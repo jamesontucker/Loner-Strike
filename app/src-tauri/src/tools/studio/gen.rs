@@ -22,7 +22,7 @@
 //! Windows and under CrossOver, need no ports, rcon password or network, and survive the app
 //! restarting.
 
-use super::graph::{param, Graph, Node, NodeDef, Variable, View, NUMBER_LIMIT};
+use super::graph::{container, param, Function, Graph, Node, NodeDef, Variable, View, LOOP_LIMIT, NUMBER_LIMIT};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -319,15 +319,49 @@ fn event_slot(def: &NodeDef, pin: &str) -> Option<(bool, usize)> {
 
 struct Gen<'a> {
     v: View<'a>,
-    /// ctx slots of flow values (loops, picks, a Function's Player and Number), after the
-    /// events' own CTX slots
-    slots: Vec<(&'a str, &'static str)>,
+    /// ctx slots of flow values (loops, picks, a Function's inputs), after the events' own
+    /// CTX slots
+    slots: Vec<(&'a str, String)>,
+    /// kept values of other outputs (`g_lsgO[k]`), and text ones (`g_lsgOT[k]`, also text flow
+    /// values: they don't fit in ctx)
+    outs: Vec<(&'a str, String)>,
+    touts: Vec<(&'a str, String)>,
     /// the nodes that become functions, in graph order (their index is their number)
     live: Vec<&'a str>,
-    /// the graph's variables in order (their index is their number)
+    /// the mode's variables, then every Function's locals, in order (their index is their number)
     vars: Vec<&'a Variable>,
+    /// a vector or struct variable's first reserved slot (after the ring), by variable index
+    reserved: Vec<usize>,
+    /// a struct's layout: each field's cell offset (vectors take 3) or text slot
+    layouts: Vec<Vec<usize>>,
+    /// a Macro's copied nodes -> the Macro node they stand for (for the debugger)
+    origin: &'a std::collections::HashMap<String, String>,
     debug: bool,
 }
+
+/// Where values of a type live in the plugin: c (a cell), s (text), v (a vector's slot), r (a
+/// struct's slot).
+fn kind_of(ty: &str) -> char {
+    match ty {
+        "text" => 's',
+        "vector" => 'v',
+        t if t.starts_with("struct:") => 'r',
+        _ => 'c',
+    }
+}
+
+/// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
+const CTX_KINDS: [&str; 9] = ["flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array"];
+/// Outputs kept in g_lsgO / g_lsgOT (what an action made).
+const STORE_KINDS: [&str; 5] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call"];
+/// Nodes with more than one flow input: one Pawn function each.
+const MULTI_IN: [&str; 5] = ["flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array"];
+/// The vector and struct rings: values that aren't in variables live here for a while.
+const VEC_RING: usize = 256;
+const REC_RING: usize = 64;
+/// Arrays made where they're used (Make Array, Players Array, Map Keys...) take turns in this
+/// many temporary arrays.
+const TMP_ARRAYS: usize = 32;
 
 /// A worked-out data value: the Pawn expression and its type.
 struct Val {
@@ -337,13 +371,47 @@ struct Val {
 
 impl<'a> Gen<'a> {
     fn slot(&self, node: &str, pin: &str) -> Option<usize> {
-        self.slots.iter().position(|(n, p)| *n == node && *p == pin).map(|i| CTX + i)
+        self.slots.iter().position(|(n, p)| *n == node && p == pin).map(|i| CTX + i)
     }
     fn index(&self, id: &str) -> usize {
         self.live.iter().position(|x| *x == id).unwrap_or(0)
     }
     fn fname(&self, id: &str) -> String {
         format!("lsg_n{}", self.index(id))
+    }
+    /// The function a flow wire into this pin calls (a node with several flow inputs has one
+    /// per input; the first is the node's own).
+    fn pin_fname(&self, id: &str, pin: &str) -> String {
+        let def = self.v.defs[id];
+        if MULTI_IN.contains(&def.kind.as_str()) && pin != "exec" {
+            format!("lsg_n{}_{}", self.index(id), id_text(pin))
+        } else {
+            self.fname(id)
+        }
+    }
+    fn out_index(&self, node: &str, pin: &str) -> Option<usize> {
+        self.outs.iter().position(|(n, p)| *n == node && p == pin)
+    }
+    fn tout_index(&self, node: &str, pin: &str) -> Option<usize> {
+        self.touts.iter().position(|(n, p)| *n == node && p == pin)
+    }
+    /// The Function (index, definition) a node's graph belongs to.
+    fn home_fn(&self, id: &str) -> Option<(usize, &'a Function)> {
+        let home = self.v.graph_of(id);
+        self.v.g.functions.iter().enumerate().find(|(_, f)| f.id == home)
+    }
+    fn fn_index(&self, f: &str) -> usize {
+        self.v.g.functions.iter().position(|x| x.id == f).unwrap_or(0)
+    }
+    fn struct_index(&self, s: &str) -> usize {
+        self.v.g.structs.iter().position(|x| x.id == s).unwrap_or(0)
+    }
+    fn enum_index(&self, e: &str) -> usize {
+        self.v.g.enums.iter().position(|x| x.id == e).unwrap_or(0)
+    }
+    /// The id the debugger knows a node by (a Macro's copies are the Macro node).
+    fn report_id(&self, id: &str) -> String {
+        id_text(self.origin.get(id).map(String::as_str).unwrap_or(id))
     }
     fn var_index(&self, id: &str) -> usize {
         self.vars.iter().position(|x| x.id == id).unwrap_or(0)
@@ -378,7 +446,72 @@ impl<'a> Gen<'a> {
         match ty {
             "number" => float_lit(v.and_then(Value::as_f64).unwrap_or(0.0)),
             "bool" => if v.and_then(Value::as_bool).unwrap_or(false) { "1".into() } else { "0".into() },
-            _ => pawn_str(&safe_text(v.and_then(Value::as_str).unwrap_or(""), 60)),
+            "text" => pawn_str(&safe_text(v.and_then(Value::as_str).unwrap_or(""), 60)),
+            t if t.starts_with("enum:") => (v.and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 31.0) as i64).to_string(),
+            _ => "0".into(),
+        }
+    }
+
+    /// An empty value of a type (an input nothing is wired into).
+    fn zero(ty: &str) -> String {
+        match kind_of(ty) {
+            's' => "\"\"".into(),
+            'v' => "lsg_vec(0.0, 0.0, 0.0)".into(),
+            'r' => "lsg_rnew()".into(),
+            _ if ty == "number" => "0.0".into(),
+            _ => "0".into(),
+        }
+    }
+
+    /// A value as an argument for a cell (an array item, a map value): numbers lose their tag.
+    fn cell_arg(ty: &str, expr: &str) -> String {
+        if ty == "number" { format!("_:({expr})") } else { expr.to_string() }
+    }
+
+    /// A cell read back as its type (a number gets its tag again).
+    fn cell_read(ty: &str, expr: String) -> String {
+        if ty == "number" { format!("Float:{expr}") } else { expr }
+    }
+
+    /// The statement that puts a variable back to its start value: `at` is the player or team
+    /// index for per-player and per-team ones.
+    fn reset_line(&self, x: &Variable, at: &str) -> String {
+        let i = self.var_index(&x.id);
+        let init = Self::var_lit(&x.ty, Some(&x.default).filter(|d| !d.is_null()));
+        let r = match x.scope.as_str() {
+            "player" => format!("g_pv{i}[{at}]"),
+            "team" => format!("g_tv{i}[{at}]"),
+            _ => format!("g_v{i}"),
+        };
+        match (kind_of(&x.ty), container(&x.ty)) {
+            ('s', _) => format!("copy({r}, 63, {init})"),
+            ('v', _) => format!("lsg_vzero({})", self.var_ref(x, at, at)),
+            ('r', _) => format!("lsg_rzero({})", self.var_ref(x, at, at)),
+            (_, Some(("array", _, _))) => format!("lsg_aclear({r})"),
+            (_, Some(("map", _, _))) => format!("lsg_mclear({r})"),
+            _ => format!("{r} = {init}"),
+        }
+    }
+
+    /// The lines that put a variable back to its start value (all players or teams).
+    fn reset_all(&self, x: &Variable) -> String {
+        match x.scope.as_str() {
+            "player" => format!("\tfor (new id = 0; id <= 32; id++)\n\t\t{}", self.reset_line(x, "id")),
+            "team" => format!("\tfor (new t = 0; t < 4; t++)\n\t\t{}", self.reset_line(x, "t")),
+            _ => format!("\t{}", self.reset_line(x, "")),
+        }
+    }
+
+    /// Setting a variable to a value (copies for text, vectors, structs, arrays and maps).
+    fn set_var(&self, var: &Variable, r: &str, val: &str) -> String {
+        match (kind_of(&var.ty), container(&var.ty)) {
+            ('s', _) => format!("copy({r}, 63, {val})"),
+            ('v', _) => format!("lsg_vset({r}, {val})"),
+            ('r', _) => format!("lsg_rset({r}, {val})"),
+            (_, Some(("array", _, _))) => format!("lsg_acopy({r}, {val})"),
+            (_, Some(("map", _, item))) => format!("lsg_mcopy({r}, {val}, {})", map_kind(item)),
+            _ if var.ty == "bool" => format!("{r} = {}", bool01(val)),
+            _ => format!("{r} = {val}"),
         }
     }
 
@@ -386,6 +519,17 @@ impl<'a> Gen<'a> {
     /// `g_tv1[clamp(T, 0, 3)]` (per team).
     fn var_ref(&self, var: &Variable, player: &str, team: &str) -> String {
         let i = self.var_index(&var.id);
+        let k = kind_of(&var.ty);
+        if k == 'v' || k == 'r' {
+            // a vector or a struct: its own slots after the ring
+            let ring = if k == 'v' { "LSG_VR" } else { "LSG_RR" };
+            let base = self.reserved.get(i).copied().unwrap_or(0);
+            return match var.scope.as_str() {
+                "player" => format!("({ring} + {base} + lsg_slot({player}))"),
+                "team" => format!("({ring} + {base} + clamp({team}, 0, 3))"),
+                _ => format!("({ring} + {base})"),
+            };
+        }
         match var.scope.as_str() {
             "player" => format!("g_pv{i}[lsg_slot({player})]"),
             "team" => format!("g_tv{i}[clamp({team}, 0, 3)]"),
@@ -400,7 +544,7 @@ impl<'a> Gen<'a> {
         if let Some((src, spin)) = self.v.data_source(node, pin) {
             return Some(self.output(src, spin));
         }
-        let ip = def.input(pin)?;
+        let ip = self.v.input(node, pin)?;
         let prm = ip.param.as_deref()?;
         let pdef = def.param(prm)?;
         let v = param(n, def, prm);
@@ -417,7 +561,28 @@ impl<'a> Gen<'a> {
 
     /// An input that must have a value (required pins are checked; this is the fallback).
     fn need(&self, node: &str, pin: &str, ty: &str) -> String {
-        self.input(node, pin).map(|v| v.expr).unwrap_or_else(|| if ty == "number" { "0.0".into() } else if ty == "text" { "\"\"".into() } else { "0".into() })
+        self.input(node, pin).map(|v| v.expr).unwrap_or_else(|| Self::zero(ty))
+    }
+
+    /// An input of the type the pin wants (generic pins: their node's type).
+    fn needt(&self, node: &str, pin: &str) -> String {
+        let ty = self.v.in_type(node, pin).unwrap_or_else(|| "any".into());
+        self.need(node, pin, &ty)
+    }
+
+    /// A map key as text: text as it is, a number written out, a player by their user id.
+    fn key_expr(&self, node: &str) -> String {
+        let k = self.needt(node, "key");
+        match self.v.in_type(node, "key").as_deref() {
+            Some("number") => format!("lsg_kn({k})"),
+            Some("player") => format!("lsg_kp({k})"),
+            _ => k,
+        }
+    }
+
+    /// A Function's arguments from a call node's inputs, in the Function's order.
+    fn call_args(&self, node: &str, f: &Function) -> String {
+        f.inputs.iter().map(|m| self.need(node, &m.id, &m.ty)).collect::<Vec<_>>().join(", ")
     }
 
     /// The value of an output: an event's (from ctx), a pure node's (an expression), or an
@@ -428,6 +593,15 @@ impl<'a> Gen<'a> {
         if let Some(k) = self.slot(node, pin) {
             let expr = if ty == "number" { format!("Float:ctx[{k}]") } else { format!("ctx[{k}]") };
             return Val { expr, ty };
+        }
+        if let Some(k) = self.tout_index(node, pin) {
+            return Val { expr: format!("g_lsgOT[{k}]"), ty };
+        }
+        if let Some(k) = self.out_index(node, pin) {
+            return Val { expr: Self::cell_read(&ty, format!("g_lsgO[{k}]")), ty };
+        }
+        if pin == "handle" && !def.pure {
+            return Val { expr: format!("(LSG_TASK + {})", self.index(node)), ty };
         }
         if def.event {
             let expr = match event_slot(def, pin) {
@@ -442,6 +616,10 @@ impl<'a> Gen<'a> {
             return Val { expr: format!("g_lsgOut[{}]", self.index(node)), ty };
         }
         let i = |p: &str, t: &str| self.need(node, p, t);
+        let it = |p: &str| self.needt(node, p);
+        // the item type of an array or map node, and where its items live
+        let item = self.v.in_type(node, "item").or_else(|| self.v.out_type(node, "out")).unwrap_or_default();
+        let ik = kind_of(&item);
         let expr = match def.kind.as_str() {
             "math.compare" => {
                 let op = match self.choice(n, def, "op") {
@@ -464,6 +642,8 @@ impl<'a> Gen<'a> {
                     "div" => format!("lsg_div({a}, {b})"),
                     "min" => format!("lsg_min({a}, {b})"),
                     "max" => format!("lsg_max({a}, {b})"),
+                    "mod" => format!("lsg_mod({a}, {b})"),
+                    "pow" => format!("lsg_pow({a}, {b})"),
                     _ => format!("(({a}) + ({b}))"),
                 }
             }
@@ -492,6 +672,111 @@ impl<'a> Gen<'a> {
             "save.get" => format!("lsg_saved_get({}, {})", i("player", "player"), pawn_str(&name_text(self.text(n, def, "key")))),
             "clock.left" => "lsg_clock_left()".into(),
             "comp.find" => format!("lsg_find({})", pawn_str(&name_text(self.text(n, def, "name")))),
+            // graph version 3
+            "logic.equal" => {
+                let t = self.v.in_type(node, "a").unwrap_or_default();
+                let (a, b) = (it("a"), it("b"));
+                let eq = match kind_of(&t) {
+                    's' => format!("equal({a}, {b})"),
+                    'v' => format!("lsg_veq({a}, {b})"),
+                    'r' => format!("lsg_req({a}, {b})"),
+                    _ => format!("({a}) == ({b})"),
+                };
+                if self.choice(n, def, "op") == "ne" { format!("({eq} ? 0 : 1)") } else { format!("({eq} ? 1 : 0)") }
+            }
+            "logic.select" => {
+                let (c, a, b) = (bool01(&i("cond", "bool")), it("a"), it("b"));
+                if kind_of(&ty) == 's' { format!("lsg_tsel({c}, {a}, {b})") } else { format!("({c} ? ({a}) : ({b}))") }
+            }
+            "cond.is_valid" => format!("(lsg_valid({}) ? 1 : 0)", i("in", "entity")),
+            "player.is_player" => format!("(lsg_ok({}) ? 1 : 0)", i("in", "entity")),
+            "creature.is" => format!("(lsg_is_creature({}) ? 1 : 0)", i("in", "entity")),
+            "timer.is_active" => format!("(lsg_tactive({}) ? 1 : 0)", i("handle", "timer")),
+            "math.fn" => {
+                let a = i("a", "number");
+                match self.choice(n, def, "op") {
+                    "round" => format!("float(floatround({a}))"),
+                    "floor" => format!("float(floatround({a}, floatround_floor))"),
+                    "ceil" => format!("float(floatround({a}, floatround_ceil))"),
+                    "sqrt" => format!("floatsqroot(floatmax({a}, 0.0))"),
+                    "neg" => format!("(-({a}))"),
+                    "sign" => format!("lsg_sign({a})"),
+                    _ => format!("floatabs({a})"),
+                }
+            }
+            "math.clamp" => format!("lsg_clampf({}, {}, {})", i("a", "number"), i("min", "number"), i("max", "number")),
+            "math.lerp" => {
+                let (a, b, t) = (i("a", "number"), i("b", "number"), i("alpha", "number"));
+                format!("(({a}) + (({b}) - ({a})) * ({t}))")
+            }
+            "math.in_range" => {
+                let x = i("a", "number");
+                format!("(({x}) >= ({}) && ({x}) <= ({}) ? 1 : 0)", i("min", "number"), i("max", "number"))
+            }
+            "math.number" => float_lit(self.num(n, def, "value")),
+            "text.literal" => pawn_str(&safe_text(self.text(n, def, "value"), 100)),
+            "text.append" => format!("lsg_tcat({}, {})", i("a", "text"), i("b", "text")),
+            "text.format" => format_text(self, node, self.text(n, def, "text")),
+            "text.contains" => format!("(containi({}, {}) >= 0 ? 1 : 0)", i("a", "text"), i("b", "text")),
+            "text.length" => format!("float(strlen({}))", i("a", "text")),
+            "text.to_number" => format!("str_to_float({})", i("a", "text")),
+            "text.from" => to_text(self, &Val { expr: it("a"), ty: self.v.in_type(node, "a").unwrap_or_default() }),
+            "vec.make" => format!("lsg_vec({}, {}, {})", i("x", "number"), i("y", "number"), i("z", "number")),
+            "vec.break" => format!("lsg_vc({}, {})", i("in", "vector"), match pin { "y" => 1, "z" => 2, _ => 0 }),
+            "vec.op" => format!("lsg_vadd({}, {}, {})", i("a", "vector"), i("b", "vector"), if self.choice(n, def, "op") == "sub" { "-1.0" } else { "1.0" }),
+            "vec.scale" => format!("lsg_vscale({}, {})", i("a", "vector"), i("n", "number")),
+            "vec.length" => format!("lsg_vlen({})", i("a", "vector")),
+            "vec.distance" => format!("lsg_vdist({}, {})", i("a", "vector"), i("b", "vector")),
+            "vec.direction" => format!("lsg_vdir({}, {})", i("from", "vector"), i("to", "vector")),
+            "vec.normalize" => format!("lsg_vnorm({})", i("a", "vector")),
+            "vec.player" => {
+                let what = ["origin", "eyes", "aim", "aim_point", "velocity"].iter().position(|w| *w == self.choice(n, def, "what")).unwrap_or(0);
+                format!("lsg_vplayer({}, {what})", i("player", "player"))
+            }
+            "vec.entity" => format!("lsg_vent({})", i("in", "entity")),
+            "struct.make" => match self.v.struct_of(node) {
+                Some(st) => format!("lsg_mks{}({})", self.struct_index(&st.id), st.fields.iter().map(|f| self.need(node, &f.id, &f.ty)).collect::<Vec<_>>().join(", ")),
+                None => "lsg_rnew()".into(),
+            },
+            "struct.break" => match self.v.struct_of(node) {
+                Some(st) => {
+                    let r = i("in", &format!("struct:{}", st.id));
+                    let lay = &self.layouts[self.struct_index(&st.id)];
+                    match st.fields.iter().position(|f| f.id == pin) {
+                        Some(k) => field_read(&st.fields[k].ty, &r, lay[k]),
+                        None => "0".into(),
+                    }
+                }
+                None => "0".into(),
+            },
+            "enum.value" => (self.num(n, def, "value").max(0.0) as i64).to_string(),
+            "enum.to_number" => format!("float({})", it("in")),
+            "array.make" => format!("lsg_mka{}({})", self.v.g.nodes.iter().position(|x| x.id == node).unwrap_or(0), (0..self.v.inputs(node).len()).map(|k| self.needt(node, &format!("i{k}"))).collect::<Vec<_>>().join(", ")),
+            "array.players" => format!("lsg_aplayers({})", which_code(self.choice(n, def, "which"))),
+            "array.get" => {
+                let item = ty.clone();
+                Self::cell_read(&item, format!("lsg_aget{}({}, {})", kind_of(&item), it("array"), i("at", "number")))
+            }
+            "array.length" => format!("float(lsg_alen({}))", it("array")),
+            "array.contains" => format!("(lsg_afind{ik}({}, {}) >= 0 ? 1 : 0)", it("array"), Self::cell_arg(&item, &it("item"))),
+            "array.find" => format!("float(lsg_afind{ik}({}, {}))", it("array"), Self::cell_arg(&item, &it("item"))),
+            "array.random" => Self::cell_read(&ty, format!("lsg_arand{}({})", kind_of(&ty), it("array"))),
+            "map.find" if pin == "found" => format!("(lsg_mhas({}, {}) ? 1 : 0)", it("map"), self.key_expr(node)),
+            "map.find" => Self::cell_read(&ty, format!("lsg_mget{}({}, {})", kind_of(&ty), it("map"), self.key_expr(node))),
+            "map.contains" => format!("(lsg_mhas({}, {}) ? 1 : 0)", it("map"), self.key_expr(node)),
+            "map.length" => format!("float(lsg_mlen({}))", it("map")),
+            "map.keys" => format!("lsg_mkeys({}, {})", it("map"), ["text", "number", "player"].iter().position(|k| *k == self.choice(n, def, "key")).unwrap_or(0)),
+            "map.values" => {
+                let t = self.v.in_type(node, "map").unwrap_or_default();
+                format!("lsg_mvalues({}, {})", it("map"), map_kind(container(&t).map_or("", |c| c.2)))
+            }
+            "fn.call_pure" => match self.v.func_of(node) {
+                Some(f) => {
+                    let k = f.outputs.iter().position(|m| m.id == pin).unwrap_or(0);
+                    format!("lsg_pf{}_{k}({})", self.fn_index(&f.id), self.call_args(node, f))
+                }
+                None => Self::zero(&ty),
+            },
             _ => "0".into(),
         };
         Val { expr, ty }
@@ -500,7 +785,10 @@ impl<'a> Gen<'a> {
 
 /// Turns a checked graph into the plugin's source. The graph must have passed
 /// `graph::validate` without errors; nodes nothing runs are left out.
-pub fn generate(g: &Graph, debug: bool) -> Generated {
+pub fn generate(checked: &Graph, debug: bool) -> Generated {
+    // Macros are copied in first (their nodes report as the Macro node)
+    let ex = super::expand::expand(checked);
+    let g = &ex.graph;
     let v = View::new(g);
     let reached = v.reached_from();
     // the nodes that become functions: every event, and whatever their flow reaches
@@ -508,20 +796,80 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         .nodes
         .iter()
         .map(|n| n.id.as_str())
-        .filter(|id| v.defs.get(id).is_some_and(|d| !d.reroute && !d.pure && (d.event || reached.contains_key(id))))
+        .filter(|id| v.defs.get(id).is_some_and(|d| !d.reroute && !v.pure(id) && (d.event || reached.contains_key(id))))
         .collect();
-    let vars: Vec<&Variable> = g.variables.iter().collect();
-    // flow values get their own ctx slots
-    let mut slots: Vec<(&str, &'static str)> = Vec::new();
+    let vars: Vec<&Variable> = g.variables.iter().chain(g.functions.iter().flat_map(|f| f.locals.iter())).collect();
+    // flow values get their own ctx slots (text: a kept text); what actions make is kept
+    let mut slots: Vec<(&str, String)> = Vec::new();
+    let mut outs: Vec<(&str, String)> = Vec::new();
+    let mut touts: Vec<(&str, String)> = Vec::new();
     for id in &live {
         let d = v.defs[id];
-        if matches!(d.kind.as_str(), "flow.for_each_player" | "flow.for_each_entity" | "flow.pick_player" | "flow.pick_entity" | "func.define") {
-            for o in d.outputs.iter().filter(|o| o.ty != "exec") {
-                slots.push((id, o.id.as_str()));
+        let ctx = CTX_KINDS.contains(&d.kind.as_str());
+        if !ctx && !STORE_KINDS.contains(&d.kind.as_str()) {
+            continue;
+        }
+        for o in v.outputs(id).iter().filter(|o| o.ty != "exec") {
+            if o.ty == "text" {
+                touts.push((id, o.id.clone()));
+            } else if ctx {
+                slots.push((id, o.id.clone()));
+            } else {
+                outs.push((id, o.id.clone()));
             }
         }
     }
-    let gen = Gen { v, slots, live, vars, debug };
+    // vector and struct variables: their own slots after the rings
+    let (mut nv, mut nr) = (0usize, 0usize);
+    let reserved: Vec<usize> = vars
+        .iter()
+        .map(|x| {
+            let size = match x.scope.as_str() {
+                "player" => 33,
+                "team" => 4,
+                _ => 1,
+            };
+            match kind_of(&x.ty) {
+                'v' => {
+                    nv += size;
+                    nv - size
+                }
+                'r' => {
+                    nr += size;
+                    nr - size
+                }
+                _ => 0,
+            }
+        })
+        .collect();
+    // struct layouts: cells (a vector takes 3) and text slots
+    let layouts: Vec<Vec<usize>> = g
+        .structs
+        .iter()
+        .map(|st| {
+            let (mut c, mut t) = (0usize, 0usize);
+            st.fields
+                .iter()
+                .map(|f| match kind_of(&f.ty) {
+                    's' => {
+                        t += 1;
+                        t - 1
+                    }
+                    'v' => {
+                        c += 3;
+                        c - 3
+                    }
+                    _ => {
+                        c += 1;
+                        c - 1
+                    }
+                })
+                .collect()
+        })
+        .collect();
+    let rec_cells = g.structs.iter().map(|st| st.fields.iter().map(|f| if f.ty == "vector" { 3 } else if f.ty == "text" { 0 } else { 1 }).sum::<usize>()).max().unwrap_or(0).max(1);
+    let rec_texts = g.structs.iter().map(|st| st.fields.iter().filter(|f| f.ty == "text").count()).max().unwrap_or(0).max(1);
+    let gen = Gen { v, slots, outs, touts, live, vars, reserved, layouts, origin: &ex.origin, debug };
     let v = &gen.v;
     let kinds_live: BTreeSet<&str> = gen.live.iter().map(|id| v.defs[id].kind.as_str()).collect();
     let has = |k: &str| kinds_live.contains(k);
@@ -536,6 +884,12 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     let uses_save = any(&["save.set", "save.add"]) || pure_used(&gen, "save.get");
     let uses_clock = any(&["clock.set", "clock.add", "clock.pause", "event.time_up"]) || pure_used(&gen, "clock.left");
     let new_round = !timers.is_empty() || !round_vars.is_empty() || uses_clock || uses_down || uses_save;
+    // what graph version 3 brought: the values that need the bigger helpers
+    let uses_v3 = !g.functions.is_empty()
+        || !g.structs.is_empty()
+        || !g.enums.is_empty()
+        || gen.vars.iter().any(|x| !matches!(x.ty.as_str(), "number" | "bool" | "text"))
+        || g.nodes.iter().any(|n| v.defs.get(n.id.as_str()).is_some_and(|d| V3_KINDS.iter().any(|k| d.kind.starts_with(k))));
 
     let mut o = Out { text: String::new(), lines: 0 };
     let mut spans = Vec::new();
@@ -548,20 +902,37 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     ));
     o.blank();
     o.line("#include <amxmodx>\n#include <cstrike>\n#include <fakemeta>\n#include <engine>\n#include <hamsandwich>\n#include <loner>");
-    if graph_uses(g, &["save.get", "save.set", "save.add"]) {
+    if graph_uses(g, &["save.get", "save.set", "save.add"]) || uses_v3 {
         o.line("#include <celltrie>");
+    }
+    if uses_v3 {
+        o.line("#include <cellarray>");
     }
     o.blank();
     o.line(format!("#define LSG_MODE {}\n#define LSG_CTX {}\n#define LSG_TXT {TXT}\n#define LSG_N {}\n#define LSG_TASK {TASK_BASE}", pawn_str(&id_text(&g.mode.id)), CTX + gen.slots.len(), gen.live.len().max(1)));
     o.line("stock g_lsgTxt[LSG_TXT][64]\nstock g_lsgOut[LSG_N]\nstock g_lsgLeft[LSG_N]\nstock const g_lsgYesNo[][] = { \"no\", \"yes\" }\nstock const g_lsgTeamName[][] = { \"no team\", \"Terrorists\", \"Counter-Terrorists\", \"Spectators\" }");
+    if uses_v3 {
+        o.line(format!(
+            "#define LSG_VR {VEC_RING}\n#define LSG_VP {}\n#define LSG_RR {REC_RING}\n#define LSG_RP {}\n#define LSG_RC {rec_cells}\n#define LSG_RT {rec_texts}\n#define LSG_AC {}\n#define LSG_AMAX {LOOP_LIMIT}\n#define LSG_TMPA {TMP_ARRAYS}\n#define LSG_O {}\n#define LSG_OT {}",
+            VEC_RING + nv,
+            REC_RING + nr,
+            (rec_cells + rec_texts * 64).max(64),
+            gen.outs.len().max(1),
+            gen.touts.len().max(1)
+        ));
+    }
     o.blank();
 
     // variables
     if !gen.vars.is_empty() {
         o.line("// The mode's variables");
         for (i, x) in gen.vars.iter().enumerate() {
-            let note = format!("// {} ({}{}{})", comment_text(&x.name), x.ty, match x.scope.as_str() { "player" => ", per player", "team" => ", per team", _ => "" }, if x.reset == "round" { ", each round" } else { "" });
+            let note = format!("// {} ({}{}{})", comment_text(&x.name), if matches!(x.ty.as_str(), "number" | "bool" | "text") { x.ty.clone() } else { comment_text(&gen.v.type_label(&x.ty)) }, match x.scope.as_str() { "player" => ", per player", "team" => ", per team", _ => "" }, if x.reset == "round" { ", each round" } else { "" });
             let init = Gen::var_lit(&x.ty, Some(&x.default).filter(|d| !d.is_null()));
+            if matches!(kind_of(&x.ty), 'v' | 'r') {
+                o.line(format!("// {} is in slot {}", comment_text(&x.name), gen.var_ref(x, "0", "0")));
+                continue;
+            }
             let decl = match (x.ty.as_str(), x.scope.as_str()) {
                 ("number", "player") => format!("stock Float:g_pv{i}[33]"),
                 ("text", "player") => format!("stock g_pv{i}[33][64]"),
@@ -590,17 +961,41 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     }
 
     if debug {
-        let ids: Vec<String> = if gen.live.is_empty() { vec![pawn_str("")] } else { gen.live.iter().map(|id| pawn_str(&id_text(id))).collect() };
+        let ids: Vec<String> = if gen.live.is_empty() { vec![pawn_str("")] } else { gen.live.iter().map(|id| pawn_str(&gen.report_id(id))).collect() };
         o.line(format!("#define LSD_N {}", gen.live.len().max(1)));
         o.line(format!("new const g_lsdIds[LSD_N][] = {{ {} }}", ids.join(", ")));
         let bps: Vec<&str> = if gen.live.is_empty() { vec!["false"] } else { gen.live.iter().map(|id| if v.nodes[id].breakpoint { "true" } else { "false" }).collect() };
         o.line(format!("new bool:g_lsdBp[LSD_N] = {{ {} }}", bps.join(", ")));
         o.line(include_str!("debug_runtime.pawn").trim_end());
         o.blank();
+    }
+
+    o.line(HELPERS);
+    o.blank();
+    if uses_v3 {
+        o.line(V3_HELPERS);
+        o.blank();
+        v3_stocks(&gen, &mut o);
+    }
+    if debug {
         // the graph's variables for the live values
         o.line("lsd_graph_vars()\n{");
         for (i, x) in gen.vars.iter().enumerate() {
             let vid = pawn_str(&id_text(&x.id));
+            if !matches!(x.ty.as_str(), "number" | "bool" | "text") {
+                // the other types as text: a name, a count of items, a position...
+                let shown = |at: &str| to_text(&gen, &Val { expr: gen.var_ref(x, at, at), ty: x.ty.clone() });
+                match x.scope.as_str() {
+                    "player" => o.line(format!("\tfor (new id = 1; id <= MaxClients; id++)\n\t\tif (is_user_connected(id))\n\t\t\tlsd_var_text({vid}, id, {})", shown("id"))),
+                    "team" => {
+                        for (t, tn) in [(1, "T"), (2, "CT")] {
+                            o.line(format!("\tlsd_var_text({}, 0, {})", pawn_str(&format!("{}:{tn}", id_text(&x.id))), shown(&t.to_string())));
+                        }
+                    }
+                    _ => o.line(format!("\tlsd_var_text({vid}, 0, {})", shown("0"))),
+                }
+                continue;
+            }
             let f = match x.ty.as_str() {
                 "number" => "lsd_var_number",
                 "bool" => "lsd_var_bool",
@@ -619,9 +1014,6 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         o.line("}");
         o.blank();
     }
-
-    o.line(HELPERS);
-    o.blank();
     if uses_down || uses_squad {
         o.line(SQUADS);
         o.blank();
@@ -670,6 +1062,22 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     if uses_save {
         o.line("\tlsg_saved_load()");
     }
+    // arrays and maps are made once; vectors and structs start at their start value (0)
+    for (i, x) in gen.vars.iter().enumerate() {
+        match container(&x.ty) {
+            Some(("array", _, _)) => o.line(format!("\tg_v{i} = _:ArrayCreate(LSG_AC)")),
+            Some(("map", _, _)) => o.line(format!("\tg_v{i} = _:TrieCreate()")),
+            _ => {}
+        }
+    }
+    // gates that start open, Do Once that starts closed
+    for id in &gen.live {
+        let (n, d) = gen.node(id);
+        let closed = gen.boolean(n, d, "closed");
+        if (d.kind == "flow.gate" && !closed) || (d.kind == "flow.do_once" && closed) {
+            o.line(format!("\tg_lsgLeft[{}] = 1", gen.index(id)));
+        }
+    }
     // chat commands: one command each
     for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.chat_command") {
         let cmd = name_text(gen.text(v.nodes[id], v.defs[id], "command"));
@@ -695,14 +1103,8 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         if uses_save {
             o.line("\tlsg_saved_flush()");
         }
-        for (i, x) in &round_vars {
-            let init = Gen::var_lit(&x.ty, Some(&x.default).filter(|d| !d.is_null()));
-            let set = |r: String| if x.ty == "text" { format!("copy({r}, 63, {init})") } else { format!("{r} = {init}") };
-            match x.scope.as_str() {
-                "player" => o.line(format!("\tfor (new id = 0; id <= 32; id++)\n\t\t{}", set(format!("g_pv{i}[id]")))),
-                "team" => o.line(format!("\tfor (new t = 0; t < 4; t++)\n\t\t{}", set(format!("g_tv{i}[t]")))),
-                _ => o.line(format!("\t{}", set(format!("g_v{i}")))),
-            }
+        for (_, x) in &round_vars {
+            o.line(gen.reset_all(x));
         }
         o.line("}\n");
     }
@@ -793,13 +1195,8 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         if uses_nofall {
             o.line("\tg_lsgNoFall[id] = 0");
         }
-        for (i, x) in &player_vars {
-            let init = Gen::var_lit(&x.ty, Some(&x.default).filter(|d| !d.is_null()));
-            if x.ty == "text" {
-                o.line(format!("\tcopy(g_pv{i}[id], 63, {init})"));
-            } else {
-                o.line(format!("\tg_pv{i}[id] = {init}"));
-            }
+        for (_, x) in &player_vars {
+            o.line(format!("\t{}", gen.reset_line(x, "id")));
         }
         if has("event.player_joined") {
             o.line("\tlsg_on_player_joined(id)");
@@ -868,7 +1265,7 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     for id in &gen.live {
         let from = o.lines + 1;
         node_code(&gen, id, &mut o);
-        spans.push(Span { node: id.to_string(), from, to: o.lines });
+        spans.push(Span { node: gen.origin.get(*id).cloned().unwrap_or_else(|| id.to_string()), from, to: o.lines });
         o.blank();
     }
 
@@ -897,12 +1294,14 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
     let (n, def) = gen.node(id);
     let i = gen.index(id);
     let debug = gen.debug;
-    o.line(format!("// {} ({})", comment_text(&def.title), id_text(id)));
-    o.line(format!("{}(ctx[])\n{{", gen.fname(id)));
+    // (in a Function's graph: compiled only when the Function is called)
+    let stock = if v.graph_of(id).is_empty() { "" } else { "stock " };
+    o.line(format!("// {} ({})", comment_text(&def.title), gen.report_id(id)));
+    o.line(format!("{stock}{}(ctx[])\n{{", gen.fname(id)));
     let mut b = Out { text: String::new(), lines: 0 };
     if debug {
         b.line("\tlsd_begin()");
-        for ip in def.inputs.iter().filter(|p| p.ty != "exec") {
+        for ip in v.inputs(id).iter().filter(|p| p.ty != "exec") {
             let Some(val) = gen.input(id, &ip.id) else { continue };
             let label = pawn_str(&safe_text(&ip.label, 30));
             let f = match val.ty.as_str() {
@@ -912,13 +1311,22 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 "number" => "lsd_in_number",
                 "bool" => "lsd_in_bool",
                 "text" => "lsd_in_text",
-                _ => continue,
+                "any" => continue,
+                t if t.starts_with("struct:") => continue,
+                _ => {
+                    b.line(format!("\tlsd_in_text({label}, {})", to_text(gen, &val)));
+                    continue;
+                }
             };
             b.line(format!("\t{f}({label}, {})", val.expr));
         }
         b.line(format!("\tif (lsd_enter({i}, ctx))\n\t\treturn"));
     }
-    let next = |pin: &str| -> Option<String> { v.exec_target(id, pin).map(|(t, _)| format!("{}(ctx)", gen.fname(t))) };
+    let next = |pin: &str| -> Option<String> { v.exec_target(id, pin).map(|(t, tp)| format!("{}(ctx)", gen.pin_fname(t, tp))) };
+    // in a Function: a Return stops loops and Sequences
+    let fn_done = gen.home_fn(id).map(|(fi, _)| format!("g_lsgFD{fi}"));
+    // more functions after this one (other flow inputs, timer callbacks)
+    let mut after: Vec<String> = Vec::new();
     let exit = |result: &str| -> String { if debug { format!("\tlsd_exit({i}, {})", pawn_str(result)) } else { String::new() } };
     let err = |msg: &str| -> String { if debug { format!("lsd_error({i}, {})", pawn_str(msg)) } else { String::new() } };
     // a check that ends in an error message (debug) or nothing (release)
@@ -1049,7 +1457,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let slot = HUD_SLOTS.iter().position(|s| *s == gen.choice(n, def, "slot")).unwrap_or(1);
             let text = pawn_str(&safe_text(gen.text(n, def, "text"), 100));
             let secs = float_lit(gen.num(n, def, "seconds"));
-            let args = text_args(&text, gen.input(id, "value"));
+            let args = text_args(gen, &text, gen.input(id, "value"));
             b.line(format!("\tls_hud({who}, LsHud:{slot}, {secs}, {args})"));
             let e = exit("shown");
             if !e.is_empty() {
@@ -1063,11 +1471,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 let stmt = if def.kind == "var.add" {
                     format!("\t{r} += {}", inp("amount", "number"))
                 } else {
-                    match var.ty.as_str() {
-                        "text" => format!("\tcopy({r}, 63, {})", inp("value", "text")),
-                        "bool" => format!("\t{r} = {}", bool01(&inp("value", "bool"))),
-                        _ => format!("\t{r} = {}", inp("value", "number")),
-                    }
+                    format!("\t{}", gen.set_var(var, &r, &inp("value", &var.ty)))
                 };
                 b.line(stmt);
                 if debug {
@@ -1171,7 +1575,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 b.line("\t}");
             }
         }
-        "func.define" | "event.chat_command" | "event.player_about_hurt" | "event.player_revived" | "event.down_timeout" | "event.time_up" => {
+        "func.define" | "fn.entry" | "event.chat_command" | "event.player_about_hurt" | "event.player_revived" | "event.down_timeout" | "event.time_up" => {
             let e = exit("called");
             if !e.is_empty() {
                 b.line(e);
@@ -1245,7 +1649,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         "msg.chat" => {
             let who = if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
             let text = pawn_str(&safe_text(gen.text(n, def, "text"), 120));
-            b.line(format!("\tls_chat({who}, {})", text_args(&text, gen.input(id, "value"))));
+            b.line(format!("\tls_chat({who}, {})", text_args(gen, &text, gen.input(id, "value"))));
             let e = exit("said");
             if !e.is_empty() {
                 b.line(e);
@@ -1478,6 +1882,269 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             then_line(&mut b, "then");
         }
+        // ---- graph version 3
+        "fn.return" => {
+            if let Some((fi, f)) = gen.home_fn(id) {
+                for (k, m) in f.outputs.iter().enumerate() {
+                    let val = inp(&m.id, &m.ty);
+                    b.line(if m.ty == "text" { format!("\tcopy(g_lsgR{fi}_{k}, 127, {val})") } else { format!("\tg_lsgR{fi}_{k} = {val}") });
+                }
+                b.line(format!("\tg_lsgFD{fi} = true"));
+            }
+            let e = exit("returned");
+            if !e.is_empty() {
+                b.line(e);
+            }
+        }
+        "fn.call" => {
+            if let Some(f) = v.func_of(id) {
+                let fi = gen.fn_index(&f.id);
+                b.line(format!("\tlsg_fr{fi}({})", gen.call_args(id, f)));
+                for (k, m) in f.outputs.iter().enumerate() {
+                    if let Some(t) = gen.tout_index(id, &m.id) {
+                        b.line(format!("\tcopy(g_lsgOT[{t}], 127, g_lsgR{fi}_{k})"));
+                    } else if let Some(c) = gen.out_index(id, &m.id) {
+                        b.line(format!("\tg_lsgO[{c}] = _:g_lsgR{fi}_{k}"));
+                    }
+                }
+            }
+            let e = exit("called");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "flow.sequence" => {
+            let e = exit("ran");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            for (k, p) in v.exec_outs(id).iter().enumerate() {
+                if let (Some(stop), true) = (&fn_done, k > 0) {
+                    b.line(format!("\tif ({stop})\n\t\treturn"));
+                }
+                then_line(&mut b, p);
+            }
+        }
+        "flow.do_once" | "flow.do_n" | "flow.gate" => {
+            let gate = format!("g_lsgLeft[{i}]");
+            match def.kind.as_str() {
+                "flow.do_once" => {
+                    b.line(format!("\tif ({gate})\n\t{{\n\t{}\n\t\treturn\n\t}}\n\t{gate} = 1", exit("closed")));
+                    after.push(multi_fn(gen, id, "reset", &format!("\t{gate} = 0")));
+                }
+                "flow.do_n" => {
+                    let c = gen.out_index(id, "counter").unwrap_or(0);
+                    b.line(format!("\tif ({gate} >= floatround({}))\n\t{{\n\t{}\n\t\treturn\n\t}}\n\t{gate}++\n\tg_lsgO[{c}] = _:float({gate})", inp("n", "number"), exit("done N times")));
+                    after.push(multi_fn(gen, id, "reset", &format!("\t{gate} = 0")));
+                }
+                _ => {
+                    b.line(format!("\tif (!{gate})\n\t{{\n\t{}\n\t\treturn\n\t}}", exit("closed")));
+                    after.push(multi_fn(gen, id, "open", &format!("\t{gate} = 1")));
+                    after.push(multi_fn(gen, id, "close", &format!("\t{gate} = 0")));
+                    after.push(multi_fn(gen, id, "toggle", &format!("\t{gate} ^= 1")));
+                }
+            }
+            let e = exit("through");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "flow.flipflop" => {
+            let c = gen.out_index(id, "is_a").unwrap_or(0);
+            b.line(format!("\tg_lsgLeft[{i}] ^= 1\n\tg_lsgO[{c}] = g_lsgLeft[{i}]"));
+            let (a, bb) = (next("a"), next("b"));
+            let dbg_a = if debug { format!("\n\t\tlsd_exit({i}, \"A\")") } else { String::new() };
+            let dbg_b = if debug { format!("\n\t\tlsd_exit({i}, \"B\")") } else { String::new() };
+            b.line(format!("\tif (g_lsgLeft[{i}])\n\t{{{dbg_a}\n\t\t{}\n\t}}\n\telse\n\t{{{dbg_b}\n\t\t{}\n\t}}", a.unwrap_or_default(), bb.unwrap_or_default()));
+        }
+        "flow.for_loop" | "flow.for_loop_break" | "flow.while" | "flow.for_each_array" => {
+            let body = next("body").map(|c| c.replace("(ctx)", "(c)"));
+            let brk = def.kind != "flow.for_loop" && def.kind != "flow.while";
+            b.line("\tnew c[LSG_CTX], n");
+            if brk {
+                b.line(format!("\tg_lsgLeft[{i}] = 0"));
+                after.push(multi_fn(gen, id, "break", &format!("\tg_lsgLeft[{i}] = 1")));
+            }
+            let copy = "\t\tfor (new j = 0; j < LSG_CTX; j++)\n\t\t\tc[j] = ctx[j]";
+            match def.kind.as_str() {
+                "flow.while" => {
+                    let limit = gen.num(n, def, "limit").round().clamp(1.0, LOOP_LIMIT as f64) as i64;
+                    b.line(format!("\twhile (n < {limit} && {})\n\t{{\n\t\tn++\n{copy}", bool01(&inp("cond", "bool"))));
+                }
+                "flow.for_each_array" => {
+                    let item = v.out_type(id, "item").unwrap_or_default();
+                    b.line(format!("\tstatic snap\n\tif (!snap)\n\t\tsnap = _:ArrayCreate(LSG_AC)\n\tlsg_acopy(snap, {})\n\tnew size = lsg_alen(snap)", inp("array", "any")));
+                    b.line(format!("\tfor (new k = 0; k < size && k < LSG_AMAX; k++)\n\t{{\n\t\tn++\n{copy}"));
+                    if let Some(s) = gen.slot(id, "index") {
+                        b.line(format!("\t\tc[{s}] = _:float(k)"));
+                    }
+                    if let Some(t) = gen.tout_index(id, "item") {
+                        b.line(format!("\t\tArrayGetString(Array:snap, k, g_lsgOT[{t}], 127)"));
+                    } else if let Some(s) = gen.slot(id, "item") {
+                        b.line(format!("\t\tc[{s}] = {}", match kind_of(&item) {
+                            'v' => "lsg_agetv(snap, float(k))".to_string(),
+                            'r' => "lsg_agetr(snap, float(k))".to_string(),
+                            _ => "ArrayGetCell(Array:snap, k)".to_string(),
+                        }));
+                    }
+                }
+                _ => {
+                    let s = gen.slot(id, "index").unwrap_or(0);
+                    b.line(format!("\tnew last = floatround({})\n\tfor (new k = floatround({}); k <= last && n < LSG_AMAX; k++)\n\t{{\n\t\tn++\n{copy}\n\t\tc[{s}] = _:float(k)", inp("last", "number"), inp("first", "number")));
+                }
+            }
+            match body {
+                Some(c) => b.line(format!("\t\t{c}")),
+                None => b.line("\t\t#pragma unused c"),
+            }
+            if brk {
+                b.line(format!("\t\tif (g_lsgLeft[{i}])\n\t\t\tbreak"));
+            }
+            if let Some(stop) = &fn_done {
+                b.line(format!("\t\tif ({stop})\n\t\t\treturn"));
+            }
+            b.line("\t}");
+            if debug {
+                b.line(format!("\tlsd_exit({i}, fmt(\"%d times\", n))"));
+            } else {
+                b.line("\t#pragma unused n");
+            }
+            then_line(&mut b, "then");
+        }
+        "flow.switch_num" | "flow.switch_text" | "flow.switch_enum" => {
+            let outs: Vec<(String, String)> = v.outputs(id).iter().filter(|p| p.id != "default").map(|p| (p.id.clone(), p.label.clone())).collect();
+            let call = |pin: &str| next(pin).map(|c| format!("\t\t{c}\n")).unwrap_or_default();
+            if def.kind == "flow.switch_enum" {
+                b.line(format!("\tswitch ({})\n\t{{", inp("in", "any")));
+                for (k, (pin, _)) in outs.iter().enumerate() {
+                    b.line(format!("\t\tcase {k}:\n\t\t{{\n\t{}\t\t}}", call(pin)));
+                }
+                b.line("\t}");
+            } else {
+                let num = def.kind == "flow.switch_num";
+                b.line(if num { format!("\tnew Float:x = {}", inp("in", "number")) } else { format!("\tnew x[128]\n\tcopy(x, 127, {})", inp("in", "text")) });
+                for (k, (pin, label)) in outs.iter().enumerate() {
+                    let test = if num { format!("x == {}", float_lit(label.parse::<f64>().unwrap_or(0.0))) } else { format!("equali(x, {})", pawn_str(&safe_text(label, 60))) };
+                    b.line(format!("\t{}if ({test})\n\t{{\n{}\t}}", if k > 0 { "else " } else { "" }, call(pin)));
+                }
+                let d = call("default");
+                if outs.is_empty() {
+                    b.line(format!("\t#pragma unused x\n{d}"));
+                } else {
+                    b.line(format!("\telse\n\t{{\n{d}\t}}"));
+                }
+            }
+        }
+        "flow.if_valid" => {
+            b.line(format!("\tif (lsg_valid({}))\n\t{{\n\t{}\n\t\t{}\n\t}}\n\telse\n\t{{\n\t{}\n\t\t{}\n\t}}", inp("in", "entity"), exit("valid"), next("valid").unwrap_or_default(), exit("not valid"), next("invalid").unwrap_or_default()));
+        }
+        "timer.retrigger" => {
+            b.line(format!("\tremove_task(LSG_TASK + {i})\n\tset_task({}, \"lsg_t{i}\", LSG_TASK + {i}, ctx, LSG_CTX)", lsg_secs(&gen.input(id, "secs"))));
+            let e = exit("waiting");
+            if !e.is_empty() {
+                b.line(e);
+            }
+        }
+        "timer.by_function" => {
+            if let Some(f) = v.func_of(id) {
+                let fi = gen.fn_index(&f.id);
+                let looping = gen.boolean(n, def, "loop");
+                b.line(format!("\tremove_task(LSG_TASK + {i})\n\tset_task({}, \"lsg_tf{i}\", LSG_TASK + {i}, _, _, {})", lsg_secs(&gen.input(id, "secs")), if looping { "\"b\"" } else { "\"\"" }));
+                let args = f.inputs.iter().map(|m| Gen::zero(&m.ty)).collect::<Vec<_>>().join(", ");
+                let hold = if debug { "\tif (lsd_hold_timer())\n\t\treturn\n".to_string() } else { String::new() };
+                after.push(format!("public lsg_tf{i}()\n{{\n{hold}\tlsg_fr{fi}({args})\n}}"));
+            }
+            let e = exit("started");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "timer.clear" => {
+            b.line(format!("\tlsg_tclear({})", inp("handle", "timer")));
+            let e = exit("cleared");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "debug.print" => {
+            let text = pawn_str(&safe_text(gen.text(n, def, "text"), 100));
+            b.line(format!("\tnew t[192]\n\tformatex(t, charsmax(t), {})\n\tserver_print(\"[%s] %s\", LSG_MODE, t)", text_args(gen, &text, gen.input(id, "value"))));
+            if gen.boolean(n, def, "chat") {
+                b.line("\tclient_print(0, print_chat, \"%s\", t)");
+            }
+            if debug {
+                b.line(format!("\tnew esc[200]\n\tlsd_esc(t, esc, charsmax(esc))\n\tlsd_exit({i}, esc)"));
+            }
+            then_line(&mut b, "then");
+        }
+        "player.set_position" | "player.set_velocity" => {
+            let p = inp("player", "player");
+            let call = if def.kind == "player.set_position" { format!("lsg_vsetpos({p}, {})", inp("at", "vector")) } else { format!("lsg_vsetvel({p}, {})", inp("v", "vector")) };
+            check(&mut b, &format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", &[format!("\t{call}"), exit("done")]);
+            then_line(&mut b, "then");
+        }
+        "struct.set_field" => {
+            if let (Some(var), Some(field)) = (v.var_of(id), v.field_of(id)) {
+                if let Some(st) = v.struct_type(&var.ty) {
+                    let si = gen.struct_index(&st.id);
+                    let k = st.fields.iter().position(|f| f.id == field.id).unwrap_or(0);
+                    let off = gen.layouts[si][k];
+                    let r = gen.var_ref(var, "0", "0");
+                    let val = inp("value", &field.ty);
+                    b.line(match kind_of(&field.ty) {
+                        's' => format!("\tcopy(g_lsgRecT[lsg_ri({r})][{off}], 63, {val})"),
+                        'v' => format!("\tlsg_rsetvec({r}, {off}, {val})"),
+                        _ => format!("\tg_lsgRec[lsg_ri({r})][{off}] = _:({val})"),
+                    });
+                }
+            }
+            let e = exit("set");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        k if k.starts_with("array.") => {
+            let a = inp("array", "any");
+            let item = v.in_type(id, "item").or_else(|| v.in_type(id, "array").and_then(|t| container(&t).map(|c| c.2.to_string()))).unwrap_or_default();
+            let ik = kind_of(&item);
+            let val = || Gen::cell_arg(&item, &inp("item", &item));
+            let stmt = match k {
+                "array.add" => format!("g_lsgO[{}] = _:float(lsg_apush{ik}({a}, {}))", gen.out_index(id, "index").unwrap_or(0), val()),
+                "array.insert" => format!("lsg_ains{ik}({a}, {}, {})", inp("at", "number"), val()),
+                "array.remove" => format!("g_lsgO[{}] = lsg_arem{ik}({a}, {}) ? 1 : 0", gen.out_index(id, "removed").unwrap_or(0), val()),
+                "array.remove_index" => format!("lsg_aremi({a}, {})", inp("at", "number")),
+                "array.set" => format!("lsg_aset{ik}({a}, {}, {})", inp("at", "number"), val()),
+                "array.shuffle" => format!("lsg_ashuffle({a})"),
+                "array.sort" => format!("lsg_asort({a}, {}, {})", match item.as_str() { "number" => 0, "text" => 2, _ => 1 }, if gen.choice(n, def, "order") == "desc" { 1 } else { 0 }),
+                _ => format!("lsg_aclear({a})"),
+            };
+            b.line(format!("\t{stmt}"));
+            if debug {
+                b.line(format!("\tlsd_exit({i}, fmt(\"%d items\", lsg_alen({a})))"));
+            }
+            then_line(&mut b, "then");
+        }
+        k if k.starts_with("map.") => {
+            let m = inp("map", "any");
+            let stmt = match k {
+                "map.add" => {
+                    let vt = v.in_type(id, "value").unwrap_or_default();
+                    format!("lsg_mset{}({m}, {}, {})", kind_of(&vt), gen.key_expr(id), Gen::cell_arg(&vt, &inp("value", &vt)))
+                }
+                "map.remove" => format!("lsg_mdel({m}, {})", gen.key_expr(id)),
+                _ => format!("lsg_mclear({m})"),
+            };
+            b.line(format!("\t{stmt}"));
+            if debug {
+                b.line(format!("\tlsd_exit({i}, fmt(\"%d keys\", lsg_mlen({m})))"));
+            }
+            then_line(&mut b, "then");
+        }
         _ => {}
     }
     if !b.text.contains("ctx") {
@@ -1489,12 +2156,16 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
     for (_, cb) in &menus_after {
         o.line(cb);
     }
+    for f in &after {
+        o.blank();
+        o.line(f);
+    }
 
     // timer callbacks (they belong to the node, for compiler messages)
     let hold = if debug { format!("\tif (lsd_hold_timer())\n\t{{\n\t\tset_task(0.25, \"lsg_t{i}\", LSG_TASK + {i}, data, LSG_CTX)\n\t\treturn\n\t}}\n") } else { String::new() };
     let cb = format!("public lsg_t{i}(const data[], task)\n{{\n{hold}\t#pragma unused task\n\tnew ctx[LSG_CTX]\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tctx[k] = data[k]");
     match def.kind.as_str() {
-        "timer.delay" => {
+        "timer.delay" | "timer.retrigger" => {
             o.blank();
             o.line(&cb);
             if debug {
@@ -1544,7 +2215,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
 }
 
 /// The format and arguments for text with an optional Value after it.
-fn text_args(text: &str, value: Option<Val>) -> String {
+fn text_args(gen: &Gen, text: &str, value: Option<Val>) -> String {
     match value {
         None => format!("\"%s\", {text}"),
         Some(val) => match val.ty.as_str() {
@@ -1553,8 +2224,172 @@ fn text_args(text: &str, value: Option<Val>) -> String {
             "player" => format!("\"%s %s\", {text}, lsg_name({})", val.expr),
             "bool" => format!("\"%s %s\", {text}, g_lsgYesNo[({}) ? 1 : 0]", val.expr),
             "team" => format!("\"%s %s\", {text}, g_lsgTeamName[clamp({}, 0, 3)]", val.expr),
-            _ => format!("\"%s %d\", {text}, {}", val.expr),
+            "entity" | "any" => format!("\"%s %d\", {text}, {}", val.expr),
+            _ => format!("\"%s %s\", {text}, {}", to_text(gen, &val)),
         },
+    }
+}
+
+/// Any value as a text expression (Print String, Format Text, To Text, the debugger).
+fn to_text(gen: &Gen, val: &Val) -> String {
+    let e = &val.expr;
+    match val.ty.as_str() {
+        "text" => e.clone(),
+        "number" => format!("lsg_ntext({e})"),
+        "player" => format!("lsg_name({e})"),
+        "entity" => format!("lsg_etext({e})"),
+        "team" => format!("g_lsgTeamName[clamp({e}, 0, 3)]"),
+        "bool" => format!("g_lsgYesNo[({e}) ? 1 : 0]"),
+        "vector" => format!("lsg_vtext({e})"),
+        "timer" => format!("g_lsgRun[lsg_tactive({e}) ? 1 : 0]"),
+        t if t.starts_with("enum:") => match gen.v.enum_type(t) {
+            Some(en) => format!("g_lsgE{}[clamp({e}, 0, {})]", gen.enum_index(&en.id), en.values.len().max(1) - 1),
+            None => "\"\"".into(),
+        },
+        t if t.starts_with("array<") => format!("fmt(\"%d items\", lsg_alen({e}))"),
+        t if t.starts_with("map<") => format!("fmt(\"%d keys\", lsg_mlen({e}))"),
+        t if t.starts_with("struct:") => pawn_str(&safe_text(&gen.v.type_label(t), 30)),
+        _ => format!("fmt(\"%d\", {e})"),
+    }
+}
+
+/// Format Text: [0] to [3] in the text become the values wired in (as text); a % stays a %.
+fn format_text(gen: &Gen, node: &str, template: &str) -> String {
+    let chars: Vec<char> = safe_text(template, 100).chars().collect();
+    let (mut f, mut args) = (String::new(), Vec::new());
+    let mut k = 0;
+    while k < chars.len() {
+        if chars[k] == '[' && k + 2 < chars.len() && chars[k + 2] == ']' && ('0'..='3').contains(&chars[k + 1]) {
+            f.push_str("%s");
+            args.push(match gen.input(node, &format!("a{}", chars[k + 1])) {
+                Some(v) => to_text(gen, &v),
+                None => "\"\"".into(),
+            });
+            k += 3;
+            continue;
+        }
+        if chars[k] == '%' {
+            f.push_str("%%");
+        } else {
+            f.push(chars[k]);
+        }
+        k += 1;
+    }
+    let mut call = format!("fmt({}", pawn_str(&f));
+    for a in args {
+        call.push_str(", ");
+        call.push_str(&a);
+    }
+    call.push(')');
+    call
+}
+
+/// A struct's field read from a struct value `r` (a slot), by its layout offset.
+fn field_read(ty: &str, r: &str, off: usize) -> String {
+    match kind_of(ty) {
+        's' => format!("g_lsgRecT[lsg_ri({r})][{off}]"),
+        'v' => format!("lsg_rvec({r}, {off})"),
+        _ if ty == "number" => format!("Float:g_lsgRec[lsg_ri({r})][{off}]"),
+        _ => format!("g_lsgRec[lsg_ri({r})][{off}]"),
+    }
+}
+
+/// How a map keeps its values: 0 cells, 1 text, 2 vectors.
+fn map_kind(item: &str) -> u8 {
+    match kind_of(item) {
+        's' => 1,
+        'v' => 2,
+        _ => 0,
+    }
+}
+
+/// Another flow input's function of a node (Reset, Open, Break...): always a stock, so an
+/// input nothing is wired into costs nothing.
+fn multi_fn(gen: &Gen, id: &str, pin: &str, body: &str) -> String {
+    format!("stock {}(ctx[])\n{{\n\t#pragma unused ctx\n{body}\n}}", gen.pin_fname(id, pin))
+}
+
+/// Node kinds that need the version 3 helpers (by prefix).
+const V3_KINDS: &[&str] = &[
+    "fn.", "macro.", "struct.", "enum.", "array.", "map.", "vec.", "flow.sequence", "flow.do_", "flow.gate", "flow.flipflop", "flow.for_loop", "flow.while", "flow.for_each_array", "flow.switch_", "flow.if_valid", "timer.retrigger", "timer.by_function",
+    "timer.clear", "timer.is_active", "debug.print", "logic.equal", "logic.select", "cond.is_valid", "player.is_player", "creature.is", "math.fn", "math.clamp", "math.lerp", "math.in_range", "math.number", "text.literal", "text.append", "text.format", "text.contains", "text.length", "text.to_number", "text.from",
+];
+
+/// The pieces made for this graph: enum names, struct makers, Make Array, Functions.
+fn v3_stocks(gen: &Gen, o: &mut Out) {
+    let v = &gen.v;
+    let g = v.g;
+    let typed = |ty: &str, name: &str| match kind_of(ty) {
+        's' => format!("const {name}[]"),
+        _ if ty == "number" => format!("Float:{name}"),
+        _ => name.to_string(),
+    };
+    for (k, e) in g.enums.iter().enumerate() {
+        let names: Vec<String> = e.values.iter().map(|x| pawn_str(&safe_text(x, 30))).collect();
+        o.line(format!("// enum {}\nstock const g_lsgE{k}[][] = {{ {} }}", comment_text(&e.name), if names.is_empty() { pawn_str("") } else { names.join(", ") }));
+    }
+    for (k, st) in g.structs.iter().enumerate() {
+        let params: Vec<String> = st.fields.iter().enumerate().map(|(j, f)| typed(&f.ty, &format!("f{j}"))).collect();
+        o.line(format!("// struct {}\nstock lsg_mks{k}({})\n{{\n\tnew r = lsg_rnew()", comment_text(&st.name), params.join(", ")));
+        for (j, f) in st.fields.iter().enumerate() {
+            let off = gen.layouts[k][j];
+            o.line(match kind_of(&f.ty) {
+                's' => format!("\tcopy(g_lsgRecT[r][{off}], 63, f{j})"),
+                'v' => format!("\tlsg_rsetvec(r, {off}, f{j})"),
+                _ => format!("\tg_lsgRec[r][{off}] = _:f{j}"),
+            });
+        }
+        o.line("\treturn r\n}");
+    }
+    for (j, n) in g.nodes.iter().enumerate().filter(|(_, n)| n.kind == "array.make") {
+        let item = v.out_type(&n.id, "out").and_then(|t| container(&t).map(|c| c.2.to_string())).unwrap_or_else(|| "number".into());
+        let count = v.inputs(&n.id).len();
+        let params: Vec<String> = (0..count).map(|k| typed(&item, &format!("p{k}"))).collect();
+        o.line(format!("stock lsg_mka{j}({})\n{{\n\tnew a = lsg_atmp()", params.join(", ")));
+        for k in 0..count {
+            o.line(format!("\tlsg_apush{}(a, {})", kind_of(&item), Gen::cell_arg(&item, &format!("p{k}"))));
+        }
+        o.line("\treturn a\n}");
+    }
+    for (fi, f) in g.functions.iter().enumerate() {
+        let Some(entry) = gen.live.iter().copied().find(|id| v.defs[id].kind == "fn.entry" && v.graph_of(id) == f.id) else { continue };
+        o.line(format!("// Function: {}", comment_text(&f.name)));
+        for (k, m) in f.outputs.iter().enumerate() {
+            o.line(match kind_of(&m.ty) {
+                's' => format!("stock g_lsgR{fi}_{k}[128]"),
+                _ if m.ty == "number" => format!("stock Float:g_lsgR{fi}_{k}"),
+                _ => format!("stock g_lsgR{fi}_{k}"),
+            });
+        }
+        o.line(format!("stock bool:g_lsgFD{fi}"));
+        let params: Vec<String> = f.inputs.iter().enumerate().map(|(j, m)| typed(&m.ty, &format!("a{j}"))).collect();
+        o.line(format!("stock lsg_fr{fi}({})\n{{\n\tnew ctx[LSG_CTX]", params.join(", ")));
+        for (j, m) in f.inputs.iter().enumerate() {
+            if let Some(t) = gen.tout_index(entry, &m.id) {
+                o.line(format!("\tcopy(g_lsgOT[{t}], 127, a{j})"));
+            } else if let Some(sl) = gen.slot(entry, &m.id) {
+                o.line(format!("\tctx[{sl}] = _:a{j}"));
+            } else {
+                o.line(format!("\t#pragma unused a{j}"));
+            }
+        }
+        for (k, m) in f.outputs.iter().enumerate() {
+            o.line(if m.ty == "text" { format!("\tg_lsgR{fi}_{k}[0] = 0") } else { format!("\tg_lsgR{fi}_{k} = {}", Gen::zero(&m.ty)) });
+        }
+        o.line(format!("\tg_lsgFD{fi} = false"));
+        for x in &f.locals {
+            o.line(gen.reset_all(x));
+        }
+        o.line(format!("\t{}(ctx)\n}}", gen.fname(entry)));
+        if f.pure {
+            let args: Vec<String> = (0..f.inputs.len()).map(|j| format!("a{j}")).collect();
+            for (k, m) in f.outputs.iter().enumerate() {
+                let head = if m.ty == "number" { "Float:" } else { "" };
+                o.line(format!("stock {head}lsg_pf{fi}_{k}({})\n{{\n\tlsg_fr{fi}({})", params.join(", "), args.join(", ")));
+                o.line(if m.ty == "text" { format!("\tnew t[128]\n\tcopy(t, 127, g_lsgR{fi}_{k})\n\treturn t\n}}") } else { format!("\treturn g_lsgR{fi}_{k}\n}}") });
+            }
+        }
+        o.blank();
     }
 }
 
@@ -1603,6 +2438,11 @@ fn lsg_secs(v: &Option<Val>) -> String {
         None => "1.0".into(),
     }
 }
+
+/// Graph version 3's helpers: vectors and structs in slots, arrays, maps, text, timers.
+/// Every index is clamped and every array or map call checks its handle and size, so a
+/// graph can't read or write outside them.
+const V3_HELPERS: &str = include_str!("v3_helpers.pawn");
 
 /// Helpers every plugin gets (stocks: the ones a graph doesn't use cost nothing).
 const HELPERS: &str = r##"stock lsg_slot(id)
@@ -1702,6 +2542,21 @@ stock lsg_bot_goto(bot, const name[], secs)
 
 public lsg_bot_free(task)
 	ls_bot_release(LSG_TASK - 100 - task)
+
+stock Float:lsg_mod(Float:a, Float:b)
+{
+	if (b == 0.0)
+		return 0.0
+	return a - b * float(floatround(a / b, floatround_floor))
+}
+
+stock Float:lsg_pow(Float:a, Float:b)
+{
+	new Float:r = floatpower(a, b)
+	if (r != r)
+		return 0.0
+	return floatclamp(r, -100000.0, 100000.0)
+}
 
 stock Float:lsg_div(Float:a, Float:b)
 	return b == 0.0 ? 0.0 : a / b
@@ -2316,15 +3171,72 @@ mod tests {
             let d = registry().get(k.kind).unwrap_or_else(|| panic!("{}", k.kind));
             assert!(d.event);
             for (pin, _) in k.values {
-                assert!(d.output(pin).is_some(), "{} {}", k.kind, pin);
+                assert!(d.outputs.iter().any(|o| o.id == *pin), "{} {}", k.kind, pin);
             }
             let cells = d.outputs.iter().filter(|o| o.ty != "exec" && o.ty != "text").count();
             let texts = d.outputs.iter().filter(|o| o.ty == "text").count();
             assert!(cells <= CTX && texts <= TXT, "{}", k.kind);
         }
-        let special = ["func.define", "event.chat_command", "event.player_about_hurt", "event.player_revived", "event.down_timeout", "event.time_up"];
+        let special = ["func.define", "fn.entry", "macro.entry", "event.chat_command", "event.player_about_hurt", "event.player_revived", "event.down_timeout", "event.time_up"];
         for d in registry().nodes.iter().filter(|d| d.event && !special.contains(&d.kind.as_str())) {
             assert!(event_kind(&d.kind).is_some(), "{} has no handler", d.kind);
+        }
+    }
+
+    /// Graph version 3's names (enums, structs, Functions, Macros, their pins, locals) are data
+    /// too: refused by the checks, and only ever comments or string literals if they got through.
+    #[test]
+    fn hostile_v3_names_stay_data() {
+        let evil = "x\"); server_cmd(\"quit\"); /* ^\"";
+        let g = serde_json::json!({
+            "schema": "loner-strike/graph", "version": 3, "mode": {"id": "evil3", "name": "Evil"},
+            "enums": [{"id": "e1", "name": evil, "values": [evil, "ok"]}],
+            "structs": [{"id": "s1", "name": evil, "fields": [{"id": "f1", "name": evil, "type": "text"}, {"id": "f2", "name": "n", "type": "number"}]}],
+            "functions": [{"id": "fn1", "name": evil, "inputs": [{"id": "a1", "name": evil, "type": "text"}], "outputs": [{"id": "o1", "name": evil, "type": "struct:s1"}],
+                           "locals": [{"id": "l1", "name": evil, "type": "enum:e1", "scope": "mode"}]}],
+            "macros": [{"id": "m1", "name": evil, "inputs": [{"id": "go", "name": evil, "type": "exec"}], "outputs": []}],
+            "variables": [{"id": "v1", "name": evil, "type": "array<struct:s1>", "scope": "mode"}],
+            "nodes": [
+                {"id": "r", "type": "event.round_started"},
+                {"id": "c", "type": "fn.call", "params": {"func": "fn1"}},
+                {"id": "t", "type": "text.format", "params": {"text": evil}},
+                {"id": "p", "type": "debug.print", "params": {"text": evil}},
+                {"id": "sw", "type": "flow.switch_text", "params": {"cases": evil}},
+                {"id": "fe", "type": "fn.entry", "graph": "fn1"},
+                {"id": "ev", "type": "enum.value", "graph": "fn1", "params": {"enum": "e1", "value": 0}},
+                {"id": "tx", "type": "text.from", "graph": "fn1", "params": {"of": "enum:e1"}},
+                {"id": "mk", "type": "struct.make", "graph": "fn1", "params": {"struct": "s1"}},
+                {"id": "fr", "type": "fn.return", "graph": "fn1"},
+                {"id": "me", "type": "macro.entry", "graph": "m1"}
+            ],
+            "edges": [
+                {"id": "w1", "from": {"node": "r", "pin": "then"}, "to": {"node": "c", "pin": "exec"}},
+                {"id": "w2", "from": {"node": "c", "pin": "then"}, "to": {"node": "p", "pin": "exec"}},
+                {"id": "w3", "from": {"node": "t", "pin": "out"}, "to": {"node": "p", "pin": "value"}},
+                {"id": "w4", "from": {"node": "p", "pin": "then"}, "to": {"node": "sw", "pin": "exec"}},
+                {"id": "w5", "from": {"node": "t", "pin": "out"}, "to": {"node": "sw", "pin": "in"}},
+                {"id": "w6", "from": {"node": "fe", "pin": "then"}, "to": {"node": "fr", "pin": "exec"}},
+                {"id": "w7", "from": {"node": "ev", "pin": "out"}, "to": {"node": "tx", "pin": "a"}},
+                {"id": "w8", "from": {"node": "tx", "pin": "out"}, "to": {"node": "mk", "pin": "f1"}},
+                {"id": "w9", "from": {"node": "mk", "pin": "out"}, "to": {"node": "fr", "pin": "o1"}},
+                {"id": "w10", "from": {"node": "fe", "pin": "a1"}, "to": {"node": "c", "pin": "a1"}}
+            ]
+        });
+        let g = super::super::graph::from_value(g).unwrap();
+        let p = validate(&g);
+        let errors: Vec<&str> = p.iter().filter(|p| p.level == "error").map(|p| p.message.as_str()).collect();
+        for want in ["Give each Function its own name", "The enum", "Name each input", "Give each struct a name", "Give each Macro its own name", "Give each variable a name", "a wire can't go from one graph to another"] {
+            assert!(errors.iter().any(|m| m.to_lowercase().contains(&want.to_lowercase())), "{want}: {errors:#?}");
+        }
+        for debug in [false, true] {
+            let src = generate(&g, debug).source;
+            assert!(!src.contains("server_cmd(\"quit"), "{src}");
+            assert!(src.contains("server_cmd(quit)"), "the words stay, as text");
+            assert_eq!(src.matches("*/").count(), 1, "only the header comment closes");
+            for l in src.lines().filter(|l| !l.trim_start().starts_with("//")) {
+                assert_eq!(l.replace("^\"", "").replace("'\"'", "").matches('"').count() % 2, 0, "{l}");
+            }
+            assert!(src.contains("lsg_fr0(") && src.contains("lsg_mks0("), "our own names");
         }
     }
 
@@ -2370,7 +3282,8 @@ mod tests {
         }
         let rel = generate(&g, false);
         let dbg = generate(&g, true);
-        for n in g.nodes.iter().filter(|n| { let d = registry().get(&n.kind).unwrap(); !d.pure && !d.reroute }) {
+        let in_macro = |n: &super::super::graph::Node| n.graph.as_deref().is_some_and(|h| g.macros.iter().any(|m| m.id == h));
+        for n in g.nodes.iter().filter(|n| { let d = registry().get(&n.kind).unwrap(); !d.pure && !d.reroute && !in_macro(n) && !n.kind.starts_with("macro.") }) {
             assert!(rel.spans.iter().any(|s| s.node == n.id), "{} isn't in the plugin", n.id);
         }
         assert!(!rel.source.contains("lsd_"));

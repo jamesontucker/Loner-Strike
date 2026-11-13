@@ -29,6 +29,16 @@ type Studio = {
   funcFocus: string | null;
   /** the compiler's last words (Results panel) */
   output: string | null;
+  /** the graph tab shown: "" the Event Graph, else a Function's or Macro's id */
+  tab: string;
+  /** the tabs open after the Event Graph, in order */
+  tabs: string[];
+  /** a Function, Macro, struct or enum shown in Details (picked in the left panel) */
+  part: string | null;
+  openTab: (id: string) => void;
+  closeTab: (id: string) => void;
+  moveTab: (id: string, before: string | null) => void;
+  selectPart: (id: string | null) => void;
   selectVar: (id: string | null) => void;
   setFuncFocus: (id: string | null) => void;
   setOutput: (o: string | null) => void;
@@ -50,6 +60,13 @@ type Studio = {
   setBpsOff: (v: boolean) => void;
 };
 
+/** The tabs still there after a change (a removed Function's tab closes). */
+function keepTabs(g: Graph, tab: string, tabs: string[]) {
+  const there = new Set([...(g.functions ?? []).map((f) => f.id), ...(g.macros ?? []).map((m) => m.id)]);
+  const next = tabs.filter((t) => there.has(t));
+  return next.length === tabs.length && (!tab || there.has(tab)) ? {} : { tabs: next, tab: tab && there.has(tab) ? tab : "" };
+}
+
 const isEventNode = (g: Graph | null) => (id: string) => {
   const n = g?.nodes.find((x) => x.id === id);
   return !!(n && nodeDef(n.type)?.event);
@@ -68,17 +85,37 @@ export const useStudio = create<Studio>((set, get) => ({
   selectedVar: null,
   funcFocus: null,
   output: null,
-  selectVar: (selectedVar) => set(selectedVar ? { selectedVar, selected: [] } : { selectedVar }),
+  tab: "",
+  tabs: [],
+  part: null,
+  openTab: (id) => {
+    const { tabs } = get();
+    set({ tab: id, tabs: !id || tabs.includes(id) ? tabs : [...tabs, id], selected: [] });
+  },
+  closeTab: (id) => {
+    const { tabs, tab } = get();
+    const i = tabs.indexOf(id);
+    const next = tabs.filter((t) => t !== id);
+    set({ tabs: next, tab: tab === id ? (next[Math.min(i, next.length - 1)] ?? "") : tab });
+  },
+  moveTab: (id, before) => {
+    const rest = get().tabs.filter((t) => t !== id);
+    const at = before ? rest.indexOf(before) : rest.length;
+    rest.splice(at < 0 ? rest.length : at, 0, id);
+    set({ tabs: rest });
+  },
+  selectPart: (part) => set(part ? { part, selected: [], selectedVar: null } : { part }),
+  selectVar: (selectedVar) => set(selectedVar ? { selectedVar, selected: [], part: null } : { selectedVar }),
   setFuncFocus: (funcFocus) => set({ funcFocus }),
   setOutput: (output) => set({ output }),
-  open: (g, saved) => set({ selectedVar: null, funcFocus: null, output: null, graph: g, saved: saved ? g : null, history: emptyHistory(), problems: [], selected: [], playing: null, debug: emptyDebug() }),
-  close: () => set({ graph: null, saved: null, history: emptyHistory(), problems: [], selected: [], playing: null, debug: emptyDebug() }),
+  open: (g, saved) => set({ selectedVar: null, funcFocus: null, output: null, tab: "", tabs: [], part: null, graph: g, saved: saved ? g : null, history: emptyHistory(), problems: [], selected: [], playing: null, debug: emptyDebug() }),
+  close: () => set({ graph: null, saved: null, tab: "", tabs: [], part: null, history: emptyHistory(), problems: [], selected: [], playing: null, debug: emptyDebug() }),
   edit: (f) => {
     const g = get().graph;
     if (!g) return;
     const next = f(g);
     if (next === g) return;
-    set({ graph: next, history: record(get().history, g) });
+    set({ graph: next, history: record(get().history, g), ...keepTabs(next, get().tab, get().tabs) });
   },
   live: (f) => {
     const g = get().graph;
@@ -90,12 +127,12 @@ export const useStudio = create<Studio>((set, get) => ({
   undo: () => {
     const { graph, history } = get();
     const r = graph && undo(history, graph);
-    if (r) set({ graph: r.graph, history: r.history });
+    if (r) set({ graph: r.graph, history: r.history, ...keepTabs(r.graph, get().tab, get().tabs) });
   },
   redo: () => {
     const { graph, history } = get();
     const r = graph && redo(history, graph);
-    if (r) set({ graph: r.graph, history: r.history });
+    if (r) set({ graph: r.graph, history: r.history, ...keepTabs(r.graph, get().tab, get().tabs) });
   },
   markSaved: () => set({ saved: get().graph }),
   setProblems: (problems) => set({ problems }),

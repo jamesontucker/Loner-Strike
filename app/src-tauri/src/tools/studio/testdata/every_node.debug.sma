@@ -1,5 +1,5 @@
 /*
-	Every Node - made with Loner-Strike's Game Mode Studio (graph version 2).
+	Every Node - made with Loner-Strike's Game Mode Studio (graph version 3).
 	Generated from every_node.graph.json: change the graph and compile it again; edits here are lost.
 	This is a debug build (Playtest): it reports every node to the Studio.
 */
@@ -11,17 +11,29 @@
 #include <hamsandwich>
 #include <loner>
 #include <celltrie>
+#include <cellarray>
 
 #define LSG_MODE "every_node"
-#define LSG_CTX 13
+#define LSG_CTX 22
 #define LSG_TXT 2
-#define LSG_N 162
+#define LSG_N 248
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
 stock const g_lsgYesNo[][] = { "no", "yes" }
 stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists", "Spectators" }
+#define LSG_VR 256
+#define LSG_VP 290
+#define LSG_RR 64
+#define LSG_RP 65
+#define LSG_RC 6
+#define LSG_RT 1
+#define LSG_AC 70
+#define LSG_AMAX 10000
+#define LSG_TMPA 32
+#define LSG_O 8
+#define LSG_OT 2
 
 // The mode's variables
 stock Float:g_pv0[33] // Kills (number, per player)
@@ -30,13 +42,27 @@ stock g_v2 = 0 // Flag (bool)
 stock g_v3[64] = "none" // Last thing (text)
 stock Float:g_tv4[4] = { 0.0, 0.0, 0.0, 0.0 } // Team score (number, per team, each round)
 stock g_v5[64] = "wait" // Phase (text)
+// Spot is in slot (LSG_VR + 0)
+// Player spot is in slot (LSG_VR + 1 + lsg_slot(0))
+stock g_v8 = 0 // Names (Array of Text)
+stock g_v9 = 0 // Numbers (Array of Number, each round)
+stock g_v10 = 0 // Players (Array of Player)
+stock g_v11 = 0 // Loadouts (Array of Loadout)
+stock g_v12 = 0 // Scores (Map of Player to Number)
+stock g_v13 = 0 // Words (Map of Text to Text)
+stock g_v14 = 0 // Marks (Map of Number to Vector)
+// Loadout is in slot (LSG_RR + 0)
+stock g_pv16[33] // Class (Class, per player)
+stock g_v17 = 0 // Timer (Timer)
+stock Float:g_v18 = 0.0 // Sum (number)
+stock g_v19 = 0 // Seen (Array of Player)
 
 stock Float:g_lsgDmg, bool:g_lsgDmgBlock
 stock g_lsgNoFall[33]
 stock g_lsgM93[33][LSG_CTX]
-#define LSD_N 162
-new const g_lsdIds[LSD_N][] = { "rs", "rs_set", "rs_cd", "rs_msg", "rs_rep", "rs_hud", "rs_delay", "rs_wave", "rs_wstop", "rs_reset", "pk", "pk_br", "pk_add", "pk_add2", "pk_team", "pk_give", "pk_seth", "pk_hud", "ps", "ps_strip", "ps_arm", "ps_spd", "ps_team", "ps_tp", "ps_set", "pj", "pj_hud", "pj_br", "pl", "pl_set", "bp", "bp_hud", "bd", "bd_end", "bx", "bx_end", "re", "re_br", "re_set", "re_stop", "pu", "pu_door", "pu_trap", "pt", "pt_crate", "cc", "cc_lock", "cc_hud", "cl", "cl_ex", "zs", "zs_shrink", "zt", "zt_set", "zt_hud", "ex", "ex_add", "ws", "ws_hud", "wp", "wp_hud", "wc", "wc_start", "lo", "lo_hud", "ck", "ck_set", "bb", "bb_msg", "me", "me_hud", "ck2", "ck2_set", "ck2_make", "ck2_spawn", "ck2_hud", "ck2_hud2", "hurt", "hurt_tadd", "hurt_glow", "tc", "tc_model", "nr", "nr_cvar", "nr_each", "nr_resp", "nr_pick", "nr_ents", "nr_use", "nr_set", "nr_stop", "nr_hud", "cmd", "cmd_menu", "cmd_arm", "cmd_money", "cmd_grav", "cmd_bar", "cmd_chat", "fn", "fn_frag", "fn_snd", "fn_role", "pk2", "pk2_call", "pk2_pick", "pk2_bot", "pk2_hold", "pk2_follow", "pk2_free", "pk2_drop", "pk2_fr", "pk2_kill", "lo2", "lo2_br", "lo2_pick", "lo2_br2", "lo2_resp", "lo2_drop", "lo2_hud", "lo2_br3", "lo2_end", "ms", "ms_pack", "ms_pick", "ms_start", "ms_stop", "ms_make", "ms_drop", "ms_each", "ms_tp", "ah", "ah_br", "ah_block", "ah_scale", "ah_set", "dk", "dk_down", "rv", "rv_hud", "to", "to_add", "to_set", "to_hud", "to_br", "sq", "sq_nf", "sq_set", "sq_ff", "sq_hud", "sq_buy", "sq_allow", "sq_up", "sq_goto", "ck3", "ck3_set", "ck3_add", "ck3_p", "ck3_r", "ck3_hud", "tu", "tu_end" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 248
+new const g_lsdIds[LSD_N][] = { "rs", "rs_set", "rs_cd", "rs_msg", "rs_rep", "rs_hud", "rs_delay", "rs_wave", "rs_wstop", "rs_reset", "pk", "pk_br", "pk_add", "pk_add2", "pk_team", "pk_give", "pk_seth", "pk_hud", "ps", "ps_strip", "ps_arm", "ps_spd", "ps_team", "ps_tp", "ps_set", "pj", "pj_hud", "pj_br", "pl", "pl_set", "bp", "bp_hud", "bd", "bd_end", "bx", "bx_end", "re", "re_br", "re_set", "re_stop", "pu", "pu_door", "pu_trap", "pt", "pt_crate", "cc", "cc_lock", "cc_hud", "cl", "cl_ex", "zs", "zs_shrink", "zt", "zt_set", "zt_hud", "ex", "ex_add", "ws", "ws_hud", "wp", "wp_hud", "wc", "wc_start", "lo", "lo_hud", "ck", "ck_set", "bb", "bb_msg", "me", "me_hud", "ck2", "ck2_set", "ck2_make", "ck2_spawn", "ck2_hud", "ck2_hud2", "hurt", "hurt_tadd", "hurt_glow", "tc", "tc_model", "nr", "nr_cvar", "nr_each", "nr_resp", "nr_pick", "nr_ents", "nr_use", "nr_set", "nr_stop", "nr_hud", "cmd", "cmd_menu", "cmd_arm", "cmd_money", "cmd_grav", "cmd_bar", "cmd_chat", "fn", "fn_frag", "fn_snd", "fn_role", "pk2", "pk2_call", "pk2_pick", "pk2_bot", "pk2_hold", "pk2_follow", "pk2_free", "pk2_drop", "pk2_fr", "pk2_kill", "lo2", "lo2_br", "lo2_pick", "lo2_br2", "lo2_resp", "lo2_drop", "lo2_hud", "lo2_br3", "lo2_end", "ms", "ms_pack", "ms_pick", "ms_start", "ms_stop", "ms_make", "ms_drop", "ms_each", "ms_tp", "ah", "ah_br", "ah_block", "ah_scale", "ah_set", "dk", "dk_down", "rv", "rv_hud", "to", "to_add", "to_set", "to_hud", "to_br", "sq", "sq_nf", "sq_set", "sq_ff", "sq_hud", "sq_buy", "sq_allow", "sq_up", "sq_goto", "ck3", "ck3_set", "ck3_add", "ck3_p", "ck3_r", "ck3_hud", "tu", "tu_end", "a0", "a_seq", "a_for", "a_add", "a_sort", "a_shuf", "a_ins", "a_rmi", "a_aset", "a_arem", "a_fe", "a_br", "a_pr", "a_pr2", "a_clr", "b_set", "b_wh", "b_add", "b_sw", "b_pr1", "b_sn", "b_pr2", "b_pr3", "c_each", "c_setp", "c_pos", "c_vel", "c_pr", "c_sl", "c_sf", "c_sf2", "c_push", "c_pr2", "c_sw", "c_pr3", "c_pr4", "d_each", "d_madd", "d_call", "d_pr", "d_pr2", "d_tadd", "d_vadd", "d_rem", "d_pr3", "d_mclr", "d_pr4", "d_pr5", "d_tbf", "d_tset", "d_pr6", "d_tclr", "d_pr7", "e0", "e_once", "e_n", "e_gate", "e_ff", "e_iv", "e_rt", "e_pr", "e_pr2", "e_seq", "f0", "f_brk", "f_br", "f_pr", "f_pr2", "f_pr3", "f_pr4", "f_setc", "f_sw", "f_pr5", "f_sp", "f_pr6", "fa_e", "fa_set", "fa_push", "fa_br", "fa_r1", "fa_r2", "fb_e", "fb_r", "fc_e", "fc_pr", "d_mac" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -477,19 +503,6 @@ public lsd_poll()
 		lsd_resume()
 }
 
-lsd_graph_vars()
-{
-	for (new id = 1; id <= MaxClients; id++)
-		if (is_user_connected(id))
-			lsd_var_number("kills", id, g_pv0[id])
-	lsd_var_number("round", 0, g_v1)
-	lsd_var_bool("flag", 0, g_v2)
-	lsd_var_text("last", 0, g_v3)
-	lsd_var_number("tscore:T", 0, g_tv4[1])
-	lsd_var_number("tscore:CT", 0, g_tv4[2])
-	lsd_var_text("phase", 0, g_v5)
-}
-
 stock lsg_slot(id)
 	return id >= 1 && id <= MaxClients ? id : 0
 
@@ -587,6 +600,21 @@ stock lsg_bot_goto(bot, const name[], secs)
 
 public lsg_bot_free(task)
 	ls_bot_release(LSG_TASK - 100 - task)
+
+stock Float:lsg_mod(Float:a, Float:b)
+{
+	if (b == 0.0)
+		return 0.0
+	return a - b * float(floatround(a / b, floatround_floor))
+}
+
+stock Float:lsg_pow(Float:a, Float:b)
+{
+	new Float:r = floatpower(a, b)
+	if (r != r)
+		return 0.0
+	return floatclamp(r, -100000.0, 100000.0)
+}
 
 stock Float:lsg_div(Float:a, Float:b)
 	return b == 0.0 ? 0.0 : a / b
@@ -746,6 +774,976 @@ stock lsg_round_time(secs)
 	message_begin(MSG_ALL, get_user_msgid("RoundTime"))
 	write_short(max(secs, 0))
 	message_end()
+}
+
+// ---- graph version 3: vectors, structs, arrays, maps, text, timers
+// Vectors and structs are slots (a ring that's reused, then each variable's own slots); a
+// value is the slot's number. Arrays and maps are handles. Every index is clamped and every
+// handle and size checked, so a graph never reads or writes outside them.
+stock Float:g_lsgVec[LSG_VP][3], g_lsgVecAt
+stock g_lsgRec[LSG_RP][LSG_RC], g_lsgRecT[LSG_RP][LSG_RT][64], g_lsgRecAt
+stock g_lsgO[LSG_O], g_lsgOT[LSG_OT][128]
+stock g_lsgTmpA[LSG_TMPA], g_lsgTmpAt
+stock const g_lsgRun[][] = { "stopped", "running" }
+
+stock lsg_vi(v)
+	return clamp(v, 0, LSG_VP - 1)
+
+stock lsg_vnew()
+{
+	if (++g_lsgVecAt >= LSG_VR)
+		g_lsgVecAt = 0
+	return g_lsgVecAt
+}
+
+stock lsg_vec(Float:x, Float:y, Float:z)
+{
+	new v = lsg_vnew()
+	g_lsgVec[v][0] = x
+	g_lsgVec[v][1] = y
+	g_lsgVec[v][2] = z
+	return v
+}
+
+stock Float:lsg_vc(v, k)
+	return g_lsgVec[lsg_vi(v)][clamp(k, 0, 2)]
+
+stock lsg_vset(dst, src)
+{
+	new d = lsg_vi(dst), s = lsg_vi(src)
+	for (new k = 0; k < 3; k++)
+		g_lsgVec[d][k] = g_lsgVec[s][k]
+}
+
+stock lsg_vzero(dst)
+{
+	new d = lsg_vi(dst)
+	for (new k = 0; k < 3; k++)
+		g_lsgVec[d][k] = 0.0
+}
+
+stock lsg_vfrom(const Float:o[3])
+	return lsg_vec(o[0], o[1], o[2])
+
+stock lsg_vto(v, Float:o[3])
+{
+	for (new k = 0; k < 3; k++)
+		o[k] = lsg_vc(v, k)
+}
+
+stock lsg_vadd(a, b, Float:sign)
+	return lsg_vec(lsg_vc(a, 0) + sign * lsg_vc(b, 0), lsg_vc(a, 1) + sign * lsg_vc(b, 1), lsg_vc(a, 2) + sign * lsg_vc(b, 2))
+
+stock lsg_vscale(a, Float:n)
+	return lsg_vec(lsg_vc(a, 0) * n, lsg_vc(a, 1) * n, lsg_vc(a, 2) * n)
+
+stock Float:lsg_vlen(a)
+	return floatsqroot(lsg_vc(a, 0) * lsg_vc(a, 0) + lsg_vc(a, 1) * lsg_vc(a, 1) + lsg_vc(a, 2) * lsg_vc(a, 2))
+
+stock Float:lsg_vdist(a, b)
+{
+	new Float:x = lsg_vc(a, 0) - lsg_vc(b, 0), Float:y = lsg_vc(a, 1) - lsg_vc(b, 1), Float:z = lsg_vc(a, 2) - lsg_vc(b, 2)
+	return floatsqroot(x * x + y * y + z * z)
+}
+
+stock lsg_vnorm(a)
+{
+	new Float:l = lsg_vlen(a)
+	if (l < 0.0001)
+		return lsg_vec(0.0, 0.0, 0.0)
+	return lsg_vscale(a, 1.0 / l)
+}
+
+stock lsg_vdir(from, to)
+	return lsg_vnorm(lsg_vadd(to, from, -1.0))
+
+stock bool:lsg_veq(a, b)
+	return lsg_vc(a, 0) == lsg_vc(b, 0) && lsg_vc(a, 1) == lsg_vc(b, 1) && lsg_vc(a, 2) == lsg_vc(b, 2)
+
+stock lsg_vtext(v)
+{
+	new t[64]
+	formatex(t, charsmax(t), "%.0f %.0f %.0f", lsg_vc(v, 0), lsg_vc(v, 1), lsg_vc(v, 2))
+	return t
+}
+
+// where a player is: 0 feet, 1 eyes, 2 aim direction, 3 what the aim hits, 4 velocity
+stock lsg_vplayer(id, what)
+{
+	new Float:o[3]
+	if (!lsg_ok(id))
+		return lsg_vfrom(o)
+	new Float:ofs[3], Float:ang[3], Float:fwd[3], Float:end[3]
+	switch (what)
+	{
+		case 1, 3:
+		{
+			pev(id, pev_origin, o)
+			pev(id, pev_view_ofs, ofs)
+			for (new k = 0; k < 3; k++)
+				o[k] += ofs[k]
+			if (what == 3)
+			{
+				pev(id, pev_v_angle, ang)
+				angle_vector(ang, ANGLEVECTOR_FORWARD, fwd)
+				for (new k = 0; k < 3; k++)
+					end[k] = o[k] + fwd[k] * 8192.0
+				engfunc(EngFunc_TraceLine, o, end, DONT_IGNORE_MONSTERS, id, 0)
+				get_tr2(0, TR_vecEndPos, o)
+			}
+		}
+		case 2:
+		{
+			pev(id, pev_v_angle, ang)
+			angle_vector(ang, ANGLEVECTOR_FORWARD, o)
+		}
+		case 4:
+			pev(id, pev_velocity, o)
+		default:
+			pev(id, pev_origin, o)
+	}
+	return lsg_vfrom(o)
+}
+
+// where an entity is (a brush entity: the middle of its box)
+stock lsg_vent(ent)
+{
+	new Float:o[3]
+	if (ent < 1 || !pev_valid(ent))
+		return lsg_vfrom(o)
+	pev(ent, pev_origin, o)
+	if (o[0] == 0.0 && o[1] == 0.0 && o[2] == 0.0)
+	{
+		new Float:mins[3], Float:maxs[3]
+		pev(ent, pev_absmin, mins)
+		pev(ent, pev_absmax, maxs)
+		for (new k = 0; k < 3; k++)
+			o[k] = (mins[k] + maxs[k]) * 0.5
+	}
+	return lsg_vfrom(o)
+}
+
+stock lsg_vsetpos(id, v)
+{
+	new Float:o[3], Float:still[3]
+	lsg_vto(v, o)
+	engfunc(EngFunc_SetOrigin, id, o)
+	set_pev(id, pev_velocity, still)
+}
+
+stock lsg_vsetvel(id, v)
+{
+	new Float:o[3]
+	lsg_vto(v, o)
+	for (new k = 0; k < 3; k++)
+		o[k] = floatclamp(o[k], -4000.0, 4000.0)
+	set_pev(id, pev_velocity, o)
+}
+
+// ---- structs
+stock lsg_ri(r)
+	return clamp(r, 0, LSG_RP - 1)
+
+stock lsg_rzero(r)
+{
+	new i = lsg_ri(r)
+	for (new k = 0; k < LSG_RC; k++)
+		g_lsgRec[i][k] = 0
+	for (new k = 0; k < LSG_RT; k++)
+		g_lsgRecT[i][k][0] = 0
+}
+
+stock lsg_rnew()
+{
+	if (++g_lsgRecAt >= LSG_RR)
+		g_lsgRecAt = 0
+	lsg_rzero(g_lsgRecAt)
+	return g_lsgRecAt
+}
+
+stock lsg_rset(dst, src)
+{
+	new d = lsg_ri(dst), s = lsg_ri(src)
+	if (d == s)
+		return
+	for (new k = 0; k < LSG_RC; k++)
+		g_lsgRec[d][k] = g_lsgRec[s][k]
+	for (new k = 0; k < LSG_RT; k++)
+		copy(g_lsgRecT[d][k], 63, g_lsgRecT[s][k])
+}
+
+stock bool:lsg_req(a, b)
+{
+	new x = lsg_ri(a), y = lsg_ri(b)
+	for (new k = 0; k < LSG_RC; k++)
+		if (g_lsgRec[x][k] != g_lsgRec[y][k])
+			return false
+	for (new k = 0; k < LSG_RT; k++)
+		if (!equal(g_lsgRecT[x][k], g_lsgRecT[y][k]))
+			return false
+	return true
+}
+
+stock lsg_rvec(r, off)
+{
+	new i = lsg_ri(r)
+	return lsg_vec(Float:g_lsgRec[i][off], Float:g_lsgRec[i][off + 1], Float:g_lsgRec[i][off + 2])
+}
+
+stock lsg_rsetvec(r, off, v)
+{
+	new i = lsg_ri(r)
+	for (new k = 0; k < 3; k++)
+		g_lsgRec[i][off + k] = _:lsg_vc(v, k)
+}
+
+stock lsg_rpack(r, b[LSG_AC])
+{
+	new i = lsg_ri(r)
+	for (new k = 0; k < LSG_RC; k++)
+		b[k] = g_lsgRec[i][k]
+	for (new t = 0; t < LSG_RT; t++)
+		for (new c = 0; c < 64; c++)
+			b[LSG_RC + t * 64 + c] = g_lsgRecT[i][t][c]
+}
+
+stock lsg_runpack(const b[LSG_AC])
+{
+	new r = lsg_rnew()
+	for (new k = 0; k < LSG_RC; k++)
+		g_lsgRec[r][k] = b[k]
+	for (new t = 0; t < LSG_RT; t++)
+	{
+		for (new c = 0; c < 63; c++)
+			g_lsgRecT[r][t][c] = b[LSG_RC + t * 64 + c]
+		g_lsgRecT[r][t][63] = 0
+	}
+	return r
+}
+
+// ---- arrays (every array holds items of LSG_AC cells; at most LSG_AMAX items)
+stock lsg_atmp()
+{
+	if (++g_lsgTmpAt >= LSG_TMPA)
+		g_lsgTmpAt = 0
+	if (!g_lsgTmpA[g_lsgTmpAt])
+		g_lsgTmpA[g_lsgTmpAt] = _:ArrayCreate(LSG_AC)
+	else
+		ArrayClear((Array:g_lsgTmpA[g_lsgTmpAt]))
+	return g_lsgTmpA[g_lsgTmpAt]
+}
+
+stock lsg_alen(a)
+	return a ? ArraySize((Array:a)) : 0
+
+// an index, or -1 when it's outside the array
+stock lsg_aidx(a, Float:i)
+{
+	new k = floatround(i, floatround_floor)
+	return k >= 0 && k < lsg_alen(a) ? k : -1
+}
+
+stock bool:lsg_aroom(a)
+	return a && ArraySize((Array:a)) < LSG_AMAX
+
+stock lsg_aremi(a, Float:i)
+{
+	new k = lsg_aidx(a, i)
+	if (k >= 0)
+		ArrayDeleteItem((Array:a), k)
+}
+
+stock lsg_aclear(a)
+{
+	if (a)
+		ArrayClear((Array:a))
+}
+
+stock lsg_ashuffle(a)
+{
+	for (new k = lsg_alen(a) - 1; k > 0; k--)
+		ArraySwap((Array:a), k, random(k + 1))
+}
+
+// kind: 0 numbers, 1 by cell, 2 text
+stock lsg_asort(a, kind, desc)
+{
+	if (lsg_alen(a) < 2)
+		return
+	new d[2]
+	d[0] = kind
+	d[1] = desc
+	ArraySort((Array:a), "lsg_acmp", d, 2)
+}
+
+public lsg_acmp(Array:a, i1, i2, const d[], size)
+{
+	#pragma unused size
+	new r
+	switch (d[0])
+	{
+		case 0:
+		{
+			new Float:x = Float:ArrayGetCell(a, i1), Float:y = Float:ArrayGetCell(a, i2)
+			r = x < y ? -1 : (x > y ? 1 : 0)
+		}
+		case 2:
+		{
+			new s1[64], s2[64]
+			ArrayGetString(a, i1, s1, 63)
+			ArrayGetString(a, i2, s2, 63)
+			r = strcmp(s1, s2, true)
+			r = r < 0 ? -1 : (r > 0 ? 1 : 0)
+		}
+		default:
+		{
+			new x = ArrayGetCell(a, i1), y = ArrayGetCell(a, i2)
+			r = x < y ? -1 : (x > y ? 1 : 0)
+		}
+	}
+	return d[1] ? -r : r
+}
+
+stock lsg_acopy(dst, src)
+{
+	if (!dst || dst == src)
+		return
+	ArrayClear((Array:dst))
+	new n = min(lsg_alen(src), LSG_AMAX), b[LSG_AC]
+	for (new k = 0; k < n; k++)
+	{
+		ArrayGetArray((Array:src), k, b)
+		ArrayPushArray((Array:dst), b)
+	}
+}
+
+stock lsg_aplayers(which)
+{
+	new a = lsg_atmp()
+	for (new p = 1; p <= MaxClients; p++)
+		if (lsg_match(p, which))
+			ArrayPushCell((Array:a), p)
+	return a
+}
+
+// items in a cell
+stock lsg_apushc(a, v)
+	return lsg_aroom(a) ? ArrayPushCell((Array:a), v) : -1
+
+stock lsg_agetc(a, Float:i)
+{
+	new k = lsg_aidx(a, i)
+	return k < 0 ? 0 : ArrayGetCell((Array:a), k)
+}
+
+stock lsg_asetc(a, Float:i, v)
+{
+	new k = lsg_aidx(a, i)
+	if (k >= 0)
+		ArraySetCell((Array:a), k, v)
+}
+
+stock lsg_ainsc(a, Float:i, v)
+{
+	if (!lsg_aroom(a))
+		return
+	new k = floatround(i, floatround_floor)
+	if (k < 0 || k >= ArraySize((Array:a)))
+		ArrayPushCell((Array:a), v)
+	else
+		ArrayInsertCellBefore((Array:a), k, v)
+}
+
+stock lsg_afindc(a, v)
+{
+	new n = lsg_alen(a)
+	for (new k = 0; k < n; k++)
+		if (ArrayGetCell((Array:a), k) == v)
+			return k
+	return -1
+}
+
+stock bool:lsg_aremc(a, v)
+{
+	new bool:any
+	for (new k = lsg_alen(a) - 1; k >= 0; k--)
+		if (ArrayGetCell((Array:a), k) == v)
+		{
+			ArrayDeleteItem((Array:a), k)
+			any = true
+		}
+	return any
+}
+
+stock lsg_arandc(a)
+{
+	new n = lsg_alen(a)
+	return n ? ArrayGetCell((Array:a), random(n)) : 0
+}
+
+// text items
+stock lsg_apushs(a, const s[])
+	return lsg_aroom(a) ? ArrayPushString((Array:a), s) : -1
+
+stock lsg_agets(a, Float:i)
+{
+	new t[64], k = lsg_aidx(a, i)
+	if (k >= 0)
+		ArrayGetString((Array:a), k, t, 63)
+	return t
+}
+
+stock lsg_asets(a, Float:i, const s[])
+{
+	new k = lsg_aidx(a, i)
+	if (k >= 0)
+		ArraySetString((Array:a), k, s)
+}
+
+stock lsg_ainss(a, Float:i, const s[])
+{
+	if (!lsg_aroom(a))
+		return
+	new k = floatround(i, floatround_floor)
+	if (k < 0 || k >= ArraySize((Array:a)))
+		ArrayPushString((Array:a), s)
+	else
+		ArrayInsertStringBefore((Array:a), k, s)
+}
+
+stock lsg_afinds(a, const s[])
+{
+	new n = lsg_alen(a), t[64]
+	for (new k = 0; k < n; k++)
+	{
+		ArrayGetString((Array:a), k, t, 63)
+		if (equal(t, s))
+			return k
+	}
+	return -1
+}
+
+stock bool:lsg_arems(a, const s[])
+{
+	new bool:any, t[64]
+	for (new k = lsg_alen(a) - 1; k >= 0; k--)
+	{
+		ArrayGetString((Array:a), k, t, 63)
+		if (equal(t, s))
+		{
+			ArrayDeleteItem((Array:a), k)
+			any = true
+		}
+	}
+	return any
+}
+
+stock lsg_arands(a)
+{
+	new t[64], n = lsg_alen(a)
+	if (n)
+		ArrayGetString((Array:a), random(n), t, 63)
+	return t
+}
+
+// vector items (3 cells)
+stock lsg_vbuf(v, b[LSG_AC])
+{
+	for (new k = 0; k < 3; k++)
+		b[k] = _:lsg_vc(v, k)
+}
+
+stock lsg_apushv(a, v)
+{
+	if (!lsg_aroom(a))
+		return -1
+	new b[LSG_AC]
+	lsg_vbuf(v, b)
+	return ArrayPushArray((Array:a), b)
+}
+
+stock lsg_agetv(a, Float:i)
+{
+	new b[LSG_AC], k = lsg_aidx(a, i)
+	if (k >= 0)
+		ArrayGetArray((Array:a), k, b)
+	return lsg_vec(Float:b[0], Float:b[1], Float:b[2])
+}
+
+stock lsg_asetv(a, Float:i, v)
+{
+	new b[LSG_AC], k = lsg_aidx(a, i)
+	lsg_vbuf(v, b)
+	if (k >= 0)
+		ArraySetArray((Array:a), k, b)
+}
+
+stock lsg_ainsv(a, Float:i, v)
+{
+	if (!lsg_aroom(a))
+		return
+	new b[LSG_AC], k = floatround(i, floatround_floor)
+	lsg_vbuf(v, b)
+	if (k < 0 || k >= ArraySize((Array:a)))
+		ArrayPushArray((Array:a), b)
+	else
+		ArrayInsertArrayBefore((Array:a), k, b)
+}
+
+stock lsg_afindv(a, v)
+{
+	new n = lsg_alen(a), b[LSG_AC]
+	for (new k = 0; k < n; k++)
+	{
+		ArrayGetArray((Array:a), k, b)
+		if (Float:b[0] == lsg_vc(v, 0) && Float:b[1] == lsg_vc(v, 1) && Float:b[2] == lsg_vc(v, 2))
+			return k
+	}
+	return -1
+}
+
+stock bool:lsg_aremv(a, v)
+{
+	new bool:any, k
+	while ((k = lsg_afindv(a, v)) >= 0)
+	{
+		ArrayDeleteItem((Array:a), k)
+		any = true
+	}
+	return any
+}
+
+stock lsg_arandv(a)
+{
+	new n = lsg_alen(a)
+	return lsg_agetv(a, n ? float(random(n)) : -1.0)
+}
+
+// struct items (packed)
+stock lsg_apushr(a, r)
+{
+	if (!lsg_aroom(a))
+		return -1
+	new b[LSG_AC]
+	lsg_rpack(r, b)
+	return ArrayPushArray((Array:a), b)
+}
+
+stock lsg_agetr(a, Float:i)
+{
+	new b[LSG_AC], k = lsg_aidx(a, i)
+	if (k >= 0)
+		ArrayGetArray((Array:a), k, b)
+	return lsg_runpack(b)
+}
+
+stock lsg_asetr(a, Float:i, r)
+{
+	new b[LSG_AC], k = lsg_aidx(a, i)
+	lsg_rpack(r, b)
+	if (k >= 0)
+		ArraySetArray((Array:a), k, b)
+}
+
+stock lsg_ainsr(a, Float:i, r)
+{
+	if (!lsg_aroom(a))
+		return
+	new b[LSG_AC], k = floatround(i, floatround_floor)
+	lsg_rpack(r, b)
+	if (k < 0 || k >= ArraySize((Array:a)))
+		ArrayPushArray((Array:a), b)
+	else
+		ArrayInsertArrayBefore((Array:a), k, b)
+}
+
+stock lsg_afindr(a, r)
+{
+	new n = lsg_alen(a), want[LSG_AC], b[LSG_AC]
+	lsg_rpack(r, want)
+	for (new k = 0; k < n; k++)
+	{
+		ArrayGetArray((Array:a), k, b)
+		new same = 1
+		for (new c = 0; c < LSG_AC && same; c++)
+			if (b[c] != want[c])
+				same = 0
+		if (same)
+			return k
+	}
+	return -1
+}
+
+stock bool:lsg_aremr(a, r)
+{
+	new bool:any, k
+	while ((k = lsg_afindr(a, r)) >= 0)
+	{
+		ArrayDeleteItem((Array:a), k)
+		any = true
+	}
+	return any
+}
+
+stock lsg_arandr(a)
+{
+	new n = lsg_alen(a)
+	return lsg_agetr(a, n ? float(random(n)) : -1.0)
+}
+
+// ---- maps: keys are text (a number written out, a player as #userid)
+stock lsg_kn(Float:n)
+{
+	new k[24]
+	formatex(k, charsmax(k), "%.3f", n)
+	return k
+}
+
+stock lsg_kp(id)
+{
+	new k[16]
+	if (lsg_ok(id))
+		formatex(k, charsmax(k), "#%d", get_user_userid(id))
+	return k
+}
+
+stock lsg_by_userid(u)
+{
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_connected(p) && get_user_userid(p) == u)
+			return p
+	return 0
+}
+
+stock lsg_mlen(m)
+	return m ? TrieGetSize((Trie:m)) : 0
+
+stock bool:lsg_mhas(m, const k[])
+	return m && TrieKeyExists((Trie:m), k)
+
+stock lsg_mdel(m, const k[])
+{
+	if (m)
+		TrieDeleteKey((Trie:m), k)
+}
+
+stock lsg_mclear(m)
+{
+	if (m)
+		TrieClear((Trie:m))
+}
+
+stock lsg_msetc(m, const k[], v)
+{
+	if (m && (TrieGetSize((Trie:m)) < LSG_AMAX || TrieKeyExists((Trie:m), k)))
+		TrieSetCell((Trie:m), k, v)
+}
+
+stock lsg_msets(m, const k[], const s[])
+{
+	if (m && (TrieGetSize((Trie:m)) < LSG_AMAX || TrieKeyExists((Trie:m), k)))
+		TrieSetString((Trie:m), k, s)
+}
+
+stock lsg_msetv(m, const k[], v)
+{
+	new Float:b[3]
+	lsg_vto(v, b)
+	if (m && (TrieGetSize((Trie:m)) < LSG_AMAX || TrieKeyExists((Trie:m), k)))
+		TrieSetArray((Trie:m), k, b, 3)
+}
+
+stock lsg_mgetc(m, const k[])
+{
+	new v
+	if (m)
+		TrieGetCell((Trie:m), k, v)
+	return v
+}
+
+stock lsg_mgets(m, const k[])
+{
+	new t[64]
+	if (m)
+		TrieGetString((Trie:m), k, t, 63)
+	return t
+}
+
+stock lsg_mgetv(m, const k[])
+{
+	new Float:b[3]
+	if (m)
+		TrieGetArray((Trie:m), k, b, 3)
+	return lsg_vfrom(b)
+}
+
+// keys: 0 text, 1 numbers, 2 players
+stock lsg_mkeys(m, kind)
+{
+	new a = lsg_atmp()
+	if (!m)
+		return a
+	new TrieIter:it = TrieIterCreate(Trie:m), k[64], n
+	while (!TrieIterEnded(it) && n++ < LSG_AMAX)
+	{
+		TrieIterGetKey(it, k, charsmax(k))
+		switch (kind)
+		{
+			case 1: ArrayPushCell((Array:a), _:str_to_float(k))
+			case 2:
+			{
+				new p = lsg_by_userid(str_to_num(k[1]))
+				if (p)
+					ArrayPushCell((Array:a), p)
+			}
+			default: ArrayPushString((Array:a), k)
+		}
+		TrieIterNext(it)
+	}
+	TrieIterDestroy(it)
+	return a
+}
+
+// values: 0 cells, 1 text, 2 vectors
+stock lsg_mvalues(m, kind)
+{
+	new a = lsg_atmp()
+	if (!m)
+		return a
+	new TrieIter:it = TrieIterCreate(Trie:m), t[64], v, Float:b[3], n
+	while (!TrieIterEnded(it) && n++ < LSG_AMAX)
+	{
+		switch (kind)
+		{
+			case 1:
+			{
+				TrieIterGetString(it, t, charsmax(t))
+				ArrayPushString((Array:a), t)
+			}
+			case 2:
+			{
+				TrieIterGetArray(it, b, 3)
+				lsg_apushv(a, lsg_vfrom(b))
+			}
+			default:
+			{
+				TrieIterGetCell(it, v)
+				ArrayPushCell((Array:a), v)
+			}
+		}
+		TrieIterNext(it)
+	}
+	TrieIterDestroy(it)
+	return a
+}
+
+stock lsg_mcopy(dst, src, kind)
+{
+	if (!dst || dst == src)
+		return
+	TrieClear((Trie:dst))
+	if (!src)
+		return
+	new TrieIter:it = TrieIterCreate((Trie:src)), k[64], t[64], v, Float:b[3], n
+	while (!TrieIterEnded(it) && n++ < LSG_AMAX)
+	{
+		TrieIterGetKey(it, k, charsmax(k))
+		switch (kind)
+		{
+			case 1:
+			{
+				TrieIterGetString(it, t, charsmax(t))
+				TrieSetString((Trie:dst), k, t)
+			}
+			case 2:
+			{
+				TrieIterGetArray(it, b, 3)
+				TrieSetArray((Trie:dst), k, b, 3)
+			}
+			default:
+			{
+				TrieIterGetCell(it, v)
+				TrieSetCell((Trie:dst), k, v)
+			}
+		}
+		TrieIterNext(it)
+	}
+	TrieIterDestroy(it)
+}
+
+// ---- text, numbers, things
+stock lsg_tcat(const a[], const b[])
+{
+	new t[128]
+	formatex(t, charsmax(t), "%s%s", a, b)
+	return t
+}
+
+stock lsg_tsel(c, const a[], const b[])
+{
+	new t[128]
+	if (c)
+		copy(t, charsmax(t), a)
+	else
+		copy(t, charsmax(t), b)
+	return t
+}
+
+stock lsg_ntext(Float:n)
+{
+	new t[24]
+	if (floatfract(n) == 0.0 && floatabs(n) < 1000000.0)
+		formatex(t, charsmax(t), "%d", floatround(n))
+	else
+		formatex(t, charsmax(t), "%.2f", n)
+	return t
+}
+
+stock lsg_etext(e)
+{
+	new t[32]
+	formatex(t, charsmax(t), "entity %d", e)
+	return t
+}
+
+stock Float:lsg_sign(Float:a)
+	return a > 0.0 ? 1.0 : (a < 0.0 ? -1.0 : 0.0)
+
+stock Float:lsg_clampf(Float:a, Float:lo, Float:hi)
+{
+	if (lo > hi)
+		return floatclamp(a, hi, lo)
+	return floatclamp(a, lo, hi)
+}
+
+stock bool:lsg_valid(e)
+{
+	if (e >= 1 && e <= MaxClients)
+		return bool:is_user_connected(e)
+	return e > MaxClients && pev_valid(e) > 0
+}
+
+stock bool:lsg_is_creature(e)
+{
+	if (e <= MaxClients || !pev_valid(e))
+		return false
+	new c[16]
+	pev(e, pev_classname, c, charsmax(c))
+	return bool:equal(c, "ls_creature")
+}
+
+stock bool:lsg_tactive(h)
+	return h >= LSG_TASK && h < LSG_TASK + LSG_N && task_exists(h)
+
+stock lsg_tclear(h)
+{
+	if (h >= LSG_TASK && h < LSG_TASK + LSG_N)
+		remove_task(h)
+}
+
+
+// enum Class
+stock const g_lsgE0[][] = { "Scout", "Tank", "Medic" }
+// struct Loadout
+stock lsg_mks0(Float:f0, const f1[], f2, f3, f4)
+{
+	new r = lsg_rnew()
+	g_lsgRec[r][0] = _:f0
+	copy(g_lsgRecT[r][0], 63, f1)
+	lsg_rsetvec(r, 1, f2)
+	g_lsgRec[r][4] = _:f3
+	g_lsgRec[r][5] = _:f4
+	return r
+}
+stock lsg_mka231(const p0[], const p1[])
+{
+	new a = lsg_atmp()
+	lsg_apushs(a, p0)
+	lsg_apushs(a, p1)
+	return a
+}
+// Function: Reward
+stock Float:g_lsgR0_0
+stock g_lsgR0_1[128]
+stock bool:g_lsgFD0
+stock lsg_fr0(a0, Float:a1, const a2[])
+{
+	new ctx[LSG_CTX]
+	ctx[19] = _:a0
+	ctx[20] = _:a1
+	copy(g_lsgOT[1], 127, a2)
+	g_lsgR0_0 = 0.0
+	g_lsgR0_1[0] = 0
+	g_lsgFD0 = false
+	g_v18 = 0.0
+	lsg_aclear(g_v19)
+	lsg_n237(ctx)
+}
+
+// Function: Double
+stock Float:g_lsgR1_0
+stock g_lsgR1_1[128]
+stock bool:g_lsgFD1
+stock lsg_fr1(Float:a0)
+{
+	new ctx[LSG_CTX]
+	ctx[21] = _:a0
+	g_lsgR1_0 = 0.0
+	g_lsgR1_1[0] = 0
+	g_lsgFD1 = false
+	lsg_n243(ctx)
+}
+stock Float:lsg_pf1_0(Float:a0)
+{
+	lsg_fr1(a0)
+	return g_lsgR1_0
+}
+stock lsg_pf1_1(Float:a0)
+{
+	lsg_fr1(a0)
+	new t[128]
+	copy(t, 127, g_lsgR1_1)
+	return t
+}
+
+// Function: Tick
+stock bool:g_lsgFD2
+stock lsg_fr2()
+{
+	new ctx[LSG_CTX]
+	g_lsgFD2 = false
+	lsg_n245(ctx)
+}
+
+lsd_graph_vars()
+{
+	for (new id = 1; id <= MaxClients; id++)
+		if (is_user_connected(id))
+			lsd_var_number("kills", id, g_pv0[id])
+	lsd_var_number("round", 0, g_v1)
+	lsd_var_bool("flag", 0, g_v2)
+	lsd_var_text("last", 0, g_v3)
+	lsd_var_number("tscore:T", 0, g_tv4[1])
+	lsd_var_number("tscore:CT", 0, g_tv4[2])
+	lsd_var_text("phase", 0, g_v5)
+	lsd_var_text("vpos", 0, lsg_vtext((LSG_VR + 0)))
+	for (new id = 1; id <= MaxClients; id++)
+		if (is_user_connected(id))
+			lsd_var_text("vppos", id, lsg_vtext((LSG_VR + 1 + lsg_slot(id))))
+	lsd_var_text("vlist", 0, fmt("%d items", lsg_alen(g_v8)))
+	lsd_var_text("vnums", 0, fmt("%d items", lsg_alen(g_v9)))
+	lsd_var_text("vplayers", 0, fmt("%d items", lsg_alen(g_v10)))
+	lsd_var_text("vloads", 0, fmt("%d items", lsg_alen(g_v11)))
+	lsd_var_text("vmap", 0, fmt("%d keys", lsg_mlen(g_v12)))
+	lsd_var_text("vtmap", 0, fmt("%d keys", lsg_mlen(g_v13)))
+	lsd_var_text("vvmap", 0, fmt("%d keys", lsg_mlen(g_v14)))
+	lsd_var_text("vload", 0, "Loadout")
+	for (new id = 1; id <= MaxClients; id++)
+		if (is_user_connected(id))
+			lsd_var_text("vcls", id, g_lsgE0[clamp(g_pv16[lsg_slot(id)], 0, 2)])
+	lsd_var_text("vtimer", 0, g_lsgRun[lsg_tactive(g_v17) ? 1 : 0])
+	lsd_var_number("lsum", 0, g_v18)
+	lsd_var_text("lseen", 0, fmt("%d items", lsg_alen(g_v19)))
 }
 
 stock g_lsgSquad[33], bool:g_lsgSquadFF
@@ -1171,6 +2169,15 @@ public plugin_init()
 	set_task(0.25, "lsg_revive_tick", LSG_TASK - 1, _, _, "b")
 	set_task(1.0, "lsg_clock_tick", LSG_TASK - 2, _, _, "b")
 	lsg_saved_load()
+	g_v8 = _:ArrayCreate(LSG_AC)
+	g_v9 = _:ArrayCreate(LSG_AC)
+	g_v10 = _:ArrayCreate(LSG_AC)
+	g_v11 = _:ArrayCreate(LSG_AC)
+	g_v12 = _:TrieCreate()
+	g_v13 = _:TrieCreate()
+	g_v14 = _:TrieCreate()
+	g_v19 = _:ArrayCreate(LSG_AC)
+	g_lsgLeft[218] = 1
 	register_clcmd("say /shop", "lsg_chat92")
 	register_clcmd("say !shop", "lsg_chat92")
 	register_clcmd("say_team /shop", "lsg_chat92")
@@ -1187,6 +2194,7 @@ public lsg_new_round()
 	lsg_saved_flush()
 	for (new t = 0; t < 4; t++)
 		g_tv4[t] = 0.0
+	lsg_aclear(g_v9)
 }
 
 public lsg_chat92(id)
@@ -1271,6 +2279,8 @@ public client_putinserver(id)
 	lsg_clear_down(id)
 	g_lsgNoFall[id] = 0
 	g_pv0[id] = 0.0
+	lsg_vzero((LSG_VR + 1 + lsg_slot(id)))
+	g_pv16[id] = 1
 	lsg_on_player_joined(id)
 }
 
@@ -1285,6 +2295,7 @@ public lsg_on_round_started()
 	new ctx[LSG_CTX]
 	lsg_n0(ctx)
 	lsg_n154(ctx)
+	lsg_n162(ctx)
 }
 
 public lsg_on_round_end_t()
@@ -1311,6 +2322,7 @@ public lsg_on_player_killed()
 	ctx[2] = read_data(3) ? 1 : 0 // headshot
 	lsg_n10(ctx)
 	lsg_n136(ctx)
+	lsg_n215(ctx)
 }
 
 public lsg_on_player_spawned(id)
@@ -1321,6 +2333,7 @@ public lsg_on_player_spawned(id)
 	ctx[0] = id // player
 	lsg_n18(ctx)
 	lsg_n145(ctx)
+	lsg_n225(ctx)
 	return HAM_IGNORED
 }
 
@@ -3820,6 +4833,1359 @@ lsg_n161(ctx[])
 	lsd_exit(161, "Counter-Terrorists win")
 }
 
+// Round Started (a0)
+lsg_n162(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(162, ctx))
+		return
+	lsd_exit(162, "ran")
+	lsg_n163(ctx)
+}
+
+// Sequence (a_seq)
+lsg_n163(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(163, ctx))
+		return
+	lsd_exit(163, "ran")
+	lsg_n164(ctx)
+	lsg_n177(ctx)
+	lsg_n185(ctx)
+	lsg_n198(ctx)
+}
+
+// For Loop (a_for)
+lsg_n164(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("First", 1.0)
+	lsd_in_number("Last", 5.0)
+	if (lsd_enter(164, ctx))
+		return
+	new c[LSG_CTX], n
+	new last = floatround(5.0)
+	for (new k = floatround(1.0); k <= last && n < LSG_AMAX; k++)
+	{
+		n++
+		for (new j = 0; j < LSG_CTX; j++)
+			c[j] = ctx[j]
+		c[13] = _:float(k)
+		lsg_n165(c)
+	}
+	lsd_exit(164, fmt("%d times", n))
+	lsg_n166(ctx)
+}
+
+// Add (a_add)
+lsg_n165(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	lsd_in_number("Item", Float:ctx[13])
+	if (lsd_enter(165, ctx))
+		return
+	g_lsgO[0] = _:float(lsg_apushc(g_v9, _:(Float:ctx[13])))
+	lsd_exit(165, fmt("%d items", lsg_alen(g_v9)))
+}
+
+// Sort (a_sort)
+lsg_n166(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	if (lsd_enter(166, ctx))
+		return
+	lsg_asort(g_v9, 0, 1)
+	lsd_exit(166, fmt("%d items", lsg_alen(g_v9)))
+	lsg_n167(ctx)
+}
+
+// Shuffle (a_shuf)
+lsg_n167(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	if (lsd_enter(167, ctx))
+		return
+	lsg_ashuffle(g_v9)
+	lsd_exit(167, fmt("%d items", lsg_alen(g_v9)))
+	lsg_n168(ctx)
+}
+
+// Insert (a_ins)
+lsg_n168(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	lsd_in_number("Item", 99.0)
+	lsd_in_number("Index", 0.0)
+	if (lsd_enter(168, ctx))
+		return
+	lsg_ainsc(g_v9, 0.0, _:(99.0))
+	lsd_exit(168, fmt("%d items", lsg_alen(g_v9)))
+	lsg_n169(ctx)
+}
+
+// Remove Index (a_rmi)
+lsg_n169(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	lsd_in_number("Index", 1.0)
+	if (lsd_enter(169, ctx))
+		return
+	lsg_aremi(g_v9, 1.0)
+	lsd_exit(169, fmt("%d items", lsg_alen(g_v9)))
+	lsg_n170(ctx)
+}
+
+// Set Array Item (a_aset)
+lsg_n170(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	lsd_in_number("Index", 0.0)
+	lsd_in_number("Item", 7.0)
+	if (lsd_enter(170, ctx))
+		return
+	lsg_asetc(g_v9, 0.0, _:(7.0))
+	lsd_exit(170, fmt("%d items", lsg_alen(g_v9)))
+	lsg_n171(ctx)
+}
+
+// Remove Item (a_arem)
+lsg_n171(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	lsd_in_number("Item", 99.0)
+	if (lsd_enter(171, ctx))
+		return
+	g_lsgO[1] = lsg_aremc(g_v9, _:(99.0)) ? 1 : 0
+	lsd_exit(171, fmt("%d items", lsg_alen(g_v9)))
+	lsg_n172(ctx)
+}
+
+// For Each (a_fe)
+lsg_n172(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	if (lsd_enter(172, ctx))
+		return
+	new c[LSG_CTX], n
+	g_lsgLeft[172] = 0
+	static snap
+	if (!snap)
+		snap = _:ArrayCreate(LSG_AC)
+	lsg_acopy(snap, g_v9)
+	new size = lsg_alen(snap)
+	for (new k = 0; k < size && k < LSG_AMAX; k++)
+	{
+		n++
+		for (new j = 0; j < LSG_CTX; j++)
+			c[j] = ctx[j]
+		c[15] = _:float(k)
+		c[14] = ArrayGetCell(Array:snap, k)
+		lsg_n173(c)
+		if (g_lsgLeft[172])
+			break
+	}
+	lsd_exit(172, fmt("%d times", n))
+	lsg_n175(ctx)
+}
+
+stock lsg_n172_break(ctx[])
+{
+	#pragma unused ctx
+	g_lsgLeft[172] = 1
+}
+
+// Branch (a_br)
+lsg_n173(ctx[])
+{
+	lsd_begin()
+	lsd_in_bool("Condition", ((Float:ctx[14]) > (3.0) ? 1 : 0))
+	if (lsd_enter(173, ctx))
+		return
+	new ok = ((((((Float:ctx[14]) > (3.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	lsd_exit(173, g_lsdBool[ok])
+	if (ok)
+		lsg_n172_break(ctx)
+	else
+		lsg_n174(ctx)
+}
+
+// Print String (a_pr)
+lsg_n174(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", lsg_ntext(Float:ctx[14]))
+	if (lsd_enter(174, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Item", lsg_ntext(Float:ctx[14]))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(174, esc)
+}
+
+// Print String (a_pr2)
+lsg_n175(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", fmt("%s items, has 7 %s at %s, one is %s (100%%)", lsg_ntext(float(lsg_alen(g_v9))), g_lsgYesNo[((lsg_afindc(g_v9, _:(7.0)) >= 0 ? 1 : 0)) ? 1 : 0], lsg_ntext(float(lsg_afindc(g_v9, _:(7.0)))), lsg_ntext(Float:lsg_arandc(g_v9))))
+	if (lsd_enter(175, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Numbers:", fmt("%s items, has 7 %s at %s, one is %s (100%%)", lsg_ntext(float(lsg_alen(g_v9))), g_lsgYesNo[((lsg_afindc(g_v9, _:(7.0)) >= 0 ? 1 : 0)) ? 1 : 0], lsg_ntext(float(lsg_afindc(g_v9, _:(7.0)))), lsg_ntext(Float:lsg_arandc(g_v9))))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(175, esc)
+	lsg_n176(ctx)
+}
+
+// Clear (a_clr)
+lsg_n176(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	if (lsd_enter(176, ctx))
+		return
+	lsg_aclear(g_v9)
+	lsd_exit(176, fmt("%d items", lsg_alen(g_v9)))
+}
+
+// Set Variable (b_set)
+lsg_n177(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", fmt("%d items", lsg_alen(lsg_mka231("a", lsg_tcat("b", "c")))))
+	if (lsd_enter(177, ctx))
+		return
+	lsg_acopy(g_v8, lsg_mka231("a", lsg_tcat("b", "c")))
+	lsd_exit(177, "set")
+	lsg_n178(ctx)
+}
+
+// While Loop (b_wh)
+lsg_n178(ctx[])
+{
+	lsd_begin()
+	lsd_in_bool("Condition", ((float(lsg_alen(g_v8))) < (5.0) ? 1 : 0))
+	if (lsd_enter(178, ctx))
+		return
+	new c[LSG_CTX], n
+	while (n < 100 && ((((float(lsg_alen(g_v8))) < (5.0) ? 1 : 0)) ? 1 : 0))
+	{
+		n++
+		for (new j = 0; j < LSG_CTX; j++)
+			c[j] = ctx[j]
+		lsg_n179(c)
+	}
+	lsd_exit(178, fmt("%d times", n))
+	lsg_n180(ctx)
+}
+
+// Add (b_add)
+lsg_n179(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v8)))
+	lsd_in_text("Item", fmt("%s items", lsg_ntext(float(lsg_alen(g_v8)))))
+	if (lsd_enter(179, ctx))
+		return
+	g_lsgO[2] = _:float(lsg_apushs(g_v8, fmt("%s items", lsg_ntext(float(lsg_alen(g_v8))))))
+	lsd_exit(179, fmt("%d items", lsg_alen(g_v8)))
+}
+
+// Switch on Text (b_sw)
+lsg_n180(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Selection", lsg_agets(g_v8, 0.0))
+	if (lsd_enter(180, ctx))
+		return
+	new x[128]
+	copy(x, 127, lsg_agets(g_v8, 0.0))
+	if (equali(x, "a"))
+	{
+		lsg_n181(ctx)
+	}
+	else if (equali(x, "bc"))
+	{
+		lsg_n182(ctx)
+	}
+	else
+	{
+		lsg_n184(ctx)
+	}
+}
+
+// Print String (b_pr1)
+lsg_n181(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(181, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s", "First is a")
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(181, esc)
+}
+
+// Switch on Number (b_sn)
+lsg_n182(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Selection", str_to_float("2"))
+	if (lsd_enter(182, ctx))
+		return
+	new Float:x = str_to_float("2")
+	if (x == 1.0)
+	{
+	}
+	else if (x == 2.0)
+	{
+		lsg_n183(ctx)
+	}
+	else if (x == 3.0)
+	{
+	}
+	else
+	{
+	}
+}
+
+// Print String (b_pr2)
+lsg_n183(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(183, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s", "Two")
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(183, esc)
+}
+
+// Print String (b_pr3)
+lsg_n184(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", fmt("%s long, %s", lsg_ntext(float(strlen(lsg_arands(g_v8)))), g_lsgYesNo[((containi(lsg_arands(g_v8), "item") >= 0 ? 1 : 0)) ? 1 : 0]))
+	if (lsd_enter(184, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Other:", fmt("%s long, %s", lsg_ntext(float(strlen(lsg_arands(g_v8)))), g_lsgYesNo[((containi(lsg_arands(g_v8), "item") >= 0 ? 1 : 0)) ? 1 : 0]))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(184, esc)
+}
+
+// For Each Player (c_each)
+lsg_n185(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(185, ctx))
+		return
+	new c[LSG_CTX], count
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_match(p, 1))
+			continue
+		count++
+		for (new k = 0; k < LSG_CTX; k++)
+			c[k] = ctx[k]
+		c[16] = p
+		lsg_n186(c)
+	}
+	lsd_exit(185, fmt("%d times", count))
+	lsg_n190(ctx)
+}
+
+// Set Variable (c_setp)
+lsg_n186(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[16])
+	lsd_in_text("Value", lsg_vtext(lsg_vplayer(ctx[16], 3)))
+	if (lsd_enter(186, ctx))
+		return
+	lsg_vset((LSG_VR + 1 + lsg_slot(ctx[16])), lsg_vplayer(ctx[16], 3))
+	lsd_exit(186, "set")
+	lsg_n187(ctx)
+}
+
+// Set Position (c_pos)
+lsg_n187(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[16])
+	lsd_in_text("Position", lsg_vtext(lsg_vadd(lsg_vplayer(ctx[16], 0), lsg_vec(0.0, 0.0, 36.0), 1.0)))
+	if (lsd_enter(187, ctx))
+		return
+	if (!ls_alive(ctx[16]))
+		lsd_error(187, "Nothing done: that player isn't alive.")
+	else
+	{
+		lsg_vsetpos(ctx[16], lsg_vadd(lsg_vplayer(ctx[16], 0), lsg_vec(0.0, 0.0, 36.0), 1.0))
+		lsd_exit(187, "done")
+	}
+	lsg_n188(ctx)
+}
+
+// Set Velocity (c_vel)
+lsg_n188(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[16])
+	lsd_in_text("Velocity", lsg_vtext(lsg_vscale(lsg_vnorm(lsg_vdir(lsg_vplayer(ctx[16], 0), lsg_vent(ctx[16]))), 300.0)))
+	if (lsd_enter(188, ctx))
+		return
+	if (!ls_alive(ctx[16]))
+		lsd_error(188, "Nothing done: that player isn't alive.")
+	else
+	{
+		lsg_vsetvel(ctx[16], lsg_vscale(lsg_vnorm(lsg_vdir(lsg_vplayer(ctx[16], 0), lsg_vent(ctx[16]))), 300.0))
+		lsd_exit(188, "done")
+	}
+	lsg_n189(ctx)
+}
+
+// Print String (c_pr)
+lsg_n189(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", fmt("%s away, %s, at %s", lsg_ntext(lsg_vdist((LSG_VR + 1 + lsg_slot(ctx[16])), (LSG_VR + 0))), lsg_ntext(((lsg_vc(lsg_vplayer(ctx[16], 3), 2)) + (lsg_vlen(lsg_vadd(lsg_vplayer(ctx[16], 0), lsg_vec(0.0, 0.0, 36.0), 1.0))))), lsg_vtext(lsg_vplayer(ctx[16], 3))))
+	if (lsd_enter(189, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Vectors:", fmt("%s away, %s, at %s", lsg_ntext(lsg_vdist((LSG_VR + 1 + lsg_slot(ctx[16])), (LSG_VR + 0))), lsg_ntext(((lsg_vc(lsg_vplayer(ctx[16], 3), 2)) + (lsg_vlen(lsg_vadd(lsg_vplayer(ctx[16], 0), lsg_vec(0.0, 0.0, 36.0), 1.0))))), lsg_vtext(lsg_vplayer(ctx[16], 3))))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(189, esc)
+}
+
+// Set Variable (c_sl)
+lsg_n190(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(190, ctx))
+		return
+	lsg_rset((LSG_RR + 0), lsg_mks0(30.0, "kit", lsg_vec(0.0, 0.0, 36.0), 0, 1))
+	lsd_exit(190, "set")
+	lsg_n191(ctx)
+}
+
+// Set Field (c_sf)
+lsg_n191(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Value", lsg_clampf(50.0, 0.0, 40.0))
+	if (lsd_enter(191, ctx))
+		return
+	g_lsgRec[lsg_ri((LSG_RR + 0))][0] = _:(lsg_clampf(50.0, 0.0, 40.0))
+	lsd_exit(191, "set")
+	lsg_n192(ctx)
+}
+
+// Set Field (c_sf2)
+lsg_n192(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", lsg_vtext((LSG_VR + 0)))
+	if (lsd_enter(192, ctx))
+		return
+	lsg_rsetvec((LSG_RR + 0), 1, (LSG_VR + 0))
+	lsd_exit(192, "set")
+	lsg_n193(ctx)
+}
+
+// Add (c_push)
+lsg_n193(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v11)))
+	if (lsd_enter(193, ctx))
+		return
+	g_lsgO[3] = _:float(lsg_apushr(g_v11, (LSG_RR + 0)))
+	lsd_exit(193, fmt("%d items", lsg_alen(g_v11)))
+	lsg_n194(ctx)
+}
+
+// Print String (c_pr2)
+lsg_n194(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", fmt("%s %s %s %s", lsg_ntext(Float:g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][0]), g_lsgRecT[lsg_ri(lsg_agetr(g_v11, 0.0))][0], g_lsgE0[clamp(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5], 0, 2)], lsg_vtext(lsg_rvec(lsg_agetr(g_v11, 0.0), 1))))
+	if (lsd_enter(194, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Loadout:", fmt("%s %s %s %s", lsg_ntext(Float:g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][0]), g_lsgRecT[lsg_ri(lsg_agetr(g_v11, 0.0))][0], g_lsgE0[clamp(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5], 0, 2)], lsg_vtext(lsg_rvec(lsg_agetr(g_v11, 0.0), 1))))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(194, esc)
+	lsg_n195(ctx)
+}
+
+// Switch on Enum (c_sw)
+lsg_n195(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Selection", g_lsgE0[clamp(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5], 0, 2)])
+	if (lsd_enter(195, ctx))
+		return
+	switch (g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5])
+	{
+		case 0:
+		{
+			lsg_n196(ctx)
+		}
+		case 1:
+		{
+			lsg_n197(ctx)
+		}
+		case 2:
+		{
+			}
+	}
+}
+
+// Print String (c_pr3)
+lsg_n196(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(196, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s", "Scout")
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(196, esc)
+}
+
+// Print String (c_pr4)
+lsg_n197(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Value", float(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5]))
+	if (lsd_enter(197, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "Tank number", floatround(float(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5])))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(197, esc)
+}
+
+// For Each Player (d_each)
+lsg_n198(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(198, ctx))
+		return
+	new c[LSG_CTX], count
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_match(p, 0))
+			continue
+		count++
+		for (new k = 0; k < LSG_CTX; k++)
+			c[k] = ctx[k]
+		c[17] = p
+		lsg_n199(c)
+	}
+	lsd_exit(198, fmt("%d times", count))
+	lsg_n203(ctx)
+}
+
+// Map Add (d_madd)
+lsg_n199(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Map", fmt("%d keys", lsg_mlen(g_v12)))
+	lsd_in_player("Key", ctx[17])
+	lsd_in_number("Value", ((Float:lsg_mgetc(g_v12, lsg_kp(ctx[17]))) + (1.0)))
+	if (lsd_enter(199, ctx))
+		return
+	lsg_msetc(g_v12, lsg_kp(ctx[17]), _:(((Float:lsg_mgetc(g_v12, lsg_kp(ctx[17]))) + (1.0))))
+	lsd_exit(199, fmt("%d keys", lsg_mlen(g_v12)))
+	lsg_n200(ctx)
+}
+
+// Call (d_call)
+lsg_n200(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Who", ctx[17])
+	lsd_in_number("Amount", 5.0)
+	lsd_in_text("Why", "kill")
+	if (lsd_enter(200, ctx))
+		return
+	lsg_fr0(ctx[17], 5.0, "kill")
+	g_lsgO[4] = _:g_lsgR0_0
+	copy(g_lsgOT[0], 127, g_lsgR0_1)
+	lsd_exit(200, "called")
+	lsg_n201(ctx)
+}
+
+// Print String (d_pr)
+lsg_n201(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", g_lsgOT[0])
+	if (lsd_enter(201, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Said:", g_lsgOT[0])
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(201, esc)
+	lsg_n202(ctx)
+}
+
+// Print String (d_pr2)
+lsg_n202(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Value", Float:g_lsgO[4])
+	if (lsd_enter(202, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "Total:", floatround(Float:g_lsgO[4]))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(202, esc)
+}
+
+// Map Add (d_tadd)
+lsg_n203(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Map", fmt("%d keys", lsg_mlen(g_v13)))
+	lsd_in_text("Key", "k")
+	lsd_in_text("Value", "k")
+	if (lsd_enter(203, ctx))
+		return
+	lsg_msets(g_v13, "k", "k")
+	lsd_exit(203, fmt("%d keys", lsg_mlen(g_v13)))
+	lsg_n204(ctx)
+}
+
+// Map Add (d_vadd)
+lsg_n204(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Map", fmt("%d keys", lsg_mlen(g_v14)))
+	lsd_in_number("Key", 1.0)
+	lsd_in_text("Value", lsg_vtext(lsg_vec(0.0, 0.0, 36.0)))
+	if (lsd_enter(204, ctx))
+		return
+	lsg_msetv(g_v14, lsg_kn(1.0), lsg_vec(0.0, 0.0, 36.0))
+	lsd_exit(204, fmt("%d keys", lsg_mlen(g_v14)))
+	lsg_n205(ctx)
+}
+
+// Map Remove (d_rem)
+lsg_n205(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Map", fmt("%d keys", lsg_mlen(g_v13)))
+	lsd_in_text("Key", "kill")
+	if (lsd_enter(205, ctx))
+		return
+	lsg_mdel(g_v13, "kill")
+	lsd_exit(205, fmt("%d keys", lsg_mlen(g_v13)))
+	lsg_n206(ctx)
+}
+
+// Print String (d_pr3)
+lsg_n206(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", fmt("%s %s %s %s", lsg_ntext(float(lsg_mlen(g_v12))), g_lsgYesNo[((lsg_mhas(g_v13, "k") ? 1 : 0)) ? 1 : 0], lsg_ntext(float(lsg_alen(lsg_mkeys(g_v12, 2)))), lsg_ntext(float(lsg_alen(lsg_mvalues(g_v14, 2))))))
+	if (lsd_enter(206, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Maps:", fmt("%s %s %s %s", lsg_ntext(float(lsg_mlen(g_v12))), g_lsgYesNo[((lsg_mhas(g_v13, "k") ? 1 : 0)) ? 1 : 0], lsg_ntext(float(lsg_alen(lsg_mkeys(g_v12, 2)))), lsg_ntext(float(lsg_alen(lsg_mvalues(g_v14, 2))))))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(206, esc)
+	lsg_n207(ctx)
+}
+
+// Map Clear (d_mclr)
+lsg_n207(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Map", fmt("%d keys", lsg_mlen(g_v14)))
+	if (lsd_enter(207, ctx))
+		return
+	lsg_mclear(g_v14)
+	lsd_exit(207, fmt("%d keys", lsg_mlen(g_v14)))
+	lsg_n208(ctx)
+}
+
+// Print String (d_pr4)
+lsg_n208(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Value", lsg_pf1_0(4.0))
+	if (lsd_enter(208, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "Double:", floatround(lsg_pf1_0(4.0)))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(208, esc)
+	lsg_n209(ctx)
+}
+
+// Print String (d_pr5)
+lsg_n209(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", lsg_pf1_1(4.0))
+	if (lsd_enter(209, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "As text:", lsg_pf1_1(4.0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(209, esc)
+	lsg_n210(ctx)
+}
+
+// Set Timer by Function (d_tbf)
+lsg_n210(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Seconds", 2.0)
+	if (lsd_enter(210, ctx))
+		return
+	remove_task(LSG_TASK + 210)
+	set_task(floatmax(2.0, 0.1), "lsg_tf210", LSG_TASK + 210, _, _, "b")
+	lsd_exit(210, "started")
+	lsg_n211(ctx)
+}
+
+public lsg_tf210()
+{
+	if (lsd_hold_timer())
+		return
+	lsg_fr2()
+}
+
+// Set Variable (d_tset)
+lsg_n211(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", g_lsgRun[lsg_tactive((LSG_TASK + 210)) ? 1 : 0])
+	if (lsd_enter(211, ctx))
+		return
+	g_v17 = (LSG_TASK + 210)
+	lsd_exit(211, "set")
+	lsg_n212(ctx)
+}
+
+// Print String (d_pr6)
+lsg_n212(ctx[])
+{
+	lsd_begin()
+	lsd_in_bool("Value", (lsg_tactive(g_v17) ? 1 : 0))
+	if (lsd_enter(212, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Timer on:", g_lsgYesNo[((lsg_tactive(g_v17) ? 1 : 0)) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(212, esc)
+	lsg_n213(ctx)
+}
+
+// Clear Timer (d_tclr)
+lsg_n213(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Timer", g_lsgRun[lsg_tactive(g_v17) ? 1 : 0])
+	if (lsd_enter(213, ctx))
+		return
+	lsg_tclear(g_v17)
+	lsd_exit(213, "cleared")
+	lsg_n247(ctx)
+}
+
+// Print String (d_pr7)
+lsg_n214(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Value", ((3.0) * (2.0)))
+	if (lsd_enter(214, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "Macro gave:", floatround(((3.0) * (2.0))))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(214, esc)
+}
+
+// Player Killed (e0)
+lsg_n215(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(215, ctx))
+		return
+	lsd_exit(215, "ran")
+	lsg_n216(ctx)
+}
+
+// Do Once (e_once)
+lsg_n216(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(216, ctx))
+		return
+	if (g_lsgLeft[216])
+	{
+		lsd_exit(216, "closed")
+		return
+	}
+	g_lsgLeft[216] = 1
+	lsd_exit(216, "through")
+	lsg_n217(ctx)
+}
+
+stock lsg_n216_reset(ctx[])
+{
+	#pragma unused ctx
+	g_lsgLeft[216] = 0
+}
+
+// Do N (e_n)
+lsg_n217(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("N", 3.0)
+	if (lsd_enter(217, ctx))
+		return
+	if (g_lsgLeft[217] >= floatround(3.0))
+	{
+		lsd_exit(217, "done N times")
+		return
+	}
+	g_lsgLeft[217]++
+	g_lsgO[5] = _:float(g_lsgLeft[217])
+	lsd_exit(217, "through")
+	lsg_n218(ctx)
+}
+
+stock lsg_n217_reset(ctx[])
+{
+	#pragma unused ctx
+	g_lsgLeft[217] = 0
+}
+
+// Gate (e_gate)
+lsg_n218(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(218, ctx))
+		return
+	if (!g_lsgLeft[218])
+	{
+		lsd_exit(218, "closed")
+		return
+	}
+	lsd_exit(218, "through")
+	lsg_n219(ctx)
+}
+
+stock lsg_n218_open(ctx[])
+{
+	#pragma unused ctx
+	g_lsgLeft[218] = 1
+}
+
+stock lsg_n218_close(ctx[])
+{
+	#pragma unused ctx
+	g_lsgLeft[218] = 0
+}
+
+stock lsg_n218_toggle(ctx[])
+{
+	#pragma unused ctx
+	g_lsgLeft[218] ^= 1
+}
+
+// Flip Flop (e_ff)
+lsg_n219(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(219, ctx))
+		return
+	g_lsgLeft[219] ^= 1
+	g_lsgO[6] = g_lsgLeft[219]
+	if (g_lsgLeft[219])
+	{
+		lsd_exit(219, "A")
+		lsg_n220(ctx)
+	}
+	else
+	{
+		lsd_exit(219, "B")
+		lsg_n224(ctx)
+	}
+}
+
+// Is Valid? (e_iv)
+lsg_n220(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Object", ctx[0])
+	if (lsd_enter(220, ctx))
+		return
+	if (lsg_valid(ctx[0]))
+	{
+		lsd_exit(220, "valid")
+		lsg_n221(ctx)
+	}
+	else
+	{
+		lsd_exit(220, "not valid")
+		lsg_n216_reset(ctx)
+	}
+}
+
+// Retriggerable Delay (e_rt)
+lsg_n221(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Seconds", 2.0)
+	if (lsd_enter(221, ctx))
+		return
+	remove_task(LSG_TASK + 221)
+	set_task(floatmax(2.0, 0.1), "lsg_t221", LSG_TASK + 221, ctx, LSG_CTX)
+	lsd_exit(221, "waiting")
+}
+
+public lsg_t221(const data[], task)
+{
+	if (lsd_hold_timer())
+	{
+		set_task(0.25, "lsg_t221", LSG_TASK + 221, data, LSG_CTX)
+		return
+	}
+	#pragma unused task
+	new ctx[LSG_CTX]
+	for (new k = 0; k < LSG_CTX; k++)
+		ctx[k] = data[k]
+	lsd_exit(221, "fired")
+	lsg_n222(ctx)
+}
+
+// Print String (e_pr)
+lsg_n222(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", lsg_ntext(Float:g_lsgO[5]))
+	if (lsd_enter(222, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Count:", lsg_ntext(Float:g_lsgO[5]))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(222, esc)
+	lsg_n223(ctx)
+}
+
+// Print String (e_pr2)
+lsg_n223(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", g_lsgYesNo[(g_lsgO[6]) ? 1 : 0])
+	if (lsd_enter(223, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Was A:", g_lsgYesNo[(g_lsgO[6]) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(223, esc)
+	lsg_n217_reset(ctx)
+}
+
+// Sequence (e_seq)
+lsg_n224(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(224, ctx))
+		return
+	lsd_exit(224, "ran")
+	lsg_n218_toggle(ctx)
+	lsg_n218_close(ctx)
+	lsg_n218_open(ctx)
+}
+
+// Player Spawned (f0)
+lsg_n225(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(225, ctx))
+		return
+	lsd_exit(225, "ran")
+	lsg_n226(ctx)
+}
+
+// For Loop with Break (f_brk)
+lsg_n226(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("First", 0.0)
+	lsd_in_number("Last", 10.0)
+	if (lsd_enter(226, ctx))
+		return
+	new c[LSG_CTX], n
+	g_lsgLeft[226] = 0
+	new last = floatround(10.0)
+	for (new k = floatround(0.0); k <= last && n < LSG_AMAX; k++)
+	{
+		n++
+		for (new j = 0; j < LSG_CTX; j++)
+			c[j] = ctx[j]
+		c[18] = _:float(k)
+		lsg_n227(c)
+		if (g_lsgLeft[226])
+			break
+	}
+	lsd_exit(226, fmt("%d times", n))
+	lsg_n229(ctx)
+}
+
+stock lsg_n226_break(ctx[])
+{
+	#pragma unused ctx
+	g_lsgLeft[226] = 1
+}
+
+// Branch (f_br)
+lsg_n227(ctx[])
+{
+	lsd_begin()
+	lsd_in_bool("Condition", ((Float:ctx[18]) >= (3.0) && (Float:ctx[18]) <= (5.0) ? 1 : 0))
+	if (lsd_enter(227, ctx))
+		return
+	new ok = ((((((Float:ctx[18]) >= (3.0) && (Float:ctx[18]) <= (5.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	lsd_exit(227, g_lsdBool[ok])
+	if (ok)
+		lsg_n226_break(ctx)
+	else
+		lsg_n228(ctx)
+}
+
+// Print String (f_pr)
+lsg_n228(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", fmt("%s %s %s %s", lsg_ntext(floatabs(Float:ctx[18])), lsg_ntext(((Float:ctx[18]) + ((10.0) - (Float:ctx[18])) * (0.25))), lsg_ntext((((((Float:ctx[18]) == (2.0) ? 1 : 0)) ? 1 : 0) ? (floatsqroot(floatmax(Float:ctx[18], 0.0))) : (lsg_mod(Float:ctx[18], 3.0)))), lsg_ntext(lsg_pow(Float:ctx[18], 2.0))))
+	if (lsd_enter(228, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Maths:", fmt("%s %s %s %s", lsg_ntext(floatabs(Float:ctx[18])), lsg_ntext(((Float:ctx[18]) + ((10.0) - (Float:ctx[18])) * (0.25))), lsg_ntext((((((Float:ctx[18]) == (2.0) ? 1 : 0)) ? 1 : 0) ? (floatsqroot(floatmax(Float:ctx[18], 0.0))) : (lsg_mod(Float:ctx[18], 3.0)))), lsg_ntext(lsg_pow(Float:ctx[18], 2.0))))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(228, esc)
+}
+
+// Print String (f_pr2)
+lsg_n229(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", lsg_tsel((((lsg_valid(ctx[0]) ? 1 : 0)) ? 1 : 0), "valid", "gone"))
+	if (lsd_enter(229, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Player is", lsg_tsel((((lsg_valid(ctx[0]) ? 1 : 0)) ? 1 : 0), "valid", "gone"))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(229, esc)
+	lsg_n230(ctx)
+}
+
+// Print String (f_pr3)
+lsg_n230(ctx[])
+{
+	lsd_begin()
+	lsd_in_bool("Value", (lsg_ok(ctx[0]) ? 1 : 0))
+	if (lsd_enter(230, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Is a player:", g_lsgYesNo[((lsg_ok(ctx[0]) ? 1 : 0)) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(230, esc)
+	lsg_n231(ctx)
+}
+
+// Print String (f_pr4)
+lsg_n231(ctx[])
+{
+	lsd_begin()
+	lsd_in_bool("Value", (lsg_is_creature(ctx[0]) ? 1 : 0))
+	if (lsd_enter(231, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Is a creature:", g_lsgYesNo[((lsg_is_creature(ctx[0]) ? 1 : 0)) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(231, esc)
+	lsg_n232(ctx)
+}
+
+// Set Variable (f_setc)
+lsg_n232(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[0])
+	lsd_in_text("Value", g_lsgE0[clamp(2, 0, 2)])
+	if (lsd_enter(232, ctx))
+		return
+	g_pv16[lsg_slot(ctx[0])] = 2
+	lsd_exit(232, "set")
+	lsg_n233(ctx)
+}
+
+// Switch on Enum (f_sw)
+lsg_n233(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Selection", g_lsgE0[clamp(g_pv16[lsg_slot(ctx[0])], 0, 2)])
+	if (lsd_enter(233, ctx))
+		return
+	switch (g_pv16[lsg_slot(ctx[0])])
+	{
+		case 0:
+		{
+			}
+		case 1:
+		{
+			}
+		case 2:
+		{
+			lsg_n234(ctx)
+		}
+	}
+}
+
+// Print String (f_pr5)
+lsg_n234(ctx[])
+{
+	lsd_begin()
+	lsd_in_bool("Value", ((g_pv16[lsg_slot(ctx[0])]) == (2) ? 1 : 0))
+	if (lsd_enter(234, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "Medic:", g_lsgYesNo[(((g_pv16[lsg_slot(ctx[0])]) == (2) ? 1 : 0)) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(234, esc)
+	lsg_n235(ctx)
+}
+
+// Set Variable (f_sp)
+lsg_n235(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", fmt("%d items", lsg_alen(lsg_aplayers(1))))
+	if (lsd_enter(235, ctx))
+		return
+	lsg_acopy(g_v10, lsg_aplayers(1))
+	lsd_exit(235, "set")
+	lsg_n236(ctx)
+}
+
+// Print String (f_pr6)
+lsg_n236(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Value", float(lsg_alen(lsg_aplayers(1))))
+	if (lsd_enter(236, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "Alive:", floatround(float(lsg_alen(lsg_aplayers(1)))))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(236, esc)
+}
+
+// Function Entry (fa_e)
+stock lsg_n237(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(237, ctx))
+		return
+	lsd_exit(237, "called")
+	lsg_n238(ctx)
+}
+
+// Set Variable (fa_set)
+stock lsg_n238(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Value", ((Float:ctx[20]) + (g_v18)))
+	if (lsd_enter(238, ctx))
+		return
+	g_v18 = ((Float:ctx[20]) + (g_v18))
+	lsd_exit(238, fmt("%.2f", g_v18))
+	lsg_n239(ctx)
+}
+
+// Add (fa_push)
+stock lsg_n239(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v19)))
+	lsd_in_player("Item", ctx[19])
+	if (lsd_enter(239, ctx))
+		return
+	g_lsgO[7] = _:float(lsg_apushc(g_v19, ctx[19]))
+	lsd_exit(239, fmt("%d items", lsg_alen(g_v19)))
+	lsg_n240(ctx)
+}
+
+// Branch (fa_br)
+stock lsg_n240(ctx[])
+{
+	lsd_begin()
+	lsd_in_bool("Condition", (ls_alive(ctx[19]) ? 1 : 0))
+	if (lsd_enter(240, ctx))
+		return
+	new ok = (((((ls_alive(ctx[19]) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	lsd_exit(240, g_lsdBool[ok])
+	if (ok)
+		lsg_n241(ctx)
+	else
+		lsg_n242(ctx)
+}
+
+// Return Node (fa_r1)
+stock lsg_n241(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Total", g_v18)
+	lsd_in_text("Message", lsg_tcat(g_lsgOT[1], "!"))
+	if (lsd_enter(241, ctx))
+		return
+	g_lsgR0_0 = g_v18
+	copy(g_lsgR0_1, 127, lsg_tcat(g_lsgOT[1], "!"))
+	g_lsgFD0 = true
+	lsd_exit(241, "returned")
+}
+
+// Return Node (fa_r2)
+stock lsg_n242(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(242, ctx))
+		return
+	g_lsgR0_0 = 0.0
+	copy(g_lsgR0_1, 127, "")
+	g_lsgFD0 = true
+	lsd_exit(242, "returned")
+}
+
+// Function Entry (fb_e)
+stock lsg_n243(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(243, ctx))
+		return
+	lsd_exit(243, "called")
+	lsg_n244(ctx)
+}
+
+// Return Node (fb_r)
+stock lsg_n244(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Y", ((Float:ctx[21]) * (2.0)))
+	lsd_in_text("As text", lsg_ntext(((Float:ctx[21]) * (2.0))))
+	if (lsd_enter(244, ctx))
+		return
+	g_lsgR1_0 = ((Float:ctx[21]) * (2.0))
+	copy(g_lsgR1_1, 127, lsg_ntext(((Float:ctx[21]) * (2.0))))
+	g_lsgFD1 = true
+	lsd_exit(244, "returned")
+}
+
+// Function Entry (fc_e)
+stock lsg_n245(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(245, ctx))
+		return
+	lsd_exit(245, "called")
+	lsg_n246(ctx)
+}
+
+// Print String (fc_pr)
+stock lsg_n246(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(246, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s", "tick")
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(246, esc)
+}
+
+// Print String (d_mac)
+lsg_n247(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Value", 3.0)
+	if (lsd_enter(247, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "In the macro:", floatround(3.0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(247, esc)
+	lsg_n214(ctx)
+}
+
 lsd_call(n, const data[])
 {
 	new ctx[LSG_CTX]
@@ -3989,5 +6355,91 @@ lsd_call(n, const data[])
 		case 159: lsg_n159(ctx)
 		case 160: lsg_n160(ctx)
 		case 161: lsg_n161(ctx)
+		case 162: lsg_n162(ctx)
+		case 163: lsg_n163(ctx)
+		case 164: lsg_n164(ctx)
+		case 165: lsg_n165(ctx)
+		case 166: lsg_n166(ctx)
+		case 167: lsg_n167(ctx)
+		case 168: lsg_n168(ctx)
+		case 169: lsg_n169(ctx)
+		case 170: lsg_n170(ctx)
+		case 171: lsg_n171(ctx)
+		case 172: lsg_n172(ctx)
+		case 173: lsg_n173(ctx)
+		case 174: lsg_n174(ctx)
+		case 175: lsg_n175(ctx)
+		case 176: lsg_n176(ctx)
+		case 177: lsg_n177(ctx)
+		case 178: lsg_n178(ctx)
+		case 179: lsg_n179(ctx)
+		case 180: lsg_n180(ctx)
+		case 181: lsg_n181(ctx)
+		case 182: lsg_n182(ctx)
+		case 183: lsg_n183(ctx)
+		case 184: lsg_n184(ctx)
+		case 185: lsg_n185(ctx)
+		case 186: lsg_n186(ctx)
+		case 187: lsg_n187(ctx)
+		case 188: lsg_n188(ctx)
+		case 189: lsg_n189(ctx)
+		case 190: lsg_n190(ctx)
+		case 191: lsg_n191(ctx)
+		case 192: lsg_n192(ctx)
+		case 193: lsg_n193(ctx)
+		case 194: lsg_n194(ctx)
+		case 195: lsg_n195(ctx)
+		case 196: lsg_n196(ctx)
+		case 197: lsg_n197(ctx)
+		case 198: lsg_n198(ctx)
+		case 199: lsg_n199(ctx)
+		case 200: lsg_n200(ctx)
+		case 201: lsg_n201(ctx)
+		case 202: lsg_n202(ctx)
+		case 203: lsg_n203(ctx)
+		case 204: lsg_n204(ctx)
+		case 205: lsg_n205(ctx)
+		case 206: lsg_n206(ctx)
+		case 207: lsg_n207(ctx)
+		case 208: lsg_n208(ctx)
+		case 209: lsg_n209(ctx)
+		case 210: lsg_n210(ctx)
+		case 211: lsg_n211(ctx)
+		case 212: lsg_n212(ctx)
+		case 213: lsg_n213(ctx)
+		case 214: lsg_n214(ctx)
+		case 215: lsg_n215(ctx)
+		case 216: lsg_n216(ctx)
+		case 217: lsg_n217(ctx)
+		case 218: lsg_n218(ctx)
+		case 219: lsg_n219(ctx)
+		case 220: lsg_n220(ctx)
+		case 221: lsg_n221(ctx)
+		case 222: lsg_n222(ctx)
+		case 223: lsg_n223(ctx)
+		case 224: lsg_n224(ctx)
+		case 225: lsg_n225(ctx)
+		case 226: lsg_n226(ctx)
+		case 227: lsg_n227(ctx)
+		case 228: lsg_n228(ctx)
+		case 229: lsg_n229(ctx)
+		case 230: lsg_n230(ctx)
+		case 231: lsg_n231(ctx)
+		case 232: lsg_n232(ctx)
+		case 233: lsg_n233(ctx)
+		case 234: lsg_n234(ctx)
+		case 235: lsg_n235(ctx)
+		case 236: lsg_n236(ctx)
+		case 237: lsg_n237(ctx)
+		case 238: lsg_n238(ctx)
+		case 239: lsg_n239(ctx)
+		case 240: lsg_n240(ctx)
+		case 241: lsg_n241(ctx)
+		case 242: lsg_n242(ctx)
+		case 243: lsg_n243(ctx)
+		case 244: lsg_n244(ctx)
+		case 245: lsg_n245(ctx)
+		case 246: lsg_n246(ctx)
+		case 247: lsg_n247(ctx)
 	}
 }

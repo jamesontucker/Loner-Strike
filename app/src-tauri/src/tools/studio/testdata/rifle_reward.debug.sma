@@ -1,5 +1,5 @@
 /*
-	Rifle Reward - made with Loner-Strike's Game Mode Studio (graph version 2).
+	Rifle Reward - made with Loner-Strike's Game Mode Studio (graph version 3).
 	Generated from rifle_reward.graph.json: change the graph and compile it again; edits here are lost.
 	This is a debug build (Playtest): it reports every node to the Studio.
 */
@@ -465,10 +465,6 @@ public lsd_poll()
 		lsd_resume()
 }
 
-lsd_graph_vars()
-{
-}
-
 stock lsg_slot(id)
 	return id >= 1 && id <= MaxClients ? id : 0
 
@@ -566,6 +562,21 @@ stock lsg_bot_goto(bot, const name[], secs)
 
 public lsg_bot_free(task)
 	ls_bot_release(LSG_TASK - 100 - task)
+
+stock Float:lsg_mod(Float:a, Float:b)
+{
+	if (b == 0.0)
+		return 0.0
+	return a - b * float(floatround(a / b, floatround_floor))
+}
+
+stock Float:lsg_pow(Float:a, Float:b)
+{
+	new Float:r = floatpower(a, b)
+	if (r != r)
+		return 0.0
+	return floatclamp(r, -100000.0, 100000.0)
+}
 
 stock Float:lsg_div(Float:a, Float:b)
 	return b == 0.0 ? 0.0 : a / b
@@ -725,6 +736,10 @@ stock lsg_round_time(secs)
 	message_begin(MSG_ALL, get_user_msgid("RoundTime"))
 	write_short(max(secs, 0))
 	message_end()
+}
+
+lsd_graph_vars()
+{
 }
 
 public plugin_init()

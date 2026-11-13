@@ -31,7 +31,7 @@
    "type": "comp.on_wave_cleared",
    "pos": {
     "x": 20,
-    "y": 207
+    "y": 218
    },
    "params": {}
   },
@@ -53,7 +53,7 @@
    "type": "comp.wave_start",
    "pos": {
     "x": 660,
-    "y": 194
+    "y": 205
    },
    "params": {
     "wave": 0

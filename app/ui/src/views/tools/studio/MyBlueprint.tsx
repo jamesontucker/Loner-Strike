@@ -4,9 +4,10 @@
 
 import { useState, type ReactNode } from "react";
 import { useStudio } from "./store";
-import { nodeDef, PIN_TYPES } from "./registry";
-import { addVariable, makeSnippet, type Snippet } from "./graphOps";
-import { DRAG_SNIPPET, DRAG_VAR, type CanvasApi } from "./Canvas";
+import { nodeDef, typeColor } from "./registry";
+import { addEnum, addFunction, addLocal, addMacro, addStruct, addVariable, makeSnippet, type Snippet } from "./graphOps";
+import { DRAG_PART, DRAG_SNIPPET, DRAG_VAR, type CanvasApi } from "./Canvas";
+import { typeLabel } from "./pins";
 import { saveSnippet, deleteSnippet } from "./snippets";
 import { useAskText, useConfirm } from "../../../ui";
 
@@ -33,13 +34,54 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
   const graph = useStudio((s) => s.graph);
   const selected = useStudio((s) => s.selected);
   const selectedVar = useStudio((s) => s.selectedVar);
-  const { edit, selectVar, setFuncFocus } = useStudio.getState();
+  const part = useStudio((s) => s.part);
+  const tab = useStudio((s) => s.tab);
+  const { edit, selectVar, setFuncFocus, selectPart, openTab } = useStudio.getState();
   const askText = useAskText();
   const ask = useConfirm();
   const [filter, setFilter] = useState("");
   if (!graph) return null;
-  const events = graph.nodes.filter((n) => nodeDef(n.type)?.event && n.type !== "func.define");
+  const events = graph.nodes.filter((n) => nodeDef(n.type)?.event && !["func.define", "fn.entry", "macro.entry"].includes(n.type));
   const funcs = graph.nodes.filter((n) => n.type === "func.define");
+  const functions = graph.functions ?? [];
+  const macros = graph.macros ?? [];
+  const tabFn = functions.find((x) => x.id === tab);
+  const varItem = (v: (typeof graph.variables)[number], local = false) => (
+    <button
+      key={v.id}
+      type="button"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAG_VAR, v.id);
+        e.dataTransfer.effectAllowed = "copy";
+      }}
+      className={`st-mb-item${selectedVar === v.id ? " on" : ""}`}
+      onClick={() => selectVar(v.id)}
+      title={`${typeLabel(graph, v.type)}${local ? ", this Function's own" : ""}: drag onto the canvas for Get or Set`}
+    >
+      <span className={`st-mb-pin${/^array</.test(v.type) ? " arr" : /^map</.test(v.type) ? " map" : ""}`} style={{ background: typeColor(v.type) }} /> {v.name}
+      <span className="st-muted st-mb-note">{v.scope === "player" ? "per player" : v.scope === "team" ? "per team" : ""}</span>
+    </button>
+  );
+  const partItem = (id: string, name: string, dot: string, drag: string | null, note = "", openable = false) => (
+    <button
+      key={id}
+      type="button"
+      draggable={!!drag}
+      onDragStart={(e) => {
+        if (!drag) return;
+        e.dataTransfer.setData(DRAG_PART, drag);
+        e.dataTransfer.effectAllowed = "copy";
+      }}
+      className={`st-mb-item${part === id ? " on" : ""}${tab === id ? " open" : ""}`}
+      onClick={() => selectPart(id)}
+      onDoubleClick={() => openable && openTab(id)}
+      title={openable ? "Double-click to open its graph; drag onto the canvas to call it" : drag ? "Drag onto the canvas" : undefined}
+    >
+      <span className={`st-mb-dot ${dot}`} /> {name}
+      {note && <span className="st-muted st-mb-note">{note}</span>}
+    </button>
+  );
   const f = filter.trim().toLowerCase();
   const shown = snippets.filter((s) => !f || `${s.name} ${s.description}`.toLowerCase().includes(f));
 
@@ -75,8 +117,19 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
           </button>
         ))}
       </Section>
-      <Section title="Functions" count={funcs.length} onAdd={() => api?.addAtCenter("func.define", { name: `function_${funcs.length + 1}` })} addTitle="Add a function">
-        {funcs.length === 0 && <p className="st-muted st-mb-empty">Pieces you call from several places.</p>}
+      <Section
+        title="Functions"
+        count={functions.length + funcs.length}
+        onAdd={() => {
+          const r = addFunction(graph);
+          edit(() => r.graph);
+          selectPart(r.id);
+          openTab(r.id);
+        }}
+        addTitle="Add a Function (its own graph)"
+      >
+        {functions.length + funcs.length === 0 && <p className="st-muted st-mb-empty">Pieces you call from several places, each on its own graph.</p>}
+        {functions.map((f) => partItem(f.id, f.name, "fn", `fn:${f.id}`, f.pure ? "pure" : "", true))}
         {funcs.map((n) => (
           <button
             key={n.id}
@@ -92,6 +145,36 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
         ))}
       </Section>
       <Section
+        title="Macros"
+        count={macros.length}
+        onAdd={() => {
+          const r = addMacro(graph);
+          edit(() => r.graph);
+          selectPart(r.id);
+          openTab(r.id);
+        }}
+        addTitle="Add a Macro"
+        open={macros.length > 0}
+      >
+        {macros.length === 0 && <p className="st-muted st-mb-empty">Pieces copied in where they're used (several flows in and out).</p>}
+        {macros.map((m) => partItem(m.id, m.name, "mac", `macro:${m.id}`, "", true))}
+      </Section>
+      {tabFn && (
+        <Section
+          title={`Local variables: ${tabFn.name}`}
+          count={tabFn.locals?.length ?? 0}
+          onAdd={() => {
+            const r = addLocal(graph, tabFn.id, { name: `Local ${(tabFn.locals?.length ?? 0) + 1}`, type: "number", scope: "mode", default: 0 });
+            edit(() => r.graph);
+            selectVar(r.id);
+          }}
+          addTitle="Add a local variable"
+        >
+          {!tabFn.locals?.length && <p className="st-muted st-mb-empty">Values only this Function sees, fresh each time it runs.</p>}
+          {(tabFn.locals ?? []).map((v) => varItem(v, true))}
+        </Section>
+      )}
+      <Section
         title="Variables"
         count={graph.variables.length}
         onAdd={() => {
@@ -102,23 +185,35 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
         addTitle="Add a variable"
       >
         {graph.variables.length === 0 && <p className="st-muted st-mb-empty">Values the mode keeps.</p>}
-        {graph.variables.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData(DRAG_VAR, v.id);
-              e.dataTransfer.effectAllowed = "copy";
-            }}
-            className={`st-mb-item${selectedVar === v.id ? " on" : ""}`}
-            onClick={() => selectVar(v.id)}
-            title="Drag onto the canvas for Get or Set"
-          >
-            <span className="st-mb-pin" style={{ background: PIN_TYPES[v.type].color }} /> {v.name}
-            <span className="st-muted st-mb-note">{v.scope === "player" ? "per player" : v.scope === "team" ? "per team" : ""}</span>
-          </button>
-        ))}
+        {graph.variables.map((v) => varItem(v))}
+      </Section>
+      <Section
+        title="Structs"
+        count={graph.structs?.length ?? 0}
+        onAdd={() => {
+          const r = addStruct(graph);
+          edit(() => r.graph);
+          selectPart(r.id);
+        }}
+        addTitle="Add a struct"
+        open={!!graph.structs?.length}
+      >
+        {!graph.structs?.length && <p className="st-muted st-mb-empty">Records of named values (a Loadout: weapon, ammo).</p>}
+        {(graph.structs ?? []).map((st) => partItem(st.id, st.name, "st", `make:${st.id}`, `${st.fields.length} fields`))}
+      </Section>
+      <Section
+        title="Enums"
+        count={graph.enums?.length ?? 0}
+        onAdd={() => {
+          const r = addEnum(graph);
+          edit(() => r.graph);
+          selectPart(r.id);
+        }}
+        addTitle="Add an enum"
+        open={!!graph.enums?.length}
+      >
+        {!graph.enums?.length && <p className="st-muted st-mb-empty">Named choices (Class: Scout, Tank, Medic).</p>}
+        {(graph.enums ?? []).map((e) => partItem(e.id, e.name, "en", null, `${e.values.length} values`))}
       </Section>
       <Section title="Snippets" count={snippets.length}>
         <input className="st-field st-mb-filter" placeholder="Find a snippet" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Find a snippet" />

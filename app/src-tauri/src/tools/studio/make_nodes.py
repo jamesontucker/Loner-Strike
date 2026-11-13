@@ -61,7 +61,7 @@ node("logic.and_or", "And / Or", "Conditions", "Both (And), or either one (Or)."
      params=[prm("a","A","bool",True), prm("op","Needs","choice","and",choices=[["and","both (And)"],["or","either (Or)"]]), prm("b","B","bool",True)], pure=True)
 node("logic.not", "Not", "Conditions", "True becomes False and False becomes True.", inputs=[P("a","bool","In",required=True)], outputs=[P("out","bool","Result")], pure=True)
 node("math.op", "Math", "Numbers", "Adds, takes away, multiplies, divides, or picks the smaller or bigger number.", inputs=[P("a","number","A",param="a"), P("b","number","B",param="b")], outputs=[P("out","number","Result")],
-     params=[prm("a","A","number",0,min=-100000,max=100000), prm("op","Do","choice","add",choices=[["add","A + B"],["sub","A - B"],["mul","A × B"],["div","A ÷ B"],["min","smaller"],["max","bigger"]]), prm("b","B","number",1,min=-100000,max=100000)], pure=True)
+     params=[prm("a","A","number",0,min=-100000,max=100000), prm("op","Do","choice","add",choices=[["add","A + B"],["sub","A - B"],["mul","A × B"],["div","A ÷ B"],["min","smaller"],["max","bigger"],["mod","remainder of A ÷ B"],["pow","A to the power B"]]), prm("b","B","number",1,min=-100000,max=100000)], pure=True)
 node("math.random", "Random Number", "Numbers", "A random number from Min to Max (whole numbers unless Fractions is on).", inputs=[P("min","number","Min",param="min"), P("max","number","Max",param="max")], outputs=[P("out","number","Number")],
      params=[prm("min","Min","number",1,min=-100000,max=100000), prm("max","Max","number",10,min=-100000,max=100000), prm("frac","Fractions","bool",False)], pure=True)
 node("player.get_health", "Health Of", "Players", "A player's health (0 if dead or nobody).", inputs=[P("player","player","Player",required=True)], outputs=[P("out","number","Health")], pure=True)
@@ -78,10 +78,10 @@ node("var.set", "Set Variable", "Variables", "Sets one of this mode's variables.
 node("var.add", "Add To Variable", "Variables", "Adds to a number variable (a negative amount takes away).", inputs=[X, P("player","player","Player",optional=True), P("team","team","Team",optional=True), P("amount","number","Amount",param="amount")], outputs=[E()], params=[prm("var","Variable","var","",varType="number"), prm("amount","Amount","number",1,min=-100000,max=100000)])
 
 # ---- timers
-node("timer.delay", "Delay", "Timers", "Waits, then carries on. Paused with the world while debugging.", inputs=[X, P("secs","number","Seconds",param="secs")], outputs=[E()], params=[prm("secs","Seconds","number",3,min=0.1,max=3600)])
-node("timer.repeat", "Repeat", "Timers", "Runs Each every few seconds, a number of times (0: until the round ends). Then runs at once.", inputs=[X, P("every","number","Every (s)",param="every")], outputs=[E("then",""), E("tick","Each")],
+node("timer.delay", "Delay", "Timers", "Waits, then carries on. Paused with the world while debugging.", inputs=[X, P("secs","number","Seconds",param="secs")], outputs=[E(), P("handle","timer","Timer")], params=[prm("secs","Seconds","number",3,min=0.1,max=3600)])
+node("timer.repeat", "Repeat", "Timers", "Runs Each every few seconds, a number of times (0: until the round ends). Then runs at once.", inputs=[X, P("every","number","Every (s)",param="every")], outputs=[E("then",""), E("tick","Each"), P("handle","timer","Timer")],
      params=[prm("every","Every (seconds)","number",5,min=0.1,max=3600), prm("times","Times (0 = until the round ends)","number",0,min=0,max=10000)])
-node("timer.countdown", "Countdown", "Timers", "Counts down on everyone's screen, then runs Done.", inputs=[X], outputs=[E("then",""), E("done","Done")],
+node("timer.countdown", "Countdown", "Timers", "Counts down on everyone's screen, then runs Done.", inputs=[X], outputs=[E("then",""), E("done","Done"), P("handle","timer","Timer")],
      params=[prm("secs","Seconds","number",10,min=1,max=600), prm("text","Text","text","Starting in",max=60), prm("slot","Where","choice","top",choices=SLOTS)])
 node("timer.stop_all", "Stop Timers", "Timers", "Stops every Delay, Repeat and Countdown of this mode.", inputs=[X], outputs=[E()])
 
@@ -224,10 +224,130 @@ node("clock.left", "Round Time Left", "Round clock", "Seconds left on the mode's
 node("player.launch", "Launch Up", "Players", "Throws a living player straight up (with low gravity and No Fall Damage, a drop-in from the sky).", inputs=[X, P("player","player","Player",required=True), P("speed","number","Speed",param="speed")], outputs=[E()], params=[prm("speed","Speed","number",900,min=50,max=3000)])
 node("event.time_up", "Round Time Up", "Events", "Runs when the mode's round clock reaches 0.", outputs=[E()], **ev)
 
+# ---- milestone 5: Blueprint staples (graph version 3)
+OF = lambda d="number": prm("of","Holds","type",d)
+KEY = prm("key","Keys","choice","text",choices=[["text","Text"],["number","Numbers"],["player","Players"]])
+# functions with their own graph, macros, locals
+node("fn.entry", "Function Entry", "Functions", "Where a Function starts. Its outputs are the Function's inputs (add them in Details).", outputs=[E()], event=True)
+node("fn.return", "Return Node", "Functions", "Ends the Function and hands back its outputs (add them in Details).", inputs=[X], outputs=[])
+node("fn.call", "Call", "Functions", "Runs a Function (with its own graph), then carries on with its outputs.", inputs=[X], outputs=[E()], params=[prm("func","Function","fn","")])
+node("fn.call_pure", "Call Pure", "Functions", "Works out a pure Function's outputs where they're used (no flow pins).", inputs=[], outputs=[], params=[prm("func","Function","fn","")], pure=True)
+node("macro.entry", "Macro Entry", "Macros", "Where a Macro starts: its inputs (flow and values).", outputs=[], event=True)
+node("macro.exit", "Macro Exit", "Macros", "Where a Macro ends: its outputs (flow and values).", inputs=[], outputs=[])
+node("macro.use", "Macro", "Macros", "A Macro's graph, copied in here when the mode is made.", inputs=[], outputs=[], params=[prm("macro","Macro","macro","")])
+# flow
+node("flow.sequence", "Sequence", "Flow", "Runs each output in turn, top to bottom.", inputs=[X], outputs=[E("then0","Then 0"), E("then1","Then 1")], params=[prm("count","Outputs","number",2,min=1,max=8)])
+node("flow.do_once", "Do Once", "Flow", "Lets the flow through the first time only, until Reset.", inputs=[X, E("reset","Reset")], outputs=[E("then","Completed")], params=[prm("closed","Start closed","bool",False)])
+node("flow.do_n", "Do N", "Flow", "Lets the flow through N times, until Reset.", inputs=[X, E("reset","Reset"), P("n","number","N",param="n")], outputs=[E("then","Exit"), P("counter","number","Counter")], params=[prm("n","N","number",3,min=1,max=10000)])
+node("flow.gate", "Gate", "Flow", "Flow coming into Enter goes through only while the gate is open.", inputs=[E("exec","Enter"), E("open","Open"), E("close","Close"), E("toggle","Toggle")], outputs=[E("then","Exit")], params=[prm("closed","Start closed","bool",True)])
+node("flow.flipflop", "Flip Flop", "Flow", "Goes to A, then B, then A again... Is A says which it just did.", inputs=[X], outputs=[E("a","A"), E("b","B"), P("is_a","bool","Is A")])
+node("flow.for_loop", "For Loop", "Flow", "Runs Loop Body once for each number from First to Last (at most 10000 times), then Completed.",
+     inputs=[X, P("first","number","First",param="first"), P("last","number","Last",param="last")], outputs=[E("body","Loop Body"), P("index","number","Index"), E("then","Completed")],
+     params=[prm("first","First","number",0,min=-100000,max=100000), prm("last","Last","number",9,min=-100000,max=100000)])
+node("flow.for_loop_break", "For Loop with Break", "Flow", "A For Loop that stops early when flow comes into Break.",
+     inputs=[X, E("break","Break"), P("first","number","First",param="first"), P("last","number","Last",param="last")], outputs=[E("body","Loop Body"), P("index","number","Index"), E("then","Completed")],
+     params=[prm("first","First","number",0,min=-100000,max=100000), prm("last","Last","number",9,min=-100000,max=100000)])
+node("flow.while", "While Loop", "Flow", "Runs Loop Body while the condition is true (checked each time; at most Limit times), then Completed.",
+     inputs=[X, P("cond","bool","Condition",required=True)], outputs=[E("body","Loop Body"), E("then","Completed")], params=[prm("limit","Limit","number",1000,min=1,max=10000)])
+node("flow.for_each_array", "For Each", "Arrays", "Runs Loop Body once for each item of an array (Break stops early), then Completed.",
+     inputs=[X, E("break","Break"), P("array","array<$T>","Array",required=True)], outputs=[E("body","Loop Body"), P("item","$T","Item"), P("index","number","Index"), E("then","Completed")], params=[OF()])
+node("flow.switch_num", "Switch on Number", "Flow", "Goes to the output whose case is the number (cases split by commas), or Default.",
+     inputs=[X, P("in","number","Selection",required=True)], outputs=[E("default","Default")], params=[prm("cases","Cases","cases","1,2,3")])
+node("flow.switch_text", "Switch on Text", "Flow", "Goes to the output whose case is the text (capitals don't matter; cases split by commas), or Default.",
+     inputs=[X, P("in","text","Selection",required=True)], outputs=[E("default","Default")], params=[prm("cases","Cases","cases","yes,no")])
+node("flow.switch_enum", "Switch on Enum", "Enums", "Goes to the output for the enum's value.", inputs=[X, P("in","$E","Selection",required=True)], outputs=[], params=[prm("enum","Enum","enum","")])
+node("flow.if_valid", "Is Valid?", "Conditions", "Goes to Is Valid when the entity (or player) is there, else Is Not Valid.", inputs=[X, P("in","entity","Object",optional=True)], outputs=[E("valid","Is Valid"), E("invalid","Is Not Valid")])
+node("timer.retrigger", "Retriggerable Delay", "Timers", "Waits, then carries on; flow coming in again while waiting starts the wait again.", inputs=[X, P("secs","number","Seconds",param="secs")], outputs=[E(), P("handle","timer","Timer")], params=[prm("secs","Seconds","number",3,min=0.1,max=3600)])
+node("timer.by_function", "Set Timer by Function", "Timers", "Runs a Function (with its own graph) after some seconds, again and again if Looping. Its inputs get nothing (0, empty).",
+     inputs=[X, P("secs","number","Seconds",param="secs")], outputs=[E(), P("handle","timer","Timer")], params=[prm("func","Function","fn",""), prm("secs","Seconds","number",5,min=0.1,max=3600), prm("loop","Looping","bool",True)])
+node("timer.clear", "Clear Timer", "Timers", "Stops a timer (a Delay, Repeat, Countdown or Set Timer's handle).", inputs=[X, P("handle","timer","Timer",required=True)], outputs=[E()])
+node("timer.is_active", "Is Timer Active", "Timers", "Is the timer waiting to run?", inputs=[P("handle","timer","Timer",required=True)], outputs=[P("out","bool","Active")], pure=True)
+node("debug.print", "Print String", "Messages", "Prints text (and a value wired in) to the server console and the Studio's output, and to chat if you like.", inputs=[X, P("value","any","Value",optional=True)], outputs=[E()],
+     params=[prm("text","Text","text","Hello",max=100), prm("chat","Also in chat","bool",True)])
+# conditions
+node("logic.equal", "Equal", "Conditions", "Are the two values the same (or different)?", inputs=[P("a","$T","A",required=True), P("b","$T","B",required=True)], outputs=[P("out","bool","Result")],
+     params=[OF(), prm("op","Is","choice","eq",choices=[["eq","equal"],["ne","not equal"]])], pure=True)
+node("logic.select", "Select", "Conditions", "Picks A when the condition is true, else B.", inputs=[P("cond","bool","Pick A",param="cond"), P("a","$T","A",optional=True), P("b","$T","B",optional=True)], outputs=[P("out","$T","Result")],
+     params=[OF(), prm("cond","Pick A","bool",True)], pure=True)
+node("cond.is_valid", "Is Valid", "Conditions", "Is the entity (or player) there?", inputs=[P("in","entity","Object",optional=True)], outputs=[P("out","bool","Valid")], pure=True)
+node("player.is_player", "Is Player", "Players", "Is the entity a player (or bot) in the game?", inputs=[P("in","entity","Entity",optional=True)], outputs=[P("out","bool","Player")], pure=True)
+node("creature.is", "Is Creature", "Creatures", "Is the entity one of the bot brain's creatures?", inputs=[P("in","entity","Entity",optional=True)], outputs=[P("out","bool","Creature")], pure=True)
+# math
+node("math.fn", "Math Function", "Numbers", "Absolute value, rounding, square root and more.", inputs=[P("a","number","In",param="a")], outputs=[P("out","number","Result")],
+     params=[prm("a","In","number",0,min=-100000,max=100000), prm("op","Do","choice","abs",choices=[["abs","Absolute (no minus)"],["round","Round"],["floor","Round down"],["ceil","Round up"],["sqrt","Square root"],["neg","Minus"],["sign","Sign (-1, 0, 1)"]])], pure=True)
+node("math.clamp", "Clamp", "Numbers", "Keeps a number between Min and Max.", inputs=[P("a","number","Value",param="a"), P("min","number","Min",param="min"), P("max","number","Max",param="max")], outputs=[P("out","number","Result")],
+     params=[prm("a","Value","number",0,min=-100000,max=100000), prm("min","Min","number",0,min=-100000,max=100000), prm("max","Max","number",100,min=-100000,max=100000)], pure=True)
+node("math.lerp", "Lerp", "Numbers", "A number between A and B: Alpha 0 is A, 1 is B, 0.5 halfway.", inputs=[P("a","number","A",param="a"), P("b","number","B",param="b"), P("alpha","number","Alpha",param="alpha")], outputs=[P("out","number","Result")],
+     params=[prm("a","A","number",0,min=-100000,max=100000), prm("b","B","number",100,min=-100000,max=100000), prm("alpha","Alpha","number",0.5,min=-100,max=100)], pure=True)
+node("math.in_range", "In Range", "Numbers", "Is the number from Min to Max?", inputs=[P("a","number","Value",required=True), P("min","number","Min",param="min"), P("max","number","Max",param="max")], outputs=[P("out","bool","In range")],
+     params=[prm("min","Min","number",0,min=-100000,max=100000), prm("max","Max","number",100,min=-100000,max=100000)], pure=True)
+node("math.number", "Number", "Numbers", "A number.", outputs=[P("out","number","Number")], params=[prm("value","Number","number",0,min=-100000,max=100000)], pure=True)
+# text
+node("text.literal", "Text", "Text", "Some text.", outputs=[P("out","text","Text")], params=[prm("value","Text","text","",max=100)], pure=True)
+node("text.append", "Append", "Text", "B straight after A (add a space in B if you want one).", inputs=[P("a","text","A",param="a"), P("b","text","B",param="b")], outputs=[P("out","text","Text")],
+     params=[prm("a","A","text","",max=60), prm("b","B","text","",max=60)], pure=True)
+node("text.format", "Format Text", "Text", "Text with [0] [1] [2] [3] replaced by the values wired in.", inputs=[P("a0","any","[0]",optional=True), P("a1","any","[1]",optional=True), P("a2","any","[2]",optional=True), P("a3","any","[3]",optional=True)], outputs=[P("out","text","Text")],
+     params=[prm("text","Format","text","[0] has [1] points",max=100)], pure=True)
+node("text.contains", "Contains Text", "Text", "Is B somewhere in A (capitals don't matter)?", inputs=[P("a","text","Text",required=True), P("b","text","Find",param="b")], outputs=[P("out","bool","Contains")], params=[prm("b","Find","text","",max=60)], pure=True)
+node("text.length", "Text Length", "Text", "How many characters the text has.", inputs=[P("a","text","Text",required=True)], outputs=[P("out","number","Length")], pure=True)
+node("text.to_number", "Text To Number", "Text", "The number written in the text (0 if none).", inputs=[P("a","text","Text",required=True)], outputs=[P("out","number","Number")], pure=True)
+node("text.from", "To Text", "Text", "A value as text: a number, a player's name, a vector, an enum's name...", inputs=[P("a","$T","Value",required=True)], outputs=[P("out","text","Text")], params=[OF()], pure=True)
+# vectors
+node("vec.make", "Make Vector", "Vectors", "A position or direction from X, Y and Z.", inputs=[P("x","number","X",param="x"), P("y","number","Y",param="y"), P("z","number","Z",param="z")], outputs=[P("out","vector","Vector")],
+     params=[prm("x","X","number",0,min=-100000,max=100000), prm("y","Y","number",0,min=-100000,max=100000), prm("z","Z","number",0,min=-100000,max=100000)], pure=True)
+node("vec.break", "Break Vector", "Vectors", "A vector's X, Y and Z.", inputs=[P("in","vector","Vector",required=True)], outputs=[P("x","number","X"), P("y","number","Y"), P("z","number","Z")], pure=True)
+node("vec.op", "Vector Math", "Vectors", "Adds or takes away two vectors.", inputs=[P("a","vector","A",required=True), P("b","vector","B",required=True)], outputs=[P("out","vector","Result")],
+     params=[prm("op","Do","choice","add",choices=[["add","A + B"],["sub","A - B"]])], pure=True)
+node("vec.scale", "Scale Vector", "Vectors", "Multiplies a vector by a number (makes it longer or shorter).", inputs=[P("a","vector","Vector",required=True), P("n","number","Times",param="n")], outputs=[P("out","vector","Result")], params=[prm("n","Times","number",2,min=-100000,max=100000)], pure=True)
+node("vec.length", "Vector Length", "Vectors", "How long a vector is.", inputs=[P("a","vector","Vector",required=True)], outputs=[P("out","number","Length")], pure=True)
+node("vec.distance", "Distance", "Vectors", "How far apart two positions are.", inputs=[P("a","vector","A",required=True), P("b","vector","B",required=True)], outputs=[P("out","number","Distance")], pure=True)
+node("vec.direction", "Direction", "Vectors", "The direction (length 1) from one position to another.", inputs=[P("from","vector","From",required=True), P("to","vector","To",required=True)], outputs=[P("out","vector","Direction")], pure=True)
+node("vec.normalize", "Normalize", "Vectors", "The same direction, length 1.", inputs=[P("a","vector","Vector",required=True)], outputs=[P("out","vector","Result")], pure=True)
+node("vec.player", "Position Of Player", "Vectors", "Where a player is: their feet, their eyes, which way they're aiming, what they're aiming at, or how fast they're moving.", inputs=[P("player","player","Player",required=True)], outputs=[P("out","vector","Vector")],
+     params=[prm("what","What","choice","origin",choices=[["origin","Position"],["eyes","Eye position"],["aim","Aim direction"],["aim_point","Aiming at (where the aim hits)"],["velocity","Velocity"]])], pure=True)
+node("vec.entity", "Position Of Entity", "Vectors", "Where an entity is (the middle of a brush entity).", inputs=[P("in","entity","Entity",required=True)], outputs=[P("out","vector","Position")], pure=True)
+node("player.set_position", "Set Position", "Players", "Moves a living player to a position (pick one where they fit).", inputs=[X, P("player","player","Player",required=True), P("at","vector","Position",required=True)], outputs=[E()])
+node("player.set_velocity", "Set Velocity", "Players", "Throws a living player: their speed and direction as a vector.", inputs=[X, P("player","player","Player",required=True), P("v","vector","Velocity",required=True)], outputs=[E()])
+# structs and enums
+node("struct.make", "Make Struct", "Structs", "A struct from its fields.", inputs=[], outputs=[P("out","$S","Struct")], params=[prm("struct","Struct","struct","")], pure=True)
+node("struct.break", "Break Struct", "Structs", "A struct's fields.", inputs=[P("in","$S","Struct",required=True)], outputs=[], params=[prm("struct","Struct","struct","")], pure=True)
+node("struct.set_field", "Set Field", "Structs", "Sets one field of a struct variable.", inputs=[X, P("value","$F","Value",optional=True)], outputs=[E()],
+     params=[prm("var","Variable","var","",varType="struct"), prm("field","Field","field","")])
+node("enum.value", "Enum Value", "Enums", "One of an enum's values.", outputs=[P("out","$E","Value")], params=[prm("enum","Enum","enum",""), prm("value","Value","enumvalue",0)], pure=True)
+node("enum.to_number", "Enum To Number", "Enums", "An enum value's number (the first is 0).", inputs=[P("in","$E","Value",required=True)], outputs=[P("out","number","Number")], params=[prm("enum","Enum","enum","")], pure=True)
+# arrays
+node("array.make", "Make Array", "Arrays", "An array of the items wired in (a new one each time it's worked out).", inputs=[P("i","$T","Item",optional=True)], outputs=[P("out","array<$T>","Array")], params=[OF(), prm("count","Items","number",2,min=0,max=8)], pure=True)
+node("array.players", "Players Array", "Arrays", "An array of every player who fits.", outputs=[P("out","array<player>","Players")], params=[prm("which","Who","choice","alive",choices=WHICH)], pure=True)
+node("array.add", "Add", "Arrays", "Adds an item at the end (an array holds at most 10000).", inputs=[X, P("array","array<$T>","Array",required=True), P("item","$T","Item",optional=True)], outputs=[E(), P("index","number","Index")], params=[OF()])
+node("array.insert", "Insert", "Arrays", "Puts an item in at an index (the rest move up).", inputs=[X, P("array","array<$T>","Array",required=True), P("item","$T","Item",optional=True), P("at","number","Index",param="at")], outputs=[E()],
+     params=[OF(), prm("at","Index","number",0,min=0,max=10000)])
+node("array.remove", "Remove Item", "Arrays", "Takes out every item equal to this one.", inputs=[X, P("array","array<$T>","Array",required=True), P("item","$T","Item",optional=True)], outputs=[E(), P("removed","bool","Removed")], params=[OF()])
+node("array.remove_index", "Remove Index", "Arrays", "Takes out the item at an index.", inputs=[X, P("array","array<$T>","Array",required=True), P("at","number","Index",param="at")], outputs=[E()], params=[OF(), prm("at","Index","number",0,min=0,max=10000)])
+node("array.set", "Set Array Item", "Arrays", "Changes the item at an index (nothing happens past the end).", inputs=[X, P("array","array<$T>","Array",required=True), P("at","number","Index",param="at"), P("item","$T","Item",optional=True)], outputs=[E()],
+     params=[OF(), prm("at","Index","number",0,min=0,max=10000)])
+node("array.clear", "Clear", "Arrays", "Empties an array.", inputs=[X, P("array","array<$T>","Array",required=True)], outputs=[E()], params=[OF()])
+node("array.shuffle", "Shuffle", "Arrays", "Puts an array's items in a random order.", inputs=[X, P("array","array<$T>","Array",required=True)], outputs=[E()], params=[OF()])
+node("array.sort", "Sort", "Arrays", "Sorts an array (numbers by size, text A to Z, the rest by their number).", inputs=[X, P("array","array<$T>","Array",required=True)], outputs=[E()],
+     params=[OF(), prm("order","Order","choice","asc",choices=[["asc","Smallest first"],["desc","Biggest first"]])])
+node("array.get", "Get", "Arrays", "The item at an index (nothing, 0 or empty past the end).", inputs=[P("array","array<$T>","Array",required=True), P("at","number","Index",param="at")], outputs=[P("out","$T","Item")], params=[OF(), prm("at","Index","number",0,min=0,max=10000)], pure=True)
+node("array.length", "Length", "Arrays", "How many items an array has.", inputs=[P("array","array<$T>","Array",required=True)], outputs=[P("out","number","Length")], params=[OF()], pure=True)
+node("array.contains", "Contains", "Arrays", "Is the item in the array?", inputs=[P("array","array<$T>","Array",required=True), P("item","$T","Item",optional=True)], outputs=[P("out","bool","Contains")], params=[OF()], pure=True)
+node("array.find", "Find", "Arrays", "The index of the first item equal to this one (-1 if none).", inputs=[P("array","array<$T>","Array",required=True), P("item","$T","Item",optional=True)], outputs=[P("out","number","Index")], params=[OF()], pure=True)
+node("array.random", "Random Item", "Arrays", "An item picked at random (a new pick each time it's worked out).", inputs=[P("array","array<$T>","Array",required=True)], outputs=[P("out","$T","Item")], params=[OF()], pure=True)
+# maps
+node("map.add", "Map Add", "Maps", "Puts a value in a map under a key (replacing what was there).", inputs=[X, P("map","map<$K,$T>","Map",required=True), P("key","$K","Key",optional=True), P("value","$T","Value",optional=True)], outputs=[E()], params=[KEY, OF()])
+node("map.remove", "Map Remove", "Maps", "Takes a key (and its value) out of a map.", inputs=[X, P("map","map<$K,$T>","Map",required=True), P("key","$K","Key",optional=True)], outputs=[E()], params=[KEY, OF()])
+node("map.clear", "Map Clear", "Maps", "Empties a map.", inputs=[X, P("map","map<$K,$T>","Map",required=True)], outputs=[E()], params=[KEY, OF()])
+node("map.find", "Map Find", "Maps", "The value under a key, and whether it was there.", inputs=[P("map","map<$K,$T>","Map",required=True), P("key","$K","Key",optional=True)], outputs=[P("out","$T","Value"), P("found","bool","Found")], params=[KEY, OF()], pure=True)
+node("map.contains", "Map Contains", "Maps", "Is the key in the map?", inputs=[P("map","map<$K,$T>","Map",required=True), P("key","$K","Key",optional=True)], outputs=[P("out","bool","Contains")], params=[KEY, OF()], pure=True)
+node("map.length", "Map Length", "Maps", "How many keys a map has.", inputs=[P("map","map<$K,$T>","Map",required=True)], outputs=[P("out","number","Length")], params=[KEY, OF()], pure=True)
+node("map.keys", "Map Keys", "Maps", "An array of a map's keys (a player who left is left out).", inputs=[P("map","map<$K,$T>","Map",required=True)], outputs=[P("out","array<$K>","Keys")], params=[KEY, OF()], pure=True)
+node("map.values", "Map Values", "Maps", "An array of a map's values.", inputs=[P("map","map<$K,$T>","Map",required=True)], outputs=[P("out","array<$T>","Values")], params=[KEY, OF()], pure=True)
+
 node("flow.reroute", "Reroute", "Flow", "A bend in a wire, to keep the graph tidy. Passes on whatever comes in.", inputs=[P("in","any","")], outputs=[P("out","any","")], reroute=True)
 
 data = {
-  "version": 3,
+  "version": 4,
   "pinTypes": {
     "exec": {"label": "Flow", "color": "#f2f2f2"},
     "player": {"label": "Player", "color": "#5ab0ff"},
@@ -236,10 +356,14 @@ data = {
     "number": {"label": "Number", "color": "#9be36a"},
     "bool": {"label": "Yes/No", "color": "#ff6b8a"},
     "text": {"label": "Text", "color": "#e0a3ff"},
+    "vector": {"label": "Vector", "color": "#ffd23f"},
+    "timer": {"label": "Timer", "color": "#7fd6ff"},
+    "enum": {"label": "Enum", "color": "#1f8a70"},
+    "struct": {"label": "Struct", "color": "#2f6fd6"},
     "any": {"label": "Anything", "color": "#9a9a9a"},
     "var": {"label": "Variable", "color": "#cccccc"}
   },
-  "categories": ["Events", "Conditions", "Numbers", "Variables", "Flow", "Functions", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Creatures"],
+  "categories": ["Events", "Conditions", "Numbers", "Text", "Variables", "Flow", "Functions", "Macros", "Arrays", "Maps", "Structs", "Enums", "Vectors", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Creatures"],
   "nodes": nodes,
 }
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)

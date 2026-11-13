@@ -3,8 +3,11 @@
 
 import { useStudio } from "./store";
 import { KEYS_CHARS, NAME_CHARS, nodeDef, type ParamDef } from "./registry";
-import { removeVariable, setParam, toggleBreakpoint, updateVariable } from "./graphOps";
-import { LABEL_CHARS, type GNode, type GVariable } from "./schema";
+import { freshMember, removeGraphPart, removeType, removeVariable, setParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
+import { LABEL_CHARS, type GMember, type GNode, type GVariable, type Graph } from "./schema";
+import { allVariables, itemTypeOk, nodeTitle, typeLabel } from "./pins";
+import { TypePicker } from "./TypePicker";
+import { useConfirm } from "../../../ui";
 
 type PV = string | number | boolean;
 
@@ -41,8 +44,21 @@ function TextField({ value, max, allowed, onChange }: { value: string; max: numb
 }
 
 /** A value for a variable of this type. */
-function ValueField({ type, value, onChange }: { type: GVariable["type"]; value: PV | undefined; onChange: (v: PV) => void }) {
+function ValueField({ type, value, onChange, graph }: { type: GVariable["type"]; value: PV | undefined; onChange: (v: PV) => void; graph?: Graph }) {
   if (type === "number") return <NumberField value={typeof value === "number" ? value : 0} onChange={onChange} />;
+  if (type.startsWith("enum:")) {
+    const e = graph?.enums?.find((x) => `enum:${x.id}` === type);
+    return (
+      <select className="st-field" value={String(typeof value === "number" ? value : 0)} onChange={(ev) => onChange(Number(ev.target.value))}>
+        {(e?.values ?? []).map((v, i) => (
+          <option key={i} value={i}>
+            {v}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  if (type !== "bool" && type !== "text") return <em className="st-muted">{/^(array|map)</.test(type) ? "Starts empty" : type === "vector" ? "Starts at 0 0 0" : type.startsWith("struct:") ? "Starts with every field empty" : "Starts as nothing"}</em>;
   if (type === "bool")
     return (
       <select className="st-field" value={value === true ? "1" : "0"} onChange={(e) => onChange(e.target.value === "1")}>
@@ -53,7 +69,40 @@ function ValueField({ type, value, onChange }: { type: GVariable["type"]; value:
   return <TextField value={typeof value === "string" ? value : ""} max={60} allowed={LABEL_CHARS} onChange={onChange} />;
 }
 
-function ParamField({ p, value, vars, nodeVar, nodes, onChange }: { p: ParamDef; value: PV; vars: GVariable[]; nodeVar?: GVariable; nodes: GNode[]; onChange: (v: PV) => void }) {
+function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: { p: ParamDef; value: PV; vars: GVariable[]; nodeVar?: GVariable; nodes: GNode[]; onChange: (v: PV) => void; graph: Graph; node: GNode }) {
+  const pick = (list: [string, string][], empty: string) => (
+    <select className="st-field" value={String(value)} onChange={(e) => onChange(e.target.value)}>
+      {!list.some(([k]) => k === String(value)) && <option value={String(value)}>{list.length ? "Pick one…" : empty}</option>}
+      {list.map(([k, l]) => (
+        <option key={k} value={k}>
+          {l}
+        </option>
+      ))}
+    </select>
+  );
+  if (p.kind === "fn") return pick((graph.functions ?? []).filter((f) => !!f.pure === (node.type === "fn.call_pure") && f.id !== node.graph).map((f) => [f.id, f.name]), "Add a Function under My mode first");
+  if (p.kind === "macro") return pick((graph.macros ?? []).filter((m) => m.id !== node.graph).map((m) => [m.id, m.name]), "Add a Macro under My mode first");
+  if (p.kind === "struct") return pick((graph.structs ?? []).map((x) => [x.id, x.name]), "Add a struct under My mode first");
+  if (p.kind === "enum") return pick((graph.enums ?? []).map((x) => [x.id, x.name]), "Add an enum under My mode first");
+  if (p.kind === "type") return <TypePicker graph={graph} value={itemTypeOk(graph, String(value), true) ? String(value) : "number"} onChange={onChange} containers={false} structs={!node.type.startsWith("map.")} label={p.label} />;
+  if (p.kind === "field") {
+    const st = graph.structs?.find((x) => `struct:${x.id}` === nodeVar?.type);
+    return st ? pick(st.fields.map((f) => [f.id, `${f.name} (${typeLabel(graph, f.type)})`]), "") : <em className="st-muted">Pick a struct variable first</em>;
+  }
+  if (p.kind === "enumvalue") {
+    const en = graph.enums?.find((x) => x.id === node.params.enum);
+    return en ? (
+      <select className="st-field" value={String(value)} onChange={(e) => onChange(Number(e.target.value))}>
+        {en.values.map((v, i) => (
+          <option key={i} value={i}>
+            {v}
+          </option>
+        ))}
+      </select>
+    ) : (
+      <em className="st-muted">Pick an enum first</em>
+    );
+  }
   if (p.kind === "func" || p.kind === "timer") {
     const list = nodes.filter((n) => (p.kind === "func" ? n.type === "func.define" : ["timer.delay", "timer.repeat", "timer.countdown"].includes(n.type)));
     return (
@@ -88,20 +137,20 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange }: { p: ParamDef;
   if (p.kind === "name") return <TextField value={String(value)} max={32} allowed={NAME_CHARS} onChange={onChange} />;
   if (p.kind === "keys") return <TextField value={String(value)} max={p.max ?? 120} allowed={KEYS_CHARS} onChange={onChange} />;
   if (p.kind === "var") {
-    const list = vars.filter((v) => !p.varType || v.type === p.varType);
+    const list = vars.filter((v) => !p.varType || v.type === p.varType || (p.varType === "struct" && v.type.startsWith("struct:")) || (p.varType === "array" && v.type.startsWith("array<")));
     return (
       <select className="st-field" value={String(value)} onChange={(e) => onChange(e.target.value)}>
         <option value="">{list.length ? "Pick one…" : "Add a variable under This mode first"}</option>
         {list.map((v) => (
           <option key={v.id} value={v.id}>
-            {v.name} ({v.type === "bool" ? "yes/no" : v.type}
-            {v.scope === "player" ? ", per player" : ""})
+            {v.name} ({typeLabel(graph, v.type)}
+            {v.scope === "player" ? ", per player" : v.scope === "team" ? ", per team" : ""})
           </option>
         ))}
       </select>
     );
   }
-  if (p.kind === "varvalue") return nodeVar ? <ValueField type={nodeVar.type} value={value === "" ? undefined : value} onChange={onChange} /> : <em className="st-muted">Pick a variable first</em>;
+  if (p.kind === "varvalue") return nodeVar ? <ValueField type={nodeVar.type} value={value === "" ? undefined : value} onChange={onChange} graph={graph} /> : <em className="st-muted">Pick a variable first</em>;
   return <TextField value={String(value)} max={p.max ?? 100} allowed={LABEL_CHARS} onChange={onChange} />;
 }
 
@@ -147,12 +196,14 @@ function VariableDetails({ id }: { id: string }) {
   const graph = useStudio((s) => s.graph)!;
   const edit = useStudio((s) => s.edit);
   const selectVar = useStudio((s) => s.selectVar);
-  const v = graph.variables.find((x) => x.id === id);
+  const v = allVariables(graph).find((x) => x.id === id);
   if (!v) return null;
+  const owner = graph.functions?.find((f) => f.locals?.some((x) => x.id === id));
+  const complex = /^(array|map)<|^struct:/.test(v.type);
   const used = graph.nodes.filter((n) => n.params.var === id).length;
   return (
     <aside className="st-side" aria-label="Details">
-      <p className="st-side-kicker">Details · Variable</p>
+      <p className="st-side-kicker">Details · {owner ? `Local variable of ${owner.name}` : "Variable"}</p>
       <div className="st-side-fields">
         <label className="st-side-field">
           <span>Name</span>
@@ -160,30 +211,30 @@ function VariableDetails({ id }: { id: string }) {
         </label>
         <label className="st-side-field">
           <span>Type</span>
-          <select className="st-field" value={v.type} onChange={(e) => edit((g) => updateVariable(g, v.id, { type: e.target.value as GVariable["type"] }))}>
-            <option value="number">Number</option>
-            <option value="bool">Yes/No</option>
-            <option value="text">Text</option>
-          </select>
+          <TypePicker graph={graph} value={v.type} onChange={(type) => edit((g) => updateVariable(g, v.id, { type }))} />
         </label>
-        <label className="st-side-field">
-          <span>One for</span>
-          <select className="st-field" value={v.scope} onChange={(e) => edit((g) => updateVariable(g, v.id, { scope: e.target.value as GVariable["scope"] }))}>
-            <option value="mode">The whole mode</option>
-            <option value="player">Each player (reset when they join)</option>
-            <option value="team">Each team</option>
-          </select>
-        </label>
-        <label className="st-side-field">
-          <span>Kept</span>
-          <select className="st-field" value={v.reset ?? "never"} onChange={(e) => edit((g) => updateVariable(g, v.id, { reset: e.target.value as "never" | "round" }))}>
-            <option value="never">For the map</option>
-            <option value="round">Starts again each round</option>
-          </select>
-        </label>
+        {!owner && (
+          <>
+            <label className="st-side-field">
+              <span>One for</span>
+              <select className="st-field" value={v.scope} disabled={complex} title={complex ? "Arrays, maps and structs are kept for the whole mode" : undefined} onChange={(e) => edit((g) => updateVariable(g, v.id, { scope: e.target.value as GVariable["scope"] }))}>
+                <option value="mode">The whole mode</option>
+                <option value="player">Each player (reset when they join)</option>
+                <option value="team">Each team</option>
+              </select>
+            </label>
+            <label className="st-side-field">
+              <span>Kept</span>
+              <select className="st-field" value={v.reset ?? "never"} onChange={(e) => edit((g) => updateVariable(g, v.id, { reset: e.target.value as "never" | "round" }))}>
+                <option value="never">For the map</option>
+                <option value="round">Starts again each round</option>
+              </select>
+            </label>
+          </>
+        )}
         <label className="st-side-field">
           <span>Starts at</span>
-          <ValueField type={v.type} value={v.default} onChange={(d) => edit((g) => updateVariable(g, v.id, { default: d }))} />
+          <ValueField type={v.type} value={v.default} graph={graph} onChange={(d) => edit((g) => updateVariable(g, v.id, { default: d }))} />
         </label>
       </div>
       <p className="st-side-help">
@@ -203,6 +254,116 @@ function VariableDetails({ id }: { id: string }) {
   );
 }
 
+/** Inputs, outputs or fields: a name and a type each, added and removed here. */
+function Members({ graph, list, prefix, exec, containers = true, structs = true, max = 12, onChange, noun }: { graph: Graph; list: GMember[]; prefix: string; exec?: boolean; containers?: boolean; structs?: boolean; max?: number; onChange: (l: GMember[]) => void; noun: string }) {
+  return (
+    <>
+      <ul className="st-vars-list">
+        {list.map((m, k) => (
+          <li key={m.id} className="st-var">
+            <div className="st-var-row">
+              <TextField value={m.name} max={30} allowed={LABEL_CHARS} onChange={(name) => onChange(list.map((x, j) => (j === k ? { ...x, name } : x)))} />
+              <button type="button" className="btn small" aria-label={`Move ${m.name} up`} disabled={k === 0} onClick={() => onChange(list.map((x, j) => (j === k - 1 ? list[k] : j === k ? list[k - 1] : x)))}>
+                ↑
+              </button>
+              <button type="button" className="btn small" aria-label={`Remove ${m.name}`} onClick={() => onChange(list.filter((_, j) => j !== k))}>
+                ×
+              </button>
+            </div>
+            <TypePicker graph={graph} value={m.type} exec={exec} containers={containers} structs={structs} onChange={(type) => onChange(list.map((x, j) => (j === k ? { ...x, type } : x)))} />
+          </li>
+        ))}
+      </ul>
+      <button type="button" className="btn small" disabled={list.length >= max} onClick={() => onChange([...list, { id: freshMember(list, prefix), name: `${noun} ${list.length + 1}`, type: "number" }])}>
+        Add {noun.toLowerCase()}
+      </button>
+    </>
+  );
+}
+
+/** A Function, Macro, struct or enum (picked in the left panel). */
+function PartDetails({ id }: { id: string }) {
+  const graph = useStudio((s) => s.graph)!;
+  const edit = useStudio((s) => s.edit);
+  const { selectPart, openTab } = useStudio.getState();
+  const ask = useConfirm();
+  const f = graph.functions?.find((x) => x.id === id);
+  const m = graph.macros?.find((x) => x.id === id);
+  const st = graph.structs?.find((x) => x.id === id);
+  const en = graph.enums?.find((x) => x.id === id);
+  const calls = graph.nodes.filter((n) => n.params.func === id || n.params.macro === id).length;
+  const name = f?.name ?? m?.name ?? st?.name ?? en?.name ?? "";
+  const rename = (v: string) => edit((g) => (f ? updateFunction(g, id, { name: v }) : m ? updateMacro(g, id, { name: v }) : st ? updateStruct(g, id, { name: v }) : updateEnum(g, id, { name: v })));
+  const drop = async () => {
+    if (!(await ask(`Remove “${name}”${f || m ? " and its graph" : ""}? Nodes using it show a problem until changed.`, { ok: "Remove", danger: true }))) return;
+    edit((g) => (f || m ? removeGraphPart(g, id) : removeType(g, id)));
+    selectPart(null);
+  };
+  return (
+    <aside className="st-side" aria-label="Details">
+      <p className="st-side-kicker">Details · {f ? (f.pure ? "Pure Function" : "Function") : m ? "Macro" : st ? "Struct" : "Enum"}</p>
+      <div className="st-side-fields">
+        <label className="st-side-field">
+          <span>Name</span>
+          <TextField value={name} max={30} allowed={LABEL_CHARS} onChange={rename} />
+        </label>
+        {f && (
+          <label className="st-side-check">
+            <input type="checkbox" checked={!!f.pure} onChange={() => edit((g) => ({ ...updateFunction(g, id, { pure: !f.pure || undefined }), nodes: g.nodes.map((n) => (n.params.func === id && (n.type === "fn.call" || n.type === "fn.call_pure") ? { ...n, type: f.pure ? "fn.call" : "fn.call_pure" } : n)) }))} />
+            <span>Pure: no flow pins where it's called; worked out where its outputs are used (no Delays)</span>
+          </label>
+        )}
+      </div>
+      {(f || m) && (
+        <>
+          <h4 className="st-side-sub">Inputs</h4>
+          <Members graph={graph} list={(f ?? m)!.inputs} prefix="a" exec={!!m} noun="Input" onChange={(inputs) => edit((g) => (f ? updateFunction(g, id, { inputs }) : updateMacro(g, id, { inputs })))} />
+          <h4 className="st-side-sub">Outputs</h4>
+          <Members graph={graph} list={(f ?? m)!.outputs} prefix="r" exec={!!m} noun="Output" onChange={(outputs) => edit((g) => (f ? updateFunction(g, id, { outputs }) : updateMacro(g, id, { outputs })))} />
+          <p className="st-side-help">
+            Called from {calls} place{calls === 1 ? "" : "s"}.{" "}
+            <button type="button" className="btn small" onClick={() => openTab(id)}>
+              Open its graph
+            </button>
+          </p>
+        </>
+      )}
+      {st && (
+        <>
+          <h4 className="st-side-sub">Fields</h4>
+          <Members graph={graph} list={st.fields} prefix="f" containers={false} structs={false} noun="Field" onChange={(fields) => edit((g) => updateStruct(g, id, { fields }))} />
+          <p className="st-side-help">Drag it from the left onto the canvas for Make; Break, Set Field and arrays of it are in the node search.</p>
+        </>
+      )}
+      {en && (
+        <>
+          <h4 className="st-side-sub">Values</h4>
+          <ul className="st-vars-list">
+            {en.values.map((v, k) => (
+              <li key={k} className="st-var">
+                <div className="st-var-row">
+                  <TextField value={v} max={30} allowed={LABEL_CHARS} onChange={(x) => edit((g) => updateEnum(g, id, { values: en.values.map((y, j) => (j === k ? x : y)) }))} />
+                  <button type="button" className="btn small" aria-label={`Remove ${v}`} disabled={en.values.length <= 1} onClick={() => edit((g) => updateEnum(g, id, { values: en.values.filter((_, j) => j !== k) }))}>
+                    ×
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="btn small" disabled={en.values.length >= 32} onClick={() => edit((g) => updateEnum(g, id, { values: [...en.values, `Value ${en.values.length + 1}`] }))}>
+            Add value
+          </button>
+        </>
+      )}
+      <p className="st-side-help">
+        <button type="button" className="btn small" onClick={() => void drop()}>
+          Remove “{name}”
+        </button>
+      </p>
+    </aside>
+  );
+}
+
 const COMMENT_COLOURS = ["#4a5a6a", "#6a4a8a", "#2f6a4a", "#7a6a2b", "#7a2b2b", "#2f4f7a", "#555555"];
 
 const cleanLabel = (v: string, max: number) => [...v].filter((c) => LABEL_CHARS.test(c)).join("").slice(0, max);
@@ -211,11 +372,16 @@ export function Inspector() {
   const graph = useStudio((s) => s.graph);
   const selected = useStudio((s) => s.selected);
   const selectedVar = useStudio((s) => s.selectedVar);
+  const part = useStudio((s) => s.part);
   const problems = useStudio((s) => s.problems);
   const runs = useStudio((s) => s.debug.runs);
   const edit = useStudio((s) => s.edit);
   if (!graph) return null;
-  if (selectedVar && graph.variables.some((x) => x.id === selectedVar)) return <VariableDetails id={selectedVar} />;
+  if (selectedVar && allVariables(graph).some((x) => x.id === selectedVar)) return <VariableDetails id={selectedVar} />;
+  if (part && !selected.length) {
+    const d = <PartDetails id={part} />;
+    if ([...(graph.functions ?? []), ...(graph.macros ?? []), ...(graph.structs ?? []), ...(graph.enums ?? [])].some((x) => x.id === part)) return d;
+  }
   const node = selected.length === 1 ? graph.nodes.find((n) => n.id === selected[0]) : undefined;
   const def = node && nodeDef(node.type);
 
@@ -225,7 +391,7 @@ export function Inspector() {
     return (
       <aside className="st-side" aria-label="Details">
         <p className="st-side-kicker">Details · {def.category}</p>
-        <h3 className="st-side-title">{def.title}</h3>
+        <h3 className="st-side-title">{nodeTitle(graph, node)}</h3>
         <p className="st-side-help">{def.help}</p>
         {def.needs && <p className="st-side-help st-needs">{def.needs === "components" ? "Needs the game mode components (gm_components) on the server; without them this does nothing and Playtest says so." : "Needs Loner-Strike's bot brain with creatures; without it this does nothing and Playtest says so."}</p>}
         {def.params.length > 0 && (
@@ -235,7 +401,20 @@ export function Inspector() {
               return (
                 <label key={p.id} className="st-side-field">
                   <span>{p.label}</span>
-                  {wiredInstead ? <em className="st-muted">From its wire</em> : <ParamField p={p} value={node.params[p.id] ?? p.default} vars={graph.variables} nodeVar={graph.variables.find((x) => x.id === node.params.var)} nodes={graph.nodes} onChange={(v) => edit((g) => setParam(g, node.id, p.id, v))} />}
+                  {wiredInstead ? (
+                    <em className="st-muted">From its wire</em>
+                  ) : (
+                    <ParamField
+                      p={p}
+                      value={node.params[p.id] ?? p.default}
+                      vars={[...graph.variables, ...(graph.functions?.find((f) => f.id === node.graph)?.locals ?? [])]}
+                      nodeVar={allVariables(graph).find((x) => x.id === node.params.var)}
+                      nodes={graph.nodes}
+                      graph={graph}
+                      node={node}
+                      onChange={(v) => edit((g) => setParam(g, node.id, p.id, v))}
+                    />
+                  )}
                 </label>
               );
             })}

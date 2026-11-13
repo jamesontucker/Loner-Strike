@@ -18,7 +18,7 @@
    "type": "timer.repeat",
    "pos": {
     "x": 340,
-    "y": 31
+    "y": 20
    },
    "params": {
     "every": 60,

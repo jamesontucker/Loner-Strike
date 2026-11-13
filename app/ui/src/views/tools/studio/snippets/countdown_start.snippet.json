@@ -9,7 +9,7 @@
    "type": "event.round_started",
    "pos": {
     "x": 20,
-    "y": 137
+    "y": 142
    },
    "params": {}
   },
@@ -18,7 +18,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 340,
-    "y": 102
+    "y": 107
    },
    "params": {
     "which": "alive"
@@ -53,7 +53,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 980,
-    "y": 183
+    "y": 194
    },
    "params": {
     "which": "alive"
@@ -64,7 +64,7 @@
    "type": "player.freeze",
    "pos": {
     "x": 1300,
-    "y": 102
+    "y": 113
    },
    "params": {
     "on": false
@@ -75,7 +75,7 @@
    "type": "msg.broadcast",
    "pos": {
     "x": 1300,
-    "y": 276
+    "y": 287
    },
    "params": {
     "text": "Go!",

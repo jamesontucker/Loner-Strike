@@ -191,7 +191,7 @@
    "type": "timer.countdown",
    "pos": {
     "x": 2065,
-    "y": 1033
+    "y": 1022
    },
    "params": {
     "secs": 15,
@@ -215,7 +215,7 @@
    "type": "comp.on_wave_start",
    "pos": {
     "x": 1565,
-    "y": 1486
+    "y": 1492
    },
    "params": {}
   },
@@ -224,7 +224,7 @@
    "type": "var.set",
    "pos": {
     "x": 2065,
-    "y": 1236
+    "y": 1242
    },
    "params": {
     "var": "wave"
@@ -235,7 +235,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 2565,
-    "y": 1448
+    "y": 1454
    },
    "params": {
     "text": "Wave",
@@ -248,7 +248,7 @@
    "type": "game.play_sound",
    "pos": {
     "x": 3065,
-    "y": 1459
+    "y": 1465
    },
    "params": {
     "sound": "radio/locknload"
@@ -259,7 +259,7 @@
    "type": "comp.on_wave_cleared",
    "pos": {
     "x": 65,
-    "y": 1605
+    "y": 1611
    },
    "params": {}
   },
@@ -268,7 +268,7 @@
    "type": "math.compare",
    "pos": {
     "x": 565,
-    "y": 2139
+    "y": 2155
    },
    "params": {
     "op": "ge",
@@ -280,7 +280,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1065,
-    "y": 1592
+    "y": 1598
    },
    "params": {}
   },
@@ -289,7 +289,7 @@
    "type": "msg.broadcast",
    "pos": {
     "x": 1565,
-    "y": 1334
+    "y": 1340
    },
    "params": {
     "text": "You held out! The base is safe.",
@@ -301,7 +301,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 2065,
-    "y": 1432
+    "y": 1438
    },
    "params": {
     "winner": "ct"
@@ -312,7 +312,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 1565,
-    "y": 1843
+    "y": 1849
    },
    "params": {
     "which": "dead"
@@ -323,7 +323,7 @@
    "type": "cond.is_team",
    "pos": {
     "x": 2065,
-    "y": 1657
+    "y": 1663
    },
    "params": {
     "team": "ct"
@@ -334,7 +334,7 @@
    "type": "player.respawn",
    "pos": {
     "x": 2565,
-    "y": 1730
+    "y": 1735
    },
    "params": {}
   },
@@ -343,7 +343,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 2065,
-    "y": 1959
+    "y": 1972
    },
    "params": {
     "which": "alive_ct"
@@ -354,7 +354,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 2565,
-    "y": 1878
+    "y": 1883
    },
    "params": {
     "amount": 1500
@@ -365,7 +365,7 @@
    "type": "timer.countdown",
    "pos": {
     "x": 2565,
-    "y": 2052
+    "y": 2057
    },
    "params": {
     "secs": 15,
@@ -378,7 +378,7 @@
    "type": "comp.wave_start",
    "pos": {
     "x": 3065,
-    "y": 1874
+    "y": 1885
    },
    "params": {
     "wave": 0
@@ -389,7 +389,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 3065,
-    "y": 2122
+    "y": 2139
    },
    "params": {
     "text": "Wave cleared: +1500. Say !shop to buy."
@@ -400,7 +400,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 2666
+    "y": 2682
    },
    "params": {}
   },
@@ -409,7 +409,7 @@
    "type": "cond.is_team",
    "pos": {
     "x": 565,
-    "y": 2502
+    "y": 2518
    },
    "params": {
     "team": "ct"
@@ -420,7 +420,7 @@
    "type": "game.count_alive",
    "pos": {
     "x": 565,
-    "y": 2676
+    "y": 2692
    },
    "params": {
     "team": "ct"
@@ -431,7 +431,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 2530
+    "y": 2547
    },
    "params": {
     "op": "eq",
@@ -443,7 +443,7 @@
    "type": "player.down",
    "pos": {
     "x": 1065,
-    "y": 2336
+    "y": 2353
    },
    "params": {
     "secs": 25,
@@ -456,7 +456,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 2454
+    "y": 2471
    },
    "params": {}
   },
@@ -465,7 +465,7 @@
    "type": "msg.broadcast",
    "pos": {
     "x": 2065,
-    "y": 2454
+    "y": 2471
    },
    "params": {
     "text": "The base is overrun!",
@@ -477,7 +477,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 2565,
-    "y": 2454
+    "y": 2471
    },
    "params": {
     "winner": "t"
@@ -488,7 +488,7 @@
    "type": "cond.is_team",
    "pos": {
     "x": 1065,
-    "y": 2682
+    "y": 2699
    },
    "params": {
     "team": "ct"
@@ -499,7 +499,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 1565,
-    "y": 2731
+    "y": 2747
    },
    "params": {
     "amount": 300
@@ -510,7 +510,7 @@
    "type": "player.add_frags",
    "pos": {
     "x": 2065,
-    "y": 2779
+    "y": 2796
    },
    "params": {
     "amount": 1
@@ -521,7 +521,7 @@
    "type": "event.player_revived",
    "pos": {
     "x": 2065,
-    "y": 2985
+    "y": 3002
    },
    "params": {}
   },
@@ -530,7 +530,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 2565,
-    "y": 2972
+    "y": 2989
    },
    "params": {
     "amount": 200
@@ -541,7 +541,7 @@
    "type": "event.chat_command",
    "pos": {
     "x": 65,
-    "y": 3894
+    "y": 3910
    },
    "params": {
     "command": "shop"
@@ -552,7 +552,7 @@
    "type": "msg.menu",
    "pos": {
     "x": 1065,
-    "y": 3676
+    "y": 3692
    },
    "params": {
     "title": "Shop",
@@ -567,7 +567,7 @@
    "type": "player.get_money",
    "pos": {
     "x": 565,
-    "y": 3350
+    "y": 3367
    },
    "params": {}
   },
@@ -576,7 +576,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 3326
+    "y": 3343
    },
    "params": {
     "op": "ge",
@@ -588,7 +588,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 3316
+    "y": 3333
    },
    "params": {}
   },
@@ -597,7 +597,7 @@
    "type": "player.give_weapon",
    "pos": {
     "x": 2065,
-    "y": 3192
+    "y": 3208
    },
    "params": {
     "weapon": "ak47",
@@ -609,7 +609,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 2565,
-    "y": 3374
+    "y": 3390
    },
    "params": {
     "amount": -2500
@@ -620,7 +620,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 2065,
-    "y": 3348
+    "y": 3365
    },
    "params": {
     "text": "Not enough money for that."
@@ -631,7 +631,7 @@
    "type": "player.get_money",
    "pos": {
     "x": 565,
-    "y": 3918
+    "y": 3934
    },
    "params": {}
   },
@@ -640,7 +640,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 3894
+    "y": 3910
    },
    "params": {
     "op": "ge",
@@ -652,7 +652,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 3803
+    "y": 3819
    },
    "params": {}
   },
@@ -661,7 +661,7 @@
    "type": "player.give_item",
    "pos": {
     "x": 2065,
-    "y": 3889
+    "y": 3905
    },
    "params": {
     "item": "vesthelm"
@@ -672,7 +672,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 2565,
-    "y": 4059
+    "y": 4076
    },
    "params": {
     "amount": -1000
@@ -683,7 +683,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 2065,
-    "y": 3557
+    "y": 3573
    },
    "params": {
     "text": "Not enough money for that."
@@ -694,7 +694,7 @@
    "type": "player.get_money",
    "pos": {
     "x": 565,
-    "y": 4201
+    "y": 4218
    },
    "params": {}
   },
@@ -703,7 +703,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 4177
+    "y": 4194
    },
    "params": {
     "op": "ge",
@@ -715,7 +715,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 4167
+    "y": 4184
    },
    "params": {}
   },
@@ -724,7 +724,7 @@
    "type": "player.give_weapon",
    "pos": {
     "x": 2065,
-    "y": 4349
+    "y": 4366
    },
    "params": {
     "weapon": "hegrenade",
@@ -736,7 +736,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 2565,
-    "y": 4387
+    "y": 4403
    },
    "params": {
     "amount": -300
@@ -747,7 +747,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 2065,
-    "y": 4060
+    "y": 4077
    },
    "params": {
     "text": "Not enough money for that."
@@ -1802,7 +1802,7 @@
    },
    "size": {
     "w": 2778,
-    "h": 306
+    "h": 317
    }
   },
   {
@@ -1810,11 +1810,11 @@
    "text": "Waves: hold out for 5. Between waves the fallen come back and everyone gets money.",
    "pos": {
     "x": 41,
-    "y": 1190
+    "y": 1196
    },
    "size": {
     "w": 3278,
-    "h": 1088
+    "h": 1099
    }
   },
   {
@@ -1822,7 +1822,7 @@
    "text": "Deaths: a fallen defender is downed for 25 s (hold USE on them for 3 s to bring them back: +200 for the helper); the base falls when no defender is standing; each zombie killed pays 300.",
    "pos": {
     "x": 41,
-    "y": 2290
+    "y": 2307
    },
    "size": {
     "w": 2778,
@@ -1834,7 +1834,7 @@
    "text": "The shop: say !shop (or slash shop). Each choice checks the money first.",
    "pos": {
     "x": 41,
-    "y": 3146
+    "y": 3162
    },
    "size": {
     "w": 2778,

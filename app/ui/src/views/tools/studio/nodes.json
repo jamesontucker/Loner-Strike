@@ -1,5 +1,5 @@
 {
- "version": 3,
+ "version": 4,
  "pinTypes": {
   "exec": {
    "label": "Flow",
@@ -29,6 +29,22 @@
    "label": "Text",
    "color": "#e0a3ff"
   },
+  "vector": {
+   "label": "Vector",
+   "color": "#ffd23f"
+  },
+  "timer": {
+   "label": "Timer",
+   "color": "#7fd6ff"
+  },
+  "enum": {
+   "label": "Enum",
+   "color": "#1f8a70"
+  },
+  "struct": {
+   "label": "Struct",
+   "color": "#2f6fd6"
+  },
   "any": {
    "label": "Anything",
    "color": "#9a9a9a"
@@ -42,9 +58,16 @@
   "Events",
   "Conditions",
   "Numbers",
+  "Text",
   "Variables",
   "Flow",
   "Functions",
+  "Macros",
+  "Arrays",
+  "Maps",
+  "Structs",
+  "Enums",
+  "Vectors",
   "Timers",
   "Round clock",
   "Players",
@@ -993,6 +1016,14 @@
       [
        "max",
        "bigger"
+      ],
+      [
+       "mod",
+       "remainder of A ÷ B"
+      ],
+      [
+       "pow",
+       "A to the power B"
       ]
      ]
     },
@@ -1384,6 +1415,11 @@
      "id": "then",
      "type": "exec",
      "label": ""
+    },
+    {
+     "id": "handle",
+     "type": "timer",
+     "label": "Timer"
     }
    ],
    "params": [
@@ -1425,6 +1461,11 @@
      "id": "tick",
      "type": "exec",
      "label": "Each"
+    },
+    {
+     "id": "handle",
+     "type": "timer",
+     "label": "Timer"
     }
    ],
    "params": [
@@ -1468,6 +1509,11 @@
      "id": "done",
      "type": "exec",
      "label": "Done"
+    },
+    {
+     "id": "handle",
+     "type": "timer",
+     "label": "Timer"
     }
    ],
    "params": [
@@ -5269,6 +5315,3157 @@
    ],
    "params": [],
    "event": true
+  },
+  {
+   "type": "fn.entry",
+   "title": "Function Entry",
+   "category": "Functions",
+   "help": "Where a Function starts. Its outputs are the Function's inputs (add them in Details).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "fn.return",
+   "title": "Return Node",
+   "category": "Functions",
+   "help": "Ends the Function and hands back its outputs (add them in Details).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [],
+   "params": []
+  },
+  {
+   "type": "fn.call",
+   "title": "Call",
+   "category": "Functions",
+   "help": "Runs a Function (with its own graph), then carries on with its outputs.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "func",
+     "label": "Function",
+     "kind": "fn",
+     "default": ""
+    }
+   ]
+  },
+  {
+   "type": "fn.call_pure",
+   "title": "Call Pure",
+   "category": "Functions",
+   "help": "Works out a pure Function's outputs where they're used (no flow pins).",
+   "inputs": [],
+   "outputs": [],
+   "params": [
+    {
+     "id": "func",
+     "label": "Function",
+     "kind": "fn",
+     "default": ""
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "macro.entry",
+   "title": "Macro Entry",
+   "category": "Macros",
+   "help": "Where a Macro starts: its inputs (flow and values).",
+   "inputs": [],
+   "outputs": [],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "macro.exit",
+   "title": "Macro Exit",
+   "category": "Macros",
+   "help": "Where a Macro ends: its outputs (flow and values).",
+   "inputs": [],
+   "outputs": [],
+   "params": []
+  },
+  {
+   "type": "macro.use",
+   "title": "Macro",
+   "category": "Macros",
+   "help": "A Macro's graph, copied in here when the mode is made.",
+   "inputs": [],
+   "outputs": [],
+   "params": [
+    {
+     "id": "macro",
+     "label": "Macro",
+     "kind": "macro",
+     "default": ""
+    }
+   ]
+  },
+  {
+   "type": "flow.sequence",
+   "title": "Sequence",
+   "category": "Flow",
+   "help": "Runs each output in turn, top to bottom.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then0",
+     "type": "exec",
+     "label": "Then 0"
+    },
+    {
+     "id": "then1",
+     "type": "exec",
+     "label": "Then 1"
+    }
+   ],
+   "params": [
+    {
+     "id": "count",
+     "label": "Outputs",
+     "kind": "number",
+     "default": 2,
+     "min": 1,
+     "max": 8
+    }
+   ]
+  },
+  {
+   "type": "flow.do_once",
+   "title": "Do Once",
+   "category": "Flow",
+   "help": "Lets the flow through the first time only, until Reset.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "reset",
+     "type": "exec",
+     "label": "Reset"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Completed"
+    }
+   ],
+   "params": [
+    {
+     "id": "closed",
+     "label": "Start closed",
+     "kind": "bool",
+     "default": false
+    }
+   ]
+  },
+  {
+   "type": "flow.do_n",
+   "title": "Do N",
+   "category": "Flow",
+   "help": "Lets the flow through N times, until Reset.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "reset",
+     "type": "exec",
+     "label": "Reset"
+    },
+    {
+     "id": "n",
+     "type": "number",
+     "label": "N",
+     "param": "n"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Exit"
+    },
+    {
+     "id": "counter",
+     "type": "number",
+     "label": "Counter"
+    }
+   ],
+   "params": [
+    {
+     "id": "n",
+     "label": "N",
+     "kind": "number",
+     "default": 3,
+     "min": 1,
+     "max": 10000
+    }
+   ]
+  },
+  {
+   "type": "flow.gate",
+   "title": "Gate",
+   "category": "Flow",
+   "help": "Flow coming into Enter goes through only while the gate is open.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": "Enter"
+    },
+    {
+     "id": "open",
+     "type": "exec",
+     "label": "Open"
+    },
+    {
+     "id": "close",
+     "type": "exec",
+     "label": "Close"
+    },
+    {
+     "id": "toggle",
+     "type": "exec",
+     "label": "Toggle"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Exit"
+    }
+   ],
+   "params": [
+    {
+     "id": "closed",
+     "label": "Start closed",
+     "kind": "bool",
+     "default": true
+    }
+   ]
+  },
+  {
+   "type": "flow.flipflop",
+   "title": "Flip Flop",
+   "category": "Flow",
+   "help": "Goes to A, then B, then A again... Is A says which it just did.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "a",
+     "type": "exec",
+     "label": "A"
+    },
+    {
+     "id": "b",
+     "type": "exec",
+     "label": "B"
+    },
+    {
+     "id": "is_a",
+     "type": "bool",
+     "label": "Is A"
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "flow.for_loop",
+   "title": "For Loop",
+   "category": "Flow",
+   "help": "Runs Loop Body once for each number from First to Last (at most 10000 times), then Completed.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "first",
+     "type": "number",
+     "label": "First",
+     "param": "first"
+    },
+    {
+     "id": "last",
+     "type": "number",
+     "label": "Last",
+     "param": "last"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "body",
+     "type": "exec",
+     "label": "Loop Body"
+    },
+    {
+     "id": "index",
+     "type": "number",
+     "label": "Index"
+    },
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Completed"
+    }
+   ],
+   "params": [
+    {
+     "id": "first",
+     "label": "First",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "last",
+     "label": "Last",
+     "kind": "number",
+     "default": 9,
+     "min": -100000,
+     "max": 100000
+    }
+   ]
+  },
+  {
+   "type": "flow.for_loop_break",
+   "title": "For Loop with Break",
+   "category": "Flow",
+   "help": "A For Loop that stops early when flow comes into Break.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "break",
+     "type": "exec",
+     "label": "Break"
+    },
+    {
+     "id": "first",
+     "type": "number",
+     "label": "First",
+     "param": "first"
+    },
+    {
+     "id": "last",
+     "type": "number",
+     "label": "Last",
+     "param": "last"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "body",
+     "type": "exec",
+     "label": "Loop Body"
+    },
+    {
+     "id": "index",
+     "type": "number",
+     "label": "Index"
+    },
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Completed"
+    }
+   ],
+   "params": [
+    {
+     "id": "first",
+     "label": "First",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "last",
+     "label": "Last",
+     "kind": "number",
+     "default": 9,
+     "min": -100000,
+     "max": 100000
+    }
+   ]
+  },
+  {
+   "type": "flow.while",
+   "title": "While Loop",
+   "category": "Flow",
+   "help": "Runs Loop Body while the condition is true (checked each time; at most Limit times), then Completed.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "cond",
+     "type": "bool",
+     "label": "Condition",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "body",
+     "type": "exec",
+     "label": "Loop Body"
+    },
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Completed"
+    }
+   ],
+   "params": [
+    {
+     "id": "limit",
+     "label": "Limit",
+     "kind": "number",
+     "default": 1000,
+     "min": 1,
+     "max": 10000
+    }
+   ]
+  },
+  {
+   "type": "flow.for_each_array",
+   "title": "For Each",
+   "category": "Arrays",
+   "help": "Runs Loop Body once for each item of an array (Break stops early), then Completed.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "break",
+     "type": "exec",
+     "label": "Break"
+    },
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "body",
+     "type": "exec",
+     "label": "Loop Body"
+    },
+    {
+     "id": "item",
+     "type": "$T",
+     "label": "Item"
+    },
+    {
+     "id": "index",
+     "type": "number",
+     "label": "Index"
+    },
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Completed"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ]
+  },
+  {
+   "type": "flow.switch_num",
+   "title": "Switch on Number",
+   "category": "Flow",
+   "help": "Goes to the output whose case is the number (cases split by commas), or Default.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "number",
+     "label": "Selection",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "default",
+     "type": "exec",
+     "label": "Default"
+    }
+   ],
+   "params": [
+    {
+     "id": "cases",
+     "label": "Cases",
+     "kind": "cases",
+     "default": "1,2,3"
+    }
+   ]
+  },
+  {
+   "type": "flow.switch_text",
+   "title": "Switch on Text",
+   "category": "Flow",
+   "help": "Goes to the output whose case is the text (capitals don't matter; cases split by commas), or Default.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "text",
+     "label": "Selection",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "default",
+     "type": "exec",
+     "label": "Default"
+    }
+   ],
+   "params": [
+    {
+     "id": "cases",
+     "label": "Cases",
+     "kind": "cases",
+     "default": "yes,no"
+    }
+   ]
+  },
+  {
+   "type": "flow.switch_enum",
+   "title": "Switch on Enum",
+   "category": "Enums",
+   "help": "Goes to the output for the enum's value.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "$E",
+     "label": "Selection",
+     "required": true
+    }
+   ],
+   "outputs": [],
+   "params": [
+    {
+     "id": "enum",
+     "label": "Enum",
+     "kind": "enum",
+     "default": ""
+    }
+   ]
+  },
+  {
+   "type": "flow.if_valid",
+   "title": "Is Valid?",
+   "category": "Conditions",
+   "help": "Goes to Is Valid when the entity (or player) is there, else Is Not Valid.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Object",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "valid",
+     "type": "exec",
+     "label": "Is Valid"
+    },
+    {
+     "id": "invalid",
+     "type": "exec",
+     "label": "Is Not Valid"
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "timer.retrigger",
+   "title": "Retriggerable Delay",
+   "category": "Timers",
+   "help": "Waits, then carries on; flow coming in again while waiting starts the wait again.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "handle",
+     "type": "timer",
+     "label": "Timer"
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 3,
+     "min": 0.1,
+     "max": 3600
+    }
+   ]
+  },
+  {
+   "type": "timer.by_function",
+   "title": "Set Timer by Function",
+   "category": "Timers",
+   "help": "Runs a Function (with its own graph) after some seconds, again and again if Looping. Its inputs get nothing (0, empty).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "handle",
+     "type": "timer",
+     "label": "Timer"
+    }
+   ],
+   "params": [
+    {
+     "id": "func",
+     "label": "Function",
+     "kind": "fn",
+     "default": ""
+    },
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 5,
+     "min": 0.1,
+     "max": 3600
+    },
+    {
+     "id": "loop",
+     "label": "Looping",
+     "kind": "bool",
+     "default": true
+    }
+   ]
+  },
+  {
+   "type": "timer.clear",
+   "title": "Clear Timer",
+   "category": "Timers",
+   "help": "Stops a timer (a Delay, Repeat, Countdown or Set Timer's handle).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "handle",
+     "type": "timer",
+     "label": "Timer",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "timer.is_active",
+   "title": "Is Timer Active",
+   "category": "Timers",
+   "help": "Is the timer waiting to run?",
+   "inputs": [
+    {
+     "id": "handle",
+     "type": "timer",
+     "label": "Timer",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Active"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "debug.print",
+   "title": "Print String",
+   "category": "Messages",
+   "help": "Prints text (and a value wired in) to the server console and the Studio's output, and to chat if you like.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "value",
+     "type": "any",
+     "label": "Value",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "Hello",
+     "max": 100
+    },
+    {
+     "id": "chat",
+     "label": "Also in chat",
+     "kind": "bool",
+     "default": true
+    }
+   ]
+  },
+  {
+   "type": "logic.equal",
+   "title": "Equal",
+   "category": "Conditions",
+   "help": "Are the two values the same (or different)?",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "$T",
+     "label": "A",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "$T",
+     "label": "B",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    },
+    {
+     "id": "op",
+     "label": "Is",
+     "kind": "choice",
+     "default": "eq",
+     "choices": [
+      [
+       "eq",
+       "equal"
+      ],
+      [
+       "ne",
+       "not equal"
+      ]
+     ]
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "logic.select",
+   "title": "Select",
+   "category": "Conditions",
+   "help": "Picks A when the condition is true, else B.",
+   "inputs": [
+    {
+     "id": "cond",
+     "type": "bool",
+     "label": "Pick A",
+     "param": "cond"
+    },
+    {
+     "id": "a",
+     "type": "$T",
+     "label": "A",
+     "optional": true
+    },
+    {
+     "id": "b",
+     "type": "$T",
+     "label": "B",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "$T",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    },
+    {
+     "id": "cond",
+     "label": "Pick A",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "cond.is_valid",
+   "title": "Is Valid",
+   "category": "Conditions",
+   "help": "Is the entity (or player) there?",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Object",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Valid"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.is_player",
+   "title": "Is Player",
+   "category": "Players",
+   "help": "Is the entity a player (or bot) in the game?",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Player"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "creature.is",
+   "title": "Is Creature",
+   "category": "Creatures",
+   "help": "Is the entity one of the bot brain's creatures?",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Creature"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "math.fn",
+   "title": "Math Function",
+   "category": "Numbers",
+   "help": "Absolute value, rounding, square root and more.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "number",
+     "label": "In",
+     "param": "a"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "In",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "op",
+     "label": "Do",
+     "kind": "choice",
+     "default": "abs",
+     "choices": [
+      [
+       "abs",
+       "Absolute (no minus)"
+      ],
+      [
+       "round",
+       "Round"
+      ],
+      [
+       "floor",
+       "Round down"
+      ],
+      [
+       "ceil",
+       "Round up"
+      ],
+      [
+       "sqrt",
+       "Square root"
+      ],
+      [
+       "neg",
+       "Minus"
+      ],
+      [
+       "sign",
+       "Sign (-1, 0, 1)"
+      ]
+     ]
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "math.clamp",
+   "title": "Clamp",
+   "category": "Numbers",
+   "help": "Keeps a number between Min and Max.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "number",
+     "label": "Value",
+     "param": "a"
+    },
+    {
+     "id": "min",
+     "type": "number",
+     "label": "Min",
+     "param": "min"
+    },
+    {
+     "id": "max",
+     "type": "number",
+     "label": "Max",
+     "param": "max"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "Value",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "min",
+     "label": "Min",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "max",
+     "label": "Max",
+     "kind": "number",
+     "default": 100,
+     "min": -100000,
+     "max": 100000
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "math.lerp",
+   "title": "Lerp",
+   "category": "Numbers",
+   "help": "A number between A and B: Alpha 0 is A, 1 is B, 0.5 halfway.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "number",
+     "label": "A",
+     "param": "a"
+    },
+    {
+     "id": "b",
+     "type": "number",
+     "label": "B",
+     "param": "b"
+    },
+    {
+     "id": "alpha",
+     "type": "number",
+     "label": "Alpha",
+     "param": "alpha"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "A",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "kind": "number",
+     "default": 100,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "alpha",
+     "label": "Alpha",
+     "kind": "number",
+     "default": 0.5,
+     "min": -100,
+     "max": 100
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "math.in_range",
+   "title": "In Range",
+   "category": "Numbers",
+   "help": "Is the number from Min to Max?",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "number",
+     "label": "Value",
+     "required": true
+    },
+    {
+     "id": "min",
+     "type": "number",
+     "label": "Min",
+     "param": "min"
+    },
+    {
+     "id": "max",
+     "type": "number",
+     "label": "Max",
+     "param": "max"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "In range"
+    }
+   ],
+   "params": [
+    {
+     "id": "min",
+     "label": "Min",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "max",
+     "label": "Max",
+     "kind": "number",
+     "default": 100,
+     "min": -100000,
+     "max": 100000
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "math.number",
+   "title": "Number",
+   "category": "Numbers",
+   "help": "A number.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Number"
+    }
+   ],
+   "params": [
+    {
+     "id": "value",
+     "label": "Number",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "text.literal",
+   "title": "Text",
+   "category": "Text",
+   "help": "Some text.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [
+    {
+     "id": "value",
+     "label": "Text",
+     "kind": "text",
+     "default": "",
+     "max": 100
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "text.append",
+   "title": "Append",
+   "category": "Text",
+   "help": "B straight after A (add a space in B if you want one).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "A",
+     "param": "a"
+    },
+    {
+     "id": "b",
+     "type": "text",
+     "label": "B",
+     "param": "b"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "A",
+     "kind": "text",
+     "default": "",
+     "max": 60
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "kind": "text",
+     "default": "",
+     "max": 60
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "text.format",
+   "title": "Format Text",
+   "category": "Text",
+   "help": "Text with [0] [1] [2] [3] replaced by the values wired in.",
+   "inputs": [
+    {
+     "id": "a0",
+     "type": "any",
+     "label": "[0]",
+     "optional": true
+    },
+    {
+     "id": "a1",
+     "type": "any",
+     "label": "[1]",
+     "optional": true
+    },
+    {
+     "id": "a2",
+     "type": "any",
+     "label": "[2]",
+     "optional": true
+    },
+    {
+     "id": "a3",
+     "type": "any",
+     "label": "[3]",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [
+    {
+     "id": "text",
+     "label": "Format",
+     "kind": "text",
+     "default": "[0] has [1] points",
+     "max": 100
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "text.contains",
+   "title": "Contains Text",
+   "category": "Text",
+   "help": "Is B somewhere in A (capitals don't matter)?",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "Text",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "text",
+     "label": "Find",
+     "param": "b"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Contains"
+    }
+   ],
+   "params": [
+    {
+     "id": "b",
+     "label": "Find",
+     "kind": "text",
+     "default": "",
+     "max": 60
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "text.length",
+   "title": "Text Length",
+   "category": "Text",
+   "help": "How many characters the text has.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "Text",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Length"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "text.to_number",
+   "title": "Text To Number",
+   "category": "Text",
+   "help": "The number written in the text (0 if none).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "Text",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Number"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "text.from",
+   "title": "To Text",
+   "category": "Text",
+   "help": "A value as text: a number, a player's name, a vector, an enum's name...",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "$T",
+     "label": "Value",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "vec.make",
+   "title": "Make Vector",
+   "category": "Vectors",
+   "help": "A position or direction from X, Y and Z.",
+   "inputs": [
+    {
+     "id": "x",
+     "type": "number",
+     "label": "X",
+     "param": "x"
+    },
+    {
+     "id": "y",
+     "type": "number",
+     "label": "Y",
+     "param": "y"
+    },
+    {
+     "id": "z",
+     "type": "number",
+     "label": "Z",
+     "param": "z"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Vector"
+    }
+   ],
+   "params": [
+    {
+     "id": "x",
+     "label": "X",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "y",
+     "label": "Y",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "z",
+     "label": "Z",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "vec.break",
+   "title": "Break Vector",
+   "category": "Vectors",
+   "help": "A vector's X, Y and Z.",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "vector",
+     "label": "Vector",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "x",
+     "type": "number",
+     "label": "X"
+    },
+    {
+     "id": "y",
+     "type": "number",
+     "label": "Y"
+    },
+    {
+     "id": "z",
+     "type": "number",
+     "label": "Z"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "vec.op",
+   "title": "Vector Math",
+   "category": "Vectors",
+   "help": "Adds or takes away two vectors.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "A",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "vector",
+     "label": "B",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "op",
+     "label": "Do",
+     "kind": "choice",
+     "default": "add",
+     "choices": [
+      [
+       "add",
+       "A + B"
+      ],
+      [
+       "sub",
+       "A - B"
+      ]
+     ]
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "vec.scale",
+   "title": "Scale Vector",
+   "category": "Vectors",
+   "help": "Multiplies a vector by a number (makes it longer or shorter).",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "Vector",
+     "required": true
+    },
+    {
+     "id": "n",
+     "type": "number",
+     "label": "Times",
+     "param": "n"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Result"
+    }
+   ],
+   "params": [
+    {
+     "id": "n",
+     "label": "Times",
+     "kind": "number",
+     "default": 2,
+     "min": -100000,
+     "max": 100000
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "vec.length",
+   "title": "Vector Length",
+   "category": "Vectors",
+   "help": "How long a vector is.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "Vector",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Length"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "vec.distance",
+   "title": "Distance",
+   "category": "Vectors",
+   "help": "How far apart two positions are.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "A",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "vector",
+     "label": "B",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Distance"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "vec.direction",
+   "title": "Direction",
+   "category": "Vectors",
+   "help": "The direction (length 1) from one position to another.",
+   "inputs": [
+    {
+     "id": "from",
+     "type": "vector",
+     "label": "From",
+     "required": true
+    },
+    {
+     "id": "to",
+     "type": "vector",
+     "label": "To",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Direction"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "vec.normalize",
+   "title": "Normalize",
+   "category": "Vectors",
+   "help": "The same direction, length 1.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "Vector",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Result"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "vec.player",
+   "title": "Position Of Player",
+   "category": "Vectors",
+   "help": "Where a player is: their feet, their eyes, which way they're aiming, what they're aiming at, or how fast they're moving.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Vector"
+    }
+   ],
+   "params": [
+    {
+     "id": "what",
+     "label": "What",
+     "kind": "choice",
+     "default": "origin",
+     "choices": [
+      [
+       "origin",
+       "Position"
+      ],
+      [
+       "eyes",
+       "Eye position"
+      ],
+      [
+       "aim",
+       "Aim direction"
+      ],
+      [
+       "aim_point",
+       "Aiming at (where the aim hits)"
+      ],
+      [
+       "velocity",
+       "Velocity"
+      ]
+     ]
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "vec.entity",
+   "title": "Position Of Entity",
+   "category": "Vectors",
+   "help": "Where an entity is (the middle of a brush entity).",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Position"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.set_position",
+   "title": "Set Position",
+   "category": "Players",
+   "help": "Moves a living player to a position (pick one where they fit).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "at",
+     "type": "vector",
+     "label": "Position",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "player.set_velocity",
+   "title": "Set Velocity",
+   "category": "Players",
+   "help": "Throws a living player: their speed and direction as a vector.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "v",
+     "type": "vector",
+     "label": "Velocity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "struct.make",
+   "title": "Make Struct",
+   "category": "Structs",
+   "help": "A struct from its fields.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "$S",
+     "label": "Struct"
+    }
+   ],
+   "params": [
+    {
+     "id": "struct",
+     "label": "Struct",
+     "kind": "struct",
+     "default": ""
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "struct.break",
+   "title": "Break Struct",
+   "category": "Structs",
+   "help": "A struct's fields.",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "$S",
+     "label": "Struct",
+     "required": true
+    }
+   ],
+   "outputs": [],
+   "params": [
+    {
+     "id": "struct",
+     "label": "Struct",
+     "kind": "struct",
+     "default": ""
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "struct.set_field",
+   "title": "Set Field",
+   "category": "Structs",
+   "help": "Sets one field of a struct variable.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "value",
+     "type": "$F",
+     "label": "Value",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "var",
+     "label": "Variable",
+     "kind": "var",
+     "default": "",
+     "varType": "struct"
+    },
+    {
+     "id": "field",
+     "label": "Field",
+     "kind": "field",
+     "default": ""
+    }
+   ]
+  },
+  {
+   "type": "enum.value",
+   "title": "Enum Value",
+   "category": "Enums",
+   "help": "One of an enum's values.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "$E",
+     "label": "Value"
+    }
+   ],
+   "params": [
+    {
+     "id": "enum",
+     "label": "Enum",
+     "kind": "enum",
+     "default": ""
+    },
+    {
+     "id": "value",
+     "label": "Value",
+     "kind": "enumvalue",
+     "default": 0
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "enum.to_number",
+   "title": "Enum To Number",
+   "category": "Enums",
+   "help": "An enum value's number (the first is 0).",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "$E",
+     "label": "Value",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Number"
+    }
+   ],
+   "params": [
+    {
+     "id": "enum",
+     "label": "Enum",
+     "kind": "enum",
+     "default": ""
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "array.make",
+   "title": "Make Array",
+   "category": "Arrays",
+   "help": "An array of the items wired in (a new one each time it's worked out).",
+   "inputs": [
+    {
+     "id": "i",
+     "type": "$T",
+     "label": "Item",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "array<$T>",
+     "label": "Array"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    },
+    {
+     "id": "count",
+     "label": "Items",
+     "kind": "number",
+     "default": 2,
+     "min": 0,
+     "max": 8
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "array.players",
+   "title": "Players Array",
+   "category": "Arrays",
+   "help": "An array of every player who fits.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "array<player>",
+     "label": "Players"
+    }
+   ],
+   "params": [
+    {
+     "id": "which",
+     "label": "Who",
+     "kind": "choice",
+     "default": "alive",
+     "choices": [
+      [
+       "all",
+       "Everyone in the game"
+      ],
+      [
+       "alive",
+       "Everyone alive"
+      ],
+      [
+       "dead",
+       "Everyone dead"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ],
+      [
+       "alive_t",
+       "Living Terrorists"
+      ],
+      [
+       "alive_ct",
+       "Living Counter-Terrorists"
+      ],
+      [
+       "bots",
+       "Bots"
+      ],
+      [
+       "humans",
+       "People (not bots)"
+      ]
+     ]
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "array.add",
+   "title": "Add",
+   "category": "Arrays",
+   "help": "Adds an item at the end (an array holds at most 10000).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    },
+    {
+     "id": "item",
+     "type": "$T",
+     "label": "Item",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "index",
+     "type": "number",
+     "label": "Index"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ]
+  },
+  {
+   "type": "array.insert",
+   "title": "Insert",
+   "category": "Arrays",
+   "help": "Puts an item in at an index (the rest move up).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    },
+    {
+     "id": "item",
+     "type": "$T",
+     "label": "Item",
+     "optional": true
+    },
+    {
+     "id": "at",
+     "type": "number",
+     "label": "Index",
+     "param": "at"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    },
+    {
+     "id": "at",
+     "label": "Index",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 10000
+    }
+   ]
+  },
+  {
+   "type": "array.remove",
+   "title": "Remove Item",
+   "category": "Arrays",
+   "help": "Takes out every item equal to this one.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    },
+    {
+     "id": "item",
+     "type": "$T",
+     "label": "Item",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "removed",
+     "type": "bool",
+     "label": "Removed"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ]
+  },
+  {
+   "type": "array.remove_index",
+   "title": "Remove Index",
+   "category": "Arrays",
+   "help": "Takes out the item at an index.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    },
+    {
+     "id": "at",
+     "type": "number",
+     "label": "Index",
+     "param": "at"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    },
+    {
+     "id": "at",
+     "label": "Index",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 10000
+    }
+   ]
+  },
+  {
+   "type": "array.set",
+   "title": "Set Array Item",
+   "category": "Arrays",
+   "help": "Changes the item at an index (nothing happens past the end).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    },
+    {
+     "id": "at",
+     "type": "number",
+     "label": "Index",
+     "param": "at"
+    },
+    {
+     "id": "item",
+     "type": "$T",
+     "label": "Item",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    },
+    {
+     "id": "at",
+     "label": "Index",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 10000
+    }
+   ]
+  },
+  {
+   "type": "array.clear",
+   "title": "Clear",
+   "category": "Arrays",
+   "help": "Empties an array.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ]
+  },
+  {
+   "type": "array.shuffle",
+   "title": "Shuffle",
+   "category": "Arrays",
+   "help": "Puts an array's items in a random order.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ]
+  },
+  {
+   "type": "array.sort",
+   "title": "Sort",
+   "category": "Arrays",
+   "help": "Sorts an array (numbers by size, text A to Z, the rest by their number).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    },
+    {
+     "id": "order",
+     "label": "Order",
+     "kind": "choice",
+     "default": "asc",
+     "choices": [
+      [
+       "asc",
+       "Smallest first"
+      ],
+      [
+       "desc",
+       "Biggest first"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "array.get",
+   "title": "Get",
+   "category": "Arrays",
+   "help": "The item at an index (nothing, 0 or empty past the end).",
+   "inputs": [
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    },
+    {
+     "id": "at",
+     "type": "number",
+     "label": "Index",
+     "param": "at"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "$T",
+     "label": "Item"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    },
+    {
+     "id": "at",
+     "label": "Index",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 10000
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "array.length",
+   "title": "Length",
+   "category": "Arrays",
+   "help": "How many items an array has.",
+   "inputs": [
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Length"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "array.contains",
+   "title": "Contains",
+   "category": "Arrays",
+   "help": "Is the item in the array?",
+   "inputs": [
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    },
+    {
+     "id": "item",
+     "type": "$T",
+     "label": "Item",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Contains"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "array.find",
+   "title": "Find",
+   "category": "Arrays",
+   "help": "The index of the first item equal to this one (-1 if none).",
+   "inputs": [
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    },
+    {
+     "id": "item",
+     "type": "$T",
+     "label": "Item",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Index"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "array.random",
+   "title": "Random Item",
+   "category": "Arrays",
+   "help": "An item picked at random (a new pick each time it's worked out).",
+   "inputs": [
+    {
+     "id": "array",
+     "type": "array<$T>",
+     "label": "Array",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "$T",
+     "label": "Item"
+    }
+   ],
+   "params": [
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "map.add",
+   "title": "Map Add",
+   "category": "Maps",
+   "help": "Puts a value in a map under a key (replacing what was there).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "map",
+     "type": "map<$K,$T>",
+     "label": "Map",
+     "required": true
+    },
+    {
+     "id": "key",
+     "type": "$K",
+     "label": "Key",
+     "optional": true
+    },
+    {
+     "id": "value",
+     "type": "$T",
+     "label": "Value",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Keys",
+     "kind": "choice",
+     "default": "text",
+     "choices": [
+      [
+       "text",
+       "Text"
+      ],
+      [
+       "number",
+       "Numbers"
+      ],
+      [
+       "player",
+       "Players"
+      ]
+     ]
+    },
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ]
+  },
+  {
+   "type": "map.remove",
+   "title": "Map Remove",
+   "category": "Maps",
+   "help": "Takes a key (and its value) out of a map.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "map",
+     "type": "map<$K,$T>",
+     "label": "Map",
+     "required": true
+    },
+    {
+     "id": "key",
+     "type": "$K",
+     "label": "Key",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Keys",
+     "kind": "choice",
+     "default": "text",
+     "choices": [
+      [
+       "text",
+       "Text"
+      ],
+      [
+       "number",
+       "Numbers"
+      ],
+      [
+       "player",
+       "Players"
+      ]
+     ]
+    },
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ]
+  },
+  {
+   "type": "map.clear",
+   "title": "Map Clear",
+   "category": "Maps",
+   "help": "Empties a map.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "map",
+     "type": "map<$K,$T>",
+     "label": "Map",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Keys",
+     "kind": "choice",
+     "default": "text",
+     "choices": [
+      [
+       "text",
+       "Text"
+      ],
+      [
+       "number",
+       "Numbers"
+      ],
+      [
+       "player",
+       "Players"
+      ]
+     ]
+    },
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ]
+  },
+  {
+   "type": "map.find",
+   "title": "Map Find",
+   "category": "Maps",
+   "help": "The value under a key, and whether it was there.",
+   "inputs": [
+    {
+     "id": "map",
+     "type": "map<$K,$T>",
+     "label": "Map",
+     "required": true
+    },
+    {
+     "id": "key",
+     "type": "$K",
+     "label": "Key",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "$T",
+     "label": "Value"
+    },
+    {
+     "id": "found",
+     "type": "bool",
+     "label": "Found"
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Keys",
+     "kind": "choice",
+     "default": "text",
+     "choices": [
+      [
+       "text",
+       "Text"
+      ],
+      [
+       "number",
+       "Numbers"
+      ],
+      [
+       "player",
+       "Players"
+      ]
+     ]
+    },
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "map.contains",
+   "title": "Map Contains",
+   "category": "Maps",
+   "help": "Is the key in the map?",
+   "inputs": [
+    {
+     "id": "map",
+     "type": "map<$K,$T>",
+     "label": "Map",
+     "required": true
+    },
+    {
+     "id": "key",
+     "type": "$K",
+     "label": "Key",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Contains"
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Keys",
+     "kind": "choice",
+     "default": "text",
+     "choices": [
+      [
+       "text",
+       "Text"
+      ],
+      [
+       "number",
+       "Numbers"
+      ],
+      [
+       "player",
+       "Players"
+      ]
+     ]
+    },
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "map.length",
+   "title": "Map Length",
+   "category": "Maps",
+   "help": "How many keys a map has.",
+   "inputs": [
+    {
+     "id": "map",
+     "type": "map<$K,$T>",
+     "label": "Map",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Length"
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Keys",
+     "kind": "choice",
+     "default": "text",
+     "choices": [
+      [
+       "text",
+       "Text"
+      ],
+      [
+       "number",
+       "Numbers"
+      ],
+      [
+       "player",
+       "Players"
+      ]
+     ]
+    },
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "map.keys",
+   "title": "Map Keys",
+   "category": "Maps",
+   "help": "An array of a map's keys (a player who left is left out).",
+   "inputs": [
+    {
+     "id": "map",
+     "type": "map<$K,$T>",
+     "label": "Map",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "array<$K>",
+     "label": "Keys"
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Keys",
+     "kind": "choice",
+     "default": "text",
+     "choices": [
+      [
+       "text",
+       "Text"
+      ],
+      [
+       "number",
+       "Numbers"
+      ],
+      [
+       "player",
+       "Players"
+      ]
+     ]
+    },
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "map.values",
+   "title": "Map Values",
+   "category": "Maps",
+   "help": "An array of a map's values.",
+   "inputs": [
+    {
+     "id": "map",
+     "type": "map<$K,$T>",
+     "label": "Map",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "array<$T>",
+     "label": "Values"
+    }
+   ],
+   "params": [
+    {
+     "id": "key",
+     "label": "Keys",
+     "kind": "choice",
+     "default": "text",
+     "choices": [
+      [
+       "text",
+       "Text"
+      ],
+      [
+       "number",
+       "Numbers"
+      ],
+      [
+       "player",
+       "Players"
+      ]
+     ]
+    },
+    {
+     "id": "of",
+     "label": "Holds",
+     "kind": "type",
+     "default": "number"
+    }
+   ],
+   "pure": true
   },
   {
    "type": "flow.reroute",

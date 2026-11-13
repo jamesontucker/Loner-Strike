@@ -20,6 +20,8 @@ import { builtInSnippets, mySnippets } from "./snippets";
 import type { Snippet } from "./graphOps";
 import { Inspector } from "./Inspector";
 import { MyBlueprint } from "./MyBlueprint";
+import { TabBar } from "./TabBar";
+import { tabView } from "./graphOps";
 import { Results } from "./Results";
 import { DebugPanel } from "./DebugPanel";
 import { applyLayout, autoLayout } from "./layout";
@@ -109,13 +111,19 @@ function Studio({ maps }: ToolProps) {
   const snippets = [...builtInSnippets, ...mine];
   const dirty = !!graph && graph !== saved;
   const funcFocus = useStudio((s) => s.funcFocus);
-  const funcName = funcFocus ? String(graph?.nodes.find((n) => n.id === funcFocus)?.params.name ?? "") : "";
-  // (a Function looked at joins the crumbs, like Blueprint's graph tabs)
-  useToolCrumbs("studio", graph ? [{ label: graph.mode.name || graph.mode.id, address: funcName ? `studio:${graph.mode.id}` : undefined }, ...(funcName ? [{ label: `Function: ${funcName}` }] : [])] : null);
+  const tab = useStudio((s) => s.tab);
+  // (the open tab joins the crumbs: a Function's or Macro's graph, or an old Function node looked at)
+  const tabName = tab ? graph?.functions?.find((f) => f.id === tab)?.name ?? graph?.macros?.find((m) => m.id === tab)?.name ?? "" : "";
+  const tabKind = tab && graph?.macros?.some((m) => m.id === tab) ? "Macro" : "Function";
+  const funcName = tabName || (funcFocus ? String(graph?.nodes.find((n) => n.id === funcFocus)?.params.name ?? "") : "");
+  useToolCrumbs("studio", graph ? [{ label: graph.mode.name || graph.mode.id, address: funcName ? `studio:${graph.mode.id}` : undefined }, ...(funcName ? [{ label: `${tabName ? tabKind : "Function"}: ${funcName}` }] : [])] : null);
+
   const [find, setFind] = useState("");
   useDirty("studio", dirty);
   // the open graph is the address ("studio:<id>"), so Back and the crumbs step in and out of it
-  useReportAddress("studio", graph ? `studio:${graph.mode.id}` : null);
+  // (an open Function's or Macro's tab too: "studio:<id>/<tab>", so Back steps out of it and
+  // the mode's crumb goes back to the Event Graph)
+  useReportAddress("studio", graph ? `studio:${graph.mode.id}${tab ? `/${tab}` : ""}` : null);
   const arg = useToolArg();
 
   const refreshList = useCallback(async () => {
@@ -224,8 +232,14 @@ function Studio({ maps }: ToolProps) {
       if (cur) useStudio.getState().close();
       return;
     }
-    if (cur?.mode.id === arg) return;
-    if (/^[a-z][a-z0-9_]{1,23}$/.test(arg)) void openId(arg, true);
+    const [gid, tabId = ""] = arg.split("/");
+    if (cur?.mode.id === gid) {
+      const st = useStudio.getState();
+      if (st.tab !== tabId && (!tabId || [...(cur.functions ?? []), ...(cur.macros ?? [])].some((x) => x.id === tabId))) st.openTab(tabId);
+      if (!tabId) st.setFuncFocus(null);
+      return;
+    }
+    if (/^[a-z][a-z0-9_]{1,23}$/.test(gid)) void openId(gid, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [arg]);
 
@@ -361,7 +375,7 @@ function Studio({ maps }: ToolProps) {
     const g = useStudio.getState().graph;
     if (!g) return;
     const sizes = new Map(rf.getNodes().map((n) => [n.id, { w: n.measured?.width ?? 220, h: n.measured?.height ?? 100 }]));
-    st.edit((x) => applyLayout(x, autoLayout(x, sizes)));
+    st.edit((x) => applyLayout(x, autoLayout(tabView(x, useStudio.getState().tab), sizes)));
     setTimeout(() => void rf.fitView({ padding: 0.2, duration: 300 }), 50);
   };
 
@@ -522,11 +536,10 @@ function Studio({ maps }: ToolProps) {
       </div>
       <div className="st-main">
         <MyBlueprint api={canvas} snippets={snippets} reloadSnippets={reloadSnippets} toast={toast} />
-        <Canvas
-          toast={toast}
-          snippets={snippets}
-          onApi={onApi}
-        />
+        <div className="st-center">
+          <TabBar />
+          <Canvas toast={toast} snippets={snippets} onApi={onApi} />
+        </div>
         <Inspector />
       </div>
       <Results focus={(id) => focusRef.current(id)} />

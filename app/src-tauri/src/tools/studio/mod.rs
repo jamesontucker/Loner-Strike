@@ -20,6 +20,7 @@
 
 pub mod debug;
 pub mod gen;
+pub mod expand;
 pub mod graph;
 
 use crate::server::Shared;

@@ -2,20 +2,34 @@
 //! edits it), the node registry shared with the editor (`app/ui/src/views/tools/studio/nodes.json`,
 //! read here at build time), and the checks a graph must pass before it's turned into Pawn.
 //!
-//! A graph file, version 2 (version 1 files, without variables, still open):
+//! A graph file, version 3 (versions 1 and 2 still open: what's new is all optional):
 //! ```json
-//! { "schema": "loner-strike/graph", "version": 2,
+//! { "schema": "loner-strike/graph", "version": 3,
 //!   "mode": { "id": "teamdm", "name": "Team DM", "description": "" },
 //!   "variables": [{ "id": "v1", "name": "Kills", "type": "number", "scope": "player", "default": 0 }],
 //!   "nodes": [{ "id": "n1", "type": "event.player_killed", "pos": {"x":0,"y":0}, "params": {}, "breakpoint": false }],
 //!   "edges": [{ "id": "e1", "from": {"node":"n1","pin":"then"}, "to": {"node":"n2","pin":"exec"} }],
-//!   "comments": [{ "id": "c1", "text": "", "pos": {"x":0,"y":0}, "size": {"w":300,"h":200} }] }
+//!   "comments": [{ "id": "c1", "text": "", "pos": {"x":0,"y":0}, "size": {"w":300,"h":200} }],
+//!   "enums": [{ "id": "e1", "name": "Class", "values": ["Scout", "Tank"] }],
+//!   "structs": [{ "id": "s1", "name": "Loadout", "fields": [{ "id": "f1", "name": "Ammo", "type": "number" }] }],
+//!   "functions": [{ "id": "f1", "name": "Reward", "pure": false, "inputs": [{ "id": "a1", "name": "Who", "type": "player" }],
+//!                   "outputs": [], "locals": [] }],
+//!   "macros": [{ "id": "m1", "name": "Every Living", "inputs": [{ "id": "a1", "name": "In", "type": "exec" }], "outputs": [] }] }
 //! ```
+//! A node or comment with `"graph": "f1"` belongs to that Function's (or Macro's) own graph: its
+//! tab in the editor. Without one it's on the Event Graph. Wires stay inside one graph. A
+//! Function's graph has one Function Entry (its inputs as outputs) and Return nodes; a Macro's
+//! has one Macro Entry and at most one Macro Exit, and is copied into the graph where it's used
+//! (expand.rs) before the plugin is made.
 //! Wires go from an output pin to an input pin. A flow ("exec") output has at most one wire;
 //! a data input has at most one wire; flow inputs and data outputs can have many.
 //!
-//! Pin types: exec, player, entity, team, number, bool, text; `any` (a reroute, or a Value that
-//! takes anything) and `var` (the type of the variable the node is set to).
+//! Pin types: exec, player, entity, team, number, bool, text, vector, timer, `enum:<id>`,
+//! `struct:<id>`, `array<T>` and `map<K,T>` (K text, number or player); `any` (a reroute, or a
+//! Value that takes anything), `var` (the type of the variable the node is set to) and, in the
+//! registry only, `$T` (the node's `of` setting), `$K` (its `key`), `$E` (its enum), `$S` (its
+//! struct) and `$F` (the type of the struct field it sets). Function, macro, struct-making and
+//! switch nodes get their pins from the graph (View::pins).
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -23,12 +37,22 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::OnceLock;
 
 pub const SCHEMA: &str = "loner-strike/graph";
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 /// Limits that keep a graph (and the plugin made from it) sane.
 pub const MAX_NODES: usize = 400;
 pub const MAX_EDGES: usize = 1200;
 pub const MAX_COMMENTS: usize = 100;
 pub const MAX_VARIABLES: usize = 64;
+pub const MAX_FUNCTIONS: usize = 64;
+pub const MAX_MACROS: usize = 32;
+pub const MAX_ENUMS: usize = 32;
+pub const MAX_STRUCTS: usize = 32;
+/// Inputs or outputs of a Function or Macro, fields of a struct, values of an enum.
+pub const MAX_MEMBERS: usize = 12;
+/// Text fields of one struct (each is 64 characters of every record).
+pub const MAX_TEXT_FIELDS: usize = 4;
+/// The most times a loop goes round, and the most items an array holds.
+pub const LOOP_LIMIT: u32 = 10_000;
 /// Numbers a graph may hold (settings, variable defaults).
 pub const NUMBER_LIMIT: f64 = 100_000.0;
 
@@ -111,15 +135,10 @@ impl Registry {
 }
 
 impl NodeDef {
-    pub fn input(&self, id: &str) -> Option<&PinDef> {
-        self.inputs.iter().find(|p| p.id == id)
-    }
-    pub fn output(&self, id: &str) -> Option<&PinDef> {
-        self.outputs.iter().find(|p| p.id == id)
-    }
     pub fn param(&self, id: &str) -> Option<&ParamDef> {
         self.params.iter().find(|p| p.id == id)
     }
+    #[cfg(test)]
     pub fn has_exec_in(&self) -> bool {
         self.inputs.iter().any(|i| i.ty == "exec")
     }
@@ -140,6 +159,68 @@ pub struct Graph {
     pub edges: Vec<Edge>,
     #[serde(default)]
     pub comments: Vec<Comment>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub enums: Vec<EnumDef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub structs: Vec<StructDef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub functions: Vec<Function>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub macros: Vec<Macro>,
+}
+
+/// A named list of choices (Class: Scout, Tank, Medic): its values are 0, 1, 2...
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct EnumDef {
+    pub id: String,
+    pub name: String,
+    pub values: Vec<String>,
+}
+
+/// A record of named values (a Loadout: Weapon, Ammo, Armor).
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct StructDef {
+    pub id: String,
+    pub name: String,
+    pub fields: Vec<Member>,
+}
+
+/// A struct's field, or a Function's or Macro's input or output.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct Member {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub ty: String,
+}
+
+/// A Function: its own graph (nodes with `graph` = its id) from Function Entry to Return.
+/// A pure one has no flow pins where it's called and works out its outputs where they're used.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct Function {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pure: bool,
+    #[serde(default)]
+    pub inputs: Vec<Member>,
+    #[serde(default)]
+    pub outputs: Vec<Member>,
+    /// variables only this Function sees, back to their start value each time it runs
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locals: Vec<Variable>,
+}
+
+/// A Macro: a piece of graph copied in wherever it's used. Its inputs and outputs can be flow
+/// pins (type exec) too, several of each.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct Macro {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub inputs: Vec<Member>,
+    #[serde(default)]
+    pub outputs: Vec<Member>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -165,18 +246,19 @@ pub fn allowed_settings() -> Vec<&'static str> {
     registry().get("game.set_cvar").and_then(|d| d.param("cvar")).map(|p| p.choices.iter().map(|(k, _)| k.as_str()).collect()).unwrap_or_default()
 }
 
-/// A value the mode keeps: one for the whole mode, or one per player. Kept for the map (per
-/// player: reset when the player joins).
+/// A value the mode keeps: one for the whole mode, one per player or one per team. Kept for the
+/// map (per player: reset when the player joins). Any type (`types`); arrays, maps and structs
+/// only for the whole mode. A Function's locals are Variables too (scope "mode").
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct Variable {
     pub id: String,
     pub name: String,
-    /// number | bool | text
+    /// any variable type (type_ok)
     #[serde(rename = "type")]
     pub ty: String,
     /// mode | player | team
     pub scope: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub default: Value,
     /// never (kept for the map) | round (back to its start value at each new round)
     #[serde(default = "never", skip_serializing_if = "is_never")]
@@ -208,6 +290,9 @@ pub struct Node {
     pub params: BTreeMap<String, Value>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub breakpoint: bool,
+    /// the Function or Macro whose graph this node is on (none: the Event Graph)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graph: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -239,6 +324,8 @@ pub struct Comment {
     pub size: Size,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graph: Option<String>,
 }
 
 /// Reads a graph file: the JSON, then its schema and version.
@@ -247,7 +334,8 @@ pub fn parse(text: &str) -> Result<Graph, String> {
     from_value(v)
 }
 
-/// A graph from JSON. Version 1 files (no variables) are read as version 2.
+/// A graph from JSON. Version 1 (no variables) and 2 (no functions, macros, enums or structs)
+/// files are read as version 3: everything they lack starts empty.
 pub fn from_value(v: Value) -> Result<Graph, String> {
     if v.get("schema").and_then(Value::as_str) != Some(SCHEMA) {
         return Err("That isn't a Game Mode Studio graph.".into());
@@ -349,22 +437,128 @@ pub fn value_fits(ty: &str, v: &Value) -> bool {
     }
 }
 
+// ---- types ---------------------------------------------------------------------------------
+
+/// The plain types: a value of one fits in a pin, a variable, an array's item.
+pub const BASE_TYPES: [&str; 8] = ["number", "bool", "text", "player", "entity", "team", "vector", "timer"];
+/// What a map's keys can be.
+pub const KEY_TYPES: [&str; 3] = ["text", "number", "player"];
+
+/// `array<T>` -> ("array", None, "T"); `map<K,T>` -> ("map", Some("K"), "T").
+pub fn container(t: &str) -> Option<(&str, Option<&str>, &str)> {
+    if let Some(inner) = t.strip_prefix("array<").and_then(|r| r.strip_suffix('>')) {
+        return Some(("array", None, inner));
+    }
+    let inner = t.strip_prefix("map<").and_then(|r| r.strip_suffix('>'))?;
+    let (k, v) = inner.split_once(',')?;
+    Some(("map", Some(k), v))
+}
+
+/// The enum or struct a type names (`enum:e1` -> ("enum", "e1")).
+pub fn named_type(t: &str) -> Option<(&str, &str)> {
+    t.strip_prefix("enum:").map(|id| ("enum", id)).or_else(|| t.strip_prefix("struct:").map(|id| ("struct", id)))
+}
+
+/// A plain type, an enum or (with `structs`) a struct of this graph.
+pub fn item_type_ok(g: &Graph, t: &str, structs: bool) -> bool {
+    BASE_TYPES.contains(&t)
+        || match named_type(t) {
+            Some(("enum", id)) => g.enums.iter().any(|e| e.id == id),
+            Some(("struct", id)) => structs && g.structs.iter().any(|s| s.id == id),
+            _ => false,
+        }
+}
+
+/// A type a variable, a Function's input or output or a node's `of` can have: an item type,
+/// an array of them, or a map from text, numbers or players to plain types or enums.
+pub fn type_ok(g: &Graph, t: &str) -> bool {
+    match container(t) {
+        Some(("array", None, item)) => item_type_ok(g, item, true),
+        Some(("map", Some(k), item)) => KEY_TYPES.contains(&k) && item_type_ok(g, item, false),
+        _ => item_type_ok(g, t, true),
+    }
+}
+
+/// Values that live in a ring of slots (a vector, a struct): they don't last long when not in
+/// a variable, like text.
+pub fn short_lived(t: &str) -> bool {
+    t == "text" || t == "vector" || t.starts_with("struct:")
+}
+
+pub fn compatible(from: &str, to: &str) -> bool {
+    if from == to || from == "any" || to == "any" || (from == "player" && to == "entity") {
+        return true;
+    }
+    match (container(from), container(to)) {
+        (Some((a, ka, ia)), Some((b, kb, ib))) => a == b && (ka == kb || ka == Some("any") || kb == Some("any")) && (ia == ib || ia == "any" || ib == "any"),
+        _ => false,
+    }
+}
+
 /// The graph as the checks and the generator see it: lookups by id, wires by pin.
 pub struct View<'a> {
     pub g: &'a Graph,
     pub defs: HashMap<&'a str, &'static NodeDef>,
     pub nodes: HashMap<&'a str, &'a Node>,
+    /// the mode's variables and every Function's locals
     pub vars: HashMap<&'a str, &'a Variable>,
+    /// a local variable -> its Function
+    pub local_of: HashMap<&'a str, &'a str>,
+    pub funcs: HashMap<&'a str, &'a Function>,
+    pub macros: HashMap<&'a str, &'a Macro>,
+    pub enums: HashMap<&'a str, &'a EnumDef>,
+    pub structs: HashMap<&'a str, &'a StructDef>,
+    /// each node's pins (from the registry, or the graph for Function, Macro, struct and
+    /// switch nodes), types resolved
+    pub pins: HashMap<&'a str, Pins>,
     /// output pin -> wires leaving it
     pub out_edges: HashMap<(String, String), Vec<&'a Edge>>,
     /// input pin -> wires arriving
     pub in_edges: HashMap<(String, String), Vec<&'a Edge>>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct Pins {
+    pub inputs: Vec<PinDef>,
+    pub outputs: Vec<PinDef>,
+}
+
+fn exec_pin(id: &str, label: &str) -> PinDef {
+    PinDef { id: id.into(), ty: "exec".into(), label: label.into(), required: false, optional: false, param: None }
+}
+
+fn member_pin(m: &Member, required: bool) -> PinDef {
+    PinDef { id: m.id.clone(), ty: m.ty.clone(), label: m.name.clone(), required: required && m.ty != "exec", optional: !required, param: None }
+}
+
+/// A count setting of a node (Sequence's outputs, Make Array's items), clamped.
+pub fn count_param(n: &Node, def: &NodeDef, id: &str, max: usize) -> usize {
+    param(n, def, id).and_then(Value::as_f64).filter(|x| x.is_finite()).map_or(0, |x| x.round().clamp(0.0, max as f64) as usize)
+}
+
+/// A Switch's cases (its `cases` setting: words or numbers split by commas), at most 16.
+pub fn switch_cases(n: &Node, def: &NodeDef) -> Vec<String> {
+    let text = param(n, def, "cases").and_then(Value::as_str).unwrap_or("");
+    text.split(',').map(|c| c.trim().to_string()).filter(|c| !c.is_empty()).take(16).collect()
+}
+
 impl<'a> View<'a> {
     pub fn new(g: &'a Graph) -> View<'a> {
         let reg = registry();
-        let mut v = View { g, defs: HashMap::new(), nodes: HashMap::new(), vars: HashMap::new(), out_edges: HashMap::new(), in_edges: HashMap::new() };
+        let mut v = View {
+            g,
+            defs: HashMap::new(),
+            nodes: HashMap::new(),
+            vars: HashMap::new(),
+            local_of: HashMap::new(),
+            funcs: HashMap::new(),
+            macros: HashMap::new(),
+            enums: HashMap::new(),
+            structs: HashMap::new(),
+            pins: HashMap::new(),
+            out_edges: HashMap::new(),
+            in_edges: HashMap::new(),
+        };
         for n in &g.nodes {
             v.nodes.entry(n.id.as_str()).or_insert(n);
             if let Some(d) = reg.get(&n.kind) {
@@ -374,11 +568,203 @@ impl<'a> View<'a> {
         for x in &g.variables {
             v.vars.entry(x.id.as_str()).or_insert(x);
         }
+        for f in &g.functions {
+            v.funcs.entry(f.id.as_str()).or_insert(f);
+            for x in &f.locals {
+                if !v.vars.contains_key(x.id.as_str()) {
+                    v.vars.insert(x.id.as_str(), x);
+                    v.local_of.insert(x.id.as_str(), f.id.as_str());
+                }
+            }
+        }
+        for m in &g.macros {
+            v.macros.entry(m.id.as_str()).or_insert(m);
+        }
+        for e in &g.enums {
+            v.enums.entry(e.id.as_str()).or_insert(e);
+        }
+        for s in &g.structs {
+            v.structs.entry(s.id.as_str()).or_insert(s);
+        }
+        let ids: Vec<&'a str> = v.nodes.keys().copied().collect();
+        for id in ids {
+            if let Some(p) = v.make_pins(id) {
+                v.pins.insert(id, p);
+            }
+        }
         for e in &g.edges {
             v.out_edges.entry((e.from.node.clone(), e.from.pin.clone())).or_default().push(e);
             v.in_edges.entry((e.to.node.clone(), e.to.pin.clone())).or_default().push(e);
         }
         v
+    }
+
+    /// The Function or Macro whose graph a node is on ("" for the Event Graph).
+    pub fn graph_of(&self, node: &str) -> &'a str {
+        self.nodes.get(node).and_then(|n| n.graph.as_deref()).unwrap_or("")
+    }
+
+    fn param_str(&self, node: &str, id: &str) -> Option<&'a str> {
+        self.nodes.get(node)?.params.get(id)?.as_str()
+    }
+
+    /// The Function a call (or timer) node is set to.
+    pub fn func_of(&self, node: &str) -> Option<&'a Function> {
+        self.param_str(node, "func").and_then(|f| self.funcs.get(f).copied())
+    }
+
+    /// The struct a node works with: its `struct` setting.
+    pub fn struct_of(&self, node: &str) -> Option<&'a StructDef> {
+        self.param_str(node, "struct").and_then(|s| self.structs.get(s).copied())
+    }
+
+    pub fn enum_of(&self, node: &str) -> Option<&'a EnumDef> {
+        self.param_str(node, "enum").and_then(|s| self.enums.get(s).copied())
+    }
+
+    /// A struct type's definition (`struct:s1`).
+    pub fn struct_type(&self, ty: &str) -> Option<&'a StructDef> {
+        ty.strip_prefix("struct:").and_then(|s| self.structs.get(s).copied())
+    }
+
+    pub fn enum_type(&self, ty: &str) -> Option<&'a EnumDef> {
+        ty.strip_prefix("enum:").and_then(|s| self.enums.get(s).copied())
+    }
+
+    /// The field a Set Field node sets (in the struct of its variable).
+    pub fn field_of(&self, node: &str) -> Option<&'a Member> {
+        let var = self.var_of(node)?;
+        let s = self.struct_type(&var.ty)?;
+        let f = self.param_str(node, "field")?;
+        s.fields.iter().find(|m| m.id == f)
+    }
+
+    fn make_pins(&self, id: &str) -> Option<Pins> {
+        let n = self.nodes.get(id)?;
+        let def = self.defs.get(id)?;
+        let mut p = Pins { inputs: def.inputs.clone(), outputs: def.outputs.clone() };
+        let home = n.graph.as_deref().unwrap_or("");
+        match def.kind.as_str() {
+            "fn.entry" => {
+                if let Some(f) = self.funcs.get(home) {
+                    p.outputs.extend(f.inputs.iter().map(|m| member_pin(m, false)));
+                }
+            }
+            "fn.return" => {
+                if let Some(f) = self.funcs.get(home) {
+                    p.inputs.extend(f.outputs.iter().map(|m| member_pin(m, false)));
+                }
+            }
+            "fn.call" | "fn.call_pure" => {
+                if let Some(f) = self.func_of(id) {
+                    p.inputs.extend(f.inputs.iter().map(|m| member_pin(m, false)));
+                    p.outputs.extend(f.outputs.iter().map(|m| member_pin(m, false)));
+                }
+            }
+            "macro.entry" => {
+                if let Some(m) = self.macros.get(home) {
+                    p.outputs = m.inputs.iter().map(|m| member_pin(m, false)).collect();
+                }
+            }
+            "macro.exit" => {
+                if let Some(m) = self.macros.get(home) {
+                    p.inputs = m.outputs.iter().map(|m| member_pin(m, false)).collect();
+                }
+            }
+            "macro.use" => {
+                if let Some(m) = self.param_str(id, "macro").and_then(|m| self.macros.get(m)) {
+                    p.inputs = m.inputs.iter().map(|m| member_pin(m, true)).collect();
+                    p.outputs = m.outputs.iter().map(|m| member_pin(m, false)).collect();
+                }
+            }
+            "struct.make" => {
+                if let Some(s) = self.struct_of(id) {
+                    p.inputs = s.fields.iter().map(|m| member_pin(m, false)).collect();
+                }
+            }
+            "struct.break" => {
+                if let Some(s) = self.struct_of(id) {
+                    p.outputs = s.fields.iter().map(|m| member_pin(m, false)).collect();
+                }
+            }
+            "flow.switch_enum" => {
+                if let Some(e) = self.enum_of(id) {
+                    p.outputs = e.values.iter().enumerate().map(|(i, l)| exec_pin(&format!("v{i}"), l)).collect();
+                }
+            }
+            "flow.switch_num" | "flow.switch_text" => {
+                p.outputs = switch_cases(n, def).iter().enumerate().map(|(i, c)| exec_pin(&format!("c{i}"), c)).collect();
+                p.outputs.push(exec_pin("default", "Default"));
+            }
+            "flow.sequence" => {
+                p.outputs = (0..count_param(n, def, "count", 8).max(1)).map(|i| exec_pin(&format!("then{i}"), &format!("Then {i}"))).collect();
+            }
+            "array.make" => {
+                let item = p.inputs.first().cloned();
+                if let Some(item) = item {
+                    p.inputs = (0..count_param(n, def, "count", 8)).map(|i| PinDef { id: format!("i{i}"), label: format!("[{i}]"), ..item.clone() }).collect();
+                }
+            }
+            _ => {}
+        }
+        for pin in p.inputs.iter_mut().chain(p.outputs.iter_mut()) {
+            pin.ty = self.resolve(n, def, &pin.ty);
+        }
+        Some(p)
+    }
+
+    /// A pin type with `var`, `$T`, `$K`, `$E`, `$S` and `$F` worked out from the node's
+    /// settings ("any" while one isn't set or isn't right).
+    fn resolve(&self, n: &Node, def: &NodeDef, ty: &str) -> String {
+        if ty == "var" {
+            return self.var_of(&n.id).map(|v| v.ty.clone()).unwrap_or_else(|| "any".into());
+        }
+        if !ty.contains('$') {
+            return ty.to_string();
+        }
+        let p = |k: &str| param(n, def, k).and_then(Value::as_str).unwrap_or("");
+        let item = p("of");
+        let item = if item_type_ok(self.g, item, !ty.starts_with("map<")) { item.to_string() } else { "any".into() };
+        let key = if KEY_TYPES.contains(&p("key")) { p("key") } else { "text" };
+        let en = if self.enums.contains_key(p("enum")) { format!("enum:{}", p("enum")) } else { "any".into() };
+        let st = if self.structs.contains_key(p("struct")) { format!("struct:{}", p("struct")) } else { "any".into() };
+        let field = self.field_of(&n.id).map(|f| f.ty.clone()).unwrap_or_else(|| "any".into());
+        ty.replace("$T", &item).replace("$K", key).replace("$E", &en).replace("$S", &st).replace("$F", &field)
+    }
+
+    pub fn inputs(&self, node: &str) -> &[PinDef] {
+        self.pins.get(node).map_or(&[], |p| p.inputs.as_slice())
+    }
+
+    pub fn outputs(&self, node: &str) -> &[PinDef] {
+        self.pins.get(node).map_or(&[], |p| p.outputs.as_slice())
+    }
+
+    pub fn input(&self, node: &str, pin: &str) -> Option<&PinDef> {
+        self.inputs(node).iter().find(|p| p.id == pin)
+    }
+
+    pub fn output(&self, node: &str, pin: &str) -> Option<&PinDef> {
+        self.outputs(node).iter().find(|p| p.id == pin)
+    }
+
+    /// No flow pins: its outputs are worked out where they're used.
+    pub fn pure(&self, node: &str) -> bool {
+        match self.defs.get(node) {
+            Some(d) if d.kind == "macro.use" => !self.inputs(node).iter().chain(self.outputs(node)).any(|p| p.ty == "exec"),
+            Some(d) => d.pure,
+            None => false,
+        }
+    }
+
+    /// Something flow comes into.
+    pub fn has_exec_in(&self, node: &str) -> bool {
+        self.inputs(node).iter().any(|p| p.ty == "exec")
+    }
+
+    /// Where a graph's flow starts: events, Function and Macro entries.
+    pub fn is_root(&self, node: &str) -> bool {
+        self.defs.get(node).is_some_and(|d| d.event)
     }
 
     /// The wires leaving an output pin.
@@ -397,15 +783,6 @@ impl<'a> View<'a> {
         self.vars.get(id).copied()
     }
 
-    /// A pin's declared type with `var` resolved ("any" when the node has no variable yet).
-    fn resolve(&self, node: &str, ty: &str) -> String {
-        if ty == "var" {
-            self.var_of(node).map(|v| v.ty.clone()).unwrap_or_else(|| "any".into())
-        } else {
-            ty.to_string()
-        }
-    }
-
     /// The type an output really carries: a reroute carries what comes into it.
     pub fn out_type(&self, node: &str, pin: &str) -> Option<String> {
         let mut seen = HashSet::new();
@@ -413,7 +790,7 @@ impl<'a> View<'a> {
         loop {
             let def = self.defs.get(node.as_str())?;
             if !def.reroute {
-                return def.output(&pin).map(|p| self.resolve(&node, &p.ty));
+                return self.output(&node, &pin).map(|p| p.ty.clone());
             }
             if !seen.insert(node.clone()) {
                 return None;
@@ -424,10 +801,9 @@ impl<'a> View<'a> {
         }
     }
 
-    /// The type an input wants (`var` resolved).
+    /// The type an input wants.
     pub fn in_type(&self, node: &str, pin: &str) -> Option<String> {
-        let def = self.defs.get(node)?;
-        def.input(pin).map(|p| self.resolve(node, &p.ty))
+        self.input(node, pin).map(|p| p.ty.clone())
     }
 
     /// Where a flow wire from this output really goes (through reroutes): the node and pin.
@@ -464,27 +840,37 @@ impl<'a> View<'a> {
         }
     }
 
-    /// The flow outputs of a node, in the registry's order.
-    pub fn exec_outs(&self, node: &str) -> Vec<&'static str> {
-        self.defs.get(node).map(|d| d.outputs.iter().filter(|p| p.ty == "exec").map(|p| p.id.as_str()).collect()).unwrap_or_default()
+    /// The flow outputs of a node, in order.
+    pub fn exec_outs(&self, node: &str) -> Vec<String> {
+        if self.defs.get(node).is_some_and(|d| d.reroute) {
+            return Vec::new();
+        }
+        self.outputs(node).iter().filter(|p| p.ty == "exec").map(|p| p.id.clone()).collect()
+    }
+
+    /// Does flow coming into this pin go on through the node's outputs? Not into Reset, Open,
+    /// Close, Toggle or Break: those only change the node.
+    pub fn passes(&self, node: &str, pin: &str) -> bool {
+        pin == "exec" || !self.defs.get(node).is_some_and(|d| matches!(d.kind.as_str(), "flow.do_once" | "flow.do_n" | "flow.gate" | "flow.for_loop_break" | "flow.for_each_array"))
+    }
+
+    /// The nodes flow goes on to from a node's outputs, and whether each passes on.
+    fn next_nodes(&self, node: &str) -> Vec<(&'a str, bool)> {
+        self.exec_outs(node).iter().filter_map(|p| self.exec_target(node, p)).map(|(t, tp)| (t, self.passes(t, tp))).collect()
     }
 
     /// Does `to` run after `from` (by flow wires, from any of `from`'s flow outputs)?
     pub fn runs_after(&self, from: &str, to: &str) -> bool {
-        let mut stack: Vec<&str> = self.exec_outs(from).into_iter().filter_map(|p| self.exec_target(from, p).map(|(t, _)| t)).collect();
+        let mut stack: Vec<(&str, bool)> = self.next_nodes(from);
         let mut seen = HashSet::new();
-        while let Some(cur) = stack.pop() {
+        while let Some((cur, on)) = stack.pop() {
             if cur == to {
                 return true;
             }
-            if !seen.insert(cur) {
+            if !on || !seen.insert(cur) {
                 continue;
             }
-            for p in self.exec_outs(cur) {
-                if let Some((t, _)) = self.exec_target(cur, p) {
-                    stack.push(t);
-                }
-            }
+            stack.extend(self.next_nodes(cur));
         }
         false
     }
@@ -497,11 +883,13 @@ impl<'a> View<'a> {
         let mut stack: Vec<(String, String)> = vec![(node.to_string(), pin.to_string())];
         while let Some((n, p)) = stack.pop() {
             let Some((src, spin)) = self.data_source(&n, &p) else { continue };
-            let Some(def) = self.defs.get(src) else { continue };
-            if !def.pure {
+            if !self.defs.contains_key(src) {
+                continue;
+            }
+            if !self.pure(src) {
                 out.push((src, spin));
             } else if seen.insert(src) {
-                for ip in def.inputs.iter().filter(|i| i.ty != "exec") {
+                for ip in self.inputs(src).iter().filter(|i| i.ty != "exec") {
                     stack.push((src.to_string(), ip.id.clone()));
                 }
             }
@@ -514,33 +902,50 @@ impl<'a> View<'a> {
     pub fn reached_from(&self) -> BTreeMap<&'a str, BTreeMap<&'a str, bool>> {
         let mut out: BTreeMap<&str, BTreeMap<&str, bool>> = BTreeMap::new();
         for n in &self.g.nodes {
-            if !self.defs.get(n.id.as_str()).is_some_and(|d| d.event) {
+            if !self.is_root(&n.id) {
                 continue;
             }
-            let mut stack = vec![(n.id.as_str(), false)];
+            let mut stack = vec![(n.id.as_str(), false, true)];
             let mut seen = HashSet::new();
-            while let Some((cur, timed)) = stack.pop() {
-                if !seen.insert((cur, timed)) {
-                    continue;
-                }
+            while let Some((cur, timed, on)) = stack.pop() {
                 let e = out.entry(cur).or_default().entry(n.id.as_str()).or_insert(false);
                 *e |= timed;
+                if !on || !seen.insert((cur, timed)) {
+                    continue;
+                }
                 let kind = self.defs.get(cur).map(|d| d.kind.as_str()).unwrap_or("");
                 for p in self.exec_outs(cur) {
-                    if let Some((t, _)) = self.exec_target(cur, p) {
-                        stack.push((t, timed || deferred(kind, p)));
+                    if let Some((t, tp)) = self.exec_target(cur, &p) {
+                        stack.push((t, timed || deferred(kind, &p), self.passes(t, tp)));
                     }
                 }
             }
         }
         out
     }
+
+    /// A type's name for people: Number, Array of Players, Loadout...
+    pub fn type_label(&self, ty: &str) -> String {
+        if let Some((_, key, item)) = container(ty) {
+            return match key {
+                Some(k) => format!("Map of {} to {}", self.type_label(k), self.type_label(item)),
+                None => format!("Array of {}", self.type_label(item)),
+            };
+        }
+        if let Some(e) = self.enum_type(ty) {
+            return e.name.clone();
+        }
+        if let Some(s) = self.struct_type(ty) {
+            return s.name.clone();
+        }
+        type_label(ty).to_string()
+    }
 }
 
 /// Does this flow output run later (from a timer), not straight away?
 pub fn deferred(kind: &str, pin: &str) -> bool {
     match kind {
-        "timer.delay" => true,
+        "timer.delay" | "timer.retrigger" => true,
         "timer.repeat" => pin == "tick",
         "timer.countdown" => pin == "done",
         "msg.menu" => pin != "then",
@@ -548,8 +953,67 @@ pub fn deferred(kind: &str, pin: &str) -> bool {
     }
 }
 
-pub fn compatible(from: &str, to: &str) -> bool {
-    from == to || from == "any" || to == "any" || (from == "player" && to == "entity")
+/// Nodes that wait (or run their flow later): not inside a Function.
+pub fn latent(kind: &str) -> bool {
+    matches!(kind, "timer.delay" | "timer.retrigger" | "timer.repeat" | "timer.countdown" | "msg.menu")
+}
+
+/// Pin ids a Function's or Macro's own pins can't have (the flow pins' ids).
+const RESERVED_PINS: [&str; 4] = ["exec", "then", "in", "out"];
+
+fn short(s: &str) -> String {
+    s.chars().take(30).collect()
+}
+
+/// The members of a Function or Macro (or a struct's fields): ids, names, types.
+fn check_members(g: &Graph, what: &str, owner: &str, ms: &[Member], exec_ok: bool, p: &mut Vec<Problem>) {
+    if ms.len() > MAX_MEMBERS {
+        p.push(Problem::err(None, format!("{what} \u{201c}{}\u{201d} has more than {MAX_MEMBERS} inputs, outputs or fields.", short(owner))));
+    }
+    let mut ids = HashSet::new();
+    for m in ms {
+        if !valid_id(&m.id) || !ids.insert(m.id.as_str()) || RESERVED_PINS.contains(&m.id.as_str()) {
+            p.push(Problem::err(None, format!("{what} \u{201c}{}\u{201d} has a bad or repeated input, output or field id.", short(owner))));
+        }
+        if m.name.trim().is_empty() || !valid_label(&m.name, 30) {
+            p.push(Problem::err(None, format!("Name each input, output and field of {what} \u{201c}{}\u{201d} (up to 30 letters, digits, spaces or plain punctuation).", short(owner))));
+        }
+        if !(type_ok(g, &m.ty) || (exec_ok && m.ty == "exec")) {
+            p.push(Problem::err(None, format!("{what} \u{201c}{}\u{201d}: \u{201c}{}\u{201d} has a type this app doesn't know.", short(owner), short(&m.name))));
+        }
+    }
+}
+
+/// A variable (or local): its id is checked by the caller.
+fn check_variable(g: &Graph, x: &Variable, local: bool, p: &mut Vec<Problem>) {
+    let name = short(&x.name);
+    if x.name.trim().is_empty() || !valid_label(&x.name, 30) {
+        p.push(Problem::err(None, "Give each variable a name (up to 30 letters, digits, spaces or plain punctuation)."));
+    }
+    let complex = container(&x.ty).is_some() || x.ty.starts_with("struct:");
+    if !type_ok(g, &x.ty) || !["mode", "player", "team"].contains(&x.scope.as_str()) || !["never", "round"].contains(&x.reset.as_str()) {
+        p.push(Problem::err(None, format!("The variable \u{201c}{name}\u{201d} has a type or scope this app doesn't know.")));
+        return;
+    }
+    if complex && x.scope != "mode" {
+        p.push(Problem::err(None, format!("The variable \u{201c}{name}\u{201d}: arrays, maps and structs are kept for the whole mode (not per player or team).")));
+    }
+    if local && (x.scope != "mode" || x.reset != "never") {
+        p.push(Problem::err(None, format!("The local variable \u{201c}{name}\u{201d} is the Function's own: not per player, team or round.")));
+    }
+    if !x.default.is_null() && !default_fits(g, &x.ty, &x.default) {
+        p.push(Problem::err(None, format!("The variable \u{201c}{name}\u{201d} starts with a value that doesn't fit its type.")));
+    }
+}
+
+/// A start value: numbers, yes/no, text, and an enum's value by its number; the other types
+/// start empty (nobody, no items, 0 0 0).
+pub fn default_fits(g: &Graph, ty: &str, v: &Value) -> bool {
+    if let Some(("enum", id)) = named_type(ty) {
+        let n = g.enums.iter().find(|e| e.id == id).map_or(0, |e| e.values.len());
+        return v.as_f64().is_some_and(|x| x.fract() == 0.0 && x >= 0.0 && (x as usize) < n);
+    }
+    value_fits(ty, v)
 }
 
 /// Every problem with a graph: errors stop a compile, warnings are shown on the nodes.
@@ -572,7 +1036,7 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
     let allowed = allowed_settings();
     for st in &g.mode.settings {
         if !allowed.contains(&st.cvar.as_str()) || !st.value.is_finite() || !(0.0..=NUMBER_LIMIT).contains(&st.value) {
-            p.push(Problem::err(None, format!("The mode's setting \u{201c}{}\u{201d} isn't one the Studio can set (or its value is out of range).", st.cvar.chars().take(30).collect::<String>())));
+            p.push(Problem::err(None, format!("The mode's setting \u{201c}{}\u{201d} isn't one the Studio can set (or its value is out of range).", short(&st.cvar))));
         }
     }
     if g.mode.settings.len() > 32 {
@@ -582,30 +1046,103 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         p.push(Problem::err(None, format!("That graph is too big (at most {MAX_NODES} nodes, {MAX_EDGES} wires, {MAX_COMMENTS} comments and {MAX_VARIABLES} variables).")));
         return p;
     }
+    if g.functions.len() > MAX_FUNCTIONS || g.macros.len() > MAX_MACROS || g.enums.len() > MAX_ENUMS || g.structs.len() > MAX_STRUCTS {
+        p.push(Problem::err(None, format!("That graph has too many parts (at most {MAX_FUNCTIONS} Functions, {MAX_MACROS} Macros, {MAX_ENUMS} enums and {MAX_STRUCTS} structs).")));
+        return p;
+    }
 
-    // variables
+    // enums and structs
+    let mut tids = HashSet::new();
+    for e in &g.enums {
+        if !valid_id(&e.id) || !tids.insert(("enum", e.id.as_str())) {
+            p.push(Problem::err(None, "An enum has a bad or repeated id."));
+        }
+        if e.name.trim().is_empty() || !valid_label(&e.name, 30) {
+            p.push(Problem::err(None, "Give each enum a name (up to 30 letters, digits, spaces or plain punctuation)."));
+        }
+        if e.values.is_empty() || e.values.len() > 32 || e.values.iter().any(|x| x.trim().is_empty() || !valid_label(x, 30)) {
+            p.push(Problem::err(None, format!("The enum \u{201c}{}\u{201d} needs 1 to 32 values, each a name of up to 30 letters, digits, spaces or plain punctuation.", short(&e.name))));
+        }
+    }
+    for s in &g.structs {
+        if !valid_id(&s.id) || !tids.insert(("struct", s.id.as_str())) {
+            p.push(Problem::err(None, "A struct has a bad or repeated id."));
+        }
+        if s.name.trim().is_empty() || !valid_label(&s.name, 30) {
+            p.push(Problem::err(None, "Give each struct a name (up to 30 letters, digits, spaces or plain punctuation)."));
+        }
+        if s.fields.is_empty() {
+            p.push(Problem::err(None, format!("The struct \u{201c}{}\u{201d} needs at least one field.", short(&s.name))));
+        }
+        check_members(g, "The struct", &s.name, &s.fields, false, &mut p);
+        if s.fields.iter().any(|f| !item_type_ok(g, &f.ty, false)) {
+            p.push(Problem::err(None, format!("The struct \u{201c}{}\u{201d}: a field can be a number, yes/no, text, player, entity, team, vector, timer or enum (not an array, map or struct).", short(&s.name))));
+        }
+        if s.fields.iter().filter(|f| f.ty == "text").count() > MAX_TEXT_FIELDS {
+            p.push(Problem::err(None, format!("The struct \u{201c}{}\u{201d} can have at most {MAX_TEXT_FIELDS} text fields.", short(&s.name))));
+        }
+    }
+
+    // Functions and Macros: their graphs share one set of ids
+    let mut gids = HashSet::new();
+    let mut fnames = HashSet::new();
+    for f in &g.functions {
+        if !valid_id(&f.id) || !gids.insert(f.id.as_str()) {
+            p.push(Problem::err(None, "A Function has a bad or repeated id."));
+        }
+        if f.name.trim().is_empty() || !valid_label(&f.name, 30) || !fnames.insert(f.name.trim().to_lowercase()) {
+            p.push(Problem::err(None, format!("Give each Function its own name (up to 30 letters, digits, spaces or plain punctuation): \u{201c}{}\u{201d}.", short(&f.name))));
+        }
+        check_members(g, "The Function", &f.name, &f.inputs, false, &mut p);
+        check_members(g, "The Function", &f.name, &f.outputs, false, &mut p);
+        if f.pure && f.outputs.is_empty() {
+            p.push(Problem::warn(None, format!("The pure Function \u{201c}{}\u{201d} has no outputs, so nothing ever runs it.", short(&f.name))));
+        }
+        if f.locals.len() > 16 {
+            p.push(Problem::err(None, format!("The Function \u{201c}{}\u{201d} has more than 16 local variables.", short(&f.name))));
+        }
+    }
+    for m in &g.macros {
+        if !valid_id(&m.id) || !gids.insert(m.id.as_str()) {
+            p.push(Problem::err(None, "A Macro has a bad or repeated id."));
+        }
+        if m.name.trim().is_empty() || !valid_label(&m.name, 30) || !fnames.insert(m.name.trim().to_lowercase()) {
+            p.push(Problem::err(None, format!("Give each Macro its own name (up to 30 letters, digits, spaces or plain punctuation): \u{201c}{}\u{201d}.", short(&m.name))));
+        }
+        check_members(g, "The Macro", &m.name, &m.inputs, true, &mut p);
+        check_members(g, "The Macro", &m.name, &m.outputs, true, &mut p);
+    }
+
+    // variables (and locals)
     let mut vids = HashSet::new();
     for x in &g.variables {
         if !valid_id(&x.id) || !vids.insert(x.id.as_str()) {
             p.push(Problem::err(None, "A variable has a bad or repeated id."));
             continue;
         }
-        if x.name.trim().is_empty() || !valid_label(&x.name, 30) {
-            p.push(Problem::err(None, "Give each variable a name (up to 30 letters, digits, spaces or plain punctuation)."));
+        check_variable(g, x, false, &mut p);
+    }
+    for f in &g.functions {
+        for x in &f.locals {
+            if !valid_id(&x.id) || !vids.insert(x.id.as_str()) {
+                p.push(Problem::err(None, format!("A local variable of \u{201c}{}\u{201d} has a bad or repeated id.", short(&f.name))));
+                continue;
+            }
+            check_variable(g, x, true, &mut p);
         }
-        if !["number", "bool", "text"].contains(&x.ty.as_str()) || !["mode", "player", "team"].contains(&x.scope.as_str()) || !["never", "round"].contains(&x.reset.as_str()) {
-            p.push(Problem::err(None, format!("The variable \u{201c}{}\u{201d} has a type or scope this app doesn't know.", x.name.chars().take(30).collect::<String>())));
-        } else if !x.default.is_null() && !value_fits(&x.ty, &x.default) {
-            p.push(Problem::err(None, format!("The variable \u{201c}{}\u{201d} starts with a value that doesn't fit its type.", x.name.chars().take(30).collect::<String>())));
-        }
+    }
+    if g.variables.len() + g.functions.iter().map(|f| f.locals.len()).sum::<usize>() > MAX_VARIABLES * 2 {
+        p.push(Problem::err(None, "That graph has too many variables and locals."));
     }
 
     // nodes and their params
     let v = View::new(g);
     let mut ids = HashSet::new();
+    let mut entries: HashMap<&str, usize> = HashMap::new();
+    let mut exits: HashMap<&str, usize> = HashMap::new();
     for n in &g.nodes {
         if !valid_id(&n.id) {
-            p.push(Problem::err(None, format!("A node has a bad id ({:?}).", n.id.chars().take(30).collect::<String>())));
+            p.push(Problem::err(None, format!("A node has a bad id ({:?}).", short(&n.id))));
             continue;
         }
         if !ids.insert(n.id.as_str()) {
@@ -616,33 +1153,92 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
             p.push(Problem::err(Some(&n.id), format!("This app doesn't know the node \u{201c}{}\u{201d}.", n.kind.chars().take(40).collect::<String>())));
             continue;
         };
+        // where it is
+        let home = n.graph.as_deref().unwrap_or("");
+        let in_fn = v.funcs.contains_key(home);
+        let in_macro = v.macros.contains_key(home);
+        if !home.is_empty() && !in_fn && !in_macro {
+            p.push(Problem::err(Some(&n.id), "This node is on the graph of a Function or Macro that isn't there."));
+            continue;
+        }
+        match def.kind.as_str() {
+            "fn.entry" | "fn.return" if !in_fn => p.push(Problem::err(Some(&n.id), format!("{} only goes in a Function's graph.", def.title))),
+            "macro.entry" | "macro.exit" if !in_macro => p.push(Problem::err(Some(&n.id), format!("{} only goes in a Macro's graph.", def.title))),
+            "fn.entry" | "macro.entry" => *entries.entry(home).or_default() += 1,
+            "macro.exit" => *exits.entry(home).or_default() += 1,
+            k if def.event && !home.is_empty() => p.push(Problem::err(Some(&n.id), format!("{} goes on the Event Graph, not in a Function or Macro.", reg.get(k).map_or("An event", |d| d.title.as_str())))),
+            k if in_fn && latent(k) => p.push(Problem::err(Some(&n.id), format!("{} waits, and a Function runs straight through: use it on the Event Graph or in a Macro.", def.title))),
+            _ => {}
+        }
         for k in n.params.keys() {
             if def.param(k).is_none() {
-                p.push(Problem::warn(Some(&n.id), format!("\u{201c}{}\u{201d} isn't a setting of {}; it's ignored.", k.chars().take(30).collect::<String>(), def.title)));
+                p.push(Problem::warn(Some(&n.id), format!("\u{201c}{}\u{201d} isn't a setting of {}; it's ignored.", short(k), def.title)));
             }
         }
         for prm in &def.params {
             let val = n.params.get(&prm.id);
+            let sval = val.and_then(Value::as_str);
             let res = match prm.kind.as_str() {
                 "var" => {
-                    let chosen = val.and_then(Value::as_str).and_then(|id| v.vars.get(id));
+                    let chosen = sval.and_then(|id| v.vars.get(id));
                     match chosen {
-                        None => Err(format!("Pick a variable for {} (add one under This mode).", def.title)),
-                        Some(x) if prm.var_type.as_deref().is_some_and(|t| t != x.ty) => Err(format!("{} needs a {} variable.", def.title, prm.var_type.as_deref().unwrap_or(""))),
+                        None => Err(format!("Pick a variable for {} (add one under My mode).", def.title)),
+                        Some(x) if prm.var_type.as_deref().is_some_and(|t| !(t == x.ty || (t == "struct" && x.ty.starts_with("struct:")) || (t == "array" && x.ty.starts_with("array<")))) => {
+                            Err(format!("{} needs a {} variable.", def.title, prm.var_type.as_deref().unwrap_or("")))
+                        }
+                        Some(x) if v.local_of.get(x.id.as_str()).is_some_and(|f| *f != home) => Err(format!("\u{201c}{}\u{201d} is a local variable of another Function.", short(&x.name))),
                         _ => Ok(()),
                     }
                 }
-                "func" => match val.and_then(Value::as_str).and_then(|id| v.defs.get(id).map(|d| d.kind.as_str())) {
+                "func" => match sval.and_then(|id| v.defs.get(id).map(|d| d.kind.as_str())) {
                     Some("func.define") => Ok(()),
                     _ => Err("Pick which Function to call (add a Function node first).".into()),
                 },
-                "timer" => match val.and_then(Value::as_str).and_then(|id| v.defs.get(id).map(|d| d.kind.as_str())) {
-                    Some("timer.delay" | "timer.repeat" | "timer.countdown") => Ok(()),
+                "fn" => match sval.and_then(|id| v.funcs.get(id)) {
+                    None => Err("Pick which Function to call.".into()),
+                    Some(f) if def.kind == "fn.call_pure" && !f.pure => Err(format!("\u{201c}{}\u{201d} isn't a pure Function: call it with flow.", short(&f.name))),
+                    Some(f) if def.kind != "fn.call_pure" && f.pure => Err(format!("\u{201c}{}\u{201d} is a pure Function: it has no flow pins.", short(&f.name))),
+                    _ => Ok(()),
+                },
+                "macro" => match sval.and_then(|id| v.macros.get(id)) {
+                    None => Err("Pick which Macro to use.".into()),
+                    _ => Ok(()),
+                },
+                "struct" => match sval.and_then(|id| v.structs.get(id)) {
+                    None => Err(format!("Pick a struct for {} (add one under My mode).", def.title)),
+                    _ => Ok(()),
+                },
+                "enum" => match sval.and_then(|id| v.enums.get(id)) {
+                    None => Err(format!("Pick an enum for {} (add one under My mode).", def.title)),
+                    _ => Ok(()),
+                },
+                "type" => match sval {
+                    Some(t) if item_type_ok(g, t, !def.kind.starts_with("map.")) => Ok(()),
+                    _ => Err(format!("{}: pick what kind of value it holds.", def.title)),
+                },
+                "field" => match v.field_of(&n.id) {
+                    None => Err(format!("Pick which field {} sets.", def.title)),
+                    _ => Ok(()),
+                },
+                "enumvalue" => {
+                    let count = v.enum_of(&n.id).map_or(0, |e| e.values.len());
+                    match param(n, def, &prm.id).and_then(Value::as_f64) {
+                        Some(x) if x.fract() == 0.0 && x >= 0.0 && (x as usize) < count => Ok(()),
+                        _ => Err(format!("Pick one of the enum's values for {}.", def.title)),
+                    }
+                }
+                "timer" => match sval.and_then(|id| v.defs.get(id).map(|d| d.kind.as_str())) {
+                    Some("timer.delay" | "timer.repeat" | "timer.countdown" | "timer.retrigger") => Ok(()),
                     _ => Err("Pick which timer to stop.".into()),
                 },
                 "varvalue" => match (val, v.var_of(&n.id)) {
-                    (Some(x), Some(var)) if !(x.is_string() && x.as_str() == Some("")) && !value_fits(&var.ty, x) => Err(format!("{} doesn't fit the variable \u{201c}{}\u{201d}.", prm.label, var.name)),
+                    (Some(x), Some(var)) if !(x.is_string() && x.as_str() == Some("")) && !default_fits(g, &var.ty, x) => Err(format!("{} doesn't fit the variable \u{201c}{}\u{201d}.", prm.label, short(&var.name))),
                     _ => Ok(()),
+                },
+                "cases" => match sval {
+                    Some(t) if valid_label(t, 120) && (def.kind != "flow.switch_num" || t.split(',').map(str::trim).filter(|c| !c.is_empty()).all(|c| c.parse::<f64>().is_ok_and(|x| x.is_finite() && x.abs() <= NUMBER_LIMIT))) => Ok(()),
+                    None => Ok(()),
+                    _ => Err(format!("{}: the cases are {} split by commas.", def.title, if def.kind == "flow.switch_num" { "numbers" } else { "words" })),
                 },
                 _ => val.map_or(Ok(()), |x| check_param(prm, x)),
             };
@@ -650,6 +1246,28 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
                 p.push(Problem::err(Some(&n.id), why).pin(&prm.id));
             }
         }
+        // a Macro can't be used inside itself
+        if def.kind == "macro.use" && v.param_str(&n.id, "macro") == Some(home) && in_macro {
+            p.push(Problem::err(Some(&n.id), "A Macro can't use itself."));
+        }
+    }
+    for f in &g.functions {
+        match entries.get(f.id.as_str()) {
+            Some(1) => {}
+            Some(_) => p.push(Problem::err(None, format!("The Function \u{201c}{}\u{201d} has more than one Function Entry.", short(&f.name)))),
+            None => p.push(Problem::err(None, format!("The Function \u{201c}{}\u{201d} needs its Function Entry node (open its tab).", short(&f.name)))),
+        }
+    }
+    for m in &g.macros {
+        if entries.get(m.id.as_str()) != Some(&1) {
+            p.push(Problem::err(None, format!("The Macro \u{201c}{}\u{201d} needs exactly one Macro Entry node.", short(&m.name))));
+        }
+        if exits.get(m.id.as_str()).copied().unwrap_or(0) > 1 || (!m.outputs.is_empty() && exits.get(m.id.as_str()).is_none()) {
+            p.push(Problem::err(None, format!("The Macro \u{201c}{}\u{201d} needs one Macro Exit node (for its outputs).", short(&m.name))));
+        }
+    }
+    if let Some(m) = find_macro_cycle(&v) {
+        p.push(Problem::err(None, format!("The Macro \u{201c}{}\u{201d} ends up using itself.", short(&m))));
     }
     let mut cids = HashSet::new();
     for c in &g.comments {
@@ -661,6 +1279,9 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         }
         if !valid_note(&c.text) {
             p.push(Problem::err(None, "A comment is too long (2000 characters at most) or uses a character that isn't allowed (* / \\ \" ^)."));
+        }
+        if c.graph.as_deref().is_some_and(|h| !gids.contains(h)) {
+            p.push(Problem::err(None, "A comment is on the graph of a Function or Macro that isn't there."));
         }
     }
 
@@ -675,12 +1296,16 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
             p.push(Problem::err(None, "A wire goes to a node that isn't there.").edge(&e.id));
             continue;
         };
-        if fd.output(&e.from.pin).is_none() {
-            p.push(Problem::err(Some(&e.from.node), format!("{} has no output \u{201c}{}\u{201d}.", fd.title, e.from.pin.chars().take(30).collect::<String>())).edge(&e.id));
+        if v.graph_of(&e.from.node) != v.graph_of(&e.to.node) {
+            p.push(Problem::err(Some(&e.to.node), "A wire can't go from one graph to another.").edge(&e.id));
             continue;
         }
-        let Some(tp) = td.input(&e.to.pin) else {
-            p.push(Problem::err(Some(&e.to.node), format!("{} has no input \u{201c}{}\u{201d}.", td.title, e.to.pin.chars().take(30).collect::<String>())).edge(&e.id));
+        if v.output(&e.from.node, &e.from.pin).is_none() {
+            p.push(Problem::err(Some(&e.from.node), format!("{} has no output \u{201c}{}\u{201d}.", fd.title, short(&e.from.pin))).edge(&e.id));
+            continue;
+        }
+        let Some(tp) = v.input(&e.to.node, &e.to.pin) else {
+            p.push(Problem::err(Some(&e.to.node), format!("{} has no input \u{201c}{}\u{201d}.", td.title, short(&e.to.pin))).edge(&e.id));
             continue;
         };
         if e.from.node == e.to.node {
@@ -688,21 +1313,21 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
             continue;
         }
         let from_ty = v.out_type(&e.from.node, &e.from.pin).unwrap_or_else(|| "any".into());
-        let to_ty = if td.reroute { "any".to_string() } else { v.in_type(&e.to.node, &e.to.pin).unwrap_or_else(|| "any".into()) };
+        let to_ty = if td.reroute { "any".to_string() } else { tp.ty.clone() };
         if !compatible(&from_ty, &to_ty) {
-            p.push(Problem::err(Some(&e.to.node), format!("{} can't go into {} (a {} wire into a {} pin).", type_label(&from_ty), pin_label(td, tp), type_label(&from_ty), type_label(&to_ty))).pin(&tp.id).edge(&e.id));
+            let (fl, tl) = (v.type_label(&from_ty), v.type_label(&to_ty));
+            p.push(Problem::err(Some(&e.to.node), format!("{fl} can't go into {} (a {fl} wire into a {tl} pin).", pin_label(td, tp))).pin(&tp.id).edge(&e.id));
         }
     }
     // one wire per flow output and per data input
     for ((node, pin), es) in &v.out_edges {
         if es.len() > 1 && v.out_type(node, pin).as_deref() == Some("exec") {
-            p.push(Problem::err(Some(node), "A flow output can only go to one place. Add the steps one after another instead.").pin(pin));
+            p.push(Problem::err(Some(node), "A flow output can only go to one place. Add the steps one after another instead (or a Sequence).").pin(pin));
         }
     }
     for ((node, pin), es) in &v.in_edges {
         let Some(def) = v.defs.get(node.as_str()) else { continue };
-        // (a reroute takes one wire in, whatever it carries)
-        let data_in = def.input(pin).is_some_and(|ip| ip.ty != "exec" && ip.ty != "any") || def.input(pin).is_some_and(|ip| ip.ty == "any" && !def.reroute);
+        let data_in = v.input(node, pin).is_some_and(|ip| ip.ty != "exec");
         if es.len() > 1 && (data_in || def.reroute) {
             p.push(Problem::err(Some(node), "Only one wire can go into this pin.").pin(pin));
         }
@@ -717,7 +1342,7 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
             }
             continue;
         }
-        for ip in &def.inputs {
+        for ip in v.inputs(&n.id) {
             if ip.ty == "exec" {
                 continue;
             }
@@ -726,7 +1351,16 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
                 p.push(Problem::err(Some(&n.id), format!("{} needs something wired into {}.", def.title, pin_label(def, ip))).pin(&ip.id));
             }
         }
-        if let (Some(var), Some(_)) = (v.var_of(&n.id), def.input("player")) {
+        // Set Variable of a type without a written value: the value has to be wired
+        if def.kind == "var.set" {
+            if let Some(var) = v.var_of(&n.id) {
+                let literal = matches!(var.ty.as_str(), "number" | "bool" | "text") || var.ty.starts_with("enum:");
+                if !literal && v.ins(&n.id, "value").is_empty() {
+                    p.push(Problem::err(Some(&n.id), format!("Wire in the value to put in \u{201c}{}\u{201d}.", short(&var.name))).pin("value"));
+                }
+            }
+        }
+        if let (Some(var), Some(_)) = (v.var_of(&n.id), v.input(&n.id, "player")) {
             let wired = !v.ins(&n.id, "player").is_empty();
             let team_wired = !v.ins(&n.id, "team").is_empty();
             if var.scope == "player" && !wired {
@@ -742,7 +1376,7 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         }
     }
 
-    // functions: names are unique, and a function can't end up calling itself
+    // (old) Function nodes: names are unique; no Function can end up calling itself
     let mut fnames = HashSet::new();
     for n in g.nodes.iter().filter(|n| n.kind == "func.define") {
         let name = n.params.get("name").and_then(Value::as_str).unwrap_or("my_function");
@@ -755,11 +1389,11 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
     }
 
     // flow: loops (flow and data), nodes nothing reaches, values used outside their event
-    if !g.nodes.iter().any(|n| v.defs.get(n.id.as_str()).is_some_and(|d| d.event)) && !g.nodes.is_empty() {
+    if !g.nodes.iter().any(|n| v.defs.get(n.id.as_str()).is_some_and(|d| d.event && d.kind != "fn.entry" && d.kind != "macro.entry")) && !g.nodes.is_empty() {
         p.push(Problem::warn(None, "Nothing starts this graph yet: add an event, like Round Started."));
     }
     if let Some(node) = find_cycle(&v) {
-        p.push(Problem::err(Some(node), "The flow loops back to here. Loops aren't possible yet: the flow has to end (a Repeat does the same job)."));
+        p.push(Problem::err(Some(node), "The flow loops back to here. Wires can't go round in a circle: use a For Loop, While Loop or Repeat."));
     }
     if let Some(node) = find_data_cycle(&v) {
         p.push(Problem::err(Some(node), "This value depends on itself."));
@@ -767,10 +1401,10 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
     let reached = v.reached_from();
     for n in &g.nodes {
         let Some(def) = v.defs.get(n.id.as_str()) else { continue };
-        if def.event || def.reroute || def.pure {
+        if def.event || def.reroute || v.pure(&n.id) {
             continue;
         }
-        if def.has_exec_in() && !reached.contains_key(n.id.as_str()) {
+        if v.has_exec_in(&n.id) && !reached.contains_key(n.id.as_str()) {
             p.push(Problem::warn(Some(&n.id), "Nothing runs this node: wire an event's flow into it."));
         }
         let Some(events) = reached.get(n.id.as_str()) else { continue };
@@ -778,10 +1412,10 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         if def.kind.starts_with("dmg.") && events.iter().any(|(ev, timed)| *timed || v.defs.get(ev).map(|d| d.kind.as_str()) != Some("event.player_about_hurt")) {
             p.push(Problem::err(Some(&n.id), format!("{} only works in a Player About To Be Hurt flow, before any Delay, Repeat or Countdown.", def.title)));
         }
-        for ip in def.inputs.iter().filter(|i| i.ty != "exec") {
+        for ip in v.inputs(&n.id).iter().filter(|i| i.ty != "exec") {
             for (src, spin) in v.flow_values(&n.id, &ip.id) {
                 let Some(sdef) = v.defs.get(src) else { continue };
-                let label = sdef.output(spin).map(|o| o.label.clone()).unwrap_or_default();
+                let label = v.output(src, spin).map(|o| o.label.clone()).unwrap_or_default();
                 if !sdef.event {
                     // a loop's or a pick's value, or what an action made: only after it has run
                     if !v.runs_after(src, &n.id) {
@@ -791,8 +1425,8 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
                 }
                 if events.len() != 1 || !events.contains_key(src) {
                     p.push(Problem::err(Some(&n.id), format!("{label} is only known while {} runs, but this node also runs from another event.", sdef.title)).pin(&ip.id));
-                } else if events[src] && sdef.output(spin).is_some_and(|o| o.ty == "text") {
-                    p.push(Problem::err(Some(&n.id), format!("{label} (text) doesn't last through a Delay, Repeat or Countdown: keep it in a variable first.")).pin(&ip.id));
+                } else if events[src] && v.output(src, spin).is_some_and(|o| short_lived(&o.ty)) {
+                    p.push(Problem::err(Some(&n.id), format!("{label} ({}) doesn't last through a Delay, Repeat or Countdown: keep it in a variable first.", v.type_label(&v.output(src, spin).map(|o| o.ty.clone()).unwrap_or_default()))).pin(&ip.id));
                 }
             }
         }
@@ -810,8 +1444,8 @@ fn find_cycle<'a>(v: &View<'a>) -> Option<&'a str> {
             _ => {}
         }
         state.insert(n, 1);
-        for p in v.exec_outs(n) {
-            if let Some((t, _)) = v.exec_target(n, p) {
+        for (t, on) in v.next_nodes(n) {
+            if on {
                 if let Some(hit) = visit(v, t, state) {
                     return Some(hit);
                 }
@@ -829,40 +1463,71 @@ fn find_cycle<'a>(v: &View<'a>) -> Option<&'a str> {
     None
 }
 
-/// A Function whose flow calls (through other Functions) back into itself.
+/// A Function that calls (through other Functions) back into itself: old Function nodes (what
+/// their flow reaches) and Functions with their own graph (every node on it).
 fn find_call_cycle<'a>(v: &View<'a>) -> Option<&'a str> {
-    // the Functions each Function's flow calls
-    let calls_from = |def_id: &'a str| -> Vec<&'a str> {
-        let mut out = Vec::new();
-        let mut stack = vec![def_id];
-        let mut seen = HashSet::new();
-        while let Some(cur) = stack.pop() {
-            if !seen.insert(cur) {
-                continue;
-            }
-            if v.defs.get(cur).is_some_and(|d| d.kind == "func.call") {
-                if let Some(target) = v.nodes[cur].params.get("func").and_then(Value::as_str).and_then(|t| v.nodes.get_key_value(t).map(|(k, _)| *k)) {
-                    out.push(target);
-                }
-            }
-            for p in v.exec_outs(cur) {
-                if let Some((t, _)) = v.exec_target(cur, p) {
-                    stack.push(t);
-                }
-            }
+    // a call node -> the function it runs (an old Function node's id, or a Function's id)
+    let target = |n: &'a str| -> Option<&'a str> {
+        let node = v.nodes.get(n)?;
+        match node.kind.as_str() {
+            "func.call" => node.params.get("func").and_then(Value::as_str).and_then(|t| v.nodes.get_key_value(t).map(|(k, _)| *k)),
+            "fn.call" | "fn.call_pure" | "timer.by_function" => node.params.get("func").and_then(Value::as_str).and_then(|t| v.funcs.get_key_value(t).map(|(k, _)| *k)),
+            _ => None,
         }
-        out
     };
-    let defs: Vec<&'a str> = v.g.nodes.iter().filter(|n| n.kind == "func.define").map(|n| n.id.as_str()).collect();
-    for start in &defs {
+    let calls_from = |f: &'a str| -> Vec<&'a str> {
+        let body: Vec<&'a str> = if v.funcs.contains_key(f) {
+            v.g.nodes.iter().filter(|n| n.graph.as_deref() == Some(f)).map(|n| n.id.as_str()).collect()
+        } else {
+            let mut out = Vec::new();
+            let mut stack = vec![f];
+            let mut seen = HashSet::new();
+            while let Some(cur) = stack.pop() {
+                if !seen.insert(cur) {
+                    continue;
+                }
+                out.push(cur);
+                for p in v.exec_outs(cur) {
+                    if let Some((t, _)) = v.exec_target(cur, &p) {
+                        stack.push(t);
+                    }
+                }
+            }
+            out
+        };
+        body.into_iter().filter_map(target).collect()
+    };
+    let starts: Vec<&'a str> = v.g.nodes.iter().filter(|n| n.kind == "func.define").map(|n| n.id.as_str()).chain(v.g.functions.iter().map(|f| f.id.as_str())).collect();
+    for start in &starts {
         let mut stack = calls_from(start);
         let mut seen = HashSet::new();
         while let Some(f) = stack.pop() {
             if f == *start {
-                return Some(start);
+                // point at a node: the old Function node, or the new Function's entry
+                return v.nodes.get_key_value(f).map(|(k, _)| *k).or_else(|| v.g.nodes.iter().find(|n| n.kind == "fn.entry" && n.graph.as_deref() == Some(f)).map(|n| n.id.as_str())).or(Some(start));
             }
             if seen.insert(f) {
                 stack.extend(calls_from(f));
+            }
+        }
+    }
+    None
+}
+
+/// A Macro that uses (through other Macros) itself: its name.
+fn find_macro_cycle(v: &View) -> Option<String> {
+    let uses = |m: &str| -> Vec<String> {
+        v.g.nodes.iter().filter(|n| n.graph.as_deref() == Some(m) && n.kind == "macro.use").filter_map(|n| n.params.get("macro").and_then(Value::as_str).map(str::to_string)).collect()
+    };
+    for m in &v.g.macros {
+        let mut stack = uses(&m.id);
+        let mut seen = HashSet::new();
+        while let Some(x) = stack.pop() {
+            if x == m.id {
+                return Some(m.name.clone());
+            }
+            if seen.insert(x.clone()) {
+                stack.extend(uses(&x));
             }
         }
     }
@@ -878,13 +1543,11 @@ fn find_data_cycle<'a>(v: &View<'a>) -> Option<&'a str> {
             _ => {}
         }
         state.insert(n, 1);
-        if let Some(def) = v.defs.get(n) {
-            for ip in def.inputs.iter().filter(|i| i.ty != "exec") {
-                if let Some((src, _)) = v.data_source(n, &ip.id) {
-                    if v.defs.get(src).is_some_and(|d| d.pure) {
-                        if let Some(hit) = visit(v, src, state) {
-                            return Some(hit);
-                        }
+        for ip in v.inputs(n).iter().filter(|i| i.ty != "exec") {
+            if let Some((src, _)) = v.data_source(n, &ip.id) {
+                if v.pure(src) {
+                    if let Some(hit) = visit(v, src, state) {
+                        return Some(hit);
                     }
                 }
             }
@@ -893,7 +1556,7 @@ fn find_data_cycle<'a>(v: &View<'a>) -> Option<&'a str> {
         None
     }
     let mut state: HashMap<&str, u8> = HashMap::new();
-    for n in v.g.nodes.iter().filter(|n| v.defs.get(n.id.as_str()).is_some_and(|d| d.pure)) {
+    for n in v.g.nodes.iter().filter(|n| v.pure(&n.id)) {
         if let Some(hit) = visit(v, n.id.as_str(), &mut state) {
             return Some(hit);
         }
@@ -910,6 +1573,8 @@ fn type_label(ty: &str) -> &str {
         "number" => "Number",
         "bool" => "Yes/No",
         "text" => "Text",
+        "vector" => "Vector",
+        "timer" => "Timer",
         "any" => "Anything",
         _ => ty,
     }
@@ -954,7 +1619,7 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
             Some(s) if valid_keys(s, def.max.unwrap_or(120.0) as usize) => Ok(()),
             _ => Err(format!("{} are words like radius=160 (letters, digits, _ - . = : and spaces; no quotes).", def.label)),
         },
-        "var" | "varvalue" | "func" | "timer" => Ok(()),
+        "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases" => Ok(()),
         _ => Err(format!("{} has a setting this app doesn't know.", def.label)),
     }
 }
@@ -981,12 +1646,15 @@ mod tests {
         p.iter().map(|p| format!("{}:{}:{}", p.level, p.node.clone().unwrap_or_default(), p.message)).collect()
     }
 
-    const TYPES: [&str; 9] = ["exec", "player", "entity", "team", "number", "bool", "text", "any", "var"];
+    const TYPES: [&str; 18] = ["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>"];
+    /// Nodes whose pins come from the graph (a Macro's, a Function's): the registry only has
+    /// their fixed part.
+    const DYNAMIC: [&str; 3] = ["macro.use", "macro.exit", "macro.entry"];
 
     #[test]
     fn registry_is_complete() {
         let r = registry();
-        assert_eq!(r.version, 3);
+        assert_eq!(r.version, 4);
         for kind in ["event.round_started", "event.player_killed", "cond.is_team", "player.give_weapon", "score.end_round", "msg.broadcast", "flow.reroute", "timer.delay", "var.set", "comp.on_capture", "creature.spawn"] {
             assert!(r.get(kind).is_some(), "{kind}");
         }
@@ -994,14 +1662,16 @@ mod tests {
         for n in &r.nodes {
             assert!(seen.insert(n.kind.as_str()), "{} twice", n.kind);
             assert!(!(n.pure && n.event), "{}", n.kind);
-            assert_eq!(n.pure, !n.event && !n.reroute && !n.has_exec_in(), "{}: pure means no flow in", n.kind);
+            if !DYNAMIC.contains(&n.kind.as_str()) {
+                assert_eq!(n.pure, !n.event && !n.reroute && !n.has_exec_in(), "{}: pure means no flow in", n.kind);
+            }
             for prm in &n.params {
-                if !["var", "varvalue", "func", "timer"].contains(&prm.kind.as_str()) {
+                if !["var", "varvalue", "func", "timer", "fn", "macro", "struct", "enum", "type", "field", "enumvalue"].contains(&prm.kind.as_str()) {
                     assert!(check_param(prm, &prm.default).is_ok(), "{} {} default", n.kind, prm.id);
                 }
             }
             for pin in n.inputs.iter().chain(&n.outputs) {
-                assert!(TYPES.contains(&pin.ty.as_str()), "{} {}", n.kind, pin.id);
+                assert!(TYPES.contains(&pin.ty.as_str()) || pin.ty == "array<player>" || pin.ty == "array<$K>", "{} {} {}", n.kind, pin.id, pin.ty);
                 if let Some(pp) = &pin.param {
                     assert!(n.param(pp).is_some(), "{} {}", n.kind, pin.id);
                 }
@@ -1014,9 +1684,14 @@ mod tests {
         assert!(parse("nope").is_err());
         assert!(parse(r#"{"schema":"other","version":1}"#).unwrap_err().contains("isn't a Game Mode Studio graph"));
         assert!(parse(r#"{"schema":"loner-strike/graph","version":9,"mode":{"id":"a","name":"b"}}"#).unwrap_err().contains("newer"));
-        // a version 1 file opens as version 2
+        // version 1 and 2 files open as version 3
         let g = parse(r#"{"schema":"loner-strike/graph","version":1,"mode":{"id":"abc","name":"ABC"}}"#).unwrap();
-        assert!(g.nodes.is_empty() && g.version == 2 && g.variables.is_empty());
+        assert!(g.nodes.is_empty() && g.version == 3 && g.variables.is_empty() && g.functions.is_empty());
+        let g = parse(r#"{"schema":"loner-strike/graph","version":2,"mode":{"id":"abc","name":"ABC"},"variables":[]}"#).unwrap();
+        assert!(g.version == 3 && g.enums.is_empty() && g.structs.is_empty() && g.macros.is_empty());
+        // and nothing new is written for them
+        let back = serde_json::to_string(&g).unwrap();
+        assert!(!back.contains("functions") && !back.contains("enums") && !back.contains("\"graph\""), "{back}");
         let t = include_str!("../../../../ui/src/views/tools/studio/templates/team-dm.graph.json");
         let g = parse(t).unwrap();
         let back = parse(&serde_json::to_string(&g).unwrap()).unwrap();
@@ -1193,6 +1868,113 @@ mod tests {
         // the Value pin takes the variable's type
         let v = View::new(&g);
         assert_eq!(v.in_type("s", "value").as_deref(), Some("number"));
+    }
+
+    fn v3(extra: Value) -> Graph {
+        let mut base = json!({"schema": SCHEMA, "version": 3, "mode": {"id": "testmode", "name": "Test"}});
+        for (k, v) in extra.as_object().unwrap() {
+            base[k] = v.clone();
+        }
+        from_value(base).unwrap()
+    }
+
+    #[test]
+    fn functions_and_their_graphs() {
+        let fns = json!([{"id": "f1", "name": "Give", "inputs": [{"id": "p", "name": "Who", "type": "player"}], "outputs": [{"id": "n", "name": "N", "type": "number"}],
+                          "locals": [{"id": "l1", "name": "Count", "type": "number", "scope": "mode"}]},
+                         {"id": "f2", "name": "Half", "pure": true, "inputs": [{"id": "x", "name": "X", "type": "number"}], "outputs": [{"id": "y", "name": "Y", "type": "number"}]}]);
+        // a clean one: entry, a local, return; called with flow and as pure
+        let g = v3(json!({"functions": fns, "nodes": [
+            {"id": "r", "type": "event.player_spawned"}, {"id": "c", "type": "fn.call", "params": {"func": "f1"}}, {"id": "h", "type": "fn.call_pure", "params": {"func": "f2"}},
+            {"id": "s", "type": "player.set_health"},
+            {"id": "e", "type": "fn.entry", "graph": "f1"}, {"id": "gl", "type": "var.get", "graph": "f1", "params": {"var": "l1"}}, {"id": "ret", "type": "fn.return", "graph": "f1"},
+            {"id": "e2", "type": "fn.entry", "graph": "f2"}, {"id": "m", "type": "math.op", "graph": "f2", "params": {"op": "div", "b": 2}}, {"id": "ret2", "type": "fn.return", "graph": "f2"}],
+            "edges": [e("w1","r","then","c","exec"), e("w2","r","player","c","p"), e("w3","c","then","s","exec"), e("w4","r","player","s","player"), e("w5","c","n","h","x"), e("w6","h","y","s","amount"),
+                      e("w7","e","then","ret","exec"), e("w8","gl","out","ret","n"), e("w9","e2","then","ret2","exec"), e("w10","e2","x","m","a"), e("w11","m","out","ret2","y")]}));
+        assert!(validate(&g).is_empty(), "{:?}", msgs(&validate(&g)));
+        let v = View::new(&g);
+        assert_eq!(v.out_type("c", "n").as_deref(), Some("number"));
+        assert!(v.pure("h") && !v.pure("c"));
+        assert_eq!(v.local_of.get("l1"), Some(&"f1"));
+        // what's wrong: no entry, a Delay inside, a local used outside, a pure call to a flow Function, a wire across graphs
+        let g = v3(json!({"functions": fns, "nodes": [
+            {"id": "r", "type": "event.round_started"}, {"id": "gl", "type": "var.get", "params": {"var": "l1"}}, {"id": "h", "type": "fn.call_pure", "params": {"func": "f1"}},
+            {"id": "e", "type": "fn.entry", "graph": "f1"}, {"id": "d", "type": "timer.delay", "graph": "f1"}, {"id": "k", "type": "event.round_started", "graph": "f1"}],
+            "edges": [e("w1","e","then","d","exec"), e("w2","r","then","d","exec")]}));
+        let m = msgs(&validate(&g));
+        for want in ["Half\u{201d} needs its Function Entry", "Delay waits", "local variable of another Function", "isn't a pure Function", "from one graph to another", "goes on the Event Graph"] {
+            assert!(m.iter().any(|x| x.contains(want)), "{want}: {m:?}");
+        }
+    }
+
+    #[test]
+    fn functions_cant_call_themselves() {
+        let g = v3(json!({"functions": [{"id": "f1", "name": "Loop", "inputs": [], "outputs": []}], "nodes": [
+            {"id": "e", "type": "fn.entry", "graph": "f1"}, {"id": "c", "type": "fn.call", "graph": "f1", "params": {"func": "f1"}}],
+            "edges": [e("w1","e","then","c","exec")]}));
+        assert!(msgs(&validate(&g)).iter().any(|m| m.contains("ends up calling itself")));
+    }
+
+    #[test]
+    fn container_types() {
+        let g = v3(json!({"structs": [{"id": "s1", "name": "Kit", "fields": [{"id": "a", "name": "Ammo", "type": "number"}, {"id": "t", "name": "Tag", "type": "text"}]}],
+            "enums": [{"id": "e1", "name": "Class", "values": ["A", "B"]}],
+            "variables": [
+                {"id": "nums", "name": "Nums", "type": "array<number>", "scope": "mode"},
+                {"id": "names", "name": "Names", "type": "array<text>", "scope": "mode"},
+                {"id": "kits", "name": "Kits", "type": "array<struct:s1>", "scope": "mode"},
+                {"id": "badscope", "name": "Bad", "type": "map<text,number>", "scope": "player"},
+                {"id": "badtype", "name": "Bad2", "type": "array<array<number>>", "scope": "mode"},
+                {"id": "badmap", "name": "Bad3", "type": "map<struct:s1,number>", "scope": "mode"},
+                {"id": "cls", "name": "Cls", "type": "enum:e1", "scope": "mode", "default": 5}],
+            "nodes": [{"id": "r", "type": "event.round_started"}, {"id": "gn", "type": "var.get", "params": {"var": "nums"}},
+                      {"id": "add", "type": "array.add", "params": {"of": "text"}}, {"id": "len", "type": "array.length", "params": {"of": "number"}},
+                      {"id": "sf", "type": "struct.set_field", "params": {"var": "nums", "field": "a"}}],
+            "edges": [e("w1","r","then","add","exec"), e("w2","gn","out","add","array"), e("w3","gn","out","len","array"), e("w4","add","then","sf","exec")]}));
+        let m = msgs(&validate(&g));
+        assert!(m.iter().any(|x| x.contains("Array of Number can't go into Array")), "{m:?}");
+        assert!(!m.iter().any(|x| x.starts_with("error:len:")), "{m:?}");
+        assert!(m.iter().any(|x| x.contains("arrays, maps and structs are kept for the whole mode")), "{m:?}");
+        assert!(m.iter().filter(|x| x.contains("type or scope this app doesn't know")).count() == 2, "{m:?}");
+        assert!(m.iter().any(|x| x.contains("\u{201c}Cls\u{201d} starts with a value")), "{m:?}");
+        assert!(m.iter().any(|x| x.starts_with("error:sf:") && x.contains("needs a struct variable")), "{m:?}");
+        assert!(compatible("array<any>", "array<number>") && !compatible("array<number>", "array<text>") && compatible("player", "entity") && !compatible("array<player>", "array<entity>"));
+    }
+
+    #[test]
+    fn macros_expand_in_place() {
+        let g = v3(json!({"macros": [{"id": "m1", "name": "Twice", "inputs": [{"id": "go", "name": "In", "type": "exec"}, {"id": "v", "name": "V", "type": "number"}],
+                                      "outputs": [{"id": "done", "name": "Out", "type": "exec"}, {"id": "r", "name": "R", "type": "number"}]}],
+            "nodes": [{"id": "r", "type": "event.player_spawned"}, {"id": "u", "type": "macro.use", "params": {"macro": "m1"}}, {"id": "n", "type": "math.number", "params": {"value": 3}},
+                      {"id": "s", "type": "player.set_health"},
+                      {"id": "me", "type": "macro.entry", "graph": "m1"}, {"id": "mm", "type": "math.op", "graph": "m1", "params": {"op": "mul", "b": 2}},
+                      {"id": "mp", "type": "debug.print", "graph": "m1"}, {"id": "mx", "type": "macro.exit", "graph": "m1"}],
+            "edges": [e("w1","r","then","u","go"), e("w2","n","out","u","v"), e("w3","u","done","s","exec"), e("w4","u","r","s","amount"), e("w5","r","player","s","player"),
+                      e("w6","me","go","mp","exec"), e("w7","me","v","mm","a"), e("w8","mp","then","mx","done"), e("w9","mm","out","mx","r")]}));
+        assert!(validate(&g).is_empty(), "{:?}", msgs(&validate(&g)));
+        let x = super::super::expand::expand(&g);
+        let ids: Vec<&str> = x.graph.nodes.iter().map(|n| n.id.as_str()).collect();
+        assert!(!ids.contains(&"u") && !ids.contains(&"me") && !ids.contains(&"mp") && ids.contains(&"x1_mp") && ids.contains(&"x1_mm"), "{ids:?}");
+        assert_eq!(x.origin.get("x1_mp").map(String::as_str), Some("u"));
+        let v = View::new(&x.graph);
+        assert_eq!(v.exec_target("r", "then"), Some(("x1_mp", "exec")));
+        assert_eq!(v.exec_target("x1_mp", "then"), Some(("s", "exec")));
+        assert_eq!(v.data_source("x1_mm", "a"), Some(("n", "out")));
+        assert_eq!(v.data_source("s", "amount"), Some(("x1_mm", "out")));
+        assert!(validate(&x.graph).iter().all(|p| p.level != "error"), "{:?}", msgs(&validate(&x.graph)));
+        // a Macro that uses itself
+        let g = v3(json!({"macros": [{"id": "m1", "name": "Self", "inputs": [], "outputs": []}],
+            "nodes": [{"id": "me", "type": "macro.entry", "graph": "m1"}, {"id": "u", "type": "macro.use", "graph": "m1", "params": {"macro": "m1"}}], "edges": []}));
+        assert!(msgs(&validate(&g)).iter().any(|m| m.contains("can't use itself")));
+    }
+
+    #[test]
+    fn loops_with_break_and_gates() {
+        // a body wired back into Break, a Gate opened from later in its own flow: not a flow loop
+        let g = v3(json!({"nodes": [{"id": "r", "type": "event.round_started"}, {"id": "l", "type": "flow.for_loop_break", "params": {"last": 3}},
+                      {"id": "b", "type": "flow.branch"}, {"id": "g", "type": "flow.gate"}, {"id": "p", "type": "debug.print"}],
+            "edges": [e("w1","r","then","l","exec"), e("w2","l","body","b","exec"), e("w3","b","true","l","break"), e("w4","l","then","g","exec"), e("w5","g","then","p","exec"), e("w6","p","then","g","open")]}));
+        assert!(validate(&g).is_empty(), "{:?}", msgs(&validate(&g)));
     }
 
     #[test]

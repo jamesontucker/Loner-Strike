@@ -4,16 +4,18 @@
 import { memo, useState } from "react";
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
 import { useStudio } from "./store";
-import { nodeDef, PIN_TYPES, type NodeDef, type PinDef } from "./registry";
-import { inType, outType, resizeComment, setCommentText, toggleBreakpoint } from "./graphOps";
+import { container, nodeDef, typeColor, type NodeDef, type PinDef } from "./registry";
+import { outType, resizeComment, setCommentText, toggleBreakpoint } from "./graphOps";
+import { allVariables, nodeTitle, pinsOf, typeLabel } from "./pins";
+import { showValue } from "./Inspector";
 import type { GNode, GVariable, Graph } from "./schema";
 
-const CAT_CLASS: Record<string, string> = { Events: "ev", Conditions: "cond", Numbers: "num", Variables: "var", Timers: "timer", Players: "player", Messages: "msg", Scoring: "score", Components: "comp", Creatures: "creature", Flow: "flow" };
+const CAT_CLASS: Record<string, string> = { Events: "ev", Conditions: "cond", Numbers: "num", Text: "num", Variables: "var", Timers: "timer", Players: "player", Messages: "msg", Scoring: "score", Components: "comp", Creatures: "creature", Flow: "flow", Arrays: "var", Maps: "var", Structs: "var", Enums: "var", Vectors: "num" };
 
 /** How a node is drawn, as in Blueprints: events red, values (pure) green, functions purple,
  *  flow control grey, actions blue. */
 export function kindOf(def: NodeDef): "event" | "pure" | "func" | "flow" | "action" {
-  if (def.type.startsWith("func.")) return "func";
+  if (def.type.startsWith("func.") || def.type.startsWith("fn.") || def.type.startsWith("macro.")) return "func";
   if (def.event) return "event";
   if (def.pure) return "pure";
   if (["Flow", "Conditions", "Timers"].includes(def.category)) return "flow";
@@ -21,11 +23,20 @@ export function kindOf(def: NodeDef): "event" | "pure" | "func" | "flow" | "acti
 }
 
 /** One line saying what a node is set to ("AK-47, 90 bullets"). */
-export function paramSummary(def: NodeDef, n: GNode, wired: (pin: string) => boolean, vars: GVariable[] = []): string {
+export function paramSummary(def: NodeDef, n: GNode, wired: (pin: string) => boolean, vars: GVariable[] = [], g: Graph | null = null): string {
   return def.params
     .filter((p) => !def.inputs.some((i) => i.param === p.id && wired(i.id)))
+    // (what the title already says)
+    .filter((p) => !["fn", "macro", "struct", "enum", "enumvalue"].includes(p.kind) && !(p.kind === "var" && (n.type === "var.get" || n.type === "var.set")))
     .map((p) => {
       const v = n.params[p.id] ?? p.default;
+      if (p.kind === "type") return typeLabel(g, String(v));
+      if (p.kind === "cases") return "";
+      if (p.kind === "field") {
+        const sv = vars.find((x) => x.id === n.params.var);
+        const st = g?.structs?.find((x) => `struct:${x.id}` === sv?.type);
+        return `.${st?.fields.find((f) => f.id === v)?.name ?? "?"}`;
+      }
       if (p.kind === "choice") return p.choices?.find(([k]) => k === v)?.[1] ?? String(v);
       if (p.kind === "number") return `${p.label}: ${v}`;
       if (p.kind === "bool") return `${p.label}: ${v ? "yes" : "no"}`;
@@ -39,15 +50,16 @@ export function paramSummary(def: NodeDef, n: GNode, wired: (pin: string) => boo
     .join(" · ");
 }
 
-function Pin({ pin, side, color, wired, problem }: { pin: PinDef; side: "in" | "out"; color: string; wired: boolean; problem?: string }) {
+function Pin({ pin, side, color, wired, problem, watch }: { pin: PinDef; side: "in" | "out"; color: string; wired: boolean; problem?: string; watch?: string }) {
   const exec = pin.type === "exec";
+  const shape = container(pin.type)?.kind;
   return (
-    <div className={`st-pin st-pin-${side}${problem ? " bad" : ""}`} title={problem}>
+    <div className={`st-pin st-pin-${side}${problem ? " bad" : ""}${watch ? " watched" : ""}`} title={problem ?? watch}>
       <Handle
         type={side === "in" ? "target" : "source"}
         position={side === "in" ? Position.Left : Position.Right}
         id={pin.id}
-        className={`st-handle ${exec ? "st-handle-exec" : "st-handle-data"}${wired ? " wired" : ""}`}
+        className={`st-handle ${exec ? "st-handle-exec" : "st-handle-data"}${shape ? ` st-handle-${shape}` : ""}${wired ? " wired" : ""}`}
         style={exec ? undefined : { borderColor: color, background: wired ? color : undefined }}
       />
       {pin.label && <span className="st-pin-label">{pin.label}</span>}
@@ -63,6 +75,7 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
   const paused = useStudio((s) => s.debug.paused?.node === id);
   const playing = useStudio((s) => !!s.playing);
   const bpsOff = useStudio((s) => s.bpsOff);
+  const runs = useStudio((s) => s.debug.runs);
   const edit = useStudio((s) => s.edit);
   if (!n || !graph) return null;
   const def = nodeDef(n.type);
@@ -72,7 +85,23 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
   const wiredIn = (pin: string) => graph.edges.some((e) => e.to.node === id && e.to.pin === pin);
   const wiredOut = (pin: string) => graph.edges.some((e) => e.from.node === id && e.from.pin === pin);
   const pinProblem = (pin: string) => mine.find((p) => p.pin === pin)?.message;
-  const summary = paramSummary(def, n, wiredIn, graph.variables);
+  const summary = paramSummary(def, n, wiredIn, allVariables(graph), graph);
+  const pins = pinsOf(graph, n);
+  // watch values: what the game last saw on a pin (the node's inputs as it ran; an output as the
+  // nodes it feeds saw it)
+  const watchIn = (p: PinDef) => {
+    const v = runs[id]?.inputs?.[p.label];
+    return v === undefined ? undefined : `${p.label || "Value"}: ${showValue(v)}`;
+  };
+  const watchOut = (p: PinDef) => {
+    for (const e of graph.edges.filter((x) => x.from.node === id && x.from.pin === p.id)) {
+      const to = graph.nodes.find((x) => x.id === e.to.node);
+      const label = to && pinsOf(graph, to).inputs.find((q) => q.id === e.to.pin)?.label;
+      const v = label !== undefined ? runs[e.to.node]?.inputs?.[label] : undefined;
+      if (v !== undefined) return `${p.label || "Value"}: ${showValue(v)}`;
+    }
+    return undefined;
+  };
   const failed = run?.result === "false";
   const cls = [
     "st-node",
@@ -83,7 +112,7 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
     paused ? "paused" : "",
     run?.error ? "ran-error" : failed ? "ran-false" : "",
   ].join(" ");
-  const rows = Math.max(def.inputs.length, def.outputs.length);
+  const rows = Math.max(pins.inputs.length, pins.outputs.length);
   return (
     <div className={cls}>
       {run && playing && <div key={run.at} className="st-flash" />}
@@ -98,7 +127,7 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
             edit((g) => toggleBreakpoint(g, id));
           }}
         />
-        <span className="st-node-title">{def.title}</span>
+        <span className="st-node-title">{nodeTitle(graph, n)}</span>
         {mine.length > 0 && (
           <span className={`st-node-badge ${errors.length ? "err" : "warn"}`} title={mine.map((p) => p.message).join("\n")}>
             {errors.length ? "!" : "?"}
@@ -107,12 +136,12 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
       </div>
       <div className="st-node-pins">
         {Array.from({ length: rows }, (_, i) => {
-          const ip = def.inputs[i];
-          const op = def.outputs[i];
+          const ip = pins.inputs[i];
+          const op = pins.outputs[i];
           return (
             <div className="st-pin-row" key={i}>
-              {ip ? <Pin pin={ip} side="in" color={PIN_TYPES[inType(graph, { node: id, pin: ip.id }) ?? ip.type].color} wired={wiredIn(ip.id)} problem={pinProblem(ip.id)} /> : <span />}
-              {op ? <Pin pin={op} side="out" color={PIN_TYPES[outType(graph, { node: id, pin: op.id }) ?? op.type].color} wired={wiredOut(op.id)} /> : <span />}
+              {ip ? <Pin pin={ip} side="in" color={typeColor(ip.type)} wired={wiredIn(ip.id)} problem={pinProblem(ip.id)} watch={watchIn(ip)} /> : <span />}
+              {op ? <Pin pin={op} side="out" color={typeColor(op.type)} wired={wiredOut(op.id)} watch={watchOut(op)} /> : <span />}
             </div>
           );
         })}
@@ -134,7 +163,7 @@ export const RerouteNode = memo(function RerouteNode({ id, selected }: NodeProps
   const bad = useStudio((s) => s.problems.some((p) => p.node === id));
   if (!graph) return null;
   const t = outType(graph, { node: id, pin: "out" }) ?? "any";
-  const color = PIN_TYPES[t].color;
+  const color = typeColor(t);
   return (
     <div className={`st-reroute${selected ? " selected" : ""}${bad ? " bad" : ""}${t === "exec" ? " exec" : ""}`} style={{ borderColor: color }} title="Reroute">
       <Handle type="target" position={Position.Left} id="in" className="st-handle st-handle-reroute" />

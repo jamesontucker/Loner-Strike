@@ -2,13 +2,15 @@
 // events mean. Run with `npm run test:studio` (esbuild + node:test, no extra packages).
 
 import { test } from "node:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import templateRaw from "../src/views/tools/studio/templates/team-dm.graph.json?raw";
 import { parseGraph, emptyGraph, type Graph } from "../src/views/tools/studio/schema";
 import { insertSnippet, makeSnippet, readSnippet } from "../src/views/tools/studio/graphOps";
 import { addVariable, addNode, canConnect, connect, copy, emptyHistory, insertReroute, inType, outType, paste, record, redo, remove, undo } from "../src/views/tools/studio/graphOps";
-import { NODE_DEFS, nodeDef, searchNodes } from "../src/views/tools/studio/registry";
+import { NODE_DEFS, compatible, nodeDef, searchNodes } from "../src/views/tools/studio/registry";
+import { addEnum, addFunction, addMacro, addStruct, collapse, removeGraphPart, tabView, updateFunction, updateStruct } from "../src/views/tools/studio/graphOps";
+import { pinsOf, typeLabel, typeOk } from "../src/views/tools/studio/pins";
 import { applyEvents, emptyDebug, pathPairs } from "../src/views/tools/studio/debugState";
 import { tidyEstimated } from "../src/views/tools/studio/layout";
 import lastStandRaw from "../src/views/tools/studio/templates/last-stand.graph.json?raw";
@@ -46,7 +48,7 @@ test("schema refuses other files, newer versions and unsafe text", () => {
 test("every node in the registry is well formed", () => {
   for (const d of NODE_DEFS) {
     assert.ok(d.title && d.category && d.help, d.type);
-    for (const p of [...d.inputs, ...d.outputs]) assert.ok(["exec", "player", "entity", "team", "number", "bool", "text", "any", "var"].includes(p.type), `${d.type}.${p.id}`);
+    for (const p of [...d.inputs, ...d.outputs]) assert.ok(["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "array<$K>", "array<player>"].includes(p.type), `${d.type}.${p.id}`);
   }
   for (const t of ["event.round_started", "event.player_killed", "cond.is_team", "player.give_weapon", "score.end_round"]) assert.ok(nodeDef(t), t);
 });
@@ -81,10 +83,13 @@ test("reroutes carry the type that comes in", () => {
   assert.equal(g.edges.filter((e) => e.to.node === "give_ak" && e.to.pin === "player").length, 1);
 });
 
-test("version 1 files open as version 2; variables are checked", () => {
+test("version 1 and 2 files open as version 3; variables are checked", () => {
   const g = template();
   const r = parseGraph({ ...g, version: 1, variables: undefined });
-  assert.ok("graph" in r && r.graph.version === 2 && r.graph.variables.length === 0);
+  assert.ok("graph" in r && r.graph.version === 3 && r.graph.variables.length === 0 && !r.graph.functions);
+  const r2 = parseGraph({ ...g, version: 2 });
+  assert.ok("graph" in r2 && r2.graph.version === 3);
+  assert.ok("error" in parseGraph({ ...g, version: 4 }));
   assert.ok("error" in parseGraph({ ...g, variables: [{ id: "v1", name: "Kills", type: "number", scope: "player", default: "lots" }] }));
   assert.ok("error" in parseGraph({ ...g, variables: [{ id: "v1", name: "a */ b", type: "number", scope: "mode", default: 0 }] }));
   assert.ok("graph" in parseGraph({ ...g, variables: [{ id: "v1", name: "Kills", type: "number", scope: "player", default: 0 }] }));
@@ -248,4 +253,109 @@ test("snippets drop in wrapped in a comment, variables merged or renamed", () =>
   // a saved selection reads back as a snippet
   const made = makeSnippet(r.graph, r.ids, "Mine");
   assert.ok(readSnippet("mine", made));
+});
+
+// ---- graph version 3
+
+test("Functions: their own graph with entry and return; calls take their pins", () => {
+  let g = emptyGraph("fx", "Fx");
+  const f = addFunction(g);
+  g = f.graph;
+  const entry = g.nodes.find((n) => n.graph === f.id && n.type === "fn.entry")!;
+  const ret = g.nodes.find((n) => n.graph === f.id && n.type === "fn.return")!;
+  assert.ok(entry && ret && g.edges.some((e) => e.from.node === entry.id && e.to.node === ret.id));
+  g = updateFunction(g, f.id, { inputs: [{ id: "a1", name: "Who", type: "player" }], outputs: [{ id: "r1", name: "Score", type: "number" }] });
+  assert.deepEqual(pinsOf(g, g.nodes.find((n) => n.id === entry.id)!).outputs.map((p) => p.id), ["then", "a1"]);
+  const call = addNode(g, "fn.call", { x: 0, y: 0 }, undefined, { func: f.id });
+  g = call.graph;
+  const pins = pinsOf(g, g.nodes.find((n) => n.id === call.id)!);
+  assert.deepEqual(pins.inputs.map((p) => `${p.id}:${p.type}`), ["exec:exec", "a1:player"]);
+  assert.deepEqual(pins.outputs.map((p) => `${p.id}:${p.type}`), ["then:exec", "r1:number"]);
+  // tabs: the Event Graph doesn't show the Function's nodes; wires can't cross
+  assert.equal(tabView(g, "").nodes.length, 1);
+  assert.equal(tabView(g, f.id).nodes.length, 2);
+  assert.equal(canConnect(g, { node: entry.id, pin: "a1" }, { node: call.id, pin: "a1" }).ok, false);
+  // removing it takes its graph along
+  const gone = removeGraphPart(g, f.id);
+  assert.equal(gone.nodes.length, 1);
+  assert.ok(!gone.functions?.length);
+});
+
+test("generic nodes take the type of the first wire, arrays only fit arrays", () => {
+  let g = { ...emptyGraph("ax", "Ax"), variables: [{ id: "v1", name: "Names", type: "array<text>", scope: "mode" as const }] };
+  const get = addNode(g, "var.get", { x: 0, y: 0 }, undefined, { var: "v1" });
+  g = get.graph;
+  const len = addNode(g, "array.length", { x: 200, y: 0 });
+  g = len.graph;
+  const r = connect(g, { node: get.id, pin: "out" }, { node: len.id, pin: "array" });
+  assert.ok("graph" in r);
+  if ("graph" in r) {
+    assert.equal(r.graph.nodes.find((n) => n.id === len.id)!.params.of, "text");
+    // a number into an array pin: no
+    const num = addNode(r.graph, "math.number", { x: 0, y: 100 });
+    assert.equal(canConnect(num.graph, { node: num.id, pin: "out" }, { node: len.id, pin: "array" }).ok, false);
+  }
+  assert.ok(compatible("array<any>", "array<number>") && !compatible("array<number>", "array<text>") && !compatible("number", "array<number>"));
+});
+
+test("a body wired into its loop's Break isn't a flow loop", () => {
+  let g = emptyGraph("lx", "Lx");
+  const ev = addNode(g, "event.round_started", { x: 0, y: 0 });
+  const loop = addNode(ev.graph, "flow.for_loop_break", { x: 200, y: 0 });
+  const br = addNode(loop.graph, "flow.branch", { x: 400, y: 0 });
+  g = br.graph;
+  for (const [a, ap, b, bp] of [[ev.id, "then", loop.id, "exec"], [loop.id, "body", br.id, "exec"]] as const) {
+    const r = connect(g, { node: a, pin: ap }, { node: b, pin: bp });
+    assert.ok("graph" in r);
+    if ("graph" in r) g = r.graph;
+  }
+  assert.ok(canConnect(g, { node: br.id, pin: "true" }, { node: loop.id, pin: "break" }).ok);
+  assert.equal(canConnect(g, { node: br.id, pin: "true" }, { node: loop.id, pin: "exec" }).ok, false);
+});
+
+test("Collapse to Function: the selection moves to a Function, a call takes its place", () => {
+  let g = template();
+  const before = g.nodes.length;
+  // the attacker's weapon and health: one flow in, one out
+  const pick = g.nodes.filter((n) => n.type === "player.give_weapon").map((n) => n.id).slice(0, 1);
+  const r = collapse(g, pick, "function");
+  if ("error" in r) assert.fail(r.error);
+  g = r.graph;
+  const f = g.functions!.find((x) => x.id === r.id)!;
+  assert.ok(f.inputs.some((m) => m.type === "player"), JSON.stringify(f));
+  assert.equal(g.nodes.filter((n) => !n.graph).length, before - pick.length + 1);
+  const call = g.nodes.find((n) => n.type === "fn.call")!;
+  assert.equal(call.params.func, r.id);
+  // every wire stays inside one graph
+  for (const e of g.edges) {
+    const a = g.nodes.find((n) => n.id === e.from.node)!;
+    const b = g.nodes.find((n) => n.id === e.to.node)!;
+    assert.equal(a.graph ?? "", b.graph ?? "", e.id);
+  }
+  // and the Function checks as data (LS_COLLAPSE_OUT: written for the app's checks too)
+  assert.ok("graph" in parseGraph(JSON.parse(JSON.stringify(g))));
+  if (process.env.LS_COLLAPSE_OUT) writeFileSync(process.env.LS_COLLAPSE_OUT, JSON.stringify(g, null, 1));
+  // nothing to collapse
+  assert.ok("error" in collapse(g, [], "macro"));
+});
+
+test("Macros, structs and enums give their nodes pins", () => {
+  let g = emptyGraph("mx", "Mx");
+  const m = addMacro(g);
+  g = m.graph;
+  const use = addNode(g, "macro.use", { x: 0, y: 0 }, undefined, { macro: m.id });
+  g = use.graph;
+  assert.deepEqual(pinsOf(g, g.nodes.find((n) => n.id === use.id)!).inputs.map((p) => p.type), ["exec"]);
+  const s = addStruct(g);
+  g = updateStruct(s.graph, s.id, { fields: [{ id: "f1", name: "Ammo", type: "number" }, { id: "f2", name: "Tag", type: "text" }] });
+  const mk = addNode(g, "struct.make", { x: 0, y: 0 }, undefined, { struct: s.id });
+  g = mk.graph;
+  const mp = pinsOf(g, g.nodes.find((n) => n.id === mk.id)!);
+  assert.deepEqual(mp.inputs.map((p) => p.type), ["number", "text"]);
+  assert.equal(mp.outputs[0].type, `struct:${s.id}`);
+  const e = addEnum(g);
+  const sw = addNode(e.graph, "flow.switch_enum", { x: 0, y: 0 }, undefined, { enum: e.id });
+  assert.deepEqual(pinsOf(sw.graph, sw.graph.nodes.find((n) => n.id === sw.id)!).outputs.map((p) => p.label), ["First", "Second"]);
+  assert.equal(typeLabel(sw.graph, `array<struct:${s.id}>`), "Array of New Struct");
+  assert.ok(typeOk(sw.graph, `map<player,enum:${e.id}>`) && !typeOk(sw.graph, `map<player,struct:${s.id}>`) && !typeOk(sw.graph, "array<array<number>>"));
 });
