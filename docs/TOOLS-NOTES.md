@@ -1033,3 +1033,65 @@ box + checks through the bridge). In the app: Settings > AI agents, then the Cla
 - (I, editor UI) The editor page should pick up changes made by an agent: refetch `meshes?since=` / `doc` when
   `revision` moves (e.g. poll `GET /api/tools/editor/doc` state every couple of seconds while the page is open, or
   on window focus). Today a box added over MCP shows up only after the page reloads its document.
+
+### Agent P2: map editor feature pass (Hammer parity, modernised) — 2026-11-12
+
+**Core (`editor/`, 63 tests)**
+- `shapes.rs`: wedge, spike (pyramid/cone, 3-64 sides), sphere (4-32 facets round, half as many bands; facets
+  planar, one brush), arch (N block pieces between angles; arc, start, wall). Grid-rounded when that stays exact.
+- `vertex.rs`: `move_vertices(brush, picks, delta)` rebuilds the hull round the moved corners; refuses (with a reason)
+  a move that would flatten the brush, dent it inwards, or swallow another corner. Faces keep the nearest old texture.
+- `texture.rs`: `justify` (left/right/top/bottom/centre/fit, on one face or several treated as one), `set_values`
+  (the face sheet's numbers; a new rotation turns the axes).
+- `history.rs`: `cmd_array` (paste special: N copies, each one step on: offset + turn about x/y/z + stretch round the
+  selection's middle), `fragment` + `cmd_paste` (clipboard as .map text, between maps; brush entities come along),
+  `cmd_fix` (check fixes in one undo step), `cmd_replace_texture`, `History::mark_unsaved`.
+- `checks.rs`: issues carry `fix` and `texture`; trigger_relay/auto/camera/changetarget no longer count as brush
+  entities with no brushes.
+- `fgd.rs` + `cstrike.fgd`: FGD reader (base classes, size/color, choices, flags, help, `+` strings, line-numbered
+  errors) and **our own Counter-Strike 1.6 definitions** (75 classes). Licence check: no clearly shippable CS FGD was
+  found (Valve's needs the SDK EULA; community ones carry no licence), so these are written from scratch for
+  Loner-Strike. `EXTRA_FGDS` takes more files after ours (W1: add `include_str!("lonerstrike.fgd")` there).
+
+**Routes (`tools/editor.rs`)**: cmd ops `add_shape`, `move_vertices` (drag id, from where the drag started), `array`,
+`paste`, `fix`, `align` with `justify`/`set`/`one`; `POST copy`, `GET fgd`, `GET recent` + `POST open-recent {index}`,
+`POST autosave` (only when dirty), `GET recovery`, `POST recover` / `discard-recovery`. Meshes carry each face's
+alignment (`align`, 11 numbers). Save copies the old project to `<app>/editor/backups/` (last 10 per name) and clears
+the autosave. `LS_EDITOR_PORT` moves the dev server off 8027.
+
+**Page (`views/tools/editor/`)**
+- Face sheet (`FaceSheet.tsx`): shift/scale/turn fields (blank when the picked faces differ), nudges, justify
+  L/R/T/B/Centre/Fit, treat as one, fit N×M, align to world/face, texture lock, recent textures. Texture tool: click
+  picks faces (Shift adds), "Click paints" mode paints, Alt picks up; drag a picked face to slide its texture
+  (grid-snapped, one undo), drag the red/blue arrow ends to stretch, the yellow knob to turn (15° steps; Alt free);
+  arrows shift the texture.
+- Entity forms (`EntityForm.tsx`, `fgd.ts`): typed fields, choice lists, flag checkboxes, colour + brightness,
+  angle dial, target suggestions, help on every key; unknown keys under "Other keys"; unknown classes stay raw.
+  Entity tool's class box and "Tie to entity" list come from the FGD.
+- Tools: Vertex (V; corner handles, drag snaps, Shift-click several, arrows/PgUp/PgDn nudge), Shape (C; cylinder,
+  wedge, spike, sphere, arch), Measure (M). Clip keeps both / behind / in front (Tab). Turn 90° and Flip on X/Y/Z.
+- Selection/view: box select in Top/Front/Side (drag on empty space; left button no longer pans there, right/middle
+  does), Pick groups / Pick objects, H hide, Shift+H isolate, U show all, visibility sets in Outline (named, kept per
+  map on this computer), [ ] grid, camera bookmarks Ctrl+1-9 store / 1-9 go (views moved to Shift+1-4;
+  Ctrl+digit is caught first in the editor, so on Windows Ctrl+1-9 doesn't switch sections while it's open; ⌘ on a
+  Mac still does).
+- Ctrl+C/X/V copy, cut, paste (.map text on the system clipboard, with the editor's own copy as a fallback);
+  Ctrl+Shift+V paste special (Row/Stairs/Ring/Spiral presets); Ctrl+H hollow.
+- Dialogs: Map properties (title, sky, draw distance, base light, sun colour/brightness/pitch/angle, buying, bomb
+  radius, WADs), Entity report (search, class filter, go to, pick, delete).
+- Checks: a fix button per issue and "Fix all N" per kind; missing textures swap for the current texture; missing
+  spawns hand you the entity tool.
+- Autosave every 3 minutes when there are changes; the start screen offers to recover it, and lists recent files
+  (also a Recent… menu in the bar).
+- P4's Compile tab and LeakLine are mounted (their request).
+- `editor-dev.html` + `editorDev.tsx`: the editor alone in a browser. Checked in Chromium (Playwright) at 1440×900
+  and 1100×720 against the real game WADs: face sheet + drag-slide, multi-face pick, sphere/arch, vertex handles,
+  box select, entity form, paste special, map properties, entity report, checks, texture browser.
+
+**How to try it**: `cargo test editor` / `cargo test tools::editor`. Browser: `LS_EDITOR_PORT=8127 LS_TEST_GAME=<Half-Life>
+cargo test serve_editor_for_ui -- --ignored`, then a Vite dev server proxying `/api` to 8127, open `/editor-dev.html`.
+
+**Left / skipped**: prefabs + library; vertex editing of edges/faces as their own handles (pick their corners instead);
+a 3D-view box select; sound preview in entity forms; studio model preview for point entities; visibility sets are
+per computer, not saved in the project; the FGD isn't user-replaceable from the UI yet (the parser is ready).
+`cargo test` right now: 579 pass, 2 fail in `tools::studio` (someone's work in progress, not the editor).
