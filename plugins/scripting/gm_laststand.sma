@@ -964,7 +964,7 @@ stock attack_barricades()
 		if (g_creatures)
 		{
 			while ((e = find_ent_by_class(e, "ls_creature")) > 0 && hits < 6)
-				if (pev(e, pev_deadflag) == DEAD_NO && near_box(e, mn, mx, 56.0))
+				if (pev(e, pev_deadflag) == DEAD_NO && near_box(e, mn, mx, 56.0) && outside(e, mn, mx))
 				{
 					ExecuteHamB(Ham_TakeDamage, b, e, e, dmg, DMG_SLASH);
 					hits++;
@@ -973,13 +973,29 @@ stock attack_barricades()
 		else
 		{
 			for (new p = 1; p <= MaxClients && hits < 6; p++)
-				if (is_user_alive(p) && cs_get_user_team(p) == CS_TEAM_T && near_box(p, mn, mx, 48.0))
+				if (is_user_alive(p) && cs_get_user_team(p) == CS_TEAM_T && near_box(p, mn, mx, 48.0) && outside(p, mn, mx))
 				{
 					ExecuteHamB(Ham_TakeDamage, b, p, p, dmg, DMG_SLASH);
 					hits++;
 				}
 		}
 	}
+}
+
+/* on the far side of a barricade from the base: only enemies still outside hit it */
+stock bool:outside(e, const Float:mn[3], const Float:mx[3])
+{
+	new Float:o[3], Float:c[3], Float:v[3];
+	pev(e, pev_origin, o);
+	pev(e, pev_velocity, v);
+	for (new i = 0; i < 3; i++)
+		c[i] = (mn[i] + mx[i]) * 0.5;
+	new Float:tbx = g_base[0] - c[0], Float:tby = g_base[1] - c[1];
+	if ((o[0] - c[0]) * tbx + (o[1] - c[1]) * tby >= 0.0)
+		return false;
+	/* and trying to get through: pressed against it (barely moving) or heading in */
+	new Float:speed = floatsqroot(v[0] * v[0] + v[1] * v[1]);
+	return speed < 60.0 || v[0] * (c[0] - o[0]) + v[1] * (c[1] - o[1]) > 0.0;
 }
 
 stock bool:near_box(e, const Float:mn[3], const Float:mx[3], Float:reach)
@@ -1038,17 +1054,21 @@ stock hud()
 		if (!is_user_connected(p) || is_user_bot(p))
 			continue;
 		ls_hud(p, LS_HUD_TOP, 1.1, "%s", top);
-		ls_hud(p, LS_HUD_LEFT, 1.1, "%s", team);
+		/* the team and the nearest barricade on the right: menus open on the left, the
+		   radar is top left and chat bottom left, so nothing here ever sits under them */
+		new right[480], bartxt[48];
 		new bar = nearest_barricade(p);
 		if (bar)
 		{
 			new mx = floatround(ls_comp_getf(bar, "hp", 500.0));
 			new hp = ls_barricade_hp(bar);
 			if (hp > 0)
-				ls_hud(p, LS_HUD_RIGHT, 1.1, "Barricade %d%%", 100 * hp / max(mx, 1));
+				formatex(bartxt, charsmax(bartxt), "^nBarricade %d%%", 100 * hp / max(mx, 1));
 			else
-				ls_hud(p, LS_HUD_RIGHT, 1.1, "Barricade DOWN");
+				copy(bartxt, charsmax(bartxt), "^nBarricade DOWN");
 		}
+		formatex(right, charsmax(right), "%s%s", team, bartxt);
+		ls_hud(p, LS_HUD_RIGHT, 1.1, "%s", right);
 	}
 }
 
@@ -1308,9 +1328,12 @@ public ham_creature_killed(ent, killer, gib)
 
 new Float:g_shop[3];
 new Float:g_useNext[33];
+new Float:g_menuUntil[33];
 
-new const SHOP_NAME[][] = { "Barricade repair kit", "Armour refill", "Grenade pack", "Ammo refill", "Medkit" };
-new const SHOP_PRICE[] = { 300, 200, 300, 150, 250 };
+new const SHOP_NAME[][] = { "Barricade repair kit", "Armour", "3 HE grenades", "Ammo", "Medkit" };
+new const SHOP_WHAT[][] = { "rebuild the most broken barricade fully", "kevlar + helmet", "three HE grenades", "refill all your guns", "+50 HP" };
+new const SHOP_PRICE[] = { 600, 650, 900, 300, 500 };
+new g_shopCb;
 
 /* an entity or component named lst_shop (the map's armory), else the base */
 stock find_shop()
@@ -1390,9 +1413,56 @@ stock bool:at_shop(id)
 	return get_distance_f(o, g_shop) < 160.0 && floatabs(o[2] - g_shop[2]) < 120.0;
 }
 
+/* 5 % dearer each wave, rounded to $50 so prices stay readable */
 stock shop_price(i)
 {
-	return floatround(float(SHOP_PRICE[i]) * (1.0 + 0.1 * float(max(g_wave - 1, 0))) * get_pcvar_float(g_cShopScale));
+	new Float:p = float(SHOP_PRICE[i]) * (1.0 + 0.05 * float(max(g_wave - 1, 0))) * get_pcvar_float(g_cShopScale);
+	return max(floatround(p / 50.0) * 50, 50);
+}
+
+/* why an item can't be bought now ("" = it can) */
+stock shop_why_not(id, i, out[], len)
+{
+	out[0] = EOS;
+	switch (i)
+	{
+		case 0: if (!most_broken_barricade()) copy(out, len, "the barricades are fine");
+		case 1:
+		{
+			new CsArmorType:t;
+			if (cs_get_user_armor(id, t) >= 100 && t == CS_ARMOR_VESTHELM)
+				copy(out, len, "you have full armour");
+		}
+		case 2: if (cs_get_user_bpammo(id, CSW_HEGRENADE) >= 3) copy(out, len, "you have 3 already");
+		case 4: if (get_user_health(id) >= 100) copy(out, len, "you're at full health");
+	}
+	if (!out[0] && cs_get_user_money(id) < shop_price(i))
+		copy(out, len, "not enough money");
+}
+
+stock most_broken_barricade()
+{
+	new best = 0, worst = 100;
+	for (new b = ls_comp_find("ls_barricade"); b; b = ls_comp_find("ls_barricade", b))
+	{
+		new mx = floatround(ls_comp_getf(b, "hp", 500.0));
+		new pct = 100 * ls_barricade_hp(b) / max(mx, 1);
+		if (pct < worst)
+		{
+			worst = pct;
+			best = b;
+		}
+	}
+	return best;
+}
+
+public shop_item_cb(id, menu, item)
+{
+	new info[4], name[2], access, cb;
+	menu_item_getinfo(menu, item, access, info, charsmax(info), name, 0, cb);
+	new why[48];
+	shop_why_not(id, str_to_num(info), why, charsmax(why));
+	return why[0] ? ITEM_DISABLED : ITEM_ENABLED;
 }
 
 public cmd_shop(id)
@@ -1410,14 +1480,23 @@ public cmd_shop(id)
 
 stock shop_menu(id)
 {
-	new m = menu_create("\yArmory", "menu_shop");
-	new text[64], info[4];
+	if (!g_shopCb)
+		g_shopCb = menu_makecallback("shop_item_cb");
+	new title[64];
+	formatex(title, charsmax(title), "\yArmory  \d(you have $%d)", cs_get_user_money(id));
+	new m = menu_create(title, "menu_shop");
+	new text[128], info[4], why[48];
 	for (new i = 0; i < sizeof SHOP_NAME; i++)
 	{
-		formatex(text, charsmax(text), "%s \R\y$%d", SHOP_NAME[i], shop_price(i));
+		shop_why_not(id, i, why, charsmax(why));
+		if (why[0])
+			formatex(text, charsmax(text), "\d%s - %s ($%d)  \r%s", SHOP_NAME[i], SHOP_WHAT[i], shop_price(i), why);
+		else
+			formatex(text, charsmax(text), "%s \d- %s \y($%d)", SHOP_NAME[i], SHOP_WHAT[i], shop_price(i));
 		num_to_str(i, info, charsmax(info));
-		menu_additem(m, text, info);
+		menu_additem(m, text, info, 0, g_shopCb);
 	}
+	g_menuUntil[id] = get_gametime() + 30.0;
 	menu_display(id, m);
 }
 
@@ -1425,12 +1504,14 @@ public menu_shop(id, menu, item)
 {
 	if (item < 0)
 	{
+		g_menuUntil[id] = 0.0;
 		menu_destroy(menu);
 		return PLUGIN_HANDLED;
 	}
 	new info[4], name[64], access, cb;
 	menu_item_getinfo(menu, item, access, info, charsmax(info), name, charsmax(name), cb);
 	menu_destroy(menu);
+	g_menuUntil[id] = 0.0;
 	if (is_user_alive(id) && at_shop(id))
 		shop_buy(id, str_to_num(info), true);
 	return PLUGIN_HANDLED;
@@ -1439,46 +1520,26 @@ public menu_shop(id, menu, item)
 stock bool:shop_buy(id, i, bool:tell)
 {
 	new price = shop_price(i), money = cs_get_user_money(id);
-	if (money < price)
+	new why[48];
+	shop_why_not(id, i, why, charsmax(why));
+	if (why[0])
 	{
 		if (tell)
-			client_print(id, print_center, "Not enough money ($%d)", price);
+			client_print(id, print_center, "%s: %s", SHOP_NAME[i], why);
 		return false;
 	}
 	switch (i)
 	{
-		case 0:
-		{
-			/* the most damaged barricade, fully */
-			new best = 0, worst = 101;
-			for (new b = ls_comp_find("ls_barricade"); b; b = ls_comp_find("ls_barricade", b))
-			{
-				new mx = floatround(ls_comp_getf(b, "hp", 500.0));
-				new pct = 100 * ls_barricade_hp(b) / max(mx, 1);
-				if (pct < worst)
-				{
-					worst = pct;
-					best = b;
-				}
-			}
-			if (!best || worst >= 100)
-			{
-				if (tell)
-					client_print(id, print_center, "The barricades are fine");
-				return false;
-			}
-			ls_barricade_repair(best, 0);
-		}
+		case 0: ls_barricade_repair(most_broken_barricade(), 0);
 		case 1: cs_set_user_armor(id, 100, CS_ARMOR_VESTHELM);
 		case 2:
 		{
-			ls_give_item(id, "he");
-			ls_give_item(id, "flash");
-			ls_give_item(id, "smoke");
-			cs_set_user_bpammo(id, CSW_FLASHBANG, 2);
+			if (!user_has_weapon(id, CSW_HEGRENADE))
+				ls_give_item(id, "he");
+			cs_set_user_bpammo(id, CSW_HEGRENADE, 3);
 		}
 		case 3: ls_give_item(id, "ammo");
-		case 4: set_user_health(id, max(get_user_health(id), 100));
+		case 4: set_user_health(id, min(get_user_health(id) + 50, 100));
 	}
 	cs_set_user_money(id, money - price);
 	if (tell)
@@ -1590,9 +1651,10 @@ stock keeper_spawn()
 		entity_set_string(g_keeper, EV_SZ_classname, "lst_shopkeeper");
 		entity_set_model(g_keeper, g_keeperModel);
 	}
+	/* (not solid while placed, and the floor trace looks past him) */
+	set_pev(g_keeper, pev_solid, SOLID_NOT);
 	new Float:o[3];
-	o = g_shop;
-	o[2] = floor_under(g_shop) + 1.0;
+	keeper_spot(o);
 	entity_set_origin(g_keeper, o);
 	entity_set_size(g_keeper, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 72.0});
 	set_pev(g_keeper, pev_movetype, MOVETYPE_NONE);
@@ -1603,6 +1665,48 @@ stock keeper_spawn()
 	g_keeperSolid = false;
 	keeper_play(g_keeperKind == 2 ? "idle01" : "idle1");
 	g_keeperNext = get_gametime() + random_float(6.0, 12.0);
+}
+
+/* by the shop marker, on the floor (a marker on a counter puts him beside it, not on it), with
+   room to stand, the closest such spot */
+stock keeper_spot(Float:out[3])
+{
+	new Float:base = floor_under(g_shop, g_keeper);
+	out = g_shop;
+	out[2] = base + 1.0;
+	new Float:best = 99999.0, Float:lowest = base;
+	for (new ring = 0; ring <= 3; ring++)
+	{
+		for (new k = 0; k < (ring ? 8 : 1); k++)
+		{
+			new Float:p[3];
+			p[0] = g_shop[0] + 40.0 * float(ring) * floatcos(45.0 * float(k), degrees);
+			p[1] = g_shop[1] + 40.0 * float(ring) * floatsin(45.0 * float(k), degrees);
+			p[2] = g_shop[2];
+			new Float:f = floor_under(p, g_keeper);
+			new Float:c[3];
+			c = p;
+			c[2] = f + 37.0;
+			engfunc(EngFunc_TraceHull, c, c, IGNORE_MONSTERS, HULL_HUMAN, g_keeper, 0);
+			if (get_tr2(0, TR_StartSolid) || get_tr2(0, TR_AllSolid))
+				continue;
+			/* lower floor first (the ground, not a counter), then closer */
+			new Float:score = (f - lowest) * 10.0 + 40.0 * float(ring);
+			if (f < lowest - 4.0)
+			{
+				lowest = f;
+				score = 40.0 * float(ring);
+				best = 99999.0;
+			}
+			if (score < best)
+			{
+				best = score;
+				out[0] = p[0];
+				out[1] = p[1];
+				out[2] = f + 1.0;
+			}
+		}
+	}
 }
 
 stock keeper_play(const seq[])
@@ -1830,13 +1934,19 @@ stock add_word(list[], len, const word[])
  * Bits
  * ========================================================================= */
 
-stock Float:floor_under(const Float:p[3])
+/* the floor under a point; a point sitting on (or just in) the floor finds that floor, and
+   nothing sensible under it keeps the point's own height (never drops something under the map) */
+stock Float:floor_under(const Float:p[3], ignore = 0)
 {
-	new Float:a[3], Float:b[3], Float:hit[3];
+	new Float:a[3], Float:b[3], Float:hit[3], Float:frac;
 	a = p;
+	a[2] += 32.0;
 	b = p;
 	b[2] -= 512.0;
-	engfunc(EngFunc_TraceLine, a, b, IGNORE_MONSTERS, 0, 0);
+	engfunc(EngFunc_TraceLine, a, b, IGNORE_MONSTERS, ignore, 0);
+	get_tr2(0, TR_flFraction, frac);
+	if (get_tr2(0, TR_StartSolid) || get_tr2(0, TR_AllSolid) || frac >= 1.0)
+		return p[2] - 1.0;
 	get_tr2(0, TR_vecEndPos, hit);
 	return hit[2];
 }

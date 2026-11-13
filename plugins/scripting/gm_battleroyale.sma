@@ -792,7 +792,9 @@ stock hud()
 		if (!is_user_connected(p) || is_user_bot(p))
 			continue;
 		ls_hud(p, LS_HUD_TOP, 1.1, "%s", top);
-		ls_hud(p, LS_HUD_RIGHT, 1.1, "Kills %d", g_kills[p]);
+		/* kills and the squad on the right (menus open on the left) */
+		if (!(get_pcvar_num(g_cSquad) > 1 && g_squad[p]))
+			ls_hud(p, LS_HUD_RIGHT, 1.1, "Kills %d", g_kills[p]);
 		if (get_pcvar_num(g_cSquad) > 1 && g_squad[p])
 		{
 			new team[256], name[24], len = 0;
@@ -806,8 +808,7 @@ stock hud()
 				else
 					len += formatex(team[len], charsmax(team) - len, "%s  out^n", name);
 			}
-			if (len)
-				ls_hud(p, LS_HUD_LEFT, 1.1, "Squad^n%s", team);
+			ls_hud(p, LS_HUD_RIGHT, 1.1, "Kills %d^n^nSquad^n%s", g_kills[p], team);
 		}
 	}
 }
