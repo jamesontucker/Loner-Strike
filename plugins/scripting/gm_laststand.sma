@@ -203,6 +203,7 @@ public plugin_init()
 	register_clcmd("lst_shop", "cmd_shop");
 	register_srvcmd("lst_gates", "cmd_gates");
 	register_srvcmd("lst_holds", "cmd_holds");
+	register_srvcmd("lst_perf", "cmd_perf");
 	register_forward(FM_PlayerPreThink, "fm_prethink");
 	register_forward(FM_SetModel, "fm_setmodel_post", 1);
 
@@ -240,6 +241,24 @@ public plugin_cfg()
 	if (!ls_components_running())
 		log_amx("Last Stand needs gm_components.amxx; add it to laststand.plugins.ini before gm_laststand.amxx.");
 	log_amx("Last Stand on %s: enemies are %s (best wave here: %d)", g_mapname, g_creatures ? "creatures" : "zombie bots", g_record);
+}
+
+/* server: entities, creatures alive, defenders up (for big-team tests) */
+public cmd_perf()
+{
+	new ct = 0, up = 0, cr = 0, e = -1;
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_connected(p) && cs_get_user_team(p) == CS_TEAM_CT)
+		{
+			ct++;
+			if (is_user_alive(p))
+				up++;
+		}
+	while ((e = find_ent_by_class(e, "ls_creature")))
+		if (pev(e, pev_deadflag) == DEAD_NO)
+			cr++;
+	log_amx("Last Stand perf: %d entities of %d, %d creatures alive (cap %d), %d of %d defenders up, phase %d wave %d", engfunc(EngFunc_NumberOfEntities), global_get(glb_maxEntities), cr, alive_cap(), up, ct, g_phase, g_wave);
+	return PLUGIN_HANDLED;
 }
 
 /* server: where each holder was sent and where it is (for tests) */
