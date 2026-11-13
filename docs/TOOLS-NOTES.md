@@ -2065,3 +2065,53 @@ page fills its box (P6's shell.css override removed); **Open in Plugin Studio** 
 /api/tools/studio/source` writes the release source to `scripting/studio_<id>.sma` and the page goes to
 `plugins:game/studio_<id>.sma`, read only by one rule in `tools/plugins.rs` (`studio_*` in the game folder). Compiles now
 keep the source there too. (S: `/api/tools/studio/source` is new if the MCP wraps the Studio routes.)
+
+### Last Stand bots (W1 ↔ W2) — and Last Stand fixes, 2026-11-12
+**What the plugin sent (before)**, the cause of "bots just sitting in a row":
+- every CT bot: `goal ct defend <base centre> 0 70 0 450` at round setup and again every wave start (prio 70 → most
+  bots take it), never cleared between waves; plus each barricade sent `goal ct defend <barricade> <ent> 40` to every CT
+  bot (same kind, so it replaced/was replaced by the base goal). Defend = `Hide()` near the point → all bots hid in the
+  CT spawn the whole stand, facing the same way. Revives sent `goal ct go_hold` to **all** CT bots.
+**Now** (gm_laststand 5b14de8, gm_components 41859f6):
+- ~6 in 10 CT bots are "holders": `goal <bot> defend <spot> 0 35 <45-80 s> 350`, spots = behind each standing barricade
+  (200 u towards the base), half-way back, and the base; each holder moves to another spot when its time runs out. The
+  other ~4 in 10 get no goal (play on their own: hunt creatures via `enemyclass`, react to noise).
+- Goals only at a wave's start and on a shift; `goal_clear ct defend` at each break and at round setup.
+- Barricades no longer send defend goals (only with `defend_goal=1`); still `block`.
+- Revive: `goal <bot> go_hold <spot> <victim> 60 <secs> 40` to the **two nearest** bots only; `goal_clear ct <victim>` after.
+- Breaks: `goal ct use <armory> 0 25 <secs> 120` (a hint some bots take: they walk to the shop, the plugin stocks them
+  up there: armour, ammo, sometimes grenades / a repair kit), `goal_clear ct use` at the wave.
+**For W2** (brain side): "animations are weird" / same aim pose — I think that's `Hide()` at the defend spot (crouched,
+looking one way for 9-21 s, every bot the same); with fewer, spread goals it should be rarer, but a defend/hold hide
+could look around more (sweep the approach angles, peek), shift within the radius, and break off to fight sooner.
+Also: is `use` (LS_GOAL_USE) OK for "go to the shop and press use"? It clears itself after 6 s there, which is what I want.
+
+**Freeze fix**: a landed supply crate became SOLID_BBOX at its landing spot; Last Stand's drop spot is the CT base, so it
+landed around a player and held them in place. Now crates, loot crates and barricades standing back up stay walk-through
+until no player or creature overlaps them (`solid_when_clear`). Audited: no other freeze/maxspeed/solid path in
+gm_components/gm_laststand (meeting FL_FROZEN is cleared at its end, round start and on spawn; class speed only through
+ResetMaxSpeed; revives spawn only where a hull fits).
+
+**Marker agreement for the ls_outpost map builder** (and any Last Stand map):
+- `lst_shop`: an entity or component with that targetname (point, or a brush/area: its middle is used) = the armory:
+  the shopkeeper stands there and USE opens the shop within 160 u. Put the map's own `func_buyzone` over the armory so
+  the game's buy menu works there (during waves too). Without one: the CT buy zone's middle, off the spawn points.
+- `lst_base`: an area component (radius or `size=`) with that targetname = the inner base / fallback room for the
+  overrun rule. Without one: `lst_base_radius` (450) round the CT spawn.
+- Barricades: `ls_barricade` brushes (or point + `fit=`), team CT. Wave spawners: `ls_wave_spawner team=t`.
+
+**New rules** (laststand.cfg + Game Mode Menu): `lst_overrun` (10 s: enemies in the base with no defender in it → lost,
+"Base being overrun! N"), `lst_last_chance` (30 s for the bots once every person is down or out), both x1.5 Easy,
+x0.7 Hard, x0.5 Nightmare; `lst_lives` (Nightmare: shared lives for coming back after a held wave, shown on the HUD);
+`lst_buy_anywhere 0` (buying in buy zones only, during waves too), `lst_shop_scale`, `lst_shopkeeper barney|gman|none`
+(Half-Life's `models/barney.mdl` / `gman.mdl` from valve/, present on this server and in the game here; a CS model
+stands in if missing): faces the nearest player, fidgets by sequence name, waves/nods and says a line after a purchase,
+invulnerable, solid to players once nobody stands in him, ignored by creatures and bots (an info_target).
+
+**Measured** (de_dust2, 6 CT bots, ~4 min each, endless waves; gm_simrec, CT bots alive):
+| | still | shots/min | 128-u cells/min |
+|---|---|---|---|
+| before (one defend goal for all) | 78.6 % | 16.1 | 13.2 |
+| after (spread holders + free roamers) | 32.9 % | 22.8 | 40.5 |
+| Classic, CT bots | 40.6 % | 23.1 | 44.5 |
+All creatures were killed by bots in the sim (no human there); waves 1-3 held in 35-82 s.
