@@ -463,6 +463,7 @@ fn rename(places: &[Place], at: &str, name: &str, to: &str) -> Result<Value, Str
     if dest.exists() && !to.eq_ignore_ascii_case(name) {
         return Err(format!("There's already a demo called {to}."));
     }
+    crate::safety::before("Demos", &format!("Renamed {name} to {to}"), &path);
     std::fs::rename(&path, &dest).map_err(|e| format!("Couldn't rename it ({e})."))?;
     Ok(json!({"ok": true, "name": to, "message": format!("Renamed to {to}.")}))
 }
@@ -472,6 +473,7 @@ fn delete(places: &[Place], at: &str, name: &str) -> Result<Value, String> {
     if maybe_recording(&p, &path) {
         return Err("HLTV may still be recording this demo. Stop the server's HLTV first.".into());
     }
+    crate::safety::before("Demos", &format!("Deleted {name}"), &path);
     std::fs::remove_file(&path).map_err(|e| format!("Couldn't delete it ({e})."))?;
     Ok(json!({"ok": true, "message": format!("Deleted {name}.")}))
 }

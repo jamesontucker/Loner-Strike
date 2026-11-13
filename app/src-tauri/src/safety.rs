@@ -1214,6 +1214,23 @@ mod tests {
     }
 
     #[test]
+    fn hooks_keep_into_the_app_store() {
+        let f = fx("hooks", KEEP, CAP);
+        let p = f.hl.join("cstrike/userconfig.cfg");
+        std::fs::write(&p, b"old").unwrap();
+        let seq = before("Crosshair & config", "Saved userconfig.cfg", &p).unwrap();
+        std::fs::write(&p, b"new").unwrap();
+        let s = store();
+        let key = s.key_for(&p).unwrap();
+        assert_eq!(s.version_bytes(&key, seq).unwrap().unwrap(), b"old");
+        // a file the player picked outside the game folders: left alone, the save goes on
+        assert!(before("Bot people", "Exported", &f.root.join("people.ini")).is_none());
+        let from = seq - 1;
+        assert_eq!(s.undo(from, s.last_seq()).unwrap(), vec!["cstrike/userconfig.cfg"]);
+        assert_eq!(std::fs::read(&p).unwrap(), b"old");
+    }
+
+    #[test]
     fn small_helpers() {
         assert!(path_matches("maps/cs_rats2.*", "cstrike/maps/cs_rats2.nav"));
         assert!(path_matches("MAPS/CS_RATS2.NAV", "cstrike/maps/cs_rats2.nav"));

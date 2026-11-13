@@ -196,6 +196,7 @@ fn write_part(path: &Path, bytes: &[u8]) -> Result<(), String> {
         std::fs::create_dir_all(d).map_err(|e| format!("Couldn't make the folder ({e})."))?;
     }
     let part = path.with_file_name(format!("{}.part", path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()));
+    crate::safety::before("Plugin Studio", &format!("Saved {}", path.file_name().unwrap_or_default().to_string_lossy()), path);
     std::fs::write(&part, bytes).map_err(|e| format!("Couldn't save it ({e})."))?;
     std::fs::rename(&part, path).map_err(|e| {
         let _ = std::fs::remove_file(&part);
@@ -228,6 +229,7 @@ pub fn delete(g: &Game, f: Folder, name: &str) -> Result<Value, String> {
         return Err("Only files in My plugins can be deleted here.".into());
     }
     let path = resolve(&folder_dir(g, f), name)?;
+    crate::safety::before("Plugin Studio", &format!("Deleted {name}"), &path);
     std::fs::remove_file(&path).map_err(|e| format!("Couldn't delete it ({e})."))?;
     Ok(json!({"ok": true}))
 }
@@ -407,6 +409,7 @@ fn set_trying(g: &Game, names: &[String]) -> Result<(), String> {
     crate::sys::write_atomic(&trying_path(g), serde_json::to_string_pretty(names).unwrap_or_default().as_bytes()).map_err(|e| format!("Couldn't save the list ({e})."))?;
     let ini = am.join("configs").join(STUDIO_INI);
     if names.is_empty() {
+        crate::safety::before("Plugin Studio", "Stopped trying plugins", &ini);
         let _ = std::fs::remove_file(&ini);
         return Ok(());
     }
@@ -461,7 +464,9 @@ pub fn remove_trial(g: &Game, stem: &str) -> Result<(), String> {
     }
     names.retain(|n| n != stem);
     set_trying(g, &names)?;
-    let _ = std::fs::remove_file(amxx_dir(g).join("plugins").join(format!("{stem}.amxx")));
+    let amxx = amxx_dir(g).join("plugins").join(format!("{stem}.amxx"));
+    crate::safety::before("Plugin Studio", &format!("Stopped trying {stem}"), &amxx);
+    let _ = std::fs::remove_file(amxx);
     Ok(())
 }
 

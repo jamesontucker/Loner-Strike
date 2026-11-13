@@ -509,7 +509,12 @@ fn cfg_pairs(text: &str) -> Vec<(String, String)> {
 /// Sets `cvar "value"` lines in a config file, keeping the rest.
 pub(crate) fn set_cfg_values(path: &std::path::Path, values: &[(String, String)]) -> std::io::Result<()> {
     let old = crate::sys::read_latin1(path).unwrap_or_default();
-    crate::sys::write_atomic(path, with_cfg_values(&old, values).as_bytes())
+    let new = with_cfg_values(&old, values);
+    if new != old {
+        let names: Vec<&str> = values.iter().map(|(k, _)| k.as_str()).take(3).collect();
+        crate::safety::before("Settings", &format!("Changed {}", names.join(", ")), path);
+    }
+    crate::sys::write_atomic(path, new.as_bytes())
 }
 
 /// A config's text with these `cvar "value"` lines set, the rest kept.

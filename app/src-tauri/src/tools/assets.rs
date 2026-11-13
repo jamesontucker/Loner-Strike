@@ -729,6 +729,7 @@ fn import_new_model(game_dir: &Path, folder_name: &str, app: &Path, src: &Path, 
         if let Some(parent) = to.parent() {
             std::fs::create_dir_all(parent).map_err(|e| format!("Couldn't make the folder: {e}"))?;
         }
+        crate::safety::before("Textures & models", &format!("Added {rel}"), to);
         std::fs::copy(from, to).map_err(|e| format!("Couldn't copy the model: {e}"))?;
         done.push(format!("{folder_name}/{}", rel.to_lowercase()));
     }
@@ -750,6 +751,7 @@ fn remove_imported(game: &Game, folder_name: &str, rel: &str) -> Result<(), Stri
     for k in list.iter().filter(|k| **k == key || **k == format!("{folder_name}/{stem}t.mdl")) {
         let r = &k[folder_name.len() + 1..];
         if let Ok(p) = inside(&base, r) {
+            crate::safety::before("Textures & models", &format!("Removed {r}"), &p);
             std::fs::remove_file(&p).map_err(|e| format!("Couldn't remove it: {e}"))?;
             // an emptied player folder goes too
             if let Some(d) = p.parent().filter(|d| d.parent().is_some_and(|pp| pp.file_name().is_some_and(|n| n.eq_ignore_ascii_case("player")))) {
@@ -841,6 +843,7 @@ fn save_texture(game_dir: &Path, folder_name: &str, app: &Path, wad: &str, t: &w
     }
     let replaced = lumps.iter().any(|l| l.name.eq_ignore_ascii_case(&t.name));
     wadwrite::put_lump(&mut lumps, wadwrite::miptex_lump(t)).map_err(|e| e.to_string())?;
+    crate::safety::before("Textures & models", &format!("Saved {} in {real}", t.name), &path);
     crate::sys::write_atomic(&path, &wadwrite::write_lumps(&lumps)).map_err(|e| format!("Couldn't save the WAD: {e}"))?;
     add_custom(app, &key).map_err(|e| e.to_string())?;
     Ok((real, replaced))

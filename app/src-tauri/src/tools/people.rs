@@ -807,6 +807,7 @@ fn backups(app: &Path, file: &str) -> Vec<PathBuf> {
 /// Writes a file whole, the old one kept in the app's folder first (when `backup`).
 fn put(app: &Path, path: &Path, text: &str, backup: bool) -> Result<(), String> {
     let file = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    crate::safety::before("Bot people", &if backup { format!("Saved {file}") } else { format!("Put back the previous {file}") }, path);
     if backup && path.is_file() {
         let b = backup_dir(app);
         std::fs::create_dir_all(&b).map_err(|e| format!("Couldn't keep a copy of {file}: {e}"))?;

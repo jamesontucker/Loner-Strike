@@ -364,6 +364,8 @@ impl Records {
                     let b = broot.join(&actual);
                     std::fs::create_dir_all(b.parent().unwrap()).map_err(|e| e.to_string())?;
                     std::fs::copy(&target, &b).map_err(|e| format!("Couldn't back up {actual} ({e})."))?;
+                    // and in the app-wide history (safety.rs), so History can put it back later too
+                    crate::safety::before("Downloads", &format!("Replaced {actual} with a download"), &target);
                     backup = json!(format!("{}/{actual}", key.replace(':', "-")));
                 }
                 if let Some(d) = target.parent() {

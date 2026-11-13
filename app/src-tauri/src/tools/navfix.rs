@@ -1040,6 +1040,8 @@ pub fn check(n: &Nav, spawns: &[[f32; 3]], ladders: &[LadderEnds], ground: Optio
 /// was there as `<path>.bak` the first time. Returns whether a backup was made now.
 pub fn write_nav(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<bool> {
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    // the app-wide history too (safety.rs): the .bak is only the very first version
+    crate::safety::before("Nav fixer", &format!("Saved {name}"), path);
     let part = path.with_file_name(format!("{name}.part"));
     let bak = path.with_file_name(format!("{name}.bak"));
     let r = (|| {
@@ -1695,6 +1697,7 @@ fn study(job: &crate::setup::Job, client: &crate::steam::Install, dir: &std::pat
         let dest = sibling_lsv(nav_path).unwrap_or_else(|| nav_path.with_extension("lsv"));
         let name = dest.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default();
         let part = dest.with_file_name(format!("{name}.part"));
+        crate::safety::before("Nav fixer", &format!("Learned the map into {name}"), &dest);
         std::fs::write(&part, &b).and_then(|_| std::fs::rename(&part, &dest)).map_err(|e| {
             let _ = std::fs::remove_file(&part);
             format!("The knowledge couldn't be saved in the maps folder ({e}).")

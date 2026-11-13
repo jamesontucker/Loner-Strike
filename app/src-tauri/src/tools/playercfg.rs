@@ -482,6 +482,7 @@ fn game_dir(hl: &Path, game: &str) -> Result<(&'static str, PathBuf), String> {
 /// Writes userconfig.cfg (the old one backed up first when `backup`).
 fn put(app: &Path, game: &str, dir: &Path, text: &str, backup: bool) -> Result<(), String> {
     let target = dir.join(FILE);
+    crate::safety::before("Crosshair & config", if backup { "Saved userconfig.cfg" } else { "Changed userconfig.cfg" }, &target);
     if backup && target.is_file() {
         let b = backup_dir(app);
         std::fs::create_dir_all(&b).map_err(|e| format!("Couldn't keep a copy of your old {FILE}: {e}"))?;

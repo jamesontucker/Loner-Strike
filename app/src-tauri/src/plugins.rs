@@ -55,6 +55,7 @@ fn save(g: &crate::game::Game, names: &[String]) -> Result<(), String> {
     crate::sys::write_atomic(&list_path(g), serde_json::to_string_pretty(names).unwrap_or_default().as_bytes()).map_err(|e| e.to_string())?;
     let ini = g.dir.join("addons/amxmodx/configs/plugins.ini");
     let old = crate::sys::read_latin1(&ini).unwrap_or_default();
+    crate::safety::before("Mods", "Changed your plugins in plugins.ini", &ini);
     crate::sys::write_latin1(&ini, &rewrite_ini(&old, names)).map_err(|e| format!("Couldn't update plugins.ini ({e})."))
 }
 
@@ -117,8 +118,10 @@ pub fn remove(g: &crate::game::Game, name: &str) -> Result<(), String> {
     names.retain(|n| n != name);
     save(g, &names)?;
     let am = g.dir.join("addons/amxmodx");
-    let _ = std::fs::remove_file(am.join("plugins").join(format!("{name}.amxx")));
-    let _ = std::fs::remove_file(am.join("scripting").join(format!("{name}.sma")));
+    for f in [am.join("plugins").join(format!("{name}.amxx")), am.join("scripting").join(format!("{name}.sma"))] {
+        crate::safety::before("Mods", &format!("Removed your plugin {name}"), &f);
+        let _ = std::fs::remove_file(f);
+    }
     Ok(())
 }
 

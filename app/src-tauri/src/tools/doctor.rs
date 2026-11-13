@@ -183,6 +183,9 @@ pub fn res_check(text: Option<&str>, wanted: &[String], exists_here: impl Fn(&st
 /// replaces is kept as `<path>.bak` the first time. Returns whether a .bak was made.
 pub fn save_file(path: &Path, bytes: &[u8]) -> std::io::Result<bool> {
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    // the app-wide history too (safety.rs): the .bak above is only the very first version
+    let tool = if name.ends_with(".nav") { "Callouts" } else if path.to_string_lossy().replace('\\', "/").contains("/overviews/") { "Radar maker" } else { "Map doctor" };
+    crate::safety::before(tool, &format!("Saved {name}"), path);
     let bak = path.with_file_name(format!("{name}.bak"));
     let mut backed = false;
     if path.is_file() && !bak.exists() {

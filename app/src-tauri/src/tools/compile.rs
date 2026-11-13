@@ -1028,6 +1028,7 @@ pub fn install_bsp(src: &Path, maps: &Path, name: &str, backups: &Path) -> Resul
             let _ = std::fs::remove_file(mine.remove(0));
         }
     }
+    crate::safety::before("Compile", &format!("Put the compiled {name}.bsp in the maps folder"), &dest);
     crate::sys::write_atomic(&dest, &bytes).map_err(|e| format!("Couldn't put the map in the game's maps folder ({e})."))?;
     Ok(backup)
 }

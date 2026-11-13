@@ -177,6 +177,7 @@ fn set_read_only(p: &Path, on: bool) -> std::io::Result<()> {
 /// written beside it and moved over, then made read-only when `lock`.
 fn put(app: &Path, game: &str, dir: &Path, bytes: &[u8], lock: bool, backup: bool) -> Result<(), String> {
     let target = dir.join(FILE);
+    crate::safety::before("Spray maker", if backup { "Saved the spray" } else { "Put back the previous spray" }, &target);
     let words = |e: std::io::Error| match e.kind() {
         std::io::ErrorKind::PermissionDenied => format!("Loner-Strike isn't allowed to change files in the {game} folder."),
         _ => format!("Couldn't save the spray in the {game} folder: {e}"),
