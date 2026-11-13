@@ -324,6 +324,24 @@ class Setup(unittest.TestCase):
 
 
 class Store(unittest.TestCase):
+    def test_applications_go_after_180_days(self):
+        """The privacy page: deleted 180 days after the decision, or after sending when undecided."""
+        _c, mod, _bot = make()
+        s = mod.c.store
+        day = 86400
+        old_decided = s.add_application(user_id="1", role_key="playtester", state="denied", why="a", at=cm.now() - 400 * day, decided_at=cm.now() - 181 * day)
+        recent_decision = s.add_application(user_id="2", role_key="playtester", state="granted", why="b", at=cm.now() - 400 * day, decided_at=cm.now() - 10 * day)
+        old_pending = s.add_application(user_id="3", role_key="playtester", state="pending", why="c", at=cm.now() - 181 * day)
+        new_pending = s.add_application(user_id="4", role_key="playtester", state="pending", why="d", at=cm.now() - 5 * day)
+        s.add_application(user_id="5", role_key="playtester", state="pending", why="e")  # adding runs the housekeeping
+        self.assertIsNone(s.application(old_decided))
+        self.assertIsNone(s.application(old_pending))
+        self.assertIsNotNone(s.application(recent_decision), "decided 10 days ago: kept")
+        self.assertIsNotNone(s.application(new_pending))
+        s.db.execute("UPDATE applications SET decided_at=? WHERE id=?", (cm.now() - 200 * day, recent_decision))
+        self.assertEqual(s.prune_applications(), 1)
+        self.assertIsNone(s.application(recent_decision))
+
     def test_migrated_to_newest(self):
         s = cm.Store(os.path.join(tempfile.mkdtemp(), "c.db"))
         self.assertEqual(s.db.execute("PRAGMA user_version").fetchone()[0], len(cm.MIGRATIONS))

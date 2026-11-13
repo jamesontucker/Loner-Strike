@@ -85,6 +85,7 @@ HEADER_SAMPLES = 16           # local headers compared with the directory, sprea
 GB_PER_VISITOR_MIN = 10       # a visitor's share of the GameBanana checks a minute
 REPORTS_PER_VISITOR_DAY = 20  # a visitor's share of the day's reports
 STATUS_PER_MIN = 60
+APPLICATION_DAYS = 180        # role applications are deleted this long after the decision (or after sending, if undecided)
 CHECK_MAX = 256 << 20         # [Caps] biggest package whose files are checked one by one (bigger: "too big to check"); the biggest real CS 1.6 item found is a 132.7 MB mappack
 CHECK_ENTRY_MAX = 256 << 20   # biggest single file inside it
 CHECK_SECONDS = 180           # the whole check (download and files) must finish in this
@@ -1448,8 +1449,17 @@ class Store:
 
     # -- role applications --
 
+    def prune_applications(self):
+        """Deletes role applications 180 days after their decision, and undecided ones 180 days after
+        they were sent (the privacy page's promise). Moderation history (log) is left as it is."""
+        cut = now() - APPLICATION_DAYS * 86400
+        with self.lock:
+            return self.db.execute("DELETE FROM applications WHERE (decided_at > 0 AND decided_at < ?) OR (decided_at = 0 AND at < ?)",
+                                   (cut, cut)).rowcount
+
     def add_application(self, **cols):
         cols.setdefault("at", now())
+        self.prune_applications()
         with self.lock:
             return self.db.execute(f"INSERT INTO applications ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                                    tuple(cols.values())).lastrowid
@@ -2184,6 +2194,8 @@ class Community:
         page is hidden. Network trouble changes nothing."""
         if not self.recheck_lock.acquire(blocking=False):
             raise Reject(409, "A re-check is already running.")
+        # (the daily housekeeping: role applications past their 180 days go)
+        self.store.prune_applications()
         try:
             rows = [self.store.get(k) for k in keys] if keys else self.store.rows(("pending", "listed", "hidden"))
             rows = [r for r in rows if r and r["state"] in ("pending", "listed", "hidden")]
