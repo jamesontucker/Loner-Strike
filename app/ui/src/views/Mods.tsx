@@ -22,6 +22,7 @@ const BUILT_IN: { id: string; name: string; kind: "mode" | "addon"; description:
   { id: "awp", name: "AWP only", kind: "mode", description: "Free AWP every spawn" },
   { id: "scoutz", name: "Scoutz & Knivez", kind: "mode", description: "Scouts, low gravity, air control" },
   { id: "surf", name: "Surf", kind: "mode", description: "Air control, free guns, long rounds" },
+  { id: "laststand", name: "Last Stand", kind: "mode", description: "Hold the base with your team and bots against waves of creatures" },
   { id: "match", name: "Match (5v5)", kind: "mode", description: "Scrims and pick-up games: ready up, knife for sides, MR15 with half-time" },
   { id: "quakesounds", name: "Quake sounds", kind: "addon", description: "Killing spree and headshot announcers" },
 ];

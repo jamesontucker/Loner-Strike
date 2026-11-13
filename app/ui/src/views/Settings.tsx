@@ -156,7 +156,7 @@ const DM = ["csdm", "csdm_ffa"];
 const FAMILIES: [string, string[]][] = [
   ["gm_gg_", GG], ["gg_", GG], ["gmdm_", DM], ["gm_zp_", ["zombie", "zp5"]], ["zp_", ["zombie", "zp5"]],
   ["wc3_", ["war3"]], ["sh_", ["shero"]], ["hns_", ["hns"]], ["pbmoves_", ["paintball"]], ["kz_", ["kreedz"]],
-  ["deathrun_", ["deathrun"]], ["dr_", ["deathrun"]], ["PBR_", ["paintball"]], ["bb_", ["basebuilder"]], ["sj_", ["soccerjam"]],
+  ["deathrun_", ["deathrun"]], ["lst_", ["laststand"]], ["dr_", ["deathrun"]], ["PBR_", ["paintball"]], ["bb_", ["basebuilder"]], ["sj_", ["soccerjam"]],
 ];
 /** Settings only for modes with a flag in modes.ini (the Game Mode Menu's SD_NeedFlag). */
 const NEEDS_FLAG: Record<string, string> = { gm_weapons: "w", gm_gg_order: "g", gm_zp_specials: "z", mp_forcerespawn: "w", gm_autorespawn: "w" };

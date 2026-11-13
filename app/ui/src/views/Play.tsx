@@ -471,6 +471,7 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
 // Map names that suit a mode, for modes without their own map list
 const MODE_PREFIX: Record<string, string[]> = {
   zombie: ["zm_", "zp_", "ze_"], zp5: ["zm_", "zp_", "ze_"], hns: ["hns_", "hide_", "hide"], deathrun: ["deathrun_", "dr_"],
+  laststand: ["ls_", "de_dust2", "de_inferno", "de_nuke", "de_aztec", "cs_office"],
   kreedz: ["kz_", "bkz_", "xc_", "kzm_"], surf: ["surf_"], soccerjam: ["soccerjam", "sj_"], basebuilder: ["bb_", "basebuilder"],
   paintball: ["pb_", "paintball", "cspaintball"], knife: ["ka_", "knife", "35hp"], awp: ["awp_"], scoutz: ["scoutz", "scout"],
   pistols: ["aim_", "fy_", "pistol"], deagle: ["aim_", "fy_", "deagle"], classic: ["de_", "cs_", "as_"], war3: ["de_", "cs_"], shero: ["de_", "cs_"],

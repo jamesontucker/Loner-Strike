@@ -319,9 +319,49 @@ fn untouched(name: &str, current: Option<&[u8]>, written: Option<&str>) -> bool 
     written == Some(h.as_str()) || SHIPPED_BEFORE.iter().any(|(n, s)| *n == name && *s == h)
 }
 
+/// A shipped Game Mode Menu settings file as setup writes it: the lists of modes and add-ons
+/// (modes.ini, addons.ini, mappresets.ini, presets.ini) cut down to the ones installed, with
+/// the Game Mode Studio's modes kept in modes.ini (`current` is the modes.ini there now).
+/// Every other file is written as shipped. Also what "Restore Loner-Strike's default" puts back.
+pub fn shape_config(base: &str, text: String, mode_ok: &dyn Fn(&str) -> bool, addon_ok: &dyn Fn(&str) -> bool, current: &str, gamemodes_dir: &std::path::Path) -> String {
+    let quoted = Regex::new(r#""([^"]*)""#).unwrap();
+    match base {
+        "modes.ini" => {
+            // modes made in the Game Mode Studio aren't shipped: their lines stay
+            let mut t = filter_lines(&text, mode_ok);
+            for line in studio_mode_lines(current, gamemodes_dir, &t) {
+                t.push_str(&line);
+                t.push_str("\r\n");
+            }
+            t
+        }
+        "addons.ini" => filter_lines(&text, addon_ok),
+        "mappresets.ini" => {
+            let keep: Vec<&str> = splitlines(&text, false)
+                .into_iter()
+                .filter(|l| is_comment_or_blank(l) || mode_ok(l.split_whitespace().last().unwrap_or("")))
+                .collect();
+            keep.join("\r\n") + "\r\n"
+        }
+        "presets.ini" => {
+            let keep: Vec<&str> = splitlines(&text, false)
+                .into_iter()
+                .filter(|l| {
+                    if is_comment_or_blank(l) {
+                        return true;
+                    }
+                    let m: Vec<&str> = quoted.captures_iter(l).map(|c| c.get(1).unwrap().as_str()).collect();
+                    m.len() < 3 || mode_ok(m[2])
+                })
+                .collect();
+            keep.join("\r\n") + "\r\n"
+        }
+        _ => text,
+    }
+}
+
 pub fn configs(rec: &mut Record, ctx: &Ctx, modes: &BTreeSet<String>, addons: &BTreeSet<String>) -> Result<(), String> {
     let cfg_src = ctx.res.join("plugins").join("configs").join("gamemodes");
-    let quoted = Regex::new(r#""([^"]*)""#).unwrap();
     let mode_ok = |m: &str| modes.contains(m);
     let mut wanted = BTreeSet::new();
     for (full, rel) in tree(&cfg_src) {
@@ -338,40 +378,8 @@ pub fn configs(rec: &mut Record, ctx: &Ctx, modes: &BTreeSet<String>, addons: &B
             continue;
         }
         let text = crate::sys::read_latin1(&full).map_err(|e| format!("Couldn't read {rel} from Loner-Strike's files ({e})."))?;
-        let text = match base.as_str() {
-            "modes.ini" => {
-                // modes made in the Game Mode Studio aren't shipped: their lines stay
-                let mut t = filter_lines(&text, mode_ok);
-                let current = rec.read(&dest).unwrap_or_default();
-                for line in studio_mode_lines(&current, &rec.full("addons/amxmodx/configs/gamemodes")?, &t) {
-                    t.push_str(&line);
-                    t.push_str("\r\n");
-                }
-                t
-            }
-            "addons.ini" => filter_lines(&text, |a| addons.contains(a)),
-            "mappresets.ini" => {
-                let keep: Vec<&str> = splitlines(&text, false)
-                    .into_iter()
-                    .filter(|l| is_comment_or_blank(l) || mode_ok(l.split_whitespace().last().unwrap_or("")))
-                    .collect();
-                keep.join("\r\n") + "\r\n"
-            }
-            "presets.ini" => {
-                let keep: Vec<&str> = splitlines(&text, false)
-                    .into_iter()
-                    .filter(|l| {
-                        if is_comment_or_blank(l) {
-                            return true;
-                        }
-                        let m: Vec<&str> = quoted.captures_iter(l).map(|c| c.get(1).unwrap().as_str()).collect();
-                        m.len() < 3 || mode_ok(m[2])
-                    })
-                    .collect();
-                keep.join("\r\n") + "\r\n"
-            }
-            _ => text,
-        };
+        let current = if base == "modes.ini" { rec.read(&dest).unwrap_or_default() } else { String::new() };
+        let text = shape_config(&base, text, &mode_ok, &|a| addons.contains(a), &current, &rec.full("addons/amxmodx/configs/gamemodes")?);
         if EDITABLE.contains(&rel.as_str()) {
             // as it'll be on disk (written as Latin-1)
             let bytes: Vec<u8> = text.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
