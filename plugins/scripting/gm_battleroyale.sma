@@ -52,6 +52,8 @@ new g_cSquad, g_cStart, g_cDrop, g_cZoneStart, g_cDrops, g_cWaitHuman, g_cDropIn
 
 new Float:g_dropSpots[33][2];
 new g_ndropSpots;
+new g_usedDrops[16];
+new g_nusedDrops;
 
 new g_phase;
 new Float:g_phaseEnd;
@@ -257,6 +259,7 @@ stock start_drop()
 		if (is_user_alive(p))
 			give_start(p);
 	g_ndropSpots = 0;
+	g_nusedDrops = 0;
 	if (get_pcvar_num(g_cDropIn))
 		for (new p = 1; p <= MaxClients; p++)
 			if (is_user_alive(p))
@@ -590,9 +593,16 @@ stock supply_drop()
 	new Float:c[3], Float:r, closing;
 	ls_zone_next(0, c, r, closing);
 	new pick = 0;
-	for (new tries = 0; tries < 6 && n; tries++)
+	for (new tries = 0; tries < 12 && n; tries++)
 	{
 		new e = markers[random(n)];
+		/* not a spot that already had a drop this game (a second crate on an opened one) */
+		new bool:used = false;
+		for (new u = 0; u < g_nusedDrops; u++)
+			if (g_usedDrops[u] == e)
+				used = true;
+		if (used && tries < 11)
+			continue;
 		new Float:o[3];
 		pev(e, pev_origin, o);
 		pick = e;
@@ -600,7 +610,11 @@ stock supply_drop()
 			break;
 	}
 	if (pick)
+	{
+		if (g_nusedDrops < sizeof g_usedDrops)
+			g_usedDrops[g_nusedDrops++] = pick;
 		ls_comp_start(pick);
+	}
 	else if (r > 0.0)
 		ls_drop_call(c, "drop");
 }
