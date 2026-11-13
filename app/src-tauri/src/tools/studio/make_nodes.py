@@ -125,8 +125,8 @@ node("comp.capture_lock", "Lock Point", "Components", "Locks a capture point for
 node("comp.reset", "Reset Components", "Components", "Puts every component back as it was at the start of the map.", inputs=[X], outputs=[E()], **ca)
 
 # ---- creatures
-node("creature.spawn", "Spawn Creature", "Creatures", "Makes a creature of this type at the entity with this name. Needs the Loner-Strike bot brain with creatures (the debugger says so if not).",
-     inputs=[X], outputs=[E(), P("out","entity","Creature")], params=[prm("kind","Type","name","zombie"), prm("at","At the entity named","name","spot1")], needs="creatures")
+node("creature.spawn", "Spawn Creature", "Creatures", "Makes a creature of this type at an entity (wired into At, or the one with this name). Needs the Loner-Strike bot brain with creatures (the debugger says so if not).",
+     inputs=[X, P("at_ent","entity","At",optional=True)], outputs=[E(), P("out","entity","Creature")], params=[prm("kind","Type","name","zombie"), prm("at","At the entity named","name","spot1")], needs="creatures")
 
 # ---- milestone 3: what whole modes (Last Stand, Battle Royale) need
 WHICH = [["all","Everyone in the game"],["alive","Everyone alive"],["dead","Everyone dead"],["t","Terrorists"],["ct","Counter-Terrorists"],["alive_t","Living Terrorists"],["alive_ct","Living Counter-Terrorists"],["bots","Bots"],["humans","People (not bots)"]]

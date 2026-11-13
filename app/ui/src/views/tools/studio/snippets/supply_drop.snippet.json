@@ -1,0 +1,98 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Supply drop every minute",
+ "description": "A supply drop onto a random respawn point every 60 s until the round ends.",
+ "nodes": [
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 20,
+    "y": 55
+   },
+   "params": {}
+  },
+  {
+   "id": "rep",
+   "type": "timer.repeat",
+   "pos": {
+    "x": 340,
+    "y": 31
+   },
+   "params": {
+    "every": 60,
+    "times": 0
+   }
+  },
+  {
+   "id": "pick",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 660,
+    "y": 20
+   },
+   "params": {
+    "by": "class",
+    "name": "ls_respawn_point"
+   }
+  },
+  {
+   "id": "drop",
+   "type": "comp.drop_call",
+   "pos": {
+    "x": 980,
+    "y": 31
+   },
+   "params": {}
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "rep",
+    "pin": "tick"
+   },
+   "to": {
+    "node": "pick",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "pick",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "drop",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "pick",
+    "pin": "then"
+   },
+   "to": {
+    "node": "drop",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": []
+}

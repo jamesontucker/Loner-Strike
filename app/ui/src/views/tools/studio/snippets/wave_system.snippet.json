@@ -1,0 +1,111 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Wave system",
+ "description": "Waves from the map's wave spawners: shown on screen, the next one 15 s after a clear (start the first yourself).",
+ "nodes": [
+  {
+   "id": "ws",
+   "type": "comp.on_wave_start",
+   "pos": {
+    "x": 20,
+    "y": 44
+   },
+   "params": {}
+  },
+  {
+   "id": "hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 340,
+    "y": 20
+   },
+   "params": {
+    "text": "Wave",
+    "slot": "top",
+    "seconds": 6
+   }
+  },
+  {
+   "id": "wc",
+   "type": "comp.on_wave_cleared",
+   "pos": {
+    "x": 20,
+    "y": 207
+   },
+   "params": {}
+  },
+  {
+   "id": "cd",
+   "type": "timer.countdown",
+   "pos": {
+    "x": 340,
+    "y": 194
+   },
+   "params": {
+    "secs": 15,
+    "text": "Next wave in",
+    "slot": "top"
+   }
+  },
+  {
+   "id": "go",
+   "type": "comp.wave_start",
+   "pos": {
+    "x": 660,
+    "y": 194
+   },
+   "params": {
+    "wave": 0
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "ws",
+    "pin": "wave"
+   },
+   "to": {
+    "node": "hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "ws",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "wc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "cd",
+    "pin": "done"
+   },
+   "to": {
+    "node": "go",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": []
+}

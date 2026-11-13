@@ -1,0 +1,171 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Kill reward",
+ "description": "A living killer gets 300, a point and a blip.",
+ "nodes": [
+  {
+   "id": "pk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 20,
+    "y": 31
+   },
+   "params": {}
+  },
+  {
+   "id": "alive",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 340,
+    "y": 153
+   },
+   "params": {}
+  },
+  {
+   "id": "br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 660,
+    "y": 160
+   },
+   "params": {}
+  },
+  {
+   "id": "pay",
+   "type": "player.add_money",
+   "pos": {
+    "x": 980,
+    "y": 106
+   },
+   "params": {
+    "amount": 300
+   }
+  },
+  {
+   "id": "pts",
+   "type": "player.add_frags",
+   "pos": {
+    "x": 1300,
+    "y": 58
+   },
+   "params": {
+    "amount": 1
+   }
+  },
+  {
+   "id": "snd",
+   "type": "game.play_sound",
+   "pos": {
+    "x": 1620,
+    "y": 20
+   },
+   "params": {
+    "sound": "buttons/blip1"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "alive",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "alive",
+    "pin": "out"
+   },
+   "to": {
+    "node": "br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "pay",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "pay",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "pts",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "pay",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pts",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "pts",
+    "pin": "then"
+   },
+   "to": {
+    "node": "snd",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": []
+}

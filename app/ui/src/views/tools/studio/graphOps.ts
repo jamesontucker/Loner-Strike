@@ -220,17 +220,31 @@ export function paste(g: Graph, text: string, at: { x: number; y: number }): { g
   } catch {
     return null;
   }
-  let part: { nodes: GNode[]; edges: GEdge[]; comments: GComment[]; variables: GVariable[] };
-  if (v && typeof v === "object" && (v as { kind?: string }).kind === CLIP) {
-    // checked like a graph file: the same shapes
-    const r = parseGraph({ schema: "loner-strike/graph", version: 1, mode: { id: "clip", name: "" }, ...(v as object) });
-    if ("error" in r) return null;
-    part = r.graph;
-  } else {
-    const r = parseGraph(v);
-    if ("error" in r) return null;
-    part = r.graph;
+  const part = readPart(v);
+  return part ? insertPart(g, part, at) : null;
+}
+
+export type Part = { nodes: GNode[]; edges: GEdge[]; comments: GComment[]; variables: GVariable[] };
+
+/** A piece of graph from the clipboard, a snippet file or a whole graph file, checked like a
+ *  graph file (the same shapes and text rules); null if it isn't one. */
+export function readPart(v: unknown): Part | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as { kind?: string; schema?: string };
+  if (o.kind === CLIP || o.schema === SNIPPET) {
+    const { kind: _k, schema: _s, version: _v, name: _n, description: _d, ...rest } = v as Record<string, unknown>;
+    void _k, _s, _v, _n, _d;
+    const r = parseGraph({ schema: "loner-strike/graph", version: 2, mode: { id: "clip", name: "" }, ...rest });
+    return "error" in r ? null : r.graph;
   }
+  const r = parseGraph(v);
+  return "error" in r ? null : r.graph;
+}
+
+/** Adds a piece with fresh ids, its top-left at `at`. Its variables join the graph's: the same
+ *  one when the name, type and scope match, a new one otherwise (renamed when the name is
+ *  taken). Settings naming a variable or another pasted node (a Function, a timer) follow. */
+export function insertPart(g: Graph, part: Part, at: { x: number; y: number }): { graph: Graph; ids: string[] } | null {
   const nodes = part.nodes.filter((n) => nodeDef(n.type));
   if (!nodes.length && !part.comments.length) return null;
   const xs = [...nodes.map((n) => n.pos.x), ...part.comments.map((c) => c.pos.x)];
@@ -245,22 +259,23 @@ export function paste(g: Graph, text: string, at: { x: number; y: number }): { g
     remap.set(old, id);
     return id;
   };
-  // variables: the same one (same name and type) if this graph has it, else added
   let variables = g.variables;
   const varMap = new Map<string, string>();
   for (const x of part.variables) {
     const same = variables.find((y) => y.name === x.name && y.type === x.type && y.scope === x.scope);
-    if (same) varMap.set(x.id, same.id);
-    else {
-      let k = 1;
-      while (variables.some((y) => y.id === `v${k}`)) k++;
-      variables = [...variables, { ...x, id: `v${k}` }];
-      varMap.set(x.id, `v${k}`);
+    if (same) {
+      varMap.set(x.id, same.id);
+      continue;
     }
+    let k = 1;
+    while (variables.some((y) => y.id === `v${k}`)) k++;
+    let name = x.name;
+    for (let n = 2; variables.some((y) => y.name === name); n++) name = `${x.name.slice(0, 26)} ${n}`;
+    variables = [...variables, { ...x, id: `v${k}`, name }];
+    varMap.set(x.id, `v${k}`);
   }
   const pastedIds = new Set(nodes.map((n) => n.id));
   const newNodes = nodes.map((n) => ({ ...n, id: fresh(n.id, "n"), pos: { x: Math.round(n.pos.x + dx), y: Math.round(n.pos.y + dy) }, breakpoint: undefined }));
-  // settings that name a variable, or another pasted node (a Function, a timer), follow along
   for (const n of newNodes) {
     const p = { ...n.params };
     if (typeof p.var === "string" && varMap.has(p.var)) p.var = varMap.get(p.var)!;
@@ -277,6 +292,45 @@ export function paste(g: Graph, text: string, at: { x: number; y: number }): { g
     });
   const ids = [...newNodes.map((n) => n.id), ...newComments.map((c) => c.id)];
   return { graph: { ...g, variables, nodes: [...g.nodes, ...newNodes], edges: [...g.edges, ...newEdges], comments: [...g.comments, ...newComments] }, ids };
+}
+
+// ---- snippets: pieces of graph to drop in --------------------------------------------------
+
+export const SNIPPET = "loner-strike/graph-snippet";
+
+/** A snippet file (shared like any community package: graph data only). */
+export type Snippet = { id: string; name: string; description: string; part: Part; mine?: boolean };
+
+export function readSnippet(id: string, v: unknown, mine = false): Snippet | null {
+  if (!v || typeof v !== "object" || (v as { schema?: string }).schema !== SNIPPET) return null;
+  const part = readPart(v);
+  if (!part) return null;
+  const o = v as { name?: unknown; description?: unknown };
+  const name = typeof o.name === "string" ? o.name : id;
+  return { id, name, description: typeof o.description === "string" ? o.description : "", part, mine };
+}
+
+/** The chosen nodes and comments as a snippet file. */
+export function makeSnippet(g: Graph, ids: Iterable<string>, name: string, description = ""): object | null {
+  const text = copy(g, ids);
+  if (!text) return null;
+  const { kind: _k, ...rest } = JSON.parse(text);
+  void _k;
+  return { schema: SNIPPET, version: 1, name, description, ...rest };
+}
+
+/** Drops a snippet in at `at`, inside a comment box named after it (unless it brings its own). */
+export function insertSnippet(g: Graph, s: Snippet, at: { x: number; y: number }, sizes?: (id: string) => { w: number; h: number }): { graph: Graph; ids: string[] } | null {
+  const r = insertPart(g, s.part, { x: at.x + 30, y: at.y + 50 });
+  if (!r) return null;
+  if (s.part.comments.length) return r;
+  const placed = r.graph.nodes.filter((n) => r.ids.includes(n.id));
+  if (!placed.length) return r;
+  const size = (id: string) => sizes?.(id) ?? { w: 230, h: 110 };
+  const x1 = Math.max(...placed.map((n) => n.pos.x + size(n.id).w));
+  const y1 = Math.max(...placed.map((n) => n.pos.y + size(n.id).h));
+  const c = addComment(r.graph, { x: at.x, y: at.y, w: x1 - at.x + 30, h: y1 - at.y + 30 }, s.name.replace(/[^\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$]/gu, "").slice(0, 200));
+  return { graph: c.graph, ids: [...r.ids, c.id] };
 }
 
 // ---- undo and redo -------------------------------------------------------------------------

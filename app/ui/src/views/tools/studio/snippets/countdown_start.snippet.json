@@ -1,0 +1,178 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Countdown and start",
+ "description": "Everyone frozen for a 5 s countdown at the start of the round, then Go.",
+ "nodes": [
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 20,
+    "y": 137
+   },
+   "params": {}
+  },
+  {
+   "id": "all",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 340,
+    "y": 102
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "fr",
+   "type": "player.freeze",
+   "pos": {
+    "x": 660,
+    "y": 20
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "cd",
+   "type": "timer.countdown",
+   "pos": {
+    "x": 660,
+    "y": 194
+   },
+   "params": {
+    "secs": 5,
+    "text": "Go in",
+    "slot": "center"
+   }
+  },
+  {
+   "id": "all2",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 980,
+    "y": 183
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "un",
+   "type": "player.freeze",
+   "pos": {
+    "x": 1300,
+    "y": 102
+   },
+   "params": {
+    "on": false
+   }
+  },
+  {
+   "id": "msg",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 1300,
+    "y": 276
+   },
+   "params": {
+    "text": "Go!",
+    "seconds": 2
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "all",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "all",
+    "pin": "player"
+   },
+   "to": {
+    "node": "fr",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "all",
+    "pin": "each"
+   },
+   "to": {
+    "node": "fr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "all",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "cd",
+    "pin": "done"
+   },
+   "to": {
+    "node": "all2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "all2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "un",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "all2",
+    "pin": "each"
+   },
+   "to": {
+    "node": "un",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "all2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "msg",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": []
+}

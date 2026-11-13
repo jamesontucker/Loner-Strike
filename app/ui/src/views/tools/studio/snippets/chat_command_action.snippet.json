@@ -1,0 +1,89 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Chat command does something",
+ "description": "Say !heal (or slash heal): back to full health.",
+ "nodes": [
+  {
+   "id": "c",
+   "type": "event.chat_command",
+   "pos": {
+    "x": 20,
+    "y": 31
+   },
+   "params": {
+    "command": "heal"
+   }
+  },
+  {
+   "id": "hp",
+   "type": "player.set_health",
+   "pos": {
+    "x": 340,
+    "y": 69
+   },
+   "params": {
+    "amount": 100
+   }
+  },
+  {
+   "id": "say",
+   "type": "msg.chat",
+   "pos": {
+    "x": 660,
+    "y": 20
+   },
+   "params": {
+    "text": "Healed."
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "c",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "c",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "c",
+    "pin": "player"
+   },
+   "to": {
+    "node": "say",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "hp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "say",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": []
+}

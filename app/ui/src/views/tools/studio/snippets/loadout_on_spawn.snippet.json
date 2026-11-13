@@ -1,0 +1,188 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Give loadout on spawn",
+ "description": "Every spawn: weapons taken away, then an M4, a Desert Eagle, armor and full health.",
+ "nodes": [
+  {
+   "id": "sp",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 20,
+    "y": 64
+   },
+   "params": {}
+  },
+  {
+   "id": "strip",
+   "type": "player.strip",
+   "pos": {
+    "x": 340,
+    "y": 203
+   },
+   "params": {
+    "knife": true
+   }
+  },
+  {
+   "id": "gun",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 660,
+    "y": 160
+   },
+   "params": {
+    "weapon": "m4a1",
+    "ammo": 90
+   }
+  },
+  {
+   "id": "pistol",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 980,
+    "y": 117
+   },
+   "params": {
+    "weapon": "deagle",
+    "ammo": 35
+   }
+  },
+  {
+   "id": "arm",
+   "type": "player.give_item",
+   "pos": {
+    "x": 1300,
+    "y": 74
+   },
+   "params": {
+    "item": "vesthelm"
+   }
+  },
+  {
+   "id": "hp",
+   "type": "player.set_health",
+   "pos": {
+    "x": 1620,
+    "y": 20
+   },
+   "params": {
+    "amount": 100
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "strip",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "sp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "strip",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "gun",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pistol",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "arm",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "strip",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gun",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "gun",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pistol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "pistol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "arm",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "arm",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": []
+}

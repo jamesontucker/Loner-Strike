@@ -2590,12 +2590,18 @@
    "type": "creature.spawn",
    "title": "Spawn Creature",
    "category": "Creatures",
-   "help": "Makes a creature of this type at the entity with this name. Needs the Loner-Strike bot brain with creatures (the debugger says so if not).",
+   "help": "Makes a creature of this type at an entity (wired into At, or the one with this name). Needs the Loner-Strike bot brain with creatures (the debugger says so if not).",
    "inputs": [
     {
      "id": "exec",
      "type": "exec",
      "label": ""
+    },
+    {
+     "id": "at_ent",
+     "type": "entity",
+     "label": "At",
+     "optional": true
     }
    ],
    "outputs": [

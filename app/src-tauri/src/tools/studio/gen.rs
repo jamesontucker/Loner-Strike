@@ -1466,7 +1466,11 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         "creature.spawn" => {
             let kind = pawn_str(&name_text(gen.text(n, def, "kind")));
-            let at = pawn_str(&name_text(gen.text(n, def, "at")));
+            // (at a wired entity, or the one with the name)
+            let at = match v.data_source(id, "at_ent") {
+                Some(_) => format!("lsg_ent_find_origin({})", inp("at_ent", "entity")),
+                None => pawn_str(&name_text(gen.text(n, def, "at"))),
+            };
             if debug {
                 b.line(format!("\tif (!get_cvar_pointer(\"ls_creature_ver\"))\n\t\t{}\n\telse if (!(g_lsgOut[{i}] = lsg_creature({kind}, {at})))\n\t\t{}\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))", err("This server's bot brain has no creatures (ls_creature)."), err("Not spawned: no entity has that name, or that type isn't loaded on this map.")));
             } else {
@@ -1601,7 +1605,7 @@ fn lsg_secs(v: &Option<Val>) -> String {
 }
 
 /// Helpers every plugin gets (stocks: the ones a graph doesn't use cost nothing).
-const HELPERS: &str = r#"stock lsg_slot(id)
+const HELPERS: &str = r##"stock lsg_slot(id)
 	return id >= 1 && id <= MaxClients ? id : 0
 
 stock bool:lsg_ok(id)
@@ -1749,7 +1753,12 @@ stock bool:lsg_named(ent, const name[])
 }
 
 stock bool:lsg_origin_of(const name[], Float:o[3])
+{
+	// "#12": entity 12 (an entity wired in, not a name)
+	if (name[0] == '#')
+		return lsg_ent_origin(str_to_num(name[1]), o)
 	return lsg_ent_origin(lsg_find(name), o)
+}
 
 stock bool:lsg_ent_origin(ent, Float:o[3])
 {
@@ -1799,6 +1808,21 @@ stock lsg_creature(const kind[], const at[])
 	new Float:o[3]
 	if (!get_cvar_pointer("ls_creature_ver") || !lsg_origin_of(at, o))
 		return 0
+	return lsg_creature_o(kind, o)
+}
+
+/// (an entity's name for lsg_creature: "" picks no entity, so its origin is looked up as #index)
+stock lsg_ent_find_origin(ent)
+{
+	new s[16]
+	formatex(s, charsmax(s), "#%d", ent)
+	return s
+}
+
+stock lsg_creature_o(const kind[], const Float:o[3])
+{
+	if (!get_cvar_pointer("ls_creature_ver"))
+		return 0
 	new ent = create_entity("ls_creature")
 	if (ent <= 0)
 		return 0
@@ -1837,7 +1861,7 @@ stock lsg_round_time(secs)
 	message_begin(MSG_ALL, get_user_msgid("RoundTime"))
 	write_short(max(secs, 0))
 	message_end()
-}"#;
+}"##;
 
 /// Squads (also the "same side" a revive needs).
 const SQUADS: &str = r#"stock g_lsgSquad[33], bool:g_lsgSquadFF

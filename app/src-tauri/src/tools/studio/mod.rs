@@ -66,6 +66,43 @@ pub fn graphs_dir() -> PathBuf {
     crate::sys::app_dir().join("tools").join("studio").join("graphs")
 }
 
+/// The player's own snippets (pieces of graph): `<app>/tools/studio/snippets/<id>.snippet.json`.
+pub fn snippets_dir() -> PathBuf {
+    crate::sys::app_dir().join("tools").join("studio").join("snippets")
+}
+
+pub const SNIPPET_SCHEMA: &str = "loner-strike/graph-snippet";
+
+/// A snippet checked like a graph (same shapes, ids, node kinds, settings and text rules), its
+/// name and description included. Graph data only: it never carries code.
+pub fn check_snippet(v: &Value) -> Result<(), String> {
+    if v.get("schema").and_then(Value::as_str) != Some(SNIPPET_SCHEMA) {
+        return Err("That isn't a Game Mode Studio snippet.".into());
+    }
+    let name = v.get("name").and_then(Value::as_str).unwrap_or("");
+    let desc = v.get("description").and_then(Value::as_str).unwrap_or("");
+    if name.trim().is_empty() || !graph::valid_label(name, 40) || !graph::valid_label(desc, 160) {
+        return Err("A snippet needs a name (up to 40 letters, digits, spaces or plain punctuation) and a short description.".into());
+    }
+    let mut g = v.clone();
+    if let Some(o) = g.as_object_mut() {
+        o.insert("schema".into(), json!(graph::SCHEMA));
+        o.insert("version".into(), json!(graph::VERSION));
+        o.insert("mode".into(), json!({"id": "snippet", "name": "Snippet"}));
+    }
+    let g = graph::from_value(g)?;
+    // (a piece of a graph may leave pins unwired or nodes unrun: only its own text and shape count)
+    let bad: Vec<String> = graph::validate(&g)
+        .into_iter()
+        .filter(|p| p.level == "error" && !p.message.contains("needs something wired") && !p.message.contains("only known") && !p.message.contains("Pick"))
+        .map(|p| p.message)
+        .collect();
+    match bad.first() {
+        Some(m) => Err(format!("That snippet has a problem: {m}")),
+        None => Ok(()),
+    }
+}
+
 fn graph_path(id: &str) -> PathBuf {
     graphs_dir().join(format!("{id}.graph.json"))
 }
@@ -562,6 +599,71 @@ async fn api_command(State(st): State<Shared>, h: HeaderMap, Json(req): Json<Com
     .await
 }
 
+async fn api_snippets() -> Response {
+    blocking(move || {
+        let list: Vec<Value> = std::fs::read_dir(snippets_dir())
+            .map(|d| {
+                d.flatten()
+                    .filter_map(|e| {
+                        let name = e.file_name().to_string_lossy().to_string();
+                        let id = name.strip_suffix(".snippet.json")?.to_string();
+                        if !graph::valid_mode_id(&id) || e.metadata().ok()?.len() > MAX_GRAPH_BYTES {
+                            return None;
+                        }
+                        let v: Value = serde_json::from_str(&std::fs::read_to_string(e.path()).ok()?).ok()?;
+                        check_snippet(&v).ok()?;
+                        Some(json!({"id": id, "snippet": v}))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(json!({"snippets": list}))
+    })
+    .await
+}
+
+async fn api_snippet_save(UrlPath(id): UrlPath<String>, h: HeaderMap, Json(body): Json<Value>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || {
+        if !graph::valid_mode_id(&id) {
+            return Err("A snippet's id is 2 to 24 small letters, digits or _.".into());
+        }
+        let v = body.get("snippet").cloned().unwrap_or(Value::Null);
+        check_snippet(&v)?;
+        let text = serde_json::to_string_pretty(&v).map_err(|_| INTERNAL.to_string())?;
+        if text.len() as u64 > MAX_GRAPH_BYTES {
+            return Err("That snippet is too big.".into());
+        }
+        let dir = snippets_dir();
+        std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn't save the snippet ({e})."))?;
+        let path = dir.join(format!("{id}.snippet.json"));
+        crate::safety::before("Game Mode Studio", "save a snippet", &path);
+        crate::sys::write_atomic(&path, text.as_bytes()).map_err(|e| format!("Couldn't save the snippet ({e})."))?;
+        Ok(json!({"ok": true}))
+    })
+    .await
+}
+
+async fn api_snippet_delete(UrlPath(id): UrlPath<String>, h: HeaderMap) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || {
+        if !graph::valid_mode_id(&id) {
+            return Err("That isn't a snippet.".into());
+        }
+        let path = snippets_dir().join(format!("{id}.snippet.json"));
+        crate::safety::before("Game Mode Studio", "delete a snippet", &path);
+        match std::fs::remove_file(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("Couldn't delete the snippet ({e}).")),
+            _ => Ok(json!({"ok": true})),
+        }
+    })
+    .await
+}
+
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/tools/studio/status", get(api_status))
@@ -572,6 +674,9 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/studio/generate", post(api_generate))
         .route("/api/tools/studio/compile", post(api_compile))
         .route("/api/tools/studio/source", post(api_source))
+        .route("/api/tools/studio/snippets", get(api_snippets))
+        .route("/api/tools/studio/snippet/:id", post(api_snippet_save))
+        .route("/api/tools/studio/snippet/:id/delete", post(api_snippet_delete))
         .route("/api/tools/studio/playtest", post(api_playtest))
         .route("/api/tools/studio/uninstall/:id", post(api_uninstall))
         .route("/api/tools/studio/debug/events", get(api_events))
@@ -589,6 +694,46 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    /// Every built-in snippet passes the snippet check, and dropped into an empty mode it checks
+    /// clean and makes a plugin (compiled with amxxpc in the compile test below).
+    pub fn builtin_snippets() -> Vec<(String, Value)> {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui/src/views/tools/studio/snippets");
+        let mut out: Vec<(String, Value)> = std::fs::read_dir(dir).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().ends_with(".snippet.json")).map(|e| (e.file_name().to_string_lossy().replace(".snippet.json", ""), serde_json::from_str(&std::fs::read_to_string(e.path()).unwrap()).unwrap())).collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
+
+    pub fn snippet_as_graph(id: &str, v: &Value) -> Graph {
+        let mut g = v.clone();
+        let o = g.as_object_mut().unwrap();
+        o.insert("schema".into(), json!(graph::SCHEMA));
+        o.insert("version".into(), json!(2));
+        o.insert("mode".into(), json!({"id": format!("sn_{id}").chars().take(24).collect::<String>(), "name": "Snippet"}));
+        graph::from_value(g).unwrap()
+    }
+
+    #[test]
+    fn snippets_check_clean() {
+        let all = builtin_snippets();
+        assert!(all.len() >= 14);
+        for (id, v) in &all {
+            check_snippet(v).unwrap_or_else(|e| panic!("{id}: {e}"));
+            let g = snippet_as_graph(id, v);
+            let p = graph::validate(&g);
+            assert!(p.iter().all(|p| p.level != "error"), "{id}: {p:?}");
+            let _ = gen::generate(&g, false);
+        }
+        // hostile text in a snippet is refused
+        let mut bad = all[0].1.clone();
+        bad["name"] = json!("x */ y");
+        assert!(check_snippet(&bad).is_err());
+        let mut bad = all[0].1.clone();
+        bad["nodes"][0]["params"]["text"] = json!("a\"); server_cmd(\"quit");
+        bad["nodes"][0]["type"] = json!("msg.broadcast");
+        assert!(check_snippet(&bad).is_err());
+        assert!(check_snippet(&json!({"schema": "other"})).is_err());
     }
 
     #[test]
@@ -668,7 +813,11 @@ mod tests {
         let every = include_str!("testdata/every_node.graph.json");
         let ls = include_str!("../../../../ui/src/views/tools/studio/templates/last-stand.graph.json");
         let br = include_str!("../../../../ui/src/views/tools/studio/templates/battle-royale.graph.json");
-        for (name, text) in [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br)] {
+        let mut graphs: Vec<(String, String)> = [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br)].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+        for (id, v) in builtin_snippets() {
+            graphs.push((format!("sn_{id}"), serde_json::to_string(&snippet_as_graph(&id, &v)).unwrap()));
+        }
+        for (name, text) in graphs.iter().map(|(a, b)| (a.as_str(), b.as_str())) {
             for debug in [false, true] {
                 let g = graph::parse(text).unwrap();
                 let out = gen::generate(&g, debug);

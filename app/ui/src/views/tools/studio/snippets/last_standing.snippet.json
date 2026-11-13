@@ -1,0 +1,214 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Last squad standing wins",
+ "description": "When one squad (or one player, without squads) is left, they win and the round ends.",
+ "nodes": [
+  {
+   "id": "pk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 340,
+    "y": 218
+   },
+   "params": {}
+  },
+  {
+   "id": "left",
+   "type": "squad.alive",
+   "pos": {
+    "x": 20,
+    "y": 90
+   },
+   "params": {}
+  },
+  {
+   "id": "one",
+   "type": "math.compare",
+   "pos": {
+    "x": 340,
+    "y": 66
+   },
+   "params": {
+    "op": "le",
+    "b": 1
+   }
+  },
+  {
+   "id": "br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 660,
+    "y": 135
+   },
+   "params": {}
+  },
+  {
+   "id": "win",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 980,
+    "y": 124
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "name",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1300,
+    "y": 124
+   },
+   "params": {
+    "text": "Winner:",
+    "slot": "center",
+    "seconds": 6
+   }
+  },
+  {
+   "id": "team",
+   "type": "player.get_team",
+   "pos": {
+    "x": 1300,
+    "y": 20
+   },
+   "params": {}
+  },
+  {
+   "id": "end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 1620,
+    "y": 66
+   },
+   "params": {}
+  },
+  {
+   "id": "draw",
+   "type": "score.end_round",
+   "pos": {
+    "x": 1300,
+    "y": 298
+   },
+   "params": {
+    "winner": "draw"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "one",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "one",
+    "pin": "out"
+   },
+   "to": {
+    "node": "br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "win",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "win",
+    "pin": "player"
+   },
+   "to": {
+    "node": "name",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "win",
+    "pin": "then"
+   },
+   "to": {
+    "node": "name",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "win",
+    "pin": "player"
+   },
+   "to": {
+    "node": "team",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "team",
+    "pin": "out"
+   },
+   "to": {
+    "node": "end",
+    "pin": "winner"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "name",
+    "pin": "then"
+   },
+   "to": {
+    "node": "end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "win",
+    "pin": "none"
+   },
+   "to": {
+    "node": "draw",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": []
+}

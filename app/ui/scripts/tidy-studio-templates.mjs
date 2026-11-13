@@ -1,4 +1,4 @@
-// Lays out every Game Mode Studio template the way Tidy up does (dagre, comment boxes fitted
+// Lays out every Game Mode Studio template and snippet the way Tidy up does (dagre, comment boxes fitted
 // round their nodes), with node sizes estimated as drawn. Run after changing a template:
 //   npm run tidy:studio
 
@@ -21,10 +21,13 @@ const raw = {
 try {
   await build({ entryPoints: [join(root, "src/views/tools/studio/layout.ts")], outfile: join(out, "layout.mjs"), bundle: true, platform: "node", format: "esm", plugins: [raw], logLevel: "warning" });
   const { tidyEstimated } = await import(pathToFileURL(join(out, "layout.mjs")).href);
-  for (const f of readdirSync(dir).filter((f) => f.endsWith(".graph.json"))) {
-    const g = JSON.parse(readFileSync(join(dir, f), "utf8"));
-    writeFileSync(join(dir, f), JSON.stringify(tidyEstimated(g), null, 1) + "\n");
-    console.log("tidied", f);
+  const snippets = join(root, "src/views/tools/studio/snippets");
+  for (const [d, ext] of [[dir, ".graph.json"], [snippets, ".snippet.json"]]) {
+    for (const f of readdirSync(d).filter((f) => f.endsWith(ext))) {
+      const g = JSON.parse(readFileSync(join(d, f), "utf8"));
+      writeFileSync(join(d, f), JSON.stringify(tidyEstimated(g), null, 1) + "\n");
+      console.log("tidied", f);
+    }
   }
 } finally {
   rmSync(out, { recursive: true, force: true });

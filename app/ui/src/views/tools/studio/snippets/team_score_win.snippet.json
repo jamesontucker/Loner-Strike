@@ -1,0 +1,190 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Team score to 10 wins",
+ "description": "Each kill scores for the killer's team; the first team to 10 wins the round.",
+ "nodes": [
+  {
+   "id": "pk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 20,
+    "y": 98
+   },
+   "params": {}
+  },
+  {
+   "id": "team",
+   "type": "player.get_team",
+   "pos": {
+    "x": 340,
+    "y": 44
+   },
+   "params": {}
+  },
+  {
+   "id": "add",
+   "type": "var.add",
+   "pos": {
+    "x": 660,
+    "y": 172
+   },
+   "params": {
+    "var": "tscore",
+    "amount": 1
+   }
+  },
+  {
+   "id": "get",
+   "type": "var.get",
+   "pos": {
+    "x": 660,
+    "y": 20
+   },
+   "params": {
+    "var": "tscore"
+   }
+  },
+  {
+   "id": "cmp",
+   "type": "math.compare",
+   "pos": {
+    "x": 980,
+    "y": 20
+   },
+   "params": {
+    "op": "ge",
+    "b": 10
+   }
+  },
+  {
+   "id": "br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 107
+   },
+   "params": {}
+  },
+  {
+   "id": "end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 1620,
+    "y": 64
+   },
+   "params": {}
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "team",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "team",
+    "pin": "out"
+   },
+   "to": {
+    "node": "add",
+    "pin": "team"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "add",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "team",
+    "pin": "out"
+   },
+   "to": {
+    "node": "get",
+    "pin": "team"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "get",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cmp",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "cmp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "add",
+    "pin": "then"
+   },
+   "to": {
+    "node": "br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "team",
+    "pin": "out"
+   },
+   "to": {
+    "node": "end",
+    "pin": "winner"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "end",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": [
+  {
+   "id": "tscore",
+   "name": "Team score",
+   "type": "number",
+   "scope": "team",
+   "default": 0
+  }
+ ]
+}
