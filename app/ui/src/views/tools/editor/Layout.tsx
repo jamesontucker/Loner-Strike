@@ -145,8 +145,10 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
           >
             {shown && views[i] === "3d" && <NavHud />}
             {shown && views[i] === "3d" && i === firstThreeD && <NavHint />}
-            {n > 1 && shown && (
-              <div className="ed-pane-head" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={() => toggleMaximise(i)}>
+            {shown && (
+              // one pane: the view is picked in the top bar, so only the drawing style shows here
+              <div className="ed-pane-head" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={() => n > 1 && toggleMaximise(i)}>
+                {n > 1 && (
                 <select
                   value={views[i]}
                   aria-label={`What pane ${i + 1} shows`}
@@ -162,6 +164,7 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
                     </option>
                   ))}
                 </select>
+                )}
                 <select
                   className="ed-pane-mode"
                   value={modeFor(modes?.[i], views[i])}
@@ -175,9 +178,11 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
                     </option>
                   ))}
                 </select>
+                {n > 1 && (
                 <button type="button" className="ed-pane-max" title={max === i ? "Put the panes back (Shift+Space)" : "Fill the space with this pane (Shift+Space)"} aria-label={max === i ? "Restore" : "Maximise"} onClick={() => toggleMaximise(i)}>
                   {max === i ? "▣" : "□"}
                 </button>
+                )}
               </div>
             )}
           </div>

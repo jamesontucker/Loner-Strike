@@ -29,6 +29,7 @@ import { shiftHeld, snapToGeometry } from "./snapGeo";
 import { edgeLook, flatMaterial, usePaneMode } from "./renderModes";
 import { EntityModelMesh, SpriteGlow, useEntityModel } from "./EntityModels";
 import { MergedBrushes } from "./MergedBrushes";
+import { brushRaycast } from "./pickRay";
 import { useNav } from "./navigation";
 import { NavCamera } from "./NavCamera";
 import { Bookmarks, MeasureLine, sameP, SelectRect, TexHandles, useVisibleBrush, VertexHandles } from "./SceneExtras";
@@ -143,10 +144,11 @@ function BrushMesh({ b, mats, picked, hideSky, version, dim }: { b: BrushGeo; ma
   const look = edgeLook(mode, picked, b.entity != null);
   useEffect(() => () => edges.dispose(), [edges]);
   const skyOnly = hideSky && b.textures.every(isSkyTex);
+  const raycast = brushRaycast(b); // P5: picks on edges too (pickRay.ts)
   return (
     <group>
-      {!skyOnly && <mesh geometry={b.geometry} material={materials} userData={{ kind: "brush", id: b.id }} visible={mode !== "wire"} />}
-      {skyOnly && <mesh geometry={b.geometry} userData={{ kind: "brush", id: b.id, sky: true }} visible={false} />}
+      {!skyOnly && <mesh geometry={b.geometry} material={materials} userData={{ kind: "brush", id: b.id }} visible={mode !== "wire"} raycast={raycast} />}
+      {skyOnly && <mesh geometry={b.geometry} userData={{ kind: "brush", id: b.id, sky: true }} visible={false} raycast={raycast} />}
       {dim && !skyOnly && <mesh geometry={b.geometry} material={DIM_MATERIAL} renderOrder={2} raycast={() => null} />}
       <lineSegments geometry={edges} renderOrder={picked ? 3 : 1}>
         <lineBasicMaterial color={look.color} transparent opacity={look.opacity} depthTest={!picked && mode !== "wire"} />

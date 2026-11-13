@@ -9,6 +9,7 @@ import type { Draw } from "../viewer/bundle";
 import type { MapMaterials } from "../viewer/materials";
 import { flatMaterial, edgeLook, type RenderMode } from "./renderModes";
 import type { BrushGeo } from "./store";
+import { brushRaycast } from "./pickRay";
 
 const drawOf = (texture: string): Draw => ({ model: 0, texture, start: 0, count: 0, flags: 0 });
 const isSky = (t: string) => /^sky$/i.test(t);
@@ -121,7 +122,7 @@ export function MergedBrushes({ list, mats, version, mode, hideSky }: { list: Br
       </lineSegments>
       {/* clicking finds each brush and its face here (never drawn) */}
       {list.map((b) => (
-        <mesh key={b.id} geometry={b.geometry} visible={false} userData={hideSky && b.textures.every(isSky) ? { kind: "brush", id: b.id, sky: true } : { kind: "brush", id: b.id }} />
+        <mesh key={b.id} geometry={b.geometry} visible={false} raycast={brushRaycast(b)} userData={hideSky && b.textures.every(isSky) ? { kind: "brush", id: b.id, sky: true } : { kind: "brush", id: b.id }} />
       ))}
     </>
   );

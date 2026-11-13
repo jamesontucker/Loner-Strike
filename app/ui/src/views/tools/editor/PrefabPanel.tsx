@@ -16,6 +16,7 @@ import { dragging, snapshot, useP4 } from "./extras";
 import { PREFAB_MIME } from "./P4Scene";
 import { selectionBounds, useEditor } from "./store";
 import "./p4.css";
+import "./p5.css";
 import { CommunityChip, CommunityLink, communityPrefab, useCommunity } from "../community/chip";
 
 const AUTHOR_KEY = "ls.editor.prefabAuthor";
@@ -132,7 +133,7 @@ export function PrefabPanel() {
           <p className="small-note muted">Drag one onto the map, or Place and click: it stands on floors, hangs from ceilings and faces out of walls, corner on the grid (Alt: off the grid). R turns it while placing. It comes in as one group; Ungroup it to change the pieces.</p>
         </>
       )}
-      {saving && <SaveDialog onClose={() => setSaving(false)} onSaved={() => void load()} />}
+      {saving && <SaveDialog taken={(list ?? []).filter((p) => !p.builtin)} onClose={() => setSaving(false)} onSaved={() => void load()} />}
       {editing && <EditDialog p={editing} onClose={() => setEditing(null)} onSaved={() => void load()} />}
     </div>
   );
@@ -246,7 +247,16 @@ function EditDialog({ p, onSaved, onClose }: { p: Prefab; onSaved: () => void; o
   );
 }
 
-function SaveDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+/** The first "Name 2", "Name 3", ... that none of your prefabs uses. */
+function nextFreeName(name: string, taken: Prefab[]) {
+  const used = new Set(taken.map((p) => p.name.trim().toLowerCase()));
+  // ("Crate 2" taken too: "Crate 3", not "Crate 2 2")
+  const m = /^(.*\S)\s+\d+$/.exec(name.trim());
+  const base = m && used.has(m[1].toLowerCase()) ? m[1] : name.trim();
+  for (let n = 2; ; n++) if (!used.has(`${base} ${n}`.toLowerCase())) return `${base} ${n}`;
+}
+
+function SaveDialog({ taken, onClose, onSaved }: { taken: Prefab[]; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
   const [name, setName] = useState("");
   const [touched, setTouched] = useState(false);
@@ -276,6 +286,10 @@ function SaveDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     };
   }, []);
   const nameError = touched && !name.trim() ? "Give it a name." : null;
+  // P5: a name you already use asks: replace that prefab, or keep both (this one gets "Name 2")
+  const same = taken.find((p) => p.name.trim().toLowerCase() === name.trim().toLowerCase());
+  const [clash, setClash] = useState<"replace" | "both">("both");
+  const saveAs = same && clash === "both" ? nextFreeName(name, taken) : name.trim();
   const save = async () => {
     setTouched(true);
     if (!name.trim()) return;
@@ -285,21 +299,43 @@ function SaveDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     } catch {
       /* private window */
     }
-    const r = await api.savePrefab({ name, tags: tags.split(","), author, description: desc, brushes: ids.brushes, entities: ids.entities, thumb });
+    const r = await api.savePrefab({ name: saveAs, tags: tags.split(","), author, description: desc, brushes: ids.brushes, entities: ids.entities, thumb });
     setBusy(false);
     if (r.error) return setError(r.error);
-    toast(`Saved the prefab ${r.name}.`);
+    if (same && clash === "replace") {
+      const d = await api.deletePrefab(same.id);
+      if (d.error) toast(`Saved it, but the old “${same.name}” couldn't be removed: ${d.error}`, true);
+    }
+    toast(`${same && clash === "replace" ? "Replaced" : "Saved"} the prefab ${r.name}.`);
     useP4.getState().set({ prefabRev: useP4.getState().prefabRev + 1 });
     onSaved();
     onClose();
   };
   const what = `${ids.brushes.length} brush${ids.brushes.length === 1 ? "" : "es"}${ids.entities.length ? `, ${ids.entities.length} entit${ids.entities.length === 1 ? "y" : "ies"}` : ""}`;
   return (
-    <EditorDialog title="Save as a prefab" subtitle={`What's picked: ${what}`} onClose={onClose} error={error} primary={{ label: "Save prefab", onClick: () => void save(), busy, busyLabel: "Saving…" }} footerNote="Kept in your prefab library, for any map.">
+    <EditorDialog title="Save as a prefab" subtitle={`What's picked: ${what}`} onClose={onClose} error={error} primary={{ label: same && clash === "replace" ? "Replace prefab" : "Save prefab", onClick: () => void save(), busy, busyLabel: "Saving…" }} footerNote="Kept in your prefab library, for any map.">
       <div className="ed-thumb-pick">
         {thumb ? <img src={thumb} alt="The prefab's picture" /> : <div className="p4-nothumb">A picture is drawn from its shapes</div>}
         <DialogSection>
-          <Field label="Name" error={nameError}>
+          <Field
+            label="Name"
+            error={nameError}
+            note={
+              same && (
+                <span className="p5-clash">
+                  You already have “{same.name}”.{" "}
+                  <span className="seg" role="group" aria-label="A prefab with this name exists">
+                    <button type="button" aria-pressed={clash === "both"} onClick={() => setClash("both")}>
+                      Keep both (“{nextFreeName(name, taken)}”)
+                    </button>
+                    <button type="button" aria-pressed={clash === "replace"} onClick={() => setClash("replace")}>
+                      Replace it
+                    </button>
+                  </span>
+                </span>
+              )
+            }
+          >
             {(id) => <input id={id} autoFocus value={name} maxLength={64} placeholder="Market stall" onChange={(e) => setName(e.target.value)} onBlur={() => setTouched(true)} />}
           </Field>
           <Field label="Tags" note="Separate them with commas; they help search.">

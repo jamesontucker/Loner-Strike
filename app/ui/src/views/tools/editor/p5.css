@@ -276,3 +276,6 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .ed-nav-hint { position: absolute; left: 10px; bottom: 10px; z-index: 2; display: flex; gap: 8px; align-items: center; max-width: calc(100% - 20px); padding: 4px 6px 4px 10px; font-size: 12px; color: var(--bone); background: rgba(20, 24, 17, 0.82); border: 1px solid var(--line); border-radius: 3px; }
 .ed-nav-hint button { border: 0; background: none; color: var(--bone-dim); cursor: pointer; font-size: 14px; padding: 0 3px; }
 .ed-nav-hint button:hover { color: var(--signal); }
+/* P5: the prefab name-clash choice in Save as a prefab */
+.p5-clash { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.p5-clash .seg button { padding: 2px 8px; font-size: 12px; }
