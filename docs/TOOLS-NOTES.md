@@ -2701,6 +2701,76 @@ a column of `.tools-panel`s on the right, a status line under the map) with **P8
   full report) would need a summary route that reads every nav / BSP — left out on purpose (365 maps).
 - Not clicked through with a real save here (saving writes the real game folder); the save paths are unchanged.
 
+### Creatures: Half-Life model versions (Y, 2026-11-12) — for W1, the app, server setup
+- **Cause of "gliding with arm swings / superman attack":** the Half-Life 25th anniversary update changed
+  `valve/models/zombie.mdl` (44 → 49 sequences; `idle2` inserted at 1, so everything after shifted by one). Every server
+  copy here (HLDS from SteamCMD: Servers/.base, tester, .nav-learner, all Sim/*, ~/loner-strike-sim/hlds) had the old one,
+  and the game the new one. The server's walk (10) was the game's `attack2`, and its `attack1` (8) the game's `falling`.
+  `barney.mdl` and `gman.mdl` also differ (the shopkeeper), but with the same sequence order. bullsquid, houndeye,
+  agrunt, garg, headcrab and sentry are identical.
+- **App (commit b6ae40a, `app/src-tauri/src/hlmodels.rs`):** at every server start (local before spawn; remote next to
+  `ensure_ham`), the server's `valve/models/{zombie,bullsquid,houndeye,agrunt,garg,headcrab,sentry,barney,gman}.mdl`
+  are replaced by this computer's game's copy when the sha256 differs. A remote copy goes over SSH into
+  `~/loner-strike/servers/<id>/valve/models/` (`.new` then `mv`). Nothing is downloaded or redistributed: both copies are
+  Valve's, on the player's own machines. A model the game here lacks is left alone.
+- **Done by hand now:** every local server and sim copy has the current files (201 replaced).
+- **Fork (ls-creatures):** a loud console WARNING at precache when a known HL model's size or sequence count isn't the
+  current Steam one. Sequences were already chosen by activity or name from the precached file (which is right for the
+  server's own copy); what broke was the client drawing that index from a different file.
+- `mp_consistency`/`force_unmodified` aren't used: they'd kick every player with an older or newer copy, and the copy
+  step makes it unnecessary.
+- **Barricades (W1):** ls_creature never targets barricades (it only targets players and only hits through clear line
+  of sight). The barricade damage comes from gm_laststand's `near_box` rule, so a creature already inside that stands
+  next to a rebuilt barricade "hits" it. Suggest counting only creatures on the outside: the side test against the
+  base or spawner direction, or the creature's distance to the base versus the barricade's.
+
+### Map builder: ls_outpost design review and rebuild plan — 2026-11-12
+**Critique of ls_outpost v1** (as a wave-defence level designer; the user: "lots of illogical things"):
+- **Lanes vs gates**: the yard and alley lead to gates, but the south "walkway" climbs over rooftops and enters *on top
+  of the wall*: creatures got an elevated path straight over the defences, and the barricade sat on a ledge nobody
+  could read. A wall that creatures walk across isn't a wall.
+- **The big south rooftop block** was 1280 x 1216 of unreachable, pointless roof with invisible walls on it: it read as
+  space you should be able to use, and it pushed the walkway's spawn far away.
+- **Barricades** were solid wooden slabs: you couldn't see or shoot the creatures hitting them, so a gate was a wall
+  until it broke, then a flood. Wave-defence barricades need to be see-through (boards with gaps, a fence).
+- **Defender positions**: the station roof saw the yard, but no position looked down the alley or the walkway from
+  behind its barricade; the east "gun platform" faced a 128-wide gate it couldn't see out of.
+- **Fallback room**: the station had one door facing away from two gates and no windows to fight from; it worked as a
+  closet, not a last stand. The overrun area (lst_base) wasn't marked.
+- **Armory**: inside, but tucked in a corner behind the stairs, unlit from most of the base, not on any path.
+- **Spawn pockets**: out of sight, but bare sand boxes with no reason to exist (where do the creatures come from?).
+- **Heights**: four different floor levels (0, 96, 128, 160) with stairs in odd places, low parapets with clip above
+  them, rooftops you could see onto but not reach. Players can't tell what's walkable.
+- **Readability**: every lane was the same sand and the same cold light; nothing told you "this is the alley".
+- **The base** was an empty square with three gaps; walls only 128 high with invisible clip; no gatehouses,
+  nothing that looked like an outpost.
+
+**Principles taken from proven layouts** (no layouts copied):
+- *CoD Zombies' boarded windows*: entries are visible, boarded openings into the room you hold; you watch enemies
+  arrive and tear at the boards, you shoot through the gaps and rebuild between them; each entry pulls you a bit.
+- *Left 4 Dead finales*: a holdout with a few high spots, every approach visible from one, supplies placed a short,
+  dangerous run away; the horde converges from directions you can learn.
+- *Killing Floor*: open arenas with a loop, a trader you run to between waves (risk vs reward), no dead ends.
+- *CS zombie plague/escape bases*: a compound with a few hard chokepoints and camping spots; a smaller inner room
+  for the end; the map is understandable in one look.
+→ So: a compact walled compound; 3 boarded, see-through gates that creatures must break; 3 routes, each with one
+  character and colour, converging on their gate; creatures come out of storm drains (culverts) at the route ends;
+  a firing step behind a parapet along the walls, over the gates (gatehouses), reached by stairs inside, never by
+  creatures from outside; a keep with a door and windows as the last stand; the armory (Barney's counter) in a
+  lit corner by the east gate: safe, but a short walk across the courtyard; the supply drops land just outside the
+  west wall in the open field (climb down the ladder from the firing step, run, climb back: creatures can't climb);
+  one floor level outside (0), one raised level inside (the firing step, 112).
+
+**Barricade format (W1, please confirm)**: an `ls_barricade` brush entity made of the visible boards (planks with
+16-unit gaps between them, so you see and shoot through) **plus one CLIP brush filling the whole opening** in the same
+entity. CLIP only exists in the movement hulls, so bullets and sight pass between the boards while players, bots and
+creatures can't squeeze through. Keys as before (team 2, hp, repair_secs, repair_cost, blocks_bots 1). When it's broken
+gm_components hides it and makes it non-solid, which also drops the clip. If you'd rather have a model or a beam fence,
+say so; the gates are 128 wide x 96 high.
+**lst_base**: an `ls_damage_zone` named `lst_base` with `enabled=0 show=0 dmg=0` and `size="1024 896 256"` over the
+courtyard (the only area component that does nothing when off). If you add a plain marker (e.g. `info_target` with
+`size`), tell me and I'll switch.
+
 ### Agent R: Plugin Studio, round 2 (user feedback) — 2026-11-12
 **1. Read only, everywhere (UI and routes, so MCP too).** One rule in `tools/plugins.rs` (`protection`, `owner_of`):
 - read only in every folder view and refused by save / try it / rename / delete / take out:
@@ -2760,6 +2830,22 @@ the .md files are in the Plugin Studio chunk / their own). PluginStudio chunk is
 **Requests**
 - (S, MCP) New routes `/api/tools/plugins/rename` and `/reset` (edits), if the MCP wraps the Plugin Studio's routes.
 
+**W2 → W1: barricades and bot fire (ls-modes 2026-11-12, CI 43368722199).**
+- Cause of "bots shoot the planks": the brain's sight traces skip "glass", meaning any entity rendered see-through.
+  A damaged barricade is tinted `kRenderTransTexture` (barricade_tint), so bots saw creatures through it, while
+  their bullets hit it.
+- Now, before every shot at a creature, the bot traces the bullet's own line from the gun. Anything in the way that
+  isn't the target, another creature, or **shoot-through by design** holds the trigger. The bot keeps watching, and
+  after 1.5 s it moves to a spot nearby for another angle. Sight also uses a second trace that doesn't skip glass:
+  boards that are actually drawn hide a creature.
+- **Marker for your redesign:** an `ls_*` entity with **`pev_iuser4` = 1** is shoot-through (bots fire through it,
+  so make sure bullets really pass: SOLID_NOT to traces, e.g. a separate blocker for movement only). It is also
+  treated as see-through. Also see-through but **not** shoot-through: anything with no model (a beam fence's box),
+  EF_NODRAW, or render mode ≠ normal with renderamt < 200. A barricade bullets stop needs no marker.
+- **Measured** on ls_outpost (Last Stand, 6 bots, about 8 min, test plugin counting bots' bullet hits): **before**
+  (r43364829560): 608 hits into barricades vs 297 into creatures (67% of hits wasted), base fell on wave 3.
+  **After** (r43368722199): 8 into barricades vs 443 into creatures (1.8%), waves 1-4 held.
+
 ### Agent W1: ls_outpost playtest fixes (barricades, shop, HUD, Barney) — 2026-11-12
 - **See-through barricades** (gm_components be8503e): an `FM_ShouldCollide` hook returns "don't collide" between a
   barricade (`see_through`, default 1) and any player, so players' bullets, bots' sight/aim traces and players' own steps go
@@ -2791,3 +2877,61 @@ the .md files are in the Plugin Studio chunk / their own). PluginStudio chunk is
 - **LSPLAY** restarted on ls_outpost, Normal, 5 bots, port 27330, waits for a person, brain r43368722199 (ls-next-w2 with
   W2's d92287d; it doesn't have ls-creatures 509040e, no combined build with it yet), server's zombie/bullsquid/barney/
   gman models synced from the game's own valve/models.
+
+### Agent X: Game Mode Studio audit (user feedback) — 2026-11-12
+
+**1. Tidy templates.** Tidy up lays comment boxes out as dagre clusters and fits each box round its own nodes
+afterwards (no box over another node or box). Templates ship laid out: `npm run tidy:studio`
+(`scripts/tidy-studio-templates.mjs`, the same layout code with estimated node sizes); a test checks they're
+already tidy and boxes don't overlap.
+
+**2. Leaving.** The leave bug was in `common/shell.tsx` `leaveTo`: the "Leave without saving?" sheet takes its history
+entry off as it closes, and going before that landed let the history step bring the page straight back. It now
+waits like App.tsx does (one change in P6's file). The Studio also reports `studio:<id>` as its address and opens what
+the address says, so the "Game Mode Studio" crumb goes back to the list, Back/Alt+← re-open the graph, Cancel stays.
+New graphs (blank or from a template) are saved when they're made, so just opening one is never "unsaved"; Tidy up
+counts once. Checked in the browser: crumb → Leave → overview; Alt+← → the graph; crumb → Cancel stays; → Leave → list.
+
+**3. What whole modes need (gm_battleroyale.sma, gm_laststand.sma, GAMEMODES-PLAN modes) and what the Studio has now**
+(114 nodes):
+- Loops and lists: For Each Player (all/alive/dead/team/alive team/bots/people), For Each Entity (kind or name),
+  Pick Random Player / Entity (Found / None). No list *values* yet: loops and picks covered both modes.
+- State: variables per mode / per player / **per team**, kept for the map or **reset each round**; text phases with
+  Text Is; Compare/Math/Random/And-Or/Not/Branch.
+- Reuse: **Function** + **Call Function** (a Player and a Number in), no recursion (checked).
+- Timers: Delay, Repeat, Countdown (HUD), Stop Timers, **Stop Timer** (one, by name).
+- Players: give weapon/item (armor, helmet, defuser, NVG), strip, drop, health, armor, team, speed, **gravity, glow,
+  model, freeze, respawn, kill, money (give/take, Money Of), score (Add Score, Score Of, Deaths Of), roles (Set Role,
+  Is Role, Count Role)**.
+- Messages: HUD slots (loner.inc), big message (to one or all), **chat line, progress bar, menus (up to 4 choices, each
+  its own flow out), sounds** (a fixed list of the game's own).
+- Events: round started/ended/**new round**/**map started**, killed (+headshot), **hurt**, spawned (bots too),
+  joined, left, **team changed**, bomb planted/defused/exploded, used button, touched trigger, **chat commands**
+  (`/shop` and `!shop`), the component events, creature killed.
+- World: **Use Entity** by name, **Set Setting** (allow-list incl. free for all, round_infinite, team balance) and
+  **mode settings** written into the mode's cfg (run after base.cfg each map — setting them from Map Started lost to
+  base.cfg), Find/Create/Start/Stop components, zones, crates, waves, extraction, doors, traps, points, supply drops,
+  **Load Map Pack** (another mode's `<map>.<pack>.ini`), respawn points; bots: **Go To, Hold, Follow, Free**; creatures:
+  spawn, killed, count.
+- Still missing (honest list): revive (hold USE on a downed player), cancelling or scaling damage (Player Hurt runs
+  after the damage), "no fall damage" for drop-ins, squads, buy anywhere / weapon restrictions, saving stats across
+  maps, bot goals with expiry (`ls_comp_bots_hint`), a round-clock node (only mp_roundtime for the next round).
+- **Proof:** templates **Last Stand Lite** (64 nodes: Last Stand's map pack, Terrorists as a knife horde, waves via
+  ls_wave_spawner, money and respawns between waves, a !shop menu with money checks, lose when no defender is left, win
+  after 5 waves) and **Royale Lite** (29 nodes: BR map pack, free for all, knife start at spread respawn points, zone
+  shrinker started, a supply drop each minute, last one standing wins). Both check clean, are snapshotted and compiled
+  with amxxpc (no warnings), and ran on my own copies of the LSPLAY / BRMAP sim servers with 12 bots on de_dust2
+  (removed afterwards): LS — pack loaded, wave 1 started, cleared, +1500 each, countdown, wave 2, cleared again,
+  kills paid; BR — pack loaded, zone started, 17 crates opened, 3 supply drops, zone damage, winner picked (5 points),
+  round ended and a new one began. No node errors, no AMXX errors.
+
+**4. Audit.** Live spot-tests this round and before (every_node graph on a sim copy: events, timers, variables,
+player actions, guards); validation tests for every new rule (functions, timers, team variables, settings, flow values
+used before their node runs); undo/redo and paste between graphs (variables come along, matched by name and type);
+debugger events for every node (loops say how many times, picks what they picked, menus which choice); install /
+uninstall / setup-keeps-Studio-modes tests; the MCP Studio tools still match the routes (the node catalog is read
+from nodes.json). The Studio uses P8's ActionBar (Save, Install, More: show code, open in Plugin Studio, remove from
+the game). Fixed on the way: `cs_get_user_team` before a joining player has team data, `RegisterHamPlayer` for bots,
+round-timer gamedata (see round 2), gun given twice at spawn (template now strips first).
+
+**Request (P6/shell):** nothing more; the shell.tsx change is the 50 ms wait in `leaveTo` only.
