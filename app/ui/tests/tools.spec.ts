@@ -64,3 +64,81 @@ test("? shows the keys, and Go to moves the viewer", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page.locator(".tools-status")).not.toHaveText(/—/);
 });
+
+test("the crumbs and Back step out of a map and back to the start", async ({ page }, info) => {
+  await page.goto(`/tools-dev.html?open=${encodeURIComponent(`doctor:${MAP}`)}`);
+  await settle(page);
+  const crumbs = page.getByRole("navigation", { name: "Where you are in Tools" });
+  await expect(crumbs.locator("[aria-current=page]")).toHaveText(MAP);
+  await page.screenshot({ path: info.outputPath("crumbs-doctor-map.png") });
+  // the tool's name: its start page (the map list), in one click
+  await crumbs.getByRole("button", { name: "Map doctor" }).click();
+  await expect(page.getByPlaceholder("Pick a map to check")).toBeVisible();
+  await expect(page).toHaveURL(/open=doctor(&|$)/);
+  // Back: the map again (the browser's history, like the mouse's back button)
+  await crumbs.getByRole("button", { name: "Back" }).click();
+  await expect(crumbs.locator("[aria-current=page]")).toHaveText(MAP);
+  // Forward with Alt+→, then Tools: the overview
+  await page.locator("body").click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press("Alt+ArrowRight");
+  await expect(page.getByPlaceholder("Pick a map to check")).toBeVisible();
+  await crumbs.getByRole("button", { name: "Tools" }).click();
+  await expect(page.locator(".tools-cards").first()).toBeVisible();
+  await page.goBack();
+  await expect(page.getByPlaceholder("Pick a map to check")).toBeVisible();
+});
+
+test("focus mode: the tool fills the window, the key and the pill bring the app back", async ({ page }, info) => {
+  await page.goto(`/tools-dev.html?open=${encodeURIComponent(`map:${MAP}`)}`);
+  await settle(page);
+  // (each test starts with nothing remembered)
+  await page.evaluate(() => localStorage.removeItem("ls.tools.focus"));
+  const canvas = page.locator(".tools-canvas canvas").first();
+  const before = await canvas.boundingBox();
+  await page.getByRole("button", { name: "Focus", exact: true }).click();
+  await expect(page.locator(".sidebar")).toBeHidden();
+  await expect(page.locator(".tools-head")).toBeHidden();
+  const pill = page.getByRole("button", { name: /Exit focus/ });
+  await expect(pill).toBeVisible();
+  // the 3D view takes the room (its canvas follows its box)
+  await expect.poll(async () => (await canvas.boundingBox())?.width ?? 0).toBeGreaterThan((before?.width ?? 0) + 100);
+  await page.screenshot({ path: info.outputPath("focus-map.png") });
+  // remembered for this tool
+  await page.reload();
+  await settle(page);
+  await expect(page.locator(".sidebar")).toBeHidden();
+  // the key turns it off; the pill too
+  await page.locator(".tools-canvas").click({ position: { x: 10, y: 10 } });
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ControlOrMeta+Shift+Enter");
+  await expect(page.locator(".sidebar")).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+Shift+Enter");
+  await expect(page.locator(".sidebar")).toBeHidden();
+  await pill.click();
+  await expect(page.locator(".sidebar")).toBeVisible();
+  await expect(pill).toBeHidden();
+});
+
+// the editors in focus mode (turned on the way it's remembered): they fill the window, nothing sticks out
+for (const address of ["editor", "studio", "plugins", `navfix:${NAV_MAP}`, "assets:models"]) {
+  test(`focus mode ${address}`, async ({ page }, info) => {
+    const tool = address.split(":")[0];
+    await page.addInitScript((t) => localStorage.setItem("ls.tools.focus", JSON.stringify({ [t]: true })), tool);
+    await page.goto(`/tools-dev.html?open=${encodeURIComponent(address)}`);
+    await settle(page);
+    await expect(page.locator(".sidebar")).toBeHidden();
+    await expect(page.getByRole("button", { name: /Exit focus/ })).toBeVisible();
+    // the map editor with a map open (a new one, unless one is open from before): its 3D view
+    // takes the window's width. (Game Mode Studio isn't opened: a new mode is saved to the game.)
+    if (address === "editor") {
+      const fresh = page.getByRole("button", { name: "New map" });
+      if (await fresh.isVisible()) await fresh.click();
+      await settle(page);
+      const box = await page.locator(".content canvas").first().boundingBox();
+      expect(box?.width ?? 0).toBeGreaterThan(page.viewportSize()!.width * 0.5);
+    }
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    await page.screenshot({ path: info.outputPath(`focus-${address.replace(/[^a-z0-9_]+/gi, "-")}.png`) });
+    expect(over).toBeLessThanOrEqual(1);
+  });
+}
