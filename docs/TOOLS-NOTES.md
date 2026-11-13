@@ -2656,3 +2656,97 @@ build right now because of `studio/gen.rs`/`graph.rs` work in progress); `tsc -b
   on your ActionBar when a shipped file is open (its default is the file before the tools changed it; safety.rs only treats
   configs/gamemodes as "shipped"). Or `useResetDefaults("plugins", { match })` + `{reset.sheet}` from a menu.
 - (X, Game Mode Studio) if the Studio gets a save area, `ActionBar` with `reset={{ tool: "studio", match: [...] }}`.
+
+### Agent P9: UX overhaul of Radar maker, Callouts, Nav fixer, Map doctor — plan, 2026-11-12
+Owner of `views/tools/{overview,callouts,navfix,doctor}/*` for this pass (+ their screenshot tests, their `SHORTCUTS`
+lines). Rust routes unchanged unless a tool needs one more field.
+- **One workspace layout for all four**, the one the viewer and nav fixer already use (`.tools-page` →
+  `.tools-bar` + `.tools-viewer` = big map stage left, `.tools-side` column of `.tools-panel`s right): the map large,
+  side panel in steps/sections, status line under the map, primary action in P8's sticky ActionBar.
+- **Start page**: P8's MapBrowser with per-tool badges (radar: has overview; callouts: nav/places; nav fixer: has nav;
+  doctor: nav / downloaded). Until it lands, the old MapList stays. **P8: I'll only consume MapBrowser/ActionBar;
+  please note their props here when ready.**
+- Radar: current vs new side by side (or a slider), style presets as thumbnails, marks as toggles, zoom/pan, install
+  result card. Callouts: palette of names (paint mode), places list with counts/colours, suggestions, conflicts.
+  Nav fixer: problems grouped by kind with Fix / Show me, tool palette, reach legend, Undo/Redo in the bar.
+  Doctor: checklist report (passed / warnings / problems) grouped files · .res · nav · overview · textures, Fix all
+  safe, links into the other tools. Help text → `Info` tooltips; `?` keys for each.
+
+**W2, later (brain side done for now): ls-modes c5c9466 merged into `ls-next-w2`, CI run 43364829560.**
+Builds on W1's plugin change (holders + free roamers). What was wrong in the brain, in order found:
+1. **The freeze:** a station's `Hide()` was refused by the brain's half-second repath throttle. It fell to Idle,
+   Hunt then pathed straight away, which restarted the throttle, and the next `Hide()` was refused too. This also
+   caused the "same pose, same facing" look: those bots never reached the hide state, the one that looks round.
+   Stations now wait for the throttle, pick their own spot (away from teammates' spots, never the last one) and move
+   on every 5-9 s in a wave.
+2. **Mode moves wiped the trigger:** `ClearMovement()` resets the whole bot command, buttons included. The
+   stand-still/step/back-off moves done after the state machine erased fire and use. Those are re-pressed now. This
+   was also why crate/shop `use` could fail.
+3. **Fighting on the move:** bots shot creatures while walking (hunting, re-stationing) and ran from biters when
+   hurt. Every bot died in wave 1. Now: bursts standing still, a sidestep between bursts with the trigger released
+   (bolder bots step more), one step back right up close, cover only from a creature at range, and no new spot or
+   errand mid-fight.
+4. **Roamers** (no goal): back to the others when hurt, over to a teammate who's fighting, out after creatures
+   (more often the more aggressive the bot), round the area their side holds rather than across the map, and now and
+   then tagging along with a person between waves. Creatures close by or coming for a bot are noticed behind it.
+- **Answers:** `use` with no `ent` (the shop) holds use 6 s and then the goal ends, as you wanted. Your revive
+  (`go_hold` with `ent` = the downed player) is now treated as a revive: the bot edges up to them and holds use until
+  you clear it (15 s at most). No change needed on your side.
+- **Measured** (de_dust2, 6 CT bots, about 8 min, gm_simrec + lstrace's new `mode_goal` column, plugins as in
+  LSPLAY at 19:17):
+
+| | still | still 5 s+ | view deg/s | yaw sectors/min | 128-u cells/min | shots/min | waves |
+|---|---|---|---|---|---|---|---|
+| old brain, old creatures | 40% | 17% | 59 | 28 | 47 | 22 | held 2, fell on 3 |
+| old brain, new creatures (control) | 29% | 10% | 62 | 31 | 60 | 25 | overrun on 3 |
+| new brain, run A: holders / roamers | 41% / 27% | 12% / 4% | 36 / 25 | 21 / 16 | 29 / 20 | 31 / 16 | held 1-2 (long fights at a choke) |
+| new brain, run B: holders / roamers | 46% / 30% | 9% / 7% | 52 / 66 | 32 / 36 | 36 / 55 | 28 / 24 | held 4, fell on 5 |
+| Classic (new build, modes off) | 39% | 11% | 56 | 27 | 53 | 29 | - |
+
+  Classic on the new build matches the old build (still 37-39%, 56 deg/s), and its trace has no mode decisions:
+  modes-off is unchanged. Remaining: holders still stand ~45% (they hold angles and fight standing up); roamers are
+  at Classic levels.
+
+### Agent P9: UX overhaul of Radar maker, Callouts, Nav fixer, Map doctor — done, 2026-11-12
+**One layout for all four** (the viewer's: `.tools-page` → `.tools-bar` + `.tools-viewer` = the map large on the left,
+a column of `.tools-panel`s on the right, a status line under the map) with **P8's MapBrowser** as the start page and
+**P8's ActionBar** at the bottom. Long help moved into `Info` tips. Checked at 1440×900 and 1024×680, focus mode too.
+- **Radar maker** (`overview/Overview.tsx`, new `overview/PanZoom.tsx`): start page cards say "Has an overview". In a
+  map: New / Side by side / Installed now (keys 1 2 3; side by side stacks when the stage is taller than wide), scroll
+  to zoom, drag to move, +/−/Fit (keys + − 0, double-click fits), both panes move together. Numbered steps: 1 Look
+  (three style thumbnails drawn from the map, background swatches), 2 What's drawn (marks as toggle chips, roofs by
+  nav / by height with the slider, outline, turn), 3 Install (.bmp/.tga, send to players). The bar: "Not installed yet"
+  / "✓ Installed", where it writes, Install; Put the old one back under More; a result card with "Compare with the old
+  one".
+- **Callouts** (`callouts/Callouts.tsx`, `TopDown.tsx`): the nav fills the stage. Pick / Paint / Erase (V P E): Paint
+  names every area the pointer drags over with the name in the box (one undo step per stroke, a brush chip on the map);
+  Erase takes names off. Places list = the palette (swatch, count, radio icon; click = pick its areas and make it the
+  brush; Rename). "Names bots know" chips. Undo/Redo in the bar with what they undo; Save names + Undo changes in the
+  ActionBar. **Suggestions**: "From bomb sites and spawns" (new, see Rust), the usual callouts, the other game's nav;
+  what they named is shown on the map. **Checks**: two spellings of one place (one-click "Use X"), a place in spots far
+  apart, one small area places, unnamed areas, each with Show me (outlined in red). Floors at the side.
+- **Nav fixer** (`navfix/NavFixer.tsx`): the tool palette in the bar with keys (Select V, Draw area D, Link L), Undo /
+  Redo in the bar, the camera as a pill on the 3D view. **Reach check** panel: a bar and counts (there and back / can't
+  get there / can't get back / only by falling in), click a line to light those areas; colours Reach / Places / Moves.
+  **Problems grouped by kind** (collapsible, counts), Show me + one-click fix per problem, "Fix N" for a group (each fix
+  its own undo step). Save the nav + Undo changes (= Start over) in the ActionBar, the last change in its status.
+- **Map doctor** (`doctor/Doctor.tsx`): start page badges from /api/tools/maps (texture files missing, nav for another
+  version, no nav, Looks OK). In a map: a verdict (problems / warnings / passed counts), Needs a look | All checks, the
+  checklist grouped: Map and files · Textures and WADs · Download list (.res) · Bots (nav, places, knowledge) ·
+  Overview (radar, via the radar maker's info route). Each check has its fix (Copy files, Make/Update the list, Teach
+  bots, GameBanana/Get more, Name places → Callouts, Open in Nav fixer, Make one → Radar maker). **Fix all safe** in the
+  ActionBar (copy files from another game's folder, then update the .res). Side: the map's facts, missing files, links
+  to Map viewer / Nav fixer / Callouts / Radar maker / Health check.
+- **Rust (one route option)**: `GET /api/tools/callouts/:name/suggest?from=marks` — unnamed areas inside bomb zones
+  (BombsiteA/B… in the game's order), rescue / VIP zones, the box round each team's spawn points (CTSpawn/TSpawn), by
+  hostages. `overview::find_marks` is `pub(crate)` for it (one word in U's file). Test `names_from_the_maps_zones_and_spawns`.
+- Keys in `?`: radar and callouts added to SHORTCUTS. Tests: `radar:<map>` page, and "map workspaces: radar compare and
+  zoom, callouts paint and undo, doctor checklist, nav fixer reach" (saves nothing); the crumbs test reads the map
+  browser's title. `npm run build` green, `cargo test` 676 passed.
+
+**Notes / left**
+- Sorry: while restarting my dev server I ran `pkill -f serve_tools_dev`, which also stopped other agents' Rust dev
+  servers (e.g. the one on 8091 / 8057). Restart yours with `npm run tools:dev` (your LS_DEV_PORT) if it went away.
+- Start page badges are only what /api/tools/maps knows cheaply; per-map problem counts (nav fixer problems, doctor's
+  full report) would need a summary route that reads every nav / BSP — left out on purpose (365 maps).
+- Not clicked through with a real save here (saving writes the real game folder); the save paths are unchanged.
