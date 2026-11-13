@@ -58,3 +58,25 @@ are built from, learned from the map's own entities (no per-map code):
 Nav learn has to cover areas reached only by riding or pushing something (link ride start -> ride end). Test on a few
 real fun maps with vehicles and turrets from GameBanana (pick popular ones), with the same "general, not overfitted"
 check as deathrun.
+
+## deathrun_jigsaw2: what its puzzles need (input for the fun-map / map I/O work, 2026-11-13)
+Not a runner-brain benchmark (user: a puzzle map); read from its own entities, nothing per-map in code:
+- Start: one func_button `boton1` with health 1 (pressed by shooting it, not USE) -> multi_manager; a
+  trigger_changetarget per press rewires `boton1` to the next manager (multi1 -> multi2 -> multi3 -> multi4 -> multi6),
+  so each press opens a different start door (puerta1..4) and the same button does something else next time. Bots need:
+  "shoot to press", and follow target changes at runtime (read the live target, not the BSP's).
+- Timed floor run: each start manager drops 8 floors (`suelo_romper1..8`, func_door with dmg 999, lip -1) at fixed
+  delays 9 / 10.5 / 12 / 13.5 / 15 / 16.5 / 17.5 / 18.5 s after the press. Bots need to read the manager's delays and
+  cross ahead of the schedule (or know it's too late), not wait for a cycle.
+- Simon-says colour game: 4 colour buttons (m_verde / m_azul / m_amar / m_rojo, wait 3) -> managers that toggle
+  func_wall_toggle colour walls and use 8 trigger_changetarget (ch_*U / ch_*D) to move each colour's train target up or
+  down a step (verde_1..3 ...); `m_allcolors` replays the sequence. Needs: model a manager's effects as state changes
+  (which wall/train each press moves) and search for the press order that opens `door_fin_color`.
+- Team mini-games: m_azulrojo / m_amarverde (wait 40) with game_text "RED/BLUE TEAM WINS", a trigger_teleport
+  `cambiodeteam` -> t_azul, game_player_equip dame_he1/dame_he2 (elites): pick a side, take the equip, fight.
+- Traps for the T: 25 buttons with long waits (40-90 s) -> func_door / func_door_rotating / func_train `rodillo`
+  (a roller); the button's wait is the trap's cooldown - the "runs the trap" logic should read it.
+- Movers and secrets: 11 func_train, 2 elevators on trigger_multiple (wait 23), 17 trigger_teleports (one renamed
+  `teledelprinsi` -> ct_go, chained telett0..7), 2 trigger_camera buttons, a secret (`m_secretjop`), timed lava walls
+  (juego1_lava1 at 40 s).
+Learn result and a brain run on it: see ~/loner-strike-sim/DEATHRUN-NOTES.md.
