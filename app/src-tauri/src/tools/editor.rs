@@ -35,7 +35,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
+pub mod components;
 pub mod prefabs;
+pub mod workspace; // P5: project files, undo history, find/replace, duplicate with new names
 
 const INTERNAL: &str = "Loner-Strike hit an internal error in the map editor. Try again, and copy the diagnostics from Settings if it keeps happening.";
 const NO_DOC: &str = "No map is open in the editor. Start a new map or open one.";
@@ -1654,6 +1656,8 @@ async fn api_settings(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Jso
         if next != s.doc.editor {
             s.doc.editor = next;
             s.history.mark_unsaved();
+            // (a new revision: other pages and the poll pick it up)
+            s.doc.revision += 1;
         }
         let mut v = s.state();
         v["editor"] = settings_json(&s.doc);
@@ -1678,6 +1682,7 @@ async fn api_fgd_pick(State(st): State<Shared>, Extension(ed): Extension<Ed>, h:
         let s = g.as_mut().ok_or(NO_DOC)?;
         s.doc.editor.fgd = Some(path.to_string_lossy().to_string());
         s.history.mark_unsaved();
+        s.doc.revision += 1;
         let mut v = s.state();
         v["editor"] = settings_json(&s.doc);
         v["classes"] = json!(n);
@@ -1695,6 +1700,7 @@ async fn api_fgd_clear(Extension(ed): Extension<Ed>, h: HeaderMap) -> Response {
         let s = g.as_mut().ok_or(NO_DOC)?;
         if s.doc.editor.fgd.take().is_some() {
             s.history.mark_unsaved();
+            s.doc.revision += 1;
         }
         let mut v = s.state();
         v["editor"] = settings_json(&s.doc);
@@ -1858,6 +1864,8 @@ fn routes_with(ed: Ed) -> Router<Shared> {
         .route("/api/tools/editor/fgd/clear", post(api_fgd_clear))
         .route("/api/tools/editor/sound", get(api_sound))
         .merge(prefabs::routes())
+        .merge(components::routes())
+        .merge(workspace::routes()) // P5
         .layer(Extension(ed))
 }
 

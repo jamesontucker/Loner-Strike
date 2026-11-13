@@ -9,10 +9,22 @@ import { useTools } from "../../../stores/tools";
 import type { ToolProps } from "../registry";
 import { canDraw3d, SceneBoundary } from "../viewer/Scene";
 import { EditorScene } from "./EditorScene";
-import { BusyLabel, ChecksPanel, deleteSelection, duplicate, hideSelection, Inspector, isolateSelection, Outline, showAll, TextureBrowser, Toolbar, ToolOptions, TOOLS } from "./Panels";
+import { BusyLabel, ChecksPanel, deleteSelection, duplicate, hideSelection, Inspector, isolateSelection, showAll, Visibility, TextureBrowser, Toolbar, ToolOptions, TOOLS } from "./Panels";
 import { selectionIds } from "./EditorScene";
 import { Dialogs } from "./Dialogs";
 import { CompilePanel } from "./CompilePanel";
+// P4: prefab library, outside changes (MCP agents), Publish
+import { LibraryPanel } from "./LibraryPanel";
+import { mapNameOf } from "./ComponentPanel";
+import { useOutsideChanges } from "./extras";
+import { useNav } from "../../../store";
+import { useToolArg } from "../../../stores/tools";
+// P5: menu bar + keys + palette, outliner, project files, undo history, selection size
+import { MenuBar, SelectionSize } from "./MenuBar";
+import { OutlinePanel } from "./OutlinePanel";
+import { HistoryPanel } from "./HistoryPanel";
+import { ProjectPanel } from "./ProjectPanel";
+import { useP5 } from "./p5store";
 import * as api from "./editorApi";
 import type { RecentFile, Recovery } from "./editorApi";
 import { EMPTY_SEL, facesOf, useEditor, type ViewId } from "./store";
@@ -21,7 +33,7 @@ import { EMPTY_SEL, facesOf, useEditor, type ViewId } from "./store";
 const AUTOSAVE_MS = 3 * 60 * 1000;
 import "./editor.css";
 
-type Tab = "inspect" | "outline" | "textures" | "checks" | "compile";
+type Tab = "inspect" | "outline" | "textures" | "library" | "checks" | "compile" | "project" | "history"; // P5: project, history
 
 const VIEWS: { id: ViewId; label: string; key: string }[] = [
   { id: "3d", label: "3D", key: "Shift+1" },
@@ -147,7 +159,9 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
   const fileBusy = useEditor((s) => s.fileBusy);
   const working = useEditor((s) => s.working);
   const checks = useEditor((s) => s.checks);
-  const [tab, setTab] = useState<Tab>("inspect");
+  // P5: the side tab lives in p5store so menus and the palette can open one
+  const tab = useP5((x) => x.tab) as Tab;
+  const setTab = (t: Tab) => useP5.getState().set({ tab: t });
   const [lost, setLost] = useState(0);
   const has3d = useMemo(() => canDraw3d(), []);
   // the camera frames the map once per document, not after every edit
@@ -155,6 +169,13 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
 
   useKeys(replace);
   useAutosave();
+  useOutsideChanges(); // P4
+  // P4: another page can open a tab ("editor:prefabs")
+  const arg = useToolArg();
+  useEffect(() => {
+    if (arg === "prefabs" || arg === "components") setTab("library");
+    else if (arg === "compile" || arg === "checks") setTab(arg);
+  }, [arg]);
   const [recent, setRecent] = useState<RecentFile[]>([]);
   useEffect(() => {
     void api.getRecent().then((r) => !r.error && setRecent(r.files ?? []));
@@ -166,6 +187,7 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
 
   return (
     <div className="tools-page editor-page">
+      <MenuBar /> {/* P5 */}
       <div className="tools-bar editor-bar">
         <span className="map-title" title={doc.saved ? "Saved as a project" : "Not saved yet"}>
           {doc.name}
@@ -197,6 +219,8 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
             </select>
           )}
           <button type="button" className="btn small" title="Sky, WADs, sun and rules" onClick={() => s.set({ dialog: "props" })}>Map properties</button>
+          {/* P4: Tools > Community's Publish, for the map compiled from this one */}
+          <button type="button" className="btn small" title="Make a package to share this map in Tools > Community (compile it into the game first)" onClick={() => useNav.getState().go("tools", `community:publish:${mapNameOf(doc.name)}`)}>Publish…</button>
           <BusyLabel busy={!!fileBusy} label={fileBusy ?? ""} />
         </div>
         <span className="push" />
@@ -233,7 +257,7 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
                   </div>
                 }
               >
-                <EditorScene key={`${doc.docId}-${lost}-${view === "3d" ? "3d" : "flat"}`} bounds={bounds} docId={doc.docId} onLost={() => setLost((n) => n + 1)} />
+                <EditorScene key={`${doc.docId}-${lost}`} /* P5: views switch inside their panes now */ bounds={bounds} docId={doc.docId} onLost={() => setLost((n) => n + 1)} />
               </SceneBoundary>
             )}
           </div>
@@ -246,8 +270,11 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
                 ["inspect", "Inspect"],
                 ["outline", "Outline"],
                 ["textures", "Textures"],
+                ["library", "Library"],
                 ["checks", problems ? `Checks (${problems})` : warnings ? `Checks (${warnings})` : "Checks"],
                 ["compile", "Compile"],
+                ["project", "Project"], // P5
+                ["history", "History"], // P5
               ] as [Tab, string][]
             ).map(([id, label]) => (
               <button key={id} type="button" role="tab" aria-pressed={tab === id} aria-selected={tab === id} className={id === "checks" && problems ? "editor-tab-bad" : undefined} onClick={() => setTab(id)}>
@@ -256,10 +283,13 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
             ))}
           </div>
           {tab === "inspect" && <Inspector />}
-          {tab === "outline" && <Outline />}
+          {tab === "outline" && <OutlinePanel extra={<Visibility />} />} {/* P5: the outliner (P2's Outline kept in Panels.tsx) */}
           {tab === "textures" && <TextureBrowser />}
+          {tab === "library" && <LibraryPanel start={arg === "components" ? "components" : arg === "prefabs" ? "prefabs" : undefined} />}
           {tab === "checks" && <ChecksPanel />}
           {tab === "compile" && <CompilePanel />}
+          {tab === "project" && <ProjectPanel />}
+          {tab === "history" && <HistoryPanel />}
         </aside>
       </div>
       <Dialogs />
@@ -286,7 +316,10 @@ function Status({ working }: { working: boolean }) {
   const camHint = view !== "3d" ? "Drag on empty space to box-pick. Right-drag to pan, scroll to zoom." : camera === "fly" ? "Fly: WASD to move, Esc lets go of the mouse. F: orbit." : "Drag to turn, right-drag to pan, scroll to zoom. F: fly.";
   return (
     <div className="tools-status">
-      <span className="mono">{cursor ? cursor.join(" ") : "–"}</span>
+      <span className="mono">
+        {cursor ? cursor.join(" ") : "–"}
+        <SelectionSize /> {/* P5 */}
+      </span>
       <span className="tools-hint">
         {hover?.label ? hover.label : `${t?.label}: ${t?.tip}`} {camHint}
       </span>
@@ -493,3 +526,4 @@ function useKeys(replace: (w: Pick) => Promise<void>) {
     };
   }, []);
 }
+

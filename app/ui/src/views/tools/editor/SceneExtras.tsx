@@ -9,6 +9,7 @@ import * as THREE from "three";
 import type { Vec3 } from "../viewer/coords";
 import { alignOf } from "./editorApi";
 import { facesOf, isHiddenBrush, useEditor, type BrushGeo } from "./store";
+import { usePaneView } from "./panes";
 
 const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const mul = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
@@ -26,31 +27,45 @@ export function cornersOf(b: BrushGeo): Vec3[] {
   return out;
 }
 
-/** The corners of the picked brushes, as handles to click and drag (vertex tool). */
+/** The corners of the picked brushes, as handles to click and drag (vertex tool); P4: plus a
+ *  small handle in the middle of each edge (picks its two corners) and each face (picks all
+ *  its corners), so edges and faces can be dragged as one. */
 export function VertexHandles({ ids }: { ids: number[] }) {
   const brushes = useEditor((s) => s.brushes);
   const verts = useEditor((s) => s.verts);
   const camera = useThree((s) => s.camera);
   // a size that stays readable: a share of the brush, at least a few units
   const handles = useMemo(() => {
-    const out: { brush: number; p: Vec3; r: number }[] = [];
+    const out: { brush: number; p: Vec3; r: number; ps: Vec3[]; kind: "corner" | "edge" | "face" }[] = [];
     for (const id of ids) {
       const b = brushes.get(id);
       if (!b) continue;
       const r = Math.max(2, Math.min(8, Math.min(...b.max.map((x, i) => x - b.min[i])) / 10));
-      for (const p of cornersOf(b)) out.push({ brush: id, p, r });
+      for (const p of cornersOf(b)) out.push({ brush: id, p, r, ps: [p], kind: "corner" });
+      const edges: [Vec3, Vec3][] = [];
+      for (const poly of b.polys.values()) {
+        for (let i = 0; i < poly.length; i++) {
+          const a = poly[i];
+          const c = poly[(i + 1) % poly.length];
+          if (!edges.some(([x, y]) => (sameP(x, a) && sameP(y, c)) || (sameP(x, c) && sameP(y, a)))) edges.push([a, c]);
+        }
+        if (poly.length >= 3) out.push({ brush: id, p: mul(poly.reduce((acc, q) => add(acc, q), [0, 0, 0] as Vec3), 1 / poly.length), r: r * 0.8, ps: poly, kind: "face" });
+      }
+      for (const [a, c] of edges) out.push({ brush: id, p: mul(add(a, c), 0.5), r: r * 0.7, ps: [a, c], kind: "edge" });
     }
-    return out.slice(0, 4000);
+    return out.slice(0, 6000);
   }, [ids, brushes]);
   const ortho = camera instanceof THREE.OrthographicCamera;
+  const k = ortho ? 1.5 : 1;
   return (
     <>
       {handles.map((h, i) => {
-        const on = verts.some((v) => v.brush === h.brush && sameP(v.p, h.p));
+        const on = h.ps.every((q) => verts.some((v) => v.brush === h.brush && sameP(v.p, q)));
+        const colour = on ? "#ff4d2e" : h.kind === "corner" ? "#ffd84a" : h.kind === "edge" ? "#7fd6ff" : "#b58cff";
         return (
-          <mesh key={i} position={h.p} userData={{ kind: "vert", id: h.brush, p: h.p }} renderOrder={6}>
-            <boxGeometry args={[h.r * (ortho ? 1.5 : 1), h.r * (ortho ? 1.5 : 1), h.r * (ortho ? 1.5 : 1)]} />
-            <meshBasicMaterial color={on ? "#ff4d2e" : "#ffd84a"} depthTest={false} />
+          <mesh key={i} position={h.p} userData={{ kind: "vert", id: h.brush, p: h.p, ps: h.ps }} renderOrder={6}>
+            {h.kind === "corner" ? <boxGeometry args={[h.r * k, h.r * k, h.r * k]} /> : h.kind === "edge" ? <sphereGeometry args={[(h.r * k) / 2, 8, 6]} /> : <octahedronGeometry args={[(h.r * k) / 1.6]} />}
+            <meshBasicMaterial color={colour} depthTest={false} />
           </mesh>
         );
       })}
@@ -164,7 +179,7 @@ export function Bookmarks() {
   const controls = useThree((s) => s.controls) as unknown as { target?: THREE.Vector3; update?: () => void } | null;
   const invalidate = useThree((s) => s.invalidate);
   const req = useEditor((s) => s.bookmark);
-  const view = useEditor((s) => s.view);
+  const view = usePaneView(); // P5: this pane's view
   useEffect(() => {
     if (!req || req.seq <= handled || view !== "3d" || !(camera instanceof THREE.PerspectiveCamera)) return;
     // going to a mark waits for the orbit/fly controls, so they don't undo the jump

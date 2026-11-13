@@ -437,17 +437,19 @@ pub fn thumbnail(frag: &MapDocument, w: u32, h: u32) -> Vec<u8> {
     let up = cam.cross(right).normalized();
     let up = if up.z < 0.0 { up * -1.0 } else { up };
     let light = v3(0.4, -0.6, 0.9).normalized();
-    let mut polys: Vec<(f64, Vec<(f64, f64)>, [f32; 3])> = Vec::new();
+    let mut polys: Vec<(f64, Vec<(f64, f64)>, [f32; 3], bool)> = Vec::new();
     for b in frag.brushes.values() {
         for f in ops::brush_mesh(b, |_| (64.0, 64.0)) {
             if f.normal.dot(cam) <= 0.0 || f.vertices.len() < 3 {
                 continue;
             }
             let Some(c) = tex_colour(&f.texture) else { continue };
+            // trigger volumes (buy zones, bomb sites, ladders) are outlines, so what's inside shows
+            let outline = f.texture.to_ascii_lowercase().starts_with("aaatrigger");
             let shade = 0.5 + 0.5 * f.normal.dot(light).max(0.0) as f32;
             let depth = f.vertices.iter().map(|p| p.dot(cam)).sum::<f64>() / f.vertices.len() as f64;
             let pts = f.vertices.iter().map(|p| (p.dot(right), p.dot(up))).collect();
-            polys.push((depth, pts, [c[0] * shade, c[1] * shade, c[2] * shade]));
+            polys.push((depth, pts, [c[0] * shade, c[1] * shade, c[2] * shade], outline));
         }
     }
     let owned: std::collections::HashSet<_> = frag.brushes.values().filter_map(|br| br.entity).collect();
@@ -458,14 +460,14 @@ pub fn thumbnail(frag: &MapDocument, w: u32, h: u32) -> Vec<u8> {
         let Some(o) = e.origin() else { continue };
         let c = if e.classname().starts_with("light") { [1.0, 0.85, 0.3] } else if e.classname().starts_with("info_player") { [0.35, 0.8, 0.45] } else { [0.85, 0.4, 0.85] };
         let (x, y, r) = (o.dot(right), o.dot(up), 7.0);
-        polys.push((o.dot(cam) + 1000.0, vec![(x, y + r), (x + r, y), (x, y - r), (x - r, y)], c));
+        polys.push((o.dot(cam) + 1000.0, vec![(x, y + r), (x + r, y), (x, y - r), (x - r, y)], c, false));
     }
     let mut img = image::RgbaImage::new(w.max(1), h.max(1));
     if polys.is_empty() {
         return encode(&img);
     }
     let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
-    for (_, pts, _) in &polys {
+    for (_, pts, _, _) in &polys {
         for (x, y) in pts {
             x0 = x0.min(*x);
             x1 = x1.max(*x);
@@ -477,10 +479,14 @@ pub fn thumbnail(frag: &MapDocument, w: u32, h: u32) -> Vec<u8> {
     let k = ((w as f64 - 2.0 * pad) / (x1 - x0).max(1.0)).min((h as f64 - 2.0 * pad) / (y1 - y0).max(1.0));
     let (ox, oy) = (w as f64 / 2.0 - (x0 + x1) / 2.0 * k, h as f64 / 2.0 + (y0 + y1) / 2.0 * k);
     polys.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-    for (_, pts, c) in &polys {
+    // outlines last, over everything
+    polys.sort_by_key(|p| p.3);
+    for (_, pts, c, outline) in &polys {
         let sp: Vec<(f64, f64)> = pts.iter().map(|(x, y)| (ox + x * k, oy - y * k)).collect();
-        fill(&mut img, &sp, [(c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8, 255]);
-        let edge = [(c[0] * 120.0) as u8, (c[1] * 120.0) as u8, (c[2] * 120.0) as u8, 255];
+        if !outline {
+            fill(&mut img, &sp, [(c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8, 255]);
+        }
+        let edge = if *outline { [(c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8, 255] } else { [(c[0] * 120.0) as u8, (c[1] * 120.0) as u8, (c[2] * 120.0) as u8, 255] };
         for i in 0..sp.len() {
             line(&mut img, sp[i], sp[(i + 1) % sp.len()], edge);
         }

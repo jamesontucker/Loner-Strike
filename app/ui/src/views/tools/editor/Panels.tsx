@@ -2,6 +2,8 @@
 // real controls, brush actions, texture alignment, map settings), the outline of the map,
 // the texture browser and the live checks.
 
+import { setVisSets } from "./extras"; // P4
+import { MarqueeOptions } from "./Marquee"; // P4
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { BusyButton, Info } from "../../../ui";
 import { useTools } from "../../../stores/tools";
@@ -20,7 +22,7 @@ export const TOOLS: { id: ToolId; label: string; key: string; tip: string }[] = 
   { id: "move", label: "Move", key: "W", tip: "Drag the arrows to move what's picked." },
   { id: "rotate", label: "Rotate", key: "E", tip: "Drag the rings to turn what's picked (15° steps)." },
   { id: "scale", label: "Scale", key: "R", tip: "Drag the handles to stretch what's picked." },
-  { id: "vertex", label: "Vertex", key: "V", tip: "Drag a corner of a picked brush (Shift-click picks several, arrows nudge them). Brushes stay convex." },
+  { id: "vertex", label: "Vertex", key: "V", tip: "Drag a corner (yellow), an edge (blue) or a face (purple) of a picked brush. Shift-click picks several, arrows nudge them. Brushes stay convex." },
   { id: "box", label: "Box", key: "B", tip: "Drag on the floor (or on top of a brush) to draw a box." },
   { id: "shape", label: "Shape", key: "C", tip: "Drag to draw a cylinder, wedge, spike, sphere or arch (pick which above the view)." },
   { id: "clip", label: "Clip", key: "X", tip: "Click two points to place a cut through what's picked. Tab: which side stays. Enter: cut." },
@@ -145,7 +147,8 @@ export function ToolOptions() {
           ))}
         </div>
       )}
-      {s.tool === "vertex" && <span className="muted">{s.verts.length ? `${s.verts.length} corner${s.verts.length === 1 ? "" : "s"} picked. Arrows nudge, Page Up/Down move up and down.` : "Pick a brush, then click or drag its corners."}</span>}
+      {(picking || s.tool === "texture") && <MarqueeOptions texture={s.tool === "texture"} />}
+      {s.tool === "vertex" && <span className="muted">{s.verts.length ? `${s.verts.length} corner${s.verts.length === 1 ? "" : "s"} picked. Arrows nudge, Page Up/Down move up and down.` : "Pick a brush, then click or drag its corners, edges (blue) or faces (purple)."}</span>}
       {s.tool === "shape" && (
         <div className="seg" role="group" aria-label="Shape">
           {SHAPES.map((x) => (
@@ -614,21 +617,27 @@ export function Outline() {
 }
 
 /** Hidden things and simple visibility groups (named sets kept with this map on this computer). */
-function Visibility() {
+export function Visibility() { // P5: exported for the outliner
   const hidden = useEditor((s) => s.hidden);
   const docName = useEditor((s) => s.doc?.name ?? "");
   const sel = useEditor((s) => s.sel);
+  // P4: kept in the project (sets made before, on this computer only, move into it once)
   const key = `ls.editor.vis.${docName}`;
-  const [groups, setGroups] = useState<VisGroup[]>(() => readVis(key));
-  useEffect(() => setGroups(readVis(key)), [key]);
-  const save = (g: VisGroup[]) => {
-    setGroups(g);
-    try {
-      localStorage.setItem(key, JSON.stringify(g));
-    } catch {
-      /* private window */
+  const groups: VisGroup[] = useEditor((s) => s.doc?.editor?.visSets) ?? [];
+  const docId = useEditor((s) => s.doc?.docId);
+  useEffect(() => {
+    const old = readVis(key);
+    if (old.length && !useEditor.getState().doc?.editor?.visSets?.length) {
+      void setVisSets(old).then(() => {
+        try {
+          localStorage.removeItem(key);
+        } catch {
+          /* private window */
+        }
+      });
     }
-  };
+  }, [key, docId]);
+  const save = (g: VisGroup[]) => void setVisSets(g);
   const s = useEditor.getState();
   const n = hidden.brushes.size + hidden.entities.size;
   const has = sel.brushes.length + sel.entities.length > 0;

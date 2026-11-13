@@ -3,7 +3,7 @@
 // one 3D view first (B's Orbit/Fly cameras), flat top/front/side views a key away.
 // Everything inside the root group is in GoldSrc units (plan 3.2).
 
-import { Line, MapControls, OrthographicCamera, TransformControls } from "@react-three/drei";
+import { Line, MapControls, OrthographicCamera, PerspectiveCamera, TransformControls, View } from "@react-three/drei";
 import { Canvas, useThree, type RootState, type ThreeEvent } from "@react-three/fiber";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
@@ -16,6 +16,15 @@ import type { Draw } from "../viewer/bundle";
 import { texUrl, type DocEntity } from "./editorApi";
 import { facesOf, groupMembers, keyOf, originOf, selectionBounds, snap, topGroup, useEditor, type BrushGeo, type FaceRef, type ViewId } from "./store";
 import { LeakLine } from "./LeakLine";
+import { DIM_MATERIAL, P4SceneParts } from "./P4Scene"; // P4: cordon, drag and drop, 3D box select
+import { useCordonDim } from "./extras";
+import { MarqueeHot, startMarquee, useMarquee } from "./Marquee";
+// P5: panes (quad view): one canvas, a drei <View> per pane
+import { PaneBoxes } from "./Layout";
+import { paneCount, PaneCtx, usePaneActive, usePanes, usePaneView } from "./panes";
+import { useP5 } from "./p5store";
+import { duplicateWith } from "./commands";
+import { shiftHeld, snapToGeometry } from "./snapGeo";
 import { Bookmarks, MeasureLine, sameP, SelectRect, TexHandles, useVisibleBrush, VertexHandles } from "./SceneExtras";
 
 // ---- small helpers ---------------------------------------------------------------------
@@ -31,8 +40,10 @@ const mul = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 /** The mouse ray in GoldSrc, from a window event. */
-function rayAt(e: { clientX: number; clientY: number }, state: RootState): { o: Vec3; d: Vec3 } {
-  const r = state.gl.domElement.getBoundingClientRect();
+export function rayAt(e: { clientX: number; clientY: number }, state: RootState): { o: Vec3; d: Vec3 } {
+  // P5: in a pane, the pane's own box (its events are connected to it), else the canvas
+  const pane = state.events.connected as HTMLElement | undefined;
+  const r = (pane?.dataset?.pane != null ? pane : state.gl.domElement).getBoundingClientRect();
   const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   const rc = new THREE.Raycaster();
   rc.setFromCamera(ndc, state.camera);
@@ -57,7 +68,8 @@ function alongLine(ray: { o: Vec3; d: Vec3 }, p0: Vec3, n: Vec3): number | null 
   return (b * dot(ray.d, w) - c * dot(n, w)) / den;
 }
 
-const snapVec = (p: Vec3): Vec3 => [snap(p[0]), snap(p[1]), snap(p[2])];
+// P5: a brush corner/edge nearby wins when "snap to corners and edges" is on
+const snapVec = (p: Vec3): Vec3 => snapToGeometry(p) ?? [snap(p[0]), snap(p[1]), snap(p[2])];
 const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const norm2 = (a: Vec3): Vec3 => {
   const l = Math.hypot(a[0], a[1], a[2]) || 1;
@@ -118,7 +130,7 @@ function isPicked(b: BrushGeo, sel: { brushes: number[]; entities: number[] }) {
 
 // ---- brushes --------------------------------------------------------------------------
 
-function BrushMesh({ b, mats, picked, hideSky, version }: { b: BrushGeo; mats: MapMaterials; picked: boolean; hideSky: boolean; version: number }) {
+function BrushMesh({ b, mats, picked, hideSky, version, dim }: { b: BrushGeo; mats: MapMaterials; picked: boolean; hideSky: boolean; version: number; dim?: boolean }) {
   const materials = useMemo(() => b.textures.map((t) => mats.get(drawOf(t))), [b, mats, version]); // eslint-disable-line react-hooks/exhaustive-deps
   const edges = useMemo(() => new THREE.EdgesGeometry(b.geometry, 20), [b]);
   useEffect(() => () => edges.dispose(), [edges]);
@@ -128,6 +140,7 @@ function BrushMesh({ b, mats, picked, hideSky, version }: { b: BrushGeo; mats: M
     <group>
       {!skyOnly && <mesh geometry={b.geometry} material={materials} userData={{ kind: "brush", id: b.id }} />}
       {skyOnly && <mesh geometry={b.geometry} userData={{ kind: "brush", id: b.id, sky: true }} visible={false} />}
+      {dim && !skyOnly && <mesh geometry={b.geometry} material={DIM_MATERIAL} renderOrder={2} raycast={() => null} />}
       <lineSegments geometry={edges} renderOrder={picked ? 3 : 1}>
         <lineBasicMaterial color={picked ? "#ffd84a" : tied ? "#62c6d6" : "#10130d"} transparent opacity={picked ? 0.95 : 0.35} depthTest={!picked} />
       </lineSegments>
@@ -141,9 +154,10 @@ function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
   const preview = useEditor((s) => s.preview);
   const groups = useEditor((s) => s.doc?.groups);
   const camera = useTools((s) => s.camera);
-  const view = useEditor((s) => s.view);
+  const view = usePaneView(); // P5
   const hideSky = !(view === "3d" && camera === "fly");
   const visible = useVisibleBrush();
+  const dim = useCordonDim(); // P4: outside the cordon
   const moving = useRef<THREE.Group>(null);
   useEffect(() => {
     const g = moving.current;
@@ -157,7 +171,7 @@ function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
     <>
       <group>
         {list.filter((b) => !isPicked(b, sel)).map((b) => (
-          <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} version={version} />
+          <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} version={version} dim={!!dim?.(b)} />
         ))}
       </group>
       <group ref={moving} matrixAutoUpdate={false}>
@@ -329,7 +343,7 @@ type Hit = { kind: "brush" | "entity" | "plane"; id: number; face: number | null
 
 /** The nearest thing under the mouse that a tool cares about: a brush or an entity, else
  *  the working plane (so a ceiling above the plane still gets picked from below). */
-type Handle = { kind: string; id: number; face?: number; p?: Vec3 };
+type Handle = { kind: string; id: number; face?: number; p?: Vec3; ps?: Vec3[] };
 /** A handle under the mouse (vertex corners, texture knobs): they're drawn on top, so they win. */
 function handleOf(e: ThreeEvent<PointerEvent>): Handle | null {
   for (const i of e.intersections) {
@@ -439,7 +453,8 @@ function onAnyPlane(ray: { o: Vec3; d: Vec3 }, p0: Vec3, n: Vec3): Vec3 | null {
 function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
   const state = useThree();
   const tool = useEditor((s) => s.tool);
-  const view = useEditor((s) => s.view);
+  const view = usePaneView(); // P5: this pane's view
+  const active = usePaneActive(); // P5: only the active pane answers clip keys
   const axis = viewAxis(view);
   const [box, setBox] = useState<{ a: Vec3; b: Vec3 } | null>(null);
   const [rect, setRect] = useState<{ a: Vec3; b: Vec3 } | null>(null);
@@ -461,7 +476,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
 
   // clip: Tab picks which side stays, Enter cuts, Esc forgets the points
   useEffect(() => {
-    if (tool !== "clip") return;
+    if (tool !== "clip" || !active) return;
     const key = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
@@ -476,8 +491,8 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
     return () => window.removeEventListener("keydown", key);
   });
   useEffect(() => {
-    useEditor.setState({ clipInfo: tool === "clip" ? { points: clip.length, keep: clipKeep } : null });
-  }, [tool, clip.length, clipKeep]);
+    if (active) useEditor.setState({ clipInfo: tool === "clip" ? { points: clip.length, keep: clipKeep } : null });
+  }, [tool, clip.length, clipKeep, active]);
 
   const clipPoints = (): [Vec3, Vec3, Vec3] | null => {
     const c = clipRef.current;
@@ -495,7 +510,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
     if (!r.error) setClip([]);
   };
   useEffect(() => {
-    useEditor.setState({ doClip, setClipKeep });
+    if (active) useEditor.setState({ doClip, setClipKeep });
   });
 
   const controlsOff = (off: boolean) => {
@@ -515,12 +530,15 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
     const handle = handleOf(e);
 
     if (tool === "vertex" && handle?.kind === "vert" && handle.p) {
-      // click picks a corner (Shift adds); dragging moves the picked corners with snapping
+      // click picks a corner (Shift adds); dragging moves the picked corners with snapping.
+      // P4: edge and face handles pick all their corners at once
       const p = handle.p;
-      const has = s.verts.some((v) => v.brush === handle.id && sameP(v.p, p));
+      const ps: Vec3[] = handle.ps?.length ? handle.ps : [p];
+      const isPick = (v: { brush: number; p: Vec3 }) => v.brush === handle.id && ps.some((q) => sameP(v.p, q));
+      const has = ps.every((q) => s.verts.some((v) => v.brush === handle.id && sameP(v.p, q)));
       let picks = s.verts;
-      if (additive) picks = has ? s.verts.filter((v) => !(v.brush === handle.id && sameP(v.p, p))) : [...s.verts, { brush: handle.id, p }];
-      else if (!has) picks = [{ brush: handle.id, p }];
+      if (additive) picks = has ? s.verts.filter((v) => !isPick(v)) : [...s.verts.filter((v) => !isPick(v)), ...ps.map((q) => ({ brush: handle.id, p: q }))];
+      else if (!has) picks = ps.map((q) => ({ brush: handle.id, p: q }));
       s.set({ verts: picks });
       if (additive && has) return;
       controlsOff(true);
@@ -536,8 +554,8 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
         if (!startAt) return;
         const q = onAnyPlane(rayAt(m, live.current), p, n);
         if (!q) return;
-        // the dragged corner lands on the grid
-        const target = snapVec(add(p, sub(q, startAt)));
+        // the dragged corner lands on the grid (an edge or face moves by whole grid steps)
+        const target = ps.length > 1 ? add(p, snapVec(sub(q, startAt))) : snapVec(add(p, sub(q, startAt)));
         for (let i = 0; i < 3; i++) if (n[i]) target[i] = p[i];
         last = sub(target, p);
         useTools.getState().setHover(`Corner to ${target.map((x) => Math.round(x * 100) / 100).join(" ")}`);
@@ -728,7 +746,10 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
 
     if (tool === "texture") {
       if (!hit || hit.kind !== "brush" || hit.face == null) {
-        if (!additive && hit?.kind === "plane") s.select({ brushes: [], entities: [], face: null, faces: [] });
+        // P4: a box from empty space picks faces
+        if (!(view === "3d" && useTools.getState().camera === "fly")) {
+          startMarquee(ev, live.current, { faces: true, controlsOff, onClick: () => !additive && s.select({ brushes: [], entities: [], face: null, faces: [] }) });
+        }
         return;
       }
       const b = s.brushes.get(hit.id);
@@ -808,60 +829,22 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
     // select / move / rotate / scale: click picks; on a picked brush in Select, drag pushes/pulls its face
     const b = hit?.kind === "brush" ? s.brushes.get(hit.id) : null;
     const canPush = tool === "select" && b && hit && hit.face != null && isPicked(b, s.sel) && !additive;
-    // flat views: dragging from empty space draws a box that picks what's inside it
-    const boxing = view !== "3d" && (!hit || hit.kind === "plane") && (tool === "select" || tool === "move" || tool === "rotate" || tool === "scale" || tool === "vertex");
-    if (boxing) {
-      const a0 = onPlane(rayAt(ev, live.current), axis, 0);
-      if (!a0) return;
-      let b0 = a0;
-      const mv = (m: PointerEvent) => {
-        const q = onPlane(rayAt(m, live.current), axis, 0);
-        if (!q) return;
-        b0 = q;
-        if (Math.hypot(m.clientX - start.x, m.clientY - start.y) >= 4) setRect({ a: a0, b: q });
-        state.invalidate();
-      };
-      const upr = () => {
-        window.removeEventListener("pointermove", mv);
-        window.removeEventListener("pointerup", upr);
-        setRect(null);
-        const [u, v] = [0, 1, 2].filter((i) => i !== axis);
-        const lo = [Math.min(a0[u], b0[u]), Math.min(a0[v], b0[v])];
-        const hi = [Math.max(a0[u], b0[u]), Math.max(a0[v], b0[v])];
-        const small = hi[0] - lo[0] < 1 && hi[1] - lo[1] < 1;
-        if (small) {
-          if (!additive) s.select({ brushes: [], entities: [], face: null });
-          return;
-        }
-        const inside = (min: Vec3, max: Vec3) => min[u] >= lo[0] && max[u] <= hi[0] && min[v] >= lo[1] && max[v] <= hi[1];
-        const st = useEditor.getState();
-        const hiddenE = st.hidden.entities;
-        const brushes: number[] = [];
-        const entities = new Set<number>();
-        for (const br of st.brushes.values()) {
-          if (st.hidden.brushes.has(br.id) || !inside(br.min, br.max)) continue;
-          if (br.entity != null) {
-            if (!hiddenE.has(br.entity)) entities.add(br.entity);
-          } else brushes.push(br.id);
-        }
-        for (const en of st.doc?.entities ?? []) {
-          if (en.brushes.length || hiddenE.has(en.id)) continue;
-          const o = originOf(en.keys);
-          if (o && inside(o, o)) entities.add(en.id);
-        }
-        // a brush entity counts only when all of it is inside
-        for (const id of [...entities]) {
-          const en = st.doc?.entities.find((x) => x.id === id);
-          if (en?.brushes.some((bid) => {
-            const g = st.brushes.get(bid);
-            return g && !inside(g.min, g.max);
-          })) entities.delete(id);
-        }
-        const cur = st.sel;
-        s.select(additive ? { brushes: [...new Set([...cur.brushes, ...brushes])], entities: [...new Set([...cur.entities, ...entities])], face: null } : { brushes, entities: [...entities], face: null });
-      };
-      window.addEventListener("pointermove", mv);
-      window.addEventListener("pointerup", upr);
+    // P4: dragging from empty space draws a box (every view; see Marquee.tsx). In flat views and
+    // in 3D with "Box anywhere", from anywhere but a picked brush (that's push/pull).
+    const flyNow = view === "3d" && useTools.getState().camera === "fly";
+    // (flat views, like Hammer: from anywhere but a picked brush; a click still picks what's under it)
+    const anywhere = (view !== "3d" || useMarquee.getState().anywhere3d) && !canPush;
+    if (!flyNow && (!hit || hit.kind === "plane" || anywhere) && (tool === "select" || tool === "move" || tool === "rotate" || tool === "scale" || tool === "vertex")) {
+      startMarquee(ev, live.current, {
+        faces: false,
+        controlsOff,
+        onClick: () => {
+          if (!hit || hit.kind === "plane") {
+            if (!additive) s.select({ brushes: [], entities: [], face: null });
+          } else if (hit.kind === "brush") pickBrush(hit.id, additive);
+          else pickEntity(hit.id, additive);
+        },
+      });
       return;
     }
     let pushing: ReturnType<typeof faceDragger> | null = null;
@@ -930,6 +913,8 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
       <TexHandles />
       <MeasureLine />
       <LeakLine />
+      <P4SceneParts />
+      <MarqueeHot />
       {clip.map((p, i) => (
         <mesh key={i} position={p}>
           <sphereGeometry args={[4, 12, 8]} />
@@ -1027,6 +1012,8 @@ function Gizmo({ pivot }: { pivot: React.MutableRefObject<THREE.Group | null> })
   const [ready, setReady] = useState<THREE.Group | null>(null);
   const start = useRef<{ pos: THREE.Vector3; q: THREE.Quaternion; s: THREE.Vector3; centre: Vec3 } | null>(null);
   const dragging = useRef(false);
+  const copying = useRef<Promise<void> | null>(null); // P5
+  const rotSnap = useP5((x) => x.rotSnap); // P5
   const mode = tool === "move" ? "translate" : tool === "rotate" ? "rotate" : tool === "scale" ? "scale" : null;
   const bounds = useMemo(() => selectionBounds(), [sel, brushes, doc]); // eslint-disable-line react-hooks/exhaustive-deps
   const centre = bounds ? mul(add(bounds[0], bounds[1]), 0.5) : null;
@@ -1049,11 +1036,13 @@ function Gizmo({ pivot }: { pivot: React.MutableRefObject<THREE.Group | null> })
           mode={mode}
           space="local"
           size={0.9}
-          rotationSnap={alt ? null : Math.PI / 12}
+          rotationSnap={alt || !rotSnap ? null : (rotSnap * Math.PI) / 180} /* P5: Grid and snapping */
           scaleSnap={alt ? null : 0.125}
           onMouseDown={() => {
             const p = pivot.current!;
             dragging.current = true;
+            // P5: Shift-drag copies: the copies move, the originals stay
+            copying.current = shiftHeld() ? duplicateWith([0, 0, 0]) : null;
             start.current = { pos: p.position.clone(), q: p.quaternion.clone(), s: p.scale.clone(), centre };
           }}
           onObjectChange={() => {
@@ -1073,6 +1062,8 @@ function Gizmo({ pivot }: { pivot: React.MutableRefObject<THREE.Group | null> })
             const p = pivot.current;
             const st = start.current;
             dragging.current = false;
+            if (copying.current) await copying.current; // P5
+            copying.current = null;
             if (!p || !st) return;
             const ids = selectionIds();
             const s = useEditor.getState();
@@ -1118,7 +1109,9 @@ function Flat({ view, bounds }: { view: Exclude<ViewId, "3d">; bounds: [Vec3, Ve
   const axis = viewAxis(view);
   const u = view === "side" ? 1 : 0;
   const v = view === "top" ? 1 : 2;
-  const zoom = Math.min(size.width / Math.max(128, hi[u] - lo[u]), size.height / Math.max(128, hi[v] - lo[v])) * 0.85;
+  // P5: the first zoom only (a pane's size can read 0 while panes move; refits come from frameFlat)
+  const zoom0 = Math.min(size.width / Math.max(128, hi[u] - lo[u]), size.height / Math.max(128, hi[v] - lo[v])) * 0.85;
+  const [zoom] = useState(() => (Number.isFinite(zoom0) && zoom0 > 0 ? zoom0 : 0.5));
   const eyeGs: Vec3 = [...centre];
   eyeGs[axis] = axis === 1 ? lo[1] - 8192 : hi[axis] + 8192;
   const eye = gsToThree(eyeGs);
@@ -1135,6 +1128,40 @@ function Flat({ view, bounds }: { view: Exclude<ViewId, "3d">; bounds: [Vec3, Ve
     // only when the view changes: panning and zooming stay yours
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, camera]);
+  // P5: zoom to a box when asked (frame selection / frame all), and follow "look at" requests
+  const frame = usePanes((s) => s.frame);
+  const lookReq = useTools((s) => s.lookAt);
+  const invalidate = useThree((s) => s.invalidate);
+  const fit = (min: Vec3, max: Vec3, zoomToo: boolean) => {
+    const c = ref.current;
+    if (!c || !(c.object instanceof THREE.OrthographicCamera)) return;
+    const mid = mul(add(min, max), 0.5);
+    const t = gsToThree(mid);
+    const off = c.object.position.clone().sub(c.target);
+    c.target.copy(t);
+    c.object.position.copy(t).add(off);
+    if (zoomToo) {
+      const el = (c as unknown as { domElement?: HTMLElement }).domElement;
+      const w = el?.clientWidth || size.width;
+      const h = el?.clientHeight || size.height;
+      c.object.zoom = Math.min(w / Math.max(64, max[u] - min[u]), h / Math.max(64, max[v] - min[v])) * 0.8;
+      c.object.updateProjectionMatrix();
+    }
+    c.update();
+    invalidate();
+  };
+  useEffect(() => {
+    if (frame) fit(frame.min, frame.max, true);
+  }, [frame]); // eslint-disable-line react-hooks/exhaustive-deps
+  // P5: fit the map to this pane once its controls are up and its box is known
+  const ctl = useThree((s) => s.controls);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => fit(lo, hi, true));
+    return () => cancelAnimationFrame(id);
+  }, [ctl]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (lookReq) fit(lookReq.point, lookReq.point, false);
+  }, [lookReq]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
       <OrthographicCamera makeDefault position={eye} up={up} zoom={zoom} near={1} far={40000} onUpdate={(c) => c.lookAt(target)} />
@@ -1166,38 +1193,126 @@ function GridFor({ view, grid, bounds }: { view: ViewId; grid: number; bounds: [
 // ---- the canvas -----------------------------------------------------------------------
 
 export function EditorScene({ bounds, docId, onLost }: { bounds: [Vec3, Vec3]; docId: number; onLost: () => void }) {
-  const view = useEditor((s) => s.view);
+  // P5: one canvas behind the pane boxes; each pane is a drei <View> drawn into its box
+  const layout = usePanes((s) => s.layout);
+  const views = usePanes((s) => s.views);
+  const max = usePanes((s) => s.max);
+  const active = usePanes((s) => s.active);
+  const wrap = useRef<HTMLDivElement>(null);
+  const t0 = useRef<HTMLDivElement | null>(null);
+  const t1 = useRef<HTMLDivElement | null>(null);
+  const t2 = useRef<HTMLDivElement | null>(null);
+  const t3 = useRef<HTMLDivElement | null>(null);
+  const tracks = [t0, t1, t2, t3];
+  const n = paneCount(layout);
+  return (
+    <div ref={wrap} className="ed-panes">
+      <div className="ed-panes-canvas">
+        <Canvas
+          onCreated={({ gl }) => gl.domElement.addEventListener("webglcontextlost", (e) => {
+            e.preventDefault();
+            // a canvas being put away (new document) drops its context on purpose
+            if (gl.domElement.isConnected) onLost();
+          })}
+          frameloop="demand"
+          dpr={[1, 1.5]}
+          linear
+          flat
+          gl={{ powerPreference: "high-performance", antialias: true }}
+          camera={{ fov: 70, near: 2, far: 40000, position: [0, 512, 512] }}
+          events={pointerEvents}
+          eventSource={wrap as React.MutableRefObject<HTMLElement>}
+        >
+          <Redraw />
+          <Materials docId={docId}>
+            {Array.from({ length: n }, (_, i) => (
+              <View key={`${i}-${views[i]}`} track={tracks[i] as React.MutableRefObject<HTMLElement>} index={i + 1} visible={max == null || max === i}>
+                <PaneCtx.Provider value={{ slot: i, view: views[i], active: n === 1 || active === i }}>
+                  <PaneScene view={views[i]} bounds={bounds} />
+                </PaneCtx.Provider>
+              </View>
+            ))}
+          </Materials>
+        </Canvas>
+      </div>
+      <PaneBoxes tracks={tracks} />
+    </div>
+  );
+}
+
+/** P5: one pane's scene: its own lights, grid, camera, tools and gizmo. */
+function PaneScene({ view, bounds }: { view: ViewId; bounds: [Vec3, Vec3] }) {
   const grid = useEditor((s) => s.grid);
+  const showGrid = useP5((s) => s.showGrid);
   const pivot = useRef<THREE.Group | null>(null);
   return (
-    <Canvas
-      onCreated={({ gl }) => gl.domElement.addEventListener("webglcontextlost", (e) => {
-        e.preventDefault();
-        // a canvas being put away (view switch, new document) drops its context on purpose
-        if (gl.domElement.isConnected) onLost();
-      })}
-      frameloop="demand"
-      dpr={[1, 1.5]}
-      linear
-      flat
-      gl={{ powerPreference: "high-performance", antialias: true }}
-      camera={{ fov: 70, near: 2, far: 40000, position: [0, 512, 512] }}
-      events={pointerEvents}
-    >
+    <>
       <color attach="background" args={["#22271e"]} />
       <hemisphereLight args={["#ffffff", "#5a5f50", 0.95]} />
       <directionalLight position={[0.4, 1, 0.25]} intensity={1.5} />
-      <GridFor view={view} grid={grid} bounds={bounds} />
-      <Materials docId={docId}>
-        <group rotation={ROOT_ROTATION}>
-          <ToolLayer bounds={bounds} />
-          {/* what the gizmo moves: in GoldSrc units like everything in here */}
-          <group ref={pivot} />
-        </group>
-      </Materials>
+      {showGrid && <GridFor view={view} grid={grid} bounds={bounds} />}
+      {view !== "3d" && <Crosshair view={view} />}
+      <group rotation={ROOT_ROTATION}>
+        <ToolLayer bounds={bounds} />
+        {/* what the gizmo moves: in GoldSrc units like everything in here */}
+        <group ref={pivot} />
+      </group>
       <Gizmo pivot={pivot} />
-      <Bookmarks />
-      {view === "3d" ? <Cameras bounds={bounds} /> : <Flat key={view} view={view} bounds={bounds} />}
-    </Canvas>
+      {view === "3d" ? (
+        <>
+          <Persp bounds={bounds} />
+          <Bookmarks />
+        </>
+      ) : (
+        <Flat key={view} view={view} bounds={bounds} />
+      )}
+    </>
+  );
+}
+
+/** P5: a 3D pane's own camera; B's orbit/fly cameras start once it's the one in use. */
+function Persp({ bounds }: { bounds: [Vec3, Vec3] }) {
+  const ref = useRef<THREE.PerspectiveCamera>(null);
+  const cam = useThree((s) => s.camera);
+  return (
+    <>
+      <PerspectiveCamera ref={ref} makeDefault fov={70} near={2} far={40000} position={[0, 512, 512]} />
+      {ref.current && cam === ref.current && <Cameras bounds={bounds} />}
+    </>
+  );
+}
+
+/** P5: pane boxes move without the canvas resizing: draw again when they do. */
+function Redraw() {
+  const invalidate = useThree((s) => s.invalidate);
+  const layout = usePanes((s) => s.layout);
+  const split = usePanes((s) => s.splits[s.layout]);
+  const max = usePanes((s) => s.max);
+  useEffect(() => {
+    invalidate();
+    // the views read their boxes on the next frame: once more after that
+    const id = requestAnimationFrame(() => invalidate());
+    return () => cancelAnimationFrame(id);
+  }, [layout, split, max, invalidate]);
+  return null;
+}
+
+/** P5: a cross-hair through the mouse's place in the flat views (GoldSrc units). */
+function Crosshair({ view }: { view: Exclude<ViewId, "3d"> }) {
+  const cursor = useEditor((s) => s.cursor);
+  if (!cursor) return null;
+  const axis = viewAxis(view);
+  const [u, v] = [0, 1, 2].filter((i) => i !== axis);
+  const far = 65536;
+  const at = (i: number, val: number): Vec3 => {
+    const p: Vec3 = [cursor[0], cursor[1], cursor[2]];
+    p[i] = val;
+    return p;
+  };
+  return (
+    <group rotation={ROOT_ROTATION}>
+      <Line points={[at(u, -far), at(u, far)]} color="#8fa0b0" lineWidth={1} transparent opacity={0.35} depthTest={false} renderOrder={6} />
+      <Line points={[at(v, -far), at(v, far)]} color="#8fa0b0" lineWidth={1} transparent opacity={0.35} depthTest={false} renderOrder={6} />
+    </group>
   );
 }

@@ -11,8 +11,11 @@ import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
 import * as api from "./compileApi";
 import type { Job, Preset, Problem } from "./compileApi";
-import { originOf, selectionBounds, useEditor } from "./store";
+import { originOf, useEditor } from "./store";
 import "./compile.css";
+import { useNav } from "../../../store";
+import { CordonPanel } from "./CordonPanel";
+import { cameraPos, cordonOf } from "./extras";
 
 const PRESETS: { id: Preset; label: string; hint: string }[] = [
   { id: "fast", label: "Fast", hint: "Quick lighting and no visibility pass: for trying things out." },
@@ -62,11 +65,9 @@ function goTo(p: Problem) {
 export function CompilePanel() {
   const toast = useToast();
   const ask = useConfirm();
-  const sel = useEditor((s) => s.sel);
   const [status, setStatus] = useState<api.CompileStatus | null>(null);
   const [preset, setPreset] = useState<Preset>(() => pref<string>("ls.compile.preset", "normal") as Preset);
   const [name, setName] = useState("");
-  const [cordon, setCordon] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [partial, setPartial] = useState("");
@@ -141,8 +142,6 @@ export function CompilePanel() {
   }, [lines, partial]);
 
   const running = !!job?.running || starting || playing;
-  const bounds = selectionBounds();
-  const hasSel = !!bounds && (sel.brushes.length > 0 || sel.entities.length > 0);
 
   const download = async () => {
     setStarting(true);
@@ -164,13 +163,17 @@ export function CompilePanel() {
       return null;
     }
     api.useLeak.getState().set(null);
-    let c: api.Cordon | undefined;
-    if (cordon && bounds) {
-      // a little room around what's picked, so its walls aren't flush with the seal
-      c = { min: bounds[0].map((x) => Math.floor(x - 64)) as Vec3, max: bounds[1].map((x) => Math.ceil(x + 64)) as Vec3 };
-    }
+    // P4: the cordon (boxes kept in the project); a playtest spawns inside it
+    const cd = cordonOf(useEditor.getState().doc);
+    const cordoned = cd.on && cd.boxes.length > 0;
+    const cam = install ? cameraPos() : null;
     setStarting(true);
-    const r = await api.startCompile({ preset, name: n || undefined, cordon: c, install });
+    const r = await api.startCompile({
+      preset,
+      name: n || undefined,
+      install,
+      ...(cordoned ? { cordons: cd.boxes, cordonOptions: { seal: cd.seal, keepLights: cd.keepLights, spawn: install, ...(cam ? { spawnAt: cam } : {}) } } : {}),
+    });
     setStarting(false);
     if (r.error) {
       toast(r.error, true);
@@ -255,6 +258,7 @@ export function CompilePanel() {
       <section className="tools-panel">
         <p className="small-note">{status.error}</p>
         <button type="button" className="btn small" onClick={() => void loadStatus()}>Try again</button>
+        <CordonPanel />
       </section>
     );
   }
@@ -277,6 +281,7 @@ export function CompilePanel() {
         )}
         {!status.canRun && status.cantRun && <p className="small-note">{status.cantRun}</p>}
         {job?.kind === "setup" && !job.running && job.error && <p className="small-note compile-bad">{job.error}</p>}
+        <CordonPanel />
       </section>
     );
   }
@@ -315,10 +320,7 @@ export function CompilePanel() {
       </div>
       <p className="small-note muted">{PRESETS.find((p) => p.id === preset)?.hint}</p>
 
-      <label className="editor-check compile-check" title={hasSel ? "Compile only what's around the picked brushes and entities, sealed in a box of sky." : "Pick some brushes or entities first."}>
-        <input type="checkbox" checked={cordon && hasSel} disabled={!hasSel || running} onChange={(e) => setCordon(e.target.checked)} />
-        Only the area around what's picked (faster)
-      </label>
+      <CordonPanel disabled={running} />
 
       <div className="editor-row wrap">
         <BusyButton className="btn" busy={starting && !playing} label="Compile" busyLabel="Starting…" disabled={running || !status.canRun} onClick={() => void onCompile()} />
@@ -389,6 +391,14 @@ export function CompilePanel() {
         <p className="small-note">
           Compiled <strong>{done.map}</strong> ({mb(done.bytes ?? 0)}) in {secs(job!.seconds)}.{done.installed ? " It's in the game's maps folder." : ""}
           {done.backup ? " The map that was there is backed up." : ""}
+          {done.installed && (
+            <>
+              {" "}
+              <button type="button" className="linklike" title="Make a package to share it in Tools > Community" onClick={() => useNav.getState().go("tools", `community:publish:${done.map}`)}>
+                Publish it…
+              </button>
+            </>
+          )}
         </p>
       )}
 

@@ -3,6 +3,7 @@
 // target name suggestions; keys the definition doesn't know, and unknown classes, fall back
 // to plain key/value rows.
 
+import { AssetPreview } from "./AssetPreview";
 import { useEffect, useMemo, useState } from "react";
 import { Info } from "../../../ui";
 import { useTools } from "../../../stores/tools";
@@ -122,6 +123,7 @@ function KeyField({ e, k, v, all }: { e: DocEntity; k: string; v: string; all: s
             ))}
           </datalist>
         )}
+        <AssetPreview value={text} />
         {k !== "classname" && (
           <button type="button" className="btn small icon" title="Remove this key" aria-label={`Remove ${k}`} onClick={() => setKey(e, k, "")}>
             ×
@@ -246,6 +248,7 @@ function DefField({ e, def, value, all }: { e: DocEntity; def: FgdKey; value: st
             if (ev.key === "Escape") setText(v);
           }}
         />
+        <AssetPreview value={text || def.default || ""} fgdType={def.type} />
       </>
     );
   }

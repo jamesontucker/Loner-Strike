@@ -13,8 +13,15 @@ export type DocEntity = { id: number; classname: string; keys: [string, string][
 export type DocGroup = { id: number; name: string; parent: number | null; hidden: boolean; locked: boolean };
 export type Stats = { brushes: number; faces: number; entities: number; point_entities: number; brush_entities: number; textures: number };
 
+export type CordonBox = { min: Vec3; max: Vec3 };
+export type Cordon = { boxes: CordonBox[]; on: boolean; seal: "sky" | "black"; keepLights: boolean };
+export type VisSet = { name: string; brushes: number[]; entities: number[] };
+/** The editor's settings kept in the project (not in the .map). */
+export type EditorSettings = { fgd: string | null; visSets: VisSet[]; cordon: Cordon };
+
 export type Doc = DocState & {
   world: { wads: string[]; keys: [string, string][] };
+  editor?: EditorSettings;
   brushes: DocBrush[];
   entities: DocEntity[];
   groups: DocGroup[];
@@ -56,6 +63,38 @@ export type FgdKey = {
   choices?: { value: string; label: string }[];
   flags?: { bit: number; label: string; on: boolean }[];
 };
+export type Prefab = {
+  id: string;
+  name: string;
+  tags: string[];
+  author: string;
+  description: string;
+  builtin: boolean;
+  brushes: number;
+  entities: number;
+  size: Vec3;
+  textures: string[];
+  wads: string[];
+  created: number;
+  thumb: string;
+};
+
+/** A game mode component in the library (editor/components.json). */
+export type ComponentDef = {
+  class: string;
+  group: string;
+  title: string;
+  blurb: string;
+  visual: "ring" | "box" | "point" | "beam_up" | "link";
+  radius_key?: string;
+  size_key?: string;
+  link_keys?: string[];
+  badge_key?: string;
+  brush?: boolean;
+  colour: [number, number, number];
+  needs_nav?: boolean;
+};
+
 export type FgdClass = { name: string; kind: "point" | "solid"; description: string; size?: number[]; color?: number[]; keys: FgdKey[] };
 export type RecentFile = { index: number; name: string; folder: string; project: boolean; found: boolean };
 export type Recovery = { found: boolean; name?: string; time?: number; brushes?: number; entities?: number; project?: boolean };
@@ -109,13 +148,29 @@ export const openProject = () => post<DocState & { cancelled?: boolean }>(`${E}/
 export const importMap = () => post<DocState & { cancelled?: boolean }>(`${E}/import-map`);
 export const saveProject = (as = false) => post<{ cancelled?: boolean; saved?: boolean; file?: string; state?: DocState }>(`${E}/save`, { as });
 export const copySelection = (brushes: number[], entities: number[]) => post<{ text: string; brushes: number; entities: number }>(`${E}/copy`, { brushes, entities });
-export const getFgd = () => getJson<{ classes: FgdClass[]; source: string }>(`${E}/fgd`);
+export const getFgd = () => getJson<{ classes: FgdClass[]; source: string; custom?: { file: string; path: string; error?: string } }>(`${E}/fgd`);
 export const getRecent = () => getJson<{ files: RecentFile[] }>(`${E}/recent`);
 export const openRecent = (index: number) => post<DocState>(`${E}/open-recent`, { index });
 export const autosave = () => post<{ saved: boolean }>(`${E}/autosave`);
 export const getRecovery = () => getJson<Recovery>(`${E}/recovery`);
 export const recover = () => post<DocState>(`${E}/recover`);
 export const discardRecovery = () => post<{ discarded: boolean }>(`${E}/discard-recovery`);
+export const getState = () => getJson<DocState>(`${E}/state`);
+export const saveSettings = (body: { visSets?: VisSet[]; cordon?: Cordon }) => post<DocState & { editor: EditorSettings }>(`${E}/settings`, body);
+export const pickFgd = () => post<DocState & { editor?: EditorSettings; cancelled?: boolean; classes?: number }>(`${E}/fgd/pick`);
+export const clearFgd = () => post<DocState & { editor: EditorSettings }>(`${E}/fgd/clear`);
+export const soundUrl = (path: string) => `${E}/sound?path=${encodeURIComponent(path)}`;
+export const getPrefabs = () => getJson<{ prefabs: Prefab[]; folder: string }>(`${E}/prefabs`);
+export const savePrefab = (b: { name: string; tags: string[]; author: string; description: string; brushes: number[]; entities: number[]; thumb?: string | null }) =>
+  post<{ ok?: boolean; id?: string; name?: string }>(`${E}/prefabs/save`, b);
+export const editPrefab = (b: { id: string; name?: string; tags?: string[]; description?: string }) => post<{ ok?: boolean }>(`${E}/prefabs/edit`, b);
+export const deletePrefab = (id: string) => post<{ ok?: boolean }>(`${E}/prefabs/delete`, { id });
+export const exportPrefab = (id: string) => post<{ ok?: boolean; cancelled?: boolean; file?: string }>(`${E}/prefabs/export`, { id });
+export const importPrefab = () => post<{ ok?: boolean; cancelled?: boolean; prefabs?: string[]; wads?: string[]; skipped?: string[] }>(`${E}/prefabs/import`);
+export const getComponents = () => getJson<{ groups: string[]; components: ComponentDef[] }>(`${E}/components`);
+export const getPackPreview = (map: string) => getJson<{ text: string; count: number; skipped: string[] }>(`${E}/components/pack?map=${encodeURIComponent(map)}`);
+export const savePack = (map: string, mode?: string) => post<{ ok?: boolean; count?: number; file?: string; skipped?: string[] }>(`${E}/components/save-pack`, { map, mode: mode || undefined });
+export const loadPack = (map: string, mode?: string) => post<DocState & { count?: number; bad?: string[]; file?: string }>(`${E}/components/load-pack`, { map, mode: mode || undefined });
 export const exportMap = () => post<{ cancelled?: boolean; exported?: boolean; file?: string }>(`${E}/export-map`);
 
 /** The brush meshes that changed since a revision (all of them without one). */

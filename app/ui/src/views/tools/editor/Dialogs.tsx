@@ -2,13 +2,13 @@
 // (sky, WADs, light, buying) and the entity report.
 
 import { useEffect, useMemo, useState } from "react";
-import { BusyButton, Info, Sheet } from "../../../ui";
+import { BusyButton, Info, Sheet, useToast } from "../../../ui";
 import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
-import { getGameWads, type DocEntity } from "./editorApi";
+import { clearFgd, getFgd, getGameWads, pickFgd, type DocEntity, type EditorSettings } from "./editorApi";
 import { selectionIds } from "./EditorScene";
 import { rgbToHex, hexToRgb } from "./EntityForm";
-import { useFgd } from "./fgd";
+import { reloadFgd, useFgd } from "./fgd";
 import { keyOf, originOf, selectionBounds, useEditor } from "./store";
 
 export function Dialogs() {
@@ -263,6 +263,7 @@ function MapProperties({ onClose }: { onClose: () => void }) {
                 </button>
               </div>
             )}
+            <FgdChoice />
           </section>
         </div>
         <div className="row ask-buttons">
@@ -377,5 +378,42 @@ function EntityReport({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </Sheet>
+  );
+}
+
+/** P4: the map's own entity definitions (an FGD file read on top of ours; kept in the project). */
+function FgdChoice() {
+  const toast = useToast();
+  const file = useEditor((s) => s.doc?.editor?.fgd ?? null);
+  const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState<{ source: string; error?: string } | null>(null);
+  useEffect(() => {
+    void getFgd().then((r) => !r.error && setInfo({ source: r.source, error: r.custom?.error }));
+  }, [file]);
+  const done = async (r: { error?: string; editor?: EditorSettings; cancelled?: boolean; classes?: number; dirty?: boolean }) => {
+    setBusy(false);
+    if (r.error) return toast(r.error, true);
+    if (r.cancelled) return;
+    const d = useEditor.getState().doc;
+    if (d && r.editor) useEditor.setState({ doc: { ...d, editor: r.editor, dirty: r.dirty ?? d.dirty } });
+    await reloadFgd();
+    if (r.classes != null) toast(`Read ${r.classes} entity classes from it.`);
+  };
+  return (
+    <>
+      <h4>
+        Entity definitions <Info text="The entity classes, keys and help the inspector shows. Ours cover Counter-Strike and the game mode components; add your own FGD file for custom entities (its classes win over ours)." />
+      </h4>
+      <p className="small-note">{info?.source ?? "Loner-Strike entity definitions"}</p>
+      {info?.error && <p className="small-note banner">{file} couldn't be read: {info.error}</p>}
+      <div className="editor-row wrap">
+        <BusyButton className="btn small" busy={busy} label={file ? "Choose another FGD…" : "Add your own FGD…"} busyLabel="Reading…" onClick={() => { setBusy(true); void pickFgd().then(done); }} />
+        {file && (
+          <button type="button" className="btn small" disabled={busy} onClick={() => { setBusy(true); void clearFgd().then(done); }}>
+            Use ours only
+          </button>
+        )}
+      </div>
+    </>
   );
 }
