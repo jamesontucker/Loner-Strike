@@ -19,6 +19,13 @@ type Props = {
   playing: boolean;
   wire: boolean;
   onLost: () => void;
+  /** go round again at the end (default: the sequence's own loop flag); off, it plays once
+   *  and holds the last frame */
+  loop?: boolean;
+  /** playback speed (1 = the sequence's own frame rate) */
+  speed?: number;
+  /** a played-once animation reached its last frame */
+  onEnded?: () => void;
 };
 
 export function ModelView(p: Props) {
@@ -87,7 +94,7 @@ function missingTexture() {
   return t;
 }
 
-function ModelMesh({ item, bundle, skin, body, anim, playing, wire }: Props) {
+function ModelMesh({ item, bundle, skin, body, anim, playing, wire, loop, speed, onEnded }: Props) {
   const invalidate = useThree((s) => s.invalidate);
   // the vertex data we move when animating (copies; the bundle stays as it came)
   const geometry = useMemo(() => {
@@ -165,13 +172,26 @@ function ModelMesh({ item, bundle, skin, body, anim, playing, wire }: Props) {
     }
     invalidate();
   }, [anim, geometry, bundle, invalidate]);
+  // played once to the end, Play starts it over
+  const loops = loop ?? anim?.loop ?? true;
+  useEffect(() => {
+    if (playing && anim && !loops && clock.current.frame >= anim.frames - 1) clock.current.t = 0;
+  }, [playing, anim, loops]);
   useFrame((_, dt) => {
     if (!anim || !playing || anim.frames < 2) return;
     const c = clock.current;
-    c.t += Math.min(dt, 0.1);
+    c.t += Math.min(dt, 0.1) * (speed ?? 1);
     let f = Math.floor(c.t * (anim.fps || 30));
-    f = anim.loop ? f % anim.frames : Math.min(f, anim.frames - 1);
-    if (!anim.loop && f === anim.frames - 1 && c.t * anim.fps > anim.frames + 15) c.t = 0; // one-shot: show it again after a pause
+    if (loops) f %= anim.frames;
+    else if (f >= anim.frames - 1) {
+      f = anim.frames - 1;
+      if (c.frame !== f) {
+        c.frame = f;
+        pose(geometry, bundle, anim, f);
+      }
+      onEnded?.();
+      return;
+    }
     if (f !== c.frame) {
       c.frame = f;
       pose(geometry, bundle, anim, f);

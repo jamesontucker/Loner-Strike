@@ -95,6 +95,9 @@ function ModelPanel({ item, onRemoved }: { item: ModelItem; onRemoved: () => voi
   const [body, setBody] = useState<number[]>([]);
   const [seq, setSeq] = useState(0);
   const [playing, setPlaying] = useState(false);
+  // null: the sequence's own setting (idle and run loop, a reload or death plays once)
+  const [loopPick, setLoop] = useState<boolean | null>(null);
+  const [speed, setSpeed] = useState(1);
   const [wire, setWire] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const b = bundle.data;
@@ -104,6 +107,7 @@ function ModelPanel({ item, onRemoved }: { item: ModelItem; onRemoved: () => voi
   useEffect(() => {
     if (b) setBody(b.bodyparts.map(() => 0));
   }, [b]);
+  const loop = loopPick ?? b?.sequences[seq]?.loop ?? true;
 
   const skins = Math.max(1, b?.skins.length ?? 1);
   const triangles = b ? b.draws.filter((d) => (body[d.part] ?? 0) === d.model).reduce((n, d) => n + d.count / 3, 0) : 0;
@@ -137,7 +141,7 @@ function ModelPanel({ item, onRemoved }: { item: ModelItem; onRemoved: () => voi
         ) : bundle.error ? (
           <LoadError text={(bundle.error as Error).message} onRetry={() => bundle.refetch()} />
         ) : b ? (
-          <ModelView key={lost} item={item} bundle={b} skin={skin} body={body} anim={anim.data ?? null} playing={playing && !!anim.data} wire={wire} onLost={() => setTimeout(() => setLost((n) => n + 1), 500)} />
+          <ModelView key={lost} item={item} bundle={b} skin={skin} body={body} anim={anim.data ?? null} playing={playing && !!anim.data} loop={loop} speed={speed} onEnded={() => setPlaying(false)} wire={wire} onLost={() => setTimeout(() => setLost((n) => n + 1), 500)} />
         ) : null}
         {anim.isFetching && <span className="spinner assets-stage-busy" aria-label="Reading the animation" />}
       </div>
@@ -148,10 +152,18 @@ function ModelPanel({ item, onRemoved }: { item: ModelItem; onRemoved: () => voi
           <Rows bare>
             {b.sequences.length > 0 && (
               <Row name="Animation" note={anim.error ? (anim.error as Error).message : `${b.sequences.length} in this model`} stacked>
-                  <select value={seq} onChange={(e) => setSeq(Number(e.target.value))} aria-label="Animation">
+                  <select value={seq} onChange={(e) => { setSeq(Number(e.target.value)); setLoop(null); }} aria-label="Animation">
                     {b.sequences.map((s, i) => <option key={i} value={i}>{s.name || `#${i}`}{s.frames > 1 ? ` (${s.frames})` : ""}</option>)}
                   </select>
-                  <button className="btn" onClick={() => setPlaying((v) => !v)} aria-pressed={playing}>{playing ? "Pause" : "Play"}</button>
+                  <div className="assets-anim-row">
+                    <button className="btn" onClick={() => setPlaying((v) => !v)} aria-pressed={playing}>{playing ? "Pause" : "Play"}</button>
+                    <label className="assets-anim-loop" title={b.sequences[seq]?.loop ? "This animation loops in the game" : "This animation plays once in the game"}>
+                      <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} /> Loop
+                    </label>
+                    <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))} aria-label="Speed" title="Speed">
+                      {[0.25, 0.5, 1, 2].map((v) => <option key={v} value={v}>{v === 1 ? "Normal speed" : `${v}×`}</option>)}
+                    </select>
+                  </div>
               </Row>
             )}
             {skins > 1 && (

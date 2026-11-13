@@ -86,3 +86,7 @@
   .assets-detail { position: static; }
   .assets-list { max-height: 300px; }
 }
+/* play / loop / speed under the animation picker */
+.assets-anim-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.assets-anim-loop { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.assets-model-side .assets-anim-row select { width: auto; }
