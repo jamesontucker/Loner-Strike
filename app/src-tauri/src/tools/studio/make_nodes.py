@@ -93,7 +93,7 @@ node("player.set_health", "Set Health", "Players", "Sets a living player's healt
 node("player.set_armor", "Set Armor", "Players", "Sets a living player's armor (with a helmet).", inputs=[X, P("player","player","Player",required=True), P("amount","number","Armor",param="amount")], outputs=[E()], params=[prm("amount","Armor","number",100,min=0,max=1000)])
 node("player.set_team", "Set Team", "Players", "Moves a player to a team (it shows from their next spawn).", inputs=[X, P("player","player","Player",required=True), P("team","team","Team",param="team")], outputs=[E()], params=[prm("team","Team","choice","ct",choices=TEAM2)])
 node("player.set_speed", "Set Speed", "Players", "Sets how fast a player runs (250 is normal) until they switch weapons.", inputs=[X, P("player","player","Player",required=True), P("speed","number","Speed",param="speed")], outputs=[E()], params=[prm("speed","Speed","number",320,min=50,max=2000)])
-node("player.teleport", "Teleport", "Players", "Moves a living player to the entity with this name (an info_target, say).", inputs=[X, P("player","player","Player",required=True)], outputs=[E()], params=[prm("name","To the entity named","name","spot1")])
+node("player.teleport", "Teleport", "Players", "Moves a living player to an entity: the one wired into To, or the one with this name.", inputs=[X, P("player","player","Player",required=True), P("to","entity","To",optional=True)], outputs=[E()], params=[prm("name","To the entity named","name","spot1")])
 
 # ---- messages
 node("msg.broadcast", "Show Message", "Messages", "Shows a big message in the middle of the screen, to one player or everyone (no Player).", inputs=[X, P("player","player","Player",optional=True)], outputs=[E()],
@@ -109,7 +109,7 @@ node("score.end_round", "End Round", "Scoring", "Ends the round now with a winne
 # ---- component actions
 ca = dict(needs="components")
 node("comp.find", "Find Component", "Components", "The component (or any entity) with this name.", outputs=[P("out","entity","Entity")], params=[prm("name","Name","name","A")], pure=True, **ca)
-node("comp.create", "Create Component", "Components", "Makes a component at the entity with this name, with keys like radius=160 capture_secs=8.", inputs=[X], outputs=[E(), P("out","entity","Component")],
+node("comp.create", "Create Component", "Components", "Makes a component at an entity (wired into At, or the one with this name), with keys like radius=160 capture_secs=8.", inputs=[X, P("at_ent","entity","At",optional=True)], outputs=[E(), P("out","entity","Component")],
      params=[prm("kind","Component","choice","ls_capture_point",choices=COMPONENTS), prm("at","At the entity named","name","spot1"), prm("keys","Keys","keys","",max=120)], **ca)
 node("comp.zone_set", "Set Zone", "Components", "Moves a shrinking zone to the entity with this name, with this radius.", inputs=[X, P("zone","entity","Zone",required=True), P("radius","number","Radius",param="radius")], outputs=[E()],
      params=[prm("at","Centre at the entity named","name","spot1"), prm("radius","Radius","number",1500,min=50,max=20000)], **ca)
@@ -133,6 +133,7 @@ WHICH = [["all","Everyone in the game"],["alive","Everyone alive"],["dead","Ever
 BY = [["class","Of this kind (classname)"],["name","With this name"]]
 node("event.player_hurt", "Player Hurt", "Events", "Runs when a player takes damage.", outputs=[E(), P("victim","player","Victim"), P("attacker","player","Attacker"), P("damage","number","Damage")], **ev)
 node("event.team_changed", "Team Changed", "Events", "Runs when a player joins a team (or changes team).", outputs=[E(), P("player","player","Player"), P("team","team","Team")], **ev)
+node("event.map_started", "Map Started", "Events", "Runs once when the map has loaded (before the first round): load map packs, set things up.", outputs=[E()], **ev)
 node("event.new_round", "New Round", "Events", "Runs when a new round is set up (freeze time starts), before Round Started.", outputs=[E()], **ev)
 node("event.chat_command", "Chat Command", "Events", "Runs when a player says /command in chat (shop for /shop).", outputs=[E(), P("player","player","Player")], params=[prm("command","Command (without /)","name","shop")], **ev)
 node("func.define", "Function", "Functions", "A piece of graph you can run from anywhere with Call Function. It gets a Player and a Number from the call.", outputs=[E(), P("player","player","Player"), P("number","number","Number")], params=[prm("name","Name","name","my_function")], event=True)
@@ -174,16 +175,19 @@ node("msg.menu", "Menu", "Messages", "Shows a player a menu; the choice they pic
 node("game.play_sound", "Play Sound", "Messages", "Plays one of the game's sounds to one player or everyone.", inputs=[X, P("player","player","Player",optional=True)], outputs=[E()],
      params=[prm("sound","Sound","choice","radio/go",choices=[["radio/go","Radio: Go go go"],["radio/locknload","Radio: Lock and load"],["radio/ctwin","Radio: CTs win"],["radio/terwin","Radio: Terrorists win"],["radio/rounddraw","Radio: Round draw"],["radio/bombpl","Radio: Bomb planted"],["buttons/bell1","Bell"],["buttons/blip1","Blip"],["weapons/c4_beep1","C4 beep"],["ambience/thunder_clap","Thunder"]])])
 node("game.set_cvar", "Set Setting", "Game", "Changes one of the game's settings now.", inputs=[X, P("value","number","Value",param="value")], outputs=[E()],
-     params=[prm("cvar","Setting","choice","mp_freeforall",choices=[["mp_freeforall","Free for all (1 on)"],["mp_friendlyfire","Friendly fire (1 on)"],["sv_gravity","Gravity (800 normal)"],["mp_buytime","Buy time (minutes)"],["mp_startmoney","Start money"],["sv_airaccelerate","Air control (10 normal)"],["mp_roundtime","Round time (minutes, next round)"],["mp_freezetime","Freeze time (seconds, next round)"]]),
+     params=[prm("cvar","Setting","choice","mp_freeforall",choices=[["mp_freeforall","Free for all (1 on)"],["mp_friendlyfire","Friendly fire (1 on)"],["sv_gravity","Gravity (800 normal)"],["mp_buytime","Buy time (minutes)"],["mp_startmoney","Start money"],["sv_airaccelerate","Air control (10 normal)"],["mp_roundtime","Round time (minutes, next round)"],["mp_freezetime","Freeze time (seconds, next round)"],["mp_round_infinite","Rounds only end when the mode says (1 on)"],["mp_autoteambalance","Team balance (1 on)"],["mp_limitteams","Most players more than the other team (0 any)"]]),
              prm("value","Value","number",1,min=0,max=100000)])
 node("entity.use", "Use Entity", "Game", "Presses (uses) every entity with this name: a door, a button, a trigger.", inputs=[X], outputs=[E()], params=[prm("name","Name","name","door1")])
 node("bot.goto", "Bot Go To", "Bots", "Sends a bot to the entity with this name (it still fights on the way).", inputs=[X, P("bot","player","Bot",required=True)], outputs=[E()], params=[prm("name","To the entity named","name","spot1")])
 node("bot.hold", "Bot Hold", "Bots", "Makes a bot hold where it is for some seconds.", inputs=[X, P("bot","player","Bot",required=True), P("secs","number","Seconds",param="secs")], outputs=[E()], params=[prm("secs","Seconds","number",20,min=1,max=600)])
 node("bot.follow", "Bot Follow", "Bots", "Makes a bot follow a player for some seconds.", inputs=[X, P("bot","player","Bot",required=True), P("who","player","Follow",required=True)], outputs=[E()], params=[prm("secs","Seconds","number",30,min=1,max=600)])
 node("bot.release", "Bot Free", "Bots", "Lets a bot do as it likes again.", inputs=[X, P("bot","player","Bot",required=True)], outputs=[E()])
+node("comp.load_pack", "Load Map Pack", "Components", "Loads another mode's map pack for this map (configs/gamemodes/components/<map>.<pack>.ini): br, laststand...", inputs=[X], outputs=[E()], params=[prm("pack","Pack","name","br")], needs="components")
+node("comp.start", "Start Component", "Components", "Starts a component that waits to be started (a zone shrinker with start_delay -1).", inputs=[X, P("comp","entity","Component",required=True)], outputs=[E()], needs="components")
+node("comp.stop", "Stop Component", "Components", "Stops a component.", inputs=[X, P("comp","entity","Component",required=True)], outputs=[E()], needs="components")
 node("comp.in_zone", "Is In Zone", "Components", "Is the player inside the zone?", inputs=[P("zone","entity","Zone",required=True), P("player","player","Player",required=True)], outputs=[P("out","bool","Inside")], pure=True, needs="components")
 node("comp.respawn_at", "Respawn At Point", "Components", "Brings a dead player back at a respawn point (ls_respawn_point), or moves a living one there.", inputs=[X, P("player","player","Player",required=True)], outputs=[E()], needs="components")
-node("comp.drop_call", "Call Supply Drop", "Components", "Calls a supply drop onto the entity with this name.", inputs=[X], outputs=[E()], params=[prm("at","At the entity named","name","drop1")], needs="components")
+node("comp.drop_call", "Call Supply Drop", "Components", "Calls a supply drop onto an entity (wired into At, or the one with this name).", inputs=[X, P("at_ent","entity","At",optional=True)], outputs=[E()], params=[prm("at","At the entity named","name","drop1")], needs="components")
 node("creature.count", "Creatures Alive", "Creatures", "How many creatures are alive.", outputs=[P("out","number","Alive")], pure=True, needs="creatures")
 
 node("flow.reroute", "Reroute", "Flow", "A bend in a wire, to keep the graph tidy. Passes on whatever comes in.", inputs=[P("in","any","")], outputs=[P("out","any","")], reroute=True)

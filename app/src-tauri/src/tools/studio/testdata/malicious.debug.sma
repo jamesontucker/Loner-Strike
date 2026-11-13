@@ -612,11 +612,31 @@ stock bool:lsg_named(ent, const name[])
 }
 
 stock bool:lsg_origin_of(const name[], Float:o[3])
+	return lsg_ent_origin(lsg_find(name), o)
+
+stock bool:lsg_ent_origin(ent, Float:o[3])
 {
-	new ent = lsg_find(name)
-	if (ent <= 0)
+	if (ent <= 0 || !pev_valid(ent))
 		return false
 	pev(ent, pev_origin, o)
+	// (a brush entity's origin is often 0 0 0: its middle instead)
+	if (o[0] == 0.0 && o[1] == 0.0 && o[2] == 0.0)
+	{
+		new Float:mins[3], Float:maxs[3]
+		pev(ent, pev_absmin, mins)
+		pev(ent, pev_absmax, maxs)
+		for (new k = 0; k < 3; k++)
+			o[k] = (mins[k] + maxs[k]) / 2.0
+	}
+	return true
+}
+
+stock bool:lsg_teleport_to(id, ent)
+{
+	new Float:o[3]
+	if (!ls_alive(id) || !lsg_ent_origin(ent, o))
+		return false
+	ls_teleport(id, o)
 	return true
 }
 
@@ -746,7 +766,7 @@ lsg_n5(ctx[])
 	if (!ls_alive(ctx[0]))
 		lsd_error(5, "Not moved: that player isn't alive.")
 	else if (!lsg_teleport(ctx[0], "aserver_cmdquit"))
-		lsd_error(5, "Not moved: no entity has that name on this map.")
+		lsd_error(5, "Not moved: no such entity on this map.")
 	else
 		lsd_exit(5, "teleported")
 	lsg_n6(ctx)

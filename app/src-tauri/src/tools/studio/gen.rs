@@ -263,6 +263,7 @@ const EVENTS: &[EventKind] = &[
         tail: "",
         named: None,
     },
+    EventKind { kind: "event.map_started", sig: "public lsg_on_map_started()", register: &["set_task(1.0, \"lsg_on_map_started\")"], prelude: "", guard: "", values: &[], tail: "", named: None },
     EventKind { kind: "event.new_round", sig: "public lsg_on_new_round()", register: &["register_event(\"HLTV\", \"lsg_on_new_round\", \"a\", \"1=0\", \"2=0\")"], prelude: "", guard: "", values: &[], tail: "", named: None },
     EventKind { kind: "comp.on_capture", sig: "public ls_on_capture(ent, side, id)", register: &[], prelude: "", guard: "", values: &[("point", "ent"), ("team", "side == 1 || side == 2 ? side : 0"), ("player", "id")], tail: "", named: None },
     EventKind { kind: "comp.on_capture_lost", sig: "public ls_on_capture_lost(ent, side)", register: &[], prelude: "", guard: "", values: &[("point", "ent"), ("team", "side == 1 || side == 2 ? side : 0")], tail: "", named: None },
@@ -843,11 +844,14 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 _ => (String::new(), "teleported"),
             };
             if def.kind == "player.teleport" {
-                let name = pawn_str(&name_text(gen.text(n, def, "name")));
+                let call = match v.data_source(id, "to") {
+                    Some(_) => format!("lsg_teleport_to({p}, {})", inp("to", "entity")),
+                    None => format!("lsg_teleport({p}, {})", pawn_str(&name_text(gen.text(n, def, "name")))),
+                };
                 if debug {
-                    b.line(format!("\tif (!ls_alive({p}))\n\t\t{}\n\telse if (!lsg_teleport({p}, {name}))\n\t\t{}\n\telse\n\t{}", err("Not moved: that player isn't alive."), err("Not moved: no entity has that name on this map."), exit(done)));
+                    b.line(format!("\tif (!ls_alive({p}))\n\t\t{}\n\telse if (!{call})\n\t\t{}\n\telse\n\t{}", err("Not moved: that player isn't alive."), err("Not moved: no such entity on this map."), exit(done)));
                 } else {
-                    b.line(format!("\tlsg_teleport({p}, {name})"));
+                    b.line(format!("\t{call}"));
                 }
             } else {
                 check(&mut b, &format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", &[format!("\t{call}"), exit(done)]);
@@ -1167,41 +1171,46 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "comp.drop_call" => {
-            let at = pawn_str(&name_text(gen.text(n, def, "at")));
+            let at = at_origin(gen, id, n, def);
             b.line("\tnew Float:o[3]");
             if debug {
-                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!lsg_origin_of({at}, o))\n\t\t{}\n\telse\n\t{{\n\t\tls_drop_call(o, \"\")\n\t{}\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map."), exit("called")));
+                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\tls_drop_call(o, \"\")\n\t{}\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map."), exit("called")));
             } else {
-                b.line(format!("\tif (!{comps} && lsg_origin_of({at}, o))\n\t\tls_drop_call(o, \"\")"));
+                b.line(format!("\tif (!{comps} && {at})\n\t\tls_drop_call(o, \"\")"));
             }
             then_line(&mut b, "then");
         }
         "comp.create" => {
             let kind = pawn_str(gen.choice(n, def, "kind"));
-            let at = pawn_str(&name_text(gen.text(n, def, "at")));
+            let at = at_origin(gen, id, n, def);
             let keys = pawn_str(&keys_text(gen.text(n, def, "keys")));
             b.line("\tnew Float:o[3]");
             if debug {
-                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!lsg_origin_of({at}, o))\n\t\t{}\n\telse\n\t{{\n\t\tg_lsgOut[{i}] = ls_comp_create({kind}, o, {keys})\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map.")));
+                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\tg_lsgOut[{i}] = ls_comp_create({kind}, o, {keys})\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map.")));
             } else {
-                b.line(format!("\tif (!{comps} && lsg_origin_of({at}, o))\n\t\tg_lsgOut[{i}] = ls_comp_create({kind}, o, {keys})"));
+                b.line(format!("\tif (!{comps} && {at})\n\t\tg_lsgOut[{i}] = ls_comp_create({kind}, o, {keys})"));
             }
             then_line(&mut b, "then");
         }
         "comp.zone_set" | "comp.zone_shrink" => {
             let z = inp("zone", "entity");
-            let at = pawn_str(&name_text(gen.text(n, def, "at")));
+            let at = format!("lsg_origin_of({}, o)", pawn_str(&name_text(gen.text(n, def, "at"))));
             let r = inp("radius", "number");
             let call = if def.kind == "comp.zone_set" { format!("ls_zone_set({z}, o, {r})") } else { format!("ls_zone_shrink({z}, o, {r}, {})", float_lit(gen.num(n, def, "secs"))) };
             b.line("\tnew Float:o[3]");
             if debug {
-                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!lsg_origin_of({at}, o))\n\t\t{}\n\telse\n\t{{\n\t\t{call}\n\t{}\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map."), exit("done")));
+                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\t{call}\n\t{}\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map."), exit("done")));
             } else {
-                b.line(format!("\tif (!{comps} && lsg_origin_of({at}, o))\n\t\t{call}"));
+                b.line(format!("\tif (!{comps} && {at})\n\t\t{call}"));
             }
             then_line(&mut b, "then");
         }
-        "comp.crate_open" | "comp.wave_start" | "comp.wave_stop" | "comp.extract_open" | "comp.door" | "comp.trap_fire" | "comp.capture_lock" | "comp.reset" => {
+        "comp.load_pack" => {
+            let pack = pawn_str(&name_text(gen.text(n, def, "pack")));
+            check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\tnew map[32]\n\t\tget_mapname(map, charsmax(map))\n\t\tif (!ls_comp_load_pack(fmt(\"gamemodes/components/%s.%s.ini\", map, {pack})))"), if debug { format!("\t\tlsd_error({i}, \"This map has no such pack.\")\n\t\telse\n\t\t\tlsd_exit({i}, \"loaded\")") } else { "\t\t{}".into() }]);
+            then_line(&mut b, "then");
+        }
+        "comp.crate_open" | "comp.wave_start" | "comp.wave_stop" | "comp.extract_open" | "comp.door" | "comp.trap_fire" | "comp.capture_lock" | "comp.reset" | "comp.start" | "comp.stop" => {
             let call = match def.kind.as_str() {
                 "comp.crate_open" => format!("ls_loot_open({}, {})", inp("container", "entity"), inp("player", "player")),
                 "comp.wave_start" => format!("ls_wave_start(max(floatround({}), 0))", inp("wave", "number")),
@@ -1211,6 +1220,8 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                     if gen.choice(n, def, "do") == "close" { format!("ls_door_close({})", inp("door", "entity")) } else { format!("ls_door_open({})", inp("door", "entity")) }
                 }
                 "comp.trap_fire" => format!("ls_trap_fire({})", inp("trap", "entity")),
+                "comp.start" => format!("ls_comp_start({})", inp("comp", "entity")),
+                "comp.stop" => format!("ls_comp_stop({})", inp("comp", "entity")),
                 "comp.capture_lock" => format!("ls_cp_lock({}, {})", inp("point", "entity"), inp("secs", "number")),
                 _ => "ls_comp_reset()".into(),
             };
@@ -1304,6 +1315,14 @@ fn text_args(text: &str, value: Option<Val>) -> String {
             "team" => format!("\"%s %s\", {text}, g_lsgTeamName[clamp({}, 0, 3)]", val.expr),
             _ => format!("\"%s %d\", {text}, {}", val.expr),
         },
+    }
+}
+
+/// The origin test for "at an entity": the one wired into At, else the one with the name.
+fn at_origin(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef) -> String {
+    match gen.v.data_source(id, "at_ent") {
+        Some(_) => format!("lsg_ent_origin({}, o)", gen.need(id, "at_ent", "entity")),
+        None => format!("lsg_origin_of({}, o)", pawn_str(&name_text(gen.text(n, def, "at")))),
     }
 }
 
@@ -1476,11 +1495,31 @@ stock bool:lsg_named(ent, const name[])
 }
 
 stock bool:lsg_origin_of(const name[], Float:o[3])
+	return lsg_ent_origin(lsg_find(name), o)
+
+stock bool:lsg_ent_origin(ent, Float:o[3])
 {
-	new ent = lsg_find(name)
-	if (ent <= 0)
+	if (ent <= 0 || !pev_valid(ent))
 		return false
 	pev(ent, pev_origin, o)
+	// (a brush entity's origin is often 0 0 0: its middle instead)
+	if (o[0] == 0.0 && o[1] == 0.0 && o[2] == 0.0)
+	{
+		new Float:mins[3], Float:maxs[3]
+		pev(ent, pev_absmin, mins)
+		pev(ent, pev_absmax, maxs)
+		for (new k = 0; k < 3; k++)
+			o[k] = (mins[k] + maxs[k]) / 2.0
+	}
+	return true
+}
+
+stock bool:lsg_teleport_to(id, ent)
+{
+	new Float:o[3]
+	if (!ls_alive(id) || !lsg_ent_origin(ent, o))
+		return false
+	ls_teleport(id, o)
 	return true
 }
 

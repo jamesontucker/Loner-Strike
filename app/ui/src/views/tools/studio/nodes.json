@@ -1886,7 +1886,7 @@
    "type": "player.teleport",
    "title": "Teleport",
    "category": "Players",
-   "help": "Moves a living player to the entity with this name (an info_target, say).",
+   "help": "Moves a living player to an entity: the one wired into To, or the one with this name.",
    "inputs": [
     {
      "id": "exec",
@@ -1898,6 +1898,12 @@
      "type": "player",
      "label": "Player",
      "required": true
+    },
+    {
+     "id": "to",
+     "type": "entity",
+     "label": "To",
+     "optional": true
     }
    ],
    "outputs": [
@@ -2102,12 +2108,18 @@
    "type": "comp.create",
    "title": "Create Component",
    "category": "Components",
-   "help": "Makes a component at the entity with this name, with keys like radius=160 capture_secs=8.",
+   "help": "Makes a component at an entity (wired into At, or the one with this name), with keys like radius=160 capture_secs=8.",
    "inputs": [
     {
      "id": "exec",
      "type": "exec",
      "label": ""
+    },
+    {
+     "id": "at_ent",
+     "type": "entity",
+     "label": "At",
+     "optional": true
     }
    ],
    "outputs": [
@@ -2661,6 +2673,22 @@
      "id": "team",
      "type": "team",
      "label": "Team"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.map_started",
+   "title": "Map Started",
+   "category": "Events",
+   "help": "Runs once when the map has loaded (before the first round): load map packs, set things up.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
     }
    ],
    "params": [],
@@ -4002,6 +4030,18 @@
       [
        "mp_freezetime",
        "Freeze time (seconds, next round)"
+      ],
+      [
+       "mp_round_infinite",
+       "Rounds only end when the mode says (1 on)"
+      ],
+      [
+       "mp_autoteambalance",
+       "Team balance (1 on)"
+      ],
+      [
+       "mp_limitteams",
+       "Most players more than the other team (0 any)"
       ]
      ]
     },
@@ -4189,6 +4229,91 @@
    "params": []
   },
   {
+   "type": "comp.load_pack",
+   "title": "Load Map Pack",
+   "category": "Components",
+   "help": "Loads another mode's map pack for this map (configs/gamemodes/components/<map>.<pack>.ini): br, laststand...",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "pack",
+     "label": "Pack",
+     "kind": "name",
+     "default": "br"
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "comp.start",
+   "title": "Start Component",
+   "category": "Components",
+   "help": "Starts a component that waits to be started (a zone shrinker with start_delay -1).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "comp",
+     "type": "entity",
+     "label": "Component",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "comp.stop",
+   "title": "Stop Component",
+   "category": "Components",
+   "help": "Stops a component.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "comp",
+     "type": "entity",
+     "label": "Component",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
    "type": "comp.in_zone",
    "title": "Is In Zone",
    "category": "Components",
@@ -4250,12 +4375,18 @@
    "type": "comp.drop_call",
    "title": "Call Supply Drop",
    "category": "Components",
-   "help": "Calls a supply drop onto the entity with this name.",
+   "help": "Calls a supply drop onto an entity (wired into At, or the one with this name).",
    "inputs": [
     {
      "id": "exec",
      "type": "exec",
      "label": ""
+    },
+    {
+     "id": "at_ent",
+     "type": "entity",
+     "label": "At",
+     "optional": true
     }
    ],
    "outputs": [

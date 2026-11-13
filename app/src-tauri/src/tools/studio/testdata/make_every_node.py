@@ -247,6 +247,19 @@ N("lo2_cmp", "math.compare", {"op": "gt"}, 8); W("lo2_f", "out", "lo2_cmp", "a")
 N("lo2_br3", "flow.branch", {}, 8); W("lo2_cmp", "out", "lo2_br3", "cond"); W("lo2_hud", "then", "lo2_br3", "exec")
 N("lo2_end", "score.end_round", {}, 9); W("lo2", "team", "lo2_end", "winner"); W("lo2_br3", "true", "lo2_end", "exec")
 
+nl()
+N("ms", "event.map_started")
+N("ms_pack", "comp.load_pack", {"pack": "br"}, 1)
+N("ms_pick", "flow.pick_entity", {"by": "class", "name": "ls_zone_shrinker"}, 2)
+N("ms_start", "comp.start", {}, 3); W("ms_pick", "entity", "ms_start", "comp")
+N("ms_stop", "comp.stop", {}, 4); W("ms_pick", "entity", "ms_stop", "comp")
+N("ms_make", "comp.create", {"kind": "ls_loot_container", "keys": "table=default"}, 5); W("ms_pick", "entity", "ms_make", "at_ent")
+N("ms_drop", "comp.drop_call", {}, 6); W("ms_pick", "entity", "ms_drop", "at_ent")
+chain(("ms", "then"), ("ms_pack", "then"), ("ms_pick", "then"), ("ms_start", "then"), ("ms_stop", "then"), ("ms_make", "then"), ("ms_drop", None))
+N("ms_each", "flow.for_each_player", {"which": "alive"}, 7)
+N("ms_tp", "player.teleport", {}, 8); W("ms_each", "player", "ms_tp", "player"); W("ms_pick", "entity", "ms_tp", "to")
+W("ms_drop", "then", "ms_each", "exec"); W("ms_each", "each", "ms_tp", "exec")
+
 g = {"schema": "loner-strike/graph", "version": 2, "mode": {"id": "every_node", "name": "Every Node", "description": "Every node in the registry"},
      "variables": variables, "nodes": nodes, "edges": edges, "comments": []}
 json.dump(g, open("every_node.graph.json", "w"), indent=1)

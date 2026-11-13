@@ -12,9 +12,9 @@
 #include <loner>
 
 #define LSG_MODE "every_node"
-#define LSG_CTX 11
+#define LSG_CTX 13
 #define LSG_TXT 2
-#define LSG_N 122
+#define LSG_N 131
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -31,9 +31,9 @@ stock Float:g_tv4[4] = { 0.0, 0.0, 0.0, 0.0 } // Team score (number, per team, e
 stock g_v5[64] = "wait" // Phase (text)
 
 stock g_lsgM93[33][LSG_CTX]
-#define LSD_N 122
-new const g_lsdIds[LSD_N][] = { "rs", "rs_set", "rs_cd", "rs_msg", "rs_rep", "rs_hud", "rs_delay", "rs_wave", "rs_wstop", "rs_reset", "pk", "pk_br", "pk_add", "pk_add2", "pk_team", "pk_give", "pk_seth", "pk_hud", "ps", "ps_strip", "ps_arm", "ps_spd", "ps_team", "ps_tp", "ps_set", "pj", "pj_hud", "pj_br", "pl", "pl_set", "bp", "bp_hud", "bd", "bd_end", "bx", "bx_end", "re", "re_br", "re_set", "re_stop", "pu", "pu_door", "pu_trap", "pt", "pt_crate", "cc", "cc_lock", "cc_hud", "cl", "cl_ex", "zs", "zs_shrink", "zt", "zt_set", "zt_hud", "ex", "ex_add", "ws", "ws_hud", "wp", "wp_hud", "wc", "wc_start", "lo", "lo_hud", "ck", "ck_set", "bb", "bb_msg", "me", "me_hud", "ck2", "ck2_set", "ck2_make", "ck2_spawn", "ck2_hud", "ck2_hud2", "hurt", "hurt_tadd", "hurt_glow", "tc", "tc_model", "nr", "nr_cvar", "nr_each", "nr_resp", "nr_pick", "nr_ents", "nr_use", "nr_set", "nr_stop", "nr_hud", "cmd", "cmd_menu", "cmd_arm", "cmd_money", "cmd_grav", "cmd_bar", "cmd_chat", "fn", "fn_frag", "fn_snd", "fn_role", "pk2", "pk2_call", "pk2_pick", "pk2_bot", "pk2_hold", "pk2_follow", "pk2_free", "pk2_drop", "pk2_fr", "pk2_kill", "lo2", "lo2_br", "lo2_pick", "lo2_br2", "lo2_resp", "lo2_drop", "lo2_hud", "lo2_br3", "lo2_end" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 131
+new const g_lsdIds[LSD_N][] = { "rs", "rs_set", "rs_cd", "rs_msg", "rs_rep", "rs_hud", "rs_delay", "rs_wave", "rs_wstop", "rs_reset", "pk", "pk_br", "pk_add", "pk_add2", "pk_team", "pk_give", "pk_seth", "pk_hud", "ps", "ps_strip", "ps_arm", "ps_spd", "ps_team", "ps_tp", "ps_set", "pj", "pj_hud", "pj_br", "pl", "pl_set", "bp", "bp_hud", "bd", "bd_end", "bx", "bx_end", "re", "re_br", "re_set", "re_stop", "pu", "pu_door", "pu_trap", "pt", "pt_crate", "cc", "cc_lock", "cc_hud", "cl", "cl_ex", "zs", "zs_shrink", "zt", "zt_set", "zt_hud", "ex", "ex_add", "ws", "ws_hud", "wp", "wp_hud", "wc", "wc_start", "lo", "lo_hud", "ck", "ck_set", "bb", "bb_msg", "me", "me_hud", "ck2", "ck2_set", "ck2_make", "ck2_spawn", "ck2_hud", "ck2_hud2", "hurt", "hurt_tadd", "hurt_glow", "tc", "tc_model", "nr", "nr_cvar", "nr_each", "nr_resp", "nr_pick", "nr_ents", "nr_use", "nr_set", "nr_stop", "nr_hud", "cmd", "cmd_menu", "cmd_arm", "cmd_money", "cmd_grav", "cmd_bar", "cmd_chat", "fn", "fn_frag", "fn_snd", "fn_role", "pk2", "pk2_call", "pk2_pick", "pk2_bot", "pk2_hold", "pk2_follow", "pk2_free", "pk2_drop", "pk2_fr", "pk2_kill", "lo2", "lo2_br", "lo2_pick", "lo2_br2", "lo2_resp", "lo2_drop", "lo2_hud", "lo2_br3", "lo2_end", "ms", "ms_pack", "ms_pick", "ms_start", "ms_stop", "ms_make", "ms_drop", "ms_each", "ms_tp" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -626,11 +626,31 @@ stock bool:lsg_named(ent, const name[])
 }
 
 stock bool:lsg_origin_of(const name[], Float:o[3])
+	return lsg_ent_origin(lsg_find(name), o)
+
+stock bool:lsg_ent_origin(ent, Float:o[3])
 {
-	new ent = lsg_find(name)
-	if (ent <= 0)
+	if (ent <= 0 || !pev_valid(ent))
 		return false
 	pev(ent, pev_origin, o)
+	// (a brush entity's origin is often 0 0 0: its middle instead)
+	if (o[0] == 0.0 && o[1] == 0.0 && o[2] == 0.0)
+	{
+		new Float:mins[3], Float:maxs[3]
+		pev(ent, pev_absmin, mins)
+		pev(ent, pev_absmax, maxs)
+		for (new k = 0; k < 3; k++)
+			o[k] = (mins[k] + maxs[k]) / 2.0
+	}
+	return true
+}
+
+stock bool:lsg_teleport_to(id, ent)
+{
+	new Float:o[3]
+	if (!ls_alive(id) || !lsg_ent_origin(ent, o))
+		return false
+	ls_teleport(id, o)
 	return true
 }
 
@@ -682,6 +702,7 @@ public plugin_init()
 	register_touch("trigger_multiple", "player", "lsg_on_player_touched")
 	RegisterHamPlayer(Ham_TakeDamage, "lsg_on_player_hurt", 1)
 	register_event("TeamInfo", "lsg_on_team_changed", "a")
+	set_task(1.0, "lsg_on_map_started")
 	register_event("HLTV", "lsg_on_new_round", "a", "1=0", "2=0")
 	if (get_cvar_pointer("ls_creature_ver"))
 		RegisterHam(Ham_Killed, "ls_creature", "lsg_on_creature_killed", 1)
@@ -843,6 +864,12 @@ public lsg_on_team_changed()
 	ctx[0] = id // player
 	ctx[1] = tn[0] == 'T' ? 1 : (tn[0] == 'C' ? 2 : 0) // team
 	lsg_n80(ctx)
+}
+
+public lsg_on_map_started()
+{
+	new ctx[LSG_CTX]
+	lsg_n122(ctx)
 }
 
 public lsg_on_new_round()
@@ -1350,7 +1377,7 @@ lsg_n23(ctx[])
 	if (!ls_alive(ctx[0]))
 		lsd_error(23, "Not moved: that player isn't alive.")
 	else if (!lsg_teleport(ctx[0], "spawn_a"))
-		lsd_error(23, "Not moved: no entity has that name on this map.")
+		lsd_error(23, "Not moved: no such entity on this map.")
 	else
 		lsd_exit(23, "teleported")
 	lsg_n24(ctx)
@@ -2699,6 +2726,168 @@ lsg_n121(ctx[])
 	lsd_exit(121, "ended")
 }
 
+// Map Started (ms)
+lsg_n122(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(122, ctx))
+		return
+	lsd_exit(122, "ran")
+	lsg_n123(ctx)
+}
+
+// Load Map Pack (ms_pack)
+lsg_n123(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(123, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(123, "gm_components isn't running on this server.")
+	else
+	{
+		new map[32]
+		get_mapname(map, charsmax(map))
+		if (!ls_comp_load_pack(fmt("gamemodes/components/%s.%s.ini", map, "br")))
+			lsd_error(123, "This map has no such pack.")
+		else
+			lsd_exit(123, "loaded")
+	}
+	lsg_n124(ctx)
+}
+
+// Pick Random Entity (ms_pick)
+lsg_n124(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(124, ctx))
+		return
+	new list[256], count
+	new p = -1
+	while (count < 256 && (p = find_ent_by_class(p, "ls_zone_shrinker")) > 0)
+		list[count++] = p
+	if (count > 0)
+	{
+		ctx[11] = list[random(count)]
+		lsd_exit(124, fmt("picked %d of %d", ctx[11], count))
+		lsg_n125(ctx)
+	}
+	else
+	{
+		lsd_exit(124, "none")
+	}
+}
+
+// Start Component (ms_start)
+lsg_n125(ctx[])
+{
+	lsd_begin()
+	lsd_in_entity("Component", ctx[11])
+	if (lsd_enter(125, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(125, "gm_components isn't running on this server.")
+	else
+	{
+		ls_comp_start(ctx[11])
+		lsd_exit(125, "done")
+	}
+	lsg_n126(ctx)
+}
+
+// Stop Component (ms_stop)
+lsg_n126(ctx[])
+{
+	lsd_begin()
+	lsd_in_entity("Component", ctx[11])
+	if (lsd_enter(126, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(126, "gm_components isn't running on this server.")
+	else
+	{
+		ls_comp_stop(ctx[11])
+		lsd_exit(126, "done")
+	}
+	lsg_n127(ctx)
+}
+
+// Create Component (ms_make)
+lsg_n127(ctx[])
+{
+	lsd_begin()
+	lsd_in_entity("At", ctx[11])
+	if (lsd_enter(127, ctx))
+		return
+	new Float:o[3]
+	if (!ls_components_running())
+		lsd_error(127, "gm_components isn't running on this server.")
+	else if (!lsg_ent_origin(ctx[11], o))
+		lsd_error(127, "No entity has that name on this map.")
+	else
+	{
+		g_lsgOut[127] = ls_comp_create("ls_loot_container", o, "table=default")
+		lsd_exit(127, fmt("entity %d", g_lsgOut[127]))
+	}
+	lsg_n128(ctx)
+}
+
+// Call Supply Drop (ms_drop)
+lsg_n128(ctx[])
+{
+	lsd_begin()
+	lsd_in_entity("At", ctx[11])
+	if (lsd_enter(128, ctx))
+		return
+	new Float:o[3]
+	if (!ls_components_running())
+		lsd_error(128, "gm_components isn't running on this server.")
+	else if (!lsg_ent_origin(ctx[11], o))
+		lsd_error(128, "No entity has that name on this map.")
+	else
+	{
+		ls_drop_call(o, "")
+		lsd_exit(128, "called")
+	}
+	lsg_n129(ctx)
+}
+
+// For Each Player (ms_each)
+lsg_n129(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(129, ctx))
+		return
+	new c[LSG_CTX], count
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_match(p, 1))
+			continue
+		count++
+		for (new k = 0; k < LSG_CTX; k++)
+			c[k] = ctx[k]
+		c[12] = p
+		lsg_n130(c)
+	}
+	lsd_exit(129, fmt("%d times", count))
+}
+
+// Teleport (ms_tp)
+lsg_n130(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[12])
+	lsd_in_entity("To", ctx[11])
+	if (lsd_enter(130, ctx))
+		return
+	if (!ls_alive(ctx[12]))
+		lsd_error(130, "Not moved: that player isn't alive.")
+	else if (!lsg_teleport_to(ctx[12], ctx[11]))
+		lsd_error(130, "Not moved: no such entity on this map.")
+	else
+		lsd_exit(130, "teleported")
+}
+
 lsd_call(n, const data[])
 {
 	new ctx[LSG_CTX]
@@ -2828,5 +3017,14 @@ lsd_call(n, const data[])
 		case 119: lsg_n119(ctx)
 		case 120: lsg_n120(ctx)
 		case 121: lsg_n121(ctx)
+		case 122: lsg_n122(ctx)
+		case 123: lsg_n123(ctx)
+		case 124: lsg_n124(ctx)
+		case 125: lsg_n125(ctx)
+		case 126: lsg_n126(ctx)
+		case 127: lsg_n127(ctx)
+		case 128: lsg_n128(ctx)
+		case 129: lsg_n129(ctx)
+		case 130: lsg_n130(ctx)
 	}
 }

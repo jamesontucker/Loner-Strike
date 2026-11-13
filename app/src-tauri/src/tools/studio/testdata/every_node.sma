@@ -11,9 +11,9 @@
 #include <loner>
 
 #define LSG_MODE "every_node"
-#define LSG_CTX 11
+#define LSG_CTX 13
 #define LSG_TXT 2
-#define LSG_N 122
+#define LSG_N 131
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -170,11 +170,31 @@ stock bool:lsg_named(ent, const name[])
 }
 
 stock bool:lsg_origin_of(const name[], Float:o[3])
+	return lsg_ent_origin(lsg_find(name), o)
+
+stock bool:lsg_ent_origin(ent, Float:o[3])
 {
-	new ent = lsg_find(name)
-	if (ent <= 0)
+	if (ent <= 0 || !pev_valid(ent))
 		return false
 	pev(ent, pev_origin, o)
+	// (a brush entity's origin is often 0 0 0: its middle instead)
+	if (o[0] == 0.0 && o[1] == 0.0 && o[2] == 0.0)
+	{
+		new Float:mins[3], Float:maxs[3]
+		pev(ent, pev_absmin, mins)
+		pev(ent, pev_absmax, maxs)
+		for (new k = 0; k < 3; k++)
+			o[k] = (mins[k] + maxs[k]) / 2.0
+	}
+	return true
+}
+
+stock bool:lsg_teleport_to(id, ent)
+{
+	new Float:o[3]
+	if (!ls_alive(id) || !lsg_ent_origin(ent, o))
+		return false
+	ls_teleport(id, o)
 	return true
 }
 
@@ -225,6 +245,7 @@ public plugin_init()
 	register_touch("trigger_multiple", "player", "lsg_on_player_touched")
 	RegisterHamPlayer(Ham_TakeDamage, "lsg_on_player_hurt", 1)
 	register_event("TeamInfo", "lsg_on_team_changed", "a")
+	set_task(1.0, "lsg_on_map_started")
 	register_event("HLTV", "lsg_on_new_round", "a", "1=0", "2=0")
 	if (get_cvar_pointer("ls_creature_ver"))
 		RegisterHam(Ham_Killed, "ls_creature", "lsg_on_creature_killed", 1)
@@ -386,6 +407,12 @@ public lsg_on_team_changed()
 	ctx[0] = id // player
 	ctx[1] = tn[0] == 'T' ? 1 : (tn[0] == 'C' ? 2 : 0) // team
 	lsg_n80(ctx)
+}
+
+public lsg_on_map_started()
+{
+	new ctx[LSG_CTX]
+	lsg_n122(ctx)
 }
 
 public lsg_on_new_round()
@@ -1538,5 +1565,99 @@ lsg_n120(ctx[])
 lsg_n121(ctx[])
 {
 	lsg_end_round(ctx[1])
+}
+
+// Map Started (ms)
+lsg_n122(ctx[])
+{
+	lsg_n123(ctx)
+}
+
+// Load Map Pack (ms_pack)
+lsg_n123(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		new map[32]
+		get_mapname(map, charsmax(map))
+		if (!ls_comp_load_pack(fmt("gamemodes/components/%s.%s.ini", map, "br")))
+			{}
+	}
+	lsg_n124(ctx)
+}
+
+// Pick Random Entity (ms_pick)
+lsg_n124(ctx[])
+{
+	new list[256], count
+	new p = -1
+	while (count < 256 && (p = find_ent_by_class(p, "ls_zone_shrinker")) > 0)
+		list[count++] = p
+	if (count > 0)
+	{
+		ctx[11] = list[random(count)]
+		lsg_n125(ctx)
+	}
+}
+
+// Start Component (ms_start)
+lsg_n125(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_comp_start(ctx[11])
+	}
+	lsg_n126(ctx)
+}
+
+// Stop Component (ms_stop)
+lsg_n126(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_comp_stop(ctx[11])
+	}
+	lsg_n127(ctx)
+}
+
+// Create Component (ms_make)
+lsg_n127(ctx[])
+{
+	new Float:o[3]
+	if (!!ls_components_running() && lsg_ent_origin(ctx[11], o))
+		g_lsgOut[127] = ls_comp_create("ls_loot_container", o, "table=default")
+	lsg_n128(ctx)
+}
+
+// Call Supply Drop (ms_drop)
+lsg_n128(ctx[])
+{
+	new Float:o[3]
+	if (!!ls_components_running() && lsg_ent_origin(ctx[11], o))
+		ls_drop_call(o, "")
+	lsg_n129(ctx)
+}
+
+// For Each Player (ms_each)
+lsg_n129(ctx[])
+{
+	new c[LSG_CTX], count
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_match(p, 1))
+			continue
+		count++
+		for (new k = 0; k < LSG_CTX; k++)
+			c[k] = ctx[k]
+		c[12] = p
+		lsg_n130(c)
+	}
+	#pragma unused count
+}
+
+// Teleport (ms_tp)
+lsg_n130(ctx[])
+{
+	lsg_teleport_to(ctx[12], ctx[11])
 }
 

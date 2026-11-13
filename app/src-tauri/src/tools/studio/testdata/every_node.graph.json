@@ -1702,6 +1702,97 @@
     "y": 3960
    },
    "params": {}
+  },
+  {
+   "id": "ms",
+   "type": "event.map_started",
+   "pos": {
+    "x": 0,
+    "y": 4180
+   },
+   "params": {}
+  },
+  {
+   "id": "ms_pack",
+   "type": "comp.load_pack",
+   "pos": {
+    "x": 260,
+    "y": 4180
+   },
+   "params": {
+    "pack": "br"
+   }
+  },
+  {
+   "id": "ms_pick",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 520,
+    "y": 4180
+   },
+   "params": {
+    "by": "class",
+    "name": "ls_zone_shrinker"
+   }
+  },
+  {
+   "id": "ms_start",
+   "type": "comp.start",
+   "pos": {
+    "x": 780,
+    "y": 4180
+   },
+   "params": {}
+  },
+  {
+   "id": "ms_stop",
+   "type": "comp.stop",
+   "pos": {
+    "x": 1040,
+    "y": 4180
+   },
+   "params": {}
+  },
+  {
+   "id": "ms_make",
+   "type": "comp.create",
+   "pos": {
+    "x": 1300,
+    "y": 4180
+   },
+   "params": {
+    "kind": "ls_loot_container",
+    "keys": "table=default"
+   }
+  },
+  {
+   "id": "ms_drop",
+   "type": "comp.drop_call",
+   "pos": {
+    "x": 1560,
+    "y": 4180
+   },
+   "params": {}
+  },
+  {
+   "id": "ms_each",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 1820,
+    "y": 4180
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "ms_tp",
+   "type": "player.teleport",
+   "pos": {
+    "x": 2080,
+    "y": 4180
+   },
+   "params": {}
   }
  ],
  "edges": [
@@ -3869,6 +3960,160 @@
    },
    "to": {
     "node": "lo2_end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w198",
+   "from": {
+    "node": "ms_pick",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ms_start",
+    "pin": "comp"
+   }
+  },
+  {
+   "id": "w199",
+   "from": {
+    "node": "ms_pick",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ms_stop",
+    "pin": "comp"
+   }
+  },
+  {
+   "id": "w200",
+   "from": {
+    "node": "ms_pick",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ms_make",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w201",
+   "from": {
+    "node": "ms_pick",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ms_drop",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w202",
+   "from": {
+    "node": "ms",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_pack",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w203",
+   "from": {
+    "node": "ms_pack",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_pick",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w204",
+   "from": {
+    "node": "ms_pick",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_start",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w205",
+   "from": {
+    "node": "ms_start",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_stop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w206",
+   "from": {
+    "node": "ms_stop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_make",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w207",
+   "from": {
+    "node": "ms_make",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_drop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w208",
+   "from": {
+    "node": "ms_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ms_tp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w209",
+   "from": {
+    "node": "ms_pick",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ms_tp",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "w210",
+   "from": {
+    "node": "ms_drop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_each",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w211",
+   "from": {
+    "node": "ms_each",
+    "pin": "each"
+   },
+   "to": {
+    "node": "ms_tp",
     "pin": "exec"
    }
   }
