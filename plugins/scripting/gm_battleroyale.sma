@@ -820,6 +820,9 @@ public ham_takedamage(victim, inflictor, attacker, Float:dmg, bits)
 	   touchdown, which ends the fall in fm_postthink */
 	if (g_falling[victim])
 		return HAM_SUPERCEDE;
+	/* the loot-up: nothing hurts at all (a bot that landed on a high roof and walked off died) */
+	if (g_phase == PH_DROP)
+		return HAM_SUPERCEDE;
 	if (!(1 <= attacker <= MaxClients) || attacker == victim || !is_user_connected(attacker))
 		return HAM_IGNORED;
 	/* nobody hurts anybody while looting up; squad mates never hurt each other */
