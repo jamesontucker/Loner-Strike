@@ -2169,6 +2169,57 @@ Apply/spawn need a running map with the creatures DLL (not checked live here: no
 - (setup) creatures.ini/waves.ini aren't shipped (an update would overwrite them: only `EDITABLE` files are kept); if one ships
   later, add it to `setup::core::EDITABLE`.
 
+### Map builder: ls_outpost, a map made for Last Stand — 2026-11-12
+
+**What**: `maps-src/ls_outpost/` (generator `build_map.py` → `ls_outpost.map`, README with the layout) and the
+shipped files in `plugins/game/` (`maps/ls_outpost.bsp/.nav/.lsv/.res`, `overviews/ls_outpost.bmp/.txt`). Setup's
+`core::plugins` step already copies the `plugins/game/` tree into the game folder (as it does the bots' spray), so
+the map installs with no new code; ~1.8 MB added to the bundle. `ls_*` maps start in Last Stand (mappresets.ini).
+A desert relay station at night: a walled base in the middle (station building NW = fallback room, roof = overwatch;
+armory SW = the only buy zone; gun platform E; rampart SE), three lanes of different character (west open yard
+with cover and two spawn pockets; east 128-wide twisting alley with a tunnel; south raised walkway over the
+rooftops that enters on the wall top), a supply-drop clearing north. Textures only from cs_dust.wad, cstrike.wad,
+halflife.wad; valve `night` sky; stock ambience sounds. All components are in the BSP (classname trick).
+
+**How it was made**: compiled through Q's pipeline (dev tools server: editor `open-recent` → `compile/start`
+Normal, install) — 0 warnings, no leak, 204 brushes, worldleaves ~4%, clipnodes ~4%. Nav + .lsv learned with the
+sim's `navpack/learn3.sh` (394 areas); nav fixer reach check: all 394 areas reachable, 0 problems. Overview and
+.res from the radar maker's install route (which calls the doctor's .res writer).
+
+**Tested** (Sim/MAP1, Last Stand, 6 bots, creatures, gm_simrec + a test-only tracker of creatures/barricades):
+creatures come down all four spawn routes into the base (yard 2 pockets, alley, walkway); no stuck spots left
+after moving two props (a 25-unit gap at the yard's water tank) and cutting 45-degree bevels into the inside
+corners of every lane turn (creatures were grinding on the walkway's corners); barricades span the gates and are broken through;
+bots move through the whole base and out into the lanes. Bots alone lost on wave 3-5 (barricades fall in wave 1;
+the bot idle/defend work in progress will matter more than the map). Barricades on this map have hp 1000.
+Pictures: `maps-src/ls_outpost/layout.png` (radar maker) and `test-tracks.png` (red = creatures, blue = CT bots,
+yellow = a creature standing 8 s+ with no defender near; last run: one, on the walkway stairs).
+- **(W1/W2) Freeze seen here**: last run (19:58, Sim/MAP2) the server stopped logging right after "Wave 4 held"
+  (the break with a supply drop) and never started wave 5: looks like the supply-drop freeze you're on. Drop spots
+  on this map: (-224 928), (224 1024) in the clearing, (224 288) in the courtyard, all open sky.
+
+**Requests**
+- **(W1, gm_components) BSP components lose all their keys.** The engine sends `classname` twice for a map entity:
+  first to pick the class (SuckOutClassname), then again with the other keys, and in a compiled BSP it comes
+  LAST (the compilers write keys in reverse). The second one hits `fm_keyvalue`'s classname branch, which
+  destroys and recreates the key trie, so every key is lost: barricades fall back to hp 500, team 0 and, worse,
+  no `model` → a 64x16 box at the world origin instead of the brush (gates left open). Fix (tested in a local
+  build in Sim/MAP1 only, not committed): in `fm_keyvalue`, after `set_kvd(kvd, KV_Value, "info_target");`:
+  ```pawn
+  if (g_pend[ent] == kind && g_pendKeys[ent] != Invalid_Trie)
+      return FMRES_IGNORED;
+  ```
+  With it hp/team/model/name all arrive (checked: barricades at hp 600 → broken by creatures at the gates).
+- **(W1, gm_laststand) Shop marker**: the armory has an `info_target` named `lst_shop` (your `find_shop`), at the
+  armory's middle, and a `func_buyzone` (team 2) covering only the armory inside. With `lst_buy_anywhere 0`,
+  buying is only there. If you'd rather have a component (e.g. an `ls_shop` area with a radius), say so and
+  I'll swap it.
+- **(coordinator)** `plugins/game/` now carries map files; if setup should skip them on servers that don't want
+  them, or list the map somewhere (Maps page "Loner-Strike maps"), that's a follow-up. The nav server
+  (`navs/list.json`) could also carry ls_outpost.nav/.lsv so the nav updater keeps it fresh.
+- Test leftovers: Sim/MAP1 and Sim/MAP2 removed after the runs. Test tracker plugin (creatures/barricades/waves each
+  second to data/ls_maptest.csv) and the analysis script stayed in my scratch space; ask if you want them in the repo.
+
 ### Agent W1: Battle Royale (mode id `br`, Phase D) — 2026-11-12
 **Built** (`gm_battleroyale.sma` on gm_components + loner.inc; `br.cfg`, `br.plugins.ini`, modes.ini, mappresets `br_*`,
 botplay `br solo`, base.cfg `ls_comp_spawn_far 0`, Game Mode Menu settings Squads / Start with / Loot-up time / Zone starts

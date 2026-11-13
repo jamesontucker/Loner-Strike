@@ -1,0 +1,15 @@
+// overview description file for ls_outpost.bsp
+// made by Loner-Strike's radar maker
+
+global
+{
+	ZOOM	1.64
+	ORIGIN	0	-512	0
+	ROTATED	1
+}
+
+layer
+{
+	IMAGE	"overviews/ls_outpost.bmp"
+	HEIGHT	0
+}
