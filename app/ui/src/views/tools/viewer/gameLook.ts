@@ -351,7 +351,8 @@ void main() {
 
 // The box: the direction from the eye picks a side and a spot on it, the way the game lays
 // its six pictures around the view (rt looks along +x with +y on its left, up has -x at its
-// top, and so on). The six pictures sit side by side in one texture, in the game's order.
+// top, and so on). The six pictures sit side by side in one texture, one per box side
+// (+x, -x, +y, -y, +z, -z; loadSky puts them there).
 const SKY_FRAG = /* glsl */ `
 precision highp float;
 uniform sampler2D sky;
@@ -391,6 +392,9 @@ export class SkyMaterial extends THREE.ShaderMaterial {
   }
 }
 
+/** Which of the six pictures (in SKY_SIDES order) each side of the box shows. */
+export const SKY_AXIS_PICTURE = [0, 2, 1, 3, 4, 5];
+
 /** Loads the six sky pictures into one texture (side by side, each scaled to the biggest).
  *  Null if any side is missing (the game then draws no sky box either). */
 export async function loadSky(urls: string[]): Promise<THREE.Texture | null> {
@@ -407,7 +411,9 @@ export async function loadSky(urls: string[]): Promise<THREE.Texture | null> {
   canvas.height = n;
   const g = canvas.getContext("2d");
   if (!g) return null;
-  imgs.forEach((img, k) => g.drawImage(img!, k * n, 0, n, n));
+  // slot k is the picture the game puts on box side k (+x, -x, +y, -y, +z, -z): it swaps
+  // bk and lf against its file order
+  SKY_AXIS_PICTURE.forEach((pic, k) => g.drawImage(imgs[pic]!, k * n, 0, n, n));
   const t = new THREE.CanvasTexture(canvas);
   t.flipY = false;
   t.colorSpace = THREE.NoColorSpace;
