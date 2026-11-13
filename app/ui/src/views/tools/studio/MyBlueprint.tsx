@@ -11,6 +11,8 @@ import { extractItem, itemFile, itemId, LIBRARY_SET, readItem, type LibItem } fr
 import { deleteItem, saveItem } from "./libraryApi";
 import { LABEL_CHARS } from "./schema";
 import { Sheet } from "../../../ui";
+import { isMenuKey, useContextMenu, type MenuItem } from "./ContextMenu";
+import { deletePart, duplicatePart, KIND_NAME, partName, partOf, renamePart, usesOf, whereText, type PartRef } from "./parts";
 import { typeLabel } from "./pins";
 import { saveSnippet, deleteSnippet } from "./snippets";
 import { useAskText, useConfirm } from "../../../ui";
@@ -116,6 +118,7 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
   const [q, setQ] = useState("");
   const file = useRef<HTMLInputElement>(null);
   const ask = useConfirm();
+  const cm = useContextMenu();
   useEffect(() => {
     void useStudio.getState().reloadLibrary();
   }, []);
@@ -136,6 +139,12 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
     a.download = name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  const dropItem = async (it: LibItem) => {
+    if (!(await ask(`Delete “${it.name}” from your library? Modes that use it keep their copy.`, { ok: "Delete", danger: true }))) return;
+    const r = await deleteItem(it.id);
+    if (r.error) toast(r.error, true);
+    await useStudio.getState().reloadLibrary();
   };
   const exportItem = (it: LibItem) => download(itemFile(it), `${it.id}.lib.json`);
   // the whole library in one file (Import takes it back, item by item)
@@ -190,6 +199,21 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
                 }}
                 className="st-mb-item"
                 onDoubleClick={() => add(it)}
+                onContextMenu={(e) =>
+                  cm.open(e, it.name, [
+                    { label: "Add to this mode", run: () => add(it) },
+                    { label: "Export as a file", run: () => exportItem(it) },
+                    "-",
+                    { label: "Delete from my library…", danger: true, run: () => void dropItem(it) },
+                  ])
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Delete" || e.key === "Backspace") {
+                    e.preventDefault();
+                    void dropItem(it);
+                  }
+                }}
+                onMouseUp={(e) => e.button === 0 && e.currentTarget.focus()}
                 title={`${it.description || it.name} · version ${it.itemVersion} (double-click or drag it in)`}
               >
                 <span className={`st-mb-dot ${it.kind === "function" ? "fn" : it.kind === "macro" ? "mac" : it.kind === "struct" ? "st" : "en"}`} /> {it.name}
@@ -203,12 +227,7 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
                 className="st-mb-add"
                 title="Delete from my library"
                 aria-label={`Delete ${it.name}`}
-                onClick={async () => {
-                  if (!(await ask(`Delete “${it.name}” from your library? Modes that use it keep their copy.`, { ok: "Delete", danger: true }))) return;
-                  const r = await deleteItem(it.id);
-                  if (r.error) toast(r.error, true);
-                  await useStudio.getState().reloadLibrary();
-                }}
+                onClick={() => void dropItem(it)}
               >
                 ×
               </button>
@@ -224,6 +243,7 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
           Export all
         </button>
       </div>
+      {cm.menu}
       <input ref={file} type="file" accept=".json,application/json" multiple hidden onChange={(e) => void importFiles(e.target.files).then(() => (e.target.value = ""))} />
     </Section>
   );
@@ -239,9 +259,94 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
   const askText = useAskText();
   const ask = useConfirm();
   const [filter, setFilter] = useState("");
-  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const cm = useContextMenu();
   const [saving, setSaving] = useState<string | null>(null);
   if (!graph) return null;
+  const now = () => useStudio.getState().graph!;
+  const findUses = (p: PartRef) => {
+    const g = now();
+    const u = usesOf(g, p);
+    const name = partName(g, p);
+    if (!u.nodes.length) return toast(u.others.length ? `“${name}” has no nodes using it; it's in ${u.others.join(", ")}.` : `Nothing uses “${name}” yet.`);
+    api?.focus(u.nodes[0].id);
+    const home = u.nodes[0].graph ?? "";
+    useStudio.getState().select(u.nodes.filter((n) => (n.graph ?? "") === home).map((n) => n.id));
+    toast(`“${name}”: ${whereText(g, u)}.`);
+  };
+  const del = async (p: PartRef) => {
+    const g = now();
+    const name = partName(g, p);
+    if (p.kind === "event") {
+      edit((x) => deletePart(x, p));
+      return;
+    }
+    const u = usesOf(g, p);
+    const used = u.nodes.length + u.others.length;
+    const q = used
+      ? `Delete the ${KIND_NAME[p.kind]} “${name}”? It's used by ${whereText(g, u)}; those show a problem until changed.`
+      : `Delete the ${KIND_NAME[p.kind]} “${name}”?${p.kind === "fn" || p.kind === "macro" ? " Its graph goes too." : ""}`;
+    if (!(await ask(q, { ok: "Delete", danger: true }))) return;
+    edit((x) => deletePart(x, p));
+    selectPart(null);
+    selectVar(null);
+  };
+  const rename = async (p: PartRef) => {
+    const g = now();
+    const name = await askText(`Rename the ${KIND_NAME[p.kind]}`, { label: "Name", placeholder: partName(g, p), max: 30 }, { ok: "Rename" });
+    const clean = [...(name ?? "").trim()].filter((c) => LABEL_CHARS.test(c)).join("").slice(0, 30);
+    if (!clean) return;
+    edit((x) => renamePart(x, p, clean));
+  };
+  const duplicate = (p: PartRef) => {
+    const r = duplicatePart(now(), p);
+    if (!r) return toast("That can't be copied.", true);
+    edit(() => r.graph);
+    if (p.kind === "var") selectVar(r.id);
+    else selectPart(r.id);
+  };
+  const dropSnippet = async (s: Snippet) => {
+    if (!(await ask(`Delete your snippet “${s.name}”?`, { ok: "Delete", danger: true }))) return;
+    const r = await deleteSnippet(s.id);
+    if (r.error) toast(r.error, true);
+    reloadSnippets();
+  };
+  /** The same menu for every item of this mode. */
+  const itemMenu = (sid: string): (MenuItem | "-")[] => {
+    const p = partOf(now(), sid);
+    if (!p) return [];
+    const libOk = p.kind === "fn" || p.kind === "macro" || p.kind === "struct" || p.kind === "enum";
+    if (p.kind === "event")
+      return [
+        { label: "Find on the graph", run: () => api?.focus(p.id) },
+        "-",
+        { label: "Delete", keys: "Del", danger: true, run: () => void del(p) },
+      ];
+    return [
+      { label: "Rename…", run: () => void rename(p) },
+      { label: "Duplicate", run: () => duplicate(p) },
+      { label: "Find uses", run: () => findUses(p) },
+      { label: "Save to my library…", disabled: !libOk, help: libOk ? undefined : "Functions, Macros, structs and enums", run: () => setSaving(p.id) },
+      "-",
+      { label: "Delete…", keys: "Del", danger: true, run: () => void del(p) },
+    ];
+  };
+  /** Right-click, Shift+F10 / the menu key, Delete or Backspace on an item. */
+  const itemKeys = (sid: string, label: string) => ({
+    // (WebKit doesn't give a clicked button the keyboard: it needs it for Delete)
+    onMouseUp: (e: React.MouseEvent<HTMLElement>) => e.button === 0 && e.currentTarget.focus(),
+    onContextMenu: (e: React.MouseEvent) => cm.open(e, label, itemMenu(sid)),
+    onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
+      if (isMenuKey(e)) {
+        e.preventDefault();
+        cm.openAt(e.currentTarget, label, itemMenu(sid));
+      } else if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        e.stopPropagation();
+        const p = partOf(now(), sid);
+        if (p) void del(p);
+      }
+    },
+  });
   const events = graph.nodes.filter((n) => nodeDef(n.type)?.event && !["func.define", "fn.entry", "macro.entry"].includes(n.type));
   const funcs = graph.nodes.filter((n) => n.type === "func.define");
   const functions = graph.functions ?? [];
@@ -258,6 +363,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
       }}
       className={`st-mb-item${selectedVar === v.id ? " on" : ""}`}
       onClick={() => selectVar(v.id)}
+      {...itemKeys(v.id, v.name)}
       title={`${typeLabel(graph, v.type)}${local ? ", this Function's own" : ""}: drag onto the canvas for Get or Set`}
     >
       <span className={`st-mb-pin${/^array</.test(v.type) ? " arr" : /^map</.test(v.type) ? " map" : ""}`} style={{ background: typeColor(v.type) }} /> {v.name}
@@ -277,10 +383,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
       className={`st-mb-item${part === id ? " on" : ""}${tab === id ? " open" : ""}`}
       onClick={() => selectPart(id)}
       onDoubleClick={() => openable && openTab(id)}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        setMenu({ id, x: e.clientX, y: e.clientY });
-      }}
+      {...itemKeys(id, name)}
       title={openable ? "Double-click to open its graph; drag onto the canvas to call it" : drag ? "Drag onto the canvas" : undefined}
     >
       <span className={`st-mb-dot ${dot}`} /> {name}
@@ -314,30 +417,12 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
 
   return (
     <aside className="st-mb" aria-label="My mode">
-      {menu && (
-        <div className="st-ctx" style={{ left: menu.x, top: menu.y }} role="menu" onMouseLeave={() => setMenu(null)}>
-          <button
-            type="button"
-            role="menuitem"
-            className="st-palette-item"
-            onClick={() => {
-              setSaving(menu.id);
-              setMenu(null);
-            }}
-          >
-            <span className="st-palette-title">Save to my library</span>
-            <span className="st-palette-help">Keep it to use in your other modes</span>
-          </button>
-          <button type="button" role="menuitem" className="st-palette-item" onClick={() => setMenu(null)}>
-            <span className="st-palette-help">Cancel</span>
-          </button>
-        </div>
-      )}
+      {cm.menu}
       {saving && <SaveToLibrary partId={saving} onDone={() => setSaving(null)} toast={toast} />}
       <Section title="Events" count={events.length} onAdd={() => api?.search("Events")} addTitle="Add an event">
         {events.length === 0 && <p className="st-muted st-mb-empty">Nothing starts this mode yet.</p>}
         {events.map((n) => (
-          <button key={n.id} type="button" className={`st-mb-item${selected.includes(n.id) ? " on" : ""}`} onClick={() => api?.focus(n.id)}>
+          <button key={n.id} type="button" className={`st-mb-item${selected.includes(n.id) ? " on" : ""}`} onClick={() => api?.focus(n.id)} {...itemKeys(n.id, label(n.id))}>
             <span className="st-mb-dot ev" /> {label(n.id)}
           </button>
         ))}
@@ -364,6 +449,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
               api?.focus(n.id);
               setFuncFocus(n.id);
             }}
+            {...itemKeys(n.id, String(n.params.name ?? n.id))}
           >
             <span className="st-mb-dot fn" /> {String(n.params.name ?? n.id)}
           </button>
@@ -463,6 +549,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
             }}
             className={`st-mb-item${part === `mk:${m.id}` ? " on" : ""}`}
             onClick={() => selectPart(`mk:${m.id}`)}
+            {...itemKeys(`mk:${m.id}`, m.label)}
             title="Drag onto the canvas for Find Marker"
           >
             <span className="st-mb-dot mk" style={{ background: m.colour || undefined }} /> {m.label}
@@ -488,6 +575,14 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
               }}
               className="st-mb-item"
               onClick={() => api?.snippetAtCenter(s)}
+              onContextMenu={(e) =>
+                cm.open(e, s.name, [
+                  { label: "Add to the graph", run: () => api?.snippetAtCenter(s) },
+                  ...(s.mine
+                    ? (["-", { label: "Delete…", danger: true, run: () => void dropSnippet(s) }] as const)
+                    : [{ label: "Delete", disabled: true, help: "Built-in snippets stay", run: () => {} }]),
+                ])
+              }
               title={`${s.description} (click or drag it in)`}
             >
               <span className="st-mb-dot sn" /> {s.name}
@@ -499,12 +594,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
                 className="st-mb-add"
                 title="Delete this snippet"
                 aria-label={`Delete ${s.name}`}
-                onClick={async () => {
-                  if (!(await ask(`Delete your snippet “${s.name}”?`, { ok: "Delete", danger: true }))) return;
-                  const r = await deleteSnippet(s.id);
-                  if (r.error) toast(r.error, true);
-                  reloadSnippets();
-                }}
+                onClick={() => void dropSnippet(s)}
               >
                 ×
               </button>

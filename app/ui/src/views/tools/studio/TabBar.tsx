@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useStudio } from "./store";
+import { useContextMenu } from "./ContextMenu";
 
 export function TabBar() {
   const graph = useStudio((s) => s.graph);
@@ -10,6 +11,7 @@ export function TabBar() {
   const tabs = useStudio((s) => s.tabs);
   const { openTab, closeTab, moveTab } = useStudio.getState();
   const [dragging, setDragging] = useState<string | null>(null);
+  const cm = useContextMenu();
   if (!graph) return null;
   const nameOf = (id: string) => graph.functions?.find((f) => f.id === id)?.name ?? graph.macros?.find((m) => m.id === id)?.name ?? id;
   const kindOf = (id: string) => (graph.macros?.some((m) => m.id === id) ? "mac" : "fn");
@@ -43,6 +45,13 @@ export function TabBar() {
           onClick={() => openTab(id)}
           onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openTab(id)}
           onAuxClick={(e) => e.button === 1 && closeTab(id)}
+          onContextMenu={(e) =>
+            cm.open(e, nameOf(id), [
+              { label: "Close", run: () => closeTab(id) },
+              { label: "Close the others", disabled: tabs.length < 2, run: () => tabs.filter((t) => t !== id).forEach(closeTab) },
+              { label: "Close all", run: () => [...tabs].forEach(closeTab) },
+            ])
+          }
           title={kindOf(id) === "mac" ? "Macro" : "Function"}
         >
           <span className={`st-mb-dot ${kindOf(id)}`} /> {nameOf(id)}
@@ -59,6 +68,7 @@ export function TabBar() {
           </button>
         </div>
       ))}
+      {cm.menu}
     </div>
   );
 }

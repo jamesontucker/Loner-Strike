@@ -271,6 +271,26 @@ FM_Spawn in its plugin's plugin_precache, the same rules: `kind`, `mode` incl. c
 **Checks** (the editor's map check, the Studio's Playtest): each marker's count within `required`, each
 component's count, path markers with 2+ points and no repeated `order`, keys of the right type.
 
+## 2026-11-13: menus and details polish (user's real-app pass)
+- **One right-click menu for the Studio** (`studio/ContextMenu.tsx`): opens at the pointer, kept on
+  screen, keyboard on the first item, ↑ ↓ Home End, Enter, Escape / a click elsewhere / scroll / leaving
+  the window closes it and gives the keyboard back; Shift+F10 or the menu key opens it on a focused item.
+  The browser's own menu never shows in the Studio or its dialogs (text boxes keep the system's).
+- **Every My mode item** (events, Functions, Macros, locals, variables, structs, enums, map markers):
+  Rename, Duplicate (a Function or Macro with its whole graph), Find uses (selects them, says where),
+  Save to my library (Functions, Macros, structs, enums; greyed with why on the others), Delete (asks
+  first; when it's used, says where: "1 node on the Event Graph, the variable “X”"). Select an item and
+  press Delete or Backspace for the same. (`studio/parts.ts`.) Library items: Add, Export, Delete;
+  snippets: Add, Delete. Sidebar items take the keyboard when clicked (WebKit doesn't by itself).
+- **Canvas:** a node's menu (Open its graph for a call, Duplicate, Comment around, Breakpoint, Delete,
+  on the selection it's in), a wire's (Add a reroute point, Break), a tab's (Close, Close the others,
+  Close all). Find in this mode: ↑ ↓ Enter, closes on Escape and on a click elsewhere.
+- **Details panels:** the comment's colours are a labelled field on the same left edge, 24 px swatches
+  8 px apart, the picked one ringed; buttons first in a line no longer step 6 px in (the app's
+  `p > .btn.small` margin); fields in boxes the same 13 px as the rest; a marker's "Use a circle" at
+  its own width, its key rows name / type / × on one line; removing a used variable asks first.
+- Tests: `tests/studio-v3.spec.ts` "our right-click menus…" (Chromium and WebKit, with all the others).
+
 ## 2026-11-13, night: map markers in the Studio, kits, mode uids
 - **Graph:** `markers` (id = the map's `kind`, label, description, type point/area/path, min/max, keys
   number/text/bool/choice with defaults, colour, icon, an area's size or radius) and `mapKit` (size,

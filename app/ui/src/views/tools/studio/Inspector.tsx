@@ -198,6 +198,7 @@ function VariableDetails({ id }: { id: string }) {
   const graph = useStudio((s) => s.graph)!;
   const edit = useStudio((s) => s.edit);
   const selectVar = useStudio((s) => s.selectVar);
+  const ask = useConfirm();
   const v = allVariables(graph).find((x) => x.id === id);
   if (!v) return null;
   const owner = graph.functions?.find((f) => f.locals?.some((x) => x.id === id));
@@ -245,7 +246,8 @@ function VariableDetails({ id }: { id: string }) {
       <button
         type="button"
         className="btn small"
-        onClick={() => {
+        onClick={async () => {
+          if (used && !(await ask(`Remove the variable “${v.name}”? ${used} node${used === 1 ? " uses" : "s use"} it; ${used === 1 ? "it shows" : "they show"} a problem until changed.`, { ok: "Remove", danger: true }))) return;
           edit((g) => removeVariable(g, v.id));
           selectVar(null);
         }}
@@ -404,7 +406,7 @@ function MarkerKeyRow({ k, onChange, onRemove }: { k: GMarkerKey; onChange: (k: 
   const choicesText = (k.choices ?? []).map(([v, l]) => (v === l ? v : `${v}=${l}`)).join(", ");
   return (
     <li className="st-var">
-      <div className="st-var-row">
+      <div className="st-mk-key-row">
         <TextField value={k.name} max={24} allowed={MARKER_ID} onChange={(name) => onChange({ ...k, name })} />
         <select className="st-field" value={k.type} aria-label="Key type" onChange={(e) => {
           const type = e.target.value as GMarkerKey["type"];
@@ -504,7 +506,7 @@ function MarkerDetails({ id }: { id: string }) {
             {m.radius != null ? (
               <NumberField value={m.radius} min={1} max={16384} onChange={(radius) => set({ radius })} />
             ) : (
-              <span className="st-var-row">
+              <span className="st-var-row st-num-row">
                 {[0, 1, 2].map((i) => (
                   <NumberField key={i} value={(m.size ?? [256, 256, 128])[i]} min={1} max={16384} onChange={(v) => set({ size: (m.size ?? [256, 256, 128]).map((x, j) => (j === i ? v : x)) as [number, number, number] })} />
                 ))}
@@ -697,10 +699,15 @@ export function Inspector() {
       <aside className="st-side" aria-label="Details">
         <p className="st-side-kicker">Details · Comment</p>
         <p className="st-side-help">Double-click its title bar to change the text. Dragging the title bar moves the box and the nodes inside; inside it, the canvas works as anywhere.</p>
-        <div className="st-swatches" role="group" aria-label="Colour">
-          {COMMENT_COLOURS.map((c) => (
-            <button key={c} type="button" className={`st-swatch${(comment.color ?? "#5b6a4b") === c ? " on" : ""}`} style={{ background: c }} aria-label={`Colour ${c}`} onClick={() => edit((g) => ({ ...g, comments: g.comments.map((x) => (x.id === comment.id ? { ...x, color: c } : x)) }))} />
-          ))}
+        <div className="st-side-fields">
+          <div className="st-side-field">
+            <span id="st-comment-colour">Colour</span>
+            <div className="st-swatches" role="radiogroup" aria-labelledby="st-comment-colour">
+              {COMMENT_COLOURS.map((c) => (
+                <button key={c} type="button" role="radio" aria-checked={(comment.color ?? "#5b6a4b") === c} className={`st-swatch${(comment.color ?? "#5b6a4b") === c ? " on" : ""}`} style={{ background: c }} aria-label={`Colour ${c}`} onClick={() => edit((g) => ({ ...g, comments: g.comments.map((x) => (x.id === comment.id ? { ...x, color: c } : x)) }))} />
+              ))}
+            </div>
+          </div>
         </div>
       </aside>
     );

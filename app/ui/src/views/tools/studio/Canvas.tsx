@@ -40,6 +40,7 @@ export function addFromLibrary(g: Graph, it: LibItem, at: { x: number; y: number
   return { graph: g2, message: n ? `Added “${it.name}” from your library (${n} part${n === 1 ? "" : "s"} with what it needs).` : `“${it.name}” is already in this mode.` };
 }
 import { pathPairs } from "./debugState";
+import { useContextMenu } from "./ContextMenu";
 import type { Graph } from "./schema";
 
 /** The real ends of a wire (through reroutes), for lighting up the path the flow took. */
@@ -372,6 +373,23 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
     setSelEdges([]);
   }, [edit, select, selEdges]);
 
+  /** a copy next to the selection (⌘D, the node menu) */
+  const duplicateSelected = useCallback(() => {
+    const g = useStudio.getState().graph;
+    const ids = useStudio.getState().selected;
+    const text = g && copy(g, ids);
+    if (!g || !text) return;
+    const sel = g.nodes.filter((n) => ids.includes(n.id));
+    const at = sel.length ? { x: Math.min(...sel.map((n) => n.pos.x)) + 40, y: Math.min(...sel.map((n) => n.pos.y)) + 40 } : rf.screenToFlowPosition(mouse.current);
+    const r = paste(g, text, at, home);
+    if (r) {
+      edit(() => r.graph);
+      select(r.ids);
+    }
+  }, [rf, home, edit, select]);
+  const cm = useContextMenu();
+  const MOD = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl+";
+
   const onKey = useCallback(
     async (e: ReactKeyboardEvent) => {
       const t = e.target as HTMLElement;
@@ -427,19 +445,8 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         e.preventDefault();
         openPalette(mouse.current.x, mouse.current.y);
       } else if (mod && k === "d") {
-        // duplicate: a copy next to the selection
         e.preventDefault();
-        const g = useStudio.getState().graph;
-        const ids = useStudio.getState().selected;
-        const text = g && copy(g, ids);
-        if (!g || !text) return;
-        const sel = g.nodes.filter((n) => ids.includes(n.id));
-        const at = sel.length ? { x: Math.min(...sel.map((n) => n.pos.x)) + 40, y: Math.min(...sel.map((n) => n.pos.y)) + 40 } : rf.screenToFlowPosition(mouse.current);
-        const r = paste(g, text, at, home);
-        if (r) {
-          edit(() => r.graph);
-          select(r.ids);
-        }
+        duplicateSelected();
       } else if (k === "f" && !mod) {
         // frame the selection (or everything)
         const ids = new Set(useStudio.getState().selected);
@@ -476,7 +483,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         for (const id of useStudio.getState().selected) if (graph.nodes.some((n) => n.id === id)) edit((g) => toggleBreakpoint(g, id));
       }
     },
-    [undo, redo, removeSelected, toast, rf, edit, select, openPalette, commentAround, graph.nodes, home],
+    [undo, redo, removeSelected, toast, rf, edit, select, openPalette, commentAround, graph.nodes, home, duplicateSelected],
   );
 
   return (
@@ -567,9 +574,33 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         }}
         onNodeContextMenu={(e, node) => {
           // inside a comment box is still empty space
-          if (node.type !== "comment") return;
-          e.preventDefault();
-          openPalette(e.clientX, e.clientY);
+          if (node.type === "comment") {
+            e.preventDefault();
+            openPalette(e.clientX, e.clientY);
+            return;
+          }
+          // the node's menu works on the selection it's in (or just it)
+          const st = useStudio.getState();
+          if (!st.selected.includes(node.id)) select([node.id]);
+          const n = st.graph?.nodes.find((x) => x.id === node.id);
+          const target = n && (n.type === "fn.call" || n.type === "fn.call_pure" ? n.params.func : n.type === "macro.use" ? n.params.macro : null);
+          const many = Math.max(1, useStudio.getState().selected.length);
+          cm.open(e, nodeDef(n?.type ?? "")?.title ?? "Node", [
+            ...(typeof target === "string" && target ? [{ label: "Open its graph", run: () => openTab(target) }, "-" as const] : []),
+            { label: many > 1 ? `Duplicate ${many} nodes` : "Duplicate", keys: `${MOD}D`, run: duplicateSelected },
+            { label: "Comment around", keys: "C", run: commentAround },
+            { label: n?.breakpoint ? "Remove the breakpoint" : "Breakpoint here", keys: "F9", run: () => edit((g) => toggleBreakpoint(g, node.id)) },
+            "-",
+            { label: many > 1 ? `Delete ${many} nodes` : "Delete", keys: "Del", danger: true, run: removeSelected },
+          ]);
+        }}
+        onEdgeContextMenu={(e, edge) => {
+          const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+          cm.open(e, "Wire", [
+            { label: "Add a reroute point", help: "Or double-click the wire", run: () => edit((g) => insertReroute(g, edge.id, { x: p.x - 8, y: p.y - 8 })) },
+            "-",
+            { label: "Break the wire", keys: "Alt+click", danger: true, run: () => edit((g) => remove(g, [edge.id])) },
+          ]);
         }}
         onPaneClick={() => setPalette(null)}
         onNodeDoubleClick={(_, node) => {
@@ -600,6 +631,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         <Controls showInteractive={false} />
         <MiniMap pannable zoomable className="st-minimap" />
       </ReactFlow>
+      {cm.menu}
       {palette && <Palette at={palette} graph={graph} tab={tab} onPick={pick} onComment={commentAround} onCollapse={selected.length ? collapseSelected : undefined} onClose={() => setPalette(null)} />}
       {varDrop && (
         <div className="st-vardrop" style={{ left: varDrop.left, top: varDrop.top }} role="menu">

@@ -197,6 +197,117 @@ test("map markers make the mode's kit", async ({ page }) => {
   await expect(page.locator(".react-flow__node").filter({ hasText: "Find Marker" })).toHaveCount(1);
 });
 
+test("our right-click menus: sidebar items, nodes; delete; dismiss", async ({ page }) => {
+  // a variable, and a call to Reward on the Event Graph
+  const g = await saved(page);
+  g.variables.push({ id: "vsq", name: "Squads left", type: "number", scope: "mode", default: 0 });
+  g.nodes.push({ id: "call1", type: "fn.call", pos: { x: 600, y: 400 }, params: { func: "fa" } });
+  expect((await (await page.request.post(`/api/tools/studio/graph/${ID}`, { data: { graph: g }, headers: H })).json()).ok).toBeTruthy();
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await expect(selectedTab(page)).toContainText("Event Graph", { timeout: 20_000 });
+  // what the browser would have done with each right-click: shown its own menu or not
+  await page.evaluate(() => {
+    const w = window as unknown as { __native: { prevented: boolean }[] };
+    w.__native = [];
+    // (each right-click: was its default, the browser's menu, stopped by anything)
+    document.addEventListener(
+      "contextmenu",
+      (e) => {
+        const rec = { prevented: false };
+        w.__native.push(rec);
+        const stop = e.preventDefault.bind(e);
+        e.preventDefault = () => {
+          rec.prevented = true;
+          stop();
+        };
+      },
+      true,
+    );
+  });
+  const native = () => page.evaluate(() => !(window as unknown as { __native: { prevented: boolean }[] }).__native.at(-1)?.prevented);
+  const menu = page.getByRole("menu");
+  const sq = page.locator(".st-mb").getByRole("button", { name: /^Squads left/ });
+
+  // a variable: our menu (not the browser's), keyboard on the first item, Escape closes
+  await sq.click({ button: "right" });
+  await expect(menu).toBeVisible();
+  expect(await native()).toBe(false);
+  await expect(menu.getByRole("menuitem")).toHaveText([/Rename/, /Duplicate/, /Find uses/, /Save to my library/, /Delete/]);
+  await expect(menu.getByRole("menuitem", { name: /Save to my library/ })).toHaveAttribute("aria-disabled", "true");
+  await expect(menu.getByRole("menuitem").first()).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(menu.getByRole("menuitem", { name: "Duplicate" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  // a click elsewhere closes it too
+  await sq.click({ button: "right" });
+  await page.locator(".react-flow__pane").click({ position: { x: 20, y: 20 } });
+  await expect(menu).toHaveCount(0);
+  // Duplicate, then select the copy and press Delete (asks first)
+  await sq.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Duplicate" }).click();
+  const copy = page.locator(".st-mb").getByRole("button", { name: /^Squads left 2/ });
+  await expect(copy).toHaveCount(1);
+  await copy.click();
+  await page.keyboard.press("Delete");
+  const askDel = page.getByRole("alertdialog");
+  await expect(askDel).toContainText("Delete the variable “Squads left 2”?");
+  await askDel.getByRole("button", { name: "Delete" }).click();
+  await expect(copy).toHaveCount(0);
+  await expect(sq).toHaveCount(1);
+
+  // a Function in use: Delete says where it's used; Cancel keeps it; Find uses selects the call
+  const fn = page.locator(".st-mb").getByRole("button", { name: "Reward", exact: true });
+  await fn.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: /Delete/ }).click();
+  await expect(askDel).toContainText("used by 1 node on the Event Graph");
+  await askDel.getByRole("button", { name: "Cancel" }).click();
+  await expect(fn).toHaveCount(1);
+  await fn.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Find uses" }).click();
+  await expect(page.locator('.react-flow__node[data-id="call1"]')).toHaveClass(/selected/);
+  // Rename
+  await fn.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: /Rename/ }).click();
+  await page.getByRole("alertdialog").getByRole("textbox").fill("Payout");
+  await page.getByRole("alertdialog").getByRole("button", { name: "Rename" }).click();
+  await expect(page.locator(".st-mb").getByRole("button", { name: "Payout", exact: true })).toHaveCount(1);
+  // Save to my library opens its sheet; Escape closes it
+  await page.locator(".st-mb").getByRole("button", { name: "Payout", exact: true }).click({ button: "right" });
+  await menu.getByRole("menuitem", { name: /Save to my library/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Save to my library" });
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+
+  // a node on the canvas: its own menu; Delete takes it away
+  const call = page.locator('.react-flow__node[data-id="call1"]');
+  await call.click({ button: "right" });
+  expect(await native()).toBe(false);
+  await expect(menu.getByRole("menuitem", { name: "Duplicate" })).toBeVisible();
+  await menu.getByRole("menuitem", { name: "Delete" }).click();
+  await expect(call).toHaveCount(0);
+  // anywhere else in the Studio: no browser menu; a text box keeps the system's (copy, paste)
+  await page.getByRole("complementary", { name: "Details" }).locator("p").first().click({ button: "right" });
+  expect(await native()).toBe(false);
+  await expect(menu).toHaveCount(0);
+  await page.locator(".st-find input").click({ button: "right" });
+  expect(await native()).toBe(true);
+  await page.keyboard.press("Escape");
+
+  // the Find list: closes on a click elsewhere and on Escape
+  const findBox = page.locator(".st-find input");
+  await findBox.fill("round");
+  const list = page.getByRole("listbox");
+  await expect(list).toBeVisible();
+  await page.locator(".react-flow__pane").click({ position: { x: 20, y: 20 } });
+  await expect(list).toHaveCount(0);
+  await findBox.click();
+  await expect(list).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(list).toHaveCount(0);
+});
+
 test.describe("leaving with unsaved edits", () => {
   // in the page, as a person gets there: Overview → Game Mode Studio → the mode → its Function
   const dirty = async (page: Page) => {

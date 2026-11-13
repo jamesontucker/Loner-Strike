@@ -25,6 +25,7 @@ import { tabView } from "./graphOps";
 import { Results } from "./Results";
 import { DebugPanel } from "./DebugPanel";
 import { applyLayout, autoLayout } from "./layout";
+import { nativeMenuOk } from "./ContextMenu";
 import { emptyGraph, newUid, parseGraph, type Graph } from "./schema";
 import rifleRaw from "./templates/team-dm.graph.json?raw";
 import lastStandRaw from "./templates/last-stand.graph.json?raw";
@@ -67,6 +68,72 @@ function idFrom(name: string, taken: Set<string>): string {
   let id = base;
   for (let i = 2; taken.has(id); i++) id = `${base}_${i}`;
   return id;
+}
+
+/** "Find in this mode": the list opens as you type, ↑ ↓ and Enter pick, Escape or a click elsewhere closes it. */
+function FindBox({ graph, onPick }: { graph: Graph; onPick: (id: string) => void }) {
+  const [find, setFind] = useState("");
+  const [open, setOpen] = useState(false);
+  const [cur, setCur] = useState(0);
+  const box = useRef<HTMLDivElement>(null);
+  const found = find.trim() ? findNodes(graph, find) : [];
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("pointerdown", away, true);
+    return () => window.removeEventListener("pointerdown", away, true);
+  }, [open]);
+  const pick = (id: string) => {
+    onPick(id);
+    setFind("");
+    setOpen(false);
+  };
+  return (
+    <div className="st-find" ref={box}>
+      <input
+        className="st-field"
+        type="search"
+        placeholder="Find in this mode"
+        value={find}
+        role="combobox"
+        aria-expanded={open && !!find.trim()}
+        aria-controls="st-find-list"
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          setFind(e.target.value);
+          setOpen(true);
+          setCur(0);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            if (open && find) setOpen(false);
+            else setFind("");
+          } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            setOpen(true);
+            if (found.length) setCur((c) => (c + (e.key === "ArrowDown" ? 1 : found.length - 1)) % found.length);
+          } else if (e.key === "Enter" && found[cur]) {
+            e.preventDefault();
+            pick(found[cur].id);
+          }
+        }}
+        aria-label="Find in this mode"
+      />
+      {open && find.trim() && (
+        <div className="st-find-list" role="listbox" id="st-find-list">
+          {found.map((n, k) => (
+            <button key={n.id} type="button" role="option" aria-selected={k === cur} className={`st-palette-item${k === cur ? " cur" : ""}`} onMouseEnter={() => setCur(k)} onClick={() => pick(n.id)}>
+              <span className="st-palette-title">{nodeDef(n.type)?.title ?? n.type}</span>
+              <span className="st-palette-help">{Object.values(n.params).filter((x) => typeof x === "string" && x).join(" · ") || n.id}</span>
+            </button>
+          ))}
+          {found.length === 0 && <div className="st-palette-none">Nothing matches.</div>}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Nodes whose title, kind, id or settings have the words. */
@@ -118,7 +185,6 @@ function Studio({ maps }: ToolProps) {
   const funcName = tabName || (funcFocus ? String(graph?.nodes.find((n) => n.id === funcFocus)?.params.name ?? "") : "");
   useToolCrumbs("studio", graph ? [{ label: graph.mode.name || graph.mode.id, address: funcName ? `studio:${graph.mode.id}` : undefined }, ...(funcName ? [{ label: `${tabName ? tabKind : "Function"}: ${funcName}` }] : [])] : null);
 
-  const [find, setFind] = useState("");
   // the canvas's look: "a" (the restrained Loner-Strike touch); development can show the plain one
   const [skin, setSkin] = useState<"a" | "none">("a");
   useEffect(() => {
@@ -406,6 +472,17 @@ function Studio({ maps }: ToolProps) {
     void refreshList();
   };
 
+  // the browser's own right-click menu never shows in the Studio or its dialogs (text boxes keep
+  // theirs: copy, paste); our menus open from the items themselves
+  useEffect(() => {
+    const noNative = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.(".st-page, .st-start, .sheet-backdrop, .st-ctx") && !nativeMenuOk(t)) e.preventDefault();
+    };
+    document.addEventListener("contextmenu", noNative);
+    return () => document.removeEventListener("contextmenu", noNative);
+  }, []);
+
   // keys anywhere on the page (the canvas has its own for the graph): never while typing
   const keyActions = useRef({ save, playtest, errors: 0, working: false });
   keyActions.current = { save, playtest, errors: problems.filter((p) => p.level === "error").length, working: !!working };
@@ -515,28 +592,7 @@ function Studio({ maps }: ToolProps) {
         <button type="button" className="btn" onClick={layout} title="Lay the nodes out left to right">
           Tidy up
         </button>
-        <div className="st-find">
-          <input className="st-field" placeholder="Find in this mode" value={find} onChange={(e) => setFind(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setFind("")} aria-label="Find in this mode" />
-          {find.trim() && (
-            <div className="st-find-list" role="listbox">
-              {findNodes(graph, find).map((n) => (
-                <button
-                  key={n.id}
-                  type="button"
-                  className="st-palette-item"
-                  onClick={() => {
-                    focusRef.current(n.id);
-                    setFind("");
-                  }}
-                >
-                  <span className="st-palette-title">{nodeDef(n.type)?.title ?? n.type}</span>
-                  <span className="st-palette-help">{Object.values(n.params).filter((x) => typeof x === "string" && x).join(" · ") || n.id}</span>
-                </button>
-              ))}
-              {findNodes(graph, find).length === 0 && <div className="st-palette-none">Nothing matches.</div>}
-            </div>
-          )}
-        </div>
+        <FindBox graph={graph} onPick={(id) => focusRef.current(id)} />
         <button type="button" className="btn" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" }))} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
           ?
         </button>
@@ -650,7 +706,8 @@ function Studio({ maps }: ToolProps) {
 export default function StudioPage(props: ToolProps) {
   return (
     <ReactFlowProvider>
-      <Studio {...props} />
+      {/* the browser's own right-click menu never shows in the Studio (text boxes keep theirs) */}
+        <Studio {...props} />
     </ReactFlowProvider>
   );
 }
