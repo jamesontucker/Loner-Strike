@@ -362,6 +362,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/tools/studio/debug/command"),
     ("GET", "/api/tools/studio/debug/events"),
     ("POST", "/api/tools/studio/generate"),
+    ("POST", "/api/tools/studio/source"),
     ("GET", "/api/tools/studio/graph/:id"),
     ("POST", "/api/tools/studio/graph/:id"),
     ("POST", "/api/tools/studio/graph/:id/delete"),
