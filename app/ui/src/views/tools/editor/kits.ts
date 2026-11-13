@@ -21,14 +21,14 @@ export type KitMarker = {
 };
 export type KitComponent = { classname: string; min: number; max: number | null; note?: string };
 export type Kit = {
-  mode: { id: string; name: string; description?: string };
+  mode: { id: string; uid?: string; name: string; description?: string };
   source?: string;
   markers: KitMarker[];
   components: KitComponent[];
   creatures: string[];
   notes?: string;
 };
-export type KitsReply = { folder: string; kits: Kit[]; bad: { file: string; error: string }[]; madeFor: string[]; key: string; needs: Issue[]; error?: string };
+export type KitsReply = { folder: string; kits: Kit[]; bad: { file: string; error: string }[]; madeFor: { uid?: string; id: string }[]; key: string; needs: Issue[]; error?: string };
 
 export const MODES_KEY = "ls_modes";
 
@@ -49,19 +49,38 @@ export async function loadKits(): Promise<KitsReply | null> {
 
 export const kitOf = (mode: string | undefined) => useKits.getState().kits.find((k) => k.mode.id === mode);
 
-/** The modes the map is made for. */
-export function madeForOf(world: { keys: [string, string][] } | undefined): string[] {
-  const v = (world ? keyOf(world.keys, MODES_KEY) ?? "" : "").split(/[\s,;]+/).filter((x) => /^[a-z][a-z0-9_]{0,23}$/.test(x));
-  return [...new Set(v)];
+/** One mode the map is made for: its permanent uid (old maps: none) and short id (for showing). */
+export type MadeFor = { uid?: string; id: string };
+const UID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SHORT = /^[a-z][a-z0-9_]{0,23}$/;
+
+/** The modes the map is made for: `ls_modes` = "uid:id,uid:id" (old maps: plain ids). */
+export function madeForOf(world: { keys: [string, string][] } | undefined): MadeFor[] {
+  const out: MadeFor[] = [];
+  for (const part of (world ? keyOf(world.keys, MODES_KEY) ?? "" : "").split(/[,;\s]+/).filter(Boolean)) {
+    const i = part.indexOf(":");
+    const m: MadeFor | null = i < 0 ? (SHORT.test(part) ? { id: part } : null) : UID.test(part.slice(0, i)) && SHORT.test(part.slice(i + 1)) ? { uid: part.slice(0, i).toLowerCase(), id: part.slice(i + 1) } : null;
+    if (m && !out.some((x) => (x.uid && x.uid === m.uid) || (!x.uid && !m.uid && x.id === m.id))) out.push(m);
+  }
+  return out;
 }
 
+/** The kit for a made-for mode: by uid; old maps or old kits (no uid) by short id. */
+export function kitFor(m: MadeFor, kits: Kit[] = useKits.getState().kits): Kit | undefined {
+  if (m.uid) return kits.find((k) => k.mode.uid?.toLowerCase() === m.uid) ?? kits.find((k) => !k.mode.uid && k.mode.id === m.id);
+  return kits.find((k) => k.mode.id === m.id);
+}
+
+/** A kit's entry in ls_modes. */
+export const madeForKit = (k: Kit): MadeFor => (k.mode.uid ? { uid: k.mode.uid.toLowerCase(), id: k.mode.id } : { id: k.mode.id });
+
 /** Sets the modes the map is made for (one undo step; saved in the project and the map). */
-export async function setMadeFor(ids: string[]) {
+export async function setMadeFor(list: MadeFor[]) {
   const s = useEditor.getState();
   const d = s.doc;
   if (!d) return;
   const keys = d.world.keys.filter(([k]) => k !== MODES_KEY);
-  if (ids.length) keys.push([MODES_KEY, ids.join(" ")]);
+  if (list.length) keys.push([MODES_KEY, list.map((m) => (m.uid ? `${m.uid}:${m.id}` : m.id)).join(",")]);
   await s.cmd({ op: "set_world", keys });
 }
 

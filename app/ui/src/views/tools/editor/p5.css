@@ -295,3 +295,4 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .p5-kit-needs li { display: flex; gap: 8px; align-items: center; justify-content: space-between; font-size: 12px; padding: 4px 6px; border-radius: 3px; background: rgba(255, 160, 60, 0.08); }
 .p5-kit-needs li span { min-width: 0; overflow-wrap: anywhere; }
 .p5-chips button { padding: 2px 8px; font-size: 12px; }
+.p5-kit-missing { padding: 4px 8px; border-left: 3px solid #e0a040; background: rgba(224, 160, 64, 0.08); }

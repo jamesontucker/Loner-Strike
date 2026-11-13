@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import type { Issue } from "./editorApi";
 import { dragging, useP4 } from "./extras";
-import { kitPlacement, loadKits, madeForOf, setMadeFor, type Kit, type KitsReply, useKits } from "./kits";
+import { kitFor, kitPlacement, loadKits, madeForKit, madeForOf, setMadeFor, type Kit, type KitsReply, useKits } from "./kits";
 import { COMPONENT_MIME } from "./P4Scene";
 import { useEditor } from "./store";
 import "./p4.css";
@@ -118,10 +118,13 @@ export function KitPanel() {
     };
   }, [rev]);
   const made = madeForOf(doc?.world);
-  const toggle = async (id: string) => {
+  // which made-for entry is this kit (by uid; old data by short id)
+  const isMade = (k: Kit) => made.some((m) => kitFor(m, kits) === k);
+  const toggle = async (k: Kit) => {
     setBusy(true);
     try {
-      await setMadeFor(made.includes(id) ? made.filter((x) => x !== id) : [...made, id]);
+      // (an old plain id becomes uid:id when it's set again)
+      await setMadeFor(isMade(k) ? made.filter((m) => kitFor(m, kits) !== k) : [...made, madeForKit(k)]);
     } finally {
       setBusy(false);
     }
@@ -134,8 +137,8 @@ export function KitPanel() {
       </p>
     );
   }
-  const sorted = [...kits].sort((a, b) => Number(made.includes(b.mode.id)) - Number(made.includes(a.mode.id)) || a.mode.name.localeCompare(b.mode.name));
-  const unknown = made.filter((m) => !kits.some((k) => k.mode.id === m));
+  const sorted = [...kits].sort((a, b) => Number(isMade(b)) - Number(isMade(a)) || a.mode.name.localeCompare(b.mode.name));
+  const unknown = made.filter((m) => !kitFor(m, kits));
   // (every kit issue starts with its mode's name)
   const needsOf = (k: Kit) => reply.needs.filter((n) => n.code !== "kit-unknown" && (n.message.startsWith(`${k.mode.name}:`) || n.message.startsWith(`${k.mode.name} `)));
   return (
@@ -145,7 +148,7 @@ export function KitPanel() {
         {kits.length ? (
           <div className="seg" role="group" aria-label="Made for">
             {kits.map((k) => (
-              <button key={k.mode.id} type="button" aria-pressed={made.includes(k.mode.id)} disabled={busy} onClick={() => void toggle(k.mode.id)} title={k.mode.description}>
+              <button key={k.mode.uid ?? k.mode.id} type="button" aria-pressed={isMade(k)} disabled={busy} onClick={() => void toggle(k)} title={k.mode.description}>
                 {k.mode.name}
               </button>
             ))}
@@ -154,8 +157,8 @@ export function KitPanel() {
           <p className="small-note muted">No mode kits are installed. Installing a game mode (Game Mode Studio, Community) adds its kit to {reply.folder}.</p>
         )}
         {unknown.map((m) => (
-          <p key={m} className="small-note">
-            Also made for “{m}” (not installed here).{" "}
+          <p key={m.uid ?? m.id} className="small-note p5-kit-missing" role="note">
+            This map is also made for the mode “{m.id}”, which isn't installed here, so what it needs can't be checked. Install it (Game Mode Studio or Community) to see it.{" "}
             <button type="button" className="linklike" onClick={() => void setMadeFor(made.filter((x) => x !== m))}>
               Remove
             </button>
@@ -169,7 +172,7 @@ export function KitPanel() {
         </p>
       )}
       {sorted.map((k) => (
-        <KitGroup key={k.mode.id} kit={k} chosen={made.includes(k.mode.id)} needs={needsOf(k)} />
+        <KitGroup key={k.mode.uid ?? k.mode.id} kit={k} chosen={isMade(k)} needs={needsOf(k)} />
       ))}
     </div>
   );

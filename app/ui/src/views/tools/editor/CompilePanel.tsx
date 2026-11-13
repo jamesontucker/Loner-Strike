@@ -137,7 +137,8 @@ export function CompilePanel() {
 
   // P5: the modes the map is made for (Library > Mode kits) first, and picked when the last
   // used mode isn't one of them
-  const madeKey = useEditor((s) => madeForOf(s.doc?.world).join(" "));
+  // (the game's mode list has short ids)
+  const madeKey = useEditor((s) => madeForOf(s.doc?.world).map((m) => m.id).join(" "));
   const made = madeKey ? madeKey.split(" ") : [];
   const rank = (id: string) => (made.includes(id) ? made.indexOf(id) : made.length);
   const shownModes = [...modes].sort((a, b) => rank(a.id) - rank(b.id));

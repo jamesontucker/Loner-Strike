@@ -16,7 +16,7 @@ const api = (page: Page, p: string, body?: unknown) =>
 const KIT = {
   schema: "loner-strike/mode-kit",
   version: 1,
-  mode: { id: "p5_test_stand", name: "P5 Test Stand", description: "Hold out (test kit)" },
+  mode: { id: "p5_test_stand", uid: "5e0c1f7a-3b2d-4c11-9a8e-1f2e3d4c5b6a", name: "P5 Test Stand", description: "Hold out (test kit)" },
   source: "hand",
   markers: [
     {
@@ -65,7 +65,7 @@ test("Mode kits: made for, what it needs, place a marker with its keys", async (
     await expect(page.getByText(/p5_broken\.kit\.json \(It isn't valid JSON/)).toBeVisible();
     // made for: saved in the map as ls_modes, and the needs show
     await page.getByRole("group", { name: "Made for" }).getByRole("button", { name: "P5 Test Stand" }).click();
-    await expect.poll(async () => ((await api(page, "/api/tools/editor/doc")).world.keys as [string, string][]).find(([k]) => k === "ls_modes")?.[1]).toBe("p5_test_stand");
+    await expect.poll(async () => ((await api(page, "/api/tools/editor/doc")).world.keys as [string, string][]).find(([k]) => k === "ls_modes")?.[1]).toBe("5e0c1f7a-3b2d-4c11-9a8e-1f2e3d4c5b6a:p5_test_stand");
     const needs = page.getByRole("list", { name: "What P5 Test Stand still needs" });
     await expect(needs).toContainText("2–8 (has 0)");
     await expect(needs.locator("li")).toHaveCount(3);
@@ -84,6 +84,14 @@ test("Mode kits: made for, what it needs, place a marker with its keys", async (
     await expect(needs).toContainText("(has 1)");
     // its form comes from the kit: a typed Side list, and a wrong value is a check warning
     await expect(page.getByText("P5 Test Stand: Creature spawn.").first()).toBeVisible();
+    // a mode the map is made for that isn't installed: a plain note (and an old plain id still finds its kit)
+    const doc0 = await api(page, "/api/tools/editor/doc");
+    const otherKeys = (doc0.world.keys as [string, string][]).filter(([k]) => k !== "ls_modes");
+    await api(page, "/api/tools/editor/cmd", { op: "set_world", keys: [...otherKeys, ["ls_modes", "5e0c1f7a-3b2d-4c11-9a8e-1f2e3d4c5b6a:p5_test_stand,11111111-2222-4333-8444-555555555555:zombie_escape"]] });
+    await expect(page.getByRole("note").filter({ hasText: "“zombie_escape”, which isn't installed here" })).toBeVisible();
+    await api(page, "/api/tools/editor/cmd", { op: "set_world", keys: [...otherKeys, ["ls_modes", "p5_test_stand"]] });
+    await expect(page.getByRole("group", { name: "Made for" }).getByRole("button", { name: "P5 Test Stand" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("note")).toHaveCount(0);
     await page.getByLabel("Side", { exact: true }).selectOption("south");
     await expect.poll(async () => Object.fromEntries((await api(page, "/api/tools/editor/doc")).entities.find((e: { id: number }) => e.id === m.id).keys).side).toBe("south");
     await api(page, "/api/tools/editor/cmd", { op: "set_key", entity: m.id, key: "wave", value: "500" });

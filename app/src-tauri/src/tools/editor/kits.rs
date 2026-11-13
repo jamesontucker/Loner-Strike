@@ -2,7 +2,8 @@
 //! format", version 1). A kit says what a map needs for one game mode: markers (`ls_marker`
 //! entities with `kind` = the marker id and `mode` = the mode id), the `ls_*` components it uses
 //! and the creatures it spawns. The map says which modes it's made for in the worldspawn key
-//! `ls_modes` (mode ids separated by spaces; saved in the project and the .bsp, read by
+//! `ls_modes` (`uid:id` pairs separated by commas, the mode's permanent uid and its short id
+//! for showing; old maps: plain ids separated by spaces; saved in the project and the .bsp, read by
 //! Playtest and Publish).
 //!   GET /api/tools/editor/kits   {folder, kits, bad, madeFor, needs}
 //! The live checks list, for each mode the map is made for, what it still needs (warnings with
@@ -100,6 +101,9 @@ pub struct Component {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ModeInfo {
     pub id: String,
+    /// the mode's permanent id (a UUID), the same when its short id or name change
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uid: Option<String>,
     pub name: String,
     #[serde(default)]
     pub description: String,
@@ -128,6 +132,12 @@ fn name_ok(s: &str, max: usize, first_letter: bool) -> bool {
     !s.is_empty() && s.len() <= max && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_') && (!first_letter || s.as_bytes()[0].is_ascii_lowercase())
 }
 
+/// A UUID as text (any version; letters a-f in either case).
+pub fn uid_ok(u: &str) -> bool {
+    let parts: Vec<&str> = u.split('-').collect();
+    parts.len() == 5 && parts.iter().zip([8, 4, 4, 4, 12]).all(|(p, n)| p.len() == n && p.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
 fn plain(s: &str, max: usize) -> bool {
     s.chars().count() <= max && !s.chars().any(|c| c.is_control())
 }
@@ -144,6 +154,9 @@ pub fn parse(text: &str) -> Result<Kit, String> {
     let k: Kit = serde_json::from_value(v).map_err(|e| format!("It doesn't follow the kit format ({e})."))?;
     if !name_ok(&k.mode.id, 24, true) || k.mode.id.len() < 2 {
         return Err("Its mode id isn't 2–24 of a-z, 0-9 and _ starting with a letter.".into());
+    }
+    if k.mode.uid.as_deref().is_some_and(|u| !uid_ok(u)) {
+        return Err("Its mode uid isn't a UUID.".into());
     }
     if !plain(&k.mode.name, 40) || k.mode.name.trim().is_empty() || !plain(&k.mode.description, 60) || !plain(&k.notes, 600) {
         return Err("Its mode name, description or notes are too long.".into());
@@ -223,8 +236,8 @@ pub fn load(dir: &Path) -> (Vec<Kit>, Vec<Value>) {
             _ => Err("It isn't a plain file.".into()),
         };
         match r {
-            Ok(k) if kits.len() < MAX_KITS || kits.contains_key(&k.mode.id) => {
-                kits.insert(k.mode.id.clone(), k);
+            Ok(k) if kits.len() < MAX_KITS || kits.contains_key(&kit_key(&k)) => {
+                kits.insert(kit_key(&k), k);
             }
             Ok(_) => bad.push(json!({"file": name, "error": "Too many kits."})),
             Err(e) => bad.push(json!({"file": name, "error": e})),
@@ -233,15 +246,48 @@ pub fn load(dir: &Path) -> (Vec<Kit>, Vec<Value>) {
     (kits.into_values().collect(), bad)
 }
 
-/// The modes the map says it's made for (worldspawn `ls_modes`).
-pub fn made_for(doc: &MapDocument) -> Vec<String> {
-    let mut v: Vec<String> = Vec::new();
-    for m in doc.world.get(MODES_KEY).unwrap_or("").split([' ', ',', ';']).map(str::trim).filter(|m| name_ok(m, 24, true)) {
-        if !v.iter().any(|x| x == m) {
-            v.push(m.to_string());
+/// One kit per mode: by its uid, or its short id when it has none (old kits).
+fn kit_key(k: &Kit) -> String {
+    k.mode.uid.as_deref().map(str::to_ascii_lowercase).unwrap_or_else(|| k.mode.id.clone())
+}
+
+/// One mode the map is made for: its permanent uid (old maps: none) and its short id.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct MadeFor {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uid: Option<String>,
+    pub id: String,
+}
+
+/// The modes the map says it's made for (worldspawn `ls_modes`): `uid:id,uid:id`, or the old
+/// plain ids separated by spaces.
+pub fn made_for(doc: &MapDocument) -> Vec<MadeFor> {
+    let mut v: Vec<MadeFor> = Vec::new();
+    for part in doc.world.get(MODES_KEY).unwrap_or("").split([',', ';', ' ']).map(str::trim).filter(|p| !p.is_empty()) {
+        let m = match part.split_once(':') {
+            Some((u, id)) if uid_ok(u) && name_ok(id, 24, true) => MadeFor { uid: Some(u.to_ascii_lowercase()), id: id.to_string() },
+            None if name_ok(part, 24, true) => MadeFor { uid: None, id: part.to_string() },
+            _ => continue,
+        };
+        if !v.iter().any(|x| (x.uid.is_some() && x.uid == m.uid) || (x.uid.is_none() && m.uid.is_none() && x.id == m.id)) {
+            v.push(m);
         }
     }
     v
+}
+
+/// The `ls_modes` value for these modes.
+pub fn made_for_text(list: &[MadeFor]) -> String {
+    list.iter().map(|m| m.uid.as_ref().map_or_else(|| m.id.clone(), |u| format!("{u}:{}", m.id))).collect::<Vec<_>>().join(",")
+}
+
+/// The installed kit for a made-for mode: the same uid; a mode saved without one (old maps),
+/// or a kit without one (old kits), by its short id.
+pub fn kit_for<'a>(m: &MadeFor, kits: &'a [Kit]) -> Option<&'a Kit> {
+    match &m.uid {
+        Some(u) => kits.iter().find(|k| k.mode.uid.as_deref().is_some_and(|x| x.eq_ignore_ascii_case(u))).or_else(|| kits.iter().find(|k| k.mode.uid.is_none() && k.mode.id == m.id)),
+        None => kits.iter().find(|k| k.mode.id == m.id),
+    }
 }
 
 /// A marker entity counts for `mode` when its `mode` is that mode, `any` or empty.
@@ -335,9 +381,13 @@ pub fn check_kit(doc: &MapDocument, kit: &Kit) -> Vec<Issue> {
 pub fn issues(doc: &MapDocument, kits: &[Kit]) -> Vec<Issue> {
     let mut out = Vec::new();
     for m in made_for(doc) {
-        match kits.iter().find(|k| k.mode.id == m) {
+        match kit_for(&m, kits) {
             Some(k) => out.extend(check_kit(doc, k)),
-            None => out.push(issue(Level::Info, "kit-unknown", format!("The map is made for “{m}”, but that mode isn't installed here, so what it needs can't be checked."))),
+            None => out.push(issue(
+                Level::Info,
+                "kit-unknown",
+                format!("The map is made for the mode “{}”, which isn't installed here, so what it needs can't be checked. Install that mode (Game Mode Studio or Community) to see it.", m.id),
+            )),
         }
     }
     out
@@ -407,6 +457,39 @@ pub mod tests {
       "creatures": [ "zombie", "brute" ]
     }"##;
 
+    const UID_A: &str = "0f6c1e3a-8b2d-4c55-9a1e-2b7d3c4e5f60";
+    const UID_B: &str = "7d1e2f30-1111-4222-8333-444455556666";
+
+    #[test]
+    fn made_for_by_uid_and_old_plain_ids() {
+        let mut d = MapDocument::new();
+        // new form, with junk and a repeat; the old form still reads
+        d.world.keys.push((MODES_KEY.into(), format!("{UID_A}:last_stand, {}:royale,bad:x,{UID_A}:last_stand", UID_B.to_uppercase())));
+        let m = made_for(&d);
+        assert_eq!(m, vec![MadeFor { uid: Some(UID_A.into()), id: "last_stand".into() }, MadeFor { uid: Some(UID_B.into()), id: "royale".into() }]);
+        assert_eq!(made_for_text(&m), format!("{UID_A}:last_stand,{UID_B}:royale"));
+        let mut d2 = MapDocument::new();
+        d2.world.keys.push((MODES_KEY.into(), "last_stand royale".into()));
+        assert_eq!(made_for(&d2)[1], MadeFor { uid: None, id: "royale".into() });
+
+        // kits: matched by uid, even when the short id changed; another mode with the same short id isn't taken
+        let renamed = parse(&LAST_STAND.replace("\"id\": \"last_stand\"", &format!("\"id\": \"stand_v2\", \"uid\": \"{UID_A}\""))).unwrap();
+        let impostor = parse(&LAST_STAND.replace("\"id\": \"last_stand\"", "\"id\": \"royale\", \"uid\": \"99999999-9999-4999-8999-999999999999\"")).unwrap();
+        let old = parse(&LAST_STAND.replace("\"id\": \"last_stand\"", "\"id\": \"royale\"")).unwrap();
+        let kits = vec![renamed.clone(), impostor.clone()];
+        assert_eq!(kit_for(&m[0], &kits).map(|k| k.mode.id.as_str()), Some("stand_v2"));
+        assert!(kit_for(&m[1], &kits).is_none(), "a different mode that happens to be called royale");
+        // an old kit (no uid) is found by its short id; an old map (no uid) too
+        assert_eq!(kit_for(&m[1], &[old.clone()]).map(|k| k.mode.id.as_str()), Some("royale"));
+        assert_eq!(kit_for(&made_for(&d2)[1], &[impostor.clone()]).map(|k| k.mode.id.as_str()), Some("royale"));
+        // not installed: a plain note
+        let iss = issues(&d, &kits);
+        let unknown: Vec<&Issue> = iss.iter().filter(|i| i.code == "kit-unknown").collect();
+        assert_eq!(unknown.len(), 1);
+        assert!(unknown[0].message.contains("“royale”, which isn't installed here"), "{}", unknown[0].message);
+        assert!(parse(&LAST_STAND.replace("\"id\": \"last_stand\"", "\"id\": \"last_stand\", \"uid\": \"not-a-uuid\"")).unwrap_err().contains("UUID"));
+    }
+
     fn marker(d: &mut MapDocument, kind: &str, mode: &str, extra: &[(&str, &str)]) {
         let mut e = Entity::new("ls_marker");
         e.keys.push(("kind".into(), kind.into()));
@@ -444,7 +527,7 @@ pub mod tests {
         let kit = parse(LAST_STAND).unwrap();
         let mut d = MapDocument::new();
         d.world.keys.push((MODES_KEY.into(), "last_stand royale".into()));
-        assert_eq!(made_for(&d), vec!["last_stand", "royale"]);
+        assert_eq!(made_for(&d).iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), vec!["last_stand", "royale"]);
         let iss = issues(&d, std::slice::from_ref(&kit));
         let codes: Vec<(&str, Option<&str>)> = iss.iter().map(|i| (i.code, i.place.as_deref())).collect();
         assert_eq!(
