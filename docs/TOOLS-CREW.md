@@ -108,5 +108,7 @@ Many agents share one staging area. Never run a bare `git commit`. Always commit
 ## Keep the user's Mac usable (2026-11-13)
 - Map compiles (sdHLCSG/BSP/VIS/RAD): at most `-threads 6`, always under `nice -n 15`, and `-full` VIS only for the final
   shipping compile. A 14-thread full VIS pushed the load to 58 with swap full and killed a window on the user's desktop.
-- At most 2 of your own sim servers at a time, and only one while you're also compiling. `cargo` builds: `-j 6`.
+- Up to 4 of your own sim servers at a time (user, 2026-11-13), as long as the whole Mac stays under 8 sim servers in
+  all (`pgrep -fl 'Sim\\.*hlds.exe' | wc -l`) and the load average is under 20. Only 2 while you're also compiling.
+  Delete each sim copy when its run ends. `cargo` builds: `-j 6`.
 - Check `uptime` before a heavy step; if the load average is over 20, wait.
