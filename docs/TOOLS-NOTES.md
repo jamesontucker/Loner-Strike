@@ -2575,3 +2575,50 @@ build right now because of `studio/gen.rs`/`graph.rs` work in progress); `tsc -b
 - **For Y**: `display` (the `name =` key) is parsed but never used in game: maybe the kill log line or a HUD name. Also, a garg
   at 0.7 is still ~95 tall over a 72 hull: if bullets aimed at its head should hit, studio hitboxes need checking on
   SOLID_SLIDEBOX creatures.
+
+### Agent P5: round 3 — Unreal-style navigation, outliner, dockable panels, Hammer gaps — 2026-11-12
+- **Navigation presets** (`navigation.ts`, `NavCamera.tsx`; View > Move like…, asked once on first open, listed in
+  the keys sheet): **Unreal** (default): hold right mouse to look + WASD/QE to fly (velocity eases in and out,
+  Shift ×3), scroll while looking changes speed (8 steps, "Speed 5 · 1024 u/s" note in the pane), plain scroll moves
+  forward/back, Alt+left-drag orbits round what's picked, Alt+right-drag dollies, middle-drag pans, left-drag on a
+  brush moves forward and turns, F focuses (Unreal takes F from fly). **Hammer**: Z toggles mouse-look (WASD),
+  left-drag looks, right-drag moves, middle pans. **Blender**: B's orbit/fly cameras as before. The Unreal/Hammer
+  camera registers a small controls object, so tools that switch controls off while dragging, the gizmo, camera marks
+  and "look at" all work. Note: P4's box select now starts from empty space in 3D, so an Unreal-style left-drag moves
+  the camera only when it starts on a brush. While looking, the camera keeps the keys (W doesn't switch tools).
+- **Outliner, Unreal-style** (`OutlinePanel.tsx`): columns Name / Type / Texture (click to sort, again to reverse,
+  third time back to map order), type icons (folder, brush, brush entity, trigger, light, spawn, sound, point),
+  eye and lock per row (folders use the group's saved flags), hidden rows dimmed, locked italic, type filter (lights,
+  spawns, triggers, hidden, locked…), Shift-click ranges, Ctrl-click adds, double-click looks, F2/right-click
+  renames, drag onto a folder (or a section heading to take it out), right-click menu (look at, rename, select same
+  type, duplicate, delete, hide/isolate/lock, new folder from the selection, move to a folder, ungroup), counts.
+- **Dockable panels** (`Dock.tsx`, `dockState.ts`, `dockPanels.tsx`): every side panel lives in a dock area — left,
+  right (with a resizable lower part) or bottom — as tabs; drag a tab to another area (drop zones show) or onto the
+  view to float it; ⋯ menu: Float, Open in its own window, Dock left/right/right-lower/bottom, Close (View > Panels
+  reopens). Areas resize from their inner edge; floats move by the title bar, resize from the corner, double-click
+  the title docks. Layout kept per computer; View > Panel layout: Default / Hammer / Unreal-like, and Reset.
+  **Own windows**: `window.open("")` + a React portal (same state, so picks and edits stay in step; styles copied).
+  Works in the browser; for the app, `main.rs` now answers window.open of about:blank with a real window sharing
+  the page's webview configuration (`on_new_window` + `window_features`; everything else is refused, outside links
+  still go through /api/app/open-url). **Not tried in the Tauri app yet** — if a window can't open, the panel floats
+  instead and says so. Windows don't survive a reload (they come back as floats).
+  **P4: new panels go in `dockPanels.tsx` (one entry)** — the old side-tab array is gone; `setTab`/`openTab` show a
+  panel wherever it is.
+- **Hammer / J.A.C.K. gaps done**: Pick brushes (Hammer's "Solids": single brushes inside brush entities), a real
+  snap-to-grid toggle (Shift+W; the "Snap on" label is clickable; Alt flips it while held), Apply current texture
+  (Shift+T), Alt+Enter properties, arch start angle, Map information dialog (counts, textures, WADs, entities by kind),
+  Hide all point entities / triggers and zones / world brushes, brighter grid lines every 64 units in flat views
+  (Grid and snapping), the status hint follows the navigation preset.
+- **Left from the Hammer 3.5 / J.A.C.K. 1.1 list** (for whoever picks it up): texture *scale* lock separate from
+  texture lock; arch "add height" (spiral) and arch radius fields (needs `shapes::Arch` work); entity report filters
+  by key/value (P4's dialog); "Select previous/next" and selection history; Hammer's dotted/1024 grid styles and grid
+  intensity; sprite (.spr) drawing for env_sprite; texture application "Treat as one" across brushes exists (P2) but
+  not Hammer's "Align: fit to selection"; decal tool preview; overlapping-brush ("Check for problems: brushes inside
+  brushes") check; Carve "keep the cutter"/hollow-carve variants; J.A.C.K.'s "Smart edit" key value lists and its
+  prefab gallery thumbnails in 2D. In the dock: a second lower area on the left, and tab tear-off by dragging out of
+  the window (now ⋯ > Open in its own window).
+- Commit ce0e37a (UI + the main.rs window hook). Tried in Chromium on my own ports (8193/5293): RMB+W flies and keeps
+  the tool, speed note, Unreal layout, float, own window (portal with the outliner working), outliner columns.
+  Typecheck green on a clean export of HEAD + these files; main.rs builds on a clean export.
+- Slip: while testing I drove a Playwright tab in another agent's context ("agentz") to my page once before opening
+  my own tab; sorry if that disturbed agent Z.

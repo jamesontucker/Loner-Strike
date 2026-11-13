@@ -252,3 +252,12 @@ agent P4; **Missing** = not done yet; **n/a** = doesn't apply to GoldSrc or to u
 | Status bar: cursor coordinates, selection count and size | Have | I + P5 |
 | Tooltips on every tool with its key | Have | I |
 | Scripting / plugins in the editor | n/a for 1.0.0 | |
+
+### Round 3 additions (P5, 2026-11-12)
+| Feature | Status | Where |
+|---|---|---|
+| Camera navigation presets: Unreal (default), Blender, Hammer | Have | `navigation.ts`, `NavCamera.tsx` |
+| Unreal-style outliner (columns, sort, icons, eye/lock, folders, right-click) | Have | `OutlinePanel.tsx` |
+| Dockable panels: left/right/right-lower/bottom, tabs, resize, float, own window, layouts | Have | `Dock.tsx`, `dockState.ts`, `dockPanels.tsx` (own window not yet tried in the Tauri app) |
+| Hammer "Solids" selection, snap toggle, apply current texture, map information, hide kinds, 64-unit highlight lines, arch start angle | Have | P5 |
+| Texture scale lock, arch add-height/radius, entity report key filters, selection history, .spr sprites, brushes-inside-brushes check | Missing | see TOOLS-NOTES "P5 round 3" |
