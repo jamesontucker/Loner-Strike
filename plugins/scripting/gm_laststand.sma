@@ -45,7 +45,7 @@ enum { PH_IDLE = 0, PH_PREPARE, PH_WAVE, PH_BREAK, PH_OVER };
 enum { RL_FODDER = 0, RL_FLANK, RL_RANGED, RL_TANK, RL_COUNT };
 new const ROSTER[][] = { "zombie", "babycrab", "runner", "spitter", "brute", "vortigaunt", "assassin", "soldier", "controller", "stukabat" };
 new const ROSTER_ROLE[] = { RL_FODDER, RL_FODDER, RL_FLANK, RL_RANGED, RL_TANK, RL_RANGED, RL_FLANK, RL_TANK, RL_RANGED, RL_FLANK };
-new const ROSTER_FROM[] = { 1, 4, 3, 4, 5, 8, 9, 10, 12, 14 };
+new const ROSTER_FROM[] = { 1, 4, 2, 4, 5, 8, 9, 10, 12, 14 };
 new const ROSTER_HP[] = { 100, 12, 60, 120, 450, 150, 90, 300, 200, 60 };
 /* how often within its role (baby headcrabs are a sprinkle: small, fast and hard to hit) */
 new const ROSTER_WEIGHT[] = { 4, 1, 3, 3, 3, 2, 2, 2, 2, 1 };
@@ -92,6 +92,7 @@ new Float:g_doubleUntil, Float:g_instaUntil;
 new g_special = -1;
 new g_heavyLeft;
 new g_cAliveMax;
+new g_cTiers;
 #define ROUND_SOUND "buttons/bell1.wav"
 new g_record;
 new g_mapname[64];
@@ -193,6 +194,7 @@ public plugin_init()
 	g_cDefenders = register_cvar("lst_defenders", "4");
 	g_cWaveMoney = register_cvar("lst_wave_money", "800");
 	g_cAliveMax = register_cvar("lst_alive_max", "0");
+	g_cTiers = register_cvar("lst_tiers", "0");
 	g_cWaitHuman = register_cvar("lst_wait_human", "1");
 	g_cOverrun = register_cvar("lst_overrun", "15");
 	g_cLastChance = register_cvar("lst_last_chance", "30");
@@ -959,12 +961,21 @@ stock Float:hp_mult()
 	return round_hp(g_wave) * team_hp_factor() * diff_mult(true);
 }
 
-/* share of walking fodder that runs instead: none in rounds 1-2, +10 % a round, 95 % from 13 */
+/* share of walking fodder that runs instead: none in rounds 1-2, +10 % a round, at most 72 %
+   (walkers and tanks stay in the mix; late rounds get harder by health, and by tiers) */
 stock Float:fast_share(n)
 {
 	if (n < 3)
 		return 0.0;
-	return floatmin(0.1 * float(n - 2), n >= 13 ? 0.95 : 0.9);
+	return floatmin(0.1 * float(n - 2), 0.72);
+}
+
+/* a creature tier for the round (0 plain; 1 from round 10, 2 from 15, 3 from 20): a hook for
+   Y's visual/enrage tiers - sent as the creature's "tier" key once the game DLL reads it
+   (lst_tiers 1) */
+stock round_tier(n)
+{
+	return n >= 20 ? 3 : (n >= 15 ? 2 : (n >= 10 ? 1 : 0));
 }
 
 /* how many creatures may be alive at once (the rest come in as they die): lst_alive_max, or
@@ -1025,8 +1036,12 @@ stock start_wave(n)
 	{
 		/* a boss every 5 rounds from 10 (garg, then gonarch, in turn); a themed round every 6
 		   (a hound pack, then a snark swarm); a heavy or more from round 11 */
-		g_bossDone = !(n >= 10 && n % 5 == 0);
-		if (!g_bossDone)
+		/* a first boss moment at round 7 (a lone baby garg with a light escort), then the big
+		   ones every 5 from 10 */
+		g_bossDone = !((n >= 10 && n % 5 == 0) || n == 7);
+		if (n == 7)
+			copy(g_wBoss, charsmax(g_wBoss), EXTRA[EX_HEAVY]);
+		else if (!g_bossDone)
 			copy(g_wBoss, charsmax(g_wBoss), EXTRA[(n / 5) % 2 == 0 ? EX_GARG : EX_GONARCH]);
 		else if (n >= 6 && n % 6 == 0)
 			g_special = (n / 6) % 2 == 1 ? EX_HOUND : EX_SNARK;
@@ -1043,7 +1058,8 @@ stock start_wave(n)
 			send_revive(d);
 
 	/* how many: grows each wave, with the team's size and the difficulty */
-	new total = floatround((11.0 + 1.4 * float(n)) * team_count_factor() * diff_mult(false) * g_wCount);
+	/* (the first rounds a few more, tapering off by round 5: no dead time at the start) */
+	new total = floatround((11.0 + 1.4 * float(n) + float(max(5 - n, 0))) * team_count_factor() * diff_mult(false) * g_wCount);
 	/* a boss round: fewer grunts with the boss (it's the round's threat); a special round: a
 	   fast pack, fewer of them */
 	if (!g_bossDone)
@@ -1289,6 +1305,14 @@ stock spawn_creature(const type[], const Float:o[3], speed = 0)
 	if (!ent)
 		return 0;
 	DispatchKeyValue(ent, "type", type);
+	/* the round's tier (Y's visual/enrage tiers), once the game DLL reads the key */
+	new tier = round_tier(g_wave);
+	if (tier > 0 && get_pcvar_num(g_cTiers))
+	{
+		new v[4];
+		num_to_str(tier, v, charsmax(v));
+		DispatchKeyValue(ent, "tier", v);
+	}
 	if (speed > 0)
 	{
 		new v[8];
@@ -2203,7 +2227,7 @@ public ham_creature_killed(ent, killer, gib)
 		money += 50;
 	pay(killer, money);
 	maybe_powerup(ent);
-	if (equal(type, "boss") || equal(type, "gonarch"))
+	if (equal(type, "boss") || equal(type, "gonarch") || (equal(type, EXTRA[EX_HEAVY]) && g_wave == 7))
 	{
 		new name[32];
 		get_user_name(killer, name, charsmax(name));
