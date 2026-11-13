@@ -75,6 +75,109 @@ and all snippets, no warnings); `npm run test:studio` 14 passed; `npm run build`
 **For S (MCP):** new Studio routes if you wrap them: `POST /api/tools/studio/switch`,
 `GET /api/tools/studio/snippets`, `POST /api/tools/studio/snippet/:id`, `POST /api/tools/studio/snippet/:id/delete`.
 
+## 2026-11-13: graph version 3 (Blueprint staples), My library, QA fixes, a light app touch
+
+**Graph version 3** (versions 1 and 2 open as 3; nothing new is written for them). New optional
+`enums`, `structs`, `functions`, `macros`; a node or comment with `"graph": "<id>"` is on that
+Function's or Macro's own graph; library marks (`from: {lib, version}`) on those four.
+- **Graph tabs**: Event Graph plus a tab per open Function or Macro (double-click it in My mode or
+  double-click a Call/Macro node; × or middle-click closes; drag to reorder). The address is
+  `studio:<mode>/<tab>`, so Back and the crumbs (`Function: name`) step out of a tab.
+- **Functions** (own graph: Function Entry with the inputs, Return Node(s) with the outputs, local
+  variables reset each run, pure or with flow; Call / Call Pure nodes; Set Timer by Function).
+  No Delay/Repeat/Countdown/Menu inside a Function (they'd return early): use a Macro.
+  **Macros** (any number of flow and data pins, Delays allowed) are copied in where used before
+  the plugin is made (`expand.rs`); the debugger shows the Macro node for its copies.
+  **Collapse to Function / Macro** (right-click with a selection).
+- **Types**: arrays of every type (incl. structs), maps (text/number/player keys to plain types or
+  enums), structs, enums, vectors, timer handles, for variables, pins and Function members.
+  Generic nodes take the type of their first wire. In the plugin: arrays are cellarray handles
+  (every index clamped, at most 10000 items), maps tries, vectors and structs slots in rings (256
+  vectors, 64 structs; variables have their own slots), so — like text — they don't last through a
+  Delay unless kept in a variable (checked).
+- **Nodes** (220 now): Sequence, Do Once, Do N, Gate, Flip Flop, For Loop (+ with Break), While
+  (bounded), For Each over an array (with Break), Switch on number/text/enum, Is Valid (pure and
+  branch), Is Player, Is Creature, Equal, Select, Retriggerable Delay, Clear Timer, Is Timer Active,
+  Print String, Math Function / Clamp / Lerp / In Range / Number, mod and power, Text / Append /
+  Format Text (`[0]`..`[3]`) / Contains / Length / To Number / To Text, Make/Break Vector, Vector
+  Math, Scale, Length, Distance, Direction, Normalize, Position Of Player (feet, eyes, aim, aim
+  point, velocity), Position Of Entity, Set Position, Set Velocity, Make/Break Struct, Set Field,
+  Enum Value, Enum To Number, Make Array, Players Array, Add, Insert, Remove Item, Remove Index,
+  Set, Clear, Shuffle, Sort, Get, Length, Contains, Find, Random Item, Map Add/Remove/Clear/Find/
+  Contains/Length/Keys/Values.
+- **Watch values**: hover a pin for the value the game last saw there (an output: as the nodes it
+  feeds saw it).
+- **Security**: every new name (enum values, fields, members, Functions, Macros) goes through the
+  same allow-list; Pawn identifiers are ours (`lsg_fr0`, `lsg_mks0`, `lsg_mka12`); test
+  `hostile_v3_names_stay_data`.
+
+**My library** (user request): right-click a Function, Macro, struct or enum in My mode → Save to
+my library (name, description, category). The item holds the part and everything it needs (the
+structs and enums it uses, Functions and Macros it calls, mode variables it reads or sets), kept in
+`<app>/tools/studio/library/<id>.lib.json` (`/api/tools/studio/library`, `library/:id`,
+`library/:id/delete`), checked like a graph (graph data only; never events). Saving changed content
+again bumps its version. The My library panel lists them by category with search; double-click or
+drag one in: the same enum/struct (same values or fields) and variables (same name, type, scope)
+are used again, anything else comes in with fresh ids and is renamed on a clash. The copy remembers
+`{lib, version}`; when the library has a newer version, its Details offer "Update from library"
+(asks first; replaces the graph and pins in place, keeps the name; calls stay). Export as a
+`.lib.json` file, Import from files. Community sharing can reuse the same file later.
+Tested: `library_items_are_checked_and_versioned` (Rust), the library test in `npm run test:studio`
+(dependencies, merge, rename, update in place) and live: a mode built from a library item compiled
+with amxxpc and ran with 12 bots ("helper ran" ×12, "kits given: 12").
+
+**QA fixes** (requests below):
+1. Drop Weapon: a bot's weapon is now taken away instead of `drop` (which crashes this DLL for bots;
+   people still drop). Live: 17 bot drops, no crash.
+2. A mode with component nodes lists `gm_components.amxx` before its plugin in its plugins.ini
+   (`gen::needs`).
+3. Creature types a mode spawns are precached as the map loads (`plugin_precache` adds them to
+   `ls_creature_precache`; "all" when waves of components bring theirs). Live: Last Stand Lite on
+   ls_outpost precached 8 types and cleared wave 1 (it stalled before); its "laststand" pack still
+   isn't on ls_outpost (the components are in the BSP) and the flow carries on.
+5. A breakpoint inside a loop: while the world is paused nothing else runs; what would (the loop's
+   other rounds, what comes after, other events) waits in order and runs after Resume, pausing
+   again at each round's breakpoint. The page keeps "Paused" until `world_resumed` and trusts the
+   game's `paused` flag. Live: a breakpoint in For Each Player with 12 bots paused 12 times, each
+   Resume ran the next player, then "after loop".
+6. A Resume sent with a breakpoint change isn't lost: the plugin moves the command file aside
+   before reading it.
+7. The debugger shows the value the node uses: in debug builds each input is worked out once into
+   a local.
+Not done yet: 8 (zone nodes with a wired zone, Create Component for traps/extractions, In Zone on
+a created zone) and 9 (the small ones).
+Known limits: a breakpoint inside a Function pauses inside it, but the call's outputs were already
+read (they show the last values); breakpoints inside pure Functions are best avoided.
+
+**A light Loner-Strike touch** (user request; no change to category, pin, wire or text colours).
+Two options were tried; the restrained one (A) is in:
+squarer VGUI corners (4 px) and the app's bevel on nodes, a 1 px highlight along the top edge of
+title bars (it sits above the text, so title contrast is unchanged: white on the title colours is
+5.5–6.5:1 as before; node body text 13.8:1), a bone outline for the selection (the app's yellow now
+only means running/paused), an olive tint in the grid, the app's olive as the default comment
+colour, bevelled tabs. Option B added the app's bold caps for titles and a dark hatch on title bars
+(contrast only goes up) and was left out as too much. Pin and wire colours are untouched, so their
+colour-blind distinguishability is unchanged.
+
+| zoom | before | A (in) | B (not taken) |
+|---|---|---|---|
+| 100% | ![](x-img/skin-none-100.png) | ![](x-img/skin-a-100.png) | ![](x-img/skin-b-100.png) |
+| 60% | ![](x-img/skin-none-60.png) | ![](x-img/skin-a-60.png) | ![](x-img/skin-b-60.png) |
+
+**Live sim run of every node** (`every_node.graph.json`, debug build, 12 bots, 150 s): Maths for a
+For Loop with Break "0 2.50 0 0 / 1 3.25 1 1 / 2 4 1.41 4" (broke at 3), struct "Loadout: 40 kit
+Tank 0 0 0" (clamped field, enum name, vector field), Function Reward "Said: kill!" "Total: 5"
+(local reset each call) ×24, maps "12 yes 12 1", pure Function "Double: 8", Macro "gave: 6",
+arrays "5 items, has 7 yes at 0", vectors per player, Players Array, switch on enum, no errors
+other than the map's missing pack and teleport target.
+
+**Checks:** `cargo test` 695 passed (studio 41, incl. amxxpc compiles of every test graph release and
+debug with no warnings); `npm run test:studio` 20 passed; `npm run build` green (Studio chunk
+610.5 kB, start chunk 530.75 kB); the Playtest Playwright test passes (WebKit and Chromium).
+
+**For S (MCP):** new routes `GET /api/tools/studio/library`, `POST /api/tools/studio/library/:id`,
+`POST /api/tools/studio/library/:id/delete`.
+
 ## Requests from QA (2026-11-12, real tests on sims QA4/QA5; full report docs/notes/QA.md)
 1. **[Critical] Drop Weapon crashes HLDS** (bots on de_dust2, both tries; "Illegal termination of worker thread
    'CFileWriterThread'"). A bare `engclient_cmd(bot,"drop")` with no Studio mode crashes the LSPLAY brain+creatures mp.dll

@@ -104,6 +104,69 @@ pub fn check_snippet(v: &Value) -> Result<(), String> {
     }
 }
 
+/// The player's library of reusable parts (a Function, Macro, struct or enum with everything it
+/// needs): `<app>/tools/studio/library/<id>.lib.json`.
+pub fn library_dir() -> PathBuf {
+    crate::sys::app_dir().join("tools").join("studio").join("library")
+}
+
+pub const LIBRARY_SCHEMA: &str = "loner-strike/graph-library";
+const LIBRARY_KINDS: [&str; 4] = ["function", "macro", "struct", "enum"];
+
+/// A library item checked like a graph (graph data only, the same rules), its name,
+/// description and category included. Its nodes are all on its Functions' and Macros' graphs
+/// (an item never brings events), and its root is there.
+pub fn check_library_item(v: &Value) -> Result<(), String> {
+    if v.get("schema").and_then(Value::as_str) != Some(LIBRARY_SCHEMA) || v.get("version").and_then(Value::as_u64) != Some(1) {
+        return Err("That isn't a Game Mode Studio library item (or it's from a newer app).".into());
+    }
+    let s = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("");
+    if s("name").trim().is_empty() || !graph::valid_label(s("name"), 40) || !graph::valid_label(s("description"), 160) || !graph::valid_label(s("category"), 30) {
+        return Err("A library item needs a name (up to 40 letters, digits, spaces or plain punctuation), a short description and a category.".into());
+    }
+    let kind = s("kind");
+    if !LIBRARY_KINDS.contains(&kind) {
+        return Err("A library item is a Function, a Macro, a struct or an enum.".into());
+    }
+    let mut g = v.clone();
+    let root = s("root").to_string();
+    if let Some(o) = g.as_object_mut() {
+        for k in ["name", "description", "category", "kind", "root", "itemVersion"] {
+            o.remove(k);
+        }
+        o.insert("schema".into(), json!(graph::SCHEMA));
+        o.insert("version".into(), json!(graph::VERSION));
+        o.insert("mode".into(), json!({"id": "library", "name": "Library"}));
+    }
+    let g = graph::from_value(g)?;
+    let has_root = match kind {
+        "function" => g.functions.iter().any(|f| f.id == root),
+        "macro" => g.macros.iter().any(|m| m.id == root),
+        "struct" => g.structs.iter().any(|x| x.id == root),
+        _ => g.enums.iter().any(|x| x.id == root),
+    };
+    if !has_root {
+        return Err("That library item doesn't hold the part it's named after.".into());
+    }
+    if g.nodes.iter().any(|n| n.graph.is_none()) || !g.comments.iter().all(|c| c.graph.is_some()) {
+        return Err("A library item only holds Functions, Macros, structs and enums (no events).".into());
+    }
+    let bad: Vec<String> = graph::validate(&g).into_iter().filter(|p| p.level == "error").map(|p| p.message).collect();
+    match bad.first() {
+        Some(m) => Err(format!("That library item has a problem: {m}")),
+        None => Ok(()),
+    }
+}
+
+/// The item without its version (to tell a real change from saving the same again).
+fn library_body(v: &Value) -> Value {
+    let mut b = v.clone();
+    if let Some(o) = b.as_object_mut() {
+        o.remove("itemVersion");
+    }
+    b
+}
+
 fn graph_path(id: &str) -> PathBuf {
     graphs_dir().join(format!("{id}.graph.json"))
 }
@@ -287,7 +350,9 @@ pub fn register_mode(cfg: &Path, g: &Graph, plugin: &str) -> Result<(), String> 
         crate::safety::before("Game Mode Studio", "install a mode", &p);
         crate::sys::write_atomic(&p, t.as_bytes()).map_err(|e| format!("Couldn't install the mode ({e})."))
     };
-    write(gm.join(format!("{id}.plugins.ini")), &format!("; Made with the Game Mode Studio from {id}.graph.json: compile the graph again instead of editing this.{nl}{plugin}.amxx{nl}"))?;
+    // gm_components first when a node needs it (as the shipped modes list it)
+    let comps = if gen::needs(g).components { format!("gm_components.amxx{nl}") } else { String::new() };
+    write(gm.join(format!("{id}.plugins.ini")), &format!("; Made with the Game Mode Studio from {id}.graph.json: compile the graph again instead of editing this.{nl}{comps}{plugin}.amxx{nl}"))?;
     // the mode's settings (the graph's own; written every compile, after base.cfg each map)
     let mut cfg_text = format!("// {} (Game Mode Studio): its settings, written from the graph each compile. Runs after base.cfg.{nl}", gen::comment_text(&g.mode.name));
     let allowed = graph::allowed_settings();
@@ -724,6 +789,89 @@ async fn api_snippet_delete(UrlPath(id): UrlPath<String>, h: HeaderMap) -> Respo
     .await
 }
 
+async fn api_library() -> Response {
+    blocking(move || {
+        let list: Vec<Value> = std::fs::read_dir(library_dir())
+            .map(|d| {
+                d.flatten()
+                    .filter_map(|e| {
+                        let name = e.file_name().to_string_lossy().to_string();
+                        let id = name.strip_suffix(".lib.json")?.to_string();
+                        if !graph::valid_mode_id(&id) || e.metadata().ok()?.len() > MAX_GRAPH_BYTES {
+                            return None;
+                        }
+                        let v: Value = serde_json::from_str(&std::fs::read_to_string(e.path()).ok()?).ok()?;
+                        check_library_item(&v).ok()?;
+                        Some(json!({"id": id, "item": v}))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(json!({"items": list}))
+    })
+    .await
+}
+
+/// Saves a library item; its version goes up by one when what it holds changed (the copies in
+/// modes remember the version they came from).
+pub fn save_library_item(id: &str, item: &Value) -> Result<u64, String> {
+    save_library_item_in(&library_dir(), id, item)
+}
+
+pub fn save_library_item_in(dir: &Path, id: &str, item: &Value) -> Result<u64, String> {
+    if !graph::valid_mode_id(id) {
+        return Err("A library item's id is 2 to 24 small letters, digits or _.".into());
+    }
+    check_library_item(item)?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("Couldn't save to the library ({e})."))?;
+    let path = dir.join(format!("{id}.lib.json"));
+    let old: Option<Value> = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok());
+    let version = match &old {
+        Some(o) if library_body(o) == library_body(item) => o.get("itemVersion").and_then(Value::as_u64).unwrap_or(1),
+        Some(o) => o.get("itemVersion").and_then(Value::as_u64).unwrap_or(1) + 1,
+        None => 1,
+    };
+    let mut v = item.clone();
+    v["itemVersion"] = json!(version);
+    let text = serde_json::to_string_pretty(&v).map_err(|_| INTERNAL.to_string())?;
+    if text.len() as u64 > MAX_GRAPH_BYTES {
+        return Err("That library item is too big.".into());
+    }
+    crate::safety::before("Game Mode Studio", "save to the library", &path);
+    crate::sys::write_atomic(&path, text.as_bytes()).map_err(|e| format!("Couldn't save to the library ({e})."))?;
+    Ok(version)
+}
+
+async fn api_library_save(UrlPath(id): UrlPath<String>, h: HeaderMap, Json(body): Json<Value>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || {
+        let v = body.get("item").cloned().unwrap_or(Value::Null);
+        let version = save_library_item(&id, &v)?;
+        Ok(json!({"ok": true, "version": version}))
+    })
+    .await
+}
+
+async fn api_library_delete(UrlPath(id): UrlPath<String>, h: HeaderMap) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || {
+        if !graph::valid_mode_id(&id) {
+            return Err("That isn't a library item.".into());
+        }
+        let path = library_dir().join(format!("{id}.lib.json"));
+        crate::safety::before("Game Mode Studio", "delete from the library", &path);
+        match std::fs::remove_file(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("Couldn't delete the library item ({e}).")),
+            _ => Ok(json!({"ok": true})),
+        }
+    })
+    .await
+}
+
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/tools/studio/status", get(api_status))
@@ -737,6 +885,9 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/studio/snippets", get(api_snippets))
         .route("/api/tools/studio/snippet/:id", post(api_snippet_save))
         .route("/api/tools/studio/snippet/:id/delete", post(api_snippet_delete))
+        .route("/api/tools/studio/library", get(api_library))
+        .route("/api/tools/studio/library/:id", post(api_library_save))
+        .route("/api/tools/studio/library/:id/delete", post(api_library_delete))
         .route("/api/tools/studio/playtest", post(api_playtest))
         .route("/api/tools/studio/switch", post(api_switch))
         .route("/api/tools/studio/uninstall/:id", post(api_uninstall))
@@ -773,6 +924,37 @@ mod tests {
         o.insert("version".into(), json!(2));
         o.insert("mode".into(), json!({"id": format!("sn_{id}").chars().take(24).collect::<String>(), "name": "Snippet"}));
         graph::from_value(g).unwrap()
+    }
+
+    /// A library item: the every-node graph's Function "Reward" with what it needs, saved twice
+    /// (the same: one version; changed: the next), and hostile text refused.
+    #[test]
+    fn library_items_are_checked_and_versioned() {
+        let every: Value = serde_json::from_str(include_str!("testdata/every_node.graph.json")).unwrap();
+        let reward_nodes: Vec<Value> = every["nodes"].as_array().unwrap().iter().filter(|n| n["graph"] == "fa").cloned().collect();
+        let ids: Vec<&str> = reward_nodes.iter().map(|n| n["id"].as_str().unwrap()).collect();
+        let edges: Vec<Value> = every["edges"].as_array().unwrap().iter().filter(|e| ids.contains(&e["from"]["node"].as_str().unwrap()) && ids.contains(&e["to"]["node"].as_str().unwrap())).cloned().collect();
+        let item = json!({"schema": LIBRARY_SCHEMA, "version": 1, "name": "Reward", "description": "Gives and counts", "category": "Scoring", "kind": "function", "root": "fa",
+            "functions": [every["functions"][0].clone()], "nodes": reward_nodes, "edges": edges});
+        check_library_item(&item).unwrap();
+        let dir = temp("library");
+        assert_eq!(save_library_item_in(&dir, "reward", &item).unwrap(), 1);
+        assert_eq!(save_library_item_in(&dir, "reward", &item).unwrap(), 1, "the same again: the same version");
+        let mut changed = item.clone();
+        changed["description"] = json!("Gives, counts, says");
+        assert_eq!(save_library_item_in(&dir, "reward", &changed).unwrap(), 2);
+        // never events, never code
+        let mut bad = item.clone();
+        bad["nodes"].as_array_mut().unwrap().push(json!({"id": "ev", "type": "event.round_started"}));
+        assert!(check_library_item(&bad).is_err());
+        let mut bad = item.clone();
+        bad["name"] = json!("x\"); server_cmd(\"quit");
+        assert!(check_library_item(&bad).is_err());
+        let mut bad = item.clone();
+        bad["root"] = json!("nope");
+        assert!(check_library_item(&bad).is_err());
+        assert!(save_library_item_in(&dir, "../x", &item).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

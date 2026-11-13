@@ -221,7 +221,7 @@ export function removeVariable(g: Graph, id: string): Graph {
 }
 
 /** A fresh id for a variable, local, Function, Macro, struct or enum. */
-function freshPartId(g: Graph, prefix: string): string {
+export function freshPartId(g: Graph, prefix: string): string {
   const used = new Set([...allVariables(g).map((x) => x.id), ...(g.functions ?? []).map((x) => x.id), ...(g.macros ?? []).map((x) => x.id), ...(g.structs ?? []).map((x) => x.id), ...(g.enums ?? []).map((x) => x.id)]);
   for (let i = 1; ; i++) if (!used.has(`${prefix}${i}`)) return `${prefix}${i}`;
 }
@@ -231,7 +231,7 @@ export function addLocal(g: Graph, fn: string, v: Omit<GVariable, "id">): { grap
   return { graph: { ...g, functions: (g.functions ?? []).map((f) => (f.id === fn ? { ...f, locals: [...(f.locals ?? []), { ...v, id }] } : f)) }, id };
 }
 
-const uniqueName = (taken: string[], base: string) => {
+export const uniqueName = (taken: string[], base: string) => {
   let name = base;
   for (let n = 2; taken.some((t) => t.toLowerCase() === name.toLowerCase()); n++) name = `${base.slice(0, 26)} ${n}`;
   return name;

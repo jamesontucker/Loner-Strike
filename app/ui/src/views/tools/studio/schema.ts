@@ -68,10 +68,13 @@ export const variableSchema = z
     "the start value doesn't fit the type",
   );
 
+/** Where a part came from: a library item and its version ("Update from library"). */
+const libFrom = z.object({ lib: modeId, version: z.number().int().min(0).max(100000) }).optional();
+
 /** A struct's field, a Function's or Macro's input or output. */
 export const memberSchema = z.object({ id, name: label(30), type: z.union([typeString, z.literal("exec")]) });
-export const enumSchema = z.object({ id, name: label(30), values: z.array(label(30)).max(32) });
-export const structSchema = z.object({ id, name: label(30), fields: z.array(memberSchema).max(12) });
+export const enumSchema = z.object({ id, name: label(30), values: z.array(label(30)).max(32), from: libFrom });
+export const structSchema = z.object({ id, name: label(30), fields: z.array(memberSchema).max(12), from: libFrom });
 export const functionSchema = z.object({
   id,
   name: label(30),
@@ -79,8 +82,9 @@ export const functionSchema = z.object({
   inputs: z.array(memberSchema).max(12).default([]),
   outputs: z.array(memberSchema).max(12).default([]),
   locals: z.array(variableSchema).max(16).optional(),
+  from: libFrom,
 });
-export const macroSchema = z.object({ id, name: label(30), inputs: z.array(memberSchema).max(12).default([]), outputs: z.array(memberSchema).max(12).default([]) });
+export const macroSchema = z.object({ id, name: label(30), inputs: z.array(memberSchema).max(12).default([]), outputs: z.array(memberSchema).max(12).default([]), from: libFrom });
 
 export const graphSchema = z.object({
   schema: z.literal(SCHEMA),

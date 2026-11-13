@@ -36,6 +36,11 @@ new g_lsdPhase[8] = "freeze"
 new g_lsdIn[600]
 new g_lsdPaused = -1, g_lsdSkip = -1
 new g_lsdCtx[LSG_CTX]
+// while the world is paused nothing else runs: what would (a loop's other rounds, what comes
+// after the paused node, other events) waits here in order and runs after Resume, so a
+// breakpoint inside a loop pauses that round and the loop carries on from there
+#define LSD_Q 128
+new g_lsdQ[LSD_Q][LSG_CTX + 1], g_lsdQn, g_lsdQins
 new Float:g_lsdPausedAt
 new g_lsdBotStop
 // the round clock: Pawn can't stop the game's own clock safely (ReGameDLL's rules object isn't
@@ -259,13 +264,37 @@ stock lsd_in_team(const name[], team)
 	lsd_in_raw(name, q)
 }
 
+stock lsd_defer(n, const ctx[])
+{
+	if (g_lsdQn >= LSD_Q)
+	{
+		lsd_emitf("^"e^":^"node_error^",^"node^":^"%s^",^"message^":^"Too much waiting while paused: this run was dropped.^"", g_lsdIds[n])
+		return
+	}
+	for (new q = g_lsdQn; q > g_lsdQins; q--)
+		for (new k = 0; k <= LSG_CTX; k++)
+			g_lsdQ[q][k] = g_lsdQ[q - 1][k]
+	g_lsdQ[g_lsdQins][0] = n
+	for (new k = 0; k < LSG_CTX; k++)
+		g_lsdQ[g_lsdQins][k + 1] = ctx[k]
+	g_lsdQins++
+	g_lsdQn++
+}
+
 stock bool:lsd_enter(n, const ctx[])
 {
 	if (g_lsdSkip == n)
 		g_lsdSkip = -1
-	else if (g_lsdBp[n] && g_lsdPaused < 0)
+	else if (g_lsdPaused >= 0)
+	{
+		lsd_defer(n, ctx)
+		return true
+	}
+	else if (g_lsdBp[n])
 	{
 		g_lsdPaused = n
+		// (what waits from now on goes before what was already waiting)
+		g_lsdQins = 0
 		for (new i = 0; i < LSG_CTX; i++)
 			g_lsdCtx[i] = ctx[i]
 		lsd_emitf("^"e^":^"breakpoint_hit^",^"node^":^"%s^",^"inputs^":{%s}", g_lsdIds[n], g_lsdIn)
@@ -428,6 +457,18 @@ stock lsd_resume()
 	for (new i = 0; i < LSG_CTX; i++)
 		ctx[i] = g_lsdCtx[i]
 	lsd_call(n, ctx)
+	// then what waited, in order, until it's all run or another breakpoint pauses again
+	while (g_lsdPaused < 0 && g_lsdQn > 0)
+	{
+		new m = g_lsdQ[0][0]
+		for (new i = 0; i < LSG_CTX; i++)
+			ctx[i] = g_lsdQ[0][i + 1]
+		for (new q = 1; q < g_lsdQn; q++)
+			for (new k = 0; k <= LSG_CTX; k++)
+				g_lsdQ[q - 1][k] = g_lsdQ[q][k]
+		g_lsdQn--
+		lsd_call(m, ctx)
+	}
 }
 
 public lsd_poll()
@@ -443,7 +484,14 @@ public lsd_poll()
 		lsd_unhold()
 	if (!file_exists(g_lsdCmd))
 		return
-	new f = fopen(g_lsdCmd, "rt")
+	// taken aside first: a command the app adds while this reads goes into a new file, not lost
+	new take[170]
+	formatex(take, charsmax(take), "%s.take", g_lsdCmd)
+	if (file_exists(take))
+		delete_file(take)
+	if (!rename_file(g_lsdCmd, take, 1))
+		return
+	new f = fopen(take, "rt")
 	if (!f)
 		return
 	new line[600], bool:resume
@@ -459,7 +507,7 @@ public lsd_poll()
 			lsd_set_bps(line[2])
 	}
 	fclose(f)
-	delete_file(g_lsdCmd)
+	delete_file(take)
 	lsd_emitf("^"e^":^"commands^",^"resume^":%s", g_lsdBool[resume ? 1 : 0])
 	if (resume)
 		lsd_resume()
@@ -562,6 +610,34 @@ stock lsg_bot_goto(bot, const name[], secs)
 
 public lsg_bot_free(task)
 	ls_bot_release(LSG_TASK - 100 - task)
+
+// Drop Weapon: a person drops it; a bot loses it (a bot's "drop" can crash this game's DLL)
+stock lsg_drop(id)
+{
+	if (!is_user_bot(id))
+	{
+		engclient_cmd(id, "drop")
+		return
+	}
+	new wid = get_user_weapon(id)
+	if (!wid || wid == CSW_KNIFE)
+		return
+	new name[32]
+	get_weaponname(wid, name, charsmax(name))
+	new ent = -1
+	while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", name)) > 0)
+	{
+		if (pev(ent, pev_owner) != id)
+			continue
+		ExecuteHamB(Ham_Weapon_RetireWeapon, ent)
+		if (ExecuteHamB(Ham_RemovePlayerItem, id, ent))
+		{
+			set_pev(id, pev_weapons, pev(id, pev_weapons) & ~(1 << wid))
+			ExecuteHamB(Ham_Item_Kill, ent)
+		}
+		break
+	}
+}
 
 stock Float:lsg_mod(Float:a, Float:b)
 {
@@ -809,12 +885,14 @@ lsg_n2(ctx[])
 // Is Team (c)
 lsg_n3(ctx[])
 {
+	new lsi0 = ctx[0]
+	new lsi1 = 2
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_team("Team", 2)
+	lsd_in_player("Player", lsi0)
+	lsd_in_team("Team", lsi1)
 	if (lsd_enter(3, ctx))
 		return
-	new ok = ((lsg_team(ctx[0]) == 2) ? 1 : 0)
+	new ok = ((lsg_team(lsi0) == lsi1) ? 1 : 0)
 	lsd_exit(3, g_lsdBool[ok])
 	if (ok)
 		lsg_n4(ctx)
@@ -825,11 +903,12 @@ lsg_n3(ctx[])
 // Give Weapon (g)
 lsg_n4(ctx[])
 {
+	new lsi0 = ctx[1]
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(4, ctx))
 		return
-	if (ls_give_weapon(ctx[1], "awp", 30))
+	if (ls_give_weapon(lsi0, "awp", 30))
 		lsd_exit(4, "given")
 	else
 		lsd_error(4, "Not given: that player is dead or already has one.")
@@ -839,23 +918,25 @@ lsg_n4(ctx[])
 // End Round (e)
 lsg_n5(ctx[])
 {
+	new lsi0 = 2
 	lsd_begin()
-	lsd_in_team("Winner", 2)
+	lsd_in_team("Winner", lsi0)
 	if (lsd_enter(5, ctx))
 		return
-	server_cmd("endround CT")
-	lsd_exit(5, "Counter-Terrorists win")
+	lsg_end_round(lsi0)
+	lsd_exit(5, "ended")
 }
 
 // End Round (e2)
 lsg_n6(ctx[])
 {
+	new lsi0 = 0
 	lsd_begin()
-	lsd_in_team("Winner", 0)
+	lsd_in_team("Winner", lsi0)
 	if (lsd_enter(6, ctx))
 		return
-	server_cmd("endround")
-	lsd_exit(6, "draw")
+	lsg_end_round(lsi0)
+	lsd_exit(6, "ended")
 }
 
 lsd_call(n, const data[])

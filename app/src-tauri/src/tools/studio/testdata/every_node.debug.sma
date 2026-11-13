@@ -74,6 +74,11 @@ new g_lsdPhase[8] = "freeze"
 new g_lsdIn[600]
 new g_lsdPaused = -1, g_lsdSkip = -1
 new g_lsdCtx[LSG_CTX]
+// while the world is paused nothing else runs: what would (a loop's other rounds, what comes
+// after the paused node, other events) waits here in order and runs after Resume, so a
+// breakpoint inside a loop pauses that round and the loop carries on from there
+#define LSD_Q 128
+new g_lsdQ[LSD_Q][LSG_CTX + 1], g_lsdQn, g_lsdQins
 new Float:g_lsdPausedAt
 new g_lsdBotStop
 // the round clock: Pawn can't stop the game's own clock safely (ReGameDLL's rules object isn't
@@ -297,13 +302,37 @@ stock lsd_in_team(const name[], team)
 	lsd_in_raw(name, q)
 }
 
+stock lsd_defer(n, const ctx[])
+{
+	if (g_lsdQn >= LSD_Q)
+	{
+		lsd_emitf("^"e^":^"node_error^",^"node^":^"%s^",^"message^":^"Too much waiting while paused: this run was dropped.^"", g_lsdIds[n])
+		return
+	}
+	for (new q = g_lsdQn; q > g_lsdQins; q--)
+		for (new k = 0; k <= LSG_CTX; k++)
+			g_lsdQ[q][k] = g_lsdQ[q - 1][k]
+	g_lsdQ[g_lsdQins][0] = n
+	for (new k = 0; k < LSG_CTX; k++)
+		g_lsdQ[g_lsdQins][k + 1] = ctx[k]
+	g_lsdQins++
+	g_lsdQn++
+}
+
 stock bool:lsd_enter(n, const ctx[])
 {
 	if (g_lsdSkip == n)
 		g_lsdSkip = -1
-	else if (g_lsdBp[n] && g_lsdPaused < 0)
+	else if (g_lsdPaused >= 0)
+	{
+		lsd_defer(n, ctx)
+		return true
+	}
+	else if (g_lsdBp[n])
 	{
 		g_lsdPaused = n
+		// (what waits from now on goes before what was already waiting)
+		g_lsdQins = 0
 		for (new i = 0; i < LSG_CTX; i++)
 			g_lsdCtx[i] = ctx[i]
 		lsd_emitf("^"e^":^"breakpoint_hit^",^"node^":^"%s^",^"inputs^":{%s}", g_lsdIds[n], g_lsdIn)
@@ -466,6 +495,18 @@ stock lsd_resume()
 	for (new i = 0; i < LSG_CTX; i++)
 		ctx[i] = g_lsdCtx[i]
 	lsd_call(n, ctx)
+	// then what waited, in order, until it's all run or another breakpoint pauses again
+	while (g_lsdPaused < 0 && g_lsdQn > 0)
+	{
+		new m = g_lsdQ[0][0]
+		for (new i = 0; i < LSG_CTX; i++)
+			ctx[i] = g_lsdQ[0][i + 1]
+		for (new q = 1; q < g_lsdQn; q++)
+			for (new k = 0; k <= LSG_CTX; k++)
+				g_lsdQ[q - 1][k] = g_lsdQ[q][k]
+		g_lsdQn--
+		lsd_call(m, ctx)
+	}
 }
 
 public lsd_poll()
@@ -481,7 +522,14 @@ public lsd_poll()
 		lsd_unhold()
 	if (!file_exists(g_lsdCmd))
 		return
-	new f = fopen(g_lsdCmd, "rt")
+	// taken aside first: a command the app adds while this reads goes into a new file, not lost
+	new take[170]
+	formatex(take, charsmax(take), "%s.take", g_lsdCmd)
+	if (file_exists(take))
+		delete_file(take)
+	if (!rename_file(g_lsdCmd, take, 1))
+		return
+	new f = fopen(take, "rt")
 	if (!f)
 		return
 	new line[600], bool:resume
@@ -497,7 +545,7 @@ public lsd_poll()
 			lsd_set_bps(line[2])
 	}
 	fclose(f)
-	delete_file(g_lsdCmd)
+	delete_file(take)
 	lsd_emitf("^"e^":^"commands^",^"resume^":%s", g_lsdBool[resume ? 1 : 0])
 	if (resume)
 		lsd_resume()
@@ -600,6 +648,34 @@ stock lsg_bot_goto(bot, const name[], secs)
 
 public lsg_bot_free(task)
 	ls_bot_release(LSG_TASK - 100 - task)
+
+// Drop Weapon: a person drops it; a bot loses it (a bot's "drop" can crash this game's DLL)
+stock lsg_drop(id)
+{
+	if (!is_user_bot(id))
+	{
+		engclient_cmd(id, "drop")
+		return
+	}
+	new wid = get_user_weapon(id)
+	if (!wid || wid == CSW_KNIFE)
+		return
+	new name[32]
+	get_weaponname(wid, name, charsmax(name))
+	new ent = -1
+	while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", name)) > 0)
+	{
+		if (pev(ent, pev_owner) != id)
+			continue
+		ExecuteHamB(Ham_Weapon_RetireWeapon, ent)
+		if (ExecuteHamB(Ham_RemovePlayerItem, id, ent))
+		{
+			set_pev(id, pev_weapons, pev(id, pev_weapons) & ~(1 << wid))
+			ExecuteHamB(Ham_Item_Kill, ent)
+		}
+		break
+	}
+}
 
 stock Float:lsg_mod(Float:a, Float:b)
 {
@@ -2143,6 +2219,40 @@ public lsg_clock_tick()
 	}
 }
 
+// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)
+public plugin_precache()
+{
+	if (get_cvar_pointer("ls_creature_precache"))
+		lsg_precache_types("all")
+}
+
+stock lsg_precache_types(const want[])
+{
+	new cur[256], w[32], rest[256], padded[280], pw[36]
+	get_cvar_string("ls_creature_precache", cur, charsmax(cur))
+	if (equali(cur, "all"))
+		return
+	if (equali(want, "all"))
+	{
+		set_cvar_string("ls_creature_precache", "all")
+		return
+	}
+	copy(rest, charsmax(rest), want)
+	while (rest[0])
+	{
+		strtok(rest, w, charsmax(w), rest, charsmax(rest), ' ')
+		formatex(padded, charsmax(padded), " %s ", cur)
+		formatex(pw, charsmax(pw), " %s ", w)
+		if (w[0] && containi(padded, pw) < 0)
+		{
+			if (cur[0])
+				add(cur, charsmax(cur), " ")
+			add(cur, charsmax(cur), w)
+		}
+	}
+	set_cvar_string("ls_creature_precache", cur)
+}
+
 public plugin_init()
 {
 	ls_register_mode(LSG_MODE, "Every Node", "1.0", "Game Mode Studio")
@@ -2556,11 +2666,12 @@ lsg_n0(ctx[])
 // Set Variable (rs_set)
 lsg_n1(ctx[])
 {
+	new Float:lsi2 = ((g_v1) + (1.0))
 	lsd_begin()
-	lsd_in_number("Value", ((g_v1) + (1.0)))
+	lsd_in_number("Value", lsi2)
 	if (lsd_enter(1, ctx))
 		return
-	g_v1 = ((g_v1) + (1.0))
+	g_v1 = lsi2
 	lsd_exit(1, fmt("%.2f", g_v1))
 	lsg_n2(ctx)
 }
@@ -2616,13 +2727,14 @@ lsg_n3(ctx[])
 // Repeat (rs_rep)
 lsg_n4(ctx[])
 {
+	new Float:lsi0 = 10.0
 	lsd_begin()
-	lsd_in_number("Every (s)", 10.0)
+	lsd_in_number("Every (s)", lsi0)
 	if (lsd_enter(4, ctx))
 		return
 	remove_task(LSG_TASK + 4)
 	g_lsgLeft[4] = 3
-	set_task(floatmax(10.0, 0.1), "lsg_t4", LSG_TASK + 4, ctx, LSG_CTX)
+	set_task(floatmax(lsi0, 0.1), "lsg_t4", LSG_TASK + 4, ctx, LSG_CTX)
 	lsd_exit(4, "started")
 	lsg_n6(ctx)
 }
@@ -2649,22 +2761,24 @@ public lsg_t4(const data[], task)
 // Show HUD Text (rs_hud)
 lsg_n5(ctx[])
 {
+	new Float:lsi1 = float(ls_count_alive(CsTeams:(0)))
 	lsd_begin()
-	lsd_in_number("Value", float(ls_count_alive(CsTeams:(0))))
+	lsd_in_number("Value", lsi1)
 	if (lsd_enter(5, ctx))
 		return
-	ls_hud(0, LsHud:2, 5.0, "%s %d", "Alive:", floatround(float(ls_count_alive(CsTeams:(0)))))
+	ls_hud(0, LsHud:2, 5.0, "%s %d", "Alive:", floatround(lsi1))
 	lsd_exit(5, "shown")
 }
 
 // Delay (rs_delay)
 lsg_n6(ctx[])
 {
+	new Float:lsi0 = 5.0
 	lsd_begin()
-	lsd_in_number("Seconds", 5.0)
+	lsd_in_number("Seconds", lsi0)
 	if (lsd_enter(6, ctx))
 		return
-	set_task(floatmax(5.0, 0.1), "lsg_t6", LSG_TASK + 6, ctx, LSG_CTX)
+	set_task(floatmax(lsi0, 0.1), "lsg_t6", LSG_TASK + 6, ctx, LSG_CTX)
 	lsd_exit(6, "waiting")
 }
 
@@ -2686,15 +2800,16 @@ public lsg_t6(const data[], task)
 // Start Wave (rs_wave)
 lsg_n7(ctx[])
 {
+	new Float:lsi0 = 0.0
 	lsd_begin()
-	lsd_in_number("Wave", 0.0)
+	lsd_in_number("Wave", lsi0)
 	if (lsd_enter(7, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(7, "gm_components isn't running on this server.")
 	else
 	{
-		ls_wave_start(max(floatround(0.0), 0))
+		ls_wave_start(max(floatround(lsi0), 0))
 		lsd_exit(7, "done")
 	}
 	lsg_n8(ctx)
@@ -2744,11 +2859,12 @@ lsg_n10(ctx[])
 // Branch (pk_br)
 lsg_n11(ctx[])
 {
+	new lsi0 = ctx[2]
 	lsd_begin()
-	lsd_in_bool("Condition", ctx[2])
+	lsd_in_bool("Condition", lsi0)
 	if (lsd_enter(11, ctx))
 		return
-	new ok = ((((ctx[2]) ? 1 : 0)) ? 1 : 0)
+	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
 	lsd_exit(11, g_lsdBool[ok])
 	if (ok)
 		lsg_n12(ctx)
@@ -2759,37 +2875,43 @@ lsg_n11(ctx[])
 // Add To Variable (pk_add)
 lsg_n12(ctx[])
 {
+	new lsi0 = ctx[1]
+	new Float:lsi2 = 2.0
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
-	lsd_in_number("Amount", 2.0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Amount", lsi2)
 	if (lsd_enter(12, ctx))
 		return
-	g_pv0[lsg_slot(ctx[1])] += 2.0
-	lsd_exit(12, fmt("%.2f", g_pv0[lsg_slot(ctx[1])]))
+	g_pv0[lsg_slot(lsi0)] += lsi2
+	lsd_exit(12, fmt("%.2f", g_pv0[lsg_slot(lsi0)]))
 	lsg_n14(ctx)
 }
 
 // Add To Variable (pk_add2)
 lsg_n13(ctx[])
 {
+	new lsi0 = ctx[1]
+	new Float:lsi2 = lsg_random(1.0, 3.0, 0)
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
-	lsd_in_number("Amount", lsg_random(1.0, 3.0, 0))
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Amount", lsi2)
 	if (lsd_enter(13, ctx))
 		return
-	g_pv0[lsg_slot(ctx[1])] += lsg_random(1.0, 3.0, 0)
-	lsd_exit(13, fmt("%.2f", g_pv0[lsg_slot(ctx[1])]))
+	g_pv0[lsg_slot(lsi0)] += lsi2
+	lsd_exit(13, fmt("%.2f", g_pv0[lsg_slot(lsi0)]))
 }
 
 // Is Team (pk_team)
 lsg_n14(ctx[])
 {
+	new lsi0 = ctx[1]
+	new lsi1 = 2
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
-	lsd_in_team("Team", 2)
+	lsd_in_player("Player", lsi0)
+	lsd_in_team("Team", lsi1)
 	if (lsd_enter(14, ctx))
 		return
-	new ok = ((lsg_team(ctx[1]) == 2) ? 1 : 0)
+	new ok = ((lsg_team(lsi0) == lsi1) ? 1 : 0)
 	lsd_exit(14, g_lsdBool[ok])
 	if (ok)
 		lsg_n15(ctx)
@@ -2800,11 +2922,12 @@ lsg_n14(ctx[])
 // Give Weapon (pk_give)
 lsg_n15(ctx[])
 {
+	new lsi0 = ctx[1]
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(15, ctx))
 		return
-	if (ls_give_weapon(ctx[1], "m4a1", 60))
+	if (ls_give_weapon(lsi0, "m4a1", 60))
 		lsd_exit(15, "given")
 	else
 		lsd_error(15, "Not given: that player is dead or already has one.")
@@ -2814,16 +2937,18 @@ lsg_n15(ctx[])
 // Set Health (pk_seth)
 lsg_n16(ctx[])
 {
+	new lsi0 = ctx[1]
+	new Float:lsi1 = ((lsg_health(ctx[1])) + (10.0))
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
-	lsd_in_number("Health", ((lsg_health(ctx[1])) + (10.0)))
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Health", lsi1)
 	if (lsd_enter(16, ctx))
 		return
-	if (!ls_alive(ctx[1]))
+	if (!ls_alive(lsi0))
 		lsd_error(16, "Nothing done: that player isn't alive.")
 	else
 	{
-		ls_set_health(ctx[1], max(floatround(((lsg_health(ctx[1])) + (10.0))), 1))
+		ls_set_health(lsi0, max(floatround(lsi1), 1))
 		lsd_exit(16, "set")
 	}
 }
@@ -2831,12 +2956,15 @@ lsg_n16(ctx[])
 // Show HUD Text (pk_hud)
 lsg_n17(ctx[])
 {
+	new lsi0 = ctx[1]
+	new lsi1[128]
+	copy(lsi1, 127, lsg_name(ctx[0]))
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
-	lsd_in_text("Value", lsg_name(ctx[0]))
+	lsd_in_player("Player", lsi0)
+	lsd_in_text("Value", lsi1)
 	if (lsd_enter(17, ctx))
 		return
-	ls_hud(ctx[1], LsHud:3, 4.0, "%s %s", "You got", lsg_name(ctx[0]))
+	ls_hud(lsi0, LsHud:3, 4.0, "%s %s", "You got", lsi1)
 	lsd_exit(17, "shown")
 }
 
@@ -2853,15 +2981,16 @@ lsg_n18(ctx[])
 // Strip Weapons (ps_strip)
 lsg_n19(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(19, ctx))
 		return
-	if (!ls_alive(ctx[0]))
+	if (!ls_alive(lsi0))
 		lsd_error(19, "Nothing done: that player isn't alive.")
 	else
 	{
-		ls_strip(ctx[0], true)
+		ls_strip(lsi0, true)
 		lsd_exit(19, "stripped")
 	}
 	lsg_n20(ctx)
@@ -2870,16 +2999,18 @@ lsg_n19(ctx[])
 // Set Armor (ps_arm)
 lsg_n20(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 50.0
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_number("Armor", 50.0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Armor", lsi1)
 	if (lsd_enter(20, ctx))
 		return
-	if (!ls_alive(ctx[0]))
+	if (!ls_alive(lsi0))
 		lsd_error(20, "Nothing done: that player isn't alive.")
 	else
 	{
-		ls_set_armor(ctx[0], max(floatround(50.0), 0), true)
+		ls_set_armor(lsi0, max(floatround(lsi1), 0), true)
 		lsd_exit(20, "set")
 	}
 	lsg_n21(ctx)
@@ -2888,16 +3019,18 @@ lsg_n20(ctx[])
 // Set Speed (ps_spd)
 lsg_n21(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 300.0
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_number("Speed", 300.0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Speed", lsi1)
 	if (lsd_enter(21, ctx))
 		return
-	if (!ls_alive(ctx[0]))
+	if (!ls_alive(lsi0))
 		lsd_error(21, "Nothing done: that player isn't alive.")
 	else
 	{
-		set_user_maxspeed(ctx[0], 300.0)
+		set_user_maxspeed(lsi0, lsi1)
 		lsd_exit(21, "set")
 	}
 	lsg_n22(ctx)
@@ -2906,16 +3039,18 @@ lsg_n21(ctx[])
 // Set Team (ps_team)
 lsg_n22(ctx[])
 {
+	new lsi0 = ctx[0]
+	new lsi1 = 1
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_team("Team", 1)
+	lsd_in_player("Player", lsi0)
+	lsd_in_team("Team", lsi1)
 	if (lsd_enter(22, ctx))
 		return
-	if (ctx[0] < 1 || ctx[0] > MaxClients || !is_user_connected(ctx[0]))
+	if (lsi0 < 1 || lsi0 > MaxClients || !is_user_connected(lsi0))
 		lsd_error(22, "Nothing done: nobody there.")
 	else
 	{
-		ls_set_team(ctx[0], CsTeams:(1))
+		ls_set_team(lsi0, CsTeams:(lsi1))
 		lsd_exit(22, "moved")
 	}
 	lsg_n23(ctx)
@@ -2924,13 +3059,14 @@ lsg_n22(ctx[])
 // Teleport (ps_tp)
 lsg_n23(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(23, ctx))
 		return
-	if (!ls_alive(ctx[0]))
+	if (!ls_alive(lsi0))
 		lsd_error(23, "Not moved: that player isn't alive.")
-	else if (!lsg_teleport(ctx[0], "spawn_a"))
+	else if (!lsg_teleport(lsi0, "spawn_a"))
 		lsd_error(23, "Not moved: no such entity on this map.")
 	else
 		lsd_exit(23, "teleported")
@@ -2940,13 +3076,15 @@ lsg_n23(ctx[])
 // Set Variable (ps_set)
 lsg_n24(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi2 = 0.0
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_number("Value", 0.0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Value", lsi2)
 	if (lsd_enter(24, ctx))
 		return
-	g_pv0[lsg_slot(ctx[0])] = 0.0
-	lsd_exit(24, fmt("%.2f", g_pv0[lsg_slot(ctx[0])]))
+	g_pv0[lsg_slot(lsi0)] = lsi2
+	lsd_exit(24, fmt("%.2f", g_pv0[lsg_slot(lsi0)]))
 }
 
 // Player Joined (pj)
@@ -2962,12 +3100,14 @@ lsg_n25(ctx[])
 // Show HUD Text (pj_hud)
 lsg_n26(ctx[])
 {
+	new lsi0 = ctx[0]
+	new lsi1 = lsg_is_bot(ctx[0])
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_bool("Value", lsg_is_bot(ctx[0]))
+	lsd_in_player("Player", lsi0)
+	lsd_in_bool("Value", lsi1)
 	if (lsd_enter(26, ctx))
 		return
-	ls_hud(ctx[0], LsHud:1, 4.0, "%s %s", "Bot:", g_lsgYesNo[(lsg_is_bot(ctx[0])) ? 1 : 0])
+	ls_hud(lsi0, LsHud:1, 4.0, "%s %s", "Bot:", g_lsgYesNo[(lsi1) ? 1 : 0])
 	lsd_exit(26, "shown")
 	lsg_n27(ctx)
 }
@@ -2975,11 +3115,12 @@ lsg_n26(ctx[])
 // Branch (pj_br)
 lsg_n27(ctx[])
 {
+	new lsi0 = (ls_alive(ctx[0]) ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Condition", (ls_alive(ctx[0]) ? 1 : 0))
+	lsd_in_bool("Condition", lsi0)
 	if (lsd_enter(27, ctx))
 		return
-	new ok = (((((ls_alive(ctx[0]) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
 	lsd_exit(27, g_lsdBool[ok])
 }
 
@@ -2996,11 +3137,13 @@ lsg_n28(ctx[])
 // Set Variable (pl_set)
 lsg_n29(ctx[])
 {
+	new lsi2[128]
+	copy(lsi2, 127, "someone left")
 	lsd_begin()
-	lsd_in_text("Value", "someone left")
+	lsd_in_text("Value", lsi2)
 	if (lsd_enter(29, ctx))
 		return
-	copy(g_v3, 63, "someone left")
+	copy(g_v3, 63, lsi2)
 	lsd_exit(29, "set")
 }
 
@@ -3017,11 +3160,12 @@ lsg_n30(ctx[])
 // Show HUD Text (bp_hud)
 lsg_n31(ctx[])
 {
+	new lsi1 = lsg_team(ctx[0])
 	lsd_begin()
-	lsd_in_team("Value", lsg_team(ctx[0]))
+	lsd_in_team("Value", lsi1)
 	if (lsd_enter(31, ctx))
 		return
-	ls_hud(0, LsHud:3, 4.0, "%s %s", "Planted by", g_lsgTeamName[clamp(lsg_team(ctx[0]), 0, 3)])
+	ls_hud(0, LsHud:3, 4.0, "%s %s", "Planted by", g_lsgTeamName[clamp(lsi1, 0, 3)])
 	lsd_exit(31, "shown")
 }
 
@@ -3038,12 +3182,13 @@ lsg_n32(ctx[])
 // End Round (bd_end)
 lsg_n33(ctx[])
 {
+	new lsi0 = 2
 	lsd_begin()
-	lsd_in_team("Winner", 2)
+	lsd_in_team("Winner", lsi0)
 	if (lsd_enter(33, ctx))
 		return
-	server_cmd("endround CT")
-	lsd_exit(33, "Counter-Terrorists win")
+	lsg_end_round(lsi0)
+	lsd_exit(33, "ended")
 }
 
 // Bomb Exploded (bx)
@@ -3059,12 +3204,13 @@ lsg_n34(ctx[])
 // End Round (bx_end)
 lsg_n35(ctx[])
 {
+	new lsi0 = 1
 	lsd_begin()
-	lsd_in_team("Winner", 1)
+	lsd_in_team("Winner", lsi0)
 	if (lsd_enter(35, ctx))
 		return
-	server_cmd("endround T")
-	lsd_exit(35, "Terrorists win")
+	lsg_end_round(lsi0)
+	lsd_exit(35, "ended")
 }
 
 // Round Ended (re)
@@ -3080,11 +3226,12 @@ lsg_n36(ctx[])
 // Branch (re_br)
 lsg_n37(ctx[])
 {
+	new lsi0 = ((((float(ls_count_alive(CsTeams:(ctx[0])))) > (0.0) ? 1 : 0)) && (((g_v2) ? 0 : 1)) ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Condition", ((((float(ls_count_alive(CsTeams:(ctx[0])))) > (0.0) ? 1 : 0)) && (((g_v2) ? 0 : 1)) ? 1 : 0))
+	lsd_in_bool("Condition", lsi0)
 	if (lsd_enter(37, ctx))
 		return
-	new ok = ((((((((float(ls_count_alive(CsTeams:(ctx[0])))) > (0.0) ? 1 : 0)) && (((g_v2) ? 0 : 1)) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
 	lsd_exit(37, g_lsdBool[ok])
 	if (ok)
 		lsg_n38(ctx)
@@ -3095,11 +3242,12 @@ lsg_n37(ctx[])
 // Set Variable (re_set)
 lsg_n38(ctx[])
 {
+	new lsi2 = 1
 	lsd_begin()
-	lsd_in_bool("Value", 1)
+	lsd_in_bool("Value", lsi2)
 	if (lsd_enter(38, ctx))
 		return
-	g_v2 = 1
+	g_v2 = ((lsi2) ? 1 : 0)
 	lsd_exit(38, g_lsdBool[g_v2 ? 1 : 0])
 }
 
@@ -3126,15 +3274,16 @@ lsg_n40(ctx[])
 // Door (pu_door)
 lsg_n41(ctx[])
 {
+	new lsi0 = ctx[1]
 	lsd_begin()
-	lsd_in_entity("Door", ctx[1])
+	lsd_in_entity("Door", lsi0)
 	if (lsd_enter(41, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(41, "gm_components isn't running on this server.")
 	else
 	{
-		ls_door_open(ctx[1])
+		ls_door_open(lsi0)
 		lsd_exit(41, "done")
 	}
 	lsg_n42(ctx)
@@ -3143,15 +3292,16 @@ lsg_n41(ctx[])
 // Fire Trap (pu_trap)
 lsg_n42(ctx[])
 {
+	new lsi0 = lsg_find("trap1")
 	lsd_begin()
-	lsd_in_entity("Trap", lsg_find("trap1"))
+	lsd_in_entity("Trap", lsi0)
 	if (lsd_enter(42, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(42, "gm_components isn't running on this server.")
 	else
 	{
-		ls_trap_fire(lsg_find("trap1"))
+		ls_trap_fire(lsi0)
 		lsd_exit(42, "done")
 	}
 }
@@ -3169,16 +3319,18 @@ lsg_n43(ctx[])
 // Open Crate (pt_crate)
 lsg_n44(ctx[])
 {
+	new lsi0 = ctx[1]
+	new lsi1 = ctx[0]
 	lsd_begin()
-	lsd_in_entity("Container", ctx[1])
-	lsd_in_player("Player", ctx[0])
+	lsd_in_entity("Container", lsi0)
+	lsd_in_player("Player", lsi1)
 	if (lsd_enter(44, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(44, "gm_components isn't running on this server.")
 	else
 	{
-		ls_loot_open(ctx[1], ctx[0])
+		ls_loot_open(lsi0, lsi1)
 		lsd_exit(44, "done")
 	}
 }
@@ -3196,16 +3348,18 @@ lsg_n45(ctx[])
 // Lock Point (cc_lock)
 lsg_n46(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 20.0
 	lsd_begin()
-	lsd_in_entity("Point", ctx[0])
-	lsd_in_number("Seconds", 20.0)
+	lsd_in_entity("Point", lsi0)
+	lsd_in_number("Seconds", lsi1)
 	if (lsd_enter(46, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(46, "gm_components isn't running on this server.")
 	else
 	{
-		ls_cp_lock(ctx[0], 20.0)
+		ls_cp_lock(lsi0, lsi1)
 		lsd_exit(46, "done")
 	}
 	lsg_n47(ctx)
@@ -3214,11 +3368,12 @@ lsg_n46(ctx[])
 // Show HUD Text (cc_hud)
 lsg_n47(ctx[])
 {
+	new lsi1 = ctx[1]
 	lsd_begin()
-	lsd_in_team("Value", ctx[1])
+	lsd_in_team("Value", lsi1)
 	if (lsd_enter(47, ctx))
 		return
-	ls_hud(0, LsHud:0, 4.0, "%s %s", "Taken by", g_lsgTeamName[clamp(ctx[1], 0, 3)])
+	ls_hud(0, LsHud:0, 4.0, "%s %s", "Taken by", g_lsgTeamName[clamp(lsi1, 0, 3)])
 	lsd_exit(47, "shown")
 }
 
@@ -3235,16 +3390,18 @@ lsg_n48(ctx[])
 // Open Extraction (cl_ex)
 lsg_n49(ctx[])
 {
+	new lsi0 = lsg_find("ex1")
+	new lsi1 = 1
 	lsd_begin()
-	lsd_in_entity("Point", lsg_find("ex1"))
-	lsd_in_bool("Open", 1)
+	lsd_in_entity("Point", lsi0)
+	lsd_in_bool("Open", lsi1)
 	if (lsd_enter(49, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(49, "gm_components isn't running on this server.")
 	else
 	{
-		ls_extract_open(lsg_find("ex1"), bool:1)
+		ls_extract_open(lsi0, bool:((lsi1) ? 1 : 0))
 		lsd_exit(49, "done")
 	}
 }
@@ -3262,9 +3419,11 @@ lsg_n50(ctx[])
 // Shrink Zone (zs_shrink)
 lsg_n51(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = ((Float:ctx[1]) * (100.0))
 	lsd_begin()
-	lsd_in_entity("Zone", ctx[0])
-	lsd_in_number("Radius", ((Float:ctx[1]) * (100.0)))
+	lsd_in_entity("Zone", lsi0)
+	lsd_in_number("Radius", lsi1)
 	if (lsd_enter(51, ctx))
 		return
 	new Float:o[3]
@@ -3274,7 +3433,7 @@ lsg_n51(ctx[])
 		lsd_error(51, "No entity has that name on this map.")
 	else
 	{
-		ls_zone_shrink(ctx[0], o, ((Float:ctx[1]) * (100.0)), 20.0)
+		ls_zone_shrink(lsi0, o, lsi1, 20.0)
 		lsd_exit(51, "done")
 	}
 }
@@ -3292,9 +3451,11 @@ lsg_n52(ctx[])
 // Set Zone (zt_set)
 lsg_n53(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 900.0
 	lsd_begin()
-	lsd_in_entity("Zone", ctx[0])
-	lsd_in_number("Radius", 900.0)
+	lsd_in_entity("Zone", lsi0)
+	lsd_in_number("Radius", lsi1)
 	if (lsd_enter(53, ctx))
 		return
 	new Float:o[3]
@@ -3304,7 +3465,7 @@ lsg_n53(ctx[])
 		lsd_error(53, "No entity has that name on this map.")
 	else
 	{
-		ls_zone_set(ctx[0], o, 900.0)
+		ls_zone_set(lsi0, o, lsi1)
 		lsd_exit(53, "done")
 	}
 	lsg_n54(ctx)
@@ -3313,12 +3474,14 @@ lsg_n53(ctx[])
 // Show HUD Text (zt_hud)
 lsg_n54(ctx[])
 {
+	new lsi0 = ctx[1]
+	new Float:lsi1 = Float:ctx[2]
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
-	lsd_in_number("Value", Float:ctx[2])
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Value", lsi1)
 	if (lsd_enter(54, ctx))
 		return
-	ls_hud(ctx[1], LsHud:3, 4.0, "%s %d", "Ouch", floatround(Float:ctx[2]))
+	ls_hud(lsi0, LsHud:3, 4.0, "%s %d", "Ouch", floatround(lsi1))
 	lsd_exit(54, "shown")
 }
 
@@ -3335,13 +3498,15 @@ lsg_n55(ctx[])
 // Add To Variable (ex_add)
 lsg_n56(ctx[])
 {
+	new lsi0 = ctx[1]
+	new Float:lsi2 = 5.0
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
-	lsd_in_number("Amount", 5.0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Amount", lsi2)
 	if (lsd_enter(56, ctx))
 		return
-	g_pv0[lsg_slot(ctx[1])] += 5.0
-	lsd_exit(56, fmt("%.2f", g_pv0[lsg_slot(ctx[1])]))
+	g_pv0[lsg_slot(lsi0)] += lsi2
+	lsd_exit(56, fmt("%.2f", g_pv0[lsg_slot(lsi0)]))
 }
 
 // Wave Started (ws)
@@ -3357,11 +3522,12 @@ lsg_n57(ctx[])
 // Show HUD Text (ws_hud)
 lsg_n58(ctx[])
 {
+	new Float:lsi1 = Float:ctx[0]
 	lsd_begin()
-	lsd_in_number("Value", Float:ctx[0])
+	lsd_in_number("Value", lsi1)
 	if (lsd_enter(58, ctx))
 		return
-	ls_hud(0, LsHud:0, 4.0, "%s %d", "Wave", floatround(Float:ctx[0]))
+	ls_hud(0, LsHud:0, 4.0, "%s %d", "Wave", floatround(lsi1))
 	lsd_exit(58, "shown")
 }
 
@@ -3378,11 +3544,12 @@ lsg_n59(ctx[])
 // Show HUD Text (wp_hud)
 lsg_n60(ctx[])
 {
+	new lsi1 = ctx[0]
 	lsd_begin()
-	lsd_in_entity("Value", ctx[0])
+	lsd_in_entity("Value", lsi1)
 	if (lsd_enter(60, ctx))
 		return
-	ls_hud(0, LsHud:2, 4.0, "%s %d", "In:", ctx[0])
+	ls_hud(0, LsHud:2, 4.0, "%s %d", "In:", lsi1)
 	lsd_exit(60, "shown")
 }
 
@@ -3399,15 +3566,16 @@ lsg_n61(ctx[])
 // Start Wave (wc_start)
 lsg_n62(ctx[])
 {
+	new Float:lsi0 = ((Float:ctx[0]) + (1.0))
 	lsd_begin()
-	lsd_in_number("Wave", ((Float:ctx[0]) + (1.0)))
+	lsd_in_number("Wave", lsi0)
 	if (lsd_enter(62, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(62, "gm_components isn't running on this server.")
 	else
 	{
-		ls_wave_start(max(floatround(((Float:ctx[0]) + (1.0))), 0))
+		ls_wave_start(max(floatround(lsi0), 0))
 		lsd_exit(62, "done")
 	}
 }
@@ -3425,11 +3593,12 @@ lsg_n63(ctx[])
 // Show HUD Text (lo_hud)
 lsg_n64(ctx[])
 {
+	new lsi0 = ctx[1]
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(64, ctx))
 		return
-	ls_hud(ctx[1], LsHud:1, 4.0, "%s", "Looted")
+	ls_hud(lsi0, LsHud:1, 4.0, "%s", "Looted")
 	lsd_exit(64, "shown")
 }
 
@@ -3446,11 +3615,12 @@ lsg_n65(ctx[])
 // Set Variable (ck_set)
 lsg_n66(ctx[])
 {
+	new Float:lsi2 = Float:ctx[2]
 	lsd_begin()
-	lsd_in_number("Value", Float:ctx[2])
+	lsd_in_number("Value", lsi2)
 	if (lsd_enter(66, ctx))
 		return
-	g_v1 = Float:ctx[2]
+	g_v1 = lsi2
 	lsd_exit(66, fmt("%.2f", g_v1))
 }
 
@@ -3487,11 +3657,12 @@ lsg_n69(ctx[])
 // Show HUD Text (me_hud)
 lsg_n70(ctx[])
 {
+	new lsi1 = ctx[1]
 	lsd_begin()
-	lsd_in_player("Value", ctx[1])
+	lsd_in_player("Value", lsi1)
 	if (lsd_enter(70, ctx))
 		return
-	ls_hud(0, LsHud:3, 4.0, "%s %s", "Out:", lsg_name(ctx[1]))
+	ls_hud(0, LsHud:3, 4.0, "%s %s", "Out:", lsg_name(lsi1))
 	lsd_exit(70, "shown")
 }
 
@@ -3508,11 +3679,13 @@ lsg_n71(ctx[])
 // Set Variable (ck2_set)
 lsg_n72(ctx[])
 {
+	new lsi2[128]
+	copy(lsi2, 127, g_lsgTxt[0])
 	lsd_begin()
-	lsd_in_text("Value", g_lsgTxt[0])
+	lsd_in_text("Value", lsi2)
 	if (lsd_enter(72, ctx))
 		return
-	copy(g_v3, 63, g_lsgTxt[0])
+	copy(g_v3, 63, lsi2)
 	lsd_exit(72, "set")
 	lsg_n73(ctx)
 }
@@ -3554,11 +3727,12 @@ lsg_n74(ctx[])
 // Show HUD Text (ck2_hud)
 lsg_n75(ctx[])
 {
+	new lsi1 = g_lsgOut[74]
 	lsd_begin()
-	lsd_in_entity("Value", g_lsgOut[74])
+	lsd_in_entity("Value", lsi1)
 	if (lsd_enter(75, ctx))
 		return
-	ls_hud(0, LsHud:2, 4.0, "%s %d", "New one:", g_lsgOut[74])
+	ls_hud(0, LsHud:2, 4.0, "%s %d", "New one:", lsi1)
 	lsd_exit(75, "shown")
 	lsg_n76(ctx)
 }
@@ -3566,12 +3740,15 @@ lsg_n75(ctx[])
 // Show HUD Text (ck2_hud2)
 lsg_n76(ctx[])
 {
+	new lsi0 = ctx[1]
+	new lsi1[128]
+	copy(lsi1, 127, g_v3)
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
-	lsd_in_text("Value", g_v3)
+	lsd_in_player("Player", lsi0)
+	lsd_in_text("Value", lsi1)
 	if (lsd_enter(76, ctx))
 		return
-	ls_hud(ctx[1], LsHud:1, 4.0, "%s %s", "Killed:", g_v3)
+	ls_hud(lsi0, LsHud:1, 4.0, "%s %s", "Killed:", lsi1)
 	lsd_exit(76, "shown")
 }
 
@@ -3588,28 +3765,31 @@ lsg_n77(ctx[])
 // Add To Variable (hurt_tadd)
 lsg_n78(ctx[])
 {
+	new lsi1 = lsg_team(ctx[1])
+	new Float:lsi2 = 1.0
 	lsd_begin()
-	lsd_in_team("Team", lsg_team(ctx[1]))
-	lsd_in_number("Amount", 1.0)
+	lsd_in_team("Team", lsi1)
+	lsd_in_number("Amount", lsi2)
 	if (lsd_enter(78, ctx))
 		return
-	g_tv4[clamp(lsg_team(ctx[1]), 0, 3)] += 1.0
-	lsd_exit(78, fmt("%.2f", g_tv4[clamp(lsg_team(ctx[1]), 0, 3)]))
+	g_tv4[clamp(lsi1, 0, 3)] += lsi2
+	lsd_exit(78, fmt("%.2f", g_tv4[clamp(lsi1, 0, 3)]))
 	lsg_n79(ctx)
 }
 
 // Set Glow (hurt_glow)
 lsg_n79(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(79, ctx))
 		return
-	if (!lsg_ok(ctx[0]))
+	if (!lsg_ok(lsi0))
 		lsd_error(79, "Nothing done: nobody there.")
 	else
 	{
-		set_user_rendering(ctx[0], kRenderFxGlowShell, 255, 0, 0, kRenderNormal, 16)
+		set_user_rendering(lsi0, kRenderFxGlowShell, 255, 0, 0, kRenderNormal, 16)
 		lsd_exit(79, "done")
 	}
 }
@@ -3627,15 +3807,16 @@ lsg_n80(ctx[])
 // Set Model (tc_model)
 lsg_n81(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(81, ctx))
 		return
-	if (!lsg_ok(ctx[0]))
+	if (!lsg_ok(lsi0))
 		lsd_error(81, "Nothing done: nobody there.")
 	else
 	{
-		cs_set_user_model(ctx[0], "gign")
+		cs_set_user_model(lsi0, "gign")
 		lsd_exit(81, "done")
 	}
 }
@@ -3653,11 +3834,12 @@ lsg_n82(ctx[])
 // Set Setting (nr_cvar)
 lsg_n83(ctx[])
 {
+	new Float:lsi0 = 0.0
 	lsd_begin()
-	lsd_in_number("Value", 0.0)
+	lsd_in_number("Value", lsi0)
 	if (lsd_enter(83, ctx))
 		return
-	set_cvar_float("mp_freeforall", 0.0)
+	set_cvar_float("mp_freeforall", lsi0)
 	lsd_exit(83, "set")
 	lsg_n84(ctx)
 }
@@ -3686,15 +3868,16 @@ lsg_n84(ctx[])
 // Respawn (nr_resp)
 lsg_n85(ctx[])
 {
+	new lsi0 = ctx[4]
 	lsd_begin()
-	lsd_in_player("Player", ctx[4])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(85, ctx))
 		return
-	if (!lsg_ok(ctx[4]) || is_user_alive(ctx[4]) || lsg_team(ctx[4]) < 1 || lsg_team(ctx[4]) > 2)
+	if (!lsg_ok(lsi0) || is_user_alive(lsi0) || lsg_team(lsi0) < 1 || lsg_team(lsi0) > 2)
 		lsd_error(85, "Nothing done: only a dead player on a team comes back.")
 	else
 	{
-		ExecuteHamB(Ham_CS_RoundRespawn, ctx[4])
+		ExecuteHamB(Ham_CS_RoundRespawn, lsi0)
 		lsd_exit(85, "respawned")
 	}
 }
@@ -3758,11 +3941,13 @@ lsg_n88(ctx[])
 // Set Variable (nr_set)
 lsg_n89(ctx[])
 {
+	new lsi2[128]
+	copy(lsi2, 127, "play")
 	lsd_begin()
-	lsd_in_text("Value", "play")
+	lsd_in_text("Value", lsi2)
 	if (lsd_enter(89, ctx))
 		return
-	copy(g_v5, 63, "play")
+	copy(g_v5, 63, lsi2)
 	lsd_exit(89, "set")
 }
 
@@ -3779,11 +3964,12 @@ lsg_n90(ctx[])
 // Show HUD Text (nr_hud)
 lsg_n91(ctx[])
 {
+	new lsi1 = ctx[5]
 	lsd_begin()
-	lsd_in_entity("Value", ctx[5])
+	lsd_in_entity("Value", lsi1)
 	if (lsd_enter(91, ctx))
 		return
-	ls_hud(0, LsHud:0, 4.0, "%s %d", "Spot:", ctx[5])
+	ls_hud(0, LsHud:0, 4.0, "%s %d", "Spot:", lsi1)
 	lsd_exit(91, "shown")
 }
 
@@ -3800,21 +3986,22 @@ lsg_n92(ctx[])
 // Menu (cmd_menu)
 lsg_n93(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(93, ctx))
 		return
-	if (!lsg_ok(ctx[0]) || is_user_bot(ctx[0]))
+	if (!lsg_ok(lsi0) || is_user_bot(lsi0))
 		lsd_error(93, "Not shown: nobody there, or a bot.")
 	else
 	{
 		for (new k = 0; k < LSG_CTX; k++)
-			g_lsgM93[ctx[0]][k] = ctx[k]
+			g_lsgM93[lsi0][k] = ctx[k]
 		new m = menu_create("Shop", "lsg_mh93")
 		menu_additem(m, "Armor")
 		menu_additem(m, "Money")
 		menu_additem(m, "Gravity")
-		menu_display(ctx[0], m)
+		menu_display(lsi0, m)
 		lsd_exit(93, "shown")
 	}
 	lsg_n97(ctx)
@@ -3853,15 +4040,16 @@ public lsg_mh93(id, menu, item)
 // Give Item (cmd_arm)
 lsg_n94(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(94, ctx))
 		return
-	if (!ls_alive(ctx[0]))
+	if (!ls_alive(lsi0))
 		lsd_error(94, "Not given: that player isn't alive.")
 	else
 	{
-		cs_set_user_armor(ctx[0], 100, CS_ARMOR_VESTHELM)
+		cs_set_user_armor(lsi0, 100, CS_ARMOR_VESTHELM)
 		lsd_exit(94, "done")
 	}
 }
@@ -3869,16 +4057,18 @@ lsg_n94(ctx[])
 // Give Money (cmd_money)
 lsg_n95(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = -500.0
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_number("Amount", -500.0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Amount", lsi1)
 	if (lsd_enter(95, ctx))
 		return
-	if (!lsg_ok(ctx[0]))
+	if (!lsg_ok(lsi0))
 		lsd_error(95, "Nothing done: nobody there.")
 	else
 	{
-		lsg_add_money(ctx[0], floatround(-500.0))
+		lsg_add_money(lsi0, floatround(lsi1))
 		lsd_exit(95, "done")
 	}
 }
@@ -3886,16 +4076,18 @@ lsg_n95(ctx[])
 // Set Gravity (cmd_grav)
 lsg_n96(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 0.5
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_number("Gravity", 0.5)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Gravity", lsi1)
 	if (lsd_enter(96, ctx))
 		return
-	if (!ls_alive(ctx[0]))
+	if (!ls_alive(lsi0))
 		lsd_error(96, "Nothing done: that player isn't alive.")
 	else
 	{
-		set_user_gravity(ctx[0], 0.5)
+		set_user_gravity(lsi0, lsi1)
 		lsd_exit(96, "done")
 	}
 }
@@ -3903,11 +4095,12 @@ lsg_n96(ctx[])
 // Progress Bar (cmd_bar)
 lsg_n97(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(97, ctx))
 		return
-	lsg_bar(ctx[0], 3)
+	lsg_bar(lsi0, 3)
 	lsd_exit(97, "shown")
 	lsg_n98(ctx)
 }
@@ -3915,12 +4108,14 @@ lsg_n97(ctx[])
 // Chat Message (cmd_chat)
 lsg_n98(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = lsg_get_money(ctx[0])
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_number("Value", lsg_get_money(ctx[0]))
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Value", lsi1)
 	if (lsd_enter(98, ctx))
 		return
-	ls_chat(ctx[0], "%s %d", "Money:", floatround(lsg_get_money(ctx[0])))
+	ls_chat(lsi0, "%s %d", "Money:", floatround(lsi1))
 	lsd_exit(98, "said")
 }
 
@@ -3937,16 +4132,18 @@ lsg_n99(ctx[])
 // Add Score (fn_frag)
 lsg_n100(ctx[])
 {
+	new lsi0 = ctx[7]
+	new Float:lsi1 = Float:ctx[8]
 	lsd_begin()
-	lsd_in_player("Player", ctx[7])
-	lsd_in_number("Amount", Float:ctx[8])
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Amount", lsi1)
 	if (lsd_enter(100, ctx))
 		return
-	if (!lsg_ok(ctx[7]))
+	if (!lsg_ok(lsi0))
 		lsd_error(100, "Nothing done: nobody there.")
 	else
 	{
-		lsg_add_frags(ctx[7], floatround(Float:ctx[8]))
+		lsg_add_frags(lsi0, floatround(lsi1))
 		lsd_exit(100, "done")
 	}
 	lsg_n101(ctx)
@@ -3955,11 +4152,12 @@ lsg_n100(ctx[])
 // Play Sound (fn_snd)
 lsg_n101(ctx[])
 {
+	new lsi0 = ctx[7]
 	lsd_begin()
-	lsd_in_player("Player", ctx[7])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(101, ctx))
 		return
-	client_cmd(ctx[7], "spk %s", "buttons/bell1")
+	client_cmd(lsi0, "spk %s", "buttons/bell1")
 	lsd_exit(101, "played")
 	lsg_n102(ctx)
 }
@@ -3967,15 +4165,16 @@ lsg_n101(ctx[])
 // Set Role (fn_role)
 lsg_n102(ctx[])
 {
+	new lsi0 = ctx[7]
 	lsd_begin()
-	lsd_in_player("Player", ctx[7])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(102, ctx))
 		return
-	if (!lsg_ok(ctx[7]))
+	if (!lsg_ok(lsi0))
 		lsd_error(102, "Nothing done: nobody there.")
 	else
 	{
-		ls_set_role(ctx[7], "hero")
+		ls_set_role(lsi0, "hero")
 		lsd_exit(102, "done")
 	}
 }
@@ -3993,14 +4192,16 @@ lsg_n103(ctx[])
 // Call Function (pk2_call)
 lsg_n104(ctx[])
 {
+	new lsi0 = ctx[1]
+	new Float:lsi1 = 3.0
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
-	lsd_in_number("Number", 3.0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Number", lsi1)
 	if (lsd_enter(104, ctx))
 		return
 	new c[LSG_CTX]
-	c[7] = ctx[1]
-	c[8] = _:(3.0)
+	c[7] = lsi0
+	c[8] = _:(lsi1)
 	lsg_n99(c)
 	lsd_exit(104, "called")
 	lsg_n105(ctx)
@@ -4031,15 +4232,16 @@ lsg_n105(ctx[])
 // Bot Go To (pk2_bot)
 lsg_n106(ctx[])
 {
+	new lsi0 = ctx[9]
 	lsd_begin()
-	lsd_in_player("Bot", ctx[9])
+	lsd_in_player("Bot", lsi0)
 	if (lsd_enter(106, ctx))
 		return
-	if (!ls_alive(ctx[9]) || !is_user_bot(ctx[9]))
+	if (!ls_alive(lsi0) || !is_user_bot(lsi0))
 		lsd_error(106, "Nothing done: that player isn't a living bot.")
 	else
 	{
-		lsg_bot_goto(ctx[9], "spot1", 0)
+		lsg_bot_goto(lsi0, "spot1", 0)
 		lsd_exit(106, "ordered")
 	}
 	lsg_n107(ctx)
@@ -4048,16 +4250,18 @@ lsg_n106(ctx[])
 // Bot Hold (pk2_hold)
 lsg_n107(ctx[])
 {
+	new lsi0 = ctx[9]
+	new Float:lsi1 = 10.0
 	lsd_begin()
-	lsd_in_player("Bot", ctx[9])
-	lsd_in_number("Seconds", 10.0)
+	lsd_in_player("Bot", lsi0)
+	lsd_in_number("Seconds", lsi1)
 	if (lsd_enter(107, ctx))
 		return
-	if (!ls_alive(ctx[9]) || !is_user_bot(ctx[9]))
+	if (!ls_alive(lsi0) || !is_user_bot(lsi0))
 		lsd_error(107, "Nothing done: that player isn't a living bot.")
 	else
 	{
-		ls_bot_hold(ctx[9], max(floatround(10.0), 1))
+		ls_bot_hold(lsi0, max(floatround(lsi1), 1))
 		lsd_exit(107, "ordered")
 	}
 	lsg_n108(ctx)
@@ -4066,16 +4270,18 @@ lsg_n107(ctx[])
 // Bot Follow (pk2_follow)
 lsg_n108(ctx[])
 {
+	new lsi0 = ctx[9]
+	new lsi1 = ctx[1]
 	lsd_begin()
-	lsd_in_player("Bot", ctx[9])
-	lsd_in_player("Follow", ctx[1])
+	lsd_in_player("Bot", lsi0)
+	lsd_in_player("Follow", lsi1)
 	if (lsd_enter(108, ctx))
 		return
-	if (!ls_alive(ctx[9]) || !is_user_bot(ctx[9]))
+	if (!ls_alive(lsi0) || !is_user_bot(lsi0))
 		lsd_error(108, "Nothing done: that player isn't a living bot.")
 	else
 	{
-		ls_bot_follow(ctx[9], ctx[1], 10)
+		ls_bot_follow(lsi0, lsi1, 10)
 		lsd_exit(108, "ordered")
 	}
 	lsg_n109(ctx)
@@ -4084,15 +4290,16 @@ lsg_n108(ctx[])
 // Bot Free (pk2_free)
 lsg_n109(ctx[])
 {
+	new lsi0 = ctx[9]
 	lsd_begin()
-	lsd_in_player("Bot", ctx[9])
+	lsd_in_player("Bot", lsi0)
 	if (lsd_enter(109, ctx))
 		return
-	if (!ls_alive(ctx[9]) || !is_user_bot(ctx[9]))
+	if (!ls_alive(lsi0) || !is_user_bot(lsi0))
 		lsd_error(109, "Nothing done: that player isn't a living bot.")
 	else
 	{
-		ls_bot_release(ctx[9])
+		ls_bot_release(lsi0)
 		lsd_exit(109, "ordered")
 	}
 	lsg_n110(ctx)
@@ -4101,15 +4308,16 @@ lsg_n109(ctx[])
 // Drop Weapon (pk2_drop)
 lsg_n110(ctx[])
 {
+	new lsi0 = ctx[1]
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(110, ctx))
 		return
-	if (!ls_alive(ctx[1]))
+	if (!ls_alive(lsi0))
 		lsd_error(110, "Nothing done: that player isn't alive.")
 	else
 	{
-		engclient_cmd(ctx[1], "drop")
+		lsg_drop(lsi0)
 		lsd_exit(110, "done")
 	}
 	lsg_n111(ctx)
@@ -4118,16 +4326,18 @@ lsg_n110(ctx[])
 // Freeze (pk2_fr)
 lsg_n111(ctx[])
 {
+	new lsi0 = ctx[1]
+	new lsi1 = 1
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
-	lsd_in_bool("Frozen", 1)
+	lsd_in_player("Player", lsi0)
+	lsd_in_bool("Frozen", lsi1)
 	if (lsd_enter(111, ctx))
 		return
-	if (!ls_alive(ctx[1]))
+	if (!ls_alive(lsi0))
 		lsd_error(111, "Nothing done: that player isn't alive.")
 	else
 	{
-		lsg_freeze(ctx[1], 1)
+		lsg_freeze(lsi0, ((lsi1) ? 1 : 0))
 		lsd_exit(111, "done")
 	}
 	lsg_n112(ctx)
@@ -4136,15 +4346,16 @@ lsg_n111(ctx[])
 // Kill (pk2_kill)
 lsg_n112(ctx[])
 {
+	new lsi0 = ctx[1]
 	lsd_begin()
-	lsd_in_player("Player", ctx[1])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(112, ctx))
 		return
-	if (!ls_alive(ctx[1]))
+	if (!ls_alive(lsi0))
 		lsd_error(112, "Nothing done: that player isn't alive.")
 	else
 	{
-		user_kill(ctx[1], 1)
+		user_kill(lsi0, 1)
 		lsd_exit(112, "done")
 	}
 }
@@ -4162,11 +4373,12 @@ lsg_n113(ctx[])
 // Branch (lo2_br)
 lsg_n114(ctx[])
 {
+	new lsi0 = (equali(g_v5, "play") ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Condition", (equali(g_v5, "play") ? 1 : 0))
+	lsd_in_bool("Condition", lsi0)
 	if (lsd_enter(114, ctx))
 		return
-	new ok = (((((equali(g_v5, "play") ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
 	lsd_exit(114, g_lsdBool[ok])
 	if (ok)
 		lsg_n116(ctx)
@@ -4197,11 +4409,12 @@ lsg_n115(ctx[])
 // Branch (lo2_br2)
 lsg_n116(ctx[])
 {
+	new lsi0 = (((ls_components_running() && ls_zone_inside(lsg_find("zone1"), ctx[10]) ? 1 : 0)) || ((ls_is_role(ctx[10], "hero") ? 1 : 0)) ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Condition", (((ls_components_running() && ls_zone_inside(lsg_find("zone1"), ctx[10]) ? 1 : 0)) || ((ls_is_role(ctx[10], "hero") ? 1 : 0)) ? 1 : 0))
+	lsd_in_bool("Condition", lsi0)
 	if (lsd_enter(116, ctx))
 		return
-	new ok = (((((((ls_components_running() && ls_zone_inside(lsg_find("zone1"), ctx[10]) ? 1 : 0)) || ((ls_is_role(ctx[10], "hero") ? 1 : 0)) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
 	lsd_exit(116, g_lsdBool[ok])
 	if (ok)
 		lsg_n117(ctx)
@@ -4212,15 +4425,16 @@ lsg_n116(ctx[])
 // Respawn At Point (lo2_resp)
 lsg_n117(ctx[])
 {
+	new lsi0 = ctx[10]
 	lsd_begin()
-	lsd_in_player("Player", ctx[10])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(117, ctx))
 		return
-	if (!ls_components_running() || !lsg_ok(ctx[10]))
+	if (!ls_components_running() || !lsg_ok(lsi0))
 		lsd_error(117, "gm_components isn't running, or nobody there.")
 	else
 	{
-		ls_respawn_at(ctx[10], 0)
+		ls_respawn_at(lsi0, 0)
 		lsd_exit(117, "done")
 	}
 }
@@ -4247,11 +4461,12 @@ lsg_n118(ctx[])
 // Show HUD Text (lo2_hud)
 lsg_n119(ctx[])
 {
+	new Float:lsi1 = ((float(ls_count_role("hero"))) + (float(get_cvar_num("ls_creature_alive"))))
 	lsd_begin()
-	lsd_in_number("Value", ((float(ls_count_role("hero"))) + (float(get_cvar_num("ls_creature_alive")))))
+	lsd_in_number("Value", lsi1)
 	if (lsd_enter(119, ctx))
 		return
-	ls_hud(0, LsHud:1, 4.0, "%s %d", "Heroes and creatures:", floatround(((float(ls_count_role("hero"))) + (float(get_cvar_num("ls_creature_alive"))))))
+	ls_hud(0, LsHud:1, 4.0, "%s %d", "Heroes and creatures:", floatround(lsi1))
 	lsd_exit(119, "shown")
 	lsg_n120(ctx)
 }
@@ -4259,11 +4474,12 @@ lsg_n119(ctx[])
 // Branch (lo2_br3)
 lsg_n120(ctx[])
 {
+	new lsi0 = ((lsg_get_frags(ctx[10])) > (lsg_get_deaths(ctx[10])) ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Condition", ((lsg_get_frags(ctx[10])) > (lsg_get_deaths(ctx[10])) ? 1 : 0))
+	lsd_in_bool("Condition", lsi0)
 	if (lsd_enter(120, ctx))
 		return
-	new ok = ((((((lsg_get_frags(ctx[10])) > (lsg_get_deaths(ctx[10])) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
 	lsd_exit(120, g_lsdBool[ok])
 	if (ok)
 		lsg_n121(ctx)
@@ -4272,11 +4488,12 @@ lsg_n120(ctx[])
 // End Round (lo2_end)
 lsg_n121(ctx[])
 {
+	new lsi0 = ctx[1]
 	lsd_begin()
-	lsd_in_team("Winner", ctx[1])
+	lsd_in_team("Winner", lsi0)
 	if (lsd_enter(121, ctx))
 		return
-	lsg_end_round(ctx[1])
+	lsg_end_round(lsi0)
 	lsd_exit(121, "ended")
 }
 
@@ -4335,15 +4552,16 @@ lsg_n124(ctx[])
 // Start Component (ms_start)
 lsg_n125(ctx[])
 {
+	new lsi0 = ctx[11]
 	lsd_begin()
-	lsd_in_entity("Component", ctx[11])
+	lsd_in_entity("Component", lsi0)
 	if (lsd_enter(125, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(125, "gm_components isn't running on this server.")
 	else
 	{
-		ls_comp_start(ctx[11])
+		ls_comp_start(lsi0)
 		lsd_exit(125, "done")
 	}
 	lsg_n126(ctx)
@@ -4352,15 +4570,16 @@ lsg_n125(ctx[])
 // Stop Component (ms_stop)
 lsg_n126(ctx[])
 {
+	new lsi0 = ctx[11]
 	lsd_begin()
-	lsd_in_entity("Component", ctx[11])
+	lsd_in_entity("Component", lsi0)
 	if (lsd_enter(126, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(126, "gm_components isn't running on this server.")
 	else
 	{
-		ls_comp_stop(ctx[11])
+		ls_comp_stop(lsi0)
 		lsd_exit(126, "done")
 	}
 	lsg_n127(ctx)
@@ -4369,14 +4588,15 @@ lsg_n126(ctx[])
 // Create Component (ms_make)
 lsg_n127(ctx[])
 {
+	new lsi0 = ctx[11]
 	lsd_begin()
-	lsd_in_entity("At", ctx[11])
+	lsd_in_entity("At", lsi0)
 	if (lsd_enter(127, ctx))
 		return
 	new Float:o[3]
 	if (!ls_components_running())
 		lsd_error(127, "gm_components isn't running on this server.")
-	else if (!lsg_ent_origin(ctx[11], o))
+	else if (!lsg_ent_origin(lsi0, o))
 		lsd_error(127, "No entity has that name on this map.")
 	else
 	{
@@ -4389,14 +4609,15 @@ lsg_n127(ctx[])
 // Call Supply Drop (ms_drop)
 lsg_n128(ctx[])
 {
+	new lsi0 = ctx[11]
 	lsd_begin()
-	lsd_in_entity("At", ctx[11])
+	lsd_in_entity("At", lsi0)
 	if (lsd_enter(128, ctx))
 		return
 	new Float:o[3]
 	if (!ls_components_running())
 		lsd_error(128, "gm_components isn't running on this server.")
-	else if (!lsg_ent_origin(ctx[11], o))
+	else if (!lsg_ent_origin(lsi0, o))
 		lsd_error(128, "No entity has that name on this map.")
 	else
 	{
@@ -4429,14 +4650,16 @@ lsg_n129(ctx[])
 // Teleport (ms_tp)
 lsg_n130(ctx[])
 {
+	new lsi0 = ctx[12]
+	new lsi1 = ctx[11]
 	lsd_begin()
-	lsd_in_player("Player", ctx[12])
-	lsd_in_entity("To", ctx[11])
+	lsd_in_player("Player", lsi0)
+	lsd_in_entity("To", lsi1)
 	if (lsd_enter(130, ctx))
 		return
-	if (!ls_alive(ctx[12]))
+	if (!ls_alive(lsi0))
 		lsd_error(130, "Not moved: that player isn't alive.")
-	else if (!lsg_teleport_to(ctx[12], ctx[11]))
+	else if (!lsg_teleport_to(lsi0, lsi1))
 		lsd_error(130, "Not moved: no such entity on this map.")
 	else
 		lsd_exit(130, "teleported")
@@ -4455,11 +4678,12 @@ lsg_n131(ctx[])
 // Branch (ah_br)
 lsg_n132(ctx[])
 {
+	new lsi0 = (equali(g_lsgTxt[0], "fall") ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Condition", (equali(g_lsgTxt[0], "fall") ? 1 : 0))
+	lsd_in_bool("Condition", lsi0)
 	if (lsd_enter(132, ctx))
 		return
-	new ok = (((((equali(g_lsgTxt[0], "fall") ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
 	lsd_exit(132, g_lsdBool[ok])
 	if (ok)
 		lsg_n133(ctx)
@@ -4483,11 +4707,12 @@ lsg_n133(ctx[])
 // Scale Damage (ah_scale)
 lsg_n134(ctx[])
 {
+	new Float:lsi0 = 0.5
 	lsd_begin()
-	lsd_in_number("Times", 0.5)
+	lsd_in_number("Times", lsi0)
 	if (lsd_enter(134, ctx))
 		return
-	g_lsgDmg = g_lsgDmg * floatmax(0.5, 0.0)
+	g_lsgDmg = g_lsgDmg * floatmax(lsi0, 0.0)
 	if (g_lsgDmgBlock)
 		lsd_exit(134, "blocked")
 	else
@@ -4498,11 +4723,12 @@ lsg_n134(ctx[])
 // Set Damage (ah_set)
 lsg_n135(ctx[])
 {
+	new Float:lsi0 = 5.0
 	lsd_begin()
-	lsd_in_number("Damage", 5.0)
+	lsd_in_number("Damage", lsi0)
 	if (lsd_enter(135, ctx))
 		return
-	g_lsgDmg = floatmax(5.0, 0.0)
+	g_lsgDmg = floatmax(lsi0, 0.0)
 	if (g_lsgDmgBlock)
 		lsd_exit(135, "blocked")
 	else
@@ -4522,11 +4748,12 @@ lsg_n136(ctx[])
 // Make Downed (dk_down)
 lsg_n137(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(137, ctx))
 		return
-	if (!lsg_make_down(ctx[0], 20.0, 2.0, 40))
+	if (!lsg_make_down(lsi0, 20.0, 2.0, 40))
 		lsd_error(137, "Not downed: that player isn't dead (wire it from Player Killed).")
 	else
 		lsd_exit(137, "downed")
@@ -4545,12 +4772,14 @@ lsg_n138(ctx[])
 // Show HUD Text (rv_hud)
 lsg_n139(ctx[])
 {
+	new lsi0 = ctx[0]
+	new lsi1 = ctx[1]
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_player("Value", ctx[1])
+	lsd_in_player("Player", lsi0)
+	lsd_in_player("Value", lsi1)
 	if (lsd_enter(139, ctx))
 		return
-	ls_hud(ctx[0], LsHud:3, 4.0, "%s %s", "Saved by", lsg_name(ctx[1]))
+	ls_hud(lsi0, LsHud:3, 4.0, "%s %s", "Saved by", lsg_name(lsi1))
 	lsd_exit(139, "shown")
 }
 
@@ -4567,17 +4796,19 @@ lsg_n140(ctx[])
 // Add To Saved (to_add)
 lsg_n141(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 1.0
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_number("Amount", 1.0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Amount", lsi1)
 	if (lsd_enter(141, ctx))
 		return
-	if (!lsg_ok(ctx[0]) || g_lsgSaved == Invalid_Trie)
+	if (!lsg_ok(lsi0) || g_lsgSaved == Invalid_Trie)
 		lsd_error(141, "Not saved: nobody there, or the store didn't open.")
 	else
 	{
-		lsg_saved_set(ctx[0], "outs", lsg_saved_get(ctx[0], "outs") + (1.0))
-		lsd_exit(141, fmt("%.1f", lsg_saved_get(ctx[0], "outs")))
+		lsg_saved_set(lsi0, "outs", lsg_saved_get(lsi0, "outs") + (lsi1))
+		lsd_exit(141, fmt("%.1f", lsg_saved_get(lsi0, "outs")))
 	}
 	lsg_n142(ctx)
 }
@@ -4585,17 +4816,19 @@ lsg_n141(ctx[])
 // Save Value (to_set)
 lsg_n142(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 1.0
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_number("Value", 1.0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Value", lsi1)
 	if (lsd_enter(142, ctx))
 		return
-	if (!lsg_ok(ctx[0]) || g_lsgSaved == Invalid_Trie)
+	if (!lsg_ok(lsi0) || g_lsgSaved == Invalid_Trie)
 		lsd_error(142, "Not saved: nobody there, or the store didn't open.")
 	else
 	{
-		lsg_saved_set(ctx[0], "last_out", 1.0)
-		lsd_exit(142, fmt("%.1f", lsg_saved_get(ctx[0], "last_out")))
+		lsg_saved_set(lsi0, "last_out", lsi1)
+		lsd_exit(142, fmt("%.1f", lsg_saved_get(lsi0, "last_out")))
 	}
 	lsg_n143(ctx)
 }
@@ -4603,12 +4836,14 @@ lsg_n142(ctx[])
 // Show HUD Text (to_hud)
 lsg_n143(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = lsg_saved_get(ctx[0], "outs")
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_number("Value", lsg_saved_get(ctx[0], "outs"))
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Value", lsi1)
 	if (lsd_enter(143, ctx))
 		return
-	ls_hud(ctx[0], LsHud:1, 4.0, "%s %d", "Times out:", floatround(lsg_saved_get(ctx[0], "outs")))
+	ls_hud(lsi0, LsHud:1, 4.0, "%s %d", "Times out:", floatround(lsi1))
 	lsd_exit(143, "shown")
 	lsg_n144(ctx)
 }
@@ -4616,11 +4851,12 @@ lsg_n143(ctx[])
 // Branch (to_br)
 lsg_n144(ctx[])
 {
+	new lsi0 = (g_lsgDown[lsg_slot(ctx[0])] ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Condition", (g_lsgDown[lsg_slot(ctx[0])] ? 1 : 0))
+	lsd_in_bool("Condition", lsi0)
 	if (lsd_enter(144, ctx))
 		return
-	new ok = (((((g_lsgDown[lsg_slot(ctx[0])] ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
 	lsd_exit(144, g_lsdBool[ok])
 }
 
@@ -4637,11 +4873,12 @@ lsg_n145(ctx[])
 // No Fall Damage (sq_nf)
 lsg_n146(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(146, ctx))
 		return
-	g_lsgNoFall[lsg_slot(ctx[0])] = 2
+	g_lsgNoFall[lsg_slot(lsi0)] = 2
 	lsd_exit(146, "set")
 	lsg_n147(ctx)
 }
@@ -4649,16 +4886,18 @@ lsg_n146(ctx[])
 // Set Squad (sq_set)
 lsg_n147(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 2.0
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_number("Squad", 2.0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Squad", lsi1)
 	if (lsd_enter(147, ctx))
 		return
-	if (!lsg_ok(ctx[0]))
+	if (!lsg_ok(lsi0))
 		lsd_error(147, "Nothing done: nobody there.")
 	else
 	{
-		lsg_set_squad(ctx[0], clamp(floatround(2.0), 0, 32))
+		lsg_set_squad(lsi0, clamp(floatround(lsi1), 0, 32))
 		lsd_exit(147, "set")
 	}
 	lsg_n148(ctx)
@@ -4667,11 +4906,12 @@ lsg_n147(ctx[])
 // Squad Friendly Fire (sq_ff)
 lsg_n148(ctx[])
 {
+	new lsi0 = 0
 	lsd_begin()
-	lsd_in_bool("On", 0)
+	lsd_in_bool("On", lsi0)
 	if (lsd_enter(148, ctx))
 		return
-	g_lsgSquadFF = bool:0
+	g_lsgSquadFF = bool:((lsi0) ? 1 : 0)
 	lsd_exit(148, "set")
 	lsg_n149(ctx)
 }
@@ -4679,11 +4919,12 @@ lsg_n148(ctx[])
 // Show HUD Text (sq_hud)
 lsg_n149(ctx[])
 {
+	new Float:lsi1 = ((float(g_lsgSquad[lsg_slot(ctx[0])])) + (float(lsg_squads_alive())))
 	lsd_begin()
-	lsd_in_number("Value", ((float(g_lsgSquad[lsg_slot(ctx[0])])) + (float(lsg_squads_alive()))))
+	lsd_in_number("Value", lsi1)
 	if (lsd_enter(149, ctx))
 		return
-	ls_hud(0, LsHud:1, 4.0, "%s %d", "Squad:", floatround(((float(g_lsgSquad[lsg_slot(ctx[0])])) + (float(lsg_squads_alive())))))
+	ls_hud(0, LsHud:1, 4.0, "%s %d", "Squad:", floatround(lsi1))
 	lsd_exit(149, "shown")
 	lsg_n150(ctx)
 }
@@ -4714,16 +4955,18 @@ lsg_n151(ctx[])
 // Launch Up (sq_up)
 lsg_n152(ctx[])
 {
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 600.0
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_number("Speed", 600.0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Speed", lsi1)
 	if (lsd_enter(152, ctx))
 		return
-	if (!ls_alive(ctx[0]))
+	if (!ls_alive(lsi0))
 		lsd_error(152, "Nothing done: that player isn't alive.")
 	else
 	{
-		lsg_launch(ctx[0], 600.0)
+		lsg_launch(lsi0, lsi1)
 		lsd_exit(152, "done")
 	}
 }
@@ -4731,15 +4974,16 @@ lsg_n152(ctx[])
 // Bot Go To (sq_goto)
 lsg_n153(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
-	lsd_in_player("Bot", ctx[0])
+	lsd_in_player("Bot", lsi0)
 	if (lsd_enter(153, ctx))
 		return
-	if (!ls_alive(ctx[0]) || !is_user_bot(ctx[0]))
+	if (!ls_alive(lsi0) || !is_user_bot(lsi0))
 		lsd_error(153, "Nothing done: that player isn't a living bot.")
 	else
 	{
-		lsg_bot_goto(ctx[0], "spot1", 15)
+		lsg_bot_goto(lsi0, "spot1", 15)
 		lsd_exit(153, "ordered")
 	}
 	lsg_n152(ctx)
@@ -4758,11 +5002,12 @@ lsg_n154(ctx[])
 // Set Round Clock (ck3_set)
 lsg_n155(ctx[])
 {
+	new Float:lsi0 = 180.0
 	lsd_begin()
-	lsd_in_number("Seconds", 180.0)
+	lsd_in_number("Seconds", lsi0)
 	if (lsd_enter(155, ctx))
 		return
-	lsg_clock_set(180.0)
+	lsg_clock_set(lsi0)
 	lsd_exit(155, fmt("%.0f s left", lsg_clock_left()))
 	lsg_n156(ctx)
 }
@@ -4770,11 +5015,12 @@ lsg_n155(ctx[])
 // Add Round Time (ck3_add)
 lsg_n156(ctx[])
 {
+	new Float:lsi0 = 30.0
 	lsd_begin()
-	lsd_in_number("Seconds", 30.0)
+	lsd_in_number("Seconds", lsi0)
 	if (lsd_enter(156, ctx))
 		return
-	lsg_clock_add(30.0)
+	lsg_clock_add(lsi0)
 	lsd_exit(156, fmt("%.0f s left", lsg_clock_left()))
 	lsg_n157(ctx)
 }
@@ -4804,11 +5050,12 @@ lsg_n158(ctx[])
 // Show HUD Text (ck3_hud)
 lsg_n159(ctx[])
 {
+	new Float:lsi1 = lsg_clock_left()
 	lsd_begin()
-	lsd_in_number("Value", lsg_clock_left())
+	lsd_in_number("Value", lsi1)
 	if (lsd_enter(159, ctx))
 		return
-	ls_hud(0, LsHud:1, 4.0, "%s %d", "Time:", floatround(lsg_clock_left()))
+	ls_hud(0, LsHud:1, 4.0, "%s %d", "Time:", floatround(lsi1))
 	lsd_exit(159, "shown")
 }
 
@@ -4825,12 +5072,13 @@ lsg_n160(ctx[])
 // End Round (tu_end)
 lsg_n161(ctx[])
 {
+	new lsi0 = 2
 	lsd_begin()
-	lsd_in_team("Winner", 2)
+	lsd_in_team("Winner", lsi0)
 	if (lsd_enter(161, ctx))
 		return
-	server_cmd("endround CT")
-	lsd_exit(161, "Counter-Terrorists win")
+	lsg_end_round(lsi0)
+	lsd_exit(161, "ended")
 }
 
 // Round Started (a0)
@@ -4859,14 +5107,16 @@ lsg_n163(ctx[])
 // For Loop (a_for)
 lsg_n164(ctx[])
 {
+	new Float:lsi0 = 1.0
+	new Float:lsi1 = 5.0
 	lsd_begin()
-	lsd_in_number("First", 1.0)
-	lsd_in_number("Last", 5.0)
+	lsd_in_number("First", lsi0)
+	lsd_in_number("Last", lsi1)
 	if (lsd_enter(164, ctx))
 		return
 	new c[LSG_CTX], n
-	new last = floatround(5.0)
-	for (new k = floatround(1.0); k <= last && n < LSG_AMAX; k++)
+	new last = floatround(lsi1)
+	for (new k = floatround(lsi0); k <= last && n < LSG_AMAX; k++)
 	{
 		n++
 		for (new j = 0; j < LSG_CTX; j++)
@@ -4881,98 +5131,113 @@ lsg_n164(ctx[])
 // Add (a_add)
 lsg_n165(ctx[])
 {
+	new lsi0 = g_v9
+	new Float:lsi1 = Float:ctx[13]
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
-	lsd_in_number("Item", Float:ctx[13])
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	lsd_in_number("Item", lsi1)
 	if (lsd_enter(165, ctx))
 		return
-	g_lsgO[0] = _:float(lsg_apushc(g_v9, _:(Float:ctx[13])))
-	lsd_exit(165, fmt("%d items", lsg_alen(g_v9)))
+	g_lsgO[0] = _:float(lsg_apushc(lsi0, _:(lsi1)))
+	lsd_exit(165, fmt("%d items", lsg_alen(lsi0)))
 }
 
 // Sort (a_sort)
 lsg_n166(ctx[])
 {
+	new lsi0 = g_v9
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	if (lsd_enter(166, ctx))
 		return
-	lsg_asort(g_v9, 0, 1)
-	lsd_exit(166, fmt("%d items", lsg_alen(g_v9)))
+	lsg_asort(lsi0, 0, 1)
+	lsd_exit(166, fmt("%d items", lsg_alen(lsi0)))
 	lsg_n167(ctx)
 }
 
 // Shuffle (a_shuf)
 lsg_n167(ctx[])
 {
+	new lsi0 = g_v9
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	if (lsd_enter(167, ctx))
 		return
-	lsg_ashuffle(g_v9)
-	lsd_exit(167, fmt("%d items", lsg_alen(g_v9)))
+	lsg_ashuffle(lsi0)
+	lsd_exit(167, fmt("%d items", lsg_alen(lsi0)))
 	lsg_n168(ctx)
 }
 
 // Insert (a_ins)
 lsg_n168(ctx[])
 {
+	new lsi0 = g_v9
+	new Float:lsi1 = 99.0
+	new Float:lsi2 = 0.0
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
-	lsd_in_number("Item", 99.0)
-	lsd_in_number("Index", 0.0)
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	lsd_in_number("Item", lsi1)
+	lsd_in_number("Index", lsi2)
 	if (lsd_enter(168, ctx))
 		return
-	lsg_ainsc(g_v9, 0.0, _:(99.0))
-	lsd_exit(168, fmt("%d items", lsg_alen(g_v9)))
+	lsg_ainsc(lsi0, lsi2, _:(lsi1))
+	lsd_exit(168, fmt("%d items", lsg_alen(lsi0)))
 	lsg_n169(ctx)
 }
 
 // Remove Index (a_rmi)
 lsg_n169(ctx[])
 {
+	new lsi0 = g_v9
+	new Float:lsi1 = 1.0
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
-	lsd_in_number("Index", 1.0)
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	lsd_in_number("Index", lsi1)
 	if (lsd_enter(169, ctx))
 		return
-	lsg_aremi(g_v9, 1.0)
-	lsd_exit(169, fmt("%d items", lsg_alen(g_v9)))
+	lsg_aremi(lsi0, lsi1)
+	lsd_exit(169, fmt("%d items", lsg_alen(lsi0)))
 	lsg_n170(ctx)
 }
 
 // Set Array Item (a_aset)
 lsg_n170(ctx[])
 {
+	new lsi0 = g_v9
+	new Float:lsi1 = 0.0
+	new Float:lsi2 = 7.0
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
-	lsd_in_number("Index", 0.0)
-	lsd_in_number("Item", 7.0)
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	lsd_in_number("Index", lsi1)
+	lsd_in_number("Item", lsi2)
 	if (lsd_enter(170, ctx))
 		return
-	lsg_asetc(g_v9, 0.0, _:(7.0))
-	lsd_exit(170, fmt("%d items", lsg_alen(g_v9)))
+	lsg_asetc(lsi0, lsi1, _:(lsi2))
+	lsd_exit(170, fmt("%d items", lsg_alen(lsi0)))
 	lsg_n171(ctx)
 }
 
 // Remove Item (a_arem)
 lsg_n171(ctx[])
 {
+	new lsi0 = g_v9
+	new Float:lsi1 = 99.0
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
-	lsd_in_number("Item", 99.0)
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	lsd_in_number("Item", lsi1)
 	if (lsd_enter(171, ctx))
 		return
-	g_lsgO[1] = lsg_aremc(g_v9, _:(99.0)) ? 1 : 0
-	lsd_exit(171, fmt("%d items", lsg_alen(g_v9)))
+	g_lsgO[1] = lsg_aremc(lsi0, _:(lsi1)) ? 1 : 0
+	lsd_exit(171, fmt("%d items", lsg_alen(lsi0)))
 	lsg_n172(ctx)
 }
 
 // For Each (a_fe)
 lsg_n172(ctx[])
 {
+	new lsi0 = g_v9
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	if (lsd_enter(172, ctx))
 		return
 	new c[LSG_CTX], n
@@ -4980,7 +5245,7 @@ lsg_n172(ctx[])
 	static snap
 	if (!snap)
 		snap = _:ArrayCreate(LSG_AC)
-	lsg_acopy(snap, g_v9)
+	lsg_acopy(snap, lsi0)
 	new size = lsg_alen(snap)
 	for (new k = 0; k < size && k < LSG_AMAX; k++)
 	{
@@ -5006,11 +5271,12 @@ stock lsg_n172_break(ctx[])
 // Branch (a_br)
 lsg_n173(ctx[])
 {
+	new lsi0 = ((Float:ctx[14]) > (3.0) ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Condition", ((Float:ctx[14]) > (3.0) ? 1 : 0))
+	lsd_in_bool("Condition", lsi0)
 	if (lsd_enter(173, ctx))
 		return
-	new ok = ((((((Float:ctx[14]) > (3.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
 	lsd_exit(173, g_lsdBool[ok])
 	if (ok)
 		lsg_n172_break(ctx)
@@ -5021,12 +5287,14 @@ lsg_n173(ctx[])
 // Print String (a_pr)
 lsg_n174(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, lsg_ntext(Float:ctx[14]))
 	lsd_begin()
-	lsd_in_text("Value", lsg_ntext(Float:ctx[14]))
+	lsd_in_text("Value", lsi0)
 	if (lsd_enter(174, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Item", lsg_ntext(Float:ctx[14]))
+	formatex(t, charsmax(t), "%s %s", "Item", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5036,12 +5304,14 @@ lsg_n174(ctx[])
 // Print String (a_pr2)
 lsg_n175(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, fmt("%s items, has 7 %s at %s, one is %s (100%%)", lsg_ntext(float(lsg_alen(g_v9))), g_lsgYesNo[((lsg_afindc(g_v9, _:(7.0)) >= 0 ? 1 : 0)) ? 1 : 0], lsg_ntext(float(lsg_afindc(g_v9, _:(7.0)))), lsg_ntext(Float:lsg_arandc(g_v9))))
 	lsd_begin()
-	lsd_in_text("Value", fmt("%s items, has 7 %s at %s, one is %s (100%%)", lsg_ntext(float(lsg_alen(g_v9))), g_lsgYesNo[((lsg_afindc(g_v9, _:(7.0)) >= 0 ? 1 : 0)) ? 1 : 0], lsg_ntext(float(lsg_afindc(g_v9, _:(7.0)))), lsg_ntext(Float:lsg_arandc(g_v9))))
+	lsd_in_text("Value", lsi0)
 	if (lsd_enter(175, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Numbers:", fmt("%s items, has 7 %s at %s, one is %s (100%%)", lsg_ntext(float(lsg_alen(g_v9))), g_lsgYesNo[((lsg_afindc(g_v9, _:(7.0)) >= 0 ? 1 : 0)) ? 1 : 0], lsg_ntext(float(lsg_afindc(g_v9, _:(7.0)))), lsg_ntext(Float:lsg_arandc(g_v9))))
+	formatex(t, charsmax(t), "%s %s", "Numbers:", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5052,22 +5322,24 @@ lsg_n175(ctx[])
 // Clear (a_clr)
 lsg_n176(ctx[])
 {
+	new lsi0 = g_v9
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v9)))
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	if (lsd_enter(176, ctx))
 		return
-	lsg_aclear(g_v9)
-	lsd_exit(176, fmt("%d items", lsg_alen(g_v9)))
+	lsg_aclear(lsi0)
+	lsd_exit(176, fmt("%d items", lsg_alen(lsi0)))
 }
 
 // Set Variable (b_set)
 lsg_n177(ctx[])
 {
+	new lsi2 = lsg_mka231("a", lsg_tcat("b", "c"))
 	lsd_begin()
-	lsd_in_text("Value", fmt("%d items", lsg_alen(lsg_mka231("a", lsg_tcat("b", "c")))))
+	lsd_in_text("Value", fmt("%d items", lsg_alen(lsi2)))
 	if (lsd_enter(177, ctx))
 		return
-	lsg_acopy(g_v8, lsg_mka231("a", lsg_tcat("b", "c")))
+	lsg_acopy(g_v8, lsi2)
 	lsd_exit(177, "set")
 	lsg_n178(ctx)
 }
@@ -5094,24 +5366,29 @@ lsg_n178(ctx[])
 // Add (b_add)
 lsg_n179(ctx[])
 {
+	new lsi0 = g_v8
+	new lsi1[128]
+	copy(lsi1, 127, fmt("%s items", lsg_ntext(float(lsg_alen(g_v8)))))
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v8)))
-	lsd_in_text("Item", fmt("%s items", lsg_ntext(float(lsg_alen(g_v8)))))
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	lsd_in_text("Item", lsi1)
 	if (lsd_enter(179, ctx))
 		return
-	g_lsgO[2] = _:float(lsg_apushs(g_v8, fmt("%s items", lsg_ntext(float(lsg_alen(g_v8))))))
-	lsd_exit(179, fmt("%d items", lsg_alen(g_v8)))
+	g_lsgO[2] = _:float(lsg_apushs(lsi0, lsi1))
+	lsd_exit(179, fmt("%d items", lsg_alen(lsi0)))
 }
 
 // Switch on Text (b_sw)
 lsg_n180(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, lsg_agets(g_v8, 0.0))
 	lsd_begin()
-	lsd_in_text("Selection", lsg_agets(g_v8, 0.0))
+	lsd_in_text("Selection", lsi0)
 	if (lsd_enter(180, ctx))
 		return
 	new x[128]
-	copy(x, 127, lsg_agets(g_v8, 0.0))
+	copy(x, 127, lsi0)
 	if (equali(x, "a"))
 	{
 		lsg_n181(ctx)
@@ -5143,11 +5420,12 @@ lsg_n181(ctx[])
 // Switch on Number (b_sn)
 lsg_n182(ctx[])
 {
+	new Float:lsi0 = str_to_float("2")
 	lsd_begin()
-	lsd_in_number("Selection", str_to_float("2"))
+	lsd_in_number("Selection", lsi0)
 	if (lsd_enter(182, ctx))
 		return
-	new Float:x = str_to_float("2")
+	new Float:x = lsi0
 	if (x == 1.0)
 	{
 	}
@@ -5180,12 +5458,14 @@ lsg_n183(ctx[])
 // Print String (b_pr3)
 lsg_n184(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, fmt("%s long, %s", lsg_ntext(float(strlen(lsg_arands(g_v8)))), g_lsgYesNo[((containi(lsg_arands(g_v8), "item") >= 0 ? 1 : 0)) ? 1 : 0]))
 	lsd_begin()
-	lsd_in_text("Value", fmt("%s long, %s", lsg_ntext(float(strlen(lsg_arands(g_v8)))), g_lsgYesNo[((containi(lsg_arands(g_v8), "item") >= 0 ? 1 : 0)) ? 1 : 0]))
+	lsd_in_text("Value", lsi0)
 	if (lsd_enter(184, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Other:", fmt("%s long, %s", lsg_ntext(float(strlen(lsg_arands(g_v8)))), g_lsgYesNo[((containi(lsg_arands(g_v8), "item") >= 0 ? 1 : 0)) ? 1 : 0]))
+	formatex(t, charsmax(t), "%s %s", "Other:", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5216,12 +5496,14 @@ lsg_n185(ctx[])
 // Set Variable (c_setp)
 lsg_n186(ctx[])
 {
+	new lsi0 = ctx[16]
+	new lsi2 = lsg_vplayer(ctx[16], 3)
 	lsd_begin()
-	lsd_in_player("Player", ctx[16])
-	lsd_in_text("Value", lsg_vtext(lsg_vplayer(ctx[16], 3)))
+	lsd_in_player("Player", lsi0)
+	lsd_in_text("Value", lsg_vtext(lsi2))
 	if (lsd_enter(186, ctx))
 		return
-	lsg_vset((LSG_VR + 1 + lsg_slot(ctx[16])), lsg_vplayer(ctx[16], 3))
+	lsg_vset((LSG_VR + 1 + lsg_slot(lsi0)), lsi2)
 	lsd_exit(186, "set")
 	lsg_n187(ctx)
 }
@@ -5229,16 +5511,18 @@ lsg_n186(ctx[])
 // Set Position (c_pos)
 lsg_n187(ctx[])
 {
+	new lsi0 = ctx[16]
+	new lsi1 = lsg_vadd(lsg_vplayer(ctx[16], 0), lsg_vec(0.0, 0.0, 36.0), 1.0)
 	lsd_begin()
-	lsd_in_player("Player", ctx[16])
-	lsd_in_text("Position", lsg_vtext(lsg_vadd(lsg_vplayer(ctx[16], 0), lsg_vec(0.0, 0.0, 36.0), 1.0)))
+	lsd_in_player("Player", lsi0)
+	lsd_in_text("Position", lsg_vtext(lsi1))
 	if (lsd_enter(187, ctx))
 		return
-	if (!ls_alive(ctx[16]))
+	if (!ls_alive(lsi0))
 		lsd_error(187, "Nothing done: that player isn't alive.")
 	else
 	{
-		lsg_vsetpos(ctx[16], lsg_vadd(lsg_vplayer(ctx[16], 0), lsg_vec(0.0, 0.0, 36.0), 1.0))
+		lsg_vsetpos(lsi0, lsi1)
 		lsd_exit(187, "done")
 	}
 	lsg_n188(ctx)
@@ -5247,16 +5531,18 @@ lsg_n187(ctx[])
 // Set Velocity (c_vel)
 lsg_n188(ctx[])
 {
+	new lsi0 = ctx[16]
+	new lsi1 = lsg_vscale(lsg_vnorm(lsg_vdir(lsg_vplayer(ctx[16], 0), lsg_vent(ctx[16]))), 300.0)
 	lsd_begin()
-	lsd_in_player("Player", ctx[16])
-	lsd_in_text("Velocity", lsg_vtext(lsg_vscale(lsg_vnorm(lsg_vdir(lsg_vplayer(ctx[16], 0), lsg_vent(ctx[16]))), 300.0)))
+	lsd_in_player("Player", lsi0)
+	lsd_in_text("Velocity", lsg_vtext(lsi1))
 	if (lsd_enter(188, ctx))
 		return
-	if (!ls_alive(ctx[16]))
+	if (!ls_alive(lsi0))
 		lsd_error(188, "Nothing done: that player isn't alive.")
 	else
 	{
-		lsg_vsetvel(ctx[16], lsg_vscale(lsg_vnorm(lsg_vdir(lsg_vplayer(ctx[16], 0), lsg_vent(ctx[16]))), 300.0))
+		lsg_vsetvel(lsi0, lsi1)
 		lsd_exit(188, "done")
 	}
 	lsg_n189(ctx)
@@ -5265,12 +5551,14 @@ lsg_n188(ctx[])
 // Print String (c_pr)
 lsg_n189(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, fmt("%s away, %s, at %s", lsg_ntext(lsg_vdist((LSG_VR + 1 + lsg_slot(ctx[16])), (LSG_VR + 0))), lsg_ntext(((lsg_vc(lsg_vplayer(ctx[16], 3), 2)) + (lsg_vlen(lsg_vadd(lsg_vplayer(ctx[16], 0), lsg_vec(0.0, 0.0, 36.0), 1.0))))), lsg_vtext(lsg_vplayer(ctx[16], 3))))
 	lsd_begin()
-	lsd_in_text("Value", fmt("%s away, %s, at %s", lsg_ntext(lsg_vdist((LSG_VR + 1 + lsg_slot(ctx[16])), (LSG_VR + 0))), lsg_ntext(((lsg_vc(lsg_vplayer(ctx[16], 3), 2)) + (lsg_vlen(lsg_vadd(lsg_vplayer(ctx[16], 0), lsg_vec(0.0, 0.0, 36.0), 1.0))))), lsg_vtext(lsg_vplayer(ctx[16], 3))))
+	lsd_in_text("Value", lsi0)
 	if (lsd_enter(189, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Vectors:", fmt("%s away, %s, at %s", lsg_ntext(lsg_vdist((LSG_VR + 1 + lsg_slot(ctx[16])), (LSG_VR + 0))), lsg_ntext(((lsg_vc(lsg_vplayer(ctx[16], 3), 2)) + (lsg_vlen(lsg_vadd(lsg_vplayer(ctx[16], 0), lsg_vec(0.0, 0.0, 36.0), 1.0))))), lsg_vtext(lsg_vplayer(ctx[16], 3))))
+	formatex(t, charsmax(t), "%s %s", "Vectors:", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5280,10 +5568,11 @@ lsg_n189(ctx[])
 // Set Variable (c_sl)
 lsg_n190(ctx[])
 {
+	new lsi2 = lsg_mks0(30.0, "kit", lsg_vec(0.0, 0.0, 36.0), 0, 1)
 	lsd_begin()
 	if (lsd_enter(190, ctx))
 		return
-	lsg_rset((LSG_RR + 0), lsg_mks0(30.0, "kit", lsg_vec(0.0, 0.0, 36.0), 0, 1))
+	lsg_rset((LSG_RR + 0), lsi2)
 	lsd_exit(190, "set")
 	lsg_n191(ctx)
 }
@@ -5291,11 +5580,12 @@ lsg_n190(ctx[])
 // Set Field (c_sf)
 lsg_n191(ctx[])
 {
+	new Float:lsi0 = lsg_clampf(50.0, 0.0, 40.0)
 	lsd_begin()
-	lsd_in_number("Value", lsg_clampf(50.0, 0.0, 40.0))
+	lsd_in_number("Value", lsi0)
 	if (lsd_enter(191, ctx))
 		return
-	g_lsgRec[lsg_ri((LSG_RR + 0))][0] = _:(lsg_clampf(50.0, 0.0, 40.0))
+	g_lsgRec[lsg_ri((LSG_RR + 0))][0] = _:(lsi0)
 	lsd_exit(191, "set")
 	lsg_n192(ctx)
 }
@@ -5303,11 +5593,12 @@ lsg_n191(ctx[])
 // Set Field (c_sf2)
 lsg_n192(ctx[])
 {
+	new lsi0 = (LSG_VR + 0)
 	lsd_begin()
-	lsd_in_text("Value", lsg_vtext((LSG_VR + 0)))
+	lsd_in_text("Value", lsg_vtext(lsi0))
 	if (lsd_enter(192, ctx))
 		return
-	lsg_rsetvec((LSG_RR + 0), 1, (LSG_VR + 0))
+	lsg_rsetvec((LSG_RR + 0), 1, lsi0)
 	lsd_exit(192, "set")
 	lsg_n193(ctx)
 }
@@ -5315,24 +5606,28 @@ lsg_n192(ctx[])
 // Add (c_push)
 lsg_n193(ctx[])
 {
+	new lsi0 = g_v11
+	new lsi1 = (LSG_RR + 0)
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v11)))
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	if (lsd_enter(193, ctx))
 		return
-	g_lsgO[3] = _:float(lsg_apushr(g_v11, (LSG_RR + 0)))
-	lsd_exit(193, fmt("%d items", lsg_alen(g_v11)))
+	g_lsgO[3] = _:float(lsg_apushr(lsi0, lsi1))
+	lsd_exit(193, fmt("%d items", lsg_alen(lsi0)))
 	lsg_n194(ctx)
 }
 
 // Print String (c_pr2)
 lsg_n194(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, fmt("%s %s %s %s", lsg_ntext(Float:g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][0]), g_lsgRecT[lsg_ri(lsg_agetr(g_v11, 0.0))][0], g_lsgE0[clamp(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5], 0, 2)], lsg_vtext(lsg_rvec(lsg_agetr(g_v11, 0.0), 1))))
 	lsd_begin()
-	lsd_in_text("Value", fmt("%s %s %s %s", lsg_ntext(Float:g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][0]), g_lsgRecT[lsg_ri(lsg_agetr(g_v11, 0.0))][0], g_lsgE0[clamp(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5], 0, 2)], lsg_vtext(lsg_rvec(lsg_agetr(g_v11, 0.0), 1))))
+	lsd_in_text("Value", lsi0)
 	if (lsd_enter(194, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Loadout:", fmt("%s %s %s %s", lsg_ntext(Float:g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][0]), g_lsgRecT[lsg_ri(lsg_agetr(g_v11, 0.0))][0], g_lsgE0[clamp(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5], 0, 2)], lsg_vtext(lsg_rvec(lsg_agetr(g_v11, 0.0), 1))))
+	formatex(t, charsmax(t), "%s %s", "Loadout:", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5343,11 +5638,12 @@ lsg_n194(ctx[])
 // Switch on Enum (c_sw)
 lsg_n195(ctx[])
 {
+	new lsi0 = g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5]
 	lsd_begin()
-	lsd_in_text("Selection", g_lsgE0[clamp(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5], 0, 2)])
+	lsd_in_text("Selection", g_lsgE0[clamp(lsi0, 0, 2)])
 	if (lsd_enter(195, ctx))
 		return
-	switch (g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5])
+	switch (lsi0)
 	{
 		case 0:
 		{
@@ -5380,12 +5676,13 @@ lsg_n196(ctx[])
 // Print String (c_pr4)
 lsg_n197(ctx[])
 {
+	new Float:lsi0 = float(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5])
 	lsd_begin()
-	lsd_in_number("Value", float(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5]))
+	lsd_in_number("Value", lsi0)
 	if (lsd_enter(197, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "Tank number", floatround(float(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5])))
+	formatex(t, charsmax(t), "%s %d", "Tank number", floatround(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5416,27 +5713,34 @@ lsg_n198(ctx[])
 // Map Add (d_madd)
 lsg_n199(ctx[])
 {
+	new lsi0 = g_v12
+	new lsi1 = ctx[17]
+	new Float:lsi2 = ((Float:lsg_mgetc(g_v12, lsg_kp(ctx[17]))) + (1.0))
 	lsd_begin()
-	lsd_in_text("Map", fmt("%d keys", lsg_mlen(g_v12)))
-	lsd_in_player("Key", ctx[17])
-	lsd_in_number("Value", ((Float:lsg_mgetc(g_v12, lsg_kp(ctx[17]))) + (1.0)))
+	lsd_in_text("Map", fmt("%d keys", lsg_mlen(lsi0)))
+	lsd_in_player("Key", lsi1)
+	lsd_in_number("Value", lsi2)
 	if (lsd_enter(199, ctx))
 		return
-	lsg_msetc(g_v12, lsg_kp(ctx[17]), _:(((Float:lsg_mgetc(g_v12, lsg_kp(ctx[17]))) + (1.0))))
-	lsd_exit(199, fmt("%d keys", lsg_mlen(g_v12)))
+	lsg_msetc(lsi0, lsg_kp(lsi1), _:(lsi2))
+	lsd_exit(199, fmt("%d keys", lsg_mlen(lsi0)))
 	lsg_n200(ctx)
 }
 
 // Call (d_call)
 lsg_n200(ctx[])
 {
+	new lsi0 = ctx[17]
+	new Float:lsi1 = 5.0
+	new lsi2[128]
+	copy(lsi2, 127, "kill")
 	lsd_begin()
-	lsd_in_player("Who", ctx[17])
-	lsd_in_number("Amount", 5.0)
-	lsd_in_text("Why", "kill")
+	lsd_in_player("Who", lsi0)
+	lsd_in_number("Amount", lsi1)
+	lsd_in_text("Why", lsi2)
 	if (lsd_enter(200, ctx))
 		return
-	lsg_fr0(ctx[17], 5.0, "kill")
+	lsg_fr0(lsi0, lsi1, lsi2)
 	g_lsgO[4] = _:g_lsgR0_0
 	copy(g_lsgOT[0], 127, g_lsgR0_1)
 	lsd_exit(200, "called")
@@ -5446,12 +5750,14 @@ lsg_n200(ctx[])
 // Print String (d_pr)
 lsg_n201(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, g_lsgOT[0])
 	lsd_begin()
-	lsd_in_text("Value", g_lsgOT[0])
+	lsd_in_text("Value", lsi0)
 	if (lsd_enter(201, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Said:", g_lsgOT[0])
+	formatex(t, charsmax(t), "%s %s", "Said:", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5462,12 +5768,13 @@ lsg_n201(ctx[])
 // Print String (d_pr2)
 lsg_n202(ctx[])
 {
+	new Float:lsi0 = Float:g_lsgO[4]
 	lsd_begin()
-	lsd_in_number("Value", Float:g_lsgO[4])
+	lsd_in_number("Value", lsi0)
 	if (lsd_enter(202, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "Total:", floatround(Float:g_lsgO[4]))
+	formatex(t, charsmax(t), "%s %d", "Total:", floatround(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5477,53 +5784,66 @@ lsg_n202(ctx[])
 // Map Add (d_tadd)
 lsg_n203(ctx[])
 {
+	new lsi0 = g_v13
+	new lsi1[128]
+	copy(lsi1, 127, "k")
+	new lsi2[128]
+	copy(lsi2, 127, "k")
 	lsd_begin()
-	lsd_in_text("Map", fmt("%d keys", lsg_mlen(g_v13)))
-	lsd_in_text("Key", "k")
-	lsd_in_text("Value", "k")
+	lsd_in_text("Map", fmt("%d keys", lsg_mlen(lsi0)))
+	lsd_in_text("Key", lsi1)
+	lsd_in_text("Value", lsi2)
 	if (lsd_enter(203, ctx))
 		return
-	lsg_msets(g_v13, "k", "k")
-	lsd_exit(203, fmt("%d keys", lsg_mlen(g_v13)))
+	lsg_msets(lsi0, lsi1, lsi2)
+	lsd_exit(203, fmt("%d keys", lsg_mlen(lsi0)))
 	lsg_n204(ctx)
 }
 
 // Map Add (d_vadd)
 lsg_n204(ctx[])
 {
+	new lsi0 = g_v14
+	new Float:lsi1 = 1.0
+	new lsi2 = lsg_vec(0.0, 0.0, 36.0)
 	lsd_begin()
-	lsd_in_text("Map", fmt("%d keys", lsg_mlen(g_v14)))
-	lsd_in_number("Key", 1.0)
-	lsd_in_text("Value", lsg_vtext(lsg_vec(0.0, 0.0, 36.0)))
+	lsd_in_text("Map", fmt("%d keys", lsg_mlen(lsi0)))
+	lsd_in_number("Key", lsi1)
+	lsd_in_text("Value", lsg_vtext(lsi2))
 	if (lsd_enter(204, ctx))
 		return
-	lsg_msetv(g_v14, lsg_kn(1.0), lsg_vec(0.0, 0.0, 36.0))
-	lsd_exit(204, fmt("%d keys", lsg_mlen(g_v14)))
+	lsg_msetv(lsi0, lsg_kn(lsi1), lsi2)
+	lsd_exit(204, fmt("%d keys", lsg_mlen(lsi0)))
 	lsg_n205(ctx)
 }
 
 // Map Remove (d_rem)
 lsg_n205(ctx[])
 {
+	new lsi0 = g_v13
+	new lsi1[128]
+	copy(lsi1, 127, "kill")
 	lsd_begin()
-	lsd_in_text("Map", fmt("%d keys", lsg_mlen(g_v13)))
-	lsd_in_text("Key", "kill")
+	lsd_in_text("Map", fmt("%d keys", lsg_mlen(lsi0)))
+	lsd_in_text("Key", lsi1)
 	if (lsd_enter(205, ctx))
 		return
-	lsg_mdel(g_v13, "kill")
-	lsd_exit(205, fmt("%d keys", lsg_mlen(g_v13)))
+	lsg_mdel(lsi0, lsi1)
+	lsd_exit(205, fmt("%d keys", lsg_mlen(lsi0)))
 	lsg_n206(ctx)
 }
 
 // Print String (d_pr3)
 lsg_n206(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, fmt("%s %s %s %s", lsg_ntext(float(lsg_mlen(g_v12))), g_lsgYesNo[((lsg_mhas(g_v13, "k") ? 1 : 0)) ? 1 : 0], lsg_ntext(float(lsg_alen(lsg_mkeys(g_v12, 2)))), lsg_ntext(float(lsg_alen(lsg_mvalues(g_v14, 2))))))
 	lsd_begin()
-	lsd_in_text("Value", fmt("%s %s %s %s", lsg_ntext(float(lsg_mlen(g_v12))), g_lsgYesNo[((lsg_mhas(g_v13, "k") ? 1 : 0)) ? 1 : 0], lsg_ntext(float(lsg_alen(lsg_mkeys(g_v12, 2)))), lsg_ntext(float(lsg_alen(lsg_mvalues(g_v14, 2))))))
+	lsd_in_text("Value", lsi0)
 	if (lsd_enter(206, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Maps:", fmt("%s %s %s %s", lsg_ntext(float(lsg_mlen(g_v12))), g_lsgYesNo[((lsg_mhas(g_v13, "k") ? 1 : 0)) ? 1 : 0], lsg_ntext(float(lsg_alen(lsg_mkeys(g_v12, 2)))), lsg_ntext(float(lsg_alen(lsg_mvalues(g_v14, 2))))))
+	formatex(t, charsmax(t), "%s %s", "Maps:", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5534,24 +5854,26 @@ lsg_n206(ctx[])
 // Map Clear (d_mclr)
 lsg_n207(ctx[])
 {
+	new lsi0 = g_v14
 	lsd_begin()
-	lsd_in_text("Map", fmt("%d keys", lsg_mlen(g_v14)))
+	lsd_in_text("Map", fmt("%d keys", lsg_mlen(lsi0)))
 	if (lsd_enter(207, ctx))
 		return
-	lsg_mclear(g_v14)
-	lsd_exit(207, fmt("%d keys", lsg_mlen(g_v14)))
+	lsg_mclear(lsi0)
+	lsd_exit(207, fmt("%d keys", lsg_mlen(lsi0)))
 	lsg_n208(ctx)
 }
 
 // Print String (d_pr4)
 lsg_n208(ctx[])
 {
+	new Float:lsi0 = lsg_pf1_0(4.0)
 	lsd_begin()
-	lsd_in_number("Value", lsg_pf1_0(4.0))
+	lsd_in_number("Value", lsi0)
 	if (lsd_enter(208, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "Double:", floatround(lsg_pf1_0(4.0)))
+	formatex(t, charsmax(t), "%s %d", "Double:", floatround(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5562,12 +5884,14 @@ lsg_n208(ctx[])
 // Print String (d_pr5)
 lsg_n209(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, lsg_pf1_1(4.0))
 	lsd_begin()
-	lsd_in_text("Value", lsg_pf1_1(4.0))
+	lsd_in_text("Value", lsi0)
 	if (lsd_enter(209, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "As text:", lsg_pf1_1(4.0))
+	formatex(t, charsmax(t), "%s %s", "As text:", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5578,12 +5902,13 @@ lsg_n209(ctx[])
 // Set Timer by Function (d_tbf)
 lsg_n210(ctx[])
 {
+	new Float:lsi0 = 2.0
 	lsd_begin()
-	lsd_in_number("Seconds", 2.0)
+	lsd_in_number("Seconds", lsi0)
 	if (lsd_enter(210, ctx))
 		return
 	remove_task(LSG_TASK + 210)
-	set_task(floatmax(2.0, 0.1), "lsg_tf210", LSG_TASK + 210, _, _, "b")
+	set_task(floatmax(lsi0, 0.1), "lsg_tf210", LSG_TASK + 210, _, _, "b")
 	lsd_exit(210, "started")
 	lsg_n211(ctx)
 }
@@ -5598,11 +5923,12 @@ public lsg_tf210()
 // Set Variable (d_tset)
 lsg_n211(ctx[])
 {
+	new lsi2 = (LSG_TASK + 210)
 	lsd_begin()
-	lsd_in_text("Value", g_lsgRun[lsg_tactive((LSG_TASK + 210)) ? 1 : 0])
+	lsd_in_text("Value", g_lsgRun[lsg_tactive(lsi2) ? 1 : 0])
 	if (lsd_enter(211, ctx))
 		return
-	g_v17 = (LSG_TASK + 210)
+	g_v17 = lsi2
 	lsd_exit(211, "set")
 	lsg_n212(ctx)
 }
@@ -5610,12 +5936,13 @@ lsg_n211(ctx[])
 // Print String (d_pr6)
 lsg_n212(ctx[])
 {
+	new lsi0 = (lsg_tactive(g_v17) ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Value", (lsg_tactive(g_v17) ? 1 : 0))
+	lsd_in_bool("Value", lsi0)
 	if (lsd_enter(212, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Timer on:", g_lsgYesNo[((lsg_tactive(g_v17) ? 1 : 0)) ? 1 : 0])
+	formatex(t, charsmax(t), "%s %s", "Timer on:", g_lsgYesNo[(lsi0) ? 1 : 0])
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5626,11 +5953,12 @@ lsg_n212(ctx[])
 // Clear Timer (d_tclr)
 lsg_n213(ctx[])
 {
+	new lsi0 = g_v17
 	lsd_begin()
-	lsd_in_text("Timer", g_lsgRun[lsg_tactive(g_v17) ? 1 : 0])
+	lsd_in_text("Timer", g_lsgRun[lsg_tactive(lsi0) ? 1 : 0])
 	if (lsd_enter(213, ctx))
 		return
-	lsg_tclear(g_v17)
+	lsg_tclear(lsi0)
 	lsd_exit(213, "cleared")
 	lsg_n247(ctx)
 }
@@ -5638,12 +5966,13 @@ lsg_n213(ctx[])
 // Print String (d_pr7)
 lsg_n214(ctx[])
 {
+	new Float:lsi0 = ((3.0) * (2.0))
 	lsd_begin()
-	lsd_in_number("Value", ((3.0) * (2.0)))
+	lsd_in_number("Value", lsi0)
 	if (lsd_enter(214, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "Macro gave:", floatround(((3.0) * (2.0))))
+	formatex(t, charsmax(t), "%s %d", "Macro gave:", floatround(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5685,11 +6014,12 @@ stock lsg_n216_reset(ctx[])
 // Do N (e_n)
 lsg_n217(ctx[])
 {
+	new Float:lsi0 = 3.0
 	lsd_begin()
-	lsd_in_number("N", 3.0)
+	lsd_in_number("N", lsi0)
 	if (lsd_enter(217, ctx))
 		return
-	if (g_lsgLeft[217] >= floatround(3.0))
+	if (g_lsgLeft[217] >= floatround(lsi0))
 	{
 		lsd_exit(217, "done N times")
 		return
@@ -5762,11 +6092,12 @@ lsg_n219(ctx[])
 // Is Valid? (e_iv)
 lsg_n220(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
-	lsd_in_player("Object", ctx[0])
+	lsd_in_entity("Object", lsi0)
 	if (lsd_enter(220, ctx))
 		return
-	if (lsg_valid(ctx[0]))
+	if (lsg_valid(lsi0))
 	{
 		lsd_exit(220, "valid")
 		lsg_n221(ctx)
@@ -5781,12 +6112,13 @@ lsg_n220(ctx[])
 // Retriggerable Delay (e_rt)
 lsg_n221(ctx[])
 {
+	new Float:lsi0 = 2.0
 	lsd_begin()
-	lsd_in_number("Seconds", 2.0)
+	lsd_in_number("Seconds", lsi0)
 	if (lsd_enter(221, ctx))
 		return
 	remove_task(LSG_TASK + 221)
-	set_task(floatmax(2.0, 0.1), "lsg_t221", LSG_TASK + 221, ctx, LSG_CTX)
+	set_task(floatmax(lsi0, 0.1), "lsg_t221", LSG_TASK + 221, ctx, LSG_CTX)
 	lsd_exit(221, "waiting")
 }
 
@@ -5808,12 +6140,14 @@ public lsg_t221(const data[], task)
 // Print String (e_pr)
 lsg_n222(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, lsg_ntext(Float:g_lsgO[5]))
 	lsd_begin()
-	lsd_in_text("Value", lsg_ntext(Float:g_lsgO[5]))
+	lsd_in_text("Value", lsi0)
 	if (lsd_enter(222, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Count:", lsg_ntext(Float:g_lsgO[5]))
+	formatex(t, charsmax(t), "%s %s", "Count:", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5824,12 +6158,14 @@ lsg_n222(ctx[])
 // Print String (e_pr2)
 lsg_n223(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, g_lsgYesNo[(g_lsgO[6]) ? 1 : 0])
 	lsd_begin()
-	lsd_in_text("Value", g_lsgYesNo[(g_lsgO[6]) ? 1 : 0])
+	lsd_in_text("Value", lsi0)
 	if (lsd_enter(223, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Was A:", g_lsgYesNo[(g_lsgO[6]) ? 1 : 0])
+	formatex(t, charsmax(t), "%s %s", "Was A:", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5862,15 +6198,17 @@ lsg_n225(ctx[])
 // For Loop with Break (f_brk)
 lsg_n226(ctx[])
 {
+	new Float:lsi0 = 0.0
+	new Float:lsi1 = 10.0
 	lsd_begin()
-	lsd_in_number("First", 0.0)
-	lsd_in_number("Last", 10.0)
+	lsd_in_number("First", lsi0)
+	lsd_in_number("Last", lsi1)
 	if (lsd_enter(226, ctx))
 		return
 	new c[LSG_CTX], n
 	g_lsgLeft[226] = 0
-	new last = floatround(10.0)
-	for (new k = floatround(0.0); k <= last && n < LSG_AMAX; k++)
+	new last = floatround(lsi1)
+	for (new k = floatround(lsi0); k <= last && n < LSG_AMAX; k++)
 	{
 		n++
 		for (new j = 0; j < LSG_CTX; j++)
@@ -5893,11 +6231,12 @@ stock lsg_n226_break(ctx[])
 // Branch (f_br)
 lsg_n227(ctx[])
 {
+	new lsi0 = ((Float:ctx[18]) >= (3.0) && (Float:ctx[18]) <= (5.0) ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Condition", ((Float:ctx[18]) >= (3.0) && (Float:ctx[18]) <= (5.0) ? 1 : 0))
+	lsd_in_bool("Condition", lsi0)
 	if (lsd_enter(227, ctx))
 		return
-	new ok = ((((((Float:ctx[18]) >= (3.0) && (Float:ctx[18]) <= (5.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
 	lsd_exit(227, g_lsdBool[ok])
 	if (ok)
 		lsg_n226_break(ctx)
@@ -5908,12 +6247,14 @@ lsg_n227(ctx[])
 // Print String (f_pr)
 lsg_n228(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, fmt("%s %s %s %s", lsg_ntext(floatabs(Float:ctx[18])), lsg_ntext(((Float:ctx[18]) + ((10.0) - (Float:ctx[18])) * (0.25))), lsg_ntext((((((Float:ctx[18]) == (2.0) ? 1 : 0)) ? 1 : 0) ? (floatsqroot(floatmax(Float:ctx[18], 0.0))) : (lsg_mod(Float:ctx[18], 3.0)))), lsg_ntext(lsg_pow(Float:ctx[18], 2.0))))
 	lsd_begin()
-	lsd_in_text("Value", fmt("%s %s %s %s", lsg_ntext(floatabs(Float:ctx[18])), lsg_ntext(((Float:ctx[18]) + ((10.0) - (Float:ctx[18])) * (0.25))), lsg_ntext((((((Float:ctx[18]) == (2.0) ? 1 : 0)) ? 1 : 0) ? (floatsqroot(floatmax(Float:ctx[18], 0.0))) : (lsg_mod(Float:ctx[18], 3.0)))), lsg_ntext(lsg_pow(Float:ctx[18], 2.0))))
+	lsd_in_text("Value", lsi0)
 	if (lsd_enter(228, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Maths:", fmt("%s %s %s %s", lsg_ntext(floatabs(Float:ctx[18])), lsg_ntext(((Float:ctx[18]) + ((10.0) - (Float:ctx[18])) * (0.25))), lsg_ntext((((((Float:ctx[18]) == (2.0) ? 1 : 0)) ? 1 : 0) ? (floatsqroot(floatmax(Float:ctx[18], 0.0))) : (lsg_mod(Float:ctx[18], 3.0)))), lsg_ntext(lsg_pow(Float:ctx[18], 2.0))))
+	formatex(t, charsmax(t), "%s %s", "Maths:", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5923,12 +6264,14 @@ lsg_n228(ctx[])
 // Print String (f_pr2)
 lsg_n229(ctx[])
 {
+	new lsi0[128]
+	copy(lsi0, 127, lsg_tsel((((lsg_valid(ctx[0]) ? 1 : 0)) ? 1 : 0), "valid", "gone"))
 	lsd_begin()
-	lsd_in_text("Value", lsg_tsel((((lsg_valid(ctx[0]) ? 1 : 0)) ? 1 : 0), "valid", "gone"))
+	lsd_in_text("Value", lsi0)
 	if (lsd_enter(229, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Player is", lsg_tsel((((lsg_valid(ctx[0]) ? 1 : 0)) ? 1 : 0), "valid", "gone"))
+	formatex(t, charsmax(t), "%s %s", "Player is", lsi0)
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5939,12 +6282,13 @@ lsg_n229(ctx[])
 // Print String (f_pr3)
 lsg_n230(ctx[])
 {
+	new lsi0 = (lsg_ok(ctx[0]) ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Value", (lsg_ok(ctx[0]) ? 1 : 0))
+	lsd_in_bool("Value", lsi0)
 	if (lsd_enter(230, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Is a player:", g_lsgYesNo[((lsg_ok(ctx[0]) ? 1 : 0)) ? 1 : 0])
+	formatex(t, charsmax(t), "%s %s", "Is a player:", g_lsgYesNo[(lsi0) ? 1 : 0])
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5955,12 +6299,13 @@ lsg_n230(ctx[])
 // Print String (f_pr4)
 lsg_n231(ctx[])
 {
+	new lsi0 = (lsg_is_creature(ctx[0]) ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Value", (lsg_is_creature(ctx[0]) ? 1 : 0))
+	lsd_in_bool("Value", lsi0)
 	if (lsd_enter(231, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Is a creature:", g_lsgYesNo[((lsg_is_creature(ctx[0]) ? 1 : 0)) ? 1 : 0])
+	formatex(t, charsmax(t), "%s %s", "Is a creature:", g_lsgYesNo[(lsi0) ? 1 : 0])
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5971,12 +6316,14 @@ lsg_n231(ctx[])
 // Set Variable (f_setc)
 lsg_n232(ctx[])
 {
+	new lsi0 = ctx[0]
+	new lsi2 = 2
 	lsd_begin()
-	lsd_in_player("Player", ctx[0])
-	lsd_in_text("Value", g_lsgE0[clamp(2, 0, 2)])
+	lsd_in_player("Player", lsi0)
+	lsd_in_text("Value", g_lsgE0[clamp(lsi2, 0, 2)])
 	if (lsd_enter(232, ctx))
 		return
-	g_pv16[lsg_slot(ctx[0])] = 2
+	g_pv16[lsg_slot(lsi0)] = lsi2
 	lsd_exit(232, "set")
 	lsg_n233(ctx)
 }
@@ -5984,11 +6331,12 @@ lsg_n232(ctx[])
 // Switch on Enum (f_sw)
 lsg_n233(ctx[])
 {
+	new lsi0 = g_pv16[lsg_slot(ctx[0])]
 	lsd_begin()
-	lsd_in_text("Selection", g_lsgE0[clamp(g_pv16[lsg_slot(ctx[0])], 0, 2)])
+	lsd_in_text("Selection", g_lsgE0[clamp(lsi0, 0, 2)])
 	if (lsd_enter(233, ctx))
 		return
-	switch (g_pv16[lsg_slot(ctx[0])])
+	switch (lsi0)
 	{
 		case 0:
 		{
@@ -6006,12 +6354,13 @@ lsg_n233(ctx[])
 // Print String (f_pr5)
 lsg_n234(ctx[])
 {
+	new lsi0 = ((g_pv16[lsg_slot(ctx[0])]) == (2) ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Value", ((g_pv16[lsg_slot(ctx[0])]) == (2) ? 1 : 0))
+	lsd_in_bool("Value", lsi0)
 	if (lsd_enter(234, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "Medic:", g_lsgYesNo[(((g_pv16[lsg_slot(ctx[0])]) == (2) ? 1 : 0)) ? 1 : 0])
+	formatex(t, charsmax(t), "%s %s", "Medic:", g_lsgYesNo[(lsi0) ? 1 : 0])
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -6022,11 +6371,12 @@ lsg_n234(ctx[])
 // Set Variable (f_sp)
 lsg_n235(ctx[])
 {
+	new lsi2 = lsg_aplayers(1)
 	lsd_begin()
-	lsd_in_text("Value", fmt("%d items", lsg_alen(lsg_aplayers(1))))
+	lsd_in_text("Value", fmt("%d items", lsg_alen(lsi2)))
 	if (lsd_enter(235, ctx))
 		return
-	lsg_acopy(g_v10, lsg_aplayers(1))
+	lsg_acopy(g_v10, lsi2)
 	lsd_exit(235, "set")
 	lsg_n236(ctx)
 }
@@ -6034,12 +6384,13 @@ lsg_n235(ctx[])
 // Print String (f_pr6)
 lsg_n236(ctx[])
 {
+	new Float:lsi0 = float(lsg_alen(lsg_aplayers(1)))
 	lsd_begin()
-	lsd_in_number("Value", float(lsg_alen(lsg_aplayers(1))))
+	lsd_in_number("Value", lsi0)
 	if (lsd_enter(236, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "Alive:", floatround(float(lsg_alen(lsg_aplayers(1)))))
+	formatex(t, charsmax(t), "%s %d", "Alive:", floatround(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -6059,11 +6410,12 @@ stock lsg_n237(ctx[])
 // Set Variable (fa_set)
 stock lsg_n238(ctx[])
 {
+	new Float:lsi2 = ((Float:ctx[20]) + (g_v18))
 	lsd_begin()
-	lsd_in_number("Value", ((Float:ctx[20]) + (g_v18)))
+	lsd_in_number("Value", lsi2)
 	if (lsd_enter(238, ctx))
 		return
-	g_v18 = ((Float:ctx[20]) + (g_v18))
+	g_v18 = lsi2
 	lsd_exit(238, fmt("%.2f", g_v18))
 	lsg_n239(ctx)
 }
@@ -6071,24 +6423,27 @@ stock lsg_n238(ctx[])
 // Add (fa_push)
 stock lsg_n239(ctx[])
 {
+	new lsi0 = g_v19
+	new lsi1 = ctx[19]
 	lsd_begin()
-	lsd_in_text("Array", fmt("%d items", lsg_alen(g_v19)))
-	lsd_in_player("Item", ctx[19])
+	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	lsd_in_player("Item", lsi1)
 	if (lsd_enter(239, ctx))
 		return
-	g_lsgO[7] = _:float(lsg_apushc(g_v19, ctx[19]))
-	lsd_exit(239, fmt("%d items", lsg_alen(g_v19)))
+	g_lsgO[7] = _:float(lsg_apushc(lsi0, lsi1))
+	lsd_exit(239, fmt("%d items", lsg_alen(lsi0)))
 	lsg_n240(ctx)
 }
 
 // Branch (fa_br)
 stock lsg_n240(ctx[])
 {
+	new lsi0 = (ls_alive(ctx[19]) ? 1 : 0)
 	lsd_begin()
-	lsd_in_bool("Condition", (ls_alive(ctx[19]) ? 1 : 0))
+	lsd_in_bool("Condition", lsi0)
 	if (lsd_enter(240, ctx))
 		return
-	new ok = (((((ls_alive(ctx[19]) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
 	lsd_exit(240, g_lsdBool[ok])
 	if (ok)
 		lsg_n241(ctx)
@@ -6099,13 +6454,16 @@ stock lsg_n240(ctx[])
 // Return Node (fa_r1)
 stock lsg_n241(ctx[])
 {
+	new Float:lsi0 = g_v18
+	new lsi1[128]
+	copy(lsi1, 127, lsg_tcat(g_lsgOT[1], "!"))
 	lsd_begin()
-	lsd_in_number("Total", g_v18)
-	lsd_in_text("Message", lsg_tcat(g_lsgOT[1], "!"))
+	lsd_in_number("Total", lsi0)
+	lsd_in_text("Message", lsi1)
 	if (lsd_enter(241, ctx))
 		return
-	g_lsgR0_0 = g_v18
-	copy(g_lsgR0_1, 127, lsg_tcat(g_lsgOT[1], "!"))
+	g_lsgR0_0 = lsi0
+	copy(g_lsgR0_1, 127, lsi1)
 	g_lsgFD0 = true
 	lsd_exit(241, "returned")
 }
@@ -6135,13 +6493,16 @@ stock lsg_n243(ctx[])
 // Return Node (fb_r)
 stock lsg_n244(ctx[])
 {
+	new Float:lsi0 = ((Float:ctx[21]) * (2.0))
+	new lsi1[128]
+	copy(lsi1, 127, lsg_ntext(((Float:ctx[21]) * (2.0))))
 	lsd_begin()
-	lsd_in_number("Y", ((Float:ctx[21]) * (2.0)))
-	lsd_in_text("As text", lsg_ntext(((Float:ctx[21]) * (2.0))))
+	lsd_in_number("Y", lsi0)
+	lsd_in_text("As text", lsi1)
 	if (lsd_enter(244, ctx))
 		return
-	g_lsgR1_0 = ((Float:ctx[21]) * (2.0))
-	copy(g_lsgR1_1, 127, lsg_ntext(((Float:ctx[21]) * (2.0))))
+	g_lsgR1_0 = lsi0
+	copy(g_lsgR1_1, 127, lsi1)
 	g_lsgFD1 = true
 	lsd_exit(244, "returned")
 }
@@ -6173,12 +6534,13 @@ stock lsg_n246(ctx[])
 // Print String (d_mac)
 lsg_n247(ctx[])
 {
+	new Float:lsi0 = 3.0
 	lsd_begin()
-	lsd_in_number("Value", 3.0)
+	lsd_in_number("Value", lsi0)
 	if (lsd_enter(247, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "In the macro:", floatround(3.0))
+	formatex(t, charsmax(t), "%s %d", "In the macro:", floatround(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))

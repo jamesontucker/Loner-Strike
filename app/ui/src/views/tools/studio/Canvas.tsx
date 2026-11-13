@@ -24,6 +24,21 @@ import { collapse, insertSnippet, tabView, type Snippet } from "./graphOps";
 import { addComment, addNode, canConnect, connect, copy, insertReroute, inType, moveItems, outType, paste, remove, toggleBreakpoint } from "./graphOps";
 import { compatible, nodeDef, typeColor, type PinType } from "./registry";
 import { allVariables, pinsOf } from "./pins";
+import { insertItem, type LibItem } from "./library";
+
+/** A library item into the mode, and (for a Function or Macro) a call to it at `at`. */
+export function addFromLibrary(g: Graph, it: LibItem, at: { x: number; y: number } | null, home?: string): { graph: Graph; message: string } {
+  const r = insertItem(g, it);
+  let g2 = r.graph;
+  const f = g2.functions?.find((x) => x.id === r.root);
+  if (at && (it.kind === "function" || it.kind === "macro") && r.root !== home) {
+    const type = it.kind === "macro" ? "macro.use" : f?.pure ? "fn.call_pure" : "fn.call";
+    g2 = addNode(g2, type, { x: at.x - 20, y: at.y - 20 }, home, it.kind === "macro" ? { macro: r.root } : { func: r.root }).graph;
+  }
+  const added = (k: "enums" | "structs" | "functions" | "macros") => (g2[k]?.length ?? 0) - (g[k]?.length ?? 0);
+  const n = added("enums") + added("structs") + added("functions") + added("macros") + (g2.variables.length - g.variables.length);
+  return { graph: g2, message: n ? `Added “${it.name}” from your library (${n} part${n === 1 ? "" : "s"} with what it needs).` : `“${it.name}” is already in this mode.` };
+}
 import { pathPairs } from "./debugState";
 import type { Graph } from "./schema";
 
@@ -73,6 +88,8 @@ export type CanvasApi = {
 export const DRAG_VAR = "application/x-studio-variable";
 /** a Function, Macro or struct: "fn:<id>", "macro:<id>", "make:<id>", "break:<id>" */
 export const DRAG_PART = "application/x-studio-part";
+/** a library item's id */
+export const DRAG_LIB = "application/x-studio-library";
 export const DRAG_SNIPPET = "application/x-studio-snippet";
 
 export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error?: boolean) => void; onApi?: (api: CanvasApi) => void; snippets: Snippet[] }) {
@@ -414,7 +431,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         mouse.current = { x: e.clientX, y: e.clientY };
       }}
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes(DRAG_VAR) || e.dataTransfer.types.includes(DRAG_SNIPPET) || e.dataTransfer.types.includes(DRAG_PART)) {
+        if (e.dataTransfer.types.includes(DRAG_VAR) || e.dataTransfer.types.includes(DRAG_SNIPPET) || e.dataTransfer.types.includes(DRAG_PART) || e.dataTransfer.types.includes(DRAG_LIB)) {
           e.preventDefault();
           e.dataTransfer.dropEffect = "copy";
         }
@@ -424,8 +441,18 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         const v = e.dataTransfer.getData(DRAG_VAR);
         const sn = e.dataTransfer.getData(DRAG_SNIPPET);
         const part = e.dataTransfer.getData(DRAG_PART);
-        if (!v && !sn && !part) return;
+        const lib = e.dataTransfer.getData(DRAG_LIB);
+        if (!v && !sn && !part && !lib) return;
         e.preventDefault();
+        if (lib) {
+          const it = useStudio.getState().library.find((x) => x.id === lib);
+          if (it) {
+            const r = addFromLibrary(useStudio.getState().graph!, it, flow, home);
+            edit(() => r.graph);
+            toast(r.message);
+          }
+          return;
+        }
         if (part) {
           const [k, pid] = part.split(":");
           const g = useStudio.getState().graph;

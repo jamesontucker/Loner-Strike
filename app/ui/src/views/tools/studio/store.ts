@@ -8,6 +8,8 @@ import type { Problem } from "./studioApi";
 import { applyEvents, emptyDebug, type DebugState } from "./debugState";
 import type { DebugEvent } from "./studioApi";
 import { nodeDef } from "./registry";
+import type { LibItem } from "./library";
+import { loadLibrary } from "./libraryApi";
 
 type Studio = {
   graph: Graph | null;
@@ -39,6 +41,9 @@ type Studio = {
   closeTab: (id: string) => void;
   moveTab: (id: string, before: string | null) => void;
   selectPart: (id: string | null) => void;
+  /** My library: reusable Functions, Macros, structs and enums */
+  library: LibItem[];
+  reloadLibrary: () => Promise<void>;
   selectVar: (id: string | null) => void;
   setFuncFocus: (id: string | null) => void;
   setOutput: (o: string | null) => void;
@@ -105,6 +110,14 @@ export const useStudio = create<Studio>((set, get) => ({
     set({ tabs: rest });
   },
   selectPart: (part) => set(part ? { part, selected: [], selectedVar: null } : { part }),
+  library: [],
+  reloadLibrary: async () => {
+    try {
+      set({ library: await loadLibrary() });
+    } catch {
+      set({ library: [] });
+    }
+  },
   selectVar: (selectedVar) => set(selectedVar ? { selectedVar, selected: [], part: null } : { selectedVar }),
   setFuncFocus: (funcFocus) => set({ funcFocus }),
   setOutput: (output) => set({ output }),

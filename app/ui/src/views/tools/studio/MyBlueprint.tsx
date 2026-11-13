@@ -2,11 +2,15 @@
 // the snippet library. + buttons add; click focuses (or shows the variable in Details); drag a
 // variable onto the canvas for Get/Set, a snippet to drop it in.
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useStudio } from "./store";
 import { nodeDef, typeColor } from "./registry";
 import { addEnum, addFunction, addLocal, addMacro, addStruct, addVariable, makeSnippet, type Snippet } from "./graphOps";
-import { DRAG_PART, DRAG_SNIPPET, DRAG_VAR, type CanvasApi } from "./Canvas";
+import { addFromLibrary, DRAG_LIB, DRAG_PART, DRAG_SNIPPET, DRAG_VAR, type CanvasApi } from "./Canvas";
+import { extractItem, itemFile, itemId, readItem, type LibItem } from "./library";
+import { deleteItem, saveItem } from "./libraryApi";
+import { LABEL_CHARS } from "./schema";
+import { Sheet } from "../../../ui";
 import { typeLabel } from "./pins";
 import { saveSnippet, deleteSnippet } from "./snippets";
 import { useAskText, useConfirm } from "../../../ui";
@@ -30,6 +34,175 @@ function Section({ title, count, onAdd, addTitle, children, open: start = true }
   );
 }
 
+const clean = (s: string, max: number) => [...s].filter((c) => LABEL_CHARS.test(c)).join("").slice(0, max);
+
+/** "Save to my library": a name, a short description and a category for the part. */
+function SaveToLibrary({ partId, onDone, toast }: { partId: string; onDone: () => void; toast: (text: string, error?: boolean) => void }) {
+  const graph = useStudio((s) => s.graph)!;
+  const library = useStudio((s) => s.library);
+  const start = [...(graph.functions ?? []), ...(graph.macros ?? []), ...(graph.structs ?? []), ...(graph.enums ?? [])].find((x) => x.id === partId);
+  // saving a part that came from the library again: the same item, a new version
+  const fromItem = start && "from" in start && start.from ? library.find((x) => x.id === start.from!.lib) : undefined;
+  const [name, setName] = useState(fromItem?.name ?? start?.name ?? "");
+  const [description, setDescription] = useState(fromItem?.description ?? "");
+  const [category, setCategory] = useState(fromItem?.category ?? "General");
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    const x = extractItem(graph, partId);
+    if ("error" in x) return toast(x.error, true);
+    const id = fromItem?.id ?? itemId(name, library.map((l) => l.id));
+    setBusy(true);
+    const r = await saveItem(id, itemFile({ name: name.trim(), description, category: category.trim() || "General", kind: x.kind, root: partId, body: x.body }));
+    setBusy(false);
+    if (r.error) return toast(r.error, true);
+    // this copy is now that version of the item
+    useStudio.getState().edit((g) => {
+      const mark = { from: { lib: id, version: r.version ?? 1 } };
+      const put = <T extends { id: string }>(l?: T[]) => l?.map((p) => (p.id === partId ? { ...p, ...mark } : p));
+      return { ...g, functions: put(g.functions), macros: put(g.macros), structs: put(g.structs), enums: put(g.enums) };
+    });
+    await useStudio.getState().reloadLibrary();
+    toast(`Kept “${name.trim()}” in your library${(r.version ?? 1) > 1 ? ` (version ${r.version})` : ""}.`);
+    onDone();
+  };
+  return (
+    <Sheet label="Save to my library" onClose={onDone}>
+      <div className="st-libform">
+        <h3>Save to my library</h3>
+        <p className="st-muted">Use it in your other modes: it brings the structs, enums, Functions and variables it needs.</p>
+        <label className="st-side-field">
+          <span>Name</span>
+          <input className="st-field" value={name} maxLength={40} onChange={(e) => setName(clean(e.target.value, 40))} autoFocus />
+        </label>
+        <label className="st-side-field">
+          <span>Description</span>
+          <input className="st-field" value={description} maxLength={160} onChange={(e) => setDescription(clean(e.target.value, 160))} placeholder="What it does" />
+        </label>
+        <label className="st-side-field">
+          <span>Category</span>
+          <input className="st-field" value={category} maxLength={30} list="st-lib-cats" onChange={(e) => setCategory(clean(e.target.value, 30))} />
+          <datalist id="st-lib-cats">
+            {[...new Set(library.map((l) => l.category))].map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+        </label>
+        <div className="st-libform-buttons">
+          <button type="button" className="btn" onClick={onDone}>
+            Cancel
+          </button>
+          <button type="button" className="btn primary" disabled={!name.trim() || busy} onClick={() => void save()}>
+            {busy ? "Saving…" : fromItem ? "Save a new version" : "Save"}
+          </button>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+/** My library: what you kept to reuse; double-click or drag one in, export, import, delete. */
+function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: string, error?: boolean) => void }) {
+  const library = useStudio((s) => s.library);
+  const [q, setQ] = useState("");
+  const file = useRef<HTMLInputElement>(null);
+  const ask = useConfirm();
+  useEffect(() => {
+    void useStudio.getState().reloadLibrary();
+  }, []);
+  const f = q.trim().toLowerCase();
+  const shown = library.filter((it) => !f || `${it.name} ${it.description} ${it.category} ${it.kind}`.toLowerCase().includes(f));
+  const add = (it: LibItem) => {
+    const g = useStudio.getState().graph;
+    if (!g) return;
+    const r = addFromLibrary(g, it, null);
+    useStudio.getState().edit(() => r.graph);
+    toast(r.message);
+    void api;
+  };
+  const exportItem = (it: LibItem) => {
+    const blob = new Blob([JSON.stringify(itemFile(it), null, 1)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${it.id}.lib.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  const importFiles = async (files: FileList | null) => {
+    for (const fl of [...(files ?? [])]) {
+      let v: unknown;
+      try {
+        v = JSON.parse(await fl.text());
+      } catch {
+        toast(`${fl.name} isn't a library file.`, true);
+        continue;
+      }
+      const it = readItem("import", v);
+      if (!it) {
+        toast(`${fl.name} isn't a Game Mode Studio library item.`, true);
+        continue;
+      }
+      const id = itemId(fl.name.replace(/\.lib\.json$|\.json$/, ""), useStudio.getState().library.map((x) => x.id));
+      const r = await saveItem(id, itemFile({ ...it, itemVersion: undefined }));
+      if (r.error) toast(r.error, true);
+      else toast(`Imported “${it.name}”.`);
+    }
+    await useStudio.getState().reloadLibrary();
+  };
+  let cat = "";
+  return (
+    <Section title="My library" count={library.length}>
+      <input className="st-field st-mb-filter" placeholder="Find in my library" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find in my library" />
+      {library.length === 0 && <p className="st-muted st-mb-empty">Right-click a Function, Macro, struct or enum: Save to my library. Then use it in any mode.</p>}
+      {shown.map((it) => {
+        const head = it.category !== cat ? it.category : null;
+        cat = it.category;
+        return (
+          <div key={it.id}>
+            {head && <div className="st-mb-cat">{head}</div>}
+            <div className="st-mb-snippet">
+              <button
+                type="button"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(DRAG_LIB, it.id);
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
+                className="st-mb-item"
+                onDoubleClick={() => add(it)}
+                title={`${it.description || it.name} · version ${it.itemVersion} (double-click or drag it in)`}
+              >
+                <span className={`st-mb-dot ${it.kind === "function" ? "fn" : it.kind === "macro" ? "mac" : it.kind === "struct" ? "st" : "en"}`} /> {it.name}
+                <span className="st-muted st-mb-note">v{it.itemVersion}</span>
+              </button>
+              <button type="button" className="st-mb-add" title="Export as a file" aria-label={`Export ${it.name}`} onClick={() => exportItem(it)}>
+                ⤓
+              </button>
+              <button
+                type="button"
+                className="st-mb-add"
+                title="Delete from my library"
+                aria-label={`Delete ${it.name}`}
+                onClick={async () => {
+                  if (!(await ask(`Delete “${it.name}” from your library? Modes that use it keep their copy.`, { ok: "Delete", danger: true }))) return;
+                  const r = await deleteItem(it.id);
+                  if (r.error) toast(r.error, true);
+                  await useStudio.getState().reloadLibrary();
+                }}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      <button type="button" className="btn small st-mb-save" onClick={() => file.current?.click()}>
+        Import from a file
+      </button>
+      <input ref={file} type="file" accept=".json,application/json" multiple hidden onChange={(e) => void importFiles(e.target.files).then(() => (e.target.value = ""))} />
+    </Section>
+  );
+}
+
 export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: CanvasApi | null; snippets: Snippet[]; reloadSnippets: () => void; toast: (text: string, error?: boolean) => void }) {
   const graph = useStudio((s) => s.graph);
   const selected = useStudio((s) => s.selected);
@@ -40,6 +213,8 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
   const askText = useAskText();
   const ask = useConfirm();
   const [filter, setFilter] = useState("");
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
   if (!graph) return null;
   const events = graph.nodes.filter((n) => nodeDef(n.type)?.event && !["func.define", "fn.entry", "macro.entry"].includes(n.type));
   const funcs = graph.nodes.filter((n) => n.type === "func.define");
@@ -76,6 +251,10 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
       className={`st-mb-item${part === id ? " on" : ""}${tab === id ? " open" : ""}`}
       onClick={() => selectPart(id)}
       onDoubleClick={() => openable && openTab(id)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setMenu({ id, x: e.clientX, y: e.clientY });
+      }}
       title={openable ? "Double-click to open its graph; drag onto the canvas to call it" : drag ? "Drag onto the canvas" : undefined}
     >
       <span className={`st-mb-dot ${dot}`} /> {name}
@@ -109,6 +288,26 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
 
   return (
     <aside className="st-mb" aria-label="My mode">
+      {menu && (
+        <div className="st-ctx" style={{ left: menu.x, top: menu.y }} role="menu" onMouseLeave={() => setMenu(null)}>
+          <button
+            type="button"
+            role="menuitem"
+            className="st-palette-item"
+            onClick={() => {
+              setSaving(menu.id);
+              setMenu(null);
+            }}
+          >
+            <span className="st-palette-title">Save to my library</span>
+            <span className="st-palette-help">Keep it to use in your other modes</span>
+          </button>
+          <button type="button" role="menuitem" className="st-palette-item" onClick={() => setMenu(null)}>
+            <span className="st-palette-help">Cancel</span>
+          </button>
+        </div>
+      )}
+      {saving && <SaveToLibrary partId={saving} onDone={() => setSaving(null)} toast={toast} />}
       <Section title="Events" count={events.length} onAdd={() => api?.search("Events")} addTitle="Add an event">
         {events.length === 0 && <p className="st-muted st-mb-empty">Nothing starts this mode yet.</p>}
         {events.map((n) => (
@@ -215,6 +414,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
         {!graph.enums?.length && <p className="st-muted st-mb-empty">Named choices (Class: Scout, Tank, Medic).</p>}
         {(graph.enums ?? []).map((e) => partItem(e.id, e.name, "en", null, `${e.values.length} values`))}
       </Section>
+      <LibrarySection api={api} toast={toast} />
       <Section title="Snippets" count={snippets.length}>
         <input className="st-field st-mb-filter" placeholder="Find a snippet" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Find a snippet" />
         {shown.map((s) => (

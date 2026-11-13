@@ -11,6 +11,7 @@ import { addVariable, addNode, canConnect, connect, copy, emptyHistory, insertRe
 import { NODE_DEFS, compatible, nodeDef, searchNodes } from "../src/views/tools/studio/registry";
 import { addEnum, addFunction, addMacro, addStruct, collapse, removeGraphPart, tabView, updateFunction, updateStruct } from "../src/views/tools/studio/graphOps";
 import { pinsOf, typeLabel, typeOk } from "../src/views/tools/studio/pins";
+import { extractItem, insertItem, itemFile, newerInLibrary, readItem } from "../src/views/tools/studio/library";
 import { applyEvents, emptyDebug, pathPairs } from "../src/views/tools/studio/debugState";
 import { tidyEstimated } from "../src/views/tools/studio/layout";
 import lastStandRaw from "../src/views/tools/studio/templates/last-stand.graph.json?raw";
@@ -358,4 +359,99 @@ test("Macros, structs and enums give their nodes pins", () => {
   assert.deepEqual(pinsOf(sw.graph, sw.graph.nodes.find((n) => n.id === sw.id)!).outputs.map((p) => p.label), ["First", "Second"]);
   assert.equal(typeLabel(sw.graph, `array<struct:${s.id}>`), "Array of New Struct");
   assert.ok(typeOk(sw.graph, `map<player,enum:${e.id}>`) && !typeOk(sw.graph, `map<player,struct:${s.id}>`) && !typeOk(sw.graph, "array<array<number>>"));
+});
+
+// ---- My library
+
+test("a library item brings what it needs, merges what's there, renames clashes, updates in place", () => {
+  // a mode: enum Class, struct Kit (with a Class), variable Kits, Function Give (takes a Kit, calls Helper, sets Kits)
+  let g: Graph = {
+    ...emptyGraph("src", "Src"),
+    enums: [{ id: "e1", name: "Class", values: ["Scout", "Tank"] }],
+    structs: [{ id: "s1", name: "Kit", fields: [{ id: "f1", name: "Ammo", type: "number" }, { id: "f2", name: "Class", type: "enum:e1" }] }],
+    variables: [{ id: "v1", name: "Kits", type: "array<struct:s1>", scope: "mode" }],
+  };
+  const helper = addFunction(g, false, "Helper");
+  g = helper.graph;
+  const give = addFunction(g, false, "Give");
+  g = updateFunction(give.graph, give.id, { inputs: [{ id: "a1", name: "Kit", type: "struct:s1" }] });
+  const call = addNode(g, "fn.call", { x: 200, y: 0 }, give.id, { func: helper.id });
+  const push = addNode(call.graph, "array.add", { x: 400, y: 0 }, give.id, { of: "struct:s1" });
+  const kits = addNode(push.graph, "var.get", { x: 300, y: 100 }, give.id, { var: "v1" });
+  g = kits.graph;
+  const entry = g.nodes.find((n) => n.graph === give.id && n.type === "fn.entry")!;
+  const ret = g.nodes.find((n) => n.graph === give.id && n.type === "fn.return")!;
+  g = { ...g, edges: g.edges.filter((e) => e.from.node !== entry.id) };
+  const wire = (a: string, ap: string, b: string, bp: string) => {
+    const r = connect(g, { node: a, pin: ap }, { node: b, pin: bp });
+    if ("error" in r) assert.fail(r.error);
+    g = r.graph;
+  };
+  wire(entry.id, "then", call.id, "exec");
+  wire(call.id, "then", push.id, "exec");
+  wire(push.id, "then", ret.id, "exec");
+  wire(kits.id, "out", push.id, "array");
+  wire(entry.id, "a1", push.id, "item");
+  const hp = g.nodes.find((n) => n.graph === helper.id && n.type === "fn.entry")!;
+  const hpr = addNode(g, "debug.print", { x: 200, y: 0 }, helper.id, { text: "helper ran", chat: false });
+  g = { ...hpr.graph, edges: hpr.graph.edges.filter((e) => e.from.node !== hp.id) };
+  wire(hp.id, "then", hpr.id, "exec");
+  const x = extractItem(g, give.id);
+  if ("error" in x) assert.fail(x.error);
+  assert.equal(x.kind, "function");
+  assert.deepEqual(x.body.functions.map((f) => f.name).sort(), ["Give", "Helper"]);
+  assert.deepEqual([x.body.structs.length, x.body.enums.length, x.body.variables.length], [1, 1, 1]);
+  const file = itemFile({ name: "Give", description: "Gives a kit", category: "Kits", kind: x.kind, root: give.id, body: x.body, itemVersion: 1 });
+  const it = readItem("give_kit", JSON.parse(JSON.stringify(file)));
+  assert.ok(it);
+  // another mode that already has the same Class, and a different "Kit"
+  let other: Graph = {
+    ...emptyGraph("dst", "Dst"),
+    enums: [{ id: "e7", name: "Class", values: ["Scout", "Tank"] }],
+    structs: [{ id: "s7", name: "Kit", fields: [{ id: "q", name: "Other", type: "text" }] }],
+  };
+  const r = insertItem(other, it!);
+  other = r.graph;
+  assert.equal(other.enums!.length, 1, "the same enum is used again");
+  assert.deepEqual(other.structs!.map((s) => s.name), ["Kit", "Kit 2"], "a clash is renamed");
+  const kit2 = other.structs!.find((s) => s.name === "Kit 2")!;
+  assert.equal(kit2.fields[1].type, "enum:e7", "types point at the mode's own");
+  const root = other.functions!.find((f) => f.id === r.root)!;
+  assert.deepEqual(root.from, { lib: "give_kit", version: 1 });
+  assert.equal(root.inputs[0].type, `struct:${kit2.id}`);
+  const inner = other.nodes.find((n) => n.graph === root.id && n.type === "fn.call")!;
+  assert.equal(other.functions!.find((f) => f.id === inner.params.func)!.name, "Helper");
+  assert.ok("graph" in parseGraph(JSON.parse(JSON.stringify(other))));
+  if (process.env.LS_LIB_OUT) {
+    // a mode that uses it: each round, every living player gets a Kit through the library's Give
+    let m: Graph = { ...other, mode: { id: "libuse", name: "Library use", description: "" } };
+    const ev = addNode(m, "event.round_started", { x: 0, y: 600 });
+    const each = addNode(ev.graph, "flow.for_each_player", { x: 200, y: 600 });
+    const mk = addNode(each.graph, "struct.make", { x: 200, y: 800 }, undefined, { struct: kit2.id });
+    const n30 = addNode(mk.graph, "math.number", { x: 0, y: 800 }, undefined, { value: 30 });
+    const giveCall = addNode(n30.graph, "fn.call", { x: 400, y: 600 }, undefined, { func: root.id });
+    const kitsVar = other.variables.find((v) => v.name === "Kits")!;
+    const getK = addNode(giveCall.graph, "var.get", { x: 400, y: 800 }, undefined, { var: kitsVar.id });
+    const len = addNode(getK.graph, "array.length", { x: 600, y: 800 }, undefined, { of: `struct:${kit2.id}` });
+    const pr = addNode(len.graph, "debug.print", { x: 800, y: 600 }, undefined, { text: "kits given:", chat: false });
+    m = pr.graph;
+    for (const [a, ap, b, bp] of [[ev.id, "then", each.id, "exec"], [each.id, "each", giveCall.id, "exec"], [n30.id, "out", mk.id, "f1"], [mk.id, "out", giveCall.id, "a1"], [each.id, "then", pr.id, "exec"], [getK.id, "out", len.id, "array"], [len.id, "out", pr.id, "value"]]) {
+      const r = connect(m, { node: a, pin: ap }, { node: b, pin: bp });
+      if ("error" in r) assert.fail(`${a}.${ap} -> ${b}.${bp}: ${r.error}`);
+      m = r.graph;
+    }
+    writeFileSync(process.env.LS_LIB_OUT, JSON.stringify(m, null, 1));
+  }
+  // the same item again: nothing new
+  const again = insertItem(other, it!);
+  assert.equal(again.graph.functions!.length, other.functions!.length);
+  // version 2 (Give gains an output): "Update from library" replaces it in place
+  const v2 = { ...it!, itemVersion: 2, body: { ...it!.body, functions: it!.body.functions.map((f) => (f.id === give.id ? { ...f, outputs: [{ id: "r1", name: "Count", type: "number" }] } : f)) } };
+  assert.equal(newerInLibrary([v2], root.from)?.itemVersion, 2);
+  const up = insertItem(other, v2, root.id);
+  const root2 = up.graph.functions!.find((f) => f.id === root.id)!;
+  assert.equal(root2.outputs.length, 1);
+  assert.deepEqual(root2.from, { lib: "give_kit", version: 2 });
+  assert.equal(up.graph.functions!.length, other.functions!.length, "no second copy");
+  assert.equal(up.graph.nodes.filter((n) => n.graph === root.id && n.type === "fn.entry").length, 1);
 });

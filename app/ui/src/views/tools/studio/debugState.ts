@@ -63,7 +63,7 @@ export function applyEvents(s: DebugState, events: DebugEvent[], isEvent: (node:
         if (!node) break;
         touch(node, (r) => ({ ...r, count: r.count + 1, at: now, inputs: ev.inputs, error: undefined, result: undefined }));
         path = isEvent(node) || !path.length ? [node] : [...path, node];
-        if (paused?.node === node) paused = null;
+        // (only Resume ends a pause: other runs of a loop come in while it's paused)
         break;
       case "node_exit":
         if (node) touch(node, (r) => ({ ...r, result: typeof ev.result === "string" ? ev.result : undefined, at: now }));
@@ -77,12 +77,17 @@ export function applyEvents(s: DebugState, events: DebugEvent[], isEvent: (node:
         touch(node, (r) => ({ ...r, inputs: ev.inputs, at: now }));
         path = isEvent(node) || !path.length ? [node] : [...path, node];
         break;
+      case "world_paused":
+        if (!paused && node) paused = { node };
+        break;
       case "world_resumed":
         paused = null;
         break;
       case "vars":
         pendingPlayers = [];
         pendingValues = [];
+        // (the game's word on whether it's paused wins: a lost event can't leave the page stuck)
+        if (ev.paused === false) paused = null;
         vars = {
           round: Number(ev.round) || 0,
           phase: String(ev.phase ?? ""),

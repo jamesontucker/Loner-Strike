@@ -7,6 +7,7 @@ import { freshMember, removeGraphPart, removeType, removeVariable, setParam, tog
 import { LABEL_CHARS, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { allVariables, itemTypeOk, nodeTitle, typeLabel } from "./pins";
 import { TypePicker } from "./TypePicker";
+import { insertItem, newerInLibrary } from "./library";
 import { useConfirm } from "../../../ui";
 
 type PV = string | number | boolean;
@@ -292,6 +293,14 @@ function PartDetails({ id }: { id: string }) {
   const st = graph.structs?.find((x) => x.id === id);
   const en = graph.enums?.find((x) => x.id === id);
   const calls = graph.nodes.filter((n) => n.params.func === id || n.params.macro === id).length;
+  const library = useStudio((s) => s.library);
+  const from = (f ?? m ?? st ?? en)?.from;
+  const newer = newerInLibrary(library, from);
+  const update = async () => {
+    if (!newer || !from) return;
+    if (!(await ask(`Update “${name}” to version ${newer.itemVersion} from your library? Its graph and pins are replaced by the library's (it keeps its name); calls to it stay.`, { ok: "Update" }))) return;
+    edit((g) => insertItem(g, newer, id).graph);
+  };
   const name = f?.name ?? m?.name ?? st?.name ?? en?.name ?? "";
   const rename = (v: string) => edit((g) => (f ? updateFunction(g, id, { name: v }) : m ? updateMacro(g, id, { name: v }) : st ? updateStruct(g, id, { name: v }) : updateEnum(g, id, { name: v })));
   const drop = async () => {
@@ -302,6 +311,22 @@ function PartDetails({ id }: { id: string }) {
   return (
     <aside className="st-side" aria-label="Details">
       <p className="st-side-kicker">Details · {f ? (f.pure ? "Pure Function" : "Function") : m ? "Macro" : st ? "Struct" : "Enum"}</p>
+      {from && (
+        <div className={newer ? "st-update" : "st-side-help"}>
+          {newer ? (
+            <>
+              <p className="st-side-help">
+                Your library has a newer “{newer.name}” (version {newer.itemVersion}; this copy is version {from.version}).
+              </p>
+              <button type="button" className="btn small" onClick={() => void update()}>
+                Update from library
+              </button>
+            </>
+          ) : (
+            <span className="st-muted">From your library{library.some((x) => x.id === from.lib) ? `, version ${from.version} (up to date)` : " (no longer there)"}.</span>
+          )}
+        </div>
+      )}
       <div className="st-side-fields">
         <label className="st-side-field">
           <span>Name</span>
@@ -364,7 +389,7 @@ function PartDetails({ id }: { id: string }) {
   );
 }
 
-const COMMENT_COLOURS = ["#4a5a6a", "#6a4a8a", "#2f6a4a", "#7a6a2b", "#7a2b2b", "#2f4f7a", "#555555"];
+const COMMENT_COLOURS = ["#5b6a4b", "#4a5a6a", "#6a4a8a", "#2f6a4a", "#7a6a2b", "#7a2b2b", "#2f4f7a", "#555555"];
 
 const cleanLabel = (v: string, max: number) => [...v].filter((c) => LABEL_CHARS.test(c)).join("").slice(0, max);
 
@@ -456,7 +481,7 @@ export function Inspector() {
         <p className="st-side-help">Double-click its title bar to change the text. Dragging the title bar moves the box and the nodes inside; inside it, the canvas works as anywhere.</p>
         <div className="st-swatches" role="group" aria-label="Colour">
           {COMMENT_COLOURS.map((c) => (
-            <button key={c} type="button" className={`st-swatch${(comment.color ?? "#4a5a6a") === c ? " on" : ""}`} style={{ background: c }} aria-label={`Colour ${c}`} onClick={() => edit((g) => ({ ...g, comments: g.comments.map((x) => (x.id === comment.id ? { ...x, color: c } : x)) }))} />
+            <button key={c} type="button" className={`st-swatch${(comment.color ?? "#5b6a4b") === c ? " on" : ""}`} style={{ background: c }} aria-label={`Colour ${c}`} onClick={() => edit((g) => ({ ...g, comments: g.comments.map((x) => (x.id === comment.id ? { ...x, color: c } : x)) }))} />
           ))}
         </div>
       </aside>

@@ -123,6 +123,34 @@ stock lsg_bot_goto(bot, const name[], secs)
 public lsg_bot_free(task)
 	ls_bot_release(LSG_TASK - 100 - task)
 
+// Drop Weapon: a person drops it; a bot loses it (a bot's "drop" can crash this game's DLL)
+stock lsg_drop(id)
+{
+	if (!is_user_bot(id))
+	{
+		engclient_cmd(id, "drop")
+		return
+	}
+	new wid = get_user_weapon(id)
+	if (!wid || wid == CSW_KNIFE)
+		return
+	new name[32]
+	get_weaponname(wid, name, charsmax(name))
+	new ent = -1
+	while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", name)) > 0)
+	{
+		if (pev(ent, pev_owner) != id)
+			continue
+		ExecuteHamB(Ham_Weapon_RetireWeapon, ent)
+		if (ExecuteHamB(Ham_RemovePlayerItem, id, ent))
+		{
+			set_pev(id, pev_weapons, pev(id, pev_weapons) & ~(1 << wid))
+			ExecuteHamB(Ham_Item_Kill, ent)
+		}
+		break
+	}
+}
+
 stock Float:lsg_mod(Float:a, Float:b)
 {
 	if (b == 0.0)
@@ -339,6 +367,40 @@ stock lsg_squads_alive()
 		}
 	}
 	return n
+}
+
+// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)
+public plugin_precache()
+{
+	if (get_cvar_pointer("ls_creature_precache"))
+		lsg_precache_types("all")
+}
+
+stock lsg_precache_types(const want[])
+{
+	new cur[256], w[32], rest[256], padded[280], pw[36]
+	get_cvar_string("ls_creature_precache", cur, charsmax(cur))
+	if (equali(cur, "all"))
+		return
+	if (equali(want, "all"))
+	{
+		set_cvar_string("ls_creature_precache", "all")
+		return
+	}
+	copy(rest, charsmax(rest), want)
+	while (rest[0])
+	{
+		strtok(rest, w, charsmax(w), rest, charsmax(rest), ' ')
+		formatex(padded, charsmax(padded), " %s ", cur)
+		formatex(pw, charsmax(pw), " %s ", w)
+		if (w[0] && containi(padded, pw) < 0)
+		{
+			if (cur[0])
+				add(cur, charsmax(cur), " ")
+			add(cur, charsmax(cur), w)
+		}
+	}
+	set_cvar_string("ls_creature_precache", cur)
 }
 
 public plugin_init()

@@ -119,6 +119,12 @@ function Studio({ maps }: ToolProps) {
   useToolCrumbs("studio", graph ? [{ label: graph.mode.name || graph.mode.id, address: funcName ? `studio:${graph.mode.id}` : undefined }, ...(funcName ? [{ label: `${tabName ? tabKind : "Function"}: ${funcName}` }] : [])] : null);
 
   const [find, setFind] = useState("");
+  // the canvas's look: "a" (the restrained Loner-Strike touch); development can show the plain one
+  const [skin, setSkin] = useState<"a" | "none">("a");
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    (window as unknown as { __studioSkin?: (s: "a" | "none") => void }).__studioSkin = setSkin;
+  }, []);
   useDirty("studio", dirty);
   // the open graph is the address ("studio:<id>"), so Back and the crumbs step in and out of it
   // (an open Function's or Macro's tab too: "studio:<id>/<tab>", so Back steps out of it and
@@ -442,7 +448,7 @@ function Studio({ maps }: ToolProps) {
   const errors = problems.filter((p) => p.level === "error").length;
   const mapNames = maps.map((m) => m.name).sort();
   return (
-    <div className={`st-page${playing ? " playing" : ""}`}>
+    <div className={`st-page st-skin-${skin}${playing ? " playing" : ""}`}>
       <div className="st-toolbar tools-bar">
         <button
           type="button"

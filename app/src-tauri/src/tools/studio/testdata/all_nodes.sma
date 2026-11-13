@@ -119,6 +119,34 @@ stock lsg_bot_goto(bot, const name[], secs)
 public lsg_bot_free(task)
 	ls_bot_release(LSG_TASK - 100 - task)
 
+// Drop Weapon: a person drops it; a bot loses it (a bot's "drop" can crash this game's DLL)
+stock lsg_drop(id)
+{
+	if (!is_user_bot(id))
+	{
+		engclient_cmd(id, "drop")
+		return
+	}
+	new wid = get_user_weapon(id)
+	if (!wid || wid == CSW_KNIFE)
+		return
+	new name[32]
+	get_weaponname(wid, name, charsmax(name))
+	new ent = -1
+	while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", name)) > 0)
+	{
+		if (pev(ent, pev_owner) != id)
+			continue
+		ExecuteHamB(Ham_Weapon_RetireWeapon, ent)
+		if (ExecuteHamB(Ham_RemovePlayerItem, id, ent))
+		{
+			set_pev(id, pev_weapons, pev(id, pev_weapons) & ~(1 << wid))
+			ExecuteHamB(Ham_Item_Kill, ent)
+		}
+		break
+	}
+}
+
 stock Float:lsg_mod(Float:a, Float:b)
 {
 	if (b == 0.0)

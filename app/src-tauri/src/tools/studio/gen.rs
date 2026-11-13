@@ -336,6 +336,9 @@ struct Gen<'a> {
     layouts: Vec<Vec<usize>>,
     /// a Macro's copied nodes -> the Macro node they stand for (for the debugger)
     origin: &'a std::collections::HashMap<String, String>,
+    /// (debug builds) the node being written: its inputs worked out once into locals, so the
+    /// debugger shows the very values the node uses
+    pinned: std::cell::RefCell<Vec<(String, String, String)>>,
     debug: bool,
 }
 
@@ -539,6 +542,17 @@ impl<'a> Gen<'a> {
 
     /// The value of a data input: what's wired in, or the param it falls back to.
     fn input(&self, node: &str, pin: &str) -> Option<Val> {
+        if let Some((_, _, local)) = self.pinned.borrow().iter().find(|(n, p, _)| n == node && p == pin) {
+            return Some(Val { expr: local.clone(), ty: self.v.in_type(node, pin).filter(|t| t != "any").unwrap_or_else(|| self.input_unpinned_ty(node, pin)) });
+        }
+        self.input_unpinned(node, pin)
+    }
+
+    fn input_unpinned_ty(&self, node: &str, pin: &str) -> String {
+        self.input_unpinned(node, pin).map(|v| v.ty).unwrap_or_else(|| "any".into())
+    }
+
+    fn input_unpinned(&self, node: &str, pin: &str) -> Option<Val> {
         let (n, def) = self.node(node);
         let want = self.v.in_type(node, pin).unwrap_or_else(|| "any".into());
         if let Some((src, spin)) = self.v.data_source(node, pin) {
@@ -783,6 +797,31 @@ impl<'a> Gen<'a> {
     }
 }
 
+/// What a mode needs on the server besides its own plugin: gm_components (any component node),
+/// and the creature types to load as the map starts (creatures can only come in mid-map when
+/// their type was precached; "all" when waves of components bring their own).
+pub struct Needs {
+    pub components: bool,
+    pub creatures: Vec<String>,
+}
+
+pub fn needs(checked: &Graph) -> Needs {
+    let ex = super::expand::expand(checked);
+    let reg = super::graph::registry();
+    let components = ex.graph.nodes.iter().any(|n| reg.get(&n.kind).is_some_and(|d| d.needs.as_deref() == Some("components")));
+    let mut creatures: Vec<String> = Vec::new();
+    for n in ex.graph.nodes.iter().filter(|n| n.kind == "creature.spawn") {
+        let k = name_text(n.params.get("kind").and_then(Value::as_str).unwrap_or("zombie"));
+        if !k.is_empty() && !creatures.contains(&k) {
+            creatures.push(k);
+        }
+    }
+    if ex.graph.nodes.iter().any(|n| n.kind.starts_with("comp.wave") || n.kind == "comp.on_wave_spawn" || n.kind == "comp.load_pack") {
+        creatures = vec!["all".into()];
+    }
+    Needs { components, creatures }
+}
+
 /// Turns a checked graph into the plugin's source. The graph must have passed
 /// `graph::validate` without errors; nodes nothing runs are left out.
 pub fn generate(checked: &Graph, debug: bool) -> Generated {
@@ -869,7 +908,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         .collect();
     let rec_cells = g.structs.iter().map(|st| st.fields.iter().map(|f| if f.ty == "vector" { 3 } else if f.ty == "text" { 0 } else { 1 }).sum::<usize>()).max().unwrap_or(0).max(1);
     let rec_texts = g.structs.iter().map(|st| st.fields.iter().filter(|f| f.ty == "text").count()).max().unwrap_or(0).max(1);
-    let gen = Gen { v, slots, outs, touts, live, vars, reserved, layouts, origin: &ex.origin, debug };
+    let gen = Gen { v, slots, outs, touts, live, vars, reserved, layouts, origin: &ex.origin, pinned: Default::default(), debug };
     let v = &gen.v;
     let kinds_live: BTreeSet<&str> = gen.live.iter().map(|id| v.defs[id].kind.as_str()).collect();
     let has = |k: &str| kinds_live.contains(k);
@@ -1037,6 +1076,11 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
 
     // registration
     let kinds: Vec<&EventKind> = EVENTS.iter().filter(|k| has(k.kind)).collect();
+    let need = needs(checked);
+    if !need.creatures.is_empty() {
+        o.line(format!("// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)\npublic plugin_precache()\n{{\n\tif (get_cvar_pointer(\"ls_creature_precache\"))\n\t\tlsg_precache_types({})\n}}\n", pawn_str(&need.creatures.join(" "))));
+        o.line("stock lsg_precache_types(const want[])\n{\n\tnew cur[256], w[32], rest[256], padded[280], pw[36]\n\tget_cvar_string(\"ls_creature_precache\", cur, charsmax(cur))\n\tif (equali(cur, \"all\"))\n\t\treturn\n\tif (equali(want, \"all\"))\n\t{\n\t\tset_cvar_string(\"ls_creature_precache\", \"all\")\n\t\treturn\n\t}\n\tcopy(rest, charsmax(rest), want)\n\twhile (rest[0])\n\t{\n\t\tstrtok(rest, w, charsmax(w), rest, charsmax(rest), ' ')\n\t\tformatex(padded, charsmax(padded), \" %s \", cur)\n\t\tformatex(pw, charsmax(pw), \" %s \", w)\n\t\tif (w[0] && containi(padded, pw) < 0)\n\t\t{\n\t\t\tif (cur[0])\n\t\t\t\tadd(cur, charsmax(cur), \" \")\n\t\t\tadd(cur, charsmax(cur), w)\n\t\t}\n\t}\n\tset_cvar_string(\"ls_creature_precache\", cur)\n}\n");
+    }
     o.line("public plugin_init()\n{");
     o.line(format!("\tls_register_mode(LSG_MODE, {}, \"1.0\", \"Game Mode Studio\")", pawn_str(&safe_text(&g.mode.name, 40))));
     if debug {
@@ -1300,6 +1344,20 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
     o.line(format!("{stock}{}(ctx[])\n{{", gen.fname(id)));
     let mut b = Out { text: String::new(), lines: 0 };
     if debug {
+        // each input worked out once, into a local: what's reported is what's used
+        for (k, ip) in v.inputs(id).iter().filter(|p| p.ty != "exec").enumerate() {
+            if def.kind == "flow.while" && ip.id == "cond" {
+                continue;
+            }
+            let Some(val) = gen.input(id, &ip.id) else { continue };
+            let local = format!("lsi{k}");
+            match kind_of(&val.ty) {
+                's' => b.line(format!("\tnew {local}[128]\n\tcopy({local}, 127, {})", val.expr)),
+                _ if val.ty == "number" => b.line(format!("\tnew Float:{local} = {}", val.expr)),
+                _ => b.line(format!("\tnew {local} = {}", val.expr)),
+            }
+            gen.pinned.borrow_mut().push((id.to_string(), ip.id.clone(), local));
+        }
         b.line("\tlsd_begin()");
         for ip in v.inputs(id).iter().filter(|p| p.ty != "exec") {
             let Some(val) = gen.input(id, &ip.id) else { continue };
@@ -1617,7 +1675,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                     "nvg" => format!("cs_set_user_nvg({p}, 1)"),
                     _ => format!("cs_set_user_armor({p}, 100, CS_ARMOR_VESTHELM)"),
                 }),
-                "player.drop_weapon" => (format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", format!("engclient_cmd({p}, \"drop\")")),
+                "player.drop_weapon" => (format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", format!("lsg_drop({p})")),
                 "player.set_gravity" => (format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", format!("set_user_gravity({p}, {})", inp("gravity", "number"))),
                 "player.launch" => (format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", format!("lsg_launch({p}, {})", inp("speed", "number"))),
                 "player.set_glow" => (format!("!lsg_ok({p})"), "Nothing done: nobody there.", match gen.choice(n, def, "color") {
@@ -2147,6 +2205,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         _ => {}
     }
+    gen.pinned.borrow_mut().clear();
     if !b.text.contains("ctx") {
         b.line("\t#pragma unused ctx");
     }
@@ -2542,6 +2601,34 @@ stock lsg_bot_goto(bot, const name[], secs)
 
 public lsg_bot_free(task)
 	ls_bot_release(LSG_TASK - 100 - task)
+
+// Drop Weapon: a person drops it; a bot loses it (a bot's "drop" can crash this game's DLL)
+stock lsg_drop(id)
+{
+	if (!is_user_bot(id))
+	{
+		engclient_cmd(id, "drop")
+		return
+	}
+	new wid = get_user_weapon(id)
+	if (!wid || wid == CSW_KNIFE)
+		return
+	new name[32]
+	get_weaponname(wid, name, charsmax(name))
+	new ent = -1
+	while ((ent = engfunc(EngFunc_FindEntityByString, ent, "classname", name)) > 0)
+	{
+		if (pev(ent, pev_owner) != id)
+			continue
+		ExecuteHamB(Ham_Weapon_RetireWeapon, ent)
+		if (ExecuteHamB(Ham_RemovePlayerItem, id, ent))
+		{
+			set_pev(id, pev_weapons, pev(id, pev_weapons) & ~(1 << wid))
+			ExecuteHamB(Ham_Item_Kill, ent)
+		}
+		break
+	}
+}
 
 stock Float:lsg_mod(Float:a, Float:b)
 {
@@ -3240,6 +3327,25 @@ mod tests {
         }
     }
 
+    /// A mode with component nodes loads gm_components (mod.rs writes it into its plugins list);
+    /// creature types it spawns are precached as the map loads; Drop Weapon never asks a bot to drop.
+    #[test]
+    fn modes_bring_what_they_need() {
+        let rifle = parse(TEMPLATE).unwrap();
+        let n = needs(&rifle);
+        assert!(!n.components && n.creatures.is_empty());
+        let ls = parse(include_str!("../../../../ui/src/views/tools/studio/templates/last-stand.graph.json")).unwrap();
+        let n = needs(&ls);
+        assert!(n.components && n.creatures == ["all"]);
+        assert!(generate(&ls, false).source.contains("public plugin_precache()"));
+        let every = parse(EVERY_NODE).unwrap();
+        let src = generate(&every, false).source;
+        assert!(src.contains("lsg_drop(") && !src.contains("engclient_cmd(ctx") && src.contains("if (!is_user_bot(id))\n\t{\n\t\tengclient_cmd(id, \"drop\")"));
+        // the debugger reports the value the node then uses (worked out once)
+        let dbg = generate(&every, true).source;
+        assert!(dbg.contains("new Float:lsi"), "inputs into locals");
+    }
+
     #[test]
     fn template_release_snapshot() {
         let g = parse(TEMPLATE).unwrap();
@@ -3325,7 +3431,7 @@ mod tests {
             for l in src.lines().filter(|l| l.contains("evil_var")) {
                 assert!(l.contains("// evil_var") && !l.contains("*/"), "{l}");
             }
-            assert!(src.contains("lsg_teleport(ctx[0], \"aserver_cmdquit\")"), "{src}");
+            assert!(src.contains("lsg_teleport(ctx[0], \"aserver_cmdquit\")") || (debug && src.contains("lsg_teleport(lsi0, \"aserver_cmdquit\")")), "{src}");
             snapshot(if debug { "malicious.debug.sma" } else { "malicious.sma" }, &src);
         }
     }

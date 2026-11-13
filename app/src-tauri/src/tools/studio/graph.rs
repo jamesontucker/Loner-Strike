@@ -175,6 +175,16 @@ pub struct EnumDef {
     pub id: String,
     pub name: String,
     pub values: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<LibFrom>,
+}
+
+/// Where a Function, Macro, struct or enum came from: an item of the player's library and its
+/// version, so the Studio can offer "Update from library" when that item changes.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct LibFrom {
+    pub lib: String,
+    pub version: u32,
 }
 
 /// A record of named values (a Loadout: Weapon, Ammo, Armor).
@@ -183,6 +193,8 @@ pub struct StructDef {
     pub id: String,
     pub name: String,
     pub fields: Vec<Member>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<LibFrom>,
 }
 
 /// A struct's field, or a Function's or Macro's input or output.
@@ -209,6 +221,8 @@ pub struct Function {
     /// variables only this Function sees, back to their start value each time it runs
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub locals: Vec<Variable>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<LibFrom>,
 }
 
 /// A Macro: a piece of graph copied in wherever it's used. Its inputs and outputs can be flow
@@ -221,6 +235,8 @@ pub struct Macro {
     pub inputs: Vec<Member>,
     #[serde(default)]
     pub outputs: Vec<Member>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<LibFrom>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -1081,6 +1097,12 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         if s.fields.iter().filter(|f| f.ty == "text").count() > MAX_TEXT_FIELDS {
             p.push(Problem::err(None, format!("The struct \u{201c}{}\u{201d} can have at most {MAX_TEXT_FIELDS} text fields.", short(&s.name))));
         }
+    }
+
+    // library marks: an item id and a version
+    let froms = g.enums.iter().map(|x| &x.from).chain(g.structs.iter().map(|x| &x.from)).chain(g.functions.iter().map(|x| &x.from)).chain(g.macros.iter().map(|x| &x.from));
+    if froms.flatten().any(|f| !valid_mode_id(&f.lib) || f.version > 100_000) {
+        p.push(Problem::err(None, "A part's library mark isn't one this app knows."));
     }
 
     // Functions and Macros: their graphs share one set of ids
