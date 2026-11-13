@@ -15,7 +15,9 @@ export type NodeRun = {
 };
 
 export type PlayerVar = { id: number; name: string; team: string; hp: number; alive: boolean; weapon: string; bot: boolean };
-export type Vars = { round: number; phase: string; timeLeft: number; aliveT: number; aliveCT: number; players: PlayerVar[]; at: number };
+/** A graph variable's value: `p` 0 for one kept for the whole mode, else the player's index. */
+export type VarValue = { v: string; p: number; value: number | boolean | string };
+export type Vars = { round: number; phase: string; timeLeft: number; aliveT: number; aliveCT: number; players: PlayerVar[]; values: VarValue[]; at: number };
 
 export type DebugState = {
   runs: Record<string, NodeRun>;
@@ -42,6 +44,7 @@ export function applyEvents(s: DebugState, events: DebugEvent[], isEvent: (node:
   let vars = s.vars;
   let map = s.map;
   let pendingPlayers: PlayerVar[] | null = null;
+  let pendingValues: VarValue[] | null = null;
   const touch = (node: string, f: (r: NodeRun) => NodeRun) => {
     runs = { ...runs, [node]: f(runs[node] ?? { count: 0, at: now }) };
   };
@@ -79,6 +82,7 @@ export function applyEvents(s: DebugState, events: DebugEvent[], isEvent: (node:
         break;
       case "vars":
         pendingPlayers = [];
+        pendingValues = [];
         vars = {
           round: Number(ev.round) || 0,
           phase: String(ev.phase ?? ""),
@@ -86,15 +90,19 @@ export function applyEvents(s: DebugState, events: DebugEvent[], isEvent: (node:
           aliveT: Number(ev.aliveT) || 0,
           aliveCT: Number(ev.aliveCT) || 0,
           players: pendingPlayers,
+          values: pendingValues,
           at: now,
         };
+        break;
+      case "var_value":
+        if (pendingValues && typeof ev.v === "string") pendingValues.push({ v: ev.v, p: Number(ev.p) || 0, value: ev.value as VarValue["value"] });
         break;
       case "var_player":
         if (pendingPlayers && ev.p && typeof ev.p === "object") pendingPlayers.push(ev.p as PlayerVar);
         break;
     }
   }
-  const log = [...s.log, ...events.filter((e) => e.e !== "var_player" && e.e !== "commands")].slice(-LOG);
+  const log = [...s.log, ...events.filter((e) => e.e !== "var_player" && e.e !== "var_value" && e.e !== "commands")].slice(-LOG);
   return { runs, path, paused, vars, log, map, seen: s.seen + events.length };
 }
 

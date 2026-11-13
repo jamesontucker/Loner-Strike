@@ -2,7 +2,7 @@
 // and the rules are testable without React (studio.test.ts). The app checks the same rules
 // again before compiling (tools/studio/graph.rs).
 
-import { parseGraph, type GComment, type GEdge, type GNode, type Graph } from "./schema";
+import { parseGraph, type GComment, type GEdge, type GNode, type GVariable, type Graph } from "./schema";
 import { compatible, defaultParams, nodeDef, type PinDef, type PinType } from "./registry";
 
 export type PinRef = { node: string; pin: string };
@@ -28,13 +28,20 @@ export function inPin(g: Graph, ref: PinRef): PinDef | undefined {
   return n ? nodeDef(n.type)?.inputs.find((p) => p.id === ref.pin) : undefined;
 }
 
+/** A `var` pin's type: the type of the variable the node is set to ("any" until one is picked). */
+function resolve(g: Graph, n: GNode, t: PinType | undefined): PinType | undefined {
+  if (t !== "var") return t;
+  const v = g.variables.find((x) => x.id === n.params.var);
+  return v ? v.type : "any";
+}
+
 /** The type an output really carries: a reroute carries whatever comes into it ("any" when
  *  nothing does yet). */
 export function outType(g: Graph, ref: PinRef, seen = new Set<string>()): PinType | undefined {
   const n = findNode(g, ref.node);
   const def = n && nodeDef(n.type);
   if (!def) return undefined;
-  if (!def.reroute) return def.outputs.find((p) => p.id === ref.pin)?.type;
+  if (!def.reroute) return resolve(g, n, def.outputs.find((p) => p.id === ref.pin)?.type);
   if (seen.has(n.id)) return "any";
   seen.add(n.id);
   const e = g.edges.find((x) => x.to.node === n.id && x.to.pin === "in");
@@ -47,7 +54,7 @@ export function inType(g: Graph, ref: PinRef, seen = new Set<string>()): PinType
   const n = findNode(g, ref.node);
   const def = n && nodeDef(n.type);
   if (!def) return undefined;
-  if (!def.reroute) return def.inputs.find((p) => p.id === ref.pin)?.type;
+  if (!def.reroute) return resolve(g, n, def.inputs.find((p) => p.id === ref.pin)?.type);
   if (seen.has(n.id)) return "any";
   seen.add(n.id);
   const e = g.edges.find((x) => x.from.node === n.id && x.from.pin === "out");
@@ -70,7 +77,7 @@ function makesLoop(g: Graph, from: string, to: string): boolean {
 
 export type Check = { ok: true; replaces: string[] } | { ok: false; error: string };
 
-const label = (t: PinType) => ({ exec: "Flow", player: "Player", team: "Team", any: "Anything" })[t];
+const label = (t: PinType) => ({ exec: "Flow", player: "Player", entity: "Entity", team: "Team", number: "Number", bool: "Yes/No", text: "Text", any: "Anything", var: "Variable" })[t];
 
 /** Can this wire be drawn? A new wire into a taken data input (or from a taken flow output)
  *  replaces the old one, as in Unreal's Blueprints: `replaces` lists those. */
@@ -134,8 +141,36 @@ export function insertReroute(g: Graph, edgeId: string, pos: { x: number; y: num
   return { ...graph, edges: [...graph.edges.filter((x) => x.id !== edgeId), a, b] };
 }
 
-export function setParam(g: Graph, node: string, param: string, value: string | number): Graph {
+export function setParam(g: Graph, node: string, param: string, value: string | number | boolean): Graph {
   return { ...g, nodes: g.nodes.map((n) => (n.id === node ? { ...n, params: { ...n.params, [param]: value } } : n)) };
+}
+
+// ---- variables -----------------------------------------------------------------------------
+
+export function addVariable(g: Graph, v: Omit<GVariable, "id">): { graph: Graph; id: string } {
+  const used = new Set(g.variables.map((x) => x.id));
+  let i = 1;
+  while (used.has(`v${i}`)) i++;
+  const id = `v${i}`;
+  return { graph: { ...g, variables: [...g.variables, { ...v, id }] }, id };
+}
+
+export function updateVariable(g: Graph, id: string, patch: Partial<Omit<GVariable, "id">>): Graph {
+  return {
+    ...g,
+    variables: g.variables.map((x) => {
+      if (x.id !== id) return x;
+      const next = { ...x, ...patch };
+      // a new type: the start value starts again
+      if (patch.type && patch.type !== x.type) next.default = patch.type === "number" ? 0 : patch.type === "bool" ? false : "";
+      return next;
+    }),
+  };
+}
+
+/** Removes a variable; nodes set to it keep their place and show a problem until another is picked. */
+export function removeVariable(g: Graph, id: string): Graph {
+  return { ...g, variables: g.variables.filter((x) => x.id !== id) };
 }
 
 export function toggleBreakpoint(g: Graph, node: string): Graph {

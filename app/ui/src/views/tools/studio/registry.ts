@@ -3,16 +3,19 @@
 
 import raw from "./nodes.json?raw";
 
-export type PinType = "exec" | "player" | "team" | "any";
-export type PinDef = { id: string; type: PinType; label: string; required?: boolean; param?: string };
+export type PinType = "exec" | "player" | "entity" | "team" | "number" | "bool" | "text" | "any" | "var";
+export type PinDef = { id: string; type: PinType; label: string; required?: boolean; optional?: boolean; param?: string };
 export type ParamDef = {
   id: string;
   label: string;
-  kind: "choice" | "number" | "text";
-  default: string | number;
+  /** name: an entity's name; keys: component keys; var: one of the graph's variables;
+   *  varvalue: a value of that variable's type */
+  kind: "choice" | "number" | "text" | "bool" | "name" | "keys" | "var" | "varvalue";
+  default: string | number | boolean;
   choices?: [string, string][];
   min?: number;
   max?: number;
+  varType?: "number" | "bool" | "text";
 };
 export type NodeDef = {
   type: string;
@@ -21,6 +24,10 @@ export type NodeDef = {
   help: string;
   event?: boolean;
   reroute?: boolean;
+  /** no flow pins: worked out where its value is used */
+  pure?: boolean;
+  /** "components" (gm_components) or "creatures" (the bot brain's creatures) */
+  needs?: string;
   inputs: PinDef[];
   outputs: PinDef[];
   params: ParamDef[];
@@ -35,10 +42,15 @@ export const PIN_TYPES = data.pinTypes;
 const BY_TYPE = new Map(NODE_DEFS.map((d) => [d.type, d]));
 export const nodeDef = (type: string): NodeDef | undefined => BY_TYPE.get(type);
 
-/** Can a wire carrying `from` go into a pin of type `to`? ("any" is a reroute's pin.) */
-export const compatible = (from: PinType, to: PinType) => from === to || from === "any" || to === "any";
+/** Can a wire carrying `from` go into a pin of type `to`? ("any" is a reroute's pin; a player
+ *  is an entity.) Same rules as graph.rs `compatible`. */
+export const compatible = (from: PinType, to: PinType) => from === to || from === "any" || to === "any" || (from === "player" && to === "entity");
 
-export function defaultParams(def: NodeDef): Record<string, string | number> {
+/** Entity names and creature types; component keys (the app checks the same). */
+export const NAME_CHARS = /^[A-Za-z0-9_.-]{0,32}$/;
+export const KEYS_CHARS = /^[A-Za-z0-9 _.=:,-]*$/;
+
+export function defaultParams(def: NodeDef): Record<string, string | number | boolean> {
   return Object.fromEntries(def.params.map((p) => [p.id, p.default]));
 }
 
@@ -49,7 +61,7 @@ export function searchNodes(query: string, wire?: { type: PinType; dir: "in" | "
   return NODE_DEFS.filter((d) => {
     if (wire) {
       const pins = wire.dir === "out" ? d.inputs : d.outputs;
-      if (!pins.some((p) => compatible(wire.type, p.type))) return false;
+      if (!pins.some((p) => fits(wire, p.type))) return false;
     }
     if (!q) return true;
     return `${d.title} ${d.category} ${d.help}`.toLowerCase().includes(q);
@@ -65,5 +77,12 @@ export function searchNodes(query: string, wire?: { type: PinType; dir: "in" | "
  *  input: an output). */
 export function firstPin(def: NodeDef, type: PinType, dir: "in" | "out"): PinDef | undefined {
   const pins = dir === "out" ? def.inputs : def.outputs;
-  return pins.find((p) => p.type === type) ?? pins.find((p) => compatible(type, p.type));
+  return pins.find((p) => p.type === type) ?? pins.find((p) => fits({ type, dir }, p.type));
+}
+
+/** Can a pin of type `pin` take a wire being dragged (a variable's pin can take anything until
+ *  its variable is picked). */
+function fits(wire: { type: PinType; dir: "in" | "out" }, pin: PinType): boolean {
+  if (pin === "var") return wire.type !== "exec";
+  return wire.dir === "out" ? compatible(wire.type, pin) : compatible(pin, wire.type);
 }

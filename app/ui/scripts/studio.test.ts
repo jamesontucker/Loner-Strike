@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import templateRaw from "../src/views/tools/studio/templates/team-dm.graph.json?raw";
 import { parseGraph, emptyGraph, type Graph } from "../src/views/tools/studio/schema";
-import { addNode, canConnect, connect, copy, emptyHistory, insertReroute, inType, outType, paste, record, redo, remove, undo } from "../src/views/tools/studio/graphOps";
+import { addVariable, addNode, canConnect, connect, copy, emptyHistory, insertReroute, inType, outType, paste, record, redo, remove, undo } from "../src/views/tools/studio/graphOps";
 import { NODE_DEFS, nodeDef, searchNodes } from "../src/views/tools/studio/registry";
 import { applyEvents, emptyDebug, pathPairs } from "../src/views/tools/studio/debugState";
 
@@ -41,7 +41,7 @@ test("schema refuses other files, newer versions and unsafe text", () => {
 test("every node in the registry is well formed", () => {
   for (const d of NODE_DEFS) {
     assert.ok(d.title && d.category && d.help, d.type);
-    for (const p of [...d.inputs, ...d.outputs]) assert.ok(["exec", "player", "team", "any"].includes(p.type), `${d.type}.${p.id}`);
+    for (const p of [...d.inputs, ...d.outputs]) assert.ok(["exec", "player", "entity", "team", "number", "bool", "text", "any", "var"].includes(p.type), `${d.type}.${p.id}`);
   }
   for (const t of ["event.round_started", "event.player_killed", "cond.is_team", "player.give_weapon", "score.end_round"]) assert.ok(nodeDef(t), t);
 });
@@ -76,10 +76,37 @@ test("reroutes carry the type that comes in", () => {
   assert.equal(g.edges.filter((e) => e.to.node === "give_ak" && e.to.pin === "player").length, 1);
 });
 
+test("version 1 files open as version 2; variables are checked", () => {
+  const g = template();
+  const r = parseGraph({ ...g, version: 1, variables: undefined });
+  assert.ok("graph" in r && r.graph.version === 2 && r.graph.variables.length === 0);
+  assert.ok("error" in parseGraph({ ...g, variables: [{ id: "v1", name: "Kills", type: "number", scope: "player", default: "lots" }] }));
+  assert.ok("error" in parseGraph({ ...g, variables: [{ id: "v1", name: "a */ b", type: "number", scope: "mode", default: 0 }] }));
+  assert.ok("graph" in parseGraph({ ...g, variables: [{ id: "v1", name: "Kills", type: "number", scope: "player", default: 0 }] }));
+});
+
+test("a variable's pins take its type", () => {
+  let g = template();
+  const v = addVariable(g, { name: "Kills", type: "number", scope: "player", default: 0 });
+  g = v.graph;
+  const s = addNode(g, "var.set", { x: 0, y: 500 });
+  g = { ...s.graph, nodes: s.graph.nodes.map((n) => (n.id === s.id ? { ...n, params: { ...n.params, var: v.id } } : n)) };
+  assert.equal(inType(g, { node: s.id, pin: "value" }), "number");
+  // a player can't go into a number
+  assert.equal(canConnect(g, { node: "killed", pin: "victim" }, { node: s.id, pin: "value" }).ok, false);
+  const h = addNode(g, "player.get_health", { x: 0, y: 600 });
+  g = h.graph;
+  assert.equal(canConnect(g, { node: h.id, pin: "out" }, { node: s.id, pin: "value" }).ok, true);
+  // a player is an entity
+  const c = addNode(g, "comp.crate_open", { x: 300, y: 600 });
+  assert.equal(canConnect(c.graph, { node: "killed", pin: "victim" }, { node: c.id, pin: "container" }).ok, true);
+});
+
 test("node search follows the wire being dragged", () => {
   const fromPlayer = searchNodes("", { type: "player", dir: "out" }).map((d) => d.type);
   assert.ok(fromPlayer.includes("cond.is_team") && fromPlayer.includes("player.give_weapon"));
   assert.ok(!fromPlayer.includes("score.end_round"));
+  assert.ok(searchNodes("", { type: "number", dir: "out" }).some((d) => d.type === "math.compare"));
   const intoPlayer = searchNodes("", { type: "player", dir: "in" }).map((d) => d.type);
   assert.ok(intoPlayer.includes("event.player_killed") && !intoPlayer.includes("event.round_started"));
   assert.equal(searchNodes("give")[0].type, "player.give_weapon");
@@ -142,6 +169,12 @@ test("debug events become runs, a path, a pause and live values", () => {
   assert.equal(s.paused?.node, "give_ak");
   assert.equal(s.vars?.aliveCT, 4);
   assert.equal(s.vars?.players[0].weapon, "ak47");
+  s = applyEvents(s, [
+    { s: 11, t: 6, e: "vars", round: 2, phase: "live", timeLeft: 90, aliveT: 3, aliveCT: 4 },
+    { s: 12, t: 6, e: "var_value", v: "v1", p: 0, value: 3 },
+    { s: 13, t: 6, e: "var_value", v: "v2", p: 1, value: true },
+  ], isEvent, 1000);
+  assert.deepEqual(s.vars?.values, [{ v: "v1", p: 0, value: 3 }, { v: "v2", p: 1, value: true }]);
   s = applyEvents(s, [
     { s: 11, t: 9, e: "world_resumed", paused: 4 },
     { s: 12, t: 9, e: "node_enter", node: "give_ak" },

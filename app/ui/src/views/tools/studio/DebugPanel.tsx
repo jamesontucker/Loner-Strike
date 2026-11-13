@@ -66,6 +66,19 @@ export function DebugPanel({ onResume, onBpsOff, onRefresh, onStop, focus }: { o
                   Alive: {d.vars.aliveT} T · {d.vars.aliveCT} CT
                 </span>
               </div>
+              {d.vars.values.length > 0 && (
+                <dl className="st-values">
+                  {d.vars.values.map((x) => (
+                    <div key={`${x.v}-${x.p}`}>
+                      <dt>
+                        {graph?.variables.find((v) => v.id === x.v)?.name ?? x.v}
+                        {x.p ? ` (${d.vars!.players.find((p) => p.id === x.p)?.name ?? `player ${x.p}`})` : ""}
+                      </dt>
+                      <dd>{typeof x.value === "boolean" ? (x.value ? "yes" : "no") : String(x.value)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
               <table className="st-players">
                 <thead>
                   <tr>

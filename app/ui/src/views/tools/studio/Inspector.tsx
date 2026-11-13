@@ -2,11 +2,58 @@
 // list when nothing is selected).
 
 import { useStudio } from "./store";
-import { nodeDef, type ParamDef } from "./registry";
-import { setParam, toggleBreakpoint } from "./graphOps";
-import { LABEL_CHARS } from "./schema";
+import { KEYS_CHARS, NAME_CHARS, nodeDef, type ParamDef } from "./registry";
+import { addVariable, removeVariable, setParam, toggleBreakpoint, updateVariable } from "./graphOps";
+import { LABEL_CHARS, type GVariable } from "./schema";
 
-function ParamField({ p, value, onChange }: { p: ParamDef; value: string | number; onChange: (v: string | number) => void }) {
+type PV = string | number | boolean;
+
+function NumberField({ value, min, max, onChange }: { value: number; min?: number; max?: number; onChange: (v: number) => void }) {
+  return (
+    <input
+      className="st-field st-field-num"
+      type="number"
+      min={min}
+      max={max}
+      step="any"
+      value={Number(value)}
+      onChange={(e) => {
+        const n = Number(e.target.value);
+        if (Number.isFinite(n)) onChange(Math.min(max ?? 100000, Math.max(min ?? -100000, n)));
+      }}
+    />
+  );
+}
+
+/** A text box that only takes the characters `allowed` lets through (the app checks the same). */
+function TextField({ value, max, allowed, onChange }: { value: string; max: number; allowed: RegExp; onChange: (v: string) => void }) {
+  return (
+    <input
+      className="st-field"
+      value={value}
+      maxLength={max}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (allowed.test(v) && v.length <= max) onChange(v);
+      }}
+    />
+  );
+}
+
+/** A value for a variable of this type. */
+function ValueField({ type, value, onChange }: { type: GVariable["type"]; value: PV | undefined; onChange: (v: PV) => void }) {
+  if (type === "number") return <NumberField value={typeof value === "number" ? value : 0} onChange={onChange} />;
+  if (type === "bool")
+    return (
+      <select className="st-field" value={value === true ? "1" : "0"} onChange={(e) => onChange(e.target.value === "1")}>
+        <option value="1">Yes</option>
+        <option value="0">No</option>
+      </select>
+    );
+  return <TextField value={typeof value === "string" ? value : ""} max={60} allowed={LABEL_CHARS} onChange={onChange} />;
+}
+
+function ParamField({ p, value, vars, nodeVar, onChange }: { p: ParamDef; value: PV; vars: GVariable[]; nodeVar?: GVariable; onChange: (v: PV) => void }) {
   if (p.kind === "choice")
     return (
       <select className="st-field" value={String(value)} onChange={(e) => onChange(e.target.value)}>
@@ -17,31 +64,76 @@ function ParamField({ p, value, onChange }: { p: ParamDef; value: string | numbe
         ))}
       </select>
     );
-  if (p.kind === "number")
+  if (p.kind === "number") return <NumberField value={Number(value)} min={p.min} max={p.max} onChange={onChange} />;
+  if (p.kind === "bool")
     return (
-      <input
-        className="st-field st-field-num"
-        type="number"
-        min={p.min}
-        max={p.max}
-        step="any"
-        value={Number(value)}
-        onChange={(e) => {
-          const n = Number(e.target.value);
-          if (Number.isFinite(n)) onChange(Math.min(p.max ?? n, Math.max(p.min ?? n, n)));
-        }}
-      />
+      <select className="st-field" value={value ? "1" : "0"} onChange={(e) => onChange(e.target.value === "1")}>
+        <option value="1">Yes</option>
+        <option value="0">No</option>
+      </select>
     );
+  if (p.kind === "name") return <TextField value={String(value)} max={32} allowed={NAME_CHARS} onChange={onChange} />;
+  if (p.kind === "keys") return <TextField value={String(value)} max={p.max ?? 120} allowed={KEYS_CHARS} onChange={onChange} />;
+  if (p.kind === "var") {
+    const list = vars.filter((v) => !p.varType || v.type === p.varType);
+    return (
+      <select className="st-field" value={String(value)} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{list.length ? "Pick one…" : "Add a variable under This mode first"}</option>
+        {list.map((v) => (
+          <option key={v.id} value={v.id}>
+            {v.name} ({v.type === "bool" ? "yes/no" : v.type}
+            {v.scope === "player" ? ", per player" : ""})
+          </option>
+        ))}
+      </select>
+    );
+  }
+  if (p.kind === "varvalue") return nodeVar ? <ValueField type={nodeVar.type} value={value === "" ? undefined : value} onChange={onChange} /> : <em className="st-muted">Pick a variable first</em>;
+  return <TextField value={String(value)} max={p.max ?? 100} allowed={LABEL_CHARS} onChange={onChange} />;
+}
+
+/** This mode's variables: add, rename, type, per player or not, start value. */
+function Variables() {
+  const graph = useStudio((s) => s.graph)!;
+  const edit = useStudio((s) => s.edit);
   return (
-    <input
-      className="st-field"
-      value={String(value)}
-      maxLength={p.max ?? 100}
-      onChange={(e) => {
-        const v = e.target.value;
-        if (LABEL_CHARS.test(v)) onChange(v);
-      }}
-    />
+    <>
+      <h4 className="st-side-sub">Variables</h4>
+      <p className="st-side-help">Values the mode keeps: one for the whole mode, or one for each player (reset when they join).</p>
+      <ul className="st-vars-list">
+        {graph.variables.map((v) => (
+          <li key={v.id} className="st-var">
+            <div className="st-var-row">
+              <TextField value={v.name} max={30} allowed={LABEL_CHARS} onChange={(name) => edit((g) => updateVariable(g, v.id, { name }))} />
+              <select className="st-field" value={v.type} onChange={(e) => edit((g) => updateVariable(g, v.id, { type: e.target.value as GVariable["type"] }))} aria-label="Type">
+                <option value="number">Number</option>
+                <option value="bool">Yes/No</option>
+                <option value="text">Text</option>
+              </select>
+              <select className="st-field" value={v.scope} onChange={(e) => edit((g) => updateVariable(g, v.id, { scope: e.target.value as GVariable["scope"] }))} aria-label="Kept">
+                <option value="mode">One for the mode</option>
+                <option value="player">One per player</option>
+              </select>
+            </div>
+            <button type="button" className="btn small" onClick={() => edit((g) => removeVariable(g, v.id))} title="Remove this variable">
+              Remove
+            </button>
+            <div className="st-var-row">
+              <span className="st-muted">Starts at</span>
+              <ValueField type={v.type} value={v.default} onChange={(d) => edit((g) => updateVariable(g, v.id, { default: d }))} />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        className="btn small"
+        disabled={graph.variables.length >= 64}
+        onClick={() => edit((g) => addVariable(g, { name: `Variable ${g.variables.length + 1}`, type: "number", scope: "mode", default: 0 }).graph)}
+      >
+        Add a variable
+      </button>
+    </>
   );
 }
 
@@ -64,6 +156,7 @@ export function Inspector({ focus }: { focus: (id: string) => void }) {
       <aside className="st-side">
         <h3 className="st-side-title">{def.title}</h3>
         <p className="st-side-help">{def.help}</p>
+        {def.needs && <p className="st-side-help st-needs">{def.needs === "components" ? "Needs the game mode components (gm_components) on the server; without them this does nothing and Playtest says so." : "Needs Loner-Strike's bot brain with creatures; without it this does nothing and Playtest says so."}</p>}
         {def.params.length > 0 && (
           <div className="st-side-fields">
             {def.params.map((p) => {
@@ -71,7 +164,7 @@ export function Inspector({ focus }: { focus: (id: string) => void }) {
               return (
                 <label key={p.id} className="st-side-field">
                   <span>{p.label}</span>
-                  {wiredInstead ? <em className="st-muted">From its wire</em> : <ParamField p={p} value={typeof node.params[p.id] === "boolean" ? p.default : (node.params[p.id] as string | number | undefined) ?? p.default} onChange={(v) => edit((g) => setParam(g, node.id, p.id, v))} />}
+                  {wiredInstead ? <em className="st-muted">From its wire</em> : <ParamField p={p} value={node.params[p.id] ?? p.default} vars={graph.variables} nodeVar={graph.variables.find((x) => x.id === node.params.var)} onChange={(v) => edit((g) => setParam(g, node.id, p.id, v))} />}
                 </label>
               );
             })}
@@ -131,6 +224,7 @@ export function Inspector({ focus }: { focus: (id: string) => void }) {
           <code className="st-muted">{graph.mode.id}</code>
         </div>
       </div>
+      <Variables />
       <h4 className="st-side-sub">Problems</h4>
       {problems.length === 0 ? (
         <p className="st-muted">None. Ready to compile.</p>

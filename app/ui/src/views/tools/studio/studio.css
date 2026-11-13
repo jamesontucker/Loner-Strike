@@ -35,6 +35,15 @@
 .st-cat-player .st-node-head { background: #2f6a4a; }
 .st-cat-score .st-node-head { background: #6a4a8a; }
 .st-cat-msg .st-node-head { background: #7a6a2b; }
+.st-cat-num .st-node-head { background: #3d6b3a; }
+.st-cat-var .st-node-head { background: #5a5a6e; }
+.st-cat-timer .st-node-head { background: #2f6a6a; }
+.st-cat-comp .st-node-head { background: #6a4a2f; }
+.st-cat-creature .st-node-head { background: #5e2f5e; }
+.st-vars-list { list-style: none; padding: 0; margin: 4px 0 8px; display: grid; gap: 6px; }
+.st-var { display: grid; grid-template-columns: 1fr auto; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 5px; }
+.st-var-row { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.st-var-row .st-field { flex: 1; min-width: 70px; }
 .st-node-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-node-badge { width: 16px; height: 16px; border-radius: 50%; font-size: 11px; line-height: 16px; text-align: center; color: #111; }
 .st-node-badge.err { background: var(--st-bad); }
@@ -141,3 +150,4 @@
 @media (max-width: 900px) {
   .st-side { width: 220px; }
 }
+.st-var > .btn.small { align-self: start; }

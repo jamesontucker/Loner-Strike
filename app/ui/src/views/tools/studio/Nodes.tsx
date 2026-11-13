@@ -6,20 +6,26 @@ import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
 import { useStudio } from "./store";
 import { nodeDef, PIN_TYPES, type NodeDef, type PinDef } from "./registry";
 import { inType, outType, resizeComment, setCommentText, toggleBreakpoint } from "./graphOps";
-import type { GNode, Graph } from "./schema";
+import type { GNode, GVariable, Graph } from "./schema";
 
-const CAT_CLASS: Record<string, string> = { Events: "ev", Conditions: "cond", Player: "player", Scoring: "score", Messages: "msg", Flow: "flow" };
+const CAT_CLASS: Record<string, string> = { Events: "ev", Conditions: "cond", Numbers: "num", Variables: "var", Timers: "timer", Players: "player", Messages: "msg", Scoring: "score", Components: "comp", Creatures: "creature", Flow: "flow" };
 
 /** One line saying what a node is set to ("AK-47, 90 bullets"). */
-export function paramSummary(def: NodeDef, n: GNode, wired: (pin: string) => boolean): string {
+export function paramSummary(def: NodeDef, n: GNode, wired: (pin: string) => boolean, vars: GVariable[] = []): string {
   return def.params
     .filter((p) => !def.inputs.some((i) => i.param === p.id && wired(i.id)))
     .map((p) => {
       const v = n.params[p.id] ?? p.default;
       if (p.kind === "choice") return p.choices?.find(([k]) => k === v)?.[1] ?? String(v);
       if (p.kind === "number") return `${p.label}: ${v}`;
+      if (p.kind === "bool") return `${p.label}: ${v ? "yes" : "no"}`;
+      if (p.kind === "var") return vars.find((x) => x.id === v)?.name ?? "(pick a variable)";
+      if (p.kind === "name") return v ? `${p.label.replace(/^.*named$/i, "at")} ${String(v)}` : "";
+      if (p.kind === "keys") return v ? String(v) : "";
+      if (p.kind === "varvalue") return v === "" ? "" : `= ${typeof v === "boolean" ? (v ? "yes" : "no") : String(v)}`;
       return `“${String(v)}”`;
     })
+    .filter(Boolean)
     .join(" · ");
 }
 
@@ -56,7 +62,7 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
   const wiredIn = (pin: string) => graph.edges.some((e) => e.to.node === id && e.to.pin === pin);
   const wiredOut = (pin: string) => graph.edges.some((e) => e.from.node === id && e.from.pin === pin);
   const pinProblem = (pin: string) => mine.find((p) => p.pin === pin)?.message;
-  const summary = paramSummary(def, n, wiredIn);
+  const summary = paramSummary(def, n, wiredIn, graph.variables);
   const failed = run?.result === "false";
   const cls = [
     "st-node",

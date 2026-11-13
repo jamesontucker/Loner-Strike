@@ -1,4 +1,4 @@
-// The Game Mode Studio's graph file, version 1: our own format and the source of truth. React
+// The Game Mode Studio's graph file, version 2 (version 1, without variables, still opens): our own format and the source of truth. React
 // Flow only shows and edits it (graphToFlow / flowToGraph in Editor.tsx), so the editor can
 // change without breaking saved modes. The app checks the same shape (tools/studio/graph.rs);
 // files from a newer app are refused with a readable message instead of half-opening.
@@ -6,7 +6,7 @@
 import { z } from "zod";
 
 export const SCHEMA = "loner-strike/graph";
-export const VERSION = 1;
+export const VERSION = 2;
 
 const id = z.string().regex(/^[A-Za-z0-9_]{1,24}$/, "ids are 1 to 24 letters, digits or _");
 export const modeId = z.string().regex(/^[a-z][a-z0-9_]{1,23}$/, "2 to 24 small letters, digits or _, starting with a letter");
@@ -37,14 +37,26 @@ export const commentSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
 
+export const VAR_TYPES = ["number", "bool", "text"] as const;
+export const variableSchema = z
+  .object({
+    id,
+    name: label(30).refine((s) => s.trim().length > 0, "a name"),
+    type: z.enum(VAR_TYPES),
+    scope: z.enum(["mode", "player"]),
+    default: z.union([z.number().finite().min(-100000).max(100000), z.boolean(), label(60)]).optional(),
+  })
+  .refine((v) => v.default === undefined || (v.type === "number" ? typeof v.default === "number" : v.type === "bool" ? typeof v.default === "boolean" : typeof v.default === "string"), "the start value doesn't fit the type");
+
 export const graphSchema = z.object({
   schema: z.literal(SCHEMA),
-  version: z.literal(VERSION),
+  version: z.union([z.literal(1), z.literal(VERSION)]).transform(() => VERSION),
   mode: z.object({
     id: modeId,
     name: label(40),
     description: label(60).default(""),
   }),
+  variables: z.array(variableSchema).max(64).default([]),
   nodes: z.array(nodeSchema).max(400).default([]),
   edges: z.array(edgeSchema).max(1200).default([]),
   comments: z.array(commentSchema).max(100).default([]),
@@ -54,6 +66,7 @@ export type Graph = z.infer<typeof graphSchema>;
 export type GNode = z.infer<typeof nodeSchema>;
 export type GEdge = z.infer<typeof edgeSchema>;
 export type GComment = z.infer<typeof commentSchema>;
+export type GVariable = z.infer<typeof variableSchema>;
 export type ParamValue = GNode["params"][string];
 
 /** Reads a graph (a file, the clipboard): the graph, or the words to show. */
@@ -71,5 +84,5 @@ export function parseGraph(v: unknown): { graph: Graph } | { error: string } {
 }
 
 export function emptyGraph(id: string, name: string): Graph {
-  return { schema: SCHEMA, version: VERSION, mode: { id, name, description: "" }, nodes: [], edges: [], comments: [] };
+  return { schema: SCHEMA, version: VERSION, mode: { id, name, description: "" }, variables: [], nodes: [], edges: [], comments: [] };
 }
