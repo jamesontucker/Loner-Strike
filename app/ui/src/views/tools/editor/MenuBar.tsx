@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../../../ui";
 import { CommandPalette, CheatSheet, KeyEditor } from "./CommandPalette";
-import { commands, fileHooks, importOther, playtestNow, publishMap, type Command, type Menu } from "./commands";
+import { askHooks, commands, fileHooks, importOther, playtestNow, publishMap, type Command, type Menu } from "./commands";
 import * as api from "./editorApi";
 import type { RecentFile } from "./editorApi";
 import { BusyLabel } from "./Panels";
@@ -45,6 +45,7 @@ export function MenuBar() {
   useShortcuts();
   // starting over asks first when there are unsaved changes (like the start screen's buttons)
   useEffect(() => {
+    askHooks.ask = (text, ok) => ask(text, { ok });
     fileHooks.replace = async (what) => {
       const d = useEditor.getState().doc;
       if (d?.dirty && !(await ask(`“${d.name}” has unsaved changes. Leave them and ${what === "new" ? "start a new map" : "open another"}?`, { ok: "Leave them", danger: true }))) return;
@@ -121,7 +122,7 @@ export function MenuBar() {
           <button type="button" className="btn small primary" data-cmd="map.playtest" title="Compile it, put it in the game and play it with bots, as the Compile panel is set" onClick={() => playtestNow()}>
             Playtest
           </button>
-          <button type="button" className="btn small" data-cmd="map.publish" title="Make a package to share this map in Tools > Community (compile it into the game first)" onClick={() => publishMap()}>
+          <button type="button" className="btn small" data-cmd="map.publish" title="Make a package to share this map in Tools > Community (compile it into the game first)" onClick={() => void publishMap()}>
             Publish…
           </button>
         </span>

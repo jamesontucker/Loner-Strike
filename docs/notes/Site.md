@@ -228,3 +228,9 @@ To turn one on, add its name to `const INGAME = new Set([...])` in `index.html`,
   "Gameplay" (Components and mode kits for game modes; was "Library"): #editor-library, the Studio's Map markers
   paragraph and the Community "Installed things show up…" paragraph still say Library.
 - **Playtest**: F5 in every key set, Map > Playtest, and the Playtest button in the editor's one bar.
+- **Budget panel** (new, View > Budget; a bottom tab after Checks): bars for how close the map is to GoldSrc's limits,
+  green, yellow over 75%, red over 90%. *Precache*: models and sounds (512 each) = the game's own share (an estimate),
+  what the map's entities load, and the creatures of the mode it's made for ("Last Stand with this roster: N sounds of
+  headroom"). *As you build*: brush entities, entities, an edicts estimate, different textures. *Last compile*: the
+  compiler's own planes, clipnodes, faces, leaves, marksurfaces, lighting… Click a bar for what uses most, the usual
+  fix, and Pick to select it. Playtest and Publish ask first when a bar is red.

@@ -18,6 +18,7 @@ import { CordonPanel } from "./CordonPanel";
 import { cameraPos, cordonOf } from "./extras";
 import { madeForOf } from "./kits"; // P5: the modes the map is made for come first
 import { useP5 } from "./p5store"; // P5: Playtest from anywhere
+import { budgetWarnings } from "./BudgetPanel"; // P5
 
 const PRESETS: { id: Preset; label: string; hint: string }[] = [
   { id: "fast", label: "Fast", hint: "Quick lighting and no visibility pass: for trying things out." },
@@ -219,6 +220,9 @@ export function CompilePanel() {
   };
 
   const onPlaytest = async () => {
+    // P5: a limit over 90% (Budget panel) is said first, never a silent block
+    const over = await budgetWarnings();
+    if (over.length && !(await ask(`Near the engine's limits: ${over.join("; ")}. The map may not load or may crash. Playtest anyway? (The Budget panel shows what uses most.)`, { ok: "Playtest anyway" }))) return;
     setPlaying(true);
     try {
       const j = await compile(true);

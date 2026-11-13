@@ -19,6 +19,7 @@ import { useNav } from "../../../store";
 import { mapNameOf } from "./ComponentPanel";
 import { startTour } from "./Tour";
 import { useBrowser } from "./contentApi";
+import { budgetWarnings } from "./BudgetPanel";
 
 export type Menu = "File" | "Edit" | "View" | "Select" | "Tools" | "Map" | "Help";
 export type Command = {
@@ -76,10 +77,17 @@ export function frame(all = false) {
   frameFlat(min, max);
 }
 
-/** Tools > Community's Publish, for the map compiled from this one (P4's, moved here with the one bar). */
-export function publishMap() {
+/** Asks before an action (set by the menu bar to the app's confirm sheet). */
+export const askHooks: { ask: (text: string, ok: string) => Promise<boolean> } = { ask: async () => true };
+
+/** Tools > Community's Publish, for the map compiled from this one (P4's, moved here with the one
+ *  bar). P5: a limit over 90% (Budget panel) is said first. */
+export async function publishMap() {
   const d = S().doc;
-  if (d) useNav.getState().go("tools", `community:publish:${mapNameOf(d.name)}`);
+  if (!d) return;
+  const over = await budgetWarnings();
+  if (over.length && !(await askHooks.ask(`Near the engine's limits: ${over.join("; ")}. Players may not be able to load it. Publish anyway? (The Budget panel shows what uses most.)`, "Publish anyway"))) return;
+  useNav.getState().go("tools", `community:publish:${mapNameOf(d.name)}`);
 }
 
 /** Playtest from anywhere (F5, Map > Playtest, the editor bar): the Compile panel opens and starts it. */
@@ -353,6 +361,7 @@ export function commands(): Command[] {
     { id: "map.checks", label: "Check the map", menu: "Map", sep: true, run: () => openTab("checks") },
     { id: "view.content", label: "Content Browser", menu: "View", sep: true, hint: "Models, sprites, sounds, textures, prefabs and GameBanana: drag onto the map", run: () => showPanel("content") },
     { id: "view.contentDrawer", label: "Content drawer", menu: "View", hint: "The Content Browser over the bottom panels (a click away closes it)", run: () => useBrowser.getState().set({ drawer: !useBrowser.getState().drawer }), fly: true },
+    { id: "view.budget", label: "Budget", menu: "View", hint: "How close the map is to the engine's limits", run: () => showPanel("budget") },
     { id: "map.publish", label: "Publish…", menu: "Map", hint: "A package to share this map in Tools > Community (compile it into the game first)", run: publishMap },
     { id: "map.playtest", label: "Playtest", menu: "Map", hint: "Compile, put it in the game and start it with bots, as the Compile panel is set", run: playtestNow },
     { id: "map.compile", label: "Compile and play…", menu: "Map", hint: "Compile with SDHLT, show the leak line, playtest with bots", run: () => openTab("compile") },

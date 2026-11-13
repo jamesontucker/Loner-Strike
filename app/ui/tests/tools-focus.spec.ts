@@ -6,7 +6,7 @@ import { expect, test } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const reg = fs.readFileSync(path.join(__dirname, "../src/views/tools/registry.tsx"), "utf8");
+const reg = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), "../src/views/tools/registry.tsx"), "utf8");
 const ids = [...reg.matchAll(/id: "([a-z0-9-]+)", label/g)].map((m) => m[1]);
 
 test("Exit focus never covers a control, on every tool", async ({ page }) => {

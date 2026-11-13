@@ -10,6 +10,7 @@ import { CompilePanel } from "./CompilePanel";
 import { ProjectPanel } from "./ProjectPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { ContentBrowser } from "./ContentBrowser";
+import { BudgetPanel } from "./BudgetPanel";
 import { useEditor } from "./store";
 
 /** `subtitle`: one line under the panel's tabs and in its tooltips (what it holds). Ids stay as
@@ -35,6 +36,7 @@ export const DOCK_PANELS: DockPanel[] = [
   { id: "textures", title: "Textures", render: () => <TextureBrowser /> },
   // (was "Library": the id stays, so saved layouts keep it)
   { id: "library", title: "Gameplay", subtitle: "Components and mode kits for game modes", render: () => <Library /> },
+  { id: "budget", title: "Budget", subtitle: "How close the map is to the engine's limits", render: () => <BudgetPanel /> }, // P5
   { id: "checks", title: "Checks", render: () => <ChecksPanel />, label: checksCount, bad: () => (useEditor.getState().checks?.issues.some((i) => i.level === "error") ?? false) },
   { id: "compile", title: "Compile", render: () => <CompilePanel /> },
   { id: "project", title: "Project", render: () => <ProjectPanel /> },
