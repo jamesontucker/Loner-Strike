@@ -186,6 +186,7 @@ impl Store {
         Store { keep, cap, ..Store::new(root) }
     }
 
+    #[allow(dead_code)] // part of the API for writers (Game Mode Studio, the editor), and tests
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -299,6 +300,7 @@ impl Store {
     }
 
     /// Deletes `path`, kept first. Ok(None) when it wasn't there.
+    #[allow(dead_code)] // part of the API for writers (Game Mode Studio, the editor), and tests
     pub fn remove(&self, tool: &str, reason: &str, path: &Path) -> Result<Option<u64>, String> {
         let (full, root) = self.check(path)?;
         if !full.is_file() {
@@ -356,14 +358,6 @@ impl Store {
         self.put(&mut last, &ix, bytes, tool, reason)
     }
 
-    /// Writes given content to a path (kept first, even if it was never kept before).
-    pub fn put_path(&self, path: &Path, bytes: Option<&[u8]>, tool: &str, reason: &str) -> Result<u64, String> {
-        match bytes {
-            Some(b) => self.save(tool, reason, path, b),
-            None => self.remove(tool, reason, path).map(|s| s.unwrap_or(0)),
-        }
-    }
-
     /// Undoes every change kept with a number in (from, to]: each file goes back to how it
     /// was before the first of them. Returns the files put back.
     pub fn undo(&self, from: u64, to: u64) -> Result<Vec<String>, String> {
@@ -402,6 +396,7 @@ impl Store {
     }
 
     /// The key a path is kept under (whether or not it has been).
+    #[allow(dead_code)] // part of the API for writers (Game Mode Studio, the editor), and tests
     pub fn key_for(&self, path: &Path) -> Option<String> {
         let (full, root) = self.check(path).ok()?;
         let rel = full.strip_prefix(&root).unwrap_or(&full).to_string_lossy().replace('\\', "/");
@@ -589,11 +584,13 @@ pub fn before(tool: &str, reason: &str, path: &Path) -> Option<u64> {
 }
 
 /// Writes a file whole, kept first.
+#[allow(dead_code)] // part of the API for writers (Game Mode Studio, the editor), and tests
 pub fn save(tool: &str, reason: &str, path: &Path, bytes: &[u8]) -> Result<u64, String> {
     store().save(tool, reason, path, bytes)
 }
 
 /// Deletes a file, kept first.
+#[allow(dead_code)] // part of the API for writers (Game Mode Studio, the editor), and tests
 pub fn remove(tool: &str, reason: &str, path: &Path) -> Result<Option<u64>, String> {
     store().remove(tool, reason, path)
 }

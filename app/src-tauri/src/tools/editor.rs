@@ -1103,6 +1103,8 @@ pub fn load_file(path: &Path) -> Result<(MapDocument, bool), String> {
 /// Writes next to the target and renames over it, so a failed write never leaves half a file.
 fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
     let tmp = path.with_extension("lsmap-tmp");
+    // backups (P7, safety.rs): only files inside a game folder; a project elsewhere keeps its own copies
+    crate::safety::before("Map editor", &format!("Saved {}", path.file_name().unwrap_or_default().to_string_lossy()), path);
     std::fs::write(&tmp, text).map_err(|_| "Couldn't write the file there. Pick another folder.".to_string())?;
     std::fs::rename(&tmp, path).map_err(|_| {
         let _ = std::fs::remove_file(&tmp);

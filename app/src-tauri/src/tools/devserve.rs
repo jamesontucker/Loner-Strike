@@ -32,6 +32,8 @@ mod tests {
         let app_dir = std::env::temp_dir().join("ls-tools-dev");
         let _ = std::fs::create_dir_all(&app_dir);
         let g = crate::game::Game::with_app_dir(std::path::Path::new(&hl), &game, &app_dir);
+        // backups (safety.rs) of what the tools save, in the temp app folder
+        crate::safety::use_game(&g);
         let host = format!("127.0.0.1:{port}");
         let st: Shared = Arc::new(AppState {
             current: RwLock::new(Some(Arc::new(g))),
@@ -47,7 +49,8 @@ mod tests {
             // textures & models: GameBanana downloads in progress
             .route("/api/gb/jobs", get(|| async { Json(json!({"jobs": []})) }))
             .route("/api/tools/dev", get(|| async { Json(json!({"dev": true})) }));
-        let app = super::super::local_routes().merge(extra).with_state(st);
+        // History & restore, and "Undo" after a save (safety.rs), like the app's listener
+        let app = super::super::local_routes().merge(extra).merge(crate::safety::routes()).layer(axum::middleware::from_fn(crate::safety::mark_saves)).with_state(st);
         let l = tokio::net::TcpListener::bind(&host).await.unwrap_or_else(|e| panic!("can't listen on {host}: {e} (is the app or another dev server running? set LS_DEV_PORT)"));
         println!("tools routes on http://{host} for {hl} ({game})");
         axum::serve(l, app).await.unwrap();

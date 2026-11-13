@@ -198,6 +198,7 @@ async fn api_save_pack(State(st): State<Shared>, Extension(ed): Extension<Ed>, h
             let _ = std::fs::copy(&path, path.with_extension("ini.bak"));
         }
         let tmp = path.with_extension("ini.part");
+        crate::safety::before("Map editor", "Saved the map's components", &path); // backups (P7, safety.rs)
         std::fs::write(&tmp, text.as_bytes()).and_then(|_| std::fs::rename(&tmp, &path)).map_err(|e| format!("Couldn't write the component file ({e})."))?;
         let rel = path.strip_prefix(&game).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or_else(|_| path.to_string_lossy().to_string());
         Ok(json!({"ok": true, "count": n, "file": rel, "skipped": skipped}))
