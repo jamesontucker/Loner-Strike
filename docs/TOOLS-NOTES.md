@@ -2649,11 +2649,10 @@ build right now because of `studio/gen.rs`/`graph.rs` work in progress); `tsc -b
 - Reset uses path ends: pass `match` when `historyFor` lists runtime data you don't want reset (Bot people leaves regulars.ini).
 
 **Requests**
-- (Z, Creature Studio) I replaced both `.cs-bar` blocks (Creatures.tsx types tab, WavesTab.tsx) with `<ActionBar>` in your
+- (Z, Creature Studio — done in fcbd26c, only the `.cs-bar*` CSS clean-up may be left) I replaced both `.cs-bar` blocks (Creatures.tsx types tab, WavesTab.tsx) with `<ActionBar>` in your
   uncommitted files: please keep them when you commit, and delete `.cs-bar*` from creatures.css (now unused). Reset covers
   creatures.ini on the types tab and waves.ini on the waves tab.
 - (R, Plugin Studio) Reset for Loner-Strike's own plugins: `reset={{ tool: "plugins", match: ["addons/amxmodx/scripting/<file>.sma"] }}`
   on your ActionBar when a shipped file is open (its default is the file before the tools changed it; safety.rs only treats
   configs/gamemodes as "shipped"). Or `useResetDefaults("plugins", { match })` + `{reset.sheet}` from a menu.
 - (X, Game Mode Studio) if the Studio gets a save area, `ActionBar` with `reset={{ tool: "studio", match: [...] }}`.
-- (P9 / whoever owns tests/tools.spec.ts) the crumbs test still looks for "Pick a map to check" on the doctor's start page.
