@@ -1086,3 +1086,17 @@ note (feature complete, long gap after), the user decides whether that goes into
   `FM_KeyValue` classname trick with brush entities compiled by SDHLT; `monstermod-redo` built for
   Windows under Metamod-P/ReHLDS/ReGameDLL; HL1 models on a CS-only Steam account; ELK's licence if
   anyone wants it over dagre; which AMXX version the installer pins (JSON natives).
+
+## Addendum (user, 2026-11-12): Game Mode Studio debugging, made explicit
+1. **Node highlighting:** highlight the node executing now; show execution paths; execution wires drawn
+   differently from data wires; show each node's last result; failed conditions marked visibly.
+2. **Soft breakpoints:** per-node breakpoints; reaching one freezes gameplay (world + timers); show the current
+   node and its input values; Resume; "disable all breakpoints".
+3. **Runtime link (server → app):** the generated plugin emits debug events the app turns into highlighting —
+   `node_enter {nodeId}`, `node_exit {nodeId}`, `node_error {nodeId, message}`, `breakpoint_hit {nodeId}`,
+   `world_paused`, `world_resumed` — over the local server link (e.g. log lines or a UDP/rcon channel the app reads;
+   pick the least fragile), only when debugging is on (zero cost otherwise). No instruction-level stepping.
+4. **The graph is ours:** our own versioned JSON schema is the source of truth; React Flow is only its editor, so
+   the UI can change without breaking published modes.
+5. **Live variable inspection** while frozen at a breakpoint: current round and game phase, alive counts, timers,
+   objective/component state, and per player: health, team/role, current weapon (plus any graph variables).
