@@ -1211,3 +1211,64 @@ browser context so it doesn't disturb other agents' pages.
 - The new tools (Crosshair & config, Bot people, Plugin Studio, Community) weren't in my list; they already use
   `common` (Rows/Empty/Loading/MapList), so they get the same look.
 - The viewer status bar still cuts the hint at 1024 wide (tooltip has it); the editor (P2) has its own panels.
+
+### Agent V: Crosshair & config builder + Bot people editor (Beta, Make) — 2026-11-12
+
+**Crosshair & config** (`tools/playercfg.rs`, `views/tools/playercfg/`, id `playercfg`)
+- Writes the player's own settings to `userconfig.cfg` in cstrike/ or czero/. The engine ends config.cfg with
+  `exec userconfig.cfg` (checked in hw.dll), and the game never rewrites that file. config.cfg is never touched, so the
+  app's F3/F4 binds (setup core.rs BINDS) stay; the builder refuses F3/F4.
+- Only the block between `// >>> Loner-Strike: Crosshair & config builder (start)` and `(end)` is ours. The player's
+  lines stay as they are, where they are. A new block goes at the end; an existing one stays in place, so their lines
+  after it keep winning (the page says which). A start marker with no end only loses the marker line.
+- A setting goes in only when it differs from config.cfg plus their own lines, so the rest keep following Options.
+  Binds go to a fixed list of actions (jump-duck alias, last weapon, AWP quick switch, voice, buy binds, net graph
+  toggle...). The server checks every value against a cvar allowlist and every key against the game's key names.
+- Cvars were checked against the 2013+ client.dll/hw.dll strings: crosshair, cl_crosshair_color/size/translucent,
+  cl_dynamiccrosshair, cl_observercrosshair, rate, cl_updaterate, cl_cmdrate, ex_interp, sensitivity, m_rawinput,
+  zoom_sensitivity_ratio, m_filter, fps_max, hud_fastswitch, hud_centerid, cl_righthand, _cl_autowepswitch,
+  cl_radartype, cl_minmodels, cl_showfps, net_graph, volume, voice_enable, voice_scale. There's no thickness/style cvar
+  in 1.6.
+- Before every write the file is backed up to `<app>/playercfg/backups` (10 kept). The page has "Put back the
+  previous file" and "Take out" (removes only our block). Saving while the game is open is allowed (it reads the file
+  only at start), and the message says to restart or `exec userconfig.cfg`.
+- The live preview is a canvas drawn 1:1 at 800/1024/1920 wide, with the scale base at small 1024 / medium 800 /
+  large 640 / auto by width. Rifle spread: standing, running, jumping, shooting. See-through is drawn additive. The
+  drawing is from memory of the CS client, so it's approximate. Presets: The game's own / Pro / Classic 2004.
+
+**Bot people** (`tools/people.rs`, `views/tools/people/`, id `people`; in Make)
+- The bots' people are *kinds* (people.ini archetypes), not a list of bots: each bot is worked out from its name.
+  The editor has four parts:
+  - Kinds of people: a searchable list by heading, plus a form per kind (name, how common with "about N in 100",
+    chats like = the gm_botchat letter with its plain description, plays like, heading, each trait Rolled or fixed,
+    hobby). Add, duplicate, remove.
+  - How common traits are: a slider per value with a share bar.
+  - Never together: the conflict pairs.
+  - Regulars' names: regular_names.ini with search, add, rename and remove (edited line by line, so its comments
+    stay), with who each name is. Also regulars.ini (profile = name) with "Fresh name" per profile or for everyone.
+- people.ini round-trips byte for byte on the real file (LF and CRLF). The header, section order and unknown
+  sections are kept, and kinds keep their `; ----` heading. Checks follow the plugin's limits: 200 kinds, 64 pairs,
+  256-character lines, a 159-character fixed field, unique names (gm_people remembers a name's kind by name in
+  nVault), valid letters, styles and values, weight counts. A kind fixing both sides of a pair gets a warning.
+  Errors block the save.
+- "Who is this name" ports gm_people's working out: FNV seed on the bare name (ls_bare_name), its LCG, the kind
+  roll, trait rolls, conflict re-rolls and clan-tag role. It assumes a Normal lobby, no home region and no gm_humanbots
+  aim style. A name the game already met keeps its first kind.
+- Save backs up to `<app>/people/backups`, then sends `gm_people_reload` over RCON to a running local game, so the
+  change is live. Otherwise it takes effect on the next game. Name changes show from the next map. Other buttons:
+  Import / Export (system dialogs), Start from Loner-Strike's (the bundled people.ini, not saved until Save), Put
+  back. Shown when present: the "people.ini.new beside yours" notice from setup's EDITABLE handling. It edits the
+  app's current game (or a dedicated server on this computer); a remote server is refused.
+
+**Try it:** `cargo test tools::playercfg tools::people` (12 tests: writer round trip without touching their lines, bad
+binds, save/backup/restore, people.ini round trip + edits on the real file, checks, names, regulars, who). In the app:
+Tools > Make > Crosshair & config / Bot people. Checked in Chromium against a copy of the real game files: the Pro
+preset and Space as jump-duck wrote the expected block under the player's own lines; a people save changed only the
+one line, added the name at the end and removed the one regular.
+
+**Left / requests**
+- (gm_people owner) Per-bot pinning isn't possible yet: a bot's kind comes from its name, and nVault keeps it. A
+  `[people]` section in people.ini (`name|kind|trait=value ...`, read in person() before the roll) would let the editor
+  pin a regular's kind and traits. The UI would be a form on each name in Regulars' names.
+- The crosshair drawing should be checked against the game side by side (gap and length per size).
+- The pages use `views/tools/common` (Rows/Row/Empty/Loading) and `common/api` (get/post/useBusy).
