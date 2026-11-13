@@ -76,13 +76,16 @@ fn game_folders(hl: &Path, game: &str) -> Vec<(String, PathBuf)> {
 
 /// A model's companion files (`xT.mdl` textures, `x01.mdl` sequence groups) aren't models of their own.
 fn companion(low: &str, names: &HashSet<String>) -> bool {
-    let stem = &low[..low.len() - 4];
+    // byte-safe: file names can hold any characters, so never slice a str mid-character
+    let Some(stem) = low.strip_suffix(".mdl") else { return false };
     if let Some(base) = stem.strip_suffix('t') {
         if names.contains(&format!("{base}.mdl")) {
             return true;
         }
     }
-    if stem.len() > 2 && stem[stem.len() - 2..].bytes().all(|b| b.is_ascii_digit()) && names.contains(&format!("{}.mdl", &stem[..stem.len() - 2])) {
+    let b = stem.as_bytes();
+    // the last two bytes are ASCII digits, so the cut before them is a character boundary
+    if b.len() > 2 && b[b.len() - 2..].iter().all(|c| c.is_ascii_digit()) && names.contains(&format!("{}.mdl", &stem[..stem.len() - 2])) {
         return true;
     }
     false
@@ -139,6 +142,8 @@ fn downloads(app: &Path, game_dir: &Path) -> Downloads {
 pub fn list(hl: &Path, game: &str, app: &Path, project: Option<&Path>, kind: Kind) -> Value {
     let f = Finder::default();
     let dl = downloads(app, &hl.join(game));
+    // (T: files a Loner-Strike Community creation installed, listed under Community)
+    let community = crate::tools::credits::community_files_in(app);
     let mut seen: HashSet<String> = HashSet::new();
     let mut items = Vec::new();
     let mut pages: HashMap<String, (String, String, usize)> = HashMap::new();
@@ -154,6 +159,8 @@ pub fn list(hl: &Path, game: &str, app: &Path, project: Option<&Path>, kind: Kin
             }
             let (source, page) = if mine {
                 ("mine", None)
+            } else if let Some(who) = community.get(&low) {
+                ("community", Some(json!({"key": who["key"], "name": who["name"], "url": who["url"], "author": who["author"]})))
             } else if let Some((key, name)) = dl.owners.get(&low) {
                 let url = dl.pages.get(key).and_then(|r| r["url"].as_str()).unwrap_or("").to_string();
                 let e = pages.entry(key.clone()).or_insert((name.clone(), url.clone(), 0));
@@ -319,6 +326,16 @@ pub fn routes() -> Router<Shared> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn companion_never_panics_on_non_ascii_names() {
+        let names: HashSet<String> = ["zombie.mdl".to_string()].into_iter().collect();
+        for n in ["é.mdl", "zé1.mdl", "日本.mdl", "日本01.mdl", "zombieT.mdl", "zombie01.mdl", "x", ".mdl", "é"] {
+            let _ = companion(n, &names);
+        }
+        assert!(companion("zombiet.mdl", &names));
+        assert!(companion("zombie01.mdl", &names));
+        assert!(!companion("日本.mdl", &names));
+    }
     use super::*;
 
     fn tmp(tag: &str) -> PathBuf {
@@ -350,6 +367,10 @@ mod tests {
         put(&app.join("content/record.json"), rec.to_string().as_bytes());
         let proj = root.join("proj");
         put(&proj.join("models/mine.mdl"), b"IDST");
+        // (T) a community map installed models/community/tree.mdl
+        put(&hl.join("cstrike/models/community/tree.mdl"), b"IDST");
+        put(&app.join("installed_maps.json"), json!({"101": {"files": ["maps/de_lonely.bsp", "models/community/tree.mdl"]}}).to_string().as_bytes());
+        put(&app.join("community/mod-101/meta.json"), json!({"kind": "map", "model": "Mod", "gb": 101, "name": "De Lonely", "author": "jam"}).to_string().as_bytes());
         let v = list(&hl, "cstrike", &app, Some(&proj), Kind::Model);
         let items = v["items"].as_array().unwrap();
         let by = |p: &str| items.iter().find(|i| i["path"] == p).cloned();
@@ -358,6 +379,8 @@ mod tests {
         assert_eq!(by("models/custom/prop.mdl").unwrap()["source"], "downloaded");
         assert_eq!(by("models/custom/prop.mdl").unwrap()["page"]["url"], "https://gamebanana.com/mods/42");
         assert_eq!(by("models/mine.mdl").unwrap()["source"], "mine");
+        assert_eq!(by("models/community/tree.mdl").unwrap()["source"], "community", "(T) a community creation's file");
+        assert_eq!(by("models/community/tree.mdl").unwrap()["page"]["author"], "jam");
         assert!(by("models/bad name;rm.mdl").is_none());
         assert_eq!(v["downloads"][0]["count"], 1);
         let s = list(&hl, "cstrike", &app, None, Kind::Sprite);
