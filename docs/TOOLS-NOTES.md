@@ -686,3 +686,23 @@ triangle facing agrees with the normals 97% (63k of 2.0M disagree: models' own o
   to `tidy` there.
 - Requests (B): `viewer/Scene.tsx` could export its `pointerEvents` (I copied the ten lines). Its context-lost
   listener would also fire when a canvas is unmounted on purpose; I check `gl.domElement.isConnected` first.
+
+## Polish & feature pass (user request, after the integration pass)
+User feedback example: docs/polish-spray-before.png — the spray maker's option buttons stack vertically in a
+narrow right column, "The picture's own" wraps onto three lines, checkbox labels wrap; controls squeezed right.
+1. **UI polish (all tools, screenshot-driven):** shared form rows / segmented pills / checkboxes / panels from the
+   app's existing components and settings-page styles; no wrapped labels; layouts good at small and large window
+   sizes; consistent spacing; empty, loading and error states; tooltips; visible focus. Screenshot every tool page
+   at 3 window sizes, fix, re-screenshot.
+2. **Editor (Hammer parity, modernised):** texture application tool (face sheet: shift/scale/rotate/justify,
+   world/face align, treat as one, texture lock, drag-align on face, recent textures); FGD-driven entity forms
+   (CS 1.6 FGD: typed fields, flags, choices, help); vertex editing; more primitives (wedge, spike, arch, sphere);
+   3-mode clip; carve; flip/rotate 90; 2D box select; select groups vs objects; hide/isolate/visgroups; arrow-key
+   nudge; [ ] grid size; camera bookmarks; paste special (arrays with offset/rotation); copy/paste between maps;
+   map properties (sky, WADs, light); entity report; measure tool; check-for-problems with fixes; leak trace
+   (pointfile) shown in 3D after compile; run-map dialog (Fast/Final presets) + cordon region; prefabs + library;
+   autosave, backups, crash recovery, recent files.
+3. **Quality of life (all tools):** search everywhere; go to coordinates; viewer bookmarks, screenshots, measure;
+   keyboard shortcut sheet (?); remember last map/tool per page; shareable "open this spot" links between tools.
+4. **Developer experience:** one command to run any tool page in a browser with real data; Playwright screenshot
+   tests per tool page (catch layout regressions); one shared API client + error handling instead of per-tool copies.
