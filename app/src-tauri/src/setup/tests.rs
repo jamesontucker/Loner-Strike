@@ -90,6 +90,47 @@ fn core_parts_install_and_undo() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+/// Modes made in the Game Mode Studio survive setup rewriting modes.ini; a line that only
+/// looks like one (no plugins.ini naming its studio_ plugin) doesn't.
+#[test]
+fn studio_modes_survive_setup() {
+    let root = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "studio-").unwrap();
+    let hl = root.join("Half-Life");
+    fake_game(&hl, "cstrike");
+    let install = install_at(&hl);
+    let res = repo_root();
+    let ctx = Ctx { install: &install, res: &res, progress: &Quiet, store: None };
+    let modes: BTreeSet<String> = core::CORE_MODES.iter().map(|s| s.to_string()).collect();
+    let addons = BTreeSet::new();
+    let configs = || {
+        let mut rec = Record::open(&hl.join("cstrike"));
+        rec.begin("core");
+        core::configs(&mut rec, &ctx, &modes, &addons).unwrap();
+        rec.done("core", json!(1)).unwrap();
+    };
+    configs();
+    let dir = hl.join("cstrike/addons/amxmodx/configs/gamemodes");
+    let ini = dir.join("modes.ini");
+    // the Studio installs a mode (tools/studio::register_mode); someone adds a stray line too
+    let g = crate::tools::studio::graph::parse(include_str!("../../../ui/src/views/tools/studio/templates/team-dm.graph.json")).unwrap();
+    crate::tools::studio::register_mode(&hl.join("cstrike/addons/amxmodx/configs"), &g, "studio_rifle_reward").unwrap();
+    let mut text = std::fs::read_to_string(&ini).unwrap();
+    text.push_str("fakemode  \"Fake\"  \"\"  \"\"  \"\"\r\n");
+    std::fs::write(&ini, text).unwrap();
+    // setup runs again (an update)
+    configs();
+    let after = std::fs::read_to_string(&ini).unwrap();
+    assert!(after.contains("rifle_reward  \"Rifle Reward\""), "{after}");
+    assert_eq!(after.matches("rifle_reward ").count(), 1);
+    assert!(!after.contains("fakemode"));
+    assert!(after.contains("classic"));
+    assert!(dir.join("rifle_reward.plugins.ini").is_file() && dir.join("rifle_reward.cfg").is_file());
+    // and again: still once
+    configs();
+    assert_eq!(std::fs::read_to_string(&ini).unwrap().matches("rifle_reward ").count(), 1);
+    let _ = std::fs::remove_dir_all(root);
+}
+
 /// Settings files the player is told to edit: an update keeps their changes (the new version
 /// beside them as .new), and replaces them when they're still what Loner-Strike put there,
 /// also for a 0.1.2 install that has no note of what it wrote.

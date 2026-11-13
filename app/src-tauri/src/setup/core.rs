@@ -10,10 +10,10 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 /// Modes that need nothing beyond Loner-Strike's own plugins
-pub const CORE_MODES: &[&str] = &["classic", "csdm", "csdm_ffa", "knife", "pistols", "deagle", "awp", "scoutz", "surf", "match"];
+pub const CORE_MODES: &[&str] = &["classic", "csdm", "csdm_ffa", "knife", "pistols", "deagle", "awp", "scoutz", "surf", "match", "laststand"];
 /// miscstats.amxx comes with AMX Mod X
 pub const CORE_ADDONS: &[&str] = &["quakesounds"];
-pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_people", "gm_atmosphere", "gm_humanbots", "gm_botfun", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_botsurf", "gm_vip", "gm_extras", "gm_community", "gm_scrim", "gm_botchat", "gm_botping", "gm_content", "gm_components"];
+pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_people", "gm_atmosphere", "gm_humanbots", "gm_botfun", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_botsurf", "gm_vip", "gm_extras", "gm_community", "gm_scrim", "gm_botchat", "gm_botping", "gm_content", "gm_components", "gm_laststand"];
 /// listed in plugins.ini. restmenu is AMX Mod X's own (amx_restrict), which its plugins.ini
 /// ships switched off: the weapon modes (knife, pistols, deagle, awp, scoutz, gm_weapons)
 /// restrict buying with it, so without it they restrict nothing.
@@ -193,6 +193,29 @@ fn filter_lines(text: &str, keep: impl Fn(&str) -> bool) -> String {
     out.join("\r\n") + "\r\n"
 }
 
+/// The lines of a modes.ini for modes made in the Game Mode Studio: the mode's plugins.ini
+/// lists its own `studio_<id>.amxx` (tools/studio). Setup keeps them when it rewrites modes.ini,
+/// unless the new modes.ini (`shipped`) has a mode with the same id.
+pub fn studio_mode_lines(current: &str, gamemodes_dir: &std::path::Path, shipped: &str) -> Vec<String> {
+    let shipped_ids: BTreeSet<&str> = splitlines(shipped, false).into_iter().filter_map(|l| l.split_whitespace().next()).collect();
+    splitlines(current, false)
+        .into_iter()
+        .filter(|l| {
+            let t = l.trim();
+            if t.is_empty() || t.starts_with(';') || t.starts_with("//") {
+                return false;
+            }
+            let id = t.split_whitespace().next().unwrap_or("");
+            if !crate::tools::studio::graph::valid_mode_id(id) || shipped_ids.contains(id) {
+                return false;
+            }
+            let plugin = format!("{}.amxx", crate::tools::studio::gen::plugin_name(id));
+            crate::sys::read_latin1(&gamemodes_dir.join(format!("{id}.plugins.ini"))).is_ok_and(|p| p.lines().any(|x| x.trim() == plugin))
+        })
+        .map(|l| l.trim_end().to_string())
+        .collect()
+}
+
 /// Python's str.strip() / lstrip() whitespace test for one char.
 fn is_comment_or_blank(l: &str) -> bool {
     l.trim().is_empty() || l.trim_start().starts_with(';')
@@ -316,7 +339,16 @@ pub fn configs(rec: &mut Record, ctx: &Ctx, modes: &BTreeSet<String>, addons: &B
         }
         let text = crate::sys::read_latin1(&full).map_err(|e| format!("Couldn't read {rel} from Loner-Strike's files ({e})."))?;
         let text = match base.as_str() {
-            "modes.ini" => filter_lines(&text, mode_ok),
+            "modes.ini" => {
+                // modes made in the Game Mode Studio aren't shipped: their lines stay
+                let mut t = filter_lines(&text, mode_ok);
+                let current = rec.read(&dest).unwrap_or_default();
+                for line in studio_mode_lines(&current, &rec.full("addons/amxmodx/configs/gamemodes")?, &t) {
+                    t.push_str(&line);
+                    t.push_str("\r\n");
+                }
+                t
+            }
             "addons.ini" => filter_lines(&text, |a| addons.contains(a)),
             "mappresets.ini" => {
                 let keep: Vec<&str> = splitlines(&text, false)
