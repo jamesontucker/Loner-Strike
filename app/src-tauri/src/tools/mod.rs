@@ -18,6 +18,7 @@ pub mod doctor;
 pub mod callouts;
 pub mod assets;
 pub mod render;
+pub mod plugins;
 pub mod community;
 
 use crate::goldsrc::{self, bsp::Bsp, entities, mesh, wad};
@@ -296,6 +297,7 @@ pub fn local_routes() -> Router<Shared> {
         .merge(callouts::routes())
         .merge(assets::routes())
         .merge(render::routes())
+        .merge(plugins::routes())
         .merge(community::routes())
 }
 
