@@ -75,6 +75,20 @@ new Float:g_revProg[33];
 new g_msgShake, g_msgRoundTime;
 new g_sprBeam;
 
+/* waves.ini [laststand] (see load_waves) */
+#define MAX_ROWS 32
+#define MAX_MIX 8
+new g_wRowFrom[MAX_ROWS], g_wRowTo[MAX_ROWS];
+new g_wMixType[MAX_ROWS][MAX_MIX][16];
+new g_wMixW[MAX_ROWS][MAX_MIX];
+new g_wMixN[MAX_ROWS];
+new g_nrows;
+new g_wBoss[16] = "boss";
+new g_wBossEvery = 5;
+new Float:g_wCount = 1.0;
+new Float:g_wHp = 1.0;
+new bool:g_wTypeHp;
+
 /* =========================================================================
  * Start-up
  * ========================================================================= */
@@ -86,8 +100,19 @@ public plugin_precache()
 	g_hasCreatureDll = get_cvar_pointer("ls_creature_ver") != 0;
 	g_cCreatures = register_cvar("lst_creatures", "1");
 	keeper_precache();
+	load_waves();
 	if (g_hasCreatureDll && get_pcvar_num(g_cCreatures))
-		set_cvar_string("ls_creature_precache", CREATURE_PRECACHE);
+	{
+		/* the built-in types, plus whatever waves.ini names */
+		new list[256];
+		copy(list, charsmax(list), CREATURE_PRECACHE);
+		for (new r = 0; r < g_nrows; r++)
+			for (new m = 0; m < g_wMixN[r]; m++)
+				add_word(list, charsmax(list), g_wMixType[r][m]);
+		if (g_wBoss[0])
+			add_word(list, charsmax(list), g_wBoss);
+		set_cvar_string("ls_creature_precache", list);
+	}
 }
 
 public plugin_init()
@@ -541,14 +566,14 @@ stock start_wave(n)
 	g_phase = PH_WAVE;
 	g_overrun = 0;
 	g_lastChanceEnd = 0.0;
-	g_bossDone = (n % 5) != 0;
+	g_bossDone = g_wBossEvery <= 0 || !g_wBoss[0] || (n % g_wBossEvery) != 0;
 	g_spawned = 0;
 	g_failSpawns = 0;
 	set_cvar_num("mp_buy_anywhere", 0);
 	ls_comp_bots_hint("goal_clear ct use");
 
 	/* how many: grows each wave, with the team's size and the difficulty */
-	new total = floatround((5.0 + 2.5 * float(n - 1)) * (0.5 + 0.2 * float(defenders())) * diff_mult(false));
+	new total = floatround((5.0 + 2.5 * float(n - 1)) * (0.5 + 0.2 * float(defenders())) * diff_mult(false) * g_wCount);
 	total = max(total, 1);
 	new nsp = max(ls_comp_count("ls_wave_spawner"), 1);
 	g_planned = 0;
@@ -595,13 +620,13 @@ public ls_on_wave_spawn(ent, wave, const Float:origin[3], const types[])
 		return PLUGIN_HANDLED;
 	if (!g_creatures)
 		return PLUGIN_CONTINUE;
-	new t = pick_type();
-	new hp = floatround(float(TYPE_HP[t]) * hp_mult());
+	new type[16];
+	new bool:boss = pick_type(type, charsmax(type));
 	new Float:o[3];
 	o[0] = origin[0];
 	o[1] = origin[1];
 	o[2] = floor_under(origin) + 1.0;
-	new cr = spawn_creature(TYPES[t], o, hp);
+	new cr = spawn_creature(type, o);
 	if (!cr)
 	{
 		/* full (ls_creature_max) or the type wasn't loaded: try again in a moment, and after
@@ -617,17 +642,75 @@ public ls_on_wave_spawn(ent, wave, const Float:origin[3], const types[])
 		return PLUGIN_CONTINUE;
 	}
 	g_failSpawns = 0;
-	if (t == 4)
+	if (boss)
 		g_bossDone = true;
+	/* health: Last Stand's own per type (or the type's own from creatures.ini with type_hp 1),
+	   scaled by wave, team size, difficulty and waves.ini's hp_scale */
+	new Float:own = entity_get_float(cr, EV_FL_health), Float:base = own;
+	if (!g_wTypeHp)
+		for (new i = 0; i < sizeof TYPES; i++)
+			if (equal(type, TYPES[i]))
+				base = float(TYPE_HP[i]);
+	new Float:hp = floatmax(base * hp_mult() * g_wHp, 1.0);
+	entity_set_float(cr, EV_FL_health, hp);
+	entity_set_float(cr, EV_FL_max_health, hp);
 	ls_wave_track(cr);
 	g_spawned++;
 	return PLUGIN_HANDLED;
 }
 
-stock pick_type()
+/* the type for the next enemy (true = the wave's boss) */
+stock bool:pick_type(out[], len)
 {
 	if (!g_bossDone)
-		return 4;
+	{
+		copy(out, len, g_wBoss);
+		return true;
+	}
+	if (g_nrows)
+	{
+		new r = wave_row(g_wave);
+		new total = 0;
+		for (new m = 0; m < g_wMixN[r]; m++)
+			total += g_wMixW[r][m];
+		if (total > 0)
+		{
+			new pick = random(total);
+			for (new m = 0; m < g_wMixN[r]; m++)
+			{
+				pick -= g_wMixW[r][m];
+				if (pick < 0)
+				{
+					copy(out, len, g_wMixType[r][m]);
+					return false;
+				}
+			}
+		}
+	}
+	copy(out, len, TYPES[builtin_type()]);
+	return false;
+}
+
+/* the row for wave n: the one covering it, else the closest one before it, else the first */
+stock wave_row(n)
+{
+	new best = -1, bestFrom = -1;
+	for (new r = 0; r < g_nrows; r++)
+	{
+		if (g_wRowFrom[r] <= n && (g_wRowTo[r] == 0 || n <= g_wRowTo[r]))
+			return r;
+		if (g_wRowFrom[r] <= n && g_wRowFrom[r] > bestFrom)
+		{
+			bestFrom = g_wRowFrom[r];
+			best = r;
+		}
+	}
+	return best >= 0 ? best : 0;
+}
+
+/* Last Stand's own mix when waves.ini has no [laststand] */
+stock builtin_type()
+{
 	new n = g_wave;
 	new w[4];
 	w[0] = 10;
@@ -645,15 +728,12 @@ stock pick_type()
 	return 0;
 }
 
-stock spawn_creature(const type[], const Float:o[3], hp)
+stock spawn_creature(const type[], const Float:o[3])
 {
 	new ent = create_entity("ls_creature");
 	if (!ent)
 		return 0;
-	new v[16];
 	DispatchKeyValue(ent, "type", type);
-	num_to_str(hp, v, charsmax(v));
-	DispatchKeyValue(ent, "health", v);
 	DispatchKeyValue(ent, "behaviour", "chase");
 	DispatchKeyValue(ent, "hates", "ct");
 	new Float:ang[3];
@@ -1539,6 +1619,121 @@ stock keeper_thanks(id)
 		client_print_color(id, print_team_default, "^4G-Man:^1 %s", GMAN_LINES[random(sizeof GMAN_LINES)]);
 	else
 		client_print_color(id, print_team_default, "^4Barney:^1 %s", BARNEY_LINES[random(sizeof BARNEY_LINES)]);
+}
+
+/* =========================================================================
+ * waves.ini [laststand] (written by the Creature Studio): boss, boss_every, count_scale,
+ * hp_scale, type_hp, and "wave N | N-M | N+ = type weight type weight ..." rows
+ * ========================================================================= */
+
+
+stock load_waves()
+{
+	new path[192];
+	get_configsdir(path, charsmax(path));
+	format(path, charsmax(path), "%s/gamemodes/waves.ini", path);
+	new f = fopen(path, "rt");
+	if (!f)
+		return;
+	new line[512], key[32], val[480];
+	new bool:mine = false, bool:found = false;
+	while (fgets(f, line, charsmax(line)))
+	{
+		/* comments start with ; # or // */
+		new c = contain(line, ";");
+		if (c >= 0) line[c] = EOS;
+		c = contain(line, "#");
+		if (c >= 0) line[c] = EOS;
+		c = contain(line, "//");
+		if (c >= 0) line[c] = EOS;
+		trim(line);
+		if (!line[0])
+			continue;
+		if (line[0] == '[')
+		{
+			new sec[32];
+			copyc(sec, charsmax(sec), line[1], ']');
+			trim(sec);
+			mine = bool:equali(sec, "laststand");
+			if (mine)
+				found = true;
+			continue;
+		}
+		if (!mine)
+			continue;
+		strtok2(line, key, charsmax(key), val, charsmax(val), '=', TRIM_FULL);
+		strtolower(key);
+		if (equal(key, "boss"))
+			copy(g_wBoss, charsmax(g_wBoss), val);
+		else if (equal(key, "boss_every"))
+			g_wBossEvery = clamp(str_to_num(val), 0, 1000);
+		else if (equal(key, "count_scale"))
+			g_wCount = floatclamp(str_to_float(val), 0.1, 10.0);
+		else if (equal(key, "hp_scale"))
+			g_wHp = floatclamp(str_to_float(val), 0.1, 10.0);
+		else if (equal(key, "type_hp"))
+			g_wTypeHp = str_to_num(val) != 0;
+		else if (equal(key, "wave", 4) && g_nrows < MAX_ROWS)
+		{
+			new r = g_nrows;
+			new range[16];
+			copy(range, charsmax(range), key[4]);
+			trim(range);
+			new dash = contain(range, "-");
+			new plus = contain(range, "+");
+			if (plus >= 0)
+			{
+				range[plus] = EOS;
+				g_wRowFrom[r] = str_to_num(range);
+				g_wRowTo[r] = 0;
+			}
+			else if (dash >= 0)
+			{
+				g_wRowTo[r] = str_to_num(range[dash + 1]);
+				range[dash] = EOS;
+				g_wRowFrom[r] = str_to_num(range);
+			}
+			else
+			{
+				g_wRowFrom[r] = str_to_num(range);
+				g_wRowTo[r] = g_wRowFrom[r];
+			}
+			if (g_wRowFrom[r] < 1)
+				continue;
+			g_wMixN[r] = 0;
+			new rest[480], t[16], w[12];
+			copy(rest, charsmax(rest), val);
+			while (rest[0] && g_wMixN[r] < MAX_MIX)
+			{
+				strtok2(rest, t, charsmax(t), rest, charsmax(rest), ' ', TRIM_FULL);
+				strtok2(rest, w, charsmax(w), rest, charsmax(rest), ' ', TRIM_FULL);
+				if (!t[0] || !w[0])
+					break;
+				strtolower(t);
+				new m = g_wMixN[r]++;
+				copy(g_wMixType[r][m], charsmax(g_wMixType[][]), t);
+				g_wMixW[r][m] = clamp(str_to_num(w), 0, 1000);
+			}
+			if (g_wMixN[r])
+				g_nrows++;
+		}
+	}
+	fclose(f);
+	if (found)
+		log_amx("Last Stand: waves from waves.ini (%d rows, boss %s every %d).", g_nrows, g_wBoss, g_wBossEvery);
+}
+
+stock add_word(list[], len, const word[])
+{
+	if (!word[0])
+		return;
+	new padded[280], w[20];
+	formatex(padded, charsmax(padded), " %s ", list);
+	formatex(w, charsmax(w), " %s ", word);
+	if (containi(padded, w) >= 0)
+		return;
+	add(list, len, " ");
+	add(list, len, word);
 }
 
 /* =========================================================================
