@@ -176,3 +176,61 @@ WebKit covered the first half of the list; the run was cut before the second hal
 The app's own Playtest button end to end (`/api/app/launch`; QA launched the client the same way by hand instead),
 File > Import's native dialog, Studio "switch an open game", menus / HUD / hold-USE repair as a player, the real
 WKWebView / WebView2 compositor (Playwright WebKit/Chromium stand in), native Windows.
+
+## Round 2 (2026-11-12, late)
+
+### (1) Fresh setup, then an update
+How: QA's harness test (`qa_fresh_setup_and_update`, in a scratch copy of the crate only, never committed) on an APFS clone of
+the game folder (`drive_c/Loner-Strike/QAfresh`), `LS_APP_DIR` = a fresh scratch app folder. Step 0: the real uninstall,
+then `addons/` and our maps wiped (hand-copied leftovers no record knows about), leaving stock liblist/mp.dll. Step 1:
+`plan_install` + `run_install` of foundation + core + mode-deathrun (the real setup job, downloads + amxxpc via CrossOver).
+Step 2: a Studio mode and a community mode installed with the real `register_mode`, a community map, a line added to
+laststand.cfg and to mappresets.ini. Step 3: a shipped file changed (br.cfg), install run again (the update path).
+
+| Check | Result | Evidence |
+|---|---|---|
+| Install job finishes | PASS ("done", 215 s) but **with a failed compile** | notes below |
+| ls_outpost + br_valley: bsp, nav, lsv, res, overview txt + bmp | PASS: all 12 present and byte-identical to the repo | |
+| modes.ini lines laststand + br | PASS | |
+| laststand / br cfg + plugins.ini (gm_components + mode plugin) | PASS | |
+| gm_components.amxx, gamemodes.amxx compiled | PASS | |
+| **gm_laststand.amxx, gm_battleroyale.amxx compiled** | **FAIL**: `fatal error 100: cannot read from file: "loner"`: setup copies only the .sma files, not `scripting/include/loner.inc` | W1.md round 2 #1 (Critical) |
+| mappresets ls_* → laststand, br_* → br | PASS | |
+| deathrun.cfg brain settings (with mode-deathrun) | PASS: bot_ls_deathrun 1, bot_ls_fight 1, bot_ls_solo 0; DeathrunManager + dr_bot_traps compiled | |
+| Update keeps Studio mode (modes.ini line, plugins.ini, amxx) | PASS | |
+| Update keeps community mode + community map | PASS | |
+| Update brings the changed shipped file | PASS | |
+| Update keeps a player's own line in laststand.cfg / mappresets.ini | FAIL (overwritten; Low, maybe intended) | W1.md round 2 #2 |
+| Update also fails gm_laststand / gm_battleroyale | FAIL (same cause) | |
+
+### (2) Editor UI, the rest, WebKit and Chromium
+| Feature | WebKit | Chromium | Result |
+|---|---|---|---|
+| Box select in 3D | ✓ | ✓ | PASS (5 picked) |
+| Select touching / all / none / invert | ✓ | ✓ | PASS (2 / 13 / 0 / 12) |
+| Outliner search, row click, eye, lock | ✓ | ✓ | PASS |
+| Visibility sets | ✓ | ✓ | PASS (doc visSets) |
+| Texture tool + face sheet; fit N×M; align to world; drag on the face; texture lock on move | ✓ | ✓ | PASS (only that face's line changes; lock keeps the texture in place) |
+| Texture drag handles (turn ring, stretch ends) | – | – | not tested |
+| Shapes (cylinder, wedge, spike, sphere, arch) | ✓ | ✓ | PASS |
+| Move tool drag; arrow nudges | ✓ | ✓ | PASS (round 1's nudge failure was the test) |
+| Measure | ✓ | ✓ | PASS |
+| Push/pull a face in 3D | ✓ | ✗ | PARTIAL: works in WebKit, nothing in Chromium (P5 round 2 #1) |
+| Rotate gizmo | ✓ | ✓ | PASS |
+| Move / scale gizmo handles, Shift-drag copy | ✗ | ✗ | INCONCLUSIVE (Playwright never hit a handle; hand check) |
+| History panel jump | ✓ | ✓ | PASS (9 → 7 → 9) |
+| Map properties (Sky) | ✓ | ✓ | PASS |
+| Camera presets: Unreal (Alt orbit, MMB pan, wheel), Blender orbit, Hammer Z look | ✓ | ✓ | PASS |
+| Per-pane drawing style | ✓ | ✓ | PASS (no control in Single layout: P5 round 2 #3) |
+| Dock resize | – | – | INCONCLUSIVE (handle not found by the test) |
+| Command palette, cheat sheet, key sets (Hammer → Quad, Shift+B box) | ✓ | ✓ | PASS |
+| Replace with prefab | ✓ | ✓ | PASS (duplicate prefab names: P5 round 2 #2) |
+| Entity report, map info, grid dialog, `]` | ✓ | ✓ | PASS |
+| New, Save (Mod+S), dirty dot, backups, Save as, Open, Recent | ✓ | ✓ | PASS |
+| Autosave (clock moved 3 min) | ✓ | ✓ | PASS (autosave.lsmap, recovery route found=true) |
+| Recovery banner after kill -9 | – | ✗ | NOT CONFIRMED: the disk filled up (ENOSPC) at that moment; route-level recovery passed in round 1 |
+| Export / import .map through the UI, History & restore page | – | – | not tested (disk full); export/import done by route in round 1 |
+
+**Machine note:** the data volume reached 100 % (206 MB free) during round 2: 31 GB under /private/tmp/claude-501 (all
+sessions), 13 GB of cargo target, many HLDS sims. QA deleted its own finished sims (QA4, QA5, QA7, QA8, QAfresh) and
+clones; QA1 is kept for re-tests.
