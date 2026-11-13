@@ -15,7 +15,7 @@ only) and `app/ui/src/views/tools/community/` (Tools > Share > Community, Beta).
 | The files | **GameBanana** | The app already browses and installs from it safely (gamebanana.rs, content.rs). Creators already have accounts there, it scans uploads for viruses, hosts pictures, comments and likes, and pays nothing to us in bandwidth. |
 | Which pages are Loner-Strike creations | A **tag** on the GameBanana page | GameBanana's search can find pages by their attributes. |
 | What GameBanana can't say | The **Loner-Strike index**, `https://dl.lonerstrike.com/community/index.json` | Modes a map supports, ships a nav and finished map knowledge, health check results, game mode plugins and their review, pulled pages, featured picks. A static file on the same download server as the nav pack. |
-| Registrations from the app | `https://list.lonerstrike.com/community/submit` (not built yet, see section 6) | Next to the server list service. Until it exists, registrations wait in the app. |
+| Registrations and reports from the app | `https://list.lonerstrike.com/community/submit` and `/community/report` (section 7, docs/COMMUNITY-SERVER.md) | In the server list service on the Hetzner box. When it doesn't answer, registrations wait in the app. |
 
 ### GameBanana's API (what we use and what it can't do)
 
@@ -94,11 +94,11 @@ reads 1 refuses 2 and says "update Loner-Strike".
       "status": "listed"
     },
     {
-      "kind": "mode", "model": "Mod", "gb": 740001, "name": "Jetpacks",
+      "kind": "mode", "model": "Mod", "gb": 740001, "name": "Jetpacks (a Game Mode Studio mode)",
       "mode": {
         "id": "jet",
-        "plugins": [ { "file": "gm_jet.amxx", "sha256": "…64 hex…", "source": "scripting/gm_jet.sma" } ],
-        "review": "reviewed",
+        "plugins": [],
+        "review": "none",
         "maps": ["de_lonely"]
       }
     }
@@ -112,7 +112,7 @@ reads 1 refuses 2 and says "update Loner-Strike".
 | `model`, `gb` | The GameBanana page (`Mod` default, or `Spray`) and its id. `model`+`gb` is the key. |
 | `file`, `md5` | The file on the page this entry describes, and its MD5 as GameBanana lists it. With `file`, Try it installs that file (if it's still clean); else the newest clean one. |
 | `map` | For maps: the exact .bsp version (`bspSize`, `bspSha256`) the nav, knowledge and checks were made for, the modes it's made for, and what it ships. |
-| `mode` | For game modes: its mode id, its plugins (file, sha256 of the .amxx, where the source is), the review state (`none`, `verified`, `reviewed`), maps it's made for. No plugins = a data-only mode. |
+| `mode` | For game modes: its mode id, its plugins (file, sha256 of the .amxx, where the source is), the review state (`none`, `verified`, `reviewed`), maps it's made for. For 1.0 `plugins` is always empty and `review` always `none` (only Game Mode Studio modes are shared); the fields stay for a later version. |
 | `health` | The newest Loner-Strike health check (tools/health.rs) of that map version. |
 | `screenshots` | https links on `images.gamebanana.com` or `dl.lonerstrike.com` only. |
 | `featured` | A team pick; listed first. |
@@ -120,7 +120,10 @@ reads 1 refuses 2 and says "update Loner-Strike".
 | `revoked` (top) | GameBanana pages pulled even though they carry the tag (the page may not be in `items`). |
 | `verifiedAuthors` | GameBanana names whose modes may be marked `verified`. Informational for the app; the index's `review` field is what counts. |
 
-What the app does with a bad entry: drops it, never the whole list. Dropped: non-positive or
+What the app does with a bad entry: drops it, never the whole list. An unknown `status` reads
+as `hidden` and an unknown `review` as `none`, so a newer index can add values without older
+apps dropping the list (other fields must keep their types: a string where a number belongs
+still fails the whole file). Dropped: non-positive or
 huge ids, duplicate keys, unknown kinds, map names that aren't plain (`maps::safe_arg`), mode
 ids that aren't letters/digits/_, entries without a name. Cleaned: text to one line and a
 length cap, MD5 to 32 hex or nothing, screenshots to allowed https hosts, games to cstrike/czero.
@@ -137,42 +140,66 @@ Featured first, then listed, then tag-only pages; newest, most liked or by name 
 
 ## 4. Trust and moderation
 
-The rules are code (`community::trust`) with tests; the page shows the result as a label, a
-sentence and, for plugins, a question before installing.
+**For 1.0 the community shares content and Game Mode Studio modes only**: maps, prefabs,
+textures, sprays, component setups and Studio graphs, all plain data. Game Mode Studio builds a
+mode's code on each player's computer, so nothing that runs code is ever downloaded. Plugin
+modes (hand-written or compiled AMX Mod X plugins) aren't shared at all; a later version may
+add them behind an automatic native-allowlist check.
+
+The rules are code (`community::trust`) with tests; the page shows the result as a label and a
+sentence.
 
 | What | Level | Installs from the app |
 |---|---|---|
 | Pulled (`revoked`, top-level or per entry) | blocked | Never; not listed. |
 | Maps, prefabs, sprays, textures | content | Yes, one click, whoever made them. The installer copies only content (gamebanana.rs/archive.rs allow-lists: maps, wads, models, sounds, sprites, gfx, overviews) and never replaces files you have. |
-| A game mode with no plugins (settings, graphs, components) | data | Yes, one click. |
-| A mode with plugins, every plugin with a sha256 and source, `review: reviewed` | reviewed | Yes, after a confirm naming the plugins ("The Loner-Strike team read their source"). |
-| Same, `review: verified` (known author, source shipped, not read) | verified | Yes, after a stronger warning ("Plugins can do anything a server can. Only install it if you trust its author"). |
-| A mode with plugins lacking source or a full hash, `review: none`, or a tagged mode the index doesn't know | unreviewed | No. The page explains why and links to GameBanana. |
+| A game mode with no plugins (a Game Mode Studio mode: settings, graphs, components) | data | Yes, one click. |
+| A mode with plugins, whatever its `review`, or a tagged mode the index doesn't know | unreviewed | No. The page says plugin modes can't be installed from the community yet and links to GameBanana. |
 
-Today Try it works for maps, sprays and textures (the installer sections that exist). Modes wait
-for the Game Mode Studio's installer and prefabs for the editor's prefab library; their pages
-say so. The metadata and the UI for plugin trust are in place for when they land.
+**What can't be published.** Publish (`build_package`), registering (`check_page`) and the list
+service all refuse the same things, with the same list kept in both places
+(`community.rs` `CODE_EXT`/`ARCHIVE_EXT`, `services/serverlist/community.py`):
+a mode with plugins ("Plugin modes can't be shared yet. Make it in Game Mode Studio, which
+builds a mode's code on each player's computer.", and the page offers "Open in Game Mode
+Studio"), and any file that runs code or hides other files: `.amxx .amx .sma .inc .dll .so
+.dylib .exe .com .scr .msi .bat .cmd .sh .ps1 .py .pyc .js .vbs .jar .lua .pl .rb .php .app
+.command`, archives inside the package (`.zip .rar .7z .tar .gz .tgz .bz2 .xz .cab`), anything
+under `addons/metamod/` or a `dlls/` folder. The list service reads the uploaded zip's file list
+itself (range requests to GameBanana's file hosts), so a hand-made zip is checked too.
 
-When the mode installer is built, it must also:
-- check each plugin's sha256 against the index before copying, and refuse a mismatch;
-- for `reviewed`, prefer building from the shipped source with the bundled amxxpc and compare;
-- install into the mode's own plugin list (`<id>.plugins.ini`), never `plugins.ini`, so removing
-  the mode removes its plugins;
-- refuse Metamod DLLs and anything outside `addons/amxmodx/{plugins,configs,data}` and the
-  mode's content.
+When the mode installer is built, it must also refuse plugins (until a later version allows a
+checked kind), install into the mode's own files, never `plugins.ini`, and refuse Metamod DLLs
+and anything outside the mode's content and settings.
 
-**Moderation** (team side, no in-app reporting beyond a link):
-- New registrations land in an inbox; a person lists them (sets `status: listed`), possibly after
-  a look. Content can be listed fast; modes with plugins need a review first.
-- Pull a page by adding `mod:<id>` to `revoked` (takes effect within 15 minutes for running apps;
-  installed copies stay, as with any GameBanana download, and can be removed in Get more).
-- Reports: GameBanana's own report button, and the Loner-Strike Discord.
-- Featured picks are a field, not an algorithm.
+**Moderation** (docs/COMMUNITY-SERVER.md has the commands and setup):
+- A registration that passes the list service's automatic checks (page in CS 1.6, the tag, the
+  kind, the file's MD5, GameBanana's virus check, nothing that runs code in the package) is
+  **listed at once**, sprays included. The team's private Discord channel gets a card for each
+  new listing with a Pull button.
+- **Report** (every creation's page): a reason (doesn't work, harmful, someone else's work,
+  offensive, not a Loner-Strike creation, something else) and an optional note (500
+  characters), sent through `POST /api/tools/community/report` to the list service, which
+  rate-limits it and posts a card to the moderators' channel with Pull, Keep and Block creator.
+  Nothing about the player is sent; the service tells reporters apart only by a salted hash.
+- **Block creator** sends that GameBanana member's future registrations to a manual queue
+  (Approve / Reject cards) instead of listing them at once.
+- A pull adds the page to `revoked` (and marks its entry `revoked`); it reaches running apps
+  when the index is next published (within 15 minutes of that). Installed copies stay, as with
+  any GameBanana download, and can be removed in Get more.
+- Also: GameBanana's own report button, and the Loner-Strike Discord. Featured picks are a
+  field, not an algorithm.
+
+### Index integrity
+
+The list service publishes `community/index.json.sha256` beside the index. The app doesn't
+check it yet, and a checksum from the same server only catches a damaged download; a signature
+the app verifies (a key pinned in the app) would be the real fix. Request in section 8.
 
 ## 5. Try it
 
 1. The page asks `/api/tools/community/try {model, id, confirmed}`. The server re-reads the
-   GameBanana page (tag still there?), applies the trust rules (and the confirm), picks the file
+   GameBanana page (tag still there?), refuses a mode with plugins outright, applies the trust
+   rules (and the confirm, unused while only content and data modes install), picks the file
    (asked, else the index's, else the newest clean supported one; GameBanana-flagged files
    never) and starts the existing installer job (`MapStore::start_section_install`).
 2. The page follows the job on `/api/gb/jobs` (the same list Get more uses).
@@ -200,37 +227,45 @@ When the mode installer is built, it must also:
    buttons for the name, the description (with the bot and health facts written out), the
    attribute and the category to pick.
 6. **Paste the link** (`POST /api/tools/community/register {url}`): the app reads the page and
-   checks the game, the tag and that one of its files has the package's MD5, then builds the
-   index entry (page id, file id, MD5, the GameBanana author name, its pictures) and sends it
-   to the inbox. If the inbox doesn't answer (it doesn't exist yet) the entry is kept in
-   `<app dir>/tools/community/mine.json` as "waiting", retried each time Yours opens, and the
-   page offers the entry as text to post in the Discord.
+   checks the game, the tag, that one of its files has the package's MD5 and that the package
+   carries nothing that runs code, then builds the index entry (page id, file id, MD5, the
+   GameBanana author name, its pictures) and sends it to the list service, which checks it all
+   again itself. Its answer, kept in `<app dir>/tools/community/mine.json` and shown in Yours:
+   - 200 `{"ok": true, "key": "mod:123", "state": "listed"}`: listed (shows up once the index is
+     next published), or `"state": "pending"` when the creator is blocked and a moderator looks
+     first;
+   - 4xx (not 429) `{"error": "..."}`: **refused**, final, with what to fix (409 pulled or turned
+     down, 422 a failed check); not sent again;
+   - 429, 5xx or no answer: **waiting**, retried each time Yours opens; the page also offers the
+     entry as text to post in the Discord.
+   A mode with plugins is refused before anything is sent, with "Open in Game Mode Studio".
 
 Other tools open Publish with a map: `go("tools", "community:publish:<map>")`. Other addresses:
 `community:yours`, `community:mod:<id>`, `community:spray:<id>`.
 
-## 7. Server-side work on dl.lonerstrike.com / list.lonerstrike.com (not done here)
+## 7. The server side (list.lonerstrike.com / dl.lonerstrike.com)
 
-1. **Host the index** at `https://dl.lonerstrike.com/community/index.json` (R2, like
-   `navs/list.json`), `Content-Type: application/json`, short cache (`max-age=300`) so a pull
-   spreads within minutes. Start with `{"schema": 1, "items": []}`.
-2. **The inbox**: `POST https://list.lonerstrike.com/community/submit`, body
-   `{"schema": 1, "app": "<version>", "item": {…}}`, in the list service on the Hetzner box.
-   It should: rate-limit per IP; re-fetch the GameBanana page itself and re-check the tag, the
-   game and the MD5 (never trust the app's copy); store the entry as pending; answer 2xx (the
-   app then marks it sent) or 4xx with `{error}`. Optionally post "new creation waiting" to a
-   team Discord channel (the status service already talks to Discord).
-3. **Building the index**: a small job (cron or a button in a team page) that merges approved
-   entries, re-checks every listed page daily (gone, tag removed, file replaced: MD5 no longer
-   on the page → hide and tell the team), writes the file and uploads it.
-4. **Health and screenshots from our side (optional, later)**: run the health check on a
-   submitted map on a team machine to fill `health` independently of the author's numbers, and
-   render viewer screenshots to `dl.lonerstrike.com/community/shots/` (already an allowed
-   screenshot host).
-5. **Discord**: a #creations channel the "waiting" fallback can point at, and a feed of newly
-   listed creations.
+Built in `services/serverlist/` (community.py inside the server list service); how it works,
+its settings and the deploy steps are in **docs/COMMUNITY-SERVER.md**. What the app talks to:
+
+| Endpoint | Body / answer |
+|---|---|
+| `POST https://list.lonerstrike.com/community/submit` | `{"schema": 1, "app": "<version>", "item": {...}}` → 200 `{"ok", "key", "state": "listed" \| "pending"}`, or 4xx/5xx `{"error"}` (section 6) |
+| `GET https://list.lonerstrike.com/community/submission/<mod\|spray>/<id>` | `{"key", "state": "listed" \| "pending" \| "hidden" \| "rejected" \| "pulled" \| "unknown", "reason"?}` |
+| `POST https://list.lonerstrike.com/community/report` | `{"schema": 1, "app", "model": "Mod" \| "Spray", "id", "reason", "note"}` → 200 `{"ok": true}`, 400 bad, 413 too long, 429 too many, 503 busy, each with `{"error"}` |
+| `GET https://dl.lonerstrike.com/community/index.json` (+ `.sha256`) | the index (section 3), published from the list service's database by the team |
+
+Later, optional: run the health check on a submitted map on a team machine to fill `health`
+independently of the author's numbers, and render viewer screenshots to
+`dl.lonerstrike.com/community/shots/` (already an allowed screenshot host).
 
 ## 8. Requests to other tools (also in TOOLS-NOTES.md)
+
+- **App / list service: a signed index.** Pin a public key in the app and have it verify a
+  signature published beside `community/index.json` (Ed25519 or minisign) before using a
+  download; the list service already writes `index.json.sha256`. Until then a tampered index on
+  the download server would be believed (the trust rules still stop plugins and the installer's
+  allow-lists still apply).
 
 - **Installer (archive.rs, owner of gamebanana/content):** allow `.lsv` in `maps/` (the bot
   brain's map knowledge, plain data). Today a package's `.lsv` is skipped on install, so bots
@@ -240,8 +275,10 @@ Other tools open Publish with a map: `go("tools", "community:publish:<map>")`. O
 - **Map viewer:** "Use as a screenshot for Publish" (the viewer's `shot()` exists for dev); could
   hand a PNG to the Publish form.
 - **Spray maker:** "Share on GameBanana" for sprays: the spray image + the tag; register the same way.
-- **Game Mode Studio:** a mode package format (mode.ini + cfg + plugins.ini + modes/<id>/ +
-  sources) and its installer following section 4; Publish then gets a "game mode" path.
+- **Game Mode Studio:** a mode package format for Studio modes (settings, graphs, components; no
+  compiled plugins or sources: the app builds the code on the player's computer) and its
+  installer following section 4; Publish then gets a "game mode" path, run through the same
+  `package_refusal` check.
 
 ## 9. Prefab packages (map editor, agent P4)
 

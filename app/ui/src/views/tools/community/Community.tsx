@@ -14,14 +14,14 @@ import { useToolArg } from "../../../stores/tools";
 import { useNav } from "../../../store";
 import type { GbJob } from "../../../types";
 import { Banner, BusyButton, LoadError, Segmented, useToast } from "../../../ui";
-import { errorText } from "../common/api";
+import { errorText, useBusy } from "../common/api";
 import { useReportAddress } from "../common/address";
 import { useToolCrumbs, type Crumb } from "../common/shell";
 import { Empty, Loading } from "../common";
 import type { ToolProps } from "../registry";
 import {
-  BADGE_LABEL, KIND_LABEL, ago, browse, details, launch, sizeText, startModes, tryIt,
-  type Details, type Entry, type Model, type Trust,
+  BADGE_LABEL, KIND_LABEL, NOTE_MAX, REPORT_REASONS, ago, browse, details, launch, report, sizeText, startModes, tryIt,
+  type Details, type Entry, type Model, type ReportReason, type Trust,
 } from "./communityApi";
 import Publish from "./Publish";
 import Yours from "./Yours";
@@ -105,7 +105,7 @@ function BrowseList({ onOpen }: { onOpen: (e: Entry) => void }) {
   return (
     <>
       <p className="muted measure">
-        Maps, game modes and more made with Loner-Strike. Try one and it's installed and ready to play with bots in a click; nothing that runs code goes in without your say.
+        Maps, game modes and more made with Loner-Strike. Try one and it's installed and ready to play with bots in a click. Only content and Game Mode Studio modes are shared: nothing that runs code.
       </p>
       <div className="toolbar cm-toolbar">
         <input className="search" type="search" aria-label="Search creations" placeholder="Search names, authors, modes" value={text} onChange={(e) => setText(e.target.value)} />
@@ -194,7 +194,9 @@ type Stage = { state: "idle" } | { state: "asking" } | { state: "installing"; jo
 
 function CreationPage({ model, id, onBack }: { model: Model; id: number; onBack: () => void }) {
   const q = useQuery({ queryKey: ["tools", "community", "item", model, id], queryFn: ({ signal }) => details(model, id, signal), retry: false });
+  const [reporting, setReporting] = useState(false);
   const head = (
+    <>
     <div className="tl-head">
       <div className="tl-head-title">
         <h3>{q.data?.name ?? "Creation"}</h3>
@@ -203,8 +205,11 @@ function CreationPage({ model, id, onBack }: { model: Model; id: number; onBack:
       <div className="tl-head-actions">
         <button className="btn" onClick={onBack}>Back to the list</button>
         {q.data && <a className="btn" href={q.data.url} target="_blank" rel="noreferrer">Open on GameBanana</a>}
+        <button className="btn" aria-expanded={reporting} onClick={() => setReporting((v) => !v)}>Report</button>
       </div>
     </div>
+    {reporting && <ReportForm model={model} id={id} name={q.data?.name} onClose={() => setReporting(false)} />}
+    </>
   );
   if (q.isPending) return <div className="panel">{head}<Loading text="Opening it…" /></div>;
   if (q.isError) return <div className="panel">{head}<LoadError text={errorText(q.error, "Couldn't open that one.")} onRetry={() => q.refetch()} /></div>;
@@ -365,6 +370,54 @@ function Creation({ d }: { d: Details }) {
         <p className="muted small-note">{d.likes} likes · {d.downloads} downloads{d.category ? ` · ${d.category}` : ""}</p>
       </div>
     </div>
+  );
+}
+
+/** Tells the Loner-Strike moderators something's wrong with a creation: a reason and an optional
+ *  note, nothing about you. They can pull it from Community in one step. */
+function ReportForm({ model, id, name, onClose }: { model: Model; id: number; name?: string; onClose: () => void }) {
+  const [reason, setReason] = useState<ReportReason | "">("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+  const { working, run } = useBusy();
+  const send = () =>
+    run("Sending…", async () => {
+      if (!reason) return;
+      setError(null);
+      const r = await report(model, id, reason, note.trim());
+      if (r.error) setError(r.error);
+      else setSent(true);
+    });
+  if (sent)
+    return (
+      <div className="cm-report" role="status">
+        <p className="cm-line ok">Thanks. The Loner-Strike moderators have your report{name ? ` about ${name}` : ""} and will take a look.</p>
+        <div className="row"><button className="btn" onClick={onClose}>Close</button></div>
+      </div>
+    );
+  return (
+    <form className="cm-report" aria-label="Report this creation" onSubmit={(e) => { e.preventDefault(); send(); }}>
+      <fieldset>
+        <legend>What's wrong with it?</legend>
+        {REPORT_REASONS.map((r) => (
+          <label key={r.id} className="cm-report-reason">
+            <input type="radio" name="reason" value={r.id} checked={reason === r.id} onChange={() => setReason(r.id)} />
+            {r.label}
+          </label>
+        ))}
+      </fieldset>
+      <label className="cm-report-note">
+        <span className="muted small-note">Anything that helps (optional, {NOTE_MAX - note.length} characters left)</span>
+        <textarea rows={3} maxLength={NOTE_MAX} value={note} onChange={(e) => setNote(e.target.value)} />
+      </label>
+      <p className="muted small-note">Only this page, the reason and your note are sent: nothing about you or your computer.</p>
+      {error && <p className="cm-bad" role="alert">{error}</p>}
+      <div className="row">
+        <BusyButton type="submit" className="btn primary" busy={working !== null} busyLabel={working ?? "Sending…"} label="Send report" disabled={!reason} />
+        <button type="button" className="btn" onClick={onClose}>Cancel</button>
+      </div>
+    </form>
   );
 }
 

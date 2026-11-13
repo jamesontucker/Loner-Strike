@@ -7,11 +7,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { copyText } from "../../../api";
+import { useNav } from "../../../store";
 import type { MapInfo } from "../../../types";
 import { BusyButton, LoadError, useToast } from "../../../ui";
 import { errorText, useBusy } from "../common/api";
 import { Loading, MapList } from "../common";
-import { publish, readiness, register, reveal, sizeText, startModes, type Form, type Package, type Shot } from "./communityApi";
+import { publish, readiness, register, reveal, sizeText, startModes, type Form, type MineState, type Package, type Shot } from "./communityApi";
 
 const MAX_SHOTS = 6;
 const MAX_SHOT = 8 << 20;
@@ -196,7 +197,8 @@ function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () =>
   const toast = useToast();
   const [url, setUrl] = useState("");
   const { working, run } = useBusy();
-  const [result, setResult] = useState<{ state: "sent" | "waiting"; copy: string } | null>(null);
+  const [result, setResult] = useState<{ state: MineState; error?: string | null; copy: string } | null>(null);
+  const [studio, setStudio] = useState(false);
 
   const show = async () => {
     const r = await reveal(pkg.file);
@@ -205,8 +207,9 @@ function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () =>
   const send = () =>
     run("Checking the page…", async () => {
       const r = await register(url.trim(), pkg.file);
-      if (r.error) return toast(r.error, true);
-      setResult({ state: r.state, copy: r.copy });
+      setStudio(!!r.studio);
+      if (r.error && !r.state) return toast(r.error, true);
+      setResult({ state: r.state, error: r.error, copy: r.copy });
     });
 
   return (
@@ -237,13 +240,23 @@ function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () =>
           </form>
         </li>
       </ol>
+      {studio && (
+        <div className="cm-result" role="status">
+          <p className="cm-line warn">Plugin modes can't be shared yet. A mode made in Game Mode Studio can: the app builds its code on each player's computer.</p>
+          <button className="btn primary" onClick={() => useNav.getState().go("tools", "studio")}>Open in Game Mode Studio</button>
+        </div>
+      )}
       {result && (
         <div className="cm-result" role="status">
-          {result.state === "sent" ? (
-            <p className="cm-line ok">Sent. It shows up in Community once the Loner-Strike list is updated.</p>
+          {result.state === "listed" || result.state === "sent" ? (
+            <p className="cm-line ok">Listed. It shows up in Community within a few minutes, once the Loner-Strike list is next updated.</p>
+          ) : result.state === "pending" ? (
+            <p className="cm-line ok">Sent. A Loner-Strike moderator looks at it first; Yours shows when it's listed.</p>
+          ) : result.state === "refused" ? (
+            <p className="cm-line bad">The Loner-Strike list turned it down: {result.error || "no reason given."}</p>
           ) : (
             <>
-              <p className="cm-line warn">The page checks out, but the Loner-Strike list isn't taking new entries from the app yet. It's kept here and sent automatically later; you can also post this in the Loner-Strike Discord:</p>
+              <p className="cm-line warn">The page checks out, but the Loner-Strike list didn't answer. It's kept here and sent automatically later; you can also post this in the Loner-Strike Discord:</p>
               <CopyRow label="Entry" value={result.copy} long />
             </>
           )}

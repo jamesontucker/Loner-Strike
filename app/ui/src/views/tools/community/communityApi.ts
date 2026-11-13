@@ -77,7 +77,9 @@ export type Package = {
 
 export type Form = { submitUrl: string; game: string; category: string; title: string; text: string; tag: { title: string; value: string }; file: string; md5: string };
 
-export type Mine = { item: Item; url: string; state: "sent" | "waiting"; when: number };
+/** listed / pending (a moderator looks first) / refused (error says why) / waiting (not sent yet); "sent" from older versions */
+export type MineState = "listed" | "pending" | "refused" | "waiting" | "sent";
+export type Mine = { item: Item; url: string; state: MineState; when: number; error?: string };
 export type PackageRow = { file: string; name: string; size: number; md5: string; made: number; map: string | null };
 
 const base = "/api/tools/community";
@@ -97,7 +99,21 @@ export type Shot = { name: string; data: string };
 export const publish = (map: string, body: { title: string; summary: string; author: string; modes: string[]; screenshots: Shot[] }) =>
   post<{ package: Package; form: Form }>(`${base}/publish/${encodeURIComponent(map)}`, body);
 
-export const register = (url: string, file: string) => post<{ ok: boolean; state: "sent" | "waiting"; item: Item; copy: string }>(`${base}/register`, { url, file });
+export const register = (url: string, file: string) =>
+  post<{ ok: boolean; state: MineState; error?: string | null; item: Item; copy: string; studio?: boolean }>(`${base}/register`, { url, file });
+
+export type ReportReason = "broken" | "malware" | "stolen" | "offensive" | "not-loner-strike" | "other";
+export const REPORT_REASONS: { id: ReportReason; label: string }[] = [
+  { id: "broken", label: "It doesn't work (crashes, missing files, broken)" },
+  { id: "malware", label: "It looks harmful (malware, something that runs code)" },
+  { id: "stolen", label: "It's someone else's work" },
+  { id: "offensive", label: "It's offensive or inappropriate" },
+  { id: "not-loner-strike", label: "It isn't a Loner-Strike creation" },
+  { id: "other", label: "Something else" },
+];
+export const NOTE_MAX = 500;
+/** Sends a report to the Loner-Strike moderators: the page, a reason and an optional note, nothing about you. */
+export const report = (model: Model, id: number, reason: ReportReason, note: string) => post<{ ok: boolean }>(`${base}/report`, { model, id, reason, note });
 
 export const mine = (signal?: AbortSignal) => get<{ mine: Mine[]; packages: PackageRow[] }>(`${base}/mine`, signal);
 
@@ -116,7 +132,7 @@ export const BADGE_LABEL: Record<Badge, { label: string; help: string }> = {
   bots: { label: "Works with bots", help: "Ships with a bot nav and finished map knowledge: bots play it well from the first round." },
   nav: { label: "Bot nav", help: "Ships with a bot nav. The bots' map knowledge fills in as you play." },
   checked: { label: "Checked with bots", help: "A Loner-Strike health check found no real problems (bots didn't fall, get stuck or hit errors)." },
-  data: { label: "Settings only", help: "A game mode made of settings and rules only: nothing that runs code." },
+  data: { label: "Settings only", help: "A Game Mode Studio mode: settings, rules and graphs only, nothing that runs code." },
 };
 
 export const sizeText = (b: number) => (b >= 1 << 20 ? `${(b / (1 << 20)).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);

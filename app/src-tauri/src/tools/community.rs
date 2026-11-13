@@ -48,6 +48,21 @@ pub const INDEX_URL: &str = "https://dl.lonerstrike.com/community/index.json";
 /// Where registrations go (a small service next to the server list; see docs/COMMUNITY.md).
 /// Until it answers, registrations wait on this computer.
 pub const SUBMIT_URL: &str = "https://list.lonerstrike.com/community/submit";
+/// Where the Report button's reports go (the team's private moderation channel hears about them).
+pub const REPORT_URL: &str = "https://list.lonerstrike.com/community/report";
+/// What a report can say is wrong (the list service takes exactly these).
+pub const REPORT_REASONS: [&str; 6] = ["broken", "malware", "stolen", "offensive", "not-loner-strike", "other"];
+const MAX_NOTE: usize = 500;
+/// For 1.0 the community shares content and Game Mode Studio modes only (settings and graphs;
+/// the app builds a Studio mode's code on each player's computer), never plugins.
+pub const PLUGIN_REFUSAL: &str = "Plugin modes can't be shared yet. Make it in Game Mode Studio, which builds a mode's code on each player's computer.";
+/// Files that run code (or hide other files) never go in a shared package. The list service
+/// (services/serverlist/community.py, CODE_EXT / ARCHIVE_EXT) refuses the same list: keep them identical.
+const CODE_EXT: [&str; 26] = [
+    ".amxx", ".amx", ".sma", ".inc", ".dll", ".so", ".dylib", ".exe", ".com", ".scr", ".msi", ".bat", ".cmd", ".sh", ".ps1", ".py", ".pyc", ".js", ".vbs", ".jar", ".lua", ".pl", ".rb",
+    ".php", ".app", ".command",
+];
+const ARCHIVE_EXT: [&str; 9] = [".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".cab"];
 /// The tag that marks a GameBanana page as a Loner-Strike creation (GameBanana's own
 /// "Software Used" attribute group, so it reads naturally on the page too). One word: the
 /// search splits "Loner-Strike" into "Loner" OR "Strike" and finds every page with "Strike".
@@ -186,13 +201,15 @@ pub struct MapMeta {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Review {
-    /// nobody has looked at it
-    #[default]
-    None,
     /// a known author, source shipped, not read line by line
     Verified,
     /// a Loner-Strike reviewer read the source and built the plugin from it (hash pinned)
     Reviewed,
+    /// nobody has looked at it (also what a newer index's unknown value reads as; serde wants
+    /// the catch-all last)
+    #[default]
+    #[serde(other)]
+    None,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -238,10 +255,13 @@ pub struct HealthMeta {
 pub enum Status {
     #[default]
     Listed,
-    /// kept out of lists (asked by the author, or waiting on a question), still openable
-    Hidden,
     /// pulled: never offered, never installed
     Revoked,
+    /// kept out of lists (asked by the author, or waiting on a question), still openable;
+    /// also what a newer index's unknown value reads as, so one entry can't break the list
+    /// (serde wants the catch-all last)
+    #[serde(other)]
+    Hidden,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -301,6 +321,33 @@ fn safe_shot(url: &str) -> bool {
 
 fn one_line(s: &str, max: usize) -> String {
     s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect::<String>().trim().chars().take(max).collect()
+}
+
+/// A path in a package that runs code or hides other files (nested archives, Metamod, dlls/).
+pub fn code_file(path: &str) -> bool {
+    let low = path.replace('\\', "/").to_ascii_lowercase();
+    if low.ends_with('/') {
+        return false;
+    }
+    let base = low.rsplit('/').next().unwrap_or("");
+    CODE_EXT.iter().chain(ARCHIVE_EXT.iter()).any(|e| base.ends_with(e)) || low.contains("addons/metamod/") || format!("/{low}").contains("/dlls/")
+}
+
+/// Why a package can't be shared, if it can't: plugins, or files that run code.
+pub fn package_refusal(item: &Item, contents: &[String]) -> Option<String> {
+    if item.mode.as_ref().is_some_and(|m| !m.plugins.is_empty()) {
+        return Some(PLUGIN_REFUSAL.into());
+    }
+    let bad: Vec<&String> = contents.iter().filter(|c| code_file(c)).collect();
+    if bad.iter().any(|b| [".amxx", ".amx", ".sma", ".inc"].iter().any(|e| b.to_ascii_lowercase().ends_with(e))) {
+        return Some(PLUGIN_REFUSAL.into());
+    }
+    (!bad.is_empty()).then(|| {
+        format!(
+            "The package has files that run code or can't be checked ({}). Only maps, textures, models, sounds, sprays and Game Mode Studio settings can be shared.",
+            bad.iter().take(3).map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+        )
+    })
 }
 
 /// Reads the index. Never panics; entries that don't check out are left out (a bad entry
@@ -583,30 +630,15 @@ pub fn trust(kind: Kind, item: Option<&Item>, revoked: bool) -> Trust {
     if mode.plugins.is_empty() {
         return t("data", "Settings only", true, None, "Settings and rules only: no plugins, nothing that runs code.");
     }
-    let complete = mode.plugins.iter().all(|p| p.sha256.len() == 64 && p.sha256.bytes().all(|c| c.is_ascii_hexdigit()) && !p.source.trim().is_empty());
-    let names = mode.plugins.iter().map(|p| p.file.as_str()).collect::<Vec<_>>().join(", ");
-    if !complete {
-        return t("unreviewed", "Not checked", false, None, "It runs plugins without their source, so the app won't install it.");
-    }
-    match mode.review {
-        Review::Reviewed => t(
-            "reviewed",
-            "Reviewed",
-            true,
-            Some(format!("This mode adds plugins to your server: {names}. The Loner-Strike team read their source. Install it?")),
-            "Its plugins were read and built from source by the Loner-Strike team.",
-        ),
-        Review::Verified => t(
-            "verified",
-            "Known author",
-            true,
-            Some(format!(
-                "This mode adds plugins to your server that nobody at Loner-Strike has read: {names}. Plugins can do anything a server can. Only install it if you trust its author."
-            )),
-            "Made by a known author with its source included, but not reviewed.",
-        ),
-        Review::None => t("unreviewed", "Not checked", false, None, "It runs plugins nobody has checked yet, so the app won't install it."),
-    }
+    // plugin modes aren't shared or installed from the community for now (whatever an index
+    // says about their review); Game Mode Studio modes are settings only and install like content
+    t(
+        "unreviewed",
+        "Plugins",
+        false,
+        None,
+        "It runs plugins, and plugin modes can't be installed from the community yet. Modes made in Game Mode Studio can.",
+    )
 }
 
 // ---- the list ----------------------------------------------------------------------------------
@@ -871,6 +903,9 @@ async fn api_try(State(st): State<Shared>, h: HeaderMap, Json(req): Json<TryReq>
             let root = s(&page["_aSuperCategory"]["_sName"]);
             let kind = it.as_ref().map(|i| i.kind).unwrap_or_else(|| kind_of(model.path(), if root.is_empty() { &cat } else { &root }, &cat));
             let tr = trust(kind, it.as_ref(), idx.revoked.iter().any(|r| *r == key(model, req.id)));
+            if it.as_ref().and_then(|i| i.mode.as_ref()).is_some_and(|m| !m.plugins.is_empty()) {
+                return Err(fail(PLUGIN_REFUSAL));
+            }
             if !tr.allowed {
                 return Err(fail(&tr.note));
             }
@@ -1194,6 +1229,10 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
             files.push((rel.replace('\\', "/"), p));
         }
     }
+    let names: Vec<String> = files.iter().map(|(n, _)| n.clone()).collect();
+    if let Some(why) = package_refusal(&item, &names) {
+        return Err(why);
+    }
     let wanted = r.files.clone();
     let res = super::doctor::res_text(&m.name, &wanted, &[]);
     let manifest = json!({"schema": SCHEMA, "app": env!("CARGO_PKG_VERSION"), "item": item});
@@ -1330,6 +1369,9 @@ pub fn parse_gb_link(url: &str) -> Option<(Model, i64)> {
 /// Checks a GameBanana page against the package: the tag, the game, and one file with the
 /// package's MD5. Returns the entry for the index.
 pub fn check_page(page: &Value, model: Model, id: i64, pkg: &Package) -> Result<Item, String> {
+    if let Some(why) = package_refusal(&pkg.item, &pkg.contents) {
+        return Err(why);
+    }
     if page["_aGame"]["_idRow"].as_i64().is_some_and(|g| g != CS16_GAME) {
         return Err("That page isn't in GameBanana's Counter-Strike 1.6 section.".into());
     }
@@ -1368,9 +1410,13 @@ pub fn check_page(page: &Value, model: Model, id: i64, pkg: &Package) -> Result<
 pub struct Mine {
     pub item: Item,
     pub url: String,
-    /// sent (the inbox took it) or waiting (kept here, sent next time)
+    /// listed (the list took it and lists it), pending (a moderator looks first), refused (the
+    /// list said no: `error` says why; not sent again), waiting (the list didn't answer: kept
+    /// here, sent next time); "sent" from older versions means listed or pending
     pub state: String,
     pub when: u64,
+    /// why the list refused it
+    pub error: String,
 }
 
 fn mine_path() -> PathBuf {
@@ -1395,16 +1441,67 @@ pub fn remember(list: &mut Vec<Mine>, m: Mine) {
     list.truncate(200);
 }
 
-fn send(item: &Item) -> bool {
+/// What the list said to a registration.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Sent {
+    /// "listed" or "pending"
+    Took(String),
+    /// a 4xx other than 429: final, with the list's reason
+    Refused(String),
+    /// no answer, 429 or 5xx: tried again later
+    Waiting,
+}
+
+/// Reads the list service's answer (status, body) to a registration.
+pub fn sent_from(status: u16, body: &[u8]) -> Sent {
+    let v: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
+    match status {
+        200..=299 => Sent::Took(match v["state"].as_str() {
+            Some("pending") => "pending".into(),
+            _ => "listed".into(),
+        }),
+        429 => Sent::Waiting,
+        400..=499 => Sent::Refused(v["error"].as_str().map(|e| one_line(e, 300)).filter(|e| !e.is_empty()).unwrap_or_else(|| "The Loner-Strike list turned it down.".into())),
+        _ => Sent::Waiting,
+    }
+}
+
+fn send(item: &Item) -> Sent {
+    if let Some(why) = package_refusal(item, &[]) {
+        return Sent::Refused(why);
+    }
     let body = json!({"schema": SCHEMA, "app": env!("CARGO_PKG_VERSION"), "item": item});
-    crate::sys::http()
+    let r = crate::sys::http()
         .post(SUBMIT_URL)
         .header("User-Agent", USER_AGENT)
         .header("Content-Type", "application/json")
-        .timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
         .body(body.to_string())
-        .send()
-        .is_ok_and(|r| r.status().is_success())
+        .send();
+    match r {
+        Ok(r) => {
+            let status = r.status().as_u16();
+            let mut out = Vec::new();
+            let _ = r.take(16 << 10).read_to_end(&mut out);
+            sent_from(status, &out)
+        }
+        Err(_) => Sent::Waiting,
+    }
+}
+
+/// Puts the list's answer on a remembered registration.
+fn mark(m: &mut Mine, sent: &Sent) {
+    match sent {
+        Sent::Took(state) => {
+            m.state = state.clone();
+            m.error.clear();
+        }
+        Sent::Refused(e) => {
+            m.state = "refused".into();
+            m.error = e.clone();
+        }
+        Sent::Waiting => m.state = "waiting".into(),
+    }
 }
 
 #[derive(Deserialize)]
@@ -1451,13 +1548,19 @@ async fn api_register(h: HeaderMap, Json(req): Json<RegisterReq>) -> Response {
                 .or_else(|| pkgs.iter().find(|p| mds.contains(&p.md5)))
                 .or_else(|| pkgs.iter().find(|p| p.file == req.file))
                 .unwrap_or(&pkgs[0]);
-            let item = check_page(&page, model, id, pkg).map_err(fail)?;
+            let item = match check_page(&page, model, id, pkg) {
+                Ok(it) => it,
+                // a Studio mode can be made again without plugins: the page offers to open the Studio
+                Err(e) if e == PLUGIN_REFUSAL => return Ok(json!({"error": e, "studio": true})),
+                Err(e) => return Err(fail(e)),
+            };
             let sent = send(&item);
             let mut list = load_mine(&mine_path());
-            let entry = Mine { item: item.clone(), url: model.url(id), state: if sent { "sent" } else { "waiting" }.into(), when: now() };
-            remember(&mut list, entry);
+            let mut entry = Mine { item: item.clone(), url: model.url(id), when: now(), ..Default::default() };
+            mark(&mut entry, &sent);
+            remember(&mut list, entry.clone());
             save_mine(&mine_path(), &list);
-            Ok(json!({"ok": true, "state": if sent { "sent" } else { "waiting" }, "item": item,
+            Ok(json!({"ok": true, "state": entry.state, "error": if entry.error.is_empty() { Value::Null } else { json!(entry.error) }, "item": item,
                       "copy": serde_json::to_string_pretty(&json!({"schema": SCHEMA, "item": item})).unwrap_or_default()}))
         })
         .await,
@@ -1472,8 +1575,9 @@ async fn api_mine() -> Response {
             // anything still waiting gets another go
             let mut changed = false;
             for m in list.iter_mut().filter(|m| m.state == "waiting").take(5) {
-                if send(&m.item) {
-                    m.state = "sent".into();
+                let sent = send(&m.item);
+                if sent != Sent::Waiting {
+                    mark(m, &sent);
                     changed = true;
                 }
             }
@@ -1548,6 +1652,57 @@ async fn api_reveal(h: HeaderMap, Json(req): Json<RevealReq>) -> Response {
     json_answer(r.map(|_| json!({"ok": true})).map_err(|e| Fail::new(StatusCode::OK, format!("Couldn't show the folder ({e})."))))
 }
 
+#[derive(Deserialize)]
+struct ReportReq {
+    model: String,
+    id: i64,
+    reason: String,
+    #[serde(default)]
+    note: String,
+}
+
+/// The report the list service is sent: the page, a reason, an optional note and the app's
+/// version; nothing about the player.
+pub fn report_body(model: &str, id: i64, reason: &str, note: &str) -> Result<Value, String> {
+    let model = Model::parse(model).filter(|_| id > 0 && id < 100_000_000).ok_or("That isn't a GameBanana page.")?;
+    if !REPORT_REASONS.contains(&reason) {
+        return Err("Pick what's wrong with it.".into());
+    }
+    if note.chars().count() > MAX_NOTE {
+        return Err(format!("Keep the note under {MAX_NOTE} characters."));
+    }
+    Ok(json!({"schema": 1, "app": env!("CARGO_PKG_VERSION"), "model": model, "id": id, "reason": reason, "note": one_line(note, MAX_NOTE)}))
+}
+
+async fn api_report(h: HeaderMap, Json(req): Json<ReportReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    json_answer(
+        blocking(move || {
+            let fail = |m: String| Fail::new(StatusCode::OK, m);
+            let body = report_body(&req.model, req.id, &req.reason, &req.note).map_err(fail)?;
+            let r = crate::sys::http()
+                .post(REPORT_URL)
+                .header("User-Agent", USER_AGENT)
+                .header("Content-Type", "application/json")
+                .timeout(Duration::from_secs(15))
+                .body(body.to_string())
+                .send()
+                .map_err(|_| fail("Couldn't reach the Loner-Strike list. Check your internet connection, or tell us in the Discord.".into()))?;
+            let status = r.status();
+            let mut out = Vec::new();
+            let _ = r.take(16 << 10).read_to_end(&mut out);
+            if status.is_success() {
+                return Ok(json!({"ok": true}));
+            }
+            let v: Value = serde_json::from_slice(&out).unwrap_or(Value::Null);
+            Err(fail(v["error"].as_str().map(|e| one_line(e, 300)).unwrap_or_else(|| "The Loner-Strike list couldn't take the report right now. Try again later.".into())))
+        })
+        .await,
+    )
+}
+
 fn forbidden() -> Response {
     (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"}))).into_response()
 }
@@ -1562,6 +1717,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/community/register", post(api_register))
         .route("/api/tools/community/mine", get(api_mine))
         .route("/api/tools/community/reveal", post(api_reveal))
+        .route("/api/tools/community/report", post(api_report))
 }
 
 // ---- MD5 (GameBanana lists each file's MD5; the package is matched by it) ---------------------------
@@ -1695,24 +1851,76 @@ mod tests {
         // data-only: one click
         let t = trust(Kind::Mode, get(102), false);
         assert!(t.allowed && t.confirm.is_none() && t.level == "data");
-        // reviewed plugins: a confirm naming them
-        let t = trust(Kind::Mode, get(103), false);
-        assert!(t.allowed && t.level == "reviewed" && t.confirm.as_ref().unwrap().contains("jet.amxx"));
-        // verified author: a stronger warning
+        // plugin modes: never from the community, whatever the index says about their review
         let mut it = get(103).unwrap().clone();
-        it.mode.as_mut().unwrap().review = Review::Verified;
-        let t = trust(Kind::Mode, Some(&it), false);
-        assert!(t.allowed && t.level == "verified" && t.confirm.unwrap().contains("nobody at Loner-Strike has read"));
-        // nobody looked: no
-        it.mode.as_mut().unwrap().review = Review::None;
-        assert!(!trust(Kind::Mode, Some(&it), false).allowed);
-        // reviewed but a plugin without source (or a bad hash): no
-        it.mode.as_mut().unwrap().review = Review::Reviewed;
-        it.mode.as_mut().unwrap().plugins[0].source = " ".into();
-        assert!(!trust(Kind::Mode, Some(&it), false).allowed);
-        it.mode.as_mut().unwrap().plugins[0].source = "jet.sma".into();
-        it.mode.as_mut().unwrap().plugins[0].sha256 = "short".into();
-        assert!(!trust(Kind::Mode, Some(&it), false).allowed);
+        for review in [Review::Reviewed, Review::Verified, Review::None] {
+            it.mode.as_mut().unwrap().review = review;
+            let t = trust(Kind::Mode, Some(&it), false);
+            assert!(!t.allowed && t.level == "unreviewed" && t.confirm.is_none(), "{review:?}");
+            assert!(t.note.contains("Game Mode Studio"));
+        }
+    }
+
+    #[test]
+    fn unknown_values_from_a_newer_index_keep_the_list() {
+        let idx = parse_index(br#"{"schema": 1, "items": [
+            {"kind": "map", "gb": 1, "name": "a", "status": "quarantined"},
+            {"kind": "mode", "gb": 2, "name": "b", "mode": {"id": "m", "review": "safe", "plugins": [{"file": "x.amxx", "sha256": "", "source": ""}]}},
+            {"kind": "map", "gb": 3, "name": "c"}]}"#).unwrap();
+        assert_eq!(idx.items.len(), 3);
+        assert_eq!(idx.items[0].status, Status::Hidden, "an unknown status keeps it out of lists");
+        assert_eq!(idx.items[1].mode.as_ref().unwrap().review, Review::None);
+        assert!(!trust(Kind::Mode, Some(&idx.items[1]), false).allowed);
+    }
+
+    #[test]
+    fn nothing_that_runs_code_is_shared() {
+        for ok in ["maps/a.bsp", "sound/x.wav", "addons/amxmodx/configs/gamemodes/a.ini", "modes/x/graph.json", "gfx/env/skyup.tga", "dir/"] {
+            assert!(!code_file(ok), "{ok}");
+        }
+        for bad in ["addons/amxmodx/plugins/x.amxx", "SCRIPTING/X.SMA", "a.dll", "b.so", "c.dylib", "d.exe", "e.bat", "f.sh", "inner.zip", "x.rar",
+                    "addons/metamod/plugins.ini", "cstrike/dlls/mp.dll", "tools\\run.ps1", "x.inc"] {
+            assert!(code_file(bad), "{bad}");
+        }
+        let map = Item { kind: Kind::Map, ..Default::default() };
+        assert_eq!(package_refusal(&map, &["maps/a.bsp".into()]), None);
+        assert_eq!(package_refusal(&map, &["maps/a.bsp".into(), "addons/amxmodx/plugins/a.amxx".into()]).as_deref(), Some(PLUGIN_REFUSAL));
+        assert!(package_refusal(&map, &["a.7z".into()]).unwrap().contains("a.7z"));
+        let mut mode = Item { kind: Kind::Mode, mode: Some(ModeMeta { id: "m".into(), ..Default::default() }), ..Default::default() };
+        assert_eq!(package_refusal(&mode, &[]), None, "a Game Mode Studio (settings only) mode");
+        mode.mode.as_mut().unwrap().plugins.push(PluginMeta { file: "x.amxx".into(), ..Default::default() });
+        assert_eq!(package_refusal(&mode, &[]).as_deref(), Some(PLUGIN_REFUSAL));
+    }
+
+    #[test]
+    fn what_the_list_says_to_a_registration() {
+        assert_eq!(sent_from(200, br#"{"ok":true,"state":"listed"}"#), Sent::Took("listed".into()));
+        assert_eq!(sent_from(200, br#"{"ok":true,"state":"pending"}"#), Sent::Took("pending".into()));
+        assert_eq!(sent_from(200, b""), Sent::Took("listed".into()));
+        assert_eq!(sent_from(422, br#"{"error":"Add the tag."}"#), Sent::Refused("Add the tag.".into()));
+        assert!(matches!(sent_from(409, b"<html>"), Sent::Refused(_)));
+        for waiting in [429, 500, 502, 503] {
+            assert_eq!(sent_from(waiting, br#"{"error":"busy"}"#), Sent::Waiting, "{waiting}");
+        }
+        let mut m = Mine::default();
+        mark(&mut m, &Sent::Refused("no".into()));
+        assert_eq!((m.state.as_str(), m.error.as_str()), ("refused", "no"));
+        mark(&mut m, &Sent::Took("listed".into()));
+        assert_eq!((m.state.as_str(), m.error.as_str()), ("listed", ""));
+    }
+
+    #[test]
+    fn reports_carry_only_the_page_and_the_reason() {
+        let b = report_body("mod", 12, "broken", "crashes\non load").unwrap();
+        assert_eq!(b["model"], "Mod");
+        assert_eq!((b["id"].as_i64(), b["reason"].as_str(), b["note"].as_str()), (Some(12), Some("broken"), Some("crashes on load")));
+        let keys: Vec<&String> = b.as_object().unwrap().keys().collect();
+        assert_eq!(keys.len(), 6, "{keys:?}");
+        assert!(report_body("spray", 3, "offensive", "").is_ok());
+        assert!(report_body("wip", 3, "broken", "").is_err());
+        assert!(report_body("mod", 0, "broken", "").is_err());
+        assert!(report_body("mod", 3, "boring", "").is_err());
+        assert!(report_body("mod", 3, "other", &"x".repeat(501)).is_err());
     }
 
     fn record(model: &str, id: i64, name: &str, tags: Value, root: &str, sub: &str, added: i64) -> Value {

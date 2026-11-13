@@ -5,7 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { BusyButton, LoadError, useToast } from "../../../ui";
 import { errorText } from "../common/api";
 import { Empty, Loading } from "../common";
-import { KIND_LABEL, ago, mine, reveal, sizeText } from "./communityApi";
+import { KIND_LABEL, ago, mine, reveal, sizeText, type Mine } from "./communityApi";
+
+function MineState({ m }: { m: Mine }) {
+  if (m.state === "listed" || m.state === "sent") return <span className="cm-ok">Listed in Community (it shows up once the list is next updated, within a few minutes)</span>;
+  if (m.state === "pending") return <span className="cm-warn">Waiting for a moderator to look at it</span>;
+  if (m.state === "refused") return <span className="cm-bad">Refused: {m.error || "the Loner-Strike list turned it down."} Fix it and add the link again in Publish.</span>;
+  return <span className="cm-warn">Waiting to be sent (the Loner-Strike list didn't answer; it's tried again each time you open this)</span>;
+}
 
 export default function Yours({ onPublish }: { onPublish: () => void }) {
   const toast = useToast();
@@ -37,7 +44,7 @@ export default function Yours({ onPublish }: { onPublish: () => void }) {
                 <div>
                   <strong>{m.item.name}</strong> <span className="muted small-note">{KIND_LABEL[m.item.kind]} · {ago(m.when)}</span>
                   <div className="small-note">
-                    {m.state === "sent" ? <span className="cm-ok">Sent to the Loner-Strike list</span> : <span className="cm-warn">Waiting to be sent (the list isn't taking entries from the app yet; it's tried again each time you open this)</span>}
+                    <MineState m={m} />
                   </div>
                 </div>
                 <a className="btn small" href={m.url} target="_blank" rel="noreferrer">Open page</a>
