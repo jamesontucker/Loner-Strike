@@ -743,6 +743,8 @@ impl MapStore {
             "files": files, "replaces": all_replaces, "downloads": d.get("_nDownloadCount").cloned().unwrap_or(json!(0)),
             "likes": d.get("_nLikeCount").cloned().unwrap_or(json!(0)), "url": s(&d["_sProfileUrl"]),
             "installed": rec,
+            // (credits: the page's terms and Credits module, shown before download and kept at install)
+            "licence": crate::tools::credits::rights_of(&d, sec.kind, mod_id),
         }))
     }
 
@@ -988,12 +990,19 @@ impl MapStore {
                 set
             };
             let author = s(&info["author"]);
+            // (credits: the terms downloaded under, and each installed file's SHA-256, so the file is
+            // traced back here wherever it's copied later)
+            let mut hashes = old["hashes"].as_object().cloned().unwrap_or_default();
+            if let Value::Object(h) = crate::tools::credits::hashes(&installed.iter().map(|d| (d.clone(), self.cstrike.join(d))).collect::<Vec<_>>()) {
+                hashes.extend(h);
+            }
             rec.insert(
                 mod_id.to_string(),
                 json!({
                     "name": info["name"], "author": if author.is_empty() { "GameBanana".into() } else { author },
                     "url": info["url"], "file": fname, "date": sys::now() as i64,
                     "maps": merge("maps", &maps), "files": merge("files", &installed), "shared": merge("shared", &shared),
+                    "rights": if info["licence"].is_object() { info["licence"].clone() } else { old["rights"].clone() }, "hashes": hashes,
                 }),
             );
             self.save_records(&rec).map_err(|e| StoreError::Bad(e.to_string()))?;
@@ -1176,12 +1185,15 @@ impl MapStore {
         let seq = rec.values().filter_map(|r| r["seq"].as_i64()).max().unwrap_or(0) + 1;
         let author = s(&info["author"]);
         let count = entries.len();
+        // (credits: the terms downloaded under, and each installed file's SHA-256)
+        let hashes = crate::tools::credits::hashes(&chosen.iter().map(|(src, dest)| (dest.clone(), src.clone())).collect::<Vec<_>>());
         rec.insert(
             key,
             json!({
                 "section": sec.key, "name": info["name"], "author": if author.is_empty() { "GameBanana".into() } else { author },
                 "url": info["url"], "file": fname, "date": sys::now() as i64, "seq": seq,
                 "game": self.game_dir.to_string_lossy(), "files": entries,
+                "rights": info["licence"], "hashes": hashes,
             }),
         );
         if let Err(e) = self.content.save(&rec) {

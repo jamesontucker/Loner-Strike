@@ -267,6 +267,35 @@ def clean_item(raw):
     if uid:
         it["uid"] = uid
     # how well bots play it (game modes), on the app's own scale (games.ts BotRating); "" not said
+    # who made the assets it ships (the app's tools/credits.rs AssetCredit): <= 64, short strings,
+    # plain game paths, GameBanana links only
+    credits = []
+    for c in _list(raw, "credits", 64):
+        if not isinstance(c, dict):
+            _bad("credits")
+        files = _list(c, "files", 64)
+        if any(not isinstance(f, str) or not f or len(f) > 128 or ".." in f or f.startswith("/") or "\\" in f for f in files) or not files:
+            _bad("credits")
+        page = _str(c, "page", 200)
+        if page and not page.startswith("https://gamebanana.com/"):
+            _bad("credits")
+        authors = []
+        for a in _list(c, "authors", 24):
+            if not isinstance(a, dict):
+                _bad("credits")
+            url = _str(a, "url", 200)
+            if url and not url.startswith("https://gamebanana.com/"):
+                _bad("credits")
+            name = _str(a, "name", 60)
+            if name:
+                authors.append({"name": name, "role": _str(a, "role", 60), "url": url})
+        perm = c.get("permission", "")
+        if perm not in ("", None, "granted"):
+            _bad("credits")
+        credits.append({"files": [one_line(f, 128) for f in files], "page": page, "name": _str(c, "name", 80), "authors": authors,
+                        "permission": perm or "", "note": _str(c, "note", 300)})
+    if credits:
+        it["credits"] = credits
     bots = raw.get("bots", "")
     if bots not in ("", None, "great", "ok", "weak", "none"):
         _bad("bots")
@@ -1585,6 +1614,8 @@ def index_item(row):
         out["uid"] = it["uid"]
     if it.get("bots"):
         out["bots"] = it["bots"]
+    if it.get("credits"):
+        out["credits"] = it["credits"]
     # the GameBanana member the entry is registered to: the app matches updates by uid only within one owner
     out["ownerId"] = int(row["submitter_id"] or 0)
     if it.get("remixOf"):

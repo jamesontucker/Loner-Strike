@@ -817,6 +817,11 @@ fn what_agents_may_do_with_each_route() {
     ] {
         assert!(user_only(m, p, b.clone()), "{m} {p} {b}");
     }
+    // credits: only the person can say permission was given
+    for path in ["/api/tools/credits/permission", "/api/tools/credits/manual"] {
+        assert!(matches!(routes::policy("POST", path, &none), routes::Policy::UserOnly(_)), "{path}");
+    }
+    assert_eq!(routes::policy("GET", "/api/tools/credits/map/de_dust2", &none), routes::Policy::Read);
     // asked every time: deleting, removing, kicking, stopping, closing the game, outward
     for (m, p, b) in [
         ("POST", "/api/servers/abc/delete", none.clone()), ("POST", "/api/servers/abc/stop", none.clone()), ("POST", "/api/servers/abc/restart", none.clone()),

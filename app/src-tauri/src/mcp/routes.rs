@@ -224,6 +224,9 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/tools/community/browse"),
     ("GET", "/api/tools/community/item/:model/:id"),
     ("GET", "/api/tools/community/library"),
+    ("GET", "/api/tools/credits/map/:name"),
+    ("POST", "/api/tools/credits/permission"),
+    ("POST", "/api/tools/credits/manual"),
     ("GET", "/api/tools/community/origins"),
     ("GET", "/api/tools/community/mine"),
     ("GET", "/api/tools/community/publish/:map"),
@@ -409,6 +412,7 @@ pub const USER_ONLY_LIST: &[&str] = &[
     "Phone access, shared control (inviting friends, joining theirs, opening ports) and sharing links.",
     "Showing or changing server console passwords and website-status secrets.",
     "A server's extra start options, putting back all of Loner-Strike's default files, and clearing old backups.",
+    "Recording that a creator gave permission to use their asset, or typing a credit for a file (Publish credits).",
 ];
 
 /// The parts of a path, matched against a pattern's (":x" matches any one part, but never an
@@ -526,6 +530,9 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
             Policy::Read => Policy::Change,
             p => p,
         };
+    }
+    if route == "/api/tools/credits/permission" || route == "/api/tools/credits/manual" {
+        return user_only("Saying a creator gave permission (or who made a file) is a statement only the person can make.");
     }
     if route == "/api/servers/:id" || route == "/api/servers" {
         // start options can run anything on the machine (the phone can't set them either)

@@ -342,6 +342,8 @@ pub struct Item {
     /// how well bots play it (game modes): great, ok, weak or none (the same scale as the app's
     /// own modes, games.ts BOT_RATING), "" not said
     pub bots: String,
+    /// who made the assets it ships (tools/credits.rs), ≤ 64 entries
+    pub credits: Vec<super::credits::AssetCredit>,
 }
 
 /// The bot-support scale (games.ts BotRating): anything else reads as "" (not said).
@@ -439,6 +441,7 @@ pub fn parse_index(bytes: &[u8]) -> Result<Index, String> {
         }
         it.uid = clean_uid(&it.uid);
         it.bots = clean_bots(&it.bots);
+        it.credits = super::credits::clean_credits(std::mem::take(&mut it.credits));
         if let Some(m) = &mut it.mode {
             m.uid = clean_uid(&m.uid);
             if !safe_mode_id(&m.id) {
@@ -1080,6 +1083,11 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
     note.md5 = files.iter().find(|f| f["id"].as_i64() == Some(file)).map(|f| s(&f["md5"])).unwrap_or_default();
     note.section = section.into();
     note.maps = it.as_ref().and_then(|i| i.map.as_ref()).map(|m| vec![m.name.clone()]).unwrap_or_default();
+    if let Some(c) = it.as_ref().map(|i| &i.credits).filter(|c| !c.is_empty()) {
+        let d = super::communitylib::lib_dir().join(super::communitylib::dir_name(model, id));
+        let _ = std::fs::create_dir_all(&d);
+        let _ = std::fs::write(d.join("credits.json"), serde_json::to_vec_pretty(c).unwrap_or_default());
+    }
     let job = game.store.start_section_install(section, id, file).map_err(|e| e.message())?;
     super::communitylib::note_after_job(game.store.clone(), job.clone(), note);
     Ok(json!({"ok": true, "job": job, "section": section, "map": it.and_then(|i| i.map).map(|m| m.name)}))
@@ -1156,6 +1164,10 @@ pub struct Readiness {
     pub files: Vec<String>,
     pub title: String,
     pub game: String,
+    /// where each shipped custom file came from, with its terms (tools/credits.rs)
+    pub assets: Vec<super::credits::Asset>,
+    /// who to credit (README, GameBanana's Credits module, the index)
+    pub credits: Vec<super::credits::AssetCredit>,
 }
 
 /// The newest health check of this map (any mode), from the reports folder.
@@ -1275,6 +1287,13 @@ pub fn readiness(m: &MapFile, reports: &Path) -> Readiness {
         r.tips.push("There's no overview (radar) picture for this map.".into());
     }
     r.health = latest_health(reports, &m.name);
+    // where each shipped custom file came from, and whether its terms let it be shared
+    let ctx = super::credits::Ctx::load(&crate::sys::app_dir());
+    r.assets = super::credits::assets_for(m, &r.files, &ctx);
+    let (credits, warnings, blockers) = super::credits::for_publish(&r.assets);
+    r.credits = credits;
+    r.warnings.extend(warnings);
+    r.blockers.extend(blockers);
     match &r.health {
         None => r.tips.push("Run the map simulator: a good result earns the \"Checked with bots\" badge.".into()),
         Some(h) if h.verdict == "bad" => r.warnings.push("The last map simulation found real problems (falls, stuck bots or errors). Have a look before sharing.".into()),
@@ -1364,6 +1383,7 @@ fn readme(item: &Item, r: &Readiness) -> String {
     if !m.modes.is_empty() {
         t.push_str(&format!("Game modes: {}\r\n", m.modes.join(", ")));
     }
+    t.push_str(&super::credits::readme_section(&item.credits));
     t
 }
 
@@ -1409,6 +1429,7 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
         games: vec![r.game.clone()],
         map: Some(map),
         health: r.health.clone(),
+        credits: r.credits.clone(),
         added: now(),
         updated: now(),
         ..Default::default()
@@ -1577,7 +1598,12 @@ pub fn gamebanana_form(p: &Package) -> Value {
         _ if m.name.starts_with("fy_") => "Maps > Fight Yard",
         _ => "Maps",
     };
+    if !it.credits.is_empty() {
+        let who: Vec<String> = it.credits.iter().flat_map(|c| c.authors.iter().map(|a| a.name.clone())).collect::<std::collections::BTreeSet<_>>().into_iter().take(8).collect();
+        text.push_str(&format!("\n- Uses assets by {}", who.join(", ")));
+    }
     json!({
+        "credits": super::credits::gamebanana_rows(&it.credits),
         "submitUrl": "https://gamebanana.com/mods/add",
         "game": "Counter-Strike 1.6",
         "category": category,

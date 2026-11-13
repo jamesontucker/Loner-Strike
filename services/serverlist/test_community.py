@@ -248,6 +248,22 @@ class Validation(unittest.TestCase):
             with self.assertRaises(cm.Reject):
                 cm.clean_item(bad)
 
+    def test_asset_credits(self):
+        good = [{"files": ["models/z.mdl", "sound/z/roar.wav"], "page": "https://gamebanana.com/mods/227562", "name": "Civilian Zombies",
+                 "authors": [{"name": "DimeX", "role": "Original Authors", "url": "https://gamebanana.com/members/599043"}],
+                 "permission": "granted", "note": "asked on Discord"}]
+        it = cm.clean_item(dict(map_item(), credits=good))
+        self.assertEqual(it["credits"][0]["authors"][0]["name"], "DimeX")
+        self.assertEqual(it["credits"][0]["permission"], "granted")
+        self.assertNotIn("credits", cm.clean_item(map_item()))
+        for bad in ([dict(good[0], files=["../evil"])], [dict(good[0], page="https://evil.example/x")], [dict(good[0], permission="maybe")],
+                    [dict(good[0], files=[])], [dict(good[0], authors=[{"name": "x", "url": "javascript:1"}])], [good[0]] * 65, ["x"]):
+            with self.assertRaises(cm.Reject):
+                cm.clean_item(dict(map_item(), credits=bad))
+        row = cm.new_row("Mod", 739197, 1)
+        row.update(kind="map", state="listed", submitter_id=1, submitter="x", item=json.dumps(dict(it, author="x")))
+        self.assertEqual(cm.index_item(row)["credits"][0]["page"], "https://gamebanana.com/mods/227562")
+
     def test_bot_rating(self):
         self.assertEqual(cm.clean_item(dict(mode_item(), bots="ok"))["bots"], "ok")
         self.assertNotIn("bots", cm.clean_item(dict(map_item(), bots="ok")), "only modes carry it")
