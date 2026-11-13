@@ -351,25 +351,40 @@ export function useCommand(after?: () => void) {
 }
 
 // ---- controls ------------------------------------------------------------
+/** The choices of a Segmented: "a b c" (labels "A|B|C" or "A B C"), "a,b,c" (labels "A,B,C" or
+ *  "A|B|C"; empty values kept: ",map" = All, Maps) or arrays. Never one pill for the whole list. */
+function choices(values: string | string[], labels?: string | string[]): [string, string][] {
+  const commas = typeof values === "string" && values.includes(",") && !/\s/.test(values);
+  if (!Array.isArray(values) && !commas) return options(values, Array.isArray(labels) ? labels.join("|") : (labels ?? values));
+  const v = Array.isArray(values) ? values.map(String) : values.split(",");
+  const l = Array.isArray(labels) ? labels.map(String) : labels ? (labels.includes("|") ? labels.split("|") : labels.split(",")) : [];
+  return v.map((x, i) => [x, l[i]?.trim() || x || "All"]);
+}
+
+/** A choice of a few words, one pill each. `values`/`labels` take a string ("a b c" with labels
+ *  "A|B|C") or arrays; `options` takes [value, label] pairs. */
 export function Segmented({
   values,
   labels,
+  options: pairs,
   current,
   onPick,
   label,
   disabled,
 }: {
-  values: string;
-  labels: string;
+  values?: string | string[];
+  labels?: string | string[];
+  options?: readonly (readonly [string, ReactNode])[];
   current: string;
   onPick: (v: string) => void;
   label: string;
   disabled?: boolean;
 }) {
+  const list: (readonly [string, ReactNode])[] = pairs ? [...pairs] : choices(values ?? "", labels);
   return (
     <div className="seg" role="group" aria-label={label} aria-busy={disabled || undefined}>
-      {options(values, labels).map(([v, l]) => (
-        <button key={v} type="button" aria-pressed={sameValue(current, v)} disabled={disabled} onClick={() => onPick(v)}>
+      {list.map(([v, l]) => (
+        <button key={v} type="button" aria-pressed={v === "" ? current === "" : sameValue(current, v)} disabled={disabled} onClick={() => onPick(v)}>
           {l}
         </button>
       ))}
@@ -381,8 +396,29 @@ export function Switch({ on, onChange, label, disabled }: { on: boolean; onChang
   return <button type="button" role="switch" aria-checked={on} aria-label={label} className="switch" disabled={disabled} aria-busy={disabled || undefined} onClick={() => onChange(!on)} />;
 }
 
+/** Places a popup (position: fixed, in document.body) next to `anchor`, on screen: on the side
+ *  asked for if it fits, else the other side; shifted along so it never leaves the window.
+ *  Works in the page's own units (the text size setting zooms the page). */
+export function placePopup(anchor: DOMRect, pop: HTMLElement, side: "top" | "bottom" = "top", align: "center" | "start" | "end" = "center", gap = 8) {
+  const z = zoom();
+  const r = { left: anchor.left / z, right: anchor.right / z, top: anchor.top / z, bottom: anchor.bottom / z };
+  const vw = window.innerWidth / z, vh = window.innerHeight / z, m = 8;
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  const want = align === "start" ? r.left : align === "end" ? r.right - w : (r.left + r.right) / 2 - w / 2;
+  const left = Math.min(Math.max(want, m), Math.max(m, vw - w - m));
+  const above = r.top - h - gap, below = r.bottom + gap;
+  const fitsAbove = above >= m, fitsBelow = below + h <= vh - m;
+  let top = side === "top" ? (fitsAbove || !fitsBelow ? above : below) : fitsBelow || !fitsAbove ? below : above;
+  top = Math.min(Math.max(top, m), Math.max(m, vh - h - m));
+  pop.style.left = `${left}px`;
+  pop.style.top = `${top}px`;
+  pop.dataset.side = top < r.top ? "top" : "bottom";
+  pop.style.visibility = "visible";
+}
+
 /** A small "?" that explains a field: shown on hover, or on click/tap (phones). Safe
- *  inside a <label>: clicking it doesn't open the field. */
+ *  inside a <label>: clicking it doesn't open the field. The tip goes in document.body, above
+ *  everything (menu bars, panels, sheets), and flips/shifts to stay on screen. */
 export function Info({ text }: { text: ReactNode }) {
   // shown while hovered, or pinned open by a click/tap
   const [hover, setHover] = useState(false);
@@ -390,21 +426,10 @@ export function Info({ text }: { text: ReactNode }) {
   const open = hover || pinned;
   const box = useRef<HTMLSpanElement>(null);
   const pop = useRef<HTMLSpanElement>(null);
-  // placed against the window, so it's never cut off and never makes the page scroll sideways
   useLayoutEffect(() => {
     const r = box.current?.querySelector("button")?.getBoundingClientRect();
-    const p = pop.current;
-    if (!open || !r || !p) return;
-    // measured on screen, placed in the page's own (text size) units
-    const z = zoom();
-    const b = { left: r.left / z, top: r.top / z, width: r.width / z, bottom: r.bottom / z };
-    const w = p.offsetWidth, h = p.offsetHeight, m = 8;
-    const left = Math.min(Math.max(b.left + b.width / 2 - w / 2, m), window.innerWidth / z - w - m);
-    const above = b.top - h - m;
-    p.style.left = `${left}px`;
-    p.style.top = `${above >= m ? above : b.bottom + m}px`;
-    p.style.visibility = "visible";
-  }, [open]);
+    if (open && r && pop.current) placePopup(r, pop.current, "top");
+  }, [open, text]);
   useEffect(() => {
     if (!open) return;
     const away = (e: Event) => !box.current?.contains(e.target as Node) && setOpen(false);
@@ -417,10 +442,12 @@ export function Info({ text }: { text: ReactNode }) {
     document.addEventListener("pointerdown", away);
     document.addEventListener("keydown", esc);
     document.addEventListener("scroll", scrolled, true);
+    window.addEventListener("resize", scrolled);
     return () => {
       document.removeEventListener("pointerdown", away);
       document.removeEventListener("keydown", esc);
       document.removeEventListener("scroll", scrolled, true);
+      window.removeEventListener("resize", scrolled);
     };
   }, [open]);
   // hover is for a mouse: a tap fires enter (and no leave) on touch screens
@@ -441,7 +468,7 @@ export function Info({ text }: { text: ReactNode }) {
       >
         ?
       </button>
-      {open && <span className="info-pop" role="tooltip" ref={pop}>{text}</span>}
+      {open && createPortal(<span className="info-pop" role="tooltip" ref={pop}>{text}</span>, document.body)}
     </span>
   );
 }
