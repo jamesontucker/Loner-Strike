@@ -1095,3 +1095,66 @@ cargo test serve_editor_for_ui -- --ignored`, then a Vite dev server proxying `/
 a 3D-view box select; sound preview in entity forms; studio model preview for point entities; visibility sets are
 per computer, not saved in the project; the FGD isn't user-replaceable from the UI yet (the parser is ready).
 `cargo test` right now: 579 pass, 2 fail in `tools::studio` (someone's work in progress, not the editor).
+
+### Agent R: Plugin Studio (Beta), 2026-11-12
+Tools > Make > **Plugin Studio**: write AMX Mod X plugins in the app.
+
+**What's there**
+- UI `views/tools/plugins/`: files on the left (My plugins = `<app dir>/plugin-studio/my-plugins`, the game's
+  `addons/amxmodx/scripting`, its include files + loner.inc read only), Monaco in the middle, Problems / Game log /
+  Compiler output underneath. New plugin from 8 templates (empty, game mode with loner.inc, chat command, on player
+  killed, give items on spawn, HUD message, menu, timer). Ctrl/Cmd+S saves, Ctrl/Cmd+Enter compiles. Address
+  `plugins:mine/<file>.sma` opens a file (for "open as code" from a future Game Mode Studio).
+- Editor: monaco-editor 0.52.2 (pinned), core only (`edcore.main` + one editor worker, no TS/JSON languages),
+  loaded with `import("./monaco")`. A Monarch grammar for Pawn (`pawn.ts`: ^ escapes, tags, directives, doc
+  comments; known natives and constants coloured once the word list arrives), the app's olive theme. Completions
+  (natives/stocks with parameter snippets, forwards as `public name(...) { }` at a line's start, constants,
+  `#include <` names, this file's own functions/variables, snippets), hover docs (signature, description,
+  parameters, returns, notes, deprecated, file), signature help.
+- Rust `tools/plugins.rs` (+ `plugins/inc.rs` include reader, `plugins/diag.rs` compiler output), routes
+  `/api/tools/plugins` (overview), `/file` (GET read, POST save), `/delete`, `/words`, `/compile`, `/try`,
+  `/untry`, `/log`. Own game only (`local_game`, refused for remote/dedicated), local listener, POSTs need X-Panel.
+  Safe names (`[A-Za-z0-9_][A-Za-z0-9_.-]*\.(sma|inc)`, no `..`, ≤64), files directly in the folder, links out
+  refused; saves write `<name>.part` then rename; UTF-8 or Latin-1 kept as it was; 2 MB cap. Loner-Strike's own
+  plugins in the game folder and includes are read only ("Save a copy in My plugins").
+- Compile: the game's `scripting/amxxpc.exe` through `setup::core::windows_command` (CrossOver wine on a Mac, as
+  setup does), one at a time, one retry if Wine stops it part way, `-i<app>/plugin-studio/include` holding the
+  app's loner.inc (embedded with include_str!). Output to `<app>/plugin-studio/build/<name>.amxx`. Errors and
+  warnings parsed (`file(line[ -- line]) : error|warning|fatal error N: msg`, any slashes) and explained in plain
+  words (about 60 codes), marked on their lines; ones in includes are listed with their file.
+- Try it: compile, copy the .amxx into the game's `plugins/` (refused if a plugin of that name is there and the
+  Studio didn't put it there, or it's one of ours), list it in `configs/plugins-studio.ini` (AMX Mod X loads
+  `plugins-*.ini` beside plugins.ini; entries get `debug` so errors name the line), remembered in
+  `data/gamemodes/studio_plugins.json`, then the map restarts through `gm_restartmap` (the app's existing
+  `Game::command` path) if a map is up. "Take it out" undoes all of that.
+- Game log: polls `/log` every 1.5 s; reads the newest `logs/L*.log` and `error_*.log` from a byte cursor (first
+  look: last 64 KB, last 50 lines) and keeps the plugin's own lines, load failures naming it and run time error
+  traces that start with it.
+- `plugins/scripting/include/loner.inc` + `docs/LONER-INC.md` + `plugins/scripting/examples/ls_example_mode.sma`
+  ("Deagle Duel"): mode registration on top of gamemodes.amxx's `gm_modes` natives, 4 HUD slots on their own sync
+  objects + director HUD announce, give weapon with ammo / strip / health / armour / teleport / team / roles,
+  timers and a countdown, bot orders over the fork's `ls_bot` command (work today), and the Mode Kit natives from
+  GAMEMODES-PLAN 2.3 declared with `#pragma reqlib modekit` plus a module/native filter installed from loner.inc's
+  own `plugin_natives()` (opt out with `LS_OWN_PLUGIN_NATIVES` + call `ls_optional()`), so plugins compile and load
+  without the kit. TODOs point at the plan. Both compile clean (no warnings) with amxxpc 1.10.
+
+**Checks**
+- `cargo test` on HEAD: 544 passed (clean export; the worktree itself currently has someone's unfinished file that
+  doesn't compile). Plugin Studio tests: include reader (sample + odd input), diagnostics from real amxxpc output
+  fixtures (`tools/testdata/amxxpc/`), path safety incl. symlinks, save/read/list/delete, Latin-1 round trip, try
+  and take out, log following, loner.inc words. With `LS_TEST_GAME`: `real_includes` (68 includes → 5126 words:
+  1270 natives, 80 forwards, 387 stocks, 1146 defines, 2130 constants; docs and params on get_user_name etc.) and
+  `real_compile` (loner.inc example compiles with no diagnostics; a broken file gives errors on the right lines).
+- `npm run build` green. Start chunk +0.33 kB (514.43 → 514.76 kB, gzip 165.19 → 165.30) for the registry line
+  only. PluginStudio chunk 21.2 kB (7.7 gz) + 5.0 kB CSS; Monaco chunk 3.31 MB (855 kB gz) + 133 kB CSS + editor
+  worker 232 kB + codicon font 80 kB, loaded only when the Studio opens.
+- Browser check against a mock of the routes: editor, colours, completion, signature help, compile → markers and
+  Problems, Try → Game log, New plugin, narrow window. Found and fixed: the app's `.main` (page shell) made Monaco's
+  suggestion rows columns (scoped override in plugins.css).
+
+**Left / for the real-app check**
+- Try it against a running game (gm_restartmap and the log lines in real AMX Mod X logs).
+- Compiler under CrossOver on a slow first start (Wine bottle boot) takes a few seconds; the button says so.
+- Dedicated servers on this computer aren't offered (own game only); easy to add with a server picker.
+- Ideas: go-to-definition into include files, format document, a "Make it a mode" button that writes the
+  modes.ini line and `<id>.plugins.ini`.
