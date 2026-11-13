@@ -29,7 +29,7 @@ pub const FILE_REL: &str = "addons/amxmodx/configs/gamemodes/creatures.ini";
 pub const WAVES_REL: &str = "addons/amxmodx/configs/gamemodes/waves.ini";
 const MAX_FILE: u64 = 1 << 20;
 /// LS_CREATURE_MAX_TYPES
-pub const MAX_TYPES: usize = 32;
+pub const MAX_TYPES: usize = 48;
 /// the fork reads a line into char[512]
 const MAX_LINE: usize = 511;
 const NO_GAME: &str = "Set up the game on this computer first.";
@@ -318,6 +318,147 @@ pub fn builtins() -> Vec<Creature> {
     t.snd[4] = String::new();
     t.snd[5] = "headcrab/hc_pain1.wav headcrab/hc_pain2.wav headcrab/hc_pain3.wav | player/pl_pain2.wav".into();
     t.snd[6] = "headcrab/hc_die1.wav headcrab/hc_die2.wav | player/die1.wav".into();
+    out.push(t);
+
+    // Half-Life's other monsters (valve/models, shared depot 1: CS-only and CZ-only installs have them).
+    // shot_fx / hops / flank (the vortigaunt's zap, the assassin's hops, flanking) aren't form fields yet.
+    let mut t = defaults("vortigaunt");
+    t.display = "Vortigaunt".into();
+    t.category = "alien".into();
+    (t.hp, t.speed, t.walk_speed) = (70.0, 190.0, 60.0);
+    t.attack = "ranged".into();
+    (t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.spread) = (12.0, 750.0, 0.6, 0.8, 2.0);
+    t.blood = "yellow".into();
+    t.model = "models/islave.mdl models/hostage.mdl".into();
+    t.fallback_glow = [60.0, 200.0, 60.0];
+    t.snd = [
+        "aslave/slv_word1.wav aslave/slv_word2.wav aslave/slv_word3.wav aslave/slv_word4.wav".into(),
+        "aslave/slv_alert1.wav aslave/slv_alert3.wav aslave/slv_alert4.wav".into(),
+        "weapons/electro4.wav weapons/electro5.wav weapons/electro6.wav".into(),
+        String::new(),
+        String::new(),
+        "aslave/slv_pain1.wav aslave/slv_pain2.wav | player/pl_pain2.wav".into(),
+        "aslave/slv_die1.wav aslave/slv_die2.wav | player/die1.wav".into(),
+    ];
+    out.push(t);
+
+    let mut t = defaults("babygarg");
+    t.display = "Baby gargantua".into();
+    t.category = "boss".into();
+    (t.hp, t.speed, t.walk_speed, t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.detect_radius) = (900.0, 210.0, 80.0, 35.0, 72.0, 0.8, 0.5, 1600.0);
+    t.behaviour = "chase".into();
+    (t.scale, t.frags) = (0.45, 5);
+    t.blood = "yellow".into();
+    t.model = "models/babygarg.mdl models/garg.mdl models/hostage.mdl".into();
+    t.fallback_glow = [160.0, 0.0, 160.0];
+    t.snd[0] = "garg/gar_idle1.wav garg/gar_idle2.wav garg/gar_breathe1.wav".into();
+    t.snd[1] = "garg/gar_alert1.wav garg/gar_alert2.wav".into();
+    t.snd[2] = "garg/gar_attack1.wav garg/gar_attack2.wav".into();
+    t.snd[3] = "garg/gar_stomp1.wav | weapons/knife_hit1.wav".into();
+    t.snd[5] = "garg/gar_pain1.wav garg/gar_pain2.wav | player/pl_pain2.wav".into();
+    t.snd[6] = "garg/gar_die1.wav | player/die1.wav".into();
+    out.push(t);
+
+    let mut t = defaults("snark");
+    t.display = "Snark".into();
+    (t.hp, t.speed, t.walk_speed, t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.detect_radius, t.detect_fov) =
+        (6.0, 320.0, 160.0, 4.0, 48.0, 2.5, 0.1, 1000.0, 360.0);
+    t.behaviour = "chase".into();
+    (t.corpse_time, t.frags) = (0.5, 0);
+    t.blood = "yellow".into();
+    t.model = "models/w_squeak.mdl models/headcrab.mdl".into();
+    (t.anim[0], t.anim[1], t.anim[2], t.anim[3]) = ("idle".into(), "run".into(), "run".into(), "jump".into());
+    (t.hull_min, t.hull_max) = ([-8.0, -8.0, 0.0], [8.0, 8.0, 30.0]);
+    t.fallback_glow = [200.0, 60.0, 60.0];
+    t.snd = Default::default();
+    t.snd[0] = "squeek/sqk_hunt1.wav squeek/sqk_hunt2.wav squeek/sqk_hunt3.wav".into();
+    t.snd[1] = "squeek/sqk_deploy1.wav".into();
+    t.snd[2] = "squeek/sqk_hunt2.wav".into();
+    t.snd[6] = "squeek/sqk_blast1.wav squeek/sqk_die1.wav".into();
+    out.push(t);
+
+    let mut t = defaults("babycrab");
+    t.display = "Baby headcrab".into();
+    (t.hp, t.speed, t.walk_speed, t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.detect_radius) = (8.0, 230.0, 80.0, 3.0, 56.0, 2.0, 0.2, 900.0);
+    t.behaviour = "chase".into();
+    (t.corpse_time, t.frags) = (1.5, 0);
+    t.blood = "yellow".into();
+    t.model = "models/baby_headcrab.mdl models/headcrab.mdl".into();
+    (t.hull_min, t.hull_max) = ([-8.0, -8.0, 0.0], [8.0, 8.0, 30.0]);
+    t.fallback_glow = [200.0, 200.0, 120.0];
+    t.snd = Default::default();
+    t.snd[2] = "headcrab/hc_attack1.wav headcrab/hc_attack2.wav".into();
+    t.snd[3] = "headcrab/hc_headbite.wav".into();
+    t.snd[6] = "headcrab/hc_die1.wav headcrab/hc_die2.wav".into();
+    out.push(t);
+
+    let mut t = defaults("miniturret");
+    t.display = "Mini turret".into();
+    t.category = "mechanical".into();
+    t.hp = 80.0;
+    t.moves = false;
+    (t.speed, t.walk_speed) = (0.0, 0.0);
+    t.attack = "ranged".into();
+    (t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.spread, t.detect_fov, t.hearing) = (4.0, 900.0, 6.0, 0.05, 4.0, 360.0, 0.0);
+    t.behaviour = "guard".into();
+    t.blood = "none".into();
+    t.corpse_time = 15.0;
+    t.model = "models/miniturret.mdl models/sentry.mdl".into();
+    (t.anim[0], t.anim[3], t.anim[5]) = ("spin".into(), "fire".into(), "die".into());
+    (t.hull_min, t.hull_max) = ([-16.0, -16.0, 0.0], [16.0, 16.0, 32.0]);
+    t.snd = Default::default();
+    t.snd[1] = "turret/tu_alert.wav turret/tu_spinup.wav".into();
+    t.snd[2] = "turret/tu_fire1.wav".into();
+    t.snd[6] = "turret/tu_die.wav turret/tu_die2.wav turret/tu_die3.wav".into();
+    out.push(t);
+
+    let mut t = defaults("assassin");
+    t.display = "Assassin".into();
+    t.category = "special".into();
+    (t.hp, t.speed, t.walk_speed) = (60.0, 320.0, 90.0);
+    t.attack = "ranged".into();
+    (t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.spread, t.flee_hp, t.detect_fov) = (8.0, 650.0, 2.0, 0.15, 4.0, 0.3, 200.0);
+    t.model = "models/hassassin.mdl models/hostage.mdl".into();
+    t.fallback_glow = [20.0, 20.0, 20.0];
+    t.snd = Default::default();
+    t.snd[2] = "weapons/pl_gun1.wav weapons/pl_gun2.wav | weapons/usp1.wav".into();
+    t.snd[5] = "player/pl_pain2.wav player/pl_pain4.wav".into();
+    t.snd[6] = "player/die1.wav player/die3.wav".into();
+    out.push(t);
+
+    let mut t = defaults("soldier");
+    t.display = "Soldier".into();
+    t.category = "special".into();
+    (t.hp, t.speed, t.walk_speed) = (110.0, 250.0, 70.0);
+    t.attack = "ranged".into();
+    (t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.spread, t.flee_hp) = (6.0, 1200.0, 4.0, 0.1, 5.0, 0.25);
+    t.model = "models/hgrunt.mdl models/player/gign/gign.mdl".into();
+    t.anim[3] = "standing_mp5".into();
+    t.fallback_glow = [0.0; 3];
+    t.snd = Default::default();
+    t.snd[0] = "hgrunt/gr_idle1.wav hgrunt/gr_idle2.wav hgrunt/gr_idle3.wav".into();
+    t.snd[1] = "hgrunt/gr_alert1.wav".into();
+    t.snd[2] = "hgrunt/gr_mgun1.wav hgrunt/gr_mgun2.wav hgrunt/gr_mgun3.wav | weapons/mp5-1.wav".into();
+    t.snd[5] = "hgrunt/gr_pain1.wav hgrunt/gr_pain2.wav hgrunt/gr_pain3.wav | player/pl_pain2.wav".into();
+    t.snd[6] = "hgrunt/gr_die1.wav hgrunt/gr_die2.wav hgrunt/gr_die3.wav | player/die1.wav".into();
+    out.push(t);
+
+    let mut t = defaults("gonarch");
+    t.display = "Gonarch".into();
+    t.category = "boss".into();
+    (t.hp, t.speed, t.walk_speed, t.damage, t.attack_range, t.attack_rate, t.attack_delay, t.detect_radius) = (3500.0, 190.0, 90.0, 50.0, 96.0, 0.7, 0.6, 2000.0);
+    t.behaviour = "chase".into();
+    (t.scale, t.frags) = (0.55, 10);
+    t.blood = "yellow".into();
+    t.model = "models/big_mom.mdl models/hostage.mdl".into();
+    t.fallback_glow = [200.0, 160.0, 40.0];
+    t.snd = Default::default();
+    t.snd[0] = "gonarch/gon_sack1.wav gonarch/gon_sack2.wav gonarch/gon_sack3.wav".into();
+    t.snd[1] = "gonarch/gon_alert1.wav gonarch/gon_alert2.wav gonarch/gon_alert3.wav".into();
+    t.snd[2] = "gonarch/gon_attack1.wav gonarch/gon_attack2.wav gonarch/gon_attack3.wav".into();
+    t.snd[3] = "gonarch/gon_step1.wav | weapons/knife_hit1.wav".into();
+    t.snd[5] = "gonarch/gon_pain2.wav gonarch/gon_pain4.wav gonarch/gon_pain5.wav | player/pl_pain2.wav".into();
+    t.snd[6] = "gonarch/gon_die1.wav | player/die1.wav".into();
     out.push(t);
     out
 }
@@ -2158,7 +2299,7 @@ mod tests {
         assert_eq!(runner.snd[0], "zombie/zo_idle1.wav zombie/zo_idle2.wav | player/pl_pain2.wav");
         assert_eq!(runner.fallback_glow, [160.0, 160.0, 20.0]);
         assert_eq!(runner.glow, [0.0; 3]);
-        assert_eq!(t.len(), 8);
+        assert_eq!(t.len(), 16);
         // clamps, aliases, comments, a bad hull, walk over run, base copies, numbers for names
         let t = types_of("[a]\nhealth = 500000 ; huge\ndetect = -5\nfov = 1\nwalk_speed = 900\nspeed = 100\nhull_min = 0 0 10\nname = Big // shown\ncategory = 3\nattack = ranged\nhates = terrorist\nmoves = 0\nmoney = 99999\n[b]\nbase = a\nhp = 7\n");
         let a = t.iter().find(|x| x.name == "a").unwrap();
@@ -2168,10 +2309,10 @@ mod tests {
         let b = t.iter().find(|x| x.name == "b").unwrap();
         assert_eq!((b.hp, b.display.as_str(), b.base.as_str()), (7.0, "Big", "a"));
         // past 32 types: skipped
-        let many: String = (0..30).map(|i| format!("[t{i}]\n")).collect();
+        let many: String = (0..MAX_TYPES).map(|i| format!("[t{i}]\n")).collect();
         let r = resolve(&Doc::parse(&many));
         assert_eq!(r.iter().filter(|x| !x.skipped).count(), MAX_TYPES);
-        assert_eq!(r.iter().filter(|x| x.skipped).count(), 6);
+        assert_eq!(r.iter().filter(|x| x.skipped).count(), builtins().len());
     }
 
     #[test]
@@ -2275,7 +2416,7 @@ mod tests {
         assert!(!check(&[later, x]).iter().any(|p| p.error && p.field == "base"));
         // two of a name; too many types
         assert!(check(&[t.clone(), t.clone()]).iter().any(|p| p.error && p.field == "name"));
-        let many: Vec<Creature> = (0..26).map(|i| Creature { name: format!("t{i}"), ..t.clone() }).collect();
+        let many: Vec<Creature> = (0..MAX_TYPES + 1).map(|i| Creature { name: format!("t{i}"), ..t.clone() }).collect();
         assert!(check(&many).iter().any(|p| p.error && p.at.is_empty()));
         // notes, not errors
         let mut x = t.clone();
@@ -2334,7 +2475,7 @@ mod tests {
         assert!(text.contains("\n\n[runner]\nhp = 61\n"), "{text}");
         assert!(!save(&f, &SaveReq { types }).unwrap());
         let st = status(&f).unwrap();
-        assert_eq!(st["types"].as_array().unwrap().len(), 8);
+        assert_eq!(st["types"].as_array().unwrap().len(), 16);
         assert_eq!(st["types"][1]["inFile"], true);
         assert_eq!(st["types"][1]["set"], json!(["hp"]));
         // waves next to it
