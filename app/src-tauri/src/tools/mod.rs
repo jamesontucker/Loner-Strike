@@ -13,6 +13,7 @@ pub mod spray;
 pub mod replay;
 pub mod editor;
 pub mod doctor;
+pub mod callouts;
 
 use crate::goldsrc::{self, bsp::Bsp, entities, mesh, wad};
 use crate::server::Shared;
@@ -285,6 +286,7 @@ pub fn local_routes() -> Router<Shared> {
         .merge(spray::routes())
         .merge(editor::routes())
         .merge(doctor::routes())
+        .merge(callouts::routes())
 }
 
 /// Builds everything the viewer needs for one map file, uncached (tests and the real-map
