@@ -2946,3 +2946,38 @@ round-timer gamedata (see round 2), gun given twice at spawn (template now strip
   246 bot bullet hits on creatures, 163 of them through an intact gate. 99 hits still landed on barricades: most likely
   knife swings (the knife's hull trace is meant to stop) — W2, worth checking whether bots knife at creatures behind a gate.
 - LSPLAY restarted with it (ls_outpost, Normal, 5 bots, port 27330, waits, brain r43369945601).
+
+### Agent X: Game Mode Studio closes the "still missing" list — 2026-11-12
+
+138 nodes now. All new ones follow the same rules: text through the allow-lists, debugger events, snapshot and amxxpc
+compile (release and debug, no warnings) in `every_node.graph.json`.
+- **Revive:** Make Downed (on a player who just died: lies where they fell, a teammate or squad mate holding USE for N s
+  brings them back with N health, else out after N s; the two nearest bots on that side get the brain's `use` goal,
+  like Last Stand's own), events Player Revived (player, by) and Downed Player Out, Is Downed. The code is the Studio's
+  own (Last Stand keeps its revive inside gm_laststand.sma; nothing in gm_components/loner.inc to reuse).
+- **Damage before it happens:** Player About To Be Hurt (victim, attacker, damage, kind: fall/blast/burn/shot/slash/other)
+  with Block Damage, Scale Damage, Set Damage (Ham_TakeDamage pre via RegisterHamPlayer, SetHamParamFloat / SUPERCEDE).
+  The damage nodes are refused anywhere else (or after a Delay/Repeat/Countdown).
+- **No Fall Damage** per player: next landing only (drop-ins), always, or off; in the same pre-damage hook.
+- **Squads:** Set Squad (1-32), Squad Of, Squads Left, Squad Friendly Fire. Squad mates can't hurt each other unless
+  it's on; the brain gets `ls_mode role <id> sqN` and `ls_mode friend @sqN @sqN 1` (only when `ls_mode_ver` exists).
+  Revives use squads when set.
+- **Buying:** Buying (anywhere: `mp_buy_anywhere 1` / buy zones / nowhere) and Allow Buying (everything, pistols+armor+
+  grenades, no snipers, no AWP, no grenades, no M249, armor only, nothing), via the cstrike module's `CS_OnBuyAttempt`.
+  Not checked live: bots buy through the game's own code and may not pass through that forward; people do.
+- **Saved values:** Saved Value / Save Value / Add To Saved, numbers, one nvault per mode (`studio_<mode>`), keyed by
+  SteamID, or the name for bots and LAN/pending ids. nvault writes on map change/plugin end; a killed server loses
+  the last map's changes (seen when the sim harness kills HLDS).
+- **Timed bot goals:** Bot Go To has "for N seconds" (then the bot is freed); Hold and Follow already were.
+- **Round clock:** Set Round Clock, Add Round Time, Pause/Resume, Round Time Left, event Round Time Up. The mode runs its
+  own clock (shown with the RoundTime message, re-sent each second while paused) and holds the game's time limit off
+  with `mp_round_infinite f` while it runs (put back at the next round) — never the gamerules offsets. Limits: the
+  game's internal round length doesn't change (only matters if the clock is stopped), the bomb timer is the game's.
+- **Launch Up** (velocity up) for drop-ins.
+- **Templates:** Last Stand Lite downs a fallen defender for 25 s (hold USE 3 s, +200 to the helper); Royale Lite puts
+  everyone in a random squad of six, drops them in from above a spread-out spot (low gravity, no fall damage on
+  landing, normal gravity after 8 s) and ends when Squads Left is 1.
+- **Live (own sim copies, removed after):** a check graph on de_dust2 with 12 bots: 25 players downed, 5 revived (bots
+  went and revived them), 4 out, every hit scaled by 0.6 (228 times), the round clock ended 2 rounds, saved values read
+  back. Last Stand Lite: 3 waves, money, respawns, downs. Royale Lite: 24 squad assignments and drop-ins, gravity back
+  after 8 s, crates, drops, zone damage, last squad wins, a new round. No node or AMXX errors.
