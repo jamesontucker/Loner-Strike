@@ -129,7 +129,7 @@ The baseline is the homepage before the 1.0 overhaul: `840ca93d:site/index.html`
 | 6 | Chapter headers (giant Play/Build/Host/Share) | New: cut. The original page had none | 97 | 0 |
 | 7 | Bots that play like people | Original, lightly updated ("They learn the rules, whatever the mode") | 101 | 95 |
 | 8 | How the bots play, with Pick the lobby | **Original**, kept | 358 | 352 |
-| 9 | Game modes: two compact cards (Last Stand, Battle Royale: picture plus one line each, no bullets), then the original Classic community modes chips | Classics original; cards new, condensed. The details go to docs#last-stand and #battle-royale | 271 | 130 |
+| 9 | Classic community modes: the original heading, lead and chip list. **Last Stand** and **Battle Royale** join the list as entries like the others, each with one line, a small "made here" tag and a link to its docs section. Chip text: "Last Stand · made here: hold an outpost against waves of creatures" (links to docs#last-stand); "Battle Royale · made here: drop in, loot up, outlast the zone" (links to docs#battle-royale) | Original, lightly updated. The separate mode cards and the "Modes made here" heading are cut | 271 | 95 |
 | 10 | **Make your own** (one feature block like Play with friends: text plus one picture). Line: "The tools we wished we had in 2004." Bullets: map editor ("Hammer's depth, modern editor feel"), F5 to playtest with bots; Game Mode Studio, modes from nodes and wires; map simulator, nav fixer, spray maker and more (Beta). Links to docs#tools | New, condensed from the editor, Studio and tool catalog | 522 | 85 |
 | 11 | Play with friends | Original, kept | 75 | 75 |
 | 12 | Dedicated servers | Original, kept | 161 | 155 |
@@ -140,14 +140,24 @@ The baseline is the homepage before the 1.0 overhaul: `840ca93d:site/index.html`
 | 17 | Support the people… | Original, kept, plus the SDHLT card | 139 | 139 |
 | 18 | Community: our server and Discord | Original, kept | 52 | 52 |
 | 19 | Questions | Original 11 kept. Of the new ones, "What does Beta mean?" stays (one sentence); Hammer and Community move to the docs | 628 | 540 |
-| | **Total** | | **about 3,000** | **about 2,260** |
+| | **Total** | | **about 3,000** | **about 2,225** |
 
-That is about a quarter cut, not half. The original sections alone come to about 2,000 words. Halving would mean cutting originals too. Options for the user, in order of least loss:
+That cuts about a quarter, not half. The original sections alone come to about 2,000 words. Halving would mean cutting originals too. Options for the user, in order of least loss:
 - a. Move "And in every fight" (the 6-item list and the ideas note, about 140) to docs#how-bots-work.
 - b. Make "Everything in it" one line per group (about 200 → 110).
 - c. Move "What does a server cost?" and "Can people join without Loner-Strike?" to the docs (about 110).
 
-Doing a, b and c brings it to about 1,900.
+Doing a, b and c brings it to about 1,865.
+
+### Our modes are no longer singled out (user, 2026-11-13)
+Besides row 9, the build also changes these:
+- Play line (row 7 area): "The classic community mods, modes of our own, and…" goes back to the original wording, or drops "modes of our own".
+- The bot bullet "They learn the rules, whatever the mode: the classics, ours and the ones you make" becomes "They learn the rules, whatever the mode".
+- "They play the mode" goes back to the original: "Run and gun in Deathmatch, a team in a 5v5." The "hold the walls in Last Stand" clause is dropped.
+- The Studio bullet "Start from Last Stand, Battle Royale or a blank mode" moves into the Make your own block as "start from a template or a blank mode".
+- The og/twitter descriptions, JSON-LD description and feature list lose the separate "Last Stand and Battle Royale" item. Both stay in the mode list there.
+- The screenshot tour keeps its Game modes tab (captions name the modes). That tab is the proof, not a callout.
+- Pending the user's answer: the hero picture (map browser or editor) and the optional trims a, b and c.
 
 ### The open questions: both sections were original
 - **Why this exists** is original (151 words before 1.0). Recommendation: keep it whole with its DreamHack photo, and cut only the added 1.0 paragraph to one sentence. That's better than cutting it to 2–3 sentences.
