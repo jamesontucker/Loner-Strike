@@ -488,6 +488,7 @@ stock unstick_bots()
 		g_unstuckTries[p]++;
 		g_releaseAt[p] = now + 12.0;
 		server_cmd("ls_bot %d goto %.0f %.0f %.0f", p, to[0], to[1], to[2]);
+		log_amx("Battle Royale: bot %d hadn't moved (try %d); sent to %.0f %.0f %.0f", p, g_unstuckTries[p], to[0], to[1], to[2]);
 	}
 }
 
