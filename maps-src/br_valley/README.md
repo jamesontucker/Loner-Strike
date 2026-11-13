@@ -10,12 +10,14 @@ beyond the map itself.
 | `build_map.py` | the generator: tables at the top (pads, mesas, hills, roads, tunnels, trenches, hatches), then terrain, river, underground, buildings, cover, mode data, light |
 | `br_valley.map` | its output (Valve 220); opens in Tools > Map editor (Import) |
 | `preview.png` | the generator's own quick top-down (heights, roads, river, tunnels in purple, spawns white, crates yellow, floor weapons orange, drop spots blue) |
-| `layout.png` | the radar maker's render of the compiled map |
+| `layout.png` | the radar maker's render of the compiled map (`layout-v1.png`: before the organic pass) |
 | `test-tracks.png` | where the bots went (grey) and died (red: shot, purple: the zone) in the last sim run |
 | `navgen.py` | makes the bots' nav from the .bsp in ~20 s (the game's own learner takes hours on a map this big); then the nav fixer's reach check |
 | `../../plugins/game/` | what ships (setup copies this tree into the game): `maps/br_valley.bsp/.nav/.lsv/.res`, `overviews/br_valley.bmp/.txt` |
 
-Rebuild: `python3 build_map.py`, then compile in the map editor (Compile tab, Normal or Final), or
+Rebuild: `python3 build_map.py` (it stops, writing nothing, if two things overlap — every brush is
+tagged with what it belongs to: a building, a bridge, stairs, a rock... — or if the ground rises
+into a structure, e.g. stairs through a bank; `ALLOW_OVERLAP=1` writes the map anyway), then compile in the map editor (Compile tab, Normal or Final), or
 the same through the compile routes. If the geometry changes: `python3 navgen.py <game>/cstrike/maps/br_valley.bsp
 <game>/cstrike/maps/br_valley.nav`, check reach in the nav fixer, load the map once so the bots build their
 knowledge (.lsv, ~10 min in the background), and redo the overview (Radar maker) and the .res (Map doctor).
@@ -48,10 +50,21 @@ break sightlines, and the zone.
   the bunker complex underneath (two halls, the best loot) through its stair trench.
 - **Lumber camp** (north east): an open sawmill, log piles, a cabin, a watchtower with a ladder.
 - **Mesas**: the old fort (west, z 352) and the lookout (east, z 320): cliffs all round, one ramp each.
-- Five cabins between the places; woods in groves (~145 trees with foliage from head height up, so they
-  block sight; ~35 rocks, ~40 bushes) between them.
-- **River**: a 512-wide channel 160 deep with cliff banks; three bridges (north, middle, south road),
-  two fords (ramps), stairs out of the bed by every bridge and at the docks.
+- Five cabins at odd spots between the places; ~120 trees in groves of different sizes plus loose ones
+  (irregular foliage from head height up, so they block sight; at least 40 of open ground between
+  canopies), ~25 boulders in formations (tilted tops, some tall standing stones), ~40 bushes.
+- **Upper deck**: plank walkways with railings link the rooftops and upper floors off the street: in
+  the town house A's roof to the hall's 3rd floor, the hall's 2nd floor to the store's roof, and a
+  catwalk over the main street to the roof across; at the factory the hall's roof to the office's roof.
+- **River**: a channel 512-1024 wide, 160 deep with cliff banks, bending in an S down the valley (corners
+  cut at 45 degrees, boulders against the banks); three bridges (north, middle, south road), two fords
+  (ramps), stairs out of the bed by every bridge and three more places, and the tunnel under it.
+- **Roads**: curves through the places that follow the ground (thin overlays the bots and players
+  walk straight through, in 512-unit pieces so VIS still culls them): the main road through the
+  town's main street to the middle bridge, the north road past the radio hill, the south road past the
+  gas station, and dirt tracks between.
+- **Landmarks**: West Peak (z ~550, between the fort and the town), the east ridge between the quarry and
+  the bunker, the radio hill (448) and its tower, the two mesas.
 - **Tunnels** (z -512, 192 wide): the town sewer, south to the gas station, west to the factory, and
   a long tunnel east under the river to the bunker complex and north to the quarry: a fourth way
   over the river, out of the zone's sight. Lit every ~380 units.

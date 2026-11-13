@@ -93,6 +93,43 @@ gm_battleroyale from HEAD 22:30, gm_simrec; port 27368)
 - **Port clash:** other agents' servers (W2LS2 27360, W2LS3 27363, W2OPA 27365, W2OPB 27366) were on my 27360-27369
   range; I used 27368.
 
+## 2026-11-13 — br_valley v2: organic pass, placement checks, upper deck
+
+### What changed (`maps-src/br_valley/build_map.py`; before: `layout-v1.png`, after: `layout.png`)
+- **River**: an S down the valley, 2-4 cells wide, corners cut at 45°, boulders against the banks; straight only where
+  it's crossed (3 bridges, 2 fords, bed stairs, the docks' piers); the tunnel under it kept. Rows 23+ now start a cell
+  further east: the radio hill's pad met the river at row 25 and the north bridge's west end sat in a 448-high slope.
+- **Roads**: curves through the places, thin non-solid overlays cut to the terrain's triangles (func_illusionary in
+  512 tiles, so VIS still culls them). Solid road pieces had pushed clipnodes over the limit.
+- **Height**: West Peak (~550) and a ridge on the east bank. Mesa ramps now follow the hillside across their width
+  (three planar pieces, each foot point 4 below its own ground) instead of one flat foot that sank into one side.
+- **Cover**: trees in groves of different sizes plus loose ones, boulder formations with tilted tops, bushes; all
+  irregular. Canopies keep 40 units of open ground between them and bushes 40 from trees and rocks; bank boulders
+  stay clear of the 45° corners (each of these left a slot a player could drop into and not leave). Cabins at
+  irregular spots; grass follows the slope.
+- **Upper deck** (`walkway()`; `building()` takes `updoors` and `roof_gaps`): town: house A's roof → the hall's 3rd
+  floor, the hall's 2nd floor → the store's roof, a catwalk over the main street → the roof across; factory: the
+  hall's roof → the office's roof (a 16 step up). All four are in the nav and linked.
+- **Placement checks** (the generator stops, writing nothing; `ALLOW_OVERLAP=1` overrides):
+  1. overlaps: every brush is tagged with what it belongs to (a building, a bridge, stairs, a rock...); two groups
+     may not overlap (exact convex footprints), only touch. Cover is only placed where nothing else stands. It found:
+     the row-11 ford through the docks' piers and stairs (ford moved to row 13), the lookout ramp into the quarry
+     shed (it now goes east), the bunker trench's railings in the bunker's wall, a car in the town hall's wall,
+     riverside boulders on piers, 45° river corners cutting piers.
+  2. ground: a structure the ground rises into (above its top somewhere while its top shows elsewhere: stairs
+     through a bank, a hillside through a floor). It found the north bridge's west end (above), the gas trench's
+     east end past its pad (trench rims are now fixed at the pad's height) and both mesa ramps' feet.
+
+### Compile (Final through the compile routes on my dev server, niced, `-low`, threads all but two)
+95-139 s, no leak. planes 44 %, worldfaces 40 %, clipnodes 75 %, worldleaves 66 %, AllocBlock 64 %, lightdata 1.8 MB,
+visdata 0.7 MB, 4.4 MB .bsp. Warnings: 3-4 road overlay entities' boxes touch more than 48 leaves (the engine uses
+a simpler vis check for them; harmless).
+
+### Nav
+`navgen.py`: 78 614 samples, 21 s, 4 792 areas. Reach check: **all reachable, 0 traps, 6 ladders linked** (it had
+found the two drop-in slots above: between canopies on a slope, and between a bank boulder and a 45° corner).
+
+
 ## Rule from Y (2026-11-13): touch only your own server processes
 - Never attach a debugger (`winedbg <pid>`, `attach`, DebugBreakProcess, anything that puts a thread into another
   process) to a running hlds under CrossOver: the injected thread starts at 0xfff4fadc and kills the server.
@@ -102,3 +139,28 @@ gm_battleroyale from HEAD 22:30, gm_simrec; port 27368)
 - Stacks and crashes without a debugger: `drive_c/Loner-Strike/Sim/crashes.log` (every crash in the bottle, full
   winedbg report), and with fork builds from ls-creatures `f351765` on, `cstrike/ls_crash*.log` and
   `cstrike/ls_watchdog.log` in the server folder.
+
+### Tested (Sim/BRMAP, port 27368, 20 bots, Battle Royale solo, gm_battleroyale + gm_components built from HEAD
+1c94661 = W1's drop-in and buy-state fixes, so **`br_dropin 1`**; 25 min; `test-tracks.png`)
+- Game 1: **6.6 min, 19 kills** (town, open ground, lumber camp, docks, radio hill; the last 4 to the zone). Game 2:
+  down to 3 players in 3.2 min, then the server stopped (below). Bots covered 580 of the ~784 surface cells (74 %,
+  v1: 66 %) plus the tunnels.
+- **Drop-in: no fall deaths on landing** (v1: 16 of 20 dead in 25 s). But many knife kills in the first 1-12 s after
+  the loot-up (8 in game 2): bots land next to each other. W1's.
+- No bot stuck on geometry: the "idle 12 s+" spots are campers holding a spot (6-9 campers a game).
+- One fall: a camper on the radio tower stood on the 40-high railing and walked off the west side (440 down, 58 hp).
+  Once; left as is (a 64 railing would block the lookout's view).
+- **Server stalls, not the map:** both runs stopped mid-game with the process alive. The first (00:15, `br_dropin 0`,
+  pre-fix plugins) after 2.5 min. The second at 00:51:35, the moment QA's QA5/QA7/QA8 servers started; LSPLAY and the
+  DR servers were restarted around 01:01 too, and W1 saw the same at 23:50. Before that the server ran at 0.86-1.0x
+  real time on a loaded Mac (load ~17-23).
+- gm_components had warned "a component at 2560 -1600 256 is inside a wall": a rock formation stood on that supply-drop
+  spot. Cover now keeps 160 clear of every drop spot (skipped at placement, so the rest of the layout didn't move).
+  The shipped build has this fix; the 25-min test ran on the build just before it (only cover at drop spots differs).
+  The shipped .lsv was built by loading the shipped bsp/nav.
+
+### Ships (plugins/game/)
+`maps/br_valley.bsp/.nav/.lsv/.res`, `overviews/br_valley.bmp/.txt` from this build; this Mac's game folder has them too.
+`maps-src/br_valley/layout-v1.png` is v1 for comparison. My test server Sim/BRMAP and my dev server (8077) are
+stopped and removed.
+
