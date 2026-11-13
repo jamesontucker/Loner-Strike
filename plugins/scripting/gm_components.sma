@@ -359,6 +359,8 @@ public plugin_natives()
 	register_native("ls_zone_damage", "n_zone_damage");
 	register_native("ls_zone_stage", "n_zone_stage");
 	register_native("ls_zone_skip", "n_zone_skip");
+	register_native("ls_zone_next", "n_zone_next");
+	register_native("ls_comp_state", "n_comp_state");
 	register_native("ls_door_open", "n_door_open");
 	register_native("ls_door_close", "n_door_close");
 	register_native("ls_door_lock", "n_door_lock");
@@ -5828,4 +5830,37 @@ public n_respawn_at(plugin, params)
 		respawn_place(id, s);
 	}
 	return is_user_alive(id);
+}
+
+/* seconds to the zone's next change; the next circle; closing = 1 while it shrinks */
+public Float:n_zone_next(plugin, params)
+{
+	new ent = get_param(1);
+	new z = -1;
+	if (ent)
+		z = arg_slot(1, K_ZONE);
+	else
+		for (new k = 0; k < g_nslots && z < 0; k++)
+			if (g_ent[k] && g_kind[k] == K_ZONE)
+				z = k;
+	if (z < 0)
+		return -1.0;
+	g_now = get_gametime();
+	set_array_f(2, g_vb[z], 3);
+	set_float_byref(3, g_pf[z][Z_TOR]);
+	new bool:closing = g_pf[z][Z_T1] > g_pf[z][Z_T0] && g_now < g_pf[z][Z_T1];
+	set_param_byref(4, closing ? 1 : 0);
+	if (closing)
+		return g_pf[z][Z_T1] - g_now;
+	for (new k = 0; k < g_nslots; k++)
+		if (g_ent[k] && g_kind[k] == K_SHRINKER && g_aux[k] == z && g_state[k] == 1)
+			return floatmax(g_pf[k][S_NEXT] - g_now, 0.0);
+	return -1.0;
+}
+
+/* a component's state: loot crate 0 full 1 empty; spawner 0 there 1 taken; extraction 1 open ... */
+public n_comp_state(plugin, params)
+{
+	new s = arg_slot(1);
+	return s >= 0 ? g_state[s] : -1;
 }

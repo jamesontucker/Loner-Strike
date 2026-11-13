@@ -155,7 +155,7 @@ status line says how far and which way.
 - Forwards: `ls_on_zone_tick(ent, id, Float:dmg)` *(handled: no damage)*, `ls_on_zone_cross(ent, id, outside)`,
   `ls_on_zone_stage(ent, stage)`.
 - Natives: `ls_zone_set(ent, center[3], r)`, `ls_zone_shrink(ent, center[3], r, secs)`,
-  `ls_zone_radius`, `ls_zone_center`, `ls_zone_inside(ent|0, id)`, `ls_zone_damage(ent, dmg)`.
+  `ls_zone_radius`, `ls_zone_center`, `ls_zone_inside(ent|0, id)`, `ls_zone_damage(ent, dmg)`, `ls_zone_next(ent|0, center[3], &radius, &closing)` (seconds to the next change, the next circle, whether it's closing now).
 - Bots: `zone` (now and next circle, when it closes).
 
 ### ls_zone_shrinker
@@ -272,7 +272,7 @@ if more than "skip" and no tie, is voted out (killed, no frag lost).
 (entity order), `ls_comp_by_name`, `ls_comp_count`, `ls_comp_get/getf/set` (set re-reads the key at
 once), `ls_comp_enable/enabled`, `ls_comp_start/stop(ent|0)`, `ls_comp_reset(ent|0)`,
 `ls_comp_load_pack(path under configs/)`, `ls_comp_inside(ent, id)`, `ls_comp_brain()`,
-`ls_comp_bots_hint(line)`, `ls_give_item(id, item)`. Forward `ls_on_component(ent, kind[])` when one is ready.
+`ls_comp_bots_hint(line)`, `ls_give_item(id, item)`, `ls_comp_state(ent)` (crate full/empty, spawner there/taken, extraction open, barricade standing, supply crate falling/landed/opened). Forward `ls_on_component(ent, kind[])` when one is ready.
 
 ## Example: King of the Hill in a few lines
 

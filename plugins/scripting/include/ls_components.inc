@@ -116,6 +116,10 @@ native ls_comp_load_pack(const path[]);
 /** Is the player inside a component's area (capture point, zone, extraction...)? */
 native bool:ls_comp_inside(ent, id);
 
+/** A component's state: a loot crate 0 full / 1 empty, a weapon spawner 0 there / 1 taken,
+ *  an extraction 1 open, a barricade 0 standing / 1 broken, a supply crate 0 falling / 1 landed / 2 opened. */
+native ls_comp_state(ent);
+
 /** Do Loner-Strike's bots understand ls_mode hints on this server? */
 native bool:ls_comp_brain();
 
@@ -168,6 +172,14 @@ native ls_zone_damage(ent, Float:dmg);
 native ls_zone_stage(ent);
 /** A shrinker goes to its next stage now. */
 native ls_zone_skip(ent);
+/**
+ * When the safe zone changes next (ent 0 = the first zone).
+ * @param center    the next circle's centre
+ * @param radius    the next circle's radius
+ * @param closing   1 while it's shrinking (the return is then the time until it stops)
+ * @return          seconds, or -1.0 when nothing is scheduled
+ */
+native Float:ls_zone_next(ent, Float:center[3], &Float:radius, &closing);
 
 /* ---------------------------------------------------------------------------
  * ls_timed_door
