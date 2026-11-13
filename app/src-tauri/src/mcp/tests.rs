@@ -81,7 +81,7 @@ fn t(changes: bool, allow: bool, dirty: bool, people: usize) -> T {
                 a.lock().unwrap().push(text);
                 allow
             }),
-            log: Arc::new(Log::default()),
+            log: Arc::new(Log::default()), st: None,
         },
         calls,
         asked,
@@ -464,7 +464,7 @@ async fn tools_reach_the_real_app_routes() {
         phone: Mutex::new(crate::app_api::Phone::default()),
     });
     let t = T {
-        ctx: Ctx { app: crate::server::router(st, crate::server::Listener::Local), host: HOST.into(), changes: false, confirm: Arc::new(|_| false), log: Arc::new(Log::default()) },
+        ctx: Ctx { app: crate::server::router(st, crate::server::Listener::Local), host: HOST.into(), changes: false, confirm: Arc::new(|_| false), log: Arc::new(Log::default()), st: None },
         calls: Arc::default(),
         asked: Arc::default(),
         sessions: rpc::Sessions::default(),
@@ -710,7 +710,7 @@ async fn unknown_means_ask() {
         let asked: Arc<Mutex<Vec<String>>> = Arc::default();
         let a = asked.clone();
         T {
-            ctx: Ctx { app, host: HOST.into(), changes: true, confirm: Arc::new(move |t| { a.lock().unwrap().push(t); allow }), log: Arc::new(Log::default()) },
+            ctx: Ctx { app, host: HOST.into(), changes: true, confirm: Arc::new(move |t| { a.lock().unwrap().push(t); allow }), log: Arc::new(Log::default()), st: None },
             calls: Arc::default(),
             asked,
             sessions: rpc::Sessions::default(),
@@ -778,7 +778,7 @@ async fn compiling_and_playtest() {
     let make = |allow: bool| {
         let asked: Arc<Mutex<Vec<String>>> = Arc::default();
         let a = asked.clone();
-        T { ctx: Ctx { app: app.clone(), host: HOST.into(), changes: true, confirm: Arc::new(move |t| { a.lock().unwrap().push(t); allow }), log: Arc::new(Log::default()) }, calls: Arc::default(), asked, sessions: rpc::Sessions::default() }
+        T { ctx: Ctx { app: app.clone(), host: HOST.into(), changes: true, confirm: Arc::new(move |t| { a.lock().unwrap().push(t); allow }), log: Arc::new(Log::default()), st: None }, calls: Arc::default(), asked, sessions: rpc::Sessions::default() }
     };
     let no = make(false);
     // compiling to the work folder doesn't ask; installing into the game, downloading and starting the game do
@@ -793,4 +793,247 @@ async fn compiling_and_playtest() {
     assert_eq!(call_tool(&yes, "playtest", json!({"map": "arena", "bots": 4, "mode": "gungame"})).await["isError"], false);
     assert!(calls.lock().unwrap().last().unwrap().contains(r#""map":"arena""#));
     assert_eq!(call_tool(&yes, "compile_start", json!({"name": "../x"})).await["isError"], true);
+}
+
+// ---- the whole app: routes, user-only, console, logs, traces ------------------------------
+
+#[test]
+fn what_agents_may_do_with_each_route() {
+    use routes::{policy, Policy};
+    let none = json!({});
+    let user_only = |m: &str, p: &str, b: Value| matches!(policy(m, p, &b), Policy::UserOnly(_));
+    let asks = |m: &str, p: &str, b: Value| matches!(policy(m, p, &b), Policy::Ask(_));
+    // the person's alone, whatever the method or body
+    for (m, p, b) in [
+        ("GET", "/api/mcp", none.clone()), ("POST", "/api/mcp", json!({"changes": true})), ("POST", "/api/mcp/token", none.clone()),
+        ("POST", "/api/app/update/install", none.clone()), ("POST", "/api/app/update/check", none.clone()), ("POST", "/api/app/remove-everything", none.clone()),
+        ("POST", "/api/app/restart", none.clone()), ("POST", "/api/setup/uninstall", json!({"hl": "x", "games": ["cstrike"]})),
+        ("POST", "/api/setup/install", json!({"hl": "x", "games": ["cstrike"], "components": []})),
+        ("POST", "/api/setup/install", json!({"hl": "x", "games": ["cstrike"], "components": ["core"], "repair": true})),
+        ("GET", "/api/app/phone", none.clone()), ("POST", "/api/app/phone", json!({"enabled": true})), ("POST", "/api/app/phone/reset", none.clone()),
+        ("POST", "/api/control/invite", none.clone()), ("POST", "/api/control/open-port", none.clone()), ("POST", "/api/control/server/abc/invite", none.clone()),
+        ("POST", "/api/share", none.clone()), ("POST", "/api/servers/abc/rcon-password", none.clone()), ("POST", "/api/servers/abc/rcon-password/show", none.clone()),
+        ("POST", "/api/servers/abc/webstatus/secret", none.clone()), ("GET", "/api/nothing/here", none.clone()), ("POST", "/api/servers/abc/hltv/../../mcp", none.clone()),
+    ] {
+        assert!(user_only(m, p, b.clone()), "{m} {p} {b}");
+    }
+    // asked every time: deleting, removing, kicking, stopping, closing the game, outward
+    for (m, p, b) in [
+        ("POST", "/api/servers/abc/delete", none.clone()), ("POST", "/api/servers/abc/stop", none.clone()), ("POST", "/api/servers/abc/restart", none.clone()),
+        ("POST", "/api/servers/abc/join", json!({"restart": true})), ("POST", "/api/admins/kick", none.clone()), ("POST", "/api/admins/ban", none.clone()),
+        ("POST", "/api/gb/uninstall", none.clone()), ("POST", "/api/gb/install", none.clone()), ("POST", "/api/app/launch", json!({"map": "de_dust2"})),
+        ("POST", "/api/app/storage/clear", none.clone()), ("POST", "/api/tools/demos/delete", none.clone()), ("POST", "/api/tools/plugins/delete", none.clone()),
+        ("POST", "/api/tools/editor/prefabs/delete", none.clone()), ("POST", "/api/tools/community/register", none.clone()), ("POST", "/api/tools/community/publish/de_x", none.clone()),
+        ("POST", "/api/servers/abc/webstatus", none.clone()), ("POST", "/api/app/direct", none.clone()), ("POST", "/api/safety/restore", none.clone()),
+        ("POST", "/api/safety/clear", none.clone()), ("POST", "/api/setup/install", json!({"components": ["addon-monstermod"]})),
+        ("POST", "/api/setup/uninstall", json!({"components": ["addon-monstermod"]})), ("POST", "/api/cmd", json!({"cmd": "gm_player", "args": ["3", "kick"]})),
+        ("POST", "/api/sounds/pack", json!({"id": 1, "action": "remove"})), ("POST", "/api/backup/restore", none.clone()), ("POST", "/api/browser/connect", none.clone()),
+    ] {
+        assert!(asks(m, p, b.clone()), "{m} {p} {b} -> {:?}", policy(m, p, &b));
+    }
+    // plain changes and reads
+    assert_eq!(policy("POST", "/api/cmd", &json!({"cmd": "gm_map", "args": ["de_dust2"]})), Policy::Change);
+    assert_eq!(policy("POST", "/api/servers/abc/start", &none), Policy::Change);
+    assert_eq!(policy("POST", "/api/servers", &json!({"name": "x"})), Policy::Change);
+    assert_eq!(policy("POST", "/api/servers/import", &none), Policy::Change, "the literal route, not /api/servers/:id");
+    assert_eq!(policy("POST", "/api/servers/abc/hltv", &none), Policy::Change);
+    assert_eq!(policy("POST", "/api/navs/learn", &none), Policy::Change);
+    assert_eq!(policy("GET", "/api/state", &none), Policy::Read);
+    assert_eq!(policy("GET", "/api/servers/abc/console", &none), Policy::Read);
+    assert_eq!(policy("GET", "/api/gb/browse", &none), Policy::Read);
+    // every listed route has a known area and no route is listed twice
+    let mut seen = std::collections::HashSet::new();
+    for (m, p) in routes::ROUTES {
+        assert!(seen.insert((m, p)), "{m} {p} twice");
+        assert!(!routes::area_of(p).is_empty(), "{p} has no area");
+    }
+}
+
+#[test]
+fn secrets_never_reach_agents() {
+    let mut v = json!({"servers": [{"id": "a", "password": "joinme", "rcon_password": "x", "hasPassword": true, "password_set": true, "name": "Mine"}],
+                       "token": "abc", "webhook": "https://discord", "api_key": "k", "steamid": 123, "lines": ["rcon_password \"hunter2\"", "status"], "empty_password": ""});
+    routes::redact(&mut v);
+    let text = v.to_string();
+    for secret in ["joinme", "hunter2", "abc\"", "discord", "\"k\"", "123"] {
+        assert!(!text.contains(secret), "{secret} in {text}");
+    }
+    assert_eq!(v["servers"][0]["hasPassword"], true, "flags stay");
+    assert_eq!(v["servers"][0]["name"], "Mine");
+    assert_eq!(v["lines"][1], "status");
+}
+
+#[test]
+fn the_console_allowlist() {
+    use debug::{console_policy, Console};
+    for line in ["status", "  amxx   list ", "meta list", "ls_mode status", "ls_creature list", "bot_ls_trace", "bot_ls_surf", "bot_quota", "sv_gravity", "mp_timelimit", "cvarlist bot_ls", "ls_creature_max"] {
+        assert_eq!(console_policy(line, false), Ok(Console::Read), "{line}");
+    }
+    // changes off: anything that isn't a read is refused, even settings with a value
+    for line in ["bot_ls_trace 1", "bot_kill", "bot_add", "quit", "kick Bob", "changelevel de_dust2", "sv_password", "amxx unload x", "map de_dust2", "exec server.cfg", "bot_nav_analyze", "gm_map de_dust2"] {
+        assert!(console_policy(line, false).is_err(), "{line}");
+    }
+    // never: chaining, the console password, control characters
+    for line in ["status; quit", "rcon_password x", "\"rcon_password\" x", "status\nquit", "", &"x".repeat(201)] {
+        assert!(console_policy(line, true).is_err(), "{line:?}");
+    }
+    // changes on: a change goes, but quitting, kicking, banning, the map and exec ask
+    assert_eq!(console_policy("bot_ls_trace 1", true), Ok(Console::Change));
+    assert_eq!(console_policy("bot_add", true), Ok(Console::Change));
+    for line in ["quit", "kick Bob", "banid 0 1", "changelevel de_dust2", "map de_dust2", "exec x.cfg", "sv_password abc", "amx_ban x"] {
+        assert!(matches!(console_policy(line, true), Ok(Console::Ask(_))), "{line}");
+    }
+}
+
+#[tokio::test]
+async fn app_call_follows_the_routes_rules() {
+    // read-only: a GET goes, a POST doesn't, the person's own never (even with changes)
+    let off = t(false, true, false, 0);
+    let r = call_tool(&off, "app_call", json!({"method": "GET", "path": "/api/servers"})).await;
+    assert_eq!(r["isError"], false, "{}", text(&r));
+    assert!(!text(&r).contains("secret"), "passwords are hidden: {}", text(&r));
+    let r = call_tool(&off, "app_call", json!({"method": "POST", "path": "/api/cmd", "body": {"cmd": "gm_map", "args": ["de_dust2"]}})).await;
+    assert!(text(&r).contains("Allow changes"));
+    let on = t(true, false, false, 0);
+    for (m, p) in [("POST", "/api/mcp"), ("POST", "/api/app/update/install"), ("POST", "/api/app/phone"), ("POST", "/api/servers/mine/rcon-password/show"), ("GET", "/api/mcp")] {
+        let r = call_tool(&on, "app_call", json!({"method": m, "path": p})).await;
+        assert_eq!(r["isError"], true, "{p}");
+        assert!(text(&r).contains("person's call") || text(&r).contains("off limits"), "{p}: {}", text(&r));
+    }
+    assert!(on.asked.lock().unwrap().is_empty(), "never even asked");
+    // asks, and "Don't allow" means nothing was sent
+    let r = call_tool(&on, "app_call", json!({"method": "POST", "path": "/api/servers/mine/delete"})).await;
+    assert_eq!(r["isError"], true);
+    assert!(on.asked.lock().unwrap()[0].contains("delete this server"));
+    assert!(!on.calls.lock().unwrap().iter().any(|c| c.contains("/delete")));
+    // a change goes through, aimed at a server with target
+    let r = call_tool(&on, "app_call", json!({"method": "POST", "path": "/api/cmd", "body": {"cmd": "gm_bots", "args": ["count", "4"]}, "target": "mine"})).await;
+    assert_eq!(r["isError"], false, "{}", text(&r));
+    assert!(on.calls.lock().unwrap().iter().any(|c| c.starts_with("POST /api/cmd @mine")));
+    // only the person's own servers as targets; no sneaking paths
+    let r = call_tool(&on, "app_call", json!({"method": "GET", "path": "/api/state", "target": "far"})).await;
+    assert_eq!(r["isError"], true);
+    for p in ["/api/../mcp", "/api/state?x=1", "api/state", "/api//state"] {
+        assert_eq!(call_tool(&on, "app_call", json!({"method": "GET", "path": p})).await["isError"], true, "{p}");
+    }
+    // the route list says what each one may do
+    let v: Value = serde_json::from_str(&text(&call_tool(&off, "app_routes", json!({"search": "admins kick"})).await)).unwrap();
+    assert!(v["routes"].as_array().unwrap().iter().any(|r| r["may"] == "asks the person first"));
+    assert!(v["userOnly"].as_array().unwrap().len() >= 4);
+}
+
+#[tokio::test]
+async fn the_console_through_the_tools() {
+    let off = t(false, true, false, 0);
+    // a server's console: read-only lines pass even with changes off; others are refused before sending
+    let r = call_tool(&off, "console_send", json!({"server": "mine", "command": "bot_ls_trace 1"})).await;
+    assert_eq!(r["isError"], true);
+    assert!(text(&r).contains("only reading"), "{}", text(&r));
+    assert!(!off.calls.lock().unwrap().iter().any(|c| c.contains("console/send")));
+    let r = call_tool(&off, "brain_trace", json!({"server": "mine", "on": true})).await;
+    assert!(text(&r).contains("Allow changes"));
+    assert_eq!(off.ctx.log.rows().last().unwrap()["outcome"], "refused");
+}
+
+#[test]
+fn log_tails_follow_and_filter() {
+    let d = scratch("logs");
+    let f = d.join("qconsole.log");
+    std::fs::write(&f, "L 11/12/2026 - 10:00:00: LSSURF surf_ski: floor 3\nhello\nL 11/12/2026 - 10:00:01: [gm_components] loaded\nrcon_password \"secret1\"\n").unwrap();
+    let all = |_: &str| true;
+    let v = debug::tail(&f, None, 100, &all).unwrap();
+    assert_eq!(v["lines"].as_array().unwrap().len(), 4);
+    assert!(!v.to_string().contains("secret1"), "passwords hidden");
+    let cursor = v["cursor"].as_str().unwrap().to_string();
+    // nothing new yet; then two new lines, only those
+    let v = debug::tail(&f, Some(&cursor), 100, &all).unwrap();
+    assert!(v["lines"].as_array().unwrap().is_empty());
+    std::fs::OpenOptions::new().append(true).open(&f).unwrap().write_all(b"one\nLSSURF two\n").unwrap();
+    let v = debug::tail(&f, Some(&cursor), 100, &all).unwrap();
+    assert_eq!(v["lines"], json!(["one", "LSSURF two"]));
+    // paging: one at a time
+    let v1 = debug::tail(&f, Some(&cursor), 1, &all).unwrap();
+    assert_eq!((v1["lines"].clone(), v1["more"].clone()), (json!(["one"]), json!(true)));
+    let v2 = debug::tail(&f, v1["cursor"].as_str(), 1, &all).unwrap();
+    assert_eq!(v2["lines"], json!(["LSSURF two"]));
+    // a file that started again (shorter) resets
+    std::fs::write(&f, "new\n").unwrap();
+    let v = debug::tail(&f, v2["cursor"].as_str(), 100, &all).unwrap();
+    assert_eq!((v["lines"].clone(), v["reset"].clone()), (json!(["new"]), json!(true)));
+    // prefix filters look past the log's date
+    std::fs::write(&f, "L 11/12/2026 - 10:00:00: LSSURF a\nLSSURF b\nother\n").unwrap();
+    let keep = |l: &str| {
+        let body = l.split_once(": ").filter(|(d, _)| d.starts_with('L') && d.len() < 30).map(|(_, b)| b).unwrap_or(l);
+        body.starts_with("LSSURF")
+    };
+    assert_eq!(debug::tail(&f, None, 100, &keep).unwrap()["lines"].as_array().unwrap().len(), 2);
+    use std::io::Write;
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn brain_traces_read_as_columns() {
+    let d = scratch("trace");
+    let f = d.join("lstrace.csv");
+    std::fs::write(&f, "#map,cs_rats2\n#cols,time,id,team,state,task\n10.5,3,1,Hunt,Patrol\n10.5,4,2,Idle,Camp\n#mark,11.0,cs_rats2,before\n11.0,3,1,Attack,Fight\n").unwrap();
+    let v = debug::trace_rows(&f, None, 100, Some(3), None, None).unwrap();
+    let rows = v["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 3, "{v}"); // bot 3's two rows and the mark
+    assert_eq!(rows[0]["task"], "Patrol");
+    assert_eq!(rows[0]["time"], 10.5);
+    let v = debug::trace_rows(&f, None, 100, None, Some(11.0), None).unwrap();
+    assert!(v["rows"].as_array().unwrap().iter().all(|r| r.is_string() || r["time"] == 11.0), "{v}");
+    // a recording's trace, one bot in a window, every 2nd row
+    let rec = json!({"columns": ["t", "id", "task"], "bots": [{"id": 3, "rows": [[1.0, 3, "a"], [2.0, 3, "b"], [3.0, 3, "c"], [4.0, 3, "d"]]}, {"id": 4, "rows": [[1.0, 4, "x"]]}],
+                     "why": [{"t": 2.0, "id": 3, "why": "heard"}, {"t": 2.0, "id": 4, "why": "x"}], "marks": []});
+    let w = debug::trace_window(&rec, &json!({"bot": 3, "from": 2.0, "every": 2}));
+    assert_eq!(w["bots"].as_array().unwrap().len(), 1);
+    assert_eq!(w["bots"][0]["rows"], json!([{"t": 2.0, "id": 3, "task": "b"}, {"t": 4.0, "id": 3, "task": "d"}]));
+    assert_eq!(w["why"].as_array().unwrap().len(), 1);
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
+fn docs_come_in_pages() {
+    let p = debug::doc_page("gamemodes-plan", 0).unwrap();
+    let next = p["next"].as_u64().expect("the plan is longer than a page");
+    let p2 = debug::doc_page("gamemodes-plan", next as usize).unwrap();
+    assert!(p2["text"].as_str().unwrap().len() > 100);
+    assert!(debug::doc_page("components", 0).unwrap()["text"].as_str().unwrap().contains("ls_"));
+    assert!(debug::doc_page("../secrets", 0).is_none());
+    assert!(serde_json::from_str::<Value>(more::STUDIO_NODES).is_ok());
+}
+
+/// Every route in the source is listed in routes.rs (or deliberately left out): run it after
+/// adding routes, `cargo test mcp_route_coverage -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn mcp_route_coverage() {
+    let mut missing = vec![];
+    let re = regex::Regex::new(r#"\.route\(\s*"([^"]+)",\s*((?:[\w:]+\(\w+\)\.?)+)"#).unwrap();
+    fn walk(d: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        for e in std::fs::read_dir(d).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(&p, out);
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                out.push(p);
+            }
+        }
+    }
+    let mut files = vec![];
+    walk(std::path::Path::new("src"), &mut files);
+    for f in files.iter().filter(|f| !f.to_string_lossy().contains("/mcp/")) {
+        let t = std::fs::read_to_string(f).unwrap();
+        let t = t.split("#[cfg(test)]").next().unwrap();
+        for c in re.captures_iter(t) {
+            for m in ["get", "post"] {
+                if c[2].contains(&format!("{m}(")) && !routes::ROUTES.iter().any(|(rm, rp)| rm.eq_ignore_ascii_case(m) && *rp == &c[1]) {
+                    missing.push(format!("{} {} ({})", m.to_uppercase(), &c[1], f.display()));
+                }
+            }
+        }
+    }
+    println!("{}", missing.join("\n"));
+    assert!(missing.is_empty(), "{} routes aren't listed in mcp/routes.rs", missing.len());
 }

@@ -83,42 +83,121 @@ Code: `app/src-tauri/src/mcp/`. Settings UI: `app/ui/src/views/AgentSettings.tsx
   - It's for agents that only start local programs. It checks for its flag before Tauri starts, so it
     never opens a window or trips the single-instance lock.
 
-## Tools (55)
-**Maps**
-- `maps_list`, `map_info`, `map_entities`
-- `map_nav_summary`, `map_nav_areas` (by ids, place or near a point)
-- `map_knowledge`, `map_probe` (floor under a point)
-- `map_doctor`, `map_doctor_write_res`*, `map_doctor_copy_files`
-- `health_options`, `health_start`, `health_progress`, `health_cancel`, `health_reports`, `health_report`
+## What agents can't do
+Agents can do anything the person can do in the app. They go through the same routes and the same
+handlers, under these rules (`mcp/routes.rs`, tested in `what_agents_may_do_with_each_route` and
+`app_call_follows_the_routes_rules`).
 
-**Editor**
-- `editor_state`, `editor_list_entities`
-- `editor_new`*, `editor_open`*, `editor_import_map`*
-- `editor_add_box`, `editor_add_cylinder`, `editor_add_entity`, `editor_set_key`
-- `editor_command`: any editor op, including add_shape, delete, transform, hollow, clip, set_texture and set_world
-- `editor_undo`, `editor_redo`, `editor_checks`, `editor_textures`
-- `editor_save`*, `editor_export_map`
+**The person's alone.** These are refused even with "Allow changes" on, and the agent is told it's
+the person's call:
+1. The AI agents settings themselves: turning agents on, Allow changes, the token and the port
+   (`/api/mcp*`).
+2. App updates, restarting or removing Loner-Strike, and setting up, repairing or removing the game's
+   whole setup (`/api/app/update*`, `/api/app/remove-everything*`, `/api/app/restart`;
+   `/api/setup/install` with `repair` or no components; `/api/setup/uninstall` with no components).
+   Installing or removing *named add-ons* (MonsterMod and the like) is allowed, and asks first.
+3. Phone access, shared control (inviting, joining, opening ports) and sharing links
+   (`/api/app/phone*`, POST `/api/control/*`, POST `/api/share`).
+4. Showing or setting server console passwords and website-status secrets.
+5. Any route not listed in `routes.rs` (default deny).
+   `cargo test mcp_route_coverage -- --ignored` lists any route that isn't classified yet.
 
-**Compile**
-- `compile_status`, `compile_setup`*, `compile_start` (* with `install`), `compile_progress`, `compile_cancel`
-- `playtest`*
+**Asked in the app every time** ("An AI agent is asking", Allow / Don't allow; with no window the answer
+is no):
+- deleting or removing anything: servers, maps, demos, backups, projects, plugins, prefabs, graphs,
+  add-ons, sound packs, presets;
+- clearing, resetting and restoring;
+- kicking, banning and slaying;
+- stopping, restarting, updating or rebuilding a server;
+- changing the map while people play;
+- starting the game, or closing it to start it again;
+- anything public or online: GameBanana installs and community "try it", community publish and
+  register, website status and Discord, direct connect and port forwarding, opening URLs or folders,
+  SSH to other machines, sending navs to servers, restoring backups.
 
-**Nav fixer**
-- `nav_open`, `nav_problems`
-- `nav_add_area`, `nav_link`, `nav_unlink`, `nav_edit` (any edit, including a problem's fix)
-- `nav_undo`, `nav_redo`, `nav_save`*
+**Never shown:** passwords, RCON passwords, tokens, keys, webhooks, Steam ids, invite codes and QR codes.
+They're removed from every tool's answer (`routes::redact`, test `secrets_never_reach_agents`), and
+from console lines (`hide_passwords`).
 
-**Replay:** `replay_list`, `replay_summary` (kills, headshots, deaths to the world, falls with the drop, stuck spots).
+**Read-only until "Allow changes":** GETs, the read tools, and a console allowlist. With changes off, the
+console takes only:
+- `status`, `version`, `stats`;
+- `meta list`, `amxx list` / `plugins` / `modules` / `cvars`;
+- `ls_mode status`, `ls_creature list` / `status` / `types`, `listmaps`;
+- `cvarlist <prefix>`;
+- a setting's name on its own to read it (`bot_ls_*`, `ls_creature_*`, `sv_*` except `sv_password`,
+  `mp_*`, and `bot_*` settings, not bot commands).
 
-**Servers:** `servers_list`, `server_status`, `server_start`, `server_stop`*, `server_change_map`*, `server_set_bots`.
+With changes on, any single console line goes and is logged, but `quit`, `exit`, `killserver`, `kick`,
+`banid`, `addip`, `amx_kick`, `amx_ban`, `amx_slay`, `writeid`, `writeip`, `sv_password`, `map`,
+`changelevel`, `restart`, `exec` and `sv_downloadurl` ask first. Never allowed: `;` chains,
+`rcon_password` and `rcon`.
 
-Every tool except the read tools needs "Allow changes". * = may ask the person.
+## Tools (99)
+R = read (works with changes off). C = needs Allow changes. A = needs Allow changes and may ask the
+person.
+
+| Area | Tools |
+|---|---|
+| **The whole app** | `app_routes` (R: every route, what it's for, what an agent may do with it), `app_call` (GET = R; POST under the rules above; `target` aims "the game" routes at one of your servers) |
+| Maps | `maps_list`, `map_info`, `map_entities`, `map_nav_summary`, `map_nav_areas`, `map_knowledge`, `map_probe` (R) |
+| Map doctor | `map_doctor` (R), `map_doctor_write_res` (A), `map_doctor_copy_files` (C) |
+| Health check | `health_options`, `health_progress`, `health_reports`, `health_report` (R); `health_start`, `health_cancel` (C) |
+| Map editor | `editor_state`, `editor_list_entities`, `editor_checks`, `editor_textures` (R); `editor_add_box`, `editor_add_cylinder`, `editor_add_entity`, `editor_set_key`, `editor_command`, `editor_undo`, `editor_redo`, `editor_export_map` (C); `editor_new`, `editor_open`, `editor_import_map`, `editor_save` (A) |
+| Compile and playtest | `compile_status`, `compile_progress` (R); `compile_start`, `compile_cancel` (C; A with install); `compile_setup`, `playtest` (A) |
+| Nav fixer | `nav_open`, `nav_problems`, `nav_reach` (R); `nav_add_area`, `nav_link`, `nav_unlink`, `nav_edit`, `nav_undo`, `nav_redo` (C); `nav_save` (A) |
+| Replay | `replay_list`, `replay_summary`, `replay_trace` (a bot's trace in a time window; `every` gives its path) (R) |
+| Servers and play | `servers_list`, `server_status` (R); `server_start`, `server_set_bots` (C); `server_stop`, `server_change_map` (A). Everything else (making and configuring servers, rotation, HLTV, admins, the web panel's controls, launching the game) goes through `app_call` |
+| **Console and logs** | `console_send` (allowlist above), `console_log` (console / amxx / errors; `contains`, `prefixes`, `errors`; `cursor` to follow) |
+| **Bot brain** | `brain_settings`, `brain_trace_read`, `mode_status`, `creatures_list` (R); `brain_set` (typed switches: `bot_ls_trace`, `bot_ls_surf` 0/1/2, `bot_ls_fight`...), `brain_trace` (on/off plus `ls_mark` notes) (C) |
+| Recorder | `recording_status` (R), `recording_set` (C: pause or resume gm_simrec where it's loaded) |
+| Game Mode Studio | `studio_status`, `studio_nodes`, `studio_graphs`, `studio_graph_read`, `studio_validate`, `studio_code` (paged), `studio_debug_events` (cursor, kinds) (R); `studio_compile`, `studio_debug` (breakpoints, vars, resume) (C); `studio_graph_save`, `studio_graph_delete`, `studio_playtest`, `studio_uninstall` (A) |
+| Plugin Studio | `plugins_list`, `plugin_read` (paged), `plugin_log` (cursor) (R); `plugin_compile` (C); `plugin_save`, `plugin_delete`, `plugin_try`, `plugin_untry` (A) |
+| Components | `components_library`, `components_pack` (R); `components_load_pack` (C); `components_save_pack` (A) |
+| Safety net | `backups_list` (R), `backup_restore` (A); compare, undo and defaults through `app_call /api/safety/*` |
+| Radar and demos | `radar_preview` (R: returns the picture), `demos_list` (R); install, restore, details, watch and to-replay through `app_call` |
+| Docs | `docs_read` (R, paged): components, loner-inc, creatures, bot-people, mcp, gamemodes-plan, studio-nodes |
+
+Bot people, the crosshair and config builder, the community browser, prefabs, the project and history
+panels, GetMore / GameBanana, add-ons, sounds, voice, smarter chat, admins, lists, extras, scrims, the
+server browser, backups, map copy and nav learning are all reachable through `app_call`. Use
+`app_routes` with a search word to find the route.
 
 **Resources:**
-- fixed: `loner://maps`, `loner://editor/doc`, `loner://health/reports`
-- templates: `loner://map/{map}/info`, `loner://map/{map}/doctor`, `loner://map/{map}/nav`, `loner://health/{id}`
+- fixed: `loner://maps`, `loner://editor/doc`, `loner://health/reports`, and `loner://docs/<name>` for
+  each doc;
+- templates: `loner://map/{map}/info`, `loner://map/{map}/doctor`, `loner://map/{map}/nav`, `loner://health/{id}`.
 
-**Prompts:** `make_small_arena` (size, theme) and `check_map_for_bots` (map).
+**Prompts:** `make_small_arena`, `check_map_for_bots`, `debug_bots_on_map`, `make_game_mode`, `fix_map_nav`.
+
+Long answers are cut to about 48 KB. Logs, traces, debugger events and plugin logs take a `cursor`;
+docs, code and files take an `offset`.
+
+## Debugging with an agent
+This is what we do ourselves, step by step, with an agent. Example: bots keep falling on surf_ski_2 and
+get stuck on cs_rats2.
+1. **What's known.** Call `map_doctor`, `map_nav_summary`, `nav_reach` and `map_knowledge`, then
+   `health_reports` / `health_report` for earlier checks.
+2. **A health check.** `health_start {map, minutes: 5, bots: 12}` runs the bots on a hidden server. Poll
+   `health_progress`, then read `health_report`. It lists falls, stuck spots and deaths to the map by
+   place, plus console errors.
+3. **The recording.** `replay_list`, then `replay_summary {id}` for kills, falls with the drop, and stuck
+   spans. Then `replay_trace {id, bot, from, to}` around a fall shows the brain's task, goal, why and
+   speed row by row; `every: 5` gives the bot's path.
+4. **Live, on the person's game or server** (with their OK for changes):
+   - `brain_settings`, then `brain_trace {on: true, note: "before"}`.
+   - Let it play, then `brain_trace_read {bot, cursor}` to follow one bot.
+   - For surf, `brain_set bot_ls_surf 2`, then
+     `console_log {source: "console", prefixes: ["LSSURF"], cursor}` every ~10 s.
+   - Plugin errors: `console_log {source: "errors"}`. Game mode lines: `prefixes: ["[gm_"]`.
+   - `mode_status` and `creatures_list` show what the mode told the brain.
+5. **Your own mode or plugin.**
+   - Game Mode Studio: `studio_playtest {id, map, breakpoints}`, then follow
+     `studio_debug_events {mode, from}` (node inputs and results, errors, breakpoint hits). Use
+     `studio_debug {vars: true}` for live variables and `studio_debug {resume: true}`.
+   - Plugin Studio: `plugin_try`, then follow `plugin_log {name, cursor}`.
+6. **Fix and check again.** Use the nav fixer tools, components or brain settings, then run another
+   health check.
 
 ## Connect an agent
 1. In Loner-Strike, open Settings > AI agents and turn on "Let AI agents connect". Turn on "Allow changes"
@@ -159,8 +238,8 @@ Any other client: `http://127.0.0.1:<port>/mcp` (Streamable HTTP), with the head
    - Turn the setting off: it should fail to connect.
    - With the HTTP setup and a wrong token you should get 401, "Wrong or missing token…".
    - Restart Loner-Strike: the stdio setup should still connect, with no change to the config.
-2. **List tools.** In Claude Code, run `/mcp` and pick loner-strike. You should see 55 tools, 3 resources
-   and 2 prompts.
+2. **List tools.** In Claude Code, run `/mcp` and pick loner-strike. You should see 99 tools, 10 resources
+   and 5 prompts.
 3. **Read a map.** Ask: "Use loner-strike to tell me about de_dust2: its spawns, nav and whether bots know
    it". The agent should call `map_info`, `map_nav_summary` and `map_knowledge`. Settings > AI agents >
    "What agents did" lists the calls.

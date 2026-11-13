@@ -20,6 +20,7 @@ type Agents = {
   port_pref: number;
   port_note: string | null;
   setups: Setup[];
+  userOnly?: string[];
   log: Row[];
 };
 type Setup = { client: string; label: string; kind: "stdio" | "http"; where: string; text: string };
@@ -160,6 +161,14 @@ export function AgentSettings() {
                 {a.port_note && <p className="muted">{a.port_note}</p>}
               </div>
             )}
+            <div className="setting-line stack-tight">
+              <b>What agents can't do</b>
+              <p className="muted">Agents can do what you can in the app, through the same pages' rules. You're asked here first before anything that deletes, removes, kicks or bans, stops a server people are on, closes your game, or goes public or online. These stay yours alone:</p>
+              <ul className="muted" style={{ margin: 0, paddingLeft: 18 }}>
+                {(a.userOnly ?? []).map((t) => <li key={t}>{t}</li>)}
+              </ul>
+              <p className="muted">Passwords, tokens and keys are never shown to agents.</p>
+            </div>
             <div className="setting-line stack-tight">
               <div className="row between">
                 <div>

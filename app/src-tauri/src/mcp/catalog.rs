@@ -32,25 +32,25 @@ pub struct Spec {
 
 // ---- schemas -------------------------------------------------------------------------
 
-fn obj(props: Value, required: &[&str]) -> Value {
+pub(super) fn obj(props: Value, required: &[&str]) -> Value {
     json!({"type": "object", "properties": props, "required": required, "additionalProperties": false})
 }
-fn none() -> Value {
+pub(super) fn none() -> Value {
     obj(json!({}), &[])
 }
-fn map_prop() -> Value {
+pub(super) fn map_prop() -> Value {
     json!({"type": "string", "description": "Map name without .bsp, e.g. de_dust2"})
 }
-fn map_only() -> Value {
+pub(super) fn map_only() -> Value {
     obj(json!({"map": map_prop()}), &["map"])
 }
-fn vec3(what: &str) -> Value {
+pub(super) fn vec3(what: &str) -> Value {
     json!({"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3, "description": what})
 }
 fn range2(what: &str) -> Value {
     json!({"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2, "description": what})
 }
-fn server_prop() -> Value {
+pub(super) fn server_prop() -> Value {
     json!({"type": "string", "description": "A server id from servers_list, or \"game\" for the game the player hosts from Play"})
 }
 
@@ -68,7 +68,7 @@ const EDITOR_OPS: &[&str] = &[
 
 pub fn specs() -> Vec<Spec> {
     use Kind::*;
-    vec![
+    let core: Vec<Spec> = vec![
         // maps
         Spec { name: "maps_list", title: "List maps", kind: Read, schema: none,
             description: "The game's maps with what the tools know about each: file size, nav (bot navigation) and its version/places, bot map knowledge (.lsv), missing WADs, recordings." },
@@ -204,7 +204,11 @@ pub fn specs() -> Vec<Spec> {
         Spec { name: "server_set_bots", title: "Set the bot count", kind: Change,
             schema: || obj(json!({"server": server_prop(), "count": {"type": "integer", "minimum": 0, "maximum": 31}}), &["server", "count"]),
             description: "Sets how many bots a running server (or the hosted game) has." },
-    ]
+    ];
+    core.into_iter()
+    .chain(super::more::specs())
+    .chain(super::debug::specs())
+    .collect()
 }
 
 pub fn has_tool(name: &str) -> bool {
@@ -247,9 +251,9 @@ pub enum Fail {
     Error(String),
 }
 
-type Done = Result<Value, Fail>;
+pub(super) type Done = Result<Value, Fail>;
 
-fn err(m: impl Into<String>) -> Fail {
+pub(super) fn err(m: impl Into<String>) -> Fail {
     Fail::Error(m.into())
 }
 
@@ -273,6 +277,15 @@ pub async fn call(ctx: &Ctx, method: Method, path: &str, target: Option<&str>, b
     let res = ctx.app.clone().oneshot(req).await.map_err(|_| err("The app didn't answer."))?;
     let status = res.status();
     let bytes = axum::body::to_bytes(res.into_body(), 512 << 20).await.map_err(|_| err("The app's answer was too big."))?;
+    // a picture (radar previews, textures, map pictures): handed on as an image
+    if status.is_success() && (bytes.starts_with(b"\x89PNG") || bytes.starts_with(b"\xff\xd8")) {
+        if bytes.len() > 4 << 20 {
+            return Err(err("That picture is too big to pass on."));
+        }
+        use base64::Engine;
+        let mime = if bytes.starts_with(b"\x89PNG") { "image/png" } else { "image/jpeg" };
+        return Ok(json!({"__image": base64::engine::general_purpose::STANDARD.encode(&bytes), "mime": mime}));
+    }
     let v = if bytes.starts_with(b"LSMB") { lsmb_header(&bytes) } else { serde_json::from_slice::<Value>(&bytes).ok() };
     match v {
         Some(v) => match v.get("error").and_then(Value::as_str) {
@@ -284,10 +297,10 @@ pub async fn call(ctx: &Ctx, method: Method, path: &str, target: Option<&str>, b
     }
 }
 
-async fn get(ctx: &Ctx, path: &str) -> Done {
+pub(super) async fn get(ctx: &Ctx, path: &str) -> Done {
     call(ctx, Method::GET, path, None, None).await
 }
-async fn post(ctx: &Ctx, path: &str, body: Value) -> Done {
+pub(super) async fn post(ctx: &Ctx, path: &str, body: Value) -> Done {
     call(ctx, Method::POST, path, None, Some(body)).await
 }
 
@@ -305,7 +318,7 @@ pub fn lsmb_header(b: &[u8]) -> Option<Value> {
 }
 
 /// The person at the computer says yes, or the tool stops.
-async fn ask(ctx: &Ctx, text: String) -> Result<(), Fail> {
+pub(super) async fn ask(ctx: &Ctx, text: String) -> Result<(), Fail> {
     let confirm = ctx.confirm.clone();
     let yes = tokio::task::spawn_blocking(move || confirm(text)).await.unwrap_or(false);
     if yes {
@@ -317,11 +330,11 @@ async fn ask(ctx: &Ctx, text: String) -> Result<(), Fail> {
 
 // ---- arguments ------------------------------------------------------------------------
 
-fn s<'a>(a: &'a Value, k: &str) -> Option<&'a str> {
+pub(super) fn s<'a>(a: &'a Value, k: &str) -> Option<&'a str> {
     a.get(k).and_then(Value::as_str)
 }
 
-fn map_arg(a: &Value) -> Result<String, Fail> {
+pub(super) fn map_arg(a: &Value) -> Result<String, Fail> {
     let m = s(a, "map").ok_or_else(|| err("Say which map (map: \"de_dust2\")."))?;
     let m = m.strip_suffix(".bsp").unwrap_or(m);
     if !crate::maps::safe_arg(m) {
@@ -331,7 +344,7 @@ fn map_arg(a: &Value) -> Result<String, Fail> {
 }
 
 /// An id going into a route's path: letters, digits, - and _ only.
-fn id_arg(a: &Value, k: &str) -> Result<String, Fail> {
+pub(super) fn id_arg(a: &Value, k: &str) -> Result<String, Fail> {
     let v = s(a, k).ok_or_else(|| err(format!("Missing {k}.")))?;
     if v.is_empty() || v.len() > 64 || !v.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_') {
         return Err(err(format!("That isn't a {k}.")));
@@ -339,11 +352,11 @@ fn id_arg(a: &Value, k: &str) -> Result<String, Fail> {
     Ok(v.to_string())
 }
 
-fn limit(a: &Value, default: usize, max: usize) -> usize {
+pub(super) fn limit(a: &Value, default: usize, max: usize) -> usize {
     a.get("limit").and_then(Value::as_u64).map(|n| (n as usize).clamp(1, max)).unwrap_or(default)
 }
 
-fn vec3_arg(a: &Value, k: &str) -> Result<Value, Fail> {
+pub(super) fn vec3_arg(a: &Value, k: &str) -> Result<Value, Fail> {
     match a.get(k).and_then(Value::as_array) {
         Some(v) if v.len() == 3 && v.iter().all(|x| x.as_f64().is_some_and(f64::is_finite)) => Ok(Value::Array(v.clone())),
         _ => Err(err(format!("{k} must be [x, y, z]."))),
@@ -351,7 +364,7 @@ fn vec3_arg(a: &Value, k: &str) -> Result<Value, Fail> {
 }
 
 /// Copies the listed fields that are there.
-fn pick(a: &Value, keys: &[&str]) -> Map<String, Value> {
+pub(super) fn pick(a: &Value, keys: &[&str]) -> Map<String, Value> {
     keys.iter().filter_map(|k| a.get(*k).map(|v| (k.to_string(), v.clone()))).collect()
 }
 
@@ -408,14 +421,25 @@ pub async fn call_tool(ctx: &Ctx, name: &str, args: Value) -> Value {
     } else {
         run(ctx, name, &args).await
     };
+    let mut image = None;
     let (outcome, text, is_error) = match r {
-        Ok(v) => (Outcome::Done, trimmed(v).to_string(), false),
+        Ok(mut v) => {
+            if let Some(data) = v.get("__image").and_then(Value::as_str) {
+                image = Some(json!({"type": "image", "data": data, "mimeType": v["mime"]}));
+                v = json!({"image": v["mime"]});
+            }
+            // (never a password, token or key, whichever tool it came from)
+            super::routes::redact(&mut v);
+            (Outcome::Done, trimmed(v).to_string(), false)
+        }
         Err(Fail::Refused(m)) => (Outcome::Refused, m, true),
         Err(Fail::Error(m)) => (Outcome::Failed, m, true),
     };
     let note = if is_error { text.chars().take(160).collect() } else { String::new() };
     ctx.log.add(name, &detail, outcome, &note);
-    json!({"content": [{"type": "text", "text": text}], "isError": is_error})
+    let mut content = vec![json!({"type": "text", "text": text})];
+    content.extend(image);
+    json!({"content": content, "isError": is_error})
 }
 
 async fn run(ctx: &Ctx, name: &str, a: &Value) -> Done {
@@ -716,11 +740,17 @@ async fn run(ctx: &Ctx, name: &str, a: &Value) -> Done {
             let n = a.get("count").and_then(Value::as_u64).filter(|n| *n <= 31).ok_or_else(|| err("count must be 0 to 31."))?;
             call(ctx, Method::POST, "/api/cmd", t.as_deref(), Some(json!({"cmd": "gm_bots", "args": ["count", n.to_string()]}))).await
         }
-        _ => Err(err(format!("Unknown tool: {name}"))),
+        _ => match super::more::run(ctx, name, a).await {
+            Some(r) => r,
+            None => match super::debug::run(ctx, name, a).await {
+                Some(r) => r,
+                None => Err(err(format!("Unknown tool: {name}"))),
+            },
+        },
     }
 }
 
-fn plural(n: usize) -> String {
+pub(super) fn plural(n: usize) -> String {
     if n == 1 {
         "1 person is".into()
     } else {
@@ -877,7 +907,7 @@ fn state_view(v: &Value) -> Value {
 
 /// People (not bots) on a game right now; None when that can't be told (the game didn't
 /// answer, or answered without a player list), which callers treat as "maybe someone".
-async fn people_on(ctx: &Ctx, target: Option<&str>) -> Option<usize> {
+pub(super) async fn people_on(ctx: &Ctx, target: Option<&str>) -> Option<usize> {
     match call(ctx, Method::GET, "/api/state", target, None).await {
         Ok(v) if v["online"] == true => v["players"].as_array().map(|l| l.iter().filter(|p| p["bot"].as_i64() != Some(1)).count()),
         _ => None,
@@ -885,7 +915,7 @@ async fn people_on(ctx: &Ctx, target: Option<&str>) -> Option<usize> {
 }
 
 /// A server id that is one of the player's own on this computer.
-async fn own_server(ctx: &Ctx, a: &Value) -> Result<String, Fail> {
+pub(super) async fn own_server(ctx: &Ctx, a: &Value) -> Result<String, Fail> {
     let id = id_arg(a, "server")?;
     let v = get(ctx, "/api/servers").await?;
     let ok = v["servers"].as_array().into_iter().flatten().any(|e| e["id"] == id.as_str() && e["host"].is_null() && e["shared"] != true);
@@ -897,7 +927,7 @@ async fn own_server(ctx: &Ctx, a: &Value) -> Result<String, Fail> {
 }
 
 /// "game" (the hosted game: no target) or one of the player's own servers.
-async fn target_arg(ctx: &Ctx, a: &Value) -> Result<Option<String>, Fail> {
+pub(super) async fn target_arg(ctx: &Ctx, a: &Value) -> Result<Option<String>, Fail> {
     match s(a, "server") {
         Some("game") | Some("local") => Ok(None),
         _ => own_server(ctx, a).await.map(Some),
@@ -912,11 +942,15 @@ pub enum ResourceError {
 }
 
 pub fn resource_list() -> Vec<Value> {
+    let docs = super::debug::DOCS.iter().map(|(n, what, _)| json!({"uri": format!("loner://docs/{n}"), "name": format!("doc-{n}"), "title": what, "mimeType": if *n == "studio-nodes" { "application/json" } else { "text/markdown" }}));
     vec![
         json!({"uri": "loner://maps", "name": "maps", "title": "Maps", "description": "The game's maps with nav, knowledge and missing files.", "mimeType": "application/json"}),
         json!({"uri": "loner://editor/doc", "name": "editor-doc", "title": "Map editor: open map", "description": "The map open in the map editor.", "mimeType": "application/json"}),
         json!({"uri": "loner://health/reports", "name": "health-reports", "title": "Health check reports", "description": "Earlier map health checks.", "mimeType": "application/json"}),
     ]
+    .into_iter()
+    .chain(docs)
+    .collect()
 }
 
 pub fn resource_templates() -> Vec<Value> {
@@ -931,6 +965,15 @@ pub fn resource_templates() -> Vec<Value> {
 /// Reads a resource as text (read-only, logged like a tool).
 pub async fn read_resource(ctx: &Ctx, uri: &str) -> Result<String, ResourceError> {
     let parts: Vec<&str> = uri.strip_prefix("loner://").ok_or(ResourceError::Unknown)?.split('/').collect();
+    if let ["docs", name] = parts.as_slice() {
+        let v = super::debug::doc_page(name, 0).ok_or(ResourceError::Unknown)?;
+        ctx.log.add("read", uri, Outcome::Done, "");
+        let mut text = v["text"].as_str().unwrap_or("").to_string();
+        if let Some(next) = v["next"].as_u64() {
+            text.push_str(&format!("\n\n[... continues: docs_read with doc \"{name}\" and offset {next}]"));
+        }
+        return Ok(text);
+    }
     let (tool, args) = match parts.as_slice() {
         ["maps"] => ("maps_list", json!({})),
         ["editor", "doc"] => ("editor_state", json!({})),
@@ -961,6 +1004,15 @@ pub fn prompt_list() -> Vec<Value> {
                "description": "Builds a small enclosed arena in the map editor with spawns for both teams, checks it and exports a .map.",
                "arguments": [{"name": "size", "description": "Floor size in units (default 1024)", "required": false},
                              {"name": "theme", "description": "A look to aim for, e.g. desert, office", "required": false}]}),
+        json!({"name": "debug_bots_on_map", "title": "Debug my bots on this map",
+               "description": "Finds out why bots misbehave on a map: health check, recordings, the brain's trace and the console, then explains and suggests fixes.",
+               "arguments": [{"name": "map", "description": "Map name", "required": true}, {"name": "problem", "description": "What you see, e.g. they fall off the beams", "required": false}]}),
+        json!({"name": "make_game_mode", "title": "Make a game mode",
+               "description": "Builds a game mode in the Game Mode Studio from a description, checks it, compiles it and offers a playtest with the debugger.",
+               "arguments": [{"name": "idea", "description": "What the mode is", "required": true}]}),
+        json!({"name": "fix_map_nav", "title": "Fix this map's nav",
+               "description": "Uses the nav fixer to find and fix where bots can't get, then saves (asking you) and rebuilds bot knowledge.",
+               "arguments": [{"name": "map", "description": "Map name", "required": true}]}),
         json!({"name": "check_map_for_bots", "title": "Check this map for bots",
                "description": "Looks at a map's nav, knowledge and files, lists what stops bots playing it well, and suggests fixes.",
                "arguments": [{"name": "map", "description": "Map name, e.g. de_dust2", "required": true}]}),
@@ -980,6 +1032,41 @@ pub fn get_prompt(name: &str, args: &Map<String, Value>) -> Option<Value> {
                  3. Put the spawns at opposite ends with editor_command transform or editor_add_entity (info_player_start for CT, info_player_deathmatch for T), at least 64 units apart and 1 unit above the floor.\n\
                  4. Run editor_checks and fix every problem it lists.\n\
                  5. Tell me what you made, then editor_export_map so I can pick where to save the .map."
+            ))
+        }
+        "debug_bots_on_map" => {
+            let map = arg("map").filter(|m| crate::maps::safe_arg(m))?;
+            let problem = arg("problem").map(|p| format!(" What I see: {p}.")).unwrap_or_default();
+            ("Debug bots on a map", format!(
+                "Find out why bots play {map} badly and what to do about it.{problem}\n\
+                 1. Read docs_read mcp (the debugging walkthrough) if you haven't.\n\
+                 2. Look at what's known: map_doctor, map_nav_summary, nav_reach, map_knowledge for {map}; health_reports for an earlier check.\n\
+                 3. If there's no recent report, health_start {map} (a few minutes, a hidden server; poll health_progress), then health_report.\n\
+                 4. For a spot in the report, replay_list then replay_summary and replay_trace (bot, from/to around the time) to see what the brain was doing (task, why, goal).\n\
+                 5. If the game or a server is running {map}: console_log with errors, brain_settings, and (with my OK) brain_trace on, ls_mark notes, brain_trace_read; bot_ls_surf 2 + console_log prefixes LSSURF for surf maps.\n\
+                 6. Tell me, worst first, what goes wrong and why, and the fix for each (nav edits, components, settings). Ask before changing anything."
+            ))
+        }
+        "make_game_mode" => {
+            let idea = arg("idea")?;
+            let idea: String = idea.chars().take(500).collect();
+            ("Make a game mode", format!(
+                "Make a Counter-Strike game mode with the Game Mode Studio: {idea}\n\
+                 1. Read docs_read studio-nodes (what graphs are built from) and look at studio_graphs for examples (studio_graph_read).\n\
+                 2. Build the graph JSON, then studio_validate and fix every problem.\n\
+                 3. Save it with studio_graph_save, check studio_code to see the plugin it makes.\n\
+                 4. studio_compile, then offer a studio_playtest (it starts the game, so I'll be asked) and use studio_debug_events / studio_debug to check it works.\n\
+                 Components (docs_read components) can add capture points, doors and the like to maps."
+            ))
+        }
+        "fix_map_nav" => {
+            let map = arg("map").filter(|m| crate::maps::safe_arg(m))?;
+            ("Fix a map's nav", format!(
+                "Fix the bots' nav for {map} with the nav fixer.\n\
+                 1. nav_open and nav_problems {map}; nav_reach for unreachable areas, traps and fall-in areas.\n\
+                 2. For each problem: use its one-click fix with nav_edit if it has one, else nav_add_area / nav_link (oneWay for drops) with map_probe for floor heights.\n\
+                 3. Check nav_problems again until only real ones are left; explain any you leave.\n\
+                 4. nav_save (I'll be asked), then app_call POST /api/tools/navfix/{map}/rebuild to rebuild the bots' knowledge."
             ))
         }
         "check_map_for_bots" => {

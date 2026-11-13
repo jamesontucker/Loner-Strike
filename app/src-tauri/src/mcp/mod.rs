@@ -14,6 +14,9 @@
 
 pub mod catalog;
 pub mod conn;
+pub mod debug;
+pub mod more;
+pub mod routes;
 pub mod rpc;
 pub mod stdio;
 
@@ -45,6 +48,8 @@ pub struct Ctx {
     pub changes: bool,
     pub confirm: Confirm,
     pub log: Arc<Log>,
+    /// The app's state, for what has no route (the game's own console); None in tests.
+    pub st: Option<Shared>,
 }
 
 // ---- the activity log -----------------------------------------------------------------
@@ -324,6 +329,7 @@ async fn endpoint(State(ep): State<Arc<Endpoint>>, h: HeaderMap, body: Bytes) ->
         changes: m.changes.load(Ordering::Relaxed),
         confirm: Arc::new(move |text| ask_person(&st, text)),
         log: m.log.clone(),
+        st: Some(ep.st.clone()),
     };
     reply_response(rpc::handle(&ctx, &m.sessions, &h, &body).await)
 }
@@ -368,6 +374,7 @@ fn view() -> Value {
         "port_pref": *lock(&m.port_pref),
         "port_note": lock(&m.port_note).clone(),
         "setups": conn::snippets(&exe, url.as_deref(), &token),
+        "userOnly": routes::USER_ONLY_LIST,
         "log": m.log.rows(),
     })
 }

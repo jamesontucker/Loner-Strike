@@ -1847,3 +1847,48 @@ show them hunting the creatures as mode enemies. Barricades fitted (dust2: 221 a
 - Commits: 4841af5, da0bca8 (hardening), 5a4f2a2, plus the start-screen button. Tests run on a clean export of HEAD
   (the worktree's `cargo test` is red right now on someone's `mcp/catalog.rs`): editor::rmf 7 + 1 opt-in,
   editor::bulk 12, workspace 3. Note: port 8157 is used by another agent's serve_editor_for_ui; I moved to 8193/5293.
+
+### Agent S: AI agents coverage pass — the whole app, debugging and tracing — 2026-11-12
+- **The whole app.** `mcp/routes.rs` lists every route on the app window's listener (339) with a policy.
+  - Reading: GET.
+  - Change: POST, needs Allow changes.
+  - Asks the person first: deleting, removing, clearing, restoring, kicking, banning, stopping/restarting/updating
+    servers, starting or closing the game, and anything public or online.
+  - The person's alone: AI agents settings, updates/uninstall/setup repair, phone, shared control, sharing links,
+    console passwords and secrets.
+  - Unlisted routes are refused (default deny).
+  - `app_routes` lists them with what they're for; `app_call` calls them exactly as the page does (same handlers,
+    `target` aims "the game" routes at one of the person's servers).
+  - Every tool answer goes through `routes::redact`: passwords, tokens, keys, webhooks, Steam ids and invite/QR codes.
+- **New typed tools (55 → 99):**
+  - Debugging: `console_send` (read-only allowlist; changes logged; risky lines ask), `console_log` (console /
+    amxx / errors with words, prefixes, errors-only and a cursor).
+  - The brain: `brain_settings`, `brain_set` (typed `bot_ls_*` / `ls_creature_*` switches with what each does,
+    from the fork's cvars), `brain_trace` (on/off + `ls_mark`), `brain_trace_read` (lstrace.csv as named columns,
+    bot/time filters, cursor), `mode_status`, `creatures_list`.
+  - Recordings: `recording_status`, `recording_set` (gm_simrec pause/unpause where loaded), `replay_trace` (a bot's
+    trace in a window, `every` for paths).
+  - Nav: `nav_reach` (P3's reach check as id lists).
+  - Game Mode Studio (13 tools, incl. debugger events/breakpoints/vars/resume and the node catalog) and Plugin
+    Studio (8, incl. try/untry and the live log).
+  - Components (4), the safety net (`backups_list`, `backup_restore`, over P7's `/api/safety/*`),
+    `radar_preview` (returns the picture as MCP image content), `demos_list`, `docs_read` (paged).
+- Resources `loner://docs/{components,loner-inc,creatures,bot-people,mcp,gamemodes-plan,studio-nodes}` (compiled in).
+  Prompts `debug_bots_on_map`, `make_game_mode`, `fix_map_nav`.
+- Settings > AI agents now shows "What agents can't do" (the server's own list).
+- Tests: route policies (user-only, asks, changes, reads, literal-over-pattern), secret redaction, the console
+  allowlist, `app_call` rules end to end, console tools read-only, log tails (cursor, paging, reset, prefixes),
+  trace columns and windows, docs paging.
+  - `cargo test mcp_route_coverage -- --ignored` fails when a route isn't classified in routes.rs. Run it after adding
+    routes, or agents can't reach them.
+- Tried live against the real game: `app_routes`, `app_call GET /api/servers`, `/api/mcp` refused, `console_log` on
+  qconsole.log and the AMXX error log, `console_send` refusing `bot_kick` read-only, `nav_reach` on cs_rats2,
+  `docs_read`.
+- **Notes:**
+  - `npm run build` is currently red only from uncommitted Game Mode Studio edits (graphOps.ts, Inspector.tsx: the
+    pin type map). My files type-check.
+  - Disk was full (3 GB left). I deleted my own `target-s` build folder (6.9 GB) and now build in the shared target.
+- **Requests:**
+  - (P7, safety.rs) `safety::save`/`remove` aren't used yet (warnings).
+  - (owners of new routes) Add each to `mcp/routes.rs` ROUTES: one line per route; the policy follows from
+    method/path, so only special cases need code.
