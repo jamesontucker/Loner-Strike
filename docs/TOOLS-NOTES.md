@@ -761,3 +761,16 @@ narrow right column, "The picture's own" wraps onto three lines, checkbox labels
 - Leaving a tool page doesn't show "The 3D view stopped".
 - "Open in Tools" from a map sheet: Back should go to Maps, not a dead sheet.
 - Ladders: confirm in game, with developer 1 for the "Unconnected ladder" messages, that cs_rats2's 8 and de_nuke's 2 are topless there too.
+
+## Queued (user approved, 2026-11-12): Plugin Studio and an MCP connector
+- **Plugin Studio (Tools > Make):** easy AMX Mod X scripting. Monaco editor with Pawn highlighting; autocomplete and
+  hover docs generated from the server's AMXX .inc files; one-click compile with the bundled amxxpc, errors inline in
+  plain words; one-click "try it" (compile, load on the local server, reload, live log panel); templates/snippets
+  (new mode, command, on player killed, give item, HUD message, menu); a Loner-Strike include (loner.inc) wrapping
+  the component library, bot orders, safely shared HUD channels and mode registration; "open as code" from the Game
+  Mode Studio. No Lua.
+- **MCP connector:** the app exposes its Tools as MCP tools for coding agents (maps: list/read/query, doctor, health
+  check; editor: create map, brushes/entities/components, checks, export, compile, playtest; nav fixer ops; game
+  modes: graphs, generate/compile plugins, start a local server in a mode with bots, read logs; server control).
+  Off by default (Settings switch), local connections only, per-session token, read-only unless edits are allowed,
+  destructive actions confirmed in the app. Built on the existing local HTTP API (server.rs).
