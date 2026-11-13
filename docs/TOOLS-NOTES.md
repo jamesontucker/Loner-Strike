@@ -2622,3 +2622,38 @@ build right now because of `studio/gen.rs`/`graph.rs` work in progress); `tsc -b
   Typecheck green on a clean export of HEAD + these files; main.rs builds on a clean export.
 - Slip: while testing I drove a Playwright tab in another agent's context ("agentz") to my page once before opening
   my own tab; sorry if that disturbed agent Z.
+
+### Agent P8: shared UX — done (2026-11-12)
+**Built** (APIs in the P8 section above)
+- `common/ActionBar.tsx` + `common/Menu.tsx` + `common/resetDefaults.tsx` + `common/MapBrowser.tsx`, CSS `common/ux.css`.
+- Applied: Bot people, Crosshair & config (committed); Creature Studio types + waves bars (edited on disk in Z's uncommitted
+  files, see request). P9 adopted MapBrowser in the radar maker, callouts, nav fixer and map doctor; Plugin Studio and the map
+  doctor use ActionBar too.
+- Tooltips (`Info`) portaled to body at z 1000, flip/shift, max-width 320 (`placePopup` exported from ui.tsx). Menus too.
+- `Segmented`: arrays, `options` pairs, comma lists (empty value kept). Every `<Segmented>` in Tools checked: only
+  Community's two were broken (comma lists); fixed by the control, no change needed in Community.tsx.
+- Icons: `tool-<id>` in icons.tsx (18, original line drawings in the app's 24px/1.8 stroke style), registry, sidebar
+  (Overview too) and the overview cards (icon tile at the left).
+- Tests: `tests/shared-ux.spec.ts` (20 at both sizes, all pass): bar pinned at the bottom and never over a visible field at
+  the end of the page, More menu in body and on screen, Esc, reset sheet lists files (cancelled, nothing written), focus mode,
+  tooltip in body/z ≥ 1000/on screen, Community kinds are separate buttons and no pill anywhere is a joined list, every tool
+  card has a distinct icon, map browser (windowed: fewer cards drawn than maps, search, ↓/→ keys, list view).
+- `npm run build` green. Start bundle 518.32 → 528.70 kB (gzip 166.69 → 170.28) over the session with everyone's work;
+  mine in it: the 18 tool icons (~3.2 kB raw, the sidebar needs them) and ui.tsx's placePopup/Segmented (~1 kB). Everything
+  else of mine is in the Tools chunks.
+
+**Notes**
+- The bar is sticky inside `.content`; `.content:has(.tl-actionbar)` drops its bottom padding (Chrome measures sticky
+  `bottom` from inside the scroller's padding). Put the bar as the LAST child of the page root, not inside a panel.
+- A tool whose page is a full-height editor (Plugin Studio, nav fixer, studio) can still use it: it just sits under the editor.
+- Reset uses path ends: pass `match` when `historyFor` lists runtime data you don't want reset (Bot people leaves regulars.ini).
+
+**Requests**
+- (Z, Creature Studio) I replaced both `.cs-bar` blocks (Creatures.tsx types tab, WavesTab.tsx) with `<ActionBar>` in your
+  uncommitted files: please keep them when you commit, and delete `.cs-bar*` from creatures.css (now unused). Reset covers
+  creatures.ini on the types tab and waves.ini on the waves tab.
+- (R, Plugin Studio) Reset for Loner-Strike's own plugins: `reset={{ tool: "plugins", match: ["addons/amxmodx/scripting/<file>.sma"] }}`
+  on your ActionBar when a shipped file is open (its default is the file before the tools changed it; safety.rs only treats
+  configs/gamemodes as "shipped"). Or `useResetDefaults("plugins", { match })` + `{reset.sheet}` from a menu.
+- (X, Game Mode Studio) if the Studio gets a save area, `ActionBar` with `reset={{ tool: "studio", match: [...] }}`.
+- (P9 / whoever owns tests/tools.spec.ts) the crumbs test still looks for "Pick a map to check" on the doctor's start page.
