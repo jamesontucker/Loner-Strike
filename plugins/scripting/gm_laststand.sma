@@ -872,7 +872,7 @@ stock Float:diff_mult(bool:hp)
 
 stock Float:hp_mult()
 {
-	return (1.0 + 0.08 * float(g_wave - 1)) * (0.8 + 0.1 * float(defenders())) * diff_mult(true);
+	return (1.0 + 0.06 * float(g_wave - 1)) * (0.8 + 0.1 * float(defenders())) * diff_mult(true);
 }
 
 stock start_wave(n)
@@ -892,7 +892,7 @@ stock start_wave(n)
 			send_revive(d);
 
 	/* how many: grows each wave, with the team's size and the difficulty */
-	new total = floatround((6.0 + 3.0 * float(n - 1)) * (0.5 + 0.2 * float(defenders())) * diff_mult(false) * g_wCount);
+	new total = floatround((7.0 + 2.0 * float(n - 1)) * (0.5 + 0.2 * float(defenders())) * diff_mult(false) * g_wCount);
 	/* a boss wave: fewer grunts with the boss (it's the wave's threat) */
 	if (!g_bossDone)
 		total = floatround(float(total) * 0.6);
@@ -980,7 +980,7 @@ public ls_on_wave_spawn(ent, wave, const Float:origin[3], const types[])
 				base = float(TYPE_HP[i]);
 	/* the boss: the wave's growth and difficulty, but only a little of the team-size factor
 	   (x1.4 for 6 defenders made it a wall at wave 5) */
-	new Float:mult = boss ? (1.0 + 0.08 * float(g_wave - 1)) * (0.8 + 0.04 * float(defenders())) * diff_mult(true) : hp_mult();
+	new Float:mult = boss ? (1.0 + 0.06 * float(g_wave - 1)) * (0.8 + 0.04 * float(defenders())) * diff_mult(true) : hp_mult();
 	new Float:hp = floatmax(base * mult * g_wHp, 1.0);
 	entity_set_float(cr, EV_FL_health, hp);
 	entity_set_float(cr, EV_FL_max_health, hp);
