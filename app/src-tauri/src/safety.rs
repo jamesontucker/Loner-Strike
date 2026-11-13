@@ -178,7 +178,9 @@ pub fn valid_key(k: &str) -> bool {
 
 impl Store {
     pub fn new(root: PathBuf) -> Store {
-        Store { root, roots: RwLock::new(Vec::new()), lock: Mutex::new(0), keep: KEEP, cap: CAP }
+        // numbers start from now, so "kept since this request began" never reaches back into
+        // an earlier run's versions
+        Store { root, roots: RwLock::new(Vec::new()), lock: Mutex::new((now() * 1_000_000.0) as u64), keep: KEEP, cap: CAP }
     }
 
     #[cfg(test)]
@@ -191,7 +193,8 @@ impl Store {
         &self.root
     }
 
-    /// A folder whose files may be kept and written (a game folder).
+    /// A folder whose files may be kept and written (a game folder). Paths are shown from the
+    /// outermost registered folder that holds them (Half-Life, so "cstrike/maps/x.nav").
     pub fn allow_root(&self, p: &Path) {
         if let Ok(c) = crate::sys::canonical(p) {
             let mut r = self.roots.write().unwrap();
@@ -217,7 +220,7 @@ impl Store {
                 return Err(bad());
             }
         }
-        let registered = self.roots.read().unwrap().iter().filter(|r| full.starts_with(r) && full != **r).max_by_key(|r| r.as_os_str().len()).cloned();
+        let registered = self.roots.read().unwrap().iter().filter(|r| full.starts_with(r) && full != **r).min_by_key(|r| r.as_os_str().len()).cloned();
         let root = registered.or_else(|| full.ancestors().skip(1).find(|a| is_hl_root(a)).map(Path::to_path_buf)).ok_or_else(bad)?;
         Ok((full, root))
     }
@@ -348,7 +351,7 @@ impl Store {
         let ix = self.read_index(key).ok_or(GONE)?;
         let v = ix.versions.iter().find(|v| v.seq == seq).ok_or(GONE)?.clone();
         let bytes = self.bytes_of(key, &v)?;
-        self.put(&mut last, &ix, bytes.as_deref(), tool, "Before putting back an earlier version")
+        self.put(&mut last, &ix, bytes.as_deref(), tool, "Put back an earlier version")
     }
 
     /// Writes given content to a kept file (Loner-Strike's default), keeping it first.
@@ -366,7 +369,7 @@ impl Store {
         for (key, ix) in self.all() {
             let Some(v) = ix.versions.iter().filter(|v| v.seq > from && v.seq <= to).min_by_key(|v| v.seq).cloned() else { continue };
             let bytes = self.bytes_of(&key, &v)?;
-            self.put(&mut last, &ix, bytes.as_deref(), "undo", "Before undoing a save")?;
+            self.put(&mut last, &ix, bytes.as_deref(), "Undo", "Undid a save")?;
             done.push(ix.rel.clone());
         }
         if done.is_empty() {
@@ -812,7 +815,7 @@ async fn api_restore(State(st): State<Shared>, h: HeaderMap, Json(r): Json<Resto
     let s = ready(&st);
     blocking(move || {
         let ix = s.index(&r.id).ok_or(GONE)?;
-        let seq = s.restore(&r.id, r.seq, "restore")?;
+        let seq = s.restore(&r.id, r.seq, "History")?;
         let name = Path::new(&ix.path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         Ok(json!({"ok": true, "undo": seq, "message": format!("{name} is back the way it was. Its version from just now is kept too, if you change your mind.")}))
     })
@@ -840,7 +843,7 @@ async fn api_defaults(State(st): State<Shared>, h: HeaderMap, Json(r): Json<Defa
         for id in r.ids.iter().take(2000) {
             let out = if let Some(ix) = s.index(id) {
                 match default_of(&s, res.as_deref(), id, &ix) {
-                    Some((_, want)) if differs(Path::new(&ix.path), &want) => s.put_key(id, want.as_deref(), "defaults", "Before restoring Loner-Strike's default").map(|_| ix.rel.clone()),
+                    Some((_, want)) if differs(Path::new(&ix.path), &want) => s.put_key(id, want.as_deref(), "Defaults", "Restored Loner-Strike's default").map(|_| ix.rel.clone()),
                     Some(_) => continue,
                     None => Err(format!("{} has no default to go back to.", ix.rel)),
                 }
@@ -849,7 +852,7 @@ async fn api_defaults(State(st): State<Shared>, h: HeaderMap, Json(r): Json<Defa
                 let (Some(g), Some(res)) = (&game, &res) else { failed.push("Set up the game first.".to_string()); continue };
                 match crate::setup::record::inside(&g.dir, &format!("{GM}{rel}")) {
                     Some(p) => match shipped(res, &p) {
-                        Some(b) => s.save("defaults", "Before restoring Loner-Strike's default", &p, &b).map(|_| rel.to_string()),
+                        Some(b) => s.save("Defaults", "Restored Loner-Strike's default", &p, &b).map(|_| rel.to_string()),
                         None => Err(format!("Loner-Strike doesn't ship {rel}.")),
                     },
                     None => Err("That isn't a settings file.".into()),
@@ -1004,6 +1007,8 @@ mod tests {
     fn save_and_restore_round_trip() {
         let f = fx("round", KEEP, CAP);
         let p = f.hl.join("cstrike/userconfig.cfg");
+        // a fresh store's numbers start from now (an Undo range never reaches an earlier run)
+        assert!(f.s.last_seq() as f64 > (now() - 60.0) * 1e6);
         // a new file: its version says it wasn't there
         let s1 = f.s.save("crosshair", "Saved the crosshair", &p, b"cl_crosshair_color 255\n").unwrap();
         let s2 = f.s.save("crosshair", "Saved the crosshair", &p, b"cl_crosshair_color 50\n").unwrap();

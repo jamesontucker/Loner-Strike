@@ -142,3 +142,54 @@ for (const address of ["editor", "studio", "plugins", `navfix:${NAV_MAP}`, "asse
     expect(over).toBeLessThanOrEqual(1);
   });
 }
+
+// History & restore (common/History.tsx, safety.rs): the button on a tool that writes files and
+// on Settings' sheet; read-only unless LS_TOOLS_WRITE=1 (that one saves and undoes in your game).
+test("History opens on a tool that writes files and says what's kept", async ({ page }, info) => {
+  const problems: string[] = [];
+  page.on("pageerror", (e) => problems.push(`crash: ${e.message}`));
+  await page.goto(`/tools-dev.html?open=people`);
+  await settle(page);
+  await page.getByRole("button", { name: "History", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "History & restore" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByText(/Reading the history/)).toHaveCount(0, { timeout: 15_000 });
+  await page.screenshot({ path: info.outputPath("history-people.png") });
+  // Compare shows what restoring would change (when something's been saved before)
+  const compare = sheet.getByRole("button", { name: /^Compare/ });
+  if (await compare.count()) {
+    await compare.first().click();
+    const diff = page.getByRole("dialog", { name: /^Compare / });
+    await expect(diff).toBeVisible();
+    await expect(diff.getByText(/Reading both versions/)).toHaveCount(0, { timeout: 15_000 });
+    await page.screenshot({ path: info.outputPath("history-compare.png") });
+    await diff.getByRole("button", { name: "Close" }).click();
+  }
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  // a tool that only reads has no History button
+  await page.goto(`/tools-dev.html?open=${encodeURIComponent(`map:${MAP}`)}`);
+  await settle(page);
+  await expect(page.locator(".tools-head").getByRole("button", { name: "History", exact: true })).toHaveCount(0);
+  expect(problems).toEqual([]);
+});
+
+test("a save offers Undo, and Undo puts the file back", async ({ page }, info) => {
+  test.skip(!process.env.LS_TOOLS_WRITE, "saves in the game folder: set LS_TOOLS_WRITE=1 (point LS_TEST_GAME at a copy)");
+  await page.goto(`/tools-dev.html?open=people`);
+  await settle(page);
+  const name = `Zz Undo Test ${Date.now() % 100000}`;
+  const names = () => page.evaluate(async () => (await (await fetch("/api/tools/people")).json()).names as string[]);
+  // a save through the tools' own post(), as the page does it
+  await page.evaluate(async (n) => {
+    const api = await import("/src/views/tools/common/api.ts");
+    await api.post("/api/tools/people/save", { names: { added: [n] } });
+  }, name);
+  expect(await names()).toContain(name);
+  const toast = page.locator(".toast", { hasText: "Undo that save?" });
+  await expect(toast).toBeVisible();
+  await page.screenshot({ path: info.outputPath("undo-toast.png") });
+  await toast.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".toast", { hasText: /Undone/ })).toBeVisible();
+  expect(await names()).not.toContain(name);
+});
