@@ -79,6 +79,10 @@ pub struct Installed {
     pub uid: String,
     /// the GameBanana member who uploaded the installed file (0: unknown, from an older install)
     pub owner_id: i64,
+    /// a newer file waiting to go in: the map or mode is in use now (applied at the next map change)
+    pub pending: i64,
+    /// the file installed before the last update (Go back to the previous version)
+    pub previous_file: i64,
 }
 
 impl Installed {
@@ -202,17 +206,28 @@ pub fn summary(items: &[Installed], idx: &Index) -> Value {
             let mut v = serde_json::to_value(it).unwrap_or_default();
             v["key"] = json!(it.key());
             v["url"] = json!(it.url());
-            v["update"] = json!(newer(it, idx));
+            v["update"] = json!(newer(it, idx).filter(|f| *f != it.pending));
             v["pulled"] = json!(pulled(it, idx));
+            v["canGoBack"] = json!(it.previous_file > 0 || lib_dir().join(it.key()).join("previous").join("meta.json").is_file());
             v
         })
         .collect();
-    json!({"items": list, "maps": maps, "modes": modes, "prefabs": prefabs, "pages": pages})
+    let updates = list.iter().filter(|v| !v["update"].is_null()).count();
+    let waiting = items.iter().filter(|i| i.pending > 0).count();
+    json!({"items": list, "maps": maps, "modes": modes, "prefabs": prefabs, "pages": pages, "updates": updates, "waiting": waiting})
 }
 
 /// Removes an installed creation the way it went in. The store's own records (maps, sprays,
 /// textures) say which files are its; each is kept by the safety net before it goes.
 pub fn uninstall(game: Option<&crate::game::Game>, dir: &Path, it: &Installed) -> Result<Value, String> {
+    let removed = remove_files(game, it)?;
+    forget(dir, it.model, it.gb);
+    Ok(json!({"ok": true, "removed": removed}))
+}
+
+/// Takes an installed creation's files out of the game (or the editor's library), keeping its
+/// library entry (an update or a rollback puts another version in its place).
+fn remove_files(game: Option<&crate::game::Game>, it: &Installed) -> Result<Vec<String>, String> {
     let mut removed: Vec<String> = Vec::new();
     match it.kind {
         Kind::Map | Kind::Spray | Kind::Texture => {
@@ -271,8 +286,7 @@ pub fn uninstall(game: Option<&crate::game::Game>, dir: &Path, it: &Installed) -
         }
         Kind::Other => {}
     }
-    forget(dir, it.model, it.gb);
-    Ok(json!({"ok": true, "removed": removed}))
+    Ok(removed)
 }
 
 /// Waits for a store install job, then notes the creation (only when it finished).
@@ -290,12 +304,27 @@ pub fn note_after_job(store: std::sync::Arc<crate::gamebanana::MapStore>, job: S
                     let _ = save(&lib_dir(), &it);
                     return;
                 }
-                "error" => return,
+                "error" => {
+                    // an update that didn't go in: the previous version comes back
+                    if let Some(g) = store_game(&store) {
+                        let _ = restore_previous(Some(&g), None, &lib_dir(), &it.key());
+                    }
+                    return;
+                }
                 _ => {}
             }
         }
     });
 }
+
+fn store_game(store: &std::sync::Arc<crate::gamebanana::MapStore>) -> Option<std::sync::Arc<crate::game::Game>> {
+    // (the store is the player's own game's)
+    let _ = store;
+    UPDATE_GAME.lock().ok().and_then(|g| g.clone())
+}
+
+/// The player's game, for jobs that end after their request did (set by the routes).
+static UPDATE_GAME: std::sync::Mutex<Option<std::sync::Arc<crate::game::Game>>> = std::sync::Mutex::new(None);
 
 // ---- Studio modes ------------------------------------------------------------------------------
 
@@ -442,6 +471,8 @@ pub fn remix(dir: &Path, graphs: &Path, game_dir: Option<&Path>, it: &Installed)
 pub struct ServerPick {
     pub maps: Vec<String>,
     pub modes: Vec<String>,
+    /// carried creations updated here that the server doesn't have yet (sent when it's not in use)
+    pub stale: Vec<String>,
 }
 
 fn picks_path(dir: &Path, server: &str) -> PathBuf {
@@ -511,6 +542,7 @@ pub fn apply_picks(st: &Shared, server: &crate::servers::Entry, new: ServerPick)
     let new = ServerPick {
         maps: new.maps.into_iter().filter(|k| lib.iter().any(|i| i.key() == *k && i.kind == Kind::Map)).collect(),
         modes: new.modes.into_iter().filter(|k| lib.iter().any(|i| i.key() == *k && i.kind == Kind::Mode)).collect(),
+        stale: vec![],
     };
     let (add_maps, drop_maps, add_modes, drop_modes) = pick_changes(&lib, &old, &new);
     let game_dir = server.dir.join(&server.game);
@@ -531,6 +563,8 @@ pub fn apply_picks(st: &Shared, server: &crate::servers::Entry, new: ServerPick)
         }
     }
     let mut kept = new.clone();
+    // (updates still to be sent stay owed for what the server keeps carrying)
+    kept.stale = old.stale.iter().filter(|k| new.maps.contains(k) || new.modes.contains(k)).cloned().collect();
     for it in &add_modes {
         match mode_to_server(st, it, &game_dir) {
             Ok(()) => changed = true,
@@ -591,7 +625,7 @@ fn drop_everywhere(st: &Shared, key: &str) {
     for e in crate::servers::load() {
         let p = load_picks(&dir, &e.id);
         if p.maps.iter().any(|k| k == key) || p.modes.iter().any(|k| k == key) {
-            let new = ServerPick { maps: p.maps.iter().filter(|k| *k != key).cloned().collect(), modes: p.modes.iter().filter(|k| *k != key).cloned().collect() };
+            let new = ServerPick { maps: p.maps.iter().filter(|k| *k != key).cloned().collect(), modes: p.modes.iter().filter(|k| *k != key).cloned().collect(), stale: p.stale.iter().filter(|k| *k != key).cloned().collect() };
             let _ = apply_picks(st, &e, new);
         }
     }
@@ -614,6 +648,359 @@ async fn api_server_set(State(st): State<Shared>, h: HeaderMap, axum::extract::P
         apply_picks(&st, &e, req)
     })
     .await
+}
+
+
+// ---- updates ---------------------------------------------------------------------------------------
+//
+// An update never pulls a map or mode out from under a game: in use here (the map loaded, the mode
+// running) it waits (`pending`) and goes in at the next map change; servers carrying it get it when
+// nobody's playing it there (`ServerPick::stale`). The version before is kept in
+// `<key>/previous/` (its files, its graph, its meta) until the next update, so a failed update puts
+// it straight back and "Go back to the previous version" is one click. Files another map still
+// needs (listed in its .res) are kept when the old version goes, whoever installed them.
+
+fn prev_dir(dir: &Path, key: &str) -> PathBuf {
+    dir.join(key).join("previous")
+}
+
+/// Whether the creation is in use in the player's game right now (its map loaded, its mode running).
+pub fn in_use_here(g: &crate::game::Game, it: &Installed) -> bool {
+    if it.maps.iter().any(|m| super::doctor::map_in_use(g, m)) {
+        return true;
+    }
+    it.kind == Kind::Mode && !it.mode.is_empty() && crate::sys::game_running() && crate::extras::current_mode(g) == it.mode
+}
+
+/// Whether a server is playing the creation with people on it (bots don't count).
+pub fn busy_on(state: &Value, it: &Installed, current_mode: &str) -> bool {
+    if state["online"] != json!(true) {
+        return false;
+    }
+    let people = state["state"]["players"].as_array().map(|p| p.iter().filter(|x| x["bot"] != json!(true)).count()).unwrap_or(0);
+    if people == 0 {
+        return false;
+    }
+    let map = state["state"]["map"].as_str().unwrap_or("");
+    it.maps.iter().any(|m| m.eq_ignore_ascii_case(map)) || (it.kind == Kind::Mode && !it.mode.is_empty() && current_mode == it.mode)
+}
+
+/// Every file other maps' .res lists (lower case, relative to the game folder), leaving out the
+/// creation's own maps: shared files (a WAD, a model) another map needs stay when it's replaced.
+pub fn needed_by_others(maps_dirs: &[PathBuf], own: &[String]) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    for d in maps_dirs {
+        for e in std::fs::read_dir(d).into_iter().flatten().flatten() {
+            let name = e.file_name().to_string_lossy().to_lowercase();
+            let Some(stem) = name.strip_suffix(".res") else { continue };
+            if own.iter().any(|m| m.eq_ignore_ascii_case(stem)) || e.metadata().map(|m| m.len() > 256 << 10).unwrap_or(true) {
+                continue;
+            }
+            for line in crate::sys::read_latin1(&e.path()).unwrap_or_default().lines() {
+                let l = line.trim().trim_matches('"').replace('\\', "/").to_lowercase();
+                if !l.is_empty() && !l.starts_with("//") {
+                    out.insert(l);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Keeps the installed version aside (`<key>/previous/`): its meta, the files its record lists,
+/// its prefabs and its graph. Replaces what an earlier update kept.
+pub fn keep_previous(game_root: Option<&Path>, records: &serde_json::Map<String, Value>, dir: &Path, it: &Installed) -> Result<(), String> {
+    let pd = prev_dir(dir, &it.key());
+    let _ = std::fs::remove_dir_all(&pd);
+    std::fs::create_dir_all(pd.join("files")).map_err(|e| format!("Couldn't keep the version you have ({e})."))?;
+    if let (Some(root), Some(r)) = (game_root, records.get(&it.gb.to_string())) {
+        if it.kind == Kind::Map {
+            for f in r["files"].as_array().into_iter().flatten().filter_map(|f| f.as_str()) {
+                let rel = f.replace('\\', "/");
+                if rel.split('/').any(|p| p == ".." || p.is_empty()) {
+                    continue;
+                }
+                let src = root.join(&rel);
+                if src.is_file() {
+                    let dst = pd.join("files").join(&rel);
+                    if let Some(p) = dst.parent() {
+                        let _ = std::fs::create_dir_all(p);
+                    }
+                    std::fs::copy(&src, &dst).map_err(|e| format!("Couldn't keep the version you have ({e})."))?;
+                }
+            }
+        }
+    }
+    if it.kind == Kind::Prefab {
+        let lib = super::editor::prefabs::lib_dir(&crate::sys::app_dir().join("editor"));
+        for id in &it.prefabs {
+            let Some(stem) = id.strip_prefix("mine:").filter(|s| crate::editor::prefab::valid_id(s)) else { continue };
+            for ext in ["map", "json", "png"] {
+                let p = lib.join(format!("{stem}.{ext}"));
+                if p.is_file() {
+                    let _ = std::fs::create_dir_all(pd.join("prefabs"));
+                    let _ = std::fs::copy(&p, pd.join("prefabs").join(format!("{stem}.{ext}")));
+                }
+            }
+        }
+    }
+    if it.kind == Kind::Mode && !it.mode.is_empty() {
+        let g = dir.join(it.key()).join(format!("{}.graph.json", it.mode));
+        if g.is_file() {
+            let _ = std::fs::copy(&g, pd.join(format!("{}.graph.json", it.mode)));
+        }
+    }
+    let rec = records.get(&it.gb.to_string()).cloned().unwrap_or(Value::Null);
+    std::fs::write(pd.join("record.json"), serde_json::to_vec(&rec).unwrap_or_default()).map_err(|e| e.to_string())?;
+    crate::sys::write_atomic(&pd.join("meta.json"), &serde_json::to_vec_pretty(it).unwrap_or_default()).map_err(|e| e.to_string())
+}
+
+/// Puts the kept version back (the current one must already be out): its files where they were
+/// (never over a file that's there), its record, its prefabs, its graph (built again when a
+/// Studio mode: `st` given). Returns the restored entry.
+pub fn restore_previous(game: Option<&crate::game::Game>, st: Option<&Shared>, dir: &Path, key: &str) -> Result<Installed, String> {
+    let pd = prev_dir(dir, key);
+    let prev: Installed = std::fs::read(pd.join("meta.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).ok_or("There's no earlier version kept.")?;
+    if prev.kind == Kind::Map {
+        let g = game.ok_or("Set up the game on this computer first.")?;
+        let root = g.store.maps_dir().parent().map(Path::to_path_buf).ok_or("The game folder isn't there.")?;
+        let mut copied: Vec<String> = Vec::new();
+        for f in crate::archive::walk(&pd.join("files")) {
+            let Ok(rel) = f.strip_prefix(pd.join("files")) else { continue };
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            let dst = root.join(&rel);
+            if !dst.exists() {
+                if let Some(p) = dst.parent() {
+                    let _ = std::fs::create_dir_all(p);
+                }
+                std::fs::copy(&f, &dst).map_err(|e| format!("Couldn't put the earlier version back ({e})."))?;
+            }
+            copied.push(rel);
+        }
+        let rec: Value = std::fs::read(pd.join("record.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+        let info = json!({"name": prev.name, "author": prev.author, "url": prev.url()});
+        let info = if rec.is_object() { rec.clone() } else { info };
+        for m in &prev.maps {
+            g.store.record_copy(&prev.gb.to_string(), &info, m, &copied, &[]).map_err(|e| format!("Couldn't note the earlier version ({e})."))?;
+        }
+    }
+    if prev.kind == Kind::Prefab && pd.join("prefabs").is_dir() {
+        let lib = super::editor::prefabs::lib_dir(&crate::sys::app_dir().join("editor"));
+        let _ = std::fs::create_dir_all(&lib);
+        for f in crate::archive::walk(&pd.join("prefabs")) {
+            if let Some(n) = f.file_name() {
+                let _ = std::fs::copy(&f, lib.join(n));
+            }
+        }
+    }
+    if prev.kind == Kind::Mode && !prev.mode.is_empty() {
+        let gp = pd.join(format!("{}.graph.json", prev.mode));
+        let text = std::fs::read_to_string(&gp).map_err(|_| "The earlier version's graph isn't kept.".to_string())?;
+        crate::sys::write_atomic(&dir.join(key).join(format!("{}.graph.json", prev.mode)), text.as_bytes()).map_err(|e| e.to_string())?;
+        if let Some(st) = st {
+            let g = super::studio::graph::parse(&text)?;
+            let r = super::studio::compile(st, g, false)?;
+            if r["ok"] != json!(true) {
+                return Err("The earlier version couldn't be built again.".into());
+            }
+        }
+    }
+    let mut back = prev.clone();
+    back.pending = 0;
+    back.previous_file = 0;
+    save(dir, &back)?;
+    let _ = std::fs::remove_dir_all(&pd);
+    Ok(back)
+}
+
+/// Marks a creation as changed for every server carrying it (sent when nobody's playing it there).
+fn mark_servers_stale(dir: &Path, key: &str) {
+    for e in crate::servers::load() {
+        let mut p = load_picks(dir, &e.id);
+        if (p.maps.iter().any(|k| k == key) || p.modes.iter().any(|k| k == key)) && !p.stale.iter().any(|k| k == key) {
+            p.stale.push(key.to_string());
+            let _ = save_picks(dir, &e.id, &p);
+        }
+    }
+}
+
+/// Updates an installed creation to `file`: waits when it's in use; else keeps the version you have,
+/// takes it out (keeping files other maps need), puts the new one in through Try it's checks, and
+/// puts the old one back if the new one fails.
+pub fn apply_update(st: &Shared, it: &Installed, file: i64) -> Result<Value, String> {
+    let dir = lib_dir();
+    let game = st.local_game();
+    if let Some(g) = &game {
+        *UPDATE_GAME.lock().unwrap_or_else(|e| e.into_inner()) = Some(g.clone());
+        if in_use_here(g, it) {
+            let mut w = it.clone();
+            w.pending = file;
+            save(&dir, &w)?;
+            return Ok(json!({"ok": true, "state": "waiting", "message": format!("{} is in use right now: the new version goes in at the next map change.", it.name)}));
+        }
+    }
+    let records = game.as_ref().map(|g| g.store.records()).unwrap_or_default();
+    let root = game.as_ref().and_then(|g| g.store.maps_dir().parent().map(Path::to_path_buf));
+    keep_previous(root.as_deref(), &records, &dir, it)?;
+    // files another map's .res needs stay (they're kept aside above; put back after the removal)
+    let keep: Vec<String> = if it.kind == Kind::Map {
+        let dirs: Vec<PathBuf> = game.as_ref().map(|g| vec![g.dir.join("maps"), g.hl.join("cstrike").join("maps")]).unwrap_or_default();
+        let others = needed_by_others(&dirs, &it.maps);
+        records.get(&it.gb.to_string()).map(|r| r["files"].as_array().into_iter().flatten().filter_map(|f| f.as_str()).filter(|f| others.contains(&f.to_lowercase())).map(String::from).collect()).unwrap_or_default()
+    } else {
+        vec![]
+    };
+    remove_files(game.as_deref(), it)?;
+    if let Some(root) = &root {
+        for rel in &keep {
+            let src = prev_dir(&dir, &it.key()).join("files").join(rel);
+            let dst = root.join(rel);
+            if src.is_file() && !dst.exists() {
+                let _ = std::fs::copy(&src, &dst);
+            }
+        }
+    }
+    let mut marked = it.clone();
+    marked.pending = 0;
+    marked.previous_file = it.file;
+    save(&dir, &marked)?;
+    match super::community::start_try(st, it.model, it.gb, Some(file), true) {
+        Ok(mut v) => {
+            // (the new entry is noted by the installer; it keeps where it came from)
+            if let Some(mut now_it) = load(&dir, it.model, it.gb) {
+                now_it.previous_file = it.file;
+                let _ = save(&dir, &now_it);
+            }
+            mark_servers_stale(&dir, &it.key());
+            v["state"] = json!(if v["job"].is_string() { "installing" } else { "done" });
+            Ok(v)
+        }
+        Err(e) => {
+            let _ = restore_previous(game.as_deref(), Some(st), &dir, &it.key());
+            Err(format!("The new version couldn't be installed ({e}); you still have the one you had."))
+        }
+    }
+}
+
+/// Goes back to the version kept before the last update (or, without one kept here, installs
+/// the previous file from its page again with the same checks).
+pub fn go_back(st: &Shared, it: &Installed) -> Result<Value, String> {
+    let dir = lib_dir();
+    let game = st.local_game();
+    if game.as_ref().is_some_and(|g| in_use_here(g, it)) {
+        return Err(format!("{} is in use right now. Change the map (or mode) first.", it.name));
+    }
+    if prev_dir(&dir, &it.key()).join("meta.json").is_file() {
+        remove_files(game.as_deref(), it)?;
+        let back = restore_previous(game.as_deref(), Some(st), &dir, &it.key())?;
+        mark_servers_stale(&dir, &it.key());
+        return Ok(json!({"ok": true, "state": "done", "file": back.file}));
+    }
+    if it.previous_file > 0 {
+        remove_files(game.as_deref(), it)?;
+        let v = super::community::start_try(st, it.model, it.gb, Some(it.previous_file), true)?;
+        mark_servers_stale(&dir, &it.key());
+        return Ok(v);
+    }
+    Err("There's no earlier version to go back to.".into())
+}
+
+/// The creator's update notes from GameBanana (newest first): title, version, date, changes.
+pub fn notes_of(v: &Value) -> Vec<Value> {
+    v["_aRecords"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .take(5)
+        .map(|r| {
+            let changes: Vec<Value> = r["_aChangeLog"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .take(30)
+                .map(|c| json!({"cat": crate::gamebanana::plain(c["cat"].as_str().unwrap_or(""), 30), "text": crate::gamebanana::plain(c["text"].as_str().unwrap_or(""), 300)}))
+                .collect();
+            json!({
+                "title": crate::gamebanana::plain(r["_sName"].as_str().unwrap_or(""), 100),
+                "version": crate::gamebanana::plain(r["_sVersion"].as_str().unwrap_or(""), 30),
+                "date": r["_tsDateAdded"].as_i64().unwrap_or(0),
+                "text": crate::gamebanana::plain(r["_sText"].as_str().unwrap_or(""), 800),
+                "changes": changes,
+            })
+        })
+        .collect()
+}
+
+/// One pass of the waiting work: updates waiting for their map/mode to be free here, and servers
+/// that should get an updated creation when nobody's playing it there. Runs every 30 s.
+pub fn tick(st: &Shared) {
+    let dir = lib_dir();
+    let lib = load_all(&dir);
+    for it in lib.iter().filter(|i| i.pending > 0) {
+        if st.local_game().is_some_and(|g| !in_use_here(&g, it)) {
+            let _ = apply_update(st, it, it.pending);
+        }
+    }
+    for e in crate::servers::load().into_iter().filter(|e| e.ready) {
+        let mut p = load_picks(&dir, &e.id);
+        if p.stale.is_empty() {
+            continue;
+        }
+        let Some(g) = crate::servers::game_for(&e.id, || None) else { continue };
+        let state = g.state();
+        let mode = crate::extras::current_mode(&g);
+        let game_dir = e.dir.join(&e.game);
+        let mut maps: Vec<String> = Vec::new();
+        let mut done: Vec<String> = Vec::new();
+        for key in p.stale.clone() {
+            let Some(it) = lib.iter().find(|i| i.key() == key) else {
+                done.push(key);
+                continue;
+            };
+            if busy_on(&state, it, &mode) {
+                continue;
+            }
+            let ok = match it.kind {
+                Kind::Map => map_off_server(&e.id, it).map(|_| maps.extend(it.maps.clone())).is_ok(),
+                Kind::Mode => mode_to_server(st, it, &game_dir).is_ok(),
+                _ => true,
+            };
+            if ok {
+                done.push(key);
+            }
+        }
+        if !maps.is_empty() {
+            let Some(local) = st.local_game() else { continue };
+            if crate::mapcopy::start(local.hl.clone(), local.store.records(), maps, vec![e.id.clone()]).is_err() {
+                // (another job is running: the maps are tried again next time)
+                done.retain(|k| lib.iter().find(|i| i.key() == *k).is_some_and(|i| i.kind != Kind::Map));
+            }
+        }
+        if !done.is_empty() {
+            p.stale.retain(|k| !done.contains(k));
+            let _ = save_picks(&dir, &e.id, &p);
+            crate::servers::mark_changed(&e.id);
+            if e.remote.is_some() {
+                let _ = crate::servers::sync(&e, false);
+            }
+        }
+    }
+}
+
+static TICKING: std::sync::Once = std::sync::Once::new();
+
+/// Starts the 30-second tick (once, with the first community request after the app starts).
+fn start_tick(st: &Shared) {
+    if cfg!(test) {
+        return;
+    }
+    let st = st.clone();
+    TICKING.call_once(move || {
+        std::thread::spawn(move || loop {
+            std::thread::sleep(Duration::from_secs(30));
+            tick(&st);
+        });
+    });
 }
 
 // ---- routes ------------------------------------------------------------------------------------
@@ -643,7 +1030,8 @@ fn entry(key: &str) -> Result<Installed, String> {
     load(&lib_dir(), model, gb).ok_or_else(|| "That isn't installed from Community (any more).".to_string())
 }
 
-async fn api_library() -> Response {
+async fn api_library(State(st): State<Shared>) -> Response {
+    start_tick(&st);
     run(|| {
         let idx = super::community::index_cached();
         Ok(summary(&load_all(&lib_dir()), &idx))
@@ -675,25 +1063,55 @@ async fn api_update(State(st): State<Shared>, h: HeaderMap, Json(req): Json<KeyR
     if !crate::panel_api::from_panel(&h) {
         return forbidden();
     }
+    start_tick(&st);
     run(move || {
         let it = entry(&req.key)?;
         let idx = super::community::index_cached();
-        let file = newer(&it, &idx);
-        // the installer never replaces a file that's there: the old version goes first
-        let game = st.local_game();
-        if let Some(g) = &game {
-            for m in &it.maps {
-                if super::doctor::map_in_use(g, m) {
-                    return Err(super::doctor::IN_USE.into());
-                }
-            }
+        let file = newer(&it, &idx).ok_or("There's no newer version listed.")?;
+        apply_update(&st, &it, file)
+    })
+    .await
+}
+
+async fn api_update_all(State(st): State<Shared>, h: HeaderMap) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    start_tick(&st);
+    run(move || {
+        let idx = super::community::index_cached();
+        let mut out = Vec::new();
+        for it in load_all(&lib_dir()) {
+            let Some(file) = newer(&it, &idx).filter(|f| *f != it.pending) else { continue };
+            let r = apply_update(&st, &it, file);
+            out.push(json!({"key": it.key(), "name": it.name, "result": r.as_ref().ok(), "error": r.err()}));
         }
-        if it.kind == Kind::Mode {
-            // (a mode installs the new graph over its own entry; the old build is replaced by the compile)
-            return super::community::start_try(&st, it.model, it.gb, file, true);
-        }
-        uninstall(game.as_deref(), &lib_dir(), &it)?;
-        super::community::start_try(&st, it.model, it.gb, file, true).map_err(|e| format!("The old version was removed, but the new one couldn't be installed: {e} Try it again from its page."))
+        Ok(json!({"ok": true, "updates": out}))
+    })
+    .await
+}
+
+async fn api_go_back(State(st): State<Shared>, h: HeaderMap, Json(req): Json<KeyReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    run(move || {
+        let it = entry(&req.key)?;
+        go_back(&st, &it)
+    })
+    .await
+}
+
+async fn api_notes(axum::extract::Path((model, id)): axum::extract::Path<(String, i64)>) -> Response {
+    run(move || {
+        let model = Model::parse(&model).filter(|_| id > 0 && id < 100_000_000).ok_or("That isn't a GameBanana page.")?;
+        let url = format!("https://gamebanana.com/apiv11/{}/{id}/Updates?_nPage=1&_nPerpage=5", if model == Model::Spray { "Spray" } else { "Mod" });
+        let r = crate::sys::http().get(url).header("User-Agent", "LonerStrike/1.0 (community browser)").timeout(Duration::from_secs(15)).send().map_err(|_| "Couldn't reach GameBanana.".to_string())?;
+        let mut b = Vec::new();
+        use std::io::Read;
+        r.take(2 << 20).read_to_end(&mut b).map_err(|_| "GameBanana's answer was cut off.".to_string())?;
+        let v: Value = serde_json::from_slice(&b).map_err(|_| "GameBanana sent something the app couldn't read.".to_string())?;
+        Ok(json!({"notes": notes_of(&v)}))
     })
     .await
 }
@@ -716,6 +1134,9 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/community/library", get(api_library))
         .route("/api/tools/community/uninstall", post(api_uninstall))
         .route("/api/tools/community/update", post(api_update))
+        .route("/api/tools/community/update-all", post(api_update_all))
+        .route("/api/tools/community/go-back", post(api_go_back))
+        .route("/api/tools/community/notes/:model/:id", get(api_notes))
         .route("/api/tools/community/remix", post(api_remix))
         .route("/api/tools/community/server/:id", get(api_server).post(api_server_set))
 }
@@ -874,6 +1295,103 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
+
+    #[test]
+    fn busy_servers_and_maps_in_use() {
+        let mut it = map_item(1, 1);
+        it.maps = vec!["de_lonely".into()];
+        let st = |map: &str, players: Value| json!({"online": true, "state": {"map": map, "players": players}});
+        assert!(busy_on(&st("de_Lonely", json!([{"name": "a"}])), &it, ""), "people on that map");
+        assert!(!busy_on(&st("de_lonely", json!([{"name": "b", "bot": true}])), &it, ""), "bots only: free");
+        assert!(!busy_on(&st("de_dust2", json!([{"name": "a"}])), &it, ""), "another map");
+        assert!(!busy_on(&json!({"online": false}), &it, ""));
+        let mut m = it.clone();
+        m.kind = Kind::Mode;
+        m.maps.clear();
+        m.mode = "lava".into();
+        assert!(busy_on(&st("de_dust2", json!([{"name": "a"}])), &m, "lava"), "a mode in play");
+        assert!(!busy_on(&st("de_dust2", json!([{"name": "a"}])), &m, "classic"));
+    }
+
+    #[test]
+    fn shared_files_other_maps_need_are_counted() {
+        let d = tmp("res");
+        let maps = d.join("maps");
+        std::fs::create_dir_all(&maps).unwrap();
+        std::fs::write(maps.join("de_other.res"), "// other\r\nshared.wad\r\nmodels/props/barrel.mdl\r\n").unwrap();
+        std::fs::write(maps.join("de_lonely.res"), "lonely.wad\r\nshared.wad\r\n").unwrap();
+        let need = needed_by_others(&[maps.clone()], &["de_lonely".to_string()]);
+        assert!(need.contains("shared.wad") && need.contains("models/props/barrel.mdl"));
+        assert!(!need.contains("lonely.wad"), "its own .res doesn't count");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn previous_version_kept_and_put_back() {
+        let d = tmp("prev");
+        let lib = d.join("lib");
+        let root = d.join("cstrike");
+        std::fs::create_dir_all(root.join("maps")).unwrap();
+        std::fs::write(root.join("maps/de_lonely.bsp"), b"v1").unwrap();
+        std::fs::write(root.join("shared.wad"), b"WAD3").unwrap();
+        let mut it = map_item(101, 5);
+        it.maps = vec!["de_lonely".into()];
+        save(&lib, &it).unwrap();
+        let mut recs = serde_json::Map::new();
+        recs.insert("101".into(), json!({"name": "De Lonely", "files": ["maps/de_lonely.bsp", "shared.wad", "../evil"], "maps": ["de_lonely"]}));
+        keep_previous(Some(&root), &recs, &lib, &it).unwrap();
+        let pd = prev_dir(&lib, "mod-101");
+        assert_eq!(std::fs::read(pd.join("files/maps/de_lonely.bsp")).unwrap(), b"v1");
+        assert!(pd.join("files/shared.wad").is_file() && !d.join("evil").exists());
+        assert!(pd.join("meta.json").is_file() && pd.join("record.json").is_file());
+        // a mode's graph is kept too; restoring it without the game rebuilds nothing but puts the graph back
+        let mut m = map_item(102, 3);
+        m.kind = Kind::Mode;
+        m.maps.clear();
+        m.mode = "lava".into();
+        save(&lib, &m).unwrap();
+        std::fs::write(lib.join("mod-102/lava.graph.json"), b"{\"v\":1}").unwrap();
+        keep_previous(None, &serde_json::Map::new(), &lib, &m).unwrap();
+        std::fs::write(lib.join("mod-102/lava.graph.json"), b"{\"v\":2}").unwrap();
+        let mut newer_m = m.clone();
+        newer_m.file = 4;
+        newer_m.previous_file = 3;
+        save(&lib, &newer_m).unwrap();
+        let back = restore_previous(None, None, &lib, "mod-102").unwrap();
+        assert_eq!((back.file, back.previous_file), (3, 0), "the earlier file is the one installed again");
+        assert_eq!(std::fs::read(lib.join("mod-102/lava.graph.json")).unwrap(), b"{\"v\":1}");
+        assert!(!prev_dir(&lib, "mod-102").exists(), "the kept copy is used up");
+        assert!(restore_previous(None, None, &lib, "mod-102").is_err(), "nothing more to go back to");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn update_notes_from_gamebanana() {
+        let v = json!({"_aRecords": [{"_sName": "Night version", "_sVersion": "1.1", "_tsDateAdded": 5, "_sText": "<b>Darker</b>",
+                                      "_aChangeLog": [{"cat": "Feature", "text": "Night <i>sky</i>"}, {"cat": "Bugfix", "text": "Ladder"}]}]});
+        let n = notes_of(&v);
+        assert_eq!((n[0]["title"].as_str(), n[0]["version"].as_str()), (Some("Night version"), Some("1.1")));
+        assert_eq!(n[0]["changes"][0]["text"], "Night sky", "plain text only");
+        assert_eq!(n[0]["text"], "Darker");
+        assert!(notes_of(&json!({})).is_empty());
+    }
+
+    #[test]
+    fn waiting_updates_and_stale_servers_in_the_library() {
+        let d = tmp("pend");
+        let mut it = map_item(101, 5);
+        it.pending = 9;
+        save(&d, &it).unwrap();
+        let idx: Index = parse_index(br#"{"schema": 1, "items": [{"kind": "map", "gb": 101, "file": 9, "name": "De Lonely"}]}"#).unwrap();
+        let s = summary(&load_all(&d), &idx);
+        assert_eq!((s["updates"].as_u64(), s["waiting"].as_u64()), (Some(0), Some(1)), "a waiting update isn't offered again");
+        let mut p = ServerPick { maps: vec!["mod-101".into()], ..Default::default() };
+        p.stale.push("mod-101".into());
+        save_picks(&d, "srv", &p).unwrap();
+        assert_eq!(load_picks(&d, "srv").stale, ["mod-101"]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     #[test]
     fn server_pick_changes() {
         let mut a = map_item(1, 1);
@@ -883,8 +1401,8 @@ mod tests {
         m.kind = Kind::Mode;
         m.mode = "lava".into();
         let lib = vec![a, b, m];
-        let old = ServerPick { maps: vec!["mod-1".into()], modes: vec![] };
-        let new = ServerPick { maps: vec!["mod-2".into(), "mod-3".into(), "mod-77".into()], modes: vec!["mod-3".into(), "mod-1".into()] };
+        let old = ServerPick { maps: vec!["mod-1".into()], ..Default::default() };
+        let new = ServerPick { maps: vec!["mod-2".into(), "mod-3".into(), "mod-77".into()], modes: vec!["mod-3".into(), "mod-1".into()], ..Default::default() };
         let (am, dm, ao, dmo) = pick_changes(&lib, &old, &new);
         assert_eq!(am.iter().map(|i| i.gb).collect::<Vec<_>>(), [2], "only maps that are maps and installed");
         assert_eq!(dm.iter().map(|i| i.gb).collect::<Vec<_>>(), [1]);
