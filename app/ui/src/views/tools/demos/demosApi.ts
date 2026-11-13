@@ -45,3 +45,4 @@ export const renameDemo = (d: Demo, to: string) => post<Done & { name?: string }
 export const deleteDemo = (d: Demo) => post<Done>("/api/tools/demos/delete", { at: d.at, name: d.name });
 export const playDemo = (d: Demo) => post<Done & { gameOpen?: boolean; command?: string; copied?: boolean }>("/api/tools/demos/play", { at: d.at, name: d.name });
 export const demoToReplay = (d: Demo) => post<Done & { id?: string; map?: string }>("/api/tools/demos/replay", { at: d.at, name: d.name });
+export const revealDemo = (d: Demo) => post<Done>("/api/tools/demos/reveal", { at: d.at, name: d.name });

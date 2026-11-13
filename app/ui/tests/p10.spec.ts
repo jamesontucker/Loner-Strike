@@ -124,3 +124,76 @@ test.describe("spray composer", () => {
     expect(problems).toEqual([]);
   });
 });
+
+test("crosshair & config: tabs, preset cards, nothing sticks out", async ({ page }, info) => {
+  const problems = watch(page);
+  await page.goto("/tools-dev.html?open=playercfg");
+  const tabs = page.getByRole("tablist", { name: "Settings" });
+  await expect(tabs).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(".pc-canvas")).toBeVisible();
+  for (const name of ["Crosshair", "Keys", "Mouse", "Network", "Video & HUD"]) {
+    await tabs.getByRole("tab", { name }).click();
+    await expect(tabs.getByRole("tab", { name })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tabpanel").locator(".tl-row").first()).toBeVisible();
+    await fits(page);
+    await page.screenshot({ path: info.outputPath(`playercfg-${name.replace(/\W+/g, "-").toLowerCase()}.png`) });
+  }
+  // arrows move between the tabs
+  await tabs.getByRole("tab", { name: "Video & HUD" }).press("ArrowRight");
+  await expect(tabs.getByRole("tab", { name: "Crosshair" })).toHaveAttribute("aria-selected", "true");
+  // a preset card changes things (not saved): Undo changes puts them back
+  const cards = page.getByRole("region", { name: "Presets" }).locator(".pc-card");
+  await expect(cards).toHaveCount(3);
+  const pressed = await cards.evaluateAll((els) => els.map((e) => e.getAttribute("aria-pressed")));
+  const off = cards.nth(pressed.indexOf("false"));
+  await off.click();
+  await expect(off).toHaveAttribute("aria-pressed", "true");
+  const bar = page.getByRole("region", { name: "Save" });
+  await expect(bar).toContainText("Unsaved changes");
+  await bar.getByRole("button", { name: "More" }).click();
+  await page.getByRole("menuitem", { name: "Show what gets saved" }).click();
+  await expect(page.getByRole("dialog", { name: "What gets saved" })).toBeVisible();
+  await page.getByRole("dialog", { name: "What gets saved" }).getByRole("button", { name: "Close" }).click();
+  await bar.getByRole("button", { name: "Undo changes" }).click();
+  await expect(bar).not.toContainText("Unsaved changes");
+  expect(problems).toEqual([]);
+});
+
+test("demos: table, full dates, row actions on hover, side panel", async ({ page }, info) => {
+  const problems = watch(page);
+  await page.goto("/tools-dev.html?open=demos");
+  await expect(page.locator(".dm-table, .tl-empty").first()).toBeVisible({ timeout: 20_000 });
+  const rows = page.locator(".dm-row");
+  test.skip((await rows.count()) === 0, "no demos in this game folder");
+  // the date cell carries the full date and time
+  await expect(rows.first().locator(".dm-c-when")).toHaveAttribute("title", /\d{4}/);
+  // actions show on hover
+  const acts = rows.first().locator(".dm-row-acts");
+  await rows.first().hover();
+  await expect(acts).toHaveCSS("opacity", "1");
+  await expect(rows.first().getByRole("button", { name: /^Watch / })).toBeVisible();
+  await expect(rows.first().getByRole("button", { name: /^Rename / })).toBeVisible();
+  await expect(rows.first().getByRole("button", { name: /^Delete / })).toBeVisible();
+  await expect(rows.first().getByRole("button", { name: /^Show .*\.dem in / })).toBeVisible();
+  await expect(rows.first().getByRole("button", { name: /^Show my path in Replay/ })).toBeVisible();
+  // picking a row opens its panel; Close shuts it
+  await rows.first().click();
+  const panel = page.locator(".dm-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel.locator(".dm-facts")).toContainText("Recorded");
+  await expect(panel.locator(".dm-facts")).toContainText(/\d{4}/);
+  await fits(page);
+  await page.screenshot({ path: info.outputPath("demos-panel.png") });
+  // ↓ moves the pick
+  if ((await rows.count()) > 1) {
+    await rows.first().focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(rows.nth(1)).toHaveClass(/\bon\b/);
+  }
+  await panel.getByRole("button", { name: "Close" }).click();
+  await expect(panel).toHaveCount(0);
+  // the filter is a segmented control, the "Looked in" words a tooltip
+  await expect(page.getByRole("group", { name: "Which demos" }).getByRole("button")).toHaveCount(3);
+  await expect(page.locator(".tl-page > p.small-note")).toHaveCount(0);
+  expect(problems).toEqual([]);
+});
