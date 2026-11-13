@@ -260,7 +260,14 @@ impl Model {
             }
             let at = r.u32(o + 76)? as usize;
             let pixels = r.bytes(at, n)?.to_vec();
-            let palette = r.bytes(at + n, 768)?.to_vec();
+            // some tools write the last palette a few bytes short of the file's end: the
+            // missing colours are black rather than the model failing
+            let pal_at = at + n;
+            let mut palette = r.b.get(pal_at..r.len().min(pal_at + 768)).unwrap_or(&[]).to_vec();
+            if palette.len() < 768 - 64 {
+                r.bytes(pal_at, 768)?;
+            }
+            palette.resize(768, 0);
             textures.push(Texture { name: cname(r.bytes(o, 64)?), flags: r.i32(o + 64)?, width: w, height: h, pixels, palette });
         }
 
