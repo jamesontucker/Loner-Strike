@@ -25,8 +25,9 @@ geometry changes, teach the bots again (nav + .lsv), redo the overview (Radar ma
     drop off one by one as it weakens. hp 800, hold USE to repair board by board ($100). Creatures pile
     up outside; you shoot them through the boards.
   - **Firing step** (z 112) inside the west, south and east walls and over each gate (gatehouses),
-    two stairs up from the courtyard. From it you see down each route over the parapet. Creatures
-    can't get onto it from outside.
+    two stairs up from the courtyard. The parapet is crenellated: 48-wide gaps (sill 24 above the step)
+    every ~112 units, merlons between them; shoot down through a gap, duck behind a merlon. Creatures
+    can't get onto it from outside; CLIP over the walls keeps everyone in.
   - **The keep** (north wall): the last stand. One 128-wide door and two windows onto the courtyard.
   - **The armory** (NE, by the east gate): Barney's counter (`info_target` `lst_shop`), lockers, the
     only `func_buyzone`. Lit bright, caution stripes and a light strip over the door.

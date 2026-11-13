@@ -258,15 +258,39 @@ WALL = "csSandWall2"
 STEP_TOP = "OUT_PAVE2"
 
 
-def wall(xa, ya, xb, yb, z0=0, z1=WALL_H, clip=True):
-    W(box(xa, ya, z0, xb, yb, z1, WALL, top="SandTrim"))
-    if clip and z1 == WALL_H:
-        W(box(xa, ya, WALL_H, xb, yb, CLIP_TOP, "CLIP"))
+SILL = STEP_Z + 24        # crenel sill: half the parapet (shoot down through the gaps, duck behind the merlons)
+CRENEL = 48               # gap width; one gap every ~112 units
+
+
+def wall(xa, ya, xb, yb, z0=0, z1=WALL_H, clip=True, crenel=True):
+    """a wall segment. Along the firing step its parapet is crenellated: the wall runs up to SILL, then
+    merlons up to WALL_H with CRENEL-wide gaps between them. CLIP from the sill up keeps everyone inside
+    (bullets pass CLIP). Merlons are world brushes on the wall, so the compiler merges the touching faces."""
+    if not (crenel and z1 == WALL_H):
+        W(box(xa, ya, z0, xb, yb, z1, WALL, top="SandTrim"))
+        if clip and z1 == WALL_H:
+            W(box(xa, ya, WALL_H, xb, yb, CLIP_TOP, "CLIP"))
+        return
+    W(box(xa, ya, z0, xb, yb, SILL, WALL, top="SandTrim"))
+    along_x = (xb - xa) >= (yb - ya)
+    a, b = (xa, xb) if along_x else (ya, yb)
+    n = int(round((b - a) / 112.0))
+    cuts = []
+    for i in range(n):
+        c = a + (b - a) * (i + 0.5) / n
+        cuts.append((c - CRENEL / 2, c + CRENEL / 2))
+    edges = [a] + [v for cut in cuts for v in cut] + [b]
+    for m0, m1 in zip(edges[0::2], edges[1::2]):
+        if m1 - m0 < 1:
+            continue
+        W(box(m0, ya, SILL, m1, yb, WALL_H, WALL, top="SandTrim") if along_x else box(xa, m0, SILL, xb, m1, WALL_H, WALL, top="SandTrim"))
+    if clip:
+        W(box(xa, ya, SILL, xb, yb, CLIP_TOP, "CLIP"))
 
 
 g = GATE_W // 2
 # north wall (the keep and armory back onto it)
-wall(CX0, IY1, CX1, CY1)
+wall(CX0, IY1, CX1, CY1, crenel=False)
 # south wall, gate at x -64..64
 wall(CX0, CY0, -g, IY0)
 wall(g, CY0, CX1, IY0)

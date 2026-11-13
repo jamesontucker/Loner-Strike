@@ -26,3 +26,16 @@ ls_outpost.map), shipped files in plugins/game/.
 - Stacks and crashes without a debugger: `drive_c/Loner-Strike/Sim/crashes.log` (every crash in the bottle, full
   winedbg report), and with fork builds from ls-creatures `f351765` on, `cstrike/ls_crash*.log` and
   `cstrike/ls_watchdog.log` in the server folder.
+
+## 2026-11-13 — crenellated parapet (user request)
+- The parapet along the firing step (west, south, east walls and over the three gatehouses) is now merlons and
+  crenels: the wall runs to a sill 24 above the step (z 136, half the 48-unit parapet), merlons rise to 160, with a
+  48-wide gap every ~112 units (one centred over each gate). Shoot down through a gap, step aside behind a merlon.
+  The north wall (keep, armory) stays plain. Merlons are world brushes on the wall (the compiler merges the touching
+  faces: nothing coplanar to flicker).
+- Creature-proof: the sill is 136 above the ground outside (they step 18); CLIP from the sill up over every
+  crenellated wall keeps players and bots inside (bullets and sight pass CLIP).
+- Compiled through Q's pipeline (Normal): 229 brushes, no leak, no warnings. Nav re-learned: 366 areas, all
+  reachable, 0 problems, the ladder still joined. Overview and .res redone; outputs in plugins/game.
+- Bots (6, Normal, creatures, 7 min): waves 1-4 held; 62 of 1276 CT shots were fired from the firing step, by 5 of
+  the 6 bots.
