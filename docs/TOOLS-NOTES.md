@@ -581,3 +581,59 @@ triangle facing agrees with the normals 97% (63k of 2.0M disagree: models' own o
 **Requests**
 - (H) GetMore.tsx: `SECTION_NAME` / `KIND_NAMES` have no `textures` entry, so its badge shows "textures";
   add `textures: "Texture pack"` / `textures: "Textures"`. Owner: whoever owns GetMore.tsx.
+
+### Agent J: Nav fixer (Beta), 2026-11-12
+
+**What's built**
+- `tools/navfix.rs` (`routes()`, mounted with one line in tools/mod.rs). It keeps one editing session per nav, and every answer is the whole state:
+  - `GET /api/tools/navfix/:name`
+  - `POST .../edit` with `{op: add|delete|reshape|link|unlink|attr|place, ...}`
+  - `POST .../undo`, `.../redo`, `.../save`, `.../reload`, `.../rebuild`
+  - POSTs need X-Panel. Errors come back as `{error}` with 200 (400 for a malformed edit).
+  - The state is C's `nav_json` plus `reach[]` per area (0 ok, 1 can't get there, 2 can't get back), `problems[]` (text, hint, area ids, a point, an optional one-click `fix` edit), dirty/undo/redo labels, the .lsv status and a rebuild estimate.
+- **How edits work:** each edit is a pure function over a `Doc` whose areas sit behind `Arc`, so an undo step costs a list of pointers (300 steps kept).
+  - *Add:* new id = max + 1. It takes the nearest named area's place (navarea.py's place_from). Corners are dropped to the floor with point traces: the middle first, and a corner that falls off a beam edge takes the middle's height.
+  - *Link:* direction worked out exactly like navarea.py/navlink.py. A one-way link removes b → a.
+  - *Delete:* also drops links, approach entries and encounter data that name the deleted areas or their hiding spots.
+  - *Reshape:* moves hiding spots along when the area keeps its size.
+- **Auto-check:**
+  - Directed reach from the spawn areas, plus a reverse pass for traps. Ladders join their foot and top both ways.
+  - Islands are grouped ("Bots can't reach these 12 areas from any spawn").
+  - Also finds dangling links, links to self, duplicate ids, areas with no size, areas a standing player doesn't fit in (head room over the middle; crouch and jump areas skipped), and ladders with no area at an end.
+- **Save:** writes `<nav>.part`, then renames it; keeps `<nav>.bak` the first time. It refuses while the game has the map loaded (`Game::state()` map) and refuses if the file changed on disk since it was opened. It re-parses what it wrote before replacing anything, and says when the .lsv no longer fits (`nav_key` changed). Link, attribute and place edits keep the key, so the knowledge still fits after those.
+- **Rebuild bot knowledge:** a setup job (`knowfix`, shown with the app's JobProgress).
+  - The game's own learner can't do it: the hidden server (navs.rs) runs Valve's mp.dll, which has no brain.
+  - So it reuses `LocalLearner::new` + `prepare` (same folder, same download), swaps in the brain DLL from the player's game for the run (checked for "lonerstrike_mapknow"; Valve's DLL is put back however the run ends), copies in the map, its resources and the saved nav, and adds `bot_enable 1 / bot_ls_fight 1` to server.cfg.
+  - It waits for "map knowledge for <map>:" while showing the stage from the .lsv header, then checks the result's key against the nav and installs it with .part + rename.
+  - Estimate: 45 s + 11 s × (areas/737)² with nobody on (the brain's budget is 4 ms/frame then), e.g. "about a minute" for cs_rats2.
+  - Not run end to end here (it needs the hidden server); see Left.
+- `views/tools/navfix/` (`NavFixer.tsx`, `FixScene.tsx`, `navfixApi.ts`, `navfix.css`), one line in registry.tsx.
+  - Map list: doctor's MapList, nav maps only.
+  - The 3D view is its own Canvas using B's `World`, `Cameras`, `coords`, `useModelMeshes`, `areaColours`, `canDraw3d`/`SceneBoundary`, all read-only.
+  - Modes: Select (Shift adds), Draw area (drag on any surface; the box is laid at that height; left-drag draws while right-drag pans), Link (click A then B; Shift or the checkbox makes it a one-way drop; the chain carries on from B so a beam is click, click, click).
+  - Colours: where bots can get to, places, or how bots move.
+  - Panels: Changes (Undo/Redo with labels, Start over, Save with "Saving…"), the picked area(s) (facts, links with Unlink, attribute checkboxes, place dropdown + New name…, position/size inputs, Snap to floor, Delete, Look at), Problems (Show me highlights the areas and moves the camera, plus one-click fixes), Bot knowledge (status, Rebuild with time estimate and inline job progress).
+  - Keys: Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z or Ctrl+Y, Delete, Esc, V/D/L, O/T. `useDirty("navfix")` asks before leaving. The Fly camera is swapped for Orbit (the mouse is needed for drawing).
+
+**Acceptance (cs_rats2)**
+- `rats2_fix_matches_the_hand_made_one` runs on every `cargo test`. It sends the raw nav (fixture `tools/testdata/cs_rats2_raw.nav.gz`, 78 KB) the same edits the page sends (12 adds, the links, the one-way drop from 1155 to 2). The result is navpack/fixes/cs_rats2.nav byte for byte (sha256 checked).
+- `real_rats2_on_the_map` (LS_TEST_SIM + LS_TEST_GAME) draws the same areas with floor snapping on the real cs_rats2.bsp. Every corner lands within 1 unit of the hand fix (256 / 448), ids and links are identical, and every new area is reachable.
+- The checker on the raw nav: 7 problems, including "A ladder has no area at its top" at the beam ladders (it points at the very spot that needed fixing). After the fix: 5.
+
+**How to try it**
+- `cd app/src-tauri && cargo test navfix` (13 tests: edits round-trip through the file, one-way links, delete, islands/traps, the other checks, save/backup/refusals, the routes, the rats2 fix).
+- Real files: `LS_TEST_SIM=/Users/jameson/loner-strike-sim LS_TEST_GAME="$HOME/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life" cargo test navfix -- --nocapture`.
+- In the app: Tools > Nav fixer > cs_rats2. With the raw nav in cstrike/maps: Top-down, Draw area along the beam, Link from 274 along it, Shift-click the drop to area 2, Save, Rebuild bot knowledge.
+
+**Notes for others**
+- C's `build_ladders` misses tops on cs_rats2 (9 of 22 ladders find no top area; some collapse to length 0). Islands would be badly wrong without a fix, so the checker's `ladder_ends` also counts any area within 72 units of the ladder box's foot or top. That took cs_rats2's raw nav from 120 "unreachable" areas to 6.
+- Hull 1 traces from `MapHulls::trace` come back all-solid at many spots where `ceiling_above` from the same start says there's room (cs_rats2 areas 65, 146, 273, ... under the big furniture). That's why the stand-room check uses point traces. Possibly an entity tree (`solids`) answering all-solid for a short trace near it. Worth a look by C.
+
+**Requests**
+- (B) `Scene` could take extra children (layers) and export its `pointerEvents`. The nav fixer has its own small Canvas because Scene's layer list is fixed.
+- (navs.rs owner) The knowledge rebuild copies a few small private pieces of `LocalLearner` (spawn with low priority, free port, resource copy). A `LocalLearner::run_server(map, extra_cfg)` would let navfix.rs drop them.
+
+**Left**
+- Not clicked through in the real app yet. The running app on this computer is the installed one, without these routes, and testing against the real game's maps folder would change real navs. First check: the rats2 flow above, including pointer picking at the app's text sizes.
+- Rebuild not run end to end (needs the hidden server). Check that the brain DLL loads in Valve's HLDS under CrossOver and that bots join with `bot_enable 1` from server.cfg.
+- Split, and a drag gizmo for move/resize (numeric inputs for now); multi-area link; a Problem spots feed from the health check and replays (plan 5.3).
