@@ -462,16 +462,20 @@ class Submissions(unittest.TestCase):
         self.assertEqual(c.status("Mod", 1)["state"], "unknown")
         self.assertEqual(c.submit(body(mode_item()), "1.2.3.4")[1]["state"], "listed", "a Game Mode Studio (settings only) mode")
 
-    def _uid_setup(self, creator_at, squatter_at):
+    def _uid_setup(self, creator_at, squatter_at, creator_old_at=None):
         """The creator's page (MODE, member 3608549) and a squatter's copy (member 999), both packages
-        declaring the same uid, uploaded at the given GameBanana dates."""
+        declaring the same uid, uploaded at the given GameBanana dates. creator_old_at: an older file
+        on the creator's page that carries the uid too."""
         u = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b"
         mode = {"kind": "mode", "name": "Cage", "uid": u, "mode": {"id": "cage", "uid": u, "maps": [], "plugins": []}}
         files = FakeFiles()
         files.files[1886785] = zip_of(["modes/cage/cage.graph.json"], {"loner-strike.json": manifest(mode)})
+        files.files[1886000] = zip_of(["modes/cage/cage.graph.json"], {"loner-strike.json": manifest(mode)})
         files.files[2100000] = zip_of(["modes/cage/cage.graph.json"], {"loner-strike.json": manifest(dict(mode, name="Cage (copy)"))})
         creator = copy.deepcopy(MODE)
         creator["_aFiles"] = [dict(creator["_aFiles"][0], _tsDateAdded=creator_at)]
+        if creator_old_at:
+            creator["_aFiles"].append(dict(creator["_aFiles"][0], _idRow=1886000, _tsDateAdded=creator_old_at))
         thief = copy.deepcopy(MODE)
         thief["_idRow"] = 800001
         thief["_aSubmitter"] = dict(thief["_aSubmitter"], _idRow=999, _sName="Squatter")
@@ -482,45 +486,84 @@ class Submissions(unittest.TestCase):
         c, rec = make(gb=gb, files=files)
         return c, rec, u
 
-    def _uids_of(self, c, key):
-        return cm.item_uids(json.loads(c.store.get(key)["item"]))
+    def _uids_of(self, c, key, col="item"):
+        return cm.item_uids(json.loads(c.store.get(key)[col] or "{}"))
 
-    def test_the_earlier_upload_owns_the_uid_whoever_registers_first(self):
-        """A squatter registers a copy first (uploaded later than the creator's file): both stay listed,
-        and the creator registering later gets the uid; the squatter's entry loses it and it's flagged."""
+    def _hide(self, c, key):
+        row = c.store.get(key)
+        row.update(state="hidden", hidden_by="recheck")
+        c.store.put(row, "test")
+
+    def test_an_older_upload_never_strips_a_listed_entry(self):
+        """A squatter registers a copy first (uploaded later than the creator's file): both stay listed;
+        the creator's older upload doesn't strip the listed squatter automatically, a moderator decides."""
         c, rec, u = self._uid_setup(creator_at=1_700_000_000, squatter_at=1_790_000_000)
-        code, ans = c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")
-        self.assertEqual((code, ans["state"]), (200, "listed"))
-        self.assertEqual(c.store.uid_owner(u)["owner_id"], 999, "nobody else had it yet")
+        self.assertEqual(c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")[1]["state"], "listed")
         code, ans = c.submit(body(mode_item()), "1.2.3.4")
         self.assertEqual((code, ans["state"]), (200, "listed"), "the creator is never refused")
-        self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549, "the older upload wins")
-        self.assertEqual(self._uids_of(c, "mod:739703"), [u])
-        self.assertEqual(self._uids_of(c, "mod:800001"), [], "the squatter's entry lost the uid")
-        self.assertTrue(any("uid conflict" in str(s[1]) for s in rec.sent), "the moderators are told")
+        self.assertEqual(c.store.uid_owner(u)["owner_id"], 999, "nothing listed loses a uid automatically")
+        self.assertEqual((self._uids_of(c, "mod:800001"), self._uids_of(c, "mod:739703")), ([u], []))
+        conflict = c.store.db.execute("SELECT * FROM uid_conflicts").fetchone()
+        self.assertIn("is older", conflict["why"])
+        self.assertTrue(any("give-uid" in str(s[1]) for s in rec.sent), "the moderators are asked")
+        c.store.give_uid(u, "mod:739703", "test")
+        self.assertEqual((self._uids_of(c, "mod:739703"), self._uids_of(c, "mod:800001")), ([u], []))
         idx = {e["gb"]: e for e in json.loads(cm.build_index(c.store)[0])["items"]}
         self.assertEqual((idx[739703].get("uid"), idx[739703]["ownerId"]), (u, 3608549))
         self.assertNotIn("uid", idx[800001], "listed, linked to nothing")
 
-    def test_a_later_copy_is_listed_without_the_uid(self):
+    def test_an_older_upload_takes_from_an_unlisted_holder(self):
         c, rec, u = self._uid_setup(creator_at=1_700_000_000, squatter_at=1_790_000_000)
-        self.assertEqual(c.submit(body(mode_item()), "1.2.3.4")[0], 200)
-        code, ans = c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")
-        self.assertEqual((code, ans["state"]), (200, "listed"), "never blocked")
+        c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")
+        self._hide(c, "mod:800001")
+        self.assertEqual(c.submit(body(mode_item()), "1.2.3.4")[1]["state"], "listed")
+        self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549, "the older upload wins")
+        self.assertEqual((self._uids_of(c, "mod:739703"), self._uids_of(c, "mod:800001")), ([u], []))
+
+    def test_both_sides_dates_are_their_earliest_upload(self):
+        """The holder's newest file is later than the newcomer's, but an older file on the holder's page
+        carries the uid too: the holder's earliest upload counts, so the newcomer doesn't take it."""
+        c, rec, u = self._uid_setup(creator_at=1_790_000_000, squatter_at=1_700_000_000, creator_old_at=1_600_000_000)
+        c.submit(body(mode_item()), "1.2.3.4")
+        self._hide(c, "mod:739703")
+        self.assertEqual(c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")[1]["state"], "listed")
+        self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549, "1600 beats 1700")
+        self.assertEqual(self._uids_of(c, "mod:800001"), [])
+
+    def test_a_held_submission_takes_nothing_until_approved(self):
+        c, rec, u = self._uid_setup(creator_at=1_700_000_000, squatter_at=1_790_000_000)
+        c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")
+        self._hide(c, "mod:800001")
+        block(c, MODE)
+        self.assertEqual(c.submit(body(mode_item()), "1.2.3.4")[1]["state"], "pending")
+        self.assertEqual(c.store.uid_owner(u)["owner_id"], 999, "a blocked creator's submission takes nothing")
+        self.assertTrue(c.store.db.execute("SELECT 1 FROM uid_conflicts WHERE why LIKE '%waits for a moderator%'").fetchone())
+        c.moderate("mod:739703", "approve", {"reason": ""}, live=False)
+        self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549, "settled when approved")
+        self.assertEqual(self._uids_of(c, "mod:739703"), [u])
+
+    def test_a_pin_strips_a_waiting_proposal_too(self):
+        c, rec, u = self._uid_setup(creator_at=1_700_000_000, squatter_at=1_790_000_000)
+        c.submit(body(mode_item()), "1.2.3.4")
+        block(c, {"_aSubmitter": {"_idRow": 999, "_sName": "Squatter"}})
+        c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")
+        self.assertEqual(self._uids_of(c, "mod:800001", "proposed"), [u], "waiting, still declaring it")
+        c.store.give_uid(u, "mod:739703", "test")
+        self.assertEqual(self._uids_of(c, "mod:800001", "proposed"), [], "the pin reaches proposals")
+        c.moderate("mod:800001", "approve", {"reason": ""}, live=False)
         self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549)
         self.assertEqual(self._uids_of(c, "mod:800001"), [])
-        self.assertTrue(any("uid conflict" in str(s[1]) for s in rec.sent))
 
     def test_unproven_dates_go_to_a_moderator(self):
         for creator_at, squatter_at in ((1_750_000_000, 1_750_000_000), (0, 1_750_000_000), (1_750_000_000, 0)):
             c, rec, u = self._uid_setup(creator_at, squatter_at)
             self.assertEqual(c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")[0], 200)
+            self._hide(c, "mod:800001")
             self.assertEqual(c.submit(body(mode_item()), "1.2.3.4")[0], 200, "never blocked")
             self.assertEqual(c.store.uid_owner(u)["owner_id"], 999, "unproven: the holder keeps it for now")
             self.assertEqual(self._uids_of(c, "mod:739703"), [])
             cid = c.store.db.execute("SELECT id FROM uid_conflicts").fetchone()[0]
             self.assertTrue(any("give-uid" in str(s[1]) for s in rec.sent))
-            # a moderator settles it, and a later registration doesn't undo that
             c.store.give_uid(u, "mod:739703", "test")
             self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549)
             self.assertEqual((self._uids_of(c, "mod:739703"), self._uids_of(c, "mod:800001")), ([u], []))
@@ -533,6 +576,9 @@ class Submissions(unittest.TestCase):
         self.assertEqual(cm.settle_uid(None, 2, 50), "same")
         self.assertEqual(cm.settle_uid(h, 1, 999), "same")
         self.assertEqual(cm.settle_uid(h, 2, 50), "take")
+        self.assertEqual(cm.settle_uid(h, 2, 50, holder_listed=True), "flag", "nothing listed loses it automatically")
+        self.assertEqual(cm.settle_uid(h, 2, 50, may_take=False), "flag", "a held submission never takes")
+        self.assertEqual(cm.settle_uid(h, 2, 50, holder_at=40), "keep", "the holder's earliest upload counts")
         self.assertEqual(cm.settle_uid(h, 2, 150), "keep")
         self.assertEqual(cm.settle_uid(h, 2, 100), "keep")
         self.assertEqual(cm.settle_uid(h, 2, 0), "keep")
