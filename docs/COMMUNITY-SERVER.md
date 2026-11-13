@@ -27,7 +27,7 @@ Nothing here is live until the steps in section 6 are run.
 | `services/serverlist/test_community.py`, `test_modbot.py`, `testdata/gamebanana/` | Offline tests with recorded GameBanana answers and forged Discord interactions. |
 
 Tests: `cd services/serverlist && python3 -m unittest test_community test_modbot test_serverlist`
-(73 tests). A live check that a real GameBanana zip can be listed by range requests:
+(82 tests). A live check that a real GameBanana zip can be listed by range requests:
 `python3 -c "import community as c; print(c.package_names({'id': 1886785, 'name': 'cage.zip', 'size': 278384}))"`.
 
 ## 2. How it works
@@ -65,6 +65,14 @@ Answers: `200 {"ok": true, "key": "mod:123", "state": "listed" | "pending" | "hi
 `400/409/413/422 {"error": "<what to fix>"}`; `429` rate limit; `502` GameBanana didn't answer;
 `503` busy. The app treats a 4xx other than 429 as final and shows the reason; 429/5xx stay
 "waiting" and are retried.
+
+**Who can undo what.** Each entry records who took it out of the list (`hidden_by`: `team`,
+`recheck` or empty). A creator's new registration never reverses a moderator: a page the team
+pulled or hid, or turned down, stays so; the new file waits for a moderator (pulled pages refuse
+it). A re-check hide (the listed file vanished) is lifted by a new registration that passes every
+check; a re-check rejection doesn't hold either. Pulls by anyone stay until a moderator restores
+them. Blocks only change by a moderator. The full table is at the top of community.py's
+migrations, tested in `test_community.Transitions`.
 
 **Where a registration stands** (`GET /community/submission/<mod|spray>/<id>`, public, CORS `*`):
 `{"key", "state": "unknown|pending|listed|hidden|rejected|pulled", "updated", "md5"?, "waiting"?, "reason"?}`.
@@ -146,7 +154,8 @@ logged):
 | `COMMUNITY_MOD_WEBHOOK` | Fallback: the channel's webhook (from `~/.config/lonerstrike/community-webhook`). Only `https://discord.com/api/webhooks/…` is ever posted to. |
 
 The database is `/var/lib/lonerstrike-list/community.db` (systemd StateDirectory). Migrations run
-at start (`PRAGMA user_version`; version 1 creates everything).
+at start (`PRAGMA user_version`; version 1 creates everything; version 2 adds `hidden_by`, with
+rows already hidden, pulled or turned down counted as the team's).
 
 ## 5. Security notes
 

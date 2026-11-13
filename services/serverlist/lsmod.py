@@ -107,7 +107,7 @@ def show_entry(d):
     print(f"{d['key']}  {d['state'].upper()}  {d['kind']}  {d['link']}")
     print(f"  name: {it.get('name', '')}   by {d['submitter']} (GameBanana member {d['submitter_id']})")
     if d.get("reason"):
-        print(f"  reason: {d['reason']}")
+        print(f"  reason: {d['reason']}" + (f"  (out of the list by the {d['hidden_by']})" if d.get("hidden_by") else ""))
     if d.get("check_note"):
         print(f"  last check: {d['check_note']} ({when(d['checked'])})")
     for label, x in (("listed", d.get("listed")), ("waiting", d.get("waiting"))):

@@ -532,7 +532,8 @@ class Moderation(unittest.TestCase):
         c.moderate("mod:739197", "hide", {"reason": "Asked by the author."})
         c.get.pages[("Mod", 739197)] = new_file(MAP)
         c.get_range.files[2000000] = c.get_range.files[1885247]
-        self.assertEqual(c.submit(body(map_item(file=2000000, md5="1" * 32)), "a")[1]["state"], "hidden")
+        self.assertEqual(c.submit(body(map_item(file=2000000, md5="1" * 32)), "a")[1]["state"], "pending", "the new file waits")
+        self.assertEqual(c.store.get("mod:739197")["state"], "hidden")
 
     def test_pull_anything_and_restore(self):
         c, _ = make()
@@ -907,6 +908,109 @@ class Http(unittest.TestCase):
         self.assertNotIn("wrong" * 10, r.stdout + r.stderr)
 
 
+class Transitions(unittest.TestCase):
+    """A creator's registration never undoes what a moderator did (pull, hide, block, reject)."""
+
+    def fresh_file(self, c, page=MAP, key=("Mod", 739197), fid=2000000, md5="1" * 32):
+        c.get.pages[key] = new_file(page, fid, md5)
+        c.get_range.files[fid] = c.get_range.files.get(1885247)
+        return map_item(file=fid, md5=md5)
+
+    def test_a_team_hide_stays(self):
+        c, rec = make()
+        c.submit(body(map_item()), "a")
+        c.moderate("mod:739197", "hide", {"reason": "Asked by the author."})
+        c.store.touch("mod:739197", 1, "")  # whatever the re-check wrote, it's the team's hide
+        code, ans = c.submit(body(self.fresh_file(c)), "a")
+        self.assertEqual((code, ans["state"]), (200, "pending"))
+        row = c.store.get("mod:739197")
+        self.assertEqual((row["state"], row["hidden_by"], row["reason"]), ("hidden", "team", "Asked by the author."))
+        self.assertEqual(json.loads(row["proposed"])["md5"], "1" * 32, "the new file waits")
+        self.assertIn("hidden by the team", rec.sent[-1][1]["content"])
+        idx = json.loads(cm.build_index(c.store)[0])["items"][0]
+        self.assertEqual((idx["status"], idx["md5"]), ("hidden", "bb48b1faf89c4daad7545c4f3a2ce681"))
+        self.assertEqual(c.moderate("mod:739197", "approve", {})["state"], "listed", "a moderator lifts it")
+        self.assertEqual(c.store.get("mod:739197")["hidden_by"], "")
+
+    def test_a_recheck_hide_lifts_when_the_page_passes(self):
+        c, _ = make()
+        c.submit(body(map_item()), "a")
+        c.get.pages[("Mod", 739197)] = new_file(MAP, 2000000, "1" * 32)
+        c.get.pages[("Mod", 739197)]["_aFiles"].pop(0)  # the listed file is gone from the page
+        c.recheck(pause=0)
+        row = c.store.get("mod:739197")
+        self.assertEqual((row["state"], row["hidden_by"]), ("hidden", "recheck"))
+        untagged = copy.deepcopy(c.get.pages[("Mod", 739197)])
+        untagged["_aTags"] = []
+        c.get.pages[("Mod", 739197)], ok = untagged, c.get.pages[("Mod", 739197)]
+        c.get_range.files[2000000] = c.get_range.files[1885247]
+        self.assertEqual(c.submit(body(map_item(file=2000000, md5="1" * 32)), "a")[0], 422, "only when it passes")
+        self.assertEqual(c.store.get("mod:739197")["state"], "hidden")
+        c.get.pages[("Mod", 739197)] = ok
+        self.assertEqual(c.submit(body(map_item(file=2000000, md5="1" * 32)), "a")[1]["state"], "listed")
+        row = c.store.get("mod:739197")
+        self.assertEqual((row["hidden_by"], row["check_note"], row["reason"]), ("", "", ""))
+
+    def test_pulls_stay_whoever_pulled(self):
+        for who in ("team", "recheck"):
+            c, _ = make()
+            c.submit(body(map_item()), "a")
+            if who == "team":
+                c.moderate("mod:739197", "pull", {"reason": "Malware."})
+            else:
+                c.get.pages[("Mod", 739197)] = fixture("mod_739197_untagged.json")
+                c.recheck(pause=0)
+                c.get.pages[("Mod", 739197)] = MAP
+            self.assertEqual(c.store.get("mod:739197")["hidden_by"], who)
+            self.assertEqual(c.submit(body(self.fresh_file(c)), "a")[0], 409, who)
+            self.assertEqual(c.store.get("mod:739197")["state"], "pulled")
+
+    def test_a_team_rejection_sends_the_next_file_to_a_moderator(self):
+        c, _ = make()
+        block(c, MAP)
+        c.submit(body(map_item()), "a")
+        c.moderate("mod:739197", "reject", {"reason": "Stolen."})
+        c.unblock(MAP["_aSubmitter"]["_idRow"], "test")
+        self.assertEqual(c.submit(body(map_item()), "a")[0], 409, "the same file")
+        code, ans = c.submit(body(self.fresh_file(c)), "a")
+        self.assertEqual((code, ans["state"]), (200, "pending"), "unblocked, but the team turned this page down")
+        self.assertEqual(c.store.get("mod:739197")["reason"], "Stolen.")
+
+    def test_a_recheck_rejection_doesnt_hold(self):
+        c, _ = make()
+        block(c, MAP)
+        c.submit(body(map_item()), "a")
+        del c.get.pages[("Mod", 739197)]
+        c.recheck(pause=0)
+        self.assertEqual(c.store.get("mod:739197")["hidden_by"], "recheck")
+        c.unblock(MAP["_aSubmitter"]["_idRow"], "test")
+        c.get.pages[("Mod", 739197)] = MAP
+        self.assertEqual(c.submit(body(map_item()), "a")[1]["state"], "listed")
+
+    def test_blocks_stay(self):
+        c, _ = make()
+        c.submit(body(map_item()), "a")
+        block(c, MAP)
+        self.assertEqual(c.submit(body(self.fresh_file(c)), "a")[1]["state"], "pending")
+        self.assertTrue(c.store.is_blocked(MAP["_aSubmitter"]["_idRow"]))
+
+    def test_a_team_hold_stays_the_teams_through_a_recheck(self):
+        c, _ = make()
+        c.submit(body(map_item()), "a")
+        c.moderate("mod:739197", "hide", {"reason": "x"})
+        c.get.pages[("Mod", 739197)] = fixture("mod_739197_untagged.json")
+        c.recheck(pause=0)
+        row = c.store.get("mod:739197")
+        self.assertEqual((row["state"], row["hidden_by"]), ("pulled", "team"))
+
+    def test_featured_and_reason_survive_a_resubmission(self):
+        c, _ = make()
+        c.submit(body(map_item()), "a")
+        c.moderate("mod:739197", "feature", {"featured": True})
+        c.submit(body(self.fresh_file(c)), "a")
+        self.assertTrue(c.store.get("mod:739197")["featured"])
+
+
 class Migrations(unittest.TestCase):
     def test_reopening_keeps_everything(self):
         p = os.path.join(tempfile.mkdtemp(), "c.db")
@@ -915,6 +1019,21 @@ class Migrations(unittest.TestCase):
         s = cm.Store(p)
         self.assertEqual(s.db.execute("PRAGMA user_version").fetchone()[0], len(cm.MIGRATIONS))
         self.assertEqual(s.get("mod:739197")["state"], "listed")
+
+    def test_version_1_rows_count_as_the_teams(self):
+        p = os.path.join(tempfile.mkdtemp(), "c.db")
+        old = cm.MIGRATIONS
+        cm.MIGRATIONS = old[:1]
+        try:
+            s1 = cm.Store(p)
+            for key, state in (("mod:1", "hidden"), ("mod:2", "pulled"), ("mod:3", "rejected"), ("mod:4", "listed")):
+                s1.db.execute("INSERT INTO entries (key, model, gb, state, added, updated) VALUES (?,?,?,?,1,1)", (key, "Mod", int(key[4:]), state))
+            s1.db.close()
+        finally:
+            cm.MIGRATIONS = old
+        s2 = cm.Store(p)
+        self.assertEqual(s2.db.execute("PRAGMA user_version").fetchone()[0], 2)
+        self.assertEqual([s2.get(f"mod:{i}")["hidden_by"] for i in range(1, 5)], ["team", "team", "team", ""])
 
 
 if __name__ == "__main__":

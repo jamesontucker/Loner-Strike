@@ -755,7 +755,28 @@ MIGRATIONS = [
     );
     CREATE TABLE interactions (id TEXT PRIMARY KEY, at INTEGER NOT NULL);
     """,
+    # 2: who took an entry out of the list ('team' | 'recheck' | ''), recorded instead of guessed.
+    # Rows already hidden, pulled or turned down count as the team's: only a moderator lifts them.
+    """
+    ALTER TABLE entries ADD COLUMN hidden_by TEXT NOT NULL DEFAULT '';
+    UPDATE entries SET hidden_by = 'team' WHERE state IN ('hidden', 'pulled', 'rejected')
+    """,
 ]
+
+# Every way an entry's state changes, and who may do it (a creator's registration never undoes a
+# moderator's pull, hide, block or turning down; tests in test_community.Transitions):
+#   creator registers  new page             -> listed (blocked creator: pending)
+#                      listed               -> listed, new file (blocked: stays listed, file waits)
+#                      hidden by re-check   -> listed again, if the page passes every check now
+#                      hidden by the team   -> stays hidden; the new file waits for a moderator
+#                      rejected by re-check -> listed (blocked: pending)
+#                      rejected by the team -> pending (a moderator looks at the new file)
+#                      same file as rejected, or pulled by anyone -> refused (409), no change
+#   moderator          approve (pending/waiting file) -> listed; restore (hidden/pulled) -> listed;
+#                      hide -> hidden; pull -> pulled; reject -> rejected (or drops a waiting file);
+#                      block/unblock a creator; Undo puts back the exact row before the action
+#   re-check           gone/untagged/flagged -> pulled (waiting: rejected); listed file replaced
+#                      -> hidden; a team hold stays marked as the team's
 
 
 class Store:
@@ -923,7 +944,8 @@ class Store:
 def new_row(model, gb, t):
     return {"key": key_of(model, gb), "model": model, "gb": gb, "kind": "", "state": "pending", "item": None,
             "proposed": None, "rejected_md5": "", "featured": 0, "reason": "",
-            "submitter_id": 0, "submitter": "", "app": "", "added": t, "updated": t, "checked": 0, "check_note": ""}
+            "submitter_id": 0, "submitter": "", "app": "", "added": t, "updated": t, "checked": 0, "check_note": "",
+            "hidden_by": ""}
 
 
 def _j(s):
@@ -1042,7 +1064,7 @@ class Community:
                 if row["state"] == "pulled":
                     raise Reject(409, "The Loner-Strike team pulled this page, so it can't be registered again. Ask in the Discord.")
                 same = [x for x in (_j(row["proposed"]), _j(row["item"])) if x and x.get("md5") == item["md5"]]
-                if row["state"] == "rejected" and row["rejected_md5"] == item["md5"]:
+                if row["state"] == "rejected" and row["hidden_by"] == "team" and row["rejected_md5"] == item["md5"]:
                     raise Reject(409, f"The Loner-Strike team turned this file down: {row['reason'] or 'no reason given'}. Upload a new version to try again.")
                 if same and row["state"] in ("pending", "listed", "hidden"):
                     return 200, {"ok": True, "key": key, "state": row["state"]}
@@ -1051,8 +1073,11 @@ class Community:
             facts = self._verify(model, gb, item)
             if not self.submitter_limit.allow(facts["submitterId"]):
                 raise Reject(429, "Too many registrations from this GameBanana member today. Try again tomorrow.")
-            # creators the team blocked wait for a moderator; everyone else is listed at once
-            look = self.store.is_blocked(facts["submitterId"])
+            # creators the team blocked wait for a moderator, and so does a new file for a page the
+            # team hid or turned down; everyone else is listed at once
+            team_hold = bool(row) and row["hidden_by"] == "team"
+            blocked = self.store.is_blocked(facts["submitterId"])
+            look = blocked or team_hold
             if look and not (row and row["proposed"]) and self.store.count("pending") >= MAX_PENDING:
                 raise Reject(503, "The list has too many creations waiting for a look. Try again in a day or two.")
         except Reject as e:
@@ -1062,25 +1087,26 @@ class Community:
         fresh = row is None
         row = row or new_row(model, gb, t)
         was = row["state"]
-        row.update(kind=item["kind"], submitter_id=facts["submitterId"], submitter=facts["author"], app=app, updated=t, reason="")
+        row.update(kind=item["kind"], submitter_id=facts["submitterId"], submitter=facts["author"], app=app, updated=t)
         data = json.dumps(item, ensure_ascii=False)
         if look:
+            # the team's reason and hold stay as they are; the file waits for a moderator
             row["proposed"] = data
             if was not in ("listed", "hidden"):
                 row["state"] = "pending"
             action = "submit"
         else:
-            # hidden by the team stays hidden; a replaced file the re-check hid comes back
-            row.update(item=data, proposed=None, rejected_md5="",
-                       state="hidden" if was == "hidden" and not row["check_note"] else "listed")
+            # new, listed, or out of the list only by the re-check (and passing every check now)
+            row.update(item=data, proposed=None, rejected_md5="", state="listed", hidden_by="", reason="", check_note="")
             action = "list"
         self.store.put(row, action, f"md5 {item['md5']} file {item['file']} app {app}")
         log(f"registration {key} {row['state']} ({'new' if fresh else 'update'})")
-        self.notify_new(key, item, look, not fresh and was in ("listed", "hidden"), fresh)
+        self.notify_new(key, item, look, not fresh and was in ("listed", "hidden"), fresh,
+                        why="blocked creator" if look and blocked else f"{was} by the team" if look else "")
         return 200, {"ok": True, "key": key, "state": "pending" if look else row["state"]}
 
-    def notify_new(self, key, item, look, update, fresh=True):
-        head = (f"**From a blocked creator, waiting{' (update)' if update else ''}:**" if look
+    def notify_new(self, key, item, look, update, fresh=True, why=""):
+        head = (f"**Waiting for a moderator ({why}){' (update)' if update else ''}:**" if look
                 else f"**Listed {'update' if update else item['kind']}:**")
         lines = [f"{head} {discord_text(item['name'])} by {discord_text(item['author'])}",
                  f"<{gb_link(item['model'], item['gb'])}>"]
@@ -1212,7 +1238,8 @@ class Community:
             if live:
                 facts = self._verify_live(row, cand)
                 cand.update(author=facts["author"], screenshots=facts["screenshots"])
-            row.update(item=json.dumps(cand, ensure_ascii=False), proposed=None, state="listed", reason="", updated=t, rejected_md5="")
+            row.update(item=json.dumps(cand, ensure_ascii=False), proposed=None, state="listed", reason="", updated=t, rejected_md5="",
+                       hidden_by="", check_note="")
             self.store.put(row, "approve", reason)
         elif action == "reject":
             row = self._need(key)
@@ -1223,14 +1250,14 @@ class Community:
                 raise Reject(409, f"Nothing is waiting for {row['key']}. To take a listed page out, pull it.")
             row.update(proposed=None, rejected_md5=cand["md5"], updated=t, reason=reason)
             if not row["item"]:
-                row["state"] = "rejected"
+                row.update(state="rejected", hidden_by="team")
             self.store.put(row, "reject", reason)
         elif action == "pull":
             p, row = self._row(key)
             if not reason:
                 raise Reject(400, "Say why (--reason); it's kept with the entry.")
             row = row or new_row(p[0], p[1], t)
-            row.update(state="pulled", reason=reason, updated=t, proposed=None)
+            row.update(state="pulled", reason=reason, updated=t, proposed=None, hidden_by="team")
             self.store.put(row, "pull", reason)
         elif action == "restore":
             row = self._need(key)
@@ -1239,13 +1266,13 @@ class Community:
             item = _j(row["item"])
             facts = self._verify_live(row, item)
             item.update(author=facts["author"], screenshots=facts["screenshots"])
-            row.update(item=json.dumps(item, ensure_ascii=False), state="listed", reason="", updated=t, check_note="")
+            row.update(item=json.dumps(item, ensure_ascii=False), state="listed", reason="", updated=t, check_note="", hidden_by="")
             self.store.put(row, "restore", reason)
         elif action == "hide":
             row = self._need(key)
             if row["state"] != "listed":
                 raise Reject(409, f"{row['key']} is {row['state']}; only a listed entry can be hidden.")
-            row.update(state="hidden", reason=reason, updated=t)
+            row.update(state="hidden", reason=reason, updated=t, hidden_by="team")
             self.store.put(row, "hide", reason)
         elif action == "feature":
             row = self._need(key)
@@ -1261,7 +1288,7 @@ class Community:
     def detail(self, key):
         row = self._need(key)
         out = {k: row[k] for k in ("key", "model", "gb", "kind", "state", "reason", "submitter", "submitter_id",
-                                   "app", "added", "updated", "checked", "check_note", "rejected_md5")}
+                                   "app", "added", "updated", "checked", "check_note", "rejected_md5", "hidden_by")}
         out["featured"] = bool(row["featured"])
         out["link"] = gb_link(row["model"], row["gb"])
         out["listed"] = _j(row["item"])
@@ -1323,6 +1350,10 @@ class Community:
                 if verdict == "ok":
                     continue
                 row = self.store.get(row["key"])
+                # a hold the team put on stays the team's (only a moderator lifts it)
+                by = "team" if row["hidden_by"] == "team" else "recheck"
+                if verdict in ("pull", "reject", "hide"):
+                    row["hidden_by"] = by
                 if verdict == "pull":
                     row.update(state="pulled", reason=why, updated=t, proposed=None)
                 elif verdict == "reject":
