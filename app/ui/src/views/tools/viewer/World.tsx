@@ -2,7 +2,7 @@
 // the bundle's buffers, with a group per draw so each texture is its own material.
 
 import { useThree, type ThreeEvent } from "@react-three/fiber";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useTools } from "../../../stores/tools";
 import { notAPick } from "./Cameras";
@@ -10,7 +10,10 @@ import type { MapEntity } from "../toolsApi";
 import { lightmapUrl, texUrl } from "../toolsApi";
 import type { Draw, MeshBundle } from "./bundle";
 import { parseVec, type Vec3 } from "./coords";
-import { MapMaterials, isSky, isTrigger } from "./materials";
+import { MapMaterials, isSky, isTrigger, isWater } from "./materials";
+import { animates, loadSky, renderOf, styleStrings, styleValues } from "./gameLook";
+import { skyUrls, useLook, useLookMode } from "./look";
+import { DevCamera } from "./DevCamera";
 
 /** origin: where the model sits (GoldSrc); models built around an origin brush (rotating
  *  doors) are at 0,0,0 in the buffers and moved there. */
@@ -79,7 +82,7 @@ export function drawAt(mesh: ModelMesh, faceIndex: number | null | undefined, ma
   return d;
 }
 
-export function World({ meshes, bundle, map }: { meshes: ModelMesh[]; bundle: MeshBundle; map: string }) {
+export function World({ meshes, bundle, map, entities = [] }: { meshes: ModelMesh[]; bundle: MeshBundle; map: string; entities?: MapEntity[] }) {
   const invalidate = useThree((s) => s.invalidate);
   const gl = useThree((s) => s.gl);
   const layers = useTools((s) => s.layers);
@@ -88,8 +91,9 @@ export function World({ meshes, bundle, map }: { meshes: ModelMesh[]; bundle: Me
   const [version, setVersion] = useState(0);
   // (the dev test room draws its own pictures; a real map's come from the app)
   const mock = import.meta.env.DEV && bundle.header.mock === true;
+  const lookMode = useLookMode((s) => s.mode);
   const mats = useMemo(
-    () => new MapMaterials({ tex: (n) => texUrl(map, n, mock), lightmap: () => (bundle.uv2 ? lightmapUrl(map, mock) : Promise.resolve(null)) }, { textures: layers.textures, lighting: layers.lighting, triggers: layers.triggers, sky: camera === "fly" }, invalidate, Math.min(8, gl.capabilities.getMaxAnisotropy()), bundle.clockwise),
+    () => new MapMaterials({ tex: (n) => texUrl(map, n, mock), lightmap: () => (bundle.uv2 ? lightmapUrl(map, mock) : Promise.resolve(null)) }, { textures: layers.textures, lighting: layers.lighting, triggers: layers.triggers, sky: camera === "fly", look: lookMode }, invalidate, Math.min(16, gl.capabilities.getMaxAnisotropy()), bundle.clockwise, bundle.header.lightmap as { maps?: number; planes?: number; height?: number } | undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [map, bundle],
   );
@@ -97,9 +101,22 @@ export function World({ meshes, bundle, map }: { meshes: ModelMesh[]; bundle: Me
     mats.onChange = (remade) => remade && setVersion((v) => v + 1);
     return () => mats.dispose();
   }, [mats]);
-  useEffect(() => mats.setOptions({ textures: layers.textures, lighting: layers.lighting, triggers: layers.triggers, sky: camera === "fly" }), [mats, layers.textures, layers.lighting, layers.triggers, camera]);
+  useEffect(() => mats.setOptions({ textures: layers.textures, lighting: layers.lighting, triggers: layers.triggers, sky: camera === "fly", look: lookMode }), [mats, layers.textures, layers.lighting, layers.triggers, camera, lookMode]);
+  // the player's own picture settings and the sky box
+  const look = useLook(map, mock).data ?? null;
+  useEffect(() => {
+    if (look) mats.setSettings(look.settings);
+  }, [mats, look]);
+  useEffect(() => {
+    const urls = skyUrls(map, look);
+    if (!urls) return;
+    let live = true;
+    loadSky(urls).then((t) => (live ? mats.setSky(t) : t?.dispose()));
+    return () => void (live = false);
+  }, [mats, map, look]);
+  // brush entities by their render mode (rendermode, renderamt, rendercolor)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const materialSets = useMemo(() => meshes.map((m) => m.draws.map((d) => mats.get(d))), [meshes, mats, version]);
+  const materialSets = useMemo(() => meshes.map((m) => m.draws.map((d) => mats.get(d, m.entity ? renderOf(m.entity.keys) : undefined))), [meshes, mats, version]);
   useEffect(() => invalidate(), [materialSets, layers, invalidate]);
 
   const pick = (m: ModelMesh, i: number) => (e: ThreeEvent<MouseEvent>) => {
@@ -123,6 +140,8 @@ export function World({ meshes, bundle, map }: { meshes: ModelMesh[]; bundle: Me
 
   return (
     <>
+      <GameClock mats={mats} meshes={meshes} entities={entities} on={layers.lighting} />
+      {import.meta.env.DEV && <DevCamera />}
       {meshes.map((m, i) => {
         const visible = m.kind === "world" || (m.kind === "trigger" ? layers.triggers : layers.moving);
         return (
@@ -142,4 +161,38 @@ export function World({ meshes, bundle, map }: { meshes: ModelMesh[]; bundle: Me
       })}
     </>
   );
+}
+
+/** The game's clock for the open map: light styles flicker and pulse (10 steps a second) and
+ *  water wobbles. Only runs while something on the map moves, the page is visible and the
+ *  map's own lighting is on; the view otherwise draws only when something changes. */
+function GameClock({ mats, meshes, entities, on }: { mats: MapMaterials; meshes: ModelMesh[]; entities: MapEntity[]; on: boolean }) {
+  const invalidate = useThree((s) => s.invalidate);
+  const styles = useMemo(() => styleStrings(entities), [entities]);
+  // the styles lights on this map use (faces lit by them carry their pictures)
+  const used = useMemo(() => {
+    const u = new Set<number>([0]);
+    for (const e of entities) if (e.classname.startsWith("light")) u.add(Number(e.keys.style) || 0);
+    return u;
+  }, [entities]);
+  const water = useMemo(() => meshes.some((m) => m.draws.some(isWater)), [meshes]);
+  const start = useRef(performance.now());
+  useEffect(() => {
+    const u = mats.uniforms;
+    styleValues(styles, 0, u.uStyles.value);
+    invalidate();
+    if (!on || !(water || animates(styles, used))) return;
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (document.hidden) return;
+      const t = (performance.now() - start.current) / 1000;
+      u.uTime.value = t;
+      styleValues(styles, t, u.uStyles.value);
+      invalidate();
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [mats, styles, used, water, on, invalidate]);
+  return null;
 }

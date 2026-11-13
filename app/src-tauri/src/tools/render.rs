@@ -386,4 +386,31 @@ mod tests {
         }
         println!("maps with light styles: {} {multi:?}", multi.len());
     }
+
+    /// For comparing the viewer with the game without the app: serves every Tools route on
+    /// 127.0.0.1:8027 (what `npm run dev` proxies to) with the game from LS_TEST_GAME; open
+    /// http://localhost:5173/render-dev.html?map=de_dust2 (docs/TOOLS-RENDER.md).
+    /// `LS_TEST_GAME=... cargo test serve_tools_for_ui -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore]
+    async fn serve_tools_for_ui() {
+        use crate::server::AppState;
+        use std::sync::{Arc, Mutex, OnceLock, RwLock};
+        let Ok(hl) = std::env::var("LS_TEST_GAME") else { return };
+        let app_dir = std::env::temp_dir().join("ls-render-serve");
+        let game = std::env::var("LS_TEST_MOD").unwrap_or_else(|_| "cstrike".into());
+        let g = crate::game::Game::with_app_dir(std::path::Path::new(&hl), &game, &app_dir);
+        let st: Shared = Arc::new(AppState {
+            current: RwLock::new(Some(Arc::new(g))),
+            hosts: RwLock::new(vec!["127.0.0.1:8027".into()]),
+            lan_hosts: RwLock::new(vec![]),
+            token: RwLock::new("devtoken0123456789".into()),
+            app: OnceLock::new(),
+            phone: Mutex::new(crate::app_api::Phone::default()),
+        });
+        let l = tokio::net::TcpListener::bind("127.0.0.1:8027").await.unwrap();
+        println!("tools routes on http://127.0.0.1:8027");
+        axum::serve(l, super::super::local_routes().with_state(st)).await.unwrap();
+    }
 }
+

@@ -90,7 +90,7 @@ export function Scene({ bundle, meshes, entities, map, overlays, onLost, childre
       <hemisphereLight args={["#ffffff", "#5a5f50", 0.9]} />
       <directionalLight position={[0.4, 1, 0.25]} intensity={1.6} />
       <group rotation={ROOT_ROTATION}>
-        <World meshes={meshes} bundle={bundle} map={map} />
+        <World meshes={meshes} bundle={bundle} map={map} entities={entities} />
         <Entities entities={entities} meshes={meshes} />
         {overlays.nav && <NavLayer nav={overlays.nav} know={knowOk} />}
         {overlays.nav && knowOk && <KnowLayer nav={overlays.nav} know={knowOk} />}

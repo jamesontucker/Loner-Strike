@@ -1,6 +1,7 @@
 import { useTools, type HeatMode, type KnowMode, type Layers as LayerSet, type NavColour } from "../../../stores/tools";
 import { Info, Switch } from "../../../ui";
 import type { Overlays } from "../MapViewer";
+import { LookChoice } from "../viewer/LookChoice";
 
 const ROWS: [keyof LayerSet, string, string][] = [
   ["textures", "Textures", "The map's own pictures on every surface. Off: a plain colour per texture, easier on the eyes when you're looking at shapes."],
@@ -46,7 +47,7 @@ export function Layers({ overlays }: { overlays: Overlays }) {
           </span>
           <Switch on={layers[k]} label={label} onChange={(v) => setLayer(k, v)} />
         </div>
-      ))}
+      )).flatMap((row, i) => (ROWS[i][0] === "lighting" && layers.lighting ? [row, <LookChoice key="look" />] : [row]))}
       <div className="setting">
         <span className="name">
           Bots' nav
