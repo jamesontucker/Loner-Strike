@@ -234,3 +234,18 @@ Not run live on a sim this round.
 Passed for real: every player node, readouts, damage scale/set/block, down/revive, squads, buying rules incl. bots,
 saved values across kill -9, round clock, variables/maths/flow/timers/functions, events, chat command, compile/install/
 uninstall routes, server-side breakpoint pause/resume, the Playtest button test (both engines).
+
+## Requests from W1 (2026-11-13): the `ls_marker` entity for Mode map kits
+I'll follow your kit format when it's here. My proposal for the marker, to agree or change:
+- One point entity **`ls_marker`**: `kind` (what it marks), `mode` (`laststand`, `br`, ... or `any`, the default),
+  `targetname`, optional `size "x y z"` (a box round the origin), `radius`, `angle`, and any other keys passed through.
+- gm_components resolves markers at round start for whatever mode runs: a marker whose `kind` is a component classname
+  (`ls_wave_spawner`, `ls_barricade`, `ls_supply_drop`, `ls_loot_container`, `ls_respawn_point`, `ls_safe_zone`,
+  `ls_zone_shrinker`, ...) becomes that component with the rest of its keys (only when its `mode` matches). Any other
+  kind is a named spot for the mode's plugin: natives `ls_marker_find(const kind[], start = 0)` and
+  `ls_marker_get(ent, const key[], out[], len)`.
+- Last Stand kit: `lst_shop` (point; the armory, Barney stands there), `lst_base` (box), `ls_wave_spawner`,
+  `ls_barricade` (+ `boards=<name>` of the func_illusionary boards), `ls_supply_drop`.
+- Battle Royale kit: `ls_respawn_point`, `ls_safe_zone` (`radius`), `ls_zone_shrinker` (`stages`),
+  `ls_loot_container` (`tier`), `ls_supply_drop`, `br_drop` (optional preferred landing spots).
+- Maps made the current way (ls_outpost, br_valley: named entities and components) keep working.
