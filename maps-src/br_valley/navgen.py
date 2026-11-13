@@ -138,11 +138,12 @@ class Hull:
 
 
 class Node:
-    __slots__ = ("i", "j", "z", "nz", "to", "area")
+    __slots__ = ("i", "j", "z", "nz", "to", "area", "wall")
 
     def __init__(self, i, j, z, nz):
         self.i, self.j, self.z, self.nz = i, j, z, nz
         self.to = [None] * 4
+        self.wall = [False] * 4       # the way on that side ends at a wall or a drop's edge
         self.area = None
 
 
@@ -227,6 +228,7 @@ def main():
                     landings.append(n)
 
     ledge = [False]
+    wallhit = [False]
 
     def walk(x, y, z, nx, ny):
         """the player's own moves (PM_StepMove-like): up to STEPUP, across, down to the floor
@@ -234,6 +236,7 @@ def main():
         cz, nz = z, 1.0
         px, py = x, y
         ledge[0] = False
+        wallhit[0] = False
         for k in range(1, SUB + 1):
             tx, ty = x + (nx - x) * k / SUB, y + (ny - y) * k / SUB
             up = h.trace((px, py, cz + HALF + 1), (px, py, cz + HALF + 1 + STEPUP))
@@ -241,6 +244,7 @@ def main():
             t = h.trace((px, py, hz + HALF), (tx, ty, hz + HALF))
             traces[0] += 3
             if t["frac"] < 1.0 or t["startsolid"]:
+                wallhit[0] = True
                 return None
             g = ground(tx, ty, hz, hz - cz + DROP)
             if not g or z - g[0] > DROP:
@@ -265,6 +269,8 @@ def main():
                 if not g:
                     if ledge[0]:
                         ledges.add((n, d))
+                    if wallhit[0] or ledge[0]:      # (a wall, or the edge of a drop a player can overhang)
+                        n.wall[d] = True
                     continue
                 m, new = add(ni, nj, round(g[0], 1), g[1])
                 n.to[d] = m
@@ -388,11 +394,22 @@ def main():
         return a.z + (dzx if k >= w else 0) + (dzy if r >= hgt else 0)
 
     buf = [struct.pack("<III", 0xFEEDFACE, 5, h.size), struct.pack("<H", 0), struct.pack("<I", len(areas))]
+    rects = []
     for aid, rows in enumerate(areas, 1):
         w, hgt = len(rows[0]), len(rows)
         n0 = rows[0][0]
         x0, y0 = n0.i * STEP - STEP / 2, n0.j * STEP - STEP / 2
         x1, y1 = x0 + w * STEP, y0 + hgt * STEP
+        ext = STEP / 2 - 0.5
+        if any(rr[0].wall[WEST] for rr in rows):
+            x0 -= ext
+        if any(rr[-1].wall[EAST] for rr in rows):
+            x1 += ext
+        if any(a.wall[NORTH] for a in rows[0]):
+            y0 -= ext
+        if any(a.wall[SOUTH] for a in rows[-1]):
+            y1 += ext
+        rects.append((aid, x0, y0, x1, y1, min(a.z for rr in rows for a in rr), max(a.z for rr in rows for a in rr)))
         z_nw = corner_z(rows, 0, 0)
         z_ne = corner_z(rows, w, 0)
         z_se = corner_z(rows, w, hgt)
@@ -417,11 +434,11 @@ def main():
     open(out, "wb").write(b"".join(buf))
     print("wrote %s (%.0f s)" % (out, time.time() - t0))
     if layers:
-        ok = check(h, nodes, grid, seeded, landings, canopy_landings, ladders, ledges, layers)
+        ok = check(h, nodes, grid, seeded, landings, canopy_landings, ladders, ledges, layers, rects)
         sys.exit(0 if ok else 1)
 
 
-def check(h, nodes, grid, seeded, landings, canopy_landings, ladders, ledges, layers):
+def check(h, nodes, grid, seeded, landings, canopy_landings, ladders, ledges, layers, rects=()):
     """the map's checks on the walk (see the top of the file); prints a report, returns True if all pass"""
     G = layers["grid"]
     gnd, gx0, gy0, gs = G["ground"], G["x0"], G["y0"], G["step"]
@@ -685,6 +702,47 @@ def check(h, nodes, grid, seeded, landings, canopy_landings, ladders, ledges, la
     print("below ground: %d crates and guns, %d stair trenches; walk from the nearest trench: worst %d units (%.1f s); %d too far"
           % (len(below), len(portals), worst, worst / 250.0, far_below))
     if far_below or len(portals) < 6:
+        ok = False
+    # every way between levels (stairs, trenches, hatches, ramps, walkways) and W2's two river-bed spots: around each
+    # end (24 each way) a player is always inside an area of his own level, never only under or over another one
+    # (the brain would put him on that one and plan from there); and the two ends are linked on foot or by ladder
+    def own_and_other(x, y, z):
+        own = other = False
+        for (aid, a0, b0, a1, b1, zlo, zhi) in rects:
+            if a0 <= x <= a1 and b0 <= y <= b1:
+                if zlo - 40 <= z <= zhi + 40:
+                    own = True
+                elif abs(z - (zlo + zhi) / 2) < 400:
+                    other = True
+        return own, other
+    seams = 0
+    ends = [(c["kind"] + " " + c["name"], end, c[end]) for c in layers["connectors"] for end in ("bottom", "top")]
+    ends += [("W2's river-bed spot", "bed", (840, -1537, -160)), ("W2's river-bed spot", "bed", (725, -2420, -160))]
+    for (name, end, (x, y, z)) in ends:
+        bad = []
+        for dx in (-24, 0, 24):
+            for dy in (-24, 0, 24):
+                nn = found(x + dx, y + dy, z, r=20, dz=30)
+                if not nn:
+                    continue          # (nobody stands there: a wall or a drop)
+                own, other = own_and_other(x + dx, y + dy, nn.z)      # (at the ground's own height there)
+                if other and not own:
+                    bad.append((dx, dy, round(nn.z), [r_[0] for r_ in rects if r_[1] <= x + dx <= r_[3] and r_[2] <= y + dy <= r_[4]]))
+        if bad:
+            seams += 1
+            print("  SEAM: %s, %s end (%d %d %d): standing at %s from it a player is only over/under another level's area"
+                  % (name, end, x, y, z, bad))
+    unlinked = 0
+    for c in layers["connectors"]:
+        a = found(*c["bottom"], r=40, dz=30)
+        b = found(*c["top"], r=40, dz=30)
+        # (both ends reach the respawn points and are reached from them: they're joined both ways)
+        if not (a and b and a in back and a in there and b in back and b in there):
+            unlinked += 1
+            print("  UNLINKED: %s %s: its ends aren't joined on foot or by ladder" % (c["kind"], c["name"]))
+    print("ways between levels: %d ends checked, %d seams (a level's area short of the wall under another), %d not linked"
+          % (len(ends), seams, unlinked))
+    if seams or unlinked:
         ok = False
     sd = 0
     for (x, y, z) in layers["supply_drops"]:

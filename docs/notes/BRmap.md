@@ -408,6 +408,90 @@ gm_battleroyale + gm_components built from HEAD 965fb0c, gm_simrec, a probe coun
   across the map (`shots4/tour/*.jpg`, retakes in `shots4/retake/`); contact sheets `sheets4/*.png`; the radar
   `overview4.png` (also maps-src/br_valley/layout.png).
 
+## 2026-11-13 — br_valley v5: the second review's fixes (docs/notes/BRmapReview2.md)
+
+### Must-fix
+- **B1 the river has water:** `!WATERBLUE` 28 over the bed, the whole river (you wade, you don't swim: no slowdown, but
+  the splashes give you away); liquids aren't in the clip hulls; running-water sounds at four places along it.
+- **B2 the town vault is closed:** the storm drain moved to x -576..-384 (64 of rock between); its only way in is the
+  grate-floored passage from the sewer.
+- **B3 the deep stope:** out of the deep chamber's footprint (x -896..-384, y 2880..3264, floor -704), one 96-wide
+  grate-floored passage in, concrete steps down, lamps every 256 at 240.
+- **B4 walls below:** each solid cell is faced as the place it faces and the merge only joins cells with the same look
+  (the style is in the merge key). The town vault, the armoury, the guard room and the tunnels show their own walls.
+- **B5 trenches:** the factory yard's trench is four cells now, down northwards straight into the fort caves (33.7
+  degrees, was 45); the factory tunnel moved east of it (no 48-wide slot: full 192 width from the boiler house to the
+  fort caves); the bunker's pad came down to 64, so its trench is 36.9 degrees (was 41.2).
+
+### Should-fix and the "feel bigger" brief
+- **S1 sightlines:** slopes may be up to 32 degrees now (were 24), ridges 1.3x taller, two new ones (the east field; the
+  farm-town gap), each crest with rock outcrops (at most ~170 tall: anything taller is a perch you can't get off) and a
+  line of pines; the lanes 110-130 deep. Measured (eye 64, target 48, points every 256 on dry ground):
+  - the reviewer's los.py as it is (terrain and tree canopies; note it reads the ground grid transposed, `G[x][y]` on
+    a grid stored by rows): **1.5-3k 47 -> 42 %, over 3k 24 -> 20 %** (targets 35 / 15 not met by that count);
+  - corrected (grid by rows) and counting the rocks, buildings and structures that do block sight: **17 % and 6 %**;
+  - terrain alone 58 -> 52 % and 37 -> 29 %. Reaching the reviewer's targets on terrain and trees alone would take
+    dozens more trees; each costs clipnodes (82 %).
+- **S2 the cliff ring:** an irregular crest (more harmonics, a phase per side, raised peaks), a look per side, eight
+  rock spires in front of it, notches where the river comes in (a waterfall) and goes out and where the main road
+  leaves (a boarded tunnel mouth in the west).
+- **S3/S4 lamps below:** the old warm tunnel grid is gone (one lamp scheme per place); every place's lamps are 210+,
+  every 256 in rooms under 600 across.
+- **S5** the boathouse cellar no longer overlaps the cisterns; **S6** the bunker's north tunnel opens 192 wide into the
+  guard room.
+- **S7 the east ridge trail:** a plank catwalk along the east ridge from the quarry side to the bunker yard, a lookout
+  hut with a 440-high mast and a red lamp (the south-east's landmark), stairs down at both ends, a sniper rifle and a
+  crate in the hut.
+- **S8** the hatch head-frames are boarded housings (door on the ladder's side, a roof) under the tall frame and wheel;
+  the adit's head-frame has a plank housing roof at 176.
+- **S9** the concrete trenches are lined with concrete from below ground to the top.
+- **S10** wood floors in houses, the farmhouse and the boathouse, stone in the hall, steel in the office and factory;
+  roofs in three textures; a table and a crate in each ground floor's free corners (clear of doors and stairs).
+- **S11** a hip-high stripe in the place's lamp colour along every tunnel and an EXIT sign at both ends of each.
+- **S12** two more stair trenches: the town's north edge down into the storm drain (to the deep chamber; it replaces
+  the drain's ladder hatch) and the pumping station down into its works. 8 stair trenches, 12 hatches.
+- N2 the cars have cabs and wheels.
+- Validator: rocks clear of anything placed before them (a crest rock had closed a foxhole's open side: a pit);
+  crest rocks at most ~170 tall (taller steep rocks are perches: a player's box rests on a brush's corner);
+  CLIP ramps' feet may meet a cross-slope (the steps are checked); a flat drop spot on steep ground gets its pistol
+  right beside it.
+
+### Build (6 threads, nice 19, VIS and RAD without -full/-extra)
+- No leak. **clipnodes 26986/32767 (82.4 %), AllocBlock 59/64 (92.2 %), worldleaves 6619/8192 (80.8 %),** planes 44.6 %,
+  marksurfaces 46.0 %, visdata 0.91 MB, lightdata 2.6 MB. AllocBlock is the tightest now (the ring, water, spires: the
+  spires are lightmapped at scale 4 to keep it down).
+- Nav 5255 areas (cap 6000). All checks pass: 0 traps, 56 high/underground pockets each with 2+ ways out, 26/26
+  ladders joined, 90 connectors on the walk, drop-in spot to a gun median 233 / worst 1802 units (7.2 s), every crate
+  and gun below within 15.4 s of a stair trench on foot (8 trenches), 8/8 supply drops openable.
+- **Walkable: below 16.9 M, surface 43.9 M, high 8.7 M = 69.4 M (1.35x).**
+
+### W2's nav seam (bots dropping orders below), fixed in navgen.py
+- The cause W2 found: a nav area ends half a step past its last sample, but a player can stand up to ~25 further on
+  (until the wall, or overhanging a drop's edge). Where another level's area overlaps that strip (the bridge deck and
+  the bank over the river bed at (840, -1537) and (725, -2420); kiosk roofs over the hatch rooms; ramps), a bot standing
+  in it is put on the other level's area and plans a path it can't follow.
+- Fix: an area's side reaches on half a step more (to the wall, or over the drop's edge) where any of its samples is
+  stopped there by a wall or a drop. Area count unchanged (5255).
+- New check in `navgen.py --check`: at every end of every way between levels (182: stairs, trenches, hatches, ladders,
+  ramps, walkways) and at W2's two spots, standing anywhere within 24 of the end, a player is inside an area of his own
+  level whenever another level's area overlaps that spot; and both ends are joined to the respawn network. Before the
+  fix: 15 seams; after: **0 seams, 0 unlinked**.
+- **Drop-in spots at the trench mouths** (for W1): one `br_drop` spot 160 past each of the 8 stair trenches' tops, so
+  W1 can land some bots right by a way down (the spot decides the starting layer). 41 drop-in spots in all, each with a
+  gun near (3 pistols added).
+
+### Tested (sim BRV5 of BRPLAY, port 27364, 20 bots, brain r43395720981, plugins from HEAD with W1's loot-up; the
+### build before the seam fix and the trench-mouth spots; 25 min)
+- 3 complete games: **6.3 / 5.0 / 5.4 min**, **drop-in deaths 0**, zone deaths 1 / 0 / 1, armed at the fight start 9 of 18
+  in game 1, supply drops opened 2 of 2, 1 of 2, 2 of 2; went below during a game 1 / 2 / 1 (2 / 19 / 1 % of the time).
+  Games 2 and 3 started with only 4 players (the bot count fell after game 1: the server's, not the map's; noted for W1).
+- Screenshots (scratch folder): 179 connector views (`shots5/conn/*.jpg`, cameras where a player can stand with a clear
+  view), 45 tour views incl. 12 at ground level (`shots5/tour/*.jpg`; u13 bunker hall and u18 town trench foot are now
+  shot from open floor), contact sheets `sheets5/*.png`.
+- **Shipped build** (seam fix, trench-mouth spots, 5255 areas): the .lsv (5.7 MB) was built by loading the shipped
+  bsp/nav in BRV5 (9 min, 20 bots). Game 1: 15 players, 4.5 min, drop-in deaths 0, zone deaths 0, 1 bot unstuck.
+  Game 2 again started with 4 players (same bot-count drop, for W1). Radar overview regenerated from this bsp.
+
 ## Next map (after br_valley passes its next review): br_port, a coastal port town (user's pick)
 An old harbour town on a hill above the port; docks, warehouses and container yards (cheap cover mazes); a cargo ship
 at the quay you can board (decks, hold); a lighthouse on a cliff; water as scenery and crossings, not a place to
@@ -416,3 +500,15 @@ fight. Three layers: below (sewers, smugglers' tunnels, warehouse basements, the
 so it feels larger. From the start: a purpose for every element, distinct zones, 2+ ways out everywhere, guns near
 drop spots, loot by risk per layer, the validator (build_map + navgen --check), brush-cheap construction (CLIP ramps
 over non-clipping steps, CLIP boxes round non-clipping foliage, nav under 6000 areas). Not started (disk).
+
+### From W2 (2026-11-13): why ordered bots don't reach crates below (trace_BRV4_classic_br_valley_143053.csv)
+- A bot sent to (-1300, -900) from the eastern tunnels loops between about (272, -2362), (752, -2424) and
+  (1210, -1530) at z -124 for 7+ minutes. It is marked "bad area" each time at **(840, -1537)** and
+  **(725, -2420)**, and its path fails there.
+- At both spots an underground corridor area (z -160: areas 833/852/870/889 ending at y -1537.5; area 727 at
+  y -2312..-2412) ends a few units short of where surface areas sit right above it (1273/1299 at z -11, 1234 at z 40;
+  709/713 at z -2). The corridor has no link to them. A bot that steps 2-3 u past the corridor's end gets a surface
+  area as its "last known area", plans its path from up there, can't follow it, and gives up.
+- Fix on the nav side: extend the corridor areas to the wall at those trench ends, or join them properly to the stair
+  areas, so a bot standing there is always inside a z -160 area. Worth checking every trench and hatch for the same
+  seam (corridor end under a surface area).

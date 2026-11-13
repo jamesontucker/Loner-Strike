@@ -41,7 +41,7 @@ FLOOR_Z = -768              # bottom of the underground slab
 SLAB_TOP = -320             # terrain prisms start here; tunnel ceilings
 TUN_Z = -512                # tunnel floor
 BED_Z = -160                # river bed
-MAXD = 112                  # largest height step between neighbouring vertices (256 apart)
+MAXD = 160                  # largest height step between neighbouring vertices (256 apart): 32 degrees (v5: 112, 24)
 
 GRASS, GRASS2, DIRT, ROAD, ASPH = "CSTRIKE_FT3GRAS", "-0OUT_GRSS1", "CSTRIKE_FT2DIRT", "OUT_GRVL2", "CSTRIKE_FT4APHT"
 ROCK, ROCK2, MUD, SAND = "OUT_RK3", "-0OUT_RK4", "CSTRIKE_FT2MUD", "-1Sand"
@@ -220,16 +220,16 @@ detail_nc = Ent("func_detail", zhlt_detaillevel=1, zhlt_noclip=1)
 ents.append(detail_nc)
 
 
-def frustum(poly, zb, zt, s, tex, bottom=None):
+def frustum(poly, zb, zt, s, tex, bottom=None, scale=1):
     """a convex brush: the polygon at zb, the same scaled by s round its middle at zt (s 0: a point, a cone)"""
     b = Brush()
     cx_ = sum(p[0] for p in poly) / len(poly)
     cy_ = sum(p[1] for p in poly) / len(poly)
     bot = [(p[0], p[1], zb) for p in poly]
     top = [(cx_ + (p[0] - cx_) * s, cy_ + (p[1] - cy_) * s, zt) for p in poly]
-    b.face(bot[:3], (0, 0, -1), bottom or tex)
+    b.face(bot[:3], (0, 0, -1), bottom or tex, scale)
     if s > 0:
-        b.face(top[:3], (0, 0, 1), tex)
+        b.face(top[:3], (0, 0, 1), tex, scale)
     k = len(poly)
     for i in range(k):
         p, q = bot[i], bot[(i + 1) % k]
@@ -238,7 +238,7 @@ def frustum(poly, zb, zt, s, tex, bottom=None):
         mx, my = (p[0] + q[0]) / 2 - cx_, (p[1] + q[1]) / 2 - cy_
         if n[0] * mx + n[1] * my < 0:
             n = (-n[0], -n[1], -n[2])
-        b.face([p, q, t], n, tex)
+        b.face([p, q, t], n, tex, scale)
     b.bounds = (min(p[0] for p in poly), min(p[1] for p in poly), zb, max(p[0] for p in poly), max(p[1] for p in poly), zt)
     b.poly = [(p[0], p[1]) for p in poly]
     b.top3 = top[:3] if s > 0 else [(p[0], p[1], zt) for p in poly[:3]]
@@ -383,8 +383,8 @@ def check_ground():
     floor with the hillside poking through). Fully buried brushes (foundations) are fine."""
     bad = []
     for b in REG:
-        if b.group.startswith(EXEMPT) or b.group in ("rock", "tree", "bush", "boulder"):
-            continue
+        if b.group.startswith(EXEMPT) or b.group in ("rock", "tree", "bush", "boulder") or getattr(b, "kind", None) == "ramp":
+            continue          # (a CLIP ramp's foot may meet a cross-slope: it's invisible; its steps are checked)
         (ax, ay, az), (bx_, by, bz), (cx_, cy, cz) = b.top3
         n = cross((bx_ - ax, by - ay, bz - az), (cx_ - ax, cy - ay, cz - az))
         if abs(n[2]) < 1e-9:
@@ -496,7 +496,7 @@ PADS = [
     ("farm", -3328, 1792, -1792, 3328, 32),
     ("radio", -512, 2560, 0, 3072, 448),
     ("gas", -1280, -3072, -512, -1792, 0),
-    ("bunker", 2304, -3328, 3328, -2304, 160),
+    ("bunker", 2304, -3328, 3328, -2304, 64),
     ("lumber", 2304, 2048, 3328, 3072, 128),
     ("quarry", 2304, -512, 3328, 512, -128),
     ("docks", -256, -1536, 512, -768, 0),
@@ -583,18 +583,19 @@ TUNNELS = [
     ("sewer", -1664, 320, 256, 512),             # the town's sewer, under the main street (a channel down its middle)
     ("sewer_s", -992, -1952, -800, 320),         # the old sewer south: town - cisterns - the gas station's tank vault
     ("gas_w", -2752, -2016, -800, -1824),        # gas station west to the factory
-    ("factory", -2944, -2560, -2752, -1408),     # the factory's service tunnel: boiler house - yard trench - fort caves
+    ("factory", -2752, -2560, -2560, -1408),     # the factory's service tunnel: boiler house - west tunnel - fort caves
     ("river", -800, -2016, 2944, -1824),         # under the river to the bunker
     ("gas_s", -1280, -2560, -1088, -1824),       # gas station trench to the west tunnel
     ("docks_s", 0, -1824, 192, -1536),           # the river tunnel up to the boathouse cellar
-    ("bunker_b", 2688, -2368, 2944, -1824),      # the bunker's north tunnel
+    ("bunker_b", 2688, -2496, 2944, -1824),      # the bunker's north tunnel (a 192 opening into the guard room)
     ("quarry", 2816, -1824, 3008, -1152),        # bunker north to the quarry workings
-    ("drain_n", -640, 512, -448, 1920),          # storm drain: the town sewer north to the deep chamber
+    ("drain_n", -576, 512, -384, 1920),          # storm drain: the town sewer north to the deep chamber
     ("mine", -2240, 2112, 2432, 2304),           # the mine gallery: farm - deep chamber - under the river - lumber caves
     ("mine_n", -1600, 2304, -1408, 2432),        # the gallery up to the north caves
     ("pumpline", 256, 352, 1536, 480),           # the pump line: sewer east, under the river, to the pumping works
     ("vault_way", -912, 512, -816, 640),         # a grate-floored passage from the sewer to the town vault (you hear it)
     ("armoury_way", 3008, -3008, 3104, -2944),   # the same into the bunker's armoury
+    ("stope_way", -896, 2816, -800, 2880),       # and into the deep stope
     ("ridge_way", 1920, -1824, 2112, -1664),     # the river tunnel up into the ridge caves
     ("drain_e", 3072, 1408, 3264, 1920),         # the east drain: the quarry workings north to the lumber caves
 ]
@@ -604,13 +605,13 @@ PLACES = [
     ("west mine", -3328, 1664, -2048, 2560, "mine", TUN_Z),          # the old mine's west workings (the farm adit)
     ("north caves", -2048, 2432, -1280, 3200, "cave", TUN_Z),        # caves under the north road
     ("deep chamber", -1152, 1920, -128, 2816, "cave", TUN_Z),        # the deep chamber under radio hill's flank
-    ("deep stope", -896, 2560, -384, 2944, "vault", -704),           # ...and its stope, a level down (tier 5)
+    ("deep stope", -896, 2880, -384, 3264, "vault", -704),           # ...and its stope, a level down behind a grate (tier 5)
     ("lumber caves", 2432, 1792, 3328, 2816, "cave", TUN_Z),         # caves under the lumber camp
     ("cisterns", -1664, -1280, -128, -128, "cistern", -576),         # the town's cistern hall: columns, a water channel
     ("town vault", -1088, 640, -640, 1024, "vault", TUN_Z),          # under the town hall (tier 5), one grate way in
     ("boiler house", -3328, -3328, -2304, -2560, "utility", TUN_Z),  # the factory's basement: boilers, pipes
     ("tank vault", -1536, -3328, -640, -2560, "utility", TUN_Z),     # the gas station's fuel tanks
-    ("boathouse cellar", -256, -1536, 512, -768, "pump", TUN_Z),     # the docks' cellar (a hatch in the yard)
+    ("boathouse cellar", -128, -1536, 512, -768, "pump", TUN_Z),     # the docks' cellar (a hatch in the yard)
     ("pumping works", 1536, -1024, 2304, 1024, "pump", TUN_Z),       # the river pumping station's works
     ("ridge caves", 1664, -2304, 2304, -1152, "cave", TUN_Z),        # caves under the east ridge
     ("quarry workings", 2432, -1152, 3328, 1536, "works", TUN_Z),    # the quarry's old workings
@@ -631,7 +632,7 @@ PSTYLE = {   # walls, floor, lamp colour, lamp texture, sound
     "pump": ("CSTRIKE_ME2RSTW", CONC_F, "150 220 255", "~SPOTBLUE", "ambience/pumper.wav"),
     "grate": (CONC, "CSTRIKE_FE2GTNG", "255 120 100", "~SPOTRED", None),
 }
-TUNNEL_STYLE = {"drain_e": "works", "sewer": "sewer", "sewer_s": "sewer", "drain_n": "sewer", "mine": "mine", "mine_n": "mine", "vault_way": "grate",
+TUNNEL_STYLE = {"stope_way": "grate", "drain_e": "works", "sewer": "sewer", "sewer_s": "sewer", "drain_n": "sewer", "mine": "mine", "mine_n": "mine", "vault_way": "grate",
                 "armoury_way": "grate", "pumpline": "pump", "docks_s": "pump", "factory": "utility", "gas_w": "utility",
                 "gas_s": "utility", "river": "sewer", "bunker_b": "bunker", "quarry": "works", "ridge_way": "cave"}
 
@@ -657,10 +658,12 @@ def zone_style(x, y):
 TRENCHES = [
     ("town", 15, 13, 16, 17, "n"),      # town south-east corner, down northwards to the sewer
     ("gas", 10, 5, 14, 6, "w"),         # behind the gas station, down westwards
-    ("factory", 3, 6, 4, 9, "s"),       # factory yard, down southwards
+    ("factory", 3, 6, 4, 10, "n"),      # factory yard, down northwards into the fort caves (four cells: 33.7 degrees)
     ("bunker", 24, 2, 25, 6, "n"),      # bunker yard, down northwards
     ("quarry", 26, 13, 27, 16, "s"),    # quarry floor, down southwards
     ("farm", 5, 22, 6, 26, "s"),        # the mine's adit in the farmyard, down southwards to the west mine
+    ("drain", 12, 20, 16, 21, "w"),     # the town's north edge, down westwards into the storm drain (to the deep chamber)
+    ("pumping", 22, 14, 23, 18, "s"),   # the pumping station, down southwards into the pumping works
 ]
 # ladder hatches: (i, j, what stands over it). A 96 hole with a ladder on its north wall, the cell made flat;
 # every one under a small structure that says what it is (and keeps a camper from covering the hole from
@@ -670,12 +673,11 @@ HATCH_KIND = {(13, 16): "kiosk",        # the main street, into the sewer
               (6, 7): "shed",           # by the factory road, into the west tunnel
               (8, 16): "kiosk",         # the sewer's west end, by house A
               (11, 13): "kiosk",        # south of the town, into the cisterns
-              (13, 20): "kiosk",        # north of the town, into the storm drain
               (18, 23): "pump", (21, 23): "pump",   # pump houses on both river banks over the mine gallery
               (25, 23): "headframe",    # the lumber camp, into the lumber caves
               (9, 26): "headframe",     # the north road, into the north caves
               (5, 9): "shed",           # by the west track south-east of the fort, into the fort caves
-              (22, 13): "pump", (22, 16): "pump",   # the pumping station east of the river, into its works
+              (22, 13): "pump",         # the pumping station east of the river, into its works
               (15, 9): "shed",          # the docks' yard, into the boathouse cellar
               (9, 2): "shed"}           # south-west of the gas station, into the tank vault
 HATCHES = list(HATCH_KIND)
@@ -695,15 +697,17 @@ def noise(x, y):
 # v4: ridges between the places (you crest one to see the next place; no long sightlines across the valley)
 # and sunken lanes along three tracks (gullies with banks you can walk out of anywhere: slopes stay under 24
 # degrees). (x0, y0, x1, y1, height or depth, half width)
-RIDGES = [(-1350, -1450, -150, -1250, 230, 360),      # between the town and the gas station
-          (-3050, 1300, -1850, 1500, 200, 340),       # between the fort / West Peak and the farm
-          (-450, -3300, 700, -2600, 210, 380),         # south of the gas station to the river
-          (1600, 1700, 1950, 2500, 170, 300),          # east bank, north: the viaduct's branch stairs come down it
-          (-1500, 1900, -900, 1700, 160, 300),         # north of the town, between the storm drain and the north road
-          (1250, -3200, 2000, -2600, 180, 340)]        # the south-east, between the river and the bunker
-GULLIES = [(-1000, -1930, -420, -1100, 88, 230),       # the gas station - docks track: a sunken lane
-           (-2480, -1650, -2250, -600, 72, 210),        # the west track past the fort
-           (-1500, 2330, -400, 2420, 72, 210)]          # the north road under radio hill
+RIDGES = [(-1350, -1450, -150, -1250, 299, 360),      # between the town and the gas station
+          (-3050, 1300, -1850, 1500, 260, 340),       # between the fort / West Peak and the farm
+          (-450, -3300, 700, -2600, 273, 380),         # south of the gas station to the river
+          (1600, 1700, 1950, 2500, 221, 300),          # east bank, north: the viaduct's branch stairs come down it
+          (-1500, 1900, -900, 1700, 208, 300),         # north of the town, between the storm drain and the north road
+          (1250, -3200, 2000, -2600, 234, 340),        # the south-east, between the river and the bunker
+          (2080, -1000, 2120, 850, 286, 260),          # (v5) the east field, between the pumping station and the quarry
+          (-2150, 1650, -1650, 2050, 260, 280)]        # (v5) the gap between the farm and the town
+GULLIES = [(-1000, -1930, -420, -1100, 130, 230),      # the gas station - docks track: a sunken lane (a crouched player hides in it)
+           (-2480, -1650, -2250, -600, 110, 210),       # the west track past the fort
+           (-1500, 2330, -400, 2420, 110, 210)]         # the north road under radio hill
 
 
 def seg_d(x, y, x0, y0, x1, y1):
@@ -760,7 +764,15 @@ for i in range(N + 1):
     for j in range(N + 1):
         if min(i, j, N - i, N - j) == 0:
             x, y = cx(i), cx(j)
-            H[i][j] = 1300 + 260 * math.sin(x / 700.0 + y / 900.0) + 180 * math.cos(y / 400.0 - x / 1300.0)
+            side_ = 0 if j == N else 1 if i == N else 2 if j == 0 else 3
+            H[i][j] = (1250 + 260 * math.sin(x / 700.0 + y / 900.0 + side_) + 180 * math.cos(y / 400.0 - x / 1300.0)
+                       + 150 * math.sin(x / 233.0 + y / 377.0 + 2.1 * side_) + 110 * math.cos(x / 131.0 - y / 171.0 + side_)
+                       + (260 if (i * 7 + j * 13) % 5 == 0 else 0))
+            # notches: the river's gorge in the north and out in the south, the main road's cut in the west and east
+            if (j == N and 17 <= i <= 20) or (j == 0 and 15 <= i <= 18):
+                H[i][j] = 240
+            if (i == 0 or i == N) and 14 <= j <= 15:
+                H[i][j] = 420
             FIX[i][j] = True
 
 
@@ -867,8 +879,8 @@ def ground(x, y):
 
 
 def cell_tex(i, j, slope):
-    if min(i, j, N - 1 - i, N - 1 - j) == 0:
-        return ROCK
+    if min(i, j, N - 1 - i, N - 1 - j) == 0:      # the cliff ring: a look per side
+        return ROCK2 if (i == 0 or i == N - 1) else ROCK
     if slope > 0.55:
         return ROCK2
     for name, x0, y0, x1, y1, z in PADS:
@@ -1024,6 +1036,13 @@ bed = {c: zone_style(cx(c[0]) + 128, cx(c[1]) + 128) in ("cave", "works") for c 
 for i0, j0, i1, j1, rocky in merge_cells(bed):
     W(box(cx(i0), cx(j0), SLAB_TOP, cx(i1), cx(j1), BED_Z, ROCK, top=MUD, bottom=ROCK if rocky else CEIL, scale=2))
 
+# water in the river: 28 over the bed (a standing player stays dry: no swimming, no slowdown, wading sounds);
+# liquids aren't in the clip hulls; not registered (nobody stands on water)
+for i0, j0, i1, j1, _r in merge_cells({c: 1 for c in RIVER}):
+    world.brushes.append(box(cx(i0), cx(j0), BED_Z, cx(i1), cx(j1), BED_Z + 28, "!WATERBLUE"))
+for j in (4, 11, 18, 25):
+    xw_, xe_ = cx(SPAN[j][0]), cx(SPAN[j][1])
+    point("ambient_generic", (xw_ + xe_) / 2, cx(j) + 128, BED_Z + 64, message="ambience/waterfall2.wav", health=3, spawnflags=4, pitch=100)
 group("bank")
 # the channel's corners cut at 45 degrees (where it widens or bends), so it doesn't read as a grid
 KEEP_STRAIGHT = set()
@@ -1212,7 +1231,7 @@ for a in range(len(xs) - 1):
     for b in range(len(ys) - 1):
         mx, my = (xs[a] + xs[a + 1]) / 2, (ys[b] + ys[b + 1]) / 2
         fl_ = slab_floor(mx, my)
-        cells[(a, b)] = (fl_, style_at(mx, my) if fl_ is not None else None)
+        cells[(a, b)] = (fl_, style_at(mx, my) if fl_ is not None else near_style(xs[a], ys[b], xs[a + 1], ys[b + 1]))
 # merge on the irregular grid (same greedy idea)
 left = dict(cells)
 for b in range(len(ys) - 1):
@@ -1230,9 +1249,7 @@ for b in range(len(ys) - 1):
             for bb in range(b, b1 + 1):
                 del left[(aa, bb)]
         X0b, Y0b, X1b, Y1b = xs[a], ys[b], xs[a1 + 1], ys[b1 + 1]
-        fl, st = key
-        if fl is None:       # solid rock: faced as the nearest place or tunnel (what you see from inside it)
-            st = near_style(X0b, Y0b, X1b, Y1b)
+        fl, st = key           # (solid rock: faced as the nearest place, cell by cell, in the merge key)
         wall_t, floor_t = PSTYLE[st][0], PSTYLE[st][1]
         if fl is not None:
             W(box(X0b, Y0b, FLOOR_Z, X1b, Y1b, fl, wall_t, top=floor_t, scale=2))
@@ -1311,6 +1328,11 @@ for name, i0, j0, i1, j1, d in TRENCHES:
             D(frustum([(px, py), (px + 16, py), (px + 16, py + 16), (px, py + 16)], top_z + ht, top_z + ht + 32, 0.0, fr))
     if not mine:
         D(box(hb[0] - 16, hb[1] - 16, top_z + ht, hb[2] + 16, hb[3] + 16, top_z + ht + 16, fr, top="OUT_ROOF3B"))
+    else:           # the adit's housing: a plank roof at 176 under the head-frame
+        D(box(hb[0] - 16, hb[1] - 16, top_z + 160, hb[2] + 16, hb[3] + 16, top_z + 176, "OUT_WD", top="OUT_ROOF1B"))
+    if not mine:    # concrete trenches lined with concrete (not raw rock), from below ground to the top
+        for (a, b_, c, e) in ((x0, y0, x0 + 8, y1), (x1 - 8, y0, x1, y1)) if d in "ns" else ((x0, y0, x1, y0 + 8), (x0, y1 - 8, x1, y1)):
+            NC(box(a, b_, SLAB_TOP, c, e, top_z, CONC))
     if mine:        # the head-frame's beams and its winding wheel (high up, not in anyone's way)
         for zz in (top_z + 192, top_z + ht - 16):
             NC(box(hb[0] - 16, hb[1] - 16, zz, hb[2] + 16, hb[1], zz + 16, "OUT_WD"))
@@ -1330,10 +1352,16 @@ for name, i0, j0, i1, j1, d in TRENCHES:
 # (HATCH_KIND) with its door on the ladder's side; under it daylight down the shaft and an EXIT sign
 def hatch_house(kind, x0, y0, z, hx0, hy0, hx1, hy1):
     mid = (hx0 + hx1) / 2
-    if kind == "headframe":     # a mine's timber head-frame: four posts, cross beams, a little roof, 288 tall
-        W(box(hx0 - 16, hy0 - 16, z, hx1 + 16, hy0, z + 40, "OUT_WD"))           # a timber collar round three sides
-        W(box(hx0 - 16, hy0, z, hx0, hy1, z + 40, "OUT_WD"))
-        W(box(hx1, hy0, z, hx1 + 16, hy1, z + 40, "OUT_WD"))
+    if kind == "headframe":     # a mine's timber head-frame over a boarded housing (door on the ladder's side)
+        ht = 128
+        W(box(hx0 - 16, hy0 - 16, z, hx1 + 16, hy0, z + ht, "OUT_WD"))
+        W(box(hx0 - 16, hy0, z, hx0, hy1 + 72, z + ht, "OUT_WD"))
+        W(box(hx1, hy0, z, hx1 + 16, hy1 + 72, z + ht, "OUT_WD"))
+        W(box(hx0 - 16, hy1 + 56, z, mid - 40, hy1 + 72, z + ht, "OUT_WD"))
+        W(box(mid + 40, hy1 + 56, z, hx1 + 16, hy1 + 72, z + ht, "OUT_WD"))
+        W(box(mid - 40, hy1 + 56, z + 112, mid + 40, hy1 + 72, z + ht, "OUT_WD"))
+        W(box(hx0 - 16, hy0 - 16, z + ht, hx1 + 16, hy1 + 72, z + ht + 16, "OUT_WD", top="OUT_ROOF1B"))
+        point("light", mid, hy1 + 28, z + ht - 24, _light="255 220 170 70")
         for (px, py) in ((hx0 - 32, hy0 - 32), (hx1 + 16, hy0 - 32), (hx0 - 32, hy1 + 16), (hx1 + 16, hy1 + 16)):
             P(box(px, py, z - 32, px + 16, py + 16, z + 256, "OUT_WD"))
             D(frustum([(px, py), (px + 16, py), (px + 16, py + 16), (px, py + 16)], z + 256, z + 288, 0.0, "OUT_WD"))
@@ -1388,17 +1416,6 @@ for (i, j) in HATCHES:
     sign.brushes.append(box((hx0 + hx1) / 2 - 32, hy0 - 4, SLAB_TOP - 48, (hx0 + hx1) / 2 + 32, hy0, SLAB_TOP - 32, "+0EXIT"))
     ents.append(sign)
 
-group("slab")
-# tunnel lights every ~384 along each tunnel
-for name, x0, y0, x1, y1 in TUNNELS:
-    lx, ly = x1 - x0, y1 - y0
-    n = max(1, int(max(lx, ly) // 384))
-    for k in range(n):
-        f = (k + 0.5) / n
-        x = x0 + lx * (f if lx >= ly else 0.5)
-        y = y0 + ly * (f if ly > lx else 0.5)
-        point("light", x, y, SLAB_TOP - 24, _light="255 214 150 160")
-        D(box(x - 16, y - 16, SLAB_TOP - 4, x + 16, y + 16, SLAB_TOP, "~LIGHT3A"))
 
 # ---------------------------------------------------------------------------------------
 # buildings
@@ -1433,14 +1450,15 @@ def seg(x0, y0, x1, y1, along, a, b, z0, z1, tex):
         W(box(x0, a, z0, x1, b, z1, tex))
 
 
-def building(x0, y0, x1, y1, z, floors=1, fh=160, wt=16, tex="OUT_WALL1A", inner=None, roof="OUT_ROOF2B",
-             doors=(), windows=True, roof_access=False, floor_tex="CSTRIKE_FE2SQRS", light=True, updoors=(),
+def building(x0, y0, x1, y1, z, floors=1, fh=160, wt=16, tex="OUT_WALL1A", inner=None, roof=None,
+             doors=(), windows=True, roof_access=False, floor_tex="CSTRIKE_FJ2DOCK", light=True, updoors=(),
              roof_gaps=(), stairs_east=False):
     """updoors: [(floor, side, centre, width)] doorways on upper floors (to bridges); roof_gaps:
     [(side, centre, width)] openings in the roof's parapet (to bridges, ladders, or a drop of at most
     176 to the ground); stairs_east: the first flight along the east wall instead of the west"""
     keep = GROUP
     group("bld:%d,%d" % (x0, y0))
+    roof = roof or ("OUT_ROOF2B", "OUT_ROOF3B", "OUT_ROOF1B")[(int(x0) // 64 + int(y0) // 64) % 3]
     top = _building(x0, y0, x1, y1, z, floors, fh, wt, tex, inner, roof, doors, windows, roof_access, floor_tex, light,
                     updoors, roof_gaps, stairs_east)
     group(keep)
@@ -1524,6 +1542,30 @@ def _building(x0, y0, x1, y1, z, floors, fh, wt, tex, inner, roof, doors, window
         wall(x0, y0 + 8, x0 + 8, y1 - 8, top, top + 40, tex, gaps["w"], "y")
         wall(x1 - 8, y0 + 8, x1, y1 - 8, top, top + 40, tex, gaps["e"], "y")
     W(box(x0 + wt, y0 + wt, z, x1 - wt, y1 - wt, z + 1, floor_tex))
+    # furniture: a table and a crate in the ground floor's free corners (cover inside, and it's lived in)
+    flx = flight_x(0) if levels else None
+    placed = 0
+    for (cx_, cy_, sx_, sy_) in ((x0 + wt, y0 + wt, 1, 1), (x1 - wt, y0 + wt, -1, 1), (x0 + wt, y1 - wt, 1, -1), (x1 - wt, y1 - wt, -1, -1)):
+        if placed >= 2:
+            break
+        w_, d_ = (96, 48) if placed == 0 else (48, 48)
+        bx0, bx1 = sorted((cx_ + sx_ * 24, cx_ + sx_ * (24 + w_)))
+        by0, by1 = sorted((cy_ + sy_ * 24, cy_ + sy_ * (24 + d_)))
+        near_door = False
+        for (side, off) in doors:
+            mid = (x0 + x1) / 2 + off if side in "ns" else (y0 + y1) / 2 + off
+            if side == "n" and sy_ < 0 and abs((bx0 + bx1) / 2 - mid) < 200: near_door = True
+            if side == "s" and sy_ > 0 and abs((bx0 + bx1) / 2 - mid) < 200: near_door = True
+            if side == "w" and sx_ > 0 and abs((by0 + by1) / 2 - mid) < 200: near_door = True
+            if side == "e" and sx_ < 0 and abs((by0 + by1) / 2 - mid) < 200: near_door = True
+        in_stairs = flx is not None and bx0 < flx[1] + 48 and bx1 > flx[0] - 48 and by0 < sy1 + 64 and by1 > sy0 - 96
+        if near_door or in_stairs or x1 - x0 < 320 or y1 - y0 < 256:
+            continue
+        if placed == 0:
+            P(box(bx0, by0, z + 1, bx1, by1, z + 40, "OUT_WD", top="CSTRIKE_FJ2DOCK"))
+        else:
+            P(box(bx0, by0, z + 1, bx1, by1, z + 49, "MltryCrteSd", top="MltryCrteTp"))
+        placed += 1
     if light:
         for f in range(floors):
             point("light", (x0 + x1) / 2, (y0 + y1) / 2, z + f * fh + fh - 40, _light="255 230 190 110")
@@ -1569,7 +1611,7 @@ th = building(-1664, 640, -1216, 1024, Z, floors=2, tex="CSTRIKE_WB6PLN2", doors
               roof_gaps=[("e", 980, 72)], updoors=[(1, "s", -1480, 96)])
 LOOT += [(-1440, 832, Z + 8, 2, "default"), (-1400, 880, Z + 160 + 8, 3, "default"), (-1560, 980, Z + 320 + 8, 3, "default")]
 # town hall: three floors and a roof, the tallest building in the valley
-building(-1088, 576, -640, 1152, Z, floors=3, tex="OUT_WALL6", doors=[("s", 0), ("w", 128)], roof_access=True,
+building(-1088, 576, -640, 1152, Z, floors=3, tex="OUT_WALL6", doors=[("s", 0), ("w", 128)], roof_access=True, floor_tex="-0CRETE4_FLR01",
          updoors=[(2, "w", 980, 96), (1, "e", 992, 96)], roof_gaps=[("n", -888, 72)])
 # the hall's fire ladder: from the street behind it straight up to the roof (the roof's second way down)
 ladder(-912, 1152, -864, 1156, Z, Z + 480 + 8, "n", name="hall fire ladder")
@@ -1614,7 +1656,10 @@ walkway("west-street", -1528, 192, -1432, 640, Z + 160, "y")      # house D's ro
 walkway("E-F", -576, -56, -448, 24, Z + 160, "x")                 # house E's 2nd floor to house F's roof
 # cars and crates in the streets
 for (x, y) in [(-1408, 336), (-704, 448), (-1500, 1180), (-320, 1184)]:
-    P(box(x, y, Z, x + 160, y + 80, Z + 56, "CSTRIKE_ME2RSTW", top="CSTRIKE_ME4METL"))
+    D(box(x, y, Z + 12, x + 160, y + 80, Z + 52, "CSTRIKE_ME2RSTW", top="CSTRIKE_ME4METL"))      # (on its wheels)
+    D(box(x + 40, y + 8, Z + 52, x + 112, y + 72, Z + 88, "CSTRIKE_ME2RSTW", top="CSTRIKE_ME4METL"))      # the cab
+    for (wx, wy) in ((x + 16, y - 4), (x + 112, y - 4), (x + 16, y + 76), (x + 112, y + 76)):
+        P(box(wx, wy, Z, wx + 32, wy + 8, Z + 24, "CSTRIKE_ME4METL"))                                   # wheels
 crate(-1792, 600, Z, 64)
 crate(160, 576, Z, 64)
 sandbags(-560, 192, -528, 320, Z)
@@ -1653,7 +1698,7 @@ for k in range(4):
 LOOT += [(-2960, -2700, 8, 4, "default"), (-3100, -3180, 168, 3, "default"), (-2540, -2700, 8, 2, "gear")]
 WEAP += [(-2700, -3180, 168, "rifles", 3)]
 # offices: two floors with a roof
-building(-2304, -3200, -1920, -2752, Z, floors=2, tex=CONC, doors=[("e", 0), ("n", 0)], roof_access=True,
+building(-2304, -3200, -1920, -2752, Z, floors=2, tex=CONC, doors=[("e", 0), ("n", 0)], roof_access=True, floor_tex="CSTRIKE_FE2SQRS",
          roof_gaps=[("w", -2880, 80), ("e", -2808, 80)])
 walkway("factory-office", -2432, -2920, -2304, -2840, FH + 32, "x")   # the hall's roof to the office's roof
 LOOT += [(-2112, -2976, 168, 3, "default")]
@@ -1835,7 +1880,7 @@ WEAP += [(3136, 400, Z + 8, "rifles", 3)]
 
 # --- the bunker (z 160): thick concrete, two rooms, roof with parapet; the complex below ----
 group("poi:bunker")
-Z = 160
+Z = 64          # (v5: the pad came down 96, so its stair trench is 36.9 degrees)
 KX0, KY0, KX1, KY1, KH = 2560, -3072, 3072, -2624, 160
 BLOCKED.append((KX0 - 32, KY0 - 32, KX1 + 32, KY1 + 32))
 wall(KX0, KY1 - 32, KX1, KY1, Z, Z + KH, CONC, [(2688, 128, Z, Z + 128)], "x")
@@ -1921,14 +1966,14 @@ BLOCKED.append((-3232, -512, -3072, -512 + 24 * n_ + 32))
 # --- the river pumping station (east of the river): two pump houses over the works below (their hatches), a
 # water tower between them (no way up: it's to look at and to hide behind), pipe runs as cover
 group("poi:pumping")
-PWX, PWY = 1920, 0
+PWX, PWY = 1920, -760
 gz_ = min(ground(PWX + dx, PWY + dy) for dx in (-80, 80) for dy in (-80, 80))
 for (dx, dy) in ((-72, -72), (56, -72), (-72, 56), (56, 56)):
     P(box(PWX + dx, PWY + dy, gz_ - 16, PWX + dx + 16, PWY + dy + 16, gz_ + 256, RAIL))
 D(prism([(px, py, gz_ + 352) for (px, py) in regular(PWX, PWY, 104, 8, math.pi / 8)], gz_ + 256, "CSTRIKE_OE6TNKS", "CSTRIKE_ME4METL"))
 D(frustum(regular(PWX, PWY, 108, 8, math.pi / 8), gz_ + 352, gz_ + 528, 0.0, "CSTRIKE_ME4METL"))      # (steep: nothing to stand on)
-for (ya, yb) in ((-240, -96), (96, 240)):
-    P(box(PWX - 12, PWY + ya, min(ground(PWX, PWY + ya), ground(PWX, PWY + yb)) - 8, PWX + 12, PWY + yb, max(ground(PWX, PWY + ya), ground(PWX, PWY + yb)) + 32, "CSTRIKE_ME4METL"))
+for (ya, yb) in ((96, 216),):            # (a pipe north to the pump house)
+    D(box(PWX - 12, PWY + ya, min(ground(PWX, PWY + ya), ground(PWX, PWY + yb)) - 8, PWX + 12, PWY + yb, max(ground(PWX, PWY + ya), ground(PWX, PWY + yb)) + 32, "CSTRIKE_ME4METL"))
 BLOCKED.append((PWX - 128, PWY - 260, PWX + 128, PWY + 260))
 LOOT += [(PWX + 120, PWY + 40, gz_ + 8, 2, "default")]
 
@@ -1987,11 +2032,10 @@ for k in range(nleg):
         D(prism([(r0, yb, zb + 40), (r1, yb, zb + 40), (r1, ya, za + 40), (r0, ya, za + 40)], zb - 48, CONC, CONC))
 connector("ramp", "viaduct south leg", ((VB_X0 + VB_X1) / 2, VB_Y - 18, 320), (0, -1), ((VB_X0 + VB_X1) / 2, VD_Y0 + 40, VD_Z), (0, 1))
 # the branch stairs, with one sloped rail on each side
-zf = 0
-for _ in range(6):
-    n_ = int(math.ceil((VD_Z - zf) / 16.0 - 0.01))
-    zf = max(ground(x_, VD_Y0 - 24 * n_ - 24) for x_ in (BR_X0 + 8, BR_X1 - 8))
-n_ = int(math.ceil((VD_Z - zf) / 16.0 - 0.01))
+# (down the slope: the flight ends at the first step that reaches the ground)
+for n_ in range(1, 40):
+    if VD_Z - 16 * n_ <= ground((BR_X0 + BR_X1) / 2, VD_Y0 - 24 * n_ - 12) + 8:
+        break
 BR_FOOT = VD_Y0 - 24 * n_
 stairs(BR_X0, BR_FOOT, BR_X1, VD_Y0, VD_Z - 16 * n_, VD_Z, "n", side=CONC, top="OUT_PAVE1", name="viaduct stairs")
 for (r0, r1) in ((BR_X0 - 8, BR_X0), (BR_X1, BR_X1 + 8)):
@@ -2042,6 +2086,66 @@ stairs(416, sb_, 512, 752, ZT - 16 * n_, ZT, "n", side=WOOD, top=PLANK, name="st
 for (r0, r1) in ((408, 416), (512, 520)):
     D(prism([(r0, sb_, ZT - 16 * n_ + 40), (r1, sb_, ZT - 16 * n_ + 40), (r1, 752, ZT + 40), (r0, 752, ZT + 40)], ZT - 16 * n_, RAIL, RAIL))
 BLOCKED.append((-16, sb_ - 32, 552, 880))
+# --- the east ridge trail (v5): a plank catwalk along the east ridge's crest from above the quarry's south rim to
+# the bunker yard, a lookout hut with a mast half way (the south-east's landmark), stairs down at both ends
+group("high:ridgetrail")
+RT_X0, RT_X1, RT_YS, RT_YN = 2592, 2688, -1850, -800
+HY = -1300
+RT_Z = round((max(ground(x_, y_) for x_ in (RT_X0, RT_X1) for y_ in range(RT_YS, RT_YN + 1, 64)) + 72) / 8) * 8
+for ya in range(RT_YS, RT_YN, 448):
+    yb = min(ya + 448, RT_YN)
+    D(box(RT_X0, ya, RT_Z - 16, RT_X1, yb, RT_Z, WOOD, top=PLANK))
+    for (ra, rb) in ((ya, min(yb, HY - 112)), (max(ya, HY + 112), yb)):    # (open onto the hut's platform)
+        if rb - ra > 1:
+            D(box(RT_X0 - 8, ra, RT_Z, RT_X0, rb, RT_Z + 40, WOOD))
+    D(box(RT_X1, ya, RT_Z, RT_X1 + 8, yb, RT_Z + 40, WOOD))
+    for py in (ya + 32, yb - 48):
+        if ground(RT_X0 + 40, py) < RT_Z - 40:
+            D(box(RT_X0 + 32, py, ground(RT_X0 + 40, py) - 16, RT_X0 + 48, py + 16, RT_Z - 16, WOOD))
+            D(box(RT_X1 - 48, py, ground(RT_X1 - 40, py) - 16, RT_X1 - 32, py + 16, RT_Z - 16, WOOD))
+connector("walkway", "east ridge trail", ((RT_X0 + RT_X1) / 2, RT_YS + 40, RT_Z), (0, 1), ((RT_X0 + RT_X1) / 2, RT_YN - 40, RT_Z), (0, -1))
+# the lookout hut: a platform west of the trail half way, waist walls, posts, a roof, a mast with a red lamp
+HY = -1300
+HX0, HX1 = RT_X0 - 232, RT_X0 - 8
+D(box(HX0, HY - 112, RT_Z - 16, HX1, HY + 112, RT_Z, WOOD, top=PLANK))
+for (a, b, c, d) in ((HX0, HY - 112, HX0 + 8, HY + 112), (HX0, HY - 112, HX1, HY - 104), (HX0, HY + 104, HX1, HY + 112)):
+    D(box(a, b, RT_Z, c, d, RT_Z + 48, WOOD))
+for (px, py) in ((HX0, HY - 112), (HX1 - 16, HY - 112), (HX0, HY + 96), (HX1 - 16, HY + 96)):
+    D(box(px, py, min(ground(px, py), ground(px + 16, py + 16)) - 16, px + 16, py + 16, RT_Z + 144, WOOD))
+D(frustum([(HX0 - 16, HY - 128), (HX1 + 16, HY - 128), (HX1 + 16, HY + 128), (HX0 - 16, HY + 128)], RT_Z + 144, RT_Z + 208, 0.0, "OUT_ROOF1B"))
+D(box(HX0 + 8, HY - 8, RT_Z + 200, HX0 + 24, HY + 8, RT_Z + 640, RAIL))
+NC(box(HX0 + 10, HY - 6, RT_Z + 640, HX0 + 22, HY + 6, RT_Z + 652, "~SPOTRED"))
+point("light", HX0 + 16, HY, RT_Z + 600, _light="255 60 40 120")
+for (end, dirn) in ((RT_YS, "s"), (RT_YN, "n")):
+    zf = 0
+    for _ in range(6):
+        n_ = int(math.ceil((RT_Z - zf) / 16.0 - 0.01))
+        far = end - 24 * n_ if dirn == "s" else end + 24 * n_
+        zf = max(ground(x_, far + (12 if dirn == "s" else -12)) for x_ in (RT_X0 + 8, RT_X1 - 8))
+    n_ = int(math.ceil((RT_Z - zf) / 16.0 - 0.01))
+    if dirn == "s":
+        stairs(RT_X0, end - 24 * n_, RT_X1, end, RT_Z - 16 * n_, RT_Z, "n", side=WOOD, top=PLANK, name="ridge trail south stairs")
+    else:
+        stairs(RT_X0, end, RT_X1, end + 24 * n_, RT_Z - 16 * n_, RT_Z, "s", side=WOOD, top=PLANK, name="ridge trail north stairs")
+    yy0, yy1 = (end - 24 * n_, end) if dirn == "s" else (end, end + 24 * n_)
+    BLOCKED.append((RT_X0 - 48, yy0 - 48, RT_X1 + 48, yy1 + 48))
+BLOCKED.append((HX0 - 48, RT_YS, RT_X1 + 48, RT_YN))
+LOOT += [(HX0 + 120, HY + 40, RT_Z + 8, 3, "default")]
+WEAP += [(HX0 + 120, HY - 40, RT_Z + 8, "snipers", 3)]
+
+# --- the cliff ring: a few tall rock spires in front of it, a waterfall where the river comes in, a boarded road
+# tunnel where the main road leaves to the west (all out of reach, behind the play edge)
+group("ring")
+for k, (x, y, r, h) in enumerate([(-3720, 2600, 130, 1700), (-3700, -2300, 110, 1500), (3700, 1900, 140, 1800), (3720, -900, 120, 1600),
+                                  (-1900, 3720, 120, 1650), (2400, 3700, 130, 1750), (-600, -3710, 120, 1500), (2900, -3700, 110, 1600)]):
+    D(frustum(blob(x, y, r, 6, 77 + 13 * k), 0, h, 0.35, ROCK2, scale=4))      # (scale 4: little lightmap)
+NC(box(512, PLAY + 40, BED_Z, 1280, PLAY + 48, 240, "+0WATERF"))
+for (a, b) in ((-3712, -3696),):
+    D(box(a, -180, 0, b, -140, 300, CONC))
+    D(box(a, 20, 0, b, 60, 300, CONC))
+    D(box(a, -180, 300, b, 60, 340, CONC))
+    D(box(a + 4, -140, 0, a + 12, 20, 300, "OUT_WD"))
+
 # cover on the town's roofs (something to duck behind on the way across): a water tank on house A, chimney
 # stacks on house D, house F and the store
 group("high:roofcover")
@@ -2083,6 +2187,9 @@ def pillar_rock(x, y, r, k, fl):
 
 def lights_in(name, step=384, bright=120):
     x0, y0, x1, y1, st, fl = PL[name]
+    bright = max(bright, 210)
+    if min(x1 - x0, y1 - y0) < 600:
+        step = min(step, 256)
     lamps = Ent("func_illusionary")
     nx, ny = max(1, int((x1 - x0) // step)), max(1, int((y1 - y0) // step))
     for a in range(nx):
@@ -2118,12 +2225,12 @@ def cave(name, k):
         if clear_below(x, y, 200):
             poly = blob(x, y, 180, 7, k * 5 + 1)
             D(prism([(px, py, fl + 24 + 24 * (px - x) / 180.0) for (px, py) in poly], fl - 8, ROCK2, ROCK2, topscale=2))
-    lights_in(name, bright=110)
+    lights_in(name, step=320, bright=230)
 
 
 group("under:deep stope")
-stairs(-896, 2560, -800, 2784, -704, TUN_Z, "s", side=ROCK2, top=MUD, name="deep stope steps", out_bottom="e")
-lights_in("deep stope", step=384, bright=150)
+stairs(-896, 2880, -800, 3144, -704, TUN_Z, "s", side=CONC, top=CONC_F, name="deep stope steps", out_bottom="e")
+lights_in("deep stope", step=256, bright=240)
 for k, n_ in enumerate(("fort caves", "north caves", "deep chamber", "lumber caves", "ridge caves")):
     cave(n_, k)
 
@@ -2163,6 +2270,20 @@ for name, tx0, ty0, tx1, ty1 in TUNNELS:
         lamps.brushes.append(box(x - 12, y - 12, SLAB_TOP - 4, x + 12, y + 12, SLAB_TOP, PSTYLE[st][3]))
     if lamps.brushes:
         ents.append(lamps)
+    if st != "grate":
+        stripe = Ent("func_illusionary")
+        if lx >= ly:
+            stripe.brushes.append(box(tx0, ty0, TUN_Z + 40, tx1, ty0 + 2, TUN_Z + 56, PSTYLE[st][3]))
+            stripe.brushes.append(box(tx0, ty1 - 2, TUN_Z + 40, tx1, ty1, TUN_Z + 56, PSTYLE[st][3]))
+            ends_ = ((tx0 + 48, (ty0 + ty1) / 2), (tx1 - 48, (ty0 + ty1) / 2))
+        else:
+            stripe.brushes.append(box(tx0, ty0, TUN_Z + 40, tx0 + 2, ty1, TUN_Z + 56, PSTYLE[st][3]))
+            stripe.brushes.append(box(tx1 - 2, ty0, TUN_Z + 40, tx1, ty1, TUN_Z + 56, PSTYLE[st][3]))
+            ends_ = (((tx0 + tx1) / 2, ty0 + 48), ((tx0 + tx1) / 2, ty1 - 48))
+        for (sx_, sy_) in ends_:
+            stripe.brushes.append(box(sx_ - 2, sy_ - 32, SLAB_TOP - 48, sx_ + 2, sy_ + 32, SLAB_TOP - 32, "+0EXIT") if lx >= ly else
+                                  box(sx_ - 32, sy_ - 2, SLAB_TOP - 48, sx_ + 32, sy_ + 2, SLAB_TOP - 32, "+0EXIT"))
+        ents.append(stripe)
 
 # the cisterns: a columned hall 256 high, a water channel down its middle, steps down from the old sewer
 group("under:cisterns")
@@ -2211,7 +2332,7 @@ for nm in ("boathouse cellar", "pumping works"):
         x, y = x0 + u * w, y0 + v * h
         if clear_below(x, y, 100):
             D(box(x - 64, y - 48, fl, x + 64, y + 48, fl + 96, "CSTRIKE_ME2RSTW", top="CSTRIKE_ME4METL"))
-    NC(box(x0 + 24, y0 + 32, -400, x0 + 48, y1 - 32, -376, "-0GENPIPE1"))
+    NC(box(x0 + 32, y0 + 24, -400, x1 - 32, y0 + 48, -376, "-0GENPIPE1"))     # (along the south wall)
     lights_in(nm, bright=120)
 # the quarry workings: rock pillars, timber props
 cave_k = 9
@@ -2235,7 +2356,7 @@ LOOT += [(-1520, 448, TUN_Z + 8, 3, "default"),        # the sewer's west end
          (-2900, 2200, TUN_Z + 8, 3, "default"),        # the west mine
          (-1700, 2900, TUN_Z + 8, 3, "default"),        # the north caves
          (-500, 2300, TUN_Z + 8, 3, "default"),         # the deep chamber
-         (-640, 2720, -704 + 8, 5, "default"),          # ...its stope (a vault)
+         (-600, 3120, -704 + 8, 5, "default"),          # ...its stope (a vault)
          (2900, 2500, TUN_Z + 8, 3, "default"),         # the lumber caves
          (-1300, -900, -576 + 8, 3, "default"), (-500, -400, -576 + 8, 3, "default"),        # the cisterns
          (-864, 880, TUN_Z + 8, 5, "default"),          # the town vault
@@ -2249,9 +2370,9 @@ LOOT += [(-1520, 448, TUN_Z + 8, 3, "default"),        # the sewer's west end
          (3100, -3200, -704 + 8, 5, "default"),         # the armoury (a vault)
          (1100, -1920, TUN_Z + 8, 3, "default")]        # the south tunnel under the river
 WEAP += [(-2800, -300, TUN_Z + 8, "smgs", 3), (-2600, 2000, TUN_Z + 8, "smgs", 3), (-300, 2600, TUN_Z + 8, "smgs", 3),
-         (-1300, -400, -576 + 8, "smgs", 3), (1800, 600, TUN_Z + 8, "smgs", 3), (2800, 300, TUN_Z + 8, "smgs", 3),
+         (-1300, -400, -576 + 8, "smgs", 3), (1650, 600, TUN_Z + 8, "smgs", 3), (2800, 300, TUN_Z + 8, "smgs", 3),
          (2900, 2100, TUN_Z + 8, "smgs", 3),
-         (-760, 760, TUN_Z + 8, "rifles", 5), (-480, 2760, -704 + 8, "rifles", 5), (3200, -3100, -704 + 8, "rifles", 5)]
+         (-760, 760, TUN_Z + 8, "rifles", 5), (-480, 3180, -704 + 8, "rifles", 5), (3200, -3100, -704 + 8, "rifles", 5)]
 
 # ---------------------------------------------------------------------------------------
 # cover in the open: rocks and trees (detail), placed on the ground
@@ -2260,7 +2381,7 @@ WEAP += [(-2800, -300, TUN_Z + 8, "smgs", 3), (-2600, 2000, TUN_Z + 8, "smgs", 3
 def steep(x, y, r=56):
     """too steep to stand on round x, y (cover there leaves ledges you can't step off onto the slope)"""
     zs = [ground(x + dx, y + dy) for dx in (-r, 0, r) for dy in (-r, 0, r)]
-    return max(zs) - min(zs) > 0.6 * 2 * r
+    return max(zs) - min(zs) > 0.66 * 2 * r
 
 
 def blocked(x, y, m=0):
@@ -2295,7 +2416,7 @@ trees = rocks = bushes = 0
 
 
 # supply drop spots (open ground; cover keeps 160 clear of them, so a crate never lands in a rock or a tree)
-DROPS = [(-1536, 1792), (1024, -2816), (-2048, -1280), (2048, 384), (0, -768), (-512, 1920), (2560, -1600), (-2688, -1664)]
+DROPS = [(-1536, 1792), (1024, -2816), (-2048, -1280), (2800, 1150), (0, -768), (-512, 1920), (2560, -1600), (-2688, -1664)]
 
 
 def drop_ok(x, y):
@@ -2399,11 +2520,12 @@ def poly_gap(pa, pb):
                min(seg(p, pa[k], pa[(k + 1) % len(pa)]) for k in range(len(pa)) for p in pb))
 
 
-def rock(x, y, z, r, h, k):
-    """a boulder: an irregular block with a tilted top"""
+def rock(x, y, z, r, h, k, spire=False):
+    """a boulder: an irregular block with a tilted top (spire: a top too steep to stand on: a tall outcrop
+    nobody can be dropped onto and stuck on)"""
     global rocks
     poly = blob(x, y, r, 5 + k % 3, k, squash=0.65 + 0.35 * ((k * 7) % 10) / 10.0, turn=k * 0.7)
-    ax, ay = 0.25 * math.cos(k), 0.25 * math.sin(k * 1.7)
+    ax, ay = (1.15 * math.cos(k), 1.15 * math.sin(k)) if spire else (0.25 * math.cos(k), 0.25 * math.sin(k * 1.7))
     b = prism([(px, py, z + h + ax * (px - x) + ay * (py - y)) for (px, py) in poly], z - 48, ROCK2, ROCK2)
     group("rock")
     if near_drop(x, y, r) or clashes(b, allow=("rock",)):
@@ -2507,6 +2629,21 @@ for j in range(1, N - 1):
             D(b)
             b.prop = True
 
+# the ridges' crests: rock outcrops and a line of pines along each (a crest 200 high with 200 of rock and trees
+# on it blocks the view like a 400 ridge)
+crest_k = 0
+for (x0, y0, x1, y1, hh, hw) in RIDGES:
+    L_ = math.hypot(x1 - x0, y1 - y0) or 1.0
+    nx_, ny_ = -(y1 - y0) / L_, (x1 - x0) / L_
+    for m, f in enumerate((0.15, 0.4, 0.62, 0.86)):
+        x, y = x0 + (x1 - x0) * f + nx_ * (50 if m % 2 else -50), y0 + (y1 - y0) * f + ny_ * (50 if m % 2 else -50)
+        if not blocked(x, y, 180):      # (clear of foxholes, berms and the rest: no pit closed off by a rock)
+            rock(x, y, ground4(x, y, 120), 120 + 30 * (m % 2), 130 + 20 * ((m + crest_k) % 3), 500 + 7 * crest_k + m)   # (at most ~170: a safe drop)
+    for m, f in enumerate((0.05, 0.27, 0.5, 0.73, 0.95)):
+        x, y = x0 + (x1 - x0) * f + nx_ * (190 if m % 2 else -190), y0 + (y1 - y0) * f + ny_ * (190 if m % 2 else -190)
+        if not blocked(x, y, 56):
+            tree(x, y, ground(x, y), 0.4 + 0.12 * (m % 4), 0.5 + 0.1 * (m % 3))
+    crest_k += 1
 # rock formations: a few big stones with smaller ones round them; some standing stones
 for f in range(60):
     seed, u = rnd(seed)
@@ -2598,6 +2735,11 @@ for k, (x, y, z) in enumerate(picks[:28]):
 # looters over a tier 2+ crate): the same open, ground-level picks
 DROP_EXTRA = [(-888, 1236), (-3040, -2368), ((BR_X0 + BR_X1) / 2, BR_FOOT - 64), (-3232, 2112)]   # the hall's fire ladder,
 # the factory's north ladder, the viaduct's stairs, the silo's stairs
+# and one just past each stair trench's top (W1 can land bots by a way down: the drop-in spot decides their layer)
+for (_n, i0, j0, i1, j1, d_) in TRENCHES:
+    tx_, ty_ = {"s": ((cx(i0) + cx(i1)) / 2, cx(j1) + 160), "n": ((cx(i0) + cx(i1)) / 2, cx(j0) - 160),
+                "w": (cx(i1) + 160, (cx(j0) + cx(j1)) / 2), "e": (cx(i0) - 160, (cx(j0) + cx(j1)) / 2)}[d_]
+    DROP_EXTRA.append((tx_, ty_))
 picks_drop = list(picks[:28]) + [(x, y, ground(x, y)) for (x, y) in DROP_EXTRA]
 for (x, y, z) in picks_drop:
     point("ls_marker", x, y, z + 8, kind="br_drop", mode="br")
@@ -2628,14 +2770,15 @@ added_guns = 0
 for (x, y, z) in picks_drop:
     if gun_near(x, y, z, GUN_RUN * 0.55, dz=80):
         continue
-    for r_, a_ in [(r, a) for r in (160, 224, 288, 384, 480) for a in range(0, 360, 20)]:
+    for r_, a_ in [(r, a) for r in (160, 224, 288, 384, 480, 576, 672) for a in range(0, 360, 15)]:
         gx_, gy_ = x + r_ * math.cos(math.radians(a_)), y + r_ * math.sin(math.radians(a_))
         if not blocked(gx_, gy_, 0) and abs(ground(gx_, gy_) - z) < 48:
             WEAP.append((round(gx_), round(gy_), round(ground(gx_, gy_)) + 8, "pistols", 1))
             added_guns += 1
             break
-    else:
-        raise SystemExit("no room for a gun near the drop-in spot %d %d" % (x, y))
+    else:          # (a flat spot on steep ground: the pistol right beside it)
+        WEAP.append((x + 48, y, round(ground(x + 48, y)) + 8, "pistols", 1))
+        added_guns += 1
 for (x, y, z, tier, table) in LOOT:
     point("ls_loot_container", x, y, z, table=table, tier=tier, items=3 if tier >= 4 else 2)
 for (x, y, z, table, tier) in WEAP:
@@ -2900,9 +3043,12 @@ for gy in range(-PLAY, PLAY + 1, GSTEP):
             row.append(round(surface(x_, y_)))
     gnd.append(row)
 canopies = [[round(v) for v in b_.bounds] for b_ in REG if getattr(b_, "kind", None) in ("foliage", "treeclip")]
+# solid things that block sight at eye height (for line-of-sight counts; not used by navgen)
+sight = [[round(v) for v in b_.bounds] for b_ in REG if b_.group.startswith(("bld:", "rock", "boulder", "poi:", "high:", "hatch:", "trench:"))
+         and not getattr(b_, "noclip", False) and b_.bounds[5] - b_.bounds[2] > 48 and b_.bounds[5] > -200]
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), NAME + ".layers.json"), "w") as f:
     json.dump({"grid": {"x0": -PLAY, "y0": -PLAY, "step": GSTEP, "ground": gnd}, "slab_top": SLAB_TOP,
-               "connectors": CONN, "canopies": canopies,
+               "connectors": CONN, "canopies": canopies, "sight": sight,
                "supply_drops": [[x_, y_, round(ground(x_, y_))] for (x_, y_) in DROPS]}, f, separators=(",", ":"))
 nb = sum(len(e.brushes) for e in ents)
 print("%s.map: %d world brushes, %d detail brushes, %d brushes in all, %d entities, %d trees, %d rocks, %d bushes, %d foxholes/berms, %d loot, %d weapons"

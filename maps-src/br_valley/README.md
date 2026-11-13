@@ -51,8 +51,11 @@ break sightlines, and the zone.
 
 ## Layout (north up; the river runs north-south east of the middle; v4)
 
-**The surface.** Ridges between the places (you crest one to see the next place; no sightline runs across the
-valley), sunken lanes along three tracks, foxholes and earth berms in the open between places.
+**The surface.** Ridges between the places (slopes up to 32 degrees), each crest with rock outcrops and a line of
+pines, sunken lanes along three tracks (~110-130 deep: a crouched player is out of sight), foxholes and earth berms
+in the open between places. Measured at eye height between points 1.5-3k apart, 17 % of pairs see each other (6 %
+over 3k), counting terrain, trees, rocks and buildings. A cliff ring with an irregular crest and spires, a look per
+side, notches where the river comes in (a waterfall) and goes out, and where the main road leaves (a boarded tunnel).
 - **Town** (middle west, z 64): six buildings on two streets, a door at street level on each. The town hall has
   three floors and a roof (a sniper rifle, a fire ladder down the back). Cars, crates and sandbags in the streets.
   Ways down: the sewer trench in the south-east corner, brick kiosks over hatches in the main street, by house A,
@@ -70,10 +73,12 @@ valley), sunken lanes along three tracks, foxholes and earth berms in the open b
   landing half way, then another), a hut; the old rail viaduct leaves its east cliff.
 - **Docks** (west bank): the boathouse (roof by its stairs, drop gaps), piers over the river, steps up from the bed,
   a shed over the hatch to the boathouse cellar.
-- **Pumping station** (east of the river): two pump houses over hatches into the works below, a water tower,
-  pipe runs to hide behind.
+- **Pumping station** (east of the river): a pump house over a hatch and a stair trench into the works below, a water
+  tower, pipe runs to hide behind.
+- **The east ridge trail** (v5): a plank catwalk along the east ridge's crest between the quarry and the bunker yard,
+  a lookout hut with a mast and a red lamp half way (the south-east's landmark), stairs down at both ends.
 - **Quarry** (east, z -128, a pit): rock piles, a shed with a roof, a stair trench down to the workings.
-- **Bunker** (south east, z 160): two rooms, a roof (outside stairs, a ladder on the north wall), sandbags, a stair
+- **Bunker** (south east, z 64): two rooms, a roof (outside stairs, a ladder on the north wall), sandbags, a stair
   trench under a roofed housing down to the bunker below.
 - **Lumber camp** (north east): the sawmill (roof at 176), log piles, a cabin, the open watchtower (a ladder, and
   stairs down to the sawmill's roof), a head-frame over the hatch into the lumber caves.
@@ -81,7 +86,8 @@ valley), sunken lanes along three tracks, foxholes and earth berms in the open b
   lookout (east, z 320: its ramp on the east, the viaduct's south leg arriving on its north edge).
 - Five cabins between the places; ~70 tiered pines in groves (the lowest tier from head height up blocks sight;
   you bump into a box round each), boulders 40+ apart (no slots between them), bushes.
-- **River**: a channel 512-1024 wide, 160 deep with cliff banks, bending in an S (corners cut at 45 degrees);
+- **River**: a channel 512-1024 wide, 160 deep with cliff banks, water 28 deep in it (you wade, you don't swim: a
+  splash gives you away), running-water sounds, bending in an S (corners cut at 45 degrees);
   three bridges, two fords, stone steps out of the bed by the bridges and in two more places, each flight climbing
   straight onto its bank.
 - **Roads**: curves through the places that follow the ground (thin overlays): the main road through the town to
@@ -99,14 +105,18 @@ farmhouse and bunker roofs, each with two ways off.
 older tunnels; every one reachable on foot from a stair trench (the main ways down; the ladder hatches are extra),
 within a 17-second walk of the nearest:
 the fort caves (under the fort and West Peak), the west mine (the farm adit; timber props), the north caves, the
-deep chamber under radio hill's flank and its stope a level down (a vault), the lumber caves, the ridge caves
+deep chamber under radio hill's flank and its stope a level down behind a grate (a vault), the lumber caves, the ridge caves
 (caves: rock, mud, cut corners, rock pillars and hanging rock, a raised shelf; yellow lamps, drips); the town's
 sewer (a water channel between ledges) and the cistern hall (256 high, columns, a water channel; green); the town
 vault under the hall (a grate-floored passage you hear); the boiler house under the factory and the tank vault
 under the gas station (boilers, tanks, pipes; orange); the boathouse cellar and the pumping works (pumps, pipes;
 blue); the quarry workings (white); the bunker: a hall, the guard room, the generator room and the armoury a level
-down (a vault, a grate passage; blue). Ways up: 6 stair trenches under housings or a head-frame, 14 hatches under
-kiosks, pump houses, sheds or head-frames; daylight falls down every shaft and an EXIT sign hangs at each foot.
+down (a vault, a grate passage; blue). Each vault (the town vault, the stope, the armoury) has one way in, a
+grate-floored passage you hear. Ways up: 8 stair trenches (the main ways down: town, gas station, factory yard into
+the fort caves, bunker, quarry, the farm adit, the town's north edge into the storm drain, the pumping station) under
+housings or the adit's head-frame, 12 hatches under kiosks, pump houses, sheds or boarded head-frames; daylight down
+every shaft and trench, an EXIT sign at each foot and at both ends of every tunnel, a hip-high stripe in the place's
+lamp colour along the tunnels.
 
 Mode data in the BSP (gm_components): 28 respawn points spread by farthest-point picking; drop-in landing spots
 (`ls_marker kind=br_drop`, all on the ground): the same 28 plus four by the high layer's ways up; 32 game spawns;
