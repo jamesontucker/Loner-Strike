@@ -256,3 +256,68 @@ Note: a dev server run with a different HOME can't find the CrossOver bottle (st
 - Stacks and crashes without a debugger: `drive_c/Loner-Strike/Sim/crashes.log` (every crash in the bottle, full
   winedbg report), and with fork builds from ls-creatures `f351765` on, `cstrike/ls_crash*.log` and
   `cstrike/ls_watchdog.log` in the server folder.
+
+## Round 3 re-tests (2026-11-13, HEAD 1ceff77 + X's uncommitted Studio edits; brains r43392249830 → r43393053888 → r43395720981)
+
+### Hammer / J.A.C.K. imports (fixed importer 3958840, compile b8944a4/05b4602), each re-imported → saved → exported → Normal → HLDS
+| Map | Geometry vs source | Entities | Compile | Server load (edicts / named / brush models) |
+|---|---|---|---|---|
+| regamedll_test_map_v8.rmf | **0 brushes off** (worst 0.001 u; was 154 >0.1 u) | 439/442 identical with Hammer's flags rule (was 431); "Фаза - #1" decoded, exported back as the same cp1251 bytes (d4 e0 e7 e0) | **done** (was leak) | 455 / 439 / 151 = exactly the reference build |
+| pmk_m1.rmf | 0 off (was 47) | 62/62 | **done** (was leak) | 59 / 44 / 11 |
+| pmk_m2.rmf | 0 off | ok | done | 73 / 58 / 33 (= reference) |
+| pmk_m3.rmf | 0 off (was 104, worst 9.3 u) | ok | done, **no illegal brushes** (was 3) | 89 / 74 / 19 (= reference) |
+| de_kobbl_v102.jmf | 0 brushes without a polygon (was 1 + 52 broken); 6 "not closed" warnings left | WADs picked from the game + beside the file | **done in 73 s** (was "brush outside world"); no false too-many-entities/models (P5 #5 fixed) | 539 / 524 / 226 after installing its custom sprites; **without them the server died: "Mod_LoadModel: sprites/de_kobbl/blin.spr not found"** → P5 round 3 #1 (High) |
+| aim_stadium_gsu_v01.jmf | – | – | **done** (was leak + 5 illegal) | 235 / 220 / 9 |
+| pustinya_v0002.jmf | – | – | **done in 46 s** (was leak + planes 132 %: limits now use the last report) | 43 / 28 / 24 |
+| carver1.jmf | – | – | fails with the plain "nothing inside it… put a player spawn" (correct) | – |
+Imports now also say which WADs they found ("Texture files for this map: …") and set them; missing ones are named.
+
+### Editor UI (WebKit + Chromium, P5 1ceff77): all re-tests PASS
+Push/pull in Chromium; prefab name clash (Keep both / Replace); Single-layout style picker; recovery banner after kill -9
+(8/8 brushes back); export/import .map through the UI; History & restore; move and scale gizmos; Shift-drag copy; dock
+resize. New Low findings (P5 round 3): status bar counts worldspawn; unchanged component save adds a History entry;
+Shift-drag copy undo says "Move".
+
+### Fresh setup end to end (7a32fd5, 2531ebf)
+| Check | Result |
+|---|---|
+| Clean clone → install base + core + Deathrun | **PASS**: done in 43 s, no failed compiles, nothing missing (gm_laststand / gm_battleroyale build now) |
+| Maps, overviews, modes, cfgs, mappresets, deathrun brain lines | PASS (as round 2) |
+| Update keeps Studio + community modes and the community map, brings the shipped change | PASS |
+| A hand-edited laststand.cfg / mappresets.ini on update | Replaced with a note ("yours is kept under Settings, Backups & defaults"); **the copy is really in the app's backups** |
+| A plugin that doesn't build (gm_battleroyale.sma broken on purpose in QA's copy) | PASS: "Couldn't compile gm_battleroyale.sma … error 010", "Left out of the mode list until their plugins build: Battle Royale"; br not in modes.ini |
+
+### Game Mode Studio (X c5d56a2+)
+| Bug | Result |
+|---|---|
+| Component nodes → gm_components in the mode's plugin list (also via the real install route) | **FIXED** |
+| Creature Spawn without Last Stand (precache) | **FIXED** |
+| Last Stand Lite plays (wave 1 cleared, base falls, new stand) / Royale Lite to a winner | **FIXED** |
+| For Each breakpoint: pause per round, Resume, page Paused/Resume (WebKit + Chromium) | **FIXED** |
+| Resume sent with a breakpoint change | **FIXED** |
+| Debugger value = used value (25 random branches) | **FIXED** |
+| Drop Weapon node (250 bot drops) | **FIXED** (no crash) |
+| Create trap / extraction, In Zone on a created zone, Player Hurt on blocked damage, Find Component with spaces, Creature Count, Team Changed ×1, uninstall leftovers | **FIXED** |
+| Zone Set / Shrink with a wired Shrinking Zone | **still broken** (`ls_zone_center` run-time error 10) → X / W1 |
+| For Each reports "N times" while rounds wait at a breakpoint | new, Low → X |
+| Library save/version/delete routes | PASS (export/import is a page file picker, not run); Entry/Return details, shortcuts, snippet routing, leave flow: pending (not committed) |
+| `npm run test:studio` | 20/20 |
+
+### Brain drop crash (Y)
+Raw `engclient_cmd(bot,"drop")` stress (Y's qa_drop: drop / drop_all / drop_dead): **r43392249830 crashed at round 24**
+(`exception 0xc0000005 … last text: drop`, logs kept in Sim/QA5 and scratch); **r43395720981: 30/30 rounds, no crash.**
+
+### Last Stand / Battle Royale (W1 28b3652, ff51cea, f9daa11; gm_battleroyale working tree d0885d80; brains r43393053888 + r43395720981)
+| Bug | Result |
+|---|---|
+| LS bots buy guns between waves | **Partly**: every bot buys (14-17 guns a stand), but only SMGs (mp5/ump45/p90): money stays $200-2500, never a rifle; stands still fall on wave 5 |
+| LS supply drops opened by bots | **FIXED** (3/4, 4/5, ~5 s after landing) |
+| BR supply drops opened by bots | still failing (1 of 8) |
+| Creatures killing defenders through intact gates | **NOT FIXED** (14 deaths 20-50 u behind solid West/East gates) |
+| Won stand logged; money reset after a loss; 32-slot log spam | **FIXED** (spam 1092 → 0) |
+| BR start loadout (knife, $0) | **FIXED** |
+| BR drop-in: no landing deaths, no stacking | **FIXED** (26 landings, 0 damage taken, ≥60 u apart) |
+| BR squads, no damage between mates | Partial (no leak seen; squads not exposed to check directly) |
+| New: a repaired barricade stays non-solid ~20 s into the next wave; some drop-in spots on high roofs (z 564) and one into the tunnels | → W1 |
+| New: stopping a server writes an "unhandled exception" ls_crash.log on r43393053888 (looks like a crash) | → Y |
+| Hang after a boss-wave loss | not seen (3 more losses; still no real person on the server) |

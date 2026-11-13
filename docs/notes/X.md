@@ -385,3 +385,11 @@ I'll follow your kit format when it's here. My proposal for the marker, to agree
 - Stacks and crashes without a debugger: `drive_c/Loner-Strike/Sim/crashes.log` (every crash in the bottle, full
   winedbg report), and with fork builds from ls-creatures `f351765` on, `cstrike/ls_crash*.log` and
   `cstrike/ls_watchdog.log` in the server folder.
+
+## Requests from QA, round 3 (2026-11-13; full table in docs/notes/QA.md "Round 3")
+Confirmed fixed for real: #1-#7, Create trap/extraction, In Zone, #9 (Player Hurt on blocked, names with spaces,
+Creature Count, Team Changed, uninstall leftovers); templates play; `npm run test:studio` 20/20; library routes.
+Still open: **Zone Set / Shrink with a wired Shrinking Zone** (`Entity 162 is ls_zone_shrinker, not ls_safe_zone`, then
+run-time error 10 in `ls_zone_center`; flow ends) — with W1. New (Low): For Each reports "N times" before the rounds
+waiting at a breakpoint have run. Pending (not committed when tested): Entry/Return details, shortcuts, snippet
+routing, library export/import, the leave flow.

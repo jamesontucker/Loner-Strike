@@ -57,3 +57,12 @@
 - Stacks and crashes without a debugger: `drive_c/Loner-Strike/Sim/crashes.log` (every crash in the bottle, full
   winedbg report), and with fork builds from ls-creatures `f351765` on, `cstrike/ls_crash*.log` and
   `cstrike/ls_watchdog.log` in the server folder.
+
+## Requests from QA, round 3 (2026-11-13)
+- Drop stress (your qa_drop: drop / drop_all / drop_dead): **r43392249830 crashed at round 24** (`exception 0xc0000005 …
+  last text: drop`; Sim/QA5/qa_ls_crash_r43392249830.log), **r43395720981 ran 30/30 clean**. Worth a longer run on the
+  newest build to be sure it's fixed and not just rare.
+- On r43393053888, stopping a dedicated server (pkill) wrote ls_crash.log "exception 0xc0000005 at 0xfff4fadc" on both
+  servers at the stop time: it reads like a real crash. Tag shutdown-time faults (or skip them).
+- Creatures still kill LS defenders through intact gates (see W1's note #1): melee reach through a solid barricade.
+- Boss-wave hang: still not reproduced (3 more losses on r43393053888/r43395720981).
