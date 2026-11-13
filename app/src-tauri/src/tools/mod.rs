@@ -15,6 +15,7 @@ pub mod health;
 pub mod editor;
 pub mod doctor;
 pub mod callouts;
+pub mod assets;
 
 use crate::goldsrc::{self, bsp::Bsp, entities, mesh, wad};
 use crate::server::Shared;
@@ -289,6 +290,7 @@ pub fn local_routes() -> Router<Shared> {
         .merge(editor::routes())
         .merge(doctor::routes())
         .merge(callouts::routes())
+        .merge(assets::routes())
 }
 
 /// Builds everything the viewer needs for one map file, uncached (tests and the real-map
