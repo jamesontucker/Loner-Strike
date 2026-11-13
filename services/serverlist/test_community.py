@@ -65,12 +65,31 @@ class FakeGB:
         return 200, json.dumps(page).encode()
 
 
-def zip_of(names):
+def manifest(item):
+    return json.dumps({"schema": 1, "app": "1.0.0", "item": item}).encode()
+
+
+MAP_MANIFEST = {"kind": "map", "gb": 0, "name": "de_marakesh (from the package)", "summary": "A market town.", "games": ["cstrike"],
+                "tags": ["desert"], "map": {"name": "de_marakesh", "bspSize": 1, "bspSha256": "ab" * 32, "modes": ["classic", "csdm"],
+                                            "nav": True, "places": True, "lsv": True, "res": True, "overview": True},
+                "health": {"verdict": "good", "when": 1793990000, "mode": "classic", "minutes": 5, "bots": 12,
+                           "stuckPct": 0.8, "falls": 0, "killsPerBotMin": 1.2, "coveragePct": 61.0}}
+
+
+def zip_of(names, files=None):
+    """A zip with these paths (100 bytes each) and loner-strike.json etc. from `files`."""
     b = io.BytesIO()
-    with zipfile.ZipFile(b, "w") as z:
+    with zipfile.ZipFile(b, "w", zipfile.ZIP_DEFLATED) as z:
         for n in names:
             z.writestr(n, b"x" * 100)
+        for n, data in (files or {}).items():
+            z.writestr(n, data)
     return b.getvalue()
+
+
+def map_zip(extra=(), man=None):
+    return zip_of(["maps/de_marakesh.bsp", "maps/de_marakesh.nav", "maps/de_marakesh.lsv", "README.txt", *extra],
+                  {"loner-strike.json": manifest(man or MAP_MANIFEST)})
 
 
 class FakeFiles:
@@ -78,9 +97,11 @@ class FakeFiles:
 
     def __init__(self):
         self.files = {
-            1885247: zip_of(["maps/de_marakesh.bsp", "maps/de_marakesh.nav", "maps/de_marakesh.lsv", "README.txt", "loner-strike.json"]),
-            1886785: zip_of(["addons/amxmodx/configs/gamemodes/cage.ini", "modes/cage/graph.json", "loner-strike.json"]),
-            1789868: zip_of(["prefabs/can.map", "prefabs/can.json", "prefabs/can.png", "loner-strike.json"]),
+            1885247: map_zip(),
+            1886785: zip_of(["addons/amxmodx/configs/gamemodes/cage.ini", "modes/cage/graph.json"],
+                            {"loner-strike.json": manifest({"kind": "mode", "name": "Cage", "mode": {"id": "cage", "maps": ["de_dust2"], "plugins": []}})}),
+            1789868: zip_of(["prefabs/can.map", "prefabs/can.json", "prefabs/can.png"],
+                            {"loner-strike.json": manifest({"kind": "prefab", "name": "Can", "tags": ["props"]})}),
         }
         self.calls = 0
 
@@ -192,9 +213,13 @@ class Validation(unittest.TestCase):
         self.assertEqual(it["summary"], "a b")
 
     def test_submission_envelope(self):
+        self.assertEqual(cm.parse_submission(body(map_item())), ("Mod", 739197, 1885247, "0.1.3"))
+        page = json.dumps({"schema": 1, "app": "1.0", "page": {"model": "Spray", "id": 5, "file": 6}}).encode()
+        self.assertEqual(cm.parse_submission(page), ("Spray", 5, 6, "1.0"))
         for raw, code in [(b"x" * (cm.MAX_BODY + 1), 413), (b"not json", 400), (b"[]", 400), (b"\xff", 400),
                           (body(map_item(), schema=2), 400), (body(map_item(), schema=0), 400),
-                          (json.dumps({"schema": 1}).encode(), 400)]:
+                          (json.dumps({"schema": 1}).encode(), 400), (body(map_item(gb=0)), 400), (body(map_item(file="1")), 400),
+                          (body(map_item(model="Wip")), 400)]:
             with self.subTest(raw=raw[:30]):
                 with self.assertRaises(cm.Reject) as e:
                     cm.parse_submission(raw)
@@ -226,37 +251,34 @@ class Pages(unittest.TestCase):
         self.assertEqual(cm.page_kind(SPRAY, "Spray"), "spray")
 
     def test_check_page(self):
-        it = cm.clean_item(map_item())
-        facts = cm.check_page(MAP, "Mod", 739197, it)
-        self.assertEqual(facts["author"], "TheHouthi")
-        self.assertEqual(facts["submitterId"], 6096365)
+        facts = cm.check_page(MAP, "Mod", 739197, 1885247)
+        self.assertEqual((facts["kind"], facts["title"], facts["author"], facts["submitterId"]), ("map", "de_marakesh", "TheHouthi", 6096365))
+        self.assertEqual(facts["file"]["md5"], "bb48b1faf89c4daad7545c4f3a2ce681")
         self.assertTrue(facts["screenshots"] and all(u.startswith("https://images.gamebanana.com/") for u in facts["screenshots"]))
+        nocat = copy.deepcopy(MAP)
+        nocat["_aCategory"], nocat["_aSuperCategory"] = {"_idRow": 1, "_sName": "Skins"}, {"_idRow": 2, "_sName": "Skins"}
         cases = {
-            "untagged": (fixture("mod_739197_untagged.json"), "tag"),
-            "game": (dict(MAP, _aGame={"_idRow": 1}), "1.6"),
-            "kind": (dict(MAP, _aCategory=PREFAB["_aCategory"], _aSuperCategory=PREFAB["_aSuperCategory"]), "category"),
-            "flagged": (dict(MAP, _bIsFlagged=True), "flagged"),
+            "untagged": (fixture("mod_739197_untagged.json"), 1885247, "tag"),
+            "game": (dict(MAP, _aGame={"_idRow": 1}), 1885247, "1.6"),
+            "category": (nocat, 1885247, "category"),
+            "flagged": (dict(MAP, _bIsFlagged=True), 1885247, "flagged"),
+            "file": (MAP, 999, "isn't on the page"),
         }
-        md5 = copy.deepcopy(MAP)
-        md5["_aFiles"][0]["_sMd5Checksum"] = "0" * 32
-        cases["md5"] = (md5, "package")
         pending = copy.deepcopy(MAP)
         pending["_aFiles"][0].update(_sAvResult="", _sAvState="pending")
-        cases["av pending"] = (pending, "still checking")
+        cases["av pending"] = (pending, 1885247, "still checking")
         infected = copy.deepcopy(MAP)
         infected["_aFiles"][0].update(_sAvResult="infected", _sAvState="done")
-        cases["av"] = (infected, "virus")
+        cases["av"] = (infected, 1885247, "virus")
         big = copy.deepcopy(MAP)
         big["_aFiles"][0]["_nFilesize"] = cm.MAX_FILE + 1
-        cases["size"] = (big, "too big")
-        for name, (page, words) in cases.items():
+        cases["size"] = (big, 1885247, "too big")
+        for name, (page, fid, words) in cases.items():
             with self.subTest(name):
                 with self.assertRaises(cm.Reject) as e:
-                    cm.check_page(page, "Mod", 739197, it)
+                    cm.check_page(page, "Mod", 739197, fid)
                 self.assertEqual(e.exception.code, 422)
                 self.assertIn(words, e.exception.message)
-        with self.assertRaises(cm.Reject):
-            cm.check_page(MAP, "Mod", 739197, dict(it, file=999))
 
     def test_fetch_outcomes(self):
         gb = FakeGB({("Mod", 1): None, ("Mod", 2): OSError("down"), ("Mod", 739197): dict(MAP, _bIsTrashed=True)})
@@ -428,11 +450,13 @@ class Submissions(unittest.TestCase):
                 self.assertIn(words, ans["error"])
                 self.assertIsNone(c.store.get("mod:739197"), "nothing is kept from a refused registration")
                 self.assertEqual(rec.sent, [])
-        c, _ = make()
-        self.assertEqual(c.submit(body(mode_item(gb=739197, file=1885247, md5="bb48b1faf89c4daad7545c4f3a2ce681")), "ip")[0], 422)
-        code, ans = c.submit(body(mode_item(plugins=True)), "ip")
+        ff = FakeFiles()
+        ff.files[1886785] = zip_of(["modes/cage/graph.json"], {"loner-strike.json": manifest(
+            {"kind": "mode", "name": "Cage", "mode": {"id": "cage", "plugins": [{"file": "cage.amxx", "sha256": "ab" * 32, "source": "cage.sma"}]}})})
+        c, _ = make(files=ff)
+        code, ans = c.submit(body(mode_item()), "ip")
         self.assertEqual(code, 422)
-        self.assertIn("Plugin modes can't be shared yet", ans["error"])
+        self.assertIn("Plugin modes can't be shared yet", ans["error"], "a plugin mode in the package itself")
 
     def test_rate_limits(self):
         c, _ = make()
@@ -442,14 +466,14 @@ class Submissions(unittest.TestCase):
         self.assertEqual(c.submit(body(map_item()), "9.9.9.9")[0], 429, "junk counts too")
         self.assertEqual(c.submit(body(map_item()), "8.8.8.8")[0], 200)
         c, _ = make()
-        c.submitter_limit = cm.Window(1, 86400)
+        c.ip_day = cm.Window(1, 86400)
         self.assertEqual(c.submit(body(map_item()), "a")[0], 200)
         other = copy.deepcopy(MAP)
         other["_idRow"] = 5
         c.get.pages[("Mod", 5)] = other
-        code, ans = c.submit(body(map_item(gb=5)), "b")
-        self.assertEqual(code, 429, "the same GameBanana member from another address")
-        self.assertIn("member", ans["error"])
+        code, ans = c.submit(body(map_item(gb=5)), "a")
+        self.assertEqual(code, 429, "the daily limit is per visitor")
+        self.assertEqual(c.submit(body(map_item(gb=5)), "b")[0], 200, "the same GameBanana member's page from someone else")
 
     def test_queue_cap_for_blocked_creators(self):
         c, _ = make()
@@ -640,12 +664,12 @@ class Index(unittest.TestCase):
         self.assertEqual([i["gb"] for i in sorted(idx["items"], key=lambda i: i["gb"])], [82585, 739197])
         m = next(i for i in idx["items"] if i["kind"] == "map")
         types = {"kind": str, "model": str, "gb": int, "file": int, "md5": str, "name": str, "author": str, "summary": str,
-                 "games": list, "map": dict, "health": dict, "screenshots": list, "tags": list, "featured": bool,
+                 "games": list, "map": dict, "screenshots": list, "tags": list, "featured": bool,
                  "added": int, "updated": int, "status": str}
         for k, t in types.items():
             self.assertIsInstance(m[k], t, k)
         self.assertEqual(set(m["map"]), {"name", "bspSize", "bspSha256", "modes", "nav", "places", "lsv", "res", "overview"})
-        self.assertEqual(set(m["health"]), {"verdict", "when", "mode", "minutes", "bots", "stuckPct", "falls", "killsPerBotMin", "coveragePct"})
+        self.assertNotIn("health", m, "nothing proves the author's health numbers, so none are listed")
         self.assertEqual(m["model"], "Mod")
         self.assertEqual(m["author"], "TheHouthi")
         self.assertFalse(m["featured"], "featured is the team's pick, not the author's")
@@ -906,6 +930,75 @@ class Http(unittest.TestCase):
         r = run("queue")
         self.assertNotEqual(r.returncode, 0)
         self.assertNotIn("wrong" * 10, r.stdout + r.stderr)
+
+
+class Provenance(unittest.TestCase):
+    """What's listed comes from GameBanana and the package, never from the request."""
+
+    def test_a_strangers_made_up_metadata_is_ignored(self):
+        c, _ = make()
+        lies = map_item(name="FREE VBUCKS", summary="lies", author="admin", games=["czero"], tags=["scam"],
+                        map={"name": "de_dust2", "bspSize": 5, "modes": ["zombie"], "nav": True, "lsv": True, "overview": True})
+        self.assertEqual(c.submit(body(lies), "stranger")[1]["state"], "listed")
+        it = json.loads(cm.build_index(c.store)[0])["items"][0]
+        self.assertEqual((it["name"], it["author"], it["summary"], it["games"], it["tags"]),
+                         ("de_marakesh", "TheHouthi", "A market town.", ["cstrike"], ["desert"]))
+        self.assertEqual(it["md5"], "bb48b1faf89c4daad7545c4f3a2ce681", "the MD5 GameBanana lists")
+        m = it["map"]
+        self.assertEqual((m["name"], m["modes"], m["bspSize"]), ("de_marakesh", ["classic", "csdm"], 100))
+        self.assertEqual((m["nav"], m["lsv"], m["places"], m["res"], m["overview"]), (True, True, True, False, False),
+                         "only what ships in the zip counts")
+        self.assertNotIn("health", it)
+
+    def test_a_stranger_can_only_refresh_to_the_truth(self):
+        c, _ = make()
+        c.submit(body(map_item()), "creator")
+        before = c.store.get("mod:739197")
+        self.assertEqual(c.submit(body(map_item(name="EVIL")), "stranger")[0], 200)
+        self.assertEqual(c.store.get("mod:739197")["item"], before["item"], "same file: nothing changes")
+        c.get.pages[("Mod", 739197)] = new_file(MAP)
+        c.get_range.files[2000000] = map_zip(["overviews/de_marakesh.bmp"])
+        c.submit(body(map_item(file=2000000, name="EVIL", summary="EVIL")), "stranger")
+        it = json.loads(c.store.get("mod:739197")["item"])
+        self.assertEqual((it["name"], it["summary"], it["md5"], it["map"]["overview"]), ("de_marakesh", "A market town.", "1" * 32, True))
+
+    def package_refusal(self, data, words):
+        ff = FakeFiles()
+        ff.files[1885247] = data
+        c, _ = make(files=ff)
+        code, ans = c.submit(body(map_item()), "a")
+        self.assertEqual(code, 422, ans)
+        self.assertIn(words, ans["error"])
+
+    def test_package_refusals(self):
+        self.package_refusal(map_zip(man=dict(MAP_MANIFEST, kind="prefab")), "category")
+        self.package_refusal(map_zip(man=dict(MAP_MANIFEST, map=dict(MAP_MANIFEST["map"], name="de_other"))), "isn't in it")
+        self.package_refusal(map_zip(man=dict(MAP_MANIFEST, map=dict(MAP_MANIFEST["map"], name="../../x"))), "loner-strike.json")
+        self.package_refusal(map_zip(man={k: v for k, v in MAP_MANIFEST.items() if k != "map"}), "loner-strike.json: map")
+        self.package_refusal(zip_of(["maps/de_marakesh.bsp"]), "no loner-strike.json")
+        self.package_refusal(zip_of(["maps/de_marakesh.bsp"], {"loner-strike.json": b"{nope"}), "couldn't be read")
+        self.package_refusal(zip_of(["maps/de_marakesh.bsp"], {"loner-strike.json": json.dumps({"schema": 9, "item": {}}).encode()}), "newer")
+        # a small zip entry that would unpack to far more than a manifest can be
+        self.package_refusal(zip_of(["maps/de_marakesh.bsp"], {"loner-strike.json": manifest(MAP_MANIFEST) + b" " * 300_000}), "too big")
+        b = io.BytesIO()
+        with zipfile.ZipFile(b, "w") as z:
+            z.writestr("maps/de_marakesh.bsp", b"x")
+            z.writestr(zipfile.ZipInfo("loner-strike.json"), manifest(MAP_MANIFEST), compress_type=zipfile.ZIP_BZIP2)
+        self.package_refusal(b.getvalue(), "odd way")
+
+    def test_places_need_a_nav(self):
+        ff = FakeFiles()
+        ff.files[1885247] = zip_of(["maps/de_marakesh.bsp"], {"loner-strike.json": manifest(MAP_MANIFEST)})
+        c, _ = make(files=ff)
+        c.submit(body(map_item()), "a")
+        m = json.loads(c.store.get("mod:739197")["item"])["map"]
+        self.assertEqual((m["nav"], m["places"], m["lsv"]), (False, False, False))
+
+    def test_sprays_and_textures_without_a_manifest(self):
+        c, _ = make()
+        c.submit(body(SPRAY_ITEM), "a")
+        it = json.loads(c.store.get("spray:82585")["item"])
+        self.assertEqual((it["name"], it["kind"]), (SPRAY["_sName"], "spray"))
 
 
 class Transitions(unittest.TestCase):

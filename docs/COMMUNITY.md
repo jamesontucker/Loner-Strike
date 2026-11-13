@@ -113,7 +113,7 @@ reads 1 refuses 2 and says "update Loner-Strike".
 | `file`, `md5` | The file on the page this entry describes, and its MD5 as GameBanana lists it. With `file`, Try it installs that file (if it's still clean); else the newest clean one. |
 | `map` | For maps: the exact .bsp version (`bspSize`, `bspSha256`) the nav, knowledge and checks were made for, the modes it's made for, and what it ships. |
 | `mode` | For game modes: its mode id, its plugins (file, sha256 of the .amxx, where the source is), the review state (`none`, `verified`, `reviewed`), maps it's made for. For 1.0 `plugins` is always empty and `review` always `none` (only Game Mode Studio modes are shared); the fields stay for a later version. |
-| `health` | The newest Loner-Strike health check (tools/health.rs) of that map version. |
+| `health` | The newest Loner-Strike health check (tools/health.rs) of that map version. Not filled by the list service for now: an author's numbers can't be proven (see section 7, health from our side). |
 | `screenshots` | https links on `images.gamebanana.com` or `dl.lonerstrike.com` only. |
 | `featured` | A team pick; listed first. |
 | `status` | `listed`; `hidden` (kept out of lists, still openable by link); `revoked` (never offered or installed). |
@@ -250,7 +250,7 @@ its settings and the deploy steps are in **docs/COMMUNITY-SERVER.md**. What the 
 
 | Endpoint | Body / answer |
 |---|---|
-| `POST https://list.lonerstrike.com/community/submit` | `{"schema": 1, "app": "<version>", "item": {...}}` → 200 `{"ok", "key", "state": "listed" \| "pending"}`, or 4xx/5xx `{"error"}` (section 6) |
+| `POST https://list.lonerstrike.com/community/submit` | `{"schema": 1, "app": "<version>", "page": {"model": "Mod" \| "Spray", "id", "file"}}` — only which page and file; the list takes the title, author and pictures from GameBanana and everything Loner-Strike from the package's own `loner-strike.json` and file list (nav/knowledge/overview only when they ship; health numbers aren't listed, as nothing proves them) → 200 `{"ok", "key", "state": "listed" \| "pending"}`, or 4xx/5xx `{"error"}` (section 6) |
 | `GET https://list.lonerstrike.com/community/submission/<mod\|spray>/<id>` | `{"key", "state": "listed" \| "pending" \| "hidden" \| "rejected" \| "pulled" \| "unknown", "reason"?}` |
 | `POST https://list.lonerstrike.com/community/report` | `{"schema": 1, "app", "model": "Mod" \| "Spray", "id", "reason", "note"}` → 200 `{"ok": true}`, 400 bad, 413 too long, 429 too many, 503 busy, each with `{"error"}` |
 | `GET https://dl.lonerstrike.com/community/index.json` (+ `.sha256`) | the index (section 3), published from the list service's database by the team |

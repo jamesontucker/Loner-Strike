@@ -27,39 +27,44 @@ Nothing here is live until the steps in section 6 are run.
 | `services/serverlist/test_community.py`, `test_modbot.py`, `testdata/gamebanana/` | Offline tests with recorded GameBanana answers and forged Discord interactions. |
 
 Tests: `cd services/serverlist && python3 -m unittest test_community test_modbot test_serverlist`
-(82 tests). A live check that a real GameBanana zip can be listed by range requests:
+(87 tests). A live check that a real GameBanana zip can be listed by range requests:
 `python3 -c "import community as c; print(c.package_names({'id': 1886785, 'name': 'cage.zip', 'size': 278384}))"`.
 
 ## 2. How it works
 
-**A registration** (`POST /community/submit`, sent by the app after Publish, body
-`{"schema": 1, "app": "<version>", "item": {...}}` exactly as community.rs `send()` builds it):
+**A registration** (`POST /community/submit`, sent by the app after Publish). The body says only
+which page and file: `{"schema": 1, "app": "<version>", "page": {"model": "Mod"|"Spray", "id": 123,
+"file": 456}}` (an older app's `{"item": {...}}` is read for its `model`, `gb` and `file` only).
+Anyone may register any tagged page — the tag is the creator's say-so — because nothing in the
+request ends up in the listing: a stranger can at most make an entry match the page and package again.
 
-1. Rate limit per visitor (10/hour; Cloudflare's `CF-Connecting-IP` only when the request comes from
-   the tunnel on 127.0.0.1, like `/register`), body at most 64 KB.
-2. The item is checked field by field and retyped to the app's schema (ids, MD5, names `safe_arg`,
-   mode ids, health numbers in range, text to one line with caps). Fields only the server may set
-   (author, screenshots, featured, status, review, dates) are ignored. A mode with plugins is refused:
-   "Plugin modes can't be shared yet. Make it in Game Mode Studio…".
-3. A retry of the same file (the app retries "waiting" entries) answers at once without asking
-   GameBanana again. A pulled page answers 409; a file the team turned down answers 409 with the reason.
-4. The page is fetched from `https://gamebanana.com/apiv11/<Mod|Spray>/<id>/ProfilePage` (the only
+1. Rate limits per visitor: 10 an hour, 30 a day (Cloudflare's `CF-Connecting-IP` only when the
+   request comes from the tunnel on 127.0.0.1, like `/register`); never per GameBanana member, so
+   nobody can use up a creator's quota. Body at most 64 KB.
+2. A retry naming a file already registered answers at once without asking GameBanana again. A
+   pulled page answers 409.
+3. The page is fetched from `https://gamebanana.com/apiv11/<Mod|Spray>/<id>/ProfilePage` (the only
    host; ids from validated integers; no redirects; 4 MB cap; 30 fetches/minute in all). It must:
    exist and not be trashed/private/withheld/flagged; be Counter-Strike 1.6 (4254); carry
-   `Software Used: LonerStrike`; be in the category for its kind (Maps 5474, Prefabs 451, Textures
-   681, AMXX 3521 for Studio modes, Sprays); list the item's file id with the same MD5, scanned clean,
-   1 byte to 1 GB.
-5. **The package's contents**: the zip's directory is read with HTTP range requests (usually two, a
-   few KB) from `gamebanana.com/dl/<file>`, following redirects only to `files.gamebanana.com` /
-   `filecacheN.gamebanana.com`, at most 4 MB read. Refused: anything that runs code (`.amxx .amx .sma
-   .inc .dll .so .dylib .exe .bat .cmd .sh .ps1 .py .js .jar .lua …`), archives inside the archive,
-   `addons/metamod/`, `dlls/`. A lone `.bsp/.wad/.bmp/.tga/.png/.jpg` is fine; any other non-zip is
-   refused ("upload the zip the app made"). The app's Publish uses the same list.
-6. Rate limit per GameBanana member (10/day).
-7. **Listed at once**, with the GameBanana submitter as author and the page's own pictures. A card
-   goes to the mod channel (title, kind, page id, thumbnail, link, **[Pull]**). If the team blocked
-   that member, it waits instead (`pending`, card with **[Approve] [Reject]**). An update to a listed
-   page replaces it at once (or waits, for a blocked creator, while the old one stays listed).
+   `Software Used: LonerStrike`; be in a category we take (its kind comes from it: Maps 5474,
+   Prefabs 451, Textures 681, AMXX 3521 for Studio modes, Sprays); list the file id, scanned clean,
+   1 byte to 1 GB. A file the team turned down (same MD5) answers 409.
+4. **The package**: the zip's directory and its `loner-strike.json` (one entry, at most 64 KB packed
+   and unpacked whatever the header claims, stored or deflated, not encrypted) are read with HTTP
+   range requests from `gamebanana.com/dl/<file>`, following redirects only to
+   `files.gamebanana.com` / `filecacheN.gamebanana.com`, at most 4 MB read. Refused: anything that
+   runs code (`.amxx .amx .sma .inc .dll .so .dylib .exe .bat .cmd .sh .ps1 .py .js .jar .lua …`),
+   archives inside the archive, `addons/metamod/`, `dlls/`; maps, modes and prefabs without a
+   `loner-strike.json`; a manifest of another kind than the page's category, or a plugin mode
+   ("Plugin modes can't be shared yet…"). A lone `.wad`/picture (sprays, textures) needs no manifest.
+5. **The entry is built only from verified sources**: title, author and pictures from the page; the
+   file id and MD5 from the page; summary, games, tags, map modes and mode details from the
+   package's manifest (checked with the same strict rules); the map's `.bsp` must be in the zip
+   (`bspSize` from it), and `nav`, `places`, `lsv`, `res`, `overview` count only when those files
+   ship. Health numbers are dropped (unverified) until we run checks ourselves.
+6. **Listed at once**. A card goes to the mod channel (title, kind, page id, thumbnail, link,
+   **[Pull]**). If the team blocked that member, or hid or turned down this page, the new file
+   waits instead (card with **[Approve] [Reject]**). An update to a listed page replaces it at once.
 
 Answers: `200 {"ok": true, "key": "mod:123", "state": "listed" | "pending" | "hidden"}`; refusals
 `400/409/413/422 {"error": "<what to fix>"}`; `429` rate limit; `502` GameBanana didn't answer;

@@ -1466,11 +1466,18 @@ pub fn sent_from(status: u16, body: &[u8]) -> Sent {
     }
 }
 
+/// The registration the list service takes: which page and which file, nothing more.
+pub fn submit_body(item: &Item) -> Value {
+    json!({"schema": SCHEMA, "app": env!("CARGO_PKG_VERSION"), "page": {"model": item.model, "id": item.gb, "file": item.file}})
+}
+
 fn send(item: &Item) -> Sent {
     if let Some(why) = package_refusal(item, &[]) {
         return Sent::Refused(why);
     }
-    let body = json!({"schema": SCHEMA, "app": env!("CARGO_PKG_VERSION"), "item": item});
+    // only which page and file: the list reads everything else from GameBanana and from the
+    // package's own loner-strike.json, never from what an app says
+    let body = submit_body(item);
     let r = crate::sys::http()
         .post(SUBMIT_URL)
         .header("User-Agent", USER_AGENT)
@@ -2155,6 +2162,15 @@ mod tests {
         let hits = search(true).expect("GameBanana answered");
         assert!(hits.iter().all(|h| h.id > 0));
         println!("{} tagged creations", hits.len());
+    }
+
+    #[test]
+    fn a_registration_says_only_which_page() {
+        let it = Item { kind: Kind::Map, model: Model::Mod, gb: 739197, file: 1885247, name: "de_x".into(), summary: "s".into(), ..Default::default() };
+        let b = submit_body(&it);
+        assert_eq!(b["page"], json!({"model": "Mod", "id": 739197, "file": 1885247}));
+        assert!(b.get("item").is_none());
+        assert_eq!(b.as_object().unwrap().len(), 3);
     }
 
     #[test]

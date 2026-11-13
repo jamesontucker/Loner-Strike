@@ -62,7 +62,7 @@ MAX_FILE = 1 << 30            # the package (Publish refuses bigger)
 MAX_PENDING = 500             # waiting for a person, all together
 MAX_REASON = 300
 SUBMIT_PER_IP_HOUR = 10
-SUBMIT_PER_SUBMITTER_DAY = 10
+SUBMIT_PER_IP_DAY = 30
 ADMIN_FAILS_PER_HOUR = 10
 GB_FETCHES_PER_MIN = 30
 MIN_TOKEN = 32
@@ -294,7 +294,10 @@ def clean_item(raw):
 
 
 def parse_submission(body):
-    """The app's POST body {"schema": 1, "app": "<version>", "item": {...}} -> (item, app)."""
+    """The app's POST body -> (model, page id, file id, app version). Only the ids are read:
+    {"schema": 1, "app": "<version>", "page": {"model": "Mod", "id": 123, "file": 456}} (the
+    older {"item": {"model", "gb", "file", ...}} is read the same way). Everything else about a
+    creation comes from GameBanana and from the package itself, never from the request."""
     if len(body) > MAX_BODY:
         raise Reject(413, "The registration is too big.")
     try:
@@ -310,10 +313,59 @@ def parse_submission(body):
         raise Reject(400, "This registration is from a newer Loner-Strike than the list knows.")
     app = d.get("app", "")
     app = one_line(app, 32) if isinstance(app, str) else ""
-    return clean_item(d.get("item")), app
+    page = d.get("page") if isinstance(d.get("page"), dict) else None
+    old = d.get("item") if isinstance(d.get("item"), dict) else None
+    if page is None and old is None:
+        raise Reject(400, "The registration doesn't say which GameBanana page it is.")
+    src = page if page is not None else dict(old, id=old.get("gb"))
+    model = parse_model(src.get("model", "Mod"))
+    if not model:
+        _bad("model")
+    return model, _int(src, "id", 1, 99_999_999), _int(src, "file", 1, 99_999_999), app
 
 
-# ---- GameBanana ---------------------------------------------------------------------------
+def package_item(manifest, kind):
+    """The Loner-Strike part of an entry (summary, games, tags, map and mode details) from the
+    package's own loner-strike.json, checked with the same rules as everything else. Health
+    numbers are dropped: nothing proves them, so they show as unchecked."""
+    try:
+        d = json.loads(manifest.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise Reject(422, "The package's loner-strike.json couldn't be read. Make the package again with Publish.")
+    if not isinstance(d, dict) or not isinstance(d.get("item"), dict):
+        raise Reject(422, "The package's loner-strike.json isn't one the app made. Make the package again with Publish.")
+    schema = d.get("schema")
+    if isinstance(schema, bool) or not isinstance(schema, int) or not 1 <= schema <= SCHEMA:
+        raise Reject(422, "The package was made by a newer Loner-Strike than the list knows.")
+    m = dict(d["item"])
+    if m.get("kind", kind) != kind:
+        raise Reject(422, f"The package is a {m.get('kind')} but the page is in the category for a {kind}. Move one of them.")
+    # what the checks need but the package can't know yet; replaced by the verified values after
+    m.update(kind=kind, model="Spray" if kind == "spray" else "Mod", gb=1, file=1, md5="0" * 32, name=m.get("name") or "x", health=None)
+    try:
+        it = clean_item(m)
+    except Reject as e:
+        if e.code == 422:
+            raise
+        raise Reject(422, e.message.replace("The registration's", "The package's loner-strike.json:"))
+    return it
+
+
+def map_facts(meta, sizes):
+    """A map's details checked against the files really in the package: the .bsp must be there
+    (its size from the zip), nav, knowledge, .res and overview only count when they ship."""
+    have = {n.replace("\\", "/").lower(): sz for n, sz in sizes.items()}
+    name = meta["name"]
+    bsp = have.get(f"maps/{name.lower()}.bsp")
+    if bsp is None:
+        raise Reject(422, f"The package says it's the map {name}, but maps/{name}.bsp isn't in it.")
+    nav = f"maps/{name.lower()}.nav" in have
+    return dict(meta, bspSize=bsp, nav=nav, places=bool(meta.get("places")) and nav,
+                lsv=nav and f"maps/{name.lower()}.lsv" in have, res=f"maps/{name.lower()}.res" in have,
+                overview=any(f"overviews/{name.lower()}.{e}" in have for e in ("bmp", "tga", "txt")))
+
+
+# ---- GameBanana ---# ---- GameBanana ---------------------------------------------------------------------------
 
 class FetchError(Exception):
     pass
@@ -441,22 +493,45 @@ class RangeFile(io.RawIOBase):
         return len(d)
 
 
-def package_names(f, get=range_get):
-    """The paths inside a page's file (the file itself when it's a single map, wad or image).
-    Reject(422) when it can't be looked inside; FetchError on network trouble."""
+MAX_MANIFEST = 64 * 1024
+
+
+def read_package(f, get=range_get):
+    """(sizes {path: bytes}, loner-strike.json's bytes or None) of a page's file, read from the
+    zip's directory and that one small entry by range requests (a lone .bsp/.wad/picture is
+    itself). Reject(422) when it can't be looked inside; FetchError on network trouble."""
     low = f["name"].lower()
     if low.endswith(SINGLE_OK):
-        return [f["name"]]
+        return {f["name"]: f["size"]}, None
     if not low.endswith(".zip"):
         raise Reject(422, "Upload the zip the app made (Publish), unchanged: the list can only look inside zips.")
     try:
         with zipfile.ZipFile(RangeFile(f"https://{GB_HOST}/dl/{f['id']}", f["size"], get)) as z:
-            names = z.namelist()
-    except (zipfile.BadZipFile, zipfile.LargeZipFile, EOFError, ValueError, NotImplementedError):
+            infos = z.infolist()
+            if len(infos) > MAX_ENTRIES:
+                raise Reject(422, "The package has too many files.")
+            sizes = {i.filename: i.file_size for i in infos}
+            manifest = None
+            found = [i for i in infos if i.filename.lower() == "loner-strike.json"]
+            if found:
+                i = found[0]
+                if i.flag_bits & 1 or i.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+                    raise Reject(422, "The package's loner-strike.json is encrypted or packed in an odd way. Make it with Publish.")
+                if i.file_size > MAX_MANIFEST or i.compress_size > MAX_MANIFEST:
+                    raise Reject(422, "The package's loner-strike.json is too big.")
+                with z.open(i) as fh:
+                    # at most this much comes out, whatever the header claims (no zip bombs)
+                    manifest = fh.read(MAX_MANIFEST + 1)
+                if len(manifest) > MAX_MANIFEST:
+                    raise Reject(422, "The package's loner-strike.json is too big.")
+    except (zipfile.BadZipFile, zipfile.LargeZipFile, EOFError, ValueError, NotImplementedError, KeyError):
         raise Reject(422, "The zip on the page couldn't be read. Upload the zip the app made, unchanged.")
-    if len(names) > MAX_ENTRIES:
-        raise Reject(422, "The package has too many files.")
-    return names
+    return sizes, manifest
+
+
+def package_names(f, get=range_get):
+    """The paths inside a page's file."""
+    return list(read_package(f, get)[0])
 
 
 def code_files(names):
@@ -575,9 +650,9 @@ def page_shots(page):
     return out
 
 
-def check_page(page, model, gb, item):
-    """Checks a profile page against a registration. Returns the page's facts
-    (submitter, author name, screenshots, the file); Reject(422) with what to fix."""
+def check_page(page, model, gb, file_id):
+    """Checks a profile page and the file asked for. Returns the page's facts (kind, title,
+    submitter, author name, screenshots, the file); Reject(422) with what to fix."""
     if _d(page.get("_aGame")).get("_idRow") != CS16_GAME:
         raise Reject(422, "That page isn't in GameBanana's Counter-Strike 1.6 section.")
     if page.get("_bIsFlagged"):
@@ -585,13 +660,15 @@ def check_page(page, model, gb, item):
     if not has_tag(page.get("_aTags")):
         raise Reject(422, f'Add the tag "{TAG_TITLE}: {TAG_VALUE}" to the page (Edit > Attributes), then try again.')
     kind = page_kind(page, model)
-    if kind != item["kind"]:
-        where = {"map": "a Maps category", "prefab": "Prefabs", "texture": "Textures",
-                 "mode": "Resources > AMXX Plugins & Mods", "spray": "Sprays"}[item["kind"]]
-        raise Reject(422, f"The page is in the wrong category for a {item['kind']}: put it in {where}.")
-    f = next((f for f in page_files(page) if f["id"] == item["file"]), None)
-    if not f or f["md5"] != item["md5"]:
-        raise Reject(422, "None of the page's files is the package the app made. Upload that zip unchanged, then try again.")
+    if not kind:
+        raise Reject(422, "The page isn't in a category the list takes: Maps, Prefabs, Textures, Resources > AMXX Plugins & Mods "
+                          "(Game Mode Studio modes) or Sprays.")
+    title = one_line(str(page.get("_sName") or ""), 80)
+    if not title:
+        raise Reject(422, "The page has no name.")
+    f = next((f for f in page_files(page) if f["id"] == file_id), None)
+    if not f or not _HEX32.match(f["md5"]):
+        raise Reject(422, "That file isn't on the page. Upload the zip the app made unchanged, then try again.")
     if f["av"] != "clean":
         if f["av"] in ("", "pending") or f["avState"] not in ("", "done"):
             raise Reject(422, "GameBanana is still checking the file. Try again in a few minutes.")
@@ -603,7 +680,27 @@ def check_page(page, model, gb, item):
     name = one_line(str(sub.get("_sName") or ""), 40)
     if sid <= 0 or not name:
         raise Reject(422, "GameBanana didn't say who made the page. Try again in a minute.")
-    return {"submitterId": sid, "author": name, "screenshots": page_shots(page), "file": f}
+    return {"kind": kind, "title": title, "submitterId": sid, "author": name, "screenshots": page_shots(page), "file": f}
+
+
+def build_item(model, gb, facts, sizes, manifest):
+    """The entry, from verified sources only: GameBanana's page (title, author, pictures, the
+    file and its MD5) and the package's own loner-strike.json and file list."""
+    kind, f = facts["kind"], facts["file"]
+    if manifest is not None:
+        it = package_item(manifest, kind)
+    elif kind in ("map", "mode", "prefab"):
+        raise Reject(422, "The package has no loner-strike.json. Make it with the app's Publish and upload that zip unchanged.")
+    else:
+        it = {"kind": kind, "summary": "", "games": ["cstrike"], "tags": []}
+    if kind == "map":
+        if not it.get("map"):
+            raise Reject(422, "The package's loner-strike.json doesn't name its map. Make it again with Publish.")
+        it["map"] = map_facts(it["map"], sizes)
+    it.pop("health", None)
+    it.update(kind=kind, model=model, gb=gb, file=f["id"], md5=f["md5"], name=facts["title"], author=facts["author"],
+              screenshots=facts["screenshots"], featured=False, status="listed")
+    return it
 
 
 # ---- rate limits ----------------------------------------------------------------------------
@@ -1016,7 +1113,8 @@ class Community:
         self.get_range = get_range
         self.admin_local = admin_local
         self.ip_limit = Window(SUBMIT_PER_IP_HOUR, 3600)
-        self.submitter_limit = Window(SUBMIT_PER_SUBMITTER_DAY, 86400)
+        # per visitor, never per GameBanana member (a stranger mustn't use up a creator's quota)
+        self.ip_day = Window(SUBMIT_PER_IP_DAY, 86400)
         self.admin_fails = Window(ADMIN_FAILS_PER_HOUR, 3600)
         self.gb_limit = Window(GB_FETCHES_PER_MIN, 60)
         self.report_ip = Window(REPORTS_PER_IP_HOUR, 3600)
@@ -1033,46 +1131,47 @@ class Community:
 
     # -- registrations --
 
-    def _verify(self, model, gb, item):
-        """The page's facts after every automatic check (page, tag, kind, file, package contents)."""
+    def _verify(self, model, gb, file_id):
+        """(page facts, the entry) after every automatic check: page, tag, category, file, the
+        package's contents and its loner-strike.json."""
         got, page = fetch_page(model, gb, self.get)
         if got == "gone":
             raise Reject(422, page)
         if got == "error":
             log(f"GameBanana didn't answer for {key_of(model, gb)}: {page}")
             raise Reject(502, "GameBanana didn't answer. Try again in a few minutes.")
-        facts = check_page(page, model, gb, item)
+        facts = check_page(page, model, gb, file_id)
         try:
-            names = package_names(facts["file"], self.get_range)
+            sizes, manifest = read_package(facts["file"], self.get_range)
         except FetchError as e:
-            log(f"couldn't list the package of {key_of(model, gb)}: {e}")
+            log(f"couldn't read the package of {key_of(model, gb)}: {e}")
             raise Reject(502, "GameBanana's file server didn't answer. Try again in a few minutes.")
-        check_package(names)
-        facts["files"] = len(names)
-        return facts
+        check_package(list(sizes))
+        return facts, build_item(model, gb, facts, sizes, manifest)
 
     def submit(self, body, ip):
-        """(status, answer) for the app's POST /community/submit."""
+        """(status, answer) for the app's POST /community/submit. Anyone may register any
+        tagged page (the tag is the creator's say-so); what gets listed is always the page's and
+        the package's own data, so a stranger can at most make the entry match them again."""
         if not self.ip_limit.allow(ip):
             return 429, {"error": "Too many registrations from here. Try again in an hour."}
+        if not self.ip_day.allow(ip):
+            return 429, {"error": "Too many registrations from here today. Try again tomorrow."}
         try:
-            item, app = parse_submission(body)
-            model, gb = item["model"], item["gb"]
+            model, gb, file_id, app = parse_submission(body)
             key = key_of(model, gb)
             row = self.store.get(key)
             if row:
                 if row["state"] == "pulled":
                     raise Reject(409, "The Loner-Strike team pulled this page, so it can't be registered again. Ask in the Discord.")
-                same = [x for x in (_j(row["proposed"]), _j(row["item"])) if x and x.get("md5") == item["md5"]]
-                if row["state"] == "rejected" and row["hidden_by"] == "team" and row["rejected_md5"] == item["md5"]:
-                    raise Reject(409, f"The Loner-Strike team turned this file down: {row['reason'] or 'no reason given'}. Upload a new version to try again.")
+                same = [x for x in (_j(row["proposed"]), _j(row["item"])) if x and x.get("file") == file_id]
                 if same and row["state"] in ("pending", "listed", "hidden"):
-                    return 200, {"ok": True, "key": key, "state": row["state"]}
+                    return 200, {"ok": True, "key": key, "state": "pending" if row["proposed"] and _j(row["proposed"]).get("file") == file_id else row["state"]}
             if not self.gb_limit.allow("gb"):
                 raise Reject(503, "The list is busy. Try again in a few minutes.")
-            facts = self._verify(model, gb, item)
-            if not self.submitter_limit.allow(facts["submitterId"]):
-                raise Reject(429, "Too many registrations from this GameBanana member today. Try again tomorrow.")
+            facts, item = self._verify(model, gb, file_id)
+            if row and row["state"] == "rejected" and row["hidden_by"] == "team" and row["rejected_md5"] == item["md5"]:
+                raise Reject(409, f"The Loner-Strike team turned this file down: {row['reason'] or 'no reason given'}. Upload a new version to try again.")
             # creators the team blocked wait for a moderator, and so does a new file for a page the
             # team hid or turned down; everyone else is listed at once
             team_hold = bool(row) and row["hidden_by"] == "team"
@@ -1083,7 +1182,6 @@ class Community:
         except Reject as e:
             return e.code, {"error": e.message}
         t = now()
-        item.update(author=facts["author"], screenshots=facts["screenshots"], featured=False, status="listed")
         fresh = row is None
         row = row or new_row(model, gb, t)
         was = row["state"]
@@ -1212,12 +1310,16 @@ class Community:
         return row
 
     def _verify_live(self, row, item):
+        """The entry as the page and package are now, which must still be the same file."""
         try:
-            return self._verify(row["model"], row["gb"], item)
+            facts, fresh = self._verify(row["model"], row["gb"], item.get("file", 0))
         except Reject as e:
             if e.code == 502:
                 raise Reject(502, f"{e.message} Nothing changed.")
             raise Reject(409, f"Not done: the page doesn't pass the checks now. {e.message}")
+        if fresh["md5"] != item.get("md5"):
+            raise Reject(409, "Not done: the file on the page changed. A new registration brings the new one.")
+        return fresh
 
     def moderate(self, key, action, body, live=True):
         """One moderation step; returns the entry afterwards. live=False skips checking the page
@@ -1236,8 +1338,7 @@ class Community:
             if row["state"] == "pulled":
                 raise Reject(409, "It's pulled. Restore it first if it should come back.")
             if live:
-                facts = self._verify_live(row, cand)
-                cand.update(author=facts["author"], screenshots=facts["screenshots"])
+                cand = self._verify_live(row, cand)
             row.update(item=json.dumps(cand, ensure_ascii=False), proposed=None, state="listed", reason="", updated=t, rejected_md5="",
                        hidden_by="", check_note="")
             self.store.put(row, "approve", reason)
@@ -1263,9 +1364,7 @@ class Community:
             row = self._need(key)
             if row["state"] not in ("hidden", "pulled") or not row["item"]:
                 raise Reject(409, f"{row['key']} is {row['state']}; only a hidden or pulled entry that was listed can be restored.")
-            item = _j(row["item"])
-            facts = self._verify_live(row, item)
-            item.update(author=facts["author"], screenshots=facts["screenshots"])
+            item = self._verify_live(row, _j(row["item"]))
             row.update(item=json.dumps(item, ensure_ascii=False), state="listed", reason="", updated=t, check_note="", hidden_by="")
             self.store.put(row, "restore", reason)
         elif action == "hide":
