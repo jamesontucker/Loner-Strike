@@ -11,7 +11,8 @@ import { useDirty, useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
 import { useReportAddress } from "../common/address";
 import { Banner, BusyButton, Info, LoadError, Segmented, useAskText, useConfirm, useToast } from "../../../ui";
-import { Empty, Loading, MapList } from "../common";
+import { Empty, Loading } from "../common";
+import { MapBrowser, rememberMap } from "../common/MapBrowser";
 import type { ToolProps } from "../registry";
 import { loadCallouts, placeColours, saveCallouts, spoken, suggest, validPlace, type Area, type CalloutNav, type Change } from "./calloutsApi";
 import { TopDown, type Tool } from "./TopDown";
@@ -24,17 +25,22 @@ export default function Callouts({ maps }: ToolProps) {
   useEffect(() => {
     if (arg) setMap(arg);
   }, [arg]);
+  useEffect(() => {
+    if (map) rememberMap("callouts", map);
+  }, [map]);
   if (!map)
     return (
-      <div className="tl-page stack-tight">
-        <div className="tl-head">
-          <div className="tl-head-title">
-            <h3>Pick a map to name its places</h3>
-            <Info text={'Bots say these names on the radio ("enemy spotted at Long"), and bot chat and voice commands understand them. Only maps with a bot nav are listed: the map doctor can teach bots the others.'} />
-          </div>
-        </div>
-        <MapList maps={maps} onPick={setMap} placeholder="Search maps" filter={(m) => m.nav} none="None of your maps has a bot nav yet. The map doctor can teach bots a map; then you can name its places here." />
-      </div>
+      <MapBrowser
+        tool="callouts"
+        maps={maps}
+        onPick={setMap}
+        title="Pick a map to name its places"
+        note={<>Only maps with a bot nav. <Info text={'Bots say these names on the radio ("enemy spotted at Long"), and bot chat and voice commands understand them. Only maps with a bot nav are listed: the map doctor can teach bots the others.'} /></>}
+        action="Name places"
+        filter={(m, f) => !!(f ? f.nav : m.nav)}
+        none="None of your maps has a bot nav yet. The map doctor can teach bots a map; then you can name its places here."
+        badges={(_m, f) => (!f?.nav ? [] : f.nav.places ? [{ text: `${f.nav.places} place${f.nav.places === 1 ? "" : "s"}`, tone: "ok" }] : [{ text: "No places yet", tone: "warn" }])}
+      />
     );
   return <Editor map={map} onBack={() => setMap(null)} />;
 }

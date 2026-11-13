@@ -15,7 +15,8 @@ import { useReportAddress } from "../common/address";
 import { Banner, BusyButton, Info, LoadError, Segmented, Switch, useConfirm, useToast } from "../../../ui";
 import { isAbort } from "../../../api";
 import { errorText } from "../common/api";
-import { Loading, MapList } from "../common";
+import { Loading } from "../common";
+import { MapBrowser, rememberMap } from "../common/MapBrowser";
 import type { ToolProps } from "../registry";
 import { currentUrl, DEFAULT_CHOICE, installOverview, overviewInfo, previewUrl, restoreOverview, type Choice, type Format, type MarkKind, type OverviewInfo, type Style } from "./overviewApi";
 import { FIT, PanZoom, zoomBy, type View } from "./PanZoom";
@@ -28,17 +29,20 @@ export default function OverviewMaker({ maps }: ToolProps) {
   useEffect(() => {
     if (arg) setMap(arg);
   }, [arg]);
+  useEffect(() => {
+    if (map) rememberMap("radar", map);
+  }, [map]);
   if (!map)
     return (
-      <div className="tl-page stack-tight">
-        <div className="tl-head">
-          <div className="tl-head-title">
-            <h3>Pick a map</h3>
-            <Info text={WHO} />
-          </div>
-        </div>
-        <MapList maps={maps} onPick={setMap} placeholder="Search maps" note={(m) => (m.thumb === "radar" ? "has an overview" : null)} />
-      </div>
+      <MapBrowser
+        tool="radar"
+        maps={maps}
+        onPick={setMap}
+        title="Pick a map to make its overview"
+        note={<>The top-down picture spectators and HLTV viewers see, drawn from the map. <Info text={WHO} /></>}
+        action={(m) => (m.thumb === "radar" ? "Remake overview" : "Make overview")}
+        badges={(m) => (m.thumb === "radar" ? [{ text: "Has an overview", tone: "ok" }] : [])}
+      />
     );
   return <Maker key={map} map={map} onBack={() => setMap(null)} />;
 }

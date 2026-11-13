@@ -10,13 +10,13 @@ import { useSetupJob, waitForSetupJob } from "../../../queries";
 import { useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
 import { useReportAddress } from "../common/address";
-import type { MapInfo } from "../../../types";
 import { Banner, BusyButton, Info, LoadError, Segmented, useToast } from "../../../ui";
 import { JobProgress } from "../../JobProgress";
 import type { ToolProps } from "../registry";
 import { overviewInfo } from "../overview/overviewApi";
 import { checkMap, copyFiles, learnMap, learnResult, writeRes, type FileRow, type Report } from "./doctorApi";
-import { Empty, Loading, MapList } from "../common";
+import { Empty, Loading } from "../common";
+import { MapBrowser, rememberMap, type MapBadge } from "../common/MapBrowser";
 import "./doctor.css";
 
 export default function Doctor({ maps }: ToolProps) {
@@ -26,17 +26,27 @@ export default function Doctor({ maps }: ToolProps) {
   useEffect(() => {
     if (arg) setMap(arg);
   }, [arg]);
+  useEffect(() => {
+    if (map) rememberMap("doctor", map);
+  }, [map]);
   if (!map)
     return (
-      <div className="tl-page stack-tight">
-        <div className="tl-head">
-          <div className="tl-head-title">
-            <h3>Pick a map to check</h3>
-            <Info text="The doctor looks for the texture files, models, sounds and sky a map needs, the list of files players download with it, the bots' nav and the overview, and fixes what it safely can." />
-          </div>
-        </div>
-        <MapList maps={maps} onPick={setMap} placeholder="Search maps" note={(m: MapInfo) => (m.nav ? null : "no bot nav yet")} />
-      </div>
+      <MapBrowser
+        tool="doctor"
+        maps={maps}
+        onPick={setMap}
+        title="Pick a map to check"
+        note={<>Finds what a map is missing and fixes what it safely can. <Info text="The doctor looks for the texture files, models, sounds and sky a map needs, the list of files players download with it, the bots' nav and the overview, and fixes what it safely can. The badges here are a quick look; the full check runs when you open a map." /></>}
+        action="Check"
+        problem={() => null}
+        badges={(m, f) => {
+          const b: MapBadge[] = [];
+          if (f?.missingWads?.length) b.push({ text: `${f.missingWads.length} texture file${f.missingWads.length === 1 ? "" : "s"} missing`, tone: "bad" });
+          if (f?.nav?.matchesMap === false) b.push({ text: "Nav for another version", tone: "warn" });
+          if (!(f ? f.nav : m.nav)) b.push({ text: "No bot nav", tone: "warn" });
+          return b.length ? b : f ? [{ text: "Looks OK", tone: "ok" }] : [];
+        }}
+      />
     );
   return <Checkup map={map} onBack={() => setMap(null)} />;
 }
