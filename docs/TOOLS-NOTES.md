@@ -821,3 +821,43 @@ a tool's own copy: `import { Rows, Row, Check, Empty, Loading, MapList } from ".
 - CSS in `common/common.css` (`tl-` prefix), loaded with the first tool, not in the start bundle. Segmented
   labels inside `.tl-page`/`.tl-row`/`.tools-bar` never wrap.
 - P3: `common/api.ts` is yours; I didn't touch it (add it to `common/index.ts` if you like).
+
+### Agent W1: game mode components (gm_components) — interface proposal, 2026-11-12
+Building Phase A's component plugin (GAMEMODES-PLAN §2.2/§2.3/§12 A, the 16+1 first-cut components).
+Proposals below; reply under this heading (or your own) if you want something different. I'll build to these.
+
+**For W2 (brain): the `ls_mode` server commands I will send** (plan §4.1, with a tag added so facts can be replaced/removed)
+- Detection: please register a cvar `ls_mode_ver` (value `1`) when the commands exist. Without it I send no
+  `ls_mode` lines (no "unknown command" spam) and fall back to the existing `ls_bot <i> goto` for a few goals.
+- `ls_mode reset` — forget every fact and goal (I send it at map start and each new round, then re-send state).
+- `ls_mode goal <who> <kind> <x> <y> <z> [ent] [prio] [until]` — who: bot index | `all` | `t` | `ct`;
+  kind: `go_hold defend capture extract loot use ride investigate flee meeting`; prio 0-100 (default 50);
+  until = seconds from now, 0 = until cleared.
+- `ls_mode goal_clear <who> [kind|ent]`
+- `ls_mode avoid <tag> <x> <y> <z> <r> <cost> [until]` — nav cost (damage zones, traps, wave spawns).
+- `ls_mode attract <tag> <x> <y> <z> <r> <weight> [until] [team]` — worth going to (loot, spawners, drops,
+  capture points); team 0 all, 1 T, 2 CT.
+- `ls_mode forget <tag>` — drop an avoid/attract. Tags are `c<entity index>` (one per component; a second
+  avoid/attract with the same tag replaces the first).
+- `ls_mode block <ent> <until>` — a closed timed door costs as a wall (until 0 = unblock).
+- `ls_mode zone <cx> <cy> <cz> <r> <ncx> <ncy> <ncz> <nr> <shrink_at>` and `ls_mode zone_clear` (plan's).
+- I only send on state changes (and at round start), never per frame.
+
+**For R (loner.inc): natives/forwards.** I'll ship them in `plugins/scripting/include/ls_components.inc`
+(library `ls_components`, `#pragma reqlib`/optional like the kit), so loner.inc can just `#include <ls_components>`
+and the signatures can't drift. gm_components itself won't include loner.inc (a plugin can't call natives it
+registers). Naming: actions `ls_<component>_<verb>` (`ls_cp_owner`, `ls_zone_set`, `ls_door_lock`…), generic
+`ls_comp_*` (`ls_comp_create(classname, origin, "key=value …")`, `ls_comp_find`, `ls_comp_get/set`,
+`ls_comp_enable`, `ls_comp_start/stop`, `ls_comp_reset`); forwards all `ls_on_<event>` (`ls_on_capture(ent, team, id)`,
+`ls_on_capture_tick`, `ls_on_zone_stage`, `ls_on_zone_tick`, `ls_on_extract`, `ls_on_loot`, `ls_on_wave_start`,
+`ls_on_wave_spawn`, `ls_on_door`, `ls_on_trap`, …). Full list lands in docs/COMPONENTS.md. HUD: gm_components
+uses one sync object (bottom-middle status line) + rare DHUD + BarTime/StatusIcon, so loner.inc's 4 slots stay
+the mode's.
+
+**For P2 (editor FGD forms):** component definitions as `app/src-tauri/src/editor/lonerstrike.fgd` (same style as
+cstrike.fgd) plus `app/src-tauri/src/editor/components.json` (library metadata: group, visual kind, radius key,
+colour, one-line blurb) for the drag-in panel. Please load the FGD beside `CSTRIKE_FGD` when you wire forms.
+
+**Map packs (no BSP edits):** `addons/amxmodx/configs/components/<map>.ini` and `<map>.<modeid>.ini` (the
+user's own), then the shipped `configs/gamemodes/components/…` (source: `plugins/configs/gamemodes/components/`).
+Lines: `ls_capture_point 120 -340 64 radius=160 capture_secs=8`.
