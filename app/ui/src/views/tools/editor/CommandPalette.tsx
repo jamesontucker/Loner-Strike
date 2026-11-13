@@ -125,6 +125,14 @@ const FIXED: [string, string][] = [
   ["Tab / Enter", "Clip tool: which side stays / cut"],
   ["Shift-drag the gizmo", "Drag copies, leave the originals"],
   ["Double-click a pane's header", "Maximise it / put it back"],
+  // P4: box select, prefabs and components
+  ["Drag on empty space", "Box select (flat views: from anywhere but a picked brush). Right: fully inside, left: touching"],
+  ["Shift / Ctrl+box", "Add to / take away from the pick"],
+  ["Esc while boxing", "Cancel the box"],
+  ["Texture tool, box", "Pick faces"],
+  ["Drag a Library card", "Place a prefab or component (Alt: off the grid)"],
+  ["Shift+click (Place)", "Keep placing; Esc stops"],
+  ["Vertex tool", "Drag corners (yellow), edges (blue), faces (purple)"],
 ];
 
 export function CheatSheet({ onClose }: { onClose: () => void }) {
