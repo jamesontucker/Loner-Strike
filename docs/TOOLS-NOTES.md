@@ -1975,3 +1975,37 @@ History and Compare shown above at both sizes; `/api/safety/changed` lists shipp
 - (P6) Tools.tsx has one line from me in the title row (`<ToolHistory tool={entry.id} />`, before FocusButton).
 - (S) The safety routes are on the local listener; add them to `mcp/routes.rs` if agents should list/restore
   versions (restore/defaults/undo/clear change files: treat as edits).
+
+### Agent W1: Last Stand test server + what to look at — 2026-11-12
+**Server**: `Sim/LSPLAY` (APFS copy of Sim/B) with the combined brain+creatures mp.dll, gm_components + gm_laststand +
+configs as setup installs them (gm_simrec switched off there). de_dust2, Normal, 5 defending bots, LAN only, port 27330,
+no password, no time limit (started through a copy of run-wine.sh with a 100-day duration).
+- Join from the game console: `connect 127.0.0.1:27330` (you're put on CT; pick any model).
+- The stand waits in "prepare" until a person is on CT (top line: "Last Stand starts when a player joins the
+  Counter-Terrorists"), then counts down 45 s. If everyone leaves mid-stand, it starts over and waits again.
+- Stop: `pkill -f 'lsrun.sh LSPLAY'; pkill -f 'Sim\\LSPLAY\\hlds.exe'`. Remove: `rm -rf "${SIM:?}/LSPLAY"` with
+  SIM=".../drive_c/Loner-Strike/Sim". Console log: `Sim/LSPLAY/qconsole.log`.
+- Creature models on this machine: Half-Life's own from `valve/models` (`ls_creature types`): zombie, runner, brute and
+  boss use `models/zombie.mdl`, the spitter `models/bullsquid.mdl`; no hostage stand-ins. The game client here has both
+  files (bullsquid.mdl identical; zombie.mdl is a newer version than the server's copy, which is fine: each side uses
+  its own, sv_consistency doesn't force it).
+
+**What to look at** (say which number when something's off):
+1. **HUD, top**: "Get ready: first wave in N s (buy anywhere)" → "WAVE 1/10 - N left" → "Wave 1 held - next in N s".
+   Does "left" count down as creatures die? Readable, not clashing with the money/timer?
+2. **HUD, left**: the team list (name + HP, "DOWN 23s", "out"). **Right**: "Barricade 85%" near a barricade.
+3. **Bottom-middle status line** (gm_components): "Hold USE to repair (…)" by a damaged barricade.
+4. **Round clock** counts down the prepare time and each break (RoundTime).
+5. **Barricades**: two beam fences (one between CT spawn and mid, one on the way from B), drawn when you're within
+   1200 u: green at full health, going yellow/red as creatures hit them; gone (wood gibs + sound) when broken; hold
+   USE to repair (+25% each, $100) and the fence comes back. Do they really block the corridor wall to wall?
+6. **Waves**: creatures come from the T spawn and B site; runners from wave 2, brutes 3, spitters 4, a boss on wave 5
+   (banner + screen shake). Models and animations: walking/running/attacking/dying look right? Stuck anywhere?
+7. **Bots**: they hold around CT spawn, shoot creatures, go to a downed teammate's beam and revive them.
+8. **Down and revive**: when you die, a blue vertical beam at the spot; a teammate holding USE on it for 3 s
+   (progress bar) brings you back with 50 HP; after 30 s you're out until the wave is held.
+9. **Between waves**: $1000 each, buying anywhere, the dead respawn, a supply drop every 2nd wave (announced,
+   falls with a red beacon, lands with smoke, hold USE 3 s to open → "Found: …").
+10. **Win / lose**: "You held out all 10 waves!" (round ends as a CT win), or "The base fell on wave N" (T win) +
+    "Best on de_dust2: wave N" in chat; then a fresh stand starts (and waits for you).
+11. **Anything noisy**: too many messages at once, flicker, beams through walls, lag with many creatures.
