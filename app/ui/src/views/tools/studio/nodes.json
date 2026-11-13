@@ -54,7 +54,7 @@
       "type": "player.give_weapon",
       "title": "Give Weapon",
       "category": "Player",
-      "help": "Gives a living player a weapon and spare bullets. Does nothing for a dead player (the debugger marks that).",
+      "help": "Gives a living player a weapon and spare bullets. Does nothing for a dead player, or one who already has that weapon (the debugger marks that).",
       "inputs": [
         { "id": "exec", "type": "exec", "label": "" },
         { "id": "player", "type": "player", "label": "Player", "required": true }

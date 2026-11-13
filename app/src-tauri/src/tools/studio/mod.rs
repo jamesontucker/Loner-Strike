@@ -43,7 +43,20 @@ const MAX_MODES: usize = 32;
 /// Graph files bigger than this aren't graphs anyone drew.
 const MAX_GRAPH_BYTES: u64 = 2 << 20;
 
-const LONER_INC: &str = include_str!("../../../../../plugins/scripting/include/loner.inc");
+/// The includes a generated plugin is built against (loner.inc and what it pulls in), written
+/// next to the plugin's source before each compile so they always match this app.
+const INCLUDES: &[(&str, &str)] = &[
+    ("loner.inc", include_str!("../../../../../plugins/scripting/include/loner.inc")),
+    ("ls_components.inc", include_str!("../../../../../plugins/scripting/include/ls_components.inc")),
+];
+
+fn write_includes(dir: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    for (name, text) in INCLUDES {
+        crate::sys::write_atomic(&dir.join(name), text.as_bytes())?;
+    }
+    Ok(())
+}
 
 /// One compile at a time (they write the same files).
 static COMPILING: Mutex<()> = Mutex::new(());
@@ -277,8 +290,7 @@ fn compile(st: &Shared, g: Graph, debug: bool) -> Result<Value, String> {
     let scripting = am.join("scripting");
     let work = scripting.join("studio");
     let inc = work.join("include");
-    std::fs::create_dir_all(&inc).map_err(|e| format!("Couldn't write the plugin ({e})."))?;
-    crate::sys::write_atomic(&inc.join("loner.inc"), LONER_INC.as_bytes()).map_err(|e| format!("Couldn't write the plugin ({e})."))?;
+    write_includes(&inc).map_err(|e| format!("Couldn't write the plugin ({e})."))?;
     let src = work.join(format!("{plugin}.sma"));
     crate::sys::write_atomic(&src, out.source.as_bytes()).map_err(|e| format!("Couldn't write the plugin ({e})."))?;
     let built = work.join(format!("{plugin}.amxx"));
@@ -489,7 +501,7 @@ async fn api_command(State(st): State<Shared>, h: HeaderMap, Json(req): Json<Com
         let mut cmds = Vec::new();
         // breakpoints first: Resume with them all off doesn't stop again at the next one
         if let Some(b) = req.breakpoints {
-            cmds.push(debug::Command::Breakpoints(b));
+            debug::set_breakpoints(&game.dir, &req.mode, b).map_err(|e| format!("Couldn't reach the plugin ({e})."))?;
         }
         if req.vars {
             cmds.push(debug::Command::Vars);
@@ -602,8 +614,7 @@ mod tests {
         let install = crate::steam::Install { hl: PathBuf::new(), kind: "crossover".into(), bottle: Some("Steam".into()), games: vec![], dedicated: false };
         let work = temp("amxxpc");
         let inc = work.join("include");
-        std::fs::create_dir_all(&inc).unwrap();
-        std::fs::write(inc.join("loner.inc"), LONER_INC).unwrap();
+        write_includes(&inc).unwrap();
         let all = include_str!("testdata/all_nodes.graph.json");
         let evil = include_str!("testdata/malicious.graph.json");
         for (name, text) in [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil)] {

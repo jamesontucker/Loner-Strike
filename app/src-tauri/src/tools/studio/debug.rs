@@ -28,6 +28,23 @@ pub fn cmd_file(game_dir: &Path, mode: &str) -> PathBuf {
     dir(game_dir).join(format!("{mode}.cmd"))
 }
 
+/// The breakpoints that are on, one line of node ids: read by the plugin when a map loads
+/// (a `bp` command only lasts until the next map).
+pub fn bp_file(game_dir: &Path, mode: &str) -> PathBuf {
+    dir(game_dir).join(format!("{mode}.bp"))
+}
+
+fn bp_line(ids: &[String]) -> String {
+    ids.iter().map(String::as_str).filter(|i| super::graph::valid_id(i)).take(200).collect::<Vec<_>>().join(" ")
+}
+
+/// Saves the breakpoints for the next map load and tells the running plugin.
+pub fn set_breakpoints(game_dir: &Path, mode: &str, ids: Vec<String>) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir(game_dir))?;
+    crate::sys::write_atomic(&bp_file(game_dir, mode), format!("{}\n", bp_line(&ids)).as_bytes())?;
+    send(&cmd_file(game_dir, mode), &[Command::Breakpoints(ids)])
+}
+
 /// What a read found: the events, where to read from next time, and whether the file was
 /// started again (a new map: everything before is gone).
 #[derive(Debug, PartialEq)]
@@ -86,8 +103,8 @@ impl Command {
             Command::Resume => "resume".into(),
             Command::Vars => "vars".into(),
             Command::Breakpoints(ids) => {
-                let ids: Vec<&str> = ids.iter().map(String::as_str).filter(|i| super::graph::valid_id(i)).take(200).collect();
-                if ids.is_empty() { "bp".into() } else { format!("bp {}", ids.join(" ")) }
+                let ids = bp_line(ids);
+                if ids.is_empty() { "bp".into() } else { format!("bp {ids}") }
             }
         }
     }
@@ -115,7 +132,7 @@ pub fn start(game_dir: &Path, mode: &str, breakpoints: Vec<String>) -> std::io::
     std::fs::create_dir_all(dir(game_dir))?;
     let _ = std::fs::remove_file(events_file(game_dir, mode));
     let _ = std::fs::remove_file(cmd_file(game_dir, mode));
-    send(&cmd_file(game_dir, mode), &[Command::Breakpoints(breakpoints)])
+    set_breakpoints(game_dir, mode, breakpoints)
 }
 
 #[cfg(test)]
@@ -137,6 +154,7 @@ mod tests {
         start(&d, "mymode", vec!["n1".into(), "bad id!".into()]).unwrap();
         let cmd = cmd_file(&d, "mymode");
         assert_eq!(std::fs::read_to_string(&cmd).unwrap(), "bp n1\n");
+        assert_eq!(std::fs::read_to_string(bp_file(&d, "mymode")).unwrap(), "n1\n");
         send(&cmd, &[Command::Resume, Command::Breakpoints(vec![])]).unwrap();
         assert_eq!(std::fs::read_to_string(&cmd).unwrap(), "bp n1\nresume\nbp\n");
 

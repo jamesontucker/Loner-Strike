@@ -26,6 +26,11 @@ new g_lsdPaused = -1, g_lsdSkip = -1
 new g_lsdCtx[LSG_CTX]
 new Float:g_lsdPausedAt
 new g_lsdBotStop
+// the round clock: Pawn can't stop the game's own clock safely (ReGameDLL's rules object isn't
+// laid out like AMX Mod X's gamedata says), so while paused no round may end (mp_round_infinite)
+// and afterwards the round may not end on time until the paused seconds are made up
+new Float:g_lsdLiveAt, Float:g_lsdFreezeAt, Float:g_lsdOwed
+new g_lsdInfWas[16], bool:g_lsdHolding
 new bool:g_lsdHeld[33], g_lsdWasFrozen[33], g_lsdCanShoot[33], Float:g_lsdWasDmg[33]
 
 lsd_init()
@@ -40,6 +45,17 @@ lsd_init()
 	new f = fopen(g_lsdEvents, "wt")
 	if (f)
 		fclose(f)
+	// the breakpoints the Studio has on now (kept across map changes; "bp" commands change them live)
+	new bps[160], line[600]
+	formatex(bps, charsmax(bps), "%s/%s.bp", dir, LSG_MODE)
+	f = fopen(bps, "rt")
+	if (f)
+	{
+		fgets(f, line, charsmax(line))
+		fclose(f)
+		trim(line)
+		lsd_set_bps(line)
+	}
 	register_event("HLTV", "lsd_new_round", "a", "1=0", "2=0")
 	register_logevent("lsd_round_start", 2, "1=Round_Start")
 	register_logevent("lsd_round_end", 2, "1=Round_End")
@@ -51,20 +67,51 @@ lsd_init()
 
 public plugin_end()
 {
-	// a map change while paused: the bots mustn't stay stopped
+	// a map change while paused: the bots mustn't stay stopped, rounds must end again
 	if (g_lsdPaused >= 0)
 		set_cvar_num("bot_stop", g_lsdBotStop)
+	lsd_unhold()
 }
 
 public lsd_new_round()
 {
 	g_lsdRound++
 	copy(g_lsdPhase, charsmax(g_lsdPhase), "freeze")
+	g_lsdFreezeAt = get_gametime()
+	g_lsdOwed = 0.0
+	if (g_lsdPaused < 0)
+		lsd_unhold()
 }
 
 public lsd_round_start()
 {
 	copy(g_lsdPhase, charsmax(g_lsdPhase), "live")
+	g_lsdLiveAt = get_gametime()
+	g_lsdOwed = 0.0
+}
+
+stock lsd_hold(const how[])
+{
+	if (!g_lsdHolding)
+	{
+		get_cvar_string("mp_round_infinite", g_lsdInfWas, charsmax(g_lsdInfWas))
+		// someone set it on purpose: leave it alone
+		if (g_lsdInfWas[0] && !equal(g_lsdInfWas, "0"))
+			return
+		g_lsdHolding = true
+	}
+	set_cvar_string("mp_round_infinite", how)
+}
+
+stock lsd_unhold()
+{
+	if (!g_lsdHolding)
+		return
+	g_lsdHolding = false
+	if (g_lsdInfWas[0])
+		set_cvar_string("mp_round_infinite", g_lsdInfWas)
+	else
+		set_cvar_string("mp_round_infinite", "0")
 }
 
 public lsd_round_end()
@@ -187,12 +234,15 @@ stock lsd_error(n, const msg[])
 stock lsd_time_left()
 {
 	new Float:now = g_lsdPaused >= 0 ? g_lsdPausedAt : get_gametime()
-	new Float:start = get_gamerules_float("CHalfLifeMultiplay", "m_fRoundCount")
-	new secs = get_gamerules_int("CHalfLifeMultiplay", "m_iRoundTimeSecs")
-	return max(floatround(float(secs) - (now - start)), 0)
+	new Float:left
+	if (equal(g_lsdPhase, "live"))
+		left = get_cvar_float("mp_roundtime") * 60.0 - (now - g_lsdLiveAt - g_lsdOwed)
+	else if (equal(g_lsdPhase, "freeze"))
+		left = get_cvar_float("mp_freezetime") - (now - g_lsdFreezeAt)
+	return max(floatround(left, floatround_ceil), 0)
 }
 
-stock lsd_hold(id)
+stock lsd_hold_player(id)
 {
 	if (g_lsdHeld[id] || !is_user_alive(id))
 		return
@@ -212,7 +262,8 @@ stock lsd_freeze()
 	g_lsdBotStop = get_cvar_num("bot_stop")
 	set_cvar_num("bot_stop", 1)
 	for (new id = 1; id <= MaxClients; id++)
-		lsd_hold(id)
+		lsd_hold_player(id)
+	lsd_hold("1")
 	lsd_emitf("^"e^":^"world_paused^",^"node^":^"%s^"", g_lsdIds[g_lsdPaused])
 	lsd_vars()
 }
@@ -234,9 +285,15 @@ stock lsd_release()
 		if (is_user_alive(id))
 			set_ent_data(id, "CBasePlayer", "m_bCanShoot", g_lsdCanShoot[id])
 	}
+	// the paused seconds are added to the round: it can't end on time until they're made up
+	if (equal(g_lsdPhase, "live"))
+	{
+		g_lsdOwed += paused
+		lsd_hold("f")
+	}
+	else
+		lsd_unhold()
 	lsd_emitf("^"e^":^"world_resumed^",^"paused^":%.1f", paused)
-	// the round clock didn't run while paused (last: it needs the game's rules object)
-	set_gamerules_float("CHalfLifeMultiplay", "m_fRoundCount", get_gamerules_float("CHalfLifeMultiplay", "m_fRoundCount") + paused)
 	message_begin(MSG_ALL, get_user_msgid("RoundTime"))
 	write_short(lsd_time_left())
 	message_end()
@@ -299,10 +356,12 @@ public lsd_poll()
 	if (g_lsdPaused >= 0)
 	{
 		for (new id = 1; id <= MaxClients; id++)
-			lsd_hold(id)
+			lsd_hold_player(id)
 		if (++g_lsdTick % 4 == 0)
 			lsd_vars()
 	}
+	else if (g_lsdHolding && lsd_time_left() <= 0)
+		lsd_unhold()
 	if (!file_exists(g_lsdCmd))
 		return
 	new f = fopen(g_lsdCmd, "rt")
@@ -405,7 +464,7 @@ lsg_n4(const ctx[])
 	if (ls_give_weapon(ctx[1], "awp", 30))
 		lsd_exit(4, "given")
 	else
-		lsd_error(4, "Not given: that player isn't alive.")
+		lsd_error(4, "Not given: that player is dead or already has one.")
 	lsg_n5(ctx)
 }
 

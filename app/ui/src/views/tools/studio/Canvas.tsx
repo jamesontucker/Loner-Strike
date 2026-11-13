@@ -321,6 +321,12 @@ export function Canvas({ toast, onFocusReady }: { toast: (text: string, error?: 
           e.preventDefault();
           openPalette(e.clientX, e.clientY);
         }}
+        onNodeContextMenu={(e, node) => {
+          // inside a comment box is still empty space
+          if (node.type !== "comment") return;
+          e.preventDefault();
+          openPalette(e.clientX, e.clientY);
+        }}
         onPaneClick={() => setPalette(null)}
         onEdgeDoubleClick={(e, edge) => {
           const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
