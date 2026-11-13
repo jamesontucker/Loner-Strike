@@ -177,6 +177,28 @@ All GET unless noted, all `Listener::Local`, all answer `{error}` JSON on failur
 | `/api/tools/recording/:id` | replay bundle: players, per-bot columns, events (`K`/`H`/`F`/`E`/`C`/`R`), fall deaths classified |
 | `/api/tools/recording/:id/trace` | trace rows per bot + `#why/#attack/#seen/#mark` events, mapped onto the recording's clock |
 
+**Map editor (Beta), agent I** (`tools/editor.rs`, on agent E's core in `src/editor/`). One open document per
+app run, held in Rust with its undo history. POSTs need `x-panel: 1` (403 without); JSON answers `{error}` with
+200 (400 when the request itself is malformed). Files are only ever picked with the system dialog; Save writes
+back to the project it came from. Every mutating answer carries `state` =
+`{docId, revision, name, saved, dirty, undo, redo}` (`undo`/`redo` are labels or null).
+
+| Route | Returns |
+|---|---|
+| `GET /api/tools/editor/doc` | `state` + `world{wads[], keys[[k,v]]}`, `brushes[{id, entity, group, min, max}]`, `entities[{id, classname, keys[[k,v]], group, brushes[]}]`, `groups[{id, name, parent, hidden, locked}]`, `bounds[[min],[max]]`, `stats` |
+| `GET /api/tools/editor/meshes?doc=ID&since=REV` | LSMB bundle; header `{kind:"editor", docId, revision, full, removed[], brushes[{id, entity, group, faces[{face, texture, normal, start, count}]}]}`, sections `pos` f32×3 (GoldSrc units) and `uv` f32×2 (already divided by the texture size). One polygon per face (`start`/`count` in vertices, draw as a fan, CCW from outside). Without `since`, for another `docId`, or too old: `full: true` with every brush. 404 `{error}` when nothing is open. |
+| `GET /api/tools/editor/checks` | `{docId, revision, issues[{level, code, message, brush?, entity?}], stats, texturesChecked}` (E's `checks::run`, textures checked against the document's WADs when the game is set up) |
+| `GET /api/tools/editor/textures` | `{wads[{name, found, error?, textures[{name, width, height}]}]}` from the document's WAD list; `{wads:[], noGame:true}` without a game |
+| `GET /api/tools/editor/wads` | `{wads[{name, game}]}`: WAD files in the game folders (for "Add a WAD") |
+| `GET /api/tools/editor/tex/:name.png` | RGBA PNG from the document's WADs (ETag, 304); 404 → the UI draws the checker |
+| `POST /api/tools/editor/cmd` | body `{op, ...}` → `{created{brushes[], entities[]}, note, changed, docChanged, state}` or `{error, state}` (nothing changed). Ops: `add_box{min,max,texture}`, `add_cylinder{base,radius,height,sides,texture,grid?}`, `delete{brushes,entities}`, `duplicate{brushes,entities,offset}`, `transform{brushes,entities, translate \| rotate{axis,degrees} \| scale, pivot?, lock=true}`, `move_face{brush,face,distance,lock=true,drag?}` (distance from where the drag started; same `drag` = one undo step), `clip{brushes, points[3], keep:"back"\|"front"\|"both", texture?}`, `hollow{brushes,thickness}`, `carve{cutter,targets}`, `merge{brushes}`, `snap{brushes,grid}`, `set_texture{faces[[brush, face\|null]], texture}`, `align{faces[[brush,face]], action:"shift"\|"scale"\|"rotate"\|"fit"\|"center"\|"world"\|"face", u, v, degrees, drag?}`, `set_key{entity,key,value}` (empty value removes), `add_entity{classname,origin,keys?}`, `tie{brushes,classname}`, `to_world{entity}`, `set_world{wads?,keys?}`, `group{name,brushes,entities}`, `ungroup{group}`, `group_flags{group,hidden?,locked?}` |
+| `POST /api/tools/editor/undo`, `/redo` | `{label, changed, docChanged, state}` |
+| `POST /api/tools/editor/new` | the starter map (1024² open-sky room, 2 CT + 2 T spawns, a sun) → `state` |
+| `POST /api/tools/editor/open` | dialog (`.lsmap` project) → `state` or `{cancelled}` |
+| `POST /api/tools/editor/import-map` | dialog (`.map`, Valve 220 or standard) → `state` or `{cancelled}` |
+| `POST /api/tools/editor/save` | body `{as?: true}`; writes the project (dialog the first time or with `as`) → `{saved, file, state}` or `{cancelled}` |
+| `POST /api/tools/editor/export-map` | dialog → writes a Valve 220 `.map` → `{exported, file, bytes}` or `{cancelled}` |
+
 ### 3.9 Dependencies (pinned)
 UI (`package.json`): `three 0.170.0`, `@types/three 0.170.0`, `@react-three/fiber 8.17.10`, `@react-three/drei 9.117.3` — the last R3F 8 / drei 9 line that targets React 18 (the app is on 18.3.1; moving to React 19 + R3F 9 + drei 10 is a separate decision). Verify the three/drei pair compiles on install; if a newer 8.x/9.x pair exists at build time, take it. Optional dev: `vitest 2.1.x` for the pure TS modules (bundle decoder, coords, timeline maths).
 
