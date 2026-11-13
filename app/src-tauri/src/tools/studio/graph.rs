@@ -159,10 +159,21 @@ pub struct Variable {
     /// number | bool | text
     #[serde(rename = "type")]
     pub ty: String,
-    /// mode | player
+    /// mode | player | team
     pub scope: String,
     #[serde(default)]
     pub default: Value,
+    /// never (kept for the map) | round (back to its start value at each new round)
+    #[serde(default = "never", skip_serializing_if = "is_never")]
+    pub reset: String,
+}
+
+fn never() -> String {
+    "never".into()
+}
+
+fn is_never(s: &String) -> bool {
+    s == "never"
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Default)]
@@ -443,17 +454,38 @@ impl<'a> View<'a> {
         self.defs.get(node).map(|d| d.outputs.iter().filter(|p| p.ty == "exec").map(|p| p.id.as_str()).collect()).unwrap_or_default()
     }
 
-    /// The event outputs a data input depends on (directly, or through pure nodes).
-    pub fn event_values(&self, node: &str, pin: &str) -> Vec<(&'a str, &'a str)> {
+    /// Does `to` run after `from` (by flow wires, from any of `from`'s flow outputs)?
+    pub fn runs_after(&self, from: &str, to: &str) -> bool {
+        let mut stack: Vec<&str> = self.exec_outs(from).into_iter().filter_map(|p| self.exec_target(from, p).map(|(t, _)| t)).collect();
+        let mut seen = HashSet::new();
+        while let Some(cur) = stack.pop() {
+            if cur == to {
+                return true;
+            }
+            if !seen.insert(cur) {
+                continue;
+            }
+            for p in self.exec_outs(cur) {
+                if let Some((t, _)) = self.exec_target(cur, p) {
+                    stack.push(t);
+                }
+            }
+        }
+        false
+    }
+
+    /// The flow values a data input depends on (directly, or through pure nodes): events'
+    /// outputs, and outputs of flow nodes (loops, picks, actions that make something).
+    pub fn flow_values(&self, node: &str, pin: &str) -> Vec<(&'a str, &'a str)> {
         let mut out = Vec::new();
         let mut seen = HashSet::new();
         let mut stack: Vec<(String, String)> = vec![(node.to_string(), pin.to_string())];
         while let Some((n, p)) = stack.pop() {
             let Some((src, spin)) = self.data_source(&n, &p) else { continue };
             let Some(def) = self.defs.get(src) else { continue };
-            if def.event {
+            if !def.pure {
                 out.push((src, spin));
-            } else if def.pure && seen.insert(src) {
+            } else if seen.insert(src) {
                 for ip in def.inputs.iter().filter(|i| i.ty != "exec") {
                     stack.push((src.to_string(), ip.id.clone()));
                 }
@@ -496,6 +528,7 @@ pub fn deferred(kind: &str, pin: &str) -> bool {
         "timer.delay" => true,
         "timer.repeat" => pin == "tick",
         "timer.countdown" => pin == "done",
+        "msg.menu" => pin != "then",
         _ => false,
     }
 }
@@ -536,7 +569,7 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         if x.name.trim().is_empty() || !valid_label(&x.name, 30) {
             p.push(Problem::err(None, "Give each variable a name (up to 30 letters, digits, spaces or plain punctuation)."));
         }
-        if !["number", "bool", "text"].contains(&x.ty.as_str()) || !["mode", "player"].contains(&x.scope.as_str()) {
+        if !["number", "bool", "text"].contains(&x.ty.as_str()) || !["mode", "player", "team"].contains(&x.scope.as_str()) || !["never", "round"].contains(&x.reset.as_str()) {
             p.push(Problem::err(None, format!("The variable \u{201c}{}\u{201d} has a type or scope this app doesn't know.", x.name.chars().take(30).collect::<String>())));
         } else if !x.default.is_null() && !value_fits(&x.ty, &x.default) {
             p.push(Problem::err(None, format!("The variable \u{201c}{}\u{201d} starts with a value that doesn't fit its type.", x.name.chars().take(30).collect::<String>())));
@@ -575,6 +608,14 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
                         _ => Ok(()),
                     }
                 }
+                "func" => match val.and_then(Value::as_str).and_then(|id| v.defs.get(id).map(|d| d.kind.as_str())) {
+                    Some("func.define") => Ok(()),
+                    _ => Err("Pick which Function to call (add a Function node first).".into()),
+                },
+                "timer" => match val.and_then(Value::as_str).and_then(|id| v.defs.get(id).map(|d| d.kind.as_str())) {
+                    Some("timer.delay" | "timer.repeat" | "timer.countdown") => Ok(()),
+                    _ => Err("Pick which timer to stop.".into()),
+                },
                 "varvalue" => match (val, v.var_of(&n.id)) {
                     (Some(x), Some(var)) if !(x.is_string() && x.as_str() == Some("")) && !value_fits(&var.ty, x) => Err(format!("{} doesn't fit the variable \u{201c}{}\u{201d}.", prm.label, var.name)),
                     _ => Ok(()),
@@ -663,12 +704,30 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         }
         if let (Some(var), Some(_)) = (v.var_of(&n.id), def.input("player")) {
             let wired = !v.ins(&n.id, "player").is_empty();
+            let team_wired = !v.ins(&n.id, "team").is_empty();
             if var.scope == "player" && !wired {
                 p.push(Problem::err(Some(&n.id), format!("\u{201c}{}\u{201d} is kept per player: wire in whose.", var.name)).pin("player"));
-            } else if var.scope == "mode" && wired {
-                p.push(Problem::warn(Some(&n.id), format!("\u{201c}{}\u{201d} is one for the whole mode: the Player wired in is ignored.", var.name)).pin("player"));
+            } else if var.scope != "player" && wired {
+                p.push(Problem::warn(Some(&n.id), format!("\u{201c}{}\u{201d} isn't kept per player: the Player wired in is ignored.", var.name)).pin("player"));
+            }
+            if var.scope == "team" && !team_wired {
+                p.push(Problem::err(Some(&n.id), format!("\u{201c}{}\u{201d} is kept per team: wire in which.", var.name)).pin("team"));
+            } else if var.scope != "team" && team_wired {
+                p.push(Problem::warn(Some(&n.id), format!("\u{201c}{}\u{201d} isn't kept per team: the Team wired in is ignored.", var.name)).pin("team"));
             }
         }
+    }
+
+    // functions: names are unique, and a function can't end up calling itself
+    let mut fnames = HashSet::new();
+    for n in g.nodes.iter().filter(|n| n.kind == "func.define") {
+        let name = n.params.get("name").and_then(Value::as_str).unwrap_or("my_function");
+        if !fnames.insert(name) {
+            p.push(Problem::err(Some(&n.id), "Two Functions have this name."));
+        }
+    }
+    if let Some(node) = find_call_cycle(&v) {
+        p.push(Problem::err(Some(node), "This Function ends up calling itself, which would never end."));
     }
 
     // flow: loops (flow and data), nodes nothing reaches, values used outside their event
@@ -692,9 +751,16 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         }
         let Some(events) = reached.get(n.id.as_str()) else { continue };
         for ip in def.inputs.iter().filter(|i| i.ty != "exec") {
-            for (src, spin) in v.event_values(&n.id, &ip.id) {
+            for (src, spin) in v.flow_values(&n.id, &ip.id) {
                 let Some(sdef) = v.defs.get(src) else { continue };
                 let label = sdef.output(spin).map(|o| o.label.clone()).unwrap_or_default();
+                if !sdef.event {
+                    // a loop's or a pick's value, or what an action made: only after it has run
+                    if !v.runs_after(src, &n.id) {
+                        p.push(Problem::err(Some(&n.id), format!("{label} is only known after {} runs: wire the flow through it first.", sdef.title)).pin(&ip.id));
+                    }
+                    continue;
+                }
                 if events.len() != 1 || !events.contains_key(src) {
                     p.push(Problem::err(Some(&n.id), format!("{label} is only known while {} runs, but this node also runs from another event.", sdef.title)).pin(&ip.id));
                 } else if events[src] && sdef.output(spin).is_some_and(|o| o.ty == "text") {
@@ -730,6 +796,46 @@ fn find_cycle<'a>(v: &View<'a>) -> Option<&'a str> {
     for n in &v.g.nodes {
         if let Some(hit) = visit(v, n.id.as_str(), &mut state) {
             return Some(hit);
+        }
+    }
+    None
+}
+
+/// A Function whose flow calls (through other Functions) back into itself.
+fn find_call_cycle<'a>(v: &View<'a>) -> Option<&'a str> {
+    // the Functions each Function's flow calls
+    let calls_from = |def_id: &'a str| -> Vec<&'a str> {
+        let mut out = Vec::new();
+        let mut stack = vec![def_id];
+        let mut seen = HashSet::new();
+        while let Some(cur) = stack.pop() {
+            if !seen.insert(cur) {
+                continue;
+            }
+            if v.defs.get(cur).is_some_and(|d| d.kind == "func.call") {
+                if let Some(target) = v.nodes[cur].params.get("func").and_then(Value::as_str).and_then(|t| v.nodes.get_key_value(t).map(|(k, _)| *k)) {
+                    out.push(target);
+                }
+            }
+            for p in v.exec_outs(cur) {
+                if let Some((t, _)) = v.exec_target(cur, p) {
+                    stack.push(t);
+                }
+            }
+        }
+        out
+    };
+    let defs: Vec<&'a str> = v.g.nodes.iter().filter(|n| n.kind == "func.define").map(|n| n.id.as_str()).collect();
+    for start in &defs {
+        let mut stack = calls_from(start);
+        let mut seen = HashSet::new();
+        while let Some(f) = stack.pop() {
+            if f == *start {
+                return Some(start);
+            }
+            if seen.insert(f) {
+                stack.extend(calls_from(f));
+            }
         }
     }
     None
@@ -820,7 +926,7 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
             Some(s) if valid_keys(s, def.max.unwrap_or(120.0) as usize) => Ok(()),
             _ => Err(format!("{} are words like radius=160 (letters, digits, _ - . = : and spaces; no quotes).", def.label)),
         },
-        "var" | "varvalue" => Ok(()),
+        "var" | "varvalue" | "func" | "timer" => Ok(()),
         _ => Err(format!("{} has a setting this app doesn't know.", def.label)),
     }
 }
@@ -852,7 +958,7 @@ mod tests {
     #[test]
     fn registry_is_complete() {
         let r = registry();
-        assert_eq!(r.version, 2);
+        assert_eq!(r.version, 3);
         for kind in ["event.round_started", "event.player_killed", "cond.is_team", "player.give_weapon", "score.end_round", "msg.broadcast", "flow.reroute", "timer.delay", "var.set", "comp.on_capture", "creature.spawn"] {
             assert!(r.get(kind).is_some(), "{kind}");
         }
@@ -862,7 +968,7 @@ mod tests {
             assert!(!(n.pure && n.event), "{}", n.kind);
             assert_eq!(n.pure, !n.event && !n.reroute && !n.has_exec_in(), "{}: pure means no flow in", n.kind);
             for prm in &n.params {
-                if !["var", "varvalue"].contains(&prm.kind.as_str()) {
+                if !["var", "varvalue", "func", "timer"].contains(&prm.kind.as_str()) {
                     assert!(check_param(prm, &prm.default).is_ok(), "{} {} default", n.kind, prm.id);
                 }
             }
@@ -1028,9 +1134,9 @@ mod tests {
             json!([e("e1","r","then","s","exec"), e("e2","s","then","a","exec")]),
         );
         g.variables = vec![
-            Variable { id: "kills".into(), name: "Kills".into(), ty: "number".into(), scope: "player".into(), default: json!(0) },
-            Variable { id: "name".into(), name: "Last name".into(), ty: "text".into(), scope: "mode".into(), default: json!("") },
-            Variable { id: "bad".into(), name: "Bad /*".into(), ty: "number".into(), scope: "mode".into(), default: json!("x") },
+            Variable { id: "kills".into(), name: "Kills".into(), ty: "number".into(), scope: "player".into(), default: json!(0), reset: "never".into() },
+            Variable { id: "name".into(), name: "Last name".into(), ty: "text".into(), scope: "mode".into(), default: json!(""), reset: "never".into() },
+            Variable { id: "bad".into(), name: "Bad /*".into(), ty: "number".into(), scope: "mode".into(), default: json!("x"), reset: "never".into() },
         ];
         let m = msgs(&validate(&g));
         assert!(m.iter().any(|m| m.starts_with("error:s:") && m.contains("doesn't fit")), "{m:?}");

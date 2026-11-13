@@ -12,9 +12,9 @@
 #include <loner>
 
 #define LSG_MODE "every_node"
-#define LSG_CTX 4
+#define LSG_CTX 11
 #define LSG_TXT 2
-#define LSG_N 77
+#define LSG_N 122
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -27,10 +27,13 @@ stock Float:g_pv0[33] // Kills (number, per player)
 stock Float:g_v1 = 1.0 // Round (number)
 stock g_v2 = 0 // Flag (bool)
 stock g_v3[64] = "none" // Last thing (text)
+stock Float:g_tv4[4] = { 0.0, 0.0, 0.0, 0.0 } // Team score (number, per team, each round)
+stock g_v5[64] = "wait" // Phase (text)
 
-#define LSD_N 77
-new const g_lsdIds[LSD_N][] = { "rs", "rs_set", "rs_cd", "rs_msg", "rs_rep", "rs_hud", "rs_delay", "rs_wave", "rs_wstop", "rs_reset", "pk", "pk_br", "pk_add", "pk_add2", "pk_team", "pk_give", "pk_seth", "pk_hud", "ps", "ps_strip", "ps_arm", "ps_spd", "ps_team", "ps_tp", "ps_set", "pj", "pj_hud", "pj_br", "pl", "pl_set", "bp", "bp_hud", "bd", "bd_end", "bx", "bx_end", "re", "re_br", "re_set", "re_stop", "pu", "pu_door", "pu_trap", "pt", "pt_crate", "cc", "cc_lock", "cc_hud", "cl", "cl_ex", "zs", "zs_shrink", "zt", "zt_set", "zt_hud", "ex", "ex_add", "ws", "ws_hud", "wp", "wp_hud", "wc", "wc_start", "lo", "lo_hud", "ck", "ck_set", "bb", "bb_msg", "me", "me_hud", "ck2", "ck2_set", "ck2_make", "ck2_spawn", "ck2_hud", "ck2_hud2" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+stock g_lsgM93[33][LSG_CTX]
+#define LSD_N 122
+new const g_lsdIds[LSD_N][] = { "rs", "rs_set", "rs_cd", "rs_msg", "rs_rep", "rs_hud", "rs_delay", "rs_wave", "rs_wstop", "rs_reset", "pk", "pk_br", "pk_add", "pk_add2", "pk_team", "pk_give", "pk_seth", "pk_hud", "ps", "ps_strip", "ps_arm", "ps_spd", "ps_team", "ps_tp", "ps_set", "pj", "pj_hud", "pj_br", "pl", "pl_set", "bp", "bp_hud", "bd", "bd_end", "bx", "bx_end", "re", "re_br", "re_set", "re_stop", "pu", "pu_door", "pu_trap", "pt", "pt_crate", "cc", "cc_lock", "cc_hud", "cl", "cl_ex", "zs", "zs_shrink", "zt", "zt_set", "zt_hud", "ex", "ex_add", "ws", "ws_hud", "wp", "wp_hud", "wc", "wc_start", "lo", "lo_hud", "ck", "ck_set", "bb", "bb_msg", "me", "me_hud", "ck2", "ck2_set", "ck2_make", "ck2_spawn", "ck2_hud", "ck2_hud2", "hurt", "hurt_tadd", "hurt_glow", "tc", "tc_model", "nr", "nr_cvar", "nr_each", "nr_resp", "nr_pick", "nr_ents", "nr_use", "nr_set", "nr_stop", "nr_hud", "cmd", "cmd_menu", "cmd_arm", "cmd_money", "cmd_grav", "cmd_bar", "cmd_chat", "fn", "fn_frag", "fn_snd", "fn_role", "pk2", "pk2_call", "pk2_pick", "pk2_bot", "pk2_hold", "pk2_follow", "pk2_free", "pk2_drop", "pk2_fr", "pk2_kill", "lo2", "lo2_br", "lo2_pick", "lo2_br2", "lo2_resp", "lo2_drop", "lo2_hud", "lo2_br3", "lo2_end" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -478,10 +481,100 @@ lsd_graph_vars()
 	lsd_var_number("round", 0, g_v1)
 	lsd_var_bool("flag", 0, g_v2)
 	lsd_var_text("last", 0, g_v3)
+	lsd_var_number("tscore:T", 0, g_tv4[1])
+	lsd_var_number("tscore:CT", 0, g_tv4[2])
+	lsd_var_text("phase", 0, g_v5)
 }
 
 stock lsg_slot(id)
 	return id >= 1 && id <= MaxClients ? id : 0
+
+stock bool:lsg_ok(id)
+	return id >= 1 && id <= MaxClients && is_user_connected(id)
+
+stock bool:lsg_match(p, which)
+{
+	if (!is_user_connected(p))
+		return false
+	switch (which)
+	{
+		case 1: return bool:is_user_alive(p)
+		case 2: return !is_user_alive(p) && (lsg_team(p) == 1 || lsg_team(p) == 2)
+		case 3: return lsg_team(p) == 1
+		case 4: return lsg_team(p) == 2
+		case 5: return is_user_alive(p) && lsg_team(p) == 1
+		case 6: return is_user_alive(p) && lsg_team(p) == 2
+		case 7: return bool:is_user_bot(p)
+		case 8: return !is_user_bot(p)
+	}
+	return true
+}
+
+stock lsg_end_round(team)
+{
+	if (team == 1)
+		server_cmd("endround T")
+	else if (team == 2)
+		server_cmd("endround CT")
+	else
+		server_cmd("endround")
+}
+
+stock bool:lsg_use(const name[])
+{
+	new ent = -1, used
+	while (name[0] && used < 64 && (ent = find_ent_by_tname(ent, name)) > 0)
+	{
+		ExecuteHamB(Ham_Use, ent, 0, 0, 2, 1.0)
+		used++
+	}
+	return used > 0
+}
+
+stock lsg_bar(id, secs)
+{
+	if (id && !lsg_ok(id))
+		return
+	message_begin(id ? MSG_ONE : MSG_ALL, get_user_msgid("BarTime"), _, id)
+	write_short(secs)
+	message_end()
+}
+
+stock lsg_add_money(id, amount)
+{
+	if (pev_valid(id) == 2)
+		cs_set_user_money(id, clamp(cs_get_user_money(id) + amount, 0, 16000), 1)
+}
+
+stock Float:lsg_get_money(id)
+	return lsg_ok(id) && pev_valid(id) == 2 ? float(cs_get_user_money(id)) : 0.0
+
+stock lsg_add_frags(id, amount)
+{
+	set_user_frags(id, get_user_frags(id) + amount)
+	// (setting the deaths again sends the scoreboard its new numbers)
+	if (pev_valid(id) == 2)
+		cs_set_user_deaths(id, cs_get_user_deaths(id))
+}
+
+stock Float:lsg_get_frags(id)
+	return lsg_ok(id) ? float(get_user_frags(id)) : 0.0
+
+stock Float:lsg_get_deaths(id)
+	return lsg_ok(id) && pev_valid(id) == 2 ? float(cs_get_user_deaths(id)) : 0.0
+
+stock lsg_freeze(id, on)
+{
+	new flags = pev(id, pev_flags)
+	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
+}
+
+stock lsg_bot_goto(bot, const name[])
+{
+	new Float:o[3]
+	if (lsg_origin_of(name, o))
+		ls_bot_goto(bot, o)
+}
 
 stock Float:lsg_div(Float:a, Float:b)
 	return b == 0.0 ? 0.0 : a / b
@@ -587,14 +680,31 @@ public plugin_init()
 	register_logevent("lsg_on_bomb_exploded", 6, "3=Target_Bombed")
 	RegisterHam(Ham_Use, "func_button", "lsg_on_player_used", 0)
 	register_touch("trigger_multiple", "player", "lsg_on_player_touched")
+	RegisterHamPlayer(Ham_TakeDamage, "lsg_on_player_hurt", 1)
+	register_event("TeamInfo", "lsg_on_team_changed", "a")
+	register_event("HLTV", "lsg_on_new_round", "a", "1=0", "2=0")
 	if (get_cvar_pointer("ls_creature_ver"))
 		RegisterHam(Ham_Killed, "ls_creature", "lsg_on_creature_killed", 1)
 	register_event("HLTV", "lsg_new_round", "a", "1=0", "2=0")
+	register_clcmd("say /shop", "lsg_chat92")
+	register_clcmd("say_team /shop", "lsg_chat92")
 }
 
-// timers stop when a new round starts
+// a new round: timers stop, round variables start again
 public lsg_new_round()
+{
 	lsg_stop_timers()
+	for (new t = 0; t < 4; t++)
+		g_tv4[t] = 0.0
+}
+
+public lsg_chat92(id)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	lsg_n92(ctx)
+	return PLUGIN_CONTINUE
+}
 
 stock lsg_stop_timers()
 {
@@ -711,6 +821,36 @@ public lsg_on_player_touched(ent, id)
 	return PLUGIN_CONTINUE
 }
 
+public lsg_on_player_hurt(victim, inflictor, attacker, Float:damage, bits)
+{
+	#pragma unused inflictor
+	#pragma unused bits
+	new ctx[LSG_CTX]
+	ctx[0] = victim // victim
+	ctx[1] = attacker >= 1 && attacker <= MaxClients ? attacker : 0 // attacker
+	ctx[2] = _:damage // damage
+	lsg_n77(ctx)
+	return HAM_IGNORED
+}
+
+public lsg_on_team_changed()
+{
+	new id = read_data(1), tn[12]
+	read_data(2, tn, charsmax(tn))
+	if (id < 1 || id > MaxClients)
+		return
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	ctx[1] = tn[0] == 'T' ? 1 : (tn[0] == 'C' ? 2 : 0) // team
+	lsg_n80(ctx)
+}
+
+public lsg_on_new_round()
+{
+	new ctx[LSG_CTX]
+	lsg_n82(ctx)
+}
+
 public ls_on_capture(ent, side, id)
 {
 	new ctx[LSG_CTX]
@@ -726,6 +866,7 @@ public ls_on_capture_lost(ent, side)
 	ctx[0] = ent // point
 	ctx[1] = side == 1 || side == 2 ? side : 0 // team
 	lsg_n48(ctx)
+	lsg_n113(ctx)
 }
 
 public ls_on_zone_stage(ent, stage)
@@ -751,6 +892,7 @@ public ls_on_extract(ent, id)
 	ctx[0] = ent // point
 	ctx[1] = id // player
 	lsg_n55(ctx)
+	lsg_n103(ctx)
 }
 
 public ls_on_wave_start(wave)
@@ -821,7 +963,7 @@ public lsg_on_creature_killed(ent, killer)
 }
 
 // Round Started (rs)
-lsg_n0(const ctx[])
+lsg_n0(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(0, ctx))
@@ -831,7 +973,7 @@ lsg_n0(const ctx[])
 }
 
 // Set Variable (rs_set)
-lsg_n1(const ctx[])
+lsg_n1(ctx[])
 {
 	lsd_begin()
 	lsd_in_number("Value", ((g_v1) + (1.0)))
@@ -843,7 +985,7 @@ lsg_n1(const ctx[])
 }
 
 // Countdown (rs_cd)
-lsg_n2(const ctx[])
+lsg_n2(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(2, ctx))
@@ -859,18 +1001,21 @@ lsg_n2(const ctx[])
 lsg_c2_show()
 	ls_hud(0, LsHud:0, 1.2, "%s %d", "Go in", g_lsgLeft[2])
 
-public lsg_t2(const ctx[], task)
+public lsg_t2(const data[], task)
 {
 	if (lsd_hold_timer())
 	{
-		set_task(0.25, "lsg_t2", LSG_TASK + 2, ctx, LSG_CTX)
+		set_task(0.25, "lsg_t2", LSG_TASK + 2, data, LSG_CTX)
 		return
 	}
 	#pragma unused task
+	new ctx[LSG_CTX]
+	for (new k = 0; k < LSG_CTX; k++)
+		ctx[k] = data[k]
 	if (--g_lsgLeft[2] > 0)
 	{
 		lsg_c2_show()
-		set_task(1.0, "lsg_t2", LSG_TASK + 2, ctx, LSG_CTX)
+		set_task(1.0, "lsg_t2", LSG_TASK + 2, data, LSG_CTX)
 		return
 	}
 	lsd_exit(2, "done")
@@ -878,7 +1023,7 @@ public lsg_t2(const ctx[], task)
 }
 
 // Show Message (rs_msg)
-lsg_n3(const ctx[])
+lsg_n3(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(3, ctx))
@@ -888,7 +1033,7 @@ lsg_n3(const ctx[])
 }
 
 // Repeat (rs_rep)
-lsg_n4(const ctx[])
+lsg_n4(ctx[])
 {
 	lsd_begin()
 	lsd_in_number("Every (s)", 10.0)
@@ -901,24 +1046,27 @@ lsg_n4(const ctx[])
 	lsg_n6(ctx)
 }
 
-public lsg_t4(const ctx[], task)
+public lsg_t4(const data[], task)
 {
 	if (lsd_hold_timer())
 	{
-		set_task(0.25, "lsg_t4", LSG_TASK + 4, ctx, LSG_CTX)
+		set_task(0.25, "lsg_t4", LSG_TASK + 4, data, LSG_CTX)
 		return
 	}
 	#pragma unused task
+	new ctx[LSG_CTX]
+	for (new k = 0; k < LSG_CTX; k++)
+		ctx[k] = data[k]
 	if (g_lsgLeft[4] > 0 && --g_lsgLeft[4] == 0)
 		remove_task(LSG_TASK + 4)
 	else
-		set_task(floatmax(10.0, 0.1), "lsg_t4", LSG_TASK + 4, ctx, LSG_CTX)
+		set_task(floatmax(10.0, 0.1), "lsg_t4", LSG_TASK + 4, data, LSG_CTX)
 	lsd_exit(4, "each")
 	lsg_n5(ctx)
 }
 
 // Show HUD Text (rs_hud)
-lsg_n5(const ctx[])
+lsg_n5(ctx[])
 {
 	lsd_begin()
 	lsd_in_number("Value", float(ls_count_alive(CsTeams:(0))))
@@ -929,7 +1077,7 @@ lsg_n5(const ctx[])
 }
 
 // Delay (rs_delay)
-lsg_n6(const ctx[])
+lsg_n6(ctx[])
 {
 	lsd_begin()
 	lsd_in_number("Seconds", 5.0)
@@ -939,20 +1087,23 @@ lsg_n6(const ctx[])
 	lsd_exit(6, "waiting")
 }
 
-public lsg_t6(const ctx[], task)
+public lsg_t6(const data[], task)
 {
 	if (lsd_hold_timer())
 	{
-		set_task(0.25, "lsg_t6", LSG_TASK + 6, ctx, LSG_CTX)
+		set_task(0.25, "lsg_t6", LSG_TASK + 6, data, LSG_CTX)
 		return
 	}
 	#pragma unused task
+	new ctx[LSG_CTX]
+	for (new k = 0; k < LSG_CTX; k++)
+		ctx[k] = data[k]
 	lsd_exit(6, "fired")
 	lsg_n7(ctx)
 }
 
 // Start Wave (rs_wave)
-lsg_n7(const ctx[])
+lsg_n7(ctx[])
 {
 	lsd_begin()
 	lsd_in_number("Wave", 0.0)
@@ -969,7 +1120,7 @@ lsg_n7(const ctx[])
 }
 
 // Stop Waves (rs_wstop)
-lsg_n8(const ctx[])
+lsg_n8(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(8, ctx))
@@ -985,7 +1136,7 @@ lsg_n8(const ctx[])
 }
 
 // Reset Components (rs_reset)
-lsg_n9(const ctx[])
+lsg_n9(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(9, ctx))
@@ -1000,7 +1151,7 @@ lsg_n9(const ctx[])
 }
 
 // Player Killed (pk)
-lsg_n10(const ctx[])
+lsg_n10(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(10, ctx))
@@ -1010,7 +1161,7 @@ lsg_n10(const ctx[])
 }
 
 // Branch (pk_br)
-lsg_n11(const ctx[])
+lsg_n11(ctx[])
 {
 	lsd_begin()
 	lsd_in_bool("Condition", ctx[2])
@@ -1025,7 +1176,7 @@ lsg_n11(const ctx[])
 }
 
 // Add To Variable (pk_add)
-lsg_n12(const ctx[])
+lsg_n12(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -1038,7 +1189,7 @@ lsg_n12(const ctx[])
 }
 
 // Add To Variable (pk_add2)
-lsg_n13(const ctx[])
+lsg_n13(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -1050,7 +1201,7 @@ lsg_n13(const ctx[])
 }
 
 // Is Team (pk_team)
-lsg_n14(const ctx[])
+lsg_n14(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -1066,7 +1217,7 @@ lsg_n14(const ctx[])
 }
 
 // Give Weapon (pk_give)
-lsg_n15(const ctx[])
+lsg_n15(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -1080,7 +1231,7 @@ lsg_n15(const ctx[])
 }
 
 // Set Health (pk_seth)
-lsg_n16(const ctx[])
+lsg_n16(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -1097,7 +1248,7 @@ lsg_n16(const ctx[])
 }
 
 // Show HUD Text (pk_hud)
-lsg_n17(const ctx[])
+lsg_n17(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -1109,7 +1260,7 @@ lsg_n17(const ctx[])
 }
 
 // Player Spawned (ps)
-lsg_n18(const ctx[])
+lsg_n18(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(18, ctx))
@@ -1119,7 +1270,7 @@ lsg_n18(const ctx[])
 }
 
 // Strip Weapons (ps_strip)
-lsg_n19(const ctx[])
+lsg_n19(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[0])
@@ -1136,7 +1287,7 @@ lsg_n19(const ctx[])
 }
 
 // Set Armor (ps_arm)
-lsg_n20(const ctx[])
+lsg_n20(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[0])
@@ -1154,7 +1305,7 @@ lsg_n20(const ctx[])
 }
 
 // Set Speed (ps_spd)
-lsg_n21(const ctx[])
+lsg_n21(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[0])
@@ -1172,7 +1323,7 @@ lsg_n21(const ctx[])
 }
 
 // Set Team (ps_team)
-lsg_n22(const ctx[])
+lsg_n22(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[0])
@@ -1190,7 +1341,7 @@ lsg_n22(const ctx[])
 }
 
 // Teleport (ps_tp)
-lsg_n23(const ctx[])
+lsg_n23(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[0])
@@ -1206,7 +1357,7 @@ lsg_n23(const ctx[])
 }
 
 // Set Variable (ps_set)
-lsg_n24(const ctx[])
+lsg_n24(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[0])
@@ -1218,7 +1369,7 @@ lsg_n24(const ctx[])
 }
 
 // Player Joined (pj)
-lsg_n25(const ctx[])
+lsg_n25(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(25, ctx))
@@ -1228,7 +1379,7 @@ lsg_n25(const ctx[])
 }
 
 // Show HUD Text (pj_hud)
-lsg_n26(const ctx[])
+lsg_n26(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[0])
@@ -1241,7 +1392,7 @@ lsg_n26(const ctx[])
 }
 
 // Branch (pj_br)
-lsg_n27(const ctx[])
+lsg_n27(ctx[])
 {
 	lsd_begin()
 	lsd_in_bool("Condition", (ls_alive(ctx[0]) ? 1 : 0))
@@ -1252,7 +1403,7 @@ lsg_n27(const ctx[])
 }
 
 // Player Left (pl)
-lsg_n28(const ctx[])
+lsg_n28(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(28, ctx))
@@ -1262,7 +1413,7 @@ lsg_n28(const ctx[])
 }
 
 // Set Variable (pl_set)
-lsg_n29(const ctx[])
+lsg_n29(ctx[])
 {
 	lsd_begin()
 	lsd_in_text("Value", "someone left")
@@ -1273,7 +1424,7 @@ lsg_n29(const ctx[])
 }
 
 // Bomb Planted (bp)
-lsg_n30(const ctx[])
+lsg_n30(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(30, ctx))
@@ -1283,7 +1434,7 @@ lsg_n30(const ctx[])
 }
 
 // Show HUD Text (bp_hud)
-lsg_n31(const ctx[])
+lsg_n31(ctx[])
 {
 	lsd_begin()
 	lsd_in_team("Value", lsg_team(ctx[0]))
@@ -1294,7 +1445,7 @@ lsg_n31(const ctx[])
 }
 
 // Bomb Defused (bd)
-lsg_n32(const ctx[])
+lsg_n32(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(32, ctx))
@@ -1304,9 +1455,10 @@ lsg_n32(const ctx[])
 }
 
 // End Round (bd_end)
-lsg_n33(const ctx[])
+lsg_n33(ctx[])
 {
 	lsd_begin()
+	lsd_in_team("Winner", 2)
 	if (lsd_enter(33, ctx))
 		return
 	server_cmd("endround CT")
@@ -1314,7 +1466,7 @@ lsg_n33(const ctx[])
 }
 
 // Bomb Exploded (bx)
-lsg_n34(const ctx[])
+lsg_n34(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(34, ctx))
@@ -1324,9 +1476,10 @@ lsg_n34(const ctx[])
 }
 
 // End Round (bx_end)
-lsg_n35(const ctx[])
+lsg_n35(ctx[])
 {
 	lsd_begin()
+	lsd_in_team("Winner", 1)
 	if (lsd_enter(35, ctx))
 		return
 	server_cmd("endround T")
@@ -1334,7 +1487,7 @@ lsg_n35(const ctx[])
 }
 
 // Round Ended (re)
-lsg_n36(const ctx[])
+lsg_n36(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(36, ctx))
@@ -1344,7 +1497,7 @@ lsg_n36(const ctx[])
 }
 
 // Branch (re_br)
-lsg_n37(const ctx[])
+lsg_n37(ctx[])
 {
 	lsd_begin()
 	lsd_in_bool("Condition", ((((float(ls_count_alive(CsTeams:(ctx[0])))) > (0.0) ? 1 : 0)) && (((g_v2) ? 0 : 1)) ? 1 : 0))
@@ -1359,7 +1512,7 @@ lsg_n37(const ctx[])
 }
 
 // Set Variable (re_set)
-lsg_n38(const ctx[])
+lsg_n38(ctx[])
 {
 	lsd_begin()
 	lsd_in_bool("Value", 1)
@@ -1370,7 +1523,7 @@ lsg_n38(const ctx[])
 }
 
 // Stop Timers (re_stop)
-lsg_n39(const ctx[])
+lsg_n39(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(39, ctx))
@@ -1380,7 +1533,7 @@ lsg_n39(const ctx[])
 }
 
 // Player Used (pu)
-lsg_n40(const ctx[])
+lsg_n40(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(40, ctx))
@@ -1390,7 +1543,7 @@ lsg_n40(const ctx[])
 }
 
 // Door (pu_door)
-lsg_n41(const ctx[])
+lsg_n41(ctx[])
 {
 	lsd_begin()
 	lsd_in_entity("Door", ctx[1])
@@ -1407,7 +1560,7 @@ lsg_n41(const ctx[])
 }
 
 // Fire Trap (pu_trap)
-lsg_n42(const ctx[])
+lsg_n42(ctx[])
 {
 	lsd_begin()
 	lsd_in_entity("Trap", lsg_find("trap1"))
@@ -1423,7 +1576,7 @@ lsg_n42(const ctx[])
 }
 
 // Player Touched (pt)
-lsg_n43(const ctx[])
+lsg_n43(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(43, ctx))
@@ -1433,7 +1586,7 @@ lsg_n43(const ctx[])
 }
 
 // Open Crate (pt_crate)
-lsg_n44(const ctx[])
+lsg_n44(ctx[])
 {
 	lsd_begin()
 	lsd_in_entity("Container", ctx[1])
@@ -1450,7 +1603,7 @@ lsg_n44(const ctx[])
 }
 
 // Point Captured (cc)
-lsg_n45(const ctx[])
+lsg_n45(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(45, ctx))
@@ -1460,7 +1613,7 @@ lsg_n45(const ctx[])
 }
 
 // Lock Point (cc_lock)
-lsg_n46(const ctx[])
+lsg_n46(ctx[])
 {
 	lsd_begin()
 	lsd_in_entity("Point", ctx[0])
@@ -1478,7 +1631,7 @@ lsg_n46(const ctx[])
 }
 
 // Show HUD Text (cc_hud)
-lsg_n47(const ctx[])
+lsg_n47(ctx[])
 {
 	lsd_begin()
 	lsd_in_team("Value", ctx[1])
@@ -1489,7 +1642,7 @@ lsg_n47(const ctx[])
 }
 
 // Point Lost (cl)
-lsg_n48(const ctx[])
+lsg_n48(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(48, ctx))
@@ -1499,7 +1652,7 @@ lsg_n48(const ctx[])
 }
 
 // Open Extraction (cl_ex)
-lsg_n49(const ctx[])
+lsg_n49(ctx[])
 {
 	lsd_begin()
 	lsd_in_entity("Point", lsg_find("ex1"))
@@ -1516,7 +1669,7 @@ lsg_n49(const ctx[])
 }
 
 // Zone Stage (zs)
-lsg_n50(const ctx[])
+lsg_n50(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(50, ctx))
@@ -1526,7 +1679,7 @@ lsg_n50(const ctx[])
 }
 
 // Shrink Zone (zs_shrink)
-lsg_n51(const ctx[])
+lsg_n51(ctx[])
 {
 	lsd_begin()
 	lsd_in_entity("Zone", ctx[0])
@@ -1546,7 +1699,7 @@ lsg_n51(const ctx[])
 }
 
 // Zone Hurt Player (zt)
-lsg_n52(const ctx[])
+lsg_n52(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(52, ctx))
@@ -1556,7 +1709,7 @@ lsg_n52(const ctx[])
 }
 
 // Set Zone (zt_set)
-lsg_n53(const ctx[])
+lsg_n53(ctx[])
 {
 	lsd_begin()
 	lsd_in_entity("Zone", ctx[0])
@@ -1577,7 +1730,7 @@ lsg_n53(const ctx[])
 }
 
 // Show HUD Text (zt_hud)
-lsg_n54(const ctx[])
+lsg_n54(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -1589,7 +1742,7 @@ lsg_n54(const ctx[])
 }
 
 // Player Extracted (ex)
-lsg_n55(const ctx[])
+lsg_n55(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(55, ctx))
@@ -1599,7 +1752,7 @@ lsg_n55(const ctx[])
 }
 
 // Add To Variable (ex_add)
-lsg_n56(const ctx[])
+lsg_n56(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -1611,7 +1764,7 @@ lsg_n56(const ctx[])
 }
 
 // Wave Started (ws)
-lsg_n57(const ctx[])
+lsg_n57(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(57, ctx))
@@ -1621,7 +1774,7 @@ lsg_n57(const ctx[])
 }
 
 // Show HUD Text (ws_hud)
-lsg_n58(const ctx[])
+lsg_n58(ctx[])
 {
 	lsd_begin()
 	lsd_in_number("Value", Float:ctx[0])
@@ -1632,7 +1785,7 @@ lsg_n58(const ctx[])
 }
 
 // Wave Spawned One (wp)
-lsg_n59(const ctx[])
+lsg_n59(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(59, ctx))
@@ -1642,7 +1795,7 @@ lsg_n59(const ctx[])
 }
 
 // Show HUD Text (wp_hud)
-lsg_n60(const ctx[])
+lsg_n60(ctx[])
 {
 	lsd_begin()
 	lsd_in_entity("Value", ctx[0])
@@ -1653,7 +1806,7 @@ lsg_n60(const ctx[])
 }
 
 // Wave Cleared (wc)
-lsg_n61(const ctx[])
+lsg_n61(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(61, ctx))
@@ -1663,7 +1816,7 @@ lsg_n61(const ctx[])
 }
 
 // Start Wave (wc_start)
-lsg_n62(const ctx[])
+lsg_n62(ctx[])
 {
 	lsd_begin()
 	lsd_in_number("Wave", ((Float:ctx[0]) + (1.0)))
@@ -1679,7 +1832,7 @@ lsg_n62(const ctx[])
 }
 
 // Crate Opened (lo)
-lsg_n63(const ctx[])
+lsg_n63(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(63, ctx))
@@ -1689,7 +1842,7 @@ lsg_n63(const ctx[])
 }
 
 // Show HUD Text (lo_hud)
-lsg_n64(const ctx[])
+lsg_n64(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -1700,7 +1853,7 @@ lsg_n64(const ctx[])
 }
 
 // Checkpoint Reached (ck)
-lsg_n65(const ctx[])
+lsg_n65(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(65, ctx))
@@ -1710,7 +1863,7 @@ lsg_n65(const ctx[])
 }
 
 // Set Variable (ck_set)
-lsg_n66(const ctx[])
+lsg_n66(ctx[])
 {
 	lsd_begin()
 	lsd_in_number("Value", Float:ctx[2])
@@ -1721,7 +1874,7 @@ lsg_n66(const ctx[])
 }
 
 // Barricade Broken (bb)
-lsg_n67(const ctx[])
+lsg_n67(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(67, ctx))
@@ -1731,7 +1884,7 @@ lsg_n67(const ctx[])
 }
 
 // Show Message (bb_msg)
-lsg_n68(const ctx[])
+lsg_n68(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(68, ctx))
@@ -1741,7 +1894,7 @@ lsg_n68(const ctx[])
 }
 
 // Meeting Ended (me)
-lsg_n69(const ctx[])
+lsg_n69(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(69, ctx))
@@ -1751,7 +1904,7 @@ lsg_n69(const ctx[])
 }
 
 // Show HUD Text (me_hud)
-lsg_n70(const ctx[])
+lsg_n70(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Value", ctx[1])
@@ -1762,7 +1915,7 @@ lsg_n70(const ctx[])
 }
 
 // Creature Killed (ck2)
-lsg_n71(const ctx[])
+lsg_n71(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(71, ctx))
@@ -1772,7 +1925,7 @@ lsg_n71(const ctx[])
 }
 
 // Set Variable (ck2_set)
-lsg_n72(const ctx[])
+lsg_n72(ctx[])
 {
 	lsd_begin()
 	lsd_in_text("Value", g_lsgTxt[0])
@@ -1784,7 +1937,7 @@ lsg_n72(const ctx[])
 }
 
 // Create Component (ck2_make)
-lsg_n73(const ctx[])
+lsg_n73(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(73, ctx))
@@ -1803,7 +1956,7 @@ lsg_n73(const ctx[])
 }
 
 // Spawn Creature (ck2_spawn)
-lsg_n74(const ctx[])
+lsg_n74(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(74, ctx))
@@ -1818,7 +1971,7 @@ lsg_n74(const ctx[])
 }
 
 // Show HUD Text (ck2_hud)
-lsg_n75(const ctx[])
+lsg_n75(ctx[])
 {
 	lsd_begin()
 	lsd_in_entity("Value", g_lsgOut[74])
@@ -1830,7 +1983,7 @@ lsg_n75(const ctx[])
 }
 
 // Show HUD Text (ck2_hud2)
-lsg_n76(const ctx[])
+lsg_n76(ctx[])
 {
 	lsd_begin()
 	lsd_in_player("Player", ctx[1])
@@ -1841,8 +1994,716 @@ lsg_n76(const ctx[])
 	lsd_exit(76, "shown")
 }
 
-lsd_call(n, const ctx[])
+// Player Hurt (hurt)
+lsg_n77(ctx[])
 {
+	lsd_begin()
+	if (lsd_enter(77, ctx))
+		return
+	lsd_exit(77, "ran")
+	lsg_n78(ctx)
+}
+
+// Add To Variable (hurt_tadd)
+lsg_n78(ctx[])
+{
+	lsd_begin()
+	lsd_in_team("Team", lsg_team(ctx[1]))
+	lsd_in_number("Amount", 1.0)
+	if (lsd_enter(78, ctx))
+		return
+	g_tv4[clamp(lsg_team(ctx[1]), 0, 3)] += 1.0
+	lsd_exit(78, fmt("%.2f", g_tv4[clamp(lsg_team(ctx[1]), 0, 3)]))
+	lsg_n79(ctx)
+}
+
+// Set Glow (hurt_glow)
+lsg_n79(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[0])
+	if (lsd_enter(79, ctx))
+		return
+	if (!lsg_ok(ctx[0]))
+		lsd_error(79, "Nothing done: nobody there.")
+	else
+	{
+		set_user_rendering(ctx[0], kRenderFxGlowShell, 255, 0, 0, kRenderNormal, 16)
+		lsd_exit(79, "done")
+	}
+}
+
+// Team Changed (tc)
+lsg_n80(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(80, ctx))
+		return
+	lsd_exit(80, "ran")
+	lsg_n81(ctx)
+}
+
+// Set Model (tc_model)
+lsg_n81(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[0])
+	if (lsd_enter(81, ctx))
+		return
+	if (!lsg_ok(ctx[0]))
+		lsd_error(81, "Nothing done: nobody there.")
+	else
+	{
+		cs_set_user_model(ctx[0], "gign")
+		lsd_exit(81, "done")
+	}
+}
+
+// New Round (nr)
+lsg_n82(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(82, ctx))
+		return
+	lsd_exit(82, "ran")
+	lsg_n83(ctx)
+}
+
+// Set Setting (nr_cvar)
+lsg_n83(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Value", 0.0)
+	if (lsd_enter(83, ctx))
+		return
+	set_cvar_float("mp_freeforall", 0.0)
+	lsd_exit(83, "set")
+	lsg_n84(ctx)
+}
+
+// For Each Player (nr_each)
+lsg_n84(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(84, ctx))
+		return
+	new c[LSG_CTX], count
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!lsg_match(p, 2))
+			continue
+		count++
+		for (new k = 0; k < LSG_CTX; k++)
+			c[k] = ctx[k]
+		c[4] = p
+		lsg_n85(c)
+	}
+	lsd_exit(84, fmt("%d times", count))
+	lsg_n86(ctx)
+}
+
+// Respawn (nr_resp)
+lsg_n85(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[4])
+	if (lsd_enter(85, ctx))
+		return
+	if (!lsg_ok(ctx[4]) || is_user_alive(ctx[4]) || lsg_team(ctx[4]) < 1 || lsg_team(ctx[4]) > 2)
+		lsd_error(85, "Nothing done: only a dead player on a team comes back.")
+	else
+	{
+		ExecuteHamB(Ham_CS_RoundRespawn, ctx[4])
+		lsd_exit(85, "respawned")
+	}
+}
+
+// Pick Random Entity (nr_pick)
+lsg_n86(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(86, ctx))
+		return
+	new list[256], count
+	new p = -1
+	while (count < 256 && (p = find_ent_by_class(p, "info_player_deathmatch")) > 0)
+		list[count++] = p
+	if (count > 0)
+	{
+		ctx[5] = list[random(count)]
+		lsd_exit(86, fmt("picked %d of %d", ctx[5], count))
+		lsg_n87(ctx)
+	}
+	else
+	{
+		lsd_exit(86, "none")
+		lsg_n89(ctx)
+	}
+}
+
+// For Each Entity (nr_ents)
+lsg_n87(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(87, ctx))
+		return
+	new c[LSG_CTX], count
+	new p = -1
+	while (count < 512 && (p = find_ent_by_tname(p, "door1")) > 0)
+	{
+		count++
+		for (new k = 0; k < LSG_CTX; k++)
+			c[k] = ctx[k]
+		c[6] = p
+		lsg_n88(c)
+	}
+	lsd_exit(87, fmt("%d times", count))
+	lsg_n90(ctx)
+}
+
+// Use Entity (nr_use)
+lsg_n88(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(88, ctx))
+		return
+	if (!lsg_use("door1"))
+		lsd_error(88, "No entity has that name on this map.")
+	else
+		lsd_exit(88, "used")
+	lsg_n91(ctx)
+}
+
+// Set Variable (nr_set)
+lsg_n89(ctx[])
+{
+	lsd_begin()
+	lsd_in_text("Value", "play")
+	if (lsd_enter(89, ctx))
+		return
+	copy(g_v5, 63, "play")
+	lsd_exit(89, "set")
+}
+
+// Stop Timer (nr_stop)
+lsg_n90(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(90, ctx))
+		return
+	remove_task(LSG_TASK + 4)
+	lsd_exit(90, "stopped")
+}
+
+// Show HUD Text (nr_hud)
+lsg_n91(ctx[])
+{
+	lsd_begin()
+	lsd_in_entity("Value", ctx[5])
+	if (lsd_enter(91, ctx))
+		return
+	ls_hud(0, LsHud:0, 4.0, "%s %d", "Spot:", ctx[5])
+	lsd_exit(91, "shown")
+}
+
+// Chat Command (cmd)
+lsg_n92(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(92, ctx))
+		return
+	lsd_exit(92, "called")
+	lsg_n93(ctx)
+}
+
+// Menu (cmd_menu)
+lsg_n93(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[0])
+	if (lsd_enter(93, ctx))
+		return
+	if (!lsg_ok(ctx[0]) || is_user_bot(ctx[0]))
+		lsd_error(93, "Not shown: nobody there, or a bot.")
+	else
+	{
+		for (new k = 0; k < LSG_CTX; k++)
+			g_lsgM93[ctx[0]][k] = ctx[k]
+		new m = menu_create("Shop", "lsg_mh93")
+		menu_additem(m, "Armor")
+		menu_additem(m, "Money")
+		menu_additem(m, "Gravity")
+		menu_display(ctx[0], m)
+		lsd_exit(93, "shown")
+	}
+	lsg_n97(ctx)
+}
+
+// Menu (cmd_menu): the choice
+public lsg_mh93(id, menu, item)
+{
+	menu_destroy(menu)
+	if (item < 0 || id < 1 || id > MaxClients)
+		return PLUGIN_HANDLED
+	new ctx[LSG_CTX]
+	for (new k = 0; k < LSG_CTX; k++)
+		ctx[k] = g_lsgM93[id][k]
+	switch (item)
+	{
+		case 0:
+		{
+			lsd_exit(93, "choice 1")
+			lsg_n94(ctx)
+		}
+		case 1:
+		{
+			lsd_exit(93, "choice 2")
+			lsg_n95(ctx)
+		}
+		case 2:
+		{
+			lsd_exit(93, "choice 4")
+			lsg_n96(ctx)
+		}
+	}
+	return PLUGIN_HANDLED
+}
+
+// Give Item (cmd_arm)
+lsg_n94(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[0])
+	if (lsd_enter(94, ctx))
+		return
+	if (!ls_alive(ctx[0]))
+		lsd_error(94, "Not given: that player isn't alive.")
+	else
+	{
+		cs_set_user_armor(ctx[0], 100, CS_ARMOR_VESTHELM)
+		lsd_exit(94, "done")
+	}
+}
+
+// Give Money (cmd_money)
+lsg_n95(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[0])
+	lsd_in_number("Amount", -500.0)
+	if (lsd_enter(95, ctx))
+		return
+	if (!lsg_ok(ctx[0]))
+		lsd_error(95, "Nothing done: nobody there.")
+	else
+	{
+		lsg_add_money(ctx[0], floatround(-500.0))
+		lsd_exit(95, "done")
+	}
+}
+
+// Set Gravity (cmd_grav)
+lsg_n96(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[0])
+	lsd_in_number("Gravity", 0.5)
+	if (lsd_enter(96, ctx))
+		return
+	if (!ls_alive(ctx[0]))
+		lsd_error(96, "Nothing done: that player isn't alive.")
+	else
+	{
+		set_user_gravity(ctx[0], 0.5)
+		lsd_exit(96, "done")
+	}
+}
+
+// Progress Bar (cmd_bar)
+lsg_n97(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[0])
+	if (lsd_enter(97, ctx))
+		return
+	lsg_bar(ctx[0], 3)
+	lsd_exit(97, "shown")
+	lsg_n98(ctx)
+}
+
+// Chat Message (cmd_chat)
+lsg_n98(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[0])
+	lsd_in_number("Value", lsg_get_money(ctx[0]))
+	if (lsd_enter(98, ctx))
+		return
+	ls_chat(ctx[0], "%s %d", "Money:", floatround(lsg_get_money(ctx[0])))
+	lsd_exit(98, "said")
+}
+
+// Function (fn)
+lsg_n99(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(99, ctx))
+		return
+	lsd_exit(99, "called")
+	lsg_n100(ctx)
+}
+
+// Add Score (fn_frag)
+lsg_n100(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[7])
+	lsd_in_number("Amount", Float:ctx[8])
+	if (lsd_enter(100, ctx))
+		return
+	if (!lsg_ok(ctx[7]))
+		lsd_error(100, "Nothing done: nobody there.")
+	else
+	{
+		lsg_add_frags(ctx[7], floatround(Float:ctx[8]))
+		lsd_exit(100, "done")
+	}
+	lsg_n101(ctx)
+}
+
+// Play Sound (fn_snd)
+lsg_n101(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[7])
+	if (lsd_enter(101, ctx))
+		return
+	client_cmd(ctx[7], "spk %s", "buttons/bell1")
+	lsd_exit(101, "played")
+	lsg_n102(ctx)
+}
+
+// Set Role (fn_role)
+lsg_n102(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[7])
+	if (lsd_enter(102, ctx))
+		return
+	if (!lsg_ok(ctx[7]))
+		lsd_error(102, "Nothing done: nobody there.")
+	else
+	{
+		ls_set_role(ctx[7], "hero")
+		lsd_exit(102, "done")
+	}
+}
+
+// Player Extracted (pk2)
+lsg_n103(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(103, ctx))
+		return
+	lsd_exit(103, "ran")
+	lsg_n104(ctx)
+}
+
+// Call Function (pk2_call)
+lsg_n104(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[1])
+	lsd_in_number("Number", 3.0)
+	if (lsd_enter(104, ctx))
+		return
+	new c[LSG_CTX]
+	c[7] = ctx[1]
+	c[8] = _:(3.0)
+	lsg_n99(c)
+	lsd_exit(104, "called")
+	lsg_n105(ctx)
+}
+
+// Pick Random Player (pk2_pick)
+lsg_n105(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(105, ctx))
+		return
+	new list[256], count
+	for (new p = 1; p <= MaxClients; p++)
+		if (lsg_match(p, 5))
+			list[count++] = p
+	if (count > 0)
+	{
+		ctx[9] = list[random(count)]
+		lsd_exit(105, fmt("picked %d of %d", ctx[9], count))
+		lsg_n106(ctx)
+	}
+	else
+	{
+		lsd_exit(105, "none")
+	}
+}
+
+// Bot Go To (pk2_bot)
+lsg_n106(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Bot", ctx[9])
+	if (lsd_enter(106, ctx))
+		return
+	if (!ls_alive(ctx[9]) || !is_user_bot(ctx[9]))
+		lsd_error(106, "Nothing done: that player isn't a living bot.")
+	else
+	{
+		lsg_bot_goto(ctx[9], "spot1")
+		lsd_exit(106, "ordered")
+	}
+	lsg_n107(ctx)
+}
+
+// Bot Hold (pk2_hold)
+lsg_n107(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Bot", ctx[9])
+	lsd_in_number("Seconds", 10.0)
+	if (lsd_enter(107, ctx))
+		return
+	if (!ls_alive(ctx[9]) || !is_user_bot(ctx[9]))
+		lsd_error(107, "Nothing done: that player isn't a living bot.")
+	else
+	{
+		ls_bot_hold(ctx[9], max(floatround(10.0), 1))
+		lsd_exit(107, "ordered")
+	}
+	lsg_n108(ctx)
+}
+
+// Bot Follow (pk2_follow)
+lsg_n108(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Bot", ctx[9])
+	lsd_in_player("Follow", ctx[1])
+	if (lsd_enter(108, ctx))
+		return
+	if (!ls_alive(ctx[9]) || !is_user_bot(ctx[9]))
+		lsd_error(108, "Nothing done: that player isn't a living bot.")
+	else
+	{
+		ls_bot_follow(ctx[9], ctx[1], 10)
+		lsd_exit(108, "ordered")
+	}
+	lsg_n109(ctx)
+}
+
+// Bot Free (pk2_free)
+lsg_n109(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Bot", ctx[9])
+	if (lsd_enter(109, ctx))
+		return
+	if (!ls_alive(ctx[9]) || !is_user_bot(ctx[9]))
+		lsd_error(109, "Nothing done: that player isn't a living bot.")
+	else
+	{
+		ls_bot_release(ctx[9])
+		lsd_exit(109, "ordered")
+	}
+	lsg_n110(ctx)
+}
+
+// Drop Weapon (pk2_drop)
+lsg_n110(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[1])
+	if (lsd_enter(110, ctx))
+		return
+	if (!ls_alive(ctx[1]))
+		lsd_error(110, "Nothing done: that player isn't alive.")
+	else
+	{
+		engclient_cmd(ctx[1], "drop")
+		lsd_exit(110, "done")
+	}
+	lsg_n111(ctx)
+}
+
+// Freeze (pk2_fr)
+lsg_n111(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[1])
+	lsd_in_bool("Frozen", 1)
+	if (lsd_enter(111, ctx))
+		return
+	if (!ls_alive(ctx[1]))
+		lsd_error(111, "Nothing done: that player isn't alive.")
+	else
+	{
+		lsg_freeze(ctx[1], 1)
+		lsd_exit(111, "done")
+	}
+	lsg_n112(ctx)
+}
+
+// Kill (pk2_kill)
+lsg_n112(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[1])
+	if (lsd_enter(112, ctx))
+		return
+	if (!ls_alive(ctx[1]))
+		lsd_error(112, "Nothing done: that player isn't alive.")
+	else
+	{
+		user_kill(ctx[1], 1)
+		lsd_exit(112, "done")
+	}
+}
+
+// Point Lost (lo2)
+lsg_n113(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(113, ctx))
+		return
+	lsd_exit(113, "ran")
+	lsg_n115(ctx)
+}
+
+// Branch (lo2_br)
+lsg_n114(ctx[])
+{
+	lsd_begin()
+	lsd_in_bool("Condition", (equali(g_v5, "play") ? 1 : 0))
+	if (lsd_enter(114, ctx))
+		return
+	new ok = (((((equali(g_v5, "play") ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	lsd_exit(114, g_lsdBool[ok])
+	if (ok)
+		lsg_n116(ctx)
+}
+
+// Pick Random Player (lo2_pick)
+lsg_n115(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(115, ctx))
+		return
+	new list[256], count
+	for (new p = 1; p <= MaxClients; p++)
+		if (lsg_match(p, 1))
+			list[count++] = p
+	if (count > 0)
+	{
+		ctx[10] = list[random(count)]
+		lsd_exit(115, fmt("picked %d of %d", ctx[10], count))
+		lsg_n114(ctx)
+	}
+	else
+	{
+		lsd_exit(115, "none")
+	}
+}
+
+// Branch (lo2_br2)
+lsg_n116(ctx[])
+{
+	lsd_begin()
+	lsd_in_bool("Condition", (((ls_components_running() && ls_zone_inside(lsg_find("zone1"), ctx[10]) ? 1 : 0)) || ((ls_is_role(ctx[10], "hero") ? 1 : 0)) ? 1 : 0))
+	if (lsd_enter(116, ctx))
+		return
+	new ok = (((((((ls_components_running() && ls_zone_inside(lsg_find("zone1"), ctx[10]) ? 1 : 0)) || ((ls_is_role(ctx[10], "hero") ? 1 : 0)) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	lsd_exit(116, g_lsdBool[ok])
+	if (ok)
+		lsg_n117(ctx)
+	else
+		lsg_n118(ctx)
+}
+
+// Respawn At Point (lo2_resp)
+lsg_n117(ctx[])
+{
+	lsd_begin()
+	lsd_in_player("Player", ctx[10])
+	if (lsd_enter(117, ctx))
+		return
+	if (!ls_components_running() || !lsg_ok(ctx[10]))
+		lsd_error(117, "gm_components isn't running, or nobody there.")
+	else
+	{
+		ls_respawn_at(ctx[10], 0)
+		lsd_exit(117, "done")
+	}
+}
+
+// Call Supply Drop (lo2_drop)
+lsg_n118(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(118, ctx))
+		return
+	new Float:o[3]
+	if (!ls_components_running())
+		lsd_error(118, "gm_components isn't running on this server.")
+	else if (!lsg_origin_of("drop1", o))
+		lsd_error(118, "No entity has that name on this map.")
+	else
+	{
+		ls_drop_call(o, "")
+		lsd_exit(118, "called")
+	}
+	lsg_n119(ctx)
+}
+
+// Show HUD Text (lo2_hud)
+lsg_n119(ctx[])
+{
+	lsd_begin()
+	lsd_in_number("Value", ((float(ls_count_role("hero"))) + (float(get_cvar_num("ls_creature_alive")))))
+	if (lsd_enter(119, ctx))
+		return
+	ls_hud(0, LsHud:1, 4.0, "%s %d", "Heroes and creatures:", floatround(((float(ls_count_role("hero"))) + (float(get_cvar_num("ls_creature_alive"))))))
+	lsd_exit(119, "shown")
+	lsg_n120(ctx)
+}
+
+// Branch (lo2_br3)
+lsg_n120(ctx[])
+{
+	lsd_begin()
+	lsd_in_bool("Condition", ((lsg_get_frags(ctx[10])) > (lsg_get_deaths(ctx[10])) ? 1 : 0))
+	if (lsd_enter(120, ctx))
+		return
+	new ok = ((((((lsg_get_frags(ctx[10])) > (lsg_get_deaths(ctx[10])) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	lsd_exit(120, g_lsdBool[ok])
+	if (ok)
+		lsg_n121(ctx)
+}
+
+// End Round (lo2_end)
+lsg_n121(ctx[])
+{
+	lsd_begin()
+	lsd_in_team("Winner", ctx[1])
+	if (lsd_enter(121, ctx))
+		return
+	lsg_end_round(ctx[1])
+	lsd_exit(121, "ended")
+}
+
+lsd_call(n, const data[])
+{
+	new ctx[LSG_CTX]
+	for (new k = 0; k < LSG_CTX; k++)
+		ctx[k] = data[k]
 	switch (n)
 	{
 		case 0: lsg_n0(ctx)
@@ -1922,5 +2783,50 @@ lsd_call(n, const ctx[])
 		case 74: lsg_n74(ctx)
 		case 75: lsg_n75(ctx)
 		case 76: lsg_n76(ctx)
+		case 77: lsg_n77(ctx)
+		case 78: lsg_n78(ctx)
+		case 79: lsg_n79(ctx)
+		case 80: lsg_n80(ctx)
+		case 81: lsg_n81(ctx)
+		case 82: lsg_n82(ctx)
+		case 83: lsg_n83(ctx)
+		case 84: lsg_n84(ctx)
+		case 85: lsg_n85(ctx)
+		case 86: lsg_n86(ctx)
+		case 87: lsg_n87(ctx)
+		case 88: lsg_n88(ctx)
+		case 89: lsg_n89(ctx)
+		case 90: lsg_n90(ctx)
+		case 91: lsg_n91(ctx)
+		case 92: lsg_n92(ctx)
+		case 93: lsg_n93(ctx)
+		case 94: lsg_n94(ctx)
+		case 95: lsg_n95(ctx)
+		case 96: lsg_n96(ctx)
+		case 97: lsg_n97(ctx)
+		case 98: lsg_n98(ctx)
+		case 99: lsg_n99(ctx)
+		case 100: lsg_n100(ctx)
+		case 101: lsg_n101(ctx)
+		case 102: lsg_n102(ctx)
+		case 103: lsg_n103(ctx)
+		case 104: lsg_n104(ctx)
+		case 105: lsg_n105(ctx)
+		case 106: lsg_n106(ctx)
+		case 107: lsg_n107(ctx)
+		case 108: lsg_n108(ctx)
+		case 109: lsg_n109(ctx)
+		case 110: lsg_n110(ctx)
+		case 111: lsg_n111(ctx)
+		case 112: lsg_n112(ctx)
+		case 113: lsg_n113(ctx)
+		case 114: lsg_n114(ctx)
+		case 115: lsg_n115(ctx)
+		case 116: lsg_n116(ctx)
+		case 117: lsg_n117(ctx)
+		case 118: lsg_n118(ctx)
+		case 119: lsg_n119(ctx)
+		case 120: lsg_n120(ctx)
+		case 121: lsg_n121(ctx)
 	}
 }

@@ -243,6 +243,27 @@ const EVENTS: &[EventKind] = &[
         tail: "\treturn PLUGIN_CONTINUE",
         named: Some("ent"),
     },
+    EventKind {
+        kind: "event.player_hurt",
+        sig: "public lsg_on_player_hurt(victim, inflictor, attacker, Float:damage, bits)",
+        register: &["RegisterHamPlayer(Ham_TakeDamage, \"lsg_on_player_hurt\", 1)"],
+        prelude: "",
+        guard: "\t#pragma unused inflictor\n\t#pragma unused bits",
+        values: &[("victim", "victim"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:damage")],
+        tail: "\treturn HAM_IGNORED",
+        named: None,
+    },
+    EventKind {
+        kind: "event.team_changed",
+        sig: "public lsg_on_team_changed()",
+        register: &["register_event(\"TeamInfo\", \"lsg_on_team_changed\", \"a\")"],
+        prelude: "",
+        guard: "\tnew id = read_data(1), tn[12]\n\tread_data(2, tn, charsmax(tn))\n\tif (id < 1 || id > MaxClients)\n\t\treturn",
+        values: &[("player", "id"), ("team", "tn[0] == 'T' ? 1 : (tn[0] == 'C' ? 2 : 0)")],
+        tail: "",
+        named: None,
+    },
+    EventKind { kind: "event.new_round", sig: "public lsg_on_new_round()", register: &["register_event(\"HLTV\", \"lsg_on_new_round\", \"a\", \"1=0\", \"2=0\")"], prelude: "", guard: "", values: &[], tail: "", named: None },
     EventKind { kind: "comp.on_capture", sig: "public ls_on_capture(ent, side, id)", register: &[], prelude: "", guard: "", values: &[("point", "ent"), ("team", "side == 1 || side == 2 ? side : 0"), ("player", "id")], tail: "", named: None },
     EventKind { kind: "comp.on_capture_lost", sig: "public ls_on_capture_lost(ent, side)", register: &[], prelude: "", guard: "", values: &[("point", "ent"), ("team", "side == 1 || side == 2 ? side : 0")], tail: "", named: None },
     EventKind { kind: "comp.on_zone_stage", sig: "public ls_on_zone_stage(ent, stage)", register: &[], prelude: "", guard: "", values: &[("zone", "ent"), ("stage", "_:float(stage)")], tail: "", named: None },
@@ -297,6 +318,9 @@ fn event_slot(def: &NodeDef, pin: &str) -> Option<(bool, usize)> {
 
 struct Gen<'a> {
     v: View<'a>,
+    /// ctx slots of flow values (loops, picks, a Function's Player and Number), after the
+    /// events' own CTX slots
+    slots: Vec<(&'a str, &'static str)>,
     /// the nodes that become functions, in graph order (their index is their number)
     live: Vec<&'a str>,
     /// the graph's variables in order (their index is their number)
@@ -311,6 +335,9 @@ struct Val {
 }
 
 impl<'a> Gen<'a> {
+    fn slot(&self, node: &str, pin: &str) -> Option<usize> {
+        self.slots.iter().position(|(n, p)| *n == node && *p == pin).map(|i| CTX + i)
+    }
     fn index(&self, id: &str) -> usize {
         self.live.iter().position(|x| *x == id).unwrap_or(0)
     }
@@ -354,10 +381,15 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// Where a variable lives: `g_v1`, or `g_pv1[lsg_slot(P)]` for a per-player one.
-    fn var_ref(&self, var: &Variable, player: &str) -> String {
+    /// Where a variable lives: `g_v1`, `g_pv1[lsg_slot(P)]` (per player) or
+    /// `g_tv1[clamp(T, 0, 3)]` (per team).
+    fn var_ref(&self, var: &Variable, player: &str, team: &str) -> String {
         let i = self.var_index(&var.id);
-        if var.scope == "player" { format!("g_pv{i}[lsg_slot({player})]") } else { format!("g_v{i}") }
+        match var.scope.as_str() {
+            "player" => format!("g_pv{i}[lsg_slot({player})]"),
+            "team" => format!("g_tv{i}[clamp({team}, 0, 3)]"),
+            _ => format!("g_v{i}"),
+        }
     }
 
     /// The value of a data input: what's wired in, or the param it falls back to.
@@ -392,6 +424,10 @@ impl<'a> Gen<'a> {
     fn output(&self, node: &str, pin: &str) -> Val {
         let (n, def) = self.node(node);
         let ty = self.v.out_type(node, pin).unwrap_or_else(|| "any".into());
+        if let Some(k) = self.slot(node, pin) {
+            let expr = if ty == "number" { format!("Float:ctx[{k}]") } else { format!("ctx[{k}]") };
+            return Val { expr, ty };
+        }
         if def.event {
             let expr = match event_slot(def, pin) {
                 Some((true, i)) => format!("g_lsgTxt[{i}]"),
@@ -438,9 +474,17 @@ impl<'a> Gen<'a> {
             "player.get_name" => format!("lsg_name({})", i("player", "player")),
             "game.count_alive" => format!("float(ls_count_alive(CsTeams:({})))", i("team", "team")),
             "var.get" => match self.v.var_of(node) {
-                Some(var) => self.var_ref(var, &i("player", "player")),
+                Some(var) => self.var_ref(var, &i("player", "player"), &i("team", "team")),
                 None => "0".into(),
             },
+            "text.equals" => format!("(equali({}, {}) ? 1 : 0)", i("a", "text"), i("b", "text")),
+            "player.get_money" => format!("lsg_get_money({})", i("player", "player")),
+            "player.get_frags" => format!("lsg_get_frags({})", i("player", "player")),
+            "player.get_deaths" => format!("lsg_get_deaths({})", i("player", "player")),
+            "player.is_role" => format!("(ls_is_role({}, {}) ? 1 : 0)", i("player", "player"), pawn_str(&name_text(self.text(n, def, "role")))),
+            "game.count_role" => format!("float(ls_count_role({}))", pawn_str(&name_text(self.text(n, def, "role")))),
+            "comp.in_zone" => format!("(ls_components_running() && ls_zone_inside({}, {}) ? 1 : 0)", i("zone", "entity"), i("player", "player")),
+            "creature.count" => "float(get_cvar_num(\"ls_creature_alive\"))".into(),
             "comp.find" => format!("lsg_find({})", pawn_str(&name_text(self.text(n, def, "name")))),
             _ => "0".into(),
         };
@@ -461,11 +505,23 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         .filter(|id| v.defs.get(id).is_some_and(|d| !d.reroute && !d.pure && (d.event || reached.contains_key(id))))
         .collect();
     let vars: Vec<&Variable> = g.variables.iter().collect();
-    let gen = Gen { v, live, vars, debug };
+    // flow values get their own ctx slots
+    let mut slots: Vec<(&str, &'static str)> = Vec::new();
+    for id in &live {
+        let d = v.defs[id];
+        if matches!(d.kind.as_str(), "flow.for_each_player" | "flow.for_each_entity" | "flow.pick_player" | "flow.pick_entity" | "func.define") {
+            for o in d.outputs.iter().filter(|o| o.ty != "exec") {
+                slots.push((id, o.id.as_str()));
+            }
+        }
+    }
+    let gen = Gen { v, slots, live, vars, debug };
     let v = &gen.v;
     let kinds_live: BTreeSet<&str> = gen.live.iter().map(|id| v.defs[id].kind.as_str()).collect();
     let has = |k: &str| kinds_live.contains(k);
-    let timers: Vec<&str> = gen.live.iter().copied().filter(|id| v.defs[id].kind.starts_with("timer.") && v.defs[id].kind != "timer.stop_all").collect();
+    let timers: Vec<&str> = gen.live.iter().copied().filter(|id| matches!(v.defs[id].kind.as_str(), "timer.delay" | "timer.repeat" | "timer.countdown")).collect();
+    let round_vars: Vec<(usize, &&Variable)> = gen.vars.iter().enumerate().filter(|(_, x)| x.reset == "round").collect();
+    let new_round = !timers.is_empty() || !round_vars.is_empty();
 
     let mut o = Out { text: String::new(), lines: 0 };
     let mut spans = Vec::new();
@@ -479,7 +535,7 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     o.blank();
     o.line("#include <amxmodx>\n#include <cstrike>\n#include <fakemeta>\n#include <engine>\n#include <hamsandwich>\n#include <loner>");
     o.blank();
-    o.line(format!("#define LSG_MODE {}\n#define LSG_CTX {CTX}\n#define LSG_TXT {TXT}\n#define LSG_N {}\n#define LSG_TASK {TASK_BASE}", pawn_str(&id_text(&g.mode.id)), gen.live.len().max(1)));
+    o.line(format!("#define LSG_MODE {}\n#define LSG_CTX {}\n#define LSG_TXT {TXT}\n#define LSG_N {}\n#define LSG_TASK {TASK_BASE}", pawn_str(&id_text(&g.mode.id)), CTX + gen.slots.len(), gen.live.len().max(1)));
     o.line("stock g_lsgTxt[LSG_TXT][64]\nstock g_lsgOut[LSG_N]\nstock g_lsgLeft[LSG_N]\nstock const g_lsgYesNo[][] = { \"no\", \"yes\" }\nstock const g_lsgTeamName[][] = { \"no team\", \"Terrorists\", \"Counter-Terrorists\", \"Spectators\" }");
     o.blank();
 
@@ -487,12 +543,15 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
     if !gen.vars.is_empty() {
         o.line("// The mode's variables");
         for (i, x) in gen.vars.iter().enumerate() {
-            let note = format!("// {} ({}{})", comment_text(&x.name), x.ty, if x.scope == "player" { ", per player" } else { "" });
+            let note = format!("// {} ({}{}{})", comment_text(&x.name), x.ty, match x.scope.as_str() { "player" => ", per player", "team" => ", per team", _ => "" }, if x.reset == "round" { ", each round" } else { "" });
             let init = Gen::var_lit(&x.ty, Some(&x.default).filter(|d| !d.is_null()));
             let decl = match (x.ty.as_str(), x.scope.as_str()) {
                 ("number", "player") => format!("stock Float:g_pv{i}[33]"),
                 ("text", "player") => format!("stock g_pv{i}[33][64]"),
                 (_, "player") => format!("stock g_pv{i}[33]"),
+                ("number", "team") => format!("stock Float:g_tv{i}[4] = {{ {init}, {init}, {init}, {init} }}"),
+                ("text", "team") => format!("stock g_tv{i}[4][64] = {{ {init}, {init}, {init}, {init} }}"),
+                (_, "team") => format!("stock g_tv{i}[4] = {{ {init}, {init}, {init}, {init} }}"),
                 ("number", _) => format!("stock Float:g_v{i} = {init}"),
                 ("text", _) => format!("stock g_v{i}[64] = {init}"),
                 _ => format!("stock g_v{i} = {init}"),
@@ -500,6 +559,11 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
             o.line(format!("{decl} {note}"));
         }
         o.blank();
+    }
+
+    // menus remember who was shown what
+    for id in gen.live.iter().filter(|id| v.defs[*id].kind == "msg.menu") {
+        o.line(format!("stock g_lsgM{}[33][LSG_CTX]", gen.index(id)));
     }
 
     if debug {
@@ -521,6 +585,10 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
             };
             if x.scope == "player" {
                 o.line(format!("\tfor (new id = 1; id <= MaxClients; id++)\n\t\tif (is_user_connected(id))\n\t\t\t{f}({vid}, id, g_pv{i}[id])"));
+            } else if x.scope == "team" {
+                for (t, tn) in [(1, "T"), (2, "CT")] {
+                    o.line(format!("\t{f}({}, 0, g_tv{i}[{t}])", pawn_str(&format!("{}:{tn}", id_text(&x.id)))));
+                }
             } else {
                 o.line(format!("\t{f}({vid}, 0, g_v{i})"));
             }
@@ -544,13 +612,35 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
             o.line(format!("\t{r}"));
         }
     }
-    if !timers.is_empty() {
+    if new_round {
         o.line("\tregister_event(\"HLTV\", \"lsg_new_round\", \"a\", \"1=0\", \"2=0\")");
+    }
+    // chat commands: one command each
+    for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.chat_command") {
+        let cmd = name_text(gen.text(v.nodes[id], v.defs[id], "command"));
+        let i = gen.index(id);
+        if !cmd.is_empty() {
+            o.line(format!("\tregister_clcmd({}, \"lsg_chat{i}\")\n\tregister_clcmd({}, \"lsg_chat{i}\")", pawn_str(&format!("say /{cmd}")), pawn_str(&format!("say_team /{cmd}"))));
+        }
     }
     o.line("}");
     o.blank();
-    if !timers.is_empty() {
-        o.line("// timers stop when a new round starts\npublic lsg_new_round()\n\tlsg_stop_timers()\n");
+    if new_round {
+        o.line("// a new round: timers stop, round variables start again\npublic lsg_new_round()\n{\n\tlsg_stop_timers()");
+        for (i, x) in &round_vars {
+            let init = Gen::var_lit(&x.ty, Some(&x.default).filter(|d| !d.is_null()));
+            let set = |r: String| if x.ty == "text" { format!("copy({r}, 63, {init})") } else { format!("{r} = {init}") };
+            match x.scope.as_str() {
+                "player" => o.line(format!("\tfor (new id = 0; id <= 32; id++)\n\t\t{}", set(format!("g_pv{i}[id]")))),
+                "team" => o.line(format!("\tfor (new t = 0; t < 4; t++)\n\t\t{}", set(format!("g_tv{i}[t]")))),
+                _ => o.line(format!("\t{}", set(format!("g_v{i}")))),
+            }
+        }
+        o.line("}\n");
+    }
+    for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.chat_command") {
+        let i = gen.index(id);
+        o.line(format!("public lsg_chat{i}(id)\n{{\n\tnew ctx[LSG_CTX]\n\tctx[0] = id // player\n\t{}(ctx)\n\treturn PLUGIN_CONTINUE\n}}\n", gen.fname(id)));
     }
     o.line("stock lsg_stop_timers()\n{\n\tfor (new i = 0; i < LSG_N; i++)\n\t\tremove_task(LSG_TASK + i)\n}");
     o.blank();
@@ -634,7 +724,7 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         if gen.live.is_empty() {
             o.line("lsd_call(n, const ctx[])\n{\n\t#pragma unused n\n\t#pragma unused ctx\n}");
         } else {
-            o.line("lsd_call(n, const ctx[])\n{\n\tswitch (n)\n\t{");
+            o.line("lsd_call(n, const data[])\n{\n\tnew ctx[LSG_CTX]\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tctx[k] = data[k]\n\tswitch (n)\n\t{");
             for (i, id) in gen.live.iter().enumerate() {
                 o.line(format!("\t\tcase {i}: {}(ctx)", gen.fname(id)));
             }
@@ -655,7 +745,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
     let i = gen.index(id);
     let debug = gen.debug;
     o.line(format!("// {} ({})", comment_text(&def.title), id_text(id)));
-    o.line(format!("{}(const ctx[])\n{{", gen.fname(id)));
+    o.line(format!("{}(ctx[])\n{{", gen.fname(id)));
     let mut b = Out { text: String::new(), lines: 0 };
     if debug {
         b.line("\tlsd_begin()");
@@ -701,6 +791,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
     };
     let inp = |pin: &str, ty: &str| gen.need(id, pin, ty);
     let comps = "!ls_components_running()";
+    let mut menus_after: Vec<(usize, String)> = Vec::new();
     match def.kind.as_str() {
         k if event_kind(k).is_some() => {
             let e = exit("ran");
@@ -769,23 +860,28 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "score.end_round" => {
-            let cmd = match gen.choice(n, def, "winner") {
-                "t" => "endround T",
-                "ct" => "endround CT",
-                _ => "endround",
+            let w = inp("winner", "team");
+            // (a literal winner reads as plain words; a wired one as a number)
+            let cmd = match w.as_str() {
+                "1" => "\tserver_cmd(\"endround T\")".to_string(),
+                "2" => "\tserver_cmd(\"endround CT\")".to_string(),
+                "0" => "\tserver_cmd(\"endround\")".to_string(),
+                _ => format!("\tlsg_end_round({w})"),
             };
-            b.line(format!("\tserver_cmd({})", pawn_str(cmd)));
-            let e = exit(match gen.choice(n, def, "winner") {
-                "t" => "Terrorists win",
-                "ct" => "Counter-Terrorists win",
-                _ => "draw",
+            b.line(cmd);
+            let e = exit(match w.as_str() {
+                "1" => "Terrorists win",
+                "2" => "Counter-Terrorists win",
+                "0" => "draw",
+                _ => "ended",
             });
             if !e.is_empty() {
                 b.line(e);
             }
         }
         "msg.broadcast" => {
-            b.line(format!("\tls_announce(0, {}, \"%s\", {})", float_lit(gen.num(n, def, "seconds")), pawn_str(&safe_text(gen.text(n, def, "text"), 100))));
+            let who = if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
+            b.line(format!("\tls_announce({who}, {}, \"%s\", {})", float_lit(gen.num(n, def, "seconds")), pawn_str(&safe_text(gen.text(n, def, "text"), 100))));
             let e = exit("shown");
             if !e.is_empty() {
                 b.line(e);
@@ -797,17 +893,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let slot = HUD_SLOTS.iter().position(|s| *s == gen.choice(n, def, "slot")).unwrap_or(1);
             let text = pawn_str(&safe_text(gen.text(n, def, "text"), 100));
             let secs = float_lit(gen.num(n, def, "seconds"));
-            let args = match gen.input(id, "value") {
-                None => format!("\"%s\", {text}"),
-                Some(val) => match val.ty.as_str() {
-                    "number" => format!("\"%s %d\", {text}, floatround({})", val.expr),
-                    "text" => format!("\"%s %s\", {text}, {}", val.expr),
-                    "player" => format!("\"%s %s\", {text}, lsg_name({})", val.expr),
-                    "bool" => format!("\"%s %s\", {text}, g_lsgYesNo[({}) ? 1 : 0]", val.expr),
-                    "team" => format!("\"%s %s\", {text}, g_lsgTeamName[clamp({}, 0, 3)]", val.expr),
-                    _ => format!("\"%s %d\", {text}, {}", val.expr),
-                },
-            };
+            let args = text_args(&text, gen.input(id, "value"));
             b.line(format!("\tls_hud({who}, LsHud:{slot}, {secs}, {args})"));
             let e = exit("shown");
             if !e.is_empty() {
@@ -817,7 +903,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         "var.set" | "var.add" => {
             if let Some(var) = v.var_of(id) {
-                let r = gen.var_ref(var, &inp("player", "player"));
+                let r = gen.var_ref(var, &inp("player", "player"), &inp("team", "team"));
                 let stmt = if def.kind == "var.add" {
                     format!("\t{r} += {}", inp("amount", "number"))
                 } else {
@@ -868,6 +954,225 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let e = exit("stopped");
             if !e.is_empty() {
                 b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "flow.for_each_player" | "flow.for_each_entity" => {
+            let out = if def.kind == "flow.for_each_player" { "player" } else { "entity" };
+            let k = gen.slot(id, out).unwrap_or(0);
+            let body = next("each").map(|c| c.replace("(ctx)", "(c)"));
+            b.line("\tnew c[LSG_CTX], count");
+            if def.kind == "flow.for_each_player" {
+                let which = which_code(gen.choice(n, def, "which"));
+                b.line(format!("\tfor (new p = 1; p <= MaxClients; p++)\n\t{{\n\t\tif (!lsg_match(p, {which}))\n\t\t\tcontinue"));
+            } else {
+                let name = pawn_str(&name_text(gen.text(n, def, "name")));
+                let find = if gen.choice(n, def, "by") == "name" { "find_ent_by_tname" } else { "find_ent_by_class" };
+                b.line(format!("\tnew p = -1\n\twhile (count < 512 && (p = {find}(p, {name})) > 0)\n\t{{"));
+            }
+            b.line(format!("\t\tcount++\n\t\tfor (new k = 0; k < LSG_CTX; k++)\n\t\t\tc[k] = ctx[k]\n\t\tc[{k}] = p"));
+            match body {
+                Some(c) => b.line(format!("\t\t{c}")),
+                None => b.line("\t\t#pragma unused c"),
+            }
+            b.line("\t}");
+            if debug {
+                b.line(format!("\tlsd_exit({i}, fmt(\"%d times\", count))"));
+            } else {
+                b.line("\t#pragma unused count");
+            }
+            then_line(&mut b, "then");
+        }
+        "flow.pick_player" | "flow.pick_entity" => {
+            let out = if def.kind == "flow.pick_player" { "player" } else { "entity" };
+            let k = gen.slot(id, out).unwrap_or(0);
+            b.line("\tnew list[256], count");
+            if def.kind == "flow.pick_player" {
+                let which = which_code(gen.choice(n, def, "which"));
+                b.line(format!("\tfor (new p = 1; p <= MaxClients; p++)\n\t\tif (lsg_match(p, {which}))\n\t\t\tlist[count++] = p"));
+            } else {
+                let name = pawn_str(&name_text(gen.text(n, def, "name")));
+                let find = if gen.choice(n, def, "by") == "name" { "find_ent_by_tname" } else { "find_ent_by_class" };
+                b.line(format!("\tnew p = -1\n\twhile (count < 256 && (p = {find}(p, {name})) > 0)\n\t\tlist[count++] = p"));
+            }
+            b.line(format!("\tif (count > 0)\n\t{{\n\t\tctx[{k}] = list[random(count)]"));
+            if debug {
+                b.line(format!("\t\tlsd_exit({i}, fmt(\"picked %d of %d\", ctx[{k}], count))"));
+            }
+            if let Some(c) = next("then") {
+                b.line(format!("\t\t{c}"));
+            }
+            b.line("\t}");
+            let none = next("none");
+            if debug || none.is_some() {
+                b.line("\telse\n\t{");
+                if debug {
+                    b.line(format!("\t\tlsd_exit({i}, \"none\")"));
+                }
+                if let Some(c) = none {
+                    b.line(format!("\t\t{c}"));
+                }
+                b.line("\t}");
+            }
+        }
+        "func.define" | "event.chat_command" => {
+            let e = exit("called");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "func.call" => {
+            let target = n.params.get("func").and_then(Value::as_str).filter(|t| gen.live.contains(t));
+            if let Some(t) = target {
+                let player = if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
+                let (sp, sn) = (gen.slot(t, "player").unwrap_or(0), gen.slot(t, "number").unwrap_or(0));
+                b.line(format!("\tnew c[LSG_CTX]\n\tc[{sp}] = {player}\n\tc[{sn}] = _:({})\n\t{}(c)", inp("number", "number"), gen.fname(t)));
+            }
+            let e = exit("called");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "timer.stop" => {
+            if let Some(t) = n.params.get("timer").and_then(Value::as_str).filter(|t| gen.live.contains(t)) {
+                b.line(format!("\tremove_task(LSG_TASK + {})", gen.index(t)));
+            }
+            let e = exit("stopped");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "player.add_money" | "player.add_frags" | "player.give_item" | "player.drop_weapon" | "player.set_gravity" | "player.set_glow" | "player.set_model" | "player.kill" | "player.freeze" | "player.set_role" => {
+            let p = inp("player", "player");
+            let (cond, msg, call) = match def.kind.as_str() {
+                "player.add_money" => (format!("!lsg_ok({p})"), "Nothing done: nobody there.", format!("lsg_add_money({p}, floatround({}))", inp("amount", "number"))),
+                "player.add_frags" => (format!("!lsg_ok({p})"), "Nothing done: nobody there.", format!("lsg_add_frags({p}, floatround({}))", inp("amount", "number"))),
+                "player.set_role" => (format!("!lsg_ok({p})"), "Nothing done: nobody there.", format!("ls_set_role({p}, {})", pawn_str(&name_text(gen.text(n, def, "role"))))),
+                "player.give_item" => (format!("!ls_alive({p})"), "Not given: that player isn't alive.", match gen.choice(n, def, "item") {
+                    "vest" => format!("cs_set_user_armor({p}, 100, CS_ARMOR_KEVLAR)"),
+                    "defuser" => format!("cs_set_user_defuse({p}, 1)"),
+                    "nvg" => format!("cs_set_user_nvg({p}, 1)"),
+                    _ => format!("cs_set_user_armor({p}, 100, CS_ARMOR_VESTHELM)"),
+                }),
+                "player.drop_weapon" => (format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", format!("engclient_cmd({p}, \"drop\")")),
+                "player.set_gravity" => (format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", format!("set_user_gravity({p}, {})", inp("gravity", "number"))),
+                "player.set_glow" => (format!("!lsg_ok({p})"), "Nothing done: nobody there.", match gen.choice(n, def, "color") {
+                    "off" => format!("set_user_rendering({p})"),
+                    c => {
+                        let (r, g, bl) = match c { "green" => (0, 255, 0), "blue" => (0, 80, 255), "yellow" => (255, 220, 0), "white" => (255, 255, 255), _ => (255, 0, 0) };
+                        format!("set_user_rendering({p}, kRenderFxGlowShell, {r}, {g}, {bl}, kRenderNormal, 16)")
+                    }
+                }),
+                "player.set_model" => (format!("!lsg_ok({p})"), "Nothing done: nobody there.", match gen.choice(n, def, "model") {
+                    "reset" => format!("cs_reset_user_model({p})"),
+                    m => format!("cs_set_user_model({p}, {})", pawn_str(m)),
+                }),
+                "player.kill" => (format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", format!("user_kill({p}, 1)")),
+                _ => (format!("!ls_alive({p})"), "Nothing done: that player isn't alive.", format!("lsg_freeze({p}, {})", bool01(&inp("on", "bool")))),
+            };
+            check(&mut b, &cond, msg, &[format!("\t{call}"), exit("done")]);
+            then_line(&mut b, "then");
+        }
+        "player.respawn" | "comp.respawn_at" => {
+            let p = inp("player", "player");
+            if def.kind == "player.respawn" {
+                check(&mut b, &format!("!lsg_ok({p}) || is_user_alive({p}) || lsg_team({p}) < 1 || lsg_team({p}) > 2"), "Nothing done: only a dead player on a team comes back.", &[format!("\tExecuteHamB(Ham_CS_RoundRespawn, {p})"), exit("respawned")]);
+            } else {
+                check(&mut b, &format!("{comps} || !lsg_ok({p})"), "gm_components isn't running, or nobody there.", &[format!("\tls_respawn_at({p}, 0)"), exit("done")]);
+            }
+            then_line(&mut b, "then");
+        }
+        "msg.chat" => {
+            let who = if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
+            let text = pawn_str(&safe_text(gen.text(n, def, "text"), 120));
+            b.line(format!("\tls_chat({who}, {})", text_args(&text, gen.input(id, "value"))));
+            let e = exit("said");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "msg.bar" => {
+            let who = if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
+            b.line(format!("\tlsg_bar({who}, {})", gen.num(n, def, "secs").round() as i64));
+            let e = exit("shown");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "msg.menu" => {
+            let p = inp("player", "player");
+            let title = pawn_str(&safe_text(gen.text(n, def, "title"), 40));
+            let opts: Vec<(usize, String)> = (1..=4).filter_map(|k| {
+                let t = safe_text(gen.text(n, def, &format!("o{k}")), 40);
+                (!t.trim().is_empty()).then_some((k, t))
+            }).collect();
+            let mut body = vec![format!("\tfor (new k = 0; k < LSG_CTX; k++)\n\t\t\tg_lsgM{i}[{p}][k] = ctx[k]"), format!("\tnew m = menu_create({title}, \"lsg_mh{i}\")")];
+            for (_, t) in &opts {
+                body.push(format!("\tmenu_additem(m, {})", pawn_str(t)));
+            }
+            body.push(format!("\tmenu_display({p}, m)"));
+            body.push(exit("shown"));
+            check(&mut b, &format!("!lsg_ok({p}) || is_user_bot({p})"), "Not shown: nobody there, or a bot.", &body);
+            then_line(&mut b, "then");
+            // the choice comes back later
+            let mut cb = format!("\n// {} ({}): the choice\npublic lsg_mh{i}(id, menu, item)\n{{\n\tmenu_destroy(menu)\n\tif (item < 0 || id < 1 || id > MaxClients)\n\t\treturn PLUGIN_HANDLED\n\tnew ctx[LSG_CTX]\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tctx[k] = g_lsgM{i}[id][k]\n\tswitch (item)\n\t{{\n", comment_text(&def.title), id_text(id));
+            for (pos, (k, _)) in opts.iter().enumerate() {
+                let call = next(&format!("c{k}")).unwrap_or_else(|| "#pragma unused ctx".into());
+                let dbg = if debug { format!("\n\t\t\tlsd_exit({i}, \"choice {k}\")") } else { String::new() };
+                cb.push_str(&format!("\t\tcase {pos}:\n\t\t{{{dbg}\n\t\t\t{call}\n\t\t}}\n"));
+            }
+            cb.push_str("\t}\n\treturn PLUGIN_HANDLED\n}");
+            menus_after.push((i, cb));
+        }
+        "game.play_sound" => {
+            let who = if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
+            b.line(format!("\tclient_cmd({who}, \"spk %s\", {})", pawn_str(gen.choice(n, def, "sound"))));
+            let e = exit("played");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "game.set_cvar" => {
+            b.line(format!("\tset_cvar_float({}, {})", pawn_str(gen.choice(n, def, "cvar")), inp("value", "number")));
+            let e = exit("set");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "entity.use" => {
+            let name = pawn_str(&name_text(gen.text(n, def, "name")));
+            if debug {
+                b.line(format!("\tif (!lsg_use({name}))\n\t\t{}\n\telse\n\t{}", err("No entity has that name on this map."), exit("used")));
+            } else {
+                b.line(format!("\tlsg_use({name})"));
+            }
+            then_line(&mut b, "then");
+        }
+        "bot.goto" | "bot.hold" | "bot.follow" | "bot.release" => {
+            let bot = inp("bot", "player");
+            let call = match def.kind.as_str() {
+                "bot.goto" => format!("lsg_bot_goto({bot}, {})", pawn_str(&name_text(gen.text(n, def, "name")))),
+                "bot.hold" => format!("ls_bot_hold({bot}, max(floatround({}), 1))", inp("secs", "number")),
+                "bot.follow" => format!("ls_bot_follow({bot}, {}, {})", inp("who", "player"), gen.num(n, def, "secs").round() as i64),
+                _ => format!("ls_bot_release({bot})"),
+            };
+            check(&mut b, &format!("!ls_alive({bot}) || !is_user_bot({bot})"), "Nothing done: that player isn't a living bot.", &[format!("\t{call}"), exit("ordered")]);
+            then_line(&mut b, "then");
+        }
+        "comp.drop_call" => {
+            let at = pawn_str(&name_text(gen.text(n, def, "at")));
+            b.line("\tnew Float:o[3]");
+            if debug {
+                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!lsg_origin_of({at}, o))\n\t\t{}\n\telse\n\t{{\n\t\tls_drop_call(o, \"\")\n\t{}\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map."), exit("called")));
+            } else {
+                b.line(format!("\tif (!{comps} && lsg_origin_of({at}, o))\n\t\tls_drop_call(o, \"\")"));
             }
             then_line(&mut b, "then");
         }
@@ -930,13 +1235,17 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
     o.text.push_str(&b.text);
     o.lines += b.lines;
     o.line("}");
+    for (_, cb) in &menus_after {
+        o.line(cb);
+    }
 
     // timer callbacks (they belong to the node, for compiler messages)
-    let hold = if debug { format!("\tif (lsd_hold_timer())\n\t{{\n\t\tset_task(0.25, \"lsg_t{i}\", LSG_TASK + {i}, ctx, LSG_CTX)\n\t\treturn\n\t}}\n") } else { String::new() };
+    let hold = if debug { format!("\tif (lsd_hold_timer())\n\t{{\n\t\tset_task(0.25, \"lsg_t{i}\", LSG_TASK + {i}, data, LSG_CTX)\n\t\treturn\n\t}}\n") } else { String::new() };
+    let cb = format!("public lsg_t{i}(const data[], task)\n{{\n{hold}\t#pragma unused task\n\tnew ctx[LSG_CTX]\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tctx[k] = data[k]");
     match def.kind.as_str() {
         "timer.delay" => {
             o.blank();
-            o.line(format!("public lsg_t{i}(const ctx[], task)\n{{\n{hold}\t#pragma unused task"));
+            o.line(&cb);
             if debug {
                 o.line(format!("\tlsd_exit({i}, \"fired\")"));
             }
@@ -950,9 +1259,9 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         "timer.repeat" => {
             let every = lsg_secs(&gen.input(id, "every"));
             o.blank();
-            o.line(format!("public lsg_t{i}(const ctx[], task)\n{{\n{hold}\t#pragma unused task"));
+            o.line(&cb);
             // 0 times: until the round ends (timers stop at a new round)
-            o.line(format!("\tif (g_lsgLeft[{i}] > 0 && --g_lsgLeft[{i}] == 0)\n\t\tremove_task(LSG_TASK + {i})\n\telse\n\t\tset_task({every}, \"lsg_t{i}\", LSG_TASK + {i}, ctx, LSG_CTX)"));
+            o.line(format!("\tif (g_lsgLeft[{i}] > 0 && --g_lsgLeft[{i}] == 0)\n\t\tremove_task(LSG_TASK + {i})\n\telse\n\t\tset_task({every}, \"lsg_t{i}\", LSG_TASK + {i}, data, LSG_CTX)"));
             if debug {
                 o.line(format!("\tlsd_exit({i}, \"each\")"));
             }
@@ -967,8 +1276,8 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             o.blank();
             o.line(format!("lsg_c{i}_show()\n\tls_hud(0, LsHud:{slot}, 1.2, \"%s %d\", {text}, g_lsgLeft[{i}])"));
             o.blank();
-            o.line(format!("public lsg_t{i}(const ctx[], task)\n{{\n{hold}\t#pragma unused task"));
-            o.line(format!("\tif (--g_lsgLeft[{i}] > 0)\n\t{{\n\t\tlsg_c{i}_show()\n\t\tset_task(1.0, \"lsg_t{i}\", LSG_TASK + {i}, ctx, LSG_CTX)\n\t\treturn\n\t}}"));
+            o.line(&cb);
+            o.line(format!("\tif (--g_lsgLeft[{i}] > 0)\n\t{{\n\t\tlsg_c{i}_show()\n\t\tset_task(1.0, \"lsg_t{i}\", LSG_TASK + {i}, data, LSG_CTX)\n\t\treturn\n\t}}"));
             if debug {
                 o.line(format!("\tlsd_exit({i}, \"done\")"));
             }
@@ -980,6 +1289,36 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             o.line("}");
         }
         _ => {}
+    }
+}
+
+/// The format and arguments for text with an optional Value after it.
+fn text_args(text: &str, value: Option<Val>) -> String {
+    match value {
+        None => format!("\"%s\", {text}"),
+        Some(val) => match val.ty.as_str() {
+            "number" => format!("\"%s %d\", {text}, floatround({})", val.expr),
+            "text" => format!("\"%s %s\", {text}, {}", val.expr),
+            "player" => format!("\"%s %s\", {text}, lsg_name({})", val.expr),
+            "bool" => format!("\"%s %s\", {text}, g_lsgYesNo[({}) ? 1 : 0]", val.expr),
+            "team" => format!("\"%s %s\", {text}, g_lsgTeamName[clamp({}, 0, 3)]", val.expr),
+            _ => format!("\"%s %d\", {text}, {}", val.expr),
+        },
+    }
+}
+
+/// Who a loop or a pick takes, as lsg_match's number.
+fn which_code(w: &str) -> u8 {
+    match w {
+        "all" => 0,
+        "dead" => 2,
+        "t" => 3,
+        "ct" => 4,
+        "alive_t" => 5,
+        "alive_ct" => 6,
+        "bots" => 7,
+        "humans" => 8,
+        _ => 1,
     }
 }
 
@@ -999,6 +1338,93 @@ fn lsg_secs(v: &Option<Val>) -> String {
 /// Helpers every plugin gets (stocks: the ones a graph doesn't use cost nothing).
 const HELPERS: &str = r#"stock lsg_slot(id)
 	return id >= 1 && id <= MaxClients ? id : 0
+
+stock bool:lsg_ok(id)
+	return id >= 1 && id <= MaxClients && is_user_connected(id)
+
+stock bool:lsg_match(p, which)
+{
+	if (!is_user_connected(p))
+		return false
+	switch (which)
+	{
+		case 1: return bool:is_user_alive(p)
+		case 2: return !is_user_alive(p) && (lsg_team(p) == 1 || lsg_team(p) == 2)
+		case 3: return lsg_team(p) == 1
+		case 4: return lsg_team(p) == 2
+		case 5: return is_user_alive(p) && lsg_team(p) == 1
+		case 6: return is_user_alive(p) && lsg_team(p) == 2
+		case 7: return bool:is_user_bot(p)
+		case 8: return !is_user_bot(p)
+	}
+	return true
+}
+
+stock lsg_end_round(team)
+{
+	if (team == 1)
+		server_cmd("endround T")
+	else if (team == 2)
+		server_cmd("endround CT")
+	else
+		server_cmd("endround")
+}
+
+stock bool:lsg_use(const name[])
+{
+	new ent = -1, used
+	while (name[0] && used < 64 && (ent = find_ent_by_tname(ent, name)) > 0)
+	{
+		ExecuteHamB(Ham_Use, ent, 0, 0, 2, 1.0)
+		used++
+	}
+	return used > 0
+}
+
+stock lsg_bar(id, secs)
+{
+	if (id && !lsg_ok(id))
+		return
+	message_begin(id ? MSG_ONE : MSG_ALL, get_user_msgid("BarTime"), _, id)
+	write_short(secs)
+	message_end()
+}
+
+stock lsg_add_money(id, amount)
+{
+	if (pev_valid(id) == 2)
+		cs_set_user_money(id, clamp(cs_get_user_money(id) + amount, 0, 16000), 1)
+}
+
+stock Float:lsg_get_money(id)
+	return lsg_ok(id) && pev_valid(id) == 2 ? float(cs_get_user_money(id)) : 0.0
+
+stock lsg_add_frags(id, amount)
+{
+	set_user_frags(id, get_user_frags(id) + amount)
+	// (setting the deaths again sends the scoreboard its new numbers)
+	if (pev_valid(id) == 2)
+		cs_set_user_deaths(id, cs_get_user_deaths(id))
+}
+
+stock Float:lsg_get_frags(id)
+	return lsg_ok(id) ? float(get_user_frags(id)) : 0.0
+
+stock Float:lsg_get_deaths(id)
+	return lsg_ok(id) && pev_valid(id) == 2 ? float(cs_get_user_deaths(id)) : 0.0
+
+stock lsg_freeze(id, on)
+{
+	new flags = pev(id, pev_flags)
+	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
+}
+
+stock lsg_bot_goto(bot, const name[])
+{
+	new Float:o[3]
+	if (lsg_origin_of(name, o))
+		ls_bot_goto(bot, o)
+}
 
 stock Float:lsg_div(Float:a, Float:b)
 	return b == 0.0 ? 0.0 : a / b
@@ -1143,7 +1569,7 @@ mod tests {
             let texts = d.outputs.iter().filter(|o| o.ty == "text").count();
             assert!(cells <= CTX && texts <= TXT, "{}", k.kind);
         }
-        for d in registry().nodes.iter().filter(|d| d.event) {
+        for d in registry().nodes.iter().filter(|d| d.event && d.kind != "func.define" && d.kind != "event.chat_command") {
             assert!(event_kind(&d.kind).is_some(), "{} has no handler", d.kind);
         }
     }

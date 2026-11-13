@@ -1,5 +1,5 @@
 {
- "version": 2,
+ "version": 3,
  "pinTypes": {
   "exec": {
    "label": "Flow",
@@ -43,13 +43,16 @@
   "Conditions",
   "Numbers",
   "Variables",
+  "Flow",
+  "Functions",
   "Timers",
   "Players",
   "Messages",
+  "Game",
   "Scoring",
+  "Bots",
   "Components",
-  "Creatures",
-  "Flow"
+  "Creatures"
  ],
  "nodes": [
   {
@@ -1214,12 +1217,18 @@
    "type": "var.get",
    "title": "Get Variable",
    "category": "Variables",
-   "help": "Reads one of this mode's variables (a per-player one needs a Player).",
+   "help": "Reads one of this mode's variables (a per-player one needs a Player, a per-team one a Team).",
    "inputs": [
     {
      "id": "player",
      "type": "player",
      "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team",
      "optional": true
     }
    ],
@@ -1255,6 +1264,12 @@
      "id": "player",
      "type": "player",
      "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team",
      "optional": true
     },
     {
@@ -1301,6 +1316,12 @@
      "id": "player",
      "type": "player",
      "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team",
      "optional": true
     },
     {
@@ -1899,12 +1920,18 @@
    "type": "msg.broadcast",
    "title": "Show Message",
    "category": "Messages",
-   "help": "Shows a big message in the middle of everyone's screen.",
+   "help": "Shows a big message in the middle of the screen, to one player or everyone (no Player).",
    "inputs": [
     {
      "id": "exec",
      "type": "exec",
      "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
     }
    ],
    "outputs": [
@@ -2009,12 +2036,18 @@
    "type": "score.end_round",
    "title": "End Round",
    "category": "Scoring",
-   "help": "Ends the round now with a winner, or as a draw. The next round starts after the usual short wait.",
+   "help": "Ends the round now with a winner (no team: a draw). The next round starts after the usual short wait.",
    "inputs": [
     {
      "id": "exec",
      "type": "exec",
      "label": ""
+    },
+    {
+     "id": "winner",
+     "type": "team",
+     "label": "Winner",
+     "param": "winner"
     }
    ],
    "outputs": [],
@@ -2574,6 +2607,1689 @@
      "default": "spot1"
     }
    ],
+   "needs": "creatures"
+  },
+  {
+   "type": "event.player_hurt",
+   "title": "Player Hurt",
+   "category": "Events",
+   "help": "Runs when a player takes damage.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "victim",
+     "type": "player",
+     "label": "Victim"
+    },
+    {
+     "id": "attacker",
+     "type": "player",
+     "label": "Attacker"
+    },
+    {
+     "id": "damage",
+     "type": "number",
+     "label": "Damage"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.team_changed",
+   "title": "Team Changed",
+   "category": "Events",
+   "help": "Runs when a player joins a team (or changes team).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "team",
+     "type": "team",
+     "label": "Team"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.new_round",
+   "title": "New Round",
+   "category": "Events",
+   "help": "Runs when a new round is set up (freeze time starts), before Round Started.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.chat_command",
+   "title": "Chat Command",
+   "category": "Events",
+   "help": "Runs when a player says /command in chat (shop for /shop).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [
+    {
+     "id": "command",
+     "label": "Command (without /)",
+     "kind": "name",
+     "default": "shop"
+    }
+   ],
+   "event": true
+  },
+  {
+   "type": "func.define",
+   "title": "Function",
+   "category": "Functions",
+   "help": "A piece of graph you can run from anywhere with Call Function. It gets a Player and a Number from the call.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "number",
+     "type": "number",
+     "label": "Number"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Name",
+     "kind": "name",
+     "default": "my_function"
+    }
+   ],
+   "event": true
+  },
+  {
+   "type": "func.call",
+   "title": "Call Function",
+   "category": "Functions",
+   "help": "Runs a Function, giving it a Player and a Number, then carries on.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "number",
+     "type": "number",
+     "label": "Number",
+     "param": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "func",
+     "label": "Function",
+     "kind": "func",
+     "default": ""
+    },
+    {
+     "id": "number",
+     "label": "Number",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    }
+   ]
+  },
+  {
+   "type": "flow.for_each_player",
+   "title": "For Each Player",
+   "category": "Flow",
+   "help": "Runs Each once for every player who fits, then Then.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "each",
+     "type": "exec",
+     "label": "Each"
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Then"
+    }
+   ],
+   "params": [
+    {
+     "id": "which",
+     "label": "Who",
+     "kind": "choice",
+     "default": "alive",
+     "choices": [
+      [
+       "all",
+       "Everyone in the game"
+      ],
+      [
+       "alive",
+       "Everyone alive"
+      ],
+      [
+       "dead",
+       "Everyone dead"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ],
+      [
+       "alive_t",
+       "Living Terrorists"
+      ],
+      [
+       "alive_ct",
+       "Living Counter-Terrorists"
+      ],
+      [
+       "bots",
+       "Bots"
+      ],
+      [
+       "humans",
+       "People (not bots)"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "flow.for_each_entity",
+   "title": "For Each Entity",
+   "category": "Flow",
+   "help": "Runs Each once for every entity of a kind or with a name (at most 512), then Then.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "each",
+     "type": "exec",
+     "label": "Each"
+    },
+    {
+     "id": "entity",
+     "type": "entity",
+     "label": "Entity"
+    },
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Then"
+    }
+   ],
+   "params": [
+    {
+     "id": "by",
+     "label": "Which",
+     "kind": "choice",
+     "default": "class",
+     "choices": [
+      [
+       "class",
+       "Of this kind (classname)"
+      ],
+      [
+       "name",
+       "With this name"
+      ]
+     ]
+    },
+    {
+     "id": "name",
+     "label": "Kind or name",
+     "kind": "name",
+     "default": "ls_respawn_point"
+    }
+   ]
+  },
+  {
+   "type": "flow.pick_player",
+   "title": "Pick Random Player",
+   "category": "Flow",
+   "help": "Picks one player who fits at random (Found), or runs None.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Found"
+    },
+    {
+     "id": "none",
+     "type": "exec",
+     "label": "None"
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [
+    {
+     "id": "which",
+     "label": "Who",
+     "kind": "choice",
+     "default": "alive",
+     "choices": [
+      [
+       "all",
+       "Everyone in the game"
+      ],
+      [
+       "alive",
+       "Everyone alive"
+      ],
+      [
+       "dead",
+       "Everyone dead"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ],
+      [
+       "alive_t",
+       "Living Terrorists"
+      ],
+      [
+       "alive_ct",
+       "Living Counter-Terrorists"
+      ],
+      [
+       "bots",
+       "Bots"
+      ],
+      [
+       "humans",
+       "People (not bots)"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "flow.pick_entity",
+   "title": "Pick Random Entity",
+   "category": "Flow",
+   "help": "Picks one entity of a kind or with a name at random (Found), or runs None.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Found"
+    },
+    {
+     "id": "none",
+     "type": "exec",
+     "label": "None"
+    },
+    {
+     "id": "entity",
+     "type": "entity",
+     "label": "Entity"
+    }
+   ],
+   "params": [
+    {
+     "id": "by",
+     "label": "Which",
+     "kind": "choice",
+     "default": "class",
+     "choices": [
+      [
+       "class",
+       "Of this kind (classname)"
+      ],
+      [
+       "name",
+       "With this name"
+      ]
+     ]
+    },
+    {
+     "id": "name",
+     "label": "Kind or name",
+     "kind": "name",
+     "default": "info_player_deathmatch"
+    }
+   ]
+  },
+  {
+   "type": "text.equals",
+   "title": "Text Is",
+   "category": "Conditions",
+   "help": "Is the text the same as this (capitals don't matter)?",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "text",
+     "label": "Text",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "text",
+     "label": "Same as",
+     "param": "b"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Same"
+    }
+   ],
+   "params": [
+    {
+     "id": "b",
+     "label": "Same as",
+     "kind": "text",
+     "default": "",
+     "max": 60
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "timer.stop",
+   "title": "Stop Timer",
+   "category": "Timers",
+   "help": "Stops one Delay, Repeat or Countdown.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "timer",
+     "label": "Timer",
+     "kind": "timer",
+     "default": ""
+    }
+   ]
+  },
+  {
+   "type": "player.add_money",
+   "title": "Give Money",
+   "category": "Players",
+   "help": "Gives (or takes, with a minus) money; it stays between 0 and 16000.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "amount",
+     "type": "number",
+     "label": "Amount",
+     "param": "amount"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "amount",
+     "label": "Amount",
+     "kind": "number",
+     "default": 500,
+     "min": -16000,
+     "max": 16000
+    }
+   ]
+  },
+  {
+   "type": "player.get_money",
+   "title": "Money Of",
+   "category": "Players",
+   "help": "How much money a player has.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Money"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.add_frags",
+   "title": "Add Score",
+   "category": "Players",
+   "help": "Adds to a player's score (frags) on the scoreboard (a minus takes away).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "amount",
+     "type": "number",
+     "label": "Amount",
+     "param": "amount"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "amount",
+     "label": "Amount",
+     "kind": "number",
+     "default": 1,
+     "min": -1000,
+     "max": 1000
+    }
+   ]
+  },
+  {
+   "type": "player.get_frags",
+   "title": "Score Of",
+   "category": "Players",
+   "help": "A player's score (frags).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Score"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.get_deaths",
+   "title": "Deaths Of",
+   "category": "Players",
+   "help": "How many times a player has died.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Deaths"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.give_item",
+   "title": "Give Item",
+   "category": "Players",
+   "help": "Gives a living player armor, a defuse kit or night vision.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "item",
+     "label": "Item",
+     "kind": "choice",
+     "default": "vesthelm",
+     "choices": [
+      [
+       "vest",
+       "Kevlar"
+      ],
+      [
+       "vesthelm",
+       "Kevlar and helmet"
+      ],
+      [
+       "defuser",
+       "Defuse kit"
+      ],
+      [
+       "nvg",
+       "Night vision"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "player.drop_weapon",
+   "title": "Drop Weapon",
+   "category": "Players",
+   "help": "Makes a living player drop the weapon in their hands.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "player.set_gravity",
+   "title": "Set Gravity",
+   "category": "Players",
+   "help": "How strongly a player falls (1 is normal, 0.5 half).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "gravity",
+     "type": "number",
+     "label": "Gravity",
+     "param": "gravity"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "gravity",
+     "label": "Gravity",
+     "kind": "number",
+     "default": 0.5,
+     "min": 0.05,
+     "max": 4
+    }
+   ]
+  },
+  {
+   "type": "player.set_glow",
+   "title": "Set Glow",
+   "category": "Players",
+   "help": "Makes a player glow in a colour (or not).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "color",
+     "label": "Colour",
+     "kind": "choice",
+     "default": "red",
+     "choices": [
+      [
+       "off",
+       "No glow"
+      ],
+      [
+       "red",
+       "Red"
+      ],
+      [
+       "green",
+       "Green"
+      ],
+      [
+       "blue",
+       "Blue"
+      ],
+      [
+       "yellow",
+       "Yellow"
+      ],
+      [
+       "white",
+       "White"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "player.set_model",
+   "title": "Set Model",
+   "category": "Players",
+   "help": "Dresses a player as one of the game's characters (or back to their own).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "model",
+     "label": "Model",
+     "kind": "choice",
+     "default": "gign",
+     "choices": [
+      [
+       "reset",
+       "Their own"
+      ],
+      [
+       "urban",
+       "SEAL Team 6"
+      ],
+      [
+       "gsg9",
+       "GSG-9"
+      ],
+      [
+       "sas",
+       "SAS"
+      ],
+      [
+       "gign",
+       "GIGN"
+      ],
+      [
+       "terror",
+       "Phoenix"
+      ],
+      [
+       "leet",
+       "Elite Crew"
+      ],
+      [
+       "arctic",
+       "Arctic"
+      ],
+      [
+       "guerilla",
+       "Guerilla"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "player.respawn",
+   "title": "Respawn",
+   "category": "Players",
+   "help": "Brings a dead player back at a spawn point.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "player.kill",
+   "title": "Kill",
+   "category": "Players",
+   "help": "Kills a living player.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "player.freeze",
+   "title": "Freeze",
+   "category": "Players",
+   "help": "Freezes a player in place (or lets them move again).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "on",
+     "type": "bool",
+     "label": "Frozen",
+     "param": "on"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "Frozen",
+     "kind": "bool",
+     "default": true
+    }
+   ]
+  },
+  {
+   "type": "player.set_role",
+   "title": "Set Role",
+   "category": "Players",
+   "help": "Gives a player a role in this mode (traitor, medic...).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "role",
+     "label": "Role",
+     "kind": "name",
+     "default": "medic"
+    }
+   ]
+  },
+  {
+   "type": "player.is_role",
+   "title": "Is Role",
+   "category": "Players",
+   "help": "Does the player have this role?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Has it"
+    }
+   ],
+   "params": [
+    {
+     "id": "role",
+     "label": "Role",
+     "kind": "name",
+     "default": "medic"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "game.count_role",
+   "title": "Count Role",
+   "category": "Players",
+   "help": "How many living players have this role.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Count"
+    }
+   ],
+   "params": [
+    {
+     "id": "role",
+     "label": "Role",
+     "kind": "name",
+     "default": "medic"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "msg.chat",
+   "title": "Chat Message",
+   "category": "Messages",
+   "help": "A chat line, to one player or everyone (no Player). A Value wired in goes after the text.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "value",
+     "type": "any",
+     "label": "Value",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "Hello!",
+     "max": 120
+    }
+   ]
+  },
+  {
+   "type": "msg.bar",
+   "title": "Progress Bar",
+   "category": "Messages",
+   "help": "Shows the game's progress bar filling up over some seconds.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 5,
+     "min": 1,
+     "max": 60
+    }
+   ]
+  },
+  {
+   "type": "msg.menu",
+   "title": "Menu",
+   "category": "Messages",
+   "help": "Shows a player a menu; the choice they pick runs its output (later, when they pick).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "c1",
+     "type": "exec",
+     "label": "1"
+    },
+    {
+     "id": "c2",
+     "type": "exec",
+     "label": "2"
+    },
+    {
+     "id": "c3",
+     "type": "exec",
+     "label": "3"
+    },
+    {
+     "id": "c4",
+     "type": "exec",
+     "label": "4"
+    }
+   ],
+   "params": [
+    {
+     "id": "title",
+     "label": "Title",
+     "kind": "text",
+     "default": "Pick one",
+     "max": 40
+    },
+    {
+     "id": "o1",
+     "label": "Choice 1",
+     "kind": "text",
+     "default": "First",
+     "max": 40
+    },
+    {
+     "id": "o2",
+     "label": "Choice 2",
+     "kind": "text",
+     "default": "Second",
+     "max": 40
+    },
+    {
+     "id": "o3",
+     "label": "Choice 3",
+     "kind": "text",
+     "default": "",
+     "max": 40
+    },
+    {
+     "id": "o4",
+     "label": "Choice 4",
+     "kind": "text",
+     "default": "",
+     "max": 40
+    }
+   ]
+  },
+  {
+   "type": "game.play_sound",
+   "title": "Play Sound",
+   "category": "Messages",
+   "help": "Plays one of the game's sounds to one player or everyone.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "sound",
+     "label": "Sound",
+     "kind": "choice",
+     "default": "radio/go",
+     "choices": [
+      [
+       "radio/go",
+       "Radio: Go go go"
+      ],
+      [
+       "radio/locknload",
+       "Radio: Lock and load"
+      ],
+      [
+       "radio/ctwin",
+       "Radio: CTs win"
+      ],
+      [
+       "radio/terwin",
+       "Radio: Terrorists win"
+      ],
+      [
+       "radio/rounddraw",
+       "Radio: Round draw"
+      ],
+      [
+       "radio/bombpl",
+       "Radio: Bomb planted"
+      ],
+      [
+       "buttons/bell1",
+       "Bell"
+      ],
+      [
+       "buttons/blip1",
+       "Blip"
+      ],
+      [
+       "weapons/c4_beep1",
+       "C4 beep"
+      ],
+      [
+       "ambience/thunder_clap",
+       "Thunder"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "game.set_cvar",
+   "title": "Set Setting",
+   "category": "Game",
+   "help": "Changes one of the game's settings now.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "value",
+     "type": "number",
+     "label": "Value",
+     "param": "value"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "cvar",
+     "label": "Setting",
+     "kind": "choice",
+     "default": "mp_freeforall",
+     "choices": [
+      [
+       "mp_freeforall",
+       "Free for all (1 on)"
+      ],
+      [
+       "mp_friendlyfire",
+       "Friendly fire (1 on)"
+      ],
+      [
+       "sv_gravity",
+       "Gravity (800 normal)"
+      ],
+      [
+       "mp_buytime",
+       "Buy time (minutes)"
+      ],
+      [
+       "mp_startmoney",
+       "Start money"
+      ],
+      [
+       "sv_airaccelerate",
+       "Air control (10 normal)"
+      ],
+      [
+       "mp_roundtime",
+       "Round time (minutes, next round)"
+      ],
+      [
+       "mp_freezetime",
+       "Freeze time (seconds, next round)"
+      ]
+     ]
+    },
+    {
+     "id": "value",
+     "label": "Value",
+     "kind": "number",
+     "default": 1,
+     "min": 0,
+     "max": 100000
+    }
+   ]
+  },
+  {
+   "type": "entity.use",
+   "title": "Use Entity",
+   "category": "Game",
+   "help": "Presses (uses) every entity with this name: a door, a button, a trigger.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Name",
+     "kind": "name",
+     "default": "door1"
+    }
+   ]
+  },
+  {
+   "type": "bot.goto",
+   "title": "Bot Go To",
+   "category": "Bots",
+   "help": "Sends a bot to the entity with this name (it still fights on the way).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "bot",
+     "type": "player",
+     "label": "Bot",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "To the entity named",
+     "kind": "name",
+     "default": "spot1"
+    }
+   ]
+  },
+  {
+   "type": "bot.hold",
+   "title": "Bot Hold",
+   "category": "Bots",
+   "help": "Makes a bot hold where it is for some seconds.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "bot",
+     "type": "player",
+     "label": "Bot",
+     "required": true
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 20,
+     "min": 1,
+     "max": 600
+    }
+   ]
+  },
+  {
+   "type": "bot.follow",
+   "title": "Bot Follow",
+   "category": "Bots",
+   "help": "Makes a bot follow a player for some seconds.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "bot",
+     "type": "player",
+     "label": "Bot",
+     "required": true
+    },
+    {
+     "id": "who",
+     "type": "player",
+     "label": "Follow",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 30,
+     "min": 1,
+     "max": 600
+    }
+   ]
+  },
+  {
+   "type": "bot.release",
+   "title": "Bot Free",
+   "category": "Bots",
+   "help": "Lets a bot do as it likes again.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "bot",
+     "type": "player",
+     "label": "Bot",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "comp.in_zone",
+   "title": "Is In Zone",
+   "category": "Components",
+   "help": "Is the player inside the zone?",
+   "inputs": [
+    {
+     "id": "zone",
+     "type": "entity",
+     "label": "Zone",
+     "required": true
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Inside"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.respawn_at",
+   "title": "Respawn At Point",
+   "category": "Components",
+   "help": "Brings a dead player back at a respawn point (ls_respawn_point), or moves a living one there.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "comp.drop_call",
+   "title": "Call Supply Drop",
+   "category": "Components",
+   "help": "Calls a supply drop onto the entity with this name.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "at",
+     "label": "At the entity named",
+     "kind": "name",
+     "default": "drop1"
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "creature.count",
+   "title": "Creatures Alive",
+   "category": "Creatures",
+   "help": "How many creatures are alive.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Alive"
+    }
+   ],
+   "params": [],
+   "pure": true,
    "needs": "creatures"
   },
   {

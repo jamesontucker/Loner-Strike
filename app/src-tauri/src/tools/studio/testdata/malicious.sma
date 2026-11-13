@@ -27,6 +27,93 @@ stock g_v0[64] = "x); server_cmd(quit); " // evil_var  server_cmd(quit)  (text)
 stock lsg_slot(id)
 	return id >= 1 && id <= MaxClients ? id : 0
 
+stock bool:lsg_ok(id)
+	return id >= 1 && id <= MaxClients && is_user_connected(id)
+
+stock bool:lsg_match(p, which)
+{
+	if (!is_user_connected(p))
+		return false
+	switch (which)
+	{
+		case 1: return bool:is_user_alive(p)
+		case 2: return !is_user_alive(p) && (lsg_team(p) == 1 || lsg_team(p) == 2)
+		case 3: return lsg_team(p) == 1
+		case 4: return lsg_team(p) == 2
+		case 5: return is_user_alive(p) && lsg_team(p) == 1
+		case 6: return is_user_alive(p) && lsg_team(p) == 2
+		case 7: return bool:is_user_bot(p)
+		case 8: return !is_user_bot(p)
+	}
+	return true
+}
+
+stock lsg_end_round(team)
+{
+	if (team == 1)
+		server_cmd("endround T")
+	else if (team == 2)
+		server_cmd("endround CT")
+	else
+		server_cmd("endround")
+}
+
+stock bool:lsg_use(const name[])
+{
+	new ent = -1, used
+	while (name[0] && used < 64 && (ent = find_ent_by_tname(ent, name)) > 0)
+	{
+		ExecuteHamB(Ham_Use, ent, 0, 0, 2, 1.0)
+		used++
+	}
+	return used > 0
+}
+
+stock lsg_bar(id, secs)
+{
+	if (id && !lsg_ok(id))
+		return
+	message_begin(id ? MSG_ONE : MSG_ALL, get_user_msgid("BarTime"), _, id)
+	write_short(secs)
+	message_end()
+}
+
+stock lsg_add_money(id, amount)
+{
+	if (pev_valid(id) == 2)
+		cs_set_user_money(id, clamp(cs_get_user_money(id) + amount, 0, 16000), 1)
+}
+
+stock Float:lsg_get_money(id)
+	return lsg_ok(id) && pev_valid(id) == 2 ? float(cs_get_user_money(id)) : 0.0
+
+stock lsg_add_frags(id, amount)
+{
+	set_user_frags(id, get_user_frags(id) + amount)
+	// (setting the deaths again sends the scoreboard its new numbers)
+	if (pev_valid(id) == 2)
+		cs_set_user_deaths(id, cs_get_user_deaths(id))
+}
+
+stock Float:lsg_get_frags(id)
+	return lsg_ok(id) ? float(get_user_frags(id)) : 0.0
+
+stock Float:lsg_get_deaths(id)
+	return lsg_ok(id) && pev_valid(id) == 2 ? float(cs_get_user_deaths(id)) : 0.0
+
+stock lsg_freeze(id, on)
+{
+	new flags = pev(id, pev_flags)
+	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
+}
+
+stock lsg_bot_goto(bot, const name[])
+{
+	new Float:o[3]
+	if (lsg_origin_of(name, o))
+		ls_bot_goto(bot, o)
+}
+
 stock Float:lsg_div(Float:a, Float:b)
 	return b == 0.0 ? 0.0 : a / b
 
@@ -145,54 +232,54 @@ public lsg_on_player_killed()
 }
 
 // Round Started (r)
-lsg_n0(const ctx[])
+lsg_n0(ctx[])
 {
 	lsg_n1(ctx)
 }
 
 // Show Message (m)
-lsg_n1(const ctx[])
+lsg_n1(ctx[])
 {
 	ls_announce(0, 20.0, "%s", "hi); server_cmd(quit); #include <evil>")
 	lsg_n5(ctx)
 }
 
 // Give Weapon (g)
-lsg_n2(const ctx[])
+lsg_n2(ctx[])
 {
 	ls_give_weapon(ctx[1], "ak47", 0)
 	lsg_n3(ctx)
 }
 
 // End Round (e)
-lsg_n3(const ctx[])
+lsg_n3(ctx[])
 {
 	server_cmd("endround")
 	#pragma unused ctx
 }
 
 // Player Killed (k)
-lsg_n4(const ctx[])
+lsg_n4(ctx[])
 {
 	lsg_n2(ctx)
 }
 
 // Teleport (t)
-lsg_n5(const ctx[])
+lsg_n5(ctx[])
 {
 	lsg_teleport(ctx[0], "aserver_cmdquit")
 	lsg_n6(ctx)
 }
 
 // Set Variable (s)
-lsg_n6(const ctx[])
+lsg_n6(ctx[])
 {
 	copy(g_v0, 63, "y); server_cmd(quit); ")
 	lsg_n7(ctx)
 }
 
 // Create Component (c)
-lsg_n7(const ctx[])
+lsg_n7(ctx[])
 {
 	new Float:o[3]
 	if (!!ls_components_running() && lsg_origin_of("x", o))
