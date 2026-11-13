@@ -99,7 +99,7 @@ export const useStudio = create<Studio>((set, get) => ({
   },
   markSaved: () => set({ saved: get().graph }),
   setProblems: (problems) => set({ problems }),
-  select: (selected) => set(selected.length ? { selected, selectedVar: null } : { selected }),
+  select: (selected) => set(selected.length ? { selected, selectedVar: null, funcFocus: null } : { selected }),
   startPlaying: (mode) => set({ playing: mode, playingSince: Date.now(), debug: emptyDebug() }),
   stopPlaying: () => set({ playing: null }),
   events: (ev) => set({ debug: applyEvents(get().debug, ev, isEventNode(get().graph)) }),

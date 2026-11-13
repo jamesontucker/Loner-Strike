@@ -19,6 +19,8 @@ import { Canvas, type CanvasApi } from "./Canvas";
 import { builtInSnippets, mySnippets } from "./snippets";
 import type { Snippet } from "./graphOps";
 import { Inspector } from "./Inspector";
+import { MyBlueprint } from "./MyBlueprint";
+import { Results } from "./Results";
 import { DebugPanel } from "./DebugPanel";
 import { applyLayout, autoLayout } from "./layout";
 import { emptyGraph, parseGraph, type Graph } from "./schema";
@@ -26,6 +28,7 @@ import rifleRaw from "./templates/team-dm.graph.json?raw";
 import lastStandRaw from "./templates/last-stand.graph.json?raw";
 import royaleRaw from "./templates/battle-royale.graph.json?raw";
 import * as api from "./studioApi";
+import { nodeDef } from "./registry";
 import "./studio.css";
 
 const PREFS = "ls.studio.playtest";
@@ -64,6 +67,17 @@ function idFrom(name: string, taken: Set<string>): string {
   return id;
 }
 
+/** Nodes whose title, kind, id or settings have the words. */
+function findNodes(g: Graph, q: string) {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  return g.nodes
+    .filter((n) => {
+      const hay = `${nodeDef(n.type)?.title ?? ""} ${n.type} ${n.id} ${Object.values(n.params).join(" ")}`.toLowerCase();
+      return words.every((w) => hay.includes(w));
+    })
+    .slice(0, 30);
+}
+
 function Studio({ maps }: ToolProps) {
   const graph = useStudio((s) => s.graph);
   const saved = useStudio((s) => s.saved);
@@ -82,7 +96,11 @@ function Studio({ maps }: ToolProps) {
   const [code, setCode] = useState<string | null>(null);
   const [prefs, setPrefs] = useState(loadPrefs);
   const focusRef = useRef<(id: string) => void>(() => {});
-  const canvasApi = useRef<CanvasApi | null>(null);
+  const [canvas, setCanvas] = useState<CanvasApi | null>(null);
+  const onApi = useCallback((a: CanvasApi) => {
+    focusRef.current = a.focus;
+    setCanvas(a);
+  }, []);
   const [mine, setMine] = useState<Snippet[]>([]);
   const reloadSnippets = useCallback(() => {
     mySnippets().then(setMine, () => setMine([]));
@@ -90,7 +108,11 @@ function Studio({ maps }: ToolProps) {
   useEffect(() => reloadSnippets(), [reloadSnippets]);
   const snippets = [...builtInSnippets, ...mine];
   const dirty = !!graph && graph !== saved;
-  useToolCrumbs("studio", graph ? [{ label: graph.mode.name || graph.mode.id }] : null);
+  const funcFocus = useStudio((s) => s.funcFocus);
+  const funcName = funcFocus ? String(graph?.nodes.find((n) => n.id === funcFocus)?.params.name ?? "") : "";
+  // (a Function looked at joins the crumbs, like Blueprint's graph tabs)
+  useToolCrumbs("studio", graph ? [{ label: graph.mode.name || graph.mode.id, address: funcName ? `studio:${graph.mode.id}` : undefined }, ...(funcName ? [{ label: `Function: ${funcName}` }] : [])] : null);
+  const [find, setFind] = useState("");
   useDirty("studio", dirty);
   // the open graph is the address ("studio:<id>"), so Back and the crumbs step in and out of it
   useReportAddress("studio", graph ? `studio:${graph.mode.id}` : null);
@@ -250,6 +272,7 @@ function Studio({ maps }: ToolProps) {
       const g = useStudio.getState().graph;
       if (!g || !(await save())) return;
       const r = await api.compile(g, false);
+      if (r.output) st.setOutput(r.output);
       if (showCompile(r)) toast(`Installed “${g.mode.name}”: pick it on the Play page or in the game's mode menu.`);
       void refreshList();
     });
@@ -432,6 +455,28 @@ function Studio({ maps }: ToolProps) {
         <button type="button" className="btn" onClick={layout} title="Lay the nodes out left to right">
           Tidy up
         </button>
+        <div className="st-find">
+          <input className="st-field" placeholder="Find in this mode" value={find} onChange={(e) => setFind(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setFind("")} aria-label="Find in this mode" />
+          {find.trim() && (
+            <div className="st-find-list" role="listbox">
+              {findNodes(graph, find).map((n) => (
+                <button
+                  key={n.id}
+                  type="button"
+                  className="st-palette-item"
+                  onClick={() => {
+                    focusRef.current(n.id);
+                    setFind("");
+                  }}
+                >
+                  <span className="st-palette-title">{nodeDef(n.type)?.title ?? n.type}</span>
+                  <span className="st-palette-help">{Object.values(n.params).filter((x) => typeof x === "string" && x).join(" · ") || n.id}</span>
+                </button>
+              ))}
+              {findNodes(graph, find).length === 0 && <div className="st-palette-none">Nothing matches.</div>}
+            </div>
+          )}
+        </div>
         <span className="st-grow" />
         <select className="st-field" value={prefs.map} onChange={(e) => (setPrefs({ ...prefs, map: e.target.value }), savePrefs({ ...prefs, map: e.target.value }))} aria-label="Map">
           {(mapNames.includes(prefs.map) ? mapNames : [prefs.map, ...mapNames]).map((m) => (
@@ -476,16 +521,15 @@ function Studio({ maps }: ToolProps) {
         )}
       </div>
       <div className="st-main">
+        <MyBlueprint api={canvas} snippets={snippets} reloadSnippets={reloadSnippets} toast={toast} />
         <Canvas
           toast={toast}
           snippets={snippets}
-          onApi={(a) => {
-            focusRef.current = a.focus;
-            canvasApi.current = a;
-          }}
+          onApi={onApi}
         />
-        <Inspector focus={(id) => focusRef.current(id)} />
+        <Inspector />
       </div>
+      <Results focus={(id) => focusRef.current(id)} />
       <ActionBar
         dirty={dirty}
         errors={errors}

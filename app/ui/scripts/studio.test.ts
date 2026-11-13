@@ -2,9 +2,11 @@
 // events mean. Run with `npm run test:studio` (esbuild + node:test, no extra packages).
 
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import templateRaw from "../src/views/tools/studio/templates/team-dm.graph.json?raw";
 import { parseGraph, emptyGraph, type Graph } from "../src/views/tools/studio/schema";
+import { insertSnippet, makeSnippet, readSnippet } from "../src/views/tools/studio/graphOps";
 import { addVariable, addNode, canConnect, connect, copy, emptyHistory, insertReroute, inType, outType, paste, record, redo, remove, undo } from "../src/views/tools/studio/graphOps";
 import { NODE_DEFS, nodeDef, searchNodes } from "../src/views/tools/studio/registry";
 import { applyEvents, emptyDebug, pathPairs } from "../src/views/tools/studio/debugState";
@@ -224,4 +226,26 @@ test("templates are laid out: no comment box over another, boxes round their nod
         assert.ok(a.x1 <= b.x0 || b.x1 <= a.x0 || a.y1 <= b.y0 || b.y1 <= a.y0, `${g.mode.id}: boxes ${i} and ${j} overlap`);
       }
   }
+});
+
+test("snippets drop in wrapped in a comment, variables merged or renamed", () => {
+  const raw = JSON.parse(readFileSync("src/views/tools/studio/snippets/team_score_win.snippet.json", "utf8"));
+  const sn = readSnippet("team_score_win", raw)!;
+  assert.ok(sn && sn.part.variables.length === 1);
+  // a graph that already has "Team score", but as text: the snippet's gets another name
+  const g = { ...emptyGraph("x", "X"), variables: [{ id: "v1", name: "Team score", type: "text" as const, scope: "mode" as const, default: "" }] };
+  const r = insertSnippet(g, sn, { x: 0, y: 0 })!;
+  assert.equal(r.graph.variables.length, 2);
+  const added = r.graph.variables.find((v) => v.id !== "v1")!;
+  assert.equal(added.name, "Team score 2");
+  assert.ok(r.graph.nodes.filter((n) => n.type.startsWith("var.")).every((n) => n.params.var === added.id));
+  assert.equal(r.graph.comments.length, 1);
+  assert.equal(r.graph.comments[0].text, sn.name);
+  // into a graph that already has the same variable: that one is used, not a new one
+  const once = insertSnippet(emptyGraph("y", "Y"), sn, { x: 0, y: 0 })!;
+  const twice = insertSnippet(once.graph, sn, { x: 0, y: 900 })!;
+  assert.equal(twice.graph.variables.length, 1);
+  // a saved selection reads back as a snippet
+  const made = makeSnippet(r.graph, r.ids, "Mine");
+  assert.ok(readSnippet("mine", made));
 });

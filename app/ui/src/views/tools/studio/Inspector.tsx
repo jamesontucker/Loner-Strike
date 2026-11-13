@@ -3,7 +3,7 @@
 
 import { useStudio } from "./store";
 import { KEYS_CHARS, NAME_CHARS, nodeDef, type ParamDef } from "./registry";
-import { addVariable, removeVariable, setParam, toggleBreakpoint, updateVariable } from "./graphOps";
+import { removeVariable, setParam, toggleBreakpoint, updateVariable } from "./graphOps";
 import { LABEL_CHARS, type GNode, type GVariable } from "./schema";
 
 type PV = string | number | boolean;
@@ -142,65 +142,80 @@ function ModeSettings() {
   );
 }
 
-/** This mode's variables: add, rename, type, per player or not, start value. */
-function Variables() {
+/** One variable's details (picked in the left panel). */
+function VariableDetails({ id }: { id: string }) {
   const graph = useStudio((s) => s.graph)!;
   const edit = useStudio((s) => s.edit);
+  const selectVar = useStudio((s) => s.selectVar);
+  const v = graph.variables.find((x) => x.id === id);
+  if (!v) return null;
+  const used = graph.nodes.filter((n) => n.params.var === id).length;
   return (
-    <>
-      <h4 className="st-side-sub">Variables</h4>
-      <p className="st-side-help">Values the mode keeps: one for the whole mode, one for each player (reset when they join) or one for each team; kept for the map or started again each round.</p>
-      <ul className="st-vars-list">
-        {graph.variables.map((v) => (
-          <li key={v.id} className="st-var">
-            <div className="st-var-row">
-              <TextField value={v.name} max={30} allowed={LABEL_CHARS} onChange={(name) => edit((g) => updateVariable(g, v.id, { name }))} />
-              <select className="st-field" value={v.type} onChange={(e) => edit((g) => updateVariable(g, v.id, { type: e.target.value as GVariable["type"] }))} aria-label="Type">
-                <option value="number">Number</option>
-                <option value="bool">Yes/No</option>
-                <option value="text">Text</option>
-              </select>
-              <select className="st-field" value={v.scope} onChange={(e) => edit((g) => updateVariable(g, v.id, { scope: e.target.value as GVariable["scope"] }))} aria-label="Kept">
-                <option value="mode">One for the mode</option>
-                <option value="player">One per player</option>
-                <option value="team">One per team</option>
-              </select>
-              <select className="st-field" value={v.reset ?? "never"} onChange={(e) => edit((g) => updateVariable(g, v.id, { reset: e.target.value as "never" | "round" }))} aria-label="Kept">
-                <option value="never">Kept for the map</option>
-                <option value="round">Starts again each round</option>
-              </select>
-            </div>
-            <button type="button" className="btn small" onClick={() => edit((g) => removeVariable(g, v.id))} title="Remove this variable">
-              Remove
-            </button>
-            <div className="st-var-row">
-              <span className="st-muted">Starts at</span>
-              <ValueField type={v.type} value={v.default} onChange={(d) => edit((g) => updateVariable(g, v.id, { default: d }))} />
-            </div>
-          </li>
-        ))}
-      </ul>
+    <aside className="st-side" aria-label="Details">
+      <p className="st-side-kicker">Details · Variable</p>
+      <div className="st-side-fields">
+        <label className="st-side-field">
+          <span>Name</span>
+          <TextField value={v.name} max={30} allowed={LABEL_CHARS} onChange={(name) => edit((g) => updateVariable(g, v.id, { name }))} />
+        </label>
+        <label className="st-side-field">
+          <span>Type</span>
+          <select className="st-field" value={v.type} onChange={(e) => edit((g) => updateVariable(g, v.id, { type: e.target.value as GVariable["type"] }))}>
+            <option value="number">Number</option>
+            <option value="bool">Yes/No</option>
+            <option value="text">Text</option>
+          </select>
+        </label>
+        <label className="st-side-field">
+          <span>One for</span>
+          <select className="st-field" value={v.scope} onChange={(e) => edit((g) => updateVariable(g, v.id, { scope: e.target.value as GVariable["scope"] }))}>
+            <option value="mode">The whole mode</option>
+            <option value="player">Each player (reset when they join)</option>
+            <option value="team">Each team</option>
+          </select>
+        </label>
+        <label className="st-side-field">
+          <span>Kept</span>
+          <select className="st-field" value={v.reset ?? "never"} onChange={(e) => edit((g) => updateVariable(g, v.id, { reset: e.target.value as "never" | "round" }))}>
+            <option value="never">For the map</option>
+            <option value="round">Starts again each round</option>
+          </select>
+        </label>
+        <label className="st-side-field">
+          <span>Starts at</span>
+          <ValueField type={v.type} value={v.default} onChange={(d) => edit((g) => updateVariable(g, v.id, { default: d }))} />
+        </label>
+      </div>
+      <p className="st-side-help">
+        Used by {used} node{used === 1 ? "" : "s"}. Drag it from the left onto the canvas for Get or Set.
+      </p>
       <button
         type="button"
         className="btn small"
-        disabled={graph.variables.length >= 64}
-        onClick={() => edit((g) => addVariable(g, { name: `Variable ${g.variables.length + 1}`, type: "number", scope: "mode", default: 0 }).graph)}
+        onClick={() => {
+          edit((g) => removeVariable(g, v.id));
+          selectVar(null);
+        }}
       >
-        Add a variable
+        Remove this variable
       </button>
-    </>
+    </aside>
   );
 }
 
+const COMMENT_COLOURS = ["#4a5a6a", "#6a4a8a", "#2f6a4a", "#7a6a2b", "#7a2b2b", "#2f4f7a", "#555555"];
+
 const cleanLabel = (v: string, max: number) => [...v].filter((c) => LABEL_CHARS.test(c)).join("").slice(0, max);
 
-export function Inspector({ focus }: { focus: (id: string) => void }) {
+export function Inspector() {
   const graph = useStudio((s) => s.graph);
   const selected = useStudio((s) => s.selected);
+  const selectedVar = useStudio((s) => s.selectedVar);
   const problems = useStudio((s) => s.problems);
   const runs = useStudio((s) => s.debug.runs);
   const edit = useStudio((s) => s.edit);
   if (!graph) return null;
+  if (selectedVar && graph.variables.some((x) => x.id === selectedVar)) return <VariableDetails id={selectedVar} />;
   const node = selected.length === 1 ? graph.nodes.find((n) => n.id === selected[0]) : undefined;
   const def = node && nodeDef(node.type);
 
@@ -208,7 +223,8 @@ export function Inspector({ focus }: { focus: (id: string) => void }) {
     const mine = problems.filter((p) => p.node === node.id);
     const run = runs[node.id];
     return (
-      <aside className="st-side">
+      <aside className="st-side" aria-label="Details">
+        <p className="st-side-kicker">Details · {def.category}</p>
         <h3 className="st-side-title">{def.title}</h3>
         <p className="st-side-help">{def.help}</p>
         {def.needs && <p className="st-side-help st-needs">{def.needs === "components" ? "Needs the game mode components (gm_components) on the server; without them this does nothing and Playtest says so." : "Needs Loner-Strike's bot brain with creatures; without it this does nothing and Playtest says so."}</p>}
@@ -256,14 +272,20 @@ export function Inspector({ focus }: { focus: (id: string) => void }) {
   const comment = selected.length === 1 ? graph.comments.find((c) => c.id === selected[0]) : undefined;
   if (comment)
     return (
-      <aside className="st-side">
-        <h3 className="st-side-title">Comment</h3>
-        <p className="st-side-help">Double-click its title bar to change the text. Dragging it moves the nodes inside.</p>
+      <aside className="st-side" aria-label="Details">
+        <p className="st-side-kicker">Details · Comment</p>
+        <p className="st-side-help">Double-click its title bar to change the text. Dragging the title bar moves the box and the nodes inside; inside it, the canvas works as anywhere.</p>
+        <div className="st-swatches" role="group" aria-label="Colour">
+          {COMMENT_COLOURS.map((c) => (
+            <button key={c} type="button" className={`st-swatch${(comment.color ?? "#4a5a6a") === c ? " on" : ""}`} style={{ background: c }} aria-label={`Colour ${c}`} onClick={() => edit((g) => ({ ...g, comments: g.comments.map((x) => (x.id === comment.id ? { ...x, color: c } : x)) }))} />
+          ))}
+        </div>
       </aside>
     );
 
   return (
-    <aside className="st-side">
+    <aside className="st-side" aria-label="Details">
+      <p className="st-side-kicker">Details · Mode</p>
       <h3 className="st-side-title">This mode</h3>
       <div className="st-side-fields">
         <label className="st-side-field">
@@ -279,25 +301,7 @@ export function Inspector({ focus }: { focus: (id: string) => void }) {
           <code className="st-muted">{graph.mode.id}</code>
         </div>
       </div>
-      <Variables />
       <ModeSettings />
-      <h4 className="st-side-sub">Problems</h4>
-      {problems.length === 0 ? (
-        <p className="st-muted">None. Ready to compile.</p>
-      ) : (
-        <ul className="st-problems">
-          {problems.map((p, i) => (
-            <li key={i} className={p.level}>
-              {p.node ? (
-                <button type="button" className="st-link" onClick={() => focus(p.node!)}>
-                  {nodeDef(graph.nodes.find((n) => n.id === p.node)?.type ?? "")?.title ?? p.node}
-                </button>
-              ) : null}{" "}
-              {p.message}
-            </li>
-          ))}
-        </ul>
-      )}
       <p className="st-side-help st-keys">
         Right-click or Space: add a node · drag from a pin to empty space: nodes for that wire · double-click a wire: reroute point · C: comment · F9:
         breakpoint · ⌘Z / ⇧⌘Z: undo / redo · ⌘C / ⌘V: copy / paste

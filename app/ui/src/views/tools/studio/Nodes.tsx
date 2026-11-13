@@ -10,6 +10,16 @@ import type { GNode, GVariable, Graph } from "./schema";
 
 const CAT_CLASS: Record<string, string> = { Events: "ev", Conditions: "cond", Numbers: "num", Variables: "var", Timers: "timer", Players: "player", Messages: "msg", Scoring: "score", Components: "comp", Creatures: "creature", Flow: "flow" };
 
+/** How a node is drawn, as in Blueprints: events red, values (pure) green, functions purple,
+ *  flow control grey, actions blue. */
+export function kindOf(def: NodeDef): "event" | "pure" | "func" | "flow" | "action" {
+  if (def.type.startsWith("func.")) return "func";
+  if (def.event) return "event";
+  if (def.pure) return "pure";
+  if (["Flow", "Conditions", "Timers"].includes(def.category)) return "flow";
+  return "action";
+}
+
 /** One line saying what a node is set to ("AK-47, 90 bullets"). */
 export function paramSummary(def: NodeDef, n: GNode, wired: (pin: string) => boolean, vars: GVariable[] = []): string {
   return def.params
@@ -66,6 +76,7 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
   const failed = run?.result === "false";
   const cls = [
     "st-node",
+    `st-kind-${kindOf(def)}`,
     `st-cat-${CAT_CLASS[def.category] ?? "flow"}`,
     selected ? "selected" : "",
     errors.length ? "has-error" : mine.length ? "has-warning" : "",

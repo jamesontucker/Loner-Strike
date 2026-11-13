@@ -144,8 +144,12 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         });
       },
       snippetAtCenter: (sn) => {
-        const c = center();
-        dropSnippet(sn, { x: c.x - 200, y: c.y - 120 });
+        // (clicked rather than dragged: into free space under everything, then shown)
+        const g = useStudio.getState().graph;
+        const all = rf.getNodes();
+        const at = all.length && g ? { x: Math.min(...all.map((n) => n.position.x)), y: Math.max(...all.map((n) => n.position.y + (n.measured?.height ?? 100))) + 80 } : center();
+        dropSnippet(sn, at);
+        void rf.setCenter(at.x + 300, at.y + 150, { zoom: Math.max(rf.getZoom(), 0.8), duration: 300 });
       },
     });
   }, [onApi, rf, select, center, edit, dropSnippet]);
