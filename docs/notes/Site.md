@@ -213,3 +213,9 @@ To turn one on, add its name to `const INGAME = new Set([...])` in `index.html`,
 - Stacks and crashes without a debugger: `drive_c/Loner-Strike/Sim/crashes.log` (every crash in the bottle, full
   winedbg report), and with fork builds from ls-creatures `f351765` on, `cstrike/ls_crash*.log` and
   `cstrike/ls_watchdog.log` in the server folder.
+
+### Round 5 (2026-11-13)
+- Thanks is now 4 + 4: added Valve, Bots-United (Metamod-P) and the open-source tools (whisper.cpp, llama.cpp, Tauri, React).
+- Make your own names four tools: the map simulator, nav fixer, callouts and the spray maker.
+- Publishing wording: GameBanana is read-only, so it now reads "Package it in the app and upload it to GameBanana, with the credits filled in for you" on the homepage and in the docs.
+- docs.html is tightened by about 30%, from 20,020 to 13,948 words. Every id and anchor is kept. The before and after counts per topic are in the scratchpad docs2/*.json.

@@ -458,7 +458,9 @@ html { scroll-padding-top: 72px; }
 /* the people behind it */
 .thanks { padding: 56px 0 24px; }
 .thanks .lead { color: var(--dim); max-width: 64ch; margin: 6px 0 20px; }
-.thanks-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.thanks-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1060px) { .thanks-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .thanks-grid { grid-template-columns: 1fr; } }
 .thanks-grid a { display: block; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; padding: 14px 16px; text-decoration: none; }
 .thanks-grid a:hover { background: var(--panel-2); }
 .thanks-grid b { display: block; color: var(--bone); font-size: 18px; margin-bottom: 4px; }
@@ -854,7 +856,10 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <ul>
           <li><b>Map editor:</b> Hammer's depth, modern editor feel. Press F5 and you're playing it with bots</li>
           <li><b>Game Mode Studio:</b> game modes from nodes and wires, debugged live in the game</li>
-          <li><b>Map tools:</b> a map simulator, nav fixer, callouts, a spray maker and more</li>
+          <li><b>Map simulator:</b> bots play a match on your map, drawn on it afterward</li>
+          <li><b>Nav fixer:</b> fix where bots can walk, in 3D, top-down or split view</li>
+          <li><b>Callouts:</b> your own place names, used by the bots and the radio</li>
+          <li><b>Spray maker:</b> your spray from pictures, words and stickers, or a template</li>
         </ul>
         <p class="more"><a class="btn" href="docs#tools">Every tool</a></p>
       </div>
@@ -930,10 +935,10 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     <div class="wrap">
       <div class="text">
         <h3>Share it</h3>
-        <p>Publish what you make, and try what others made in a click.</p>
+        <p>Try what others made in a click, and share what you make.</p>
         <ul>
           <li><b>Try it:</b> maps, modes, prefabs and sprays from Community, played with bots</li>
-          <li><b>Publish</b> to GameBanana from the app, with credits tracked for you</li>
+          <li><b>Package it</b> in the app and upload it to GameBanana, with the credits filled in for you</li>
           <li><b>Remix</b> anything, with credit to the original</li>
         </ul>
         <p class="safe"><b>Nothing that runs code is shared.</b> A Studio mode travels as its graph, and each player's app builds it.</p>
@@ -1078,6 +1083,18 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <a href="https://github.com/seedee/SDHLT" target="_blank" rel="noopener">
           <b>SDHLT</b>
           <span>The map compiler the editor uses, carrying on Zoner's Half-Life tools. Free software with its own license.</span>
+        </a>
+        <a href="https://store.steampowered.com/app/10/CounterStrike/" target="_blank" rel="noopener">
+          <b>Valve</b>
+          <span>Counter-Strike and Half-Life themselves. Loner-Strike only adds to the game you own, so buy the games on Steam.</span>
+        </a>
+        <a href="https://github.com/Bots-United/metamod-p" target="_blank" rel="noopener">
+          <b>Bots-United</b>
+          <span>Metamod-P, which every plugin loads through, and two decades of keeping bots alive in these games.</span>
+        </a>
+        <a href="https://github.com/ggml-org/whisper.cpp" target="_blank" rel="noopener">
+          <b>The open-source tools</b>
+          <span>whisper.cpp and llama.cpp (ggml) hear your voice commands; Tauri, React and many more libraries build the app. All are in our credits.</span>
         </a>
         <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md" target="_blank" rel="noopener">
           <b>The mod and map makers</b>
