@@ -339,7 +339,7 @@ export function commands(): Command[] {
     { id: "view.paneMode", label: "Next drawing style for the active pane", menu: "View", hint: "Textured, flat, wireframe, textured + wire", run: () => cyclePaneMode(), fly: true },
 
     // View > Panels and layouts
-    ...DOCK_PANELS.map((p, i): Command => ({ id: `panel.${p.id}`, label: `Panel: ${p.title}`, menu: "View", sep: i === 0, hint: "Show it (wherever it's docked or floating)", run: () => showPanel(p.id) })),
+    ...DOCK_PANELS.map((p, i): Command => ({ id: `panel.${p.id}`, label: `Panel: ${p.title}`, menu: "View", sep: i === 0, hint: p.subtitle ? `${p.subtitle}. Shows it wherever it's docked or floating.` : "Show it (wherever it's docked or floating)", run: () => showPanel(p.id) })),
     ...(Object.keys(DOCK_PRESETS) as DockPresetId[]).map((id, i): Command => ({ id: `dock.${id}`, label: `Panel layout: ${DOCK_PRESETS[id].label}`, menu: "View", sep: i === 0, hint: DOCK_PRESETS[id].tip, run: () => applyDockPreset(id) })),
     { id: "dock.reset", label: "Reset the panel layout", menu: "View", run: () => applyDockPreset("default") },
 

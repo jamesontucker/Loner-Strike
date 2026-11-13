@@ -92,7 +92,7 @@ function Tabs({ area }: { area: AreaId }) {
             aria-selected={a.active === id}
             aria-pressed={a.active === id}
             className={p.bad?.() ? "editor-tab-bad" : undefined}
-            title="Drag to move it: along the tabs, to another side, or onto the view to float it"
+            title={`${p.subtitle ? `${p.subtitle}. ` : ""}Drag to move it: along the tabs, to another side, or onto the view to float it`}
             onPointerDown={(ev) => startPanelDrag(ev, id, () => set({ areas: { ...useDock.getState().areas, [area]: { ...useDock.getState().areas[area], active: id } }, ...(area === "bottom" ? { bottomFolded: false } : {}) }))}
             onKeyDown={(ev) => ev.key === "Enter" && set({ areas: { ...useDock.getState().areas, [area]: { ...a, active: id } }, ...(area === "bottom" ? { bottomFolded: false } : {}) })}
           >
@@ -250,6 +250,7 @@ function Stack({ area, style, folded }: { area: AreaId; style?: CSSProperties; f
       <Tabs area={area} />
       {!folded && (
         <div className="ed-dock-body tools-side" data-dock-body={area}>
+          {p?.subtitle && <p className="ed-dock-sub">{p.subtitle}</p>}
           {p && <PanelBoundary key={p.id} title={p.title}>{p.render()}</PanelBoundary>}
         </div>
       )}

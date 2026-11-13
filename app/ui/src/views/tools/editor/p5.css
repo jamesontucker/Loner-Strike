@@ -393,3 +393,5 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .p5-ap-pop li[aria-selected="true"] button { box-shadow: inset 0 0 0 1px #ffd84a; }
 .p5-ap-thumb { width: 36px; height: 36px; object-fit: contain; display: grid; place-items: center; background: #1f241b; border-radius: 3px; image-rendering: pixelated; }
 .p5-ap-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* P5: a panel's one-line subtitle under its tabs */
+.ed-dock-sub { margin: 0 0 6px; font-size: 11.5px; color: var(--bone-dim); }

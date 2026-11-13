@@ -12,7 +12,9 @@ import { HistoryPanel } from "./HistoryPanel";
 import { ContentBrowser } from "./ContentBrowser";
 import { useEditor } from "./store";
 
-export type DockPanel = { id: string; title: string; render: () => ReactNode; label?: () => string; bad?: () => boolean };
+/** `subtitle`: one line under the panel's tabs and in its tooltips (what it holds). Ids stay as
+ *  saved layouts and key settings have them ("library" is the Gameplay panel). */
+export type DockPanel = { id: string; title: string; subtitle?: string; render: () => ReactNode; label?: () => string; bad?: () => boolean };
 
 function Library() {
   const arg = useToolArg();
@@ -27,11 +29,12 @@ const checksCount = () => {
 };
 
 export const DOCK_PANELS: DockPanel[] = [
-  { id: "content", title: "Content", render: () => <ContentBrowser /> }, // P5: models, sprites, sounds, textures, prefabs, GameBanana
+  { id: "content", title: "Content", subtitle: "Models, sprites, sounds, textures and prefabs", render: () => <ContentBrowser /> }, // P5: (and GameBanana)
   { id: "inspect", title: "Inspect", render: () => <Inspector /> },
   { id: "outline", title: "Outline", render: () => <OutlinePanel extra={<Visibility />} /> },
   { id: "textures", title: "Textures", render: () => <TextureBrowser /> },
-  { id: "library", title: "Library", render: () => <Library /> },
+  // (was "Library": the id stays, so saved layouts keep it)
+  { id: "library", title: "Gameplay", subtitle: "Components and mode kits for game modes", render: () => <Library /> },
   { id: "checks", title: "Checks", render: () => <ChecksPanel />, label: checksCount, bad: () => (useEditor.getState().checks?.issues.some((i) => i.level === "error") ?? false) },
   { id: "compile", title: "Compile", render: () => <CompilePanel /> },
   { id: "project", title: "Project", render: () => <ProjectPanel /> },

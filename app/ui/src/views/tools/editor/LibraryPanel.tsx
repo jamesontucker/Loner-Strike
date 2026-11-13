@@ -1,5 +1,5 @@
-// The editor's Library tab: game mode components and mode kits, side by side (prefabs are in the
-// Content Browser).
+// The editor's Gameplay panel (id "library", its old name): game mode components and mode kits,
+// side by side (prefabs are in the Content Browser).
 
 import { useEffect, useState } from "react";
 import { ComponentPanel } from "./ComponentPanel";
@@ -8,7 +8,7 @@ import { useP4 } from "./extras";
 import "./dialog.css";
 
 // P5: prefabs moved to the Content Browser (Content > Prefabs), so they're in one place with
-// models, sprites and sounds; the Library keeps components and mode kits.
+// models, sprites and sounds; Gameplay keeps components and mode kits.
 export function LibraryPanel({ start }: { start?: "components" | "kits" }) {
   const [part, setPart] = useState<"components" | "kits">(start ?? "components");
   useEffect(() => {
@@ -17,7 +17,7 @@ export function LibraryPanel({ start }: { start?: "components" | "kits" }) {
   const placing = useP4((s) => s.placing);
   return (
     <section className="tools-panel p4-prefabs">
-      <div className="seg" role="group" aria-label="Library">
+      <div className="seg" role="group" aria-label="Gameplay">
         <button type="button" aria-pressed={part === "components"} onClick={() => setPart("components")}>
           Components
         </button>

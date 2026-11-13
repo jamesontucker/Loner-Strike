@@ -210,7 +210,7 @@ export async function placePrefabAt(id: string, x: number, y: number) {
 
 // ---- where a dropped prefab lands (the same rules as editor/prefab.rs) ----------------------
 
-/** What's being dragged from the Library (drag data can't be read until the drop). */
+/** What's being dragged from Content or Gameplay (drag data can't be read until the drop). */
 export const dragging: { current: { id: string; size: Vec3; component?: boolean } | null } = { current: null };
 
 /** prefab.rs wall_yaw: on a wall, its front (+y) faces out. */

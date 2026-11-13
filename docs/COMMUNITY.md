@@ -284,7 +284,7 @@ independently of the author's numbers, and render viewer screenshots to
 
 ## 9. Prefab packages (map editor, agent P4)
 
-A prefab package is a zip made by the editor's Library > Prefabs > Share:
+A prefab package is a zip made by the editor's Content > Prefabs > Share:
 `prefabs/<id>.map` (a plain Valve 220 .map: any GoldSrc editor can paste it), `prefabs/<id>.json`
 (`format`, `name`, `tags`, `author`, `description`, `size`, `brushes`, `entities`, `textures`, `wads`,
 `materials` with texture sizes), `prefabs/<id>.png` (thumbnail), optional `*.wad`, `README.txt` and

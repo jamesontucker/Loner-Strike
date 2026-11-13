@@ -1,4 +1,4 @@
-// P5: Library > Mode kits: every installed game mode's map kit as its own group (its markers,
+// P5: Gameplay > Mode kits: every installed game mode's map kit as its own group (its markers,
 // the components it uses, the creatures it spawns), "Made for" (which modes this map is for,
 // saved as the worldspawn key ls_modes) and what each of those modes still needs, with Place.
 // Drag a row onto the map, or Place and click (Shift keeps placing).

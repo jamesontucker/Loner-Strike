@@ -136,7 +136,7 @@ export function CompilePanel() {
     });
   }, [loadStatus, follow]);
 
-  // P5: the modes the map is made for (Library > Mode kits) first, and picked when the last
+  // P5: the modes the map is made for (Gameplay > Mode kits) first, and picked when the last
   // used mode isn't one of them
   // (the game's mode list has short ids)
   const madeKey = useEditor((s) => madeForOf(s.doc?.world).map((m) => m.id).join(" "));

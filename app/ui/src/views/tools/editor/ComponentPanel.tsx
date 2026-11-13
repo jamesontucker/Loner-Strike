@@ -1,4 +1,4 @@
-// Game mode components (Library > Components): the library from W1's components.json with
+// Game mode components (Gameplay > Components): the library from W1's components.json with
 // the forms from lonerstrike.fgd. Drag a card onto the map (or Place, then click) to add one;
 // zones, capture points, spawners and the like are drawn in 3D. "Save as component file"
 // writes the map's components as a pack (configs/components/<map>.ini) to try a mode on any

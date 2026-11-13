@@ -131,7 +131,7 @@ const FIXED: [string, string][] = [
   ["Shift / Ctrl+box", "Add to / take away from the pick"],
   ["Esc while boxing", "Cancel the box"],
   ["Texture tool, box", "Pick faces"],
-  ["Drag a Library card", "Place a prefab or component (Alt: off the grid)"],
+  ["Drag a Content or Gameplay card", "Place a model, sprite, sound, prefab or component (Alt: off the grid)"],
   ["Shift+click (Place)", "Keep placing; Esc stops"],
   ["Vertex tool", "Drag corners (yellow), edges (blue), faces (purple)"],
 ];

@@ -1,4 +1,4 @@
-// The prefab library (Library > Prefabs): your own prefabs and the starter ones, with search.
+// The prefab library (Content > Prefabs): your own prefabs and the starter ones, with search.
 // Drag a row onto the map (a see-through box shows where it lands) or press Place and click
 // (R turns it a quarter, Shift keeps placing, Esc stops). Prefabs stand on floors, hang from
 // ceilings and face out of walls, corner on the grid. Save what's picked as a prefab (a

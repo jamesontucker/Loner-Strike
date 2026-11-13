@@ -1,5 +1,5 @@
 // Map editor: mode map kits (docs/notes/X.md "Mode map kit format"). A kit put in the app's kits
-// folder shows in Library > Mode kits; "Made for" saves ls_modes; the checks list what the mode
+// folder shows in Gameplay > Mode kits; "Made for" saves ls_modes; the checks list what the mode
 // still needs with Place; a placed marker gets the kit's keys and a typed form; ls_creature's
 // Type lists the creature types. Runs on editor-dev.html against the tools dev server
 // (npm run test:tools -- tests/editor-kits.spec.ts); P5 also runs it in WebKit.
@@ -58,8 +58,8 @@ async function open(page: Page, withKits = true) {
 test("Mode kits: made for, what it needs, place a marker with its keys", async ({ page }) => {
   const folder = await open(page);
   try {
-    await page.getByRole("button", { name: "Library", exact: true }).or(page.getByRole("tab", { name: "Library" })).first().click();
-    await page.getByRole("group", { name: "Library" }).getByRole("button", { name: "Mode kits" }).click();
+    await page.getByRole("button", { name: "Gameplay", exact: true }).or(page.getByRole("tab", { name: "Gameplay" })).first().click();
+    await page.getByRole("group", { name: "Gameplay" }).getByRole("button", { name: "Mode kits" }).click();
     const kit = page.getByRole("group", { name: "P5 Test Stand kit" });
     await expect(kit).toBeVisible();
     await expect(page.getByText(/p5_broken\.kit\.json \(It isn't valid JSON/)).toBeVisible();

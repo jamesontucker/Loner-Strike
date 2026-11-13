@@ -135,3 +135,25 @@ test("first-map tour: Don't show again", async ({ page }) => {
   await page.waitForTimeout(1500);
   await expect(offer).toHaveCount(0);
 });
+
+test("Content and Gameplay panels: names, subtitles, the View menu; an old saved layout keeps Gameplay", async ({ page }) => {
+  // a layout saved when the panel was "Library" (same id)
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("p5-layout-set")) return;
+    sessionStorage.setItem("p5-layout-set", "1");
+    localStorage.setItem("ls.editor.dock2", JSON.stringify({ areas: { left: { tabs: [], active: null }, right: { tabs: ["outline", "library"], active: "library" }, right2: { tabs: ["inspect"], active: "inspect" }, bottom: { tabs: ["checks"], active: "checks" } }, sizes: { left: 300, right: 320, bottom: 240, rightSplit: 0.45 }, floats: [], popped: [] }));
+  });
+  await newMap(page);
+  const right = page.locator('[data-dock-strip="right"]');
+  await expect(right.getByRole("tab", { name: "Gameplay" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator('[data-dock-body="right"] .ed-dock-sub')).toHaveText("Components and mode kits for game modes");
+  await expect(right.getByRole("tab", { name: "Gameplay" })).toHaveAttribute("title", /^Components and mode kits for game modes\./);
+  // Content came into the saved layout too, with its subtitle
+  const bottom = page.locator('[data-dock-strip="bottom"]');
+  await bottom.getByRole("tab", { name: "Content" }).click();
+  await expect(page.locator('[data-dock-body="bottom"] .ed-dock-sub')).toHaveText("Models, sprites, sounds, textures and prefabs");
+  const view = await menu(page, "View");
+  await expect(view.getByRole("menuitem", { name: /^Panel: Gameplay/ })).toHaveAttribute("title", /^Components and mode kits for game modes\./);
+  await expect(view.getByRole("menuitem", { name: /^Panel: Content/ })).toBeVisible();
+  await expect(view.getByRole("menuitem", { name: /^Panel: Library/ })).toHaveCount(0);
+});

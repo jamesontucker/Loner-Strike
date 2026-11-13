@@ -31,7 +31,7 @@ export const DOCK_PRESETS: Record<DockPresetId, { label: string; tip: string; la
   // like Unreal: the outliner over the details on the right, the library (content) along the bottom
   default: {
     label: "Default (Unreal-like)",
-    tip: "Outline above Inspect on the right; Library, Textures and the rest along the bottom",
+    tip: "Outline above Inspect on the right; Content, Gameplay and the rest along the bottom",
     layout: { areas: { left: area([]), right: area(["outline"]), right2: area(["inspect", "history"]), bottom: area(["content", "library", "textures", "checks", "compile", "project"]) }, sizes: { ...SIZES, right: 330, bottom: 250, rightSplit: 0.42 }, floats: [], popped: [] },
   },
   hammer: {
@@ -41,7 +41,7 @@ export const DOCK_PRESETS: Record<DockPresetId, { label: string; tip: string; la
   },
   unreal: {
     label: "Unreal-like",
-    tip: "Outline above Inspect on the right; Library, Textures and the rest along the bottom",
+    tip: "Outline above Inspect on the right; Content, Gameplay and the rest along the bottom",
     layout: { areas: { left: area([]), right: area(["outline"]), right2: area(["inspect", "history"]), bottom: area(["content", "library", "textures", "checks", "compile", "project"]) }, sizes: { ...SIZES, right: 330, bottom: 250, rightSplit: 0.42 }, floats: [], popped: [] },
   },
   tabs: {
