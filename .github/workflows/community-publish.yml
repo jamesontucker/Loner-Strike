@@ -1,0 +1,102 @@
+# Publishes Loner-Strike's community index to the download mirror (Cloudflare R2,
+# dl.lonerstrike.com/community/index.json + index.json.sha256), which the app's Community browser
+# reads. The list service on the server builds the index from its moderation database; this
+# workflow fetches it and uploads it, so the server never holds keys to the bucket (which also
+# holds the app's updates).
+#
+# Every 10 minutes (scheduled workflows run from the default branch only) and by hand: Actions >
+# Community index > Run workflow ("force" publishes even when many creations would leave the list
+# at once). It does nothing when:
+#   - the index is the same as the live one;
+#   - the list service's last re-check was held back (too many pages leaving at once: a person
+#     looks, then `lsmod.py release-hold`).
+# It fails (GitHub tells you) when the index doesn't match its sha256, isn't an index the app reads,
+# is too big, or would drop many listed creations at once (scripts/community-index-check.py).
+#
+# Secrets: COMMUNITY_PUBLISH_TOKEN (the list service's publish token: it can only download the
+# index), and the mirror's R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET (as the
+# Mirror release workflow).
+
+name: Community index
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Publish even if many listed creations would disappear at once"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: community-publish
+  cancel-in-progress: false
+
+env:
+  SOURCE: https://list.lonerstrike.com/community/publish
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/community-index-check.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Publish the community index if it changed
+        env:
+          COMMUNITY_PUBLISH_TOKEN: ${{ secrets.COMMUNITY_PUBLISH_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          FORCE: ${{ inputs.force && '--force' || '' }}
+        run: |
+          set -euo pipefail
+          [ -n "$COMMUNITY_PUBLISH_TOKEN" ] || { echo "::error::The secret COMMUNITY_PUBLISH_TOKEN isn't set."; exit 1; }
+          work=$(mktemp -d)
+          # the token goes to curl from a file (never on a command line or in the log)
+          (umask 077; printf 'Authorization: Bearer %s\n' "$COMMUNITY_PUBLISH_TOKEN" > "$work/auth")
+          fetch() {  # fetch <path> <file>
+            curl -fsS --max-time 30 --retry 3 --retry-delay 5 --max-filesize 8388608 \
+              -H @"$work/auth" -A "LonerStrike community publish (GitHub Actions)" \
+              -D "$work/$2.headers" -o "$work/$2" "$SOURCE/$1"
+          }
+          fetch index index.json
+          fetch index.sha256 index.json.sha256
+          rm -f "$work/auth"
+          header() { grep -i "^$1:" "$work/index.json.headers" | tail -1 | cut -d: -f2- | tr -d ' \r'; }
+          if [ "$(header x-recheck-held-back)" = 1 ]; then
+            echo "::warning::The list service's last re-check was held back (many pages leaving at once). Nothing published until a person looks (lsmod.py status, then lsmod.py release-hold)."
+            exit 0
+          fi
+
+          s3() { aws s3api --endpoint-url "$R2_ENDPOINT" "$@"; }
+          # what's live, read from the bucket itself (not through the CDN's cache)
+          s3 get-object --bucket "$R2_BUCKET" --key community/index.json "$work/live.json" >/dev/null 2>&1 || : > "$work/live.json"
+
+          set +e
+          python3 -I scripts/community-index-check.py "$work/index.json" "$work/index.json.sha256" "$(header x-index-sha256)" "$work/live.json" $FORCE
+          verdict=$?
+          set -e
+          [ "$verdict" = 3 ] && exit 0
+          [ "$verdict" = 0 ] || { echo "::error::The community index was refused (see above); nothing was published."; exit 1; }
+
+          put() {  # put <file> <key> <content type>
+            s3 put-object --bucket "$R2_BUCKET" --key "$2" --body "$1" --content-type "$3" \
+              --cache-control "public, max-age=300" >/dev/null
+            etag=$(s3 head-object --bucket "$R2_BUCKET" --key "$2" --query ETag --output text | tr -d '"')
+            [ "$etag" = "$(md5sum "$1" | cut -d' ' -f1)" ] || { echo "::error::$2 didn't arrive intact."; exit 1; }
+            echo "uploaded $2"
+          }
+          put "$work/index.json" community/index.json "application/json; charset=utf-8"
+          put "$work/index.json.sha256" community/index.json.sha256 "text/plain; charset=utf-8"
+          echo "Published https://dl.lonerstrike.com/community/index.json"
