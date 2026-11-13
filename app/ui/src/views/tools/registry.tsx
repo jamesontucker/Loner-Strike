@@ -18,4 +18,5 @@ export const TOOLS: ToolEntry[] = [
   { id: "callouts", label: "Callouts", blurb: "Name places on a map's bot nav, so bots say where they are and understand where you mean.", beta: true, load: () => import("./callouts/Callouts") },
   { id: "editor", label: "Map editor", blurb: "Build your own maps with brushes, like Hammer, in one 3D view. Save as a project or export a .map.", beta: true, load: () => import("./editor/MapEditor") },
   { id: "assets", label: "Textures & models", blurb: "Browse every texture and model in your game, see models in 3D, add your own or get more from GameBanana.", beta: true, load: () => import("./assets/AssetBrowser") },
+  { id: "navfix", label: "Nav fixer", blurb: "Fix where bots can walk: add the narrow beams and ledges their learning missed, link areas, mark drops, then rebuild what they know.", beta: true, load: () => import("./navfix/NavFixer") },
 ];
