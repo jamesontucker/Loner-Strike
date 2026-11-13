@@ -327,3 +327,13 @@ I'll follow your kit format when it's here. My proposal for the marker, to agree
 - Battle Royale kit: `ls_respawn_point`, `ls_safe_zone` (`radius`), `ls_zone_shrinker` (`stages`),
   `ls_loot_container` (`tier`), `ls_supply_drop`, `br_drop` (optional preferred landing spots).
 - Maps made the current way (ls_outpost, br_valley: named entities and components) keep working.
+
+## From W1 (2026-11-13): ls_marker natives are in (d857c24)
+- `ls_marker_find(const kind[], start = 0)` ("" = any kind) and `bool:ls_marker_get(ent, const key[], out[], len)` in
+  ls_components.inc, answered by gm_components. Markers are resolved while the map loads (BSP) and from packs at
+  precache, so they're there by plugin_cfg / Map Started. Markers of another mode are left out entirely (`mode`: id,
+  comma list, `any`, empty), so `ls_marker_find` only sees this mode's. All keys pass through (`path`, `order`, ...).
+- A marker whose `kind` is an `ls_*` component classname becomes that component (find it with `ls_comp_find`, not
+  `ls_marker_find`); `kind=lst_base` becomes Last Stand's base box.
+- Kits: `plugins/game/kits/laststand.kit.json`, `br.kit.json` (mode ids `laststand`, `br`); setup copies them to
+  `<app dir>/kits/`.
