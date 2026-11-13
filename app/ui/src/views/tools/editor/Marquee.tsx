@@ -383,7 +383,7 @@ export function MarqueeOptions({ texture }: { texture?: boolean }) {
       <label title="How a box picks: drag right for fully inside, left for touching (Auto), or always one way">
         Box
         <select value={m.mode} onChange={(e) => m.set({ mode: e.target.value as MarqueeMode })}>
-          <option value="auto">Auto (right: inside, left: touching)</option>
+          <option value="auto" title="Drag right: only what's fully inside. Drag left: anything it touches.">Auto</option>
           <option value="inside">Fully inside</option>
           <option value="touching">Touching</option>
         </select>

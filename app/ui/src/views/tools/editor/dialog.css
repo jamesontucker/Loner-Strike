@@ -64,3 +64,4 @@
 .ed-vec input { width: 100%; min-width: 0; }
 .ed-grow { flex: 1 1 160px; min-width: 0; }
 .ed-field input[type="color"] { height: 30px; padding: 0 2px; width: 64px !important; }
+.editor-side .btn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
