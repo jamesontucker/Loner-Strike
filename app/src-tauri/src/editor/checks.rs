@@ -65,10 +65,14 @@ pub struct Issue {
     /// A one-click fix the editor offers (see `fix_label`), when there is one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fix: Option<&'static str>,
+    /// P5: what to place to fix it, `<mode>:<marker or component>` (a mode map kit's; the page
+    /// places it on a click: tools/editor/kits.rs)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub place: Option<String>,
 }
 
-fn issue(level: Level, code: &'static str, message: String) -> Issue {
-    Issue { level, code, message, brush: None, entity: None, texture: None, fix: fix_for(code) }
+pub(crate) fn issue(level: Level, code: &'static str, message: String) -> Issue {
+    Issue { level, code, message, brush: None, entity: None, texture: None, fix: fix_for(code), place: None }
 }
 
 /// The fix offered for an issue code. `place:<class>` fixes are done by the page (it hands

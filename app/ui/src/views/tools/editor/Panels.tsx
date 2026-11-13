@@ -2,6 +2,7 @@
 // real controls, brush actions, texture alignment, map settings), the outline of the map,
 // the texture browser and the live checks.
 
+import { placeKit } from "./KitPanel"; // P5
 import { setVisSets } from "./extras"; // P4
 import { MarqueeOptions } from "./Marquee"; // P4
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -850,6 +851,12 @@ export function ChecksPanel() {
                 <button type="button" className="linklike" disabled={i.brush == null && i.entity == null} onClick={() => go(i)}>
                   <strong>{LEVEL_LABEL[i.level]}:</strong> {i.message}
                 </button>
+                {/* P5: a mode kit's marker or component to place */}
+                {i.place && (
+                  <button type="button" className="btn small editor-fix" onClick={() => placeKit(i.place!)}>
+                    Place
+                  </button>
+                )}
                 {i.fix && (
                   <BusyButton
                     busy={busy === `one-${n}`}

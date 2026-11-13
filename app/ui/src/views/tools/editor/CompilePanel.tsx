@@ -16,6 +16,7 @@ import "./compile.css";
 import { useNav } from "../../../store";
 import { CordonPanel } from "./CordonPanel";
 import { cameraPos, cordonOf } from "./extras";
+import { madeForOf } from "./kits"; // P5: the modes the map is made for come first
 
 const PRESETS: { id: Preset; label: string; hint: string }[] = [
   { id: "fast", label: "Fast", hint: "Quick lighting and no visibility pass: for trying things out." },
@@ -133,6 +134,17 @@ export function CompilePanel() {
       if (r.modes?.length) setModes([...r.modes].sort((a, b) => a.name.localeCompare(b.name)));
     });
   }, [loadStatus, follow]);
+
+  // P5: the modes the map is made for (Library > Mode kits) first, and picked when the last
+  // used mode isn't one of them
+  const madeKey = useEditor((s) => madeForOf(s.doc?.world).join(" "));
+  const made = madeKey ? madeKey.split(" ") : [];
+  const rank = (id: string) => (made.includes(id) ? made.indexOf(id) : made.length);
+  const shownModes = [...modes].sort((a, b) => rank(a.id) - rank(b.id));
+  useEffect(() => {
+    const first = made.find((m) => modes.some((x) => x.id === m));
+    if (first && !made.includes(mode)) setMode(first);
+  }, [madeKey, modes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!name && status?.suggestName) setName(status.suggestName);
@@ -358,15 +370,16 @@ export function CompilePanel() {
             <label className="editor-field compile-inline">
               Mode
               <select
-                value={modes.some((m) => m.id === mode) ? mode : modes[0].id}
+                value={modes.some((m) => m.id === mode) ? mode : shownModes[0].id}
                 onChange={(e) => {
                   setMode(e.target.value);
                   keep("ls.compile.mode", e.target.value);
                 }}
               >
-                {modes.map((m) => (
+                {shownModes.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
+                    {made.includes(m.id) ? " (made for)" : ""}
                   </option>
                 ))}
               </select>

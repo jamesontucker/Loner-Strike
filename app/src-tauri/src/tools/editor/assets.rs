@@ -294,7 +294,7 @@ pub fn issues(assets: &[Asset], game_set_up: bool) -> Vec<Issue> {
         if a.named.kind == "sky" && out.iter().any(|i: &Issue| i.code == code && i.message.contains("the map's sky")) {
             continue;
         }
-        out.push(Issue { level, code, message, brush: None, entity, texture: None, fix: None });
+        out.push(Issue { level, code, message, brush: None, entity, texture: None, fix: None, place: None });
     }
     out
 }

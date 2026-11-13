@@ -29,7 +29,7 @@ export type Doc = DocState & {
   stats: Stats;
 };
 
-export type Issue = { level: "info" | "warning" | "error"; code: string; message: string; brush?: number; entity?: number; texture?: string; fix?: string };
+export type Issue = { level: "info" | "warning" | "error"; code: string; message: string; brush?: number; entity?: number; texture?: string; fix?: string; /** P5: a mode kit marker or component to place, "<mode>:<id>" */ place?: string };
 export type Checks = { docId: number; revision: number; issues: Issue[]; stats: Stats; texturesChecked: boolean };
 
 export type WadTextures = { name: string; found: boolean; error?: string; textures: { name: string; width: number; height: number }[] };

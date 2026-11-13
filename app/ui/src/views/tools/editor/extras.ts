@@ -3,6 +3,7 @@
 // for a prefab thumbnail, the box in view for the cordon), the settings kept in the project
 // (visibility sets, the cordon), and picking up changes made from outside (MCP agents).
 
+import { kitPlacement } from "./kits"; // P5
 import type { RootState } from "@react-three/fiber";
 import { useEffect } from "react";
 import * as THREE from "three";
@@ -277,6 +278,14 @@ export async function placeComponentAt(cls: string, x: number, y: number) {
   const s = useEditor.getState();
   const hit = pickAt(x, y);
   if (!hit) return s.notify("Drop it on the map in the view.", true);
+  // P5: a mode map kit's marker or component ("kit:<mode>:<id>", kits.ts)
+  let keys: [string, string][] | undefined;
+  if (cls.startsWith("kit:")) {
+    const k = kitPlacement(cls);
+    if (!k) return s.notify("That mode's kit isn't installed any more.", true);
+    cls = k.classname;
+    keys = k.keys.length ? k.keys : undefined;
+  }
   const lib = await loadComponents();
   const def = lib.components.find((c) => c.class === cls);
   const g = s.alt ? 0 : s.grid;
@@ -292,7 +301,7 @@ export async function placeComponentAt(cls: string, x: number, y: number) {
     return;
   }
   const o = p.map((v, i) => Math.round(v + hit.normal[i] * 16)) as Vec3;
-  const r = await s.cmd({ op: "add_entity", classname: cls, origin: o });
+  const r = await s.cmd({ op: "add_entity", classname: cls, origin: o, ...(keys ? { keys } : {}) });
   if (r.created) s.select({ brushes: [], entities: r.created.entities, face: null });
 }
 

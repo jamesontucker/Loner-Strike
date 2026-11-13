@@ -30,6 +30,8 @@ import { edgeLook, flatMaterial, usePaneMode } from "./renderModes";
 import { EntityModelMesh, SpriteGlow, useEntityModel } from "./EntityModels";
 import { MergedBrushes } from "./MergedBrushes";
 import { brushRaycast } from "./pickRay";
+import { KitOverlay } from "./KitOverlay"; // P5: mode kit areas and paths
+import { markerColour, useKits } from "./kits";
 import { useNav } from "./navigation";
 import { NavCamera } from "./NavCamera";
 import { Bookmarks, MeasureLine, sameP, SelectRect, TexHandles, useVisibleBrush, VertexHandles } from "./SceneExtras";
@@ -247,6 +249,7 @@ function entityLook(e: DocEntity): { size: Vec3; colour: string; up: number } {
     const col = l.length >= 3 && l.slice(0, 3).every(Number.isFinite) ? `rgb(${l[0]},${l[1]},${l[2]})` : "#fff3b0";
     return { size: [16, 16, 16], colour: col, up: 0 };
   }
+  if (c === "ls_marker") return { size: [24, 24, 24], colour: markerColour(e), up: 0 }; // P5: its kit's colour
   if (c.startsWith("ambient") || c.startsWith("env_sound")) return { size: [16, 16, 16], colour: "#b58bd8", up: 0 };
   if (c.startsWith("armoury") || c.startsWith("weapon") || c.startsWith("item")) return { size: [24, 24, 16], colour: "#cfd36a", up: 0 };
   return { size: [16, 16, 16], colour: "#c9c2a8", up: 0 };
@@ -295,6 +298,7 @@ function Entities() {
   const sel = useEditor((s) => s.sel.entities);
   const groups = useEditor((s) => s.doc?.groups);
   const hiddenHere = useEditor((s) => s.hidden.entities);
+  useKits((k) => k.kits); // P5: markers take their kit's colour when the kits arrive
   const hidden = useMemo(() => new Set((groups ?? []).filter((g) => g.hidden).map((g) => g.id)), [groups]);
   return (
     <>
@@ -947,6 +951,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
       {tool === "vertex" && <VertexHandles ids={selectionIds().brushes} />}
       <TexHandles />
       <MeasureLine />
+      <KitOverlay />
       <LeakLine />
       <P4SceneParts />
       <MarqueeHot />

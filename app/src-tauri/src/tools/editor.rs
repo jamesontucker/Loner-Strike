@@ -38,6 +38,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 pub mod components;
 pub mod prefabs;
 pub mod assets; // P5: the models, sprites, sounds and sky the map names
+pub mod kits; // P5: mode map kits (what each mode the map is made for needs)
 pub mod workspace; // P5: project files, undo history, find/replace, duplicate with new names
 
 const INTERNAL: &str = "Loner-Strike hit an internal error in the map editor. Try again, and copy the diagnostics from Settings if it keeps happening.";
@@ -421,6 +422,8 @@ fn checks_json(s: &mut Session, dirs: &[PathBuf], places: Option<&assets::Places
     // P5: models, sprites, sounds and the sky the entities name
     if let Some(p) = places {
         issues.extend(assets::issues(&assets::locate(assets::named_files(&s.doc), p), p.hl.is_some()));
+        // and what each mode the map is made for still needs (mode map kits)
+        issues.extend(kits::issues(&s.doc, &kits::cached()));
     }
     json!({"docId": s.id, "revision": s.doc.revision, "issues": issues, "stats": checks::stats(&s.doc), "texturesChecked": known.is_some()})
 }
@@ -1782,7 +1785,7 @@ async fn api_sound(State(st): State<Shared>, h: HeaderMap, Query(q): Query<Sound
     let dirs: Vec<PathBuf> = st.local_game().map(|g| ["cstrike", "cstrike_downloads", "czero", "valve"].iter().map(|f| g.hl.join(f)).collect()).unwrap_or_default();
     let found = tokio::task::spawn_blocking(move || {
         let finder = crate::mapcopy::Finder::default();
-        dirs.iter().find_map(|d| finder.find(d, &rel)).and_then(|p| std::fs::read(&p).ok().filter(|b| b.len() <= 32 << 20).map(|b| (p, b)))
+        dirs.iter().find_map(|d| finder.find(d, &rel)).and_then(|p| crate::caps::read_file(&p, "sound", 32 << 20).ok().map(|b| (p, b))) // [Caps] checked before reading
     })
     .await
     .ok()
@@ -1918,6 +1921,7 @@ fn routes_with(ed: Ed) -> Router<Shared> {
         .merge(components::routes())
         .merge(workspace::routes()) // P5
         .merge(assets::routes()) // P5
+        .merge(kits::routes()) // P5
         .layer(Extension(ed))
 }
 

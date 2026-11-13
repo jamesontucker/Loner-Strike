@@ -10,6 +10,7 @@ import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
 import type { DocEntity, FgdClass, FgdKey } from "./editorApi";
 import { useFgd } from "./fgd";
+import { creatureDef, loadCreatures, loadKits, markerDef, useKits } from "./kits"; // P5: kit markers, creature types
 import { deleteSelection, duplicate } from "./Panels";
 import { keyOf, originOf, selectionBounds, useEditor } from "./store";
 
@@ -271,7 +272,18 @@ export function EntityForm({ e }: { e: DocEntity }) {
   const [showRaw, setShowRaw] = useState(false);
   const all = useMemo(() => names(doc?.entities ?? []), [doc]);
   const s = useEditor.getState();
-  const def: FgdClass | undefined = fgd?.get(e.classname);
+  // P5: an ls_marker's form comes from its mode's kit; ls_creature's Type lists every creature type
+  const kits = useKits((k) => k.kits);
+  const creatures = useKits((k) => k.creatures);
+  useEffect(() => {
+    if (e.classname === "ls_marker" && !useKits.getState().loaded) void loadKits();
+    if (e.classname === "ls_creature" || e.classname === "ls_wave_spawner") void loadCreatures();
+  }, [e.classname]);
+  const def: FgdClass | undefined = useMemo(
+    () => markerDef(e, fgd?.get(e.classname)) ?? creatureDef(fgd?.get(e.classname), creatures),
+    [e, fgd, kits, creatures], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const creatureModel = e.classname === "ls_creature" ? creatures.find((c) => c.name === (keyOf(e.keys, "type") ?? "zombie"))?.model : undefined;
   const name = keyOf(e.keys, "targetname");
   const firedBy = name ? (doc?.entities ?? []).filter((x) => keyOf(x.keys, "target") === name || keyOf(x.keys, "killtarget") === name) : [];
   const target = keyOf(e.keys, "target");
@@ -310,6 +322,33 @@ export function EntityForm({ e }: { e: DocEntity }) {
         </div>
       ) : (
         fgd && <p className="small-note muted">This class isn't in the entity definitions, so its keys are shown as they are.</p>
+      )}
+      {e.classname === "ls_wave_spawner" && creatures.length > 0 && (
+        <div className="editor-key editor-def">
+          <span className="editor-def-label" title="types: the creature types its waves use">Creature types</span>
+          <div className="editor-key-value">
+            <span className="seg p5-chips" role="group" aria-label="Creature types">
+              {creatures.map((c) => {
+                const list = (keyOf(e.keys, "types") ?? "").split(/[\s,]+/).filter(Boolean);
+                const on = list.includes(c.name);
+                return (
+                  <button key={c.name} type="button" aria-pressed={on} title={c.model} onClick={() => setKey(e, "types", (on ? list.filter((x) => x !== c.name) : [...list, c.name]).join(" "))}>
+                    {c.display}
+                  </button>
+                );
+              })}
+            </span>
+          </div>
+        </div>
+      )}
+      {creatureModel && (
+        <div className="editor-key editor-def">
+          <span className="editor-def-label">Its model</span>
+          <div className="editor-key-value">
+            <span className="mono small-note">{creatureModel}</span>
+            <AssetPreview value={creatureModel} fgdType="studio" />
+          </div>
+        </div>
       )}
       {(other.length > 0 || !def) && (
         <div className="editor-keys">
