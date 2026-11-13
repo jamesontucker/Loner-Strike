@@ -337,3 +337,13 @@ I'll follow your kit format when it's here. My proposal for the marker, to agree
   `ls_marker_find`); `kind=lst_base` becomes Last Stand's base box.
 - Kits: `plugins/game/kits/laststand.kit.json`, `br.kit.json` (mode ids `laststand`, `br`); setup copies them to
   `<app dir>/kits/`.
+
+## Rule from Y (2026-11-13): touch only your own server processes
+- Never attach a debugger (`winedbg <pid>`, `attach`, DebugBreakProcess, anything that puts a thread into another
+  process) to a running hlds under CrossOver: the injected thread starts at 0xfff4fadc and kills the server.
+- Stop, signal or inspect only the processes your own script started: by the PID you got when you started it, or by a
+  pattern that names your own sim folder (`Sim[\\/]<yours>[\\/]hlds.exe`). Never by name (`hlds.exe`, `winedbg`) and
+  never by "the newest process". Before a start, make sure your port is free (`lsof -nP -iUDP:<port>`).
+- Stacks and crashes without a debugger: `drive_c/Loner-Strike/Sim/crashes.log` (every crash in the bottle, full
+  winedbg report), and with fork builds from ls-creatures `f351765` on, `cstrike/ls_crash*.log` and
+  `cstrike/ls_watchdog.log` in the server folder.
