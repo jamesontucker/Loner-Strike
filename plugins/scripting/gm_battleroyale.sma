@@ -54,6 +54,10 @@ new Float:g_dropSpots[33][2];
 new g_ndropSpots;
 #define BELOW_Z -250.0
 new g_lootTarget[33];
+enum { LAYER_BELOW = 0, LAYER_SURFACE, LAYER_HIGH };
+new g_layer[33] = { -1, ... };
+new Float:g_medianZ;
+new g_crateHeaded[2048];
 new g_looterN;
 new g_lootupGuns, g_gunGoals;
 new g_gunGoal[33];
@@ -276,7 +280,7 @@ stock start_drop()
 	   last 5 kills; 1.5 aims at 7-8 min) */
 	new zone = ls_comp_find("ls_safe_zone");
 	if (zone && ls_comp_getf(zone, "radius") >= 4000.0)
-		g_pace = floatmax(g_pace, 1.5);
+		g_pace = floatmax(g_pace, 2.0);
 	pace_zone(g_pace);
 	/* small games: a little more in each crate */
 	new extra[4];
@@ -290,6 +294,7 @@ stock start_drop()
 			give_start(p);
 	g_ndropSpots = 0;
 	g_nusedDrops = 0;
+	assign_layers();
 	g_looterN = 0;
 	g_lootupGuns = 0;
 	arrayset(g_gunGoal, 0, sizeof g_gunGoal);
@@ -338,7 +343,7 @@ stock start_play()
 				else if (d < 350.0)
 					near++;
 			}
-	new armed = 0, below = 0, alive = 0;
+	new armed = 0, below = 0, high = 0, alive = 0;
 	for (new p = 1; p <= MaxClients; p++)
 	{
 		if (!is_user_alive(p))
@@ -350,8 +355,10 @@ stock start_play()
 		pev(p, pev_origin, o);
 		if (o[2] < BELOW_Z)
 			below++;
+		else if (o[2] > g_medianZ + 200.0)
+			high++;
 	}
-	log_amx("Battle Royale: fight starts, %d pairs within 100 u, %d more within 350 u; %d of %d armed (%d guns picked up in the loot-up, %d sent for one), %d below ground", close, near, armed, alive, g_lootupGuns, g_gunGoals, below);
+	log_amx("Battle Royale: fight starts, %d pairs within 100 u, %d more within 350 u; %d of %d armed (%d guns picked up in the loot-up, %d sent for one), %d below ground, %d high, %d on the surface", close, near, armed, alive, g_lootupGuns, g_gunGoals, below, high, alive - below - high);
 	toast(0, 3.0, "Fight! %d left", alive_sides());
 	/* supply drops spread over the game */
 	g_ndrops = min(get_pcvar_num(g_cDrops), sizeof g_dropAt);
@@ -759,6 +766,135 @@ stock give_start(id)
 
 /* where this player comes down: bots by habit (looters over a good crate, campers out at the
    edge, hunters anywhere), people over a spread-out respawn point they steer away from */
+/* ---- layers: below ground, the surface, high places (roofs, walkways). Each bot gets one for
+   the game (a share of each: about 3 in 10 below, 1 in 4 high, the rest the surface; looters
+   lean below, campers high), told to the brain (ls_mode layer <i> <below|surface|high>) so its
+   own loot choice can weigh it, and used for where it lands ---- */
+stock crate_layer(e)
+{
+	new Float:o[3];
+	pev(e, pev_origin, o);
+	if (o[2] < BELOW_Z)
+		return LAYER_BELOW;
+	if (o[2] > g_medianZ + 200.0)
+		return LAYER_HIGH;
+	return LAYER_SURFACE;
+}
+
+stock compute_median_z()
+{
+	new Float:zs[160], n = 0;
+	for (new e = ls_comp_find("ls_loot_container"); e && n < sizeof zs; e = ls_comp_find("ls_loot_container", e))
+	{
+		new Float:o[3];
+		pev(e, pev_origin, o);
+		if (o[2] >= BELOW_Z)
+			zs[n++] = o[2];
+	}
+	/* (a simple selection: the middle value) */
+	for (new i = 0; i < n; i++)
+		for (new j = i + 1; j < n; j++)
+			if (zs[j] < zs[i])
+			{
+				new Float:t = zs[i];
+				zs[i] = zs[j];
+				zs[j] = t;
+			}
+	g_medianZ = n ? zs[n / 2] : 0.0;
+}
+
+stock assign_layers()
+{
+	compute_median_z();
+	new bots[32], n = 0;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		g_layer[p] = -1;
+		if (is_user_alive(p) && is_user_bot(p))
+			bots[n++] = p;
+	}
+	/* shuffle, then looters first for the places below, campers first for high */
+	for (new i = n - 1; i > 0; i--)
+	{
+		new j = random(i + 1), t = bots[i];
+		bots[i] = bots[j];
+		bots[j] = t;
+	}
+	new below = (n * 3 + 5) / 10, high = (n + 2) / 4;
+	for (new pass = 0; pass < 2; pass++)
+		for (new i = 0; i < n; i++)
+		{
+			new p = bots[i];
+			if (g_layer[p] >= 0)
+				continue;
+			if (below > 0 && (pass == 1 || g_trait[p] == TR_LOOTER))
+			{
+				g_layer[p] = LAYER_BELOW;
+				below--;
+			}
+			else if (high > 0 && (pass == 1 || g_trait[p] == TR_CAMPER))
+			{
+				g_layer[p] = LAYER_HIGH;
+				high--;
+			}
+		}
+	new line[48];
+	static const NAMES[][] = { "below", "surface", "high" };
+	for (new i = 0; i < n; i++)
+	{
+		new p = bots[i];
+		if (g_layer[p] < 0)
+			g_layer[p] = LAYER_SURFACE;
+		formatex(line, charsmax(line), "layer %d %s", p, NAMES[g_layer[p]]);
+		ls_comp_bots_hint(line);
+	}
+	arrayset(g_crateHeaded, 0, sizeof g_crateHeaded);
+}
+
+stock marker_layer(e)
+{
+	new v[16];
+	if (!ls_marker_get(e, "layer", v, charsmax(v)))
+		return -1;
+	if (equali(v, "below"))
+		return LAYER_BELOW;
+	if (equali(v, "high"))
+		return LAYER_HIGH;
+	if (equali(v, "surface"))
+		return LAYER_SURFACE;
+	return -1;
+}
+
+/* a full crate on the bot's layer, few others headed near it */
+stock crowd_pick_crate(id)
+{
+	new best = 0, Float:bs = -999999.0, Float:o[3], Float:q[3];
+	for (new e = ls_comp_find("ls_loot_container"); e; e = ls_comp_find("ls_loot_container", e))
+	{
+		if (ls_comp_state(e) != 0 || crate_layer(e) != g_layer[id])
+			continue;
+		pev(e, pev_origin, o);
+		new Float:sc = random_float(0.0, 400.0) + 100.0 * ls_comp_getf(e, "tier", 1.0);
+		for (new k = ls_comp_find("ls_loot_container"); k; k = ls_comp_find("ls_loot_container", k))
+		{
+			if (k >= sizeof g_crateHeaded || !g_crateHeaded[k])
+				continue;
+			pev(k, pev_origin, q);
+			new Float:d = get_distance_f(o, q);
+			if (d < 1200.0)
+				sc -= 800.0 * float(g_crateHeaded[k]) * (1.0 - d / 1200.0);
+		}
+		if (sc > bs)
+		{
+			bs = sc;
+			best = e;
+		}
+	}
+	if (best && best < sizeof g_crateHeaded)
+		g_crateHeaded[best]++;
+	return best;
+}
+
 /* room to fall from 250 units above a spot */
 stock bool:open_above(const Float:p[3])
 {
@@ -773,11 +909,19 @@ stock bool:open_above(const Float:p[3])
 }
 
 /* the open landing spot (br_drop marker, else respawn point) nearest to a point */
-stock bool:nearest_landing(const Float:p[3], Float:out[3])
+stock bool:nearest_landing(const Float:p[3], Float:out[3], layer = -1)
 {
 	new best = 0, Float:bd = 999999.0, Float:o[3];
+	/* a map can tag landing spots by layer (`layer` below / surface / high on the br_drop marker:
+	   spots by the stair-trench mouths are "below"); a bot for that layer takes those first */
+	new bool:tagged = false;
+	if (layer >= 0)
+		for (new e = ls_marker_find("br_drop"); e && !tagged; e = ls_marker_find("br_drop", e))
+			tagged = marker_layer(e) == layer;
 	for (new e = ls_marker_find("br_drop"); e; e = ls_marker_find("br_drop", e))
 	{
+		if (tagged && marker_layer(e) != layer)
+			continue;
 		pev(e, pev_origin, o);
 		new Float:d = get_distance_f(o, p);
 		/* (one someone already drops on is as good as further away: no crowd at one spot) */
@@ -866,11 +1010,13 @@ stock loot_goal_on_landing(p)
 		}
 	}
 	new t = g_lootTarget[p];
-	if (t && pev_valid(t) && ls_comp_state(t) == 0)
+	/* (the brain picks loot by itself, layer and crowding counted; only a bot meant for below
+	   ground is walked to its crate, the trenches and hatches being far) */
+	if (t && pev_valid(t) && ls_comp_state(t) == 0 && g_layer[p] == LAYER_BELOW)
 	{
 		new Float:o[3];
 		pev(t, pev_origin, o);
-		formatex(line, charsmax(line), "goal %d loot %.0f %.0f %.0f %d 55 %d 64", p, o[0], o[1], o[2], t, left + 30);
+		formatex(line, charsmax(line), "goal %d loot %.0f %.0f %.0f %d 55 %d 64", p, o[0], o[1], o[2], t, left + 60);
 		ls_comp_bots_hint(line);
 		/* below ground or far: walk there as ordered through the loot-up, the goal after */
 		server_cmd("ls_bot %d goto %.0f %.0f %.0f", p, o[0], o[1], o[2]);
@@ -907,6 +1053,27 @@ stock landing_spot(id, Float:out[3])
 	new Float:c[3], Float:r, closing;
 	ls_zone_next(0, c, r, closing);
 	g_lootTarget[id] = 0;
+	/* bots: a crate on their own layer that few others are headed to (crowding), landing on it
+	   if it's open to the sky, else at the nearest open landing spot to walk from */
+	if (is_user_bot(id) && g_trait[id] != TR_CAMPER && g_layer[id] >= 0)
+	{
+		new crate = crowd_pick_crate(id);
+		if (crate)
+		{
+			g_lootTarget[id] = crate;
+			pev(crate, pev_origin, out);
+			if (g_layer[id] != LAYER_SURFACE || !open_above(out))
+			{
+				new Float:o[3];
+				o = out;
+				if (nearest_landing(o, out, g_layer[id]))
+					return 1;
+			}
+			out[0] += random_float(-120.0, 120.0);
+			out[1] += random_float(-120.0, 120.0);
+			return 1;
+		}
+	}
 	if (is_user_bot(id) && g_trait[id] == TR_LOOTER)
 	{
 		/* looters spread over the layers: about every third goes for a crate below ground
@@ -1245,7 +1412,8 @@ stock bot_goals()
 			ls_comp_bots_hint(line);
 			continue;
 		}
-		if (g_trait[p] != TR_LOOTER || now < g_nextGoal[p] || g_phase == PH_WAIT)
+		/* (the loot-up and the first 90 s of the fight are the brain's own looting) */
+		if (g_trait[p] != TR_LOOTER || now < g_nextGoal[p] || g_phase == PH_WAIT || g_phase == PH_DROP || now - g_playAt < 90.0)
 			continue;
 		g_nextGoal[p] = now + random_float(15.0, 30.0);
 		/* the nearest full crate that's inside the zone (and not too far) */
@@ -1270,7 +1438,7 @@ stock bot_goals()
 			continue;
 		new Float:o[3];
 		pev(best, pev_origin, o);
-		formatex(line, charsmax(line), "goal %d loot %.0f %.0f %.0f %d 40 25 80", p, o[0], o[1], o[2], best);
+		formatex(line, charsmax(line), "goal %d loot %.0f %.0f %.0f %d 40 60 80", p, o[0], o[1], o[2], best);
 		ls_comp_bots_hint(line);
 	}
 }
