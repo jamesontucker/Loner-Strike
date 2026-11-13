@@ -637,3 +637,52 @@ triangle facing agrees with the normals 97% (63k of 2.0M disagree: models' own o
 - Not clicked through in the real app yet. The running app on this computer is the installed one, without these routes, and testing against the real game's maps folder would change real navs. First check: the rats2 flow above, including pointer picking at the app's text sizes.
 - Rebuild not run end to end (needs the hidden server). Check that the brain DLL loads in Valve's HLDS under CrossOver and that bots join with `bot_enable 1` from server.cfg.
 - Split, and a drag gizmo for move/resize (numeric inputs for now); multi-area link; a Problem spots feed from the health check and replays (plan 5.3).
+
+### Agent I: map editor (Beta) — 2026-11-12
+
+**Built**
+- `tools/editor.rs` (mounted in tools/mod.rs, contract in TOOLS-PLAN §3.8): one open document per app run,
+  held in Rust with E's `History`. `GET doc / meshes?doc&since / checks / textures / wads / tex/:name.png`,
+  `POST cmd / undo / redo / new / open / import-map / save / export-map`. The server keeps when each brush last
+  changed, so `meshes?since=REV` returns only those (plus `removed`); a new docId or no `since` gives everything.
+  Push/pull drags send the distance from where the drag started with one `drag` id, so steps are computed from
+  the brush as it was (face numbers can't shift) and fold into one undo step. Hollow on several brushes is one
+  step. Texture sizes are learned from the map's WADs (40-byte miptex headers) so UVs are right. Files only through
+  the system dialog; Save writes back to the project (`.lsmap`, E's JSON), atomic write. Never panics: numbers are
+  range-checked, work runs in spawn_blocking, the session lock survives a poisoned mutex.
+- `views/tools/editor/` (registered in registry.tsx): start screen (New map: open-sky room with 2 CT + 2 T spawns
+  and a sun; Open a project; Import a .map). The editor: one 3D view (B's Orbit/Fly cameras, F toggles), flat
+  Top/Front/Side on 2/3/4 (1 back to 3D); toolbar Select Q, Move W, Rotate E, Scale R (drei TransformControls,
+  live preview, one command on release), Box B / Cylinder C (drag a footprint on the floor or on top of a brush,
+  height and sides in the options bar), Clip X (two clicks, Tab picks the side, Enter cuts), Entity N (click a
+  surface), Texture T (click paints, Shift whole brush, Alt picks up). Select + drag a face of a picked brush =
+  push/pull (axis-aligned faces land on the grid). Snapping on by default, Alt ignores it, [ ] change the grid.
+  Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y), Delete, Ctrl+D duplicate, arrows/PgUp/PgDn nudge, H hollow, Ctrl+S save.
+  Side panels: Inspect (entity keys with colour pickers for `_light`/`rendercolor`, an angle dial, target name
+  suggestions, "sets off / set off by" links; brush actions hollow/merge/carve/snap/mirror/tie to entity/group;
+  face alignment shift/turn/scale/fit/centre/world/face; map settings: sky + WAD list from the game folders),
+  Outline (groups with hide/ungroup, entities, world brushes), Textures (the map's WADs, search, click to choose,
+  double-click to paint), Checks (E's checks, live; click an issue to pick it and look at it).
+  target -> targetname links are lines in 3D. Brush meshes are drawn with B's MapMaterials (read-only reuse of
+  coords.ts, materials.ts, Cameras.tsx, bundle.ts readLsmb, Scene.tsx canDraw3d/SceneBoundary).
+- Bundle: `MapEditor-*.js` 112 kB (33 kB gz) lazy chunk + 6 kB CSS; the start chunk is unchanged.
+
+**How to try it**
+- `cd app/src-tauri && cargo test tools::editor` (new map, commands, undo/redo, meshes since a revision,
+  a 3-step drag as one undo, bad commands change nothing, project/.map files, textures from a WAD).
+- In the app: Tools > Map editor.
+- Without the app: `LS_TEST_GAME="<Half-Life folder>" cargo test serve_editor_for_ui -- --ignored --nocapture`
+  serves just the editor routes on 127.0.0.1:8027, then `npm run dev` and a page that mounts `MapEditor` inside
+  ToastProvider/ConfirmProvider. Checked that way in Chromium with the real game WADs: new map, box drawing,
+  push/pull (one undo), gizmo move with snapping, texture painting from the browser, entity placing, clip,
+  view switching, live checks. Not tried yet in the Tauri webview (file dialogs only work there).
+
+**Left / notes**
+- Not done: texture drag handles on the face (buttons and fields only), vertex editing, prefabs, FGD-driven
+  entity forms (keys are free-form with help text for the common ones), drag-and-drop from the texture browser,
+  carve/merge previews, multi-face texture selection, compiling (separate task).
+- Big imported maps draw one mesh per brush (fine for a few thousand brushes; merge by texture if it's slow).
+- `ops::move_face` leaves float noise in plane points (e.g. 192.00000000000006); harmless in the view, E may want
+  to `tidy` there.
+- Requests (B): `viewer/Scene.tsx` could export its `pointerEvents` (I copied the ten lines). Its context-lost
+  listener would also fire when a canvas is unmounted on purpose; I check `gl.domElement.isConnected` first.
