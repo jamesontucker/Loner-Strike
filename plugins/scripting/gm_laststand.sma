@@ -11,7 +11,7 @@
  *
  * Needs gm_components.amxx (listed before this in laststand.plugins.ini).
  * Settings: lst_waves, lst_difficulty, lst_prepare, lst_break, lst_revive, lst_drops,
- * lst_creatures, lst_defenders. docs/COMPONENTS.md has the components; docs/CREATURES.md the
+ * lst_creatures, lst_defenders, lst_wait_human (1: the stand waits for a person on CT). docs/COMPONENTS.md has the components; docs/CREATURES.md the
  * creatures.
  */
 
