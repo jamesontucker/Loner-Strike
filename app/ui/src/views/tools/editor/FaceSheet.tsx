@@ -135,7 +135,7 @@ export function FaceSheet() {
       </div>
 
       <h4>
-        Justify <Info text="Line the texture up with an edge of the face, or centre it, or fit it once." />
+        Justify <Info text="Line the texture up with an edge of the face, or center it, or fit it once." />
       </h4>
       <div className="editor-justify" role="group" aria-label="Justify">
         {(
@@ -144,7 +144,7 @@ export function FaceSheet() {
             ["right", "Right"],
             ["top", "Top"],
             ["bottom", "Bottom"],
-            ["center", "Centre"],
+            ["center", "Center"],
             ["fit", "Fit"],
           ] as const
         ).map(([m, l]) => (
@@ -153,7 +153,7 @@ export function FaceSheet() {
           </button>
         ))}
       </div>
-      <label className="editor-check" title="Justify, fit and centre work across all the picked faces as one surface, like a wall made of several brushes">
+      <label className="editor-check" title="Justify, fit and center work across all the picked faces as one surface, like a wall made of several brushes">
         <input type="checkbox" checked={one} onChange={(e) => s.set({ treatAsOne: e.target.checked })} /> Treat as one
       </label>
       <div className="editor-row">

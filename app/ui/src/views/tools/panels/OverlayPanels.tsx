@@ -34,7 +34,7 @@ export function AreaPanel({ nav, know, index }: { nav: Nav; know: Know | null; i
       {a.place > 0 && <p className="small-note muted">{nav.places[a.place - 1]}</p>}
       <div className="row">
         <button className="btn small" onClick={() => look(nav.centres[index], 200)}>Look at</button>
-        <button className="btn small" onClick={async () => toast((await copyText(fmtVec(nav.centres[index]))) ? `Centre copied: ${fmtVec(nav.centres[index])}` : "Couldn't copy.")}>Copy centre</button>
+        <button className="btn small" onClick={async () => toast((await copyText(fmtVec(nav.centres[index]))) ? `Center copied: ${fmtVec(nav.centres[index])}` : "Couldn't copy.")}>Copy center</button>
         <button className="btn small" onClick={() => select(null)}>Clear</button>
       </div>
       <dl className="tools-keys">

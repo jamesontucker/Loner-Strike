@@ -1241,7 +1241,7 @@ async fn api_cancel_invite(UrlPath(iid): UrlPath<String>, headers: HeaderMap, on
             let n = s.invites.len();
             s.invites.retain(|i| i.id.is_empty() || i.id != iid);
             if s.invites.len() == n {
-                return Err("That invite was already used, cancelled or ran out.".into());
+                return Err("That invite was already used, canceled or ran out.".into());
             }
             Ok(json!({"ok": true}))
         });

@@ -48,7 +48,7 @@ const GAME = "Counter-Strike";
 const SHARE_LABEL: Record<string, string> = {
   connect: "Connecting to playit.gg…",
   disconnect: "Disconnecting from playit.gg…",
-  cancel: "Cancelling…",
+  cancel: "Canceling…",
   start: "Starting sharing…",
   stop: "Stopping sharing…",
   server: "Saving your server…",
@@ -295,7 +295,7 @@ export function Friends({ data, refresh, server, settings }: { data: Online | nu
           ) : sh.claim?.step === "failed" ? (
             <><p className="err-text">{sh.claim.error}</p><BusyButton className="btn primary" busy={busy("connect")} label="Try again" busyLabel="Connecting…" onClick={() => act("connect")} /></>
           ) : sh.claim ? (
-            <><p><a href={sh.claim.url} target="_blank" rel="noreferrer">Open playit.gg to approve this computer</a>, then come back. {sh.claim.step === "approve" ? <><span className="spinner" aria-hidden="true" />Waiting for you to approve…</> : "Waiting for the page to open…"}</p><BusyButton busy={busy("cancel")} label="Cancel" busyLabel="Cancelling…" onClick={() => act("cancel")} /></>
+            <><p><a href={sh.claim.url} target="_blank" rel="noreferrer">Open playit.gg to approve this computer</a>, then come back. {sh.claim.step === "approve" ? <><span className="spinner" aria-hidden="true" />Waiting for you to approve…</> : "Waiting for the page to open…"}</p><BusyButton busy={busy("cancel")} label="Cancel" busyLabel="Canceling…" onClick={() => act("cancel")} /></>
           ) : (
             <BusyButton className="btn primary" busy={busy("connect")} label="Connect to playit.gg" busyLabel="Connecting…" onClick={async () => { const r = await act("connect"); if (r?.claim) window.open(r.claim.url, "_blank"); }} />
           )}

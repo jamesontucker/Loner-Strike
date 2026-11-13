@@ -50,7 +50,7 @@ const FAILED_ON_COMPUTER = "Trying again, rebuilding and deleting are done on th
 /** How long a server on this computer keeps running (the switch's name is in AppSettings). */
 const RUNS_WHILE = "A server on this computer runs while Loner-Strike is open, or after you quit if you switch on Keep running after I close Loner-Strike on its Overview tab.";
 const PUBLIC_ADDRESS_INFO =
-  "A domain name that points at this server. The app shows it in place of the IP: in invites, the HLTV address and the join links. Point the name at the server's IP with your DNS provider; with Cloudflare, set it to DNS only (grey cloud), since the game's traffic can't go through its proxy.";
+  "A domain name that points at this server. The app shows it in place of the IP: in invites, the HLTV address and the join links. Point the name at the server's IP with your DNS provider; with Cloudflare, set it to DNS only (gray cloud), since the game's traffic can't go through its proxy.";
 const WHO_CAN_JOIN = "This network: only people on your Wi-Fi. Anyone with the address: friends join with the address you send, strangers can't find it. Listed on Steam: anyone can find it in the Internet tab.";
 
 type Reply = { ok?: boolean; error?: string; job?: string; id?: string; path?: string; note?: string | null; admins?: number; loner?: boolean; dir?: string | null; lines?: string[]; reply?: string; need_restart_game?: boolean; restart?: boolean; password?: string; public_address?: string | null; listing?: { ok: boolean; error?: string } | null };

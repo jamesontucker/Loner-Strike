@@ -200,7 +200,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
       title: "Help and fun",
       items: [
         item("respawn", "Respawn"),
-        item("heal", "Heal and armour", { show: !!p.alive }),
+        item("heal", "Heal and armor", { show: !!p.alive }),
         item("money", "Give $16,000"),
         item("team", "Switch team"),
         item("freeze", p.frozen ? "Unfreeze" : "Freeze", { show: !!p.alive }),
@@ -344,7 +344,7 @@ export function Players({ data, refresh }: { data: Online; refresh: () => void }
                         <div className="row">
                           {pb(p, "god", p.god ? "God mode off" : "God mode")}
                           {pb(p, "noclip", p.noclip ? "Noclip off" : "Noclip")}
-                          {pb(p, "heal", "Heal and armour")}
+                          {pb(p, "heal", "Heal and armor")}
                           {pb(p, "money", "Give $16,000")}
                           {pb(p, "respawn", "Respawn")}
                           {pb(p, "team", "Switch team")}

@@ -230,7 +230,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
             </Sheet>
           )}
           <div className="field">
-            <span id="start-map">Map<Info text="Maps made for this mode come first, then recent ones and favourites. Open the list and type to search." /></span>
+            <span id="start-map">Map<Info text="Maps made for this mode come first, then recent ones and favorites. Open the list and type to search." /></span>
             <MapPicker value={map} maps={maps} mode={mode?.id} modeName={mode?.name} recent={recent} favs={favs} onPick={(m) => setDraft({ map: m })} labelledBy="start-map" />
           </div>
         </div>
@@ -411,7 +411,7 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
     : [
         [`Maps for ${modeName ?? "this mode"}`, forMode],
         ["Recently played", recent],
-        ["Favourites", favs],
+        ["Favorites", favs],
         ["All maps", have],
       ];
   const shown = groups.map(([label, list]) => [label, list.slice(0, query ? 80 : 200)] as [string, MapInfo[]]).filter(([, l]) => l.length);
@@ -514,7 +514,7 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
   const filters: ["mode" | "all" | "fav" | "recent", string][] = [
     ...(suggested.length ? [["mode", `Maps for ${mode.name}`] as ["mode", string]] : []),
     ["all", "All"],
-    ["fav", "Favourites"],
+    ["fav", "Favorites"],
     ["recent", "Recent"],
   ];
   const which = show && filters.some(([id]) => id === show) ? show : listed === null ? "mode" : filters[0][0];
@@ -530,7 +530,7 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
     useNav.getState().go(s, s === "more" ? "maps" : undefined);
   };
   const emptyNote =
-    which === "fav" ? <>No favourite maps yet. Star maps on the <button type="button" className="link inline" onClick={() => goTo("maps")}>Maps page</button>.</>
+    which === "fav" ? <>No favorite maps yet. Star maps on the <button type="button" className="link inline" onClick={() => goTo("maps")}>Maps page</button>.</>
     : which === "recent" ? "No maps played yet."
     : <>No maps yet. Get some from <button type="button" className="link inline" onClick={() => goTo("more")}>Get more</button>.</>;
   const fits = !listed?.length && (!prefixes.length || prefixes.some((p) => map.toLowerCase().startsWith(p)));

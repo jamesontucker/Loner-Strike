@@ -52,7 +52,7 @@ loaded up front.
 | `enabled` | 1/0: on at round start |
 | `target` | entities to set off when its main thing happens (see each component) |
 | `team` | `0`/`any`, `1`/`t`, `2`/`ct` |
-| `radius`, `height`, `size` | areas: a cylinder (`radius` around, `height` above the floor) or a box (`size` = "x y z", centred on the point); a brush entity uses its brush |
+| `radius`, `height`, `size` | areas: a cylinder (`radius` around, `height` above the floor) or a box (`size` = "x y z", centered on the point); a brush entity uses its brush |
 
 - Every component goes back to how its keys say at each new round (`ls_comp_round_reset 1`);
   run-time crates are removed. Times "after the round starts" count from Round_Start (freeze time
@@ -81,8 +81,8 @@ loaded up front.
   ring dimmer) for players within 1500 u of the edge, plus the 3 nearest areas (16 segments, 12 when
   far; boxes as 4-segment outlines). A `TE_BEAMCYLINDER` pulse when the zone starts closing. Supply
   crates get one vertical beacon beam a second.
-- **Glow** by loot tier (grey, green, blue, purple, gold); spawn protection glows.
-- `ls_comp_radar 1`: a radar dot at the zone centre (when outside), an open extraction or a crate,
+- **Glow** by loot tier (gray, green, blue, purple, gold); spawn protection glows.
+- `ls_comp_radar 1`: a radar dot at the zone center (when outside), an open extraction or a crate,
   using a free player slot's `Radar` message. Not yet checked on the stock client.
 
 ## How bots learn what it means
@@ -101,7 +101,7 @@ bots walk to capture points, open extractions and meetings with the brain's olde
 | `forget c<ent>` | taken / empty / disarmed / switched off |
 | `block <door\|barricade ent> -1\|0` | a locked closed timed door, a standing barricade (`blocks_bots=1`); 0 lifts it |
 | `zone cx cy cz r ncx ncy ncz nr shrink_at` / `zone_clear` | the safe zone and the next circle |
-| `platform c<ent> <train ent> <moving 0\|1> x y z` | a moving platform started or stopped (top centre) |
+| `platform c<ent> <train ent> <moving 0\|1> x y z` | a moving platform started or stopped (top center) |
 | `profile <bot> <name>` | a class with `bot_profile` given to a bot |
 
 Modes can send their own lines with `ls_comp_bots_hint("goal all defend 1 2 3")`.
@@ -162,7 +162,7 @@ status line says how far and which way.
 Shrinks a safe zone in stages "radius:warn:shrink:damage": warn (next circle drawn, announced,
 round clock counts down), then closes in over `shrink` seconds with the stage's damage.
 - Keys: `zone` (targetname, empty = first), `stages`, `start_delay` (30, -1 manual),
-  `random_center` (1: each centre lands inside the last circle, on open ground), `final_r`, `roundtime`.
+  `random_center` (1: each center lands inside the last circle, on open ground), `final_r`, `roundtime`.
 - Forward: `ls_on_zone_stage(zone ent, stage)` when a stage starts closing.
 - Natives: `ls_zone_stage(ent)`, `ls_zone_skip(ent)`, `ls_comp_start/stop`.
 - Bots: the zone's `zone` line, sent at each warn.
@@ -196,7 +196,7 @@ Sets off its `target` entities (buttons, hurts, doors, env_*) after `delay`, hur
 ### ls_capture_point
 Stand on it to take it: `capture_secs` alone, up to 3x faster with more (`multiplier`), frozen while
 both sides are on it, decays back when nobody is (`decay`). `ffa=1`: held by one player (King of the
-Hill). Ring in the owner's colour, BarTime while taking.
+Hill). Ring in the owner's color, BarTime while taking.
 - Keys: area keys, `capture_secs` (10), `multiplier`, `decay` (1), `team_lock`, `start_owner`, `ffa`, `target`.
 - Forwards: `ls_on_capture(ent, side, id)`, `ls_on_capture_contested(ent)`, `ls_on_capture_lost(ent, side)`,
   `ls_on_capture_tick(ent, side, id)` (each second held: once with id 0, then per holder on it).

@@ -26,7 +26,7 @@ export const GUIDES: Guide[] = [
   { title: "Intro to AMX Mod X scripting", url: "https://wiki.alliedmods.net/Intro_to_AMX_Mod_X_Scripting", what: "Your first plugin: registering it, commands, cvars, events." },
   { title: "Pawn tutorial", url: "https://wiki.alliedmods.net/Pawn_Tutorial", what: "The language itself: variables, arrays, strings, tags (Float:), functions." },
   { title: "Advanced scripting", url: "https://wiki.alliedmods.net/Advanced_Scripting_(AMX_Mod_X)", what: "Tasks, menus, forwards between plugins, natives, dynamic arrays." },
-  { title: "AMX Mod X scripting articles", url: "https://wiki.alliedmods.net/Category:Scripting_(AMX_Mod_X)", what: "The AlliedModders wiki's scripting pages: optimising, translations, SQL, more." },
+  { title: "AMX Mod X scripting articles", url: "https://wiki.alliedmods.net/Category:Scripting_(AMX_Mod_X)", what: "The AlliedModders wiki's scripting pages: optimizing, translations, SQL, more." },
   { title: "Half-Life game events", url: "https://wiki.alliedmods.net/Half-Life_1_Game_Events", what: "The messages and events you can hook (DeathMsg, ResetHUD, …) and what they carry." },
   { title: "AMX Mod X documentation", url: "https://wiki.alliedmods.net/Category:Documentation_(AMX_Mod_X)", what: "Installing, configuring, plugins.ini, the compiler and its options." },
   { title: "AlliedModders forums", url: "https://forums.alliedmods.net/", what: "Ask in AMX Mod X ▸ Scripting Help; Code Snippets/Tutorials has worked examples." },

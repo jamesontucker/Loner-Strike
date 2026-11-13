@@ -2263,7 +2263,7 @@
    "type": "comp.zone_set",
    "title": "Set Zone",
    "category": "Components",
-   "help": "Sets a safe zone's radius (wire the Safe zone, or the Shrinking zone that drives it), and moves its centre to an entity wired into Centre or the one with this name (no name: it stays where it is).",
+   "help": "Sets a safe zone's radius (wire the Safe zone, or the Shrinking zone that drives it), and moves its center to an entity wired into Center or the one with this name (no name: it stays where it is).",
    "inputs": [
     {
      "id": "exec",
@@ -2279,7 +2279,7 @@
     {
      "id": "at_ent",
      "type": "entity",
-     "label": "Centre",
+     "label": "Center",
      "optional": true
     },
     {
@@ -2299,7 +2299,7 @@
    "params": [
     {
      "id": "at",
-     "label": "Centre at the entity named",
+     "label": "Center at the entity named",
      "kind": "name",
      "default": ""
     },
@@ -2318,7 +2318,7 @@
    "type": "comp.zone_shrink",
    "title": "Shrink Zone",
    "category": "Components",
-   "help": "Shrinks a safe zone (or a Shrinking zone's) over some seconds to a new radius, around an entity wired into Centre or the one with this name (no name: its centre stays).",
+   "help": "Shrinks a safe zone (or a Shrinking zone's) over some seconds to a new radius, around an entity wired into Center or the one with this name (no name: its center stays).",
    "inputs": [
     {
      "id": "exec",
@@ -2334,7 +2334,7 @@
     {
      "id": "at_ent",
      "type": "entity",
-     "label": "Centre",
+     "label": "Center",
      "optional": true
     },
     {
@@ -2354,7 +2354,7 @@
    "params": [
     {
      "id": "at",
-     "label": "New centre at the entity named",
+     "label": "New center at the entity named",
      "kind": "name",
      "default": ""
     },
@@ -3496,7 +3496,7 @@
    "type": "player.set_glow",
    "title": "Set Glow",
    "category": "Players",
-   "help": "Makes a player glow in a colour (or not).",
+   "help": "Makes a player glow in a color (or not).",
    "inputs": [
     {
      "id": "exec",
@@ -3520,7 +3520,7 @@
    "params": [
     {
      "id": "color",
-     "label": "Colour",
+     "label": "Color",
      "kind": "choice",
      "default": "red",
      "choices": [

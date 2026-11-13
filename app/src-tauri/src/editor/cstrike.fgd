@@ -18,14 +18,14 @@
 	rendermode(choices) : "Draw mode" : 0 : "How it's drawn: Normal is solid; Texture and Additive let you see through it." =
 	[
 		0 : "Normal"
-		1 : "Colour"
+		1 : "Color"
 		2 : "Texture"
 		3 : "Glow"
 		4 : "Solid (cut-out blue)"
 		5 : "Additive"
 	]
 	renderamt(integer) : "See-through amount" : 255 : "0 is invisible, 255 is fully drawn (for modes other than Normal)."
-	rendercolor(color255) : "Tint colour" : "0 0 0" : "Colour used by the Colour and Glow modes."
+	rendercolor(color255) : "Tint color" : "0 0 0" : "Color used by the Color and Glow modes."
 	renderfx(choices) : "Effect" : 0 : "A moving effect on top of the draw mode." =
 	[
 		0 : "None"
@@ -249,7 +249,7 @@
 
 @BaseClass base(Targetname) = LightBase
 [
-	_light(color255) : "Colour and brightness" : "255 255 128 200" : "Red, green, blue (0-255) and brightness."
+	_light(color255) : "Color and brightness" : "255 255 128 200" : "Red, green, blue (0-255) and brightness."
 	style(choices) : "Flicker style" : 0 : "A pattern the light follows." =
 	[
 		0 : "Steady"
@@ -296,8 +296,8 @@
 @PointClass base(Angle) size(-8 -8 -8, 8 8 8) color(255 255 0) = light_environment : "The sun: lights everything that can see the sky. Use one per map."
 [
 	pitch(integer) : "Sun height" : -90 : "Negative numbers shine down (-90 straight down, -30 a low sun)."
-	_light(color255) : "Sunlight colour and brightness" : "255 255 128 200" : "Red, green, blue (0-255) and brightness."
-	_diffuse_light(color255) : "Sky light colour and brightness" : : "Soft light from the whole sky (newer compilers)."
+	_light(color255) : "Sunlight color and brightness" : "255 255 128 200" : "Red, green, blue (0-255) and brightness."
+	_diffuse_light(color255) : "Sky light color and brightness" : : "Soft light from the whole sky (newer compilers)."
 ]
 @SolidClass base(Targetname, LightBase) = light_surface : "Brushes that give off light (newer compilers)." []
 
@@ -385,15 +385,15 @@
 		1 : "Everyone on the map" : 0
 	]
 ]
-@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(0 200 255) = env_fade : "Fades players' screens to a colour."
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(0 200 255) = env_fade : "Fades players' screens to a color."
 [
 	duration(float) : "Fade seconds" : 2
 	holdtime(float) : "Hold seconds" : 0
 	renderamt(integer) : "Strength" : 255
-	rendercolor(color255) : "Colour" : "0 0 0"
+	rendercolor(color255) : "Color" : "0 0 0"
 	spawnflags(flags) =
 	[
-		1 : "Fade in (from the colour)" : 0
+		1 : "Fade in (from the color)" : 0
 		4 : "Only the player who set it off" : 0
 	]
 ]
@@ -402,7 +402,7 @@
 	startdist(integer) : "Starts at" : 0
 	enddist(integer) : "Thick at" : 1000
 	density(string) : "Density" : "0.001" : "How thick the fog is (0.0005 light to 0.003 thick)."
-	rendercolor(color255) : "Colour" : "128 128 128"
+	rendercolor(color255) : "Color" : "128 128 128"
 ]
 @PointClass size(-8 -8 -8, 8 8 8) color(160 200 255) = env_rain : "Rain on the whole map (players see it outdoors)." []
 @PointClass size(-8 -8 -8, 8 8 8) color(255 255 255) = env_snow : "Snow on the whole map (players see it outdoors)." []
@@ -421,14 +421,14 @@
 	rendermode(choices) : "Draw mode" : 0 =
 	[
 		0 : "Normal"
-		1 : "Colour"
+		1 : "Color"
 		2 : "Texture"
 		3 : "Glow"
 		4 : "Solid"
 		5 : "Additive"
 	]
 	renderamt(integer) : "See-through amount" : 255
-	rendercolor(color255) : "Tint colour" : "0 0 0"
+	rendercolor(color255) : "Tint color" : "0 0 0"
 ]
 @PointClass base(Targetname, Angles) size(-4 -4 -4, 4 4 4) decal() = infodecal : "A decal (a painted-on picture like a crack or blood) on the nearest wall."
 [
@@ -502,16 +502,16 @@
 @PointClass base(Targetname, Target) size(-8 -8 -8, 8 8 8) color(128 255 128) = game_text : "Shows text on screen when set off."
 [
 	message(string) : "Text" : : "Up to 512 letters; \n starts a new line."
-	x(string) : "Across (0-1, -1 centre)" : "-1"
-	y(string) : "Down (0-1, -1 centre)" : "-1"
+	x(string) : "Across (0-1, -1 center)" : "-1"
+	y(string) : "Down (0-1, -1 center)" : "-1"
 	effect(choices) : "Effect" : 0 =
 	[
 		0 : "Fade in and out"
 		1 : "Credits (flicker)"
 		2 : "Typed out"
 	]
-	color(color255) : "Colour" : "100 100 100"
-	color2(color255) : "Highlight colour" : "240 110 0"
+	color(color255) : "Color" : "100 100 100"
+	color2(color255) : "Highlight color" : "240 110 0"
 	fadein(string) : "Fade in seconds" : "1.5"
 	fadeout(string) : "Fade out seconds" : "0.5"
 	holdtime(string) : "Seconds on screen" : "1.2"
@@ -591,7 +591,7 @@
 ]
 @SolidClass base(Door) = func_door : "A door that slides along its facing when touched or set off."
 [
-	angle(angle) : "Opens towards" : 0 : "Which way it slides. -1 is up, -2 is down."
+	angle(angle) : "Opens toward" : 0 : "Which way it slides. -1 is up, -2 is down."
 ]
 @SolidClass base(Door) = func_door_rotating : "A door that swings round an origin brush."
 [
@@ -681,7 +681,7 @@
 @SolidClass base(Targetname, RenderFields, ZHLT) = func_conveyor : "A conveyor belt: moves what stands on it and scrolls its texture."
 [
 	speed(integer) : "Speed" : 100
-	angle(angle) : "Moves towards" : 0
+	angle(angle) : "Moves toward" : 0
 	spawnflags(flags) =
 	[
 		1 : "Doesn't push" : 0

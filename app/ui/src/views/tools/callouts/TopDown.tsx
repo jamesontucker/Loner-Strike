@@ -335,7 +335,7 @@ export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey, to
         ref={canvas}
         style={{ width: size.w, height: size.h, cursor: drag?.kind === "pan" ? "grabbing" : tool === "pick" ? "default" : "crosshair" }}
         role="img"
-        aria-label="The bot nav seen from above, coloured by place"
+        aria-label="The bot nav seen from above, colored by place"
         onMouseDown={onDown}
         onMouseMove={onHover}
         onMouseLeave={() => (setHover(null), onHoverArea?.(null))}

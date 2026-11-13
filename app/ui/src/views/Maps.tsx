@@ -19,7 +19,7 @@ const TEACH_INFO = "A hidden server on this computer loads each map and a bot wa
 const RELEARN_INFO = "Bots learn the picked maps again even if they know them already, replacing what they learned before. Useful when bots get stuck on a map.";
 const SEND_INFO = "Sends what bots learned about this map (its .nav file) to all your servers now. Only that file goes: a server without the map itself still needs the map.";
 const SHOW_INFO = "Hidden maps stay installed but are left out of lists, the in-game map menu and map votes. Bots spend a few minutes learning a map the first time it's played. In Counter-Strike 1.6, Condition Zero's own maps (which 1.6 can't load) show only when you pick them here.";
-const SORTS: [string, string][] = [["name", "A to Z"], ["name-desc", "Z to A"], ["played", "Recently played"], ["favs", "Favourites first"], ["type", "By type"], ["source", "Downloaded first"]];
+const SORTS: [string, string][] = [["name", "A to Z"], ["name-desc", "Z to A"], ["played", "Recently played"], ["favs", "Favorites first"], ["type", "By type"], ["source", "Downloaded first"]];
 const SOURCE_ORDER = ["download", "added", "stock"];
 const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by you" };
 /** Where a map came from: one added with "Add a map file" is filed as a download (with a negative mod) but is yours. */
@@ -64,7 +64,7 @@ export const MapCard = memo(function MapCard({ map, onClick, current, onFav, sel
       <div className={`map-pic${map.thumb === "radar" ? " radar" : ""}`}>
         {(map.thumb !== "radar" || broken) && <NoPicture name={map.name} />}
         {map.thumb && !broken && <img src={withTarget(`/thumb/${encodeURIComponent(map.name)}.png?v=${map.thumb}`)} alt="" loading="lazy" onError={() => setBrokenFor(map.thumb)} />}
-        {!onFav && map.fav && <span className="fav-star" aria-label="Favourite">★</span>}
+        {!onFav && map.fav && <span className="fav-star" aria-label="Favorite">★</span>}
       </div>
       <span className="map-label">{map.name}</span>
       {map.other && <span className="map-sub" title={otherNote(map)[1]}>{otherNote(map)[0]}</span>}
@@ -81,8 +81,8 @@ export const MapCard = memo(function MapCard({ map, onClick, current, onFav, sel
         <button
           type="button"
           className={`fav-toggle${map.fav ? " on" : ""}`}
-          aria-label={map.fav ? `Remove ${map.name} from favourites` : `Add ${map.name} to favourites`}
-          title={map.fav ? "Remove from favourites" : "Add to favourites"}
+          aria-label={map.fav ? `Remove ${map.name} from favorites` : `Add ${map.name} to favorites`}
+          title={map.fav ? "Remove from favorites" : "Add to favorites"}
           onClick={() => onFav(map)}
         >
           {map.fav ? "★" : "☆"}
@@ -252,10 +252,10 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
     const r = await postJson<{ ok?: boolean; error?: string }>("/api/mapflag", { flag: f, map: map.name, on }).catch(() => ({ error: "Couldn't save that." }));
     if (r.error) return toast(r.error, true);
     if (f === "hidden") toast(on ? `${map.name} is hidden. Find it with Show: Hidden.` : `${map.name} is back in the list.`);
-    if (f === "fav") toast(on ? `${map.name} added to favourites` : `${map.name} removed from favourites`);
+    if (f === "fav") toast(on ? `${map.name} added to favorites` : `${map.name} removed from favorites`);
     setPicked(null);
     reload();
-  }, f === "fav" ? (on ? `Adding ${map.name} to favourites…` : `Removing ${map.name} from favourites…`) : on ? `Hiding ${map.name}…` : `Showing ${map.name} again…`);
+  }, f === "fav" ? (on ? `Adding ${map.name} to favorites…` : `Removing ${map.name} from favorites…`) : on ? `Hiding ${map.name}…` : `Showing ${map.name} again…`);
 
   // the same function for every card, so the cards' memo holds
   const toggleFav = useStable((m: MapInfo) => flag(m, "fav", !m.fav));
@@ -395,7 +395,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
               ) : (
                 !currentTarget() && !picked.hidden && <button className="btn primary" onClick={() => startOn(picked.name)}>Start a game on {picked.name}</button>
               )}
-              <BusyButton busy={busy(key(`flag:fav:${picked.name}`))} label={picked.fav ? "Remove from favourites" : "Favourite"} busyLabel="Saving…" onClick={() => flag(picked, "fav", !picked.fav)} />
+              <BusyButton busy={busy(key(`flag:fav:${picked.name}`))} label={picked.fav ? "Remove from favorites" : "Favorite"} busyLabel="Saving…" onClick={() => flag(picked, "fav", !picked.fav)} />
               <BusyButton busy={busy(key(`flag:hidden:${picked.name}`))} label={picked.hidden ? "Show again" : "Hide"} busyLabel={picked.hidden ? "Showing…" : "Hiding…"} onClick={() => flag(picked, "hidden", !picked.hidden)} />
               {canTeach && picked.nav && (
                 <span className="row">

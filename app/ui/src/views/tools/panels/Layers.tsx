@@ -4,7 +4,7 @@ import type { Overlays } from "../MapViewer";
 import { LookChoice } from "../viewer/LookChoice";
 
 const ROWS: [keyof LayerSet, string, string][] = [
-  ["textures", "Textures", "The map's own pictures on every surface. Off: a plain colour per texture, easier on the eyes when you're looking at shapes."],
+  ["textures", "Textures", "The map's own pictures on every surface. Off: a plain color per texture, easier on the eyes when you're looking at shapes."],
   ["lighting", "Lighting", "The light and shadow baked into the map, as in the game. Off: everything evenly lit."],
   ["entities", "Spawns & items", "Spawn points (T orange, CT blue), lights, items, sounds and other markers."],
   ["moving", "Doors & breakables", "Doors, breakable glass and boxes, ladders, lifts and other moving parts."],
@@ -23,7 +23,7 @@ const KNOW_HELP: Record<KnowMode, string> = {
   off: "",
   cover: "Green areas are sheltered, red ones open. Pick an area for how far it's open in 16 directions (yellow crouched, blue standing).",
   sight: "Areas tinted by how much they see. Pick an area for lines to everything visible from it (yellow: it sees even a crouching player there).",
-  bangs: "Walls bots learned to shoot through, coloured by material. Pick an area to see only its own.",
+  bangs: "Walls bots learned to shoot through, colored by material. Pick an area to see only its own.",
   corners: "Corners bots peek around, with the way each opens.",
   angles: "Pick an area for the angles bots watch from it; brighter = more important.",
 };
@@ -67,7 +67,7 @@ export function Layers({ overlays }: { overlays: Overlays }) {
                 {nav.areas.length} areas{nav.islands > 1 ? `, ${nav.islands - 1} cut off from the rest` : ""}{nav.oneWay.length ? `, ${nav.oneWay.length} one-way links` : ""}{nav.ladders.length ? `, ${nav.ladders.length} ladders` : ""}.
               </p>
               <label className="tools-field">
-                <span>Colour by</span>
+                <span>Color by</span>
                 <select value={navColour} onChange={(e) => setNavColour(e.target.value as NavColour)}>
                   <option value="island">Connected or cut off</option>
                   <option value="place" disabled={!nav.places.length}>Place names{nav.places.length ? "" : " (none)"}</option>

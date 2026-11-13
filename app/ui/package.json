@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test:studio": "node scripts/test-studio.mjs",
+    "test:english": "python3 ../../scripts/us-english-check.py",
     "test:dock": "node scripts/test-dock.mjs",
     "tidy:studio": "node scripts/tidy-studio-templates.mjs",
     "tauri": "node scripts/tauri.mjs",

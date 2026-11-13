@@ -343,7 +343,7 @@ footer a { color: var(--dim); }
   <h1>Maps</h1>
   <p class="lead">Finding maps, getting new ones, and teaching them to the bots.</p>
   <h2 id="browse-maps">Browse</h2>
-  <p>The Maps page shows every map you have, with pictures, search, map types, favourites and hidden maps. Pictures fill in by themselves in the background. Open a map to start a game on it or send it to your servers.</p>
+  <p>The Maps page shows every map you have, with pictures, search, map types, favorites and hidden maps. Pictures fill in by themselves in the background. Open a map to start a game on it or send it to your servers.</p>
   <p>Maps you download work in both games. Condition Zero's own <code>_cz</code> maps only load in Condition Zero, so Counter-Strike 1.6 leaves them out of its lists, rotations and votes; <b>Show</b> lists them if you want to look.</p>
   <h2 id="get-maps">Get new maps</h2>
   <ul>
@@ -439,7 +439,7 @@ footer a { color: var(--dim); }
   <ul>
     <li><b>Barricades</b>: hold <span class="kbd">E</span> (use) on a gate's boards to repair them, board by board.</li>
     <li><b>Reviving</b>: a downed teammate can be picked up. Hold use on them.</li>
-    <li><b>Buying</b>: the buy menu works during waves too, in buy zones. The armory shop (press use there, or say <code>/shop</code>) sells repair kits, armour, grenades, ammo and medkits, a bit dearer each wave.</li>
+    <li><b>Buying</b>: the buy menu works during waves too, in buy zones. The armory shop (press use there, or say <code>/shop</code>) sells repair kits, armor, grenades, ammo and medkits, a bit dearer each wave.</li>
   </ul>
   <h2 id="ls-outpost">ls_outpost</h2>
   <p>A walled desert outpost at night. Three gates (west, east and south) are closed by boarded barricades you can shoot through. A firing step runs along the walls where creatures can't reach you, the keep in the north is the last place to hold, and the armory has the shop. Supply drops land in the field outside the west wall: climb down the ladder to get them. Creatures can't climb.</p>
@@ -484,7 +484,7 @@ footer a { color: var(--dim); }
     <li><b>Supply drops</b> land during the game with the best loot.</li>
   </ul>
   <h2 id="br-valley">br_valley</h2>
-  <p>A river valley by day, about 180 metres a side, with a town (the town hall's roof has a sniper rifle), a factory, a farm, radio hill (the best crate on the map), docks, a gas station, a quarry, a bunker with the best loot, a lumber camp, cabins and woods. Three bridges and two fords cross the river, with tunnels underneath. It plays best with 16 to 28 players: fill the rest with bots.</p>
+  <p>A river valley by day, about 180 meters a side, with a town (the town hall's roof has a sniper rifle), a factory, a farm, radio hill (the best crate on the map), docks, a gas station, a quarry, a bunker with the best loot, a lumber camp, cabins and woods. Three bridges and two fords cross the river, with tunnels underneath. It plays best with 16 to 28 players: fill the rest with bots.</p>
   <h2 id="br-settings">Settings</h2>
   <p><span class="kbd">F3</span> (or <code>say /br</code>):</p>
   <div class="table"><table>
@@ -592,7 +592,7 @@ footer a { color: var(--dim); }
     <li>Smoke blocks their view. They don't see through it.</li>
   </ul>
   <h2 id="bots-aim" data-keywords="aim reaction flick headshot">How they aim</h2>
-  <p>Their aim is modelled on a hand on a mouse: still most of the time, then a flick that lands a touch off and gets corrected. They react after a moment, not instantly. Better players react sooner, flick faster and land closer; newer ones turn slower and miss more. They aim around head height, and at the head when that's all that shows over cover.</p>
+  <p>Their aim is modeled on a hand on a mouse: still most of the time, then a flick that lands a touch off and gets corrected. They react after a moment, not instantly. Better players react sooner, flick faster and land closer; newer ones turn slower and miss more. They aim around head height, and at the head when that's all that shows over cover.</p>
   <h2 id="bots-fight" data-keywords="cover reload strafe wallbang">How they fight</h2>
   <ul>
     <li>Each bot has its own habit for stopping to shoot: a quick counter-strafe for the good ones, a walk or a crouch for others, and some just run and gun.</li>
@@ -805,14 +805,14 @@ footer a { color: var(--dim); }
   </table></div>
   <ul>
     <li><b>Snapping</b> is on, to a 16-unit grid. <span class="kbd">[</span> and <span class="kbd">]</span> change the grid; hold <span class="kbd">Alt</span> to ignore it for a moment.</li>
-    <li><b>Edit</b> has the modelling moves: <b>Hollow</b> (<span class="kbd">Cmd</span> <span class="kbd">H</span>), <b>Carve</b>, <b>Merge</b>, <b>Duplicate</b>, <b>Paste special…</b> (copies in a row, ring or spiral), <b>Group</b>, and <b>Tie to entity</b> to make a door or a func_wall.</li>
+    <li><b>Edit</b> has the modeling moves: <b>Hollow</b> (<span class="kbd">Cmd</span> <span class="kbd">H</span>), <b>Carve</b>, <b>Merge</b>, <b>Duplicate</b>, <b>Paste special…</b> (copies in a row, ring or spiral), <b>Group</b>, and <b>Tie to entity</b> to make a door or a func_wall.</li>
     <li><b>Select</b> has <b>Select same texture</b>, <b>Hide</b> (<span class="kbd">H</span>), <b>Hide everything else</b> and <b>Lock</b>.</li>
     <li>Copy and paste work between maps, and with other editors: copies travel as .map text.</li>
   </ul>
   <h2 id="editor-textures">Textures</h2>
   <p>The <b>Textures</b> panel shows every texture in the map's texture files (WADs). Click one to choose it; double-click to paint what's picked, or press <span class="kbd">Shift</span> <span class="kbd">T</span>. The Texture tool's sheet sets shift, scale and turn, fits a texture to a face, and lines textures up like a floor or along a slope. <b>Texture lock</b> keeps textures in place when you move a brush. Add texture files in <b>Map properties</b>.</p>
   <h2 id="editor-entities">Entities</h2>
-  <p>Pick an entity and <b>Inspect</b> shows a form for it: choices, colour pickers for lights, an angle dial, flags, and help on every key. Links between a <code>target</code> and a <code>targetname</code> are drawn as lines in 3D. Pick several entities to change their keys together. Spawns, hostages and weapons are drawn as their models. Using a mod's own entities? <b>Map properties › Entity definitions</b> takes its FGD file.</p>
+  <p>Pick an entity and <b>Inspect</b> shows a form for it: choices, color pickers for lights, an angle dial, flags, and help on every key. Links between a <code>target</code> and a <code>targetname</code> are drawn as lines in 3D. Pick several entities to change their keys together. Spawns, hostages and weapons are drawn as their models. Using a mod's own entities? <b>Map properties › Entity definitions</b> takes its FGD file.</p>
   <h2 id="editor-library">Prefabs</h2>
   <p>The <b>Library</b> panel has starter prefabs (a doorway, stairs, crates, a ladder, a window, a bombsite kit, a buy zone with spawns, a light). Drag one in, or press <b>Place</b> and click: they stand on floors, hang from ceilings and face out of walls, and <span class="kbd">R</span> turns them while you place. Pick something you built and <b>Save what's picked…</b> to make your own. The <b>Components</b> tab places Loner-Strike's game mode pieces, like wave spawners and loot crates.</p>
   <h2 id="editor-checks">Checks as you go</h2>
@@ -835,7 +835,7 @@ footer a { color: var(--dim); }
     <figcaption>The first time, the Compile panel offers to download SDHLT.</figcaption>
   </figure>
   <h2 id="sdhlt">The compiler</h2>
-  <p>Maps are compiled with <b>SDHLT</b>, a free GoldSrc map compiler (about 3 MB). It isn't part of Loner-Strike: the first time, the panel offers <b>Download SDHLT</b>, which fetches it from its official GitHub release and checks it. Its licence is in the panel.</p>
+  <p>Maps are compiled with <b>SDHLT</b>, a free GoldSrc map compiler (about 3 MB). It isn't part of Loner-Strike: the first time, the panel offers <b>Download SDHLT</b>, which fetches it from its official GitHub release and checks it. Its license is in the panel.</p>
   <ul>
     <li><b>Windows</b>: it runs directly.</li>
     <li><b>Mac</b>: it runs through CrossOver, in the same bottle as your game. The first compile takes a little longer.</li>
@@ -926,7 +926,7 @@ footer a { color: var(--dim); }
   <h2 id="studio-nodes">Nodes and wires</h2>
   <ul>
     <li>Right-click or press <span class="kbd">Space</span> to add a node. Drag from a pin to empty space and the list only shows nodes that fit that wire.</li>
-    <li>White pentagon pins carry the flow (what runs next); round pins carry values, coloured by type.</li>
+    <li>White pentagon pins carry the flow (what runs next); round pins carry values, colored by type.</li>
     <li><span class="kbd">C</span> adds a comment box, double-clicking a wire adds a reroute point, and <b>Tidy up</b> lays nodes out left to right.</li>
   </ul>
   <p>There are over 200 nodes. The main kinds:</p>
@@ -1066,11 +1066,11 @@ public on_spawn(id)
   <h2 id="creature-types">Creature types</h2>
   <ol>
     <li>Pick a type on the left. The game has eight built in (zombie, runner, brute, spitter, hound, turret, boss, headcrab). <b>New from a template…</b> makes your own from one of them; <b>Duplicate</b> copies one.</li>
-    <li>Change it, section by section: <b>Look</b> (model, size, tint, blood), <b>Health and speed</b>, <b>Senses</b> (how far it sees and hears), <b>Attack</b> (melee or ranged, damage, rate), <b>Behaviour</b>, <b>Sounds</b> and <b>Rewards</b>.</li>
+    <li>Change it, section by section: <b>Look</b> (model, size, tint, blood), <b>Health and speed</b>, <b>Senses</b> (how far it sees and hears), <b>Attack</b> (melee or ranged, damage, rate), <b>Behavior</b>, <b>Sounds</b> and <b>Rewards</b>.</li>
     <li>The preview plays its animations: idle, walk, run, attack, flinch and die.</li>
     <li><b>Save and apply to game</b>. With the game running, <b>Spawn one in front of me</b> tries it out.</li>
   </ol>
-  <p><b>Behaviour</b> sets how it acts: stand still, wander, patrol, guard, hunt as a horde, or keep away; who it goes for (nearest, weakest, last attacker); and whether it runs when hurt. New models and sounds load on the next map.</p>
+  <p><b>Behavior</b> sets how it acts: stand still, wander, patrol, guard, hunt as a horde, or keep away; who it goes for (nearest, weakest, last attacker); and whether it runs when hurt. New models and sounds load on the next map.</p>
   <h2 id="creature-waves">Waves</h2>
   <p>Switch to <b>Waves &amp; spawn groups</b> and pick the mode (Last Stand reads its own). Set which type is the <b>Boss</b> and how often it comes, how many enemies a wave has and how much health they get, and <b>The mix</b>: which creatures come in which waves. <b>Start from the mode's own mix</b> is a good place to begin. <b>Save waves</b> when you're done; <b>Place in map…</b> opens the map editor to put spawners where you want them.</p>
 </section>
@@ -1114,7 +1114,7 @@ public on_spawn(id)
   <h1>Nav fixer</h1>
   <p class="lead">Fix where bots can walk: add the beams and ledges they missed, link areas and mark drops.</p>
   <figure class="shot">
-    <picture><source srcset="img/1.0/navfix.webp" type="image/webp"><img src="img/1.0/navfix.png" alt="The Nav fixer on cs_rats2: nav areas coloured by whether bots can get there and back, with the reach check and problems on the right" width="1440" height="900" loading="lazy"></picture>
+    <picture><source srcset="img/1.0/navfix.webp" type="image/webp"><img src="img/1.0/navfix.png" alt="The Nav fixer on cs_rats2: nav areas colored by whether bots can get there and back, with the reach check and problems on the right" width="1440" height="900" loading="lazy"></picture>
   </figure>
   <ol>
     <li>Pick a map that has a bot nav.</li>
@@ -1130,7 +1130,7 @@ public on_spawn(id)
   <h1>Callouts</h1>
   <p class="lead">Name places on a map, so bots say where they are and understand where you mean.</p>
   <figure class="shot">
-    <picture><source srcset="img/1.0/callouts.webp" type="image/webp"><img src="img/1.0/callouts.png" alt="Callouts on de_dust2: the map from above, painted in colours by place, with the list of places on the right" width="1440" height="900" loading="lazy"></picture>
+    <picture><source srcset="img/1.0/callouts.webp" type="image/webp"><img src="img/1.0/callouts.png" alt="Callouts on de_dust2: the map from above, painted in colors by place, with the list of places on the right" width="1440" height="900" loading="lazy"></picture>
   </figure>
   <ol>
     <li>Pick a map with a bot nav.</li>
@@ -1200,7 +1200,7 @@ public on_spawn(id)
   <ol>
     <li>Start from <b>Designs &amp; templates…</b> (a name tag, a skull banner, a team badge, GG) or blank.</li>
     <li>Add layers: a <b>Picture…</b>, <b>Words</b> or a sticker. Move, turn and resize them on the canvas; pictures can lose their background, words get an outline and a shadow.</li>
-    <li>Check it under <b>In game</b> on a plaster, sandstone or crate wall, at the size and colours the game will use.</li>
+    <li>Check it under <b>In game</b> on a plaster, sandstone or crate wall, at the size and colors the game will use.</li>
     <li><b>Install spray</b> for the games you tick. <b>Put back the previous one</b> undoes it.</li>
   </ol>
 </section>
@@ -1520,7 +1520,7 @@ lsctl logs        the last 100 console lines</code></pre>
   <h1>Running a server</h1>
   <p class="lead">Admins, moderation, the welcome page and the extras. Your own game has the same pages in the sidebar, and each server has them as tabs.</p>
   <h2 id="admins">Admins and VIPs</h2>
-  <p>In <b>Admins</b>, add people by SteamID as admins or VIPs, for good or for a number of days. <b>What each role gets</b> sets each role's powers. VIP perks (free armour, a defuse kit, extra money, a tag) are under <b>VIP &amp; donations</b>, with an optional donate link. Admin lists, and the ban list on Moderation, can be shared across your servers.</p>
+  <p>In <b>Admins</b>, add people by SteamID as admins or VIPs, for good or for a number of days. <b>What each role gets</b> sets each role's powers. VIP perks (free armor, a defuse kit, extra money, a tag) are under <b>VIP &amp; donations</b>, with an optional donate link. Admin lists, and the ban list on Moderation, can be shared across your servers.</p>
   <h2 id="moderation">Moderation and stats</h2>
   <p><b>Moderation</b> has player reports, the chat log, mutes and the word filter, bans and player history. Reports show up as a notification on your computer. <b>Stats</b> has player ranks and 5v5 match results.</p>
   <h2 id="welcome-page">Welcome page</h2>

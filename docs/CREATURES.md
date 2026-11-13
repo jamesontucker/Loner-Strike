@@ -45,7 +45,7 @@ nulls), `LsCreatureOf(ent)`, `LsCreaturesExist()`, `LsCreatureSpawn(type, origin
   - Noticing takes 0.15–1 s depending on distance; it is instant up close or when alert.
   - Hearing: the bots' own table (`IsGameEventAudible`) times the type's `hearing`. A bullet landing within 150 units also
     alerts it.
-- **Behaviours.**
+- **Behaviors.**
   - Home: idle, wander (around home), patrol (a `path_corner` chain with each corner's `wait`; without one it wanders the
     nav areas within `radius`), guard (holds its spot and fights only near it), chase (a hunter that always knows where the
     nearest enemy is: horde mode).
@@ -68,7 +68,7 @@ nulls), `LsCreatureOf(ent)`, `LsCreaturesExist()`, `LsCreatureSpawn(type, origin
   - A flinch plays once and holds the creature still, at most once every 2 s.
   - Death plays once and holds its last frame.
 - **Crowds.** Creatures pass through each other: `pfnShouldCollide` returns 0 only for a pair of `ls_creature`s, and
-  always 1 when no creature exists, so stock behaviour is untouched.
+  always 1 when no creature exists, so stock behavior is untouched.
   - Before this, one creature stopped in a doorway (a spitter shooting from the B doors) jammed everyone behind it.
     Two spawned close together could end up inside each other with neither able to move.
   - The personal-space push (40 units) still keeps them visually apart.
@@ -199,7 +199,7 @@ models + sounds, out of the engine's 512/512). On ReHLDS, `rescount` shows the w
 | `kill <entity\|all\|type>` | dies (death animation, log line); adopted ones are refused |
 | `remove <entity\|all\|type>` | gone at once; adopted ones are refused |
 | `target <entity\|all\|type> <entity index\|0>` | attack this player (0 = choose itself) |
-| `behave <entity\|all\|type> <idle\|wander\|patrol\|guard\|chase\|flee> [x y z]` | new behaviour (and home) |
+| `behave <entity\|all\|type> <idle\|wander\|patrol\|guard\|chase\|flee> [x y z]` | new behavior (and home) |
 | `adopt <classname> [type]` | register someone else's monsters (see §5) |
 | `list` / `types` / `reload` | |
 
@@ -253,13 +253,13 @@ modules' entities aren't in our classname hash, and it holds the edict plus its 
 
 So bots, the list, `ls_creature_alive` and the kit treat MonsterMod monsters like ours. Spawning them stays MonsterMod's own
 `monster` command, which the kit's `mm` backend issues and then follows with `adopt`. A fuller adapter would be a small
-Metamod shim that forwards MonsterMod's spawn/kill to the registry and maps target/behaviour to its `m_hEnemy`/schedules.
+Metamod shim that forwards MonsterMod's spawn/kill to the registry and maps target/behavior to its `m_hEnemy`/schedules.
 That only makes sense after the MonsterMod spike (§6.3) confirms it runs under ReGameDLL.
 
 ## 7. What's left
 
 - **Creature Studio UI** (Tools > Make): a form over creatures.ini types, plus spawn groups and waves placed through the editor's
-  component library. Custom behaviours come later via Game Mode Studio nodes.
+  component library. Custom behaviors come later via Game Mode Studio nodes.
 - **Bosses**: phases, ground pound (ScreenShake + radius damage), summons. Only a big melee type for now.
 - **Flying and swimming** creatures (no nav mesh in the air), teleporting, support and summoning specials.
 - **Turrets**: real yaw/pitch bone controllers and a deploy animation; now the whole model turns.

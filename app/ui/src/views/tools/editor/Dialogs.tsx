@@ -220,7 +220,7 @@ function MapProperties({ onClose }: { onClose: () => void }) {
         </Field>
       </DialogSection>
       <DialogSection title={sun ? "Sun" : "Sun (none yet: one is added)"} cols={2}>
-        <Field label="Colour">{(id) => <input id={id} type="color" value={sunColour} onChange={(e) => setSunColour(e.target.value)} />}</Field>
+        <Field label="Color">{(id) => <input id={id} type="color" value={sunColour} onChange={(e) => setSunColour(e.target.value)} />}</Field>
         <Field label="Brightness" error={errors.bright}>{(id) => <input id={id} type="number" min={0} max={5000} value={sunBright} onChange={(e) => setSunBright(e.target.value)} />}</Field>
         <Field label="Height (pitch)" hint="-90 shines straight down, -30 is a low evening sun." error={errors.pitch}>
           {(id) => <input id={id} type="number" min={-90} max={0} value={sunPitch} onChange={(e) => setSunPitch(e.target.value)} />}

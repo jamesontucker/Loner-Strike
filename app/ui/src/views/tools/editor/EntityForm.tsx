@@ -19,10 +19,10 @@ const KEY_HELP: Record<string, string> = {
   target: "The name of what this sets off.",
   killtarget: "The name of what this removes.",
   angle: "Which way it faces (0 = east, 90 = north).",
-  _light: "Colour and brightness (red green blue brightness).",
-  rendercolor: "Tint colour (red green blue).",
+  _light: "Color and brightness (red green blue brightness).",
+  rendercolor: "Tint color (red green blue).",
   renderamt: "How see-through (0-255).",
-  rendermode: "0 normal, 1 colour, 2 texture, 4 solid, 5 additive.",
+  rendermode: "0 normal, 1 color, 2 texture, 4 solid, 5 additive.",
   spawnflags: "Options as a number (each tick adds up).",
   message: "Text or sound file.",
   wait: "Seconds before it can be set off again.",
@@ -93,7 +93,7 @@ function KeyField({ e, k, v, all }: { e: DocEntity; k: string; v: string; all: s
               setText(`${hexToRgb(ev.target.value)}${rest ? " " + rest : ""}`);
             }}
             onBlur={() => commit(text)}
-            aria-label={`${k} colour`}
+            aria-label={`${k} color`}
           />
         )}
         {k === "angle" && (
@@ -205,7 +205,7 @@ function DefField({ e, def, value, all }: { e: DocEntity; def: FgdKey; value: st
               setText(`${hexToRgb(ev.target.value)}${rest ? " " + rest : ""}`);
             }}
             onBlur={() => commit(text)}
-            aria-label={`${def.label} colour`}
+            aria-label={`${def.label} color`}
           />
         )}
         {isColour && (def.name === "_light" || def.name === "_diffuse_light") && (

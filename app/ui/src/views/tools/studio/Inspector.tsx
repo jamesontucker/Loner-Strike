@@ -529,7 +529,7 @@ function MarkerDetails({ id }: { id: string }) {
           }} />
         </label>
         <label className="st-side-field">
-          <span>Colour in the editor</span>
+          <span>Color in the editor</span>
           <input className="st-field" type="color" value={m.colour || "#d9c27a"} onChange={(e) => set({ colour: e.target.value })} />
         </label>
         <label className="st-side-field">
@@ -701,10 +701,10 @@ export function Inspector() {
         <p className="st-side-help">Double-click its title bar to change the text. Dragging the title bar moves the box and the nodes inside; inside it, the canvas works as anywhere.</p>
         <div className="st-side-fields">
           <div className="st-side-field">
-            <span id="st-comment-colour">Colour</span>
+            <span id="st-comment-colour">Color</span>
             <div className="st-swatches" role="radiogroup" aria-labelledby="st-comment-colour">
               {COMMENT_COLOURS.map((c) => (
-                <button key={c} type="button" role="radio" aria-checked={(comment.color ?? "#5b6a4b") === c} className={`st-swatch${(comment.color ?? "#5b6a4b") === c ? " on" : ""}`} style={{ background: c }} aria-label={`Colour ${c}`} onClick={() => edit((g) => ({ ...g, comments: g.comments.map((x) => (x.id === comment.id ? { ...x, color: c } : x)) }))} />
+                <button key={c} type="button" role="radio" aria-checked={(comment.color ?? "#5b6a4b") === c} className={`st-swatch${(comment.color ?? "#5b6a4b") === c ? " on" : ""}`} style={{ background: c }} aria-label={`Color ${c}`} onClick={() => edit((g) => ({ ...g, comments: g.comments.map((x) => (x.id === comment.id ? { ...x, color: c } : x)) }))} />
               ))}
             </div>
           </div>

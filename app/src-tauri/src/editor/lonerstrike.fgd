@@ -30,13 +30,13 @@
 [
 	radius(float) : "Radius" : 128 : "How far from the middle counts as inside (units). Ignored when Box size is set."
 	height(float) : "Height" : 160 : "How far above the floor counts as inside."
-	size(string) : "Box size (x y z)" : : "Use a box instead of a circle: width, depth and height in units, centred on the point."
+	size(string) : "Box size (x y z)" : : "Use a box instead of a circle: width, depth and height in units, centered on the point."
 ]
 @BaseClass = LsTier
 [
-	tier(choices) : "Tier" : 1 : "How good the loot is. Also its glow colour." =
+	tier(choices) : "Tier" : 1 : "How good the loot is. Also its glow color." =
 	[
-		1 : "1 - common (grey)"
+		1 : "1 - common (gray)"
 		2 : "2 - good (green)"
 		3 : "3 - rare (blue)"
 		4 : "4 - epic (purple)"
@@ -58,8 +58,8 @@
 	name(string) : "Class name" : "Soldier" : "What the class is called in menus and in mode code."
 	enabled(choices) : "On at round start" : 1 : "Off: not offered or given." = [ 1 : "Yes" 0 : "No" ]
 	hp(integer) : "Health" : 100 : "Health at spawn."
-	armor(integer) : "Armour" : 0 : "Armour at spawn."
-	helmet(choices) : "Helmet" : 1 : "With a helmet when armour is given." = [ 1 : "Yes" 0 : "No" ]
+	armor(integer) : "Armor" : 0 : "Armor at spawn."
+	helmet(choices) : "Helmet" : 1 : "With a helmet when armor is given." = [ 1 : "Yes" 0 : "No" ]
 	speed(float) : "Speed" : 0 : "Running speed (250 is normal with a knife). 0 keeps the weapon's own speed."
 	gravity(float) : "Gravity" : 1 : "1 is normal, 0.5 jumps twice as high."
 	weapons(string) : "Weapons" : "knife" : "Given at spawn, separated by spaces: knife deagle ak47 vesthelm he hp:50 ..."
@@ -68,7 +68,7 @@
 	limit(integer) : "Most players" : 0 : "How many can have it at once (0 = no limit)."
 	menu(choices) : "In the class menu" : 1 : "Players can pick it from say /class." = [ 1 : "Yes" 0 : "No" ]
 	default(choices) : "Given to everyone" : 0 : "Players of the team without a class get this one." = [ 0 : "No" 1 : "Yes" ]
-	bot_profile(string) : "Bot behaviour" : : "A behaviour profile for bots with this class (botprofiles.ini: hunter, defender ...)."
+	bot_profile(string) : "Bot behavior" : : "A behavior profile for bots with this class (botprofiles.ini: hunter, defender ...)."
 ]
 
 // ---- zones -------------------------------------------------------------------------------
@@ -85,7 +85,7 @@
 	zone(target_destination) : "Safe zone" : : "The safe zone's Name (empty = the first one)."
 	stages(string) : "Stages" : "2400:60:40:1 1600:45:35:2 900:40:30:4 400:30:25:8 0:20:20:15" : "Each stage as radius:warn seconds:shrink seconds:damage, separated by spaces."
 	start_delay(float) : "Starts after" : 30 : "Seconds after the round starts (-1 = when a mode starts it)."
-	random_center(choices) : "Random centres" : 1 : "Each next circle lands somewhere inside the last one." = [ 1 : "Yes" 0 : "No (stays centred)" ]
+	random_center(choices) : "Random centers" : 1 : "Each next circle lands somewhere inside the last one." = [ 1 : "Yes" 0 : "No (stays centered)" ]
 	final_r(float) : "Smallest radius" : 0 : "Never smaller than this."
 	roundtime(choices) : "Show in round clock" : 1 : "The round timer counts down to the next change." = [ 1 : "Yes" 0 : "No" ]
 ]
@@ -95,7 +95,7 @@
 	radius(float) : "Radius" : 96 : "How far from the middle hurts."
 	dmg(float) : "Damage" : 10 : "Damage per tick."
 	interval(float) : "Seconds per tick" : 1 : "How often."
-	kind(choices) : "Kind" : "fire" : "The damage type and screen colour." =
+	kind(choices) : "Kind" : "fire" : "The damage type and screen color." =
 	[
 		"fire" : "Fire"
 		"poison" : "Poison"
@@ -258,7 +258,7 @@
 		"turret" : "Turret"
 		"boss" : "Boss"
 	]
-	behaviour(choices) : "Behaviour" : "" : "Empty: the type's own." =
+	behaviour(choices) : "Behavior" : "" : "Empty: the type's own." =
 	[
 		"" : "The type's own"
 		"idle" : "Idle"

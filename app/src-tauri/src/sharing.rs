@@ -32,7 +32,7 @@ fn error_words(code: &str) -> Option<&'static str> {
         "AgentVersionTooOld" => "playit.gg says this copy of playit is too old. Update Loner-Strike to update it.",
         "AgentNotFound" => "playit.gg doesn't know this computer any more. Disconnect and set it up again.",
         "CodeExpired" => "The setup link expired. Start again.",
-        "UserRejected" => "Setup was cancelled on playit.gg.",
+        "UserRejected" => "Setup was canceled on playit.gg.",
         _ => return None,
     })
 }

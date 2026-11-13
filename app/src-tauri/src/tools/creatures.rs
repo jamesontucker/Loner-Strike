@@ -925,7 +925,7 @@ pub fn check(types: &[Creature]) -> Vec<Problem> {
         }
         for (k, v) in [("glow", t.glow), ("fallback_glow", t.fallback_glow)] {
             if v.iter().any(|c| !finite(*c) || *c < 0.0 || *c > 255.0) {
-                out.push(problem(at, k, "Colours are three numbers from 0 to 255.", true));
+                out.push(problem(at, k, "Colors are three numbers from 0 to 255.", true));
             }
         }
         let picks: [(&str, &str, &[&str]); 4] = [("category", &t.category, &CATEGORIES), ("attack", &t.attack, &ATTACKS), ("behaviour", &t.behaviour, &BEHAVIOURS), ("target", &t.target, &TARGETS)];

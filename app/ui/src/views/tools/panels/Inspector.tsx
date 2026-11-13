@@ -71,7 +71,7 @@ export function Inspector({ entities, meshes, overlays }: { entities: MapEntity[
       {ent.keys.targetname && <p className="small-note muted">Named “{ent.keys.targetname}”</p>}
       <div className="row">
         {centre && <button className="btn small" onClick={() => look(centre.point, centre.size)}>Look at</button>}
-        {centre && <button className="btn small" onClick={() => copy(ent.origin ? "Origin" : "Centre", ent.origin ?? centre.point)}>{ent.origin ? "Copy origin" : "Copy centre"}</button>}
+        {centre && <button className="btn small" onClick={() => copy(ent.origin ? "Origin" : "Center", ent.origin ?? centre.point)}>{ent.origin ? "Copy origin" : "Copy center"}</button>}
         <button className="btn small" onClick={() => select(null)}>Clear</button>
       </div>
       {keys.length > 0 && (

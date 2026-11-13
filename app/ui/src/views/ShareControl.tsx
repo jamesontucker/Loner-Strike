@@ -131,7 +131,7 @@ function describe(a: Activity) {
   if (p === "/api/app/mode-settings") return `Set ${b.cvar ?? "a setting"} to ${b.value ?? ""} for ${b.mode ?? "a mode"}`;
   if (p === "/api/community/reports") return "Marked a report handled or reopened it";
   if (p.startsWith("/api/community")) return "Changed stats and moderation";
-  if (p === "/api/mapflag") return "Changed a map's favourite or hidden mark";
+  if (p === "/api/mapflag") return "Changed a map's favorite or hidden mark";
   if (p === "/api/control/redeem") return "Accepted an invite";
   if (p === "/api/control/invite") return "Made an invite for a Moderator";
   if (/^\/api\/servers\/[^/]+\/console\/send$/.test(p)) return `Typed in the console: ${String(b.command ?? "").slice(0, 80)}`;
@@ -305,7 +305,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
     return run(`invite:${i.id}`, async () => {
     const r = await post(`/api/control/invite/${i.id}/cancel`, { server: server.id });
     if (r.error) return toast(r.error, true);
-    toast("Invite cancelled");
+    toast("Invite canceled");
     if (i.id === inviteId) setInvite("");
     load();
   });
@@ -439,7 +439,7 @@ export function ShareControl({ server }: { server: ServerInfo }) {
                   <span className={`tag role-${i.role}`}>{ROLE_NAME[i.role]}</span>
                   <span className="muted small-note"> {i.steam ? `${i.steam} · ` : ""}made by {i.by} · runs out {until(i.expires)}</span>
                 </span>
-                {i.id && <BusyButton className="btn small danger" busy={busy(`invite:${i.id}`)} label="Cancel" busyLabel="Cancelling…" onClick={() => cancel(i)} />}
+                {i.id && <BusyButton className="btn small danger" busy={busy(`invite:${i.id}`)} label="Cancel" busyLabel="Canceling…" onClick={() => cancel(i)} />}
               </div>
             ))}
           </div>

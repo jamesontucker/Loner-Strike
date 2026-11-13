@@ -110,7 +110,7 @@ public on_death()
   {
     id: "give",
     label: "Give items on spawn",
-    blurb: "Everyone gets armour and a grenade when they spawn.",
+    blurb: "Everyone gets armor and a grenade when they spawn.",
     text: (n) => `${head(n, "items on spawn")}#include <fun>
 #include <cstrike>
 #include <hamsandwich>
@@ -255,7 +255,7 @@ export const SNIPPETS: [string, string, string][] = [
   ["givefull", "Give a weapon with spare ammo (loner.inc)", 'ls_give_weapon(${1:id}, "${2:ak47}", ${3:90})'],
   ["hud", "A HUD message (its own sync object, so other plugins don't wipe it)", 'new g_Sync = CreateHudSyncObj()\n\nset_hudmessage(${1:255}, ${2:200}, ${3:60}, -1.0, ${4:0.25}, 0, 0.0, ${5:4.0}, 0.1, 0.2, -1)\nShowSyncHudMsg(${6:0}, g_Sync, "${7:Hello}")'],
   ["lshud", "A HUD line in a shared slot (loner.inc)", 'ls_hud(${1:0}, ${2|LS_HUD_TOP,LS_HUD_LEFT,LS_HUD_RIGHT,LS_HUD_CENTER|}, ${3:4.0}, "${4:Hello}")'],
-  ["chat", "A coloured chat line", 'client_print_color(${1:0}, print_team_default, "^4[${2:Server}]^1 ${3:text}")'],
+  ["chat", "A colored chat line", 'client_print_color(${1:0}, print_team_default, "^4[${2:Server}]^1 ${3:text}")'],
   ["center", "Text in the middle of the screen", 'client_print(${1:0}, print_center, "${2:text}")'],
   // timers
   ["task", "Run a function later (set_task)", 'set_task(${1:5.0}, "${2:later}")\n\npublic ${2:later}()\n{\n\t$0\n}'],

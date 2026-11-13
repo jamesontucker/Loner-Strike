@@ -38,7 +38,7 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
   const favourite = async () => {
     const r = await postJson<{ error?: string }>("/api/mapflag", { flag: "fav", map: st.map, on: !here?.fav }).catch(() => ({ error: "Couldn't save that." }));
     if (r.error) return toast(r.error, true);
-    toast(here?.fav ? "Removed from favourites" : "Added to favourites");
+    toast(here?.fav ? "Removed from favorites" : "Added to favorites");
     reloadMaps();
   };
   // the bot count asked for (the saved target, not the bots playing right now)
@@ -105,7 +105,7 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
     { label: "Restart map", on: () => once(`quick:${targetKey()}:restartmap`, () => run("gm_restartmap"), "Restarting the map…") },
     { label: "Random map", on: randomMap },
     { label: "Change map…", on: () => setPicking(true), show: sharedRole() === "moderator" },
-    { label: here?.fav ? "Favourite map" : "Favourite this map", on: favourite, pressed: !!here?.fav, show: !!here && sharedRole() !== "moderator" },
+    { label: here?.fav ? "Favorite map" : "Favorite this map", on: favourite, pressed: !!here?.fav, show: !!here && sharedRole() !== "moderator" },
   ];
   const you: Item[] = me
     ? [

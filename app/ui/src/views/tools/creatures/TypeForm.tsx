@@ -149,7 +149,7 @@ export function TypeForm({ t, isNew, builtin, limits, problems, checked, look, o
           <Field name="Tint" note="A glow shell over the model, as the game draws it" problems={p("glow")}>
             <span className="cs-inline">
               <Switch on={!isOff(t.glow)} onChange={(on) => set("glow", on ? [160, 40, 40] : [0, 0, 0])} label="Tinted" />
-              {!isOff(t.glow) && <input type="color" value={hex(t.glow)} aria-label="Tint colour" onChange={(e) => set("glow", rgb(e.target.value))} />}
+              {!isOff(t.glow) && <input type="color" value={hex(t.glow)} aria-label="Tint color" onChange={(e) => set("glow", rgb(e.target.value))} />}
             </span>
           </Field>
           <Field name="Size" note="Only how it looks: it still fits where a player fits" problems={p("scale")}>
@@ -228,10 +228,10 @@ export function TypeForm({ t, isNew, builtin, limits, problems, checked, look, o
         </>
       ))}
 
-      {sec("Behaviour", BEHAVIOUR_WORDS[t.behaviour]?.label ?? t.behaviour, ["behaviour", "radius", "target", "hates", "flee_hp", "respawn", "corpse_time"], (
+      {sec("Behavior", BEHAVIOUR_WORDS[t.behaviour]?.label ?? t.behaviour, ["behaviour", "radius", "target", "hates", "flee_hp", "respawn", "corpse_time"], (
         <>
           <Field name="Does" note={BEHAVIOUR_WORDS[t.behaviour]?.help} problems={p("behaviour")}>
-            <select value={t.behaviour} aria-label="Behaviour" onChange={(e) => set("behaviour", e.target.value)}>
+            <select value={t.behaviour} aria-label="Behavior" onChange={(e) => set("behaviour", e.target.value)}>
               {limits.behaviours.map((b) => (
                 <option key={b} value={b}>
                   {BEHAVIOUR_WORDS[b]?.label ?? b}
@@ -320,7 +320,7 @@ export function TypeForm({ t, isNew, builtin, limits, problems, checked, look, o
           <Field name="Stand-in tint" note="Only when the stand-in plays it, to tell types apart" problems={p("fallback_glow")}>
             <span className="cs-inline">
               <Switch on={!isOff(t.fallback_glow)} onChange={(on) => set("fallback_glow", on ? [40, 140, 20] : [0, 0, 0])} label="Tinted" />
-              {!isOff(t.fallback_glow) && <input type="color" value={hex(t.fallback_glow)} aria-label="Stand-in tint colour" onChange={(e) => set("fallback_glow", rgb(e.target.value))} />}
+              {!isOff(t.fallback_glow) && <input type="color" value={hex(t.fallback_glow)} aria-label="Stand-in tint color" onChange={(e) => set("fallback_glow", rgb(e.target.value))} />}
             </span>
           </Field>
           <Field name="All model candidates" note="Space separated: the first one the game has wins" problems={[]}>

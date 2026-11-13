@@ -238,13 +238,13 @@ export default function PlayerConfig() {
         <Row name="Show the crosshair">
           <Switch on={on("crosshair")} onChange={toggle("crosshair")} label="Show the crosshair" />
         </Row>
-        <Row name="Colour">
+        <Row name="Color">
           <span className="pc-swatches">
             {COLOURS.map(([name, c]) => (
               <button key={c} type="button" className="pc-swatch" style={{ background: toHex(c) }} aria-pressed={s.cl_crosshair_color === c} aria-label={name} title={name} onClick={() => set("cl_crosshair_color", c)} />
             ))}
-            <label className="pc-custom" title="Any colour">
-              <input type="color" value={toHex(s.cl_crosshair_color)} aria-label="Any colour" onChange={(e) => set("cl_crosshair_color", fromHex(e.target.value))} />
+            <label className="pc-custom" title="Any color">
+              <input type="color" value={toHex(s.cl_crosshair_color)} aria-label="Any color" onChange={(e) => set("cl_crosshair_color", fromHex(e.target.value))} />
             </label>
           </span>
         </Row>

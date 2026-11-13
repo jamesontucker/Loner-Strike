@@ -32,7 +32,7 @@ const COLUMNS: Role[] = ["vip", "moderator", "admin", "owner"];
 
 /** What each ability does and how players use it. unfair: off in modes it would break. */
 const ABILITIES: { key: AbilityKey; name: string; what: string; how: string; unfair?: boolean }[] = [
-  { key: "gear", name: "Spawn gear", what: "The armour, defuse kit, grenades and money set up under VIP & donations.", how: "Given automatically" },
+  { key: "gear", name: "Spawn gear", what: "The armor, defuse kit, grenades and money set up under VIP & donations.", how: "Given automatically" },
   { key: "hook", name: "Grappling hook", what: "Shoots a rope and pulls them to wherever they aim.", how: "Bind a key to +hook" },
   { key: "jump", name: "Double jump", what: "One more jump in mid-air.", how: "Press jump again in the air", unfair: true },
   { key: "respawn", name: "Respawn", what: "Come back once a round after dying.", how: "Say /respawn while dead", unfair: true },
@@ -249,7 +249,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
           {!people.length && <li className="empty">{dedicated ? "Nobody yet. Add yourself as Owner to get admin powers on this server." : "Nobody yet. As the host you already have every power in your own game."}</li>}
         </ul>
         <p className="muted small-note">
-          People are recognised by their SteamID. Admins open the admin menu with <b>amxmodmenu</b> in the console. When a VIP's time runs out they go back to
+          People are recognized by their SteamID. Admins open the admin menu with <b>amxmodmenu</b> in the console. When a VIP's time runs out they go back to
           being a normal player.
         </p>
       </div>
@@ -342,7 +342,7 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
               {donate !== null && donate !== d.donate && <BusyButton className="btn primary" busy={busy("donate")} label="Save" busyLabel="Saving…" onClick={saveDonate} />}
             </div>
           </div>
-          <Perk label="Free armour and helmet" note="Every spawn." on={d.perks.armor} busy={busy("perk:armor")} set={(v) => setPerks({ armor: v })} />
+          <Perk label="Free armor and helmet" note="Every spawn." on={d.perks.armor} busy={busy("perk:armor")} set={(v) => setPerks({ armor: v })} />
           <Perk label="Defuse kit" note="For VIPs on the CT side." on={d.perks.defuse} busy={busy("perk:defuse")} set={(v) => setPerks({ defuse: v })} />
           <Perk label="Free grenades" note="HE, flash and smoke each spawn." on={d.perks.nades} busy={busy("perk:nades")} set={(v) => setPerks({ nades: v })} />
           <div className="setting">

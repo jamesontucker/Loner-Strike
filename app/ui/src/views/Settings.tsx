@@ -20,7 +20,7 @@ const NOTES: Record<string, string> = {
   gm_hb_bhop: "Locked in, Hackers and Gods hop between fights",
   gm_regulars: "The same regulars keep coming back, plus the odd newcomer",
   gm_churn: "Now and then someone leaves and a new player takes the slot",
-  gm_hb_habits: "Each bot plays like its personality: favourite guns, warming up, getting tired, nervous reloads, a rival",
+  gm_hb_habits: "Each bot plays like its personality: favorite guns, warming up, getting tired, nervous reloads, a rival",
   gm_hb_tilt: "A bad run makes most bots sloppier (some careful); outnumbered or low on health, some panic",
   gm_hb_afk: "Now and then a bot is a moment slow to move at round start, and the odd regular one stands still a few seconds (not in deathmatch or matches)",
   gm_hb_sprays: "Bots spray the Loner-Strike logo now and then, after respawning in deathmatch too",

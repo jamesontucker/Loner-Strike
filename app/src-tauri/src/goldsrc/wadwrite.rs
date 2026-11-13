@@ -441,7 +441,7 @@ pub fn read_wad(bytes: &[u8]) -> Result<Spray> {
     let pal_at = off3 + ((w / 8) * (h / 8)) as usize;
     let n = lump.u16(pal_at)? as usize;
     if n != 256 {
-        return Err(Error::damaged(what, format!("its palette has {n} colours, not 256")));
+        return Err(Error::damaged(what, format!("its palette has {n} colors, not 256")));
     }
     let raw = lump.bytes(pal_at + 2, 768)?;
     let palette = raw.chunks(3).map(|c| [c[0], c[1], c[2]]).collect();

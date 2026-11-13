@@ -42,7 +42,7 @@ const COLORS: { id: Color; name: string; css: string }[] = [
   { id: "green", name: "Green", css: "var(--chat-green)" },
   { id: "red", name: "Red", css: "var(--chat-red)" },
   { id: "blue", name: "Blue", css: "var(--chat-blue)" },
-  { id: "grey", name: "Grey", css: "var(--chat-grey)" },
+  { id: "grey", name: "Gray", css: "var(--chat-grey)" },
 ];
 const PLACEHOLDERS: [string, string][] = [
   ["{server}", "the server's name"],
@@ -507,7 +507,7 @@ function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSetting
                 onChange={(e) => setMsg(i, { text: e.target.value })}
               />
               <div className="ad-tools">
-                <select value={m.color} aria-label={`Colour of message ${i + 1}`} onChange={(e) => setMsg(i, { color: e.target.value as Color })}>
+                <select value={m.color} aria-label={`Color of message ${i + 1}`} onChange={(e) => setMsg(i, { color: e.target.value as Color })}>
                   {COLORS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <button className="btn icon" aria-label={`Move message ${i + 1} up`} disabled={i === 0} onClick={() => move(i, i - 1)}><Glyph d={UP} /></button>
@@ -540,7 +540,7 @@ function Messages({ d, saveSettings, onShared, onDirty }: { d: Data; saveSetting
                 </p>
               ))}
             </div>
-            <small>With example details. Red and blue show as the team colours.</small>
+            <small>With example details. Red and blue show as the team colors.</small>
           </div>
         )}
         <div className="row">

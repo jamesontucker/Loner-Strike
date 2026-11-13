@@ -294,7 +294,7 @@ Prefabs category with the tag, like any creation.
 **Try it** (`community::try_prefab`, no installer job): downloads the file (GameBanana hosts only,
 MD5 checked against the page, 128 MB cap), unpacks it, and `tools::editor::prefabs::install_download`
 adds every `.map` it finds to the player's library (`<app dir>/editor/prefabs/`, the `.json`/`.png`
-beside it when there; a bare GameBanana `.map` or a zip of them works too, centred on install).
+beside it when there; a bare GameBanana `.map` or a zip of them works too, centered on install).
 WADs in the package go into the game folder only when no file of that name is there. The page then
 offers "Open the map editor" (`go("tools", "editor:prefabs")`).
 

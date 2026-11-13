@@ -22,7 +22,7 @@ const PART_NOTE: Record<string, string> = {
   settings: "Server settings, modes, presets, the welcome page and the rest of the Game Mode Menu",
   admins: "Admins, VIPs and regulars",
   bans: "Banned players and IPs, and mutes",
-  rotation: "The map cycle, each mode's rotation and favourite maps",
+  rotation: "The map cycle, each mode's rotation and favorite maps",
   plugins: "Plugins you added yourself on the Mods page",
   content: "Maps, models and sounds you added, round music and skins, and the GameBanana downloads. For your game, maps you copied in yourself are only told apart from Valve's when a server here has Valve's files to compare with",
   mods: "The modes and add-ons installed",

@@ -65,8 +65,8 @@ const MARKS: [MarkKind, string][] = [
 
 const STYLES: [Style, string, string][] = [
   ["game", "Game", "Like the game: the map's own textures, lit as the game lights them"],
-  ["clean", "Clean", "Clean: colours by height, with the map's light: easy to read"],
-  ["simple", "Simple", "Simple: colours by height only"],
+  ["clean", "Clean", "Clean: colors by height, with the map's light: easy to read"],
+  ["simple", "Simple", "Simple: colors by height only"],
 ];
 
 type Show = "ours" | "split" | "installed";
@@ -302,7 +302,7 @@ function Maker({ map, onBack }: { map: string; onBack: () => void }) {
           <section className="tools-panel">
             <h3 className="ov-step"><span>3</span> Install</h3>
             <div className="tools-field">
-              <span>File <Info text="256 colours (.bmp) is what the game's own overviews use and is a small download for players. Full colour (.tga) looks better; the game reads both." /></span>
+              <span>File <Info text="256 colors (.bmp) is what the game's own overviews use and is a small download for players. Full color (.tga) looks better; the game reads both." /></span>
               <Segmented label="File" values="bmp tga" labels=".bmp|.tga" current={format} onPick={(v) => setFormat(v as Format)} />
             </div>
             {!i.stock && (

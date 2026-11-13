@@ -1,12 +1,12 @@
 {
-  "about": "Game mode component library for the map editor's drag-in panel. Keys and help live in lonerstrike.fgd (same class names). visual: how to draw it in 3D - ring (radius key), box (size key or the brush), point, beam_up (a line to the sky), link (lines to the entities named in link_keys). colour is RGB 0-255. needs_nav: the editor warns when there's no nav area under it.",
+  "about": "Game mode component library for the map editor's drag-in panel. Keys and help live in lonerstrike.fgd (same class names). visual: how to draw it in 3D - ring (radius key), box (size key or the brush), point, beam_up (a line to the sky), link (lines to the entities named in link_keys). color is RGB 0-255. needs_nav: the editor warns when there's no nav area under it.",
   "groups": [
     "Zones",
     "Spawns & players",
     "Loot",
     "Doors & traps",
     "Objectives",
-    "Defence",
+    "Defense",
     "Social",
     "Creatures"
   ],
@@ -213,7 +213,7 @@
     },
     {
       "class": "ls_barricade",
-      "group": "Defence",
+      "group": "Defense",
       "title": "Barricade",
       "blurb": "A wall that breaks and can be repaired. Wraps the selected brushes.",
       "visual": "box",
@@ -226,7 +226,7 @@
     },
     {
       "class": "ls_wave_spawner",
-      "group": "Defence",
+      "group": "Defense",
       "title": "Wave spawner",
       "blurb": "Where waves of enemies come from.",
       "visual": "ring",

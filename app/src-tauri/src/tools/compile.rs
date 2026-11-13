@@ -48,7 +48,7 @@ pub const SDHLT_SHA256: &str = "d206ddb73dc0d37f577b70b7e2503277a5092e7ab3e5b198
 pub const SDHLT_BYTES: u64 = 3_030_448;
 /// The folder everything is in inside the zip.
 const ZIP_ROOT: &str = "sdhlt-v1.3.1";
-const LICENCE: &str = "SDHLT is free software under the GPL v2, with the Valve SDK 2.3 licence taking priority where needed. It isn't part of Loner-Strike: it's downloaded from its official GitHub release and kept with its licence (LICENSE.md).";
+const LICENCE: &str = "SDHLT is free software under the GPL v2, with the Valve SDK 2.3 license taking priority where needed. It isn't part of Loner-Strike: it's downloaded from its official GitHub release and kept with its license (LICENSE.md).";
 
 const INTERNAL: &str = "Loner-Strike hit an internal error with the map compiler. Try again, and copy the diagnostics from Settings if it keeps happening.";
 const NO_GAME: &str = "Set up the game on this computer first: the compiler needs its texture files.";

@@ -290,7 +290,7 @@ pub fn marker_problems(g: &Graph) -> Vec<String> {
             out.push(format!("The map marker \u{201c}{name}\u{201d}: at least 0 to 64, at most 1 to 64 and not under the least."));
         }
         if !(m.colour.is_empty() || (m.colour.len() == 7 && m.colour.starts_with('#') && m.colour[1..].chars().all(|c| c.is_ascii_hexdigit()))) || !(m.icon.is_empty() || MARKER_ICONS.contains(&m.icon.as_str())) {
-            out.push(format!("The map marker \u{201c}{name}\u{201d} has a colour or icon this app doesn't know."));
+            out.push(format!("The map marker \u{201c}{name}\u{201d} has a color or icon this app doesn't know."));
         }
         if m.size.is_some_and(|s| s.iter().any(|x| !x.is_finite() || *x < 1.0 || *x > 16384.0)) || m.radius.is_some_and(|r| !r.is_finite() || !(1.0..=16384.0).contains(&r)) {
             out.push(format!("The map marker \u{201c}{name}\u{201d}: a size or radius is 1 to 16384 units."));
@@ -1472,7 +1472,7 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
             p.push(Problem::err(None, "A comment has a bad or repeated id."));
         }
         if c.color.as_deref().is_some_and(|k| !(k.len() == 7 && k.starts_with('#') && k[1..].chars().all(|h| h.is_ascii_hexdigit()))) {
-            p.push(Problem::err(None, "A comment's colour isn't a colour (#rrggbb)."));
+            p.push(Problem::err(None, "A comment's color isn't a color (#rrggbb)."));
         }
         if !valid_note(&c.text) {
             p.push(Problem::err(None, "A comment is too long (2000 characters at most) or uses a character that isn't allowed (* / \\ \" ^)."));

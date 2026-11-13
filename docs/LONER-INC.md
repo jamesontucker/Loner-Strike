@@ -2,7 +2,7 @@
 
 `plugins/scripting/include/loner.inc` makes the common things in an AMX Mod X plugin short:
 a game mode that fits the Game Mode Menu, HUD text that doesn't fight other plugins for the
-screen, giving weapons with ammo, health and armour, teleporting, timers and countdowns, and
+screen, giving weapons with ammo, health and armor, teleporting, timers and countdowns, and
 orders for Loner-Strike's bots.
 
 The Plugin Studio (Tools > Make) hands it to the compiler for you: `#include <loner>` just works
@@ -80,7 +80,7 @@ the plugin is loaded by hand without the Game Mode Menu).
 The game has four HUD text channels shared by every plugin. `ls_hud` gives each of its slots
 (`LS_HUD_TOP`, `LS_HUD_LEFT`, `LS_HUD_RIGHT`, `LS_HUD_CENTER`) its own sync object, so AMX Mod X
 keeps a slot on one channel per player and other plugins' messages don't wipe yours. Each slot
-has a sensible place and colour; `ls_hud_rgb` picks your own colour. `ls_announce` uses the
+has a sensible place and color; `ls_hud_rgb` picks your own color. `ls_announce` uses the
 director HUD (not one of the four channels) for short, rare shouts.
 
 ```pawn

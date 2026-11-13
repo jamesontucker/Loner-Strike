@@ -155,7 +155,7 @@ pub fn run(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<I
             if out_of_world <= 20 {
                 out.push(Issue {
                     brush: Some(id.0),
-                    ..issue(Level::Warning, "outside-world", "This brush goes past the edge of the world (4096 units from the centre).".into())
+                    ..issue(Level::Warning, "outside-world", "This brush goes past the edge of the world (4096 units from the center).".into())
                 });
             }
         }
