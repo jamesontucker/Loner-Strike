@@ -130,6 +130,8 @@ class Reject(Exception):
 _HEX32 = re.compile(r"^[0-9a-f]{32}$")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _MODE_ID = re.compile(r"^[A-Za-z0-9_]{1,32}$")
+# a mode's (or kit's, or library item's) permanent id, beside its short game id
+_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _SAFE_ARG = re.compile(r"^[A-Za-z0-9_.$-]{1,64}$")
 
 
@@ -198,6 +200,16 @@ def _list(d, k, n):
     return v
 
 
+def _uid(d, k="uid"):
+    """An optional UUID (lower case); "" when absent. Entries without one keep working."""
+    v = d.get(k, "")
+    if v is None or v == "":
+        return ""
+    if not isinstance(v, str) or not _UUID.match(v.strip().lower()):
+        _bad(k)
+    return v.strip().lower()
+
+
 def _obj(d, k):
     v = d.get(k)
     if v is None:
@@ -250,6 +262,17 @@ def clean_item(raw):
     }
     if not _HEX32.match(it["md5"]):
         _bad("md5")
+    uid = _uid(raw)
+    if uid:
+        it["uid"] = uid
+    r = _obj(raw, "remixOf")
+    if r is not None:
+        # credit for a remix: which creation it came from (shown with its name and author)
+        rm = parse_model(r.get("model", "Mod"))
+        if not rm:
+            _bad("remixOf")
+        it["remixOf"] = {"model": rm, "gb": _int(r, "gb", 0, 99_999_999), "uid": _uid(r),
+                         "name": _str(r, "name", 80), "author": _str(r, "author", 40)}
     games = _list(raw, "games", 4)
     if any(g not in ("cstrike", "czero") for g in games):
         _bad("games")
@@ -278,8 +301,18 @@ def clean_item(raw):
         modes = _list(m, "modes", 16)
         if any(not isinstance(x, str) or not _MODE_ID.match(x) for x in modes):
             _bad("modes")
+        refs = []
+        for x in _list(m, "modeRefs", 16):
+            if not isinstance(x, dict):
+                _bad("modeRefs")
+            mid = x.get("id", "")
+            if not isinstance(mid, str) or not _MODE_ID.match(mid):
+                _bad("modeRefs")
+            ref = {"uid": _uid(x), "id": mid, "name": _str(x, "name", 40)}
+            if not any(r2["id"] == mid and r2["uid"] == ref["uid"] for r2 in refs):
+                refs.append(ref)
         it["map"] = {"name": name, "bspSize": _int(m, "bspSize", 0, MAX_FILE), "bspSha256": sha,
-                     "modes": list(dict.fromkeys(modes)),
+                     "modes": list(dict.fromkeys(modes)), "modeRefs": refs,
                      **{f: _bool(m, f) for f in ("nav", "places", "lsv", "res", "overview")}}
 
     mo = _obj(raw, "mode")
@@ -297,7 +330,7 @@ def clean_item(raw):
         if any(not safe_arg(x) for x in maps):
             _bad("mode maps")
         # plugins and their review stay in the format for later; for now never any
-        it["mode"] = {"id": mid, "plugins": [], "review": "none", "maps": list(dict.fromkeys(maps))}
+        it["mode"] = {"id": mid, "uid": _uid(mo), "plugins": [], "review": "none", "maps": list(dict.fromkeys(maps))}
 
     h = _obj(raw, "health")
     if h is not None:
@@ -1319,6 +1352,10 @@ def index_item(row):
         out["mode"] = dict(it["mode"], plugins=[], review="none")
     if it.get("health"):
         out["health"] = it["health"]
+    if it.get("uid"):
+        out["uid"] = it["uid"]
+    if it.get("remixOf"):
+        out["remixOf"] = it["remixOf"]
     out.update(screenshots=list(it.get("screenshots") or [])[:MAX_SHOTS], tags=list(it.get("tags") or []),
                featured=bool(row["featured"]), added=int(row["added"]), updated=int(row["updated"]), status=status)
     return out

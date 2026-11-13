@@ -189,6 +189,9 @@ pub struct MapMeta {
     pub bsp_sha256: String,
     /// game modes it's made for (mode ids: classic, surf, deathrun...)
     pub modes: Vec<String>,
+    /// the same modes with their permanent ids and names, when the map says them (`ls_modes`
+    /// "uid:id" pairs, set in the map editor): a mode is matched by its uid, the id is for show
+    pub mode_refs: Vec<ModeRef>,
     pub nav: bool,
     /// the nav names places (bots call out "B site")
     pub places: bool,
@@ -228,11 +231,43 @@ pub struct PluginMeta {
 pub struct ModeMeta {
     /// its mode id (letters, digits, _)
     pub id: String,
+    /// its permanent id (a UUID; the Studio gives every mode one), "" for older entries
+    pub uid: String,
     /// plugins it needs; none: a data-only mode (settings, graphs, components)
     pub plugins: Vec<PluginMeta>,
     pub review: Review,
     /// maps it's made for
     pub maps: Vec<String>,
+}
+
+/// A mode a map is made for: its permanent id, its short game id and its name.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ModeRef {
+    pub uid: String,
+    pub id: String,
+    pub name: String,
+}
+
+/// A permanent id: a UUID, lower case.
+pub fn valid_uid(s: &str) -> bool {
+    let b = s.as_bytes();
+    b.len() == 36
+        && b.iter().enumerate().all(|(i, c)| if [8, 13, 18, 23].contains(&i) { *c == b'-' } else { c.is_ascii_digit() || (b'a'..=b'f').contains(c) })
+}
+
+/// A fresh permanent id (UUID version 4).
+pub fn new_uid() -> String {
+    let mut b: [u8; 16] = rand::random();
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+}
+
+fn clean_uid(s: &str) -> String {
+    let l = s.trim().to_ascii_lowercase();
+    if valid_uid(&l) { l } else { String::new() }
 }
 
 /// The health check's numbers (tools/health.rs), the newest run for this map version.
@@ -294,6 +329,9 @@ pub struct Item {
     pub status: Status,
     /// a remix: the creation it was made from (Game Mode Studio modes)
     pub remix_of: Option<super::communitylib::Credit>,
+    /// the creation's permanent id (a Studio mode's uid), "" for older entries: installs,
+    /// updates and remixes match by it
+    pub uid: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -372,12 +410,20 @@ pub fn parse_index(bytes: &[u8]) -> Result<Index, String> {
         if it.gb <= 0 || it.gb > 99_999_999 || it.kind == Kind::Other || !seen.insert(key(it.model, it.gb)) {
             return false;
         }
-        if let Some(m) = &it.map {
+        if let Some(m) = &mut it.map {
             if !crate::maps::safe_arg(&m.name) || m.name.len() > 31 {
                 return false;
             }
+            m.mode_refs.retain(|r| safe_mode_id(&r.id));
+            m.mode_refs.truncate(16);
+            for r in &mut m.mode_refs {
+                r.uid = clean_uid(&r.uid);
+                r.name = one_line(&r.name, 40);
+            }
         }
+        it.uid = clean_uid(&it.uid);
         if let Some(m) = &mut it.mode {
+            m.uid = clean_uid(&m.uid);
             if !safe_mode_id(&m.id) {
                 return false;
             }
@@ -385,6 +431,7 @@ pub fn parse_index(bytes: &[u8]) -> Result<Index, String> {
         }
         it.name = one_line(&it.name, 80);
         if let Some(r) = &mut it.remix_of {
+            r.uid = clean_uid(&r.uid);
             r.name = one_line(&r.name, 80);
             r.author = one_line(&r.author, 40);
         }
@@ -725,7 +772,7 @@ pub fn entry(hit: Option<&Hit>, it: Option<&Item>, revoked: bool, have: &HashSet
         "updated": hit.map(|h| h.updated).filter(|a| *a > 0).or(it.map(|i| i.updated)).unwrap_or(0),
         "listed": it.is_some(),
         "map": map.map(|m| m.name.clone()),
-        "modes": map.map(|m| m.modes.clone()).unwrap_or_default(),
+        "modes": map.map(|m| if m.mode_refs.is_empty() { m.modes.clone() } else { m.mode_refs.iter().map(|r| if r.name.is_empty() { r.id.clone() } else { r.name.clone() }).collect() }).unwrap_or_default(),
         "have": map.is_some_and(|m| have.contains(&m.name.to_ascii_lowercase())),
         "badges": badges(it, kind),
         "trust": tr,
@@ -971,6 +1018,7 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
         name,
         author: author.clone(),
         game: game.dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+        uid: it.as_ref().map(|i| i.uid.clone()).unwrap_or_default(),
         ..Default::default()
     };
     if kind == Kind::Prefab || kind == Kind::Mode {
@@ -1127,6 +1175,31 @@ fn sha256_file(p: &Path) -> std::io::Result<String> {
     Ok(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
+/// The modes a compiled map says it's made for: worldspawn `ls_modes` (mode ids separated by
+/// spaces, commas or semicolons; the map editor's Made for). Plain mode ids only, at most 12.
+pub fn made_for(bsp: &Path) -> Vec<String> {
+    made_for_refs(bsp).into_iter().map(|r| r.id).collect()
+}
+
+/// The same, with each mode's permanent id when the map gives one (`uid:id` pairs).
+pub fn made_for_refs(bsp: &Path) -> Vec<ModeRef> {
+    let Ok(l) = crate::goldsrc::bsp::read_lumps(bsp, &[crate::goldsrc::bsp::LUMP_ENTITIES]) else { return vec![] };
+    let text = crate::rcon::latin1(&l[0]);
+    let ents = crate::goldsrc::entities::parse(text.trim_end_matches('\0'));
+    let Some(world) = ents.iter().find(|e| e.get("classname") == Some("worldspawn")) else { return vec![] };
+    let mut v: Vec<ModeRef> = Vec::new();
+    for tok in world.get("ls_modes").unwrap_or("").split([' ', ',', ';']).map(|m| m.trim().to_ascii_lowercase()) {
+        let (uid, m) = match tok.rsplit_once(':') {
+            Some((u, m)) => (clean_uid(u), m.to_string()),
+            None => (String::new(), tok.clone()),
+        };
+        if safe_mode_id(&m) && m.len() <= 24 && !v.iter().any(|r| r.id == m) && v.len() < 12 {
+            v.push(ModeRef { uid, id: m, name: String::new() });
+        }
+    }
+    v
+}
+
 /// Checks a map the way the map doctor does and lists what would go in the package.
 pub fn readiness(m: &MapFile, reports: &Path) -> Readiness {
     let mut r = Readiness { game: m.game.clone(), ..Default::default() };
@@ -1162,6 +1235,7 @@ pub fn readiness(m: &MapFile, reports: &Path) -> Readiness {
     r.map.bsp_sha256 = sha256_file(&m.bsp).unwrap_or_default();
     r.map.overview = r.files.iter().any(|x| x.to_lowercase().starts_with("overviews/"));
     r.map.res = true; // a fresh .res is always written into the package
+    r.map.mode_refs = made_for_refs(&m.bsp);
     let nav = &doc["nav"];
     r.map.nav = nav["exists"] == json!(true) && nav.get("error").is_none() && nav["matchesMap"] != json!(false);
     r.map.places = r.map.nav && nav["namedAreas"].as_u64().unwrap_or(0) > 0;
@@ -1279,6 +1353,17 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
     let mut map = r.map.clone();
     map.modes = req.modes.iter().map(|x| x.trim().to_ascii_lowercase()).filter(|x| safe_mode_id(x)).take(12).collect();
     map.modes.dedup();
+    let names = crate::extras::parse_modes(&crate::sys::read_latin1(&m.hl.join(&m.game).join("addons/amxmodx/configs/gamemodes/modes.ini")).unwrap_or_default());
+    let known = r.map.mode_refs.clone();
+    map.mode_refs = map
+        .modes
+        .iter()
+        .map(|id| ModeRef {
+            uid: known.iter().find(|k| k.id == *id).map(|k| k.uid.clone()).unwrap_or_default(),
+            id: id.clone(),
+            name: names.iter().find(|(n, _)| n == id).map(|(_, n)| one_line(n, 40)).unwrap_or_default(),
+        })
+        .collect();
     let item = Item {
         kind: Kind::Map,
         name: title,
@@ -1461,6 +1546,26 @@ pub fn mode_readiness(graphs: &Path, lib: &Path, id: &str) -> Result<Value, Stri
     Ok(json!({"id": g.mode.id, "name": g.mode.name, "description": g.mode.description, "nodes": g.nodes.len(), "blockers": blockers, "remixOf": credit}))
 }
 
+/// The Studio's map kit for a mode (`<graphs>/<id>.kit.json`), when it's a kit for that mode.
+fn mode_kit(graphs: &Path, id: &str) -> Option<Vec<u8>> {
+    let p = graphs.join(format!("{id}.kit.json"));
+    if std::fs::metadata(&p).ok()?.len() > 256 << 10 {
+        return None;
+    }
+    let b = std::fs::read(&p).ok()?;
+    let v: Value = serde_json::from_slice(&b).ok()?;
+    (v["schema"] == "loner-strike/mode-kit" && v["mode"]["id"] == id).then_some(b)
+}
+
+/// A Studio graph's permanent id (`mode.uid`), read from the file itself.
+pub fn graph_uid(graphs: &Path, id: &str) -> String {
+    let p = graphs.join(format!("{id}.graph.json"));
+    if std::fs::metadata(&p).map(|m| m.len()).unwrap_or(u64::MAX) > 2 << 20 {
+        return String::new();
+    }
+    std::fs::read(&p).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).map(|v| clean_uid(v["mode"]["uid"].as_str().unwrap_or(""))).unwrap_or_default()
+}
+
 fn read_studio_graph(graphs: &Path, id: &str) -> Result<super::studio::graph::Graph, String> {
     if !super::studio::graph::valid_mode_id(id) {
         return Err("That isn't one of your Game Mode Studio modes.".into());
@@ -1492,12 +1597,14 @@ pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq,
     }
     let shots = req.screenshots.iter().map(decode_shot).collect::<Result<Vec<_>, _>>()?;
     let maps: Vec<String> = req.maps.iter().map(|m| m.trim().to_string()).filter(|m| crate::maps::safe_arg(m) && m.len() <= 31).take(24).collect();
+    let uid = graph_uid(graphs, id);
     let item = Item {
         kind: Kind::Mode,
+        uid: uid.clone(),
         name: title,
         author,
         summary: one_line(&req.summary, 400),
-        mode: Some(ModeMeta { id: g.mode.id.clone(), plugins: vec![], review: Review::None, maps }),
+        mode: Some(ModeMeta { id: g.mode.id.clone(), uid, plugins: vec![], review: Review::None, maps }),
         remix_of: super::communitylib::credits(lib).get(id).cloned(),
         added: now(),
         updated: now(),
@@ -1509,11 +1616,15 @@ pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq,
         readme.push_str(&format!("A remix of {} by {}.\r\n", r.name, r.author));
     }
     let manifest = json!({"schema": SCHEMA, "app": env!("CARGO_PKG_VERSION"), "item": item});
-    let entries: Vec<(String, Vec<u8>)> = vec![
+    let mut entries: Vec<(String, Vec<u8>)> = vec![
         (format!("modes/{id}/{id}.graph.json"), graph_text.into_bytes()),
         ("README.txt".into(), readme.into_bytes()),
         ("loner-strike.json".into(), serde_json::to_vec_pretty(&manifest).unwrap_or_default()),
     ];
+    // the mode's map kit, when the Studio made one (docs/notes/X.md: kits travel beside the graph)
+    if let Some(kit) = mode_kit(graphs, id) {
+        entries.insert(1, (format!("modes/{id}/{id}.kit.json"), kit));
+    }
     let contents: Vec<String> = entries.iter().map(|e| e.0.clone()).collect();
     if let Some(why) = package_refusal(&item, &contents) {
         return Err(why);
@@ -1812,9 +1923,13 @@ async fn api_ready(State(st): State<Shared>, UrlPath(name): UrlPath<String>) -> 
                 let m = locate(&game, &name)?;
                 let r = readiness(&m, &crate::sys::app_dir().join("tools").join("health"));
                 let presets = crate::sys::read_latin1(&game.dir.join("addons/amxmodx/configs/gamemodes/mappresets.ini")).unwrap_or_default();
-                let suggested: Vec<String> = super::health::preset_mode(&presets, &m.name).into_iter().chain(r.health.as_ref().map(|h| h.mode.clone())).filter(|x| !x.is_empty()).collect::<Vec<_>>();
-                let mut suggested = suggested;
-                suggested.dedup();
+                // the modes the map says it's made for (worldspawn ls_modes, set in the map editor) first
+                let mut suggested: Vec<String> = Vec::new();
+                for x in made_for(&m.bsp).into_iter().chain(super::health::preset_mode(&presets, &m.name)).chain(r.health.as_ref().map(|h| h.mode.clone())) {
+                    if !x.is_empty() && !suggested.contains(&x) {
+                        suggested.push(x);
+                    }
+                }
                 Ok(json!({"ready": r, "suggestedModes": suggested, "tag": format!("{TAG_TITLE}: {TAG_VALUE}")}))
             })
             .await
@@ -2409,6 +2524,51 @@ mod tests {
         crate::archive::extract(&out.join(&pkg.file), &un, 16 << 20).unwrap();
         assert_eq!(super::super::communitylib::mode_graph(&un).unwrap().mode.id, "lava_remix");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn reads_the_modes_a_map_is_made_for() {
+        let root = tmp("lsmodes");
+        let ents = fixture::ENTITIES.replacen("\"classname\" \"worldspawn\"", "\"classname\" \"worldspawn\"\n\"ls_modes\" \"3F2B8C1E-9A4D-4E6F-8B2A-1C3D5E7F9A0B:laststand, br;br  Bad-Id surf\"", 1);
+        let mut b = fixture::build();
+        while b.len() % 4 != 0 {
+            b.push(0);
+        }
+        let at = b.len() as u32;
+        let mut text = ents.into_bytes();
+        text.push(0);
+        b[4..8].copy_from_slice(&at.to_le_bytes());
+        b[8..12].copy_from_slice(&(text.len() as u32).to_le_bytes());
+        b.extend(text);
+        let p = root.join("x.bsp");
+        std::fs::write(&p, &b).unwrap();
+        assert_eq!(made_for(&p), ["laststand", "br", "surf"]);
+        let refs = made_for_refs(&p);
+        assert_eq!((refs[0].uid.as_str(), refs[0].id.as_str()), ("3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b", "laststand"), "uid:id pairs");
+        assert_eq!(refs[1].uid, "", "bare ids still work");
+        std::fs::write(&p, fixture::build()).unwrap();
+        assert!(made_for(&p).is_empty());
+        assert!(made_for(&root.join("none.bsp")).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn uids() {
+        let u = new_uid();
+        assert!(valid_uid(&u), "{u}");
+        assert_ne!(u, new_uid());
+        assert!(!valid_uid("3f2b8c1e9a4d4e6f8b2a1c3d5e7f9a0b") && !valid_uid("3F2B8C1E-9A4D-4E6F-8B2A-1C3D5E7F9A0B") && !valid_uid(""));
+        let idx = parse_index(br#"{"schema": 1, "items": [
+            {"kind": "mode", "gb": 1, "name": "A", "uid": "3F2B8C1E-9A4D-4E6F-8B2A-1C3D5E7F9A0B", "mode": {"id": "a", "uid": "junk"}},
+            {"kind": "map", "gb": 2, "name": "B", "map": {"name": "de_b", "modes": ["a"], "modeRefs": [{"uid": "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b", "id": "a", "name": "Mode A"}, {"id": "bad id"}]}},
+            {"kind": "map", "gb": 3, "name": "C (older, no uid)", "map": {"name": "de_c"}}]}"#).unwrap();
+        assert_eq!(idx.items[0].uid, "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b");
+        assert_eq!(idx.items[0].mode.as_ref().unwrap().uid, "", "a bad one is dropped, not the entry");
+        assert_eq!(idx.items[1].map.as_ref().unwrap().mode_refs.len(), 1);
+        assert_eq!(idx.items.len(), 3);
+        let have = HashSet::new();
+        let row = entry(None, Some(&idx.items[1]), false, &have).unwrap();
+        assert_eq!(row["modes"], json!(["Mode A"]), "cards show the modes' names");
     }
 
     #[test]

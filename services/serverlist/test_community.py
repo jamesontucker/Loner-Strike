@@ -228,6 +228,25 @@ class Validation(unittest.TestCase):
         m = cm.clean_item(mode_item())
         self.assertEqual((m["mode"]["review"], m["mode"]["plugins"]), ("none", []), "the author can't review their own mode")
 
+    def test_uids(self):
+        u = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b"
+        m = cm.clean_item(dict(mode_item(), uid=u.upper(), remixOf={"model": "Mod", "gb": 5, "uid": u, "name": "Lava", "author": "jam"}))
+        self.assertEqual((m["uid"], m["remixOf"]["uid"], m["remixOf"]["gb"]), (u, u, 5))
+        mo = dict(mode_item()["mode"], uid=u)
+        self.assertEqual(cm.clean_item(dict(mode_item(), mode=mo))["mode"]["uid"], u)
+        old = cm.clean_item(mode_item())
+        self.assertNotIn("uid", old, "entries without one keep working")
+        self.assertEqual(old["mode"]["uid"], "")
+        mp = dict(map_item()["map"], modeRefs=[{"uid": u, "id": "lava", "name": "Floor is lava"}, {"id": "classic"}])
+        refs = cm.clean_item(dict(map_item(), map=mp))["map"]["modeRefs"]
+        self.assertEqual([(r["uid"], r["id"]) for r in refs], [(u, "lava"), ("", "classic")])
+        for bad in [dict(mode_item(), uid="not-a-uuid"), dict(mode_item(), uid=5),
+                    dict(map_item(), map=dict(map_item()["map"], modeRefs=[{"uid": "x", "id": "a"}])),
+                    dict(map_item(), map=dict(map_item()["map"], modeRefs=[{"id": "bad id"}])),
+                    dict(mode_item(), remixOf={"model": "Nope", "gb": 1})]:
+            with self.assertRaises(cm.Reject):
+                cm.clean_item(bad)
+
     def test_plugin_modes_cant_be_shared(self):
         with self.assertRaises(cm.Reject) as e:
             cm.clean_item(mode_item(plugins=True))
@@ -712,7 +731,7 @@ class Index(unittest.TestCase):
                  "added": int, "updated": int, "status": str}
         for k, t in types.items():
             self.assertIsInstance(m[k], t, k)
-        self.assertEqual(set(m["map"]), {"name", "bspSize", "bspSha256", "modes", "nav", "places", "lsv", "res", "overview"})
+        self.assertEqual(set(m["map"]), {"name", "bspSize", "bspSha256", "modes", "modeRefs", "nav", "places", "lsv", "res", "overview"})
         self.assertNotIn("health", m, "nothing proves the author's health numbers, so none are listed")
         self.assertEqual(m["model"], "Mod")
         self.assertEqual(m["author"], "TheHouthi")

@@ -43,6 +43,8 @@ fn now() -> u64 {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Credit {
+    /// the original's permanent id (its mode uid), "" for older ones
+    pub uid: String,
     pub model: Model,
     pub gb: i64,
     pub name: String,
@@ -73,6 +75,8 @@ pub struct Installed {
     pub installed: u64,
     /// the original, for a remix published from this computer
     pub remix_of: Option<Credit>,
+    /// its permanent id (a Studio mode's uid), "" for older installs: updates and remixes match by it
+    pub uid: String,
 }
 
 impl Installed {
@@ -137,11 +141,25 @@ fn forget(dir: &Path, model: Model, gb: i64) {
 /// A newer file than the installed one: the index lists another file for the page (GameBanana's
 /// file ids only grow), or the installed one's MD5 no longer matches what it lists.
 pub fn newer(it: &Installed, idx: &Index) -> Option<i64> {
-    let e = idx.items.iter().find(|e| e.model == it.model && e.gb == it.gb)?;
+    let e = listed_entry(it, idx)?;
+    if e.model != it.model || e.gb != it.gb {
+        // (the same creation, now on another page: any listed file there is newer for us)
+        return (e.file > 0).then_some(e.file);
+    }
     if e.file > 0 && e.file > it.file {
         return Some(e.file);
     }
     None
+}
+
+/// The index entry for an installed creation: by its permanent id when both have one, else by page.
+pub fn listed_entry<'a>(it: &Installed, idx: &'a Index) -> Option<&'a super::community::Item> {
+    if !it.uid.is_empty() {
+        if let Some(e) = idx.items.iter().find(|e| e.uid == it.uid && e.status != super::community::Status::Revoked) {
+            return Some(e);
+        }
+    }
+    idx.items.iter().find(|e| e.model == it.model && e.gb == it.gb)
 }
 
 /// Whether a library entry was pulled by the Loner-Strike team since it was installed.
@@ -237,6 +255,12 @@ pub fn uninstall(game: Option<&crate::game::Game>, dir: &Path, it: &Installed) -
                     super::studio::uninstall(&g.dir, &it.mode)?;
                     removed.push(it.mode.clone());
                 }
+                // (its map kit, which the Studio put in the kits folder when it built the mode)
+                let kit = crate::sys::app_dir().join("kits").join(format!("{}.kit.json", it.mode));
+                if !it.mode.is_empty() && kit.is_file() && !super::studio::graphs_dir().join(format!("{}.graph.json", it.mode)).exists() {
+                    crate::safety::before(TOOL, "remove a community mode's map kit", &kit);
+                    let _ = std::fs::remove_file(kit);
+                }
             }
         }
         Kind::Other => {}
@@ -291,6 +315,18 @@ pub fn mode_graph(src: &Path) -> Result<super::studio::graph::Graph, String> {
     Ok(g)
 }
 
+/// The `mode.uid` of the graph in an unpacked mode package ("" without one).
+pub fn mode_graph_uid(src: &Path) -> String {
+    crate::archive::walk(src)
+        .into_iter()
+        .find(|p| p.to_string_lossy().to_lowercase().ends_with(".graph.json"))
+        .filter(|p| std::fs::metadata(p).map(|m| m.len() <= 2 << 20).unwrap_or(false))
+        .and_then(|p| serde_json::from_slice::<Value>(&std::fs::read(p).ok()?).ok())
+        .map(|v| v["mode"]["uid"].as_str().unwrap_or("").trim().to_ascii_lowercase())
+        .filter(|u| super::community::valid_uid(u))
+        .unwrap_or_default()
+}
+
 /// Why a community mode can't go in under its id: one of the game's modes, or one of your own
 /// Studio graphs, already has it (a reinstall of the same creation is fine).
 pub fn mode_clash(game_dir: &Path, graphs: &Path, lib: &[Installed], id: &str, model: Model, gb: i64) -> Option<String> {
@@ -327,6 +363,9 @@ pub fn install_mode(st: &Shared, src: &Path, mut it: Installed) -> Result<Value,
         return Err(format!("The mode couldn't be built on this computer ({first})."));
     }
     it.mode = g.mode.id.clone();
+    if it.uid.is_empty() {
+        it.uid = mode_graph_uid(src);
+    }
     it.installed = now();
     save(&dir, &it)?;
     let gp = dir.join(it.key()).join(format!("{}.graph.json", g.mode.id));
@@ -367,17 +406,21 @@ pub fn remix(dir: &Path, graphs: &Path, game_dir: Option<&Path>, it: &Installed)
     }
     let src = dir.join(it.key()).join(format!("{}.graph.json", it.mode));
     let text = std::fs::read_to_string(&src).map_err(|_| "This mode's graph isn't in the library any more. Install it again.".to_string())?;
-    let mut g = super::studio::graph::parse(&text)?;
+    let mut raw: Value = serde_json::from_str(&text).map_err(|_| "This mode's graph couldn't be read.".to_string())?;
+    let g0 = super::studio::graph::parse(&text)?;
     let modes = game_dir.map(|d| crate::extras::parse_modes(&crate::sys::read_latin1(&d.join("addons/amxmodx/configs/gamemodes/modes.ini")).unwrap_or_default())).unwrap_or_default();
-    let id = remix_id(&g.mode.id, &|c| graphs.join(format!("{c}.graph.json")).exists() || modes.iter().any(|(m, _)| m == c));
-    let name: String = format!("{} remix", g.mode.name).chars().take(40).collect();
-    g.mode.id = id.clone();
-    g.mode.name = name.clone();
+    let id = remix_id(&g0.mode.id, &|c| graphs.join(format!("{c}.graph.json")).exists() || modes.iter().any(|(m, _)| m == c));
+    let name: String = format!("{} remix", g0.mode.name).chars().take(40).collect();
+    raw["mode"]["id"] = json!(id);
+    raw["mode"]["name"] = json!(name);
+    // your copy is a new mode: its own permanent id (the original's goes in the credit)
+    raw["mode"]["uid"] = json!(super::community::new_uid());
+    let g = raw;
     std::fs::create_dir_all(graphs).map_err(|e| format!("Couldn't save your copy ({e})."))?;
     let path = graphs.join(format!("{id}.graph.json"));
     crate::sys::write_atomic(&path, serde_json::to_string_pretty(&g).unwrap_or_default().as_bytes()).map_err(|e| format!("Couldn't save your copy ({e})."))?;
     let mut all = credits(dir);
-    all.insert(id.clone(), Credit { model: it.model, gb: it.gb, name: it.name.clone(), author: it.author.clone() });
+    all.insert(id.clone(), Credit { uid: it.uid.clone(), model: it.model, gb: it.gb, name: it.name.clone(), author: it.author.clone() });
     std::fs::create_dir_all(dir).ok();
     crate::sys::write_atomic(&credits_path(dir), &serde_json::to_vec_pretty(&all).unwrap_or_default()).map_err(|e| format!("Couldn't note the credit ({e})."))?;
     Ok((id, name))
@@ -731,6 +774,12 @@ mod tests {
         assert_eq!(s["items"][1]["update"], 9);
         assert_eq!(s["items"][0]["pulled"], true);
 
+        // matched by uid: the same mode re-uploaded on another page
+        let idx2: Index = parse_index(br#"{"schema": 1, "items": [{"kind": "mode", "gb": 500, "file": 2, "name": "Lava", "uid": "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b", "mode": {"id": "lava"}}]}"#).unwrap();
+        let mut moved = all[2].clone();
+        moved.uid = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b".into();
+        assert_eq!(newer(&moved, &idx2), Some(2));
+        assert_eq!(newer(&all[2], &idx2), None, "without a uid only the page counts");
         // an older file listed never counts as an update
         let mut it = all[1].clone();
         it.file = 20;
@@ -790,6 +839,7 @@ mod tests {
         it.maps.clear();
         it.mode = "lava".into();
         it.name = "Floor is lava".into();
+        it.uid = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b".into();
         save(&lib, &it).unwrap();
         let g = json!({"schema": "loner-strike/graph", "version": 2, "mode": {"id": "lava", "name": "Floor is lava", "description": ""}, "nodes": [], "edges": []});
         std::fs::write(lib.join("mod-102/lava.graph.json"), g.to_string()).unwrap();
@@ -797,6 +847,8 @@ mod tests {
         assert_eq!((id.as_str(), name.as_str()), ("lava_remix", "Floor is lava remix"));
         let back: Value = serde_json::from_str(&std::fs::read_to_string(graphs.join("lava_remix.graph.json")).unwrap()).unwrap();
         assert_eq!(back["mode"]["id"], "lava_remix");
+        assert!(crate::tools::community::valid_uid(back["mode"]["uid"].as_str().unwrap()), "a uid of its own");
+        assert_eq!(credits(&lib)["lava_remix"].uid, "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b", "remixOf = the original's uid");
         assert_eq!(credits(&lib)["lava_remix"].author, "jam");
         let (id2, _) = remix(&lib, &graphs, None, &it).unwrap();
         assert_eq!(id2, "lava_remix2", "never over your first copy");
