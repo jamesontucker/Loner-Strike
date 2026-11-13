@@ -2714,7 +2714,7 @@
    "type": "event.chat_command",
    "title": "Chat Command",
    "category": "Events",
-   "help": "Runs when a player says /command in chat (shop for /shop).",
+   "help": "Runs when a player says /command or !command in chat (shop for /shop and !shop).",
    "inputs": [],
    "outputs": [
     {

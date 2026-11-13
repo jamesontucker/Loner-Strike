@@ -71,7 +71,8 @@ export function DebugPanel({ onResume, onBpsOff, onRefresh, onStop, focus }: { o
                   {d.vars.values.map((x) => (
                     <div key={`${x.v}-${x.p}`}>
                       <dt>
-                        {graph?.variables.find((v) => v.id === x.v)?.name ?? x.v}
+                        {graph?.variables.find((v) => v.id === x.v.split(":")[0])?.name ?? x.v}
+                        {x.v.includes(":") ? ` (${x.v.split(":")[1]})` : ""}
                         {x.p ? ` (${d.vars!.players.find((p) => p.id === x.p)?.name ?? `player ${x.p}`})` : ""}
                       </dt>
                       <dd>{typeof x.value === "boolean" ? (x.value ? "yes" : "no") : String(x.value)}</dd>

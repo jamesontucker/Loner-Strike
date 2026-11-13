@@ -23,7 +23,9 @@ export const nodeSchema = z.object({
   id,
   type: z.string().min(1).max(64),
   pos: pos.default({ x: 0, y: 0 }),
-  params: z.record(z.union([label(100), z.number().finite(), z.boolean()])).default({}),
+  // (choices from the registry may hold a /, like radio/go; the app checks each setting by its
+  // kind, and a / in text is refused there)
+  params: z.record(z.union([z.string().max(120).regex(/^[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$/]*$/u, "letters, digits, spaces and plain punctuation only"), z.number().finite(), z.boolean()])).default({}),
   breakpoint: z.boolean().optional(),
 });
 
@@ -43,7 +45,8 @@ export const variableSchema = z
     id,
     name: label(30).refine((s) => s.trim().length > 0, "a name"),
     type: z.enum(VAR_TYPES),
-    scope: z.enum(["mode", "player"]),
+    scope: z.enum(["mode", "player", "team"]),
+    reset: z.enum(["never", "round"]).optional(),
     default: z.union([z.number().finite().min(-100000).max(100000), z.boolean(), label(60)]).optional(),
   })
   .refine((v) => v.default === undefined || (v.type === "number" ? typeof v.default === "number" : v.type === "bool" ? typeof v.default === "boolean" : typeof v.default === "string"), "the start value doesn't fit the type");
@@ -55,6 +58,8 @@ export const graphSchema = z.object({
     id: modeId,
     name: label(40),
     description: label(60).default(""),
+    /** game settings for the mode's cfg (Set Setting's choices; the app checks them) */
+    settings: z.array(z.object({ cvar: z.string().regex(/^[a-z_]{2,32}$/), value: z.number().finite().min(0).max(100000) })).max(32).optional(),
   }),
   variables: z.array(variableSchema).max(64).default([]),
   nodes: z.array(nodeSchema).max(400).default([]),

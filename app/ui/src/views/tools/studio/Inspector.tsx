@@ -4,7 +4,7 @@
 import { useStudio } from "./store";
 import { KEYS_CHARS, NAME_CHARS, nodeDef, type ParamDef } from "./registry";
 import { addVariable, removeVariable, setParam, toggleBreakpoint, updateVariable } from "./graphOps";
-import { LABEL_CHARS, type GVariable } from "./schema";
+import { LABEL_CHARS, type GNode, type GVariable } from "./schema";
 
 type PV = string | number | boolean;
 
@@ -53,7 +53,20 @@ function ValueField({ type, value, onChange }: { type: GVariable["type"]; value:
   return <TextField value={typeof value === "string" ? value : ""} max={60} allowed={LABEL_CHARS} onChange={onChange} />;
 }
 
-function ParamField({ p, value, vars, nodeVar, onChange }: { p: ParamDef; value: PV; vars: GVariable[]; nodeVar?: GVariable; onChange: (v: PV) => void }) {
+function ParamField({ p, value, vars, nodeVar, nodes, onChange }: { p: ParamDef; value: PV; vars: GVariable[]; nodeVar?: GVariable; nodes: GNode[]; onChange: (v: PV) => void }) {
+  if (p.kind === "func" || p.kind === "timer") {
+    const list = nodes.filter((n) => (p.kind === "func" ? n.type === "func.define" : ["timer.delay", "timer.repeat", "timer.countdown"].includes(n.type)));
+    return (
+      <select className="st-field" value={String(value)} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{list.length ? "Pick one…" : p.kind === "func" ? "Add a Function node first" : "Add a timer first"}</option>
+        {list.map((n) => (
+          <option key={n.id} value={n.id}>
+            {p.kind === "func" ? String(n.params.name ?? n.id) : `${nodeDef(n.type)?.title ?? n.type} (${n.id})`}
+          </option>
+        ))}
+      </select>
+    );
+  }
   if (p.kind === "choice")
     return (
       <select className="st-field" value={String(value)} onChange={(e) => onChange(e.target.value)}>
@@ -92,6 +105,43 @@ function ParamField({ p, value, vars, nodeVar, onChange }: { p: ParamDef; value:
   return <TextField value={String(value)} max={p.max ?? 100} allowed={LABEL_CHARS} onChange={onChange} />;
 }
 
+/** The game settings the mode's cfg sets (each map, after base.cfg): Set Setting's choices. */
+function ModeSettings() {
+  const graph = useStudio((s) => s.graph)!;
+  const edit = useStudio((s) => s.edit);
+  const choices = nodeDef("game.set_cvar")?.params.find((p) => p.id === "cvar")?.choices ?? [];
+  const list = graph.mode.settings ?? [];
+  const put = (next: { cvar: string; value: number }[]) => edit((g) => ({ ...g, mode: { ...g.mode, settings: next } }));
+  return (
+    <>
+      <h4 className="st-side-sub">Game settings</h4>
+      <p className="st-side-help">Set every map, after the defaults (the mode's own cfg).</p>
+      <ul className="st-vars-list">
+        {list.map((st, k) => (
+          <li key={k} className="st-var">
+            <div className="st-var-row">
+              <select className="st-field" value={st.cvar} onChange={(e) => put(list.map((x, j) => (j === k ? { ...x, cvar: e.target.value } : x)))} aria-label="Setting">
+                {choices.map(([c, l]) => (
+                  <option key={c} value={c}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+              <NumberField value={st.value} min={0} max={100000} onChange={(value) => put(list.map((x, j) => (j === k ? { ...x, value } : x)))} />
+            </div>
+            <button type="button" className="btn small" onClick={() => put(list.filter((_, j) => j !== k))}>
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button type="button" className="btn small" disabled={list.length >= 32 || !choices.length} onClick={() => put([...list, { cvar: choices[0][0], value: 1 }])}>
+        Add a setting
+      </button>
+    </>
+  );
+}
+
 /** This mode's variables: add, rename, type, per player or not, start value. */
 function Variables() {
   const graph = useStudio((s) => s.graph)!;
@@ -99,7 +149,7 @@ function Variables() {
   return (
     <>
       <h4 className="st-side-sub">Variables</h4>
-      <p className="st-side-help">Values the mode keeps: one for the whole mode, or one for each player (reset when they join).</p>
+      <p className="st-side-help">Values the mode keeps: one for the whole mode, one for each player (reset when they join) or one for each team; kept for the map or started again each round.</p>
       <ul className="st-vars-list">
         {graph.variables.map((v) => (
           <li key={v.id} className="st-var">
@@ -113,6 +163,11 @@ function Variables() {
               <select className="st-field" value={v.scope} onChange={(e) => edit((g) => updateVariable(g, v.id, { scope: e.target.value as GVariable["scope"] }))} aria-label="Kept">
                 <option value="mode">One for the mode</option>
                 <option value="player">One per player</option>
+                <option value="team">One per team</option>
+              </select>
+              <select className="st-field" value={v.reset ?? "never"} onChange={(e) => edit((g) => updateVariable(g, v.id, { reset: e.target.value as "never" | "round" }))} aria-label="Kept">
+                <option value="never">Kept for the map</option>
+                <option value="round">Starts again each round</option>
               </select>
             </div>
             <button type="button" className="btn small" onClick={() => edit((g) => removeVariable(g, v.id))} title="Remove this variable">
@@ -164,7 +219,7 @@ export function Inspector({ focus }: { focus: (id: string) => void }) {
               return (
                 <label key={p.id} className="st-side-field">
                   <span>{p.label}</span>
-                  {wiredInstead ? <em className="st-muted">From its wire</em> : <ParamField p={p} value={node.params[p.id] ?? p.default} vars={graph.variables} nodeVar={graph.variables.find((x) => x.id === node.params.var)} onChange={(v) => edit((g) => setParam(g, node.id, p.id, v))} />}
+                  {wiredInstead ? <em className="st-muted">From its wire</em> : <ParamField p={p} value={node.params[p.id] ?? p.default} vars={graph.variables} nodeVar={graph.variables.find((x) => x.id === node.params.var)} nodes={graph.nodes} onChange={(v) => edit((g) => setParam(g, node.id, p.id, v))} />}
                 </label>
               );
             })}
@@ -225,6 +280,7 @@ export function Inspector({ focus }: { focus: (id: string) => void }) {
         </div>
       </div>
       <Variables />
+      <ModeSettings />
       <h4 className="st-side-sub">Problems</h4>
       {problems.length === 0 ? (
         <p className="st-muted">None. Ready to compile.</p>

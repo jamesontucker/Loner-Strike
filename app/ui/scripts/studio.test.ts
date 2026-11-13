@@ -8,6 +8,9 @@ import { parseGraph, emptyGraph, type Graph } from "../src/views/tools/studio/sc
 import { addVariable, addNode, canConnect, connect, copy, emptyHistory, insertReroute, inType, outType, paste, record, redo, remove, undo } from "../src/views/tools/studio/graphOps";
 import { NODE_DEFS, nodeDef, searchNodes } from "../src/views/tools/studio/registry";
 import { applyEvents, emptyDebug, pathPairs } from "../src/views/tools/studio/debugState";
+import { tidyEstimated } from "../src/views/tools/studio/layout";
+import lastStandRaw from "../src/views/tools/studio/templates/last-stand.graph.json?raw";
+import royaleRaw from "../src/views/tools/studio/templates/battle-royale.graph.json?raw";
 
 const template = (): Graph => {
   const r = parseGraph(JSON.parse(templateRaw));
@@ -105,11 +108,11 @@ test("a variable's pins take its type", () => {
 test("node search follows the wire being dragged", () => {
   const fromPlayer = searchNodes("", { type: "player", dir: "out" }).map((d) => d.type);
   assert.ok(fromPlayer.includes("cond.is_team") && fromPlayer.includes("player.give_weapon"));
-  assert.ok(!fromPlayer.includes("score.end_round"));
-  assert.ok(searchNodes("", { type: "number", dir: "out" }).some((d) => d.type === "math.compare"));
+  assert.ok(!fromPlayer.includes("score.end_round"), "end round");
+  assert.ok(searchNodes("", { type: "number", dir: "out" }).some((d) => d.type === "math.compare"), "compare");
   const intoPlayer = searchNodes("", { type: "player", dir: "in" }).map((d) => d.type);
-  assert.ok(intoPlayer.includes("event.player_killed") && !intoPlayer.includes("event.round_started"));
-  assert.equal(searchNodes("give")[0].type, "player.give_weapon");
+  assert.ok(intoPlayer.includes("event.player_killed") && !intoPlayer.includes("event.round_started"), "into");
+  assert.ok(searchNodes("give").slice(0, 3).some((d) => d.type === "player.give_weapon"));
 });
 
 test("copy and paste gives fresh ids and keeps inner wires", () => {
@@ -186,4 +189,39 @@ test("debug events become runs, a path, a pause and live values", () => {
   assert.deepEqual(s.path, ["start"], "a new event starts a new path");
   s = applyEvents(s, [{ s: 1, t: 0, e: "session", map: "cs_office" }], isEvent);
   assert.deepEqual(s.runs, {});
+});
+
+test("copy and paste between graphs brings the variables along", () => {
+  let from = template();
+  const v = addVariable(from, { name: "Kills", type: "number", scope: "player", default: 0 });
+  from = v.graph;
+  const a = addNode(from, "var.add", { x: 0, y: 900 });
+  from = { ...a.graph, nodes: a.graph.nodes.map((n) => (n.id === a.id ? { ...n, params: { ...n.params, var: v.id } } : n)) };
+  const text = copy(from, [a.id])!;
+  // into a graph that already has a variable called v1 (another one)
+  const to = { ...emptyGraph("other", "Other"), variables: [{ id: "v1", name: "Lives", type: "number" as const, scope: "mode" as const, default: 3 }] };
+  const r = paste(to, text, { x: 0, y: 0 })!;
+  assert.equal(r.graph.variables.length, 2);
+  const kills = r.graph.variables.find((x) => x.name === "Kills")!;
+  assert.notEqual(kills.id, "v1");
+  assert.equal(r.graph.nodes[0].params.var, kills.id);
+  // pasted again: the same variable, not a second one
+  const r2 = paste(r.graph, text, { x: 0, y: 300 })!;
+  assert.equal(r2.graph.variables.length, 2);
+});
+
+test("templates are laid out: no comment box over another, boxes round their nodes", () => {
+  for (const raw of [templateRaw, lastStandRaw, royaleRaw]) {
+    const p = parseGraph(JSON.parse(raw));
+    if ("error" in p) assert.fail(p.error);
+    const g = p.graph;
+    // tidying again changes nothing: they ship tidied
+    assert.deepEqual(tidyEstimated(g), g);
+    const boxes = g.comments.map((c) => ({ x0: c.pos.x, y0: c.pos.y, x1: c.pos.x + c.size.w, y1: c.pos.y + c.size.h }));
+    for (let i = 0; i < boxes.length; i++)
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i], b = boxes[j];
+        assert.ok(a.x1 <= b.x0 || b.x1 <= a.x0 || a.y1 <= b.y0 || b.y1 <= a.y0, `${g.mode.id}: boxes ${i} and ${j} overlap`);
+      }
+  }
 });

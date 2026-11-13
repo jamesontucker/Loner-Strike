@@ -621,7 +621,11 @@ pub fn generate(g: &Graph, debug: bool) -> Generated {
         let cmd = name_text(gen.text(v.nodes[id], v.defs[id], "command"));
         let i = gen.index(id);
         if !cmd.is_empty() {
-            o.line(format!("\tregister_clcmd({}, \"lsg_chat{i}\")\n\tregister_clcmd({}, \"lsg_chat{i}\")", pawn_str(&format!("say /{cmd}")), pawn_str(&format!("say_team /{cmd}"))));
+            for say in ["say", "say_team"] {
+                for mark in ["/", "!"] {
+                    o.line(format!("\tregister_clcmd({}, \"lsg_chat{i}\")", pawn_str(&format!("{say} {mark}{cmd}"))));
+                }
+            }
         }
     }
     o.line("}");
@@ -1699,6 +1703,18 @@ mod tests {
             }
             assert!(src.contains("lsg_teleport(ctx[0], \"aserver_cmdquit\")"), "{src}");
             snapshot(if debug { "malicious.debug.sma" } else { "malicious.sma" }, &src);
+        }
+    }
+
+    #[test]
+    fn mode_templates_snapshot() {
+        for (name, t) in [
+            ("last_stand.sma", include_str!("../../../../ui/src/views/tools/studio/templates/last-stand.graph.json")),
+            ("royale.sma", include_str!("../../../../ui/src/views/tools/studio/templates/battle-royale.graph.json")),
+        ] {
+            let g = parse(t).unwrap();
+            assert!(validate(&g).is_empty());
+            snapshot(name, &generate(&g, false).source);
         }
     }
 

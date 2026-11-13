@@ -1,0 +1,776 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 2,
+ "mode": {
+  "id": "royale_lite",
+  "name": "Royale Lite",
+  "description": "Last one standing in a shrinking zone",
+  "settings": [
+   {
+    "cvar": "mp_freeforall",
+    "value": 1
+   },
+   {
+    "cvar": "mp_round_infinite",
+    "value": 1
+   }
+  ]
+ },
+ "variables": [
+  {
+   "id": "alive",
+   "name": "Players left",
+   "type": "number",
+   "scope": "mode",
+   "default": 0
+  }
+ ],
+ "nodes": [
+  {
+   "id": "ms",
+   "type": "event.map_started",
+   "pos": {
+    "x": 65,
+    "y": 63
+   },
+   "params": {}
+  },
+  {
+   "id": "ms_pack",
+   "type": "comp.load_pack",
+   "pos": {
+    "x": 565,
+    "y": 50
+   },
+   "params": {
+    "pack": "br"
+   }
+  },
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 286
+   },
+   "params": {}
+  },
+  {
+   "id": "rs_each",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 565,
+    "y": 251
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "rs_strip",
+   "type": "player.strip",
+   "pos": {
+    "x": 1065,
+    "y": 267
+   },
+   "params": {
+    "knife": true
+   }
+  },
+  {
+   "id": "rs_spot",
+   "type": "comp.respawn_at",
+   "pos": {
+    "x": 1565,
+    "y": 243
+   },
+   "params": {}
+  },
+  {
+   "id": "rs_zone",
+   "type": "flow.for_each_entity",
+   "pos": {
+    "x": 1065,
+    "y": 476
+   },
+   "params": {
+    "by": "class",
+    "name": "ls_zone_shrinker"
+   }
+  },
+  {
+   "id": "rs_start",
+   "type": "comp.start",
+   "pos": {
+    "x": 1565,
+    "y": 424
+   },
+   "params": {}
+  },
+  {
+   "id": "rs_msg",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 1565,
+    "y": 550
+   },
+   "params": {
+    "text": "Loot up and stay in the zone. Last one standing wins!",
+    "seconds": 5
+   }
+  },
+  {
+   "id": "rs_alive",
+   "type": "var.set",
+   "pos": {
+    "x": 2065,
+    "y": 528
+   },
+   "params": {
+    "var": "alive",
+    "value": 0
+   }
+  },
+  {
+   "id": "rs_drops",
+   "type": "timer.repeat",
+   "pos": {
+    "x": 2565,
+    "y": 550
+   },
+   "params": {
+    "every": 60,
+    "times": 4
+   }
+  },
+  {
+   "id": "rs_pick",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 3065,
+    "y": 539
+   },
+   "params": {
+    "by": "class",
+    "name": "ls_respawn_point"
+   }
+  },
+  {
+   "id": "rs_drop",
+   "type": "comp.drop_call",
+   "pos": {
+    "x": 3565,
+    "y": 550
+   },
+   "params": {}
+  },
+  {
+   "id": "pk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 65,
+    "y": 1429
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_left",
+   "type": "game.count_alive",
+   "pos": {
+    "x": 65,
+    "y": 1201
+   },
+   "params": {
+    "team": "none"
+   }
+  },
+  {
+   "id": "pk_set",
+   "type": "var.set",
+   "pos": {
+    "x": 565,
+    "y": 1406
+   },
+   "params": {
+    "var": "alive"
+   }
+  },
+  {
+   "id": "pk_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1065,
+    "y": 1363
+   },
+   "params": {
+    "text": "Players left:",
+    "slot": "right",
+    "seconds": 5
+   }
+  },
+  {
+   "id": "pk_one",
+   "type": "math.compare",
+   "pos": {
+    "x": 1065,
+    "y": 1170
+   },
+   "params": {
+    "op": "le",
+    "b": 1
+   }
+  },
+  {
+   "id": "pk_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1565,
+    "y": 1275
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_win",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 2065,
+    "y": 1264
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "pk_name",
+   "type": "msg.hud",
+   "pos": {
+    "x": 2565,
+    "y": 1431
+   },
+   "params": {
+    "text": "Winner:",
+    "slot": "center",
+    "seconds": 6
+   }
+  },
+  {
+   "id": "pk_pts",
+   "type": "player.add_frags",
+   "pos": {
+    "x": 3065,
+    "y": 1383
+   },
+   "params": {
+    "amount": 5
+   }
+  },
+  {
+   "id": "pk_team",
+   "type": "player.get_team",
+   "pos": {
+    "x": 3065,
+    "y": 1164
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 3565,
+    "y": 1292
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_draw",
+   "type": "score.end_round",
+   "pos": {
+    "x": 2565,
+    "y": 1226
+   },
+   "params": {
+    "winner": "draw"
+   }
+  },
+  {
+   "id": "zt",
+   "type": "comp.on_zone_tick",
+   "pos": {
+    "x": 65,
+    "y": 766
+   },
+   "params": {}
+  },
+  {
+   "id": "zt_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 565,
+    "y": 764
+   },
+   "params": {
+    "text": "Get back in the zone!",
+    "slot": "center",
+    "seconds": 1
+   }
+  },
+  {
+   "id": "lo",
+   "type": "comp.on_loot",
+   "pos": {
+    "x": 65,
+    "y": 951
+   },
+   "params": {}
+  },
+  {
+   "id": "lo_chat",
+   "type": "msg.chat",
+   "pos": {
+    "x": 565,
+    "y": 938
+   },
+   "params": {
+    "text": "Crate opened."
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "ms",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_pack",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_each",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "rs_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "rs_strip",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "rs_each",
+    "pin": "each"
+   },
+   "to": {
+    "node": "rs_strip",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "rs_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "rs_spot",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "rs_strip",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_spot",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "rs_each",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_zone",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "rs_zone",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "rs_start",
+    "pin": "comp"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "rs_zone",
+    "pin": "each"
+   },
+   "to": {
+    "node": "rs_start",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "rs_zone",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_msg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "rs_msg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_alive",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "rs_alive",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_drops",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "rs_drops",
+    "pin": "tick"
+   },
+   "to": {
+    "node": "rs_pick",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "rs_pick",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "rs_drop",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "rs_pick",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_drop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "pk_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "pk_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "pk_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "pk_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_one",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "pk_one",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "pk_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "pk_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "pk_win",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "pk_win",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pk_name",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "pk_win",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_name",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "pk_win",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pk_pts",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "pk_name",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_pts",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "pk_win",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pk_team",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "pk_team",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_end",
+    "pin": "winner"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "pk_pts",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "pk_win",
+    "pin": "none"
+   },
+   "to": {
+    "node": "pk_draw",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "zt",
+    "pin": "player"
+   },
+   "to": {
+    "node": "zt_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "zt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "zt_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "lo",
+    "pin": "player"
+   },
+   "to": {
+    "node": "lo_chat",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "lo",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lo_chat",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "c_setup",
+   "text": "Set up once: Battle Royale's map pack (safe zone, shrinker, respawn points, crates). The mode's settings (This mode): free for all, rounds only end when the mode says.",
+   "pos": {
+    "x": 41,
+    "y": 4
+   },
+   "size": {
+    "w": 778,
+    "h": 158
+   }
+  },
+  {
+   "id": "c_start",
+   "text": "The round: everyone to a spread-out spot with a knife, the zone starts closing, a supply drop every minute.",
+   "pos": {
+    "x": 41,
+    "y": 197
+   },
+   "size": {
+    "w": 3778,
+    "h": 509
+   }
+  },
+  {
+   "id": "c_end",
+   "text": "When one player is left, they win (5 points) and the round ends.",
+   "pos": {
+    "x": 41,
+    "y": 1118
+   },
+   "size": {
+    "w": 3778,
+    "h": 469
+   }
+  },
+  {
+   "id": "c_tips",
+   "text": "Tips for players.",
+   "pos": {
+    "x": 41,
+    "y": 718
+   },
+   "size": {
+    "w": 778,
+    "h": 376
+   }
+  }
+ ]
+}

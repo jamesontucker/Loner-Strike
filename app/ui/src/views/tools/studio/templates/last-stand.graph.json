@@ -1,0 +1,1768 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 2,
+ "mode": {
+  "id": "last_stand_lite",
+  "name": "Last Stand Lite",
+  "description": "Hold the base against 5 waves",
+  "settings": [
+   {
+    "cvar": "mp_round_infinite",
+    "value": 1
+   },
+   {
+    "cvar": "mp_autoteambalance",
+    "value": 0
+   }
+  ]
+ },
+ "variables": [
+  {
+   "id": "wave",
+   "name": "Wave",
+   "type": "number",
+   "scope": "mode",
+   "default": 0
+  }
+ ],
+ "nodes": [
+  {
+   "id": "ms",
+   "type": "event.map_started",
+   "pos": {
+    "x": 65,
+    "y": 63
+   },
+   "params": {}
+  },
+  {
+   "id": "ms_pack",
+   "type": "comp.load_pack",
+   "pos": {
+    "x": 565,
+    "y": 50
+   },
+   "params": {
+    "pack": "laststand"
+   }
+  },
+  {
+   "id": "sp",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 65,
+    "y": 541
+   },
+   "params": {}
+  },
+  {
+   "id": "sp_t",
+   "type": "cond.is_team",
+   "pos": {
+    "x": 565,
+    "y": 398
+   },
+   "params": {
+    "team": "t"
+   }
+  },
+  {
+   "id": "sp_strip",
+   "type": "player.strip",
+   "pos": {
+    "x": 1065,
+    "y": 226
+   },
+   "params": {
+    "knife": true
+   }
+  },
+  {
+   "id": "sp_hp",
+   "type": "player.set_health",
+   "pos": {
+    "x": 1565,
+    "y": 258
+   },
+   "params": {
+    "amount": 150
+   }
+  },
+  {
+   "id": "sp_glow",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 2065,
+    "y": 366
+   },
+   "params": {
+    "color": "green"
+   }
+  },
+  {
+   "id": "sp_ctstrip",
+   "type": "player.strip",
+   "pos": {
+    "x": 1065,
+    "y": 592
+   },
+   "params": {
+    "knife": true
+   }
+  },
+  {
+   "id": "sp_gun",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1565,
+    "y": 635
+   },
+   "params": {
+    "weapon": "m4a1",
+    "ammo": 120
+   }
+  },
+  {
+   "id": "sp_arm",
+   "type": "player.give_item",
+   "pos": {
+    "x": 2065,
+    "y": 678
+   },
+   "params": {
+    "item": "vesthelm"
+   }
+  },
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 988
+   },
+   "params": {}
+  },
+  {
+   "id": "rs_w0",
+   "type": "var.set",
+   "pos": {
+    "x": 565,
+    "y": 942
+   },
+   "params": {
+    "var": "wave",
+    "value": 0
+   }
+  },
+  {
+   "id": "rs_kill",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 1065,
+    "y": 953
+   },
+   "params": {
+    "which": "alive_t"
+   }
+  },
+  {
+   "id": "rs_k",
+   "type": "player.kill",
+   "pos": {
+    "x": 1565,
+    "y": 907
+   },
+   "params": {}
+  },
+  {
+   "id": "rs_msg",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 1565,
+    "y": 1033
+   },
+   "params": {
+    "text": "Hold the base! The first wave is coming.",
+    "seconds": 4
+   }
+  },
+  {
+   "id": "rs_cd",
+   "type": "timer.countdown",
+   "pos": {
+    "x": 2065,
+    "y": 1033
+   },
+   "params": {
+    "secs": 15,
+    "text": "First wave in",
+    "slot": "top"
+   }
+  },
+  {
+   "id": "rs_go",
+   "type": "comp.wave_start",
+   "pos": {
+    "x": 2565,
+    "y": 1033
+   },
+   "params": {
+    "wave": 0
+   }
+  },
+  {
+   "id": "ws",
+   "type": "comp.on_wave_start",
+   "pos": {
+    "x": 1565,
+    "y": 2153
+   },
+   "params": {}
+  },
+  {
+   "id": "ws_set",
+   "type": "var.set",
+   "pos": {
+    "x": 2065,
+    "y": 1807
+   },
+   "params": {
+    "var": "wave"
+   }
+  },
+  {
+   "id": "ws_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 2565,
+    "y": 2075
+   },
+   "params": {
+    "text": "Wave",
+    "slot": "top",
+    "seconds": 6
+   }
+  },
+  {
+   "id": "ws_snd",
+   "type": "game.play_sound",
+   "pos": {
+    "x": 3065,
+    "y": 2086
+   },
+   "params": {
+    "sound": "radio/locknload"
+   }
+  },
+  {
+   "id": "wc",
+   "type": "comp.on_wave_cleared",
+   "pos": {
+    "x": 65,
+    "y": 2181
+   },
+   "params": {}
+  },
+  {
+   "id": "wc_cmp",
+   "type": "math.compare",
+   "pos": {
+    "x": 565,
+    "y": 2708
+   },
+   "params": {
+    "op": "ge",
+    "b": 5
+   }
+  },
+  {
+   "id": "wc_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1065,
+    "y": 2168
+   },
+   "params": {}
+  },
+  {
+   "id": "wc_won",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 1565,
+    "y": 2001
+   },
+   "params": {
+    "text": "You held out! The base is safe.",
+    "seconds": 5
+   }
+  },
+  {
+   "id": "wc_end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 2065,
+    "y": 2003
+   },
+   "params": {
+    "winner": "ct"
+   }
+  },
+  {
+   "id": "wc_dead",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 1565,
+    "y": 2351
+   },
+   "params": {
+    "which": "dead"
+   }
+  },
+  {
+   "id": "wc_isct",
+   "type": "cond.is_team",
+   "pos": {
+    "x": 2065,
+    "y": 2228
+   },
+   "params": {
+    "team": "ct"
+   }
+  },
+  {
+   "id": "wc_resp",
+   "type": "player.respawn",
+   "pos": {
+    "x": 2565,
+    "y": 2349
+   },
+   "params": {}
+  },
+  {
+   "id": "wc_pay",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 2065,
+    "y": 2604
+   },
+   "params": {
+    "which": "alive_ct"
+   }
+  },
+  {
+   "id": "wc_money",
+   "type": "player.add_money",
+   "pos": {
+    "x": 2565,
+    "y": 2475
+   },
+   "params": {
+    "amount": 1500
+   }
+  },
+  {
+   "id": "wc_cd",
+   "type": "timer.countdown",
+   "pos": {
+    "x": 2565,
+    "y": 2649
+   },
+   "params": {
+    "secs": 15,
+    "text": "Next wave in",
+    "slot": "top"
+   }
+  },
+  {
+   "id": "wc_next",
+   "type": "comp.wave_start",
+   "pos": {
+    "x": 3065,
+    "y": 2443
+   },
+   "params": {
+    "wave": 0
+   }
+  },
+  {
+   "id": "wc_tip",
+   "type": "msg.chat",
+   "pos": {
+    "x": 3065,
+    "y": 2691
+   },
+   "params": {
+    "text": "Wave cleared: +1500. Say !shop to buy."
+   }
+  },
+  {
+   "id": "pk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 65,
+    "y": 1546
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_ct",
+   "type": "cond.is_team",
+   "pos": {
+    "x": 565,
+    "y": 1388
+   },
+   "params": {
+    "team": "ct"
+   }
+  },
+  {
+   "id": "pk_left",
+   "type": "game.count_alive",
+   "pos": {
+    "x": 65,
+    "y": 1247
+   },
+   "params": {
+    "team": "ct"
+   }
+  },
+  {
+   "id": "pk_none",
+   "type": "math.compare",
+   "pos": {
+    "x": 565,
+    "y": 1236
+   },
+   "params": {
+    "op": "eq",
+    "b": 0
+   }
+  },
+  {
+   "id": "pk_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1065,
+    "y": 1236
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_lost",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 1565,
+    "y": 1236
+   },
+   "params": {
+    "text": "The base is overrun!",
+    "seconds": 5
+   }
+  },
+  {
+   "id": "pk_end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 2065,
+    "y": 1236
+   },
+   "params": {
+    "winner": "t"
+   }
+  },
+  {
+   "id": "pk_by",
+   "type": "cond.is_team",
+   "pos": {
+    "x": 1065,
+    "y": 1447
+   },
+   "params": {
+    "team": "ct"
+   }
+  },
+  {
+   "id": "pk_pay",
+   "type": "player.add_money",
+   "pos": {
+    "x": 1565,
+    "y": 1496
+   },
+   "params": {
+    "amount": 300
+   }
+  },
+  {
+   "id": "pk_score",
+   "type": "player.add_frags",
+   "pos": {
+    "x": 2065,
+    "y": 1593
+   },
+   "params": {
+    "amount": 1
+   }
+  },
+  {
+   "id": "sh",
+   "type": "event.chat_command",
+   "pos": {
+    "x": 65,
+    "y": 3613
+   },
+   "params": {
+    "command": "shop"
+   }
+  },
+  {
+   "id": "sh_menu",
+   "type": "msg.menu",
+   "pos": {
+    "x": 1065,
+    "y": 3395
+   },
+   "params": {
+    "title": "Shop",
+    "o1": "AK-47 (2500)",
+    "o2": "Kevlar and helmet (1000)",
+    "o3": "HE grenade (300)",
+    "o4": ""
+   }
+  },
+  {
+   "id": "sh_m1",
+   "type": "player.get_money",
+   "pos": {
+    "x": 565,
+    "y": 3069
+   },
+   "params": {}
+  },
+  {
+   "id": "sh_c1",
+   "type": "math.compare",
+   "pos": {
+    "x": 1065,
+    "y": 3045
+   },
+   "params": {
+    "op": "ge",
+    "b": 2500
+   }
+  },
+  {
+   "id": "sh_b1",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1565,
+    "y": 3035
+   },
+   "params": {}
+  },
+  {
+   "id": "sh_g1",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 2065,
+    "y": 2911
+   },
+   "params": {
+    "weapon": "ak47",
+    "ammo": 90
+   }
+  },
+  {
+   "id": "sh_p1",
+   "type": "player.add_money",
+   "pos": {
+    "x": 2565,
+    "y": 3110
+   },
+   "params": {
+    "amount": -2500
+   }
+  },
+  {
+   "id": "sh_n1",
+   "type": "msg.chat",
+   "pos": {
+    "x": 2065,
+    "y": 3067
+   },
+   "params": {
+    "text": "Not enough money for that."
+   }
+  },
+  {
+   "id": "sh_m2",
+   "type": "player.get_money",
+   "pos": {
+    "x": 565,
+    "y": 3637
+   },
+   "params": {}
+  },
+  {
+   "id": "sh_c2",
+   "type": "math.compare",
+   "pos": {
+    "x": 1065,
+    "y": 3613
+   },
+   "params": {
+    "op": "ge",
+    "b": 1000
+   }
+  },
+  {
+   "id": "sh_b2",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1565,
+    "y": 3522
+   },
+   "params": {}
+  },
+  {
+   "id": "sh_g2",
+   "type": "player.give_item",
+   "pos": {
+    "x": 2065,
+    "y": 3608
+   },
+   "params": {
+    "item": "vesthelm"
+   }
+  },
+  {
+   "id": "sh_p2",
+   "type": "player.add_money",
+   "pos": {
+    "x": 2565,
+    "y": 3796
+   },
+   "params": {
+    "amount": -1000
+   }
+  },
+  {
+   "id": "sh_n2",
+   "type": "msg.chat",
+   "pos": {
+    "x": 2065,
+    "y": 3276
+   },
+   "params": {
+    "text": "Not enough money for that."
+   }
+  },
+  {
+   "id": "sh_m3",
+   "type": "player.get_money",
+   "pos": {
+    "x": 565,
+    "y": 3920
+   },
+   "params": {}
+  },
+  {
+   "id": "sh_c3",
+   "type": "math.compare",
+   "pos": {
+    "x": 1065,
+    "y": 3896
+   },
+   "params": {
+    "op": "ge",
+    "b": 300
+   }
+  },
+  {
+   "id": "sh_b3",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1565,
+    "y": 3886
+   },
+   "params": {}
+  },
+  {
+   "id": "sh_g3",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 2065,
+    "y": 4068
+   },
+   "params": {
+    "weapon": "hegrenade",
+    "ammo": 0
+   }
+  },
+  {
+   "id": "sh_p3",
+   "type": "player.add_money",
+   "pos": {
+    "x": 2565,
+    "y": 4106
+   },
+   "params": {
+    "amount": -300
+   }
+  },
+  {
+   "id": "sh_n3",
+   "type": "msg.chat",
+   "pos": {
+    "x": 2065,
+    "y": 3779
+   },
+   "params": {
+    "text": "Not enough money for that."
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "ms",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_pack",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sp_t",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "sp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_t",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sp_strip",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "sp_t",
+    "pin": "true"
+   },
+   "to": {
+    "node": "sp_strip",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sp_hp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sp_glow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "sp_strip",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_hp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "sp_hp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_glow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sp_ctstrip",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "sp_t",
+    "pin": "false"
+   },
+   "to": {
+    "node": "sp_ctstrip",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sp_gun",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "sp_ctstrip",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_gun",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sp_arm",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "sp_gun",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_arm",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "rs_kill",
+    "pin": "player"
+   },
+   "to": {
+    "node": "rs_k",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "rs_kill",
+    "pin": "each"
+   },
+   "to": {
+    "node": "rs_k",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "rs_cd",
+    "pin": "done"
+   },
+   "to": {
+    "node": "rs_go",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_w0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "rs_w0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_kill",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "rs_kill",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_msg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "rs_msg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_cd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "ws",
+    "pin": "wave"
+   },
+   "to": {
+    "node": "ws_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "ws",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ws_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "ws",
+    "pin": "wave"
+   },
+   "to": {
+    "node": "ws_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "ws_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ws_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "ws_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ws_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "wc",
+    "pin": "wave"
+   },
+   "to": {
+    "node": "wc_cmp",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "wc_cmp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "wc_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "wc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wc_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "wc_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "wc_won",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "wc_won",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wc_end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "wc_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "wc_dead",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "wc_dead",
+    "pin": "player"
+   },
+   "to": {
+    "node": "wc_isct",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "wc_dead",
+    "pin": "each"
+   },
+   "to": {
+    "node": "wc_isct",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "wc_dead",
+    "pin": "player"
+   },
+   "to": {
+    "node": "wc_resp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "wc_isct",
+    "pin": "true"
+   },
+   "to": {
+    "node": "wc_resp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "wc_dead",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wc_pay",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "wc_pay",
+    "pin": "player"
+   },
+   "to": {
+    "node": "wc_money",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "wc_pay",
+    "pin": "each"
+   },
+   "to": {
+    "node": "wc_money",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "wc_pay",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wc_cd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "wc_cd",
+    "pin": "done"
+   },
+   "to": {
+    "node": "wc_next",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "wc_cd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wc_tip",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "pk_ct",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_ct",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "pk_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_none",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "pk_none",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "pk_ct",
+    "pin": "true"
+   },
+   "to": {
+    "node": "pk_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "pk_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "pk_lost",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "pk_lost",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "pk_by",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "pk_ct",
+    "pin": "false"
+   },
+   "to": {
+    "node": "pk_by",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "pk_pay",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "pk_by",
+    "pin": "true"
+   },
+   "to": {
+    "node": "pk_pay",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "pk_score",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "pk_pay",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pk_score",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_menu",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "sh",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sh_menu",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_m1",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "sh_m1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sh_c1",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "sh_c1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sh_b1",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "sh_menu",
+    "pin": "c1"
+   },
+   "to": {
+    "node": "sh_b1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_g1",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "sh_b1",
+    "pin": "true"
+   },
+   "to": {
+    "node": "sh_g1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_p1",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "sh_g1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sh_p1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_n1",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w68",
+   "from": {
+    "node": "sh_b1",
+    "pin": "false"
+   },
+   "to": {
+    "node": "sh_n1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w69",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_m2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w70",
+   "from": {
+    "node": "sh_m2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sh_c2",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w71",
+   "from": {
+    "node": "sh_c2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sh_b2",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w72",
+   "from": {
+    "node": "sh_menu",
+    "pin": "c2"
+   },
+   "to": {
+    "node": "sh_b2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w73",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_g2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w74",
+   "from": {
+    "node": "sh_b2",
+    "pin": "true"
+   },
+   "to": {
+    "node": "sh_g2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w75",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_p2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w76",
+   "from": {
+    "node": "sh_g2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sh_p2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w77",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_n2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w78",
+   "from": {
+    "node": "sh_b2",
+    "pin": "false"
+   },
+   "to": {
+    "node": "sh_n2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w79",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_m3",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w80",
+   "from": {
+    "node": "sh_m3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sh_c3",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w81",
+   "from": {
+    "node": "sh_c3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sh_b3",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w82",
+   "from": {
+    "node": "sh_menu",
+    "pin": "c3"
+   },
+   "to": {
+    "node": "sh_b3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w83",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_g3",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w84",
+   "from": {
+    "node": "sh_b3",
+    "pin": "true"
+   },
+   "to": {
+    "node": "sh_g3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w85",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_p3",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w86",
+   "from": {
+    "node": "sh_g3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sh_p3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w87",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_n3",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w88",
+   "from": {
+    "node": "sh_b3",
+    "pin": "false"
+   },
+   "to": {
+    "node": "sh_n3",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "c_setup",
+   "text": "Set up once: Last Stand's map pack (wave spawners, barricades, supply drops). The mode's settings (This mode): rounds only end when the mode says, no team balance.",
+   "pos": {
+    "x": 41,
+    "y": 4
+   },
+   "size": {
+    "w": 778,
+    "h": 158
+   }
+  },
+  {
+   "id": "c_spawn",
+   "text": "Terrorists are the horde: knife only, 150 health, green. Counter-Terrorists defend with an M4 and armor.",
+   "pos": {
+    "x": 41,
+    "y": 180
+   },
+   "size": {
+    "w": 2278,
+    "h": 632
+   }
+  },
+  {
+   "id": "c_start",
+   "text": "Each round is one stand: the horde waits, then wave 1.",
+   "pos": {
+    "x": 41,
+    "y": 861
+   },
+   "size": {
+    "w": 2778,
+    "h": 306
+   }
+  },
+  {
+   "id": "c_waves",
+   "text": "Waves: hold out for 5. Between waves the fallen come back and everyone gets money.",
+   "pos": {
+    "x": 41,
+    "y": 1761
+   },
+   "size": {
+    "w": 3278,
+    "h": 1086
+   }
+  },
+  {
+   "id": "c_deaths",
+   "text": "Deaths: the base falls when no defender is left; each zombie killed pays 300.",
+   "pos": {
+    "x": 41,
+    "y": 1190
+   },
+   "size": {
+    "w": 2278,
+    "h": 559
+   }
+  },
+  {
+   "id": "c_shop",
+   "text": "The shop: say !shop (or slash shop). Each choice checks the money first.",
+   "pos": {
+    "x": 41,
+    "y": 2865
+   },
+   "size": {
+    "w": 2778,
+    "h": 1397
+   }
+  }
+ ]
+}

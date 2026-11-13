@@ -1,28 +1,202 @@
 {
-  "schema": "loner-strike/graph",
-  "version": 2,
-  "mode": { "id": "rifle_reward", "name": "Rifle Reward", "description": "Every kill earns the killer a rifle" },
-  "nodes": [
-    { "id": "start", "type": "event.round_started", "pos": { "x": 0, "y": -200 }, "params": {} },
-    { "id": "hello", "type": "msg.broadcast", "pos": { "x": 300, "y": -200 }, "params": { "text": "Every kill earns you a rifle!", "seconds": 4 } },
-    { "id": "killed", "type": "event.player_killed", "pos": { "x": 0, "y": 0 }, "params": {} },
-    { "id": "is_ct", "type": "cond.is_team", "pos": { "x": 300, "y": 0 }, "params": { "team": "ct" } },
-    { "id": "give_m4", "type": "player.give_weapon", "pos": { "x": 620, "y": -60 }, "params": { "weapon": "m4a1", "ammo": 90 } },
-    { "id": "is_t", "type": "cond.is_team", "pos": { "x": 620, "y": 120 }, "params": { "team": "t" } },
-    { "id": "give_ak", "type": "player.give_weapon", "pos": { "x": 940, "y": 100 }, "params": { "weapon": "ak47", "ammo": 90 } }
-  ],
-  "edges": [
-    { "id": "w1", "from": { "node": "start", "pin": "then" }, "to": { "node": "hello", "pin": "exec" } },
-    { "id": "w2", "from": { "node": "killed", "pin": "then" }, "to": { "node": "is_ct", "pin": "exec" } },
-    { "id": "w3", "from": { "node": "killed", "pin": "attacker" }, "to": { "node": "is_ct", "pin": "player" } },
-    { "id": "w4", "from": { "node": "is_ct", "pin": "true" }, "to": { "node": "give_m4", "pin": "exec" } },
-    { "id": "w5", "from": { "node": "killed", "pin": "attacker" }, "to": { "node": "give_m4", "pin": "player" } },
-    { "id": "w6", "from": { "node": "is_ct", "pin": "false" }, "to": { "node": "is_t", "pin": "exec" } },
-    { "id": "w7", "from": { "node": "killed", "pin": "attacker" }, "to": { "node": "is_t", "pin": "player" } },
-    { "id": "w8", "from": { "node": "is_t", "pin": "true" }, "to": { "node": "give_ak", "pin": "exec" } },
-    { "id": "w9", "from": { "node": "killed", "pin": "attacker" }, "to": { "node": "give_ak", "pin": "player" } }
-  ],
-  "comments": [
-    { "id": "note1", "text": "The killer's team decides the rifle. A kill by the world (a fall) has no attacker, so nothing is given.", "pos": { "x": -40, "y": -60 }, "size": { "w": 1240, "h": 320 } }
-  ]
+ "schema": "loner-strike/graph",
+ "version": 2,
+ "mode": {
+  "id": "rifle_reward",
+  "name": "Rifle Reward",
+  "description": "Every kill earns the killer a rifle"
+ },
+ "nodes": [
+  {
+   "id": "start",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 44
+   },
+   "params": {}
+  },
+  {
+   "id": "hello",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 565,
+    "y": 20
+   },
+   "params": {
+    "text": "Every kill earns you a rifle!",
+    "seconds": 4
+   }
+  },
+  {
+   "id": "killed",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 65,
+    "y": 396
+   },
+   "params": {}
+  },
+  {
+   "id": "is_ct",
+   "type": "cond.is_team",
+   "pos": {
+    "x": 565,
+    "y": 192
+   },
+   "params": {
+    "team": "ct"
+   }
+  },
+  {
+   "id": "give_m4",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1065,
+    "y": 252
+   },
+   "params": {
+    "weapon": "m4a1",
+    "ammo": 90
+   }
+  },
+  {
+   "id": "is_t",
+   "type": "cond.is_team",
+   "pos": {
+    "x": 1065,
+    "y": 404
+   },
+   "params": {
+    "team": "t"
+   }
+  },
+  {
+   "id": "give_ak",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1565,
+    "y": 459
+   },
+   "params": {
+    "weapon": "ak47",
+    "ammo": 90
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "start",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hello",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "killed",
+    "pin": "then"
+   },
+   "to": {
+    "node": "is_ct",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "killed",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "is_ct",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "is_ct",
+    "pin": "true"
+   },
+   "to": {
+    "node": "give_m4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "killed",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "give_m4",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "is_ct",
+    "pin": "false"
+   },
+   "to": {
+    "node": "is_t",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "killed",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "is_t",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "is_t",
+    "pin": "true"
+   },
+   "to": {
+    "node": "give_ak",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "killed",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "give_ak",
+    "pin": "player"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "note1",
+   "text": "The killer's team decides the rifle. A kill by the world (a fall) has no attacker, so nothing is given.",
+   "pos": {
+    "x": 41,
+    "y": 146
+   },
+   "size": {
+    "w": 1778,
+    "h": 447
+   }
+  }
+ ]
 }

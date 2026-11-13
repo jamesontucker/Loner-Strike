@@ -250,9 +250,15 @@ pub fn register_mode(cfg: &Path, g: &Graph, plugin: &str) -> Result<(), String> 
         crate::sys::write_atomic(&p, t.as_bytes()).map_err(|e| format!("Couldn't install the mode ({e})."))
     };
     write(gm.join(format!("{id}.plugins.ini")), &format!("; Made with the Game Mode Studio from {id}.graph.json: compile the graph again instead of editing this.{nl}{plugin}.amxx{nl}"))?;
-    if !gm.join(format!("{id}.cfg")).is_file() {
-        write(gm.join(format!("{id}.cfg")), &format!("// {} (Game Mode Studio). Runs after base.cfg; add this mode's own settings here.{nl}", g.mode.name))?;
+    // the mode's settings (the graph's own; written every compile, after base.cfg each map)
+    let mut cfg_text = format!("// {} (Game Mode Studio): its settings, written from the graph each compile. Runs after base.cfg.{nl}", gen::comment_text(&g.mode.name));
+    let allowed = graph::allowed_settings();
+    for st in g.mode.settings.iter().filter(|s| allowed.contains(&s.cvar.as_str()) && s.value.is_finite()) {
+        let v = st.value.clamp(0.0, graph::NUMBER_LIMIT);
+        let v = if v.fract() == 0.0 { format!("{}", v as i64) } else { format!("{v}") };
+        cfg_text.push_str(&format!("{} \"{v}\"{nl}", st.cvar));
     }
+    write(gm.join(format!("{id}.cfg")), &cfg_text)?;
     write(ini_path, &text)
 }
 
@@ -660,7 +666,9 @@ mod tests {
         let all = include_str!("testdata/all_nodes.graph.json");
         let evil = include_str!("testdata/malicious.graph.json");
         let every = include_str!("testdata/every_node.graph.json");
-        for (name, text) in [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every)] {
+        let ls = include_str!("../../../../ui/src/views/tools/studio/templates/last-stand.graph.json");
+        let br = include_str!("../../../../ui/src/views/tools/studio/templates/battle-royale.graph.json");
+        for (name, text) in [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br)] {
             for debug in [false, true] {
                 let g = graph::parse(text).unwrap();
                 let out = gen::generate(&g, debug);

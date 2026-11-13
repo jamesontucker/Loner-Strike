@@ -10,19 +10,29 @@ import { Sheet, useAskText, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading } from "../common";
 import { busy, errorText } from "../common/api";
 import { useToolCrumbs } from "../common/shell";
+import { useReportAddress } from "../common/address";
+import { useToolArg } from "../../../stores/tools";
 import { useDirty, useNav } from "../../../store";
 import { useStudio, activeBreakpoints } from "./store";
 import { Canvas } from "./Canvas";
 import { Inspector } from "./Inspector";
 import { DebugPanel } from "./DebugPanel";
-import { autoLayout } from "./layout";
-import { moveItems } from "./graphOps";
+import { applyLayout, autoLayout } from "./layout";
 import { emptyGraph, parseGraph, type Graph } from "./schema";
-import templateRaw from "./templates/team-dm.graph.json?raw";
+import rifleRaw from "./templates/team-dm.graph.json?raw";
+import lastStandRaw from "./templates/last-stand.graph.json?raw";
+import royaleRaw from "./templates/battle-royale.graph.json?raw";
 import * as api from "./studioApi";
 import "./studio.css";
 
 const PREFS = "ls.studio.playtest";
+
+/** Ready-made modes to start from (shipped laid out). */
+const TEMPLATES = [
+  { id: "rifle", label: "Rifle Reward", blurb: "Every kill earns the killer a rifle.", raw: rifleRaw },
+  { id: "laststand", label: "Last Stand", blurb: "Everyone defends against creature waves; between waves, money and a shop.", raw: lastStandRaw },
+  { id: "royale", label: "Battle Royale", blurb: "Everyone for themselves, a shrinking zone, loot; last one standing wins.", raw: royaleRaw },
+];
 
 function loadPrefs(): { map: string; bots: number } {
   try {
@@ -72,6 +82,9 @@ function Studio({ maps }: ToolProps) {
   const dirty = !!graph && graph !== saved;
   useToolCrumbs("studio", graph ? [{ label: graph.mode.name || graph.mode.id }] : null);
   useDirty("studio", dirty);
+  // the open graph is the address ("studio:<id>"), so Back and the crumbs step in and out of it
+  useReportAddress("studio", graph ? `studio:${graph.mode.id}` : null);
+  const arg = useToolArg();
 
   const refreshList = useCallback(async () => {
     try {
@@ -141,8 +154,8 @@ function Studio({ maps }: ToolProps) {
     void api.debugCommand({ mode: playing, breakpoints: bpKey ? bpKey.split(" ") : [] });
   }, [bpKey, bpsOff, playing]);
 
-  const openId = async (id: string) => {
-    if (dirty && !(await ask("This graph has changes that aren't saved. Open another one anyway?", { ok: "Open without saving", danger: true }))) return;
+  const openId = async (id: string, fromAddress = false) => {
+    if (!fromAddress && dirty && !(await ask("This graph has changes that aren't saved. Open another one anyway?", { ok: "Open without saving", danger: true }))) return;
     try {
       const r = await api.openGraph(id);
       const p = parseGraph(r.graph);
@@ -153,20 +166,36 @@ function Studio({ maps }: ToolProps) {
     }
   };
 
-  const newGraph = async (fromTemplate: boolean) => {
+  const newGraph = async (template?: (typeof TEMPLATES)[number]) => {
     if (dirty && !(await ask("This graph has changes that aren't saved. Start a new one anyway?", { ok: "Start a new one", danger: true }))) return;
-    const name = await askText("What's the mode called?", { label: "Name", placeholder: fromTemplate ? "Rifle Reward" : "My mode", max: 40 }, { ok: "Create" });
+    const name = await askText("What's the mode called?", { label: "Name", placeholder: template?.label ?? "My mode", max: 40 }, { ok: "Create" });
     if (name == null) return;
-    const clean = [...name.trim()].filter((c) => /[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$]/u.test(c)).join("").slice(0, 40) || (fromTemplate ? "Rifle Reward" : "My mode");
+    const clean = [...name.trim()].filter((c) => /[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$]/u.test(c)).join("").slice(0, 40) || template?.label || "My mode";
     const id = idFrom(clean, new Set((list ?? []).map((g) => g.id)));
     let g: Graph;
-    if (fromTemplate) {
-      const p = parseGraph(JSON.parse(templateRaw));
+    if (template) {
+      const p = parseGraph(JSON.parse(template.raw));
       if ("error" in p) return toast(p.error, true);
       g = { ...p.graph, mode: { ...p.graph.mode, id, name: clean } };
     } else g = emptyGraph(id, clean);
-    st.open(g, false);
+    // saved straight away: a new mode isn't "unsaved changes"
+    const r = await busy("studio-save", "Saving the graph…", () => api.saveGraph(g));
+    if (r.error) return toast(r.error, true);
+    st.open(g, true);
+    void refreshList();
   };
+
+  // the address says which graph is open: open it (Back, a crumb, a link), or the list
+  useEffect(() => {
+    const cur = useStudio.getState().graph;
+    if (!arg) {
+      if (cur) useStudio.getState().close();
+      return;
+    }
+    if (cur?.mode.id === arg) return;
+    if (/^[a-z][a-z0-9_]{1,23}$/.test(arg)) void openId(arg, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arg]);
 
   const save = async (): Promise<boolean> => {
     const g = useStudio.getState().graph;
@@ -250,7 +279,7 @@ function Studio({ maps }: ToolProps) {
     const g = useStudio.getState().graph;
     if (!g) return;
     const sizes = new Map(rf.getNodes().map((n) => [n.id, { w: n.measured?.width ?? 220, h: n.measured?.height ?? 100 }]));
-    st.edit((x) => moveItems(x, autoLayout(x, sizes)));
+    st.edit((x) => applyLayout(x, autoLayout(x, sizes)));
     setTimeout(() => void rf.fitView({ padding: 0.2, duration: 300 }), 50);
   };
 
@@ -273,11 +302,13 @@ function Studio({ maps }: ToolProps) {
     return (
       <div className="st-start tl-page">
         <Empty title="Game Mode Studio (Beta)" text="Make a game mode out of nodes: when something happens (a round starts, a player dies), check things and do things. The Studio turns it into a plugin and Playtest starts the game in your mode with bots.">
-          <button type="button" className="btn primary" onClick={() => void newGraph(true)}>
-            New from the example
-          </button>
-          <button type="button" className="btn" onClick={() => void newGraph(false)}>
-            New blank mode
+          {TEMPLATES.map((t, k) => (
+            <button key={t.id} type="button" className={k === 0 ? "btn primary" : "btn"} title={t.blurb} onClick={() => void newGraph(t)}>
+              {t.label}
+            </button>
+          ))}
+          <button type="button" className="btn" onClick={() => void newGraph()}>
+            Blank mode
           </button>
         </Empty>
         <h3 className="st-start-head">Your modes</h3>

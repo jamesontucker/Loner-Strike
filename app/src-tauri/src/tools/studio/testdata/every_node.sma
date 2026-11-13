@@ -251,7 +251,9 @@ public plugin_init()
 		RegisterHam(Ham_Killed, "ls_creature", "lsg_on_creature_killed", 1)
 	register_event("HLTV", "lsg_new_round", "a", "1=0", "2=0")
 	register_clcmd("say /shop", "lsg_chat92")
+	register_clcmd("say !shop", "lsg_chat92")
 	register_clcmd("say_team /shop", "lsg_chat92")
+	register_clcmd("say_team !shop", "lsg_chat92")
 }
 
 // a new round: timers stop, round variables start again

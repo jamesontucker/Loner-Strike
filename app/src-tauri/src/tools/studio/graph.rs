@@ -148,6 +148,21 @@ pub struct ModeInfo {
     pub name: String,
     #[serde(default)]
     pub description: String,
+    /// game settings for the mode's cfg (run after base.cfg each map): the same allow-list as
+    /// the Set Setting node
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub settings: Vec<Setting>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct Setting {
+    pub cvar: String,
+    pub value: f64,
+}
+
+/// The settings a mode may set: Set Setting's choices.
+pub fn allowed_settings() -> Vec<&'static str> {
+    registry().get("game.set_cvar").and_then(|d| d.param("cvar")).map(|p| p.choices.iter().map(|(k, _)| k.as_str()).collect()).unwrap_or_default()
 }
 
 /// A value the mode keeps: one for the whole mode, or one per player. Kept for the map (per
@@ -553,6 +568,15 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
     }
     if !valid_label(&g.mode.description, 60) {
         p.push(Problem::err(None, "The mode's description can be up to 60 letters, digits, spaces or plain punctuation (no * / \\ \" ^)."));
+    }
+    let allowed = allowed_settings();
+    for st in &g.mode.settings {
+        if !allowed.contains(&st.cvar.as_str()) || !st.value.is_finite() || !(0.0..=NUMBER_LIMIT).contains(&st.value) {
+            p.push(Problem::err(None, format!("The mode's setting \u{201c}{}\u{201d} isn't one the Studio can set (or its value is out of range).", st.cvar.chars().take(30).collect::<String>())));
+        }
+    }
+    if g.mode.settings.len() > 32 {
+        p.push(Problem::err(None, "A mode can have at most 32 settings."));
     }
     if g.nodes.len() > MAX_NODES || g.edges.len() > MAX_EDGES || g.comments.len() > MAX_COMMENTS || g.variables.len() > MAX_VARIABLES {
         p.push(Problem::err(None, format!("That graph is too big (at most {MAX_NODES} nodes, {MAX_EDGES} wires, {MAX_COMMENTS} comments and {MAX_VARIABLES} variables).")));
@@ -996,11 +1020,16 @@ mod tests {
     }
 
     #[test]
-    fn template_is_clean() {
-        let t = include_str!("../../../../ui/src/views/tools/studio/templates/team-dm.graph.json");
-        let g = parse(t).unwrap();
-        let p = validate(&g);
-        assert!(p.is_empty(), "{:?}", msgs(&p));
+    fn templates_are_clean() {
+        for t in [
+            include_str!("../../../../ui/src/views/tools/studio/templates/team-dm.graph.json"),
+            include_str!("../../../../ui/src/views/tools/studio/templates/last-stand.graph.json"),
+            include_str!("../../../../ui/src/views/tools/studio/templates/battle-royale.graph.json"),
+        ] {
+            let g = parse(t).unwrap();
+            let p = validate(&g);
+            assert!(p.is_empty(), "{}: {:?}", g.mode.id, msgs(&p));
+        }
     }
 
     #[test]

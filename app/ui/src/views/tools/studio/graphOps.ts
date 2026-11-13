@@ -205,7 +205,10 @@ export function copy(g: Graph, ids: Iterable<string>): string | null {
   const comments = g.comments.filter((c) => keep.has(c.id));
   if (!nodes.length && !comments.length) return null;
   const edges = g.edges.filter((e) => keep.has(e.from.node) && keep.has(e.to.node));
-  return JSON.stringify({ kind: CLIP, nodes, edges, comments });
+  // the variables the nodes use go along, so they work when pasted into another graph
+  const used = new Set(nodes.map((n) => n.params.var).filter((x): x is string => typeof x === "string"));
+  const variables = g.variables.filter((x) => used.has(x.id));
+  return JSON.stringify({ kind: CLIP, nodes, edges, comments, variables });
 }
 
 /** Pastes copied text (ours, or a whole graph file) with fresh ids, its top-left at `at`.
@@ -217,7 +220,7 @@ export function paste(g: Graph, text: string, at: { x: number; y: number }): { g
   } catch {
     return null;
   }
-  let part: { nodes: GNode[]; edges: GEdge[]; comments: GComment[] };
+  let part: { nodes: GNode[]; edges: GEdge[]; comments: GComment[]; variables: GVariable[] };
   if (v && typeof v === "object" && (v as { kind?: string }).kind === CLIP) {
     // checked like a graph file: the same shapes
     const r = parseGraph({ schema: "loner-strike/graph", version: 1, mode: { id: "clip", name: "" }, ...(v as object) });
@@ -242,7 +245,28 @@ export function paste(g: Graph, text: string, at: { x: number; y: number }): { g
     remap.set(old, id);
     return id;
   };
+  // variables: the same one (same name and type) if this graph has it, else added
+  let variables = g.variables;
+  const varMap = new Map<string, string>();
+  for (const x of part.variables) {
+    const same = variables.find((y) => y.name === x.name && y.type === x.type && y.scope === x.scope);
+    if (same) varMap.set(x.id, same.id);
+    else {
+      let k = 1;
+      while (variables.some((y) => y.id === `v${k}`)) k++;
+      variables = [...variables, { ...x, id: `v${k}` }];
+      varMap.set(x.id, `v${k}`);
+    }
+  }
+  const pastedIds = new Set(nodes.map((n) => n.id));
   const newNodes = nodes.map((n) => ({ ...n, id: fresh(n.id, "n"), pos: { x: Math.round(n.pos.x + dx), y: Math.round(n.pos.y + dy) }, breakpoint: undefined }));
+  // settings that name a variable, or another pasted node (a Function, a timer), follow along
+  for (const n of newNodes) {
+    const p = { ...n.params };
+    if (typeof p.var === "string" && varMap.has(p.var)) p.var = varMap.get(p.var)!;
+    for (const k of ["func", "timer"]) if (typeof p[k] === "string" && pastedIds.has(p[k] as string)) p[k] = remap.get(p[k] as string)!;
+    n.params = p;
+  }
   const newComments = part.comments.map((c) => ({ ...c, id: fresh(c.id, "c"), pos: { x: Math.round(c.pos.x + dx), y: Math.round(c.pos.y + dy) } }));
   const newEdges = part.edges
     .filter((e) => remap.has(e.from.node) && remap.has(e.to.node))
@@ -252,7 +276,7 @@ export function paste(g: Graph, text: string, at: { x: number; y: number }): { g
       return { id, from: { node: remap.get(e.from.node)!, pin: e.from.pin }, to: { node: remap.get(e.to.node)!, pin: e.to.pin } };
     });
   const ids = [...newNodes.map((n) => n.id), ...newComments.map((c) => c.id)];
-  return { graph: { ...g, nodes: [...g.nodes, ...newNodes], edges: [...g.edges, ...newEdges], comments: [...g.comments, ...newComments] }, ids };
+  return { graph: { ...g, variables, nodes: [...g.nodes, ...newNodes], edges: [...g.edges, ...newEdges], comments: [...g.comments, ...newComments] }, ids };
 }
 
 // ---- undo and redo -------------------------------------------------------------------------

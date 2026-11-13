@@ -10,7 +10,7 @@ export type ParamDef = {
   label: string;
   /** name: an entity's name; keys: component keys; var: one of the graph's variables;
    *  varvalue: a value of that variable's type */
-  kind: "choice" | "number" | "text" | "bool" | "name" | "keys" | "var" | "varvalue";
+  kind: "choice" | "number" | "text" | "bool" | "name" | "keys" | "var" | "varvalue" | "func" | "timer";
   default: string | number | boolean;
   choices?: [string, string][];
   min?: number;

@@ -118,7 +118,12 @@ let kick = () => {};
 /** Goes to an address from a crumb or Back: asks first about unsaved edits. */
 async function leaveTo(address: string, ask: ReturnType<typeof useConfirm>) {
   if (address === here()) return;
-  if (hasUnsavedEdits() && !(await ask("Leave without saving your changes?", { ok: "Leave", danger: true }))) return;
+  if (hasUnsavedEdits()) {
+    if (!(await ask("Leave without saving your changes?", { ok: "Leave", danger: true }))) return;
+    // the question's sheet takes its history entry off as it closes; going before that lands
+    // would let the history step bring this page straight back (App.tsx waits the same way)
+    await new Promise((r) => setTimeout(r, 50));
+  }
   openAddress(address, true);
 }
 

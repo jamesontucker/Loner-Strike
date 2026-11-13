@@ -135,7 +135,7 @@ node("event.player_hurt", "Player Hurt", "Events", "Runs when a player takes dam
 node("event.team_changed", "Team Changed", "Events", "Runs when a player joins a team (or changes team).", outputs=[E(), P("player","player","Player"), P("team","team","Team")], **ev)
 node("event.map_started", "Map Started", "Events", "Runs once when the map has loaded (before the first round): load map packs, set things up.", outputs=[E()], **ev)
 node("event.new_round", "New Round", "Events", "Runs when a new round is set up (freeze time starts), before Round Started.", outputs=[E()], **ev)
-node("event.chat_command", "Chat Command", "Events", "Runs when a player says /command in chat (shop for /shop).", outputs=[E(), P("player","player","Player")], params=[prm("command","Command (without /)","name","shop")], **ev)
+node("event.chat_command", "Chat Command", "Events", "Runs when a player says /command or !command in chat (shop for /shop and !shop).", outputs=[E(), P("player","player","Player")], params=[prm("command","Command (without /)","name","shop")], **ev)
 node("func.define", "Function", "Functions", "A piece of graph you can run from anywhere with Call Function. It gets a Player and a Number from the call.", outputs=[E(), P("player","player","Player"), P("number","number","Number")], params=[prm("name","Name","name","my_function")], event=True)
 node("func.call", "Call Function", "Functions", "Runs a Function, giving it a Player and a Number, then carries on.", inputs=[X, P("player","player","Player",optional=True), P("number","number","Number",param="number")], outputs=[E()],
      params=[prm("func","Function","func",""), prm("number","Number","number",0,min=-100000,max=100000)])
