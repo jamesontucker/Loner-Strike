@@ -11,6 +11,12 @@
  * (configs/gamemodes/components/<map>.br.ini: shipped for de_aztec, cs_italy, de_dust2,
  * de_inferno, de_train); other maps get a zone round the middle of their spawns.
  *
+ * Drop-in (br_dropin 1): everyone starts as high as the map's sky allows (up to br_drop_height
+ * above a landing spot), falls at 0.2 gravity and steers, lands with normal gravity and no fall
+ * damage. Bots start over a spot their habit picks (looters a good crate, campers the edge).
+ * Stock maps have low skies (de_aztec: ~500 units of fall), so the drop is short there.
+ * Times scale with the number of players (24 = as set; fewer = quicker zone and drops).
+ *
  * Bots: free-for-all through mp_freeforall; squad mates are friends to the brain
  * (ls_mode role + friend, both ways). gm_components tells them about loot (attract) and the
  * zone (ls_mode zone). This plugin adds a few personal goals, never one for everyone: looters
@@ -26,7 +32,11 @@
 #include <engine>
 #include <cstrike>
 #include <fun>
+#define LS_OWN_PLUGIN_NATIVES
 #include <loner>
+
+/* gm_people (optional): who a bot is; its playstyle picks its Battle Royale habit */
+native people_get(id, const key[]);
 
 #pragma semicolon 1
 
@@ -38,7 +48,7 @@
 enum { PH_IDLE = 0, PH_WAIT, PH_DROP, PH_PLAY, PH_OVER };
 enum { TR_HUNTER = 0, TR_LOOTER, TR_CAMPER };
 
-new g_cSquad, g_cStart, g_cDrop, g_cZoneStart, g_cDrops, g_cWaitHuman;
+new g_cSquad, g_cStart, g_cDrop, g_cZoneStart, g_cDrops, g_cWaitHuman, g_cDropIn, g_cDropHeight;
 
 new g_phase;
 new Float:g_phaseEnd;
@@ -54,6 +64,22 @@ new g_trait[33];
 new Float:g_nextGoal[33];
 new g_lastStage;
 new g_mapname[64];
+new Float:g_pace = 1.0;
+new bool:g_falling[33];
+new g_stagesOrig[256];
+
+public plugin_natives()
+{
+	set_module_filter("ls__module_filter");
+	set_native_filter("br_native_filter");
+}
+
+public br_native_filter(const name[], index, trap)
+{
+	if (equal(name, "people_", 7))
+		return PLUGIN_HANDLED;
+	return ls__native_filter(name, index, trap);
+}
 
 public plugin_init()
 {
@@ -61,10 +87,13 @@ public plugin_init()
 
 	g_cSquad = register_cvar("br_squad", "1");
 	g_cStart = register_cvar("br_start", "knife");
-	g_cDrop = register_cvar("br_drop", "20");
-	g_cZoneStart = register_cvar("br_zone_start", "40");
+	g_cDrop = register_cvar("br_drop", "15");
+	g_cZoneStart = register_cvar("br_zone_start", "30");
 	g_cDrops = register_cvar("br_drops", "3");
 	g_cWaitHuman = register_cvar("br_wait_human", "1");
+	g_cDropIn = register_cvar("br_dropin", "1");
+	g_cDropHeight = register_cvar("br_drop_height", "3000");
+	register_forward(FM_PlayerPostThink, "fm_postthink");
 
 	register_event("HLTV", "ev_new_round", "a", "1=0", "2=0");
 	register_logevent("ev_round_start", 2, "1=Round_Start");
@@ -98,6 +127,8 @@ public ev_new_round()
 		g_kills[p] = 0;
 		g_squad[p] = 0;
 		g_nextGoal[p] = 0.0;
+		if (g_falling[p])
+			land(p);
 	}
 	if (ls_components_running())
 		ls_comp_stop(0);
@@ -129,10 +160,58 @@ public game_setup()
 	start_drop();
 }
 
+/* fewer players: a quicker game (the zone closes sooner and faster), so a 12-bot game still
+   ends with the zone doing its job; 24 players play the times as set, 32 a little longer */
+stock Float:pace()
+{
+	new n = 0;
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_connected(p) && (cs_get_user_team(p) == CS_TEAM_T || cs_get_user_team(p) == CS_TEAM_CT))
+			n++;
+	return floatclamp(float(n) / 24.0, 0.5, 1.25);
+}
+
+/* the shrinker's stages with every warn/shrink time times pace() (from the map's own each game) */
+stock pace_zone(Float:f)
+{
+	new sh = ls_comp_find("ls_zone_shrinker");
+	if (!sh)
+		return;
+	if (!g_stagesOrig[0])
+		ls_comp_get(sh, "stages", g_stagesOrig, charsmax(g_stagesOrig));
+	if (!g_stagesOrig[0])
+		return;
+	new out[256], tok[48], rest[256], a[4][12];
+	copy(rest, charsmax(rest), g_stagesOrig);
+	while (rest[0])
+	{
+		strtok2(rest, tok, charsmax(tok), rest, charsmax(rest), ' ', TRIM_FULL);
+		if (!tok[0])
+			break;
+		replace_all(tok, charsmax(tok), ":", " ");
+		parse(tok, a[0], 11, a[1], 11, a[2], 11, a[3], 11);
+		format(out, charsmax(out), "%s%s%s:%d:%d:%s", out, out[0] ? " " : "", a[0],
+			max(floatround(str_to_float(a[1]) * f), 5), max(floatround(str_to_float(a[2]) * f), 5), a[3][0] ? a[3] : "1");
+	}
+	ls_comp_set(sh, "stages", out);
+}
+
 stock start_drop()
 {
 	g_phase = PH_DROP;
-	new drop = get_pcvar_num(g_cDrop);
+	g_pace = pace();
+	pace_zone(g_pace);
+	/* small games: a little more in each crate */
+	new extra[4];
+	num_to_str(g_pace < 0.75 ? 3 : 2, extra, charsmax(extra));
+	for (new e = ls_comp_find("ls_loot_container"); e; e = ls_comp_find("ls_loot_container", e))
+		if (ls_comp_getf(e, "tier", 1.0) < 4.0)
+			ls_comp_set(e, "items", extra);
+	if (get_pcvar_num(g_cDropIn))
+		for (new p = 1; p <= MaxClients; p++)
+			if (is_user_alive(p))
+				drop_in(p);
+	new drop = floatround(get_pcvar_float(g_cDrop) * floatclamp(0.6 + g_pace * 0.4, 0.7, 1.1));
 	g_phaseEnd = get_gametime() + float(drop);
 	ls_announce(0, 5.0, "Battle Royale: loot up! Fighting starts in %d seconds", drop);
 	if (get_pcvar_num(g_cSquad) > 1)
@@ -147,7 +226,7 @@ stock start_play()
 	/* supply drops spread over the game */
 	g_ndrops = min(get_pcvar_num(g_cDrops), sizeof g_dropAt);
 	for (new i = 0; i < g_ndrops; i++)
-		g_dropAt[i] = g_playAt + 60.0 + 90.0 * float(i) + random_float(-15.0, 15.0);
+		g_dropAt[i] = g_playAt + (60.0 + 90.0 * float(i)) * g_pace + random_float(-10.0, 10.0);
 }
 
 /* a map without a pack: a zone round the middle of the spawns, shrinking in five stages */
@@ -296,7 +375,7 @@ public tick()
 	}
 	if (g_phase == PH_PLAY)
 	{
-		if (!g_zoneStarted && now - g_playAt >= get_pcvar_float(g_cZoneStart))
+		if (!g_zoneStarted && now - g_playAt >= get_pcvar_float(g_cZoneStart) * g_pace)
 		{
 			g_zoneStarted = true;
 			new sh = ls_comp_find("ls_zone_shrinker");
@@ -399,10 +478,117 @@ public task_gear(tid)
 	}
 	cs_set_user_money(id, 0);
 	cs_set_user_armor(id, 0, CS_ARMOR_NONE);
+	if (g_phase == PH_DROP && get_pcvar_num(g_cDropIn))
+		drop_in(id);
+}
+
+/* =========================================================================
+ * The drop-in: start high over a landing spot, fall slowly and steer, land
+ * ========================================================================= */
+
+/* where this player comes down: bots by habit (looters over a good crate, campers out at the
+   edge, hunters anywhere), people over a spread-out respawn point they steer away from */
+stock landing_spot(id, Float:out[3])
+{
+	new Float:c[3], Float:r, closing;
+	ls_zone_next(0, c, r, closing);
+	if (is_user_bot(id) && g_trait[id] == TR_LOOTER)
+	{
+		new cands[32], n = 0;
+		for (new e = ls_comp_find("ls_loot_container"); e && n < sizeof cands; e = ls_comp_find("ls_loot_container", e))
+			if (ls_comp_state(e) == 0 && ls_comp_getf(e, "tier", 1.0) >= 2.0)
+				cands[n++] = e;
+		if (n)
+		{
+			pev(cands[random(n)], pev_origin, out);
+			out[0] += random_float(-120.0, 120.0);
+			out[1] += random_float(-120.0, 120.0);
+			return 1;
+		}
+	}
+	new pts[64], n = 0;
+	for (new e = ls_comp_find("ls_respawn_point"); e && n < sizeof pts; e = ls_comp_find("ls_respawn_point", e))
+		pts[n++] = e;
+	if (!n)
+	{
+		pev(id, pev_origin, out);
+		return 0;
+	}
+	new pick = pts[random(n)];
+	if (is_user_bot(id) && g_trait[id] == TR_CAMPER && r > 0.0)
+	{
+		/* the respawn point furthest from the middle */
+		new Float:bd = -1.0;
+		for (new i = 0; i < n; i++)
+		{
+			new Float:o[3];
+			pev(pts[i], pev_origin, o);
+			new Float:d = floatsqroot((o[0] - c[0]) * (o[0] - c[0]) + (o[1] - c[1]) * (o[1] - c[1])) + random_float(0.0, 400.0);
+			if (d > bd)
+			{
+				bd = d;
+				pick = pts[i];
+			}
+		}
+	}
+	else if (!is_user_bot(id))
+		pev(id, pev_origin, out);
+	if (is_user_bot(id) || !n)
+		pev(pick, pev_origin, out);
+	return 1;
+}
+
+stock drop_in(id)
+{
+	new Float:land[3];
+	landing_spot(id, land);
+	/* as high as the sky allows (or br_drop_height), with room for a player */
+	new Float:a[3], Float:b[3], Float:hit[3];
+	a = land;
+	a[2] += 40.0;
+	b = a;
+	b[2] += get_pcvar_float(g_cDropHeight);
+	engfunc(EngFunc_TraceHull, a, b, IGNORE_MONSTERS, HULL_HUMAN, id, 0);
+	get_tr2(0, TR_vecEndPos, hit);
+	if (get_tr2(0, TR_StartSolid) || hit[2] - a[2] < 250.0)
+		return;
+	hit[2] -= 16.0;
+	engfunc(EngFunc_SetOrigin, id, hit);
+	set_pev(id, pev_velocity, Float:{0.0, 0.0, 0.0});
+	set_user_gravity(id, 0.2);
+	g_falling[id] = true;
+	if (!is_user_bot(id))
+		ls_hud(id, LS_HUD_CENTER, 4.0, "Pick your landing! (steer as you fall)");
+}
+
+/* landed (or hurt by someone close to the ground): normal gravity again */
+stock land(id)
+{
+	if (!g_falling[id])
+		return;
+	g_falling[id] = false;
+	if (is_user_alive(id))
+		set_user_gravity(id, 1.0);
+}
+
+public fm_postthink(id)
+{
+	if (g_falling[id] && is_user_alive(id) && (pev(id, pev_flags) & FL_ONGROUND))
+		land(id);
+	return FMRES_IGNORED;
 }
 
 public ham_takedamage(victim, inflictor, attacker, Float:dmg, bits)
 {
+	if (g_falling[victim])
+	{
+		if (bits & DMG_FALL)
+		{
+			land(victim);
+			return HAM_SUPERCEDE;
+		}
+		land(victim);
+	}
 	if (!(1 <= attacker <= MaxClients) || attacker == victim || !is_user_connected(attacker))
 		return HAM_IGNORED;
 	/* nobody hurts anybody while looting up; squad mates never hurt each other */
@@ -415,10 +601,15 @@ public ham_takedamage(victim, inflictor, attacker, Float:dmg, bits)
 
 public ham_killed(victim, killer, gib)
 {
+	if (g_phase == PH_DROP)
+		log_amx("Battle Royale: player %d died during the drop-in/loot-up (falling %d)", victim, g_falling[victim]);
+	g_falling[victim] = false;
 	if (g_phase != PH_PLAY)
 		return HAM_IGNORED;
 	if (1 <= killer <= MaxClients && killer != victim)
 		g_kills[killer]++;
+	if (get_pcvar_num(g_cSquad) > 1)
+		set_task(4.0, "task_watch_squad", TASK_GEAR + 64 + victim);
 	new place = alive_count() + 1;
 	new name[32];
 	get_user_name(victim, name, charsmax(name));
@@ -426,20 +617,88 @@ public ham_killed(victim, killer, gib)
 	return HAM_IGNORED;
 }
 
+/* out: watch a squad mate who's still in it */
+public task_watch_squad(tid)
+{
+	new id = tid - TASK_GEAR - 64;
+	if (!is_user_connected(id) || is_user_alive(id) || is_user_bot(id))
+		return;
+	for (new q = 1; q <= MaxClients; q++)
+	{
+		if (q != id && is_user_alive(q) && g_squad[q] && g_squad[q] == g_squad[id])
+		{
+			set_pev(id, pev_iuser1, 4);	/* first person */
+			set_pev(id, pev_iuser2, q);
+			new name[32];
+			get_user_name(q, name, charsmax(name));
+			ls_chat(id, "Watching %s from your squad.", name);
+			return;
+		}
+	}
+}
+
+/* a supply drop: each person hears how far and which way */
+public ls_on_drop(ent, stage, const Float:origin[3])
+{
+	if (stage != 0 || g_phase != PH_PLAY)
+		return;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p) || is_user_bot(p))
+			continue;
+		new Float:o[3], Float:ang[3];
+		pev(p, pev_origin, o);
+		pev(p, pev_v_angle, ang);
+		new Float:d = floatsqroot((origin[0] - o[0]) * (origin[0] - o[0]) + (origin[1] - o[1]) * (origin[1] - o[1]));
+		new Float:yaw = floatatan2(origin[1] - o[1], origin[0] - o[0], degrees) - ang[1];
+		while (yaw > 180.0) yaw -= 360.0;
+		while (yaw < -180.0) yaw += 360.0;
+		new dir[24];
+		if (floatabs(yaw) < 30.0)
+			copy(dir, charsmax(dir), "ahead of you");
+		else if (floatabs(yaw) > 150.0)
+			copy(dir, charsmax(dir), "behind you");
+		else if (yaw > 0.0)
+			copy(dir, charsmax(dir), "to your left");
+		else
+			copy(dir, charsmax(dir), "to your right");
+		ls_chat(p, "Supply drop coming down %d m %s.", floatround(d * 0.0254), dir);
+	}
+}
+
 /* =========================================================================
  * Bots: a few personal goals, varied, each with an end time
  * ========================================================================= */
 
+/* the bot's playstyle from people.ini: greedy roamers loot, careful ones camp, rushers hunt */
+stock persona_trait(p)
+{
+	new style = LibraryExists("gm_people", LibType_Library) ? people_get(p, "style") : -1;
+	switch (style)
+	{
+		/* rusher, knifer, ninja */
+		case 0, 6, 8: return TR_HUNTER;
+		/* roamer, nader, objective, weirdgun */
+		case 1, 7, 9, 10: return TR_LOOTER;
+		/* lurker, careful, camper, awper */
+		case 2, 3, 4, 5: return TR_CAMPER;
+	}
+	new r = random_num(1, 100);
+	return r <= 35 ? TR_LOOTER : (r <= 60 ? TR_CAMPER : TR_HUNTER);
+}
+
 stock pick_traits()
 {
+	new n[3];
 	for (new p = 1; p <= MaxClients; p++)
 	{
 		if (!is_user_connected(p) || !is_user_bot(p))
 			continue;
-		new r = random_num(1, 100);
-		g_trait[p] = r <= 35 ? TR_LOOTER : (r <= 60 ? TR_CAMPER : TR_HUNTER);
+		g_trait[p] = persona_trait(p);
+		n[g_trait[p]]++;
 		g_nextGoal[p] = get_gametime() + random_float(3.0, 12.0);
 	}
+	log_amx("Battle Royale bots: %d hunters, %d looters, %d campers (pace %.2f)", n[TR_HUNTER], n[TR_LOOTER], n[TR_CAMPER], pace());
 }
 
 stock bot_goals()
@@ -520,7 +779,7 @@ stock hud()
 		new Float:c[3], Float:r, closing;
 		new Float:secs = ls_zone_next(0, c, r, closing);
 		if (!g_zoneStarted)
-			formatex(top, charsmax(top), "ALIVE %d   The zone starts closing in %d s", alive, max(floatround(get_pcvar_float(g_cZoneStart) - (now - g_playAt)), 0));
+			formatex(top, charsmax(top), "ALIVE %d   The zone starts closing in %d s", alive, max(floatround(get_pcvar_float(g_cZoneStart) * g_pace - (now - g_playAt)), 0));
 		else if (closing)
 			formatex(top, charsmax(top), "ALIVE %d   ZONE CLOSING (%d s)", alive, floatround(secs));
 		else if (secs >= 0.0)
