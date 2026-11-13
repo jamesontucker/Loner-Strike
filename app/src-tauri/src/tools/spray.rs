@@ -343,22 +343,49 @@ pub fn open_design(app: &Path, id: &str) -> Result<Value, String> {
     Ok(d)
 }
 
-/// Saves a composition (a new id when none is given) and returns its id.
+/// Bytes the designs folder may hold in all.
+const MAX_DESIGNS_BYTES: u64 = 256 << 20;
+
+fn designs_bytes(dir: &Path, except: Option<&Path>) -> (usize, u64) {
+    let mut n = 0;
+    let mut bytes = 0;
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let p = e.path();
+        if p.extension().is_some_and(|x| x == "json") && Some(p.as_path()) != except {
+            n += 1;
+            bytes += e.metadata().map(|m| m.len()).unwrap_or(0);
+        }
+    }
+    (n, bytes)
+}
+
+/// Saves a composition and returns its id. An id from the page is only taken to update a
+/// design that's already there; a new design always gets an id from here, within the caps
+/// (MAX_DESIGNS designs, MAX_DESIGN bytes each with its pictures, MAX_DESIGNS_BYTES in all).
 pub fn save_design(app: &Path, id: Option<&str>, name: &str, doc: Value, thumb: Option<&str>) -> Result<Value, String> {
     if !doc.is_object() {
         return Err("Nothing to save.".into());
     }
+    let dir = designs_dir(app);
     let id = match id {
-        Some(i) if design_id_ok(i) => i.to_string(),
-        Some(_) => return Err("That design isn't there any more.".into()),
-        None => {
-            if std::fs::read_dir(designs_dir(app)).map(|r| r.count()).unwrap_or(0) >= MAX_DESIGNS {
-                return Err(format!("You have {MAX_DESIGNS} designs saved. Delete some first."));
+        Some(i) => {
+            if !design_path(app, i)?.is_file() {
+                return Err("That design isn't there any more. Save it as a new one.".into());
             }
+            i.to_string()
+        }
+        None => {
             let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-            format!("d{ms}")
+            let mut i = format!("d{ms}");
+            let mut k = 0;
+            while dir.join(format!("{i}.json")).exists() {
+                k += 1;
+                i = format!("d{ms}_{k}");
+            }
+            i
         }
     };
+    let p = design_path(app, &id)?;
     let name: String = name.chars().filter(|c| !c.is_control()).take(60).collect();
     let name = if name.trim().is_empty() { "Untitled".to_string() } else { name.trim().to_string() };
     let updated = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
@@ -367,12 +394,20 @@ pub fn save_design(app: &Path, id: Option<&str>, name: &str, doc: Value, thumb: 
     if body.len() > MAX_DESIGN {
         return Err(format!("This design is too big to save ({} MB). Use smaller pictures.", body.len() >> 20));
     }
-    let dir = designs_dir(app);
+    let (count, bytes) = designs_bytes(&dir, Some(&p));
+    if !p.is_file() && count >= MAX_DESIGNS {
+        return Err(format!("You have {MAX_DESIGNS} designs saved. Delete some first."));
+    }
+    if bytes + body.len() as u64 > MAX_DESIGNS_BYTES {
+        return Err(format!("Your saved designs take up {} MB, the most kept. Delete some first.", MAX_DESIGNS_BYTES >> 20));
+    }
     std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn't save the design: {e}"))?;
-    let p = design_path(app, &id)?;
     let tmp = dir.join(format!("{id}.json.new"));
     std::fs::write(&tmp, &body).map_err(|e| format!("Couldn't save the design: {e}"))?;
-    std::fs::rename(&tmp, &p).map_err(|e| format!("Couldn't save the design: {e}"))?;
+    if let Err(e) = std::fs::rename(&tmp, &p) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("Couldn't save the design: {e}"));
+    }
     Ok(json!({"ok": true, "id": id, "name": name, "updated": updated}))
 }
 
@@ -720,8 +755,22 @@ mod tests {
             assert!(delete_design(&app, bad).is_err(), "{bad}");
         }
         assert!(save_design(&app, None, "x", json!("not a doc"), None).is_err());
+        // an id the page makes up doesn't make a new file (so it can't get round the caps)
+        assert!(save_design(&app, Some("made_up"), "x", json!({}), None).is_err());
+        assert!(!designs_dir(&app).join("made_up.json").exists());
+        // too big, alone or in all
+        let big = json!({"layers": [{"src": "x".repeat(MAX_DESIGN)}]});
+        assert!(save_design(&app, None, "big", big, None).unwrap_err().contains("too big"));
+        assert_eq!(designs(&app)["designs"].as_array().unwrap().len(), 1);
         delete_design(&app, &id).unwrap();
         assert!(open_design(&app, &id).is_err());
+        // the count cap: new designs refused at MAX_DESIGNS, updates still fine
+        let mut last = String::new();
+        for _ in 0..MAX_DESIGNS {
+            last = save_design(&app, None, "n", json!({}), None).unwrap()["id"].as_str().unwrap().to_string();
+        }
+        assert!(save_design(&app, None, "one more", json!({}), None).unwrap_err().contains("Delete some"));
+        save_design(&app, Some(&last), "updated", json!({}), None).unwrap();
         std::fs::remove_dir_all(&root).ok();
     }
 }

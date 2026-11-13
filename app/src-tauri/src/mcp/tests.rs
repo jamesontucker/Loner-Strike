@@ -829,6 +829,7 @@ fn what_agents_may_do_with_each_route() {
         ("POST", "/api/safety/undo", json!({"from": 1, "to": 2})), ("POST", "/api/setup/install", json!({"components": ["addon-monstermod"]})),
         ("POST", "/api/setup/uninstall", json!({"components": ["addon-monstermod"]})), ("POST", "/api/cmd", json!({"cmd": "gm_player", "args": ["3", "kick"]})),
         ("POST", "/api/sounds/pack", json!({"id": 1, "action": "remove"})), ("POST", "/api/backup/restore", none.clone()), ("POST", "/api/browser/connect", none.clone()),
+        ("POST", "/api/tools/spray/use", none.clone()), ("POST", "/api/tools/spray/design/save", none.clone()), ("POST", "/api/tools/spray/design/delete", none.clone()),
     ] {
         assert!(asks(m, p, b.clone()), "{m} {p} {b} -> {:?}", policy(m, p, &b));
     }

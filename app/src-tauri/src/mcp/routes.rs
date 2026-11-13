@@ -578,6 +578,8 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
         ("/api/tools/plugins/file", "save a plugin's source file (overwrites it)"),
         ("/api/tools/plugins/try", "put a plugin into your game to try"),
         ("/api/tools/editor/components/save-pack", "save a map's components (overwrites them)"),
+        ("/api/tools/spray/design/save", "save a spray design (overwrites it)"),
+        ("/api/tools/spray/use", "set the picture your spray is made from (Install then puts it in the game)"),
     ];
     if let Some((_, what)) = overwrites.iter().find(|(p, _)| *p == route) {
         return Policy::Ask(what.to_string());
