@@ -31,3 +31,19 @@
   `llvm-symbolizer --obj=mp.dll 0x1000_0000+offset` and the CI's `mp.pdb` next to it.
 - **Boss-wave hang: not reproduced** (7 runs, 27+ boss-wave losses and new stands; QA's 3). Probably starvation on
   the overloaded Mac. The watchdog stays as the net.
+
+## Crash files and the 0xfff4fadc crash (Y, 2026-11-13)
+- **Where sim crashes land now (from Y, 2026-11-13):** every crash of any program in the Steam bottle appends the full
+  winedbg report (registers, backtrace, modules: what the crash dialog shows) to
+  `drive_c/Loner-Strike/Sim/crashes.log`, through the bottle's AeDebug hook (`C:\Loner-Strike\crashlog.bat`). The dialog
+  may still pop; the report is in the file anyway. Check it after each run. `~/loner-strike-sim/creatures/crashcheck.sh mark`
+  before a run and `crashcheck.sh since <mark>` after it print only the new reports. Builds of the fork from
+  ls-creatures `f351765` on also write `cstrike/ls_crash.log` (the faulting address and the stack as module+offset;
+  symbolize with `llvm-symbolizer --obj=mp.dll` and the CI's mp.pdb beside it) and `cstrike/ls_watchdog.log` (where the
+  game DLL was when frames stopped for 10 s). A dedicated server on those builds ends quietly after a crash (no
+  dialog holding its port; `ls_crash_quiet 0` for the old way).
+- **The 0xfff4fadc crash** (new thread starting at 0xfff4fadc, only ntdll frames) is a **debugger attach**. Under
+  CrossOver's wow64, the break-in thread that `winedbg <pid>` / `attach` (DebugActiveProcess) puts into a 32-bit hlds
+  starts at a bad address and kills the server, 100% of the time (reproduced: attach, then detach, then the crash).
+  Never attach winedbg to a running server: use the files above for stacks. It isn't in any game code (DR1's mp.dll
+  has no watchdog; the stock LSPLAY build does the same).
