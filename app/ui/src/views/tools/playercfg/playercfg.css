@@ -1,42 +1,73 @@
-/* Crosshair & config builder (views/tools/playercfg). Built on the shared rows (common.css). */
-.pc { display: grid; gap: 16px; }
-.pc h3 { margin: 0 0 8px; }
-.pc h4 { margin: 4px 0 2px; font-size: 15px; color: var(--bone-dim); text-transform: uppercase; letter-spacing: .04em; }
-.pc-hint { margin: 8px 0 0; font-size: 14px; }
+/* Crosshair & config builder (views/tools/playercfg). The crosshair and presets on the left
+   (sticky on wide windows), the settings in tabs on the right, one row per setting with its
+   control lined up in one column. Built on the shared rows (common.css). */
+.pc { display: grid; gap: 14px; container-type: inline-size; }
+.pc h3 { margin: 0; }
+.pc h4 { margin: 16px 0 4px; font-size: 13px; color: var(--bone-faint); text-transform: uppercase; letter-spacing: .05em; }
+.pc-hint { margin: 0 0 6px; font-size: 14px; }
 .pc-warn { color: var(--warn, #e0a040); font-weight: 600; }
 
-.pc-presets { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 10px; }
-.pc-preset { display: grid; gap: 4px; text-align: left; padding: 10px 14px; border: 0; border-radius: 3px; background: var(--bg); box-shadow: var(--sunken); color: var(--bone); font: inherit; cursor: pointer; }
-.pc-preset:hover { background: var(--panel-2); }
-.pc-preset.on { box-shadow: inset 0 0 0 2px var(--signal); }
-.pc-preset .muted { font-size: 14px; }
-.pc-preset:focus-visible, .pc-swatch:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.pc-layout { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.pc-side { display: grid; gap: 14px; min-width: 0; }
+.pc-main { min-width: 0; display: grid; }
+/* narrow: the crosshair and the presets side by side above the tabs */
+@container (min-width: 700px) and (max-width: 979px) {
+  .pc-side { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: start; }
+}
+/* wide: the crosshair column stays in view while the settings scroll */
+@container (min-width: 980px) {
+  .pc-layout { grid-template-columns: minmax(360px, 420px) minmax(0, 1fr); }
+  .pc-side { position: sticky; top: 0; }
+}
 
-.pc-cross { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
-.pc-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); align-items: start; }
-@media (max-width: 1000px) { .pc-cross { grid-template-columns: minmax(0, 1fr); } }
-
-.pc-canvas-wrap { display: grid; place-items: center; overflow: auto; background: #111; border-radius: 2px; box-shadow: var(--sunken); padding: 8px; }
+.pc-stage, .pc-presets-panel { display: grid; gap: 10px; min-width: 0; }
+.pc-stage-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pc-game { margin-left: auto; }
+.pc-canvas-wrap { display: grid; place-items: center; overflow: hidden; background: #111; border-radius: 2px; box-shadow: var(--sunken); padding: 6px; }
 .pc-canvas { display: block; max-width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
-.pc-stage-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 10px; }
+.pc-stage-bar { display: grid; gap: 8px; justify-items: start; }
+.pc-stage-bar-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .pc-stage-bar .seg button { white-space: nowrap; }
+
+/* presets: cards with the crosshair they give */
+.pc-presets { display: grid; gap: 6px; }
+.pc-presets .pc-card { grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; row-gap: 0; align-items: center; }
+.pc-presets .pc-card canvas { grid-row: 1 / 3; }
+.pc-presets .pc-card .muted { -webkit-line-clamp: 2; }
+.pc-card { display: grid; gap: 4px; justify-items: start; align-content: start; text-align: left; padding: 8px 10px; border: 0; border-radius: 3px; background: var(--bg); box-shadow: var(--sunken); color: var(--bone); font: inherit; cursor: pointer; min-width: 0; }
+.pc-card:hover { background: var(--panel-2); }
+.pc-card.on { box-shadow: inset 0 0 0 2px var(--signal); }
+.pc-card:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.pc-card .muted { font-size: 13px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.pc-swatch-canvas { width: 46px; height: 46px; image-rendering: pixelated; border-radius: 2px; box-shadow: var(--sunken); }
+.pc-net-cards { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 8px; }
+
+/* tabs */
+.pc-tabs { display: flex; gap: 2px; border-bottom: 2px solid var(--line); }
+.pc-tab { padding: 8px 14px; border: 0; border-radius: 3px 3px 0 0; background: none; color: var(--bone-dim); font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap; margin-bottom: -2px; border-bottom: 2px solid transparent; }
+.pc-tab:hover { color: var(--bone); background: var(--panel); }
+.pc-tab[aria-selected="true"] { color: var(--signal); background: var(--panel); border-bottom-color: var(--signal); }
+.pc-tab:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+.pc-section { border-top-left-radius: 0; min-height: 320px; }
+.pc-group:first-of-type h4 { margin-top: 6px; }
+
+/* one column for the controls */
+.pc-section .tl-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 280px); gap: 6px 20px; align-items: center; }
+.pc-section .tl-row-control { justify-content: flex-start; }
+@container (max-width: 560px) { .pc-section .tl-row { grid-template-columns: minmax(0, 1fr); } }
 
 .pc-swatches { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .pc-swatch { width: 28px; height: 28px; border-radius: 3px; border: 2px solid rgba(0, 0, 0, .5); cursor: pointer; padding: 0; }
 .pc-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bone); }
+.pc-swatch:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 .pc-custom input { width: 40px; height: 30px; padding: 0; border: 0; background: none; cursor: pointer; }
 
-.pc-num { display: inline-flex; align-items: center; gap: 8px; }
-.pc-num input[type="range"] { width: 160px; max-width: 40vw; }
-.pc-num .search { flex: none; width: 84px; }
+.pc-num { display: inline-flex; align-items: center; gap: 8px; width: 100%; }
+.pc-num input[type="range"] { flex: 1 1 100px; min-width: 60px; }
+.pc-num .search { flex: none; width: 80px; }
 
-.pc-more { margin: 0; }
-.pc-more summary { cursor: pointer; font-weight: 600; color: var(--bone-dim); }
-.pc-more summary:hover { color: var(--bone); }
-
-.pc-keys { display: grid; gap: 4px 28px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); margin-top: 8px; }
 .pc-key { display: inline-flex; gap: 4px; align-items: center; }
 .pc-key-btn { min-width: 128px; white-space: nowrap; }
 .pc-key-btn.waiting { box-shadow: inset 0 0 0 2px var(--signal); }
 
-.pc-lines { margin: 8px 0 0; padding: 10px 12px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; overflow: auto; max-height: 260px; font-size: 13px; }
+.pc-lines { margin: 8px 0 12px; padding: 10px 12px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; overflow: auto; max-height: 50vh; font-size: 13px; }

@@ -78,7 +78,7 @@ function scene(g: CanvasRenderingContext2D) {
 }
 
 /** Gap and line length for a rifle (distance 4, more per shot) in the motion asked for. */
-function spread(dynamic: boolean, motion: Motion, size: string, width: number) {
+export function spread(dynamic: boolean, motion: Motion, size: string, width: number) {
   let dist = 4;
   if (dynamic) {
     if (motion === "jump") dist *= 2;
@@ -116,4 +116,30 @@ export function CrosshairPreview({ colour, size, translucent, dynamic, show, mot
     g.globalCompositeOperation = "source-over";
   }, [colour, size, translucent, dynamic, show, motion, width]);
   return <canvas ref={ref} className="pc-canvas" width={W} height={H} style={{ width: W * zoom }} role="img" aria-label="Your crosshair on a dust-like wall, as the game draws it" />;
+}
+
+/** A preset's crosshair, small: the middle of the screen at 1024 wide, a few times bigger. */
+export function CrosshairSwatch({ colour, size, translucent, show = true }: { colour: string; size: string; translucent: boolean; show?: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const S = 31;
+  useEffect(() => {
+    const g = ref.current?.getContext("2d");
+    if (!g) return;
+    g.globalCompositeOperation = "source-over";
+    g.fillStyle = "#3a2a1c";
+    g.fillRect(0, 0, S, S);
+    g.fillStyle = "#c8a46a";
+    g.fillRect(0, 0, S, 9);
+    if (!show) return;
+    const [r, gg, b] = rgb(colour);
+    const { dist, bar } = spread(false, "still", size, 1024);
+    const m = Math.floor(S / 2);
+    g.globalCompositeOperation = translucent ? "lighter" : "source-over";
+    g.fillStyle = translucent ? `rgba(${r},${gg},${b},0.78)` : `rgb(${r},${gg},${b})`;
+    g.fillRect(m - dist - bar + 1, m, bar, 1);
+    g.fillRect(m + dist, m, bar, 1);
+    g.fillRect(m, m - dist - bar + 1, 1, bar);
+    g.fillRect(m, m + dist, 1, bar);
+  }, [colour, size, translucent, show]);
+  return <canvas ref={ref} className="pc-swatch-canvas" width={S} height={S} aria-hidden="true" />;
 }
