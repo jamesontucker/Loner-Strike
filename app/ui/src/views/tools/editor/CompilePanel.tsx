@@ -235,11 +235,13 @@ export function CompilePanel() {
         setPhase("Teaching bots the map (about a minute)…");
         const lr = await api.learnNav(map);
         if (lr.error) {
-          toast(`Bots couldn't learn the map first: ${lr.error} They'll learn it as they play.`, true);
+          toast(`Bots didn't learn ${map} before the playtest: ${lr.error} They'll find their way as they play.`, true);
         } else {
           const done = await waitForSetupJob();
           const said = await api.learnResult();
-          if (!done || done.state === "error") toast(said.result?.message || "Bots couldn't learn the map first. They'll learn it as they play.", true);
+          // P5: say why (the run's own summary, else the job's error), never a bare "couldn't"
+          if (!done) toast(`Bots didn't learn ${map} before the playtest: the app stopped answering while they learned. They'll find their way as they play.`, true);
+          else if (done.state === "error") toast(`Bots didn't learn ${map} before the playtest. ${said.result?.message || done.error || "The hidden server stopped without saying why."} They'll find their way as they play.`, true);
         }
       }
       setPhase("Starting the game…");

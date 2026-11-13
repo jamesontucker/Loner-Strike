@@ -77,6 +77,7 @@ function Tabs({ area }: { area: AreaId }) {
   const a = useDock((s) => s.areas[area]);
   useEditor((s) => s.checks); // the Checks tab's count
   const [menu, setMenu] = useState(false);
+  const more = useRef<HTMLButtonElement>(null);
   const set = useDock.getState().set;
   return (
     <div className="ed-dock-tabs" role="tablist" data-dock-strip={area}>
@@ -104,10 +105,10 @@ function Tabs({ area }: { area: AreaId }) {
       {area === "bottom" && <FoldButton />}
       {a.active && (
         <div className="ed-dock-menu">
-          <button type="button" className="ed-dock-more" aria-label="Panel options" aria-expanded={menu} title="Float, own window, move, close" onClick={() => setMenu(!menu)}>
+          <button ref={more} type="button" className="ed-dock-more" aria-label="Panel options" aria-expanded={menu} title="Float, own window, move, close" onClick={() => setMenu(!menu)}>
             ⋯
           </button>
-          {menu && <PanelMenu id={a.active} from={area} onDone={() => setMenu(false)} />}
+          {menu && <PanelMenu id={a.active} from={area} anchor={more.current} onDone={() => setMenu(false)} />}
         </div>
       )}
     </div>
@@ -211,13 +212,28 @@ export function startPanelDrag(ev: React.PointerEvent, id: string, onClick?: () 
   window.addEventListener("keydown", key, true);
 }
 
-function PanelMenu({ id, from, onDone }: { id: string; from: AreaId | "float"; onDone: () => void }) {
+/** A panel's ⋯ menu. In a layer of its own on the page (a portal), placed under its button: the
+ *  tab strip scrolls sideways and clipped it to a sliver (it looked like a scrollbar). */
+function PanelMenu({ id, from, onDone, anchor }: { id: string; from: AreaId | "float"; onDone: () => void; anchor: HTMLElement | null }) {
   const ref = useRef<HTMLUListElement>(null);
+  const r = anchor?.getBoundingClientRect();
+  const pos: CSSProperties = r ? { top: Math.min(r.bottom + 2, window.innerHeight - 220), right: Math.max(4, window.innerWidth - r.right), zIndex: 120 } : { top: 80, right: 20, zIndex: 120 };
   useEffect(() => {
-    const away = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && onDone();
+    // a press outside closes it (its own ⋯ button toggles it, so not that); Esc closes it too
+    const away = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && !anchor?.contains(e.target as Node) && onDone();
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      onDone();
+      anchor?.focus();
+    };
     window.addEventListener("pointerdown", away, true);
-    return () => window.removeEventListener("pointerdown", away, true);
-  }, [onDone]);
+    window.addEventListener("keydown", esc, true);
+    return () => {
+      window.removeEventListener("pointerdown", away, true);
+      window.removeEventListener("keydown", esc, true);
+    };
+  }, [onDone, anchor]);
   const item = (label: string, f: () => void) => (
     <li key={label}>
       <button
@@ -231,13 +247,14 @@ function PanelMenu({ id, from, onDone }: { id: string; from: AreaId | "float"; o
       </button>
     </li>
   );
-  return (
-    <ul className="ed-ctx ed-dock-ctx" ref={ref} role="menu">
+  return createPortal(
+    <ul className="ed-ctx ed-dock-ctx" ref={ref} role="menu" aria-label="Panel options" style={pos}>
       {from !== "float" && item("Float", () => floatPanel(id))}
       {item("Open in its own window", () => popOut(id))}
       {AREAS.filter((a) => a.id !== from).map((a) => item(`Dock: ${a.label}`, () => dockTo(id, a.id)))}
       {item("Close (View > Panels opens it again)", () => closePanel(id))}
-    </ul>
+    </ul>,
+    (ref.current?.ownerDocument ?? anchor?.ownerDocument ?? document).body,
   );
 }
 
@@ -376,6 +393,7 @@ function TargetIcon({ area }: { area: AreaKey }) {
 function FloatWin({ f, front }: { f: Float; front: boolean }) {
   const p = panelById(f.id);
   const [menu, setMenu] = useState(false);
+  const more = useRef<HTMLButtonElement>(null);
   const win = useRef<HTMLDivElement>(null);
   // its size follows the corner handle (CSS resize) and is kept
   useEffect(() => {
@@ -406,10 +424,10 @@ function FloatWin({ f, front }: { f: Float; front: boolean }) {
         <span>{p.label?.() ?? p.title}</span>
         <span className="push" />
         <div className="ed-dock-menu">
-          <button type="button" className="ed-dock-more" aria-label="Panel options" onClick={() => setMenu(!menu)}>
+          <button ref={more} type="button" className="ed-dock-more" aria-label="Panel options" onClick={() => setMenu(!menu)}>
             ⋯
           </button>
-          {menu && <PanelMenu id={f.id} from="float" onDone={() => setMenu(false)} />}
+          {menu && <PanelMenu id={f.id} from="float" anchor={more.current} onDone={() => setMenu(false)} />}
         </div>
         <button type="button" className="ed-dock-more" aria-label={`Dock ${p.title}`} title="Dock it on the right" onClick={() => dockTo(f.id, "right")}>
           ⇥

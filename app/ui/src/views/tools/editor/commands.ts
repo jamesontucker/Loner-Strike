@@ -372,6 +372,7 @@ export function commands(): Command[] {
     // Help
     { id: "help.palette", label: "Find a command…", menu: "Help", run: () => useP5.getState().set({ dialog: "palette", paletteText: "" }), fly: true },
     { id: "help.cheats", label: "Keys cheat sheet", menu: "Help", run: () => useP5.getState().set({ dialog: "cheats" }), fly: true },
+    { id: "help.coords", label: "Coordinates and axes", menu: "Help", hint: "Z up, X east, Y north: the engine's own numbers", run: () => useP5.getState().set({ dialog: "coords" }), fly: true },
     { id: "help.tour", label: "First map tour", menu: "Help", hint: "Draw a room, hollow it, add a light and spawns, then play it: each step ticks off as you go", run: () => startTour() },
     { id: "help.keys", label: "Change keys…", menu: "Help", hint: "Hammer and TrenchBroom key sets, or your own", run: () => useP5.getState().set({ dialog: "keys" }) },
   ];

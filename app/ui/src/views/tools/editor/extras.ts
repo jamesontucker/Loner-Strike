@@ -50,7 +50,7 @@ function mainScene(): SceneReg | null {
   return any;
 }
 
-export type PointHit = { point: Vec3; normal: Vec3; kind: "brush" | "entity" | "plane"; id: number | null };
+export type PointHit = { point: Vec3; normal: Vec3; kind: "brush" | "entity" | "plane"; id: number | null; face?: number | null };
 
 /** What's under a point of the window: a brush face (and which way it faces), an entity, else
  *  the ground plane (z 0 in the 3D view, the view's own plane in flat ones). */
@@ -65,9 +65,13 @@ export function pickAt(x: number, y: number): PointHit | null {
   let plane: PointHit | null = null;
   for (const i of rc.intersectObjects(st.scene.children, true)) {
     const ud = i.object.userData as { kind?: string; id?: number; sky?: boolean };
-    if (ud.kind === "brush" && ud.id != null && !ud.sky && i.object.visible) {
+    // (P5: unpicked brushes are drawn merged and found by invisible pick meshes, so a hit on an
+    // invisible brush mesh counts; the face comes along for texture drops)
+    if (ud.kind === "brush" && ud.id != null && !ud.sky) {
       const n = i.face?.normal;
-      return { point: threeToGs(i.point), normal: n ? [n.x, n.y, n.z] : [0, 0, 1], kind: "brush", id: ud.id };
+      const b = useEditor.getState().brushes.get(ud.id);
+      const face = b && i.faceIndex != null ? b.faceOfTri[i.faceIndex] ?? null : null;
+      return { point: threeToGs(i.point), normal: n ? [n.x, n.y, n.z] : [0, 0, 1], kind: "brush", id: ud.id, face };
     }
     if (ud.kind === "entity" && ud.id != null) return { point: threeToGs(i.point), normal: [0, 0, 1], kind: "entity", id: ud.id };
     if (ud.kind === "plane" && !plane) plane = { point: threeToGs(i.point), normal: [0, 0, 1], kind: "plane", id: null };

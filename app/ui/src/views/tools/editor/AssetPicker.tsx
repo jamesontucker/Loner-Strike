@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { assetList, keyValue, revealAsset, sameAsset, spriteUrl, useBrowser, used, type AssetItem, type AssetKind } from "./contentApi";
 import { cachedThumb, modelThumb } from "./modelThumbs";
 import { showPanel } from "./dockState";
+import { dragging } from "./extras";
 import "./p5.css";
 
 function SmallThumb({ a }: { a: AssetItem }) {
@@ -21,6 +22,40 @@ function SmallThumb({ a }: { a: AssetItem }) {
   if (a.kind === "sprite") return <img className="p5-ap-thumb" src={spriteUrl(a)} alt="" loading="lazy" />;
   if (a.kind === "sound") return <span className="p5-ap-thumb p5-cb-sound" aria-hidden="true">♪</span>;
   return url ? <img className="p5-ap-thumb" src={url} alt="" /> : <span className="p5-ap-thumb">{url === null ? "" : <span className="spinner" aria-hidden="true" />}</span>;
+}
+
+/** A key field that takes a file dragged from the Content Browser (its tile's drag id,
+ *  "asset:<kind>:<folder>:<path>", is known while dragging through extras' `dragging`). */
+export function useAssetDrop(kind: AssetKind | null, set: (v: string) => void) {
+  const [hot, setHot] = useState(false);
+  const fits = () => {
+    const id = dragging.current?.id ?? "";
+    const m = /^asset:(model|sprite|sound):[^:]+:(.+)$/.exec(id);
+    return m && m[1] === kind ? m[2] : null;
+  };
+  if (!kind) return { hot: false, props: {} };
+  return {
+    hot,
+    props: {
+      onDragOver: (e: React.DragEvent) => {
+        if (!fits()) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        if (!hot) setHot(true);
+      },
+      onDragLeave: () => setHot(false),
+      onDrop: (e: React.DragEvent) => {
+        const path = fits();
+        setHot(false);
+        if (!path) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const a = { kind: kind as AssetKind, path };
+        set(keyValue(a));
+        used(a);
+      },
+    },
+  };
 }
 
 /** The buttons for one key: `value` now, `set` writes the key. */

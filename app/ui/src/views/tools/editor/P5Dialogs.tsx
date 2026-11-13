@@ -11,6 +11,7 @@ import { frame, selectIds } from "./commands";
 import { useFgd } from "./fgd";
 import { cmd2, useP5, type FindSpec, type Found } from "./p5store";
 import { originOf, selectionBounds, useEditor } from "./store";
+import { AXES } from "./AxisTriad";
 
 export function P5Dialogs() {
   const dialog = useP5((s) => s.dialog);
@@ -21,6 +22,7 @@ export function P5Dialogs() {
   if (dialog === "grid") return <GridSettings onClose={close} />;
   if (dialog === "replaceWith") return <ReplaceWith onClose={close} />;
   if (dialog === "info") return <MapInfo onClose={close} />;
+  if (dialog === "coords") return <Coordinates onClose={close} />;
   return null;
 }
 
@@ -639,6 +641,34 @@ function MapInfo({ onClose }: { onClose: () => void }) {
       <p className="small-note mono">{[...tex.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t, n]) => `${t} ${n}`).join(" · ")}</p>
       <h4>Entities by kind</h4>
       <p className="small-note mono">{[...classes.entries()].sort((a, b) => b[1] - a[1]).slice(0, 16).map(([c, n]) => `${c} ${n}`).join(" · ")}</p>
+      <div className="row">
+        <span className="push" />
+        <button type="button" className="btn small primary" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+/** Help > Coordinates and axes: the convention, said once, plainly. */
+function Coordinates({ onClose }: { onClose: () => void }) {
+  return (
+    <Sheet label="Coordinates and axes" onClose={onClose} className="sheet ed-dialog">
+      <h2>Coordinates and axes</h2>
+      <p>The editor uses the game's own coordinates, the same as Hammer, J.A.C.K. and the .map file:</p>
+      <ul className="ed-axes">
+        {AXES.map((a) => (
+          <li key={a.id}>
+            <b style={{ color: a.colour }}>{a.id}</b> points {a.word}
+            {a.id === "Z" ? " (Z is height; a player stands 72 units tall)" : a.id === "X" ? " (to the right in the Top view)" : " (up the screen in the Top view)"}
+          </li>
+        ))}
+      </ul>
+      <p className="small-note">
+        The numbers never change with the key set (Hammer, TrenchBroom, Unreal): only the keys and mouse do. Unreal and Blender also put Z up, but Unreal's Y points the other way and its units differ, so a position copied from there will be mirrored. The status bar shows the cursor's position as X Y Z; the triad in each view's corner shows where the axes point from that view.
+      </p>
+      <p className="small-note muted">Angles: yaw turns round Z, 0 faces east (+X), 90 faces north (+Y). Pitch tips up and down, roll leans sideways.</p>
       <div className="row">
         <span className="push" />
         <button type="button" className="btn small primary" onClick={onClose}>

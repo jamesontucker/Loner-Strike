@@ -159,12 +159,18 @@ fn main() {
                     }
                     let label = format!("panel-{}", next_panel.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
                     let Ok(blank) = "about:blank".parse() else { return tauri::webview::NewWindowResponse::Deny };
-                    match WebviewWindowBuilder::new(&handle, label, WebviewUrl::External(blank)).window_features(features).title("Loner-Strike").min_inner_size(260.0, 200.0).build() {
+                    // (P5: the page's own drag and drop, as in the main window)
+                    match WebviewWindowBuilder::new(&handle, label, WebviewUrl::External(blank)).window_features(features).title("Loner-Strike").min_inner_size(260.0, 200.0).disable_drag_drop_handler().build() {
                         Ok(window) => tauri::webview::NewWindowResponse::Create { window },
                         Err(_) => tauri::webview::NewWindowResponse::Deny,
                     }
                 })
                 .title("Loner-Strike")
+                // P5: Tauri's own file-drop handling swallows the page's HTML drag and drop (on
+                // Windows always, on a Mac too): the editor drags prefabs, components, models,
+                // sprites, sounds and textures onto the map, and nothing in the app takes files
+                // dropped from the desktop
+                .disable_drag_drop_handler()
                 .inner_size(w, h)
                 .min_inner_size(820.0, 600.0) // the sidebar scrolls when it doesn't fit
                 .center()

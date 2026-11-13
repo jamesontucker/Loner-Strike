@@ -36,7 +36,7 @@
 .ed-menu-find:hover { color: var(--bone); }
 .ed-layouts button { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; font-size: 12px; }
 @container (max-width: 900px) { .ed-layout-label { display: none; } }
-@media (max-width: 1100px) { .ed-layout-label { display: none; } .ed-menu-find { display: none; } }
+@media (max-width: 1100px) { .ed-layout-label { display: none; } }
 .ed-selsize { color: var(--bone-dim); white-space: nowrap; }
 
 /* command palette */
@@ -313,7 +313,6 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .ed-bar-actions { display: inline-flex; gap: 4px; margin-left: 6px; }
 .ed-menu-head > button span { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
 .ed-menu-recent > button span { padding-left: 10px; }
-@media (max-width: 1250px) { .ed-menu-find-label { display: none; } }
 /* P5: the first-map tour: a slim strip under the bar, in the flow (never over the views) */
 .p5-tour { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12.5px; padding: 5px 10px; margin: 0; }
 .p5-tour-actions { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
@@ -330,9 +329,13 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .ed-dock-fold { margin-right: 2px; }
 /* (one row at common widths: the layout picker drops its words first, then Find's) */
 .ed-bar-name .map-title { font-size: 15px; line-height: 1.1; }
-.ed-bar-name { flex: 1 1 40px; }
+/* the map's name, its Beta tag, then a labeled Find button; the rest sits on the right */
+.ed-bar-name { flex: 0 1 auto; min-width: 40px; overflow: hidden; display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; }
+.ed-bar-name .map-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-menubar > .ed-menu-find { margin-right: auto; flex: none; white-space: nowrap; }
+.ed-menu-find-short { display: none; }
 @media (max-width: 1700px) { .ed-layout-label { display: none; } }
-@media (max-width: 1450px) { .ed-menu-find-label { display: none; } }
+@media (max-width: 1200px) { .ed-menu-find-label { display: none; } .ed-menu-find-short { display: inline; } }
 /* P5: the Content Browser */
 .p5-cb { display: flex; flex-direction: column; gap: 6px; min-height: 0; height: 100%; }
 .p5-cb-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -397,13 +400,16 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .ed-dock-sub { margin: 0 0 6px; font-size: 11.5px; color: var(--bone-dim); }
 /* P5: the Budget panel */
 .p5-budget h4 { margin: 10px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--bone-dim); }
-.p5-bud-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.p5-bud-head { all: unset; box-sizing: border-box; width: 100%; cursor: pointer; display: grid; grid-template-columns: minmax(110px, 1.2fr) auto minmax(80px, 2fr) 42px; gap: 8px; align-items: center; padding: 3px 4px; border-radius: 3px; font-size: 12.5px; }
+/* one grid per list, rows on its subgrid: names, numbers, bars and percents line up in columns */
+.p5-bud-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(96px, max-content) max-content minmax(80px, 1fr) 40px; column-gap: 10px; row-gap: 2px; }
+.p5-bud { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
+.p5-bud-head { all: unset; box-sizing: border-box; grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; cursor: pointer; align-items: center; padding: 3px 4px; border-radius: 3px; font-size: 12.5px; }
+.p5-bud-more { grid-column: 1 / -1; }
 .p5-bud-head:hover { background: rgba(255, 255, 255, .05); }
 .p5-bud-head:focus-visible { outline: 2px solid #ffd84a; }
 .p5-bud-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.p5-bud-num { font-size: 11.5px; color: var(--bone-dim); white-space: nowrap; }
-.p5-bud-pct { text-align: right; font-size: 11.5px; }
+.p5-bud-num { font-size: 11.5px; color: var(--bone-dim); white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.p5-bud-pct { text-align: right; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .p5-bud-track { height: 9px; border-radius: 5px; background: rgba(0, 0, 0, .35); overflow: hidden; }
 .p5-bud-fill { display: block; height: 100%; border-radius: 5px; background: #6fbf6a; }
 .p5-bud.yellow .p5-bud-fill { background: #e0b040; }
@@ -415,5 +421,45 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .p5-bud-more li { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; font-size: 12px; }
 .p5-bud-clabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p5-bud-alert { color: #ff9a8f; font-size: 12.5px; }
-.p5-bud-track { position: relative; }
-.p5-bud-reserve { position: absolute; top: 0; right: 0; height: 100%; background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .22) 0 3px, transparent 3px 6px); border-left: 1px solid rgba(255, 255, 255, .45); }
+.p5-bud-track { position: relative; display: block; }
+.p5-bud-fill { position: absolute; left: 0; top: 0; }
+.p5-bud-reserve { position: absolute; top: 0; right: 0; height: 100%; box-sizing: border-box; background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .22) 0 3px, transparent 3px 6px); border-left: 1px solid rgba(255, 255, 255, .45); }
+/* P5: a field a dragged Content Browser file can drop onto */
+.p5-drop-hot { box-shadow: inset 0 0 0 2px #ffd84a; background: rgba(255, 216, 74, .08); border-radius: 3px; }
+/* P5: the axes triad in each view's corner, and the status bar's colored X Y Z */
+.ed-triad { position: absolute; right: 6px; bottom: 6px; z-index: 3; width: 72px; height: 72px; padding: 0; border: 0; background: rgba(0, 0, 0, .22); border-radius: 50%; cursor: help; }
+.ed-triad:hover { background: rgba(0, 0, 0, .4); }
+.ed-triad:focus-visible { outline: 2px solid #ffd84a; }
+.ed-triad text { paint-order: stroke; stroke: rgba(0, 0, 0, .7); stroke-width: 2.5px; }
+.ed-coords b { font-weight: 700; }
+.ed-coords-note { margin-left: 2px; font-size: 11px; }
+.ed-axes { margin: 4px 0 8px; padding-left: 18px; }
+/* P5: Inspect's Transform (Unreal-style X/Y/Z fields with scrubbing letters) and facts */
+.p5-xf { margin: 6px 0 8px; display: flex; flex-direction: column; gap: 3px; }
+.p5-xf h4, .p5-facts h4 { margin: 4px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--bone-dim); }
+.p5-xf h4 .small-note, .p5-facts h4 .small-note { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.p5-xf-row { display: grid; grid-template-columns: 62px repeat(3, minmax(0, 1fr)); gap: 4px; align-items: center; }
+.p5-xf-label { font-size: 12px; color: var(--bone-dim); white-space: nowrap; }
+.p5-xf-field { display: flex; align-items: stretch; min-width: 0; border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); overflow: hidden; }
+.p5-xf-field:focus-within { border-color: #ffd84a; }
+.p5-xf-axis { flex: none; width: 15px; display: grid; place-items: center; font: 700 10px/1 ui-monospace, Menlo, monospace; color: #10130d; cursor: ew-resize; user-select: none; touch-action: none; }
+.p5-xf-field.scrubbing .p5-xf-axis { filter: brightness(1.25); }
+.p5-xf-field input { flex: 1 1 auto; min-width: 0; width: 100%; border: 0; background: none; color: var(--bone); font: 12px ui-monospace, Menlo, monospace; padding: 2px 4px; font-variant-numeric: tabular-nums; }
+.p5-xf-field input:focus { outline: none; }
+.p5-xf-unit { flex: none; align-self: center; padding-right: 4px; font-size: 11px; color: var(--bone-faint); }
+.p5-xf-locks { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; }
+.p5-facts { margin: 4px 0 8px; }
+.p5-facts-tex { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 4px; }
+.p5-facts-tile { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 1px; padding: 3px; border: 1px solid var(--line); border-radius: 3px; font-size: 10.5px; min-width: 0; }
+.p5-facts-tile:hover { border-color: var(--bone-dim); }
+.p5-facts-tile.on { border-color: #ffd84a; }
+.p5-facts-tile:focus-visible { outline: 2px solid #ffd84a; }
+.p5-facts-tile img { width: 100%; aspect-ratio: 1; object-fit: cover; image-rendering: pixelated; background: rgba(0, 0, 0, .3); }
+.p5-facts-tile .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p5-facts-dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 6px 0 0; font-size: 12.5px; }
+.p5-facts-dl dt { color: var(--bone-dim); }
+.p5-facts-dl dd { margin: 0; min-width: 0; }
+/* the corners: view and style pickers top-left, the hint bottom-left, the speed bottom-middle,
+   the axes bottom-right; the hint and the speed keep clear of the axes in every pane size */
+.ed-nav-hint { max-width: calc(100% - 20px - 84px); }
+.ed-nav-hud { max-width: calc(100% - 2 * 92px); overflow: hidden; text-overflow: ellipsis; }

@@ -518,6 +518,8 @@ enum Cmd {
         scale: Option<P3>,
         pivot: Option<P3>,
         #[serde(default = "yes")] lock: bool,
+        /// P5: texture lock keeps the texture's scale (a stretch repeats it, Hammer's scale lock off)
+        #[serde(default)] keep_scale: bool,
         /// P5: joins the step before it with the same key (a Shift-drag copy's move)
         #[serde(default)] merge: Option<String>,
     },
@@ -827,7 +829,7 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             }
             tx.commit(h);
         }
-        Cmd::Transform { brushes, entities, translate, rotate, scale, pivot, lock, merge } => {
+        Cmd::Transform { brushes, entities, translate, rotate, scale, pivot, lock, keep_scale, merge } => {
             let (bs, es) = (bids(&brushes), eids(&entities));
             if bs.is_empty() && es.is_empty() {
                 return Err("Pick something to move first.".into());
@@ -856,7 +858,7 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             } else {
                 return Err(NOT_UNDERSTOOD.into());
             };
-            history::cmd_transform(d, h, &bs, &es, &t, lock, label, merge.as_deref().filter(|k| !k.is_empty() && k.len() <= 64))?;
+            history::cmd_transform_with(d, h, &bs, &es, &t, lock, keep_scale, label, merge.as_deref().filter(|k| !k.is_empty() && k.len() <= 64))?;
         }
         Cmd::MoveFace { brush, face, distance, lock, drag } => {
             let id = BrushId(brush);

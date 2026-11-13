@@ -2,6 +2,7 @@
 // and its numbers, justify and align buttons, treat-as-one, recent textures. In the 3D view
 // the picked face can be dragged to slide its texture, with handles to turn and stretch it.
 
+import { FaceFacts } from "./InspectParts"; // P5
 import { useEffect, useState } from "react";
 import { Info } from "../../../ui";
 import { alignOf, texUrl } from "./editorApi";
@@ -106,6 +107,7 @@ export function FaceSheet() {
         </div>
       </div>
       <RecentTextures onPick={(t) => s.set({ texture: t })} onPaint={paint} />
+      <FaceFacts /> {/* P5: which brush, which way, world or face aligned */}
 
       <div className="editor-sheet-grid">
         <span className="editor-sheet-head" />

@@ -265,6 +265,20 @@ pub fn locked(a: &TexAlign, t: &Affine) -> TexAlign {
     TexAlign { u_axis: u, scale_u: su, u_offset: uo, v_axis: v, scale_v: sv, v_offset: vo, rotation: a.rotation }
 }
 
+/// Texture lock without scale lock (Hammer's "texture scale lock" off): the texture turns and
+/// moves with the face as `locked` does, but a stretch repeats it instead of stretching it. The
+/// face's `anchor` (a corner, after the move) keeps its texture coordinate.
+pub fn locked_keep_scale(a: &TexAlign, t: &Affine, anchor: Vec3) -> TexAlign {
+    let l = locked(a, t);
+    let (u0, v0) = l.uv(anchor);
+    let su = a.scale_u.abs().max(1e-6) * l.scale_u.signum();
+    let sv = a.scale_v.abs().max(1e-6) * l.scale_v.signum();
+    let mut out = TexAlign { scale_u: su, scale_v: sv, ..l };
+    out.u_offset = u0 - anchor.dot(out.u_axis) / su;
+    out.v_offset = v0 - anchor.dot(out.v_axis) / sv;
+    out
+}
+
 /// Without texture lock the axes stay put; but if a rotation turned the face edge-on to them
 /// the texture would smear, so fall back to world alignment (keeping scale).
 pub fn unlocked(a: &TexAlign, plane: &Plane) -> TexAlign {
@@ -314,6 +328,20 @@ mod tests {
             let b = locked(&a, &t);
             assert!(close(b.uv(t.apply(p)), a.uv(p)), "{t:?}");
         }
+    }
+
+    #[test]
+    fn keep_scale_repeats_instead_of_stretching() {
+        let a = TexAlign { u_offset: 13.0, v_offset: -7.0, scale_u: 0.5, scale_v: 2.0, ..world_aligned(Vec3::Z) };
+        let corner = v3(4.0, 4.0, 64.0);
+        let t = Affine::around(Mat3::scale(v3(2.0, 3.0, 1.0)), corner);
+        let b = locked_keep_scale(&a, &t, t.apply(corner));
+        assert!((b.scale_u - 0.5).abs() < 1e-9 && (b.scale_v - 2.0).abs() < 1e-9);
+        assert!(close(b.uv(t.apply(corner)), a.uv(corner)));
+        // a move or a turn is the same as plain texture lock
+        let r = Affine::around(Mat3::rotation(Vec3::Z, 30.0), v3(1.0, 2.0, 0.0));
+        let p = v3(10.0, 20.0, 64.0);
+        assert!(close(locked_keep_scale(&a, &r, r.apply(p)).uv(r.apply(v3(50.0, 0.0, 64.0))), a.uv(v3(50.0, 0.0, 64.0))));
     }
 
     #[test]

@@ -626,7 +626,7 @@ pub fn learn_args(game: &str, port: u16, password: &str, map: &str) -> Vec<Strin
 /// on, and nothing that changes the map while it learns.
 const LEARN_CFG: &str = "// Written by Loner-Strike: the hidden server that teaches bots maps\n\
 hostname \"Loner-Strike bot teacher\"\nsv_lan 1\nmp_timelimit 0\nmp_maxrounds 0\nmp_winlimit 0\n\
-bot_quota 1\nbot_quota_mode normal\nbot_join_after_player 0\nbot_join_delay 0\nbot_join_team any\n";
+bot_enable 1\nbot_quota 1\nbot_quota_mode normal\nbot_join_after_player 0\nbot_join_delay 0\nbot_join_team any\n";
 
 /// The hidden server on this computer: a copy of Valve's server (the one servers are made
 /// from, downloaded first if there isn't one) in <servers folder>/.nav-learner, with no
@@ -689,6 +689,34 @@ impl LocalLearner {
     }
 }
 
+fn has_bot_profile(gdir: &Path) -> bool {
+    find_file(gdir, "botprofile", "db").is_some()
+}
+
+/// Copies the game's bot brain into a hidden server's game folder: its server DLL (only when
+/// it is Loner-Strike's ReGameDLL, which has the bots) and the bot profile and chatter files.
+pub(crate) fn bring_bots(game: &Path, gdir: &Path) -> Result<(), String> {
+    let dll_rel = "dlls/mp.dll";
+    let src = game.join(dll_rel);
+    let bytes = std::fs::read(&src).map_err(|_| "Your game's bot brain isn't installed. Open Mods and click Repair, then try again.".to_string())?;
+    let needle = b"lonerstrike_mapknow";
+    if !bytes.windows(needle.len()).any(|w| w == needle) {
+        return Err("Your game has a different server DLL than Loner-Strike's bot brain, so bots can't learn maps with it. Open Mods and click Repair, then try again.".into());
+    }
+    let dest = gdir.join(dll_rel);
+    if let Some(d) = dest.parent() {
+        std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&dest, &bytes).map_err(|e| format!("The bot brain couldn't be copied ({e})."))?;
+    for name in ["botprofile", "botchatter"] {
+        if let Some(p) = find_file(game, name, "db") {
+            let file = p.file_name().map(|f| f.to_owned()).unwrap_or_default();
+            std::fs::copy(&p, gdir.join(file)).map_err(|e| format!("The bot files couldn't be copied ({e})."))?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(unix)]
 fn low_priority(cmd: &mut Command) {
     use std::os::unix::process::CommandExt;
@@ -747,8 +775,14 @@ impl Learner for LocalLearner {
         servers::copy_tree(&self.base, &self.dir, false, &|rel: &Path| rel.components().next().is_some_and(|c| c.as_os_str() != "steamapps"))?;
         for g in games {
             let gdir = self.dir.join(g);
-            if !gdir.join("botprofile.db").is_file() {
-                return Err(format!("Valve's server for {} came without bots. Update the server files and try again.", setup::game_name(g)));
+            // Valve's Counter-Strike 1.6 server has no bots (only Condition Zero's does): the
+            // game's own bot brain (Loner-Strike's ReGameDLL and its bot files) goes in instead
+            if !has_bot_profile(&gdir) {
+                job.detail("Bringing the bots in from your game");
+                bring_bots(&self.client.hl.join(g), &gdir)?;
+            }
+            if !has_bot_profile(&gdir) {
+                return Err(format!("Valve's server for {} came without bots and your game has none to lend it. Open Mods and click Repair, then try again.", setup::game_name(g)));
             }
             std::fs::write(gdir.join("server.cfg"), LEARN_CFG).map_err(|e| e.to_string())?;
         }
@@ -927,6 +961,25 @@ pub fn owner_routes() -> Router<Shared> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bring_bots_takes_only_our_brain() {
+        let game = temp("bots-game");
+        let server = temp("bots-server");
+        std::fs::create_dir_all(game.join("dlls")).unwrap();
+        // Valve's DLL (no bots): refused, nothing copied
+        std::fs::write(game.join("dlls/mp.dll"), b"valve server code").unwrap();
+        std::fs::write(game.join("BotProfile.db"), b"profiles").unwrap();
+        assert!(bring_bots(&game, &server).is_err());
+        assert!(!has_bot_profile(&server));
+        // ours: the DLL and the bot files come over
+        std::fs::write(game.join("dlls/mp.dll"), b"...lonerstrike_mapknow...").unwrap();
+        std::fs::write(game.join("BotChatter.db"), b"chatter").unwrap();
+        bring_bots(&game, &server).unwrap();
+        assert!(has_bot_profile(&server) && server.join("BotChatter.db").is_file());
+        assert_eq!(std::fs::read(server.join("dlls/mp.dll")).unwrap(), b"...lonerstrike_mapknow...");
+        assert!(LEARN_CFG.contains("bot_enable 1"));
+    }
 
     fn nav_bytes(version: u32, bsp: u32, len: usize) -> Vec<u8> {
         let mut b = Vec::new();

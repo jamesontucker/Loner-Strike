@@ -3,7 +3,7 @@
 // small 3D view, using the asset browser's model viewer.
 
 import { lazy, Suspense, useEffect, useState } from "react";
-import { soundUrl } from "./editorApi";
+import { toggleSound, useSound } from "./soundPlayer";
 import "./p4.css";
 
 const ModelPreview = lazy(() => import("./ModelPreview"));
@@ -16,41 +16,25 @@ export function assetKind(value: string, fgdType?: string): "sound" | "model" | 
   return null;
 }
 
-let audio: HTMLAudioElement | null = null;
-let stopCurrent: (() => void) | null = null;
-
-function SoundButton({ path }: { path: string }) {
-  const [state, setState] = useState<"idle" | "loading" | "playing" | "missing">("idle");
-  useEffect(() => () => {
-    if (stopCurrent && state === "playing") stopCurrent();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => setState("idle"), [path]);
-  const play = () => {
-    if (state === "playing") return stopCurrent?.();
-    stopCurrent?.();
-    audio ??= new Audio();
-    const a = audio;
-    const stop = () => {
-      a.pause();
-      a.onended = a.onerror = a.onplaying = null;
-      setState("idle");
-      stopCurrent = null;
-    };
-    stopCurrent = stop;
-    a.onplaying = () => setState("playing");
-    a.onended = stop;
-    a.onerror = () => {
-      stopCurrent = null;
-      setState("missing");
-    };
-    setState("loading");
-    a.src = soundUrl(path);
-    void a.play().catch(() => setState("missing"));
-  };
+/** Play/pause for one sound; starting it stops any other sound in the editor. */
+export function SoundButton({ path, label }: { path: string; label?: string }) {
+  const state = useSound(path);
+  const name = label ?? path;
   return (
     <span className="p4-asset">
-      <button type="button" className="btn small" title={state === "missing" ? "That sound isn't in the game's folders" : `Play ${path}`} aria-label={state === "playing" ? "Stop the sound" : "Play the sound"} onClick={play}>
-        {state === "playing" ? "■" : state === "loading" ? <span className="spinner" aria-hidden="true" /> : "▶"}
+      <button
+        type="button"
+        className="btn small icon p5-sound-btn"
+        title={state === "missing" ? "That sound isn't in the game's folders" : state === "playing" ? `Pause ${name}` : `Play ${name}`}
+        aria-label={state === "playing" ? `Pause ${name}` : `Play ${name}`}
+        aria-pressed={state === "playing"}
+        data-state={state}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleSound(path);
+        }}
+      >
+        {state === "playing" ? "❚❚" : state === "loading" ? <span className="spinner" aria-hidden="true" /> : "▶"}
       </button>
       {state === "missing" && <span className="small-note muted">not found</span>}
     </span>

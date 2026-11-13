@@ -7,6 +7,7 @@ import { paneCount, toggleMaximise, usePanes, type LayoutId, type Split } from "
 import { modeFor, RENDER_MODES, setPaneMode, type RenderMode } from "./renderModes";
 import { useEffect, useState } from "react";
 import { SPEEDS, useNav } from "./navigation";
+import { AxisTriad } from "./AxisTriad";
 
 /** How to move, in the corner of the 3D view until you've flown once (? brings it back). */
 function NavHint() {
@@ -144,6 +145,7 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
             onPointerLeave={() => usePanes.getState().hover === i && usePanes.setState({ hover: null })}
           >
             {shown && views[i] === "3d" && <NavHud />}
+            {shown && <AxisTriad slot={i} />}
             {shown && views[i] === "3d" && i === firstThreeD && <NavHint />}
             {shown && (
               // one pane: the view is picked in the top bar, so only the drawing style shows here

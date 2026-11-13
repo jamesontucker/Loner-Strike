@@ -376,13 +376,30 @@ pub fn cmd_transform(
     label: &str,
     merge_key: Option<&str>,
 ) -> OpResult<()> {
+    cmd_transform_with(doc, h, brushes, entities, t, lock, false, label, merge_key)
+}
+
+/// `cmd_transform` with the texture scale lock choice: `keep_scale` repeats a stretched
+/// brush's textures instead of stretching them (only with `lock`).
+#[allow(clippy::too_many_arguments)]
+pub fn cmd_transform_with(
+    doc: &mut MapDocument,
+    h: &mut History,
+    brushes: &[BrushId],
+    entities: &[EntityId],
+    t: &Affine,
+    lock: bool,
+    keep_scale: bool,
+    label: &str,
+    merge_key: Option<&str>,
+) -> OpResult<()> {
     let mut tx = Tx::new(doc, label);
     if let Some(k) = merge_key {
         tx = tx.merge_key(k);
     }
     for id in brushes {
         let b = get_brush(tx.doc(), *id)?;
-        tx.set_brush(*id, ops::transform(&b, t, lock)?);
+        tx.set_brush(*id, ops::transform_with(&b, t, lock, keep_scale)?);
     }
     for id in entities {
         let Some(mut e) = tx.doc().entities.get(id).cloned() else { continue };

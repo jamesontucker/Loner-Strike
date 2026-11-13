@@ -15,7 +15,6 @@ import {
   keyValue,
   sameAsset,
   soundInfo,
-  soundPlayUrl,
   spriteInfo,
   spriteUrl,
   toggleFavorite,
@@ -29,6 +28,8 @@ import {
   type SpriteInfo,
 } from "./contentApi";
 import { dragging } from "./extras";
+import { SoundButton } from "./AssetPreview";
+import { playSound, toggleSound } from "./soundPlayer";
 import { cachedThumb, dropQueued, modelThumb } from "./modelThumbs";
 import { COMPONENT_MIME } from "./P4Scene";
 import { PrefabPanel } from "./PrefabPanel";
@@ -117,12 +118,7 @@ function Thumb({ a, size }: { a: AssetItem; size: number }) {
   );
 }
 
-let audio: HTMLAudioElement | null = null;
-function play(path: string) {
-  audio?.pause();
-  audio = new Audio(soundPlayUrl(path));
-  void audio.play().catch(() => {});
-}
+const play = (path: string) => toggleSound(path);
 
 // ---- the browser -------------------------------------------------------------------------------
 
@@ -321,7 +317,7 @@ export function ContentBrowser({ drawer }: { drawer?: boolean }) {
                       pick(a);
                       setMenu({ x: e.clientX, y: e.clientY, a });
                     }}
-                    onPointerEnter={() => hoverPlay && a.kind === "sound" && play(a.path)}
+                    onPointerEnter={() => hoverPlay && a.kind === "sound" && playSound(a.path)}
                     onDragStart={(e) => {
                       e.dataTransfer.setData(COMPONENT_MIME, assetDragId(a));
                       e.dataTransfer.setData("text/plain", keyValue(a));
@@ -336,17 +332,9 @@ export function ContentBrowser({ drawer }: { drawer?: boolean }) {
                       {a.name}
                     </span>
                     {a.kind === "sound" && (
-                      <button
-                        type="button"
-                        className="btn small icon p5-cb-play"
-                        aria-label={`Play ${a.name}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          play(a.path);
-                        }}
-                      >
-                        ▶
-                      </button>
+                      <span className="p5-cb-play">
+                        <SoundButton path={a.path} label={a.name} />
+                      </span>
                     )}
                   </div>
                 ))}
@@ -502,9 +490,7 @@ function Details({ a, onUses }: { a: AssetItem | null; onUses: (a: AssetItem) =>
           </button>
         ))}
       {a.kind === "sound" && (
-        <button type="button" className="btn small" onClick={() => play(a.path)}>
-          ▶ Play
-        </button>
+        <SoundButton path={a.path} label={a.name} />
       )}
       <dl className="p5-cb-facts">
         <dt>Size</dt>

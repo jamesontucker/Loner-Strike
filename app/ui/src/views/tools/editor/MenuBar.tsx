@@ -89,9 +89,6 @@ export function MenuBar() {
             {open === m && <MenuList menu={m} onDone={() => setOpen(null)} recent={m === "File" ? recent : []} openRecent={openRecent} />}
           </div>
         ))}
-        <button type="button" className="ed-menu-find" title="Find any command (Ctrl+K)" onClick={() => useP5.getState().set({ dialog: "palette", paletteText: "" })}>
-          <span aria-hidden="true">⌕</span> <span className="ed-menu-find-label">Find a command</span> <kbd>{showKey(keysOf("help.palette")[0] ?? "Mod+K")}</kbd>
-        </button>
         {doc && (
           <span className="ed-bar-name" title={doc.saved ? "Saved as a project" : "Not saved yet"}>
             <span className="map-title">{doc.name}</span>
@@ -99,6 +96,9 @@ export function MenuBar() {
             <span className="tag tools-beta">Beta</span>
           </span>
         )}
+        <button type="button" className="ed-menu-find" title="Find any command by name" onClick={() => useP5.getState().set({ dialog: "palette", paletteText: "" })}>
+          <span aria-hidden="true">⌕</span> <span className="ed-menu-find-label">Find a command</span><span className="ed-menu-find-short">Find</span> <kbd>{showKey(keysOf("help.palette")[0] ?? "Mod+K")}</kbd>
+        </button>
         <BusyLabel busy={!!fileBusy} label={fileBusy ?? ""} />
         <div className="seg ed-layouts" role="group" aria-label="Views layout">
           {LAYOUTS.map((l) => (

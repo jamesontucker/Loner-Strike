@@ -8,6 +8,7 @@ import { PaneView } from "./PaneView"; // P5: drei View with the off-screen test
 import { Canvas, useThree, type RootState, type ThreeEvent } from "@react-three/fiber";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
+import { shapeOutline } from "./shapePreview";
 import { useTools } from "../../../stores/tools";
 import { Cameras } from "../viewer/Cameras";
 import { gsToThree, ROOT_ROTATION, threeToGs, type Vec3 } from "../viewer/coords";
@@ -31,6 +32,10 @@ import { EntityModelMesh, SpriteGlow, useEntityModel } from "./EntityModels";
 import { MergedBrushes } from "./MergedBrushes";
 import { brushRaycast } from "./pickRay";
 import { KitOverlay } from "./KitOverlay"; // P5: mode kit areas and paths
+import { FlatHandles, startFlatMove } from "./FlatHandles"; // Parity A: 2D handles and moves
+import { FlatGrid } from "./FlatGrid"; // Parity A
+import { DropTarget } from "./DropTarget"; // P5: a dragged texture's face
+import { TriadFeed } from "./AxisTriad"; // P5: the axes in each view's corner
 import { markerColour, useKits } from "./kits";
 import { useNav } from "./navigation";
 import { NavCamera } from "./NavCamera";
@@ -501,6 +506,11 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
   const clipRef = useRef<Vec3[]>([]);
   clipRef.current = clip;
   const [clipKeep, setClipKeep] = useState<"back" | "front" | "both">("both");
+  // P5: the clip's next point follows the cursor, so the cut shows before the click; in the 3D
+  // view a third point tilts the plane (any angle), in the flat views two points cut straight
+  // through the view, as in Hammer
+  const [clipHover, setClipHover] = useState<Vec3 | null>(null);
+  const clipMax = view === "3d" ? 3 : 2;
   const live = useRef(state);
   live.current = state;
 
@@ -530,12 +540,17 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
     return () => window.removeEventListener("keydown", key);
   });
   useEffect(() => {
-    if (active) useEditor.setState({ clipInfo: tool === "clip" ? { points: clip.length, keep: clipKeep } : null });
-  }, [tool, clip.length, clipKeep, active]);
+    if (active) useEditor.setState({ clipInfo: tool === "clip" ? { points: clip.length, keep: clipKeep, max: clipMax } : null });
+  }, [tool, clip.length, clipKeep, active, clipMax]);
 
-  const clipPoints = (): [Vec3, Vec3, Vec3] | null => {
-    const c = clipRef.current;
+  const clipPoints = (c: Vec3[] = clipRef.current): [Vec3, Vec3, Vec3] | null => {
     if (c.length < 2) return null;
+    if (c.length >= 3) {
+      // three points on the brushes: the core's normal is (p2 - p0) x (p1 - p0); a degenerate
+      // (in-line) third point falls back to the straight cut
+      const n = cross(sub(c[2], c[0]), sub(c[1], c[0]));
+      if (Math.hypot(...n) > 1e-6) return [c[0], c[1], c[2]];
+    }
     const up: Vec3 = [0, 0, 0];
     up[axis] = 64;
     return [c[0], add(c[0], up), c[1]];
@@ -764,7 +779,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
       const p = hit ? hit.point : onPlane(rayAt(ev, live.current), axis, 0);
       if (!p) return;
       const q = snapVec(p);
-      setClip((c) => (c.length >= 2 ? [q] : [...c, q]));
+      setClip((c) => (c.length >= clipMax ? [q] : [...c, q]));
       return;
     }
 
@@ -886,6 +901,10 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
       });
       return;
     }
+    // Parity A: in a flat view, dragging a picked brush moves the selection (Hammer), a click still picks
+    if (canPush && view !== "3d") {
+      return startFlatMove(ev, live.current, view, () => pickBrush(hit.id, additive));
+    }
     let pushing: ReturnType<typeof faceDragger> | null = null;
     let moved = false;
     if (canPush) controlsOff(true);
@@ -925,6 +944,14 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
   };
 
   const onMove = (e: ThreeEvent<PointerEvent>) => {
+    if (tool === "clip" && clip.length >= 1 && clip.length < clipMax) {
+      const h = hitOf(e);
+      const p = h ? h.point : onPlane(rayAt(e.nativeEvent, live.current), axis, 0);
+      if (p) {
+        const q = snapVec(p);
+        if (!clipHover || q.some((x, i) => x !== clipHover[i])) setClipHover(q);
+      }
+    } else if (clipHover) setClipHover(null);
     const p = onPlane(rayAt(e.nativeEvent, live.current), axis, 0);
     if (!p) return;
     const c = p.map((x) => Math.round(x)) as Vec3;
@@ -936,7 +963,8 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
   const span = Math.max(16384, ...bounds[1].map((x, i) => Math.abs(x - bounds[0][i]) * 4));
   const planeRot: [number, number, number] = axis === 2 ? [0, 0, 0] : axis === 1 ? [Math.PI / 2, 0, 0] : [0, Math.PI / 2, 0];
 
-  const clipPreview = clip.length >= 2 ? clipPoints() : null;
+  const clipShown = clipHover && clip.length >= 1 && clip.length < clipMax ? [...clip, clipHover] : clip;
+  const clipPreview = clipShown.length >= 2 ? clipPoints(clipShown) : null;
   return (
     <group onPointerDown={onDown} onPointerMove={onMove}>
       <BrushesWithMats />
@@ -946,12 +974,13 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
         <planeGeometry args={[span, span]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
-      {box && <BoxPreview a={box.a} b={box.b} cylinder={tool === "shape" && useEditor.getState().shape !== "wedge"} axis={axis} />}
+      {box && <BoxPreview a={box.a} b={box.b} shape={tool === "shape"} axis={axis} />}
       {rect && <SelectRect a={rect.a} b={rect.b} axis={axis} />}
       {tool === "vertex" && <VertexHandles ids={selectionIds().brushes} />}
       <TexHandles />
       <MeasureLine />
       <KitOverlay />
+      <DropTarget />
       <LeakLine />
       <P4SceneParts />
       <MarqueeHot />
@@ -962,6 +991,13 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
         </mesh>
       ))}
       {clipPreview && <ClipPlane pts={clipPreview} keep={clipKeep} />}
+      {clipPreview && <ClipCut pts={clipPreview} ids={selectionIds().brushes} />}
+      {clipHover && clip.length >= 1 && clip.length < clipMax && (
+        <mesh position={clipHover}>
+          <sphereGeometry args={[3, 10, 6]} />
+          <meshBasicMaterial color="#ff8f3a" transparent opacity={0.6} depthTest={false} />
+        </mesh>
+      )}
     </group>
   );
 }
@@ -971,30 +1007,85 @@ function BrushesWithMats() {
   return m ? <Brushes mats={m.mats} version={m.version} /> : null;
 }
 
-function BoxPreview({ a, b, cylinder, axis }: { a: Vec3; b: Vec3; cylinder: boolean; axis: number }) {
+function BoxPreview({ a, b, shape, axis }: { a: Vec3; b: Vec3; shape: boolean; axis: number }) {
   const min = a.map((x, i) => Math.min(x, b[i])) as Vec3;
   const max = a.map((x, i) => Math.max(x, b[i])) as Vec3;
   const size = sub(max, min).map((x) => Math.max(x, 0.5)) as Vec3;
   const centre = mul(add(min, max), 0.5);
-  const sides = useEditor.getState().sides;
+  const s = useEditor.getState();
+  const archStart = useP5((p) => p.archStart);
+  // shapes stand upright: drawn in a side view (other than a wedge) the core refuses them, so
+  // the ghost stays a red box there instead of pretending
+  const upright = axis === 2 || s.shape === "wedge";
+  const segs = useMemo(
+    () => (shape && upright ? shapeOutline(min, max, { shape: s.shape, sides: s.sides, arc: s.archArc, wall: s.archWall, start: archStart }) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shape, upright, ...min, ...max, s.shape, s.sides, s.archArc, s.archWall, archStart],
+  );
+  const colour = shape && !upright ? "#e05a4a" : "#ffd84a";
   return (
-    <group position={centre}>
-      {cylinder && axis === 2 ? (
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[Math.min(size[0], size[1]) / 2, Math.min(size[0], size[1]) / 2, size[2], sides, 1]} />
-          <meshBasicMaterial color="#ffd84a" wireframe />
-        </mesh>
-      ) : (
-        <mesh>
-          <boxGeometry args={size} />
-          <meshBasicMaterial color="#ffd84a" transparent opacity={0.25} depthWrite={false} />
-        </mesh>
+    <>
+      <group position={centre}>
+        {!segs && (
+          <mesh>
+            <boxGeometry args={size} />
+            <meshBasicMaterial color={colour} transparent opacity={0.25} depthWrite={false} />
+          </mesh>
+        )}
+        <lineSegments>
+          <edgesGeometry args={[new THREE.BoxGeometry(...size)]} />
+          <lineBasicMaterial color={colour} depthTest={false} transparent opacity={segs ? 0.3 : 1} />
+        </lineSegments>
+      </group>
+      {segs && (
+        <lineSegments renderOrder={5}>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" args={[new Float32Array(segs.flat(2)), 3]} />
+          </bufferGeometry>
+          <lineBasicMaterial color={colour} depthTest={false} />
+        </lineSegments>
       )}
-      <lineSegments>
-        <edgesGeometry args={[new THREE.BoxGeometry(...size)]} />
-        <lineBasicMaterial color="#ffd84a" depthTest={false} />
-      </lineSegments>
-    </group>
+    </>
+  );
+}
+
+/** Where the cut goes through the picked brushes: the plane against each face's edges. */
+function ClipCut({ pts, ids }: { pts: [Vec3, Vec3, Vec3]; ids: number[] }) {
+  const brushes = useEditor((s) => s.brushes);
+  const segs = useMemo(() => {
+    const [p0, p1, p2] = pts;
+    const nRaw = cross(sub(p2, p0), sub(p1, p0));
+    const len = Math.hypot(...nRaw);
+    if (len < 1e-9) return new Float32Array();
+    const n = mul(nRaw, 1 / len);
+    const d = dot(n, p0);
+    const out: number[] = [];
+    for (const id of ids.slice(0, 512)) {
+      const b = brushes.get(id);
+      if (!b) continue;
+      for (const poly of b.polys.values()) {
+        const cut: Vec3[] = [];
+        for (let i = 0; i < poly.length; i++) {
+          const a = poly[i];
+          const c = poly[(i + 1) % poly.length];
+          const da = dot(n, a) - d;
+          const dc = dot(n, c) - d;
+          if ((da < 0 && dc > 0) || (da > 0 && dc < 0)) cut.push(add(a, mul(sub(c, a), da / (da - dc))));
+          else if (Math.abs(da) < 1e-6) cut.push(a);
+        }
+        if (cut.length >= 2) out.push(...cut[0], ...cut[1]);
+      }
+    }
+    return new Float32Array(out);
+  }, [pts, ids, brushes]);
+  if (!segs.length) return null;
+  return (
+    <lineSegments renderOrder={6}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[segs, 3]} />
+      </bufferGeometry>
+      <lineBasicMaterial color="#ff8f3a" depthTest={false} />
+    </lineSegments>
   );
 }
 
@@ -1209,7 +1300,7 @@ function Flat({ view, bounds }: { view: Exclude<ViewId, "3d">; bounds: [Vec3, Ve
   return (
     <>
       <OrthographicCamera makeDefault position={eye} up={up} zoom={zoom} near={1} far={40000} onUpdate={(c) => c.lookAt(target)} />
-      {camera instanceof THREE.OrthographicCamera && <MapControls ref={ref} makeDefault enableRotate={false} screenSpacePanning enableDamping={false} minZoom={zoom / 16} maxZoom={zoom * 60} mouseButtons={{ LEFT: -1 as unknown as THREE.MOUSE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }} />}
+      {camera instanceof THREE.OrthographicCamera && <MapControls ref={ref} makeDefault enableRotate={false} zoomToCursor screenSpacePanning enableDamping={false} minZoom={zoom / 16} maxZoom={zoom * 60} mouseButtons={{ LEFT: -1 as unknown as THREE.MOUSE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }} />}
     </>
   );
 }
@@ -1299,15 +1390,16 @@ function PaneScene({ view, bounds }: { view: ViewId; bounds: [Vec3, Vec3] }) {
       <color attach="background" args={["#22271e"]} />
       <hemisphereLight args={["#ffffff", "#5a5f50", 0.95]} />
       <directionalLight position={[0.4, 1, 0.25]} intensity={1.5} />
-      {showGrid && <GridFor view={view} grid={grid} bounds={bounds} />}
-      {showGrid && gridMajor && view !== "3d" && grid < 64 && <GridFor view={view} grid={64} bounds={bounds} major />}
+      {showGrid && (view === "3d" ? <GridFor view={view} grid={grid} bounds={bounds} /> : <FlatGrid view={view} grid={grid} major={gridMajor} bounds={bounds} />) /* Parity A: the flat views' grid follows the zoom */}
       {view !== "3d" && <Crosshair view={view} />}
+      {view !== "3d" && <FlatHandles view={view} /> /* Parity A: Hammer's 8 handles */}
       <group rotation={ROOT_ROTATION}>
         <ToolLayer bounds={bounds} />
         {/* what the gizmo moves: in GoldSrc units like everything in here */}
         <group ref={pivot} />
       </group>
       <Gizmo pivot={pivot} />
+      <TriadFeed />
       {view === "3d" ? (
         <>
           <Persp bounds={bounds} />

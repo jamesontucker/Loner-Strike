@@ -144,6 +144,8 @@ type EditorState = {
   autosavedAt: string | null;
   entityClass: string;
   textureLock: boolean;
+  /** P5: with texture lock, a stretched brush stretches its textures (on) or repeats them (off) */
+  scaleLock: boolean;
   /** a command is on its way (for the busy label) */
   working: number;
   /** a file action is running: its label ("Saving…") */
@@ -154,7 +156,7 @@ type EditorState = {
   /** where the mouse is on the working plane (GoldSrc), for the status bar */
   cursor: Vec3 | null;
   /** the clip tool's progress, and its actions (set by the 3D view) */
-  clipInfo: { points: number; keep: "back" | "front" | "both" } | null;
+  clipInfo: { points: number; keep: "back" | "front" | "both"; max?: number } | null;
   doClip: (() => void) | null;
   setClipKeep: ((k: "back" | "front" | "both") => void) | null;
 
@@ -237,6 +239,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   autosavedAt: null,
   entityClass: "info_player_start",
   textureLock: true,
+  scaleLock: true,
   working: 0,
   fileBusy: null,
   preview: null,
@@ -339,6 +342,8 @@ export const useEditor = create<EditorState>((set, get) => ({
     // P5: "working" lasts until the view and the outliner have caught up (on a big map the
     // meshes take longer than the command), so the status bar's "Working…" covers it all
     // (each step of a drag is quick and the drag shows itself: not counted)
+    // P5: every move, turn and stretch follows the scale lock (one place, not every caller)
+    if (body.op === "transform" && body.keep_scale === undefined) body = { ...body, keep_scale: !get().scaleLock };
     const counts = !(body as { drag?: unknown }).drag;
     if (counts) set((s) => ({ working: s.working + 1 }));
     try {

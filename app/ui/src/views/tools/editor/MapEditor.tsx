@@ -3,6 +3,7 @@
 // (Alt ignores it), live checks, undo for every gesture, save/open and .map import/export.
 // The document lives in the app (tools/editor.rs); this page draws it and sends commands.
 
+import { AXES, COORDS_NOTE } from "./AxisTriad";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm, useToast } from "../../../ui";
 import { useTools } from "../../../stores/tools";
@@ -280,7 +281,16 @@ function Status({ working }: { working: boolean }) {
   return (
     <div className="tools-status">
       <span className="mono">
-        {cursor ? cursor.join(" ") : "–"}
+        <span className="ed-coords" title={COORDS_NOTE}>
+          {cursor
+            ? AXES.map((a, i) => (
+                <span key={a.id}>
+                  <b style={{ color: a.colour }}>{a.id}</b> {cursor[i]}{" "}
+                </span>
+              ))
+            : "–"}
+          <span className="muted ed-coords-note">Z up</span>
+        </span>
         <SelectionSize /> {/* P5 */}
       </span>
       <span className="tools-hint">

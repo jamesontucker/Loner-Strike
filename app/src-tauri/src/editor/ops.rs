@@ -8,7 +8,7 @@ use super::geom::{
     map_points_for_plane, map_points_for_polygon, planes_polygons, validate, Polygon,
 };
 use super::math::{v3, Affine, Mat3, Plane, Vec3, PLANE_EPS};
-use super::texture::{locked, unlocked, world_aligned};
+use super::texture::{locked, locked_keep_scale, unlocked, world_aligned};
 
 pub type OpResult<T> = Result<T, String>;
 
@@ -120,6 +120,12 @@ pub fn make_cylinder(base: Vec3, radius: f64, height: f64, sides: usize, grid: f
 
 /// Move/rotate/scale/mirror a brush. With `lock` the textures stay stuck to the brush.
 pub fn transform(b: &Brush, t: &Affine, lock: bool) -> OpResult<Brush> {
+    transform_with(b, t, lock, false)
+}
+
+/// `transform`, and with `keep_scale` (texture lock on) a stretch repeats the texture rather
+/// than stretching it.
+pub fn transform_with(b: &Brush, t: &Affine, lock: bool, keep_scale: bool) -> OpResult<Brush> {
     if t.m.inverse().is_none() {
         return Err("That would flatten the brush.".into());
     }
@@ -133,7 +139,11 @@ pub fn transform(b: &Brush, t: &Affine, lock: bool) -> OpResult<Brush> {
             f.points.swap(1, 2);
         }
         let Some(plane) = f.plane() else { return Err("A face collapsed.".into()) };
-        f.align = if lock { locked(&f.align, t) } else { unlocked(&f.align, &plane) };
+        f.align = match (lock, keep_scale) {
+            (true, true) => locked_keep_scale(&f.align, t, f.points[0]),
+            (true, false) => locked(&f.align, t),
+            _ => unlocked(&f.align, &plane),
+        };
     }
     check(out)
 }

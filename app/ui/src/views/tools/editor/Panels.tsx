@@ -16,7 +16,10 @@ import { useFgd } from "./fgd";
 import { FaceSheet, RecentTextures } from "./FaceSheet";
 import { EntityForm } from "./EntityForm";
 import { MultiEntityKeys } from "./MultiEntityKeys"; // P5
+import { BrushFacts, TransformSection } from "./InspectParts"; // P5
 import { ArchStart } from "./P5Dialogs"; // P5
+import { TEXTURE_MIME } from "./P4Scene"; // P5: textures drag onto faces
+import { useP5 } from "./p5store"; // P5
 
 // ---- toolbar --------------------------------------------------------------------------
 
@@ -141,6 +144,9 @@ export function ToolOptions() {
       <label className="editor-check" title="Textures stay put on the surface when you move, turn or stretch a brush">
         <input type="checkbox" checked={s.textureLock} onChange={(e) => s.set({ textureLock: e.target.checked })} /> Texture lock
       </label>
+      <label className="editor-check" title={s.textureLock ? "On: stretching a brush stretches its textures with it. Off: they keep their size and repeat (Hammer's texture scale lock)" : "Works with texture lock on"}>
+        <input type="checkbox" disabled={!s.textureLock} checked={s.textureLock && s.scaleLock} onChange={(e) => s.set({ scaleLock: e.target.checked })} /> Scale lock
+      </label>
       {picking && (
         <div className="seg" role="group" aria-label="What a click picks">
           {(["groups", "objects", "solids"] as const).map((k) => (
@@ -223,7 +229,15 @@ export function ToolOptions() {
       )}
       {s.tool === "clip" && (
         <>
-          <span className="muted">{clip?.points ? (clip.points >= 2 ? "Cut placed." : "Click the second point.") : "Click the first point."}</span>
+          <span className="muted">
+            {!clip?.points
+              ? "Click the first point."
+              : clip.points === 1
+                ? "Click the second point (the cut follows the cursor)."
+                : clip.points === 2 && (clip.max ?? 2) > 2
+                  ? "Cut placed straight up. Click a third point to tilt it, or Cut."
+                  : "Cut placed."}
+          </span>
           <div className="seg" role="group" aria-label="Which side stays (Tab)">
             {(["both", "back", "front"] as const).map((k) => (
               <button key={k} type="button" aria-pressed={clip?.keep === k} title="Tab switches" onClick={() => s.setClipKeep?.(k)}>
@@ -290,6 +304,8 @@ function SelectionPanel() {
         {sel.entities.length ? `${sel.entities.length} entit${sel.entities.length === 1 ? "y" : "ies"}` : ""}
       </h3>
       {size && <p className="small-note muted">Size {fmt(size as Vec3)} · centre {fmt(centre!)}</p>}
+      <TransformSection /> {/* P5: location, rotation, scale */}
+      <BrushFacts brushIds={ids.brushes} /> {/* P5: textures, owner, visgroups */}
       <MultiEntityKeys /> {/* P5: keys of several entities at once */}
       {n > 0 && (
         <>
@@ -786,7 +802,22 @@ export function TextureBrowser() {
       ))}
       <div className="editor-tex-grid">
         {all.slice(0, more).map((t) => (
-          <button key={t.wad + t.name} type="button" className="editor-tex" aria-pressed={t.name.toLowerCase() === current.toLowerCase()} title={`${t.name} (${t.width}×${t.height}, ${t.wad})`} onClick={() => s.set({ texture: t.name })} onDoubleClick={() => paint(t.name)}>
+          <button
+            key={t.wad + t.name}
+            type="button"
+            className="editor-tex"
+            aria-pressed={t.name.toLowerCase() === current.toLowerCase()}
+            title={`${t.name} (${t.width}×${t.height}, ${t.wad}). Drag onto a face (Alt: the whole brush).`}
+            onClick={() => s.set({ texture: t.name })}
+            onDoubleClick={() => paint(t.name)}
+            draggable /* P5: onto a face in the views */
+            onDragStart={(e) => {
+              e.dataTransfer.setData(TEXTURE_MIME, t.name);
+              e.dataTransfer.setData("text/plain", t.name);
+              e.dataTransfer.effectAllowed = "copy";
+            }}
+            onDragEnd={() => useP5.getState().set({ dropFace: null })}
+          >
             <img src={texUrl(t.name)} alt="" loading="lazy" />
             <span>{t.name}</span>
           </button>

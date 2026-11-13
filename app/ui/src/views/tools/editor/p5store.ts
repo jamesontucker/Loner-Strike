@@ -8,7 +8,7 @@ import type { DocState } from "./editorApi";
 import { useEditor } from "./store";
 
 export type SideTab = "inspect" | "outline" | "textures" | "checks" | "compile" | "history" | "project" | (string & {});
-export type P5Dialog = "palette" | "cheats" | "keys" | "find" | "transform" | "goto" | "grid" | "replaceWith" | "info" | null;
+export type P5Dialog = "palette" | "cheats" | "keys" | "find" | "transform" | "goto" | "grid" | "replaceWith" | "info" | "coords" | null;
 
 type P5State = {
   tab: SideTab;
@@ -31,6 +31,8 @@ type P5State = {
   /** Playtest asked for (F5, Map > Playtest, the bar's button) and how many the Compile panel has started */
   playtestAsked: number;
   playtestDone: number;
+  /** a texture being dragged over this face (null face: the whole brush), outlined in the views */
+  dropFace: { brush: number; face: number | null } | null;
   set: (p: Partial<Omit<P5State, "set">>) => void;
 };
 
@@ -63,6 +65,7 @@ export const useP5 = create<P5State>((set) => ({
   gridMajor: num("ls.editor.gridMajor", 1) !== 0,
   playtestAsked: 0,
   playtestDone: 0,
+  dropFace: null,
   set: (p) => {
     if (p.gridMajor != null) keep("ls.editor.gridMajor", p.gridMajor ? "1" : "0");
     if (p.showModels != null) keep("ls.editor.showModels", p.showModels ? "1" : "0");

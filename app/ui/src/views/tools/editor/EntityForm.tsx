@@ -4,13 +4,14 @@
 // to plain key/value rows.
 
 import { AssetPreview } from "./AssetPreview";
+import { BrushFacts, TransformSection } from "./InspectParts"; // P5
 import { useEffect, useMemo, useState } from "react";
 import { Info } from "../../../ui";
 import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
 import type { DocEntity, FgdClass, FgdKey } from "./editorApi";
 import { useFgd } from "./fgd";
-import { AssetButtons } from "./AssetPicker"; // P5
+import { AssetButtons, useAssetDrop } from "./AssetPicker"; // P5
 import { kindOfKey, type AssetKind } from "./contentApi"; // P5
 
 /** P5: the kind of file a key names: by its FGD type or its value's file type, else by the key's
@@ -91,8 +92,10 @@ function KeyField({ e, k, v, all }: { e: DocEntity; k: string; v: string; all: s
   useEffect(() => setText(v), [v]);
   const commit = (value: string) => value !== v && setKey(e, k, value);
   const list = k === "target" || k === "killtarget" || k === "master" ? `editor-names-${e.id}` : undefined;
+  // P5: a file dragged from the Content Browser onto the field
+  const drop = useAssetDrop(keyAssetKind(k, text), (nv) => (setText(nv), commit(nv)));
   return (
-    <div className="editor-key">
+    <div className={`editor-key${drop.hot ? " p5-drop-hot" : ""}`} {...drop.props}>
       <span className="editor-key-name" title={KEY_HELP[k] ?? k}>
         {k}
       </span>
@@ -163,6 +166,8 @@ function DefField({ e, def, value, all }: { e: DocEntity; def: FgdKey; value: st
       {def.help && <Info text={def.help} />}
     </label>
   );
+  // P5: a file dragged from the Content Browser onto the field
+  const drop = useAssetDrop(keyAssetKind(def.name, text, def.type), (nv) => (setText(nv), commit(nv)));
   if (def.type === "flags" && def.flags?.length) {
     const n = Number(v || def.default || 0) | 0;
     return (
@@ -270,7 +275,7 @@ function DefField({ e, def, value, all }: { e: DocEntity; def: FgdKey; value: st
     );
   }
   return (
-    <div className="editor-key editor-def">
+    <div className={`editor-key editor-def${drop.hot ? " p5-drop-hot" : ""}`} {...drop.props}>
       {label}
       <div className="editor-key-value">
         {control}
@@ -325,6 +330,8 @@ export function EntityForm({ e }: { e: DocEntity }) {
         {def?.description ? `${def.description} ` : ""}
         {e.brushes.length ? `${e.brushes.length} brush${e.brushes.length === 1 ? "" : "es"}.` : o ? `At ${fmt(o)}.` : "No origin."}
       </p>
+      <TransformSection entity={e} /> {/* P5 */}
+      {e.brushes.length > 0 && <BrushFacts brushIds={e.brushes} />}
       <datalist id={`editor-names-${e.id}`}>
         {all.map((n) => (
           <option key={n} value={n} />

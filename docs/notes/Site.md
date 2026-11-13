@@ -234,3 +234,10 @@ To turn one on, add its name to `const INGAME = new Set([...])` in `index.html`,
   headroom"). *As you build*: brush entities, entities, an edicts estimate, different textures. *Last compile*: the
   compiler's own planes, clipnodes, faces, leaves, marksurfaces, lighting… Click a bar for what uses most, the usual
   fix, and Pick to select it. Playtest and Publish ask first when a bar is red.
+
+## From P5 (2026-11-13): map editor feedback batch
+Drag files from the Content Browser onto surfaces and into Inspect fields; drop textures on faces (Alt: whole brush);
+play/pause sounds; Inspect shows Transform (Location/Rotation/Scale with scrubbing), textures used, owner and
+visgroups, and per-face facts; scale lock beside texture lock; X/Y/Z axes in every view and Help > Coordinates
+(Z up, X east, Y north); the Shape tool previews the shape you picked; the clip cut follows the cursor; bots now
+learn CS 1.6 maps before an editor Playtest.

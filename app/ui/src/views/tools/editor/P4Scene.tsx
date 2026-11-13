@@ -10,7 +10,8 @@ import { useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import type { Vec3 } from "../viewer/coords";
-import { cordonOf, dragging, loadComponents, placeComponentAt, placePrefabAt, registerScene, sceneAt, updateGhost, useP4 } from "./extras";
+import { cordonOf, dragging, loadComponents, pickAt, placeComponentAt, placePrefabAt, registerScene, sceneAt, updateGhost, useP4 } from "./extras";
+import { useP5 } from "./p5store"; // P5: a texture's drop target
 import type { ComponentDef, DocEntity } from "./editorApi";
 import { useFgd } from "./fgd";
 import { Html } from "@react-three/drei";
@@ -22,6 +23,8 @@ import { useEditor } from "./store";
 export const PREFAB_MIME = "application/x-ls-prefab";
 /** ... and a component card (its class name). */
 export const COMPONENT_MIME = "application/x-ls-component";
+/** P5: a texture dragged from the texture browser (Content › Textures, or the Textures panel). */
+export const TEXTURE_MIME = "application/x-ls-texture";
 
 function boxEdges(min: Vec3, max: Vec3): Vec3[][] {
   const c = (k: number): Vec3 => [k & 1 ? max[0] : min[0], k & 2 ? max[1] : min[1], k & 4 ? max[2] : min[2]];
@@ -119,6 +122,18 @@ function install() {
   // drag a prefab card onto the map
   const over = (e: DragEvent) => {
     const types = e.dataTransfer?.types ?? [];
+    // P5: a texture onto a face (Alt: the whole brush), the target outlined while hovering
+    if (types.includes(TEXTURE_MIME)) {
+      const hit = sceneAt(e.clientX, e.clientY) ? pickAt(e.clientX, e.clientY) : null;
+      const target = hit?.kind === "brush" && hit.id != null ? { brush: hit.id, face: e.altKey ? null : hit.face ?? null } : null;
+      const now = useP5.getState().dropFace;
+      if (now?.brush !== target?.brush || now?.face !== target?.face) useP5.getState().set({ dropFace: target });
+      if (target) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      }
+      return;
+    }
     if (!(types.includes(PREFAB_MIME) || types.includes(COMPONENT_MIME)) || !sceneAt(e.clientX, e.clientY)) {
       if (useP4.getState().ghost) useP4.getState().set({ ghost: null });
       return;
@@ -129,6 +144,19 @@ function install() {
   };
   const drop = (e: DragEvent) => {
     useP4.getState().set({ ghost: null });
+    // P5: a texture onto a face (Alt: the whole brush)
+    const tex = e.dataTransfer?.getData(TEXTURE_MIME);
+    if (tex) {
+      const target = useP5.getState().dropFace;
+      useP5.getState().set({ dropFace: null });
+      if (!target) return;
+      e.preventDefault();
+      const s = useEditor.getState();
+      void s.cmd({ op: "set_texture", faces: [[target.brush, e.altKey ? null : target.face]], texture: tex }).then((r) => {
+        if (!r.error) s.set({ texture: tex });
+      });
+      return;
+    }
     const id = e.dataTransfer?.getData(PREFAB_MIME);
     const comp = e.dataTransfer?.getData(COMPONENT_MIME);
     if ((!id && !comp) || !sceneAt(e.clientX, e.clientY)) return;
