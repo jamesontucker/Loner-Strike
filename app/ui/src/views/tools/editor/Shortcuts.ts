@@ -88,6 +88,7 @@ const LONER: Keys = {
   "help.cheats": ["?"],
   "map.inspect": ["Alt+Enter"],
   "map.playtest": ["F5"],
+  "view.contentDrawer": ["Mod+Space"],
   "view.snap": ["Shift+W"],
   "edit.applyTexture": ["Shift+T"],
 };
@@ -140,6 +141,7 @@ const TRENCHBROOM: Keys = {
   "edit.mirrorZ": ["Mod+Alt+F"],
   "edit.find": [],
   "view.maximise": ["Mod+Space"],
+  "view.contentDrawer": ["Mod+Shift+Space"], // (Ctrl+Space maximizes here)
   "view.frame": ["Mod+U"],
   "tool.select": [],
   "tool.move": [],

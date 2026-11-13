@@ -1,14 +1,16 @@
-// The editor's Library tab: prefabs and game mode components, side by side.
+// The editor's Library tab: game mode components and mode kits, side by side (prefabs are in the
+// Content Browser).
 
 import { useEffect, useState } from "react";
 import { ComponentPanel } from "./ComponentPanel";
 import { KitPanel } from "./KitPanel"; // P5: mode map kits
-import { PrefabPanel } from "./PrefabPanel";
 import { useP4 } from "./extras";
 import "./dialog.css";
 
-export function LibraryPanel({ start }: { start?: "prefabs" | "components" | "kits" }) {
-  const [part, setPart] = useState<"prefabs" | "components" | "kits">(start ?? "prefabs");
+// P5: prefabs moved to the Content Browser (Content > Prefabs), so they're in one place with
+// models, sprites and sounds; the Library keeps components and mode kits.
+export function LibraryPanel({ start }: { start?: "components" | "kits" }) {
+  const [part, setPart] = useState<"components" | "kits">(start ?? "components");
   useEffect(() => {
     if (start) setPart(start);
   }, [start]);
@@ -16,9 +18,6 @@ export function LibraryPanel({ start }: { start?: "prefabs" | "components" | "ki
   return (
     <section className="tools-panel p4-prefabs">
       <div className="seg" role="group" aria-label="Library">
-        <button type="button" aria-pressed={part === "prefabs"} onClick={() => setPart("prefabs")}>
-          Prefabs
-        </button>
         <button type="button" aria-pressed={part === "components"} onClick={() => setPart("components")}>
           Components
         </button>
@@ -31,7 +30,8 @@ export function LibraryPanel({ start }: { start?: "prefabs" | "components" | "ki
           Click on the map to place {placing.name}. {placing.component ? "" : "R turns it, "}Shift keeps placing, Esc stops.
         </p>
       )}
-      {part === "prefabs" ? <PrefabPanel /> : part === "kits" ? <KitPanel /> : <ComponentPanel />}
+      {part === "kits" ? <KitPanel /> : <ComponentPanel />}
+      <p className="small-note muted">Prefabs are in the Content panel (Content › Prefabs), with models, sprites and sounds.</p>
     </section>
   );
 }

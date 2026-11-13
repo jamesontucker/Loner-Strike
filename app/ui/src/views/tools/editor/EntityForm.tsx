@@ -10,6 +10,19 @@ import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
 import type { DocEntity, FgdClass, FgdKey } from "./editorApi";
 import { useFgd } from "./fgd";
+import { AssetButtons } from "./AssetPicker"; // P5
+import { kindOfKey, type AssetKind } from "./contentApi"; // P5
+
+/** P5: the kind of file a key names: by its FGD type or its value's file type, else by the key's
+ *  name (model, sprite, noise…; never a brush model like *12). */
+function keyAssetKind(key: string, value: string, fgdType?: string): AssetKind | null {
+  if (value.trim().startsWith("*")) return null;
+  const k = kindOfKey(value, fgdType);
+  if (k) return k;
+  if (/^noise\d*$/.test(key)) return "sound";
+  if (!value.trim() && (key === "model" || key === "sprite")) return key === "sprite" ? "sprite" : null;
+  return null;
+}
 import { creatureDef, loadCreatures, loadKits, markerDef, useKits } from "./kits"; // P5: kit markers, creature types
 import { deleteSelection, duplicate } from "./Panels";
 import { keyOf, originOf, selectionBounds, useEditor } from "./store";
@@ -125,6 +138,8 @@ function KeyField({ e, k, v, all }: { e: DocEntity; k: string; v: string; all: s
           </datalist>
         )}
         <AssetPreview value={text} />
+        {/* P5: Choose… / Show in Content Browser / Use selected */}
+        {keyAssetKind(k, text) && <AssetButtons kind={keyAssetKind(k, text)!} value={text} label={k} set={(nv) => (setText(nv), commit(nv))} />}
         {k !== "classname" && (
           <button type="button" className="btn small icon" title="Remove this key" aria-label={`Remove ${k}`} onClick={() => setKey(e, k, "")}>
             ×
@@ -250,6 +265,7 @@ function DefField({ e, def, value, all }: { e: DocEntity; def: FgdKey; value: st
           }}
         />
         <AssetPreview value={text || def.default || ""} fgdType={def.type} />
+        {keyAssetKind(def.name, text, def.type) && <AssetButtons kind={keyAssetKind(def.name, text, def.type)!} value={text} label={def.label} set={(nv) => (setText(nv), commit(nv))} />}
       </>
     );
   }

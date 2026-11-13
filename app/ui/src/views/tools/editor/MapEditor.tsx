@@ -25,6 +25,7 @@ import { DockArea, DockDropZones, DockFloats, useDockColumns } from "./Dock";
 import { showPanel } from "./dockState";
 import { useNav as useNavPreset } from "./navigation";
 import { importOther } from "./commands";
+import { gotoSection } from "./contentApi";
 import * as api from "./editorApi";
 import type { RecentFile, Recovery } from "./editorApi";
 import { EMPTY_SEL, facesOf, useEditor, type ViewId } from "./store";
@@ -33,7 +34,7 @@ import { EMPTY_SEL, facesOf, useEditor, type ViewId } from "./store";
 const AUTOSAVE_MS = 3 * 60 * 1000;
 import "./editor.css";
 
-type Tab = "inspect" | "outline" | "textures" | "library" | "checks" | "compile" | "project" | "history"; // P5: project, history
+type Tab = "inspect" | "outline" | "textures" | "library" | "checks" | "compile" | "project" | "history" | "content"; // P5: project, history, content
 
 
 const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
@@ -200,7 +201,11 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
   // P4: another page can open a tab ("editor:prefabs")
   const arg = useToolArg();
   useEffect(() => {
-    if (arg === "prefabs" || arg === "components") setTab("library");
+    // P5: prefabs are in the Content Browser now
+    if (arg === "prefabs") {
+      gotoSection("prefab");
+      setTab("content");
+    } else if (arg === "components") setTab("library");
     else if (arg === "compile" || arg === "checks") setTab(arg);
   }, [arg]);
 

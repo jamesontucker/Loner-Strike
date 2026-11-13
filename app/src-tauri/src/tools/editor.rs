@@ -38,6 +38,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 pub mod components;
 pub mod prefabs;
 pub mod assets; // P5: the models, sprites, sounds and sky the map names
+pub mod browser; // P5: the Content Browser (models, sprites, sounds)
 pub mod kits; // P5: mode map kits (what each mode the map is made for needs)
 pub mod workspace; // P5: project files, undo history, find/replace, duplicate with new names
 
@@ -2022,6 +2023,7 @@ fn routes_with(ed: Ed) -> Router<Shared> {
         .merge(workspace::routes()) // P5
         .merge(assets::routes()) // P5
         .merge(kits::routes()) // P5
+        .merge(browser::routes()) // P5
         .layer(Extension(ed))
 }
 

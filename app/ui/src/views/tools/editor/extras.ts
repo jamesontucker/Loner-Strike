@@ -4,6 +4,8 @@
 // (visgroups, the cordon), and picking up changes made from outside (MCP agents).
 
 import { kitPlacement } from "./kits"; // P5
+import { keyValue, used as usedAsset } from "./contentApi"; // P5
+
 import type { RootState } from "@react-three/fiber";
 import { useEffect } from "react";
 import * as THREE from "three";
@@ -272,6 +274,15 @@ export function loadComponents() {
 
 const snapTo = (v: number, g: number) => (g > 0 ? Math.round(v / g) * g : Math.round(v));
 
+/** P5: the entity a Content Browser file becomes on the map: a model as a cycler_sprite (CS's
+ *  usual static prop), a sprite as an env_sprite (additive, on), a sound as an ambient_generic
+ *  (medium radius, playing). */
+export function assetEntity(kind: "model" | "sprite" | "sound", path: string): { classname: string; keys: [string, string][] } {
+  if (kind === "model") return { classname: "cycler_sprite", keys: [["model", path], ["framerate", "1"], ["renderamt", "255"]] };
+  if (kind === "sprite") return { classname: "env_sprite", keys: [["model", path], ["rendermode", "5"], ["renderamt", "255"], ["scale", "1"], ["framerate", "10"], ["spawnflags", "1"]] };
+  return { classname: "ambient_generic", keys: [["message", keyValue({ kind, path })], ["health", "10"], ["spawnflags", "4"]] };
+}
+
 /** Drops a component where a point of the window is: a point entity a little off the surface
  *  (components find the floor themselves), or for brush components (ls_barricade) a box tied to it. */
 export async function placeComponentAt(cls: string, x: number, y: number) {
@@ -280,6 +291,15 @@ export async function placeComponentAt(cls: string, x: number, y: number) {
   if (!hit) return s.notify("Drop it on the map in the view.", true);
   // P5: a mode map kit's marker or component ("kit:<mode>:<id>", kits.ts)
   let keys: [string, string][] | undefined;
+  // P5: a file from the Content Browser ("asset:<kind>:<folder>:<path>"): the entity that shows it
+  const asset = /^asset:(model|sprite|sound):[^:]+:(.+)$/.exec(cls);
+  if (asset) {
+    const [, kind, path] = asset;
+    const placed = assetEntity(kind as "model" | "sprite" | "sound", path);
+    cls = placed.classname;
+    keys = placed.keys;
+    usedAsset({ kind, path });
+  }
   if (cls.startsWith("kit:")) {
     const k = kitPlacement(cls);
     if (!k) return s.notify("That mode's kit isn't installed any more.", true);

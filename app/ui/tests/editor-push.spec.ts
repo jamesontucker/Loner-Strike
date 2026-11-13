@@ -83,7 +83,9 @@ test("saving a prefab under a name you already use: keep both or replace", async
   const r = (await page.locator(".ed-pane").first().boundingBox())!;
   await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
   await expect(page.locator(".ed-selsize")).toContainText("128 × 128 × 128");
-  await page.getByRole("tab", { name: "Library" }).or(page.getByRole("button", { name: "Library", exact: true })).first().click();
+  // (prefabs are in the Content Browser: Content › Prefabs)
+  await page.locator('[data-dock-strip] [role=tab]', { hasText: /^Content$/ }).first().click();
+  await page.getByRole("tablist", { name: "Content" }).getByRole("tab", { name: "Prefabs" }).click();
   await save();
   await save(/^Keep both/);
   const before = await mine();

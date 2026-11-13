@@ -32,22 +32,22 @@ export const DOCK_PRESETS: Record<DockPresetId, { label: string; tip: string; la
   default: {
     label: "Default (Unreal-like)",
     tip: "Outline above Inspect on the right; Library, Textures and the rest along the bottom",
-    layout: { areas: { left: area([]), right: area(["outline"]), right2: area(["inspect", "history"]), bottom: area(["library", "textures", "checks", "compile", "project"]) }, sizes: { ...SIZES, right: 330, bottom: 250, rightSplit: 0.42 }, floats: [], popped: [] },
+    layout: { areas: { left: area([]), right: area(["outline"]), right2: area(["inspect", "history"]), bottom: area(["content", "library", "textures", "checks", "compile", "project"]) }, sizes: { ...SIZES, right: 330, bottom: 250, rightSplit: 0.42 }, floats: [], popped: [] },
   },
   hammer: {
     label: "Hammer",
     tip: "Properties and textures on the right, checks and compiling below, with the four views",
-    layout: { areas: { left: area([]), right: area(["inspect", "textures", "library"]), right2: area(["outline", "history"]), bottom: area(["checks", "compile", "project"]) }, sizes: { ...SIZES, bottom: 200 }, floats: [], popped: [] },
+    layout: { areas: { left: area([]), right: area(["inspect", "textures", "library"]), right2: area(["outline", "history"]), bottom: area(["content", "checks", "compile", "project"]) }, sizes: { ...SIZES, bottom: 200 }, floats: [], popped: [] },
   },
   unreal: {
     label: "Unreal-like",
     tip: "Outline above Inspect on the right; Library, Textures and the rest along the bottom",
-    layout: { areas: { left: area([]), right: area(["outline"]), right2: area(["inspect", "history"]), bottom: area(["library", "textures", "checks", "compile", "project"]) }, sizes: { ...SIZES, right: 330, bottom: 250, rightSplit: 0.42 }, floats: [], popped: [] },
+    layout: { areas: { left: area([]), right: area(["outline"]), right2: area(["inspect", "history"]), bottom: area(["content", "library", "textures", "checks", "compile", "project"]) }, sizes: { ...SIZES, right: 330, bottom: 250, rightSplit: 0.42 }, floats: [], popped: [] },
   },
   tabs: {
     label: "All on the right",
     tip: "Every panel as a tab on the right (the old layout)",
-    layout: { areas: { left: area([]), right: area(["inspect", "outline", "textures", "library", "checks", "compile", "project", "history"]), right2: area([]), bottom: area([]) }, sizes: { ...SIZES }, floats: [], popped: [] },
+    layout: { areas: { left: area([]), right: area(["inspect", "outline", "content", "textures", "library", "checks", "compile", "project", "history"]), right2: area([]), bottom: area([]) }, sizes: { ...SIZES }, floats: [], popped: [] },
   },
 };
 
@@ -76,6 +76,12 @@ function load(): DockLayout {
     for (const id of Array.isArray(v.popped) ? v.popped : []) if (typeof id === "string" && !out.floats.some((f) => f.id === id)) out.floats.push({ id, x: 120, y: 120, w: 380, h: 520 });
     out.popped = [];
     out.bottomFolded = v.bottomFolded === true;
+    // P5: the Content Browser came after this layout was saved: first in the bottom area
+    const anywhere = AREAS.some((x) => out.areas[x.id].tabs.includes("content")) || out.floats.some((f) => f.id === "content");
+    if (!anywhere) {
+      const at = out.areas.bottom.tabs.length ? "bottom" : "right";
+      out.areas[at] = { ...out.areas[at], tabs: ["content", ...out.areas[at].tabs] };
+    }
     return out;
   } catch {
     return clone(DOCK_PRESETS.default.layout);

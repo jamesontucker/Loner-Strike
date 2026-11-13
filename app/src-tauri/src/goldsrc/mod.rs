@@ -13,6 +13,7 @@ pub mod lsv;
 pub mod mdl;
 pub mod mesh;
 pub mod nav;
+pub mod spr; // P5: sprites for the editor's Content Browser
 pub mod wad;
 pub mod wadwrite;
 

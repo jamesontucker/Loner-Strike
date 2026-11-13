@@ -12,6 +12,7 @@ import * as api from "./editorApi";
 import type { RecentFile } from "./editorApi";
 import { BusyLabel } from "./Panels";
 import { FirstMapTour } from "./Tour";
+import { ContentDrawer } from "./ContentBrowser";
 import { LAYOUTS, setLayout, usePanes } from "./panes";
 import { P5Dialogs } from "./P5Dialogs";
 import { useP5 } from "./p5store";
@@ -127,6 +128,7 @@ export function MenuBar() {
       </div>
       <NavChoice />
       <FirstMapTour />
+      <ContentDrawer />
       <Overlays />
     </>
   );

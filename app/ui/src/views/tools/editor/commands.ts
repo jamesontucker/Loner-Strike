@@ -18,6 +18,7 @@ import { EMPTY_SEL, selectionBounds, useEditor, type ViewId } from "./store";
 import { useNav } from "../../../store";
 import { mapNameOf } from "./ComponentPanel";
 import { startTour } from "./Tour";
+import { useBrowser } from "./contentApi";
 
 export type Menu = "File" | "Edit" | "View" | "Select" | "Tools" | "Map" | "Help";
 export type Command = {
@@ -350,6 +351,8 @@ export function commands(): Command[] {
     { id: "map.report", label: "Entity report…", menu: "Map", run: () => S().set({ dialog: "report" }) },
     { id: "map.info", label: "Map information…", menu: "Map", hint: "Counts, textures and texture files in use", run: () => useP5.getState().set({ dialog: "info" }) },
     { id: "map.checks", label: "Check the map", menu: "Map", sep: true, run: () => openTab("checks") },
+    { id: "view.content", label: "Content Browser", menu: "View", sep: true, hint: "Models, sprites, sounds, textures, prefabs and GameBanana: drag onto the map", run: () => showPanel("content") },
+    { id: "view.contentDrawer", label: "Content drawer", menu: "View", hint: "The Content Browser over the bottom panels (a click away closes it)", run: () => useBrowser.getState().set({ drawer: !useBrowser.getState().drawer }), fly: true },
     { id: "map.publish", label: "Publish…", menu: "Map", hint: "A package to share this map in Tools > Community (compile it into the game first)", run: publishMap },
     { id: "map.playtest", label: "Playtest", menu: "Map", hint: "Compile, put it in the game and start it with bots, as the Compile panel is set", run: playtestNow },
     { id: "map.compile", label: "Compile and play…", menu: "Map", hint: "Compile with SDHLT, show the leak line, playtest with bots", run: () => openTab("compile") },

@@ -9,13 +9,14 @@ import { LibraryPanel } from "./LibraryPanel";
 import { CompilePanel } from "./CompilePanel";
 import { ProjectPanel } from "./ProjectPanel";
 import { HistoryPanel } from "./HistoryPanel";
+import { ContentBrowser } from "./ContentBrowser";
 import { useEditor } from "./store";
 
 export type DockPanel = { id: string; title: string; render: () => ReactNode; label?: () => string; bad?: () => boolean };
 
 function Library() {
   const arg = useToolArg();
-  return <LibraryPanel start={arg === "components" ? "components" : arg === "prefabs" ? "prefabs" : undefined} />;
+  return <LibraryPanel start={arg === "components" ? "components" : arg === "kits" ? "kits" : undefined} />;
 }
 
 const checksCount = () => {
@@ -26,6 +27,7 @@ const checksCount = () => {
 };
 
 export const DOCK_PANELS: DockPanel[] = [
+  { id: "content", title: "Content", render: () => <ContentBrowser /> }, // P5: models, sprites, sounds, textures, prefabs, GameBanana
   { id: "inspect", title: "Inspect", render: () => <Inspector /> },
   { id: "outline", title: "Outline", render: () => <OutlinePanel extra={<Visibility />} /> },
   { id: "textures", title: "Textures", render: () => <TextureBrowser /> },
