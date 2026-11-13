@@ -28,6 +28,7 @@ import { WhatsNew } from "./views/WhatsNew";
 import { anySetUp, Setup } from "./views/Setup";
 // the list of tools only (each tool's page is its own lazy chunk)
 import { TOOL_GROUPS, TOOLS } from "./views/tools/registry";
+import { CountBadge, useCommunityUpdateNotice, useCommunityUpdates } from "./views/tools/community/chip";
 
 // The bigger pages load the first time they're opened, so the app starts on a smaller bundle
 const Servers = lazyPage(() => import("./views/Servers").then((m) => ({ default: m.Servers })));
@@ -699,10 +700,14 @@ function ToolsNav({ section, onOpen }: { section: Section; onOpen: (focus: strin
       // storage off: it just isn't remembered
     }
   };
+  // (community: a count of updates for things installed from Community, told once a session)
+  const updates = useCommunityUpdates();
+  useCommunityUpdateNotice(updates);
   const item = (focus: string, label: string, icon: string, current: boolean, title?: string) => (
-    <button key={focus} className="nav-item" aria-current={current ? "page" : undefined} title={title} onClick={() => onOpen(focus)}>
+    <button key={focus} className="nav-item" aria-current={current ? "page" : undefined} title={title} onClick={() => onOpen(focus === "community" && updates ? "community:installed:updates" : focus)}>
       <Icon name={icon} />
       {label}
+      {focus === "community" && <CountBadge n={updates} title={`${updates} update${updates === 1 ? "" : "s"} ready`} />}
     </button>
   );
   return (
@@ -710,6 +715,7 @@ function ToolsNav({ section, onOpen }: { section: Section; onOpen: (focus: strin
       <button className="nav-group nav-group-fold" aria-expanded={open} aria-controls="side-tools" onClick={toggle}>
         Tools
         <span className="tag nav-beta">Beta</span>
+        {folded && <CountBadge n={updates} title={`${updates} community update${updates === 1 ? "" : "s"} ready`} />}
         <svg className="fold-caret" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
           <path d={open ? "M6 9l6 6 6-6" : "M9 6l6 6-6 6"} />
         </svg>

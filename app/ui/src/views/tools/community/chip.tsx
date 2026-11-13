@@ -9,10 +9,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { getJson, ON_THIS_COMPUTER } from "../../../api";
+import { useEffect } from "react";
 import { useNav } from "../../../store";
+import { useToast } from "../../../ui";
 
 export type Chip = { key: string; name: string; author: string; url: string; kind: string };
-export type CommunityLookup = { maps: Record<string, Chip>; modes: Record<string, Chip>; prefabs: Record<string, Chip>; pages: Record<string, Chip> };
+export type CommunityLookup = { maps: Record<string, Chip>; modes: Record<string, Chip>; prefabs: Record<string, Chip>; pages: Record<string, Chip>; updates?: number; waiting?: number };
 
 /** What's installed from Community (cached a minute; nothing on a phone, where Tools isn't). */
 export function useCommunity(): CommunityLookup | undefined {
@@ -66,5 +68,32 @@ export function CommunityLink({ kind, label, link, before }: { kind: string; lab
     >
       {label}
     </button>
+  );
+}
+
+/** How many installed community creations have a newer version (0 when none or not known). */
+export function useCommunityUpdates(): number {
+  return useCommunity()?.updates ?? 0;
+}
+
+let told = 0;
+/** Says once a session (and again when the count goes up) that community updates are waiting. */
+export function useCommunityUpdateNotice(n: number) {
+  const toast = useToast();
+  useEffect(() => {
+    if (n > told) {
+      told = n;
+      toast(`${n} community update${n === 1 ? "" : "s"} ready: Tools > Community > Installed.`);
+    }
+  }, [n, toast]);
+}
+
+/** A small count on a sidebar entry. */
+export function CountBadge({ n, title }: { n: number; title: string }) {
+  if (!n) return null;
+  return (
+    <span className="tag" title={title} aria-label={title} style={{ marginLeft: "auto", fontSize: 11, padding: "0 6px", background: "var(--signal)", color: "var(--signal-ink)" }}>
+      {n}
+    </span>
   );
 }

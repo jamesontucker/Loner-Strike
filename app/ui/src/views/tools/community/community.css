@@ -116,3 +116,4 @@
 .cm-srv-row:first-child { border-top: 0; }
 .cm-srv-row .check-row { font-weight: 400; min-width: 0; }
 .cm-srv-row .check-row span { overflow-wrap: anywhere; }
+.cm-notes { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }

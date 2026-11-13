@@ -133,14 +133,20 @@ export type Credit = { model: Model; gb: number; name: string; author: string };
 export type Installed = {
   key: string; kind: Kind; model: Model; gb: number; file: number; md5: string; name: string; author: string; game: string; section: string;
   maps: string[]; prefabs: string[]; mode: string; installed: number; url: string; update: number | null; pulled: boolean; remixOf: Credit | null;
+  /** a newer file waiting for the map or mode to be free */
+  pending: number; previousFile: number; canGoBack: boolean;
 };
 export type { Chip } from "./chip";
 import type { Chip } from "./chip";
-export type Library = { items: Installed[]; maps: Record<string, Chip>; modes: Record<string, Chip>; prefabs: Record<string, Chip>; pages: Record<string, Chip> };
+export type Library = { items: Installed[]; maps: Record<string, Chip>; modes: Record<string, Chip>; prefabs: Record<string, Chip>; pages: Record<string, Chip>; updates: number; waiting: number };
 
 export const library = (signal?: AbortSignal) => get<Library>(`${base}/library`, signal);
 export const uninstall = (key: string) => post<{ ok: boolean; removed: string[] }>(`${base}/uninstall`, { key });
-export const update = (key: string) => post<{ ok: boolean; job?: string; kind?: string }>(`${base}/update`, { key });
+export const update = (key: string) => post<{ ok: boolean; job?: string; kind?: string; state?: "waiting" | "installing" | "done"; message?: string }>(`${base}/update`, { key });
+export const updateAll = () => post<{ ok: boolean; updates: { key: string; name: string; result: { state?: string } | null; error: string | null }[] }>(`${base}/update-all`, {});
+export const goBack = (key: string) => post<{ ok: boolean; state?: string; job?: string }>(`${base}/go-back`, { key });
+export type UpdateNote = { title: string; version: string; date: number; text: string; changes: { cat: string; text: string }[] };
+export const updateNotes = (model: Model, id: number, signal?: AbortSignal) => get<{ notes: UpdateNote[] }>(`${base}/notes/${model.toLowerCase()}/${id}`, signal);
 export const remix = (key: string) => post<{ ok: boolean; id: string; name: string }>(`${base}/remix`, { key });
 
 export type ModeReady = { id: string; name: string; description: string; nodes: number; blockers: string[]; remixOf: Credit | null };

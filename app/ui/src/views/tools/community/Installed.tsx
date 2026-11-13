@@ -8,7 +8,7 @@ import { useNav } from "../../../store";
 import { BusyButton, LoadError, Segmented, useToast } from "../../../ui";
 import { errorText, useBusy } from "../common/api";
 import { Empty, Loading } from "../common";
-import { KIND_LABEL, ago, library, remix, uninstall, update, type Details, type Installed, type Model } from "./communityApi";
+import { KIND_LABEL, ago, goBack, library, remix, uninstall, update, updateAll, updateNotes, type Details, type Installed, type Model } from "./communityApi";
 
 const keyOf = (model: Model, id: number) => `${model === "Spray" ? "spray" : "mod"}-${id}`;
 
@@ -50,11 +50,20 @@ export function InstalledActions({ d, it: given, onChanged }: { d?: Details; it?
       toast(`${it.name} removed.`);
       refresh();
     });
+  const [notes, setNotes] = useState(false);
   const upd = () =>
     run("Updating…", async () => {
       const r = await update(it.key);
+      setNotes(false);
       if (r.error) return toast(r.error, true);
-      toast(r.job ? `Downloading the new version of ${it.name}…` : `${it.name} is up to date.`);
+      toast(r.state === "waiting" ? r.message ?? `${it.name} is in use: the new version goes in at the next map change.` : r.job ? `Downloading the new version of ${it.name}…` : `${it.name} is updated.`);
+      setTimeout(refresh, r.job ? 4000 : 0);
+    });
+  const back = () =>
+    run("Going back…", async () => {
+      const r = await goBack(it.key);
+      if (r.error) return toast(r.error, true);
+      toast(`${it.name}: the earlier version is back.`);
       setTimeout(refresh, r.job ? 4000 : 0);
     });
   const rmx = () =>
@@ -67,8 +76,10 @@ export function InstalledActions({ d, it: given, onChanged }: { d?: Details; it?
   return (
     <div className="cm-installed">
       <div className="row cm-actions">
-        {it.update && (
-          <BusyButton className="btn primary" busy={working === "Updating…"} busyLabel="Updating…" label="Update" disabled={working !== null} onClick={upd} />
+        {it.update && !notes && <button className="btn primary" disabled={working !== null} onClick={() => setNotes(true)}>Update…</button>}
+        {it.pending > 0 && <span className="small-note cm-warn">New version waiting: it goes in at the next map change.</span>}
+        {it.canGoBack && (
+          <BusyButton className="btn" busy={working === "Going back…"} busyLabel="Going back…" label="Go back to the previous version" disabled={working !== null} onClick={back} />
         )}
         {it.kind === "mode" && (
           <BusyButton className="btn" busy={working === "Making your copy…"} busyLabel="Making your copy…" label="Remix in Game Mode Studio" disabled={working !== null} onClick={rmx} />
@@ -83,8 +94,41 @@ export function InstalledActions({ d, it: given, onChanged }: { d?: Details; it?
           </span>
         )}
       </div>
-      {it.update && <p className="muted small-note">A newer version is listed. Updating removes this one first, then installs the new one with the same checks.</p>}
+      {it.update && notes && (
+        <div className="cm-confirm" role="dialog" aria-label={`Update ${it.name}`}>
+          <UpdateNotes model={it.model} id={it.gb} />
+          <p className="muted small-note">
+            The version you have is kept until the new one works, and you can go back to it in one click. If it's in use now (the map loaded, the mode running) it goes in at the next map change; servers carrying it get it when nobody's playing it there. Things you copied into your own work (placed prefabs, remixes) don't change.
+          </p>
+          <div className="row">
+            <BusyButton className="btn primary" busy={working === "Updating…"} busyLabel="Updating…" label="Update" onClick={upd} />
+            <button className="btn" onClick={() => setNotes(false)}>Not now</button>
+          </div>
+        </div>
+      )}
       {it.pulled && <p className="cm-warn small-note">The Loner-Strike team pulled this from Community since you installed it. You may want to remove it.</p>}
+    </div>
+  );
+}
+
+/** The creator's update notes from GameBanana (what changed), newest first. */
+function UpdateNotes({ model, id }: { model: Model; id: number }) {
+  const q = useQuery({ queryKey: ["tools", "community", "notes", model, id], queryFn: ({ signal }) => updateNotes(model, id, signal), retry: false, staleTime: 300_000 });
+  if (q.isPending) return <Loading text="Reading what changed…" />;
+  if (q.isError || !q.data.notes.length) return <p className="muted small-note">The creator didn't write update notes on GameBanana.</p>;
+  return (
+    <div className="cm-notes">
+      {q.data.notes.slice(0, 3).map((n, i) => (
+        <div key={i}>
+          <strong>{n.title || "Update"}</strong>{n.version ? ` · ${n.version}` : ""}<span className="muted small-note"> · {ago(n.date)}</span>
+          {n.changes.length > 0 && (
+            <ul className="cm-facts">
+              {n.changes.map((c, j) => <li key={j}>{c.cat ? <span className="muted">{c.cat}: </span> : null}{c.text}</li>)}
+            </ul>
+          )}
+          {n.text && <p className="small-note cm-text">{n.text}</p>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -92,7 +136,23 @@ export function InstalledActions({ d, it: given, onChanged }: { d?: Details; it?
 export default function InstalledList({ onOpen, onBrowse }: { onOpen: (model: Model, id: number) => void; onBrowse: () => void }) {
   const q = useQuery({ queryKey: ["tools", "community", "library"], queryFn: ({ signal }) => library(signal), retry: false });
   const [kind, setKind] = useState("all");
-  const items = useMemo(() => (q.data?.items ?? []).filter((i) => kind === "all" || i.kind === kind), [q.data, kind]);
+  // updates first, then the newest installs
+  const items = useMemo(
+    () => (q.data?.items ?? []).filter((i) => kind === "all" || i.kind === kind).sort((a, b) => Number(!!b.update) - Number(!!a.update) || b.installed - a.installed),
+    [q.data, kind],
+  );
+  const toast = useToast();
+  const qc = useQueryClient();
+  const { working, run } = useBusy();
+  const all = () =>
+    run("Updating everything…", async () => {
+      const r = await updateAll();
+      if (r.error) return toast(r.error, true);
+      const bad = r.updates.filter((u) => u.error);
+      const waiting = r.updates.filter((u) => u.result?.state === "waiting").length;
+      toast(bad.length ? `${bad.length} couldn't be updated: ${bad[0].name}: ${bad[0].error}` : `${r.updates.length - waiting} updating${waiting ? `, ${waiting} waiting for the next map change` : ""}.`, bad.length > 0);
+      setTimeout(() => qc.invalidateQueries({ queryKey: ["tools", "community"] }), 4000);
+    });
   if (q.isPending) return <Loading text="Loading what you installed…" />;
   if (q.isError) return <LoadError text={errorText(q.error, "Couldn't load what you installed.")} onRetry={() => q.refetch()} />;
   if (!q.data.items.length)
@@ -108,7 +168,9 @@ export default function InstalledList({ onOpen, onBrowse }: { onOpen: (model: Mo
         <Segmented label="Kind" values="all map mode prefab spray texture" labels="All Maps Modes Prefabs Sprays Textures" current={kind} onPick={setKind} />
         <span className="muted small-note" aria-live="polite">
           {q.data.items.length} installed{updates ? ` · ${updates} update${updates === 1 ? "" : "s"} available` : ""}
+          {q.data.waiting ? ` · ${q.data.waiting} waiting for the next map change` : ""}
         </span>
+        {updates > 1 && <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Updating…"} label="Update all" onClick={all} />}
       </div>
       {items.length === 0 ? (
         <Empty plain title="None of these" text="Pick All to see everything you installed." />
