@@ -2,8 +2,10 @@
 
 import { useEffect } from "react";
 import { useActions } from "../../api";
+import { useNav } from "../../store";
 import { useTools } from "../../stores/tools";
 import { BusyButton, LoadError, Skeleton, useToast } from "../../ui";
+import { Empty, Loading } from "./common";
 import { Viewer } from "./MapViewer";
 import { openRecording, ToolsError, useRecordings, useReplay, useTrace } from "./toolsApi";
 
@@ -36,25 +38,35 @@ function RecordingList() {
       }
     }, "Opening a recording…");
   const recs = list.data?.recordings ?? [];
+  const openButton = <BusyButton className="btn" busy={busy("tools:replay:open")} label="Open a recording…" busyLabel="Opening…" onClick={open} />;
   return (
     <div className="stack-tight">
-      <div className="row">
-        <BusyButton className="btn primary" busy={busy("tools:replay:open")} label="Open a recording…" busyLabel="Opening…" onClick={open} />
-        <span className="muted small-note">Recordings are made by the gm_simrec plugin while bots play (a .csv file per match).</span>
-      </div>
       {list.isLoading ? (
         <Skeleton rows={3} />
       ) : list.error ? (
         <LoadError text={list.error instanceof Error ? list.error.message : "Couldn't list the recordings."} onRetry={() => void list.refetch()} />
       ) : !recs.length ? (
-        <div className="panel">
-          <h3>No recordings yet</h3>
-          <p className="muted measure">Open one with the button above, or put recordings in {list.data?.folders?.[0] ? <span className="mono">{list.data.folders[0]}</span> : "the Tools recordings folder"} and they'll show here.</p>
-        </div>
+        <Empty
+          title="No recordings yet"
+          text={
+            <>
+              Run a map health check to make one: bots play the map and the match is recorded for you to watch here. Recordings from the gm_simrec plugin (a .csv per match) work too
+              {list.data?.folders?.[0] ? <>: open one, or put them in <span className="mono">{list.data.folders[0]}</span></> : ""}.
+            </>
+          }
+        >
+          <button className="btn primary" onClick={() => useNav.getState().go("tools", "health")}>Run a map health check</button>
+          {openButton}
+        </Empty>
       ) : (
+        <>
+          <div className="tl-head">
+            <span className="muted small-note">{recs.length} recording{recs.length === 1 ? "" : "s"}, newest first. Click one to watch it.</span>
+            <div className="tl-head-actions">{openButton}</div>
+          </div>
         <div className="tools-recs">
           {recs.map((r) => (
-            <button key={r.id} className="tools-rec" disabled={!!r.error} title={r.error ?? r.file} onClick={() => openReplay(r.id, r.map)}>
+            <button key={r.id} className="tools-rec" disabled={!!r.error} title={r.error ?? `${r.file}: click to watch it`} onClick={() => openReplay(r.id, r.map)}>
               <span className="tools-rec-map">{r.map || "unknown map"}</span>
               <span className="muted small">{when(r.when)}</span>
               {r.error ? (
@@ -67,6 +79,7 @@ function RecordingList() {
             </button>
           ))}
         </div>
+        </>
       )}
     </div>
   );
@@ -82,22 +95,14 @@ function ReplayOpen({ id }: { id: string }) {
     if (rec.data?.map && rec.data.map !== map) useTools.setState({ map: rec.data.map });
   }, [rec.data, map]);
   const back = () => openReplay(null);
-  if (rec.isLoading)
-    return (
-      <div className="panel" role="status">
-        <span className="spinner" aria-hidden="true" />
-        Reading the recording…
-      </div>
-    );
+  if (rec.isLoading) return <Loading text="Reading the recording…" />;
   if (rec.error || !rec.data)
     return <LoadError title="Couldn't open this recording" text={rec.error instanceof Error ? rec.error.message : "Something went wrong."} onRetry={() => void rec.refetch()} />;
   if (!rec.data.map)
     return (
-      <div className="panel">
-        <h3>Which map?</h3>
-        <p className="muted measure">This recording's map isn't in your game, so it can't be shown. Install the map, then open the recording again.</p>
+      <Empty title="Which map?" text="This recording's map isn't in your game, so it can't be shown. Install the map, then open the recording again.">
         <button className="btn" onClick={back}>Back</button>
-      </div>
+      </Empty>
     );
   const file = rec.data.id;
   return (
@@ -106,7 +111,8 @@ function ReplayOpen({ id }: { id: string }) {
       replay={{
         data: rec.data,
         trace: trace.data ?? null,
-        title: "Replay",
+        title: rec.data.map,
+        note: `${rec.data.players.length} players · ${mins(rec.data.end - rec.data.start)}${rec.data.hasTrace ? " · with bot thoughts" : ""}`,
         onBack: back,
       }}
       key={`${file}:${rec.data.map}`}

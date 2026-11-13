@@ -48,7 +48,9 @@
 .assets-make-preview img { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
 .assets-make-busy { position: absolute; top: 8px; right: 8px; }
 .assets-make-form { flex: 1 1 280px; min-width: 0; }
-.assets-make-form .search { max-width: 220px; }
+.assets-make-form .search { width: 200px; max-width: 100%; flex: 0 1 auto; }
+.assets-make-actions { margin-top: 12px; }
+.assets-model-side .tl-row-control select { max-width: 200px; }
 
 /* models: the list, the 3D view and its controls */
 .assets-models { display: grid; gap: 14px; grid-template-columns: 260px minmax(0, 1fr); align-items: start; }
@@ -70,7 +72,6 @@
 .assets-model-side { display: grid; gap: 10px; align-content: start; min-width: 0; }
 .assets-model-side h3, .assets-model-side h4 { margin: 0; }
 .assets-path { margin: -6px 0 0; font-size: 13px; overflow-wrap: anywhere; }
-.assets-model-side select { max-width: 170px; }
 .assets-model-tex { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .assets-model-tex li { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center; font-size: 13px; }
 .assets-model-tex img { width: 48px; height: 48px; grid-row: span 2; }

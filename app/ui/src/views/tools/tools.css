@@ -1,0 +1,78 @@
+/* The Tools pages (views/tools): the overview, the viewer's frame, panels and status bar.
+   Loaded with the Tools page, not at start. Shared form pieces are in common/common.css. */
+.tools-beta { font-size: 11px; padding: 0 6px; letter-spacing: .03em; text-transform: uppercase; vertical-align: 1px; margin-right: 4px; }
+/* the Tools overview: a card per tool, its blurb on up to two lines */
+.tools-cards-group { margin-bottom: 18px; }
+.tools-cards-head { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--bone-faint); letter-spacing: .04em; text-transform: uppercase; }
+.tools-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.tools-card { display: grid; gap: 4px; align-content: start; min-width: 0; padding: 12px 14px; border: 0; border-radius: 3px; background: var(--panel); box-shadow: var(--raised); color: var(--bone); text-align: left; cursor: pointer; }
+.tools-card:hover { background: var(--panel-2); }
+.tools-card-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; }
+.tools-card-title .tools-beta { margin: 0; }
+.tools-card-blurb { color: var(--bone-dim); font-size: 14px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+/* the viewer fills the page's height: the page stops scrolling and the view takes the rest */
+.content:has(> .tools-page) { display: flex; flex-direction: column; padding-bottom: 16px; }
+.tools-page { flex: 1 1 auto; min-height: 460px; display: flex; flex-direction: column; gap: 10px; }
+.tools-page > .banner { margin-bottom: 0; }
+.tools-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tools-bar .map-title { font: 400 18px/1.1 var(--stencil); letter-spacing: .02em; }
+.tools-bar .push { flex: 1; }
+.tools-viewer { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, 22vw, 340px); gap: 10px; }
+.tools-stage { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; padding: 1px; }
+.tools-canvas { position: relative; flex: 1 1 auto; min-height: 0; background: #262c21; overflow: hidden; }
+.tools-canvas canvas { display: block; touch-action: none; }
+.tools-overlay { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--bone-dim); font-weight: 600; padding: 20px; }
+.tools-overlay .spinner { width: 18px; height: 18px; margin: 0; }
+.tools-crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 0 1px rgba(0,0,0,.6); pointer-events: none; }
+.tools-status { flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 5px 10px; font-size: 13px; color: var(--bone-dim); background: var(--side); border-top: 1px solid var(--bevel-lo); min-height: 28px; }
+.tools-status .mono { word-break: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tools-hint { color: var(--bone-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tools-side { min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 10px; }
+.tools-panel { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 12px 14px; display: grid; gap: 8px; align-content: start; }
+.tools-panel h3 { margin: 0; font-size: 16px; }
+.tools-panel h4 { margin: 4px 0 0; font-size: 14px; color: var(--bone-dim); }
+.tools-panel .small-note { margin: 0; }
+.tools-panel .setting { padding: 6px 0; grid-template-columns: minmax(0, 1fr) auto; }
+.tools-panel .setting:last-child { border-bottom: 0; box-shadow: none; }
+.tools-panel .search { max-width: none; width: 100%; }
+.tools-panel .row { gap: 6px; }
+.tools-class { word-break: break-all; }
+.tools-keys { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; font-size: 14px; }
+.tools-key { display: contents; }
+.tools-keys dt { color: var(--bone-faint); font-weight: 600; }
+.tools-keys dd { margin: 0; min-width: 0; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+.tools-keys dd.mono { font-size: 13px; word-break: normal; }
+.tools-links { list-style: none; margin: 4px 0 0; padding: 0 0 0 4px; display: grid; gap: 3px; font-size: 14px; }
+.tools-links .mono { font-size: 12px; }
+.tools-groups { display: grid; gap: 2px; }
+.tools-groups summary { cursor: pointer; padding: 3px 0; font-size: 14px; }
+.tools-groups summary .mono { font-size: 13px; }
+/* the bots' data: nav, knowledge, replay */
+.tools-sub { display: grid; gap: 6px; padding: 2px 0 6px 10px; border-left: 2px solid var(--bevel-lo); }
+.tools-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.tools-field select { max-width: 170px; }
+.tools-warn { color: var(--warn); }
+.tools-oneway { color: #f08a3c; }
+.tools-place { font: 600 12px/1 var(--text); color: #fff; background: rgba(20, 24, 16, .72); padding: 2px 6px; border-radius: 2px; white-space: nowrap; }
+.tools-name { font: 700 11px/1 var(--text); background: rgba(20, 24, 16, .7); padding: 1px 4px; border-radius: 2px; white-space: nowrap; }
+.tools-name.picked { outline: 1px solid #fff6b0; }
+.tools-scrub { position: relative; padding-top: 8px; }
+.tools-scrub input { width: 100%; }
+.tools-ticks { position: absolute; left: 7px; right: 7px; top: 0; height: 10px; pointer-events: none; }
+.tools-ticks i { position: absolute; top: 0; width: 2px; height: 8px; margin-left: -1px; }
+.tools-ticks i.round { background: var(--bone-faint); height: 10px; }
+.tools-ticks i.kill { background: #ff5a4a; }
+.tools-ticks i.fall { background: #ff4fd8; height: 10px; }
+.tools-players li { display: flex; align-items: center; gap: 6px; }
+.tools-follow { padding: 0 6px; font-size: 12px; margin-left: auto; }
+.tools-follow.on { color: var(--signal); }
+.tools-recs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.tools-rec { display: grid; gap: 3px; text-align: left; border: 1px solid transparent; border-radius: 3px; background: var(--panel); box-shadow: var(--raised); padding: 12px 14px; }
+.tools-rec:hover:not(:disabled) { background: var(--panel-2); }
+.tools-rec:disabled { opacity: .6; cursor: default; }
+.tools-rec-map { font: 400 17px/1.1 var(--stencil); letter-spacing: .02em; }
+@media (max-width: 1020px) {
+  .tools-viewer { grid-template-columns: 1fr; grid-template-rows: minmax(360px, 1fr) auto; }
+  .tools-side { overflow: visible; }
+  .tools-hint { display: none; }
+}

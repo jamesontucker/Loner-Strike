@@ -7,6 +7,7 @@ import { useNav } from "../../../store";
 import { useTools } from "../../../stores/tools";
 import type { MapInfo } from "../../../types";
 import { BusyButton, Info, LoadError, Segmented, Skeleton, SteamProgress, useToast } from "../../../ui";
+import { Empty, Loading, Row, Rows } from "../common";
 import type { ToolProps } from "../registry";
 import {
   healthOptions,
@@ -71,7 +72,7 @@ export default function HealthCheck({ maps }: ToolProps) {
   if (open) return <ReportView id={open} onBack={() => setOpen(null)} />;
 
   return (
-    <div className="health">
+    <div className="tl-page health-page">
       {active && run ? <Running p={progress.data!} /> : <Setup maps={maps} onStarted={() => progress.refetch()} />}
       {!active && run && (run.phase === "failed" || run.phase === "stopped") && (
         <div className={`panel health-ended ${run.phase}`} role="status">
@@ -86,7 +87,7 @@ export default function HealthCheck({ maps }: ToolProps) {
         ) : reports.isError || reports.data?.error ? (
           <LoadError text={reports.data?.error ?? "Couldn't load the earlier checks."} onRetry={() => reports.refetch()} />
         ) : (reports.data?.reports ?? []).length === 0 ? (
-          <p className="muted">None yet. Run a check and its report shows up here.</p>
+          <Empty plain text="None yet. Run a check above and its report shows up here, with a recording you can watch in Replay." />
         ) : (
           <ul className="health-list">
             {(reports.data?.reports ?? []).map((r) => (
@@ -160,12 +161,10 @@ function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) 
       <p className="muted measure">
         Bots play the map on a hidden server for a few minutes while you do something else, then you get a report: where they fall, where they get stuck, how much of the map they use, and any errors. The game and your servers need to be closed while it runs.
       </p>
-      <div className="settings">
-        <div className="setting health-map">
-          <span className="name">Map</span>
-          <div className="health-map-pick">
-            <input className="search" type="search" placeholder="Find a map" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Find a map" />
-            <select value={map} onChange={(e) => setMap(e.target.value)} aria-label="Map">
+      <Rows>
+        <Row name="Map" wide>
+          <input className="search" type="search" placeholder="Find a map" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Find a map" />
+          <select value={map} onChange={(e) => setMap(e.target.value)} aria-label="Map">
               <option value="" disabled>
                 Choose a map
               </option>
@@ -175,18 +174,14 @@ function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) 
                   {m.nav ? "" : " (bots don't know it yet)"}
                 </option>
               ))}
-            </select>
-          </div>
-        </div>
-        {map && opts.isPending && <Skeleton rows={2} />}
+          </select>
+        </Row>
+        {map && opts.isPending && <Loading className="health-wait" text="Reading the map…" />}
         {map && (opts.isError || opts.data?.error) && <LoadError text={opts.data?.error ?? "Couldn't read that map's details."} onRetry={() => opts.refetch()} />}
         {o && (
           <>
             {o.modes.length > 0 && (
-              <div className="setting">
-                <span className="name">
-                  Game mode<span className="note">The map's own mode is picked for you</span>
-                </span>
+              <Row name="Game mode" note="The map's own mode is picked for you">
                 <select value={pickedMode} onChange={(e) => setMode(e.target.value)} aria-label="Game mode">
                   {o.modes.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -194,24 +189,16 @@ function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) 
                     </option>
                   ))}
                 </select>
-              </div>
+              </Row>
             )}
-            <div className="setting">
-              <span className="name">
-                How long<span className="note">Longer runs find rarer problems</span>
-              </span>
+            <Row name="How long" note="Longer runs find rarer problems">
               <Segmented label="How long" values={MINUTES.join(" ")} labels={MINUTES.map((m) => `${m} min`).join("|")} current={minutes} onPick={setMinutes} />
-            </div>
-            <div className="setting">
-              <span className="name">Bots</span>
+            </Row>
+            <Row name="Bots">
               <Segmented label="Bots" values={BOTS.join(" ")} labels={BOTS.join("|")} current={bots} onPick={setBots} />
-            </div>
+            </Row>
             {o.servers.length > 1 && (
-              <div className="setting">
-                <span className="name">
-                  Plugins and modes from
-                  <Info text="The check runs on a hidden copy of one of your servers on this computer, so the bots play with its plugins, modes and settings. Your server itself isn't touched." />
-                </span>
+              <Row name="Plugins and modes from" info="The check runs on a hidden copy of one of your servers on this computer, so the bots play with its plugins, modes and settings. Your server itself isn't touched.">
                 <select value={server ?? o.server ?? ""} onChange={(e) => setServer(e.target.value)} aria-label="Server to copy">
                   {o.servers.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -219,11 +206,11 @@ function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) 
                     </option>
                   ))}
                 </select>
-              </div>
+              </Row>
             )}
           </>
         )}
-      </div>
+      </Rows>
       {blocked && <p className="health-blocked">{blocked}</p>}
       <div className="row health-actions">
         <BusyButton className="btn primary" busy={starting} disabled={!o || !!blocked} label="Run the check" busyLabel="Starting…" onClick={go} />
@@ -333,7 +320,7 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
   const r = q.data?.report;
   if (q.isError || !r)
     return (
-      <div className="health">
+      <div className="tl-page health-page">
         <button type="button" className="btn" onClick={onBack}>
           Back
         </button>
@@ -351,7 +338,7 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
   };
 
   return (
-    <div className="health">
+    <div className="tl-page health-page">
       <div className="panel health-report-head">
         <div className="row between">
           <div>
@@ -381,7 +368,7 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
         <h3>The numbers</h3>
         <div className="health-stats">
           <Stat label="Bots that played" value={`${r.botsSeen} of ${r.botsWanted}`} />
-          <Stat label="Kills a bot-minute" value={r.killsPerBotMin.toFixed(2)} note={`${r.kills} kills, ${r.botMinutes} bot-minutes`} help="Kills for every minute a bot was alive and in play. Fighting modes usually sit around 0.6 to 1.2." />
+          <Stat label="Kills a bot-minute" value={r.killsPerBotMin.toFixed(2)} note={`${r.kills} kills, ${Math.round(r.botMinutes)} bot-minutes`} help="Kills for every minute a bot was alive and in play. Fighting modes usually sit around 0.6 to 1.2." />
           <Stat label="Stuck" value={pct(r.stuckPct)} note="of bot time" help="Barely moving for 8 seconds or more with no enemy in sight, during play." />
           <Stat label="Standing still" value={pct(r.stillPct)} note="with no enemy in sight" help="Some is normal: holding an angle, waiting for a teammate." />
           <Stat label="Map used" value={pct(r.coveragePct)} note={r.navAreas ? `of ${r.navAreas} nav areas` : "no nav"} help="How much of the bots' nav they walked over. Low means parts of the map are hard to reach or not worth going to." />

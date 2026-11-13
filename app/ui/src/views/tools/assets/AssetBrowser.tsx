@@ -17,9 +17,7 @@ export default function AssetBrowser(_: ToolProps) {
     <div className="assets">
       <div className="row between assets-head">
         <Segmented values="textures models get" labels="Textures|Models|Get more" current={tab} onPick={(v) => setTab(v as Tab)} label="Show" />
-        <span className="muted assets-note">
-          <span className="tag tools-beta">Beta</span> Browsing changes nothing in your game.
-        </span>
+        <span className="muted assets-note">Browsing changes nothing in your game.</span>
       </div>
       {tab === "textures" && <Textures />}
       {tab === "models" && <Models />}

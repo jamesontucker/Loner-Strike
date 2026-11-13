@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNav } from "../../../store";
 import { BusyButton, LoadError, Skeleton, Switch, useConfirm, useToast } from "../../../ui";
 import { exportPng, getAnimation, getModel, modelTextureUrl, removeModel, useModelInfo, useModels, type ModelItem, type ModelKind } from "./assetsApi";
+import { Row, Rows } from "../common";
 import { ModelView } from "./ModelView";
 
 const KINDS: [ModelKind | "all", string][] = [
@@ -143,39 +144,33 @@ function ModelPanel({ item, onRemoved }: { item: ModelItem; onRemoved: () => voi
         <h3 className="assets-detail-name">{item.name}</h3>
         <p className="muted assets-path">{item.folder}/{item.path}</p>
         {b && (
-          <div className="settings">
+          <Rows bare>
             {b.sequences.length > 0 && (
-              <div className="setting">
-                <span className="name">Animation{anim.error ? <span className="note">{(anim.error as Error).message}</span> : <span className="note">{b.sequences.length} in this model</span>}</span>
-                <span className="row">
+              <Row name="Animation" note={anim.error ? (anim.error as Error).message : `${b.sequences.length} in this model`} stacked>
                   <select value={seq} onChange={(e) => setSeq(Number(e.target.value))} aria-label="Animation">
                     {b.sequences.map((s, i) => <option key={i} value={i}>{s.name || `#${i}`}{s.frames > 1 ? ` (${s.frames})` : ""}</option>)}
                   </select>
                   <button className="btn" onClick={() => setPlaying((v) => !v)} aria-pressed={playing}>{playing ? "Pause" : "Play"}</button>
-                </span>
-              </div>
+              </Row>
             )}
             {skins > 1 && (
-              <div className="setting">
-                <span className="name">Skin<span className="note">{skins} looks</span></span>
+              <Row name="Skin" note={`${skins} looks`}>
                 <select value={skin} onChange={(e) => setSkin(Number(e.target.value))} aria-label="Skin">
                   {Array.from({ length: skins }, (_, i) => <option key={i} value={i}>Skin {i + 1}</option>)}
                 </select>
-              </div>
+              </Row>
             )}
             {b.bodyparts.map((p, pi) => p.models.length > 1 && (
-              <div className="setting" key={pi}>
-                <span className="name">{p.name || `Part ${pi + 1}`}</span>
+              <Row key={pi} name={p.name || `Part ${pi + 1}`}>
                 <select value={body[pi] ?? 0} onChange={(e) => setBody((old) => old.map((v, k) => (k === pi ? Number(e.target.value) : v)))} aria-label={p.name || `Part ${pi + 1}`}>
                   {p.models.map((m, mi) => <option key={mi} value={mi}>{m.triangles ? m.name || `Choice ${mi + 1}` : `${m.name || "Nothing"} (empty)`}</option>)}
                 </select>
-              </div>
+              </Row>
             ))}
-            <div className="setting">
-              <span className="name">Wireframe</span>
+            <Row name="Wireframe" note="The model's triangles">
               <Switch on={wire} onChange={setWire} label="Wireframe" />
-            </div>
-          </div>
+            </Row>
+          </Rows>
         )}
         <dl className="assets-facts">
           <dt>Triangles</dt><dd>{b ? Math.round(triangles).toLocaleString() : "…"}</dd>

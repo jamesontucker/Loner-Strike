@@ -6,6 +6,7 @@ import { useTools, type CameraMode } from "../../stores/tools";
 import type { MapInfo } from "../../types";
 import { Banner, LoadError, Segmented, Skeleton } from "../../ui";
 import { COLLATOR, MapCard } from "../Maps";
+import { Empty, Loading } from "./common";
 import { Inspector } from "./panels/Inspector";
 import { Layers } from "./panels/Layers";
 import type { Know, Nav, Replay, Trace } from "./overlays";
@@ -48,11 +49,11 @@ function MapPicker({ maps }: { maps: MapInfo[] }) {
         <input className="search" type="search" aria-label="Search maps" placeholder="Pick a map to look inside" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {!maps.length ? (
-        <p className="muted">Loner-Strike can't find any maps in your game yet.</p>
+        <Empty title="No maps yet" text="Loner-Strike can't find any maps in your game yet. Add some from Get more or the Maps page, then come back to look inside them." />
       ) : (
         <div className="maps grid">
           {shown.slice(0, limit).map((m) => <MapCard key={m.name} map={m} onClick={pick} />)}
-          {!shown.length && <p className="muted">No maps match.</p>}
+          {!shown.length && <Empty plain text={`No maps match “${q.trim()}”.`} />}
         </div>
       )}
       {shown.length > limit && (
@@ -67,7 +68,7 @@ function MapPicker({ maps }: { maps: MapInfo[] }) {
 const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
 
 /** What a replay adds to the viewer: the recording, its trace, and the bar's title/back. */
-export type ReplayExtra = { data: Replay; trace: Trace | null; title: string; onBack: () => void };
+export type ReplayExtra = { data: Replay; trace: Trace | null; title: string; note?: string; onBack: () => void };
 
 export function Viewer({ map, replay = null }: { map: string; replay?: ReplayExtra | null }) {
   const openMap = useTools((s) => s.openMap);
@@ -113,7 +114,7 @@ export function Viewer({ map, replay = null }: { map: string; replay?: ReplayExt
     <div className="tools-page">
       <div className="tools-bar">
         <span className="map-title">{replay ? replay.title : map}</span>
-        {replay ? <span className="muted small">on {map}</span> : null}
+        {replay?.note ? <span className="muted small-note">{replay.note}</span> : null}
         <button className="btn small" onClick={() => (replay ? replay.onBack() : openMap(null))}>{replay ? "Other recording" : "Other map"}</button>
         <span className="push" />
         <Segmented values="orbit fly top" labels="Orbit|Fly|Top-down" current={camera} onPick={(v) => setCamera(v as CameraMode)} label="Camera" />
@@ -171,9 +172,8 @@ function Loaded({ bundle, entities, map, overlays }: { bundle: MeshBundle | null
               <Scene bundle={bundle} meshes={meshes} entities={entities} map={map} overlays={overlays} onLost={() => setLost(true)} />
             </SceneBoundary>
           ) : (
-            <div className="tools-overlay" role="status">
-              <span className="spinner" aria-hidden="true" />
-              Reading the map…
+            <div className="tools-overlay">
+              <Loading text="Reading the map…" />
             </div>
           )}
           {looking && <div className="tools-crosshair" aria-hidden="true" />}
@@ -200,13 +200,14 @@ function StatusBar() {
   const hover = useTools((s) => s.hover);
   const camera = useTools((s) => s.camera);
   const looking = useTools((s) => s.looking);
+  const hint = camera === "fly" && looking ? "WASD to move · Shift faster · Click to pick · Esc to let go" : HINTS[camera];
   return (
     <div className="tools-status" aria-live="off">
       <span className="mono" title="Where the camera is, in game units (x y z), and which way it faces">
         {status ? <>{fmtVec(status.pos)} · facing {Math.round(status.yaw)}°</> : "—"}
       </span>
       <span className="tools-hover mono">{hover ? <>{hover.label}{hover.point && <span className="muted"> at {fmtVec(hover.point)}</span>}</> : ""}</span>
-      <span className="tools-hint">{camera === "fly" && looking ? "WASD to move · Shift faster · Click to pick · Esc to let go" : HINTS[camera]}</span>
+      <span className="tools-hint" title={hint}>{hint}</span>
     </div>
   );
 }

@@ -6,8 +6,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
-import { Banner, BusyButton, Info, LoadError, Skeleton, useAskText, useConfirm, useToast } from "../../../ui";
-import { MapList } from "../common";
+import { Banner, BusyButton, Info, LoadError, useAskText, useConfirm, useToast } from "../../../ui";
+import { Empty, Loading, MapList } from "../common";
 import type { ToolProps } from "../registry";
 import { loadCallouts, placeColours, saveCallouts, spoken, suggest, validPlace, type Area, type CalloutNav, type Change } from "./calloutsApi";
 import { TopDown } from "./TopDown";
@@ -171,12 +171,12 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
   };
 
   const head = (
-    <div className="row between co-head">
-      <div>
-        <h3 className="co-title">Places on {map}</h3>
-        {nav && <span className="muted small-note">{nav.file} · {areas.length} areas · {counts.length} places{unnamed ? ` · ${unnamed} areas without a name` : ""}</span>}
+    <div className="tl-head">
+      <div className="tl-head-title">
+        <h3>Places on {map}</h3>
+        {nav && <span className="muted small-note">{nav.file} · {areas.length} areas · {counts.length} places{unnamed ? ` · ${unnamed} ${unnamed === 1 ? "area" : "areas"} without a name` : ""}</span>}
       </div>
-      <div className="row">
+      <div className="tl-head-actions">
         <button className="btn" onClick={back}>Pick another map</button>
       </div>
     </div>
@@ -186,7 +186,7 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
     return (
       <div className="panel">
         {head}
-        <Skeleton rows={5} />
+        <Loading className="co-wait" text={`Reading ${map}'s nav…`} />
       </div>
     );
   if (q.isError || !nav)
@@ -269,7 +269,7 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
               <Info text="Names from the game's list (marked with a speaker) have a radio voice line. Any other name works in bot chat and voice commands: capitals and _ become spaces, so UpperTunnel is 'upper tunnel'." />
             </div>
             {counts.length === 0 ? (
-              <p className="muted small-note">No places named yet.</p>
+              <Empty plain text={nav.usual ? "No places named yet. Pick areas and name them, or start from the usual callouts below." : "No places named yet. Pick areas on the map and give them a name."} />
             ) : (
               <ul className="co-places">
                 {counts.map(([p, n]) => (

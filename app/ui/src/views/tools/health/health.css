@@ -1,9 +1,9 @@
 /* The map health check (views/tools/health). */
-.health { display: grid; gap: 16px; }
-.health h3 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.health-map-pick { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-.health-map-pick .search { width: 180px; }
-.health-map-pick select { min-width: 220px; max-width: 100%; }
+/* .health-page, not .health: the app already has a .health (styles.css) */
+.health-page { display: grid; gap: 16px; }
+.health-page h3 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.health-setup .tl-row-control.wide { max-width: 560px; }
+.health-wait { padding: 12px 0; }
 .health-blocked { margin: 12px 0 0; color: var(--warn); font-weight: 600; max-width: 70ch; }
 .health-actions { margin-top: 14px; }
 .health-ended { border-left: 3px solid var(--warn); }

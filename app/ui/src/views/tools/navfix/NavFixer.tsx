@@ -9,7 +9,7 @@ import { useDirty } from "../../../store";
 import { useTools, useToolArg, type CameraMode } from "../../../stores/tools";
 import { Banner, BusyButton, Info, LoadError, Segmented, Skeleton, useAskText, useConfirm, useToast } from "../../../ui";
 import { JobProgress } from "../../JobProgress";
-import { MapList } from "../common";
+import { Check, Loading, MapList } from "../common";
 import type { NavArea } from "../overlays";
 import type { ToolProps } from "../registry";
 import { useMesh, useEntities } from "../toolsApi";
@@ -213,8 +213,7 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
     <div className="tools-page">
       <div className="tools-bar">
         <span className="map-title">{map}</span>
-        <span className="tag tools-beta">Beta</span>
-        {st?.file && <span className="muted small">{st.file}</span>}
+        {st?.file && <span className="muted small-note">{st.file}</span>}
         <button className="btn small" onClick={async () => (!st?.dirty || (await confirm("Leave without saving your changes to the nav?", { ok: "Leave", danger: true }))) && onBack()}>
           Other map
         </button>
@@ -233,9 +232,8 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
           <div className="tools-stage">
             <div className={`tools-canvas navfix-canvas navfix-${mode}`}>
               {!ready ? (
-                <div className="tools-overlay" role="status">
-                  <span className="spinner" aria-hidden="true" />
-                  {mesh.data ? "Reading the nav…" : "Reading the map…"}
+                <div className="tools-overlay">
+                  <Loading text={mesh.data ? "Reading the nav…" : "Reading the map…"} />
                 </div>
               ) : lost ? (
                 <div className="tools-overlay">
@@ -297,11 +295,8 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
                     <p className="small-note muted">
                       {linkFrom === null ? "Click the area to link from." : `From area ${linkFrom}: click the area it leads to. Each link carries on from the last area, so you can click along a beam.`}
                     </p>
-                    <label className="tools-field">
-                      One way (a drop bots can't climb back up)
-                      <input type="checkbox" checked={oneWay} onChange={(e) => setOneWay(e.target.checked)} />
-                    </label>
-                    <p className="small-note muted">Or hold Shift while clicking for a one-way link.</p>
+                    <Check checked={oneWay} onChange={setOneWay} label="One way" title="A drop bots can't climb back up" />
+                    <p className="small-note muted">One way is for a drop bots can't climb back up. Holding Shift while clicking makes a one-way link too.</p>
                   </section>
                 )}
                 {mode === "draw" && (

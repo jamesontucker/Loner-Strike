@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getJson } from "../../../api";
 import { useNav } from "../../../store";
 import { BusyButton, Info, LoadError, Segmented, Skeleton, useToast } from "../../../ui";
+import { Row, Rows } from "../common";
 import { exportPng, mapTextureUrl, pickPicture, previewTexture, saveTexture, useUsage, useWads, useWadTextures, wadTextureUrl, type ExportSource, type WadInfo, type WadTexture } from "./assetsApi";
 
 /** "all", "maps" (textures inside maps) or "folder/name.wad" */
@@ -252,24 +253,22 @@ function MakeTexture({ onDone }: { onDone: (wad: string | null) => void }) {
           {preview ? <img src={preview.png} alt="Your texture as the game draws it" /> : <span className="muted">{picture ? (problem ?? "Making a preview…") : "No picture yet"}</span>}
           {previewing && preview && <span className="spinner assets-make-busy" aria-label="Updating the preview" />}
         </div>
-        <div className="settings assets-make-form">
-          <div className="setting">
-            <span className="name">Picture{picture && <span className="note">{picture.name} · {picture.width} × {picture.height}</span>}</span>
-            <BusyButton className="btn" busy={busy === "pick"} label={picture ? "Choose another…" : "Choose a picture…"} busyLabel="Opening…" onClick={pick} />
-          </div>
-          <label className="setting">
-            <span className="name">Texture name<span className="note">Up to 15 letters, digits, _ or -</span></span>
-            <input className="search" value={name} maxLength={15} onChange={(e) => setName(e.target.value.toLowerCase())} spellCheck={false} />
-          </label>
-          <div className="setting">
-            <span className="name">Biggest side{preview && <span className="note">Comes out {preview.width} × {preview.height}</span>}</span>
-            <Segmented values={SIZES.join(" ")} labels={SIZES.join("|")} current={size} onPick={setSize} label="Biggest side" />
-          </div>
-          <label className="setting">
-            <span className="name">Save in<span className="note">A WAD you made here, or a new one</span></span>
-            <span className="row"><input className="search" value={wad} maxLength={40} onChange={(e) => setWad(e.target.value)} spellCheck={false} /><span className="muted">.wad</span></span>
-          </label>
-          <div className="row">
+        <div className="assets-make-form">
+          <Rows>
+            <Row name="Picture" note={picture ? `${picture.name} · ${picture.width} × ${picture.height}` : undefined}>
+              <BusyButton className="btn" busy={busy === "pick"} label={picture ? "Choose another…" : "Choose a picture…"} busyLabel="Opening…" onClick={pick} />
+            </Row>
+            <Row name="Texture name" note="Up to 15 letters, digits, _ or -">
+              <input className="search" aria-label="Texture name" value={name} maxLength={15} onChange={(e) => setName(e.target.value.toLowerCase())} spellCheck={false} />
+            </Row>
+            <Row name="Biggest side" note={preview ? `Comes out ${preview.width} × ${preview.height}` : undefined}>
+              <Segmented values={SIZES.join(" ")} labels={SIZES.join("|")} current={size} onPick={setSize} label="Biggest side" />
+            </Row>
+            <Row name="Save in" note="A WAD you made here, or a new one">
+              <span className="row nowrap"><input className="search" aria-label="WAD to save in" value={wad} maxLength={40} onChange={(e) => setWad(e.target.value)} spellCheck={false} /><span className="muted">.wad</span></span>
+            </Row>
+          </Rows>
+          <div className="row assets-make-actions">
             <BusyButton className="btn primary" busy={busy === "save"} disabled={!preview || !wad.trim()} label="Save texture" busyLabel="Saving…" onClick={save} />
             <button className="btn" onClick={() => onDone(null)}>Close</button>
           </div>

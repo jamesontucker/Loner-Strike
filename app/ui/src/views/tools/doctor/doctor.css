@@ -1,6 +1,5 @@
 /* The map doctor (views/tools/doctor). Its map list is common/MapList. */
-.doc-head { align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
-.doc-title { margin: 0; }
+.doc-head { margin-bottom: 8px; }
 .doc-summary { font-weight: 700; margin: 8px 0 4px; }
 .doc-summary.ok { color: var(--ok); }
 .doc-summary.warn { color: var(--warn); }

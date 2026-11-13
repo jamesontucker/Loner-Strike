@@ -8,11 +8,11 @@ import { useSetupJob, waitForSetupJob } from "../../../queries";
 import { useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
 import type { MapInfo } from "../../../types";
-import { Banner, BusyButton, LoadError, Skeleton, useToast } from "../../../ui";
+import { Banner, BusyButton, LoadError, useToast } from "../../../ui";
 import { JobProgress } from "../../JobProgress";
 import type { ToolProps } from "../registry";
 import { checkMap, copyFiles, learnMap, learnResult, writeRes, type FileRow, type Report } from "./doctorApi";
-import { MapList } from "../common";
+import { Loading, MapList } from "../common";
 import "./doctor.css";
 
 export default function Doctor({ maps }: ToolProps) {
@@ -103,12 +103,12 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
   const nameplaces = () => useNav.getState().go("tools", `callouts:${map}`);
 
   const head = (
-    <div className="row between doc-head">
-      <div>
-        <h3 className="doc-title">{map}</h3>
+    <div className="tl-head doc-head">
+      <div className="tl-head-title">
+        <h3>{map}</h3>
         {q.data?.title && q.data.title !== map && <span className="muted">{q.data.title}</span>}
       </div>
-      <div className="row">
+      <div className="tl-head-actions">
         <button className="btn" onClick={onBack}>Check another map</button>
         <BusyButton className="btn" busy={q.isFetching} label="Check again" busyLabel="Checking…" onClick={() => q.refetch()} />
       </div>
@@ -119,8 +119,7 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
     return (
       <div className="panel">
         {head}
-        <p className="muted" role="status"><span className="spinner" aria-hidden="true" /> Checking {map}…</p>
-        <Skeleton rows={4} />
+        <Loading text={`Checking ${map}…`} />
       </div>
     );
   if (q.isError) return <div className="panel">{head}<LoadError text={(q.error as Error).message || "Couldn't check that map."} onRetry={() => q.refetch()} /></div>;

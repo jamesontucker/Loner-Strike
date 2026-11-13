@@ -1,6 +1,5 @@
 /* The callout editor (views/tools/callouts). */
-.co-head { align-items: flex-start; flex-wrap: wrap; }
-.co-title { margin: 0; }
+.co-wait { padding: 14px 0 4px; }
 .co-body { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; }
 @media (max-width: 1000px) { .co-body { grid-template-columns: minmax(0, 1fr); } }
 .co-map { min-width: 0; }

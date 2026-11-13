@@ -12,6 +12,8 @@ import type { MapInfo } from "../../types";
 import { lazyPage, SectionHead, Skeleton } from "../../ui";
 import type { Vec3 } from "./viewer/coords";
 import { TOOL_GROUPS, TOOLS } from "./registry";
+import "./tools.css";
+import "./common/common.css";
 
 const PAGES = new Map(TOOLS.map((t) => [t.id, lazyPage(t.load)]));
 
