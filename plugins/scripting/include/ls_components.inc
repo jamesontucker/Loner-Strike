@@ -46,7 +46,7 @@ stock bool:ls_components_running()
  *
  * @param classname     "ls_capture_point", "ls_loot_container", ...
  * @param origin        Where (GoldSrc units)
- * @param keys          Its keys as text: "radius=160 capture_secs=8 name=\"B\""
+ * @param keys          Its keys as text: "radius=160 capture_secs=8 name=^"B^""
  * @return              The entity, or 0 if the classname isn't a component
  */
 native ls_comp_create(const classname[], const Float:origin[3], const keys[] = "");
