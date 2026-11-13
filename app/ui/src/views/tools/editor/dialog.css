@@ -1,0 +1,60 @@
+/* P4: the map editor's dialogs (EditorDialog) and the side panels' never-clip rules */
+
+/* -- dialogs: header, a body that scrolls, a footer that stays -- */
+.sheet.ed-dlg { display: flex; flex-direction: column; overflow: hidden; padding: 0; max-height: min(88vh, calc(100vh - 40px)); }
+.sheet.ed-dlg-sm { width: min(420px, 100%); }
+.sheet.ed-dlg-md { width: min(600px, 100%); }
+.sheet.ed-dlg-lg { width: min(820px, 100%); }
+.ed-dlg-form { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.ed-dlg-head { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.ed-dlg-titles { flex: 1; min-width: 0; }
+.ed-dlg-head h2 { margin: 0; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
+.ed-dlg-sub { margin: 3px 0 0; font-size: 13px; color: var(--bone-dim); }
+.ed-dlg-x { flex: none; }
+.ed-dlg-body { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px 14px; display: grid; gap: 14px; align-content: start; scrollbar-gutter: stable; }
+.ed-dlg-error { margin: 0; padding: 8px 16px; color: #ffb4a8; background: rgba(255, 90, 60, 0.12); border-top: 1px solid rgba(255, 90, 60, 0.3); font-size: 13px; }
+.ed-dlg-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); background: var(--panel-2, rgba(0, 0, 0, 0.12)); }
+.ed-dlg-foot-left { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; flex: 1; min-width: 0; }
+.ed-dlg-foot-right { display: flex; gap: 8px; margin-left: auto; }
+.ed-dlg-note { font-size: 12px; color: var(--bone-dim); min-width: 0; }
+
+.ed-dlg-section { display: grid; gap: 8px; min-width: 0; }
+.ed-dlg-section + .ed-dlg-section { padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.ed-dlg-section-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.ed-dlg-section h3 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bone-dim); }
+.ed-dlg-grid { display: grid; gap: 10px 14px; grid-template-columns: minmax(0, 1fr); }
+.ed-dlg-section.two .ed-dlg-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+
+.ed-field { display: grid; gap: 4px; min-width: 0; align-content: start; }
+.ed-field.wide { grid-column: 1 / -1; }
+.ed-field-label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--bone-dim); }
+.ed-field input:not([type="checkbox"]):not([type="radio"]):not([type="color"]), .ed-field select, .ed-field textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+.ed-field.bad input, .ed-field.bad select { outline: 1.5px solid #ff7b6b; }
+.ed-field-error { font-size: 12px; color: #ffb4a8; }
+.ed-field-note { font-size: 12px; color: var(--bone-dim); }
+.ed-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.ed-inline > input[type="number"] { width: 90px; }
+.ed-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.ed-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.ed-list li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ed-list li .mono, .ed-list li .ed-grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-table-wrap { overflow: auto; max-height: 52vh; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 4px; }
+.ed-table-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ed-table-wrap th { position: sticky; top: 0; background: var(--panel); text-align: left; padding: 5px 8px; z-index: 1; }
+.ed-table-wrap td { padding: 4px 8px; border-top: 1px solid rgba(255, 255, 255, 0.05); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-table-wrap tr[aria-selected="true"] td { background: rgba(201, 164, 74, 0.18); }
+.ed-thumb-pick { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 14px; align-items: start; }
+.ed-thumb-pick img, .ed-thumb-pick .p4-nothumb { width: 160px; aspect-ratio: 4 / 3; border-radius: 4px; background: #1d211b; object-fit: contain; }
+@media (max-width: 560px) {
+  .ed-thumb-pick { grid-template-columns: 1fr; }
+}
+
+/* -- side panels: nothing cut off -- */
+.editor-side { min-width: 0; scrollbar-gutter: stable; overflow-x: hidden; }
+.editor-side .tools-panel, .editor-side section, .editor-side .p4-prefabs { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.editor-side .editor-row { min-width: 0; flex-wrap: wrap; }
+.editor-side .btn { flex-shrink: 0; max-width: 100%; }
+.editor-side input, .editor-side select { min-width: 0; max-width: 100%; }
+.editor-side .seg { max-width: 100%; }
+.editor-side .seg > button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

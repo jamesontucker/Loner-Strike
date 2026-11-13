@@ -10,7 +10,7 @@ import { useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import type { Vec3 } from "../viewer/coords";
-import { cordonOf, loadComponents, placeComponentAt, placePrefabAt, registerScene, sceneAt, useP4 } from "./extras";
+import { cordonOf, dragging, loadComponents, placeComponentAt, placePrefabAt, registerScene, sceneAt, updateGhost, useP4 } from "./extras";
 import type { ComponentDef, DocEntity } from "./editorApi";
 import { useFgd } from "./fgd";
 import { Html } from "@react-three/drei";
@@ -71,6 +71,7 @@ export function P4SceneParts() {
     <>
       <CordonBoxes />
       <ComponentVisuals />
+      <Ghost />
     </>
   );
 }
@@ -118,11 +119,16 @@ function install() {
   // drag a prefab card onto the map
   const over = (e: DragEvent) => {
     const types = e.dataTransfer?.types ?? [];
-    if (!(types.includes(PREFAB_MIME) || types.includes(COMPONENT_MIME)) || !sceneAt(e.clientX, e.clientY)) return;
+    if (!(types.includes(PREFAB_MIME) || types.includes(COMPONENT_MIME)) || !sceneAt(e.clientX, e.clientY)) {
+      if (useP4.getState().ghost) useP4.getState().set({ ghost: null });
+      return;
+    }
     e.preventDefault();
+    updateGhost(e.clientX, e.clientY, dragging.current);
     if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
   };
   const drop = (e: DragEvent) => {
+    useP4.getState().set({ ghost: null });
     const id = e.dataTransfer?.getData(PREFAB_MIME);
     const comp = e.dataTransfer?.getData(COMPONENT_MIME);
     if ((!id && !comp) || !sceneAt(e.clientX, e.clientY)) return;
@@ -141,21 +147,52 @@ function install() {
     if (target && target.tagName !== "CANVAS" && target.dataset?.pane == null) return;
     e.preventDefault();
     e.stopPropagation();
-    useP4.getState().set({ placing: e.shiftKey ? placing : null });
+    useP4.getState().set({ placing: e.shiftKey ? placing : null, ghost: e.shiftKey ? useP4.getState().ghost : null });
     void (placing.component ? placeComponentAt(placing.id, e.clientX, e.clientY) : placePrefabAt(placing.id, e.clientX, e.clientY));
   };
+  // while placing: the ghost follows the mouse, R turns it a quarter (Shift+R back), Esc stops
+  const hover = (e: PointerEvent) => {
+    const placing = useP4.getState().placing;
+    if (!placing) return;
+    if (sceneAt(e.clientX, e.clientY)) updateGhost(e.clientX, e.clientY, placing);
+    else if (useP4.getState().ghost) useP4.getState().set({ ghost: null });
+  };
+  let lastXY = { x: 0, y: 0 };
+  const track = (e: PointerEvent) => (lastXY = { x: e.clientX, y: e.clientY });
   const esc = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && useP4.getState().placing) useP4.getState().set({ placing: null });
+    const p4 = useP4.getState();
+    if (!p4.placing) return;
+    const t = e.target as HTMLElement | null;
+    if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
+    if (e.key === "Escape") {
+      p4.set({ placing: null, ghost: null });
+    } else if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      // (before the editor's own R = Scale)
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      p4.set({ turn: (p4.turn + (e.shiftKey ? 270 : 90)) % 360 });
+      updateGhost(lastXY.x, lastXY.y, p4.placing);
+    }
+  };
+  const end = () => {
+    dragging.current = null;
+    if (useP4.getState().ghost && !useP4.getState().placing) useP4.getState().set({ ghost: null });
   };
   window.addEventListener("dragover", over);
   window.addEventListener("drop", drop);
   window.addEventListener("pointerdown", down, true);
-  window.addEventListener("keydown", esc);
+  window.addEventListener("keydown", esc, true);
+  window.addEventListener("pointermove", hover);
+  window.addEventListener("pointermove", track);
+  window.addEventListener("dragend", end);
   return () => {
     window.removeEventListener("dragover", over);
     window.removeEventListener("drop", drop);
     window.removeEventListener("pointerdown", down, true);
-    window.removeEventListener("keydown", esc);
+    window.removeEventListener("keydown", esc, true);
+    window.removeEventListener("pointermove", hover);
+    window.removeEventListener("pointermove", track);
+    window.removeEventListener("dragend", end);
   };
 }
 
@@ -251,4 +288,28 @@ function ComponentVisuals() {
     }
   }
   return <>{out}</>;
+}
+
+/** Where a dragged or placed prefab/component would land: a see-through box with its outline
+ *  and an arrow for which way its front faces. */
+function Ghost() {
+  const g = useP4((s) => s.ghost);
+  if (!g) return null;
+  const mid = g.min.map((x, k) => (x + g.max[k]) / 2) as Vec3;
+  const size = g.max.map((x, k) => Math.max(1, x - g.min[k])) as Vec3;
+  const r = (g.yaw * Math.PI) / 180;
+  const front: Vec3 = [-Math.sin(r), Math.cos(r), 0];
+  const reach = Math.max(size[0], size[1]) / 2 + 16;
+  return (
+    <group>
+      <mesh position={mid} raycast={() => null} renderOrder={8}>
+        <boxGeometry args={size} />
+        <meshBasicMaterial color="#7ee08a" transparent opacity={0.18} depthWrite={false} />
+      </mesh>
+      {boxEdges(g.min, g.max).map((e, j) => (
+        <Line key={j} points={e} color="#7ee08a" lineWidth={1.5} depthTest={false} renderOrder={9} />
+      ))}
+      <Line points={[[mid[0], mid[1], g.min[2] + 2], [mid[0] + front[0] * reach, mid[1] + front[1] * reach, g.min[2] + 2]]} color="#7ee08a" lineWidth={3} depthTest={false} renderOrder={9} />
+    </group>
+  );
 }

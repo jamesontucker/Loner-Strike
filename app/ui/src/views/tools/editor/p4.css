@@ -43,3 +43,27 @@
 .p4-comp-dot { width: 12px; height: 12px; border-radius: 50%; }
 .p4-comp-text { display: grid; min-width: 0; font-size: 13px; }
 .p4-comp-text .muted { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* library rows (never clip: thumbnail, text that shortens, actions that keep their size) */
+.p4-prefabs { gap: 8px; min-width: 0; }
+.p4-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.p4-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; min-width: 0; }
+.p4-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 4px 6px 4px 4px; border: 1px solid var(--line, rgba(255,255,255,0.12)); border-radius: 6px; background: rgba(255,255,255,0.03); cursor: grab; min-width: 0; }
+.p4-row:hover, .p4-row:focus-within { border-color: var(--accent, #c9a44a); }
+.p4-row-thumb { width: 56px; height: 42px; object-fit: contain; background: #1d211b; border-radius: 3px; display: block; }
+.p4-row-text { display: grid; min-width: 0; }
+.p4-row-name { font-weight: 600; font-size: 13px; }
+.p4-row-meta { font-size: 12px; }
+.p4-row-actions { display: flex; gap: 4px; align-items: center; flex: none; }
+.p4-menu { position: relative; display: inline-flex; }
+.p4-menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; display: grid; min-width: 180px; padding: 4px; background: var(--panel); border-radius: 4px; box-shadow: var(--raised), 0 10px 30px rgba(0,0,0,0.5); }
+.p4-menu-list button { text-align: left; background: none; border: 0; color: inherit; font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+.p4-menu-list button:hover, .p4-menu-list button:focus-visible { background: rgba(255,255,255,0.08); }
+.p4-comp { grid-template-columns: 12px minmax(0, 1fr) auto; }
+.p4-comp-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p4-pack { display: grid; gap: 8px; min-width: 0; }
+.p4-pack .editor-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.6fr); gap: 6px; }
+.p4-pack .editor-field { min-width: 0; }
+.p4-pack .editor-field input { width: 100%; box-sizing: border-box; }
+.p4-pack .p4-actions .btn { flex: 1 1 auto; }
+.p4-mono-path { font-family: var(--mono, monospace); font-size: 12px; overflow-wrap: anywhere; }

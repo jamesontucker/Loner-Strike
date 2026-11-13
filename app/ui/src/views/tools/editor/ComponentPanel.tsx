@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BusyButton, useToast } from "../../../ui";
 import * as api from "./editorApi";
 import type { ComponentDef } from "./editorApi";
-import { loadComponents, useP4 } from "./extras";
+import { dragging, loadComponents, useP4 } from "./extras";
 import { COMPONENT_MIME } from "./P4Scene";
 import { useEditor } from "./store";
 import "./p4.css";
@@ -82,7 +82,9 @@ export function ComponentPanel() {
                     e.dataTransfer.setData(COMPONENT_MIME, c.class);
                     e.dataTransfer.setData("text/plain", c.class);
                     e.dataTransfer.effectAllowed = "copy";
+                    dragging.current = { id: c.class, size: [32, 32, 32], component: true };
                   }}
+                  onDragEnd={() => (dragging.current = null)}
                   title={`${c.class}: ${c.blurb}${c.brush ? " Made of brushes: drops as a box." : ""}${c.needs_nav ? " Bots need a nav area under it." : ""}\nDrag onto the map.`}
                 >
                   <span className="p4-comp-dot" style={{ background: `rgb(${c.colour.join(",")})` }} aria-hidden="true" />
@@ -90,7 +92,7 @@ export function ComponentPanel() {
                     <strong>{c.title}</strong>
                     <span className="muted">{c.blurb}</span>
                   </span>
-                  <button type="button" className="btn small" onClick={() => useP4.getState().set({ placing: { id: c.class, name: c.title, component: true } })}>
+                  <button type="button" className="btn small" title="Then click on the map" onClick={() => useP4.getState().set({ placing: { id: c.class, name: c.title, component: true }, turn: 0 })}>
                     Place
                   </button>
                 </div>
@@ -98,7 +100,7 @@ export function ComponentPanel() {
           </div>
         </div>
       ))}
-      <fieldset className="p4-cordon">
+      <fieldset className="p4-cordon p4-pack">
         <legend>Component file (try a mode on any map)</legend>
         <p className="small-note muted">
           {count ? `${count} component${count === 1 ? "" : "s"} in this map.` : "No components in this map yet."} A component file adds them to a map when it loads, no compile needed, stock maps too (needs gm_components on).
@@ -113,11 +115,13 @@ export function ComponentPanel() {
             <input value={mode} maxLength={32} placeholder="any" spellCheck={false} onChange={(e) => setMode(e.target.value.replace(/\s/g, ""))} />
           </label>
         </div>
-        <div className="editor-row wrap">
+        <div className="p4-actions">
           <BusyButton className="btn small primary" busy={busy === "save"} label="Save as component file" busyLabel="Saving…" disabled={!count || !map.trim() || !!busy} onClick={() => void save()} />
           <BusyButton className="btn small" busy={busy === "load"} label="Load component file" busyLabel="Loading…" disabled={!map.trim() || !!busy} onClick={() => void load()} />
         </div>
-        <p className="small-note muted">Saved to addons/amxmodx/configs/components/{map || "<map>"}{mode ? `.${mode}` : ""}.ini in your game (the old one kept as .bak). Barricades are brushes, so they only work compiled into the map.</p>
+        <p className="small-note muted">
+          Saved to <span className="p4-mono-path">addons/amxmodx/configs/components/{map || "<map>"}{mode ? `.${mode}` : ""}.ini</span> in your game (the old one kept as .bak). Barricades are brushes, so they only work compiled into the map.
+        </p>
       </fieldset>
     </div>
   );

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ComponentPanel } from "./ComponentPanel";
 import { PrefabPanel } from "./PrefabPanel";
 import { useP4 } from "./extras";
+import "./dialog.css";
 
 export function LibraryPanel({ start }: { start?: "prefabs" | "components" }) {
   const [part, setPart] = useState<"prefabs" | "components">(start ?? "prefabs");
@@ -23,7 +24,7 @@ export function LibraryPanel({ start }: { start?: "prefabs" | "components" }) {
       </div>
       {placing && (
         <p className="banner p4-placing" role="status">
-          Click on the map to place {placing.name}. Shift keeps placing, Esc stops.
+          Click on the map to place {placing.name}. {placing.component ? "" : "R turns it, "}Shift keeps placing, Esc stops.
         </p>
       )}
       {part === "prefabs" ? <PrefabPanel /> : <ComponentPanel />}

@@ -172,7 +172,11 @@ export function snapshot(box: [Vec3, Vec3], w = 192, h = 144): string | null {
 
 type P4State = {
   /** a prefab (or a component) waiting for a click in the view to be placed */
-  placing: { id: string; name: string; component?: boolean } | null;
+  placing: { id: string; name: string; component?: boolean; size?: Vec3 } | null;
+  /** where it would land (a see-through box in the views), while dragging a card or placing */
+  ghost: { min: Vec3; max: Vec3; yaw: number } | null;
+  /** extra quarter turns for the next prefab (R while placing) */
+  turn: number;
   /** the prefab library changed (saved, imported): panels refetch */
   prefabRev: number;
   /** the editor tab to show (another page asked: "editor:prefabs") */
@@ -182,6 +186,8 @@ type P4State = {
 
 export const useP4 = create<P4State>((set) => ({
   placing: null,
+  ghost: null,
+  turn: 0,
   prefabRev: 0,
   wantTab: null,
   set: (p) => set(p),
@@ -192,11 +198,66 @@ export async function placePrefabAt(id: string, x: number, y: number) {
   const s = useEditor.getState();
   const hit = pickAt(x, y);
   if (!hit) return s.notify("Drop it on the map in the view.", true);
-  const r = await s.cmd({ op: "place_prefab", prefab: id, point: hit.point, normal: hit.normal, grid: s.alt ? 0 : s.grid });
+  const r = await s.cmd({ op: "place_prefab", prefab: id, point: hit.point, normal: hit.normal, grid: s.alt ? 0 : s.grid, yaw: useP4.getState().turn });
   if (r.created) {
     const owned = new Set(r.created.entities);
     s.select({ brushes: r.created.brushes.filter((b) => !owned.has(useEditor.getState().brushes.get(b)?.entity ?? -1)), entities: r.created.entities, face: null });
   }
+}
+
+// ---- where a dropped prefab lands (the same rules as editor/prefab.rs) ----------------------
+
+/** What's being dragged from the Library (drag data can't be read until the drop). */
+export const dragging: { current: { id: string; size: Vec3; component?: boolean } | null } = { current: null };
+
+/** prefab.rs wall_yaw: on a wall, its front (+y) faces out. */
+export function wallYaw(n: Vec3): number {
+  const l = Math.hypot(n[0], n[1], n[2]);
+  if (!(l > 0.5) || Math.abs(n[2] / l) >= 0.7) return 0;
+  let yaw = (Math.atan2(n[1], n[0]) * 180) / Math.PI - 90;
+  const q = Math.round(yaw / 90) * 90;
+  if (Math.abs(yaw - q) < 1) yaw = q;
+  return ((yaw % 360) + 360) % 360;
+}
+
+/** prefab.rs place_transform for a centred box of `size`: the box where it would land. */
+export function landingBox(size: Vec3, point: Vec3, normal: Vec3, grid: number, extraYaw: number) {
+  const yaw = (wallYaw(normal) + extraYaw + 360) % 360;
+  const r = (yaw * Math.PI) / 180;
+  const c = Math.abs(Math.cos(r));
+  const sn = Math.abs(Math.sin(r));
+  // turned about the middle of its footprint (its origin)
+  const w = size[0] * c + size[1] * sn;
+  const d = size[0] * sn + size[1] * c;
+  const lo: Vec3 = [-w / 2, -d / 2, 0];
+  const hi: Vec3 = [w / 2, d / 2, size[2]];
+  const l = Math.hypot(...normal);
+  const n: Vec3 = l > 0.5 ? normal : [0, 0, 1];
+  const a = Math.abs(n[0]) >= Math.abs(n[1]) && Math.abs(n[0]) >= Math.abs(n[2]) ? 0 : Math.abs(n[1]) >= Math.abs(n[2]) ? 1 : 2;
+  const snapG = (v: number) => (grid > 0 ? Math.round(v / grid) * grid : Math.round(v));
+  const off: Vec3 = [0, 0, 0];
+  for (let i = 0; i < 3; i++) {
+    if (i === a) off[i] = n[i] >= 0 ? point[i] - lo[i] : point[i] - hi[i];
+    else off[i] = snapG(point[i] - (hi[i] - lo[i]) / 2) - lo[i];
+  }
+  return { min: lo.map((v, i) => v + off[i]) as Vec3, max: hi.map((v, i) => v + off[i]) as Vec3, yaw };
+}
+
+/** The ghost for what's dragged or being placed, under a point of the window. */
+export function updateGhost(x: number, y: number, what: { size?: Vec3; component?: boolean } | null) {
+  const p4 = useP4.getState();
+  if (!what) return p4.ghost && p4.set({ ghost: null });
+  const hit = pickAt(x, y);
+  if (!hit) return p4.ghost && p4.set({ ghost: null });
+  const s = useEditor.getState();
+  const grid = s.alt ? 0 : s.grid;
+  let ghost;
+  if (what.component || !what.size) {
+    const p = hit.point.map((v, i) => Math.round(v + hit.normal[i] * 16)) as Vec3;
+    ghost = { min: p.map((v) => v - 16) as Vec3, max: p.map((v) => v + 16) as Vec3, yaw: 0 };
+  } else ghost = landingBox(what.size, hit.point, hit.normal, grid, p4.turn);
+  const g = p4.ghost;
+  if (!g || g.min.some((v, i) => v !== ghost.min[i]) || g.max.some((v, i) => v !== ghost.max[i])) p4.set({ ghost });
 }
 
 // ---- game mode components ----------------------------------------------------------------
