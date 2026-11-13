@@ -138,6 +138,8 @@ const FIXED: [string, string][] = [
 
 export function CheatSheet({ onClose }: { onClose: () => void }) {
   const st = useKeySet();
+  // ? brings the view's "how to move" hint back too
+  useEffect(() => useNav.getState().set({ hintDone: false }), []);
   const nav = useNav((s) => s.preset);
   const all = commands();
   const preset = PRESETS.find((p) => p.id === st.preset);

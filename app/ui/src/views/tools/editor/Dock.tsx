@@ -142,6 +142,7 @@ export function startPanelDrag(ev: React.PointerEvent, id: string, onClick?: () 
   const finish = (apply: boolean) => {
     window.removeEventListener("pointermove", move, true);
     window.removeEventListener("pointerup", up, true);
+    window.removeEventListener("pointercancel", cancel, true);
     window.removeEventListener("keydown", key, true);
     try {
       el.releasePointerCapture(ev.pointerId);
@@ -178,6 +179,8 @@ export function startPanelDrag(ev: React.PointerEvent, id: string, onClick?: () 
     useDrag.setState({ d: { id, x: m.clientX, y: m.clientY, drop } });
   };
   const up = () => finish(true);
+  // the system took the pointer away (a gesture, a window switch): stop, change nothing
+  const cancel = () => finish(false);
   const key = (k: KeyboardEvent) => {
     if (k.key !== "Escape") return;
     k.preventDefault();
@@ -186,6 +189,7 @@ export function startPanelDrag(ev: React.PointerEvent, id: string, onClick?: () 
   };
   window.addEventListener("pointermove", move, true);
   window.addEventListener("pointerup", up, true);
+  window.addEventListener("pointercancel", cancel, true);
   window.addEventListener("keydown", key, true);
 }
 

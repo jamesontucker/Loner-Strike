@@ -1147,6 +1147,11 @@ enum Pick {
 /// The system file dialog; None when cancelled.
 fn dialog(st: &Shared, kind: Pick, name: &str) -> Result<Option<PathBuf>, String> {
     use tauri_plugin_dialog::DialogExt;
+    // P5: dev servers (test builds only) answer the dialog with LS_DEV_PICK, to open big maps in a browser
+    #[cfg(test)]
+    if let Ok(p) = std::env::var("LS_DEV_PICK") {
+        return Ok(Some(PathBuf::from(p)));
+    }
     let app = st.app.get().cloned().ok_or(INTERNAL)?;
     let d = app.dialog().file();
     let picked = match kind {

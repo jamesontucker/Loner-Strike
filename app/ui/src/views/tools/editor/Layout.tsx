@@ -8,6 +8,22 @@ import { modeFor, RENDER_MODES, setPaneMode, type RenderMode } from "./renderMod
 import { useEffect, useState } from "react";
 import { SPEEDS, useNav } from "./navigation";
 
+/** How to move, in the corner of the 3D view until you've flown once (? brings it back). */
+function NavHint() {
+  const preset = useNav((s) => s.preset);
+  const seen = useNav((s) => s.hintDone);
+  if (seen) return null;
+  const text = preset === "unreal" ? "Hold right mouse + WASD to fly · Alt+drag to orbit · F to frame" : preset === "hammer" ? "Z for mouse-look + WASD · drag to look · right-drag to move" : "Drag to orbit · right-drag to pan · scroll to zoom · F to fly";
+  return (
+    <div className="ed-nav-hint" role="note">
+      {text}
+      <button type="button" aria-label="Hide this hint" title="Hide (? shows the keys again)" onClick={() => useNav.getState().set({ hintDone: true })}>
+        ×
+      </button>
+    </div>
+  );
+}
+
 /** The camera speed note ("Speed 4 · 512 u/s") shown a moment after it changes, and while looking round. */
 function NavHud() {
   const until = useNav((s) => s.hudUntil);
@@ -75,6 +91,7 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
   const modes = usePanes((s) => s.modes);
   const wrap = useRef<HTMLDivElement>(null);
   const rects = paneRects(layout, split);
+  const firstThreeD = views.slice(0, paneCount(layout)).indexOf("3d");
   const n = paneCount(layout);
   const set = usePanes.getState().set;
 
@@ -114,11 +131,19 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
             data-pane={i}
             className={`ed-pane${n > 1 && active === i ? " active" : ""}`}
             style={shown ? { left: pct(r[0]), top: pct(r[1]), width: pct(r[2]), height: pct(r[3]) } : { display: "none" }}
-            onPointerDownCapture={() => usePanes.getState().active !== i && set({ active: i })}
+            tabIndex={-1}
+            onPointerDownCapture={(e) => {
+              if (usePanes.getState().active !== i) set({ active: i });
+              // a press in a view takes the keys from any text box (WebKit doesn't move focus on
+              // a right-click, so a search box kept the keys and Right mouse + WASD did nothing)
+              const el = e.currentTarget as HTMLElement;
+              if (document.activeElement !== el && !(e.target as HTMLElement).closest(".ed-pane-head")) el.focus({ preventScroll: true });
+            }}
             onPointerEnter={() => usePanes.setState({ hover: i })}
             onPointerLeave={() => usePanes.getState().hover === i && usePanes.setState({ hover: null })}
           >
             {shown && views[i] === "3d" && <NavHud />}
+            {shown && views[i] === "3d" && i === firstThreeD && <NavHint />}
             {n > 1 && shown && (
               <div className="ed-pane-head" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={() => toggleMaximise(i)}>
                 <select

@@ -284,6 +284,8 @@ export function runCommand(id: string): boolean {
   return true;
 }
 
+let wasdTold = false;
+
 /** Mounted once by the menu bar: keys to commands. */
 export function useShortcuts() {
   useEffect(() => {
@@ -310,6 +312,11 @@ export function useShortcuts() {
       if (document.querySelector(".sheet-backdrop")) return;
       const flying = s.view === "3d" && useTools.getState().camera === "fly";
       const id = keyMap().get(name);
+      // Unreal: W/E/R pick tools unless right mouse is held; say so once
+      if (id && !flying && useNav.getState().preset === "unreal" && s.view === "3d" && /^[WASDQE]$/.test(name) && !wasdTold) {
+        wasdTold = true;
+        s.notify("Hold right mouse to fly — W/E/R pick tools.");
+      }
       if (id) {
         const c = commandById(id);
         if (!c) return;

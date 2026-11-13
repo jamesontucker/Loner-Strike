@@ -270,6 +270,12 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
     const up = async (u: PointerEvent) => {
       window.removeEventListener("pointermove", move, true);
       window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", up, true);
+      if (u.type === "pointercancel") {
+        setGhost(null);
+        setDragOver(null);
+        return;
+      }
       setGhost(null);
       setDragOver(null);
       if (!on) return;
@@ -282,6 +288,7 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
     };
     window.addEventListener("pointermove", move, true);
     window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", up, true);
   };
   const dropOn = (key: string, group: number | null) => ({ "data-ol-drop": key, "data-ol-group": group == null ? "top" : String(group) });
 

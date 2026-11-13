@@ -155,6 +155,8 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
           drag = { kind: e.altKey ? "dolly" : "look", x: e.clientX, y: e.clientY, moved: false, button: 2 };
           if (!e.altKey) {
             useNav.getState().set({ looking: true });
+            // the keys come here now, wherever focus was
+            (document.activeElement as HTMLElement | null)?.blur?.();
             lock();
           }
         } else drag = { kind: "dolly", x: e.clientX, y: e.clientY, moved: false, button: 2 };
@@ -225,7 +227,7 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
     const menu = (e: MouseEvent) => e.preventDefault();
     const keyDown = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
+      if (!nav().looking && t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
       if (nav().preset === "hammer" && e.code === "KeyZ" && navWantsKey(e) && useEditor.getState().view === "3d") {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -248,6 +250,7 @@ export function NavCamera({ bounds, preset }: { bounds: [Vec3, Vec3]; preset: Ex
         e.preventDefault();
         e.stopImmediatePropagation();
         keys.current.add(e.code);
+        if (!nav().hintDone && /^Key[WASDQE]$/.test(e.code)) useNav.getState().set({ hintDone: true });
         invalidate();
       }
     };

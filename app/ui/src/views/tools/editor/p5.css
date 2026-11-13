@@ -272,3 +272,7 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 }
 .editor-options select { min-width: 58px; }
 .ed-pane-head select { padding: 1px 18px 1px 4px !important; background-position: right 4px center; }
+.ed-pane:focus { outline: none; }
+.ed-nav-hint { position: absolute; left: 10px; bottom: 10px; z-index: 2; display: flex; gap: 8px; align-items: center; max-width: calc(100% - 20px); padding: 4px 6px 4px 10px; font-size: 12px; color: var(--bone); background: rgba(20, 24, 17, 0.82); border: 1px solid var(--line); border-radius: 3px; }
+.ed-nav-hint button { border: 0; background: none; color: var(--bone-dim); cursor: pointer; font-size: 14px; padding: 0 3px; }
+.ed-nav-hint button:hover { color: var(--signal); }

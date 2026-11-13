@@ -28,6 +28,8 @@ type NavState = {
   hudUntil: number;
   /** right mouse (Unreal) or Z (Hammer) look is on: keys go to the camera */
   looking: boolean;
+  /** the "how to move" hint has done its job (flown once, or closed) */
+  hintDone: boolean;
   set: (p: Partial<Omit<NavState, "set">>) => void;
 };
 
@@ -47,8 +49,23 @@ export const useNav = create<NavState>((set, get) => ({
   ...load(),
   hudUntil: 0,
   looking: false,
+  hintDone: (() => {
+    try {
+      return localStorage.getItem("ls.editor.navHint") === "1";
+    } catch {
+      return false;
+    }
+  })(),
   set: (p) => {
     set(p);
+    if ("hintDone" in p) {
+      try {
+        if (p.hintDone) localStorage.setItem("ls.editor.navHint", "1");
+        else localStorage.removeItem("ls.editor.navHint");
+      } catch {
+        /* private window */
+      }
+    }
     if ("preset" in p || "speed" in p) {
       const s = get();
       try {
