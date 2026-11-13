@@ -16,4 +16,5 @@ export const TOOLS: ToolEntry[] = [
   { id: "doctor", label: "Map doctor", blurb: "Find what a map is missing (textures, models, sounds, the download list, the bots' nav) and fix it.", beta: true, load: () => import("./doctor/Doctor") },
   { id: "health", label: "Map health check", blurb: "Bots play a map in the background for a few minutes, then a report says where they fall, get stuck or hit errors.", beta: true, load: () => import("./health/HealthCheck") },
   { id: "callouts", label: "Callouts", blurb: "Name places on a map's bot nav, so bots say where they are and understand where you mean.", beta: true, load: () => import("./callouts/Callouts") },
+  { id: "editor", label: "Map editor", blurb: "Build your own maps with brushes, like Hammer, in one 3D view. Save as a project or export a .map.", beta: true, load: () => import("./editor/MapEditor") },
 ];
