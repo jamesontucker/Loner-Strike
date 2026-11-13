@@ -16,6 +16,10 @@ use super::texture::from_standard;
 use std::collections::HashMap;
 
 const MAX_COUNT: usize = 1_000_000;
+/// Groups inside groups deeper than this are refused (a crafted file can't exhaust the stack).
+const MAX_DEPTH: usize = 64;
+/// More groups or visgroups than any real map has.
+const MAX_GROUPS: usize = 10_000;
 
 /// What an import made, and what it left out (plain words for the page).
 #[derive(Debug)]
@@ -301,6 +305,9 @@ pub fn read_rmf(bytes: &[u8]) -> Res<Imported> {
     let mut notes = Vec::new();
     if ver > 9 {
         let n = r.count("visgroup")?;
+        if n > MAX_GROUPS {
+            return Err(format!("This .rmf file lists {n} visgroups. It may be damaged."));
+        }
         for _ in 0..n {
             let name = r.fixed(128)?;
             r.skip(4)?; // colour
@@ -319,7 +326,7 @@ pub fn read_rmf(bytes: &[u8]) -> Res<Imported> {
     }
     let mut groups = 0usize;
     let mut paths = 0usize;
-    rmf_object_body(&mut r, ver, &mut b, &mut groups, "CMapWorld", None, None, &mut notes)?;
+    rmf_object_body(&mut r, ver, &mut b, &mut groups, "CMapWorld", None, None, &mut notes, 0)?;
     if !r.done() {
         // the DOCINFO block (cameras) follows; nothing in it we keep
         if r.b.len() - r.at >= 8 && &r.b[r.at..r.at + 7] == b"DOCINFO" {
@@ -403,18 +410,24 @@ fn rmf_face(r: &mut R, ver: i32) -> Res<RawFace> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn rmf_object_body(r: &mut R, ver: i32, b: &mut Builder, groups: &mut usize, kind: &str, group: Option<GroupId>, entity: Option<EntityId>, notes: &mut Vec<String>) -> Res<()> {
+fn rmf_object_body(r: &mut R, ver: i32, b: &mut Builder, groups: &mut usize, kind: &str, group: Option<GroupId>, entity: Option<EntityId>, notes: &mut Vec<String>, depth: usize) -> Res<()> {
+    if depth > MAX_DEPTH {
+        return Err(format!("This .rmf file has groups inside groups more than {MAX_DEPTH} deep, which no editor writes. It may be damaged."));
+    }
     let vis = rmf_base(r, ver)?;
     let n = r.count("object")?;
     match kind {
         "CMapWorld" => {
             for _ in 0..n {
-                rmf_object(r, ver, b, groups, None, None, notes)?;
+                rmf_object(r, ver, b, groups, None, None, notes, depth + 1)?;
             }
             let (_, _, keys) = rmf_entity_data(r, ver)?;
             b.world(keys);
             if ver <= 9 {
                 let ng = r.count("visgroup")?;
+                if ng > MAX_GROUPS {
+                    return Err(format!("This .rmf file lists {ng} visgroups. It may be damaged."));
+                }
                 for _ in 0..ng {
                     let name = r.fixed(128)?;
                     r.skip(4)?;
@@ -436,9 +449,12 @@ fn rmf_object_body(r: &mut R, ver: i32, b: &mut Builder, groups: &mut usize, kin
         }
         "CMapGroup" => {
             *groups += 1;
+            if *groups > MAX_GROUPS {
+                return Err(format!("This .rmf file has more than {MAX_GROUPS} groups. It may be damaged."));
+            }
             let g = b.group(group, *groups);
             for _ in 0..n {
-                rmf_object(r, ver, b, groups, Some(g), None, notes)?;
+                rmf_object(r, ver, b, groups, Some(g), None, notes, depth + 1)?;
             }
         }
         "CMapSolid" => {
@@ -488,10 +504,11 @@ fn rmf_object_body(r: &mut R, ver: i32, b: &mut Builder, groups: &mut usize, kin
     Ok(())
 }
 
-fn rmf_object(r: &mut R, ver: i32, b: &mut Builder, groups: &mut usize, group: Option<GroupId>, entity: Option<EntityId>, notes: &mut Vec<String>) -> Res<()> {
+#[allow(clippy::too_many_arguments)]
+fn rmf_object(r: &mut R, ver: i32, b: &mut Builder, groups: &mut usize, group: Option<GroupId>, entity: Option<EntityId>, notes: &mut Vec<String>, depth: usize) -> Res<()> {
     let kind = r.bstr()?;
     match kind.as_str() {
-        "CMapGroup" | "CMapSolid" | "CMapEntity" => rmf_object_body(r, ver, b, groups, &kind, group, entity, notes),
+        "CMapGroup" | "CMapSolid" | "CMapEntity" => rmf_object_body(r, ver, b, groups, &kind, group, entity, notes, depth),
         other => Err(format!("This .rmf file has a {other}, which this editor can't read.")),
     }
 }
@@ -544,6 +561,46 @@ fn rmf_path(r: &mut R, b: &mut Builder) -> Res<()> {
 
 // ---- JMF ---------------------------------------------------------------------------------
 
+/// Makes the file's groups in linear time: each group's chain of parents is walked once
+/// (remembered), a parent that's missing, itself, or part of a loop puts the group at the top,
+/// and chains deeper than MAX_DEPTH are cut there.
+fn resolve_groups(b: &mut Builder, order: &[i32], parent_of: &HashMap<i32, i32>) -> HashMap<i32, GroupId> {
+    let mut made: HashMap<i32, GroupId> = HashMap::with_capacity(order.len());
+    let mut n = 0usize;
+    for &start in order {
+        if made.contains_key(&start) {
+            continue;
+        }
+        // walk up until a made group, the top, a loop or the depth limit
+        let mut chain = vec![start];
+        let mut seen: std::collections::HashSet<i32> = [start].into_iter().collect();
+        let mut cur = start;
+        let top = loop {
+            let p = parent_of.get(&cur).copied().unwrap_or(0);
+            if p == 0 || p == cur || !parent_of.contains_key(&p) {
+                break None;
+            }
+            if let Some(g) = made.get(&p) {
+                break Some(*g);
+            }
+            if !seen.insert(p) || chain.len() >= MAX_DEPTH {
+                break None; // a loop or too deep: the rest goes at the top
+            }
+            chain.push(p);
+            cur = p;
+        };
+        // make from the top down
+        let mut parent = top;
+        for id in chain.into_iter().rev() {
+            n += 1;
+            let g = b.group(parent, n);
+            made.insert(id, g);
+            parent = Some(g);
+        }
+    }
+    made
+}
+
 /// Reads a J.A.C.K. .jmf (versions 121 and 122).
 pub fn read_jmf(bytes: &[u8]) -> Res<Imported> {
     let mut r = R::new(bytes, ".jmf");
@@ -573,40 +630,24 @@ pub fn read_jmf(bytes: &[u8]) -> Res<Imported> {
     let mut b = Builder::new();
     // groups: id, parent, flags, count, colour
     let ng = r.count("group")?;
-    let mut raw = Vec::new();
+    if ng > MAX_GROUPS {
+        return Err(format!("This .jmf file has {ng} groups (more than {MAX_GROUPS}). It may be damaged."));
+    }
+    let mut order = Vec::with_capacity(ng);
+    let mut parent_of: HashMap<i32, i32> = HashMap::with_capacity(ng);
     for _ in 0..ng {
         let id = r.i32()?;
         let parent = r.i32()?;
         r.skip(12)?;
-        raw.push((id, parent));
-    }
-    let mut gid: HashMap<i32, GroupId> = HashMap::new();
-    let mut left = raw.clone();
-    let mut n = 0usize;
-    while !left.is_empty() {
-        let before = left.len();
-        left.retain(|(id, parent)| {
-            let top = *parent == 0 || parent == id;
-            if top || gid.contains_key(parent) {
-                n += 1;
-                let p = if top { None } else { gid.get(parent).copied() };
-                let g = b.group(p, n);
-                gid.insert(*id, g);
-                false
-            } else {
-                true
-            }
-        });
-        if left.len() == before {
-            // a loop or a missing parent: put the rest at the top
-            for (id, _) in left.drain(..) {
-                n += 1;
-                let g = b.group(None, n);
-                gid.insert(id, g);
-            }
+        if parent_of.insert(id, parent).is_none() {
+            order.push(id);
         }
     }
+    let gid = resolve_groups(&mut b, &order, &parent_of);
     let nv = r.count("visgroup")?;
+    if nv > MAX_GROUPS {
+        return Err(format!("This .jmf file lists {nv} visgroups. It may be damaged."));
+    }
     for _ in 0..nv {
         let name = r.istr()?;
         let id = r.i32()?;
@@ -1029,6 +1070,87 @@ pub(crate) mod tests {
         }
         assert!(read_jmf(b"JHMF\x7b\x00\x00\x00").is_err());
         assert!(read_jmf(b"NOPE").unwrap_err().contains("JHMF"));
+    }
+
+    #[test]
+    fn hostile_deep_nesting_is_refused_not_a_crash() {
+        // 100 000 groups each inside the last: would overflow the stack if read recursively
+        let mut w = W::default();
+        w.f(2.2).b(b"RMF").i(0);
+        w.bs("CMapWorld").i(0).b(&[0, 0, 0]).i(1);
+        for _ in 0..100_000 {
+            w.bs("CMapGroup").i(0).b(&[0, 0, 0]).i(1);
+        }
+        let e = read_rmf(&w.0).unwrap_err();
+        assert!(e.contains("deep"), "{e}");
+        // 64 deep is fine (and ends cleanly when the file ends)
+        let mut w = W::default();
+        w.f(2.2).b(b"RMF").i(0);
+        w.bs("CMapWorld").i(0).b(&[0, 0, 0]).i(1);
+        for k in 0..60 {
+            w.bs("CMapGroup").i(0).b(&[0, 0, 0]).i(if k == 59 { 0 } else { 1 });
+        }
+        rmf_kv(&mut w, "worldspawn", 0, &[]);
+        w.i(0);
+        let im = read_rmf(&w.0).unwrap();
+        assert_eq!(im.doc.groups.len(), 60);
+    }
+
+    fn jmf_with_groups(groups: &[(i32, i32)]) -> Vec<u8> {
+        let mut w = W::default();
+        w.b(b"JHMF").i(121).i(0);
+        w.i(groups.len() as i32);
+        for (id, parent) in groups {
+            w.i(*id).i(*parent).i(0).i(0).b(&[0; 4]);
+        }
+        w.i(0); // visgroups
+        w.v([0.0; 3]).v([0.0; 3]).i(0).i(0); // cordon, cameras, paths
+        jmf_entity(&mut w, "worldspawn", [0.0; 3], 0, &[], &[], &[([0.0, 0.0, 0.0], [32.0, 32.0, 32.0], groups.last().map_or(0, |g| g.0))]);
+        w.0
+    }
+
+    #[test]
+    fn hostile_group_tables() {
+        // too many groups: refused before any work
+        let many: Vec<(i32, i32)> = (1..=10_001).map(|i| (i, 0)).collect();
+        assert!(read_jmf(&jmf_with_groups(&many)).unwrap_err().contains("groups"));
+        // a long chain listed child-first (the worst order for the old loop): linear now
+        let chain: Vec<(i32, i32)> = (1..=10_000).rev().map(|i| (i, i - 1)).collect();
+        let t = std::time::Instant::now();
+        let im = read_jmf(&jmf_with_groups(&chain)).unwrap();
+        assert!(t.elapsed().as_secs_f64() < 2.0, "took {:?}", t.elapsed());
+        assert_eq!(im.doc.groups.len(), 10_000);
+        // no group is more than MAX_DEPTH inside another
+        let d = &im.doc;
+        for g in d.groups.values() {
+            let mut cur = g.parent;
+            let mut depth = 0;
+            while let Some(p) = cur {
+                depth += 1;
+                assert!(depth <= MAX_DEPTH + 1);
+                cur = d.groups[&p].parent;
+            }
+        }
+        // loops and missing parents land at the top, nothing hangs
+        let looped = [(1, 2), (2, 3), (3, 1), (4, 4), (5, 99)];
+        let im = read_jmf(&jmf_with_groups(&looped)).unwrap();
+        assert_eq!(im.doc.groups.len(), 5);
+        assert!(im.doc.groups.values().any(|g| g.parent.is_none()));
+    }
+
+    #[test]
+    fn hostile_counts_dont_allocate() {
+        // a solid claiming a billion faces, a string claiming a megabyte, huge corner counts
+        for patch in [i32::MAX, 1 << 30, -1] {
+            let mut full = sample_jmf(121);
+            // the first group count sits right after the export path (bytes 12..)
+            let at = 12 + 4 + "C:\\maps\\x.map".len() + 1;
+            full[at..at + 4].copy_from_slice(&patch.to_le_bytes());
+            assert!(read_jmf(&full).is_err());
+        }
+        let mut w = W::default();
+        w.b(b"JHMF").i(121).i(1).i(1 << 30);
+        assert!(read_jmf(&w.0).is_err());
     }
 
     /// A real Hammer file when one is on this computer (opt-in):
