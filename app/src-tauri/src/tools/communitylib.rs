@@ -1003,6 +1003,87 @@ fn start_tick(st: &Shared) {
     });
 }
 
+
+// ---- origins: made by me / from the community / remixed ----------------------------------------------
+
+/// Where things in the player's library came from, for the origin chips and filters on My library
+/// pages: maps by lower-case name, modes by id, prefabs by id (`mine:<id>`). Each value is
+/// `{kind: "mine" | "community" | "remix" | "file", author?, url?, name?, of?}`.
+/// - community: the community library (this file);
+/// - remix: a Studio graph with a remix credit (`remixes.json`), with what it's a remix of;
+/// - mine: your other Studio graphs, maps you published (packages) or compiled in the map editor
+///   (`<app dir>/tools/compile/made.json` when the compiler keeps one), prefabs saved in the editor;
+/// - file: prefabs added from a file (P5's origin).
+pub fn origins(lib: &[Installed], credits: &BTreeMap<String, Credit>, graphs: &Path, packages: &Path, made: &Path, prefabs: &[(String, crate::editor::prefab::PrefabMeta)]) -> Value {
+    let mut maps = serde_json::Map::new();
+    let mut modes = serde_json::Map::new();
+    let mut pre = serde_json::Map::new();
+    let mine = json!({"kind": "mine"});
+    // maps you made: published packages, and the compiler's own list
+    for e in std::fs::read_dir(packages).into_iter().flatten().flatten() {
+        let n = e.file_name().to_string_lossy().to_lowercase();
+        if let Some(m) = n.strip_suffix("-loner-strike.zip").filter(|m| !m.ends_with("-mode")) {
+            maps.insert(m.to_string(), mine.clone());
+        }
+    }
+    if let Some(list) = std::fs::read(made).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) {
+        for m in list["maps"].as_array().into_iter().flatten().filter_map(|m| m.as_str()).take(5000) {
+            if crate::maps::safe_arg(m) {
+                maps.insert(m.to_lowercase(), mine.clone());
+            }
+        }
+    }
+    // your Studio modes, and the ones that are remixes
+    for e in std::fs::read_dir(graphs).into_iter().flatten().flatten() {
+        let n = e.file_name().to_string_lossy().to_string();
+        let Some(id) = n.strip_suffix(".graph.json") else { continue };
+        let v = match credits.get(id) {
+            Some(c) => json!({"kind": "remix", "of": c.name, "author": c.author, "url": if c.gb > 0 { format!("https://gamebanana.com/{}/{}", if c.model == Model::Spray { "sprays" } else { "mods" }, c.gb) } else { String::new() }}),
+            None => mine.clone(),
+        };
+        modes.insert(id.to_string(), v);
+    }
+    for (id, m) in prefabs {
+        let kind = m.origin.as_ref().map(|o| o.kind.as_str()).unwrap_or("local");
+        let v = match kind {
+            "community" => json!({"kind": "community", "author": m.author}),
+            "file" => json!({"kind": "file"}),
+            _ => mine.clone(),
+        };
+        pre.insert(format!("mine:{id}"), v);
+    }
+    // the community library wins: it knows the creator and the page
+    for it in lib {
+        let v = json!({"kind": "community", "author": it.author, "url": it.url(), "name": it.name});
+        for m in &it.maps {
+            maps.insert(m.to_lowercase(), v.clone());
+        }
+        if !it.mode.is_empty() {
+            modes.insert(it.mode.clone(), v.clone());
+        }
+        for p in &it.prefabs {
+            pre.insert(p.clone(), v.clone());
+        }
+    }
+    json!({"maps": maps, "modes": modes, "prefabs": pre})
+}
+
+async fn api_origins() -> Response {
+    run(|| {
+        let dir = lib_dir();
+        let prefab_dir = super::editor::prefabs::lib_dir(&crate::sys::app_dir().join("editor"));
+        Ok(origins(
+            &load_all(&dir),
+            &credits(&dir),
+            &super::studio::graphs_dir(),
+            &crate::sys::app_dir().join("tools").join("community").join("packages"),
+            &crate::sys::app_dir().join("tools").join("compile").join("made.json"),
+            &super::editor::prefabs::mine(&prefab_dir),
+        ))
+    })
+    .await
+}
+
 // ---- routes ------------------------------------------------------------------------------------
 
 #[derive(Deserialize)]
@@ -1132,6 +1213,7 @@ async fn api_remix(State(st): State<Shared>, h: HeaderMap, Json(req): Json<KeyRe
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/tools/community/library", get(api_library))
+        .route("/api/tools/community/origins", get(api_origins))
         .route("/api/tools/community/uninstall", post(api_uninstall))
         .route("/api/tools/community/update", post(api_update))
         .route("/api/tools/community/update-all", post(api_update_all))
@@ -1389,6 +1471,37 @@ mod tests {
         p.stale.push("mod-101".into());
         save_picks(&d, "srv", &p).unwrap();
         assert_eq!(load_picks(&d, "srv").stale, ["mod-101"]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+
+    #[test]
+    fn origins_of_things_in_the_library() {
+        let d = tmp("orig");
+        let graphs = d.join("graphs");
+        let packages = d.join("packages");
+        std::fs::create_dir_all(&graphs).unwrap();
+        std::fs::create_dir_all(&packages).unwrap();
+        std::fs::write(graphs.join("mine.graph.json"), "{}").unwrap();
+        std::fs::write(graphs.join("lava_remix.graph.json"), "{}").unwrap();
+        std::fs::write(packages.join("de_mine-loner-strike.zip"), b"").unwrap();
+        std::fs::write(packages.join("lava_remix-mode-loner-strike.zip"), b"").unwrap();
+        std::fs::write(d.join("made.json"), r#"{"maps": ["de_Built", "bad;map"]}"#).unwrap();
+        let mut credits = BTreeMap::new();
+        credits.insert("lava_remix".to_string(), Credit { model: Model::Mod, gb: 102, name: "Floor is lava".into(), author: "jam".into(), ..Default::default() });
+        let mut it = map_item(101, 5);
+        it.maps = vec!["De_Lonely".into()];
+        let pf = |kind: &str| crate::editor::prefab::PrefabMeta { origin: Some(crate::editor::prefab::Origin { kind: kind.into(), ..Default::default() }), author: "x".into(), ..Default::default() };
+        let prefabs = vec![("crate".to_string(), pf("local")), ("door".to_string(), pf("file")), ("fence".to_string(), pf("community"))];
+        let o = origins(&[it], &credits, &graphs, &packages, &d.join("made.json"), &prefabs);
+        assert_eq!(o["maps"]["de_mine"]["kind"], "mine", "a map you published");
+        assert!(o["maps"]["lava_remix-mode"].is_null(), "a mode package isn't a map");
+        assert_eq!(o["maps"]["de_built"]["kind"], "mine", "a map you compiled");
+        assert!(o["maps"]["bad;map"].is_null());
+        assert_eq!((o["maps"]["de_lonely"]["kind"].as_str(), o["maps"]["de_lonely"]["author"].as_str()), (Some("community"), Some("jam")));
+        assert_eq!(o["modes"]["mine"]["kind"], "mine");
+        assert_eq!((o["modes"]["lava_remix"]["kind"].as_str(), o["modes"]["lava_remix"]["of"].as_str()), (Some("remix"), Some("Floor is lava")));
+        assert_eq!((o["prefabs"]["mine:crate"]["kind"].as_str(), o["prefabs"]["mine:door"]["kind"].as_str(), o["prefabs"]["mine:fence"]["kind"].as_str()), (Some("mine"), Some("file"), Some("community")));
         let _ = std::fs::remove_dir_all(&d);
     }
 

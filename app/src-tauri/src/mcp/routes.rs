@@ -224,6 +224,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/tools/community/browse"),
     ("GET", "/api/tools/community/item/:model/:id"),
     ("GET", "/api/tools/community/library"),
+    ("GET", "/api/tools/community/origins"),
     ("GET", "/api/tools/community/mine"),
     ("GET", "/api/tools/community/publish/:map"),
     ("POST", "/api/tools/community/publish/:map"),
@@ -383,6 +384,10 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/tools/studio/debug/events"),
     ("POST", "/api/tools/studio/generate"),
     ("POST", "/api/tools/studio/source"),
+    ("GET", "/api/tools/studio/snippets"),
+    ("POST", "/api/tools/studio/snippet/:id"),
+    ("POST", "/api/tools/studio/snippet/:id/delete"),
+    ("POST", "/api/tools/studio/switch"),
     ("GET", "/api/tools/studio/graph/:id"),
     ("POST", "/api/tools/studio/graph/:id"),
     ("POST", "/api/tools/studio/graph/:id/delete"),
@@ -571,6 +576,8 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
     // what the typed tools ask about (overwriting, replacing unsaved work, the game): asked
     // here too, so app_call is never the way round (test typed_tools_are_never_stronger_than_app_call)
     let overwrites = [
+        ("/api/tools/studio/snippet/:id", "save a Game Mode Studio snippet (overwrites one with that name)"),
+        ("/api/tools/studio/switch", "switch the running game to a Studio mode (changes the map for everyone on it)"),
         ("/api/tools/editor/new", "start a new map in the editor (unsaved changes are lost)"),
         ("/api/tools/editor/open", "open another map in the editor (unsaved changes are lost)"),
         ("/api/tools/editor/import-map", "import a map into the editor (unsaved changes are lost)"),

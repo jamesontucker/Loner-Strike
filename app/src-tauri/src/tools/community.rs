@@ -339,6 +339,15 @@ pub struct Item {
     /// the GameBanana member the list service registered it to (who owns its uid there), 0 unknown:
     /// a uid only links two entries of the same owner
     pub owner_id: i64,
+    /// how well bots play it (game modes): great, ok, weak or none (the same scale as the app's
+    /// own modes, games.ts BOT_RATING), "" not said
+    pub bots: String,
+}
+
+/// The bot-support scale (games.ts BotRating): anything else reads as "" (not said).
+pub fn clean_bots(s: &str) -> String {
+    let l = s.trim().to_ascii_lowercase();
+    if ["great", "ok", "weak", "none"].contains(&l.as_str()) { l } else { String::new() }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -429,6 +438,7 @@ pub fn parse_index(bytes: &[u8]) -> Result<Index, String> {
             }
         }
         it.uid = clean_uid(&it.uid);
+        it.bots = clean_bots(&it.bots);
         if let Some(m) = &mut it.mode {
             m.uid = clean_uid(&m.uid);
             if !safe_mode_id(&m.id) {
@@ -779,6 +789,7 @@ pub fn entry(hit: Option<&Hit>, it: Option<&Item>, revoked: bool, have: &HashSet
         "updated": hit.map(|h| h.updated).filter(|a| *a > 0).or(it.map(|i| i.updated)).unwrap_or(0),
         "listed": it.is_some(),
         "map": map.map(|m| m.name.clone()),
+        "bots": it.map(|i| i.bots.clone()).unwrap_or_default(),
         "modes": map.map(|m| if m.mode_refs.is_empty() { m.modes.clone() } else { m.mode_refs.iter().map(|r| if r.name.is_empty() { r.id.clone() } else { r.name.clone() }).collect() }).unwrap_or_default(),
         "have": map.is_some_and(|m| have.contains(&m.name.to_ascii_lowercase())),
         "badges": badges(it, kind),
@@ -1290,6 +1301,8 @@ pub struct PublishReq {
     pub screenshots: Vec<Shot>,
     /// a game mode: maps it's made for
     pub maps: Vec<String>,
+    /// a game mode: how well bots play it (great / ok / weak / none)
+    pub bots: String,
 }
 
 /// The finished package.
@@ -1517,6 +1530,16 @@ pub fn gamebanana_form(p: &Package) -> Value {
         if let Some(r) = &it.remix_of {
             text.push_str(&format!("\n- A remix of {} by {} (https://gamebanana.com/{}/{})", r.name, r.author, if r.model == Model::Spray { "sprays" } else { "mods" }, r.gb));
         }
+        let bots = match it.bots.as_str() {
+            "great" => "Bots play this well",
+            "ok" => "Bots are so-so",
+            "weak" => "Best with a friend",
+            "none" => "Solo, no bots",
+            _ => "",
+        };
+        if !bots.is_empty() {
+            text.push_str(&format!("\n- Bots: {bots}"));
+        }
         if let Some(m) = it.mode.as_ref().filter(|m| !m.maps.is_empty()) {
             text.push_str(&format!("\n- Made for: {}", m.maps.join(", ")));
         }
@@ -1573,7 +1596,17 @@ pub fn mode_readiness(graphs: &Path, lib: &Path, id: &str) -> Result<Value, Stri
     let problems = super::studio::graph::validate(&g);
     let blockers: Vec<String> = problems.iter().filter(|p| p.level == "error").map(|p| p.message.clone()).take(5).collect();
     let credit = super::communitylib::credits(lib).get(id).cloned();
-    Ok(json!({"id": g.mode.id, "name": g.mode.name, "description": g.mode.description, "nodes": g.nodes.len(), "blockers": blockers, "remixOf": credit}))
+    Ok(json!({"id": g.mode.id, "name": g.mode.name, "description": g.mode.description, "nodes": g.nodes.len(), "blockers": blockers, "remixOf": credit,
+              "botsSuggested": graph_bots(graphs, id)}))
+}
+
+/// The bot rating the Studio suggests for a graph (`mode.bots` in the graph file, when it says one).
+pub fn graph_bots(graphs: &Path, id: &str) -> String {
+    let p = graphs.join(format!("{id}.graph.json"));
+    if std::fs::metadata(&p).map(|m| m.len()).unwrap_or(u64::MAX) > 2 << 20 {
+        return String::new();
+    }
+    std::fs::read(&p).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).map(|v| clean_bots(v["mode"]["bots"].as_str().unwrap_or(""))).unwrap_or_default()
 }
 
 /// The Studio's map kit for a mode (`<graphs>/<id>.kit.json`), when it's a kit for that mode.
@@ -1636,6 +1669,7 @@ pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq,
         summary: one_line(&req.summary, 400),
         mode: Some(ModeMeta { id: g.mode.id.clone(), uid, plugins: vec![], review: Review::None, maps }),
         remix_of: super::communitylib::credits(lib).get(id).cloned(),
+        bots: clean_bots(&req.bots),
         added: now(),
         updated: now(),
         ..Default::default()
@@ -2537,7 +2571,7 @@ mod tests {
         assert_eq!(ready["remixOf"]["author"], "jam");
         assert!(mode_readiness(&graphs, &lib, "../x").is_err());
         let out = root.join("p");
-        let req = PublishReq { title: "Lava, mine".into(), author: "me".into(), maps: vec!["de_dust2".into(), "bad;map".into()], ..Default::default() };
+        let req = PublishReq { title: "Lava, mine".into(), author: "me".into(), maps: vec!["de_dust2".into(), "bad;map".into()], bots: "OK".into(), ..Default::default() };
         let pkg = build_mode_package(&graphs, &lib, "lava_remix", &req, &out).unwrap();
         assert_eq!(pkg.contents[0], "modes/lava_remix/lava_remix.graph.json");
         assert_eq!(pkg.item.kind, Kind::Mode);
@@ -2549,6 +2583,8 @@ mod tests {
         let form = gamebanana_form(&pkg);
         assert_eq!(form["category"], "Resources > AMXX Plugins & Mods");
         assert!(form["text"].as_str().unwrap().contains("A remix of Floor is lava by jam"));
+        assert_eq!(pkg.item.bots, "ok", "the bot rating goes in the package");
+        assert!(form["text"].as_str().unwrap().contains("Bots: Bots are so-so"));
         // the graph unpacks and checks as the installer reads it
         let un = root.join("un");
         std::fs::create_dir_all(&un).unwrap();
@@ -2600,6 +2636,20 @@ mod tests {
         let have = HashSet::new();
         let row = entry(None, Some(&idx.items[1]), false, &have).unwrap();
         assert_eq!(row["modes"], json!(["Mode A"]), "cards show the modes' names");
+    }
+
+    #[test]
+    fn bot_ratings() {
+        assert_eq!((clean_bots(" Great "), clean_bots("superb"), clean_bots("")), ("great".into(), String::new(), String::new()));
+        let idx = parse_index(br#"{"schema": 1, "items": [{"kind": "mode", "gb": 1, "name": "A", "bots": "WEAK", "mode": {"id": "a"}}, {"kind": "mode", "gb": 2, "name": "B", "bots": "amazing", "mode": {"id": "b"}}]}"#).unwrap();
+        assert_eq!((idx.items[0].bots.as_str(), idx.items[1].bots.as_str()), ("weak", ""), "an unknown value is 'not said', not a dropped list");
+        let row = entry(None, Some(&idx.items[0]), false, &HashSet::new()).unwrap();
+        assert_eq!(row["bots"], "weak");
+        let d = tmp("bots");
+        std::fs::write(d.join("lava.graph.json"), r#"{"mode": {"id": "lava", "bots": "ok"}}"#).unwrap();
+        assert_eq!(graph_bots(&d, "lava"), "ok");
+        assert_eq!(graph_bots(&d, "none"), "");
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]

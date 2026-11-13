@@ -248,6 +248,13 @@ class Validation(unittest.TestCase):
             with self.assertRaises(cm.Reject):
                 cm.clean_item(bad)
 
+    def test_bot_rating(self):
+        self.assertEqual(cm.clean_item(dict(mode_item(), bots="ok"))["bots"], "ok")
+        self.assertNotIn("bots", cm.clean_item(dict(map_item(), bots="ok")), "only modes carry it")
+        self.assertNotIn("bots", cm.clean_item(mode_item()))
+        with self.assertRaises(cm.Reject):
+            cm.clean_item(dict(mode_item(), bots="superb"))
+
     def test_plugin_modes_cant_be_shared(self):
         with self.assertRaises(cm.Reject) as e:
             cm.clean_item(mode_item(plugins=True))

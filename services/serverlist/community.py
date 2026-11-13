@@ -266,6 +266,12 @@ def clean_item(raw):
     uid = _uid(raw)
     if uid:
         it["uid"] = uid
+    # how well bots play it (game modes), on the app's own scale (games.ts BotRating); "" not said
+    bots = raw.get("bots", "")
+    if bots not in ("", None, "great", "ok", "weak", "none"):
+        _bad("bots")
+    if bots and kind == "mode":
+        it["bots"] = bots
     r = _obj(raw, "remixOf")
     if r is not None:
         # credit for a remix: which creation it came from (shown with its name and author)
@@ -1577,6 +1583,8 @@ def index_item(row):
         out["health"] = it["health"]
     if it.get("uid"):
         out["uid"] = it["uid"]
+    if it.get("bots"):
+        out["bots"] = it["bots"]
     # the GameBanana member the entry is registered to: the app matches updates by uid only within one owner
     out["ownerId"] = int(row["submitter_id"] or 0)
     if it.get("remixOf"):
