@@ -13,7 +13,7 @@ export type MapLook = {
   sky: { name: string; sides: Record<string, boolean> } | null;
   sun: { colour: [number, number, number]; dir: [number, number, number] } | null;
   /** entities drawn with a model: the light at their spot (0..255+) and where it comes from */
-  models: { index: number; model: string; light: [number, number, number]; dir: [number, number, number]; sky: boolean }[];
+  models: { index: number; model: string; folder: string; light: [number, number, number]; dir: [number, number, number]; sky: boolean }[];
 };
 
 const base = (map: string) => `/api/tools/map/${encodeURIComponent(map)}`;

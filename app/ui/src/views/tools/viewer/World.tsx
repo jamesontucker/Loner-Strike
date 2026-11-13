@@ -11,7 +11,8 @@ import { lightmapUrl, texUrl } from "../toolsApi";
 import type { Draw, MeshBundle } from "./bundle";
 import { parseVec, type Vec3 } from "./coords";
 import { MapMaterials, isSky, isTrigger, isWater } from "./materials";
-import { animates, loadSky, renderOf, styleStrings, styleValues } from "./gameLook";
+import { animates, effectiveSettings, GAME_DEFAULTS, loadSky, renderOf, styleStrings, styleValues } from "./gameLook";
+import { Models } from "./Models";
 import { skyUrls, useLook, useLookMode } from "./look";
 import { DevCamera } from "./DevCamera";
 
@@ -104,6 +105,7 @@ export function World({ meshes, bundle, map, entities = [] }: { meshes: ModelMes
   useEffect(() => mats.setOptions({ textures: layers.textures, lighting: layers.lighting, triggers: layers.triggers, sky: camera === "fly", look: lookMode }), [mats, layers.textures, layers.lighting, layers.triggers, camera, lookMode]);
   // the player's own picture settings and the sky box
   const look = useLook(map, mock).data ?? null;
+  const modelSettings = useMemo(() => effectiveSettings(look?.settings ?? GAME_DEFAULTS, lookMode), [look, lookMode]);
   useEffect(() => {
     if (look) mats.setSettings(look.settings);
   }, [mats, look]);
@@ -142,6 +144,7 @@ export function World({ meshes, bundle, map, entities = [] }: { meshes: ModelMes
     <>
       <GameClock mats={mats} meshes={meshes} entities={entities} on={layers.lighting} />
       {import.meta.env.DEV && <DevCamera />}
+      {layers.lighting && <Models look={look} entities={entities} settings={modelSettings} />}
       {meshes.map((m, i) => {
         const visible = m.kind === "world" || (m.kind === "trigger" ? layers.triggers : layers.moving);
         return (

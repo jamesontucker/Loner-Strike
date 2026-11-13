@@ -240,6 +240,15 @@ pub fn model_of(e: &Entity) -> Option<String> {
     }
 }
 
+/// The first game folder (in the game's order) that has the model file.
+fn model_folder(m: &MapFile, model: &str) -> Option<String> {
+    if model.split('/').any(|p| p.is_empty() || p == ".." || p == ".") || model.len() > 128 {
+        return None;
+    }
+    let f = Finder::default();
+    goldsrc::wad::search_dirs(&m.hl, m.czero).into_iter().find(|d| f.find(d, model).is_some()).and_then(|d| d.file_name().map(|n| n.to_string_lossy().into_owned()))
+}
+
 fn look(m: &MapFile) -> Result<Value, Fail> {
     let (texts, from) = config_texts(m);
     let s = read_settings(&texts);
@@ -254,8 +263,10 @@ fn look(m: &MapFile) -> Result<Value, Fail> {
             break;
         }
         let (Some(o), Some(model)) = (e.origin(), model_of(e)) else { continue };
+        // the game folder it's in, as the model routes (assets.rs) take it; skipped if not here
+        let Some(folder) = model_folder(m, &model) else { continue };
         let (light, dir, from_sky) = model_light(&bsp, o, sun);
-        lit.push(json!({"index": i, "model": model, "light": light, "dir": dir, "sky": from_sky}));
+        lit.push(json!({"index": i, "model": model, "folder": folder, "light": light, "dir": dir, "sky": from_sky}));
     }
     Ok(json!({
         "settings": {
