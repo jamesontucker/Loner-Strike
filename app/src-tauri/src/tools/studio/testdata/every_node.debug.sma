@@ -184,7 +184,8 @@ stock lsd_pl(id, out[], len)
 			replace(wpn, charsmax(wpn), "weapon_", "")
 		}
 	}
-	new team = _:cs_get_user_team(id)
+	// (a player still joining has no team data yet: asking would be an error)
+	new team = pev_valid(id) == 2 ? (_:cs_get_user_team(id)) : 0
 	if (team < 0 || team > 3)
 		team = 0
 	formatex(out, len, "{^"id^":%d,^"name^":^"%s^",^"team^":^"%s^",^"hp^":%d,^"alive^":%s,^"weapon^":^"%s^",^"bot^":%s}",
@@ -506,7 +507,7 @@ stock Float:lsg_health(id)
 	return ls_alive(id) ? float(get_user_health(id)) : 0.0
 
 stock lsg_team(id)
-	return id >= 1 && id <= MaxClients && is_user_connected(id) ? (_:cs_get_user_team(id)) : 0
+	return id >= 1 && id <= MaxClients && is_user_connected(id) && pev_valid(id) == 2 ? (_:cs_get_user_team(id)) : 0
 
 stock lsg_is_bot(id)
 	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0
@@ -580,7 +581,7 @@ public plugin_init()
 	register_event("SendAudio", "lsg_on_round_end_ct", "a", "2&%!MRAD_ctwin")
 	register_event("SendAudio", "lsg_on_round_end_draw", "a", "2&%!MRAD_rounddraw")
 	register_event("DeathMsg", "lsg_on_player_killed", "a")
-	RegisterHam(Ham_Spawn, "player", "lsg_on_player_spawned", 1)
+	RegisterHamPlayer(Ham_Spawn, "lsg_on_player_spawned", 1)
 	register_logevent("lsg_on_bomb_planted", 3, "2=Planted_The_Bomb")
 	register_logevent("lsg_on_bomb_defused", 3, "2=Defused_The_Bomb")
 	register_logevent("lsg_on_bomb_exploded", 6, "3=Target_Bombed")
@@ -1056,7 +1057,7 @@ lsg_n14(const ctx[])
 	lsd_in_team("Team", 2)
 	if (lsd_enter(14, ctx))
 		return
-	new ok = ((ctx[1] >= 1 && ctx[1] <= MaxClients && is_user_connected(ctx[1]) && _:cs_get_user_team(ctx[1]) == 2) ? 1 : 0)
+	new ok = ((lsg_team(ctx[1]) == 2) ? 1 : 0)
 	lsd_exit(14, g_lsdBool[ok])
 	if (ok)
 		lsg_n15(ctx)

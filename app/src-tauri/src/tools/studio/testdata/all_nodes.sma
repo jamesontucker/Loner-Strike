@@ -48,7 +48,7 @@ stock Float:lsg_health(id)
 	return ls_alive(id) ? float(get_user_health(id)) : 0.0
 
 stock lsg_team(id)
-	return id >= 1 && id <= MaxClients && is_user_connected(id) ? (_:cs_get_user_team(id)) : 0
+	return id >= 1 && id <= MaxClients && is_user_connected(id) && pev_valid(id) == 2 ? (_:cs_get_user_team(id)) : 0
 
 stock lsg_is_bot(id)
 	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0
@@ -163,7 +163,7 @@ lsg_n2(const ctx[])
 // Is Team (c)
 lsg_n3(const ctx[])
 {
-	new ok = ((ctx[0] >= 1 && ctx[0] <= MaxClients && is_user_connected(ctx[0]) && _:cs_get_user_team(ctx[0]) == 2) ? 1 : 0)
+	new ok = ((lsg_team(ctx[0]) == 2) ? 1 : 0)
 	if (ok)
 		lsg_n4(ctx)
 	else

@@ -178,7 +178,8 @@ stock lsd_pl(id, out[], len)
 			replace(wpn, charsmax(wpn), "weapon_", "")
 		}
 	}
-	new team = _:cs_get_user_team(id)
+	// (a player still joining has no team data yet: asking would be an error)
+	new team = pev_valid(id) == 2 ? (_:cs_get_user_team(id)) : 0
 	if (team < 0 || team > 3)
 		team = 0
 	formatex(out, len, "{^"id^":%d,^"name^":^"%s^",^"team^":^"%s^",^"hp^":%d,^"alive^":%s,^"weapon^":^"%s^",^"bot^":%s}",
@@ -494,7 +495,7 @@ stock Float:lsg_health(id)
 	return ls_alive(id) ? float(get_user_health(id)) : 0.0
 
 stock lsg_team(id)
-	return id >= 1 && id <= MaxClients && is_user_connected(id) ? (_:cs_get_user_team(id)) : 0
+	return id >= 1 && id <= MaxClients && is_user_connected(id) && pev_valid(id) == 2 ? (_:cs_get_user_team(id)) : 0
 
 stock lsg_is_bot(id)
 	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0
@@ -626,7 +627,7 @@ lsg_n3(const ctx[])
 	lsd_in_team("Team", 2)
 	if (lsd_enter(3, ctx))
 		return
-	new ok = ((ctx[1] >= 1 && ctx[1] <= MaxClients && is_user_connected(ctx[1]) && _:cs_get_user_team(ctx[1]) == 2) ? 1 : 0)
+	new ok = ((lsg_team(ctx[1]) == 2) ? 1 : 0)
 	lsd_exit(3, g_lsdBool[ok])
 	if (ok)
 		lsg_n4(ctx)
@@ -655,7 +656,7 @@ lsg_n5(const ctx[])
 	lsd_in_team("Team", 1)
 	if (lsd_enter(5, ctx))
 		return
-	new ok = ((ctx[1] >= 1 && ctx[1] <= MaxClients && is_user_connected(ctx[1]) && _:cs_get_user_team(ctx[1]) == 1) ? 1 : 0)
+	new ok = ((lsg_team(ctx[1]) == 1) ? 1 : 0)
 	lsd_exit(5, g_lsdBool[ok])
 	if (ok)
 		lsg_n6(ctx)

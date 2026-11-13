@@ -193,7 +193,7 @@ const EVENTS: &[EventKind] = &[
     EventKind {
         kind: "event.player_spawned",
         sig: "public lsg_on_player_spawned(id)",
-        register: &["RegisterHam(Ham_Spawn, \"player\", \"lsg_on_player_spawned\", 1)"],
+        register: &["RegisterHamPlayer(Ham_Spawn, \"lsg_on_player_spawned\", 1)"],
         prelude: "",
         guard: "\tif (!is_user_alive(id))\n\t\treturn HAM_IGNORED",
         values: &[("player", "id")],
@@ -712,7 +712,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         "cond.is_team" | "flow.branch" => {
             let cond = if def.kind == "cond.is_team" {
                 let p = inp("player", "player");
-                format!("{p} >= 1 && {p} <= MaxClients && is_user_connected({p}) && _:cs_get_user_team({p}) == {}", inp("team", "team"))
+                format!("lsg_team({p}) == {}", inp("team", "team"))
             } else {
                 bool01(&inp("cond", "bool"))
             };
@@ -1024,7 +1024,7 @@ stock Float:lsg_health(id)
 	return ls_alive(id) ? float(get_user_health(id)) : 0.0
 
 stock lsg_team(id)
-	return id >= 1 && id <= MaxClients && is_user_connected(id) ? (_:cs_get_user_team(id)) : 0
+	return id >= 1 && id <= MaxClients && is_user_connected(id) && pev_valid(id) == 2 ? (_:cs_get_user_team(id)) : 0
 
 stock lsg_is_bot(id)
 	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0

@@ -119,7 +119,10 @@ fn save_graph(dir: &Path, id: &str, g: &Graph) -> Result<(), String> {
         return Err("That graph is too big to save.".into());
     }
     std::fs::create_dir_all(dir).map_err(|e| format!("Couldn't save the graph ({e})."))?;
-    crate::sys::write_atomic(&dir.join(format!("{id}.graph.json")), text.as_bytes()).map_err(|e| format!("Couldn't save the graph ({e})."))
+    let path = dir.join(format!("{id}.graph.json"));
+    // (graphs live in the app's own folder; the safety net keeps a copy where it looks after files)
+    crate::safety::before("Game Mode Studio", "save a graph", &path);
+    crate::sys::write_atomic(&path, text.as_bytes()).map_err(|e| format!("Couldn't save the graph ({e})."))
 }
 
 // ---- compiling -----------------------------------------------------------------------------
@@ -241,7 +244,10 @@ pub fn register_mode(cfg: &Path, g: &Graph, plugin: &str) -> Result<(), String> 
         None => lines.push(line),
     }
     let text = lines.join(nl) + nl;
-    let write = |p: PathBuf, t: &str| crate::sys::write_atomic(&p, t.as_bytes()).map_err(|e| format!("Couldn't install the mode ({e})."));
+    let write = |p: PathBuf, t: &str| {
+        crate::safety::before("Game Mode Studio", "install a mode", &p);
+        crate::sys::write_atomic(&p, t.as_bytes()).map_err(|e| format!("Couldn't install the mode ({e})."))
+    };
     write(gm.join(format!("{id}.plugins.ini")), &format!("; Made with the Game Mode Studio from {id}.graph.json: compile the graph again instead of editing this.{nl}{plugin}.amxx{nl}"))?;
     if !gm.join(format!("{id}.cfg")).is_file() {
         write(gm.join(format!("{id}.cfg")), &format!("// {} (Game Mode Studio). Runs after base.cfg; add this mode's own settings here.{nl}", g.mode.name))?;
@@ -266,9 +272,13 @@ fn uninstall(game_dir: &Path, id: &str) -> Result<(), String> {
     let ini = crate::sys::read_latin1(&gm.join("modes.ini")).map_err(|e| format!("Couldn't remove the mode ({e})."))?;
     let nl = if ini.contains("\r\n") { "\r\n" } else { "\n" };
     let kept: Vec<&str> = ini.lines().map(|l| l.trim_end_matches('\r')).filter(|l| l.split_whitespace().next() != Some(id)).collect();
+    crate::safety::before("Game Mode Studio", "remove a mode", &gm.join("modes.ini"));
     crate::sys::write_atomic(&gm.join("modes.ini"), (kept.join(nl) + nl).as_bytes()).map_err(|e| format!("Couldn't remove the mode ({e})."))?;
     let plugin = gen::plugin_name(id);
     for p in [gm.join(format!("{id}.plugins.ini")), gm.join(format!("{id}.cfg")), am.join("plugins").join(format!("{plugin}.amxx"))] {
+        if p.is_file() {
+            crate::safety::before("Game Mode Studio", "remove a mode", &p);
+        }
         let _ = std::fs::remove_file(p);
     }
     Ok(())
@@ -305,6 +315,7 @@ fn compile(st: &Shared, g: Graph, debug: bool) -> Result<Value, String> {
         return Ok(json!({"ok": false, "problems": problems, "output": output}));
     }
     let dest = am.join("plugins").join(format!("{plugin}.amxx"));
+    crate::safety::before("Game Mode Studio", "install a mode", &dest);
     std::fs::copy(&built, &dest).map_err(|e| format!("Couldn't install the plugin ({e})."))?;
     register_mode(&am.join("configs"), &g, &plugin)?;
     Ok(json!({"ok": true, "problems": problems, "output": output, "plugin": plugin, "debug": debug}))
@@ -370,6 +381,7 @@ async fn api_delete(UrlPath(id): UrlPath<String>, h: HeaderMap) -> Response {
         if !graph::valid_mode_id(&id) {
             return Err(BAD_ID.into());
         }
+        crate::safety::before("Game Mode Studio", "delete a graph", &graph_path(&id));
         match std::fs::remove_file(graph_path(&id)) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("Couldn't delete the graph ({e}).")),
             _ => Ok(json!({"ok": true})),

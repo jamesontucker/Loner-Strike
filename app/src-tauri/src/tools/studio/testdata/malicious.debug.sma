@@ -181,7 +181,8 @@ stock lsd_pl(id, out[], len)
 			replace(wpn, charsmax(wpn), "weapon_", "")
 		}
 	}
-	new team = _:cs_get_user_team(id)
+	// (a player still joining has no team data yet: asking would be an error)
+	new team = pev_valid(id) == 2 ? (_:cs_get_user_team(id)) : 0
 	if (team < 0 || team > 3)
 		team = 0
 	formatex(out, len, "{^"id^":%d,^"name^":^"%s^",^"team^":^"%s^",^"hp^":%d,^"alive^":%s,^"weapon^":^"%s^",^"bot^":%s}",
@@ -498,7 +499,7 @@ stock Float:lsg_health(id)
 	return ls_alive(id) ? float(get_user_health(id)) : 0.0
 
 stock lsg_team(id)
-	return id >= 1 && id <= MaxClients && is_user_connected(id) ? (_:cs_get_user_team(id)) : 0
+	return id >= 1 && id <= MaxClients && is_user_connected(id) && pev_valid(id) == 2 ? (_:cs_get_user_team(id)) : 0
 
 stock lsg_is_bot(id)
 	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0

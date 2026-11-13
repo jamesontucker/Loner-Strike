@@ -9,6 +9,8 @@ import type { ToolProps } from "../registry";
 import { Sheet, useAskText, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading } from "../common";
 import { busy, errorText } from "../common/api";
+import { useToolCrumbs } from "../common/shell";
+import { useDirty } from "../../../store";
 import { useStudio, activeBreakpoints } from "./store";
 import { Canvas } from "./Canvas";
 import { Inspector } from "./Inspector";
@@ -67,6 +69,8 @@ function Studio({ maps }: ToolProps) {
   const [prefs, setPrefs] = useState(loadPrefs);
   const focusRef = useRef<(id: string) => void>(() => {});
   const dirty = !!graph && graph !== saved;
+  useToolCrumbs("studio", graph ? [{ label: graph.mode.name || graph.mode.id }] : null);
+  useDirty("studio", dirty);
 
   const refreshList = useCallback(async () => {
     try {
