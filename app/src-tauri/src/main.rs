@@ -271,6 +271,7 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .item(&MenuItemBuilder::with_id("section:more", "Get more").build(app)?)
         .separator()
         .item(&MenuItemBuilder::with_id("section:servers", "Servers").build(app)?)
+        .item(&MenuItemBuilder::with_id("section:tools", "Tools").build(app)?)
         .build()?;
     let window = SubmenuBuilder::new(app, "Window").minimize().maximize().separator().fullscreen().separator().close_window().build()?;
     let help = SubmenuBuilder::new(app, "Help")

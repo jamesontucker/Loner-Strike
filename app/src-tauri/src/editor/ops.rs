@@ -29,10 +29,13 @@ fn face_with_align(plane: &Plane, poly: Option<&[Vec3]>, texture: &str, align: T
     Face { points, texture: texture.to_string(), align }
 }
 
-/// Snap coordinates that are a rounding error away from a whole unit (plane intersections
-/// give 31.999999 for 32), so files stay clean.
+/// Snap coordinates that are a rounding error away from a 1/1024 step (plane intersections
+/// give 31.999999 for 32, moves 192.00000000000006 for 192), so files stay clean.
 pub fn tidy(p: Vec3) -> Vec3 {
-    let t = |x: f64| if (x - x.round()).abs() < 1e-6 { x.round() + 0.0 } else { x };
+    let t = |x: f64| {
+        let r = (x * 1024.0).round() / 1024.0;
+        if (x - r).abs() < 1e-6 { r + 0.0 } else { x }
+    };
     v3(t(p.x), t(p.y), t(p.z))
 }
 
@@ -156,7 +159,7 @@ pub fn move_face(b: &Brush, face: usize, distance: f64, lock: bool) -> OpResult<
     let mut out = b.clone();
     let mf = &mut out.faces[face];
     for p in &mut mf.points {
-        *p += d;
+        *p = tidy(*p + d);
     }
     if lock {
         mf.align = locked(&mf.align, &Affine::translate(d));
@@ -456,6 +459,10 @@ mod tests {
         assert!(move_face(&b, top, -100.0, false).is_err());
         let to = move_face_to(&b, top, v3(5.0, 5.0, 80.0), false).unwrap();
         assert!((brush_bounds(&to).max.z - 80.0).abs() < 1e-9);
+        // float noise from the move is snapped away (0.1 * 3 is 0.30000000000000004)
+        let noisy = move_face(&b, top, 0.1 + 0.1 + 0.1 + 127.7, false).unwrap();
+        assert!(noisy.faces[top].points.iter().all(|p| p.z == 192.0));
+        assert_eq!(tidy(v3(0.5 + 1e-9, 31.999_999_9, 1.0 / 3.0)), v3(0.5, 32.0, 1.0 / 3.0));
         // A wedge: pushing the slope in far enough hides the top face, which is dropped.
         let (wedge, _) = clip(&b, &Plane::from_point_normal(v3(32.0, 0.0, 64.0), v3(1.0, 0.0, 1.0).normalized()), "X");
         let wedge = wedge.unwrap();
