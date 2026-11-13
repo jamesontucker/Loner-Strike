@@ -1051,7 +1051,10 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
                 }
                 return super::communitylib::install_mode(st, &src, note.clone());
             }
-            let v = super::editor::prefabs::install_download(&src, &author, Some(&game.dir))?;
+            // P5: the creation's page and uploader, so only a later version of this one can update
+            // the prefabs (after the player says yes); a uid alone never replaces anything
+            let origin = crate::editor::prefab::Origin::community(&format!("{}:{}", format!("{:?}", note.model).to_lowercase(), note.gb), note.owner_id);
+            let v = super::editor::prefabs::install_download(&src, &author, Some(&game.dir), &origin)?;
             note.prefabs = v["ids"].as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)).collect();
             note.installed = now();
             super::communitylib::save(&super::communitylib::lib_dir(), &note)?;

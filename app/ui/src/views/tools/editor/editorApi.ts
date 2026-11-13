@@ -162,13 +162,16 @@ export const saveSettings = (body: { visSets?: VisSet[]; cordon?: Cordon }) => p
 export const pickFgd = () => post<DocState & { editor?: EditorSettings; cancelled?: boolean; classes?: number }>(`${E}/fgd/pick`);
 export const clearFgd = () => post<DocState & { editor: EditorSettings }>(`${E}/fgd/clear`);
 export const soundUrl = (path: string) => `${E}/sound?path=${encodeURIComponent(path)}`;
-export const getPrefabs = () => getJson<{ prefabs: Prefab[]; folder: string }>(`${E}/prefabs`);
+/** P5: an update of one of your prefabs from the same source, waiting for your yes */
+export type PrefabUpdate = { uid: string; id: string; name: string; changes: string[] };
+export const getPrefabs = () => getJson<{ prefabs: Prefab[]; folder: string; pending?: PrefabUpdate[] }>(`${E}/prefabs`);
+export const settlePrefabUpdate = (uid: string, apply: boolean) => post<{ ok?: boolean; updated?: string; name?: string }>(`${E}/prefabs/update`, { uid, apply });
 export const savePrefab = (b: { name: string; tags: string[]; author: string; description: string; brushes: number[]; entities: number[]; thumb?: string | null; /** P5: the id of your prefab this replaces (keeps its uid) */ replace?: string }) =>
   post<{ ok?: boolean; id?: string; name?: string }>(`${E}/prefabs/save`, b);
 export const editPrefab = (b: { id: string; name?: string; tags?: string[]; description?: string }) => post<{ ok?: boolean }>(`${E}/prefabs/edit`, b);
 export const deletePrefab = (id: string) => post<{ ok?: boolean }>(`${E}/prefabs/delete`, { id });
 export const exportPrefab = (id: string) => post<{ ok?: boolean; cancelled?: boolean; file?: string }>(`${E}/prefabs/export`, { id });
-export const importPrefab = () => post<{ ok?: boolean; cancelled?: boolean; prefabs?: string[]; wads?: string[]; skipped?: string[] }>(`${E}/prefabs/import`);
+export const importPrefab = () => post<{ ok?: boolean; cancelled?: boolean; prefabs?: string[]; wads?: string[]; skipped?: string[]; waiting?: string[]; copies?: string[] }>(`${E}/prefabs/import`);
 export const getComponents = () => getJson<{ groups: string[]; components: ComponentDef[] }>(`${E}/components`);
 export const getPackPreview = (map: string) => getJson<{ text: string; count: number; skipped: string[] }>(`${E}/components/pack?map=${encodeURIComponent(map)}`);
 export const savePack = (map: string, mode?: string) => post<{ ok?: boolean; count?: number; file?: string; skipped?: string[] }>(`${E}/components/save-pack`, { map, mode: mode || undefined });

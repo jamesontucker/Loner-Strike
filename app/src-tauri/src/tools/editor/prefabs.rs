@@ -77,7 +77,7 @@ pub fn mine(dir: &Path) -> Vec<(String, PrefabMeta)> {
 pub fn list(dir: &Path) -> Value {
     let mut items: Vec<Value> = mine(dir).iter().map(|(id, m)| card(&format!("{MINE}{id}"), m, false)).collect();
     items.extend(prefab::builtins().iter().map(|(id, m, _)| card(&format!("{BUILTIN}{id}"), m, true)));
-    json!({"prefabs": items, "folder": dir.to_string_lossy()})
+    json!({"prefabs": items, "folder": dir.to_string_lossy(), "pending": pending(dir)})
 }
 
 /// A prefab's pieces and details by id ("builtin:stairs", "mine:my_room").
@@ -122,25 +122,42 @@ fn write_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
     })
 }
 
-/// Saves pieces as one of the player's prefabs; its id ("mine:...").
+/// Saves pieces as a NEW prefab in the player's library; its id ("mine:..."). P5: a uid
+/// that's missing, not a v4 UUID, a starter prefab's or one already in the library gets a new
+/// one: an existing prefab is only ever changed by `save_over` (an explicit replace or update).
 pub fn save(dir: &Path, frag: &MapDocument, meta: &PrefabMeta, thumb: Option<&[u8]>) -> Result<String, String> {
     if mine(dir).len() >= MAX_MINE {
         return Err("Your prefab library is full (2000). Delete some first.".into());
     }
     std::fs::create_dir_all(dir).map_err(|e| format!("Couldn't make the prefab folder ({e})."))?;
-    // P5: a prefab with this uid in the library already is updated in place (a newer version
-    // of a package, Replace it in Save); otherwise a new one (with a new uid if it had none,
-    // or one of the starter prefabs')
     let mut meta = meta.clone();
-    let builtin = prefab::builtins().into_iter().any(|(_, m, _)| m.uid == meta.uid);
-    if !crate::editor::doc::valid_uid(&meta.uid) || builtin {
+    let taken = prefab::builtins().into_iter().any(|(_, m, _)| m.uid == meta.uid) || mine(dir).iter().any(|(_, m)| m.uid == meta.uid);
+    if !crate::editor::doc::valid_uid(&meta.uid) || taken {
         meta.uid = crate::editor::doc::new_uid();
     }
-    let meta = &meta;
-    let id = match mine(dir).into_iter().find(|(_, m)| m.uid == meta.uid) {
-        Some((own, _)) => own,
-        None => free_id(dir, &meta.name),
-    };
+    let id = free_id(dir, &meta.name);
+    write_prefab(dir, &id, frag, &meta, thumb)?;
+    Ok(format!("{MINE}{id}"))
+}
+
+/// P5: replaces one of the player's prefabs (the Save dialog's "Replace it", or an update the
+/// player confirmed): same id and uid, the new pieces and details.
+pub fn save_over(dir: &Path, own: &str, frag: &MapDocument, meta: &PrefabMeta, thumb: Option<&[u8]>) -> Result<String, String> {
+    let (_, old) = mine(dir).into_iter().find(|(i, _)| i == own).ok_or("The prefab to replace isn't there any more.")?;
+    let mut meta = meta.clone();
+    meta.uid = old.uid;
+    if meta.origin.is_none() {
+        meta.origin = old.origin;
+    }
+    meta.exports = old.exports;
+    if thumb.is_none() {
+        let _ = std::fs::remove_file(dir.join(format!("{own}.png")));
+    }
+    write_prefab(dir, own, frag, &meta, thumb)?;
+    Ok(format!("{MINE}{own}"))
+}
+
+fn write_prefab(dir: &Path, id: &str, frag: &MapDocument, meta: &PrefabMeta, thumb: Option<&[u8]>) -> Result<(), String> {
     let (map, js) = prefab::to_files(frag, meta)?;
     if let Some(png) = thumb {
         prefab::check_png(png)?;
@@ -148,7 +165,81 @@ pub fn save(dir: &Path, frag: &MapDocument, meta: &PrefabMeta, thumb: Option<&[u
     }
     write_file(&dir.join(format!("{id}.map")), map.as_bytes())?;
     write_file(&dir.join(format!("{id}.json")), js.as_bytes())?;
-    Ok(format!("{MINE}{id}"))
+    Ok(())
+}
+
+// ---- updates waiting for the player's yes (P5) ----------------------------------------------
+
+/// Packages that would update a prefab (same uid, same source) wait here until the player says.
+fn pending_dir(lib: &Path) -> PathBuf {
+    lib.join(".pending")
+}
+
+/// What an update changes, in words.
+fn changes(old: &PrefabMeta, new: &PrefabMeta) -> Vec<String> {
+    let mut c = Vec::new();
+    if old.name != new.name {
+        c.push(format!("name “{}” → “{}”", old.name, new.name));
+    }
+    if (old.brushes, old.entities) != (new.brushes, new.entities) {
+        c.push(format!("{} brushes, {} entities → {} brushes, {} entities", old.brushes, old.entities, new.brushes, new.entities));
+    }
+    if old.size != new.size {
+        c.push(format!("size {} → {}", old.size.map(|x| x.to_string()).join(" × "), new.size.map(|x| x.to_string()).join(" × ")));
+    }
+    let added: Vec<&String> = new.textures.iter().filter(|t| !old.textures.contains(t)).collect();
+    let gone: Vec<&String> = old.textures.iter().filter(|t| !new.textures.contains(t)).collect();
+    if !added.is_empty() || !gone.is_empty() {
+        c.push(format!("textures{}{}", if added.is_empty() { String::new() } else { format!(" + {}", added.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")) }, if gone.is_empty() { String::new() } else { format!(" − {}", gone.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")) }));
+    }
+    if old.description != new.description {
+        c.push("description".into());
+    }
+    if c.is_empty() {
+        c.push("nothing you can see (the same pieces)".into());
+    }
+    c
+}
+
+/// The updates waiting: [{uid, id, name, changes}].
+pub fn pending(lib: &Path) -> Vec<Value> {
+    let mut out = Vec::new();
+    let own = mine(lib);
+    for e in std::fs::read_dir(pending_dir(lib)).into_iter().flatten().flatten().take(200) {
+        let uid = e.file_name().to_string_lossy().to_string();
+        if !crate::editor::doc::valid_uid(&uid) {
+            continue;
+        }
+        let d = e.path();
+        let (Ok(map), Ok(js)) = (std::fs::read_to_string(d.join("prefab.map")), std::fs::read_to_string(d.join("prefab.json"))) else { continue };
+        let (Ok((_, new)), Some((id, old))) = (prefab::from_files(&map, Some(&js), "prefab"), own.iter().find(|(_, m)| m.uid == uid)) else { continue };
+        out.push(json!({"uid": uid, "id": format!("{MINE}{id}"), "name": old.name, "changes": changes(old, &new)}));
+    }
+    out
+}
+
+/// The player said yes (apply) or no to a waiting update.
+pub fn settle(lib: &Path, uid: &str, apply: bool) -> Result<Value, String> {
+    if !crate::editor::doc::valid_uid(uid) {
+        return Err("That update isn't there any more.".into());
+    }
+    let d = pending_dir(lib).join(uid);
+    if !d.is_dir() {
+        return Err("That update isn't there any more.".into());
+    }
+    let r = if apply {
+        let (own, old) = mine(lib).into_iter().find(|(_, m)| m.uid == uid).ok_or("The prefab it updates isn't in your library any more.")?;
+        let map = std::fs::read_to_string(d.join("prefab.map")).map_err(|_| "That update couldn't be read.".to_string())?;
+        let js = std::fs::read_to_string(d.join("prefab.json")).ok();
+        let (frag, mut meta) = prefab::from_files(&map, js.as_deref(), &own)?;
+        meta.origin = old.origin.clone();
+        let png = std::fs::read(d.join("prefab.png")).ok().filter(|b| prefab::check_png(b).is_ok());
+        save_over(lib, &own, &frag, &meta, png.as_deref()).map(|id| json!({"ok": true, "updated": id, "name": meta.name}))
+    } else {
+        Ok(json!({"ok": true, "kept": true}))
+    };
+    let _ = std::fs::remove_dir_all(&d);
+    r
 }
 
 /// What a package (an unpacked folder) brought: prefab names and WAD files beside them.
@@ -158,12 +249,16 @@ pub struct Installed {
     pub ids: Vec<String>,
     pub wads: Vec<PathBuf>,
     pub skipped: Vec<String>,
+    /// P5: updates of prefabs you have from the same source, waiting for a yes (`pending`)
+    pub waiting: Vec<String>,
+    /// P5: prefabs with the uid of one you have but from somewhere else: added as copies
+    pub copies: Vec<String>,
 }
 
 /// Installs every prefab in an unpacked package or download: each `.map` (with the `.json`
 /// and `.png` of the same name beside it, when there are) becomes one of the player's
 /// prefabs. WAD files are listed for the caller to put where the game looks.
-pub fn install_dir(lib: &Path, src: &Path, author_hint: &str) -> Result<Installed, String> {
+pub fn install_dir(lib: &Path, src: &Path, author_hint: &str, origin: &prefab::Origin) -> Result<Installed, String> {
     let mut got = Installed::default();
     let files = crate::archive::walk(src);
     for p in &files {
@@ -199,6 +294,28 @@ pub fn install_dir(lib: &Path, src: &Path, author_hint: &str) -> Result<Installe
                     meta.created = now_secs();
                 }
                 let png = crate::caps::read_file(&p.with_extension("png"), "picture", 1 << 20).ok().filter(|b| prefab::check_png(b).is_ok()); // [Caps]
+                // P5: identity isn't permission. A prefab you have with this uid is only
+                // updated when the package is from the same source, and only after you say yes
+                // (it waits in .pending); from anywhere else it's added as a copy (a new uid).
+                meta.origin = Some(origin.clone());
+                if let Some((own, old)) = mine(lib).into_iter().find(|(_, m)| !meta.uid.is_empty() && m.uid == meta.uid) {
+                    if prefab::same_source(&old, origin) {
+                        let d = pending_dir(lib).join(&meta.uid);
+                        let _ = std::fs::remove_dir_all(&d);
+                        std::fs::create_dir_all(&d).map_err(|e| format!("Couldn't keep the update ({e})."))?;
+                        let (map, js) = prefab::to_files(&frag, &meta)?;
+                        write_file(&d.join("prefab.map"), map.as_bytes())?;
+                        write_file(&d.join("prefab.json"), js.as_bytes())?;
+                        if let Some(png) = &png {
+                            write_file(&d.join("prefab.png"), png)?;
+                        }
+                        got.waiting.push(old.name.clone());
+                        got.ids.push(format!("{MINE}{own}"));
+                        continue;
+                    }
+                    meta.uid = crate::editor::doc::new_uid();
+                    got.copies.push(format!("“{}” was added as a copy: it has the same id as your “{}” but comes from somewhere else, so yours wasn't changed.", meta.name, old.name));
+                }
                 let id = save(lib, &frag, &meta, png.as_deref())?;
                 got.prefabs.push(meta.name.clone());
                 got.ids.push(id);
@@ -206,7 +323,7 @@ pub fn install_dir(lib: &Path, src: &Path, author_hint: &str) -> Result<Installe
             Err(e) => got.skipped.push(format!("{stem}: {e}")),
         }
     }
-    if got.prefabs.is_empty() {
+    if got.prefabs.is_empty() && got.waiting.is_empty() {
         let why = got.skipped.first().cloned().map(|s| format!(" ({s})")).unwrap_or_default();
         return Err(format!("There's no prefab (.map) in it the editor can use{why}."));
     }
@@ -236,7 +353,25 @@ pub fn install_wads(wads: &[PathBuf], game_dir: &Path) -> Vec<String> {
 
 /// A package to share: `prefabs/<id>.map|json|png`, README.txt and loner-strike.json.
 pub fn package(dir: &Path, id: &str, out: &Path) -> Result<(), String> {
-    let (frag, meta) = load(dir, id)?;
+    let (frag, mut meta) = load(dir, id)?;
+    // P5: where it came from stays here (load already leaves it out); record this export, so
+    // importing this file again is the same source (it can update after asking)
+    meta.origin = None;
+    meta.exports.clear();
+    if let Some(own) = id.strip_prefix(MINE).filter(|x| prefab::valid_id(x)) {
+        let path = dir.join(format!("{own}.json"));
+        if let Some(mut m) = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str::<PrefabMeta>(&t).ok()) {
+            let out_dir = out.parent().and_then(|p| std::fs::canonicalize(p).ok());
+            if let Some(full) = out_dir.zip(out.file_name()).map(|(d, n)| d.join(n).to_string_lossy().to_string()) {
+                m.exports.retain(|e| *e != full);
+                m.exports.insert(0, full);
+                m.exports.truncate(5);
+                if let Ok(t) = serde_json::to_string_pretty(&m) {
+                    let _ = write_file(&path, t.as_bytes());
+                }
+            }
+        }
+    }
     let slug = id.split(':').nth(1).unwrap_or("prefab");
     let (map, js) = prefab::to_files(&frag, &meta)?;
     let png = match id.strip_prefix(MINE).map(|x| dir.join(format!("{x}.png"))).and_then(|p| std::fs::read(p).ok()) {
@@ -294,9 +429,9 @@ fn install_file(lib: &Path, work: &Path, file: &Path, game_dir: Option<&Path>) -
         } else {
             return Err("Pick a prefab package (.zip) or a .map file.".into());
         }
-        let got = install_dir(lib, &src, "")?;
+        let got = install_dir(lib, &src, "", &prefab::Origin::file(file))?;
         let wads = game_dir.map(|g| install_wads(&got.wads, g)).unwrap_or_default();
-        Ok(json!({"ok": true, "prefabs": got.prefabs, "ids": got.ids, "wads": wads, "skipped": got.skipped}))
+        Ok(json!({"ok": true, "prefabs": got.prefabs, "ids": got.ids, "wads": wads, "skipped": got.skipped, "waiting": got.waiting, "copies": got.copies, "pending": pending(lib)}))
     })();
     let _ = std::fs::remove_dir_all(&tmp);
     res
@@ -389,11 +524,12 @@ async fn api_save(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Json<Sa
         }
         meta.description = prefab::clean_text(&req.description, 400);
         let dir = lib_dir(&ed.dir);
-        if let Some(r) = &req.replace {
-            let own = r.strip_prefix(MINE).ok_or("Only your own prefabs can be replaced.")?;
-            meta.uid = mine(&dir).into_iter().find(|(i, _)| i == own).map(|(_, m)| m.uid).ok_or("The prefab to replace isn't there any more.")?;
-        }
-        let id = save(&dir, &frag, &meta, thumb.as_deref())?;
+        meta.origin = Some(prefab::Origin::local());
+        // Replace it (asked in the Save dialog): the same prefab, new pieces
+        let id = match &req.replace {
+            Some(r) => save_over(&dir, r.strip_prefix(MINE).filter(|x| prefab::valid_id(x)).ok_or("Only your own prefabs can be replaced.")?, &frag, &meta, thumb.as_deref())?,
+            None => save(&dir, &frag, &meta, thumb.as_deref())?,
+        };
         Ok(json!({"ok": true, "id": id, "name": meta.name}))
     })
     .await
@@ -433,6 +569,21 @@ async fn api_edit(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Json<Ed
         Ok(json!({"ok": true}))
     })
     .await
+}
+
+#[derive(Deserialize)]
+struct UpdateReq {
+    uid: String,
+    /// true: update the prefab; false: keep yours and drop the update
+    apply: bool,
+}
+
+/// P5: the player's answer to a waiting update (Library: "Update <name>?").
+async fn api_update(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req): Json<UpdateReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || settle(&lib_dir(&ed.dir), &req.uid, req.apply)).await
 }
 
 #[derive(Deserialize)]
@@ -493,17 +644,20 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/editor/prefabs/save", post(api_save))
         .route("/api/tools/editor/prefabs/edit", post(api_edit))
         .route("/api/tools/editor/prefabs/delete", post(api_delete))
+        .route("/api/tools/editor/prefabs/update", post(api_update)) // P5
         .route("/api/tools/editor/prefabs/export", post(api_export))
         .route("/api/tools/editor/prefabs/import", post(api_import))
 }
 
 /// For the community browser's Try it (tools/community.rs): installs the prefabs in an
 /// unpacked download into the player's library, and its WADs into the game folder.
-pub fn install_download(src: &Path, author: &str, game_dir: Option<&Path>) -> Result<Value, String> {
+/// A community download. P5: `origin` is the creation's page and its uploader, so a later
+/// version can update the prefabs it installed (after the player says yes in the library).
+pub fn install_download(src: &Path, author: &str, game_dir: Option<&Path>, origin: &prefab::Origin) -> Result<Value, String> {
     let lib = lib_dir(&crate::sys::app_dir().join("editor"));
-    let got = install_dir(&lib, src, author)?;
+    let got = install_dir(&lib, src, author, origin)?;
     let wads = game_dir.map(|g| install_wads(&got.wads, g)).unwrap_or_default();
-    Ok(json!({"prefabs": got.prefabs, "ids": got.ids, "wads": wads, "skipped": got.skipped}))
+    Ok(json!({"prefabs": got.prefabs, "ids": got.ids, "wads": wads, "skipped": got.skipped, "waiting": got.waiting, "copies": got.copies}))
 }
 
 #[cfg(test)]
@@ -545,7 +699,8 @@ mod tests {
         assert!(un.join("prefabs/crate_stack.map").is_file() && un.join("loner-strike.json").is_file());
         std::fs::write(un.join("prefabs/mytex.wad"), b"WAD3\0\0\0\0\0\0\0\0").unwrap();
         let lib2 = root.join("lib2");
-        let got = install_dir(&lib2, &un, "someone").unwrap();
+        let community = prefab::Origin::community("mod:501", 77);
+        let got = install_dir(&lib2, &un, "someone", &community).unwrap();
         assert_eq!(got.prefabs, vec!["Crate stack"]);
         assert_eq!(got.wads.len(), 1);
         assert!(lib2.join("crate_stack.png").is_file());
@@ -565,7 +720,7 @@ mod tests {
         let empty = root.join("empty");
         std::fs::create_dir_all(&empty).unwrap();
         std::fs::write(empty.join("readme.txt"), "hi").unwrap();
-        assert!(install_dir(&lib2, &empty, "").is_err());
+        assert!(install_dir(&lib2, &empty, "", &community).is_err());
 
         // P5: uids: a new one per saved prefab, kept in the package and by the install
         let ua = mine(&lib).into_iter().find(|(i, _)| format!("{MINE}{i}") == a).unwrap().1.uid;
@@ -575,12 +730,64 @@ mod tests {
         let pk: Value = serde_json::from_slice(&std::fs::read(un.join("loner-strike.json")).unwrap()).unwrap();
         assert_eq!(pk["item"]["prefab"]["uid"], json!(ua));
         assert_eq!(mine(&lib2).iter().find(|(_, m)| m.name == "Crate stack").unwrap().1.uid, ua);
-        // the same package again (a newer version): updates it, no second copy
+        // P5 (identity isn't permission): the package records where it came from, never its own claim
+        let in2 = || mine(&lib2).into_iter().find(|(_, m)| m.uid == ua).unwrap();
+        assert_eq!(in2().1.origin, Some(community.clone()));
+        let before = std::fs::read(lib2.join(format!("{}.map", in2().0))).unwrap();
+        // the same creation again (a newer version): waits for a yes, nothing changed yet
         let n2 = mine(&lib2).len();
-        install_dir(&lib2, &un, "someone").unwrap();
+        let again = install_dir(&lib2, &un, "someone", &community).unwrap();
+        assert_eq!((again.waiting.clone(), again.prefabs.len()), (vec!["Crate stack".to_string()], 0));
         assert_eq!(mine(&lib2).len(), n2);
+        assert_eq!(std::fs::read(lib2.join(format!("{}.map", in2().0))).unwrap(), before);
+        let p = pending(&lib2);
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0]["uid"], json!(ua));
+        assert!(p[0]["changes"].as_array().is_some_and(|c| !c.is_empty()));
+        // no: yours stays; yes: updated in place, same id and uid
+        settle(&lib2, &ua, false).unwrap();
+        assert!(pending(&lib2).is_empty());
+        install_dir(&lib2, &un, "someone", &community).unwrap();
+        let id_before = in2().0;
+        assert_eq!(settle(&lib2, &ua, true).unwrap()["updated"], json!(format!("{MINE}{id_before}")));
+        assert_eq!((in2().0, mine(&lib2).len()), (id_before.clone(), n2));
+        assert!(settle(&lib2, &ua, true).is_err(), "settled already");
+        // the same uid from another uploader, another page, or a file: a copy with a new uid, yours untouched
+        for other in [prefab::Origin::community("mod:501", 78), prefab::Origin::community("mod:999", 77), prefab::Origin::file(&zip)] {
+            let n = mine(&lib2).len();
+            let got = install_dir(&lib2, &un, "x", &other).unwrap();
+            assert_eq!(got.copies.len(), 1, "{other:?}");
+            assert!(got.waiting.is_empty());
+            assert_eq!(mine(&lib2).len(), n + 1);
+            assert_eq!((in2().0, in2().1.origin), (id_before.clone(), Some(community.clone())));
+        }
+        // an export: importing that same file into the library it came from is the same source (asks)
+        let exp = lib.join(format!("{}.json", a.strip_prefix(MINE).unwrap()));
+        assert!(std::fs::read_to_string(&exp).unwrap().contains("out.zip"), "the export is recorded");
+        let back = install_file(&lib, &root.join("work"), &zip, None).unwrap();
+        assert_eq!(back["waiting"], json!(["Crate stack"]));
+        // the package itself never carries where it came from or was exported to
+        let shipped = std::fs::read_to_string(un.join("prefabs/crate_stack.json")).unwrap();
+        assert!(!shipped.contains("origin") && !shipped.contains("exports"), "{shipped}");
+        // a package claiming an origin: ignored
+        let forged = shipped.replacen("{", "{\"origin\": {\"kind\": \"community\", \"page\": \"mod:501\", \"owner\": 77},", 1);
+        std::fs::write(un.join("prefabs/crate_stack.json"), &forged).unwrap();
+        let n = mine(&lib2).len();
+        let got = install_dir(&lib2, &un, "x", &prefab::Origin::community("mod:666", 5)).unwrap();
+        assert_eq!((got.copies.len(), mine(&lib2).len()), (1, n + 1));
+        std::fs::write(un.join("prefabs/crate_stack.json"), &shipped).unwrap();
+        // Save's Replace it: the same prefab, same uid
+        let (f3, mut m3) = load(&lib, &a).unwrap();
+        m3.name = "Crate stack v2".into();
+        assert_eq!(save_over(&lib, a.strip_prefix(MINE).unwrap(), &f3, &m3, None).unwrap(), a);
+        let now = mine(&lib).into_iter().find(|(i, _)| format!("{MINE}{i}") == a).unwrap().1;
+        assert_eq!((now.uid.as_str(), now.name.as_str()), (ua.as_str(), "Crate stack v2"));
+        // a plain save with a uid that's taken: a new prefab, the other untouched
+        let c = save(&lib, &f3, &now, None).unwrap();
+        assert_ne!(c, a);
+        assert_ne!(mine(&lib).into_iter().find(|(i, _)| format!("{MINE}{i}") == c).unwrap().1.uid, ua);
         // by uid
-        assert_eq!(load(&lib, &format!("uid:{ua}")).unwrap().1.name, "Crate stack");
+        assert_eq!(load(&lib, &format!("uid:{ua}")).unwrap().1.name, "Crate stack v2");
         assert_eq!(id_of_uid(&lib, &ua).as_deref(), Some(a.as_str()));
         assert!(load(&lib, "uid:not-a-uid").is_err());
         assert!(id_of_uid(&lib, &prefab::builtins()[0].1.uid).unwrap().starts_with(BUILTIN));
@@ -589,7 +796,7 @@ mod tests {
         let js = std::fs::read_to_string(un.join("prefabs/crate_stack.json")).unwrap();
         std::fs::write(un.join("prefabs/crate_stack.json"), js.replace(&ua, "../../not-a-uuid")).unwrap();
         let lib3 = root.join("lib3");
-        install_dir(&lib3, &un, "").unwrap();
+        install_dir(&lib3, &un, "", &community).unwrap();
         let u3 = mine(&lib3)[0].1.uid.clone();
         assert!(crate::editor::doc::valid_uid(&u3) && u3 != ua);
         let old = std::fs::read_to_string(lib3.join("crate_stack.json")).unwrap().replace(&format!("\"uid\": \"{u3}\","), "");
@@ -607,12 +814,13 @@ mod tests {
         let mut d = MapDocument::new();
         let mut h = history::History::default();
         let (frag2, meta2) = load(&lib, &a).unwrap();
+        assert_eq!(meta2.uid, ua);
         let (_, g) = history::cmd_place_prefab_from(&mut d, &mut h, &frag2, &crate::editor::math::Affine::translate(crate::editor::math::v3(0.0, 0.0, 0.0)), &meta2.name, &[], Some(&meta2.uid)).unwrap();
         assert_eq!(d.groups[&g].prefab.as_deref(), Some(ua.as_str()));
 
         // delete: only your own
         let gone = mine(&lib).len();
-        std::fs::remove_file(lib.join("crate_stack_2.map")).unwrap();
+        std::fs::remove_file(lib.join(format!("{}.map", b.strip_prefix(MINE).unwrap()))).unwrap();
         assert_eq!(mine(&lib).len(), gone - 1);
         let _ = std::fs::remove_dir_all(&root);
     }

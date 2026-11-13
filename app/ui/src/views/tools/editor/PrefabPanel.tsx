@@ -44,6 +44,7 @@ export function PrefabPanel() {
   const sel = useEditor((s) => s.sel);
   const rev = useP4((s) => s.prefabRev);
   const [list, setList] = useState<Prefab[] | null>(null);
+  const [updates, setUpdates] = useState<api.PrefabUpdate[]>([]); // P5
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [saving, setSaving] = useState(false);
@@ -55,6 +56,7 @@ export function PrefabPanel() {
     if (r.error) return setError(r.error);
     setError(null);
     setList(r.prefabs);
+    setUpdates(r.pending ?? []);
   }, []);
   useEffect(() => {
     void load();
@@ -72,7 +74,10 @@ export function PrefabPanel() {
     setBusy(null);
     if (r.error) return toast(r.error, true);
     if (r.cancelled) return;
-    toast(`Added ${r.prefabs?.join(", ")}${r.wads?.length ? ` (and ${r.wads.join(", ")} to the game folder)` : ""}.`);
+    // P5: an update of one you have (same source) waits below for a yes; one with a borrowed id is a copy
+    if (r.prefabs?.length) toast(`Added ${r.prefabs.join(", ")}${r.wads?.length ? ` (and ${r.wads.join(", ")} to the game folder)` : ""}.`);
+    for (const c of r.copies ?? []) toast(c);
+    if (r.waiting?.length) toast(`A newer ${r.waiting.join(", ")} is waiting below: update yours, or keep it.`);
     bump();
   };
 
@@ -108,6 +113,39 @@ export function PrefabPanel() {
         </p>
       )}
       {error && <p className="banner">{error}</p>}
+      {updates.map((u) => (
+        <div key={u.uid} className="banner p5-prefab-update" role="group" aria-label={`Update for ${u.name}`}>
+          <span>
+            A newer “{u.name}” from the same place is waiting. It changes: {u.changes.join("; ")}.
+          </span>
+          <span className="p4-actions">
+            <button
+              type="button"
+              className="btn small primary"
+              onClick={async () => {
+                if (!(await ask(`Update your “${u.name}”? It changes: ${u.changes.join("; ")}. Maps it's in keep their copy.`, { ok: `Update ${u.name}` }))) return;
+                const r = await api.settlePrefabUpdate(u.uid, true);
+                if (r.error) return toast(r.error, true);
+                toast(`Updated ${r.name ?? u.name}.`);
+                bump();
+              }}
+            >
+              Update {u.name}
+            </button>
+            <button
+              type="button"
+              className="btn small"
+              onClick={async () => {
+                const r = await api.settlePrefabUpdate(u.uid, false);
+                if (r.error) return toast(r.error, true);
+                bump();
+              }}
+            >
+              Keep mine
+            </button>
+          </span>
+        </div>
+      ))}
       {!list && !error && (
         <p className="small-note muted">
           <span className="spinner" aria-hidden="true" />

@@ -30,6 +30,13 @@ pub struct PrefabMeta {
     /// in a placed group; the name is only for showing. Empty until the library gives it one.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub uid: String,
+    /// P5: where this copy came from (kept in your library only; a package's own is never
+    /// read): a package can only update a prefab from the same source, and only when asked
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<Origin>,
+    /// P5: package files this prefab was exported to (here; re-importing one is the same source)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exports: Vec<String>,
     pub name: String,
     #[serde(default)]
     pub tags: Vec<String>,
@@ -55,6 +62,49 @@ pub struct PrefabMeta {
     /// texture sizes, so alignment is right before the map's WADs are read
     #[serde(default)]
     pub materials: Vec<Material>,
+}
+
+/// P5: where a prefab in the library came from.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Origin {
+    /// "local" (saved in the editor), "community" (Tools > Community), "file" (Add from a file)
+    pub kind: String,
+    /// community: the creation's page ("mod:123")
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub page: String,
+    /// community: the member who uploaded it
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub owner: i64,
+    /// file: the file it was added from (its full path)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub file: String,
+}
+
+fn is_zero(x: &i64) -> bool {
+    *x == 0
+}
+
+impl Origin {
+    pub fn local() -> Origin {
+        Origin { kind: "local".into(), ..Default::default() }
+    }
+    pub fn community(page: &str, owner: i64) -> Origin {
+        Origin { kind: "community".into(), page: page.into(), owner, ..Default::default() }
+    }
+    pub fn file(path: &std::path::Path) -> Origin {
+        let p = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        Origin { kind: "file".into(), file: p.to_string_lossy().to_string(), ..Default::default() }
+    }
+}
+
+/// P5: whether a package from `incoming` may update `existing` (after asking): the same
+/// community creation by the same member, or the same file it came from or was exported to.
+pub fn same_source(existing: &PrefabMeta, incoming: &Origin) -> bool {
+    match (existing.origin.as_ref(), incoming.kind.as_str()) {
+        (Some(o), "community") => o.kind == "community" && !o.page.is_empty() && o.page == incoming.page && o.owner > 0 && o.owner == incoming.owner,
+        (o, "file") => !incoming.file.is_empty() && (o.is_some_and(|o| o.kind == "file" && o.file == incoming.file) || existing.exports.iter().any(|e| *e == incoming.file)),
+        _ => false,
+    }
 }
 
 /// Cleans what a person typed: one line, a length cap.
@@ -172,6 +222,8 @@ pub fn describe(frag: &MapDocument, name: &str, tags: &[String], author: &str, c
     PrefabMeta {
         format: PREFAB_FORMAT,
         uid: String::new(),
+        origin: None,
+        exports: Vec::new(),
         name: clean_text(name, 64),
         tags: clean_tags(tags),
         author: clean_text(author, 48),
@@ -252,6 +304,9 @@ pub fn from_files(map: &str, json: Option<&str>, fallback_name: &str) -> Result<
         meta.wads = meta.wads.iter().map(|w| w.rsplit(['\\', '/']).next().unwrap_or(w).to_ascii_lowercase()).filter(|w| w.ends_with(".wad") && w.len() <= 64).collect();
     }
     meta.format = PREFAB_FORMAT;
+    // P5: what a package says about where it came from is never taken (the library records it)
+    meta.origin = None;
+    meta.exports.clear();
     // P5: a uid that isn't a UUID v4 is dropped (the library gives it a new one)
     meta.uid = meta.uid.trim().to_ascii_lowercase();
     if !crate::editor::doc::valid_uid(&meta.uid) {
