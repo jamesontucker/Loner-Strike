@@ -1135,6 +1135,23 @@ MIGRATIONS = [
         WHERE json_valid(item) AND submitter_id > 0 AND lower(trim(COALESCE(json_extract(item, '$.mode.uid'), ''))) GLOB '[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'
         ORDER BY added, key
     """,
+    # 5: a uid is settled by evidence, not by who registered first: the date of the earliest
+    # GameBanana upload carrying it (file_at, 0 unknown), a moderator's pin, and the conflicts the
+    # moderators are asked to settle (a card each, with a button per side)
+    """
+    ALTER TABLE uids ADD COLUMN file_at INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE uids ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE uid_conflicts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uid TEXT NOT NULL,
+        holder TEXT NOT NULL,
+        other TEXT NOT NULL,
+        why TEXT NOT NULL DEFAULT '',
+        at INTEGER NOT NULL,
+        settled TEXT NOT NULL DEFAULT '',
+        settled_by TEXT NOT NULL DEFAULT ''
+    )
+    """,
 ]
 
 # Every way an entry's state changes, and who may do it (a creator's registration never undoes a
@@ -1195,22 +1212,47 @@ class Store:
             return self.db.execute("SELECT COUNT(*) FROM entries WHERE state=?", (state,)).fetchone()[0]
 
     def put(self, row, action, detail="", claim=None):
-        """Writes a whole entry and a log line in one go. `claim` (uids, owner id, owner name): those
-        uids go to that member in the same transaction, and nothing is written (Reject 409) when
-        another member owns one of them."""
+        """Writes a whole entry and a log line in one go. `claim` (uids, owner id, owner name, the
+        upload's GameBanana date): settles those uids in the same transaction (settle_uid). A uid
+        another member keeps is left out of this entry, which is listed all the same. Returns the
+        ids of the uid conflicts it found, for the moderators' cards."""
         cols = list(row)
+        conflicts = []
         with self.lock:
             self.db.execute("BEGIN")
             try:
                 if claim:
-                    uids, owner_id, owner = claim
+                    # settled here, with the entry write, so nothing half-done is ever kept
+                    uids, owner_id, owner, file_at = claim
+                    lost = []
                     for uid in uids:
-                        r = self.db.execute("SELECT owner_id FROM uids WHERE uid=?", (uid,)).fetchone()
-                        if r and r["owner_id"] != owner_id:
-                            raise Reject(409, UID_TAKEN)
-                        if not r:
-                            self.db.execute("INSERT INTO uids (uid, owner_id, owner, key, at, by) VALUES (?,?,?,?,?,?)",
-                                            (uid, owner_id, owner, row["key"], now(), "registration"))
+                        r = self.db.execute("SELECT * FROM uids WHERE uid=?", (uid,)).fetchone()
+                        holder = dict(r) if r else None
+                        verdict = settle_uid(holder, owner_id, file_at)
+                        if holder is None:
+                            self.db.execute("INSERT INTO uids (uid, owner_id, owner, key, at, by, file_at) VALUES (?,?,?,?,?,?,?)",
+                                            (uid, owner_id, owner, row["key"], now(), "registration", file_at or 0))
+                        elif verdict == "same":
+                            if file_at and (not holder["file_at"] or file_at < holder["file_at"]):
+                                self.db.execute("UPDATE uids SET file_at=? WHERE uid=?", (file_at, uid))
+                        elif verdict == "take":
+                            # the earlier upload wins: the holder's entry loses the uid
+                            self.db.execute("UPDATE uids SET owner_id=?, owner=?, key=?, at=?, by=?, file_at=? WHERE uid=?",
+                                            (owner_id, owner, row["key"], now(), "earlier upload", file_at, uid))
+                            self._strip_row(holder["key"], uid)
+                            conflicts.append(self._conflict(uid, row["key"], holder["key"],
+                                                            f"{row['key']}'s upload carrying it is older; {holder['key']} lost it"))
+                        else:
+                            lost.append(uid)
+                            why = ("a moderator gave it to " + holder["key"]) if holder.get("pinned") else (
+                                f"{holder['key']} has it; this upload isn't provably older")
+                            conflicts.append(self._conflict(uid, holder["key"], row["key"], why))
+                    if lost:
+                        row = dict(row)
+                        for col in ("item", "proposed"):
+                            if row.get(col):
+                                row[col] = json.dumps(strip_uids(_j(row[col]), lost), ensure_ascii=False)
+                        cols = list(row)
                 self.db.execute(f"INSERT OR REPLACE INTO entries ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                                 tuple(row[c] for c in cols))
                 self.db.execute("INSERT INTO log (key, at, action, detail) VALUES (?,?,?,?)", (row["key"], now(), action, detail[:500]))
@@ -1218,6 +1260,7 @@ class Store:
             except Exception:
                 self.db.execute("ROLLBACK")
                 raise
+        return conflicts
 
     def touch(self, key, checked, note):
         with self.lock:
@@ -1283,12 +1326,54 @@ class Store:
             r = self.db.execute("SELECT * FROM uids WHERE uid=?", (uid,)).fetchone()
             return dict(r) if r else None
 
+    def _strip_row(self, key, uid):
+        """(inside a transaction) Takes a uid out of an entry's stored item."""
+        r = self.db.execute("SELECT item, proposed FROM entries WHERE key=?", (key,)).fetchone()
+        if not r:
+            return
+        vals = [json.dumps(strip_uids(_j(v), [uid]), ensure_ascii=False) if v else v for v in (r["item"], r["proposed"])]
+        self.db.execute("UPDATE entries SET item=?, proposed=? WHERE key=?", (*vals, key))
+        self.db.execute("INSERT INTO log (key, at, action, detail) VALUES (?,?,?,?)", (key, now(), "uid-lost", uid))
+
+    def _conflict(self, uid, holder, other, why):
+        """(inside a transaction) Notes a uid conflict for the moderators; its id."""
+        return self.db.execute("INSERT INTO uid_conflicts (uid, holder, other, why, at) VALUES (?,?,?,?,?)",
+                               (uid, holder, other, why[:300], now())).lastrowid
+
+    def uid_conflict(self, cid):
+        with self.lock:
+            r = self.db.execute("SELECT * FROM uid_conflicts WHERE id=?", (cid,)).fetchone()
+        return dict(r) if r else None
+
+    def give_uid(self, uid, key, by):
+        """A moderator settles a uid on one page: that page's submitter owns it (pinned), that entry
+        carries it again, every other entry that declares it loses it."""
+        with self.lock:
+            self.db.execute("BEGIN")
+            try:
+                row = self.db.execute("SELECT * FROM entries WHERE key=?", (key,)).fetchone()
+                if not row or not row["submitter_id"]:
+                    raise Reject(404, "That page isn't registered.")
+                self.db.execute("INSERT OR REPLACE INTO uids (uid, owner_id, owner, key, at, by, file_at, pinned) VALUES (?,?,?,?,?,?,COALESCE((SELECT file_at FROM uids WHERE uid=?), 0),1)",
+                                (uid, row["submitter_id"], row["submitter"], key, now(), by, uid))
+                for r in self.db.execute("SELECT key, item FROM entries WHERE key<>?", (key,)).fetchall():
+                    if uid in item_uids(_j(r["item"]) or {}):
+                        self._strip_row(r["key"], uid)
+                vals = [json.dumps(restore_uid(_j(v), uid), ensure_ascii=False) if v else v for v in (row["item"], row["proposed"])]
+                self.db.execute("UPDATE entries SET item=?, proposed=? WHERE key=?", (*vals, key))
+                self.db.execute("UPDATE uid_conflicts SET settled=?, settled_by=? WHERE uid=? AND settled=''", (key, by, uid))
+                self.db.execute("INSERT INTO log (key, at, action, detail) VALUES (?,?,?,?)", (f"uid:{uid}", now(), "uid-owner", f"to {key} by {by}"[:500]))
+                self.db.execute("COMMIT")
+            except Exception:
+                self.db.execute("ROLLBACK")
+                raise
+
     def set_uid_owner(self, uid, owner_id, owner, by):
         """A moderator moves a uid to another member (a creator who changed accounts)."""
         with self.lock:
             self.db.execute("BEGIN")
-            self.db.execute("INSERT OR REPLACE INTO uids (uid, owner_id, owner, key, at, by) VALUES (?,?,?,COALESCE((SELECT key FROM uids WHERE uid=?), ''),?,?)",
-                            (uid, owner_id, owner, uid, now(), by))
+            self.db.execute("INSERT OR REPLACE INTO uids (uid, owner_id, owner, key, at, by, file_at, pinned) VALUES (?,?,?,COALESCE((SELECT key FROM uids WHERE uid=?), ''),?,?,COALESCE((SELECT file_at FROM uids WHERE uid=?), 0),1)",
+                            (uid, owner_id, owner, uid, now(), by, uid))
             self.db.execute("INSERT INTO log (key, at, action, detail) VALUES (?,?,?,?)",
                             (f"uid:{uid}", now(), "uid-owner", f"to member {owner_id} {owner} by {by}"[:500]))
             self.db.execute("COMMIT")
@@ -1386,9 +1471,51 @@ def row_hash(row):
 
 # ---- the index ------------------------------------------------------------------------------
 
-UID_TAKEN = ("This creation's permanent id (uid) belongs to another GameBanana member's creation. "
-             "If it's a copy, remix it in the Game Mode Studio (that gives it an id of its own), "
-             "or ask a moderator if you moved accounts.")
+def settle_uid(holder, owner_id, file_at):
+    """Who gets a uid another member already holds: "keep" (the holder keeps it; the newcomer is
+    listed without it), "take" (the newcomer's upload carrying it is provably older) or "same"
+    (the same member). Arrival order never decides: an upload's GameBanana date is the evidence,
+    a moderator's pin beats it, and anything unproven stays with the holder for a moderator."""
+    if holder is None or holder["owner_id"] == owner_id:
+        return "same"
+    if holder.get("pinned"):
+        return "keep"
+    a, b = holder.get("file_at") or 0, file_at or 0
+    if a > 0 and b > 0 and b < a:
+        return "take"
+    return "keep"
+
+
+def strip_uids(item, uids):
+    """An entry without the given uids (listed, but linked to nothing). What it declared is kept
+    aside (`heldBack`, not indexed) for a moderator to give back."""
+    it = dict(item)
+    back = dict(it.get("heldBack") or {})
+    if norm_uid(it.get("uid")) in uids:
+        back["uid"] = norm_uid(it.pop("uid", None))
+    if isinstance(it.get("mode"), dict) and norm_uid(it["mode"].get("uid")) in uids:
+        back["modeUid"] = norm_uid(it["mode"].get("uid"))
+        it["mode"] = dict(it["mode"], uid="")
+    if back:
+        it["heldBack"] = back
+    return it
+
+
+def restore_uid(item, uid):
+    """Gives an entry back a uid it declared and had held back."""
+    it = dict(item)
+    back = dict(it.get("heldBack") or {})
+    if back.get("uid") == uid:
+        it["uid"] = uid
+        back.pop("uid")
+    if back.get("modeUid") == uid and isinstance(it.get("mode"), dict):
+        it["mode"] = dict(it["mode"], uid=uid)
+        back.pop("modeUid")
+    if back:
+        it["heldBack"] = back
+    else:
+        it.pop("heldBack", None)
+    return it
 
 
 def norm_uid(u):
@@ -1525,6 +1652,8 @@ class Community:
         item = build_item(model, gb, dict(facts, file=f), sizes, manifest)
         # the files themselves, one by one (kept with the entry; not part of the index)
         item["checks"] = self.check_files(model, gb, f, facts["kind"])
+        # the upload's GameBanana date: the evidence when two pages declare the same uid (not indexed)
+        item["fileAt"] = f.get("added") or 0
         return item
 
     def check_files(self, model, gb, f, kind):
@@ -1659,13 +1788,10 @@ class Community:
             # team hid or turned down; everyone else is listed at once
             # a permanent id belongs to the member who first registered it: someone else's package
             # declaring it would otherwise show as that creation's "update" in every app
-            # (checked now for a clear answer; claimed only when the entry is written, in the same
-            # transaction, so a submission refused below never keeps a claim)
+            # a uid another member holds never stops a listing: it's settled by evidence when the
+            # entry is written (settle_uid), and conflicts go to the moderators
             uids = item_uids(item)
-            for uid in uids:
-                owner = self.store.uid_owner(uid)
-                if owner and owner["owner_id"] != facts["submitterId"]:
-                    raise Reject(409, UID_TAKEN)
+            file_at = self._uid_evidence(model, gb, facts, item, uids)
             team_hold = bool(row) and row["hidden_by"] == "team"
             blocked = self.store.is_blocked(facts["submitterId"])
             look = blocked or team_hold
@@ -1689,14 +1815,44 @@ class Community:
             # new, listed, or out of the list only by the re-check (and passing every check now)
             row.update(item=data, proposed=None, rejected_md5="", state="listed", hidden_by="", reason="", check_note="")
             action = "list"
-        try:
-            self.store.put(row, action, f"md5 {item['md5']} file {item['file']} app {app}", claim=(uids, facts["submitterId"], facts["author"]))
-        except Reject as e:
-            return e.code, {"error": e.message}
+        conflicts = self.store.put(row, action, f"md5 {item['md5']} file {item['file']} app {app}",
+                                   claim=(uids, facts["submitterId"], facts["author"], file_at))
+        for cid in conflicts:
+            self.notify_uid_conflict(cid)
         log(f"registration {key} {row['state']} ({'new' if fresh else 'update'})")
         self.notify_new(key, item, look, not fresh and was in ("listed", "hidden"), fresh,
                         why="blocked creator" if look and blocked else f"{was} by the team" if look else "")
         return 200, {"ok": True, "key": key, "state": "pending" if look else row["state"]}
+
+    def _uid_evidence(self, model, gb, facts, item, uids):
+        """The GameBanana date of this page's earliest upload that carries the entry's uids: the
+        file being registered, or (only when another member holds one of them) an older file of the
+        same page whose package declares it too (up to 3 read, newest first)."""
+        at = item.get("fileAt") or 0
+        held = [u for u in uids if (self.store.uid_owner(u) or {}).get("owner_id") not in (None, facts["submitterId"])]
+        if not held:
+            return at
+        try:
+            files = page_files(self._page(model, gb))
+        except Reject:
+            return at
+        older = sorted([x for x in files if x.get("added") and at and x["added"] < at], key=lambda x: x["added"], reverse=True)[:3]
+        for x in older:
+            try:
+                _sizes, manifest = read_package(x, self.get_range)
+                if manifest and set(held) <= set(item_uids(package_item(manifest, facts["kind"]))):
+                    at = x["added"]
+            except (Reject, FetchError, ValueError):
+                break
+        return at
+
+    def notify_uid_conflict(self, cid):
+        c = self.store.uid_conflict(cid)
+        if not c:
+            return
+        text = (f"**uid conflict** `{c['uid']}` between `{c['holder']}` (has it) and `{c['other']}`: {discord_text(c['why'], 300)}\n"
+                f"Give it to one: `lsmod.py give-uid {c['uid']} {c['holder']}` or `lsmod.py give-uid {c['uid']} {c['other']}`")
+        self.notifier.card("uid", c["holder"], text, report_id=cid)
 
     def notify_new(self, key, item, look, update, fresh=True, why=""):
         head = (f"**Waiting for a moderator ({why}){' (update)' if update else ''}:**" if look
@@ -2175,6 +2331,13 @@ class Community:
                 else:
                     self.block(sid, (row or {}).get("submitter", ""), "lsmod", body.get("reason") if isinstance(body.get("reason"), str) else "")
             return reply(h, 200, {"blocked": self.store.blocked()}, cors=False)
+        if parts == ["give-uid"] and method == "POST":
+            uid = norm_uid(body.get("uid"))
+            p = parse_key(body.get("page")) if isinstance(body.get("page"), str) else None
+            if not uid or not p:
+                raise Reject(400, "Send {\"uid\": \"<uuid>\", \"page\": \"mod:<id>\"}.")
+            self.store.give_uid(uid, key_of(*p), "lsmod")
+            return reply(h, 200, {"ok": True, "uid": uid, "owner": self.store.uid_owner(uid)}, cors=False)
         if parts == ["uid"] and method == "POST":
             uid = norm_uid(body.get("uid"))
             member = body.get("member")

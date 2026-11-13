@@ -163,6 +163,29 @@ class Requests(unittest.TestCase):
 
 
 class Cards(unittest.TestCase):
+    def test_uid_conflict_card(self):
+        """Two members' pages declare one uid: both listed, a card with a button per side settles it."""
+        c, mod, bot, _ = make()
+        u = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b"
+        for key, sid in (("mod:1", 10), ("mod:2", 20)):
+            row = cm.new_row("Mod", int(key[4:]), 1)
+            row.update(kind="mode", state="listed", submitter_id=sid, submitter=f"m{sid}",
+                       item=json.dumps({"kind": "mode", "name": key, "mode": {"id": "cage", "uid": u if key == "mod:1" else ""},
+                                        "heldBack": {} if key == "mod:1" else {"modeUid": u}}))
+            c.store.put(row, "test")
+        c.store.set_uid_owner(u, 10, "m10", "test")
+        with c.store.lock:
+            cid = c.store._conflict(u, "mod:1", "mod:2", "test")
+        mod.card("uid", "mod:1", "fallback", report_id=cid)
+        card = bot.posts[-1]
+        self.assertIn("uid conflict", card["embeds"][0]["title"])
+        give = buttons(card)["Give to mod:2"]["custom_id"]
+        self.assertEqual(click(mod, give)[1]["type"], 7)
+        self.assertEqual(c.store.uid_owner(u)["owner_id"], 20)
+        self.assertEqual(cm.item_uids(json.loads(c.store.get("mod:2")["item"])), [u])
+        self.assertEqual(cm.item_uids(json.loads(c.store.get("mod:1")["item"])), [])
+        self.assertEqual(c.store.uid_conflict(cid)["settled"], "mod:2")
+
     def test_listing_pull_and_undo(self):
         c, mod, bot, _ = make()
         c.submit(body(map_item()), "a")

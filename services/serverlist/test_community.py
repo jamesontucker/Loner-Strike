@@ -462,32 +462,82 @@ class Submissions(unittest.TestCase):
         self.assertEqual(c.status("Mod", 1)["state"], "unknown")
         self.assertEqual(c.submit(body(mode_item()), "1.2.3.4")[1]["state"], "listed", "a Game Mode Studio (settings only) mode")
 
-    def test_a_uid_belongs_to_its_first_registrant(self):
-        """The update hijack: a stranger's package declaring someone else's uid is refused, so no app
-        sees it as that creation's new version; the owner's own update passes; a moderator can move it."""
+    def _uid_setup(self, creator_at, squatter_at):
+        """The creator's page (MODE, member 3608549) and a squatter's copy (member 999), both packages
+        declaring the same uid, uploaded at the given GameBanana dates."""
         u = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b"
         mode = {"kind": "mode", "name": "Cage", "uid": u, "mode": {"id": "cage", "uid": u, "maps": [], "plugins": []}}
         files = FakeFiles()
         files.files[1886785] = zip_of(["modes/cage/cage.graph.json"], {"loner-strike.json": manifest(mode)})
-        files.files[2100000] = zip_of(["modes/cage/cage.graph.json"], {"loner-strike.json": manifest(dict(mode, name="Cage 2.0 (not really)"))})
+        files.files[2100000] = zip_of(["modes/cage/cage.graph.json"], {"loner-strike.json": manifest(dict(mode, name="Cage (copy)"))})
+        creator = copy.deepcopy(MODE)
+        creator["_aFiles"] = [dict(creator["_aFiles"][0], _tsDateAdded=creator_at)]
         thief = copy.deepcopy(MODE)
         thief["_idRow"] = 800001
-        thief["_aSubmitter"] = dict(thief["_aSubmitter"], _idRow=999, _sName="Thief")
-        thief["_aFiles"] = [dict(thief["_aFiles"][0], _idRow=2100000)]
+        thief["_aSubmitter"] = dict(thief["_aSubmitter"], _idRow=999, _sName="Squatter")
+        thief["_aFiles"] = [dict(thief["_aFiles"][0], _idRow=2100000, _tsDateAdded=squatter_at)]
         gb = FakeGB()
+        gb.pages[("Mod", 739703)] = creator
         gb.pages[("Mod", 800001)] = thief
-        c, _ = make(gb=gb, files=files)
-        self.assertEqual(c.submit(body(mode_item()), "1.2.3.4")[1]["state"], "listed")
-        idx = json.loads(cm.build_index(c.store)[0])["items"]
-        self.assertEqual((idx[0]["uid"], idx[0]["ownerId"]), (u, 3608549), "the index says whose uid it is")
+        c, rec = make(gb=gb, files=files)
+        return c, rec, u
+
+    def _uids_of(self, c, key):
+        return cm.item_uids(json.loads(c.store.get(key)["item"]))
+
+    def test_the_earlier_upload_owns_the_uid_whoever_registers_first(self):
+        """A squatter registers a copy first (uploaded later than the creator's file): both stay listed,
+        and the creator registering later gets the uid; the squatter's entry loses it and it's flagged."""
+        c, rec, u = self._uid_setup(creator_at=1_700_000_000, squatter_at=1_790_000_000)
         code, ans = c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")
-        self.assertEqual(code, 409)
-        self.assertIn("belongs to another GameBanana member", ans["error"])
-        self.assertIsNone(c.store.get("mod:800001"), "not listed under the stolen id")
+        self.assertEqual((code, ans["state"]), (200, "listed"))
+        self.assertEqual(c.store.uid_owner(u)["owner_id"], 999, "nobody else had it yet")
+        code, ans = c.submit(body(mode_item()), "1.2.3.4")
+        self.assertEqual((code, ans["state"]), (200, "listed"), "the creator is never refused")
+        self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549, "the older upload wins")
+        self.assertEqual(self._uids_of(c, "mod:739703"), [u])
+        self.assertEqual(self._uids_of(c, "mod:800001"), [], "the squatter's entry lost the uid")
+        self.assertTrue(any("uid conflict" in str(s[1]) for s in rec.sent), "the moderators are told")
+        idx = {e["gb"]: e for e in json.loads(cm.build_index(c.store)[0])["items"]}
+        self.assertEqual((idx[739703].get("uid"), idx[739703]["ownerId"]), (u, 3608549))
+        self.assertNotIn("uid", idx[800001], "listed, linked to nothing")
+
+    def test_a_later_copy_is_listed_without_the_uid(self):
+        c, rec, u = self._uid_setup(creator_at=1_700_000_000, squatter_at=1_790_000_000)
+        self.assertEqual(c.submit(body(mode_item()), "1.2.3.4")[0], 200)
+        code, ans = c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")
+        self.assertEqual((code, ans["state"]), (200, "listed"), "never blocked")
         self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549)
-        # a moderator moves the uid (the creator changed accounts): then that member's page may use it
-        c.store.set_uid_owner(u, 999, "Thief", "test")
-        self.assertEqual(c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")[0], 200)
+        self.assertEqual(self._uids_of(c, "mod:800001"), [])
+        self.assertTrue(any("uid conflict" in str(s[1]) for s in rec.sent))
+
+    def test_unproven_dates_go_to_a_moderator(self):
+        for creator_at, squatter_at in ((1_750_000_000, 1_750_000_000), (0, 1_750_000_000), (1_750_000_000, 0)):
+            c, rec, u = self._uid_setup(creator_at, squatter_at)
+            self.assertEqual(c.submit(body(mode_item(gb=800001, file=2100000)), "5.6.7.8")[0], 200)
+            self.assertEqual(c.submit(body(mode_item()), "1.2.3.4")[0], 200, "never blocked")
+            self.assertEqual(c.store.uid_owner(u)["owner_id"], 999, "unproven: the holder keeps it for now")
+            self.assertEqual(self._uids_of(c, "mod:739703"), [])
+            cid = c.store.db.execute("SELECT id FROM uid_conflicts").fetchone()[0]
+            self.assertTrue(any("give-uid" in str(s[1]) for s in rec.sent))
+            # a moderator settles it, and a later registration doesn't undo that
+            c.store.give_uid(u, "mod:739703", "test")
+            self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549)
+            self.assertEqual((self._uids_of(c, "mod:739703"), self._uids_of(c, "mod:800001")), ([u], []))
+            self.assertEqual(c.store.uid_conflict(cid)["settled"], "mod:739703")
+            c.submit(body(mode_item(gb=800001, file=2100000)), "9.9.9.9")
+            self.assertEqual(c.store.uid_owner(u)["owner_id"], 3608549, "a pin beats any date")
+
+    def test_settling_rules(self):
+        h = {"owner_id": 1, "file_at": 100, "pinned": 0}
+        self.assertEqual(cm.settle_uid(None, 2, 50), "same")
+        self.assertEqual(cm.settle_uid(h, 1, 999), "same")
+        self.assertEqual(cm.settle_uid(h, 2, 50), "take")
+        self.assertEqual(cm.settle_uid(h, 2, 150), "keep")
+        self.assertEqual(cm.settle_uid(h, 2, 100), "keep")
+        self.assertEqual(cm.settle_uid(h, 2, 0), "keep")
+        self.assertEqual(cm.settle_uid(dict(h, file_at=0), 2, 50), "keep")
+        self.assertEqual(cm.settle_uid(dict(h, pinned=1), 2, 1), "keep")
 
     def test_listed_uids_are_owned_after_the_migration(self):
         """Entries listed before the uids table came in own their uids from the start."""

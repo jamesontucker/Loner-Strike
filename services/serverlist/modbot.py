@@ -233,7 +233,8 @@ def _button(label, custom_id, style, disabled=False):
 
 PRIMARY, SECONDARY, SUCCESS, DANGER = 1, 2, 3, 4
 PULLED = "Pulled by the moderators"  # the default reason: neutral, never a moderator's name
-DONE_WORDS = {"pull": "Pulled", "keep": "Kept", "block": "Creator blocked", "approve": "Approved", "reject": "Turned down"}
+DONE_WORDS = {"pull": "Pulled", "keep": "Kept", "block": "Creator blocked", "approve": "Approved", "reject": "Turned down",
+              "uidh": "uid given to the holder", "uido": "uid given to the other page"}
 
 
 class Mod(cm.Notifier):
@@ -320,7 +321,15 @@ class Mod(cm.Notifier):
         shots = it.get("screenshots") or []
         if shots and shots[0].startswith("https://images.gamebanana.com/"):
             embed["thumbnail"] = {"url": shots[0]}
-        if card["kind"] == "listing":
+        if card["kind"] == "uid":
+            # a uid declared by two members' pages: both stay listed; a moderator says whose it is
+            c = self.c.store.uid_conflict(card["report_id"]) or {}
+            embed.update(color=0xDAA520, title=f"uid conflict: {c.get('uid', '?')}"[:200],
+                         description=f"`{c.get('holder')}` has it, `{c.get('other')}` declares it too: {cm.discord_text(c.get('why', ''), 300)}"
+                                     + (f"\nSettled on `{c['settled']}` by {c['settled_by']}." if c.get("settled") else ""))
+            buttons = [_button(f"Give to {c.get('holder', '?')}"[:80], self.custom_id("uidh", card_id), PRIMARY),
+                       _button(f"Give to {c.get('other', '?')}"[:80], self.custom_id("uido", card_id), PRIMARY)]
+        elif card["kind"] == "listing":
             embed.update(color=0x2E8B57, description="Listed after the automatic checks.")
             buttons = [_button("Pull", self.custom_id("pull", card_id), DANGER)]
         elif card["kind"] == "report":
@@ -345,7 +354,10 @@ class Mod(cm.Notifier):
                 line += f" · {cm.discord_text(card['reason'], 200)}"
             embed["description"] = (embed.get("description", "") + "\n\n" + line).strip()
             embed["color"] = 0x808080
-            buttons = [_button("Undo", self.custom_id("undo", card_id), SECONDARY)]
+            # (giving a uid is undone by giving it to the other side, with the other button or lsmod)
+            buttons = [] if card["kind"] == "uid" else [_button("Undo", self.custom_id("undo", card_id), SECONDARY)]
+        if not buttons:
+            return {"embeds": [embed], "components": []}
         return {"embeds": [embed], "components": [{"type": 1, "components": buttons}]}
 
     # -- interactions --
@@ -441,7 +453,9 @@ class Mod(cm.Notifier):
 
     def click(self, d, actor):
         action, card, _ = self._card_for(d, "custom_id")
-        allowed = {"listing": ("pull",), "report": ("pull", "keep", "block"), "queue": ("approve", "reject")}[card["kind"]]
+        allowed = {"listing": ("pull",), "report": ("pull", "keep", "block"), "queue": ("approve", "reject"), "uid": ("uidh", "uido")}[card["kind"]]
+        if action == "undo" and card["kind"] == "uid":
+            raise cm.Reject(400, "Give the uid to the other page instead.")
         if action == "undo":
             self.undo(card, actor)
         elif action not in allowed:
@@ -479,6 +493,14 @@ class Mod(cm.Notifier):
         key = card["key"]
         before = self.c.store.get(key)
         reason = cm.one_line(reason or "", cm.MAX_REASON)
+        if action in ("uidh", "uido"):
+            c = self.c.store.uid_conflict(card["report_id"]) or {}
+            if not c:
+                raise cm.Reject(404, "That conflict isn't on record.")
+            self.c.store.give_uid(c["uid"], c["holder"] if action == "uidh" else c["other"], actor["name"])
+            self.c.store.update_card(card["id"], action=action, actor=actor["id"], actor_name=actor["name"], reason="", before="", after_hash="")
+            self.audit(f"{DONE_WORDS[action]}: `{c['uid']}` (by <@{actor['id']}>)")
+            return
         if action == "pull":
             self.c.moderate(key, "pull", {"reason": reason or PULLED})
         elif action == "approve":
