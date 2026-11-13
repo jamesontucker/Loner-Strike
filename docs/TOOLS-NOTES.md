@@ -774,3 +774,38 @@ narrow right column, "The picture's own" wraps onto three lines, checkbox labels
   modes: graphs, generate/compile plugins, start a local server in a mode with bots, read logs; server control).
   Off by default (Settings switch), local connections only, per-session token, read-only unless edits are allowed,
   destructive actions confirmed in the app. Built on the existing local HTTP API (server.rs).
+
+### Agent K: the map viewer drawn like the game — 2026-11-12
+
+**Built** (details, sources and formulas: docs/TOOLS-RENDER.md)
+- Rust: `goldsrc/lightmap.rs` keeps every light style (atlas planes: pictures, then the faces' style numbers;
+  `uv2` unchanged), `light_point`/`first_hit` (the game's light sample under a point); bundle header
+  `lightmap.{maps,planes}`; `PARSER_VERSION` 2 (old caches rebuild). New `tools/render.rs` (mounted with one
+  `pub mod` + one merge line): `GET /api/tools/map/:name/look` (the player's gamma/brightness/texgamma/
+  lightgamma/gl_overbright/texture mode from config.cfg, sky sides, the sun, light at each model entity) and
+  `/sky/:side` (TGA → PNG). Two lines in `tools/mod.rs` now pass `atlas.full_height()` to the PNG writer.
+- UI: `viewer/gameLook.ts` (tables, styles, shaders), `materials.ts` rewritten inside (game look with Lighting
+  on; sun shading with it off, as before), `World.tsx` (look, sky, render modes per brush entity, `GameClock`
+  for flicker/pulse/water), `Models.tsx` (studio models placed in the map, lit like the game), Layers ▸
+  **Look: Like the game | Bright** (`LookChoice.tsx`, one row inserted in `panels/Layers.tsx`). `Scene.tsx`:
+  one line passes `entities` to `World`.
+- Dev: `window.__lsViewer.camera(x,y,z,pitch,yaw,fov)` / `.shot()`, `app/ui/render-dev.html?map=&cam=&look=`,
+  `cargo test serve_tools_for_ui -- --ignored` (all Tools routes on :8027 without the app), in-game kit
+  `docs/render-compare/` (`lscompare.cfg` + `ls_camera.sma`, GoldSrc has no setpos).
+
+**For agent I (editor) / anyone using MapMaterials**: the API is backwards compatible — same constructor
+(new optional 6th `lightmapInfo`), `get(d)` (new optional `render`), `setOptions` (new optional `look`),
+plus `setSettings`, `setSky`, `uniforms`. With `lighting: false` nothing changed. `OVERBRIGHT`/`SKY_COLOUR`
+still exported.
+
+**How to try it**: Tools ▸ Map viewer, any map, Lighting on (Fly shows the sky box). Or without the app: see
+"Checking against the game" in TOOLS-RENDER.md. Checked in Chromium on de_dust2 (out/in, sky), cs_office
+(indoor + glass), cs_havana (additive cones), cs_747 (strobe style animates 0/71 at 10 Hz), de_aztec (world
+water, func_water, `{` fence in mode 4, a lit pred_plant model). `cargo test` and `npm run build` green.
+
+**Left**: real in-game screenshots side by side (steps written, game not launched by me); detail textures (CZ),
+gl_max_size downscaling, sprites/decals/dynamic lights/renderfx, model animation, animated `+0~` textures.
+
+**Note**: my first commit (6ea2b7f) also carried someone's uncommitted reorder of the `pub mod` lines in
+`goldsrc/mod.rs` (same modules, moved to the top) — harmless, but it's in my commit, not theirs. Someone is also
+running my `serve_tools_for_ui` harness (debug build) on :8027.
