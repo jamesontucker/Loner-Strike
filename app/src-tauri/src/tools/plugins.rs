@@ -29,6 +29,10 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 
 /// The helper include, shipped with the app and handed to the compiler.
 pub const LONER_INC: &str = include_str!("../../../../plugins/scripting/include/loner.inc");
+/// The game-mode components' include (gm_components), which loner.inc pulls in.
+pub const LS_COMPONENTS_INC: &str = include_str!("../../../../plugins/scripting/include/ls_components.inc");
+/// The includes the app ships: shown in the include folder and handed to the compiler.
+pub const APP_INCS: &[(&str, &str)] = &[("loner.inc", LONER_INC), ("ls_components.inc", LS_COMPONENTS_INC)];
 
 const NO_GAME: &str = "Set up the game on this computer first.";
 const INTERNAL: &str = "Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.";
@@ -151,8 +155,12 @@ fn list(g: &Game, f: Folder) -> Vec<Value> {
             (wanted && meta.is_file() && safe_file(&name)).then(|| json!({"name": name, "size": meta.len(), "modified": modified(&meta), "readOnly": read_only(f, &name).is_some()}))
         })
         .collect();
-    if f == Folder::Include && !files.iter().any(|v| v["name"] == "loner.inc") {
-        files.push(json!({"name": "loner.inc", "size": LONER_INC.len(), "modified": 0, "readOnly": true}));
+    if f == Folder::Include {
+        for (inc, text) in APP_INCS {
+            if !files.iter().any(|v| v["name"] == *inc) {
+                files.push(json!({"name": inc, "size": text.len(), "modified": 0, "readOnly": true}));
+            }
+        }
     }
     files.sort_by_key(|v| v["name"].as_str().unwrap_or("").to_lowercase());
     files
@@ -169,8 +177,8 @@ fn decode(bytes: &[u8]) -> (String, &'static str) {
 pub fn read(g: &Game, f: Folder, name: &str) -> Result<Value, String> {
     let path = resolve(&folder_dir(g, f), name)?;
     if !path.is_file() {
-        if f == Folder::Include && name == "loner.inc" {
-            return Ok(json!({"name": name, "folder": f.id(), "text": LONER_INC, "encoding": "utf8", "readOnly": read_only(f, name)}));
+        if let Some((_, text)) = APP_INCS.iter().find(|(inc, _)| f == Folder::Include && *inc == name) {
+            return Ok(json!({"name": name, "folder": f.id(), "text": text, "encoding": "utf8", "readOnly": read_only(f, name)}));
         }
         return Err("That file isn't there any more.".into());
     }
@@ -255,8 +263,10 @@ pub fn api(g: &Game) -> Value {
         }
     }
     let mut texts: Vec<(String, String)> = files.iter().filter_map(|(n, p, ..)| std::fs::read(p).ok().map(|b| (n.clone(), decode(&b).0))).collect();
-    if !texts.iter().any(|(n, _)| n == "loner.inc") {
-        texts.push(("loner.inc".into(), LONER_INC.into()));
+    for (inc, text) in APP_INCS {
+        if !texts.iter().any(|(n, _)| n == inc) {
+            texts.push((inc.to_string(), text.to_string()));
+        }
     }
     let symbols = inc::parse_all(&texts);
     let value = Arc::new(json!({"includes": texts.iter().map(|(n, _)| n.trim_end_matches(".inc")).collect::<Vec<_>>(), "symbols": symbols}));
@@ -350,9 +360,11 @@ pub fn run_compiler(exe: &Path, install: &crate::steam::Install, src: &Path, out
 /// The include folder handed to the compiler, holding the app's loner.inc.
 fn studio_include(g: &Game) -> Result<PathBuf, String> {
     let dir = studio_dir(g).join("include");
-    let file = dir.join("loner.inc");
-    if std::fs::read_to_string(&file).ok().as_deref() != Some(LONER_INC) {
-        write_part(&file, LONER_INC.as_bytes())?;
+    for (inc, text) in APP_INCS {
+        let file = dir.join(inc);
+        if std::fs::read_to_string(&file).ok().as_deref() != Some(*text) {
+            write_part(&file, text.as_bytes())?;
+        }
     }
     Ok(dir)
 }

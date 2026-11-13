@@ -33,6 +33,7 @@
 #include <cstrike>
 #include <fun>
 #include <fakemeta>
+#include <ls_components>
 
 #define LS_INC_VERSION "0.1"
 
@@ -113,13 +114,13 @@ stock ls_optional()
 
 public ls__module_filter(const library[], LibType:type)
 {
-	return equal(library, "modekit") || equal(library, "gm_modes") ? PLUGIN_HANDLED : PLUGIN_CONTINUE;
+	return equal(library, "modekit") || equal(library, "gm_modes") || equal(library, "ls_components") ? PLUGIN_HANDLED : PLUGIN_CONTINUE;
 }
 
 public ls__native_filter(const name[], index, trap)
 {
 	/* missing at load: fine; a call made anyway does nothing */
-	if (equal(name, "mk_", 3) || equal(name, "gm_modes_", 9))
+	if (equal(name, "mk_", 3) || equal(name, "gm_modes_", 9) || equal(name, "ls_", 3))
 		return PLUGIN_HANDLED;
 	return PLUGIN_CONTINUE;
 }
