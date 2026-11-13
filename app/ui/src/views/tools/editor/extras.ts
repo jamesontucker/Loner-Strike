@@ -14,6 +14,7 @@ import { gsToThree, threeToGs, type Vec3 } from "../viewer/coords";
 import * as api from "./editorApi";
 import type { Cordon, CordonBox, Doc, VisSet } from "./editorApi";
 import { useEditor } from "./store";
+import { hangPlacement } from "./ceiling"; // Y: barnacles hang from the ceiling
 
 // ---- the views, from outside the canvas ---------------------------------------------------
 
@@ -247,7 +248,7 @@ export function landingBox(size: Vec3, point: Vec3, normal: Vec3, grid: number, 
 }
 
 /** The ghost for what's dragged or being placed, under a point of the window. */
-export function updateGhost(x: number, y: number, what: { size?: Vec3; component?: boolean } | null) {
+export function updateGhost(x: number, y: number, what: { id?: string; size?: Vec3; component?: boolean } | null) {
   const p4 = useP4.getState();
   if (!what) return p4.ghost && p4.set({ ghost: null });
   const hit = pickAt(x, y);
@@ -255,7 +256,9 @@ export function updateGhost(x: number, y: number, what: { size?: Vec3; component
   const s = useEditor.getState();
   const grid = s.alt ? 0 : s.grid;
   let ghost;
-  if (what.component || !what.size) {
+  const hang = what.component ? hangPlacement(what.id, hit.point, hit.normal) : null;
+  if (hang) ghost = { min: hang.min, max: hang.max, yaw: 0 };
+  else if (what.component || !what.size) {
     const p = hit.point.map((v, i) => Math.round(v + hit.normal[i] * 16)) as Vec3;
     ghost = { min: p.map((v) => v - 16) as Vec3, max: p.map((v) => v + 16) as Vec3, yaw: 0 };
   } else ghost = landingBox(what.size, hit.point, hit.normal, grid, p4.turn);
@@ -320,7 +323,8 @@ export async function placeComponentAt(cls: string, x: number, y: number) {
     if (t.created?.entities?.length) s.select({ brushes: [], entities: t.created.entities, face: null });
     return;
   }
-  const o = p.map((v, i) => Math.round(v + hit.normal[i] * 16)) as Vec3;
+  // Y: a barnacle goes on the ceiling straight above where it was dropped
+  const o = hangPlacement(cls, [p[0], p[1], hit.point[2]], hit.normal)?.origin ?? (p.map((v, i) => Math.round(v + hit.normal[i] * 16)) as Vec3);
   const r = await s.cmd({ op: "add_entity", classname: cls, origin: o, ...(keys ? { keys } : {}) });
   if (r.created) s.select({ brushes: [], entities: r.created.entities, face: null });
 }

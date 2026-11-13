@@ -207,3 +207,14 @@ Measured on ls_outpost, Last Stand, full roster (waves_full.ini), with bots and 
 - W1: gm_laststand should precache only the types its waves use (it does, up to round 20). The enrage request is
   noted for the next batch.
 - Flyers (controller, stukabat) start after QA round 4, as agreed.
+
+## Y for P5 (2026-11-13): barnacles hang from the ceiling when placed
+- New `editor/ceiling.ts`: `HANGS` (classes that hang, with their box under the hanging point), `ceilingAbove(p)`
+  (straight up through the brushes, nearest solid face within 4096; sky or nothing = null) and
+  `hangPlacement(cls, point, normal)`.
+- `extras.ts` (your placement code), three small hunks marked `Y:`: the import, `updateGhost` takes the dragged or
+  placing item's `id` and draws the ghost hanging from the ceiling, and `placeComponentAt` puts a hanging class's
+  origin on the ceiling above the drop point. Click (Place) and drag from Gameplay both go through these. Please
+  keep them when you merge your drag-and-drop work; to add another hanging class, add it to `HANGS`.
+- The game does the same at spawn (brain 86cce29): an `ls_barnacle` left floating or on the floor moves up to the
+  ceiling above it (not under open sky).
