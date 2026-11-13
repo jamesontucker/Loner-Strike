@@ -66,3 +66,22 @@
   servers at the stop time: it reads like a real crash. Tag shutdown-time faults (or skip them).
 - Creatures still kill LS defenders through intact gates (see W1's note #1): melee reach through a solid barricade.
 - Boss-wave hang: still not reproduced (3 more losses on r43393053888/r43395720981).
+
+## Base Builder player models as Last Stand creatures (Y, 2026-11-13; prototype only, roster unchanged)
+- **Works without code changes.** A creatures.ini type can point at `models/player/bb_*/bb_*.mdl` and name the player
+  sequences: `anim_idle = ref_aim_knife_idle1`, `anim_walk = ref_aim_knife_walk`, `anim_run = ref_aim_knife_run`,
+  `anim_attack = ref_shoot_knife`, `anim_flinch = gut_flinch`. Missing names fall back to the activity (idle1, walk,
+  run, death*). Sim copy run (de_dust2, 12 bb types + zombie): sequence 80 idle, 81 walk, 84 swing on the CSO-style
+  models; 1/3/4 idle/walk/run plus 76 swing on the others. They chased and hit bots.
+  - **Gap:** player sequences carry little or no linear movement, so walk/run can't be matched to the speed. A
+    per-type `anim_speeds = <walk> <run>` key would fix the sliding; not built.
+- **Looks** (renders: `~/loner-strike-sim/creatures/shot_*.png`): far more detailed and "modern zombie mod" than
+  zombie.mdl. Fat cleaver tank, banshee in a dress, clawed green poisoner, grim reaper with a scythe, a T-800.
+- **Licensing: don't ship them with Last Stand.** The textures and model names show they're ripped from commercial
+  games: `NEXON_CSO_heavy_zombi_origin*.bmp`, ev_banshee/cosspeed/boomer/parcour "_origin" (Counter-Strike Online,
+  Nexon), `kf_husk` (Killing Floor, Tripwire, the snowman), Deimos (CSO), a Terminator T-800. The GitHub repo has no
+  licence. Base Builder setup already fetches them from that repo at install (we don't host them).
+- **Cleanest way:** keep Last Stand's default roster on Half-Life's models. Offer an opt-in "Base Builder look" for
+  Last Stand that appears only when mode-basebuilder is installed: a creatures.ini overlay of bb_ types, no new fetch
+  and no Base Builder dependency. Never put the files on FastDL. A server that uses it makes clients without Base
+  Builder download them (sv_allowdownload) or fail to join: that's the server owner's choice, stated on the toggle.
