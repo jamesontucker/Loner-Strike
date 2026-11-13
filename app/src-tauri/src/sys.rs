@@ -8,6 +8,12 @@ use std::time::{Duration, Instant};
 
 /// The app's own files (install records, caches, playit key): <config dir>/Loner-Strike.
 pub fn app_dir() -> PathBuf {
+    // test builds (the Tools dev server, agents' test servers) can point it at a scratch folder,
+    // so they never touch the real app's files
+    #[cfg(test)]
+    if let Some(d) = std::env::var_os("LS_APP_DIR") {
+        return PathBuf::from(d);
+    }
     dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Loner-Strike")
 }
 

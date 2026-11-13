@@ -91,7 +91,7 @@ impl<'a> R<'a> {
     fn fixed(&mut self, n: usize) -> Res<String> {
         let s = self.take(n)?;
         let end = s.iter().position(|c| *c == 0).unwrap_or(s.len());
-        Ok(String::from_utf8_lossy(&s[..end]).into_owned())
+        Ok(decode_text(&s[..end]))
     }
     /// RMF: a byte length, then the text (with its zero).
     fn bstr(&mut self) -> Res<String> {
@@ -114,9 +114,51 @@ impl<'a> R<'a> {
     }
 }
 
+/// Text from the file: UTF-8 when it is, else the Windows code page it most likely was in
+/// (Cyrillic cp1251 when its high bytes are mostly Cyrillic letters, else Western cp1252), so
+/// "Фаза - #1" in a Russian map survives instead of turning into question marks.
+pub fn decode_text(b: &[u8]) -> String {
+    if let Ok(s) = std::str::from_utf8(b) {
+        return s.to_string();
+    }
+    let high: Vec<u8> = b.iter().copied().filter(|c| *c >= 0x80).collect();
+    let cyr = high.iter().filter(|c| **c >= 0xC0 || **c == 0xA8 || **c == 0xB8).count();
+    // (Cyrillic words are runs of high bytes; Western text has a lone accent here and there)
+    let run = b.windows(2).any(|w| w[0] >= 0xC0 && w[1] >= 0xC0);
+    let cp1251 = run && cyr * 10 >= high.len() * 7;
+    b.iter()
+        .map(|&c| match c {
+            0..=0x7F => c as char,
+            _ if cp1251 => match c {
+                0xC0..=0xFF => char::from_u32(0x0410 + (c as u32 - 0xC0)).unwrap_or('?'),
+                0xA8 => 'Ё',
+                0xB8 => 'ё',
+                0xB9 => '№',
+                0x96 => '–',
+                0x97 => '—',
+                0xAB => '«',
+                0xBB => '»',
+                _ => char::from_u32(c as u32).unwrap_or('?'),
+            },
+            // cp1252's differences from Latin-1 that maps use
+            0x80 => '€',
+            0x85 => '…',
+            0x91 => '‘',
+            0x92 => '’',
+            0x93 => '“',
+            0x94 => '”',
+            0x96 => '–',
+            0x97 => '—',
+            _ => char::from_u32(c as u32).unwrap_or('?'),
+        })
+        .collect()
+}
+
 /// A face as the editors store it: its corners and texture.
 struct RawFace {
     verts: Vec<Vec3>,
+    /// Hammer's three stored plane points (RMF): exactly what Hammer writes into a .map
+    points: Option<[Vec3; 3]>,
     /// a plane from the file, when it has one (JMF), else from the corners
     plane: Option<Plane>,
     texture: String,
@@ -125,30 +167,60 @@ struct RawFace {
     standard: Option<[f64; 5]>,
 }
 
-/// Newell's normal of a polygon (either winding).
-fn newell(v: &[Vec3]) -> Vec3 {
-    let mut n = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
-    for i in 0..v.len() {
-        let a = v[i];
-        let b = v[(i + 1) % v.len()];
-        n.x += (a.y - b.y) * (a.z + b.z);
-        n.y += (a.z - b.z) * (a.x + b.x);
-        n.z += (a.x - b.x) * (a.y + b.y);
-    }
-    n
-}
-
-/// Tidies float noise from 32-bit files: 63.99998 -> 64.
+/// Float noise from 32-bit files: a coordinate within a hair of a whole unit is that unit.
+/// Only points are tidied, never a plane's normal (that would turn slanted faces about the
+/// world's origin and move them, by several units far from it).
 fn tidy(x: f64) -> f64 {
     let r = x.round();
     if (x - r).abs() < 1e-3 {
         r
     } else {
-        (x * 1024.0).round() / 1024.0
+        x
     }
 }
 
-/// A brush from raw faces: planes facing out from the brush's middle, in our three-point form.
+fn tidy3(p: Vec3) -> Vec3 {
+    Vec3 { x: tidy(p.x), y: tidy(p.y), z: tidy(p.z) }
+}
+
+/// Three points for a face, in .map order and facing out of the brush: Hammer's own stored
+/// points when the file has them, else three well-spread corners, else the file's plane.
+fn face_points(f: &RawFace, mid: Vec3) -> Option<([Vec3; 3], Plane)> {
+    let candidates: Vec<[Vec3; 3]> = {
+        let mut c = Vec::new();
+        if let Some(p) = f.points {
+            c.push([tidy3(p[0]), tidy3(p[1]), tidy3(p[2])]);
+        }
+        // (J.A.C.K.: three corners of the face; tried its stored plane first, and real maps got
+        // more illegal brushes from the rounded 32-bit normals)
+        if f.verts.len() >= 3 {
+            let v: Vec<Vec3> = f.verts.iter().map(|p| tidy3(*p)).collect();
+            if let Some(p) = super::geom::map_points_for_polygon(&v) {
+                c.push(p);
+            }
+        }
+        if let Some(pl) = f.plane.filter(|p| p.normal.len() > 0.5) {
+            c.push(map_points_for_plane(&pl));
+        }
+        c
+    };
+    for p in candidates {
+        let Some(pl) = Plane::from_map_points(&p) else { continue };
+        // outward: the brush's middle behind the plane (else the same points the other way round)
+        if pl.distance(mid) > 0.0 {
+            let q = [p[0], p[2], p[1]];
+            if let Some(pl2) = Plane::from_map_points(&q) {
+                return Some((q, pl2));
+            }
+        } else {
+            return Some((p, pl));
+        }
+    }
+    None
+}
+
+/// A brush from raw faces. Faces that don't touch the solid are dropped; a brush with no
+/// closed shape left is refused (counted and said in the notes).
 fn make_brush(faces: Vec<RawFace>) -> Option<Brush> {
     let all: Vec<Vec3> = faces.iter().flat_map(|f| f.verts.iter().copied()).collect();
     if all.len() < 4 || faces.len() < 4 {
@@ -158,26 +230,7 @@ fn make_brush(faces: Vec<RawFace>) -> Option<Brush> {
     let mid = Vec3 { x: all.iter().map(|p| p.x).sum::<f64>() / n, y: all.iter().map(|p| p.y).sum::<f64>() / n, z: all.iter().map(|p| p.z).sum::<f64>() / n };
     let mut out = Vec::new();
     for f in faces {
-        let plane = match f.plane {
-            Some(p) if p.normal.len() > 0.5 => p,
-            _ => {
-                if f.verts.len() < 3 {
-                    continue;
-                }
-                let nrm = newell(&f.verts);
-                if nrm.len() < 1e-9 {
-                    continue;
-                }
-                let c = f.verts.iter().fold(Vec3 { x: 0.0, y: 0.0, z: 0.0 }, |a, p| a + *p) * (1.0 / f.verts.len() as f64);
-                Plane::from_point_normal(c, nrm.normalized())
-            }
-        };
-        // outward: the brush's middle must be behind the plane
-        let plane = if plane.distance(mid) > 0.0 { plane.flipped() } else { plane };
-        // snap nearly-axis normals and whole distances (32-bit floats in the file)
-        let nn = Vec3 { x: tidy(plane.normal.x), y: tidy(plane.normal.y), z: tidy(plane.normal.z) };
-        let plane = if nn.len() > 0.999 && nn.len() < 1.001 { Plane::new(nn.normalized(), tidy(plane.dist)) } else { plane };
-        let points = map_points_for_plane(&plane).map(|p| Vec3 { x: tidy(p.x), y: tidy(p.y), z: tidy(p.z) });
+        let Some((points, plane)) = face_points(&f, mid) else { continue };
         let align = match (f.align, f.standard) {
             (Some(a), _) => a,
             (None, Some([xs, ys, rot, sx, sy])) => from_standard(plane.normal, xs, ys, rot, sx, sy),
@@ -189,7 +242,12 @@ fn make_brush(faces: Vec<RawFace>) -> Option<Brush> {
     if out.len() < 4 {
         return None;
     }
-    Some(Brush { faces: out, entity: None, group: None })
+    let mut b = Brush { faces: out, entity: None, group: None };
+    super::geom::drop_unused_faces(&mut b);
+    if b.faces.len() < 4 || super::geom::brush_polygons(&b).iter().filter(|p| p.len() >= 3).count() < 4 {
+        return None;
+    }
+    Some(b)
 }
 
 fn valve(u: Vec3, us: f64, v: Vec3, vs: f64, rot: f64, su: f64, sv: f64) -> TexAlign {
@@ -242,7 +300,7 @@ impl Builder {
         }
         Some(id)
     }
-    fn entity(&mut self, class: &str, keys: Vec<(String, String)>, flags: i32, origin: Option<Vec3>, group: Option<GroupId>, vis: &[i32]) -> EntityId {
+    fn entity(&mut self, class: &str, keys: Vec<(String, String)>, flags: Option<i32>, origin: Option<Vec3>, group: Option<GroupId>, vis: &[i32]) -> EntityId {
         let mut e = Entity::new(class);
         for (k, v) in keys {
             if k.is_empty() || k == "classname" {
@@ -250,8 +308,13 @@ impl Builder {
             }
             e.set(&k, &v);
         }
-        if flags != 0 && e.get("spawnflags").is_none() {
-            e.set("spawnflags", &flags.to_string());
+        // the editors keep spawnflags in their own field and write that out: a stray
+        // "spawnflags" key left in the list is stale (Hammer ignores it)
+        if let Some(f) = flags {
+            e.remove("spawnflags");
+            if f != 0 {
+                e.set("spawnflags", &f.to_string());
+            }
         }
         if let Some(o) = origin {
             e.set("origin", &format!("{} {} {}", fmt(o.x), fmt(o.y), fmt(o.z)));
@@ -400,13 +463,13 @@ fn rmf_face(r: &mut R, ver: i32) -> Res<RawFace> {
     for _ in 0..n {
         verts.push(r.vec()?);
     }
-    r.skip(36)?; // the three plane points (we use the corners)
+    let points = [r.vec()?, r.vec()?, r.vec()?];
     if ver <= 18 {
         standard = Some([us, vs, rot, if su == 0.0 { 1.0 } else { su }, if sv == 0.0 { 1.0 } else { sv }]);
     } else {
         align = Some(valve(u, us, v, vs, rot, su, sv));
     }
-    Ok(RawFace { verts, plane: None, texture, align, standard })
+    Ok(RawFace { verts, points: Some(points), plane: None, texture, align, standard })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -494,7 +557,7 @@ fn rmf_object_body(r: &mut R, ver: i32, b: &mut Builder, groups: &mut usize, kin
             let origin = r.vec()?;
             r.skip(4)?;
             let point = solids.is_empty();
-            let e = b.entity(&class, keys, flags, point.then_some(origin), group, &vis);
+            let e = b.entity(&class, keys, Some(flags), point.then_some(origin), group, &vis);
             for (faces, sv) in solids.into_iter().zip(solid_vis) {
                 b.brush(faces, Some(e), None, &sv);
             }
@@ -532,7 +595,7 @@ fn path_entities(b: &mut Builder, base: &str, class: &str, circular: bool, nodes
             keys.push(("target".to_string(), names[j].clone()));
         }
         keys.extend(n.keys);
-        b.entity(class, keys, 0, Some(n.pos), None, &[]);
+        b.entity(class, keys, None, Some(n.pos), None, &[]);
     }
 }
 
@@ -771,7 +834,7 @@ pub fn read_jmf(bytes: &[u8]) -> Res<Imported> {
                     r.skip(12)?; // texture coordinates
                 }
                 let plane = (normal.len() > 0.5).then(|| Plane::new(normal.normalized(), dist));
-                faces.push(RawFace { verts, plane, texture, align: Some(valve(u, us, v, vs, rot, su, sv)), standard: None });
+                faces.push(RawFace { verts, points: None, plane, texture, align: Some(valve(u, us, v, vs, rot, su, sv)), standard: None });
             }
             for _ in 0..npatch {
                 r.skip(4 + 4)?; // width, height
@@ -790,7 +853,7 @@ pub fn read_jmf(bytes: &[u8]) -> Res<Imported> {
             }
         } else {
             let point = solids.is_empty();
-            let e = b.entity(&class, keys, spawnflags, point.then_some(origin), g, &vis);
+            let e = b.entity(&class, keys, Some(spawnflags), point.then_some(origin), g, &vis);
             for (faces, _, sv) in solids {
                 b.brush(faces, Some(e), None, &sv);
             }
@@ -1151,6 +1214,68 @@ pub(crate) mod tests {
         let mut w = W::default();
         w.b(b"JHMF").i(121).i(1).i(1 << 30);
         assert!(read_jmf(&w.0).is_err());
+    }
+
+    /// An RMF with one brush given as faces (corners in order; the first three are also
+    /// Hammer's stored plane points), as an entity with `flags` and `keys`.
+    fn rmf_one(faces: &[Vec<[f32; 3]>], class: &str, flags: i32, keys: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut w = W::default();
+        w.f(2.2).b(b"RMF").i(0);
+        w.bs("CMapWorld").i(0).b(&[0, 0, 0]).i(1);
+        w.bs("CMapEntity").i(0).b(&[0, 0, 0]).i(1);
+        w.bs("CMapSolid").i(0).b(&[0, 0, 0]).i(0).i(faces.len() as i32);
+        for verts in faces {
+            w.fixed("SLOPE", 260).v([1.0, 0.0, 0.0]).f(0.0).v([0.0, 0.0, -1.0]).f(0.0).f(0.0).f(1.0).f(1.0).b(&[0; 16]);
+            w.i(verts.len() as i32);
+            for p in verts {
+                w.v(*p);
+            }
+            w.v(verts[0]).v(verts[1]).v(verts[2]);
+        }
+        w.bs(class).b(&[0; 4]).i(flags).i(keys.len() as i32);
+        for (k, v) in keys {
+            w.bs(k);
+            w.0.push(v.len() as u8 + 1);
+            w.b(v).b(&[0]);
+        }
+        w.b(&[0; 12]).b(&[0; 2]).v([0.0, 0.0, 0.0]).b(&[0; 4]);
+        rmf_kv(&mut w, "worldspawn", 0, &[]);
+        w.i(0);
+        w.0
+    }
+
+    #[test]
+    fn slanted_faces_far_from_the_origin_stay_exactly_put() {
+        // a wedge 4000 units out with an odd slope (the old import rounded its normal and
+        // moved the face by units)
+        let (a, b, c, d) = ([4000.0, 3000.0, 0.0], [4128.0, 3000.0, 0.0], [4128.0, 3100.0, 0.0], [4000.0, 3100.0, 0.0]);
+        let (e, f) = ([4000.0, 3000.0, 37.0], [4000.0, 3100.0, 37.0]);
+        let faces = vec![vec![a, b, c, d], vec![a, d, f, e], vec![e, f, c, b], vec![a, e, b], vec![d, c, f]];
+        let im = read_rmf(&rmf_one(&faces, "func_wall", 0, &[])).unwrap();
+        let br = im.doc.brushes.values().next().expect("the wedge");
+        assert!(is_valid(br));
+        let slope = br.faces.iter().map(|x| x.plane().unwrap()).find(|p| p.normal.z > 0.1 && p.normal.x > 0.1).expect("the slope");
+        for p in [e, f, c, b] {
+            let v = Vec3 { x: p[0] as f64, y: p[1] as f64, z: p[2] as f64 };
+            assert!(slope.distance(v).abs() < 1e-6, "{p:?} is {} off the slope", slope.distance(v));
+        }
+    }
+
+    #[test]
+    fn hammer_flags_win_and_old_text_survives() {
+        let (a, b, c, d) = ([0.0, 0.0, 0.0], [64.0, 0.0, 0.0], [64.0, 64.0, 0.0], [0.0, 64.0, 0.0]);
+        let (e, f, g, h) = ([0.0, 0.0, 64.0], [64.0, 0.0, 64.0], [64.0, 64.0, 64.0], [0.0, 64.0, 64.0]);
+        let faces = vec![vec![e, h, g, f], vec![a, b, c, d], vec![b, f, g, c], vec![a, d, h, e], vec![d, c, g, h], vec![a, e, f, b]];
+        // a stale "spawnflags" key and the editor's own field (257): the field wins
+        let rus = [0xD4u8, 0xE0, 0xE7, 0xE0, b' ', b'-', b' ', b'#', b'1']; // "Фаза - #1" in cp1251
+        let im = read_rmf(&rmf_one(&faces, "func_rotating", 257, &[("spawnflags", b"1"), ("message", &rus)])).unwrap();
+        let e0 = im.doc.entities.values().find(|x| x.classname() == "func_rotating").unwrap();
+        assert_eq!(e0.get("spawnflags"), Some("257"));
+        assert_eq!(e0.get("message"), Some("Фаза - #1"));
+        let im = read_rmf(&rmf_one(&faces, "func_wall", 0, &[("spawnflags", b"4")])).unwrap();
+        assert_eq!(im.doc.entities.values().find(|x| x.classname() == "func_wall").unwrap().get("spawnflags"), None);
+        assert_eq!(decode_text("café".as_bytes()), "café");
+        assert_eq!(decode_text(&[b'c', b'a', b'f', 0xE9]), "café");
     }
 
     /// A real Hammer file when one is on this computer (opt-in):

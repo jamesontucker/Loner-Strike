@@ -170,6 +170,11 @@ pub fn run(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<I
     }
 
     // Entities.
+    // P5: func_detail is merged into the world by the compiler (SDHLT): not an entity or a
+    // brush model in the compiled map, so it doesn't count toward those limits
+    let detail: HashSet<EntityId> = doc.entities.iter().filter(|(_, e)| e.classname().eq_ignore_ascii_case("func_detail")).map(|(id, _)| *id).collect();
+    let detail_models = doc.brushes.values().filter_map(|b| b.entity).filter(|e| detail.contains(e)).collect::<HashSet<_>>().len();
+    let st = Stats { entities: st.entities - detail.len(), brush_entities: st.brush_entities - detail_models, ..st };
     if st.entities > limits::MAX_ENTITIES {
         out.push(issue(Level::Error, "too-many-entities", format!("{} entities; a map can hold {}.", st.entities, limits::MAX_ENTITIES)));
     } else if st.entities > limits::DEFAULT_EDICTS - 100 {

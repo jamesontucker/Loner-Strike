@@ -516,7 +516,7 @@ async fn api_project_action(State(st): State<Shared>, Extension(ed): Extension<E
                 }
                 let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
                 if (ext == "rmf" || ext == "jmf") && r.kind != Kind::Project {
-                    let im = import_other(&path)?;
+                    let im = import_other(&path, &dirs)?;
                     let mut state = ed.install_from(im.doc, stem(&path), None, Some(&path), &dirs);
                     state["notes"] = json!(im.notes);
                     return Ok(json!({"opened": true, "state": state}));
@@ -572,8 +572,87 @@ async fn api_project_action(State(st): State<Shared>, Extension(ed): Extension<E
 
 // ---- Hammer .rmf / J.A.C.K. .jmf import --------------------------------------------------
 
-/// A .rmf or .jmf file read into a document (by its extension, then by its first bytes).
-pub fn import_other(path: &Path) -> Result<crate::editor::rmf::Imported, String> {
+/// A .rmf or .jmf file read into a document (by its first bytes), with its texture files
+/// found (Hammer and J.A.C.K. keep the WAD list in their own settings, not in the map).
+pub fn import_other(path: &Path, game_dirs: &[PathBuf]) -> Result<crate::editor::rmf::Imported, String> {
+    let mut im = read_other(path)?;
+    let mut dirs: Vec<PathBuf> = path.parent().map(|p| vec![p.to_path_buf()]).unwrap_or_default();
+    dirs.extend(game_dirs.iter().cloned());
+    let note = find_wads(&mut im.doc, &dirs);
+    im.notes.push(note);
+    Ok(im)
+}
+
+/// Picks texture files that hold the map's textures: the ones it names when they're here,
+/// then the fewest more from `dirs` (the file's own folder first, then the game's) that cover
+/// the rest. Returns a plain note of what was found and what's still missing.
+pub fn find_wads(doc: &mut MapDocument, dirs: &[PathBuf]) -> String {
+    use std::collections::{BTreeMap, HashSet};
+    let used: HashSet<String> = doc.brushes.values().flat_map(|b| b.faces.iter().map(|f| f.texture.to_ascii_lowercase())).collect();
+    // every WAD in those folders (first one with a name wins), with its texture names
+    let mut wads: BTreeMap<String, (usize, PathBuf, HashSet<String>)> = BTreeMap::new();
+    for (rank, d) in dirs.iter().enumerate() {
+        let Ok(rd) = std::fs::read_dir(d) else { continue };
+        let mut files: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("wad"))).collect();
+        files.sort();
+        for p in files.into_iter().take(400) {
+            let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            if wads.contains_key(&name.to_ascii_lowercase()) {
+                continue;
+            }
+            if let Ok(w) = crate::goldsrc::wad::Wad::open(&p) {
+                let names: HashSet<String> = w.entries.keys().filter(|k| used.contains(*k)).cloned().collect();
+                wads.insert(name.to_ascii_lowercase(), (rank, p.clone(), names));
+            }
+        }
+    }
+    let base = |w: &str| w.rsplit(['/', '\\']).next().unwrap_or(w).to_ascii_lowercase();
+    let mut chosen: Vec<String> = Vec::new();
+    let mut covered: HashSet<String> = HashSet::new();
+    // the ones the map already names, when they're here
+    for w in doc.world.wads.clone() {
+        if let Some((_, p, names)) = wads.get(&base(&w)) {
+            covered.extend(names.iter().cloned());
+            chosen.push(p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(w));
+        }
+    }
+    // then the fewest more (most new textures first; the file's folder before the game's)
+    loop {
+        let best = wads
+            .iter()
+            .filter(|(k, _)| !chosen.iter().any(|c| c.to_ascii_lowercase() == **k))
+            .map(|(k, (rank, p, names))| (names.iter().filter(|n| !covered.contains(*n)).count(), std::cmp::Reverse(*rank), k.clone(), p.clone()))
+            .filter(|x| x.0 > 0)
+            .max_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+        let Some((_, _, k, p)) = best else { break };
+        covered.extend(wads[&k].2.iter().cloned());
+        chosen.push(p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(k));
+    }
+    let missing: Vec<&String> = used.iter().filter(|t| !covered.contains(*t)).collect();
+    let named_missing: Vec<String> = doc.world.wads.iter().filter(|w| !wads.contains_key(&base(w))).cloned().collect();
+    if !chosen.is_empty() {
+        // the map's own list first (even the ones not here), then what was found
+        let mut list: Vec<String> = doc.world.wads.clone();
+        for c in &chosen {
+            if !list.iter().any(|w| base(w) == c.to_ascii_lowercase()) {
+                list.push(c.clone());
+            }
+        }
+        doc.world.wads = list;
+    }
+    let mut note = if chosen.is_empty() { "No texture files with this map's textures were found beside it or in the game.".to_string() } else { format!("Texture files for this map: {}.", chosen.join(", ")) };
+    if !named_missing.is_empty() {
+        note.push_str(&format!(" Named by the map but not on this computer: {}.", named_missing.join(", ")));
+    }
+    if !missing.is_empty() {
+        let mut m: Vec<&String> = missing.clone();
+        m.sort();
+        note.push_str(&format!(" {} texture{} aren't in any texture file here (e.g. {}): add their WAD in Map properties.", m.len(), if m.len() == 1 { "" } else { "s" }, m.iter().take(4).map(|s| s.as_str()).collect::<Vec<_>>().join(", ")));
+    }
+    note
+}
+
+fn read_other(path: &Path) -> Result<crate::editor::rmf::Imported, String> {
     let len = std::fs::metadata(path).map_err(|_| "That file couldn't be opened.".to_string())?.len();
     if len > super::MAX_FILE {
         return Err("That file is too big to be a map (over 64 MB).".into());
@@ -595,12 +674,22 @@ async fn api_import_other(State(st): State<Shared>, Extension(ed): Extension<Ed>
     let dirs = wad_dirs(&st);
     blocking(move || {
         use tauri_plugin_dialog::DialogExt;
-        let app = st.app.get().cloned().ok_or(super::INTERNAL)?;
-        let Some(picked) = app.dialog().file().set_title("Import a Hammer or J.A.C.K. map").add_filter("Hammer / J.A.C.K. map", &["rmf", "jmf"]).blocking_pick_file() else {
-            return Ok(json!({"cancelled": true}));
+        // dev servers (test builds only) answer the dialog with LS_DEV_PICK, like the other file routes
+        #[cfg(test)]
+        let dev = std::env::var("LS_DEV_PICK").ok().map(PathBuf::from);
+        #[cfg(not(test))]
+        let dev: Option<PathBuf> = None;
+        let path = match dev {
+            Some(p) => p,
+            None => {
+                let app = st.app.get().cloned().ok_or(super::INTERNAL)?;
+                let Some(picked) = app.dialog().file().set_title("Import a Hammer or J.A.C.K. map").add_filter("Hammer / J.A.C.K. map", &["rmf", "jmf"]).blocking_pick_file() else {
+                    return Ok(json!({"cancelled": true}));
+                };
+                picked.into_path().map_err(|_| "That file can't be used.".to_string())?
+            }
         };
-        let path = picked.into_path().map_err(|_| "That file can't be used.".to_string())?;
-        let im = import_other(&path)?;
+        let im = import_other(&path, &dirs)?;
         // not a project yet: Save makes one (the original file is never written to)
         let mut state = ed.install_from(im.doc, stem(&path), None, Some(&path), &dirs);
         state["notes"] = json!(im.notes);

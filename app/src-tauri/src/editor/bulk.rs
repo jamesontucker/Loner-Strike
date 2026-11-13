@@ -1016,4 +1016,18 @@ mod tests {
         assert!(cmd_set_key_many(&mut d, &mut h, &[es[0]], "classname", "").is_err());
         assert!(cmd_set_key_many(&mut d, &mut h, &[es[0]], "message", "a \"quote\"").is_err());
     }
+
+    #[test]
+    fn func_detail_does_not_count_toward_entity_limits() {
+        let mut d = MapDocument::new();
+        let mut h = History::default();
+        for i in 0..1100 {
+            let x = (i % 40) as f64 * 40.0;
+            let y = (i / 40) as f64 * 40.0;
+            let b = super::super::history::cmd_add_brush(&mut d, &mut h, make_box(v3(x, y, 0.0), v3(x + 32.0, y + 32.0, 32.0), "WALL"), "Box");
+            super::super::history::cmd_tie_to_entity(&mut d, &mut h, &[b], "func_detail").unwrap();
+        }
+        let issues = crate::editor::checks::run(&d, None);
+        assert!(!issues.iter().any(|i| i.code == "too-many-entities" || i.code == "too-many-models"), "{:?}", issues.iter().map(|i| &i.code).collect::<Vec<_>>());
+    }
 }

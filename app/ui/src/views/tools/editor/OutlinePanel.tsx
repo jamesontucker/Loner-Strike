@@ -156,7 +156,8 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
       const key = `g${g.id}`;
       const ids = members(g.id);
       out.push({ kind: "group", key, depth, g, ids, count: ids.brushes.length + ids.entities.length });
-      if (!open[key]) return;
+      // a search opens the folders its matches are in
+      if (!open[key] && !query && filter === "all") return;
       for (const c of childGroups(g.id)) pushGroup(c, depth + 1);
       const es = sortE(entsIn(g.id));
       const bs = sortB(brushesIn(g.id));
@@ -311,7 +312,7 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
       const isOpen = open[k] ?? true;
       return (
         <div key={r.key} className={`ed-ol-head${dragOver === r.key ? " drop" : ""}`} {...(r.dropToTop ? dropOn(r.key, null) : {})} title={r.dropToTop ? "Drop things here to take them out of their folder" : undefined}>
-          <button type="button" className="ed-ol-twist" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [k]: !isOpen }))}>
+          <button type="button" className="ed-ol-twist" aria-expanded={isOpen} aria-label={`${isOpen ? "Fold" : "Unfold"} ${r.label}`} onClick={() => setOpen((o) => ({ ...o, [k]: !isOpen }))}>
             {isOpen ? "▾" : "▸"}
           </button>
           <span>{r.label}</span>

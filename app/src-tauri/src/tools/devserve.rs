@@ -31,6 +31,11 @@ mod tests {
         let port: u16 = std::env::var("LS_DEV_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8027);
         let app_dir = std::env::temp_dir().join("ls-tools-dev");
         let _ = std::fs::create_dir_all(&app_dir);
+        // everything the tools keep (editor recent/autosave/backups, prefabs, Studio graphs) in
+        // the temp folder too, as TOOLS-DEV.md says, unless LS_APP_DIR picks one (P5)
+        if std::env::var_os("LS_APP_DIR").is_none() {
+            std::env::set_var("LS_APP_DIR", &app_dir);
+        }
         let g = crate::game::Game::with_app_dir(std::path::Path::new(&hl), &game, &app_dir);
         // backups (safety.rs) of what the tools save, in the temp app folder
         crate::safety::use_game(&g);

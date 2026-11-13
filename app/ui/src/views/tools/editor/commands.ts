@@ -238,7 +238,11 @@ export function commands(): Command[] {
         if (g != null) void S().cmd({ op: "ungroup", group: g });
       },
     },
-    { id: "edit.tie", label: "Tie to entity", menu: "Edit", hint: "func_wall (pick another in Inspect)", when: brushSel, run: () => void S().cmd({ op: "tie", brushes: selectionIds().brushes, classname: "func_wall" }) },
+    { id: "edit.tie", label: "Tie to entity", menu: "Edit", hint: "func_wall (pick another in Inspect)", when: brushSel, run: async () => {
+      // the new entity is what's picked after (so Move to world works straight away)
+      const r = await S().cmd({ op: "tie", brushes: selectionIds().brushes, classname: "func_wall" });
+      if (r.created?.entities.length) S().select({ brushes: [], entities: r.created.entities, face: null });
+    } },
     {
       id: "edit.toWorld",
       label: "Move to world",
