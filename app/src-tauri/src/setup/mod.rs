@@ -580,11 +580,20 @@ fn install_game_with(job: &Job, plan: &InstallPlan, ctx: &Ctx, g: &str, rec: &mu
             }
         }
     }
-    let (modes, addons) = menu_contents(rec, &plan.catalog);
+    let (mut modes, addons) = menu_contents(rec, &plan.catalog);
     rec.begin("core");
-    let ok = run_step(job, &format!("{g}/core-plugins"), || core::plugins(rec, ctx))?;
-    if !ok {
-        job.failed_compile("Loner-Strike plugins");
+    let failed = run_step(job, &format!("{g}/core-plugins"), || core::plugins(rec, ctx))?;
+    for name in &failed {
+        job.failed_compile(&format!("{name}.amxx"));
+    }
+    // a mode whose plugin didn't build isn't offered (its line in modes.ini goes) until it does
+    let unbuilt = core::unbuilt_modes(rec, ctx, &failed);
+    for (id, _) in &unbuilt {
+        modes.remove(id);
+    }
+    if !unbuilt.is_empty() {
+        let names: Vec<&str> = unbuilt.iter().map(|(_, n)| n.as_str()).collect();
+        ctx.progress.note(&format!("Left out of the mode list until their plugins build: {}.", names.join(", ")));
     }
     run_step(job, &format!("{g}/core-configs"), || core::configs(rec, ctx, &modes, &addons))?;
     run_step(job, &format!("{g}/core-quake"), || core::quake_sounds(rec, ctx))?;

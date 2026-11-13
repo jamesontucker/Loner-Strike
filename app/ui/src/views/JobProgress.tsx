@@ -55,11 +55,14 @@ export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, long, s
   const job = data && (data.state === "running" || seen.current || (data.state !== "idle" && data.id !== startId)) ? data : null;
   if (job) seen.current = true;
   const over = !!job && (job.state === "done" || job.state === "error");
+  // finished, but some of Loner-Strike's plugins didn't build (they won't load): said, not hidden
+  const unbuilt = job?.state === "done" && !!job.failed_compiles?.length;
+  const why = job?.notes?.find((t) => t.includes("Couldn't compile"));
 
   useEffect(() => {
     if (!over || ended.current) return;
     ended.current = true;
-    onEnd(job!.state === "done");
+    onEnd(job!.state === "done" && !job!.failed_compiles?.length);
   }, [over, job, onEnd]);
   // the shared query only polls a running job: ask until this one shows up, and give up
   // (saying so) if it never does or the app stops answering
@@ -93,7 +96,7 @@ export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, long, s
   // the job's id ends in when it started (ms)
   const began = Number(/-(\d{12,})$/.exec(job?.id ?? "")?.[1]) || opened;
   const elapsed = Math.max(0, Math.round((Date.now() - began) / 1000));
-  const failed = lost || job?.state === "error";
+  const failed = lost || job?.state === "error" || unbuilt;
   const steps = job?.steps ?? [];
   const now = steps.find((s) => s.state === "running");
   const n = now ? steps.indexOf(now) + 1 : steps.filter((s) => s.state === "done").length;
@@ -116,8 +119,8 @@ export function JobProgress({ onEnd: onEndProp, onClose, onRetry, title, long, s
     <div className="job-progress">
       <SteamProgress
         value={value}
-        title={failed ? `Stopped: ${name.charAt(0).toLowerCase()}${name.slice(1).replace(/…$/, "")}` : name}
-        text={lost ? "Lost track of it. The app stopped answering; check the server's page to see if it finished." : job?.state === "error" ? job.error : now ? `${now.label}${now.detail ? ` · ${now.detail}` : ""}` : "Getting ready…"}
+        title={unbuilt ? `${name.replace(/…$/, "")}: finished, but not everything built` : failed ? `Stopped: ${name.charAt(0).toLowerCase()}${name.slice(1).replace(/…$/, "")}` : name}
+        text={unbuilt ? `These didn't build, so they won't load: ${job!.failed_compiles!.join(", ")}.${why ? ` ${why}` : ""} Try again; if it keeps failing, use Copy diagnostics under Settings, Help.` : lost ? "Lost track of it. The app stopped answering; check the server's page to see if it finished." : job?.state === "error" ? job.error : now ? `${now.label}${now.detail ? ` · ${now.detail}` : ""}` : "Getting ready…"}
         error={failed}
         foot={foot}
       />

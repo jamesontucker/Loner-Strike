@@ -129,6 +129,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup, 
       const j = await waitForSetupJob();
       const what = id ? name ?? id : remove ? `Loner-Strike from ${where}` : "the basics";
       if (!j) toast("Lost track of it. Reload this page to see if it finished.", true);
+      else if (j.state === "done" && j.failed_compiles?.length) toast(`Done, but these didn't build, so they won't load: ${j.failed_compiles.join(", ")}.${(j.notes ?? []).filter((n) => n.includes("Couldn't compile") || n.includes("Left out of the mode list")).map((n) => ` ${n}`).join("")}`, true);
       else if (j.state === "done" && !id && again) toast(`Repaired.${running || !game.dedicated ? " Restart the game so it loads." : ""}`);
       else if (j.state === "done") toast(`${remove ? "Removed" : again ? "Reinstalled" : "Installed"} ${what}${running ? ". It loads on the next map." : ""}`);
       else toast(j.error || (remove ? `Couldn't remove ${what}.` : `Couldn't install ${what}.`), true);
@@ -253,7 +254,7 @@ export function Mods({ app, scan, running, onChanged: onChangedProp, openSetup, 
         <div ref={repairRef} className={`panel row between lightable${lit ? " settings-lit" : ""}`}>
           <div>
             <b>Repair Loner-Strike</b>
-            <p className="muted">No bots, or the app can't connect? This puts the bots, the Game Mode Menu and what they run on back in {where}. Your settings and mods stay.</p>
+            <p className="muted">No bots, or the app can't connect? This puts the bots, the Game Mode Menu and what they run on back in {where}. Your settings and mods stay. Lines you added by hand to Loner-Strike's own mode files (like laststand.cfg or mappresets.ini) are replaced by an update or repair; your version is kept under Settings, Backups & defaults.</p>
           </div>
           <BusyButton className="btn" busy={busy === "core:repair"} disabled={!!busy} label="Repair" busyLabel="Repairing…" onClick={() => change(null, false, undefined, true)} />
         </div>

@@ -127,8 +127,9 @@ fn install_is_crossover(ctx: &Ctx) -> bool {
     ctx.install.kind == "crossover"
 }
 
-/// Our plugin sources, compiled. Ok(false) if any didn't compile.
-pub fn plugins(rec: &mut Record, ctx: &Ctx) -> Result<bool, String> {
+/// Our plugin sources, compiled. Ok(the plugins that didn't compile), each with a note giving
+/// the compiler's reason.
+pub fn plugins(rec: &mut Record, ctx: &Ctx) -> Result<Vec<String>, String> {
     let src = ctx.res.join("plugins").join("scripting");
     for name in OUR_PLUGINS {
         rec.copy(&src.join(format!("{name}.sma")), &format!("addons/amxmodx/scripting/{name}.sma"))?;
@@ -141,11 +142,13 @@ pub fn plugins(rec: &mut Record, ctx: &Ctx) -> Result<bool, String> {
     for (full, rel) in tree(&ctx.res.join("plugins").join("game")) {
         rec.copy(&full, &rel)?;
     }
-    let mut ok = true;
+    let mut failed = vec![];
     for (i, name) in OUR_PLUGINS.iter().enumerate() {
         ctx.progress.detail(&format!("Compiling {name} ({} of {})", i + 1, OUR_PLUGINS.len()));
         ctx.progress.fraction(i as f64 / OUR_PLUGINS.len() as f64);
-        ok = compile_plugin(rec, ctx, &format!("{name}.sma"), name, None)? && ok;
+        if !compile_plugin(rec, ctx, &format!("{name}.sma"), name, None)? {
+            failed.push(name.to_string());
+        }
     }
     let pl = rec.read("addons/amxmodx/configs/plugins.ini").unwrap_or_default();
     let mine: Vec<String> = rec.read(MY_PLUGINS).and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
@@ -153,7 +156,27 @@ pub fn plugins(rec: &mut Record, ctx: &Ctx) -> Result<bool, String> {
     if new != pl {
         rec.write("addons/amxmodx/configs/plugins.ini", &new)?;
     }
-    Ok(ok)
+    Ok(failed)
+}
+
+/// Built-in modes that can't run: their <mode>.plugins.ini lists one of our plugins that
+/// didn't compile and has no .amxx in the game (an update keeps the last good build).
+/// (id, name) each, for leaving them out of the mode list.
+pub fn unbuilt_modes(rec: &Record, ctx: &Ctx, failed: &[String]) -> Vec<(String, String)> {
+    let gm = ctx.res.join("plugins").join("configs").join("gamemodes");
+    let missing: Vec<&String> = failed.iter().filter(|p| !rec.exists(&format!("addons/amxmodx/plugins/{p}.amxx"))).collect();
+    if missing.is_empty() {
+        return vec![];
+    }
+    let names = crate::extras::parse_modes(&crate::sys::read_latin1(&gm.join("modes.ini")).unwrap_or_default());
+    CORE_MODES
+        .iter()
+        .filter(|m| {
+            let ini = crate::sys::read_latin1(&gm.join(format!("{m}.plugins.ini"))).unwrap_or_default();
+            ini.lines().map(str::trim).filter(|l| !l.starts_with(';')).any(|l| missing.iter().any(|p| l.split_whitespace().next() == Some(&format!("{p}.amxx"))))
+        })
+        .map(|m| (m.to_string(), names.iter().find(|(id, _)| id == m).map(|(_, n)| n.clone()).unwrap_or(m.to_string())))
+        .collect()
 }
 
 /// The Mods page's list of the player's own plugins (plugins.rs)
@@ -398,6 +421,24 @@ pub fn configs(rec: &mut Record, ctx: &Ctx, modes: &BTreeSet<String>, addons: &B
                 wanted.insert(dest);
                 ctx.progress.note(&format!("Kept your changes to {rel}. This version's is beside it as {rel}.new."));
                 continue;
+            }
+            let notes = rec.data.extra.entry(WRITTEN.to_string()).or_insert_with(|| serde_json::json!({}));
+            if !notes.is_object() {
+                *notes = serde_json::json!({});
+            }
+            notes[dest.as_str()] = serde_json::json!(content_hash(&bytes));
+        } else {
+            // a shipped file the player edited by hand (laststand.cfg, mappresets.ini, ...) is
+            // replaced: their version is kept first (Settings, Backups & defaults) and they're told
+            let bytes: Vec<u8> = text.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
+            let full = rec.full(&dest)?;
+            if let Some(current) = std::fs::read(&full).ok().filter(|c| content_hash(c) != content_hash(&bytes)) {
+                let written = rec.data.extra.get(WRITTEN).and_then(|w| w.get(&dest)).and_then(|h| h.as_str()).map(String::from);
+                crate::safety::before("Setup", "Updated by Loner-Strike's setup", &full);
+                // (modes.ini: the Game Mode Studio's lines in it stay, see shape_config)
+                if base != "modes.ini" && written.is_some_and(|w| w != content_hash(&current)) {
+                    ctx.progress.note(&format!("Your changes to {rel} were replaced by this version's; yours is kept under Settings, Backups & defaults."));
+                }
             }
             let notes = rec.data.extra.entry(WRITTEN.to_string()).or_insert_with(|| serde_json::json!({}));
             if !notes.is_object() {
