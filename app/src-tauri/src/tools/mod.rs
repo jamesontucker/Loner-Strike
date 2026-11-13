@@ -18,9 +18,12 @@ pub mod doctor;
 pub mod callouts;
 pub mod assets;
 pub mod render;
-pub mod compile;
+pub mod overview;
 pub mod plugins;
+pub mod compile;
 pub mod community;
+pub mod playercfg;
+pub mod people;
 
 use crate::goldsrc::{self, bsp::Bsp, entities, mesh, wad};
 use crate::server::Shared;
@@ -298,9 +301,12 @@ pub fn local_routes() -> Router<Shared> {
         .merge(callouts::routes())
         .merge(assets::routes())
         .merge(render::routes())
-        .merge(compile::routes())
+        .merge(overview::routes())
         .merge(plugins::routes())
+        .merge(compile::routes())
         .merge(community::routes())
+        .merge(playercfg::routes())
+        .merge(people::routes())
 }
 
 /// Builds everything the viewer needs for one map file, uncached (tests and the real-map
