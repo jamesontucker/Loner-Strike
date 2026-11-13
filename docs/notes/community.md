@@ -26,7 +26,9 @@ Design: docs/COMMUNITY.md (app side) and docs/COMMUNITY-SERVER.md (server side, 
 
 ## Format checks (server only, 2026-11-12)
 - Every registration's file is downloaded (<= 128 MB, MD5 must match the page) and each file in it
-  checked by formats.py before listing; one at a time, niced, 180 s; results kept in the entry's
+  checked by formats.py in a child process (formats_runner.py: RLIMIT_CPU 120 s, RLIMIT_AS 256 MB,
+  nice 10; killed with SIGKILL and reaped at 180 s; the one-at-a-time slot is freed only after it
+  exits; unit MemoryMax 384M); results kept in the entry's
   item JSON as "checks" (not exported to the index) and shown on the Discord card.
 - Corpus proof (corpus_check.py --hostile): 21,574 real files, 4 refused, all genuinely unusable
   (cs_ship.nav v9 Source nav; doublekill.wav/unstoppable.wav are MP3s; HLDS valve/models/doctor.mdl
@@ -40,7 +42,7 @@ Design: docs/COMMUNITY.md (app side) and docs/COMMUNITY-SERVER.md (server side, 
 
 ## Tests
 `cd services/serverlist && python3 -m unittest test_formats test_community test_modbot test_serverlist test_publish_check`
-(125). App: `cd app/src-tauri && cargo test tools::community`.
+(130). App: `cd app/src-tauri && cargo test tools::community`.
 
 ## Open
 - App Publish's refusal check is still a blocklist (the server's allow-list decides what's listed).

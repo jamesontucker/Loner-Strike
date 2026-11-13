@@ -1510,6 +1510,96 @@ class FileChecks(unittest.TestCase):
         self.assertEqual(code, 422, ans)
 
 
+class CheckerChild(unittest.TestCase):
+    """Package checks run in a child process: killed and reaped at the limit, one at a time,
+    without slowing the service."""
+
+    def setUp(self):
+        self.old = cm.CHECK_SECONDS
+        cm.CHECK_SECONDS = 2
+
+    def tearDown(self):
+        cm.CHECK_SECONDS = self.old
+
+    def hung(self, c, code="import time; time.sleep(60)"):
+        pidfile = os.path.join(tempfile.mkdtemp(), "pid")
+        c.checker_cmd = [sys.executable, "-c", f"import os; open({pidfile!r}, 'w').write(str(os.getpid())); " + code]
+        return pidfile
+
+    def test_a_hung_check_is_killed_and_reaped_before_the_slot_is_free(self):
+        c, _ = make()
+        pidfile = self.hung(c)
+        t = time.monotonic()
+        code, ans = c.submit(body(map_item()), "a")
+        took = time.monotonic() - t
+        self.assertEqual(code, 422)
+        self.assertIn("too long", ans["error"])
+        self.assertLess(took, 8)
+        pid = int(open(pidfile).read())
+        with self.assertRaises(ProcessLookupError):
+            os.kill(pid, 0)  # gone, and reaped (a zombie would still answer)
+        self.assertTrue(c.check_slot.acquire(blocking=False), "the slot is free once the child has exited")
+        c.check_slot.release()
+
+    def test_the_slot_is_held_while_the_child_runs(self):
+        c, _ = make()
+        self.hung(c)
+        first = threading.Thread(target=c.submit, args=(body(map_item()), "a"))
+        first.start()
+        time.sleep(0.8)
+        self.assertIsNotNone(c.checking, "the child is running")
+        code, ans = c.submit(body(map_item(gb=739703)), "b")
+        self.assertEqual(code, 429)
+        first.join(10)
+        self.assertIsNone(c.checking)
+
+    def test_the_service_keeps_answering_during_a_check(self):
+        c, _ = make()
+        self.hung(c, "while True: pass")  # a child burning CPU
+        reg = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), sl.make_handler(reg, sl.RateLimit(3), lambda a: (None, None), community=c))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            base = f"http://127.0.0.1:{srv.server_address[1]}"
+            check = threading.Thread(target=c.submit, args=(body(map_item()), "x"))
+            check.start()
+            time.sleep(0.5)
+            worst = 0.0
+            for _ in range(10):
+                t = time.monotonic()
+                with urllib.request.urlopen(base + "/servers", timeout=5) as r:
+                    r.read()
+                worst = max(worst, time.monotonic() - t)
+                time.sleep(0.05)
+            check.join(10)
+            self.assertLess(worst, 0.3, f"/servers took {worst:.3f} s during a check")
+        finally:
+            srv.shutdown()
+
+    def test_a_hostile_slow_file_hits_the_deadline(self):
+        # a 4096x4096 RLE picture made of one-pixel packets: millions of steps to walk
+        tga = struct.pack("<BBBHHBHHHHBB", 0, 0, 11, 0, 0, 0, 0, 0, 4096, 4096, 8, 0) + b"\x00\x00" * (4096 * 4096)
+        cm.CHECK_SECONDS = 1
+        ff = FakeFiles()
+        ff.files[1885247] = zip_of(["maps/de_marakesh.bsp"], {"gfx/env/skyup.tga": tga, "loner-strike.json": manifest(MAP_MANIFEST)})
+        c, _ = make(files=ff)
+        t = time.monotonic()
+        code, ans = c.submit(body(map_item()), "a")
+        self.assertEqual(code, 422, ans)
+        self.assertIn("too long", ans["error"])
+        self.assertLess(time.monotonic() - t, 8)
+
+    def test_the_deadline_inside_the_checks(self):
+        import formats
+        formats.set_deadline(time.monotonic() - 1)
+        try:
+            with self.assertRaises(formats.FormatError) as e:
+                formats.check("maps/a.bsp", io.BytesIO(tiny_bsp()), len(tiny_bsp()))
+            self.assertIn("too long", str(e.exception))
+        finally:
+            formats.set_deadline(None)
+
+
 class Migrations(unittest.TestCase):
     def test_reopening_keeps_everything(self):
         p = os.path.join(tempfile.mkdtemp(), "c.db")

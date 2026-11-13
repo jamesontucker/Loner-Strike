@@ -23,12 +23,30 @@
 # (docs/COMMUNITY-SERVER.md, "Format checks").
 import json
 import struct
+import time
 
 MAX_TRAILING = 1 << 20      # bytes after a file's last structure (padding some tools leave)
+MAX_WAV_CHUNKS = 4096
+MAX_PIXELS = 4096 * 4096    # the biggest picture looked at (RLE packets are walked one by one)
+MAX_MESHES = 1 << 16        # meshes in a whole model
+
+_deadline = None
 
 
 class FormatError(Exception):
     pass
+
+
+def set_deadline(t):
+    """A time.monotonic() after which every check stops with "took too long" (None: no limit).
+    The runner's CPU limit and the service's kill are the real limits; this is a third."""
+    global _deadline
+    _deadline = t
+
+
+def tick():
+    if _deadline is not None and time.monotonic() > _deadline:
+        raise FormatError("it took too long to check")
 
 
 class Reader:
@@ -38,6 +56,7 @@ class Reader:
         self.f, self.size = f, size
 
     def at(self, off, n):
+        tick()
         if off < 0 or n < 0 or off + n > self.size:
             raise FormatError("a part of it points past the end of the file")
         self.f.seek(off)
@@ -75,6 +94,7 @@ def _records(r, lump, fmt):
     size = struct.calcsize("<" + fmt)
     per = max(1, CHUNK // size)
     for start in range(0, length // size, per):
+        tick()
         n = min(per, length // size - start)
         data = r.at(off + start * size, n * size)
         yield from struct.iter_unpack("<" + fmt, data)
@@ -257,6 +277,7 @@ def check_mdl(r):
             # real models, which the game copes with)
             r.inside(index, w * ht, f"texture {t}")
     # body parts -> models -> meshes and vertices
+    meshes = 0
     for b in range(h[16]):
         nummodels, base, modelindex = r.ints(h[17] + b * 76 + 64, "3i")
         _need(0 <= nummodels <= 64, "a body part is damaged")
@@ -270,6 +291,8 @@ def check_mdl(r):
                            (normindex, numnorms * 12), (norminfo, numnorms)):
                 if n:
                     r.inside(off, n, "body model")
+            meshes += nummesh
+            _need(meshes <= MAX_MESHES, "it has more meshes than the game allows")
             for k in range(nummesh):
                 numtris, triindex, skinref, mnorms, mnormindex = r.ints(meshindex + k * 20, "5i")
                 _need(numtris >= 0 and (numtris == 0 or 0 <= triindex < r.size), "a mesh is damaged")
@@ -333,8 +356,10 @@ def check_spr(r):
 
 def check_wav(r):
     _need(r.size >= 12 and r.at(0, 4) == b"RIFF" and r.at(8, 4) == b"WAVE", "it isn't a WAV sound")
-    pos, fmt, data = 12, None, None
+    pos, fmt, data, chunks = 12, None, None, 0
     while pos + 8 <= r.size:
+        chunks += 1
+        _need(chunks <= MAX_WAV_CHUNKS, "it has too many parts")
         cid, size = r.at(pos, 4), r.ints(pos + 4, "I")[0]
         if cid == b"fmt ":
             _need(size >= 16, "its format is damaged")
@@ -398,9 +423,12 @@ def check_tga(r):
         _need(start + w * h * px <= r.size, "its pixels go past the end of the file")
     else:
         # run-length packets: walk them until every pixel is accounted for, inside the file
-        _need(r.size <= 64 << 20, "it's too big for a picture")
-        data, pos, left = r.at(0, r.size), start, w * h
+        _need(r.size <= 64 << 20 and w * h <= MAX_PIXELS, "it's too big for a picture")
+        data, pos, left, packets = r.at(0, r.size), start, w * h, 0
         while left > 0:
+            packets += 1
+            if packets & 0xFFFF == 0:
+                tick()
             _need(pos < len(data), "its pixels go past the end of the file")
             head = data[pos]
             n = (head & 0x7F) + 1
@@ -433,8 +461,13 @@ def check_nav(r):
     # version 5, as the game's bots read it: places, then every area and what it links to
     b, p = r.at(0, r.size), 12
 
+    calls = 0
+
     def take(fmt):
-        nonlocal p
+        nonlocal p, calls
+        calls += 1
+        if calls & 0xFFF == 0:
+            tick()
         n = struct.calcsize("<" + fmt)
         _need(p + n <= len(b), "it ends early")
         v = struct.unpack_from("<" + fmt, b, p)

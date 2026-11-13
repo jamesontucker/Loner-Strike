@@ -21,8 +21,8 @@ PrivateDevices=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 CapabilityBoundingSet=
 AmbientCapabilities=
-# room for the list, the community database and two package checks at once (each reads at most 1 MB)
-MemoryMax=192M
+# the list and its database, plus one package-check child (formats_runner.py, its own address space capped at 256 MB)
+MemoryMax=384M
 
 [Install]
 WantedBy=multi-user.target

@@ -30,7 +30,7 @@ Nothing here is live until the steps in section 6 are run.
 | `services/serverlist/test_community.py`, `test_modbot.py`, `testdata/gamebanana/` | Offline tests with recorded GameBanana answers and forged Discord interactions. |
 
 Tests: `cd services/serverlist && python3 -m unittest test_community test_modbot test_serverlist`
-(125 tests: `python3 -m unittest test_formats test_community test_modbot test_serverlist test_publish_check`). A live check that a real GameBanana zip can be listed by range requests:
+(130 tests: `python3 -m unittest test_formats test_community test_modbot test_serverlist test_publish_check`). A live check that a real GameBanana zip can be listed by range requests:
 `python3 -c "import community as c; print(c.package_names({'id': 1886785, 'name': 'cage.zip', 'size': 278384}))"`.
 
 ## 2. How it works
@@ -90,8 +90,12 @@ request ends up in the listing: a stranger can at most make an entry match the p
    downloaded (range requests to GameBanana's file hosts, at most 128 MB, otherwise "too big to
    check") to a temporary file, its MD5 must be the one the page lists, and every file in it is
    streamed to its own temporary file and checked: maps, textures, models, sprites, sounds,
-   pictures, nav and knowledge files, text. One package at a time (others get a 429 "try again in a
-   minute"), at a lower CPU priority, 180 seconds at most. A file that fails is named in the
+   pictures, nav and knowledge files, text. The checking runs in a **child process**
+   (`formats_runner.py`: 120 s of CPU, 256 MB of address space, lower priority), so a hostile file
+   can't slow the list service (measured: `/servers` stays under 0.3 s during a check that burns a
+   CPU). The child is killed and reaped at 180 seconds of wall-clock time, and the next package is
+   checked only after it has exited (others get a 429 "try again in a minute"). The checks also
+   carry their own deadline and caps (WAV parts, picture size, model meshes). A file that fails is named in the
    refusal ("maps/x.bsp didn't pass the checks: a face points at edges that aren't there"). What
    passed is kept with the entry and shown on the Discord card ("Files checked: 14 passed (1 map, 1
    nav, 12 sounds)").
@@ -251,7 +255,7 @@ logged):
 No R2 keys go on the box (set-env.sh refuses `R2_*`/`AWS_*` names); install.sh removes the earlier
 box publish timer and `publish.env` if they're there.
 
-The unit allows 192 MB (`MemoryMax`): the list, the database and two package checks at 1 MB each.
+The unit allows 384 MB (`MemoryMax`): the list and its database, plus the one package-check child (its own address space capped at 256 MB).
 Discord signatures use `python3-cryptography` (install.sh installs it; without it a slower
 built-in RFC 8032 check is used and the service says so in its log at start).
 
