@@ -1,19 +1,47 @@
-/* The radar (overview) maker (views/tools/overview). */
-.ov { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); align-items: start; }
-@media (max-width: 1100px) { .ov { grid-template-columns: minmax(0, 1fr); } }
-.ov-stage { display: grid; gap: 8px; min-width: 0; }
-.ov-compare { flex-wrap: wrap; gap: 8px; }
-.ov-picture { position: relative; aspect-ratio: 4 / 3; width: 100%; background: #0b0d0b; box-shadow: var(--sunken); border-radius: 2px; overflow: hidden; display: grid; place-items: center; }
-.ov-picture img { width: 100%; height: 100%; object-fit: contain; image-rendering: auto; display: block; }
-.ov-msg { margin: 0; padding: 16px; color: var(--bone-dim); display: flex; align-items: center; gap: 6px; text-align: center; }
-.ov-busy { position: absolute; top: 10px; right: 10px; }
-.ov-note { margin: 0; }
-.ov-options { min-width: 0; }
-.ov-options h3 { margin-top: 0; }
-.ov-sub { margin: 18px 0 6px; }
-.ov-range { width: 180px; max-width: 100%; }
-.ov-num { font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; color: var(--bone-dim); }
-.ov-actions { margin-top: 12px; flex-wrap: wrap; gap: 8px; }
-.ov-done { color: var(--ok); font-weight: 600; margin: 10px 0 0; }
-.ov-who h3 { margin-top: 0; }
-.ov-who ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; color: var(--bone-dim); }
+/* The radar (overview) maker (views/tools/overview): the picture large, the steps at the side. */
+.ov-empty { flex: 1; display: grid; place-content: center; }
+.ov-page .tools-bar .tag.ov-none { color: var(--bone-faint); }
+
+/* the stage: one picture, or two side by side (stacked when the box is taller than wide) */
+.ov-stage { container-type: size; }
+.ov-panes { position: absolute; inset: 0; display: flex; gap: 2px; }
+@container (max-aspect-ratio: 5/4) { .ov-panes { flex-direction: column; } }
+.ov-pane { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+.ov-msg { margin: 0; padding: 16px; color: var(--bone-dim); text-align: center; }
+.ov-busy { position: absolute; top: 10px; left: 10px; width: 16px; height: 16px; margin: 0; }
+.ov-tag { position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 2px; background: rgba(15, 18, 13, .82); color: var(--bone); font-size: 12px; font-weight: 700; pointer-events: none; }
+.ov-zoom { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }
+.ov-zoom .btn { min-width: 30px; }
+
+/* zoom and pan */
+.ov-pz { position: absolute; inset: 0; overflow: hidden; cursor: zoom-in; touch-action: none; user-select: none; }
+.ov-pz.zoomed { cursor: grab; }
+.ov-pz.zoomed:active { cursor: grabbing; }
+.ov-pz-in { position: absolute; inset: 0; transform-origin: 0 0; will-change: transform; }
+.ov-pz-in img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
+
+/* the steps */
+.ov-step { display: flex; align-items: center; gap: 8px; }
+.ov-step > span:first-child { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--bg); color: var(--signal); font-size: 12px; font-weight: 800; flex: none; }
+.ov-step .info { margin-left: auto; }
+.ov-styles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ov-style { display: grid; gap: 4px; padding: 4px; border: 1px solid transparent; border-radius: 3px; background: var(--panel-2); box-shadow: var(--raised); color: var(--bone-dim); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; }
+.ov-style:hover { color: var(--bone); }
+.ov-style[aria-pressed="true"] { border-color: var(--signal); color: var(--signal); }
+.ov-thumb { aspect-ratio: 4 / 3; display: grid; place-items: center; background: var(--bg); border-radius: 2px; overflow: hidden; }
+.ov-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ov-thumb .spinner { width: 14px; height: 14px; margin: 0; }
+.ov-style-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-swatches { display: flex; gap: 6px; }
+.ov-swatch { width: 26px; height: 26px; border-radius: 3px; border: 2px solid transparent; box-shadow: var(--raised); cursor: pointer; padding: 0; }
+.ov-swatch.green { background: #00ff00; }
+.ov-swatch.black { background: #000; }
+.ov-swatch[aria-pressed="true"] { border-color: var(--signal); }
+.ov-height { display: flex; align-items: center; gap: 8px; }
+.ov-height input { flex: 1; min-width: 0; }
+.ov-num { font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; color: var(--bone-dim); font-size: 13px; }
+.tools-field > span { display: inline-flex; align-items: center; gap: 4px; }
+.ov-done { display: grid; gap: 4px; padding: 8px 10px; border-left: 3px solid var(--ok); background: var(--panel-2); border-radius: 2px; font-size: 14px; }
+.ov-done strong { color: var(--ok); }
+.ov-page .tools-status { grid-template-columns: auto minmax(0, 1fr) minmax(0, auto); }
+.ov-page .tools-status > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -50,6 +50,10 @@ export const SHORTCUTS: Record<string, Keys> = {
     ["Shift+Mod+Z / Ctrl+Y", "Redo"],
     ["Esc", "Clear the pick and the highlighted problem"],
   ],
+  radar: [
+    ["1 / 2 / 3", "The new picture / side by side / the installed one"],
+    ["+ / − / 0", "Zoom in, out, fit (scroll and drag work too)"],
+  ],
   callouts: [
     ["Mod+Z", "Undo"],
     ["Shift+Mod+Z", "Redo"],
