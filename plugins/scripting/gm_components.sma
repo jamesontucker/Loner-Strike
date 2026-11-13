@@ -191,6 +191,7 @@ new g_ndoors[MAX_COMP];
 #define MAX_BOARDS 12
 new g_boards[MAX_COMP][MAX_BOARDS];
 new g_nboards[MAX_COMP];
+new g_boardOf[MAX_ENTS];
 new g_nslots;
 
 new g_slotOf[MAX_ENTS];
@@ -1211,7 +1212,11 @@ stock comp_link(s)
 			ks(s, "boards", name, charsmax(name));
 			new e = 0;
 			while (name[0] && g_nboards[s] < MAX_BOARDS && (e = engfunc(EngFunc_FindEntityByString, e, "targetname", name)) > 0)
+			{
 				g_boards[s][g_nboards[s]++] = e;
+				if (e < MAX_ENTS)
+					g_boardOf[e] = s + 1;
+			}
 			barricade_tint(s);
 		}
 		case K_CHECKPOINT:
@@ -2596,7 +2601,13 @@ stock barricade_tint(s)
 	else
 		render(ent, kRenderFxNone, 0, 0, 0, kRenderTransTexture, 120 + floatround(135.0 * f));
 	/* boards: as many showing as the health is worth */
+	/* the bots' brain: pev_iuser4 1 = shoot-through by design (W2), for the barricade and its boards */
+	new st = ki(s, "see_through", 1) ? 1 : 0;
+	set_pev(ent, pev_iuser4, st);
 	new n = g_nboards[s];
+	for (new i = 0; i < n; i++)
+		if (pev_valid(g_boards[s][i]))
+			set_pev(g_boards[s][i], pev_iuser4, st);
 	if (n)
 	{
 		new show = g_state[s] == 1 ? 0 : floatround(float(n) * f, floatround_ceil);
@@ -2617,9 +2628,11 @@ stock barricade_tint(s)
    creatures don't, so they have to break it */
 public fm_shouldcollide(touched, other)
 {
-	if (touched <= 0 || touched >= MAX_ENTS || !g_slotOf[touched] || !(1 <= other <= MaxClients))
+	if (touched <= 0 || touched >= MAX_ENTS || !(1 <= other <= MaxClients))
 		return FMRES_IGNORED;
-	new s = g_slotOf[touched] - 1;
+	new s = g_slotOf[touched] ? g_slotOf[touched] - 1 : g_boardOf[touched] - 1;
+	if (s < 0)
+		return FMRES_IGNORED;
 	if (g_kind[s] != K_BARRICADE || !ki(s, "see_through", 1))
 		return FMRES_IGNORED;
 	forward_return(FMV_CELL, 0);
