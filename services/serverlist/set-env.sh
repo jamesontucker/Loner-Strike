@@ -8,12 +8,14 @@ set -eu
 key=${1:?Usage: set-env.sh KEY [community|publish] < value}
 file=${2:-community}
 case "$file" in community|publish) ;; *) echo "The file is community or publish."; exit 1 ;; esac
-exec python3 -I - "$key" "/etc/lonerstrike-list/$file.env" <<'PY'
+# the value comes in on stdin; the Python below comes in on a here-document, which takes stdin
+# over, so the value is handed on as fd 3 first (3<&0 must come before the <<)
+exec python3 -I - "$key" "/etc/lonerstrike-list/$file.env" 3<&0 <<'PY'
 import os, re, sys, tempfile
 key, path = sys.argv[1], sys.argv[2]
 if not re.fullmatch(r"[A-Z][A-Z0-9_]{1,40}", key):
     sys.exit("That isn't a setting name.")
-value = open("/dev/stdin").read().strip()
+value = os.fdopen(3).read().strip()
 if "\n" in value or not value:
     sys.exit("The value must be one non-empty line.")
 lines = open(path).read().splitlines() if os.path.exists(path) else []
