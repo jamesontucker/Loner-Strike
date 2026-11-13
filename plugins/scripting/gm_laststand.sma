@@ -43,16 +43,16 @@ enum { PH_IDLE = 0, PH_PREPARE, PH_WAVE, PH_BREAK, PH_OVER };
    falls back to an older type on a server that doesn't have it yet. docs/notes/W1.md has the
    round table. */
 enum { RL_FODDER = 0, RL_FLANK, RL_RANGED, RL_TANK, RL_COUNT };
-new const ROSTER[][] = { "zombie", "babycrab", "runner", "spitter", "brute", "vortigaunt", "assassin", "hgrunt", "controller", "stukabat" };
+new const ROSTER[][] = { "zombie", "babycrab", "runner", "spitter", "brute", "vortigaunt", "assassin", "soldier", "controller", "stukabat" };
 new const ROSTER_ROLE[] = { RL_FODDER, RL_FODDER, RL_FLANK, RL_RANGED, RL_TANK, RL_RANGED, RL_FLANK, RL_TANK, RL_RANGED, RL_FLANK };
 new const ROSTER_FROM[] = { 1, 2, 3, 4, 5, 7, 8, 9, 12, 14 };
 new const ROSTER_HP[] = { 100, 30, 60, 120, 450, 150, 90, 300, 200, 60 };
-new const ROSTER_PAY[] = { 50, 40, 60, 70, 120, 80, 90, 120, 100, 70 };
+new const ROSTER_PAY[] = { 75, 50, 90, 100, 175, 120, 130, 175, 150, 100 };
 new const ROSTER_FALLBACK[][] = { "", "headcrab", "", "", "", "spitter", "runner", "brute", "spitter", "runner" };
 /* specials, the heavy and the bosses: name, health, pay, fallback */
-new const EXTRA[][] = { "hound", "snark", "heavy", "boss", "gonarch" };
+new const EXTRA[][] = { "hound", "snark", "babygarg", "boss", "gonarch" };
 new const EXTRA_HP[] = { 80, 20, 1500, 3000, 3500 };
-new const EXTRA_PAY[] = { 60, 30, 300, 1000, 1000 };
+new const EXTRA_PAY[] = { 90, 40, 400, 1000, 1000 };
 new const EXTRA_FALLBACK[][] = { "runner", "headcrab", "boss", "", "boss" };
 enum { EX_HOUND = 0, EX_SNARK, EX_HEAVY, EX_GARG, EX_GONARCH };
 #define HEAVY_FROM 11
@@ -189,7 +189,7 @@ public plugin_init()
 	g_cRevive = register_cvar("lst_revive", "30");
 	g_cDrops = register_cvar("lst_drops", "2");
 	g_cDefenders = register_cvar("lst_defenders", "4");
-	g_cWaveMoney = register_cvar("lst_wave_money", "250");
+	g_cWaveMoney = register_cvar("lst_wave_money", "600");
 	g_cAliveMax = register_cvar("lst_alive_max", "0");
 	g_cWaitHuman = register_cvar("lst_wait_human", "1");
 	g_cOverrun = register_cvar("lst_overrun", "15");
@@ -925,12 +925,12 @@ stock Float:team_hp_factor()
 	return (0.8 + 0.1 * float(min(d, 16))) * (1.0 + 0.02 * float(max(d - 16, 0)));
 }
 
-/* creature health: +6 % a round through round 9, then x1.1 a round */
+/* creature health: +4 % a round through round 9, then x1.1 a round */
 stock Float:round_hp(n)
 {
 	if (n <= 9)
-		return 1.0 + 0.06 * float(n - 1);
-	return 1.48 * floatpower(1.1, float(n - 9));
+		return 1.0 + 0.04 * float(n - 1);
+	return 1.32 * floatpower(1.1, float(n - 9));
 }
 
 stock Float:hp_mult()
@@ -1022,7 +1022,7 @@ stock start_wave(n)
 			send_revive(d);
 
 	/* how many: grows each wave, with the team's size and the difficulty */
-	new total = floatround((10.0 + 2.5 * float(n)) * team_count_factor() * diff_mult(false) * g_wCount);
+	new total = floatround((13.0 + 1.5 * float(n)) * team_count_factor() * diff_mult(false) * g_wCount);
 	/* a boss round: fewer grunts with the boss (it's the round's threat); a special round: a
 	   fast pack, fewer of them */
 	if (!g_bossDone)
