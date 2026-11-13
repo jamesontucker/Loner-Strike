@@ -32,6 +32,7 @@ const Hltv = lazyPage(() => import("./Hltv").then((m) => ({ default: m.Hltv })))
 const Voice = lazyPage(() => import("./Voice").then((m) => ({ default: m.Voice })));
 const Addons = lazyPage(() => import("./Addons").then((m) => ({ default: m.Addons })));
 const WebStatus = lazyPage(() => import("./WebStatus").then((m) => ({ default: m.WebStatus })));
+const ServerContent = lazyPage(() => import("./tools/community/ServerContent")); // (community)
 
 const GAME = { cstrike: "Counter-Strike 1.6", czero: "Condition Zero" } as const;
 const VISIBILITY = [
@@ -389,7 +390,7 @@ type Tab =
   | "overview" | "join" | "health" | "extras" | "hltv" | "webstatus"
   | "modes" | "bots" | "match" | "fun" | "addons" | "voice"
   | "players" | "moderation" | "stats" | "admins" | "welcome" | "share"
-  | "mods" | "maps" | "skins" | "sounds" | "more";
+  | "mods" | "maps" | "skins" | "sounds" | "more" | "creations";
 /** remote: only for servers on a Linux machine. Server comes first: a server's page opens on its Overview. */
 const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: boolean }[] = [
   { id: "overview", label: "Overview", group: "Server" },
@@ -416,6 +417,7 @@ const TABS: { id: Tab; label: string; group: string; live?: boolean; remote?: bo
   { id: "skins", label: "Skins & models", group: "Library" },
   { id: "sounds", label: "Sounds", group: "Library" },
   { id: "more", label: "Get more", group: "Library" },
+  { id: "creations", label: "Community content", group: "Library" }, // (community: maps and Studio modes from Tools > Community)
 ];
 const TAB_GROUPS = [...new Set(TABS.map((t) => t.group))];
 /** Older names for a tab, as other pages may still ask for it (openServerTab). */
@@ -430,7 +432,7 @@ const SHARED_TABS: Record<"admin" | "moderator", Tab[]> = {
 };
 /** The tabs a server shows at all: Website status only for a Linux server, Shared control only on this computer. */
 function tabsShown(s: ServerInfo): Tab[] {
-  return TABS.filter((t) => (!t.remote || !!s.host) && (t.id !== "share" || ON_THIS_COMPUTER)).map((t) => t.id);
+  return TABS.filter((t) => (!t.remote || !!s.host) && ((t.id !== "share" && t.id !== "creations") || ON_THIS_COMPUTER)).map((t) => t.id);
 }
 /** The tabs you can use: all of yours, or your role's. */
 function tabsFor(s: ServerInfo): Tab[] {
@@ -896,6 +898,7 @@ export function ServerPage(props: {
           {tab === "welcome" && <Welcome target={s.id} />}
           {tab === "sounds" && <Sounds target={s.id} />}
           {tab === "extras" && <ServerExtras target={s.id} />}
+          {tab === "creations" && !role && ON_THIS_COMPUTER && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><ServerContent server={s} /></Suspense></PageBoundary>}
           {tab === "webstatus" && s.host && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><WebStatus server={s} /></Suspense></PageBoundary>}
           {tab === "voice" && <PageBoundary><Suspense fallback={<Skeleton rows={3} />}><Voice server={s} /></Suspense></PageBoundary>}
           {tab === "hltv" && <PageBoundary><Suspense fallback={<Skeleton rows={4} />}><Hltv server={s} /></Suspense></PageBoundary>}

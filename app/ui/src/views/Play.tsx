@@ -9,6 +9,7 @@ import { usePlayDraft, usePlayDrafts } from "../stores/playDraft";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
 import { Banner, BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 import { COLLATOR, MapCard } from "./Maps";
+import { communityMode, useCommunity } from "./tools/community/chip";
 import { MatchMode } from "./MatchMode";
 
 /** A start that hasn't brought the game up after this long can be sent again (CrossOver
@@ -20,6 +21,7 @@ const STUCK_MS = 20000;
 /** The game modes as cards, each saying how well bots play it: the same before a game (to
  *  pick the one to start in) and in one (to switch). */
 function ModeCards({ modes, current, busy, onPick }: { modes: { id: string; name: string; desc?: string }[]; current?: string; busy?: string | null; onPick: (id: string) => void }) {
+  const community = useCommunity(); // (community chip)
   return (
     <div className="modes">
       {[...modes].sort((a, b) => a.name.localeCompare(b.name)).map((m) => {
@@ -31,6 +33,7 @@ function ModeCards({ modes, current, busy, onPick }: { modes: { id: string; name
             </span>
             <span className="mode-name">{busy === m.id && <span className="spinner" aria-hidden="true" />}{m.name}</span>
             {m.desc && <span className="mode-desc">{m.desc}</span>}
+            {communityMode(community, m.id) && <span className="mode-desc" title={`From Community: ${communityMode(community, m.id)!.name}`}>Community{communityMode(community, m.id)!.author ? ` · ${communityMode(community, m.id)!.author}` : ""}</span>}
             <span className={`bots-note ${rating}`} title={BOT_RATING_INFO}>{BOT_NOTE[rating]}</span>
           </button>
         );

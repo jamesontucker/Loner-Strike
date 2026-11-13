@@ -2,7 +2,8 @@
 // Community with its badges. Uploading happens on GameBanana's site (it has no upload API);
 // the app prepares everything to paste and checks the page afterwards.
 //
-// Other tools hand over a map with go("tools", "community:publish:<map>").
+// Other tools hand over a map with go("tools", "community:publish:<map>"), and the Game Mode
+// Studio a mode with go("tools", "community:publish:mode:<id>").
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -11,23 +12,150 @@ import { useNav } from "../../../store";
 import type { MapInfo } from "../../../types";
 import { BusyButton, LoadError, useToast } from "../../../ui";
 import { errorText, useBusy } from "../common/api";
-import { Loading, MapList } from "../common";
-import { publish, readiness, register, reveal, sizeText, startModes, type Form, type MineState, type Package, type Shot } from "./communityApi";
+import { Empty, Loading, MapList } from "../common";
+import { Segmented } from "../../../ui";
+import { modeReadiness, publish, publishMode, readiness, register, reveal, sizeText, startModes, studioGraphs, type Form, type MineState, type Package, type Shot } from "./communityApi";
 
 const MAX_SHOTS = 6;
 const MAX_SHOT = 8 << 20;
 
 export default function Publish({ maps, map, onMap, onDone }: { maps: MapInfo[]; map?: string; onMap: (m: string | undefined) => void; onDone: () => void }) {
+  const [what, setWhat] = useState<"map" | "mode">(map?.startsWith("mode:") ? "mode" : "map");
+  if (map?.startsWith("mode:")) return <PublishMode id={map.slice(5)} onBack={() => onMap(undefined)} onDone={onDone} />;
   if (!map)
     return (
       <div className="stack-tight">
-        <p className="muted measure">
-          Share a map you made. Loner-Strike checks it, packs it with its bot nav, map knowledge, download list and overview, and tells you exactly what to put on GameBanana. Once it's up, paste the link and it shows up here for everyone.
-        </p>
-        <MapList maps={maps} onPick={onMap} placeholder="Pick a map to publish" filter={(m) => m.source !== "stock"} none="Only maps you made or added can be published; the game's own maps can't." note={(m) => (m.nav ? null : "no bot nav yet")} />
+        <Segmented label="What to publish" values="map mode" labels="A map|A game mode" current={what} onPick={(v) => setWhat(v as "map" | "mode")} />
+        {what === "map" ? (
+          <>
+            <p className="muted measure">
+              Share a map you made. Loner-Strike checks it, packs it with its bot nav, map knowledge, download list and overview, and tells you exactly what to put on GameBanana. Once it's up, paste the link and it shows up here for everyone.
+            </p>
+            <MapList maps={maps} onPick={onMap} placeholder="Pick a map to publish" filter={(m) => m.source !== "stock"} none="Only maps you made or added can be published; the game's own maps can't." note={(m) => (m.nav ? null : "no bot nav yet")} />
+          </>
+        ) : (
+          <ModeList onPick={(id) => onMap(`mode:${id}`)} />
+        )}
       </div>
     );
   return <PublishMap map={map} onBack={() => onMap(undefined)} onDone={onDone} />;
+}
+
+/** Your Game Mode Studio modes (remixes included): only the graph is shared, each player's app builds it. */
+function ModeList({ onPick }: { onPick: (id: string) => void }) {
+  const q = useQuery({ queryKey: ["tools", "community", "studio-graphs"], queryFn: () => studioGraphs(), retry: false });
+  if (q.isPending) return <Loading text="Loading your modes…" />;
+  if (q.data?.error) return <LoadError text={q.data.error} onRetry={() => q.refetch()} />;
+  const list = (q.data?.graphs ?? []).filter((g) => !g.damaged);
+  return (
+    <div className="stack-tight">
+      <p className="muted measure">
+        Share a mode you made in the Game Mode Studio (or a remix of someone's). Only its graph goes in the package: each player's Loner-Strike builds the mode on their own computer, so nothing that runs code is shared.
+      </p>
+      {list.length === 0 ? (
+        <Empty title="No Game Mode Studio modes yet" text="Make one in Tools > Game Mode Studio, or remix one you installed from Community." >
+          <button className="btn" onClick={() => useNav.getState().go("tools", "studio")}>Open Game Mode Studio</button>
+        </Empty>
+      ) : (
+        <ul className="tl-maps">
+          {list.map((g) => (
+            <li key={g.id}>
+              <button className="tl-map" onClick={() => onPick(g.id)}>
+                <span className="tl-map-name">{g.name}</span>
+                <span className="muted small-note">{g.id}{g.nodes != null ? ` · ${g.nodes} nodes` : ""}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const q = useQuery({ queryKey: ["tools", "community", "ready-mode", id], queryFn: ({ signal }) => modeReadiness(id, signal), retry: false });
+  const [title, setTitle] = useState("");
+  const [summary, setSummary] = useState("");
+  const [author, setAuthor] = useState(() => {
+    try {
+      return localStorage.getItem("ls.community.author") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [maps, setMaps] = useState("");
+  const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
+  const { working, run } = useBusy();
+  useEffect(() => {
+    if (!q.data) return;
+    setTitle((t) => t || q.data.name);
+    setSummary((s) => s || q.data.description);
+  }, [q.data]);
+  const head = (
+    <div className="tl-head">
+      <div className="tl-head-title">
+        <h3>Publish {q.data?.name ?? id}</h3>
+        <span className="muted">Game Mode Studio mode</span>
+      </div>
+      <div className="tl-head-actions">
+        <button className="btn" onClick={onBack}>Pick something else</button>
+        <BusyButton className="btn" busy={q.isFetching} label="Check again" busyLabel="Checking…" onClick={() => q.refetch()} />
+      </div>
+    </div>
+  );
+  if (q.isPending) return <div className="panel">{head}<Loading text="Checking the mode…" /></div>;
+  if (q.isError) return <div className="panel">{head}<LoadError text={errorText(q.error, "Couldn't check that mode.")} onRetry={() => q.refetch()} /></div>;
+  if (done) return <div className="panel">{head}<Upload pkg={done.pkg} form={done.form} onDone={onDone} /></div>;
+  const r = q.data;
+  const build = () =>
+    run("Packing…", async () => {
+      try {
+        localStorage.setItem("ls.community.author", author.trim());
+      } catch {
+        /* remembered next time, maybe */
+      }
+      const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: [] });
+      if (res.error) return toast(res.error, true);
+      setDone({ pkg: res.package, form: res.form });
+    });
+  return (
+    <div className="panel">
+      {head}
+      <section className="cm-ready">
+        {r.blockers.map((b) => <p key={b} className="cm-line bad">{b}</p>)}
+        {r.blockers.length === 0 && <p className="cm-line ok">The graph passes the Studio's checks ({r.nodes} nodes).</p>}
+        {r.blockers.length > 0 && (
+          <p className="cm-line tip">Fix these in the Game Mode Studio first. <button className="btn small" onClick={() => useNav.getState().go("tools", `studio:${id}`)}>Open it</button></p>
+        )}
+        {r.remixOf && <p className="cm-line tip">A remix of {r.remixOf.name}{r.remixOf.author ? ` by ${r.remixOf.author}` : ""}: the package and its page credit them.</p>}
+      </section>
+      {r.blockers.length === 0 && (
+        <form className="cm-form" onSubmit={(e) => { e.preventDefault(); build(); }}>
+          <label className="cm-field">
+            <span>Name</span>
+            <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="What players will see" />
+          </label>
+          <label className="cm-field">
+            <span>Made by</span>
+            <input value={author} maxLength={40} onChange={(e) => setAuthor(e.target.value)} placeholder="Your GameBanana name" />
+          </label>
+          <label className="cm-field cm-wide">
+            <span>About it</span>
+            <textarea value={summary} maxLength={400} rows={3} onChange={(e) => setSummary(e.target.value)} placeholder="How it plays, in a sentence or two" />
+          </label>
+          <label className="cm-field cm-wide">
+            <span>Maps it's made for (optional)</span>
+            <input value={maps} onChange={(e) => setMaps(e.target.value)} placeholder="de_dust2, cs_office" />
+          </label>
+          <p className="muted small-note cm-wide">Add screenshots on GameBanana's page itself (a Playtest shot works well).</p>
+          <div className="cm-wide row">
+            <BusyButton type="submit" className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={!title.trim() || !author.trim()} />
+          </div>
+        </form>
+      )}
+    </div>
+  );
 }
 
 function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; onDone: () => void }) {

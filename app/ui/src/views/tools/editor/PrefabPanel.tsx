@@ -16,6 +16,7 @@ import { dragging, snapshot, useP4 } from "./extras";
 import { PREFAB_MIME } from "./P4Scene";
 import { selectionBounds, useEditor } from "./store";
 import "./p4.css";
+import { CommunityChip, communityPrefab, useCommunity } from "../community/chip";
 
 const AUTHOR_KEY = "ls.editor.prefabAuthor";
 
@@ -140,6 +141,7 @@ export function PrefabPanel() {
 function Row({ p, rev, onShare, onEdit, onDelete }: { p: Prefab; rev: number; onShare: () => void; onEdit?: () => void; onDelete?: () => void }) {
   const img = useRef<HTMLImageElement>(null);
   const meta = `${sizeText(p)}${p.tags.length ? ` · ${p.tags.join(", ")}` : ""}${p.author && !p.builtin ? ` · ${p.author}` : ""}`;
+  const cm = communityPrefab(useCommunity(), p.id); // (community chip)
   return (
     <li
       className="p4-row"
@@ -158,6 +160,7 @@ function Row({ p, rev, onShare, onEdit, onDelete }: { p: Prefab; rev: number; on
       <span className="p4-row-text">
         <span className="p4-row-name ed-ellipsis">{p.name}</span>
         <span className="p4-row-meta ed-ellipsis muted">{meta}</span>
+        {cm && <CommunityChip chip={cm} />}
       </span>
       <span className="p4-row-actions">
         <button type="button" className="btn small" title="Then click on the map (R turns it)" onClick={() => useP4.getState().set({ placing: { id: p.id, name: p.name, size: p.size }, turn: 0 })}>

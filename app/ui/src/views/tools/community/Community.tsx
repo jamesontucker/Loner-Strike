@@ -1,13 +1,15 @@
 // Community creations: maps, game modes, prefabs, sprays and textures made with Loner-Strike.
 // Browse finds them (GameBanana pages tagged for Loner-Strike, plus the Loner-Strike index's
 // extras), Try it installs one with the app's own safe installer and starts a game with bots,
-// Publish packages your map for GameBanana, Yours lists what you published.
+// Installed lists what came from Community (update, remove, remix a Studio mode), Publish
+// packages your map or Studio mode for GameBanana, Published lists what you published.
 //
-// Addresses (go("tools", ...)): "community", "community:publish", "community:publish:<map>"
-// (the editor or nav fixer handing over a map), "community:yours", "community:mod:<id>" /
-// "community:spray:<id>" (one creation).
+// Addresses (go("tools", ...)): "community", "community:installed", "community:publish",
+// "community:publish:<map>" (the editor or nav fixer handing over a map),
+// "community:publish:mode:<id>" (the Game Mode Studio handing over a mode), "community:yours",
+// "community:mod:<id>" / "community:spray:<id>" (one creation).
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getJson } from "../../../api";
 import { useToolArg } from "../../../stores/tools";
@@ -25,15 +27,17 @@ import {
 } from "./communityApi";
 import Publish from "./Publish";
 import Yours from "./Yours";
+import InstalledList, { InstalledActions } from "./Installed";
 import "./community.css";
 
-type Tab = "browse" | "publish" | "yours";
+type Tab = "browse" | "installed" | "publish" | "yours";
 
 function fromArg(arg: string | null): { tab: Tab; map?: string; open?: { model: Model; id: number } } {
   if (!arg) return { tab: "browse" };
   const [a, b] = [arg.split(":")[0], arg.split(":").slice(1).join(":")];
   if (a === "publish") return { tab: "publish", map: b || undefined };
   if (a === "yours") return { tab: "yours" };
+  if (a === "installed") return { tab: "installed" };
   if ((a === "mod" || a === "spray") && /^\d+$/.test(b)) return { tab: "browse", open: { model: a === "mod" ? "Mod" : "Spray", id: Number(b) } };
   return { tab: "browse" };
 }
@@ -53,10 +57,10 @@ export default function Community({ maps }: ToolProps) {
   // each tab and creation has its own address, so Back and the crumbs step between them
   const shown = tab === "browse" && open ? open : null;
   const item = useQuery({ queryKey: ["tools", "community", "item", shown?.model, shown?.id], queryFn: ({ signal }) => details(shown!.model, shown!.id, signal), retry: false, enabled: !!shown });
-  const tabCrumb: Record<Tab, Crumb> = { browse: { label: "Browse", address: "community" }, publish: { label: "Publish", address: "community:publish" }, yours: { label: "Yours", address: "community:yours" } };
+  const tabCrumb: Record<Tab, Crumb> = { browse: { label: "Browse", address: "community" }, installed: { label: "Installed", address: "community:installed" }, publish: { label: "Publish", address: "community:publish" }, yours: { label: "Published", address: "community:yours" } };
   useReportAddress(
     "community",
-    shown ? `community:${shown.model === "Mod" ? "mod" : "spray"}:${shown.id}` : tab === "publish" ? `community:publish${publishMap ? `:${publishMap}` : ""}` : tab === "yours" ? "community:yours" : null,
+    shown ? `community:${shown.model === "Mod" ? "mod" : "spray"}:${shown.id}` : tab === "publish" ? `community:publish${publishMap ? `:${publishMap}` : ""}` : tab === "yours" ? "community:yours" : tab === "installed" ? "community:installed" : null,
   );
   useToolCrumbs(
     "community",
@@ -66,9 +70,10 @@ export default function Community({ maps }: ToolProps) {
   return (
     <div className="cm stack-tight">
       <div className="cm-tabs">
-        <Segmented label="Community" values="browse,publish,yours" labels="Browse,Publish,Yours" current={tab} onPick={(v) => setTab(v as Tab)} />
+        <Segmented label="Community" values="browse installed publish yours" labels="Browse|Installed|Publish|Published" current={tab} onPick={(v) => setTab(v as Tab)} />
       </div>
       {tab === "browse" && (open ? <CreationPage model={open.model} id={open.id} onBack={() => setOpen(null)} /> : <BrowseList onOpen={(e) => setOpen({ model: e.model, id: e.id })} />)}
+      {tab === "installed" && <InstalledList onOpen={(m, id) => { setOpen({ model: m, id }); setTab("browse"); }} onBrowse={() => setTab("browse")} />}
       {tab === "publish" && <Publish maps={maps} map={publishMap} onMap={setPublishMap} onDone={() => setTab("yours")} />}
       {tab === "yours" && <Yours onPublish={() => setTab("publish")} />}
     </div>
@@ -78,7 +83,7 @@ export default function Community({ maps }: ToolProps) {
 // ---- browse --------------------------------------------------------------------------------
 
 function BrowseList({ onOpen }: { onOpen: (e: Entry) => void }) {
-  const [kind, setKind] = useState("");
+  const [kind, setKind] = useState("all");
   const [sort, setSort] = useState("new");
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
@@ -92,7 +97,7 @@ function BrowseList({ onOpen }: { onOpen: (e: Entry) => void }) {
     queryFn: ({ signal }) => {
       const r = refresh.current;
       refresh.current = false;
-      return browse(kind, q, sort, r, signal);
+      return browse(kind === "all" ? "" : kind, q, sort, r, signal);
     },
     retry: false,
     staleTime: 60_000,
@@ -109,7 +114,7 @@ function BrowseList({ onOpen }: { onOpen: (e: Entry) => void }) {
       </p>
       <div className="toolbar cm-toolbar">
         <input className="search" type="search" aria-label="Search creations" placeholder="Search names, authors, modes" value={text} onChange={(e) => setText(e.target.value)} />
-        <Segmented label="Kind" values=",map,mode,prefab,spray,texture" labels="All,Maps,Modes,Prefabs,Sprays,Textures" current={kind} onPick={setKind} />
+        <Segmented label="Kind" values="all map mode prefab spray texture" labels="All Maps Modes Prefabs Sprays Textures" current={kind} onPick={setKind} />
         <label className="cm-sort">
           <span className="muted small-note">Sort</span>
           <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
@@ -127,9 +132,9 @@ function BrowseList({ onOpen }: { onOpen: (e: Entry) => void }) {
         <LoadError text={errorText(list.error, "Couldn't load the community list.")} onRetry={again} />
       ) : list.data.items.length === 0 ? (
         <Empty
-          title={q || kind ? "Nothing matches" : "Nothing here yet"}
+          title={q || kind !== "all" ? "Nothing matches" : "Nothing here yet"}
           text={
-            q || kind
+            q || kind !== "all"
               ? "Try other words, or All."
               : <>Nobody has published with Loner-Strike yet. Be the first: Publish packages your map, and the tag <code>{list.data.tag}</code> on its GameBanana page makes it show up here.</>
           }
@@ -190,7 +195,7 @@ function Card({ e, onOpen }: { e: Entry; onOpen: () => void }) {
 
 // ---- one creation ----------------------------------------------------------------------------
 
-type Stage = { state: "idle" } | { state: "asking" } | { state: "installing"; job: string; got?: number; size?: number; message?: string } | { state: "done"; map: string | null; prefabs?: string[] } | { state: "failed"; message: string };
+type Stage = { state: "idle" } | { state: "asking" } | { state: "installing"; job: string; got?: number; size?: number; message?: string } | { state: "done"; map: string | null; prefabs?: string[]; mode?: string } | { state: "failed"; message: string };
 
 function CreationPage({ model, id, onBack }: { model: Model; id: number; onBack: () => void }) {
   const q = useQuery({ queryKey: ["tools", "community", "item", model, id], queryFn: ({ signal }) => details(model, id, signal), retry: false });
@@ -218,6 +223,7 @@ function CreationPage({ model, id, onBack }: { model: Model; id: number; onBack:
 
 function Creation({ d }: { d: Details }) {
   const toast = useToast();
+  const qc = useQueryClient();
   const [stage, setStage] = useState<Stage>({ state: "idle" });
   const [pic, setPic] = useState(0);
   const modes = useQuery({ queryKey: ["tools", "community", "modes"], queryFn: () => startModes(), staleTime: 60_000 });
@@ -233,7 +239,11 @@ function Creation({ d }: { d: Details }) {
       const list = await getJson<GbJob[]>("/api/gb/jobs").catch(() => [] as GbJob[]);
       const j = Array.isArray(list) ? list.find((x) => x.id === stage.job) : undefined;
       if (gone || !j) return;
-      if (j.state === "done") setStage({ state: "done", map: map ?? j.maps?.[0] ?? null });
+      if (j.state === "done") {
+        setStage({ state: "done", map: map ?? j.maps?.[0] ?? null });
+        // (the library notes it a moment after the job ends)
+        setTimeout(() => qc.invalidateQueries({ queryKey: ["tools", "community"] }), 1500);
+      }
       else if (j.state === "error") setStage({ state: "failed", message: j.message || "Couldn't install it." });
       else setStage({ state: "installing", job: stage.job, got: j.got, size: j.size, message: j.message });
     };
@@ -252,6 +262,13 @@ function Creation({ d }: { d: Details }) {
     if (!r.error && r.kind === "prefab") {
       // prefabs go straight into the map editor's library (no install job)
       setStage({ state: "done", map: null, prefabs: r.prefabs ?? [] });
+      qc.invalidateQueries({ queryKey: ["tools", "community", "library"] });
+      return;
+    }
+    if (!r.error && r.kind === "mode") {
+      // a Game Mode Studio mode, built on this computer (no install job)
+      setStage({ state: "done", map: null, mode: r.mode });
+      qc.invalidateQueries({ queryKey: ["tools", "community"] });
       return;
     }
     if (r.error || !r.job) {
@@ -263,8 +280,9 @@ function Creation({ d }: { d: Details }) {
 
   const play = async (mode?: string) => {
     const m = stage.state === "done" ? stage.map : map;
-    if (!m) return;
-    const r = await launch(m, mode);
+    // (a mode on its own starts on the first map it's made for, else the map you played last)
+    if (!m && !mode) return;
+    const r = await launch(m ?? d.item?.mode?.maps?.[0] ?? null, mode);
     if (r.error) toast(r.error, true);
     else toast("Starting the game…");
   };
@@ -326,6 +344,13 @@ function Creation({ d }: { d: Details }) {
                 <p className="muted small-note">Made for {wanted.filter((w) => !playable.some((p) => p.id === w)).join(", ")} too; add {wanted.length - playable.length === 1 ? "that mode" : "those modes"} in Mods to play {wanted.length - playable.length === 1 ? "it" : "them"}.</p>
               )}
             </div>
+          ) : (stage.state === "done" && stage.mode) || (d.kind === "mode" && d.installed?.mode && stage.state !== "done") ? (
+            <div className="stack-tight">
+              <p className="cm-ok">{stage.state === "done" ? "Built on this computer and added to your modes." : "In your modes."}</p>
+              <div className="row cm-play">
+                <button className="btn primary" onClick={() => play(stage.state === "done" ? stage.mode : d.installed!.mode)}>Play with bots</button>
+              </div>
+            </div>
           ) : stage.state === "done" && stage.prefabs ? (
             <div className="stack-tight">
               <p className="cm-ok">Added to your prefab library: {stage.prefabs.join(", ")}.</p>
@@ -342,6 +367,7 @@ function Creation({ d }: { d: Details }) {
             </>
           )}
           {stage.state === "failed" && <p className="cm-bad" role="alert">{stage.message}</p>}
+          {(d.installed || stage.state === "done") && stage.state !== "installing" && <InstalledActions d={d} onChanged={() => setStage({ state: "idle" })} />}
         </div>
 
         {d.text && (

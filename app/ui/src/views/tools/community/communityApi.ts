@@ -61,10 +61,12 @@ export type Item = {
 
 export type GbFile = { id: number; file: string; size: number; added: number; md5: string; clean: boolean; supported: boolean };
 
+export type InstalledInfo = { key: string; file: number; installed: number; maps: string[]; mode: string; prefabs: string[]; update: number | null };
+
 export type Details = {
   model: Model; id: number; kind: Kind; name: string; author: string; category: string; text: string; images: string[];
   files: GbFile[]; url: string; tagged: boolean; likes: number; downloads: number; item: Item | null; trust: Trust;
-  canTry: boolean; why: string | null; have: boolean;
+  canTry: boolean; why: string | null; have: boolean; installed: InstalledInfo | null;
 };
 
 export type Readiness = {
@@ -90,7 +92,7 @@ export const browse = (kind: string, q: string, sort: string, refresh = false, s
 export const details = (model: Model, id: number, signal?: AbortSignal) => get<Details>(`${base}/item/${model.toLowerCase()}/${id}`, signal);
 
 export const tryIt = (model: Model, id: number, confirmed: boolean, file?: number) =>
-  post<{ ok: boolean; job: string; section: string; map: string | null; kind?: "prefab"; prefabs?: string[]; wads?: string[] }>(`${base}/try`, { model, id, confirmed, ...(file ? { file } : {}) });
+  post<{ ok: boolean; job: string; section: string; map: string | null; kind?: "prefab" | "mode"; prefabs?: string[]; wads?: string[]; mode?: string; name?: string }>(`${base}/try`, { model, id, confirmed, ...(file ? { file } : {}) });
 
 export const readiness = (map: string, signal?: AbortSignal) =>
   get<{ ready: Readiness; suggestedModes: string[]; tag: string }>(`${base}/publish/${encodeURIComponent(map)}`, signal);
@@ -123,7 +125,36 @@ export type StartMode = { id: string; name: string };
 export const startModes = () => tryGet<{ modes: StartMode[] }>("/api/app/start-options");
 
 /** Starts the game on a map with bots (optionally in a mode), like the Play page does. */
-export const launch = (map: string, mode?: string) => post<{ ok?: boolean }>("/api/app/launch", { map, ...(mode ? { mode } : {}) });
+export const launch = (map: string | null, mode?: string) => post<{ ok?: boolean }>("/api/app/launch", { ...(map ? { map } : {}), ...(mode ? { mode } : {}) });
+
+// ---- the library (tools/communitylib.rs): what's installed from Community ----
+
+export type Credit = { model: Model; gb: number; name: string; author: string };
+export type Installed = {
+  key: string; kind: Kind; model: Model; gb: number; file: number; md5: string; name: string; author: string; game: string; section: string;
+  maps: string[]; prefabs: string[]; mode: string; installed: number; url: string; update: number | null; pulled: boolean; remixOf: Credit | null;
+};
+export type { Chip } from "./chip";
+import type { Chip } from "./chip";
+export type Library = { items: Installed[]; maps: Record<string, Chip>; modes: Record<string, Chip>; prefabs: Record<string, Chip>; pages: Record<string, Chip> };
+
+export const library = (signal?: AbortSignal) => get<Library>(`${base}/library`, signal);
+export const uninstall = (key: string) => post<{ ok: boolean; removed: string[] }>(`${base}/uninstall`, { key });
+export const update = (key: string) => post<{ ok: boolean; job?: string; kind?: string }>(`${base}/update`, { key });
+export const remix = (key: string) => post<{ ok: boolean; id: string; name: string }>(`${base}/remix`, { key });
+
+export type ModeReady = { id: string; name: string; description: string; nodes: number; blockers: string[]; remixOf: Credit | null };
+export const modeReadiness = (id: string, signal?: AbortSignal) => get<ModeReady>(`${base}/publish-mode/${encodeURIComponent(id)}`, signal);
+export const publishMode = (id: string, body: { title: string; summary: string; author: string; maps: string[]; screenshots: Shot[] }) =>
+  post<{ package: Package; form: Form }>(`${base}/publish-mode/${encodeURIComponent(id)}`, body);
+export type StudioGraph = { id: string; name: string; description?: string; nodes?: number; damaged?: boolean; installed?: boolean };
+export const studioGraphs = () => tryGet<{ graphs: StudioGraph[] }>("/api/tools/studio/graphs");
+
+export type ServerItem = { key: string; kind: Kind; name: string; author: string; url: string; maps: string[]; mode: string; on: boolean; there: boolean };
+export type ServerView = { server: { id: string; name: string; remote: boolean; ready: boolean; game: string }; items: ServerItem[] };
+export const serverContent = (id: string, signal?: AbortSignal) => get<ServerView>(`${base}/server/${encodeURIComponent(id)}`, signal);
+export const setServerContent = (id: string, picks: { maps: string[]; modes: string[] }) =>
+  post<{ ok: boolean; job: string | null; problems: string[]; uploaded: boolean | null }>(`${base}/server/${encodeURIComponent(id)}`, picks);
 
 export const KIND_LABEL: Record<Kind, string> = { map: "Map", mode: "Game mode", prefab: "Prefab", spray: "Spray", texture: "Textures", other: "Other" };
 

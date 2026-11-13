@@ -7,6 +7,7 @@ import { BusyButton, LoadError, Segmented, Skeleton, Switch, useToast } from "..
 import { Check, Empty, Row, Rows } from "../common";
 import { DEFAULT_CHOICE, installSpray, pickPicture, previewSpray, restoreSpray, sprayStatus, type Choice, type GameSpray, type SprayImage } from "./sprayApi";
 import "./spray.css";
+import { CommunitySprays } from "../community/Hooks";
 
 const SIZE_NOTE: Record<Choice["size"], string> = {
   small: "About the size of the game's own sprays",
@@ -212,6 +213,7 @@ export function SprayMaker() {
           ))}
         </div>
       </div>
+      <CommunitySprays />{/* (community: sprays installed from Tools > Community) */}
     </div>
     </div>
   );

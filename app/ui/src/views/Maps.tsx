@@ -6,12 +6,14 @@ import { usePlayDrafts } from "../stores/playDraft";
 import type { MapInfo } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Sheet, Switch, useCommand, useConfirm, useToast } from "../ui";
 import { JobProgress } from "./JobProgress";
+import { CommunityChip, communityMap, useCommunity } from "./tools/community/chip";
 import { CATS, CopyFromGame, CopyToServers } from "./MapCopy";
 
 /** Where a map came from and whether it's hidden or new to the bots: one menu, so the chips stay about map types. */
 const SHOW: [string, string][] = [
   ["all", "All maps"], ["stock", "Came with the game"], ["download", "Downloaded"], ["added", "Added by you"],
   ["nonav", "Bots haven't learned it"], ["hidden", "Hidden"],
+  ["community", "From Community"], // (community: installed from Tools > Community)
 ];
 const TEACH_INFO = "A hidden server on this computer loads each map and a bot walks all of it, a few minutes per map. It runs in the background at low priority; the game doesn't need to be open. What the bots learn goes to your servers too.";
 const RELEARN_INFO = "Bots learn the picked maps again even if they know them already, replacing what they learned before. Useful when bots get stuck on a map.";
@@ -55,6 +57,7 @@ export const MapCard = memo(function MapCard({ map, onClick, current, onFav, sel
   // map list (thumb changes) tries again, with ?v= so the browser doesn't reuse the 404
   const [brokenFor, setBrokenFor] = useState<MapInfo["thumb"] | undefined>(undefined);
   const broken = brokenFor === map.thumb;
+  const cm = communityMap(useCommunity(), map.name); // (community chip)
   const card = (
     <button className={`map-card${selected ? " selected" : ""}`} onClick={() => onClick(map)} aria-current={current ? "true" : undefined} aria-pressed={selected === undefined ? undefined : selected} title={map.title || map.name}>
       <div className={`map-pic${map.thumb === "radar" ? " radar" : ""}`}>
@@ -64,6 +67,7 @@ export const MapCard = memo(function MapCard({ map, onClick, current, onFav, sel
       </div>
       <span className="map-label">{map.name}</span>
       {map.other && <span className="map-sub" title={otherNote(map)[1]}>{otherNote(map)[0]}</span>}
+      {cm && <span className="map-sub" title={`From Community: ${cm.name}${cm.author ? ` by ${cm.author}` : ""}`}>Community{cm.author ? ` · ${cm.author}` : ""}</span>}
     </button>
   );
   if (!onFav) return card;
@@ -110,6 +114,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
   const isLoading = loading ?? mapsQ.isLoading;
   const [cat, setCat] = useState("all");
   const [show, setShow] = useState("all");
+  const community = useCommunity(); // (community: chips and the From Community filter)
   const [q, setQ] = useState("");
   // typing stays quick: the list filters a moment behind the box
   const search = useDeferredValue(q);
@@ -200,6 +205,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
     const query = search.trim().toLowerCase();
     let list = show === "other" ? maps.filter((m) => m.other) : maps.filter((m) => !m.other && (show === "hidden" ? m.hidden : !m.hidden));
     if (show === "nonav") list = list.filter((m) => !m.nav);
+    else if (show === "community") list = list.filter((m) => !!communityMap(community, m.name));
     else if (show === "stock" || show === "download" || show === "added") list = list.filter((m) => sourceOf(m) === show);
     if (cat === "fav") list = list.filter((m) => m.fav);
     else if (cat === "recent") list = list.filter((m) => m.recent >= 0).sort((a, b) => a.recent - b.recent);
@@ -219,7 +225,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
       list = [...list].sort(order[sort] ?? byName);
     }
     return list;
-  }, [maps, cat, show, search, sort]);
+  }, [maps, cat, show, search, sort, community]);
   // other filters start from the top again
 
   const remove = async (map: MapInfo) => {
@@ -367,7 +373,7 @@ export function Maps({ current: currentMap, live, maps, loading, reload: reloadP
             <h2 className="map-title">{picked.name}</h2>
             <p className="muted">
               {picked.title && picked.title !== picked.name ? `${picked.title} · ` : ""}
-              {picked.by !== "Other" ? `by ${picked.by}` : ""}
+              {picked.by !== "Other" ? `by ${picked.by}` : ""} <CommunityChip chip={communityMap(community, picked.name)} />
               {!picked.nav && " · Bots haven't learned this map yet. They learn it the first time it's played (a few minutes)."}
             </p>
             <p className="muted">
