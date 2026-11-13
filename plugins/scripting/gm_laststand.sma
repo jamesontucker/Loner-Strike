@@ -56,6 +56,10 @@ new g_mapname[64];
 new g_classZombie;
 new g_kills;
 new g_hePack[33];
+new g_keeper;
+new g_keeperKind;	/* 0 none, 1 barney, 2 gman, 3 a CS model standing in */
+new bool:g_inShop[33];
+new g_shopVisits[33];
 new g_repairing[33];
 new Float:g_repairNext[33];
 new Float:g_repairUntil[33];
@@ -922,8 +926,7 @@ public tick()
 	hud();
 	beacons();
 	bots_shop_tick();
-	if (g_phase != PH_WAVE || (floatround(now) % 3) == 0)
-		shop_hint();
+	shop_hint();
 }
 
 /* A creature that hasn't moved for a minute with no defender within 800 units is stuck
@@ -1603,8 +1606,11 @@ public shop_item_cb(id, menu, item)
 {
 	new info[4], name[2], access, cb;
 	menu_item_getinfo(menu, item, access, info, charsmax(info), name, 0, cb);
+	new i = str_to_num(info);
+	if (i < 0 || i >= sizeof SHOP_NAME)
+		return ITEM_ENABLED;
 	new why[48];
-	shop_why_not(id, str_to_num(info), why, charsmax(why));
+	shop_why_not(id, i, why, charsmax(why));
 	return why[0] ? ITEM_DISABLED : ITEM_ENABLED;
 }
 
@@ -1639,6 +1645,7 @@ stock shop_menu(id)
 		num_to_str(i, info, charsmax(info));
 		menu_additem(m, text, info, 0, g_shopCb);
 	}
+	menu_additem(m, "Open the gun menu \d(B)", "99");
 	g_menuUntil[id] = get_gametime() + 30.0;
 	menu_display(id, m);
 }
@@ -1655,6 +1662,12 @@ public menu_shop(id, menu, item)
 	menu_item_getinfo(menu, item, access, info, charsmax(info), name, charsmax(name), cb);
 	menu_destroy(menu);
 	g_menuUntil[id] = 0.0;
+	if (str_to_num(info) == 99)
+	{
+		/* the game's own buy menu (works here: the armory is a buy zone) */
+		engclient_cmd(id, "buy");
+		return PLUGIN_HANDLED;
+	}
 	if (is_user_alive(id) && at_shop(id))
 		shop_buy(id, str_to_num(info), true);
 	return PLUGIN_HANDLED;
@@ -1764,11 +1777,36 @@ stock bots_shop_tick()
 	}
 }
 
+/* Both ways to buy, made obvious: on walking into the armory a centre message (in full the first
+   3 visits on a map, short after), a line on the HUD while inside, and the shopkeeper says it */
 stock shop_hint()
 {
 	for (new p = 1; p <= MaxClients; p++)
-		if (is_user_alive(p) && !is_user_bot(p) && at_shop(p))
-			client_print(p, print_center, "Armory: press USE (or say /shop)");
+	{
+		if (!is_user_alive(p) || is_user_bot(p))
+			continue;
+		new bool:in = at_shop(p);
+		if (in && !g_inShop[p])
+		{
+			g_shopVisits[p]++;
+			if (g_shopVisits[p] <= 3)
+			{
+				client_print(p, print_center, "Armory^nPress B for weapons, USE at the counter for supplies");
+				if (g_keeper && is_valid_ent(g_keeper))
+				{
+					if (g_keeperKind == 2)
+						client_print_color(p, print_team_default, "^4G-Man:^1 Weapons... on the B menu. Supplies... from me.");
+					else if (g_keeperKind == 1)
+						client_print_color(p, print_team_default, "^4Barney:^1 Guns are on the B menu, supplies from me. Press USE.");
+				}
+			}
+			else
+				client_print(p, print_center, "Armory: B weapons, USE supplies");
+		}
+		g_inShop[p] = in;
+		if (in)
+			ls_hud(p, LS_HUD_CENTER, 1.1, "Armory  -  B: weapons   USE: supplies");
+	}
 }
 
 /* =========================================================================
@@ -1777,8 +1815,6 @@ stock shop_hint()
 
 new g_cKeeper;
 new g_keeperModel[64];
-new g_keeper;
-new g_keeperKind;	/* 0 none, 1 barney, 2 gman, 3 a CS model standing in */
 new Float:g_keeperNext;
 new Float:g_keeperBackAt;
 new bool:g_keeperSolid;
