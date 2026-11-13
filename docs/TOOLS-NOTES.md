@@ -1158,3 +1158,56 @@ Tools > Make > **Plugin Studio**: write AMX Mod X plugins in the app.
 - Dedicated servers on this computer aren't offered (own game only); easy to add with a server picker.
 - Ideas: go-to-definition into include files, format document, a "Make it a mode" button that writes the
   modes.ini line and `<id>.plugins.ini`.
+
+### Agent P1: UI polish pass — done (2026-11-12)
+Every Tools page except the map editor (P2) and K's viewer rendering files, checked in Chromium against real data
+at 1024×700, 1366×860 and 1920×1080, fixed, and checked again.
+
+**What changed**
+- **Shared pieces, `tools/common/index.tsx`** (one file on purpose, so every tool shares one small chunk): `Rows`/`Row`
+  (settings rows like the app's Settings page: name + note or "?" on the left, the control at its natural width on
+  the right, dropping under the name when there isn't room), `Check` (checkbox + label on one line), `Empty`,
+  `Loading`, `MapList` (moved from doctor/, now styled on its own: the callouts list was unstyled if the doctor
+  hadn't been opened first). CSS in `common/common.css`, loaded with the Tools page.
+- **Spray maker** (the user's example): settings rows; pills on one line ("The picture's own" no longer wraps);
+  "Install for" checkboxes on one line; preview and options sit side by side only when the page is 980px+ wide
+  (container query), stacked otherwise; shorter wall at small heights; "Tick a game" hint when none is ticked.
+- **Map health check**: settings rows (search + map list share one wide row); "Reading the map…" line instead of
+  grey bars; empty "Earlier checks" says what you get. Bug: the page's root class `.health` clashed with the app's
+  own `.health` (`justify-items: start`), so every panel shrank to its content; now `.health-page`. "54.29999923706055
+  bot-minutes" rounded; spot rows start with a capital.
+- **Replay**: empty state "No recordings yet — run a map health check to make one" with a button to the health
+  check and Open a recording…; list header with the count and the open button; cards no longer break words
+  (`.small` has `word-break: break-all` app-wide). The open recording's bar shows the map and "12 players · 10 min ·
+  with bot thoughts" instead of a second "Replay" title.
+- **Map viewer**: empty/no-match states, the loading line, the status-bar hint has a tooltip (it's cut off at small
+  sizes), the side column is `clamp(280px, 22vw, 340px)`, side-panel names and their "?" stay on one line and pills
+  there don't wrap (Look: Like the game | Bright).
+- **Textures & models**: model side panel and the texture maker use settings rows (the old 200px name column
+  squeezed the selects in a 320px panel); the duplicate Beta tag is gone (the page title has it).
+- **Map doctor / Callouts**: one heading row (`tl-head`: title + note, actions at the right, wraps cleanly); loading
+  lines; callouts' empty place list says how to start. **Nav fixer**: duplicate Beta tag gone; "One way" is a
+  proper checkbox with its label; empty map list says to teach bots a map first (same for Callouts).
+- **Overview**: card blurbs show on up to two lines instead of being cut off.
+- **Start bundle**: the Tools pages' CSS (`.tools-*`) moved from styles.css into `views/tools/tools.css`, loaded with
+  the Tools page: start CSS 108.27 → 102.81 kB. Start JS: my part is one more file name in the Tools page's preload
+  list (~30 bytes); the rest of today's growth (514.0 → 516.1 kB) is the new tools other agents registered.
+- Focus rings: the app's `:focus-visible` outline shows on every control I touched (checked by tabbing).
+
+**Screenshots** (`docs/polish/before/` and `docs/polish/after/`, `<page>-<small|medium|large>.png`, half size,
+128 colours): overview, spray (+ after `spray-options-small`, scrolled to the options), viewer-pick, viewer-open
+(+ after `viewer-focus-small`), replay-empty, replay-list, replay-open, assets-textures, assets-models, assets-get,
+health, health-report (before: broken widths), doctor-pick, doctor-map, navfix-pick, navfix-map, callouts-pick
+(before: unstyled list), callouts-map.
+
+**How I ran it** (no app needed): `serve_tools_for_ui` (render.rs) with `HOME` pointed at a scratch folder so
+recordings/health reports went there (`LS_TEST_GAME=<Half-Life> HOME=<scratch> target/debug/deps/loner_strike-…
+serve_tools_for_ui --ignored`), a 30-line node stub on :8029 for the shell's `/api/app`, `/api/state`, `/api/maps`,
+`/api/servers`, `/api/setup/scan` that forwards the rest to :8027, and `vite --config <scratch config>` on :5197
+proxying to it. A health report came from `real_sweep`'s printed report (id must be digits). Playwright in its own
+browser context so it doesn't disturb other agents' pages.
+
+**Left / for others**
+- The new tools (Crosshair & config, Bot people, Plugin Studio, Community) weren't in my list; they already use
+  `common` (Rows/Empty/Loading/MapList), so they get the same look.
+- The viewer status bar still cuts the hint at 1024 wide (tooltip has it); the editor (P2) has its own panels.
