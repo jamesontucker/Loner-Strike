@@ -251,7 +251,7 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
           <Line tone="ok">The map only uses files every player has, so it doesn't need a list.</Line>
         ) : r.res.missing.length === 0 ? (
           <Line tone="ok">
-            {r.name}.res lists {plural(r.res.listed, "file")}: players joining your server download everything the map needs.
+            {r.name}.res lists {plural(r.res.listed, "file")}{r.res.wanted ? ", including everything the map uses that players may not have" : ""}.
             {r.res.broken.length > 0 && <> It also names {plural(r.res.broken.length, "file")} that {r.res.broken.length === 1 ? "isn't" : "aren't"} on this computer; updating it leaves {r.res.broken.length === 1 ? "that" : "those"} out.</>}
           </Line>
         ) : (

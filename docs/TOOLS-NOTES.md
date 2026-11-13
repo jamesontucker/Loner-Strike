@@ -472,3 +472,59 @@ timeline of #why notes, bot view cones as meshes, Replay heat by round.
 - Check C's ladder top areas (cs_rats2's 22 ladders show no top area; de_nuke vents).
 - Shared files (tools/mod.rs, registry.tsx, goldsrc/mod.rs, content.rs): review every agent's lines.
 - Then: two reviews, cargo test, npm run build + size check, real app check, merge `tools` into main.
+
+### Agent G: map doctor + callout editor — 2026-11-12
+
+**Built**
+- `tools/doctor.rs` (`routes()`, mounted in tools/mod.rs): `GET /api/tools/doctor/:name` checks one map: the map
+  file (A's full BSP parse), texture files and textures, every sky/model/sprite/sound the entities name
+  (`mapcopy::entity_files`, the same rules as navpack/res.py), the .res (exists, files missing from it, lines for
+  files not on this computer), the nav (exists, damaged, made for this map version, places) and the .lsv (stage,
+  fits the nav by the brain's key), plus the GameBanana page the map came from (store records) and whether the
+  game has it loaded. Files are looked for the way the game looks: own folder, `<game>_downloads`, cstrike (for
+  CZ), valve; "elsewhere" means only in another game folder (czero, czeror, the downloads folders).
+  `POST .../res` writes or updates `<map>.res` (custom files only: Valve's, CS's stock WADs, and files both CS and
+  CZ ship are left out; hand-added lines for files that exist are kept). `POST .../copy {files}` copies files
+  found only in another game folder into the map's game folder (never replaces). Both need X-Panel and refuse
+  while the game has that map loaded. Writes: `.part` then rename, `.bak` the first time (`doctor::save_file`).
+- `tools/callouts.rs`: `GET /api/tools/callouts/:name` (areas as `[id,x0,y0,x1,y1,z,place]`, places, the voice
+  list from the game's BotChatter.db, chat callouts gm_botchat knows, knowledge fit, file stamp),
+  `GET .../suggest?from=usual|other` (navpack/callouts.py's rules for de_dust2/de_inferno; navpack/names.py's
+  name_areas from the same map's nav in the other game folder, filling unnamed areas only),
+  `POST /api/tools/callouts/:name {stamp, changes:[{id,place}]}` (refused if the nav changed on disk since load).
+  Names: letter then letters/digits/_ up to 31. The nav is rewritten with C's nav.rs, read back and compared (ids,
+  corners, links, hiding spots, names, and the brain's LsNavKey) before the rename.
+- UI: `views/tools/doctor/` (Doctor.tsx, MapList.tsx shared with callouts, doctorApi.ts, doctor.css) and
+  `views/tools/callouts/` (Callouts.tsx, TopDown.tsx: a 2D canvas, calloutsApi.ts, callouts.css). Registered as
+  "Map doctor" and "Callouts" in registry.tsx. Doctor: plain-language rows with fixes (Copy files, Make/Update the
+  list, Teach bots this map via the existing `/api/navs/learn` with JobProgress, Name places → Callouts, GameBanana
+  page or search, Get more). Callouts: top-down nav coloured by place with labels, click/Shift-click/drag-box/
+  Alt-drag/double-click selection, floor range sliders, pan/zoom, name box with the voice + chat lists, places list
+  (pick, rename), suggestions, undo/redo/put back, Save with busy state, unsaved-changes guard.
+
+**Knowledge (.lsv) and place names** — the .lsv key is FNV over area count, ids and integer centres
+(cs_bot_ls.cpp LsNavKey), so renaming places never invalidates it: the save checks the key is unchanged and says
+the knowledge still fits. I did not add a "rebuild knowledge" button: the app's learner relearns the *nav* from
+scratch (it would throw away the names), and the brain already rebuilds a non-matching .lsv itself the next time
+the map is played. If a knowledge-only rebuild is wanted, it fits F's hidden-server runner (load the map with
+bots, wait for stage 4).
+
+**How to try it**
+- `cd app/src-tauri && cargo test doctor callouts` (fixtures: missing/elsewhere/stock files, .res write/keep/drop/
+  backup, copy refuses paths and existing files, CZ search order, nav+lsv fit, damaged map/nav; place rename round
+  trip, bad names, usual rules, names carried over, save with stamp check and backup).
+- Real game: `LS_TEST_GAME=<Half-Life folder> cargo test real_doctor -- --nocapture` (LS_TEST_MAPS=a,b) and
+  `cargo test real_callouts -- --nocapture`.
+- In the app: Tools > Map doctor / Callouts. Checked in the real dev app: routes answer for cs_rats2, cf_egypt,
+  de_dust2, and the doctor page renders cf_egypt (missing sky, broken .res lines). The callouts page builds and
+  type-checks but I didn't get to see it in the app (the shared dev build kept restarting as others saved files).
+
+**Left / caveats**
+- "Stock" is a heuristic (valve/, the stock WAD list, or in both cstrike and czero); a custom map using a stock-only
+  CS file (as_oilrig's orange.mdl) gets it listed in the .res, which is harmless.
+- No WAD embedding into the BSP yet (2a writer); missing textures point to copying the WAD or getting the map again.
+- Git slip: my doctor commit (96db1b9) picked up E's then-uncommitted `editor` mount lines in tools/mod.rs, and my
+  `--amend` to take them out landed on H's model reader commit (32abfb3), which now carries that small mod.rs fix.
+  The tree is right; sorry for the noise in those two commits.
+
+**Requests**: none.
