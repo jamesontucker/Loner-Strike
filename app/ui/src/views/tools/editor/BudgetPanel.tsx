@@ -15,7 +15,7 @@ import { originOf, selectionBounds, useEditor } from "./store";
 import "./p5.css";
 
 export type Contributor = { label: string; entities: number[]; brushes: number[]; share?: number; cost?: number; texture?: string; kind?: string };
-export type Bar = { id: string; name: string; used: number; max: number; pct: number; what: string; contributors?: { fix: string; rows: Contributor[]; basis?: string } };
+export type Bar = { id: string; name: string; used: number; max: number; pct: number; what: string; reserve?: number; contributors?: { fix: string; rows: Contributor[]; basis?: string } };
 type Report = {
   map: string;
   compile: { rows: Bar[]; when: number; log: string } | null;
@@ -25,9 +25,30 @@ type Report = {
 };
 type Creature = { name: string; display?: string; model?: string; snd?: string[] };
 
-/** The game and Loner-Strike's plugins before the map adds anything (Y: a CS map with the game
- *  and our plugins uses roughly 120-200 models and 150-250 sounds; the middle, as an estimate). */
-export const BASELINE = { models: 160, sounds: 200 };
+/** The game, a map and Loner-Strike's plugins before creatures, as Y measured them (ls_outpost,
+ *  Last Stand, bots: docs/notes/Y.md, "precache budget guard"): about 197 models and 315 sounds.
+ *  Stock maps differ; this is a Loner-Strike map with its plugins loaded. */
+export const BASELINE = { models: 197, sounds: 315 };
+/** The slots the creature guard keeps free (`ls_creature_reserve "40 60"`). */
+export const RESERVE = { models: 40, sounds: 60 };
+
+/** Y's measured cost per creature type with the default `ls_creature_sounds 2` (new sounds after
+ *  what the game or another type already loaded; the models it adds). */
+const Y_TYPES: Record<string, { models: string[]; sounds: number }> = {
+  zombie: { models: ["zombie.mdl"], sounds: 12 },
+  headcrab: { models: ["headcrab.mdl"], sounds: 11 },
+  runner: { models: ["houndeye.mdl"], sounds: 10 },
+  babycrab: { models: ["baby_headcrab.mdl"], sounds: 0 },
+  spitter: { models: ["bullsquid.mdl"], sounds: 12 },
+  vortigaunt: { models: ["islave.mdl", "sprites/lgtning.spr"], sounds: 10 },
+  brute: { models: ["agrunt.mdl"], sounds: 10 },
+  snark: { models: ["w_squeak.mdl"], sounds: 5 },
+  assassin: { models: ["hassassin.mdl"], sounds: 2 },
+  soldier: { models: ["hgrunt.mdl"], sounds: 6 },
+  babygarg: { models: ["garg.mdl"], sounds: 10 },
+  gonarch: { models: ["big_mom.mdl"], sounds: 10 },
+  boss: { models: ["garg.mdl"], sounds: 1 },
+};
 
 export async function getBudget(): Promise<Report | null> {
   try {
@@ -51,8 +72,9 @@ function creatures(): Promise<Creature[]> {
   return creatureCache;
 }
 
-/** What the modes the map is made for precache for their creatures (Y's per-type numbers come
- *  from the types themselves: one model and every sound named in snd_*). */
+/** What the modes the map is made for precache for their creatures: Y's measured table for the
+ *  types it lists; another type (yours, a community one) counted from its keys like the guard
+ *  does (its model, and 2 sounds per kind). */
 export async function modeLoad(): Promise<{ label: string; models: number; sounds: number; roster: string[] } | null> {
   const doc = useEditor.getState().doc;
   const made = madeForOf(doc?.world);
@@ -62,16 +84,27 @@ export async function modeLoad(): Promise<{ label: string; models: number; sound
   const names = [...new Set(kits.flatMap((k) => k.creatures))];
   const label = kits.length ? kits.map((k) => k.mode.name).join(" + ") : made.map((m) => m.id).join(" + ");
   if (!names.length) return { label, models: 0, sounds: 0, roster: [] };
-  const all = await creatures();
   const models = new Set<string>();
-  const sounds = new Set<string>();
+  let soundCount = 0;
+  const others = new Set<string>();
+  const unknown = names.filter((n) => !Y_TYPES[n]);
   for (const n of names) {
-    const t = all.find((c) => c.name === n);
-    if (!t) continue;
-    if (t.model) models.add(t.model.toLowerCase());
-    for (const s of t.snd ?? []) for (const w of s.split(/[\s|]+/)) if (/\.wav$/i.test(w)) sounds.add(w.toLowerCase());
+    const y = Y_TYPES[n];
+    if (!y) continue;
+    y.models.forEach((m) => models.add(m));
+    soundCount += y.sounds;
   }
-  return { label, models: models.size, sounds: sounds.size, roster: names };
+  if (unknown.length) {
+    const all = await creatures();
+    for (const n of unknown) {
+      const t = all.find((c) => c.name === n);
+      if (!t) continue;
+      if (t.model) models.add(t.model.toLowerCase());
+      // the guard's default: 2 sounds per kind
+      for (const kind of t.snd ?? []) for (const w of kind.split(/[\s|]+/).filter((x) => /\.wav$/i.test(x)).slice(0, 2)) others.add(w.toLowerCase());
+    }
+  }
+  return { label, models: models.size, sounds: soundCount + others.size, roster: names };
 }
 
 const tone = (pct: number) => (pct > 90 ? "red" : pct > 75 ? "yellow" : "green");
@@ -113,6 +146,7 @@ function BarRow({ b, open, onToggle }: { b: Bar; open: boolean; onToggle: () => 
         </span>
         <span className="p5-bud-track" role="meter" aria-valuemin={0} aria-valuemax={b.max} aria-valuenow={b.used} aria-label={`${b.name}: ${Math.round(b.pct)}%`}>
           <span className="p5-bud-fill" style={{ width: `${Math.min(100, b.pct)}%` }} />
+          {b.reserve ? <span className="p5-bud-reserve" style={{ width: `${(b.reserve / b.max) * 100}%` }} title={`${b.reserve} slots the creature guard keeps free (ls_creature_reserve)`} /> : null}
         </span>
         <span className="p5-bud-pct mono">{Math.round(b.pct)}%</span>
       </button>
@@ -186,7 +220,8 @@ export function BudgetPanel() {
       used: pm,
       max: 512,
       pct: (pm / 512) * 100,
-      what: `the game's own (about ${BASELINE.models}), this map's ${r.precache.models} (models, sprites and ${r.precache.inlineModels} brush entities)${mode ? `, and ${mode.label}'s ${mode.models}` : ""}`,
+      reserve: RESERVE.models,
+      what: `the game, map and plugins before creatures (about ${BASELINE.models}, measured by Y), this map's ${r.precache.models} (models, sprites and ${r.precache.inlineModels} brush entities)${mode ? `, and ${mode.label}'s ${mode.models}` : ""}; the striped end is the guard's reserve of ${RESERVE.models}`,
       contributors: { fix: "Use fewer different models and sprites; each brush entity counts too (func_detail doesn't).", rows: r.precache.modelRows.map((c) => ({ ...c, label: `${c.label}${c.entities.length ? ` (${c.entities.length}×)` : ""}` })) },
     },
     {
@@ -195,7 +230,8 @@ export function BudgetPanel() {
       used: ps,
       max: 512,
       pct: (ps / 512) * 100,
-      what: `the game's own (about ${BASELINE.sounds}), this map's ${r.precache.sounds}${mode ? `, and ${mode.label}'s ${mode.sounds}` : ""}`,
+      reserve: RESERVE.sounds,
+      what: `the game, map and plugins before creatures (about ${BASELINE.sounds}, measured by Y), this map's ${r.precache.sounds}${mode ? `, and ${mode.label}'s ${mode.sounds} (2 sounds per kind)` : ""}; the striped end is the guard's reserve of ${RESERVE.sounds}`,
       contributors: { fix: "Reuse the same sounds on doors, buttons and ambient_generics; a creature type brings all its sounds.", rows: r.precache.soundRows.map((c) => ({ ...c, label: `${c.label}${c.entities.length ? ` (${c.entities.length}×)` : ""}` })) },
     },
   ];
@@ -216,14 +252,14 @@ export function BudgetPanel() {
         {mode ? (
           <>
             {mode.label}
-            {mode.roster.length ? ` with this roster (${mode.roster.join(", ")})` : ""}: <b>{Math.max(0, 512 - ps)} sounds</b> and <b>{Math.max(0, 512 - pm)} models</b> of headroom.
+            {mode.roster.length ? ` with this roster (${mode.roster.join(", ")})` : ""}: <b>{Math.max(0, 512 - RESERVE.sounds - ps)} sounds</b> and <b>{Math.max(0, 512 - RESERVE.models - pm)} models</b> of headroom (after the guard's reserve).
           </>
         ) : (
           <>
-            <b>{Math.max(0, 512 - ps)} sounds</b> and <b>{Math.max(0, 512 - pm)} models</b> of headroom (no mode chosen: Gameplay › Mode kits › Made for adds its creatures).
+            <b>{Math.max(0, 512 - RESERVE.sounds - ps)} sounds</b> and <b>{Math.max(0, 512 - RESERVE.models - pm)} models</b> of headroom after the guard's reserve (no mode chosen: Gameplay › Mode kits › Made for adds its creatures).
           </>
         )}{" "}
-        <span className="muted">The game's own share is an estimate.</span>
+        <span className="muted">The game's share is Y's measurement on a Loner-Strike map; stock maps differ.</span>
       </p>
       <ul className="p5-bud-list">
         {pre.map((b) => (

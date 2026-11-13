@@ -64,7 +64,7 @@ for (const [name, file] of [
     expect(await barNum(b, "Entities")).toBe(doc.entities.length + 1);
     expect(await barNum(b, "Brush entities")).toBeGreaterThan(0);
     expect(await barNum(b, "Different textures")).toBeGreaterThan(1);
-    expect(await barNum(b, "Precached models")).toBeGreaterThanOrEqual(160);
+    expect(await barNum(b, "Precached models")).toBeGreaterThanOrEqual(197);
     await expect(b).toContainText(/sounds<\/b>|sounds and/);
     // a bar's contributors, and Pick selects them in the map
     await b.locator(".p5-bud-head", { hasText: /^Entities/ }).click();
@@ -96,6 +96,7 @@ test("a Hammer import, a mode's roster, the last compile, and the warnings", asy
   const kitFile = path.join(kits.folder, "p5_budget_stand.kit.json");
   fs.writeFileSync(kitFile, JSON.stringify({ schema: "loner-strike/mode-kit", version: 1, mode: { id: "p5_budget_stand", name: "Budget Stand", description: "test" }, markers: [], components: [], creatures: ["zombie", "headcrab"] }));
   const before = await barNum(b, "Precached sounds");
+  const doc0Sounds = (await api(page, "/api/tools/editor/budget")).precache.sounds;
   const keys = (doc.world.keys as [string, string][]).filter(([k]) => k !== "ls_modes");
   await api(page, "/api/tools/editor/cmd", { op: "set_world", keys: [...keys, ["ls_modes", "p5_budget_stand"]] });
   await page.reload();
@@ -104,6 +105,10 @@ test("a Hammer import, a mode's roster, the last compile, and the warnings", asy
   await page.locator(".ed-pane").first().waitFor();
   b = await showBudget(page);
   await expect(b).toContainText("Budget Stand with this roster (zombie, headcrab)");
+  // Y's measured baseline (197 models, 315 sounds) + the roster from Y's table (zombie 12 + headcrab 11 new sounds)
+  await expect.poll(() => barNum(b, "Precached sounds")).toBe(315 + doc0Sounds + 23);
+  // the guard's reserve shows as a marked band on the precache bars
+  await expect(b.locator(".p5-bud-reserve")).toHaveCount(2);
   await expect.poll(() => barNum(b, "Precached sounds")).toBeGreaterThan(before);
   // the last compile (its log), with a red bar: Playtest and Publish ask first
   const rep = await api(page, "/api/tools/editor/budget");
