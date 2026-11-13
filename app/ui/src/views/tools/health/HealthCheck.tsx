@@ -11,6 +11,7 @@ import { Empty, Loading, Row, Rows } from "../common";
 import { matches, searchWords } from "../common/search";
 import type { ToolProps } from "../registry";
 import { useReportAddress } from "../common/address";
+import { useToolCrumbs } from "../common/shell";
 import {
   healthOptions,
   healthProgress,
@@ -54,7 +55,8 @@ export default function HealthCheck({ maps }: ToolProps) {
     refetchInterval: (q) => ((q.state.data as Progress | undefined)?.active ? 1000 : false),
   });
   const reports = useQuery({ queryKey: ["tools", "health", "reports"], queryFn: healthReports });
-  const [open, setOpen] = useState<string | null>(null);
+  // a report is its own page: "health:report:<id>" (so Back and the crumbs step out of it)
+  const [open, setOpen] = useState<string | null>(() => useTools.getState().arg?.match(/^report:(.+)$/)?.[1] ?? null);
   const run = progress.data?.run ?? null;
   const active = !!progress.data?.active;
 
@@ -127,7 +129,7 @@ function SummaryRow({ r, onOpen }: { r: ReportSummary; onOpen: () => void }) {
 
 function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) {
   const toast = useToast();
-  const [map, setMap] = useState<string>(() => useTools.getState().arg ?? useTools.getState().map ?? "");
+  const [map, setMap] = useState<string>(() => (useTools.getState().arg?.startsWith("report:") ? null : useTools.getState().arg) ?? useTools.getState().map ?? "");
   useReportAddress("health", map ? `health:${map}` : null);
   const [filter, setFilter] = useState("");
   const [mode, setMode] = useState<string | null>(null);
@@ -320,6 +322,9 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
   const toast = useToast();
   const q = useQuery({ queryKey: ["tools", "health", "report", id], queryFn: () => healthReport(id) });
   const [replaying, setReplaying] = useState(false);
+  useReportAddress("health", `health:report:${id}`);
+  const reportMap = q.data?.report?.map;
+  useToolCrumbs("health", reportMap ? [{ label: reportMap, address: `health:${reportMap}`, title: `Check ${reportMap} again` }, { label: "Report" }] : [{ label: "Report" }]);
   if (q.isPending) return <Skeleton rows={6} />;
   const r = q.data?.report;
   if (q.isError || !r)

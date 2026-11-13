@@ -6,7 +6,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePoll } from "../../../api";
+import { useDirty } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
+import { useReportAddress } from "../common/address";
+import { useToolCrumbs } from "../common/shell";
 import { BusyButton, LoadError, Skeleton, useAskText, useConfirm, useToast } from "../../../ui";
 import type { ToolProps } from "../registry";
 import type { EditorHandle } from "./monaco";
@@ -42,6 +45,11 @@ export default function PluginStudio(_: ToolProps) {
   const [editorFailed, setEditorFailed] = useState(false);
   const [open, setOpen] = useState<Open | null>(null);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
+  // the open file is in the address ("plugins:mine/foo.sma") and the crumbs; unsaved files are
+  // asked about before leaving
+  useReportAddress("plugins", open ? `plugins:${open.folder}/${open.name}` : null);
+  useToolCrumbs("plugins", open ? [{ label: open.name }] : null);
+  useDirty("plugins", dirty.size > 0);
   const [busy, setBusy] = useState<Busy>(null);
   const [result, setResult] = useState<CompileResult | null>(null);
   const [tab, setTab] = useState<Tab>("problems");

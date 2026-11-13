@@ -7,6 +7,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useToolArg } from "../../../stores/tools";
+import { useReportAddress } from "../common/address";
 import { Banner, BusyButton, LoadError, Segmented, Switch, useConfirm, useToast } from "../../../ui";
 import { isAbort } from "../../../api";
 import { errorText } from "../common/api";
@@ -18,6 +19,7 @@ import "./overview.css";
 export default function OverviewMaker({ maps }: ToolProps) {
   const arg = useToolArg();
   const [map, setMap] = useState<string | null>(arg);
+  useReportAddress("radar", map ? `radar:${map}` : null);
   useEffect(() => {
     if (arg) setMap(arg);
   }, [arg]);

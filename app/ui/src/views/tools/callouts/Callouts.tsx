@@ -4,7 +4,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { useNav } from "../../../store";
+import { useDirty, useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
 import { useReportAddress } from "../common/address";
 import { Banner, BusyButton, Info, LoadError, useAskText, useConfirm, useToast } from "../../../ui";
@@ -91,6 +91,8 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
   const colours = useMemo(() => placeColours(counts.map((c) => c[0])), [counts]);
   const voice = useMemo(() => new Set(nav?.voice ?? []), [nav]);
   const changes: Change[] = useMemo(() => Object.entries(edits).filter(([id, p]) => (original[+id] ?? "") !== p).map(([id, p]) => ({ id: +id, place: p })), [edits, original]);
+  // (asked about before leaving: the crumbs, Back, another section)
+  useDirty("callouts", changes.length > 0);
   const unnamed = areas.length - counts.reduce((s, c) => s + c[1], 0);
 
   const push = (next: Names) => {

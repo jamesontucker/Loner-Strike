@@ -15,6 +15,8 @@ import { useNav } from "../../../store";
 import type { GbJob } from "../../../types";
 import { Banner, BusyButton, LoadError, Segmented, useToast } from "../../../ui";
 import { errorText } from "../common/api";
+import { useReportAddress } from "../common/address";
+import { useToolCrumbs, type Crumb } from "../common/shell";
 import { Empty, Loading } from "../common";
 import type { ToolProps } from "../registry";
 import {
@@ -48,6 +50,18 @@ export default function Community({ maps }: ToolProps) {
     if (s.map) setPublishMap(s.map);
     if (s.open) setOpen(s.open);
   }, [arg]);
+  // each tab and creation has its own address, so Back and the crumbs step between them
+  const shown = tab === "browse" && open ? open : null;
+  const item = useQuery({ queryKey: ["tools", "community", "item", shown?.model, shown?.id], queryFn: ({ signal }) => details(shown!.model, shown!.id, signal), retry: false, enabled: !!shown });
+  const tabCrumb: Record<Tab, Crumb> = { browse: { label: "Browse", address: "community" }, publish: { label: "Publish", address: "community:publish" }, yours: { label: "Yours", address: "community:yours" } };
+  useReportAddress(
+    "community",
+    shown ? `community:${shown.model === "Mod" ? "mod" : "spray"}:${shown.id}` : tab === "publish" ? `community:publish${publishMap ? `:${publishMap}` : ""}` : tab === "yours" ? "community:yours" : null,
+  );
+  useToolCrumbs(
+    "community",
+    shown ? [tabCrumb.browse, { label: item.data?.name ?? "Creation" }] : tab === "publish" && publishMap ? [tabCrumb.publish, { label: publishMap }] : [tabCrumb[tab]],
+  );
 
   return (
     <div className="cm stack-tight">
