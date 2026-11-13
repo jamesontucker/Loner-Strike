@@ -58,3 +58,9 @@
 .editor-side .seg { max-width: 100%; }
 .editor-side .seg > button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ed-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ed-vec { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ed-vec label { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.ed-vec label span { color: var(--bone-faint, #888); font-size: 12px; }
+.ed-vec input { width: 100%; min-width: 0; }
+.ed-grow { flex: 1 1 160px; min-width: 0; }
+.ed-field input[type="color"] { height: 30px; padding: 0 2px; width: 64px !important; }
