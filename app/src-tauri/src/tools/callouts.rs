@@ -3,9 +3,10 @@
 //! (gm_botchat turns "UpperTunnel" into "upper tunnel", knows "cat" and "apps", and so on).
 //!
 //! - `GET  /api/tools/callouts/:name`          the nav's areas (top-down boxes) and places
-//! - `GET  /api/tools/callouts/:name/suggest?from=usual|other`  names to try: the usual
-//!   callouts for a well-known map (navpack/callouts.py's rules), or the names on the same
-//!   map's nav in the other game folder (Condition Zero's hand-named ones; navpack/names.py)
+//! - `GET  /api/tools/callouts/:name/suggest?from=usual|other|marks`  names to try: the usual
+//!   callouts for a well-known map (navpack/callouts.py's rules), the names on the same
+//!   map's nav in the other game folder (Condition Zero's hand-named ones; navpack/names.py),
+//!   or names from the map's own zones and spawns (BombsiteA, CTSpawn, ...) for unnamed areas
 //! - `POST /api/tools/callouts/:name`          `{stamp, changes: [{id, place}]}` saves
 //!
 //! Only place names change: area ids, corners and links stay as they are, so the bots' map
@@ -163,6 +164,46 @@ fn inside(v: f32, r: Range) -> bool {
 /// An area's middle and its average floor height (as the python tools take it).
 fn mid(a: &nav::Area) -> (f32, f32, f32) {
     ((a.lo[0] + a.hi[0]) / 2.0, (a.lo[1] + a.hi[1]) / 2.0, (a.lo[2] + a.hi[2] + a.ne_z + a.sw_z) / 4.0)
+}
+
+/// Names from the map's own zones and spawns, for areas without a name: bomb sites (BombsiteA,
+/// BombsiteB... in the game's order), the hostage rescue zone, VIP escape, the CT and T spawns
+/// (the box round each team's spawn points) and hostages. Zones first, then spawns.
+pub fn names_from_marks(n: &nav::Nav, marks: &[super::overview::Mark]) -> Vec<(u32, String)> {
+    // (name, x0, y0, x1, y1, z0, z1): a nav area whose middle is inside gets the name
+    let mut boxes: Vec<(String, [f32; 6])> = Vec::new();
+    for m in marks {
+        let name = match (m.kind, m.label.as_deref()) {
+            ("bomb", Some(l)) => format!("Bombsite{l}"),
+            ("rescue", _) => "HostageRescueZone".into(),
+            ("vip", _) => "VipRescueZone".into(),
+            _ => continue,
+        };
+        boxes.push((name, [m.lo[0] - 16.0, m.lo[1] - 16.0, m.hi[0] + 16.0, m.hi[1] + 16.0, m.lo[2] - 64.0, m.hi[2] + 64.0]));
+    }
+    for (kind, name) in [("ct", "CTSpawn"), ("t", "TSpawn")] {
+        let pts: Vec<&[f32; 3]> = marks.iter().filter(|m| m.kind == kind).map(|m| &m.lo).collect();
+        if pts.is_empty() {
+            continue;
+        }
+        let f = |i: usize, lo: bool| pts.iter().map(|p| p[i]).fold(if lo { f32::MAX } else { f32::MIN }, |a, b| if lo { a.min(b) } else { a.max(b) });
+        // spawn points stand 36 units over the floor
+        boxes.push((name.into(), [f(0, true) - 160.0, f(1, true) - 160.0, f(0, false) + 160.0, f(1, false) + 160.0, f(2, true) - 100.0, f(2, false) + 24.0]));
+    }
+    for m in marks.iter().filter(|m| m.kind == "hostage") {
+        boxes.push(("Hostages".into(), [m.lo[0] - 96.0, m.lo[1] - 96.0, m.lo[0] + 96.0, m.lo[1] + 96.0, m.lo[2] - 100.0, m.lo[2] + 40.0]));
+    }
+    let mut out = Vec::new();
+    for a in &n.areas {
+        if a.place != 0 {
+            continue;
+        }
+        let (x, y, z) = mid(a);
+        if let Some((name, _)) = boxes.iter().find(|(_, b)| x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3] && z >= b[4] && z <= b[5]) {
+            out.push((a.id, name.clone()));
+        }
+    }
+    out
 }
 
 /// The usual callouts for this map: changes the rules make.
@@ -388,10 +429,17 @@ async fn api_suggest(State(st): State<Shared>, UrlPath(name): UrlPath<String>, q
                         let words = if g == "czero" { "Condition Zero's nav of this map" } else { "CS 1.6's nav of this map" };
                         (names_from(&n, &src, 64.0), words)
                     }
-                    _ => return Err(Fail::new(StatusCode::BAD_REQUEST, "Ask for from=usual or from=other.")),
+                    "marks" => {
+                        let bsp = crate::goldsrc::bsp::Bsp::open(&m.bsp, false)?;
+                        let ents = crate::goldsrc::entities::parse(&bsp.entities);
+                        (names_from_marks(&n, &super::overview::find_marks(&bsp, &ents)), "the map's bomb sites, spawns and zones")
+                    }
+                    _ => return Err(Fail::new(StatusCode::BAD_REQUEST, "Ask for from=usual, from=other or from=marks.")),
                 };
                 let msg = if changes.is_empty() {
-                    if from == "usual" {
+                    if from == "marks" {
+                        format!("Nothing to add: no unnamed area is in {words}.")
+                    } else if from == "usual" {
                         format!("Nothing to change: the names already match {words}.")
                     } else {
                         format!("Nothing to add: the areas {words} can name have names already.")
@@ -467,6 +515,23 @@ mod tests {
 
     fn names(n: &nav::Nav) -> Vec<&str> {
         n.areas.iter().map(|a| n.place_name(a)).collect()
+    }
+
+    #[test]
+    fn names_from_the_maps_zones_and_spawns() {
+        use super::super::overview::Mark;
+        // four areas at x 0..400: a bomb zone over the first, CT spawns over the third, the
+        // second is named already, the last is left alone
+        let mut n = row();
+        n.areas[0].place = 0;
+        let marks = vec![
+            Mark { kind: "bomb", lo: [10.0, 10.0, -10.0], hi: [90.0, 90.0, 60.0], label: Some("A".into()) },
+            Mark { kind: "bomb", lo: [100.0, 0.0, 0.0], hi: [200.0, 100.0, 60.0], label: Some("B".into()) },
+            Mark { kind: "ct", lo: [250.0, 50.0, 36.0], hi: [250.0, 50.0, 36.0], label: None },
+            Mark { kind: "t", lo: [5000.0, 0.0, 36.0], hi: [5000.0, 0.0, 36.0], label: None },
+        ];
+        let c = names_from_marks(&n, &marks);
+        assert_eq!(c, vec![(10, "BombsiteA".to_string()), (12, "CTSpawn".to_string())]);
     }
 
     #[test]

@@ -36,7 +36,7 @@ const base = (map: string) => `/api/tools/callouts/${encodeURIComponent(map)}`;
 
 export const loadCallouts = (map: string): Promise<CalloutNav> => get<CalloutNav>(base(map));
 
-export const suggest = (map: string, from: "usual" | "other") => tryGet<{ changes?: Change[]; message?: string }>(`${base(map)}/suggest?from=${from}`);
+export const suggest = (map: string, from: "usual" | "other" | "marks") => tryGet<{ changes?: Change[]; message?: string }>(`${base(map)}/suggest?from=${from}`);
 
 export const saveCallouts = (map: string, stamp: string, changes: Change[]) =>
   post<{ ok?: boolean; changed?: number; message?: string; stamp?: string; knowledge?: boolean | null }>(base(map), { stamp, changes });

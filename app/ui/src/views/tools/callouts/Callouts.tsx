@@ -1,17 +1,20 @@
 // The callout editor: name places on a map's bot nav ("Catwalk", "Apartments"), so bots say
 // where they are on the radio and bot chat and voice commands understand the names.
-// Pick areas on the top-down map, give them a name, save.
+//
+// Layout: the nav seen from above fills the stage; the side has the name palette (the brush),
+// the places with their counts and colours, suggestions and checks. Pick areas and name them,
+// or pick a name and paint it on (P), erase (E). Undo/Redo and Save are in the bar.
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useDirty, useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
 import { useReportAddress } from "../common/address";
-import { Banner, BusyButton, Info, LoadError, useAskText, useConfirm, useToast } from "../../../ui";
+import { Banner, BusyButton, Info, LoadError, Segmented, useAskText, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading, MapList } from "../common";
 import type { ToolProps } from "../registry";
 import { loadCallouts, placeColours, saveCallouts, spoken, suggest, validPlace, type Area, type CalloutNav, type Change } from "./calloutsApi";
-import { TopDown } from "./TopDown";
+import { TopDown, type Tool } from "./TopDown";
 import "./callouts.css";
 
 export default function Callouts({ maps }: ToolProps) {
@@ -23,11 +26,14 @@ export default function Callouts({ maps }: ToolProps) {
   }, [arg]);
   if (!map)
     return (
-      <div className="stack-tight">
-        <p className="muted measure">
-          Pick a map to name its places. Bots say these names on the radio ("enemy spotted at Long") and bot chat and voice commands understand them. Only maps with a bot nav are listed: the map doctor can teach bots the others.
-        </p>
-        <MapList maps={maps} onPick={setMap} placeholder="Pick a map to name its places" filter={(m) => m.nav} none="None of your maps has a bot nav yet. The map doctor can teach bots a map; then you can name its places here." />
+      <div className="tl-page stack-tight">
+        <div className="tl-head">
+          <div className="tl-head-title">
+            <h3>Pick a map to name its places</h3>
+            <Info text={'Bots say these names on the radio ("enemy spotted at Long"), and bot chat and voice commands understand them. Only maps with a bot nav are listed: the map doctor can teach bots the others.'} />
+          </div>
+        </div>
+        <MapList maps={maps} onPick={setMap} placeholder="Search maps" filter={(m) => m.nav} none="None of your maps has a bot nav yet. The map doctor can teach bots a map; then you can name its places here." />
       </div>
     );
   return <Editor map={map} onBack={() => setMap(null)} />;
@@ -35,6 +41,15 @@ export default function Callouts({ maps }: ToolProps) {
 
 /** names by area id */
 type Names = Record<number, string>;
+type Issue = { key: string; tone: "warn" | "bad" | "info"; text: string; areas: number[]; fix?: { label: string; run: () => void } };
+
+const TOOL_HINT: Record<Tool, string> = {
+  pick: "Click to pick · Shift adds · drag a box · double-click picks a place · right-drag moves",
+  paint: "Drag over areas to give them the name · right-drag or Space moves · scroll zooms",
+  erase: "Drag over areas to take their name off · right-drag or Space moves · scroll zooms",
+};
+
+const norm = (n: string) => n.toLowerCase().replace(/[_\s]/g, "");
 
 function Editor({ map, onBack }: { map: string; onBack: () => void }) {
   const toast = useToast();
@@ -50,18 +65,20 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
     for (const a of nav?.areas ?? []) o[a[0]] = a[6] ? nav!.places[a[6] - 1] ?? "" : "";
     return o;
   }, [nav]);
-  const [history, setHistory] = useState<Names[]>([{}]);
+  const [history, setHistory] = useState<{ names: Names; what: string }[]>([{ names: {}, what: "" }]);
   const [at, setAt] = useState(0);
-  const edits = history[at];
+  const edits = history[at].names;
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [flash, setFlash] = useState<Set<number>>(new Set());
+  const [tool, setTool] = useState<Tool>("pick");
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [suggesting, setSuggesting] = useState<string | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
   const [stamp, setStamp] = useState<string | null>(null);
+  const [hover, setHover] = useState<Area | null>(null);
 
   useEffect(() => {
-    setHistory([{}]);
+    setHistory([{ names: {}, what: "" }]);
     setAt(0);
     setSelected(new Set());
     setStamp(nav?.stamp ?? null);
@@ -88,44 +105,52 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
     for (const a of areas) if (a.place) m.set(a.place, (m.get(a.place) ?? 0) + 1);
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [areas]);
-  const colours = useMemo(() => placeColours(counts.map((c) => c[0])), [counts]);
+  const trimmed = name.trim();
+  const nameOk = validPlace(trimmed);
+  // the brush's colour: its own if the place exists, else the one it would get
+  const colours = useMemo(() => placeColours([...counts.map((c) => c[0]), ...(nameOk ? [trimmed] : [])]), [counts, nameOk, trimmed]);
   const voice = useMemo(() => new Set(nav?.voice ?? []), [nav]);
   const changes: Change[] = useMemo(() => Object.entries(edits).filter(([id, p]) => (original[+id] ?? "") !== p).map(([id, p]) => ({ id: +id, place: p })), [edits, original]);
   // (asked about before leaving: the crumbs, Back, another section)
   useDirty("callouts", changes.length > 0);
   const unnamed = areas.length - counts.reduce((s, c) => s + c[1], 0);
 
-  const push = (next: Names) => {
-    setHistory([...history.slice(0, at + 1), next]);
+  const push = (next: Names, what: string) => {
+    setHistory([...history.slice(0, at + 1), { names: next, what }]);
     setAt(at + 1);
-    setSaved(null);
   };
-  const setNames = (ids: number[], place: string) => {
+  const setNames = (ids: number[], place: string, what?: string) => {
     const next = { ...edits };
     for (const id of ids) next[id] = place;
-    push(next);
+    push(next, what ?? (place ? `name ${ids.length} area${ids.length === 1 ? "" : "s"} ${place}` : `take the name off ${ids.length} area${ids.length === 1 ? "" : "s"}`));
   };
   const undo = () => at > 0 && setAt(at - 1);
   const redo = () => at < history.length - 1 && setAt(at + 1);
 
-  // keys: Escape clears the pick, Cmd/Ctrl+Z undoes, with Shift redoes
+  // keys: V/P/E tools, Escape clears the pick, Cmd/Ctrl+Z undoes, with Shift redoes
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
-      if (e.key === "Escape") setSelected(new Set());
+      const t = e.target as HTMLElement;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || document.querySelector(".sheet-backdrop")) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) redo();
         else undo();
+        return;
       }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "Escape") {
+        setSelected(new Set());
+        setFlash(new Set());
+      } else if (e.code === "KeyV") setTool("pick");
+      else if (e.code === "KeyP") setTool("paint");
+      else if (e.code === "KeyE") setTool("erase");
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   });
 
   const picked = [...selected].map((i) => areas[i]).filter(Boolean);
-  const trimmed = name.trim();
-  const nameOk = validPlace(trimmed);
   const applyName = () => {
     if (!nameOk || !picked.length) return;
     setNames(picked.map((a) => a.id), trimmed);
@@ -135,16 +160,30 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
     const next = add ? new Set(selected) : new Set<number>();
     areas.forEach((a, i) => a.place === place && next.add(i));
     setSelected(next);
+    setFlash(new Set());
     setName(place);
+  };
+  const showAreas = (ids: number[]) => {
+    const want = new Set(ids);
+    const s = new Set<number>();
+    areas.forEach((a, i) => want.has(a.id) && s.add(i));
+    setFlash(s);
+    setSelected(s);
   };
   const rename = async (place: string) => {
     const to = await askText(`Rename ${place} on every area that has it`, { label: "New name", placeholder: place, max: 31 }, { ok: "Rename" });
     if (to === null || !to || to === place) return;
     if (!validPlace(to)) return toast("Use letters and numbers (and _), starting with a letter, up to 31.", true);
-    setNames(areas.filter((a) => a.place === place).map((a) => a.id), to);
+    setNames(areas.filter((a) => a.place === place).map((a) => a.id), to, `rename ${place} to ${to}`);
+  };
+  const onPaint = (list: number[]) => {
+    if (tool === "erase") return setNames(list.map((i) => areas[i].id).filter((id, k) => areas[list[k]].place !== ""), "");
+    if (!nameOk) return toast("Type or pick a name first: that's what the brush paints.", true);
+    const ids = list.filter((i) => areas[i].place !== trimmed).map((i) => areas[i].id);
+    if (ids.length) setNames(ids, trimmed);
   };
 
-  const fetchSuggest = async (from: "usual" | "other") => {
+  const fetchSuggest = async (from: "usual" | "other" | "marks") => {
     setSuggesting(from);
     const r = await suggest(map, from);
     setSuggesting(null);
@@ -153,7 +192,8 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
     if (c.length) {
       const next = { ...edits };
       for (const x of c) next[x.id] = x.place;
-      push(next);
+      push(next, from === "marks" ? "names from bomb sites and spawns" : from === "usual" ? "the usual callouts" : "names from the other game's nav");
+      showAreas(c.map((x) => x.id));
     }
     toast(r.message || "Done.");
   };
@@ -164,7 +204,6 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
     const r = await saveCallouts(map, stamp, changes);
     setSaving(false);
     if (r.error || !r.ok) return toast(r.error || "Couldn't save the names.", true);
-    setSaved(r.message || "Saved.");
     toast(r.message || "Saved.");
     await qc.invalidateQueries({ queryKey: ["tools", "callouts", map] });
   };
@@ -174,73 +213,100 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
     onBack();
   };
 
-  const head = (
-    <div className="tl-head">
-      <div className="tl-head-title">
-        <h3>Places on {map}</h3>
-        {nav && <span className="muted small-note">{nav.file} · {areas.length} areas · {counts.length} places{unnamed ? ` · ${unnamed} ${unnamed === 1 ? "area" : "areas"} without a name` : ""}</span>}
-      </div>
-      <div className="tl-head-actions">
-        <button className="btn" onClick={back}>Pick another map</button>
-      </div>
-    </div>
+  // ---- checks: two spellings of one place, a place in pieces far apart, one-area places, unnamed areas
+  const issues = useMemo<Issue[]>(() => {
+    const out: Issue[] = [];
+    const byNorm = new Map<string, string[]>();
+    for (const [p] of counts) byNorm.set(norm(p), [...(byNorm.get(norm(p)) ?? []), p]);
+    const count = new Map(counts);
+    for (const names of byNorm.values()) {
+      if (names.length < 2) continue;
+      const keep = [...names].sort((a, b) => (count.get(b) ?? 0) - (count.get(a) ?? 0))[0];
+      const others = names.filter((n) => n !== keep);
+      out.push({
+        key: `spell-${keep}`,
+        tone: "bad",
+        text: `${names.join(" and ")} look like one place spelled ${names.length === 2 ? "two" : "different"} ways`,
+        areas: areas.filter((a) => names.includes(a.place)).map((a) => a.id),
+        fix: { label: `Use ${keep}`, run: () => setNames(areas.filter((a) => others.includes(a.place)).map((a) => a.id), keep, `use ${keep} for ${others.join(", ")}`) },
+      });
+    }
+    for (const [p, n] of counts) {
+      const mine = areas.filter((a) => a.place === p);
+      const parts = pieces(mine);
+      if (parts.length > 1) out.push({ key: `split-${p}`, tone: "warn", text: `${p} is in ${parts.length} spots far apart`, areas: mine.map((a) => a.id) });
+      else if (n === 1 && mine[0] && (mine[0].x1 - mine[0].x0) * (mine[0].y1 - mine[0].y0) < 128 * 128) out.push({ key: `one-${p}`, tone: "info", text: `${p} names only one small area`, areas: mine.map((a) => a.id) });
+    }
+    if (unnamed && counts.length) out.push({ key: "unnamed", tone: "info", text: `${unnamed} area${unnamed === 1 ? "" : "s"} without a name`, areas: areas.filter((a) => !a.place).map((a) => a.id) });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [areas, counts, unnamed]);
+
+  const title = (
+    <>
+      <span className="map-title">{map}</span>
+      {nav?.file && <span className="muted small-note">{nav.file}</span>}
+      <button className="btn small" onClick={back}>Other map</button>
+    </>
   );
 
   if (q.isPending)
     return (
-      <div className="panel">
-        {head}
-        <Loading className="co-wait" text={`Reading ${map}'s nav…`} />
+      <div className="tools-page">
+        <div className="tools-bar">{title}</div>
+        <div className="tools-stage co-empty"><Loading text={`Reading ${map}'s nav…`} /></div>
       </div>
     );
   if (q.isError || !nav)
     return (
-      <div className="panel">
-        {head}
-        <LoadError text={(q.error as Error)?.message || "Couldn't load the nav."} onRetry={() => q.refetch()} />
+      <div className="tools-page">
+        <div className="tools-bar">{title}</div>
+        <LoadError title={`Couldn't open ${map}'s nav`} text={(q.error as Error)?.message || "Couldn't load the nav."} onRetry={() => q.refetch()} />
       </div>
     );
 
   const locked = nav.inUse;
+  const brushColour = nameOk ? colours.get(trimmed) ?? null : null;
+  const known = [...new Set([...nav.voice, ...nav.chat])].filter((n) => !counts.some((c) => c[0] === n));
+  const floorsCut = zRange[0] !== zLimits[0] || zRange[1] !== zLimits[1];
 
   return (
-    <div className="co stack-tight">
-      <div className="panel">
-        {head}
-        {locked && <Banner>The game has {map} loaded right now. You can name places, but saving waits until you change to another map (or close the game).</Banner>}
-        {nav.matchesMap === false && <Banner>This nav was made for a different version of the map. Names still work, but the map doctor can teach bots the map again.</Banner>}
+    <div className="tools-page co-page">
+      <div className="tools-bar">
+        {title}
+        <span className="push" />
+        <Segmented label="What dragging does" values="pick paint erase" labels="Pick|Paint|Erase" current={tool} onPick={(v) => setTool(v as Tool)} />
+        <button className="btn" onClick={undo} disabled={at === 0} title={at ? `Undo ${history[at].what} (Mod+Z)` : "Nothing to undo"}>Undo</button>
+        <button className="btn" onClick={redo} disabled={at >= history.length - 1} title={at < history.length - 1 ? `Redo ${history[at + 1].what}` : "Nothing to redo"}>Redo</button>
+        <BusyButton className="btn primary" busy={saving} label={changes.length ? `Save ${changes.length} change${changes.length === 1 ? "" : "s"}` : "Save names"} busyLabel="Saving…" disabled={!changes.length || locked} onClick={save} />
       </div>
+      {locked && <Banner>The game has {map} loaded. You can name places, but saving waits until you change map (or close the game).</Banner>}
+      {nav.matchesMap === false && <Banner>This nav was made for another version of the map. Names still work; the map doctor can teach bots the map again.</Banner>}
 
-      <div className="co-body">
-        <div className="panel co-map">
-          <TopDown areas={areas} colours={colours} selected={selected} onSelect={setSelected} zRange={zRange} fitKey={map + (nav.areas.length || 0)} />
-          <div className="co-floors row">
-            <span className="muted small-note">Floors shown</span>
-            <label className="co-range">
-              <span className="small-note">from</span>
-              <input type="range" min={zLimits[0]} max={zLimits[1]} value={zRange[0]} aria-label="Lowest floor shown" onChange={(e) => setZRange([Math.min(+e.target.value, zRange[1]), zRange[1]])} />
-            </label>
-            <label className="co-range">
-              <span className="small-note">to</span>
-              <input type="range" min={zLimits[0]} max={zLimits[1]} value={zRange[1]} aria-label="Highest floor shown" onChange={(e) => setZRange([zRange[0], Math.max(+e.target.value, zRange[0])])} />
-            </label>
-            <span className="muted small-note">{zRange[0]} to {zRange[1]} units</span>
-            {(zRange[0] !== zLimits[0] || zRange[1] !== zLimits[1]) && <button className="btn small" onClick={() => setZRange(zLimits)}>All floors</button>}
+      <div className="tools-viewer">
+        <div className="tools-stage">
+          <div className={`tools-canvas co-stage co-${tool}`}>
+            {areas.length ? (
+              <TopDown areas={areas} colours={colours} selected={selected} onSelect={(s) => (setSelected(s), setFlash(new Set()))} zRange={zRange} fitKey={map + (nav.areas.length || 0)} tool={tool} brush={brushColour} onPaint={onPaint} flash={flash} onHoverArea={setHover} />
+            ) : (
+              <div className="tools-overlay"><Empty plain title="The nav has no areas" text="There's nothing to name. Teach bots the map again in the map doctor." /></div>
+            )}
+            {tool === "paint" && (
+              <div className="co-brush" aria-live="polite">
+                {nameOk ? <><span className="co-swatch" style={{ background: brushColour ?? undefined }} /> Painting <strong>{trimmed}</strong></> : "Pick a name to paint with"}
+              </div>
+            )}
           </div>
-          <p className="muted small-note co-help">
-            Click an area to pick it, Shift-click to add more, drag a box to pick many (Alt-drag takes them away). Double-click picks a whole place. Right-drag or Space-drag moves the map, scroll zooms.
-          </p>
+          <div className="tools-status">
+            <span className="mono">{areas.length} areas · {counts.length} places</span>
+            <span className="tools-hover">{hover ? <>{hover.place || <span className="muted">no name</span>}<span className="muted"> · area {hover.id} · height {Math.round(hover.z)}</span></> : picked.length ? `${picked.length} picked` : ""}</span>
+            <span className="tools-hint">{TOOL_HINT[tool]}</span>
+          </div>
         </div>
 
-        <div className="co-side stack-tight">
-          <div className="panel">
-            <h3>{picked.length ? `${picked.length} area${picked.length === 1 ? "" : "s"} picked` : "Pick areas on the map"}</h3>
-            {picked.length > 0 && (
-              <p className="muted small-note">
-                Now: {[...new Set(picked.map((a) => a.place || "no name"))].slice(0, 4).join(", ")}
-                {new Set(picked.map((a) => a.place)).size > 4 ? "…" : ""}
-              </p>
-            )}
+        <aside className="tools-side">
+          <section className="tools-panel">
+            <h3>{tool === "pick" ? (picked.length ? `Name ${picked.length} picked area${picked.length === 1 ? "" : "s"}` : "Name") : tool === "paint" ? "Brush" : "Erase"}</h3>
             <form
               className="co-name"
               onSubmit={(e) => {
@@ -254,83 +320,112 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
                   <option key={n} value={n}>{voice.has(n) ? "bots say it on the radio" : "in chat"}</option>
                 ))}
               </datalist>
-              <div className="row">
-                <button className="btn primary" type="submit" disabled={!picked.length || !nameOk}>Name {picked.length > 1 ? "them" : "it"}</button>
-                <button className="btn" type="button" disabled={!picked.length} onClick={clearName}>Remove the name</button>
-              </div>
+              {tool === "pick" && (
+                <div className="row">
+                  <button className="btn primary small" type="submit" disabled={!picked.length || !nameOk}>Name {picked.length > 1 ? "them" : "it"}</button>
+                  <button className="btn small" type="button" disabled={!picked.length} onClick={clearName}>Remove the name</button>
+                </div>
+              )}
             </form>
-            {trimmed && !nameOk && <p className="co-bad small-note">Use letters and numbers (and _), starting with a letter, up to 31.</p>}
-            {nameOk && (
-              <p className="muted small-note">
-                {voice.has(trimmed) ? "Bots say this one on the radio, and write it in chat" : "Bots write this in chat (no radio voice for it)"}: "{spoken(trimmed)}".
-              </p>
+            {trimmed && !nameOk && <p className="co-bad small-note">Letters and numbers (and _), starting with a letter, up to 31.</p>}
+            {nameOk && <p className="muted small-note">{voice.has(trimmed) ? "🔊 Said on the radio" : "In chat only"}: “{spoken(trimmed)}”</p>}
+            {known.length > 0 && (
+              <details className="co-known">
+                <summary>Names bots know</summary>
+                <div className="chips">
+                  {known.slice(0, 80).map((n) => (
+                    <button key={n} className="chip" aria-pressed={trimmed === n} title={voice.has(n) ? "Bots say it on the radio" : "Bot chat knows it"} onClick={() => setName(n)}>{n}</button>
+                  ))}
+                </div>
+              </details>
             )}
-          </div>
+          </section>
 
-          <div className="panel">
-            <div className="row between">
-              <h3>Places</h3>
-              <Info text="Names from the game's list (marked with a speaker) have a radio voice line. Any other name works in bot chat and voice commands: capitals and _ become spaces, so UpperTunnel is 'upper tunnel'." />
-            </div>
+          <section className="tools-panel">
+            <h3>
+              Places <span className="muted small-note">{counts.length}</span>
+              <Info text="Click a place to pick its areas (Shift adds) and make it the brush. Names with 🔊 have a radio voice line; any other name works in bot chat and voice commands (capitals and _ become spaces: UpperTunnel is 'upper tunnel')." />
+            </h3>
             {counts.length === 0 ? (
-              <Empty plain text={nav.usual ? "No places named yet. Pick areas and name them, or start from the usual callouts below." : "No places named yet. Pick areas on the map and give them a name."} />
+              <Empty plain text={nav.usual ? "No places yet. Paint some, or start from a suggestion below." : "No places yet. Pick areas and name them, or paint a name on (P)."} />
             ) : (
               <ul className="co-places">
                 {counts.map(([p, n]) => (
                   <li key={p}>
-                    <button className="co-place" onClick={(e) => pickPlace(p, e.shiftKey)} title="Pick its areas (Shift adds)">
+                    <button className="co-place" aria-pressed={trimmed === p} onClick={(e) => pickPlace(p, e.shiftKey)} title="Pick its areas and paint with it (Shift adds)">
                       <span className="co-swatch" style={{ background: colours.get(p) }} />
                       <span className="co-place-name">{p}</span>
                       {voice.has(p) && <span className="co-voice" role="img" aria-label="has a radio voice line" title="Bots say it on the radio">🔊</span>}
                       <span className="muted small-note push">{n}</span>
                     </button>
-                    <button className="btn small" onClick={() => rename(p)} aria-label={`Rename ${p}`}>Rename</button>
+                    <button className="btn small" onClick={() => rename(p)} aria-label={`Rename ${p}`} title={`Rename ${p}`}>Rename</button>
                   </li>
                 ))}
               </ul>
             )}
-            {(nav.usual || nav.other) && (
-              <div className="co-suggest stack-tight">
-                {nav.usual && (
-                  <BusyButton className="btn" busy={suggesting === "usual"} label="Use the usual callouts" busyLabel="Working…" disabled={suggesting !== null} onClick={() => fetchSuggest("usual")} />
-                )}
-                {nav.other && (
-                  <BusyButton
-                    className="btn"
-                    busy={suggesting === "other"}
-                    label={`Fill gaps from ${nav.other === "czero" ? "Condition Zero's" : "CS 1.6's"} nav`}
-                    busyLabel="Working…"
-                    disabled={suggesting !== null}
-                    onClick={() => fetchSuggest("other")}
-                  />
-                )}
-                <p className="muted small-note">Suggestions show on the map first; nothing is saved until you save.</p>
-              </div>
-            )}
-          </div>
+          </section>
 
-          <div className="panel">
-            <h3>Save</h3>
-            <p className="muted small-note">
-              {changes.length ? `${changes.length} area${changes.length === 1 ? "" : "s"} changed, not saved yet.` : "No changes."}{" "}
-              {nav.knowledge === true && "Names don't move the areas, so the bots' map knowledge still fits after saving."}
-              {nav.knowledge === false && "The bots' map knowledge was made for a different nav; they work it out again when they next play the map."}
-            </p>
-            <div className="row">
-              <button className="btn" onClick={undo} disabled={at === 0}>Undo</button>
-              <button className="btn" onClick={redo} disabled={at >= history.length - 1}>Redo</button>
-              <button className="btn" disabled={!changes.length} onClick={() => push({})}>Put back</button>
+          <section className="tools-panel">
+            <h3>Suggestions <Info text="Suggestions only fill in names on the map; nothing is saved until you save, and Undo takes them back." /></h3>
+            <div className="co-suggest">
+              <BusyButton className="btn small" busy={suggesting === "marks"} label="From bomb sites and spawns" busyLabel="Working…" disabled={suggesting !== null} onClick={() => fetchSuggest("marks")} />
+              {nav.usual && <BusyButton className="btn small" busy={suggesting === "usual"} label="The usual callouts" busyLabel="Working…" disabled={suggesting !== null} onClick={() => fetchSuggest("usual")} />}
+              {nav.other && <BusyButton className="btn small" busy={suggesting === "other"} label={`From ${nav.other === "czero" ? "Condition Zero's" : "CS 1.6's"} nav`} busyLabel="Working…" disabled={suggesting !== null} onClick={() => fetchSuggest("other")} />}
             </div>
-            <div className="row co-save">
-              <BusyButton className="btn primary" busy={saving} label="Save names" busyLabel="Saving…" disabled={!changes.length || locked} onClick={save} />
-            </div>
-            {saved && <p className="co-saved small-note">{saved}</p>}
-            <p className="muted small-note">
-              The old nav is kept as {nav.file}.bak the first time{nav.backup ? " (there's one already)" : ""}. <button className="linkish" onClick={() => useNav.getState().go("tools", `doctor:${map}`)}>Check the map in the map doctor</button>
-            </p>
-          </div>
-        </div>
+          </section>
+
+          {issues.length > 0 && (
+            <section className="tools-panel">
+              <h3>Checks <span className="muted small-note">{issues.filter((i) => i.tone !== "info").length || ""}</span></h3>
+              <ul className="co-issues">
+                {issues.map((i) => (
+                  <li key={i.key} className={`co-issue ${i.tone}`}>
+                    <span>{i.text}</span>
+                    <div className="row">
+                      <button className="btn small" onClick={() => showAreas(i.areas)}>Show me</button>
+                      {i.fix && <button className="btn small" onClick={i.fix.run}>{i.fix.label}</button>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <section className="tools-panel">
+            <h3>
+              Floors <Info text="Show only the areas between two heights, to name one floor of a building at a time. The others are drawn faint and can't be picked." />
+              {floorsCut && <button className="btn small co-all" onClick={() => setZRange(zLimits)}>All</button>}
+            </h3>
+            <label className="co-range"><span className="small-note">From</span><input type="range" min={zLimits[0]} max={zLimits[1]} value={zRange[0]} aria-label="Lowest floor shown" onChange={(e) => setZRange([Math.min(+e.target.value, zRange[1]), zRange[1]])} /><span className="co-num">{zRange[0]}</span></label>
+            <label className="co-range"><span className="small-note">To</span><input type="range" min={zLimits[0]} max={zLimits[1]} value={zRange[1]} aria-label="Highest floor shown" onChange={(e) => setZRange([zRange[0], Math.max(+e.target.value, zRange[0])])} /><span className="co-num">{zRange[1]}</span></label>
+          </section>
+
+          <p className="small-note muted co-foot">
+            {nav.knowledge === false ? "The bots' map knowledge is for another nav; they work it out again when they next play the map. " : "Names don't move areas, so the bots' map knowledge still fits. "}
+            <button className="linkish" onClick={() => useNav.getState().go("tools", `doctor:${map}`)}>Check the map in the map doctor</button>
+          </p>
+        </aside>
       </div>
     </div>
   );
+}
+
+/** A place's areas in spots: areas within 600 units of each other (and on about the same floor) are one spot. */
+function pieces(list: Area[]): Area[][] {
+  const near = (a: Area, b: Area) => a.x0 - 600 <= b.x1 && b.x0 - 600 <= a.x1 && a.y0 - 600 <= b.y1 && b.y0 - 600 <= a.y1 && Math.abs(a.z - b.z) < 200;
+  const group = new Array<number>(list.length).fill(-1);
+  const groups: Area[][] = [];
+  for (let i = 0; i < list.length; i++) {
+    if (group[i] >= 0) continue;
+    const g: Area[] = [];
+    group[i] = groups.length;
+    const todo = [i];
+    while (todo.length) {
+      const k = todo.pop()!;
+      g.push(list[k]);
+      for (let j = 0; j < list.length; j++) if (group[j] < 0 && near(list[k], list[j])) (group[j] = groups.length), todo.push(j);
+    }
+    groups.push(g);
+  }
+  return groups;
 }

@@ -2,15 +2,17 @@
 // place names written over them. Click an area to pick it, Shift-click to add or take one
 // away, drag a box to pick every area whose middle is inside (Shift adds, Alt takes away).
 // Drag with the right mouse button (or hold Space) to move, scroll to zoom. Double-click
-// picks every area of that place.
+// picks every area of that place. With a brush (tool "paint" or "erase"), dragging names every
+// area the pointer passes over in one step.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Area } from "./calloutsApi";
 
 type View = { cx: number; cy: number; scale: number };
-type Drag = { kind: "box" | "pan"; x0: number; y0: number; x1: number; y1: number; view: View; mode: "set" | "add" | "remove"; moved: boolean };
+type Drag = { kind: "box" | "pan" | "paint"; x0: number; y0: number; x1: number; y1: number; view: View; mode: "set" | "add" | "remove"; moved: boolean };
+export type Tool = "pick" | "paint" | "erase";
 
-export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey }: {
+export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey, tool = "pick", brush, onPaint, flash, onHoverArea }: {
   areas: Area[];
   colours: Map<string, string>;
   selected: Set<number>;
@@ -20,7 +22,17 @@ export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey }: 
   zRange: [number, number];
   /** changes when the view should fit the map again */
   fitKey: string;
+  /** what a left-drag does: pick areas, or paint the brush's name on them (erase: no name) */
+  tool?: Tool;
+  /** the brush's colour (tool "paint") */
+  brush?: string | null;
+  /** a finished stroke: the areas painted (indexes into areas) */
+  onPaint?: (painted: number[]) => void;
+  /** areas to point out (a problem being shown) */
+  flash?: Set<number>;
+  onHoverArea?: (a: Area | null) => void;
 }) {
+  const stroke = useRef<Set<number>>(new Set());
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 560 });
@@ -53,7 +65,7 @@ export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey }: 
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: Math.max(360, Math.min(760, Math.round(el.clientWidth * 0.68))) }));
+    const ro = new ResizeObserver(() => setSize({ w: Math.max(200, el.clientWidth), h: Math.max(200, el.clientHeight) }));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -114,7 +126,8 @@ export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey }: 
       const y = sy(a.y1);
       const w = Math.max(1, (a.x1 - a.x0) * v.scale);
       const h = Math.max(1, (a.y1 - a.y0) * v.scale);
-      const col = a.place ? colours.get(a.place) ?? "#999" : null;
+      const painting = drag?.kind === "paint" && stroke.current.has(i);
+      const col = painting ? (tool === "erase" ? null : brush ?? null) : a.place ? colours.get(a.place) ?? "#999" : null;
       g.globalAlpha = on ? 1 : 0.12;
       g.fillStyle = col ?? "#5b6152";
       g.globalAlpha *= col ? 0.62 : 0.5;
@@ -123,6 +136,12 @@ export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey }: 
       g.strokeStyle = "rgba(0,0,0,.55)";
       g.lineWidth = 1;
       if (w > 3 && h > 3) g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+      if (flash?.has(i)) {
+        g.globalAlpha = 1;
+        g.strokeStyle = "#ff7a5c";
+        g.lineWidth = 2;
+        g.strokeRect(x + 1, y + 1, Math.max(1, w - 2), Math.max(1, h - 2));
+      }
       if (selected.has(i)) {
         g.globalAlpha = 1;
         g.strokeStyle = "#fff6c0";
@@ -183,7 +202,7 @@ export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey }: 
       g.setLineDash([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areas, colours, selected, view, size, drag, zRange, order]);
+  }, [areas, colours, selected, view, size, drag, zRange, order, flash, brush, tool]);
 
   // ---- the mouse
   const point = (e: React.MouseEvent | MouseEvent) => {
@@ -196,7 +215,13 @@ export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey }: 
     const p = point(e);
     const pan = e.button === 2 || e.button === 1 || space.current;
     const mode = e.altKey ? "remove" : e.shiftKey || e.metaKey || e.ctrlKey ? "add" : "set";
-    setDrag({ kind: pan ? "pan" : "box", x0: p.x, y0: p.y, x1: p.x, y1: p.y, view, mode, moved: false });
+    const paint = !pan && tool !== "pick";
+    if (paint) {
+      stroke.current = new Set();
+      const i = areaAt(p.x, p.y);
+      if (i >= 0) stroke.current.add(i);
+    }
+    setDrag({ kind: pan ? "pan" : paint ? "paint" : "box", x0: p.x, y0: p.y, x1: p.x, y1: p.y, view, mode, moved: false });
   };
 
   useEffect(() => {
@@ -207,10 +232,23 @@ export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey }: 
       if (drag.kind === "pan") {
         setView({ ...drag.view, cx: drag.view.cx - (p.x - drag.x0) / drag.view.scale, cy: drag.view.cy + (p.y - drag.y0) / drag.view.scale });
       }
+      if (drag.kind === "paint") {
+        // every area along the way since the last move, so a quick stroke leaves no gaps
+        const steps = Math.max(1, Math.ceil(Math.hypot(p.x - drag.x1, p.y - drag.y1) / 4));
+        for (let k = 1; k <= steps; k++) {
+          const i = areaAt(drag.x1 + ((p.x - drag.x1) * k) / steps, drag.y1 + ((p.y - drag.y1) * k) / steps);
+          if (i >= 0) stroke.current.add(i);
+        }
+      }
       setDrag({ ...drag, x1: p.x, y1: p.y, moved });
     };
     const up = (e: MouseEvent) => {
       const p = point(e);
+      if (drag.kind === "paint") {
+        const list = [...stroke.current];
+        stroke.current = new Set();
+        if (list.length) onPaint?.(list);
+      }
       if (drag.kind === "box") {
         const next = drag.mode === "set" ? new Set<number>() : new Set(selected);
         if (drag.moved) {
@@ -268,6 +306,7 @@ export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey }: 
   }, [size.w, size.h]);
 
   const onDouble = (e: React.MouseEvent) => {
+    if (tool !== "pick") return;
     const p = point(e);
     const i = areaAt(p.x, p.y);
     if (i < 0) return;
@@ -284,6 +323,7 @@ export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey }: 
     const p = point(e);
     const i = areaAt(p.x, p.y);
     setHover(i >= 0 ? { i, x: p.x, y: p.y } : null);
+    onHoverArea?.(i >= 0 ? areas[i] : null);
   };
 
   const zoom = (k: number) => setView((o) => (o ? { ...o, scale: Math.min(40, Math.max(0.005, o.scale * k)) } : o));
@@ -293,12 +333,12 @@ export function TopDown({ areas, colours, selected, onSelect, zRange, fitKey }: 
     <div className="co-canvas" ref={wrap}>
       <canvas
         ref={canvas}
-        style={{ width: size.w, height: size.h, cursor: drag?.kind === "pan" ? "grabbing" : "crosshair" }}
+        style={{ width: size.w, height: size.h, cursor: drag?.kind === "pan" ? "grabbing" : tool === "pick" ? "default" : "crosshair" }}
         role="img"
         aria-label="The bot nav seen from above, coloured by place"
         onMouseDown={onDown}
         onMouseMove={onHover}
-        onMouseLeave={() => setHover(null)}
+        onMouseLeave={() => (setHover(null), onHoverArea?.(null))}
         onDoubleClick={onDouble}
         onContextMenu={(e) => e.preventDefault()}
       />

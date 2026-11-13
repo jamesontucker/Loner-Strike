@@ -369,7 +369,7 @@ fn skip_entity(e: &Entity) -> bool {
 
 /// The zones and spots worth marking: bomb sites (A, B... in the game's order), buy zones
 /// (by team), rescue zones, VIP escape, spawns, hostages.
-fn find_marks(bsp: &Bsp, ents: &[Entity]) -> Vec<Mark> {
+pub(crate) fn find_marks(bsp: &Bsp, ents: &[Entity]) -> Vec<Mark> {
     let mut out = Vec::new();
     let mut sites = 0u8;
     for e in ents {
