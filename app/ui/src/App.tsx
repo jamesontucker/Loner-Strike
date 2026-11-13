@@ -715,7 +715,7 @@ function ToolsNav({ section, onOpen }: { section: Section; onOpen: (focus: strin
       </button>
       {open && (
         <div id="side-tools">
-          {item("overview", "Overview", "tools", here && !tool)}
+          {item("overview", "Overview", "tool-overview", here && !tool)}
           {TOOL_GROUPS.map((g) => (
             <div key={g} role="group" aria-label={g}>
               <div className="nav-subgroup">{g}</div>

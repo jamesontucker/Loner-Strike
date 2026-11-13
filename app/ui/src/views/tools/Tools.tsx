@@ -8,6 +8,7 @@ import { ON_THIS_COMPUTER } from "../../api";
 import { useNav } from "../../store";
 import { useToolPage } from "../../stores/toolPage";
 import type { MapInfo } from "../../types";
+import { Icon } from "../../icons";
 import { lazyPage, SectionHead, Skeleton } from "../../ui";
 import { TOOL_GROUPS, TOOLS } from "./registry";
 import { lastTool, rememberWhereYouAre } from "./common/address";
@@ -102,6 +103,9 @@ function Overview() {
           <div className="tools-cards">
             {TOOLS.filter((t) => t.group === g).map((t) => (
               <button key={t.id} className="tools-card" title={t.blurb} onClick={() => go("tools", t.id)}>
+                <span className="tools-card-icon">
+                  <Icon name={t.icon ?? "tools"} size={22} />
+                </span>
                 <span className="tools-card-title">
                   {t.label}
                   {t.beta && <span className="tag tools-beta">Beta</span>}
