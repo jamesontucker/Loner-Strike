@@ -111,7 +111,7 @@ export const tryIt = (model: Model, id: number, confirmed: boolean, file?: numbe
   post<{ ok: boolean; job: string; section: string; map: string | null; kind?: "prefab" | "mode"; prefabs?: string[]; wads?: string[]; mode?: string; name?: string }>(`${base}/try`, { model, id, confirmed, ...(file ? { file } : {}) });
 
 export const readiness = (map: string, signal?: AbortSignal) =>
-  get<{ ready: Readiness; suggestedModes: string[]; tag: string }>(`${base}/publish/${encodeURIComponent(map)}`, signal);
+  get<{ ready: Readiness; suggestedModes: string[]; modeChoices?: { id: string; name: string; uid: string; studio: boolean }[]; tag: string }>(`${base}/publish/${encodeURIComponent(map)}`, signal);
 
 export type Shot = { name: string; data: string };
 export const publish = (map: string, body: { title: string; summary: string; author: string; modes: string[]; screenshots: Shot[] }) =>

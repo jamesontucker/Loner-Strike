@@ -89,7 +89,7 @@ export default function Community({ maps }: ToolProps) {
   );
   useToolCrumbs(
     "community",
-    shown ? [tabCrumb.browse, { label: item.data?.name ?? "Creation" }] : tab === "publish" && publishMap ? [tabCrumb.publish, { label: publishMap }] : [tabCrumb[tab]],
+    shown ? [tabCrumb.browse, { label: item.data?.name ?? "Creation" }] : tab === "publish" && publishMap ? [tabCrumb.publish, { label: publishMap.replace(/^(mode|prefab):(mine:)?/, "") }] : [tabCrumb[tab]],
   );
 
   return (

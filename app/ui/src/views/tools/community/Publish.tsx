@@ -1,47 +1,175 @@
-// Publish: package a map you made for GameBanana, then register its page so it shows up in
-// Community with its badges. Uploading happens on GameBanana's site (it has no upload API);
+// Publish: package a map, a Game Mode Studio mode or a prefab for GameBanana, then register its
+// page so it shows up in Community. Uploading happens on GameBanana's site (it has no upload API);
 // the app prepares everything to paste and checks the page afterwards.
 //
-// Other tools hand over a map with go("tools", "community:publish:<map>"), and the Game Mode
-// Studio a mode with go("tools", "community:publish:mode:<id>").
+// The page is one column of numbered steps: what you're publishing, checks (a status list where
+// each check says why in one line and has a button that fixes it), details, modes, pictures,
+// credits, then the action. After packing: the upload steps, the terms tick and Register.
+//
+// Other tools hand over a map with go("tools", "community:publish:<map>"), the Game Mode Studio a
+// mode with "community:publish:mode:<id>", the prefab library a prefab with "community:publish:prefab:<id>".
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { copyText } from "../../../api";
+import { useEffect, useState, type ReactNode } from "react";
+import { copyText, getJson } from "../../../api";
 import { useNav } from "../../../store";
 import type { MapInfo } from "../../../types";
-import { BusyButton, LoadError, useToast } from "../../../ui";
-import { errorText, useBusy } from "../common/api";
+import { BusyButton, LoadError, Segmented, useToast } from "../../../ui";
+import { errorText, post, useBusy } from "../common/api";
 import { Empty, Loading, MapList } from "../common";
-import { Segmented } from "../../../ui";
 import { CreditsPanel } from "./Credits";
 import { BOT_NOTE, BOT_RATING_INFO } from "../../../games";
-import { modeReadiness, publish, publishMode, readiness, register, reveal, sizeText, startModes, studioGraphs, type Form, type MineState, type Package, type Shot } from "./communityApi";
+import {
+  modeReadiness, publish, publishMode, readiness, register, reveal, sizeText, studioGraphs,
+  type AssetCredit, type Form, type MineState, type Package, type Readiness, type Shot,
+} from "./communityApi";
 
 const MAX_SHOTS = 6;
 const MAX_SHOT = 8 << 20;
+type What = "map" | "mode" | "prefab";
 
 export default function Publish({ maps, map, onMap, onDone }: { maps: MapInfo[]; map?: string; onMap: (m: string | undefined) => void; onDone: () => void }) {
-  const [what, setWhat] = useState<"map" | "mode">(map?.startsWith("mode:") ? "mode" : "map");
+  const [what, setWhat] = useState<What>(map?.startsWith("mode:") ? "mode" : map?.startsWith("prefab:") ? "prefab" : "map");
   if (map?.startsWith("mode:")) return <PublishMode id={map.slice(5)} onBack={() => onMap(undefined)} onDone={onDone} />;
-  if (!map)
-    return (
-      <div className="stack-tight">
-        <Segmented label="What to publish" values="map mode" labels="A map|A game mode" current={what} onPick={(v) => setWhat(v as "map" | "mode")} />
-        {what === "map" ? (
+  if (map?.startsWith("prefab:")) return <PublishPrefab id={map.slice(7)} onBack={() => onMap(undefined)} onDone={onDone} />;
+  if (map) return <PublishMap map={map} onBack={() => onMap(undefined)} onDone={onDone} />;
+  return (
+    <div className="cm-pub">
+      <Step n={1} title="What are you publishing?">
+        <Segmented label="What to publish" values="map mode prefab" labels="A map|A game mode|A prefab" current={what} onPick={(v) => setWhat(v as What)} />
+        {what === "map" && (
           <>
-            <p className="muted measure">
-              Share a map you made. Loner-Strike checks it, packs it with its bot nav, map knowledge, download list and overview, and tells you exactly what to put on GameBanana. Once it's up, paste the link and it shows up here for everyone.
-            </p>
+            <p className="muted small-note">A map you made: it's checked, then packed with its bot nav, map knowledge, download list and radar picture.</p>
             <MapList maps={maps} onPick={onMap} placeholder="Pick a map to publish" filter={(m) => m.source !== "stock"} none="Only maps you made or added can be published; the game's own maps can't." note={(m) => (m.nav ? null : "no bot nav yet")} />
           </>
-        ) : (
-          <ModeList onPick={(id) => onMap(`mode:${id}`)} />
         )}
-      </div>
-    );
-  return <PublishMap map={map} onBack={() => onMap(undefined)} onDone={onDone} />;
+        {what === "mode" && <ModeList onPick={(id) => onMap(`mode:${id}`)} />}
+        {what === "prefab" && <PrefabList onPick={(id) => onMap(`prefab:${id}`)} />}
+      </Step>
+    </div>
+  );
 }
+
+// ---- building blocks ---------------------------------------------------------------------------
+
+function Step({ n, title, note, children, id }: { n: number; title: string; note?: ReactNode; children: ReactNode; id?: string }) {
+  return (
+    <section className="cm-step panel" id={id} aria-labelledby={`cm-step-${n}`}>
+      <header className="cm-step-head">
+        <span className="cm-step-n" aria-hidden="true">{n}</span>
+        <div>
+          <h3 id={`cm-step-${n}`}>{title}</h3>
+          {note && <p className="muted small-note">{note}</p>}
+        </div>
+      </header>
+      <div className="cm-step-body">{children}</div>
+    </section>
+  );
+}
+
+type Check = { state: "ok" | "warn" | "bad" | "tip"; title: string; why: string; fix?: { label: string; to: string } };
+const MARK: Record<Check["state"], [string, string]> = { ok: ["✓", "Done"], warn: ["!", "Worth a look"], bad: ["✕", "Must fix"], tip: ["·", "Optional"] };
+
+/** The checks: one line each, with the button that fixes it. */
+function Checks({ rows }: { rows: Check[] }) {
+  const go = useNav((s) => s.go);
+  return (
+    <ul className="cm-checks">
+      {rows.map((c) => (
+        <li key={c.title} className={`cm-check ${c.state}`}>
+          <span className="cm-check-mark" role="img" aria-label={MARK[c.state][1]} title={MARK[c.state][1]}>{MARK[c.state][0]}</span>
+          <span className="cm-check-title">{c.title}</span>
+          <span className="cm-check-why muted">{c.why}</span>
+          {c.fix ? (
+            c.fix.to.startsWith("#") ? (
+              <button className="btn small" onClick={() => document.querySelector(c.fix!.to)?.scrollIntoView({ behavior: "smooth", block: "start" })}>{c.fix.label}</button>
+            ) : (
+              <button className="btn small" onClick={() => go("tools", c.fix!.to)}>{c.fix.label}</button>
+            )
+          ) : <span />}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function useAuthor(): [string, (v: string) => void, () => void] {
+  const [author, setAuthor] = useState(() => {
+    try {
+      return localStorage.getItem("ls.community.author") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const remember = () => {
+    try {
+      localStorage.setItem("ls.community.author", author.trim());
+    } catch {
+      /* remembered next time, maybe */
+    }
+  };
+  return [author, setAuthor, remember];
+}
+
+function Details({ title, setTitle, author, setAuthor, summary, setSummary, about }: {
+  title: string; setTitle: (v: string) => void; author: string; setAuthor: (v: string) => void; summary: string; setSummary: (v: string) => void; about: string;
+}) {
+  return (
+    <div className="cm-grid2">
+      <label className="cm-field">
+        <span>Name</span>
+        <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="What players will see" />
+      </label>
+      <label className="cm-field">
+        <span>Made by</span>
+        <input value={author} maxLength={40} onChange={(e) => setAuthor(e.target.value)} placeholder="Your GameBanana name" />
+      </label>
+      <label className="cm-field cm-span2">
+        <span>About it</span>
+        <textarea value={summary} maxLength={400} rows={3} onChange={(e) => setSummary(e.target.value)} placeholder={about} />
+      </label>
+    </div>
+  );
+}
+
+/** Toggle chips, one per choice (names shown, ids sent). */
+function Chips({ choices, picked, onToggle, label }: { choices: { id: string; name: string }[]; picked: string[]; onToggle: (id: string) => void; label: string }) {
+  return (
+    <div className="cm-chips" role="group" aria-label={label}>
+      {choices.map((c) => (
+        <button key={c.id} type="button" className="cm-chip-toggle" aria-pressed={picked.includes(c.id)} title={c.id} onClick={() => onToggle(c.id)}>
+          {c.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Action({ children, note }: { children: ReactNode; note?: ReactNode }) {
+  return (
+    <div className="cm-action panel">
+      {note && <span className="muted small-note">{note}</span>}
+      <div className="row">{children}</div>
+    </div>
+  );
+}
+
+function Head({ title, kind, onBack, busy, onRecheck }: { title: string; kind: string; onBack: () => void; busy: boolean; onRecheck: () => void }) {
+  return (
+    <div className="tl-head cm-pub-head">
+      <div className="tl-head-title">
+        <h3>Publish {title}</h3>
+        <span className="muted">{kind}</span>
+      </div>
+      <div className="tl-head-actions">
+        <button className="btn" onClick={onBack}>Pick something else</button>
+        <BusyButton className="btn" busy={busy} label="Check again" busyLabel="Checking…" onClick={onRecheck} />
+      </div>
+    </div>
+  );
+}
+
+// ---- lists to pick from ------------------------------------------------------------------------------
 
 /** Your Game Mode Studio modes (remixes included): only the graph is shared, each player's app builds it. */
 function ModeList({ onPick }: { onPick: (id: string) => void }) {
@@ -49,140 +177,101 @@ function ModeList({ onPick }: { onPick: (id: string) => void }) {
   if (q.isPending) return <Loading text="Loading your modes…" />;
   if (q.data?.error) return <LoadError text={q.data.error} onRetry={() => q.refetch()} />;
   const list = (q.data?.graphs ?? []).filter((g) => !g.damaged);
+  if (!list.length)
+    return (
+      <Empty title="No Game Mode Studio modes yet" text="Make one in Tools > Game Mode Studio, or remix one you installed from Community.">
+        <button className="btn" onClick={() => useNav.getState().go("tools", "studio")}>Open Game Mode Studio</button>
+      </Empty>
+    );
   return (
-    <div className="stack-tight">
-      <p className="muted measure">
-        Share a mode you made in the Game Mode Studio (or a remix of someone's). Only its graph goes in the package: each player's Loner-Strike builds the mode on their own computer, so nothing that runs code is shared.
-      </p>
-      {list.length === 0 ? (
-        <Empty title="No Game Mode Studio modes yet" text="Make one in Tools > Game Mode Studio, or remix one you installed from Community." >
-          <button className="btn" onClick={() => useNav.getState().go("tools", "studio")}>Open Game Mode Studio</button>
-        </Empty>
-      ) : (
-        <ul className="tl-maps">
-          {list.map((g) => (
-            <li key={g.id}>
-              <button className="tl-map" onClick={() => onPick(g.id)}>
-                <span className="tl-map-name">{g.name}</span>
-                <span className="muted small-note">{g.id}{g.nodes != null ? ` · ${g.nodes} nodes` : ""}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <>
+      <p className="muted small-note">Only the mode's graph is shared: each player's Loner-Strike builds it on their own computer, so nothing that runs code is downloaded.</p>
+      <ul className="tl-maps">
+        {list.map((g) => (
+          <li key={g.id}>
+            <button className="tl-map" onClick={() => onPick(g.id)}>
+              <span className="tl-map-name">{g.name}</span>
+              <span className="muted small-note">{g.nodes != null ? `${g.nodes} nodes` : ""}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
-function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; onDone: () => void }) {
-  const toast = useToast();
-  const q = useQuery({ queryKey: ["tools", "community", "ready-mode", id], queryFn: ({ signal }) => modeReadiness(id, signal), retry: false });
-  const [title, setTitle] = useState("");
-  const [summary, setSummary] = useState("");
-  const [author, setAuthor] = useState(() => {
-    try {
-      return localStorage.getItem("ls.community.author") ?? "";
-    } catch {
-      return "";
-    }
-  });
-  const [maps, setMaps] = useState("");
-  const [bots, setBots] = useState("");
-  const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
-  const { working, run } = useBusy();
-  useEffect(() => {
-    if (!q.data) return;
-    setTitle((t) => t || q.data.name);
-    setSummary((s) => s || q.data.description);
-    setBots((b) => b || q.data.botsSuggested || "");
-  }, [q.data]);
-  const head = (
-    <div className="tl-head">
-      <div className="tl-head-title">
-        <h3>Publish {q.data?.name ?? id}</h3>
-        <span className="muted">Game Mode Studio mode</span>
-      </div>
-      <div className="tl-head-actions">
-        <button className="btn" onClick={onBack}>Pick something else</button>
-        <BusyButton className="btn" busy={q.isFetching} label="Check again" busyLabel="Checking…" onClick={() => q.refetch()} />
-      </div>
-    </div>
-  );
-  if (q.isPending) return <div className="panel">{head}<Loading text="Checking the mode…" /></div>;
-  if (q.isError) return <div className="panel">{head}<LoadError text={errorText(q.error, "Couldn't check that mode.")} onRetry={() => q.refetch()} /></div>;
-  if (done) return <div className="panel">{head}<Upload pkg={done.pkg} form={done.form} onDone={onDone} /></div>;
-  const r = q.data;
-  const build = () =>
-    run("Packing…", async () => {
-      try {
-        localStorage.setItem("ls.community.author", author.trim());
-      } catch {
-        /* remembered next time, maybe */
-      }
-      const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: [], bots });
-      if (res.error) return toast(res.error, true);
-      setDone({ pkg: res.package, form: res.form });
-    });
+type PrefabRow = { id: string; name: string; builtin: boolean; brushes: number; entities: number };
+
+function PrefabList({ onPick }: { onPick: (id: string) => void }) {
+  const q = useQuery({ queryKey: ["tools", "community", "my-prefabs"], queryFn: () => getJson<{ prefabs: PrefabRow[] }>("/api/tools/editor/prefabs"), retry: false });
+  if (q.isPending) return <Loading text="Loading your prefabs…" />;
+  if (q.isError) return <LoadError text={errorText(q.error, "Couldn't load your prefabs.")} onRetry={() => q.refetch()} />;
+  const list = (q.data.prefabs ?? []).filter((p) => !p.builtin);
+  if (!list.length)
+    return (
+      <Empty title="No prefabs of your own yet" text="In the map editor, pick some brushes and entities and choose Save what's picked.">
+        <button className="btn" onClick={() => useNav.getState().go("tools", "editor:prefabs")}>Open the map editor</button>
+      </Empty>
+    );
   return (
-    <div className="panel">
-      {head}
-      <section className="cm-ready">
-        {r.blockers.map((b) => <p key={b} className="cm-line bad">{b}</p>)}
-        {r.blockers.length === 0 && <p className="cm-line ok">The graph passes the Studio's checks ({r.nodes} nodes).</p>}
-        {r.blockers.length > 0 && (
-          <p className="cm-line tip">Fix these in the Game Mode Studio first. <button className="btn small" onClick={() => useNav.getState().go("tools", `studio:${id}`)}>Open it</button></p>
-        )}
-        {r.remixOf && <p className="cm-line tip">A remix of {r.remixOf.name}{r.remixOf.author ? ` by ${r.remixOf.author}` : ""}: the package and its page credit them.</p>}
-      </section>
-      {r.blockers.length === 0 && (
-        <form className="cm-form" onSubmit={(e) => { e.preventDefault(); build(); }}>
-          <label className="cm-field">
-            <span>Name</span>
-            <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="What players will see" />
-          </label>
-          <label className="cm-field">
-            <span>Made by</span>
-            <input value={author} maxLength={40} onChange={(e) => setAuthor(e.target.value)} placeholder="Your GameBanana name" />
-          </label>
-          <label className="cm-field cm-wide">
-            <span>About it</span>
-            <textarea value={summary} maxLength={400} rows={3} onChange={(e) => setSummary(e.target.value)} placeholder="How it plays, in a sentence or two" />
-          </label>
-          <label className="cm-field">
-            <span>How well bots play it</span>
-            <select value={bots} onChange={(e) => setBots(e.target.value)}>
-              <option value="">Not saying</option>
-              {(["great", "ok", "weak", "none"] as const).map((r) => <option key={r} value={r}>{BOT_NOTE[r]}</option>)}
-            </select>
-            <span className="muted small-note">{BOT_RATING_INFO}{r.botsSuggested ? " The Studio suggested this from the graph." : ""}</span>
-          </label>
-          <label className="cm-field cm-wide">
-            <span>Maps it's made for (optional)</span>
-            <input value={maps} onChange={(e) => setMaps(e.target.value)} placeholder="de_dust2, cs_office" />
-          </label>
-          <p className="muted small-note cm-wide">Add screenshots on GameBanana's page itself (a Playtest shot works well).</p>
-          <div className="cm-wide row">
-            <BusyButton type="submit" className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={!title.trim() || !author.trim()} />
-          </div>
-        </form>
-      )}
-    </div>
+    <>
+      <p className="muted small-note">A prefab from your library: shared as a package other mappers add to their prefab library, with the credits of the models and textures it uses.</p>
+      <ul className="tl-maps">
+        {list.map((p) => (
+          <li key={p.id}>
+            <button className="tl-map" onClick={() => onPick(p.id)}>
+              <span className="tl-map-name">{p.name}</span>
+              <span className="muted small-note">{p.brushes} brushes{p.entities ? `, ${p.entities} entities` : ""}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
   );
+}
+
+// ---- a map ----------------------------------------------------------------------------------------
+
+/** The map's checks as a status list (from the server's readiness), each with its fix. */
+function mapChecks(map: string, r: Readiness): Check[] {
+  const rows: Check[] = r.blockers.map((b) => ({ state: "bad" as const, title: "Can't publish yet", why: b }));
+  const credit = (r.assets ?? []).filter((a) => (a.verdict === "ask" || a.verdict === "no") && !a.permission?.granted);
+  const creditNo = credit.some((a) => a.verdict === "no");
+  const files = r.warnings.filter((w) => /map doctor/i.test(w));
+  rows.push(
+    files.length
+      ? { state: "warn", title: "Files and textures", why: files[0], fix: { label: "Open the map doctor", to: `doctor:${map}` } }
+      : { state: "ok", title: "Files and textures", why: "Everything the map uses is where the game looks." },
+    r.map.nav
+      ? { state: "ok", title: "Bots know the map", why: "It ships with a bot nav." }
+      : { state: "warn", title: "Bots know the map", why: "No nav that fits this map yet, so it won't get the Works with bots badge.", fix: { label: "Teach the bots", to: `doctor:${map}` } },
+    r.map.lsv
+      ? { state: "ok", title: "Bot map knowledge", why: "Finished, so bots play it well from the first round." }
+      : { state: "tip", title: "Bot map knowledge", why: "Not finished yet; a run in the Map simulator fills it in.", fix: { label: "Open the Map simulator", to: `health:${map}` } },
+    r.map.places
+      ? { state: "ok", title: "Callouts", why: "Places are named, so bots say where they are." }
+      : { state: "tip", title: "Callouts", why: "Name places so bots call out where they are.", fix: { label: "Open Callouts", to: `callouts:${map}` } },
+    r.map.overview
+      ? { state: "ok", title: "Radar picture", why: "It ships with an overview." }
+      : { state: "tip", title: "Radar picture", why: "No overview (radar) picture for this map.", fix: { label: "Open the Radar maker", to: `radar:${map}` } },
+    !r.health
+      ? { state: "tip", title: "Bot simulation", why: "Run one: a good result earns the Checked with bots badge.", fix: { label: "Open the Map simulator", to: `health:${map}` } }
+      : r.health.verdict === "bad"
+        ? { state: "warn", title: "Bot simulation", why: "The last run found real problems (falls, stuck bots or errors).", fix: { label: "See the report", to: `health:${map}` } }
+        : { state: "ok", title: "Bot simulation", why: `Last run ${new Date(r.health.when * 1000).toLocaleDateString()}: ${r.health.verdict}.` },
+    credit.length
+      ? { state: creditNo ? "bad" : "warn", title: "Credits and permissions", why: `${credit.length} file${credit.length === 1 ? "" : "s"} ${creditNo ? "may not be shared without permission" : "ask for permission first"}.`, fix: { label: "See credits", to: "#cm-credits" } }
+      : { state: "ok", title: "Credits and permissions", why: "Everyone whose files it uses is credited." },
+  );
+  return rows;
 }
 
 function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; onDone: () => void }) {
   const toast = useToast();
   const q = useQuery({ queryKey: ["tools", "community", "ready", map], queryFn: ({ signal }) => readiness(map, signal), retry: false });
-  const modes = useQuery({ queryKey: ["tools", "community", "modes"], queryFn: () => startModes(), staleTime: 60_000 });
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
-  const [author, setAuthor] = useState(() => {
-    try {
-      return localStorage.getItem("ls.community.author") ?? "";
-    } catch {
-      return "";
-    }
-  });
+  const [author, setAuthor, remember] = useAuthor();
   const [picked, setPicked] = useState<string[]>([]);
   const [shots, setShots] = useState<Shot[]>([]);
   const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
@@ -194,28 +283,18 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
     setPicked((p) => (p.length ? p : q.data.suggestedModes));
   }, [q.data]);
 
-  const head = (
-    <div className="tl-head">
-      <div className="tl-head-title">
-        <h3>Publish {map}</h3>
-      </div>
-      <div className="tl-head-actions">
-        <button className="btn" onClick={onBack}>Pick another map</button>
-        <BusyButton className="btn" busy={q.isFetching} label="Check again" busyLabel="Checking…" onClick={() => q.refetch()} />
-      </div>
-    </div>
-  );
-  if (q.isPending) return <div className="panel">{head}<Loading text={`Checking ${map}…`} /></div>;
-  if (q.isError) return <div className="panel">{head}<LoadError text={errorText(q.error, "Couldn't check that map.")} onRetry={() => q.refetch()} /></div>;
+  const head = <Head title={map} kind="Map" onBack={onBack} busy={q.isFetching} onRecheck={() => q.refetch()} />;
+  if (q.isPending) return <div className="cm-pub">{head}<Loading text={`Checking ${map}…`} /></div>;
+  if (q.isError) return <div className="cm-pub">{head}<LoadError text={errorText(q.error, "Couldn't check that map.")} onRetry={() => q.refetch()} /></div>;
   const r = q.data.ready;
-  if (done) return <div className="panel">{head}<Upload pkg={done.pkg} form={done.form} onDone={onDone} /></div>;
+  if (done) return <div className="cm-pub">{head}<Upload pkg={done.pkg} form={done.form} onDone={onDone} /></div>;
+  const choices = q.data.modeChoices ?? [];
 
   const addShots = async (files: FileList | null) => {
     if (!files) return;
     const room = MAX_SHOTS - shots.length;
-    const list = Array.from(files).slice(0, Math.max(0, room));
     const read: Shot[] = [];
-    for (const f of list) {
+    for (const f of Array.from(files).slice(0, Math.max(0, room))) {
       if (!/^image\/(png|jpeg)$/.test(f.type)) {
         toast(`${f.name} isn't a PNG or JPEG picture.`, true);
         continue;
@@ -235,93 +314,184 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
     if (files.length > room) toast(`At most ${MAX_SHOTS} screenshots.`, true);
     setShots((s) => [...s, ...read]);
   };
-
   const build = () =>
     run("Packing…", async () => {
-      try {
-        localStorage.setItem("ls.community.author", author.trim());
-      } catch {
-        /* remembered next time, maybe */
-      }
+      remember();
       const res = await publish(map, { title, summary, author, modes: picked, screenshots: shots });
       if (res.error) return toast(res.error, true);
       setDone({ pkg: res.package, form: res.form });
     });
-
-  const allModes = modes.data?.modes ?? [];
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const blocked = r.blockers.length > 0;
 
   return (
-    <div className="panel">
+    <div className="cm-pub">
       {head}
-      <section className="cm-ready">
-        {r.blockers.map((b) => <p key={b} className="cm-line bad">{b}</p>)}
-        {r.warnings.map((w) => <p key={w} className="cm-line warn">{w}</p>)}
-        {!blocked && r.warnings.length === 0 && <p className="cm-line ok">Ready to share.</p>}
-        {r.tips.map((t) => <p key={t} className="cm-line tip">{t}</p>)}
-        <p className="muted small-note">
-          Goes in the package: the map{r.map.nav ? ", its bot nav" : ""}{r.map.lsv ? ", finished bot map knowledge" : ""}, a fresh download list (.res)
-          {r.files.length ? ` and ${r.files.length} file${r.files.length === 1 ? "" : "s"} it uses (${r.files.slice(0, 4).join(", ")}${r.files.length > 4 ? "…" : ""})` : ""}.
-          {r.health ? ` Bot simulation from ${new Date(r.health.when * 1000).toLocaleDateString()}: ${r.health.verdict}.` : ""}
+      <Step n={1} title="Checks" note={blocked ? "Fix what's marked Must fix, then Check again." : "Optional items earn badges; nothing here stops you except Must fix."}>
+        <Checks rows={mapChecks(map, r)} />
+        <p className="muted small-note cm-ships">
+          In the package: the map{r.map.nav ? ", its bot nav" : ""}{r.map.lsv ? ", bot map knowledge" : ""}, a fresh download list (.res)
+          {r.files.length ? ` and ${r.files.length} file${r.files.length === 1 ? "" : "s"} it uses` : ""}.
         </p>
-        <CreditsPanel assets={r.assets ?? []} onChanged={() => q.refetch()} />
-      </section>
-
-      {!blocked && (
-        <form className="cm-form" onSubmit={(e) => { e.preventDefault(); build(); }}>
-          <label className="cm-field">
-            <span>Name</span>
-            <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="What players will see" />
-          </label>
-          <label className="cm-field">
-            <span>Made by</span>
-            <input value={author} maxLength={40} onChange={(e) => setAuthor(e.target.value)} placeholder="Your GameBanana name" />
-          </label>
-          <label className="cm-field cm-wide">
-            <span>About it</span>
-            <textarea value={summary} maxLength={400} rows={3} onChange={(e) => setSummary(e.target.value)} placeholder="One or two sentences: what it is and what makes it fun" />
-          </label>
-          <fieldset className="cm-field cm-wide">
-            <legend>Game modes it's made for</legend>
-            {allModes.length ? (
-              <div className="cm-modes">
-                {allModes.map((m) => (
-                  <label key={m.id} className="check-row">
-                    <input type="checkbox" checked={picked.includes(m.id)} onChange={() => toggle(m.id)} /> {m.name}
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <p className="muted small-note">{modes.isPending ? "Loading modes…" : "No modes found in your game; it'll be listed for the usual mode."}</p>
-            )}
-          </fieldset>
-          <div className="cm-field cm-wide">
-            <span>Screenshots ({shots.length}/{MAX_SHOTS})</span>
-            <div className="cm-shots">
-              {shots.map((s, i) => (
-                <figure key={i}>
-                  <img src={s.data} alt={s.name} />
-                  <button type="button" className="btn small" onClick={() => setShots(shots.filter((_, j) => j !== i))} aria-label={`Remove ${s.name}`}>Remove</button>
-                </figure>
-              ))}
-              {shots.length < MAX_SHOTS && (
-                <label className="btn cm-add">
-                  Add pictures
-                  <input type="file" accept="image/png,image/jpeg" multiple hidden onChange={(e) => { addShots(e.target.files); e.target.value = ""; }} />
-                </label>
-              )}
-            </div>
-            <p className="muted small-note">PNG or JPEG, up to 8 MB each. Shots from the map viewer work well. They're saved next to the package for GameBanana's picture upload.</p>
-          </div>
-          <div className="cm-wide row">
-            <BusyButton type="submit" className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={!title.trim() || !author.trim()} />
-          </div>
-        </form>
-      )}
+      </Step>
+      <Step n={2} title="Details">
+        <Details title={title} setTitle={setTitle} author={author} setAuthor={setAuthor} summary={summary} setSummary={setSummary} about="One or two sentences: what it is and what makes it fun" />
+      </Step>
+      <Step n={3} title="Game modes it's made for" note="Picked from the map's own Made for list when it has one. Players see these on its card.">
+        {choices.length ? <Chips choices={choices} picked={picked} onToggle={toggle} label="Game modes" /> : <p className="muted small-note">No modes found in your game; it's listed for the usual mode.</p>}
+      </Step>
+      <Step n={4} title="Screenshots" note="PNG or JPEG, up to 8 MB each, up to 6. Saved next to the package for GameBanana's picture upload.">
+        <div className="cm-shots">
+          {shots.map((s, i) => (
+            <figure key={i}>
+              <img src={s.data} alt={s.name} />
+              <button type="button" className="btn small" onClick={() => setShots(shots.filter((_, j) => j !== i))} aria-label={`Remove ${s.name}`}>Remove</button>
+            </figure>
+          ))}
+          {shots.length < MAX_SHOTS && (
+            <label className="btn cm-add">
+              Add pictures
+              <input type="file" accept="image/png,image/jpeg" multiple hidden onChange={(e) => { void addShots(e.target.files); e.target.value = ""; }} />
+            </label>
+          )}
+        </div>
+      </Step>
+      <Step n={5} title="Credits and permissions" id="cm-credits" note="Where each file the map ships came from. Credits go into the README, GameBanana's Credits module and the Community listing.">
+        {(r.assets ?? []).some((a) => a.source !== "stock" && a.source !== "mine") ? (
+          <CreditsPanel assets={r.assets ?? []} onChanged={() => q.refetch()} />
+        ) : (
+          <p className="muted small-note">The map only uses the game's own files and yours: nobody else to credit.</p>
+        )}
+      </Step>
+      <Action note={blocked ? "Fix the checks marked Must fix first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana and register the page."}>
+        <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || !title.trim() || !author.trim()} onClick={build} />
+      </Action>
     </div>
   );
 }
+
+// ---- a game mode ----------------------------------------------------------------------------------
+
+function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const q = useQuery({ queryKey: ["tools", "community", "ready-mode", id], queryFn: ({ signal }) => modeReadiness(id, signal), retry: false });
+  const [title, setTitle] = useState("");
+  const [summary, setSummary] = useState("");
+  const [author, setAuthor, remember] = useAuthor();
+  const [maps, setMaps] = useState("");
+  const [bots, setBots] = useState("");
+  const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
+  const { working, run } = useBusy();
+  useEffect(() => {
+    if (!q.data) return;
+    setTitle((t) => t || q.data.name);
+    setSummary((s) => s || q.data.description);
+    setBots((b) => b || q.data.botsSuggested || "");
+  }, [q.data]);
+  const head = <Head title={q.data?.name ?? id} kind="Game Mode Studio mode" onBack={onBack} busy={q.isFetching} onRecheck={() => q.refetch()} />;
+  if (q.isPending) return <div className="cm-pub">{head}<Loading text="Checking the mode…" /></div>;
+  if (q.isError) return <div className="cm-pub">{head}<LoadError text={errorText(q.error, "Couldn't check that mode.")} onRetry={() => q.refetch()} /></div>;
+  if (done) return <div className="cm-pub">{head}<Upload pkg={done.pkg} form={done.form} onDone={onDone} /></div>;
+  const r = q.data;
+  const blocked = r.blockers.length > 0;
+  const checks: Check[] = blocked
+    ? r.blockers.map((b) => ({ state: "bad" as const, title: "The graph has problems", why: b, fix: { label: "Open in the Studio", to: `studio:${id}` } }))
+    : [{ state: "ok", title: "The graph", why: `Passes the Studio's checks (${r.nodes} nodes).` }];
+  if (r.remixOf) checks.push({ state: "ok", title: "Remix credit", why: `A remix of ${r.remixOf.name}${r.remixOf.author ? ` by ${r.remixOf.author}` : ""}: the package and its page credit them.` });
+  const build = () =>
+    run("Packing…", async () => {
+      remember();
+      const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: [], bots });
+      if (res.error) return toast(res.error, true);
+      setDone({ pkg: res.package, form: res.form });
+    });
+  return (
+    <div className="cm-pub">
+      {head}
+      <Step n={1} title="Checks"><Checks rows={checks} /></Step>
+      <Step n={2} title="Details">
+        <Details title={title} setTitle={setTitle} author={author} setAuthor={setAuthor} summary={summary} setSummary={setSummary} about="How it plays, in a sentence or two" />
+      </Step>
+      <Step n={3} title="How well bots play it" note={`${BOT_RATING_INFO}${r.botsSuggested ? " The Studio suggested one from the graph." : ""}`}>
+        <Chips
+          choices={[{ id: "", name: "Not saying" }, ...(["great", "ok", "weak", "none"] as const).map((k) => ({ id: k, name: BOT_NOTE[k] }))]}
+          picked={[bots]}
+          onToggle={setBots}
+          label="Bot rating"
+        />
+      </Step>
+      <Step n={4} title="Maps it's made for" note="Optional: map names, separated by commas.">
+        <input className="cm-wide-input" value={maps} onChange={(e) => setMaps(e.target.value)} placeholder="de_dust2, cs_office" aria-label="Maps it's made for" />
+        <p className="muted small-note">Add screenshots on GameBanana's page itself (a Playtest shot works well).</p>
+      </Step>
+      <Action note={blocked ? "Fix the graph first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana and register the page."}>
+        <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || !title.trim() || !author.trim()} onClick={build} />
+      </Action>
+    </div>
+  );
+}
+
+// ---- a prefab -------------------------------------------------------------------------------------
+
+type PrefabReady = { id: string; name: string; description: string; author: string; tags: string[]; brushes: number; entities: number; credits: AssetCredit[] };
+
+function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const q = useQuery({ queryKey: ["tools", "community", "ready-prefab", id], queryFn: () => getJson<PrefabReady & { error?: string }>(`/api/tools/community/publish-prefab/${encodeURIComponent(id)}`), retry: false });
+  const [title, setTitle] = useState("");
+  const [summary, setSummary] = useState("");
+  const [author, setAuthor, remember] = useAuthor();
+  const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
+  const { working, run } = useBusy();
+  useEffect(() => {
+    if (!q.data || q.data.error) return;
+    setTitle((t) => t || q.data.name);
+    setSummary((s) => s || q.data.description);
+    if (q.data.author) setAuthor(author || q.data.author);
+  }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const head = <Head title={q.data?.name ?? id.replace(/^mine:/, "")} kind="Prefab" onBack={onBack} busy={q.isFetching} onRecheck={() => q.refetch()} />;
+  if (q.isPending) return <div className="cm-pub">{head}<Loading text="Reading the prefab…" /></div>;
+  if (q.isError || q.data.error) return <div className="cm-pub">{head}<LoadError text={q.data?.error ?? errorText(q.error, "Couldn't read that prefab.")} onRetry={() => q.refetch()} /></div>;
+  if (done) return <div className="cm-pub">{head}<Upload pkg={done.pkg} form={done.form} onDone={onDone} /></div>;
+  const r = q.data;
+  const build = () =>
+    run("Packing…", async () => {
+      remember();
+      const res = await post<{ package: Package; form: Form }>(`/api/tools/community/publish-prefab/${encodeURIComponent(id)}`, { title, summary, author, modes: [], screenshots: [] });
+      if (res.error) return toast(res.error, true);
+      setDone({ pkg: res.package, form: res.form });
+    });
+  return (
+    <div className="cm-pub">
+      {head}
+      <Step n={1} title="Checks">
+        <Checks rows={[
+          { state: "ok", title: "The prefab", why: `${r.brushes} brushes${r.entities ? `, ${r.entities} entities` : ""}; a plain .map any GoldSrc editor can paste.` },
+          r.credits.length
+            ? { state: "ok", title: "Credits", why: `Credits ${r.credits.length} source${r.credits.length === 1 ? "" : "s"} of models and textures it uses.` }
+            : { state: "ok", title: "Credits", why: "Uses only the game's own files and yours." },
+        ]} />
+      </Step>
+      <Step n={2} title="Details">
+        <Details title={title} setTitle={setTitle} author={author} setAuthor={setAuthor} summary={summary} setSummary={setSummary} about="What it is, in a sentence" />
+      </Step>
+      {r.credits.length > 0 && (
+        <Step n={3} title="Credits" note="Carried in the package, so whoever uses the prefab credits these too.">
+          <ul className="cm-credit-list">
+            {r.credits.map((c, i) => (
+              <li key={i}><strong>{c.name || "Files"}</strong> <span className="muted small-note">{c.authors.map((a) => a.name).join(", ")} · {c.files.join(", ")}</span></li>
+            ))}
+          </ul>
+        </Step>
+      )}
+      <Action note={!title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana's Prefabs and register the page."}>
+        <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={!title.trim() || !author.trim()} onClick={build} />
+      </Action>
+    </div>
+  );
+}
+
+// ---- after packing: upload and register --------------------------------------------------------------
 
 function CopyRow({ label, value, long }: { label: string; value: string; long?: boolean }) {
   const toast = useToast();
@@ -356,63 +526,58 @@ function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () =>
     });
 
   return (
-    <div className="cm-upload stack-tight">
-      <p className="cm-line ok">Package made: <code>{pkg.file}</code> ({sizeText(pkg.size)}, {pkg.contents.length} files{pkg.screenshots.length ? `, ${pkg.screenshots.length} screenshots beside it` : ""}).</p>
-      {pkg.warnings.map((w) => <p key={w} className="cm-line warn">{w}</p>)}
-      <ol className="cm-steps">
-        <li>
-          <strong>Find the package.</strong> <button className="btn small" onClick={show}>Show it in the folder</button>
-        </li>
-        <li>
-          <strong>Open GameBanana's submit page</strong> (sign in there), choose {form.game} &gt; {form.category}.{" "}
-          <a className="btn small primary" href={form.submitUrl} target="_blank" rel="noreferrer">Open GameBanana</a>
-          <div className="cm-copies">
-            <CopyRow label="Name" value={form.title} />
-            <CopyRow label="Description" value={form.text} long />
-            <CopyRow label={`Attribute: ${form.tag.title}`} value={form.tag.value} />
-            {form.credits && form.credits.length > 0 && (
-              <CopyRow label="Credits module (one per line: group, name, role)" value={form.credits.map((c) => `${c.group} | ${c.name} | ${c.role}${c.url ? ` | ${c.url}` : ""}`).join("\n")} long />
-            )}
-          </div>
-          <p className="muted small-note">
-            Add the attribute <code>{form.tag.title}: {form.tag.value}</code> (it's how Community finds it), upload <code>{form.file}</code> unchanged, and add the screenshots.
-          </p>
-        </li>
-        <li>
-          <strong>Paste the page's link</strong> once GameBanana has checked the file:
-          <form className="row cm-register" onSubmit={(e) => { e.preventDefault(); send(); }}>
-            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://gamebanana.com/mods/…" aria-label="GameBanana link" />
-            <label className="check-row small-note" style={{ flexBasis: "100%", fontWeight: 400 }}>
-              <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} required />
-              I have the right to share this, and I accept the <a href="https://lonerstrike.com/terms" target="_blank" rel="noreferrer">Terms</a>.
-            </label>
-            <BusyButton type="submit" className="btn primary" busy={working !== null} busyLabel={working ?? "Checking…"} label="Add to Community" disabled={!url.trim() || !agree} />
-          </form>
-        </li>
-      </ol>
-      {studio && (
-        <div className="cm-result" role="status">
-          <p className="cm-line warn">Plugin modes can't be shared yet. A mode made in Game Mode Studio can: the app builds its code on each player's computer.</p>
-          <button className="btn primary" onClick={() => useNav.getState().go("tools", "studio")}>Open in Game Mode Studio</button>
-        </div>
-      )}
-      {result && (
-        <div className="cm-result" role="status">
-          {result.state === "listed" || result.state === "sent" ? (
-            <p className="cm-line ok">Listed. It shows up in Community within a few minutes, once the Loner-Strike list is next updated.</p>
-          ) : result.state === "pending" ? (
-            <p className="cm-line ok">Sent. A Loner-Strike moderator looks at it first; Yours shows when it's listed.</p>
-          ) : result.state === "refused" ? (
-            <p className="cm-line bad">The Loner-Strike list turned it down: {result.error || "no reason given."}</p>
-          ) : (
-            <>
-              <p className="cm-line warn">The page checks out, but the Loner-Strike list didn't answer. It's kept here and sent automatically later; you can also post this in the Loner-Strike Discord:</p>
-              <CopyRow label="Entry" value={result.copy} long />
-            </>
+    <>
+      <Step n={1} title="The package is ready" note={`${pkg.file} · ${sizeText(pkg.size)} · ${pkg.contents.length} files${pkg.screenshots.length ? ` · ${pkg.screenshots.length} screenshots beside it` : ""}`}>
+        {pkg.warnings.map((w) => <p key={w} className="cm-line warn">{w}</p>)}
+        <div className="row"><button className="btn" onClick={show}>Show it in the folder</button></div>
+      </Step>
+      <Step n={2} title="Upload it to GameBanana" note={`Sign in there and choose ${form.game} > ${form.category}. Upload ${form.file} unchanged and add the screenshots.`}>
+        <div className="row"><a className="btn primary" href={form.submitUrl} target="_blank" rel="noreferrer">Open GameBanana's submit page</a></div>
+        <div className="cm-copies">
+          <CopyRow label="Name" value={form.title} />
+          <CopyRow label="Description" value={form.text} long />
+          <CopyRow label={`Attribute: ${form.tag.title}`} value={form.tag.value} />
+          {form.credits && form.credits.length > 0 && (
+            <CopyRow label="Credits module (group | name | role)" value={form.credits.map((c) => `${c.group} | ${c.name} | ${c.role}${c.url ? ` | ${c.url}` : ""}`).join("\n")} long />
           )}
-          <button className="btn" onClick={onDone}>See what you've published</button>
         </div>
-      )}
-    </div>
+        <p className="muted small-note">The attribute <code>{form.tag.title}: {form.tag.value}</code> is how Community finds it.</p>
+      </Step>
+      <Step n={3} title="Register the page" note="Paste the page's link once GameBanana has checked the file.">
+        <form className="cm-register" onSubmit={(e) => { e.preventDefault(); send(); }}>
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://gamebanana.com/mods/…" aria-label="GameBanana link" />
+          <label className="check-row cm-agree">
+            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} required />
+            <span>I have the right to share this, and I accept the <a href="https://lonerstrike.com/terms" target="_blank" rel="noreferrer">Terms</a>.</span>
+          </label>
+          <div className="row">
+            <BusyButton type="submit" className="btn primary" busy={working !== null} busyLabel={working ?? "Checking…"} label="Add to Community" disabled={!url.trim() || !agree} />
+          </div>
+        </form>
+        {studio && (
+          <div className="cm-result" role="status">
+            <p className="cm-line warn">Plugin modes can't be shared yet. A mode made in Game Mode Studio can: the app builds its code on each player's computer.</p>
+            <button className="btn primary" onClick={() => useNav.getState().go("tools", "studio")}>Open in Game Mode Studio</button>
+          </div>
+        )}
+        {result && (
+          <div className="cm-result" role="status">
+            {result.state === "listed" || result.state === "sent" ? (
+              <p className="cm-line ok">Listed. It shows up in Community within a few minutes, once the Loner-Strike list is next updated.</p>
+            ) : result.state === "pending" ? (
+              <p className="cm-line ok">Sent. A Loner-Strike moderator looks at it first; Published shows when it's listed.</p>
+            ) : result.state === "refused" ? (
+              <p className="cm-line bad">The Loner-Strike list turned it down: {result.error || "no reason given."}</p>
+            ) : (
+              <>
+                <p className="cm-line warn">The page checks out, but the Loner-Strike list didn't answer. It's kept here and sent automatically later; you can also post this in the Loner-Strike Discord:</p>
+                <CopyRow label="Entry" value={result.copy} long />
+              </>
+            )}
+            <button className="btn" onClick={onDone}>See what you've published</button>
+          </div>
+        )}
+      </Step>
+    </>
   );
 }

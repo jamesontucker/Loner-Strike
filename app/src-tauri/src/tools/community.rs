@@ -1211,6 +1211,30 @@ fn sha256_file(p: &Path) -> std::io::Result<String> {
     Ok(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
+/// The modes a map can say it's made for, in Publish: the game's mode list without leftovers. A
+/// Game Mode Studio mode (its plugins.ini names `studio_<id>.amxx`) counts only when you still have
+/// its graph or it came from Community (Playtest and test builds leave modes.ini lines like
+/// "V3 check" behind). Each with its permanent id when the Studio gave it one; names one line.
+pub fn mode_choices(game_dir: &Path, graphs: &Path, lib: &[super::communitylib::Installed]) -> Vec<Value> {
+    let gm = game_dir.join("addons/amxmodx/configs/gamemodes");
+    let mut seen = std::collections::HashSet::new();
+    crate::extras::parse_modes(&crate::sys::read_latin1(&gm.join("modes.ini")).unwrap_or_default())
+        .into_iter()
+        .filter(|(id, _)| safe_mode_id(id) && seen.insert(id.clone()))
+        .filter_map(|(id, name)| {
+            let studio = crate::sys::read_latin1(&gm.join(format!("{id}.plugins.ini"))).is_ok_and(|t| t.to_lowercase().contains(&format!("studio_{}.amxx", id.to_lowercase())));
+            let community = lib.iter().any(|i| i.kind == Kind::Mode && i.mode == id);
+            let graph = graphs.join(format!("{id}.graph.json")).is_file();
+            if studio && !community && !graph {
+                return None;
+            }
+            let uid = if graph { graph_uid(graphs, &id) } else { lib.iter().find(|i| i.mode == id).map(|i| i.uid.clone()).unwrap_or_default() };
+            let name = one_line(&name, 40);
+            Some(json!({"id": id, "name": if name.is_empty() { id.clone() } else { name }, "uid": uid, "studio": studio}))
+        })
+        .collect()
+}
+
 /// The modes a compiled map says it's made for: worldspawn `ls_modes` (mode ids separated by
 /// spaces, commas or semicolons; the map editor's Made for). Plain mode ids only, at most 12.
 pub fn made_for(bsp: &Path) -> Vec<String> {
@@ -1547,6 +1571,18 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
 /// What to type into GameBanana's submit form.
 pub fn gamebanana_form(p: &Package) -> Value {
     let it = &p.item;
+    if it.kind == Kind::Prefab {
+        let mut text = format!("{}\n\nA map editor prefab made with Loner-Strike (lonerstrike.com): open Tools > Community in the app and click Try it to add it to your prefab library. prefabs/*.map is a plain Valve 220 .map for any GoldSrc editor.\n", it.summary);
+        if !it.credits.is_empty() {
+            let who: Vec<String> = it.credits.iter().flat_map(|c| c.authors.iter().map(|a| a.name.clone())).collect::<std::collections::BTreeSet<_>>().into_iter().take(8).collect();
+            text.push_str(&format!("\n- Uses assets by {}", who.join(", ")));
+        }
+        return json!({
+            "credits": super::credits::gamebanana_rows(&it.credits),
+            "submitUrl": "https://gamebanana.com/mods/add", "game": "Counter-Strike 1.6", "category": "Prefabs",
+            "title": it.name, "text": text, "tag": {"title": TAG_TITLE, "value": TAG_VALUE}, "file": p.file, "md5": p.md5,
+        });
+    }
     if it.kind == Kind::Mode {
         let mut text = format!("{}\n\nA Game Mode Studio mode made with Loner-Strike (lonerstrike.com): open Tools > Community in the app and click Try it; the app builds it on your computer and you can play it with bots in one click. Nothing in the download runs code by itself: it's the mode's graph.\n", it.summary);
         if let Some(r) = &it.remix_of {
@@ -1753,6 +1789,70 @@ pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq,
         sha256: Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect(),
         contents,
         screenshots: shot_names,
+        item,
+        warnings: vec![],
+    };
+    let _ = std::fs::write(out_dir.join(format!("{stem}.json")), serde_json::to_vec_pretty(&pkg).unwrap_or_default());
+    Ok(pkg)
+}
+
+/// A prefab of your library, ready to share? Its details and the credits of the assets it uses.
+pub fn prefab_readiness(game: Option<&crate::game::Game>, id: &str) -> Result<Value, String> {
+    let dir = super::editor::prefabs::lib_dir(&crate::sys::app_dir().join("editor"));
+    if !id.starts_with("mine:") {
+        return Err("Only prefabs you made (or added) can be published, not the starter ones.".into());
+    }
+    let (frag, meta) = super::editor::prefabs::load(&dir, id)?;
+    let credits = game.map(|g| super::editor::prefabs::prefab_credits(&g.hl, if g.is_czero() { "czero" } else { "cstrike" }, &frag, &meta)).unwrap_or_default();
+    Ok(json!({"id": id, "name": meta.name, "description": meta.description, "author": meta.author, "tags": meta.tags,
+              "brushes": meta.brushes, "entities": meta.entities, "credits": credits, "blockers": []}))
+}
+
+/// Builds the upload package for a prefab (the editor's own package format, with its credits) in
+/// the packages folder, plus the details registering needs.
+pub fn build_prefab_package(game: Option<&crate::game::Game>, id: &str, req: &PublishReq, out_dir: &Path) -> Result<Package, String> {
+    let dir = super::editor::prefabs::lib_dir(&crate::sys::app_dir().join("editor"));
+    if !id.starts_with("mine:") {
+        return Err("Only prefabs you made (or added) can be published.".into());
+    }
+    let (frag, meta) = super::editor::prefabs::load(&dir, id)?;
+    let title = one_line(&req.title, 80);
+    let author = one_line(&req.author, 40);
+    if title.is_empty() || author.is_empty() {
+        return Err("Give it a name and say who made it (your GameBanana name).".into());
+    }
+    let credits = game.map(|g| super::editor::prefabs::prefab_credits(&g.hl, if g.is_czero() { "czero" } else { "cstrike" }, &frag, &meta));
+    std::fs::create_dir_all(out_dir).map_err(|e| format!("Couldn't make the packages folder ({e})."))?;
+    let slug = id.trim_start_matches("mine:");
+    let stem = format!("{slug}-prefab-loner-strike");
+    let zip_path = out_dir.join(format!("{stem}.zip"));
+    super::editor::prefabs::package(&dir, id, &zip_path, credits.clone())?;
+    let bytes = std::fs::read(&zip_path).map_err(|e| e.to_string())?;
+    let contents: Vec<String> = zip::ZipArchive::new(std::io::Cursor::new(&bytes))
+        .map(|mut z| (0..z.len()).filter_map(|i| z.by_index(i).ok().and_then(|f| f.name().ok().map(|n| n.to_string()))).collect())
+        .unwrap_or_default();
+    let item = Item {
+        kind: Kind::Prefab,
+        name: title,
+        author,
+        summary: one_line(&req.summary, 400),
+        credits: super::credits::clean_credits(credits.unwrap_or_default()),
+        tags: meta.tags.iter().map(|t| one_line(t, 24)).take(12).collect(),
+        added: now(),
+        updated: now(),
+        ..Default::default()
+    };
+    if let Some(why) = package_refusal(&item, &contents) {
+        let _ = std::fs::remove_file(&zip_path);
+        return Err(why);
+    }
+    let pkg = Package {
+        file: format!("{stem}.zip"),
+        size: bytes.len() as u64,
+        md5: md5_hex(&bytes),
+        sha256: Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect(),
+        contents,
+        screenshots: vec![],
         item,
         warnings: vec![],
     };
@@ -2021,7 +2121,8 @@ async fn api_ready(State(st): State<Shared>, UrlPath(name): UrlPath<String>) -> 
                         suggested.push(x);
                     }
                 }
-                Ok(json!({"ready": r, "suggestedModes": suggested, "tag": format!("{TAG_TITLE}: {TAG_VALUE}")}))
+                let choices = mode_choices(&game.dir, &super::studio::graphs_dir(), &super::communitylib::load_all(&super::communitylib::lib_dir()));
+                Ok(json!({"ready": r, "suggestedModes": suggested, "modeChoices": choices, "tag": format!("{TAG_TITLE}: {TAG_VALUE}")}))
             })
             .await
         }
@@ -2046,6 +2147,25 @@ async fn api_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(name): UrlP
         }
     };
     json_answer(r)
+}
+
+async fn api_prefab_ready(State(st): State<Shared>, UrlPath(id): UrlPath<String>) -> Response {
+    let game = st.local_game();
+    json_answer(blocking(move || prefab_readiness(game.as_deref(), &id).map_err(|e| Fail::new(StatusCode::OK, e))).await)
+}
+
+async fn api_prefab_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(id): UrlPath<String>, Json(req): Json<PublishReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let game = st.local_game();
+    json_answer(
+        blocking(move || {
+            let pkg = build_prefab_package(game.as_deref(), &id, &req, &packages_dir()).map_err(|e| Fail::new(StatusCode::OK, e))?;
+            Ok(json!({"package": pkg, "form": gamebanana_form(&pkg)}))
+        })
+        .await,
+    )
 }
 
 async fn api_mode_ready(UrlPath(id): UrlPath<String>) -> Response {
@@ -2152,6 +2272,7 @@ pub fn routes() -> Router<Shared> {
         // [Caps] up to MAX_SHOTS screenshots of MAX_SHOT each, as base64 (axum's 2 MB default refused real ones)
         .route("/api/tools/community/publish/:map", get(api_ready).post(api_publish).layer(axum::extract::DefaultBodyLimit::max(PUBLISH_BODY)))
         .route("/api/tools/community/publish-mode/:id", get(api_mode_ready).post(api_mode_publish))
+        .route("/api/tools/community/publish-prefab/:id", get(api_prefab_ready).post(api_prefab_publish))
         .route("/api/tools/community/register", post(api_register))
         .route("/api/tools/community/mine", get(api_mine))
         .route("/api/tools/community/reveal", post(api_reveal))
@@ -2663,6 +2784,27 @@ mod tests {
         let have = HashSet::new();
         let row = entry(None, Some(&idx.items[1]), false, &have).unwrap();
         assert_eq!(row["modes"], json!(["Mode A"]), "cards show the modes' names");
+    }
+
+    #[test]
+    fn publish_mode_choices_leave_test_leftovers_out() {
+        let d = tmp("choices");
+        let gm = d.join("game/addons/amxmodx/configs/gamemodes");
+        std::fs::create_dir_all(&gm).unwrap();
+        std::fs::write(gm.join("modes.ini"), "classic \"Classic\" \"x\" \"\" \"\"\nscoutz \"Scoutz & Knivez\" \"y\" \"\" \"\"\npw_v3 \"V3 check\" \"z\" \"\" \"\"\nmine \"My mode\" \"z\" \"\" \"\"\nlava \"Lava\" \"\" \"\" \"\"\nclassic \"Classic again\" \"\" \"\" \"\"\n").unwrap();
+        for id in ["pw_v3", "mine", "lava"] {
+            std::fs::write(gm.join(format!("{id}.plugins.ini")), format!("; studio\nstudio_{id}.amxx\n")).unwrap();
+        }
+        let graphs = d.join("graphs");
+        std::fs::create_dir_all(&graphs).unwrap();
+        std::fs::write(graphs.join("mine.graph.json"), r#"{"mode": {"id": "mine", "uid": "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b"}}"#).unwrap();
+        let lib = vec![super::super::communitylib::Installed { kind: Kind::Mode, mode: "lava".into(), gb: 5, ..Default::default() }];
+        let c = mode_choices(&d.join("game"), &graphs, &lib);
+        let ids: Vec<&str> = c.iter().map(|v| v["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["classic", "scoutz", "mine", "lava"], "no Studio leftover without a graph, no repeats");
+        assert_eq!(c[1]["name"], "Scoutz & Knivez");
+        assert_eq!(c[2]["uid"], "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b");
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
