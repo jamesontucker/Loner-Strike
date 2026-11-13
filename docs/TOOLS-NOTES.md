@@ -2551,3 +2551,27 @@ build right now because of `studio/gen.rs`/`graph.rs` work in progress); `tsc -b
 - Not clicked through in the real app: Try it on a real tagged page (none exist yet), the server tab against a real
   Linux server. Mode filter on Play's mode list skipped (short list; the chip says where it's from).
 - Slip: I briefly navigated p5's Playwright tab to my page before opening my own tab; put it back on editor-dev.
+
+### Agent Z: Creature Studio polish (user feedback) — 2026-11-12
+- **Layout**: types left, the editor in folding sections (Name and kind, Look, Health and speed, Senses, Attack, Behaviour,
+  Sounds, Rewards, Finer points; folds remembered), each row one grid (name + help left, control right, stacks under 400 px),
+  the preview pinned on the right with "Try it in your game" (Spawn one in front of me, Standing still). Save is P8's ActionBar
+  (P8 wired it; I added the problem list under it). Tooltip over the sidebar checked after P8's fix.
+- **Preview drawn as the game draws it**: ModelView (asset browser, an additive change) takes `scale` and `shell` — a second pass
+  of the mesh pushed out along its normals, additive in the colour (kRenderFxGlowShell, renderamt 12 as in the brain's Setup);
+  the stand-in tint only when the stand-in model plays. Run on a model without its own run plays the walk at 2× and says so
+  (`noRun` from the model route: run resolves to the walk, as ResolveAnims). Attack sequence picked by attack type (ranged: range
+  attack first), as PickSequence now does.
+- **Sounds**: one row per event, chips (▶, name, ×), "+ Add" opens a search popover (plays from the list), fallback groups on a
+  quieter "If those are missing:" line. Model picker is a popover too; popovers open upwards near the save bar.
+- **Built-in types with their own HL models** (brain commit `814f2d3` on ls-creatures in ~/regamedll-creatures, local only;
+  Studio templates and CREATURES.md table match): runner → `houndeye.mdl` (real run, its sounds, 36-tall hull), brute →
+  `agrunt.mdl` (alien, yellow blood, agrunt sounds, no tint/scale), boss → `garg.mdl` at scale 0.7 (hull stays 32×72, garg
+  sounds, stomp on hit), new `headcrab` (25 hp, 36-tall hull, `anim_attack jump` since its MELEE_ATTACK2 is a looping turn,
+  hc_* sounds). Sequences checked with mdlseq.py: agrunt walk/run/mattack, garg walk/run/Attack, headcrab walk/run/jump,
+  houndeye run (no melee: plays `attack`). Zombie, spitter, hound, turret unchanged. Not run in a game yet.
+- **Brain parity re-checked**: hulls wider than 32 are narrowed (a note in the form); spitter hull 32×36; turret anims by name;
+  8 built-ins. Every key maps 1:1 to LsSetTypeKey and is used by the brain, except the shown name.
+- **For Y**: `display` (the `name =` key) is parsed but never used in game: maybe the kill log line or a HUD name. Also, a garg
+  at 0.7 is still ~95 tall over a 72 hull: if bullets aimed at its head should hit, studio hitboxes need checking on
+  SOLID_SLIDEBOX creatures.
