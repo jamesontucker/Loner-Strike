@@ -207,6 +207,9 @@ pub struct Asset {
     /// the License tab, line → yes | ask | only_if_same | no (empty when not from GameBanana)
     pub checklist: Value,
     pub ported: String,
+    /// the GameBanana uploader ({id, name}) and the license text, when from GameBanana
+    pub submitter: Option<Value>,
+    pub licence: String,
     /// ok | ask | no | none (no permission needed: stock or yours)
     pub verdict: String,
     pub why: String,
@@ -258,14 +261,12 @@ impl Ctx {
                 c.mine.insert(h.to_lowercase());
             }
         }
-        // community creations: files their maps installed (their own credits ride along)
-        for it in super::communitylib::load_all(&super::communitylib::lib_dir()) {
-            let manifest_credits: Vec<AssetCredit> = std::fs::read(super::communitylib::lib_dir().join(it.key()).join("credits.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-            let who = json!({"page": it.url(), "name": it.name, "submitter": {"name": it.author}});
-            let rec = maps[it.gb.to_string()].clone();
-            for f in rec["files"].as_array().into_iter().flatten().filter_map(|f| f.as_str()) {
-                c.community.insert(f.to_lowercase(), (who.clone(), manifest_credits.clone()));
-            }
+        // community creations: the files they installed (their own credits ride along)
+        let lib = super::communitylib::lib_dir();
+        for (path, who) in community_files(&super::communitylib::load_all(&lib), &maps, &content) {
+            let key = who["key"].as_str().unwrap_or("").to_string();
+            let manifest_credits: Vec<AssetCredit> = std::fs::read(lib.join(&key).join("credits.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+            c.community.insert(path, (json!({"page": who["url"], "name": who["name"], "submitter": {"name": who["author"]}}), manifest_credits));
         }
         c
     }
@@ -290,6 +291,106 @@ impl Ctx {
             }
         }
     }
+}
+
+/// Every file a community creation installed (lower-case game path → `{key, name, author, url}`),
+/// from the map records and Get more's content records of the community library's pages. The
+/// editor's Content Browser lists these under Community.
+pub fn community_files(lib: &[super::communitylib::Installed], maps: &Value, content: &Value) -> HashMap<String, Value> {
+    let mut out = HashMap::new();
+    for it in lib {
+        let who = json!({"key": it.key(), "name": it.name, "author": it.author, "url": it.url()});
+        let mut add = |f: &Value| {
+            let p = f.as_str().map(String::from).or_else(|| f["path"].as_str().map(String::from)).unwrap_or_default();
+            if !p.is_empty() {
+                out.insert(p.replace('\\', "/").to_lowercase(), who.clone());
+            }
+        };
+        match it.kind {
+            super::community::Kind::Map => {
+                for f in maps[it.gb.to_string()]["files"].as_array().into_iter().flatten() {
+                    add(f);
+                }
+            }
+            super::community::Kind::Spray | super::community::Kind::Texture => {
+                let kind = if it.model == super::community::Model::Spray { "Spray" } else { "Mod" };
+                for (k, r) in content.as_object().into_iter().flatten() {
+                    if k.split(':').next() == Some(kind) && crate::content::key_id(k) == it.gb {
+                        for f in r["files"].as_array().into_iter().flatten() {
+                            add(f);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// `community_files` from an app folder's own records (the editor's Content Browser uses this).
+pub fn community_files_in(app: &Path) -> HashMap<String, Value> {
+    let read = |p: PathBuf| std::fs::read(p).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).unwrap_or(Value::Null);
+    community_files(&super::communitylib::load_all(&app.join("community")), &read(app.join("installed_maps.json")), &read(app.join("content").join("record.json")))
+}
+
+/// The editor Content Browser's view of one file (docs/notes/P5.md, "the credits API agreed with T").
+pub fn asset_answer(a: &Asset) -> Value {
+    let verdict = match (a.source.as_str(), a.verdict.as_str()) {
+        ("stock", _) => "stock",
+        ("unknown", _) => "unknown",
+        (_, "none") => "ok",
+        (_, v) => {
+            if a.permission.as_ref().is_some_and(|p| p.granted) { "ok" } else { v }
+        }
+    };
+    let authors: Vec<Value> = a
+        .authors
+        .iter()
+        .map(|x| {
+            let (group, role) = x.role.split_once(": ").map(|(g, r)| (g.to_string(), r.to_string())).unwrap_or((x.role.clone(), String::new()));
+            json!({"group": group, "name": x.name, "role": role, "url": x.url})
+        })
+        .collect();
+    json!({
+        "source": a.source,
+        "page": if a.page.is_empty() { Value::Null } else { json!({"url": a.page, "name": a.name}) },
+        "submitter": a.submitter.clone().unwrap_or(Value::Null),
+        "authors": authors,
+        "checklist": if a.checklist.as_object().is_some_and(|c| !c.is_empty()) { a.checklist.clone() } else { Value::Null },
+        "licence": if a.licence.is_empty() { Value::Null } else { json!(a.licence) },
+        "ported": !a.ported.is_empty(),
+        "verdict": verdict,
+        "why": if a.permission.as_ref().is_some_and(|p| p.granted) { format!("Permission recorded: {}", a.permission.as_ref().map(|p| p.note.clone()).unwrap_or_default()) } else { a.why.clone() },
+        "permission": a.permission,
+    })
+}
+
+/// The credits for a prefab's assets, from its entity text (the models, sprites and sounds its
+/// entities name) and the WADs it uses: what P5's prefab export writes as `credits` into
+/// `prefabs/<id>.json` and the `loner-strike.json` item (docs/notes/P5.md, "Requests from T").
+#[allow(dead_code)] // (called by the prefab export once P5 wires it)
+pub fn credits_for_entities(hl: &Path, game: &str, entity_text: &str, wads: &[String]) -> Vec<AssetCredit> {
+    let mut files = crate::mapcopy::entity_files(entity_text);
+    files.extend(wads.iter().cloned());
+    files.sort();
+    files.dedup();
+    credits_for_files(hl, game, &files)
+}
+
+/// The credits for a set of files (game paths) as a prefab or package should carry them.
+pub fn credits_for_files(hl: &Path, game: &str, files: &[String]) -> Vec<AssetCredit> {
+    let f = crate::mapcopy::Finder::default();
+    let path = super::doctor::game_path(hl, game);
+    let ctx = Ctx::load(&crate::sys::app_dir());
+    let assets: Vec<Asset> = files
+        .iter()
+        .map(|rel| {
+            let p = path.iter().find_map(|d| f.find(d, rel));
+            resolve(rel, &p.as_deref().map(sha256_file).unwrap_or_default(), super::doctor::is_stock(&f, hl, rel), &ctx)
+        })
+        .collect();
+    for_publish(&assets).0
 }
 
 fn authors_of(rights: &Value) -> Vec<Author> {
@@ -328,6 +429,8 @@ pub fn resolve(rel: &str, sha: &str, stock: bool, ctx: &Ctx) -> Asset {
         a.authors = authors_of(r);
         a.checklist = r["checklist"].clone();
         a.ported = ported_from(r).unwrap_or_default();
+        a.submitter = r["submitter"].is_object().then(|| r["submitter"].clone());
+        a.licence = s(&r["licence"]);
         let (v, why) = if r["checklist"].as_object().is_some_and(|c| !c.is_empty()) {
             verdict(r)
         } else {
@@ -523,6 +626,43 @@ async fn api_map(State(st): State<Shared>, UrlPath(name): UrlPath<String>) -> Re
 }
 
 #[derive(Deserialize)]
+struct AssetQ {
+    folder: String,
+    path: String,
+}
+
+/// A clean game-relative path (no parent steps, no absolute or Windows paths, no odd characters).
+fn clean_rel(p: &str) -> Option<String> {
+    let p = p.trim().replace('\\', "/");
+    let ok = !p.is_empty() && p.len() <= 200 && !p.starts_with('/') && !p.contains(':')
+        && p.split('/').all(|s| !s.is_empty() && s != "." && s != "..")
+        && p.chars().all(|c| c.is_ascii_alphanumeric() || "/_-.+!()[]{}~@ $'".contains(c));
+    ok.then_some(p)
+}
+
+/// Where one file the editor shows came from (P5's Content Browser): `folder` is a game folder
+/// (cstrike, czero, valve, their _downloads) or "project" (next to the map project: yours).
+async fn api_asset(State(st): State<Shared>, axum::extract::Query(q): axum::extract::Query<AssetQ>) -> Response {
+    let game = st.local_game();
+    run(move || {
+        let rel = clean_rel(&q.path).ok_or("That isn't a file path.")?;
+        if q.folder == "project" {
+            let a = Asset { rel, source: "mine".into(), verdict: "none".into(), why: "A file next to your map project: yours.".into(), checklist: json!({}), ..Default::default() };
+            return Ok(asset_answer(&a));
+        }
+        const FOLDERS: [&str; 6] = ["cstrike", "czero", "valve", "cstrike_downloads", "czero_downloads", "valve_downloads"];
+        let folder = FOLDERS.iter().find(|f| f.eq_ignore_ascii_case(&q.folder)).ok_or("That isn't a game folder.")?;
+        let g = game.ok_or("Set up the game on this computer first.")?;
+        let f = crate::mapcopy::Finder::default();
+        let p = f.find(&g.hl.join(folder), &rel).ok_or("That file isn't there.")?;
+        let ctx = Ctx::load(&crate::sys::app_dir());
+        let a = resolve(&rel, &sha256_file(&p), super::doctor::is_stock(&f, &g.hl, &rel), &ctx);
+        Ok(asset_answer(&a))
+    })
+    .await
+}
+
+#[derive(Deserialize)]
 struct PermissionReq {
     /// the page (for a GameBanana or community file), or "sha:<hash>" for a file nothing knows
     key: String,
@@ -576,6 +716,7 @@ async fn api_permission(h: HeaderMap, Json(req): Json<PermissionReq>) -> Respons
 pub fn routes() -> Router<Shared> {
     Router::new()
         .route("/api/tools/credits/map/:name", get(api_map))
+        .route("/api/tools/credits/asset", get(api_asset))
         .route("/api/tools/credits/permission", post(api_permission))
         .route("/api/tools/credits/manual", post(api_permission))
 }
@@ -688,6 +829,46 @@ mod tests {
         assert!(readme.contains("Used with permission (asked on Discord)") && readme.contains("models/forbidden.mdl"));
         let rows = gamebanana_rows(&credits);
         assert_eq!(rows[0]["name"], "DimeX");
+    }
+
+    #[test]
+    fn the_content_browsers_answer() {
+        let r = rights_of(&page(&ALL[..1], &ALL[1..7], &ALL[7..]), "Mod", 227562);
+        let mut ctx = ctx_with(r);
+        let a = asset_answer(&resolve("models/player/zombie/zombie.mdl", "", false, &ctx));
+        assert_eq!((a["source"].as_str(), a["verdict"].as_str()), (Some("gamebanana"), Some("ask")));
+        assert_eq!(a["page"]["url"], "https://gamebanana.com/mods/227562");
+        assert_eq!(a["submitter"]["id"], 599043);
+        assert_eq!((a["authors"][0]["group"].as_str(), a["authors"][0]["name"].as_str()), (Some("Original Authors"), Some("DimeX")));
+        assert_eq!(a["checklist"]["parts_gb"], "ask");
+        assert!(a["licence"].as_str().unwrap().contains("CC BY-NC-ND"));
+        assert_eq!(a["ported"], false);
+        assert_eq!(asset_answer(&resolve("models/v_ak47.mdl", "", true, &ctx))["verdict"], "stock");
+        assert_eq!(asset_answer(&resolve("x.mdl", "q", false, &ctx))["verdict"], "unknown");
+        ctx.noted.insert("https://gamebanana.com/mods/227562".into(), Noted { granted: true, note: "yes on Discord".into(), ..Default::default() });
+        let g = asset_answer(&resolve("models/player/zombie/zombie.mdl", "", false, &ctx));
+        assert_eq!(g["verdict"], "ok", "permission recorded");
+        assert!(g["why"].as_str().unwrap().contains("yes on Discord"));
+        assert_eq!(clean_rel("sprites/x.spr").as_deref(), Some("sprites/x.spr"));
+        for bad in ["../x", "/etc/x", "a//b", "c:\\x", "a/./b", ""] {
+            assert!(clean_rel(bad).is_none(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn community_files_by_kind() {
+        use crate::tools::communitylib::Installed;
+        use crate::tools::community::{Kind, Model};
+        let lib = vec![
+            Installed { kind: Kind::Map, model: Model::Mod, gb: 101, name: "De Lonely".into(), author: "jam".into(), ..Default::default() },
+            Installed { kind: Kind::Spray, model: Model::Spray, gb: 7, name: "Smile".into(), ..Default::default() },
+        ];
+        let maps = json!({"101": {"files": ["maps/de_lonely.bsp", "Models/Props/Barrel.mdl"]}, "102": {"files": ["maps/other.bsp"]}});
+        let content = json!({"Spray:7:cs": {"files": [{"path": "tempdecal.wad"}]}, "Mod:7:cs": {"files": [{"path": "models/not_it.mdl"}]}});
+        let m = community_files(&lib, &maps, &content);
+        assert_eq!(m["models/props/barrel.mdl"]["key"], "mod-101");
+        assert_eq!(m["tempdecal.wad"]["key"], "spray-7");
+        assert!(!m.contains_key("maps/other.bsp") && !m.contains_key("models/not_it.mdl"));
     }
 
     #[test]

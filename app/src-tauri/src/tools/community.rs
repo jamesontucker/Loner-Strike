@@ -1044,6 +1044,12 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
         owner_id: page["_aSubmitter"]["_idRow"].as_i64().filter(|i| *i > 0).unwrap_or(0),
         ..Default::default()
     };
+    // the creation's own credits (who made the assets it ships), kept so reusing them keeps the chain
+    if let Some(c) = it.as_ref().map(|i| &i.credits).filter(|c| !c.is_empty()) {
+        let d = super::communitylib::lib_dir().join(super::communitylib::dir_name(model, id));
+        let _ = std::fs::create_dir_all(&d);
+        let _ = std::fs::write(d.join("credits.json"), serde_json::to_vec_pretty(c).unwrap_or_default());
+    }
     if kind == Kind::Prefab || kind == Kind::Mode {
         // small downloads installed here, no job: prefabs into the editor's library, modes built
         // by the Studio (a prefab can be a bare .map file, a mode is a zip with its graph)
@@ -1083,11 +1089,6 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
     note.md5 = files.iter().find(|f| f["id"].as_i64() == Some(file)).map(|f| s(&f["md5"])).unwrap_or_default();
     note.section = section.into();
     note.maps = it.as_ref().and_then(|i| i.map.as_ref()).map(|m| vec![m.name.clone()]).unwrap_or_default();
-    if let Some(c) = it.as_ref().map(|i| &i.credits).filter(|c| !c.is_empty()) {
-        let d = super::communitylib::lib_dir().join(super::communitylib::dir_name(model, id));
-        let _ = std::fs::create_dir_all(&d);
-        let _ = std::fs::write(d.join("credits.json"), serde_json::to_vec_pretty(c).unwrap_or_default());
-    }
     let job = game.store.start_section_install(section, id, file).map_err(|e| e.message())?;
     super::communitylib::note_after_job(game.store.clone(), job.clone(), note);
     Ok(json!({"ok": true, "job": job, "section": section, "map": it.and_then(|i| i.map).map(|m| m.name)}))
