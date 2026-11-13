@@ -445,6 +445,7 @@ public plugin_init()
 	RegisterHam(Ham_Touch, "func_door_rotating", "ham_door_touch");
 	register_forward(FM_PlayerPreThink, "fm_prethink");
 	register_forward(FM_TraceLine, "fm_traceline_post", 1);
+	register_srvcmd("ls_comp_tracestats", "cmd_tracestats");
 
 	register_event("HLTV", "ev_new_round", "a", "1=0", "2=0");
 	register_logevent("ev_round_start", 2, "1=Round_Start");
@@ -2632,27 +2633,69 @@ stock barricade_tint(s)
    of its boards carries on past it to whatever is behind */
 new g_traceDepth;
 
+new g_tsSeen, g_tsPassed, g_tsEnded, g_tsSkipped, g_tsBullets;
+
+public cmd_tracestats()
+{
+	server_print("barricade traces: seen %d (bullet-length %d), passed %d, ended inside %d, skipped (depth/not see-through) %d", g_tsSeen, g_tsBullets, g_tsPassed, g_tsEnded, g_tsSkipped);
+	return PLUGIN_HANDLED;
+}
+
 public fm_traceline_post(const Float:v1[3], const Float:v2[3], noMonsters, skip, tr)
 {
 	new hit = get_tr2(tr, TR_pHit);
+	if (hit > 0 && hit < MAX_ENTS && (g_slotOf[hit] || g_boardOf[hit]))
+	{
+		new ss = g_slotOf[hit] ? g_slotOf[hit] - 1 : g_boardOf[hit] - 1;
+		if (g_kind[ss] == K_BARRICADE)
+		{
+			g_tsSeen++;
+			if (get_distance_f(v1, v2) >= 1024.0)
+				g_tsBullets++;
+			if (g_traceDepth >= 4 || !g_seeThrough[ss])
+				g_tsSkipped++;
+		}
+	}
 	if (hit <= 0 || hit >= MAX_ENTS || g_traceDepth >= 4)
 		return FMRES_IGNORED;
 	new s = g_slotOf[hit] ? g_slotOf[hit] - 1 : g_boardOf[hit] - 1;
 	if (s < 0 || g_kind[s] != K_BARRICADE || !g_seeThrough[s])
 		return FMRES_IGNORED;
-	new Float:end[3], Float:dir[3], Float:start[3];
-	get_tr2(tr, TR_vecEndPos, end);
+	new Float:dir[3], Float:start[3];
 	new Float:total = get_distance_f(v1, v2);
 	if (total < 1.0)
 		return FMRES_IGNORED;
 	for (new i = 0; i < 3; i++)
-	{
 		dir[i] = (v2[i] - v1[i]) / total;
-		start[i] = end[i] + dir[i] * 2.0;
+	/* carry on from where the line leaves the barricade's box (a shot from right against it or
+	   from inside it, and a thick brush, are all past in one step) */
+	new Float:mn[3], Float:mx[3];
+	pev(hit, pev_absmin, mn);
+	pev(hit, pev_absmax, mx);
+	new Float:tout = total;
+	for (new i = 0; i < 3; i++)
+	{
+		if (floatabs(dir[i]) < 0.0001)
+			continue;
+		new Float:t1 = (mn[i] - v1[i]) / dir[i], Float:t2 = (mx[i] - v1[i]) / dir[i];
+		new Float:far = floatmax(t1, t2);
+		if (far < tout)
+			tout = far;
 	}
-	new Float:done = get_distance_f(v1, start);
+	new Float:done = floatmax(tout + 1.0, 1.0);
 	if (done >= total)
+	{
+		/* the shot ends inside the barricade: as if it went through to nothing */
+		set_tr2(tr, TR_flFraction, 1.0);
+		set_tr2(tr, TR_vecEndPos, v2);
+		set_tr2(tr, TR_pHit, 0);
+		set_tr2(tr, TR_StartSolid, 0);
+		set_tr2(tr, TR_AllSolid, 0);
+		g_tsEnded++;
 		return FMRES_IGNORED;
+	}
+	for (new i = 0; i < 3; i++)
+		start[i] = v1[i] + dir[i] * done;
 	new tr2 = create_tr2();
 	g_traceDepth++;
 	engfunc(EngFunc_TraceLine, start, v2, noMonsters, hit, tr2);
@@ -2661,6 +2704,18 @@ public fm_traceline_post(const Float:v1[3], const Float:v2[3], noMonsters, skip,
 	get_tr2(tr2, TR_flFraction, f2);
 	get_tr2(tr2, TR_vecEndPos, e2);
 	get_tr2(tr2, TR_vecPlaneNormal, n2);
+	/* past the barricade it hit the world (or nothing): fakemeta can't set the hit entity to the
+	   world, so the result would still name the barricade; make it a clean miss instead */
+	if (get_tr2(tr2, TR_pHit) <= 0)
+	{
+		free_tr2(tr2);
+		set_tr2(tr, TR_flFraction, 1.0);
+		set_tr2(tr, TR_vecEndPos, v2);
+		set_tr2(tr, TR_StartSolid, 0);
+		set_tr2(tr, TR_AllSolid, 0);
+		g_tsPassed++;
+		return FMRES_IGNORED;
+	}
 	set_tr2(tr, TR_flFraction, floatmin((done + f2 * (total - done)) / total, 1.0));
 	set_tr2(tr, TR_vecEndPos, e2);
 	set_tr2(tr, TR_vecPlaneNormal, n2);
@@ -2668,7 +2723,10 @@ public fm_traceline_post(const Float:v1[3], const Float:v2[3], noMonsters, skip,
 	set_tr2(tr, TR_iHitgroup, get_tr2(tr2, TR_iHitgroup));
 	set_tr2(tr, TR_InOpen, get_tr2(tr2, TR_InOpen));
 	set_tr2(tr, TR_InWater, get_tr2(tr2, TR_InWater));
+	set_tr2(tr, TR_StartSolid, 0);
+	set_tr2(tr, TR_AllSolid, get_tr2(tr2, TR_AllSolid));
 	free_tr2(tr2);
+	g_tsPassed++;
 	return FMRES_IGNORED;
 }
 
