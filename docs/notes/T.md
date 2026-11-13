@@ -134,3 +134,6 @@ Library items and snippets carry `fromMode` (a uid) when they're shared.
 - Tests: `busy_servers_and_maps_in_use`, `shared_files_other_maps_need_are_counted`,
   `previous_version_kept_and_put_back`, `update_notes_from_gamebanana`, `waiting_updates_and_stale_servers_in_the_library`.
 - Not tried live: a real update on GameBanana (none exists yet); the tick against a real server.
+- (follow-up) The holder's date is the earliest ever proven: `uids.file_at` only goes down, a fresh look can only
+  lower it; every registration with a uid records its earliest upload carrying it. Test
+  `test_the_holders_proven_date_never_weakens` (old file leaves the page, a later claimant still loses).
