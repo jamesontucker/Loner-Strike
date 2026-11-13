@@ -2271,3 +2271,29 @@ much; with more players or a bigger map it matters more (raise `br_drop` / lower
 - Tested on my own copy (removed): de_dust2 12 bots (traits 2/4/6 from personas, pace 0.5, games won), de_aztec drop-in
   (all players fell from ~500 u above ground and landed in ~2 s, no deaths in the drop, a game won).
 - Extraction: not started (tabled by the user).
+
+### Agent W1: ls_outpost fixes — BSP component keys, the "freeze", base overrun, precache — 2026-11-12
+- **BSP components kept no keys** (gm_components dcb7ebc): the repeat `classname` (after the other keys in a compiled
+  BSP) re-created the key trie. Fixed by telling the first call from the repeat by parse order (the entity being parsed):
+  the repeat keeps the keys. Note for anyone hooking FM_KeyValue: on the first `classname` call kvd's class name is NULL
+  (reading it with `get_kvd(KV_ClassName)` crashed the server) and the entity has no game data yet (`pev()` throws a native
+  error that aborts the hook), so nothing about the entity can be read there. Checked on ls_outpost: all 19 in-map
+  components load with their keys (3 barricades on the gate brushes with their names/hp/team, 4 wave spawners, 3 drop
+  spots, 5 crates, 4 weapon spawners); the `lst_shop` info_target is found (shop goals go to -320 -336).
+- **The freeze after "Wave 4 held"**: not reproduced with the current code (de_dust2 earlier; ls_outpost: waves 1-6 with a
+  drop every break, the boss wave, 9 bots; no crash, no stall). Bots alone lose wave 4 on ls_outpost, so I drove waves on
+  with `ls_creature kill all` to get through the wave-4 break and the boss wave. The builder's logs are gone; two things
+  would look exactly like "stopped logging, no wave 5": the server dying (look for "breakpad" in the console log) or a wave
+  that never ends (a creature stuck where nobody can reach it: their tracker saw one standing 8 s+ on the walkway stairs).
+  Added: a creature that hasn't moved for 60 s with no defender within 800 u is removed (logged), and a heartbeat line every
+  2 min ("phase, wave, enemies left, defenders standing") so a hang can be told from a stuck wave.
+- **Base overrun** now needs two or more enemies (or the boss) inside the base and no defender in it or within 350 u of it,
+  for 15 s on Normal (`lst_overrun`, menu 10/15/25/Never). ls_outpost has no `lst_base`; the default 450 u round the CT
+  spawn covers the courtyard (-448..448). Builder: a `lst_base` area (e.g. an `ls_damage_zone` won't do; any component with
+  targetname `lst_base`, `size=`/radius) over the courtyard would make it exact.
+- **Precache**: Last Stand now asks only for the types waves 1..`lst_waves` use (waves.ini rows in range + the boss if it
+  comes; built-in: zombie, runner from 2, brute 3, spitter 4, boss 5). With 10 waves that is still all five (5 models, 81
+  sounds); fewer waves load fewer. The sounds per type are the fork's (every `snd_*` group of each type): for Y.
+- Revives now `goal <bot> use <spot> <victim> 75 <secs left> 64` to the two nearest bots (W2's request).
+- **Server for the user**: Sim/LSPLAY on ls_outpost, Normal, 5 bots, port 27330, waits for a person, brain r43364829560
+  (ls-next-w2). `connect 127.0.0.1:27330`. Stop: `pkill -f 'lsrun.sh LSPLAY'; pkill -f 'Sim\\LSPLAY\\hlds.exe'`.
