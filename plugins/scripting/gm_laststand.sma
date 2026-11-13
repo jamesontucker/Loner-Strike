@@ -55,6 +55,12 @@ new g_record;
 new g_mapname[64];
 new g_classZombie;
 new g_kills;
+new g_hePack[33];
+new g_repairing[33];
+new Float:g_repairNext[33];
+new Float:g_repairUntil[33];
+new Float:g_repairResend[33];
+new g_botRepaired;
 new Float:g_beatAt;
 new Float:g_stuckAt;
 new Float:g_crPos[2048][3];
@@ -137,6 +143,7 @@ public plugin_init()
 	register_clcmd("say_team /shop", "cmd_shop");
 	register_clcmd("lst_shop", "cmd_shop");
 	register_forward(FM_PlayerPreThink, "fm_prethink");
+	register_forward(FM_SetModel, "fm_setmodel_post", 1);
 
 	g_msgShake = get_user_msgid("ScreenShake");
 	g_msgRoundTime = get_user_msgid("RoundTime");
@@ -185,7 +192,10 @@ public ev_new_round()
 	g_planned = 0;
 	g_spawned = 0;
 	for (new p = 1; p <= MaxClients; p++)
+	{
 		clear_down(p);
+		g_repairing[p] = 0;
+	}
 	if (ls_components_running())
 		ls_wave_stop();
 	if (g_creatures)
@@ -606,6 +616,9 @@ stock start_wave(n)
 		ls_comp_set(g_classZombie, "hp", v);
 	}
 	ls_wave_start(n);
+	if (g_botRepaired > 0)
+		log_amx("Last Stand: bots repaired %d barricade health before wave %d", g_botRepaired, n);
+	g_botRepaired = 0;
 	assign_defenders();
 	g_kills = 0;
 	g_waveAt = get_gametime();
@@ -890,6 +903,7 @@ public tick()
 		server_cmd("endround T");
 		return;
 	}
+	bot_repairs();
 	if (g_phase == PH_WAVE)
 	{
 		attack_barricades();
@@ -946,6 +960,134 @@ stock unstick_creatures()
 		g_crStill[e] = 0;
 		server_cmd("ls_creature kill %d", e);
 	}
+}
+
+/* Bots repair barricades: in breaks and the prepare time, and mid-wave only while that gate is
+   quiet (no enemy within 600 units), the nearest one or two bots per damaged barricade walk to
+   its inside and add a board every 1.5 s (paying like a person) until it's full */
+stock bot_repairs()
+{
+	if (g_phase != PH_BREAK && g_phase != PH_PREPARE && g_phase != PH_WAVE)
+		return;
+	new Float:now = get_gametime();
+	for (new b = ls_comp_find("ls_barricade"); b; b = ls_comp_find("ls_barricade", b))
+	{
+		new mxhp = floatround(ls_comp_getf(b, "hp", 500.0));
+		new hp = ls_barricade_hp(b);
+		new Float:mn[3], Float:mx[3], Float:c[3];
+		pev(b, pev_absmin, mn);
+		pev(b, pev_absmax, mx);
+		for (new i = 0; i < 3; i++)
+			c[i] = (mn[i] + mx[i]) * 0.5;
+		new bool:calm = !enemy_near(c, 600.0);
+		new want = hp >= mxhp - 1 || !calm ? 0 : (g_phase == PH_WAVE ? 1 : 2);
+		/* who's on it now; release them when it's full or the gate turns hot */
+		new have = 0;
+		for (new p = 1; p <= MaxClients; p++)
+		{
+			if (g_repairing[p] != b)
+				continue;
+			if (!want || !is_user_alive(p) || now >= g_repairUntil[p])
+			{
+				release_repair(p);
+				continue;
+			}
+			have++;
+			/* the brain's use goal ends after ~6 s there: send it again while there's work */
+			if (now >= g_repairResend[p])
+				send_repair_goal(p, b, c, mn);
+			/* close to it: a board every 1.5 s */
+			if (near_box(p, mn, mx, 110.0) && now >= g_repairNext[p])
+			{
+				g_repairNext[p] = now + 1.5;
+				new cost = floatround(ls_comp_getf(b, "repair_cost", 0.0));
+				new money = cs_get_user_money(p);
+				if (money >= cost)
+				{
+					cs_set_user_money(p, money - cost);
+					new before = ls_barricade_hp(b);
+					ls_barricade_repair(b, p);
+					g_botRepaired += ls_barricade_hp(b) - before;
+				}
+			}
+		}
+		/* more hands: the nearest free bots */
+		while (have < want)
+		{
+			new best = 0, Float:bd = 2500.0, Float:o[3];
+			for (new p = 1; p <= MaxClients; p++)
+			{
+				if (!is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT || g_repairing[p])
+					continue;
+				pev(p, pev_origin, o);
+				new Float:d = get_distance_f(o, c);
+				if (d < bd)
+				{
+					bd = d;
+					best = p;
+				}
+			}
+			if (!best)
+				break;
+			g_repairing[best] = b;
+			g_repairNext[best] = now + 1.5;
+			g_repairUntil[best] = now + 40.0;
+			send_repair_goal(best, b, c, mn);
+			have++;
+		}
+	}
+}
+
+/* walk to the base's side of it and work on it */
+stock send_repair_goal(p, b, const Float:c[3], const Float:mn[3])
+{
+	g_repairResend[p] = get_gametime() + 6.0;
+	new Float:to[3];
+	new Float:dx = g_base[0] - c[0], Float:dy = g_base[1] - c[1];
+	new Float:l = floatmax(floatsqroot(dx * dx + dy * dy), 1.0);
+	to[0] = c[0] + dx / l * 56.0;
+	to[1] = c[1] + dy / l * 56.0;
+	to[2] = mn[2] + 1.0;
+	new line[96];
+	formatex(line, charsmax(line), "goal %d use %.0f %.0f %.0f %d 50 10 64", p, to[0], to[1], to[2], b);
+	ls_comp_bots_hint(line);
+}
+
+stock release_repair(p)
+{
+	if (!g_repairing[p])
+		return;
+	new line[48];
+	formatex(line, charsmax(line), "goal_clear %d %d", p, g_repairing[p]);
+	ls_comp_bots_hint(line);
+	g_repairing[p] = 0;
+}
+
+stock bool:enemy_near(const Float:c[3], Float:r)
+{
+	new Float:o[3];
+	if (g_creatures)
+	{
+		new e = -1;
+		while ((e = find_ent_by_class(e, "ls_creature")) > 0)
+		{
+			if (pev(e, pev_deadflag) != DEAD_NO)
+				continue;
+			pev(e, pev_origin, o);
+			if (get_distance_f(o, c) < r)
+				return true;
+		}
+		return false;
+	}
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p) || cs_get_user_team(p) != CS_TEAM_T)
+			continue;
+		pev(p, pev_origin, o);
+		if (get_distance_f(o, c) < r)
+			return true;
+	}
+	return false;
 }
 
 /* creatures and zombies that reach a barricade hit it */
@@ -1128,6 +1270,7 @@ stock beacons()
 
 public ham_player_killed(victim, killer, gib)
 {
+	g_hePack[victim] = 0;
 	if (g_phase == PH_WAVE && !g_creatures && is_user_connected(victim) && cs_get_user_team(victim) == CS_TEAM_T)
 		g_kills++;
 	if (g_phase != PH_WAVE && g_phase != PH_BREAK && g_phase != PH_PREPARE)
@@ -1537,6 +1680,8 @@ stock bool:shop_buy(id, i, bool:tell)
 			if (!user_has_weapon(id, CSW_HEGRENADE))
 				ls_give_item(id, "he");
 			cs_set_user_bpammo(id, CSW_HEGRENADE, 3);
+			/* and a promise of 3: if anything caps the count at 1, each throw hands the next one */
+			g_hePack[id] = 3;
 		}
 		case 3: ls_give_item(id, "ammo");
 		case 4: set_user_health(id, min(get_user_health(id) + 50, 100));
@@ -1548,6 +1693,31 @@ stock bool:shop_buy(id, i, bool:tell)
 		keeper_thanks(id);
 	}
 	return true;
+}
+
+/* an HE grenade leaving someone's hand: one less owed from their pack */
+public fm_setmodel_post(ent, const model[])
+{
+	if (!equal(model, "models/w_hegrenade.mdl"))
+		return FMRES_IGNORED;
+	new id = pev(ent, pev_owner);
+	if (!(1 <= id <= MaxClients) || g_hePack[id] <= 0)
+		return FMRES_IGNORED;
+	g_hePack[id]--;
+	if (g_hePack[id] > 0)
+		set_task(0.3, "task_he_next", TASK_REV + 100 + id);
+	return FMRES_IGNORED;
+}
+
+public task_he_next(tid)
+{
+	new id = tid - TASK_REV - 100;
+	if (!is_user_alive(id) || g_hePack[id] <= 0)
+		return;
+	if (!user_has_weapon(id, CSW_HEGRENADE))
+		ls_give_item(id, "he");
+	if (cs_get_user_bpammo(id, CSW_HEGRENADE) < g_hePack[id])
+		cs_set_user_bpammo(id, CSW_HEGRENADE, g_hePack[id]);
 }
 
 /* USE at the armory opens the shop; a hint when close */
