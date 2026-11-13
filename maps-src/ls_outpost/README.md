@@ -21,7 +21,7 @@ geometry changes, teach the bots again (nav + .lsv), redo the overview (Radar ma
 - **The compound** (walls 160 high round a 1024 x 896 courtyard). 16 CT spawns in the middle.
   - **Three gates** (west, east, south), 128 x 96, each closed by a **boarded barricade**: an
     `ls_barricade` CLIP brush filling the opening (solid to everything that moves; gm_components lets
-    bullets and sight through) and five `func_illusionary` boards named `<gate>_boards` (`boards=`) that
+    bullets and sight through) and four `func_illusionary` boards (16-unit gaps) named `<gate>_boards` (`boards=`) that
     drop off one by one as it weakens. hp 800, hold USE to repair board by board ($100). Creatures pile
     up outside; you shoot them through the boards.
   - **Firing step** (z 112) inside the west, south and east walls and over each gate (gatehouses),
@@ -42,7 +42,8 @@ geometry changes, teach the bots again (nav + .lsv), redo the overview (Radar ma
 - **South, the canyon road**: from the south gate's apron, two bends, a burning truck (orange light,
   fire sound); a storm drain at the end.
 - One floor level outside (0) and one raised level inside (the firing step). Routes 160+ wide, 45-degree
-  bevels in every turn, props 64+ from walls or flush, stairs (16 up), one ladder (only for defenders).
+  bevels in every turn, props 64+ from walls or flush, stairs (16 up), one ladder (only for defenders: it starts
+  76 up over a 40-high step creatures can't climb).
 
 Components: 4 wave spawners (one per drain), 3 barricades, 3 supply drop spots, 4 loot crates (one per
 route + the keep), 4 weapon spawners (courtyard x2, a sniper rifle on the firing step, a rifle in the field).

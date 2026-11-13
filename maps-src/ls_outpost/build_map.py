@@ -111,8 +111,9 @@ class Brush:
         return "\n".join(out)
 
 
-def box(x0, y0, z0, x1, y1, z1, side, top=None, bottom=None, scale=1):
-    """an axis-aligned box: side / top / bottom textures"""
+def box(x0, y0, z0, x1, y1, z1, side, top=None, bottom=None, scale=1, hidden=()):
+    """an axis-aligned box: side / top / bottom textures; faces whose normal is in `hidden` get NULL
+    (faces that touch or sit inside other brushes: nothing drawn there, nothing to flicker)"""
     assert x1 > x0 and y1 > y0 and z1 > z0, (x0, y0, z0, x1, y1, z1)
     top = top or side
     bottom = bottom or top
@@ -122,6 +123,8 @@ def box(x0, y0, z0, x1, y1, z1, side, top=None, bottom=None, scale=1):
         p0 = tuple(p1[i] + 64 * a[i] for i in range(3))
         p2 = tuple(p1[i] + 64 * b[i] for i in range(3))
         t = top if n == (0, 0, 1) else bottom if n == (0, 0, -1) else side
+        if n in hidden:
+            t = "NULL"
         faces.append((p0, p1, p2, t, n, scale))
     return Brush(faces)
 
@@ -317,10 +320,14 @@ def stairs(xa, ya, xb, yb, z0, z1, toward, side="SandCCrete", top="OUT_PAVE1"):
 stairs(SX0, -256, SX0 + 224, -160, 0, STEP_Z, "w")
 stairs(SX1 - 224, -256, SX1, -160, 0, STEP_Z, "e")
 
-# the ladder down to the field (supply drops) and back up: creatures can't climb
-D(box(CX0 - 4, LAD0 + 8, 0, CX0, LAD1 - 8, STEP_Z, "CSTRIKE_ME4METL"))
-brush_ent("func_wall", [box(CX0 - 8, LAD0 + 8, 0, CX0 - 4, LAD1 - 8, STEP_Z, "{CSTRIKE_LE6LAD")], rendermode=4, renderamt=255)
-brush_ent("func_ladder", [box(CX0 - 24, LAD0 + 8, 0, CX0 - 8, LAD1 - 8, STEP_Z + 24, "AAATRIGGER")])
+# the ladder down to the field (supply drops) and back up. Creature-proof by geometry: the ladder
+# starts 76 up (over the head of anything standing on the ground) above a 40-high step that players
+# hop onto and creatures can't climb (they step 18). Ladder art 1 unit off its metal backing.
+LSTEP = 40
+D(box(CX0 - 40, LAD0 + 8, 0, CX0, LAD1 - 8, LSTEP, "MltryCrteSd", top="MltryCrteTp", hidden=((1, 0, 0), (0, 0, -1))))
+D(box(CX0 - 4, LAD0 + 8, LSTEP, CX0, LAD1 - 8, STEP_Z, "CSTRIKE_ME4METL", hidden=((1, 0, 0), (0, 0, -1))))
+brush_ent("func_wall", [box(CX0 - 7, LAD0 + 12, LSTEP + 8, CX0 - 5, LAD1 - 12, STEP_Z - 2, "{CSTRIKE_LE6LAD")], rendermode=4, renderamt=255)
+brush_ent("func_ladder", [box(CX0 - 24, LAD0 + 8, 76, CX0 - 8, LAD1 - 8, STEP_Z + 24, "AAATRIGGER")])
 D(box(CX0 - 6, LAD0 + 4, STEP_Z + 4, CX0, LAD0 + 8, STEP_Z + 40, "+0~LAB1_CAU"))
 D(box(CX0 - 6, LAD1 - 8, STEP_Z + 4, CX0, LAD1 - 4, STEP_Z + 40, "+0~LAB1_CAU"))
 
@@ -393,28 +400,44 @@ D(box(-288, 64, 0, -224, 128, 64, "MltryCrteSd", top="MltryCrteTp"))
 # barricades: boards with gaps you see and shoot through + one CLIP brush across the opening
 
 
-def barricade(name, ident, axis, at, lo, hi):
-    """W1's format (TOOLS-NOTES "barricades solid to everyone"): the ls_barricade entity is the CLIP brush
-    filling the opening (+ a thin top rail) - solid to everything that moves, bullets and sight pass; the
-    visible boards are separate func_illusionary brushes (never solid: the nav and bullets pass) named <ident>_boards (boards=), hidden one by one as it weakens.
-    axis 'x': the opening spans y lo..hi at x = at..at+8 (in the wall's outer face); 'y' likewise."""
-    def slab(z0, z1, a0, a1, tex, top):
-        return box(at, a0, z0, at + 8, a1, z1, tex, top=top) if axis == "x" else box(a0, at, z0, a1, at + 8, z1, tex, top=top)
-    # the frame: two posts in the wall, always there
-    D(slab(0, GATE_H, lo, lo + 12, "TNNL_BRD1", "TNNL_BRD1B"))
-    D(slab(0, GATE_H, hi - 12, hi, "TNNL_BRD1", "TNNL_BRD1B"))
-    # five boards, a little uneven, gaps you see through
-    for z0, z1 in [(6, 18), (24, 36), (44, 56), (62, 74), (80, 90)]:
-        brush_ent("func_illusionary", [slab(z0, z1, lo + 4, hi - 4, "CRATE27", "TNNL_BRD1B")], targetname=ident + "_boards")
-    brush_ent("ls_barricade", [slab(0, GATE_H, lo + 12, hi - 12, "CLIP", "CLIP"),
-                               slab(GATE_H - 4, GATE_H, lo + 12, hi - 12, "TNNL_BRD1B", "TNNL_BRD1B")],
+def barricade(name, ident, axis, out, inward, lo, hi):
+    """W1's format (notes: "barricades solid to everyone"): the ls_barricade entity is the CLIP brush
+    filling the opening (+ a thin top rail) - solid to everything that moves, bullets and sight pass;
+    the visible boards are separate func_illusionary brushes named <ident>_boards (boards=), never solid
+    (the nav learns through, bullets pass), hidden one by one as it weakens.
+    axis 'x': the opening spans y lo..hi; `out` is the wall's outer face (x), `inward` +1/-1 toward the
+    courtyard. Nothing here shares a visible plane with anything else (no z-fighting): the frame is
+    recessed 4 units into the opening, the boards sit 3 units inside the frame's faces, the rail stops
+    1 unit under the lintel, and every face that touches a jamb, the floor, the lintel or a post is NULL."""
+    f0 = out + 4 * inward                       # the frame: 12 deep, starting 4 inside the outer face
+    f1 = f0 + 12 * inward
+    fa, fb = min(f0, f1), max(f0, f1)
+
+    def slab(d0, d1, z0, z1, a0, a1, tex, top, hidden=()):
+        if axis == "x":
+            return box(d0, a0, z0, d1, a1, z1, tex, top=top, hidden=hidden)
+        return box(a0, d0, z0, a1, d1, z1, tex, top=top, hidden=hidden)
+    lo_n = (0, -1, 0) if axis == "x" else (-1, 0, 0)     # the face toward the lo jamb
+    hi_n = (0, 1, 0) if axis == "x" else (1, 0, 0)
+    up, down = (0, 0, 1), (0, 0, -1)
+    # the frame: two posts against the jambs, floor to lintel, always there
+    D(slab(fa, fb, 0, GATE_H, lo, lo + 12, "TNNL_BRD1", "TNNL_BRD1B", hidden=(lo_n, up, down)))
+    D(slab(fa, fb, 0, GATE_H, hi - 12, hi, "TNNL_BRD1", "TNNL_BRD1B", hidden=(hi_n, up, down)))
+    # four boards 10 high with 16-unit gaps, 6 thick, centred in the frame; their ends run 4 into the posts
+    for z0, z1 in [(6, 16), (32, 42), (58, 68), (84, 94)]:
+        brush_ent("func_illusionary", [slab(fa + 3, fb - 3, z0, z1, lo + 8, hi - 8, "CRATE27", "TNNL_BRD1B",
+                                            hidden=(lo_n, hi_n))], targetname=ident + "_boards")
+    # the blocker (CLIP, never drawn) and a rail just under the lintel, both between the posts
+    brush_ent("ls_barricade", [slab(fa, fb, 0, GATE_H, lo + 12, hi - 12, "CLIP", "CLIP"),
+                               slab(fa + 2, fb - 2, GATE_H - 6, GATE_H - 1, lo + 10, hi - 10, "TNNL_BRD1B", "TNNL_BRD1B",
+                                    hidden=(lo_n, hi_n))],
               targetname=name, name=name, team=2, hp=800, repair_secs=3, repair_cost=100, blocks_bots=1,
               boards=ident + "_boards", see_through=1)
 
 
-barricade("West gate", "west", "x", CX0, -g, g)
-barricade("East gate", "east", "x", CX1 - 8, -g, g)
-barricade("South gate", "south", "y", CY0, -g, g)
+barricade("West gate", "west", "x", CX0, 1, -g, g)
+barricade("East gate", "east", "x", CX1, -1, -g, g)
+barricade("South gate", "south", "y", CY0, 1, -g, g)
 
 # ---------------------------------------------------------------------------------------
 # the routes: cover and landmarks
