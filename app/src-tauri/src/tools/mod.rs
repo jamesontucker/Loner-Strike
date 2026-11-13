@@ -19,6 +19,7 @@ pub mod callouts;
 pub mod assets;
 pub mod render;
 pub mod overview;
+pub mod demos;
 pub mod compile;
 pub mod plugins;
 pub mod community;
@@ -302,6 +303,7 @@ pub fn local_routes() -> Router<Shared> {
         .merge(assets::routes())
         .merge(render::routes())
         .merge(overview::routes())
+        .merge(demos::routes())
         .merge(compile::routes())
         .merge(plugins::routes())
         .merge(community::routes())
