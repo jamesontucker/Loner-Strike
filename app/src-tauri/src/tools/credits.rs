@@ -369,25 +369,33 @@ pub fn asset_answer(a: &Asset) -> Value {
 /// The credits for a prefab's assets, from its entity text (the models, sprites and sounds its
 /// entities name) and the WADs it uses: what P5's prefab export writes as `credits` into
 /// `prefabs/<id>.json` and the `loner-strike.json` item (docs/notes/P5.md, "Requests from T").
-#[allow(dead_code)] // (called by the prefab export once P5 wires it)
 pub fn credits_for_entities(hl: &Path, game: &str, entity_text: &str, wads: &[String]) -> Vec<AssetCredit> {
+    credits_for_entities_with(&Ctx::load(&crate::sys::app_dir()), hl, game, entity_text, wads)
+}
+
+/// (P5) The same against records already read (the prefab export's tests give their own).
+pub fn credits_for_entities_with(ctx: &Ctx, hl: &Path, game: &str, entity_text: &str, wads: &[String]) -> Vec<AssetCredit> {
     let mut files = crate::mapcopy::entity_files(entity_text);
     files.extend(wads.iter().cloned());
     files.sort();
     files.dedup();
-    credits_for_files(hl, game, &files)
+    credits_for_files_with(ctx, hl, game, &files)
 }
 
 /// The credits for a set of files (game paths) as a prefab or package should carry them.
+#[allow(dead_code)]
 pub fn credits_for_files(hl: &Path, game: &str, files: &[String]) -> Vec<AssetCredit> {
+    credits_for_files_with(&Ctx::load(&crate::sys::app_dir()), hl, game, files)
+}
+
+fn credits_for_files_with(ctx: &Ctx, hl: &Path, game: &str, files: &[String]) -> Vec<AssetCredit> {
     let f = crate::mapcopy::Finder::default();
     let path = super::doctor::game_path(hl, game);
-    let ctx = Ctx::load(&crate::sys::app_dir());
     let assets: Vec<Asset> = files
         .iter()
         .map(|rel| {
             let p = path.iter().find_map(|d| f.find(d, rel));
-            resolve(rel, &p.as_deref().map(sha256_file).unwrap_or_default(), super::doctor::is_stock(&f, hl, rel), &ctx)
+            resolve(rel, &p.as_deref().map(sha256_file).unwrap_or_default(), super::doctor::is_stock(&f, hl, rel), ctx)
         })
         .collect();
     for_publish(&assets).0

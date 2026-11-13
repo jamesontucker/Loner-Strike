@@ -37,6 +37,10 @@ pub struct PrefabMeta {
     /// P5: package files this prefab was exported to (here; re-importing one is the same source)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exports: Vec<String>,
+    /// P5: who made the models, sprites, sounds and WADs its entities use (T's credits.rs,
+    /// written on export; kept from a package, so prefab → asset → author survives a reinstall)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub credits: Vec<crate::tools::credits::AssetCredit>,
     pub name: String,
     #[serde(default)]
     pub tags: Vec<String>,
@@ -224,6 +228,7 @@ pub fn describe(frag: &MapDocument, name: &str, tags: &[String], author: &str, c
         uid: String::new(),
         origin: None,
         exports: Vec::new(),
+        credits: Vec::new(),
         name: clean_text(name, 64),
         tags: clean_tags(tags),
         author: clean_text(author, 48),
@@ -307,6 +312,10 @@ pub fn from_files(map: &str, json: Option<&str>, fallback_name: &str) -> Result<
     // P5: what a package says about where it came from is never taken (the library records it)
     meta.origin = None;
     meta.exports.clear();
+    // P5: a package's credits are kept (they're about others' work), within sane sizes
+    let short = |s: &str| s.len() <= 300;
+    meta.credits.retain(|c| c.files.len() <= 64 && c.files.iter().all(|f| short(f)) && short(&c.page) && short(&c.name) && short(&c.note) && c.authors.len() <= 32 && c.authors.iter().all(|a| short(&a.name) && short(&a.role) && short(&a.url)));
+    meta.credits.truncate(64);
     // P5: a uid that isn't a UUID v4 is dropped (the library gives it a new one)
     meta.uid = meta.uid.trim().to_ascii_lowercase();
     if !crate::editor::doc::valid_uid(&meta.uid) {

@@ -395,9 +395,21 @@ pub fn install_wads(wads: &[PathBuf], game_dir: &Path) -> Vec<String> {
     added
 }
 
+/// The credits of a prefab's assets, from the game's records (T's credits.rs): the models,
+/// sprites and sounds its entities name and the WADs it uses. None without a game.
+pub fn prefab_credits(hl: &Path, game: &str, frag: &MapDocument, meta: &PrefabMeta) -> Vec<crate::tools::credits::AssetCredit> {
+    let text = crate::editor::mapfile::write_map(frag, &Default::default()).unwrap_or_default();
+    crate::tools::credits::credits_for_entities(hl, game, &text, &meta.wads)
+}
+
 /// A package to share: `prefabs/<id>.map|json|png`, README.txt and loner-strike.json.
-pub fn package(dir: &Path, id: &str, out: &Path) -> Result<(), String> {
+/// `credits`: who made the assets it uses (`prefab_credits`), written into the prefab's .json
+/// and the package's item (P5; T's list service checks them), and listed in README.txt.
+pub fn package(dir: &Path, id: &str, out: &Path, credits: Option<Vec<crate::tools::credits::AssetCredit>>) -> Result<(), String> {
     let (frag, mut meta) = load(dir, id)?;
+    if let Some(c) = credits {
+        meta.credits = c;
+    }
     // P5: where it came from stays here (load already leaves it out); record this export, so
     // importing this file again is the same source (it can update after asking)
     meta.origin = None;
@@ -428,7 +440,16 @@ pub fn package(dir: &Path, id: &str, out: &Path) -> Result<(), String> {
          Other editors: prefabs/{slug}.map is a plain Valve 220 .map (copy and paste it into J.A.C.K. or TrenchBroom).\r\n",
         meta.name, meta.brushes, meta.entities, meta.size[0], meta.size[1], meta.size[2], meta.textures.join(", "), meta.wads.join(", ")
     );
-    let manifest = json!({"schema": 1, "app": env!("CARGO_PKG_VERSION"), "item": {"kind": "prefab", "name": meta.name, "author": meta.author, "summary": meta.description, "tags": meta.tags,
+    // (who made what it uses)
+    let mut readme = readme;
+    if !meta.credits.is_empty() {
+        readme.push_str("\r\nCredits:\r\n");
+        for c in &meta.credits {
+            let who: Vec<String> = c.authors.iter().map(|a| if a.role.is_empty() { a.name.clone() } else { format!("{} ({})", a.name, a.role) }).collect();
+            readme.push_str(&format!("- {}{}: {}{}\r\n", if c.name.is_empty() { c.files.join(", ") } else { c.name.clone() }, if c.page.is_empty() { String::new() } else { format!(" <{}>", c.page) }, who.join(", "), if c.permission == "granted" { format!(" (used with permission: {})", c.note) } else { String::new() }));
+        }
+    }
+    let manifest = json!({"schema": 1, "app": env!("CARGO_PKG_VERSION"), "item": {"kind": "prefab", "name": meta.name, "author": meta.author, "summary": meta.description, "tags": meta.tags, "credits": meta.credits,
         "prefab": {"uid": meta.uid, "files": [format!("prefabs/{slug}.map")], "brushes": meta.brushes, "entities": meta.entities, "size": meta.size, "wads": meta.wads}}});
     let part = out.with_extension("part");
     let write = || -> Result<(), String> {
@@ -654,10 +675,12 @@ async fn api_export(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: H
     }
     blocking(move || {
         let dir = lib_dir(&ed.dir);
-        let (_, meta) = load(&dir, &req.id)?;
+        let (frag, meta) = load(&dir, &req.id)?;
         let slug = req.id.split(':').nth(1).unwrap_or("prefab").to_string();
         let Some(out) = super::dialog(&st, super::Pick::ExportPrefab, &format!("{slug}-prefab"))? else { return Ok(json!({"cancelled": true})) };
-        package(&dir, &req.id, &out)?;
+        // P5: the credits of what it uses (needs the game; without one, what the prefab had)
+        let credits = st.local_game().map(|g| prefab_credits(&g.hl, if g.is_czero() { "czero" } else { "cstrike" }, &frag, &meta));
+        package(&dir, &req.id, &out, credits)?;
         Ok(json!({"ok": true, "file": out.file_name().map(|n| n.to_string_lossy().to_string()), "name": meta.name}))
     })
     .await
@@ -709,6 +732,58 @@ mod tests {
         d
     }
 
+    /// A prefab whose entity uses a downloaded model: its package carries that model's credits
+    /// (in the prefab's .json, the loner-strike.json item and README.txt), and installing it
+    /// keeps them.
+    #[test]
+    fn package_carries_the_credits_of_what_it_uses() {
+        use crate::editor::doc::Entity;
+        use crate::tools::credits::{credits_for_entities_with, Ctx};
+        let root = tmp("credits");
+        let lib = lib_dir(&root);
+        let hl = root.join("Half-Life");
+        std::fs::create_dir_all(hl.join("cstrike/models/props")).unwrap();
+        std::fs::write(hl.join("cstrike/models/props/crate_x.mdl"), b"IDST\x0a\0\0\0crate").unwrap();
+        // the prefab: a box and a cycler_sprite with the downloaded model
+        let (mut frag, meta) = load(&lib, "builtin:crate_stack").unwrap();
+        let mut e = Entity::new("cycler_sprite");
+        e.keys.push(("model".into(), "models/props/crate_x.mdl".into()));
+        e.keys.push(("origin".into(), "0 0 0".into()));
+        frag.insert_entity(e);
+        let id = save(&lib, &frag, &meta, None).unwrap();
+        // Get more's record of the download, with the page's credits
+        let mut ctx = Ctx::default();
+        ctx.add_record(&json!({
+            "url": "https://gamebanana.com/mods/4242", "name": "Wooden Crates", "author": "Uploader",
+            "files": [{"path": "models/props/crate_x.mdl"}],
+            "rights": {"page": "https://gamebanana.com/mods/4242", "model": "Mod", "id": 4242, "name": "Wooden Crates",
+                "submitter": {"id": 7, "name": "Uploader"},
+                "credits": [{"group": "Original Authors", "authors": [{"name": "CrateMaker", "role": "Modeler", "url": ""}]}],
+                "checklist": {"install": "yes", "parts_gb": "yes", "parts_other": "yes"}, "licence": "", "ported": false}
+        }));
+        let (f2, m2) = load(&lib, &id).unwrap();
+        let text = crate::editor::mapfile::write_map(&f2, &Default::default()).unwrap();
+        let credits = credits_for_entities_with(&ctx, &hl, "cstrike", &text, &m2.wads);
+        assert!(credits.iter().any(|c| c.files.iter().any(|f| f == "models/props/crate_x.mdl") && c.authors.iter().any(|a| a.name == "CrateMaker")), "{credits:?}");
+        let zip = root.join("crate.zip");
+        package(&lib, &id, &zip, Some(credits.clone())).unwrap();
+        let un = root.join("un");
+        std::fs::create_dir_all(&un).unwrap();
+        crate::archive::extract(&zip, &un, 64 << 20).unwrap();
+        let slug = id.strip_prefix(MINE).unwrap();
+        let pj: Value = serde_json::from_slice(&std::fs::read(un.join(format!("prefabs/{slug}.json"))).unwrap()).unwrap();
+        assert_eq!(pj["credits"][0]["page"], "https://gamebanana.com/mods/4242");
+        let mf: Value = serde_json::from_slice(&std::fs::read(un.join("loner-strike.json")).unwrap()).unwrap();
+        assert_eq!(mf["item"]["credits"][0]["authors"][0]["name"], "CrateMaker");
+        let readme = std::fs::read_to_string(un.join("README.txt")).unwrap();
+        assert!(readme.contains("Credits:") && readme.contains("CrateMaker"), "{readme}");
+        // installed elsewhere: the credits stay with the prefab
+        let lib2 = root.join("lib2");
+        install_dir(&lib2, &un, "x", &prefab::Origin::file(&zip)).unwrap();
+        assert_eq!(mine(&lib2)[0].1.credits, credits);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn library_save_list_load_delete_and_packages() {
         let root = tmp("lib");
@@ -730,7 +805,7 @@ mod tests {
 
         // a package round trip: zip -> unpack -> install into another library
         let zip = root.join("out.zip");
-        package(&lib, &a, &zip).unwrap();
+        package(&lib, &a, &zip, None).unwrap();
         let un = root.join("un");
         std::fs::create_dir_all(&un).unwrap();
         crate::archive::extract(&zip, &un, 64 << 20).unwrap();
