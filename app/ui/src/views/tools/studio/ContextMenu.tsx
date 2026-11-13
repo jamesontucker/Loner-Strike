@@ -42,14 +42,14 @@ export function ContextMenu({ at, onClose }: { at: MenuAt; onClose: () => void }
   const back = useRef<HTMLElement | null>(typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null);
   const close = (refocus = true) => {
     onClose();
-    if (refocus) back.current?.focus?.();
+    if (refocus) back.current?.focus?.({ preventScroll: true });
   };
   // kept inside the window
   useLayoutEffect(() => {
     const b = box.current?.getBoundingClientRect();
     if (!b) return;
     setPos({ left: Math.max(4, Math.min(at.x, window.innerWidth - b.width - 4)), top: Math.max(4, Math.min(at.y, window.innerHeight - b.height - 4)) });
-    box.current?.querySelector<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])')?.focus();
+    box.current?.querySelector<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])')?.focus({ preventScroll: true });
   }, [at]);
   useEffect(() => {
     const away = (e: PointerEvent) => {
@@ -74,7 +74,7 @@ export function ContextMenu({ at, onClose }: { at: MenuAt; onClose: () => void }
     const i = list.indexOf(document.activeElement as HTMLElement);
     const go = (n: number) => {
       e.preventDefault();
-      list[(n + list.length) % list.length]?.focus();
+      list[(n + list.length) % list.length]?.focus({ preventScroll: true });
     };
     if (e.key === "ArrowDown") go(i + 1);
     else if (e.key === "ArrowUp") go(i - 1);

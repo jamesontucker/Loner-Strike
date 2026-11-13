@@ -213,7 +213,7 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
                     void dropItem(it);
                   }
                 }}
-                onMouseUp={(e) => e.button === 0 && e.currentTarget.focus()}
+                onMouseUp={(e) => e.button === 0 && e.currentTarget.focus({ preventScroll: true })}
                 title={`${it.description || it.name} · version ${it.itemVersion} (double-click or drag it in)`}
               >
                 <span className={`st-mb-dot ${it.kind === "function" ? "fn" : it.kind === "macro" ? "mac" : it.kind === "struct" ? "st" : "en"}`} /> {it.name}
@@ -333,7 +333,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
   /** Right-click, Shift+F10 / the menu key, Delete or Backspace on an item. */
   const itemKeys = (sid: string, label: string) => ({
     // (WebKit doesn't give a clicked button the keyboard: it needs it for Delete)
-    onMouseUp: (e: React.MouseEvent<HTMLElement>) => e.button === 0 && e.currentTarget.focus(),
+    onMouseUp: (e: React.MouseEvent<HTMLElement>) => e.button === 0 && e.currentTarget.focus({ preventScroll: true }),
     onContextMenu: (e: React.MouseEvent) => cm.open(e, label, itemMenu(sid)),
     onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
       if (isMenuKey(e)) {

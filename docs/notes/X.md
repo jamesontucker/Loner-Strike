@@ -290,6 +290,13 @@ component's count, path markers with 2+ points and no repeated `order`, keys of 
   `p > .btn.small` margin); fields in boxes the same 13 px as the rest; a marker's "Use a circle" at
   its own width, its key rows name / type / × on one line; removing a used variable asks first.
 - Tests: `tests/studio-v3.spec.ts` "our right-click menus…" (Chromium and WebKit, with all the others).
+- **The Studio never scrolls as a whole:** it fills the window (`.content:has(.st-page)`, no longer only
+  a direct child; `.st-page` flex 1 1 0, min-height 0; the page clips) and its panels scroll inside
+  themselves; the Studio's own focus() calls use preventScroll. The page scroll seen earlier came from a
+  wrapper around the page (tried for the right-click work, not committed) breaking the direct-child
+  selector. Test: "the Studio never scrolls as a whole" (every-node graph, 1440×900 and 1024×680:
+  picking items, the canvas, Home/F, going to a node, a menu, the Find list, the end of My mode;
+  Chromium and WebKit); it fails if the page grows again.
 
 ## 2026-11-13, night: map markers in the Studio, kits, mode uids
 - **Graph:** `markers` (id = the map's `kind`, label, description, type point/area/path, min/max, keys

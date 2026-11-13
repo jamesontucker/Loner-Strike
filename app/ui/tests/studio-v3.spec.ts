@@ -4,6 +4,7 @@
 // leaving with unsaved edits through each way out (asked once; Leave goes and stays gone).
 // Run in Chromium and WebKit: `npx playwright test studio-v3 [--browser webkit]`.
 import { expect, test, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
 
 const H = { "X-Panel": "1" };
 const ID = "pw_v3";
@@ -306,6 +307,65 @@ test("our right-click menus: sidebar items, nodes; delete; dismiss", async ({ pa
   await expect(list).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(list).toHaveCount(0);
+});
+
+test("the Studio never scrolls as a whole (every-node graph: long panels scroll inside)", async ({ page }) => {
+  const g = JSON.parse(readFileSync("../src-tauri/src/tools/studio/testdata/every_node.graph.json", "utf8"));
+  g.mode.id = "pw_tall";
+  expect((await (await page.request.post("/api/tools/studio/graph/pw_tall", { data: { graph: g }, headers: H })).json()).ok).toBeTruthy();
+  try {
+    for (const size of [{ width: 1440, height: 900 }, { width: 1024, height: 680 }]) {
+      await page.setViewportSize(size);
+      await page.goto("/tools-dev.html?open=studio:pw_tall");
+      await expect(selectedTab(page)).toContainText("Event Graph", { timeout: 20_000 });
+      const still = async (after: string) => {
+        const m = await page.evaluate(() => {
+          const c = document.querySelector<HTMLElement>(".content")!;
+          const st = document.querySelector<HTMLElement>(".st-page")!.getBoundingClientRect();
+          const mb = document.querySelector<HTMLElement>(".st-mb")!;
+          return { top: c.scrollTop, over: c.scrollHeight - c.clientHeight, win: window.scrollY, bottom: st.bottom, inner: window.innerHeight, mbScrolls: mb.scrollHeight > mb.clientHeight };
+        });
+        expect(m.top, `${after}: the page scrolled`).toBe(0);
+        expect(m.win, after).toBe(0);
+        expect(m.over, `${after}: the page is taller than the window`).toBeLessThanOrEqual(1);
+        expect(m.bottom, `${after}: the Studio runs past the window`).toBeLessThanOrEqual(m.inner + 1);
+        expect(m.mbScrolls, "the long My mode list scrolls inside itself").toBe(true);
+      };
+      await still("open");
+      for (const t of [/^Reward$/, /^Twice$/, /^Loadout/, /^Class/, /^Kills/, /^Spot/]) {
+        const item = page.locator(".st-mb").getByRole("button", { name: t }).first();
+        if (!(await item.count())) continue;
+        await item.scrollIntoViewIfNeeded();
+        await item.click();
+        await still(`picking ${t}`);
+      }
+      await page.locator(".react-flow__pane").click({ position: { x: 20, y: 20 } });
+      await still("clicking the canvas");
+      await page.keyboard.press("Home");
+      await page.keyboard.press("f");
+      await still("Home and F");
+      // a node far away, picked from Find (the view goes to it)
+      await page.locator(".st-find input").fill("marker");
+      await page.keyboard.press("Enter");
+      await still("going to a node");
+      const shown = page.locator(".react-flow__node.selected").first();
+      await expect(shown).toBeVisible();
+      const box = (await shown.boundingBox({ timeout: 5000 }))!;
+      await page.mouse.click(box.x + box.width / 2, box.y + 8);
+      await still("clicking a node");
+      await page.locator(".st-mb").getByRole("button", { name: /^Kills/ }).first().click({ button: "right" });
+      await page.keyboard.press("Escape");
+      await still("a menu");
+      await page.locator(".st-find input").fill("print");
+      await page.locator(".react-flow__pane").click({ position: { x: 20, y: 20 } });
+      await still("the Find list");
+      // the last items of the long list: scrolled to inside the panel
+      await page.locator(".st-mb").getByRole("button", { name: "Export all" }).scrollIntoViewIfNeeded();
+      await still("the end of My mode");
+    }
+  } finally {
+    await page.request.post("/api/tools/studio/graph/pw_tall/delete", { headers: H });
+  }
 });
 
 test.describe("leaving with unsaved edits", () => {

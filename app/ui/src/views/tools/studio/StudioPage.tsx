@@ -502,7 +502,7 @@ function Studio({ maps }: ToolProps) {
         if (!keyActions.current.working && !keyActions.current.errors) void keyActions.current.playtest();
       } else if (mod && k === "f") {
         e.preventDefault();
-        document.querySelector<HTMLInputElement>(".st-find input")?.focus();
+        document.querySelector<HTMLInputElement>(".st-find input")?.focus({ preventScroll: true });
       } else if (mod && k === "w" && st2.tab) {
         e.preventDefault();
         st2.closeTab(st2.tab);

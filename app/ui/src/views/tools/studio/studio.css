@@ -1,9 +1,11 @@
 /* Game Mode Studio (st- prefix). Loaded with the Studio's own chunk. */
 
 .st-page { --st-grid: #1c2126; --st-grid-major: #2a3139; --st-exec: #f2f2f2; --st-bad: #ff5b4f; --st-warn: #ffb347; --st-run: #ffe066; --st-node: #22262b; --st-node-2: #2b3036;
-  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 480px; gap: 8px; }
+  display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; gap: 8px; }
 /* the Studio fills the page's height, like the map viewer: the page stops scrolling */
-.content:has(> .st-page) { display: flex; flex-direction: column; padding-bottom: 16px; }
+/* the Studio fills the page's height and never scrolls as a whole: its panels scroll inside
+   themselves (whatever wraps .st-page, the page stays the size of the window) */
+.content:has(.st-page) { display: flex; flex-direction: column; padding-bottom: 16px; overflow: hidden; }
 .st-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .st-toolbar .btn { white-space: nowrap; }
 .st-name { margin: 0 6px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
