@@ -46,7 +46,9 @@ enum { RL_FODDER = 0, RL_FLANK, RL_RANGED, RL_TANK, RL_COUNT };
 new const ROSTER[][] = { "zombie", "babycrab", "runner", "spitter", "brute", "vortigaunt", "assassin", "soldier", "controller", "stukabat" };
 new const ROSTER_ROLE[] = { RL_FODDER, RL_FODDER, RL_FLANK, RL_RANGED, RL_TANK, RL_RANGED, RL_FLANK, RL_TANK, RL_RANGED, RL_FLANK };
 new const ROSTER_FROM[] = { 1, 2, 3, 4, 5, 7, 8, 9, 12, 14 };
-new const ROSTER_HP[] = { 100, 30, 60, 120, 450, 150, 90, 300, 200, 60 };
+new const ROSTER_HP[] = { 100, 12, 60, 120, 450, 150, 90, 300, 200, 60 };
+/* how often within its role (baby headcrabs are a sprinkle: small, fast and hard to hit) */
+new const ROSTER_WEIGHT[] = { 4, 1, 3, 3, 3, 2, 2, 2, 2, 1 };
 new const ROSTER_PAY[] = { 75, 50, 90, 100, 175, 120, 130, 175, 150, 100 };
 new const ROSTER_FALLBACK[][] = { "", "headcrab", "", "", "", "spitter", "runner", "brute", "spitter", "runner" };
 /* specials, the heavy and the bosses: name, health, pay, fallback */
@@ -1266,11 +1268,19 @@ stock builtin_type()
 			break;
 		}
 	}
-	new cands[sizeof ROSTER], nc = 0;
+	new tw = 0;
 	for (new i = 0; i < sizeof ROSTER; i++)
 		if (ROSTER_ROLE[i] == role && ROSTER_FROM[i] <= n)
-			cands[nc++] = i;
-	return nc ? cands[random(nc)] : 0;
+			tw += ROSTER_WEIGHT[i];
+	new k = random(max(tw, 1));
+	for (new i = 0; i < sizeof ROSTER; i++)
+		if (ROSTER_ROLE[i] == role && ROSTER_FROM[i] <= n)
+		{
+			k -= ROSTER_WEIGHT[i];
+			if (k < 0)
+				return i;
+		}
+	return 0;
 }
 
 stock spawn_creature(const type[], const Float:o[3], speed = 0)
