@@ -35,9 +35,27 @@
 
 enum { PH_IDLE = 0, PH_PREPARE, PH_WAVE, PH_BREAK, PH_OVER };
 
-new const TYPES[][] = { "zombie", "runner", "brute", "spitter", "boss" };
-new const TYPE_HP[] = { 100, 60, 450, 120, 3000 };
-new const TYPE_MONEY[] = { 100, 100, 250, 150, 1000 };
+/* The built-in rounds (when waves.ini has no [laststand]): an endless ramp in the style of
+   zombie-survival games (health grows a little each round through round 9, then 10 % a round;
+   more creatures each round with a cap on how many are alive at once; walkers early, runners
+   later), roles in the style of wave shooters (fodder, flankers, ranged, tanks, a heavy, bosses),
+   a themed special round every 6, a boss every 5 from round 10. Each type unlocks at a round and
+   falls back to an older type on a server that doesn't have it yet. docs/notes/W1.md has the
+   round table. */
+enum { RL_FODDER = 0, RL_FLANK, RL_RANGED, RL_TANK, RL_COUNT };
+new const ROSTER[][] = { "zombie", "babycrab", "runner", "spitter", "brute", "vortigaunt", "assassin", "hgrunt", "controller", "stukabat" };
+new const ROSTER_ROLE[] = { RL_FODDER, RL_FODDER, RL_FLANK, RL_RANGED, RL_TANK, RL_RANGED, RL_FLANK, RL_TANK, RL_RANGED, RL_FLANK };
+new const ROSTER_FROM[] = { 1, 2, 3, 4, 5, 7, 8, 9, 12, 14 };
+new const ROSTER_HP[] = { 100, 30, 60, 120, 450, 150, 90, 300, 200, 60 };
+new const ROSTER_PAY[] = { 50, 40, 60, 70, 120, 80, 90, 120, 100, 70 };
+new const ROSTER_FALLBACK[][] = { "", "headcrab", "", "", "", "spitter", "runner", "brute", "spitter", "runner" };
+/* specials, the heavy and the bosses: name, health, pay, fallback */
+new const EXTRA[][] = { "hound", "snark", "heavy", "boss", "gonarch" };
+new const EXTRA_HP[] = { 80, 20, 1500, 3000, 3500 };
+new const EXTRA_PAY[] = { 60, 30, 300, 1000, 1000 };
+new const EXTRA_FALLBACK[][] = { "runner", "headcrab", "boss", "", "boss" };
+enum { EX_HOUND = 0, EX_SNARK, EX_HEAVY, EX_GARG, EX_GONARCH };
+#define HEAVY_FROM 11
 
 new g_cWaves, g_cDiff, g_cPrepare, g_cBreak, g_cRevive, g_cDrops, g_cCreatures, g_cDefenders, g_cWaveMoney, g_cWaitHuman, g_cOverrun, g_cLastChance, g_cLives, g_cBaseRadius, g_cBuyAnywhere, g_cShopScale;
 
@@ -59,7 +77,20 @@ new g_rightShown[33][480];
 new Float:g_rightAt[33];
 new g_planned;
 new g_spawned;
+enum { PU_RESUPPLY = 0, PU_DOUBLE, PU_ONEHIT, PU_AIRSTRIKE, PU_COUNT };
+new const PU_NAME[PU_COUNT][] = { "Full resupply", "Double pay", "One-hit kills", "Airstrike" };
+new const PU_MODEL[PU_COUNT][] = { "models/w_9mmarclip.mdl", "models/w_kevlar.mdl", "models/w_backpack.mdl", "models/w_medkit.mdl" };
+new const PU_RGB[PU_COUNT][3] = { {80, 160, 255}, {255, 210, 40}, {255, 60, 60}, {255, 140, 0} };
+new g_puEnt[8], g_puKind[8], Float:g_puUntil[8];
+new g_puThisWave;
 new bool:g_bossDone;
+new bool:g_traderWarned;
+new bool:g_headLast[2048];
+new Float:g_doubleUntil, Float:g_instaUntil;
+new g_special = -1;
+new g_heavyLeft;
+new g_cAliveMax;
+#define ROUND_SOUND "buttons/bell1.wav"
 new g_record;
 new g_mapname[64];
 new g_classZombie;
@@ -158,7 +189,8 @@ public plugin_init()
 	g_cRevive = register_cvar("lst_revive", "30");
 	g_cDrops = register_cvar("lst_drops", "2");
 	g_cDefenders = register_cvar("lst_defenders", "4");
-	g_cWaveMoney = register_cvar("lst_wave_money", "1000");
+	g_cWaveMoney = register_cvar("lst_wave_money", "250");
+	g_cAliveMax = register_cvar("lst_alive_max", "0");
 	g_cWaitHuman = register_cvar("lst_wait_human", "1");
 	g_cOverrun = register_cvar("lst_overrun", "15");
 	g_cLastChance = register_cvar("lst_last_chance", "30");
@@ -184,7 +216,13 @@ public plugin_init()
 	RegisterHam(Ham_Touch, "weaponbox", "ham_touch_weapon");
 	RegisterHam(Ham_Touch, "armoury_entity", "ham_touch_weapon");
 	if (g_hasCreatureDll)
+	{
 		RegisterHam(Ham_Killed, "ls_creature", "ham_creature_killed", 1);
+		RegisterHam(Ham_TakeDamage, "ls_creature", "ham_creature_hurt");
+		RegisterHam(Ham_TakeDamage, "ls_creature", "ham_creature_hurt_post", 1);
+		RegisterHam(Ham_TraceAttack, "ls_creature", "ham_creature_trace");
+	}
+	set_task(0.2, "tick_powerups", TASK_REV + 400, _, _, "b");
 
 	register_clcmd("say /ls", "cmd_help");
 	register_clcmd("say /laststand", "cmd_help");
@@ -287,6 +325,10 @@ public round_setup()
 	}
 	g_botGunsBought = 0;
 	g_botRifles = 0;
+	clear_powerups();
+	/* repairs are paid for (points per board), not charged */
+	for (new b = ls_comp_find("ls_barricade"); b; b = ls_comp_find("ls_barricade", b))
+		ls_comp_set(b, "repair_cost", "0");
 	arrayset(g_gatePct, 0, sizeof g_gatePct);
 	ls_comp_bots_hint("set laststand");
 	if (g_creatures)
@@ -870,9 +912,81 @@ stock Float:diff_mult(bool:hp)
 	return 1.0;
 }
 
+/* the team-size factors: counted up to 16 players (more than that: a little more health each,
+   not more creatures) */
+stock Float:team_count_factor()
+{
+	return 0.5 + 0.2 * float(min(defenders(), 16));
+}
+
+stock Float:team_hp_factor()
+{
+	new d = defenders();
+	return (0.8 + 0.1 * float(min(d, 16))) * (1.0 + 0.02 * float(max(d - 16, 0)));
+}
+
+/* creature health: +6 % a round through round 9, then x1.1 a round */
+stock Float:round_hp(n)
+{
+	if (n <= 9)
+		return 1.0 + 0.06 * float(n - 1);
+	return 1.48 * floatpower(1.1, float(n - 9));
+}
+
 stock Float:hp_mult()
 {
-	return (1.0 + 0.04 * float(g_wave - 1)) * (0.8 + 0.1 * float(defenders())) * diff_mult(true);
+	return round_hp(g_wave) * team_hp_factor() * diff_mult(true);
+}
+
+/* share of walking fodder that runs instead: none in rounds 1-2, +10 % a round, 95 % from 13 */
+stock Float:fast_share(n)
+{
+	if (n < 3)
+		return 0.0;
+	return floatmin(0.1 * float(n - 2), n >= 13 ? 0.95 : 0.9);
+}
+
+/* how many creatures may be alive at once (the rest come in as they die): lst_alive_max, or
+   by the team's size (16 + 2 a player, 20-48) */
+stock alive_cap()
+{
+	new c = get_pcvar_num(g_cAliveMax);
+	if (c > 0)
+		return c;
+	return clamp(16 + 2 * defenders(), 20, 48);
+}
+
+stock type_hp(const type[])
+{
+	for (new i = 0; i < sizeof ROSTER; i++)
+		if (equal(type, ROSTER[i]))
+			return ROSTER_HP[i];
+	for (new i = 0; i < sizeof EXTRA; i++)
+		if (equal(type, EXTRA[i]))
+			return EXTRA_HP[i];
+	return 0;
+}
+
+stock type_pay(const type[])
+{
+	for (new i = 0; i < sizeof ROSTER; i++)
+		if (equal(type, ROSTER[i]))
+			return ROSTER_PAY[i];
+	for (new i = 0; i < sizeof EXTRA; i++)
+		if (equal(type, EXTRA[i]))
+			return EXTRA_PAY[i];
+	return 50;
+}
+
+stock type_fallback(const type[], out[], len)
+{
+	out[0] = EOS;
+	for (new i = 0; i < sizeof ROSTER; i++)
+		if (equal(type, ROSTER[i]))
+			copy(out, len, ROSTER_FALLBACK[i]);
+	for (new i = 0; i < sizeof EXTRA; i++)
+		if (equal(type, EXTRA[i]))
+			copy(out, len, EXTRA_FALLBACK[i]);
 }
 
 stock start_wave(n)
@@ -881,7 +995,23 @@ stock start_wave(n)
 	g_phase = PH_WAVE;
 	g_overrun = 0;
 	g_lastChanceEnd = 0.0;
-	g_bossDone = g_wBossEvery <= 0 || !g_wBoss[0] || (n % g_wBossEvery) != 0;
+	g_special = -1;
+	g_heavyLeft = 0;
+	g_puThisWave = 0;
+	if (g_nrows)
+		g_bossDone = g_wBossEvery <= 0 || !g_wBoss[0] || (n % g_wBossEvery) != 0;
+	else
+	{
+		/* a boss every 5 rounds from 10 (garg, then gonarch, in turn); a themed round every 6
+		   (a hound pack, then a snark swarm); a heavy or more from round 11 */
+		g_bossDone = !(n >= 10 && n % 5 == 0);
+		if (!g_bossDone)
+			copy(g_wBoss, charsmax(g_wBoss), EXTRA[(n / 5) % 2 == 0 ? EX_GARG : EX_GONARCH]);
+		else if (n >= 6 && n % 6 == 0)
+			g_special = (n / 6) % 2 == 1 ? EX_HOUND : EX_SNARK;
+		if (n >= HEAVY_FROM && g_special < 0)
+			g_heavyLeft = 1 + (n - HEAVY_FROM) / 4;
+	}
 	g_spawned = 0;
 	g_failSpawns = 0;
 	set_cvar_num("mp_buy_anywhere", 0);
@@ -892,10 +1022,15 @@ stock start_wave(n)
 			send_revive(d);
 
 	/* how many: grows each wave, with the team's size and the difficulty */
-	new total = floatround((14.0 + 1.5 * float(n - 1)) * (0.5 + 0.2 * float(defenders())) * diff_mult(false) * g_wCount);
-	/* a boss wave: fewer grunts with the boss (it's the wave's threat) */
+	new total = floatround((10.0 + 2.5 * float(n)) * team_count_factor() * diff_mult(false) * g_wCount);
+	/* a boss round: fewer grunts with the boss (it's the round's threat); a special round: a
+	   fast pack, fewer of them */
 	if (!g_bossDone)
 		total = floatround(float(total) * 0.6);
+	else if (g_special >= 0)
+		total = floatround(float(total) * 0.7);
+	/* never more alive at once than the cap: the rest come in as they die */
+	set_cvar_num("ls_comp_wave_alive_max", alive_cap());
 	total = max(total, 1);
 	new nsp = max(ls_comp_count("ls_wave_spawner"), 1);
 	g_planned = 0;
@@ -928,12 +1063,19 @@ stock start_wave(n)
 	g_floorSecs = 0;
 	g_kills = 0;
 	g_waveAt = get_gametime();
-	log_amx("Wave %d: %d %s against %d defenders (creature health x%.2f%s)", n, g_planned, g_creatures ? "creatures" : "zombie bots", defenders(), hp_mult(), g_bossDone ? "" : ", boss wave");
+	log_amx("Wave %d: %d %s against %d defenders (creature health x%.2f, %d%% of the walkers run, %d alive at most%s%s%s)", n, g_planned, g_creatures ? "creatures" : "zombie bots", defenders(), hp_mult(), floatround(100.0 * fast_share(n)), alive_cap(),
+		g_bossDone ? "" : ", boss wave", g_special == EX_HOUND ? ", hound pack" : (g_special == EX_SNARK ? ", snark swarm" : ""), g_heavyLeft ? ", with heavies" : "");
+	/* the round's start: a clear cue */
 	if (!g_bossDone)
-	{
-		toast(0, 4.0, false, "Wave %d: a boss is coming!", n);
-		shake_all();
-	}
+		toast(0, 4.0, true, "Wave %d: a boss is coming!", n);
+	else if (g_special == EX_HOUND)
+		toast(0, 4.0, true, "Wave %d: a hound pack! Fast and many", n);
+	else if (g_special == EX_SNARK)
+		toast(0, 4.0, true, "Wave %d: a swarm! Small, fast, everywhere", n);
+	else
+		toast(0, 3.0, true, "Wave %d", n);
+	shake_all();
+	client_cmd(0, "spk ^"%s^"", ROUND_SOUND);
 }
 
 stock enemies_left()
@@ -953,7 +1095,28 @@ public ls_on_wave_spawn(ent, wave, const Float:origin[3], const types[])
 	o[0] = origin[0];
 	o[1] = origin[1];
 	o[2] = floor_under(origin) + 1.0;
-	new cr = spawn_creature(type, o);
+	/* walking fodder: early rounds walk, later ones run (the zombie's run speed is its own) */
+	new speed = 0;
+	if (equal(type, "zombie") && random_float(0.0, 1.0) >= fast_share(g_wave))
+		speed = 110;
+	new cr = spawn_creature(type, o, speed);
+	if (!cr)
+	{
+		/* a type this server doesn't have yet: the one it stands in for */
+		new fb[16];
+		type_fallback(type, fb, charsmax(fb));
+		if (fb[0])
+		{
+			cr = spawn_creature(fb, o, speed);
+			if (!cr)
+			{
+				new fb2[16];
+				type_fallback(fb, fb2, charsmax(fb2));
+				if (fb2[0])
+					cr = spawn_creature(fb2, o, speed);
+			}
+		}
+	}
 	if (!cr)
 	{
 		/* full (ls_creature_max) or the type wasn't loaded: try again in a moment, and after
@@ -974,13 +1137,13 @@ public ls_on_wave_spawn(ent, wave, const Float:origin[3], const types[])
 	/* health: Last Stand's own per type (or the type's own from creatures.ini with type_hp 1),
 	   scaled by wave, team size, difficulty and waves.ini's hp_scale */
 	new Float:own = entity_get_float(cr, EV_FL_health), Float:base = own;
-	if (!g_wTypeHp)
-		for (new i = 0; i < sizeof TYPES; i++)
-			if (equal(type, TYPES[i]))
-				base = float(TYPE_HP[i]);
-	/* the boss: the wave's growth and difficulty, but only a little of the team-size factor
-	   (x1.4 for 6 defenders made it a wall at wave 5) */
-	new Float:mult = boss ? (1.0 + 0.04 * float(g_wave - 1)) * (0.8 + 0.04 * float(defenders())) * diff_mult(true) : hp_mult();
+	if (!g_wTypeHp && type_hp(type))
+		base = float(type_hp(type));
+	/* the boss and the heavy: the round's growth and difficulty, but only a little of the
+	   team-size factor; a special round's pack a little less than usual */
+	new Float:mult = (boss || equal(type, EXTRA[EX_HEAVY])) ? round_hp(g_wave) * (0.8 + 0.04 * float(min(defenders(), 16))) * diff_mult(true) : hp_mult();
+	if (g_special >= 0)
+		mult *= 0.8;
 	new Float:hp = floatmax(base * mult * g_wHp, 1.0);
 	entity_set_float(cr, EV_FL_health, hp);
 	entity_set_float(cr, EV_FL_max_health, hp);
@@ -1017,7 +1180,19 @@ stock bool:pick_type(out[], len)
 			}
 		}
 	}
-	copy(out, len, TYPES[builtin_type()]);
+	if (g_special >= 0)
+	{
+		copy(out, len, EXTRA[g_special]);
+		return false;
+	}
+	/* the heavy comes once a quarter of the round is in */
+	if (g_heavyLeft > 0 && g_spawned >= g_planned / 4)
+	{
+		g_heavyLeft--;
+		copy(out, len, EXTRA[EX_HEAVY]);
+		return false;
+	}
+	copy(out, len, ROSTER[builtin_type()]);
 	return false;
 }
 
@@ -1042,28 +1217,55 @@ stock wave_row(n)
 stock builtin_type()
 {
 	new n = g_wave;
-	new w[4];
-	w[0] = 10;
-	w[1] = n >= 2 ? 4 + n : 0;
-	w[2] = n >= 3 ? 1 + n / 3 : 0;
-	w[3] = n >= 4 ? 2 : 0;
-	new total = w[0] + w[1] + w[2] + w[3];
-	new r = random(total);
-	for (new i = 0; i < 4; i++)
+	/* a role by weight (fodder 10, flankers 2 + n/2, ranged 1 + n/4, tanks 1 + n/5, once
+	   unlocked), then one of the role's unlocked types */
+	new w[RL_COUNT], total = 0;
+	for (new r = 0; r < RL_COUNT; r++)
 	{
-		r -= w[i];
-		if (r < 0)
-			return i;
+		new any = 0;
+		for (new i = 0; i < sizeof ROSTER; i++)
+			if (ROSTER_ROLE[i] == r && ROSTER_FROM[i] <= n)
+				any = 1;
+		if (!any)
+			continue;
+		switch (r)
+		{
+			case RL_FODDER: w[r] = 20;
+			case RL_FLANK: w[r] = 4 + n;
+			case RL_RANGED: w[r] = 2 + n / 2;
+			case RL_TANK: w[r] = 2 + (2 * n) / 5;
+		}
+		total += w[r];
 	}
-	return 0;
+	new role = RL_FODDER, pick = random(max(total, 1));
+	for (new r = 0; r < RL_COUNT; r++)
+	{
+		pick -= w[r];
+		if (pick < 0)
+		{
+			role = r;
+			break;
+		}
+	}
+	new cands[sizeof ROSTER], nc = 0;
+	for (new i = 0; i < sizeof ROSTER; i++)
+		if (ROSTER_ROLE[i] == role && ROSTER_FROM[i] <= n)
+			cands[nc++] = i;
+	return nc ? cands[random(nc)] : 0;
 }
 
-stock spawn_creature(const type[], const Float:o[3])
+stock spawn_creature(const type[], const Float:o[3], speed = 0)
 {
 	new ent = create_entity("ls_creature");
 	if (!ent)
 		return 0;
 	DispatchKeyValue(ent, "type", type);
+	if (speed > 0)
+	{
+		new v[8];
+		num_to_str(speed, v, charsmax(v));
+		DispatchKeyValue(ent, "speed", v);
+	}
 	DispatchKeyValue(ent, "behaviour", "chase");
 	DispatchKeyValue(ent, "hates", "ct");
 	new Float:ang[3];
@@ -1098,6 +1300,15 @@ public ls_on_wave_cleared(wave)
 	}
 	g_phase = PH_BREAK;
 	clear_defenders();
+	g_traderWarned = false;
+	/* a special round held: a full resupply in the middle of the base */
+	if (g_special >= 0)
+	{
+		new Float:o[3];
+		o = g_base;
+		o[2] = floor_under(g_base) + 4.0;
+		spawn_powerup(PU_RESUPPLY, o);
+	}
 	new brk = get_pcvar_num(g_cBreak);
 	g_phaseEnd = get_gametime() + float(brk);
 	set_cvar_num("mp_buy_anywhere", get_pcvar_num(g_cBuyAnywhere) ? 1 : 0);
@@ -1202,6 +1413,12 @@ public tick()
 		for (new p = 1; p <= MaxClients; p++)
 			if (is_user_connected(p) && !is_user_bot(p) && cs_get_user_team(p) == CS_TEAM_CT && !is_user_alive(p) && !g_down[p])
 				ExecuteHamB(Ham_CS_RoundRespawn, p);
+	/* the armory closing: a warning 10 s before the next wave */
+	if (g_phase == PH_BREAK && !g_traderWarned && g_phaseEnd - now <= 10.0)
+	{
+		g_traderWarned = true;
+		toast(0, 3.0, false, "The armory closes in 10 seconds!");
+	}
 	/* the last seconds of a break: holders take their places for the wave */
 	if ((g_phase == PH_PREPARE || g_phase == PH_BREAK) && g_phaseEnd - now <= 10.0 && !g_preHeld)
 	{
@@ -1917,7 +2134,12 @@ stock bar(id, secs)
 
 public ham_player_spawn(id)
 {
-	if (!is_user_alive(id) || g_phase == PH_IDLE)
+	if (!is_user_alive(id))
+		return HAM_IGNORED;
+	/* a big team on a map with fewer spawn points: nobody stays stuck in someone else */
+	if (cs_get_user_team(id) == CS_TEAM_CT)
+		unstack_spawn(id);
+	if (g_phase == PH_IDLE)
 		return HAM_IGNORED;
 	if (cs_get_user_team(id) == CS_TEAM_T && !g_creatures)
 	{
@@ -1944,18 +2166,250 @@ public ham_creature_killed(ent, killer, gib)
 		return HAM_IGNORED;
 	new type[16];
 	pev(ent, pev_netname, type, charsmax(type));
-	new money = 100;
-	for (new i = 0; i < sizeof TYPES; i++)
-		if (equal(type, TYPES[i]))
-			money = TYPE_MONEY[i];
-	cs_set_user_money(killer, min(cs_get_user_money(killer) + money, 16000));
-	if (equal(type, "boss"))
+	/* points: the type's pay, more for a head or a knife */
+	new money = type_pay(type);
+	if (ent < sizeof g_headLast && g_headLast[ent])
+		money += 50;
+	if (get_user_weapon(killer) == CSW_KNIFE)
+		money += 50;
+	pay(killer, money);
+	maybe_powerup(ent);
+	if (equal(type, "boss") || equal(type, "gonarch"))
 	{
 		new name[32];
 		get_user_name(killer, name, charsmax(name));
 		toast(0, 4.0, false, "%s brought the boss down!", name);
 	}
 	return HAM_IGNORED;
+}
+
+/* ---- points: per hit, per kill, per board repaired; double pay doubles them ---- */
+stock pay(id, amount)
+{
+	if (!(1 <= id <= MaxClients) || !is_user_connected(id) || cs_get_user_team(id) != CS_TEAM_CT)
+		return;
+	if (get_gametime() < g_doubleUntil)
+		amount *= 2;
+	cs_set_user_money(id, min(cs_get_user_money(id) + amount, 16000));
+}
+
+public ham_creature_hurt(ent, inflictor, attacker, Float:dmg, bits)
+{
+	if (!(1 <= attacker <= MaxClients) || !is_user_connected(attacker) || cs_get_user_team(attacker) != CS_TEAM_CT)
+		return HAM_IGNORED;
+	/* one-hit kills: anything but a boss or a heavy goes down to the next hit */
+	if (get_gametime() < g_instaUntil)
+	{
+		new type[16];
+		pev(ent, pev_netname, type, charsmax(type));
+		if (!equal(type, "boss") && !equal(type, "gonarch") && !equal(type, EXTRA[EX_HEAVY]))
+			SetHamParamFloat(4, floatmax(dmg, entity_get_float(ent, EV_FL_health) + 1.0));
+	}
+	return HAM_IGNORED;
+}
+
+public ham_creature_hurt_post(ent, inflictor, attacker, Float:dmg, bits)
+{
+	if (1 <= attacker <= MaxClients && dmg > 0.0)
+		pay(attacker, 10);
+	return HAM_IGNORED;
+}
+
+/* the last hit's place: a head counts at the kill */
+public ham_creature_trace(ent, attacker, Float:dmg, Float:dir[3], tr, bits)
+{
+	if (ent < sizeof g_headLast)
+		g_headLast[ent] = get_tr2(tr, TR_iHitgroup) == HIT_HEAD;
+	return HAM_IGNORED;
+}
+
+stock unstack_spawn(id)
+{
+	new Float:o[3], Float:po[3];
+	pev(id, pev_origin, o);
+	new bool:stacked = false;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (p == id || !is_user_alive(p))
+			continue;
+		pev(p, pev_origin, po);
+		if (floatabs(o[0] - po[0]) < 33.0 && floatabs(o[1] - po[1]) < 33.0 && floatabs(o[2] - po[2]) < 73.0)
+		{
+			stacked = true;
+			break;
+		}
+	}
+	if (!stacked)
+		return;
+	/* a ring of spots round where it stands, then round the base */
+	for (new k = 0; k < 48; k++)
+	{
+		new Float:c[3];
+		c = (k < 24) ? o : g_base;
+		new Float:a = float(k) * 47.0, Float:r = 48.0 + 24.0 * float(k % 8);
+		new Float:t[3];
+		t[0] = c[0] + r * floatcos(a, degrees);
+		t[1] = c[1] + r * floatsin(a, degrees);
+		t[2] = c[2] + 8.0;
+		engfunc(EngFunc_TraceHull, t, t, DONT_IGNORE_MONSTERS, HULL_HUMAN, id, 0);
+		if (get_tr2(0, TR_StartSolid) || get_tr2(0, TR_AllSolid))
+			continue;
+		/* (a floor under it, not a drop) */
+		if (t[2] - floor_under(t) > 80.0)
+			continue;
+		engfunc(EngFunc_SetOrigin, id, t);
+		return;
+	}
+}
+
+public ls_on_barricade_repaired(ent, id, hp)
+{
+	if (g_phase != PH_IDLE && 1 <= id <= MaxClients)
+		pay(id, 10);
+}
+
+/* ---- power-ups: now and then a killed creature leaves one; whoever on the team touches it
+   gets it for everyone ---- */
+
+stock maybe_powerup(ent)
+{
+	if (g_phase != PH_WAVE || g_puThisWave >= 4 || random_float(0.0, 1.0) >= 0.025)
+		return;
+	new Float:o[3];
+	pev(ent, pev_origin, o);
+	o[2] = floor_under(o) + 4.0;
+	spawn_powerup(random(PU_COUNT), o);
+}
+
+stock spawn_powerup(kind, const Float:o[3])
+{
+	new slot = -1;
+	for (new i = 0; i < sizeof g_puEnt; i++)
+		if (!g_puEnt[i] || !pev_valid(g_puEnt[i]))
+		{
+			slot = i;
+			break;
+		}
+	if (slot < 0)
+		return;
+	new e = create_entity("info_target");
+	if (!e)
+		return;
+	entity_set_string(e, EV_SZ_classname, "lst_powerup");
+	entity_set_model(e, PU_MODEL[kind]);
+	entity_set_origin(e, o);
+	set_rendering(e, kRenderFxGlowShell, PU_RGB[kind][0], PU_RGB[kind][1], PU_RGB[kind][2], kRenderNormal, 16);
+	set_pev(e, pev_movetype, MOVETYPE_NOCLIP);
+	set_pev(e, pev_avelocity, Float:{0.0, 90.0, 0.0});
+	g_puEnt[slot] = e;
+	g_puKind[slot] = kind;
+	g_puUntil[slot] = get_gametime() + 25.0;
+	g_puThisWave++;
+	toast(0, 2.0, false, "%s dropped!", PU_NAME[kind]);
+}
+
+public tick_powerups()
+{
+	new Float:now = get_gametime(), Float:o[3], Float:po[3];
+	for (new i = 0; i < sizeof g_puEnt; i++)
+	{
+		new e = g_puEnt[i];
+		if (!e)
+			continue;
+		if (!pev_valid(e) || now >= g_puUntil[i])
+		{
+			if (pev_valid(e))
+				remove_entity(e);
+			g_puEnt[i] = 0;
+			continue;
+		}
+		/* blinks its last 5 s */
+		if (g_puUntil[i] - now < 5.0)
+			set_pev(e, pev_effects, (floatround(now * 4.0) % 2) ? (pev(e, pev_effects) | EF_NODRAW) : (pev(e, pev_effects) & ~EF_NODRAW));
+		pev(e, pev_origin, o);
+		for (new p = 1; p <= MaxClients; p++)
+		{
+			if (!is_user_alive(p) || cs_get_user_team(p) != CS_TEAM_CT)
+				continue;
+			pev(p, pev_origin, po);
+			if (get_distance_f(o, po) > 56.0)
+				continue;
+			take_powerup(g_puKind[i], p);
+			remove_entity(e);
+			g_puEnt[i] = 0;
+			break;
+		}
+	}
+	/* the timed ones running out */
+	if (g_doubleUntil > 0.0 && now >= g_doubleUntil)
+	{
+		g_doubleUntil = 0.0;
+		toast(0, 2.0, false, "Double pay is over");
+	}
+	if (g_instaUntil > 0.0 && now >= g_instaUntil)
+	{
+		g_instaUntil = 0.0;
+		toast(0, 2.0, false, "One-hit kills are over");
+	}
+}
+
+stock take_powerup(kind, by)
+{
+	new name[32];
+	get_user_name(by, name, charsmax(name));
+	switch (kind)
+	{
+		case PU_RESUPPLY:
+		{
+			for (new p = 1; p <= MaxClients; p++)
+				if (is_user_alive(p) && cs_get_user_team(p) == CS_TEAM_CT)
+					ls_give_item(p, "ammo");
+			toast(0, 3.0, false, "Full resupply! (%s)", name);
+		}
+		case PU_DOUBLE:
+		{
+			g_doubleUntil = get_gametime() + 30.0;
+			toast(0, 3.0, false, "Double pay for 30 seconds! (%s)", name);
+		}
+		case PU_ONEHIT:
+		{
+			g_instaUntil = get_gametime() + 30.0;
+			toast(0, 3.0, false, "One-hit kills for 30 seconds! (%s)", name);
+		}
+		case PU_AIRSTRIKE:
+		{
+			new n = 0, e = -1;
+			while ((e = find_ent_by_class(e, "ls_creature")))
+			{
+				if (pev(e, pev_deadflag) != DEAD_NO)
+					continue;
+				new type[16];
+				pev(e, pev_netname, type, charsmax(type));
+				if (equal(type, "boss") || equal(type, "gonarch") || equal(type, EXTRA[EX_HEAVY]))
+					continue;
+				ExecuteHamB(Ham_TakeDamage, e, 0, 0, entity_get_float(e, EV_FL_health) + 1000.0, DMG_BLAST);
+				n++;
+			}
+			for (new p = 1; p <= MaxClients; p++)
+				if (is_user_connected(p) && cs_get_user_team(p) == CS_TEAM_CT)
+					pay(p, 400);
+			shake_all();
+			toast(0, 3.0, false, "Airstrike! %d cleared (%s)", n, name);
+		}
+	}
+	log_amx("Last Stand: %s picked up by %d in wave %d", PU_NAME[kind], by, g_wave);
+}
+
+stock clear_powerups()
+{
+	for (new i = 0; i < sizeof g_puEnt; i++)
+	{
+		if (g_puEnt[i] && pev_valid(g_puEnt[i]))
+			remove_entity(g_puEnt[i]);
+		g_puEnt[i] = 0;
+	}
+	g_doubleUntil = 0.0;
+	g_instaUntil = 0.0;
 }
 
 /* =========================================================================
@@ -2727,12 +3181,24 @@ stock precache_types(list[], len)
 	}
 	else
 	{
-		add_word(list, len, "zombie");
-		if (n >= 2) add_word(list, len, "runner");
-		if (n >= 3) add_word(list, len, "brute");
-		if (n >= 4) add_word(list, len, "spitter");
+		/* every type up to round 20 (and what each falls back to); a type the server doesn't
+		   have is skipped by the game DLL */
+		for (new i = 0; i < sizeof ROSTER; i++)
+			if (ROSTER_FROM[i] <= min(n, 20))
+			{
+				add_word(list, len, ROSTER[i]);
+				if (ROSTER_FALLBACK[i][0])
+					add_word(list, len, ROSTER_FALLBACK[i]);
+			}
+		if (n >= 6)
+			for (new i = 0; i < sizeof EXTRA; i++)
+			{
+				add_word(list, len, EXTRA[i]);
+				if (EXTRA_FALLBACK[i][0])
+					add_word(list, len, EXTRA_FALLBACK[i]);
+			}
 	}
-	if (g_wBoss[0] && g_wBossEvery > 0 && g_wBossEvery <= n)
+	if (g_nrows && g_wBoss[0] && g_wBossEvery > 0 && g_wBossEvery <= n)
 		add_word(list, len, g_wBoss);
 	if (!list[0])
 		copy(list, len, "zombie");

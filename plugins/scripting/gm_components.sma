@@ -264,6 +264,7 @@ new g_modeId[32];
 /* Mode map kits: an ls_marker (kind, mode, targetname, size, radius, ...) becomes the component
    its kind names, or stays a named spot the mode's plugin finds (ls_marker_find) */
 #define PEND_MARKER 99
+new g_cWaveAlive;
 new g_gateBlocks;
 #define TOAST_Q 4
 new g_tqText[33][TOAST_Q][128];
@@ -444,6 +445,7 @@ public plugin_init()
 	g_cRoundReset = register_cvar("ls_comp_round_reset", "1");
 	g_cDebug = register_cvar("ls_comp_debug", "0");
 	g_cWaveAnnounce = register_cvar("ls_comp_wave_announce", "1");
+	g_cWaveAlive = register_cvar("ls_comp_wave_alive_max", "0");
 
 	g_msgBarTime = get_user_msgid("BarTime");
 	g_msgBarTime2 = get_user_msgid("BarTime2");
@@ -2565,7 +2567,8 @@ stock tick_spawner(s)
 			continue;
 		new Float:d = dist2d(g_porg[p], g_org[s]);
 		new Float:dz = g_porg[p][2] - g_floor[s];
-		if (d > 40.0 || dz < -16.0 || dz > 96.0)
+		/* (a bot's path can end a little short of a gun by a wall or on a ledge) */
+		if (d > (g_bot[p] ? 96.0 : 40.0) || dz < -16.0 || dz > 96.0)
 			continue;
 		if (!can_take(p, g_item[s]))
 			continue;
@@ -3132,6 +3135,13 @@ stock tick_waves()
 		left += g_aux[s];
 		if (g_now < g_pf[s][WV_NEXT])
 			continue;
+		/* a cap on how many are alive at once (ls_comp_wave_alive_max): the rest wait */
+		new cap = get_pcvar_num(g_cWaveAlive);
+		if (cap > 0 && wave_alive() >= cap)
+		{
+			g_pf[s][WV_NEXT] = g_now + 0.5;
+			continue;
+		}
 		if (wave_spawn_one(s))
 		{
 			g_aux[s]--;
