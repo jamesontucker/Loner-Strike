@@ -245,6 +245,8 @@ new Float:g_now;
 new Float:g_roundStart;
 new Float:g_nextSec;
 new bool:g_ready;
+new bool:g_quiet;
+new bool:g_sawRound;
 new bool:g_canPrecache;
 new bool:g_brain;
 new bool:g_lsBot;
@@ -265,6 +267,15 @@ new g_fwComponent, g_fwCapture, g_fwContested, g_fwLost, g_fwCapTick, g_fwZoneSt
 	g_fwLap, g_fwPlatform, g_fwClass, g_fwRespawn, g_fwMeetStart, g_fwMeetVote, g_fwMeetEnd;
 
 new const DEFAULT_CRATE[] = "models/mil_crate.mdl";
+new const WEAPON_MODELS[][] =
+{
+	"models/w_ak47.mdl", "models/w_aug.mdl", "models/w_awp.mdl", "models/w_deagle.mdl", "models/w_elite.mdl",
+	"models/w_famas.mdl", "models/w_fiveseven.mdl", "models/w_flashbang.mdl", "models/w_g3sg1.mdl",
+	"models/w_galil.mdl", "models/w_glock18.mdl", "models/w_hegrenade.mdl", "models/w_knife.mdl",
+	"models/w_m249.mdl", "models/w_m3.mdl", "models/w_m4a1.mdl", "models/w_mac10.mdl", "models/w_mp5.mdl",
+	"models/w_p228.mdl", "models/w_p90.mdl", "models/w_scout.mdl", "models/w_sg550.mdl", "models/w_sg552.mdl",
+	"models/w_smokegrenade.mdl", "models/w_tmp.mdl", "models/w_ump45.mdl", "models/w_usp.mdl", "models/w_xm1014.mdl"
+};
 new const DEFAULT_BOX[] = "models/w_weaponbox.mdl";
 
 /* =========================================================================
@@ -292,6 +303,9 @@ public plugin_precache()
 	precache_model_once("models/w_backpack.mdl");
 	precache_model_once("models/w_medkit.mdl");
 	precache_model_once("models/w_9mmarclip.mdl");
+	/* every weapon a spawner or loot table can show: the game's own precache comes later */
+	for (new i = 0; i < sizeof WEAPON_MODELS; i++)
+		precache_model_once(WEAPON_MODELS[i]);
 	precache_sound("debris/bustcrate1.wav");
 	precache_sound("items/gunpickup2.wav");
 	precache_sound("items/ammopickup1.wav");
@@ -483,19 +497,20 @@ public plugin_cfg()
 	{
 		if (!g_ent[s])
 			continue;
+		comp_init(s);
 		comp_link(s);
 		comp_announce(s);
 	}
 	set_task(TICK, "tick", TASK_TICK, _, _, "b");
 	/* a map with no rounds (or a mode that never sends Round_Start) still gets its timers */
-	set_task(6.0, "task_round_fallback");
+	set_task(20.0, "task_round_fallback");
 	log_amx("%d components on %s (bots %s)", count_comps(K_NONE), g_mapname,
 		g_brain ? "understand ls_mode" : (g_lsBot ? "use ls_bot goto" : "get no hints"));
 }
 
 public task_round_fallback()
 {
-	if (g_roundStart <= 0.0)
+	if (g_roundStart <= 0.0 && !g_sawRound)
 		round_begin();
 }
 
@@ -536,6 +551,18 @@ stock precache_model_once(const model[])
 	idx = precache_model(model);
 	TrieSetCell(g_models, model, idx);
 	return idx;
+}
+
+/* SetModel only with a model this plugin precached (else the fallback, which it did) */
+stock set_model(ent, const model[], const fallback[])
+{
+	if (TrieKeyExists(g_models, model))
+		engfunc(EngFunc_SetModel, ent, model);
+	else
+	{
+		log_amx("Model %s isn't loaded; showing %s instead.", model, fallback);
+		engfunc(EngFunc_SetModel, ent, fallback);
+	}
 }
 
 /* a model a key asks for: precached while the map loads, otherwise only if it already was */
@@ -660,11 +687,18 @@ stock comp_add(ent, kind, Trie:keys, src)
 	set_pev(ent, pev_classname, KIND_NAME[kind]);
 	for (new p = 1; p <= 32; p++)
 		inside_set(p, s, false);
-	comp_init(s);
 	if (g_ready)
 	{
+		comp_init(s);
 		comp_link(s);
 		comp_announce(s);
+	}
+	else
+	{
+		/* set up in plugin_cfg, once traces hit the world; a model key has to be loaded now */
+		new m[64];
+		if (ks(s, "model", m, charsmax(m)) && m[0] != '*')
+			usable_model(m);
 	}
 	return s;
 }
@@ -897,7 +931,9 @@ stock comp_init(s)
 		}
 	}
 	vcopy(o, g_org[s]);
-	g_floor[s] = floor_z(o, ent);
+	new k = g_kind[s];
+	/* logic-only components have no spot on the floor */
+	g_floor[s] = (k == K_CLASS || k == K_SHRINKER || k == K_PLATFORM || k == K_DOOR) ? o[2] : floor_z(o, ent);
 	g_r[s] = kf(s, "radius", default_radius(g_kind[s]));
 	g_h[s] = kf(s, "height", 160.0);
 
@@ -915,7 +951,7 @@ stock comp_init(s)
 			ks(s, "model", m, charsmax(m), g_kind[s] == K_CRATE ? DEFAULT_CRATE : DEFAULT_BOX);
 			if (m[0] == '*' || !usable_model(m))
 				copy(m, charsmax(m), g_kind[s] == K_CRATE ? DEFAULT_CRATE : DEFAULT_BOX);
-			engfunc(EngFunc_SetModel, ent, m);
+			set_model(ent, m, g_kind[s] == K_CRATE ? DEFAULT_CRATE : DEFAULT_BOX);
 			engfunc(EngFunc_SetSize, ent, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 24.0});
 			set_pev(ent, pev_movetype, MOVETYPE_NONE);
 			set_pev(ent, pev_solid, g_kind[s] == K_CRATE ? SOLID_NOT : SOLID_BBOX);
@@ -939,7 +975,7 @@ stock comp_init(s)
 				ks(s, "model", m, charsmax(m), DEFAULT_CRATE);
 				if (!usable_model(m))
 					copy(m, charsmax(m), DEFAULT_CRATE);
-				engfunc(EngFunc_SetModel, ent, m);
+				set_model(ent, m, DEFAULT_CRATE);
 				new Float:size[3];
 				if (!kvec(s, "size", size) || size[0] <= 0.0)
 				{
@@ -1109,8 +1145,11 @@ public ev_new_round()
 		for (new i = 0; i < sizeof g_inside[]; i++)
 			g_inside[p][i] = 0;
 	}
+	g_sawRound = true;
 	if (get_pcvar_num(g_cRoundReset))
 	{
+		/* the bots hear it all at Round_Start */
+		g_quiet = true;
 		for (new s = 0; s < g_nslots; s++)
 		{
 			if (!g_ent[s])
@@ -1122,6 +1161,7 @@ public ev_new_round()
 			}
 			comp_reset(s);
 		}
+		g_quiet = false;
 	}
 }
 
@@ -2127,7 +2167,7 @@ stock spawner_show(s, bool:on)
 	{
 		new m[64];
 		item_model(g_item[s], m, charsmax(m));
-		engfunc(EngFunc_SetModel, ent, m);
+		set_model(ent, m, DEFAULT_BOX);
 		engfunc(EngFunc_SetSize, ent, Float:{-8.0, -8.0, 0.0}, Float:{8.0, 8.0, 8.0});
 		set_pev(ent, pev_effects, pev(ent, pev_effects) & ~EF_NODRAW);
 		new Float:o[3];
@@ -3710,7 +3750,7 @@ stock fallback_goto(team, const Float:p[3])
 /* what this component means to bots, now */
 stock hint_comp(s)
 {
-	if (!g_ready || !g_ent[s])
+	if (!g_ready || g_quiet || !g_ent[s])
 		return;
 	new ent = g_ent[s];
 	new Float:o[3];
@@ -4297,6 +4337,15 @@ stock Float:floor_z(const Float:p[3], ignore)
 	a[2] += 8.0;
 	b[2] -= 4096.0;
 	engfunc(EngFunc_TraceLine, a, b, IGNORE_MONSTERS, ignore, 0);
+	new Float:frac;
+	get_tr2(0, TR_flFraction, frac);
+	if (get_tr2(0, TR_StartSolid) || get_tr2(0, TR_AllSolid) || frac >= 1.0)
+	{
+		/* inside a wall or over the void: keep the height it was given */
+		if (ignore)
+			log_amx("A component at %.0f %.0f %.0f is inside a wall or has no floor under it.", p[0], p[1], p[2]);
+		return p[2] - 36.0;
+	}
 	get_tr2(0, TR_vecEndPos, hit);
 	return hit[2];
 }
