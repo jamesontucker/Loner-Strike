@@ -178,3 +178,7 @@ Library items and snippets carry `fromMode` (a uid) when they're shared.
 - Tests: Rust credits (checklist lines, rights snapshot and verdicts, resolve order incl. copies by hash and old
   installs, publish credits/warnings/refusals, cleaning for the index, noting permissions), MCP user-only; list
   service `test_asset_credits`.
+- (later) `GET /api/tools/credits/asset` for P5's Content Browser (their contract, confirmed), Community group filled
+  (`community_files_in`, wired in browser.rs), `credits_for_entities` for prefab packages (P5 to call it in
+  `prefabs::package`), every community install keeps its creation's credits. Note: P5's commit 0dff8735 carried my
+  browser.rs lines before credits.rs had the function; d4b35435 completes it.
