@@ -2115,3 +2115,56 @@ invulnerable, solid to players once nobody stands in him, ignored by creatures a
 | after (spread holders + free roamers) | 32.9 % | 22.8 | 40.5 |
 | Classic, CT bots | 40.6 % | 23.1 | 44.5 |
 All creatures were killed by bots in the sim (no human there); waves 1-3 held in 35-82 s.
+
+### Agent Z: Creature Studio (Beta, Tools > Make) — 2026-11-12
+
+**Built**
+- `tools/creatures.rs` (own routes, one mount line): creatures.ini read the way the fork's `LsLoadTypes`/`LsSetTypeKey` read it
+  (built-ins mirrored from `LsBuiltinTypes`, sections add/override by name, keys in order, `base =` copies a type above, aliases,
+  `ls =`/`sounds =` forms, comments cut at `; # //`, 511-byte lines, 32 types, the same clamps, walk ≤ run, bad hull → default).
+  Saving edits in place: a changed key keeps its line and comment, a missing one goes after the section's last key, a new type is a
+  section with `base =` and only what differs, removed sections go (a built-in returns to stock), unknown keys (`mm`, `bot`) stay;
+  the text is read back as the game would and must equal what was asked, or nothing is written. Checks: every range the fork clamps
+  (errors name the clamp), names (small letters/digits/_; not "all", not digits), comment characters in values, sizes, hull rules,
+  model/sound paths (`models/…mdl`, plain parts, no `..`), base must be above; notes for odd combinations. A one-line summary.
+  Writes go through `safety::before` ("Creature Studio"); History maps creatures.ini + waves.ini.
+- Models: the game's search order (game, _downloads, cstrike for CZ, valve), no weapon/companion files, and who has each: the game's
+  own (models/*.mdl, stock player models), Half-Life's own (valve: most have it, never FastDL), or custom (players download it).
+  Preview data: MDL sequences via goldsrc::mdl and which one SetAnim would play (name → activity → player names; activity numbers
+  from the fork's activity.h). The UI reuses the asset browser's ModelView in a lazy chunk.
+- Apply live: `ls_creature reload` over the game's rcon; spawn = `ls_creature spawn <type> x y z yaw [behaviour=idle]` at the host's
+  aim point if `gm_aim` answers (see request), else at the map's first Terrorist spawn (BSP entities). Plain words for "not
+  precached", unknown type, no creature DLL, game not running. `GET live` = `ls_creature types` + list.
+- waves.ini (`addons/amxmodx/configs/gamemodes/waves.ini`): `[mode]`, `boss`, `boss_every`, `count_scale`, `hp_scale`, `type_hp`,
+  `wave N | N-M | N+ = type weight ...`; one mode's section replaced, the rest kept. Last Stand's default = its `pick_type` exactly.
+- Routes (all in mcp/routes.rs, default policies: GET read, POST change): `GET /api/tools/creatures`, `POST …/check`, `POST …/save`,
+  `GET …/models`, `GET …/model?models=&anims=`, `GET …/sounds`, `GET …/live`, `POST …/reload`, `POST …/spawn`, `GET …/waves`,
+  `POST …/waves/save`. MCP typed tools (more.rs): `creature_types`, `creature_type_read`, `creature_type_save` (Change; merges one type,
+  `remove`), `creature_apply` (reload, optional spawn; Change).
+- UI `views/tools/creatures/`: types list (search, built in / changed / yours), new from a template (zombie…boss) or duplicate, put
+  back / remove; form by section (who, looks with the 3D preview playing idle/walk/run/attack/flinch/die, tint, size, blood; health,
+  moves, speeds; aggression, sight, view cone, hearing; attack; behaviour, goes for, enemies, runs when hurt, comes back, body stays;
+  money/score; sounds with play buttons and fallback groups; finer points: anim names from the model, body size, skin/body, stand-in
+  tint, all candidates). Server problems appear under their control. Save / Save and apply / Spawn one in front of me (standing still
+  option). Waves tab: per mode, boss, scales, the mix table with a bar per line, Place in map (opens `editor:components`).
+- Tests: round trip of the CREATURES.md example (read from the doc) + `testdata/creatures.ini` (+ CRLF), the fork's reading rules,
+  in-place edits, clamps/validation, path safety, save via the safety net, waves; screenshot test "Creature Studio: …". `cargo test`
+  651 ok, `mcp_route_coverage` clean for mine (it reports X's `POST /api/tools/studio/source`), `npm run build` green; the start bundle
+  only has the registry line (page 38 kB + preview 2 kB, own chunks).
+
+**How to try it**: `LS_TEST_GAME=<copy> npm run tools:dev`, open `?open=creatures`. Saving creates creatures.ini in that game folder.
+Apply/spawn need a running map with the creatures DLL (not checked live here: no game running).
+
+**Requests**
+- (W1, Last Stand) read `configs/gamemodes/waves.ini` `[laststand]` when present: mix rows by wave (`wave N`, `N-M`, `N+`; a wave
+  without a row uses the closest one before it), `boss`/`boss_every`, `count_scale`, `hp_scale`, `type_hp 1` = the type's own hp
+  (creatures.ini) instead of TYPE_HP. Add the types it uses to `ls_creature_precache`. Then flip `reads` for laststand in
+  `creatures.rs waves_status` (or tell me).
+- (gamemodes.sma owner) a `gm_aim` srvcmd: `server_print("GM aim %d %d %d %d", x, y, z, yaw)` for the host's aim point
+  (`get_user_origin(host, o, 3)`, pulled back ~32 u toward the host, z + 1). Spawn already uses it when it answers.
+- (P4, map editor) accept `editor:components:<class>` (e.g. `ls_wave_spawner`, later `ls_creature`) to open the library with that
+  component picked (search filled or Place armed). Creature Studio sends `editor:components` today.
+- (W1/P4) `ls_creature` isn't in components.json / lonerstrike.fgd: a point entity with the CREATURES.md §3 keys (type, behaviour,
+  path, radius, respawn, health, speed, damage, aggression, detect, hates, persist, angles) would let maps place creatures.
+- (setup) creatures.ini/waves.ini aren't shipped (an update would overwrite them: only `EDITABLE` files are kept); if one ships
+  later, add it to `setup::core::EDITABLE`.
