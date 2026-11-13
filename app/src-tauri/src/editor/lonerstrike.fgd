@@ -257,6 +257,15 @@
 		"hound" : "Hound"
 		"turret" : "Turret"
 		"boss" : "Boss"
+		"headcrab" : "Headcrab"
+		"vortigaunt" : "Vortigaunt"
+		"babygarg" : "Baby gargantua"
+		"snark" : "Snark"
+		"babycrab" : "Baby headcrab"
+		"miniturret" : "Mini turret"
+		"assassin" : "Assassin"
+		"soldier" : "Soldier"
+		"gonarch" : "Gonarch"
 	]
 	behaviour(choices) : "Behavior" : "" : "Empty: the type's own." =
 	[
@@ -279,4 +288,13 @@
 	hates(choices) : "Attacks" : "" : "" = [ "" : "The type's own" "all" : "Everyone" "t" : "Terrorists" "ct" : "Counter-Terrorists" ]
 	persist(choices) : "Body stays" : 0 : "Hidden until it comes back instead of removed." = [ 0 : "No" 1 : "Yes" ]
 	angles(string) : "Facing (pitch yaw roll)" : "0 0 0" : ""
+]
+
+@PointClass size(-16 -16 -32, 16 16 0) color(200 120 60) studio("models/barnacle.mdl") = ls_barnacle : "A barnacle on the ceiling (needs Loner-Strike's game DLL). Put it right under the ceiling: its tongue hangs to the floor, and a player who walks into it is hauled up and chewed until someone shoots it. It comes back every round."
+[
+	health(integer) : "Health" : 25 : "Shots it takes."
+	damage(float) : "Bite" : 10 : "Damage a bite, one a second."
+	length(float) : "Longest tongue" : 512 : "It hangs to the floor below, at most this far."
+	speed(float) : "Haul speed" : 80 : "How fast it pulls a player up (units a second)."
+	hates(choices) : "Catches" : "all" : "" = [ "all" : "Everyone" "t" : "Terrorists" "ct" : "Counter-Terrorists" ]
 ]
