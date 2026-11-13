@@ -40,9 +40,18 @@ Design: docs/COMMUNITY.md (app side) and docs/COMMUNITY-SERVER.md (server side, 
   chunks unchecked; MP3 zero padding; UTF-16 text; JSON lines; nav data after the areas.
 - App-side install-time checks: NOT built (user: risk of false rejects on old GameBanana content).
 
+## Apply for a role (2026-11-12)
+- applications.py via modbot: public #📝・apply (pinned button, made by discord-setup.py --apply) ->
+  role menu -> form (why 20-1000, links <= 400) -> card in private #🛂・applications with Approve /
+  Deny (optional reason, DM) / Undo; deciders DISCORD_APPLY_ROLES (Moderator, Dev, G-Man) + owner.
+- One open application per user per role, 14-day wait after a no, 5 a day. Roles found by name.
+- Hierarchy refusals (Discord 50013) leave the application open with a note saying exactly how to
+  fix the role order. Moderator approval gives the Moderator role only.
+- DB migration 3 (applications). Env: DISCORD_APPLY_CHANNEL_ID, DISCORD_APPLY_ROLES.
+
 ## Tests
-`cd services/serverlist && python3 -m unittest test_formats test_community test_modbot test_serverlist test_publish_check`
-(130). App: `cd app/src-tauri && cargo test tools::community`.
+`cd services/serverlist && python3 -m unittest test_applications test_formats test_community test_modbot test_serverlist test_publish_check`
+(146). App: `cd app/src-tauri && cargo test tools::community`.
 
 ## Open
 - App Publish's refusal check is still a blocklist (the server's allow-list decides what's listed).

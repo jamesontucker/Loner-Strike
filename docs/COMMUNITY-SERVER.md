@@ -30,7 +30,7 @@ Nothing here is live until the steps in section 6 are run.
 | `services/serverlist/test_community.py`, `test_modbot.py`, `testdata/gamebanana/` | Offline tests with recorded GameBanana answers and forged Discord interactions. |
 
 Tests: `cd services/serverlist && python3 -m unittest test_community test_modbot test_serverlist`
-(130 tests: `python3 -m unittest test_formats test_community test_modbot test_serverlist test_publish_check`). A live check that a real GameBanana zip can be listed by range requests:
+(146 tests: `python3 -m unittest test_applications test_formats test_community test_modbot test_serverlist test_publish_check`). A live check that a real GameBanana zip can be listed by range requests:
 `python3 -c "import community as c; print(c.package_names({'id': 1886785, 'name': 'cage.zip', 'size': 278384}))"`.
 
 ## 2. How it works
@@ -213,6 +213,32 @@ their last palette, and an old-version knowledge file (rebuilt by the brain anyw
 Tests: `test_formats.py` (every cut of each kind refused, wrong versions, huge counts and offsets,
 4,000 random damages without a crash; `LS_CORPUS=<folders>` runs the real-content check too).
 
+## Apply for a role (Discord)
+
+`services/serverlist/applications.py`, through the same interactions endpoint, signatures, signed
+button ids, done-once handling, audit lines and Undo as the mod cards.
+
+- **Public #📝・apply** (read-only for members; made by `discord-setup.py --apply`): one pinned
+  message with **[Apply for a role]**. Anyone in the server may press it: a private menu of roles
+  (Playtester, Map Maker, Mode Maker, Bug Hunter, Surf Legend, Deathrun Legend, Moderator), then a
+  form: "Why?" (20–1000 characters, required) and "Links" (up to 400, optional).
+- Refused politely: a role you already have; a second open application for the same role; the same
+  role again within 14 days of a no; more than 5 applications a day.
+- **Private #🛂・applications** (Moderator, Dev, G-Man and the bot): a card per application (who,
+  account age, when they joined, why, links; text escaped and capped, mentions off) with
+  **[Approve] [Deny]**. Only Moderator, Dev, G-Man (`DISCORD_APPLY_ROLES`) or the owner may press
+  them; anyone else gets "You can't do that." Approve gives that one role (roles are found by name,
+  emoji and punctuation ignored). Deny asks for an optional reason and tells the applicant by DM if
+  their DMs are open (the card says when they aren't). Every action edits the card, posts an audit
+  line and gets [Undo] (Undo of an approval takes the role back).
+- **Role order**: Discord only lets the bot give roles below its own highest role. If it refuses,
+  the card says so ("the bot's own role has to be ABOVE Map Maker in Server Settings > Roles (drag
+  "Loner-Strike Setup" above it) and have Manage Roles") and the application stays open, so pressing
+  Approve again after fixing it works. `discord-setup.py` warns about this too.
+- **Moderator applications** give the Moderator role and nothing else; what that role may do is set
+  in Discord. Dev, G-Man and admin are never handed out by this flow.
+- Kept in the community database (migration 3, table `applications`).
+
 ## 3. Admin API and lsmod.py
 
 All under `/community/admin/`, `Authorization: Bearer <COMMUNITY_ADMIN_TOKEN>` (32+ characters;
@@ -351,6 +377,18 @@ Box: `you@your-box` (Ubuntu 24.04, sudo). Run from the tools checkout
       and "uploaded community/index.json", or "the same as the live one".
     - Check: `! curl -s https://dl.lonerstrike.com/community/index.json.sha256` matches
       `lsmod.py status`'s index sha.
+
+11. **Apply for a role** (after the service update with `applications.py`, step 2 of an update:
+    `scp` + `install.sh` as in step 2):
+    ```
+    ! python3 services/serverlist/discord-setup.py            # dry run: what it would make, role-order warnings
+    ! python3 services/serverlist/discord-setup.py --apply    # makes #📝・apply (pinned button) and #🛂・applications
+    ! echo <DISCORD_APPLY_CHANNEL_ID it printed> | ssh you@your-box 'sudo /opt/lonerstrike-list/set-env.sh DISCORD_APPLY_CHANNEL_ID'
+    ! ssh you@your-box 'grep -q "^DISCORD_APPLY_ROLES=" /etc/lonerstrike-list/community.env || echo 1568425985504968768,1568425984288362637,1570702999754379264 | sudo /opt/lonerstrike-list/set-env.sh DISCORD_APPLY_ROLES'
+    ! ssh you@your-box 'sudo systemctl restart lonerstrike-list'
+    ```
+    Then in Server Settings > Roles drag "Loner-Strike Setup" above the roles people can apply for
+    (the script names any that are above it, or missing), and try it: press the button in #📝・apply.
 
 **Rollback**: copy the previous `services/serverlist` (main checkout) and run its install.sh; its
 unit has no `--community-db`, so the community part stops answering (404) and `community.db` stays

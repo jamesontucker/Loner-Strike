@@ -1624,7 +1624,7 @@ class Migrations(unittest.TestCase):
         finally:
             cm.MIGRATIONS = old
         s2 = cm.Store(p)
-        self.assertEqual(s2.db.execute("PRAGMA user_version").fetchone()[0], 2)
+        self.assertEqual(s2.db.execute("PRAGMA user_version").fetchone()[0], len(cm.MIGRATIONS))
         self.assertEqual([s2.get(f"mod:{i}")["hidden_by"] for i in range(1, 5)], ["team", "team", "team", ""])
 
 

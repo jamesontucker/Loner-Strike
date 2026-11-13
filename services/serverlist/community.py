@@ -1059,6 +1059,27 @@ MIGRATIONS = [
     ALTER TABLE entries ADD COLUMN hidden_by TEXT NOT NULL DEFAULT '';
     UPDATE entries SET hidden_by = 'team' WHERE state IN ('hidden', 'pulled', 'rejected')
     """,
+    # 3: role applications from the Discord server (applications.py)
+    """
+    CREATE TABLE applications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        user_name TEXT NOT NULL DEFAULT '',
+        role_key TEXT NOT NULL,
+        state TEXT NOT NULL,
+        why TEXT NOT NULL,
+        links TEXT NOT NULL DEFAULT '',
+        joined TEXT NOT NULL DEFAULT '',
+        msg_id TEXT NOT NULL DEFAULT '',
+        reason TEXT NOT NULL DEFAULT '',
+        decider TEXT NOT NULL DEFAULT '',
+        decider_name TEXT NOT NULL DEFAULT '',
+        note TEXT NOT NULL DEFAULT '',
+        at INTEGER NOT NULL,
+        decided_at INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX applications_user ON applications(user_id, role_key)
+    """,
 ]
 
 # Every way an entry's state changes, and who may do it (a creator's registration never undoes a
@@ -1203,6 +1224,28 @@ class Store:
     def update_card(self, card_id, **cols):
         with self.lock:
             self.db.execute(f"UPDATE cards SET {', '.join(f'{k}=?' for k in cols)} WHERE id=?", (*cols.values(), card_id))
+
+    # -- role applications --
+
+    def add_application(self, **cols):
+        cols.setdefault("at", now())
+        with self.lock:
+            return self.db.execute(f"INSERT INTO applications ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
+                                   tuple(cols.values())).lastrowid
+
+    def application(self, app_id):
+        with self.lock:
+            r = self.db.execute("SELECT * FROM applications WHERE id=?", (app_id,)).fetchone()
+        return dict(r) if r else None
+
+    def update_application(self, app_id, **cols):
+        with self.lock:
+            self.db.execute(f"UPDATE applications SET {', '.join(f'{k}=?' for k in cols)} WHERE id=?", (*cols.values(), app_id))
+
+    def applications_of(self, user_id, role_key):
+        with self.lock:
+            return [dict(r) for r in self.db.execute("SELECT * FROM applications WHERE user_id=? AND role_key=? ORDER BY id DESC",
+                                                      (user_id, role_key))]
 
     def first_time(self, interaction_id):
         """True the first time an interaction id is seen (Discord may deliver one twice)."""

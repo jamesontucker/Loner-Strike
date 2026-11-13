@@ -16,7 +16,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 python3 -c 'import cryptography' 2>/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3-cryptography >/dev/null \
   || echo "Couldn't install python3-cryptography; the slower built-in signature check will be used."
 install -d -o root -g root -m 755 /opt/lonerstrike-list
-for f in serverlist.py community.py modbot.py lsmod.py formats.py formats_runner.py; do
+for f in serverlist.py community.py modbot.py lsmod.py formats.py formats_runner.py applications.py; do
   install -o root -g root -m 644 "$here/$f" "/opt/lonerstrike-list/$f"
 done
 install -o root -g root -m 755 "$here/set-env.sh" /opt/lonerstrike-list/set-env.sh

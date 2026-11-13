@@ -24,17 +24,37 @@ PUB = modbot.public_key(SECRET)
 GUILD, CHANNEL, MOD_ROLE, DEV_ROLE, OWNER = "1568421500636233748", "1570640821320159252", "1568425985504968768", "1568425984288362637", "310619637727363072"
 
 
+ROLE_IDS = {"Playtester": "900001", "🗺️・Map Maker": "900002", "Mode Maker": "900003", "Bug Hunter": "900004",
+            "Surf Legend": "900005", "Deathrun Legend": "900006", "Moderator": "1568425985504968768"}
+
+
 class FakeBot(modbot.Bot):
+    """Discord as the bot sees it: messages, the server's roles, giving roles, DMs."""
+
     def __init__(self, fail=False):
         super().__init__("bot-token-not-real", CHANNEL, send=self.send)
         self.fail, self.posts, self.edits, self.n = fail, [], [], 0
+        self.calls, self.dms = [], []
+        self.roles = dict(ROLE_IDS)
+        self.role_reply = (204, {})
+        self.dm_reply = (200, {"id": "dm-1"})
 
-    def send(self, method, path, b):
+    def send(self, method, path, b, reason=None):
+        self.calls.append((method, path, b, reason))
         if self.fail:
             return 500, {}
+        if method == "GET" and path.endswith("/roles"):
+            return 200, [{"id": i, "name": n} for n, i in self.roles.items()]
+        if "/members/" in path and method in ("PUT", "DELETE"):
+            return self.role_reply
+        if path == "/users/@me/channels":
+            return self.dm_reply
         if method == "POST":
             self.n += 1
-            self.posts.append(b)
+            if path == "/channels/dm-1/messages":
+                self.dms.append(b)
+            else:
+                self.posts.append(b)
             return 200, {"id": str(9000 + self.n)}
         self.edits.append((path, b))
         return 200, {}

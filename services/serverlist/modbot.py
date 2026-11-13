@@ -17,8 +17,10 @@ import re
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
+import applications
 import community as cm
 
 API = "https://discord.com/api/v10"
@@ -156,20 +158,48 @@ class Bot:
         self.token, self.channel = token, channel
         self._send = send or self._http
 
-    def _http(self, method, path, body):
+    # what the bot may ask of Discord: messages in channels, roles of members, a DM channel
+    ALLOWED = ("/channels/", "/guilds/", "/users/@me/channels")
+
+    def _http(self, method, path, body, reason=None):
         url = API + path
-        if not url.startswith(API + "/channels/"):
-            raise ValueError("not a channel call")
-        req = urllib.request.Request(url, data=json.dumps(body).encode(), method=method, headers={
-            "Authorization": f"Bot {self.token}", "Content-Type": "application/json",
-            "User-Agent": "DiscordBot (https://lonerstrike.com, 1)"})
+        if not path.startswith(self.ALLOWED) or ".." in path:
+            raise ValueError("not a call the bot makes")
+        headers = {"Authorization": f"Bot {self.token}", "User-Agent": "DiscordBot (https://lonerstrike.com, 1)"}
+        data = None
+        if body is not None:
+            data = json.dumps(body).encode()
+            headers["Content-Type"] = "application/json"
+        if reason:
+            headers["X-Audit-Log-Reason"] = urllib.parse.quote(reason[:400])
+        req = urllib.request.Request(url, data=data, method=method, headers=headers)
         try:
             with cm._OPENER.open(req, timeout=10) as r:
-                return r.status, json.loads(r.read() or b"{}")
+                raw = r.read()
+                return r.status, json.loads(raw) if raw else {}
         except urllib.error.HTTPError as e:
-            return e.code, {}
+            try:
+                return e.code, json.loads(e.read() or b"{}")
+            except ValueError:
+                return e.code, {}
         except (OSError, ValueError):
             return 0, {}
+
+    def api(self, method, path, body=None, reason=None):
+        """(status, answer) for one call (see ALLOWED)."""
+        return self._send(method, path, body, reason) if reason else self._send(method, path, body)
+
+    def post_to(self, channel, payload):
+        """The new message's id in another channel, or None."""
+        code, ans = self._send("POST", f"/channels/{channel}/messages", dict(payload, allowed_mentions={"parse": []}))
+        if code != 200:
+            cm.log(f"the bot couldn't post (status {code})")
+            return None
+        return str(ans.get("id") or "") or None
+
+    def edit_in(self, channel, msg_id, payload):
+        code, _ = self._send("PATCH", f"/channels/{channel}/messages/{msg_id}", dict(payload, allowed_mentions={"parse": []}))
+        return code == 200
 
     def post(self, payload):
         """The new message's id, or None."""
@@ -186,6 +216,17 @@ class Bot:
 
 # ---- cards ----------------------------------------------------------------------------------
 
+def button_secret(token):
+    """The key button ids are signed with, from the bot token (discord-setup.py signs the
+    pinned Apply button with the same)."""
+    return hmac.new(token.encode() or b"none", b"ls-buttons-1", hashlib.sha256).digest()
+
+
+def sign_id(secret, action, n):
+    mac = hmac.new(secret, f"{action}:{n}".encode(), hashlib.sha256).hexdigest()[:20]
+    return f"ls1:{action}:{n}:{mac}"
+
+
 def _button(label, custom_id, style, disabled=False):
     return {"type": 2, "style": style, "label": label, "custom_id": custom_id, "disabled": disabled}
 
@@ -199,7 +240,8 @@ class Mod(cm.Notifier):
     """Cards and buttons. A Notifier, so community.py can use it in its place: card() posts a
     card through the bot (text through the webhook when the bot can't), say() a plain line."""
 
-    def __init__(self, community, bot, public_key_hex, guild, roles, owner, webhook="", post=None, background=True):
+    def __init__(self, community, bot, public_key_hex, guild, roles, owner, webhook="", post=None, background=True,
+                 apply_channel="", apply_roles=()):
         super().__init__(webhook, post=post)
         self.c = community
         self.bot = bot
@@ -208,10 +250,12 @@ class Mod(cm.Notifier):
             cm.log("DISCORD_PUBLIC_KEY isn't 64 hex characters; buttons are off")
         self.guild, self.roles, self.owner = str(guild or ""), {str(r) for r in roles if r}, str(owner or "")
         # button ids are signed so a forged click can't name another card or action
-        self.secret = hmac.new((bot.token if bot else "").encode() or b"none", b"ls-buttons-1", hashlib.sha256).digest()
-        self.lock = threading.Lock()
+        self.secret = button_secret(bot.token if bot else "")
+        self.lock = threading.RLock()
         self.background = background
         community.notifier = self
+        # role applications (only when their private channel is set)
+        self.apps = applications.Applications(self, apply_channel, apply_roles) if apply_channel and bot else None
         if self.pub and not FAST:
             cm.log("python3-cryptography isn't installed: Discord signatures are checked by the slower built-in "
                    "verifier (apt install python3-cryptography)")
@@ -248,8 +292,7 @@ class Mod(cm.Notifier):
         return card_id
 
     def custom_id(self, action, card_id):
-        mac = hmac.new(self.secret, f"{action}:{card_id}".encode(), hashlib.sha256).hexdigest()[:20]
-        return f"ls1:{action}:{card_id}:{mac}"
+        return sign_id(self.secret, action, card_id)
 
     def parse_id(self, cid):
         m = re.fullmatch(r"ls1:([a-z]{2,12}):(\d{1,12}):([0-9a-f]{20})", cid or "")
@@ -332,6 +375,15 @@ class Mod(cm.Notifier):
         user = member.get("user") if isinstance(member.get("user"), dict) else {}
         uid = str(user.get("id") or "")
         roles = {str(r) for r in member.get("roles") or [] if isinstance(r, (str, int))}
+        # role applications: anyone may apply; deciding has its own roles (applications.py)
+        data = d.get("data") if isinstance(d.get("data"), dict) else {}
+        parsed = self.parse_id(str(data.get("custom_id") or "")) if d.get("type") in (COMPONENT, MODAL) else None
+        if parsed and self.apps and parsed[0] in applications.PUBLIC_ACTIONS + applications.DECIDER_ACTIONS:
+            if not uid:
+                return 200, self.tell("You can't do that.")
+            if parsed[0] in applications.DECIDER_ACTIONS and not self.apps.may_decide(uid, roles):
+                return 200, self.tell("You can't do that.")
+            return 200, self.application(d, parsed, uid, roles, user, member)
         if not uid or not (uid == self.owner or roles & self.roles):
             return 200, self.tell("You can't do that.")
         actor = {"id": uid, "name": cm.one_line(str(user.get("global_name") or user.get("username") or uid), 40)}
@@ -351,6 +403,26 @@ class Mod(cm.Notifier):
             except (TypeError, AttributeError, KeyError, ValueError, IndexError):
                 return 200, self.tell("That didn't make sense to the list service.")
         return 400, {"error": "unknown interaction"}
+
+    def application(self, d, parsed, uid, roles, user, member):
+        action, n = parsed
+        actor = {"id": uid, "name": cm.one_line(str(user.get("global_name") or user.get("username") or uid), 40)}
+        iid = str(d.get("id") or "")
+        with self.lock:
+            if not iid or not self.c.store.first_time(iid):
+                return self.tell("Already done.")
+            try:
+                if action == "apply":
+                    return self.apps.start()
+                if action == "applypick":
+                    return self.apps.pick(d, uid, roles)
+                if action == "applyform":
+                    return self.apps.submit(d, n, user, member)
+                return self.apps.decide(action, n, d, actor)
+            except cm.Reject as e:
+                return self.tell(e.message)
+            except (TypeError, AttributeError, KeyError, ValueError, IndexError):
+                return self.tell("That didn't make sense to the list service.")
 
     def tell(self, text):
         return {"type": R_MESSAGE, "data": {"content": text[:1900], "flags": EPHEMERAL, "allowed_mentions": {"parse": []}}}
