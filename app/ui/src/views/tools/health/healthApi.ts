@@ -1,10 +1,10 @@
 // The map health check's server side (tools/health.rs): bots play a map on a hidden copy of
 // one of your servers for a few minutes, then a report says what went wrong.
 
-import { getJson, postJson } from "../../../api";
+import { getJson } from "../../../api";
+import { post, type Err } from "../common/api";
 import type { Vec3 } from "../viewer/coords";
 
-type Err = { error?: string };
 
 export type Options = Err & {
   map: string;
@@ -84,8 +84,6 @@ export type Report = {
 };
 export type ReportSummary = { id: string; map: string; mode: string; modeName: string; when: number; minutes: number; bots: number; verdict: Report["verdict"]; headline: string; problems: number };
 
-/** A POST whose failure to arrive reads like any other error. */
-const post = <T>(path: string, body: unknown = {}) => postJson<T & Err>(path, body).catch(() => ({ error: "Couldn't reach the app." }) as T & Err);
 
 export const healthOptions = (map: string) => getJson<Options>(`/api/tools/health/options?map=${encodeURIComponent(map)}`);
 export const healthProgress = () => getJson<Progress>("/api/tools/health/progress");

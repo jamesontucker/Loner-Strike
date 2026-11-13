@@ -7,10 +7,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { postJson } from "../../api";
-import { useActivityStore } from "../../store";
+import { busy, checked, fetchOk as fetchOkShared, ToolsError } from "./common/api";
 import { decodeKnow, decodeReplay, toNav, toTrace, type Know, type Nav, type RecordingInfo } from "./overlays";
 import { decodeBundle, type MeshBundle } from "./viewer/bundle";
 import { parseVec, type Vec3 } from "./viewer/coords";
+
+export { ToolsError };
 
 export type MapEntity = {
   index: number;
@@ -29,20 +31,6 @@ export type ToolsMapInfo = {
   message?: string;
   [k: string]: unknown;
 };
-
-/** A request the app answered with an error (its own words when it gave some). */
-export class ToolsError extends Error {
-  /** json: the app answered in its own words (not a missing route) */
-  constructor(message: string, readonly status = 0, readonly json = false) {
-    super(message);
-  }
-}
-
-/** JSON routes answer {error} with 200 (like the rest of the app): that's a failure too. */
-function checked<T>(v: unknown): T {
-  if (v && typeof v === "object" && !Array.isArray(v) && typeof (v as { error?: unknown }).error === "string") throw new ToolsError((v as { error: string }).error, 200, true);
-  return v as T;
-}
 
 const base = (map: string) => `/api/tools/map/${encodeURIComponent(map)}`;
 
@@ -66,37 +54,8 @@ const noServer = (e: ToolsError) => import.meta.env.DEV && !e.json && [0, 404, 5
 
 // ---- requests ------------------------------------------------------------------------------
 
-async function fetchOk(path: string, signal?: AbortSignal): Promise<Response> {
-  let r: Response;
-  try {
-    r = await fetch(path, { credentials: "same-origin", signal });
-  } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") throw e;
-    throw new ToolsError("Couldn't reach the app. Try again.");
-  }
-  if (r.ok) return r;
-  const json = (r.headers.get("content-type") ?? "").includes("json");
-  let msg = "";
-  if (json) {
-    try {
-      msg = String((await r.json()).error ?? "");
-    } catch {
-      /* no message */
-    }
-  }
-  throw new ToolsError(msg || (r.status === 404 ? "That map isn't in your game any more." : "Something went wrong reading this map. Try again."), r.status, json && !!msg);
-}
-
-/** Runs a slow read with the app's spinner and label in the top bar (kept across pages). */
-async function withActivity<T>(key: string, label: string, fn: () => Promise<T>): Promise<T> {
-  const { start, end } = useActivityStore.getState();
-  const mine = start(key, label);
-  try {
-    return await fn();
-  } finally {
-    if (mine) end(key);
-  }
-}
+const fetchOk = (path: string, signal?: AbortSignal) => fetchOkShared(path, { signal }, "That map isn't in your game any more.");
+const withActivity = busy;
 
 async function getMesh(map: string, signal?: AbortSignal): Promise<MeshBundle> {
   return withActivity(`tools:open:${map}`, "Reading the map…", async () => {

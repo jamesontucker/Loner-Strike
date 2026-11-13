@@ -1,7 +1,8 @@
 // The spray maker's server side (tools/spray.rs): the picture is chosen with the system's
 // file dialog and kept by the app; the page only sends the choices.
 
-import { getJson, postJson } from "../../../api";
+import { getJson } from "../../../api";
+import { post } from "../common/api";
 
 export type Choice = {
   size: "small" | "medium" | "large";
@@ -26,9 +27,6 @@ export type GameSpray = {
 };
 export type Status = { games: GameSpray[]; picked: { name: string; width: number; height: number } | null; error?: string };
 
-type Err = { error?: string };
-/** A POST whose failure to arrive reads like any other error. */
-const post = <T>(path: string, body: unknown = {}) => postJson<T & Err>(path, body).catch(() => ({ error: "Couldn't reach the app." }) as T & Err);
 
 export const sprayStatus = () => getJson<Status>("/api/tools/spray");
 export const pickPicture = () => post<{ cancelled?: boolean; name?: string; width?: number; height?: number }>("/api/tools/spray/pick");

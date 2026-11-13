@@ -1,7 +1,7 @@
 // The nav fixer's requests (app/src-tauri/src/tools/navfix.rs). The editing session lives in
 // the app: every edit, undo and save answers with the whole state, so the page just shows it.
 
-import { postJson } from "../../../api";
+import { post as postJson } from "../common/api";
 import { toNav, type Nav } from "../overlays";
 import type { Vec3 } from "../viewer/coords";
 
@@ -75,13 +75,7 @@ export async function openFix(map: string, signal?: AbortSignal): Promise<FixSta
 }
 
 async function post(map: string, what: string, body: unknown = {}): Promise<FixState> {
-  let raw: Record<string, unknown>;
-  try {
-    raw = await postJson<Record<string, unknown>>(`${base(map)}/${what}`, body);
-  } catch {
-    throw new FixError("Couldn't reach the app. Try again.");
-  }
-  return toState(raw);
+  return toState(await postJson<Record<string, unknown>>(`${base(map)}/${what}`, body));
 }
 
 export const editNav = (map: string, op: Op) => post(map, "edit", op);
@@ -92,7 +86,7 @@ export const reloadNav = (map: string) => post(map, "reload");
 
 /** Starts rebuilding the bots' map knowledge for the saved nav (a setup job). */
 export async function rebuildKnowledge(map: string): Promise<string> {
-  const r = await postJson<{ ok?: boolean; job?: string; error?: string }>(`${base(map)}/rebuild`).catch(() => ({ error: "Couldn't reach the app. Try again." }) as { error: string; job?: string });
+  const r = await postJson<{ ok?: boolean; job?: string }>(`${base(map)}/rebuild`);
   if (r.error || !r.job) throw new FixError(r.error ?? "The rebuild didn't start.");
   return r.job;
 }

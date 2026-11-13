@@ -1,6 +1,6 @@
 // The callout editor's server side (tools/callouts.rs).
 
-import { getJson, postJson } from "../../../api";
+import { get, post, tryGet } from "../common/api";
 
 /** [id, x0, y0, x1, y1, z, place (1-based into places, 0 none)] */
 export type RawArea = [number, number, number, number, number, number, number];
@@ -32,22 +32,14 @@ export type Area = { id: number; x0: number; y0: number; x1: number; y1: number;
 
 export type Change = { id: number; place: string };
 
-type Err = { error?: string };
 const base = (map: string) => `/api/tools/callouts/${encodeURIComponent(map)}`;
 
-export const loadCallouts = async (map: string): Promise<CalloutNav> => {
-  const r = await getJson<CalloutNav & Err>(base(map));
-  if (r.error) throw new Error(r.error);
-  return r;
-};
+export const loadCallouts = (map: string): Promise<CalloutNav> => get<CalloutNav>(base(map));
 
-export const suggest = (map: string, from: "usual" | "other") =>
-  getJson<{ changes?: Change[]; message?: string } & Err>(`${base(map)}/suggest?from=${from}`).catch(() => ({ error: "Couldn't reach the app." }) as Err & { changes?: Change[]; message?: string });
+export const suggest = (map: string, from: "usual" | "other") => tryGet<{ changes?: Change[]; message?: string }>(`${base(map)}/suggest?from=${from}`);
 
 export const saveCallouts = (map: string, stamp: string, changes: Change[]) =>
-  postJson<{ ok?: boolean; changed?: number; message?: string; stamp?: string; knowledge?: boolean | null } & Err>(base(map), { stamp, changes }).catch(
-    () => ({ error: "Couldn't reach the app." }) as Err & { ok?: boolean; changed?: number; message?: string; stamp?: string; knowledge?: boolean | null },
-  );
+  post<{ ok?: boolean; changed?: number; message?: string; stamp?: string; knowledge?: boolean | null }>(base(map), { stamp, changes });
 
 /** The same rule as the server: a letter, then letters, digits or _, up to 31. */
 export const validPlace = (n: string) => /^[A-Za-z][A-Za-z0-9_]{0,30}$/.test(n);

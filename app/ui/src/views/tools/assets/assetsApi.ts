@@ -3,7 +3,7 @@
 // system's file dialog, never a path from the page.
 
 import { useQuery } from "@tanstack/react-query";
-import { getJson, postJson } from "../../../api";
+import { get as json, getBytes, post } from "../common/api";
 import { readLsmb } from "../viewer/bundle";
 
 export type WadInfo = { folder: string; name: string; size: number; textures?: number; custom: boolean; stock: boolean; error?: string };
@@ -20,18 +20,6 @@ export type Usage = {
 export type ModelKind = "player" | "view" | "carried" | "world" | "hostage" | "prop";
 export type ModelItem = { folder: string; path: string; name: string; kind: ModelKind; size: number; imported: boolean };
 export type ModelInfo = { name: string; bones: number; sequences: number; textures: number; skins: number; bodyparts: number; maps: string[] };
-
-type Err = { error?: string };
-
-/** JSON routes answer {error} with 200: that's a failure too. */
-async function json<T>(path: string): Promise<T> {
-  const v = await getJson<T & Err>(path);
-  if (v && typeof v === "object" && typeof (v as Err).error === "string") throw new Error((v as Err).error);
-  return v;
-}
-
-/** A POST whose failure to arrive reads like any other error. */
-const post = <T>(path: string, body: unknown = {}) => postJson<T & Err>(path, body).catch(() => ({ error: "Couldn't reach the app." }) as T & Err);
 
 const enc = encodeURIComponent;
 
@@ -79,25 +67,8 @@ export type ModelBundle = {
 
 const DAMAGED = "This model couldn't be read. The file may be damaged.";
 
-async function fetchBin(path: string, signal?: AbortSignal): Promise<ArrayBuffer> {
-  let r: Response;
-  try {
-    r = await fetch(path, { credentials: "same-origin", signal });
-  } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") throw e;
-    throw new Error("Couldn't reach the app. Try again.");
-  }
-  if (!r.ok) {
-    let msg = "";
-    try {
-      msg = String((await r.json()).error ?? "");
-    } catch {
-      /* no words */
-    }
-    throw new Error(msg || DAMAGED);
-  }
-  return r.arrayBuffer();
-}
+// (a model that isn't there or can't be read: the app's words, else DAMAGED)
+const fetchBin = (path: string, signal?: AbortSignal) => getBytes(path, signal, DAMAGED);
 
 export async function getModel(m: { folder: string; path: string }, signal?: AbortSignal): Promise<ModelBundle> {
   const { header: h, get } = readLsmb(await fetchBin(`/api/tools/assets/model?${modelQuery(m)}`, signal), DAMAGED);

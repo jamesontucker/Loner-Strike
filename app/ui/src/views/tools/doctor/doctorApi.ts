@@ -1,6 +1,7 @@
 // The map doctor's server side (tools/doctor.rs).
 
-import { getJson, postJson } from "../../../api";
+import { getJson } from "../../../api";
+import { get, post } from "../common/api";
 
 export type FileStatus = "ok" | "elsewhere" | "missing";
 
@@ -36,15 +37,9 @@ export type Report = {
   error?: undefined;
 };
 
-type Err = { error?: string };
-const post = <T>(path: string, body: unknown = {}) => postJson<T & Err>(path, body).catch(() => ({ error: "Couldn't reach the app." }) as T & Err);
 const base = (map: string) => `/api/tools/doctor/${encodeURIComponent(map)}`;
 
-export const checkMap = async (map: string): Promise<Report> => {
-  const r = await getJson<Report | { error: string }>(base(map));
-  if (r.error) throw new Error(r.error);
-  return r as Report;
-};
+export const checkMap = (map: string): Promise<Report> => get<Report>(base(map));
 export const writeRes = (map: string) => post<{ ok?: boolean; message?: string; listed?: number }>(`${base(map)}/res`);
 export const copyFiles = (map: string, files: string[]) => post<{ ok?: boolean; message?: string; copied?: string[] }>(`${base(map)}/copy`, { files });
 export const learnMap = (map: string, relearn: boolean) => post<{ ok?: boolean; job?: string }>("/api/navs/learn", { maps: [map], relearn });
