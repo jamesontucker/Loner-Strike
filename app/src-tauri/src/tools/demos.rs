@@ -693,6 +693,22 @@ async fn api_replay(State(st): State<Shared>, h: HeaderMap, Json(q): Json<Which>
     act(st, h, move |_, p| to_replay(p, &q.at, &q.name)).await
 }
 
+/// Shows the demo in Finder / Explorer (the folder on Linux).
+fn reveal(places: &[Place], at: &str, name: &str) -> Result<Value, String> {
+    let (_, path) = find(places, at, name).ok_or(GONE)?;
+    #[cfg(target_os = "macos")]
+    let r = std::process::Command::new("open").arg("-R").arg(&path).spawn().map(crate::sys::reap);
+    #[cfg(windows)]
+    let r = std::process::Command::new("explorer").arg(format!("/select,{}", path.display())).spawn().map(crate::sys::reap);
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let r = std::process::Command::new("xdg-open").arg(path.parent().unwrap_or(&path)).spawn().map(crate::sys::reap);
+    r.map(|_| json!({"ok": true})).map_err(|e| format!("Couldn't show the folder ({e})."))
+}
+
+async fn api_reveal(State(st): State<Shared>, h: HeaderMap, Json(q): Json<Which>) -> Response {
+    act(st, h, move |_, p| reveal(p, &q.at, &q.name)).await
+}
+
 /// The app window's listener only (merged into tools::local_routes).
 pub fn routes() -> Router<Shared> {
     Router::new()
@@ -702,6 +718,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/demos/delete", post(api_delete))
         .route("/api/tools/demos/play", post(api_play))
         .route("/api/tools/demos/replay", post(api_replay))
+        .route("/api/tools/demos/reveal", post(api_reveal))
 }
 
 #[cfg(test)]

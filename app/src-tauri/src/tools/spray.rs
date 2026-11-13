@@ -7,12 +7,17 @@
 //! unless the player says not to. The file it replaces is kept in the app's folder
 //! (sprays/backups) and "Put back" brings it back.
 //!
+//! The page's composer (layers of pictures, words and stickers) draws the spray itself and
+//! hands the result over with `POST /use` (a PNG), so preview and install work the same as for
+//! a picture from the dialog. Compositions are kept as JSON in the app's folder
+//! (sprays/designs) so they can be opened and changed later.
+//!
 //! App window only (merged into tools::local_routes). Errors are `{error}` with status 200,
 //! like the rest of the app; POSTs need the panel header.
 
 use crate::goldsrc::wadwrite::{self, Clear, Look, Options, Spray};
 use crate::server::Shared;
-use axum::extract::State;
+use axum::extract::{DefaultBodyLimit, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -34,6 +39,12 @@ const MAX_SIDE: u32 = 8192;
 const KEEP: usize = 10;
 pub const FILE: &str = "tempdecal.wad";
 pub const GAMES: [(&str, &str); 2] = [("cstrike", "Counter-Strike 1.6"), ("czero", "Condition Zero")];
+
+/// The biggest drawn spray the page may hand over (a PNG data URL), and the biggest saved composition.
+const MAX_USE: usize = 8 << 20;
+const MAX_DESIGN: usize = 24 << 20;
+/// Saved compositions kept at most.
+const MAX_DESIGNS: usize = 200;
 
 /// The picture the player chose (its file name and pixels).
 struct Picked {
@@ -266,6 +277,111 @@ pub fn restore(hl: &Path, app: &Path, game: &str) -> Result<Value, String> {
     Ok(json!({"ok": true, "message": format!("Your previous spray is back in {label}.")}))
 }
 
+// ---- the composer: a drawn spray, saved compositions -----------------------------------
+
+/// Takes the page's drawn spray (a PNG data URL) as the picture to preview and install.
+pub fn use_drawn(name: &str, data_url: &str) -> Result<Value, String> {
+    let b64 = data_url.strip_prefix("data:image/png;base64,").ok_or("The drawn spray wasn't a PNG.")?;
+    if b64.len() > MAX_USE {
+        return Err("The drawn spray is too big.".into());
+    }
+    let bytes = base64::engine::general_purpose::STANDARD.decode(b64.trim()).map_err(|_| "The drawn spray was damaged.".to_string())?;
+    let mut r = image::ImageReader::with_format(std::io::Cursor::new(bytes), image::ImageFormat::Png);
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(2048);
+    limits.max_image_height = Some(2048);
+    r.limits(limits);
+    let img = r.decode().map_err(|_| "The drawn spray was damaged.".to_string())?.to_rgba8();
+    let name: String = name.chars().filter(|c| !c.is_control()).take(60).collect();
+    let name = if name.trim().is_empty() { "Your design".to_string() } else { name };
+    let v = json!({"name": name, "width": img.width(), "height": img.height()});
+    *PICKED.lock().unwrap_or_else(|e| e.into_inner()) = Some(Picked { name, img });
+    Ok(v)
+}
+
+fn designs_dir(app: &Path) -> PathBuf {
+    app.join("sprays").join("designs")
+}
+
+/// A composition's id: letters, digits, - and _ only (it's its file name).
+fn design_id_ok(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 40 && id.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+}
+
+fn design_path(app: &Path, id: &str) -> Result<PathBuf, String> {
+    if !design_id_ok(id) {
+        return Err("That design isn't there any more.".into());
+    }
+    Ok(designs_dir(app).join(format!("{id}.json")))
+}
+
+/// The saved compositions, newest first: id, name, when, and a small picture.
+pub fn designs(app: &Path) -> Value {
+    let mut v: Vec<Value> = std::fs::read_dir(designs_dir(app))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let p = e.path();
+            let id = p.file_name()?.to_str()?.strip_suffix(".json")?.to_string();
+            if !design_id_ok(&id) || e.metadata().ok()?.len() as usize > MAX_DESIGN {
+                return None;
+            }
+            let d: Value = serde_json::from_slice(&std::fs::read(&p).ok()?).ok()?;
+            Some(json!({"id": id, "name": d["name"].as_str().unwrap_or("Untitled"), "updated": d["updated"].as_u64().unwrap_or(0), "thumb": d["thumb"].as_str().filter(|t| t.starts_with("data:image/png;base64,"))}))
+        })
+        .collect();
+    v.sort_by_key(|d| std::cmp::Reverse(d["updated"].as_u64().unwrap_or(0)));
+    json!({"designs": v})
+}
+
+pub fn open_design(app: &Path, id: &str) -> Result<Value, String> {
+    let p = design_path(app, id)?;
+    let bytes = std::fs::read(&p).map_err(|_| "That design isn't there any more.".to_string())?;
+    let mut d: Value = serde_json::from_slice(&bytes).map_err(|_| "That design's file is damaged.".to_string())?;
+    d["id"] = json!(id);
+    Ok(d)
+}
+
+/// Saves a composition (a new id when none is given) and returns its id.
+pub fn save_design(app: &Path, id: Option<&str>, name: &str, doc: Value, thumb: Option<&str>) -> Result<Value, String> {
+    if !doc.is_object() {
+        return Err("Nothing to save.".into());
+    }
+    let id = match id {
+        Some(i) if design_id_ok(i) => i.to_string(),
+        Some(_) => return Err("That design isn't there any more.".into()),
+        None => {
+            if std::fs::read_dir(designs_dir(app)).map(|r| r.count()).unwrap_or(0) >= MAX_DESIGNS {
+                return Err(format!("You have {MAX_DESIGNS} designs saved. Delete some first."));
+            }
+            let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+            format!("d{ms}")
+        }
+    };
+    let name: String = name.chars().filter(|c| !c.is_control()).take(60).collect();
+    let name = if name.trim().is_empty() { "Untitled".to_string() } else { name.trim().to_string() };
+    let updated = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let thumb = thumb.filter(|t| t.starts_with("data:image/png;base64,") && t.len() < 512 << 10);
+    let body = serde_json::to_vec(&json!({"name": name, "updated": updated, "thumb": thumb, "doc": doc})).map_err(|e| e.to_string())?;
+    if body.len() > MAX_DESIGN {
+        return Err(format!("This design is too big to save ({} MB). Use smaller pictures.", body.len() >> 20));
+    }
+    let dir = designs_dir(app);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn't save the design: {e}"))?;
+    let p = design_path(app, &id)?;
+    let tmp = dir.join(format!("{id}.json.new"));
+    std::fs::write(&tmp, &body).map_err(|e| format!("Couldn't save the design: {e}"))?;
+    std::fs::rename(&tmp, &p).map_err(|e| format!("Couldn't save the design: {e}"))?;
+    Ok(json!({"ok": true, "id": id, "name": name, "updated": updated}))
+}
+
+pub fn delete_design(app: &Path, id: &str) -> Result<Value, String> {
+    let p = design_path(app, id)?;
+    std::fs::remove_file(&p).map_err(|_| "That design isn't there any more.".to_string())?;
+    Ok(json!({"ok": true}))
+}
+
 // ---- routes ----------------------------------------------------------------------------
 
 fn answer(r: Result<Value, String>) -> Response {
@@ -372,6 +488,75 @@ async fn api_restore(State(st): State<Shared>, h: HeaderMap, Json(req): Json<Res
     blocking(move || restore(&hl, &app, &req.game)).await
 }
 
+#[derive(Deserialize)]
+struct UseReq {
+    #[serde(default)]
+    name: String,
+    png: String,
+}
+
+async fn api_use(h: HeaderMap, Json(req): Json<UseReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || use_drawn(&req.name, &req.png)).await
+}
+
+async fn api_designs(State(st): State<Shared>) -> Response {
+    let (_, app) = match folders(&st) {
+        Ok(f) => f,
+        Err(e) => return answer(Err(e)),
+    };
+    blocking(move || Ok(designs(&app))).await
+}
+
+#[derive(Deserialize)]
+struct DesignQ {
+    #[serde(default)]
+    id: String,
+}
+
+async fn api_design(State(st): State<Shared>, Query(q): Query<DesignQ>) -> Response {
+    let (_, app) = match folders(&st) {
+        Ok(f) => f,
+        Err(e) => return answer(Err(e)),
+    };
+    blocking(move || open_design(&app, &q.id)).await
+}
+
+#[derive(Deserialize)]
+struct SaveDesignReq {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    name: String,
+    doc: Value,
+    #[serde(default)]
+    thumb: Option<String>,
+}
+
+async fn api_design_save(State(st): State<Shared>, h: HeaderMap, Json(req): Json<SaveDesignReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let (_, app) = match folders(&st) {
+        Ok(f) => f,
+        Err(e) => return answer(Err(e)),
+    };
+    blocking(move || save_design(&app, req.id.as_deref(), &req.name, req.doc, req.thumb.as_deref())).await
+}
+
+async fn api_design_delete(State(st): State<Shared>, h: HeaderMap, Json(q): Json<DesignQ>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let (_, app) = match folders(&st) {
+        Ok(f) => f,
+        Err(e) => return answer(Err(e)),
+    };
+    blocking(move || delete_design(&app, &q.id)).await
+}
+
 /// The app window's listener only (merged into tools::local_routes).
 pub fn routes() -> Router<Shared> {
     Router::new()
@@ -380,6 +565,11 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/spray/preview", post(api_preview))
         .route("/api/tools/spray/install", post(api_install))
         .route("/api/tools/spray/restore", post(api_restore))
+        .route("/api/tools/spray/use", post(api_use).layer(DefaultBodyLimit::max(MAX_USE + 4096)))
+        .route("/api/tools/spray/designs", get(api_designs))
+        .route("/api/tools/spray/design", get(api_design))
+        .route("/api/tools/spray/design/save", post(api_design_save).layer(DefaultBodyLimit::max(MAX_DESIGN + 4096)))
+        .route("/api/tools/spray/design/delete", post(api_design_delete))
 }
 
 #[cfg(test)]
@@ -495,6 +685,43 @@ mod tests {
         let e = load_picture(&txt).unwrap_err();
         assert!(e.contains("isn't a picture") || e.contains("damaged"), "{e}");
         assert!(load_picture(&root.join("missing.png")).unwrap_err().starts_with("Couldn't open"));
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn drawn_sprays_and_designs() {
+        let (root, hl, app) = temp("designs");
+        // a drawn spray goes in like a picture from the dialog
+        let png = crate::goldsrc::png(64, 48, &[200; 64 * 48 * 4], true).unwrap();
+        let url = format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&png));
+        let v = use_drawn("My design", &url).unwrap();
+        assert_eq!((v["width"].as_u64(), v["height"].as_u64()), (Some(64), Some(48)));
+        assert!(use_drawn("x", "data:image/jpeg;base64,AAAA").is_err());
+        assert!(use_drawn("x", "data:image/png;base64,!!!!").is_err());
+        install(&hl, &app, &picked(|p| p.img.clone()).unwrap(), &Choice::default(), &["cstrike".into()], false).unwrap();
+
+        // save, list, open, save again under the same id, delete
+        assert_eq!(designs(&app)["designs"], json!([]));
+        let s = save_design(&app, None, "  Skull  ", json!({"layers": []}), Some(&url)).unwrap();
+        let id = s["id"].as_str().unwrap().to_string();
+        assert_eq!(s["name"], "Skull");
+        let list = designs(&app);
+        assert_eq!(list["designs"][0]["id"], id.as_str());
+        assert!(list["designs"][0]["thumb"].as_str().unwrap().starts_with("data:image/png"));
+        let d = open_design(&app, &id).unwrap();
+        assert_eq!(d["doc"], json!({"layers": []}));
+        save_design(&app, Some(&id), "Skull 2", json!({"layers": [1]}), None).unwrap();
+        assert_eq!(open_design(&app, &id).unwrap()["name"], "Skull 2");
+        assert_eq!(designs(&app)["designs"].as_array().unwrap().len(), 1);
+        // ids are file names: nothing outside the folder
+        for bad in ["../x", "a/b", "", "a.json", &"x".repeat(41)] {
+            assert!(open_design(&app, bad).is_err(), "{bad}");
+            assert!(save_design(&app, Some(bad), "x", json!({}), None).is_err(), "{bad}");
+            assert!(delete_design(&app, bad).is_err(), "{bad}");
+        }
+        assert!(save_design(&app, None, "x", json!("not a doc"), None).is_err());
+        delete_design(&app, &id).unwrap();
+        assert!(open_design(&app, &id).is_err());
         std::fs::remove_dir_all(&root).ok();
     }
 }
