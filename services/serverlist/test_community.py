@@ -419,7 +419,7 @@ class Submissions(unittest.TestCase):
         asked = files.calls
         for _ in range(2):
             self.assertEqual(c.submit(body(map_item()), "1.2.3.4")[0], 200)
-        self.assertEqual((len(gb.calls), files.calls), (1, asked), "a retry of the same file doesn't ask GameBanana again")
+        self.assertEqual(files.calls, asked, "a retry reads the page (a newer file?) but not the same package again")
         self.assertEqual(len(rec.sent), 1, "nor tell the team again")
 
     def test_refusals(self):
@@ -999,6 +999,67 @@ class Provenance(unittest.TestCase):
         c.submit(body(SPRAY_ITEM), "a")
         it = json.loads(c.store.get("spray:82585")["item"])
         self.assertEqual((it["name"], it["kind"]), (SPRAY["_sName"], "spray"))
+
+
+class FileChoice(unittest.TestCase):
+    """The server picks the file: the newest that passes, never older than what's listed."""
+
+    def two_files(self, c, newer_zip=None, newer_av="clean"):
+        page = new_file(MAP)  # 2000000 is newer (same date, bigger id)
+        page["_aFiles"][1]["_sAvResult"] = newer_av
+        c.get.pages[("Mod", 739197)] = page
+        c.get_range.files[2000000] = newer_zip or map_zip(["overviews/de_marakesh.bmp"])
+
+    def test_the_newest_file_is_listed_whatever_the_request_names(self):
+        c, _ = make()
+        self.two_files(c)
+        c.submit(body(map_item(file=1885247)), "a")
+        self.assertEqual(json.loads(c.store.get("mod:739197")["item"])["file"], 2000000)
+
+    def test_a_stranger_cant_downgrade(self):
+        c, _ = make()
+        self.two_files(c)
+        c.submit(body(map_item()), "creator")
+        before = c.store.get("mod:739197")["item"]
+        code, ans = c.submit(body(map_item(file=1885247)), "stranger")
+        self.assertEqual((code, ans["state"]), (200, "listed"))
+        self.assertEqual(c.store.get("mod:739197")["item"], before)
+
+    def test_a_newer_file_updates_the_listing(self):
+        c, _ = make()
+        c.submit(body(map_item()), "a")
+        self.assertEqual(json.loads(c.store.get("mod:739197")["item"])["file"], 1885247)
+        self.two_files(c)
+        c.submit(body(map_item()), "anyone")
+        it = json.loads(c.store.get("mod:739197")["item"])
+        self.assertEqual((it["file"], it["md5"]), (2000000, "1" * 32))
+
+    def test_a_newer_file_that_fails_keeps_the_listed_one(self):
+        for bad in ({"newer_av": "infected"}, {"newer_zip": map_zip(["addons/amxmodx/plugins/x.amxx"])}):
+            c, _ = make()
+            c.submit(body(map_item()), "a")
+            self.two_files(c, **bad)
+            code, ans = c.submit(body(map_item(file=2000000)), "a")
+            self.assertEqual((code, ans["state"]), (200, "listed"), bad)
+            self.assertIn("newer file", ans["note"])
+            row = c.store.get("mod:739197")
+            self.assertEqual(json.loads(row["item"])["file"], 1885247)
+            self.assertIn("wasn't used", row["check_note"])
+
+    def test_a_new_page_takes_the_newest_file_that_passes(self):
+        c, _ = make()
+        self.two_files(c, newer_av="infected")
+        self.assertEqual(c.submit(body(map_item(file=2000000)), "a")[0], 200)
+        self.assertEqual(json.loads(c.store.get("mod:739197")["item"])["file"], 1885247)
+
+    def test_a_moderator_can_go_back(self):
+        c, _ = make()
+        self.two_files(c)
+        c.submit(body(map_item()), "a")
+        self.assertEqual(c.moderate("mod:739197", "usefile", {"file": 1885247})["listed"]["file"], 1885247,
+                         "going back to an older file is the moderator's tool")
+        with self.assertRaises(cm.Reject):
+            c.moderate("mod:739197", "usefile", {"file": 999})
 
 
 class Transitions(unittest.TestCase):

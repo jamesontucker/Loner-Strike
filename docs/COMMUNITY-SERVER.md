@@ -27,7 +27,7 @@ Nothing here is live until the steps in section 6 are run.
 | `services/serverlist/test_community.py`, `test_modbot.py`, `testdata/gamebanana/` | Offline tests with recorded GameBanana answers and forged Discord interactions. |
 
 Tests: `cd services/serverlist && python3 -m unittest test_community test_modbot test_serverlist`
-(87 tests). A live check that a real GameBanana zip can be listed by range requests:
+(93 tests). A live check that a real GameBanana zip can be listed by range requests:
 `python3 -c "import community as c; print(c.package_names({'id': 1886785, 'name': 'cage.zip', 'size': 278384}))"`.
 
 ## 2. How it works
@@ -41,14 +41,20 @@ request ends up in the listing: a stranger can at most make an entry match the p
 1. Rate limits per visitor: 10 an hour, 30 a day (Cloudflare's `CF-Connecting-IP` only when the
    request comes from the tunnel on 127.0.0.1, like `/register`); never per GameBanana member, so
    nobody can use up a creator's quota. Body at most 64 KB.
-2. A retry naming a file already registered answers at once without asking GameBanana again. A
-   pulled page answers 409.
+2. A pulled page answers 409. A retry reads the page again (is there a newer file?) but not an
+   unchanged package.
 3. The page is fetched from `https://gamebanana.com/apiv11/<Mod|Spray>/<id>/ProfilePage` (the only
    host; ids from validated integers; no redirects; 4 MB cap; 30 fetches/minute in all). It must:
    exist and not be trashed/private/withheld/flagged; be Counter-Strike 1.6 (4254); carry
    `Software Used: LonerStrike`; be in a category we take (its kind comes from it: Maps 5474,
-   Prefabs 451, Textures 681, AMXX 3521 for Studio modes, Sprays); list the file id, scanned clean,
-   1 byte to 1 GB. A file the team turned down (same MD5) answers 409.
+   Prefabs 451, Textures 681, AMXX 3521 for Studio modes, Sprays).
+   **The server picks the file**, not the request (its file id is only a hint): the page's newest
+   file (GameBanana's date, then id) that passes every check here and below, scanned clean, 1 byte
+   to 1 GB; up to three are tried. For a page already registered only a file newer than the one it
+   has counts, so nobody can switch a listing back to an old version; if a newer file fails, the
+   listed one stays and the answer and the entry's check note say why. Going back to an older file
+   is a moderator's `lsmod.py use-file <page> <file id>`. A file the team turned down (same MD5)
+   answers 409.
 4. **The package**: the zip's directory and its `loner-strike.json` (one entry, at most 64 KB packed
    and unpacked whatever the header claims, stored or deflated, not encrypted) are read with HTTP
    range requests from `gamebanana.com/dl/<file>`, following redirects only to
@@ -139,7 +145,7 @@ for an hour; no CORS headers). `--admin-local` on the service makes them answer 
 `lsmod.py` (Mac: token in `~/.config/lonerstrike/community-admin.token`, chmod 600, or
 `LS_COMMUNITY_TOKEN`): `queue [--state …]`, `show`, `pull --reason`, `restore`, `hide`, `approve`,
 `reject --reason`, `block`, `unblock`, `blocked`, `reports [page]`, `feature on|off`,
-`recheck [page]`, `status` (counts; "CHANGED, run publish" when the index differs from what was
+`use-file <page> <file id>`, `recheck [page]`, `status` (counts; "CHANGED, run publish" when the index differs from what was
 last published), `publish [--out DIR] [--upload] [--if-changed]`. Pages as `mod:123`, `spray:45` or
 the GameBanana link. On the box: `python3 /opt/lonerstrike-list/lsmod.py --server http://127.0.0.1:8100 …`
 with the token in `LS_COMMUNITY_TOKEN`.

@@ -632,6 +632,7 @@ def page_files(page):
                         "size": f.get("_nFilesize") if isinstance(f.get("_nFilesize"), int) else 0,
                         "md5": str(f.get("_sMd5Checksum") or "").lower(),
                         "av": str(f.get("_sAvResult") or "").lower(),
+                        "added": f.get("_tsDateAdded") if isinstance(f.get("_tsDateAdded"), int) else 0,
                         "avState": str(f.get("_sAvState") or "").lower()})
     return out
 
@@ -650,9 +651,9 @@ def page_shots(page):
     return out
 
 
-def check_page(page, model, gb, file_id):
-    """Checks a profile page and the file asked for. Returns the page's facts (kind, title,
-    submitter, author name, screenshots, the file); Reject(422) with what to fix."""
+def page_facts(page, model):
+    """Checks a profile page (game, flags, tag, category, name, submitter). Returns its facts;
+    Reject(422) with what to fix."""
     if _d(page.get("_aGame")).get("_idRow") != CS16_GAME:
         raise Reject(422, "That page isn't in GameBanana's Counter-Strike 1.6 section.")
     if page.get("_bIsFlagged"):
@@ -666,21 +667,39 @@ def check_page(page, model, gb, file_id):
     title = one_line(str(page.get("_sName") or ""), 80)
     if not title:
         raise Reject(422, "The page has no name.")
-    f = next((f for f in page_files(page) if f["id"] == file_id), None)
-    if not f or not _HEX32.match(f["md5"]):
-        raise Reject(422, "That file isn't on the page. Upload the zip the app made unchanged, then try again.")
+    sub = _d(page.get("_aSubmitter"))
+    sid = sub.get("_idRow") if isinstance(sub.get("_idRow"), int) else 0
+    name = one_line(str(sub.get("_sName") or ""), 40)
+    if sid <= 0 or not name:
+        raise Reject(422, "GameBanana didn't say who made the page. Try again in a minute.")
+    return {"kind": kind, "title": title, "submitterId": sid, "author": name, "screenshots": page_shots(page)}
+
+
+def file_ok(f):
+    """Reject(422) unless a page's file is scanned clean and of a sane size."""
+    if not _HEX32.match(f["md5"]):
+        raise Reject(422, "GameBanana doesn't list the file's checksum yet. Try again in a few minutes.")
     if f["av"] != "clean":
         if f["av"] in ("", "pending") or f["avState"] not in ("", "done"):
             raise Reject(422, "GameBanana is still checking the file. Try again in a few minutes.")
         raise Reject(422, "GameBanana's virus check didn't pass the file.")
     if not 0 < f["size"] <= MAX_FILE:
         raise Reject(422, "The file on the page is empty or too big.")
-    sub = _d(page.get("_aSubmitter"))
-    sid = sub.get("_idRow") if isinstance(sub.get("_idRow"), int) else 0
-    name = one_line(str(sub.get("_sName") or ""), 40)
-    if sid <= 0 or not name:
-        raise Reject(422, "GameBanana didn't say who made the page. Try again in a minute.")
-    return {"kind": kind, "title": title, "submitterId": sid, "author": name, "screenshots": page_shots(page), "file": f}
+
+
+def newest_first(files):
+    """A page's files, newest first (GameBanana's date added, then the id)."""
+    return sorted(files, key=lambda f: (f["added"], f["id"]), reverse=True)
+
+
+def check_page(page, model, gb, file_id):
+    """The page's facts with one of its files (moderators restoring a given file, and tests)."""
+    facts = page_facts(page, model)
+    f = next((f for f in page_files(page) if f["id"] == file_id), None)
+    if not f:
+        raise Reject(422, "That file isn't on the page. Upload the zip the app made unchanged, then try again.")
+    file_ok(f)
+    return dict(facts, file=f)
 
 
 def build_item(model, gb, facts, sizes, manifest):
@@ -1131,23 +1150,60 @@ class Community:
 
     # -- registrations --
 
-    def _verify(self, model, gb, file_id):
-        """(page facts, the entry) after every automatic check: page, tag, category, file, the
-        package's contents and its loner-strike.json."""
+    def _page(self, model, gb):
         got, page = fetch_page(model, gb, self.get)
         if got == "gone":
             raise Reject(422, page)
         if got == "error":
             log(f"GameBanana didn't answer for {key_of(model, gb)}: {page}")
             raise Reject(502, "GameBanana didn't answer. Try again in a few minutes.")
-        facts = check_page(page, model, gb, file_id)
+        return page
+
+    def _entry(self, model, gb, facts, f):
+        """The entry for one of the page's files after the file and package checks."""
+        file_ok(f)
         try:
-            sizes, manifest = read_package(facts["file"], self.get_range)
+            sizes, manifest = read_package(f, self.get_range)
         except FetchError as e:
             log(f"couldn't read the package of {key_of(model, gb)}: {e}")
             raise Reject(502, "GameBanana's file server didn't answer. Try again in a few minutes.")
         check_package(list(sizes))
-        return facts, build_item(model, gb, facts, sizes, manifest)
+        return build_item(model, gb, dict(facts, file=f), sizes, manifest)
+
+    def _choose(self, model, gb, row):
+        """(page facts, the entry or None, a note). The server picks the file, never the request:
+        the page's newest file that passes every check, and for a page already registered only a
+        file newer than the one it has (None: keep it; the note says why when a newer one failed).
+        Going back to an older file is a moderator's call."""
+        page = self._page(model, gb)
+        facts = page_facts(page, model)
+        files = newest_first(page_files(page))
+        have = (_j(row["item"]) or _j(row["proposed"]) or {}) if row else {}
+        cur = next((f for f in files if f["id"] == have.get("file")), None)
+        floor = (cur["added"], cur["id"]) if cur else None
+        newer = [f for f in files if floor is None or (f["added"], f["id"]) > floor][:3]
+        refusals = []
+        for f in newer:
+            try:
+                return facts, self._entry(model, gb, facts, f), ""
+            except Reject as e:
+                if e.code == 502:
+                    raise
+                refusals.append(e)
+        if cur:
+            return facts, None, (f"A newer file on the page wasn't used: {refusals[0].message}" if refusals else "")
+        if refusals:
+            raise refusals[0]
+        raise Reject(422, "The page has no file. Upload the zip the app made, then try again.")
+
+    def _verify_file(self, model, gb, file_id):
+        """(facts, entry) for one given file (a moderator approving or restoring)."""
+        page = self._page(model, gb)
+        facts = page_facts(page, model)
+        f = next((f for f in page_files(page) if f["id"] == file_id), None)
+        if not f:
+            raise Reject(422, "That file isn't on the page any more.")
+        return facts, self._entry(model, gb, facts, f)
 
     def submit(self, body, ip):
         """(status, answer) for the app's POST /community/submit. Anyone may register any
@@ -1158,18 +1214,21 @@ class Community:
         if not self.ip_day.allow(ip):
             return 429, {"error": "Too many registrations from here today. Try again tomorrow."}
         try:
-            model, gb, file_id, app = parse_submission(body)
+            model, gb, _hint, app = parse_submission(body)  # the file id is only a hint: the server picks
             key = key_of(model, gb)
             row = self.store.get(key)
-            if row:
-                if row["state"] == "pulled":
-                    raise Reject(409, "The Loner-Strike team pulled this page, so it can't be registered again. Ask in the Discord.")
-                same = [x for x in (_j(row["proposed"]), _j(row["item"])) if x and x.get("file") == file_id]
-                if same and row["state"] in ("pending", "listed", "hidden"):
-                    return 200, {"ok": True, "key": key, "state": "pending" if row["proposed"] and _j(row["proposed"]).get("file") == file_id else row["state"]}
+            if row and row["state"] == "pulled":
+                raise Reject(409, "The Loner-Strike team pulled this page, so it can't be registered again. Ask in the Discord.")
             if not self.gb_limit.allow("gb"):
                 raise Reject(503, "The list is busy. Try again in a few minutes.")
-            facts, item = self._verify(model, gb, file_id)
+            facts, item, note = self._choose(model, gb, row)
+            if item is None:
+                # nothing newer that passes: the entry stays as it is
+                if note:
+                    self.store.touch(key, row["checked"], note)
+                    log(f"registration {key}: kept the current file ({note})")
+                waiting = bool(row["proposed"])
+                return 200, dict({"ok": True, "key": key, "state": "pending" if waiting else row["state"]}, **({"note": note} if note else {}))
             if row and row["state"] == "rejected" and row["hidden_by"] == "team" and row["rejected_md5"] == item["md5"]:
                 raise Reject(409, f"The Loner-Strike team turned this file down: {row['reason'] or 'no reason given'}. Upload a new version to try again.")
             # creators the team blocked wait for a moderator, and so does a new file for a page the
@@ -1312,7 +1371,7 @@ class Community:
     def _verify_live(self, row, item):
         """The entry as the page and package are now, which must still be the same file."""
         try:
-            facts, fresh = self._verify(row["model"], row["gb"], item.get("file", 0))
+            facts, fresh = self._verify_file(row["model"], row["gb"], item.get("file", 0))
         except Reject as e:
             if e.code == 502:
                 raise Reject(502, f"{e.message} Nothing changed.")
@@ -1373,6 +1432,20 @@ class Community:
                 raise Reject(409, f"{row['key']} is {row['state']}; only a listed entry can be hidden.")
             row.update(state="hidden", reason=reason, updated=t, hidden_by="team")
             self.store.put(row, "hide", reason)
+        elif action == "usefile":
+            # a moderator choosing which of the page's files is listed (an older one too)
+            row = self._need(key)
+            fid = body.get("file")
+            if isinstance(fid, bool) or not isinstance(fid, int) or fid <= 0:
+                raise Reject(400, "Which file? Its GameBanana file id.")
+            if not row["item"]:
+                raise Reject(409, f"{row['key']} isn't listed; approve it first.")
+            try:
+                _, item = self._verify_file(row["model"], row["gb"], fid)
+            except Reject as e:
+                raise Reject(e.code if e.code == 502 else 409, f"Not done: {e.message}")
+            row.update(item=json.dumps(item, ensure_ascii=False), updated=t, check_note="")
+            self.store.put(row, "usefile", f"file {fid} {reason}".strip())
         elif action == "feature":
             row = self._need(key)
             on = body.get("featured")

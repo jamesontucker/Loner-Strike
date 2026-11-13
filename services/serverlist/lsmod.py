@@ -20,6 +20,7 @@ a terminal, and the way to publish the index.
   lsmod.py blocked                     who is blocked
   lsmod.py reports [<page>]            players' reports (the last 100)
   lsmod.py feature <page> on|off
+  lsmod.py use-file <page> <file id>   list another of the page's files (an older one too: only you can)
   lsmod.py recheck [<page>]            check GameBanana again now (all pages: in the background)
   lsmod.py status                      counts, and whether the index changed since publishing
   lsmod.py publish [--out DIR] [--upload]
@@ -181,6 +182,9 @@ def main(argv=None):
     sub.add_parser("unblock").add_argument("page")
     sub.add_parser("blocked")
     sub.add_parser("reports").add_argument("page", nargs="?")
+    s = sub.add_parser("use-file")
+    s.add_argument("page")
+    s.add_argument("file", type=int)
     s = sub.add_parser("feature")
     s.add_argument("page")
     s.add_argument("onoff", choices=("on", "off"))
@@ -231,6 +235,9 @@ def main(argv=None):
                 print("No reports.")
             for x in r["reports"]:
                 print(f"{when(x['at'])}  {x['key']:<16} {x['reason']:<16} #{x['reporter']}  {x['note']}")
+        elif a.cmd == "use-file":
+            d = call(srv, tok, "POST", page_path(a.page), {"action": "usefile", "file": a.file})
+            print(f"{d['key']} now lists file {d['listed']['file']}. Run `lsmod.py publish --upload` to put it out.")
         elif a.cmd == "feature":
             d = call(srv, tok, "POST", page_path(a.page), {"action": "feature", "featured": a.onoff == "on"})
             print(f"{d['key']}: featured {d['featured']}.")
