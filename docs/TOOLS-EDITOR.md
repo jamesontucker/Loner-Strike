@@ -154,3 +154,101 @@ Routes under `/api/tools/editor/` on the local listener only, one open document 
 since a revision, binary like the LSMB bundle), `POST cmd` (`{op: "hollow", ids, thickness}` →
 `{revision, changed, error?}`), `POST undo | redo`, `GET checks`. These are a proposal for the
 crew contract (TOOLS-PLAN §3.8), to agree before anyone builds them.
+
+## 4. Feature parity checklist (agent P5, 2026-11-12)
+
+What mappers expect from Hammer 3.5/4, J.A.C.K., TrenchBroom, NetRadiant and the scene editors of
+Blender/Unity/Godot, checked against our code. **Have** = in the editor now; **P4** = being built by
+agent P4; **Missing** = not done yet; **n/a** = doesn't apply to GoldSrc or to us.
+
+### Files and project
+| Feature | Status | Where |
+|---|---|---|
+| New / open / save / save as, recent files, autosave + crash recovery, backups on save | Have | P2: `MapEditor.tsx`, `tools/editor.rs` |
+| Import / export .map (Valve 220, standard), TrenchBroom groups | Have | E: `mapfile.rs` |
+| Menu bar (File/Edit/View/Select/Tools/Map/Help) with keys shown | Have | P5: `MenuBar.tsx`, `commands.ts` |
+| Project viewer: project + files beside it, backups, compile output (.bsp/.log/.err/.pts/.lin/.prt), installed map/.nav/.lsv/.res/overview, WADs, sounds/models/sprites/sky used; open/show/rename/delete (asked, kept in a deleted folder); missing-file warnings; recent projects | Have | P5: `ProjectPanel.tsx`, `tools/editor/workspace.rs` |
+| Prefabs and a prefab library | P4 | `PrefabPanel.tsx`, `tools/editor/prefabs.rs` |
+| Publish to the community | P4 | Publish… button |
+| RMF/JMF (Hammer/J.A.C.K. binary) import | Missing | export .map from those editors instead |
+| BSP decompile / trace-over reference | Missing | (TOOLS-EDITOR §1 "next steps") |
+
+### Editing
+| Feature | Status | Where |
+|---|---|---|
+| Undo/redo with labels; drags fold into one step | Have | E/I |
+| Undo history panel (click to jump) | Have | P5: `HistoryPanel.tsx`, `/history`, `/history/jump` |
+| Cut / copy / paste (as .map text, between maps), paste special (arrays) | Have | P2 |
+| Duplicate one grid step over, duplicate in place, **new targetnames with links kept inside the copy** | Have | P5: `bulk::cmd_duplicate`, Ctrl+D / Ctrl+Shift+D |
+| Shift-drag the gizmo to copy | Have | P5 (Gizmo hook) |
+| Duplicate in the outliner | Have | (pick in Outline, Ctrl+D or Edit > Duplicate) |
+| Delete, group / ungroup, tie to entity / move to world | Have | I/P2, menu + keys P5 |
+| Hollow, carve, merge, clip (3 modes), snap to grid | Have | E/I/P2 |
+| Vertex editing (corners) | Have | P2; edge/face handles P4 |
+| Mirror / turn 90° | Have | P2, menu + keys P5 |
+| Transform dialog (exact move / turn / stretch) | Have | P5: `P5Dialogs.tsx` |
+| Align (line up low/middle/high) and distribute (equal gaps) | Have | P5: `bulk::cmd_align_objects`, `cmd_distribute` |
+| Find and replace: textures, classnames, key names, values (whole/contains, case, selection only) | Have | P5: `bulk::find`, `cmd_replace` |
+| Replace with entity / prefab | Have | P5 (`ReplaceWith`, uses P4's `place_prefab`) |
+| Shapes: box, cylinder, wedge, spike, sphere, arch | Have | P2 |
+| Texture application, face sheet, justify, fit, texture lock, drag handles | Have | P2 |
+| Decal tool / overlay tool | n/a (infodecal entity works via the entity tool) | |
+| Displacements, instances (func_instance), I/O system | n/a | Source-only |
+| Brush/face CSG "extrude face" (TrenchBroom Shift-drag a face) | Have (push/pull a face) | I |
+| Edit keyvalues of many entities at once | Missing | inspector shows one entity |
+
+### Selecting
+| Feature | Status | Where |
+|---|---|---|
+| Click / Shift-click, box select in flat views | Have | I/P2; 3D box select P4 |
+| Select all / none / invert | Have | P5 |
+| Select same texture / same type / same name | Have | P5: `bulk::similar` |
+| Select touching / inside | Have | P5: `bulk::touching` |
+| Go to brush / entity number (compiler numbers or editor ids; paste "Entity 3, Brush 12") | Have | P5: `GoTo` |
+| Hide / isolate / show all, visibility sets | Have | P2; project-saved sets P4 |
+| Lock (can't be picked) per item and per group | Have | P5 (per item, page only), group lock flag (doc) |
+| Pick groups vs objects | Have | P2 |
+| Selection filters (only brushes/entities/triggers) | Partly | Outline filters; no click filter yet |
+
+### Views and navigation
+| Feature | Status | Where |
+|---|---|---|
+| **Quad view** (3D + Top + Front + Side), 1+3, two side by side, single; splitters; per-pane camera and view; maximise (Shift+Space / Shift+Z Hammer / Ctrl+Space TB, or double-click a pane header); remembered | Have | P5: `panes.ts`, `Layout.tsx`, EditorScene panes (one canvas, drei `<View>`) |
+| Orbit and fly cameras, camera bookmarks | Have | B/P2 |
+| Zoom to selection / whole map in every pane | Have | P5 (`frame`, `frameFlat`) |
+| Grid size, show/hide grid, rotation snap steps | Have | P5: Grid and snapping dialog |
+| Snap to brush corners / edges | Have | P5: `snapGeo.ts` (new points: boxes, clip, entities, measure) |
+| Cross-hair at the cursor in flat views | Have | P5 |
+| Cordon | Have/P4 | Q (compile), P4 (improvements) |
+| Lighting preview / compiled lightmap preview | Missing | (the viewer shows compiled maps lit) |
+| Textured / flat / wireframe render modes per pane | Missing | panes all draw textured |
+| Measure tool | Have | P2 |
+
+### Entities
+| Feature | Status | Where |
+|---|---|---|
+| FGD-driven forms, help, flags, choices, colour, angle | Have | P2 |
+| Entity tool remembers the last class | Have | P5 (kept across visits) |
+| Target/targetname lines in 3D, "sets off / set off by" | Have | I |
+| Entity report | Have | P2 |
+| Sound / model preview, custom FGD | P4 | |
+| Model drawn in place of the box (studio models in the view) | Missing | |
+
+### Map and compile
+| Feature | Status | Where |
+|---|---|---|
+| Live checks with fixes | Have | E/P2 |
+| Compile (SDHLT) with presets, problems linked into the map, leak line + go to start/end | Have | Q |
+| Playtest with bots | Have | Q |
+| Point file / leak navigation | Have | Q (`LeakLine`, Compile tab), reachable from Map > Compile |
+| Map properties dialog | Have | P2 |
+
+### Help and keys
+| Feature | Status | Where |
+|---|---|---|
+| Command palette (Ctrl+K / Ctrl+Shift+P): every command with its key, plus entities by name | Have | P5: `CommandPalette.tsx` |
+| Cheat sheet (?) | Have | P5 |
+| Shortcut editor with Hammer-style and TrenchBroom-style presets (Hammer also switches to Quad) | Have | P5: `Shortcuts.ts`, `KeyEditor` |
+| Status bar: cursor coordinates, selection count and size | Have | I + P5 |
+| Tooltips on every tool with its key | Have | I |
+| Scripting / plugins in the editor | n/a for 1.0.0 | |

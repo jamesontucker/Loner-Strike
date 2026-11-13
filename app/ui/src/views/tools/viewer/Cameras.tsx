@@ -84,13 +84,15 @@ function Fly() {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
   const invalidate = useThree((s) => s.invalidate);
+  // the map editor's panes (one canvas, several views): grab the mouse in the pane's own box
+  const connected = useThree((s) => s.events.connected) as HTMLElement | undefined;
   const keys = useRef(new Set<string>());
   const euler = useRef(new THREE.Euler(0, 0, 0, "YXZ"));
 
   useEffect(() => {
     euler.current.setFromQuaternion(camera.quaternion, "YXZ");
     euler.current.z = 0;
-    const el = gl.domElement;
+    const el = connected?.dataset?.pane != null ? connected : gl.domElement;
     const { setLooking } = useTools.getState();
     let dragging = false;
     const locked = () => document.pointerLockElement === el;
@@ -152,7 +154,7 @@ function Fly() {
       setLooking(false);
       fly.grabbing = false;
     };
-  }, [camera, gl, invalidate]);
+  }, [camera, gl, invalidate, connected]);
 
   const fwd = useMemo(() => new THREE.Vector3(), []);
   const side = useMemo(() => new THREE.Vector3(), []);
