@@ -1,23 +1,271 @@
 {
   "about": "Game mode component library for the map editor's drag-in panel. Keys and help live in lonerstrike.fgd (same class names). visual: how to draw it in 3D - ring (radius key), box (size key or the brush), point, beam_up (a line to the sky), link (lines to the entities named in link_keys). colour is RGB 0-255. needs_nav: the editor warns when there's no nav area under it.",
-  "groups": ["Zones", "Spawns & players", "Loot", "Doors & traps", "Objectives", "Defence", "Social"],
+  "groups": [
+    "Zones",
+    "Spawns & players",
+    "Loot",
+    "Doors & traps",
+    "Objectives",
+    "Defence",
+    "Social",
+    "Creatures"
+  ],
   "components": [
-    { "class": "ls_safe_zone", "group": "Zones", "title": "Safe zone", "blurb": "The circle players must stay inside.", "visual": "ring", "radius_key": "radius", "colour": [80, 160, 255], "needs_nav": true },
-    { "class": "ls_zone_shrinker", "group": "Zones", "title": "Zone shrinker", "blurb": "Shrinks a safe zone in stages.", "visual": "link", "link_keys": ["zone"], "colour": [80, 160, 255] },
-    { "class": "ls_damage_zone", "group": "Zones", "title": "Damage zone", "blurb": "Fire, poison or shock that hurts players inside.", "visual": "ring", "radius_key": "radius", "size_key": "size", "colour": [255, 60, 30] },
-    { "class": "ls_respawn_point", "group": "Spawns & players", "title": "Respawn point", "blurb": "Where a team spawns in a mode.", "visual": "point", "colour": [80, 200, 255], "needs_nav": true },
-    { "class": "ls_player_class", "group": "Spawns & players", "title": "Player class", "blurb": "Health, speed, weapons and model for a class.", "visual": "point", "colour": [200, 160, 255] },
-    { "class": "ls_weapon_spawner", "group": "Loot", "title": "Weapon spawner", "blurb": "A weapon on the floor that comes back.", "visual": "point", "colour": [255, 170, 0], "needs_nav": true },
-    { "class": "ls_loot_container", "group": "Loot", "title": "Loot crate", "blurb": "Hold USE to open; gives items from a loot table.", "visual": "point", "colour": [255, 170, 0], "needs_nav": true },
-    { "class": "ls_supply_drop", "group": "Loot", "title": "Supply drop", "blurb": "A crate falls from the sky here.", "visual": "beam_up", "colour": [255, 90, 60], "needs_nav": true },
-    { "class": "ls_timed_door", "group": "Doors & traps", "title": "Timed door", "blurb": "Opens, closes and locks doors on a timetable.", "visual": "link", "link_keys": ["door"], "colour": [200, 200, 80] },
-    { "class": "ls_trigger_trap", "group": "Doors & traps", "title": "Trap", "blurb": "Sets off its targets when someone walks in.", "visual": "ring", "radius_key": "radius", "size_key": "size", "link_keys": ["target"], "colour": [255, 80, 80] },
-    { "class": "ls_moving_platform", "group": "Doors & traps", "title": "Moving platform", "blurb": "Bots wait for a train or lift and ride it.", "visual": "link", "link_keys": ["platform"], "colour": [120, 200, 255] },
-    { "class": "ls_capture_point", "group": "Objectives", "title": "Capture point", "blurb": "Stand on it to take it for your team.", "visual": "ring", "radius_key": "radius", "size_key": "size", "colour": [255, 220, 40], "needs_nav": true },
-    { "class": "ls_extraction_zone", "group": "Objectives", "title": "Extraction", "blurb": "Stay inside while it's open to get out.", "visual": "ring", "radius_key": "radius", "size_key": "size", "colour": [60, 255, 90], "needs_nav": true },
-    { "class": "ls_checkpoint", "group": "Objectives", "title": "Checkpoint", "blurb": "Race gates passed in order.", "visual": "ring", "radius_key": "radius", "size_key": "size", "badge_key": "order", "colour": [255, 220, 60], "needs_nav": true },
-    { "class": "ls_barricade", "group": "Defence", "title": "Barricade", "blurb": "A wall that breaks and can be repaired. Wraps the selected brushes.", "visual": "box", "brush": true, "colour": [180, 120, 60] },
-    { "class": "ls_wave_spawner", "group": "Defence", "title": "Wave spawner", "blurb": "Where waves of enemies come from.", "visual": "ring", "radius_key": "radius", "badge_key": "waves", "colour": [255, 40, 40], "needs_nav": true },
-    { "class": "ls_meeting_point", "group": "Social", "title": "Meeting point", "blurb": "Call a meeting, talk, vote someone out.", "visual": "ring", "radius_key": "radius", "size_key": "size", "colour": [255, 200, 140], "needs_nav": true }
+    {
+      "class": "ls_safe_zone",
+      "group": "Zones",
+      "title": "Safe zone",
+      "blurb": "The circle players must stay inside.",
+      "visual": "ring",
+      "radius_key": "radius",
+      "colour": [
+        80,
+        160,
+        255
+      ],
+      "needs_nav": true
+    },
+    {
+      "class": "ls_zone_shrinker",
+      "group": "Zones",
+      "title": "Zone shrinker",
+      "blurb": "Shrinks a safe zone in stages.",
+      "visual": "link",
+      "link_keys": [
+        "zone"
+      ],
+      "colour": [
+        80,
+        160,
+        255
+      ]
+    },
+    {
+      "class": "ls_damage_zone",
+      "group": "Zones",
+      "title": "Damage zone",
+      "blurb": "Fire, poison or shock that hurts players inside.",
+      "visual": "ring",
+      "radius_key": "radius",
+      "size_key": "size",
+      "colour": [
+        255,
+        60,
+        30
+      ]
+    },
+    {
+      "class": "ls_respawn_point",
+      "group": "Spawns & players",
+      "title": "Respawn point",
+      "blurb": "Where a team spawns in a mode.",
+      "visual": "point",
+      "colour": [
+        80,
+        200,
+        255
+      ],
+      "needs_nav": true
+    },
+    {
+      "class": "ls_player_class",
+      "group": "Spawns & players",
+      "title": "Player class",
+      "blurb": "Health, speed, weapons and model for a class.",
+      "visual": "point",
+      "colour": [
+        200,
+        160,
+        255
+      ]
+    },
+    {
+      "class": "ls_weapon_spawner",
+      "group": "Loot",
+      "title": "Weapon spawner",
+      "blurb": "A weapon on the floor that comes back.",
+      "visual": "point",
+      "colour": [
+        255,
+        170,
+        0
+      ],
+      "needs_nav": true
+    },
+    {
+      "class": "ls_loot_container",
+      "group": "Loot",
+      "title": "Loot crate",
+      "blurb": "Hold USE to open; gives items from a loot table.",
+      "visual": "point",
+      "colour": [
+        255,
+        170,
+        0
+      ],
+      "needs_nav": true
+    },
+    {
+      "class": "ls_supply_drop",
+      "group": "Loot",
+      "title": "Supply drop",
+      "blurb": "A crate falls from the sky here.",
+      "visual": "beam_up",
+      "colour": [
+        255,
+        90,
+        60
+      ],
+      "needs_nav": true
+    },
+    {
+      "class": "ls_timed_door",
+      "group": "Doors & traps",
+      "title": "Timed door",
+      "blurb": "Opens, closes and locks doors on a timetable.",
+      "visual": "link",
+      "link_keys": [
+        "door"
+      ],
+      "colour": [
+        200,
+        200,
+        80
+      ]
+    },
+    {
+      "class": "ls_trigger_trap",
+      "group": "Doors & traps",
+      "title": "Trap",
+      "blurb": "Sets off its targets when someone walks in.",
+      "visual": "ring",
+      "radius_key": "radius",
+      "size_key": "size",
+      "link_keys": [
+        "target"
+      ],
+      "colour": [
+        255,
+        80,
+        80
+      ]
+    },
+    {
+      "class": "ls_moving_platform",
+      "group": "Doors & traps",
+      "title": "Moving platform",
+      "blurb": "Bots wait for a train or lift and ride it.",
+      "visual": "link",
+      "link_keys": [
+        "platform"
+      ],
+      "colour": [
+        120,
+        200,
+        255
+      ]
+    },
+    {
+      "class": "ls_capture_point",
+      "group": "Objectives",
+      "title": "Capture point",
+      "blurb": "Stand on it to take it for your team.",
+      "visual": "ring",
+      "radius_key": "radius",
+      "size_key": "size",
+      "colour": [
+        255,
+        220,
+        40
+      ],
+      "needs_nav": true
+    },
+    {
+      "class": "ls_extraction_zone",
+      "group": "Objectives",
+      "title": "Extraction",
+      "blurb": "Stay inside while it's open to get out.",
+      "visual": "ring",
+      "radius_key": "radius",
+      "size_key": "size",
+      "colour": [
+        60,
+        255,
+        90
+      ],
+      "needs_nav": true
+    },
+    {
+      "class": "ls_checkpoint",
+      "group": "Objectives",
+      "title": "Checkpoint",
+      "blurb": "Race gates passed in order.",
+      "visual": "ring",
+      "radius_key": "radius",
+      "size_key": "size",
+      "badge_key": "order",
+      "colour": [
+        255,
+        220,
+        60
+      ],
+      "needs_nav": true
+    },
+    {
+      "class": "ls_barricade",
+      "group": "Defence",
+      "title": "Barricade",
+      "blurb": "A wall that breaks and can be repaired. Wraps the selected brushes.",
+      "visual": "box",
+      "brush": true,
+      "colour": [
+        180,
+        120,
+        60
+      ]
+    },
+    {
+      "class": "ls_wave_spawner",
+      "group": "Defence",
+      "title": "Wave spawner",
+      "blurb": "Where waves of enemies come from.",
+      "visual": "ring",
+      "radius_key": "radius",
+      "badge_key": "waves",
+      "colour": [
+        255,
+        40,
+        40
+      ],
+      "needs_nav": true
+    },
+    {
+      "class": "ls_meeting_point",
+      "group": "Social",
+      "title": "Meeting point",
+      "blurb": "Call a meeting, talk, vote someone out.",
+      "visual": "ring",
+      "radius_key": "radius",
+      "size_key": "size",
+      "colour": [
+        255,
+        200,
+        140
+      ],
+      "needs_nav": true
+    },
+    {
+      "class": "ls_creature",
+      "group": "Creatures",
+      "title": "Creature",
+      "blurb": "A zombie, hound, turret... from creatures.ini, back every round.",
+      "visual": "point",
+      "colour": [
+        120,
+        200,
+        60
+      ],
+      "needs_nav": true
+    }
   ]
 }

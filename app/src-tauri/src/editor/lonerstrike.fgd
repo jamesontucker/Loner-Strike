@@ -242,3 +242,40 @@
 	platform(target_destination) : "Train or platform" : : "Its Name, or its brush model (*12) in a map pack."
 	auto(float) : "Sets off after" : -1 : "Seconds after the round starts (-1 = never by itself)."
 ]
+
+// ---- creatures (the ReGameDLL fork's creature framework, docs/CREATURES.md) ------------------------
+
+@PointClass size(-16 -16 0, 16 16 72) color(120 200 60) studio("models/zombie.mdl") = ls_creature : "A creature placed in the map (needs Loner-Strike's game DLL; types from creatures.ini). It comes back every round."
+[
+	type(choices) : "Type" : "zombie" : "A type from creatures.ini (the Creature Studio makes more); any name works." =
+	[
+		"zombie" : "Zombie"
+		"runner" : "Runner"
+		"brute" : "Brute"
+		"spitter" : "Spitter"
+		"hound" : "Hound"
+		"turret" : "Turret"
+		"boss" : "Boss"
+	]
+	behaviour(choices) : "Behaviour" : "" : "Empty: the type's own." =
+	[
+		"" : "The type's own"
+		"idle" : "Idle"
+		"wander" : "Wander round its spot"
+		"patrol" : "Patrol (a path_corner chain)"
+		"guard" : "Guard its spot"
+		"chase" : "Hunt (always knows where you are)"
+		"flee" : "Run away"
+	]
+	path(target_destination) : "Patrol path" : : "The first path_corner of its patrol."
+	radius(float) : "Range" : : "How far it wanders, patrols or guards from its spot (empty: the type's)."
+	respawn(float) : "Comes back after" : : "Seconds after it dies (0 = next round; empty: the type's)."
+	health(integer) : "Health" : : "Empty: the type's."
+	speed(float) : "Speed" : : "Running speed (empty: the type's)."
+	damage(float) : "Damage" : : "Per hit (empty: the type's)."
+	aggression(float) : "Aggression" : : "0 only fights back .. 1 attacks anyone it notices (empty: the type's)."
+	detect(float) : "Sight range" : : "Empty: the type's."
+	hates(choices) : "Attacks" : "" : "" = [ "" : "The type's own" "all" : "Everyone" "t" : "Terrorists" "ct" : "Counter-Terrorists" ]
+	persist(choices) : "Body stays" : 0 : "Hidden until it comes back instead of removed." = [ 0 : "No" 1 : "Yes" ]
+	angles(string) : "Facing (pitch yaw roll)" : "0 0 0" : ""
+]

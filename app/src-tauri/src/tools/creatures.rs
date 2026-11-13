@@ -1709,7 +1709,7 @@ pub fn waves_status(f: &Files) -> Result<Value, String> {
     let sets = parse_waves(text.as_deref().unwrap_or(""));
     let types: Vec<String> = resolve(&Doc::parse(&read_text(&f.ini())?.unwrap_or_default())).into_iter().filter(|r| !r.skipped).map(|r| r.t.name).collect();
     Ok(json!({"file": WAVES_REL, "exists": text.is_some(), "sets": sets, "defaults": {"laststand": laststand_default()}, "types": types,
-              "modes": [{"id": "laststand", "name": "Last Stand", "reads": false, "note": "Last Stand plays its built-in mix today; it reads this file once its update lands."}]}))
+              "modes": [{"id": "laststand", "name": "Last Stand", "reads": true, "note": "Last Stand reads [laststand] at map start (types it names are loaded for that map)."}]}))
 }
 
 pub fn save_waves(f: &Files, w: &WaveSet) -> Result<bool, String> {
