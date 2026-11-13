@@ -541,6 +541,29 @@ pub fn replay_csv(name: &str, d: &Details) -> String {
     out
 }
 
+/// Keeps only `[A-Za-z0-9_-]` (anything else becomes `-`), at most 64 characters; `empty`
+/// when nothing is left. For text from a demo (its file name, the map its header names) that
+/// goes into a file name: a crafted header must never reach outside the folder.
+pub fn file_part(s: &str, dash_ok: bool, empty: &str) -> String {
+    let v: String = s.chars().take(64).map(|c| if c.is_ascii_alphanumeric() || c == '-' || (c == '_' && !dash_ok) { c } else { '-' }).collect();
+    let v = v.trim_matches('-').to_string();
+    if v.is_empty() {
+        empty.to_string()
+    } else {
+        v
+    }
+}
+
+/// Where a demo's path goes as a recording: `<dir>/demo-<stem>_<map>_1.csv` (the Replay tool
+/// finds the map in the name). None if it wouldn't be a plain file right in `dir`.
+pub fn replay_file(dir: &Path, name: &str, map: &str) -> Option<PathBuf> {
+    // the stem keeps no '_' (the map comes after the first one)
+    let stem = file_part(name.trim_end_matches(".dem").trim_end_matches(".DEM"), true, "demo");
+    let map = file_part(map, false, "unknown");
+    let file = dir.join(format!("demo-{stem}_{map}_1.csv"));
+    (file.parent() == Some(dir)).then_some(file)
+}
+
 fn to_replay(places: &[Place], at: &str, name: &str) -> Result<Value, String> {
     let (_, path) = find(places, at, name).ok_or(GONE)?;
     let mut f = std::fs::File::open(&path).map_err(|e| e.to_string())?;
@@ -554,11 +577,9 @@ fn to_replay(places: &[Place], at: &str, name: &str) -> Result<Value, String> {
         return Err("This demo has no player walking around in it (an HLTV demo follows a camera, not a player).".into());
     }
     let who = d.names.first().cloned().unwrap_or_else(|| "You".into());
-    let stem: String = name.trim_end_matches(".dem").trim_end_matches(".DEM").chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' }).collect();
     let dir = crate::sys::app_dir().join("tools").join("recordings");
     std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn't make the recordings folder ({e})."))?;
-    // <prefix>_<map>_<n>.csv: the Replay tool finds the map in the name
-    let file = dir.join(format!("demo-{stem}_{}_1.csv", h.map));
+    let file = replay_file(&dir, name, &h.map).ok_or("This demo's name or map can't be used for a file.")?;
     crate::sys::write_atomic(&file, replay_csv(&who, &d).as_bytes()).map_err(|e| format!("Couldn't save it ({e})."))?;
     let id = super::cache::short_hash(&[&file.to_string_lossy()]);
     Ok(json!({"ok": true, "id": id, "map": h.map, "message": "Opening the path in Replay…"}))
@@ -807,6 +828,28 @@ mod tests {
                 let _ = scan(&mut Cursor::new(&x), &h);
             }
         }
+    }
+
+
+    #[test]
+    fn crafted_headers_stay_in_the_folder() {
+        let dir = PathBuf::from("/tmp/recs");
+        for map in ["../../x", "..\\..\\x", "/etc/passwd", "a/b", "", "..", "de_dust2\0evil", &"x".repeat(500)] {
+            let f = replay_file(&dir, "my demo.dem", map).unwrap();
+            assert_eq!(f.parent(), Some(dir.as_path()), "{map}");
+            let n = f.file_name().unwrap().to_string_lossy().to_string();
+            assert!(n.starts_with("demo-my-demo_") && n.ends_with("_1.csv") && n.len() < 160 && !n.contains(".."), "{n}");
+        }
+        assert_eq!(replay_file(&dir, "a.dem", "de_dust2").unwrap(), dir.join("demo-a_de_dust2_1.csv"));
+        // a demo whose header names a path as its map: the header reads, the file stays put
+        let mut b = fixture::build();
+        b[16..32].copy_from_slice(b"../../../evil\0\0\0");
+        let h = read_header(&mut Cursor::new(&b), b.len() as u64).unwrap();
+        assert_eq!(h.map, "../../../evil");
+        assert_eq!(replay_file(&dir, "x.dem", &h.map).unwrap(), dir.join("demo-x_evil_1.csv"));
+        // names with line breaks or commas can't add rows to the recording
+        let d = Details { path: vec![], ..Default::default() };
+        assert_eq!(replay_csv("a,b\nS,1,2", &d), "P,1,abS12,0\n");
     }
 
     #[test]
