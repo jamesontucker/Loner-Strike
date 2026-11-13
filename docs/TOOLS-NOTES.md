@@ -2481,3 +2481,29 @@ Builds on W1's plugin change (holders + free roamers). What was wrong in the bra
 - Revives now `goal <bot> use <spot> <victim> 75 <secs left> 64` to the two nearest bots (W2's request).
 - **Server for the user**: Sim/LSPLAY on ls_outpost, Normal, 5 bots, port 27330, waits for a person, brain r43364829560
   (ls-next-w2). `connect 127.0.0.1:27330`. Stop: `pkill -f 'lsrun.sh LSPLAY'; pkill -f 'Sim\\LSPLAY\\hlds.exe'`.
+
+### Agent P4: map editor UX round (dialogs, panels, leftovers) — 2026-11-12
+- **One dialog** (`editor/EditorDialog.tsx`, `dialog.css`): header (title, subtitle, ×), body that scrolls on its own, footer
+  that stays (secondary actions left, Cancel + main action right), Enter = main action, Esc closes, focus in/out (the app's
+  Sheet), inline errors per field (`<Field error>`), whole-form error above the footer; sm/md/lg widths that fit 1024×700.
+  Now on it: Paste special (numbers checked as you type), Map properties (World / Sun / Rules / WADs / Entity definitions in
+  columns; ranges checked; FGD choice says what happened in place), Entity report (sticky table header, tick-all, Delete
+  left / Pick right), Save as a prefab (picture + fields), Rename prefab, Cordon (all cordon settings; the Compile tab keeps a
+  one-line summary + "Box round what's picked").
+- **Panels never clip** (`dialog.css` `.editor-side` rules): Library rows instead of cards (56 px thumbnail, name and details
+  shortened with … and shown in full on hover, Place + ⋯ menu for Share / Rename / Delete), component rows the same way,
+  buttons shorten with … instead of spilling, the box-mode list fits, Compile tab grouped (Compile / Playtest), map name
+  checked as you type, the pack and cordon fields fit. Checked at 1024×700 (tools-dev, sidebar on) and 1440×900.
+- **Leftovers**: a see-through box shows where a dragged or placed prefab/component lands, with an arrow for its front (the
+  drag image is the thumbnail); prefabs dropped on walls turn to face out (front = +y; `place_prefab` `yaw`, `face_out`,
+  `prefab::place_transform`, tested with the ladder); R turns a quarter while placing (Shift+R back); breadcrumb with the
+  open map's name and the unsaved-changes check (`useToolCrumbs`/`useDirty`, P6's request) — those two lines sit in
+  **MapEditor.tsx next to P5's uncommitted dock work; P5, please commit them with yours**.
+- **Not done by me, on purpose (others' files are mid-edit):** `P5Dialogs.tsx` and `CommandPalette.tsx` (find & replace,
+  transform, go to, grid, replace with, cheat sheet, key editor) have P5's uncommitted edits: **P5, please move them onto
+  EditorDialog** (same props as above; `Field` for each input). `community/Publish.tsx` has the community agent's uncommitted
+  edits (and the Community page doesn't load in tools-dev right now): **Community owner, please put Publish's steps on the
+  same pattern** (sections, inline errors, a footer/ActionBar that stays) — happy to do it once it's committed.
+- Git slip: my notes commit "P4 to P5 on the editor dialog…" also carried 184 lines of someone else's uncommitted
+  TOOLS-NOTES text (the file was dirty when I committed it by path). Content intact; the message is mine.
+- Dev servers: mine are `serve_tools_dev` on 8268 + Vite 5267 (from a private copy of HEAD), tab in isolated context `p4`.
