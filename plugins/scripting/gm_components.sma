@@ -188,6 +188,9 @@ new g_doors[MAX_COMP][MAX_DOORS];
 new Float:g_dorg[MAX_COMP][MAX_DOORS][3];
 new Float:g_dang[MAX_COMP][MAX_DOORS][3];
 new g_ndoors[MAX_COMP];
+#define MAX_BOARDS 12
+new g_boards[MAX_COMP][MAX_BOARDS];
+new g_nboards[MAX_COMP];
 new g_nslots;
 
 new g_slotOf[MAX_ENTS];
@@ -439,6 +442,7 @@ public plugin_init()
 	RegisterHam(Ham_Touch, "func_door", "ham_door_touch");
 	RegisterHam(Ham_Touch, "func_door_rotating", "ham_door_touch");
 	register_forward(FM_PlayerPreThink, "fm_prethink");
+	register_forward(FM_ShouldCollide, "fm_shouldcollide");
 
 	register_event("HLTV", "ev_new_round", "a", "1=0", "2=0");
 	register_logevent("ev_round_start", 2, "1=Round_Start");
@@ -1083,12 +1087,35 @@ stock solid_when_clear(s, solid)
 	pev(ent, pev_absmax, mx);
 	if (box_occupied(mn, mx))
 		return;
+	/* a barricade only re-forms with no creature close by (on either side) */
+	if (g_kind[s] == K_BARRICADE && creature_near(mn, mx, 250.0))
+		return;
 	g_aux[s] = 0;
 	set_pev(ent, pev_solid, solid);
 	/* relink where it is (a brush's origin isn't its middle) */
 	new Float:o[3];
 	pev(ent, pev_origin, o);
 	engfunc(EngFunc_SetOrigin, ent, o);
+}
+
+stock bool:creature_near(const Float:mn[3], const Float:mx[3], Float:r)
+{
+	new e = 0, Float:o[3];
+	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
+	{
+		if (pev(e, pev_deadflag) != DEAD_NO)
+			continue;
+		pev(e, pev_origin, o);
+		new Float:d = 0.0;
+		for (new i = 0; i < 3; i++)
+		{
+			new Float:c = floatclamp(o[i], mn[i], mx[i]);
+			d += (o[i] - c) * (o[i] - c);
+		}
+		if (d < r * r)
+			return true;
+	}
+	return false;
 }
 
 /* is any living player or creature overlapping this box (with a little room) */
@@ -1179,6 +1206,13 @@ stock comp_link(s)
 			ks(s, "adopt", name, charsmax(name));
 			if (name[0])
 				barricade_adopt(s, name);
+			/* boards=<targetname>: separate board brushes, hidden one by one as it weakens */
+			g_nboards[s] = 0;
+			ks(s, "boards", name, charsmax(name));
+			new e = 0;
+			while (name[0] && g_nboards[s] < MAX_BOARDS && (e = engfunc(EngFunc_FindEntityByString, e, "targetname", name)) > 0)
+				g_boards[s][g_nboards[s]++] = e;
+			barricade_tint(s);
 		}
 		case K_CHECKPOINT:
 		{
@@ -1408,7 +1442,7 @@ stock comp_reset(s)
 		case K_BARRICADE:
 		{
 			g_pf[s][B_MAX] = floatmax(kf(s, "hp", 500.0), 1.0);
-			g_pf[s][B_REPAIR] = floatmax(kf(s, "repair_secs", 3.0), 0.5);
+			g_pf[s][B_REPAIR] = floatmax(kf(s, "repair_secs", 1.5), 0.5);
 			g_pf[s][B_COST] = kf(s, "repair_cost", 0.0);
 			g_val[s] = g_pf[s][B_MAX];
 			g_pf[s][B_LASTSTEP] = 4.0;
@@ -2535,17 +2569,61 @@ stock barricade_stand(s, bool:up)
 		set_pev(ent, pev_solid, SOLID_NOT);
 		set_pev(ent, pev_takedamage, DAMAGE_NO);
 	}
+	barricade_tint(s);
 	if (g_ready)
 		hint_comp(s);
 }
 
+/* how a barricade looks for its health: a brush one is see-through (more so as it weakens,
+   or alpha-tested with alpha_test=1 for a { fence texture); boards= brushes go one by one */
 stock barricade_tint(s)
 {
-	new Float:f = g_val[s] / g_pf[s][B_MAX];
-	if (f >= 0.99)
-		render(g_ent[s], kRenderFxNone, 0, 0, 0, kRenderNormal, 255);
+	new Float:f = floatclamp(g_val[s] / g_pf[s][B_MAX], 0.0, 1.0);
+	new ent = g_ent[s];
+	new m[4];
+	pev(ent, pev_model, m, charsmax(m));
+	if (m[0] == '*')
+	{
+		if (ki(s, "alpha_test", 0))
+			render(ent, kRenderFxNone, 0, 0, 0, kRenderTransAlpha, 255);
+		else if (ki(s, "see_through", 1))
+			render(ent, kRenderFxNone, 0, 0, 0, kRenderTransTexture, 90 + floatround(110.0 * f));
+		else
+			render(ent, kRenderFxNone, 0, 0, 0, kRenderNormal, 255);
+	}
+	else if (f >= 0.99)
+		render(ent, kRenderFxNone, 0, 0, 0, kRenderNormal, 255);
 	else
-		render(g_ent[s], kRenderFxNone, 0, 0, 0, kRenderTransTexture, 120 + floatround(135.0 * f));
+		render(ent, kRenderFxNone, 0, 0, 0, kRenderTransTexture, 120 + floatround(135.0 * f));
+	/* boards: as many showing as the health is worth */
+	new n = g_nboards[s];
+	if (n)
+	{
+		new show = g_state[s] == 1 ? 0 : floatround(float(n) * f, floatround_ceil);
+		for (new i = 0; i < n; i++)
+		{
+			new b = g_boards[s][i];
+			if (!pev_valid(b))
+				continue;
+			if (i < show)
+				set_pev(b, pev_effects, pev(b, pev_effects) & ~EF_NODRAW);
+			else
+				set_pev(b, pev_effects, pev(b, pev_effects) | EF_NODRAW);
+		}
+	}
+}
+
+/* Players (their bullets, their bots' sight, their steps) pass through a see-through barricade;
+   creatures don't, so they have to break it */
+public fm_shouldcollide(touched, other)
+{
+	if (touched <= 0 || touched >= MAX_ENTS || !g_slotOf[touched] || !(1 <= other <= MaxClients))
+		return FMRES_IGNORED;
+	new s = g_slotOf[touched] - 1;
+	if (g_kind[s] != K_BARRICADE || !ki(s, "see_through", 1))
+		return FMRES_IGNORED;
+	forward_return(FMV_CELL, 0);
+	return FMRES_SUPERCEDE;
 }
 
 public ham_takedamage(ent, inflictor, attacker, Float:dmg, bits)
@@ -2601,8 +2679,9 @@ stock barricade_break(s, attacker)
 stock barricade_repair(s, id)
 {
 	new Float:mx = g_pf[s][B_MAX];
+	/* a player adds one board (1/boards of its health); a kit or the mode rebuilds it all */
 	if (id)
-		g_val[s] = floatmin(g_val[s] + mx * 0.25, mx);
+		g_val[s] = floatmin(g_val[s] + mx / float(max(ki(s, "boards_count", 6), 1)), mx);
 	else
 		g_val[s] = mx;
 	g_pf[s][B_LASTSTEP] = float(floatround(g_val[s] * 4.0 / mx, floatround_ceil));
@@ -3412,6 +3491,9 @@ stock tick_acts()
 					cs_set_user_money(p, money - cost);
 				}
 				barricade_repair(s, p);
+				/* still holding USE: on to the next board */
+				if (!g_bot[p] && (pev(p, pev_button) & IN_USE) && g_val[s] < g_pf[s][B_MAX] - 0.5)
+					act_start(p, s, ACT_REPAIR, g_pf[s][B_REPAIR]);
 			}
 			case ACT_LOCK:
 				door_lock(s, kf(s, "lock_secs", 10.0), p);
