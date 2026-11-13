@@ -37,3 +37,8 @@ Brain work, all general: read the map's I/O wiring (button -> manager -> door/te
 does; a chooser behavior for the race winner (random or by preference, maybe what humans played last); teleports whose
 destination changes (learn every destination, follow the active one); arena awareness after strip/equip (HE-only fighting
 with real grenade arcs, para floating/falling, walking to a chosen equip spot). Check against other fun/jail maps too.
+Nav generation must work on it first (user, 2026-11-13): learn a clean nav for fun_allinone with the app's normal
+nav learn (not hand-edited), covering the glass room, the chooser room and all six arenas, with every teleport destination
+linked, ladders joined, no unreachable or trapped areas in playable space, and the 6,000-area map-knowledge limit
+respected. Fix the learner generally (seeding every arena, teleport destinations, trigger_push areas, water) if it
+misses parts, and run the nav fixer's reach check on the result.
