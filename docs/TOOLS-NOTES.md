@@ -25,6 +25,11 @@
   Please honour a pending request once the map is ready (e.g. start `done` at 0 and run it after the
   first fit), or take a focus string like `map:<name>@x,y,z`. Owner: agent B.
 
+- (T, community) `archive.rs` content allow-list: add `.lsv` to `maps/` (the bot brain's map knowledge, plain
+  data). Publish packages ship `maps/<map>.lsv`, which the installer skips today, so bots rebuild knowledge on
+  first play. Map editor / nav fixer: a "Publish…" action doing `go("tools", "community:publish:<map>")` after a
+  save or compile. Map viewer: "Use as a screenshot for Publish". Details in docs/COMMUNITY.md section 8.
+
 ## Progress
 
 ### Agent A (Rust core: goldsrc readers + map routes) — M1/M2 server side done
@@ -861,3 +866,38 @@ colour, one-line blurb) for the drag-in panel. Please load the FGD beside `CSTRI
 **Map packs (no BSP edits):** `addons/amxmodx/configs/components/<map>.ini` and `<map>.<modeid>.ini` (the
 user's own), then the shipped `configs/gamemodes/components/…` (source: `plugins/configs/gamemodes/components/`).
 Lines: `ls_capture_point 120 -340 64 radius=160 capture_secs=8`.
+
+### Agent T: Community creations (Tools > Share > Community, Beta) — 2026-11-12
+
+**Built** (design, schema, rules and server-side work: docs/COMMUNITY.md)
+- `tools/community.rs` (one `pub mod` + one merge line in tools/mod.rs): browse (GameBanana's attribute search
+  for the tag `Software Used: LonerStrike` merged with the Loner-Strike index `dl.lonerstrike.com/community/index.json`;
+  kept copy and tag-only fallbacks), one creation (GameBanana page + index entry + trust), Try it (re-checks the tag
+  and trust, picks a clean file, starts the existing `MapStore::start_section_install` job), Publish readiness
+  (reuses `doctor::diagnose`/`file_checks`/`res_text`, newest `health::Report` for the map, `health::preset_mode`),
+  the package zip (map, nav, finished .lsv, fresh .res, overview, custom files, README, loner-strike.json; screenshots
+  beside it), register (paste the GameBanana link: game, tag and the package's MD5 checked; sent to
+  `list.lonerstrike.com/community/submit` or kept as "waiting" in `<app dir>/tools/community/mine.json`), Yours,
+  and "show in folder". Trust rules in `community::trust` (content / data-only / reviewed / verified / unreviewed / pulled).
+- `views/tools/community/` (Community.tsx, Publish.tsx, Yours.tsx, communityApi.ts, community.css), registered in a
+  new **Share** group (registry.tsx: `ToolGroup` + `TOOL_GROUPS` gained "Share", plus my one entry). Addresses:
+  `community`, `community:publish[:<map>]`, `community:yours`, `community:mod:<id>`, `community:spray:<id>`.
+
+**GameBanana findings**: no public upload API (submit on the site; the app prepares and checks). apiv11 has no tag
+filter; `Util/Search/Results?_csvFields=attribs` searches tags, but splits on hyphens and ORs ("Loner-Strike"
+matched 680 pages with "Strike"), hence the one-word tag value. Pages list each file's MD5, used to match the
+package. To verify with the first real upload: the search finds `LonerStrike`.
+
+**How to try it**: `cargo test tools::community` (index parsing and bad entries, kept-copy fallback, trust rules,
+tag matching on search records, the merged list, file picking, links, MD5, a package built from a fixture game and
+read back through `archive::plan_rels`, refusals, registration check); `cargo test community_live -- --ignored`
+(GameBanana answers). In the app: Tools > Community (empty until something carries the tag), Publish > pick a map.
+
+**Left**: modes and prefabs can't be tried until the Game Mode Studio's installer and the editor's prefab library
+exist (pages say so; trust metadata and UI ready). The index file and the inbox don't exist on the servers yet
+(COMMUNITY.md section 7). Not checked in the running app (the shared build was mid-change by others).
+I re-read health reports from `<app dir>/tools/health` myself (`health::load_reports` is private).
+
+**Git slip**: my first commit's staged files (community.rs + the two mod.rs lines) were swept into a292b8d
+"Game modes plan: the Creature Framework…" by a commit that ran between my `git add` and `git commit`. Tree is
+right; the message isn't mine. Tip for everyone: stage and commit in one command, by path.
