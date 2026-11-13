@@ -83,9 +83,9 @@ request method; set up a privacy email then (or now).
    API (apiv11, no key) and showing its pictures (hotlinked from images.gamebanana.com) impose
    anything on us? Their ToS licenses uploads to GameBanana only; we never rehost files, but the
    index republishes names, summaries and credits. Do we need their permission or attribution?
-5. **The liability cap.** Is "greater of 12 months' payments or US$50" right? Should the
-   disclaimers be visually conspicuous? (The `caps` class on those paragraphs has no CSS, so they
-   render as normal text; UCC 2-316 wants a disclaimer of merchantability to be conspicuous.)
+5. **The liability cap.** Is "greater of 12 months' payments or US$50" right? The disclaimers are
+   now set apart (bold, brighter text on a panel with a yellow edge; `.caps` in terms.html) for
+   UCC 2-316's "conspicuous" rule. Is that enough, or should they be in capitals?
 6. **The license from creators**: is "for as long as it's listed and for our records after" fine,
    and does it need to survive deletion requests?
 7. **Retention**: confirm 180 days for applications and pick one for moderation history.
