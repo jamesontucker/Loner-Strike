@@ -31,4 +31,5 @@ export const TOOLS: ToolEntry[] = [
   { id: "radar", label: "Radar maker", group: "Make", icon: "maps", blurb: "Make a map's overview: the top-down picture spectators and HLTV viewers see, drawn from the map.", beta: true, load: () => import("./overview/Overview") },
   { id: "demos", label: "Demos", group: "Look", icon: "play", blurb: "Your recorded demos and your servers' HLTV ones: what's in them, rename, delete, watch.", beta: true, load: () => import("./demos/Demos") },
   { id: "studio", label: "Game Mode Studio", group: "Make", icon: "rules", blurb: "Make a game mode from nodes and wires, then playtest it with bots and watch the nodes run.", beta: true, load: () => import("./studio/StudioPage") },
+  { id: "creatures", label: "Creature Studio", group: "Make", icon: "bots", blurb: "Make the creatures modes throw at you: zombies, aliens, animals, turrets and bosses, with waves to match.", beta: true, load: () => import("./creatures/Creatures") },
 ];

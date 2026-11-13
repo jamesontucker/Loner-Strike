@@ -947,6 +947,16 @@ pub fn check(types: &[Creature]) -> Vec<Problem> {
     out
 }
 
+fn rate_words(r: f32) -> String {
+    if (r - 1.0).abs() < 0.05 {
+        "once a second".into()
+    } else if r < 1.0 {
+        format!("every {} s", fmt_num((1.0 / r * 10.0).round() / 10.0))
+    } else {
+        format!("{} times a second", fmt_num(r))
+    }
+}
+
 /// One line in plain words about how a type plays.
 pub fn summary(t: &Creature) -> String {
     let speed = |v: f32| if v >= 280.0 { "fast" } else if v >= 200.0 { "quick" } else if v >= 120.0 { "slow" } else { "very slow" };
@@ -968,8 +978,8 @@ pub fn summary(t: &Creature) -> String {
     };
     s.push_str(&format!(", {mood}"));
     match t.attack.as_str() {
-        "melee" => s.push_str(&format!(" (hits for {} about {} times a second)", fmt_num(t.damage), fmt_num(t.attack_rate))),
-        "ranged" => s.push_str(&format!(" (shoots {} damage {} times a second from up to {} units)", fmt_num(t.damage), fmt_num(t.attack_rate), fmt_num(t.attack_range))),
+        "melee" => s.push_str(&format!(" (hits for {} {})", fmt_num(t.damage), rate_words(t.attack_rate))),
+        "ranged" => s.push_str(&format!(" (shoots for {} {} from up to {} units)", fmt_num(t.damage), rate_words(t.attack_rate), fmt_num(t.attack_range))),
         _ => {}
     }
     let home = match t.behaviour.as_str() {
@@ -1409,8 +1419,14 @@ fn availability(folder: &str, rel: &str, imported: &[String]) -> (&'static str, 
     if folder == "valve" {
         return ("hl", "Half-Life's own file: most players have it (Steam's shared files); anyone without it sees an error model. It's never offered for download.");
     }
-    if folder.ends_with("_downloads") || imported.contains(&format!("{folder}/{}", rel.to_lowercase())) {
-        return ("custom", "Your own file: players get it from your server when they join (downloads on, or FastDL).");
+    let low = rel.to_lowercase();
+    let parts: Vec<&str> = low.split('/').collect();
+    // the game's own: models/<file>.mdl, and its own player models; anything in another
+    // folder under models/ came with a map or an add-on
+    const STOCK_PLAYERS: &[&str] = &["arctic", "gign", "gsg9", "guerilla", "leet", "sas", "terror", "urban", "vip", "spetsnaz", "militia"];
+    let stock_place = parts.len() == 2 || (parts.len() == 4 && parts[1] == "player" && STOCK_PLAYERS.contains(&parts[2]));
+    if folder.ends_with("_downloads") || imported.contains(&format!("{folder}/{low}")) || !stock_place {
+        return ("custom", "Not one of the game's own files: players get it from your server when they join (downloads on, or FastDL), or see an error model.");
     }
     ("game", "Comes with the game: everyone has it.")
 }
@@ -1679,7 +1695,7 @@ pub fn save(f: &Files, req: &SaveReq) -> Result<bool, String> {
     let old = read_text(&f.ini())?.unwrap_or_default();
     let mut new = write(&old, &req.types)?;
     if old.is_empty() && !new.is_empty() {
-        new = format!("; creatures.ini: creature types for the game (docs/CREATURES.md). Made in Tools > Creature Studio; edit freely.\n; A [type] adds a type or changes a built-in one (zombie runner brute spitter hound turret boss) by name.\n{new}");
+        new = format!("; creatures.ini: creature types for the game (docs/CREATURES.md). Made in Tools > Creature Studio; edit freely.\n; A [type] adds a type or changes a built-in one (zombie runner brute spitter hound turret boss) by name.\n\n{new}");
     }
     if new == old {
         return Ok(false);
@@ -2254,7 +2270,7 @@ mod tests {
         assert!(save(&f, &SaveReq { types: types.clone() }).unwrap());
         let text = std::fs::read_to_string(f.ini()).unwrap();
         assert!(text.starts_with("; creatures.ini"));
-        assert!(text.contains("[runner]\nhp = 61\n"), "{text}");
+        assert!(text.contains("\n\n[runner]\nhp = 61\n"), "{text}");
         assert!(!save(&f, &SaveReq { types }).unwrap());
         let st = status(&f).unwrap();
         assert_eq!(st["types"].as_array().unwrap().len(), 7);

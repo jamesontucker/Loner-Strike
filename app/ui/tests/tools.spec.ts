@@ -193,3 +193,29 @@ test("a save offers Undo, and Undo puts the file back", async ({ page }, info) =
   await expect(page.locator(".toast", { hasText: /Undone/ })).toBeVisible();
   expect(await names()).not.toContain(name);
 });
+
+test("Creature Studio: a type's form with its model, the model picker and the waves", async ({ page }, info) => {
+  const problems: string[] = [];
+  page.on("console", (m) => {
+    if (m.type() === "error" && !IGNORED.some((r) => r.test(m.text()))) problems.push(`console: ${m.text()}`);
+  });
+  page.on("pageerror", (e) => problems.push(`crash: ${e.message}`));
+  await page.goto(`/tools-dev.html?open=creatures`);
+  await settle(page);
+  await page.getByRole("listbox", { name: "Creature types" }).getByRole("option", { name: /Spitter/ }).click();
+  await expect(page.locator(".cs-summary")).toContainText(/shoots/);
+  await page.getByRole("button", { name: "Change…" }).click();
+  await expect(page.locator(".cs-model-list")).toBeVisible();
+  await page.waitForTimeout(1500); // the 3D view and the model list
+  await page.screenshot({ path: info.outputPath("creatures-spitter.png"), fullPage: true });
+  // a value past the game's limit says so under its control
+  await page.getByRole("spinbutton", { name: "Health (number)" }).fill("200000");
+  await expect(page.locator(".cs-error").first()).toContainText(/between 1 and 100000/, { timeout: 5_000 });
+  await page.getByRole("button", { name: "Undo changes" }).click();
+  await page.getByRole("button", { name: "Waves & spawn groups" }).click();
+  await expect(page.locator(".cs-wave-row").first()).toBeVisible();
+  await page.screenshot({ path: info.outputPath("creatures-waves.png"), fullPage: true });
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(over).toBeLessThanOrEqual(1);
+  expect(problems).toEqual([]);
+});

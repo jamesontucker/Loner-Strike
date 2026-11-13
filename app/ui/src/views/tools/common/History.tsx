@@ -76,6 +76,8 @@ export function historyFor(tool: string, arg: string | null): { match: string[];
       return { match: [], tools: ["Demos"] };
     case "community":
       return { match: [], tools: ["Downloads"] };
+    case "creatures":
+      return { match: [`${GM}creatures.ini`, `${GM}waves.ini`], tools: ["Creature Studio"] };
     case "studio":
       return { match: [], tools: ["Game Mode Studio"] };
     default:
