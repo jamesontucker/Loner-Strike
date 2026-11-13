@@ -6,7 +6,7 @@
 // range); double-click looks at it; ✎ or F2 renames; drag rows onto a folder; right-click
 // for everything else.
 
-import { useMemo, useRef, useState, type DragEvent, type MouseEvent as RMouseEvent, type ReactNode } from "react";
+import { useMemo, useRef, useState, type MouseEvent as RMouseEvent, type ReactNode } from "react";
 import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
 import type { DocBrush, DocEntity, DocGroup } from "./editorApi";
@@ -89,6 +89,7 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
   const [more, setMore] = useState<Record<string, number>>({});
   const [renaming, setRenaming] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [ghost, setGhost] = useState<{ x: number; y: number; label: string; ok: boolean } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; row: Row } | null>(null);
   const anchor = useRef<string | null>(null);
   const tree = useRef<HTMLDivElement>(null);
@@ -247,30 +248,42 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
   const toggleHide = (r: Row) => (r.kind === "group" ? void s.cmd({ op: "group_flags", group: r.g.id, hidden: !r.g.hidden }) : hideIds(idsOf(r), !hiddenOf(r)));
   const toggleLock = (r: Row) => (r.kind === "group" ? void s.cmd({ op: "group_flags", group: r.g.id, locked: !r.g.locked }) : lockIds(idsOf(r), !lockedOf(r)));
 
-  // drag rows (the picked set when a picked row is dragged) onto a folder
-  const dragStart = (ev: DragEvent, r: Row) => {
-    const payload = r.kind === "group" ? { brushes: [], entities: [], groups: [r.g.id] } : isOn(r) ? { brushes: s.sel.brushes, entities: s.sel.entities, groups: [] } : { ...idsOf(r), groups: [] };
-    ev.dataTransfer.setData("application/x-ls-outline", JSON.stringify(payload));
-    ev.dataTransfer.effectAllowed = "move";
-  };
-  const dropOn = (key: string, group: number | null) => ({
-    onDragOver: (ev: DragEvent) => {
-      if (!ev.dataTransfer.types.includes("application/x-ls-outline")) return;
-      ev.preventDefault();
-      setDragOver(key);
-    },
-    onDragLeave: () => setDragOver((k) => (k === key ? null : k)),
-    onDrop: async (ev: DragEvent) => {
-      ev.preventDefault();
+  // drag rows (the picked set when a picked row is dragged) onto a folder. Pointer events, not
+  // HTML5 drag-and-drop (that isn't dependable in the app's web view).
+  const suppressClick = useRef(false);
+  const rowDown = (ev: React.PointerEvent, r: Row) => {
+    if (ev.button !== 0 || (r.kind === "brush" && r.inEntity)) return;
+    if ((ev.target as HTMLElement).closest("button, input")) return;
+    const start = { x: ev.clientX, y: ev.clientY };
+    const payload = r.kind === "group" ? { brushes: [] as number[], entities: [] as number[], groups: [r.g.id] } : isOn(r) ? { brushes: s.sel.brushes, entities: s.sel.entities, groups: [] as number[] } : { ...idsOf(r), groups: [] as number[] };
+    const label = r.kind === "group" ? r.g.name : payload.brushes.length + payload.entities.length > 1 ? `${payload.brushes.length + payload.entities.length} things` : r.kind === "entity" ? nameOfE(r.e) || r.e.classname : `Brush ${r.kind === "brush" ? r.b.id : ""}`;
+    let on = false;
+    const targetAt = (x: number, y: number) => (document.elementFromPoint(x, y) as HTMLElement | null)?.closest<HTMLElement>("[data-ol-drop]") ?? null;
+    const move = (m: PointerEvent) => {
+      if (!on && Math.hypot(m.clientX - start.x, m.clientY - start.y) < 6) return;
+      on = true;
+      m.preventDefault();
+      const t = targetAt(m.clientX, m.clientY);
+      setDragOver(t?.dataset.olDrop ?? null);
+      setGhost({ x: m.clientX, y: m.clientY, label, ok: !!t });
+    };
+    const up = async (u: PointerEvent) => {
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      setGhost(null);
       setDragOver(null);
-      try {
-        const p = JSON.parse(ev.dataTransfer.getData("application/x-ls-outline")) as Ids & { groups: number[] };
-        await cmd2({ op: "move_to_group", group, ...p });
-      } catch {
-        /* not ours */
-      }
-    },
-  });
+      if (!on) return;
+      suppressClick.current = true;
+      setTimeout(() => (suppressClick.current = false), 0);
+      const t = targetAt(u.clientX, u.clientY);
+      if (!t) return;
+      const g = t.dataset.olGroup;
+      await cmd2({ op: "move_to_group", group: g === "top" ? null : Number(g), ...payload });
+    };
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
+  };
+  const dropOn = (key: string, group: number | null) => ({ "data-ol-drop": key, "data-ol-group": group == null ? "top" : String(group) });
 
   const rename = async (r: Row, value: string) => {
     setRenaming(null);
@@ -320,10 +333,9 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
         key={r.key}
         className={`ed-ol-row ed-ol-${r.kind}${on ? " on" : ""}${hid ? " dim" : ""}${lck ? " locked" : ""}${dragOver === r.key ? " drop" : ""}`}
         style={{ paddingLeft: 2 + r.depth * 14 }}
-        draggable={!(r.kind === "brush" && r.inEntity)}
-        onDragStart={(ev) => dragStart(ev, r)}
+        onPointerDown={(ev) => rowDown(ev, r)}
         {...(r.kind === "group" ? dropOn(r.key, r.g.id) : {})}
-        onClick={(ev) => pick(r, ev)}
+        onClick={(ev) => !suppressClick.current && pick(r, ev)}
         onDoubleClick={() => look(r)}
         onContextMenu={(ev: RMouseEvent) => {
           ev.preventDefault();
@@ -447,6 +459,12 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
       <p className="small-note muted ed-ol-foot">
         {total} things · {sel.brushes.length + sel.entities.length} picked{nHidden ? ` · ${nHidden} hidden` : ""}. Double-click to look; right-click for more; drag onto a folder.
       </p>
+      {ghost && (
+        <div className="ed-dock-ghost" style={{ left: ghost.x + 12, top: ghost.y + 10, zIndex: 80 }}>
+          {ghost.label}
+          <span className="muted"> {ghost.ok ? "· into this folder" : "· onto a folder"}</span>
+        </div>
+      )}
       {menu && (
         <div className="ed-ctx-back" onClick={() => setMenu(null)} onContextMenu={(e) => (e.preventDefault(), setMenu(null))}>
           <ul className="ed-ctx" role="menu" style={{ left: Math.min(menu.x, window.innerWidth - 240), top: Math.min(menu.y, window.innerHeight - 380) }} onClick={(e) => e.stopPropagation()}>

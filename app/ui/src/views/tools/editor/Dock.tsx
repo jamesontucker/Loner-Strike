@@ -1,24 +1,58 @@
 // P5: the dock. Panels (dockPanels.tsx) sit in areas — left, right (with an optional lower
 // part), bottom — as tabs; drag a tab to another area, onto the view to float it, or use the
 // ⋯ menu (float, own window, move, close). Areas resize from their inner edge; floats move by
-// their title bar and resize from the corner. "Own window" opens a real browser/app window
+// their title bar (over a tab strip or a dock target they dock) and resize from the corner. "Own window" opens a real browser/app window
 // rendered from here (same state, so picks and edits stay in step); when a window can't open
 // the panel floats instead.
 
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
+import { Component, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { create } from "zustand";
+import { dropChanges, resolveDrop, targetBoxes, type AreaKey, type Box, type Drop, type Geometry } from "./dockDrag";
 import { createPortal } from "react-dom";
 import { useEditor } from "./store";
 import { AREAS, closePanel, dockTo, floatPanel, panelWindows, popOut, useDock, type AreaId, type Float } from "./dockState";
 import { DOCK_PANELS, panelById } from "./dockPanels";
 
-const MIME = "application/x-ls-panel";
+
+/** One panel failing doesn't take the editor down with it: it says so, with a way back. */
+class PanelBoundary extends Component<{ title: string; children: ReactNode }, { failed: string | null }> {
+  state = { failed: null as string | null };
+  static getDerivedStateFromError(e: unknown) {
+    return { failed: e instanceof Error ? e.message : String(e) };
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <section className="tools-panel">
+        <p className="small-note">The {this.props.title} panel stopped working.</p>
+        <button type="button" className="btn small" onClick={() => this.setState({ failed: null })}>
+          Try again
+        </button>
+      </section>
+    );
+  }
+}
 
 /** The editor's grid columns for the open side areas (MapEditor's `editor-main`). */
 export function useDockColumns(): CSSProperties {
   const left = useDock((s) => s.areas.left.tabs.length > 0);
   const right = useDock((s) => s.areas.right.tabs.length + s.areas.right2.tabs.length > 0);
-  const lw = useDock((s) => s.sizes.left);
-  const rw = useDock((s) => s.sizes.right);
+  let lw = useDock((s) => s.sizes.left);
+  let rw = useDock((s) => s.sizes.right);
+  // the view keeps at least ~380 px: on a narrow window the sides give way (in proportion)
+  const [width, setWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const on = () => setWidth(window.innerWidth);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  const room = Math.max(0, width - 110 - 380);
+  const want = (left ? lw : 0) + (right ? rw : 0);
+  if (want > room && want > 0) {
+    const k = Math.max(room, 0) / want;
+    lw = Math.max(170, Math.round(lw * k));
+    rw = Math.max(200, Math.round(rw * k));
+  }
   return { gridTemplateColumns: `auto ${left ? `${lw}px ` : ""}minmax(0, 1fr)${right ? ` ${rw}px` : ""}` };
 }
 
@@ -26,25 +60,9 @@ function Tabs({ area }: { area: AreaId }) {
   const a = useDock((s) => s.areas[area]);
   useEditor((s) => s.checks); // the Checks tab's count
   const [menu, setMenu] = useState(false);
-  const [over, setOver] = useState<string | null>(null);
   const set = useDock.getState().set;
-  const drop = (ev: DragEvent, before?: string) => {
-    const id = ev.dataTransfer.getData(MIME);
-    setOver(null);
-    if (!id) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    if (id !== before) dockTo(id, area, before);
-    useDock.getState().set({ dragging: null });
-  };
   return (
-    <div
-      className={`ed-dock-tabs${over === "" ? " drop" : ""}`}
-      role="tablist"
-      onDragOver={(ev) => ev.dataTransfer.types.includes(MIME) && (ev.preventDefault(), setOver(""))}
-      onDragLeave={() => setOver(null)}
-      onDrop={(ev) => drop(ev)}
-    >
+    <div className="ed-dock-tabs" role="tablist" data-dock-strip={area}>
       {a.tabs.map((id) => {
         const p = panelById(id);
         if (!p) return null;
@@ -53,26 +71,13 @@ function Tabs({ area }: { area: AreaId }) {
             key={id}
             type="button"
             role="tab"
-            draggable
+            data-dock-tab={id}
             aria-selected={a.active === id}
             aria-pressed={a.active === id}
-            className={`${p.bad?.() ? "editor-tab-bad" : ""}${over === id ? " drop-before" : ""}`}
-            title="Drag to another side, or onto the view to float it"
-            onClick={() => set({ areas: { ...useDock.getState().areas, [area]: { ...a, active: id } } })}
-            onDragStart={(ev) => {
-              ev.dataTransfer.setData(MIME, id);
-              ev.dataTransfer.effectAllowed = "move";
-              // (the zones show a moment later: changing the page during dragstart cancels the drag)
-              setTimeout(() => useDock.getState().set({ dragging: id }), 0);
-            }}
-            onDragEnd={(ev) => {
-              const was = useDock.getState().dragging;
-              useDock.getState().set({ dragging: null });
-              // dropped where nothing took it (over the view): float it there
-              if (was && ev.dataTransfer.dropEffect === "none" && ev.clientX > 0) floatPanel(was, ev.clientX - 40, ev.clientY - 12);
-            }}
-            onDragOver={(ev) => ev.dataTransfer.types.includes(MIME) && (ev.preventDefault(), ev.stopPropagation(), setOver(id))}
-            onDrop={(ev) => drop(ev, id)}
+            className={p.bad?.() ? "editor-tab-bad" : undefined}
+            title="Drag to move it: along the tabs, to another side, or onto the view to float it"
+            onPointerDown={(ev) => startPanelDrag(ev, id, () => set({ areas: { ...useDock.getState().areas, [area]: { ...useDock.getState().areas[area], active: id } } }))}
+            onKeyDown={(ev) => ev.key === "Enter" && set({ areas: { ...useDock.getState().areas, [area]: { ...a, active: id } } })}
           >
             {p.label?.() ?? p.title}
           </button>
@@ -89,6 +94,99 @@ function Tabs({ area }: { area: AreaId }) {
       )}
     </div>
   );
+}
+
+// ---- dragging panels (pointer events: HTML5 drag-and-drop isn't dependable in app web views) ----
+
+type DragView = { id: string; x: number; y: number; drop: Drop };
+const useDrag = create<{ d: DragView | null }>(() => ({ d: null }));
+
+/** The boxes a drop can land on, read from the page right now. */
+function geometry(): Geometry {
+  const box = (el: Element): Box => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  };
+  const strips = [...document.querySelectorAll<HTMLElement>("[data-dock-strip]")].map((el) => ({
+    area: el.dataset.dockStrip as AreaId,
+    box: box(el),
+    tabs: [...el.querySelectorAll<HTMLElement>("[data-dock-tab]")].map((t) => ({ id: t.dataset.dockTab!, box: box(t) })),
+  }));
+  const main = document.querySelector(".editor-main");
+  const targets = main ? targetBoxes(box(main)) : [];
+  const bodies = [...document.querySelectorAll<HTMLElement>("[data-dock-body]")].map((el) => ({ area: el.dataset.dockBody as AreaId, box: box(el) }));
+  const v = document.querySelector(".tools-canvas");
+  return { strips, targets, bodies, view: v ? box(v) : null };
+}
+
+function whereNow(id: string) {
+  const s = useDock.getState();
+  for (const a of AREAS) if (s.areas[a.id].tabs.includes(id)) return { area: a.id as AreaKey, tabs: s.areas[a.id].tabs };
+  return { area: null, tabs: [] as string[] };
+}
+
+/** Press on a tab or a float's title: a click (no movement) runs `onClick`; a drag shows where
+ *  the panel would land and puts it there on release (Esc cancels). `float` moves a floating
+ *  panel's window while dragging. */
+export function startPanelDrag(ev: React.PointerEvent, id: string, onClick?: () => void, float?: { x: number; y: number }) {
+  if (ev.button !== 0) return;
+  if ((ev.target as HTMLElement).closest(".ed-dock-more")) return;
+  const start = { x: ev.clientX, y: ev.clientY };
+  let dragging = false;
+  const el = ev.currentTarget as HTMLElement;
+  try {
+    el.setPointerCapture(ev.pointerId);
+  } catch {
+    /* fine without */
+  }
+  const finish = (apply: boolean) => {
+    window.removeEventListener("pointermove", move, true);
+    window.removeEventListener("pointerup", up, true);
+    window.removeEventListener("keydown", key, true);
+    try {
+      el.releasePointerCapture(ev.pointerId);
+    } catch {
+      /* already let go */
+    }
+    const d = useDrag.getState().d;
+    useDrag.setState({ d: null });
+    useDock.getState().set({ dragging: null });
+    if (!apply) return;
+    if (!dragging) return onClick?.();
+    const drop = d?.drop ?? null;
+    if (!drop || !dropChanges(drop, id, whereNow(id))) return;
+    if (drop.kind === "tab") dockTo(id, drop.area, drop.before ?? undefined);
+    else if (drop.kind === "area") dockTo(id, drop.area);
+    else if (!float) floatPanel(id, drop.x - 60, drop.y - 14);
+  };
+  const move = (m: PointerEvent) => {
+    if (!dragging) {
+      if (Math.hypot(m.clientX - start.x, m.clientY - start.y) < 5) return;
+      dragging = true;
+      useDock.getState().set({ dragging: id });
+    }
+    m.preventDefault();
+    // the boxes as they are now (the targets appear once dragging starts)
+    const geo = geometry();
+    if (float) {
+      const s = useDock.getState();
+      const fx = Math.max(0, Math.min(window.innerWidth - 120, float.x + m.clientX - start.x));
+      const fy = Math.max(0, Math.min(window.innerHeight - 40, float.y + m.clientY - start.y));
+      s.set({ floats: s.floats.map((q) => (q.id === id ? { ...q, x: fx, y: fy } : q)) });
+    }
+    const drop = resolveDrop(geo, m.clientX, m.clientY, id, !float);
+    useDrag.setState({ d: { id, x: m.clientX, y: m.clientY, drop } });
+  };
+  const up = () => finish(true);
+  const key = (k: KeyboardEvent) => {
+    if (k.key !== "Escape") return;
+    k.preventDefault();
+    k.stopPropagation();
+    finish(false);
+  };
+  window.addEventListener("pointermove", move, true);
+  window.addEventListener("pointerup", up, true);
+  window.addEventListener("keydown", key, true);
 }
 
 function PanelMenu({ id, from, onDone }: { id: string; from: AreaId | "float"; onDone: () => void }) {
@@ -128,7 +226,9 @@ function Stack({ area, style }: { area: AreaId; style?: CSSProperties }) {
   return (
     <div className={`ed-dock-stack ed-dock-${area}`} style={style}>
       <Tabs area={area} />
-      <div className="ed-dock-body tools-side">{p?.render()}</div>
+      <div className="ed-dock-body tools-side" data-dock-body={area}>
+        {p && <PanelBoundary key={p.id} title={p.title}>{p.render()}</PanelBoundary>}
+      </div>
     </div>
   );
 }
@@ -198,36 +298,52 @@ export function DockArea({ side }: { side: "left" | "right" | "bottom" }) {
   );
 }
 
-/** While a tab is dragged: zones to drop it on (an empty side, or the bottom). */
+/** While a panel is dragged: small dock targets near the edges, the insertion marker in a
+ *  tab strip, and the panel's name under the pointer. */
 export function DockDropZones() {
   const dragging = useDock((s) => s.dragging);
-  const [over, setOver] = useState<AreaId | null>(null);
-  if (!dragging) return null;
-  const zone = (id: AreaId, label: string) => (
-    <div
-      key={id}
-      className={`ed-dock-zone ${id}${over === id ? " over" : ""}`}
-      onDragOver={(ev) => (ev.preventDefault(), setOver(id))}
-      onDragLeave={() => setOver(null)}
-      onDrop={(ev) => {
-        ev.preventDefault();
-        const pid = ev.dataTransfer.getData(MIME);
-        setOver(null);
-        useDock.getState().set({ dragging: null });
-        if (pid) dockTo(pid, id);
-      }}
-    >
-      {label}
+  const d = useDrag((s) => s.d);
+  const [main, setMain] = useState<Box | null>(null);
+  useEffect(() => {
+    if (!dragging) return;
+    const el = document.querySelector(".editor-main");
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setMain({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+  }, [dragging]);
+  if (!dragging || !main) return null;
+  const drop = d?.drop ?? null;
+  const label: Record<AreaKey, string> = { left: "Dock left", right: "Dock right", right2: "Dock right, lower", bottom: "Dock at the bottom" };
+  const p = panelById(dragging);
+  return (
+    <div className="ed-dock-zones" aria-hidden="true">
+      {targetBoxes(main).map((t) => (
+        <div key={t.area} className={`ed-dock-target ${t.area}${drop?.kind === "area" && drop.area === t.area ? " over" : ""}`} style={{ left: t.box.left, top: t.box.top, width: t.box.right - t.box.left, height: t.box.bottom - t.box.top }} title={label[t.area]}>
+          <TargetIcon area={t.area} />
+        </div>
+      ))}
+      {drop?.kind === "tab" && <div className="ed-dock-marker" style={{ left: drop.markerX - 1, top: drop.markerTop, height: drop.markerBottom - drop.markerTop }} />}
+      {d && (
+        <div className="ed-dock-ghost" style={{ left: d.x + 12, top: d.y + 10 }}>
+          {p?.title}
+          <span className="muted">
+            {" "}
+            {drop == null ? "· let go to cancel" : drop.kind === "float" ? "· float here" : drop.kind === "area" ? `· ${label[drop.area].toLowerCase()}` : "· here"}
+          </span>
+        </div>
+      )}
     </div>
   );
+}
+
+function TargetIcon({ area }: { area: AreaKey }) {
+  // a little window with the side that would fill
+  const fill = area === "left" ? <rect x="3" y="4" width="6" height="16" /> : area === "right" ? <rect x="15" y="4" width="6" height="8" /> : area === "right2" ? <rect x="15" y="12" width="6" height="8" /> : <rect x="3" y="14" width="18" height="6" />;
   return (
-    <div className="ed-dock-zones">
-      {zone("left", "Dock left")}
-      {zone("right", "Dock right")}
-      {zone("right2", "Dock right, lower")}
-      {zone("bottom", "Dock at the bottom")}
-      <div className="ed-dock-zone-hint">Or drop it on the view to float it</div>
-    </div>
+    <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+      <rect x="2.5" y="3.5" width="19" height="17" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <g fill="currentColor" opacity="0.85">{fill}</g>
+    </svg>
   );
 }
 
@@ -253,21 +369,10 @@ function FloatWin({ f, front }: { f: Float; front: boolean }) {
   const drag = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest("button")) return;
     e.preventDefault();
-    const start = { x: e.clientX, y: e.clientY, fx: f.x, fy: f.y };
     const s = useDock.getState();
     s.set({ floats: [...s.floats.filter((x) => x.id !== f.id), f] }); // to the front
-    const move = (m: PointerEvent) => {
-      const st = useDock.getState();
-      const x = Math.max(0, Math.min(window.innerWidth - 120, start.fx + m.clientX - start.x));
-      const y = Math.max(0, Math.min(window.innerHeight - 40, start.fy + m.clientY - start.y));
-      st.set({ floats: st.floats.map((q) => (q.id === f.id ? { ...q, x, y } : q)) });
-    };
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    // moves the window; let go over a tab strip or a dock target to dock it
+    startPanelDrag(e, f.id, undefined, { x: f.x, y: f.y });
   };
   return (
     <div ref={win} className={`ed-float${front ? " front" : ""}`} style={{ left: f.x, top: f.y, width: f.w, height: f.h }} role="dialog" aria-label={p.title}>
@@ -284,7 +389,9 @@ function FloatWin({ f, front }: { f: Float; front: boolean }) {
           ⇥
         </button>
       </div>
-      <div className="ed-float-body tools-side">{p.render()}</div>
+      <div className="ed-float-body tools-side">
+        <PanelBoundary title={p.title}>{p.render()}</PanelBoundary>
+      </div>
     </div>
   );
 }
@@ -350,7 +457,7 @@ function PanelWindow({ id }: { id: string }) {
     };
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!host || !p) return null;
-  return createPortal(p.render() as ReactNode, host);
+  return createPortal(<PanelBoundary title={p.title}>{p.render()}</PanelBoundary>, host);
 }
 
 /** Every panel and where it is, for View > Panels. */

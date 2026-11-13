@@ -21,15 +21,16 @@ export type DockLayout = {
   floats: Float[];
   popped: string[];
 };
-export type DockPresetId = "default" | "hammer" | "unreal";
+export type DockPresetId = "default" | "hammer" | "unreal" | "tabs";
 
 const area = (tabs: string[], active = tabs[0] ?? null): Area => ({ tabs, active });
 const SIZES = { left: 300, right: 320, bottom: 240, rightSplit: 0.45 };
 export const DOCK_PRESETS: Record<DockPresetId, { label: string; tip: string; layout: DockLayout }> = {
+  // like Unreal: the outliner over the details on the right, the library (content) along the bottom
   default: {
-    label: "Default",
-    tip: "Everything on the right as tabs",
-    layout: { areas: { left: area([]), right: area(["inspect", "outline", "textures", "library", "checks", "compile", "project", "history"]), right2: area([]), bottom: area([]) }, sizes: { ...SIZES }, floats: [], popped: [] },
+    label: "Default (Unreal-like)",
+    tip: "Outline above Inspect on the right; Library, Textures and the rest along the bottom",
+    layout: { areas: { left: area([]), right: area(["outline"]), right2: area(["inspect", "history"]), bottom: area(["library", "textures", "checks", "compile", "project"]) }, sizes: { ...SIZES, right: 330, bottom: 250, rightSplit: 0.42 }, floats: [], popped: [] },
   },
   hammer: {
     label: "Hammer",
@@ -38,8 +39,13 @@ export const DOCK_PRESETS: Record<DockPresetId, { label: string; tip: string; la
   },
   unreal: {
     label: "Unreal-like",
-    tip: "Outliner above details on the right, a content drawer (textures, library, project) below",
-    layout: { areas: { left: area([]), right: area(["outline"]), right2: area(["inspect", "history"]), bottom: area(["textures", "library", "project", "checks", "compile"]) }, sizes: { ...SIZES, right: 340, bottom: 260, rightSplit: 0.42 }, floats: [], popped: [] },
+    tip: "Outline above Inspect on the right; Library, Textures and the rest along the bottom",
+    layout: { areas: { left: area([]), right: area(["outline"]), right2: area(["inspect", "history"]), bottom: area(["library", "textures", "checks", "compile", "project"]) }, sizes: { ...SIZES, right: 330, bottom: 250, rightSplit: 0.42 }, floats: [], popped: [] },
+  },
+  tabs: {
+    label: "All on the right",
+    tip: "Every panel as a tab on the right (the old layout)",
+    layout: { areas: { left: area([]), right: area(["inspect", "outline", "textures", "library", "checks", "compile", "project", "history"]), right2: area([]), bottom: area([]) }, sizes: { ...SIZES }, floats: [], popped: [] },
   },
 };
 
@@ -49,7 +55,7 @@ type DockState = DockLayout & {
   set: (p: Partial<DockLayout & { dragging: string | null }>) => void;
 };
 
-const KEY = "ls.editor.dock";
+const KEY = "ls.editor.dock2"; // (v2: the Unreal-like default; the old key is left alone)
 const clone = (l: DockLayout): DockLayout => JSON.parse(JSON.stringify(l));
 
 function load(): DockLayout {

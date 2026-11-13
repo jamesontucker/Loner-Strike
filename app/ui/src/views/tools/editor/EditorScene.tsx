@@ -3,7 +3,8 @@
 // one 3D view first (B's Orbit/Fly cameras), flat top/front/side views a key away.
 // Everything inside the root group is in GoldSrc units (plan 3.2).
 
-import { Line, MapControls, OrthographicCamera, PerspectiveCamera, TransformControls, View } from "@react-three/drei";
+import { Line, MapControls, OrthographicCamera, PerspectiveCamera, TransformControls } from "@react-three/drei";
+import { PaneView } from "./PaneView"; // P5: drei View with the off-screen test fixed
 import { Canvas, useThree, type RootState, type ThreeEvent } from "@react-three/fiber";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
@@ -1234,11 +1235,11 @@ export function EditorScene({ bounds, docId, onLost }: { bounds: [Vec3, Vec3]; d
           <Redraw />
           <Materials docId={docId}>
             {Array.from({ length: n }, (_, i) => (
-              <View key={`${i}-${views[i]}`} track={tracks[i] as React.MutableRefObject<HTMLElement>} index={i + 1} visible={max == null || max === i}>
+              <PaneView key={`${i}-${views[i]}`} track={tracks[i] as React.MutableRefObject<HTMLElement | null>} index={i + 1} visible={max == null || max === i}>
                 <PaneCtx.Provider value={{ slot: i, view: views[i], active: n === 1 || active === i }}>
                   <PaneScene view={views[i]} bounds={bounds} />
                 </PaneCtx.Provider>
-              </View>
+              </PaneView>
             ))}
           </Materials>
         </Canvas>
