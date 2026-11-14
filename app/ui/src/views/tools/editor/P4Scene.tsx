@@ -9,6 +9,7 @@ import { Line } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { InstancedMarkers } from "./EntityBatch"; // Parity A
 import type { Vec3 } from "../viewer/coords";
 import { cordonOf, dragging, loadComponents, pickAt, placeComponentAt, placePrefabAt, registerScene, sceneAt, updateGhost, useP4 } from "./extras";
 import { useP5 } from "./p5store"; // P5: a texture's drop target
@@ -262,6 +263,7 @@ function ComponentVisuals() {
   }
   const fgdDefault = (cls: string, k?: string) => (k ? fgd?.get(cls)?.keys.find((x) => x.name === k)?.default : undefined);
   const out: JSX.Element[] = [];
+  const points: { at: Vec3; color: string }[] = [];
   for (const e of ents) {
     const def = lib.get(e.classname);
     if (!def || e.brushes.length) continue;
@@ -292,12 +294,7 @@ function ComponentVisuals() {
     } else if (def.visual === "beam_up") {
       out.push(<Line key={`c${e.id}`} points={[o, [o[0], o[1], o[2] + 2048]]} color={col} lineWidth={2} dashed dashSize={32} gapSize={16} />);
     } else if (def.visual === "point") {
-      out.push(
-        <mesh key={`c${e.id}`} position={[o[0], o[1], o[2] + 28]} raycast={() => null}>
-          <octahedronGeometry args={[7]} />
-          <meshBasicMaterial color={col} />
-        </mesh>,
-      );
+      points.push({ at: [o[0], o[1], o[2] + 28], color: col }); // Parity A: all in one draw (below)
     }
     for (const k of def.link_keys ?? []) {
       const n = keyOfE(e, k);
@@ -315,7 +312,12 @@ function ComponentVisuals() {
       );
     }
   }
-  return <>{out}</>;
+  return (
+    <>
+      {out}
+      <InstancedMarkers items={points} shape="octahedron" size={7} />
+    </>
+  );
 }
 
 /** Where a dragged or placed prefab/component would land: a see-through box with its outline

@@ -54,11 +54,11 @@ export function modelOf(e: DocEntity, creatures: Creature[] = []): string | null
   return null;
 }
 
-type Got = { item: { folder: string; path: string }; bundle: ModelBundle } | null;
+export type Got = { item: { folder: string; path: string }; bundle: ModelBundle } | null;
 const cache = new Map<string, Promise<Got>>();
 
 /** The first of the paths found in a game folder (null when none are); one request per list. */
-function loadModel(paths: string): Promise<Got> {
+export function loadModel(paths: string): Promise<Got> {
   const key = paths.toLowerCase();
   let p = cache.get(key);
   if (!p) {
@@ -103,42 +103,48 @@ export function useEntityModel(e: DocEntity): Got {
 
 const texLoader = new THREE.TextureLoader();
 
+/** Parity A: a model's geometry for one body (shared by the single mesh and the instanced batch). */
+export function modelGeometry(b: ModelBundle, body: number): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(b.positions, 3));
+  g.setAttribute("normal", new THREE.BufferAttribute(b.normals, 3));
+  g.setAttribute("uv", new THREE.BufferAttribute(b.uv, 2));
+  g.setIndex(new THREE.BufferAttribute(b.indices, 1));
+  b.draws.forEach((d, i) => {
+    const part = b.bodyparts[d.part];
+    const count = part?.models.length || 1;
+    const want = Math.floor(body / (part?.base || 1)) % count;
+    if (d.model === want && d.count > 0) g.addGroup(d.start, d.count, i);
+  });
+  return g;
+}
+
+/** Parity A: a model's materials for one skin; `loaded` runs as each texture arrives. */
+export function modelMaterials(b: ModelBundle, item: { folder: string; path: string }, skin: number, loaded: () => void): THREE.MeshLambertMaterial[] {
+  const tex = new Map<number, THREE.Texture>();
+  const pick = (ref: number) => b.skins[skin]?.[ref] ?? b.skins[0]?.[ref] ?? ref;
+  return b.draws.map((d) => {
+    const ti = pick(d.skinRef);
+    const info = b.textures[ti];
+    let t = tex.get(ti);
+    if (!t) {
+      t = texLoader.load(modelTextureUrl(item, ti), loaded);
+      t.flipY = false;
+      t.colorSpace = THREE.NoColorSpace;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      tex.set(ti, t);
+    }
+    return new THREE.MeshLambertMaterial({ map: t, side: THREE.DoubleSide, alphaTest: info?.masked ? 0.5 : 0, transparent: !!info?.additive, depthWrite: !info?.additive, blending: info?.additive ? THREE.AdditiveBlending : THREE.NormalBlending });
+  });
+}
+
 /** The model's first body and skin, lit by the scene. Not pickable (the entity's box is). */
 export function EntityModelMesh({ got, yaw, body = 0, skin = 0 }: { got: NonNullable<Got>; yaw: number; body?: number; skin?: number }) {
   const invalidate = useThree((s) => s.invalidate);
   const { bundle: b, item } = got;
-  const geometry = useMemo(() => {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.BufferAttribute(b.positions, 3));
-    g.setAttribute("normal", new THREE.BufferAttribute(b.normals, 3));
-    g.setAttribute("uv", new THREE.BufferAttribute(b.uv, 2));
-    g.setIndex(new THREE.BufferAttribute(b.indices, 1));
-    b.draws.forEach((d, i) => {
-      const part = b.bodyparts[d.part];
-      const count = part?.models.length || 1;
-      const want = Math.floor(body / (part?.base || 1)) % count;
-      if (d.model === want && d.count > 0) g.addGroup(d.start, d.count, i);
-    });
-    return g;
-  }, [b, body]);
+  const geometry = useMemo(() => modelGeometry(b, body), [b, body]);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  const materials = useMemo(() => {
-    const tex = new Map<number, THREE.Texture>();
-    const pick = (ref: number) => b.skins[skin]?.[ref] ?? b.skins[0]?.[ref] ?? ref;
-    return b.draws.map((d) => {
-      const ti = pick(d.skinRef);
-      const info = b.textures[ti];
-      let t = tex.get(ti);
-      if (!t) {
-        t = texLoader.load(modelTextureUrl(item, ti), () => invalidate());
-        t.flipY = false;
-        t.colorSpace = THREE.NoColorSpace;
-        t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        tex.set(ti, t);
-      }
-      return new THREE.MeshLambertMaterial({ map: t, side: THREE.DoubleSide, alphaTest: info?.masked ? 0.5 : 0, transparent: !!info?.additive, depthWrite: !info?.additive, blending: info?.additive ? THREE.AdditiveBlending : THREE.NormalBlending });
-    });
-  }, [b, item, skin, invalidate]);
+  const materials = useMemo(() => modelMaterials(b, item, skin, () => invalidate()), [b, item, skin, invalidate]);
   useEffect(
     () => () =>
       materials.forEach((m) => {

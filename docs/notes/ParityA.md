@@ -71,3 +71,9 @@ axis pair on a spike, a box's corners on whole units), the command test, `editor
 - My dev servers: Rust on 8093 (started as `... devserve::tests::serve_tools_de` so a `pkill -f serve_tools_dev`
   doesn't hit it), Vite on 5393 with HMR off (other agents' edits reloaded pages mid-test).
 - WebKit reports fetches cut off by a reload as "access control checks" page errors: the specs ignore those.
+
+## Note (2026-11-13)
+2b9ddff1 (the MCP commit) undid 4f578685 (big-map drawing): it deleted EntityBatch.tsx and paneRedraw.ts and reverted
+the hunks in EditorScene, PaneView, EntityModels, P4Scene, CheckMarkers, editor-flatperf.spec.ts and P5.md, most likely
+committed from an index made before 4f578685. Restored as it was in the next commit. Whoever commits from a separate
+index: build it from the current HEAD (git read-tree HEAD) right before committing.
