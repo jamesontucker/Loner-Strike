@@ -1,7 +1,11 @@
 # Community roles: Steam ↔ Discord link, Supporter VIP, server moderator applications
 
 Owner: **MCP** (list service, Discord bot, app backend routes, ls-control, plugins). **P5**: the app UI.
-Status: design and API (2026-11-14). Nothing deployed: the box, the live Discord and Polar need the user's OK.
+Status (2026-11-14): built and tested (list service and bot, the app's backend, ls-control's roles unit,
+gm_extras /link, gm_vip 1.2). Nothing deployed: the box, the live Discord and Polar need the user's OK (docs/ROLES.md,
+"For the Loner-Strike team"). The relay is gm_extras (not a new gm_link plugin), so no setup change was needed. On a
+Linux server the relay and supporters run as their own unit (`ls-control roles`), because the shared control service
+may only talk to this machine; an Admin's calls reach it through a spool in the service's folder.
 
 ## The pieces
 1. **Server claim.** A host proves they run a server, the same way the server list already works: the list service
@@ -41,7 +45,7 @@ Status: design and API (2026-11-14). Nothing deployed: the box, the live Discord
   their app access and in-game role away.
 
 ## 2. Link
-- In game: `say /link` (new plugin **gm_link.amxx**, on every Loner-Strike server). The plugin logs
+- In game: `say /link` (gm_extras.amxx, on every Loner-Strike server). The plugin logs
   `"Name<uid><STEAM_0:1:123><CT>" triggered "ls_link"` and tells the player "Getting your code…". The **relay**
   (the owner's app for a server on this computer, ls-control for a Linux server) sees the line in the log, asks
   `POST /roles/link/code {steamid, name}` (server token), and runs `ls_link_show <uid> <code>` over RCON; the plugin

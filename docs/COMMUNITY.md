@@ -5,6 +5,8 @@ Loner-Strike's promise is build, play locally with human-like bots, host, share.
 with Loner-Strike, where one click installs a creation and starts a game with bots, and a
 **Publish** flow that turns a map you made into a ready-to-upload package.
 
+Linking SteamIDs to Discord, Supporter VIP and server moderator applications are in docs/ROLES.md.
+
 Code: `app/src-tauri/src/tools/community.rs` (routes under `/api/tools/community/*`, app window
 only) and `app/ui/src/views/tools/community/` (Tools > Share > Community, Beta).
 

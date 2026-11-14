@@ -223,6 +223,23 @@ Expected messages are the app's own words; a row fails if a failure shows a raw 
 | Taken down after install | Pull a test entry you installed | Installed copy stays and shows the pulled note; Try it is gone; Update never offered |
 | Ownership after reinstall | Remove and reinstall the app (keep the GameBanana account), update your test entry | Updating still works: ownership is the GameBanana member, not the app copy |
 
+### Community roles (docs/ROLES.md; **needs user**: the box deploy, the Discord roles and commands, Polar)
+Use a test Discord account for the applicant, a second for the owner, and the official test server. Run on the
+current builds (gm_extras and gm_vip 1.2 from `tools` HEAD, ls-control unit 4 on the Linux server).
+| Item | Steps | Pass when |
+|---|---|---|
+| Claim | A server on this computer, then a Linux one: Shared control › Loner-Strike roles › Claim; type the owner code in Discord | "Claiming…" then the owner code; `/server claim` says you're the owner; the card shows the owner linked; a stopped server says to start it; a LAN-only one gets the list service's words |
+| Claimed again | Claim the same address from another app; then `lsmod.py roles servers` | The first app's card says the claim ended; the old server isn't official, its moderators are gone (Discord role too), the team channel got the alert |
+| /link | Say /link in game; type the code in Discord; a wrong code; one 11 minutes old; /link again for another SteamID; /unlink | The code shows in chat, console and on screen; "Linked…"; "isn't right"; "ran out"; relinking replaces; unlink works; on a server whose app is closed: "This server can't make link codes…" after 10 s |
+| Link squatting | Link a SteamID from a community server with account A; then link it on an official server with account B; `lsmod.py roles unlink <steamid>` | B's verified link replaces A's and A gets a DM; a code for a player not on the server is refused; the unlink is in `lsmod.py roles log` |
+| Supporters (Polar test events) | Monthly grant, revoke; one-time order twice; a bad signature; the same event again; an older grant after a revoke | Supporter while monthly is granted; 60 days for two one-time orders; 401; replay ignored; the older event ignored |
+| VIP in game | A linked supporter joins the official server; the Admins page's Supporters switches; reserved slot 1 with bots filling the server | [VIP] tag and scoreboard mark, the join message; no gear or money; a non-supporter in the kept slot is kicked unless a bot makes room; a host server with Honor off shows nothing, with it on the supporter within 5 minutes |
+| Application, owner | Apply › Server moderator for a claimed server (not linked first; then linked); the owner approves by DM; Create moderator invite; accept it | "Link your SteamID first"; the card reaches the owner's DMs (unverified link marked); approve DMs the applicant; the invite comes by DM; accepting gives app access as Moderator, the in-game Moderator role and the Discord role Server Moderator |
+| Application, Discord moderators | With Let Discord moderators decide on, a moderator denies with a reason from the team channel; without it, they try | Denied with the reason DMed and the owner's copy edited; without the switch: "You can't decide…"; nobody decides on their own |
+| Admin invites | A shared-control Admin (local and Linux server) makes the invite and revokes | Works on their server only; they never see the claim or the switches; on the Linux server it works with the owner's computer off |
+| DMs closed, revoke, unclaim | An applicant with DMs closed; Revoke an active moderator; Unclaim | The invite shows to copy; revoke takes app access, the in-game role and the Discord role; unclaim does the same for every moderator and the claim leaves the Linux server |
+| Log | `lsmod.py roles log` | Every claim, link, decision, invite, redemption, revoke and eviction is there |
+
 ### Offline
 | Item | Steps | Pass when |
 |---|---|---|
