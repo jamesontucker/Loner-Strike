@@ -42,23 +42,7 @@ enum { PH_IDLE = 0, PH_PREPARE, PH_WAVE, PH_BREAK, PH_OVER };
    a themed special round every 6, a boss every 5 from round 10. Each type unlocks at a round and
    falls back to an older type on a server that doesn't have it yet. docs/notes/W1.md has the
    round table. */
-enum { RL_FODDER = 0, RL_FLANK, RL_RANGED, RL_TANK, RL_COUNT };
-new const ROSTER[][] = { "zombie", "babycrab", "runner", "spitter", "brute", "vortigaunt", "assassin", "soldier", "controller", "stukabat" };
-new const ROSTER_ROLE[] = { RL_FODDER, RL_FODDER, RL_FLANK, RL_RANGED, RL_TANK, RL_RANGED, RL_FLANK, RL_TANK, RL_RANGED, RL_FLANK };
-new const ROSTER_FROM[] = { 1, 4, 2, 4, 5, 8, 9, 10, 12, 14 };
-new const ROSTER_HP[] = { 100, 12, 60, 120, 450, 150, 90, 300, 200, 60 };
-/* how often within its role (baby headcrabs are a sprinkle: small, fast and hard to hit) */
-new const ROSTER_WEIGHT[] = { 4, 1, 3, 3, 3, 2, 2, 2, 2, 1 };
-new const ROSTER_PAY[] = { 75, 50, 90, 100, 175, 120, 130, 175, 150, 100 };
-new const ROSTER_FALLBACK[][] = { "", "headcrab", "", "", "", "spitter", "runner", "brute", "spitter", "runner" };
-/* specials, the heavy and the bosses: name, health, pay, fallback */
-new const EXTRA[][] = { "hound", "snark", "babygarg", "boss", "gonarch" };
-new const EXTRA_HP[] = { 80, 20, 1500, 3000, 3500 };
-new const EXTRA_PAY[] = { 90, 40, 400, 1000, 1000 };
-new const EXTRA_FALLBACK[][] = { "runner", "headcrab", "boss", "", "boss" };
-enum { EX_HOUND = 0, EX_SNARK, EX_HEAVY, EX_GARG, EX_GONARCH };
-#define HEAVY_FROM 11
-
+/* the round table (what each round brings) is gm_components' (ls_wave_table) */
 new g_cWaves, g_cDiff, g_cPrepare, g_cBreak, g_cRevive, g_cDrops, g_cCreatures, g_cDefenders, g_cWaveMoney, g_cWaitHuman, g_cOverrun, g_cLastChance, g_cLives, g_cBaseRadius, g_cBuyAnywhere, g_cShopScale;
 
 new Float:g_gunNext[33];
@@ -71,7 +55,6 @@ new g_wave;
 new Float:g_phaseEnd;
 new bool:g_creatures;
 new bool:g_hasCreatureDll;
-new g_failSpawns;
 new Float:g_base[3];
 new g_gatePct[2048];
 new Float:g_gateUpAt[2048];
@@ -100,12 +83,10 @@ new Float:g_upNext[33];
 new bool:g_hasPerkM, bool:g_hasBench;
 new Float:g_shop[3];
 new bool:g_downOn;
-new bool:g_bossDone;
 new bool:g_traderWarned;
 new bool:g_headLast[2048];
 new Float:g_doubleUntil, Float:g_instaUntil;
-new g_special = -1;
-new g_heavyLeft;
+new g_special;	/* this round: 0 normal, 1 boss, 2 a special pack (ls_wave_kind) */
 new g_cAliveMax;
 new g_cTiers;
 new g_capShown;
@@ -161,18 +142,6 @@ new g_msgShake, g_msgRoundTime;
 new g_sprBeam;
 
 /* waves.ini [laststand] (see load_waves) */
-#define MAX_ROWS 32
-#define MAX_MIX 8
-new g_wRowFrom[MAX_ROWS], g_wRowTo[MAX_ROWS];
-new g_wMixType[MAX_ROWS][MAX_MIX][16];
-new g_wMixW[MAX_ROWS][MAX_MIX];
-new g_wMixN[MAX_ROWS];
-new g_nrows;
-new g_wBoss[16] = "boss";
-new g_wBossEvery = 5;
-new Float:g_wCount = 1.0;
-new Float:g_wHp = 1.0;
-new bool:g_wTypeHp;
 
 /* =========================================================================
  * Start-up
@@ -190,7 +159,8 @@ public plugin_precache()
 	g_hasCreatureDll = get_cvar_pointer("ls_creature_ver") != 0;
 	g_cCreatures = register_cvar("lst_creatures", "1");
 	keeper_precache();
-	load_waves();
+	/* the round table: waves.ini [laststand] if the Creature Studio wrote one, else the built-in */
+	ls_wave_table("laststand", 2, true);
 	if (g_hasCreatureDll && get_pcvar_num(g_cCreatures))
 	{
 		/* only the types this map's stand will use (each type loads its model and sounds) */
@@ -307,7 +277,7 @@ public cmd_perf()
 		}
 	log_amx("Last Stand perf: %d creatures with a glow shell (%d red)", shell, red);
 	new capnow = get_cvar_pointer("ls_creature_cap_now") ? get_cvar_num("ls_creature_cap_now") : -1;
-	log_amx("Last Stand perf: %d entities of %d, %d creatures alive (cap %d, ls_creature_cap_now %d), %d of %d defenders up, phase %d wave %d", engfunc(EngFunc_NumberOfEntities), global_get(glb_maxEntities), cr, alive_cap(), capnow, up, ct, g_phase, g_wave);
+	log_amx("Last Stand perf: %d entities of %d, %d creatures alive (cap %d, ls_creature_cap_now %d), %d of %d defenders up, phase %d wave %d", engfunc(EngFunc_NumberOfEntities), global_get(glb_maxEntities), cr, ls_wave_cap_now(), capnow, up, ct, g_phase, g_wave);
 	return PLUGIN_HANDLED;
 }
 
@@ -910,7 +880,7 @@ stock lose_checks(why[], len)
 				if (pev(e, pev_deadflag) == DEAD_NO && pev(e, pev_team) != 1 && in_base(e))
 				{
 					pev(e, pev_netname, type, charsmax(type));
-					enemies += equal(type, g_wBoss) ? 2 : 1;
+					enemies += ls_wave_is_big(type) ? 2 : 1;
 				}
 		}
 		else
@@ -986,167 +956,36 @@ stock Float:diff_mult(bool:hp)
 	return 1.0;
 }
 
-/* the team-size factors: counted up to 16 players (more than that: a little more health each,
-   not more creatures) */
-stock Float:team_count_factor()
-{
-	return 0.5 + 0.2 * float(min(defenders(), 16));
-}
-
-stock Float:team_hp_factor()
-{
-	new d = defenders();
-	return (0.8 + 0.1 * float(min(d, 16))) * (1.0 + 0.02 * float(max(d - 16, 0)));
-}
-
-/* creature health: +4 % a round through round 9, then x1.1 a round */
-stock Float:round_hp(n)
-{
-	if (n <= 9)
-		return 1.0 + 0.04 * float(n - 1);
-	return 1.32 * floatpower(1.1, float(n - 9));
-}
-
-stock Float:hp_mult()
-{
-	return round_hp(g_wave) * team_hp_factor() * diff_mult(true);
-}
-
-/* share of walking fodder that runs instead: none in rounds 1-2, +10 % a round, at most 72 %
-   (walkers and tanks stay in the mix; late rounds get harder by health, and by tiers) */
-stock Float:fast_share(n)
-{
-	if (n < 3)
-		return 0.0;
-	return floatmin(0.1 * float(n - 2), 0.72);
-}
-
-/* a creature tier for the round, sent as the creature's "tier" key (lst_tiers): 0 and 1 are
-   normal in the game DLL, 2 (from round 15) a yellow shell, 3 (from round 20) red-orange and 8 %
-   bigger; health stays Last Stand's */
-stock round_tier(n)
-{
-	return n >= 20 ? 3 : (n >= 15 ? 2 : (n >= 10 ? 1 : 0));
-}
-
-/* how many creatures may be alive at once (the rest come in as they die): lst_alive_max, or
-   by the team's size (16 + 2 a player, 20-48) */
-stock alive_cap()
-{
-	new c = get_pcvar_num(g_cAliveMax);
-	if (c <= 0)
-		c = clamp(16 + 2 * defenders(), 20, 48);
-	/* the game DLL's own adaptive cap (it lowers it when the server can't keep up) */
-	new p = get_cvar_pointer("ls_creature_cap_now");
-	if (p && get_pcvar_num(p) > 0)
-		c = min(c, get_pcvar_num(p));
-	return c;
-}
-
-stock type_hp(const type[])
-{
-	for (new i = 0; i < sizeof ROSTER; i++)
-		if (equal(type, ROSTER[i]))
-			return ROSTER_HP[i];
-	for (new i = 0; i < sizeof EXTRA; i++)
-		if (equal(type, EXTRA[i]))
-			return EXTRA_HP[i];
-	return 0;
-}
-
-stock type_pay(const type[])
-{
-	for (new i = 0; i < sizeof ROSTER; i++)
-		if (equal(type, ROSTER[i]))
-			return ROSTER_PAY[i];
-	for (new i = 0; i < sizeof EXTRA; i++)
-		if (equal(type, EXTRA[i]))
-			return EXTRA_PAY[i];
-	return 50;
-}
-
-stock type_fallback(const type[], out[], len)
-{
-	out[0] = EOS;
-	for (new i = 0; i < sizeof ROSTER; i++)
-		if (equal(type, ROSTER[i]))
-			copy(out, len, ROSTER_FALLBACK[i]);
-	for (new i = 0; i < sizeof EXTRA; i++)
-		if (equal(type, EXTRA[i]))
-			copy(out, len, EXTRA_FALLBACK[i]);
-}
-
 stock start_wave(n)
 {
 	g_wave = n;
 	g_phase = PH_WAVE;
 	g_overrun = 0;
 	g_lastChanceEnd = 0.0;
-	g_special = -1;
-	g_heavyLeft = 0;
 	g_puThisWave = 0;
-	if (g_nrows)
-		g_bossDone = g_wBossEvery <= 0 || !g_wBoss[0] || (n % g_wBossEvery) != 0;
-	else
-	{
-		/* a boss every 5 rounds from 10 (garg, then gonarch, in turn); a themed round every 6
-		   (a hound pack, then a snark swarm); a heavy or more from round 11 */
-		/* a first boss moment at round 7 (a lone baby garg with a light escort), then the big
-		   ones every 5 from 10 */
-		g_bossDone = !((n >= 10 && n % 5 == 0) || n == 7);
-		if (n == 7)
-			copy(g_wBoss, charsmax(g_wBoss), EXTRA[EX_HEAVY]);
-		else if (!g_bossDone)
-			copy(g_wBoss, charsmax(g_wBoss), EXTRA[(n / 5) % 2 == 0 ? EX_GARG : EX_GONARCH]);
-		else if (n >= 6 && n % 6 == 0)
-			g_special = (n / 6) % 2 == 1 ? EX_HOUND : EX_SNARK;
-		if (n >= HEAVY_FROM && g_special < 0)
-			g_heavyLeft = 1 + (n - HEAVY_FROM) / 4;
-	}
 	g_spawned = 0;
-	g_failSpawns = 0;
 	set_cvar_num("mp_buy_anywhere", 0);
 	/* the shop trips end; anyone still waiting for a revive gets their helpers back */
 	ls_comp_bots_hint("goal_clear ct use");
 	for (new d = 1; d <= MaxClients; d++)
 		if (g_down[d])
 			send_revive(d);
-
-	/* how many: grows each wave, with the team's size and the difficulty */
-	/* (the first rounds a few more, tapering off by round 5: no dead time at the start) */
-	new total = floatround((11.0 + 1.4 * float(n) + float(max(5 - n, 0))) * team_count_factor() * diff_mult(false) * g_wCount);
-	/* a boss round: fewer grunts with the boss (it's the round's threat); a special round: a
-	   fast pack, fewer of them */
-	if (!g_bossDone)
-		total = floatround(float(total) * 0.6);
-	else if (g_special >= 0)
-		total = floatround(float(total) * 0.7);
-	/* never more alive at once than the cap: the rest come in as they die */
-	set_cvar_num("ls_comp_wave_alive_max", alive_cap());
-	total = max(total, 1);
-	new nsp = max(ls_comp_count("ls_wave_spawner"), 1);
-	g_planned = 0;
-	new i = 0;
-	for (new e = ls_comp_find("ls_wave_spawner"); e; e = ls_comp_find("ls_wave_spawner", e))
-	{
-		new each = total / nsp + (i < total % nsp ? 1 : 0);
-		if (!g_bossDone && i == 0)
-			each++;
-		new v[8];
-		num_to_str(each, v, charsmax(v));
-		ls_comp_set(e, "wave_min", v);
-		ls_comp_set(e, "wave_max", v);
-		ls_comp_set(e, "waves", "1");
-		g_planned += each;
-		i++;
-	}
+	/* the round table plans it (gm_components): how many, which types, health, a boss or a
+	   special pack, how many alive at once; difficulty scales count and health */
+	ls_wave_table("laststand", 2, g_creatures);
+	ls_wave_scale(diff_mult(false), diff_mult(true));
+	ls_wave_cap(get_pcvar_num(g_cAliveMax));
+	ls_wave_tiers(get_pcvar_num(g_cTiers) != 0);
+	ls_wave_start(n);
+	g_planned = ls_wave_planned();
+	new kind[16];
+	g_special = ls_wave_kind(kind, charsmax(kind));
 	if (!g_creatures && g_classZombie)
 	{
 		new v[8];
-		num_to_str(floatround(100.0 * hp_mult()), v, charsmax(v));
+		num_to_str(floatround(100.0 * ls_wave_hp_mult()), v, charsmax(v));
 		ls_comp_set(g_classZombie, "hp", v);
 	}
-	ls_wave_start(n);
 	if (g_botRepaired > 0)
 		log_amx("Last Stand: bots repaired %d barricade health before wave %d", g_botRepaired, n);
 	g_botRepaired = 0;
@@ -1155,14 +994,12 @@ stock start_wave(n)
 	g_floorSecs = 0;
 	g_kills = 0;
 	g_waveAt = get_gametime();
-	log_amx("Wave %d: %d %s against %d defenders (creature health x%.2f, %d%% of the walkers run, %d alive at most%s%s%s)", n, g_planned, g_creatures ? "creatures" : "zombie bots", defenders(), hp_mult(), floatround(100.0 * fast_share(n)), alive_cap(),
-		g_bossDone ? "" : ", boss wave", g_special == EX_HOUND ? ", hound pack" : (g_special == EX_SNARK ? ", snark swarm" : ""), g_heavyLeft ? ", with heavies" : "");
 	/* the round's start: a clear cue */
-	if (!g_bossDone)
+	if (g_special == 1)
 		toast(0, 4.0, true, "Wave %d: a boss is coming!", n);
-	else if (g_special == EX_HOUND)
+	else if (g_special == 2 && equal(kind, "hound"))
 		toast(0, 4.0, true, "Wave %d: a hound pack! Fast and many", n);
-	else if (g_special == EX_SNARK)
+	else if (g_special == 2)
 		toast(0, 4.0, true, "Wave %d: a swarm! Small, fast, everywhere", n);
 	else
 		toast(0, 3.0, true, "Wave %d", n);
@@ -1172,218 +1009,15 @@ stock start_wave(n)
 
 stock enemies_left()
 {
+	if (g_creatures)
+		return max(ls_wave_planned() - ls_wave_spawned(), 0) + ls_wave_alive();
 	return max(g_planned - g_spawned, 0) + ls_wave_alive();
 }
 
+/* the round table's spawners make the creatures; none outside a wave */
 public ls_on_wave_spawn(ent, wave, const Float:origin[3], const types[])
 {
-	if (g_phase != PH_WAVE)
-		return PLUGIN_HANDLED;
-	if (!g_creatures)
-		return PLUGIN_CONTINUE;
-	new type[16];
-	new bool:boss = pick_type(type, charsmax(type));
-	new Float:o[3];
-	o[0] = origin[0];
-	o[1] = origin[1];
-	o[2] = floor_under(origin) + 1.0;
-	/* walking fodder: early rounds walk, later ones run (the zombie's run speed is its own) */
-	new speed = 0;
-	if (equal(type, "zombie") && random_float(0.0, 1.0) >= fast_share(g_wave))
-		speed = 110;
-	new cr = spawn_creature(type, o, speed);
-	if (!cr)
-	{
-		/* a type this server doesn't have yet: the one it stands in for */
-		new fb[16];
-		type_fallback(type, fb, charsmax(fb));
-		if (fb[0])
-		{
-			cr = spawn_creature(fb, o, speed);
-			if (!cr)
-			{
-				new fb2[16];
-				type_fallback(fb, fb2, charsmax(fb2));
-				if (fb2[0])
-					cr = spawn_creature(fb2, o, speed);
-			}
-		}
-	}
-	if (!cr)
-	{
-		/* full (ls_creature_max) or the type wasn't loaded: try again in a moment, and after
-		   a long run of failures with nothing alive, fall back to zombie bots */
-		if (++g_failSpawns >= 20 && !ls_wave_alive())
-		{
-			log_amx("Last Stand: creatures won't spawn on %s; using zombie bots instead.", g_mapname);
-			g_creatures = false;
-			ensure_components();
-			assign_teams(false);
-		}
-		/* not handled: the spawner finds no dead Terrorist either and tries again in a second */
-		return PLUGIN_CONTINUE;
-	}
-	g_failSpawns = 0;
-	if (boss)
-		g_bossDone = true;
-	/* health: Last Stand's own per type (or the type's own from creatures.ini with type_hp 1),
-	   scaled by wave, team size, difficulty and waves.ini's hp_scale */
-	new Float:own = entity_get_float(cr, EV_FL_health), Float:base = own;
-	if (!g_wTypeHp && type_hp(type))
-		base = float(type_hp(type));
-	/* the boss and the heavy: the round's growth and difficulty, but only a little of the
-	   team-size factor; a special round's pack a little less than usual */
-	new Float:mult = (boss || equal(type, EXTRA[EX_HEAVY])) ? round_hp(g_wave) * (0.8 + 0.04 * float(min(defenders(), 16))) * diff_mult(true) : hp_mult();
-	if (g_special >= 0)
-		mult *= 0.8;
-	new Float:hp = floatmax(base * mult * g_wHp, 1.0);
-	entity_set_float(cr, EV_FL_health, hp);
-	entity_set_float(cr, EV_FL_max_health, hp);
-	ls_wave_track(cr);
-	g_spawned++;
-	return PLUGIN_HANDLED;
-}
-
-/* the type for the next enemy (true = the wave's boss) */
-stock bool:pick_type(out[], len)
-{
-	if (!g_bossDone)
-	{
-		copy(out, len, g_wBoss);
-		return true;
-	}
-	if (g_nrows)
-	{
-		new r = wave_row(g_wave);
-		new total = 0;
-		for (new m = 0; m < g_wMixN[r]; m++)
-			total += g_wMixW[r][m];
-		if (total > 0)
-		{
-			new pick = random(total);
-			for (new m = 0; m < g_wMixN[r]; m++)
-			{
-				pick -= g_wMixW[r][m];
-				if (pick < 0)
-				{
-					copy(out, len, g_wMixType[r][m]);
-					return false;
-				}
-			}
-		}
-	}
-	if (g_special >= 0)
-	{
-		copy(out, len, EXTRA[g_special]);
-		return false;
-	}
-	/* the heavy comes once a quarter of the round is in */
-	if (g_heavyLeft > 0 && g_spawned >= g_planned / 4)
-	{
-		g_heavyLeft--;
-		copy(out, len, EXTRA[EX_HEAVY]);
-		return false;
-	}
-	copy(out, len, ROSTER[builtin_type()]);
-	return false;
-}
-
-/* the row for wave n: the one covering it, else the closest one before it, else the first */
-stock wave_row(n)
-{
-	new best = -1, bestFrom = -1;
-	for (new r = 0; r < g_nrows; r++)
-	{
-		if (g_wRowFrom[r] <= n && (g_wRowTo[r] == 0 || n <= g_wRowTo[r]))
-			return r;
-		if (g_wRowFrom[r] <= n && g_wRowFrom[r] > bestFrom)
-		{
-			bestFrom = g_wRowFrom[r];
-			best = r;
-		}
-	}
-	return best >= 0 ? best : 0;
-}
-
-/* Last Stand's own mix when waves.ini has no [laststand] */
-stock builtin_type()
-{
-	new n = g_wave;
-	/* a role by weight (fodder 10, flankers 2 + n/2, ranged 1 + n/4, tanks 1 + n/5, once
-	   unlocked), then one of the role's unlocked types */
-	new w[RL_COUNT], total = 0;
-	for (new r = 0; r < RL_COUNT; r++)
-	{
-		new any = 0;
-		for (new i = 0; i < sizeof ROSTER; i++)
-			if (ROSTER_ROLE[i] == r && ROSTER_FROM[i] <= n)
-				any = 1;
-		if (!any)
-			continue;
-		switch (r)
-		{
-			case RL_FODDER: w[r] = 20;
-			case RL_FLANK: w[r] = 4 + n;
-			case RL_RANGED: w[r] = 2 + n / 2;
-			case RL_TANK: w[r] = 2 + (2 * n) / 5;
-		}
-		total += w[r];
-	}
-	new role = RL_FODDER, pick = random(max(total, 1));
-	for (new r = 0; r < RL_COUNT; r++)
-	{
-		pick -= w[r];
-		if (pick < 0)
-		{
-			role = r;
-			break;
-		}
-	}
-	new tw = 0;
-	for (new i = 0; i < sizeof ROSTER; i++)
-		if (ROSTER_ROLE[i] == role && ROSTER_FROM[i] <= n)
-			tw += ROSTER_WEIGHT[i];
-	new k = random(max(tw, 1));
-	for (new i = 0; i < sizeof ROSTER; i++)
-		if (ROSTER_ROLE[i] == role && ROSTER_FROM[i] <= n)
-		{
-			k -= ROSTER_WEIGHT[i];
-			if (k < 0)
-				return i;
-		}
-	return 0;
-}
-
-stock spawn_creature(const type[], const Float:o[3], speed = 0)
-{
-	new ent = create_entity("ls_creature");
-	if (!ent)
-		return 0;
-	DispatchKeyValue(ent, "type", type);
-	/* the round's tier (Y's visual/enrage tiers), once the game DLL reads the key */
-	new tier = round_tier(g_wave);
-	if (tier > 0 && get_pcvar_num(g_cTiers))
-	{
-		new v[4];
-		num_to_str(tier, v, charsmax(v));
-		DispatchKeyValue(ent, "tier", v);
-	}
-	if (speed > 0)
-	{
-		new v[8];
-		num_to_str(speed, v, charsmax(v));
-		DispatchKeyValue(ent, "speed", v);
-	}
-	DispatchKeyValue(ent, "behaviour", "chase");
-	DispatchKeyValue(ent, "hates", "ct");
-	new Float:ang[3];
-	ang[1] = random_float(0.0, 360.0);
-	entity_set_vector(ent, EV_VEC_angles, ang);
-	entity_set_origin(ent, o);
-	DispatchSpawn(ent);
-	if (!is_valid_ent(ent) || (entity_get_int(ent, EV_INT_flags) & FL_KILLME))
-		return 0;
-	return ent;
+	return g_phase == PH_WAVE ? PLUGIN_CONTINUE : PLUGIN_HANDLED;
 }
 
 public ls_on_wave_cleared(wave)
@@ -1410,7 +1044,7 @@ public ls_on_wave_cleared(wave)
 	clear_defenders();
 	g_traderWarned = false;
 	/* a special round held: a full resupply in the middle of the base */
-	if (g_special >= 0)
+	if (g_special == 2)
 	{
 		new Float:o[3];
 		o = g_base;
@@ -1576,8 +1210,16 @@ public tick()
 		attack_barricades();
 		weigh_defenders();
 		count_height();
+		/* creatures that won't spawn here: zombie bots instead */
+		if (g_creatures && !ls_wave_creatures_ok())
+		{
+			log_amx("Last Stand: creatures won't spawn on %s; using zombie bots instead.", g_mapname);
+			g_creatures = false;
+			ensure_components();
+			assign_teams(false);
+		}
 		/* the alive cap follows the game DLL's adaptive one through the round */
-		new cap = alive_cap();
+		new cap = ls_wave_cap_now();
 		if (cap != g_capShown)
 		{
 			if (g_capShown)
@@ -2309,14 +1951,14 @@ public ham_creature_killed(ent, killer, gib)
 	new type[16];
 	pev(ent, pev_netname, type, charsmax(type));
 	/* points: the type's pay, more for a head or a knife */
-	new money = type_pay(type);
+	new money = ls_wave_type_pay(type);
 	if (ent < sizeof g_headLast && g_headLast[ent])
 		money += 50;
 	if (get_user_weapon(killer) == CSW_KNIFE)
 		money += 50;
 	pay(killer, money);
 	maybe_powerup(ent);
-	if (equal(type, "boss") || equal(type, "gonarch") || (equal(type, EXTRA[EX_HEAVY]) && g_wave == 7))
+	if (equal(type, "boss") || equal(type, "gonarch") || (ls_wave_is_big(type) && g_wave == 7))
 	{
 		new name[32];
 		get_user_name(killer, name, charsmax(name));
@@ -2464,7 +2106,7 @@ public ham_creature_hurt(ent, inflictor, attacker, Float:dmg, bits)
 	{
 		new type[16];
 		pev(ent, pev_netname, type, charsmax(type));
-		if (!equal(type, "boss") && !equal(type, "gonarch") && !equal(type, EXTRA[EX_HEAVY]))
+		if (!ls_wave_is_big(type))
 			SetHamParamFloat(4, floatmax(dmg, entity_get_float(ent, EV_FL_health) + 1.0));
 	}
 	return HAM_IGNORED;
@@ -2613,7 +2255,7 @@ stock take_powerup(kind, by)
 					continue;
 				new type[16];
 				pev(e, pev_netname, type, charsmax(type));
-				if (equal(type, "boss") || equal(type, "gonarch") || equal(type, EXTRA[EX_HEAVY]))
+				if (ls_wave_is_big(type))
 					continue;
 				ExecuteHamB(Ham_TakeDamage, e, 0, 0, entity_get_float(e, EV_FL_health) + 1000.0, DMG_BLAST);
 				n++;
@@ -3017,147 +2659,12 @@ stock keeper_precache()
 	precache_model(m);
 }
 
-/* =========================================================================
- * waves.ini [laststand] (written by the Creature Studio): boss, boss_every, count_scale,
- * hp_scale, type_hp, and "wave N | N-M | N+ = type weight type weight ..." rows
- * ========================================================================= */
-
-
-stock load_waves()
-{
-	new path[192];
-	get_configsdir(path, charsmax(path));
-	format(path, charsmax(path), "%s/gamemodes/waves.ini", path);
-	new f = fopen(path, "rt");
-	if (!f)
-		return;
-	new line[512], key[32], val[480];
-	new bool:mine = false, bool:found = false;
-	while (fgets(f, line, charsmax(line)))
-	{
-		/* comments start with ; # or // */
-		new c = contain(line, ";");
-		if (c >= 0) line[c] = EOS;
-		c = contain(line, "#");
-		if (c >= 0) line[c] = EOS;
-		c = contain(line, "//");
-		if (c >= 0) line[c] = EOS;
-		trim(line);
-		if (!line[0])
-			continue;
-		if (line[0] == '[')
-		{
-			new sec[32];
-			copyc(sec, charsmax(sec), line[1], ']');
-			trim(sec);
-			mine = bool:equali(sec, "laststand");
-			if (mine)
-				found = true;
-			continue;
-		}
-		if (!mine)
-			continue;
-		strtok2(line, key, charsmax(key), val, charsmax(val), '=', TRIM_FULL);
-		strtolower(key);
-		if (equal(key, "boss"))
-			copy(g_wBoss, charsmax(g_wBoss), val);
-		else if (equal(key, "boss_every"))
-			g_wBossEvery = clamp(str_to_num(val), 0, 1000);
-		else if (equal(key, "count_scale"))
-			g_wCount = floatclamp(str_to_float(val), 0.1, 10.0);
-		else if (equal(key, "hp_scale"))
-			g_wHp = floatclamp(str_to_float(val), 0.1, 10.0);
-		else if (equal(key, "type_hp"))
-			g_wTypeHp = str_to_num(val) != 0;
-		else if (equal(key, "wave", 4) && g_nrows < MAX_ROWS)
-		{
-			new r = g_nrows;
-			new range[16];
-			copy(range, charsmax(range), key[4]);
-			trim(range);
-			new dash = contain(range, "-");
-			new plus = contain(range, "+");
-			if (plus >= 0)
-			{
-				range[plus] = EOS;
-				g_wRowFrom[r] = str_to_num(range);
-				g_wRowTo[r] = 0;
-			}
-			else if (dash >= 0)
-			{
-				g_wRowTo[r] = str_to_num(range[dash + 1]);
-				range[dash] = EOS;
-				g_wRowFrom[r] = str_to_num(range);
-			}
-			else
-			{
-				g_wRowFrom[r] = str_to_num(range);
-				g_wRowTo[r] = g_wRowFrom[r];
-			}
-			if (g_wRowFrom[r] < 1)
-				continue;
-			g_wMixN[r] = 0;
-			new rest[480], t[16], w[12];
-			copy(rest, charsmax(rest), val);
-			while (rest[0] && g_wMixN[r] < MAX_MIX)
-			{
-				strtok2(rest, t, charsmax(t), rest, charsmax(rest), ' ', TRIM_FULL);
-				strtok2(rest, w, charsmax(w), rest, charsmax(rest), ' ', TRIM_FULL);
-				if (!t[0] || !w[0])
-					break;
-				strtolower(t);
-				new m = g_wMixN[r]++;
-				copy(g_wMixType[r][m], charsmax(g_wMixType[][]), t);
-				g_wMixW[r][m] = clamp(str_to_num(w), 0, 1000);
-			}
-			if (g_wMixN[r])
-				g_nrows++;
-		}
-	}
-	fclose(f);
-	if (found)
-		log_amx("Last Stand: waves from waves.ini (%d rows, boss %s every %d).", g_nrows, g_wBoss, g_wBossEvery);
-}
-
-/* the types waves 1..lst_waves use (every wave when endless), from waves.ini or the built-in mix */
+/* the types waves 1..lst_waves use (every wave when endless), from the round table */
 stock precache_types(list[], len)
 {
-	list[0] = EOS;
 	new p = get_cvar_pointer("lst_waves");
 	new n = p ? get_pcvar_num(p) : 10;
-	if (n <= 0)
-		n = 1000;
-	if (g_nrows)
-	{
-		for (new r = 0; r < g_nrows; r++)
-			if (g_wRowFrom[r] <= n)
-				for (new m = 0; m < g_wMixN[r]; m++)
-					if (g_wMixW[r][m] > 0)
-						add_word(list, len, g_wMixType[r][m]);
-	}
-	else
-	{
-		/* every type up to round 20 (and what each falls back to); a type the server doesn't
-		   have is skipped by the game DLL */
-		for (new i = 0; i < sizeof ROSTER; i++)
-			if (ROSTER_FROM[i] <= min(n, 20))
-			{
-				add_word(list, len, ROSTER[i]);
-				if (ROSTER_FALLBACK[i][0])
-					add_word(list, len, ROSTER_FALLBACK[i]);
-			}
-		if (n >= 6)
-			for (new i = 0; i < sizeof EXTRA; i++)
-			{
-				add_word(list, len, EXTRA[i]);
-				if (EXTRA_FALLBACK[i][0])
-					add_word(list, len, EXTRA_FALLBACK[i]);
-			}
-	}
-	if (g_nrows && g_wBoss[0] && g_wBossEvery > 0 && g_wBossEvery <= n)
-		add_word(list, len, g_wBoss);
-	if (!list[0])
-		copy(list, len, "zombie");
+	ls_wave_types(list, len, n > 0 ? n : 1000);
 	/* the defenders' sentry turrets */
 	add_word(list, len, "turret");
 }

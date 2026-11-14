@@ -3097,6 +3097,7 @@ stock wave_start(n)
 		g_aux[s] = floatround(g_pf[s][WV_MIN] + (g_pf[s][WV_MAX] - g_pf[s][WV_MIN]) * f);
 		g_pf[s][WV_NEXT] = g_now + random_float(0.0, 1.0);
 	}
+	wt_plan(); /* W1 */
 	fwd1(g_fwWaveStart, g_wave);
 	new msg[48];
 	formatex(msg, charsmax(msg), "Wave %d", g_wave);
@@ -3213,6 +3214,9 @@ stock bool:wave_spawn_one(s)
 	ExecuteForward(g_fwWaveSpawn, ret, g_ent[s], g_wave, arr, types);
 	if (ret >= PLUGIN_HANDLED)
 		return true;
+	new wt = wt_spawn(o); /* W1: the round table's creature */
+	if (wt)
+		return wt > 0;
 	/* a dead player of the spawner's team, bots first */
 	new pick = 0;
 	for (new pass = 0; pass < 2 && !pick; pass++)
@@ -9609,6 +9613,28 @@ new Float:g_turOfferOrg[33][3];
 new bool:g_turOffered[33];
 new g_fwTurret;
 
+/* the round table (ls_wave_table) */
+enum { WR_FODDER = 0, WR_FLANK, WR_RANGED, WR_TANK, WR_COUNT };
+new const WT_ROSTER[][] = { "zombie", "babycrab", "runner", "spitter", "brute", "vortigaunt", "assassin", "soldier", "controller", "stukabat" };
+new const WT_ROSTER_ROLE[] = { WR_FODDER, WR_FODDER, WR_FLANK, WR_RANGED, WR_TANK, WR_RANGED, WR_FLANK, WR_TANK, WR_RANGED, WR_FLANK };
+new const WT_ROSTER_FROM[] = { 1, 4, 2, 4, 5, 8, 9, 10, 12, 14 };
+new const WT_ROSTER_HP[] = { 100, 12, 60, 120, 450, 150, 90, 300, 200, 60 };
+new const WT_ROSTER_WEIGHT[] = { 4, 1, 3, 3, 3, 2, 2, 2, 2, 1 };
+new const WT_ROSTER_PAY[] = { 75, 50, 90, 100, 175, 120, 130, 175, 150, 100 };
+new const WT_ROSTER_FB[][] = { "", "headcrab", "", "", "", "spitter", "runner", "brute", "spitter", "runner" };
+new const WT_EXTRA[][] = { "hound", "snark", "babygarg", "boss", "gonarch" };
+new const WT_EXTRA_HP[] = { 80, 20, 1500, 3000, 3500 };
+new const WT_EXTRA_PAY[] = { 90, 40, 400, 1000, 1000 };
+new const WT_EXTRA_FB[][] = { "runner", "headcrab", "boss", "", "boss" };
+enum { WX_HOUND = 0, WX_SNARK, WX_HEAVY, WX_GARG, WX_GONARCH };
+#define WT_HEAVY_FROM 11
+#define WT_MAX_ROWS 32
+#define WT_MAX_MIX 8
+new bool:g_wtOn, bool:g_wtCreatures, g_wtTeam = 2, Float:g_wtCountScale = 1.0, Float:g_wtHpScale = 1.0, g_wtCap, bool:g_wtTiers = true;
+new g_wtRowFrom[WT_MAX_ROWS], g_wtRowTo[WT_MAX_ROWS], g_wtMixType[WT_MAX_ROWS][WT_MAX_MIX][16], g_wtMixW[WT_MAX_ROWS][WT_MAX_MIX], g_wtMixN[WT_MAX_ROWS], g_wtNrows;
+new g_wtFileBoss[16] = "boss", g_wtFileEvery = 5, Float:g_wtFileCount = 1.0, Float:g_wtFileHp = 1.0, bool:g_wtTypeHp;
+new g_wtBoss[16], bool:g_wtBossDone = true, g_wtSpecial = -1, g_wtHeavyLeft, g_wtPlanned, g_wtSpawned, g_wtFail;
+
 /* shop */
 #define SH_NEXT     0
 #define SH_BACK     1
@@ -9666,6 +9692,20 @@ stock up_natives()
 	register_native("ls_bench_use", "n_bench_use");
 	register_native("ls_box_use", "n_box_use");
 	register_native("ls_pickup_spawn", "n_pickup_spawn");
+	register_native("ls_wave_table", "n_wave_table");
+	register_native("ls_wave_table_off", "n_wave_table_off");
+	register_native("ls_wave_scale", "n_wave_scale");
+	register_native("ls_wave_cap", "n_wave_cap");
+	register_native("ls_wave_tiers", "n_wave_tiers");
+	register_native("ls_wave_planned", "n_wave_planned");
+	register_native("ls_wave_spawned", "n_wave_spawned");
+	register_native("ls_wave_kind", "n_wave_kind");
+	register_native("ls_wave_hp_mult", "n_wave_hp_mult");
+	register_native("ls_wave_type_pay", "n_wave_type_pay");
+	register_native("ls_wave_is_big", "n_wave_is_big");
+	register_native("ls_wave_types", "n_wave_types");
+	register_native("ls_wave_cap_now", "n_wave_cap_now");
+	register_native("ls_wave_creatures_ok", "n_wave_creatures_ok");
 	register_native("ls_turret_setup", "n_turret_setup");
 	register_native("ls_turret_give", "n_turret_give");
 	register_native("ls_turret_kits", "n_turret_kits");
@@ -11790,6 +11830,542 @@ stock turret_tick()
 	}
 }
 
+/* ---- the round table (zombie-survival rounds), ls_wave_table: what each round brings - how
+   many (by round and team size), which creature types (unlocked by round, weighted by role,
+   with stand-ins), their health (+4 % a round to 9, then x1.1), a boss now and then, a themed
+   pack round every 6, heavies from 11, tiers, and how many may be alive at once. Planned when a
+   wave starts; the wave spawners then make the creatures. A waves.ini section (written by the
+   Creature Studio) can replace the mix: boss, boss_every, count_scale, hp_scale, type_hp and
+   "wave N | N-M | N+ = type weight ..." rows ---- */
+
+stock wt_defenders()
+{
+	new n = 0;
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_connected(p) && get_user_team(p) == g_wtTeam)
+			n++;
+	return max(n, 1);
+}
+
+/* the team-size factors: counted up to 16 players (more: a little more health each) */
+stock Float:wt_team_count()
+{
+	return 0.5 + 0.2 * float(min(wt_defenders(), 16));
+}
+
+stock Float:wt_team_hp()
+{
+	new d = wt_defenders();
+	return (0.8 + 0.1 * float(min(d, 16))) * (1.0 + 0.02 * float(max(d - 16, 0)));
+}
+
+stock Float:wt_round_hp(n)
+{
+	if (n <= 9)
+		return 1.0 + 0.04 * float(n - 1);
+	return 1.32 * floatpower(1.1, float(n - 9));
+}
+
+stock Float:wt_hp_mult()
+{
+	return wt_round_hp(g_wave) * wt_team_hp() * g_wtHpScale * g_wtFileHp;
+}
+
+/* share of walking fodder that runs: none in rounds 1-2, +10 % a round, 72 % at most */
+stock Float:wt_fast_share(n)
+{
+	if (n < 3)
+		return 0.0;
+	return floatmin(0.1 * float(n - 2), 0.72);
+}
+
+/* the round's tier (the game DLL's look): 2 from round 15, 3 from 20 */
+stock wt_round_tier(n)
+{
+	return n >= 20 ? 3 : (n >= 15 ? 2 : (n >= 10 ? 1 : 0));
+}
+
+/* alive at once: ls_wave_cap, or by the team's size (16 + 2 a player, 20-48), never over the
+   game DLL's adaptive cap */
+stock wt_alive_cap()
+{
+	new c = g_wtCap;
+	if (c <= 0)
+		c = clamp(16 + 2 * wt_defenders(), 20, 48);
+	new p = get_cvar_pointer("ls_creature_cap_now");
+	if (p && get_pcvar_num(p) > 0)
+		c = min(c, get_pcvar_num(p));
+	return c;
+}
+
+stock wt_type_index(const type[], &bool:extra)
+{
+	for (new i = 0; i < sizeof WT_ROSTER; i++)
+		if (equal(type, WT_ROSTER[i]))
+		{
+			extra = false;
+			return i;
+		}
+	for (new i = 0; i < sizeof WT_EXTRA; i++)
+		if (equal(type, WT_EXTRA[i]))
+		{
+			extra = true;
+			return i;
+		}
+	return -1;
+}
+
+stock wt_type_hp(const type[])
+{
+	new bool:x, i = wt_type_index(type, x);
+	return i < 0 ? 0 : (x ? WT_EXTRA_HP[i] : WT_ROSTER_HP[i]);
+}
+
+stock wt_type_pay(const type[])
+{
+	new bool:x, i = wt_type_index(type, x);
+	return i < 0 ? 50 : (x ? WT_EXTRA_PAY[i] : WT_ROSTER_PAY[i]);
+}
+
+stock wt_type_fallback(const type[], out[], len)
+{
+	new bool:x, i = wt_type_index(type, x);
+	if (i < 0)
+		out[0] = EOS;
+	else
+		copy(out, len, x ? WT_EXTRA_FB[i] : WT_ROSTER_FB[i]);
+}
+
+/* a boss or the heavy (they get the round's growth but little of the team-size factor) */
+stock bool:wt_is_big(const type[])
+{
+	return equal(type, "boss") || equal(type, "gonarch") || equal(type, WT_EXTRA[WX_HEAVY]) || (g_wtNrows && equal(type, g_wtFileBoss));
+}
+
+/* wave_start: how many from each spawner, the boss, the special, the heavies */
+stock wt_plan()
+{
+	if (!g_wtOn)
+		return;
+	new n = g_wave;
+	g_wtSpecial = -1;
+	g_wtHeavyLeft = 0;
+	g_wtSpawned = 0;
+	g_wtFail = 0;
+	if (g_wtNrows)
+	{
+		g_wtBossDone = g_wtFileEvery <= 0 || !g_wtFileBoss[0] || (n % g_wtFileEvery) != 0;
+		copy(g_wtBoss, charsmax(g_wtBoss), g_wtFileBoss);
+	}
+	else
+	{
+		/* a first boss moment at round 7 (a lone baby garg), then a garg or gonarch every 5
+		   from 10; a hound pack or snark swarm every 6; heavies from 11 */
+		g_wtBossDone = !((n >= 10 && n % 5 == 0) || n == 7);
+		if (n == 7)
+			copy(g_wtBoss, charsmax(g_wtBoss), WT_EXTRA[WX_HEAVY]);
+		else if (!g_wtBossDone)
+			copy(g_wtBoss, charsmax(g_wtBoss), WT_EXTRA[(n / 5) % 2 == 0 ? WX_GARG : WX_GONARCH]);
+		else if (n >= 6 && n % 6 == 0)
+			g_wtSpecial = (n / 6) % 2 == 1 ? WX_HOUND : WX_SNARK;
+		if (n >= WT_HEAVY_FROM && g_wtSpecial < 0)
+			g_wtHeavyLeft = 1 + (n - WT_HEAVY_FROM) / 4;
+	}
+	/* (the first rounds a few more, tapering off by round 5: no dead time at the start) */
+	new total = floatround((11.0 + 1.4 * float(n) + float(max(5 - n, 0))) * wt_team_count() * g_wtCountScale * g_wtFileCount);
+	if (!g_wtBossDone)
+		total = floatround(float(total) * 0.6);
+	else if (g_wtSpecial >= 0)
+		total = floatround(float(total) * 0.7);
+	total = max(total, 1);
+	set_pcvar_num(g_cWaveAlive, wt_alive_cap());
+	new nsp = 0;
+	for (new s = 0; s < g_nslots; s++)
+		if (g_ent[s] && g_kind[s] == K_WAVE && g_on[s])
+			nsp++;
+	g_wtPlanned = 0;
+	new i = 0;
+	for (new s = 0; s < g_nslots; s++)
+	{
+		if (!g_ent[s] || g_kind[s] != K_WAVE || !g_on[s])
+			continue;
+		new each = total / max(nsp, 1) + (i < total % max(nsp, 1) ? 1 : 0);
+		if (!g_wtBossDone && i == 0)
+			each++;
+		g_aux[s] = each;
+		g_wtPlanned += each;
+		i++;
+	}
+	log_amx("Wave %d: %d %s against %d defenders (creature health x%.2f, %d%% of the walkers run, %d alive at most%s%s%s)", n, g_wtPlanned, g_wtCreatures ? "creatures" : "zombie bots", wt_defenders(), wt_hp_mult(), floatround(100.0 * wt_fast_share(n)), wt_alive_cap(),
+		g_wtBossDone ? "" : ", boss wave", g_wtSpecial == WX_HOUND ? ", hound pack" : (g_wtSpecial == WX_SNARK ? ", snark swarm" : ""), g_wtHeavyLeft ? ", with heavies" : "");
+}
+
+/* a spawner wants one: 1 made, -1 couldn't (try again), 0 not ours (the table is off) */
+stock wt_spawn(const Float:origin[3])
+{
+	if (!g_wtOn || !g_wtCreatures)
+		return 0;
+	new type[16];
+	new bool:boss = wt_pick_type(type, charsmax(type));
+	new Float:o[3];
+	vcopy(origin, o);
+	o[2] = quiet_floor(origin, 0) + 1.0;
+	/* walking fodder: early rounds walk, later ones run */
+	new speed = 0;
+	if (equal(type, "zombie") && random_float(0.0, 1.0) >= wt_fast_share(g_wave))
+		speed = 110;
+	new cr = wt_creature(type, o, speed);
+	if (!cr)
+	{
+		/* a type this server doesn't have: the one it stands in for (twice) */
+		new fb[16];
+		wt_type_fallback(type, fb, charsmax(fb));
+		if (fb[0])
+		{
+			cr = wt_creature(fb, o, speed);
+			if (!cr)
+			{
+				new fb2[16];
+				wt_type_fallback(fb, fb2, charsmax(fb2));
+				if (fb2[0])
+					cr = wt_creature(fb2, o, speed);
+			}
+		}
+	}
+	if (!cr)
+	{
+		/* full, or the type wasn't loaded: after a long run of failures with nothing alive,
+		   the dead players of the spawner's team are used instead (ls_wave_creatures_ok) */
+		if (++g_wtFail >= 20 && !wave_alive())
+		{
+			log_amx("Waves: creatures won't spawn on %s; dead players come back as enemies instead.", g_mapname);
+			g_wtCreatures = false;
+		}
+		return -1;
+	}
+	g_wtFail = 0;
+	if (boss)
+		g_wtBossDone = true;
+	/* health: the table's per type (or the type's own with type_hp 1), by round, team size and
+	   difficulty; the boss and the heavy little of the team-size factor; a special pack less */
+	new Float:base;
+	pev(cr, pev_health, base);
+	if (!g_wtTypeHp && wt_type_hp(type))
+		base = float(wt_type_hp(type));
+	new Float:mult = wt_is_big(type) ? wt_round_hp(g_wave) * (0.8 + 0.04 * float(min(wt_defenders(), 16))) * g_wtHpScale * g_wtFileHp : wt_hp_mult();
+	if (g_wtSpecial >= 0)
+		mult *= 0.8;
+	new Float:hp = floatmax(base * mult, 1.0);
+	set_pev(cr, pev_health, hp);
+	set_pev(cr, pev_max_health, hp);
+	wave_track(cr);
+	g_wtSpawned++;
+	return 1;
+}
+
+/* the type for the next one (true = the round's boss) */
+stock bool:wt_pick_type(out[], len)
+{
+	if (!g_wtBossDone)
+	{
+		copy(out, len, g_wtBoss);
+		return true;
+	}
+	if (g_wtNrows)
+	{
+		new r = wt_row(g_wave);
+		new total = 0;
+		for (new m = 0; m < g_wtMixN[r]; m++)
+			total += g_wtMixW[r][m];
+		if (total > 0)
+		{
+			new pick = random(total);
+			for (new m = 0; m < g_wtMixN[r]; m++)
+			{
+				pick -= g_wtMixW[r][m];
+				if (pick < 0)
+				{
+					copy(out, len, g_wtMixType[r][m]);
+					return false;
+				}
+			}
+		}
+	}
+	if (g_wtSpecial >= 0)
+	{
+		copy(out, len, WT_EXTRA[g_wtSpecial]);
+		return false;
+	}
+	/* the heavy comes once a quarter of the round is in */
+	if (g_wtHeavyLeft > 0 && g_wtSpawned >= g_wtPlanned / 4)
+	{
+		g_wtHeavyLeft--;
+		copy(out, len, WT_EXTRA[WX_HEAVY]);
+		return false;
+	}
+	copy(out, len, WT_ROSTER[wt_builtin_type()]);
+	return false;
+}
+
+/* the row for round n: the one covering it, else the closest before it, else the first */
+stock wt_row(n)
+{
+	new best = -1, bestFrom = -1;
+	for (new r = 0; r < g_wtNrows; r++)
+	{
+		if (g_wtRowFrom[r] <= n && (g_wtRowTo[r] == 0 || n <= g_wtRowTo[r]))
+			return r;
+		if (g_wtRowFrom[r] <= n && g_wtRowFrom[r] > bestFrom)
+		{
+			bestFrom = g_wtRowFrom[r];
+			best = r;
+		}
+	}
+	return best >= 0 ? best : 0;
+}
+
+/* the built-in mix: a role by weight (fodder 20, flankers 4 + n, ranged 2 + n/2, tanks
+   2 + 2n/5, once unlocked), then one of the role's unlocked types by weight */
+stock wt_builtin_type()
+{
+	new n = g_wave;
+	new w[WR_COUNT], total = 0;
+	for (new r = 0; r < WR_COUNT; r++)
+	{
+		new any = 0;
+		for (new i = 0; i < sizeof WT_ROSTER; i++)
+			if (WT_ROSTER_ROLE[i] == r && WT_ROSTER_FROM[i] <= n)
+				any = 1;
+		if (!any)
+			continue;
+		switch (r)
+		{
+			case WR_FODDER: w[r] = 20;
+			case WR_FLANK: w[r] = 4 + n;
+			case WR_RANGED: w[r] = 2 + n / 2;
+			case WR_TANK: w[r] = 2 + (2 * n) / 5;
+		}
+		total += w[r];
+	}
+	new role = WR_FODDER, pick = random(max(total, 1));
+	for (new r = 0; r < WR_COUNT; r++)
+	{
+		pick -= w[r];
+		if (pick < 0)
+		{
+			role = r;
+			break;
+		}
+	}
+	new tw = 0;
+	for (new i = 0; i < sizeof WT_ROSTER; i++)
+		if (WT_ROSTER_ROLE[i] == role && WT_ROSTER_FROM[i] <= n)
+			tw += WT_ROSTER_WEIGHT[i];
+	new k = random(max(tw, 1));
+	for (new i = 0; i < sizeof WT_ROSTER; i++)
+		if (WT_ROSTER_ROLE[i] == role && WT_ROSTER_FROM[i] <= n)
+		{
+			k -= WT_ROSTER_WEIGHT[i];
+			if (k < 0)
+				return i;
+		}
+	return 0;
+}
+
+stock wt_creature(const type[], const Float:o[3], speed)
+{
+	new ent = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "ls_creature"));
+	if (!ent || !pev_valid(ent))
+		return 0;
+	new v[8];
+	set_kv(ent, "type", type);
+	new tier = wt_round_tier(g_wave);
+	if (tier > 0 && g_wtTiers)
+	{
+		num_to_str(tier, v, charsmax(v));
+		set_kv(ent, "tier", v);
+	}
+	if (speed > 0)
+	{
+		num_to_str(speed, v, charsmax(v));
+		set_kv(ent, "speed", v);
+	}
+	set_kv(ent, "behaviour", "chase");
+	set_kv(ent, "hates", g_wtTeam == 1 ? "t" : "ct");
+	new Float:ang[3];
+	ang[1] = random_float(0.0, 360.0);
+	set_pev(ent, pev_angles, ang);
+	engfunc(EngFunc_SetOrigin, ent, o);
+	dllfunc(DLLFunc_Spawn, ent);
+	if (!pev_valid(ent) || (pev(ent, pev_flags) & FL_KILLME))
+		return 0;
+	return ent;
+}
+
+stock set_kv(ent, const key[], const value[])
+{
+	new cls[32];
+	pev(ent, pev_classname, cls, charsmax(cls));
+	set_kvd(0, KV_ClassName, cls);
+	set_kvd(0, KV_KeyName, key);
+	set_kvd(0, KV_Value, value);
+	set_kvd(0, KV_fHandled, 0);
+	dllfunc(DLLFunc_KeyValue, ent, 0);
+}
+
+/* a waves.ini section (configs/gamemodes/waves.ini) */
+stock wt_load(const section[])
+{
+	g_wtNrows = 0;
+	copy(g_wtFileBoss, charsmax(g_wtFileBoss), "boss");
+	g_wtFileEvery = 5;
+	g_wtFileCount = 1.0;
+	g_wtFileHp = 1.0;
+	g_wtTypeHp = false;
+	if (!section[0])
+		return;
+	new path[192];
+	get_configsdir(path, charsmax(path));
+	format(path, charsmax(path), "%s/gamemodes/waves.ini", path);
+	new f = fopen(path, "rt");
+	if (!f)
+		return;
+	new line[512], key[32], val[480];
+	new bool:mine = false, bool:found = false;
+	while (fgets(f, line, charsmax(line)))
+	{
+		/* comments start with ; # or // */
+		new c = contain(line, ";");
+		if (c >= 0) line[c] = EOS;
+		c = contain(line, "#");
+		if (c >= 0) line[c] = EOS;
+		c = contain(line, "//");
+		if (c >= 0) line[c] = EOS;
+		trim(line);
+		if (!line[0])
+			continue;
+		if (line[0] == '[')
+		{
+			new sec[32];
+			copyc(sec, charsmax(sec), line[1], ']');
+			trim(sec);
+			mine = bool:equali(sec, section);
+			if (mine)
+				found = true;
+			continue;
+		}
+		if (!mine)
+			continue;
+		strtok2(line, key, charsmax(key), val, charsmax(val), '=', TRIM_FULL);
+		strtolower(key);
+		if (equal(key, "boss"))
+			copy(g_wtFileBoss, charsmax(g_wtFileBoss), val);
+		else if (equal(key, "boss_every"))
+			g_wtFileEvery = clamp(str_to_num(val), 0, 1000);
+		else if (equal(key, "count_scale"))
+			g_wtFileCount = floatclamp(str_to_float(val), 0.1, 10.0);
+		else if (equal(key, "hp_scale"))
+			g_wtFileHp = floatclamp(str_to_float(val), 0.1, 10.0);
+		else if (equal(key, "type_hp"))
+			g_wtTypeHp = str_to_num(val) != 0;
+		else if (equal(key, "wave", 4) && g_wtNrows < WT_MAX_ROWS)
+		{
+			new r = g_wtNrows;
+			new range[16];
+			copy(range, charsmax(range), key[4]);
+			trim(range);
+			new dash = contain(range, "-");
+			new plus = contain(range, "+");
+			if (plus >= 0)
+			{
+				range[plus] = EOS;
+				g_wtRowFrom[r] = str_to_num(range);
+				g_wtRowTo[r] = 0;
+			}
+			else if (dash >= 0)
+			{
+				g_wtRowTo[r] = str_to_num(range[dash + 1]);
+				range[dash] = EOS;
+				g_wtRowFrom[r] = str_to_num(range);
+			}
+			else
+			{
+				g_wtRowFrom[r] = str_to_num(range);
+				g_wtRowTo[r] = g_wtRowFrom[r];
+			}
+			if (g_wtRowFrom[r] < 1)
+				continue;
+			g_wtMixN[r] = 0;
+			new rest[480], t[16], w[12];
+			copy(rest, charsmax(rest), val);
+			while (rest[0] && g_wtMixN[r] < WT_MAX_MIX)
+			{
+				strtok2(rest, t, charsmax(t), rest, charsmax(rest), ' ', TRIM_FULL);
+				strtok2(rest, w, charsmax(w), rest, charsmax(rest), ' ', TRIM_FULL);
+				if (!t[0] || !w[0])
+					break;
+				strtolower(t);
+				new m = g_wtMixN[r]++;
+				copy(g_wtMixType[r][m], charsmax(g_wtMixType[][]), t);
+				g_wtMixW[r][m] = clamp(str_to_num(w), 0, 1000);
+			}
+			if (g_wtMixN[r])
+				g_wtNrows++;
+		}
+	}
+	fclose(f);
+	if (found)
+		log_amx("Waves: [%s] from waves.ini (%d rows, boss %s every %d).", section, g_wtNrows, g_wtFileBoss, g_wtFileEvery);
+}
+
+/* every type rounds 1..upto use (and their stand-ins), for ls_creature_precache */
+stock wt_types(list[], len, upto)
+{
+	list[0] = EOS;
+	new n = upto > 0 ? upto : 1000;
+	if (g_wtNrows)
+	{
+		for (new r = 0; r < g_wtNrows; r++)
+			if (g_wtRowFrom[r] <= n)
+				for (new m = 0; m < g_wtMixN[r]; m++)
+					if (g_wtMixW[r][m] > 0)
+						wt_add_word(list, len, g_wtMixType[r][m]);
+		if (g_wtFileBoss[0] && g_wtFileEvery > 0 && g_wtFileEvery <= n)
+			wt_add_word(list, len, g_wtFileBoss);
+	}
+	else
+	{
+		for (new i = 0; i < sizeof WT_ROSTER; i++)
+			if (WT_ROSTER_FROM[i] <= min(n, 20))
+			{
+				wt_add_word(list, len, WT_ROSTER[i]);
+				if (WT_ROSTER_FB[i][0])
+					wt_add_word(list, len, WT_ROSTER_FB[i]);
+			}
+		if (n >= 6)
+			for (new i = 0; i < sizeof WT_EXTRA; i++)
+			{
+				wt_add_word(list, len, WT_EXTRA[i]);
+				if (WT_EXTRA_FB[i][0])
+					wt_add_word(list, len, WT_EXTRA_FB[i]);
+			}
+	}
+	if (!list[0])
+		copy(list, len, "zombie");
+}
+
+stock wt_add_word(list[], len, const word[])
+{
+	new padded[40], have[520];
+	formatex(padded, charsmax(padded), " %s ", word);
+	formatex(have, charsmax(have), " %s ", list);
+	if (contain(have, padded) >= 0)
+		return;
+	if (list[0])
+		add(list, len, " ");
+	add(list, len, word);
+}
+
 /* lst_perk / lst_bench / lst_box / lst_trap markers (Last Stand's kit) are these components */
 stock up_marker_kind(const k[], Trie:keys)
 {
@@ -12021,6 +12597,113 @@ public n_pickup_spawn(plugin, params)
 		format(keys, charsmax(keys), "%s model=%s", keys, model);
 	g_now = get_gametime();
 	return comp_make(K_PICKUP, o, keys, SRC_RUNTIME);
+}
+
+/* ls_wave_table(const section[] = "", team = 2, bool:creatures = true): the round table on
+   (section: a waves.ini section replacing the built-in mix; team: the defenders) */
+public n_wave_table(plugin, params)
+{
+	new sec[32];
+	get_string(1, sec, charsmax(sec));
+	wt_load(sec);
+	g_wtTeam = clamp(get_param(2), 1, 2);
+	g_wtCreatures = get_param(3) != 0 && g_upCreatures;
+	g_wtOn = true;
+	return g_wtNrows;
+}
+
+public n_wave_table_off(plugin, params)
+{
+	g_wtOn = false;
+	return 1;
+}
+
+/* ls_wave_scale(Float:count, Float:hp): the mode's difficulty */
+public n_wave_scale(plugin, params)
+{
+	g_wtCountScale = floatclamp(get_param_f(1), 0.05, 20.0);
+	g_wtHpScale = floatclamp(get_param_f(2), 0.05, 20.0);
+	return 1;
+}
+
+public n_wave_cap(plugin, params)
+{
+	g_wtCap = max(get_param(1), 0);
+	if (g_wtOn && g_waveOn)
+		set_pcvar_num(g_cWaveAlive, wt_alive_cap());
+	return 1;
+}
+
+public n_wave_tiers(plugin, params)
+{
+	g_wtTiers = get_param(1) != 0;
+	return 1;
+}
+
+public n_wave_planned(plugin, params)
+{
+	return g_wtPlanned;
+}
+
+public n_wave_spawned(plugin, params)
+{
+	return g_wtSpawned;
+}
+
+/* ls_wave_kind(out[], len): 0 a normal round, 1 a boss round, 2 a special (pack) round; out = its type */
+public n_wave_kind(plugin, params)
+{
+	new k = 0, t[16];
+	if (!g_wtBossDone)
+	{
+		k = 1;
+		copy(t, charsmax(t), g_wtBoss);
+	}
+	else if (g_wtSpecial >= 0)
+	{
+		k = 2;
+		copy(t, charsmax(t), WT_EXTRA[g_wtSpecial]);
+	}
+	set_string(1, t, get_param(2));
+	return k;
+}
+
+public Float:n_wave_hp_mult(plugin, params)
+{
+	return wt_hp_mult();
+}
+
+public n_wave_type_pay(plugin, params)
+{
+	new t[16];
+	get_string(1, t, charsmax(t));
+	return wt_type_pay(t);
+}
+
+public bool:n_wave_is_big(plugin, params)
+{
+	new t[16];
+	get_string(1, t, charsmax(t));
+	return wt_is_big(t);
+}
+
+/* ls_wave_types(out[], len, upto): the types rounds 1..upto use, for ls_creature_precache */
+public n_wave_types(plugin, params)
+{
+	new list[512];
+	wt_types(list, charsmax(list), get_param(3));
+	set_string(1, list, get_param(2));
+	return strlen(list);
+}
+
+public n_wave_cap_now(plugin, params)
+{
+	return wt_alive_cap();
+}
+
+public bool:n_wave_creatures_ok(plugin, params)
+{
+	return g_wtCreatures;
 }
 
 /* ls_turret_setup(price, Float:life, per_player, const type[], health, bool:bots) */

@@ -655,4 +655,43 @@ native ls_turret_spawn(owner, const Float:origin[3], Float:yaw = 0.0);
 /** Turrets this player has out. */
 native ls_turret_count(id);
 forward ls_on_turret(ent, owner);
+
+/**
+ * The round table (zombie-survival rounds): on, each ls_wave_start plans the round on the wave
+ * spawners - how many (11 + 1.4 a round, more the first rounds, by the team's size up to 16),
+ * which creature types (unlocked by round: zombie, then runners, spitters, babycrabs, brutes,
+ * vortigaunts, assassins, soldiers, controllers, stukabats; weighted by role, with stand-ins the
+ * server has), their health (+4 % a round to 9, then x1.1 a round, by team size), a boss (a
+ * baby garg at 7, a garg or gonarch every 5 from 10; fewer grunts), a hound pack or snark swarm
+ * every 6, heavies from 11, tiers 2/3 from rounds 15/20, and how many alive at once - and the
+ * spawners make the creatures (a plugin handling ls_on_wave_spawn still comes first).
+ * section: a [section] of configs/gamemodes/waves.ini (boss, boss_every, count_scale, hp_scale,
+ * type_hp, "wave N | N-M | N+ = type weight ..." rows) replacing the built-in mix.
+ * team: the defenders (creatures hunt them). creatures false: the counts only (dead players of
+ * the spawners' team come back as the enemies).
+ */
+native ls_wave_table(const section[] = "", team = 2, bool:creatures = true);
+native ls_wave_table_off();
+/** The mode's difficulty: times the count and the health. */
+native ls_wave_scale(Float:count, Float:hp);
+/** Alive at once (0: 16 + 2 a defender, 20-48); never over the game DLL's adaptive cap. */
+native ls_wave_cap(n);
+native ls_wave_cap_now();
+/** Tiers (yellow from round 15, red-orange from 20) on or off. */
+native ls_wave_tiers(bool:on);
+/** This round's planned count and how many the table has made so far. */
+native ls_wave_planned();
+native ls_wave_spawned();
+/** 0 a normal round, 1 a boss round (until the boss is out), 2 a special pack round; out = the type. */
+native ls_wave_kind(out[], len);
+/** The health multiplier this round (for enemies a mode makes itself). */
+native Float:ls_wave_hp_mult();
+/** The table's pay for a kill of this type. */
+native ls_wave_type_pay(const type[]);
+/** A boss or a heavy (boss, gonarch, babygarg, the waves.ini boss). */
+native bool:ls_wave_is_big(const type[]);
+/** Every type rounds 1..upto use, with stand-ins, space-separated (for ls_creature_precache). */
+native ls_wave_types(out[], len, upto = 0);
+/** False once creatures wouldn't spawn (the table fell back to dead players). */
+native bool:ls_wave_creatures_ok();
 /* ==== end W1 ==== */

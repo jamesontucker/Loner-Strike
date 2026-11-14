@@ -503,6 +503,31 @@ within 450 u of that point. It goes after `life` seconds (150; 0 = until destroy
 `ls_turret_count`; forward `ls_on_turret(ent, owner)`. The type must be precached (`ls_creature_precache`).
 Plugins should skip friendly creatures (`pev_team` 1) when they count or hurt enemies; the paid trap does.
 
+### The round table (ls_wave_table)
+Zombie-survival rounds on the map's `ls_wave_spawner`s. `ls_wave_table(section[], team, creatures)` turns it
+on; each `ls_wave_start(n)` then plans the round and the spawners make the creatures (a plugin that handles
+`ls_on_wave_spawn` still comes first):
+- **How many:** (11 + 1.4 per round + a few more in rounds 1-4) x (0.5 + 0.2 per defender, up to 16) x the
+  mode's count scale; 60 % of that in a boss round, 70 % in a pack round. Alive at once: `ls_wave_cap(n)`, or
+  16 + 2 per defender (20-48), never over the game DLL's adaptive cap (followed through the round).
+- **Which:** types unlock by round (zombie 1, runner 2, babycrab and spitter 4, brute 5, vortigaunt 8,
+  assassin 9, soldier 10, controller 12, stukabat 14), picked by role (fodder, flankers, ranged, tanks: the
+  others grow each round) and weight; a type the server lacks gets its stand-in. Walkers start running from
+  round 3 (+10 % a round, 72 % at most). A baby garg at round 7, a garg or gonarch every 5 rounds from 10,
+  a hound pack or snark swarm every 6, heavies from round 11; tiers 2 and 3 from rounds 15 and 20
+  (`ls_wave_tiers`).
+- **Health:** the type's table health x (1 + 4 % a round to round 9, then x1.1 a round) x (0.8 + 0.1 per
+  defender, up to 16; +2 % each past that) x the mode's health scale; bosses and heavies little of the team
+  factor; pack rounds 80 %.
+- **A waves.ini section** (`configs/gamemodes/waves.ini`, written by the Creature Studio) replaces the mix:
+  `boss`, `boss_every`, `count_scale`, `hp_scale`, `type_hp` (1: the types' own health) and
+  `wave N | N-M | N+ = type weight ...` rows.
+- Natives: `ls_wave_table_off`, `ls_wave_scale(count, hp)`, `ls_wave_cap`, `ls_wave_cap_now`, `ls_wave_planned`,
+  `ls_wave_spawned`, `ls_wave_kind(out[], len)` (0 normal, 1 boss, 2 pack), `ls_wave_hp_mult`,
+  `ls_wave_type_pay(type[])`, `ls_wave_is_big(type[])`, `ls_wave_types(out[], len, upto)` (for
+  `ls_creature_precache`), `ls_wave_creatures_ok` (false once creatures wouldn't spawn and dead players of
+  the spawners' team were used instead). Last Stand runs on it.
+
 ### Creatures
 Forward `ls_on_creature_hurt(ent, attacker, dmg, headshot)` after each hit (the damage modifier and gun
 level are applied to players' hits on creatures and on players).
