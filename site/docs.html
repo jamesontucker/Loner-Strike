@@ -87,8 +87,39 @@ a { color: var(--signal); }
 .side a[aria-current="page"] + .sub { display: block; }
 .side .sub a { padding: 2px 16px 2px 30px; font-size: 16px; font-weight: 500; color: var(--faint); }
 .side .sub a:hover, .side .sub a.on { color: var(--bone); }
-.results a small { display: block; color: var(--faint); font-weight: 500; font-size: 14px; }
-.results p { margin: 6px 16px; color: var(--faint); font-size: 16px; }
+/* search results: one per heading, the topic above it, a snippet with the match marked */
+.results ul { list-style: none; margin: 0; padding: 0; }
+.results [role="option"] { display: block; padding: 6px 16px; color: var(--dim); cursor: pointer; border-left: 3px solid transparent; line-height: 1.3; }
+.results [role="option"] b { display: block; color: var(--bone); font-weight: 700; }
+.results [role="option"] small { display: block; color: var(--faint); font-weight: 600; font-size: 13px; }
+.results [role="option"] span { display: block; color: var(--dim); font-size: 15px; font-weight: 500; margin-top: 2px; }
+.results [role="option"]:hover, .results [role="option"][aria-selected="true"] { background: var(--panel); border-left-color: var(--signal); }
+.results mark, mark.hit { background: var(--signal); color: var(--ink); border-radius: 2px; padding: 0 1px; }
+.results .none { margin: 6px 16px; color: var(--faint); font-size: 16px; }
+.results .none a { display: inline; padding: 0; border: 0; color: var(--signal); }
+.flash { animation: flash 2.2s ease-out; }
+@keyframes flash { 0%, 35% { background: rgba(196,181,80,.28); box-shadow: 0 0 0 6px rgba(196,181,80,.28); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
+.wrong-link { margin: 0 12px 4px; }
+.side a.wrong-link { padding: 4px 4px; border: 0; color: var(--signal); font-weight: 700; }
+/* collapsible groups */
+.group-btn { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; background: none; border: 0; cursor: pointer; padding: 3px 16px; color: var(--faint); font: 700 14px/1.3 var(--text); text-align: left; }
+.group-btn:hover { color: var(--bone); }
+.group-btn .chev { transition: transform .15s; font-size: 12px; }
+.group-btn[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+.group-btn[aria-expanded="false"] + ul { display: none; }
+/* on this page (wide screens) */
+.toc { display: none; }
+@media (min-width: 1200px) {
+  .docs { width: min(1400px, 100% - 32px); grid-template-columns: 250px minmax(0, 1fr) 210px; gap: 40px; }
+  .toc:not([hidden]) { display: block; position: sticky; top: calc(var(--top) + 20px); margin: 26px 0 40px; max-height: calc(100vh - var(--top) - 40px); overflow-y: auto; scrollbar-width: thin; }
+  .toc-title { margin: 0 0 6px; color: var(--faint); font-size: 14px; font-weight: 700; }
+  .toc ul { list-style: none; margin: 0; padding: 0; box-shadow: inset 1px 0 0 var(--bevel-lo); }
+  .toc a { display: block; padding: 3px 10px; color: var(--faint); text-decoration: none; font-size: 15px; font-weight: 600; line-height: 1.3; border-left: 2px solid transparent; }
+  .toc a.h3 { padding-left: 22px; font-weight: 500; font-size: 14px; }
+  .toc a:hover { color: var(--bone); }
+  .toc a.on { color: var(--bone); border-left-color: var(--signal); }
+}
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--signal); } .group-btn .chev { transition: none; } }
 html:not(.js) .search { display: none; }
 html:not(.js) .side .sub { display: block; }
 
@@ -197,9 +228,14 @@ footer a { color: var(--dim); }
     <nav class="side" id="side" aria-label="Docs">
       <div class="search" role="search">
         <label class="sr-only" for="q">Search the docs</label>
-        <input id="q" type="search" placeholder="Search the docs" autocomplete="off">
+        <input id="q" type="search" placeholder="Search the docs" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="results">
       </div>
-      <div class="results" id="results" aria-live="polite" hidden></div>
+      <p class="sr-only" id="rcount" aria-live="polite"></p>
+      <div class="results" id="results-box" hidden>
+        <ul id="results" role="listbox" aria-label="Search results"></ul>
+        <div class="none" id="none" hidden></div>
+      </div>
+      <a class="wrong-link" href="#something-wrong">Something's wrong?</a>
       <div id="tree"></div>
     </nav>
   </div>
@@ -211,7 +247,7 @@ footer a { color: var(--dim); }
 <section class="topic" id="getting-started" data-group="Basics">
   <p class="crumb">Basics</p>
   <h1>Getting started</h1>
-  <p class="lead">Install in a few minutes, then <a href="#playing">play with bots</a>, <a href="#friends">play with friends</a>, <a href="#servers">run a server</a> or <a href="#tools">make something</a>. Coming from 0.1? See <a href="#whats-new">what's new</a>.</p>
+  <p class="lead">Install in a few minutes, then <a href="#playing">play with bots</a>, <a href="#friends">play with friends</a>, <a href="#servers">run a server</a> or <a href="#tools">make something</a>. Coming from 0.1? See <a href="#whats-new">what's new</a>. Something not working? See <a href="#something-wrong">Something's wrong?</a></p>
   <h2 id="requirements">What you need</h2>
   <ul>
     <li><b>Counter-Strike 1.6 or Condition Zero on Steam</b>, the current version. Old retail or repacked copies can't run the mods (<a href="#old-copy">why</a>).</li>
@@ -222,7 +258,7 @@ footer a { color: var(--dim); }
     <li>Download Loner-Strike from <a href="/#get">lonerstrike.com</a>: the <code>-setup.exe</code> on Windows (the <code>.dmg</code> on a Mac).</li>
     <li>Run it. If Windows says it protected your PC, click <b>More info</b>, then <b>Run anyway</b> (<a href="#smartscreen">why</a>). It installs for your Windows user, with no admin prompt, in <code>C:\Users\&lt;you&gt;\AppData\Local\Loner-Strike</code>.</li>
     <li>Close Counter-Strike: setup can't change the game's files while it runs.</li>
-    <li>Open Loner-Strike. It finds your game (Steam's usual place is <code>C:\Program Files (x86)\Steam\steamapps\common\Half-Life</code>, and other Steam libraries are found too) and you pick what to install: under a minute for the basics, 2 to 5 for everything.</li>
+    <li>Open Loner-Strike. It finds your game (Steam's usual place is <code>C:\Program Files (x86)\Steam\steamapps\common\Half-Life</code>, and other Steam libraries are found too) and you pick what to install: about 2 to 4 minutes for the basics, 4 to 8 for everything (the fun maps take most of it).</li>
   </ol>
   <h2 id="mac">Mac (CrossOver)</h2>
   <p>The Mac version of Counter-Strike can't run mods, so the game runs through CrossOver (paid, with a free trial):</p>
@@ -959,7 +995,7 @@ footer a { color: var(--dim); }
     <li>White pentagon pins carry the flow; round pins carry values, colored by type.</li>
     <li><span class="kbd">C</span> adds a comment box, double-clicking a wire adds a reroute point, and <b>Tidy up</b> lays nodes out.</li>
   </ul>
-  <p>Over 440 nodes, for example:</p>
+  <p>Over 450 nodes, for example:</p>
   <div class="table"><table>
     <thead><tr><th>Kind</th><th>For example</th></tr></thead>
     <tbody>
@@ -1964,6 +2000,38 @@ args = ["--mcp-stdio"]</code></pre>
   </ul>
 </section>
 
+<section class="topic" id="something-wrong" data-group="Help" data-keywords="problem trouble broken not working fix help stuck error">
+  <p class="crumb">Help</p>
+  <h1>Something's wrong?</h1>
+  <p class="lead">Find what you see, then follow the link to the fix.</p>
+  <h2 id="wrong-setup" data-keywords="setup install game not found mac crossover update failed">Setup and the app</h2>
+  <ul>
+    <li><b>Setup failed or is stuck</b>: <a href="#setup-failed">Setup or a download failed</a>.</li>
+    <li><b>The game isn't found</b>: <a href="#no-game-found">"No game found"</a>.</li>
+    <li><b>On a Mac, through CrossOver</b>: <a href="#mac">Mac setup</a>, then <a href="#game-wont-start">the game doesn't start</a>.</li>
+    <li><b>An update failed</b>: <a href="#update-problems">The app won't update</a>.</li>
+  </ul>
+  <h2 id="wrong-bots" data-keywords="bots dont move stand still no bots dont know map nav">Bots</h2>
+  <ul>
+    <li><b>No bots, or they don't move</b>: <a href="#no-bots">No bots</a>; in a playtest, <a href="#playtest-stuck">bots stand still</a>.</li>
+    <li><b>Bots don't know a map</b>: <a href="#teach-bots">Bots on new maps</a>.</li>
+  </ul>
+  <h2 id="wrong-servers" data-keywords="server list friends join crash freeze hang mode map fit">Servers and friends</h2>
+  <ul>
+    <li><b>The server doesn't show in lists</b>: set <b>Who can join</b> to Listed (<a href="#server-tabs">a server's tabs</a>) and <a href="#open-ports">open its ports</a>.</li>
+    <li><b>Friends can't join</b>: <a href="#friends-cant-join">Friends can't join</a>.</li>
+    <li><b>A server crashes or freezes</b>: <a href="#crashes">Crashes</a>, or <a href="#server-wont-start">a server won't start</a>.</li>
+    <li><b>A mode won't load on a map</b>: <a href="#map-fit">too many models for the mode</a>.</li>
+    <li><b>Voice commands don't work</b>: <a href="#voice-not-working">When it doesn't work</a>.</li>
+  </ul>
+  <h2 id="wrong-making" data-keywords="leak compile mac sdhlt">Making maps</h2>
+  <ul>
+    <li><b>The map leaks or won't compile</b>: <a href="#compile-leak">"The map leaks"</a> and <a href="#compile-problems">when the compiler finds a problem</a>.</li>
+    <li><b>Compiling doesn't start on a Mac</b>: <a href="#compile-mac">Compiling doesn't start on a Mac</a>.</li>
+  </ul>
+  <p>Still stuck? <a href="#diagnostics">Send diagnostics</a>.</p>
+</section>
+
 <section class="topic" id="no-bots-help" data-group="Help">
   <p class="crumb">Help</p>
   <h1>No bots or Bad Rcon</h1>
@@ -2141,6 +2209,10 @@ args = ["--mcp-stdio"]</code></pre>
       <a class="next" id="next" href="#" hidden></a>
     </nav>
   </article>
+  <aside class="toc" id="toc" aria-labelledby="toc-title" hidden>
+    <p class="toc-title" id="toc-title">On this page</p>
+    <ul id="toc-list"></ul>
+  </aside>
 </div>
 
 <footer>
@@ -2153,17 +2225,39 @@ args = ["--mcp-stdio"]</code></pre>
   var tree = document.getElementById("tree");
   var side = document.getElementById("side"), menu = document.querySelector(".menu-btn");
   var prev = document.getElementById("prev"), next = document.getElementById("next");
-  var q = document.getElementById("q"), results = document.getElementById("results");
+  var q = document.getElementById("q"), box = document.getElementById("results-box"), list = document.getElementById("results");
+  var none = document.getElementById("none"), count = document.getElementById("rcount");
+  var toc = document.getElementById("toc"), tocList = document.getElementById("toc-list");
   var title = function (t) { return t.querySelector("h1").textContent; };
   var heading = function (h) { return h.firstChild.textContent.trim(); };
   var esc = function (s) { return s.replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+  var slug = function (s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40); };
+  var store = {
+    get: function (k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private window: not kept */ } },
+  };
 
-  // the sidebar, from the topics: groups, topics, and each topic's headings under it when open
-  var html = "", group = "";
+  // h3 headings get ids (under their h2's), so the page list and search can link to them
+  topics.forEach(function (t) {
+    var under = t.id;
+    [].forEach.call(t.querySelectorAll("h2, h3"), function (h) {
+      if (h.tagName === "H2") { if (h.id) under = h.id; return; }
+      if (h.id) return;
+      var id = under + "-" + slug(h.textContent), n = 2;
+      while (document.getElementById(id)) id = under + "-" + slug(h.textContent) + "-" + n++;
+      h.id = id;
+    });
+  });
+
+  // the sidebar: groups that fold (remembered per viewer), topics, and each topic's headings
+  var closed = store.get("ls.docs.closed") || {};
+  var html = "", group = "", gi = 0;
   topics.forEach(function (t) {
     if (t.dataset.group !== group) {
-      html += (group ? "</ul></div>" : "") + '<div class="group"><b>' + esc(t.dataset.group) + "</b><ul>";
       group = t.dataset.group;
+      gi++;
+      html += (gi > 1 ? "</ul></div>" : "") + '<div class="group" data-group="' + esc(group) + '"><button type="button" class="group-btn" aria-expanded="' + (closed[group] ? "false" : "true") +
+        '" aria-controls="g' + gi + '"><span>' + esc(group) + '</span><span class="chev" aria-hidden="true">&#9662;</span></button><ul id="g' + gi + '">';
     }
     html += '<li><a href="#' + t.id + '">' + esc(title(t)) + '</a><ul class="sub">';
     [].forEach.call(t.querySelectorAll("h2[id]"), function (h) {
@@ -2173,16 +2267,64 @@ args = ["--mcp-stdio"]</code></pre>
   });
   tree.innerHTML = html + "</ul></div>";
   var links = [].slice.call(tree.querySelectorAll("a"));
+  tree.addEventListener("click", function (e) {
+    var b = e.target.closest(".group-btn");
+    if (!b) return;
+    var open = b.getAttribute("aria-expanded") !== "true";
+    b.setAttribute("aria-expanded", open ? "true" : "false");
+    var g = b.parentNode.dataset.group;
+    if (open) delete closed[g]; else closed[g] = 1;
+    store.set("ls.docs.closed", closed);
+  });
+
+  // On this page: the topic's headings, the one being read marked
+  var watch = null, tocMark = null, endTick = 0;
+  // (the end of the page crosses no heading: checked on scroll too, once a frame)
+  window.addEventListener("scroll", function () {
+    if (endTick || !tocMark) return;
+    endTick = requestAnimationFrame(function () { endTick = 0; if (tocMark && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) tocMark(); });
+  }, { passive: true });
+  function buildToc(topic) {
+    var hs = [].slice.call(topic.querySelectorAll("h2[id], h3[id]"));
+    if (watch) { watch.disconnect(); watch = null; }
+    if (hs.length < 3) { toc.hidden = true; tocList.innerHTML = ""; tocMark = null; return; }
+    tocList.innerHTML = hs.map(function (h) {
+      return '<li><a class="' + h.tagName.toLowerCase() + '" href="#' + h.id + '">' + esc(h.dataset.short || heading(h)) + "</a></li>";
+    }).join("");
+    toc.hidden = false;
+    var tl = [].slice.call(tocList.querySelectorAll("a"));
+    var mark = function () {
+      // the last heading above the top third of the window
+      var line = window.innerHeight * 0.3, cur = 0;
+      hs.forEach(function (h, i) { if (h.getBoundingClientRect().top < line) cur = i; });
+      // (at the very end, the last heading, even when it can't reach the top)
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+        for (var k = hs.length - 1; k > cur; k--) if (hs[k].getBoundingClientRect().top < window.innerHeight) { cur = k; break; }
+      }
+      tl.forEach(function (a, i) { if (i === cur) a.classList.add("on"); else a.classList.remove("on"); });
+    };
+    if ("IntersectionObserver" in window) {
+      watch = new IntersectionObserver(mark, { rootMargin: "0px 0px -60% 0px", threshold: [0, 1] });
+      hs.forEach(function (h) { watch.observe(h); });
+    }
+    tocMark = mark;
+    mark();
+  }
 
   function show(hash, jump) {
     var el = hash && document.getElementById(decodeURIComponent(hash.slice(1)));
     var topic = el && el.closest(".topic") || topics[0];
+    var changed = !topic.classList.contains("on");
     topics.forEach(function (t) { t.classList.toggle("on", t === topic); });
     links.forEach(function (a) {
       var id = a.getAttribute("href").slice(1);
       if (a.closest(".sub")) a.classList.toggle("on", !!el && el.id === id);
       else if (id === topic.id) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
+    // the current topic's group always open
+    var cur = tree.querySelector('[aria-current="page"]');
+    var gb = cur && cur.closest(".group").querySelector(".group-btn");
+    if (gb) gb.setAttribute("aria-expanded", "true");
     var i = topics.indexOf(topic);
     [[prev, topics[i - 1], "Previous"], [next, topics[i + 1], "Next"]].forEach(function (p) {
       if (!p[1]) { p[0].hidden = true; return; }
@@ -2192,11 +2334,11 @@ args = ["--mcp-stdio"]</code></pre>
     });
     document.title = title(topic) + " · Loner-Strike docs";
     document.getElementById("menu-now").textContent = title(topic);
-    var cur = tree.querySelector('[aria-current="page"]');
     if (cur && !side.classList.contains("open")) {
       var r = cur.getBoundingClientRect(), s = side.getBoundingClientRect();
       if (r.top < s.top || r.bottom > s.bottom) side.scrollTop += r.top - s.top - 60;
     }
+    if (changed || !tocList.children.length) buildToc(topic);
     if (jump) {
       if (el && el !== topic) el.scrollIntoView();
       else window.scrollTo(0, 0);
@@ -2210,47 +2352,129 @@ args = ["--mcp-stdio"]</code></pre>
     menu.setAttribute("aria-expanded", open ? "true" : "false");
   });
 
-  // search: every topic and heading, with the text under it
+  // search: one entry per heading (a topic's opening part is the topic's own), indexed once
   var index = [];
+  var blockText = function (n) { return n.nodeType === 1 && n.matches("figure") ? "" : n.textContent; };
   topics.forEach(function (t) {
-    index.push({ id: t.id, name: title(t), where: t.dataset.group, text: t.textContent, keys: "", topic: true });
-    [].forEach.call(t.querySelectorAll("h2[id]"), function (h) {
-      var text = "", n = h.nextElementSibling;
-      while (n && n.tagName !== "H2") { text += " " + n.textContent; n = n.nextElementSibling; }
-      index.push({ id: h.id, name: heading(h), where: title(t), text: text, keys: h.dataset.keywords || "" });
+    var name = title(t), cur = { id: t.id, name: name, topic: name, keys: t.dataset.keywords || "", text: "", head: true };
+    index.push(cur);
+    [].forEach.call(t.children, function (n) {
+      if (n.tagName === "H1" || n.classList.contains("crumb")) return;
+      if ((n.tagName === "H2" || n.tagName === "H3") && n.id) {
+        cur = { id: n.id, name: heading(n), topic: name, keys: n.dataset.keywords || "", text: "" };
+        index.push(cur);
+        return;
+      }
+      cur.text += " " + blockText(n);
+      // (a paragraph's own keywords count for its heading)
+      if (n.dataset && n.dataset.keywords) cur.keys += " " + n.dataset.keywords;
+      [].forEach.call(n.querySelectorAll ? n.querySelectorAll("[data-keywords]") : [], function (k) { cur.keys += " " + k.dataset.keywords; });
     });
   });
+  index.forEach(function (e) { e.text = e.text.replace(/\s+/g, " ").trim(); e.lname = e.name.toLowerCase(); e.ltext = e.text.toLowerCase(); e.lkeys = e.keys.toLowerCase(); });
+
   // words that say nothing about what's wanted
   var STOP = " a an the my me i it its is are am be to of in on for and or not no dont doesnt cant wont can how why what when where do does with this that from at ";
-  function search() {
-    var words = q.value.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(function (w) { return w && STOP.indexOf(" " + w + " ") < 0; })
+  var hits = [], at = -1, words = [];
+  function terms(v) {
+    return v.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(function (w) { return w && STOP.indexOf(" " + w + " ") < 0; })
       // (the word's stem: "working" finds "work", "servers" finds "server")
       .map(function (w) { return w.length > 5 ? w.replace(/(ing|ed|es|s)$/, "") : w.length > 3 ? w.replace(/s$/, "") : w; });
-    if (!words.length) { results.hidden = true; tree.hidden = false; return; }
+  }
+  function snippet(e, res) {
+    var src = e.text || "", best = -1;
+    for (var i = 0; i < res.length && best < 0; i++) { var m = res[i].exec(src); if (m) best = m.index + m[1].length; }
+    if (best < 0) return esc(src.slice(0, 110)) + (src.length > 110 ? "…" : "");
+    var from = Math.max(0, best - 40), cut = src.slice(from, from + 130);
+    var out = esc(cut);
+    words.forEach(function (w) { out = out.replace(new RegExp("(^|[^a-z0-9])(" + w.replace(/[^a-z0-9]/g, "") + "[a-z0-9]*)", "gi"), "$1<mark>$2</mark>"); });
+    return (from > 0 ? "…" : "") + out + (from + 130 < src.length ? "…" : "");
+  }
+  function select(i) {
+    var opts = list.children;
+    if (!opts.length) { q.removeAttribute("aria-activedescendant"); at = -1; return; }
+    at = (i + opts.length) % opts.length;
+    [].forEach.call(opts, function (o, j) { o.setAttribute("aria-selected", j === at ? "true" : "false"); });
+    q.setAttribute("aria-activedescendant", opts[at].id);
+    opts[at].scrollIntoView({ block: "nearest" });
+  }
+  function search() {
+    words = terms(q.value);
+    if (!words.length) {
+      box.hidden = true; tree.hidden = false; list.innerHTML = ""; none.hidden = true; count.textContent = "";
+      q.setAttribute("aria-expanded", "false"); q.removeAttribute("aria-activedescendant"); hits = []; at = -1;
+      return;
+    }
     // (a word matched at a word's start: "vac" finds VAC, not privacy)
     var res = words.map(function (w) { return new RegExp("(^|[^a-z0-9])" + w, "i"); });
-    var hits = index.map(function (e) {
-      var score = 0, matched = 0;
+    var seen = {};
+    hits = index.map(function (e) {
+      var tier = 0, matched = 0, score = 0;
       for (var i = 0; i < res.length; i++) {
-        if (res[i].test(e.name) || res[i].test(e.keys)) { score += 4; matched++; }
-        else if (res[i].test(e.text)) { score += 1; matched++; }
+        if (res[i].test(e.lname)) { matched++; score += 6; tier = Math.max(tier, 3); }
+        else if (res[i].test(e.lkeys)) { matched++; score += 4; tier = Math.max(tier, 2); }
+        else if (res[i].test(e.ltext)) { matched++; score += 1; tier = Math.max(tier, 1); }
       }
       // most of the words, and every one for a short search
       if (!matched || matched < Math.ceil(res.length * (res.length > 2 ? 0.6 : 1))) return null;
-      if (!e.topic) score += 1;
-      return { e: e, score: score + matched * 2 };
-    }).filter(Boolean).sort(function (a, b) { return b.score - a.score; }).slice(0, 10);
-    results.innerHTML = hits.length
-      ? "<ul>" + hits.map(function (h) { return '<li><a href="#' + h.e.id + '">' + esc(h.e.name) + "<small>" + esc(h.e.where) + "</small></a></li>"; }).join("") + "</ul>"
-      : "<p>Nothing found. Try another word.</p>";
-    results.hidden = false; tree.hidden = true;
+      return { e: e, tier: tier, score: score };
+    }).filter(function (h) {
+      // one result per place: a heading only once
+      if (!h || seen[h.e.id]) return false;
+      return (seen[h.e.id] = true);
+    }).sort(function (a, b) { return b.score - a.score || b.tier - a.tier; }).slice(0, 12);
+    list.innerHTML = hits.map(function (h, i) {
+      return '<li role="option" id="r' + i + '" aria-selected="false" data-id="' + h.e.id + '"><small>' + esc(h.e.topic) + "</small><b>" + esc(h.e.head ? h.e.topic : h.e.name) + "</b><span>" + snippet(h.e, res) + "</span></li>";
+    }).join("");
+    none.hidden = !!hits.length;
+    if (!hits.length) none.innerHTML = "No results for “" + esc(q.value.trim()) + "”. Try <a href=\"#something-wrong\">Something's wrong?</a> or <a href=\"#getting-started\">Getting started</a>.";
+    count.textContent = hits.length ? hits.length + (hits.length === 1 ? " result" : " results") : "No results";
+    box.hidden = false; tree.hidden = true;
+    q.setAttribute("aria-expanded", hits.length ? "true" : "false");
+    select(0);
+  }
+  // opening a result: its topic and heading, then the matching words on the page marked a moment
+  function open(i) {
+    var h = hits[i];
+    if (!h) return;
+    var ws = words.slice();
+    q.value = ""; search();
+    if (location.hash === "#" + h.e.id) show(location.hash, true); else location.hash = "#" + h.e.id;
+    closeMenu();
+    flash(h.e.id, ws);
+  }
+  function flash(id, ws) {
+    var start = document.getElementById(id);
+    if (!start) return;
+    var res = ws.map(function (w) { return new RegExp("(^|[^a-z0-9])" + w, "i"); });
+    var n = start.tagName === "SECTION" ? start.querySelector("h1") : start, target = null;
+    for (var k = 0; n && k < 40 && !target; k++) {
+      if (k > 0 && (n.tagName === "H2" || (n.tagName === "H3" && n.id))) break;
+      var parts = n.matches && n.matches("ul, ol") ? [].slice.call(n.children) : [n];
+      for (var j = 0; j < parts.length && !target; j++) if (res.some(function (r) { return r.test(parts[j].textContent); })) target = parts[j];
+      n = n.nextElementSibling;
+    }
+    target = target || start;
+    setTimeout(function () {
+      var r = target.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > window.innerHeight) target.scrollIntoView({ block: "center" });
+      target.classList.remove("flash"); void target.offsetWidth; target.classList.add("flash");
+      setTimeout(function () { target.classList.remove("flash"); }, 2300);
+    }, 30);
   }
   q.addEventListener("input", search);
   q.addEventListener("keydown", function (e) {
-    if (e.key === "Enter") { var a = results.querySelector("a"); if (a) location.hash = a.getAttribute("href"); }
-    if (e.key === "Escape") { q.value = ""; search(); }
+    if (e.key === "ArrowDown" && hits.length) { e.preventDefault(); select(at + 1); }
+    else if (e.key === "ArrowUp" && hits.length) { e.preventDefault(); select(at - 1); }
+    else if (e.key === "Enter") { e.preventDefault(); open(at < 0 ? 0 : at); }
+    else if (e.key === "Escape") { e.preventDefault(); q.value = ""; search(); }
   });
-  results.addEventListener("click", function (e) { if (e.target.closest("a")) { q.value = ""; search(); } });
+  list.addEventListener("mousedown", function (e) { if (e.target.closest("[role=option]")) e.preventDefault(); });
+  list.addEventListener("click", function (e) {
+    var o = e.target.closest("[role=option]");
+    if (o) open([].indexOf.call(list.children, o));
+  });
+  none.addEventListener("click", function (e) { if (e.target.closest("a")) { q.value = ""; search(); } });
   document.addEventListener("keydown", function (e) {
     if (e.key === "/" && document.activeElement !== q && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); q.focus(); }
   });
