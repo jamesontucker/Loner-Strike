@@ -25,6 +25,7 @@ Layers:
              stair trenches and two ladder hatches lead down
 Textures only from cs_dust.wad, cstrike.wad (CS 1.6) and halflife.wad; the valve `cliff` sky.
 """
+import json
 import math
 import os
 import struct
@@ -45,6 +46,7 @@ MAXD = 160                  # largest height step between neighbouring vertices 
 
 GRASS, GRASS2, DIRT, ROAD, ASPH = "CSTRIKE_FT3GRAS", "-0OUT_GRSS1", "CSTRIKE_FT2DIRT", "OUT_GRVL2", "CSTRIKE_FT4APHT"
 ROCK, ROCK2, MUD, SAND = "OUT_RK3", "-0OUT_RK4", "CSTRIKE_FT2MUD", "-1Sand"
+RING = "-0SandRock"         # the cliff ring and its crags (layered, tan and grey)
 CONC, CONC_F, CEIL = "CSTRIKE_WR4CCPN", "-0CRETE4_FLR01", "TNNL_C1"
 TUNW = "TNNL_W4"
 
@@ -82,8 +84,12 @@ class Brush:
     def __init__(self):
         self.faces = []   # (p0, p1, p2, tex, n, scale)
 
-    def face(self, pts, n, tex, scale=1):
-        """a plane through three of pts with outward normal n (order fixed up here)"""
+    def face(self, pts, n, tex, scale=1, verts=None):
+        """a plane through three of pts with outward normal n (order fixed up here); verts: the face's corners
+        when known (for finding faces nobody sees)"""
+        if not hasattr(self, "verts"):
+            self.verts = []
+        self.verts.append(verts)
         p0, p1, p2 = pts[0], pts[1], pts[2]
         c = cross(sub(p0, p1), sub(p2, p1))
         if dot(c, n) < 0:
@@ -94,6 +100,8 @@ class Brush:
         out = ["{"]
         for p0, p1, p2, tex, n, scale in self.faces:
             u, v = tex_axes(n)
+            if getattr(self, "uv", None) and abs(dot(n, self.uv[0])) < 1e-6 and abs(dot(n, self.uv[1])) < 1e-6:
+                u, v = self.uv          # (a face the given axes lie in: the waterfall's front and back)
             pts = " ".join("( %s %s %s )" % tuple(fmt(c) for c in p) for p in (p0, p1, p2))
             out.append("%s %s [ %d %d %d 0 ] [ %d %d %d 0 ] 0 %s %s" % (pts, tex, *u, *v, fmt(scale), fmt(scale)))
         out.append("}")
@@ -109,8 +117,9 @@ def prism(top, zb, toptex, side, bottom=None, scale=1, topscale=None):
     n = cross(sub(top[1], top[0]), sub(top[2], top[0]))
     if n[2] < 0:
         n = (-n[0], -n[1], -n[2])
-    b.face(top[:3], n, toptex, topscale or scale)
-    b.face([(top[0][0], top[0][1], zb), (top[1][0], top[1][1], zb), (top[2][0], top[2][1], zb)], (0, 0, -1), bottom or side, scale)
+    b.face(top[:3], n, toptex, topscale or scale, verts=list(top))
+    b.face([(top[0][0], top[0][1], zb), (top[1][0], top[1][1], zb), (top[2][0], top[2][1], zb)], (0, 0, -1), bottom or side, scale,
+           verts=[(p[0], p[1], zb) for p in top])
     k = len(top)
     for i in range(k):
         p, q = top[i], top[(i + 1) % k]
@@ -119,7 +128,7 @@ def prism(top, zb, toptex, side, bottom=None, scale=1, topscale=None):
         mx, my = (p[0] + q[0]) / 2 - cx, (p[1] + q[1]) / 2 - cy
         if nn[0] * mx + nn[1] * my < 0:
             nn = (-dy, dx, 0)
-        b.face([p, q, (p[0], p[1], zb)], nn, side, scale)
+        b.face([p, q, (p[0], p[1], zb)], nn, side, scale, verts=[p, q, (q[0], q[1], zb), (p[0], p[1], zb)])
     b.bounds = (min(p[0] for p in top), min(p[1] for p in top), zb,
                 max(p[0] for p in top), max(p[1] for p in top), max(p[2] for p in top))
     b.poly = [(p[0], p[1]) for p in top]
@@ -220,25 +229,26 @@ detail_nc = Ent("func_detail", zhlt_detaillevel=1, zhlt_noclip=1)
 ents.append(detail_nc)
 
 
-def frustum(poly, zb, zt, s, tex, bottom=None, scale=1):
-    """a convex brush: the polygon at zb, the same scaled by s round its middle at zt (s 0: a point, a cone)"""
+def frustum(poly, zb, zt, s, tex, bottom=None, scale=1, lean=(0, 0)):
+    """a convex brush: the polygon at zb, the same scaled by s round its middle at zt (s 0: a point, a cone),
+    its top moved by lean"""
     b = Brush()
     cx_ = sum(p[0] for p in poly) / len(poly)
     cy_ = sum(p[1] for p in poly) / len(poly)
     bot = [(p[0], p[1], zb) for p in poly]
-    top = [(cx_ + (p[0] - cx_) * s, cy_ + (p[1] - cy_) * s, zt) for p in poly]
-    b.face(bot[:3], (0, 0, -1), bottom or tex, scale)
+    top = [(cx_ + lean[0] + (p[0] - cx_) * s, cy_ + lean[1] + (p[1] - cy_) * s, zt) for p in poly]
+    b.face(bot[:3], (0, 0, -1), bottom or tex, scale, verts=list(bot))
     if s > 0:
-        b.face(top[:3], (0, 0, 1), tex, scale)
+        b.face(top[:3], (0, 0, 1), tex, scale, verts=list(top))
     k = len(poly)
     for i in range(k):
         p, q = bot[i], bot[(i + 1) % k]
-        t = top[i] if s > 0 else (cx_, cy_, zt)
+        t = top[i] if s > 0 else (cx_ + lean[0], cy_ + lean[1], zt)
         n = cross(sub(q, p), sub(t, p))
         mx, my = (p[0] + q[0]) / 2 - cx_, (p[1] + q[1]) / 2 - cy_
         if n[0] * mx + n[1] * my < 0:
             n = (-n[0], -n[1], -n[2])
-        b.face([p, q, t], n, tex, scale)
+        b.face([p, q, t], n, tex, scale, verts=[p, q] + ([top[(i + 1) % k], t] if s > 0 else [t]))
     b.bounds = (min(p[0] for p in poly), min(p[1] for p in poly), zb, max(p[0] for p in poly), max(p[1] for p in poly), zt)
     b.poly = [(p[0], p[1]) for p in poly]
     b.top3 = top[:3] if s > 0 else [(p[0], p[1], zt) for p in poly[:3]]
@@ -383,7 +393,7 @@ def check_ground():
     floor with the hillside poking through). Fully buried brushes (foundations) are fine."""
     bad = []
     for b in REG:
-        if b.group.startswith(EXEMPT) or b.group in ("rock", "tree", "bush", "boulder") or getattr(b, "kind", None) == "ramp":
+        if b.group.startswith(EXEMPT) or b.group in ("rock", "tree", "bush", "boulder", "ring") or getattr(b, "kind", None) == "ramp":
             continue          # (a CLIP ramp's foot may meet a cross-slope: it's invisible; its steps are checked)
         (ax, ay, az), (bx_, by, bz), (cx_, cy, cz) = b.top3
         n = cross((bx_ - ax, by - ay, bz - az), (cx_ - ax, cy - ay, cz - az))
@@ -598,6 +608,16 @@ TUNNELS = [
     ("stope_way", -896, 2816, -800, 2880),       # and into the deep stope
     ("ridge_way", 1920, -1824, 2112, -1664),     # the river tunnel up into the ridge caves
     ("drain_e", 3072, 1408, 3264, 1920),         # the east drain: the quarry workings north to the lumber caves
+    ("boiler_e", -2304, -2752, -1536, -2560),    # (v6) the boiler house east to the tank vault: its second way out
+]
+# the vaults' escapes (v6, the user's choice): each vault keeps its one noisy grate way in, and gets a way OUT that
+# nobody can come in by: a ladder up the vault's wall to a crawl 96 over the next place's floor, through the rock,
+# and a drop into that place. (vault, crawl x0, y0, x1, y1, the ladder's wall: which side of the vault, where along it)
+ESC_Z = -416               # (96 over the floor below: too high to jump up into; 96 of room to stand in)
+ESCAPES = [
+    ("town vault", -640, 920, -576, 984, "e", 952),           # east into the storm drain
+    ("deep stope", -512, 2816, -448, 2880, "s", -480),        # south into the deep chamber
+    ("armoury", 3136, -3008, 3200, -2816, "n", 3168),         # north, then out sideways into the bunker hall
 ]
 # places: (name, x0, y0, x1, y1, style, floor). Styles: what it looks like, how it's lit, what you hear (PSTYLE)
 PLACES = [
@@ -611,7 +631,7 @@ PLACES = [
     ("town vault", -1088, 640, -640, 1024, "vault", TUN_Z),          # under the town hall (tier 5), one grate way in
     ("boiler house", -3328, -3328, -2304, -2560, "utility", TUN_Z),  # the factory's basement: boilers, pipes
     ("tank vault", -1536, -3328, -640, -2560, "utility", TUN_Z),     # the gas station's fuel tanks
-    ("boathouse cellar", -128, -1536, 512, -768, "pump", TUN_Z),     # the docks' cellar (a hatch in the yard)
+    ("boathouse cellar", -64, -1536, 512, -768, "pump", TUN_Z),      # the docks' cellar (a hatch in the yard; 64 of rock from the cisterns)
     ("pumping works", 1536, -1024, 2304, 1024, "pump", TUN_Z),       # the river pumping station's works
     ("ridge caves", 1664, -2304, 2304, -1152, "cave", TUN_Z),        # caves under the east ridge
     ("quarry workings", 2432, -1152, 3328, 1536, "works", TUN_Z),    # the quarry's old workings
@@ -632,7 +652,7 @@ PSTYLE = {   # walls, floor, lamp colour, lamp texture, sound
     "pump": ("CSTRIKE_ME2RSTW", CONC_F, "150 220 255", "~SPOTBLUE", "ambience/pumper.wav"),
     "grate": (CONC, "CSTRIKE_FE2GTNG", "255 120 100", "~SPOTRED", None),
 }
-TUNNEL_STYLE = {"stope_way": "grate", "drain_e": "works", "sewer": "sewer", "sewer_s": "sewer", "drain_n": "sewer", "mine": "mine", "mine_n": "mine", "vault_way": "grate",
+TUNNEL_STYLE = {"boiler_e": "utility", "stope_way": "grate", "drain_e": "works", "sewer": "sewer", "sewer_s": "sewer", "drain_n": "sewer", "mine": "mine", "mine_n": "mine", "vault_way": "grate",
                 "armoury_way": "grate", "pumpline": "pump", "docks_s": "pump", "factory": "utility", "gas_w": "utility",
                 "gas_s": "utility", "river": "sewer", "bunker_b": "bunker", "quarry": "works", "ridge_way": "cave"}
 
@@ -645,6 +665,9 @@ def style_at(x, y):
     for (n_, x0, y0, x1, y1) in TUNNELS:
         if x0 <= x < x1 and y0 <= y < y1:
             return TUNNEL_STYLE.get(n_, "utility")
+    for (n_, x0, y0, x1, y1, _w, _a) in ESCAPES:
+        if x0 <= x < x1 and y0 <= y < y1:
+            return "grate"
     return "cave" if (x < -2240 or y > 1600 or x > 2368) else "utility"
 
 
@@ -760,6 +783,14 @@ for (i, j) in HATCHES:
     _fixed = [H[i + a][j + b] for a in (0, 1) for b in (0, 1) if FIX[i + a][j + b]]
     fix_rect(cx(i), cx(j), cx(i + 1), cx(j + 1), max(_fixed) if _fixed else round(sum(H[i + a][j + b] for a in (0, 1) for b in (0, 1)) / 32) * 8)
 # the backdrop ring: tall cliffs, fixed
+
+
+def _crest_kick(i, j):
+    """one vertex in about seven raised 120-300 (a hash, no beat)"""
+    h = ((i * 73856093) ^ (j * 19349663) ^ 0x5bd1e995) & 0xffffff
+    return 120 + h % 181 if h % 7 == 0 else 0
+
+
 for i in range(N + 1):
     for j in range(N + 1):
         if min(i, j, N - i, N - j) == 0:
@@ -767,7 +798,7 @@ for i in range(N + 1):
             side_ = 0 if j == N else 1 if i == N else 2 if j == 0 else 3
             H[i][j] = (1250 + 260 * math.sin(x / 700.0 + y / 900.0 + side_) + 180 * math.cos(y / 400.0 - x / 1300.0)
                        + 150 * math.sin(x / 233.0 + y / 377.0 + 2.1 * side_) + 110 * math.cos(x / 131.0 - y / 171.0 + side_)
-                       + (260 if (i * 7 + j * 13) % 5 == 0 else 0))
+                       + _crest_kick(i, j) - (200 if i in (0, N) else 0))     # (v6: lower east and west: the sky's cliffs behind)
             # notches: the river's gorge in the north and out in the south, the main road's cut in the west and east
             if (j == N and 17 <= i <= 20) or (j == 0 and 15 <= i <= 18):
                 H[i][j] = 240
@@ -879,10 +910,12 @@ def ground(x, y):
 
 
 def cell_tex(i, j, slope):
-    if min(i, j, N - 1 - i, N - 1 - j) == 0:      # the cliff ring: a look per side
-        return ROCK2 if (i == 0 or i == N - 1) else ROCK
-    if slope > 0.55:
+    if min(i, j, N - 1 - i, N - 1 - j) == 0:      # the cliff ring: layered cliff rock, unlike the ridges' rubble
+        return RING
+    if slope > 0.66:            # (v6: rock only where it's steepest; worn grass and dirt below that)
         return ROCK2
+    if slope > 0.56:
+        return "OUT_DIRT1"      # (grassy dirt: between the worn grass and the rock)
     for name, x0, y0, x1, y1, z in PADS:
         if x0 <= cx(i) < x1 and y0 <= cx(j) < y1:
             return {"town": ASPH, "factory": "-0CRETE4_FLR01", "gas": ASPH, "bunker": SAND,
@@ -933,7 +966,8 @@ for i in range(N):
         for tri in ([p00, p10, p11], [p00, p11, p01]):
             n = cross(sub(tri[1], tri[0]), sub(tri[2], tri[0]))
             slope = math.hypot(n[0], n[1]) / abs(n[2])
-            W(prism(tri, SLAB_TOP, cell_tex(i, j, slope), ROCK, bottom=ROCK if zone_style(cx(i) + 128, cx(j) + 128) in ("cave", "works") else CEIL, scale=2))
+            ring_ = min(i, j, N - 1 - i, N - 1 - j) == 0      # (the ring at scale 4: out of reach, a sixteenth of the lightmap)
+            W(prism(tri, SLAB_TOP, cell_tex(i, j, slope), RING if ring_ else ROCK, bottom=ROCK if zone_style(cx(i) + 128, cx(j) + 128) in ("cave", "works") else CEIL, scale=4 if ring_ else 2))
 
 # mesa tops
 for (i, j), k in list(KIND.items()):
@@ -1192,6 +1226,7 @@ OPEN_RECTS = [(x0, y0, x1, y1, TUN_Z) for _, x0, y0, x1, y1 in TUNNELS] + [(x0, 
 # the sewer's channel and the cisterns' water channel: 16 down (you step out anywhere)
 OPEN_RECTS.append((-1472, 384, 256, 448, TUN_Z - 16))
 OPEN_RECTS.append((-1664, -544, -128, -480, -592))
+OPEN_RECTS += [(x0, y0, x1, y1, ESC_Z) for (_n, x0, y0, x1, y1, _w, _a) in ESCAPES]
 for c, name in TRENCH_CELLS.items():
     OPEN_RECTS.append((cx(c[0]), cx(c[1]), cx(c[0] + 1), cx(c[1] + 1), TUN_Z))
 for (i, j) in HATCHES:
@@ -1231,7 +1266,31 @@ for a in range(len(xs) - 1):
     for b in range(len(ys) - 1):
         mx, my = (xs[a] + xs[a + 1]) / 2, (ys[b] + ys[b + 1]) / 2
         fl_ = slab_floor(mx, my)
-        cells[(a, b)] = (fl_, style_at(mx, my) if fl_ is not None else near_style(xs[a], ys[b], xs[a + 1], ys[b + 1]))
+        cells[(a, b)] = (fl_, style_at(mx, my) if fl_ is not None else None)
+# solid rock (v6): each side faced as the place it faces (a thin wall between two places shows each its own look);
+# the merge key is the four faced looks, so a block's side faces one place all along
+_open_st = dict(cells)
+for (a, b), (fl_, st_) in list(_open_st.items()):
+    if fl_ is None:
+        cells[(a, b)] = (None, tuple((_open_st.get(nb) or (None, None))[1] for nb in ((a - 1, b), (a + 1, b), (a, b - 1), (a, b + 1))))
+
+
+def box_faced(x0, y0, z0, x1, y1, z1, sides, top, bottom, scales):
+    """a box with its own texture (and scale) on each side: sides/scales = (west, east, south, north)"""
+    b = Brush()
+    b.face([(x0, y0, z1), (x1, y0, z1), (x1, y1, z1)], (0, 0, 1), top, 1)
+    b.face([(x0, y0, z0), (x1, y0, z0), (x1, y1, z0)], (0, 0, -1), bottom, 1)
+    b.face([(x0, y0, z0), (x0, y1, z0), (x0, y0, z1)], (-1, 0, 0), sides[0], scales[0])
+    b.face([(x1, y0, z0), (x1, y1, z0), (x1, y0, z1)], (1, 0, 0), sides[1], scales[1])
+    b.face([(x0, y0, z0), (x1, y0, z0), (x0, y0, z1)], (0, -1, 0), sides[2], scales[2])
+    b.face([(x0, y1, z0), (x1, y1, z0), (x0, y1, z1)], (0, 1, 0), sides[3], scales[3])
+    b.bounds = (x0, y0, z0, x1, y1, z1)
+    b.poly = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    b.top3 = [(x0, y0, z1), (x1, y0, z1), (x1, y1, z1)]
+    return b
+
+
+ROCKY = ("cave", "mine", "works")
 # merge on the irregular grid (same greedy idea)
 left = dict(cells)
 for b in range(len(ys) - 1):
@@ -1249,12 +1308,12 @@ for b in range(len(ys) - 1):
             for bb in range(b, b1 + 1):
                 del left[(aa, bb)]
         X0b, Y0b, X1b, Y1b = xs[a], ys[b], xs[a1 + 1], ys[b1 + 1]
-        fl, st = key           # (solid rock: faced as the nearest place, cell by cell, in the merge key)
-        wall_t, floor_t = PSTYLE[st][0], PSTYLE[st][1]
+        fl, st = key
         if fl is not None:
-            W(box(X0b, Y0b, FLOOR_Z, X1b, Y1b, fl, wall_t, top=floor_t, scale=2))
-        else:
-            W(box(X0b, Y0b, FLOOR_Z, X1b, Y1b, SLAB_TOP, wall_t, top=CEIL))
+            W(box(X0b, Y0b, FLOOR_Z, X1b, Y1b, fl, PSTYLE[st][0], top=PSTYLE[st][1], scale=2))
+        else:           # (walls below at scale 2: a quarter of the lightmap)
+            W(box_faced(X0b, Y0b, FLOOR_Z, X1b, Y1b, SLAB_TOP, [PSTYLE[f][0] if f else ROCK for f in st], CEIL, ROCK,
+                        [2] * 4))
 
 # trenches: stairs from the tunnel floor up to the pad; railings round the deep part
 for name, i0, j0, i1, j1, d in TRENCHES:
@@ -1332,7 +1391,7 @@ for name, i0, j0, i1, j1, d in TRENCHES:
         D(box(hb[0] - 16, hb[1] - 16, top_z + 160, hb[2] + 16, hb[3] + 16, top_z + 176, "OUT_WD", top="OUT_ROOF1B"))
     if not mine:    # concrete trenches lined with concrete (not raw rock), from below ground to the top
         for (a, b_, c, e) in ((x0, y0, x0 + 8, y1), (x1 - 8, y0, x1, y1)) if d in "ns" else ((x0, y0, x1, y0 + 8), (x0, y1 - 8, x1, y1)):
-            NC(box(a, b_, SLAB_TOP, c, e, top_z, CONC))
+            NC(box(a, b_, SLAB_TOP, c, e, top_z, CONC, scale=2))
     if mine:        # the head-frame's beams and its winding wheel (high up, not in anyone's way)
         for zz in (top_z + 192, top_z + ht - 16):
             NC(box(hb[0] - 16, hb[1] - 16, zz, hb[2] + 16, hb[1], zz + 16, "OUT_WD"))
@@ -1340,7 +1399,7 @@ for name, i0, j0, i1, j1, d in TRENCHES:
         wx, wy = (hb[0] + hb[2]) / 2, (hb[1] + hb[3]) / 2
         NC(prism([(wx - 4, wy - 64, top_z + ht - 16), (wx + 4, wy - 64, top_z + ht - 16), (wx + 4, wy + 64, top_z + ht - 16),
                   (wx - 4, wy + 64, top_z + ht - 16)], top_z + ht - 144, "CSTRIKE_ME4METL", "CSTRIKE_ME4METL"))
-    point("light", (hb[0] + hb[2]) / 2, (hb[1] + hb[3]) / 2, top_z + ht - 24, _light="255 215 160 110")
+    point("light", (hb[0] + hb[2]) / 2, (hb[1] + hb[3]) / 2, top_z + (152 if mine else ht - 24), _light="255 215 160 110")   # (under the roof)
     point("light_spot", (hb[0] + hb[2]) / 2, (hb[1] + hb[3]) / 2, top_z + 40, pitch=-45, angles="-45 %d 0" % aim, _cone=40, _cone2=70,
           _light="215 232 255 700")
     point("light", foot[0], foot[1], TUN_Z + 140, _light="215 232 255 160")
@@ -1541,7 +1600,7 @@ def _building(x0, y0, x1, y1, z, floors, fh, wt, tex, inner, roof, doors, window
         wall(x0, y1 - 8, x1, y1, top, top + 40, tex, gaps["n"], "x")
         wall(x0, y0 + 8, x0 + 8, y1 - 8, top, top + 40, tex, gaps["w"], "y")
         wall(x1 - 8, y0 + 8, x1, y1 - 8, top, top + 40, tex, gaps["e"], "y")
-    W(box(x0 + wt, y0 + wt, z, x1 - wt, y1 - wt, z + 1, floor_tex))
+    W(box(x0 + wt, y0 + wt, z, x1 - wt, y1 - wt, z + 4, floor_tex))      # (v6: 4 up, over the road overlays under it)
     # furniture: a table and a crate in the ground floor's free corners (cover inside, and it's lived in)
     flx = flight_x(0) if levels else None
     placed = 0
@@ -2115,7 +2174,8 @@ for (px, py) in ((HX0, HY - 112), (HX1 - 16, HY - 112), (HX0, HY + 96), (HX1 - 1
 D(frustum([(HX0 - 16, HY - 128), (HX1 + 16, HY - 128), (HX1 + 16, HY + 128), (HX0 - 16, HY + 128)], RT_Z + 144, RT_Z + 208, 0.0, "OUT_ROOF1B"))
 D(box(HX0 + 8, HY - 8, RT_Z + 200, HX0 + 24, HY + 8, RT_Z + 640, RAIL))
 NC(box(HX0 + 10, HY - 6, RT_Z + 640, HX0 + 22, HY + 6, RT_Z + 652, "~SPOTRED"))
-point("light", HX0 + 16, HY, RT_Z + 600, _light="255 60 40 120")
+NC(box(HX0 - 4, HY - 8, RT_Z + 604, HX0 + 8, HY + 8, RT_Z + 620, "~SPOTRED"))        # (v6: the lamp on the mast's face)
+point("light", HX0 - 16, HY, RT_Z + 612, _light="255 60 40 160")
 for (end, dirn) in ((RT_YS, "s"), (RT_YN, "n")):
     zf = 0
     for _ in range(6):
@@ -2133,13 +2193,71 @@ BLOCKED.append((HX0 - 48, RT_YS, RT_X1 + 48, RT_YN))
 LOOT += [(HX0 + 120, HY + 40, RT_Z + 8, 3, "default")]
 WEAP += [(HX0 + 120, HY - 40, RT_Z + 8, "snipers", 3)]
 
-# --- the cliff ring: a few tall rock spires in front of it, a waterfall where the river comes in, a boarded road
-# tunnel where the main road leaves to the west (all out of reach, behind the play edge)
+# --- the cliff ring (v6): five crags set into it (one a side, one by the river's gorge: layered rock, broad along the
+# ring, narrow across, leaning along it, 100-300 over the crest), a lower broken terrace in front of the wall on
+# three sides (two distances at the edge), a stepped waterfall where the river comes in; a boarded road tunnel
+# where the main road leaves to the west (all out of reach, behind the play edge)
 group("ring")
-for k, (x, y, r, h) in enumerate([(-3720, 2600, 130, 1700), (-3700, -2300, 110, 1500), (3700, 1900, 140, 1800), (3720, -900, 120, 1600),
-                                  (-1900, 3720, 120, 1650), (2400, 3700, 130, 1750), (-600, -3710, 120, 1500), (2900, -3700, 110, 1600)]):
-    D(frustum(blob(x, y, r, 6, 77 + 13 * k), 0, h, 0.35, ROCK2, scale=4))      # (scale 4: little lightmap)
-NC(box(512, PLAY + 40, BED_Z, 1280, PLAY + 48, 240, "+0WATERF"))
+
+
+def ring_crest(x, y):
+    i = min(max(int(round((x - X0) / CELL)), 0), N)
+    j = min(max(int(round((y - X0) / CELL)), 0), N)
+    i = 0 if x < -PLAY else N if x > PLAY else i
+    j = 0 if y < -PLAY else N if y > PLAY else j
+    return H[i][j]
+
+
+for k, (x, y, along, top_over) in enumerate([(-PLAY - 128, 2200, "y", 260), (PLAY + 128, 600, "y", 140), (-1800, -PLAY - 128, "x", 220),
+                                              (-2300, PLAY + 128, "x", 300), (1500, PLAY + 128, "x", 180)]):
+    pts = [(px / 1000.0, py / 1000.0) for (px, py) in blob(0, 0, 1000, 9, 501 + 37 * k)]
+    ra, rc = 280 + 30 * (k % 3), 104           # along the ring, across it
+    poly = [(x + (px * ra if along == "x" else px * rc), y + (py * ra if along == "y" else py * rc)) for (px, py) in pts]
+    lean = (90 + 25 * k, 0) if along == "x" else (0, 90 + 25 * k)
+    if k % 2:
+        lean = (-lean[0], -lean[1])
+    zt = ring_crest(x, y) + top_over
+    NC(frustum(poly, -64, zt * 0.62, 0.62, RING, scale=4))                        # (two pieces: a broad foot,
+    NC(frustum([(x + (px - x) * 0.62, y + (py - y) * 0.62) for (px, py) in poly], zt * 0.62, zt, 0.22, RING, scale=4, lean=lean))   # a leaning top)
+# the terrace: broken ledges 300-600 high in front of the wall, grass on top (not where the river and the road go out)
+for side in ("w", "e", "n"):
+    for t0 in range(-PLAY + 256, PLAY - 256, 384):
+        h_ = ((t0 * 2654435761) ^ (ord(side) * 40503)) & 0xffff
+        if h_ % 5 == 0:
+            continue                    # (a gap)
+        t1 = t0 + 256 + h_ % 160
+        if side in ("w", "e") and t0 < 400 and t1 > -400:
+            continue                    # (the road's cut)
+        if side == "n" and t0 < 1400 and t1 > 400:
+            continue                    # (the river's gorge)
+        sgn = -1 if side == "w" else 1
+        d0, d1 = PLAY + 24, PLAY + 112 + h_ % 64
+        if side == "n":
+            quad = [(t0, d0), (t1, d0), (t1 - 24, d1), (t0 + 32, d1)]
+            gmax = max(ground(xx, PLAY - 8) for xx in range(t0, t1 + 1, 64))
+        else:
+            quad = [(sgn * d0, t0), (sgn * d0, t1), (sgn * d1, t1 - 24), (sgn * d1, t0 + 32)]
+            gmax = max(ground(sgn * (PLAY - 8), yy) for yy in range(t0, t1 + 1, 64))
+        zt = 300 + h_ % 300
+        if zt < gmax + 160:
+            continue                    # (no ledge where the ground at the edge is already that high)
+        tilt = ((h_ >> 4) % 3 - 1) * 0.12
+        poly = quad if area(quad) > 0 else quad[::-1]
+        mid_ = sum(p[0] for p in poly) / 4.0 if side == "n" else sum(p[1] for p in poly) / 4.0
+        NC(prism([(px, py, zt + tilt * ((px if side == "n" else py) - mid_)) for (px, py) in poly], -64, GRASS2, RING, scale=4, topscale=2))
+# the waterfall: three falls down the gorge's rock, ledges between, foam at the foot, the sound at the foot
+WF_X0, WF_X1 = 560, 1232
+for (y0_, za, zb_) in ((PLAY + 168, 240, 120), (PLAY + 104, 120, 0), (PLAY + 40, 0, BED_Z + 28)):
+    NC(box(WF_X0 - 48, y0_ + 8, BED_Z, WF_X1 + 48, y0_ + 72, za, RING, top=ROCK, scale=4))          # the rock it runs down
+    fall = Ent("func_conveyor", speed=130, spawnflags=3, rendermode=5, renderamt=230)
+    b_ = box(WF_X0, y0_, zb_, WF_X1, y0_ + 8, za + 6, "SCROLLWATER1")
+    b_.uv = ((0, 0, -1), (1, 0, 0))          # (scrolls down the fall)
+    fall.brushes.append(b_)
+    ents.append(fall)
+foam = Ent("func_illusionary", rendermode=2, renderamt=170)
+foam.brushes.append(box(WF_X0 - 16, PLAY - 40, BED_Z + 26, WF_X1 + 16, PLAY + 40, BED_Z + 30, "WHITE"))
+ents.append(foam)
+point("ambient_generic", (WF_X0 + WF_X1) / 2, PLAY - 32, BED_Z + 64, message="ambience/waterfall2.wav", health=6, spawnflags=4, pitch=100)
 for (a, b) in ((-3712, -3696),):
     D(box(a, -180, 0, b, -140, 300, CONC))
     D(box(a, 20, 0, b, 60, 300, CONC))
@@ -2166,7 +2284,7 @@ LOOT += [(-1568, -2808, 320 - 160 * 352 / 704.0 + 8, 3, "default")]
 
 # --- the level below, place by place (v4): each its own look, light, sound, cover; loot tier 3 and SMGs, the
 # best (tier 5, rifles) only in three vaults, each behind one grate-floored way in that you hear
-KEEP_CLEAR = [(cx(c[0]) - 64, cx(c[1]) - 64, cx(c[0] + 1) + 64, cx(c[1] + 1) + 64) for c in TRENCH_CELLS] + \
+KEEP_CLEAR = [(x0 - 96, y0 - 96, x1 + 96, y1 + 96) for (_n, x0, y0, x1, y1, _w, _a) in ESCAPES] + [(cx(c[0]) - 64, cx(c[1]) - 64, cx(c[0] + 1) + 64, cx(c[1] + 1) + 64) for c in TRENCH_CELLS] + \
              [(cx(i) - 48, cx(j) - 48, cx(i + 1) + 48, cx(j + 1) + 48) for (i, j) in HATCHES] + \
              [(x0 - 32, y0 - 32, x1 + 32, y1 + 32) for n_, x0, y0, x1, y1 in TUNNELS if n_ not in ("mine", "river")]
 PL = {n_: (x0, y0, x1, y1, st, fl) for (n_, x0, y0, x1, y1, st, fl) in PLACES}
@@ -2176,6 +2294,40 @@ def clear_below(x, y, r):
     if not any(a - r < x < c + r and b - r < y < d + r for (a, b, c, d) in KEEP_CLEAR):
         return slab_open(x - r, y - r) and slab_open(x + r, y + r) and slab_open(x - r, y + r) and slab_open(x + r, y - r)
     return False
+
+
+NOLIGHT = ("CLIP", "NULL", "SKIP", "AAATRIGGER", "SKY", "ORIGIN", "HINT")
+
+
+def blocks_light(b):
+    return any(f[3] not in NOLIGHT and not f[3].startswith("!") for f in b.faces) and not getattr(b, "kind", None) == "treeclip"
+
+
+def in_brush(b, p, m=0.0):
+    """p inside the brush grown by m (its planes moved out by m)"""
+    bd = b.bounds
+    if not (bd[0] - m <= p[0] <= bd[3] + m and bd[1] - m <= p[1] <= bd[4] + m and bd[2] - m <= p[2] <= bd[5] + m):
+        return False
+    for (p0, _p1, _p2, _t, n, _s) in b.faces:
+        if dot(n, sub(p, p0)) / math.sqrt(dot(n, n)) >= m:
+            return False
+    return True
+
+
+def clear_spot(x, y, z, m, brushes, inside=None, rmax=320):
+    """the nearest point to x, y, z at least m from every brush that stops light (z first as it is, then lower)"""
+    near = [b for b in brushes if blocks_light(b) and b.bounds[0] - rmax - m <= x <= b.bounds[3] + rmax + m
+            and b.bounds[1] - rmax - m <= y <= b.bounds[4] + rmax + m and b.bounds[2] - 200 <= z <= b.bounds[5] + 200]
+    for dz in (0, -24, -64, -112):
+        for r in range(0, rmax + 1, 32):
+            for k in range(max(1, int(2 * math.pi * r / 48))):
+                a = 2 * math.pi * k / max(1, int(2 * math.pi * r / 48))
+                p = (x + r * math.cos(a), y + r * math.sin(a), z + dz)
+                if inside and not (inside[0] <= p[0] <= inside[2] and inside[1] <= p[1] <= inside[3]):
+                    continue
+                if not any(in_brush(b, p, m) for b in near):
+                    return p
+    return None
 
 
 def pillar_rock(x, y, r, k, fl):
@@ -2190,13 +2342,24 @@ def lights_in(name, step=384, bright=120):
     bright = max(bright, 210)
     if min(x1 - x0, y1 - y0) < 600:
         step = min(step, 256)
+    deep = fl < TUN_Z           # (a place a level down is tall: its lamps hang at mid height on a rod)
+    lz = fl + 220 if deep else SLAB_TOP - 40
     lamps = Ent("func_illusionary")
     nx, ny = max(1, int((x1 - x0) // step)), max(1, int((y1 - y0) // step))
     for a in range(nx):
         for b in range(ny):
             lx, ly = x0 + (x1 - x0) * (a + 0.5) / nx, y0 + (y1 - y0) * (b + 0.5) / ny
-            point("light", lx, ly, SLAB_TOP - 40, _light="%s %d" % (PSTYLE[st][2], bright))
-            lamps.brushes.append(box(lx - 12, ly - 12, SLAB_TOP - 6, lx + 12, ly + 12, SLAB_TOP, PSTYLE[st][3]))
+            # (v6) not inside a boiler, a pillar or a trench's mass: the nearest clear spot in the place
+            spot = clear_spot(lx, ly, lz, 32, REG, inside=(x0 + 40, y0 + 40, x1 - 40, y1 - 40))
+            if spot is None:
+                continue
+            lx, ly, lz_ = spot
+            point("light", lx, ly, lz_, _light="%s %d" % (PSTYLE[st][2], bright))
+            if deep:
+                lamps.brushes.append(box(lx - 2, ly - 2, lz_ + 18, lx + 2, ly + 2, SLAB_TOP, "CSTRIKE_ME4METL"))
+                lamps.brushes.append(box(lx - 12, ly - 12, lz_ + 12, lx + 12, ly + 12, lz_ + 18, PSTYLE[st][3]))
+            else:
+                lamps.brushes.append(box(lx - 12, ly - 12, SLAB_TOP - 7, lx + 12, ly + 12, SLAB_TOP - 1, PSTYLE[st][3]))
     ents.append(lamps)
     if PSTYLE[st][4]:
         point("ambient_generic", (x0 + x1) / 2, (y0 + y1) / 2, fl + 96, message=PSTYLE[st][4], health=4, spawnflags=4, pitch=100)
@@ -2230,7 +2393,7 @@ def cave(name, k):
 
 group("under:deep stope")
 stairs(-896, 2880, -800, 3144, -704, TUN_Z, "s", side=CONC, top=CONC_F, name="deep stope steps", out_bottom="e")
-lights_in("deep stope", step=256, bright=240)
+lights_in("deep stope", step=256, bright=260)
 for k, n_ in enumerate(("fort caves", "north caves", "deep chamber", "lumber caves", "ridge caves")):
     cave(n_, k)
 
@@ -2254,7 +2417,9 @@ for k, (x, y) in enumerate([(-2944, 2112), (-3200, 1760)]):
     pillar_rock(x, y, 84, 40 + k, fl)
 P(box(-3232, 2400, fl, -3136, 2456, fl + 48, "CSTRIKE_ME2RSTW", top="CSTRIKE_ME4METL"))
 lights_in("west mine", bright=110)
-# lighting along the tunnels
+# lighting along the tunnels; a painted band along their walls in the place's colour (v6: paint, not lamps)
+BAND = {"~SPOTYELLOW": "YELLOW", "~LIGHT3A": "YELLOW", "~LIGHT5A": "C1A3YELLOW", "~SPOTRED": "RED", "~SPOTGREEN": "GLASSGREEN",
+        "~SPOTBLUE": "GLASSBLUE1"}
 for name, tx0, ty0, tx1, ty1 in TUNNELS:
     lx, ly = tx1 - tx0, ty1 - ty0
     st = TUNNEL_STYLE.get(name, "utility")
@@ -2270,15 +2435,16 @@ for name, tx0, ty0, tx1, ty1 in TUNNELS:
         lamps.brushes.append(box(x - 12, y - 12, SLAB_TOP - 4, x + 12, y + 12, SLAB_TOP, PSTYLE[st][3]))
     if lamps.brushes:
         ents.append(lamps)
-    if st != "grate":
+    if st not in ("grate", "mine"):       # (the mine has its timber frames along the walls)
         stripe = Ent("func_illusionary")
+        band = BAND[PSTYLE[st][3]]
         if lx >= ly:
-            stripe.brushes.append(box(tx0, ty0, TUN_Z + 40, tx1, ty0 + 2, TUN_Z + 56, PSTYLE[st][3]))
-            stripe.brushes.append(box(tx0, ty1 - 2, TUN_Z + 40, tx1, ty1, TUN_Z + 56, PSTYLE[st][3]))
+            stripe.brushes.append(box(tx0, ty0, TUN_Z + 44, tx1, ty0 + 1, TUN_Z + 52, band, scale=2))
+            stripe.brushes.append(box(tx0, ty1 - 1, TUN_Z + 44, tx1, ty1, TUN_Z + 52, band, scale=2))
             ends_ = ((tx0 + 48, (ty0 + ty1) / 2), (tx1 - 48, (ty0 + ty1) / 2))
         else:
-            stripe.brushes.append(box(tx0, ty0, TUN_Z + 40, tx0 + 2, ty1, TUN_Z + 56, PSTYLE[st][3]))
-            stripe.brushes.append(box(tx1 - 2, ty0, TUN_Z + 40, tx1, ty1, TUN_Z + 56, PSTYLE[st][3]))
+            stripe.brushes.append(box(tx0, ty0, TUN_Z + 44, tx0 + 1, ty1, TUN_Z + 52, band, scale=2))
+            stripe.brushes.append(box(tx1 - 1, ty0, TUN_Z + 44, tx1, ty1, TUN_Z + 52, band, scale=2))
             ends_ = (((tx0 + tx1) / 2, ty0 + 48), ((tx0 + tx1) / 2, ty1 - 48))
         for (sx_, sy_) in ends_:
             stripe.brushes.append(box(sx_ - 2, sy_ - 32, SLAB_TOP - 48, sx_ + 2, sy_ + 32, SLAB_TOP - 32, "+0EXIT") if lx >= ly else
@@ -2302,7 +2468,7 @@ W(box(-1472, 384, TUN_Z - 16, 256, 448, TUN_Z - 6, "!WATERBLUE"))
 point("ambient_generic", -700, 416, TUN_Z + 64, message="ambience/drips.wav", health=4, spawnflags=4, pitch=90)
 # the town vault (tier 5): strongboxes, one grate way in from the sewer
 group("under:town vault")
-lights_in("town vault", step=384, bright=150)
+lights_in("town vault", step=192, bright=240)
 for (x, y) in [(-1040, 680), (-720, 680), (-1040, 940)]:
     crate(x, y, TUN_Z, 64)
 # the boiler house under the factory: boilers, pipes along the north wall, a work bench
@@ -2314,7 +2480,7 @@ for (x, y) in [(-3104, -3104), (-2848, -3104), (-2592, -3104)]:
 NC(box(x0 + 32, y1 - 48, -400, x1 - 32, y1 - 24, -376, "-0GENPIPE1"))
 NC(box(x0 + 32, y1 - 48, -440, x1 - 32, y1 - 24, -416, "-0GENPIPE1"))
 P(box(-2560, -2752, fl, -2368, -2688, fl + 40, "CSTRIKE_ME4METL"))
-lights_in("boiler house", bright=150)
+lights_in("boiler house", step=340, bright=270)          # (v6: six lamps, clear of the boilers)
 # the tank vault under the gas station: three fuel tanks, pipes
 group("under:tank vault")
 x0, y0, x1, y1, st, fl = PL["tank vault"]
@@ -2343,12 +2509,33 @@ for m, (u, v) in enumerate([(0.25, 0.2), (0.7, 0.45), (0.3, 0.65), (0.75, 0.85)]
 lights_in("quarry workings", bright=130)
 # the bunker: a long hall, the guard room (a barrier), the generator room (generators), the armoury a level down
 group("under:bunker")
-P(box(2368, -2496, TUN_Z, 2624, -2464, TUN_Z + 48, "OUT_SNBAG", top="OUT_SNBAGB"))
+P(box(2368, -2400, TUN_Z, 2624, -2368, TUN_Z + 48, "OUT_SNBAG", top="OUT_SNBAGB"))      # (v6: 140 clear of the trench's foot)
 for (x, y) in [(2912, -2560), (3104, -2560)]:
     D(box(x - 48, y - 64, TUN_Z, x + 48, y + 64, TUN_Z + 112, "CSTRIKE_ME2RSTW", top="CSTRIKE_ME4METL"))
 stairs(3008, -3272, 3104, -3008, -704, TUN_Z, "n", side=CONC, top=CONC_F, name="armoury steps")
 for nm in ("bunker hall", "guard room", "generator room", "armoury"):
-    lights_in(nm, step=384, bright=150 if nm == "armoury" else 120)
+    lights_in(nm, step=384 if nm != "armoury" else 160, bright=260 if nm == "armoury" else 120)
+
+# the vaults' escapes: a ladder up the wall, a red lamp in the crawl
+for (vn, ex0, ey0, ex1, ey1, wside, along) in ESCAPES:
+    group("under:" + vn)
+    vx0, vy0, vx1, vy1, _st, vfl = PL[vn]
+    wall_ = {"e": vx1, "w": vx0, "n": vy1, "s": vy0}[wside]
+    inward = {"e": -1, "w": 1, "n": -1, "s": 1}[wside]
+    lad = Ent("func_wall", rendermode=4, renderamt=255)
+    fl_ = Ent("func_ladder")
+    if wside in "ew":
+        lad.brushes.append(box(min(wall_, wall_ + 4 * inward), along - 24, vfl, max(wall_, wall_ + 4 * inward), along + 24, ESC_Z + 8, "{CSTRIKE_LE6LAD"))
+        fl_.brushes.append(box(min(wall_, wall_ + 12 * inward), along - 24, vfl, max(wall_, wall_ + 12 * inward), along + 24, ESC_Z + 8, "AAATRIGGER"))
+        connector("ladder", vn + " escape", (wall_ + 26 * inward, along, vfl), (inward, 0), (wall_ - 20 * inward, along, ESC_Z), (-inward, 0))
+    else:
+        lad.brushes.append(box(along - 24, min(wall_, wall_ + 4 * inward), vfl, along + 24, max(wall_, wall_ + 4 * inward), ESC_Z + 8, "{CSTRIKE_LE6LAD"))
+        fl_.brushes.append(box(along - 24, min(wall_, wall_ + 12 * inward), vfl, along + 24, max(wall_, wall_ + 12 * inward), ESC_Z + 8, "AAATRIGGER"))
+        connector("ladder", vn + " escape", (along, wall_ + 26 * inward, vfl), (0, inward), (along, wall_ - 20 * inward, ESC_Z), (0, -inward))
+    ents.append(lad)
+    ents.append(fl_)
+    point("light", (ex0 + ex1) / 2, (ey0 + ey1) / 2, ESC_Z + 48, _light="255 120 100 90")
+    BLOCKED.append((ex0 - 96, ey0 - 96, ex1 + 96, ey1 + 96))
 
 # --- loot below
 LOOT += [(-1520, 448, TUN_Z + 8, 3, "default"),        # the sewer's west end
@@ -2373,6 +2560,92 @@ WEAP += [(-2800, -300, TUN_Z + 8, "smgs", 3), (-2600, 2000, TUN_Z + 8, "smgs", 3
          (-1300, -400, -576 + 8, "smgs", 3), (1650, 600, TUN_Z + 8, "smgs", 3), (2800, 300, TUN_Z + 8, "smgs", 3),
          (2900, 2100, TUN_Z + 8, "smgs", 3),
          (-760, 760, TUN_Z + 8, "rifles", 5), (-480, 3180, -704 + 8, "rifles", 5), (3200, -3100, -704 + 8, "rifles", 5)]
+
+# ---------------------------------------------------------------------------------------
+# (v6) more of the high layer on foot: a ladder up to each roof that only a drop-in reached (the places from
+# navgen --check's list of high places walkable from no respawn point). Each finds the roof under its point, then
+# a side of it with level, free ground below, and puts a ladder from the ground to the roof's edge
+ROOF_POINTS = [(-800, -16, 384), (2176, -1024, 304), (2416, -3200, 240),
+               (-760, -1936, 176), (2688, 2880, 288), (2944, 128, 48), (128, 1408, 240), (128, -384, 240), (-1280, 1792, 496),
+               (-1792, -1280, 296), (-2816, 1024, 416), (-320, 2688, 592), (-384, -2432, 176), (-2944, -2176, 176), (1920, 640, 176),
+               (128, -1380, 144), (1792, 3200, 200), (896, 2204, 176), (-896, -356, 208), (-2176, -1892, 144), (1920, -356, 176),
+               (1664, 2204, 176), (-1408, -3172, 144), (-384, 412, 208), (-1408, 2972, 192), (-1664, 412, 208), (-2432, -1380, 144)]
+roof_ladders, roof_missed = 0, []
+
+
+def roof_under(x, y, z):
+    best = None
+    for b in REG:
+        if b.group.startswith(EXEMPT) or getattr(b, "noclip", False) or getattr(b, "kind", None) in ("ladder", "treeclip", "foliage"):
+            continue
+        bd = b.bounds
+        if bd[0] <= x <= bd[3] and bd[1] <= y <= bd[4] and abs(bd[5] - z) <= 24 and bd[5] - bd[2] <= 64 and \
+                bd[3] - bd[0] >= 96 and bd[4] - bd[1] >= 96 and _inside(b.poly, x, y):
+            if best is None or abs(bd[5] - z) < abs(best.bounds[5] - z):
+                best = b
+    return best
+
+
+def try_roof_ladder(x, y, z):
+    global roof_ladders
+    rb = roof_under(x, y, z)
+    if rb is None:
+        return "no roof"
+    if any(abs(c["top"][2] - rb.bounds[5]) < 40 and rb.bounds[0] - 40 <= c["top"][0] <= rb.bounds[3] + 40 and
+           rb.bounds[1] - 40 <= c["top"][1] <= rb.bounds[4] + 40 for c in CONN if c["name"].startswith("roof ladder")):
+        return None             # (this roof has one already)
+    x0, y0, _, x1, y1, top = rb.bounds
+    keep = GROUP
+    for side in ("s", "e", "w", "n"):
+        f = OUT[side]
+        a0, a1 = (x0, x1) if side in "ns" else (y0, y1)
+        mid = (a0 + a1) / 2
+        for off in sorted(range(int(a0) + 48 - int(mid), int(a1) - 48 - int(mid) + 1, 32), key=abs):
+            c = mid + off
+            ex = {"n": y1, "s": y0, "e": x1, "w": x0}[side]
+            # the ladder's foot: 64 out from the edge, 64 wide; level ground, no river, trench or structure there
+            fx, fy = (c, ex + f[1] * 40) if side in "ns" else (ex + f[0] * 40, c)
+            gs = [ground(fx + dx, fy + dy) for dx in (-32, 0, 32) for dy in (-32, 0, 32)]
+            if max(gs) - min(gs) > 20 or any(KIND.get((ci(fx + dx), ci(fy + dy))) == "river" or (ci(fx + dx), ci(fy + dy)) in TRENCH_CELLS
+                                                                    for dx in (-40, 40) for dy in (-40, 40)) or \
+                    max(abs(fx), abs(fy)) > PLAY - 128:
+                continue
+            g0 = min(gs)
+            if top - g0 < 96 or top - g0 > 640:
+                continue
+            group(rb.group)
+            room = box(fx - 32, fy - 32, g0 + 8, fx + 32, fy + 32, top + 64, "NULL")
+            if clashes(room, allow=("tree", "bush", "rock", "boulder")):
+                continue
+            if side in "ns":
+                lb = (c - 24, ex if side == "n" else ex - 4, c + 24, ex + 4 if side == "n" else ex)
+            else:
+                lb = (ex if side == "e" else ex - 4, c - 24, ex + 4 if side == "e" else ex, c + 24)
+            ladder(lb[0], lb[1], lb[2], lb[3], g0 - 8, top + 24, side, top_z=top, bottom_z=g0, name="roof ladder:%d,%d" % (x, y))
+            BLOCKED.append((fx - 48, fy - 48, fx + 48, fy + 48))
+            group(keep)
+            roof_ladders += 1
+            return None
+    group(keep)
+    return "no side with room"
+
+
+if os.environ.get("ROOF_DUMP"):         # (designer's tool: navgen --check's DUMP_HIGH file -> one point per roof)
+    _seen, _pts = set(), []
+    for cl in json.load(open(os.environ["ROOF_DUMP"])):
+        if cl[0] < 16:
+            continue
+        for (px, py, pz) in cl[7]:
+            rb = roof_under(px, py, pz)
+            if rb is not None and id(rb) not in _seen:
+                _seen.add(id(rb))
+                _pts.append((round((rb.bounds[0] + rb.bounds[3]) / 2), round((rb.bounds[1] + rb.bounds[4]) / 2), round(rb.bounds[5])))
+    print("ROOF_POINTS", _pts)
+for (x, y, z) in ROOF_POINTS:
+    why = try_roof_ladder(x, y, z)
+    if why:
+        roof_missed.append((x, y, z, why))
+print("roof ladders: %d added; not placed at %s" % (roof_ladders, roof_missed))
 
 # ---------------------------------------------------------------------------------------
 # cover in the open: rocks and trees (detail), placed on the ground
@@ -2494,7 +2767,7 @@ def tree(x, y, z, u, v):
     tiers = [(z + 48, z + 48 + 0.42 * hgt, 1.0, 0.62), (z + 40 + 0.36 * hgt, z + 48 + 0.72 * hgt, 0.78, 0.4), (z + 40 + 0.66 * hgt, top, 0.52, 0.0)]
     for (zb_, zt_, sc, st_) in tiers:
         tp = [(x + (px - x) * sc, y + (py - y) * sc) for (px, py) in base]
-        fol = frustum(tp, zb_, zt_, st_, "OUT_SHRB1")
+        fol = frustum(tp, zb_, zt_, st_, "OUT_SHRB1", scale=2)      # (scale 2: a quarter of the lightmap)
         NC(fol)
         fol.kind = "foliage"
     NC(trunk)
@@ -2691,7 +2964,7 @@ for b_ in range(360):
     if blocked(x, y, 40):
         continue
     z = ground(x, y)
-    b = prism([(px, py, z + 52) for (px, py) in blob(x, y, 46, 6, b_ * 17 + 1)], ground4(x, y, 40) - 16, "OUT_SHRB1", "OUT_SHRB1")
+    b = prism([(px, py, z + 52) for (px, py) in blob(x, y, 46, 6, b_ * 17 + 1)], ground4(x, y, 40) - 16, "OUT_SHRB1", "OUT_SHRB1", scale=2)
     group("bush")
     # a bush stands clear of trees and rocks (40 round it): no slots between them to drop into
     room = prism([(px, py, z + 140) for (px, py) in blob(x, y, 86, 6, b_ * 17 + 1)], z - 16, "NULL", "NULL")   # (no canopy low over it)
@@ -2741,10 +3014,26 @@ for (_n, i0, j0, i1, j1, d_) in TRENCHES:
                 "w": (cx(i1) + 160, (cx(j0) + cx(j1)) / 2), "e": (cx(i0) - 160, (cx(j0) + cx(j1)) / 2)}[d_]
     DROP_EXTRA.append((tx_, ty_))
 picks_drop = list(picks[:28]) + [(x, y, ground(x, y)) for (x, y) in DROP_EXTRA]
-for (x, y, z) in picks_drop:
-    point("ls_marker", x, y, z + 8, kind="br_drop", mode="br")
-# the game's own spawn points (it needs some per team; gm_components moves players to the above)
-for k, (x, y, z) in enumerate(picks[28:]):
+for k_, (x, y, z) in enumerate(picks_drop):
+    # (v6) the layer a bot landing here plays: by the high routes' ways up "high", by the trench mouths "below"
+    lay_ = "surface" if k_ < 28 else "high" if k_ < 32 else "below"
+    point("ls_marker", x, y, z + 8, kind="br_drop", mode="br", layer=lay_)
+# the game's own spawn points (it needs some per team; gm_components moves players to the above). v6: from a looser
+# set (roads and pads allowed), spread: v5 had only 28 open spots, so 29 of its 32 stood on one (a new round
+# spawned everyone there at once)
+loose = []
+for xg in range(-PLAY + 384, PLAY - 383, 128):
+    for yg in range(-PLAY + 384, PLAY - 383, 128):
+        if steep(xg, yg) or any(KIND.get((ci(xg) + di, ci(yg) + dj)) in ("river", "cut") for di in (-1, 0, 1) for dj in (-1, 0, 1)):
+            continue
+        if any(x0 - 16 <= xg <= x1 + 16 and y0 - 16 <= yg <= y1 + 16 for (x0, y0, x1, y1) in BLOCKED):
+            continue
+        zs = [ground(xg + dx, yg + dy) for dx in (-32, 32) for dy in (-32, 32)]
+        if max(zs) - min(zs) <= 24:
+            loose.append((xg, yg, max(zs)))
+game_spawns = spread(loose, 32, loose[len(loose) // 2])
+assert len(set(game_spawns)) == 32, len(set(game_spawns))
+for k, (x, y, z) in enumerate(game_spawns):
     point("info_player_start" if k % 2 else "info_player_deathmatch", x, y, z + 36, angle=0)
 
 # loot crates in the places (above), plus field crates in the open
@@ -2805,6 +3094,135 @@ point("light_environment", 0, 0, 2048, pitch=-52, angles="0 140 0", _light="255 
 point("ambient_generic", 0, 0, 900, message="ambience/wind1.wav", health=3, spawnflags=1, pitch=100)
 point("ambient_generic", -2816, 2560, 100, message="ambience/crickets.wav", health=3, spawnflags=4, pitch=100)
 point("ambient_generic", -900, -1000, TUN_Z + 64, message="ambience/drips.wav", health=3, spawnflags=4, pitch=100)
+
+# ---------------------------------------------------------------------------------------
+# lights (v6): none inside a brush (a light in a solid gives nothing). Any that is gets moved to the nearest spot 24
+# clear of every brush that stops light; the validator then refuses a light still inside one
+_LB = {}
+for b in world.brushes + detail.brushes + detail_nc.brushes:
+    if blocks_light(b):
+        for c in _cells(b.bounds):
+            _LB.setdefault(c, []).append(b)
+
+
+def _light_brushes(x, y, r=0):
+    out, seen = [], set()
+    for gx_ in range(int((x - r) // 256), int((x + r) // 256) + 1):
+        for gy_ in range(int((y - r) // 256), int((y + r) // 256) + 1):
+            for b in _LB.get((gx_, gy_), ()):
+                if id(b) not in seen:
+                    seen.add(id(b))
+                    out.append(b)
+    return out
+
+
+def lights_inside():
+    bad = []
+    for e in ents:
+        if e.keys["classname"] in ("light", "light_spot"):
+            p = tuple(float(v) for v in e.keys["origin"].split())
+            if any(in_brush(b, p, 0.5) for b in _light_brushes(p[0], p[1])):
+                bad.append((e, p))
+    return bad
+
+
+# faces nobody sees (v6): a face of a detail brush (rocks, trees, props, posts) wholly under the ground is NULL (no
+# lightmap, nothing for the compiler to keep)
+nulled = 0
+for b in detail.brushes + detail_nc.brushes:
+    vs = getattr(b, "verts", None)
+    if not vs:
+        continue
+    for k_, f_ in enumerate(b.faces):
+        v_ = vs[k_] if k_ < len(vs) else None
+        if not v_ or f_[3] in ("NULL", "CLIP") or max(abs(p_[0]) for p_ in v_) > PLAY or max(abs(p_[1]) for p_ in v_) > PLAY:
+            continue
+        if all(KIND.get((ci(p_[0]), ci(p_[1]))) not in ("river", "cut") and SLAB_TOP + 1 <= p_[2] <= ground(p_[0], p_[1]) - 1 for p_ in v_) and \
+                all(KIND.get((ci(p_[0]), ci(p_[1]))) == KIND.get((ci(v_[0][0]), ci(v_[0][1]))) for p_ in v_):
+            b.faces[k_] = (f_[0], f_[1], f_[2], "NULL", f_[4], f_[5])
+            nulled += 1
+print("faces under the ground made NULL: %d" % nulled)
+
+# spawns (v6): a player standing at every spawn point fits (the Checks found 6 of v6's first spawns stuck in a prop
+# or with their feet in the slope); one that doesn't moves to the nearest spot where he does
+def spawn_fits(x, y):
+    """the feet height a player standing at x, y would have, if he fits there (ground under all of him, nothing in him)"""
+    gs = [ground(x + dx, y + dy) for dx in (-16, 0, 16) for dy in (-16, 0, 16)]
+    if max(gs) - min(gs) > 18 or KIND.get((ci(x), ci(y))) in ("river", "cut") or max(abs(x), abs(y)) > PLAY - 64:
+        return None
+    feet = max(gs) + 1
+    hull = box(x - 17, y - 17, feet, x + 17, y + 17, feet + 73, "NULL")
+    if clashes(hull, grp="spawn-check"):
+        return None
+    if any(in_brush(b, (x + dx, y + dy, feet + dz), 0.5) for b in _light_brushes(x, y, 32) for dx in (-16, 0, 16)
+           for dy in (-16, 0, 16) for dz in (2, 36, 70)):
+        return None
+    return feet
+
+
+spawn_moved, spawn_bad = 0, []
+for e in ents:
+    if e.keys["classname"] in ("info_player_start", "info_player_deathmatch", "ls_respawn_point"):
+        x, y, z = (float(v) for v in e.keys["origin"].split())
+        if spawn_fits(x, y) is not None and abs(spawn_fits(x, y) + 36 - z) <= 3:
+            continue
+        for r in range(0, 512, 32):
+            spot = next(((x + r * math.cos(a_), y + r * math.sin(a_)) for a_ in [k_ * math.pi / 8 for k_ in range(16)]
+                         if spawn_fits(x + r * math.cos(a_), y + r * math.sin(a_)) is not None), None)
+            if spot:
+                e.keys["origin"] = "%d %d %d" % (spot[0], spot[1], spawn_fits(*spot) + 36)
+                spawn_moved += 1
+                break
+        else:
+            spawn_bad.append((x, y, z))
+print("spawns: %d set to where a player fits (height, or moved), %d with nowhere near" % (spawn_moved, len(spawn_bad)))
+if spawn_bad and not os.environ.get("ALLOW_OVERLAP"):
+    raise SystemExit(1)
+
+# crates and floor weapons (v6): room for the thing and a floor under it (the game's components check said three
+# weren't: the guard room's crate on the trench's stairs, the armoury's on its steps, a field crate in a slope);
+# one that hasn't moves to the nearest spot at the same height that has
+_ALLB = {}
+for b in world.brushes + detail.brushes + detail_nc.brushes:
+    for c in _cells(b.bounds):
+        _ALLB.setdefault(c, []).append(b)
+
+
+def item_fits(x, y, z):
+    near = [b for b in _ALLB.get((int(x // 256), int(y // 256)), ())]
+    if any(in_brush(b, (x + dx, y + dy, z + dz), 0.5) for b in near for dx in (-8, 0, 8) for dy in (-8, 0, 8) for dz in (4, 24)):
+        return False
+    return any(in_brush(b, (x, y, z - dz_), 0) for b in near for dz_ in (12, 24, 40))     # (a crate on a slope may sit a little over it)
+
+
+items_moved, items_bad = 0, []
+for e in ents:
+    if e.keys["classname"] in ("ls_loot_container", "ls_weapon_spawner"):
+        x, y, z = (float(v) for v in e.keys["origin"].split())
+        if item_fits(x, y, z):
+            continue
+        spot = next(((x + r * math.cos(k_ * math.pi / 8), y + r * math.sin(k_ * math.pi / 8), z + dz) for r in range(32, 288, 32)
+                     for k_ in range(16) for dz in (0, 8, 16, -8)
+                     if item_fits(x + r * math.cos(k_ * math.pi / 8), y + r * math.sin(k_ * math.pi / 8), z + dz)), None)
+        if spot:
+            e.keys["origin"] = "%d %d %d" % spot
+            items_moved += 1
+        else:
+            items_bad.append((x, y, z))
+print("crates and weapons: %d moved to room with a floor, %d with none near: %s" % (items_moved, len(items_bad), items_bad))
+
+moved = 0
+for e, p in lights_inside():
+    spot = clear_spot(p[0], p[1], p[2], 24, _light_brushes(p[0], p[1], 340))
+    if spot:
+        e.keys["origin"] = "%d %d %d" % spot
+        moved += 1
+LBAD = lights_inside()
+print("lights: %d moved out of a brush, %d still inside one" % (moved, len(LBAD)))
+for e, p in LBAD:
+    print("  LIGHT in a brush at %d %d %d" % p)
+if LBAD and not os.environ.get("ALLOW_OVERLAP"):
+    raise SystemExit(1)
 
 # ---------------------------------------------------------------------------------------
 # placement check: nothing may cut into anything else (props, stairs, piers, bridges, buildings)
@@ -3049,6 +3467,7 @@ sight = [[round(v) for v in b_.bounds] for b_ in REG if b_.group.startswith(("bl
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), NAME + ".layers.json"), "w") as f:
     json.dump({"grid": {"x0": -PLAY, "y0": -PLAY, "step": GSTEP, "ground": gnd}, "slab_top": SLAB_TOP,
                "connectors": CONN, "canopies": canopies, "sight": sight,
+               "places": [[n_, x0_, y0_, x1_, y1_, fl_] for (n_, x0_, y0_, x1_, y1_, _s, fl_) in PLACES],
                "supply_drops": [[x_, y_, round(ground(x_, y_))] for (x_, y_) in DROPS]}, f, separators=(",", ":"))
 nb = sum(len(e.brushes) for e in ents)
 print("%s.map: %d world brushes, %d detail brushes, %d brushes in all, %d entities, %d trees, %d rocks, %d bushes, %d foxholes/berms, %d loot, %d weapons"

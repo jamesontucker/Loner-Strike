@@ -492,6 +492,106 @@ gm_battleroyale + gm_components built from HEAD 965fb0c, gm_simrec, a probe coun
   bsp/nav in BRV5 (9 min, 20 bots). Game 1: 15 players, 4.5 min, drop-in deaths 0, zone deaths 0, 1 bot unstuck.
   Game 2 again started with 4 players (same bot-count drop, for W1). Radar overview regenerated from this bsp.
 
+## 2026-11-13 — br_valley v6: the third review's fixes (docs/notes/BRmapReview3.md), the vaults' escapes
+
+### Must-fix
+- **M1 lights in brushes: 12 -> 0.** `lights_in()` puts each lamp at the nearest spot 32 clear of every brush that stops
+  light (boilers, pillars, the trench's mass), its fixture with it; the mast's red lamp is a lamp plate on the mast's
+  face with the light 16 off it; the housing lamps hang under their roofs. A last pass moves any light still in a brush
+  to the nearest spot 24 clear, and the validator refuses one left inside (`lights: 1 moved, 0 still inside`). The
+  reviewer's own point-in-brush count on the .map: v5 12, v6 0.
+- **M2 cisterns / boathouse cellar:** the cellar starts at x -64: 64 of rock between them (walls faced as each side).
+- **M3 dark places**, baked mean over each place's faces (reviewer's `placelight.py`, v5 -> v6): boiler house 30 -> 86
+  (six lamps clear of the boilers), armoury 37 -> 134 and the stope 63 -> 101 (the places a level down hang their lamps
+  at mid height on a rod), town vault 55 -> 136 (four lamps). Every place below 80-153.
+- **M4 spires:** the eight brick-like spires are gone. Five crags set into the ring (one a side, one by the river's gorge):
+  layered rock (`-0SandRock`, the ring's own), broad along the ring and narrow across it, a broad foot and a leaning top,
+  100-300 over the crest.
+
+### AllocBlock (the user's ask) and the budget
+- Foliage and bushes at texture scale 2, the ring at 4, every wall below at 2, the trench linings at 2, the tunnel
+  stripes now an 8-high painted band (flat YELLOW/RED/GLASSGREEN/GLASSBLUE1 at scale 2, not lamp textures), faces of
+  rocks/trees/props wholly under the ground NULL (298). **AllocBlock 92.2 % -> 76.6 %** (49 of 64 pages).
+- Clipnodes 82.5 -> 85.0 % (the per-face walls below split some merged blocks; the crags, terrace and waterfall rock are
+  `zhlt_noclip`, out of reach). Worldleaves 84.0 %, planes 45 %.
+
+### Should-fix
+- **S1 walls by the place they face:** each side of a block of rock below takes the look of the open place on that
+  side (`box_faced`; the merge key is the four faced looks). The reviewer's `wallcheck.py` no longer finds the quarry,
+  ridge-cave, stope, guard-room or storm-drain walls in another place's look.
+- **S3 the ring:** the periodic spike term is gone (a hash raises one vertex in about seven by 120-300); east and west
+  are 200 lower; a broken grassy terrace 300-600 high in front of the wall on the west, east and north (gaps, tilted
+  tops; not at the road's cut or the gorge).
+- **S4 waterfall:** three falls down the gorge's rock (func_conveyor, `SCROLLWATER1` scrolling down, additive), rock
+  ledges between, a foam strip at the foot, the sound at the foot.
+- **S5 bunker sandbags** moved to y -2400..-2368 (140 clear of the trench's foot).
+- **S6 slopes:** rock only over slope 0.66, grassy dirt (`OUT_DIRT1`) 0.56-0.66, worn grass 0.46-0.56; the ring is `-0SandRock` (tan and grey
+  layers), unlike the ridges' pink rubble.
+- **S7 radar:** `radar_marks.py` draws a yellow arrow over the 8 stair trenches and a smaller one over the 12 hatches,
+  and clears the notch wedges outside the play square.
+- **High layer on foot:** a ladder to each roof that only a drop-in reached (29: sheds, kiosks, pump houses, cabins,
+  hut and shed roofs; `ROOF_POINTS`, found from navgen's list of high places no respawn point walks to). High samples
+  walkable from the respawn points **7563 of 13844 (55 %) -> 10857 of 13770 (79 %)**, about 6.8 M sq units.
+- **S8 re-shoots:** u09 boiler house and u12 quarry workings back in the tour, u04 and u21 moved, the escapes, the
+  cisterns' east wall, crags and terrace; the ground views now at eye height (64) and turned to their most open way.
+- **S9 notes and README** corrected (lamps, the cellar, the sightline figures, high walkable).
+- **S10 stripes:** see AllocBlock (paint, not lamps).
+- Not done: N1-N9 (roofs by kind, housing signs, interior lights, ladder collars, pump houses, viaduct stone, cave
+  ceilings, zone warning below, long hatch ladders).
+
+### The vaults (the user's choice b): a way out nobody comes in by
+- Town vault, deep stope, armoury: each keeps its one noisy grate way in and gets a ladder up its wall to a crawl 96
+  over the next place's floor, through the rock, and a drop into that place: the town vault east into the storm drain,
+  the stope south into the deep chamber, the armoury north and out sideways into the bunker hall. From outside the
+  crawl's mouth is 96 up a sheer wall: nobody climbs in. A red lamp in each crawl.
+- **New check** in `navgen.py --check`: every named place below (18) needs 2+ ways out by its own floor's samples
+  (ladders count; walking ways count apart by direction and 128+ apart). It found one more single-exit place, the
+  boiler house: a new tunnel (`boiler_e`) joins it to the tank vault. Now **18 places, 0 with fewer than 2 ways out**;
+  each vault 2.
+
+### From Checks / W2 requests
+- **Spawns:** v5's 32 game spawns stood 29 on one spot (only 28 open spots passed the strict test): now spread over a
+  looser set (roads and pads allowed), and a last pass checks a standing player fits at every spawn and respawn point
+  (ground under all of him, nothing in him) and moves the ones that don't (the 6 the Checks found are fixed).
+- **br_drop `layer` keys:** the 8 trench-mouth spots `below`, the 4 by the high routes' ways up `high`, the rest
+  `surface`.
+- **Z-fighting:** building ground floors are 4 up (the road overlays under them don't show through); no tunnel band in
+  the mine (it met the timber frames); lamp plates 1 off the ceiling.
+- The editor's Checks over the final .map (`LS_CHECKS_MAPS=1 LS_CHECKS_STRICT_MAPS=1 cargo test our_maps_pass`): passes;
+  no lights in solids, no stuck spawns, no z-fighting; Info only (hidden faces 9795 not NULL, 101 off-grid stair sides,
+  22 texture seams).
+
+### Build (6 threads, nice 19, VIS and RAD without -full/-extra)
+- No leak. AllocBlock 75.0 % (48/64), clipnodes 85.0 %, worldleaves 83.7 %, planes 45 %, lightdata 2.2 MB, visdata 0.95 MB.
+  5426 brushes, 755 entities.
+- navgen --check: 5347 areas; walkable under 16.9 M / surface 43.8 M / high 8.6 M (6.8 M of it walkable from the
+  respawn points); 0 traps; 56/56 ladders; 120 connectors; 242 ends of ways between levels, 0 seams, 0 unlinked; 18
+  places below, each 2+ ways out; guns median 375 / worst 1900 (7.6 s); below ground worst 15.4 s; ALL CHECKS PASS.
+- Crates and floor weapons: a last pass gives each room and a floor (moves 19 a short way: the guard room's crate off
+  the trench's stairs, the armoury's off its steps, a field crate out of a slope, a pistol out of a kiosk wall; the
+  game's components check no longer reports any inside a wall).
+- The .lsv (5.3 MB) built by loading the shipped bsp/nav in my sim copy BRV6 (port 27364, 9 min). That copy's plugins
+  (BRPLAY's) didn't start a Battle Royale game with bots only, so this round has no bot-game numbers.
+- Screenshots (scratch folder): `shots6/tour/*.jpg` (57: 12 ground views at eye 64, the crags, terrace and waterfall,
+  u09 boiler house, u12 quarry workings, the three escapes and their drops, the cisterns' east wall), sheets
+  `sheets6/tour_*.png`, the radar `v6/layout6.png`.
+
+### For W1 (W1.md has other agents' edits in progress, so the request is here)
+- **Please refresh BRPLAY's br_valley** from `plugins/game/maps/br_valley.bsp/.nav/.lsv/.res` and
+  `plugins/game/overviews/br_valley.bmp/.txt` at the br_valley v6 commit (after its review, if one is planned).
+- **br_drop markers now carry `layer`:** the 8 by the stair-trench mouths `below`, the 4 by the high routes' ways up
+  `high`, the other 28 `surface`.
+- **The 32 game spawns are spread** (v5 stacked 29 on one spot) and every spawn/respawn point is checked to fit a
+  standing player.
+- **Each vault has a way out** (the user's choice): a ladder up its wall to a crawl and a 96 drop into the next place
+  (town vault -> storm drain, stope -> deep chamber, armoury -> bunker hall). Nav-linked one way; bots in a vault can
+  leave by it, nobody comes in by it.
+- 29 new ladders up roofs that only a drop-in reached (high places walkable from the respawn points 55 % -> 79 %).
+
+### Sightlines (eye 64, target 48, points every 256)
+- Reviewer's `raylos.py` (every visible brush): v5 14.6 % / 5.3 % -> **v6 14.4 % / 5.2 %** (1.5-3k / over 3k).
+- My corrected script (bounding boxes): 17 % / 6 % (terrain only 52 % / 29 %).
+
 ## Next map (after br_valley passes its next review): br_port, a coastal port town (user's pick)
 An old harbour town on a hill above the port; docks, warehouses and container yards (cheap cover mazes); a cargo ship
 at the quay you can board (decks, hold); a lighthouse on a cliff; water as scenery and crossings, not a place to
@@ -513,6 +613,14 @@ over non-clipping steps, CLIP boxes round non-clipping foliage, nav under 6000 a
   areas, so a bot standing there is always inside a z -160 area. Worth checking every trench and hatch for the same
   seam (corridor end under a surface area).
 
+### From W2 (2026-11-13): why games 2+ start with ~4 players
+- br_valley's spawn entities are stacked: 14 of 16 `info_player_start` and 14 of 16 `info_player_deathmatch` are at
+  **-3200 896 363**, and the rest are at 2-3 other spots. Game 1 works because bots join one at a time and are moved
+  off. At a new round everyone spawns at once on those few spots and only about 4 live.
+- Fixed for Battle Royale on the config side: `br.cfg` now sets `mp_randomspawn 1`, so players spawn on the game's
+  nav-spread spawn points (128 on br_valley), and `base.cfg` resets it for other modes. The map should still spread
+  its 32 spawn entities (any other mode, and servers without the new br.cfg).
+
 ## Requests from Checks (2026-11-13, the editor's new live checks on br_valley)
 - 12 lights give no light because they're inside solids: the tunnel lights at z -360 sit inside OUT_RK4 rock
   func_details (e.g. -3104 176 -360, 1824 -1344 -360, -1856 2624 -360), lamp lights inside their CSTRIKE_ME4METL poles
@@ -522,6 +630,9 @@ over non-clipping steps, CLIP boxes round non-clipping foliage, nav under 6000 a
   2943 -1824 -464). Lift the strips 1 unit or NULL the covered face.
 - Notes only: 48 OUT_RK3 seams (neighbors with different scales), 101 brushes off whole units (stairs in thirds), and
   9594 faces nobody sees (3183 the compiler keeps, ~1.4 MB of lighting; mostly rocks pushed into the terrain).
+- **From W2 (2026-11-13): v5's `br_drop` markers have no `layer` key.** All 40 `ls_marker kind=br_drop` in the BSP
+  lack `layer`, so gm_battleroyale's `nearest_landing` finds no below-tagged spots and lands below bots at the
+  nearest open one. Please add `layer below` to the 8 trench-mouth markers (and `high` to the 4 by the high routes).
 - (later the same day) The current br_valley.map has 6 spawns stuck in solid: T at -2560 -2432 36 inside the tank
   prop (func_detail -2688..-2432, -2496..-2400, 0..112), CT at 256 1792 122 with its feet in the terrain (top 128), and
   T 2048 1664 190, T -2560 0 565, CT 3072 2176 164, T 2816 -2432 100. The Checks panel's "Move it to free space" fixes each.

@@ -27,6 +27,7 @@ supply drop has ground beside it (bots open crates from within 80). Exit code 1 
 """
 import json
 import math
+import os
 import re
 import struct
 import sys
@@ -543,19 +544,17 @@ def check(h, nodes, grid, seeded, landings, canopy_landings, ladders, ledges, la
                     mem.append(m)
         pockets.append(mem)
     print("pockets: %d high or underground places" % len(pockets))
-    bad_pockets = 0
-    for k, mem in enumerate(pockets):
-        if len(mem) < 8:
-            continue
-        # ways out: steps to a sample outside the pocket that leads back. Each ladder is one way; walking
-        # (or dropping) ways are told apart by the way they go (n/e/s/w) and by being 128+ apart
+
+    def ways_out(mem, inside):
+        """ways out of a set of samples: steps to a sample outside it that leads back. Each ladder is one way;
+        walking (or dropping) ways are told apart by the way they go (n/e/s/w) and by being 128+ apart"""
         lad_ways, walk_ways = set(), []
         for a in mem:
             for d, m in enumerate(a.to):
-                if m is not None and pid.get(m) != k and m in back:
+                if m is not None and not inside(m) and m in back:
                     walk_ways.append((a.i * STEP, a.j * STEP, d))
             for m in out[a]:
-                if (a, m) in via and pid.get(m) != k and m in back:
+                if (a, m) in via and not inside(m) and m in back:
                     lad_ways.add(via[(a, m)])
         clusters = [[w] for w in sorted(lad_ways)]
         groups_ = []
@@ -578,6 +577,13 @@ def check(h, nodes, grid, seeded, landings, canopy_landings, ladders, ledges, la
                 if merged:
                     break
         clusters += groups_
+        return clusters
+
+    bad_pockets = 0
+    for k, mem in enumerate(pockets):
+        if len(mem) < 8:
+            continue
+        clusters = ways_out(mem, lambda m, k=k: pid.get(m) == k)
         xs = [n.i * STEP for n in mem]
         ys = [n.j * STEP for n in mem]
         led = sum(1 for (n, d) in ledges if pid.get(n) == k and n in there)
@@ -591,6 +597,41 @@ def check(h, nodes, grid, seeded, landings, canopy_landings, ladders, ledges, la
                  "" if reach == len(mem) else ", %d only by drop-in" % (len(mem) - reach), tag))
     if bad_pockets:
         ok = False
+
+    # every named place below (the vaults too): 2+ ways out, by its own floor's samples
+    bad_places = []
+    for (pn, x0, y0, x1, y1, fl) in layers.get("places", []):
+        mem = set(n for n in nodes if x0 <= n.i * STEP < x1 and y0 <= n.j * STEP < y1 and abs(n.z - fl) <= 100 and lay[n] == "under")
+        k_ = len(ways_out(mem, lambda m: m in mem)) if mem else 0
+        if k_ < 2:
+            bad_places.append("%s (%d)" % (pn, k_))
+        elif "vault" in pn or pn in ("deep stope", "armoury"):
+            print("  place %-16s %4d samples: %d ways out" % (pn, len(mem), k_))
+    print("places below: %d, %d with fewer than 2 ways out%s" % (len(layers.get("places", [])), len(bad_places),
+          (": " + ", ".join(bad_places)) if bad_places else ""))
+    if bad_places:
+        ok = False
+
+    # (for the designer: the high places reached only by a drop-in, as clusters, to a JSON file)
+    if os.environ.get("DUMP_HIGH"):
+        un = set(n for n in nodes if lay[n] == "high" and n not in there)
+        seen_, cl_ = set(), []
+        for n in un:
+            if n in seen_:
+                continue
+            st_, mem_ = [n], [n]
+            seen_.add(n)
+            while st_:
+                a_ = st_.pop()
+                for m in out[a_] + rev[a_]:
+                    if m in un and m not in seen_:
+                        seen_.add(m)
+                        st_.append(m)
+                        mem_.append(m)
+            cl_.append([len(mem_), min(m.i for m in mem_) * STEP, min(m.j for m in mem_) * STEP, max(m.i for m in mem_) * STEP,
+                        max(m.j for m in mem_) * STEP, min(m.z for m in mem_), max(m.z for m in mem_),
+                        sorted(set((round(m.i * STEP / 96) * 96, round(m.j * STEP / 96) * 96, round(m.z)) for m in mem_))])
+        json.dump(sorted(cl_, reverse=True), open(os.environ["DUMP_HIGH"], "w"))
 
     # ladders joined top and bottom
     joined = sum(1 for lad in ladders if lad["bottom"] and lad["top"])

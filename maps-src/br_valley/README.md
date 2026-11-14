@@ -12,6 +12,7 @@ beyond the map itself.
 | `preview.png` | the generator's own quick top-down (heights, roads, river, tunnels in purple, spawns white, crates yellow, floor weapons orange, drop spots blue) |
 | `layout.png` | the radar maker's render of the compiled map (`layout-v1.png`: before the organic pass) |
 | `test-tracks.png` | where the bots went (grey) and died (red: shot, purple: the zone) in the last sim run |
+| `radar_marks.py` | run after the radar maker: a yellow arrow over every stair trench and hatch (the ways down), nothing outside the play square |
 | `navgen.py` | makes the bots' nav from the .bsp in ~40 s (the game's own learner takes hours on a map this big); with `--check br_valley.layers.json` it also runs the map's checks on the compiled hulls (below) |
 | `br_valley.layers.json` | written by `build_map.py` for `navgen.py --check`: the connectors (every stair, ladder, ramp, walkway), the ground the layers are measured from, tree canopies, supply drops |
 | `../../plugins/game/` | what ships (setup copies this tree into the game): `maps/br_valley.bsp/.nav/.lsv/.res`, `overviews/br_valley.bmp/.txt` |
@@ -19,7 +20,8 @@ beyond the map itself.
 Rebuild: `python3 build_map.py`, then compile in the map editor (Compile tab, Normal or Final), or the same through
 the compile routes; then `python3 navgen.py <game>/cstrike/maps/br_valley.bsp <game>/cstrike/maps/br_valley.nav
 --check br_valley.layers.json`, load the map once so the bots build their knowledge (.lsv, ~5-10 min in the
-background), and redo the overview (Radar maker; it writes the .res too).
+background), and redo the overview (Radar maker; it writes the .res too), then `python3 radar_marks.py
+<game>/cstrike/overviews/br_valley.bmp`.
 
 **The placement validator.** `build_map.py` stops, writing nothing, if (`ALLOW_OVERLAP=1` writes the map anyway):
 - two things overlap (every brush is tagged with what it belongs to: a building, a bridge, stairs, a rock...);
@@ -30,12 +32,15 @@ background), and redo the overview (Radar maker; it writes the .res too).
   over air) or is buried (the ground up most of a box's side, or a rock/bush that barely shows);
 - a drop-in spot or supply drop would land on something over it (a roof, a tower, a canopy);
 - a drop-in spot has no gun on the ground within a 10-second run (it adds a pistol near any that has none);
-- (v4) rocks within 40 of each other, cover on steep ground, bushes under a canopy (each leaves a slot you can't climb out of).
+- (v4) rocks within 40 of each other, cover on steep ground, bushes under a canopy (each leaves a slot you can't climb out of);
+- (v6) a light inside a brush (it would give no light): it moves each to the nearest spot 24 clear first, and stops if
+  one is still inside.
 It prints the loot per layer (crates, tiers, guns). `navgen.py --check` then checks the compiled map on the real
 collision hulls: places you can't get back from without a fall over 200 (traps; every spot a drop-in can land on is
 tried too), high or underground pockets with fewer than 2 ways out (each ladder is one way; walking or dropping ways
 count apart when they go different ways or are 128+ apart), ladders not joined at both ends, connector ends off the
-walk, a drop-in spot more than a 10-second walk from a gun, a crate or gun below ground more than a 25-second walk
+walk, a named place below with fewer than 2 ways out (v6: the vaults' escapes count), a drop-in spot more than a
+10-second walk from a gun, a crate or gun below ground more than a 25-second walk
 (stairs and ramps only, no ladders) from the nearest stair trench, a supply drop with no ground beside it (bots open
 crates from within 80). It prints the walkable area per layer.
 
@@ -53,9 +58,13 @@ break sightlines, and the zone.
 
 **The surface.** Ridges between the places (slopes up to 32 degrees), each crest with rock outcrops and a line of
 pines, sunken lanes along three tracks (~110-130 deep: a crouched player is out of sight), foxholes and earth berms
-in the open between places. Measured at eye height between points 1.5-3k apart, 17 % of pairs see each other (6 %
-over 3k), counting terrain, trees, rocks and buildings. A cliff ring with an irregular crest and spires, a look per
-side, notches where the river comes in (a waterfall) and goes out, and where the main road leaves (a boarded tunnel).
+in the open between places. Measured at eye height between points 1.5-3k apart, about 15-17 % of pairs see each other
+(5-6 % over 3k), counting terrain, trees, rocks and buildings (v4 was already about 16 % / 6 % counted that way; the v5
+terrain cut what the terrain alone shows, 58 % -> 52 %, and moved the true figure by about a point). A cliff ring of
+layered rock (lower on the east and west, where the sky's own cliffs stand behind it), a crest with no beat, five crags
+set into it (one a side, one by the river's gorge), a broken grassy terrace in front of it on three sides, notches
+where the river comes in (a stepped waterfall, foam at its foot) and goes out, and where the main road leaves (a
+boarded tunnel). Rock only on the steepest slopes; worn grass and dirt below that.
 - **Town** (middle west, z 64): six buildings on two streets, a door at street level on each. The town hall has
   three floors and a roof (a sniper rifle, a fire ladder down the back). Cars, crates and sandbags in the streets.
   Ways down: the sewer trench in the south-east corner, brick kiosks over hatches in the main street, by house A,
@@ -99,7 +108,8 @@ the factory's roofs, the office roof and the fuel-line bridge down to the gas st
 viaduct**: from radio hill (z 448) east over the river and the north bridge (a branch of stone stairs down to the
 east bank half way), then south along the lookout's flank down to the lookout mesa (z 320) - piers every ~320
 with stepped corbels, a 48-thick deck with the old rails on it; the silo, chimney, radio tower, watchtower, barn,
-farmhouse and bunker roofs, each with two ways off.
+farmhouse and bunker roofs, each with two ways off; (v6) a ladder up to each roof only a drop-in reached before (29:
+sheds, kiosks, pump houses, cabins, the hut roofs; `ROOF_POINTS` in `build_map.py`, from navgen's list).
 
 **Below** (z -512, some halls lower): named places, each with its own look, light colour and sound, joined by the
 older tunnels; every one reachable on foot from a stair trench (the main ways down; the ladder hatches are extra),
@@ -112,11 +122,13 @@ vault under the hall (a grate-floored passage you hear); the boiler house under 
 under the gas station (boilers, tanks, pipes; orange); the boathouse cellar and the pumping works (pumps, pipes;
 blue); the quarry workings (white); the bunker: a hall, the guard room, the generator room and the armoury a level
 down (a vault, a grate passage; blue). Each vault (the town vault, the stope, the armoury) has one way in, a
-grate-floored passage you hear. Ways up: 8 stair trenches (the main ways down: town, gas station, factory yard into
+grate-floored passage you hear, and (v6) one way out nobody comes in by: a ladder up the vault's wall to a crawl 96
+over the next place's floor and a drop into it (the town vault into the storm drain, the stope into the deep chamber,
+the armoury into the bunker hall). The boathouse cellar and the cistern hall have 64 of rock between them. Ways up: 8 stair trenches (the main ways down: town, gas station, factory yard into
 the fort caves, bunker, quarry, the farm adit, the town's north edge into the storm drain, the pumping station) under
 housings or the adit's head-frame, 12 hatches under kiosks, pump houses, sheds or boarded head-frames; daylight down
-every shaft and trench, an EXIT sign at each foot and at both ends of every tunnel, a hip-high stripe in the place's
-lamp colour along the tunnels.
+every shaft and trench, an EXIT sign at each foot and at both ends of every tunnel, a hip-high
+band painted in the place's colour along the tunnels.
 
 Mode data in the BSP (gm_components): 28 respawn points spread by farthest-point picking; drop-in landing spots
 (`ls_marker kind=br_drop`, all on the ground): the same 28 plus four by the high layer's ways up; 32 game spawns;
