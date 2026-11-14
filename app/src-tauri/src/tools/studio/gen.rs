@@ -867,6 +867,11 @@ impl<'a> Gen<'a> {
             "cond.is_valid" => format!("(lsg_valid({}) ? 1 : 0)", i("in", "entity")),
             "player.is_player" => format!("(lsg_ok({}) ? 1 : 0)", i("in", "entity")),
             "creature.is" => format!("(lsg_is_creature({}) ? 1 : 0)", i("in", "entity")),
+            "bot.skill" => match pin {
+                "style" => format!("lsg_bot_style({})", i("bot", "player")),
+                p => format!("lsg_bot_nat({}, {})", i("bot", "player"), match p { "aggression" => 1, "teamwork" => 2, "greed" => 3, _ => 0 }),
+            },
+            "bot.trait" => format!("(lsg_bot_trait({}, {}) ? 1 : 0)", i("bot", "player"), match self.choice(n, def, "trait") { "cautious" => 2, "team" => 4, "loner" => 8, "greedy" => 16, "skilled" => 32, "novice" => 64, _ => 1 }),
             "creature.of_type" => format!("lsg_cr_all({})", pawn_str(&name_text(self.text(n, def, "type")))),
             "creature.nearest" => {
                 let pos = if self.v.data_source(node, "pos").is_some() { i("pos", "vector") } else { "-1".into() };
@@ -2416,7 +2421,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "comp.crate_open" | "comp.wave_start" | "comp.wave_stop" | "comp.extract_open" | "comp.door" | "comp.trap_fire" | "comp.capture_lock" | "comp.reset" | "comp.start" | "comp.stop" | "comp.barricade_set_hp" | "comp.barricade_repair" | "comp.zone_skip"
-        | "up.mod" | "up.perk_give" | "up.bench" | "up.box" | "kd.enable" | "kd.down" | "kd.revive" | "shop.menu" | "shop.open" | "br.heal_give" | "br.armor" | "br.glow" | "br.hud" | "br.hud_text" | "br.feed" | "br.drop_in" | "br.lobby" | "br.squad_size"
+        | "up.mod" | "up.perk_give" | "up.bench" | "up.box" | "kd.enable" | "kd.down" | "kd.revive" | "shop.menu" | "shop.open" | "br.heal_give" | "br.armor" | "br.glow" | "br.hud" | "br.hud_text" | "br.feed" | "br.drop_in" | "br.lobby" | "br.squad_size" | "comp.revive_pay"
         | "wave.table" | "wave.table_off" | "wave.scale" | "wave.cap" | "wave.tiers" | "turret.setup" | "turret.give" => {
             let p = || inp("player", "player");
             let call = match def.kind.as_str() {
@@ -2448,6 +2453,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 "turret.setup" => format!("ls_turret_setup({}, {}, {}, {}, 0, {})", gen.num(n, def, "price").round().clamp(0.0, 100000.0) as i64, float_lit(gen.num(n, def, "life")), gen.num(n, def, "per").round().clamp(1.0, 8.0) as i64, pawn_str(&name_text(gen.text(n, def, "type"))), if gen.boolean(n, def, "bots") { "true" } else { "false" }),
                 "turret.give" => format!("ls_turret_give({}, clamp(floatround({}), 1, 8))", p(), inp("n", "number")),
                 "br.squad_size" => format!("ls_squad_max(clamp(floatround({}), 1, 8))", inp("size", "number")),
+                "comp.revive_pay" => format!("ls_down_revive_pay(clamp(floatround({}), 0, 16000))", inp("amount", "number")),
                 "comp.barricade_set_hp" => format!("ls_barricade_set_hp({}, max(floatround({}), 0))", inp("barricade", "entity"), inp("hp", "number")),
                 "comp.barricade_repair" => format!("ls_barricade_repair({}, {})", inp("barricade", "entity"), if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() }),
                 "comp.zone_skip" => format!("ls_zone_skip({})", inp("zone", "entity")),
@@ -5106,6 +5112,41 @@ stock lsg_freeze(id, on)
 {
 	new flags = pev(id, pev_flags)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
+}
+
+// a bot's nature as the bot brain plays it (W2: pev_vuser2 = skill, aggression, teamwork 0-1;
+// pev_vuser3 = greed 0-1, playstyle, trait bits); people read 0
+stock Float:lsg_bot_nat(id, which)
+{
+	if (!lsg_ok(id) || !is_user_bot(id))
+		return 0.0
+	new Float:v[3]
+	pev(id, which == 3 ? pev_vuser3 : pev_vuser2, v)
+	return floatclamp((which == 3 ? v[0] : v[which]) * 100.0, 0.0, 100.0)
+}
+
+stock bool:lsg_bot_trait(id, bit)
+{
+	if (!lsg_ok(id) || !is_user_bot(id))
+		return false
+	new Float:v[3]
+	pev(id, pev_vuser3, v)
+	return (floatround(v[2]) & bit) != 0
+}
+
+stock lsg_bot_style(id)
+{
+	static const S[][] = { "rusher", "roamer", "lurker", "careful", "camper", "awper", "knifer", "nader", "ninja", "objective", "weirdgun" }
+	new t[16]
+	if (lsg_ok(id) && is_user_bot(id))
+	{
+		new Float:v[3]
+		pev(id, pev_vuser3, v)
+		new k = floatround(v[1])
+		if (k >= 0 && k < sizeof S)
+			copy(t, charsmax(t), S[k])
+	}
+	return t
 }
 
 // a follow with a personality influence (0-100: 50 as usual; W2's ls_mode_ver 2)

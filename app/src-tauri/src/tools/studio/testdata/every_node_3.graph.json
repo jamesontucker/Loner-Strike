@@ -1141,9 +1141,36 @@
   },
   {
    "id": "n112",
-   "type": "timer.by_event",
+   "type": "bot.skill",
    "pos": {
     "x": 1560,
+    "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "n113",
+   "type": "bot.trait",
+   "pos": {
+    "x": 1820,
+    "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "n114",
+   "type": "comp.revive_pay",
+   "pos": {
+    "x": 2080,
+    "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "n115",
+   "type": "timer.by_event",
+   "pos": {
+    "x": 2340,
     "y": 3080
    },
    "params": {
@@ -1153,57 +1180,30 @@
    }
   },
   {
-   "id": "n113",
-   "type": "event.custom",
-   "pos": {
-    "x": 1820,
-    "y": 3080
-   },
-   "params": {
-    "event": "ce1"
-   }
-  },
-  {
-   "id": "n114",
-   "type": "event.call",
-   "pos": {
-    "x": 2080,
-    "y": 3080
-   },
-   "params": {
-    "event": "ce1"
-   }
-  },
-  {
-   "id": "n115",
-   "type": "creature.for_each",
-   "pos": {
-    "x": 2340,
-    "y": 3080
-   },
-   "params": {}
-  },
-  {
    "id": "n116",
-   "type": "creature.of_type",
+   "type": "event.custom",
    "pos": {
     "x": 2600,
     "y": 3080
    },
-   "params": {}
+   "params": {
+    "event": "ce1"
+   }
   },
   {
    "id": "n117",
-   "type": "creature.nearest",
+   "type": "event.call",
    "pos": {
     "x": 2860,
     "y": 3080
    },
-   "params": {}
+   "params": {
+    "event": "ce1"
+   }
   },
   {
    "id": "n118",
-   "type": "creature.type",
+   "type": "creature.for_each",
    "pos": {
     "x": 3120,
     "y": 3080
@@ -1212,7 +1212,7 @@
   },
   {
    "id": "n119",
-   "type": "creature.idle_for",
+   "type": "creature.of_type",
    "pos": {
     "x": 260,
     "y": 3300
@@ -1221,7 +1221,7 @@
   },
   {
    "id": "n120",
-   "type": "creature.can_see",
+   "type": "creature.nearest",
    "pos": {
     "x": 520,
     "y": 3300
@@ -1230,7 +1230,7 @@
   },
   {
    "id": "n121",
-   "type": "creature.go_to",
+   "type": "creature.type",
    "pos": {
     "x": 780,
     "y": 3300
@@ -1239,7 +1239,7 @@
   },
   {
    "id": "n122",
-   "type": "creature.attack",
+   "type": "creature.idle_for",
    "pos": {
     "x": 1040,
     "y": 3300
@@ -1248,7 +1248,7 @@
   },
   {
    "id": "n123",
-   "type": "creature.hold",
+   "type": "creature.can_see",
    "pos": {
     "x": 1300,
     "y": 3300
@@ -1257,7 +1257,7 @@
   },
   {
    "id": "n124",
-   "type": "creature.resume",
+   "type": "creature.go_to",
    "pos": {
     "x": 1560,
     "y": 3300
@@ -1266,7 +1266,7 @@
   },
   {
    "id": "n125",
-   "type": "creature.flee_to",
+   "type": "creature.attack",
    "pos": {
     "x": 1820,
     "y": 3300
@@ -1275,7 +1275,7 @@
   },
   {
    "id": "n126",
-   "type": "creature.set_health",
+   "type": "creature.hold",
    "pos": {
     "x": 2080,
     "y": 3300
@@ -1284,7 +1284,7 @@
   },
   {
    "id": "n127",
-   "type": "creature.remove",
+   "type": "creature.resume",
    "pos": {
     "x": 2340,
     "y": 3300
@@ -1293,7 +1293,7 @@
   },
   {
    "id": "n128",
-   "type": "creature.on_idle",
+   "type": "creature.flee_to",
    "pos": {
     "x": 2600,
     "y": 3300
@@ -1302,21 +1302,48 @@
   },
   {
    "id": "n129",
-   "type": "table.get_row",
+   "type": "creature.set_health",
    "pos": {
     "x": 2860,
     "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n130",
+   "type": "creature.remove",
+   "pos": {
+    "x": 3120,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n131",
+   "type": "creature.on_idle",
+   "pos": {
+    "x": 260,
+    "y": 3520
+   },
+   "params": {}
+  },
+  {
+   "id": "n132",
+   "type": "table.get_row",
+   "pos": {
+    "x": 520,
+    "y": 3520
    },
    "params": {
     "table": "dt1"
    }
   },
   {
-   "id": "n130",
+   "id": "n133",
    "type": "table.get_cell",
    "pos": {
-    "x": 3120,
-    "y": 3300
+    "x": 780,
+    "y": 3520
    },
    "params": {
     "table": "dt1",
@@ -1324,42 +1351,8 @@
    }
   },
   {
-   "id": "n131",
-   "type": "table.for_each",
-   "pos": {
-    "x": 260,
-    "y": 3520
-   },
-   "params": {
-    "table": "dt1"
-   }
-  },
-  {
-   "id": "n132",
-   "type": "table.find",
-   "pos": {
-    "x": 520,
-    "y": 3520
-   },
-   "params": {
-    "table": "dt1",
-    "column": "lvl"
-   }
-  },
-  {
-   "id": "n133",
-   "type": "table.count",
-   "pos": {
-    "x": 780,
-    "y": 3520
-   },
-   "params": {
-    "table": "dt1"
-   }
-  },
-  {
    "id": "n134",
-   "type": "table.keys",
+   "type": "table.for_each",
    "pos": {
     "x": 1040,
     "y": 3520
@@ -1370,9 +1363,43 @@
   },
   {
    "id": "n135",
-   "type": "timeline.play",
+   "type": "table.find",
    "pos": {
     "x": 1300,
+    "y": 3520
+   },
+   "params": {
+    "table": "dt1",
+    "column": "lvl"
+   }
+  },
+  {
+   "id": "n136",
+   "type": "table.count",
+   "pos": {
+    "x": 1560,
+    "y": 3520
+   },
+   "params": {
+    "table": "dt1"
+   }
+  },
+  {
+   "id": "n137",
+   "type": "table.keys",
+   "pos": {
+    "x": 1820,
+    "y": 3520
+   },
+   "params": {
+    "table": "dt1"
+   }
+  },
+  {
+   "id": "n138",
+   "type": "timeline.play",
+   "pos": {
+    "x": 2080,
     "y": 3520
    },
    "params": {
@@ -1380,35 +1407,8 @@
    }
   },
   {
-   "id": "n136",
-   "type": "ent.transform",
-   "pos": {
-    "x": 1560,
-    "y": 3520
-   },
-   "params": {}
-  },
-  {
-   "id": "n137",
-   "type": "ent.position",
-   "pos": {
-    "x": 1820,
-    "y": 3520
-   },
-   "params": {}
-  },
-  {
-   "id": "n138",
-   "type": "ent.rotation",
-   "pos": {
-    "x": 2080,
-    "y": 3520
-   },
-   "params": {}
-  },
-  {
    "id": "n139",
-   "type": "ent.distance",
+   "type": "ent.transform",
    "pos": {
     "x": 2340,
     "y": 3520
@@ -1417,10 +1417,37 @@
   },
   {
    "id": "n140",
-   "type": "ent.direction",
+   "type": "ent.position",
    "pos": {
     "x": 2600,
     "y": 3520
+   },
+   "params": {}
+  },
+  {
+   "id": "n141",
+   "type": "ent.rotation",
+   "pos": {
+    "x": 2860,
+    "y": 3520
+   },
+   "params": {}
+  },
+  {
+   "id": "n142",
+   "type": "ent.distance",
+   "pos": {
+    "x": 3120,
+    "y": 3520
+   },
+   "params": {}
+  },
+  {
+   "id": "n143",
+   "type": "ent.direction",
+   "pos": {
+    "x": 260,
+    "y": 3740
    },
    "params": {}
   },
@@ -2617,18 +2644,29 @@
   {
    "id": "w108",
    "from": {
-    "node": "n103",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
     "node": "n112",
-    "pin": "exec"
+    "pin": "bot"
    }
   },
   {
    "id": "w109",
    "from": {
-    "node": "n112",
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "n113",
+    "pin": "bot"
+   }
+  },
+  {
+   "id": "w110",
+   "from": {
+    "node": "n103",
     "pin": "then"
    },
    "to": {
@@ -2637,7 +2675,7 @@
    }
   },
   {
-   "id": "w110",
+   "id": "w111",
    "from": {
     "node": "n114",
     "pin": "then"
@@ -2648,36 +2686,25 @@
    }
   },
   {
-   "id": "w111",
-   "from": {
-    "node": "ent",
-    "pin": "out"
-   },
-   "to": {
-    "node": "n118",
-    "pin": "creature"
-   }
-  },
-  {
    "id": "w112",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n115",
+    "pin": "then"
    },
    "to": {
-    "node": "n119",
-    "pin": "creature"
+    "node": "n117",
+    "pin": "exec"
    }
   },
   {
    "id": "w113",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n117",
+    "pin": "then"
    },
    "to": {
-    "node": "n120",
-    "pin": "creature"
+    "node": "n118",
+    "pin": "exec"
    }
   },
   {
@@ -2687,8 +2714,8 @@
     "pin": "out"
    },
    "to": {
-    "node": "n120",
-    "pin": "what"
+    "node": "n121",
+    "pin": "creature"
    }
   },
   {
@@ -2698,19 +2725,19 @@
     "pin": "out"
    },
    "to": {
-    "node": "n121",
+    "node": "n122",
     "pin": "creature"
    }
   },
   {
    "id": "w116",
    "from": {
-    "node": "n115",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n121",
-    "pin": "exec"
+    "node": "n123",
+    "pin": "creature"
    }
   },
   {
@@ -2720,8 +2747,8 @@
     "pin": "out"
    },
    "to": {
-    "node": "n122",
-    "pin": "creature"
+    "node": "n123",
+    "pin": "what"
    }
   },
   {
@@ -2731,18 +2758,18 @@
     "pin": "out"
    },
    "to": {
-    "node": "n122",
-    "pin": "target"
+    "node": "n124",
+    "pin": "creature"
    }
   },
   {
    "id": "w119",
    "from": {
-    "node": "n121",
+    "node": "n118",
     "pin": "then"
    },
    "to": {
-    "node": "n122",
+    "node": "n124",
     "pin": "exec"
    }
   },
@@ -2753,183 +2780,216 @@
     "pin": "out"
    },
    "to": {
-    "node": "n123",
+    "node": "n125",
     "pin": "creature"
    }
   },
   {
    "id": "w121",
    "from": {
-    "node": "n122",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n123",
-    "pin": "exec"
+    "node": "n125",
+    "pin": "target"
    }
   },
   {
    "id": "w122",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n124",
+    "pin": "then"
    },
    "to": {
-    "node": "n124",
-    "pin": "creature"
+    "node": "n125",
+    "pin": "exec"
    }
   },
   {
    "id": "w123",
    "from": {
-    "node": "n123",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n124",
-    "pin": "exec"
+    "node": "n126",
+    "pin": "creature"
    }
   },
   {
    "id": "w124",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n125",
+    "pin": "then"
    },
    "to": {
-    "node": "n125",
-    "pin": "creature"
+    "node": "n126",
+    "pin": "exec"
    }
   },
   {
    "id": "w125",
    "from": {
-    "node": "n124",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n125",
-    "pin": "exec"
+    "node": "n127",
+    "pin": "creature"
    }
   },
   {
    "id": "w126",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n126",
+    "pin": "then"
    },
    "to": {
-    "node": "n126",
-    "pin": "creature"
+    "node": "n127",
+    "pin": "exec"
    }
   },
   {
    "id": "w127",
    "from": {
-    "node": "n125",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n126",
-    "pin": "exec"
+    "node": "n128",
+    "pin": "creature"
    }
   },
   {
    "id": "w128",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n127",
+    "pin": "then"
    },
    "to": {
-    "node": "n127",
-    "pin": "creature"
+    "node": "n128",
+    "pin": "exec"
    }
   },
   {
    "id": "w129",
    "from": {
-    "node": "n126",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n127",
-    "pin": "exec"
+    "node": "n129",
+    "pin": "creature"
    }
   },
   {
    "id": "w130",
    "from": {
-    "node": "n127",
+    "node": "n128",
     "pin": "then"
    },
    "to": {
-    "node": "n131",
+    "node": "n129",
     "pin": "exec"
    }
   },
   {
    "id": "w131",
    "from": {
-    "node": "n131",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n135",
-    "pin": "exec"
+    "node": "n130",
+    "pin": "creature"
    }
   },
   {
    "id": "w132",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n129",
+    "pin": "then"
    },
    "to": {
-    "node": "n136",
-    "pin": "in"
+    "node": "n130",
+    "pin": "exec"
    }
   },
   {
    "id": "w133",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n130",
+    "pin": "then"
    },
    "to": {
-    "node": "n137",
-    "pin": "in"
+    "node": "n134",
+    "pin": "exec"
    }
   },
   {
    "id": "w134",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n134",
+    "pin": "then"
    },
    "to": {
     "node": "n138",
-    "pin": "in"
+    "pin": "exec"
    }
   },
   {
    "id": "w135",
    "from": {
-    "node": "num",
+    "node": "ent",
     "pin": "out"
    },
    "to": {
-    "node": "n129",
-    "pin": "key"
+    "node": "n139",
+    "pin": "in"
    }
   },
   {
    "id": "w136",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n140",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w137",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n141",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w138",
    "from": {
     "node": "num",
     "pin": "out"
    },
    "to": {
     "node": "n132",
+    "pin": "key"
+   }
+  },
+  {
+   "id": "w139",
+   "from": {
+    "node": "num",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n135",
     "pin": "value"
    }
   }

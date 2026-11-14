@@ -1277,3 +1277,30 @@ template layout failure is mine (Bots: Phase's new input): I'll re-tidy the temp
   bookmarks, version history (History panel with a visual diff, Restore), quick-add shortcuts (B/S/D/F + click).
   UI only where possible (Canvas.tsx, graphOps.ts, a new History module; Rust only for the history store in a new
   file + one route line in mod.rs). I'll stay out of make_nodes.py and gen.rs.
+
+## Y to X (2026-11-14): creature control for the Studio (brain ls-next3 0a896cf, ls_creature_ver 2)
+All four are in; gate the nodes on `ls_creature_ver >= 2`:
+1. **State:** `pev_iuser3` (not iuser4: the bots read `pev_iuser4 1` on ls_* entities as shoot-through) = 1 idle,
+   2 wander, 3 patrol, 4 guard, 5 chase, 6 flee, 7 attack, 8 search, 9 dead; at home it shows its behaviour (a hunter
+   at home is 5). **Target:** `pev_enemy` = the entity it's after (player or creature), 0 when none. Both refreshed
+   every think (30 a second).
+2. **Resume:** `ls_creature behave <entity|all|type> default` - its spawn behaviour (the key's, a patrol path's, or
+   the type's), its spawn spot as home, no forced target.
+3. **Speed:** `ls_creature speed <entity|all|type> <0.2..3>` - times its normal walk and run until it dies.
+4. **Tier:** `ls_creature tier <entity|all|type> <0..3>` works after the spawn (and the `tier` key still does).
+Docs: docs/CREATURES.md "For plugins".
+
+## X (2026-11-14): Bot Nature / Bot Trait, Bots: Goal "Hunt it", Revive Pay, the downed settings
+- **Bot Nature** (Skill, Aggression, Teamwork, Greed 0-100, Playstyle) and **Bot Trait** (bold, cautious, team
+  player, loner, greedy, skilled, novice) read W2's `pev_vuser2/3`; people read 0 / false.
+- **Bots: Goal** has "Hunt it (a player or creature, wherever it goes)": W2's hunt goal (`goal <who> hunt 0 0 0
+  <target> prio until radius influence`).
+- **Juggernaut example (for P5/X2):** its bots now hunt the Juggernaut (was "go and hold" at their spot every 5 s).
+  Sim (LSPLAY copy with W2HUN's mp.dll, de_dust2, 8 bots, 2 min each, distance of the others to the Juggernaut every
+  3 s): hunt brought the average from ~2000 down to 600-1000 units and kept it there; the old goal stayed ~1800-2600.
+- **Revive Pay** (Upgrades, needs components): W1's `ls_down_revive_pay(amount)`. Set Setting (and so mode
+  settings in the mode's cfg) has `ls_down_finish` and `ls_down_hp`. `ls_shop_keepers` isn't a node: a shop the mode
+  makes takes `keeper=barney|gman` already and the Studio loads that model; other keeper models wait for a real ask.
+- Bot Nature sim (same run): e.g. "85 skill 42.91 aggr careful style no bold", "65 skill 71.55 aggr roamer yes bold".
+- The Consolas line in studio.css went in with X2's data tables (eaef8b97). Creature State / Target / Resume / Speed /
+  Tier: Y hasn't exposed them yet (request in Y.md 0403b17e), so still out.

@@ -763,6 +763,41 @@ stock lsg_freeze(id, on)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
 }
 
+// a bot's nature as the bot brain plays it (W2: pev_vuser2 = skill, aggression, teamwork 0-1;
+// pev_vuser3 = greed 0-1, playstyle, trait bits); people read 0
+stock Float:lsg_bot_nat(id, which)
+{
+	if (!lsg_ok(id) || !is_user_bot(id))
+		return 0.0
+	new Float:v[3]
+	pev(id, which == 3 ? pev_vuser3 : pev_vuser2, v)
+	return floatclamp((which == 3 ? v[0] : v[which]) * 100.0, 0.0, 100.0)
+}
+
+stock bool:lsg_bot_trait(id, bit)
+{
+	if (!lsg_ok(id) || !is_user_bot(id))
+		return false
+	new Float:v[3]
+	pev(id, pev_vuser3, v)
+	return (floatround(v[2]) & bit) != 0
+}
+
+stock lsg_bot_style(id)
+{
+	static const S[][] = { "rusher", "roamer", "lurker", "careful", "camper", "awper", "knifer", "nader", "ninja", "objective", "weirdgun" }
+	new t[16]
+	if (lsg_ok(id) && is_user_bot(id))
+	{
+		new Float:v[3]
+		pev(id, pev_vuser3, v)
+		new k = floatround(v[1])
+		if (k >= 0 && k < sizeof S)
+			copy(t, charsmax(t), S[k])
+	}
+	return t
+}
+
 // a follow with a personality influence (0-100: 50 as usual; W2's ls_mode_ver 2)
 stock lsg_bot_follow(bot, who, secs, influence)
 {

@@ -9142,7 +9142,7 @@
 "settings":[
 {
 "id":"cvar",
-"help":"Pick one: Free for all (1 on), Friendly fire (1 on), Gravity (800 normal), Buy time (minutes), Start money, Air control (10 normal), Round time (minutes, next round), Freeze time (seconds, next round), Rounds only end when the mode says (1 on), Team balance (1 on), Most players more than the other team (0 any), Bomb for the Terrorists (1 on)."
+"help":"Pick one: Free for all (1 on), Friendly fire (1 on), Gravity (800 normal), Buy time (minutes), Start money, Air control (10 normal), Round time (minutes, next round), Freeze time (seconds, next round), Rounds only end when the mode says (1 on), Team balance (1 on), Most players more than the other team (0 any), Bomb for the Terrorists (1 on)…."
 },
 {
 "id":"value",
@@ -24179,7 +24179,7 @@
 },
 {
 "id":"kind",
-"help":"Pick one: Defend it, Capture it, Use it, Loot it, Go and hold there."
+"help":"Pick one: Defend it, Capture it, Use it, Loot it, Go and hold there, Hunt it (a player or creature, wherever it goes)."
 },
 {
 "id":"prio",
@@ -24810,7 +24810,7 @@
 ],
 "related":[
 "bot.hold",
-"bot.release",
+"bot.skill",
 "bot.goto"
 ],
 "example":{
@@ -24875,6 +24875,219 @@
 ]
 }
 },
+"bot.skill":{
+"title":"Bot Nature",
+"category":"Bots",
+"what":"A bot's nature, as the bot brain plays it: Skill, Aggression, Teamwork and Greed (0-100) and its playstyle (rusher, lurker, careful, camper...). People read 0 and empty.",
+"pins":[
+{
+"id":"bot",
+"dir":"in",
+"help":"Bot: a player. Needs a wire."
+},
+{
+"id":"skill",
+"dir":"out",
+"help":"Skill: a number."
+},
+{
+"id":"aggression",
+"dir":"out",
+"help":"Aggression: a number."
+},
+{
+"id":"teamwork",
+"dir":"out",
+"help":"Teamwork: a number."
+},
+{
+"id":"greed",
+"dir":"out",
+"help":"Greed: a number."
+},
+{
+"id":"style",
+"dir":"out",
+"help":"Playstyle: text."
+}
+],
+"settings":[],
+"related":[
+"bot.follow",
+"bot.trait",
+"bot.hold"
+],
+"example":{
+"caption":"When a player spawns, Bot Nature is read and printed to the server console.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"bot.skill",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Skill:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"bot"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"skill"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"bot.trait":{
+"title":"Bot Trait",
+"category":"Bots",
+"what":"Is the bot bold, cautious, a team player, a loner, greedy, skilled or a novice (as the bot brain sees it)? False for people.",
+"pins":[
+{
+"id":"bot",
+"dir":"in",
+"help":"Bot: a player. Needs a wire."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Has it: yes or no."
+}
+],
+"settings":[
+{
+"id":"trait",
+"help":"Pick one: Bold, Cautious, Team player, Loner, Greedy, Skilled, Novice."
+}
+],
+"related":[
+"bot.skill",
+"bot.release",
+"bot.follow"
+],
+"example":{
+"caption":"When a player spawns, Bot Trait is read and printed to the server console.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"bot.trait",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"trait":"bold"
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Has it:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"bot"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"out"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
 "bot.release":{
 "title":"Bot Free",
 "category":"Bots",
@@ -24898,9 +25111,9 @@
 ],
 "settings":[],
 "related":[
-"bot.follow",
-"bot.hold",
-"bot.goto"
+"bot.trait",
+"bot.skill",
+"bot.follow"
 ],
 "example":{
 "caption":"When a player spawns, Bot Free runs.",
@@ -26337,6 +26550,78 @@
 },
 {
 "id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"comp.revive_pay":{
+"title":"Revive Pay",
+"category":"Upgrades",
+"what":"Money for getting a teammate up (the components' downed players: Last Stand, Battle Royale), once a downing, never for getting yourself up; bots get it too. 0: off.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"amount",
+"dir":"in",
+"help":"Amount ($): a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"amount",
+"help":"A number from 0 to 16000. A wire into the pin of the same name is used instead."
+}
+],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"turret.on_placed",
+"turret.count",
+"turret.kits"
+],
+"example":{
+"caption":"When a round starts, Revive Pay runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"comp.revive_pay",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"amount":150
+}
+}
+],
+"edges":[
+{
+"id":"w1",
 "from":{
 "node":"ev",
 "pin":"then"

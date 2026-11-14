@@ -15,7 +15,7 @@
 #define LSG_MODE "every_node_3"
 #define LSG_CTX 21
 #define LSG_TXT 2
-#define LSG_N 82
+#define LSG_N 83
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -966,6 +966,41 @@ stock lsg_freeze(id, on)
 {
 	new flags = pev(id, pev_flags)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
+}
+
+// a bot's nature as the bot brain plays it (W2: pev_vuser2 = skill, aggression, teamwork 0-1;
+// pev_vuser3 = greed 0-1, playstyle, trait bits); people read 0
+stock Float:lsg_bot_nat(id, which)
+{
+	if (!lsg_ok(id) || !is_user_bot(id))
+		return 0.0
+	new Float:v[3]
+	pev(id, which == 3 ? pev_vuser3 : pev_vuser2, v)
+	return floatclamp((which == 3 ? v[0] : v[which]) * 100.0, 0.0, 100.0)
+}
+
+stock bool:lsg_bot_trait(id, bit)
+{
+	if (!lsg_ok(id) || !is_user_bot(id))
+		return false
+	new Float:v[3]
+	pev(id, pev_vuser3, v)
+	return (floatround(v[2]) & bit) != 0
+}
+
+stock lsg_bot_style(id)
+{
+	static const S[][] = { "rusher", "roamer", "lurker", "careful", "camper", "awper", "knifer", "nader", "ninja", "objective", "weirdgun" }
+	new t[16]
+	if (lsg_ok(id) && is_user_bot(id))
+	{
+		new Float:v[3]
+		pev(id, pev_vuser3, v)
+		new k = floatround(v[1])
+		if (k >= 0 && k < sizeof S)
+			copy(t, charsmax(t), S[k])
+	}
+	return t
 }
 
 // a follow with a personality influence (0-100: 50 as usual; W2's ls_mode_ver 2)
@@ -2447,7 +2482,7 @@ stock lsg_ce0(a0, Float:a1, const a2[])
 		ctx[8] = _:a0
 		ctx[9] = _:a1
 		copy(g_lsgOT[0], 127, a2)
-		lsg_n69(ctx)
+		lsg_n70(ctx)
 	}
 }
 
@@ -2740,7 +2775,7 @@ stock lsg_cr_health(e, Float:hp)
 }
 
 
-stock Float:g_lsgCrNext79[2048]
+stock Float:g_lsgCrNext80[2048]
 // once a second: how long each creature has stood still; Go To's "then resume"; Creature Idle
 public lsg_cr_tick()
 {
@@ -2761,13 +2796,13 @@ public lsg_cr_tick()
 			g_lsgCrGoalOn[e] = false
 			lsg_cr_resume(e)
 		}
-		if (now - g_lsgCrStill[e] >= 12.0 && now >= g_lsgCrNext79[e] && !lsg_cr_sees_any(e))
+		if (now - g_lsgCrStill[e] >= 12.0 && now >= g_lsgCrNext80[e] && !lsg_cr_sees_any(e))
 		{
-			g_lsgCrNext79[e] = now + 12.0
+			g_lsgCrNext80[e] = now + 12.0
 			new ctx[LSG_CTX]
 			ctx[0] = e
 			ctx[1] = _:(now - g_lsgCrStill[e])
-			lsg_n79(ctx)
+			lsg_n80(ctx)
 		}
 	}
 }
@@ -2859,8 +2894,8 @@ public plugin_init()
 public lsg_tl_auto()
 {
 	new c[LSG_CTX]
-	lsg_tl81_save(0, c)
-	lsg_tl81_go(0, 0.0, 1)
+	lsg_tl82_save(0, c)
+	lsg_tl82_go(0, 0.0, 1)
 }
 
 // the host's values for the mode settings, as the map starts
@@ -3493,34 +3528,44 @@ lsg_n67(ctx[])
 	#pragma unused ctx
 }
 
-// Set Timer by Event (n112)
+// Revive Pay (n114)
 lsg_n68(ctx[])
 {
-	remove_task(LSG_TASK + 68)
-	set_task(floatmax(5.0, 0.1), "lsg_te68", LSG_TASK + 68, _, _, "b")
-	lsg_n70(ctx)
+	if (!(!ls_components_running()))
+	{
+		ls_down_revive_pay(clamp(floatround(150.0), 0, 16000))
+	}
+	lsg_n69(ctx)
 }
 
-public lsg_te68()
+// Set Timer by Event (n115)
+lsg_n69(ctx[])
+{
+	remove_task(LSG_TASK + 69)
+	set_task(floatmax(5.0, 0.1), "lsg_te69", LSG_TASK + 69, _, _, "b")
+	lsg_n71(ctx)
+}
+
+public lsg_te69()
 {
 	lsg_ce1()
 }
 
-// Custom Event (n113)
-lsg_n69(ctx[])
+// Custom Event (n116)
+lsg_n70(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Call Custom Event (n114)
-lsg_n70(ctx[])
+// Call Custom Event (n117)
+lsg_n71(ctx[])
 {
 	lsg_ce0(0, 0.0, "")
-	lsg_n71(ctx)
+	lsg_n72(ctx)
 }
 
-// For Each Creature (n115)
-lsg_n71(ctx[])
+// For Each Creature (n118)
+lsg_n72(ctx[])
 {
 	new c[LSG_CTX], count, p = -1
 	while (count < 512 && (p = find_ent_by_class(p, "ls_creature")) > 0)
@@ -3534,66 +3579,66 @@ lsg_n71(ctx[])
 		#pragma unused c
 	}
 	#pragma unused count
-	lsg_n72(ctx)
-}
-
-// Creature Go To (n121)
-lsg_n72(ctx[])
-{
-	lsg_cr_goto(lsg_find("spot1"), 0, -1, "gate1", 0)
 	lsg_n73(ctx)
 }
 
-// Creature Attack (n122)
+// Creature Go To (n124)
 lsg_n73(ctx[])
 {
-	lsg_cr_attack(lsg_find("spot1"), lsg_find("spot1"))
+	lsg_cr_goto(lsg_find("spot1"), 0, -1, "gate1", 0)
 	lsg_n74(ctx)
 }
 
-// Creature Hold (n123)
+// Creature Attack (n125)
 lsg_n74(ctx[])
 {
-	lsg_cr_hold(lsg_find("spot1"))
+	lsg_cr_attack(lsg_find("spot1"), lsg_find("spot1"))
 	lsg_n75(ctx)
 }
 
-// Creature Resume AI (n124)
+// Creature Hold (n126)
 lsg_n75(ctx[])
 {
-	lsg_cr_resume(lsg_find("spot1"))
+	lsg_cr_hold(lsg_find("spot1"))
 	lsg_n76(ctx)
 }
 
-// Creature Flee To (n125)
+// Creature Resume AI (n127)
 lsg_n76(ctx[])
 {
-	lsg_cr_goto(lsg_find("spot1"), 0, -1, "", 2)
+	lsg_cr_resume(lsg_find("spot1"))
 	lsg_n77(ctx)
 }
 
-// Set Creature Health (n126)
+// Creature Flee To (n128)
 lsg_n77(ctx[])
 {
-	lsg_cr_health(lsg_find("spot1"), 100.0)
+	lsg_cr_goto(lsg_find("spot1"), 0, -1, "", 2)
 	lsg_n78(ctx)
 }
 
-// Remove Creature (n127)
+// Set Creature Health (n129)
 lsg_n78(ctx[])
 {
-	lsg_cr_cmd(lsg_find("spot1"), "kill %d")
-	lsg_n80(ctx)
+	lsg_cr_health(lsg_find("spot1"), 100.0)
+	lsg_n79(ctx)
 }
 
-// Creature Idle (n128)
+// Remove Creature (n130)
 lsg_n79(ctx[])
+{
+	lsg_cr_cmd(lsg_find("spot1"), "kill %d")
+	lsg_n81(ctx)
+}
+
+// Creature Idle (n131)
+lsg_n80(ctx[])
 {
 	#pragma unused ctx
 }
 
-// For Each Row (n131)
-lsg_n80(ctx[])
+// For Each Row (n134)
+lsg_n81(ctx[])
 {
 	new c[LSG_CTX], count
 	for (new r = 0; r < LSG_DT0_N; r++)
@@ -3610,43 +3655,43 @@ lsg_n80(ctx[])
 		#pragma unused c
 	}
 	#pragma unused count
-	lsg_n81(ctx)
+	lsg_n82(ctx)
 }
 
-// Timeline (n135)
-lsg_n81(ctx[])
+// Timeline (n138)
+lsg_n82(ctx[])
 {
 	new inst = 0
-	lsg_tl81_save(inst, ctx)
-	lsg_tl81_go(inst, -1.0, 1)
+	lsg_tl82_save(inst, ctx)
+	lsg_tl82_go(inst, -1.0, 1)
 }
 
 // Timeline: Platform
-stock Float:g_lsgTlT81[33], g_lsgTlDir81[33], bool:g_lsgTlOn81[33], g_lsgTlC81[33][LSG_CTX]
-stock lsg_tl81_save(inst, ctx[])
+stock Float:g_lsgTlT82[33], g_lsgTlDir82[33], bool:g_lsgTlOn82[33], g_lsgTlC82[33][LSG_CTX]
+stock lsg_tl82_save(inst, ctx[])
 {
 	for (new k = 0; k < LSG_CTX; k++)
-		g_lsgTlC81[inst][k] = ctx[k]
+		g_lsgTlC82[inst][k] = ctx[k]
 }
-stock lsg_tl81_go(inst, Float:from, dir)
+stock lsg_tl82_go(inst, Float:from, dir)
 {
 	if (from >= 0.0)
-		g_lsgTlT81[inst] = from
-	else if (!g_lsgTlOn81[inst] && ((dir > 0 && g_lsgTlT81[inst] >= 4.0) || (dir < 0 && g_lsgTlT81[inst] <= 0.0)))
-		g_lsgTlT81[inst] = dir > 0 ? 0.0 : 4.0
-	g_lsgTlDir81[inst] = dir
-	if (!g_lsgTlOn81[inst])
+		g_lsgTlT82[inst] = from
+	else if (!g_lsgTlOn82[inst] && ((dir > 0 && g_lsgTlT82[inst] >= 4.0) || (dir < 0 && g_lsgTlT82[inst] <= 0.0)))
+		g_lsgTlT82[inst] = dir > 0 ? 0.0 : 4.0
+	g_lsgTlDir82[inst] = dir
+	if (!g_lsgTlOn82[inst])
 	{
-		g_lsgTlOn81[inst] = true
-		set_task(0.05, "lsg_tl81_tick", LSG_TASK + 50000 + 81 * 33 + inst, _, _, "b")
+		g_lsgTlOn82[inst] = true
+		set_task(0.05, "lsg_tl82_tick", LSG_TASK + 50000 + 82 * 33 + inst, _, _, "b")
 	}
 }
-stock lsg_tl81_stop(inst)
+stock lsg_tl82_stop(inst)
 {
-	g_lsgTlOn81[inst] = false
-	remove_task(LSG_TASK + 50000 + 81 * 33 + inst)
+	g_lsgTlOn82[inst] = false
+	remove_task(LSG_TASK + 50000 + 82 * 33 + inst)
 }
-stock Float:lsg_tl81_v0(Float:t)
+stock Float:lsg_tl82_v0(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3656,7 +3701,7 @@ stock Float:lsg_tl81_v0(Float:t)
 		return 128.0 + (0.0 - 128.0) * ((t - 2.0) / 2.0)
 	return 0.0
 }
-stock Float:lsg_tl81_v1_0(Float:t)
+stock Float:lsg_tl82_v1_0(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3664,7 +3709,7 @@ stock Float:lsg_tl81_v1_0(Float:t)
 		return 0.0 + (256.0 - 0.0) * ((t - 0.0) / 4.0)
 	return 256.0
 }
-stock Float:lsg_tl81_v1_1(Float:t)
+stock Float:lsg_tl82_v1_1(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3672,7 +3717,7 @@ stock Float:lsg_tl81_v1_1(Float:t)
 		return 0.0 + (0.0 - 0.0) * ((t - 0.0) / 4.0)
 	return 0.0
 }
-stock Float:lsg_tl81_v1_2(Float:t)
+stock Float:lsg_tl82_v1_2(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3680,7 +3725,7 @@ stock Float:lsg_tl81_v1_2(Float:t)
 		return 0.0 + (64.0 - 0.0) * ((t - 0.0) / 4.0)
 	return 64.0
 }
-stock Float:lsg_tl81_v2_0(Float:t)
+stock Float:lsg_tl82_v2_0(Float:t)
 {
 	if (t <= 0.0)
 		return 255.0
@@ -3690,7 +3735,7 @@ stock Float:lsg_tl81_v2_0(Float:t)
 		return 0.0 + (255.0 - 0.0) * lsg_tl_ease((t - 2.0) / 2.0)
 	return 255.0
 }
-stock Float:lsg_tl81_v2_1(Float:t)
+stock Float:lsg_tl82_v2_1(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3700,7 +3745,7 @@ stock Float:lsg_tl81_v2_1(Float:t)
 		return 0.0 + (0.0 - 0.0) * lsg_tl_ease((t - 2.0) / 2.0)
 	return 0.0
 }
-stock Float:lsg_tl81_v2_2(Float:t)
+stock Float:lsg_tl82_v2_2(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3710,12 +3755,12 @@ stock Float:lsg_tl81_v2_2(Float:t)
 		return 255.0 + (0.0 - 255.0) * lsg_tl_ease((t - 2.0) / 2.0)
 	return 0.0
 }
-public lsg_tl81_tick(task)
+public lsg_tl82_tick(task)
 {
-	new inst = task - (LSG_TASK + 50000 + 81 * 33)
+	new inst = task - (LSG_TASK + 50000 + 82 * 33)
 	if (inst < 0 || inst > 32)
 		return
-	new Float:was = g_lsgTlT81[inst], dir = g_lsgTlDir81[inst]
+	new Float:was = g_lsgTlT82[inst], dir = g_lsgTlDir82[inst]
 	new Float:t = was + 0.05 * float(dir)
 	new bool:done, bool:wrapped
 	if (dir > 0 && t > 4.0)
@@ -3728,56 +3773,56 @@ public lsg_tl81_tick(task)
 		t += 4.0
 		wrapped = true
 	}
-	g_lsgTlT81[inst] = t
+	g_lsgTlT82[inst] = t
 	new c[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
-		c[k] = g_lsgTlC81[inst][k]
+		c[k] = g_lsgTlC82[inst][k]
 	c[16] = dir > 0 ? 1 : 0
 	c[17] = _:t
-	c[18] = _:lsg_tl81_v0(t)
-	c[19] = lsg_vec(lsg_tl81_v1_0(t), lsg_tl81_v1_1(t), lsg_tl81_v1_2(t))
-	c[20] = lsg_vec(lsg_tl81_v2_0(t), lsg_tl81_v2_1(t), lsg_tl81_v2_2(t))
+	c[18] = _:lsg_tl82_v0(t)
+	c[19] = lsg_vec(lsg_tl82_v1_0(t), lsg_tl82_v1_1(t), lsg_tl82_v1_2(t))
+	c[20] = lsg_vec(lsg_tl82_v2_0(t), lsg_tl82_v2_1(t), lsg_tl82_v2_2(t))
 	if (done)
 	{
-		lsg_tl81_stop(inst)
+		lsg_tl82_stop(inst)
 	}
 	#pragma unused c
 	#pragma unused wrapped, done, was
 }
 
 
-stock lsg_n81_play_start(ctx[])
+stock lsg_n82_play_start(ctx[])
 {
 	new inst = 0
-	lsg_tl81_save(inst, ctx)
-	lsg_tl81_go(inst, 0.0, 1)
+	lsg_tl82_save(inst, ctx)
+	lsg_tl82_go(inst, 0.0, 1)
 }
 
-stock lsg_n81_stop(ctx[])
+stock lsg_n82_stop(ctx[])
 {
 	new inst = 0
 	#pragma unused ctx
-	lsg_tl81_stop(inst)
+	lsg_tl82_stop(inst)
 }
 
-stock lsg_n81_reverse(ctx[])
+stock lsg_n82_reverse(ctx[])
 {
 	new inst = 0
-	lsg_tl81_save(inst, ctx)
-	lsg_tl81_go(inst, -1.0, -1)
+	lsg_tl82_save(inst, ctx)
+	lsg_tl82_go(inst, -1.0, -1)
 }
 
-stock lsg_n81_reverse_end(ctx[])
+stock lsg_n82_reverse_end(ctx[])
 {
 	new inst = 0
-	lsg_tl81_save(inst, ctx)
-	lsg_tl81_go(inst, 4.0, -1)
+	lsg_tl82_save(inst, ctx)
+	lsg_tl82_go(inst, 4.0, -1)
 }
 
-stock lsg_n81_set_time(ctx[])
+stock lsg_n82_set_time(ctx[])
 {
 	new inst = 0
-	lsg_tl81_save(inst, ctx)
-	g_lsgTlT81[inst] = floatclamp(0.0, 0.0, 4.0)
+	lsg_tl82_save(inst, ctx)
+	g_lsgTlT82[inst] = floatclamp(0.0, 0.0, 4.0)
 }
 

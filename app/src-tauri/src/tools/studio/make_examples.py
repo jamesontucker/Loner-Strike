@@ -560,7 +560,7 @@ def juggernaut():
     m.flow("nr", "all", "all.each", "zero")
     m.w("all.player", "zero.player")
 
-    m.part("Bots go after the Juggernaut: every 5 seconds each other bot gets a goal at the place the Juggernaut is now (Bots: Goal, go and hold there). A bot in a fight keeps fighting, so in a crowded free for all this mostly moves the ones with nobody to shoot. Bot Follow would not do: it only follows teammates, and here everyone is an enemy.")
+    m.part("Bots go after the Juggernaut: every 5 seconds each other bot is told to hunt them (Bots: Goal, Hunt it): the bot brain follows the Juggernaut wherever they go, bold bots pushing right in, careful ones from cover at range. A bot in a fight keeps fighting.")
     m.n("rs2", "event.round_started")
     m.n("hunt", "timer.repeat", {"every": 5, "times": 0})
     m.n("bots", "flow.for_each_player", {"which": "bots"})
@@ -568,7 +568,7 @@ def juggernaut():
     m.n("isj", "logic.equal", {"of": "player"}, below=True)
     m.n("notj", "logic.not", {}, below=True)
     m.n("other", "flow.branch")
-    m.n("chase", "bots.goal", {"who": "player", "kind": "go_hold", "prio": 70, "secs": 6, "radius": 300})
+    m.n("chase", "bots.goal", {"who": "player", "kind": "hunt", "prio": 70, "secs": 6, "radius": 300})
     m.flow("rs2", "hunt")
     m.w("hunt.tick", "bots.exec")
     m.w("bots.player", "isj.a")

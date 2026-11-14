@@ -4543,6 +4543,14 @@
       [
        "mp_give_player_c4",
        "Bomb for the Terrorists (1 on)"
+      ],
+      [
+       "ls_down_finish",
+       "Downed players can be finished by enemies (1 on; components)"
+      ],
+      [
+       "ls_down_hp",
+       "A downed player's health when they can be finished (components)"
       ]
      ]
     },
@@ -11045,6 +11053,10 @@
       [
        "go_hold",
        "Go and hold there"
+      ],
+      [
+       "hunt",
+       "Hunt it (a player or creature, wherever it goes)"
       ]
      ]
     },
@@ -11522,6 +11534,111 @@
     }
    ],
    "keywords": "personality obey skill"
+  },
+  {
+   "type": "bot.skill",
+   "title": "Bot Nature",
+   "category": "Bots",
+   "help": "A bot's nature, as the bot brain plays it: Skill, Aggression, Teamwork and Greed (0-100) and its playstyle (rusher, lurker, careful, camper...). People read 0 and empty.",
+   "inputs": [
+    {
+     "id": "bot",
+     "type": "player",
+     "label": "Bot",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "skill",
+     "type": "number",
+     "label": "Skill"
+    },
+    {
+     "id": "aggression",
+     "type": "number",
+     "label": "Aggression"
+    },
+    {
+     "id": "teamwork",
+     "type": "number",
+     "label": "Teamwork"
+    },
+    {
+     "id": "greed",
+     "type": "number",
+     "label": "Greed"
+    },
+    {
+     "id": "style",
+     "type": "text",
+     "label": "Playstyle"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "personality skill aggression teamwork style"
+  },
+  {
+   "type": "bot.trait",
+   "title": "Bot Trait",
+   "category": "Bots",
+   "help": "Is the bot bold, cautious, a team player, a loner, greedy, skilled or a novice (as the bot brain sees it)? False for people.",
+   "inputs": [
+    {
+     "id": "bot",
+     "type": "player",
+     "label": "Bot",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Has it"
+    }
+   ],
+   "params": [
+    {
+     "id": "trait",
+     "label": "Trait",
+     "kind": "choice",
+     "default": "bold",
+     "choices": [
+      [
+       "bold",
+       "Bold"
+      ],
+      [
+       "cautious",
+       "Cautious"
+      ],
+      [
+       "team",
+       "Team player"
+      ],
+      [
+       "loner",
+       "Loner"
+      ],
+      [
+       "greedy",
+       "Greedy"
+      ],
+      [
+       "skilled",
+       "Skilled"
+      ],
+      [
+       "novice",
+       "Novice"
+      ]
+     ]
+    }
+   ],
+   "pure": true,
+   "keywords": "personality bold careful"
   },
   {
    "type": "bot.release",
@@ -12055,6 +12172,44 @@
      "max": 255
     }
    ]
+  },
+  {
+   "type": "comp.revive_pay",
+   "title": "Revive Pay",
+   "category": "Upgrades",
+   "help": "Money for getting a teammate up (the components' downed players: Last Stand, Battle Royale), once a downing, never for getting yourself up; bots get it too. 0: off.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "amount",
+     "type": "number",
+     "label": "Amount ($)",
+     "param": "amount"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "amount",
+     "label": "Amount ($)",
+     "kind": "number",
+     "default": 150,
+     "min": 0,
+     "max": 16000
+    }
+   ],
+   "keywords": "revive bonus reward money",
+   "needs": "components"
   },
   {
    "type": "player.is_downed",

@@ -458,7 +458,7 @@
    },
    "params": {
     "who": "player",
-    "kind": "go_hold",
+    "kind": "hunt",
     "prio": 70,
     "secs": 6,
     "radius": 300
@@ -1391,7 +1391,7 @@
   },
   {
    "id": "c4",
-   "text": "Bots go after the Juggernaut: every 5 seconds each other bot gets a goal at the place the Juggernaut is now (Bots: Goal, go and hold there). A bot in a fight keeps fighting, so in a crowded free for all this mostly moves the ones with nobody to shoot. Bot Follow would not do: it only follows teammates, and here everyone is an enemy.",
+   "text": "Bots go after the Juggernaut: every 5 seconds each other bot is told to hunt them (Bots: Goal, Hunt it): the bot brain follows the Juggernaut wherever they go, bold bots pushing right in, careful ones from cover at range. A bot in a fight keeps fighting.",
    "pos": {
     "x": 41,
     "y": 1439
