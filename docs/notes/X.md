@@ -1304,3 +1304,10 @@ Docs: docs/CREATURES.md "For plugins".
 - Bot Nature sim (same run): e.g. "85 skill 42.91 aggr careful style no bold", "65 skill 71.55 aggr roamer yes bold".
 - The Consolas line in studio.css went in with X2's data tables (eaef8b97). Creature State / Target / Resume / Speed /
   Tier: Y hasn't exposed them yet (request in Y.md 0403b17e), so still out.
+
+## X (2026-11-14): mode settings on Alone Together - skipped (no Studio mode there)
+Checked read-only over SSH (after Y's go-ahead): the server has no Studio plugin and no `*.settings.json`, only the
+stock modes, so there was nothing to change; I installed nothing and wrote nothing. The remote path stays covered
+by the same `remote::game_file` / `put_game_file` the server page uses for users.ini and the per-mode files. Next
+time a Studio mode with settings is on a remote server, change one and reset it from its Modes tab.
+Creature State / Target / Resume / Speed / Tier: waiting on Y's notes.
