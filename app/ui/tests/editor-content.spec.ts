@@ -29,6 +29,13 @@ async function open(page: Page) {
   return page.getByRole("region", { name: "Content Browser" }).first();
 }
 
+// a spot near the middle of the first view, so the drop lands on it at any window size (P5: at
+// 1024x680 the Content dock leaves the view about 240 px tall)
+const paneSpot = async (page: Page, dx: number, dy: number) => {
+  const b = (await page.locator(".ed-pane").first().boundingBox())!;
+  return { x: Math.round(b.width / 2 + dx), y: Math.round(b.height / 2 + dy) };
+};
+
 const tab = (cb: ReturnType<Page["locator"]>, name: string) => cb.getByRole("tablist", { name: "Content" }).getByRole("tab", { name });
 
 test("models: thumbnails, search, size, sources, details, drag onto the map, Find uses", async ({ page }) => {
@@ -58,7 +65,7 @@ test("models: thumbnails, search, size, sources, details, drag onto the map, Fin
   // drag onto the map: a cycler_sprite with that model
   const path = (await tiles.first().getAttribute("title"))!.split("\n")[0];
   const before = (await api(page, "/api/tools/editor/doc")).entities.length;
-  await tiles.first().dragTo(page.locator(".ed-pane").first(), { targetPosition: { x: 300, y: 260 } });
+  await tiles.first().dragTo(page.locator(".ed-pane").first(), { targetPosition: await paneSpot(page, 40, 20) });
   await expect.poll(async () => (await api(page, "/api/tools/editor/doc")).entities.length).toBe(before + 1);
   const e = (await api(page, "/api/tools/editor/doc")).entities.find((x: { classname: string }) => x.classname === "cycler_sprite");
   expect(Object.fromEntries(e.keys).model).toBe(path);
@@ -80,11 +87,12 @@ test("sprites and sounds: decoded pictures, animated preview, play, facts, placi
   await expect(tiles.first()).toBeVisible({ timeout: 20000 });
   await cb.getByRole("searchbox", { name: "Search" }).fill("muzzleflash");
   const img = tiles.first().locator("img");
+  await tiles.first().scrollIntoViewIfNeeded();
   await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth)).toBeGreaterThan(0);
   await tiles.first().click();
   const details = cb.getByRole("complementary", { name: "Details" });
   await expect(details).toContainText(/frame/);
-  await tiles.first().dragTo(page.locator(".ed-pane").first(), { targetPosition: { x: 260, y: 240 } });
+  await tiles.first().dragTo(page.locator(".ed-pane").first(), { targetPosition: await paneSpot(page, 0, 10) });
   await expect.poll(async () => (await api(page, "/api/tools/editor/doc")).entities.some((x: { classname: string }) => x.classname === "env_sprite")).toBe(true);
   // sounds
   await tab(cb, "Sounds").click();
@@ -93,7 +101,7 @@ test("sprites and sounds: decoded pictures, animated preview, play, facts, placi
   await tiles.first().click();
   await expect(details).toContainText(/kHz/);
   await expect(tiles.first().getByRole("button", { name: /^Play / })).toBeVisible();
-  await tiles.first().dragTo(page.locator(".ed-pane").first(), { targetPosition: { x: 220, y: 220 } });
+  await tiles.first().dragTo(page.locator(".ed-pane").first(), { targetPosition: await paneSpot(page, -40, 0) });
   await expect.poll(async () => {
     const a = (await api(page, "/api/tools/editor/doc")).entities.find((x: { classname: string }) => x.classname === "ambient_generic");
     return a ? Object.fromEntries(a.keys).message : null;

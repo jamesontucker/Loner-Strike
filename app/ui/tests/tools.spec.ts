@@ -133,6 +133,9 @@ for (const address of ["editor", "studio", "plugins", `navfix:${NAV_MAP}`, "asse
     if (address === "editor") {
       const fresh = page.getByRole("button", { name: "New map" });
       if (await fresh.isVisible()) await fresh.click();
+      // (a map an earlier spec left open has unsaved changes: "New map" asks first; P5)
+      const leave = page.getByRole("button", { name: "Leave them" });
+      if (await leave.waitFor({ timeout: 1500 }).then(() => true, () => false)) await leave.click();
       await settle(page);
       const box = await page.locator(".content canvas").first().boundingBox();
       expect(box?.width ?? 0).toBeGreaterThan(page.viewportSize()!.width * 0.5);
