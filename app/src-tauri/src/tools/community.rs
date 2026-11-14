@@ -1472,8 +1472,6 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
     note.md5 = files.iter().find(|f| f["id"].as_i64() == Some(file)).map(|f| s(&f["md5"])).unwrap_or_default();
     note.section = section.into();
     note.maps = it.as_ref().and_then(|i| i.map.as_ref()).map(|m| vec![m.name.clone()]).unwrap_or_default();
-    // (a Community creation installs strictly: only a zip, every name checked, every file new)
-    crate::gamebanana::mark_strict(id);
     let job = game.store.start_section_install(section, id, file).map_err(|e| e.message())?;
     super::communitylib::note_after_job(game.store.clone(), job.clone(), note);
     Ok(json!({"ok": true, "job": job, "section": section, "map": it.and_then(|i| i.map).map(|m| m.name)}))

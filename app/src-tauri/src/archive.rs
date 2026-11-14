@@ -209,6 +209,8 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
         let (ok, err) = run_limited(c, dest, budget)?;
         strip_links(dest);
         if ok {
+            let files = list_out.lines().filter(|l| l.starts_with('-')).count();
+            check_tree(dest, Some(files))?;
             return not_a_zip_package(dest);
         }
         tar_err = Some(err);
@@ -233,6 +235,7 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
                 let (ok, err) = run_limited(c, dest, budget)?;
                 strip_links(dest);
                 if ok {
+                    check_tree(dest, None)?;
                     return not_a_zip_package(dest);
                 }
                 tar_err = Some(seven_zip_error(&err));
@@ -258,6 +261,8 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
             let (ok, _) = run_limited(c, dest, budget)?;
             strip_links(dest);
             if ok {
+                let files = entries.iter().filter(|e| !e.get("XADIsDirectory").is_some_and(|v| v.as_bool() == Some(true) || v.as_i64() == Some(1))).count();
+                check_tree(dest, Some(files))?;
                 return not_a_zip_package(dest);
             }
         }
@@ -481,6 +486,99 @@ pub fn strict_problem(names: &[String]) -> Option<String> {
     None
 }
 
+/// A part of a written path that some system would read as another file: a trailing dot or space,
+/// a short name (`x~1`), a Windows device name, `..` or a drive.
+pub fn alias_part(part: &str) -> Option<&'static str> {
+    if part == ".." || part == "." {
+        return Some("it points outside the download");
+    }
+    if part.contains(':') {
+        return Some("it names a drive");
+    }
+    if part.ends_with('.') || part.ends_with(' ') {
+        return Some("a name ends in a dot or a space");
+    }
+    if let Some(t) = part.find('~') {
+        if part[t + 1..].bytes().next().is_some_and(|c| c.is_ascii_digit()) {
+            return Some("it looks like a short name");
+        }
+    }
+    if crate::setup::record::windows_unsafe(part) {
+        return Some("Windows keeps that name for a device");
+    }
+    None
+}
+
+/// An entry whose stored name and the name it's written as differ in more than slash style (a
+/// Unicode name field renaming it).
+pub fn written_name_problem(raw: &[u8], resolved: &str) -> Option<&'static str> {
+    let norm = |s: &str| s.replace('\\', "/");
+    let same = match std::str::from_utf8(raw) {
+        Ok(r) => norm(r) == norm(resolved),
+        // (an old code page: its letters decode differently, but its folders, dots and plain
+        // letters must stay where they are)
+        Err(_) => {
+            let a: String = raw.iter().filter(|b| b.is_ascii()).map(|b| if *b == b'\\' { '/' } else { *b as char }).collect();
+            let b: String = resolved.chars().filter(|c| c.is_ascii()).map(|c| if c == '\\' { '/' } else { c }).collect();
+            a == b
+        }
+    };
+    (!same).then_some("its stored name and the name it would be written as differ")
+}
+
+/// A zip's entry names exactly as its central directory stores them, in order (None: a zip64
+/// directory or one that can't be read here: the reader's raw names are used).
+fn raw_names(path: &Path) -> Option<Vec<Vec<u8>>> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    let tail_len = len.min(66_000);
+    f.seek(SeekFrom::Start(len - tail_len)).ok()?;
+    let mut tail = vec![0u8; tail_len as usize];
+    f.read_exact(&mut tail).ok()?;
+    let at = (0..tail.len().saturating_sub(21)).rev().find(|i| tail[*i..*i + 4] == [0x50, 0x4b, 0x05, 0x06])?;
+    let e = &tail[at..];
+    let u16_at = |b: &[u8], o: usize| u16::from_le_bytes([b[o], b[o + 1]]) as u64;
+    let u32_at = |b: &[u8], o: usize| u32::from_le_bytes([b[o], b[o + 1], b[o + 2], b[o + 3]]) as u64;
+    let (count, size, off) = (u16_at(e, 10), u32_at(e, 12), u32_at(e, 16));
+    if count == 0xFFFF || size == 0xFFFF_FFFF || off == 0xFFFF_FFFF || size > 64 << 20 || off + size > len {
+        return None;
+    }
+    f.seek(SeekFrom::Start(off)).ok()?;
+    let mut cd = vec![0u8; size as usize];
+    f.read_exact(&mut cd).ok()?;
+    let (mut out, mut p) = (Vec::new(), 0usize);
+    for _ in 0..count {
+        if cd.len() < p + 46 || cd[p..p + 4] != [0x50, 0x4b, 0x01, 0x02] {
+            return None;
+        }
+        let (n, x, c) = (u16_at(&cd, p + 28) as usize, u16_at(&cd, p + 30) as usize, u16_at(&cd, p + 32) as usize);
+        out.push(cd.get(p + 46..p + 46 + n)?.to_vec());
+        p += 46 + n + x + c;
+    }
+    Some(out)
+}
+
+/// After another unpacker (tar, 7-Zip, unar): every written path checked as a zip's entries are,
+/// and as many files as its listing had (a twin written over another leaves fewer).
+fn check_tree(dest: &Path, listed_files: Option<usize>) -> Result<(), String> {
+    let files = walk(dest);
+    let mut seen = std::collections::HashSet::new();
+    for f in &files {
+        let rel = f.strip_prefix(dest).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+        let why = rel.split('/').find_map(alias_part);
+        if why.is_some() || !seen.insert(rel.to_lowercase()) {
+            clear_dir(dest);
+            return Err(format!("This download has a file named so it could land somewhere else ({rel}), so it wasn't installed."));
+        }
+    }
+    if listed_files.is_some_and(|n| files.len() < n) {
+        clear_dir(dest);
+        return Err("This download has two files that unpack as the same one, so it wasn't installed.".into());
+    }
+    Ok(())
+}
+
 /// Unpacks a Community download: only a zip, every name checked strictly, every file new (a
 /// twin can never write over an earlier one), no archives inside it unpacked.
 pub fn extract_strict(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
@@ -514,14 +612,17 @@ fn extract_zip_with(archive: &Path, dest: &Path, budget: u64, strict_always: boo
     // a Community download, or any zip carrying a file an installer acts on, is checked strictly
     // (the community list checks each entry, so a later twin can't replace a checked one)
     let names: Vec<String> = (0..z.len()).filter_map(|i| z.by_index_raw(i).ok().map(|m| m.name_raw().iter().map(|b| *b as char).collect())).collect();
-    let strict = strict_always || has_marker(&names);
-    if strict {
+    // (Community installs: also plain ASCII names only, every one checked before anything unpacks)
+    if strict_always {
         if let Some(why) = strict_problem(&names) {
             return Err(why);
         }
     }
     let mut written: u64 = 0; // the sizes in a zip's index can lie, so count while writing too
     let mut buf = vec![0u8; 1024 * 1024];
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // the names exactly as stored (the reader shows a Unicode name field's name instead)
+    let raw = raw_names(archive).filter(|r| r.len() == z.len());
     for i in 0..z.len() {
         let Ok(mut m) = z.by_index(i) else { return Ok(false) };
         if m.is_dir() {
@@ -533,24 +634,31 @@ fn extract_zip_with(archive: &Path, dest: &Path, budget: u64, strict_always: boo
             note_dropped(format!("{shown} (a link: never unpacked)"));
             continue; // links are never unpacked
         }
+        // every archive: the path really written is checked (after any Unicode name field), and the
+        // download is refused when it could land anywhere but where its listing says
+        let raw = raw.as_ref().and_then(|r| r.get(i)).map(|v| v.as_slice()).unwrap_or(m.name_raw());
+        if let Some(why) = written_name_problem(raw, &m.name().map(|n| n.to_string()).unwrap_or_default()) {
+            return Err(format!("This download has a file whose name doesn't add up ({shown}: {why}), so it wasn't installed."));
+        }
         let Some(rel) = m.enclosed_name() else {
-            note_dropped(format!("{shown} (points outside the download)"));
-            continue;
+            return Err(format!("This download has a file that points outside it ({shown}), so it wasn't installed."));
         };
         let target = dest.join(&rel);
         if !target.starts_with(dest) || target == dest {
-            note_dropped(format!("{shown} (points outside the download)"));
-            continue;
+            return Err(format!("This download has a file that points outside it ({shown}), so it wasn't installed."));
+        }
+        let rel_s = rel.to_string_lossy().replace('\\', "/");
+        if let Some(why) = rel_s.split('/').find_map(alias_part) {
+            return Err(format!("This download has a file named so it could land somewhere else ({shown}: {why}), so it wasn't installed."));
+        }
+        if !seen.insert(rel_s.to_lowercase()) {
+            return Err(format!("This download has two files that unpack as {}, so it wasn't installed.", rel_s.to_lowercase()));
         }
         if let Some(d) = target.parent() {
             std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
         }
-        // (strict: each file new, so nothing can write over one unpacked before it)
-        let mut out = if strict {
-            std::fs::OpenOptions::new().write(true).create_new(true).open(&target).map_err(|_| format!("This download has two files that unpack as {shown}, so it wasn't installed."))?
-        } else {
-            std::fs::File::create(&target).map_err(|e| e.to_string())?
-        };
+        // (each file new: nothing can write over one unpacked before it, or one already there)
+        let mut out = std::fs::OpenOptions::new().write(true).create_new(true).open(&target).map_err(|_| format!("This download has two files that unpack as {shown}, so it wasn't installed."))?;
         loop {
             let n = match m.read(&mut buf) {
                 Ok(0) => break,
@@ -1176,8 +1284,6 @@ mod tests {
             let o = zip::write::SimpleFileOptions::default();
             z.start_file("maps/de_a.bsp", o).unwrap();
             z.write_all(&[7u8; 5000]).unwrap();
-            z.start_file("../../escape.txt", o).unwrap();
-            z.write_all(b"nope").unwrap();
             z.add_symlink("maps/link.bsp", "/etc/hosts", o).unwrap();
             z.finish().unwrap();
         }
@@ -1185,13 +1291,26 @@ mod tests {
         std::fs::create_dir_all(&dest).unwrap();
         extract(&archive, &dest, MAX_UNPACKED).unwrap();
         assert_eq!(std::fs::read(dest.join("maps/de_a.bsp")).unwrap().len(), 5000);
-        assert!(!r.join("escape.txt").exists() && !r.parent().unwrap().join("escape.txt").exists());
-        // P5 (QA4-G): the left-out entry is listed with what plan() skipped
+        // P5 (QA4-G): the left-out link is listed with what plan() skipped
         let (picked, skipped) = plan(&dest);
         assert!(picked.iter().any(|(_, d)| d == "maps/de_a.bsp"));
-        assert!(skipped.iter().any(|x| x.contains("escape.txt") && x.contains("outside the download")), "{skipped:?}");
         assert!(skipped.iter().any(|x| x.contains("link.bsp") && x.contains("a link")), "{skipped:?}");
         assert!(take_dropped().is_empty(), "listed once");
+        // an entry that points outside: the whole download is refused, nothing escapes
+        let bad = r.join("bad.zip");
+        {
+            let mut z = zip::ZipWriter::new(std::fs::File::create(&bad).unwrap());
+            let o = zip::write::SimpleFileOptions::default();
+            z.start_file("maps/de_b.bsp", o).unwrap();
+            z.write_all(b"x").unwrap();
+            z.start_file("../../escape.txt", o).unwrap();
+            z.write_all(b"nope").unwrap();
+            z.finish().unwrap();
+        }
+        let d2 = r.join("bad");
+        std::fs::create_dir_all(&d2).unwrap();
+        assert!(extract(&bad, &d2, MAX_UNPACKED).unwrap_err().contains("points outside"));
+        assert!(!r.join("escape.txt").exists() && !r.parent().unwrap().join("escape.txt").exists());
 
         let small = r.join("small");
         std::fs::create_dir_all(&small).unwrap();

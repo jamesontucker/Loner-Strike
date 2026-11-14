@@ -198,20 +198,13 @@ impl Semaphore {
     }
 }
 
-/// GameBanana pages whose downloads install strictly (Community creations: only a zip, every
-/// name checked, every file new): `archive::extract_strict`.
-static STRICT: std::sync::Mutex<Vec<i64>> = std::sync::Mutex::new(Vec::new());
-
-/// Marks a page's downloads to install strictly (Community's Try it, before it starts the job).
-pub fn mark_strict(mod_id: i64) {
-    let mut s = STRICT.lock().unwrap_or_else(|e| e.into_inner());
-    if !s.contains(&mod_id) {
-        s.push(mod_id);
-    }
-}
-
-fn is_strict(mod_id: i64) -> bool {
-    STRICT.lock().unwrap_or_else(|e| e.into_inner()).contains(&mod_id)
+/// A page whose downloads install strictly (only a zip, plain ASCII names, every file new): a
+/// Community creation, by this computer's Community library or the community list. Decided by the
+/// install job itself from those records, whichever way it was started (Try it, Install, an
+/// update, a server's copy).
+pub fn community_page(mod_id: i64) -> bool {
+    use crate::tools::community::Model;
+    crate::tools::communitylib::load(&crate::tools::communitylib::lib_dir(), Model::Mod, mod_id).is_some() || crate::tools::community::index_cached().items.iter().any(|i| i.model == Model::Mod && i.gb == mod_id)
 }
 
 #[derive(Clone, Serialize)]
@@ -1157,7 +1150,7 @@ impl MapStore {
             // only the file name from GameBanana, never a path
             let base = Path::new(&fname.replace('\\', "/")).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| format!("file{ext}"));
             std::fs::rename(&download, src.join(base)).map_err(|e| StoreError::Bad(e.to_string()))?;
-        } else if self.jobs.lock().unwrap().get(id).is_some_and(|j| is_strict(j.mod_id)) {
+        } else if self.jobs.lock().unwrap().get(id).map(|j| j.mod_id).is_some_and(community_page) {
             // a Community creation: only a zip, every name checked, nothing nested unpacked
             archive::extract_strict(&download, &src, MAX_UNPACKED).map_err(StoreError::Bad)?;
         } else {
@@ -1262,7 +1255,7 @@ impl MapStore {
             // the shared creatures it brought (its block in creatures.ini; types another item brings stay)
             let key = crate::tools::communitylib::dir_name(crate::tools::community::Model::Mod, mod_id);
             let files = crate::tools::creaturepack::uninstall_pack(&self.cstrike, &key).map_err(StoreError::Bad)?;
-            return Ok(json!({"maps": maps, "files": files}));
+            return Ok(if files.is_empty() { json!({"maps": maps}) } else { json!({"maps": maps, "files": files}) });
         }
         if self.server && (sec.key == "skins" || sec.key == "players") {
             let files = crate::servercontent::remove(&self.game_dir, sec.key, mod_id).map_err(StoreError::Bad)?;

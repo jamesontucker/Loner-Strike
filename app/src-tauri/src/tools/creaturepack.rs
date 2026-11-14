@@ -644,6 +644,54 @@ fn custom_files(hl: &Path, game: &str, t: &creatures::Creature) -> Vec<(String, 
     out
 }
 
+/// A custom file's game path in a package: under the namespace's own folder (models/<ns>/...,
+/// sound/<ns>/...), so no download can land on another creature's or the game's files.
+fn relocate(rel: &str, ns: &str) -> String {
+    let low = rel.to_ascii_lowercase();
+    for top in ["models/", "sound/"] {
+        if let Some(rest) = low.strip_prefix(top) {
+            if rest.starts_with(&format!("{ns}/")) {
+                return low;
+            }
+            return format!("{top}{ns}/{rest}");
+        }
+    }
+    low
+}
+
+/// A custom file (not the game's own) that's in the game's folders.
+fn find_custom(hl: &Path, game: &str, rel: &str) -> bool {
+    !super::doctor::is_stock(rel, game) && find_file(hl, game, rel).is_some()
+}
+
+/// A model or snd_ value with its custom files' paths moved under the namespace.
+fn relocate_value(v: &str, model: bool, ns: &str, custom: &dyn Fn(&str) -> bool) -> String {
+    let mut out = String::new();
+    let mut word = String::new();
+    let flush = |word: &mut String, out: &mut String| {
+        if !word.is_empty() {
+            let rel = if model { word.clone() } else { format!("sound/{word}") };
+            if custom(&rel) {
+                let moved = relocate(&rel, ns);
+                out.push_str(if model { &moved } else { moved.strip_prefix("sound/").unwrap_or(&moved) });
+            } else {
+                out.push_str(word);
+            }
+            word.clear();
+        }
+    };
+    for c in v.chars() {
+        if c == ' ' || c == '|' {
+            flush(&mut word, &mut out);
+            out.push(c);
+        } else {
+            word.push(c);
+        }
+    }
+    flush(&mut word, &mut out);
+    out
+}
+
 /// The Publish step's line for the custom creatures `names` use: {"includes": ["runner_x (with
 /// its model)", ...]} or {"problem": why it can't be shared}.
 pub fn listing(hl: &Path, game: &str, names: &[String]) -> Value {
@@ -758,12 +806,13 @@ pub fn pack_types(hl: &Path, game: &str, names: &[String], namespace: &str) -> R
             if v == base.get(k) {
                 continue;
             }
-            // (file names in lower case: the community list and Linux servers match them so)
-            let v = if *k == "model" || k.starts_with("snd_") { v.replace('\\', "/").to_ascii_lowercase() } else { v };
+            // (file names in lower case: the community list and Linux servers match them so; a
+            // custom file goes under the namespace's own folder, models/<ns>/ and sound/<ns>/)
+            let v = if *k == "model" || k.starts_with("snd_") { relocate_value(&v.replace('\\', "/").to_ascii_lowercase(), *k == "model", &slug, &|r| find_custom(hl, game, r)) } else { v };
             body.push_str(&format!("{k} = {v}\n"));
         }
         let t = t.settled();
-        let own = custom_files(hl, game, &t);
+        let own: Vec<(String, PathBuf)> = custom_files(hl, game, &t).into_iter().map(|(r, p)| (relocate(&r, &slug), p)).collect();
         for (r, p) in &own {
             if !files.iter().any(|(x, _)| x.eq_ignore_ascii_case(r)) {
                 files.push((r.clone(), p.clone()));
@@ -839,6 +888,10 @@ pub struct Parsed {
     pub files: Vec<String>,
     /// the sections as they go into creatures.ini
     pub body: String,
+    /// each type's own section text
+    pub sections: Vec<(String, String)>,
+    /// the files each type's model and snd_ values name (game paths)
+    pub refs: BTreeMap<String, Vec<String>>,
 }
 
 pub fn parse_pack(text: &str) -> Result<Parsed, String> {
@@ -874,6 +927,7 @@ pub fn parse_pack(text: &str) -> Result<Parsed, String> {
                     p.types.push(n.clone());
                 }
                 p.body.push_str(&format!("[{n}]\n"));
+                p.sections.push((n.clone(), format!("[{n}]\n")));
                 cur = Some(n);
             }
             L::Key(k, v) => {
@@ -904,12 +958,35 @@ pub fn parse_pack(text: &str) -> Result<Parsed, String> {
                     if !ok {
                         return Err(format!("A creature in the download names a file it can't use ({v})."));
                     }
+                    let refs = p.refs.entry(cur.clone().unwrap_or_default()).or_default();
+                    for w in v.split([' ', '|']).filter(|w| !w.is_empty()) {
+                        let w = w.to_ascii_lowercase();
+                        refs.push(if model { w } else { format!("sound/{w}") });
+                    }
                 }
                 if low == "base" && !is_builtin(&v) && !p.types.contains(&v.to_ascii_lowercase()) {
                     return Err(format!("A creature in the download is based on {v}, which it doesn't bring."));
                 }
                 p.body.push_str(&format!("{k} = {v}\n"));
+                if let Some(last) = p.sections.last_mut() {
+                    last.1.push_str(&format!("{k} = {v}\n"));
+                }
             }
+        }
+    }
+    // every listed file is one of its creatures' own, in that creature's maker's folder
+    for f in &p.files {
+        let low = f.to_ascii_lowercase();
+        let users: Vec<&String> = p.refs.iter().filter(|(_, r)| r.iter().any(|x| *x == low)).map(|(t, _)| t).collect();
+        if users.is_empty() {
+            return Err(format!("The download lists a file none of its creatures use ({f})."));
+        }
+        let at_home = users.iter().any(|t| {
+            let ns = t.split('.').next().unwrap_or("");
+            low.starts_with(&format!("models/{ns}/")) || low.starts_with(&format!("sound/{ns}/"))
+        });
+        if !at_home {
+            return Err(format!("The download's file {f} isn't in its creature maker's own folder."));
         }
     }
     if p.types.is_empty() {
@@ -963,11 +1040,16 @@ pub struct Block {
     /// the app added a line break before the block (the file didn't end with one)
     joined: bool,
     pub body: String,
+    /// the namespace of who uploaded it (gb<id>): only its own types are in the block
+    pub owner: String,
 }
 
 impl Block {
     fn render(&self) -> String {
         let mut s = format!("{BLOCK_START}{}{} (shared creatures: Loner-Strike adds and removes this block)\n", self.id, if self.joined { " +nl" } else { "" });
+        if !self.owner.is_empty() {
+            s.push_str(&format!("; owner: {}\n", self.owner));
+        }
         s.push_str(&format!("; types: {}\n", self.types.join(" ")));
         if !self.files.is_empty() {
             s.push_str(&format!("; files: {}\n", self.files.join(" ")));
@@ -992,6 +1074,8 @@ pub fn split_blocks(text: &str) -> (String, Vec<Block>) {
         if let Some(b) = cur.as_mut() {
             if t == format!("{BLOCK_END}{}", b.id) {
                 blocks.push(cur.take().unwrap());
+            } else if let Some(r) = t.strip_prefix("; owner:") {
+                b.owner = r.trim().to_string();
             } else if let Some(r) = t.strip_prefix("; types:") {
                 b.types = r.split_whitespace().map(String::from).collect();
             } else if let Some(r) = t.strip_prefix("; files:") {
@@ -1068,14 +1152,25 @@ fn write_ini(game_dir: &Path, text: &str, why: &str) -> Result<(), String> {
 /// `namespace`: the uploader's, as the community list's entry says (`gb<member id>`; never one the
 /// GameBanana name): its types must be named under it (see `namespace_problem`).
 pub fn check_pack(game_dir: &Path, text: &str, namespace: &str) -> Result<Parsed, String> {
+    check_for(game_dir, text, namespace, "")
+}
+
+/// `replacing`: the package being updated (its own older block doesn't vouch for anything).
+fn check_for(game_dir: &Path, text: &str, namespace: &str, replacing: &str) -> Result<Parsed, String> {
     let p = parse_pack(text)?;
     let (user, blocks) = split_blocks(&read_ini(game_dir)?);
     let own: BTreeSet<String> = sections_in(&user).into_iter().collect();
     if let Some(n) = p.types.iter().find(|t| own.contains(*t)) {
         return Err(format!("You already have a creature type called {n}, so this download's isn't added. Rename yours in the Creature Studio to use it."));
     }
-    if let Some(e) = namespace_problem(&p, &blocks, namespace) {
+    let others: Vec<Block> = blocks.into_iter().filter(|b| b.id != replacing).collect();
+    if let Some(e) = namespace_problem(&p, &others, namespace) {
         return Err(e);
+    }
+    // never the game's own files
+    let game = game_dir.file_name().map(|g| g.to_string_lossy().to_string()).unwrap_or_default();
+    if let Some(f) = p.files.iter().find(|f| super::doctor::is_stock(f, &game)) {
+        return Err(format!("The download brings {f}, one of the game's own files, so it wasn't installed."));
     }
     Ok(p)
 }
@@ -1092,8 +1187,9 @@ fn namespace_problem(p: &Parsed, installed: &[Block], namespace: &str) -> Option
         if author == slug {
             continue;
         }
+        // (only its maker's own block vouches for it)
         let mine = keys_of(&p.body, t);
-        if installed.iter().any(|b| b.types.iter().any(|x| x == t) && keys_of(&b.body, t) == mine) {
+        if installed.iter().any(|b| b.owner == author && b.types.iter().any(|x| x == t) && keys_of(&b.body, t) == mine) {
             continue;
         }
         let _ = author;
@@ -1126,23 +1222,33 @@ fn install_inner(game_dir: &Path, id: &str, text: &str, src: Option<&Path>, publ
     if !valid_id(id) {
         return Err("That isn't a package id.".into());
     }
-    let p = match publisher {
-        Some(who) => check_pack(game_dir, text, who)?,
+    let (p, owner) = match publisher {
+        Some(who) => (check_for(game_dir, text, who, id)?, who.to_string()),
         None => {
+            // (a block already checked here: its own owner line says whose it is)
+            let owner = split_blocks(text).1.first().map(|b| b.owner.clone()).unwrap_or_default();
             let p = parse_pack(text)?;
             let (user, _) = split_blocks(&read_ini(game_dir)?);
             if let Some(n) = p.types.iter().find(|t| sections_in(&user).contains(t)) {
                 return Err(format!("There's already a creature type called {n} there, so it wasn't added."));
             }
-            p
+            (p, owner)
         }
     };
+    // only the uploader's own types go in its block: a carried copy of someone else's stays theirs
+    // (their own block, which the check above found unchanged)
+    let is_own = |t: &str| owner.is_empty() || t.split('.').next() == Some(owner.as_str());
+    let own_types: Vec<String> = p.types.iter().filter(|t| is_own(t)).cloned().collect();
+    let body: String = p.sections.iter().filter(|(t, _)| is_own(t)).map(|(_, s)| s.as_str()).collect();
+    let own_files: Vec<String> = p.files.iter().filter(|f| p.refs.iter().any(|(t, r)| is_own(t) && r.iter().any(|x| x.eq_ignore_ascii_case(f)))).cloned().collect();
     let old = read_ini(game_dir)?;
     let (user, mut blocks) = split_blocks(&old);
     let prev = blocks.iter().position(|b| b.id == id).map(|i| blocks.remove(i));
     let mut done = Done { types: p.types.clone(), ..Default::default() };
     let mut wrote: Vec<String> = Vec::new();
-    for rel in &p.files {
+    // (a map's files came in with the map: the store keeps them; nothing to copy or hand over)
+    let copying: Vec<String> = if src.is_some() { own_files.clone() } else { vec![] };
+    for rel in &copying {
         let dest = game_dir.join(rel);
         let from = src.map(|s| s.join(rel)).filter(|f| f.is_file());
         // (only a file this package's previous version wrote is replaced; another package's or
@@ -1179,15 +1285,21 @@ fn install_inner(game_dir: &Path, id: &str, text: &str, src: Option<&Path>, publ
             (None, false) => done.missing.push(rel.clone()),
         }
     }
+    if src.is_none() {
+        done.missing = own_files.iter().filter(|f| !game_dir.join(f).is_file()).cloned().collect();
+    }
+    // (what it needs, so a file another block wrote passes to it before it'd go: only files in its
+    // uploader's own folder, so no download can claim another maker's files)
+    let block_files = own_files.clone();
     // the previous version's files nobody needs now
     if let Some(b) = &prev {
         let mut others: Vec<Block> = blocks.clone();
-        others.push(Block { files: p.files.clone(), ..Default::default() });
+        others.push(Block { files: block_files.clone(), ..Default::default() });
         let gone: Vec<String> = b.wrote.iter().filter(|w| !wrote.iter().any(|x| x.eq_ignore_ascii_case(w))).cloned().collect();
         drop_files(game_dir, &gone, &mut others);
     }
     done.wrote = wrote.clone();
-    blocks.push(Block { id: id.to_string(), types: p.types.clone(), files: p.files.clone(), wrote, joined: false, body: p.body.clone() });
+    blocks.push(Block { id: id.to_string(), types: own_types, files: block_files, wrote, joined: false, body, owner });
     let new = join_blocks(&user, &blocks);
     if new != old {
         write_ini(game_dir, &new, &format!("Add shared creatures from {id}"))?;
@@ -1495,7 +1607,9 @@ mod tests {
         assert_eq!(p.renames["runner_x"], "gb11.runner_x");
         assert!(p.text.contains("[gb11.tough_base]\nbase = brute\nhp = 900\n[gb11.runner_x]\nbase = gb11.tough_base\n"), "{}", p.text);
         assert!(!p.text.contains("[zombie]") && !p.text.contains("fast"));
-        assert_eq!(p.files.iter().map(|f| f.0.as_str()).collect::<Vec<_>>(), vec!["models/qa/runner_x.mdl", "sound/qa/die.wav"], "the game's own zombie.mdl isn't packed");
+        assert_eq!(p.files.iter().map(|f| f.0.as_str()).collect::<Vec<_>>(), vec!["models/gb11/qa/runner_x.mdl", "sound/gb11/qa/die.wav"], "the game's own zombie.mdl isn't packed; custom files go under the namespace");
+        assert!(p.text.contains("model = models/gb11/qa/runner_x.mdl models/zombie.mdl\n") && p.text.contains("snd_die = gb11/qa/die.wav\n"), "{}", p.text);
+        assert!(parse_pack(&p.text).is_ok());
         assert_eq!(p.summary()[0], "runner_x (with its model and 1 sound)");
         assert!(pack_types(&hl, "cstrike", &["ghost".into()], "gb11").unwrap_err().contains("isn't one of your creature types"));
         assert!(pack_types(&hl, "cstrike", &["zombie".into()], "gb11").unwrap().is_empty());
@@ -1527,8 +1641,8 @@ mod tests {
         assert!(parse_pack("[gb11.x]\nrun_shell = 1\n").unwrap_err().contains("doesn't know"));
         assert!(parse_pack("; files: ../../x.mdl\n[gb11.x]\n").unwrap_err().contains("can't use"));
         assert!(parse_pack("; files: models/con.mdl\n[gb11.x]\n").is_err());
-        let p = parse_pack("; types: gb11.x\n; files: models/jam/x.mdl\n[gb11.x]\nbase = runner\nhp = 5\n").unwrap();
-        assert_eq!((p.types, p.files), (vec!["gb11.x".to_string()], vec!["models/jam/x.mdl".to_string()]));
+        let p = parse_pack("; types: gb11.x\n; files: models/gb11/x.mdl\n[gb11.x]\nbase = runner\nhp = 5\nmodel = models/gb11/x.mdl\n").unwrap();
+        assert_eq!((p.types, p.files), (vec!["gb11.x".to_string()], vec!["models/gb11/x.mdl".to_string()]));
     }
 
     #[test]
@@ -1536,14 +1650,14 @@ mod tests {
         let mine = "; my creatures\r\n[pet]\r\nbase = hound\r\nhp = 5"; // CRLF, no final line break
         let (hl, gd) = game(mine);
         let src = hl.join("pkg");
-        std::fs::create_dir_all(src.join("models/jam")).unwrap();
-        std::fs::write(src.join("models/jam/x.mdl"), b"IDST x").unwrap();
-        let pack = "; types: gb11.x\n; files: models/jam/x.mdl\n[gb11.x]\nbase = runner\nhp = 50\n";
+        std::fs::create_dir_all(src.join("models/gb11")).unwrap();
+        std::fs::write(src.join("models/gb11/x.mdl"), b"IDST x").unwrap();
+        let pack = "; types: gb11.x\n; files: models/gb11/x.mdl\n[gb11.x]\nbase = runner\nhp = 50\nmodel = models/gb11/x.mdl\n";
         let d = install_pack(&gd, "mod-1", pack, Some(&src), "gb11").unwrap();
-        assert_eq!(d.wrote, vec!["models/jam/x.mdl"]);
-        assert!(gd.join("models/jam/x.mdl").is_file());
+        assert_eq!(d.wrote, vec!["models/gb11/x.mdl"]);
+        assert!(gd.join("models/gb11/x.mdl").is_file());
         let text = std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap();
-        assert!(text.starts_with(mine) && text.contains("; >>> from mod-1 +nl") && text.contains("[gb11.x]\nbase = runner\nhp = 50\n; <<< end mod-1\n"), "{text}");
+        assert!(text.starts_with(mine) && text.contains("; >>> from mod-1 +nl") && text.contains("[gb11.x]\nbase = runner\nhp = 50\nmodel = models/gb11/x.mdl\n; <<< end mod-1\n"), "{text}");
         // the game (and the Studio) read the type
         let r = creatures::resolve(&creatures::Doc::parse(&text));
         assert_eq!(r.iter().find(|x| x.t.name == "gb11.x").unwrap().t.hp, 50.0);
@@ -1554,11 +1668,11 @@ mod tests {
         assert_eq!(installed_types(&gd)["gb11.x"], vec!["mod-1", "mod-2"]);
         // the first goes: the type and the model stay for the second
         assert!(uninstall_pack(&gd, "mod-1").unwrap().is_empty());
-        assert!(gd.join("models/jam/x.mdl").is_file());
+        assert!(gd.join("models/gb11/x.mdl").is_file());
         assert_eq!(installed_types(&gd)["gb11.x"], vec!["mod-2"]);
         // the second goes: everything of ours is gone, the player's part is byte for byte as it was
-        assert_eq!(uninstall_pack(&gd, "mod-2").unwrap(), vec!["models/jam/x.mdl"]);
-        assert!(!gd.join("models/jam/x.mdl").exists());
+        assert_eq!(uninstall_pack(&gd, "mod-2").unwrap(), vec!["models/gb11/x.mdl"]);
+        assert!(!gd.join("models/gb11/x.mdl").exists());
         assert_eq!(std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap(), mine);
         assert!(uninstall_pack(&gd, "mod-9").unwrap().is_empty());
         let _ = std::fs::remove_dir_all(&hl);
@@ -1567,18 +1681,18 @@ mod tests {
     #[test]
     fn never_overwrites_the_players_files_or_types() {
         let (hl, gd) = game("[gb11.x]\nhp = 1\n");
-        let pack = "; files: models/jam/x.mdl\n[gb11.x]\nbase = runner\n";
+        let pack = "; files: models/gb11/x.mdl\n[gb11.x]\nbase = runner\nmodel = models/gb11/x.mdl\n";
         assert!(install_pack(&gd, "mod-1", pack, None, "gb11").unwrap_err().contains("already have a creature type called gb11.x"));
         std::fs::write(gd.join(creatures::FILE_REL), "").unwrap();
-        std::fs::create_dir_all(gd.join("models/jam")).unwrap();
-        std::fs::write(gd.join("models/jam/x.mdl"), b"theirs").unwrap();
+        std::fs::create_dir_all(gd.join("models/gb11")).unwrap();
+        std::fs::write(gd.join("models/gb11/x.mdl"), b"theirs").unwrap();
         let src = hl.join("pkg");
-        std::fs::create_dir_all(src.join("models/jam")).unwrap();
-        std::fs::write(src.join("models/jam/x.mdl"), b"ours").unwrap();
+        std::fs::create_dir_all(src.join("models/gb11")).unwrap();
+        std::fs::write(src.join("models/gb11/x.mdl"), b"ours").unwrap();
         let d = install_pack(&gd, "mod-1", pack, Some(&src), "gb11").unwrap();
-        assert_eq!(d.kept, vec!["models/jam/x.mdl"]);
+        assert_eq!(d.kept, vec!["models/gb11/x.mdl"]);
         uninstall_pack(&gd, "mod-1").unwrap();
-        assert_eq!(std::fs::read(gd.join("models/jam/x.mdl")).unwrap(), b"theirs");
+        assert_eq!(std::fs::read(gd.join("models/gb11/x.mdl")).unwrap(), b"theirs");
         let _ = std::fs::remove_dir_all(&hl);
     }
 
@@ -1635,12 +1749,53 @@ mod tests {
             }
         }
         // the aliases and ls = / sounds = aren't taken at all
-        for k in ["ls = model=models/jam/x.mdl", "sounds = jam/a.wav", "models = models/jam/x.mdl", "health = 5"] {
+        for k in ["ls = model=models/gb11/x.mdl", "sounds = jam/a.wav", "models = models/gb11/x.mdl", "health = 5"] {
             assert!(parse_pack(&format!("[gb11.x]\n{k}\n")).is_err(), "{k}");
         }
         assert!(parse_pack("[gb11.x]\nmodel = jam/x.mdl\n").is_err(), "a model outside models/");
         assert!(parse_pack("[gb11.x]\nsnd_die = jam/x.mp3\n").is_err());
-        assert!(parse_pack("[gb11.x]\nmodel = models/jam/x.mdl | models/zombie.mdl\nsnd_die = jam/a.wav jam/b.wav | player/die1.wav\n").is_ok());
+        assert!(parse_pack("[gb11.x]\nmodel = models/gb11/x.mdl | models/zombie.mdl\nsnd_die = jam/a.wav jam/b.wav | player/die1.wav\n").is_ok());
+    }
+
+    #[test]
+    fn listed_files_are_only_the_creatures_own() {
+        // a file no creature names, a file in someone else's folder, the game's own files
+        assert!(parse_pack("; files: models/gb11/x.mdl\n[gb11.x]\nhp = 1\n").unwrap_err().contains("none of its creatures use"));
+        assert!(parse_pack("; files: models/gb22/x.mdl\n[gb11.x]\nmodel = models/gb22/x.mdl\n").unwrap_err().contains("maker's own folder"));
+        assert!(parse_pack("; files: models/player/gign/gign.mdl\n[gb11.x]\nmodel = models/player/gign/gign.mdl\n").unwrap_err().contains("maker's own folder"));
+        assert!(parse_pack("; files: sound/gb11/a.wav\n[gb11.x]\nsnd_die = gb11/a.wav\n").is_ok());
+        let (hl, gd) = game("");
+        assert!(check_pack(&gd, "; files: models/gb11/x.mdl\n[gb11.x]\nmodel = models/gb11/x.mdl\n", "gb11").is_ok());
+        // a carried copy of someone else's type brings none of their files, and isn't written again
+        install_pack(&gd, "mod-1", "[gb22.y]\nbase = runner\nhp = 5\n", None, "gb22").unwrap();
+        let src = hl.join("pk");
+        std::fs::create_dir_all(src.join("models/gb22")).unwrap();
+        std::fs::write(src.join("models/gb22/y.mdl"), b"x").unwrap();
+        let d = install_pack(&gd, "mod-2", "[gb22.y]\nbase = runner\nhp = 5\n[gb11.z]\nbase = gb22.y\n", Some(&src), "gb11").unwrap();
+        assert!(d.wrote.is_empty());
+        let (_, blocks) = split_blocks(&std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap());
+        let b2 = blocks.iter().find(|b| b.id == "mod-2").unwrap();
+        assert_eq!((b2.types.clone(), b2.owner.as_str()), (vec!["gb11.z".to_string()], "gb11"));
+        assert!(!b2.body.contains("[gb22.y]"));
+        let _ = std::fs::remove_dir_all(&hl);
+    }
+
+    #[test]
+    fn an_update_cant_vouch_for_its_own_stale_copy() {
+        let (hl, gd) = game("");
+        // the owner's v2, and a package that carried v1 of it
+        install_pack(&gd, "mod-1", "[gb22.y]\nbase = runner\nhp = 5\n", None, "gb22").unwrap();
+        install_pack(&gd, "mod-2", "[gb22.y]\nbase = runner\nhp = 5\n[gb11.z]\nbase = gb22.y\n", None, "gb11").unwrap();
+        install_pack(&gd, "mod-1", "[gb22.y]\nbase = runner\nhp = 9\n", None, "gb22").unwrap();
+        // re-installing the old carried copy doesn't pin it again
+        assert!(install_pack(&gd, "mod-2", "[gb22.y]\nbase = runner\nhp = 5\n[gb11.z]\nbase = gb22.y\n", None, "gb11").unwrap_err().contains("isn't the uploader's"));
+        // and a block that isn't the owner's never vouches (one written by hand, say)
+        let t = std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap();
+        let (u, mut b) = split_blocks(&t);
+        b.push(Block { id: "mod-3".into(), owner: "gb33".into(), types: vec!["gb44.w".into()], body: "[gb44.w]\nbase = runner\n".into(), ..Default::default() });
+        std::fs::write(gd.join(creatures::FILE_REL), join_blocks(&u, &b)).unwrap();
+        assert!(install_pack(&gd, "mod-4", "[gb44.w]\nbase = runner\n", None, "gb55").unwrap_err().contains("isn't the uploader's"));
+        let _ = std::fs::remove_dir_all(&hl);
     }
 
     #[test]
@@ -1648,22 +1803,22 @@ mod tests {
         let (hl, gd) = game("");
         let mk = |dir: &str, body: &[u8]| {
             let src = hl.join(dir);
-            std::fs::create_dir_all(src.join("models/jam")).unwrap();
-            std::fs::write(src.join("models/jam/x.mdl"), body).unwrap();
+            std::fs::create_dir_all(src.join("models/gb11")).unwrap();
+            std::fs::write(src.join("models/gb11/x.mdl"), body).unwrap();
             src
         };
-        let pack = "; files: models/jam/x.mdl\n[gb11.x]\nmodel = models/jam/x.mdl\n";
+        let pack = "; files: models/gb11/x.mdl\n[gb11.x]\nmodel = models/gb11/x.mdl\n";
         install_pack(&gd, "mod-1", pack, Some(&mk("a", b"from A")), "gb11").unwrap();
         let d = install_pack(&gd, "mod-2", pack, Some(&mk("b", b"from B")), "gb11").unwrap();
-        assert_eq!(d.kept, vec!["models/jam/x.mdl"]);
-        assert_eq!(std::fs::read(gd.join("models/jam/x.mdl")).unwrap(), b"from A");
+        assert_eq!(d.kept, vec!["models/gb11/x.mdl"]);
+        assert_eq!(std::fs::read(gd.join("models/gb11/x.mdl")).unwrap(), b"from A");
         // A's own update may replace its file
         install_pack(&gd, "mod-1", pack, Some(&mk("c", b"A v2")), "gb11").unwrap();
-        assert_eq!(std::fs::read(gd.join("models/jam/x.mdl")).unwrap(), b"A v2");
+        assert_eq!(std::fs::read(gd.join("models/gb11/x.mdl")).unwrap(), b"A v2");
         // A goes: B still needs the file, so it stays (now B's to remove)
         uninstall_pack(&gd, "mod-1").unwrap();
-        assert!(gd.join("models/jam/x.mdl").is_file());
-        assert_eq!(uninstall_pack(&gd, "mod-2").unwrap(), vec!["models/jam/x.mdl"]);
+        assert!(gd.join("models/gb11/x.mdl").is_file());
+        assert_eq!(uninstall_pack(&gd, "mod-2").unwrap(), vec!["models/gb11/x.mdl"]);
         let _ = std::fs::remove_dir_all(&hl);
     }
 
@@ -1752,7 +1907,7 @@ mod tests {
         // Community downloads: strict even with no marker, and never over a file already written
         let zp = zip_of("plain.zip", &[("maps/x.bsp", "a"), ("maps/x.bsp.", "b")]);
         assert!(crate::archive::extract_strict(&zp, &fresh("o3"), 1 << 20).is_err());
-        assert!(crate::archive::extract(&zp, &fresh("o4"), 1 << 20).is_ok(), "other downloads keep their own rules");
+        assert!(crate::archive::extract(&zp, &fresh("o4"), 1 << 20).is_err(), "aliasing names: refused in every download");
         let zp = zip_of("ok.zip", &[("loner-strike.json", "{}"), ("creatures/creatures.ini", "[gb11.x]\n")]);
         let o = fresh("o5");
         crate::archive::extract_strict(&zp, &o, 1 << 20).unwrap();
@@ -1769,6 +1924,100 @@ mod tests {
             assert!(crate::archive::extract(&tp, &out, 1 << 20).unwrap_err().contains("come as .zip"));
             assert!(!out.join("creatures/creatures.ini").exists());
             assert!(crate::archive::extract_strict(&tp, &fresh("o7"), 1 << 20).unwrap_err().contains("come as .zip"));
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn every_archive_is_checked_on_the_paths_it_writes() {
+        use std::io::Write;
+        fn crc32(b: &[u8]) -> u32 {
+            let mut c = !0u32;
+            for x in b {
+                c ^= *x as u32;
+                for _ in 0..8 {
+                    c = if c & 1 != 0 { (c >> 1) ^ 0xEDB8_8320 } else { c >> 1 };
+                }
+            }
+            !c
+        }
+        let dir = std::env::temp_dir().join(format!("ls-every-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let fresh = |n: &str| {
+            let d = dir.join(n);
+            std::fs::create_dir_all(&d).unwrap();
+            d
+        };
+        // a Unicode name field that renames the entry: refused, any download
+        // (built by hand: the zip crate won't write a field that renames its entry)
+        let zp = dir.join("uni.zip");
+        {
+            let name: &[u8] = b"maps/a.bsp";
+            let mut extra = vec![0x75u8, 0x70];
+            let mut data = vec![1u8];
+            data.extend_from_slice(&crc32(name).to_le_bytes());
+            data.extend_from_slice(b"creatures/creatures.ini");
+            extra.extend_from_slice(&(data.len() as u16).to_le_bytes());
+            extra.extend_from_slice(&data);
+            let body: &[u8] = b"x";
+            let crc = crc32(body);
+            let le16 = |v: u16| v.to_le_bytes().to_vec();
+            let le32 = |v: u32| v.to_le_bytes().to_vec();
+            let mut b: Vec<u8> = Vec::new();
+            for x in [le32(0x0403_4b50), le16(20), le16(0), le16(0), le16(0), le16(0), le32(crc), le32(1), le32(1), le16(name.len() as u16), le16(extra.len() as u16)] {
+                b.extend(x);
+            }
+            b.extend_from_slice(name);
+            b.extend_from_slice(&extra);
+            b.extend_from_slice(body);
+            let cd = b.len() as u32;
+            for x in [le32(0x0201_4b50), le16(20), le16(20), le16(0), le16(0), le16(0), le16(0), le32(crc), le32(1), le32(1), le16(name.len() as u16), le16(extra.len() as u16), le16(0), le16(0), le16(0), le32(0), le32(0)] {
+                b.extend(x);
+            }
+            b.extend_from_slice(name);
+            b.extend_from_slice(&extra);
+            let cd_len = b.len() as u32 - cd;
+            for x in [le32(0x0605_4b50), le16(0), le16(0), le16(1), le16(1), le32(cd_len), le32(cd), le16(0)] {
+                b.extend(x);
+            }
+            std::fs::write(&zp, &b).unwrap();
+            let mut z = zip::ZipArchive::new(std::fs::File::open(&zp).unwrap()).unwrap();
+            assert_eq!(z.by_index(0).unwrap().name().unwrap(), "creatures/creatures.ini", "the reader takes the Unicode name");
+        }
+        assert!(crate::archive::extract(&zp, &fresh("u"), 1 << 20).unwrap_err().contains("doesn't add up"));
+        // aliasing names in a plain GameBanana-style zip (no marker): refused too
+        for bad in ["maps/x.bsp.", "maps/x.bsp ", "models/PROGRA~1/x.mdl", "models/con.mdl", "creatures/creatures.ini."] {
+            let zp = dir.join("alias.zip");
+            {
+                let mut z = zip::ZipWriter::new(std::fs::File::create(&zp).unwrap());
+                z.start_file(bad, zip::write::SimpleFileOptions::default()).unwrap();
+                z.write_all(b"x").unwrap();
+                z.finish().unwrap();
+            }
+            let out = fresh(&format!("a{}", bad.len()));
+            assert!(crate::archive::extract(&zp, &out, 1 << 20).is_err(), "{bad}");
+        }
+        assert!(crate::archive::written_name_problem("maps\\x.bsp".as_bytes(), "maps/x.bsp").is_none(), "slash style only");
+        assert!(crate::archive::written_name_problem(b"caf\x82/x.bsp", "caf\u{e9}/x.bsp").is_none(), "an old code page");
+        assert!(crate::archive::written_name_problem(b"caf\x82/x.bsp", "caf\u{e9}/../x.bsp").is_some());
+        // a tarball whose twin creatures.ini would land on the first (case): refused, cleared
+        if Path::new("/usr/bin/tar").exists() {
+            let pk = fresh("pk");
+            std::fs::create_dir_all(pk.join("a")).unwrap();
+            std::fs::write(pk.join("a/creatures.ini"), "[gb11.x]\n").unwrap();
+            std::fs::write(pk.join("creatures.ini.bak"), "[gb11.x]\nhp = 1\n").unwrap();
+            let tp = dir.join("twin.tar");
+            // the same entry twice under two spellings of one path
+            assert!(std::process::Command::new("/usr/bin/tar")
+                .arg("-cf").arg(&tp).arg("-C").arg(&pk).arg("-s").arg(",^creatures.ini.bak,a/CREATURES.INI,").arg("a/creatures.ini").arg("creatures.ini.bak")
+                .status().unwrap().success());
+            let out = fresh("t");
+            let r = crate::archive::extract(&tp, &out, 1 << 20);
+            // (a case-insensitive disk keeps one file for two entries: refused; a case-sensitive
+            // one keeps both, which the lower-case twin check refuses)
+            assert!(r.is_err(), "{r:?}");
+            assert!(!out.join("a/creatures.ini").exists());
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
