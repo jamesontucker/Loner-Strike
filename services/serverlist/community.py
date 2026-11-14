@@ -196,6 +196,33 @@ def _bool(d, k):
     return v
 
 
+_ASSET = re.compile(r"^[a-z0-9_./ -]{1,160}\.(mdl|spr|wav|mp3)$")
+
+
+def _requirements(r):
+    """A mode's maps and content (the app's community::ModeRequirements): plain map names, clean
+    model/sound/sprite paths, links to GameBanana pages; anything else is dropped or refused."""
+    dm = r.get("defaultMap", "") or ""
+    if not isinstance(dm, str):
+        _bad("requirements")
+    maps = [m for m in dict.fromkeys(_list(r, "maps", 24)) if isinstance(m, str) and safe_arg(m)]
+    content = []
+    for c in _list(r, "content", 64):
+        if not isinstance(c, dict) or not isinstance(c.get("path"), str):
+            _bad("requirements content")
+        p = c["path"].strip().replace("\\", "/").lower().lstrip("/")
+        if ".." in p or not _ASSET.match(p):
+            continue
+        kind = "model" if p.endswith(".mdl") else "sprite" if p.endswith(".spr") else "sound"
+        e = {"path": p, "kind": kind}
+        link = c.get("link")
+        if isinstance(link, dict) and link.get("model") in ("Mod", "Spray") and isinstance(link.get("id"), int) and 0 < link["id"] < 100_000_000:
+            name = link.get("name", "")
+            e["link"] = {"model": link["model"], "id": link["id"], "name": name[:80] if isinstance(name, str) else ""}
+        content.append(e)
+    return {"defaultMap": dm if safe_arg(dm) else "", "maps": maps, "content": content}
+
+
 # what a Game Mode Studio mode can do beyond its own game (keep in step with community.rs RISKS)
 MODE_CAPABILITIES = ("server_commands", "amx_commands", "plugin_calls", "kicks_players")
 
@@ -380,6 +407,9 @@ def clean_item(raw):
         it["mode"] = {"id": mid, "uid": _uid(mo), "plugins": [], "review": "none", "maps": list(dict.fromkeys(maps))}
         if caps:
             it["mode"]["capabilities"] = caps
+        req = _obj(mo, "requirements")
+        if req is not None:
+            it["mode"]["requirements"] = _requirements(req)
 
     h = _obj(raw, "health")
     if h is not None:

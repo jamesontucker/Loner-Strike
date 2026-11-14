@@ -280,6 +280,18 @@ class Validation(unittest.TestCase):
         with self.assertRaises(cm.Reject):
             cm.clean_item(dict(mode_item(), bots="superb"))
 
+    def test_mode_requirements_are_kept_and_cleaned(self):
+        it = cm.clean_item(mode_item(mode={"id": "cage", "maps": [], "requirements": {
+            "defaultMap": "de_dust2", "maps": ["de_dust2", "a b", "de_dust2"],
+            "content": [{"path": "Models/Crate.mdl", "link": {"model": "Mod", "id": 77, "name": "Crates"}},
+                        {"path": "../../x.mdl"}, {"path": "sound/beep.wav", "link": {"model": "Skin", "id": 1}}]}}))
+        r = it["mode"]["requirements"]
+        self.assertEqual(r["maps"], ["de_dust2"])
+        self.assertEqual(r["content"], [{"path": "models/crate.mdl", "kind": "model", "link": {"model": "Mod", "id": 77, "name": "Crates"}},
+                                        {"path": "sound/beep.wav", "kind": "sound"}])
+        with self.assertRaises(cm.Reject):
+            cm.clean_item(mode_item(mode={"id": "cage", "requirements": {"content": "nope"}}))
+
     def test_mode_capabilities_are_kept_and_cleaned(self):
         it = cm.clean_item(mode_item(mode={"id": "cage", "maps": [], "capabilities": ["kicks_players", "server_commands", "format_disk", "kicks_players"]}))
         self.assertEqual(it["mode"]["capabilities"], ["kicks_players", "server_commands"])

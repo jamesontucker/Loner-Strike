@@ -246,6 +246,63 @@ pub struct ModeMeta {
     /// amx_commands, plugin_calls, kicks_players
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub capabilities: Vec<String>,
+    /// the maps it plays on and the content it needs (requirements.rs; the Studio's Details)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requirements: Option<ModeRequirements>,
+}
+
+/// What a mode plays on and needs, as listed.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ModeRequirements {
+    pub default_map: String,
+    pub maps: Vec<String>,
+    pub content: Vec<ContentNeed>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ContentNeed {
+    pub path: String,
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link: Option<super::requirements::Link>,
+}
+
+impl ModeRequirements {
+    /// From a requirements report (requirements::report): its maps and the content that isn't the game's own.
+    pub fn from_report(r: &Value) -> ModeRequirements {
+        let name = |m: &Value| m["name"].as_str().unwrap_or("").to_string();
+        ModeRequirements {
+            default_map: if r["defaultMap"].is_null() { String::new() } else { name(&r["defaultMap"]) },
+            maps: r["maps"].as_array().into_iter().flatten().map(name).collect(),
+            content: r["content"].as_array().into_iter().flatten().map(|c| ContentNeed { path: c["path"].as_str().unwrap_or("").into(), kind: c["kind"].as_str().unwrap_or("").into(), link: serde_json::from_value(c["link"].clone()).ok() }).collect(),
+        }
+    }
+
+    /// Only plain map names, clean paths of the three kinds, real page links; capped.
+    pub fn clean(&mut self) {
+        let ok = |m: &String| crate::maps::safe_arg(m) && m.len() <= 31;
+        if !ok(&self.default_map) {
+            self.default_map.clear();
+        }
+        self.maps.retain(ok);
+        self.maps.truncate(24);
+        self.content.retain_mut(|c| {
+            let Some(p) = super::requirements::clean_path(&c.path) else { return false };
+            c.kind = super::requirements::kind_of(&p).unwrap_or("").into();
+            c.path = p;
+            if let Some(l) = &mut c.link {
+                if !matches!(l.model.as_str(), "Mod" | "Spray") || l.id <= 0 || l.id >= 100_000_000 {
+                    c.link = None;
+                } else {
+                    l.name = one_line(&l.name, 80);
+                }
+            }
+            true
+        });
+        self.content.truncate(64);
+    }
 }
 
 /// What a mode can do beyond its own game, in plain words (badges and the question before
@@ -498,6 +555,9 @@ pub fn parse_index(bytes: &[u8]) -> Result<Index, String> {
             m.maps.retain(|x| crate::maps::safe_arg(x));
             let known: Vec<String> = RISKS.iter().filter(|(c, _)| m.capabilities.iter().any(|x| x == c)).map(|(c, _)| c.to_string()).collect();
             m.capabilities = known;
+            if let Some(r) = &mut m.requirements {
+                r.clean();
+            }
         }
         it.name = one_line(&it.name, 80);
         if let Some(r) = &mut it.remix_of {
@@ -1020,10 +1080,34 @@ async fn api_item(State(st): State<Shared>, UrlPath((model, id)): UrlPath<(Strin
                 "why": if !tagged { Some("This page doesn't carry the Loner-Strike tag any more.") } else if !kind.can_install() { Some(kind.no_installer()) } else { None },
                 "have": it.as_ref().and_then(|i| i.map.as_ref()).is_some_and(|m| have.contains(&m.name.to_ascii_lowercase())),
                 "installed": installed_json(model, id, &idx, &page),
+                // a mode's "Plays on" and "Needs", each with whether you have it and where to get it
+                "needs": it.as_ref().and_then(|i| i.mode.as_ref()).and_then(|m| m.requirements.as_ref()).map(|r| needs_json(r, &idx, &have, &|p: &str| game.as_deref().is_some_and(|g| g.dir.join(p).is_file() || crate::tools::doctor::is_stock(&crate::mapcopy::Finder::default(), &g.hl, p)))),
             }))
         })
         .await,
     )
+}
+
+/// A mode's requirements for its page: each map and file, whether it's here, and the item
+/// that provides it (a community map by its name; content by its link).
+pub fn needs_json(r: &ModeRequirements, idx: &Index, maps_have: &HashSet<String>, file_here: &dyn Fn(&str) -> bool) -> Value {
+    let map = |name: &str| {
+        let base = crate::maps::is_stock_file(&format!("maps/{name}.bsp"));
+        let item = idx.items.iter().find(|i| i.map.as_ref().is_some_and(|m| m.name.eq_ignore_ascii_case(name)));
+        json!({"name": name, "have": base || maps_have.contains(&name.to_ascii_lowercase()), "base": base,
+               "item": item.map(|i| json!({"model": i.model, "id": i.gb, "name": i.name}))})
+    };
+    let mut maps: Vec<String> = vec![];
+    for m in std::iter::once(&r.default_map).chain(r.maps.iter()).filter(|m| !m.is_empty()) {
+        if !maps.iter().any(|x| x.eq_ignore_ascii_case(m)) {
+            maps.push(m.clone());
+        }
+    }
+    json!({
+        "defaultMap": if r.default_map.is_empty() { Value::Null } else { json!(r.default_map) },
+        "maps": maps.iter().map(|m| map(m)).collect::<Vec<_>>(),
+        "content": r.content.iter().map(|c| json!({"path": c.path, "kind": c.kind, "have": file_here(&c.path), "link": c.link})).collect::<Vec<_>>(),
+    })
 }
 
 #[derive(Deserialize)]
@@ -1781,7 +1865,7 @@ fn read_studio_graph(graphs: &Path, id: &str) -> Result<super::studio::graph::Gr
 
 /// Builds the upload package for a Studio mode: `modes/<id>/<id>.graph.json` (only the graph:
 /// each player's app builds the code), README.txt and loner-strike.json; screenshots beside it.
-pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq, out_dir: &Path) -> Result<Package, String> {
+pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq, out_dir: &Path, needs: Option<&Value>) -> Result<Package, String> {
     let g = read_studio_graph(graphs, id)?;
     if super::studio::graph::has_errors(&super::studio::graph::validate(&g)) {
         return Err("The graph has problems. Fix them in Game Mode Studio first.".into());
@@ -1806,7 +1890,19 @@ pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq,
         name: title,
         author,
         summary: one_line(&req.summary, 400),
-        mode: Some(ModeMeta { id: g.mode.id.clone(), uid, plugins: vec![], review: Review::None, maps, capabilities: super::studio::graph::capabilities(&g).iter().map(|c| c.to_string()).collect() }),
+        mode: Some(ModeMeta {
+            id: g.mode.id.clone(),
+            uid,
+            plugins: vec![],
+            review: Review::None,
+            maps,
+            capabilities: super::studio::graph::capabilities(&g).iter().map(|c| c.to_string()).collect(),
+            requirements: needs.map(|r| {
+                let mut m = ModeRequirements::from_report(r);
+                m.clean();
+                m
+            }),
+        }),
         remix_of: super::communitylib::credits(lib).get(id).cloned(),
         bots: clean_bots(&req.bots),
         added: now(),
@@ -1866,7 +1962,7 @@ pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq,
         contents,
         screenshots: shot_names,
         item,
-        warnings: vec![],
+        warnings: needs.map(|r| r["warnings"].as_array().into_iter().flatten().filter_map(|w| w.as_str().map(String::from)).collect()).unwrap_or_default(),
     };
     let _ = std::fs::write(out_dir.join(format!("{stem}.json")), serde_json::to_vec_pretty(&pkg).unwrap_or_default());
     Ok(pkg)
@@ -2244,17 +2340,38 @@ async fn api_prefab_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(id):
     )
 }
 
-async fn api_mode_ready(UrlPath(id): UrlPath<String>) -> Response {
-    json_answer(blocking(move || mode_readiness(&super::studio::graphs_dir(), &super::communitylib::lib_dir(), &id).map_err(|e| Fail::new(StatusCode::OK, e))).await)
+async fn api_mode_ready(State(st): State<Shared>, UrlPath(id): UrlPath<String>) -> Response {
+    json_answer(
+        blocking(move || {
+            let mut v = mode_readiness(&super::studio::graphs_dir(), &super::communitylib::lib_dir(), &id).map_err(|e| Fail::new(StatusCode::OK, e))?;
+            // the mode's requirements: files that can't be found anywhere stop it; the rest are warnings
+            if let Ok(r) = super::requirements::report(&st, &id) {
+                if let Some(b) = v["blockers"].as_array_mut() {
+                    for p in r["missing"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+                        b.push(json!(format!("{p} isn't on this computer and isn't linked to an item that has it. Link it in My mode › Details › Requirements, or remove what uses it.")));
+                    }
+                }
+                v["requirementWarnings"] = r["warnings"].clone();
+                v["requirements"] = r;
+            }
+            Ok(v)
+        })
+        .await,
+    )
 }
 
-async fn api_mode_publish(h: HeaderMap, UrlPath(id): UrlPath<String>, Json(req): Json<PublishReq>) -> Response {
+async fn api_mode_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(id): UrlPath<String>, Json(req): Json<PublishReq>) -> Response {
     if !crate::panel_api::from_panel(&h) {
         return forbidden();
     }
     json_answer(
         blocking(move || {
-            let pkg = build_mode_package(&super::studio::graphs_dir(), &super::communitylib::lib_dir(), &id, &req, &packages_dir()).map_err(|e| Fail::new(StatusCode::OK, e))?;
+            let needs = super::requirements::report(&st, &id).ok();
+            if let Some(missing) = needs.as_ref().and_then(|r| r["missing"].as_array()).filter(|m| !m.is_empty()) {
+                let list: Vec<&str> = missing.iter().filter_map(Value::as_str).collect();
+                return Err(Fail::new(StatusCode::OK, format!("Not on this computer and not linked to an item that has them: {}. Link them in My mode › Details › Requirements first.", list.join(", "))));
+            }
+            let pkg = build_mode_package(&super::studio::graphs_dir(), &super::communitylib::lib_dir(), &id, &req, &packages_dir(), needs.as_ref()).map_err(|e| Fail::new(StatusCode::OK, e))?;
             Ok(json!({"package": pkg, "form": gamebanana_form(&pkg)}))
         })
         .await,
@@ -2796,7 +2913,7 @@ mod tests {
         assert!(mode_readiness(&graphs, &lib, "../x").is_err());
         let out = root.join("p");
         let req = PublishReq { title: "Lava, mine".into(), author: "me".into(), maps: vec!["de_dust2".into(), "bad;map".into()], bots: "OK".into(), ..Default::default() };
-        let pkg = build_mode_package(&graphs, &lib, "lava_remix", &req, &out).unwrap();
+        let pkg = build_mode_package(&graphs, &lib, "lava_remix", &req, &out, None).unwrap();
         assert_eq!(pkg.contents[0], "modes/lava_remix/lava_remix.graph.json");
         assert_eq!(pkg.item.kind, Kind::Mode);
         assert_eq!(pkg.item.remix_of.as_ref().unwrap().gb, 102);
@@ -3007,5 +3124,35 @@ mod risk_tests {
         for c in ["server_commands", "amx_commands", "plugin_calls", "kicks_players"] {
             assert_eq!(risk_words(&[c]).len(), 1, "{c}");
         }
+    }
+}
+
+#[cfg(test)]
+mod requirement_tests {
+    use super::*;
+
+    #[test]
+    fn a_modes_page_says_what_it_plays_on_and_needs() {
+        let idx = parse_index(br#"{"schema": 1, "items": [
+            {"kind": "map", "gb": 101, "name": "de_lonely", "map": {"name": "de_lonely"}},
+            {"kind": "mode", "gb": 2, "name": "Crates", "mode": {"id": "crates", "requirements": {
+                "defaultMap": "de_lonely", "maps": ["de_dust2", "de_lonely", "bad map"],
+                "content": [{"path": "Models/Crate.mdl", "kind": "x", "link": {"model": "Mod", "id": 77, "name": "Crate pack"}},
+                            {"path": "../../etc/passwd.mdl"}, {"path": "sound/beep.wav", "link": {"model": "Skin", "id": 1}}]}}}]}"#).unwrap();
+        let r = idx.items.iter().find(|i| i.gb == 2).unwrap().mode.as_ref().unwrap().requirements.clone().unwrap();
+        assert_eq!(r.maps, vec!["de_dust2", "de_lonely"], "bad names dropped");
+        assert_eq!(r.content.len(), 2, "a path out of the game dropped");
+        assert_eq!(r.content[0].path, "models/crate.mdl");
+        assert_eq!(r.content[0].kind, "model");
+        assert!(r.content[1].link.is_none(), "not a real page link");
+        let have: HashSet<String> = ["de_lonely".to_string()].into();
+        let v = needs_json(&r, &idx, &have, &|p| p == "sound/beep.wav");
+        assert_eq!(v["defaultMap"], "de_lonely");
+        assert_eq!(v["maps"][0]["name"], "de_lonely");
+        assert_eq!(v["maps"][0]["item"]["id"], 101, "the community map that provides it");
+        assert_eq!(v["maps"][1]["base"], true);
+        assert_eq!(v["content"][0]["have"], false);
+        assert_eq!(v["content"][0]["link"]["id"], 77);
+        assert_eq!(v["content"][1]["have"], true);
     }
 }

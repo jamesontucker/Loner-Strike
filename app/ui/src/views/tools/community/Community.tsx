@@ -15,6 +15,7 @@ import { getJson } from "../../../api";
 import { useToolArg } from "../../../stores/tools";
 import { useNav } from "../../../store";
 import type { GbJob } from "../../../types";
+import type { NeedLink, Needs } from "./communityApi";
 import { Banner, BusyButton, LoadError, Segmented, useToast } from "../../../ui";
 import { errorText, useBusy } from "../common/api";
 import { useReportAddress } from "../common/address";
@@ -200,6 +201,40 @@ function SourceNote({ data }: { data: { index: string; gamebanana: string } }) {
   return null;
 }
 
+/** A mode's "Plays on" and "Needs", each with whether you have it. */
+function ModeNeeds({ needs }: { needs: Needs }) {
+  const mark = (have: boolean) => <span className={`tag ${have ? "cm-badge-bots" : "cm-trust-unreviewed"}`}>{have ? "You have it" : "Missing"}</span>;
+  return (
+    <div className="cm-needs">
+      {needs.maps.length > 0 && (
+        <>
+          <h4>Plays on</h4>
+          <ul>
+            {needs.maps.map((m) => (
+              <li key={m.name}>
+                {m.name}
+                {m.name === needs.defaultMap ? " (default)" : ""} {mark(m.have)} {!m.have && !m.item && <span className="muted small-note">not shared on the community list</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {needs.content.length > 0 && (
+        <>
+          <h4>Needs</h4>
+          <ul>
+            {needs.content.map((c) => (
+              <li key={c.path}>
+                <code>{c.path}</code> {mark(c.have)} {c.link && <span className="muted small-note">from {c.link.name || `page ${c.link.id}`}</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Badges({ list, trust }: { list: Entry["badges"]; trust?: Trust }) {
   return (
     <span className="cm-badges">
@@ -275,6 +310,42 @@ function Creation({ d }: { d: Details }) {
   // (the risk codes that question named: sent back with the yes)
   const [askCodes, setAskCodes] = useState<string[] | null>(null);
   const [pic, setPic] = useState(0);
+  // "Get everything": what the mode needs that isn't here (and has an item to get it from)
+  const missingNeeds: NeedLink[] = [
+    ...(d.needs?.maps ?? []).filter((m) => !m.have && m.item).map((m) => m.item!),
+    ...(d.needs?.content ?? []).filter((c) => !c.have && c.link).map((c) => c.link!),
+  ].filter((x, i, all) => all.findIndex((y) => y.model === x.model && y.id === x.id) === i);
+  const [getting, setGetting] = useState<string | null>(null);
+  const [getNotes, setGetNotes] = useState<string[]>([]);
+  const getEverything = async () => {
+    const notes: string[] = [];
+    for (const it of missingNeeds) {
+      setGetting(`Getting ${it.name || `item ${it.id}`}…`);
+      const r = await tryIt(it.model, it.id, false);
+      if (r.error) {
+        notes.push(`${it.name || `Item ${it.id}`}: ${r.error}`);
+        continue;
+      }
+      if (r.job) {
+        // each through its own installer: one at a time
+        for (;;) {
+          await new Promise((res) => setTimeout(res, 1000));
+          const list = await getJson<GbJob[]>("/api/gb/jobs").catch(() => [] as GbJob[]);
+          const j = Array.isArray(list) ? list.find((x) => x.id === r.job) : undefined;
+          if (!j || j.state === "done") break;
+          if (j.state === "error") {
+            notes.push(`${it.name || `Item ${it.id}`}: ${j.message || "couldn't install it"}`);
+            break;
+          }
+        }
+      }
+    }
+    setGetNotes(notes);
+    setGetting(null);
+    qc.invalidateQueries({ queryKey: ["tools", "community"] });
+    // then the mode itself (asked first when it does more than its own game)
+    await go(false);
+  };
   const modes = useQuery({ queryKey: ["tools", "community", "modes"], queryFn: () => startModes(), staleTime: 60_000 });
   const map = d.item?.map?.name ?? null;
   const wanted = d.item?.map?.modes ?? [];
@@ -339,7 +410,8 @@ function Creation({ d }: { d: Details }) {
     const m = stage.state === "done" ? stage.map : map;
     // (a mode on its own starts on the first map it's made for, else the map you played last)
     if (!m && !mode) return;
-    const r = await launch(m ?? d.item?.mode?.maps?.[0] ?? null, mode);
+    // (a mode starts on its default map, else the first it's made for)
+    const r = await launch(m ?? d.needs?.defaultMap ?? d.item?.mode?.maps?.[0] ?? null, mode);
     if (r.error) toast(r.error, true);
     else toast("Starting the game…");
   };
@@ -373,6 +445,7 @@ function Creation({ d }: { d: Details }) {
         {d.item?.summary && <p className="cm-summary">{d.item.summary}</p>}
         <TrustNote trust={d.trust} listed={!!d.item} />
         {d.item?.map && <BotFacts d={d} />}
+        {d.needs && <ModeNeeds needs={d.needs} />}
 
         <div className="cm-try">
           {stage.state === "asking" && (ask || d.trust.confirm) ? (
@@ -419,7 +492,22 @@ function Creation({ d }: { d: Details }) {
             <p className="cm-ok">Installed.{d.kind === "spray" ? " Pick it in Get more > Sprays to use it." : ""}</p>
           ) : (
             <>
-              <button className="btn primary" disabled={!d.canTry} onClick={() => go(false)}>Try it</button>
+              <button className="btn primary" disabled={!d.canTry || getting !== null} onClick={() => go(false)}>{missingNeeds.length ? "Just the mode" : "Try it"}</button>
+              {missingNeeds.length > 0 && (
+                <button className="btn" disabled={!d.canTry || getting !== null} onClick={() => void getEverything()} title="The mode plus the maps and content it needs, each through its own installer and checks">
+                  {getting !== null ? (
+                    <>
+                      <span className="spinner" aria-hidden="true" />
+                      {getting}
+                    </>
+                  ) : (
+                    "Get everything"
+                  )}
+                </button>
+              )}
+              {getNotes.map((n) => (
+                <p key={n} className="muted small-note">{n}</p>
+              ))}
               {d.why && <p className="muted small-note">{d.why}</p>}
             </>
           )}

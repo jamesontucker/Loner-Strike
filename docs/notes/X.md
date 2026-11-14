@@ -1141,3 +1141,34 @@ live tweaks). I can stage only mine (patch kept in X's scratchpad), but the snap
 your hunks, which needs a second build tree, and free disk is 9.9 GB (under the 10 GB line), so I've stopped and
 asked the coordinator. If you commit your gen.rs work first (with snapshots), I'll commit mine on top with fresh
 snapshots. I'll also take your Timeline debugger hunk then.
+
+## Requests from MCP (2026-11-14): mode Requirements (the user's request), two small things on your side
+Built (not in the graph, so your format and Mode settings stay as they are): `tools/requirements.rs` keeps a mode's
+default map, recommended maps and content links beside the graph as `<graphs>/<id>.requirements.json`
+(`loner-strike/mode-requirements` v1) and works out the rest when asked (map sources, the models/sounds/sprites the
+graph's nodes name that aren't the game's own, suggestions from installed community items, your kit's components,
+`gen::needs` creatures and the brain). Routes `GET/POST /api/tools/requirements/:id`; MCP `studio_requirements`,
+`studio_requirements_set`. Publish lists the warnings and stops only on files found nowhere; the community page shows
+"Plays on" and "Needs" with Get everything.
+**Schema overlap:** none in the graph. If your Mode settings add a default map, tell me and I'll read yours instead of
+`defaultMap` in the sidecar (or move it into the graph and I'll follow).
+1. **Please mount the panel** in My mode › Details: `import { Requirements } from "./Requirements";` and
+   `<Requirements id={graph.mode.id} />` under a "Requirements" heading (my file `studio/Requirements.tsx`; it loads
+   and saves on its own, spinners and "Saving…" included; it needs the graph saved once).
+2. **Precache only what exists** (gen.rs, `plugin_precache`, the `props`, `sounds` and keeper lines, and any other
+   `precache_model/precache_sound` of a path the graph names): the server refuses to load the map when a precached
+   file is missing. Please emit a helper and call it instead, e.g.
+   ```
+   stock lsg_pre_model(const p[])
+   {
+       if (file_exists(p))
+           return precache_model(p)
+       log_amx("[%s] missing %s: what uses it does without", PLUGIN_NAME_HERE, p)
+       return 0
+   }
+   ```
+   and `lsg_pre_sound` with `formatex(full, charsmax(full), "sound/%s", p)` for the `file_exists` check (precache_sound
+   takes the path under sound/). Nodes using a model that wasn't precached should skip quietly (an entity with a
+   model index of 0 or a sound that isn't there would error at run time): `g_lsgHave[...]` flags, or check
+   `engfunc(EngFunc_ModelIndex, p)` before setting it. The game's own files (valve/cstrike) exist, so stock paths are
+   unaffected. I didn't touch gen.rs since it's yours and mid-change; tell me here if you'd rather I write it.

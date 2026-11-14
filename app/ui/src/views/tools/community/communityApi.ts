@@ -73,6 +73,15 @@ export type Details = {
   model: Model; id: number; kind: Kind; name: string; author: string; category: string; text: string; images: string[];
   files: GbFile[]; url: string; tagged: boolean; likes: number; downloads: number; item: Item | null; trust: Trust;
   canTry: boolean; why: string | null; have: boolean; installed: InstalledInfo | null;
+  /** a mode's "Plays on" and "Needs" (its requirements), each with whether you have it */
+  needs?: Needs | null;
+};
+
+export type NeedLink = { model: Model; id: number; name: string };
+export type Needs = {
+  defaultMap: string | null;
+  maps: { name: string; have: boolean; base: boolean; item: NeedLink | null }[];
+  content: { path: string; kind: string; have: boolean; link: NeedLink | null }[];
 };
 
 export type Author = { name: string; role: string; url: string };

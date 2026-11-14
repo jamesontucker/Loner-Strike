@@ -107,6 +107,12 @@ Pin types and node types: studio_nodes."}}), &["id", "ops"]),
         Spec { name: "studio_node_help", title: "Mode Studio: node help", kind: Read,
             schema: || obj(json!({"type": {"type": "string", "description": "A node type, e.g. event.player_killed"}, "search": {"type": "string", "description": "Words in a node's title or help"}}), &[]),
             description: "The Studio's node help (F1 on a node): what a node does, each pin and setting, more advice and related nodes." },
+        Spec { name: "studio_requirements", title: "Mode Studio: requirements", kind: Read, schema: || obj(json!({"id": id_prop()}), &["id"]),
+            description: "What a saved mode plays on and needs (My mode › Details › Requirements): the default and recommended maps with where each comes from (base game, a community item, or only on this computer: share it first), every model, sound and sprite its nodes use that isn't the game's own with whether it's here, its link to a community or GameBanana item and a suggested one, the components, creature types and bot brain it needs, warnings, and the files that can't be found anywhere (Publish stops on those)." },
+        Spec { name: "studio_requirements_set", title: "Mode Studio: set requirements", kind: Change,
+            schema: || obj(json!({"id": id_prop(), "defaultMap": {"type": "string"}, "maps": {"type": "array", "items": {"type": "string"}, "description": "Recommended maps (installed map names)"},
+                "links": {"type": "object", "additionalProperties": {"type": ["object", "null"]}, "description": "content path -> {model: Mod|Spray, id: GameBanana page number, name} (null removes the link)"}}), &["id"]),
+            description: "Sets a saved mode's default map, recommended maps and the items that provide its content. Fields left out keep what's there. Returns the same as studio_requirements." },
         Spec { name: "studio_snippets", title: "Mode Studio: snippets", kind: Read, schema: none,
             description: "The person's snippets (pieces of graph to drop in): id, name, description, the nodes they hold. Insert one with studio_edit insert_snippet." },
         Spec { name: "studio_library", title: "Mode Studio: My library", kind: Read, schema: none,
@@ -839,6 +845,28 @@ pub async fn run(ctx: &Ctx, name: &str, a: &Value) -> Option<Done> {
                 words.iter().all(|w| t.contains(w.as_str()))
             }).take(30).map(|(k, h)| json!({"type": k, "title": h["title"], "what": h["what"]})).collect();
             Ok(json!({"matched": hits.len(), "nodes": hits}))
+        }
+        .await,
+        "studio_requirements" => async { get(ctx, &format!("/api/tools/requirements/{}", mode_id(a)?)).await }.await,
+        "studio_requirements_set" => async {
+            let id = mode_id(a)?;
+            let now = get(ctx, &format!("/api/tools/requirements/{id}")).await?;
+            // (fields left out keep what's saved)
+            let maps: Vec<Value> = match a.get("maps") {
+                Some(m) => m.as_array().cloned().unwrap_or_default(),
+                None => now["maps"].as_array().into_iter().flatten().map(|m| m["name"].clone()).collect(),
+            };
+            let default_map = a.get("defaultMap").cloned().unwrap_or_else(|| now["defaultMap"]["name"].clone());
+            let mut links = serde_json::Map::new();
+            for c in now["content"].as_array().into_iter().flatten() {
+                if let (Some(p), false) = (c["path"].as_str(), c["link"].is_null()) {
+                    links.insert(p.into(), c["link"].clone());
+                }
+            }
+            for (k, v) in a["links"].as_object().into_iter().flatten() {
+                links.insert(k.clone(), v.clone());
+            }
+            post(ctx, &format!("/api/tools/requirements/{id}"), json!({"defaultMap": default_map, "maps": maps, "links": links})).await
         }
         .await,
         "studio_snippets" => get(ctx, "/api/tools/studio/snippets").await,

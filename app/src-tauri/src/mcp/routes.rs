@@ -415,6 +415,8 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/tools/studio/testrun/cancel"),
     ("POST", "/api/tools/studio/generate"),
     ("POST", "/api/tools/studio/source"),
+    ("GET", "/api/tools/requirements/:id"),
+    ("POST", "/api/tools/requirements/:id"),
     ("GET", "/api/tools/studio/kits"),
     ("GET", "/api/tools/studio/kit/:id"),
     ("GET", "/api/tools/studio/library"),
@@ -857,6 +859,7 @@ pub const CHANGES: &[&str] = &[
     "/api/tools/studio/debug/command",
     "/api/tools/studio/generate",
     "/api/tools/studio/validate",
+    "/api/tools/requirements/:id",
     "/api/tools/studio/testrun/cancel",
     "/api/welcome",
 ];
