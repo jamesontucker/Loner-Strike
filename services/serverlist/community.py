@@ -825,6 +825,23 @@ def _outer_name_ok(name):
         and not name.endswith((" ", ".")) and bool(_OUTER.match(name))
 
 
+# the games' own files (the app's stock lists: Steam's depot manifests for Half-Life, CS 1.6 and
+# Condition Zero; kept in step with app/src-tauri/src/tools/stock_*.txt)
+_STOCK = None
+
+
+def is_stock(path):
+    global _STOCK
+    if _STOCK is None:
+        here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stock")
+        got = set()
+        for n in ("stock_valve.txt", "stock_cstrike.txt", "stock_czero.txt"):
+            with open(os.path.join(here, n), encoding="utf-8") as f:
+                got.update(line.strip().lower() for line in f if line.strip())
+        _STOCK = got
+    return path.lower() in _STOCK
+
+
 def _part_ok(p):
     stem = p.split(".", 1)[0].rstrip(" ").lower()
     return not (p in ("", ".", "..") or p.startswith(".") or p.endswith((" ", ".")) or not _PART.match(p)
@@ -1950,6 +1967,7 @@ class Community:
         if missing:
             raise Reject(422, f"The package lists {missing[0]} but its creatures.ini doesn't define it. Make it again with Publish.")
         self._creature_names_owned(item, facts)
+        self._creature_files_owned(item, facts, sizes)
         # the upload's GameBanana date: the evidence when two pages declare the same uid (not indexed)
         item["fileAt"] = f.get("added") or 0
         return item
@@ -2015,6 +2033,12 @@ class Community:
             secs = result.get("creatureSections")
             if isinstance(secs, dict):
                 out["creatureSections"] = {k: v for k, v in list(secs.items())[:64] if isinstance(k, str) and isinstance(v, str)}
+            refs = result.get("creatureRefs")
+            if isinstance(refs, list):
+                out["creatureRefs"] = [r for r in refs if isinstance(r, str)][:1024]
+            got = result.get("creatureFiles")
+            if isinstance(got, dict):
+                out["creatureFiles"] = {k: v for k, v in list(got.items())[:2048] if isinstance(k, str) and isinstance(v, str)}
         return out
 
     def run_checker(self, path, name, seconds, cwd):
@@ -2374,6 +2398,44 @@ class Community:
                     except Exception as e:  # noqa: BLE001
                         self._write_failed(row["key"], "pull", e)
         return pulled
+
+    def _creature_files_owned(self, item, facts, sizes):
+        """The files a creature-carrying package ships: none of the games' own files (stock lists);
+        every file in a models/gb<id>/ or sound/gb<id>/ folder named by its creatures.ini, and
+        every file it names that ships in such a folder; the uploader's own id, or another
+        member's (a carried creature) only when byte-identical to that member's listed file. A
+        creature package ships nothing in models/ or sound/ its creatures don't use."""
+        checks = item.get("checks", {})
+        if not checks.get("creatureSections") and item.get("kind") != "creature":
+            return
+        member = int(facts["submitterId"])
+        refs = set(checks.get("creatureRefs") or [])
+        files = checks.get("creatureFiles") or {}
+        shipped = [p for p in (norm_path(n) for n in sizes) if p and not p.endswith("/")]
+        # (game content only: the package's own readme and data aren't installed into the game)
+        stock = [p for p in shipped if p.partition("/")[0] not in ("creatures", "source", "prefabs", "modes")
+                 and p not in ("readme.txt", "loner-strike.json") and is_stock(p)]
+        if stock:
+            raise Reject(422, f"The package ships the game's own {stock[0]}. Leave the game's files out: players have them.")
+        listed = None
+        for p in shipped:
+            top, _, rest = p.partition("/")
+            if top not in ("models", "sound"):
+                continue
+            folder = rest.partition("/")[0]
+            ns = folder if re.match(r"^gb[1-9][0-9]{0,8}$", folder) and "/" in rest else ""
+            if (ns or item.get("kind") == "creature") and p not in refs:
+                raise Reject(422, f"{p} isn't used by any of the package's creatures. Make it again with Publish.")
+            if p in refs and not ns:
+                raise Reject(422, f"{p} must be in {top}/gb{member}/ (the creature files' own folder). Make it again with Publish.")
+            if ns and ns != f"gb{member}":
+                owner = int(ns[2:])
+                if listed is None:
+                    listed = [((_j(r["item"]) or {}).get("checks") or {}).get("creatureFiles") or {}
+                              for r in self.store.rows(("listed",)) if r["submitter_id"] == owner]
+                if not any(x.get(p) == files.get(p) and files.get(p) for x in listed):
+                    raise Reject(422, f"{p} is in {ns}'s folder but isn't the same as that creator's listed file.")
+                listed = None
 
     def _write_failed(self, key, what, e):
         """A moderation or re-check write that failed for one entry: logged and told to the

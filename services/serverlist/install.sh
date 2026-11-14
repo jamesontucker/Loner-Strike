@@ -20,6 +20,11 @@ for f in serverlist.py community.py modbot.py lsmod.py formats.py formats_runner
   install -o root -g root -m 644 "$here/$f" "/opt/lonerstrike-list/$f"
 done
 install -o root -g root -m 755 "$here/set-env.sh" /opt/lonerstrike-list/set-env.sh
+# the games' own files (creature packages may not ship them)
+install -d -o root -g root -m 755 /opt/lonerstrike-list/stock
+for f in stock_valve.txt stock_cstrike.txt stock_czero.txt; do
+  install -o root -g root -m 644 "$here/stock/$f" "/opt/lonerstrike-list/stock/$f"
+done
 rm -f /opt/lonerstrike-list/r2-community.sh
 install -d -o root -g root -m 700 /etc/lonerstrike-list
 umask 077

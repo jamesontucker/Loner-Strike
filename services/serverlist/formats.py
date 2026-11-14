@@ -684,6 +684,28 @@ def creatures_ini_sections(data):
     return out
 
 
+def creatures_ini_refs(data):
+    """The game paths a creatures.ini names: its model paths, and its sounds as sound/<path>."""
+    out, in_type = set(), False
+    for raw in data.decode("latin-1").splitlines():
+        line = raw.split(";", 1)[0].split("#", 1)[0].split("//", 1)[0].strip()
+        if not line:
+            continue
+        if line.startswith("["):
+            in_type = True
+            continue
+        if not in_type or "=" not in line:
+            continue
+        key, value = (x.strip() for x in line.split("=", 1))
+        key = key.lower()
+        toks = value.replace("|", " ").lower().split()
+        if key == "model":
+            out.update(toks)
+        elif key.startswith("snd_"):
+            out.update("sound/" + t for t in toks)
+    return out
+
+
 def creatures_ini_types(data):
     """The [type] names in a creatures.ini fragment, in order."""
     out = []

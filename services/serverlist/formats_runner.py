@@ -8,6 +8,7 @@ starve or crash the service; the service also kills it at a wall-clock limit. Ea
 is streamed to its own temporary file (never whole into memory) and checked by formats.py.
 Prints one line of JSON: {"ok": true, "files": n, "kinds": {...}} or {"ok": false, "error": "..."}.
 """
+import hashlib
 import json
 import os
 import sys
@@ -43,6 +44,8 @@ def run(path, name, seconds):
     kinds = {}
     creatures = []
     sections = {}
+    refs = set()
+    files = {}  # models/ and sound/ files: sha256 (creature files are compared with their owner's)
 
     def one(fname, fh, size):
         try:
@@ -57,6 +60,17 @@ def run(path, name, seconds):
             data = fh.read(formats.CREATURES_MAX)
             creatures.extend(formats.creatures_ini_types(data))
             sections.update(formats.creatures_ini_sections(data))
+            refs.update(formats.creatures_ini_refs(data))
+        low = fname.replace("\\", "/").lower()
+        if low.startswith(("models/", "sound/")) and len(files) < 2048:
+            fh.seek(0)
+            h = hashlib.sha256()
+            while True:
+                b = fh.read(1 << 20)
+                if not b:
+                    break
+                h.update(b)
+            files[low] = h.hexdigest()
 
     if not name.lower().endswith(".zip"):
         with open(path, "rb") as fh:
@@ -96,6 +110,8 @@ def run(path, name, seconds):
     if creatures:
         out["creatures"] = creatures
         out["creatureSections"] = sections
+        out["creatureRefs"] = sorted(refs)
+        out["creatureFiles"] = files
     return out
 
 

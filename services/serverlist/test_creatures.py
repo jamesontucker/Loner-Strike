@@ -17,22 +17,22 @@ from test_formats import model  # noqa: E402
 
 GOOD_INI = b"""; >>> from mod:1234 (made in Loner-Strike)
 ; types: gb1001.runner_x gb1001.boss_y
-; files: models/ann/runner_x.mdl sound/ann/hit.wav ../not/checked:here
+; files: models/gb1001/runner_x.mdl sound/gb1001/hit.wav ../not/checked:here
 [gb1001.runner_x]
 base = runner
 name = Fast One / v2
 hp = 80
-model = models/ann/runner_x.mdl models/zombie.mdl
-snd_attack = ann/hit.wav ann/hit2.wav | player/pl_pain2.wav
+model = models/gb1001/runner_x.mdl models/zombie.mdl
+snd_attack = gb1001/hit.wav gb1001/hit2.wav | player/pl_pain2.wav
 [gb1001.boss_y]
 base = gb1001.runner_x
 ; <<< end
 """
 CREATURES = [{"name": "gb1001.runner_x", "model": True, "sounds": 2}, {"name": "gb1001.boss_y"}]
-FILES = {"creatures/creatures.ini": GOOD_INI, "models/ann/runner_x.mdl": model()}
+FILES = {"creatures/creatures.ini": GOOD_INI, "models/gb1001/runner_x.mdl": model()}
 # (the app keeps packed files under the author's own folders)
-FILES_NS = {"models/ann/qa/runner_x.mdl": model()}
-ASSETS = ["sound/ann/hit.wav", "sound/ann/hit2.wav"]
+FILES_NS = {"models/gb1001/qa/runner_x.mdl": model()}
+ASSETS = ["sound/gb1001/hit.wav", "sound/gb1001/hit2.wav"]
 
 
 MEMBERS = {"Ann": 1001, "Bob": 1002, "ann!": 7771234}
@@ -51,9 +51,12 @@ def creature_page(gb=706630, file_id=1789869, author="Ann"):
     return p
 
 
-def creature_zip(ini=GOOD_INI, man=None, extra=()):
-    files = dict(FILES, **{"creatures/creatures.ini": ini, "creatures/preview.png": b"\x89PNG\r\n\x1a\n" + bytes(32)})
-    return zip_of([*ASSETS, *extra], dict(files, **{"loner-strike.json": manifest(man or {"kind": "creature", "name": "Fast One", "creatures": CREATURES})}))
+def creature_zip(ini=GOOD_INI, man=None, extra=(), folder="gb1001"):
+    """Ann's creature package (or with its files in another member's folder)."""
+    files = {k.replace("gb1001/", folder + "/"): v for k, v in FILES.items()}
+    files.update({"creatures/creatures.ini": ini, "creatures/preview.png": b"\x89PNG\r\n\x1a\n" + bytes(32)})
+    return zip_of([a.replace("gb1001/", folder + "/") for a in ASSETS] + list(extra),
+                  dict(files, **{"loner-strike.json": manifest(man or {"kind": "creature", "name": "Fast One", "creatures": CREATURES})}))
 
 
 def creature_item(**kw):
@@ -127,11 +130,11 @@ class Rules(unittest.TestCase):
         self.assertEqual(formats.check("addons/amxmodx/configs/gamemodes/zombie.ini", __import__("io").BytesIO(b"[zombie]\n"), 9), "text")
 
     def test_where_creature_files_may_be(self):
-        cm.check_package(["maps/a.bsp", "creatures/creatures.ini", "models/ann/x.mdl", "sound/ann/x.wav"], "map")
-        cm.check_package(["creatures/creatures.ini", "models/ann/qa/x.mdl", "sound/ann/qa/a/1.wav"], "creature")
-        cm.check_package(["modes/cage/graph.json", "creatures/creatures.ini", "models/ann/x.mdl"], "mode")
-        cm.check_package(["prefabs/can.map", "prefabs/can.json", "creatures/creatures.ini", "models/ann/x.mdl", "sound/ann/x.wav"], "prefab")
-        cm.check_package(["creatures/creatures.ini", "creatures/preview.png", "models/ann/x.mdl", "sound/ann/x.wav", "README.txt", "loner-strike.json"], "creature")
+        cm.check_package(["maps/a.bsp", "creatures/creatures.ini", "models/gb1001/x.mdl", "sound/gb1001/x.wav"], "map")
+        cm.check_package(["creatures/creatures.ini", "models/gb1001/qa/x.mdl", "sound/gb1001/qa/a/1.wav"], "creature")
+        cm.check_package(["modes/cage/graph.json", "creatures/creatures.ini", "models/gb1001/x.mdl"], "mode")
+        cm.check_package(["prefabs/can.map", "prefabs/can.json", "creatures/creatures.ini", "models/gb1001/x.mdl", "sound/gb1001/x.wav"], "prefab")
+        cm.check_package(["creatures/creatures.ini", "creatures/preview.png", "models/gb1001/x.mdl", "sound/gb1001/x.wav", "README.txt", "loner-strike.json"], "creature")
         for kind, bad in (("spray", "creatures/creatures.ini"), ("texture", "creatures/creatures.ini"), ("creature", "maps/a.bsp"),
                           ("creature", "creatures/other.ini"), ("creature", "addons/amxmodx/plugins/x.amxx"), ("creature", "../models/x.mdl"),
                           ("creature", "creatures/sub/preview.png"), ("prefab", "sprites/x.spr"), ("map", "creatures/x.ini")):
@@ -211,7 +214,7 @@ class Registration(unittest.TestCase):
         self.refused(zip_of(ASSETS, dict(FILES, **{"loner-strike.json": manifest({"kind": "creature", "name": "x", "creatures": []})})), "creatures")
         no_ini = {k: v for k, v in FILES.items() if k != "creatures/creatures.ini"}
         self.refused(zip_of(ASSETS, dict(no_ini, **{"loner-strike.json": manifest({"kind": "creature", "name": "x", "creatures": CREATURES})})), "doesn't include them")
-        self.refused(zip_of(ASSETS, dict(FILES, **{"models/ann/runner_x.mdl": b"not a model",
+        self.refused(zip_of(ASSETS, dict(FILES, **{"models/gb1001/runner_x.mdl": b"not a model",
                                                    "loner-strike.json": manifest({"kind": "creature", "name": "x", "creatures": CREATURES})})), "runner_x.mdl")
 
     def test_ids_are_the_uploaders(self):
@@ -265,6 +268,36 @@ class Registration(unittest.TestCase):
         self.assertEqual(c.store.get("mod:706631")["state"], "pulled")
         self.assertTrue(any("Couldn't pull `mod:706630`" in t for t in said), said)
 
+    def test_creature_files(self):
+        man = {"kind": "creature", "name": "Fast One", "creatures": CREATURES}
+        # a file the creatures don't use, in their folder or anywhere in a creature package
+        self.refused(creature_zip(extra=["sound/gb1001/unused.wav"]), "isn't used by any")
+        self.refused(creature_zip(extra=["sound/other/x.wav"]), "isn't used by any")
+        # a file the creatures use, shipped outside their folder
+        ini = GOOD_INI.replace(b"models/gb1001/runner_x.mdl", b"models/mine/runner_x.mdl")
+        self.refused(zip_of(ASSETS, {"creatures/creatures.ini": ini, "models/mine/runner_x.mdl": model(), "loner-strike.json": manifest(man)}), "must be in models/gb1001/")
+        # the game's own model, shipped
+        ini = GOOD_INI.replace(b"models/gb1001/runner_x.mdl models/zombie.mdl", b"models/zombie.mdl")
+        self.refused(zip_of(ASSETS, {"creatures/creatures.ini": ini, "models/zombie.mdl": model(), "loner-strike.json": manifest(man)}), "game's own models/zombie.mdl")
+
+    def test_carried_files_must_match_the_owners(self):
+        c = self.setup(creature_zip())
+        self.assertEqual(c.submit(body(creature_item()), "ann")[0], 200)
+        changed = dict(FILES, **{"models/gb1001/runner_x.mdl": model() + b"x"})
+        c.get_range.files[1885247] = zip_of(["maps/de_marakesh.bsp", "README.txt", *ASSETS],
+                                            dict(changed, **{"loner-strike.json": manifest(dict(MAP_MANIFEST, creatures=CREATURES))}))
+        code, ans = c.submit(body(map_item()), "a")
+        self.assertEqual(code, 422, ans)
+        self.assertIn("isn't the same as that creator's listed file", ans["error"])
+
+    def test_stock_lists_match_the_apps(self):
+        app = os.path.join(HERE, "..", "..", "app", "src-tauri", "src", "tools")
+        for n in ("stock_valve.txt", "stock_cstrike.txt", "stock_czero.txt"):
+            mine, theirs = os.path.join(HERE, "stock", n), os.path.join(app, n)
+            if os.path.exists(theirs):
+                with open(mine, "rb") as a, open(theirs, "rb") as b:
+                    self.assertEqual(a.read(), b.read(), f"stock/{n} differs from the app's: copy it again")
+
     def test_duplicate_entries(self):
         import io as _io
         import warnings
@@ -306,10 +339,10 @@ class Registration(unittest.TestCase):
 
     def test_own_namespace_and_remixes(self):
         # a remix of Ann's creature by Bob: in Bob's name, the credit in remixOf
-        bob_ini = GOOD_INI.replace(b"gb1001.", b"gb1002.")
+        bob_ini = GOOD_INI.replace(b"gb1001", b"gb1002")
         bob = [dict(x, name=x["name"].replace("gb1001.", "gb1002.")) for x in CREATURES]
         man = {"kind": "creature", "name": "Faster One", "creatures": bob, "remixOf": {"model": "Mod", "gb": 706630, "name": "Fast One", "author": "Ann"}}
-        c = self.setup(creature_zip(ini=bob_ini, man=man), page=creature_page(author="Bob"))
+        c = self.setup(creature_zip(ini=bob_ini, man=man, folder="gb1002"), page=creature_page(author="Bob"))
         code, ans = c.submit(body(creature_item(creatures=bob)), "bob")
         self.assertEqual(code, 200, ans)
         it = [x for x in json.loads(cm.build_index(c.store)[0])["items"] if x["gb"] == 706630][0]
@@ -320,7 +353,7 @@ class Registration(unittest.TestCase):
         self.assertEqual(code, 422, ans)
         self.assertIn("yours are named gb1002.", ans["error"])
         # files under the author's own folders pass
-        c = self.setup(zip_of(ASSETS, dict(FILES_NS, **{"creatures/creatures.ini": GOOD_INI.replace(b"models/ann/runner_x.mdl", b"models/ann/qa/runner_x.mdl"),
+        c = self.setup(zip_of(ASSETS, dict(FILES_NS, **{"creatures/creatures.ini": GOOD_INI.replace(b"models/gb1001/runner_x.mdl", b"models/gb1001/qa/runner_x.mdl"),
                                                         "loner-strike.json": manifest({"kind": "creature", "name": "Fast One", "creatures": CREATURES})})))
         self.assertEqual(c.submit(body(creature_item()), "ann")[0], 200)
 
