@@ -20,7 +20,7 @@
 // installed, else full colour) and thumb/<name>.webp (320 wide). Needs cwebp (brew install webp).
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { connect } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -106,7 +106,7 @@ async function dockTab(page, name) {
  *  the Focus hint and the Studio's tour offer already seen. */
 async function toolsPrefs(page) {
   await page.addInitScript(() => {
-    const tools = ["studio", "creatures", "plugins", "editor", "navfix", "callouts", "radar", "map", "doctor", "spray", "playercfg", "people", "models", "replay", "sim", "community", "overview"];
+    const tools = ["studio", "creatures", "plugins", "editor", "navfix", "callouts", "radar", "map", "doctor", "spray", "playercfg", "people", "models", "demos", "replay", "sim", "community", "overview"];
     localStorage.setItem("ls.tools.focus", JSON.stringify(Object.fromEntries(tools.map((t) => [t, true]))));
     localStorage.setItem("ls.tools.focusHintSeen", JSON.stringify(tools));
     localStorage.setItem("ls.studio.tour", JSON.stringify({ offered: true, never: true }));
@@ -172,17 +172,21 @@ function sampleCommunity() {
   const base = { model: "Mod", category: "", likes: 0, listed: true, have: false, canTry: true, url: "https://lonerstrike.com", games: ["cstrike"] };
   let id = 1;
   const map = (name, summary, modes, img, ago) => ({ ...base, id: id++, key: `mod-${id}`, kind: "map", name, author: "Loner-Strike", summary, image: `https://site-shots.invalid/${img}`, added: now - ago * day, updated: now - ago * day, map: name, modes, badges: ["featured", "bots", "nav", "checked"], bots: "", trust: content });
-  const mode = (file, bots, ago) => {
+  // (a mode's card shows its first screenshot: here the site's render of a map it's played on)
+  const mode = (file, bots, ago, img) => {
     const m = tpl(file);
-    return { ...base, id: id++, key: `mod-${id}`, kind: "mode", name: m.name, author: "Loner-Strike", summary: m.description, image: null, added: now - ago * day, updated: now - ago * day, map: null, modes: [], badges: ["checked"], bots, trust: data };
+    return { ...base, id: id++, key: `mod-${id}`, kind: "mode", name: m.name, author: "Loner-Strike", summary: m.description, image: img ? `https://site-shots.invalid/${img}` : null, added: now - ago * day, updated: now - ago * day, map: null, modes: [], badges: ["checked"], bots, trust: data };
   };
+  // newest first, as the list sorts them
   return {
     items: [
+      mode("king-of-the-hill.graph.json", "ok", 1, "render-dust2.webp"),
+      mode("infection.graph.json", "great", 1, "render-outpost.webp"),
       map("ls_outpost", "A walled courtyard with a keep and an armory, made for Last Stand", ["Last Stand", "Classic"], "render-outpost.webp", 2),
       map("br_valley", "A river valley with a town, a factory, farms and bridges, made for Battle Royale", ["Battle Royale"], "render-valley.webp", 3),
-      mode("king-of-the-hill.graph.json", "ok", 1),
-      mode("infection.graph.json", "great", 1),
-      mode("gun-game-lite.graph.json", "great", 4),
+      mode("gun-game-lite.graph.json", "great", 4, "render-dust2.webp"),
+      mode("juggernaut.graph.json", "ok", 5, "render-valley.webp"),
+      mode("one-in-the-chamber.graph.json", "great", 6, "render-dust2.webp"),
     ],
     index: "live", gamebanana: "live", indexUpdated: now - 3600, tag: "Software Used: LonerStrike",
   };
@@ -220,7 +224,9 @@ const SHOTS = {
     await settle(page, 1500);
     await page.getByRole("button", { name: "Compile", exact: true }).click().catch(() => {});
     await page.getByText(/No problems|compiled|Compiled/).first().waitFor({ timeout: 120000 }).catch(() => {});
-    await settle(page, 1000);
+    // the "Compiled with no problems" toast says it a second time: let it go
+    await page.waitForTimeout(8000);
+    await settle(page, 500);
   }),
   navfix: plain("tools", "navfix:cs_rats2", "Nav fixer on cs_rats2: where bots can go and get back from"),
   doctor: plain("tools", "doctor:de_dust2", "Map doctor on de_dust2: every check, grouped"),
@@ -235,10 +241,10 @@ const SHOTS = {
   spray: plain("tools", "spray", "Spray maker"),
   playercfg: plain("tools", "playercfg", "Crosshair & config with the crosshair live"),
   people: plain("tools", "people", "Bot people: who the bots are"),
-  models: { group: "tools", about: "Textures and models: the AK-47's view model in 3D (the list shows the downloaded skins too)", take: (page) => ak47(page, false) },
+  // (the user chose this one: the downloaded skins' names never go on the site)
   "models-game": {
     group: "tools",
-    about: "The same, with only the game's own models (the clone's downloaded models set aside for it)",
+    about: "Textures and models: the AK-47's view model in 3D, with only the game's own models listed (the clone's downloaded models set aside for it)",
     async take(page) {
       // (only in the throwaway clone, and put back after: the real game is never touched)
       const dl = join(started.game, "cstrike_downloads", "models");
@@ -253,6 +259,70 @@ const SHOTS = {
     },
   },
 
+  demos: {
+    group: "tools",
+    about: "Demos: three short bot rounds on de_dust2 (recorded with HLTV on a test server, bots only), one picked",
+    async take(page) {
+      // The demos: <SiteShots>/site-demos/*.dem, recorded once on a throwaway server with bots only
+      // (Parity A, 2026-11-14: Sim/DEMOREC, HLTV, de_dust2, 10 bots, about a minute each). In the clone
+      // only: its other demos (copies of the player's own) are set aside for the shot and put back.
+      const src = join(dirname(started.game), "site-demos");
+      const ours = existsSync(src) ? readdirSync(src).filter((f) => f.endsWith(".dem")) : [];
+      if (!ours.length) throw new Error(`no demos in ${src}: record some first (see the note above)`);
+      const moved = [];
+      const placed = [];
+      for (const game of ["cstrike", "czero"]) {
+        const dir = join(started.game, game);
+        if (!existsSync(dir)) continue;
+        const away = join(dir, ".site-shots-demos-aside");
+        mkdirSync(away, { recursive: true });
+        for (const f of readdirSync(dir).filter((x) => x.toLowerCase().endsWith(".dem"))) {
+          renameSync(join(dir, f), join(away, f));
+          moved.push([join(away, f), join(dir, f)]);
+        }
+      }
+      try {
+        for (const f of ours) {
+          const to = join(started.game, "cstrike", f);
+          copyFileSync(join(src, f), to);
+          // (each keeps its recording time, so the list's dates are real)
+          const t = statSync(join(src, f)).mtime;
+          utimesSync(to, t, t);
+          placed.push(to);
+        }
+        await tool(page, "demos", 3000);
+        await page.getByText(ours.sort()[0].replace(/\.dem$/, ""), { exact: false }).first().click().catch(() => {});
+        await settle(page, 2500);
+      } finally {
+        for (const f of placed) rmSync(f, { force: true });
+        for (const [from, to] of moved) renameSync(from, to);
+        // (the empty holding folders too; one with anything left in it stays)
+        for (const game of ["cstrike", "czero"]) {
+          const away = join(started.game, game, ".site-shots-demos-aside");
+          if (existsSync(away) && !readdirSync(away).length) rmSync(away, { recursive: true });
+        }
+      }
+    },
+  },
+
+  "publish-mode": {
+    group: "tools",
+    about: "Community › Publish for a Game Mode Studio mode (King of the Hill): its checks, details and how well bots play it",
+    async take(page) {
+      const tpl = JSON.parse(readFileSync(join(ui, "src/views/tools/studio/templates", "king-of-the-hill.graph.json"), "utf8"));
+      await toolsPrefs(page);
+      await page.goto(`http://127.0.0.1:${VITE_PORT}/tools-dev.html?open=overview`);
+      tpl.mode.id = "king_of_the_hill";
+      const r = await api(page, "/api/tools/studio/graph/king_of_the_hill", { graph: tpl });
+      if (!r.ok) throw new Error(`save: ${JSON.stringify(r)}`);
+      await tool(page, "community:publish:mode:king_of_the_hill", 5000);
+      const name = page.getByRole("textbox", { name: "Made by" });
+      if (await name.count()) await name.fill("Loner-Strike");
+      await page.getByRole("button", { name: "Bots play this well" }).click().catch(() => {});
+      await settle(page, 1200);
+    },
+  },
+
   editor: {
     group: "editor",
     about: "The map editor on br_valley in 3D, with the outline, Inspect and the Content browser",
@@ -260,7 +330,7 @@ const SHOTS = {
     async take(page) {
       await editorWith(page);
       await menu(page, "Select", "Hide triggers and zones");
-      await fly(page, 14);
+      await fly(page, 9);
       await dockTab(page, "Content");
     },
   },
@@ -325,6 +395,75 @@ const SHOTS = {
       await settle(page, 800);
     },
   },
+  "editor-facesheet": {
+    group: "editor",
+    about: "A wall face picked on ls_outpost: the face sheet in Inspect (texture, size, alignment, shift, scale, turn)",
+    pick: "maps-src/ls_outpost/ls_outpost.map",
+    async take(page) {
+      await editorWith(page);
+      // the courtyard's north wall (brush 62 of the shipped source): its sandstone face toward the yard (picked the way a click picks it: a click in the middle of
+      // the view can land on a CLIP brush in front of it), framed, then the Texture tool
+      await page.evaluate(() => {
+        const st = window.__lsEditor.getState();
+        const faces = st.brushes.get(62)?.faces ?? [];
+        const f = faces.find((x) => x.normal[1] < -0.5 && !/^(CLIP|SKY|NULL|AAATRIGGER)$/i.test(x.texture)) ?? faces[0];
+        const ref = { brush: 62, face: f.face };
+        st.select({ brushes: [], entities: [], face: ref, faces: [ref] });
+      });
+      await menu(page, "Select", "Hide triggers and zones");
+      await menu(page, "View", "Zoom to selection");
+      await settle(page, 1200);
+      await page.keyboard.press("t");
+      await settle(page, 1500);
+    },
+  },
+  "editor-io": {
+    group: "editor",
+    about: "I/O on ls_outpost: a button sets off a multi_manager that drops the east gate's boards and sounds a siren; the chain as arrows, the I/O panel below",
+    pick: "maps-src/ls_outpost/ls_outpost.map",
+    async take(page) {
+      await editorWith(page);
+      // built as a mapper would: a button, the multi_manager it fires, a siren (ambient_generic)
+      const cmd = (body) => api(page, "/api/tools/editor/cmd", body);
+      const doc = () => api(page, "/api/tools/editor/doc");
+      await cmd({ op: "add_box", min: [16, 88, 24], max: [32, 104, 56], texture: "~LIGHT3A" });
+      const box = (await doc()).brushes.find((b) => b.min[0] === 16 && b.min[1] === 88);
+      await cmd({ op: "tie", brushes: [box.id], classname: "func_button" });
+      const button = (await doc()).entities.find((e) => e.brushes?.includes(box.id));
+      await cmd({ op: "set_key", entity: button.id, key: "target", value: "east_alarm" });
+      await cmd({ op: "add_entity", classname: "multi_manager", origin: [64, 0, 64], keys: [["targetname", "east_alarm"], ["east_boards", "0.5"], ["east_siren", "0"]] });
+      await cmd({ op: "add_entity", classname: "ambient_generic", origin: [112, -96, 96], keys: [["targetname", "east_siren"], ["message", "ambience/siren.wav"], ["health", "10"], ["spawnflags", "48"]] });
+      const mm = (await doc()).entities.find((e) => (e.keys ?? []).some(([k, v]) => k === "targetname" && v === "east_alarm"));
+      await page.evaluate((id) => window.__lsEditor.getState().select({ brushes: [], entities: [id], face: null }), mm.id);
+      await menu(page, "Select", "Hide triggers and zones");
+      await menu(page, "View", "Zoom to selection");
+      await settle(page, 1000);
+      await fly(page, -2);
+      await dockTab(page, "I/O");
+      await page.getByRole("button", { name: "Picked chain", exact: true }).click();
+      await settle(page, 1500);
+    },
+  },
+  "editor-leak": {
+    group: "compile",
+    about: "A leak on ls_outpost: the sky's lid taken out, a Fast compile, Go to leak: the red line through the gap and the leak bar",
+    pick: "maps-src/ls_outpost/ls_outpost.map",
+    async take(page) {
+      await editorWith(page);
+      // the sky's lid (brush 1 of the shipped source) taken out: the map leaks through the top
+      await api(page, "/api/tools/editor/cmd", { op: "delete", brushes: [1], entities: [] });
+      await dockTab(page, "Compile");
+      await page.getByRole("group", { name: "Quality" }).getByRole("button", { name: "Fast" }).click();
+      await page.getByRole("button", { name: "Compile", exact: true }).click();
+      await page.waitForFunction(async () => {
+        const r = await (await fetch("/api/tools/compile/progress")).json();
+        return r.job && !r.job.running;
+      }, null, { timeout: 900_000, polling: 3000 });
+      await settle(page, 2000);
+      await page.getByRole("button", { name: /Go to leak/ }).first().click();
+      await settle(page, 2500);
+    },
+  },
   "editor-checks": {
     group: "editor",
     about: "Checks: the map's problems as you build, each with its fix",
@@ -332,7 +471,7 @@ const SHOTS = {
     async take(page) {
       await editorWith(page);
       await menu(page, "Select", "Hide triggers and zones");
-      await fly(page, 14);
+      await fly(page, 9);
       await dockTab(page, "Checks");
       await page.getByText("Checking the map").waitFor({ state: "hidden", timeout: 120000 }).catch(() => {});
       await settle(page, 800);
@@ -352,7 +491,7 @@ const SHOTS = {
       );
       await editorWith(page);
       await menu(page, "Select", "Hide triggers and zones");
-      await fly(page, 14);
+      await fly(page, 9);
       await settle(page, 2500);
     },
   },
@@ -386,6 +525,10 @@ const SHOTS = {
       const item = page.locator("text=\"Hill Glow\" >> visible=true").first();
       await item.scrollIntoViewIfNeeded();
       await item.dblclick({ force: true });
+      // (the side panel back at its top: finding the item scrolled it)
+      await item.evaluate((el) => { for (let e = el; e; e = e.parentElement) e.scrollTop = 0; }).catch(() => {});
+      // the Events list folded, so the side panel ends with the Timelines list whole
+      await page.locator("button.st-mb-toggle", { hasText: /Events/ }).first().click().catch(() => {});
       await settle(page, 1500);
     },
   },

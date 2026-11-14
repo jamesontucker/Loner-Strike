@@ -207,6 +207,7 @@
 }
 </script>
 <link rel="stylesheet" href="fonts/barlow.css">
+<link rel="stylesheet" href="viewer.css">
 
 <!-- Plausible (self-hosted) -->
 <script defer data-domain="lonerstrike.com" src="https://analytics.nanoshrine.com/js/script.file-downloads.hash.outbound-links.pageview-props.tagged-events.js"></script>
@@ -468,25 +469,6 @@ html { scroll-padding-top: 72px; }
   .sl-game, .sl-bots, .sl-map { display: none; }
 }
 
-/* the big screenshot viewer */
-.viewer { width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: rgba(20,22,16,.94); color: var(--bone); }
-.viewer::backdrop { background: rgba(20,22,16,.7); }
-.viewer figure { margin: 0; height: 100%; display: grid; grid-template-rows: 1fr auto; place-items: center; padding: 48px 72px 18px; gap: 12px; }
-.viewer img { max-width: 100%; max-height: calc(100vh - 120px); object-fit: contain; box-shadow: 0 20px 60px rgba(0,0,0,.6); border-radius: 3px; }
-.viewer figcaption { color: var(--dim); font-weight: 600; text-align: center; }
-.viewer button { position: absolute; border: 0; background: var(--panel); color: var(--bone); box-shadow: var(--raised); border-radius: 2px; cursor: pointer; font: 700 28px/1 var(--text); }
-.viewer button:hover { color: var(--signal); }
-.viewer .nav { top: 50%; transform: translateY(-50%); width: 48px; height: 64px; }
-.viewer .prev { left: 14px; }
-.viewer .next { right: 14px; }
-.viewer .close { top: 14px; right: 14px; width: 44px; height: 44px; }
-.viewer .count { position: absolute; top: 24px; left: 18px; color: var(--faint); font-weight: 600; font-size: 15px; }
-@media (max-width: 860px) {
-  .viewer figure { padding: 60px 12px 90px; }
-  .viewer .nav { top: auto; bottom: 18px; transform: none; }
-  .viewer .prev { left: calc(50% - 58px); }
-  .viewer .next { right: calc(50% - 58px); }
-}
 
 /* the people behind it */
 .thanks { padding: 56px 0 24px; }
@@ -1119,16 +1101,6 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     </div>
   </dialog>
 
-  <dialog class="viewer" id="viewer" aria-label="Screenshot">
-    <figure>
-      <img id="viewer-img" alt="">
-      <figcaption id="viewer-cap"></figcaption>
-    </figure>
-    <button class="nav prev" id="prev" aria-label="Previous screenshot">‹</button>
-    <button class="nav next" id="next" aria-label="Next screenshot">›</button>
-    <button class="close" id="close" aria-label="Close">×</button>
-    <span class="count" id="count"></span>
-  </dialog>
 
   <section class="get" id="get">
     <div class="wrap">
@@ -1311,6 +1283,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 </section>
 <button type="button" class="radio-tab" id="radio-tab" aria-label="Open radio" hidden><i></i>Radio</button>
 
+<script src="viewer.js"></script>
 <script>
   // ---- settings -------------------------------------------------------------
   // The public server: its address (ip:port) shows the "Play on our server" block. STATUS
@@ -1701,7 +1674,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       shot("spray", "Spray maker"),
       shot("playercfg", "Crosshair & config, with the crosshair drawn live"),
       shot("people", "Bot people: who the bots are"),
-      shot("models", "Every texture and model in your game"),
+      shot("models-game", "Every texture and model in your game"),
       shot("render-dust2", "Any map, lit like the game"),
     ],
     friends: [
@@ -1720,9 +1693,6 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   };
   const showDrafts = /[?&]drafts\b/.test(location.search);
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const viewer = document.getElementById("viewer");
-  const vimg = document.getElementById("viewer-img");
-  let open = null; // the widget the big viewer is showing
 
   const pictureOf = (s, thumb) => {
     if (s.draft && !s.have) {
@@ -1809,7 +1779,6 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       w.at = (i + n) % n;
       w.render();
       if (focusStrip && !strip.hidden) strip.querySelector('[aria-current="true"]')?.focus({ preventScroll: true });
-      if (open === w) showBig();
     };
     prev.addEventListener("click", () => w.go(w.at - 1, false));
     next.addEventListener("click", () => w.go(w.at + 1, false));
@@ -1841,42 +1810,18 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       if (stage.dataset.swiped) { delete stage.dataset.swiped; return; }
       const s = w.list()[w.at];
       if (!s || (s.draft && !s.have)) return;
-      open = w;
-      showBig();
-      viewer.showModal();
+      // the big viewer (viewer.js, shared with the docs): this section's shots, kept in step with it
+      const shown = w.list().filter((x) => !x.draft || x.have);
+      LSViewer.open(shown, Math.max(0, shown.indexOf(s)), {
+        returnTo: stage,
+        onStep: (i) => { w.at = w.list().indexOf(shown[i]); w.render(); },
+      });
       window.plausible("Screenshot", { props: { image: (s.webp || s.src).split("/").pop() } });
     });
     w.render();
     return w;
   });
 
-  // the big viewer, over the page, for one section's shots
-  function showBig() {
-    const s = open.list()[open.at];
-    if (!s || (s.draft && !s.have)) return;
-    vimg.src = s.webp || s.src;
-    vimg.alt = s.cap;
-    document.getElementById("viewer-cap").textContent = s.cap;
-    document.getElementById("count").textContent = `${open.at + 1} / ${open.list().length}`;
-  }
-  const step = (d) => { if (open) open.go(open.at + d, false); };
-  document.getElementById("prev").addEventListener("click", () => step(-1));
-  document.getElementById("next").addEventListener("click", () => step(1));
-  document.getElementById("close").addEventListener("click", () => viewer.close());
-  viewer.addEventListener("close", () => { open = null; });
-  viewer.addEventListener("click", (e) => { if (e.target === viewer || e.target.tagName === "FIGURE") viewer.close(); });
-  viewer.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowLeft") step(-1);
-    if (e.key === "ArrowRight") step(1);
-  });
-  let x0 = null;
-  viewer.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
-  viewer.addEventListener("touchend", (e) => {
-    if (x0 === null) return;
-    const dx = e.changedTouches[0].clientX - x0;
-    if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1);
-    x0 = null;
-  });
 
   // The loader fills up once, like Steam connecting in 2004
   // Only whole blocks: the count follows the bar's width (a block is 7 px plus a 3 px gap, inside

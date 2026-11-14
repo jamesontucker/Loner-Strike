@@ -27,6 +27,7 @@
 {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Loner-Strike", "item": "https://lonerstrike.com/"}, {"@type": "ListItem", "position": 2, "name": "Docs", "item": "https://lonerstrike.com/docs"}]}
 </script>
 <link rel="stylesheet" href="fonts/barlow.css">
+<link rel="stylesheet" href="viewer.css">
 
 <!-- Plausible (self-hosted) -->
 <script defer data-domain="lonerstrike.com" src="https://analytics.nanoshrine.com/js/script.file-downloads.hash.outbound-links.pageview-props.tagged-events.js"></script>
@@ -805,14 +806,14 @@ footer a { color: var(--dim); }
   <p>The <b>Textures</b> panel shows the map's WADs (add more in <b>Map properties</b>). Click to choose; double-click or <span class="kbd">Shift</span> <span class="kbd">T</span> paints what's picked. <b>Texture lock</b> keeps textures in place when brushes move.</p>
   <p>With faces picked, <b>Inspect</b> shows the face sheet: shift, scale and turn, <b>Fit</b> and <b>Justify</b>, <b>Align</b> to the world or to the face (good for slopes), <b>Pick up</b> a face's texture and <b>Recent textures</b>. With the <b>Texture</b> tool in the 3D view, right-click a face to paint the current texture on it, <span class="kbd">Alt</span>-right-click to paint it and carry the picked face's alignment round the corner (like Hammer), and <span class="kbd">Alt</span>-click to pick a texture up.</p>
   <figure class="shot">
-    <picture><source srcset="img/1.0/editor-facesheet.webp" type="image/webp"><img src="img/1.0/editor-facesheet.jpg" alt="The map editor with a wall face picked: the face sheet in Inspect shows its texture, size, alignment, shift, scale and turn" width="1200" height="750" loading="lazy"></picture>
+    <picture><source srcset="img/1.0/editor-facesheet.webp" type="image/webp"><img src="img/1.0/editor-facesheet.png" alt="The map editor with the Texture tool on ls_outpost: a sandstone wall face picked, its stretch and turn handles in 3D, and the face sheet in Inspect with its texture, size, alignment, shift, scale and turn" width="1440" height="900" loading="lazy"></picture>
     <figcaption>The face sheet: a picked face's texture and how it lies.</figcaption>
   </figure>
   <h2 id="editor-entities">Entities</h2>
   <p><b>Inspect</b> shows a form for the picked entity, with help on every key; pick several to change them together. <code>target</code> → <code>targetname</code> links are drawn in 3D. A model, sprite or sound key has <b>Choose…</b>, ↗ (show it in the <a href="#content-browser">Content Browser</a>) and <b>Use selected</b>. For a mod's own entities, add its FGD in <b>Map properties › Entity definitions</b>.</p>
   <p>The <b>I/O</b> panel (<b>What triggers what</b>) lists every link (targets, <code>multi_manager</code>s, masters and kill targets) and draws them as arrows. Show <b>All</b>, only <b>Broken</b> ones (a target no entity is named), or the <b>Picked chain</b>; the search box finds a name or a class. Click a row to pick it, double-click to look at it.</p>
   <figure class="shot">
-    <picture><source srcset="img/1.0/editor-io.webp" type="image/webp"><img src="img/1.0/editor-io.jpg" alt="The map editor showing a multi_manager's chain as arrows in 3D, with the I/O panel listing its links below" width="1200" height="750" loading="lazy"></picture>
+    <picture><source srcset="img/1.0/editor-io.webp" type="image/webp"><img src="img/1.0/editor-io.png" alt="The map editor on ls_outpost: a button fires a multi_manager that drops the east gate's boards and sounds a siren, its chain as arrows in 3D, the I/O panel listing the links below and the multi_manager's keys in Inspect" width="1440" height="900" loading="lazy"></picture>
     <figcaption>A multi_manager's chain: arrows in 3D, links in the I/O panel.</figcaption>
   </figure>
   <h2 id="content-browser" data-keywords="assets models sprites sounds props content drawer">Content Browser</h2>
@@ -833,7 +834,7 @@ footer a { color: var(--dim); }
   <p><b>Checks</b> finds broken brushes, limits, missing textures, spawns, files or targets, and what a mode still needs. Click a problem to go to it; most have a fix, like <b>Place a CT spawn</b> or <b>Add halflife.wad and cstrike.wad</b>.</p>
   <p id="editor-leaks" data-keywords="leak pointfile hole void">Leaks show when you compile: a red line runs from an entity out to the hole, and a bar says which brush the gap is next to. <b>Go to leak</b> flies along the line and picks that brush; <b>Pick brushes at the hole</b>, <b>Hide line</b> and <b>Forget it</b> are there too. <b>Map › Load pointfile…</b> loads a line (<code>.lin</code> or <code>.pts</code>) from another compile.</p>
   <figure class="shot">
-    <picture><source srcset="img/1.0/editor-leak.webp" type="image/webp"><img src="img/1.0/editor-leak.jpg" alt="The map editor after Go to leak: a red line through a gap in ls_outpost's wall, the brush beside it picked, and the leak bar above" width="1200" height="750" loading="lazy"></picture>
+    <picture><source srcset="img/1.0/editor-leak.webp" type="image/webp"><img src="img/1.0/editor-leak.png" alt="The map editor after a Fast compile of ls_outpost with its sky lid taken out: the red leak line running up to the gap, the brush beside it picked by Go to leak, and the leak bar above" width="1440" height="900" loading="lazy"></picture>
     <figcaption>Go to leak flies to the hole and picks the brush beside it.</figcaption>
   </figure>
   <p>The game won't load a map with missing models or sprites. The <b>Project</b> panel lists every file the map uses, can <b>Copy into the game</b> or <b>Copy next to the project</b>, and <b>Find missing files…</b> searches a folder you pick.</p>
@@ -1407,6 +1408,9 @@ public on_spawn(id)
   <p class="crumb">Watch &amp; inspect</p>
   <h1>Demos</h1>
   <p class="lead">Your demos and your servers' HLTV ones, in one list.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/demos.webp" type="image/webp"><img src="img/1.0/demos.png" alt="Demos: three short bot rounds on de_dust2 in the list with their length, date and size; the first one picked, showing its map, server, length and the players seen, with Watch and Show my path in Replay" width="1440" height="900" loading="lazy"></picture>
+  </figure>
   <ol>
     <li>Sort, filter (<b>All</b>, <b>Recorded in game</b>, <b>HLTV</b>) or search; pick one for who played and where.</li>
     <li><b>Watch</b> it (a server's demo: <b>Copy to my game and watch</b>; with the game open you get the console command). <b>Show my path in Replay</b> draws where you went.</li>
@@ -1420,7 +1424,7 @@ public on_spawn(id)
   <h1>Textures &amp; models</h1>
   <p class="lead">Browse every texture and model in your game. Browsing changes nothing.</p>
   <figure class="shot">
-    <picture><source srcset="img/1.0/models.webp" type="image/webp"><img src="img/1.0/models.png" alt="Textures and models: the AK-47 view model in 3D with its animations and textures listed" width="1440" height="900" loading="lazy"></picture>
+    <picture><source srcset="img/1.0/models-game.webp" type="image/webp"><img src="img/1.0/models-game.png" alt="Textures and models: the AK-47 view model in 3D with its animations and textures listed" width="1440" height="900" loading="lazy"></picture>
   </figure>
   <ul>
     <li><b>Textures</b>: search every WAD, see where a texture comes from and which maps use it, <b>Save as picture…</b>. <b>Make your own…</b> turns a picture into a texture.</li>
@@ -1813,7 +1817,7 @@ lsctl logs        the last 100 console lines</code></pre>
   </ul>
   <p>Others can play and remix it, with your name on it.</p>
   <figure class="shot">
-    <picture><source srcset="img/1.0/publish-mode.webp" type="image/webp"><img src="img/1.0/publish-mode.png" alt="Publishing King of the Hill: the checks (the graph passes, a requirements warning with Open in the Studio), details, the bot rating and maps" width="1000" height="860" loading="lazy"></picture>
+    <picture><source srcset="img/1.0/publish-mode.webp" type="image/webp"><img src="img/1.0/publish-mode.png" alt="Publishing King of the Hill: the checks (the graph passes; what players need), the name, maker and about text, how well bots play it, and the maps it's made for, with Make the package below" width="1440" height="900" loading="lazy"></picture>
     <figcaption>Publishing a mode: the checks come first.</figcaption>
   </figure>
   <h2 id="credits" data-keywords="credit license permission terms author assets">Credits</h2>
@@ -2242,6 +2246,29 @@ args = ["--mcp-stdio"]</code></pre>
 
   show(location.hash, !!location.hash);
 })();
+</script>
+<script src="viewer.js"></script>
+<script>
+  // Every picture opens the big viewer (viewer.js, the same as the home page's): a click, or Enter or
+  // Space on it; Esc closes it and focus comes back here. The arrows step through the page's pictures.
+  (() => {
+    const figs = [...document.querySelectorAll("figure.shot")].filter((f) => f.querySelector("img"));
+    const items = figs.map((f) => {
+      const img = f.querySelector("img");
+      const webp = f.querySelector('source[type="image/webp"]');
+      return { webp: webp ? webp.getAttribute("srcset") : null, src: img.getAttribute("src"), cap: f.querySelector("figcaption")?.textContent.trim() || img.alt };
+    });
+    figs.forEach((f, i) => {
+      const pic = f.querySelector("picture") || f.querySelector("img");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "shot-open";
+      b.setAttribute("aria-label", `Open larger: ${items[i].cap}`);
+      pic.replaceWith(b);
+      b.append(pic);
+      b.addEventListener("click", () => LSViewer.open(items, i, { returnTo: b }));
+    });
+  })();
 </script>
 </body>
 </html>

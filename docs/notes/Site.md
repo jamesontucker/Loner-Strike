@@ -347,3 +347,19 @@ learn CS 1.6 maps before an editor Playtest.
   only opens the creation's page in Tools › Community; installing stays behind Try it and its confirm. A browser can't
   tell whether the app is installed, so if the page still has focus 1.5 s after the click, the card says "Didn't open?
   Get Loner-Strike (free), then try again." Hidden on phones (`pointer: coarse`).
+**Fifth pass (review of every picture, 2026-11-14):** retaken with fixes in the app where the picture showed a
+real problem: `studio-timeline` (header/lane layout, value labels, "Delete timeline"; X's Timeline tab), `editor-facesheet`,
+`editor-io`, `editor-leak` (were 1200×750 JPGs with the old bars; now PNG/WebP on ls_outpost: a sandstone face with
+the Texture tool, a button → multi_manager → boards and siren chain, a leak from the sky lid taken out),
+`editor-compile` (the Playtest "Bots" box sat at the far edge; "its own licence" → license), `plugins` (the
+"Compiled" toast covered the panel), `publish-mode` (the maps box was unstyled; whole page now), `community`
+(seven cards, newest first, mode cards with a map picture), `demos` (was the empty state: three ~1-minute bot rounds on
+de_dust2 recorded with HLTV on a throwaway server clone, Sim/DEMOREC, kept in `SiteShots/site-demos` and put in the
+clone only for the shot; the clone's other demos set aside meanwhile), `models` removed (the user chose
+`models-game`). App fixes found this way: Zoom to selection with only a face picked frames the face (it framed the
+whole map); the Inspect size line says "center"; Demos no longer lists HLTV's own slot as a player (the HLTV
+userinfo has `*hltv`); the Play page's mode settings give a long choice room (was cut: "Whoever has i").
+Docs pictures open in the home page's viewer (site/viewer.js + viewer.css, shared; Enter/Space, Esc, focus back).
+**Still for the draft build** (the dev server can't run them): the map simulator report (`health`, no picture in the
+docs yet: the section shows none), Replay (none yet), the Studio debugger, and the main app's `mode-settings`
+(fix above, needs a retake), `crashes`, `roles-*` and the home page's `app-*` gallery.
