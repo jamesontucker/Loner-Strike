@@ -13,9 +13,9 @@
 #include <cellarray>
 
 #define LSG_MODE "last_stand_lite"
-#define LSG_CTX 9
+#define LSG_CTX 8
 #define LSG_TXT 2
-#define LSG_N 61
+#define LSG_N 62
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -38,6 +38,21 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 stock Float:g_v0 = 0.0 // Wave (number)
 stock g_v1 = 0 // Shop (Entity)
 stock Float:g_v2 = 0.0 // Standing (number)
+
+// the round table's kind of round (0 normal, 1 boss, 2 pack) and its type
+stock lsg_wave_kind()
+{
+	new t[32]
+	return ls_components_running() ? ls_wave_kind(t, charsmax(t)) : 0
+}
+
+stock lsg_wave_type()
+{
+	new t[32]
+	if (ls_components_running())
+		ls_wave_kind(t, charsmax(t))
+	return t
+}
 
 // a drop-in over an entity's place
 stock lsg_drop_in(id, ent)
@@ -1492,11 +1507,13 @@ public plugin_init()
 	register_event("DeathMsg", "lsg_on_player_killed", "a")
 	RegisterHamPlayer(Ham_Spawn, "lsg_on_player_spawned", 1)
 	set_task(1.0, "lsg_on_map_started")
+	if (get_cvar_pointer("ls_creature_ver"))
+		RegisterHam(Ham_Killed, "ls_creature", "lsg_on_creature_killed", 1)
 	register_event("HLTV", "lsg_new_round", "a", "1=0", "2=0")
-	register_clcmd("say /shop", "lsg_chat48")
-	register_clcmd("say !shop", "lsg_chat48")
-	register_clcmd("say_team /shop", "lsg_chat48")
-	register_clcmd("say_team !shop", "lsg_chat48")
+	register_clcmd("say /shop", "lsg_chat40")
+	register_clcmd("say !shop", "lsg_chat40")
+	register_clcmd("say_team /shop", "lsg_chat40")
+	register_clcmd("say_team !shop", "lsg_chat40")
 }
 
 // a new round: timers stop, round variables start again
@@ -1505,11 +1522,11 @@ public lsg_new_round()
 	lsg_stop_timers()
 }
 
-public lsg_chat48(id)
+public lsg_chat40(id)
 {
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
-	lsg_n48(ctx)
+	lsg_n40(ctx)
 	return PLUGIN_CONTINUE
 }
 
@@ -1522,7 +1539,7 @@ stock lsg_stop_timers()
 public lsg_on_round_started()
 {
 	new ctx[LSG_CTX]
-	lsg_n10(ctx)
+	lsg_n7(ctx)
 }
 
 public lsg_on_player_killed()
@@ -1531,7 +1548,7 @@ public lsg_on_player_killed()
 	ctx[0] = read_data(2) // victim
 	ctx[1] = read_data(1) // attacker
 	ctx[2] = read_data(3) ? 1 : 0 // headshot
-	lsg_n33(ctx)
+	lsg_n28(ctx)
 }
 
 public lsg_on_player_spawned(id)
@@ -1554,14 +1571,14 @@ public ls_on_wave_start(wave)
 {
 	new ctx[LSG_CTX]
 	ctx[0] = _:float(wave) // wave
-	lsg_n17(ctx)
+	lsg_n12(ctx)
 }
 
 public ls_on_wave_cleared(wave)
 {
 	new ctx[LSG_CTX]
 	ctx[0] = _:float(wave) // wave
-	lsg_n21(ctx)
+	lsg_n16(ctx)
 }
 
 public ls_on_down(id, attacker)
@@ -1569,7 +1586,7 @@ public ls_on_down(id, attacker)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	ctx[1] = attacker // attacker
-	lsg_n52(ctx)
+	lsg_n44(ctx)
 	return PLUGIN_CONTINUE
 }
 
@@ -1578,7 +1595,17 @@ public ls_on_revive(id, by)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	ctx[1] = by >= 1 && by <= MaxClients ? by : 0 // by
-	lsg_n50(ctx)
+	lsg_n42(ctx)
+}
+
+public lsg_on_creature_killed(ent, killer)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = ent // creature
+	ctx[1] = killer >= 1 && killer <= MaxClients ? killer : 0 // killer
+	pev(ent, pev_netname, g_lsgTxt[0], 63) // kind
+	lsg_n58(ctx)
+	return HAM_IGNORED
 }
 
 // Map Started (ms)
@@ -1597,7 +1624,7 @@ lsg_n1(ctx[])
 		if (!ls_comp_load_pack(fmt("gamemodes/components/%s.%s.ini", map, "laststand")))
 			{}
 	}
-	lsg_n41(ctx)
+	lsg_n33(ctx)
 }
 
 // Player Spawned (sp)
@@ -1611,12 +1638,12 @@ lsg_n3(ctx[])
 {
 	new ok = ((lsg_team(ctx[0]) == 1) ? 1 : 0)
 	if (ok)
-		lsg_n4(ctx)
+		lsg_n57(ctx)
 	else
-		lsg_n7(ctx)
+		lsg_n4(ctx)
 }
 
-// Strip Weapons (sp_strip)
+// Strip Weapons (sp_ctstrip)
 lsg_n4(ctx[])
 {
 	if (!(!ls_alive(ctx[0])))
@@ -1626,44 +1653,15 @@ lsg_n4(ctx[])
 	lsg_n5(ctx)
 }
 
-// Set Health (sp_hp)
+// Give Weapon (sp_gun)
 lsg_n5(ctx[])
 {
-	if (!(!ls_alive(ctx[0])))
-	{
-		ls_set_health(ctx[0], max(floatround(150.0), 1))
-	}
+	ls_give_weapon(ctx[0], "m4a1", 120)
 	lsg_n6(ctx)
 }
 
-// Set Glow (sp_glow)
-lsg_n6(ctx[])
-{
-	if (!(!lsg_ok(ctx[0])))
-	{
-		set_user_rendering(ctx[0], kRenderFxGlowShell, 0, 255, 0, kRenderNormal, 16)
-	}
-}
-
-// Strip Weapons (sp_ctstrip)
-lsg_n7(ctx[])
-{
-	if (!(!ls_alive(ctx[0])))
-	{
-		ls_strip(ctx[0], true)
-	}
-	lsg_n8(ctx)
-}
-
-// Give Weapon (sp_gun)
-lsg_n8(ctx[])
-{
-	ls_give_weapon(ctx[0], "m4a1", 120)
-	lsg_n9(ctx)
-}
-
 // Give Item (sp_arm)
-lsg_n9(ctx[])
+lsg_n6(ctx[])
 {
 	if (!(!ls_alive(ctx[0])))
 	{
@@ -1672,81 +1670,54 @@ lsg_n9(ctx[])
 }
 
 // Round Started (rs)
-lsg_n10(ctx[])
+lsg_n7(ctx[])
 {
-	lsg_n11(ctx)
+	lsg_n8(ctx)
 }
 
 // Set Variable (rs_w0)
-lsg_n11(ctx[])
+lsg_n8(ctx[])
 {
 	g_v0 = 0.0
-	lsg_n12(ctx)
-}
-
-// For Each Player (rs_kill)
-lsg_n12(ctx[])
-{
-	new c[LSG_CTX], count
-	for (new p = 1; p <= MaxClients; p++)
-	{
-		if (!lsg_match(p, 5))
-			continue
-		count++
-		for (new k = 0; k < LSG_CTX; k++)
-			c[k] = ctx[k]
-		c[4] = p
-		lsg_n13(c)
-	}
-	#pragma unused count
-	lsg_n14(ctx)
-}
-
-// Kill (rs_k)
-lsg_n13(ctx[])
-{
-	if (!(!ls_alive(ctx[4])))
-	{
-		user_kill(ctx[4], 1)
-	}
+	lsg_n9(ctx)
 }
 
 // Show Message (rs_msg)
-lsg_n14(ctx[])
+lsg_n9(ctx[])
 {
 	ls_announce(0, 4.0, "%s", "Hold the base! The first wave is coming.")
-	lsg_n15(ctx)
+	lsg_n10(ctx)
 }
 
 // Countdown (rs_cd)
-lsg_n15(ctx[])
+lsg_n10(ctx[])
 {
-	remove_task(LSG_TASK + 15)
-	g_lsgLeft[15] = 15
-	lsg_c15_show()
-	set_task(1.0, "lsg_t15", LSG_TASK + 15, ctx, LSG_CTX)
+	remove_task(LSG_TASK + 10)
+	g_lsgLeft[10] = 15
+	lsg_c10_show()
+	set_task(1.0, "lsg_t10", LSG_TASK + 10, ctx, LSG_CTX)
 }
 
-lsg_c15_show()
-	ls_hud(0, LsHud:0, 1.2, "%s %d", "First wave in", g_lsgLeft[15])
+lsg_c10_show()
+	ls_hud(0, LsHud:0, 1.2, "%s %d", "First wave in", g_lsgLeft[10])
 
-public lsg_t15(const data[], task)
+public lsg_t10(const data[], task)
 {
 	#pragma unused task
 	new ctx[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
 		ctx[k] = data[k]
-	if (--g_lsgLeft[15] > 0)
+	if (--g_lsgLeft[10] > 0)
 	{
-		lsg_c15_show()
-		set_task(1.0, "lsg_t15", LSG_TASK + 15, data, LSG_CTX)
+		lsg_c10_show()
+		set_task(1.0, "lsg_t10", LSG_TASK + 10, data, LSG_CTX)
 		return
 	}
-	lsg_n16(ctx)
+	lsg_n11(ctx)
 }
 
 // Start Wave (rs_go)
-lsg_n16(ctx[])
+lsg_n11(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
@@ -1756,64 +1727,64 @@ lsg_n16(ctx[])
 }
 
 // Wave Started (ws)
-lsg_n17(ctx[])
+lsg_n12(ctx[])
 {
-	lsg_n18(ctx)
+	lsg_n13(ctx)
 }
 
 // Set Variable (ws_set)
-lsg_n18(ctx[])
+lsg_n13(ctx[])
 {
 	g_v0 = Float:ctx[0]
-	lsg_n19(ctx)
+	lsg_n14(ctx)
 }
 
 // Show HUD Text (ws_hud)
-lsg_n19(ctx[])
+lsg_n14(ctx[])
 {
 	ls_hud(0, LsHud:0, 6.0, "%s %d", "Wave", floatround(Float:ctx[0]))
-	lsg_n20(ctx)
+	lsg_n15(ctx)
 }
 
 // Play Sound (ws_snd)
-lsg_n20(ctx[])
+lsg_n15(ctx[])
 {
 	client_cmd(0, "spk %s", "radio/locknload")
 	#pragma unused ctx
 }
 
 // Wave Cleared (wc)
-lsg_n21(ctx[])
+lsg_n16(ctx[])
 {
-	lsg_n22(ctx)
+	lsg_n17(ctx)
 }
 
 // Branch (wc_br)
-lsg_n22(ctx[])
+lsg_n17(ctx[])
 {
 	new ok = ((((((Float:ctx[0]) >= (5.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
 	if (ok)
-		lsg_n23(ctx)
+		lsg_n18(ctx)
 	else
-		lsg_n25(ctx)
+		lsg_n20(ctx)
 }
 
 // Show Message (wc_won)
-lsg_n23(ctx[])
+lsg_n18(ctx[])
 {
 	ls_announce(0, 5.0, "%s", "You held out! The base is safe.")
-	lsg_n24(ctx)
+	lsg_n19(ctx)
 }
 
 // End Round (wc_end)
-lsg_n24(ctx[])
+lsg_n19(ctx[])
 {
 	server_cmd("endround CT")
 	#pragma unused ctx
 }
 
 // For Each Player (wc_dead)
-lsg_n25(ctx[])
+lsg_n20(ctx[])
 {
 	new c[LSG_CTX], count
 	for (new p = 1; p <= MaxClients; p++)
@@ -1823,32 +1794,32 @@ lsg_n25(ctx[])
 		count++
 		for (new k = 0; k < LSG_CTX; k++)
 			c[k] = ctx[k]
-		c[5] = p
-		lsg_n26(c)
+		c[4] = p
+		lsg_n21(c)
 	}
 	#pragma unused count
-	lsg_n28(ctx)
+	lsg_n23(ctx)
 }
 
 // Is Team (wc_isct)
-lsg_n26(ctx[])
+lsg_n21(ctx[])
 {
-	new ok = ((lsg_team(ctx[5]) == 2) ? 1 : 0)
+	new ok = ((lsg_team(ctx[4]) == 2) ? 1 : 0)
 	if (ok)
-		lsg_n27(ctx)
+		lsg_n22(ctx)
 }
 
 // Respawn (wc_resp)
-lsg_n27(ctx[])
+lsg_n22(ctx[])
 {
-	if (!(!lsg_ok(ctx[5]) || is_user_alive(ctx[5]) || lsg_team(ctx[5]) < 1 || lsg_team(ctx[5]) > 2))
+	if (!(!lsg_ok(ctx[4]) || is_user_alive(ctx[4]) || lsg_team(ctx[4]) < 1 || lsg_team(ctx[4]) > 2))
 	{
-		ExecuteHamB(Ham_CS_RoundRespawn, ctx[5])
+		ExecuteHamB(Ham_CS_RoundRespawn, ctx[4])
 	}
 }
 
 // For Each Player (wc_pay)
-lsg_n28(ctx[])
+lsg_n23(ctx[])
 {
 	new c[LSG_CTX], count
 	for (new p = 1; p <= MaxClients; p++)
@@ -1858,52 +1829,52 @@ lsg_n28(ctx[])
 		count++
 		for (new k = 0; k < LSG_CTX; k++)
 			c[k] = ctx[k]
-		c[6] = p
-		lsg_n29(c)
+		c[5] = p
+		lsg_n24(c)
 	}
 	#pragma unused count
-	lsg_n30(ctx)
+	lsg_n25(ctx)
 }
 
 // Give Money (wc_money)
-lsg_n29(ctx[])
+lsg_n24(ctx[])
 {
-	if (!(!lsg_ok(ctx[6])))
+	if (!(!lsg_ok(ctx[5])))
 	{
-		lsg_add_money(ctx[6], floatround(1500.0))
+		lsg_add_money(ctx[5], floatround(1500.0))
 	}
 }
 
 // Countdown (wc_cd)
-lsg_n30(ctx[])
+lsg_n25(ctx[])
 {
-	remove_task(LSG_TASK + 30)
-	g_lsgLeft[30] = 15
-	lsg_c30_show()
-	set_task(1.0, "lsg_t30", LSG_TASK + 30, ctx, LSG_CTX)
-	lsg_n32(ctx)
+	remove_task(LSG_TASK + 25)
+	g_lsgLeft[25] = 15
+	lsg_c25_show()
+	set_task(1.0, "lsg_t25", LSG_TASK + 25, ctx, LSG_CTX)
+	lsg_n27(ctx)
 }
 
-lsg_c30_show()
-	ls_hud(0, LsHud:0, 1.2, "%s %d", "Next wave in", g_lsgLeft[30])
+lsg_c25_show()
+	ls_hud(0, LsHud:0, 1.2, "%s %d", "Next wave in", g_lsgLeft[25])
 
-public lsg_t30(const data[], task)
+public lsg_t25(const data[], task)
 {
 	#pragma unused task
 	new ctx[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
 		ctx[k] = data[k]
-	if (--g_lsgLeft[30] > 0)
+	if (--g_lsgLeft[25] > 0)
 	{
-		lsg_c30_show()
-		set_task(1.0, "lsg_t30", LSG_TASK + 30, data, LSG_CTX)
+		lsg_c25_show()
+		set_task(1.0, "lsg_t25", LSG_TASK + 25, data, LSG_CTX)
 		return
 	}
-	lsg_n31(ctx)
+	lsg_n26(ctx)
 }
 
 // Start Wave (wc_next)
-lsg_n31(ctx[])
+lsg_n26(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
@@ -1913,115 +1884,86 @@ lsg_n31(ctx[])
 }
 
 // Chat Message (wc_tip)
-lsg_n32(ctx[])
+lsg_n27(ctx[])
 {
 	ls_chat(0, "%s", "Wave cleared: +1500. Say !shop to buy.")
 	#pragma unused ctx
 }
 
 // Player Killed (pk)
-lsg_n33(ctx[])
+lsg_n28(ctx[])
 {
-	lsg_n34(ctx)
+	lsg_n29(ctx)
 }
 
 // Is Team (pk_ct)
-lsg_n34(ctx[])
+lsg_n29(ctx[])
 {
 	new ok = ((lsg_team(ctx[0]) == 2) ? 1 : 0)
 	if (ok)
-		lsg_n35(ctx)
-	else
-		lsg_n38(ctx)
+		lsg_n30(ctx)
 }
 
 // Branch (pk_br)
-lsg_n35(ctx[])
+lsg_n30(ctx[])
 {
 	new ok = ((((((float(ls_count_alive(CsTeams:(2)))) == (0.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
 	if (ok)
-		lsg_n36(ctx)
+		lsg_n31(ctx)
 }
 
 // Show Message (pk_lost)
-lsg_n36(ctx[])
+lsg_n31(ctx[])
 {
 	ls_announce(0, 5.0, "%s", "The base is overrun!")
-	lsg_n37(ctx)
+	lsg_n32(ctx)
 }
 
 // End Round (pk_end)
-lsg_n37(ctx[])
+lsg_n32(ctx[])
 {
 	server_cmd("endround T")
 	#pragma unused ctx
 }
 
-// Is Team (pk_by)
-lsg_n38(ctx[])
-{
-	new ok = ((lsg_team(ctx[1]) == 2) ? 1 : 0)
-	if (ok)
-		lsg_n39(ctx)
-}
-
-// Give Money (pk_pay)
-lsg_n39(ctx[])
-{
-	if (!(!lsg_ok(ctx[1])))
-	{
-		lsg_add_money(ctx[1], floatround(300.0))
-	}
-	lsg_n40(ctx)
-}
-
-// Add Score (pk_score)
-lsg_n40(ctx[])
-{
-	if (!(!lsg_ok(ctx[1])))
-	{
-		lsg_add_frags(ctx[1], floatround(1.0))
-	}
-}
-
 // Knocked Down On (ms_kd)
-lsg_n41(ctx[])
+lsg_n33(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
 		ls_down_enable(true, 25.0, 2, true)
 	}
-	lsg_n42(ctx)
+	lsg_n53(ctx)
 }
 
 // Branch (ms_has)
-lsg_n42(ctx[])
+lsg_n34(ctx[])
 {
 	new ok = (((((lsg_mk_get(0, floatround(1.0)) > 0 ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
 	if (ok)
-		lsg_n43(ctx)
+		lsg_n35(ctx)
 	else
-		lsg_n45(ctx)
+		lsg_n37(ctx)
 }
 
 // Create Component (ms_shop)
-lsg_n43(ctx[])
+lsg_n35(ctx[])
 {
 	new Float:o[3]
 	if (!!ls_components_running() && lsg_ent_origin(lsg_mk_get(0, floatround(1.0)), o))
-		g_lsgOut[43] = ls_comp_create("ls_shop", o, "items=AK-47|2500|ak47|rifle;Kevlar and helmet|1000|vesthelm|armor;HE grenade|300|hegrenade|grenade;Ammo|200|ammo|ammo upgrades=1 keeper=barney price_rise=0.05")
-	lsg_n44(ctx)
+		g_lsgOut[35] = ls_comp_create("ls_shop", o, "items=AK-47|2500|ak47|rifle;Kevlar and helmet|1000|vesthelm|armor;HE grenade|300|hegrenade|grenade;Ammo|200|ammo|ammo;Turret kit|2500|turret|turret upgrades=1 keeper=barney price_rise=0.05")
+	lsg_n36(ctx)
 }
 
 // Set Variable (ms_keep)
-lsg_n44(ctx[])
+lsg_n36(ctx[])
 {
-	g_v1 = g_lsgOut[43]
+	g_v1 = g_lsgOut[35]
 	#pragma unused ctx
 }
 
 // Pick Random Entity (ms_spawn)
-lsg_n45(ctx[])
+lsg_n37(ctx[])
 {
 	new list[256], count
 	new p = -1
@@ -2029,35 +1971,35 @@ lsg_n45(ctx[])
 		list[count++] = p
 	if (count > 0)
 	{
-		ctx[7] = list[random(count)]
-		lsg_n46(ctx)
+		ctx[6] = list[random(count)]
+		lsg_n38(ctx)
 	}
 }
 
 // Create Component (ms_shop2)
-lsg_n46(ctx[])
+lsg_n38(ctx[])
 {
 	new Float:o[3]
-	if (!!ls_components_running() && lsg_ent_origin(ctx[7], o))
-		g_lsgOut[46] = ls_comp_create("ls_shop", o, "items=AK-47|2500|ak47|rifle;Kevlar and helmet|1000|vesthelm|armor;HE grenade|300|hegrenade|grenade;Ammo|200|ammo|ammo upgrades=1 keeper=barney price_rise=0.05")
-	lsg_n47(ctx)
+	if (!!ls_components_running() && lsg_ent_origin(ctx[6], o))
+		g_lsgOut[38] = ls_comp_create("ls_shop", o, "items=AK-47|2500|ak47|rifle;Kevlar and helmet|1000|vesthelm|armor;HE grenade|300|hegrenade|grenade;Ammo|200|ammo|ammo;Turret kit|2500|turret|turret upgrades=1 keeper=barney price_rise=0.05")
+	lsg_n39(ctx)
 }
 
 // Set Variable (ms_keep2)
-lsg_n47(ctx[])
+lsg_n39(ctx[])
 {
-	g_v1 = g_lsgOut[46]
+	g_v1 = g_lsgOut[38]
 	#pragma unused ctx
 }
 
 // Chat Command (sh)
-lsg_n48(ctx[])
+lsg_n40(ctx[])
 {
-	lsg_n49(ctx)
+	lsg_n41(ctx)
 }
 
 // Open Shop Menu (sh_menu)
-lsg_n49(ctx[])
+lsg_n41(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
@@ -2066,13 +2008,13 @@ lsg_n49(ctx[])
 }
 
 // Got Up (up)
-lsg_n50(ctx[])
+lsg_n42(ctx[])
 {
-	lsg_n51(ctx)
+	lsg_n43(ctx)
 }
 
 // Give Money (up_pay)
-lsg_n51(ctx[])
+lsg_n43(ctx[])
 {
 	if (!(!lsg_ok(ctx[1])))
 	{
@@ -2081,35 +2023,35 @@ lsg_n51(ctx[])
 }
 
 // Knocked Down (dn)
-lsg_n52(ctx[])
+lsg_n44(ctx[])
 {
-	lsg_n53(ctx)
+	lsg_n45(ctx)
 }
 
 // Delay (dn_wait)
-lsg_n53(ctx[])
+lsg_n45(ctx[])
 {
-	set_task(floatmax(0.1, 0.1), "lsg_t53", LSG_TASK + 53, ctx, LSG_CTX)
+	set_task(floatmax(0.1, 0.1), "lsg_t45", LSG_TASK + 45, ctx, LSG_CTX)
 }
 
-public lsg_t53(const data[], task)
+public lsg_t45(const data[], task)
 {
 	#pragma unused task
 	new ctx[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
 		ctx[k] = data[k]
-	lsg_n54(ctx)
+	lsg_n46(ctx)
 }
 
 // Set Variable (dn_zero)
-lsg_n54(ctx[])
+lsg_n46(ctx[])
 {
 	g_v2 = 0.0
-	lsg_n55(ctx)
+	lsg_n47(ctx)
 }
 
 // For Each Player (dn_each)
-lsg_n55(ctx[])
+lsg_n47(ctx[])
 {
 	new c[LSG_CTX], count
 	for (new p = 1; p <= MaxClients; p++)
@@ -2119,47 +2061,132 @@ lsg_n55(ctx[])
 		count++
 		for (new k = 0; k < LSG_CTX; k++)
 			c[k] = ctx[k]
-		c[8] = p
-		lsg_n56(c)
+		c[7] = p
+		lsg_n48(c)
 	}
 	#pragma unused count
-	lsg_n58(ctx)
+	lsg_n50(ctx)
 }
 
 // Branch (dn_br)
-lsg_n56(ctx[])
+lsg_n48(ctx[])
 {
-	new ok = (((((ls_components_running() && ls_is_down(ctx[8]) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	new ok = (((((ls_components_running() && ls_is_down(ctx[7]) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
 	if (!ok)
-		lsg_n57(ctx)
+		lsg_n49(ctx)
 }
 
 // Add To Variable (dn_add)
-lsg_n57(ctx[])
+lsg_n49(ctx[])
 {
 	g_v2 += 1.0
 	#pragma unused ctx
 }
 
 // Branch (dn_br2)
-lsg_n58(ctx[])
+lsg_n50(ctx[])
 {
 	new ok = ((((((g_v2) == (0.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
 	if (ok)
-		lsg_n59(ctx)
+		lsg_n51(ctx)
 }
 
 // Show Message (dn_lost)
-lsg_n59(ctx[])
+lsg_n51(ctx[])
 {
 	ls_announce(0, 5.0, "%s", "The base is overrun!")
-	lsg_n60(ctx)
+	lsg_n52(ctx)
 }
 
 // End Round (dn_end)
-lsg_n60(ctx[])
+lsg_n52(ctx[])
 {
 	server_cmd("endround T")
 	#pragma unused ctx
+}
+
+// Round Table On (ms_wt)
+lsg_n53(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_wave_table("", 2, true)
+	}
+	lsg_n54(ctx)
+}
+
+// Creature Tiers (ms_tiers)
+lsg_n54(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_wave_tiers(true)
+	}
+	lsg_n55(ctx)
+}
+
+// Turrets (ms_tur)
+lsg_n55(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_turret_setup(2500, 150.0, 1, "turret", 0, true)
+	}
+	lsg_n56(ctx)
+}
+
+// Bots: Fight Creatures (ms_foe)
+lsg_n56(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		if (!lsg_hint(fmt("enemyclass ls_creature %d", 1)))
+			{}
+	}
+	lsg_n34(ctx)
+}
+
+// Set Team (sp_ct)
+lsg_n57(ctx[])
+{
+	if (!(ctx[0] < 1 || ctx[0] > MaxClients || !is_user_connected(ctx[0])))
+	{
+		ls_set_team(ctx[0], CsTeams:(2))
+	}
+	lsg_n61(ctx)
+}
+
+// Creature Killed (ck)
+lsg_n58(ctx[])
+{
+	lsg_n59(ctx)
+}
+
+// Give Money (ck_add)
+lsg_n59(ctx[])
+{
+	if (!(!lsg_ok(ctx[1])))
+	{
+		lsg_add_money(ctx[1], floatround(float(ls_components_running() ? ls_wave_type_pay(g_lsgTxt[0]) : 0)))
+	}
+	lsg_n60(ctx)
+}
+
+// Add Score (ck_pt)
+lsg_n60(ctx[])
+{
+	if (!(!lsg_ok(ctx[1])))
+	{
+		lsg_add_frags(ctx[1], floatround(1.0))
+	}
+}
+
+// Respawn (sp_resp)
+lsg_n61(ctx[])
+{
+	if (!(!lsg_ok(ctx[0]) || is_user_alive(ctx[0]) || lsg_team(ctx[0]) < 1 || lsg_team(ctx[0]) > 2))
+	{
+		ExecuteHamB(Ham_CS_RoundRespawn, ctx[0])
+	}
 }
 

@@ -44,7 +44,7 @@
    "type": "event.map_started",
    "pos": {
     "x": 65,
-    "y": 974
+    "y": 2470
    },
    "params": {}
   },
@@ -53,7 +53,7 @@
    "type": "comp.load_pack",
    "pos": {
     "x": 565,
-    "y": 961
+    "y": 2457
    },
    "params": {
     "pack": "laststand"
@@ -63,8 +63,8 @@
    "id": "sp",
    "type": "event.player_spawned",
    "pos": {
-    "x": 1065,
-    "y": 139
+    "x": 3065,
+    "y": 364
    },
    "params": {}
   },
@@ -72,52 +72,19 @@
    "id": "sp_t",
    "type": "cond.is_team",
    "pos": {
-    "x": 1565,
-    "y": 315
+    "x": 3565,
+    "y": 100
    },
    "params": {
     "team": "t"
    }
   },
   {
-   "id": "sp_strip",
-   "type": "player.strip",
-   "pos": {
-    "x": 2065,
-    "y": 408
-   },
-   "params": {
-    "knife": true
-   }
-  },
-  {
-   "id": "sp_hp",
-   "type": "player.set_health",
-   "pos": {
-    "x": 2565,
-    "y": 371
-   },
-   "params": {
-    "amount": 150
-   }
-  },
-  {
-   "id": "sp_glow",
-   "type": "player.set_glow",
-   "pos": {
-    "x": 3065,
-    "y": 227
-   },
-   "params": {
-    "color": "green"
-   }
-  },
-  {
    "id": "sp_ctstrip",
    "type": "player.strip",
    "pos": {
-    "x": 2065,
-    "y": 245
+    "x": 4065,
+    "y": 56
    },
    "params": {
     "knife": true
@@ -127,8 +94,8 @@
    "id": "sp_gun",
    "type": "player.give_weapon",
    "pos": {
-    "x": 2565,
-    "y": 219
+    "x": 4565,
+    "y": 111
    },
    "params": {
     "weapon": "m4a1",
@@ -139,8 +106,8 @@
    "id": "sp_arm",
    "type": "player.give_item",
    "pos": {
-    "x": 3065,
-    "y": 69
+    "x": 5065,
+    "y": 206
    },
    "params": {
     "item": "vesthelm"
@@ -151,7 +118,7 @@
    "type": "event.round_started",
    "pos": {
     "x": 65,
-    "y": 1994
+    "y": 335
    },
    "params": {}
   },
@@ -160,7 +127,7 @@
    "type": "var.set",
    "pos": {
     "x": 565,
-    "y": 1948
+    "y": 289
    },
    "params": {
     "var": "wave",
@@ -168,31 +135,11 @@
    }
   },
   {
-   "id": "rs_kill",
-   "type": "flow.for_each_player",
-   "pos": {
-    "x": 1065,
-    "y": 1959
-   },
-   "params": {
-    "which": "alive_t"
-   }
-  },
-  {
-   "id": "rs_k",
-   "type": "player.kill",
-   "pos": {
-    "x": 1565,
-    "y": 2052
-   },
-   "params": {}
-  },
-  {
    "id": "rs_msg",
    "type": "msg.broadcast",
    "pos": {
-    "x": 1565,
-    "y": 1900
+    "x": 1065,
+    "y": 311
    },
    "params": {
     "text": "Hold the base! The first wave is coming.",
@@ -203,8 +150,8 @@
    "id": "rs_cd",
    "type": "timer.countdown",
    "pos": {
-    "x": 2065,
-    "y": 1889
+    "x": 1565,
+    "y": 300
    },
    "params": {
     "secs": 15,
@@ -216,8 +163,8 @@
    "id": "rs_go",
    "type": "comp.wave_start",
    "pos": {
-    "x": 2565,
-    "y": 1900
+    "x": 2065,
+    "y": 311
    },
    "params": {
     "wave": 0
@@ -228,7 +175,7 @@
    "type": "comp.on_wave_start",
    "pos": {
     "x": 1565,
-    "y": 2275
+    "y": 828
    },
    "params": {}
   },
@@ -237,7 +184,7 @@
    "type": "var.set",
    "pos": {
     "x": 2065,
-    "y": 2294
+    "y": 732
    },
    "params": {
     "var": "wave"
@@ -248,7 +195,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 2565,
-    "y": 2251
+    "y": 804
    },
    "params": {
     "text": "Wave",
@@ -261,7 +208,7 @@
    "type": "game.play_sound",
    "pos": {
     "x": 3065,
-    "y": 2262
+    "y": 815
    },
    "params": {
     "sound": "radio/locknload"
@@ -272,7 +219,7 @@
    "type": "comp.on_wave_cleared",
    "pos": {
     "x": 65,
-    "y": 3026
+    "y": 1134
    },
    "params": {}
   },
@@ -281,7 +228,7 @@
    "type": "math.compare",
    "pos": {
     "x": 565,
-    "y": 3129
+    "y": 840
    },
    "params": {
     "op": "ge",
@@ -293,7 +240,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1065,
-    "y": 3013
+    "y": 1121
    },
    "params": {}
   },
@@ -302,7 +249,7 @@
    "type": "msg.broadcast",
    "pos": {
     "x": 1565,
-    "y": 3129
+    "y": 981
    },
    "params": {
     "text": "You held out! The base is safe.",
@@ -314,7 +261,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 2065,
-    "y": 3129
+    "y": 981
    },
    "params": {
     "winner": "ct"
@@ -325,7 +272,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 1565,
-    "y": 2790
+    "y": 1240
    },
    "params": {
     "which": "dead"
@@ -336,7 +283,7 @@
    "type": "cond.is_team",
    "pos": {
     "x": 2065,
-    "y": 2955
+    "y": 1133
    },
    "params": {
     "team": "ct"
@@ -347,7 +294,7 @@
    "type": "player.respawn",
    "pos": {
     "x": 2565,
-    "y": 2931
+    "y": 1206
    },
    "params": {}
   },
@@ -356,7 +303,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 2065,
-    "y": 2648
+    "y": 1441
    },
    "params": {
     "which": "alive_ct"
@@ -367,7 +314,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 2565,
-    "y": 2735
+    "y": 1354
    },
    "params": {
     "amount": 1500
@@ -378,7 +325,7 @@
    "type": "timer.countdown",
    "pos": {
     "x": 2565,
-    "y": 2561
+    "y": 1528
    },
    "params": {
     "secs": 15,
@@ -391,7 +338,7 @@
    "type": "comp.wave_start",
    "pos": {
     "x": 3065,
-    "y": 2864
+    "y": 1247
    },
    "params": {
     "wave": 0
@@ -402,7 +349,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 3065,
-    "y": 2479
+    "y": 1603
    },
    "params": {
     "text": "Wave cleared: +1500. Say !shop to buy."
@@ -412,8 +359,8 @@
    "id": "pk",
    "type": "event.player_killed",
    "pos": {
-    "x": 65,
-    "y": 1163
+    "x": 1565,
+    "y": 2105
    },
    "params": {}
   },
@@ -421,8 +368,8 @@
    "id": "pk_ct",
    "type": "cond.is_team",
    "pos": {
-    "x": 565,
-    "y": 1367
+    "x": 2065,
+    "y": 2103
    },
    "params": {
     "team": "ct"
@@ -432,8 +379,8 @@
    "id": "pk_left",
    "type": "game.count_alive",
    "pos": {
-    "x": 65,
-    "y": 1703
+    "x": 1565,
+    "y": 2288
    },
    "params": {
     "team": "ct"
@@ -443,8 +390,8 @@
    "id": "pk_none",
    "type": "math.compare",
    "pos": {
-    "x": 565,
-    "y": 1692
+    "x": 2065,
+    "y": 2277
    },
    "params": {
     "op": "eq",
@@ -455,8 +402,8 @@
    "id": "pk_br",
    "type": "flow.branch",
    "pos": {
-    "x": 1065,
-    "y": 1610
+    "x": 2565,
+    "y": 2208
    },
    "params": {}
   },
@@ -464,8 +411,8 @@
    "id": "pk_lost",
    "type": "msg.broadcast",
    "pos": {
-    "x": 1565,
-    "y": 1610
+    "x": 3065,
+    "y": 2208
    },
    "params": {
     "text": "The base is overrun!",
@@ -476,44 +423,11 @@
    "id": "pk_end",
    "type": "score.end_round",
    "pos": {
-    "x": 2065,
-    "y": 1516
+    "x": 3565,
+    "y": 2208
    },
    "params": {
     "winner": "t"
-   }
-  },
-  {
-   "id": "pk_by",
-   "type": "cond.is_team",
-   "pos": {
-    "x": 1065,
-    "y": 1285
-   },
-   "params": {
-    "team": "ct"
-   }
-  },
-  {
-   "id": "pk_pay",
-   "type": "player.add_money",
-   "pos": {
-    "x": 1565,
-    "y": 1209
-   },
-   "params": {
-    "amount": 300
-   }
-  },
-  {
-   "id": "pk_score",
-   "type": "player.add_frags",
-   "pos": {
-    "x": 2065,
-    "y": 1161
-   },
-   "params": {
-    "amount": 1
    }
   },
   {
@@ -521,7 +435,7 @@
    "type": "kd.enable",
    "pos": {
     "x": 1065,
-    "y": 961
+    "y": 2457
    },
    "params": {
     "on": true,
@@ -534,8 +448,8 @@
    "id": "ms_mk",
    "type": "marker.find",
    "pos": {
-    "x": 1065,
-    "y": 543
+    "x": 3065,
+    "y": 490
    },
    "params": {
     "marker": "lst_shop",
@@ -546,8 +460,8 @@
    "id": "ms_has",
    "type": "flow.branch",
    "pos": {
-    "x": 1565,
-    "y": 950
+    "x": 3565,
+    "y": 1421
    },
    "params": {}
   },
@@ -555,21 +469,21 @@
    "id": "ms_shop",
    "type": "comp.create",
    "pos": {
-    "x": 2065,
-    "y": 950
+    "x": 4065,
+    "y": 1421
    },
    "params": {
     "kind": "ls_shop",
     "at": "",
-    "keys": "items=AK-47|2500|ak47|rifle;Kevlar and helmet|1000|vesthelm|armor;HE grenade|300|hegrenade|grenade;Ammo|200|ammo|ammo upgrades=1 keeper=barney price_rise=0.05"
+    "keys": "items=AK-47|2500|ak47|rifle;Kevlar and helmet|1000|vesthelm|armor;HE grenade|300|hegrenade|grenade;Ammo|200|ammo|ammo;Turret kit|2500|turret|turret upgrades=1 keeper=barney price_rise=0.05"
    }
   },
   {
    "id": "ms_keep",
    "type": "var.set",
    "pos": {
-    "x": 2565,
-    "y": 928
+    "x": 4565,
+    "y": 1399
    },
    "params": {
     "var": "shop"
@@ -579,8 +493,8 @@
    "id": "ms_spawn",
    "type": "flow.pick_entity",
    "pos": {
-    "x": 2065,
-    "y": 560
+    "x": 4065,
+    "y": 518
    },
    "params": {
     "by": "class",
@@ -591,21 +505,21 @@
    "id": "ms_shop2",
    "type": "comp.create",
    "pos": {
-    "x": 2565,
-    "y": 776
+    "x": 4565,
+    "y": 1247
    },
    "params": {
     "kind": "ls_shop",
     "at": "",
-    "keys": "items=AK-47|2500|ak47|rifle;Kevlar and helmet|1000|vesthelm|armor;HE grenade|300|hegrenade|grenade;Ammo|200|ammo|ammo upgrades=1 keeper=barney price_rise=0.05"
+    "keys": "items=AK-47|2500|ak47|rifle;Kevlar and helmet|1000|vesthelm|armor;HE grenade|300|hegrenade|grenade;Ammo|200|ammo|ammo;Turret kit|2500|turret|turret upgrades=1 keeper=barney price_rise=0.05"
    }
   },
   {
    "id": "ms_keep2",
    "type": "var.set",
    "pos": {
-    "x": 3065,
-    "y": 754
+    "x": 5065,
+    "y": 1225
    },
    "params": {
     "var": "shop"
@@ -615,8 +529,8 @@
    "id": "sh",
    "type": "event.chat_command",
    "pos": {
-    "x": 1565,
-    "y": 1458
+    "x": 3065,
+    "y": 2418
    },
    "params": {
     "command": "shop"
@@ -626,8 +540,8 @@
    "id": "sh_get",
    "type": "var.get",
    "pos": {
-    "x": 1565,
-    "y": 3480
+    "x": 3065,
+    "y": 2779
    },
    "params": {
     "var": "shop"
@@ -637,8 +551,8 @@
    "id": "sh_menu",
    "type": "shop.menu",
    "pos": {
-    "x": 2065,
-    "y": 1668
+    "x": 3565,
+    "y": 2439
    },
    "params": {}
   },
@@ -647,7 +561,7 @@
    "type": "kd.on_up",
    "pos": {
     "x": 2565,
-    "y": 3486
+    "y": 2944
    },
    "params": {}
   },
@@ -656,7 +570,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 3065,
-    "y": 3473
+    "y": 2931
    },
    "params": {
     "amount": 200
@@ -667,7 +581,7 @@
    "type": "kd.on_down",
    "pos": {
     "x": 65,
-    "y": 3661
+    "y": 3139
    },
    "params": {}
   },
@@ -676,7 +590,7 @@
    "type": "timer.delay",
    "pos": {
     "x": 565,
-    "y": 3659
+    "y": 3137
    },
    "params": {
     "secs": 0.1
@@ -687,7 +601,7 @@
    "type": "var.set",
    "pos": {
     "x": 1065,
-    "y": 3637
+    "y": 3115
    },
    "params": {
     "var": "standing",
@@ -699,7 +613,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 1565,
-    "y": 3648
+    "y": 3126
    },
    "params": {
     "which": "alive_ct"
@@ -710,7 +624,7 @@
    "type": "kd.is",
    "pos": {
     "x": 2065,
-    "y": 3662
+    "y": 3174
    },
    "params": {}
   },
@@ -719,7 +633,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 2565,
-    "y": 3745
+    "y": 3127
    },
    "params": {}
   },
@@ -728,7 +642,7 @@
    "type": "var.add",
    "pos": {
     "x": 3065,
-    "y": 3723
+    "y": 3105
    },
    "params": {
     "var": "standing",
@@ -740,7 +654,7 @@
    "type": "var.get",
    "pos": {
     "x": 1065,
-    "y": 3873
+    "y": 3311
    },
    "params": {
     "var": "standing"
@@ -751,7 +665,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1565,
-    "y": 3873
+    "y": 3311
    },
    "params": {
     "op": "eq",
@@ -763,7 +677,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 2065,
-    "y": 3766
+    "y": 3311
    },
    "params": {}
   },
@@ -772,7 +686,7 @@
    "type": "msg.broadcast",
    "pos": {
     "x": 2565,
-    "y": 3301
+    "y": 3483
    },
    "params": {
     "text": "The base is overrun!",
@@ -784,11 +698,119 @@
    "type": "score.end_round",
    "pos": {
     "x": 3065,
-    "y": 3301
+    "y": 3483
    },
    "params": {
     "winner": "t"
    }
+  },
+  {
+   "id": "ms_wt",
+   "type": "wave.table",
+   "pos": {
+    "x": 1565,
+    "y": 2457
+   },
+   "params": {
+    "section": "",
+    "team": "2",
+    "creatures": true
+   }
+  },
+  {
+   "id": "ms_tiers",
+   "type": "wave.tiers",
+   "pos": {
+    "x": 2065,
+    "y": 2457
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "ms_tur",
+   "type": "turret.setup",
+   "pos": {
+    "x": 2565,
+    "y": 2457
+   },
+   "params": {
+    "price": 2500,
+    "life": 150,
+    "per": 1,
+    "type": "turret",
+    "bots": true
+   }
+  },
+  {
+   "id": "ms_foe",
+   "type": "bots.creature_enemies",
+   "pos": {
+    "x": 3065,
+    "y": 2607
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "sp_ct",
+   "type": "player.set_team",
+   "pos": {
+    "x": 4065,
+    "y": 208
+   },
+   "params": {
+    "team": "ct"
+   }
+  },
+  {
+   "id": "ck",
+   "type": "creature.on_killed",
+   "pos": {
+    "x": 65,
+    "y": 1857
+   },
+   "params": {}
+  },
+  {
+   "id": "ck_pay",
+   "type": "wave.type_pay",
+   "pos": {
+    "x": 565,
+    "y": 1883
+   },
+   "params": {}
+  },
+  {
+   "id": "ck_add",
+   "type": "player.add_money",
+   "pos": {
+    "x": 1065,
+    "y": 1817
+   },
+   "params": {}
+  },
+  {
+   "id": "ck_pt",
+   "type": "player.add_frags",
+   "pos": {
+    "x": 1565,
+    "y": 1872
+   },
+   "params": {
+    "amount": 1
+   }
+  },
+  {
+   "id": "sp_resp",
+   "type": "player.respawn",
+   "pos": {
+    "x": 4565,
+    "y": 287
+   },
+   "params": {}
   }
  ],
  "edges": [
@@ -822,72 +844,6 @@
    },
    "to": {
     "node": "sp_t",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w4",
-   "from": {
-    "node": "sp",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sp_strip",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w5",
-   "from": {
-    "node": "sp_t",
-    "pin": "true"
-   },
-   "to": {
-    "node": "sp_strip",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w6",
-   "from": {
-    "node": "sp",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sp_hp",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w7",
-   "from": {
-    "node": "sp",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sp_glow",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w8",
-   "from": {
-    "node": "sp_strip",
-    "pin": "then"
-   },
-   "to": {
-    "node": "sp_hp",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w9",
-   "from": {
-    "node": "sp_hp",
-    "pin": "then"
-   },
-   "to": {
-    "node": "sp_glow",
     "pin": "exec"
    }
   },
@@ -958,28 +914,6 @@
    }
   },
   {
-   "id": "w16",
-   "from": {
-    "node": "rs_kill",
-    "pin": "player"
-   },
-   "to": {
-    "node": "rs_k",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w17",
-   "from": {
-    "node": "rs_kill",
-    "pin": "each"
-   },
-   "to": {
-    "node": "rs_k",
-    "pin": "exec"
-   }
-  },
-  {
    "id": "w18",
    "from": {
     "node": "rs_cd",
@@ -998,28 +932,6 @@
    },
    "to": {
     "node": "rs_w0",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w20",
-   "from": {
-    "node": "rs_w0",
-    "pin": "then"
-   },
-   "to": {
-    "node": "rs_kill",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w21",
-   "from": {
-    "node": "rs_kill",
-    "pin": "then"
-   },
-   "to": {
-    "node": "rs_msg",
     "pin": "exec"
    }
   },
@@ -1332,72 +1244,6 @@
    }
   },
   {
-   "id": "w53",
-   "from": {
-    "node": "pk",
-    "pin": "attacker"
-   },
-   "to": {
-    "node": "pk_by",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w54",
-   "from": {
-    "node": "pk_ct",
-    "pin": "false"
-   },
-   "to": {
-    "node": "pk_by",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w55",
-   "from": {
-    "node": "pk",
-    "pin": "attacker"
-   },
-   "to": {
-    "node": "pk_pay",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w56",
-   "from": {
-    "node": "pk_by",
-    "pin": "true"
-   },
-   "to": {
-    "node": "pk_pay",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w57",
-   "from": {
-    "node": "pk",
-    "pin": "attacker"
-   },
-   "to": {
-    "node": "pk_score",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w58",
-   "from": {
-    "node": "pk_pay",
-    "pin": "then"
-   },
-   "to": {
-    "node": "pk_score",
-    "pin": "exec"
-   }
-  },
-  {
    "id": "v4_1",
    "from": {
     "node": "ms_pack",
@@ -1405,17 +1251,6 @@
    },
    "to": {
     "node": "ms_kd",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "v4_2",
-   "from": {
-    "node": "ms_kd",
-    "pin": "then"
-   },
-   "to": {
-    "node": "ms_has",
     "pin": "exec"
    }
   },
@@ -1726,15 +1561,191 @@
     "node": "pk_br",
     "pin": "exec"
    }
+  },
+  {
+   "id": "v5_1",
+   "from": {
+    "node": "ms_kd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_wt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v5_2",
+   "from": {
+    "node": "ms_wt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_tiers",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v5_3",
+   "from": {
+    "node": "ms_tiers",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_tur",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v5_4",
+   "from": {
+    "node": "ms_tur",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_foe",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v5_5",
+   "from": {
+    "node": "ms_foe",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_has",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v5_6",
+   "from": {
+    "node": "sp_t",
+    "pin": "true"
+   },
+   "to": {
+    "node": "sp_ct",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v5_7",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sp_ct",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "v5_8",
+   "from": {
+    "node": "rs_w0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_msg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v5_9",
+   "from": {
+    "node": "ck",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck_add",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v5_10",
+   "from": {
+    "node": "ck",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ck_add",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "v5_11",
+   "from": {
+    "node": "ck",
+    "pin": "kind"
+   },
+   "to": {
+    "node": "ck_pay",
+    "pin": "type"
+   }
+  },
+  {
+   "id": "v5_12",
+   "from": {
+    "node": "ck_pay",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ck_add",
+    "pin": "amount"
+   }
+  },
+  {
+   "id": "v5_13",
+   "from": {
+    "node": "ck_add",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ck_pt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v5_14",
+   "from": {
+    "node": "ck",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ck_pt",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "v5_r1",
+   "from": {
+    "node": "sp_ct",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sp_resp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v5_r2",
+   "from": {
+    "node": "sp",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sp_resp",
+    "pin": "player"
+   }
   }
  ],
  "comments": [
   {
    "id": "c_setup",
-   "text": "Set up once: Last Stand's map pack (wave spawners, barricades, supply drops), knocked down instead of dead for defenders, the armory. The mode's settings (This mode): rounds only end when the mode says, no team balance.",
+   "text": "Set up once: Last Stand's map pack (wave spawners, barricades, supply drops), knocked down instead of dead for defenders, the round table with tiers, turrets (2500, bots buy them too), bots fight the creatures, the armory. The mode's settings (This mode): rounds only end when the mode says, no team balance.",
    "pos": {
     "x": 41,
-    "y": 915
+    "y": 2411
    },
    "size": {
     "w": 778,
@@ -1743,62 +1754,74 @@
   },
   {
    "id": "c_spawn",
-   "text": "Terrorists are the horde: knife only, 150 health, green. Counter-Terrorists defend with an M4 and armor.",
+   "text": "Everyone defends (a Terrorist is moved over) with an M4 and armor; the horde is creatures.",
    "pos": {
-    "x": 1041,
-    "y": 23
+    "x": 3041,
+    "y": 10
    },
    "size": {
     "w": 2278,
-    "h": 693
+    "h": 664
    }
   },
   {
    "id": "c_start",
-   "text": "Each round is one stand: the horde waits, then wave 1.",
+   "text": "Each round is one stand: a message, then wave 1.",
    "pos": {
     "x": 41,
-    "y": 1843
+    "y": 243
    },
    "size": {
-    "w": 2778,
-    "h": 317
+    "w": 2278,
+    "h": 224
    }
   },
   {
    "id": "c_waves",
-   "text": "Waves: hold out for 5. Between waves the fallen come back and everyone gets money.",
+   "text": "Waves: the round table plans each wave on the map's wave spawners (zombie-survival rounds: more and tougher each wave, new creature types, a baby garg at 7, bosses, packs, tiers, an alive cap). Hold out for 5. Between waves the fallen come back and everyone gets money.",
    "pos": {
     "x": 41,
-    "y": 2205
+    "y": 686
    },
    "size": {
     "w": 3278,
-    "h": 1058
+    "h": 1073
    }
   },
   {
    "id": "c_deaths",
-   "text": "Deaths: a defender who'd die is knocked down instead and bleeds out over 25 s (a teammate holding USE for 4 s gets them up: +200 for the helper); the base falls when no defender is standing; each zombie killed pays 300.",
+   "text": "Deaths: a defender who'd die is knocked down instead and bleeds out over 25 s (a teammate holding USE for 4 s gets them up: +200 for the helper); the base falls when no defender is standing; each creature killed pays what the round table says, and a point.",
    "pos": {
-    "x": 41,
-    "y": 1115
+    "x": 1541,
+    "y": 2057
    },
    "size": {
     "w": 2278,
-    "h": 711
+    "h": 512
    }
   },
   {
    "id": "c_shop",
-   "text": "The armory: a real shop with a keeper at the map's Armory marker (else a defender spawn); walk up and press USE, or say !shop anywhere. Prices rise 5 % a wave; perks and the gun upgrade are on sale where the map has no machine or bench.",
+   "text": "The armory: a real shop with a keeper at the map's Armory marker (else a defender spawn); walk up and press USE, or say !shop anywhere. It sells a turret kit (press USE where it should stand). Prices rise 5 % a wave; perks and the gun upgrade are on sale where the map has no machine or bench.",
    "pos": {
     "x": 41,
-    "y": 3427
+    "y": 2733
    },
    "size": {
     "w": 3278,
-    "h": 580
+    "h": 712
+   }
+  },
+  {
+   "id": "c_ck",
+   "text": "A creature killed: its pay goes to the killer, and a point.",
+   "pos": {
+    "x": 41,
+    "y": 1771
+   },
+   "size": {
+    "w": 1778,
+    "h": 257
    }
   }
  ],

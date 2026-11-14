@@ -524,6 +524,21 @@ public lsd_poll()
 		lsd_resume()
 }
 
+// the round table's kind of round (0 normal, 1 boss, 2 pack) and its type
+stock lsg_wave_kind()
+{
+	new t[32]
+	return ls_components_running() ? ls_wave_kind(t, charsmax(t)) : 0
+}
+
+stock lsg_wave_type()
+{
+	new t[32]
+	if (ls_components_running())
+		ls_wave_kind(t, charsmax(t))
+	return t
+}
+
 // a drop-in over an entity's place
 stock lsg_drop_in(id, ent)
 {

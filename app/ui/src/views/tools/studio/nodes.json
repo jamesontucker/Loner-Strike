@@ -81,6 +81,7 @@
   "Bots",
   "Components",
   "Map markers",
+  "Waves",
   "Upgrades",
   "Downed",
   "Shop",
@@ -6099,6 +6100,496 @@
    ],
    "params": [],
    "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "wave.table",
+   "title": "Round Table On",
+   "category": "Waves",
+   "help": "Each Start Wave from now on plans a zombie-survival round on the map's wave spawners: how many (by round and team size), which creature types (unlocked by round, with stand-ins), their health, bosses, packs, heavies, tiers, how many alive at once. A waves.ini section replaces the built-in mix.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "section",
+     "label": "waves.ini section (empty: built in)",
+     "kind": "name",
+     "default": ""
+    },
+    {
+     "id": "team",
+     "label": "Defenders",
+     "kind": "choice",
+     "default": "2",
+     "choices": [
+      [
+       "2",
+       "Counter-Terrorists"
+      ],
+      [
+       "1",
+       "Terrorists"
+      ]
+     ]
+    },
+    {
+     "id": "creatures",
+     "label": "Creatures (no: dead players come back as the enemies)",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "wave.table_off",
+   "title": "Round Table Off",
+   "category": "Waves",
+   "help": "Waves go back to the spawners' own settings.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "wave.scale",
+   "title": "Round Difficulty",
+   "category": "Waves",
+   "help": "Times the round table's counts and health (the mode's difficulty).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "count",
+     "type": "number",
+     "label": "Count times",
+     "param": "count"
+    },
+    {
+     "id": "hp",
+     "type": "number",
+     "label": "Health times",
+     "param": "hp"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "count",
+     "label": "Count times",
+     "kind": "number",
+     "default": 1,
+     "min": 0.1,
+     "max": 10
+    },
+    {
+     "id": "hp",
+     "label": "Health times",
+     "kind": "number",
+     "default": 1,
+     "min": 0.1,
+     "max": 10
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "wave.cap",
+   "title": "Alive Cap",
+   "category": "Waves",
+   "help": "How many creatures at once (0: 16 + 2 a defender, 20-48; never over the game's own cap).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "n",
+     "type": "number",
+     "label": "At once",
+     "param": "n"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "n",
+     "label": "At once",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 64
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "wave.tiers",
+   "title": "Creature Tiers",
+   "category": "Waves",
+   "help": "Tiers on (yellow from round 15, red-orange from 20) or off.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "On",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "wave.info",
+   "title": "This Round",
+   "category": "Waves",
+   "help": "This round's plan: how many, how many made so far, the health times, whether it's a boss or a pack round (and the type).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "planned",
+     "type": "number",
+     "label": "Planned"
+    },
+    {
+     "id": "spawned",
+     "type": "number",
+     "label": "Made so far"
+    },
+    {
+     "id": "hp",
+     "type": "number",
+     "label": "Health times"
+    },
+    {
+     "id": "boss",
+     "type": "bool",
+     "label": "Boss round"
+    },
+    {
+     "id": "pack",
+     "type": "bool",
+     "label": "Pack round"
+    },
+    {
+     "id": "type",
+     "type": "text",
+     "label": "Boss or pack type"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "wave.type_pay",
+   "title": "Kill Pay",
+   "category": "Waves",
+   "help": "What the round table pays for killing this creature type.",
+   "inputs": [
+    {
+     "id": "type",
+     "type": "text",
+     "label": "Type",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Pay"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "wave.creatures_ok",
+   "title": "Creatures Working",
+   "category": "Waves",
+   "help": "False once creatures can't spawn on this server (the table fell back to dead players).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Working"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "turret.setup",
+   "title": "Turrets",
+   "category": "Upgrades",
+   "help": "Turrets: friendly creatures that shoot the horde. A kit (Give Turret Kit, or a shop line with give=turret) is placed with USE where the player looks; bots are offered turret spots at this price. Price 0: off.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "price",
+     "label": "Price",
+     "kind": "number",
+     "default": 2500,
+     "min": 0,
+     "max": 100000
+    },
+    {
+     "id": "life",
+     "label": "Lasts (seconds, 0: until destroyed)",
+     "kind": "number",
+     "default": 150,
+     "min": 0,
+     "max": 3600
+    },
+    {
+     "id": "per",
+     "label": "At once per player",
+     "kind": "number",
+     "default": 1,
+     "min": 1,
+     "max": 8
+    },
+    {
+     "id": "type",
+     "label": "Creature type",
+     "kind": "name",
+     "default": "turret"
+    },
+    {
+     "id": "bots",
+     "label": "Bots buy them",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "turret.give",
+   "title": "Give Turret Kit",
+   "category": "Upgrades",
+   "help": "Gives a player turret kits to place.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "n",
+     "type": "number",
+     "label": "How many",
+     "param": "n"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "n",
+     "label": "How many",
+     "kind": "number",
+     "default": 1,
+     "min": 1,
+     "max": 8
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "turret.place",
+   "title": "Place Turret",
+   "category": "Upgrades",
+   "help": "Places a turret where the player looks: from a kit, or paid at the turrets' price.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Turret"
+    }
+   ],
+   "params": [
+    {
+     "id": "pay",
+     "label": "Pay for it (no: use a kit)",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "turret.kits",
+   "title": "Turret Kits",
+   "category": "Upgrades",
+   "help": "How many turret kits a player has.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Kits"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "turret.count",
+   "title": "Turrets Out",
+   "category": "Upgrades",
+   "help": "How many turrets a player has out.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Turrets"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "turret.on_placed",
+   "title": "Turret Placed",
+   "category": "Upgrades",
+   "help": "A turret was placed.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "turret",
+     "type": "entity",
+     "label": "Turret"
+    },
+    {
+     "id": "owner",
+     "type": "player",
+     "label": "Owner"
+    }
+   ],
+   "params": [],
+   "event": true,
    "needs": "components"
   },
   {

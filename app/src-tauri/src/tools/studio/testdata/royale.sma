@@ -26,6 +26,21 @@ stock Float:g_v0 = 0.0 // Squads left (number)
 stock g_v1 = 0 // Looting (bool)
 
 stock Float:g_lsgDmg, bool:g_lsgDmgBlock
+// the round table's kind of round (0 normal, 1 boss, 2 pack) and its type
+stock lsg_wave_kind()
+{
+	new t[32]
+	return ls_components_running() ? ls_wave_kind(t, charsmax(t)) : 0
+}
+
+stock lsg_wave_type()
+{
+	new t[32]
+	if (ls_components_running())
+		ls_wave_kind(t, charsmax(t))
+	return t
+}
+
 // a drop-in over an entity's place
 stock lsg_drop_in(id, ent)
 {

@@ -307,6 +307,7 @@ const EVENTS: &[EventKind] = &[
     EventKind { kind: "shop.on_buy", sig: "public ls_on_shop_buy(ent, id, const item[], price)", register: &[], prelude: "", guard: "", values: &[("shop", "ent"), ("player", "id"), ("item", "@str:item"), ("price", "_:float(price)")], tail: "\treturn PLUGIN_CONTINUE", named: None },
     EventKind { kind: "br.on_landed", sig: "public ls_on_landed(id)", register: &[], prelude: "", guard: "", values: &[("player", "id")], tail: "", named: None },
     EventKind { kind: "br.on_lobby_end", sig: "public ls_on_lobby_end(squads)", register: &[], prelude: "", guard: "", values: &[("squads", "_:float(squads)")], tail: "", named: None },
+    EventKind { kind: "turret.on_placed", sig: "public ls_on_turret(ent, owner)", register: &[], prelude: "", guard: "", values: &[("turret", "ent"), ("owner", "owner >= 1 && owner <= MaxClients ? owner : 0")], tail: "", named: None },
     EventKind { kind: "comp.on_barricade_broken", sig: "public ls_on_barricade_broken(ent, attacker)", register: &[], prelude: "", guard: "", values: &[("barricade", "ent"), ("attacker", "attacker")], tail: "", named: None },
     EventKind { kind: "comp.on_meeting_end", sig: "public ls_on_meeting_end(ent, ejected)", register: &[], prelude: "", guard: "", values: &[("meeting", "ent"), ("ejected", "ejected")], tail: "", named: None },
     EventKind {
@@ -711,6 +712,21 @@ impl<'a> Gen<'a> {
             "br.heal_count" => format!("float(ls_components_running() ? ls_heal_count({}) : 0)", i("player", "player")),
             "br.kills" => format!("float(ls_components_running() ? ls_kills({}) : 0)", i("player", "player")),
             "br.squads_alive" => "float(ls_components_running() ? ls_squads_alive() : 0)".into(),
+            "wave.info" => {
+                let on = "ls_components_running()";
+                match pin {
+                    "spawned" => format!("float({on} ? ls_wave_spawned() : 0)"),
+                    "hp" => format!("({on} ? ls_wave_hp_mult() : 1.0)"),
+                    "boss" => "(lsg_wave_kind() == 1 ? 1 : 0)".into(),
+                    "pack" => "(lsg_wave_kind() == 2 ? 1 : 0)".into(),
+                    "type" => "lsg_wave_type()".into(),
+                    _ => format!("float({on} ? ls_wave_planned() : 0)"),
+                }
+            }
+            "wave.type_pay" => format!("float(ls_components_running() ? ls_wave_type_pay({}) : 0)", i("type", "text")),
+            "wave.creatures_ok" => "(ls_components_running() && ls_wave_creatures_ok() ? 1 : 0)".into(),
+            "turret.kits" => format!("float(ls_components_running() ? ls_turret_kits({}) : 0)", i("player", "player")),
+            "turret.count" => format!("float(ls_components_running() ? ls_turret_count({}) : 0)", i("player", "player")),
             "comp.barricade_hp" => format!("float(ls_components_running() ? ls_barricade_hp({}) : 0)", i("barricade", "entity")),
             "comp.zone_stage" => format!("float(ls_components_running() ? ls_zone_stage({}) : 0)", i("zone", "entity")),
             "comp.zone_next" => format!("{}lsg_zone_next({}, {})", if pin == "closing" { "_:" } else { "" }, i("zone", "entity"), match pin { "radius" => 1, "closing" => 2, _ => 0 }),
@@ -866,7 +882,7 @@ pub fn needs(checked: &Graph) -> Needs {
             creatures.push(k);
         }
     }
-    if ex.graph.nodes.iter().any(|n| n.kind.starts_with("comp.wave") || n.kind == "comp.on_wave_spawn" || n.kind == "comp.load_pack") {
+    if ex.graph.nodes.iter().any(|n| n.kind.starts_with("comp.wave") || n.kind.starts_with("wave.") || n.kind.starts_with("turret.") || n.kind == "comp.on_wave_spawn" || n.kind == "comp.load_pack") {
         creatures = vec!["all".into()];
     }
     Needs { components, creatures }
@@ -2028,7 +2044,8 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "comp.crate_open" | "comp.wave_start" | "comp.wave_stop" | "comp.extract_open" | "comp.door" | "comp.trap_fire" | "comp.capture_lock" | "comp.reset" | "comp.start" | "comp.stop" | "comp.barricade_set_hp" | "comp.barricade_repair" | "comp.zone_skip"
-        | "up.mod" | "up.perk_give" | "up.bench" | "up.box" | "kd.enable" | "kd.down" | "kd.revive" | "shop.menu" | "shop.open" | "br.heal_give" | "br.armor" | "br.glow" | "br.hud" | "br.hud_text" | "br.feed" | "br.drop_in" | "br.lobby" | "br.squad_size" => {
+        | "up.mod" | "up.perk_give" | "up.bench" | "up.box" | "kd.enable" | "kd.down" | "kd.revive" | "shop.menu" | "shop.open" | "br.heal_give" | "br.armor" | "br.glow" | "br.hud" | "br.hud_text" | "br.feed" | "br.drop_in" | "br.lobby" | "br.squad_size"
+        | "wave.table" | "wave.table_off" | "wave.scale" | "wave.cap" | "wave.tiers" | "turret.setup" | "turret.give" => {
             let p = || inp("player", "player");
             let call = match def.kind.as_str() {
                 "up.mod" => format!("ls_player_mod({}, {}, {})", p(), pawn_str(gen.choice(n, def, "what")), inp("mult", "number")),
@@ -2051,6 +2068,13 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                     None => format!("ls_drop_in({})", p()),
                 },
                 "br.lobby" => format!("ls_squad_lobby(floatmax({}, 0.0))", inp("secs", "number")),
+                "wave.table" => format!("ls_wave_table({}, {}, {})", pawn_str(&name_text(gen.text(n, def, "section"))), if gen.choice(n, def, "team") == "1" { 1 } else { 2 }, if gen.boolean(n, def, "creatures") { "true" } else { "false" }),
+                "wave.table_off" => "ls_wave_table_off()".into(),
+                "wave.scale" => format!("ls_wave_scale(floatclamp({}, 0.1, 10.0), floatclamp({}, 0.1, 10.0))", inp("count", "number"), inp("hp", "number")),
+                "wave.cap" => format!("ls_wave_cap(clamp(floatround({}), 0, 64))", inp("n", "number")),
+                "wave.tiers" => format!("ls_wave_tiers({})", if gen.boolean(n, def, "on") { "true" } else { "false" }),
+                "turret.setup" => format!("ls_turret_setup({}, {}, {}, {}, 0, {})", gen.num(n, def, "price").round().clamp(0.0, 100000.0) as i64, float_lit(gen.num(n, def, "life")), gen.num(n, def, "per").round().clamp(1.0, 8.0) as i64, pawn_str(&name_text(gen.text(n, def, "type"))), if gen.boolean(n, def, "bots") { "true" } else { "false" }),
+                "turret.give" => format!("ls_turret_give({}, clamp(floatround({}), 1, 8))", p(), inp("n", "number")),
                 "br.squad_size" => format!("ls_squad_max(clamp(floatround({}), 1, 8))", inp("size", "number")),
                 "comp.barricade_set_hp" => format!("ls_barricade_set_hp({}, max(floatround({}), 0))", inp("barricade", "entity"), inp("hp", "number")),
                 "comp.barricade_repair" => format!("ls_barricade_repair({}, {})", inp("barricade", "entity"), if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() }),
@@ -2075,6 +2099,10 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let k = gen.out_index(id, "bought");
             let store = k.map_or(String::new(), |k| format!("g_lsgO[{k}] = "));
             check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\t{store}ls_perk_buy({}, {}) ? 1 : 0", inp("player", "player"), pawn_str(gen.choice(n, def, "perk"))), exit("done")]);
+            then_line(&mut b, "then");
+        }
+        "turret.place" => {
+            check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\tg_lsgOut[{i}] = ls_turret_place({}, {})", inp("player", "player"), if gen.boolean(n, def, "pay") { "true" } else { "false" }), exit("done")]);
             then_line(&mut b, "then");
         }
         "up.pickup" | "br.crate" => {
@@ -2944,7 +2972,22 @@ fn lsg_secs(v: &Option<Val>) -> String {
 const V3_HELPERS: &str = include_str!("v3_helpers.pawn");
 
 /// Helpers every plugin gets (stocks: the ones a graph doesn't use cost nothing).
-const HELPERS: &str = r##"// a drop-in over an entity's place
+const HELPERS: &str = r##"// the round table's kind of round (0 normal, 1 boss, 2 pack) and its type
+stock lsg_wave_kind()
+{
+	new t[32]
+	return ls_components_running() ? ls_wave_kind(t, charsmax(t)) : 0
+}
+
+stock lsg_wave_type()
+{
+	new t[32]
+	if (ls_components_running())
+		ls_wave_kind(t, charsmax(t))
+	return t
+}
+
+// a drop-in over an entity's place
 stock lsg_drop_in(id, ent)
 {
 	new Float:o[3]

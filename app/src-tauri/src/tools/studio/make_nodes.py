@@ -239,6 +239,24 @@ node("br.squad_size", "Squad Size", "Battle Royale", "Sets the squad size: 1 sol
 node("br.on_lobby_end", "Lobby Ended", "Battle Royale", "The squad lobby is over and the squads are filled.", outputs=[E(), P("squads","number","Squads")], **cev)
 node("br.squads_alive", "Sides Alive", "Battle Royale", "How many sides have someone alive (squads, and players in none).", outputs=[P("out","number","Sides")], pure=True, needs="components")
 
+# the round table (zombie-survival rounds on the wave spawners) and turrets: W1's components
+node("wave.table", "Round Table On", "Waves", "Each Start Wave from now on plans a zombie-survival round on the map's wave spawners: how many (by round and team size), which creature types (unlocked by round, with stand-ins), their health, bosses, packs, heavies, tiers, how many alive at once. A waves.ini section replaces the built-in mix.",
+     inputs=[X], outputs=[E()], params=[prm("section","waves.ini section (empty: built in)","name",""), prm("team","Defenders","choice","2",choices=[["2","Counter-Terrorists"],["1","Terrorists"]]), prm("creatures","Creatures (no: dead players come back as the enemies)","bool",True)], **ca)
+node("wave.table_off", "Round Table Off", "Waves", "Waves go back to the spawners' own settings.", inputs=[X], outputs=[E()], **ca)
+node("wave.scale", "Round Difficulty", "Waves", "Times the round table's counts and health (the mode's difficulty).", inputs=[X, P("count","number","Count times",param="count"), P("hp","number","Health times",param="hp")], outputs=[E()], params=[prm("count","Count times","number",1,min=0.1,max=10), prm("hp","Health times","number",1,min=0.1,max=10)], **ca)
+node("wave.cap", "Alive Cap", "Waves", "How many creatures at once (0: 16 + 2 a defender, 20-48; never over the game's own cap).", inputs=[X, P("n","number","At once",param="n")], outputs=[E()], params=[prm("n","At once","number",0,min=0,max=64)], **ca)
+node("wave.tiers", "Creature Tiers", "Waves", "Tiers on (yellow from round 15, red-orange from 20) or off.", inputs=[X], outputs=[E()], params=[prm("on","On","bool",True)], **ca)
+node("wave.info", "This Round", "Waves", "This round's plan: how many, how many made so far, the health times, whether it's a boss or a pack round (and the type).", outputs=[P("planned","number","Planned"), P("spawned","number","Made so far"), P("hp","number","Health times"), P("boss","bool","Boss round"), P("pack","bool","Pack round"), P("type","text","Boss or pack type")], pure=True, needs="components")
+node("wave.type_pay", "Kill Pay", "Waves", "What the round table pays for killing this creature type.", inputs=[P("type","text","Type",required=True)], outputs=[P("out","number","Pay")], pure=True, needs="components")
+node("wave.creatures_ok", "Creatures Working", "Waves", "False once creatures can't spawn on this server (the table fell back to dead players).", outputs=[P("out","bool","Working")], pure=True, needs="components")
+node("turret.setup", "Turrets", "Upgrades", "Turrets: friendly creatures that shoot the horde. A kit (Give Turret Kit, or a shop line with give=turret) is placed with USE where the player looks; bots are offered turret spots at this price. Price 0: off.", inputs=[X], outputs=[E()],
+     params=[prm("price","Price","number",2500,min=0,max=100000), prm("life","Lasts (seconds, 0: until destroyed)","number",150,min=0,max=3600), prm("per","At once per player","number",1,min=1,max=8), prm("type","Creature type","name","turret"), prm("bots","Bots buy them","bool",True)], **ca)
+node("turret.give", "Give Turret Kit", "Upgrades", "Gives a player turret kits to place.", inputs=[X, PL, P("n","number","How many",param="n")], outputs=[E()], params=[prm("n","How many","number",1,min=1,max=8)], **ca)
+node("turret.place", "Place Turret", "Upgrades", "Places a turret where the player looks: from a kit, or paid at the turrets' price.", inputs=[X, PL], outputs=[E(), P("out","entity","Turret")], params=[prm("pay","Pay for it (no: use a kit)","bool",False)], **ca)
+node("turret.kits", "Turret Kits", "Upgrades", "How many turret kits a player has.", inputs=[PL], outputs=[P("out","number","Kits")], pure=True, needs="components")
+node("turret.count", "Turrets Out", "Upgrades", "How many turrets a player has out.", inputs=[PL], outputs=[P("out","number","Turrets")], pure=True, needs="components")
+node("turret.on_placed", "Turret Placed", "Upgrades", "A turret was placed.", outputs=[E(), P("turret","entity","Turret"), P("owner","player","Owner")], **cev)
+
 # what the mode tells the bots' brain (ls_mode hints, through gm_components): so community modes get bots that play them well
 BH = dict(needs="components")
 BWHO = P("player","player","Bot",optional=True)
@@ -454,7 +472,7 @@ data = {
     "any": {"label": "Anything", "color": "#9a9a9a"},
     "var": {"label": "Variable", "color": "#cccccc"}
   },
-  "categories": ["Events", "Conditions", "Numbers", "Text", "Variables", "Flow", "Functions", "Macros", "Arrays", "Maps", "Structs", "Enums", "Vectors", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Map markers", "Upgrades", "Downed", "Shop", "Battle Royale", "Creatures"],
+  "categories": ["Events", "Conditions", "Numbers", "Text", "Variables", "Flow", "Functions", "Macros", "Arrays", "Maps", "Structs", "Enums", "Vectors", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Map markers", "Waves", "Upgrades", "Downed", "Shop", "Battle Royale", "Creatures"],
   "nodes": nodes,
 }
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)

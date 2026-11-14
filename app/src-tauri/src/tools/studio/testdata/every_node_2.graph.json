@@ -1049,11 +1049,243 @@
    "params": {}
   },
   {
+   "id": "wt",
+   "type": "wave.table",
+   "pos": {
+    "x": 0,
+    "y": 2860
+   },
+   "params": {
+    "section": "",
+    "team": "2",
+    "creatures": true
+   }
+  },
+  {
+   "id": "wsc",
+   "type": "wave.scale",
+   "pos": {
+    "x": 260,
+    "y": 2860
+   },
+   "params": {
+    "count": 1.2,
+    "hp": 1.1
+   }
+  },
+  {
+   "id": "wcap",
+   "type": "wave.cap",
+   "pos": {
+    "x": 520,
+    "y": 2860
+   },
+   "params": {
+    "n": 24
+   }
+  },
+  {
+   "id": "wti",
+   "type": "wave.tiers",
+   "pos": {
+    "x": 780,
+    "y": 2860
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "tset",
+   "type": "turret.setup",
+   "pos": {
+    "x": 1040,
+    "y": 2860
+   },
+   "params": {
+    "price": 1500,
+    "life": 120,
+    "per": 1,
+    "type": "turret",
+    "bots": true
+   }
+  },
+  {
+   "id": "winfo",
+   "type": "wave.info",
+   "pos": {
+    "x": 1040,
+    "y": 2860
+   },
+   "params": {}
+  },
+  {
+   "id": "wfmt",
+   "type": "text.format",
+   "pos": {
+    "x": 1300,
+    "y": 2860
+   },
+   "params": {
+    "text": "X2 round: planned [0], made [1], health x[2], boss [3]"
+   }
+  },
+  {
+   "id": "p_winfo",
+   "type": "debug.print",
+   "pos": {
+    "x": 1560,
+    "y": 2860
+   },
+   "params": {
+    "text": "",
+    "chat": false
+   }
+  },
+  {
+   "id": "wpay",
+   "type": "wave.type_pay",
+   "pos": {
+    "x": 1560,
+    "y": 2860
+   },
+   "params": {}
+  },
+  {
+   "id": "wfmt2",
+   "type": "text.format",
+   "pos": {
+    "x": 1820,
+    "y": 2860
+   },
+   "params": {
+    "text": "X2 pack [0] type [1] pay [2]"
+   }
+  },
+  {
+   "id": "p_wpay",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 2860
+   },
+   "params": {
+    "text": "",
+    "chat": false
+   }
+  },
+  {
+   "id": "wok",
+   "type": "wave.creatures_ok",
+   "pos": {
+    "x": 2080,
+    "y": 2860
+   },
+   "params": {}
+  },
+  {
+   "id": "p_wok",
+   "type": "debug.print",
+   "pos": {
+    "x": 2080,
+    "y": 2860
+   },
+   "params": {
+    "text": "X2 creatures working:",
+    "chat": false
+   }
+  },
+  {
+   "id": "wtoff",
+   "type": "wave.table_off",
+   "pos": {
+    "x": 2340,
+    "y": 2860
+   },
+   "params": {}
+  },
+  {
+   "id": "tg",
+   "type": "turret.give",
+   "pos": {
+    "x": 0,
+    "y": 3080
+   },
+   "params": {
+    "n": 1
+   }
+  },
+  {
+   "id": "tk",
+   "type": "turret.kits",
+   "pos": {
+    "x": 260,
+    "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "p_tk",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 3080
+   },
+   "params": {
+    "text": "X2 turret kits:",
+    "chat": false
+   }
+  },
+  {
+   "id": "tp",
+   "type": "turret.place",
+   "pos": {
+    "x": 520,
+    "y": 3080
+   },
+   "params": {
+    "pay": false
+   }
+  },
+  {
+   "id": "p_tp",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 3080
+   },
+   "params": {
+    "text": "X2 turret placed:",
+    "chat": false
+   }
+  },
+  {
+   "id": "tc",
+   "type": "turret.count",
+   "pos": {
+    "x": 780,
+    "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "p_tc",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 3080
+   },
+   "params": {
+    "text": "X2 turrets out:",
+    "chat": false
+   }
+  },
+  {
    "id": "e_perk",
    "type": "up.on_perk",
    "pos": {
     "x": 0,
-    "y": 2640
+    "y": 3080
    },
    "params": {}
   },
@@ -1062,7 +1294,7 @@
    "type": "debug.print",
    "pos": {
     "x": 260,
-    "y": 2640
+    "y": 3080
    },
    "params": {
     "text": "X2 perk bought:",
@@ -1074,7 +1306,7 @@
    "type": "up.on_upgraded",
    "pos": {
     "x": 520,
-    "y": 2640
+    "y": 3080
    },
    "params": {}
   },
@@ -1083,7 +1315,7 @@
    "type": "debug.print",
    "pos": {
     "x": 780,
-    "y": 2640
+    "y": 3080
    },
    "params": {
     "text": "X2 gun upgraded to:",
@@ -1095,7 +1327,7 @@
    "type": "up.on_box",
    "pos": {
     "x": 1040,
-    "y": 2640
+    "y": 3080
    },
    "params": {}
   },
@@ -1104,7 +1336,7 @@
    "type": "debug.print",
    "pos": {
     "x": 1300,
-    "y": 2640
+    "y": 3080
    },
    "params": {
     "text": "X2 box gave:",
@@ -1116,7 +1348,7 @@
    "type": "up.on_pickup",
    "pos": {
     "x": 1560,
-    "y": 2640
+    "y": 3080
    },
    "params": {}
   },
@@ -1125,7 +1357,7 @@
    "type": "debug.print",
    "pos": {
     "x": 1820,
-    "y": 2640
+    "y": 3080
    },
    "params": {
     "text": "X2 pickup taken:",
@@ -1137,7 +1369,7 @@
    "type": "up.on_creature_hurt",
    "pos": {
     "x": 0,
-    "y": 2860
+    "y": 3300
    },
    "params": {}
   },
@@ -1146,7 +1378,7 @@
    "type": "debug.print",
    "pos": {
     "x": 260,
-    "y": 2860
+    "y": 3300
    },
    "params": {
     "text": "X2 creature hurt:",
@@ -1158,7 +1390,7 @@
    "type": "kd.on_down",
    "pos": {
     "x": 520,
-    "y": 2860
+    "y": 3300
    },
    "params": {}
   },
@@ -1167,7 +1399,7 @@
    "type": "debug.print",
    "pos": {
     "x": 780,
-    "y": 2860
+    "y": 3300
    },
    "params": {
     "text": "X2 knocked down:",
@@ -1179,7 +1411,7 @@
    "type": "kd.on_up",
    "pos": {
     "x": 1040,
-    "y": 2860
+    "y": 3300
    },
    "params": {}
   },
@@ -1188,7 +1420,7 @@
    "type": "debug.print",
    "pos": {
     "x": 1300,
-    "y": 2860
+    "y": 3300
    },
    "params": {
     "text": "X2 got up:",
@@ -1200,7 +1432,7 @@
    "type": "kd.on_bled_out",
    "pos": {
     "x": 1560,
-    "y": 2860
+    "y": 3300
    },
    "params": {}
   },
@@ -1209,7 +1441,7 @@
    "type": "debug.print",
    "pos": {
     "x": 1820,
-    "y": 2860
+    "y": 3300
    },
    "params": {
     "text": "X2 bled out:",
@@ -1221,7 +1453,7 @@
    "type": "shop.on_buy",
    "pos": {
     "x": 0,
-    "y": 3080
+    "y": 3520
    },
    "params": {}
   },
@@ -1230,7 +1462,7 @@
    "type": "debug.print",
    "pos": {
     "x": 260,
-    "y": 3080
+    "y": 3520
    },
    "params": {
     "text": "X2 shop sold:",
@@ -1242,7 +1474,7 @@
    "type": "br.on_landed",
    "pos": {
     "x": 520,
-    "y": 3080
+    "y": 3520
    },
    "params": {}
   },
@@ -1251,7 +1483,7 @@
    "type": "debug.print",
    "pos": {
     "x": 780,
-    "y": 3080
+    "y": 3520
    },
    "params": {
     "text": "X2 landed:",
@@ -1263,7 +1495,7 @@
    "type": "br.on_lobby_end",
    "pos": {
     "x": 1040,
-    "y": 3080
+    "y": 3520
    },
    "params": {}
   },
@@ -1272,10 +1504,31 @@
    "type": "debug.print",
    "pos": {
     "x": 1300,
-    "y": 3080
+    "y": 3520
    },
    "params": {
     "text": "X2 lobby ended, squads:",
+    "chat": false
+   }
+  },
+  {
+   "id": "e_tur",
+   "type": "turret.on_placed",
+   "pos": {
+    "x": 1560,
+    "y": 3520
+   },
+   "params": {}
+  },
+  {
+   "id": "p_e_tur",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 3520
+   },
+   "params": {
+    "text": "X2 turret placed by:",
     "chat": false
    }
   }
@@ -2714,6 +2967,358 @@
   {
    "id": "w131",
    "from": {
+    "node": "winfo",
+    "pin": "planned"
+   },
+   "to": {
+    "node": "wfmt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w132",
+   "from": {
+    "node": "winfo",
+    "pin": "spawned"
+   },
+   "to": {
+    "node": "wfmt",
+    "pin": "a1"
+   }
+  },
+  {
+   "id": "w133",
+   "from": {
+    "node": "winfo",
+    "pin": "hp"
+   },
+   "to": {
+    "node": "wfmt",
+    "pin": "a2"
+   }
+  },
+  {
+   "id": "w134",
+   "from": {
+    "node": "winfo",
+    "pin": "boss"
+   },
+   "to": {
+    "node": "wfmt",
+    "pin": "a3"
+   }
+  },
+  {
+   "id": "w135",
+   "from": {
+    "node": "wfmt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_winfo",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w136",
+   "from": {
+    "node": "winfo",
+    "pin": "type"
+   },
+   "to": {
+    "node": "wpay",
+    "pin": "type"
+   }
+  },
+  {
+   "id": "w137",
+   "from": {
+    "node": "winfo",
+    "pin": "pack"
+   },
+   "to": {
+    "node": "wfmt2",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w138",
+   "from": {
+    "node": "winfo",
+    "pin": "type"
+   },
+   "to": {
+    "node": "wfmt2",
+    "pin": "a1"
+   }
+  },
+  {
+   "id": "w139",
+   "from": {
+    "node": "wpay",
+    "pin": "out"
+   },
+   "to": {
+    "node": "wfmt2",
+    "pin": "a2"
+   }
+  },
+  {
+   "id": "w140",
+   "from": {
+    "node": "wfmt2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_wpay",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w141",
+   "from": {
+    "node": "wok",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_wok",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w142",
+   "from": {
+    "node": "p_zst2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w143",
+   "from": {
+    "node": "wt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wsc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w144",
+   "from": {
+    "node": "wsc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wcap",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w145",
+   "from": {
+    "node": "wcap",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wti",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w146",
+   "from": {
+    "node": "wti",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tset",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w147",
+   "from": {
+    "node": "tset",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_winfo",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w148",
+   "from": {
+    "node": "p_winfo",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_wpay",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w149",
+   "from": {
+    "node": "p_wpay",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_wok",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w150",
+   "from": {
+    "node": "p_wok",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wtoff",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w151",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "tg",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w152",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "tk",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w153",
+   "from": {
+    "node": "tk",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_tk",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w154",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "tp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w155",
+   "from": {
+    "node": "tp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_tp",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w156",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "tc",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w157",
+   "from": {
+    "node": "tc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_tc",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w158",
+   "from": {
+    "node": "din",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w159",
+   "from": {
+    "node": "tg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_tk",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w160",
+   "from": {
+    "node": "p_tk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w161",
+   "from": {
+    "node": "tp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_tp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w162",
+   "from": {
+    "node": "p_tp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_tc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w163",
+   "from": {
     "node": "e_perk",
     "pin": "then"
    },
@@ -2723,7 +3328,7 @@
    }
   },
   {
-   "id": "w132",
+   "id": "w164",
    "from": {
     "node": "e_perk",
     "pin": "perk"
@@ -2734,7 +3339,7 @@
    }
   },
   {
-   "id": "w133",
+   "id": "w165",
    "from": {
     "node": "e_up",
     "pin": "then"
@@ -2745,7 +3350,7 @@
    }
   },
   {
-   "id": "w134",
+   "id": "w166",
    "from": {
     "node": "e_up",
     "pin": "level"
@@ -2756,7 +3361,7 @@
    }
   },
   {
-   "id": "w135",
+   "id": "w167",
    "from": {
     "node": "e_box",
     "pin": "then"
@@ -2767,7 +3372,7 @@
    }
   },
   {
-   "id": "w136",
+   "id": "w168",
    "from": {
     "node": "e_box",
     "pin": "weapon"
@@ -2778,7 +3383,7 @@
    }
   },
   {
-   "id": "w137",
+   "id": "w169",
    "from": {
     "node": "e_pick",
     "pin": "then"
@@ -2789,7 +3394,7 @@
    }
   },
   {
-   "id": "w138",
+   "id": "w170",
    "from": {
     "node": "e_pick",
     "pin": "kind"
@@ -2800,7 +3405,7 @@
    }
   },
   {
-   "id": "w139",
+   "id": "w171",
    "from": {
     "node": "e_ch",
     "pin": "then"
@@ -2811,7 +3416,7 @@
    }
   },
   {
-   "id": "w140",
+   "id": "w172",
    "from": {
     "node": "e_ch",
     "pin": "damage"
@@ -2822,7 +3427,7 @@
    }
   },
   {
-   "id": "w141",
+   "id": "w173",
    "from": {
     "node": "e_kd",
     "pin": "then"
@@ -2833,7 +3438,7 @@
    }
   },
   {
-   "id": "w142",
+   "id": "w174",
    "from": {
     "node": "e_kd",
     "pin": "player"
@@ -2844,7 +3449,7 @@
    }
   },
   {
-   "id": "w143",
+   "id": "w175",
    "from": {
     "node": "e_ku",
     "pin": "then"
@@ -2855,7 +3460,7 @@
    }
   },
   {
-   "id": "w144",
+   "id": "w176",
    "from": {
     "node": "e_ku",
     "pin": "player"
@@ -2866,7 +3471,7 @@
    }
   },
   {
-   "id": "w145",
+   "id": "w177",
    "from": {
     "node": "e_bo",
     "pin": "then"
@@ -2877,7 +3482,7 @@
    }
   },
   {
-   "id": "w146",
+   "id": "w178",
    "from": {
     "node": "e_bo",
     "pin": "player"
@@ -2888,7 +3493,7 @@
    }
   },
   {
-   "id": "w147",
+   "id": "w179",
    "from": {
     "node": "e_buy",
     "pin": "then"
@@ -2899,7 +3504,7 @@
    }
   },
   {
-   "id": "w148",
+   "id": "w180",
    "from": {
     "node": "e_buy",
     "pin": "item"
@@ -2910,7 +3515,7 @@
    }
   },
   {
-   "id": "w149",
+   "id": "w181",
    "from": {
     "node": "e_land",
     "pin": "then"
@@ -2921,7 +3526,7 @@
    }
   },
   {
-   "id": "w150",
+   "id": "w182",
    "from": {
     "node": "e_land",
     "pin": "player"
@@ -2932,7 +3537,7 @@
    }
   },
   {
-   "id": "w151",
+   "id": "w183",
    "from": {
     "node": "e_lob",
     "pin": "then"
@@ -2943,7 +3548,7 @@
    }
   },
   {
-   "id": "w152",
+   "id": "w184",
    "from": {
     "node": "e_lob",
     "pin": "squads"
@@ -2954,7 +3559,29 @@
    }
   },
   {
-   "id": "w153",
+   "id": "w185",
+   "from": {
+    "node": "e_tur",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_e_tur",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w186",
+   "from": {
+    "node": "e_tur",
+    "pin": "owner"
+   },
+   "to": {
+    "node": "p_e_tur",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w187",
    "from": {
     "node": "p_e_land",
     "pin": "then"
@@ -2965,7 +3592,7 @@
    }
   },
   {
-   "id": "w154",
+   "id": "w188",
    "from": {
     "node": "e_land",
     "pin": "player"

@@ -15,7 +15,7 @@
 #define LSG_MODE "every_node_2"
 #define LSG_CTX 4
 #define LSG_TXT 2
-#define LSG_N 95
+#define LSG_N 111
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -36,6 +36,21 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 
 // The mode's variables
 stock g_v0 = 0 // Shop (Entity)
+
+// the round table's kind of round (0 normal, 1 boss, 2 pack) and its type
+stock lsg_wave_kind()
+{
+	new t[32]
+	return ls_components_running() ? ls_wave_kind(t, charsmax(t)) : 0
+}
+
+stock lsg_wave_type()
+{
+	new t[32]
+	if (ls_components_running())
+		ls_wave_kind(t, charsmax(t))
+	return t
+}
 
 // a drop-in over an entity's place
 stock lsg_drop_in(id, ent)
@@ -1351,7 +1366,7 @@ public plugin_precache()
 	precache_model("models/barney.mdl")
 	// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)
 	if (get_cvar_pointer("ls_creature_precache"))
-		lsg_precache_types("zombie")
+		lsg_precache_types("all")
 }
 
 stock lsg_precache_types(const want[])
@@ -1463,7 +1478,7 @@ public ls_on_perk(id, const perk[], price)
 	ctx[0] = id // player
 	copy(g_lsgTxt[0], 63, perk) // perk
 	ctx[1] = _:float(price) // price
-	lsg_n73(ctx)
+	lsg_n87(ctx)
 	return PLUGIN_CONTINUE
 }
 
@@ -1474,7 +1489,7 @@ public ls_on_weapon_upgraded(id, weapon, level, price)
 	ctx[0] = id // player
 	ctx[1] = _:float(level) // level
 	ctx[2] = _:float(price) // price
-	lsg_n75(ctx)
+	lsg_n89(ctx)
 }
 
 public ls_on_box(ent, id, const weapon[])
@@ -1483,7 +1498,7 @@ public ls_on_box(ent, id, const weapon[])
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	copy(g_lsgTxt[0], 63, weapon) // weapon
-	lsg_n77(ctx)
+	lsg_n91(ctx)
 	return PLUGIN_CONTINUE
 }
 
@@ -1493,7 +1508,7 @@ public ls_on_pickup(ent, id, const kind[])
 	ctx[0] = ent // pickup
 	ctx[1] = id // player
 	copy(g_lsgTxt[0], 63, kind) // kind
-	lsg_n79(ctx)
+	lsg_n93(ctx)
 	return PLUGIN_CONTINUE
 }
 
@@ -1504,7 +1519,7 @@ public ls_on_creature_hurt(ent, attacker, Float:dmg, headshot)
 	ctx[1] = attacker >= 1 && attacker <= MaxClients ? attacker : 0 // attacker
 	ctx[2] = _:dmg // damage
 	ctx[3] = headshot ? 1 : 0 // headshot
-	lsg_n81(ctx)
+	lsg_n95(ctx)
 }
 
 public ls_on_down(id, attacker)
@@ -1512,7 +1527,7 @@ public ls_on_down(id, attacker)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	ctx[1] = attacker // attacker
-	lsg_n83(ctx)
+	lsg_n97(ctx)
 	return PLUGIN_CONTINUE
 }
 
@@ -1521,14 +1536,14 @@ public ls_on_revive(id, by)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	ctx[1] = by >= 1 && by <= MaxClients ? by : 0 // by
-	lsg_n85(ctx)
+	lsg_n99(ctx)
 }
 
 public ls_on_bled_out(id)
 {
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
-	lsg_n87(ctx)
+	lsg_n101(ctx)
 }
 
 public ls_on_shop_buy(ent, id, const item[], price)
@@ -1538,7 +1553,7 @@ public ls_on_shop_buy(ent, id, const item[], price)
 	ctx[1] = id // player
 	copy(g_lsgTxt[0], 63, item) // item
 	ctx[2] = _:float(price) // price
-	lsg_n89(ctx)
+	lsg_n103(ctx)
 	return PLUGIN_CONTINUE
 }
 
@@ -1546,14 +1561,22 @@ public ls_on_landed(id)
 {
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
-	lsg_n91(ctx)
+	lsg_n105(ctx)
 }
 
 public ls_on_lobby_end(squads)
 {
 	new ctx[LSG_CTX]
 	ctx[0] = _:float(squads) // squads
-	lsg_n93(ctx)
+	lsg_n107(ctx)
+}
+
+public ls_on_turret(ent, owner)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = ent // turret
+	ctx[1] = owner >= 1 && owner <= MaxClients ? owner : 0 // owner
+	lsg_n109(ctx)
 }
 
 public lsg_on_creature_killed(ent, killer)
@@ -1828,7 +1851,7 @@ lsg_n26(ctx[])
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "X2 zone stage 2 s later:", floatround(float(ls_components_running() ? ls_zone_stage(lsg_find("shr")) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
-	#pragma unused ctx
+	lsg_n73(ctx)
 }
 
 // Call Supply Drop (drop)
@@ -2091,6 +2114,7 @@ lsg_n56(ctx[])
 	{
 		ls_drop_in(ctx[0])
 	}
+	lsg_n82(ctx)
 }
 
 // Map Started (rs3)
@@ -2244,14 +2268,147 @@ lsg_n72(ctx[])
 	}
 }
 
-// Perk Bought (e_perk)
+// Round Table On (wt)
 lsg_n73(ctx[])
 {
+	if (!(!ls_components_running()))
+	{
+		ls_wave_table("", 2, true)
+	}
 	lsg_n74(ctx)
 }
 
-// Print String (p_e_perk)
+// Round Difficulty (wsc)
 lsg_n74(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_wave_scale(floatclamp(1.2, 0.1, 10.0), floatclamp(1.1, 0.1, 10.0))
+	}
+	lsg_n75(ctx)
+}
+
+// Alive Cap (wcap)
+lsg_n75(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_wave_cap(clamp(floatround(24.0), 0, 64))
+	}
+	lsg_n76(ctx)
+}
+
+// Creature Tiers (wti)
+lsg_n76(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_wave_tiers(true)
+	}
+	lsg_n77(ctx)
+}
+
+// Turrets (tset)
+lsg_n77(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_turret_setup(1500, 120.0, 1, "turret", 0, true)
+	}
+	lsg_n78(ctx)
+}
+
+// Print String (p_winfo)
+lsg_n78(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "", fmt("X2 round: planned %s, made %s, health x%s, boss %s", lsg_ntext(float(ls_components_running() ? ls_wave_planned() : 0)), lsg_ntext(float(ls_components_running() ? ls_wave_spawned() : 0)), lsg_ntext((ls_components_running() ? ls_wave_hp_mult() : 1.0)), g_lsgYesNo[((lsg_wave_kind() == 1 ? 1 : 0)) ? 1 : 0]))
+	server_print("[%s] %s", LSG_MODE, t)
+	lsg_n79(ctx)
+}
+
+// Print String (p_wpay)
+lsg_n79(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "", fmt("X2 pack %s type %s pay %s", g_lsgYesNo[((lsg_wave_kind() == 2 ? 1 : 0)) ? 1 : 0], lsg_wave_type(), lsg_ntext(float(ls_components_running() ? ls_wave_type_pay(lsg_wave_type()) : 0))))
+	server_print("[%s] %s", LSG_MODE, t)
+	lsg_n80(ctx)
+}
+
+// Print String (p_wok)
+lsg_n80(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 creatures working:", g_lsgYesNo[((ls_components_running() && ls_wave_creatures_ok() ? 1 : 0)) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	lsg_n81(ctx)
+}
+
+// Round Table Off (wtoff)
+lsg_n81(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_wave_table_off()
+	}
+	#pragma unused ctx
+}
+
+// Give Turret Kit (tg)
+lsg_n82(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_turret_give(ctx[0], clamp(floatround(1.0), 1, 8))
+	}
+	lsg_n83(ctx)
+}
+
+// Print String (p_tk)
+lsg_n83(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 turret kits:", floatround(float(ls_components_running() ? ls_turret_kits(ctx[0]) : 0)))
+	server_print("[%s] %s", LSG_MODE, t)
+	lsg_n84(ctx)
+}
+
+// Place Turret (tp)
+lsg_n84(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		g_lsgOut[84] = ls_turret_place(ctx[0], false)
+	}
+	lsg_n85(ctx)
+}
+
+// Print String (p_tp)
+lsg_n85(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 turret placed:", g_lsgOut[84])
+	server_print("[%s] %s", LSG_MODE, t)
+	lsg_n86(ctx)
+}
+
+// Print String (p_tc)
+lsg_n86(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 turrets out:", floatround(float(ls_components_running() ? ls_turret_count(ctx[0]) : 0)))
+	server_print("[%s] %s", LSG_MODE, t)
+}
+
+// Perk Bought (e_perk)
+lsg_n87(ctx[])
+{
+	lsg_n88(ctx)
+}
+
+// Print String (p_e_perk)
+lsg_n88(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "X2 perk bought:", g_lsgTxt[0])
@@ -2260,13 +2417,13 @@ lsg_n74(ctx[])
 }
 
 // Gun Upgraded (e_up)
-lsg_n75(ctx[])
+lsg_n89(ctx[])
 {
-	lsg_n76(ctx)
+	lsg_n90(ctx)
 }
 
 // Print String (p_e_up)
-lsg_n76(ctx[])
+lsg_n90(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "X2 gun upgraded to:", floatround(Float:ctx[1]))
@@ -2274,13 +2431,13 @@ lsg_n76(ctx[])
 }
 
 // Mystery Box Gave (e_box)
-lsg_n77(ctx[])
+lsg_n91(ctx[])
 {
-	lsg_n78(ctx)
+	lsg_n92(ctx)
 }
 
 // Print String (p_e_box)
-lsg_n78(ctx[])
+lsg_n92(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "X2 box gave:", g_lsgTxt[0])
@@ -2289,13 +2446,13 @@ lsg_n78(ctx[])
 }
 
 // Pickup Taken (e_pick)
-lsg_n79(ctx[])
+lsg_n93(ctx[])
 {
-	lsg_n80(ctx)
+	lsg_n94(ctx)
 }
 
 // Print String (p_e_pick)
-lsg_n80(ctx[])
+lsg_n94(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "X2 pickup taken:", g_lsgTxt[0])
@@ -2304,13 +2461,13 @@ lsg_n80(ctx[])
 }
 
 // Creature Hurt (e_ch)
-lsg_n81(ctx[])
+lsg_n95(ctx[])
 {
-	lsg_n82(ctx)
+	lsg_n96(ctx)
 }
 
 // Print String (p_e_ch)
-lsg_n82(ctx[])
+lsg_n96(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "X2 creature hurt:", floatround(Float:ctx[2]))
@@ -2318,13 +2475,13 @@ lsg_n82(ctx[])
 }
 
 // Knocked Down (e_kd)
-lsg_n83(ctx[])
+lsg_n97(ctx[])
 {
-	lsg_n84(ctx)
+	lsg_n98(ctx)
 }
 
 // Print String (p_e_kd)
-lsg_n84(ctx[])
+lsg_n98(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "X2 knocked down:", lsg_name(ctx[0]))
@@ -2332,13 +2489,13 @@ lsg_n84(ctx[])
 }
 
 // Got Up (e_ku)
-lsg_n85(ctx[])
+lsg_n99(ctx[])
 {
-	lsg_n86(ctx)
+	lsg_n100(ctx)
 }
 
 // Print String (p_e_ku)
-lsg_n86(ctx[])
+lsg_n100(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "X2 got up:", lsg_name(ctx[0]))
@@ -2346,13 +2503,13 @@ lsg_n86(ctx[])
 }
 
 // Bled Out (e_bo)
-lsg_n87(ctx[])
+lsg_n101(ctx[])
 {
-	lsg_n88(ctx)
+	lsg_n102(ctx)
 }
 
 // Print String (p_e_bo)
-lsg_n88(ctx[])
+lsg_n102(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "X2 bled out:", lsg_name(ctx[0]))
@@ -2360,13 +2517,13 @@ lsg_n88(ctx[])
 }
 
 // Shop Purchase (e_buy)
-lsg_n89(ctx[])
+lsg_n103(ctx[])
 {
-	lsg_n90(ctx)
+	lsg_n104(ctx)
 }
 
 // Print String (p_e_buy)
-lsg_n90(ctx[])
+lsg_n104(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "X2 shop sold:", g_lsgTxt[0])
@@ -2375,13 +2532,13 @@ lsg_n90(ctx[])
 }
 
 // Landed (e_land)
-lsg_n91(ctx[])
+lsg_n105(ctx[])
 {
-	lsg_n92(ctx)
+	lsg_n106(ctx)
 }
 
 // Print String (p_e_land)
-lsg_n92(ctx[])
+lsg_n106(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %s", "X2 landed:", lsg_name(ctx[0]))
@@ -2390,16 +2547,30 @@ lsg_n92(ctx[])
 }
 
 // Lobby Ended (e_lob)
-lsg_n93(ctx[])
+lsg_n107(ctx[])
 {
-	lsg_n94(ctx)
+	lsg_n108(ctx)
 }
 
 // Print String (p_e_lob)
-lsg_n94(ctx[])
+lsg_n108(ctx[])
 {
 	new t[192]
 	formatex(t, charsmax(t), "%s %d", "X2 lobby ended, squads:", floatround(Float:ctx[0]))
+	server_print("[%s] %s", LSG_MODE, t)
+}
+
+// Turret Placed (e_tur)
+lsg_n109(ctx[])
+{
+	lsg_n110(ctx)
+}
+
+// Print String (p_e_tur)
+lsg_n110(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 turret placed by:", lsg_name(ctx[1]))
 	server_print("[%s] %s", LSG_MODE, t)
 }
 
