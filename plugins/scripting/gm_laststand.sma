@@ -117,6 +117,7 @@ new Float:g_idleAt[2048];
 new Float:g_recallAt[2048];
 new Float:g_recallTick;
 new g_crStill[2048];
+new g_bigTries[2048];
 new g_overrun;
 new Float:g_lastChanceEnd;
 new g_lives;
@@ -1299,6 +1300,7 @@ stock unstick_creatures()
 		{
 			g_crPos[e] = o;
 			g_crStill[e] = 0;
+			g_bigTries[e] = 0;
 			continue;
 		}
 		if (++g_crStill[e] < (few ? 2 : 4))
@@ -1332,8 +1334,23 @@ stock unstick_creatures()
 			continue;
 		new type[16];
 		pev(e, pev_netname, type, charsmax(type));
-		log_amx("Last Stand: creature %d (%s) stuck at %.0f %.0f %.0f for %s; removed", e, type, o[0], o[1], o[2], few ? "30 s (one of the last)" : "a minute");
 		g_crStill[e] = 0;
+		/* a boss or a heavy is never just removed (QA4-C: a garg wedged in a broken gateway went, and
+		   nobody got the boss pay): moved to open floor near it, and only after three tries killed,
+		   its pay shared by the defenders */
+		if (ls_wave_is_big(type))
+		{
+			if (++g_bigTries[e] <= 3 && unwedge(e, o))
+			{
+				log_amx("Last Stand: %s %d wedged at %.0f %.0f %.0f; moved to open floor (try %d)", type, e, o[0], o[1], o[2], g_bigTries[e]);
+				continue;
+			}
+			log_amx("Last Stand: %s %d wedged at %.0f %.0f %.0f and couldn't be moved; killed, its pay shared", type, e, o[0], o[1], o[2]);
+			share_pay(ls_wave_type_pay(type));
+			server_cmd("ls_creature kill %d", e);
+			continue;
+		}
+		log_amx("Last Stand: creature %d (%s) stuck at %.0f %.0f %.0f for %s; removed", e, type, o[0], o[1], o[2], few ? "30 s (one of the last)" : "a minute");
 		server_cmd("ls_creature kill %d", e);
 	}
 }
@@ -1342,6 +1359,51 @@ stock unstick_creatures()
    one stops where it is and waits (balance stands: four held wave 8 for 9 minutes from the south
    road, out of sight of everyone). After 12 s still and out of sight it's sent to guard the
    outside of the nearest gate, where it sees through the boards and fights. */
+/* a free spot near a wedged creature, toward the base first: rings 64-256 u out, room for its hull,
+   floor under it */
+stock bool:unwedge(e, const Float:o[3])
+{
+	new Float:mn[3], Float:mx[3];
+	pev(e, pev_mins, mn);
+	pev(e, pev_maxs, mx);
+	new Float:toBase = floatatan2(g_base[1] - o[1], g_base[0] - o[0], degrees);
+	for (new r = 64; r <= 256; r += 48)
+		for (new k = 0; k < 12; k++)
+		{
+			/* 0, +30, -30, +60, -60 ... degrees from the way to the base */
+			new Float:a = toBase + 30.0 * float((k + 1) / 2) * (k % 2 ? 1.0 : -1.0);
+			new Float:t[3];
+			t[0] = o[0] + float(r) * floatcos(a, degrees);
+			t[1] = o[1] + float(r) * floatsin(a, degrees);
+			t[2] = o[2] + 16.0;
+			new Float:f = floor_under(t, e);
+			if (floatabs(f - o[2]) > 64.0 && floatabs(f - (o[2] + mn[2])) > 64.0)
+				continue;
+			t[2] = f - mn[2] + 2.0;
+			engfunc(EngFunc_TraceHull, t, t, DONT_IGNORE_MONSTERS, (mx[0] - mn[0]) > 40.0 ? HULL_LARGE : HULL_HUMAN, e, 0);
+			if (get_tr2(0, TR_StartSolid) || get_tr2(0, TR_AllSolid))
+				continue;
+			engfunc(EngFunc_SetOrigin, e, t);
+			/* (from here: moving on by itself clears its tries; staying wedged counts on) */
+			g_crPos[e] = t;
+			return true;
+		}
+	return false;
+}
+
+stock share_pay(amount)
+{
+	new n = 0;
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_alive(p) && cs_get_user_team(p) == CS_TEAM_CT)
+			n++;
+	if (!n)
+		return;
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_alive(p) && cs_get_user_team(p) == CS_TEAM_CT)
+			pay(p, max(amount / n, 10));
+}
+
 stock recall_idle()
 {
 	if (!g_creatures || g_base[0] == 0.0 && g_base[1] == 0.0)

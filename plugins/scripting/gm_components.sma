@@ -10006,6 +10006,14 @@ stock perk_tags(id, out[], len)
    bench often has its knife out) */
 stock gun_of(id)
 {
+	/* a bot: its primary first (QA4-C: armory Mk IIs went on the Deagle it held), then what it holds;
+	   a person: what they hold */
+	if (is_user_bot(id))
+	{
+		new pr = get_pdata_cbase(id, 368, 5);	/* m_rgpPlayerItems[1] */
+		if (pr > 0 && pev_valid(pr))
+			return pr;
+	}
 	new w = active_weapon(id);
 	if (w)
 		return w;
