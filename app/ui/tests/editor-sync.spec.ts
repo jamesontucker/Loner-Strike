@@ -61,9 +61,10 @@ test("edits patch the document; outside changes arrive by themselves; idle means
   // (the checks run once, 1.2 s after that change)
   await expect.poll(() => urls.filter((u) => u.startsWith("/api/tools/editor/checks")).length, { timeout: 5000 }).toBeGreaterThan(0);
   await page.waitForTimeout(1500);
-  // idle for 6 s: at most the one waiting /state ask (it answers after 25 s)
+  // idle for 6 s: only waiting asks (state?wait= and MCP's selection?after=, each answers after 25 s)
   const at = urls.length;
   await page.waitForTimeout(6000);
-  expect(urls.slice(at).filter((u) => !u.startsWith("/api/tools/editor/state?wait=")), urls.slice(at).join("\n")).toEqual([]);
-  expect(urls.slice(at).length).toBeLessThanOrEqual(1);
+  const waiting = (u: string) => u.startsWith("/api/tools/editor/state?wait=") || u.startsWith("/api/tools/editor/selection?after=");
+  expect(urls.slice(at).filter((u) => !waiting(u)), urls.slice(at).join("\n")).toEqual([]);
+  expect(urls.slice(at).length, urls.slice(at).join("\n")).toBeLessThanOrEqual(2);
 });
