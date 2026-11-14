@@ -16,6 +16,7 @@ import { deletePart, duplicatePart, KIND_NAME, partName, partOf, renamePart, use
 import { typeLabel } from "./pins";
 import { saveSnippet, deleteSnippet } from "./snippets";
 import { useAskText, useConfirm } from "../../../ui";
+import { askDelete } from "./DeleteDialog";
 
 function Section({ title, count, onAdd, addTitle, children, open: start = true }: { title: string; count: number; onAdd?: () => void; addTitle?: string; children: ReactNode; open?: boolean }) {
   const [open, setOpen] = useState(start);
@@ -280,11 +281,18 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
       edit((x) => deletePart(x, p));
       return;
     }
+    if (p.kind === "var" || p.kind === "fn") {
+      if (await askDelete({ kind: p.kind, id: p.id })) {
+        selectPart(null);
+        selectVar(null);
+      }
+      return;
+    }
     const u = usesOf(g, p);
     const used = u.nodes.length + u.others.length;
     const q = used
       ? `Delete the ${KIND_NAME[p.kind]} “${name}”? It's used by ${whereText(g, u)}; those show a problem until changed.`
-      : `Delete the ${KIND_NAME[p.kind]} “${name}”?${p.kind === "fn" || p.kind === "macro" ? " Its graph goes too." : ""}`;
+      : `Delete the ${KIND_NAME[p.kind]} “${name}”?${p.kind === "macro" ? " Its graph goes too." : ""}`;
     if (!(await ask(q, { ok: "Delete", danger: true }))) return;
     edit((x) => deletePart(x, p));
     selectPart(null);

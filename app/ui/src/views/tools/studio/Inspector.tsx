@@ -3,12 +3,13 @@
 
 import { useStudio } from "./store";
 import { ENT_NAME_CHARS, KEYS_CHARS, NAME_CHARS, PATH_CHARS, nodeDef, type ParamDef } from "./registry";
-import { freshMember, mapName, removeCustomEvent, removeGraphPart, updateCustomEvent, removeMarker, updateMarker, removeType, removeVariable, setParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
+import { freshMember, mapName, removeGraphPart, updateCustomEvent, removeMarker, updateMarker, removeType, setParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
 import { LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { allVariables, itemTypeOk, nodeTitle, typeLabel } from "./pins";
 import { TypePicker } from "./TypePicker";
 import { insertItem, newerInLibrary } from "./library";
 import { useConfirm } from "../../../ui";
+import { askDelete } from "./DeleteDialog";
 
 type PV = string | number | boolean;
 
@@ -201,7 +202,6 @@ function VariableDetails({ id }: { id: string }) {
   const graph = useStudio((s) => s.graph)!;
   const edit = useStudio((s) => s.edit);
   const selectVar = useStudio((s) => s.selectVar);
-  const ask = useConfirm();
   const v = allVariables(graph).find((x) => x.id === id);
   if (!v) return null;
   const owner = graph.functions?.find((f) => f.locals?.some((x) => x.id === id));
@@ -250,9 +250,7 @@ function VariableDetails({ id }: { id: string }) {
         type="button"
         className="btn small"
         onClick={async () => {
-          if (used && !(await ask(`Remove the variable “${v.name}”? ${used} node${used === 1 ? " uses" : "s use"} it; ${used === 1 ? "it shows" : "they show"} a problem until changed.`, { ok: "Remove", danger: true }))) return;
-          edit((g) => removeVariable(g, v.id));
-          selectVar(null);
+          if (await askDelete({ kind: "var", id: v.id })) selectVar(null);
         }}
       >
         Remove this variable
@@ -310,8 +308,12 @@ function PartDetails({ id, embedded = false }: { id: string; embedded?: boolean 
   const name = f?.name ?? m?.name ?? st?.name ?? en?.name ?? "";
   const rename = (v: string) => edit((g) => (f ? updateFunction(g, id, { name: v }) : m ? updateMacro(g, id, { name: v }) : st ? updateStruct(g, id, { name: v }) : updateEnum(g, id, { name: v })));
   const drop = async () => {
-    if (!(await ask(`Remove “${name}”${f || m ? " and its graph" : ""}? Nodes using it show a problem until changed.`, { ok: "Remove", danger: true }))) return;
-    edit((g) => (f || m ? removeGraphPart(g, id) : removeType(g, id)));
+    if (f) {
+      if (await askDelete({ kind: "fn", id })) selectPart(null);
+      return;
+    }
+    if (!(await ask(`Remove “${name}”${m ? " and its graph" : ""}? Nodes using it show a problem until changed.`, { ok: "Remove", danger: true }))) return;
+    edit((g) => (m ? removeGraphPart(g, id) : removeType(g, id)));
     selectPart(null);
   };
   const Box = embedded ? "div" : "aside";
@@ -772,14 +774,11 @@ function CustomEventDetails({ id }: { id: string }) {
   const graph = useStudio((s) => s.graph)!;
   const edit = useStudio((s) => s.edit);
   const { selectPart } = useStudio.getState();
-  const ask = useConfirm();
   const c = graph.customEvents?.find((x) => x.id === id);
   if (!c) return null;
   const uses = graph.nodes.filter((n) => ["event.custom", "event.call", "timer.by_event"].includes(n.type) && n.params.event === id);
   const drop = async () => {
-    if (uses.length && !(await ask(`Remove “${c.name}”? ${uses.length} node${uses.length === 1 ? "" : "s"} use it and show a problem until changed.`, { ok: "Remove", danger: true }))) return;
-    edit((g) => removeCustomEvent(g, id));
-    selectPart(null);
+    if (await askDelete({ kind: "cevent", id })) selectPart(null);
   };
   return (
     <aside className="st-side" aria-label="Details">

@@ -87,3 +87,43 @@ test("example modes and the tour: offered once, every step, skip, again from the
   await expect(page.getByTestId("studio-examples")).toBeVisible();
   await expect(page.getByTestId("studio-tour-offer")).toBeHidden();
 });
+
+test("deleting a variable in use: the choices, Find uses, one undo step", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("ls.studio.tour", JSON.stringify({ offered: true, never: false })));
+  const g = await (await page.request.get(`/api/tools/studio/graph/${ID}`)).json();
+  const tpl = g.graph;
+  tpl.variables = [
+    { id: "v1", name: "Kills Made", type: "number", scope: "player", default: 0 },
+    { id: "v2", name: "Other Count", type: "number", scope: "player", default: 0 },
+  ];
+  // Player Killed -> Add to Kills Made -> Is CT ... (the Add sits in the flow)
+  tpl.nodes.push({ id: "addk", type: "var.add", pos: { x: 300, y: 600 }, params: { var: "v1", amount: 1 } }, { id: "getk", type: "var.get", pos: { x: 300, y: 800 }, params: { var: "v1" } });
+  const w = tpl.edges.find((e: { from: { node: string }; to: { node: string } }) => e.from.node === "killed" && e.to.node === "is_ct");
+  w.to = { node: "addk", pin: "exec" };
+  tpl.edges.push({ id: "wa", from: { node: "addk", pin: "then" }, to: { node: "is_ct", pin: "exec" } }, { id: "wb", from: { node: "killed", pin: "attacker" }, to: { node: "addk", pin: "player" } }, { id: "wc", from: { node: "killed", pin: "attacker" }, to: { node: "getk", pin: "player" } });
+  await page.request.post(`/api/tools/studio/graph/${ID}`, { data: { graph: tpl }, headers: H });
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await page.getByRole("complementary", { name: "My mode" }).getByText("Kills Made").click();
+  await page.getByRole("button", { name: "Remove this variable" }).click();
+  const dlg = page.getByTestId("studio-delete-dialog");
+  await expect(dlg).toContainText("used by 2 nodes");
+  await expect(dlg.getByRole("combobox")).toHaveValue("v2");
+  // Find uses closes it and picks them
+  await dlg.getByRole("button", { name: "Find uses" }).click();
+  await expect(dlg).toBeHidden();
+  await expect(page.locator('.react-flow__node[data-id="addk"].selected')).toHaveCount(1);
+  // again: remove it and its nodes
+  await page.getByRole("complementary", { name: "My mode" }).getByText("Kills Made").click();
+  await page.getByRole("button", { name: "Remove this variable" }).click();
+  await dlg.getByLabel(/Remove it and its nodes/).check();
+  await dlg.getByTestId("studio-delete-go").click();
+  await expect(page.locator('.react-flow__node[data-id="addk"]')).toHaveCount(0);
+  await expect(page.locator('.react-flow__node[data-id="getk"]')).toHaveCount(0);
+  // the flow was joined: Player Killed runs Is CT again, so no "nothing runs" for it
+  await expect(page.locator('.react-flow__node[data-id="is_ct"] .st-node-badge')).toHaveCount(0);
+  // one undo brings it all back
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.locator('.react-flow__node[data-id="addk"]')).toHaveCount(1);
+  await expect(page.locator('.react-flow__node[data-id="getk"]')).toHaveCount(1);
+  await expect(page.getByRole("complementary", { name: "My mode" }).getByText("Kills Made")).toBeVisible();
+});

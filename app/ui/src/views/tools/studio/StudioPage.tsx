@@ -27,6 +27,7 @@ import { Results, fullText, testText } from "./Results";
 import { DebugPanel } from "./DebugPanel";
 import { NodeHelp } from "./NodeHelp";
 import { HelpMenu } from "./HelpMenu";
+import { DeleteDialogHost } from "./DeleteDialog";
 import { StudioTour, TourOffer, startStudioTour } from "./Tour";
 import { applyLayout, autoLayout } from "./layout";
 import { nativeMenuOk } from "./ContextMenu";
@@ -830,6 +831,16 @@ function Studio({ maps }: ToolProps) {
       </div>
       <Results focus={(id) => focusRef.current(id)} />
       <StudioTour />
+      <DeleteDialogHost
+        findUses={(ids) => {
+          const g = useStudio.getState().graph;
+          const first = g?.nodes.find((n) => n.id === ids[0]);
+          if (!first) return;
+          focusRef.current(first.id);
+          const home = first.graph ?? "";
+          setTimeout(() => useStudio.getState().select(ids.filter((id) => (g!.nodes.find((n) => n.id === id)?.graph ?? "") === home)), 120);
+        }}
+      />
       {helpFor !== null && <NodeHelp open={helpFor} onClose={() => setHelpFor(null)} canvas={canvas} toast={toast} />}
       <ActionBar
         dirty={dirty}

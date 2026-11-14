@@ -384,3 +384,14 @@
 .st-tl-k.ease { stroke-dasharray: 2 1; }
 .st-tl-k.on { fill: var(--signal, #e8c35a); }
 .st-tl-empty { padding: 12px; }
+
+/* The delete question (DeleteDialog.tsx) */
+.st-del { display: grid; gap: 10px; max-width: 520px; padding: 16px 18px; }
+.st-del h3 { margin: 0; }
+.st-del p { margin: 0; }
+.st-del-choices { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.st-del-choices label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.st-del-choices label > span { display: grid; gap: 2px; }
+.st-del-off { opacity: .55; }
+.st-del-help { font-size: 12.5px; }
+.st-del-actions { justify-content: flex-end; gap: 8px; }
