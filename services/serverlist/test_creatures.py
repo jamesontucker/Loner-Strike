@@ -224,6 +224,77 @@ class Registration(unittest.TestCase):
         self.assertEqual(c.store.namespace_owner("ann_1234"), 7771234)
         self.assertEqual(c.store.namespace_owner("ann"), 1001)
 
+    def test_namespaces_are_taken_only_when_listed(self):
+        c = self.setup(creature_zip())
+        c.block(1001, "Ann", "test", "testing")
+        code, ans = c.submit(body(creature_item()), "ann")
+        self.assertEqual((code, ans["state"]), (200, "pending"))
+        self.assertIsNone(c.store.namespace_owner("ann"), "a blocked creator's waiting entry takes nothing")
+        # a moderator approves it: listed, and the name is taken then
+        self.assertEqual(self.approve(c)[0], 200)
+        self.assertEqual(c.store.namespace_owner("ann"), 1001)
+        # pulled: nothing else of Ann's is listed, so the name goes
+        self.pull(c)
+        self.assertIsNone(c.store.namespace_owner("ann"))
+
+    def approve(self, c):
+        return self.moderate(c, "approve")
+
+    def pull(self, c):
+        return self.moderate(c, "pull")
+
+    def moderate(self, c, action):
+        import threading
+        from http.server import ThreadingHTTPServer
+        import serverlist as sl
+        import tempfile as _t
+        import urllib.request
+        reg = sl.Registry(os.path.join(_t.mkdtemp(), "list.json"))
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), sl.make_handler(reg, sl.RateLimit(3), lambda a: (None, None), community=c))
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            from test_community import TOKEN
+            req = urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}/community/admin/item/mod/706630", method="POST",
+                                         data=json.dumps({"action": action, "reason": "test"}).encode(), headers={"Authorization": f"Bearer {TOKEN}"})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                return r.status, json.loads(r.read())
+        finally:
+            srv.shutdown()
+
+    def test_a_name_taken_meanwhile_or_used_by_another(self):
+        c = self.setup(creature_zip())
+        # another member took "ann" after the checks looked (the write refuses, in its transaction)
+        orig = c.store.namespace_for
+        c.store.namespace_for = lambda m, a: ("ann", False)
+        with c.store.lock:
+            c.store.db.execute("INSERT INTO namespaces (ns, member, at) VALUES ('ann', 99, 1)")
+        code, ans = c.submit(body(creature_item()), "ann")
+        self.assertEqual(code, 409, ans)
+        self.assertIn("Another creator has the name ann", ans["error"])
+        c.store.namespace_for = orig
+        # a listed entry by someone else already uses "ann" (no claim on record): Ann gets a suffix
+        with c.store.lock:
+            c.store.db.execute("DELETE FROM namespaces")
+        c.store.put(dict(cm.new_row("Mod", 5, 1), state="listed", submitter_id=99,
+                         item=json.dumps({"kind": "creature", "checks": {"creatureSections": {"ann.old": "x"}}})), "test")
+        self.assertEqual(c.store.namespace_for(1001, "Ann"), ("ann_1001", False))
+
+    def test_backfill(self):
+        import sqlite3
+        c = self.setup(creature_zip())
+        t = 1000
+        for key, member, added in (("mod:1", 50, 2000), ("mod:2", 60, 1500), ("mod:3", 70, 1700)):
+            row = dict(cm.new_row("Mod", int(key[4:]), t), state="listed", submitter_id=member, added=added,
+                       item=json.dumps({"kind": "creature", "checks": {"creatureSections": {"ann.x": "h", "bob.y": "h"} if member != 70 else {"cid.z": "h"}}}))
+            c.store.put(row, "test")
+        with c.store.lock:
+            c.store.db.execute("DROP TABLE namespaces")
+            c.store.db.execute("PRAGMA user_version=5")
+        c.store.migrate()
+        self.assertEqual((c.store.namespace_owner("ann"), c.store.namespace_owner("cid")), (60, 70), "the earliest listed entry wins")
+        self.assertEqual(c.store.namespace_owner("bob"), 50, "60 has ann already (one each): the next earliest gets bob")
+        self.assertIsInstance(sqlite3.sqlite_version, str)
+
     def test_duplicate_entries(self):
         import io as _io
         import warnings

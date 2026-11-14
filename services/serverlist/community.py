@@ -1342,7 +1342,12 @@ MIGRATIONS = [
         ns TEXT PRIMARY KEY,
         member INTEGER NOT NULL UNIQUE,
         at INTEGER NOT NULL
-    )
+    );
+    INSERT OR IGNORE INTO namespaces (ns, member, at)
+        SELECT substr(j.key, 1, instr(j.key, '.') - 1), e.submitter_id, e.added
+        FROM entries e, json_each(e.item, '$.checks.creatureSections') j
+        WHERE e.state IN ('listed', 'hidden') AND e.submitter_id > 0 AND instr(j.key, '.') > 1
+        ORDER BY e.added, e.key
     """,
 ]
 
@@ -1473,6 +1478,7 @@ class Store:
                         cols = list(row)
                 self.db.execute(f"INSERT OR REPLACE INTO entries ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                                 tuple(row[c] for c in cols))
+                self._sync_namespace(row)
                 self.db.execute("INSERT INTO log (key, at, action, detail) VALUES (?,?,?,?)", (row["key"], now(), action, detail[:500]))
                 self.db.execute("COMMIT")
             except Exception:
@@ -1528,20 +1534,52 @@ class Store:
         out = [slug, f"{slug[:15].rstrip('_')}_{m % 10000:04d}", f"{slug[:13].rstrip('_')}_{m % 1000000:06d}", f"m{m}"]
         return list(dict.fromkeys(out))
 
-    def namespace_for(self, member, author, claim=False):
+    def _ns_used_by_other(self, ns, member):
+        """Does a listed (or held) entry by another member define types in this namespace?"""
+        return self.db.execute(
+            "SELECT 1 FROM entries e, json_each(e.item, '$.checks.creatureSections') j "
+            "WHERE e.state IN ('listed', 'hidden') AND e.submitter_id != ? AND substr(j.key, 1, ?) = ? LIMIT 1",
+            (int(member), len(ns) + 1, ns + ".")).fetchone() is not None
+
+    def namespace_for(self, member, author):
         """(namespace, claimed) for a GameBanana member: the one they hold, else the first candidate
-        nobody else holds (taken for them when `claim`)."""
+        nobody else holds or uses in a listed entry. Never takes it: that happens only when an entry
+        of theirs is written as listed (put)."""
         with self.lock:
             r = self.db.execute("SELECT ns FROM namespaces WHERE member=?", (int(member),)).fetchone()
             if r:
                 return r[0], True
             for ns in self._ns_candidates(member, author):
-                if not self.db.execute("SELECT 1 FROM namespaces WHERE ns=?", (ns,)).fetchone():
-                    if claim:
-                        self.db.execute("INSERT INTO namespaces (ns, member, at) VALUES (?, ?, ?)", (ns, int(member), now()))
-                        self.db.commit()
-                    return ns, claim
+                if not self.db.execute("SELECT 1 FROM namespaces WHERE ns=?", (ns,)).fetchone() and not self._ns_used_by_other(ns, member):
+                    return ns, False
         raise Reject(409, "No creature name is free for this member. Ask in the Discord.")
+
+    def _sync_namespace(self, row):
+        """Inside put's transaction: an entry written as listed takes its namespace for its member
+        (refused when the member holds another, or another member holds or uses it); an entry that
+        leaves the list lets its member's namespace go when nothing else of theirs listed or held
+        uses it."""
+        member = int(row.get("submitter_id") or 0)
+        if not member:
+            return
+        item = _j(row.get("item")) or {}
+        ns = item.get("namespace") if isinstance(item.get("namespace"), str) else ""
+        held = self.db.execute("SELECT ns FROM namespaces WHERE member=?", (member,)).fetchone()
+        if row.get("state") == "listed" and ns:
+            if held and held[0] != ns:
+                raise Reject(409, f"Your creatures are named {held[0]}.…, not {ns}.…. Make the package again with Publish.")
+            if not held:
+                other = self.db.execute("SELECT member FROM namespaces WHERE ns=?", (ns,)).fetchone()
+                if other or self._ns_used_by_other(ns, member):
+                    raise Reject(409, f"Another creator has the name {ns}. Make the package again with Publish to get yours.")
+                self.db.execute("INSERT INTO namespaces (ns, member, at) VALUES (?, ?, ?)", (ns, member, now()))
+            return
+        if held and row.get("state") not in ("listed", "hidden"):
+            still = self.db.execute(
+                "SELECT 1 FROM entries WHERE submitter_id=? AND key != ? AND state IN ('listed', 'hidden') "
+                "AND json_extract(item, '$.namespace') = ? LIMIT 1", (member, row["key"], held[0])).fetchone()
+            if not still:
+                self.db.execute("DELETE FROM namespaces WHERE member=?", (member,))
 
     def namespace_owner(self, ns):
         with self.lock:
@@ -1997,7 +2035,8 @@ class Community:
                 raise Reject(422, f"{n} isn't in your name ({mine}.…) and isn't a listed creature by its author, unchanged. "
                                   "Publish your own creatures under your name, or use the listed one as it is.")
         if len(foreign) < len(secs):
-            item["namespace"], _ = self.store.namespace_for(member, facts.get("author", ""), claim=True)
+            # (taken in the same transaction that writes the entry as listed: Store._sync_namespace)
+            item["namespace"] = mine
 
     def check_files(self, model, gb, f, kind):
         """Downloads the page's file (range requests to GameBanana's file hosts, at most
@@ -2169,8 +2208,12 @@ class Community:
             else:
                 row.update(item=data, proposed=None, rejected_md5="", state="listed", hidden_by="", reason="", check_note="")
             action = "list"
-        conflicts = self.store.put(row, action, f"md5 {item['md5']} file {item['file']} app {app}",
-                                   claim=self._claim(uids, facts["submitterId"], facts["author"], file_at, may_take=not look))
+        try:
+            # (a creature namespace is taken here, with the write: Store._sync_namespace)
+            conflicts = self.store.put(row, action, f"md5 {item['md5']} file {item['file']} app {app}",
+                                       claim=self._claim(uids, facts["submitterId"], facts["author"], file_at, may_take=not look))
+        except Reject as e:
+            return e.code, {"error": e.message}
         for cid in conflicts:
             self.notify_uid_conflict(cid)
         log(f"registration {key} {row['state']} ({'new' if fresh else 'update'})")
