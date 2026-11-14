@@ -53,7 +53,8 @@
     "yaw": 270,
     "behavior": "stand",
     "unkillable": true
-   }
+   },
+   "quiet": true
   },
   {
    "id": "note_at",
@@ -80,7 +81,7 @@
     "prompt": "Press E to read the note",
     "once": true,
     "hide": false,
-    "bots": false
+    "bots": true
    }
   },
   {

@@ -28,6 +28,8 @@ export const nodeSchema = z.object({
   // kind, and a / in text is refused there)
   params: z.record(z.union([z.string().max(400).regex(/^[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$/|]*$/u, "letters, digits, spaces and plain punctuation only"), z.number().finite(), z.boolean()])).default({}),
   breakpoint: z.boolean().optional(),
+  /** "Don't warn for this one": no Problems note about bots for it (graph.rs bot_awareness) */
+  quiet: z.boolean().optional(),
   /** the Function or Macro whose graph (tab) it's on; none: the Event Graph */
   graph: id.optional(),
 });

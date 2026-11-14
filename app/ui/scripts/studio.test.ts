@@ -17,6 +17,7 @@ import { tidyEstimated } from "../src/views/tools/studio/layout";
 import lastStandRaw from "../src/views/tools/studio/templates/last-stand.graph.json?raw";
 import royaleRaw from "../src/views/tools/studio/templates/battle-royale.graph.json?raw";
 import runDialogRaw from "../src/views/tools/studio/library/run_dialog.lib.json?raw";
+import { botFix, botFixLabel, isBotsNote, quietNode } from "../src/views/tools/studio/botNotes";
 
 const template = (): Graph => {
   const r = parseGraph(JSON.parse(templateRaw));
@@ -533,4 +534,34 @@ test("the built-in Run Dialog brings its Dialog table; adding it again uses the 
   // and a Function or Macro that reads a table takes it with it when saved to the library
   const back = extractItem(r.graph, r.root);
   assert.ok(!("error" in back) && back.body.dataTables?.[0].id === t.id);
+});
+
+test("the bots note's fixes: Bots may use on, bots=1 in the keys, a Bots: Offer after an NPC; and quiet", () => {
+  const n = (id: string, type: string, params: Record<string, string | number | boolean>) => ({ id, type, pos: { x: 0, y: 0 }, params });
+  const g0: Graph = {
+    ...emptyGraph("bots", "Bots"),
+    nodes: [n("rs", "event.round_started", {}), n("lever", "npc.spawn_use", { bots: false }), n("term", "comp.create", { kind: "ls_interactable", keys: "name=t bots=0" }), n("sam", "npc.spawn", { name: "Sam" }), n("p", "debug.print", { text: "x" })],
+    edges: [
+      { id: "w1", from: { node: "rs", pin: "then" }, to: { node: "lever", pin: "exec" } },
+      { id: "w2", from: { node: "lever", pin: "then" }, to: { node: "sam", pin: "exec" } },
+      { id: "w3", from: { node: "sam", pin: "then" }, to: { node: "p", pin: "exec" } },
+    ],
+  };
+  assert.ok(isBotsNote("Bots won't know about \u201cSam\u201d. Add an Offer to bots or a Bot goal."));
+  assert.equal(botFixLabel(g0, "lever"), "Let bots use it");
+  assert.equal(botFixLabel(g0, "sam"), "Offer it to bots");
+  assert.equal(botFixLabel(g0, "rs"), null);
+  assert.equal(botFix(g0, "lever").nodes.find((x) => x.id === "lever")!.params.bots, true);
+  assert.equal(botFix(g0, "term").nodes.find((x) => x.id === "term")!.params.keys, "name=t bots=1");
+  const g1 = botFix(g0, "sam");
+  const offer = g1.nodes.find((x) => x.type === "bots.offer")!;
+  assert.equal(offer.params.kind, "use");
+  const wire = (a: string, ap: string, b: string, bp: string) => g1.edges.some((e) => e.from.node === a && e.from.pin === ap && e.to.node === b && e.to.pin === bp);
+  assert.ok(wire("sam", "then", offer.id, "exec") && wire("sam", "out", offer.id, "at") && wire(offer.id, "then", "p", "exec"), "after the NPC, at it, and the flow goes on");
+  assert.ok(!wire("sam", "then", "p", "exec"));
+  assert.ok("graph" in parseGraph(JSON.parse(JSON.stringify(g1))));
+  const q = quietNode(g0, "lever");
+  assert.equal(q.nodes.find((x) => x.id === "lever")!.quiet, true);
+  const back = parseGraph(JSON.parse(JSON.stringify(q)));
+  assert.ok("graph" in back && back.graph.nodes.find((x) => x.id === "lever")!.quiet === true, "kept in the file");
 });

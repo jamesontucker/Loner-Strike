@@ -770,6 +770,9 @@ pub struct Node {
     pub params: BTreeMap<String, Value>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub breakpoint: bool,
+    /// "Don't warn for this one": no Problems note about bots for this node (bot_awareness)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub quiet: bool,
     /// the Function or Macro whose graph this node is on (none: the Event Graph)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graph: Option<String>,
@@ -1564,6 +1567,52 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
         p.extend(cost_warnings(g, &View::new(g)));
     }
     p.extend(nothing_happens(g));
+    p.extend(bot_awareness(g, &View::new(g)));
+    p
+}
+
+/// The start of the note about something bots could use but aren't told about (the Studio
+/// offers its fix and "Don't warn for this one" on it).
+pub const BOTS_NOTE: &str = "Bots won't know about";
+
+/// Things a mode makes that bots could act on, that nothing tells them about: a warning each
+/// (never an error), so a mode where bots play along isn't missed. What gm_components already
+/// tells bots by itself isn't flagged: capture points, extraction zones, checkpoints, loot
+/// containers, supply drops, perk machines, upgrade benches, mystery boxes and traps. Shops aren't
+/// either: a bot can't pick from a shop's menu, so an offer wouldn't help. Flagged: an
+/// interactable bots may not use (Spawn Interactable with Bots may use off, or Create Component
+/// without bots=1), and an NPC a mode talks through (Talked To NPC in the mode) with no Bots: Goal
+/// or Bots: Offer at it. A node marked "Don't warn for this one" (quiet) is left alone.
+pub fn bot_awareness(g: &Graph, v: &View) -> Vec<Problem> {
+    let talks = g.nodes.iter().any(|n| n.kind == "npc.on_talk");
+    // what a Bots: Goal or Bots: Offer points at (the node whose output is wired into At)
+    let told: HashSet<&str> = g.nodes.iter().filter(|n| n.kind == "bots.goal" || n.kind == "bots.offer").filter_map(|n| v.data_source(&n.id, "at").map(|(from, _)| from)).collect();
+    let text = |n: &Node, k: &str| n.params.get(k).and_then(Value::as_str).unwrap_or("").trim().to_string();
+    let key = |keys: &str, k: &str| keys.split_whitespace().find_map(|kv| kv.strip_prefix(&format!("{k}=")).map(str::to_string));
+    let mut p = Vec::new();
+    for n in g.nodes.iter().filter(|n| !n.quiet && !told.contains(n.id.as_str())) {
+        let name = match n.kind.as_str() {
+            "npc.spawn_use" if !n.params.get("bots").and_then(Value::as_bool).unwrap_or(false) => {
+                let prompt = text(n, "prompt");
+                if prompt.is_empty() { "this interactable".to_string() } else { format!("the interactable \u{201c}{prompt}\u{201d}") }
+            }
+            "npc.spawn" if talks => {
+                let name = text(n, "name");
+                if name.is_empty() { "this NPC".to_string() } else { format!("\u{201c}{name}\u{201d}") }
+            }
+            "comp.create" => {
+                let keys = text(n, "keys");
+                let named = key(&keys, "name").map(|x| format!("\u{201c}{x}\u{201d}"));
+                match text(n, "kind").as_str() {
+                    "ls_interactable" if key(&keys, "bots").as_deref() != Some("1") => named.unwrap_or_else(|| "this interactable".into()),
+                    "ls_npc" if talks => named.unwrap_or_else(|| "this NPC".into()),
+                    _ => continue,
+                }
+            }
+            _ => continue,
+        };
+        p.push(Problem::warn(Some(&n.id), format!("{BOTS_NOTE} {name}. Add an Offer to bots or a Bot goal.")));
+    }
     p
 }
 
@@ -2619,6 +2668,48 @@ mod tests {
 
     pub fn graph(nodes: Value, edges: Value) -> Graph {
         from_value(json!({"schema": SCHEMA, "version": 2, "mode": {"id": "testmode", "name": "Test"}, "nodes": nodes, "edges": edges})).unwrap()
+    }
+
+    /// Things bots could use that nothing tells them about get one warning each (never an error);
+    /// what's told (Bots may use, bots=1, a Bots: Offer or Goal wired at it), what gm_components
+    /// tells bots by itself, and a quiet node get none.
+    #[test]
+    fn bots_are_told_or_warned() {
+        let notes = |g: &Graph| validate(g).into_iter().filter(|p| p.message.starts_with(BOTS_NOTE)).map(|p| (p.level, p.node.unwrap_or_default(), p.message)).collect::<Vec<_>>();
+        let n = |id: &str, t: &str, params: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": params});
+        let base = vec![
+            n("rs", "event.round_started", json!({})),
+            n("lever", "npc.spawn_use", json!({"at": "spot1", "prompt": "Pull the lever"})),
+            n("note", "npc.spawn_use", json!({"at": "spot1", "bots": true})),
+            n("term", "comp.create", json!({"kind": "ls_interactable", "at": "spot1", "keys": "name=terminal"})),
+            n("ok", "comp.create", json!({"kind": "ls_interactable", "at": "spot1", "keys": "bots=1"})),
+            n("cap", "comp.create", json!({"kind": "ls_capture_point", "at": "spot1"})),
+            n("shop", "comp.create", json!({"kind": "ls_shop", "at": "spot1"})),
+            n("mara", "npc.spawn", json!({"at": "spot1", "name": "Mara"})),
+        ];
+        let flow = json!([e("w1", "rs", "then", "lever", "exec"), e("w2", "lever", "then", "note", "exec"), e("w3", "note", "then", "term", "exec"), e("w4", "term", "then", "ok", "exec"), e("w5", "ok", "then", "cap", "exec"), e("w6", "cap", "then", "shop", "exec"), e("w7", "shop", "then", "mara", "exec")]);
+        let g = graph(Value::Array(base.clone()), flow.clone());
+        let got = notes(&g);
+        assert_eq!(got.iter().map(|x| x.1.as_str()).collect::<Vec<_>>(), ["lever", "term"], "{got:#?}");
+        assert!(got.iter().all(|x| x.0 == "warning"));
+        assert_eq!(got[0].2, "Bots won't know about the interactable \u{201c}Pull the lever\u{201d}. Add an Offer to bots or a Bot goal.");
+        assert!(got[1].2.contains("\u{201c}terminal\u{201d}"));
+        // an NPC counts once the mode talks through NPCs; a Bots: Offer at it tells the bots
+        let mut talk = base.clone();
+        talk.push(n("talk", "npc.on_talk", json!({})));
+        let g = graph(Value::Array(talk.clone()), flow.clone());
+        assert!(notes(&g).iter().any(|x| x.1 == "mara" && x.2.contains("\u{201c}Mara\u{201d}")));
+        talk.push(n("offer", "bots.offer", json!({"kind": "use"})));
+        let mut wires = flow.as_array().unwrap().clone();
+        wires.extend([e("w8", "mara", "then", "offer", "exec"), e("w9", "mara", "out", "offer", "at")]);
+        let g = graph(Value::Array(talk.clone()), Value::Array(wires.clone()));
+        assert!(!notes(&g).iter().any(|x| x.1 == "mara"));
+        // "Don't warn for this one"
+        let mut quiet = talk.clone();
+        quiet[1]["quiet"] = json!(true);
+        let g = graph(Value::Array(quiet), Value::Array(wires));
+        assert!(!notes(&g).iter().any(|x| x.1 == "lever"));
+        assert!(serde_json::to_value(&g).unwrap()["nodes"][1]["quiet"] == json!(true), "kept in the file");
     }
 
     #[test]

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { checkKey, useStudio, type ResultsTab } from "./store";
 import { nodeTitle } from "./pins";
 import type { Problem, TestRunState } from "./studioApi";
+import { botFix, botFixLabel, isBotsNote, quietNode } from "./botNotes";
 import { cancelTestRun } from "./studioApi";
 
 /** "Full check: ..." for the status line and the toolbar icon's hover text. */
@@ -146,6 +147,26 @@ function TestRunTab({ focus, titleOf }: { focus: (id: string) => void; titleOf: 
   );
 }
 
+/** The bots note's one-click fix (where there's one right fix) and "Don't warn for this one". */
+function BotsNoteActions({ node }: { node: string }) {
+  const graph = useStudio((s) => s.graph);
+  if (!graph) return null;
+  const label = botFixLabel(graph, node);
+  return (
+    <span className="st-results-fix">
+      {" "}
+      {label && (
+        <button type="button" className="btn small" onClick={() => useStudio.getState().edit((g) => botFix(g, node))}>
+          {label}
+        </button>
+      )}{" "}
+      <button type="button" className="st-link" onClick={() => useStudio.getState().edit((g) => quietNode(g, node))}>
+        Don't warn for this one
+      </button>
+    </span>
+  );
+}
+
 export function Results({ focus }: { focus: (id: string) => void }) {
   const graph = useStudio((s) => s.graph);
   const problems = useStudio((s) => s.problems);
@@ -203,6 +224,7 @@ export function Results({ focus }: { focus: (id: string) => void }) {
                 <span className="st-muted">The mode</span>
               )}{" "}
               {p.message}
+              {from === "quick" && p.node && isBotsNote(p.message) && <BotsNoteActions node={p.node} />}
             </li>
           ))}
         </ul>
