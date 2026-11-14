@@ -594,8 +594,11 @@ class Roles:
                 self._apply(o["order_id"], account, o["at"] if o["at"] > at - 86400 else at)
             self.log("supporter", "polar", 0, account, f"{kind} {'monthly' if monthly else 'one-time'} {'granted' if granted else 'revoked'}")
         elif kind == "order.paid":
+            # one-time donations and each paid month of a subscription alike: every payment from the minimum
+            # counts (with POLAR_SUPPORTER_DAYS 0 the first makes them a supporter for good, so cancelling,
+            # the grant's revoke, takes nothing they paid for)
             oid, cust = str(d.get("id") or ""), str(d.get("customer_id") or "")
-            if not oid or not cust or d.get("subscription_id"):
+            if not oid or not cust:
                 return
             cents, currency, why = self.order_counts(d)
             try:
@@ -613,9 +616,9 @@ class Roles:
             else:
                 self.log("donation", "polar", 0, cust, f"order {oid}: waiting for the Discord benefit")
         elif kind == "order.refunded":
-            # monthly support ends with its grant's revoke; this is about one-time donations
+            # any payment, one-time or a month of a subscription
             oid, cust = str(d.get("id") or ""), str(d.get("customer_id") or "")
-            if not oid or not cust or d.get("subscription_id"):
+            if not oid or not cust:
                 return
             total = d.get("total_amount", d.get("amount"))
             refunded_amount = d.get("refunded_amount")
@@ -641,7 +644,7 @@ class Roles:
                 self.log("refund", "polar", 0, cust, f"order {oid}: refunded (it hadn't counted yet)")
 
     def order_counts(self, d):
-        """(cents, currency, why not) for a one-time order: it counts (why None) when what was paid,
+        """(cents, currency, why not) for a payment (one-time, or a month of a subscription): it counts (why None) when what was paid,
         net of discounts and before tax, is at least the minimum, in a currency worth at least a dollar."""
         def num(k):
             v = d.get(k)

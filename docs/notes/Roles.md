@@ -108,6 +108,11 @@ may only talk to this machine; an Admin's calls reach it through a spool in the 
   `POLAR_SUPPORTER_MIN_CENTS` (default 300) in USD, EUR, GBP or CHF (each worth at least a dollar, so compared by
   their own cents); other currencies aren't counted automatically (logged "check by hand"); $0 never counts.
   **Duration:** `POLAR_SUPPORTER_DAYS` (default 30, stacking; 0 = a donation makes them a supporter for good).
+  **Monthly** (one Supporter level, same as one-time): each paid month (`order.paid` with a `subscription_id`) counts
+  exactly like a donation, by the same minimum. With days 0 (the box's setting) the first qualifying payment makes them
+  a supporter for good, and cancelling (the grant's revoke) takes away nothing paid for; with days > 0 each paid month
+  adds its days. While a monthly grant is active they're a supporter anyway. Only a full refund of every counting
+  payment ends it.
 - **To servers:** a supporter's VIP follows their current link. Official servers: ls-control (a timer, every 5 min)
   `GET /roles/vip` → every supporter's SteamID. Other servers that turned on **Honor Loner-Strike supporters** (off by
   default): `POST /roles/vip/check {steamids}` with the players on the server now (at most 64), answered with the ones

@@ -429,12 +429,30 @@ class Refunds(unittest.TestCase):
         polar(r, grant(OTHER, gid="gw", cust="cus_w"))
         self.assertFalse(r.is_supporter(OTHER))
 
-    def test_monthly_refunds_are_left_to_the_revoke(self):
-        r, *_ = make()
+    def test_subscription_payments_count_and_cancelling_keeps_them(self):
+        # lifetime (POLAR_SUPPORTER_DAYS 0): subscribe, pay, cancel: still a supporter
+        r = roles.Roles(roles.Store(os.path.join(tempfile.mkdtemp(), "r.db")), polar_secret=POLAR, days=0)
         polar(r, grant(PLAYER, gid="gm", cust="cus_m", sub="sub_1"))
-        polar(r, {"type": "order.refunded", "data": {"id": "om", "customer_id": "cus_m", "subscription_id": "sub_1", "status": "refunded"}})
-        self.assertTrue(r.is_supporter(PLAYER))
-        self.assertIsNone(r.s.one("SELECT * FROM polar_orders WHERE order_id='om'"))
+        self.order(r, "m1", cust="cus_m", subscription_id="sub_1", net_amount=300)
+        polar(r, grant(PLAYER, gid="gm", cust="cus_m", sub="sub_1", kind="benefit_grant.revoked", revoked=True))
+        self.assertTrue(r.is_supporter(PLAYER, at=cm.now() + 10 * 365 * 86400))
+        # a month under the minimum doesn't count; the same payment twice counts once
+        self.order(r, "m0", cust="cus_m", subscription_id="sub_1", net_amount=0)
+        self.order(r, "m1", cust="cus_m", subscription_id="sub_1", net_amount=300)
+        self.assertEqual(len(r.s.all("SELECT * FROM polar_orders WHERE applied=1")), 1)
+        # a full refund of the only counting payment ends it
+        self.order(r, "m1", "order.refunded", cust="cus_m", subscription_id="sub_1", status="refunded")
+        self.assertFalse(r.is_supporter(PLAYER))
+
+    def test_paid_months_add_days(self):
+        r, *_ = make()
+        polar(r, grant(OTHER, gid="gm2", cust="cus_n", sub="sub_2"))
+        for m in ("n1", "n2"):
+            self.order(r, m, cust="cus_n", subscription_id="sub_2")
+        polar(r, grant(OTHER, gid="gm2", cust="cus_n", sub="sub_2", kind="benefit_grant.revoked", revoked=True))
+        self.assertAlmostEqual(self.until(r, OTHER), 60 * 86400, delta=120)
+        self.assertTrue(r.is_supporter(OTHER))
+        self.assertFalse(r.is_supporter(OTHER, at=cm.now() + 61 * 86400))
 
     def test_amounts(self):
         r, *_ = make()

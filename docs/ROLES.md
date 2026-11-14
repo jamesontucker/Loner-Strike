@@ -15,8 +15,9 @@ service and the bot), `app/src-tauri/src/roles.rs` (the host's app), `app/server
   SteamID.
 - **Supporter VIP:** supporting Loner-Strike on Polar gives the Supporter role in Discord; with your SteamID
   linked, official servers show you as a VIP within 5 minutes: the [VIP] tag, the scoreboard mark, a kept
-  slot and a join message. Never gear, money or abilities. A one-time donation gives 30 days (they add up); a
-  monthly one, as long as it runs.
+  slot and a join message. Never gear, money or abilities. One-time or monthly, it's the same Supporter: each payment
+  from the minimum counts (with the box's setting, the first one makes you a supporter for good, and cancelling a
+  monthly support takes nothing away).
 - **Moderate a server:** in the Discord's #apply channel, Apply for a role › Server moderator (needs a link;
   official servers need a verified one). Pick the server and answer the questions. The owner decides; when
   approved, the bot DMs you an invite: in Loner-Strike, Settings › Shared control › Accept an invite.
