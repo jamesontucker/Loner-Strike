@@ -159,7 +159,8 @@ pub fn build(project: &Path, hl: &Path, czero: bool, name: &str) -> Result<Sourc
     // (no path from the author's computer goes out; a shared project gets no id of its own, so a
     // remix of it is never taken for the author's)
     sanitize(&mut doc);
-    let map_text = mapfile::write_map(&doc, &mapfile::WriteOptions::default())?;
+    // (opens in TrenchBroom with its groups and layers: EditorCoverage TB-3)
+    let map_text = mapfile::write_map(&doc, &mapfile::WriteOptions::export())?;
     let (map_bytes, _, _) = mapfile::encode_for_game(&map_text);
     let mut files = vec![(format!("source/{name}.lsmap"), doc.to_json().into_bytes()), (format!("source/{name}.map"), map_bytes)];
     if !lumps.is_empty() {

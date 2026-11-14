@@ -248,6 +248,7 @@ function DefField({ e, def, value, all }: { e: DocEntity; def: FgdKey; value: st
               setText(`${base.join(" ")} ${ev.target.value}`.trim());
             }}
             onBlur={() => commit(text)}
+            onKeyDown={(ev) => ev.key === "Enter" && commit(text)}
           />
         )}
         {def.type === "angle" && (

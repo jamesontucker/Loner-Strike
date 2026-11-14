@@ -500,7 +500,8 @@ function MapPanel() {
     <section className="tools-panel">
       <h3>Map settings</h3>
       <p className="small-note muted">
-        {doc.stats.brushes} brushes, {doc.stats.entities} entities, {doc.stats.textures} textures. Pick something to change it.
+        {/* (entities without the world, as the status bar and Map information count them) */}
+        {doc.stats.brushes} brushes, {doc.stats.point_entities + doc.stats.brush_entities} entities, {doc.stats.textures} textures. Pick something to change it.
       </p>
       <div className="editor-row wrap">
         <button type="button" className="btn small" onClick={() => s.set({ dialog: "props" })}>

@@ -281,7 +281,7 @@ impl Builder {
     }
     fn group(&mut self, parent: Option<GroupId>, n: usize) -> GroupId {
         let id = self.doc.new_group_id();
-        self.doc.groups.insert(id, Group { name: format!("Group {n}"), parent, hidden: false, locked: false, prefab: None });
+        self.doc.groups.insert(id, Group { name: format!("Group {n}"), parent, ..Default::default() });
         id
     }
     fn brush(&mut self, faces: Vec<RawFace>, entity: Option<EntityId>, group: Option<GroupId>, vis: &[i32]) -> Option<BrushId> {

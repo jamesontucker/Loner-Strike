@@ -117,15 +117,19 @@ test("Export keeps every brush face and entity; groups survive a trip back to Tr
   await importMap(page, fixture("tb_valve_layers_roundtrip.map", out));
   await expect.poll(() => counts(page).then((c) => c.entities)).toBe(4);
   expect((await counts(page)).brushes).toBeGreaterThanOrEqual(12);
-  // the groups and layers too (so a map can go back to TrenchBroom without losing them)
-  expect((await counts(page)).groups).toBe(6);
+  // the groups and layers too (so a map can go back to TrenchBroom without losing them); the
+  // "omit from export" layer (Notes) isn't exported, so 5 of the 6 (TB-2, TB-3)
+  expect((await counts(page)).groups).toBe(5);
 });
 
 test("TrenchBroom's worldspawn keys (_tb_def) aren't passed on to the compiler", async ({ page }) => {
   await openEditor(page);
   await importMap(page, join(TB, "tb_valve_layers.map"));
   const out = await exportMap(page);
-  expect(out).not.toMatch(/"_tb_/);
+  // (the export writes TrenchBroom's group keys now, TB-3; its world keys stay behind; the
+  // compiler gets neither: mapfile's trenchbroom_layers_round_trip test)
+  expect(out).not.toMatch(/"_tb_def"/);
+  expect(out.slice(0, out.indexOf("// entity 1"))).not.toMatch(/"_tb_/);
 });
 
 for (const [file, n] of [["tb_standard.map", 7], ["tb_standard_q2.map", 7], ["tb_valve_q2extras.map", 6]] as const) {

@@ -235,9 +235,10 @@ function PanelMenu({ id, from, onDone, anchor }: { id: string; from: AreaId | "f
     };
   }, [onDone, anchor]);
   const item = (label: string, f: () => void) => (
-    <li key={label}>
+    <li key={label} role="none">
       <button
         type="button"
+        role="menuitem"
         onClick={() => {
           onDone();
           f();

@@ -129,6 +129,12 @@ pub struct Group {
     pub hidden: bool,
     #[serde(default)]
     pub locked: bool,
+    /// Parity A: a TrenchBroom layer (written back as one), not a group
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub layer: bool,
+    /// Parity A: TrenchBroom's "omit from export": what's in it isn't exported or compiled
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub omit_export: bool,
 }
 
 /// What we know about a texture: its size (for fitting and alignment) and where it comes from.

@@ -251,7 +251,8 @@ pub fn to_files(frag: &MapDocument, meta: &PrefabMeta) -> Result<(String, String
     if f.world.keys.is_empty() {
         f.world.keys.push(("comment".into(), format!("Loner-Strike prefab: {}", meta.name)));
     }
-    let map = mapfile::write_map(&f, &mapfile::WriteOptions::default())?;
+    // (groups inside the prefab kept, as TrenchBroom groups: EditorCoverage TB-3)
+    let map = mapfile::write_map(&f, &mapfile::WriteOptions::export())?;
     let json = serde_json::to_string_pretty(meta).map_err(|e| e.to_string())?;
     Ok((map, json))
 }

@@ -5,7 +5,7 @@
 
 import { AXES, COORDS_NOTE } from "./AxisTriad";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useConfirm, useToast } from "../../../ui";
+import { sheetOpen, useConfirm, useToast } from "../../../ui";
 import { useTools } from "../../../stores/tools";
 import type { ToolProps } from "../registry";
 import { canDraw3d, SceneBoundary } from "../viewer/Scene";
@@ -384,7 +384,8 @@ function useKeys(replace: (w: Pick) => Promise<void>) {
     const down = (e: KeyboardEvent) => {
       const s = useEditor.getState();
       if (e.key === "Alt") s.set({ alt: true });
-      if (isField(e.target) || s.dialog) return;
+      // (a dialog of any kind is open: its keys are its own, even with focus fallen to the page; F-1)
+      if (isField(e.target) || s.dialog || sheetOpen()) return;
       const mod = e.ctrlKey || e.metaKey;
       const k = e.key.toLowerCase();
       if (mod && k === "z") {

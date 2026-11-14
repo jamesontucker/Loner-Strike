@@ -114,6 +114,27 @@ than the Rust build under test: not counted; rerun on one build).
 
 (F-1 has two failing tests and one inventory row; TB-1..TB-4 one test and one row each.)
 
+### Fixed (Parity A, 2026-11-14)
+- **F-1:** a sheet now closes on Esc wherever focus is (a window listener for the top sheet, `ui.tsx`), and the
+  page behind never gets that Esc; the editor's own key handler ignores keys while any sheet is open
+  (`sheetOpen()`, `MapEditor.tsx`). Both `editor-coverage-dialogs` Esc tests pass.
+- **TB-1:** a layer's `_tb_layer_hidden` / `_tb_layer_locked` come in as the group's hidden / locked.
+- **TB-2:** `_tb_layer_omit_from_export` is kept (`Group.omit_export`); File › Export, Share and remix's source
+  .map, prefabs and compiles leave that layer and what's in it out (a copied selection keeps it).
+- **TB-3:** File › Export, the remix source .map and prefabs write groups and layers as TrenchBroom's
+  `func_group` / `_tb_*` entities (layers with their flags, nesting kept; `WriteOptions::export()`).
+  Compiles keep writing no editor groups (`WriteOptions::compile()`), so the compilers never see them.
+- **TB-4:** `_tb_*` world keys (`_tb_def`) are dropped on import and never written.
+- Tests: Rust `mapfile::trenchbroom_layers_round_trip` (fixture → import → export → re-import keeps groups,
+  layers, flags and nesting; compile text has no groups, `_tb_` keys or the omitted layer); the TrenchBroom
+  coverage spec passes (two of its lines updated to the agreed behavior: 5 groups after the trip, since the
+  omitted layer isn't exported; and the export's world has no `_tb_` keys, its groups do).
+- **Wording:** File › Import a .map… has a hint naming TrenchBroom, Hammer and J.A.C.K.; the file dialogs'
+  filter reads "Map source (.map: TrenchBroom, Hammer, J.A.C.K.)"; Export's hint says groups and layers go
+  back to TrenchBroom; docs `#import-comes-over` says what's kept.
+- **UX notes:** Enter commits a light's Brightness; Map settings counts entities without the world (as the
+  status bar does); the dock's ⋯ menu items are `menuitem`s.
+
 ---
 
 ## UX notes (not FAILs)

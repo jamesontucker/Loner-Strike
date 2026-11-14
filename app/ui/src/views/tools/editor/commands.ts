@@ -221,11 +221,11 @@ export function commands(): Command[] {
     // File
     { id: "file.new", label: "New map", menu: "File", run: () => fileHooks.replace("new") },
     { id: "file.open", label: "Open a project…", menu: "File", run: () => fileHooks.replace("open") },
-    { id: "file.import", label: "Import a .map…", menu: "File", run: () => fileHooks.replace("import") },
+    { id: "file.import", label: "Import a .map…", menu: "File", hint: "From TrenchBroom, Hammer, J.A.C.K. or any GoldSrc editor; TrenchBroom's groups and layers come in as groups", run: () => fileHooks.replace("import") },
     { id: "file.importOther", label: "Import a Hammer .rmf or J.A.C.K. .jmf…", menu: "File", hint: "Brushes, entities, groups and visgroups come over", run: () => fileHooks.replace("other") },
     { id: "file.save", label: "Save", menu: "File", sep: true, run: () => void S().file("save"), fly: true },
     { id: "file.saveAs", label: "Save as…", menu: "File", run: () => void S().file("saveAs"), fly: true },
-    { id: "file.export", label: "Export a .map…", menu: "File", hint: "For any GoldSrc compiler", run: () => void S().file("export") },
+    { id: "file.export", label: "Export a .map…", menu: "File", hint: "For any GoldSrc compiler, and back to TrenchBroom with its groups and layers", run: () => void S().file("export") },
     { id: "file.project", label: "Project files", menu: "File", sep: true, hint: "The map's files, compile output, WADs and sounds it uses", run: () => openTab("project") },
     { id: "file.props", label: "Map properties…", menu: "File", hint: "Sky, WADs, sun and rules", run: () => S().set({ dialog: "props" }) },
 

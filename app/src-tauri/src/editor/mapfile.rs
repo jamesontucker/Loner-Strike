@@ -253,7 +253,18 @@ pub fn read_map(text: &str) -> Result<MapDocument, String> {
     };
     for e in raw.iter().filter(|e| is_tb_group(e)) {
         let name = key(&e.keys, "_tb_name").unwrap_or("Group").to_string();
-        let gid = doc.insert_group(Group { name, ..Default::default() });
+        // a layer's flags come along (QA EditorCoverage TB-1, TB-2): hidden and locked as the
+        // editor's own, "omit from export" kept for export and compile
+        let on = |k: &str| key(&e.keys, k) == Some("1");
+        let layer = key(&e.keys, "_tb_type") == Some("_tb_layer");
+        let gid = doc.insert_group(Group {
+            name,
+            layer,
+            hidden: layer && on("_tb_layer_hidden"),
+            locked: layer && on("_tb_layer_locked"),
+            omit_export: layer && on("_tb_layer_omit_from_export"),
+            ..Default::default()
+        });
         if let Some(tid) = key(&e.keys, "_tb_id") {
             tb_groups.insert(tid.to_string(), gid);
         }
@@ -276,7 +287,9 @@ pub fn read_map(text: &str) -> Result<MapDocument, String> {
         if Some(i) == world_i {
             for (k, v) in e.keys {
                 match k.as_str() {
+                    // (TrenchBroom's own world keys, like _tb_def, stay with TrenchBroom: TB-4)
                     "classname" | "mapversion" => {}
+                    k if k.starts_with("_tb_") => {}
                     "wad" => doc.world.set_wad_key(&v),
                     _ => doc.world.keys.push((k, v)),
                 }
@@ -309,6 +322,21 @@ pub struct WriteOptions {
     /// Write groups as TrenchBroom `func_group`s so they survive a trip through TrenchBroom.
     /// Off by default: the HLT compilers would then see extra func_group entities.
     pub trenchbroom_groups: bool,
+    /// Leave out what's in a layer marked "omit from export" (TrenchBroom's own rule): File ›
+    /// Export, Share and remix and compiles. Off for copying a selection.
+    pub leave_out_omitted: bool,
+}
+
+impl WriteOptions {
+    /// File › Export, a shared map's source and prefabs: groups and layers kept for TrenchBroom,
+    /// "omit from export" layers left out.
+    pub fn export() -> WriteOptions {
+        WriteOptions { trenchbroom_groups: true, leave_out_omitted: true }
+    }
+    /// What the compilers get: no editor groups, "omit from export" layers left out.
+    pub fn compile() -> WriteOptions {
+        WriteOptions { trenchbroom_groups: false, leave_out_omitted: true }
+    }
 }
 
 /// Format a number the way map files like it: whole numbers without a dot, others with up to
@@ -378,19 +406,36 @@ fn write_brush(out: &mut String, n: usize, b: &Brush) -> Result<(), String> {
 /// Write the document as a Valve 220 .map.
 pub fn write_map(doc: &MapDocument, opts: &WriteOptions) -> Result<String, String> {
     let mut out = String::new();
-    let tb = opts.trenchbroom_groups && !doc.groups.is_empty();
+    // "omit from export": a group in (or under) a layer marked so is left out with what's in it
+    let omitted = |g: Option<GroupId>| {
+        let mut g = g;
+        for _ in 0..64 {
+            let Some(id) = g else { return false };
+            let Some(x) = doc.groups.get(&id) else { return false };
+            if x.omit_export {
+                return opts.leave_out_omitted;
+            }
+            g = x.parent;
+        }
+        false
+    };
+    let tb = opts.trenchbroom_groups && doc.groups.iter().any(|(id, _)| !omitted(Some(*id)));
     // Brushes whose owner entity is gone are written as world brushes rather than lost.
     let owner = |b: &Brush| b.entity.filter(|e| doc.entities.contains_key(e));
+    let brush_out = |b: &Brush| !omitted(b.group) && !owner(b).and_then(|e| doc.entities.get(&e)).is_some_and(|e| omitted(e.group));
+    // the key a member uses to name its group or layer (TrenchBroom reads both)
+    let member_key = |g: GroupId| if doc.groups.get(&g).is_some_and(|x| x.layer) { "_tb_layer" } else { "_tb_group" };
 
     out.push_str("// entity 0\n{\n");
     let mut wk = vec![("classname".to_string(), "worldspawn".to_string()), ("mapversion".to_string(), "220".to_string())];
     if !doc.world.wads.is_empty() {
         wk.push(("wad".into(), doc.world.wad_key()));
     }
-    wk.extend(doc.world.keys.iter().filter(|(k, _)| !matches!(k.as_str(), "classname" | "mapversion" | "wad")).cloned());
+    // (never TrenchBroom's own world keys: _tb_def and the like, TB-4)
+    wk.extend(doc.world.keys.iter().filter(|(k, _)| !matches!(k.as_str(), "classname" | "mapversion" | "wad") && !k.starts_with("_tb_")).cloned());
     write_keys(&mut out, &wk)?;
     let mut n = 0;
-    for b in doc.brushes.values().filter(|b| owner(b).is_none() && !(tb && b.group.is_some())) {
+    for b in doc.brushes.values().filter(|b| brush_out(b) && owner(b).is_none() && !(tb && b.group.is_some())) {
         write_brush(&mut out, n, b)?;
         n += 1;
     }
@@ -398,17 +443,24 @@ pub fn write_map(doc: &MapDocument, opts: &WriteOptions) -> Result<String, Strin
 
     let mut en = 1;
     if tb {
-        for (gid, g) in &doc.groups {
+        for (gid, g) in doc.groups.iter().filter(|(id, _)| !omitted(Some(**id))) {
             let _ = writeln!(out, "// entity {en}\n{{");
             en += 1;
             let mut keys = vec![
                 ("classname".to_string(), "func_group".to_string()),
-                ("_tb_type".into(), "_tb_group".into()),
+                ("_tb_type".into(), if g.layer { "_tb_layer" } else { "_tb_group" }.into()),
                 ("_tb_name".into(), g.name.clone()),
                 ("_tb_id".into(), gid.0.to_string()),
             ];
-            if let Some(p) = g.parent {
-                keys.push(("_tb_group".into(), p.0.to_string()));
+            if g.layer {
+                // (TrenchBroom's layers are top level; their flags go with them)
+                for (on, k) in [(g.hidden, "_tb_layer_hidden"), (g.locked, "_tb_layer_locked"), (g.omit_export, "_tb_layer_omit_from_export")] {
+                    if on {
+                        keys.push((k.into(), "1".into()));
+                    }
+                }
+            } else if let Some(p) = g.parent.filter(|p| doc.groups.contains_key(p)) {
+                keys.push((member_key(p).into(), p.0.to_string()));
             }
             write_keys(&mut out, &keys)?;
             for (bn, b) in doc.brushes.values().filter(|b| owner(b).is_none() && b.group == Some(*gid)).enumerate() {
@@ -417,13 +469,13 @@ pub fn write_map(doc: &MapDocument, opts: &WriteOptions) -> Result<String, Strin
             out.push_str("}\n");
         }
     }
-    for (id, e) in &doc.entities {
+    for (id, e) in doc.entities.iter().filter(|(_, e)| !omitted(e.group)) {
         let _ = writeln!(out, "// entity {en}\n{{");
         en += 1;
         let mut keys = e.keys.clone();
         if tb {
             if let Some(g) = e.group.filter(|g| doc.groups.contains_key(g)) {
-                keys.push(("_tb_group".into(), g.0.to_string()));
+                keys.push((member_key(g).into(), g.0.to_string()));
             }
         }
         write_keys(&mut out, &keys)?;
@@ -438,6 +490,56 @@ pub fn write_map(doc: &MapDocument, opts: &WriteOptions) -> Result<String, Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Parity A (EditorCoverage TB-1..TB-4): a TrenchBroom map with layers and nested groups
+    /// comes in with its layers' flags, goes out (File › Export) with its groups and layers and
+    /// without the "omit from export" layer, comes back in the same, and the compilers get
+    /// neither groups nor the omitted layer nor TrenchBroom's world keys.
+    #[test]
+    fn trenchbroom_layers_round_trip() {
+        let src = include_str!("../../../ui/tests/fixtures/trenchbroom/tb_valve_layers.map");
+        let d = read_map(src).unwrap();
+        let by = |d: &MapDocument, n: &str| d.groups.iter().find(|(_, g)| g.name == n).map(|(id, g)| (*id, g.clone())).unwrap_or_else(|| panic!("group {n}"));
+        let (details, g) = by(&d, "Details");
+        assert!(g.layer && g.hidden && g.locked && !g.omit_export, "TB-1: {g:?}");
+        let (notes, g) = by(&d, "Notes");
+        assert!(g.layer && g.omit_export && !g.hidden, "TB-2: {g:?}");
+        let (crates, g) = by(&d, "Crates");
+        assert!(!g.layer && g.parent == Some(details));
+        assert_eq!(by(&d, "Inner").1.parent, Some(crates));
+        assert!(!d.world.keys.iter().any(|(k, _)| k.starts_with("_tb_")), "TB-4: {:?}", d.world.keys);
+        let in_notes = d.brushes.values().filter(|b| b.group == Some(notes)).count();
+        assert!(in_notes > 0);
+
+        // File › Export: groups and layers with their flags, the Notes layer left out
+        let out = write_map(&d, &WriteOptions::export()).unwrap();
+        assert!(!out.contains("_tb_def") && !out.contains("\"Notes\""));
+        let back = read_map(&out).unwrap();
+        assert_eq!(back.groups.len(), d.groups.len() - 1, "every group but the omitted layer");
+        assert_eq!(back.brushes.len(), d.brushes.len() - in_notes);
+        assert_eq!(back.entities.len(), d.entities.len());
+        let g = by(&back, "Details").1;
+        assert!(g.layer && g.hidden && g.locked);
+        let (bcrates, g) = by(&back, "Crates");
+        assert_eq!(g.parent, Some(by(&back, "Details").0));
+        assert_eq!(by(&back, "Inner").1.parent, Some(bcrates));
+        // ...and a second trip keeps the same groups, flags and nesting (ids may be renumbered)
+        let shape = |d: &MapDocument| {
+            let mut v: Vec<_> = d.groups.values().map(|g| (g.name.clone(), g.layer, g.hidden, g.locked, g.parent.and_then(|p| d.groups.get(&p)).map(|p| p.name.clone()))).collect();
+            v.sort();
+            v
+        };
+        let again = read_map(&write_map(&back, &WriteOptions::export()).unwrap()).unwrap();
+        assert_eq!(shape(&again), shape(&back));
+        assert_eq!(again.brushes.len(), back.brushes.len());
+
+        // the compilers: no func_group from the editor, no _tb_ keys, no omitted brushes
+        let c = write_map(&d, &WriteOptions::compile()).unwrap();
+        assert!(!c.contains("_tb_") && !c.contains("func_group"));
+        assert_eq!(read_map(&c).unwrap().brushes.len(), d.brushes.len() - in_notes);
+        // a copied selection keeps everything (the omitted layer's brushes too)
+        assert_eq!(read_map(&write_map(&d, &WriteOptions::default()).unwrap()).unwrap().brushes.len(), d.brushes.len());
+    }
     use crate::editor::geom::{brush_volume, is_valid};
     use crate::editor::math::v3;
     use crate::editor::ops::{make_box, make_cylinder, rotate};
@@ -543,7 +645,7 @@ mod tests {
         let sub = d.insert_group(Group { name: "Bits".into(), parent: Some(g), ..Default::default() });
         let first = *d.brushes.keys().next().unwrap();
         d.brushes.get_mut(&first).unwrap().group = Some(sub);
-        let opts = WriteOptions { trenchbroom_groups: true };
+        let opts = WriteOptions { trenchbroom_groups: true, ..Default::default() };
         let text = write_map(&d, &opts).unwrap();
         assert!(text.contains("\"_tb_type\" \"_tb_group\""));
         let back = read_map(&text).unwrap();

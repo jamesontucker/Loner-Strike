@@ -941,7 +941,8 @@ pub fn wadinclude_args(include: &[String]) -> Vec<String> {
 pub fn map_text(doc: &MapDocument, paths: &[String]) -> Result<String, String> {
     let mut d = doc.clone();
     d.world.wads = paths.to_vec();
-    mapfile::write_map(&d, &mapfile::WriteOptions::default())
+    // (no editor groups for the compilers; "omit from export" layers left out: EditorCoverage TB-2)
+    mapfile::write_map(&d, &mapfile::WriteOptions::compile())
 }
 
 /// A map file name from the document's name: lower case letters, digits, `_` and `-`.

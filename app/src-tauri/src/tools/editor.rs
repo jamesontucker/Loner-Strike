@@ -1456,7 +1456,8 @@ fn save_project(s: &mut Session, path: &Path, backups: Option<&Path>) -> Result<
 /// Writes the document as a .map in the game's code page (Western, or Cyrillic when its text
 /// needs it); the size, and a note when some characters couldn't be kept.
 fn export_map(s: &Session, path: &Path) -> Result<(usize, Option<String>), String> {
-    let text = mapfile::write_map(&s.doc, &mapfile::WriteOptions::default())?;
+    // groups and TrenchBroom layers kept, "omit from export" layers left out (EditorCoverage TB-2, TB-3)
+    let text = mapfile::write_map(&s.doc, &mapfile::WriteOptions::export())?;
     let (bytes, cp, lost) = mapfile::encode_for_game(&text);
     write_atomic(path, &bytes)?;
     Ok((bytes.len(), code_page_note(cp, &lost)))
@@ -1498,9 +1499,9 @@ fn dialog(st: &Shared, kind: Pick, name: &str) -> Result<Option<PathBuf>, String
     let d = app.dialog().file();
     let picked = match kind {
         Pick::Open => d.set_title("Open a map project").add_filter("Loner-Strike map project", &[PROJECT_EXT]).blocking_pick_file(),
-        Pick::Import => d.set_title("Import a .map file (TrenchBroom, Hammer, J.A.C.K.)").add_filter("GoldSrc map source", &["map"]).blocking_pick_file(),
+        Pick::Import => d.set_title("Import a .map file (TrenchBroom, Hammer, J.A.C.K.)").add_filter("Map source (.map: TrenchBroom, Hammer, J.A.C.K.)", &["map"]).blocking_pick_file(),
         Pick::SaveProject => d.set_title("Save the map project").set_file_name(format!("{name}.{PROJECT_EXT}")).add_filter("Loner-Strike map project", &[PROJECT_EXT]).blocking_save_file(),
-        Pick::ExportMap => d.set_title("Export a .map file").set_file_name(format!("{name}.map")).add_filter("GoldSrc map source", &["map"]).blocking_save_file(),
+        Pick::ExportMap => d.set_title("Export a .map file").set_file_name(format!("{name}.map")).add_filter("Map source (.map: TrenchBroom, Hammer, J.A.C.K.)", &["map"]).blocking_save_file(),
         Pick::ExportPrefab => d.set_title("Save the prefab package").set_file_name(format!("{name}.zip")).add_filter("Prefab package", &["zip"]).blocking_save_file(),
         Pick::ImportPrefab => d.set_title("Add a prefab").add_filter("Prefab package or .map", &["zip", "rar", "7z", "map"]).blocking_pick_file(),
         Pick::Fgd => d.set_title("Choose an entity definition file").add_filter("Entity definitions (FGD)", &["fgd"]).blocking_pick_file(),

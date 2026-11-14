@@ -395,7 +395,7 @@ test("dock: tabs, ⋯ Float, Dock back, Dock: Left, Close, Open in its own windo
   await expect(tab(page, "Budget")).toHaveAttribute("aria-selected", "true");
   const more = page.getByRole("button", { name: "Panel options" }).first();
   await more.click();
-  await page.getByRole("menu", { name: "Panel options" }).getByRole("button", { name: "Float" }).click();
+  await page.getByRole("menu", { name: "Panel options" }).getByRole("menuitem", { name: "Float" }).click();
   await expect(page.locator(".ed-float-title").first()).toBeVisible();
   await page.getByRole("button", { name: /^Dock / }).first().click();
   await expect(page.locator(".ed-float-title")).toHaveCount(0);
@@ -403,16 +403,16 @@ test("dock: tabs, ⋯ Float, Dock back, Dock: Left, Close, Open in its own windo
   const optionsBy = (title: string) => page.locator("[data-dock-strip]").filter({ has: page.getByRole("tab", { name: title, exact: true }) }).getByRole("button", { name: "Panel options" });
   await tab(page, "Checks").click();
   await optionsBy("Checks").click();
-  await page.getByRole("menu", { name: "Panel options" }).getByRole("button", { name: "Dock: Left" }).click();
+  await page.getByRole("menu", { name: "Panel options" }).getByRole("menuitem", { name: "Dock: Left" }).click();
   await expect.poll(async () => JSON.parse((await ls(page, "ls.editor.dock2"))!).areas.left.tabs).toContain("checks");
   await optionsBy("Checks").click();
-  await page.getByRole("menu", { name: "Panel options" }).getByRole("button", { name: /^Close/ }).click();
+  await page.getByRole("menu", { name: "Panel options" }).getByRole("menuitem", { name: /^Close/ }).click();
   await expect.poll(async () => JSON.parse((await ls(page, "ls.editor.dock2"))!).areas.left.tabs).not.toContain("checks");
   // own window
   await tab(page, "History").click();
   const popup = page.waitForEvent("popup", { timeout: 10_000 }).catch(() => null);
   await optionsBy("History").click();
-  await page.getByRole("menu", { name: "Panel options" }).getByRole("button", { name: "Open in its own window" }).click();
+  await page.getByRole("menu", { name: "Panel options" }).getByRole("menuitem", { name: "Open in its own window" }).click();
   expect(await popup, "a window opens for the panel").not.toBeNull();
   // fold the bottom panels and unfold
   const fold = page.getByRole("button", { name: /Fold the bottom panels|Unfold/ }).first();
