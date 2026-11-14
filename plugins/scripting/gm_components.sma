@@ -349,6 +349,7 @@ public plugin_precache()
 	read_mode_id();
 	load_loot();
 	load_packs();
+	w3_precache(); /* W3 */
 }
 
 public plugin_natives()
@@ -5210,6 +5211,16 @@ new bool:g_w3Falling[33];
 new Float:g_w3FallAt[33];
 new Float:g_w3DropSpots[33][2];
 new g_w3NDrop;
+/* squads */
+new g_w3Squad[33];
+new g_w3SquadMax = 1;
+new g_w3Code[33][6];
+new g_w3Invite[33];
+new bool:g_w3Lobby;
+new Float:g_w3LobbyEnd;
+new g_w3cSquadFF, g_w3cSquadMarks, g_w3cSquadTeams, g_w3fwSquad, g_w3fwLobby;
+new g_w3SprMark;
+new bool:g_w3Down[33];
 /* rarity glow */
 new g_w3cRarity;
 /* scarce ammo */
@@ -5242,6 +5253,16 @@ stock w3_natives()
 	register_native("ls_dropping", "n_w3_dropping");
 	register_native("ls_drop_spot", "n_w3_drop_spot");
 	register_native("ls_drop_reset", "n_w3_drop_reset");
+	register_native("ls_squad_set", "n_w3_squad_set");
+	register_native("ls_squad_get", "n_w3_squad_get");
+	register_native("ls_squad_max", "n_w3_squad_max");
+	register_native("ls_squad_count", "n_w3_squad_count");
+	register_native("ls_squads_alive", "n_w3_squads_alive");
+	register_native("ls_squad_fill", "n_w3_squad_fill");
+	register_native("ls_squad_lobby", "n_w3_squad_lobby");
+	register_native("ls_squad_menu", "n_w3_squad_menu");
+	register_native("ls_squad_short", "n_w3_squad_short");
+	register_native("ls_squad_code", "n_w3_squad_code");
 }
 
 stock w3_init()
@@ -5292,6 +5313,16 @@ stock w3_init()
 	g_w3fwLanded = CreateMultiForward("ls_on_landed", ET_IGNORE, FP_CELL);
 	register_forward(FM_PlayerPostThink, "fm_w3_postthink", 1);
 	RegisterHamPlayer(Ham_TakeDamage, "ham_w3_hurt_pre");
+	/* squads: squad mates can't hurt each other unless 1; markers over their heads and on the radar */
+	g_w3cSquadFF = register_cvar("ls_squad_ff", "0");
+	g_w3cSquadMarks = register_cvar("ls_squad_markers", "1");
+	/* 1: squads are put on alternating teams (the scoreboard's colours) when they're filled */
+	g_w3cSquadTeams = register_cvar("ls_squad_teams", "1");
+	g_w3fwSquad = CreateMultiForward("ls_on_squad", ET_IGNORE, FP_CELL, FP_CELL);
+	g_w3fwLobby = CreateMultiForward("ls_on_lobby_end", ET_IGNORE, FP_CELL);
+	register_clcmd("say", "cmd_w3_say");
+	register_clcmd("say_team", "cmd_w3_say");
+	register_clcmd("ls_squad", "cmd_w3_squad");
 	RegisterHamPlayer(Ham_TraceAttack, "ham_w3_trace");
 	g_w3Hooked = true;
 }
@@ -5301,6 +5332,7 @@ public ev_w3_new_round()
 	for (new p = 1; p <= 32; p++)
 	{
 		w3_reset_player(p);
+		g_w3Down[p] = false;
 		g_w3Kills[p] = 0;
 		g_w3Killer[p] = 0;
 		remove_task(W3_TASK_SPEC + p);
@@ -5331,6 +5363,9 @@ public client_putinserver(id)
 {
 	if (g_w3Hooked)
 		w3_reset_player(id);
+	g_w3Squad[id] = 0;
+	g_w3Invite[id] = 0;
+	g_w3Down[id] = false;
 }
 
 public ham_w3_killed(id, killer, gib)
@@ -5341,6 +5376,7 @@ public ham_w3_killed(id, killer, gib)
 		w3_dc_from_death(id);
 	g_w3SnapN[id] = 0;
 	w3_match_death(id, killer);
+	g_w3Down[id] = false;
 	for (new k = 0; k < HEAL_KINDS; k++)
 		g_w3Heals[id][k] = 0;
 	g_w3BoostEnd[id] = 0.0;
@@ -5797,8 +5833,10 @@ stock w3_tick(bool:sec)
 		if (g_w3Vest[p] && get_user_armor(p) <= 0)
 			w3_armor_set(p, 0, -1, true);
 	}
-	if (sec && get_pcvar_num(g_w3cMatchHud))
+	if (sec && get_pcvar_num(g_w3cMatchHud) && !g_w3Lobby)
 		w3_match_hud();
+	if (sec)
+		w3_squad_tick();
 }
 
 /* a hurt bot heals when nobody has hurt it for 4 s and no enemy is in sight (W2 may take this over) */
@@ -7142,8 +7180,22 @@ stock w3_side_extra(p, out[], len)
 {
 	#pragma unused p
 	out[0] = EOS;
-	#pragma unused len
-	return 0;
+	if (g_w3SquadMax <= 1 || !g_w3Squad[p])
+		return 0;
+	new n = formatex(out, len, "^nSquad %d^n", g_w3Squad[p]), name[24];
+	for (new q = 1; q <= MaxClients; q++)
+	{
+		if (q == p || g_w3Squad[q] != g_w3Squad[p] || !is_user_connected(q))
+			continue;
+		get_user_name(q, name, charsmax(name));
+		if (is_user_alive(q) && g_w3Down[q])
+			n += formatex(out[n], len - n, "%s  DOWN^n", name);
+		else if (is_user_alive(q))
+			n += formatex(out[n], len - n, "%s  %d^n", name, get_user_health(q));
+		else
+			n += formatex(out[n], len - n, "%s  out^n", name);
+	}
+	return n;
 }
 
 /* native ls_match_hud(bool:on) */
@@ -7410,6 +7462,13 @@ public ham_w3_hurt_pre(victim, inflictor, attacker, Float:dmg, bits)
 {
 	if (1 <= victim <= 32 && g_w3Falling[victim])
 		return HAM_SUPERCEDE;
+	/* the squad lobby: nobody gets hurt */
+	if (g_w3Lobby && 1 <= victim <= 32)
+		return HAM_SUPERCEDE;
+	/* squad mates don't hurt each other */
+	if (g_w3SquadMax > 1 && 1 <= attacker <= 32 && attacker != victim && 1 <= victim <= 32 && g_w3Squad[victim]
+		&& g_w3Squad[victim] == g_w3Squad[attacker] && !get_pcvar_num(g_w3cSquadFF))
+		return HAM_SUPERCEDE;
 	return HAM_IGNORED;
 }
 
@@ -7451,6 +7510,590 @@ public n_w3_drop_reset(plugin, params)
 		if (g_w3Falling[p])
 			w3_land(p, false);
 	return 1;
+}
+
+/* ---- squads: who's with whom, a lobby to team up, markers, the list, friendly fire ---- */
+
+stock w3_precache()
+{
+	g_w3SprMark = precache_model("sprites/radio.spr");
+}
+
+/* on the same side: the same squad when squads are on, else the same team (for revives and the like) */
+stock bool:w3_friends(a, b)
+{
+	if (g_w3SquadMax > 1 && 1 <= a <= 32 && 1 <= b <= 32 && g_w3Squad[a] && g_w3Squad[b])
+		return g_w3Squad[a] == g_w3Squad[b];
+	return get_user_team(a) == get_user_team(b);
+}
+
+/* (the downed state's own forwards, for the squad list: DOWN) */
+public ls_on_down(id, attacker)
+{
+	if (1 <= id <= 32)
+		g_w3Down[id] = true;
+	return PLUGIN_CONTINUE;
+}
+
+public ls_on_revive(id, by)
+{
+	if (1 <= id <= 32)
+		g_w3Down[id] = false;
+}
+
+public ls_on_bled_out(id)
+{
+	if (1 <= id <= 32)
+		g_w3Down[id] = false;
+}
+
+stock w3_squad_set(id, sq)
+{
+	if (!(1 <= id <= 32))
+		return;
+	new old = g_w3Squad[id];
+	g_w3Squad[id] = clamp(sq, 0, 32);
+	if (sq > 0 && !g_w3Code[sq][0])
+		w3_new_code(sq);
+	if (old == g_w3Squad[id])
+		return;
+	if (sq > 0)
+	{
+		hint("role %d sq%d", id, sq);
+		hint("friend @sq%d @sq%d 1", sq, sq);
+	}
+	else
+		hint("role %d -", id);
+	new ret;
+	ExecuteForward(g_w3fwSquad, ret, id, g_w3Squad[id]);
+}
+
+/* a 4-letter party code for a squad (friends type say /squad CODE) */
+stock w3_new_code(sq)
+{
+	static const L[] = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+	for (new tries = 0; tries < 20; tries++)
+	{
+		for (new i = 0; i < 4; i++)
+			g_w3Code[sq][i] = L[random(sizeof L - 1)];
+		g_w3Code[sq][4] = EOS;
+		new bool:dup = false;
+		for (new k = 1; k <= 32; k++)
+			if (k != sq && equal(g_w3Code[k], g_w3Code[sq]))
+				dup = true;
+		if (!dup)
+			return;
+	}
+}
+
+stock w3_squad_count(sq, bool:alive)
+{
+	new n = 0;
+	for (new p = 1; p <= MaxClients; p++)
+		if (g_w3Squad[p] == sq && is_user_connected(p) && (!alive || is_user_alive(p)))
+			n++;
+	return n;
+}
+
+stock w3_free_squad()
+{
+	for (new sq = 1; sq <= 32; sq++)
+		if (!w3_squad_count(sq, false))
+		{
+			g_w3Code[sq][0] = EOS;
+			return sq;
+		}
+	return 0;
+}
+
+/* how many sides still have someone alive: squads, and players in none; last = one of them */
+stock w3_sides_alive(&last)
+{
+	new seen[66], n = 0;
+	last = 0;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p))
+			continue;
+		new key = g_w3SquadMax > 1 && g_w3Squad[p] ? min(g_w3Squad[p], 32) : 33 + p;
+		if (key < sizeof seen && !seen[key])
+		{
+			seen[key] = 1;
+			n++;
+			last = p;
+		}
+	}
+	return n;
+}
+
+/* is this a private (LAN) address; the network part to compare (a.b.c) */
+stock bool:w3_lan_prefix(const ip[], out[], len)
+{
+	new bool:lan = equal(ip, "10.", 3) || equal(ip, "192.168.", 8) || equal(ip, "127.", 4);
+	if (equal(ip, "172.", 4))
+	{
+		new b = str_to_num(ip[4]);
+		lan = b >= 16 && b <= 31;
+	}
+	copy(out, len, ip);
+	new dots = 0;
+	for (new i = 0; out[i]; i++)
+		if (out[i] == '.' && ++dots == 3)
+		{
+			out[i] = EOS;
+			break;
+		}
+	return lan;
+}
+
+/* players on the server who aren't in a squad yet, people first */
+stock w3_playing(p)
+{
+	return is_user_connected(p) && (get_user_team(p) == 1 || get_user_team(p) == 2);
+}
+
+/* fills the squads: squads people made stay; people from one address (or one LAN) together; people
+   short of a squad join one that's short; then bots fill every squad up to the size */
+stock w3_squad_fill()
+{
+	new size = max(g_w3SquadMax, 1);
+	if (size <= 1)
+	{
+		for (new p = 1; p <= MaxClients; p++)
+			w3_squad_set(p, w3_playing(p) ? p : 0);
+		return MaxClients;
+	}
+	/* (people who left the game don't count) */
+	for (new p = 1; p <= MaxClients; p++)
+		if (!w3_playing(p))
+			g_w3Squad[p] = 0;
+	/* same address or LAN, not in a squad yet: grouped */
+	new ip[33][24], pre[33][24], bool:lan[33];
+	for (new p = 1; p <= MaxClients; p++)
+		if (w3_playing(p) && !is_user_bot(p))
+		{
+			get_user_ip(p, ip[p], charsmax(ip[]), 1);
+			lan[p] = w3_lan_prefix(ip[p], pre[p], charsmax(pre[]));
+		}
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!w3_playing(p) || is_user_bot(p) || g_w3Squad[p])
+			continue;
+		for (new q = 1; q <= MaxClients; q++)
+		{
+			if (q == p || !w3_playing(q) || is_user_bot(q) || !g_w3Squad[q] || w3_squad_count(g_w3Squad[q], false) >= size)
+				continue;
+			if (equal(ip[p], ip[q]) || (lan[p] && lan[q] && equal(pre[p], pre[q])))
+			{
+				w3_squad_set(p, g_w3Squad[q]);
+				break;
+			}
+		}
+		if (!g_w3Squad[p])
+		{
+			/* another person from there, not in a squad either: a new squad for both */
+			for (new q = p + 1; q <= MaxClients; q++)
+				if (w3_playing(q) && !is_user_bot(q) && !g_w3Squad[q] && (equal(ip[p], ip[q]) || (lan[p] && lan[q] && equal(pre[p], pre[q]))))
+				{
+					new sq = w3_free_squad();
+					w3_squad_set(p, sq);
+					w3_squad_set(q, sq);
+					break;
+				}
+		}
+	}
+	/* people alone: into a squad with people that's short, else their own */
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!w3_playing(p) || is_user_bot(p) || g_w3Squad[p])
+			continue;
+		new pick = 0;
+		for (new sq = 1; sq <= 32 && !pick; sq++)
+			if (w3_squad_count(sq, false) && w3_squad_count(sq, false) < size)
+				pick = sq;
+		w3_squad_set(p, pick ? pick : w3_free_squad());
+	}
+	/* bots: fill short squads (people's first), then squads of their own */
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!w3_playing(p) || !is_user_bot(p) || g_w3Squad[p])
+			continue;
+		new pick = 0;
+		for (new sq = 1; sq <= 32 && !pick; sq++)
+			if (w3_squad_count(sq, false) && w3_squad_count(sq, false) < size)
+				pick = sq;
+		w3_squad_set(p, pick ? pick : w3_free_squad());
+	}
+	/* the scoreboard: odd squads one side, even the other */
+	new n = 0;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!g_w3Squad[p])
+			continue;
+		n = max(n, g_w3Squad[p]);
+		if (get_pcvar_num(g_w3cSquadTeams))
+			cs_set_user_team(p, (g_w3Squad[p] % 2) ? CS_TEAM_T : CS_TEAM_CT);
+	}
+	for (new sq = 1; sq <= n; sq++)
+		if (w3_squad_count(sq, false))
+			hint("friend @sq%d @sq%d 1", sq, sq);
+	return n;
+}
+
+/* a squad short of players with someone in it still alive (a late joiner can fill it); 0 none */
+stock w3_squad_short()
+{
+	if (g_w3SquadMax <= 1)
+		return 0;
+	for (new sq = 1; sq <= 32; sq++)
+	{
+		new n = w3_squad_count(sq, false);
+		if (n && n < g_w3SquadMax && w3_squad_count(sq, true))
+			return sq;
+	}
+	return 0;
+}
+
+stock w3_lobby_start(Float:secs)
+{
+	if (secs <= 0.0)
+	{
+		w3_lobby_end();
+		return;
+	}
+	g_w3Lobby = true;
+	g_w3LobbyEnd = get_gametime() + secs;
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_connected(p) && !is_user_bot(p) && g_w3SquadMax > 1)
+			client_print_color(p, print_team_default, "^4[Squads]^1 Squads of %d: say ^3/squad^1 to make one, invite friends or join with a code. The rest fill up when the game starts.", g_w3SquadMax);
+}
+
+stock w3_lobby_end()
+{
+	g_w3Lobby = false;
+	new n = w3_squad_fill();
+	new ret;
+	ExecuteForward(g_w3fwLobby, ret, n);
+}
+
+stock w3_squad_tick()
+{
+	new Float:now = get_gametime();
+	if (g_w3Lobby)
+	{
+		new left = floatround(g_w3LobbyEnd - now, floatround_ceil);
+		if (left <= 0)
+			w3_lobby_end();
+		else
+			for (new p = 1; p <= MaxClients; p++)
+			{
+				if (!is_user_connected(p) || is_user_bot(p))
+					continue;
+				new msg[256], n, name[24];
+				n = formatex(msg, charsmax(msg), "SQUAD LOBBY   the game starts in %d s^n", left);
+				if (g_w3SquadMax <= 1)
+					n += formatex(msg[n], charsmax(msg) - n, "Solo: everyone for themselves");
+				else if (!g_w3Squad[p])
+					n += formatex(msg[n], charsmax(msg) - n, "say /squad to team up (squads of %d); or you'll be put in one", g_w3SquadMax);
+				else
+				{
+					n += formatex(msg[n], charsmax(msg) - n, "Your squad (code %s):", g_w3Code[g_w3Squad[p]]);
+					for (new q = 1; q <= MaxClients; q++)
+						if (g_w3Squad[q] == g_w3Squad[p] && is_user_connected(q))
+						{
+							get_user_name(q, name, charsmax(name));
+							n += formatex(msg[n], charsmax(msg) - n, " %s", name);
+						}
+				}
+				set_hudmessage(120, 220, 255, -1.0, 0.02, 0, 0.0, 1.1, 0.0, 0.1, -1);
+				ShowSyncHudMsg(p, g_w3SyncTop, "%s", msg);
+			}
+	}
+	/* squad mates: a marker over their heads and a dot on the radar, for each person in a squad */
+	if (g_w3SquadMax <= 1 || !get_pcvar_num(g_w3cSquadMarks))
+		return;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p) || !g_w3Squad[p])
+			continue;
+		for (new q = 1; q <= MaxClients; q++)
+		{
+			if (q == p || g_w3Squad[q] != g_w3Squad[p] || !is_user_alive(q))
+				continue;
+			message_begin(MSG_ONE_UNRELIABLE, SVC_TEMPENTITY, _, p);
+			write_byte(TE_PLAYERATTACHMENT);
+			write_byte(q);
+			write_coord(45);
+			write_short(g_w3SprMark);
+			write_short(11);
+			message_end();
+			if (g_msgRadar && is_user_alive(p))
+			{
+				new Float:o[3];
+				pev(q, pev_origin, o);
+				message_begin(MSG_ONE_UNRELIABLE, g_msgRadar, _, p);
+				write_byte(q);
+				write_coord(floatround(o[0]));
+				write_coord(floatround(o[1]));
+				write_coord(floatround(o[2]));
+				message_end();
+			}
+		}
+	}
+}
+
+/* say /squad, say /squad CODE */
+public cmd_w3_say(id)
+{
+	new a[64];
+	read_args(a, charsmax(a));
+	remove_quotes(a);
+	trim(a);
+	if (!equali(a, "/squad", 6) || (a[6] && a[6] != ' '))
+		return PLUGIN_CONTINUE;
+	new code[16];
+	copy(code, charsmax(code), a[6]);
+	trim(code);
+	if (code[0])
+		w3_join_code(id, code);
+	else
+		w3_squad_menu(id);
+	return PLUGIN_HANDLED;
+}
+
+public cmd_w3_squad(id)
+{
+	new code[16];
+	read_argv(1, code, charsmax(code));
+	if (code[0])
+		w3_join_code(id, code);
+	else
+		w3_squad_menu(id);
+	return PLUGIN_HANDLED;
+}
+
+stock bool:w3_can_change(id)
+{
+	if (g_w3SquadMax <= 1)
+	{
+		client_print(id, print_chat, "[Squads] This game is solo.");
+		return false;
+	}
+	if (!g_w3Lobby && is_user_alive(id) && g_w3Squad[id])
+	{
+		client_print(id, print_chat, "[Squads] Squads are set until the next game's lobby.");
+		return false;
+	}
+	return true;
+}
+
+stock w3_join_code(id, const code[])
+{
+	if (!w3_can_change(id))
+		return;
+	for (new sq = 1; sq <= 32; sq++)
+	{
+		if (!g_w3Code[sq][0] || !equali(g_w3Code[sq], code) || !w3_squad_count(sq, false))
+			continue;
+		if (w3_squad_count(sq, false) >= g_w3SquadMax)
+		{
+			client_print(id, print_chat, "[Squads] That squad is full.");
+			return;
+		}
+		w3_squad_set(id, sq);
+		client_print(id, print_chat, "[Squads] You joined squad %s.", g_w3Code[sq]);
+		return;
+	}
+	client_print(id, print_chat, "[Squads] No squad has the code %s.", code);
+}
+
+stock w3_squad_menu(id)
+{
+	if (!w3_can_change(id))
+		return;
+	new title[96];
+	if (g_w3Squad[id])
+		formatex(title, charsmax(title), "Squad (code %s: friends say /squad %s)", g_w3Code[g_w3Squad[id]], g_w3Code[g_w3Squad[id]]);
+	else
+		formatex(title, charsmax(title), "Squads of %d", g_w3SquadMax);
+	new m = menu_create(title, "menu_w3_squad");
+	menu_additem(m, g_w3Squad[id] ? "Start a new squad" : "Start a squad", "new");
+	menu_additem(m, "Invite someone", "inv");
+	if (g_w3Squad[id])
+		menu_additem(m, "Leave my squad", "leave");
+	menu_display(id, m);
+}
+
+public menu_w3_squad(id, menu, item)
+{
+	if (item < 0)
+	{
+		menu_destroy(menu);
+		return PLUGIN_HANDLED;
+	}
+	new info[8], acc, cb;
+	menu_item_getinfo(menu, item, acc, info, charsmax(info), _, _, cb);
+	menu_destroy(menu);
+	if (equal(info, "new"))
+	{
+		w3_squad_set(id, w3_free_squad());
+		client_print(id, print_chat, "[Squads] Your squad's code is %s: friends say /squad %s to join.", g_w3Code[g_w3Squad[id]], g_w3Code[g_w3Squad[id]]);
+	}
+	else if (equal(info, "leave"))
+		w3_squad_set(id, 0);
+	else if (equal(info, "inv"))
+		w3_invite_menu(id);
+	return PLUGIN_HANDLED;
+}
+
+stock w3_invite_menu(id)
+{
+	if (!g_w3Squad[id])
+		w3_squad_set(id, w3_free_squad());
+	new m = menu_create("Invite to your squad", "menu_w3_invite"), name[40], info[4];
+	/* people first, then bots */
+	for (new pass = 0; pass < 2; pass++)
+		for (new q = 1; q <= MaxClients; q++)
+		{
+			if (q == id || !w3_playing(q) || g_w3Squad[q] == g_w3Squad[id] || (is_user_bot(q) ? 1 : 0) != pass)
+				continue;
+			get_user_name(q, name, charsmax(name));
+			if (pass == 1)
+				add(name, charsmax(name), " (bot)");
+			num_to_str(q, info, charsmax(info));
+			menu_additem(m, name, info);
+		}
+	menu_display(id, m);
+}
+
+public menu_w3_invite(id, menu, item)
+{
+	if (item < 0)
+	{
+		menu_destroy(menu);
+		return PLUGIN_HANDLED;
+	}
+	new info[4], acc, cb;
+	menu_item_getinfo(menu, item, acc, info, charsmax(info), _, _, cb);
+	menu_destroy(menu);
+	new q = str_to_num(info), sq = g_w3Squad[id];
+	if (!is_user_connected(q) || !sq)
+		return PLUGIN_HANDLED;
+	if (w3_squad_count(sq, false) >= g_w3SquadMax)
+	{
+		client_print(id, print_chat, "[Squads] Your squad is full.");
+		return PLUGIN_HANDLED;
+	}
+	/* a bot says yes; a person is asked */
+	if (is_user_bot(q))
+	{
+		w3_squad_set(q, sq);
+		return PLUGIN_HANDLED;
+	}
+	g_w3Invite[q] = id;
+	new title[80], name[32];
+	get_user_name(id, name, charsmax(name));
+	formatex(title, charsmax(title), "%s asks you into their squad", name);
+	new m = menu_create(title, "menu_w3_accept");
+	menu_additem(m, "Join", "yes");
+	menu_additem(m, "No thanks", "no");
+	menu_display(q, m);
+	return PLUGIN_HANDLED;
+}
+
+public menu_w3_accept(id, menu, item)
+{
+	new info[4], acc, cb;
+	if (item >= 0)
+		menu_item_getinfo(menu, item, acc, info, charsmax(info), _, _, cb);
+	menu_destroy(menu);
+	new from = g_w3Invite[id];
+	g_w3Invite[id] = 0;
+	if (!equal(info, "yes") || !from || !is_user_connected(from) || !g_w3Squad[from] || !w3_can_change(id))
+		return PLUGIN_HANDLED;
+	if (w3_squad_count(g_w3Squad[from], false) >= g_w3SquadMax)
+	{
+		client_print(id, print_chat, "[Squads] That squad is full now.");
+		return PLUGIN_HANDLED;
+	}
+	w3_squad_set(id, g_w3Squad[from]);
+	return PLUGIN_HANDLED;
+}
+
+/* native ls_squad_set(id, squad) */
+public n_w3_squad_set(plugin, params)
+{
+	w3_squad_set(get_param(1), get_param(2));
+	return 1;
+}
+
+/* native ls_squad_get(id) */
+public n_w3_squad_get(plugin, params)
+{
+	new id = get_param(1);
+	return 1 <= id <= 32 ? g_w3Squad[id] : 0;
+}
+
+/* native ls_squad_max(size = -1): sets the squad size (1 = solo), returns the size before */
+public n_w3_squad_max(plugin, params)
+{
+	new old = g_w3SquadMax, n = get_param(1);
+	if (n >= 1)
+		g_w3SquadMax = min(n, 16);
+	return old;
+}
+
+/* native ls_squad_count(squad, bool:alive = false) */
+public n_w3_squad_count(plugin, params)
+{
+	return w3_squad_count(get_param(1), get_param(2) != 0);
+}
+
+/* native ls_squads_alive(&last = 0) */
+public n_w3_squads_alive(plugin, params)
+{
+	new last;
+	new n = w3_sides_alive(last);
+	set_param_byref(1, last);
+	return n;
+}
+
+/* native ls_squad_fill() */
+public n_w3_squad_fill(plugin, params)
+{
+	return w3_squad_fill();
+}
+
+/* native ls_squad_lobby(Float:secs) */
+public n_w3_squad_lobby(plugin, params)
+{
+	w3_lobby_start(get_param_f(1));
+	return 1;
+}
+
+/* native ls_squad_menu(id) */
+public n_w3_squad_menu(plugin, params)
+{
+	new id = get_param(1);
+	if (1 <= id <= MaxClients && is_user_connected(id))
+		w3_squad_menu(id);
+	return 1;
+}
+
+/* native ls_squad_short() */
+public n_w3_squad_short(plugin, params)
+{
+	return w3_squad_short();
+}
+
+/* native ls_squad_code(squad, out[], len) */
+public n_w3_squad_code(plugin, params)
+{
+	new sq = get_param(1);
+	if (!(1 <= sq <= 32))
+		return 0;
+	set_string(2, g_w3Code[sq], get_param(3));
+	return g_w3Code[sq][0] != EOS;
 }
 
 /* ==== end W3 ==== */

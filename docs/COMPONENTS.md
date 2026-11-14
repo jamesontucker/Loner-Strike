@@ -401,6 +401,22 @@ Nobody lands within 96 u of another. `ls_drop_spot(near[3], out[3], layer[] = ""
 nearest a point (markers tagged `layer=below|surface|high` first when a layer is given; spots others drop
 on count 1500 u further). `ls_dropping(id)`, `ls_drop_reset()` (a new game).
 
+### Squads and the squad lobby
+- `ls_squad_max(size)` (1 solo, 2 duos, 4 squads), `ls_squad_set(id, squad)`, `ls_squad_get(id)`,
+  `ls_squad_count(squad, alive = false)`, `ls_squads_alive(&last = 0)` (sides left: squads, and players in
+  none), `ls_squad_short()` (a squad short of players with someone alive: for a late joiner),
+  `ls_squad_code(squad, out[], len)`. Forward `ls_on_squad(id, squad)`.
+- Squad mates can't hurt each other (`ls_squad_ff 0`), see a marker over each other's heads and a dot on
+  the radar (`ls_squad_markers 1`; the radar dot is unverified on a real client), and the match HUD lists
+  them. Bots are told (`ls_mode role <id> sq<N>`, `friend @sqN @sqN 1`).
+- **The lobby:** `ls_squad_lobby(secs)`: nobody gets hurt; a top line counts down and shows your squad and
+  its code. `say /squad` (or `ls_squad`): start a squad, invite someone (a person gets a Join / No thanks
+  menu, a bot just joins), leave; `say /squad ABCD` joins the squad with that party code. When it ends
+  (`ls_on_lobby_end(squads)`) the squads are filled (`ls_squad_fill()`): squads people made stay; people
+  from one address, or one LAN (same /24 private network), go together; people alone join a squad with
+  people that's short; then bots fill every squad up to the size. With `ls_squad_teams 1` odd squads are
+  Terrorists and even ones Counter-Terrorists (the scoreboard's colours). **The server can't see Steam
+  friend lists**: friends who aren't on one network team up with `/squad` or a code.
 <!-- ==== end W3 ==== -->
 
 <!-- ==== W1: Last Stand pieces ==== -->

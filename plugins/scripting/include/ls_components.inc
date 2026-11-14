@@ -507,6 +507,36 @@ native ls_drop_reset();
 /** A player who dropped in is down on the ground. */
 forward ls_on_landed(id);
 
+/* Squads: squad mates can't hurt each other (ls_squad_ff 0), see markers over each other's heads and dots on
+ * the radar (ls_squad_markers 1), and the match HUD lists them with health. Bots are told who's a friend.
+ * A lobby (ls_squad_lobby) lets people team up with say /squad: start a squad, invite someone, leave, or
+ * join with a party code (say /squad ABCD). When it ends the squads are filled: people from one address or
+ * LAN together, people alone into squads that are short, then bots. The server can't see Steam friends. */
+
+/** Puts a player in a squad (1-32; 0 none). */
+native ls_squad_set(id, squad);
+/** A player's squad (0 none). */
+native ls_squad_get(id);
+/** Sets the squad size (1 = solo, 2 duos, 4 squads...). @return the size before */
+native ls_squad_max(size = -1);
+/** How many are in a squad (alive only, if asked). */
+native ls_squad_count(squad, bool:alive = false);
+/** How many sides have someone alive: squads, and players in none. last = one of them. */
+native ls_squads_alive(&last = 0);
+/** Fills the squads now (as at the end of the lobby). @return the highest squad number */
+native ls_squad_fill();
+/** A lobby of some seconds for teaming up (0 = fill now); ls_on_lobby_end when it's over. */
+native ls_squad_lobby(Float:secs);
+/** Opens the squad menu for a player. */
+native ls_squad_menu(id);
+/** A squad that's short of players with someone alive in it (0 none): for someone joining late. */
+native ls_squad_short();
+/** A squad's party code. */
+native ls_squad_code(squad, out[], len);
+/** A player joined a squad (0: left one). */
+forward ls_on_squad(id, squad);
+/** The squad lobby ended and the squads are filled. */
+forward ls_on_lobby_end(squads);
 /* ==== end W3 ==== */
 
 /* ==== W1: Last Stand pieces ==== */
