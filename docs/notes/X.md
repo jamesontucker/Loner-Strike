@@ -1273,3 +1273,7 @@ template layout failure is mine (Bots: Phase's new input): I'll re-tidy the temp
   section, notes (7ed53fd8 eaef8b97 bbfd6bc5 ). The three templates (team-dm, last-stand, royale) are re-tidied: Give Weapon's two new
   pins changed node sizes, which was the "templates are laid out" failure. **start_hidden_server in servers.rs
   isn't mine** (it was uncommitted before I started).
+- **X2 takes (2026-11-14, StudioPolish.md):** Promote to Variable, align/distribute/straighten/select linked/
+  bookmarks, version history (History panel with a visual diff, Restore), quick-add shortcuts (B/S/D/F + click).
+  UI only where possible (Canvas.tsx, graphOps.ts, a new History module; Rust only for the history store in a new
+  file + one route line in mod.rs). I'll stay out of make_nodes.py and gen.rs.
