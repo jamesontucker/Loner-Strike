@@ -411,6 +411,22 @@ pub fn take_dropped() -> Vec<String> {
 }
 
 /// Zip files are read here directly. Ok(false): not a zip we can read, let tar try.
+/// An archive entry's name as it unpacks: / for \\, no ./ or empty parts, lower case.
+pub fn normalized_entry(name: &str) -> String {
+    name.replace('\\', "/").split('/').filter(|p| !p.is_empty() && *p != ".").collect::<Vec<_>>().join("/").to_lowercase()
+}
+
+/// In a Loner-Strike package (loner-strike.json at the root): the first name two entries share
+/// once normalized (folders left out).
+pub fn package_twin(names: &[String]) -> Option<String> {
+    let norm: Vec<String> = names.iter().filter(|n| !n.ends_with('/') && !n.ends_with('\\')).map(|n| normalized_entry(n)).collect();
+    if !norm.iter().any(|n| n == "loner-strike.json") {
+        return None;
+    }
+    let mut seen = std::collections::HashSet::new();
+    norm.into_iter().find(|n| !seen.insert(n.clone()))
+}
+
 fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String> {
     let _ = take_dropped(); // (a fresh list for this archive)
     use std::io::{Read, Write};
@@ -425,6 +441,12 @@ fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String>
         return Err(TOO_BIG.into());
     }
     bomb_check(z.len(), listed, packed_len(archive))?; // [Caps]
+    // a Loner-Strike package (loner-strike.json at its root) never holds two entries that unpack
+    // to the same file: the community list checks each, so a later twin can't replace a checked one
+    let names: Vec<String> = (0..z.len()).filter_map(|i| z.by_index_raw(i).ok().and_then(|m| m.name().ok().map(|n| n.to_string()))).collect();
+    if let Some(twin) = package_twin(&names) {
+        return Err(format!("This Loner-Strike package has two files that unpack as {twin}, so it wasn't installed."));
+    }
     let mut written: u64 = 0; // the sizes in a zip's index can lie, so count while writing too
     let mut buf = vec![0u8; 1024 * 1024];
     for i in 0..z.len() {

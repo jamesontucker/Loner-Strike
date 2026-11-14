@@ -80,17 +80,55 @@ pub fn author_slug(author: &str) -> String {
     }
 }
 
-/// `<author>.<type>`, the author part cut so the whole fits 31 characters.
+/// The namespace for someone's shared creatures when the community list hasn't assigned one (no
+/// member id to ask with, or an unlisted creation): their name's slug, the list's first choice.
+pub fn namespace_for(author: &str) -> String {
+    author_slug(author)
+}
+
+/// The namespace the community list assigned to a GameBanana member (services/serverlist:
+/// `GET /community/namespace?member=<id>&name=<name>`; the first member to claim a slug keeps it,
+/// another gets it with a suffix from their id).
+pub fn fetch_namespace(member: i64, name: &str) -> Result<String, String> {
+    if member <= 0 {
+        return Ok(namespace_for(name));
+    }
+    let r = crate::sys::http()
+        .get(NAMESPACE_URL)
+        .query(&[("member", member.to_string()), ("name", name.to_string())])
+        .timeout(std::time::Duration::from_secs(20))
+        .send()
+        .map_err(|_| "Couldn't reach the community list to get your creature names. Check your internet connection.".to_string())?;
+    if r.status().as_u16() == 429 {
+        return Err("The community list is busy. Try again in a minute.".into());
+    }
+    let v: Value = r.json().map_err(|_| "The community list's answer couldn't be read.".to_string())?;
+    let ns = v["namespace"].as_str().unwrap_or("").to_string();
+    if !author_part(&ns) {
+        return Err("The community list didn't give a name for your creatures. Try again later.".into());
+    }
+    Ok(ns)
+}
+
+pub const NAMESPACE_URL: &str = "https://list.lonerstrike.com/community/namespace";
+
+/// An index entry's namespace, cleaned ("" when it isn't one).
+pub fn clean_namespace(ns: &str) -> String {
+    if author_part(ns) { ns.to_string() } else { String::new() }
+}
+
+/// `<author>.<type>`. The author part is always the whole namespace (installs check it against
+/// who uploaded the package); a type name too long to fit is cut instead.
 pub fn shared_name(slug: &str, name: &str) -> Result<String, String> {
     if is_shared_name(name) {
         return Ok(name.to_string());
     }
-    let room = 31usize.saturating_sub(name.len() + 1);
-    if room < 3 {
-        return Err(format!("{name} is too long to share: keep creature names to 27 characters."));
+    let room = 31usize.saturating_sub(slug.len() + 1);
+    let short: String = name.chars().take(room).collect::<String>().trim_end_matches('_').to_string();
+    if short.is_empty() || short.bytes().all(|c| c.is_ascii_digit()) {
+        return Err(format!("{name} can't be shared under your name: rename it in the Creature Studio."));
     }
-    let a: String = slug.chars().take(room).collect::<String>().trim_end_matches('_').to_string();
-    let n = format!("{a}.{name}");
+    let n = format!("{slug}.{short}");
     match shared_name_problem(&n) {
         None => Ok(n),
         Some(e) => Err(e),
@@ -485,6 +523,8 @@ pub struct Pack {
     pub text: String,
     /// (game path, file on disk) for the custom models and sounds
     pub files: Vec<(String, PathBuf)>,
+    /// what the Publish step should say: a name cut to fit
+    pub notes: Vec<String>,
 }
 
 impl Pack {
@@ -581,15 +621,29 @@ fn custom_files(hl: &Path, game: &str, t: &creatures::Creature) -> Vec<(String, 
 /// its model)", ...]} or {"problem": why it can't be shared}.
 pub fn listing(hl: &Path, game: &str, names: &[String]) -> Value {
     match pack_types(hl, game, names, "you") {
-        Ok(p) => serde_json::json!({"includes": p.summary()}),
+        Ok(p) => {
+            let carried: Vec<String> = p
+                .types
+                .iter()
+                .filter(|t| is_shared_name(&t.from))
+                .map(|t| {
+                    let a = t.name.split('.').next().unwrap_or("");
+                    format!("{} is {a}'s: it can be listed once {a}'s own item is, and only unchanged.", t.name)
+                })
+                .collect();
+            let mut notes = p.notes.clone();
+            notes.extend(carried);
+            serde_json::json!({"includes": p.summary(), "notes": notes})
+        }
         Err(e) => serde_json::json!({"includes": [], "problem": e}),
     }
 }
 
-/// Packs the custom types `names` use (with their custom bases), named for `author`. Built-ins,
+/// Packs the custom types `names` use (with their custom bases), named under `namespace` (from
+/// `fetch_namespace`, or `namespace_for`). Built-ins,
 /// "all" and Last Stand's planned names are left out; a shared type installed from someone
 /// else keeps its name.
-pub fn pack_types(hl: &Path, game: &str, names: &[String], author: &str) -> Result<Pack, String> {
+pub fn pack_types(hl: &Path, game: &str, names: &[String], namespace: &str) -> Result<Pack, String> {
     let wanted: Vec<String> = names.iter().map(|n| n.trim().to_ascii_lowercase()).filter(|n| !not_a_type(n) && !is_builtin(n)).collect();
     if wanted.is_empty() {
         return Ok(Pack::default());
@@ -611,31 +665,67 @@ pub fn pack_types(hl: &Path, game: &str, names: &[String], author: &str) -> Resu
             }
         }
     }
-    let slug = author_slug(author);
+    let slug = namespace.to_string();
+    if !author_part(&slug) {
+        return Err("That isn't a name creatures can be shared under.".into());
+    }
     let mut renames: BTreeMap<String, String> = BTreeMap::new();
+    let mut notes: Vec<String> = Vec::new();
     for n in &order {
-        renames.insert(n.clone(), shared_name(&slug, n)?);
+        let to = shared_name(&slug, n)?;
+        if let Some((other, _)) = renames.iter().find(|(_, v)| **v == to) {
+            return Err(format!("{other} and {n} would both be shared as {to}: rename one in the Creature Studio."));
+        }
+        let part = to.split_once('.').map(|x| x.1).unwrap_or("");
+        if !is_shared_name(n) && part != n {
+            notes.push(format!("{n} is shared as {part}: the full name is too long."));
+        }
+        renames.insert(n.clone(), to);
     }
     let resolved = creatures::resolve(&creatures::Doc::parse(&ini));
+    let get = |n: &str| resolved.iter().find(|r| r.t.name.eq_ignore_ascii_case(n)).map(|r| r.t.clone());
     let mut types = Vec::new();
     let mut files: Vec<(String, PathBuf)> = Vec::new();
     let mut body = String::new();
     for n in &order {
         let to = &renames[n];
+        let t = get(n).unwrap_or_default();
+        // its base as the player who installs it has it: a built-in as the game ships it (never
+        // the publisher's own changes to it), or a type packed above
+        let base_name = bases_of(&ini).get(n).cloned().unwrap_or_default();
+        let base_name = if is_builtin(&base_name) || renames.contains_key(&base_name) { base_name } else { String::new() };
+        let base = if base_name.is_empty() { Some(creatures::defaults(to)) } else if is_builtin(&base_name) { creatures::builtin(&base_name) } else { get(&base_name) };
+        let base = base.unwrap_or_default();
         body.push_str(&format!("[{to}]\n"));
-        for (k, v) in keys_of(&ini, n) {
-            let low = k.to_ascii_lowercase();
-            let v = if low == "base" {
-                renames.get(&v.to_ascii_lowercase()).cloned().unwrap_or(v)
-            } else if low == "model" || low.starts_with("snd_") {
-                // (file names in lower case: the community list and Linux servers match them so)
-                v.replace('\\', "/").to_ascii_lowercase()
-            } else {
-                v
-            };
+        // a shared type installed from someone else goes as it came, line for line (the community
+        // list takes it only unchanged, once its author's own item is listed)
+        if is_shared_name(n) {
+            for (k, v) in first_section_keys(&ini, n) {
+                body.push_str(&format!("{k} = {v}\n"));
+            }
+            let own = custom_files(hl, game, &t.settled());
+            for (r, p) in &own {
+                if !files.iter().any(|(x, _)| x.eq_ignore_ascii_case(r)) {
+                    files.push((r.clone(), p.clone()));
+                }
+            }
+            types.push(PackedType { name: to.clone(), from: n.clone(), files: own.into_iter().map(|(r, _)| r).collect() });
+            continue;
+        }
+        if !base_name.is_empty() {
+            body.push_str(&format!("base = {}\n", renames.get(&base_name).cloned().unwrap_or(base_name.clone())));
+        }
+        // every key that differs from the base, by its own name (no aliases, no ls = / sounds =)
+        for k in creatures::KEYS {
+            let v = t.get(k);
+            if v == base.get(k) {
+                continue;
+            }
+            // (file names in lower case: the community list and Linux servers match them so)
+            let v = if *k == "model" || k.starts_with("snd_") { v.replace('\\', "/").to_ascii_lowercase() } else { v };
             body.push_str(&format!("{k} = {v}\n"));
         }
-        let t = resolved.iter().find(|r| r.t.name.eq_ignore_ascii_case(n)).map(|r| r.t.settled()).unwrap_or_default();
+        let t = t.settled();
         let own = custom_files(hl, game, &t);
         for (r, p) in &own {
             if !files.iter().any(|(x, _)| x.eq_ignore_ascii_case(r)) {
@@ -652,7 +742,27 @@ pub fn pack_types(hl: &Path, game: &str, names: &[String], author: &str) -> Resu
     text.push_str(&body);
     // the types the person named come first in the listing; bases after
     types.sort_by_key(|t| !wanted.contains(&t.from));
-    Ok(Pack { types, renames, text, files })
+    Ok(Pack { types, renames, text, files, notes })
+}
+
+/// A type's keys in its first section only (an installed type two blocks bring is in both).
+fn first_section_keys(ini: &str, name: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut state = 0; // 0 before, 1 in it, 2 after
+    for raw in ini.lines() {
+        match line_of(raw) {
+            L::Section(n) => {
+                if state == 1 {
+                    state = 2;
+                } else if state == 0 && n.eq_ignore_ascii_case(name) {
+                    state = 1;
+                }
+            }
+            L::Key(k, v) if state == 1 => out.push((k, v)),
+            _ => {}
+        }
+    }
+    out
 }
 
 /// The section names in a creatures.ini (lower case, once each).
@@ -734,16 +844,22 @@ pub fn parse_pack(text: &str) -> Result<Parsed, String> {
                     continue;
                 }
                 let low = k.to_ascii_lowercase();
-                if !(low == "base" || creatures::KEYS.contains(&low.as_str()) || low == "ls" || low == "sounds") {
+                // (only the keys by their own names: no aliases, and no `ls =` or `sounds =`, which
+                // carry paths in their own formats)
+                if !(low == "base" || creatures::KEYS.contains(&low.as_str())) {
                     return Err(format!("The download's creature list has a setting the game doesn't know ({k})."));
                 }
                 if v.chars().any(|c| c.is_control()) || v.len() > 480 {
                     return Err("The download's creature list has a value the game can't read.".into());
                 }
-                // file values: models/....mdl, and sounds under sound/ (no .. \\ or :)
+                // no value may hold .. \\ or : (whatever the key); file values are models/....mdl
+                // and sounds under sound/
                 let file_key = low == "model" || low.starts_with("snd_");
-                if file_key && (v.contains("..") || v.contains('\\') || v.contains(':')) {
+                if v.contains("..") || v.contains('\\') || v.contains(':') {
                     return Err(format!("A creature in the download names a file it can't use ({v})."));
+                }
+                if !file_key && low != "name" && v.contains('/') {
+                    return Err(format!("The download's creature list has a value the game can't read ({k})."));
                 }
                 if file_key {
                     let model = low == "model";
@@ -912,14 +1028,40 @@ fn write_ini(game_dir: &Path, text: &str, why: &str) -> Result<(), String> {
 
 /// Whether a pack would go in (before anything else of the download is installed): it reads,
 /// and none of its types is one of the player's own.
-pub fn check_pack(game_dir: &Path, text: &str) -> Result<Parsed, String> {
+/// `namespace`: the uploader's, as the community list's entry says (else `namespace_for` their
+/// GameBanana name): its types must be named under it (see `namespace_problem`).
+pub fn check_pack(game_dir: &Path, text: &str, namespace: &str) -> Result<Parsed, String> {
     let p = parse_pack(text)?;
-    let (user, _) = split_blocks(&read_ini(game_dir)?);
+    let (user, blocks) = split_blocks(&read_ini(game_dir)?);
     let own: BTreeSet<String> = sections_in(&user).into_iter().collect();
     if let Some(n) = p.types.iter().find(|t| own.contains(*t)) {
         return Err(format!("You already have a creature type called {n}, so this download's isn't added. Rename yours in the Creature Studio to use it."));
     }
+    if let Some(e) = namespace_problem(&p, &blocks, namespace) {
+        return Err(e);
+    }
     Ok(p)
+}
+
+/// A package may only define types named for whoever uploaded it. A type named for someone else
+/// is accepted only as a carried copy of one already installed from them, key for key.
+fn namespace_problem(p: &Parsed, installed: &[Block], namespace: &str) -> Option<String> {
+    let slug = namespace.to_string();
+    if !author_part(&slug) {
+        return Some("Couldn't tell who uploaded this download, so its creatures weren't added.".into());
+    }
+    for t in &p.types {
+        let author = t.split('.').next().unwrap_or("");
+        if author == slug {
+            continue;
+        }
+        let mine = keys_of(&p.body, t);
+        if installed.iter().any(|b| b.types.iter().any(|x| x == t) && keys_of(&b.body, t) == mine) {
+            continue;
+        }
+        return Some(format!("This download brings {t}, which is named for {author}, not for who uploaded it. Install {author}'s creation with that creature first."));
+    }
+    None
 }
 
 /// What an install did.
@@ -938,26 +1080,36 @@ pub struct Done {
 /// (an update replaces it in one write), and with `src` (the unpacked package) its models and
 /// sounds are copied into the game where the player doesn't already have a file there. A map's
 /// files come in with the map (no `src`).
-pub fn install_pack(game_dir: &Path, id: &str, text: &str, src: Option<&Path>) -> Result<Done, String> {
+pub fn install_pack(game_dir: &Path, id: &str, text: &str, src: Option<&Path>, namespace: &str) -> Result<Done, String> {
+    install_inner(game_dir, id, text, src, Some(namespace))
+}
+
+fn install_inner(game_dir: &Path, id: &str, text: &str, src: Option<&Path>, publisher: Option<&str>) -> Result<Done, String> {
     if !valid_id(id) {
         return Err("That isn't a package id.".into());
     }
-    let p = parse_pack(text)?;
+    let p = match publisher {
+        Some(who) => check_pack(game_dir, text, who)?,
+        None => {
+            let p = parse_pack(text)?;
+            let (user, _) = split_blocks(&read_ini(game_dir)?);
+            if let Some(n) = p.types.iter().find(|t| sections_in(&user).contains(t)) {
+                return Err(format!("There's already a creature type called {n} there, so it wasn't added."));
+            }
+            p
+        }
+    };
     let old = read_ini(game_dir)?;
     let (user, mut blocks) = split_blocks(&old);
-    // a player's own type of the same name wins: theirs stays and the download's isn't added
-    let own: BTreeSet<String> = sections_in(&user).into_iter().collect();
-    if let Some(n) = p.types.iter().find(|t| own.contains(*t)) {
-        return Err(format!("You already have a creature type called {n}, so this download's isn't added. Rename yours in the Creature Studio to use it."));
-    }
     let prev = blocks.iter().position(|b| b.id == id).map(|i| blocks.remove(i));
     let mut done = Done { types: p.types.clone(), ..Default::default() };
     let mut wrote: Vec<String> = Vec::new();
     for rel in &p.files {
         let dest = game_dir.join(rel);
         let from = src.map(|s| s.join(rel)).filter(|f| f.is_file());
-        // (a file of ours from the previous version: replaced)
-        let ours = prev.as_ref().is_some_and(|b| b.wrote.iter().any(|w| w.eq_ignore_ascii_case(rel))) || blocks.iter().any(|b| b.wrote.iter().any(|w| w.eq_ignore_ascii_case(rel)));
+        // (only a file this package's previous version wrote is replaced; another package's or
+        // the player's stays as it is)
+        let ours = prev.as_ref().is_some_and(|b| b.wrote.iter().any(|w| w.eq_ignore_ascii_case(rel)));
         match (&from, dest.is_file()) {
             (Some(f), true) if crate::archive::same_file(f, &dest) => {
                 if ours {
@@ -1005,6 +1157,13 @@ pub fn install_pack(game_dir: &Path, id: &str, text: &str, src: Option<&Path>) -
     Ok(done)
 }
 
+/// Copies a block this app already installed and checked on this computer to another game folder
+/// (a server here, or a server's copy before it's sent): no publisher check, since the block
+/// passed it when it came in; everything else is checked again.
+pub fn install_trusted(game_dir: &Path, id: &str, block: &str, src: Option<&Path>) -> Result<Done, String> {
+    install_inner(game_dir, id, block, src, None)
+}
+
 /// Files a block wrote that it no longer needs: passed to another block that needs them, else
 /// removed from the game.
 fn drop_files(game_dir: &Path, gone: &[String], others: &mut [Block]) -> Vec<String> {
@@ -1017,8 +1176,12 @@ fn drop_files(game_dir: &Path, gone: &[String], others: &mut [Block]) -> Vec<Str
             continue;
         }
         let p = game_dir.join(f);
-        if safe_rel(f) && p.is_file() && crate::safety::remove(TOOL, "remove a shared creature's file", &p).is_ok() {
-            removed.push(f.clone());
+        if safe_rel(f) && p.is_file() {
+            // (kept by the safety net first)
+            crate::safety::before(TOOL, "remove a shared creature's file", &p);
+            if std::fs::remove_file(&p).is_ok() {
+                removed.push(f.clone());
+            }
         }
     }
     removed
@@ -1257,10 +1420,11 @@ mod tests {
         assert_eq!(author_slug("  "), "a");
         assert_eq!(author_slug("1234"), "a1234");
         assert_eq!(shared_name("jam", "runner_x").unwrap(), "jam.runner_x");
-        let long = shared_name("averyveryverylongname", "a_rather_long_name_xx").unwrap();
-        assert!(long.len() <= 31 && is_shared_name(&long), "{long}");
+        assert_eq!(shared_name("averyveryverylongname", "a_rather_long_name_xx").unwrap(), "averyveryverylongname.a_rather");
+        assert_eq!(shared_name("averyveryverylongname", "short").unwrap(), "averyveryverylongname.short");
         assert_eq!(shared_name("jam", "bob.x").unwrap(), "bob.x", "an installed shared type keeps its name");
-        assert!(shared_name("jam", &"x".repeat(29)).is_err());
+        assert_eq!(shared_name("jam", &"x".repeat(29)).unwrap().len(), 31);
+        assert!(shared_name("averyveryverylongname", "123456789_abc").is_err(), "cut to digits only");
         assert!(!is_shared_name("runner_x") && !is_shared_name("a.b.c") && !is_shared_name("A.b"));
     }
 
@@ -1271,15 +1435,15 @@ mod tests {
         std::fs::write(gd.join("models/qa/runner_x.mdl"), b"IDST model").unwrap();
         std::fs::create_dir_all(gd.join("sound/qa")).unwrap();
         std::fs::write(gd.join("sound/qa/die.wav"), b"RIFF").unwrap();
-        let p = pack_types(&hl, "cstrike", &["runner_x".into(), "zombie".into(), "all".into()], "Jam").unwrap();
+        let p = pack_types(&hl, "cstrike", &["runner_x".into(), "zombie".into(), "all".into()], "jam").unwrap();
         assert_eq!(p.types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), vec!["jam.runner_x", "jam.tough_base"]);
         assert_eq!(p.renames["runner_x"], "jam.runner_x");
         assert!(p.text.contains("[jam.tough_base]\nbase = brute\nhp = 900\n[jam.runner_x]\nbase = jam.tough_base\n"), "{}", p.text);
         assert!(!p.text.contains("[zombie]") && !p.text.contains("fast"));
         assert_eq!(p.files.iter().map(|f| f.0.as_str()).collect::<Vec<_>>(), vec!["models/qa/runner_x.mdl", "sound/qa/die.wav"], "the game's own zombie.mdl isn't packed");
         assert_eq!(p.summary()[0], "runner_x (with its model and 1 sound)");
-        assert!(pack_types(&hl, "cstrike", &["ghost".into()], "Jam").unwrap_err().contains("isn't one of your creature types"));
-        assert!(pack_types(&hl, "cstrike", &["zombie".into()], "Jam").unwrap().is_empty());
+        assert!(pack_types(&hl, "cstrike", &["ghost".into()], "jam").unwrap_err().contains("isn't one of your creature types"));
+        assert!(pack_types(&hl, "cstrike", &["zombie".into()], "jam").unwrap().is_empty());
 
         // the package's references follow the new names
         let mut g = serde_json::json!({"nodes": [{"id": "a", "type": "creature.spawn", "params": {"kind": "runner_x"}}, {"id": "e", "type": "comp.create", "params": {"kind": "ls_wave_spawner", "keys": "types=runner_x brute waves=3"}}]});
@@ -1320,7 +1484,7 @@ mod tests {
         std::fs::create_dir_all(src.join("models/jam")).unwrap();
         std::fs::write(src.join("models/jam/x.mdl"), b"IDST x").unwrap();
         let pack = "; types: jam.x\n; files: models/jam/x.mdl\n[jam.x]\nbase = runner\nhp = 50\n";
-        let d = install_pack(&gd, "mod-1", pack, Some(&src)).unwrap();
+        let d = install_pack(&gd, "mod-1", pack, Some(&src), "jam").unwrap();
         assert_eq!(d.wrote, vec!["models/jam/x.mdl"]);
         assert!(gd.join("models/jam/x.mdl").is_file());
         let text = std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap();
@@ -1331,7 +1495,7 @@ mod tests {
         assert_eq!(r.iter().find(|x| x.t.name == "pet").unwrap().t.hp, 5.0);
 
         // a second package that shares the type and the model
-        install_pack(&gd, "mod-2", pack, None).unwrap();
+        install_pack(&gd, "mod-2", pack, None, "jam").unwrap();
         assert_eq!(installed_types(&gd)["jam.x"], vec!["mod-1", "mod-2"]);
         // the first goes: the type and the model stay for the second
         assert!(uninstall_pack(&gd, "mod-1").unwrap().is_empty());
@@ -1349,14 +1513,14 @@ mod tests {
     fn never_overwrites_the_players_files_or_types() {
         let (hl, gd) = game("[jam.x]\nhp = 1\n");
         let pack = "; files: models/jam/x.mdl\n[jam.x]\nbase = runner\n";
-        assert!(install_pack(&gd, "mod-1", pack, None).unwrap_err().contains("already have a creature type called jam.x"));
+        assert!(install_pack(&gd, "mod-1", pack, None, "jam").unwrap_err().contains("already have a creature type called jam.x"));
         std::fs::write(gd.join(creatures::FILE_REL), "").unwrap();
         std::fs::create_dir_all(gd.join("models/jam")).unwrap();
         std::fs::write(gd.join("models/jam/x.mdl"), b"theirs").unwrap();
         let src = hl.join("pkg");
         std::fs::create_dir_all(src.join("models/jam")).unwrap();
         std::fs::write(src.join("models/jam/x.mdl"), b"ours").unwrap();
-        let d = install_pack(&gd, "mod-1", pack, Some(&src)).unwrap();
+        let d = install_pack(&gd, "mod-1", pack, Some(&src), "jam").unwrap();
         assert_eq!(d.kept, vec!["models/jam/x.mdl"]);
         uninstall_pack(&gd, "mod-1").unwrap();
         assert_eq!(std::fs::read(gd.join("models/jam/x.mdl")).unwrap(), b"theirs");
@@ -1368,9 +1532,9 @@ mod tests {
         let (hl, gd) = game("[pet]\nbase = hound\n");
         let v1 = "[jam.x]\nbase = runner\nhp = 50\n";
         let v2 = "[jam.x]\nbase = runner\nhp = 80\n[jam.y]\nbase = jam.x\n";
-        install_pack(&gd, "mod-1", v1, None).unwrap();
+        install_pack(&gd, "mod-1", v1, None, "jam").unwrap();
         let kept = block_text(&gd, "mod-1");
-        install_pack(&gd, "mod-1", v2, None).unwrap();
+        install_pack(&gd, "mod-1", v2, None, "jam").unwrap();
         let t = std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap();
         assert_eq!(t.matches("; >>> from mod-1").count(), 1, "one block per package");
         assert!(t.contains("hp = 80") && t.contains("[jam.y]"));
@@ -1388,7 +1552,7 @@ mod tests {
     #[test]
     fn remix_makes_a_shared_type_your_own() {
         let (hl, gd) = game("[pet]\nbase = hound\n");
-        install_pack(&gd, "mod-1", "[jam.base]\nbase = brute\nhp = 900\n[jam.x]\nbase = jam.base\nspeed = 320\n", None).unwrap();
+        install_pack(&gd, "mod-1", "[jam.base]\nbase = brute\nhp = 900\n[jam.x]\nbase = jam.base\nspeed = 320\n", None, "jam").unwrap();
         remix_type(&gd, "jam.x", "my_x").unwrap();
         let t = std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap();
         let (user, blocks) = split_blocks(&t);
@@ -1400,6 +1564,116 @@ mod tests {
         assert!(remix_type(&gd, "jam.x", "pet").is_err());
         assert!(remix_type(&gd, "jam.nope", "other").is_err());
         let _ = std::fs::remove_dir_all(&hl);
+    }
+
+    #[test]
+    fn a_hostile_pack_cant_name_a_path_through_any_key() {
+        let bad = ["../../../x", "..\\x", "C:\\x", "\\\\server\\share\\x", "a:b", "/etc/passwd.wav", "models/../../x.mdl"];
+        for k in creatures::KEYS.iter().chain(["ls", "sounds", "models", "health", "mm", "bot"].iter()) {
+            for v in bad {
+                // (the shown name is text, never a path: it may hold a /)
+                if *k == "name" && !v.contains("..") && !v.contains('\\') && !v.contains(':') {
+                    continue;
+                }
+                let t = format!("[jam.x]\n{k} = {v}\n");
+                assert!(parse_pack(&t).is_err(), "{k} = {v} got through");
+            }
+        }
+        // the aliases and ls = / sounds = aren't taken at all
+        for k in ["ls = model=models/jam/x.mdl", "sounds = jam/a.wav", "models = models/jam/x.mdl", "health = 5"] {
+            assert!(parse_pack(&format!("[jam.x]\n{k}\n")).is_err(), "{k}");
+        }
+        assert!(parse_pack("[jam.x]\nmodel = jam/x.mdl\n").is_err(), "a model outside models/");
+        assert!(parse_pack("[jam.x]\nsnd_die = jam/x.mp3\n").is_err());
+        assert!(parse_pack("[jam.x]\nmodel = models/jam/x.mdl | models/zombie.mdl\nsnd_die = jam/a.wav jam/b.wav | player/die1.wav\n").is_ok());
+    }
+
+    #[test]
+    fn one_package_never_replaces_anothers_file() {
+        let (hl, gd) = game("");
+        let mk = |dir: &str, body: &[u8]| {
+            let src = hl.join(dir);
+            std::fs::create_dir_all(src.join("models/jam")).unwrap();
+            std::fs::write(src.join("models/jam/x.mdl"), body).unwrap();
+            src
+        };
+        let pack = "; files: models/jam/x.mdl\n[jam.x]\nmodel = models/jam/x.mdl\n";
+        install_pack(&gd, "mod-1", pack, Some(&mk("a", b"from A")), "jam").unwrap();
+        let d = install_pack(&gd, "mod-2", pack, Some(&mk("b", b"from B")), "jam").unwrap();
+        assert_eq!(d.kept, vec!["models/jam/x.mdl"]);
+        assert_eq!(std::fs::read(gd.join("models/jam/x.mdl")).unwrap(), b"from A");
+        // A's own update may replace its file
+        install_pack(&gd, "mod-1", pack, Some(&mk("c", b"A v2")), "jam").unwrap();
+        assert_eq!(std::fs::read(gd.join("models/jam/x.mdl")).unwrap(), b"A v2");
+        // A goes: B still needs the file, so it stays (now B's to remove)
+        uninstall_pack(&gd, "mod-1").unwrap();
+        assert!(gd.join("models/jam/x.mdl").is_file());
+        assert_eq!(uninstall_pack(&gd, "mod-2").unwrap(), vec!["models/jam/x.mdl"]);
+        let _ = std::fs::remove_dir_all(&hl);
+    }
+
+    #[test]
+    fn types_are_bound_to_who_uploaded_them() {
+        let (hl, gd) = game("");
+        let pack = "[jam.x]\nbase = runner\nhp = 50\n";
+        assert!(install_pack(&gd, "mod-1", pack, None, "bob").unwrap_err().contains("named for jam"));
+        assert!(install_pack(&gd, "mod-1", pack, None, "").is_err() && install_pack(&gd, "mod-1", pack, None, "Jam").is_err());
+        install_pack(&gd, "mod-1", pack, None, "jam").unwrap();
+        // Bob's mode carries jam.x: fine when it's the same as the one installed from Jam
+        install_pack(&gd, "mod-2", "[jam.x]\nbase = runner\nhp = 50\n[bob.y]\nbase = jam.x\n", None, "bob").unwrap();
+        // ... but not a changed copy (that would replace Jam's creature)
+        assert!(install_pack(&gd, "mod-3", "[jam.x]\nbase = runner\nhp = 9999\n", None, "bob").unwrap_err().contains("named for jam"));
+        let _ = std::fs::remove_dir_all(&hl);
+    }
+
+    #[test]
+    fn someone_elses_type_is_carried_unchanged() {
+        let (hl, gd) = game("[mine]\nbase = bob.y\nhp = 5\n");
+        let bob = "[bob.y]\nbase = runner\nhp = 44\nspeed = 300\n";
+        install_pack(&gd, "mod-7", bob, None, "bob").unwrap();
+        let p = pack_types(&hl, "cstrike", &["mine".into()], "jam").unwrap();
+        assert_eq!(p.types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), vec!["jam.mine", "bob.y"]);
+        assert!(p.text.contains("[bob.y]\nbase = runner\nhp = 44\nspeed = 300\n[jam.mine]\nbase = bob.y\n"), "{}", p.text);
+        let l = listing(&hl, "cstrike", &["mine".into()]);
+        assert_eq!(l["notes"][0], "bob.y is bob's: it can be listed once bob's own item is, and only unchanged.");
+        // installing Jam's package elsewhere: only where Bob's own is in, unchanged
+        let (hl2, other) = game("");
+        assert!(install_pack(&other, "mod-8", &p.text, None, "jam").unwrap_err().contains("named for bob"));
+        install_pack(&other, "mod-7", bob, None, "bob").unwrap();
+        install_pack(&other, "mod-8", &p.text, None, "jam").unwrap();
+        let r = creatures::resolve(&creatures::Doc::parse(&std::fs::read_to_string(other.join(creatures::FILE_REL)).unwrap()));
+        assert_eq!(r.iter().find(|x| x.t.name == "jam.mine").unwrap().t.hp, 5.0);
+        let _ = std::fs::remove_dir_all(&hl);
+        let _ = std::fs::remove_dir_all(&hl2);
+    }
+
+    #[test]
+    fn a_package_with_twin_entries_is_refused() {
+        use std::io::Write;
+        let names = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        for twin in [["creatures/creatures.ini", "Creatures/creatures.INI"], ["creatures/creatures.ini", "creatures\\creatures.ini"], ["creatures/creatures.ini", "./creatures//creatures.ini"]] {
+            let mut l = names(&["loner-strike.json"]);
+            l.extend(names(&twin));
+            assert_eq!(crate::archive::package_twin(&l).as_deref(), Some("creatures/creatures.ini"), "{twin:?}");
+        }
+        assert_eq!(crate::archive::package_twin(&names(&["loner-strike.json", "creatures/", "creatures/creatures.ini"])), None);
+        assert_eq!(crate::archive::package_twin(&names(&["a.bsp", "A.bsp"])), None, "only Loner-Strike packages");
+        // unpacking one is refused
+        let dir = std::env::temp_dir().join(format!("ls-twin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("out")).unwrap();
+        let zp = dir.join("p.zip");
+        {
+            let mut z = zip::ZipWriter::new(std::fs::File::create(&zp).unwrap());
+            let o = zip::write::SimpleFileOptions::default();
+            for (n, b) in [("loner-strike.json", "{}"), ("creatures/creatures.ini", "[jam.x]\n"), ("CREATURES/creatures.ini", "[jam.x]\nhp = 1\n")] {
+                z.start_file(n, o).unwrap();
+                z.write_all(b.as_bytes()).unwrap();
+            }
+            z.finish().unwrap();
+        }
+        assert!(crate::archive::extract(&zp, &dir.join("out"), 1 << 20).unwrap_err().contains("two files that unpack as creatures/creatures.ini"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
