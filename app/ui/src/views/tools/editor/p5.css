@@ -467,3 +467,20 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .p5-leakbar { position: absolute; top: 36px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; max-width: min(860px, calc(100% - 24px)); padding: 6px 10px; font-size: 12.5px; color: var(--bone); background: rgba(48, 16, 12, 0.92); border: 1px solid #ff3b30; border-radius: 4px; box-shadow: 0 6px 18px rgba(0, 0, 0, .4); }
 .p5-leakbar strong { color: #ff9a8f; }
 .p5-leakbar-text { flex: 1 1 260px; min-width: 0; }
+/* P5: the I/O panel (what triggers what) */
+.p5-io { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.p5-io-head { align-items: center; gap: 8px; }
+.p5-io-search { width: 100%; }
+.p5-io-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; }
+.p5-io-legend i, .p5-io-kind { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: middle; }
+.p5-io-bad { color: #ff9a8f; }
+.p5-io-list { list-style: none; margin: 0; padding: 0; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+.p5-io-group { border-left: 2px solid var(--line); padding: 2px 0 2px 8px; }
+.p5-io-group.hot { border-left-color: #ffd84a; }
+.p5-io-group.picked { background: rgba(255, 216, 74, .07); }
+.p5-io-from { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12.5px; }
+.p5-io-group > ul { list-style: none; margin: 2px 0 0; padding: 0 0 0 6px; display: flex; flex-direction: column; gap: 1px; }
+.p5-io-link { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; }
+.p5-io-word { color: var(--bone-dim); min-width: 56px; }
+.p5-io-key { font-size: 11px; }
+.p5-io-link.broken { background: rgba(255, 95, 86, .08); border-radius: 2px; }

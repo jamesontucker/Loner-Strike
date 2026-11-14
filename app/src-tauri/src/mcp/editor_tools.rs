@@ -50,6 +50,12 @@ pub fn specs() -> Vec<Spec> {
         Spec { name: "editor_leak", title: "Editor: the leak", kind: Read,
             schema: || obj(json!({"points": {"type": "integer", "minimum": 0, "maximum": 4000, "description": "Most points of the line returned (default 200, thinned evenly; 0 for none)"}}), &[]),
             description: "Leak tracing: the leak line of the last compile that leaked (or a pointfile the person loaded), where the hole is and what's round it. leaked false when the last compile got past BSP without one. Else: pointfile, from (compile or file), pointCount, points [[x,y,z]…] from the entity that sees the void out to it, hole {at, index} (where the line leaves the world's brushes for good), nearest [{brush, distance}] (world brushes round the hole: close the gap there), brushEntitiesNear [{brush, entity, classname}] (they don't seal), start {entity, classname} (where the line begins), length and advice." },
+        Spec { name: "editor_io", title: "Editor: what triggers what", kind: Read,
+            schema: || obj(json!({
+                "entity": {"type": "integer", "description": "An entity id: also its chain (what it sets off down the line, and what leads to it), and only the links in that chain"},
+                "broken_only": {"type": "boolean", "description": "Only the broken links (default false)"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 5000, "description": "Most links listed (default 500; counts cover all)"}}), &[]),
+            description: "The entity I/O graph (deathrun traps, jail cells, fun maps): nodes [{entity, classname, targetname, at [x,y,z], unused (named but nothing fires it)}], links [{from, to [entity ids], key, name, kind fires|kills|master|names, delay (a multi_manager's seconds)}] from target, killtarget, master, pathtarget, beams' ends, trigger_changetarget and every multi_manager name (name#2 fires name again), broken (links whose name no entity has: fix them by naming an entity so, or editor_findings kind dangling-target with its fixId to remove the key), shared (names several entities have: all of them fire) and counts. With entity: chain {down, up}." },
         Spec { name: "editor_history", title: "Editor: undo history", kind: Read, schema: none,
             description: "The undo and redo steps by name, newest first. editor_history_jump goes back or forward several at once." },
         Spec { name: "editor_find", title: "Editor: find things", kind: Read,
@@ -613,6 +619,35 @@ pub async fn run(ctx: &Ctx, name: &str, a: &Value) -> Option<Done> {
             let total = shown.len();
             Ok(json!({"docId": v["docId"], "revision": v["revision"], "counts": counts, "byKind": by_kind, "matched": total, "findings": shown.into_iter().take(n).collect::<Vec<_>>(),
                 "texturesChecked": v["texturesChecked"], "stats": v["stats"], "next": "Apply a fix with editor_apply_fix {fixId}."}))
+        }
+        .await,
+        "editor_io" => async {
+            let q = match a["entity"].as_u64() {
+                Some(e) => format!("/api/tools/editor/io?entity={e}"),
+                None => "/api/tools/editor/io".to_string(),
+            };
+            let mut v = get(ctx, &q).await?;
+            let n = super::catalog::limit(a, 500, 5000);
+            let chain: Option<Vec<u64>> = v["chain"].is_object().then(|| {
+                let mut c: Vec<u64> = ["down", "up"].iter().flat_map(|k| v["chain"][k].as_array().cloned().unwrap_or_default()).filter_map(|x| x.as_u64()).collect();
+                c.extend(a["entity"].as_u64());
+                c
+            });
+            let keep = |l: &Value| {
+                let from = l["from"].as_u64().unwrap_or(0);
+                let to: Vec<u64> = l["to"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
+                chain.as_ref().is_none_or(|c| c.contains(&from) && (to.is_empty() || to.iter().any(|t| c.contains(t))))
+            };
+            let src = if a["broken_only"] == true { "broken" } else { "links" };
+            let links: Vec<Value> = v[src].as_array().into_iter().flatten().filter(|l| keep(l)).cloned().collect();
+            let matched = links.len();
+            v["links"] = json!(links.into_iter().take(n).collect::<Vec<_>>());
+            v["matched"] = json!(matched);
+            if let Some(c) = &chain {
+                let nodes: Vec<Value> = v["nodes"].as_array().into_iter().flatten().filter(|x| x["entity"].as_u64().is_some_and(|e| c.contains(&e))).cloned().collect();
+                v["nodes"] = json!(nodes);
+            }
+            Ok(v)
         }
         .await,
         "editor_leak" => async {

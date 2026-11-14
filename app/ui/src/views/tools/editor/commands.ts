@@ -364,6 +364,7 @@ export function commands(): Command[] {
     { id: "view.content", label: "Content Browser", menu: "View", sep: true, hint: "Models, sprites, sounds, textures, prefabs and GameBanana: drag onto the map", run: () => showPanel("content") },
     { id: "view.contentDrawer", label: "Content drawer", menu: "View", hint: "The Content Browser over the bottom panels (a click away closes it)", run: () => useBrowser.getState().set({ drawer: !useBrowser.getState().drawer }), fly: true },
     { id: "view.budget", label: "Budget", menu: "View", hint: "How close the map is to the engine's limits", run: () => showPanel("budget") },
+    { id: "view.io", label: "I/O: what triggers what", menu: "View", hint: "Targets, multi_managers, masters and broken links; pick an entity for its chain", run: () => showPanel("io") },
     { id: "map.publish", label: "Publish…", menu: "Map", hint: "A package to share this map in Tools > Community (compile it into the game first)", run: publishMap },
     { id: "map.playtest", label: "Playtest", menu: "Map", hint: "Compile, put it in the game and start it with bots, as the Compile panel is set", run: playtestNow },
     { id: "map.goToLeak", label: "Go to leak", menu: "Map", hint: "Fly along the leak line to the hole and pick the brush beside it", when: () => !!useLeak.getState().points, run: () => goToLeak() },

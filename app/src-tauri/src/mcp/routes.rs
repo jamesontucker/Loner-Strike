@@ -287,6 +287,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/tools/editor/fgd/clear"),
     ("POST", "/api/tools/editor/fgd/pick"),
     ("GET", "/api/tools/editor/history"),
+    ("GET", "/api/tools/editor/io"),
     ("GET", "/api/tools/editor/leak"),
     ("POST", "/api/tools/editor/leak/clear"),
     ("POST", "/api/tools/editor/leak/load"),

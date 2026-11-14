@@ -10,6 +10,7 @@ pub mod doc;
 pub mod extrude; // Parity A: pull a new brush out of a face
 pub mod geom;
 pub mod history;
+pub mod io; // P5: what triggers what
 pub mod mapfile;
 pub mod math;
 pub mod ops;

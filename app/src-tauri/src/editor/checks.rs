@@ -358,12 +358,6 @@ fn basic(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<Iss
     }
     let mut entstring = 40 + doc.world.keys.iter().map(|(k, v)| k.len() + v.len() + 6).sum::<usize>() + doc.world.wad_key().len();
     let with_brushes: HashSet<EntityId> = doc.brushes.values().filter_map(|b| b.entity).collect();
-    let mut targetnames: HashSet<&str> = HashSet::new();
-    for e in doc.entities.values() {
-        if let Some(t) = e.get("targetname") {
-            targetnames.insert(t);
-        }
-    }
     for (id, e) in &doc.entities {
         let eid = Some(id.0);
         entstring += 4 + e.keys.iter().map(|(k, v)| k.len() + v.len() + 6).sum::<usize>();
@@ -390,13 +384,17 @@ fn basic(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<Iss
                 out.push(Issue { entity: eid, ..issue(Level::Warning, "long-key", format!("{cls}: the key \"{k}\" or its value is too long.")) });
             }
         }
-        for key in ["target", "killtarget"] {
-            if let Some(t) = e.get(key) {
-                if !t.is_empty() && !targetnames.contains(t) {
-                    out.push(Issue { entity: eid, ..issue(Level::Info, "dangling-target", format!("{cls} points at \"{t}\", which nothing is named.")) });
-                }
-            }
-        }
+    }
+    // P5: every link that names nothing (target, killtarget, master, pathtarget, a
+    // multi_manager's names…), from the one I/O graph the I/O panel and MCP editor_io use
+    for l in super::io::graph(doc).broken() {
+        let cls = doc.entities.get(&l.from).map(|e| e.classname()).unwrap_or("");
+        let how = match l.kind {
+            super::io::Kind::Master => format!("{cls}'s master is \"{}\", which nothing is named: it may never work.", l.name),
+            _ if l.key == l.name || l.key.starts_with(&format!("{}#", l.name)) => format!("{cls} fires \"{}\", which nothing is named.", l.name),
+            _ => format!("{cls} points at \"{}\" ({}), which nothing is named.", l.name, l.key),
+        };
+        out.push(Issue { entity: Some(l.from.0), ..issue(Level::Info, "dangling-target", how) });
     }
     if entstring > limits::MAX_ENTSTRING {
         out.push(issue(Level::Warning, "entstring", format!("About {} KB of entity text; older tools stop at 128 KB.", entstring / 1024)));

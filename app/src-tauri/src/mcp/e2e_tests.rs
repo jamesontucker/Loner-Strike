@@ -287,3 +287,44 @@ async fn an_agent_finds_the_leak() {
     assert_eq!(ag.call("editor_leak", json!({"points": 0})).await["points"], json!([]));
     crate::tools::editor::leak::set(None);
 }
+
+/// P5: the entity I/O view as an agent: a deathrun trap chain, its multi_manager fan-out with
+/// delays, a broken name, the chain of one entity, and the Checks fix that clears the dead key.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_agent_follows_what_triggers_what() {
+    let ag = Agent::new();
+    ag.call("editor_new", json!({})).await;
+    let add = |class: &'static str, keys: Value| {
+        let ag = &ag;
+        async move { ids(&ag.call("editor_add_entity", json!({"classname": class, "origin": [0, 0, 64], "keys": keys})).await["created"]["entities"])[0] }
+    };
+    let button = add("trigger_relay", json!({"targetname": "start", "target": "trap1_mm"})).await;
+    let mm = add("multi_manager", json!({"targetname": "trap1_mm", "trap1_spike": "0", "trap1_spike#1": "2.5", "trap1_sound": "0"})).await;
+    let spike = add("env_explosion", json!({"targetname": "trap1_spike"})).await;
+    let all = ag.call("editor_io", json!({})).await;
+    assert_eq!(all["counts"]["broken"], 1, "{all}");
+    assert_eq!(all["broken"][0]["name"], "trap1_sound");
+    let fan: Vec<&Value> = all["links"].as_array().unwrap().iter().filter(|l| l["from"] == mm).collect();
+    assert_eq!(fan.len(), 3, "{all}");
+    assert!(fan.iter().any(|l| l["key"] == "trap1_spike#1" && l["delay"] == 2.5 && l["to"] == json!([spike])));
+    // the chain from the relay: the manager and the spike (and the manager's broken name);
+    // an unrelated relay stays out
+    let other = add("trigger_relay", json!({"targetname": "elsewhere", "target": "start_light"})).await;
+    let light = add("light", json!({"targetname": "start_light"})).await;
+    let c = ag.call("editor_io", json!({"entity": button})).await;
+    assert_eq!(c["chain"]["down"], json!([mm, spike]), "{c}");
+    let names: Vec<&str> = c["links"].as_array().unwrap().iter().filter_map(|l| l["name"].as_str()).collect();
+    assert!(names.contains(&"trap1_sound") && !names.contains(&"start_light"), "{c}");
+    assert!(c["nodes"].as_array().unwrap().iter().all(|n| n["entity"] != other && n["entity"] != light));
+    let b = ag.call("editor_io", json!({"broken_only": true})).await;
+    assert_eq!(b["matched"], 1);
+    // the Checks finding and its fix take the dead name off the manager, nothing else
+    let f = ag.call("editor_findings", json!({"kind": "dangling-target"})).await;
+    assert_eq!(f["matched"], 1, "{f}");
+    assert!(f["findings"][0]["message"].as_str().unwrap().contains("fires \"trap1_sound\""), "{f}");
+    let fix = f["findings"][0]["fixes"][0]["fixId"].as_str().unwrap().to_string();
+    ag.call("editor_apply_fix", json!({"fixId": fix})).await;
+    let after = ag.call("editor_io", json!({})).await;
+    assert_eq!(after["counts"]["broken"], 0, "{after}");
+    assert_eq!(after["links"].as_array().unwrap().iter().filter(|l| l["from"] == mm).count(), 2);
+}

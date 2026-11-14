@@ -41,6 +41,8 @@ import { QuietWhileDragging, wrapRootInvalidate } from "./paneRedraw"; // Parity
 import { startExtrude, startSplit } from "./extrude"; // Parity A: Shift-drag extrude, Ctrl-drag split
 import { DropTarget } from "./DropTarget"; // P5: a dragged texture's face
 import { LeakFlight } from "./LeakTools"; // P5
+import { IOArrows } from "./IOPanel"; // P5
+import { chainOf, ioLinks } from "./ioGraph"; // P5
 import { TriadFeed } from "./AxisTriad"; // P5: the axes in each view's corner
 import { markerColour, useKits } from "./kits";
 import { useNav } from "./navigation";
@@ -351,35 +353,32 @@ function Links() {
   const ents = useEditor((s) => s.doc?.entities);
   const brushes = useEditor((s) => s.brushes);
   const sel = useEditor((s) => s.sel.entities);
+  // P5: every link (target, killtarget, master, a multi_manager's names…, ioGraph.ts) as faint
+  // dashes; the picked entity's chain is IOPanel's IOArrows, colored, with heads
+  const picked = sel.length === 1 ? sel[0] : null;
   const lines = useMemo(() => {
-    const out: { a: Vec3; b: Vec3; hot: boolean }[] = [];
+    const out: { a: Vec3; b: Vec3 }[] = [];
     if (!ents) return out;
-    const named = new Map<string, DocEntity[]>();
-    for (const e of ents) {
-      const n = keyOf(e.keys, "targetname");
-      if (n) named.set(n, [...(named.get(n) ?? []), e]);
-    }
-    for (const e of ents) {
-      for (const k of ["target", "killtarget"]) {
-        const t = keyOf(e.keys, k);
-        if (!t) continue;
-        const a = entityCentre(e, brushes);
-        for (const to of named.get(t) ?? []) {
-          const b = entityCentre(to, brushes);
-          if (a && b && out.length < 2000) out.push({ a, b, hot: sel.includes(e.id) || sel.includes(to.id) });
-        }
+    const byId = new Map(ents.map((e) => [e.id, e]));
+    const chain = picked != null ? chainOf(ioLinks(ents), picked) : null;
+    const inChain = (x: number) => x === picked || !!chain?.down.has(x) || !!chain?.up.has(x);
+    for (const l of ioLinks(ents)) {
+      const from = byId.get(l.from);
+      const a = from && entityCentre(from, brushes);
+      for (const t of l.to) {
+        if (chain && inChain(l.from) && inChain(t)) continue;
+        const to = byId.get(t);
+        const b = to && entityCentre(to, brushes);
+        if (a && b && out.length < 2000) out.push({ a, b });
       }
     }
     return out;
-  }, [ents, brushes, sel]);
-  // Parity A: the ordinary links in one dashed draw; the picked entity's few stay thick lines
-  const cold = useMemo(() => lines.filter((l) => !l.hot), [lines]);
+  }, [ents, brushes, picked]);
+  // Parity A: the ordinary links in one dashed draw
   return (
     <>
-      <LinkBatch lines={cold} />
-      {lines.filter((l) => l.hot).map((l, i) => (
-        <Line key={i} points={[l.a, l.b]} color={l.hot ? "#ffd84a" : "#7fb7c9"} lineWidth={l.hot ? 2.5 : 1} dashed={!l.hot} dashSize={12} gapSize={8} transparent opacity={l.hot ? 1 : 0.6} depthTest={!l.hot} />
-      ))}
+      <LinkBatch lines={lines} />
+      <IOArrows />
     </>
   );
 }

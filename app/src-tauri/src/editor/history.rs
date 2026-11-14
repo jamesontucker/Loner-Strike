@@ -919,11 +919,12 @@ pub fn cmd_fix(doc: &mut MapDocument, h: &mut History, fixes: &[FixIt], with: Op
             }
             "clear-target" => {
                 let Some(id) = f.entity else { continue };
-                let names: std::collections::HashSet<String> = tx.doc().entities.values().filter_map(|e| e.get("targetname").map(String::from)).collect();
+                // P5: every broken link key on it (target, killtarget, master, a multi_manager's names…)
+                let dead: Vec<String> = super::io::graph(tx.doc()).broken().filter(|l| l.from == id).map(|l| l.key.clone()).collect();
                 let Some(mut e) = tx.doc().entities.get(&id).cloned() else { continue };
                 let mut changed = false;
-                for k in ["target", "killtarget"] {
-                    if e.get(k).is_some_and(|t| !names.contains(t)) {
+                for k in &dead {
+                    if e.get(k).is_some() {
                         e.remove(k);
                         changed = true;
                     }

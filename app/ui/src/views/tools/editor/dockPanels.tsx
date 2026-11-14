@@ -1,6 +1,7 @@
 // P5: every panel the editor can dock, float or pop out. P4 and others: add a panel here (one
 // entry) instead of a side tab; it then shows up in View > Panels too.
 
+import { IOPanel } from "./IOPanel"; // P5
 import type { ReactNode } from "react";
 import { useToolArg } from "../../../stores/tools";
 import { Inspector, TextureBrowser, Visibility } from "./Panels";
@@ -38,6 +39,7 @@ export const DOCK_PANELS: DockPanel[] = [
   // (was "Library": the id stays, so saved layouts keep it)
   { id: "library", title: "Gameplay", subtitle: "Components and mode kits for game modes", render: () => <Library /> },
   { id: "budget", title: "Budget", subtitle: "How close the map is to the engine's limits", render: () => <BudgetPanel /> }, // P5
+  { id: "io", title: "I/O", subtitle: "What triggers what: targets, multi_managers, masters, broken links", render: () => <IOPanel /> }, // P5
   { id: "checks", title: "Checks", render: () => <ChecksPanel />, label: checksCount, bad: () => (useEditor.getState().checks?.issues.some((i) => i.level === "error") ?? false) },
   { id: "compile", title: "Compile", render: () => <CompilePanel /> },
   { id: "project", title: "Project", render: () => <ProjectPanel /> },
