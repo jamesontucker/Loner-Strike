@@ -163,6 +163,7 @@ function Studio({ maps }: ToolProps) {
   const playing = useStudio((s) => s.playing);
   const problems = useStudio((s) => s.problems);
   const history = useStudio((s) => s.history);
+  const onMode = useStudio((s) => !s.selected.length && !s.part && !s.selectedVar);
   const st = useStudio.getState();
   const toast = useToast();
   const ask = useConfirm();
@@ -717,6 +718,16 @@ function Studio({ maps }: ToolProps) {
           {graph.mode.name}
           {dirty ? " •" : ""}
         </strong>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => st.select([])}
+          aria-pressed={onMode}
+          title="The mode's name, description, game settings, mode settings and requirements, in Details (or click empty canvas, or Escape)"
+          data-testid="studio-mode-settings"
+        >
+          Mode settings
+        </button>
         <span className="st-sep" />
         <button type="button" className="btn" onClick={st.undo} disabled={!history.past.length} title="Undo (⌘Z)">
           Undo

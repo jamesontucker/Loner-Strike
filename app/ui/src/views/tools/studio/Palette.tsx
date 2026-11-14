@@ -3,7 +3,7 @@
 // Functions, Macros, structs and enums (Call X, Make X, Switch on X), and only what fits the tab.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CATEGORIES, compatible, defaultParams, nodeDef, searchNodes, type NodeDef, type PinType } from "./registry";
+import { CATEGORIES, compatible, defaultParams, matchRank, nodeDef, searchNodes, type NodeDef, type PinType } from "./registry";
 import { pinsOf, typeLabel } from "./pins";
 import type { Graph } from "./schema";
 
@@ -141,8 +141,13 @@ export function Palette({
       .map((d) => ({ def: d, title: d.title, help: d.help, category: d.category }));
     const own = ownItems(graph, tab).filter((it, k) => (!words || `${it.title} ${it.category}`.toLowerCase().includes(words)) && (!wire || itemFits(graph, it, wire, k)));
     const all = [...own, ...reg].filter((it) => !at.only || it.category === at.only);
-    // (stable: the search's own order inside a category)
-    return all.map((it, k) => ({ it, k })).sort((a, b) => CATEGORIES.indexOf(a.it.category) - CATEGORIES.indexOf(b.it.category) || a.k - b.k).map((x) => x.it);
+    // searching: the best matches first (their folder goes first too, so Enter places the top
+    // one); otherwise by category. (stable: the search's own order otherwise)
+    const rank = (it: PaletteItem) => (words ? matchRank(it.title, words, it.def.keywords) : 0);
+    return all
+      .map((it, k) => ({ it, k, r: rank(it) }))
+      .sort((a, b) => a.r - b.r || CATEGORIES.indexOf(a.it.category) - CATEGORIES.indexOf(b.it.category) || a.k - b.k)
+      .map((x) => x.it);
   }, [q, wire, at.only, graph, tab]);
   const searching = q.trim() !== "";
   // folders: open while searching (those with matches), when the list is short, or when opened
@@ -162,8 +167,10 @@ export function Palette({
       section("fav", "Favorites", favs.map((k) => byKey.get(k)).filter((x): x is PaletteItem => !!x), true);
       section("recent", "Recently used", recent.map((k) => byKey.get(k)).filter((x): x is PaletteItem => !!x).slice(0, 10), true);
     }
+    // (searching: folders in the order of their best match; else the usual order)
     const cats: string[] = [];
     for (const it of list) if (!cats.includes(it.category)) cats.push(it.category);
+    if (!searching) cats.sort((a, b) => CATEGORIES.indexOf(a) - CATEGORIES.indexOf(b));
     for (const c of cats) {
       const items = list.filter((it) => it.category === c);
       const id = `cat:${c}`;
@@ -188,7 +195,8 @@ export function Palette({
     return out;
   }, [list, favs, recent, opened, searching, at.only]);
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => setCur(0), [q, context]);
+  // searching: the cursor on the best match (Enter places it), not its folder
+  useEffect(() => setCur(q.trim() ? Math.max(0, rows.findIndex((r) => r.kind === "item")) : 0), [q, context]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const away = (e: PointerEvent) => {
       if (box.current && !box.current.contains(e.target as Node)) onClose();

@@ -8,7 +8,7 @@ import templateRaw from "../src/views/tools/studio/templates/team-dm.graph.json?
 import { parseGraph, emptyGraph, type Graph } from "../src/views/tools/studio/schema";
 import { insertSnippet, makeSnippet, readSnippet } from "../src/views/tools/studio/graphOps";
 import { addVariable, addNode, canConnect, connect, copy, emptyHistory, insertReroute, inType, outType, paste, record, redo, remove, undo } from "../src/views/tools/studio/graphOps";
-import { NODE_DEFS, compatible, nodeDef, searchNodes } from "../src/views/tools/studio/registry";
+import { NODE_DEFS, compatible, matchRank, nodeDef, searchNodes } from "../src/views/tools/studio/registry";
 import { addEnum, addFunction, addMacro, addStruct, collapse, removeGraphPart, tabView, updateFunction, updateStruct } from "../src/views/tools/studio/graphOps";
 import { pinsOf, typeLabel, typeOk } from "../src/views/tools/studio/pins";
 import { extractItem, insertItem, itemFile, newerInLibrary, readItem } from "../src/views/tools/studio/library";
@@ -473,4 +473,27 @@ test("a library item brings what it needs, merges what's there, renames clashes,
   assert.deepEqual(root2.from, { lib: "give_kit", version: 2 });
   assert.equal(up.graph.functions!.length, other.functions!.length, "no second copy");
   assert.equal(up.graph.nodes.filter((n) => n.graph === root.id && n.type === "fn.entry").length, 1);
+});
+
+test("UX review H5: search puts title matches first (killed: Player Killed before Bot Trait)", () => {
+  const titles = searchNodes("killed").map((d) => d.title);
+  assert.equal(titles[0], "Player Killed");
+  assert.ok(titles.indexOf("Player Killed") < titles.indexOf("Bot Trait") || !titles.includes("Bot Trait"));
+  assert.equal(searchNodes("give w")[0].title, "Give Weapon");
+  assert.equal(matchRank("Player Killed", "player killed"), 0);
+  assert.ok(matchRank("Player Killed", "player") < matchRank("Player Killed", "killed"));
+  assert.ok(matchRank("Bot Trait", "skilled", "skill skilled") > matchRank("Player Killed", "killed"));
+});
+
+test("UX review M4: Get/Set show Player and Team only for a per-player or per-team variable", () => {
+  for (const scope of ["mode", "player", "team"] as const) {
+    let g = template();
+    g = { ...g, variables: [...g.variables, { id: "vx", name: "X", type: "number", scope, default: 0 }] };
+    for (const type of ["var.get", "var.set", "var.add"]) {
+      const r = addNode(g, type, { x: 0, y: 0 }, undefined, { var: "vx" });
+      const ids = pinsOf(r.graph, r.graph.nodes.find((n) => n.id === r.id)!).inputs.map((p) => p.id);
+      assert.equal(ids.includes("player"), scope === "player", `${type} ${scope} player`);
+      assert.equal(ids.includes("team"), scope === "team", `${type} ${scope} team`);
+    }
+  }
 });

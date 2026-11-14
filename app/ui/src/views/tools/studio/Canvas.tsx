@@ -292,7 +292,11 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         }
       }
       if (moves.size) live((g) => moveItems(g, moves));
-      if (selection) select([...selection]);
+      // (only a real change: a deselect echo would also clear the My mode item just picked)
+      if (selection) {
+        const cur = useStudio.getState().selected;
+        if (selection.size !== cur.length || cur.some((id) => !selection!.has(id))) select([...selection]);
+      }
     },
     [live, select],
   );
@@ -549,6 +553,9 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         straighten();
       } else if (k === "c" && !mod) {
         commentAround();
+      } else if (e.key === "Escape" && !mod) {
+        // nothing picked: Details shows the mode itself (UX review H2)
+        select([]);
       } else if (e.key === "F9") {
         e.preventDefault();
         for (const id of useStudio.getState().selected) if (graph.nodes.some((n) => n.id === id)) edit((g) => toggleBreakpoint(g, id));
@@ -785,6 +792,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
             return;
           }
           if (Date.now() - paletteAt.current > 400) setPalette(null);
+          select([]);
         }}
         onNodeDoubleClick={(_, node) => {
           const n = useStudio.getState().graph?.nodes.find((x) => x.id === node.id);
@@ -815,6 +823,39 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         <Controls showInteractive={false} />
         <MiniMap pannable zoomable className="st-minimap" />
       </ReactFlow>
+      {view.nodes.length === 0 && view.comments.length === 0 && (!tab || (graph.eventGraphs ?? []).some((e) => e.id === tab)) && (
+        // an empty event graph: where to start (UX review H7)
+        <div className="st-empty-card" data-testid="studio-empty">
+          <strong>Nothing happens yet</strong>
+          <p>A mode runs when something happens in the game: an event. Right-click or press Space to add one, or start with:</p>
+          <div className="st-empty-actions">
+            {[
+              ["event.round_started", "Round Started"],
+              ["event.player_killed", "Player Killed"],
+              ["event.player_spawned", "Player Spawned"],
+            ].map(([type, label]) => (
+              <button
+                key={type}
+                type="button"
+                className="btn"
+                onClick={() => {
+                  const b = wrap.current?.getBoundingClientRect();
+                  const p = b ? rf.screenToFlowPosition({ x: b.left + b.width / 2 - 120, y: b.top + b.height / 2 - 60 }) : { x: 0, y: 0 };
+                  let id = "";
+                  edit((g) => {
+                    const r = addNode(g, type, p, home);
+                    id = r.id;
+                    return r.graph;
+                  });
+                  if (id) select([id]);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {cm.menu}
       {palette && <Palette at={palette} graph={graph} tab={tab} onPick={pick} onComment={commentAround} onCollapse={selected.length ? collapseSelected : undefined} onClose={() => setPalette(null)} />}
       {varDrop && (

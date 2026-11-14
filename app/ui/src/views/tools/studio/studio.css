@@ -221,6 +221,10 @@
 .st-find { position: relative; }
 .st-find-list { position: absolute; top: 100%; left: 0; z-index: 30; width: 320px; max-height: 300px; overflow-y: auto; background: var(--panel, #22262b); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); }
 .st-vardrop { position: absolute; z-index: 20; min-width: 180px; background: var(--panel, #22262b); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); padding: 4px 0; }
+/* an empty event graph: where to start (UX review H7) */
+.st-empty-card { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; max-width: 360px; padding: 16px 18px; background: var(--panel, #22262b); border: 1px dashed var(--line); border-radius: 8px; text-align: center; }
+.st-empty-card p { margin: 6px 0 12px; font-size: 13px; color: var(--bone-dim, #9aa); }
+.st-empty-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 @media (max-width: 1100px) {
   .st-main { grid-template-columns: 190px minmax(0, 1fr) 240px; }
 }

@@ -332,7 +332,7 @@ fn timeline_problems(g: &Graph, p: &mut Vec<Problem>) {
                     _ => true,
                 };
                 if !k.t.is_finite() || k.t < 0.0 || k.t > tl.length.max(0.1) || !ok_v || k.ease.as_deref().is_some_and(|e| !EASES.contains(&e)) || !tangent_ok(&k.tin, &tr.kind) || !tangent_ok(&k.tout, &tr.kind) {
-                    p.push(Problem::err(None, format!("A key of the track \u{201c}{}\u{201d} is out of range (its time 0 to the length, its value the track's kind).", short(&tr.name))));
+                    p.push(Problem::err(None, format!("A key of the track \u{201c}{}\u{201d} is out of range: its time must be between 0 and the length, and its value must fit the track (a number, a position, or a color from 0 to 255), with a known curve.", short(&tr.name))));
                     break;
                 }
             }
@@ -1556,7 +1556,23 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
     if !has_errors(&p) {
         p.extend(cost_warnings(g, &View::new(g)));
     }
+    p.extend(nothing_happens(g));
     p
+}
+
+/// A mode that does nothing yet: no event at all (and no game settings, which are a mode by
+/// themselves), or events with nothing wired after them (UX review H7).
+fn nothing_happens(g: &Graph) -> Option<Problem> {
+    let reg = registry();
+    // (a Function's or Macro's entry isn't something happening in the game)
+    let events: Vec<&Node> = g.nodes.iter().filter(|n| n.kind != "fn.entry" && n.kind != "macro.entry" && reg.get(&n.kind).is_some_and(|d| d.event)).collect();
+    if events.is_empty() {
+        // (with other nodes but no event, "Nothing starts this graph yet" says it already)
+        let only_entries = g.nodes.iter().all(|n| n.kind == "fn.entry" || n.kind == "macro.entry" || n.kind == "fn.return" || n.kind == "macro.exit");
+        return (only_entries && g.mode.settings.is_empty()).then(|| Problem::warn(None, "Nothing happens yet: add an event (right-click the Event Graph: Round Started, Player Killed...) and wire what it does after it."));
+    }
+    let wired = events.iter().any(|n| g.edges.iter().any(|e| e.from.node == n.id));
+    (!wired).then(|| Problem::warn(Some(&events[0].id), "Nothing happens yet: none of the events has anything wired after it."))
 }
 
 /// The extra event graphs: good ids and names, no wire from one graph to another, and a note
@@ -2594,6 +2610,23 @@ mod tests {
 
     pub fn graph(nodes: Value, edges: Value) -> Graph {
         from_value(json!({"schema": SCHEMA, "version": 2, "mode": {"id": "testmode", "name": "Test"}, "nodes": nodes, "edges": edges})).unwrap()
+    }
+
+    #[test]
+    fn nothing_happens_yet() {
+        let nothing = |g: &Graph| validate(g).iter().any(|p| p.message.starts_with("Nothing happens yet"));
+        assert!(nothing(&graph(json!([]), json!([]))));
+        let lone = graph(json!([{"id": "rs", "type": "event.round_started", "pos": {"x": 0, "y": 0}, "params": {}}]), json!([]));
+        assert!(nothing(&lone));
+        let wired = graph(
+            json!([{"id": "rs", "type": "event.round_started", "pos": {"x": 0, "y": 0}, "params": {}}, {"id": "p", "type": "debug.print", "pos": {"x": 300, "y": 0}, "params": {"text": "hi"}}]),
+            json!([e("w", "rs", "then", "p", "exec")]),
+        );
+        assert!(!nothing(&wired));
+        // game settings alone are a mode
+        let mut set = graph(json!([]), json!([]));
+        set.mode.settings = vec![Setting { cvar: "mp_freeforall".into(), value: 1.0 }];
+        assert!(!nothing(&set));
     }
 
     fn e(id: &str, a: &str, ap: &str, b: &str, bp: &str) -> Value {

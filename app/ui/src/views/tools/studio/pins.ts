@@ -186,6 +186,18 @@ export function pinsOf(g: Graph, n: GNode): Pins {
       if (item) inputs = Array.from({ length: countParam(n, def, "count", 8) }, (_, i) => ({ ...item, id: `i${i}`, label: `[${i}]` }));
       break;
     }
+    case "var.get":
+    case "var.set":
+    case "var.add": {
+      // Player only for a per-player variable, Team only for a per-team one (a wire already on
+      // one keeps it showing, so it can be seen and taken off): UX review M4
+      const v = allVariables(g).find((x) => x.id === n.params.var);
+      if (v) {
+        const wired = (pin: string) => g.edges.some((e) => e.to.node === n.id && e.to.pin === pin);
+        inputs = inputs.filter((p) => (p.id !== "player" || v.scope === "player" || wired("player")) && (p.id !== "team" || v.scope === "team" || wired("team")));
+      }
+      break;
+    }
   }
   const out: Pins = {
     inputs: inputs.map((p) => ({ ...p, type: resolve(g, n, def, p.type) })),

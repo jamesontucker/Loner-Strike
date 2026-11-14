@@ -92,6 +92,23 @@ export function defaultParams(def: NodeDef): Record<string, string | number | bo
 
 /** What the node search lists. `wire`: dragging a wire of that type from an output (`dir:
  *  "out"`, so the node needs a matching input) or from an input (`dir: "in"`). */
+/** How well an item's title (and keywords) match a search, lower is better: the whole title, the
+ *  title's start, a word in it starting so, anywhere in the title, a keyword, then the help. */
+export function matchRank(title: string, query: string, keywords = ""): number {
+  const q = query.trim().toLowerCase();
+  const t = title.toLowerCase();
+  if (!q) return 0;
+  if (t === q) return 0;
+  if (t.startsWith(q)) return 1;
+  if (t.split(/[^a-z0-9]+/).some((w) => w.startsWith(q)) || t.includes(` ${q}`)) return 2;
+  if (t.includes(q)) return 3;
+  const words = q.split(/\s+/);
+  if (words.every((w) => t.includes(w))) return 3;
+  const kw = keywords.toLowerCase().split(/[^a-z0-9]+/);
+  if (words.every((w) => kw.some((k) => k.startsWith(w)) || t.includes(w))) return 4;
+  return 5;
+}
+
 export function searchNodes(query: string, wire?: { type: PinType; dir: "in" | "out" }): NodeDef[] {
   const q = query.trim().toLowerCase();
   return NODE_DEFS.filter((d) => {
@@ -102,11 +119,9 @@ export function searchNodes(query: string, wire?: { type: PinType; dir: "in" | "
     if (!q) return true;
     return `${d.title} ${d.category} ${d.help} ${d.keywords ?? ""} ${d.cvar ?? ""}`.toLowerCase().includes(q);
   }).sort((a, b) => {
-    // titles that start with the words first, then by category order, then the registry's order
-    // (the everyday nodes come first in each category: Give Weapon before Give Ammo)
-    const sa = a.title.toLowerCase().startsWith(q) ? 0 : 1;
-    const sb = b.title.toLowerCase().startsWith(q) ? 0 : 1;
-    return sa - sb || CATEGORIES.indexOf(a.category) - CATEGORIES.indexOf(b.category);
+    // the best title matches first (matchRank), then by category order, then the registry's
+    // order (the everyday nodes come first in each category: Give Weapon before Give Ammo)
+    return matchRank(a.title, q, a.keywords) - matchRank(b.title, q, b.keywords) || CATEGORIES.indexOf(a.category) - CATEGORIES.indexOf(b.category);
   });
 }
 
