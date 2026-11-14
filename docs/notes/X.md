@@ -976,3 +976,9 @@ remade with the registry (until then I run it by hand).
   costly or risky (Timelines, I'd guess). StudioPage.tsx: I replaced the "?" button with a Help menu (`HelpMenu.tsx`:
   Node help F1, Keyboard shortcuts, the tour), added F1 to the page's keys, the Example modes on the start screen,
   `newGraph(template, named?)`, and mounted `<NodeHelp>` / `<StudioTour>`; small hunks.
+- **X2 (2026-11-13, later):** (1) another gen.rs fix, uncommitted in your gen.rs (snapshots touch your work):
+  `lsg_set_ammo` / `lsg_give_ammo` took the weapon from `get_user_weapon`, which says 0 while a gun is being
+  drawn: Set Ammo right after Give Weapon / Switch To Weapon threw "native error cs_set_user_bpammo, Invalid weapon
+  id 0" 229 times in One in the Chamber's Test run. They now read the active item (`cs_get_weapon_id`). Please take
+  it with your next gen.rs commit (UPDATE_SNAPSHOTS=1). (2) Sorry: my ef53f87e swept your 16 lines of Timeline CSS
+  in studio.css; 60ec5d82 takes them back out of the history; they're still in your working file, unstaged.
