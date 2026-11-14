@@ -416,52 +416,88 @@ pub fn normalized_entry(name: &str) -> String {
     name.replace('\\', "/").split('/').filter(|p| !p.is_empty() && *p != ".").collect::<Vec<_>>().join("/").to_lowercase()
 }
 
-/// Loner-Strike packages come only as zips (their entries are checked before they unpack): one
-/// that came out of a rar, 7z or tarball is refused and its files cleared.
+/// Files an installer acts on (a Loner-Strike package's manifest, its shared creatures, a map's
+/// editable source): an archive carrying any of them is checked strictly (`strict_problem`) and
+/// unpacked only from a zip.
+pub fn has_marker(names: &[String]) -> bool {
+    names.iter().any(|n| {
+        let k = normalized_entry(n);
+        k == "loner-strike.json" || k.ends_with("/loner-strike.json") || k == "creatures/creatures.ini" || k.ends_with("/creatures/creatures.ini") || k.starts_with("source/") || k == "source"
+    })
+}
+
+/// A file tree that holds a marker (after another unpacker than ours made it).
+fn tree_has_marker(dest: &Path) -> bool {
+    let names: Vec<String> = walk(dest).iter().filter_map(|p| p.strip_prefix(dest).ok().map(|r| r.to_string_lossy().replace('\\', "/"))).collect();
+    has_marker(&names)
+}
+
+/// One that came out of a rar, 7z or tarball carrying a marker is refused, its files cleared.
 fn not_a_zip_package(dest: &Path) -> Result<(), String> {
-    if dest.join("loner-strike.json").exists() || std::fs::read_dir(dest).into_iter().flatten().flatten().any(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case("loner-strike.json")) {
+    if tree_has_marker(dest) {
         clear_dir(dest);
         return Err("Loner-Strike packages come as .zip files; this one isn't, so it wasn't installed.".into());
     }
     Ok(())
 }
 
-/// Is this archive listing a Loner-Strike package (loner-strike.json at its root)?
-pub fn is_ls_package(names: &[String]) -> bool {
-    names.iter().any(|n| normalized_entry(n) == "loner-strike.json")
-}
-
-/// A Loner-Strike package's entry names, checked before anything unpacks: none may climb out (a
-/// `..` part), start at the root or name a drive, and no two may unpack to the same file. The
-/// first problem, said plainly.
-pub fn package_problem(names: &[String]) -> Option<String> {
-    if !is_ls_package(names) {
-        return None;
-    }
+/// Entry names, strictly (every Community install, and any archive with a marker): plain ASCII
+/// letters, digits and `_ . / -` and spaces; no part that climbs out (..), is empty, ends in a dot
+/// or a space, looks like a short name (`x~1`) or is a name Windows keeps for a device; and no
+/// two that unpack to the same file (compared in lower case). The first problem, plainly.
+pub fn strict_problem(names: &[String]) -> Option<String> {
     let mut seen = std::collections::HashSet::new();
-    for n in names.iter().filter(|n| !n.ends_with('/') && !n.ends_with('\\')) {
-        let parts: Vec<&str> = n.split(['/', '\\']).collect();
-        if n.starts_with(['/', '\\']) || parts.iter().any(|p| *p == ".." || p.contains(':')) {
-            return Some(format!("This Loner-Strike package has a file that points outside it ({}), so it wasn't installed.", n.chars().filter(|c| !c.is_control()).take(80).collect::<String>()));
+    for n in names {
+        let shown: String = n.chars().filter(|c| !c.is_control()).take(80).collect();
+        let bad = |why: &str| Some(format!("This download has a file named so it can't be installed safely ({shown}: {why}), so it wasn't installed."));
+        if !n.bytes().all(|c| c.is_ascii_alphanumeric() || b"_./ -".contains(&c)) {
+            return bad("only letters, digits, spaces and _ . / - can be used");
         }
-        let key = normalized_entry(n);
-        if !seen.insert(key.clone()) {
-            return Some(format!("This Loner-Strike package has two files that unpack as {key}, so it wasn't installed."));
+        let dir = n.ends_with('/');
+        let body = n.strip_suffix('/').unwrap_or(n);
+        if body.is_empty() || body.starts_with('/') {
+            return bad("it starts at the root");
+        }
+        for part in body.split('/') {
+            if part.is_empty() || part == "." || part == ".." {
+                return bad("it points outside the download");
+            }
+            if part.ends_with('.') || part.ends_with(' ') || part.starts_with(' ') {
+                return bad("a name ends in a dot or a space");
+            }
+            if let Some(t) = part.find('~') {
+                if part[t + 1..].bytes().next().is_some_and(|c| c.is_ascii_digit()) {
+                    return bad("it looks like a short name");
+                }
+            }
+            if crate::setup::record::windows_unsafe(part) {
+                return bad("Windows keeps that name for a device");
+            }
+        }
+        if !dir && !seen.insert(body.to_ascii_lowercase()) {
+            return Some(format!("This download has two files that unpack as {}, so it wasn't installed.", body.to_ascii_lowercase()));
         }
     }
     None
 }
 
-/// The first name two entries share once normalized (folders left out), in a Loner-Strike package.
-pub fn package_twin(names: &[String]) -> Option<String> {
-    if !is_ls_package(names) {
-        return None;
+/// Unpacks a Community download: only a zip, every name checked strictly, every file new (a
+/// twin can never write over an earlier one), no archives inside it unpacked.
+pub fn extract_strict(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
+    match extract_zip_with(archive, dest, budget, true)? {
+        true => Ok(()),
+        false => {
+            clear_dir(dest);
+            Err("Loner-Strike creations come as .zip files; this one isn't, so it wasn't installed.".into())
+        }
     }
-    let mut seen = std::collections::HashSet::new();
-    names.iter().filter(|n| !n.ends_with('/') && !n.ends_with('\\')).map(|n| normalized_entry(n)).find(|n| !seen.insert(n.clone()))
 }
 
 fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String> {
+    extract_zip_with(archive, dest, budget, false)
+}
+
+fn extract_zip_with(archive: &Path, dest: &Path, budget: u64, strict_always: bool) -> Result<bool, String> {
     let _ = take_dropped(); // (a fresh list for this archive)
     use std::io::{Read, Write};
     let Ok(f) = std::fs::File::open(archive) else { return Ok(false) };
@@ -475,15 +511,15 @@ fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String>
         return Err(TOO_BIG.into());
     }
     bomb_check(z.len(), listed, packed_len(archive))?; // [Caps]
-    // a Loner-Strike package (loner-strike.json at its root) never holds two entries that unpack
-    // to the same file: the community list checks each, so a later twin can't replace a checked one
-    let names: Vec<String> = (0..z.len()).filter_map(|i| z.by_index_raw(i).ok().and_then(|m| m.name().ok().map(|n| n.to_string()))).collect();
-    if let Some(why) = package_problem(&names) {
-        return Err(why);
+    // a Community download, or any zip carrying a file an installer acts on, is checked strictly
+    // (the community list checks each entry, so a later twin can't replace a checked one)
+    let names: Vec<String> = (0..z.len()).filter_map(|i| z.by_index_raw(i).ok().map(|m| m.name_raw().iter().map(|b| *b as char).collect())).collect();
+    let strict = strict_always || has_marker(&names);
+    if strict {
+        if let Some(why) = strict_problem(&names) {
+            return Err(why);
+        }
     }
-    let package = is_ls_package(&names);
-    // (and again from what's really written: the extractor's own path, lower case)
-    let mut wrote_names: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut written: u64 = 0; // the sizes in a zip's index can lie, so count while writing too
     let mut buf = vec![0u8; 1024 * 1024];
     for i in 0..z.len() {
@@ -506,13 +542,15 @@ fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String>
             note_dropped(format!("{shown} (points outside the download)"));
             continue;
         }
-        if package && !wrote_names.insert(rel.to_string_lossy().replace('\\', "/").to_lowercase()) {
-            return Err(format!("This Loner-Strike package has two files that unpack as {shown}, so it wasn't installed."));
-        }
         if let Some(d) = target.parent() {
             std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
         }
-        let mut out = std::fs::File::create(&target).map_err(|e| e.to_string())?;
+        // (strict: each file new, so nothing can write over one unpacked before it)
+        let mut out = if strict {
+            std::fs::OpenOptions::new().write(true).create_new(true).open(&target).map_err(|_| format!("This download has two files that unpack as {shown}, so it wasn't installed."))?
+        } else {
+            std::fs::File::create(&target).map_err(|e| e.to_string())?
+        };
         loop {
             let n = match m.read(&mut buf) {
                 Ok(0) => break,

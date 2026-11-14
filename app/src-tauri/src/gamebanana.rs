@@ -198,6 +198,22 @@ impl Semaphore {
     }
 }
 
+/// GameBanana pages whose downloads install strictly (Community creations: only a zip, every
+/// name checked, every file new): `archive::extract_strict`.
+static STRICT: std::sync::Mutex<Vec<i64>> = std::sync::Mutex::new(Vec::new());
+
+/// Marks a page's downloads to install strictly (Community's Try it, before it starts the job).
+pub fn mark_strict(mod_id: i64) {
+    let mut s = STRICT.lock().unwrap_or_else(|e| e.into_inner());
+    if !s.contains(&mod_id) {
+        s.push(mod_id);
+    }
+}
+
+fn is_strict(mod_id: i64) -> bool {
+    STRICT.lock().unwrap_or_else(|e| e.into_inner()).contains(&mod_id)
+}
+
 #[derive(Clone, Serialize)]
 pub struct Job {
     pub id: String,
@@ -1141,6 +1157,9 @@ impl MapStore {
             // only the file name from GameBanana, never a path
             let base = Path::new(&fname.replace('\\', "/")).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| format!("file{ext}"));
             std::fs::rename(&download, src.join(base)).map_err(|e| StoreError::Bad(e.to_string()))?;
+        } else if self.jobs.lock().unwrap().get(id).is_some_and(|j| is_strict(j.mod_id)) {
+            // a Community creation: only a zip, every name checked, nothing nested unpacked
+            archive::extract_strict(&download, &src, MAX_UNPACKED).map_err(StoreError::Bad)?;
         } else {
             archive::extract(&download, &src, MAX_UNPACKED).map_err(StoreError::Bad)?;
             archive::extract_nested(&src).map_err(StoreError::Bad)?;

@@ -1703,50 +1703,72 @@ mod tests {
     }
 
     #[test]
-    fn a_package_with_twin_entries_is_refused() {
+    fn community_downloads_unpack_strictly() {
         use std::io::Write;
         let names = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        for twin in [["creatures/creatures.ini", "Creatures/creatures.INI"], ["creatures/creatures.ini", "creatures\\creatures.ini"], ["creatures/creatures.ini", "./creatures//creatures.ini"]] {
-            let mut l = names(&["loner-strike.json"]);
-            l.extend(names(&twin));
-            assert_eq!(crate::archive::package_twin(&l).as_deref(), Some("creatures/creatures.ini"), "{twin:?}");
+        let problem = |l: &[&str]| crate::archive::strict_problem(&names(l));
+        assert!(problem(&["loner-strike.json", "creatures/", "creatures/creatures.ini", "models/gb11/x.mdl", "maps/My Map 2.bsp"]).is_none());
+        // twins (case, back slashes, ./ and //, Unicode case and NFC/NFD forms) are all refused
+        for twin in [
+            ["creatures/creatures.ini", "Creatures/creatures.INI"],
+            ["creatures/creatures.ini", "creatures\\creatures.ini"],
+            ["creatures/creatures.ini", "./creatures//creatures.ini"],
+            ["models/\u{e9}.mdl", "models/\u{c9}.mdl"],
+            ["models/caf\u{e9}.mdl", "models/cafe\u{301}.mdl"],
+        ] {
+            assert!(problem(&twin).is_some(), "{twin:?}");
         }
-        assert_eq!(crate::archive::package_twin(&names(&["loner-strike.json", "creatures/", "creatures/creatures.ini"])), None);
-        assert_eq!(crate::archive::package_twin(&names(&["a.bsp", "A.bsp"])), None, "only Loner-Strike packages");
-        // nothing climbing out, from the root or a drive, in a package
-        for bad in ["a/../creatures/creatures.ini", "../x.mdl", "/etc/x", "\\\\srv\\x", "C:\\x.mdl", "models/a:b.mdl"] {
-            let l = names(&["loner-strike.json", "creatures/creatures.ini", bad]);
-            assert!(crate::archive::package_problem(&l).is_some_and(|w| w.contains("points outside")), "{bad}");
+        // names that could land somewhere else on some system
+        for bad in ["a/../x.mdl", "../x.mdl", "/etc/x", "C:\\x.mdl", "models/a:b.mdl", "models/x.mdl.", "models/x.mdl ", "models/PROGRA~1/x.mdl", "models/con.mdl", "models/LPT1", "sound/aux/x.wav", "models//x.mdl", "models/./x.mdl"] {
+            assert!(problem(&[bad]).is_some(), "{bad}");
         }
-        assert!(crate::archive::package_problem(&names(&["loner-strike.json", "creatures/creatures.ini", "models/jam/x.mdl"])).is_none());
-        assert!(crate::archive::package_problem(&names(&["a/../b.bsp"])).is_none(), "other downloads keep their own rules");
-        // unpacking one is refused
-        let dir = std::env::temp_dir().join(format!("ls-twin-{}", std::process::id()));
+        // markers: an archive carrying a file an installer acts on is checked the same way
+        assert!(crate::archive::has_marker(&names(&["x/loner-strike.json"])) && crate::archive::has_marker(&names(&["creatures/creatures.ini"])) && crate::archive::has_marker(&names(&["source/m.map"])));
+        assert!(!crate::archive::has_marker(&names(&["maps/x.bsp"])));
+
+        let dir = std::env::temp_dir().join(format!("ls-strict-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(dir.join("out")).unwrap();
-        let zp = dir.join("p.zip");
-        {
+        std::fs::create_dir_all(&dir).unwrap();
+        let zip_of = |name: &str, files: &[(&str, &str)]| {
+            let zp = dir.join(name);
             let mut z = zip::ZipWriter::new(std::fs::File::create(&zp).unwrap());
             let o = zip::write::SimpleFileOptions::default();
-            for (n, b) in [("loner-strike.json", "{}"), ("creatures/creatures.ini", "[gb11.x]\n"), ("CREATURES/creatures.ini", "[gb11.x]\nhp = 1\n")] {
-                z.start_file(n, o).unwrap();
+            for (n, b) in files {
+                z.start_file(*n, o).unwrap();
                 z.write_all(b.as_bytes()).unwrap();
             }
             z.finish().unwrap();
-        }
-        assert!(crate::archive::extract(&zp, &dir.join("out"), 1 << 20).unwrap_err().contains("two files that unpack as creatures/creatures.ini"));
-        // a Loner-Strike package that isn't a zip (a tarball here) is refused, its files cleared
+            zp
+        };
+        let fresh = |n: &str| {
+            let d = dir.join(n);
+            std::fs::create_dir_all(&d).unwrap();
+            d
+        };
+        // a twin is refused before anything unpacks: without loner-strike.json too (the marker)
+        let zp = zip_of("twin.zip", &[("creatures/creatures.ini", "[gb11.x]\n"), ("CREATURES/creatures.ini", "[gb11.x]\nhp = 1\n")]);
+        assert!(crate::archive::extract(&zp, &fresh("o1"), 1 << 20).unwrap_err().contains("two files"));
+        assert!(crate::archive::extract_strict(&zp, &fresh("o2"), 1 << 20).unwrap_err().contains("two files"));
+        // Community downloads: strict even with no marker, and never over a file already written
+        let zp = zip_of("plain.zip", &[("maps/x.bsp", "a"), ("maps/x.bsp.", "b")]);
+        assert!(crate::archive::extract_strict(&zp, &fresh("o3"), 1 << 20).is_err());
+        assert!(crate::archive::extract(&zp, &fresh("o4"), 1 << 20).is_ok(), "other downloads keep their own rules");
+        let zp = zip_of("ok.zip", &[("loner-strike.json", "{}"), ("creatures/creatures.ini", "[gb11.x]\n")]);
+        let o = fresh("o5");
+        crate::archive::extract_strict(&zp, &o, 1 << 20).unwrap();
+        assert!(o.join("creatures/creatures.ini").is_file());
+        // a tarball carrying a marker (no loner-strike.json) is refused and cleared; as a
+        // Community download, any tarball is
         if Path::new("/usr/bin/tar").exists() {
             let pk = dir.join("pk");
             std::fs::create_dir_all(pk.join("creatures")).unwrap();
-            std::fs::write(pk.join("loner-strike.json"), "{}").unwrap();
             std::fs::write(pk.join("creatures/creatures.ini"), "[gb11.x]\n").unwrap();
             let tp = dir.join("p.tar");
             assert!(std::process::Command::new("/usr/bin/tar").arg("-cf").arg(&tp).arg("-C").arg(&pk).arg(".").status().unwrap().success());
-            let out = dir.join("out2");
-            std::fs::create_dir_all(&out).unwrap();
+            let out = fresh("o6");
             assert!(crate::archive::extract(&tp, &out, 1 << 20).unwrap_err().contains("come as .zip"));
-            assert!(!out.join("loner-strike.json").exists());
+            assert!(!out.join("creatures/creatures.ini").exists());
+            assert!(crate::archive::extract_strict(&tp, &fresh("o7"), 1 << 20).unwrap_err().contains("come as .zip"));
         }
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -1472,6 +1472,8 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
     note.md5 = files.iter().find(|f| f["id"].as_i64() == Some(file)).map(|f| s(&f["md5"])).unwrap_or_default();
     note.section = section.into();
     note.maps = it.as_ref().and_then(|i| i.map.as_ref()).map(|m| vec![m.name.clone()]).unwrap_or_default();
+    // (a Community creation installs strictly: only a zip, every name checked, every file new)
+    crate::gamebanana::mark_strict(id);
     let job = game.store.start_section_install(section, id, file).map_err(|e| e.message())?;
     super::communitylib::note_after_job(game.store.clone(), job.clone(), note);
     Ok(json!({"ok": true, "job": job, "section": section, "map": it.and_then(|i| i.map).map(|m| m.name)}))
@@ -1525,8 +1527,8 @@ fn fetch_unpacked(file: i64, fname: &str, md5: &str, limit: u64, bare_map: bool)
         } else if crate::archive::is_archive(&low) {
             let a = tmp.join(format!("download{}", crate::archive::ext_of(&low)));
             std::fs::write(&a, &bytes).map_err(|e| e.to_string())?;
-            crate::archive::extract(&a, &src, 512 << 20)?;
-            crate::archive::extract_nested(&src)?;
+            // (a Community download: only a zip, every name checked strictly, nothing nested unpacked)
+            crate::archive::extract_strict(&a, &src, 512 << 20)?;
         } else {
             return Err("That file isn't something the app can install here (it wants a zip).".to_string());
         }
