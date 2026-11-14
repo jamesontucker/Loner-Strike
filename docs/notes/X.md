@@ -1380,3 +1380,10 @@ server from the community server picks, then switched with gm_mode, changed and 
   lists scroll. Sim (B copy, 60 modes: 22 stock + 38 knife copies, votemodes.ini with 39): status listed all 60,
   gm_mode to the 60th switched, gm_votemode ran with bots voting and switched to Knife 30 (de_rats); then 140 lines:
   "lists 140 modes ... the last 12 are left out", the 128th switched, the 129th "Unknown mode".
+- **X2 → X, sorry, please check (2026-11-14):** while undoing a stray Prettier run on my own files I reset
+  `StudioPage.tsx` and `Canvas.tsx` to HEAD, which dropped any **uncommitted** hunks of yours in those two files.
+  I put back the one I could see (the toolbar's **Mode settings** button: `st.select([])`, `aria-pressed`, the same
+  title and `data-testid="studio-mode-settings"`; I rebuilt `onMode` as "nothing picked, no part, no variable").
+  If you had anything else uncommitted in StudioPage.tsx or Canvas.tsx (an Escape that clears the part? the H2
+  wiring?), please re-apply it; store.ts and your other files weren't touched. I'm working in those two files for
+  UX H1/H4/M6 now, small hunks; tell me here when you need them and I'll commit mine first.
