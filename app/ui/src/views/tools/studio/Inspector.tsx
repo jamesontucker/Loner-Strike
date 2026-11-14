@@ -11,6 +11,7 @@ import { Requirements } from "./Requirements";
 import { insertItem, newerInLibrary } from "./library";
 import { useConfirm } from "../../../ui";
 import { askDelete } from "./DeleteDialog";
+import { useFreshFocus } from "./freshFocus";
 
 type PV = string | number | boolean;
 
@@ -32,9 +33,12 @@ function NumberField({ value, min, max, onChange }: { value: number; min?: numbe
 }
 
 /** A text box that only takes the characters `allowed` lets through (the app checks the same). */
-function TextField({ value, max, allowed, onChange }: { value: string; max: number; allowed: RegExp; onChange: (v: string) => void }) {
+function TextField({ value, max, allowed, onChange, fresh }: { value: string; max: number; allowed: RegExp; onChange: (v: string) => void; fresh?: string }) {
+  // (fresh: the id of what it names; just added, it takes the focus)
+  const ref = useFreshFocus<HTMLInputElement>(fresh);
   return (
     <input
+      ref={ref}
       className="st-field"
       value={value}
       maxLength={max}
@@ -180,16 +184,37 @@ function ModeSettings() {
       <ul className="st-vars-list">
         {list.map((st, k) => (
           <li key={k} className="st-var">
-            <div className="st-var-row">
-              <select className="st-field" value={st.cvar} onChange={(e) => put(list.map((x, j) => (j === k ? { ...x, cvar: e.target.value } : x)))} aria-label="Setting">
-                {choices.map(([c, l]) => (
-                  <option key={c} value={c}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-              <NumberField value={st.value} min={0} max={100000} onChange={(value) => put(list.map((x, j) => (j === k ? { ...x, value } : x)))} />
-            </div>
+            {(() => {
+              // a yes/no setting is a switch, a number one shows its unit; the whole name shows
+              // (UX review M9)
+              const label = choices.find(([c]) => c === st.cvar)?.[1] ?? st.cvar;
+              const yesNo = /\(1 on\b/.test(label);
+              const unit = /\(([^)]*)\)/.exec(label)?.[1] ?? "";
+              const set = (value: number) => put(list.map((x, j) => (j === k ? { ...x, value } : x)));
+              return (
+                <>
+                  <select className="st-field st-setting-pick" value={st.cvar} title={label} onChange={(e) => put(list.map((x, j) => (j === k ? { ...x, cvar: e.target.value } : x)))} aria-label="Setting">
+                    {choices.map(([c, l]) => (
+                      <option key={c} value={c}>
+                        {l.replace(/ \(1 on\)$/, "")}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="st-var-row">
+                    {yesNo ? (
+                      <label className="st-side-check">
+                        <input type="checkbox" role="switch" checked={st.value !== 0} onChange={(e) => set(e.target.checked ? 1 : 0)} aria-label={label.replace(/ \(.*\)$/, "")} /> {st.value !== 0 ? "On" : "Off"}
+                      </label>
+                    ) : (
+                      <>
+                        <NumberField value={st.value} min={0} max={100000} onChange={set} />
+                        {unit && <span className="st-muted">{unit}</span>}
+                      </>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
             <button type="button" className="btn small" onClick={() => put(list.filter((_, j) => j !== k))}>
               Remove
             </button>
@@ -219,7 +244,7 @@ function VariableDetails({ id }: { id: string }) {
       <div className="st-side-fields">
         <label className="st-side-field">
           <span>Name</span>
-          <TextField value={v.name} max={30} allowed={LABEL_CHARS} onChange={(name) => edit((g) => updateVariable(g, v.id, { name }))} />
+          <TextField value={v.name} max={30} allowed={LABEL_CHARS} fresh={v.id} onChange={(name) => edit((g) => updateVariable(g, v.id, { name }))} />
         </label>
         <label className="st-side-field">
           <span>Type</span>
@@ -346,7 +371,7 @@ function PartDetails({ id, embedded = false }: { id: string; embedded?: boolean 
       <div className="st-side-fields">
         <label className="st-side-field">
           <span>Name</span>
-          <TextField value={name} max={30} allowed={LABEL_CHARS} onChange={rename} />
+          <TextField value={name} max={30} allowed={LABEL_CHARS} fresh={id} onChange={rename} />
         </label>
         {f && (
           <label className="st-side-check">
@@ -619,6 +644,38 @@ function MapAdvice() {
   );
 }
 
+/** A Timeline's tab is open and nothing else is picked: what it is (UX review M8). */
+function TimelineDetails({ id }: { id: string }) {
+  const graph = useStudio((s) => s.graph)!;
+  const tl = graph.timelines?.find((t) => t.id === id);
+  if (!tl) return null;
+  const plays = graph.nodes.filter((n) => n.type === "timeline.play" && n.params.timeline === id).length;
+  const kinds: Record<string, string> = { float: "number", vector: "position", color: "color", event: "events" };
+  return (
+    <aside className="st-side" aria-label="Details">
+      <p className="st-side-kicker">Details · Timeline</p>
+      <h3 className="st-side-title">{tl.name}</h3>
+      <p className="st-side-help">
+        {tl.length} s{tl.loop ? ", looping" : ""}
+        {tl.autoplay ? ", plays at each round's start" : ""}. {plays ? `${plays} Timeline node${plays === 1 ? "" : "s"} play${plays === 1 ? "s" : ""} it.` : "No Timeline node plays it yet: find Timeline: " + tl.name + " in the node search."}
+      </p>
+      <h4 className="st-side-sub">Tracks</h4>
+      {tl.tracks.length ? (
+        <ul className="st-side-list">
+          {tl.tracks.map((t) => (
+            <li key={t.id}>
+              {t.name} <span className="st-muted">({kinds[t.kind] ?? t.kind}, {t.keys.length} key{t.keys.length === 1 ? "" : "s"})</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="st-muted">None yet: add one in the editor.</p>
+      )}
+      <p className="st-side-help">Change its name, length, tracks and keys in its tab.</p>
+    </aside>
+  );
+}
+
 export function Inspector() {
   const graph = useStudio((s) => s.graph);
   const selected = useStudio((s) => s.selected);
@@ -627,7 +684,10 @@ export function Inspector() {
   const problems = useStudio((s) => s.problems);
   const runs = useStudio((s) => s.debug.runs);
   const edit = useStudio((s) => s.edit);
+  const tab = useStudio((s) => s.tab);
   if (!graph) return null;
+  const tlTab = (graph.timelines ?? []).find((t) => t.id === tab);
+  if (tlTab && !selected.length && !part && !selectedVar) return <TimelineDetails id={tlTab.id} />;
   if (selectedVar && allVariables(graph).some((x) => x.id === selectedVar)) return <VariableDetails id={selectedVar} />;
   if (part?.startsWith("mk:") && !selected.length) {
     const id = part.slice(3);
@@ -794,7 +854,7 @@ function CustomEventDetails({ id }: { id: string }) {
       <p className="st-side-kicker">Details · Custom Event</p>
       <label className="st-side-label">
         Name
-        <TextField value={c.name} max={26} allowed={LABEL_CHARS} onChange={(name) => edit((g) => updateCustomEvent(g, id, { name }))} />
+        <TextField value={c.name} max={26} allowed={LABEL_CHARS} fresh={id} onChange={(name) => edit((g) => updateCustomEvent(g, id, { name }))} />
       </label>
       <p className="st-side-help">Add a Custom Event node for it on any event graph (what runs), and Call {c.name} or Set Timer by {c.name} where it should run. Find them in the node search.</p>
       <h4 className="st-side-sub">Inputs</h4>

@@ -47,6 +47,9 @@ type Studio = {
   tabs: string[];
   /** a Function, Macro, struct or enum shown in Details (picked in the left panel) */
   part: string | null;
+  /** a thing just added under My mode: its name field takes the focus, ready to type (UX review M5) */
+  renameNew: string | null;
+  setRenameNew: (id: string | null) => void;
   openTab: (id: string) => void;
   closeTab: (id: string) => void;
   moveTab: (id: string, before: string | null) => void;
@@ -127,11 +130,15 @@ export const useStudio = create<Studio>((set, get) => ({
   tab: "",
   tabs: [],
   part: null,
+  renameNew: null,
+  setRenameNew: (renameNew) => set({ renameNew }),
   openTab: (id) => {
     const { tabs, graph } = get();
     // (the extra event graphs always have their tabs: they aren't opened or closed)
     const eg = (graph?.eventGraphs ?? []).some((e) => e.id === id);
-    set({ tab: id, tabs: !id || eg || tabs.includes(id) ? tabs : [...tabs, id], selected: [] });
+    // (a Timeline's tab: Details shows that Timeline, not what was picked before: UX review M8)
+    const tl = (graph?.timelines ?? []).some((t) => t.id === id);
+    set({ tab: id, tabs: !id || eg || tabs.includes(id) ? tabs : [...tabs, id], selected: [], ...(tl ? { part: null, selectedVar: null } : {}) });
   },
   closeTab: (id) => {
     const { tabs, tab } = get();

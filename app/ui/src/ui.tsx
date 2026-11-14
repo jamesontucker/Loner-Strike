@@ -21,6 +21,21 @@ let ownBacks = 0;
 /** History moved to an entry over sheet `landed` (0: no sheet): every sheet opened after
  *  it closes (true), or there was none (false). Works from the entry alone, so a Back we
  *  caused ourselves (a sheet taking its entry off again) closes nothing extra. */
+/** Waits until a dialog that just closed has taken its history entry off (its Back has
+ *  landed), or a moment: open a new tab or page after that, or the late Back (WebKit) is
+ *  taken for a Back from it to the page under the dialog. */
+export function afterSheetBack(): Promise<void> {
+  return new Promise((done) => {
+    let t = 0;
+    const end = () => {
+      window.removeEventListener("popstate", end);
+      clearTimeout(t);
+      setTimeout(done, 0);
+    };
+    window.addEventListener("popstate", end);
+    t = window.setTimeout(end, 300);
+  });
+}
 export function closeSheetsAbove(landed: number) {
   if (ownBacks > 0) {
     ownBacks--;

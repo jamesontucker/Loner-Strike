@@ -167,7 +167,8 @@ test("polish: drops with Ctrl and Alt, quick add, Promote to Variable, align, ve
   let n = await nodes();
   await drop(VAR, "v1", { ctrl: true });
   await expect.poll(nodes).toBe(n + 1);
-  await expect(page.locator(".react-flow__node").filter({ hasText: "Get Kills Made" })).toHaveCount(1);
+  // (a whole-mode variable's Get is a pill with just its name, UX review M4)
+  await expect(page.locator(".st-node-pill").filter({ hasText: "Kills Made" })).toHaveCount(1);
   await drop(VAR, "v1", { alt: true }, { x: 200, y: 260 });
   await expect(page.locator(".react-flow__node").filter({ hasText: "Set Kills Made" })).toHaveCount(1);
   // no key: a choice

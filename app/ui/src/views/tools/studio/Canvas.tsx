@@ -81,6 +81,10 @@ function settleViewport(rf: ReturnType<typeof useReactFlow>, box: HTMLDivElement
 }
 
 /** What the panels around the canvas can ask of it. */
+/** What was last copied here: pasted when the system clipboard can't be read (WebKit, and the
+ *  Mac app's web view, can refuse it outside a paste event). */
+let lastCopied = "";
+
 export type CanvasApi = {
   focus: (id: string) => void;
   /** the node search at the middle of the view, maybe only one category */
@@ -253,7 +257,8 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       return node;
     };
     for (const c of view.comments) out.push(get(c.id, c, sel.has(c.id), () => ({ id: c.id, type: "comment", position: c.pos, data: NO_DATA, selected: sel.has(c.id), zIndex: -1, dragHandle: ".st-comment-head", style: { width: c.size.w, height: c.size.h } })));
-    for (const n of view.nodes) out.push(get(n.id, n, sel.has(n.id), () => ({ id: n.id, type: nodeDef(n.type)?.reroute ? "reroute" : "logic", position: n.pos, data: NO_DATA, selected: sel.has(n.id) })));
+    // (each node named for screen readers: "Give Weapon node", UX review L8)
+    for (const n of view.nodes) out.push(get(n.id, n, sel.has(n.id), () => ({ id: n.id, type: nodeDef(n.type)?.reroute ? "reroute" : "logic", position: n.pos, data: NO_DATA, selected: sel.has(n.id), ariaLabel: `${nodeDef(n.type)?.title ?? n.type} node` })));
     for (const id of [...cache.keys()]) if (!keep.has(id)) cache.delete(id);
     return out;
   }, [view.comments, view.nodes, sel]);
@@ -385,8 +390,10 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       const at = palette;
       setPalette(null);
       if (!at) return;
+      let placed = "";
       edit((g) => {
         const { graph: g2, id } = addNode(g, item.def.type, at.wire?.dir === "in" ? { x: at.flow.x - 220, y: at.flow.y - 20 } : { x: at.flow.x, y: at.flow.y - 20 }, home, item.params);
+        placed = id;
         if (!at.wire) return g2;
         const made = g2.nodes.find((n) => n.id === id)!;
         const pins = pinsOf(g2, made);
@@ -398,8 +405,10 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         const r = at.wire.dir === "out" ? connect(g2, { node: at.wire.node, pin: at.wire.pin }, { node: id, pin: pin.id }) : connect(g2, { node: id, pin: pin.id }, { node: at.wire.node, pin: at.wire.pin });
         return "error" in r ? g2 : r.graph;
       });
+      // (picked, so Details shows its help and settings: UX review M5)
+      if (placed) select([placed]);
     },
-    [palette, edit, home],
+    [palette, edit, home, select],
   );
 
   const collapseSelected = useCallback(
@@ -537,24 +546,26 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         const text = g && copy(g, useStudio.getState().selected);
         if (!text) return;
         e.preventDefault();
+        lastCopied = text;
         try {
           await navigator.clipboard.writeText(text);
-          if (k === "x") removeSelected();
         } catch {
-          toast("Couldn't use the clipboard.", true);
+          /* kept here: pasting in the Studio still works */
         }
+        if (k === "x") removeSelected();
       } else if (mod && k === "v") {
         e.preventDefault();
         let text = "";
         try {
           text = await navigator.clipboard.readText();
         } catch {
-          toast("Couldn't read the clipboard.", true);
-          return;
+          text = "";
         }
         const g = useStudio.getState().graph;
         if (!g) return;
-        const r = paste(g, text, rf.screenToFlowPosition(mouse.current), home);
+        const at = rf.screenToFlowPosition(mouse.current);
+        // (the system clipboard first, so nodes copied in another mode or window come too)
+        const r = (text && paste(g, text, at, home)) || (lastCopied ? paste(g, lastCopied, at, home) : null);
         if (!r) toast("The clipboard doesn't hold nodes.", true);
         else {
           edit(() => r.graph);
@@ -763,6 +774,16 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
                   toast(r.message);
                 },
               },
+              "-",
+              // as in Unreal's pin menu (UX review L4)
+              ...(() => {
+                const wires = st.graph!.edges.filter((w) => (dir === "in" ? w.to.node === n.id && w.to.pin === pinId : w.from.node === n.id && w.from.pin === pinId));
+                const others = [...new Set(wires.map((w) => (dir === "in" ? w.from.node : w.to.node)))];
+                return [
+                  { label: wires.length > 1 ? `Break ${wires.length} links` : "Break link", disabled: !wires.length, help: wires.length ? "Takes this pin's wires off" : "Nothing is wired here", danger: true, run: () => edit((g) => remove(g, wires.map((w) => w.id))) },
+                  { label: others.length > 1 ? `Select the ${others.length} linked nodes` : "Select the linked node", disabled: !others.length, run: () => select(others) },
+                ];
+              })(),
             ]);
             return;
           }
@@ -818,7 +839,13 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
             h.used = true;
             const q = QUICK_ADD[h.key];
             const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
-            edit((g) => addNode(g, q.type, { x: p.x - 20, y: p.y - 20 }, useStudio.getState().tab || undefined, q.params).graph);
+            let placed = "";
+            edit((g) => {
+              const r = addNode(g, q.type, { x: p.x - 20, y: p.y - 20 }, useStudio.getState().tab || undefined, q.params);
+              placed = r.id;
+              return r.graph;
+            });
+            if (placed) select([placed]);
             return;
           }
           if (Date.now() - paletteAt.current > 400) setPalette(null);

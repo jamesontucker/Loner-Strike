@@ -11,13 +11,15 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { useStudio } from "./store";
 import { newTrack, removeTimeline, updateTimeline, type GKey, type GTimeline, type GTrack } from "./graphOps";
 import { useContextMenu } from "./ContextMenu";
+import { useFreshFocus } from "./freshFocus";
+import { LABEL_CHARS } from "./schema";
 import { useConfirm } from "../../../ui";
 import { EASES, num, sortKeys as sorted, tangent, valueAt, type Ease } from "./curves";
 
 export { valueAt };
 
 const HEAD = 170;
-const LANE: Record<GTrack["kind"], number> = { float: 96, vector: 96, color: 44, event: 36 };
+const LANE: Record<GTrack["kind"], number> = { float: 140, vector: 140, color: 44, event: 36 };
 const COMP = ["#e05a4f", "#5fbf6a", "#5a8fe0"];
 const KIND_NAME: Record<GTrack["kind"], string> = { float: "Number", vector: "Position", color: "Color", event: "Event" };
 
@@ -46,9 +48,13 @@ export function TimelineEditor({ id }: { id: string }) {
   const [width, setWidth] = useState(800);
   const [view, setView] = useState<{ pps: number; at: number } | null>(null);
   const [sel, setSel] = useState<Sel>(null);
+  // lane heights a drag on a lane's bottom edge set (this editor only, not saved)
+  const [heights, setHeights] = useState<Record<string, number>>({});
+  const laneH = (tr: GTrack) => heights[tr.id] ?? LANE[tr.kind];
   const laneW = Math.max(200, width - HEAD - 16);
   const length = tl ? (tl.useLastKey ? Math.max(0.1, ...tl.tracks.flatMap((t) => t.keys.map((k) => k.t))) : tl.length) : 1;
-  const fit = useCallback(() => setView({ pps: laneW / Math.max(tl?.length ?? 1, 0.1), at: 0 }), [laneW, tl?.length]);
+  // (null: fitted to the length, following the editor's width until zoomed or panned: UX review M8)
+  const fit = useCallback(() => setView(null), []);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -57,13 +63,11 @@ export function TimelineEditor({ id }: { id: string }) {
     setWidth(el.clientWidth);
     return () => ro.disconnect();
   }, []);
-  useEffect(() => {
-    if (!view && width > 0) fit();
-  }, [view, width, fit]);
   const v = view ?? { pps: laneW / Math.max(tl?.length ?? 1, 0.1), at: 0 };
   const xOf = (t: number) => (t - v.at) * v.pps;
   const tOf = (x: number) => x / v.pps + v.at;
   const set = (f: (t: GTimeline) => GTimeline) => edit((g) => updateTimeline(g, id, f));
+  const nameRef = useFreshFocus<HTMLInputElement>(id);
   const setTrack = (tid: string, f: (t: GTrack) => GTrack) => set((t) => ({ ...t, tracks: t.tracks.map((x) => (x.id === tid ? f(x) : x)) }));
   const ticks = useMemo(() => {
     const step = [0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60].find((s) => s * v.pps >= 60) ?? 60;
@@ -92,7 +96,7 @@ export function TimelineEditor({ id }: { id: string }) {
     // (the lane's box, whatever was pressed in it)
     const lane = (e.currentTarget as Element).closest("svg.st-tl-lane") ?? (e.currentTarget as Element);
     const svg = lane.getBoundingClientRect();
-    const h = LANE[tr.kind];
+    const h = laneH(tr);
     const [lo, hi] = range(tr);
     const yToV = (y: number) => hi - (y / h) * (hi - lo);
     const start = { x: e.clientX, y: e.clientY };
@@ -167,7 +171,7 @@ export function TimelineEditor({ id }: { id: string }) {
     ]);
 
   const curve = (tr: GTrack, c: number | undefined) => {
-    const h = LANE[tr.kind];
+    const h = laneH(tr);
     const [lo, hi] = range(tr);
     const y = (val: number) => ((hi - val) / (hi - lo)) * h;
     const pts: string[] = [];
@@ -188,7 +192,7 @@ export function TimelineEditor({ id }: { id: string }) {
     if (!k || si < 0) return null;
     const custom = k.ease === "custom" || (si > 0 && keys[si - 1].ease === "custom");
     if (!custom) return null;
-    const h = LANE[tr.kind];
+    const h = laneH(tr);
     const [lo, hi] = range(tr);
     const y = (val: number) => ((hi - val) / (hi - lo)) * h;
     const L = 40;
@@ -282,6 +286,22 @@ export function TimelineEditor({ id }: { id: string }) {
       {cm.menu}
       <div className="st-tl-bar">
         <label>
+          Name{" "}
+          <input
+            ref={nameRef}
+            className="st-field"
+            key={tl.name}
+            defaultValue={tl.name}
+            maxLength={30}
+            aria-label="Timeline name"
+            onBlur={(e) => {
+              const name = [...e.target.value].filter((c) => LABEL_CHARS.test(c)).join("").trim().slice(0, 30);
+              if (name && name !== tl.name) set((t) => ({ ...t, name }));
+            }}
+            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          />
+        </label>
+        <label>
           Length (s){" "}
           <input className="st-field st-field-num" type="number" min={0.1} max={600} step={0.1} value={tl.length} onChange={(e) => set((t) => ({ ...t, length: Math.min(600, Math.max(0.1, Number(e.target.value) || 0.1)) }))} aria-label="Length" />
         </label>
@@ -327,6 +347,7 @@ export function TimelineEditor({ id }: { id: string }) {
           Remove
         </button>
       </div>
+      {!(selKey && selTrack && sel) && <div className="st-tl-key st-tl-key-hint st-muted">Click a lane to add a key; click a key to change it (right-click: how it goes to the next).</div>}
       {selKey && selTrack && sel && (
         <div className="st-tl-key" data-testid="timeline-key">
           <span>
@@ -397,7 +418,7 @@ export function TimelineEditor({ id }: { id: string }) {
           {ticks.map((t) => (
             <g key={t} transform={`translate(${xOf(t)},0)`}>
               <line y1={12} y2={20} stroke="var(--line)" />
-              <text y={10} fontSize={10} fill="var(--bone-dim, #9aa)" textAnchor="middle">
+              <text y={10} fontSize={10} fill="var(--bone-dim, #9aa)" textAnchor={xOf(t) < 12 ? "start" : xOf(t) > laneW - 12 ? "end" : "middle"}>
                 {t}s
               </text>
             </g>
@@ -408,7 +429,7 @@ export function TimelineEditor({ id }: { id: string }) {
       <div className="st-tl-tracks">
         {tl.tracks.length === 0 && <p className="st-muted st-tl-empty">Add a track: a number (a speed, a height), a position, a color, or events at set moments.</p>}
         {tl.tracks.map((tr) => {
-          const h = LANE[tr.kind];
+          const h = laneH(tr);
           return (
             <div key={tr.id} className="st-tl-track" data-track={tr.id}>
               <div className="st-tl-head" style={{ width: HEAD, height: h }}>
@@ -426,8 +447,8 @@ export function TimelineEditor({ id }: { id: string }) {
                     </>
                   )}
                 </span>
-                <button type="button" className="st-tl-x" aria-label={`Remove track ${tr.name}`} onClick={() => (set((t) => ({ ...t, tracks: t.tracks.filter((x) => x.id !== tr.id) })), setSel(null))}>
-                  ×
+                <button type="button" className="st-tl-x" aria-label={`Remove track ${tr.name}`} title="Remove this track (Undo brings it back)" onClick={() => (set((t) => ({ ...t, tracks: t.tracks.filter((x) => x.id !== tr.id) })), setSel(null))}>
+                  Remove
                 </button>
               </div>
               <svg className="st-tl-lane" width={laneW} height={h} onPointerDown={(e) => press(e, tr, null)} aria-label={`${tr.name} lane`}>
@@ -436,6 +457,19 @@ export function TimelineEditor({ id }: { id: string }) {
                   <line key={t} x1={xOf(t)} x2={xOf(t)} y1={0} y2={h} stroke="var(--line)" strokeOpacity={0.35} />
                 ))}
                 <rect x={xOf(length)} y={0} width={laneW} height={h} fill="rgba(0,0,0,.25)" pointerEvents="none" />
+                {comps(tr).length > 0 &&
+                  (() => {
+                    // the value axis: what the lane's top and bottom are (UX review M8)
+                    const [lo, hi] = range(tr);
+                    const f = (x: number) => (Math.abs(x) >= 100 ? x.toFixed(0) : x.toFixed(1));
+                    return (
+                      <g pointerEvents="none" fontSize={10} fill="var(--bone-dim, #9aa)">
+                        <text x={3} y={11}>{f(hi)}</text>
+                        <text x={3} y={h - 3}>{f(lo)}</text>
+                        {lo < 0 && hi > 0 && <line x1={0} x2={laneW} y1={(hi / (hi - lo)) * h} y2={(hi / (hi - lo)) * h} stroke="var(--line)" strokeDasharray="3 3" />}
+                      </g>
+                    );
+                  })()}
                 {tr.kind === "color" && (
                   <>
                     <defs>
@@ -476,6 +510,20 @@ export function TimelineEditor({ id }: { id: string }) {
                   ));
                 })}
               </svg>
+              <div
+                className="st-tl-resize"
+                title="Drag to make the lane taller or shorter"
+                aria-hidden="true"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  const y0 = e.clientY;
+                  const h0 = h;
+                  const move = (m: PointerEvent) => setHeights((x) => ({ ...x, [tr.id]: Math.min(480, Math.max(30, h0 + m.clientY - y0)) }));
+                  const up = () => (window.removeEventListener("pointermove", move), window.removeEventListener("pointerup", up));
+                  window.addEventListener("pointermove", move);
+                  window.addEventListener("pointerup", up);
+                }}
+              />
             </div>
           );
         })}

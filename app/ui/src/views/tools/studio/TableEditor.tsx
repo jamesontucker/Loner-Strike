@@ -7,6 +7,7 @@ import { Sheet, useConfirm } from "../../../ui";
 import { useStudio } from "./store";
 import { COLUMN_TYPES, LIMITS, WEAPONS, addColumn, blank, importCsv, readCell, removeColumn, removeTable, retypeColumn, tableProblems, toCsv, updateTable, type Cell, type DataTable, type TableColumn } from "./tables";
 import { LABEL_CHARS } from "./schema";
+import { useFreshFocus } from "./freshFocus";
 
 const useOpen = create<{ id: string | null; set: (id: string | null) => void }>((set) => ({ id: null, set: (id) => set({ id }) }));
 export const openTableEditor = (id: string) => useOpen.getState().set(id);
@@ -64,6 +65,7 @@ export function TableEditorHost({ toast }: { toast: (m: string, bad?: boolean) =
   const [csv, setCsv] = useState<string | null>(null);
   const [replace, setReplace] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
+  const nameRef = useFreshFocus<HTMLInputElement>(id ?? undefined);
   const ask = useConfirm();
   useEffect(() => setCsv(null), [id]);
   const t = graph?.dataTables?.find((x) => x.id === id);
@@ -85,6 +87,7 @@ export function TableEditorHost({ toast }: { toast: (m: string, bad?: boolean) =
           <label>
             Name{" "}
             <input
+              ref={nameRef}
               className="st-field"
               key={t.name}
               defaultValue={t.name}

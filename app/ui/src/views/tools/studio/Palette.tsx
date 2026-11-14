@@ -128,7 +128,9 @@ export function Palette({
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
-  const [cur, setCur] = useState(0);
+  // (null: the default place, worked out with the rows, so Enter right after typing places the
+  // best match: an effect would come a frame late)
+  const [curSet, setCur] = useState<number | null>(null);
   const [context, setContext] = useState(true);
   const [favs, setFavs] = useState(() => loadList(FAVS));
   const recent = useMemo(() => loadList(RECENT), []);
@@ -196,7 +198,7 @@ export function Palette({
   }, [list, favs, recent, opened, searching, at.only]);
   const box = useRef<HTMLDivElement>(null);
   // searching: the cursor on the best match (Enter places it), not its folder
-  useEffect(() => setCur(q.trim() ? Math.max(0, rows.findIndex((r) => r.kind === "item")) : 0), [q, context]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cur = curSet ?? (searching ? Math.max(0, rows.findIndex((r) => r.kind === "item")) : 0);
   useEffect(() => {
     const away = (e: PointerEvent) => {
       if (box.current && !box.current.contains(e.target as Node)) onClose();
@@ -227,17 +229,17 @@ export function Palette({
           autoFocus
           placeholder={wire ? `Nodes for this ${typeLabel(graph, wire.type)} wire…` : "Search all actions…"}
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => (setQ(e.target.value), setCur(null))}
           onKeyDown={(e) => {
             e.stopPropagation();
             const row = rows[cur];
             if (e.key === "Escape") onClose();
             else if (e.key === "ArrowDown") {
               e.preventDefault();
-              setCur((c) => Math.min(c + 1, rows.length - 1));
+              setCur(Math.min(cur + 1, rows.length - 1));
             } else if (e.key === "ArrowUp") {
               e.preventDefault();
-              setCur((c) => Math.max(c - 1, 0));
+              setCur(Math.max(cur - 1, 0));
             } else if (e.key === "ArrowRight" && row?.kind === "folder" && !row.open) {
               e.preventDefault();
               toggle(row.id, true);
@@ -258,7 +260,7 @@ export function Palette({
         />
         {at.wire && (
           <label className="st-palette-context" title="Only nodes that can attach to the wire you're dragging">
-            <input type="checkbox" checked={context} onChange={(e) => setContext(e.target.checked)} /> Context Sensitive
+            <input type="checkbox" checked={context} onChange={(e) => (setContext(e.target.checked), setCur(null))} /> Context Sensitive
           </label>
         )}
       </div>

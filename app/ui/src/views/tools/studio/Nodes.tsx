@@ -63,6 +63,7 @@ function Pin({ pin, side, color, wired, problem, watch }: { pin: PinDef; side: "
         type={side === "in" ? "target" : "source"}
         position={side === "in" ? Position.Left : Position.Right}
         id={pin.id}
+        aria-label={`${pin.label || (pin.type === "exec" ? "Flow" : "Value")} ${side === "in" ? "input" : "output"}`}
         className={`st-handle ${exec ? "st-handle-exec" : "st-handle-data"}${shape ? ` st-handle-${shape}` : ""}${wired ? " wired" : ""}`}
         style={exec ? undefined : { borderColor: color, background: wired ? color : undefined }}
       />
@@ -133,6 +134,21 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
     run?.error ? "ran-error" : failed ? "ran-false" : "",
   ].join(" ");
   const rows = Math.max(pins.inputs.length, pins.outputs.length);
+  // a whole-mode variable's Get: a small pill (its name and the value), as in Unreal (UX review M4)
+  if (n.type === "var.get" && !pins.inputs.length && pins.outputs.length === 1 && !run) {
+    const op = pins.outputs[0];
+    return (
+      <div className={`${cls} st-node-pill`}>
+        <span className="st-node-title">{shape.title.replace(/^Get /, "")}</span>
+        {mine.length > 0 && (
+          <span className={`st-node-badge ${errors.length ? "err" : "warn"}`} title={mine.map((p) => p.message).join("\n")}>
+            {errors.length ? "!" : "?"}
+          </span>
+        )}
+        <Pin pin={{ ...op, label: "" }} side="out" color={typeColor(op.type)} wired={wiredOut(op.id)} watch={watchOut(op)} />
+      </div>
+    );
+  }
   return (
     <div className={cls}>
       {run && playing && <div key={run.at} className="st-flash" />}

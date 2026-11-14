@@ -258,8 +258,8 @@ test("our right-click menus: sidebar items, nodes; delete; dismiss", async ({ pa
   await sq.click({ button: "right" });
   await expect(menu).toBeVisible();
   expect(await native()).toBe(false);
-  await expect(menu.getByRole("menuitem")).toHaveText([/Rename/, /Duplicate/, /Find uses/, /Save to my library/, /Delete/]);
-  await expect(menu.getByRole("menuitem", { name: /Save to my library/ })).toHaveAttribute("aria-disabled", "true");
+  // (no "Save to my library" on a variable: it only shows where it applies, UX review L9)
+  await expect(menu.getByRole("menuitem")).toHaveText([/Rename/, /Duplicate/, /Find uses/, /Delete/]);
   await expect(menu.getByRole("menuitem").first()).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(menu.getByRole("menuitem", { name: "Duplicate" })).toBeFocused();
@@ -602,6 +602,7 @@ test("several event graphs: add, copy and paste across them keeping inner wires,
   for (const t of await list.locator("li.error").allTextContents()) expect(t).toContain("needs something wired into Player");
   // the Event Graph tab still has its own nodes
   await tabs(page).getByRole("tab", { name: "Event Graph" }).click();
+  await fitAll(page);
   await expect(node(page, "give_m4")).toBeVisible();
 });
 
@@ -626,7 +627,8 @@ test("custom events: add one with an input, its Custom Event and Call nodes get 
   await expect(pal.getByRole("button", { name: /^Call Gate Opened/ })).toBeVisible();
   await expect(pal.getByRole("button", { name: /^Set Timer by Gate Opened/ })).toHaveCount(0);
   await pal.getByRole("button", { name: /^Custom Event: Gate Opened/ }).click();
-  const ev = page.locator(".react-flow__node").filter({ hasText: "Custom Event: Gate Opened" });
+  // (adding the Custom Event already put one down, UX review M7: this is the second)
+  const ev = page.locator(".react-flow__node").filter({ hasText: "Custom Event: Gate Opened" }).last();
   await expect(ev).toBeVisible();
   await expect(ev).toContainText("Input 1");
   await page.keyboard.press("ControlOrMeta+s");

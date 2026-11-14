@@ -15,7 +15,7 @@ import { isMenuKey, useContextMenu, type MenuItem } from "./ContextMenu";
 import { deletePart, duplicatePart, KIND_NAME, partName, partOf, renamePart, usesOf, whereText, type PartRef } from "./parts";
 import { typeLabel } from "./pins";
 import { saveSnippet, deleteSnippet } from "./snippets";
-import { useAskText, useConfirm } from "../../../ui";
+import { afterSheetBack, useAskText, useConfirm } from "../../../ui";
 import { askDelete } from "./DeleteDialog";
 import { addTable } from "./tables";
 import { dragHint } from "./dropOps";
@@ -336,7 +336,8 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
       { label: "Rename…", run: () => void rename(p) },
       { label: "Duplicate", run: () => duplicate(p) },
       { label: "Find uses", run: () => findUses(p) },
-      { label: "Save to my library…", disabled: !libOk, help: libOk ? undefined : "Functions, Macros, structs and enums", run: () => setSaving(p.id) },
+      // (only where it applies: UX review L9)
+      ...(libOk ? [{ label: "Save to my library…", run: () => setSaving(p.id) }] : []),
       "-",
       { label: "Delete…", keys: "Del", danger: true, run: () => void del(p) },
     ];
@@ -448,8 +449,10 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
           const clean = [...name.trim()].filter((c) => /[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$]/u.test(c)).join("").slice(0, 30);
           const r = addEventGraph(useStudio.getState().graph ?? graph, clean || undefined);
           edit(() => r.graph);
-          // (after the question's dialog has closed and handed focus back)
-          setTimeout(() => openTab(r.id), 0);
+          // (once the question's dialog has taken its history entry off: in WebKit that Back
+          // came after the new tab and was taken for a Back to the Event Graph)
+          await afterSheetBack();
+          openTab(r.id);
         }}
         addTitle="Add an event graph (to organize: Rounds, Shop, Bots...)"
       >
@@ -497,6 +500,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
           const r = addFunction(graph);
           edit(() => r.graph);
           selectPart(r.id);
+          useStudio.getState().setRenameNew(r.id);
           openTab(r.id);
         }}
         addTitle="Add a Function (its own graph)"
@@ -526,6 +530,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
             const r = addLocal(graph, tabFn.id, { name: `Local ${(tabFn.locals?.length ?? 0) + 1}`, type: "number", scope: "mode", default: 0 });
             edit(() => r.graph);
             selectVar(r.id);
+            useStudio.getState().setRenameNew(r.id);
           }}
           addTitle="Add a local variable"
         >
@@ -540,6 +545,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
           const r = addVariable(graph, { name: `Variable ${graph.variables.length + 1}`, type: "number", scope: "mode", default: 0 });
           edit(() => r.graph);
           selectVar(r.id);
+          useStudio.getState().setRenameNew(r.id);
         }}
         addTitle="Add a variable"
       >
@@ -552,7 +558,10 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
         onAdd={() => {
           const r = addCustomEvent(graph);
           edit(() => r.graph);
+          // its Custom Event node in the middle of the view, as in Unreal (UX review M7)
+          api?.addAtCenter("event.custom", { event: r.id });
           selectPart(r.id);
+          useStudio.getState().setRenameNew(r.id);
         }}
         addTitle="Add a Custom Event (call it from anywhere, a timer or the map)"
         open={(graph.customEvents ?? []).length > 0}
@@ -585,6 +594,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
           const r = addMacro(graph);
           edit(() => r.graph);
           selectPart(r.id);
+          useStudio.getState().setRenameNew(r.id);
           openTab(r.id);
         }}
         addTitle="Add a Macro"
@@ -599,6 +609,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
         onAdd={() => {
           const r = addTimeline(graph);
           edit(() => r.graph);
+          useStudio.getState().setRenameNew(r.id);
           setTimeout(() => openTab(r.id), 0);
         }}
         addTitle="Add a Timeline (values over time, events at set moments)"
@@ -617,6 +628,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
         count={(graph.dataTables ?? []).length}
         onAdd={() => {
           const r = addTable(graph);
+          useStudio.getState().setRenameNew(r.id);
           edit(() => r.graph);
           setTimeout(() => openTableEditor(r.id), 0);
         }}
@@ -637,6 +649,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
         onAdd={() => {
           const r = addStruct(graph);
           edit(() => r.graph);
+          useStudio.getState().setRenameNew(r.id);
           selectPart(r.id);
         }}
         addTitle="Add a struct"
@@ -651,6 +664,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
         onAdd={() => {
           const r = addEnum(graph);
           edit(() => r.graph);
+          useStudio.getState().setRenameNew(r.id);
           selectPart(r.id);
         }}
         addTitle="Add an enum"

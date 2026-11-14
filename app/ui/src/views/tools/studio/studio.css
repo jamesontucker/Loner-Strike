@@ -377,10 +377,24 @@
 .st-tl-key { background: color-mix(in srgb, var(--signal) 8%, transparent); }
 .st-tl-ruler { padding-top: 2px; }
 .st-tl-tracks { flex: 1 1 0; overflow-y: auto; }
-.st-tl-track { display: flex; border-bottom: 1px solid var(--line); }
+.st-tl-track { display: flex; border-bottom: 1px solid var(--line); position: relative; }
+/* (UX review M8) the key row keeps its space; a lane's bottom edge resizes it */
+.st-tl-key { height: 44px; box-sizing: border-box; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; }
+.st-tl-key-hint { font-size: 12px; }
+.st-tl-key > span, .st-tl-key label { white-space: nowrap; flex: none; }
+.st-tl-resize { position: absolute; left: 0; right: 0; bottom: -3px; height: 6px; cursor: ns-resize; z-index: 1; }
+/* a game setting's whole name (UX review M9) */
+.st-setting-pick { width: 100%; }
+/* the breakpoint dot: on hover, on a picked node, or when set (UX review L5) */
+.st-node .st-bp:not(.on) { opacity: 0; transition: opacity .12s; }
+.st-node:hover .st-bp, .st-node.selected .st-bp, .st-node .st-bp:focus-visible { opacity: 1; }
+/* a whole-mode variable's Get: a pill (UX review M4) */
+.st-node.st-node-pill { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 4px 4px 10px; border-radius: 14px; }
+.st-node-pill .st-node-title { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.st-node-pill .st-pin { margin-left: auto; }
 .st-tl-head { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 4px 8px; position: relative; font-size: 12px; box-sizing: border-box; }
 .st-tl-head .st-field { width: 100%; padding: 2px 4px; font-size: 12px; }
-.st-tl-x { position: absolute; top: 2px; right: 2px; background: none; border: 0; color: var(--bone-dim, #9aa); cursor: pointer; }
+.st-tl-x { align-self: flex-start; padding: 0; background: none; border: 0; color: var(--bone-dim, #9aa); cursor: pointer; font-size: 11px; text-decoration: underline; }
 .st-tl-lane { flex: none; cursor: crosshair; touch-action: none; }
 .st-tl-k { fill: var(--panel, #22262b); stroke: var(--signal, #e8c35a); stroke-width: 2; cursor: grab; }
 .st-tl-k.ease { stroke-dasharray: 2 1; }

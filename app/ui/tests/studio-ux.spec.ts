@@ -5,6 +5,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const H = { "X-Panel": "1" };
+// UX_SHOTS=<folder>: screenshots of what each test checks
+const shot = async (page: Page, name: string) => {
+  if (process.env.UX_SHOTS) await page.screenshot({ path: `${process.env.UX_SHOTS}/${name}.png` });
+};
 const ID = "pw_ux";
 
 async function seed(page: Page, blank = false) {
@@ -95,10 +99,120 @@ test("H7: an empty Event Graph shows where to start, and the Quick check says no
   const card = page.getByTestId("studio-empty");
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText(/Nothing happens yet: add an event/)).toBeVisible();
+  await shot(page, "h7-empty");
   await card.getByRole("button", { name: "Round Started" }).click();
   await expect(card).toHaveCount(0);
   await expect(page.locator(".react-flow__node").filter({ hasText: "Round Started" })).toHaveCount(1);
   // just placed: picked, so Details shows it
   await expect(page.locator(".react-flow__node.selected")).toHaveCount(1);
   await expect(page.getByText(/none of the events has anything wired after it/).first()).toBeVisible();
+});
+
+test("M5, M7, L9: new things are picked and named at once; a Custom Event puts its node down; no Save to library on a variable", async ({ page }) => {
+  await seed(page);
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await expect(page.getByRole("heading", { name: "This mode" })).toBeVisible({ timeout: 20_000 });
+  // a node from the search is picked: Details shows it
+  const pb = (await page.locator(".react-flow__pane").boundingBox())!;
+  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 60, y: pb.height - 60 } });
+  const pal = page.getByRole("dialog", { name: "Add a node" });
+  await pal.getByRole("textbox").fill("give money");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(1);
+  await expect(page.locator(".react-flow__node.selected")).toContainText("Give Money");
+  // a new variable: its name field has the focus, all selected
+  await page.getByRole("button", { name: "Add a variable" }).click();
+  const focused = page.locator("input:focus");
+  await expect(focused).toHaveValue(/^Variable \d+$/);
+  await page.keyboard.type("Lives");
+  await expect(page.locator(".st-mb-section").getByText("Lives", { exact: true })).toBeVisible();
+  // its menu has no "Save to my library" (it can't be saved there)
+  await page.locator(".st-mb-section").getByText("Lives", { exact: true }).click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: /Rename/ })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Save to my library/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  // a Custom Event: its node on the graph, its name ready
+  const before = await page.locator(".react-flow__node").filter({ hasText: "Custom Event" }).count();
+  await page.getByRole("button", { name: /^Add a Custom Event/ }).click();
+  await expect(page.locator("input:focus")).toBeVisible();
+  await expect(page.locator(".react-flow__node").filter({ hasText: "Custom Event" })).toHaveCount(before + 1);
+});
+
+test("M4, L4, L5, L8: a mode variable's Get is a pill without Player and Team; pin menu; breakpoint dot on hover; labels", async ({ page }) => {
+  await seed(page);
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await expect(page.getByRole("heading", { name: "This mode" })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole("button", { name: "Add a variable" }).click();
+  await page.keyboard.type("Score");
+  // drop a Get (Ctrl drag) onto empty canvas
+  const item = page.locator(".st-mb-section").getByText("Score", { exact: true });
+  const pb = (await page.locator(".react-flow__pane").boundingBox())!;
+  await page.keyboard.down(process.platform === "darwin" ? "Meta" : "Control");
+  await item.dragTo(page.locator(".react-flow__pane"), { targetPosition: { x: pb.width - 120, y: pb.height - 80 } });
+  await page.keyboard.up(process.platform === "darwin" ? "Meta" : "Control");
+  const choice = page.getByTestId("studio-drop-choice");
+  if (await choice.isVisible().catch(() => false)) await choice.getByRole("menuitem", { name: /Get/ }).first().click();
+  const pill = page.locator(".st-node-pill").filter({ hasText: "Score" });
+  await expect(pill).toHaveCount(1);
+  await expect(pill.locator(".react-flow__handle")).toHaveCount(1);
+  await shot(page, "m4-pill");
+  // nodes and pins have names for screen readers
+  await expect(page.locator('.react-flow__node[aria-label="Get Variable node"]')).toHaveCount(1);
+  await expect(pill.locator(".react-flow__handle")).toHaveAttribute("aria-label", /output/);
+  // the breakpoint dot shows on hover only (unless set)
+  const n = page.locator(".react-flow__node").filter({ hasText: "Player Killed" }).first();
+  const dot = n.locator(".st-bp");
+  await page.mouse.move(5, 5);
+  await expect(dot).toHaveCSS("opacity", "0");
+  await n.hover({ force: true });
+  await expect(dot).toHaveCSS("opacity", "1");
+  // a wired pin's menu: Break link, Select the linked node
+  const wired = page.locator(".st-pin:has(.react-flow__handle.wired) .st-pin-label").first();
+  await wired.click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: /^Break/ })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /^Select the/ })).toBeVisible();
+  await page.getByRole("menuitem", { name: /^Select the/ }).click();
+  await expect(page.locator(".react-flow__node.selected")).not.toHaveCount(0);
+});
+
+test("M8, M9: the Timeline editor (name, fitted length, the key row's place, labeled Remove, Details) and yes/no settings", async ({ page }) => {
+  await seed(page);
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await expect(page.getByRole("heading", { name: "This mode" })).toBeVisible({ timeout: 20_000 });
+  // M9: Free for all is a switch, Round time a number with its unit
+  const ffa = page.getByRole("switch", { name: "Free for all" });
+  if (await ffa.count()) await expect(ffa).toBeVisible();
+  await page.getByRole("button", { name: "Add a setting" }).click();
+  const pick = page.getByRole("combobox", { name: "Setting" }).last();
+  await pick.selectOption("mp_friendlyfire");
+  const sw = page.getByRole("switch", { name: "Friendly fire" });
+  await expect(sw).toBeChecked();
+  await sw.uncheck();
+  await expect(sw).not.toBeChecked();
+  await pick.selectOption("mp_roundtime");
+  await expect(page.locator(".st-var").last()).toContainText("minutes, next round");
+  await shot(page, "m9-settings");
+  // M8
+  await page.getByRole("button", { name: /^Add a Timeline/ }).click();
+  const name = page.getByRole("textbox", { name: "Timeline name" });
+  await expect(name).toBeFocused();
+  await page.keyboard.type("Lift");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "Lift" })).toBeVisible();
+  await expect(page.getByText("Details · Timeline")).toBeVisible();
+  await page.getByRole("button", { name: "+ Number track" }).click();
+  // the ruler shows the whole length at once, its first label whole
+  const ruler = page.locator(".st-tl-ruler text");
+  await expect(ruler.first()).toHaveText("0s");
+  const last = await ruler.last().textContent();
+  const len = await page.getByRole("spinbutton", { name: "Length" }).inputValue();
+  expect(Number(last!.replace("s", ""))).toBeGreaterThanOrEqual(Number(len) - 0.01);
+  // a key added: the lanes don't move
+  const lane = page.locator(".st-tl-lane").first();
+  const y0 = (await lane.boundingBox())!.y;
+  await lane.click({ position: { x: 80, y: 40 } });
+  await expect(page.getByTestId("timeline-key")).toBeVisible();
+  expect(Math.abs((await lane.boundingBox())!.y - y0)).toBeLessThan(2);
+  await expect(page.getByRole("button", { name: /^Remove track/ })).toHaveText("Remove");
+  await shot(page, "m8-timeline");
 });
