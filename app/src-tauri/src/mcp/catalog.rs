@@ -97,9 +97,9 @@ pub fn specs() -> Vec<Spec> {
             description: "Copies files the doctor found only in another game folder into the map's game folder (never replaces a file)." },
         Spec { name: "health_options", title: "Map simulator options", kind: Read, schema: map_only,
             description: "Whether the map simulator can run for a map (and why not), the modes, servers to copy and the preset mode." },
-        Spec { name: "health_start", title: "Start a map simulation", kind: Change,
+        Spec { name: "health_start", title: "Start a map simulation", kind: Risky,
             schema: || obj(json!({"map": map_prop(), "mode": {"type": "string"}, "minutes": {"type": "integer", "minimum": 1, "maximum": 15}, "bots": {"type": "integer", "minimum": 2, "maximum": 20}, "server": {"type": "string"}}), &["map"]),
-            description: "Starts a map simulation (the map simulator, once called the health check): bots play the map on a hidden server for a few minutes, then a report says where they fall, get stuck or die to the map, where fights happen and where nobody went, and who wins rounds. Poll health_progress." },
+            description: "Starts a map simulation (the map simulator, once called the health check): bots play the map on a hidden server for a few minutes, then a report says where they fall, get stuck or die to the map, where fights happen and where nobody went, and who wins rounds. Asks the person first (about 6 minutes of heavy CPU). Poll health_progress." },
         Spec { name: "health_progress", title: "Map simulation progress", kind: Read, schema: none,
             description: "The running map simulation: phase, what it's doing, time left." },
         Spec { name: "health_cancel", title: "Stop the map simulation", kind: Change, schema: none, description: "Stops the running map simulation." },
@@ -494,6 +494,9 @@ async fn run(ctx: &Ctx, name: &str, a: &Value) -> Done {
             let m = map_arg(a)?;
             let mut b = pick(a, &["mode", "minutes", "bots", "server"]);
             b.insert("map".into(), json!(m));
+            // (5 minutes of play by default, plus about a minute to start and stop the server)
+            let mins = a.get("minutes").and_then(Value::as_u64).unwrap_or(5).clamp(1, 15) + 1;
+            ask(ctx, format!("An AI agent wants to run a map simulation on {m}: bots play it on a hidden server for about {mins} minutes, which uses a lot of CPU. Allow it?")).await?;
             post(ctx, "/api/tools/health/start", Value::Object(b)).await
         }
         "health_progress" => get(ctx, "/api/tools/health/progress").await,

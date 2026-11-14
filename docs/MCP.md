@@ -38,6 +38,7 @@ Code: `app/src-tauri/src/mcp/`. Settings UI: `app/ui/src/views/AgentSettings.tsx
   - copying the editor map's models, sprites and sounds into the game;
   - saving callouts (place names) into a map's nav;
   - saving a Studio graph or a prefab over one that's there;
+  - starting a map simulation (a hidden server for about 6 minutes, heavy on the CPU);
   - starting the game (playtest).
 
   If it can't tell, it asks anyway: when it doesn't know who's on, or can't read the editor's state. With
@@ -119,8 +120,8 @@ tool and classifies each request it makes.
 catches is a plain change only when it's on the reviewed list `routes::CHANGES` (edits to the open map or a nav
 session, new things, settings easy to change back); a route added later is asked about until it's reviewed.
 Installing into the game (plugins, sounds, radar, spray, a Studio mode, a map's files and `.res`), renaming or
-deleting files, throwing away unsaved work, switching the game or its folder, copying maps and teaching bots a map
-all ask. Applying or dropping a waiting prefab update is the person's alone.
+deleting files, throwing away unsaved work, switching the game or its folder, copying maps, teaching bots a map
+and running a map simulation all ask. Applying or dropping a waiting prefab update is the person's alone.
 
 **Asked in the app every time** ("An AI agent is asking", Allow / Don't allow; with no window the answer
 is no):
@@ -162,7 +163,7 @@ A = needs Allow changes and may ask the person.
 | **The whole app** | `app_routes` (R: every route, what it's for, what an agent may do with it), `app_call` (GET = R; POST under the rules above; `target` aims "the game" routes at one of your servers) |
 | Maps | `maps_list`, `map_info`, `map_entities`, `map_nav_summary`, `map_nav_areas`, `map_knowledge`, `map_probe` (R) |
 | Map doctor | `map_doctor` (R), `map_doctor_write_res`, `map_doctor_copy_files` (A) |
-| Map simulator (was "health check") | `health_options`, `health_progress`, `health_reports`, `health_report` (R); `health_start`, `health_cancel` (C) |
+| Map simulator (was "health check") | `health_options`, `health_progress`, `health_reports`, `health_report` (R); `health_cancel` (C); `health_start` (A: a hidden server for about 6 minutes, heavy on the CPU) |
 | Map editor: files | `editor_state` (brushes, entities, groups, world keys, visgroups and cordon under `editor`), `editor_list_entities`, `editor_history` (R); `editor_export_map`, `editor_history_jump`, `editor_undo`, `editor_redo` (C); `editor_new`, `editor_open`, `editor_import_map`, `editor_save` (A) |
 | Map editor: building | `editor_add_box`, `editor_add_cylinder`, `editor_add_shape` (box, cylinder, wedge, spike, cone, sphere, arch, torus with every setting), `editor_add_entity`, `editor_set_key`, `editor_set_keys`, `editor_transform` (move, turn, stretch, pivot, texture lock, scale lock), `editor_move_face`, `editor_extrude_face`, `editor_vertices` (move, split, merge corners), `editor_clip`, `editor_hollow`, `editor_carve`, `editor_merge`, `editor_snap`, `editor_delete`, `editor_duplicate`, `editor_array`, `editor_paste`, `editor_group` (group, ungroup, hide, lock, rename, move into), `editor_tie` (to an entity / back to the world), `editor_world` (WADs and worldspawn keys), `editor_replace`, `editor_arrange` (align, distribute), `editor_settings` (visgroups, cordon), `editor_command` (any editor op) (C); `editor_find` (by text, texture, class, value, touching, inside) (R) |
 | Map editor: textures | `editor_textures`, `editor_faces` (each face's index, facing, texture and alignment) (R); `editor_set_texture`, `editor_align_texture` (set, shift, scale, rotate, Fit, Justify, Center, to the world/face/view), `editor_wrap_texture` (C) |
@@ -225,7 +226,7 @@ This is what we do ourselves, step by step, with an agent. Example: bots keep fa
 get stuck on cs_rats2.
 1. **What's known.** Call `map_doctor`, `map_nav_summary`, `nav_reach` and `map_knowledge`, then
    `health_reports` / `health_report` for earlier checks.
-2. **A map simulation.** `health_start {map, minutes: 5, bots: 12}` runs the bots on a hidden server. Poll
+2. **A map simulation.** `health_start {map, minutes: 5, bots: 12}` runs the bots on a hidden server (the person is asked first). Poll
    `health_progress`, then read `health_report`. It lists falls, stuck spots and deaths to the map by
    place, plus console errors.
 3. **The recording.** `replay_list`, then `replay_summary {id}` for kills, falls with the drop, and stuck

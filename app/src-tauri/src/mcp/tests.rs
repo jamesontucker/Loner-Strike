@@ -1259,7 +1259,7 @@ fn every_route_has_an_explicit_policy() {
     // the ones the review named
     let none = json!({});
     assert!(matches!(routes::policy("POST", "/api/tools/editor/prefabs/update", &none), routes::Policy::UserOnly(_)));
-    for p in ["/api/tools/editor/assets/find", "/api/tools/editor/assets/copy", "/api/tools/studio/compile", "/api/tools/doctor/de_x/copy", "/api/tools/overview/de_x/install", "/api/tools/editor/project/action"] {
+    for p in ["/api/tools/editor/assets/find", "/api/tools/editor/assets/copy", "/api/tools/studio/compile", "/api/tools/doctor/de_x/copy", "/api/tools/overview/de_x/install", "/api/tools/editor/project/action", "/api/tools/health/start"] {
         assert!(matches!(routes::policy("POST", p, &none), routes::Policy::Ask(_)), "{p}");
     }
     assert_eq!(routes::policy("POST", "/api/tools/editor/assets/copy", &json!({"to": "project"})), routes::Policy::Change);
