@@ -253,7 +253,7 @@ footer a { color: var(--dim); }
   <h2 id="new-build">Build</h2>
   <p>A new <a href="#tools">Tools</a> section (Beta):</p>
   <ul>
-    <li><a href="#map-editor">Map editor</a> with <a href="#compile-playtest">compile and playtest</a>, <a href="#map-import">Hammer and J.A.C.K. import</a> and a <a href="#content-browser">Content Browser</a>.</li>
+    <li><a href="#map-editor">Map editor</a> with <a href="#compile-playtest">compile and playtest</a>, <a href="#map-import">Hammer, J.A.C.K. and TrenchBroom import</a> and a <a href="#content-browser">Content Browser</a>.</li>
     <li><a href="#game-mode-studio">Game Mode Studio</a> with five <a href="#studio-examples">example modes</a>, a tour, <a href="#studio-help">node help</a>, <a href="#studio-checks">three checks</a> (Quick check, Compile, Test run), <a href="#studio-timelines">Timelines</a>, <a href="#studio-tables">data tables</a> and <a href="#studio-live-tweaks">live tweaks</a>; <a href="#plugin-studio">Plugin Studio</a> and <a href="#creature-studio">Creature Studio</a>.</li>
     <li><a href="#map-doctor">Map doctor</a>, <a href="#map-simulator">Map simulator</a>, <a href="#nav-fixer">Nav fixer</a>, <a href="#callouts">Callouts</a>, <a href="#radar-maker">Radar maker</a>.</li>
     <li><a href="#crosshair-config">Crosshair &amp; config</a>, <a href="#bot-people">Bot people</a>, <a href="#spray-maker">Spray maker</a>.</li>
@@ -753,7 +753,7 @@ footer a { color: var(--dim); }
   <ul>
     <li><b>New map</b>: an open-sky room with two spawns per team.</li>
     <li><b>Open a project</b> (<code>.lsmap</code>), or pick from <b>Recent</b>.</li>
-    <li><b>Import a .map</b> or <b>Import from Hammer / J.A.C.K.</b> (<a href="#map-import">Importing</a>).</li>
+    <li><b>Import a .map</b> (TrenchBroom, or any GoldSrc editor) or <b>Import from Hammer / J.A.C.K.</b> (<a href="#map-import">Importing</a>).</li>
   </ul>
   <p>Work is autosaved every 3 minutes, and each save keeps the one before. After a crash, the start screen offers <b>Recover it</b>.</p>
   <h2 id="editor-camera">Moving around</h2>
@@ -891,7 +891,7 @@ footer a { color: var(--dim); }
 
 <section class="topic" id="map-import" data-group="Create">
   <p class="crumb">Create</p>
-  <h1>Hammer and J.A.C.K. maps</h1>
+  <h1>Hammer, J.A.C.K. and TrenchBroom maps</h1>
   <p class="lead">Open maps from other editors. The original file is never changed: saving makes a new project.</p>
   <h2 id="import-what">What it opens</h2>
   <div class="table"><table>
@@ -902,7 +902,7 @@ footer a { color: var(--dim); }
     </tbody>
   </table></div>
   <h2 id="import-comes-over">What comes over</h2>
-  <p>Brushes, entities, groups, visgroups and paths. Cameras, background pictures, the cordon and J.A.C.K.'s curved patches are left out, and the import says so, along with any missing models, sprites and sounds (<b>Find missing files…</b> in Project fetches them).</p>
+  <p>Brushes, entities, groups, visgroups and paths; TrenchBroom's groups and layers come in as editor groups. Cameras, background pictures, the cordon and J.A.C.K.'s curved patches are left out, and the import says so, along with any missing models, sprites and sounds (<b>Find missing files…</b> in Project fetches them).</p>
   <h2 id="import-wads">Texture files</h2>
   <p>Hammer and J.A.C.K. keep the WAD list outside the map, so the editor adds the WADs it finds beside the imported file, then in your game folders, and notes which. Still missing? Add them in <b>Map properties</b>, or put them beside the map or project.</p>
   <h2 id="import-check">Before you compile</h2>
@@ -2018,7 +2018,7 @@ args = ["--mcp-stdio"]</code></pre>
   <h2 id="compile-leak" data-keywords="leak void sealed" data-short="The map leaks">"The map leaks" <a class="anchor" href="#compile-leak" aria-label="Link to this">#</a></h2>
   <p>Press <b>Show the leak line</b> and follow the red line to where it leaves the map; close that gap with a brush. Only world brushes seal a map, not entities like a func_wall or door.</p>
   <h2 id="missing-textures" data-keywords="wad texture missing pink checkerboard" data-short="Missing textures">Textures are missing <a class="anchor" href="#missing-textures" aria-label="Link to this">#</a></h2>
-  <p>A WAD the map lists isn't on this computer, or none has the texture. Put the WADs beside the map, or add them in <b>Map properties › WADs</b>. For Hammer or J.A.C.K. maps, see <a href="#import-wads">Texture files</a>.</p>
+  <p>A WAD the map lists isn't on this computer, or none has the texture. Put the WADs beside the map, or add them in <b>Map properties › WADs</b>. For Hammer, J.A.C.K. or TrenchBroom maps, see <a href="#import-wads">Texture files</a>.</p>
   <h2 id="playtest-stuck" data-keywords="playtest game won't start bots don't move" data-short="Playtest problems">A playtest doesn't start, or bots stand still <a class="anchor" href="#playtest-stuck" aria-label="Link to this">#</a></h2>
   <ul>
     <li>Close the game if it asks, and let it restart into the playtest.</li>

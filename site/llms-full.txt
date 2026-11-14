@@ -47,7 +47,7 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 ## New in 1.0: Tools (Beta)
 
 A Tools section in the app for making things:
-- Map editor: brushes, entities and textures in one 3D view (or four, like Hammer), with Unreal, Blender or Hammer camera controls, live checks, prefabs, Hammer .rmf / J.A.C.K. .jmf / .map import and .map export. Compiles with SDHLT (downloaded on first use; through CrossOver on a Mac) and playtests with bots in one click.
+- Map editor: brushes, entities and textures in one 3D view (or four, like Hammer), with Unreal, Blender or Hammer camera controls, live checks, prefabs, Hammer .rmf / J.A.C.K. .jmf / .map import (TrenchBroom's too, with its groups and layers) and .map export. Compiles with SDHLT (downloaded on first use; through CrossOver on a Mac) and playtests with bots in one click.
 - Game Mode Studio: game modes from Blueprint-style node graphs (200+ nodes, functions, macros, variables, structs, enums, snippets), compiled to an AMX Mod X plugin; playtest with bots while nodes light up, with breakpoints and live values.
 - Plugin Studio: an AMX Mod X editor with suggestions, docs, plain-language compile errors and "Try it in my game"; loner.inc gives short natives for modes, HUD, players, timers and bots.
 - Creature Studio: creature types (zombies, aliens, animals, turrets, bosses) and the waves they come in.

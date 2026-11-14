@@ -151,7 +151,7 @@ function Start({ onPick, busy, error, open }: { onPick: (w: Pick) => void; busy:
           <button type="button" className="btn" disabled={!!busy} onClick={() => onPick("open")}>
             Open a project
           </button>
-          <button type="button" className="btn" disabled={!!busy} onClick={() => onPick("import")}>
+          <button type="button" className="btn" disabled={!!busy} title="A .map from TrenchBroom, Hammer, J.A.C.K. or any GoldSrc editor (TrenchBroom's groups and layers come in as groups)" onClick={() => onPick("import")}>
             Import a .map
           </button>
           {/* P5: Hammer .rmf / J.A.C.K. .jmf */}

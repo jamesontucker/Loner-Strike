@@ -1496,7 +1496,7 @@ fn dialog(st: &Shared, kind: Pick, name: &str) -> Result<Option<PathBuf>, String
     let d = app.dialog().file();
     let picked = match kind {
         Pick::Open => d.set_title("Open a map project").add_filter("Loner-Strike map project", &[PROJECT_EXT]).blocking_pick_file(),
-        Pick::Import => d.set_title("Import a .map file").add_filter("GoldSrc map source", &["map"]).blocking_pick_file(),
+        Pick::Import => d.set_title("Import a .map file (TrenchBroom, Hammer, J.A.C.K.)").add_filter("GoldSrc map source", &["map"]).blocking_pick_file(),
         Pick::SaveProject => d.set_title("Save the map project").set_file_name(format!("{name}.{PROJECT_EXT}")).add_filter("Loner-Strike map project", &[PROJECT_EXT]).blocking_save_file(),
         Pick::ExportMap => d.set_title("Export a .map file").set_file_name(format!("{name}.map")).add_filter("GoldSrc map source", &["map"]).blocking_save_file(),
         Pick::ExportPrefab => d.set_title("Save the prefab package").set_file_name(format!("{name}.zip")).add_filter("Prefab package", &["zip"]).blocking_save_file(),
