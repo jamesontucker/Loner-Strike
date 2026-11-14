@@ -3723,7 +3723,7 @@ lsg_n83(ctx[])
 }
 
 // Timeline (n138)
-lsg_n84(ctx[])
+stock lsg_n84(ctx[])
 {
 	new inst = 0
 	lsg_tl84_save(inst, ctx)

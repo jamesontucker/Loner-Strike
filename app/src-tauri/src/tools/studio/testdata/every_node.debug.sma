@@ -6559,7 +6559,7 @@ lsg_n171(ctx[])
 }
 
 // For Each (a_fe)
-lsg_n172(ctx[])
+stock lsg_n172(ctx[])
 {
 	new lsi0 = g_v9
 	lsd_begin()
@@ -7316,7 +7316,7 @@ lsg_n215(ctx[])
 }
 
 // Do Once (e_once)
-lsg_n216(ctx[])
+stock lsg_n216(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(216, ctx))
@@ -7338,7 +7338,7 @@ stock lsg_n216_reset(ctx[])
 }
 
 // Do N (e_n)
-lsg_n217(ctx[])
+stock lsg_n217(ctx[])
 {
 	new Float:lsi0 = 3.0
 	lsd_begin()
@@ -7363,7 +7363,7 @@ stock lsg_n217_reset(ctx[])
 }
 
 // Gate (e_gate)
-lsg_n218(ctx[])
+stock lsg_n218(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(218, ctx))
@@ -7522,7 +7522,7 @@ lsg_n225(ctx[])
 }
 
 // For Loop with Break (f_brk)
-lsg_n226(ctx[])
+stock lsg_n226(ctx[])
 {
 	new Float:lsi0 = 0.0
 	new Float:lsi1 = 10.0

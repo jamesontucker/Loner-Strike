@@ -1750,8 +1750,10 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
     let (n, def) = gen.node(id);
     let i = gen.index(id);
     let debug = gen.debug;
-    // (in a Function's graph: compiled only when the Function is called)
-    let stock = if v.graph_of(id).is_empty() { "" } else { "stock " };
+    // (in a Function's graph: compiled only when the Function is called; a node with several
+    // flow inputs, as a Timeline's Play / Play from Start: its first input's function only when
+    // something is wired into it, so no "never used" warning)
+    let stock = if v.graph_of(id).is_empty() && !MULTI_IN.contains(&def.kind.as_str()) { "" } else { "stock " };
     o.line(format!("// {} ({})", comment_text(&def.title), gen.report_id(id)));
     o.line(format!("{stock}{}(ctx[])\n{{", gen.fname(id)));
     let mut b = Out { text: String::new(), lines: 0 };

@@ -4805,7 +4805,7 @@ lsg_n83(ctx[])
 }
 
 // Timeline (n138)
-lsg_n84(ctx[])
+stock lsg_n84(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(84, ctx))

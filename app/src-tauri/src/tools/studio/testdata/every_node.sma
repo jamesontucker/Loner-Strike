@@ -4766,7 +4766,7 @@ lsg_n171(ctx[])
 }
 
 // For Each (a_fe)
-lsg_n172(ctx[])
+stock lsg_n172(ctx[])
 {
 	new c[LSG_CTX], n
 	g_lsgLeft[172] = 0
@@ -5210,7 +5210,7 @@ lsg_n215(ctx[])
 }
 
 // Do Once (e_once)
-lsg_n216(ctx[])
+stock lsg_n216(ctx[])
 {
 	if (g_lsgLeft[216])
 	{
@@ -5228,7 +5228,7 @@ stock lsg_n216_reset(ctx[])
 }
 
 // Do N (e_n)
-lsg_n217(ctx[])
+stock lsg_n217(ctx[])
 {
 	if (g_lsgLeft[217] >= floatround(3.0))
 	{
@@ -5247,7 +5247,7 @@ stock lsg_n217_reset(ctx[])
 }
 
 // Gate (e_gate)
-lsg_n218(ctx[])
+stock lsg_n218(ctx[])
 {
 	if (!g_lsgLeft[218])
 	{
@@ -5354,7 +5354,7 @@ lsg_n225(ctx[])
 }
 
 // For Loop with Break (f_brk)
-lsg_n226(ctx[])
+stock lsg_n226(ctx[])
 {
 	new c[LSG_CTX], n
 	g_lsgLeft[226] = 0
