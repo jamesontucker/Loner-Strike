@@ -433,7 +433,6 @@ public plugin_natives()
 	register_native("ls_respawn_at", "n_respawn_at");
 	w3_natives(); /* W3 */
 	up_natives(); /* W1 */
-	w3_natives(); /* W3 */
 }
 
 public plugin_init()
@@ -530,7 +529,6 @@ public plugin_init()
 	g_fwMeetEnd = CreateMultiForward("ls_on_meeting_end", ET_IGNORE, FP_CELL, FP_CELL);
 	w3_init(); /* W3 */
 	up_plugin_init(); /* W1 */
-	w3_init(); /* W3 */
 }
 
 public plugin_cfg()
@@ -7178,7 +7176,6 @@ stock w3_match_hud()
 /* more for the right side (the squad list, when squads are on) */
 stock w3_side_extra(p, out[], len)
 {
-	#pragma unused p
 	out[0] = EOS;
 	if (g_w3SquadMax <= 1 || !g_w3Squad[p])
 		return 0;
