@@ -5827,7 +5827,8 @@ stock w3_tick(bool:sec)
 				set_pev(p, pev_health, floatmin(hp + give, w3_max_hp(p)));
 			}
 		}
-		if (sec && g_bot[p] && !g_w3Using[p] && get_pcvar_num(g_w3cHealBots) && get_pcvar_num(g_w3cHealCarry))
+		/* (the brain picks its own heal moment from ls_mode_ver 2: W2) */
+		if (sec && g_bot[p] && !g_w3Using[p] && get_pcvar_num(g_w3cHealBots) && get_pcvar_num(g_w3cHealCarry) && get_cvar_num("ls_mode_ver") < 2) /* W1 for W3 */
 			w3_bot_heal(p, now);
 		if (sec && g_bot[p])
 			w3_bot_crate(p);
@@ -9586,6 +9587,10 @@ new bool:g_headLast[MAX_ENTS];
 new Float:g_upUseNext[33];
 new Float:g_offerAt;
 new g_boxWave[33];
+/* what each bot was last offered (W2: the box answered a bot holding USE nearby for something else) */
+#define MAX_OFFERS 24
+new g_offerEnt[33][MAX_OFFERS];
+new g_offerN[33];
 new bool:g_upCreatures;
 #define OFS_NEXT_ATTACK 83
 #define OFS_WPN_IDLE    48
@@ -10174,6 +10179,9 @@ stock bool:box_use(s, id, bool:tell)
 {
 	if (!is_user_alive(id) || g_down[id] || g_state[s] != 1)
 		return false;
+	/* a bot rolls once a round (holding USE a moment longer rolled it twice) */
+	if (is_user_bot(id) && g_boxWave[id] == g_wave && g_wave > 0)
+		return false;
 	new price = floatround(g_pf[s][BX_PRICE]);
 	if (cs_get_user_money(id) < price)
 	{
@@ -10716,6 +10724,9 @@ public up_prethink(id)
 			g_upUseNext[id] = now + 1.0;
 		return FMRES_IGNORED;
 	}
+	/* a bot buys only what it was sent to (not the box beside the gate it's repairing) */
+	if (bot && !was_offered(id, g_ent[s]))
+		return FMRES_IGNORED;
 	g_upUseNext[id] = now + 1.0;
 	up_use(s, id, !bot);
 	if (bot)
@@ -10822,6 +10833,7 @@ stock go_down(victim)
 		set_pev(victim, pev_flags, pev(victim, pev_flags) | FL_NOTARGET);
 	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, victim);
 	down_look_on(victim);
+	hint("down %d 1", victim);
 	render(victim, kRenderFxGlowShell, 255, 40, 40, kRenderNormal, 12);
 	act_cancel(victim);
 	send_revive(victim);
@@ -10872,6 +10884,7 @@ stock down_clear(p)
 	if (g_down[p])
 	{
 		hint("goal_clear all %d", p);
+		hint("down %d 0", p);
 		down_look_off(p);
 	}
 	if (g_revBy[p] && is_user_connected(g_revBy[p]))
@@ -11153,6 +11166,8 @@ public up_player_killed(id, killer, gib)
 
 stock up_disconnected(id)
 {
+	if (g_down[id])
+		hint("down %d 0", id);
 	g_boxWave[id] = 0;
 	g_turKits[id] = 0;
 	g_turOffered[id] = false;
@@ -11209,6 +11224,7 @@ stock up_offers(p)
 	if (!g_brain || !is_user_bot(p))
 		return;
 	hint("offer_clear %d", p);
+	g_offerN[p] = 0;
 	if (!is_user_alive(p) || g_down[p])
 		return;
 	new team = get_user_team(p);
@@ -11252,6 +11268,7 @@ stock up_offers(p)
 				if (perk_has(p, k) || (mx > 0 && g_nperks[p] >= mx) || benchFirst)
 					continue;
 				hint("offer %d perk %.0f %.0f %.0f %d %d %d", p, o[0], o[1], o[2], g_ent[s], perk_price_at(s, p), PK_ORDER[k]);
+				offer_note(p, g_ent[s]);
 			}
 			case K_BENCH:
 			{
@@ -11260,12 +11277,14 @@ stock up_offers(p)
 				if (!w || (why[0] && !equal(why, "not enough money")))
 					continue;
 				hint("offer %d bench %.0f %.0f %.0f %d %d", p, o[0], o[1], o[2], g_ent[s], bench_price(s, wpn_level(w)));
+				offer_note(p, g_ent[s]);
 			}
 			case K_BOX:
 			{
 				if (g_state[s] != 1 || perksFirst || g_boxWave[p] == g_wave)
 					continue;
 				hint("offer %d box %.0f %.0f %.0f %d %d", p, o[0], o[1], o[2], g_ent[s], floatround(g_pf[s][BX_PRICE]));
+				offer_note(p, g_ent[s]);
 			}
 			case K_TRAP:
 			{
@@ -11289,9 +11308,24 @@ stock up_offers(p)
 					}
 				}
 				hint("offer %d trap %.0f %.0f %.0f %d %d", p, gc[0], gc[1], gc[2], g_ent[s], floatround(kf(s, "cost", 0.0)));
+				offer_note(p, g_ent[s]);
 			}
 		}
 	}
+}
+
+stock offer_note(p, ent)
+{
+	if (g_offerN[p] < MAX_OFFERS)
+		g_offerEnt[p][g_offerN[p]++] = ent;
+}
+
+stock bool:was_offered(p, ent)
+{
+	for (new i = 0; i < g_offerN[p]; i++)
+		if (g_offerEnt[p][i] == ent)
+			return true;
+	return false;
 }
 
 stock bool:perks_sold()

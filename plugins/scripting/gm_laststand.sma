@@ -103,6 +103,10 @@ new g_repairing[33];
 new Float:g_repairNext[33];
 new Float:g_repairUntil[33];
 new Float:g_repairResend[33];
+new Float:g_repairPickAt[33];
+new bool:g_repairCame[33];
+new g_repairNo[33];
+new Float:g_repairNoUntil[33];
 new g_botRepaired;
 new Float:g_beatAt;
 new Float:g_stuckAt;
@@ -1443,6 +1447,19 @@ stock bot_repairs()
 				release_repair(p);
 				continue;
 			}
+			/* a bot that hasn't come within 300 u 9 s after it was picked turned the job down (the brain
+			   decides once per gate, W2): let it go and ask the next nearest */
+			new Float:po[3];
+			pev(p, pev_origin, po);
+			if (get_distance_f(po, c) < 300.0)
+				g_repairCame[p] = true;
+			else if (!g_repairCame[p] && now - g_repairPickAt[p] > 9.0)
+			{
+				g_repairNo[p] = b;
+				g_repairNoUntil[p] = now + 60.0;
+				release_repair(p);
+				continue;
+			}
 			have++;
 			/* the brain's use goal ends after ~6 s there: send it again while there's work */
 			if (now >= g_repairResend[p])
@@ -1470,6 +1487,8 @@ stock bot_repairs()
 			{
 				if (!is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT || g_repairing[p])
 					continue;
+				if (g_repairNo[p] == b && now < g_repairNoUntil[p])
+					continue;
 				pev(p, pev_origin, o);
 				new Float:d = get_distance_f(o, c);
 				if (d < bd)
@@ -1483,6 +1502,8 @@ stock bot_repairs()
 			g_repairing[best] = b;
 			g_repairNext[best] = now + 1.5;
 			g_repairUntil[best] = now + 40.0;
+			g_repairPickAt[best] = now;
+			g_repairCame[best] = false;
 			send_repair_goal(best, b, c, mn);
 			have++;
 		}
