@@ -154,7 +154,7 @@ With changes on, any single console line goes and is logged, but `quit`, `exit`,
 `changelevel`, `restart`, `exec` and `sv_downloadurl` ask first. Never allowed: `;` chains,
 `rcon_password` and `rcon`.
 
-## Tools (160)
+## Tools (165)
 R = read (works with changes off). C = needs Allow changes (edits to the open map or draft are undoable).
 A = needs Allow changes and may ask the person.
 
@@ -166,6 +166,7 @@ A = needs Allow changes and may ask the person.
 | Map simulator (was "health check") | `health_options`, `health_progress`, `health_reports`, `health_report` (R); `health_cancel` (C); `health_start` (A: a hidden server for about 6 minutes, heavy on the CPU) |
 | Map editor: files | `editor_state` (brushes, entities, groups, world keys, visgroups and cordon under `editor`), `editor_list_entities`, `editor_history` (R); `editor_export_map`, `editor_history_jump`, `editor_undo`, `editor_redo` (C); `editor_new`, `editor_open`, `editor_import_map`, `editor_save` (A) |
 | Map editor: building | `editor_add_box`, `editor_add_cylinder`, `editor_add_shape` (box, cylinder, wedge, spike, cone, sphere, arch, torus with every setting), `editor_add_entity`, `editor_set_key`, `editor_set_keys`, `editor_transform` (move, turn, stretch, pivot, texture lock, scale lock), `editor_move_face`, `editor_extrude_face`, `editor_vertices` (move, split, merge corners), `editor_clip`, `editor_hollow`, `editor_carve`, `editor_merge`, `editor_snap`, `editor_delete`, `editor_duplicate`, `editor_array`, `editor_paste`, `editor_group` (group, ungroup, hide, lock, rename, move into), `editor_tie` (to an entity / back to the world), `editor_world` (WADs and worldspawn keys), `editor_replace`, `editor_arrange` (align, distribute), `editor_settings` (visgroups, cordon), `editor_command` (any editor op) (C); `editor_find` (by text, texture, class, value, touching, inside) (R) |
+| Map editor: the selection | `editor_selection` (R: what the person has selected: brush, entity and face ids, each in a few words, bounds, center, tool and view); `editor_select` (C: select things in the person's editor; not an edit, no undo step). Edit tools take `selection: true` (below) |
 | Map editor: textures | `editor_textures`, `editor_faces` (each face's index, facing, texture and alignment) (R); `editor_set_texture`, `editor_align_texture` (set, shift, scale, rotate, Fit, Justify, Center, to the world/face/view), `editor_wrap_texture` (C) |
 | Map editor: Checks and Budget | `editor_findings` (R: structured findings: id, kind, severity, message, location, brush/entity/face ids, hint, fixes by `fixId`; the stretched-texture limits as arguments), `editor_checks` (R: the raw panel answer), `editor_budget` (R: every bar with status, the fix and the biggest contributors with ids; precache with the game's share, the modes' creatures and the guard's reserve; red-bar warnings); `editor_apply_fix` (C: one or several fixes by id as one undo step); `editor_io` (R: what triggers what: nodes, links fires/kills/master/names with multi_manager delays, broken links, shared names; `entity` gives its chain down and up), `editor_leak` (R: the last leak line or a loaded pointfile, its hole `{at, index}`, the world brushes round it `nearest [{brush, distance}]`, brush entities near it, the entity it starts at, advice) |
 | Content Browser and prefabs | `content_list` (models, sprites, sounds with sources), `content_credits` (who made it, may it be shared), `editor_assets` (files the map names: found or missing), `prefabs_list` (R); `editor_place_asset`, `editor_place_prefab`, `prefab_save` (C; A when replacing); `editor_copy_assets` (A into the game). Recording permission or typing a credit is the person's alone |
@@ -200,6 +201,17 @@ re-reads the checks, finds the fix and sends it the way the Checks panel's butto
 own: the game's share of the precache (197 models, 315 sounds, measured), the creatures of the modes the map is made
 for, and the creature guard's reserve (40 models, 60 sounds). Each bar has `status` (green under 75%, yellow, red
 over 90%), the usual `fix` and `top` contributors with their brush and entity ids.
+
+**"Change this": the selection.** The editor page tells the app what's selected whenever it changes (150 ms after
+the last change: brush and entity ids, picked faces in the Texture tool, the tool and the view; `selectionSync.ts`,
+`tools/editor/selection.rs`). `editor_selection` reads it. These tools take `selection: true` and fill their ids
+from it (ids given win): `editor_transform`, `editor_delete`, `editor_duplicate`, `editor_array`, `editor_arrange`,
+`editor_group`, `editor_find`, `editor_replace`, `prefab_save` (brushes and entities); `editor_hollow`,
+`editor_merge`, `editor_snap`, `editor_clip`, `editor_tie`, `editor_faces` (brushes); `editor_set_keys`,
+`editor_set_key` (one entity); `editor_set_texture` (picked faces, else every face of the selected brushes);
+`editor_align_texture`, `editor_wrap_texture` (picked faces). With nothing selected they say so. `editor_select`
+sets the selection (ids; nothing clears it), and the page selects it too within a second, so the person sees what
+the agent changed or found (a long look at the app, `?after=<seq>`, not a poll). Selecting isn't a change to the map: no undo step, no question.
 
 **Editing a Studio graph, as an agent.** `studio_draft_open` loads a graph (or a new one, or a template) into a draft
 in the app's memory; `studio_edit` takes a list of edits and applies all of them or none (refusing, say, a wire
@@ -286,7 +298,7 @@ Any other client: `http://127.0.0.1:<port>/mcp` (Streamable HTTP), with the head
    - Turn the setting off: it should fail to connect.
    - With the HTTP setup and a wrong token you should get 401, "Wrong or missing token…".
    - Restart Loner-Strike: the stdio setup should still connect, with no change to the config.
-2. **List tools.** In Claude Code, run `/mcp` and pick loner-strike. You should see 160 tools, 10 resources
+2. **List tools.** In Claude Code, run `/mcp` and pick loner-strike. You should see 165 tools, 10 resources
    and 5 prompts.
 3. **Read a map.** Ask: "Use loner-strike to tell me about de_dust2: its spawns, nav and whether bots know
    it". The agent should call `map_info`, `map_nav_summary` and `map_knowledge`. Settings > AI agents >

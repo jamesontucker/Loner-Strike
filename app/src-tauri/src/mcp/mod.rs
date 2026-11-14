@@ -19,6 +19,7 @@ pub mod editor_tools;
 pub mod more;
 pub mod routes;
 pub mod rpc;
+pub mod selection_tools;
 pub mod stdio;
 pub mod studio_tools;
 

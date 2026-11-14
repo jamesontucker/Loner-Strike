@@ -211,6 +211,7 @@ pub fn specs() -> Vec<Spec> {
     .chain(super::debug::specs())
     .chain(super::editor_tools::specs())
     .chain(super::studio_tools::specs())
+    .chain(super::selection_tools::specs())
     .collect()
 }
 
@@ -231,7 +232,7 @@ pub fn tool_list() -> Vec<Value> {
                 "name": s.name,
                 "title": s.title,
                 "description": format!("{}{note}", s.description),
-                "inputSchema": (s.schema)(),
+                "inputSchema": super::selection_tools::with_selection(s.name, (s.schema)()),
                 "annotations": {
                     "title": s.title,
                     "readOnlyHint": s.kind == Kind::Read,
@@ -422,7 +423,11 @@ pub async fn call_tool(ctx: &Ctx, name: &str, args: Value) -> Value {
     let r = if kind != Kind::Read && !ctx.changes {
         Err(Fail::Refused("Changes are off. The person can turn on \"Allow changes\" under AI agents in Loner-Strike's Settings; until then only reading works.".into()))
     } else {
-        run(ctx, name, &args).await
+        // ("selection: true": what the person has selected in the editor)
+        match super::selection_tools::expand(ctx, name, &args).await {
+            Ok(a) => run(ctx, name, &a).await,
+            Err(e) => Err(e),
+        }
     };
     let mut image = None;
     let (outcome, text, is_error) = match r {
@@ -757,7 +762,10 @@ async fn run(ctx: &Ctx, name: &str, a: &Value) -> Done {
                     Some(r) => r,
                     None => match super::studio_tools::run(ctx, name, a).await {
                         Some(r) => r,
-                        None => Err(err(format!("Unknown tool: {name}"))),
+                        None => match super::selection_tools::run(ctx, name, a).await {
+                            Some(r) => r,
+                            None => Err(err(format!("Unknown tool: {name}"))),
+                        },
                     },
                 },
             },

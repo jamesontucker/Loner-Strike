@@ -48,6 +48,7 @@ pub mod browser; // P5: the Content Browser (models, sprites, sounds)
 pub mod kits; // P5: mode map kits (what each mode the map is made for needs)
 pub mod workspace; // P5: project files, undo history, find/replace, duplicate with new names
 pub mod heavy; // Checks: heavy views from the last compile's VIS data
+pub mod selection; // MCP: what's selected, for agents
 
 const INTERNAL: &str = "Loner-Strike hit an internal error in the map editor. Try again, and copy the diagnostics from Settings if it keeps happening.";
 const NO_DOC: &str = "No map is open in the editor. Start a new map or open one.";
@@ -2420,6 +2421,7 @@ fn routes_with(ed: Ed) -> Router<Shared> {
         .merge(kits::routes()) // P5
         .merge(browser::routes()) // P5
         .merge(budget::routes()) // P5
+        .merge(selection::routes()) // MCP
         .merge(leak::routes()) // P5
         .merge(io::routes()) // P5
         .layer(Extension(ed))

@@ -34,6 +34,7 @@ import { EMPTY_SEL, facesOf, useEditor, type ViewId } from "./store";
 /** How often unsaved changes are written to the autosave file. */
 const AUTOSAVE_MS = 3 * 60 * 1000;
 import "./editor.css";
+import { useSelectionSync } from "./selectionSync"; // MCP: agents see the selection
 
 type Tab = "inspect" | "outline" | "textures" | "library" | "checks" | "compile" | "project" | "history" | "content"; // P5: project, history, content
 
@@ -62,6 +63,7 @@ export default function MapEditor(_: ToolProps) {
   const fileBusy = useEditor((s) => s.fileBusy);
   const toast = useToast();
   const ask = useConfirm();
+  useSelectionSync(); // MCP
 
   useEffect(() => {
     useEditor.getState().setNotify((t, e) => toast(t, e));
