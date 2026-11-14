@@ -112,3 +112,8 @@ Many agents share one staging area. Never run a bare `git commit`. Always commit
   all (`pgrep -fl 'Sim\\.*hlds.exe' | wc -l`) and the load average is under 20. Only 2 while you're also compiling.
   Delete each sim copy when its run ends. `cargo` builds: `-j 6`.
 - Check `uptime` before a heavy step; if the load average is over 20, wait.
+
+## Commits in a shared worktree (2026-11-13)
+- Everyone shares one git index. Never leave files staged (`git add` then wander off), and never commit from the index:
+  always `git commit -m "..." -- <your paths>` against the live tree, then check `git show --stat` touches only your
+  files and lines. Two commits today swept in other agents' work (one reverted a perf commit, one took staged WIP).
