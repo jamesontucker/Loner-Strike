@@ -9564,7 +9564,7 @@ new bool:g_dnOn;
 new Float:g_dnBleed = 30.0;
 new g_dnTeam;
 new bool:g_dnLosePerks = true;
-new g_cDownFinish, g_cDownHp;
+new g_cDownFinish, g_cDownHp, g_cRevivePay;
 /* how a downed player looks and plays: lying (a death sequence held on its last frame), a low
    view, a red pulse, a bleed-out bar, the pistol only */
 new g_downSeq[33];
@@ -9699,6 +9699,7 @@ stock up_natives()
 	register_native("ls_down", "n_down");
 	register_native("ls_revive", "n_revive");
 	register_native("ls_down_left", "n_down_left");
+	register_native("ls_down_revive_pay", "n_down_revive_pay");
 	register_native("ls_weapon_level", "n_weapon_level");
 	register_native("ls_weapon_set_level", "n_weapon_set_level");
 	register_native("ls_bench_use", "n_bench_use");
@@ -9750,6 +9751,8 @@ stock up_plugin_init()
 	/* BR-style knock-downs: players who aren't friends can finish a downed player (down HP) */
 	g_cDownFinish = register_cvar("ls_down_finish", "0");
 	g_cDownHp = register_cvar("ls_down_hp", "100");
+	/* money for getting a teammate up (once a downing; self-revive pays nothing) */
+	g_cRevivePay = register_cvar("ls_down_revive_pay", "0");
 	register_forward(FM_PlayerPreThink, "up_prethink");
 	RegisterHamPlayer(Ham_TakeDamage, "up_player_hurt");
 	RegisterHamPlayer(Ham_Killed, "up_player_killed", 1);
@@ -10889,7 +10892,16 @@ stock get_up(d, by)
 	new ret;
 	ExecuteForward(g_fwRevive, ret, d, by);
 	if (by && by != d)
+	{
 		log_amx("Upgrades: %d revived %d in wave %d", by, d, g_wave);
+		new pay = get_pcvar_num(g_cRevivePay);
+		if (pay > 0 && 1 <= by <= 32 && is_user_connected(by))
+		{
+			cs_set_user_money(by, min(cs_get_user_money(by) + pay, 16000));
+			if (!is_user_bot(by))
+				client_print(by, print_center, "+$%d revive", pay);
+		}
+	}
 }
 
 stock down_tick()
@@ -12838,6 +12850,13 @@ public n_revive(plugin, params)
 	if (!(1 <= id <= 32) || !g_down[id])
 		return 0;
 	get_up(id, get_param(2));
+	return 1;
+}
+
+/* ls_down_revive_pay(amount): what getting a teammate up pays (0 off) */
+public n_down_revive_pay(plugin, params)
+{
+	set_pcvar_num(g_cRevivePay, max(get_param(1), 0));
 	return 1;
 }
 

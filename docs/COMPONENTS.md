@@ -452,6 +452,8 @@ after `bleed_secs`. The two nearest bots are sent to revive (`goal use`, priorit
   grows as bleeding out nears and a bleed-out bar, and holds only a pistol (theirs, or a glock/usp by team that's
   taken back after). Getting up brings back the view, the animation and the gun they had. `ls_down_list` (server
   console) prints each downed player's pose, view, weapon and time left.
+- `ls_down_revive_pay` (or `ls_down_revive_pay(amount)`): money for getting a teammate up, once a downing, not for
+  getting yourself up ("+$150 revive"); bots get it too. 0 = off (default); Last Stand pays $150, Battle Royale nothing.
 - `ls_down_finish 1` (Battle Royale knock-downs): a downed player has `ls_down_hp` (100) health and players who
   aren't their friends (squad mates, else teammates) can finish them; everything else still can't hurt them.
 - Natives: `ls_is_down`, `ls_down(id)`, `ls_revive(id, by)`, `ls_down_left(id)`. Forwards

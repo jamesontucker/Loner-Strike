@@ -586,6 +586,9 @@ native bool:ls_is_down(id);
 native ls_down(id);
 /** Gets a downed player up (by = who did it, 0 nobody). */
 native ls_revive(id, by = 0);
+/** What getting a teammate up pays the reviver (cvar ls_down_revive_pay; 0 off, once a downing, not for
+ *  getting yourself up). Last Stand pays $150. */
+native ls_down_revive_pay(amount);
 /** Seconds of bleeding left (0 when not down). */
 native Float:ls_down_left(id);
 

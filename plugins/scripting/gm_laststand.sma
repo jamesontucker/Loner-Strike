@@ -2119,6 +2119,8 @@ stock down_sync()
 		return;
 	g_downOn = on;
 	ls_down_enable(on, floatmax(get_pcvar_float(g_cRevive), 1.0), 2, true);
+	/* getting a teammate up pays */
+	ls_down_revive_pay(150);
 }
 
 public ls_on_down(id, attacker)
