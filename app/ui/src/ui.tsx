@@ -14,10 +14,18 @@ let openSheets = 0;
 type OpenSheet = { id: number; close: () => void };
 const sheetStack: OpenSheet[] = [];
 let nextSheet = 1;
+/** Backs a sheet started itself (taking its entry off) that haven't landed yet: they close
+ *  nothing. History moves later than the code runs, so a sheet opened meanwhile (React's
+ *  dev double mount, or one sheet closing as another opens) would otherwise close at once. */
+let ownBacks = 0;
 /** History moved to an entry over sheet `landed` (0: no sheet): every sheet opened after
  *  it closes (true), or there was none (false). Works from the entry alone, so a Back we
  *  caused ourselves (a sheet taking its entry off again) closes nothing extra. */
 export function closeSheetsAbove(landed: number) {
+  if (ownBacks > 0) {
+    ownBacks--;
+    return true;
+  }
   const above = sheetStack.filter((s) => s.id > landed);
   above.reverse().forEach((s) => s.close());
   return above.length > 0;
@@ -113,7 +121,10 @@ export function Sheet({
       if (at >= 0) sheetStack.splice(at, 1);
       // closed by its own button (its entry is still the current one): take the entry off
       // again, so Back afterwards goes where it should
-      if ((history.state as { sheet?: number } | null)?.sheet === id) history.back();
+      if ((history.state as { sheet?: number } | null)?.sheet === id) {
+        ownBacks++;
+        history.back();
+      }
     };
   }, []);
   return createPortal(
