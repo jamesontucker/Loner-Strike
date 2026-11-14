@@ -9,6 +9,7 @@ import { Canvas, useThree, type RootState, type ThreeEvent } from "@react-three/
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { shapeOutline } from "./shapePreview";
+import { shapeCommand, useCurrentShape } from "./shapeParams"; // Parity A
 import { useTools } from "../../../stores/tools";
 import { Cameras } from "../viewer/Cameras";
 import { gsToThree, ROOT_ROTATION, threeToGs, type Vec3 } from "../viewer/coords";
@@ -787,7 +788,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
           if (axis !== 2 && s.shape !== "wedge") return s.notify("Draw this shape in the 3D or top view: it stands upright.", true);
           const min = a.map((x, i) => Math.min(x, end[i]));
           const max = a.map((x, i) => Math.max(x, end[i]));
-          const r = await s.cmd({ op: "add_shape", shape: s.shape, min, max, sides: s.sides, texture: s.texture, grid: s.alt ? 0 : 1, arc: s.archArc, wall: s.archWall, start: useP5.getState().archStart });
+          const r = await s.cmd({ op: "add_shape", ...shapeCommand(), min, max, texture: s.texture, grid: s.alt ? 0 : 1 }); // Parity A: every shape setting
           if (r.created) s.select({ brushes: r.created.brushes, entities: [], face: null });
         } else {
           const u = [0, 1, 2].filter((i) => i !== axis);
@@ -1043,14 +1044,14 @@ function BoxPreview({ a, b, shape, axis }: { a: Vec3; b: Vec3; shape: boolean; a
   const size = sub(max, min).map((x) => Math.max(x, 0.5)) as Vec3;
   const centre = mul(add(min, max), 0.5);
   const s = useEditor.getState();
-  const archStart = useP5((p) => p.archStart);
+  const params = useCurrentShape(); // Parity A: every shape setting (cone top, tube sides, add height too)
   // shapes stand upright: drawn in a side view (other than a wedge) the core refuses them, so
   // the ghost stays a red box there instead of pretending
   const upright = axis === 2 || s.shape === "wedge";
   const segs = useMemo(
-    () => (shape && upright ? shapeOutline(min, max, { shape: s.shape, sides: s.sides, arc: s.archArc, wall: s.archWall, start: archStart }) : null),
+    () => (shape && upright ? shapeOutline(min, max, params) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [shape, upright, ...min, ...max, s.shape, s.sides, s.archArc, s.archWall, archStart],
+    [shape, upright, ...min, ...max, ...Object.values(params)],
   );
   const colour = shape && !upright ? "#e05a4a" : "#ffd84a";
   return (

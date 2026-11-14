@@ -11,6 +11,7 @@ import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
 import { getGameWads, getTextures, texUrl, type DocEntity, type Issue, type WadTextures } from "./editorApi";
 import { selectionIds } from "./EditorScene";
+import { ShapeExtraFields } from "./ShapeSettings"; // Parity A
 import { EMPTY_SEL, facesOf, keyOf, originOf, selectionBounds, useEditor, type ShapeKind, type ToolId } from "./store";
 import { useFgd } from "./fgd";
 import { FaceSheet, RecentTextures } from "./FaceSheet";
@@ -30,7 +31,7 @@ export const TOOLS: { id: ToolId; label: string; key: string; tip: string }[] = 
   { id: "scale", label: "Scale", key: "R", tip: "Drag the handles to stretch what's picked." },
   { id: "vertex", label: "Vertex", key: "V", tip: "Drag a corner (yellow), an edge (blue) or a face (purple) of a picked brush. Shift-click picks several, arrows nudge them. Brushes stay convex." },
   { id: "box", label: "Box", key: "B", tip: "Drag on the floor (or on top of a brush) to draw a box." },
-  { id: "shape", label: "Shape", key: "C", tip: "Drag to draw a cylinder, wedge, spike, sphere or arch (pick which above the view)." },
+  { id: "shape", label: "Shape", key: "C", tip: "Drag to draw a cylinder, wedge, spike, cone, sphere, arch or torus (pick which above the view)." },
   { id: "clip", label: "Clip", key: "X", tip: "Click two points to place a cut through what's picked. Tab: which side stays. Enter: cut." },
   { id: "entity", label: "Entity", key: "N", tip: "Click a surface to place an entity there." },
   { id: "texture", label: "Texture", key: "T", tip: "Click a face to pick it (Shift adds more), drag it to slide the texture, drag the handles to turn or stretch it. Alt-click picks up a texture." },
@@ -110,6 +111,8 @@ const SHAPES: { id: ShapeKind; label: string }[] = [
   { id: "spike", label: "Spike" },
   { id: "sphere", label: "Sphere" },
   { id: "arch", label: "Arch" },
+  { id: "cone", label: "Cone" }, // Parity A
+  { id: "torus", label: "Torus" }, // Parity A
 ];
 
 const num = (v: string, lo: number, hi: number, fallback: number) => {
@@ -174,24 +177,25 @@ export function ToolOptions() {
         </label>
       )}
       {s.tool === "shape" && s.shape !== "wedge" && (
-        <label title={s.shape === "sphere" ? "Facets round the middle (4-32)" : s.shape === "arch" ? "How many pieces (3-64)" : "Sides (3-64)"}>
-          {s.shape === "arch" ? "Pieces" : "Sides"}
+        <label title={s.shape === "sphere" ? "Facets round the middle (4-32)" : s.shape === "arch" || s.shape === "torus" ? "How many pieces (3-64)" : "Sides (3-64)"}>
+          {s.shape === "arch" || s.shape === "torus" ? "Pieces" : "Sides"}
           <input type="number" min={s.shape === "sphere" ? 4 : 3} max={s.shape === "sphere" ? 32 : 64} value={s.sides} onChange={(e) => s.set({ sides: Math.round(num(e.target.value, s.shape === "sphere" ? 4 : 3, s.shape === "sphere" ? 32 : 64, 12)) })} />
         </label>
       )}
-      {s.tool === "shape" && s.shape === "arch" && (
+      {s.tool === "shape" && (s.shape === "arch" || s.shape === "torus") && (
         <>
           <label title="How far round the arch goes">
             Arc°
             <input type="number" min={1} max={360} value={s.archArc} onChange={(e) => s.set({ archArc: num(e.target.value, 1, 360, 180) })} />
           </label>
-          <label title="How thick the arch's wall is">
-            Wall
+          <label title={s.shape === "torus" ? "How wide the ring's tube is" : "How thick the arch's wall is"}>
+            {s.shape === "torus" ? "Tube width" : "Wall"}
             <input type="number" min={1} max={1024} step={s.grid} value={s.archWall} onChange={(e) => s.set({ archWall: num(e.target.value, 1, 1024, 16) })} />
           </label>
           <ArchStart /> {/* P5 */}
         </>
       )}
+      {s.tool === "shape" && <ShapeExtraFields /> /* Parity A: cone top, tube sides, add height, Preview */}
       {s.tool === "texture" && (
         <div className="seg" role="group" aria-label="What a click does">
           <button type="button" aria-pressed={s.texClick === "pick"} title="Click picks faces to line up in the face sheet" onClick={() => s.set({ texClick: "pick" })}>

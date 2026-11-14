@@ -13,6 +13,12 @@ export interface ShapeParams {
   arc: number;
   wall: number;
   start: number;
+  /** Parity A: a cone's top as a share of its base (0: a point) */
+  top?: number;
+  /** Parity A: a torus's tube sides */
+  tubeSides?: number;
+  /** Parity A: arch and torus pieces climb this much each */
+  addHeight?: number;
 }
 
 const TAU = Math.PI * 2;
@@ -73,9 +79,63 @@ export function shapeOutline(min: V, max: V, p: ShapeParams): Seg[] {
         }
       return out;
     }
+    case "cone": {
+      // Parity A: shapes.rs make_cone: the base on the floor, the top ring (or a point) on top
+      const k = Math.max(0, Math.min(0.95, p.top ?? 0));
+      const base = ringPts(c, rx, ry, sides, min[2]);
+      if (k < 1e-3) return [...loop(base), ...base.map((q) => [q, [c[0], c[1], max[2]]] as Seg)];
+      const topRing = ringPts(c, rx * k, ry * k, sides, max[2]);
+      return [...loop(base), ...loop(topRing), ...base.map((q, i) => [q, topRing[i]] as Seg)];
+    }
+    case "torus": {
+      // Parity A: shapes.rs make_torus: a tube's cross-sections round the ring, joined
+      const sweep = Math.max(1, Math.min(360, p.arc || 360));
+      const halfW = Math.max(0.5, (p.wall || 16) / 2);
+      const halfH = (max[2] - min[2]) / 2;
+      const ts = Math.max(3, Math.min(32, Math.round(p.tubeSides ?? 8)));
+      const rise = p.addHeight ?? 0;
+      const section = (k: number): V[] => {
+        const a = ((p.start + (sweep * k) / sides) * TAU) / 360;
+        const z = min[2] + halfH + rise * k;
+        return Array.from({ length: ts }, (_, j) => {
+          const phi = (TAU * j) / ts;
+          const off = Math.cos(phi) * halfW;
+          return [c[0] + Math.cos(a) * (rx - halfW + off), c[1] + Math.sin(a) * (ry - halfW + off), z + Math.sin(phi) * halfH] as V;
+        });
+      };
+      const out: Seg[] = [];
+      let prev = section(0);
+      out.push(...loop(prev));
+      for (let k = 1; k <= sides; k++) {
+        const next = section(k);
+        out.push(...loop(next), ...prev.map((q, j) => [q, next[j]] as Seg));
+        prev = next;
+      }
+      return out;
+    }
     case "arch": {
       const sweep = Math.max(1, Math.min(360, p.arc || 180));
       const w = Math.max(1, p.wall || 16);
+      const rise = p.addHeight ?? 0;
+      if (rise) {
+        // Parity A: each piece its own block, raised by add height (shapes.rs make_arch)
+        const out: Seg[] = [];
+        for (let k = 0; k < sides; k++) {
+          const z0 = min[2] + rise * k;
+          const z1 = max[2] + rise * k;
+          const d0 = p.start + (sweep * k) / sides;
+          const d1 = p.start + (sweep * (k + 1)) / sides;
+          const at = (d: number, inner: boolean, z: number): V => {
+            const t = (d * TAU) / 360;
+            const [ex, ey] = inner ? [Math.max(0.5, rx - w), Math.max(0.5, ry - w)] : [rx, ry];
+            return [c[0] + Math.cos(t) * ex, c[1] + Math.sin(t) * ey, z];
+          };
+          const lo = [at(d0, false, z0), at(d1, false, z0), at(d1, true, z0), at(d0, true, z0)];
+          const hi = [at(d0, false, z1), at(d1, false, z1), at(d1, true, z1), at(d0, true, z1)];
+          out.push(...loop(lo), ...loop(hi), ...lo.map((q, i) => [q, hi[i]] as Seg));
+        }
+        return out;
+      }
       const out: Seg[] = [];
       for (const z of [min[2], max[2]]) {
         const outer = ringPts(c, rx, ry, sides, z, p.start, sweep, true);

@@ -8,7 +8,7 @@ import * as api from "./editorApi";
 import type { Checks, CmdResult, Doc, DocState, MeshBrush, MeshFace, MeshUpdate } from "./editorApi";
 
 export type ToolId = "select" | "move" | "rotate" | "scale" | "vertex" | "box" | "shape" | "clip" | "entity" | "texture" | "measure";
-export type ShapeKind = "cylinder" | "wedge" | "spike" | "sphere" | "arch";
+export type ShapeKind = "cylinder" | "wedge" | "spike" | "sphere" | "arch" | "cone" | "torus"; // Parity A: cone, torus
 export type FaceRef = { brush: number; face: number };
 export type Dialog = "paste" | "props" | "report" | null;
 export type ViewId = "3d" | "top" | "front" | "side";

@@ -133,7 +133,7 @@ pub fn specs() -> Vec<Spec> {
             description: "Sets (or with an empty value removes) a key on an entity. Undoable." },
         Spec { name: "editor_command", title: "Editor: other edits", kind: Change,
             schema: || obj(json!({"op": {"type": "string", "enum": EDITOR_OPS}, "args": {"type": "object", "description": "The op's fields, e.g. delete {brushes:[1], entities:[]}, transform {brushes, entities, translate:[x,y,z]}, hollow {brushes, thickness}, set_texture {faces:[[brush, null]], texture}, set_world {wads, keys}"}}), &["op"]),
-            description: "Any map editor command (the same ones the editor page sends): add_shape (wedge, spike, sphere, arch), delete, duplicate, transform, move_face, clip, hollow, carve, merge, snap, set_texture, align, tie, to_world, set_world, group... All undoable." },
+            description: "Any map editor command (the same ones the editor page sends): add_shape (wedge, spike, cone, sphere, arch, torus), delete, duplicate, transform, move_face, clip, hollow, carve, merge, snap, set_texture, align, tie, to_world, set_world, group... All undoable." },
         Spec { name: "editor_undo", title: "Editor: undo", kind: Change, schema: none, description: "Undoes the last editor change." },
         Spec { name: "editor_redo", title: "Editor: redo", kind: Change, schema: none, description: "Redoes the last undone editor change." },
         Spec { name: "editor_checks", title: "Editor: check the map", kind: Read, schema: none,

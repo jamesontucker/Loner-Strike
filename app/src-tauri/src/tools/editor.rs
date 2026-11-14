@@ -482,7 +482,7 @@ struct Rotate {
 enum Cmd {
     AddBox { min: P3, max: P3, texture: String },
     AddCylinder { base: P3, radius: f64, height: f64, sides: usize, texture: String, #[serde(default)] grid: f64 },
-    /// wedge, spike, sphere or arch, filling the box `min`..`max`
+    /// wedge, spike, cone, sphere, arch or torus, filling the box `min`..`max`
     AddShape {
         shape: String,
         min: P3,
@@ -493,6 +493,12 @@ enum Cmd {
         #[serde(default = "half_turn")] arc: f64,
         #[serde(default)] start: f64,
         #[serde(default = "sixteen")] wall: f64,
+        /// Parity A: arch/torus pieces climb this much each (spirals)
+        #[serde(default)] add_height: f64,
+        /// Parity A: a cone's top as a share of its base (0 = a point)
+        #[serde(default)] top: f64,
+        /// Parity A: a torus's tube sides
+        #[serde(default = "eight")] tube_sides: usize,
     },
     MoveVertices { picks: Vec<(u64, P3)>, delta: P3, drag: Option<String> },
     /// paste special: copies, each moved, turned (degrees about x, y, z) and stretched from the last
@@ -589,6 +595,10 @@ fn twelve() -> usize {
 fn half_turn() -> f64 {
     180.0
 }
+fn eight() -> usize {
+    8
+}
+
 fn sixteen() -> f64 {
     16.0
 }
@@ -679,7 +689,7 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             let c = ops::make_cylinder(p3(base)?, num(radius, 1.0, BIG, "radius")?, num(height, 1.0, BIG, "height")?, sides, num(grid, 0.0, 1024.0, "grid")?, &texture_name(&texture)?)?;
             created.0.push(history::cmd_add_brush(d, h, c, "Add cylinder").0);
         }
-        Cmd::AddShape { shape, min, max, sides, texture, grid, arc, start, wall } => {
+        Cmd::AddShape { shape, min, max, sides, texture, grid, arc, start, wall, add_height, top, tube_sides } => {
             let (a, b) = (p3(min)?, p3(max)?);
             let tex = texture_name(&texture)?;
             let grid = num(grid, 0.0, 1024.0, "grid")?;
@@ -699,8 +709,26 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
                         arc: num(arc, 1.0, 360.0, "arc")?,
                         start: num(start, -360.0, 360.0, "start angle")?,
                         sides,
+                        add_height: num(add_height, -4096.0, 4096.0, "add height")?,
                     };
                     shapes::make_arch(&arch, grid, &tex)?
+                }
+                "cone" => vec![shapes::make_cone(a, b, sides, num(top, 0.0, 0.95, "top size")?, grid, &tex)?],
+                "torus" => {
+                    let c = (lo + hi) * 0.5;
+                    let torus = shapes::Torus {
+                        centre: v3(c.x, c.y, lo.z),
+                        radius_x: (hi.x - lo.x) / 2.0,
+                        radius_y: (hi.y - lo.y) / 2.0,
+                        wall: num(wall, 1.0, BIG, "tube width")?,
+                        height: hi.z - lo.z,
+                        sides,
+                        tube_sides,
+                        arc: num(arc, 1.0, 360.0, "arc")?,
+                        start: num(start, -360.0, 360.0, "start angle")?,
+                        add_height: num(add_height, -4096.0, 4096.0, "add height")?,
+                    };
+                    shapes::make_torus(&torus, &tex)?
                 }
                 _ => return Err(NOT_UNDERSTOOD.into()),
             };
@@ -708,6 +736,8 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
                 "wedge" => "Add wedge",
                 "spike" => "Add spike",
                 "sphere" => "Add sphere",
+                "cone" => "Add cone",
+                "torus" => "Add torus",
                 _ => "Add arch",
             };
             let mut tx = Tx::new(d, label);
@@ -2544,6 +2574,16 @@ mod tests {
             assert_eq!(r["created"]["brushes"].as_array().map(|a| a.len()), Some(n), "{shape}: {r}");
         }
         assert!(t.cmd(json!({"op": "add_shape", "shape": "blob", "min": [0, 0, 0], "max": [8, 8, 8], "texture": "ROCK"})).await["error"].is_string());
+        // Parity A: cone (cut off), torus (with its own tube sides and a climb), arch add height
+        let r = t.cmd(json!({"op": "add_shape", "shape": "cone", "min": [0, 0, 0], "max": [128, 128, 64], "sides": 12, "top": 0.5, "texture": "ROCK", "grid": 1})).await;
+        assert_eq!(r["created"]["brushes"].as_array().map(|a| a.len()), Some(1), "cone: {r}");
+        let r = t.cmd(json!({"op": "add_shape", "shape": "torus", "min": [0, 0, 0], "max": [256, 256, 32], "sides": 12, "tube_sides": 6, "wall": 32, "arc": 360, "add_height": 8, "texture": "PIPE", "grid": 1})).await;
+        assert_eq!(r["created"]["brushes"].as_array().map(|a| a.len()), Some(12), "torus: {r}");
+        assert_eq!(t.get("/api/tools/editor/doc").await["undo"], "Add torus");
+        let r = t.cmd(json!({"op": "add_shape", "shape": "arch", "min": [0, 0, 0], "max": [256, 256, 16], "sides": 8, "wall": 32, "arc": 360, "add_height": 16, "texture": "STEP", "grid": 1})).await;
+        assert_eq!(r["created"]["brushes"].as_array().map(|a| a.len()), Some(8), "spiral: {r}");
+        assert!(t.cmd(json!({"op": "add_shape", "shape": "torus", "min": [0, 0, 0], "max": [64, 64, 32], "wall": 200, "texture": "PIPE"})).await["error"].is_string());
+        assert!(t.cmd(json!({"op": "add_shape", "shape": "cone", "min": [0, 0, 0], "max": [64, 64, 32], "top": 2, "texture": "PIPE"})).await["error"].is_string());
 
         // a vertex drag in two steps: one undo step, from where it started
         let r = t.cmd(json!({"op": "add_box", "min": [0, 0, 0], "max": [64, 64, 64], "texture": "CRATE01"})).await;
