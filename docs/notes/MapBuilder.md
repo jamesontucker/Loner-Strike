@@ -70,3 +70,14 @@ ls_outpost.map), shipped files in plugins/game/.
   (in the ground and in the lamp head) are NULL. Recompiled (Normal, 6 threads, niced): no leak, no warnings,
   collision unchanged (clipnodes 1508). Nav re-learned anyway with r43507381531: the same 365 areas and the same
   knowledge (34100 pairs in sight, 581 wallbang spots); mapcheck.py: all pass. Outputs in plugins/game/maps.
+
+## Requests from W1 (2026-11-13): Last Stand upgrade spots on ls_outpost (and ls_lab)
+The Last Stand kit (plugins/game/kits/laststand.kit.json) has new markers; please place them on ls_outpost:
+- `ls_marker kind=lst_perk perk=<tough|hands|doubletap|revive|feet>`: five perk stations, spread over the courtyard
+  and the keep (one each).
+- `ls_marker kind=lst_bench`: one upgrade bench in the armory.
+- `ls_marker kind=lst_trap size="x y z"`: one per gate, the box covering the way in just outside the gate (I tested
+  with 160 x 192 x 96 centered ~100 u outside each gate).
+- `ls_marker kind=lst_box`: 2-3 spots for the mystery box (it moves between them).
+All need `mode=laststand`. My test pack (scratchpad, not committed) used: perks at (-200 200), (200 200), (-200 -100),
+(200 -100), (0 300); bench (300 330); traps (-630 0), (630 0), (0 -570); boxes (-150 -250), (150 -250); all z 4.

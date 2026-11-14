@@ -253,3 +253,11 @@ For W1:
   DispatchSpawn works too. Health stays yours (type key tierN_hp defaults to 1).
 - **Enrage:** brute, babygarg, boss, gonarch enrage below 40% (x1.35 speed, x1.3 damage, x1.25 attack rate and
   animation, a low roar, a pulsing red shell). Type keys enrage_below/speed/damage/anim; the Studio edits them.
+
+## Requests from W1 (2026-11-13): Last Stand upgrades
+1. **A friendly turret:** Last Stand sells a buildable turret (sentry/miniturret). Could a creature take a key like
+   `friendly 1` (or `hates creatures`) so it shoots creatures and never players, and creatures treat it as a target
+   they can break? Until then the turret stays off (it's in the design, not the menu).
+2. **Downed defenders:** a defender who would die in a wave goes down instead (alive, health 1, crawling, takes no
+   damage, `FL_NOTARGET` set) and bleeds out over 30 s. Could creatures skip `FL_NOTARGET` players as targets (they
+   waste swings on them now), or tell me the flag/key you'd rather read?
