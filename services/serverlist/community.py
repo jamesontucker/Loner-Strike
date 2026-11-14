@@ -142,7 +142,7 @@ _MODE_ID = re.compile(r"^[A-Za-z0-9_]{1,32}$")
 
 # custom creatures a map, mode, prefab or creature package carries: the rules live in formats.py
 # (the checker child reads the fragment itself)
-from formats import BUILTIN_CREATURES, CREATURES_FILE, CREATURES_TYPES, creature_name_ok, creatures_ini_problem, creatures_ini_types  # noqa: E402,F401
+from formats import BUILTIN_CREATURES, CREATURES_FILE, CREATURES_TYPES, author_slug, creature_name_ok, creatures_ini_problem, creatures_ini_sections, creatures_ini_types, namespace_is  # noqa: E402,F401
 
 
 def _creatures(raw, kind):
@@ -1923,9 +1923,32 @@ class Community:
         missing = [c["name"] for c in item.get("creatures", []) if c["name"] not in item["checks"].get("creatures", [])]
         if missing:
             raise Reject(422, f"The package lists {missing[0]} but its creatures.ini doesn't define it. Make it again with Publish.")
+        self._creature_names_owned(item, facts)
         # the upload's GameBanana date: the evidence when two pages declare the same uid (not indexed)
         item["fileAt"] = f.get("added") or 0
         return item
+
+    def _creature_names_owned(self, item, facts):
+        """Every type a package defines is in its publisher's namespace (the GameBanana submitter's
+        name, slugged as the app does), or is an exact copy of a type listed by the author whose
+        namespace it is (a creation carrying someone else's creature it uses). A remix is published
+        in the remixer's namespace (remixOf keeps the credit)."""
+        secs = item.get("checks", {}).get("creatureSections", {})
+        mine = author_slug(facts.get("author", ""))
+        foreign = {n: h for n, h in secs.items() if not namespace_is(n, mine)}
+        if not foreign:
+            return
+        listed = {}
+        for row in self.store.rows(("listed",)):
+            it = _j(row["item"]) or {}
+            slug = author_slug(it.get("author", ""))
+            for n, h in ((it.get("checks") or {}).get("creatureSections") or {}).items():
+                if namespace_is(n, slug):
+                    listed.setdefault(n, set()).add(h)
+        for n, h in foreign.items():
+            if h not in listed.get(n, ()):
+                raise Reject(422, f"{n} isn't in your name ({mine}.…) and isn't a listed creature by its author, unchanged. "
+                                  "Publish your own creatures under your name, or use the listed one as it is.")
 
     def check_files(self, model, gb, f, kind):
         """Downloads the page's file (range requests to GameBanana's file hosts, at most
@@ -1966,6 +1989,9 @@ class Community:
         out = {"files": result["files"], "kinds": result["kinds"], "bytes": f["size"], "at": now()}
         if isinstance(result.get("creatures"), list):
             out["creatures"] = [n for n in result["creatures"] if isinstance(n, str)][:64]
+            secs = result.get("creatureSections")
+            if isinstance(secs, dict):
+                out["creatureSections"] = {k: v for k, v in list(secs.items())[:64] if isinstance(k, str) and isinstance(v, str)}
         return out
 
     def run_checker(self, path, name, seconds, cwd):

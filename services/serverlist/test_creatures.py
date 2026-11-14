@@ -30,12 +30,15 @@ base = ann.runner_x
 """
 CREATURES = [{"name": "ann.runner_x", "model": True, "sounds": 2}, {"name": "ann.boss_y"}]
 FILES = {"creatures/creatures.ini": GOOD_INI, "models/ann/runner_x.mdl": model()}
+# (the app keeps packed files under the author's own folders)
+FILES_NS = {"models/ann/qa/runner_x.mdl": model()}
 ASSETS = ["sound/ann/hit.wav", "sound/ann/hit2.wav"]
 
 
-def creature_page(gb=706630, file_id=1789869):
-    """A tagged page among the game's skins (the prefab fixture, moved and renumbered)."""
+def creature_page(gb=706630, file_id=1789869, author="Ann"):
+    """A tagged page among the game's skins (the prefab fixture, moved, renumbered, by Ann)."""
     p = copy.deepcopy(PREFAB)
+    p["_aSubmitter"]["_sName"] = author
     p["_idRow"] = gb
     p["_aFiles"] = p["_aFiles"][:1]
     p["_aFiles"][0]["_idRow"] = file_id
@@ -71,12 +74,48 @@ class Rules(unittest.TestCase):
                            (b"[ann.x]\nmodel = ../../evil.mdl\n", "outside"), (b"[ann.x]\nmodel = C:/x.mdl\n", "outside"),
                            (b"[ann.x]\nmodel = models\\\\x.mdl\n", "outside"), (b"[ann.x]\nmodel = maps/x.bsp\n", "models/....mdl"),
                            (b"[ann.x]\nmodel = models/a.mdl | sound/x.wav\n", "models/....mdl"),
-                           (b"[ann.x]\nsnd_die = x.exe\n", ".wav path"), (b"[ann.x]\nsnd_die = a/1.wav | /etc/x.wav\n", ".wav path"),
+                           (b"[ann.x]\nsnd_die = x.exe\n", ".wav path"), (b"[ann.x]\nsnd_die = a/1.wav | /etc/x.wav\n", "outside"),
                            (b"[ann.x]\nsnd_pain = a/../../x.wav\n", "outside"), (b"[ann.x]\nbase = ann.nope\n", "isn't a built-in"),
                            (b"[ann.x]\nbase = bob.y\n[ann.y]\n", "isn't a built-in"), (b"; nothing\n", "no creature"),
                            (b"[ann.x]\n" + b"a" * 600 + b"\n", "longer"), (b"[ann.x]\0", "text"), (b"[ann.x]\n" * 1 + b" " * (65 << 10), "too big"),
                            (b"".join(b"[ann.t%d]\n" % i for i in range(33)), "33 types")):
             self.assertIn(words, cm.creatures_ini_problem(bad) or "", bad[:40])
+
+    def test_every_key_that_names_a_file(self):
+        hostile = {
+            b"models = models/ok.mdl /etc/passwd": "outside", b"model = models/a.mdl models/../../x.mdl": "outside",
+            b"model = \\\\server\\share\\x.mdl": "outside", b"model = C:/x.mdl": "outside", b"model = /models/x.mdl": "outside",
+            b"sounds = a/1.wav maps/x.bsp": ".wav path", b"sounds = /abs/x.wav": "outside", b"snd_idle = ok.wav x.exe": ".wav path",
+            b"snd_alert = ../x.wav": "outside", b"snd_hit = d:x.wav": "outside", b"snd_miss = a.wav|/x.wav": "outside",
+            b"snd_die = a.wav | \\\\h\\x.wav": "outside",
+            b"ls = model=maps/x.bsp anims=walk run attack die": "ls model", b"ls = model=models/a.mdl anims=walk sound/x.wav": "ls names a file",
+            b"ls = model=../x.mdl": "outside", b"say_idle = sound/x.wav": "sentence", b"say_pain = HG_PAIN": None,
+            b"walk = models/x.mdl": "names a file where", b"glow = /x": "outside", b"whatever = a/b": "names a file where",
+            b"name = Fast / One": None, b"sounds = ann/a.wav ann/b.wav": None, b"ls = model=models/ann/x.mdl anims=walk run attack die": None,
+        }
+        for line, words in hostile.items():
+            with self.subTest(line=line):
+                why = cm.creatures_ini_problem(b"[ann.x]\n" + line + b"\n")
+                if words is None:
+                    self.assertIsNone(why)
+                else:
+                    self.assertIn(words, why or "")
+
+    def test_namespaces(self):
+        self.assertEqual((cm.author_slug("Jam Tucker!"), cm.author_slug("  "), cm.author_slug("1234"), cm.author_slug("Texture_Woman66")),
+                         ("jam_tucker", "a", "a1234", "texture_woman66"))
+        self.assertTrue(cm.namespace_is("jam_tucker.x", "jam_tucker"))
+        self.assertFalse(cm.namespace_is("jam.x", "jam_tucker"), "a cut only when the name needs it")
+        self.assertFalse(cm.namespace_is("bob.x", "bobby"), "someone else's shorter name")
+        long_slug = "abcdefghijklmnopqrst"
+        self.assertTrue(cm.namespace_is("abcdefghij." + "y" * 20, long_slug))
+        self.assertFalse(cm.namespace_is("abcdefghi." + "y" * 20, long_slug))
+        sec = cm.creatures_ini_sections(GOOD_INI)
+        self.assertEqual(sorted(sec), ["ann.boss_y", "ann.runner_x"])
+        # comments and spacing don't change a section; a value does
+        same = GOOD_INI.replace(b"hp = 80", b"hp = 80   ; tough").replace(b"; <<< end", b"")
+        self.assertEqual(cm.creatures_ini_sections(same), sec)
+        self.assertNotEqual(cm.creatures_ini_sections(GOOD_INI.replace(b"hp = 80", b"hp = 81"))["ann.runner_x"], sec["ann.runner_x"])
 
     def test_the_format_check_reads_it(self):
         self.assertEqual(formats.check("creatures/creatures.ini", __import__("io").BytesIO(GOOD_INI), len(GOOD_INI)), "creatures")
@@ -87,6 +126,7 @@ class Rules(unittest.TestCase):
 
     def test_where_creature_files_may_be(self):
         cm.check_package(["maps/a.bsp", "creatures/creatures.ini", "models/ann/x.mdl", "sound/ann/x.wav"], "map")
+        cm.check_package(["creatures/creatures.ini", "models/ann/qa/x.mdl", "sound/ann/qa/a/1.wav"], "creature")
         cm.check_package(["modes/cage/graph.json", "creatures/creatures.ini", "models/ann/x.mdl"], "mode")
         cm.check_package(["prefabs/can.map", "prefabs/can.json", "creatures/creatures.ini", "models/ann/x.mdl", "sound/ann/x.wav"], "prefab")
         cm.check_package(["creatures/creatures.ini", "creatures/preview.png", "models/ann/x.mdl", "sound/ann/x.wav", "README.txt", "loner-strike.json"], "creature")
@@ -155,22 +195,53 @@ class Registration(unittest.TestCase):
         self.refused(zip_of(ASSETS, dict(FILES, **{"models/ann/runner_x.mdl": b"not a model",
                                                    "loner-strike.json": manifest({"kind": "creature", "name": "x", "creatures": CREATURES})})), "runner_x.mdl")
 
-    def test_a_map_carrying_creatures(self):
-        ff = FakeFiles()
-        ff.files[1885247] = zip_of(["maps/de_marakesh.bsp", "README.txt", *ASSETS],
-                                   dict(FILES, **{"loner-strike.json": manifest(dict(MAP_MANIFEST, creatures=CREATURES))}))
-        c, _ = make(files=ff)
-        code, ans = c.submit(body(map_item()), "a")
+    def map_with(self, c, ini):
+        c.get_range.files[1885247] = zip_of(["maps/de_marakesh.bsp", "README.txt", *ASSETS],
+                                            dict(FILES, **{"creatures/creatures.ini": ini, "loner-strike.json": manifest(dict(MAP_MANIFEST, creatures=CREATURES))}))
+        return c.submit(body(map_item()), "a")
+
+    def test_a_map_carrying_someone_elses_listed_creature(self):
+        # TheHouthi's map carries Ann's types: refused until Ann's creature is listed, then only unchanged
+        c = self.setup(creature_zip())
+        code, ans = self.map_with(c, GOOD_INI)
+        self.assertEqual(code, 422, ans)
+        self.assertIn("isn't in your name (thehouthi.", ans["error"])
+        self.assertEqual(c.submit(body(creature_item()), "ann")[0], 200)
+        code, ans = self.map_with(c, GOOD_INI.replace(b"hp = 80", b"hp = 9999"))
+        self.assertEqual(code, 422, "changed: not Ann's creature any more")
+        code, ans = self.map_with(c, GOOD_INI.replace(b"; <<< end", b"; carried"))
         self.assertEqual(code, 200, ans)
-        it = json.loads(cm.build_index(c.store)[0])["items"][0]
+        it = [x for x in json.loads(cm.build_index(c.store)[0])["items"] if x["gb"] == 739197][0]
         self.assertEqual([x["name"] for x in it["creatures"]], ["ann.runner_x", "ann.boss_y"])
-        # a map whose creatures.ini changes a built-in type is refused
+        self.assertNotIn("checks", it, "the section hashes stay on the server")
+
+    def test_own_namespace_and_remixes(self):
+        # a remix of Ann's creature by Bob: in Bob's name, the credit in remixOf
+        bob_ini = GOOD_INI.replace(b"ann.", b"bob.")
+        bob = [dict(x, name=x["name"].replace("ann.", "bob.")) for x in CREATURES]
+        man = {"kind": "creature", "name": "Faster One", "creatures": bob, "remixOf": {"model": "Mod", "gb": 706630, "name": "Fast One", "author": "Ann"}}
+        c = self.setup(creature_zip(ini=bob_ini, man=man), page=creature_page(author="Bob"))
+        code, ans = c.submit(body(creature_item(creatures=bob)), "bob")
+        self.assertEqual(code, 200, ans)
+        it = [x for x in json.loads(cm.build_index(c.store)[0])["items"] if x["gb"] == 706630][0]
+        self.assertEqual((it["creatures"][0]["name"], it["remixOf"]["author"]), ("bob.runner_x", "Ann"))
+        # Bob can't publish in Ann's name
+        c = self.setup(creature_zip(), page=creature_page(author="Bob"))
+        code, ans = c.submit(body(creature_item()), "bob")
+        self.assertEqual(code, 422, ans)
+        self.assertIn("isn't in your name (bob.", ans["error"])
+        # files under the author's own folders pass
+        c = self.setup(zip_of(ASSETS, dict(FILES_NS, **{"creatures/creatures.ini": GOOD_INI.replace(b"models/ann/runner_x.mdl", b"models/ann/qa/runner_x.mdl"),
+                                                        "loner-strike.json": manifest({"kind": "creature", "name": "Fast One", "creatures": CREATURES})})))
+        self.assertEqual(c.submit(body(creature_item()), "ann")[0], 200)
+
+    def test_a_map_whose_creatures_change_a_built_in(self):
+        ff = FakeFiles()
         ff.files[1885247] = zip_of(["maps/de_marakesh.bsp", "README.txt"], {"creatures/creatures.ini": b"[runner]\nhp = 1\n", "loner-strike.json": manifest(MAP_MANIFEST)})
         c, _ = make(files=ff)
         code, ans = c.submit(body(map_item()), "a")
         self.assertEqual(code, 422, ans)
         self.assertIn("built-in", ans["error"])
-
 
 if __name__ == "__main__":
     unittest.main()

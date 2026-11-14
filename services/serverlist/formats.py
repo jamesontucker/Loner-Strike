@@ -21,6 +21,7 @@
 # every map, model, sprite, sound and texture of the installed CS 1.6, CZ and Half-Life, the
 # downloads folder, our nav pack and real GameBanana packages without one false refusal
 # (docs/COMMUNITY-SERVER.md, "Format checks").
+import hashlib
 import json
 import re
 import struct
@@ -560,6 +561,32 @@ _CREATURE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,23}\.[a-z0-9_]{1,29}$")
 # a model: models/....mdl; a sound: a .wav path relative to sound/ (as the game names sounds)
 _CREATURE_MODEL = re.compile(r"^models/[a-z0-9_./-]{1,150}\.mdl$")
 _CREATURE_SOUND = re.compile(r"^[a-z0-9_-][a-z0-9_./-]{0,150}\.wav$")
+# a sentence group (say_* keys: the game's sentences.txt names, like HG_IDLE)
+_CREATURE_SENTENCE = re.compile(r"^!?[a-z0-9_]{1,31}$")
+# the bot brain's keys that name files (creature.cpp LsSetTypeKey): models, and sounds relative to sound/
+_SOUND_KEYS = ("sounds", "snd_idle", "snd_alert", "snd_attack", "snd_hit", "snd_miss", "snd_pain", "snd_die")
+
+
+def author_slug(author):
+    """The author part of shared names, exactly as the app makes it (creaturepack.rs author_slug)."""
+    s = ""
+    for c in (author or "").strip().lower():
+        if c.isascii() and c.isalnum():
+            s += c
+        elif s and not s.endswith("_"):
+            s += "_"
+    s = s.strip("_")
+    if not s or s.isdigit():
+        return ("a" + s)[:20]
+    return s[:20].rstrip("_")
+
+
+def namespace_is(name, slug):
+    """Is a shared type's author part this slug, cut exactly as the app cuts it to fit 31?"""
+    part, _, rest = name.partition(".")
+    # (the app cuts the slug only as far as the name needs: creaturepack.rs shared_name)
+    want = slug[:max(0, 31 - len(rest) - 1)].rstrip("_")
+    return bool(part) and part == want
 
 
 def creature_name_ok(n):
@@ -609,17 +636,35 @@ def creatures_ini_problem(data):
         key = key.lower()
         if "\\" in value or ":" in value or ".." in value:
             return f"[{names[-1]}] names a file outside the game's folders"
+        if value.startswith("/") or value.startswith("\\\\"):
+            return f"[{names[-1]}] names a file outside the game's folders"
         toks = value.replace("|", " ").lower().split()
-        if key == "model":
+        if key not in ("name", "display") and any(t.startswith("/") or t.startswith("model=/") for t in toks):
+            return f"[{names[-1]}] names a file outside the game's folders"
+        if key in ("model", "models"):
             bad = [t for t in toks if not _CREATURE_MODEL.match(t)]
             if bad:
-                return f"[{names[-1]}] model isn't a models/....mdl path ({bad[0][:60]})"
-        elif key.startswith("snd_"):
+                return f"[{names[-1]}] {key} isn't a models/....mdl path ({bad[0][:60]})"
+        elif key in _SOUND_KEYS or key.startswith("snd_"):
             bad = [t for t in toks if not _CREATURE_SOUND.match(t)]
             if bad:
                 return f"[{names[-1]}] {key} isn't a .wav path in sound/ ({bad[0][:60]})"
+        elif key == "ls":
+            # ls = model=<path> anims=<walk> <run> <attack> <die>
+            bad = [t for t in toks if t.startswith("model=") and not _CREATURE_MODEL.match(t[6:])]
+            if bad:
+                return f"[{names[-1]}] ls model isn't a models/....mdl path ({bad[0][:60]})"
+            if any("/" in t and not t.startswith("model=") for t in toks):
+                return f"[{names[-1]}] ls names a file where it shouldn't"
+        elif key.startswith("say_"):
+            bad = [t for t in toks if not _CREATURE_SENTENCE.match(t)]
+            if bad:
+                return f"[{names[-1]}] {key} isn't a sentence name ({bad[0][:40]})"
         elif key == "base":
             bases.append((names[-1], value.lower()))
+        elif key not in ("name", "display") and "/" in value:
+            # (no other key takes a file)
+            return f"[{names[-1]}] {key} names a file where it shouldn't"
     if not names:
         return "it has no creature types"
     if len(names) > CREATURES_TYPES:
@@ -628,6 +673,28 @@ def creatures_ini_problem(data):
         if base and base not in BUILTIN_CREATURES and base not in names:
             return f"[{who}] starts from {base[:40]}, which isn't a built-in type or in this file"
     return None
+
+
+def creatures_ini_sections(data):
+    """{type: sha256 of its section}: each line with comments cut and spaces trimmed, blank lines
+    left out (what the game reads), so the same type packed twice hashes the same."""
+    out, cur, lines = {}, None, []
+
+    def done():
+        if cur is not None:
+            h = hashlib.sha256("\n".join(lines).encode("latin-1")).hexdigest()
+            out[cur] = h if cur not in out else hashlib.sha256((out[cur] + h).encode()).hexdigest()
+
+    for raw in data.decode("latin-1").splitlines():
+        line = raw.split(";", 1)[0].split("#", 1)[0].split("//", 1)[0].strip()
+        if not line:
+            continue
+        if line.startswith("["):
+            done()
+            cur, lines = line[1:].split("]", 1)[0].strip(), []
+        lines.append(line)
+    done()
+    return out
 
 
 def creatures_ini_types(data):

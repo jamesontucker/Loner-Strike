@@ -42,6 +42,7 @@ def run(path, name, seconds):
     formats.set_deadline(time.monotonic() + seconds)
     kinds = {}
     creatures = []
+    sections = {}
 
     def one(fname, fh, size):
         try:
@@ -53,7 +54,9 @@ def run(path, name, seconds):
         if k == "creatures":
             # the types it defines (the service checks the listing against them)
             fh.seek(0)
-            creatures.extend(formats.creatures_ini_types(fh.read(formats.CREATURES_MAX)))
+            data = fh.read(formats.CREATURES_MAX)
+            creatures.extend(formats.creatures_ini_types(data))
+            sections.update(formats.creatures_ini_sections(data))
 
     if not name.lower().endswith(".zip"):
         with open(path, "rb") as fh:
@@ -86,6 +89,7 @@ def run(path, name, seconds):
     out = {"ok": True, "files": sum(kinds.values()), "kinds": kinds}
     if creatures:
         out["creatures"] = creatures
+        out["creatureSections"] = sections
     return out
 
 
