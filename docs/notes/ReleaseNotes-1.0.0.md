@@ -47,7 +47,7 @@ Loner-Strike 1.0.0 is the first full release. You still get everything from 0.1,
 - **Last Stand (made here).** Hold the base against endless rounds of Half-Life creatures, or knife-only zombie bots. It has barricades you repair, a shop and armory, perks, a gun upgrade bench, a mystery box, paid traps, turrets, power-ups and bosses. If you go down you crawl and bleed out until a teammate revives you. Bots defend, repair, buy and revive with you.
 - **ls_outpost.** A walled outpost at night, built for Last Stand. It has three boarded gates, battlements to shoot down from, and spawns for 4 to 16 players (playable up to 32).
 - **Battle Royale (made here).** You drop in from the sky and steer down. Loot up before anyone can be hurt, then survive a shrinking zone. Loot includes healing items, armor levels 1 to 3, scarce ammo, items that glow by rarity, supply drops, and death crates with everything a player carried.
-- **Duos and Squads.** These are their own modes. You get a squad lobby, no squad damage, markers and radar dots for squad mates, and a knocked-down state where only your squad can revive you.
+- **Duos and Squads.** These are their own modes. You get a squad lobby, no squad damage, markers and radar dots for squad mates, and a knocked-down state (45 seconds to bleed out) where only your squad can revive you.
 - **Battle Royale HUD.** It shows players left, kills, the zone timer, and how far away and which way the next circle is. You get a kill feed, and you watch your killer after you die.
 - **br_valley.** A big Battle Royale map in a river valley, with towns, a river and waterfall, ridges, and a whole level of caves, mines and bunkers below ground. Bots spread over the surface, high ground and the level below.
 - **Creatures.** New Half-Life creature types join Last Stand: vortigaunt, baby gargantua, assassin, soldier, gonarch and more. Tougher tiers glow, heavies enrage when hurt, and barnacles hang from ceilings.
@@ -73,10 +73,11 @@ All of these are in the new Tools section, marked Beta.
 - **Gameplay panel.** Drag in game mode pieces, like spawners, zones, barricades, loot, supply drops, waves and creatures. Mode kits show what a mode still needs on your map.
 - **Entity I/O view.** See what triggers what in one graph, with broken links marked.
 - **Game Mode Studio.** Build a whole game mode visually, Blueprint style, with nodes for players, bots, creatures, zones, shops, perks, revives, squads and more. No coding needed.
-  - Includes: functions, macros, custom events, Timelines, variables, a snippet library and My library to reuse your own pieces.
+  - Includes: functions, macros, custom events, Timelines, variables, data tables (a gun list, prices or waves as a grid you look things up in), a snippet library and My library to reuse your own pieces.
   - Start from five example modes: Infection, Gun Game Lite, King of the Hill, One in the Chamber and Juggernaut. Or start from the Last Stand Lite and Royale Lite templates.
+  - Timelines have curves: each key can be linear, a step, ease in, ease out, or a custom curve you shape with handles.
   - Press F1 on any node for help, or take the short tour.
-- **Test your mode.** Playtest puts it straight into your game. Compile checks it, and a debugger with breakpoints shows live values. Test run plays it with bots on a hidden server and reports pass, warn or fail. You can mark a variable as a setting hosts can change.
+- **Test your mode.** Playtest puts it straight into your game. Compile checks it, and a debugger with breakpoints shows live values. You can change a value while it plays (live tweaks) and keep it or put it back. Test run plays it with bots on a hidden server and reports pass, warn or fail. You can mark a variable as a setting hosts can change.
 - **Plugin Studio.** Write AMX Mod X plugins with suggestions, hover docs and plain-language compile errors, then try them in your game. Loner-Strike's own plugins are read-only.
 - **Creature Studio.** Make creature types with their health, speed, attacks, tiers and fleeing, and see a live 3D preview. You can also set up waves for Last Stand.
 - **Map simulator.** Bots play your map on a hidden server. You get a report drawn on the map showing where bots went and died, falls, stuck spots, rounds won per side, and places nobody visits.
@@ -120,6 +121,9 @@ All of these are in the new Tools section, marked Beta.
 - **Spray maker.** Make a spray from layers of pictures, words and stickers. You can use the fonts on your computer (Windows and macOS), start from templates, and see it on a real wall the way the game draws it. Install it with one click, and your old one is kept.
 - **Prefabs carry their credits** when you share them, and installed creations remember who made them.
 - **Made by players on lonerstrike.com.** The website shows what's listed in Community. **Open in Loner-Strike** opens a creation's page in the app; installing still asks first.
+- **Link Steam to Discord.** Say `/link` on any Loner-Strike server and type the code in the Loner-Strike Discord.
+- **Supporters.** Supporting Loner-Strike (from $3, through Polar) makes you a Supporter for good: a gold Discord role and a [VIP] tag with a reserved slot on the official servers. Hosts can honor Supporters on their own servers too (off by default).
+- **Moderate a server.** Apply in the Discord; the server's owner approves you and sends a Moderator invite from the app. **Join as moderator** shows what you'll be able to do before you accept, and the owner can revoke it in one click.
 - **Join the Discord** from Community and Find servers.
 - **Terms.** You'll find Terms and Privacy in About. Publishing asks you to confirm you have the right to share.
 
@@ -168,7 +172,7 @@ All of these are in the new Tools section, marked Beta.
 
 ## Not sure it landed (check before publishing)
 
-- Game Mode Studio data tables and live tweaks while playtesting. The site docs mention them, but the notes say they're waiting to be committed.
+- Community roles (Steam to Discord link, Supporters, moderator applications and invites). The app's side is built, but its routes, the list service, the Discord bot and Polar's webhook aren't live yet (Roles.md); drop these lines if they don't ship with 1.0.
 - Bots learning a Counter-Strike 1.6 map before an editor Playtest. The fix is committed, but the notes say it hasn't been run against a live server.
 - Open in Loner-Strike (`loner-strike://` links). Tested on a Mac debug build; Windows registers the link at install and first start, untested until QA round 4 (QA4.md area H). The website's Made by players section reads the community list (CORS is set up and checked); it shows the empty state until an item is listed.
 - Windows installer as a single setup.exe (no MSI), with 0.1.2 updating in place. It's committed in the build config, but no release build has run it yet.
