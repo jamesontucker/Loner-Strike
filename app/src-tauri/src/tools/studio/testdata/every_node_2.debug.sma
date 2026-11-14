@@ -1455,7 +1455,7 @@ stock lsg_round_time(secs)
 stock bool:lsg_cmd_denied(const w[])
 {
 	static const DENY_WORDS[][] = { "quit", "exit", "restart", "_restart", "changelevel", "changelevel2", "map", "meta", "amxx", "condump", "logaddress" }
-	static const DENY_PARTS[][] = { "file", "cfg", "log", "password", "rcon", "downloadurl", "motd", "exec", "dump", "alias", "plugin", "write", "save", "load", "admin", "ban", "sql" }
+	static const DENY_PARTS[][] = { "file", "cfg", "log", "password", "rcon", "downloadurl", "motd", "exec", "dump", "alias", "plugin", "write", "save", "load", "admin", "ban", "sql", "nav", "del", "remove", "reset", "trace", "record", "demo", "map", "list" }
 	for (new i = 0; i < sizeof DENY_WORDS; i++)
 		if (equal(w, DENY_WORDS[i]))
 			return true
@@ -1467,8 +1467,8 @@ stock bool:lsg_cmd_denied(const w[])
 
 stock bool:lsg_server_word(const w[])
 {
-	static const WORDS[][] = { "say", "humans_join_team", "sv_gravity", "sv_airaccelerate", "sv_accelerate", "sv_maxspeed", "sv_friction", "sv_stopspeed", "sv_alltalk", "sv_maxvelocity", "sv_stepsize", "sv_wateraccelerate", "sv_waterfriction", "sv_bounce", "sv_restart", "sv_restartround", "sv_clienttrace", "sv_voiceenable" }
-	static const PREFIXES[][] = { "mp_", "bot_", "ls_" }
+	static const WORDS[][] = { "say", "humans_join_team", "sv_gravity", "sv_airaccelerate", "sv_accelerate", "sv_maxspeed", "sv_friction", "sv_stopspeed", "sv_alltalk", "sv_maxvelocity", "sv_stepsize", "sv_wateraccelerate", "sv_waterfriction", "sv_bounce", "sv_restart", "sv_restartround", "sv_voiceenable", "bot_quota", "bot_quota_mode", "bot_difficulty", "bot_add", "bot_add_t", "bot_add_ct", "bot_kick", "bot_kill", "bot_knives_only", "bot_pistols_only", "bot_snipers_only", "bot_all_weapons", "bot_allow_rogues", "bot_allow_pistols", "bot_allow_shotguns", "bot_allow_sub_machine_guns", "bot_allow_rifles", "bot_allow_machine_guns", "bot_allow_grenades", "bot_allow_snipers", "bot_allow_shield", "bot_join_team", "bot_join_after_player", "bot_chatter", "bot_stop", "bot_zombie", "bot_defer_to_human", "bot_auto_vacate", "bot_walk", "ls_comp_start", "ls_comp_stop", "ls_comp_spawn", "ls_comp_heal", "ls_comp_players" }
+	static const PREFIXES[][] = { "mp_" }
 	if (lsg_cmd_denied(w))
 		return false
 	for (new i = 0; i < sizeof WORDS; i++)
@@ -1491,24 +1491,32 @@ stock bool:lsg_safe_cmd(const cmd[], amx)
 	for (new i = 0; c[i]; i++)
 		if (!isalnum(c[i]) && c[i] != ' ' && c[i] != '_' && c[i] != '.' && c[i] != '-' && c[i] != '+' && c[i] != '!' && c[i] != '?' && c[i] != '@' && c[i] != '#')
 			return false
-	// the first two words, lower case
+	// the first two words, lower case (a word that doesn't fit is refused: the same whole words
+	// as the app's check, WORD_MAX = 47)
 	for (k = 0; c[k] == ' '; k++) {}
 	for (n = 0; c[k] && c[k] != ' ' && n < charsmax(w); k++)
 		w[n++] = tolower(c[k])
 	w[n] = 0
+	if (c[k] && c[k] != ' ')
+		return false
 	for (; c[k] == ' '; k++) {}
 	for (n = 0; c[k] && c[k] != ' ' && n < charsmax(w2); k++)
 		w2[n++] = tolower(c[k])
 	w2[n] = 0
+	if (c[k] && c[k] != ' ')
+		return false
 	if (amx)
 	{
-		static const AMX_BLOCK[][] = { "amx_rcon", "amx_ban", "amx_banip", "amx_addban", "amx_unban", "amx_addadmin", "amx_reloadadmins", "amx_pause", "amx_unpause", "amx_pausecfg", "amx_plugins", "amx_modules", "amx_cfg", "amx_execcfg", "amx_exec", "amx_execall", "amx_logs", "amx_map", "amx_votemap", "amx_extendmap", "amx_last", "amx_who", "amx_off", "amx_on", "amx_nick", "amx_leave" }
-		if (!equal(w, "amx_", 4) || lsg_cmd_denied(w))
+		static const AMX_WORDS[][] = { "amx_slap", "amx_slay", "amx_kick", "amx_say", "amx_psay", "amx_tsay", "amx_csay", "amx_chat", "amx_cvar", "amx_map", "amx_nextmap" }
+		new found
+		for (new i = 0; i < sizeof AMX_WORDS; i++)
+			if (equal(w, AMX_WORDS[i]))
+				found = 1
+		if (!found)
 			return false
-		for (new i = 0; i < sizeof AMX_BLOCK; i++)
-			if (equal(w, AMX_BLOCK[i]))
-				return false
 		if (equal(w, "amx_cvar") && !lsg_server_word(w2))
+			return false
+		if (equal(w, "amx_map") && (!w2[0] || strlen(w2) > 31 || !is_map_valid(w2)))
 			return false
 	}
 	else if (equal(w, "amx_", 4) || !lsg_server_word(w))

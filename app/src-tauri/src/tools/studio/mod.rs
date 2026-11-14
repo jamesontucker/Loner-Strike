@@ -306,6 +306,21 @@ fn local_game(st: &Shared) -> Result<std::sync::Arc<crate::game::Game>, String> 
     Ok(g)
 }
 
+/// How to run the compiler for this game: the player's own install (the app), or, for another
+/// folder (a sim copy under the dev server, a hidden server), from where it is: inside a CrossOver
+/// bottle it runs through that bottle, on Windows as it is.
+pub fn compiler_install(st: &Shared, game_dir: &Path) -> Option<crate::steam::Install> {
+    if let Some(i) = crate::servers::client(st) {
+        return Some(i);
+    }
+    let text = game_dir.to_string_lossy().replace('\\', "/");
+    if let Some(rest) = text.split("/CrossOver/Bottles/").nth(1) {
+        let bottle = rest.split('/').next().filter(|b| !b.is_empty())?;
+        return Some(crate::steam::Install { hl: game_dir.parent()?.to_path_buf(), kind: "crossover".into(), bottle: Some(bottle.into()), games: vec![], dedicated: false });
+    }
+    cfg!(windows).then(|| crate::steam::Install { hl: game_dir.parent().map(Path::to_path_buf).unwrap_or_default(), kind: "windows".into(), bottle: None, games: vec![], dedicated: false })
+}
+
 /// Runs amxxpc on a source file; Ok((compiled, output)).
 pub fn run_amxxpc(install: &crate::steam::Install, scripting: &Path, src: &Path, inc: &Path, out: &Path) -> Result<(bool, String), String> {
     let exe = scripting.join("amxxpc.exe");
@@ -520,7 +535,7 @@ pub fn compile(st: &Shared, mut g: Graph, debug: bool) -> Result<Value, String> 
     // installed under the short id this game has for its uid (another mode may have its own)
     let installed_as = install_id(&game.dir, &g);
     g.mode.id = installed_as.clone();
-    let install = crate::servers::client(st).ok_or(NO_GAME)?;
+    let install = compiler_install(st, &game.dir).ok_or(NO_GAME)?;
     let _one = COMPILING.lock().unwrap_or_else(|e| e.into_inner());
     let out = gen::generate(&g, debug);
     let plugin = gen::plugin_name(&g.mode.id);
@@ -574,7 +589,7 @@ pub fn check_compile(st: &Shared, mut g: Graph) -> Result<Value, String> {
     let game = local_game(st)?;
     guard_real_game(&game.dir)?;
     g.mode.id = install_id(&game.dir, &g);
-    let install = crate::servers::client(st).ok_or(NO_GAME)?;
+    let install = compiler_install(st, &game.dir).ok_or(NO_GAME)?;
     let out = gen::generate(&g, false);
     let plugin = gen::plugin_name(&g.mode.id);
     let scripting = game.dir.join("addons/amxmodx/scripting");
@@ -1364,6 +1379,25 @@ mod tests {
                 assert!(diags.is_empty(), "{file} has warnings:\n{output}");
             }
         }
+        // Compile's mapping with the real compiler: an error inside a node's code names that node;
+        // one outside every node says so, with the line
+        let g = graph::parse(TEMPLATE).unwrap();
+        let out = gen::generate(&g, false);
+        let span = out.spans.iter().find(|s| s.to > s.from).expect("a node with a body");
+        let mut lines: Vec<String> = out.source.lines().map(str::to_string).collect();
+        lines[span.to - 2].push_str("\n\tlsx_no_such_thing()");
+        lines.push("public lsx_outside() { lsx_also_missing(); }".into());
+        // (the inserted line shifts what follows by one: the generated spans count from the original)
+        let text = lines.join("\n");
+        let src = work.join("studio_broken.sma");
+        std::fs::create_dir_all(&work).unwrap();
+        std::fs::write(&src, &text).unwrap();
+        let (ok, output) = run_amxxpc(&install, &scripting, &src, &inc, &work.join("studio_broken.amxx")).unwrap();
+        assert!(!ok, "{output}");
+        let diags = parse_compiler(&output, "studio_broken.sma");
+        let found = diag_problems(&diags, &out);
+        assert!(found.iter().any(|p| p.level == "error" && p.node.as_deref() == Some(span.node.as_str())), "{found:?}\n{output}");
+        assert!(found.iter().any(|p| p.level == "error" && p.node.is_none() && p.message.contains("not tied to a node")), "{found:?}\n{output}");
         let _ = std::fs::remove_dir_all(&work);
     }
 }
