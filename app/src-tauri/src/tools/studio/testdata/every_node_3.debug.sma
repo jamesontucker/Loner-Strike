@@ -14,9 +14,9 @@
 #include <cellarray>
 
 #define LSG_MODE "every_node_3"
-#define LSG_CTX 15
+#define LSG_CTX 16
 #define LSG_TXT 2
-#define LSG_N 68
+#define LSG_N 77
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -35,9 +35,9 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_O 4
 #define LSG_OT 1
 
-#define LSD_N 68
-new const g_lsdIds[LSD_N][] = { "ps", "tick", "n12", "n13", "n14", "n15", "n17", "n19", "n21", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n67", "n68", "n69", "n70", "n71", "n72", "n73", "n74", "n75", "n76", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n114", "n115" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 77
+new const g_lsdIds[LSD_N][] = { "ps", "tick", "n12", "n13", "n14", "n15", "n17", "n19", "n21", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n67", "n68", "n69", "n70", "n71", "n72", "n73", "n74", "n75", "n76", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n114", "n115", "n121", "n122", "n123", "n124", "n125", "n126", "n127", "n128", "n129" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -2705,6 +2705,214 @@ public lsg_ev_use(ent, caller, activator)
 }
 
 
+// ---- creature control ----
+stock Float:g_lsgCrPos[2048][3], Float:g_lsgCrStill[2048], g_lsgCrSerial[2048], g_lsgCrSeen[2048]
+stock bool:g_lsgCrGoalOn[2048], Float:g_lsgCrGoal[2048][3]
+
+// alive, not friendly (a turret), of the type (empty: any)
+stock bool:lsg_cr_match(e, const type[])
+{
+	if (!lsg_is_creature(e) || pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
+		return false
+	new Float:hp
+	pev(e, pev_health, hp)
+	if (hp <= 0.0)
+		return false
+	if (!type[0])
+		return true
+	new t[24]
+	pev(e, pev_netname, t, charsmax(t))
+	return bool:equali(t, type)
+}
+
+stock lsg_cr_cmd(e, const fmt[])
+{
+	if (lsg_cr_match(e, "") && get_cvar_pointer("ls_creature_ver"))
+		server_cmd(fmt, e)
+}
+
+stock lsg_cr_all(const type[])
+{
+	new a = lsg_atmp(), e = -1, n
+	while (n < 512 && (e = find_ent_by_class(e, "ls_creature")) > 0)
+	{
+		if (!lsg_cr_match(e, type))
+			continue
+		ArrayPushCell((Array:a), e)
+		n++
+	}
+	return a
+}
+
+stock lsg_cr_nearest(const type[], pos, to)
+{
+	new Float:at[3]
+	if (pos >= 0)
+		lsg_vto(pos, at)
+	else if (to > 0 && pev_valid(to))
+		pev(to, pev_origin, at)
+	else
+		return 0
+	new e = -1, best, Float:bd = 999999.0, Float:o[3]
+	while ((e = find_ent_by_class(e, "ls_creature")) > 0)
+	{
+		if (e == to || !lsg_cr_match(e, type))
+			continue
+		pev(e, pev_origin, o)
+		new Float:d = get_distance_f(o, at)
+		if (d < bd)
+		{
+			bd = d
+			best = e
+		}
+	}
+	return best
+}
+
+stock lsg_cr_type(e)
+{
+	new t[24]
+	if (lsg_is_creature(e))
+		pev(e, pev_netname, t, charsmax(t))
+	return t
+}
+
+stock Float:lsg_cr_idle(e)
+{
+	if (e <= 0 || e >= 2048 || !lsg_cr_match(e, "") || g_lsgCrSeen[e] != g_lsgCrSerial[e] || g_lsgCrStill[e] <= 0.0)
+		return 0.0
+	return get_gametime() - g_lsgCrStill[e]
+}
+
+// a clear line from its eyes to the thing's middle (or the thing itself in the way)
+stock bool:lsg_cr_sees(e, what)
+{
+	if (!lsg_cr_match(e, "") || what <= 0 || !pev_valid(what))
+		return false
+	new Float:a[3], Float:v[3], Float:b[3]
+	pev(e, pev_origin, a)
+	pev(e, pev_view_ofs, v)
+	a[2] += v[2] > 0.0 ? v[2] : 24.0
+	pev(what, pev_origin, b)
+	if (what <= MaxClients)
+	{
+		pev(what, pev_view_ofs, v)
+		b[2] += v[2]
+	}
+	new tr = create_tr2()
+	engfunc(EngFunc_TraceLine, a, b, IGNORE_MONSTERS, e, tr)
+	new Float:f
+	get_tr2(tr, TR_flFraction, f)
+	new hit = get_tr2(tr, TR_pHit)
+	free_tr2(tr)
+	return f >= 1.0 || hit == what
+}
+
+stock bool:lsg_cr_sees_any(e)
+{
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_alive(p) && lsg_cr_sees(e, p))
+			return true
+	return false
+}
+
+// how: 0 guard there, 1 then resume hunting, 2 flee there
+stock lsg_cr_goto(e, to, pos, const name[], how)
+{
+	if (!lsg_cr_match(e, "") || !get_cvar_pointer("ls_creature_ver"))
+		return
+	new Float:t[3]
+	if (pos >= 0)
+		lsg_vto(pos, t)
+	else
+	{
+		if (to <= 0 && name[0])
+			to = find_ent_by_tname(-1, name)
+		if (to <= 0 || !pev_valid(to))
+			return
+		// (a brush entity, a gate: its middle)
+		new Float:mn[3], Float:mx[3]
+		pev(to, pev_absmin, mn)
+		pev(to, pev_absmax, mx)
+		for (new k = 0; k < 3; k++)
+			t[k] = (mn[k] + mx[k]) / 2.0
+	}
+	server_cmd("ls_creature behave %d %s %.0f %.0f %.0f;ls_creature target %d 0", e, how == 2 ? "flee" : "guard", t[0], t[1], t[2], e)
+	g_lsgCrGoalOn[e] = how == 1
+	g_lsgCrGoal[e] = t
+	g_lsgCrSerial[e]++
+}
+
+stock lsg_cr_attack(e, t)
+{
+	if (!lsg_cr_match(e, "") || t <= 0 || !pev_valid(t) || !get_cvar_pointer("ls_creature_ver"))
+		return
+	g_lsgCrGoalOn[e] = false
+	server_cmd("ls_creature target %d %d;ls_creature behave %d chase", e, t, e)
+}
+
+// stays where it is (guarding its spot: it still fights what comes close, then comes back)
+stock lsg_cr_hold(e)
+{
+	if (!lsg_cr_match(e, "") || !get_cvar_pointer("ls_creature_ver"))
+		return
+	new Float:o[3]
+	pev(e, pev_origin, o)
+	g_lsgCrGoalOn[e] = false
+	server_cmd("ls_creature behave %d guard %.0f %.0f %.0f;ls_creature target %d 0", e, o[0], o[1], o[2], e)
+}
+
+// its own choice of targets again (until the bot brain says what its type does by itself: chase)
+stock lsg_cr_resume(e)
+{
+	if (e > 0 && e < 2048)
+		g_lsgCrGoalOn[e] = false
+	if (lsg_cr_match(e, "") && get_cvar_pointer("ls_creature_ver"))
+		server_cmd("ls_creature behave %d chase;ls_creature target %d 0", e, e)
+}
+
+stock lsg_cr_health(e, Float:hp)
+{
+	if (!lsg_cr_match(e, ""))
+		return
+	hp = floatclamp(hp, 1.0, 100000.0)
+	set_pev(e, pev_health, hp)
+	set_pev(e, pev_max_health, hp)
+}
+
+
+stock Float:g_lsgCrNext75[2048]
+// once a second: how long each creature has stood still; Go To's "then resume"; Creature Idle
+public lsg_cr_tick()
+{
+	new Float:now = get_gametime(), e = -1, Float:o[3]
+	while ((e = find_ent_by_class(e, "ls_creature")) > 0)
+	{
+		if (e >= 2048 || !lsg_cr_match(e, ""))
+			continue
+		pev(e, pev_origin, o)
+		if (g_lsgCrSeen[e] != g_lsgCrSerial[e] || get_distance_f(o, g_lsgCrPos[e]) > 32.0)
+		{
+			g_lsgCrPos[e] = o
+			g_lsgCrStill[e] = now
+			g_lsgCrSeen[e] = g_lsgCrSerial[e]
+		}
+		if (g_lsgCrGoalOn[e] && get_distance_f(o, g_lsgCrGoal[e]) < 96.0)
+		{
+			g_lsgCrGoalOn[e] = false
+			lsg_cr_resume(e)
+		}
+		if (now - g_lsgCrStill[e] >= 12.0 && now >= g_lsgCrNext75[e] && !lsg_cr_sees_any(e))
+		{
+			g_lsgCrNext75[e] = now + 12.0
+			new ctx[LSG_CTX]
+			ctx[0] = e
+			ctx[1] = _:(now - g_lsgCrStill[e])
+			lsg_n75(ctx)
+		}
+	}
+}
+
 public lsg_count_round()
 	g_lsgRounds++
 
@@ -2776,6 +2984,7 @@ public plugin_init()
 	register_logevent("lsg_on_hostage_rescued", 3, "2=Rescued_A_Hostage")
 	register_logevent("lsg_on_vip_escaped", 3, "2=Escaped_As_VIP")
 	RegisterHam(Ham_Use, "info_target", "lsg_ev_use", 1)
+	set_task(1.0, "lsg_cr_tick", LSG_TASK + 60000, _, _, "b")
 	register_logevent("lsg_tl_auto", 2, "1=Round_Start")
 	register_clcmd("say", "lsg_gag_say")
 	register_clcmd("say_team", "lsg_gag_say")
@@ -2785,8 +2994,8 @@ public plugin_init()
 public lsg_tl_auto()
 {
 	new c[LSG_CTX]
-	lsg_tl67_save(0, c)
-	lsg_tl67_go(0, 0.0, 1)
+	lsg_tl76_save(0, c)
+	lsg_tl76_go(0, 0.0, 1)
 }
 
 public plugin_end()
@@ -3749,44 +3958,169 @@ lsg_n66(ctx[])
 	lsg_n67(ctx)
 }
 
-// Timeline (n115)
+// For Each Creature (n115)
 lsg_n67(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(67, ctx))
 		return
+	new c[LSG_CTX], count, p = -1
+	while (count < 512 && (p = find_ent_by_class(p, "ls_creature")) > 0)
+	{
+		if (!lsg_cr_match(p, ""))
+			continue
+		count++
+		for (new k = 0; k < LSG_CTX; k++)
+			c[k] = ctx[k]
+		c[10] = p
+		#pragma unused c
+	}
+	lsd_exit(67, lsd_times(count))
+	lsg_n68(ctx)
+}
+
+// Creature Go To (n121)
+lsg_n68(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	lsd_begin()
+	lsd_in_entity("Creature", lsi0)
+	if (lsd_enter(68, ctx))
+		return
+	lsg_cr_goto(lsi0, 0, -1, "gate1", 0)
+	lsd_exit(68, "done")
+	lsg_n69(ctx)
+}
+
+// Creature Attack (n122)
+lsg_n69(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	new lsi1 = lsg_find("spot1")
+	lsd_begin()
+	lsd_in_entity("Creature", lsi0)
+	lsd_in_entity("Target", lsi1)
+	if (lsd_enter(69, ctx))
+		return
+	lsg_cr_attack(lsi0, lsi1)
+	lsd_exit(69, "done")
+	lsg_n70(ctx)
+}
+
+// Creature Hold (n123)
+lsg_n70(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	lsd_begin()
+	lsd_in_entity("Creature", lsi0)
+	if (lsd_enter(70, ctx))
+		return
+	lsg_cr_hold(lsi0)
+	lsd_exit(70, "done")
+	lsg_n71(ctx)
+}
+
+// Creature Resume AI (n124)
+lsg_n71(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	lsd_begin()
+	lsd_in_entity("Creature", lsi0)
+	if (lsd_enter(71, ctx))
+		return
+	lsg_cr_resume(lsi0)
+	lsd_exit(71, "done")
+	lsg_n72(ctx)
+}
+
+// Creature Flee To (n125)
+lsg_n72(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	lsd_begin()
+	lsd_in_entity("Creature", lsi0)
+	if (lsd_enter(72, ctx))
+		return
+	lsg_cr_goto(lsi0, 0, -1, "", 2)
+	lsd_exit(72, "done")
+	lsg_n73(ctx)
+}
+
+// Set Creature Health (n126)
+lsg_n73(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	new Float:lsi1 = 100.0
+	lsd_begin()
+	lsd_in_entity("Creature", lsi0)
+	lsd_in_number("Health", lsi1)
+	if (lsd_enter(73, ctx))
+		return
+	lsg_cr_health(lsi0, lsi1)
+	lsd_exit(73, "done")
+	lsg_n74(ctx)
+}
+
+// Remove Creature (n127)
+lsg_n74(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	lsd_begin()
+	lsd_in_entity("Creature", lsi0)
+	if (lsd_enter(74, ctx))
+		return
+	lsg_cr_cmd(lsi0, "kill %d")
+	lsd_exit(74, "done")
+	lsg_n76(ctx)
+}
+
+// Creature Idle (n128)
+lsg_n75(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(75, ctx))
+		return
+	lsd_exit(75, "ran")
+}
+
+// Timeline (n129)
+lsg_n76(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(76, ctx))
+		return
 	new inst = 0
-	lsg_tl67_save(inst, ctx)
-	lsg_tl67_go(inst, -1.0, 1)
-	lsd_exit(67, "playing")
+	lsg_tl76_save(inst, ctx)
+	lsg_tl76_go(inst, -1.0, 1)
+	lsd_exit(76, "playing")
 }
 
 // Timeline: Platform
-stock Float:g_lsgTlT67[33], g_lsgTlDir67[33], bool:g_lsgTlOn67[33], g_lsgTlC67[33][LSG_CTX]
-stock lsg_tl67_save(inst, ctx[])
+stock Float:g_lsgTlT76[33], g_lsgTlDir76[33], bool:g_lsgTlOn76[33], g_lsgTlC76[33][LSG_CTX]
+stock lsg_tl76_save(inst, ctx[])
 {
 	for (new k = 0; k < LSG_CTX; k++)
-		g_lsgTlC67[inst][k] = ctx[k]
+		g_lsgTlC76[inst][k] = ctx[k]
 }
-stock lsg_tl67_go(inst, Float:from, dir)
+stock lsg_tl76_go(inst, Float:from, dir)
 {
 	if (from >= 0.0)
-		g_lsgTlT67[inst] = from
-	else if (!g_lsgTlOn67[inst] && ((dir > 0 && g_lsgTlT67[inst] >= 4.0) || (dir < 0 && g_lsgTlT67[inst] <= 0.0)))
-		g_lsgTlT67[inst] = dir > 0 ? 0.0 : 4.0
-	g_lsgTlDir67[inst] = dir
-	if (!g_lsgTlOn67[inst])
+		g_lsgTlT76[inst] = from
+	else if (!g_lsgTlOn76[inst] && ((dir > 0 && g_lsgTlT76[inst] >= 4.0) || (dir < 0 && g_lsgTlT76[inst] <= 0.0)))
+		g_lsgTlT76[inst] = dir > 0 ? 0.0 : 4.0
+	g_lsgTlDir76[inst] = dir
+	if (!g_lsgTlOn76[inst])
 	{
-		g_lsgTlOn67[inst] = true
-		set_task(0.05, "lsg_tl67_tick", LSG_TASK + 50000 + 67 * 33 + inst, _, _, "b")
+		g_lsgTlOn76[inst] = true
+		set_task(0.05, "lsg_tl76_tick", LSG_TASK + 50000 + 76 * 33 + inst, _, _, "b")
 	}
 }
-stock lsg_tl67_stop(inst)
+stock lsg_tl76_stop(inst)
 {
-	g_lsgTlOn67[inst] = false
-	remove_task(LSG_TASK + 50000 + 67 * 33 + inst)
+	g_lsgTlOn76[inst] = false
+	remove_task(LSG_TASK + 50000 + 76 * 33 + inst)
 }
-stock Float:lsg_tl67_v0(Float:t)
+stock Float:lsg_tl76_v0(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3796,7 +4130,7 @@ stock Float:lsg_tl67_v0(Float:t)
 		return 128.0 + (0.0 - 128.0) * ((t - 2.0) / 2.0)
 	return 0.0
 }
-stock Float:lsg_tl67_v1_0(Float:t)
+stock Float:lsg_tl76_v1_0(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3804,7 +4138,7 @@ stock Float:lsg_tl67_v1_0(Float:t)
 		return 0.0 + (256.0 - 0.0) * ((t - 0.0) / 4.0)
 	return 256.0
 }
-stock Float:lsg_tl67_v1_1(Float:t)
+stock Float:lsg_tl76_v1_1(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3812,7 +4146,7 @@ stock Float:lsg_tl67_v1_1(Float:t)
 		return 0.0 + (0.0 - 0.0) * ((t - 0.0) / 4.0)
 	return 0.0
 }
-stock Float:lsg_tl67_v1_2(Float:t)
+stock Float:lsg_tl76_v1_2(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3820,7 +4154,7 @@ stock Float:lsg_tl67_v1_2(Float:t)
 		return 0.0 + (64.0 - 0.0) * ((t - 0.0) / 4.0)
 	return 64.0
 }
-stock Float:lsg_tl67_v2_0(Float:t)
+stock Float:lsg_tl76_v2_0(Float:t)
 {
 	if (t <= 0.0)
 		return 255.0
@@ -3830,7 +4164,7 @@ stock Float:lsg_tl67_v2_0(Float:t)
 		return 0.0 + (255.0 - 0.0) * lsg_tl_ease((t - 2.0) / 2.0)
 	return 255.0
 }
-stock Float:lsg_tl67_v2_1(Float:t)
+stock Float:lsg_tl76_v2_1(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3840,7 +4174,7 @@ stock Float:lsg_tl67_v2_1(Float:t)
 		return 0.0 + (0.0 - 0.0) * lsg_tl_ease((t - 2.0) / 2.0)
 	return 0.0
 }
-stock Float:lsg_tl67_v2_2(Float:t)
+stock Float:lsg_tl76_v2_2(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3850,14 +4184,14 @@ stock Float:lsg_tl67_v2_2(Float:t)
 		return 255.0 + (0.0 - 255.0) * lsg_tl_ease((t - 2.0) / 2.0)
 	return 0.0
 }
-public lsg_tl67_tick(task)
+public lsg_tl76_tick(task)
 {
 	if (lsd_hold_timer())
 		return
-	new inst = task - (LSG_TASK + 50000 + 67 * 33)
+	new inst = task - (LSG_TASK + 50000 + 76 * 33)
 	if (inst < 0 || inst > 32)
 		return
-	new Float:was = g_lsgTlT67[inst], dir = g_lsgTlDir67[inst]
+	new Float:was = g_lsgTlT76[inst], dir = g_lsgTlDir76[inst]
 	new Float:t = was + 0.05 * float(dir)
 	new bool:done, bool:wrapped
 	if (dir > 0 && t > 4.0)
@@ -3870,57 +4204,57 @@ public lsg_tl67_tick(task)
 		t += 4.0
 		wrapped = true
 	}
-	g_lsgTlT67[inst] = t
+	g_lsgTlT76[inst] = t
 	new c[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
-		c[k] = g_lsgTlC67[inst][k]
-	c[10] = dir > 0 ? 1 : 0
-	c[11] = _:t
-	c[12] = _:lsg_tl67_v0(t)
-	c[13] = lsg_vec(lsg_tl67_v1_0(t), lsg_tl67_v1_1(t), lsg_tl67_v1_2(t))
-	c[14] = lsg_vec(lsg_tl67_v2_0(t), lsg_tl67_v2_1(t), lsg_tl67_v2_2(t))
+		c[k] = g_lsgTlC76[inst][k]
+	c[11] = dir > 0 ? 1 : 0
+	c[12] = _:t
+	c[13] = _:lsg_tl76_v0(t)
+	c[14] = lsg_vec(lsg_tl76_v1_0(t), lsg_tl76_v1_1(t), lsg_tl76_v1_2(t))
+	c[15] = lsg_vec(lsg_tl76_v2_0(t), lsg_tl76_v2_1(t), lsg_tl76_v2_2(t))
 	if (done)
 	{
-		lsg_tl67_stop(inst)
+		lsg_tl76_stop(inst)
 	}
 	#pragma unused c
 	#pragma unused wrapped, done, was
 }
 
 
-stock lsg_n67_play_start(ctx[])
+stock lsg_n76_play_start(ctx[])
 {
 	new inst = 0
-	lsg_tl67_save(inst, ctx)
-	lsg_tl67_go(inst, 0.0, 1)
+	lsg_tl76_save(inst, ctx)
+	lsg_tl76_go(inst, 0.0, 1)
 }
 
-stock lsg_n67_stop(ctx[])
+stock lsg_n76_stop(ctx[])
 {
 	new inst = 0
 	#pragma unused ctx
-	lsg_tl67_stop(inst)
+	lsg_tl76_stop(inst)
 }
 
-stock lsg_n67_reverse(ctx[])
+stock lsg_n76_reverse(ctx[])
 {
 	new inst = 0
-	lsg_tl67_save(inst, ctx)
-	lsg_tl67_go(inst, -1.0, -1)
+	lsg_tl76_save(inst, ctx)
+	lsg_tl76_go(inst, -1.0, -1)
 }
 
-stock lsg_n67_reverse_end(ctx[])
+stock lsg_n76_reverse_end(ctx[])
 {
 	new inst = 0
-	lsg_tl67_save(inst, ctx)
-	lsg_tl67_go(inst, 4.0, -1)
+	lsg_tl76_save(inst, ctx)
+	lsg_tl76_go(inst, 4.0, -1)
 }
 
-stock lsg_n67_set_time(ctx[])
+stock lsg_n76_set_time(ctx[])
 {
 	new inst = 0
-	lsg_tl67_save(inst, ctx)
-	g_lsgTlT67[inst] = floatclamp(0.0, 0.0, 4.0)
+	lsg_tl76_save(inst, ctx)
+	g_lsgTlT76[inst] = floatclamp(0.0, 0.0, 4.0)
 }
 
 lsd_call(n, const data[])
@@ -3998,5 +4332,14 @@ lsd_call(n, const data[])
 		case 65: lsg_n65(ctx)
 		case 66: lsg_n66(ctx)
 		case 67: lsg_n67(ctx)
+		case 68: lsg_n68(ctx)
+		case 69: lsg_n69(ctx)
+		case 70: lsg_n70(ctx)
+		case 71: lsg_n71(ctx)
+		case 72: lsg_n72(ctx)
+		case 73: lsg_n73(ctx)
+		case 74: lsg_n74(ctx)
+		case 75: lsg_n75(ctx)
+		case 76: lsg_n76(ctx)
 	}
 }

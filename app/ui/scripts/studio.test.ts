@@ -84,6 +84,14 @@ test("reroutes carry the type that comes in", () => {
   assert.equal(g.edges.filter((e) => e.to.node === "give_ak" && e.to.pin === "player").length, 1);
 });
 
+test("mode settings may have digits after the first letter (mp_give_player_c4), not first", () => {
+  const g = emptyGraph("koth", "King");
+  const ok = parseGraph({ ...g, mode: { ...g.mode, settings: [{ cvar: "mp_give_player_c4", value: 0 }] } });
+  assert.ok(!("error" in ok), "mp_give_player_c4");
+  const bad = parseGraph({ ...g, mode: { ...g.mode, settings: [{ cvar: "4mp", value: 0 }] } });
+  assert.ok("error" in bad, "a digit first");
+});
+
 test("version 1 and 2 files open as version 3; variables are checked", () => {
   const g = template();
   const r = parseGraph({ ...g, version: 1, variables: undefined });

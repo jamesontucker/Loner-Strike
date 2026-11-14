@@ -398,7 +398,7 @@ fn kind_of(ty: &str) -> char {
 }
 
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
-const CTX_KINDS: [&str; 12] = ["timeline.play", "marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
+const CTX_KINDS: [&str; 13] = ["creature.for_each", "timeline.play", "marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
 const STORE_KINDS: [&str; 9] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call"];
 /// Nodes with more than one flow input: one Pawn function each.
@@ -841,6 +841,15 @@ impl<'a> Gen<'a> {
             "cond.is_valid" => format!("(lsg_valid({}) ? 1 : 0)", i("in", "entity")),
             "player.is_player" => format!("(lsg_ok({}) ? 1 : 0)", i("in", "entity")),
             "creature.is" => format!("(lsg_is_creature({}) ? 1 : 0)", i("in", "entity")),
+            "creature.of_type" => format!("lsg_cr_all({})", pawn_str(&name_text(self.text(n, def, "type")))),
+            "creature.nearest" => {
+                let pos = if self.v.data_source(node, "pos").is_some() { i("pos", "vector") } else { "-1".into() };
+                let to = if self.v.data_source(node, "to").is_some() { i("to", "entity") } else { "0".into() };
+                format!("lsg_cr_nearest({}, {pos}, {to})", pawn_str(&name_text(self.text(n, def, "type"))))
+            }
+            "creature.type" => format!("lsg_cr_type({})", i("creature", "entity")),
+            "creature.idle_for" => format!("lsg_cr_idle({})", i("creature", "entity")),
+            "creature.can_see" => format!("(lsg_cr_sees({}, {}) ? 1 : 0)", i("creature", "entity"), i("what", "entity")),
             "timer.is_active" => format!("(lsg_tactive({}) ? 1 : 0)", i("handle", "timer")),
             "math.fn" => {
                 let a = i("a", "number");
@@ -1225,6 +1234,27 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     let mut auto_tl: Vec<usize> = Vec::new();
     let map_events = g.custom_events.iter().any(|c| c.map);
     let uses_spawn = has("creature.spawn");
+    // creature control: the helpers, and the once-a-second watch (Idle For, Creature Idle, Go To then resume)
+    let cr_ctl = g.nodes.iter().any(|n| n.kind.starts_with("creature.") && !["creature.spawn", "creature.health", "creature.count", "creature.is", "creature.on_killed"].contains(&n.kind.as_str()));
+    let cr_watch = has("creature.on_idle") || pure_used(&gen, "creature.idle_for") || g.nodes.iter().any(|n| n.kind == "creature.go_to");
+    if cr_ctl {
+        o.line(CREATURE_CTL);
+    }
+    if cr_watch {
+        let mut t = String::from("// once a second: how long each creature has stood still; Go To's \"then resume\"; Creature Idle\npublic lsg_cr_tick()\n{\n\tnew Float:now = get_gametime(), e = -1, Float:o[3]\n\twhile ((e = find_ent_by_class(e, \"ls_creature\")) > 0)\n\t{\n\t\tif (e >= 2048 || !lsg_cr_match(e, \"\"))\n\t\t\tcontinue\n\t\tpev(e, pev_origin, o)\n\t\tif (g_lsgCrSeen[e] != g_lsgCrSerial[e] || get_distance_f(o, g_lsgCrPos[e]) > 32.0)\n\t\t{\n\t\t\tg_lsgCrPos[e] = o\n\t\t\tg_lsgCrStill[e] = now\n\t\t\tg_lsgCrSeen[e] = g_lsgCrSerial[e]\n\t\t}\n\t\tif (g_lsgCrGoalOn[e] && get_distance_f(o, g_lsgCrGoal[e]) < 96.0)\n\t\t{\n\t\t\tg_lsgCrGoalOn[e] = false\n\t\t\tlsg_cr_resume(e)\n\t\t}");
+        let idle: Vec<&str> = gen.live.iter().copied().filter(|id| gen.v.defs[id].kind == "creature.on_idle").collect();
+        for id in &idle {
+            let nd = gen.v.nodes[id];
+            let d = gen.v.defs[id];
+            let secs = float_lit(gen.num(nd, d, "secs").clamp(2.0, 600.0));
+            let unseen = if gen.boolean(nd, d, "unseen") { " && !lsg_cr_sees_any(e)" } else { "" };
+            let k = gen.index(id);
+            t.push_str(&format!("\n\t\tif (now - g_lsgCrStill[e] >= {secs} && now >= g_lsgCrNext{k}[e]{unseen})\n\t\t{{\n\t\t\tg_lsgCrNext{k}[e] = now + {secs}\n\t\t\tnew ctx[LSG_CTX]\n\t\t\tctx[0] = e\n\t\t\tctx[1] = _:(now - g_lsgCrStill[e])\n\t\t\t{}(ctx)\n\t\t}}", gen.fname(id)));
+            o.line(format!("stock Float:g_lsgCrNext{k}[2048]"));
+        }
+        t.push_str("\n\t}\n}\n");
+        o.line(t);
+    }
     if uses_spawn {
         o.line(CREATURES_X);
     }
@@ -1317,6 +1347,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     if map_events {
         o.line("\tRegisterHam(Ham_Use, \"info_target\", \"lsg_ev_use\", 1)");
+    }
+    if cr_watch {
+        o.line("\tset_task(1.0, \"lsg_cr_tick\", LSG_TASK + 60000, _, _, \"b\")");
     }
     // Timelines with AutoPlay: from the start at each round's start (the one instance)
     let autoplay: Vec<usize> = gen
@@ -1862,6 +1895,31 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             then_line(&mut b, "then");
         }
+        "creature.for_each" => {
+            let k = gen.slot(id, "creature").unwrap_or(0);
+            let body = next("each").map(|c| c.replace("(ctx)", "(c)"));
+            let ty = pawn_str(&name_text(gen.text(n, def, "type")));
+            b.line(format!("\tnew c[LSG_CTX], count, p = -1\n\twhile (count < 512 && (p = find_ent_by_class(p, \"ls_creature\")) > 0)\n\t{{\n\t\tif (!lsg_cr_match(p, {ty}))\n\t\t\tcontinue"));
+            b.line(format!("\t\tcount++\n\t\tfor (new k = 0; k < LSG_CTX; k++)\n\t\t\tc[k] = ctx[k]\n\t\tc[{k}] = p"));
+            match body {
+                Some(c) => b.line(format!("\t\t{c}")),
+                None => b.line("\t\t#pragma unused c"),
+            }
+            b.line("\t}");
+            if debug {
+                b.line(format!("\tlsd_exit({i}, lsd_times(count))"));
+            } else {
+                b.line("\t#pragma unused count");
+            }
+            then_line(&mut b, "then");
+        }
+        "creature.on_idle" => {
+            let e = exit("ran");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
         "marker.for_each" => {
             let k = marker_index(v.g, gen.text(n, def, "marker"));
             let body = next("each").map(|c| c.replace("(ctx)", "(c)"));
@@ -2279,7 +2337,8 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         "game.change_map" | "game.restart_round" | "player.set_transform" | "player.set_rotation" | "player.look_at" | "player.slap" | "player.fade" | "player.shake" | "player.godmode" | "player.noclip" | "player.render"
         | "player.set_ammo" | "player.give_ammo" | "player.take_weapon" | "player.switch_weapon" | "player.set_frags" | "player.set_deaths" | "player.to_spectators" | "player.kick" | "player.mute" | "player.gag"
-        | "msg.team_chat" | "msg.notify_admins" | "ent.remove" | "ent.set_position" | "ent.set_angles" | "ent.set_visible" | "fx.explosion" | "fx.beam" | "fx.sound_at" | "fx.sound_to" | "fx.lights" | "amx.fire" => {
+        | "msg.team_chat" | "msg.notify_admins" | "ent.remove" | "ent.set_position" | "ent.set_angles" | "ent.set_visible" | "fx.explosion" | "fx.beam" | "fx.sound_at" | "fx.sound_to" | "fx.lights" | "amx.fire"
+        | "creature.go_to" | "creature.attack" | "creature.hold" | "creature.resume" | "creature.flee_to" | "creature.set_health" | "creature.remove" => {
             let p = || inp("player", "player");
             let num = |k: &str| float_lit(gen.num(n, def, k));
             let on = |k: &str| if gen.boolean(n, def, k) { "1" } else { "0" };
@@ -2328,6 +2387,17 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                     let (r, g_, bl) = match gen.choice(n, def, "colour") { "green" => (40, 220, 60), "blue" => (60, 120, 255), "white" => (255, 255, 255), "gold" => (255, 200, 40), _ => (230, 30, 30) };
                     format!("lsg_beam({}, {}, {r}, {g_}, {bl}, {})", inp("a", "vector"), inp("b", "vector"), num("secs"))
                 }
+                "creature.go_to" | "creature.flee_to" => {
+                    let to = if wired("to") { inp("to", "entity") } else { "0".into() };
+                    let pos = if wired("pos") { inp("pos", "vector") } else { "-1".into() };
+                    let how = if def.kind == "creature.flee_to" { 2 } else if gen.choice(n, def, "then") == "resume" { 1 } else { 0 };
+                    format!("lsg_cr_goto({}, {to}, {pos}, {}, {how})", inp("creature", "entity"), pawn_str(&ent_name_text(gen.text(n, def, "name"))))
+                }
+                "creature.attack" => format!("lsg_cr_attack({}, {})", inp("creature", "entity"), inp("target", "entity")),
+                "creature.hold" => format!("lsg_cr_hold({})", inp("creature", "entity")),
+                "creature.resume" => format!("lsg_cr_resume({})", inp("creature", "entity")),
+                "creature.set_health" => format!("lsg_cr_health({}, {})", inp("creature", "entity"), inp("hp", "number")),
+                "creature.remove" => format!("lsg_cr_cmd({}, {})", inp("creature", "entity"), pawn_str(if gen.choice(n, def, "how") == "remove" { "remove %d" } else { "kill %d" })),
                 "fx.sound_at" => format!("lsg_sound_at({}, {})", inp("pos", "vector"), pawn_str(&sound_text(gen.text(n, def, "sound")))),
                 "fx.sound_to" => format!("lsg_sound_to({}, {})", p(), pawn_str(&sound_text(gen.text(n, def, "sound")))),
                 "fx.lights" => format!("set_lights({})", pawn_str(match gen.choice(n, def, "style") { "dark" => "e", "darkest" => "b", "bright" => "z", "flicker" => "mmnmmommommnonmmonqnmmo", _ => "#OFF" })),
@@ -2942,7 +3012,7 @@ fn multi_fn(gen: &Gen, id: &str, pin: &str, body: &str) -> String {
 
 /// Node kinds that need the version 3 helpers (by prefix).
 const V3_KINDS: &[&str] = &[
-    "timeline.", "player.transform", "player.set_transform", "player.set_rotation", "player.look_at", "ent.", "fx.",
+    "creature.", "timeline.", "player.transform", "player.set_transform", "player.set_rotation", "player.look_at", "ent.", "fx.",
     "marker.",
     "fn.", "macro.", "struct.", "enum.", "array.", "map.", "vec.", "flow.sequence", "flow.do_", "flow.gate", "flow.flipflop", "flow.for_loop", "flow.while", "flow.for_each_array", "flow.switch_", "flow.if_valid", "timer.retrigger", "timer.by_function",
     "timer.clear", "timer.is_active", "debug.print", "logic.equal", "logic.select", "cond.is_valid", "player.is_player", "creature.is", "math.fn", "math.clamp", "math.lerp", "math.in_range", "math.number", "text.literal", "text.append", "text.format", "text.contains", "text.length", "text.to_number", "text.from",
@@ -3343,6 +3413,185 @@ fn at_origin(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef) -> String {
 }
 
 /// Creatures with the mode's own health, tier and pay for their killer (Spawn Creature).
+/// Creature control (the bot brain's `ls_creature` commands; numbers only, so nothing else can
+/// ride along): finding, sending, attacking, holding, health, removing, and what the watch keeps.
+const CREATURE_CTL: &str = r##"// ---- creature control ----
+stock Float:g_lsgCrPos[2048][3], Float:g_lsgCrStill[2048], g_lsgCrSerial[2048], g_lsgCrSeen[2048]
+stock bool:g_lsgCrGoalOn[2048], Float:g_lsgCrGoal[2048][3]
+
+// alive, not friendly (a turret), of the type (empty: any)
+stock bool:lsg_cr_match(e, const type[])
+{
+	if (!lsg_is_creature(e) || pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
+		return false
+	new Float:hp
+	pev(e, pev_health, hp)
+	if (hp <= 0.0)
+		return false
+	if (!type[0])
+		return true
+	new t[24]
+	pev(e, pev_netname, t, charsmax(t))
+	return bool:equali(t, type)
+}
+
+stock lsg_cr_cmd(e, const fmt[])
+{
+	if (lsg_cr_match(e, "") && get_cvar_pointer("ls_creature_ver"))
+		server_cmd(fmt, e)
+}
+
+stock lsg_cr_all(const type[])
+{
+	new a = lsg_atmp(), e = -1, n
+	while (n < 512 && (e = find_ent_by_class(e, "ls_creature")) > 0)
+	{
+		if (!lsg_cr_match(e, type))
+			continue
+		ArrayPushCell((Array:a), e)
+		n++
+	}
+	return a
+}
+
+stock lsg_cr_nearest(const type[], pos, to)
+{
+	new Float:at[3]
+	if (pos >= 0)
+		lsg_vto(pos, at)
+	else if (to > 0 && pev_valid(to))
+		pev(to, pev_origin, at)
+	else
+		return 0
+	new e = -1, best, Float:bd = 999999.0, Float:o[3]
+	while ((e = find_ent_by_class(e, "ls_creature")) > 0)
+	{
+		if (e == to || !lsg_cr_match(e, type))
+			continue
+		pev(e, pev_origin, o)
+		new Float:d = get_distance_f(o, at)
+		if (d < bd)
+		{
+			bd = d
+			best = e
+		}
+	}
+	return best
+}
+
+stock lsg_cr_type(e)
+{
+	new t[24]
+	if (lsg_is_creature(e))
+		pev(e, pev_netname, t, charsmax(t))
+	return t
+}
+
+stock Float:lsg_cr_idle(e)
+{
+	if (e <= 0 || e >= 2048 || !lsg_cr_match(e, "") || g_lsgCrSeen[e] != g_lsgCrSerial[e] || g_lsgCrStill[e] <= 0.0)
+		return 0.0
+	return get_gametime() - g_lsgCrStill[e]
+}
+
+// a clear line from its eyes to the thing's middle (or the thing itself in the way)
+stock bool:lsg_cr_sees(e, what)
+{
+	if (!lsg_cr_match(e, "") || what <= 0 || !pev_valid(what))
+		return false
+	new Float:a[3], Float:v[3], Float:b[3]
+	pev(e, pev_origin, a)
+	pev(e, pev_view_ofs, v)
+	a[2] += v[2] > 0.0 ? v[2] : 24.0
+	pev(what, pev_origin, b)
+	if (what <= MaxClients)
+	{
+		pev(what, pev_view_ofs, v)
+		b[2] += v[2]
+	}
+	new tr = create_tr2()
+	engfunc(EngFunc_TraceLine, a, b, IGNORE_MONSTERS, e, tr)
+	new Float:f
+	get_tr2(tr, TR_flFraction, f)
+	new hit = get_tr2(tr, TR_pHit)
+	free_tr2(tr)
+	return f >= 1.0 || hit == what
+}
+
+stock bool:lsg_cr_sees_any(e)
+{
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_alive(p) && lsg_cr_sees(e, p))
+			return true
+	return false
+}
+
+// how: 0 guard there, 1 then resume hunting, 2 flee there
+stock lsg_cr_goto(e, to, pos, const name[], how)
+{
+	if (!lsg_cr_match(e, "") || !get_cvar_pointer("ls_creature_ver"))
+		return
+	new Float:t[3]
+	if (pos >= 0)
+		lsg_vto(pos, t)
+	else
+	{
+		if (to <= 0 && name[0])
+			to = find_ent_by_tname(-1, name)
+		if (to <= 0 || !pev_valid(to))
+			return
+		// (a brush entity, a gate: its middle)
+		new Float:mn[3], Float:mx[3]
+		pev(to, pev_absmin, mn)
+		pev(to, pev_absmax, mx)
+		for (new k = 0; k < 3; k++)
+			t[k] = (mn[k] + mx[k]) / 2.0
+	}
+	server_cmd("ls_creature behave %d %s %.0f %.0f %.0f;ls_creature target %d 0", e, how == 2 ? "flee" : "guard", t[0], t[1], t[2], e)
+	g_lsgCrGoalOn[e] = how == 1
+	g_lsgCrGoal[e] = t
+	g_lsgCrSerial[e]++
+}
+
+stock lsg_cr_attack(e, t)
+{
+	if (!lsg_cr_match(e, "") || t <= 0 || !pev_valid(t) || !get_cvar_pointer("ls_creature_ver"))
+		return
+	g_lsgCrGoalOn[e] = false
+	server_cmd("ls_creature target %d %d;ls_creature behave %d chase", e, t, e)
+}
+
+// stays where it is (guarding its spot: it still fights what comes close, then comes back)
+stock lsg_cr_hold(e)
+{
+	if (!lsg_cr_match(e, "") || !get_cvar_pointer("ls_creature_ver"))
+		return
+	new Float:o[3]
+	pev(e, pev_origin, o)
+	g_lsgCrGoalOn[e] = false
+	server_cmd("ls_creature behave %d guard %.0f %.0f %.0f;ls_creature target %d 0", e, o[0], o[1], o[2], e)
+}
+
+// its own choice of targets again (until the bot brain says what its type does by itself: chase)
+stock lsg_cr_resume(e)
+{
+	if (e > 0 && e < 2048)
+		g_lsgCrGoalOn[e] = false
+	if (lsg_cr_match(e, "") && get_cvar_pointer("ls_creature_ver"))
+		server_cmd("ls_creature behave %d chase;ls_creature target %d 0", e, e)
+}
+
+stock lsg_cr_health(e, Float:hp)
+{
+	if (!lsg_cr_match(e, ""))
+		return
+	hp = floatclamp(hp, 1.0, 100000.0)
+	set_pev(e, pev_health, hp)
+	set_pev(e, pev_max_health, hp)
+}
+
+"##;
+
 const CREATURES_X: &str = r##"// a creature with the mode's own health, tier and pay for its killer
 new g_lsgPay[2048]
 stock lsg_creature_x(const kind[], const at[], tier, Float:hp, pay)
@@ -5056,6 +5305,32 @@ mod tests {
         assert_eq!(keys_text("radius=1 \"x\""), "radius=1 x");
     }
 
+    /// Set Ammo / Give Ammo read the gun from the active item (X2: get_user_weapon says 0 while a gun
+    /// is being drawn, and "Invalid weapon id 0" came 229 times in One in the Chamber's Test run).
+    #[test]
+    fn ammo_reads_the_active_item() {
+        let g = parse(&serde_json::json!({
+            "schema": super::super::graph::SCHEMA, "version": super::super::graph::VERSION, "mode": {"id": "ammo", "name": "Ammo"}, "variables": [], "comments": [],
+            "nodes": [
+                {"id": "e", "type": "event.player_spawned", "pos": {"x": 0, "y": 0}, "params": {}},
+                {"id": "a", "type": "player.set_ammo", "pos": {"x": 300, "y": 0}, "params": {}},
+                {"id": "b", "type": "player.give_ammo", "pos": {"x": 600, "y": 0}, "params": {}}
+            ],
+            "edges": [
+                {"id": "w1", "from": {"node": "e", "pin": "then"}, "to": {"node": "a", "pin": "exec"}},
+                {"id": "w2", "from": {"node": "e", "pin": "player"}, "to": {"node": "a", "pin": "player"}},
+                {"id": "w3", "from": {"node": "a", "pin": "then"}, "to": {"node": "b", "pin": "exec"}},
+                {"id": "w4", "from": {"node": "e", "pin": "player"}, "to": {"node": "b", "pin": "player"}}
+            ]
+        }).to_string()).unwrap();
+        let src = generate(&g, false).source;
+        for f in ["stock lsg_set_ammo(", "stock lsg_give_ammo("] {
+            let at = src.find(f).unwrap_or_else(|| panic!("{f}"));
+            let body = &src[at..at + src[at..].find("\n}").unwrap()];
+            assert!(body.contains("m_pActiveItem") && body.contains("cs_get_weapon_id") && !body.contains("get_user_weapon("), "{body}");
+        }
+    }
+
     #[test]
     fn every_event_kind_is_registered_and_known() {
         for k in EVENTS {
@@ -5068,7 +5343,7 @@ mod tests {
             let texts = d.outputs.iter().filter(|o| o.ty == "text").count();
             assert!(cells <= CTX && texts <= TXT, "{}", k.kind);
         }
-        let special = ["func.define", "fn.entry", "macro.entry", "event.custom", "event.chat_command", "event.player_about_hurt", "event.player_revived", "event.down_timeout", "event.time_up"];
+        let special = ["func.define", "fn.entry", "macro.entry", "event.custom", "creature.on_idle", "event.chat_command", "event.player_about_hurt", "event.player_revived", "event.down_timeout", "event.time_up"];
         for d in registry().nodes.iter().filter(|d| d.event && !special.contains(&d.kind.as_str())) {
             assert!(event_kind(&d.kind).is_some(), "{} has no handler", d.kind);
         }

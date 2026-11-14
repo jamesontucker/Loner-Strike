@@ -4516,6 +4516,10 @@
       [
        "mp_limitteams",
        "Most players more than the other team (0 any)"
+      ],
+      [
+       "mp_give_player_c4",
+       "Bomb for the Terrorists (1 on)"
       ]
      ]
     },
@@ -9201,11 +9205,15 @@
       [
        "smokegrenade",
        "Smoke grenade"
+      ],
+      [
+       "c4",
+       "C4 (the bomb)"
       ]
      ]
     }
    ],
-   "keywords": "strip drop"
+   "keywords": "strip drop bomb"
   },
   {
    "type": "player.switch_weapon",
@@ -13386,6 +13394,527 @@
     }
    ],
    "keywords": "fire broadcast signal"
+  },
+  {
+   "type": "creature.for_each",
+   "title": "For Each Creature",
+   "category": "Creatures",
+   "help": "Runs Each once for every creature alive (of a type, or any), then Then. Friendly ones (turrets) are left out. Every creature each time it runs: keep it out of per-frame flows.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "each",
+     "type": "exec",
+     "label": "Each"
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature"
+    },
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Then"
+    }
+   ],
+   "params": [
+    {
+     "id": "type",
+     "label": "Type (empty: any)",
+     "kind": "name",
+     "default": ""
+    }
+   ],
+   "keywords": "loop all monsters zombies",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.of_type",
+   "title": "Creatures of Type",
+   "category": "Creatures",
+   "help": "Every creature alive of a type (empty: any), as an array. Looks through them all each time: keep it in a variable instead of in a loop.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "array<entity>",
+     "label": "Creatures"
+    }
+   ],
+   "params": [
+    {
+     "id": "type",
+     "label": "Type (empty: any)",
+     "kind": "name",
+     "default": ""
+    }
+   ],
+   "pure": true,
+   "keywords": "list all monsters",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.nearest",
+   "title": "Nearest Creature",
+   "category": "Creatures",
+   "help": "The creature alive nearest to a point or an entity (a player, a gate), of a type or any; nobody if there are none.",
+   "inputs": [
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "To point",
+     "optional": true
+    },
+    {
+     "id": "to",
+     "type": "entity",
+     "label": "To entity",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Creature"
+    }
+   ],
+   "params": [
+    {
+     "id": "type",
+     "label": "Type (empty: any)",
+     "kind": "name",
+     "default": ""
+    }
+   ],
+   "pure": true,
+   "keywords": "closest monster",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.type",
+   "title": "Creature Type",
+   "category": "Creatures",
+   "help": "A creature's type (zombie, runner...); empty for anything else.",
+   "inputs": [
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Type"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.idle_for",
+   "title": "Idle For",
+   "category": "Creatures",
+   "help": "Seconds a creature has stood still (moved less than 32 units). Counted once a second.",
+   "inputs": [
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Seconds"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "stuck still waiting",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.can_see",
+   "title": "Can See",
+   "category": "Creatures",
+   "help": "Is there a clear line from the creature's eyes to a player or entity?",
+   "inputs": [
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    },
+    {
+     "id": "what",
+     "type": "entity",
+     "label": "Player or entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Sees"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "sight visible line of sight",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.go_to",
+   "title": "Creature Go To",
+   "category": "Creatures",
+   "help": "Sends a creature to a place: an entity wired in (a player, a marker's entity), a point, or the entity with this name. Guard there: it stays and fights there. Then resume: it goes back to hunting once there.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    },
+    {
+     "id": "to",
+     "type": "entity",
+     "label": "To entity",
+     "optional": true
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "To point",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Or the entity named",
+     "kind": "entname",
+     "default": "gate1"
+    },
+    {
+     "id": "then",
+     "label": "Then",
+     "kind": "choice",
+     "default": "guard",
+     "choices": [
+      [
+       "guard",
+       "Guard there"
+      ],
+      [
+       "resume",
+       "Resume hunting"
+      ]
+     ]
+    }
+   ],
+   "keywords": "move send walk gate guard",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.attack",
+   "title": "Creature Attack",
+   "category": "Creatures",
+   "help": "Makes a creature go after a player or an entity (a gate, a turret) until it's gone.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    },
+    {
+     "id": "target",
+     "type": "entity",
+     "label": "Target",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "target chase hunt",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.hold",
+   "title": "Creature Hold",
+   "category": "Creatures",
+   "help": "Makes a creature stay where it is (it guards the spot: it still fights what comes close, then comes back) until Resume AI or Go To.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "stop freeze wait",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.resume",
+   "title": "Creature Resume AI",
+   "category": "Creatures",
+   "help": "Lets a creature choose its own targets again (hunting).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "release free",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.flee_to",
+   "title": "Creature Flee To",
+   "category": "Creatures",
+   "help": "Makes a creature run away to a place (an entity wired in, a point, or the entity with this name).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    },
+    {
+     "id": "to",
+     "type": "entity",
+     "label": "To entity",
+     "optional": true
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "To point",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Or the entity named",
+     "kind": "entname",
+     "default": ""
+    }
+   ],
+   "keywords": "run away retreat",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.set_health",
+   "title": "Set Creature Health",
+   "category": "Creatures",
+   "help": "Sets a creature's health (and its full health, so it isn't over).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    },
+    {
+     "id": "hp",
+     "type": "number",
+     "label": "Health",
+     "param": "hp"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "hp",
+     "label": "Health",
+     "kind": "number",
+     "default": 100,
+     "min": 1,
+     "max": 100000
+    }
+   ],
+   "keywords": "hp heal",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.remove",
+   "title": "Remove Creature",
+   "category": "Creatures",
+   "help": "Takes a creature away. Kill: it dies (Creature Killed runs, waves count it; nobody is paid). Remove quietly: it's gone, nothing runs.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "how",
+     "label": "How",
+     "kind": "choice",
+     "default": "kill",
+     "choices": [
+      [
+       "kill",
+       "Kill (counts as a death)"
+      ],
+      [
+       "remove",
+       "Remove quietly"
+      ]
+     ]
+    }
+   ],
+   "keywords": "despawn delete kill",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.on_idle",
+   "title": "Creature Idle",
+   "category": "Creatures",
+   "help": "Runs when a creature has stood still this many seconds (and, if asked, can't see any player): send it somewhere with Creature Go To. Runs again after as many seconds if it's still stuck.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature"
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Idle for"
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 12,
+     "min": 2,
+     "max": 600
+    },
+    {
+     "id": "unseen",
+     "label": "Only when no player is in sight",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "event": true,
+   "keywords": "stuck wait gate send",
+   "needs": "creatures"
   },
   {
    "type": "timeline.play",

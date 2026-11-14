@@ -2101,7 +2101,8 @@ fn advanced_problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
 }
 
 /// The loops (and the output pins their body hangs off).
-const LOOPS: [(&str, &str); 7] = [
+const LOOPS: [(&str, &str); 8] = [
+    ("creature.for_each", "each"),
     ("flow.for_each_player", "each"),
     ("flow.for_each_entity", "each"),
     ("flow.for_loop", "body"),
@@ -2158,6 +2159,7 @@ pub fn cost_warnings(g: &Graph, v: &View) -> Vec<Problem> {
         for n in &body {
             match kind(n) {
                 "flow.for_each_entity" | "flow.pick_entity" => warn(&mut p, n, "scan", format!("This runs on every {title}, and each time it looks through every entity on the map (about 0.1 ms, more on big maps). Keep what it finds in a variable at round start instead.")),
+                "creature.for_each" => warn(&mut p, n, "scan", format!("This runs on every {title}, and each time it goes through every creature (with 60 alive, every frame adds up). Use Creature Idle or a Repeat timer once a second instead.")),
                 "timer.delay" => warn(&mut p, n, "delay", format!("A Delay in {title} starts another timer on every fire (they pile up). Use Retrigger Delay, which starts over instead.")),
                 _ => {}
             }
@@ -2176,7 +2178,7 @@ pub fn cost_warnings(g: &Graph, v: &View) -> Vec<Problem> {
     for l in g.nodes.iter().filter(|n| is_loop(&n.id)) {
         let pin = LOOPS.iter().find(|(k, _)| *k == kind(&l.id)).map(|(_, p)| *p).unwrap_or("each");
         // (For Each Player and For Each Marker are short: 32 players, 128 markers at most)
-        let big = |id: &str| matches!(kind(id), "flow.for_loop" | "flow.for_loop_break" | "flow.while" | "flow.for_each_array" | "flow.for_each_entity");
+        let big = |id: &str| matches!(kind(id), "flow.for_loop" | "flow.for_loop_break" | "flow.while" | "flow.for_each_array" | "flow.for_each_entity" | "creature.for_each");
         for n in flow_from(v, &l.id, &[pin]) {
             if big(&l.id) && big(n) {
                 warn(&mut p, n, "nested", "A loop inside a loop: up to 10,000 x 10,000 passes in one server frame can freeze the server. Loop over less, or Break out early.".into());
@@ -2807,6 +2809,17 @@ mod tests {
             json!([{"id":"w","from":{"node":"e","pin":"then"},"to":{"node":"c","pin":"exec"}}]),
         );
         assert!(validate(&g).iter().any(|p| p.level == "error" && p.node.as_deref() == Some("c")), "{:?}", validate(&g));
+    }
+
+    #[test]
+    fn the_bomb_setting_is_allowed_and_the_list_still_holds() {
+        let mut g = graph(json!([{"id":"e","type":"event.round_started","params":{}}]), json!([]));
+        g.mode.settings = serde_json::from_value(json!([{"cvar": "mp_give_player_c4", "value": 0}])).unwrap();
+        assert!(!has_errors(&validate(&g)), "{:?}", msgs(&validate(&g)));
+        for bad in ["sv_cheats", "rcon_password", "mp_logfile", "mp_give_player_c5"] {
+            g.mode.settings = serde_json::from_value(json!([{"cvar": bad, "value": 1}])).unwrap();
+            assert!(has_errors(&validate(&g)), "{bad}");
+        }
     }
 
     #[test]

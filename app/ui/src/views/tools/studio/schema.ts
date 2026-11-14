@@ -126,7 +126,7 @@ export const graphSchema = z.object({
     name: label(40),
     description: label(60).default(""),
     /** game settings for the mode's cfg (Set Setting's choices; the app checks them) */
-    settings: z.array(z.object({ cvar: z.string().regex(/^[a-z_]{2,32}$/), value: z.number().finite().min(0).max(100000) })).max(32).optional(),
+    settings: z.array(z.object({ cvar: z.string().regex(/^[a-z_][a-z0-9_]{1,31}$/), value: z.number().finite().min(0).max(100000) })).max(32).optional(),
   }),
   variables: z.array(variableSchema).max(64).default([]),
   nodes: z.array(nodeSchema).max(400).default([]),

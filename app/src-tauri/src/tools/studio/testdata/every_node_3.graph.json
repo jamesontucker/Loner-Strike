@@ -1097,10 +1097,136 @@
   },
   {
    "id": "n115",
-   "type": "timeline.play",
+   "type": "creature.for_each",
    "pos": {
     "x": 2340,
     "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "n116",
+   "type": "creature.of_type",
+   "pos": {
+    "x": 2600,
+    "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "n117",
+   "type": "creature.nearest",
+   "pos": {
+    "x": 2860,
+    "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "n118",
+   "type": "creature.type",
+   "pos": {
+    "x": 3120,
+    "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "n119",
+   "type": "creature.idle_for",
+   "pos": {
+    "x": 260,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n120",
+   "type": "creature.can_see",
+   "pos": {
+    "x": 520,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n121",
+   "type": "creature.go_to",
+   "pos": {
+    "x": 780,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n122",
+   "type": "creature.attack",
+   "pos": {
+    "x": 1040,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n123",
+   "type": "creature.hold",
+   "pos": {
+    "x": 1300,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n124",
+   "type": "creature.resume",
+   "pos": {
+    "x": 1560,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n125",
+   "type": "creature.flee_to",
+   "pos": {
+    "x": 1820,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n126",
+   "type": "creature.set_health",
+   "pos": {
+    "x": 2080,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n127",
+   "type": "creature.remove",
+   "pos": {
+    "x": 2340,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n128",
+   "type": "creature.on_idle",
+   "pos": {
+    "x": 2600,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n129",
+   "type": "timeline.play",
+   "pos": {
+    "x": 2860,
+    "y": 3300
    },
    "params": {
     "timeline": "tl1"
@@ -2271,6 +2397,226 @@
    },
    "to": {
     "node": "n115",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w107",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n118",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w108",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n119",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w109",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n120",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w110",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n120",
+    "pin": "what"
+   }
+  },
+  {
+   "id": "w111",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n121",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w112",
+   "from": {
+    "node": "n115",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n121",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w113",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n122",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w114",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n122",
+    "pin": "target"
+   }
+  },
+  {
+   "id": "w115",
+   "from": {
+    "node": "n121",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n122",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w116",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n123",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w117",
+   "from": {
+    "node": "n122",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n123",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w118",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n124",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w119",
+   "from": {
+    "node": "n123",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n124",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w120",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n125",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w121",
+   "from": {
+    "node": "n124",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n125",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w122",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n126",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w123",
+   "from": {
+    "node": "n125",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n126",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w124",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n127",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w125",
+   "from": {
+    "node": "n126",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n127",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w126",
+   "from": {
+    "node": "n127",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n129",
     "pin": "exec"
    }
   }

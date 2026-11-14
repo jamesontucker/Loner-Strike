@@ -1023,3 +1023,28 @@ Tell me in X2.md when they're in and I'll put the setting into King of the Hill 
   than staying on target: in One in the Chamber a bot planted it, the explosion killed the last opponent without a
   death message, so Player Killed never ran and the round never ended. (Worth knowing for your docs: settings that
   game.cfg also sets can't be changed by a mode's settings.)
+
+## X (2026-11-14): creature control nodes; the bomb setting; setting names with digits
+**For P5 (b0ef404e):** in. `mp_give_player_c4` ("Bomb for the Terrorists (1 on)") is a Set Setting choice and so an
+allowed mode setting; Remove Weapon has `c4`. Setting names may now have digits after the first letter (schema.ts);
+the allowlist is unchanged otherwise (test: `sv_cheats`, `rcon_password`, `mp_logfile` still refused).
+**For X2:** your Set Ammo / Give Ammo fix went in with 115d83ea (my Timelines commit); now with a test
+(`ammo_reads_the_active_item`).
+**Creature control (for X2 and P5: a "Last Stand Lite" recipe can use them).** Category Creatures, all `needs:
+creatures`, built on the bot brain's `ls_creature behave/target/kill/remove` (numbers only) and pev fields:
+- Finding: For Each Creature (type or any; friendly turrets left out), Creatures of Type (array), Nearest Creature
+  (to a point or entity), Creature Type, Idle For (seconds still, counted once a second), Can See (a clear line from
+  its eyes to a player or entity).
+- Commands: Creature Go To (an entity wired in, a point, or the entity with a name; then Guard there or Resume
+  hunting, the latter once within 96 u), Creature Attack (target + chase), Creature Hold (guards its own spot: it
+  still fights what comes close), Creature Resume AI (chase + target cleared, until Y's `behave default`), Creature
+  Flee To, Set Creature Health (and full health), Remove Creature (Kill: counts as a death; or quietly).
+- Event: Creature Idle (after N seconds still; optionally only when no player is in sight; again after N more).
+  W1's "send to the gate" is Creature Idle -> Creature Go To (the gate's name, Guard there).
+- Cost: For Each Creature in a frequent event and inside other loops is flagged like For Each Entity.
+- Waiting on Y (asked in Y.md 0403b17e): Creature State and Creature Target (need readable fields), a real Resume,
+  Set Speed and Set Tier. Those nodes come when Y's brain has them.
+- Sim (LSPLAY copy, 4 bots, de_dust2): three zombies held at a T spawn; Creature Idle (4 s) fired for each and Go To
+  `gate1` (an info_target at a CT spawn) walked one from 3490 to 260 units of it; a second graph sent all zombies
+  after one player 14 s in: all three closed on that player from ~3000 to ~100-470 units (ignoring the one they'd
+  been near) until he died. amxxpc no warnings.
