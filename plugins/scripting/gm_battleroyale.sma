@@ -122,8 +122,9 @@ public plugin_init()
 	/* squads: someone who joins during the first N s of fighting fills a squad that's short (else watches) */
 	g_cLateFill = register_cvar("br_late_fill", "120");
 	/* squads: a deadly hit knocks you down instead; a squad mate holding USE gets you up; you bleed out
-	   after this many seconds, and you're out when your whole squad is down (0: no knocking down) */
-	g_cBleed = register_cvar("br_bleed", "30");
+	   after this many seconds (45: time for a squad mate to reach you), and you're out when your whole squad is down
+	   (0: no knocking down) */
+	g_cBleed = register_cvar("br_bleed", "45");
 
 	register_event("HLTV", "ev_new_round", "a", "1=0", "2=0");
 	register_logevent("ev_round_start", 2, "1=Round_Start");

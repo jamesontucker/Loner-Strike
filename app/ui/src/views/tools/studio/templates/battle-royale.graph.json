@@ -320,7 +320,7 @@
    },
    "params": {
     "on": true,
-    "bleed": 30,
+    "bleed": 45,
     "team": "0",
     "perks": false
    }

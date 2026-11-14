@@ -10895,7 +10895,10 @@ stock get_up(d, by)
 	ExecuteForward(g_fwRevive, ret, d, by);
 	if (by && by != d)
 	{
-		log_amx("Upgrades: %d revived %d in wave %d", by, d, g_wave);
+		if (g_wave > 0)
+			log_amx("Upgrades: %d revived %d in wave %d", by, d, g_wave);
+		else
+			log_amx("Downed: %d revived %d", by, d);
 		new pay = get_pcvar_num(g_cRevivePay);
 		if (pay > 0 && 1 <= by <= 32 && is_user_connected(by))
 		{
