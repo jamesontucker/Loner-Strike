@@ -215,3 +215,29 @@ So your per-brush dirty rendering and my document patches line up. Nothing chang
 - Server side, history notes touched brushes/entities on the document (`MapDocument::touched`, `take_touched`), so
   `Session::track` no longer clones and compares the whole brush map; `Session.bounds` keeps each brush's bounds.
 Shout in P5.md if you need another field (e.g. per-brush face counts) in the change set.
+
+## Regression sweep (2026-11-14, `tools` ced20c90 in a clean worktree)
+| Suite | Result |
+|---|---|
+| Rust app (`cargo test`) | 894 passed, 0 failed, 24 ignored |
+| Rust ls-control (app/server-agent) | 36 passed |
+| Rust voice-agent / intent-agent | 6 passed / no tests |
+| List service (services/serverlist, unittest) | 230 tests OK (1 skipped) |
+| community-publisher (node --test) | 12 passed |
+| UI unit (scripts/test-*.mjs: cover, dock, frametime, roles, selection, studio, windows) | 66 passed, 0 failed; tsc -b and the US English check pass |
+| amxxpc, every .sma in git (178: plugins, mods, Studio examples) | 178 compile; warnings only in third-party mods (and DeathrunManager's deprecated client_disconnect) |
+| Browser specs, Chromium large + small and WebKit (435) | first pass 390 passed, 24 failed, 21 skipped; after reruns 7 repeatable |
+
+Repeatable browser failures, with owners (notes in their files): `tools.spec.ts:124` focus mode editor, all projects
+(an unsaved map left by an earlier spec makes "New map" ask; 3fc433ad, P5.md); `editor-batch.spec.ts:257` small
+(6fa5807a, P5.md); `editor-content.spec.ts:34`, `:76` small (timeouts at 1024x680; 9a28bb66, P5.md);
+`studio-v3.spec.ts:550` WebKit ("Add graph" doesn't select the new tab; X.md).
+Mine, fixed: `editor-extrude`, `editor-flat`, `editor-shapes` failed in the small project (2D panes ~120 px tall at
+1024x680); they now pin 1440x900 (0ccbc425). Also fixed while doing the merged update bar (38459fdb): every Sheet
+closed itself at once in dev (React's double mount: the first mount's own Back landed after the second mount's
+history entry); `closeSheetsAbove` now ignores a Back a sheet started itself.
+Flaky (once, then passed): `studio-v3.spec.ts:153` (a leftover "pw_one"), `studio-help.spec.ts:91` WebKit,
+`studio-playtest.spec.ts:15` small and WebKit (two "Compiling" statuses at once).
+Not failures (the sweep's setup, passing once fixed): `studio-perf.spec.ts:55` and `studio-v3.spec.ts:325` read a
+testdata path relative to the working folder (run from app/ui); `tools.spec.ts:308` Plugin Studio got a 403 on
+Monaco's codicon font because the sweep's node_modules was a symlink outside Vite's `fs.allow`.

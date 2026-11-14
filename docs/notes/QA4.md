@@ -129,6 +129,25 @@ br_valley v6; squads on QA4B (16 bots), duos/solo on QA4B2.
 | Mode vote (83fad7c8) | Battle Royale, Duos and Squads appear in the app's and gm_pubserver's lists, matching votemodes.ini; a vote switches the mode |
 | Queued after round 4 (fun_allinone, vehicles) | Not tested: queued for after this round (Deathrun.md) |
 
+### Area E self-check (Parity A, 2026-11-14, before QA starts; sims, no person)
+Current builds: bot brain ls-next3 72cfb7f (run 43580692204, its head matched `ls-remote`; checked inside each sim's
+mp.dll), plugins compiled fresh from `tools` c8562711 into each sim. Sims QA4D1/QA4D2 (clones of DRPLAY) and QA4V
+(clone of BRPLAY), `-insecure`, 8 bots, real time, 15 minutes per map, the shipped deathrun.cfg (brain on:
+bot_ls_deathrun 1, bot_ls_fight 1, dr_bot_traps 1). Per round: `drruns.py` on gm_simrec + gm_drrec; crashes:
+`crashcheck.sh` around every map. Load 14-26, 7-8 sims on the Mac. Results: ~/loner-strike-sim/results/qa4e/.
+Dojo: no dojo rows here; dojo is removed from 1.0 by the user (it isn't in the catalog's Deathrun maps).
+| Item | Verified here | Evidence | Left for QA / the user |
+|---|---|---|---|
+| deathrun_crash_egypt | **yes** | 15 rounds, 20 of 103 runs reach the end (19%), 11 presses, 9 trap deaths, no crash | a person running it |
+| deathrun_temple | partly | 11 rounds, traps fire (10 presses, 23 trap deaths), no crash; only 2 of 77 runs reach the end (3%) | Deathrun agent: few finishes (Deathrun.md) |
+| deathrun_death | **no** | 45 rounds, no crash; runners die 4-8 s into nearly every round to one trigger_hurt near (-3540, 170, -219) with no press (313 of 314 deaths), 6 finishes (2%), 0 presses | Deathrun agent (same in their DR3 runs at 01:51 and 02:06) |
+| deathrun_jigsaw2 | **no** | 2 rounds in 15 min, both to the round timer: every runner stuck at 81% of the course (its puzzles), 0 presses, 0 finishes; no crash | Deathrun agent (jigsaw2's puzzle notes in Deathrun.md) |
+| deathrun_starwars | partly | 2 rounds in 15 min (round timer), 7 of 14 runs reach the end (50%) but the rounds don't end; 0 presses (the brain finds 0 traps the terrorist can walk to) | Deathrun agent |
+| 10 rounds without a crash | yes on death, temple, egypt | 0 crash reports on all five maps; jigsaw2 and starwars only reach 2 rounds in 15 minutes (time-outs) | longer runs of jigsaw2 and starwars |
+| Mode vote lists | **yes** | votemodes.ini, gm_pubserver's DEFAULT_VOTE_MODES and the app's modevote::DEFAULT are the same 17 modes (br, br_duo, br_squads at the end) | the Rules page by eye |
+| A vote switches the mode | **yes** | QA4V on classic, the server's votemodes.ini limited to br/br_duo/br_squads, `gm_votemode` over rcon (bots vote): vote 5 "Switching to Battle Royale: Duos on cs_assault", gm_battleroyale running after it; Keep won votes 1, 2, 4 (map vote only) | a person's vote with the menu |
+| Mode vote observations | - | (1) a Keep in Battle Royale runs the usual map vote, which offered cs_assault: the map preset then went "Back to Classic", so Keep BR can end BR; (2) a BR mode's map stage offered cs_assault while br_valley was there (no maps/br*.txt list, so every map suits) | the mode vote's owner (83fad7c8) |
+
 ## F. Platform: crash tracking, MCP live, site and legal, setup
 | Item | Pass when |
 |---|---|

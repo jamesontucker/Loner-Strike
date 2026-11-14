@@ -2,6 +2,18 @@
 
 Earlier rounds are in docs/TOOLS-NOTES.md ("Agent X" sections). From here on, notes go here.
 
+## From Parity A: regression sweep failures (2026-11-14)
+Clean worktree at `tools` ced20c90 (Parity A, regression sweep 2026-11-14): every spec in the repo's Chromium
+projects (large 1440x900, small 1024x680) and WebKit, one worker, against the tools dev server; each failure run
+again. Repeatable failures for you:
+- `studio-v3.spec.ts:550` "several event graphs" (WebKit only, twice): after "Add graph" with the name "Shop" the
+  selected tab is still " Event Graph" (line 564). Chromium passes.
+Flaky (failed once, passed on the rerun): `studio-v3.spec.ts:153` library Export/Import (got "pw_one_2": a "pw_one"
+left from an earlier run in the same app folder), `studio-help.spec.ts:91` (WebKit), `studio-playtest.spec.ts:15`
+(small and WebKit: two `role=status` elements with "Compiling" at once, a strict-mode violation).
+Not failures (the sweep's setup): `studio-perf.spec.ts:55` and `studio-v3.spec.ts:325` read
+`../src-tauri/.../every_node.graph.json` relative to the working folder, so they only pass when run from app/ui.
+
 ## 2026-11-12, late: loose ends, Playtest feedback, crisp zoom, snippets, Blueprint-style editor
 
 **Saved values survive a crash.** Saved values no longer use nvault (it only wrote at map end; a killed

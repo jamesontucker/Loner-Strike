@@ -16,6 +16,18 @@
   Never attach winedbg to a running server: use the files above for stacks. It isn't in any game code (DR1's mp.dll
   has no watchdog; the stock LSPLAY build does the same).
 
+## From Parity A: QA4 area E self-check failures (2026-11-14)
+Brain ls-next3 72cfb7f (run 43580692204), plugins fresh from `tools` c8562711, shipped deathrun.cfg, 8 bots, 15 min a
+map, `-insecure`; table in QA4.md (area E self-check), recordings in ~/loner-strike-sim/results/qa4e/ (gm_simrec,
+gm_drrec, console, `drruns.py` with DRMAPS set to a sim's maps folder). No crash on any map. For you:
+- **deathrun_death**: 313 of 314 runner deaths are one trigger_hurt near (-3540, 170, -219), 4-8 s into the round,
+  with no press (0 presses in 45 rounds); 6 finishes (2%). Your DR3 runs at 01:51 and 02:06 show the same.
+- **deathrun_jigsaw2**: every runner stuck at 81% of the course until the round timer (2 rounds in 15 min), 0 presses.
+- **deathrun_starwars**: 7 of 14 runs reach the end but the rounds go to the timer (finishers don't end them); 0 presses
+  ("20 traps, 0 the terrorist can walk to").
+- **deathrun_temple**: traps fire (10 presses, 23 trap deaths) but only 2 of 77 runs reach the end (3%).
+- deathrun_crash_egypt passes (19% finish, traps fire).
+
 ## Rule from Y (2026-11-13): touch only your own server processes
 - Never attach a debugger (`winedbg <pid>`, `attach`, DebugBreakProcess, anything that puts a thread into another
   process) to a running hlds under CrossOver: the injected thread starts at 0xfff4fadc and kills the server.
