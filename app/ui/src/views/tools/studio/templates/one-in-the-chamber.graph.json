@@ -49,6 +49,14 @@
    "default": 0
   },
   {
+   "id": "over",
+   "name": "Round Over",
+   "type": "bool",
+   "scope": "mode",
+   "default": false,
+   "reset": "round"
+  },
+  {
    "id": "best",
    "name": "Leader",
    "type": "player",
@@ -104,7 +112,7 @@
    "type": "event.player_spawned",
    "pos": {
     "x": 65,
-    "y": 331
+    "y": 279
    },
    "params": {}
   },
@@ -220,7 +228,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 1617
+    "y": 1563
    },
    "params": {}
   },
@@ -315,7 +323,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 3565,
-    "y": 1526
+    "y": 1459
    },
    "params": {}
   },
@@ -324,7 +332,7 @@
    "type": "var.set",
    "pos": {
     "x": 4065,
-    "y": 1533
+    "y": 1455
    },
    "params": {
     "var": "back",
@@ -336,7 +344,7 @@
    "type": "timer.delay",
    "pos": {
     "x": 4565,
-    "y": 1555
+    "y": 1477
    },
    "params": {
     "secs": 2
@@ -347,7 +355,7 @@
    "type": "player.respawn",
    "pos": {
     "x": 5065,
-    "y": 1694
+    "y": 1631
    },
    "params": {}
   },
@@ -367,7 +375,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 2632
+    "y": 2643
    },
    "params": {}
   },
@@ -376,7 +384,7 @@
    "type": "var.set",
    "pos": {
     "x": 565,
-    "y": 2674
+    "y": 2685
    },
    "params": {
     "var": "playing",
@@ -388,7 +396,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 1065,
-    "y": 2685
+    "y": 2696
    },
    "params": {
     "which": "all"
@@ -442,7 +450,7 @@
    "type": "logic.and_or",
    "pos": {
     "x": 2065,
-    "y": 2772
+    "y": 2750
    },
    "params": {
     "op": "or"
@@ -453,7 +461,7 @@
    "type": "logic.and_or",
    "pos": {
     "x": 2565,
-    "y": 2729
+    "y": 2666
    },
    "params": {
     "op": "and"
@@ -464,7 +472,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 3065,
-    "y": 2686
+    "y": 2623
    },
    "params": {}
   },
@@ -473,7 +481,7 @@
    "type": "var.add",
    "pos": {
     "x": 3565,
-    "y": 2664
+    "y": 2601
    },
    "params": {
     "var": "playing",
@@ -484,8 +492,8 @@
    "id": "n",
    "type": "var.get",
    "pos": {
-    "x": 565,
-    "y": 3007
+    "x": 65,
+    "y": 2966
    },
    "params": {
     "var": "playing"
@@ -495,8 +503,8 @@
    "id": "last",
    "type": "math.compare",
    "pos": {
-    "x": 1065,
-    "y": 3007
+    "x": 565,
+    "y": 2966
    },
    "params": {
     "op": "le",
@@ -504,11 +512,42 @@
    }
   },
   {
+   "id": "done1",
+   "type": "var.get",
+   "pos": {
+    "x": 65,
+    "y": 3118
+   },
+   "params": {
+    "var": "over"
+   }
+  },
+  {
+   "id": "notdone1",
+   "type": "logic.not",
+   "pos": {
+    "x": 565,
+    "y": 3142
+   },
+   "params": {}
+  },
+  {
+   "id": "decide1",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 1065,
+    "y": 3078
+   },
+   "params": {
+    "op": "and"
+   }
+  },
+  {
    "id": "over",
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 2997
+    "y": 3076
    },
    "params": {}
   },
@@ -517,7 +556,7 @@
    "type": "flow.pick_player",
    "pos": {
     "x": 2065,
-    "y": 2986
+    "y": 3065
    },
    "params": {
     "which": "alive"
@@ -528,18 +567,30 @@
    "type": "msg.chat",
    "pos": {
     "x": 2565,
-    "y": 2986
+    "y": 3065
    },
    "params": {
     "text": "Last one standing:"
    }
   },
   {
+   "id": "mark1",
+   "type": "var.set",
+   "pos": {
+    "x": 3065,
+    "y": 3054
+   },
+   "params": {
+    "var": "over",
+    "value": true
+   }
+  },
+  {
    "id": "end",
    "type": "score.end_round",
    "pos": {
-    "x": 3065,
-    "y": 2997
+    "x": 3565,
+    "y": 3076
    },
    "params": {
     "winner": "draw"
@@ -570,7 +621,7 @@
    "type": "event.round_started",
    "pos": {
     "x": 65,
-    "y": 2319
+    "y": 2265
    },
    "params": {}
   },
@@ -579,7 +630,7 @@
    "type": "timer.delay",
    "pos": {
     "x": 565,
-    "y": 2295
+    "y": 2241
    },
    "params": {
     "secs": 120
@@ -590,7 +641,7 @@
    "type": "msg.broadcast",
    "pos": {
     "x": 1065,
-    "y": 2295
+    "y": 2241
    },
    "params": {
     "text": "Sudden death! Everyone glows, and has one bullet.",
@@ -602,7 +653,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 1565,
-    "y": 2284
+    "y": 2230
    },
    "params": {
     "which": "alive"
@@ -624,7 +675,7 @@
    "type": "player.switch_weapon",
    "pos": {
     "x": 2565,
-    "y": 2209
+    "y": 2198
    },
    "params": {
     "weapon": "deagle"
@@ -635,7 +686,7 @@
    "type": "player.set_ammo",
    "pos": {
     "x": 3065,
-    "y": 2230
+    "y": 2194
    },
    "params": {
     "clip": 1,
@@ -647,7 +698,7 @@
    "type": "timer.repeat",
    "pos": {
     "x": 2065,
-    "y": 3356
+    "y": 3471
    },
    "params": {
     "every": 10,
@@ -659,7 +710,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 2565,
-    "y": 3356
+    "y": 3471
    },
    "params": {
     "which": "bots"
@@ -670,7 +721,7 @@
    "type": "flow.pick_player",
    "pos": {
     "x": 3065,
-    "y": 3332
+    "y": 3449
    },
    "params": {
     "which": "alive"
@@ -681,7 +732,7 @@
    "type": "logic.equal",
    "pos": {
     "x": 3565,
-    "y": 3295
+    "y": 3411
    },
    "params": {
     "of": "player",
@@ -693,7 +744,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 4065,
-    "y": 3252
+    "y": 3368
    },
    "params": {}
   },
@@ -702,7 +753,7 @@
    "type": "bots.goal",
    "pos": {
     "x": 4565,
-    "y": 3263
+    "y": 3406
    },
    "params": {
     "who": "player",
@@ -717,7 +768,27 @@
    "type": "event.time_up",
    "pos": {
     "x": 65,
-    "y": 4001
+    "y": 3849
+   },
+   "params": {}
+  },
+  {
+   "id": "done2",
+   "type": "var.get",
+   "pos": {
+    "x": 65,
+    "y": 4295
+   },
+   "params": {
+    "var": "over"
+   }
+  },
+  {
+   "id": "still",
+   "type": "flow.branch",
+   "pos": {
+    "x": 565,
+    "y": 4016
    },
    "params": {}
   },
@@ -725,8 +796,8 @@
    "id": "reset",
    "type": "var.set",
    "pos": {
-    "x": 565,
-    "y": 3955
+    "x": 1065,
+    "y": 3994
    },
    "params": {
     "var": "bestScore",
@@ -737,8 +808,8 @@
    "id": "all",
    "type": "flow.for_each_player",
    "pos": {
-    "x": 1065,
-    "y": 3966
+    "x": 1565,
+    "y": 4005
    },
    "params": {
     "which": "all"
@@ -748,8 +819,8 @@
    "id": "lv",
    "type": "var.get",
    "pos": {
-    "x": 1565,
-    "y": 3702
+    "x": 2065,
+    "y": 3822
    },
    "params": {
     "var": "lives"
@@ -759,8 +830,8 @@
    "id": "pts",
    "type": "math.op",
    "pos": {
-    "x": 2065,
-    "y": 3702
+    "x": 2565,
+    "y": 3822
    },
    "params": {
     "op": "mul",
@@ -771,8 +842,8 @@
    "id": "kills",
    "type": "player.get_frags",
    "pos": {
-    "x": 2065,
-    "y": 4054
+    "x": 2565,
+    "y": 3974
    },
    "params": {}
   },
@@ -780,8 +851,8 @@
    "id": "score",
    "type": "math.op",
    "pos": {
-    "x": 2565,
-    "y": 3857
+    "x": 3065,
+    "y": 3886
    },
    "params": {
     "op": "add"
@@ -791,8 +862,8 @@
    "id": "bs",
    "type": "var.get",
    "pos": {
-    "x": 2565,
-    "y": 4094
+    "x": 3065,
+    "y": 4258
    },
    "params": {
     "var": "bestScore"
@@ -802,8 +873,8 @@
    "id": "better",
    "type": "math.compare",
    "pos": {
-    "x": 3065,
-    "y": 3933
+    "x": 3565,
+    "y": 3995
    },
    "params": {
     "op": "gt"
@@ -813,8 +884,8 @@
    "id": "isbest",
    "type": "flow.branch",
    "pos": {
-    "x": 3565,
-    "y": 3853
+    "x": 4065,
+    "y": 3909
    },
    "params": {}
   },
@@ -822,8 +893,8 @@
    "id": "keep",
    "type": "var.set",
    "pos": {
-    "x": 4065,
-    "y": 3844
+    "x": 4565,
+    "y": 3887
    },
    "params": {
     "var": "bestScore"
@@ -833,8 +904,8 @@
    "id": "lead",
    "type": "var.set",
    "pos": {
-    "x": 4565,
-    "y": 3963
+    "x": 5065,
+    "y": 4073
    },
    "params": {
     "var": "best"
@@ -844,8 +915,8 @@
    "id": "who",
    "type": "var.get",
    "pos": {
-    "x": 1065,
-    "y": 4204
+    "x": 1565,
+    "y": 4376
    },
    "params": {
     "var": "best"
@@ -855,19 +926,31 @@
    "id": "tell",
    "type": "msg.chat",
    "pos": {
-    "x": 1565,
-    "y": 3864
+    "x": 2065,
+    "y": 4095
    },
    "params": {
     "text": "Time! Most lives left:"
    }
   },
   {
+   "id": "mark2",
+   "type": "var.set",
+   "pos": {
+    "x": 2565,
+    "y": 4084
+   },
+   "params": {
+    "var": "over",
+    "value": true
+   }
+  },
+  {
    "id": "fin",
    "type": "score.end_round",
    "pos": {
-    "x": 2065,
-    "y": 3875
+    "x": 3065,
+    "y": 4106
    },
    "params": {
     "winner": "draw"
@@ -1540,12 +1623,23 @@
     "pin": "then"
    },
    "to": {
-    "node": "end",
+    "node": "mark1",
     "pin": "exec"
    }
   },
   {
    "id": "w59",
+   "from": {
+    "node": "mark1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w60",
    "from": {
     "node": "n",
     "pin": "out"
@@ -1556,9 +1650,42 @@
    }
   },
   {
-   "id": "w60",
+   "id": "w61",
    "from": {
     "node": "last",
+    "pin": "out"
+   },
+   "to": {
+    "node": "decide1",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "done1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "notdone1",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "notdone1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "decide1",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "decide1",
     "pin": "out"
    },
    "to": {
@@ -1567,7 +1694,7 @@
    }
   },
   {
-   "id": "w61",
+   "id": "w65",
    "from": {
     "node": "winner",
     "pin": "player"
@@ -1578,7 +1705,7 @@
    }
   },
   {
-   "id": "w62",
+   "id": "w66",
    "from": {
     "node": "rs3",
     "pin": "then"
@@ -1589,7 +1716,7 @@
    }
   },
   {
-   "id": "w63",
+   "id": "w67",
    "from": {
     "node": "rs4",
     "pin": "then"
@@ -1600,7 +1727,7 @@
    }
   },
   {
-   "id": "w64",
+   "id": "w68",
    "from": {
     "node": "late",
     "pin": "then"
@@ -1611,7 +1738,7 @@
    }
   },
   {
-   "id": "w65",
+   "id": "w69",
    "from": {
     "node": "sd",
     "pin": "then"
@@ -1622,7 +1749,7 @@
    }
   },
   {
-   "id": "w66",
+   "id": "w70",
    "from": {
     "node": "everyone",
     "pin": "each"
@@ -1633,62 +1760,62 @@
    }
   },
   {
-   "id": "w67",
-   "from": {
-    "node": "red",
-    "pin": "then"
-   },
-   "to": {
-    "node": "draw",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w68",
-   "from": {
-    "node": "draw",
-    "pin": "then"
-   },
-   "to": {
-    "node": "load",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w69",
-   "from": {
-    "node": "everyone",
-    "pin": "player"
-   },
-   "to": {
-    "node": "red",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w70",
-   "from": {
-    "node": "everyone",
-    "pin": "player"
-   },
-   "to": {
-    "node": "draw",
-    "pin": "player"
-   }
-  },
-  {
    "id": "w71",
    "from": {
-    "node": "everyone",
-    "pin": "player"
+    "node": "red",
+    "pin": "then"
    },
    "to": {
-    "node": "load",
-    "pin": "player"
+    "node": "draw",
+    "pin": "exec"
    }
   },
   {
    "id": "w72",
+   "from": {
+    "node": "draw",
+    "pin": "then"
+   },
+   "to": {
+    "node": "load",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w73",
+   "from": {
+    "node": "everyone",
+    "pin": "player"
+   },
+   "to": {
+    "node": "red",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w74",
+   "from": {
+    "node": "everyone",
+    "pin": "player"
+   },
+   "to": {
+    "node": "draw",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w75",
+   "from": {
+    "node": "everyone",
+    "pin": "player"
+   },
+   "to": {
+    "node": "load",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w76",
    "from": {
     "node": "everyone",
     "pin": "then"
@@ -1699,7 +1826,7 @@
    }
   },
   {
-   "id": "w73",
+   "id": "w77",
    "from": {
     "node": "hunt",
     "pin": "tick"
@@ -1710,7 +1837,7 @@
    }
   },
   {
-   "id": "w74",
+   "id": "w78",
    "from": {
     "node": "hunters",
     "pin": "each"
@@ -1721,7 +1848,7 @@
    }
   },
   {
-   "id": "w75",
+   "id": "w79",
    "from": {
     "node": "prey",
     "pin": "then"
@@ -1732,7 +1859,7 @@
    }
   },
   {
-   "id": "w76",
+   "id": "w80",
    "from": {
     "node": "someone",
     "pin": "true"
@@ -1743,7 +1870,7 @@
    }
   },
   {
-   "id": "w77",
+   "id": "w81",
    "from": {
     "node": "hunters",
     "pin": "player"
@@ -1754,7 +1881,7 @@
    }
   },
   {
-   "id": "w78",
+   "id": "w82",
    "from": {
     "node": "prey",
     "pin": "player"
@@ -1765,7 +1892,7 @@
    }
   },
   {
-   "id": "w79",
+   "id": "w83",
    "from": {
     "node": "self",
     "pin": "out"
@@ -1776,7 +1903,7 @@
    }
   },
   {
-   "id": "w80",
+   "id": "w84",
    "from": {
     "node": "hunters",
     "pin": "player"
@@ -1787,7 +1914,7 @@
    }
   },
   {
-   "id": "w81",
+   "id": "w85",
    "from": {
     "node": "prey",
     "pin": "player"
@@ -1798,10 +1925,21 @@
    }
   },
   {
-   "id": "w82",
+   "id": "w86",
    "from": {
     "node": "tu",
     "pin": "then"
+   },
+   "to": {
+    "node": "still",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w87",
+   "from": {
+    "node": "still",
+    "pin": "false"
    },
    "to": {
     "node": "reset",
@@ -1809,7 +1947,7 @@
    }
   },
   {
-   "id": "w83",
+   "id": "w88",
    "from": {
     "node": "reset",
     "pin": "then"
@@ -1820,7 +1958,7 @@
    }
   },
   {
-   "id": "w84",
+   "id": "w89",
    "from": {
     "node": "all",
     "pin": "each"
@@ -1831,7 +1969,7 @@
    }
   },
   {
-   "id": "w85",
+   "id": "w90",
    "from": {
     "node": "isbest",
     "pin": "true"
@@ -1842,7 +1980,7 @@
    }
   },
   {
-   "id": "w86",
+   "id": "w91",
    "from": {
     "node": "keep",
     "pin": "then"
@@ -1853,7 +1991,18 @@
    }
   },
   {
-   "id": "w87",
+   "id": "w92",
+   "from": {
+    "node": "done2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "still",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w93",
    "from": {
     "node": "all",
     "pin": "player"
@@ -1864,7 +2013,7 @@
    }
   },
   {
-   "id": "w88",
+   "id": "w94",
    "from": {
     "node": "lv",
     "pin": "out"
@@ -1875,7 +2024,7 @@
    }
   },
   {
-   "id": "w89",
+   "id": "w95",
    "from": {
     "node": "pts",
     "pin": "out"
@@ -1886,7 +2035,7 @@
    }
   },
   {
-   "id": "w90",
+   "id": "w96",
    "from": {
     "node": "all",
     "pin": "player"
@@ -1897,7 +2046,7 @@
    }
   },
   {
-   "id": "w91",
+   "id": "w97",
    "from": {
     "node": "kills",
     "pin": "out"
@@ -1908,7 +2057,7 @@
    }
   },
   {
-   "id": "w92",
+   "id": "w98",
    "from": {
     "node": "score",
     "pin": "out"
@@ -1919,7 +2068,7 @@
    }
   },
   {
-   "id": "w93",
+   "id": "w99",
    "from": {
     "node": "bs",
     "pin": "out"
@@ -1930,7 +2079,7 @@
    }
   },
   {
-   "id": "w94",
+   "id": "w100",
    "from": {
     "node": "better",
     "pin": "out"
@@ -1941,7 +2090,7 @@
    }
   },
   {
-   "id": "w95",
+   "id": "w101",
    "from": {
     "node": "score",
     "pin": "out"
@@ -1952,7 +2101,7 @@
    }
   },
   {
-   "id": "w96",
+   "id": "w102",
    "from": {
     "node": "all",
     "pin": "player"
@@ -1963,7 +2112,7 @@
    }
   },
   {
-   "id": "w97",
+   "id": "w103",
    "from": {
     "node": "all",
     "pin": "then"
@@ -1974,9 +2123,20 @@
    }
   },
   {
-   "id": "w98",
+   "id": "w104",
    "from": {
     "node": "tell",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mark2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w105",
+   "from": {
+    "node": "mark2",
     "pin": "then"
    },
    "to": {
@@ -1985,7 +2145,7 @@
    }
   },
   {
-   "id": "w99",
+   "id": "w106",
    "from": {
     "node": "who",
     "pin": "out"
@@ -1996,7 +2156,7 @@
    }
   },
   {
-   "id": "w100",
+   "id": "w107",
    "from": {
     "node": "nb_rs",
     "pin": "then"
@@ -2007,7 +2167,7 @@
    }
   },
   {
-   "id": "w101",
+   "id": "w108",
    "from": {
     "node": "nb_each",
     "pin": "each"
@@ -2018,7 +2178,7 @@
    }
   },
   {
-   "id": "w102",
+   "id": "w109",
    "from": {
     "node": "nb_each",
     "pin": "player"
@@ -2075,7 +2235,7 @@
    },
    "size": {
     "w": 3778,
-    "h": 620
+    "h": 730
    }
   },
   {
@@ -2099,7 +2259,7 @@
    },
    "size": {
     "w": 3278,
-    "h": 320
+    "h": 266
    }
   },
   {
@@ -2107,7 +2267,7 @@
    "text": "And every 10 seconds of sudden death each bot is told to hunt another player (Bots: Goal, Hunt it), so bots go looking instead of waiting.",
    "pos": {
     "x": 2041,
-    "y": 3206
+    "y": 3322
    },
    "size": {
     "w": 2778,
@@ -2116,14 +2276,14 @@
   },
   {
    "id": "c8",
-   "text": "Time up: the one with the most lives left wins (a life is worth 100 points, each kill 1, so kills break a tie).",
+   "text": "Time up: the one with the most lives left wins (a life is worth 100 points, each kill 1, so kills break a tie). Round Over makes sure a round is only decided once.",
    "pos": {
     "x": 41,
-    "y": 3656
+    "y": 3776
    },
    "size": {
-    "w": 4778,
-    "h": 682
+    "w": 5278,
+    "h": 734
    }
   },
   {
