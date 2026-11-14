@@ -313,7 +313,7 @@ Screenshots are in `/private/tmp/claude-501/-Users-jameson/a1c85d27-df33-445d-9b
 ## NPCs and interactables (1.0, 2026-11-14): QA rows
 | Check | Result | Evidence |
 |---|---|---|
-| The Quest Giver installs and runs | PASS | Sim/T1NPC (brain ls-next3 run 43648864150, 1310-dev; plugins fresh from b5bb94c7 plus 5f1e3c2a's gm_components), `-insecure`, de_dust2, 5 bots, debug build of the example: Old Sam spawned (entity 236), the note (237) |
+| The Quest Giver installs and runs | PASS | Sim/T1NPC (brain ls-next3 run 43648864150, 1310-dev; plugins fresh from b5bb94c7 plus 801fbeed's gm_components), `-insecure`, de_dust2, 5 bots, debug build of the example: Old Sam spawned (entity 236), the note (237) |
 | Talked To NPC fires from a use | PASS | `ls_npc_use 1 236` → events `talk ran`, `ask asked` |
 | A choice flows | PASS | `ls_npc_pick 1 0` → `ask reply 1` → `take true` → `thanks said`; a second bot answered by itself → `ask reply 2` → `later said` |
 | The interactable fires Used Interactable and the reward | PASS | `ls_npc_use 1 237` → `used ran` → `if true` → `pay done` → `yay said` |
