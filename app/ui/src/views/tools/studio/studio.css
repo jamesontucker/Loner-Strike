@@ -424,3 +424,4 @@
 .st-mark.changed { color: #e8b04a; }
 .st-versions-pick { border-top: 1px solid var(--line); }
 .st-help-quick { font-size: 12.5px; margin: 0; padding-top: 0; }
+.st-tl-tan { fill: var(--panel, #22262b); stroke: var(--signal, #e8c35a); stroke-width: 1.5; cursor: grab; }

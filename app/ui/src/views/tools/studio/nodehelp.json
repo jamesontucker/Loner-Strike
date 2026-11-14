@@ -31152,11 +31152,13 @@
 "help":"Picked from this mode's own pieces."
 }
 ],
+"more":"Each key says how the track goes to the next: Linear, Constant (a step), Ease In, Ease Out, Ease In-Out, or Custom, where you drag the key's tangent handles to shape the curve (Alt drags one side; Auto tangents puts them back). The plugin works the curves out with a few multiplications a tick, no tables.",
 "related":[
 "timer.clear",
 "timer.is_active",
 "timer.by_event"
-]
+],
+"cost":"A Timeline in a Function with a Player input runs once per player: up to 32 copies, each ticking 20 times a second at the default Tick."
 },
 "timer.clear":{
 "title":"Clear Timer",

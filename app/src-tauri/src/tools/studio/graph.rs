@@ -230,9 +230,30 @@ pub struct Key {
     /// a number (float), [x, y, z] (vector), [r, g, b] (color); nothing for an event
     #[serde(default)]
     pub v: Value,
-    /// "ease" (smooth in and out) to the next key; else straight
+    /// how it goes to the next key: "linear" (or none), "constant" (a step), "in", "out", "ease"
+    /// (in and out), "custom" (a cubic curve by the tangents)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ease: Option<String>,
+    /// Custom curves: the key's own tangents (value per second; [x, y, z] for a position or
+    /// color), coming in and going out; none: Auto (through the neighbors)
+    #[serde(default, skip_serializing_if = "Value::is_null")]
+    pub tin: Value,
+    #[serde(default, skip_serializing_if = "Value::is_null")]
+    pub tout: Value,
+}
+
+/// The ways a key goes to the next (Key::ease).
+pub const EASES: [&str; 6] = ["linear", "constant", "in", "out", "ease", "custom"];
+
+impl Key {
+    /// A tangent's value for one component (none: Auto).
+    pub fn own_tangent(&self, side_in: bool, comp: Option<usize>) -> Option<f64> {
+        let t = if side_in { &self.tin } else { &self.tout };
+        match comp {
+            None => t.as_f64(),
+            Some(c) => t.as_array().and_then(|a| a.get(c)).and_then(Value::as_f64),
+        }
+    }
 }
 
 impl Timeline {
@@ -310,12 +331,23 @@ fn timeline_problems(g: &Graph, p: &mut Vec<Problem>) {
                     "color" => k.v.as_array().is_some_and(|a| a.len() == 3 && a.iter().all(|x| x.as_f64().is_some_and(|c| (0.0..=255.0).contains(&c)))),
                     _ => true,
                 };
-                if !k.t.is_finite() || k.t < 0.0 || k.t > tl.length.max(0.1) || !ok_v || k.ease.as_deref().is_some_and(|e| e != "ease" && e != "linear") {
+                if !k.t.is_finite() || k.t < 0.0 || k.t > tl.length.max(0.1) || !ok_v || k.ease.as_deref().is_some_and(|e| !EASES.contains(&e)) || !tangent_ok(&k.tin, &tr.kind) || !tangent_ok(&k.tout, &tr.kind) {
                     p.push(Problem::err(None, format!("A key of the track \u{201c}{}\u{201d} is out of range (its time 0 to the length, its value the track's kind).", short(&tr.name))));
                     break;
                 }
             }
         }
+    }
+}
+
+/// A tangent: none, or a number (a number track), or three (a position or color), in range.
+fn tangent_ok(t: &Value, kind: &str) -> bool {
+    let ok = |x: &Value| x.as_f64().is_some_and(|f| f.is_finite() && f.abs() <= NUMBER_LIMIT * 100.0);
+    match (t, kind) {
+        (Value::Null, _) => true,
+        (Value::Number(_), "float") => ok(t),
+        (Value::Array(a), "vector" | "color") => a.len() == 3 && a.iter().all(ok),
+        _ => false,
     }
 }
 

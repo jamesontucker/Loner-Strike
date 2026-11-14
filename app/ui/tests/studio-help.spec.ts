@@ -194,7 +194,7 @@ test("polish: drops with Ctrl and Alt, quick add, Promote to Variable, align, ve
   await page.getByRole("menuitem", { name: "Align left edges" }).click();
   // versions: save, change, save; pick the first: marks on the canvas; restore is one undo
   await page.locator(".tl-actionbar").getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("No unsaved changes")).toBeVisible();
+  await expect(page.locator(".tl-actionbar").getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   const after = (await (await page.request.get(`/api/tools/studio/graph/${ID}`)).json()).graph;
   const pos = (id: string) => after.nodes.find((x: { id: string }) => x.id === id).pos.x;
   expect(pos("give_m4")).toBe(pos("give_ak"));
@@ -213,4 +213,28 @@ test("polish: drops with Ctrl and Alt, quick add, Promote to Variable, align, ve
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.locator(".react-flow__node").filter({ hasText: "Branch" })).toHaveCount(1);
   expect(versions).toBeGreaterThanOrEqual(2);
+});
+
+test("Timeline curves: pick Custom, drag a tangent handle, Auto puts it back", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("ls.studio.tour", JSON.stringify({ offered: true, never: false })));
+  const g = (await (await page.request.get(`/api/tools/studio/graph/${ID}`)).json()).graph;
+  g.timelines = [{ id: "tl1", name: "Lift", length: 4, tick: 0.05, tracks: [{ id: "h", name: "Height", kind: "float", keys: [{ t: 0, v: 0 }, { t: 2, v: 50 }, { t: 4, v: 0 }] }] }];
+  await page.request.post(`/api/tools/studio/graph/${ID}`, { data: { graph: g }, headers: H });
+  await page.goto(`/tools-dev.html?open=studio:${ID}/tl1`);
+  const ed = page.getByTestId("timeline-editor");
+  await expect(ed).toBeVisible();
+  // pick the middle key, then Custom
+  await ed.locator('circle.st-tl-k[data-key="1"]').dispatchEvent("pointerdown", { button: 0, clientX: 0, clientY: 0, bubbles: true });
+  await page.mouse.up();
+  await ed.getByLabel("Key interpolation").selectOption("custom");
+  const handle = ed.locator('[data-tangent="out"]');
+  await expect(handle).toBeVisible();
+  const b = (await handle.boundingBox())!;
+  await page.mouse.move(b.x + 4, b.y + 4);
+  await handle.dispatchEvent("pointerdown", { button: 0, clientX: b.x + 4, clientY: b.y + 4, bubbles: true });
+  await page.mouse.move(b.x + 4, b.y - 30, { steps: 4 });
+  await page.mouse.up();
+  await expect(ed.getByRole("button", { name: "Auto tangents" })).toBeEnabled();
+  await ed.getByRole("button", { name: "Auto tangents" }).click();
+  await expect(ed.getByRole("button", { name: "Auto tangents" })).toBeDisabled();
 });

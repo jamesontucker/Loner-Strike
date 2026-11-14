@@ -32,6 +32,8 @@ pub mod modes_reload;
 mod help_tests;
 #[cfg(test)]
 mod examples_tests;
+#[cfg(test)]
+mod timeline_tests;
 
 use crate::server::Shared;
 use axum::extract::{Path as UrlPath, Query, State};

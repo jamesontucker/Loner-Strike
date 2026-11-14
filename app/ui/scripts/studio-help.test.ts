@@ -322,3 +322,28 @@ test("version compare: added and changed nodes are marked, removed ones listed",
   assert.equal(c.marks.start, undefined, "a move isn't a change");
   assert.deepEqual(c.gone.map((x) => x.id), ["hello"]);
 });
+
+// ---- Timeline curves (curves.ts): the same as the plugin's
+import { valueAt as curveAt, tangent as curveTangent } from "../src/views/tools/studio/curves";
+
+test("Timeline curves: step, eases and custom tangents", () => {
+  const k = (t: number, v: number, ease?: string, tin?: number, tout?: number) => ({ t, v, ...(ease ? { ease } : {}), ...(tin !== undefined ? { tin } : {}), ...(tout !== undefined ? { tout } : {}) }) as never;
+  const keys = [k(0, 0, "constant"), k(1, 10, "in"), k(2, 20, "out"), k(3, 30, "ease"), k(4, 40, "custom", undefined, 50), k(5, 0, "custom", -10), k(6, 5)];
+  assert.equal(curveAt(keys, 0.9), 0, "a step holds");
+  assert.equal(curveAt(keys, 1.5), 12.5, "ease in: 10 + 10 * 0.25");
+  assert.equal(curveAt(keys, 2.5), 27.5, "ease out: 20 + 10 * 0.75");
+  assert.equal(curveAt(keys, 3.5), 35, "in-out: halfway at the middle");
+  // custom: it leaves 40 going up at 50 a second, then turns down to 0
+  assert.ok(curveAt(keys, 4.1) > 40);
+  assert.ok(Math.abs(curveAt(keys, 5) - 0) < 1e-9 && Math.abs(curveAt(keys, 4) - 40) < 1e-9, "it passes through its keys");
+  // Auto: through the neighbors
+  assert.equal(curveTangent(keys, 6, "in"), (5 - 0) / 1);
+  assert.equal(curveTangent(keys, 4, "out"), 50, "its own when set");
+  // smooth: no jumps between ticks over the custom part
+  let last = curveAt(keys, 4);
+  for (let t = 4.05; t <= 5; t += 0.05) {
+    const v = curveAt(keys, t);
+    assert.ok(Math.abs(v - last) < 6, `a jump at ${t}`);
+    last = v;
+  }
+});

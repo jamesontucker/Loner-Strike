@@ -3268,7 +3268,9 @@ fn timeline_instance(gen: &Gen, id: &str) -> String {
     "0".into()
 }
 
-/// A track's value at time t, for one component (a straight line between keys, or eased).
+/// A track's value at time t, for one component: from each key to the next as the key says
+/// (straight, a step, eased in, out or both, or a cubic Hermite curve by the tangents), worked
+/// out with a few multiplications: no tables.
 fn track_eval(name: &str, keys: &[&super::graph::Key], comp: Option<usize>) -> String {
     let val = |k: &super::graph::Key| -> f64 {
         match comp {
@@ -3276,18 +3278,44 @@ fn track_eval(name: &str, keys: &[&super::graph::Key], comp: Option<usize>) -> S
             None => k.v.as_f64().unwrap_or(0.0),
         }
     };
+    // a tangent: the key's own, else through its neighbors (Auto)
+    let tangent = |i: usize, side_in: bool| -> f64 {
+        keys[i].own_tangent(side_in, comp).unwrap_or_else(|| {
+            let (a, b) = (keys[i.saturating_sub(1)], keys[(i + 1).min(keys.len() - 1)]);
+            let dt = b.t - a.t;
+            if dt > 1e-6 { (val(b) - val(a)) / dt } else { 0.0 }
+        })
+    };
     let mut b = format!("stock Float:{name}(Float:t)\n{{");
     if keys.is_empty() {
         b.push_str("\n\t#pragma unused t\n\treturn 0.0\n}");
         return b;
     }
     b.push_str(&format!("\n\tif (t <= {})\n\t\treturn {}", float_lit(keys[0].t), float_lit(val(keys[0]))));
-    for w in keys.windows(2) {
+    for (i, w) in keys.windows(2).enumerate() {
         let (a, z) = (w[0], w[1]);
         let span = (z.t - a.t).max(0.0001);
         let x = format!("(t - {}) / {}", float_lit(a.t), float_lit(span));
-        let f = if a.ease.as_deref() == Some("ease") { "lsg_tl_ease" } else { "" };
-        b.push_str(&format!("\n\tif (t <= {})\n\t\treturn {} + ({} - {}) * {f}({x})", float_lit(z.t), float_lit(val(a)), float_lit(val(z)), float_lit(val(a))));
+        let (p0, p1) = (val(a), val(z));
+        let body = match a.ease.as_deref() {
+            Some("constant") => float_lit(p0),
+            Some("ease") => format!("{} + {} * lsg_tl_ease({x})", float_lit(p0), float_lit(p1 - p0)),
+            Some("in") => format!("{} + {} * x * x", float_lit(p0), float_lit(p1 - p0)),
+            Some("out") => format!("{} + {} * x * (2.0 - x)", float_lit(p0), float_lit(p1 - p0)),
+            Some("custom") => {
+                let (m0, m1) = (tangent(i, false) * span, tangent(i + 1, true) * span);
+                format!(
+                    "{} * (2.0 * x * x * x - 3.0 * x * x + 1.0) + {} * (x * x * x - 2.0 * x * x + x) + {} * (3.0 * x * x - 2.0 * x * x * x) + {} * (x * x * x - x * x)",
+                    float_lit(p0), float_lit(m0), float_lit(p1), float_lit(m1)
+                )
+            }
+            _ => format!("{} + {} * ({x})", float_lit(p0), float_lit(p1 - p0)),
+        };
+        if body.contains(" x") || body.contains("(x") {
+            b.push_str(&format!("\n\tif (t <= {})\n\t{{\n\t\tnew Float:x = {x}\n\t\treturn {body}\n\t}}", float_lit(z.t)));
+        } else {
+            b.push_str(&format!("\n\tif (t <= {})\n\t\treturn {body}", float_lit(z.t)));
+        }
     }
     b.push_str(&format!("\n\treturn {}\n}}", float_lit(val(keys[keys.len() - 1]))));
     b

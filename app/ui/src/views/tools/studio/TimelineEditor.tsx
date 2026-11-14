@@ -2,40 +2,24 @@
 // mode): its settings, and tracks as lanes of keys over time. Number and position tracks are
 // curves (a position's x, y and z in three colors), a color track a gradient, an event track
 // diamonds. Click a lane to add a key, drag a key to move it (Shift: one axis only), Delete
-// removes the selected one, right-click a key for Linear or Ease, the wheel zooms time, dragging
-// empty space pans, F fits the whole length.
+// removes the selected one, right-click a key for how it goes to the next (Linear, Constant,
+// Ease In, Ease Out, Ease In-Out, Custom), a Custom key's tangent handles shape its curve (Alt
+// drags one side only; Auto resets them), the wheel zooms time, dragging empty space pans, F fits
+// the whole length.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
 import { useStudio } from "./store";
 import { newTrack, removeTimeline, updateTimeline, type GKey, type GTimeline, type GTrack } from "./graphOps";
 import { useContextMenu } from "./ContextMenu";
 import { useConfirm } from "../../../ui";
+import { EASES, num, sortKeys as sorted, tangent, valueAt, type Ease } from "./curves";
+
+export { valueAt };
 
 const HEAD = 170;
 const LANE: Record<GTrack["kind"], number> = { float: 96, vector: 96, color: 44, event: 36 };
 const COMP = ["#e05a4f", "#5fbf6a", "#5a8fe0"];
 const KIND_NAME: Record<GTrack["kind"], string> = { float: "Number", vector: "Position", color: "Color", event: "Event" };
-
-const ease = (x: number) => x * x * (3 - 2 * x);
-const num = (v: unknown, c?: number): number => (c === undefined ? (typeof v === "number" ? v : 0) : Array.isArray(v) && typeof v[c] === "number" ? v[c] : 0);
-const sorted = (keys: GKey[]) => [...keys].sort((a, b) => a.t - b.t);
-
-/** A track's value at time t (one component of a position or color), as the plugin works it out. */
-export function valueAt(keys: GKey[], t: number, c?: number): number {
-  const k = sorted(keys);
-  if (!k.length) return 0;
-  if (t <= k[0].t) return num(k[0].v, c);
-  for (let i = 0; i < k.length - 1; i++) {
-    const a = k[i],
-      b = k[i + 1];
-    if (t <= b.t) {
-      const x = (t - a.t) / Math.max(b.t - a.t, 0.0001);
-      const f = a.ease === "ease" ? ease(x) : x;
-      return num(a.v, c) + (num(b.v, c) - num(a.v, c)) * f;
-    }
-  }
-  return num(k[k.length - 1].v, c);
-}
 
 const comps = (tr: GTrack) => (tr.kind === "vector" ? [0, 1, 2] : tr.kind === "float" ? [undefined] : []);
 
@@ -161,10 +145,23 @@ export function TimelineEditor({ id }: { id: string }) {
     window.addEventListener("pointerup", up);
   };
 
+  /** how a key goes to the next (Linear drops the field, as before) */
+  const setEase = (tid: string, i: number, e: Ease) => setTrack(tid, (x) => ({ ...x, keys: x.keys.map((k, j) => (j === i ? { ...k, ease: e === "linear" ? undefined : e } : k)) }));
+  /** Auto: the key's own tangents go */
+  const autoTangents = (tid: string, i: number) =>
+    setTrack(tid, (x) => ({
+      ...x,
+      keys: x.keys.map((k, j) => {
+        if (j !== i) return k;
+        const { tin: _a, tout: _b, ...rest } = k as GKey & { tin?: unknown; tout?: unknown };
+        void _a, _b;
+        return rest as GKey;
+      }),
+    }));
+
   const keyMenu = (e: React.MouseEvent, tr: GTrack, i: number) =>
     cm.open(e, `${tr.name}: key at ${tr.keys[i].t} s`, [
-      { label: "Linear", run: () => setTrack(tr.id, (x) => ({ ...x, keys: x.keys.map((k, j) => (j === i ? { ...k, ease: undefined } : k)) })) },
-      { label: "Ease", run: () => setTrack(tr.id, (x) => ({ ...x, keys: x.keys.map((k, j) => (j === i ? { ...k, ease: "ease" as const } : k)) })) },
+      ...EASES.map(([e, label]) => ({ label: `${label}${(tr.keys[i].ease ?? "linear") === e ? " ✓" : ""}`, run: () => setEase(tr.id, i, e) })),
       "-",
       { label: "Delete key", danger: true, run: () => (setTrack(tr.id, (x) => ({ ...x, keys: x.keys.filter((_, j) => j !== i) })), setSel(null)) },
     ]);
@@ -180,6 +177,86 @@ export function TimelineEditor({ id }: { id: string }) {
       pts.push(`${((i / n) * laneW).toFixed(1)},${y(valueAt(tr.keys, t, c)).toFixed(1)}`);
     }
     return <polyline points={pts.join(" ")} fill="none" stroke={c === undefined ? "var(--signal, #e8c35a)" : COMP[c]} strokeWidth={1.6} />;
+  };
+
+  /** A Custom key's tangent handles (the selected key): drag to shape the curve; Alt: one side. */
+  const tangentHandles = (tr: GTrack) => {
+    if (!sel || sel.track !== tr.id || (tr.kind !== "float" && tr.kind !== "vector")) return null;
+    const keys = sorted(tr.keys);
+    const k = tr.keys[sel.key];
+    const si = keys.indexOf(k);
+    if (!k || si < 0) return null;
+    const custom = k.ease === "custom" || (si > 0 && keys[si - 1].ease === "custom");
+    if (!custom) return null;
+    const h = LANE[tr.kind];
+    const [lo, hi] = range(tr);
+    const y = (val: number) => ((hi - val) / (hi - lo)) * h;
+    const L = 40;
+    const out: JSX.Element[] = [];
+    for (const c of comps(tr)) {
+      const kx = xOf(k.t),
+        kv = num(k.v, c);
+      for (const side of ["in", "out"] as const) {
+        const dir = side === "in" ? -1 : 1;
+        const s = tangent(keys, si, side, c);
+        const dt = (L / v.pps) * dir;
+        const hx = kx + L * dir,
+          hy = y(kv + s * dt);
+        out.push(
+          <g key={`${side}${c}`}>
+            <line x1={kx} y1={y(kv)} x2={hx} y2={hy} stroke={c === undefined ? "var(--signal, #e8c35a)" : COMP[c]} strokeDasharray="3 2" pointerEvents="none" />
+            <rect
+              x={hx - 4}
+              y={hy - 4}
+              width={8}
+              height={8}
+              className="st-tl-tan"
+              data-tangent={`${side}${c ?? ""}`}
+              aria-label={`${side === "in" ? "Incoming" : "Outgoing"} tangent`}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const svg = ((e.currentTarget as Element).closest("svg.st-tl-lane") as Element).getBoundingClientRect();
+                const before = useStudio.getState().graph!;
+                const yToV = (py: number) => hi - (py / h) * (hi - lo);
+                const move = (ev: PointerEvent) => {
+                  const px = ev.clientX - svg.left - kx;
+                  if (Math.abs(px) < 4) return;
+                  const slope = Math.round(((yToV(ev.clientY - svg.top) - kv) / (px / v.pps)) * 1000) / 1000;
+                  const put = (old: unknown) => (c === undefined ? slope : [0, 1, 2].map((q) => (q === c ? slope : Array.isArray(old) && typeof old[q] === "number" ? old[q] : tangent(keys, si, side, q))));
+                  live((g) =>
+                    updateTimeline(g, id, (x) => ({
+                      ...x,
+                      tracks: x.tracks.map((tt) =>
+                        tt.id !== tr.id
+                          ? tt
+                          : {
+                              ...tt,
+                              keys: tt.keys.map((kk, j) => {
+                                if (j !== sel.key) return kk;
+                                const cur = kk as GKey & { tin?: unknown; tout?: unknown };
+                                // (user tangents: both sides together, like Unreal; Alt breaks them)
+                                return ev.altKey ? { ...kk, [side === "in" ? "tin" : "tout"]: put(side === "in" ? cur.tin : cur.tout) } : { ...kk, tin: put(cur.tin), tout: put(cur.tout) };
+                              }),
+                            },
+                      ),
+                    })),
+                  );
+                };
+                const up = () => {
+                  window.removeEventListener("pointermove", move);
+                  window.removeEventListener("pointerup", up);
+                  commit(before);
+                };
+                window.addEventListener("pointermove", move);
+                window.addEventListener("pointerup", up);
+              }}
+            />
+          </g>,
+        );
+      }
+    }
+    return out;
   };
 
   return (
@@ -296,11 +373,19 @@ export function TimelineEditor({ id }: { id: string }) {
           {selTrack.kind !== "event" && (
             <label>
               To the next{" "}
-              <select className="st-field" value={selKey.ease ?? "linear"} onChange={(e) => setTrack(selTrack.id, (x) => ({ ...x, keys: x.keys.map((k, j) => (j === sel.key ? { ...k, ease: e.target.value === "ease" ? ("ease" as const) : undefined } : k)) }))} aria-label="Key interpolation">
-                <option value="linear">Linear</option>
-                <option value="ease">Ease</option>
+              <select className="st-field" value={selKey.ease ?? "linear"} onChange={(e) => setEase(selTrack.id, sel.key, e.target.value as Ease)} aria-label="Key interpolation">
+                {EASES.map(([e, label]) => (
+                  <option key={e} value={e}>
+                    {label}
+                  </option>
+                ))}
               </select>
             </label>
+          )}
+          {selTrack.kind !== "event" && selTrack.kind !== "color" && (
+            <button type="button" className="btn small" onClick={() => autoTangents(selTrack.id, sel.key)} title="Its tangents go back to following its neighbors" disabled={!("tin" in selKey) && !("tout" in selKey)}>
+              Auto tangents
+            </button>
           )}
           <button type="button" className="btn small" onClick={removeSel}>
             Delete key
@@ -368,6 +453,7 @@ export function TimelineEditor({ id }: { id: string }) {
                     {curve(tr, c)}
                   </g>
                 ))}
+                {tangentHandles(tr)}
                 {tr.keys.map((k, i) => {
                   const on = sel?.track === tr.id && sel.key === i;
                   const x = xOf(k.t);
@@ -381,7 +467,7 @@ export function TimelineEditor({ id }: { id: string }) {
                       cx={x}
                       cy={((hi - num(k.v, c)) / (hi - lo)) * h}
                       r={5}
-                      className={`st-tl-k${on ? " on" : ""}${k.ease === "ease" ? " ease" : ""}`}
+                      className={`st-tl-k${on ? " on" : ""}${k.ease && k.ease !== "linear" ? ` ease ${k.ease}` : ""}`}
                       style={c === undefined ? undefined : { stroke: COMP[c] }}
                       onPointerDown={(e) => press(e, tr, i, c)}
                       onContextMenu={(e) => keyMenu(e, tr, i)}

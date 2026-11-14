@@ -3696,9 +3696,9 @@ stock Float:lsg_tl82_v0(Float:t)
 	if (t <= 0.0)
 		return 0.0
 	if (t <= 2.0)
-		return 0.0 + (128.0 - 0.0) * lsg_tl_ease((t - 0.0) / 2.0)
+		return 0.0 + 128.0 * lsg_tl_ease((t - 0.0) / 2.0)
 	if (t <= 4.0)
-		return 128.0 + (0.0 - 128.0) * ((t - 2.0) / 2.0)
+		return 128.0 + -128.0 * ((t - 2.0) / 2.0)
 	return 0.0
 }
 stock Float:lsg_tl82_v1_0(Float:t)
@@ -3706,7 +3706,7 @@ stock Float:lsg_tl82_v1_0(Float:t)
 	if (t <= 0.0)
 		return 0.0
 	if (t <= 4.0)
-		return 0.0 + (256.0 - 0.0) * ((t - 0.0) / 4.0)
+		return 0.0 + 256.0 * ((t - 0.0) / 4.0)
 	return 256.0
 }
 stock Float:lsg_tl82_v1_1(Float:t)
@@ -3714,7 +3714,7 @@ stock Float:lsg_tl82_v1_1(Float:t)
 	if (t <= 0.0)
 		return 0.0
 	if (t <= 4.0)
-		return 0.0 + (0.0 - 0.0) * ((t - 0.0) / 4.0)
+		return 0.0 + 0.0 * ((t - 0.0) / 4.0)
 	return 0.0
 }
 stock Float:lsg_tl82_v1_2(Float:t)
@@ -3722,7 +3722,7 @@ stock Float:lsg_tl82_v1_2(Float:t)
 	if (t <= 0.0)
 		return 0.0
 	if (t <= 4.0)
-		return 0.0 + (64.0 - 0.0) * ((t - 0.0) / 4.0)
+		return 0.0 + 64.0 * ((t - 0.0) / 4.0)
 	return 64.0
 }
 stock Float:lsg_tl82_v2_0(Float:t)
@@ -3730,9 +3730,9 @@ stock Float:lsg_tl82_v2_0(Float:t)
 	if (t <= 0.0)
 		return 255.0
 	if (t <= 2.0)
-		return 255.0 + (0.0 - 255.0) * ((t - 0.0) / 2.0)
+		return 255.0 + -255.0 * ((t - 0.0) / 2.0)
 	if (t <= 4.0)
-		return 0.0 + (255.0 - 0.0) * lsg_tl_ease((t - 2.0) / 2.0)
+		return 0.0 + 255.0 * lsg_tl_ease((t - 2.0) / 2.0)
 	return 255.0
 }
 stock Float:lsg_tl82_v2_1(Float:t)
@@ -3740,9 +3740,9 @@ stock Float:lsg_tl82_v2_1(Float:t)
 	if (t <= 0.0)
 		return 0.0
 	if (t <= 2.0)
-		return 0.0 + (0.0 - 0.0) * ((t - 0.0) / 2.0)
+		return 0.0 + 0.0 * ((t - 0.0) / 2.0)
 	if (t <= 4.0)
-		return 0.0 + (0.0 - 0.0) * lsg_tl_ease((t - 2.0) / 2.0)
+		return 0.0 + 0.0 * lsg_tl_ease((t - 2.0) / 2.0)
 	return 0.0
 }
 stock Float:lsg_tl82_v2_2(Float:t)
@@ -3750,9 +3750,9 @@ stock Float:lsg_tl82_v2_2(Float:t)
 	if (t <= 0.0)
 		return 0.0
 	if (t <= 2.0)
-		return 0.0 + (255.0 - 0.0) * ((t - 0.0) / 2.0)
+		return 0.0 + 255.0 * ((t - 0.0) / 2.0)
 	if (t <= 4.0)
-		return 255.0 + (0.0 - 255.0) * lsg_tl_ease((t - 2.0) / 2.0)
+		return 255.0 + -255.0 * lsg_tl_ease((t - 2.0) / 2.0)
 	return 0.0
 }
 public lsg_tl82_tick(task)

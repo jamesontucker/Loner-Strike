@@ -167,7 +167,20 @@ export const graphSchema = z.object({
               id,
               name: label(30),
               kind: z.enum(["float", "vector", "color", "event"]),
-              keys: z.array(z.object({ t: z.number().min(0).max(600), v: z.union([z.number(), z.array(z.number()).length(3), z.null()]).optional(), ease: z.enum(["linear", "ease"]).optional() })).max(64).default([]),
+              keys: z
+                .array(
+                  z.object({
+                    t: z.number().min(0).max(600),
+                    v: z.union([z.number(), z.array(z.number()).length(3), z.null()]).optional(),
+                    /** to the next key: linear, a step, eased in/out/both, or a curve by the tangents (curves.ts) */
+                    ease: z.enum(["linear", "constant", "in", "out", "ease", "custom"]).optional(),
+                    /** Custom: the key's own tangents (value per second), in and out; none: Auto */
+                    tin: z.union([z.number().finite(), z.array(z.number().finite()).length(3)]).optional(),
+                    tout: z.union([z.number().finite(), z.array(z.number().finite()).length(3)]).optional(),
+                  }),
+                )
+                .max(64)
+                .default([]),
             }),
           )
           .max(8)

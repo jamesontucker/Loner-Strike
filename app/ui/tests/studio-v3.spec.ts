@@ -647,7 +647,7 @@ test("Timelines: the editor (tracks, add / drag / delete keys, ease, fit), the n
   expect(Number(await page.getByLabel("Key time").inputValue())).toBeGreaterThan(t0);
   // ease from the key's menu, then Delete removes it
   await k.click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Ease" }).click();
+  await page.getByRole("menuitem", { name: "Ease In-Out" }).click();
   await expect(page.getByLabel("Key interpolation")).toHaveValue("ease");
   await ed.focus();
   await page.keyboard.press("Delete");
