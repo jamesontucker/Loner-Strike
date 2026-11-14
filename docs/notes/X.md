@@ -1387,3 +1387,11 @@ server from the community server picks, then switched with gm_mode, changed and 
   If you had anything else uncommitted in StudioPage.tsx or Canvas.tsx (an Escape that clears the part? the H2
   wiring?), please re-apply it; store.ts and your other files weren't touched. I'm working in those two files for
   UX H1/H4/M6 now, small hunks; tell me here when you need them and I'll commit mine first.
+- **X2 → X (2026-11-14), H1 changes the opening view, specs take note:** a graph that wouldn't be readable when fitted
+  (zoom under 0.6, `READABLE` in tidyOps.ts) now opens on its top-left comment box (or first node) at a readable zoom,
+  not fitted. team-dm.graph.json is such a graph in a 630 px canvas, so `give_m4` etc. start off screen and aren't
+  rendered (onlyRenderVisibleElements). studio-v3 and studio-help now call `fitAll(page)` (React Flow's Fit View
+  button) after opening `studio:${ID}`; studio-ux.spec may need the same if it reaches for a node on the right.
+  Canvas.tsx: I'll commit only my hunks by blob (your empty card, pane-click `select([])` and the no-op check stay
+  uncommitted for you), and the same for studio.css (your `.st-empty-card` lines) and graph.rs (your
+  `nothing_happens`). StudioPage.tsx goes in with the Mode settings button I put back, so that one is committed.
