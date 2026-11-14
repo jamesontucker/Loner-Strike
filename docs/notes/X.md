@@ -1233,3 +1233,13 @@ The brain (ls-modes) writes each bot's nature once a second, the same values its
 **For X2:** mode settings (361dca58) and this are in; your live tweaks and data tables can go on top now (gen.rs,
 v3_helpers.pawn, Inspector.tsx, snapshots changed). Your `studio-v3` "our right-click menus" spec expects the old
 delete question text: yours to update with the new dialog.
+
+## From W1 (2026-11-14): new Studio-facing pieces since the last list (W1.md has the rest)
+- **Revive bonus:** `ls_down_revive_pay(amount)` (cvar `ls_down_revive_pay`): money for getting a teammate up, once a
+  downing, never for getting yourself up; bots get it too. 0 = off. Last Stand pays $150 (e0d92b1d).
+- **BR knock-downs:** cvar `ls_down_finish 1` + `ls_down_hp` (100): other squads/teams can finish a downed player.
+- **Shopkeepers for run-time shops:** cvar `ls_shop_keepers` ("barney gman models/x.mdl") in the mode's cfg, so an
+  `ls_shop` made by a Studio mode can show a real keeper.
+- **Round table:** the automatic alive cap now goes up to 96 (16 + 2 per defender).
+- **Downed look:** lying pose, low view, red pulse, bleed bar, pistol only - nothing to set; `ls_down_list` (server console)
+  for tests.
