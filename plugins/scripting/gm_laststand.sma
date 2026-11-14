@@ -174,7 +174,7 @@ public plugin_precache()
 	if (g_hasCreatureDll && get_pcvar_num(g_cCreatures))
 	{
 		/* only the types this map's stand will use (each type loads its model and sounds) */
-		new list[256];
+		new list[512];
 		precache_types(list, charsmax(list));
 		set_cvar_string("ls_creature_precache", list);
 		log_amx("Last Stand: creature types for this map: %s", list);
@@ -2887,7 +2887,8 @@ stock keeper_precache()
 stock precache_types(list[], len)
 {
 	new p = get_cvar_pointer("lst_waves");
-	new n = p ? get_pcvar_num(p) : 10;
+	/* (the first map after a start: lst_waves isn't registered yet; its default is 0, endless) */
+	new n = p ? get_pcvar_num(p) : 0;
 	ls_wave_types(list, len, n > 0 ? n : 1000);
 	/* the defenders' sentry turrets */
 	add_word(list, len, "turret");
