@@ -5145,6 +5145,18 @@ new g_w3cHealCarry, g_w3cHealLimits, g_w3cHealSecs, g_w3cHealKey, g_w3cHealBots;
 new g_w3fwHeal;
 new bool:g_w3Hooked;
 
+/* armor levels */
+new g_w3Vest[33], g_w3Helm[33];
+new Float:g_w3HelmHp[33];
+new g_w3cArmorLevels;
+new g_w3fwArmor;
+/* armor points and the share of a hit that still gets through (on top of the game's own vest) */
+new const W3_VEST_AP[4] = { 0, 100, 120, 150 };
+new const Float:W3_VEST_F[4] = { 1.0, 1.0, 0.85, 0.7 };
+/* a helmet takes this much of head hits before it breaks; the share that gets through */
+new const Float:W3_HELM_HP[4] = { 0.0, 100.0, 150.0, 200.0 };
+new const Float:W3_HELM_F[4] = { 1.0, 0.7, 0.6, 0.45 };
+
 stock w3_natives()
 {
 	register_native("ls_heal_give", "n_w3_heal_give");
@@ -5152,6 +5164,8 @@ stock w3_natives()
 	register_native("ls_heal_use", "n_w3_heal_use");
 	register_native("ls_heal_cancel", "n_w3_heal_cancel");
 	register_native("ls_heal_using", "n_w3_heal_using");
+	register_native("ls_armor_set", "n_w3_armor_set");
+	register_native("ls_armor_get", "n_w3_armor_get");
 }
 
 stock w3_init()
@@ -5175,6 +5189,10 @@ stock w3_init()
 	RegisterHamPlayer(Ham_TakeDamage, "ham_w3_hurt_post", 1);
 	RegisterHamPlayer(Ham_CS_Player_ResetMaxSpeed, "ham_w3_maxspeed", 1);
 	register_event("HLTV", "ev_w3_new_round", "a", "1=0", "2=0");
+	/* 1: vests and helmets come in levels 1-3 (vest1..3, helmet1..3 as loot) */
+	g_w3cArmorLevels = register_cvar("ls_armor_levels", "0");
+	g_w3fwArmor = CreateMultiForward("ls_on_armor", ET_IGNORE, FP_CELL, FP_CELL, FP_CELL);
+	RegisterHamPlayer(Ham_TraceAttack, "ham_w3_trace");
 	g_w3Hooked = true;
 }
 
@@ -5192,6 +5210,9 @@ stock w3_reset_player(p)
 	g_w3BoostEnd[p] = 0.0;
 	g_w3BoostHp[p] = 0.0;
 	g_w3Hurt[p] = 0.0;
+	g_w3Vest[p] = 0;
+	g_w3Helm[p] = 0;
+	g_w3HelmHp[p] = 0.0;
 }
 
 public client_putinserver(id)
@@ -5206,6 +5227,9 @@ public ham_w3_killed(id, killer, gib)
 	for (new k = 0; k < HEAL_KINDS; k++)
 		g_w3Heals[id][k] = 0;
 	g_w3BoostEnd[id] = 0.0;
+	g_w3Vest[id] = 0;
+	g_w3Helm[id] = 0;
+	g_w3HelmHp[id] = 0.0;
 	return HAM_IGNORED;
 }
 
@@ -5523,6 +5547,14 @@ public menu_w3_heal(id, menu, item)
 /* gm_components' give_thing: -1 = not one of these, else 0/1 */
 stock w3_give(id, const item[])
 {
+	new r = w3_give_armor(id, item);
+	if (r >= 0)
+		return r;
+	return w3_give_heal(id, item);
+}
+
+stock w3_give_heal(id, const item[])
+{
 	new kind = w3_heal_kind(item);
 	if (kind >= 0)
 	{
@@ -5546,6 +5578,9 @@ stock w3_give(id, const item[])
 /* gm_components' can_take: -1 = not one of these */
 stock w3_can_take(id, const item[])
 {
+	new r = w3_can_take_armor(id, item);
+	if (r >= 0)
+		return r;
 	new kind = w3_heal_kind(item);
 	if (kind >= 0)
 		return !get_pcvar_num(g_w3cHealCarry) || g_w3Heals[id][kind] < w3_heal_limit(kind);
@@ -5557,6 +5592,12 @@ stock bool:w3_item_model(const item[], out[], len)
 	if (w3_heal_kind(item) >= 0)
 	{
 		copy(out, len, "models/w_medkit.mdl");
+		return true;
+	}
+	new lv, part = w3_armor_item(item, lv);
+	if (part >= 0)
+	{
+		copy(out, len, part == 0 ? "models/w_kevlar.mdl" : "models/w_assault.mdl");
 		return true;
 	}
 	return false;
@@ -5599,6 +5640,9 @@ stock w3_tick(bool:sec)
 		}
 		if (sec && g_bot[p] && !g_w3Using[p] && get_pcvar_num(g_w3cHealBots) && get_pcvar_num(g_w3cHealCarry))
 			w3_bot_heal(p, now);
+		/* a vest shot through */
+		if (g_w3Vest[p] && get_user_armor(p) <= 0)
+			w3_armor_set(p, 0, -1, true);
 	}
 }
 
@@ -5701,6 +5745,153 @@ public n_w3_heal_using(plugin, params)
 {
 	new id = get_param(1);
 	return 1 <= id <= MaxClients && g_w3Using[id] != 0;
+}
+
+/* ---- armor levels: vests and helmets 1-3 ---- */
+
+
+/* "vest2" -> 0 (vest) and lv 2; "helmet3" -> 1 and 3; with levels on "vest"/"kevlar" is a level-1 vest
+   and "vesthelm" a vest and a helmet (2); -1 not armor */
+stock w3_armor_item(const item[], &lv)
+{
+	lv = 0;
+	if (equali(item, "vest", 4) && item[4] >= '1' && item[4] <= '3' && !item[5])
+	{
+		lv = item[4] - '0';
+		return 0;
+	}
+	if (equali(item, "helmet", 6) && item[6] >= '1' && item[6] <= '3' && !item[7])
+	{
+		lv = item[6] - '0';
+		return 1;
+	}
+	if (!get_pcvar_num(g_w3cArmorLevels))
+		return -1;
+	lv = 1;
+	if (equali(item, "vest") || equali(item, "kevlar"))
+		return 0;
+	if (equali(item, "vesthelm") || equali(item, "assault"))
+		return 2;
+	return -1;
+}
+
+/* sets levels (-1 keeps one); a new vest comes with its full armor points */
+stock w3_armor_set(id, vest, helm, bool:tell = false)
+{
+	if (vest >= 0)
+	{
+		vest = clamp(vest, 0, 3);
+		g_w3Vest[id] = vest;
+		if (is_user_alive(id))
+			cs_set_user_armor(id, W3_VEST_AP[vest], vest ? CS_ARMOR_KEVLAR : CS_ARMOR_NONE);
+	}
+	if (helm >= 0)
+	{
+		helm = clamp(helm, 0, 3);
+		g_w3Helm[id] = helm;
+		g_w3HelmHp[id] = W3_HELM_HP[helm];
+	}
+	if (tell && is_user_connected(id) && !is_user_bot(id))
+	{
+		if (vest == 0 && helm < 0)
+			client_print(id, print_center, "Your vest is broken");
+		else if (helm == 0 && vest < 0)
+			client_print(id, print_center, "Your helmet is broken");
+	}
+	new ret;
+	ExecuteForward(g_w3fwArmor, ret, id, g_w3Vest[id], g_w3Helm[id]);
+}
+
+stock w3_give_armor(id, const item[])
+{
+	new lv, part = w3_armor_item(item, lv);
+	if (part < 0)
+		return -1;
+	if (!get_pcvar_num(g_w3cArmorLevels))
+	{
+		/* levels off: a vest is a vest */
+		new CsArmorType:t;
+		new cur = cs_get_user_armor(id, t);
+		cs_set_user_armor(id, 100, part == 0 && !(cur > 0 && t == CS_ARMOR_VESTHELM) ? CS_ARMOR_KEVLAR : CS_ARMOR_VESTHELM);
+		return 1;
+	}
+	if (w3_can_take_armor(id, item) == 0)
+		return 0;
+	if (part == 0 || part == 2)
+		w3_armor_set(id, part == 2 ? max(lv, g_w3Vest[id]) : lv, -1);
+	if (part == 1 || part == 2)
+		w3_armor_set(id, -1, part == 2 ? max(lv, g_w3Helm[id]) : lv);
+	emit_sound(id, CHAN_ITEM, "items/ammopickup1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+	if (!is_user_bot(id))
+		client_print(id, print_center, "Vest %d   Helmet %d", g_w3Vest[id], g_w3Helm[id]);
+	return 1;
+}
+
+/* worth taking: a higher level, or the same level when yours is half gone */
+stock w3_can_take_armor(id, const item[])
+{
+	new lv, part = w3_armor_item(item, lv);
+	if (part < 0)
+		return -1;
+	if (!get_pcvar_num(g_w3cArmorLevels))
+		return 1;
+	new bool:vest = lv > g_w3Vest[id] || (lv == g_w3Vest[id] && get_user_armor(id) < W3_VEST_AP[lv] / 2);
+	new bool:helm = lv > g_w3Helm[id] || (lv == g_w3Helm[id] && g_w3HelmHp[id] < W3_HELM_HP[lv] * 0.5);
+	switch (part)
+	{
+		case 0: return vest;
+		case 1: return helm;
+	}
+	return vest || helm;
+}
+
+/* a bullet: the level's share gets through (the game's own vest still counts on the body) */
+public ham_w3_trace(victim, attacker, Float:dmg, Float:dir[3], tr, bits)
+{
+	if (!(1 <= victim <= 32) || dmg <= 0.0 || !get_pcvar_num(g_w3cArmorLevels))
+		return HAM_IGNORED;
+	new hg = get_tr2(tr, TR_iHitgroup);
+	if (hg == HIT_HEAD)
+	{
+		new lv = g_w3Helm[victim];
+		if (!lv)
+			return HAM_IGNORED;
+		new Float:f = W3_HELM_F[lv];
+		/* (head hits count 4x in the game) */
+		g_w3HelmHp[victim] -= dmg * 4.0 * (1.0 - f);
+		SetHamParamFloat(3, dmg * f);
+		if (g_w3HelmHp[victim] <= 0.0)
+			w3_armor_set(victim, -1, 0, true);
+		return HAM_HANDLED;
+	}
+	if ((hg == HIT_CHEST || hg == HIT_STOMACH || hg == HIT_LEFTARM || hg == HIT_RIGHTARM || hg == HIT_GENERIC)
+		&& g_w3Vest[victim] && get_user_armor(victim) > 0)
+	{
+		SetHamParamFloat(3, dmg * W3_VEST_F[g_w3Vest[victim]]);
+		return HAM_HANDLED;
+	}
+	return HAM_IGNORED;
+}
+
+/* native ls_armor_set(id, vest, helmet) (-1 keeps one) */
+public n_w3_armor_set(plugin, params)
+{
+	new id = get_param(1);
+	if (!(1 <= id <= MaxClients) || !is_user_connected(id))
+		return 0;
+	w3_armor_set(id, get_param(2), get_param(3));
+	return 1;
+}
+
+/* native ls_armor_get(id, &vest, &helmet): returns the vest's armor points */
+public n_w3_armor_get(plugin, params)
+{
+	new id = get_param(1);
+	if (!(1 <= id <= MaxClients))
+		return 0;
+	set_param_byref(2, g_w3Vest[id]);
+	set_param_byref(3, g_w3Helm[id]);
+	return is_user_alive(id) ? get_user_armor(id) : 0;
 }
 
 /* ==== end W3 ==== */

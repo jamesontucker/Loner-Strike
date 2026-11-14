@@ -427,4 +427,17 @@ native ls_heal_cancel(id);
 native bool:ls_heal_using(id);
 /** A healing item: stage 0 starting (handled: refused), 1 used, 2 stopped before the end. */
 forward ls_on_heal(id, const kind[], stage);
+
+/* Armor levels (cvar ls_armor_levels 1): vests and helmets 1-3, loot items "vest1".."vest3" and
+ * "helmet1".."helmet3" ("vest" is a level-1 vest, "vesthelm" both at level 1). A vest has 100/120/150 armor
+ * points and lets 100/85/70 % of a body hit through on top of the game's own vest; a helmet lets 70/60/45 %
+ * of a head hit through and breaks after 100/150/200 of head damage. A higher level is picked up over a
+ * lower one, the same level only when yours is half gone. Levels off: vestN/helmetN are plain armor. */
+
+/** Sets a player's armor levels 0-3 (-1 keeps one); a new vest comes with its full armor points. */
+native ls_armor_set(id, vest, helmet);
+/** A player's vest and helmet levels. @return the vest's armor points left */
+native ls_armor_get(id, &vest, &helmet);
+/** A player's armor levels changed (picked up, set, or one broke: level 0). */
+forward ls_on_armor(id, vest, helmet);
 /* ==== end W3 ==== */

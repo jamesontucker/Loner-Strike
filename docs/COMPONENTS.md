@@ -332,4 +332,19 @@ more speed). Loot items `bandage`, `medkit`, `drink` (`bandage:3` gives three).
 - Bots (`ls_heal_bots 1`): a hurt bot not hit for 4 s with no enemy in sight within 1500 u uses the best one,
   standing still; hit while healing, it stops and fights. The brain hears `ls_mode heal <bot> <kind> <secs>`
   when one starts and `ls_mode heal <bot> -` when it ends.
+
+### Armor levels
+`ls_armor_levels 1`: vests and helmets come in levels 1-3 (loot `vest1`..`vest3`, `helmet1`..`helmet3`;
+`vest` = a level-1 vest, `vesthelm` both at level 1).
+
+| Level | Vest armor points | Body hit gets through (after the game's own vest) | Helmet takes before breaking | Head hit gets through |
+|---|---|---|---|---|
+| 1 | 100 | 100 % | 100 | 70 % |
+| 2 | 120 | 85 % | 150 | 60 % |
+| 3 | 150 | 70 % | 200 | 45 % |
+
+A vest that runs out of armor points is gone (level 0); so is a helmet. A higher level is picked up
+over a lower one, the same level only when yours is half gone. Levels off: `vestN`/`helmetN` are plain
+armor. Natives `ls_armor_set(id, vest, helmet)` (-1 keeps one), `ls_armor_get(id, &vest, &helmet)`
+(returns armor points); forward `ls_on_armor(id, vest, helmet)`. Bots see the armor points as usual.
 <!-- ==== end W3 ==== -->
