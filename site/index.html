@@ -491,10 +491,10 @@ html { scroll-padding-top: 72px; }
 /* the people behind it */
 .thanks { padding: 56px 0 24px; }
 .thanks .lead { color: var(--dim); max-width: 64ch; margin: 6px 0 20px; }
-.thanks-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 1060px) { .thanks-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.thanks-grid a:last-child:nth-child(odd) { grid-column: span 2; }
-@media (max-width: 560px) { .thanks-grid { grid-template-columns: 1fr; } .thanks-grid a:last-child:nth-child(odd) { grid-column: auto; } }
+.thanks-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.thanks-grid a { flex: 0 0 calc((100% - 36px) / 4); }
+@media (max-width: 1060px) { .thanks-grid a { flex-basis: calc((100% - 12px) / 2); } }
+@media (max-width: 560px) { .thanks-grid a { flex-basis: 100%; } }
 .thanks-grid a { display: block; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; padding: 14px 16px; text-decoration: none; }
 .thanks-grid a:hover { background: var(--panel-2); }
 .thanks-grid b { display: block; color: var(--bone); font-size: 18px; margin-bottom: 4px; }
