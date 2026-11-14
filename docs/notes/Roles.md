@@ -35,8 +35,10 @@ Status: design and API (2026-11-14). Nothing deployed: the box, the live Discord
   ACL on Windows). A Linux server: `~/loner-strike/control/<id>/roles-token` (0600, the game user), written by the
   owner's app over SSH; ls-control uses it. The token never goes to helpers' apps.
 - **Official servers:** the user marks them on the box: `lsmod.py servers official <server> on`.
-- Unclaim: `DELETE /roles/server` (the owner's app). Its links stay (they're the players'); its open applications
-  close; its moderators keep their app access until the owner removes them (the app says so).
+- Unclaim: `DELETE /roles/server` (the owner's app). Its links stay (they're the players'); pending and approved
+  applications close; invited and active ones are revoked as `revoke` does (invites stop, the Discord role goes unless
+  they moderate another server); the answer lists them (`revoked: [{application, member, steamid}]`) and the app takes
+  their app access and in-game role away.
 
 ## 2. Link
 - In game: `say /link` (new plugin **gm_link.amxx**, on every Loner-Strike server). The plugin logs
@@ -52,7 +54,9 @@ Status: design and API (2026-11-14). Nothing deployed: the box, the live Discord
   linked to; `/unlink`. One Discord id ↔ one SteamID, both ways. A SteamID linked to someone else: "That SteamID is
   linked to another Discord account. They can /unlink first." Relinking replaces your link, except while you're a
   server moderator through it ("You moderate <server> with this SteamID. Ask its owner to remove you first.").
-- Not accepted: bots, `STEAM_ID_LAN`, `STEAM_ID_PENDING`, `VALVE_…`, `HLTV`.
+- Not accepted: bots, `STEAM_ID_LAN`, `STEAM_ID_PENDING`, `VALVE_…`, `HLTV`. Every SteamID is kept and looked up in one
+  form, `STEAM_0:Y:Z` (`STEAM_1:1:123` is the same account); older rows are made canonical at start (two links that turn
+  out to be one account: the official one stays, else the older).
 - **Trust (link squatting, security review 2026-11-14):** a host controls their own server's log, so a host could make a
   code for any SteamID and bind it to their own Discord. So:
   - every link keeps the server it came from; a link made on an official server is **verified**, others **unverified**
@@ -86,7 +90,9 @@ Status: design and API (2026-11-14). Nothing deployed: the box, the live Discord
 - **Who supports:** a Discord benefit grant gives `customer_id` ↔ Discord id (`properties.account_id`).
   Monthly (the grant has a `subscription_id`): supporter while the grant is granted. One-time (`order.paid` without a
   subscription): **30 days per donation, stacking** (`SUPPORTER_DAYS`, default 30), from the later of now and the end
-  of what they had; an order that arrives before its grant is kept and counted when the grant comes.
+  of what they had; an order that arrives before its grant is kept and counted when the grant comes. Grant events can
+  arrive out of order: each grant keeps when it changed (`modified_at`, else the webhook's timestamp); an older event is
+  ignored, and a revoke is only undone by a newer grant.
 - **To servers:** a supporter's VIP follows their current link. Official servers: ls-control (a timer, every 5 min)
   `GET /roles/vip` → every supporter's SteamID. Other servers that turned on **Honor Loner-Strike supporters** (off by
   default): `POST /roles/vip/check {steamids}` with the players on the server now (at most 64), answered with the ones

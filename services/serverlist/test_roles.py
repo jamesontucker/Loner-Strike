@@ -318,6 +318,72 @@ class Squatting(unittest.TestCase):
             r.evict(STEAM)
 
 
+class Review3(unittest.TestCase):
+    def test_one_form_per_account(self):
+        r, mod, bot, fs, _ = make()
+        linked(r, fs, mod, OTHER, "STEAM_1:1:12345")
+        self.assertEqual(r.s.one("SELECT steamid FROM links WHERE discord_id=?", (OTHER,))["steamid"], "STEAM_0:1:12345")
+        _, srv = claim(r, fs, "x.example.com:27015")
+        code = r.link_code(srv, {"steamid": "STEAM_0:1:12345", "name": "Zoë"})["code"]
+        self.assertIn("another Discord account", command(mod, "link", PLAYER, code))
+        polar(r, grant(OTHER, gid="g", cust="c", sub="s"))
+        r.set_settings(srv, {"settings": {"honor_supporters": True}})
+        srv = r.s.one("SELECT * FROM servers WHERE id=?", (srv["id"],))
+        self.assertEqual(r.vip_check(srv, {"steamids": ["STEAM_1:1:12345"]}), {"steamids": ["STEAM_1:1:12345"]})
+        self.assertEqual(r.evict("STEAM_1:1:12345")["discord_id"], OTHER)
+
+    def test_old_rows_are_made_canonical_on_start(self):
+        path = os.path.join(tempfile.mkdtemp(), "r.db")
+        st = roles.Store(path)
+        st.run("INSERT INTO links(discord_id, steamid, server_id, official, linked_at) VALUES ('1','STEAM_1:0:7',1,0,100)")
+        st.run("INSERT INTO links(discord_id, steamid, server_id, official, linked_at) VALUES ('2','STEAM_0:0:7',1,1,200)")
+        st.run("INSERT INTO links(discord_id, steamid, server_id, official, linked_at) VALUES ('3','STEAM_1:0:8',1,0,100)")
+        st.run("INSERT INTO sm_apps(server_id, discord_id, discord_name, steamid, availability, why, state, created) VALUES (1,'3','n','STEAM_1:0:8','a','b','active',1)")
+        st.db.close()
+        st = roles.Store(path)
+        self.assertEqual(st.all("SELECT discord_id, steamid FROM links ORDER BY discord_id"),
+                         [{"discord_id": "2", "steamid": "STEAM_0:0:7"}, {"discord_id": "3", "steamid": "STEAM_0:0:8"}])
+        self.assertEqual(st.one("SELECT steamid FROM sm_apps")["steamid"], "STEAM_0:0:8")
+
+    def test_unclaim_revokes_like_revoke(self):
+        r, mod, bot, fs, _ = make()
+        done, srv = claim(r, fs)
+        rows = []
+        for i, state in enumerate(("active", "invited", "approved", "pending")):
+            cur = r.s.run("INSERT INTO sm_apps(server_id, discord_id, discord_name, steamid, availability, why, state, created, invite_hash, invite_expires, member) "
+                          "VALUES (?,?,?,?,?,?,?,?,?,?,?)", (srv["id"], f"47000000000000000{i}", "n", f"STEAM_0:0:{i}", "a", "b", state, 1,
+                                                              "h" if state == "invited" else "", cm.now() + 99 if state == "invited" else 0, f"m{i}"))
+            rows.append(cur.lastrowid)
+        out = r.unclaim(srv)
+        self.assertEqual(sorted(x["member"] for x in out["revoked"]), ["m0", "m1"])
+        got = r.s.all(f"SELECT state, invite_hash FROM sm_apps ORDER BY id")
+        self.assertEqual([g["state"] for g in got], ["revoked", "revoked", "closed", "closed"])
+        self.assertTrue(all(g["invite_hash"] == "" for g in got))
+        self.assertEqual(sum(1 for m, p, *_ in bot.calls if m == "DELETE" and "/roles/900099" in p), 2)
+        self.assertIsNone(r.server_by_token(done["token"]))
+
+    def test_out_of_order_grants(self):
+        r, *_ = make()
+        g = grant(PLAYER, gid="gx", cust="cx", sub="s")
+        revoked = grant(PLAYER, gid="gx", cust="cx", sub="s", kind="benefit_grant.revoked", revoked=True)
+        g["data"]["modified_at"] = "2026-11-14T10:00:00Z"
+        revoked["data"]["modified_at"] = "2026-11-14T11:00:00.500Z"
+        polar(r, revoked)
+        polar(r, g)  # the older "granted" arrives late
+        self.assertFalse(r.is_supporter(PLAYER))
+        later = grant(PLAYER, gid="gx", cust="cx", sub="s", kind="benefit_grant.updated")
+        later["data"]["modified_at"] = "2026-11-15T09:00:00+00:00"
+        polar(r, later)
+        self.assertTrue(r.is_supporter(PLAYER))
+        # no modified_at: the webhook's own timestamp orders them
+        g2 = grant(OTHER, gid="gy", cust="cy", sub="s")
+        r2 = grant(OTHER, gid="gy", cust="cy", sub="s", kind="benefit_grant.revoked", revoked=True)
+        polar(r, r2, ts=int(time.time()))
+        polar(r, g2, ts=int(time.time()) - 60)
+        self.assertFalse(r.is_supporter(OTHER))
+        self.assertIsNone(roles.event_time("not a time"))
+
+
 class Supporters(unittest.TestCase):
     def test_signature_replay_and_staleness(self):
         r, *_ = make()
@@ -546,7 +612,7 @@ class Http(unittest.TestCase):
                                                                                 "webhook-signature": f"v1,{sig}"})[0], 202)
             self.assertEqual(call("POST", "/roles/polar/webhook", body, headers={"webhook-id": "m2", "webhook-timestamp": ts,
                                                                                 "webhook-signature": f"v1,{sig}"})[0], 401)
-            self.assertEqual(call("DELETE", "/roles/server", {}, token=tok), (200, {"ok": True}))
+            self.assertEqual(call("DELETE", "/roles/server", {}, token=tok), (200, {"ok": True, "revoked": []}))
             self.assertEqual(call("GET", "/roles/server", token=tok)[0], 401)
             self.assertEqual(call("GET", "/roles/nothing")[0], 401)
         finally:

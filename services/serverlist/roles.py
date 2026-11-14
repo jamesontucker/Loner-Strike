@@ -81,6 +81,10 @@ MIGRATIONS = [
     CREATE TABLE roles_log (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, server_id INTEGER NOT NULL DEFAULT 0,
         actor TEXT NOT NULL, action TEXT NOT NULL, subject TEXT NOT NULL DEFAULT '', detail TEXT NOT NULL DEFAULT '')
     """,
+    # when Polar says a grant changed (events can come out of order)
+    """
+    ALTER TABLE polar_grants ADD COLUMN event_at REAL NOT NULL DEFAULT 0
+    """,
 ]
 
 
@@ -106,6 +110,12 @@ def valid_steamid(s):
     return isinstance(s, str) and bool(STEAMID.match(s))
 
 
+def canon(s):
+    """One form per account: STEAM_1:1:123 and STEAM_0:1:123 are the same, kept as STEAM_0:1:123
+    (None when it isn't a SteamID)."""
+    return "STEAM_0" + s[7:] if valid_steamid(s) else None
+
+
 class Store:
     def __init__(self, path):
         self.lock = threading.RLock()
@@ -125,6 +135,23 @@ class Store:
                 except Exception:
                     self.db.execute("ROLLBACK")
                     raise
+            self.canonical_steamids()
+
+    def canonical_steamids(self):
+        """Every SteamID in its one form (STEAM_0:Y:Z), on every start. Two links that turn out to be
+        one account: the official one is kept, else the older one; the other is dropped."""
+        with self.lock:
+            for table in ("link_codes", "sm_apps"):
+                self.db.execute(f"UPDATE {table} SET steamid='STEAM_0'||substr(steamid, 8) WHERE steamid GLOB 'STEAM_[1-5]:*'")
+            for r in self.db.execute("SELECT * FROM links WHERE steamid GLOB 'STEAM_[1-5]:*'").fetchall():
+                c = "STEAM_0" + r["steamid"][7:]
+                have = self.db.execute("SELECT * FROM links WHERE steamid=?", (c,)).fetchone()
+                if have and (have["official"], -have["linked_at"]) >= (r["official"], -r["linked_at"]):
+                    self.db.execute("DELETE FROM links WHERE discord_id=?", (r["discord_id"],))
+                    continue
+                if have:
+                    self.db.execute("DELETE FROM links WHERE discord_id=?", (have["discord_id"],))
+                self.db.execute("UPDATE links SET steamid=? WHERE discord_id=?", (c, r["discord_id"]))
 
     def one(self, sql, args=()):
         with self.lock:
@@ -251,18 +278,9 @@ class Roles:
         moderators lose the Discord role. Their app access and in-game role are kept by the old
         host's app and game files, which the service can't reach: the old host's app finds its
         claim gone. Returns the removed moderators' Discord ids."""
-        removed = []
         self.s.run("UPDATE servers SET address=?, token_hash='', official=0, owner_code_hash='', owner_code_expires=0 WHERE id=?",
                    (f"{old['address']}#retired-{old['id']}", old["id"]))
-        self.s.run("UPDATE sm_apps SET state='closed' WHERE server_id=? AND state IN ('pending','approved','invited')", (old["id"],))
-        for a in self.s.all("SELECT * FROM sm_apps WHERE server_id=? AND state='active'", (old["id"],)):
-            self.s.run("UPDATE sm_apps SET state='revoked', note='The server was claimed again.' WHERE id=?", (a["id"],))
-            rid = self.mod_role()
-            if rid and not self.moderating(a["discord_id"]):
-                self.mod.bot.api("DELETE", f"/guilds/{self.mod.guild}/members/{a['discord_id']}/roles/{rid}",
-                                 reason=f"The server of application #{a['id']} was claimed again")
-            self.log("revoke", "reclaim", old["id"], a["discord_id"], f"application #{a['id']}: the server was claimed again")
-            removed.append(a["discord_id"])
+        removed = [x["discord_id"] for x in self.end_server(old["id"], "reclaim", "the server was claimed again")]
         self.log("retire", "reclaim", old["id"], old["address"], ("official, " if old["official"] else "") + f"{len(removed)} moderator(s) removed")
         return removed
 
@@ -286,10 +304,28 @@ class Roles:
         return self.server_view(self.s.one("SELECT * FROM servers WHERE id=?", (srv["id"],)))
 
     def unclaim(self, srv):
+        """The owner's app ends the claim: its moderators are revoked like revoke() does; the answer
+        lists them so the app takes their app access and in-game role away too."""
+        revoked = self.end_server(srv["id"], "unclaim", "the server's claim ended")
         self.s.run("DELETE FROM servers WHERE id=?", (srv["id"],))
-        self.s.run("UPDATE sm_apps SET state='closed' WHERE server_id=? AND state IN ('pending','approved')", (srv["id"],))
-        self.log("unclaim", "host", srv["id"], srv["address"])
-        return {"ok": True}
+        self.log("unclaim", "host", srv["id"], srv["address"], f"{len(revoked)} moderator(s) removed")
+        return {"ok": True, "revoked": revoked}
+
+    def end_server(self, server_id, actor, why):
+        """A server's claim ends (unclaimed, or claimed again): open applications close, invites stop
+        and moderators are revoked (Discord role gone unless they moderate another server). Returns
+        [{application, member, steamid}] for the ones revoked."""
+        self.s.run("UPDATE sm_apps SET state='closed', invite_hash='', invite_expires=0 WHERE server_id=? AND state IN ('pending','approved')", (server_id,))
+        revoked = []
+        for a in self.s.all("SELECT * FROM sm_apps WHERE server_id=? AND state IN ('invited','active')", (server_id,)):
+            self.s.run("UPDATE sm_apps SET state='revoked', invite_hash='', invite_expires=0, note=? WHERE id=?", (why[:1].upper() + why[1:] + ".", a["id"]))
+            rid = self.mod_role()
+            if rid and not self.moderating(a["discord_id"]):
+                self.mod.bot.api("DELETE", f"/guilds/{self.mod.guild}/members/{a['discord_id']}/roles/{rid}",
+                                 reason=f"Application #{a['id']}: {why}")
+            self.log("revoke", actor, server_id, a["discord_id"], f"application #{a['id']}: {why}")
+            revoked.append({"application": a["id"], "member": a["member"], "steamid": a["steamid"], "discord_id": a["discord_id"]})
+        return revoked
 
     def set_official(self, server, on):
         """lsmod.py servers official <id> on|off (admin)."""
@@ -303,8 +339,8 @@ class Roles:
     # ---- link ----
 
     def link_code(self, srv, body):
-        steamid = body.get("steamid")
-        if not valid_steamid(steamid):
+        steamid = canon(body.get("steamid"))
+        if not steamid:
             raise cm.Reject(400, "That isn't a SteamID a link can use (bots, LAN and pending ids can't link).")
         name = body.get("name") if isinstance(body.get("name"), str) else ""
         if not name.strip() or len(name) > 64:
@@ -423,7 +459,8 @@ class Roles:
 
     def evict(self, steamid, reason=""):
         """lsmod.py roles unlink <steamid>: a moderator takes a squatted link away (logged)."""
-        if not valid_steamid(steamid):
+        steamid = canon(steamid)
+        if not steamid:
             raise cm.Reject(400, "That isn't a SteamID.")
         r = self.s.one("SELECT * FROM links WHERE steamid=?", (steamid,))
         if not r:
@@ -484,11 +521,14 @@ class Roles:
                 self.s.run("INSERT INTO polar_events(id, at) VALUES (?,?)", (wid, cm.now()))
             except sqlite3.IntegrityError:
                 return 202, {"ok": True, "again": True}
-            self.polar_event(str(ev.get("type") or ""), ev["data"])
+            self.polar_event(str(ev.get("type") or ""), ev["data"], float(ts))
         return 202, {"ok": True}
 
-    def polar_event(self, kind, d):
+    def polar_event(self, kind, d, sent=None):
         at = cm.now()
+        # when the grant changed, by Polar (modified_at), else when the webhook was sent: an event older
+        # than what's kept is ignored, and a revoke is only undone by a newer grant
+        when = event_time(d.get("modified_at")) or event_time(d.get("revoked_at")) or event_time(d.get("granted_at")) or sent or at
         if kind.startswith("benefit_grant."):
             props = d.get("properties") if isinstance(d.get("properties"), dict) else {}
             benefit = d.get("benefit") if isinstance(d.get("benefit"), dict) else {}
@@ -498,9 +538,13 @@ class Roles:
                 return
             granted = 1 if d.get("is_granted", True) and not d.get("is_revoked") and not d.get("revoked_at") and kind != "benefit_grant.revoked" else 0
             monthly = 1 if d.get("subscription_id") else 0
+            have = self.s.one("SELECT * FROM polar_grants WHERE grant_id=?", (gid,))
+            if have and (when < have["event_at"] or (when == have["event_at"] and granted and not have["granted"])):
+                self.log("supporter", "polar", 0, account, f"{kind} older than what's kept: ignored")
+                return
             self.s.run("INSERT OR REPLACE INTO polar_customers(customer_id, discord_id) VALUES (?,?)", (cust, account))
-            self.s.run("INSERT OR REPLACE INTO polar_grants(grant_id, customer_id, discord_id, monthly, granted, at) VALUES (?,?,?,?,?,?)",
-                       (gid, cust, account, monthly, granted, at))
+            self.s.run("INSERT OR REPLACE INTO polar_grants(grant_id, customer_id, discord_id, monthly, granted, at, event_at) VALUES (?,?,?,?,?,?,?)",
+                       (gid, cust, account, monthly, granted, at, when))
             # donations that came before Polar told us whose Discord this customer is
             for o in self.s.all("SELECT * FROM polar_orders WHERE customer_id=? AND applied=0 ORDER BY at", (cust,)):
                 self._extend(account, o["at"] if o["at"] > at - 86400 else at)
@@ -535,7 +579,8 @@ class Roles:
             raise cm.Reject(400, f"Send at most {MAX_STEAMIDS} SteamIDs.")
         out = []
         for sid in sorted(set(ids)):
-            r = self.s.one("SELECT discord_id FROM links WHERE steamid=?", (sid,))
+            # answered in the form the server sent (its users.ini compares its own form)
+            r = self.s.one("SELECT discord_id FROM links WHERE steamid=?", (canon(sid),))
             if r and self.is_supporter(r["discord_id"]):
                 out.append(sid)
         return {"steamids": out}
@@ -924,6 +969,18 @@ class Roles:
             return {"steamids": self.supporter_steamids(),
                     "supporters": self.s.all("SELECT * FROM supporters ORDER BY until DESC LIMIT 500")}
         raise cm.Reject(404, "not found")
+
+
+def event_time(v):
+    """An ISO 8601 time from Polar ("2026-11-14T10:00:00.123Z") as unix seconds, or None."""
+    if not isinstance(v, str) or len(v) > 40:
+        return None
+    try:
+        import datetime
+        t = datetime.datetime.fromisoformat(v.replace("Z", "+00:00"))
+        return (t if t.tzinfo else t.replace(tzinfo=datetime.timezone.utc)).timestamp()
+    except ValueError:
+        return None
 
 
 def webhook_key(secret):
