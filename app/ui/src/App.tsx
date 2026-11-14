@@ -1,6 +1,6 @@
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { clock, getJsonAt, isSignedOut, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, SIGNED_OUT, withTarget, useActions, useActivity } from "./api";
+import { clock, getJsonAt, isSignedOut, ON_THIS_COMPUTER, postJson, postJsonAt, SETUP_ON_COMPUTER, SIGNED_OUT, withTarget, useActions, useActivity } from "./api";
 import { gameShort, gameTitle } from "./games";
 import { Icon } from "./icons";
 import { forgetLive, queryClient, reloadAppInfo, useOpenReports, reloadMaps, reloadScan, reloadServers, useAppInfo, useGameState, useMaps, useScan, useServers } from "./queries";
@@ -181,6 +181,21 @@ function Shell() {
     }
     if (myGame !== g) switchGame(null, g);
   };
+
+  // P5: loner-strike:// links (the website's Open in Loner-Strike): the app keeps a checked link
+  // until the page asks for it, here when the page loads and whenever the app nudges ("ls-open").
+  // Only a Community creation's page ("community:mod:<id>"), checked again here; installing
+  // stays behind Try it and its confirm.
+  useEffect(() => {
+    const take = async () => {
+      const r = await postJsonAt<{ open?: string | null }>("/api/app/deep-link", {}, null).catch(() => null);
+      const to = r?.open;
+      if (typeof to === "string" && /^community:(mod|spray):[1-9][0-9]{0,11}$/.test(to)) useNav.getState().go("tools", to);
+    };
+    void take();
+    window.addEventListener("ls-open", take);
+    return () => window.removeEventListener("ls-open", take);
+  }, []);
 
   // the macOS menu bar: "section:<id>" or "updates"
   useEffect(() => {

@@ -466,10 +466,7 @@ fn changes_json(s: &Session, since: u64) -> Option<Value> {
 /// and `removed[]`; each face's `align` is `[u axis x3, u offset, v axis x3, v offset,
 /// rotation, u scale, v scale]` (Valve 220); sections `pos` (f32 x3, GoldSrc units) and `uv` (f32 x2, divided by the
 /// texture size).
-fn meshes_bundle(s: &Session, doc_id: Option<u64>, since: Option<u64>) -> Vec<u8> {
-    MeshSnap::take(s, doc_id, since).build()
-}
-
+///
 /// P5 (perf): what a meshes answer needs, copied under a brief lock (the changed brushes and
 /// the texture sizes); the meshes are built off it, so edits and other asks don't wait for them.
 struct MeshSnap {
@@ -1643,14 +1640,6 @@ fn recent_json(dir: &Path) -> Value {
         })
         .collect();
     json!({"files": files})
-}
-
-/// Writes the open document to the autosave file when it has unsaved changes.
-fn autosave(dir: &Path, s: &Session) -> Result<bool, String> {
-    match AutosaveSnap::take(s) {
-        Some(a) => a.write(dir).map(|_| true),
-        None => Ok(false),
-    }
 }
 
 /// P5 (perf): an autosave copies the document under a brief lock and writes it without the

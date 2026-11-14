@@ -65,6 +65,13 @@
       "windows": {
         "installMode": "passive"
       }
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "loner-strike"
+        ]
+      }
     }
   }
 }

@@ -14,6 +14,7 @@ mod consolehints;
 mod control;
 mod content;
 mod crashes; // MCP: crash tracking for the player's servers
+mod deeplink; // P5: loner-strike:// links (Open in Loner-Strike on the website)
 mod hamguard; // MCP: the fixed Ham Sandwich kept in place before Play and local starts
 mod procmatch; // MCP: a leftover process is ended only if it's still the one the app started
 mod diagnostics;
@@ -100,6 +101,8 @@ fn main() {
                 let _ = w.set_focus();
             }
         }))
+        // P5: loner-strike:// links (after single-instance, which hands a second launch's link here)
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
@@ -109,6 +112,7 @@ fn main() {
         .on_menu_event(|app, event| menu_clicked(app, event.id().as_ref()))
         .setup(move |app| {
             let _ = state.app.set(app.handle().clone());
+            deep_links(app);
             tauri::async_runtime::spawn(server::serve(state.clone(), listener));
             // friends helping run a shared server reach this app here (control/)
             control::listen(&state);
@@ -338,6 +342,34 @@ fn mac_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
         .item(&MenuItemBuilder::with_id("link:github", "Loner-Strike on GitHub").build(app)?)
         .build()?;
     MenuBuilder::new(app).items(&[&app_menu, &edit, &view, &window, &help]).build()
+}
+
+/// P5: loner-strike:// links: the scheme registered where the app needs to do it itself
+/// (Windows; macOS reads it from the bundle's Info.plist), the link that started the app and
+/// the ones that come while it runs. Each is checked (deeplink.rs), kept for the page, and the
+/// page nudged to ask for it (it also asks when it loads).
+fn deep_links(app: &tauri::App) {
+    use tauri::Manager;
+    use tauri_plugin_deep_link::DeepLinkExt;
+    #[cfg(windows)]
+    if let Err(e) = app.deep_link().register_all() {
+        eprintln!("couldn't register {}:// links: {e}", deeplink::SCHEME);
+    }
+    let nudge = |h: &tauri::AppHandle, links: Vec<String>| {
+        if deeplink::open(&links) {
+            if let Some(w) = h.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.show();
+                let _ = w.set_focus();
+                let _ = w.eval("window.dispatchEvent(new CustomEvent('ls-open'))");
+            }
+        }
+    };
+    if let Ok(Some(urls)) = app.deep_link().get_current() {
+        nudge(app.handle(), urls.iter().map(|u| u.to_string()).collect());
+    }
+    let h = app.handle().clone();
+    app.deep_link().on_open_url(move |event| nudge(&h, event.urls().iter().map(|u| u.to_string()).collect()));
 }
 
 /// A menu item for the page: it listens for "ls-menu" (section:<id>, updates).

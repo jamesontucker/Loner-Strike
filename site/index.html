@@ -714,6 +714,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 .cr-msg { margin: 18px 0 0; padding: 18px; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; color: var(--dim); }
 .cr-msg a { color: var(--signal); }
 .cr-more { margin-top: 16px; }
+.cr-note { margin: 0; font-size: 14px; color: var(--dim); }
 @media (max-width: 960px) { .cr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .cr-grid { grid-template-columns: 1fr; } .cr-bar { justify-content: flex-start; } }
 </style>
@@ -1312,7 +1313,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     }
     const KINDS = { map: "Map", mode: "Studio mode", prefab: "Prefab" };
     const GAMES = { cstrike: "CS 1.6", czero: "Condition Zero" };
-    const BOTS = { great: "Bots play it well", ok: "Bots play it", weak: "Bots struggle" };
+    const BOTS = { great: "Bots play this well", ok: "Bots are so-so", weak: "Best with a friend", none: "Solo, no bots" }; // (the app's words, games.ts BOT_NOTE)
     const RISK = { server_commands: "Runs server commands", amx_commands: "Runs AMX Mod X commands", plugin_calls: "Calls other plugins", kicks_players: "Can kick players" };
     const PAGE = 9;
     const section = document.getElementById("creations");
@@ -1375,7 +1376,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         for (const c of it.mode.capabilities || []) if (RISK[c]) tag(RISK[c], "risk");
         for (const m of (it.mode.maps || []).slice(0, 3)) tag(m);
       }
-      if (BOTS[it.bots]) tag(BOTS[it.bots], "good");
+      if (it.kind === "mode" && BOTS[it.bots]) tag(BOTS[it.bots], it.bots === "great" ? "good" : "");
       if (tags.childElementCount) body.append(tags);
       const acts = el("div", "cr-acts");
       const gb = Number(it.gb);
@@ -1387,12 +1388,43 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         a.dataset.event = "Community: GameBanana";
         acts.append(a);
       }
-      // (the app has no link it answers yet: the download, where Community opens it)
-      const get = el("a", "btn primary", "Get Loner-Strike");
+      // Open in Loner-Strike: the app's loner-strike:// link opens the creation's page in Community
+      // (never an install). A browser can't tell whether the app is there, so if the page still
+      // has focus a moment later, the card says how to get it. Not on phones (no app there).
+      const get = el("a", "btn", "Get Loner-Strike");
       get.href = "#get";
       get.dataset.event = "Community: Get Loner-Strike";
-      acts.append(get);
-      body.append(acts);
+      const model = it.model === "spray" ? "spray" : "mod";
+      if (Number.isInteger(gb) && gb > 0 && !window.matchMedia("(pointer: coarse)").matches) {
+        const open = el("a", "btn primary", "Open in Loner-Strike");
+        open.href = `loner-strike://community/${model}/${gb}`;
+        open.dataset.event = "Community: Open in Loner-Strike";
+        const note = el("p", "cr-note");
+        note.hidden = true;
+        note.setAttribute("role", "status");
+        open.addEventListener("click", () => {
+          let left = false;
+          const away = () => { left = true; };
+          window.addEventListener("blur", away, { once: true });
+          document.addEventListener("visibilitychange", away, { once: true });
+          setTimeout(() => {
+            window.removeEventListener("blur", away);
+            document.removeEventListener("visibilitychange", away);
+            if (left || document.hidden) return;
+            note.replaceChildren("Didn't open? ");
+            const a = el("a", "", "Get Loner-Strike");
+            a.href = "#get";
+            note.append(a, " (free), then try again.");
+            note.hidden = false;
+          }, 1500);
+        });
+        acts.append(open, get);
+        body.append(acts, note);
+      } else {
+        get.className = "btn primary";
+        acts.append(get);
+        body.append(acts);
+      }
       li.append(pic, body);
       return li;
     };

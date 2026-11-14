@@ -320,6 +320,7 @@ pub fn router(state: Shared, listener: Listener) -> Router {
         .merge(crate::modevote::routes())
         .merge(crate::scrim::routes())
         .merge(crate::community::routes())
+        .merge(crate::deeplink::routes()) // P5: loner-strike:// links
         .merge(crate::prefs::routes())
         .merge(crate::plugins::routes())
         .merge(crate::sounds::routes())

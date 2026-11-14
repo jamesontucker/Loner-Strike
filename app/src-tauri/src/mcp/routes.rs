@@ -39,6 +39,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/admins/settings"),
     ("POST", "/api/admins/unban"),
     ("GET", "/api/app"),
+    ("POST", "/api/app/deep-link"),
     ("GET", "/api/app/diagnostics"),
     ("GET", "/api/app/direct"),
     ("POST", "/api/app/direct"),
@@ -525,6 +526,10 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
     }
     if route.starts_with("/api/app/update") || route.starts_with("/api/app/remove-everything") || route == "/api/app/restart" {
         return user_only("Updating, restarting or removing Loner-Strike is off limits to agents.");
+    }
+    // P5: the website's link waiting for the app's page (taking it would lose it)
+    if route == "/api/app/deep-link" {
+        return user_only("The app's waiting website link is for its own page, not for agents.");
     }
     if route.starts_with("/api/app/phone") || route.starts_with("/api/control/") && method == "POST" || route == "/api/share" && method == "POST" {
         return user_only("Phone access, shared control and sharing links are off limits to agents.");

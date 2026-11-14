@@ -119,6 +119,7 @@ All of these are in the new Tools section, marked Beta.
 - **Playtest screenshots.** When you publish a mode, you can pick from the screenshots you took while playtesting.
 - **Spray maker.** Make a spray from layers of pictures, words and stickers. You can use the fonts on your computer (Windows and macOS), start from templates, and see it on a real wall the way the game draws it. Install it with one click, and your old one is kept.
 - **Prefabs carry their credits** when you share them, and installed creations remember who made them.
+- **Made by players on lonerstrike.com.** The website shows what's listed in Community. **Open in Loner-Strike** opens a creation's page in the app; installing still asks first.
 - **Join the Discord** from Community and Find servers.
 - **Terms.** You'll find Terms and Privacy in About. Publishing asks you to confirm you have the right to share.
 
@@ -169,4 +170,5 @@ All of these are in the new Tools section, marked Beta.
 
 - Game Mode Studio data tables and live tweaks while playtesting. The site docs mention them, but the notes say they're waiting to be committed.
 - Bots learning a Counter-Strike 1.6 map before an editor Playtest. The fix is committed, but the notes say it hasn't been run against a live server.
+- Open in Loner-Strike (`loner-strike://` links). Tested on a Mac debug build; Windows registers the link at install and first start, untested until QA round 4 (QA4.md area H). The website's Made by players section also needs the community list to allow lonerstrike.com (CORS, Site.md) and a listed item.
 - Windows installer as a single setup.exe (no MSI), with 0.1.2 updating in place. It's committed in the build config, but no release build has run it yet.

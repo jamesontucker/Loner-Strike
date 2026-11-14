@@ -271,3 +271,8 @@ learn CS 1.6 maps before an editor Playtest.
 - **Item states (after MCP's 4a178c08):** only `status: "listed"` shows; unlisted, withdrawn, hidden, pending,
   revoked, a missing status and any state added later stay out, and so does a listed item whose key ("mod:<gb>")
   is in the index's `revoked`. Checked with a sample of 11 entries in every state: only the 3 listed ones show.
+- **Open in Loner-Strike (P5, 2026-11-14):** each card's primary button is now `loner-strike://community/<mod|spray>/<GameBanana id>`
+  (only for a whole-number id; "Get Loner-Strike" stays beside it). The app (deeplink.rs) understands only that form and
+  only opens the creation's page in Tools › Community; installing stays behind Try it and its confirm. A browser can't
+  tell whether the app is installed, so if the page still has focus 1.5 s after the click, the card says "Didn't open?
+  Get Loner-Strike (free), then try again." Hidden on phones (`pointer: coarse`).
