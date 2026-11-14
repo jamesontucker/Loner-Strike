@@ -3,8 +3,9 @@
 Earlier rounds are in docs/TOOLS-NOTES.md ("Agent X" sections). From here on, notes go here.
 
 ## From Parity A: QA4 area B self-check (2026-11-14)
-Table in QA4.md (area B self-check). Nothing big failed: the five examples compile, test-run to pass and play on a
-sim without run-time errors; Playtest, the debugger (breakpoint, variables, a live tweak, Resume), Timelines in real
+Table in QA4.md (area B self-check). One gameplay failure (One in the Chamber stalls, below); otherwise the five
+examples compile, test-run to pass and play on a sim without run-time errors; Playtest, the debugger (breakpoint,
+variables, a live tweak, Resume), Timelines in real
 time with Reverse, data tables, custom events with an input, Set Timer by Event, tab order, mode settings (local),
 Requirements, the creature and bot nodes, the security allowlist and the publish package's capabilities all did what
 their help says. For you, small:
@@ -14,6 +15,11 @@ their help says. For you, small:
   node" can only be seen with a hand-made plugin now. The old Set Zone error 10 is a warn with both problems on nodes.
 - After Resume from a breakpoint in a Repeat timer's tick, the next tick came 0.2 s later instead of 2 s (the pause
   didn't hold the timer; harmless).
+- **One in the Chamber stalls (the one real failure):** QA4S, de_dust2, 8 bots, newest brain: round 1 ended at 2:40
+  ("Last one standing", 22 kills); round 2 had 21 kills by 04:53 and then none for 6.5 minutes until the run ended
+  (console in ~/loner-strike-sim/results/qa4b/long_console_QA4S_one_in_the_chamber_*). With mp_round_infinite 1
+  the round only ends at one left, so the last few (likely out of bullets, knives only) never finish it. A round
+  clock (or Sudden Death after N minutes) would fix it; an earlier 7-minute run showed the same (1 round ended).
 - `world.spawn_prop` isn't a node type (the publish check said "This app doesn't know the node"): my graph's mistake,
   but the Requirements scan still found its model in the params, which is right.
 
