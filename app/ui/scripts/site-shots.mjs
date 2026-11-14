@@ -146,7 +146,56 @@ async function studioWith(page, file, id, change) {
   return tpl;
 }
 
+/** A Tools page by its address (tools-dev.html?open=...), as the app opens it, in Focus. */
+async function tool(page, addr, wait = 4000) {
+  await toolsPrefs(page);
+  // (tools-dev.html's left list is the dev page's own, never the app's: left out for pages
+  // that have no Focus)
+  await page.addInitScript(() => document.addEventListener("DOMContentLoaded", () => {
+    const st = document.createElement("style");
+    st.textContent = "aside.sidebar{display:none!important}.shell{grid-template-columns:1fr!important}";
+    document.head.appendChild(st);
+  }));
+  await page.goto(`http://127.0.0.1:${VITE_PORT}/tools-dev.html?open=${addr}`);
+  await settle(page, wait);
+}
+const plain = (group, addr, about, then) => ({ group, about, async take(page) { await tool(page, addr); if (then) await then(page); } });
+
 const SHOTS = {
+  tools: plain("tools", "overview", "The Tools page: every tool, grouped"),
+  plugins: plain("tools", "plugins", "Plugin Studio: a game plugin's code (read only), compiled, with Problems below", async (page) => {
+    await page.getByText("antiflood.sma", { exact: true }).first().click();
+    await page.locator(".monaco-editor").first().waitFor({ timeout: 30000 });
+    await settle(page, 1500);
+    await page.getByRole("button", { name: "Compile", exact: true }).click().catch(() => {});
+    await page.getByText(/No problems|compiled|Compiled/).first().waitFor({ timeout: 120000 }).catch(() => {});
+    await settle(page, 1000);
+  }),
+  navfix: plain("tools", "navfix:cs_rats2", "Nav fixer on cs_rats2: where bots can go and get back from"),
+  doctor: plain("tools", "doctor:de_dust2", "Map doctor on de_dust2: every check, grouped"),
+  callouts: plain("tools", "callouts:de_dust2", "Callouts on de_dust2: places painted by name"),
+  radar: plain("tools", "radar:de_dust2", "Radar maker on de_dust2"),
+  "viewer-nav": plain("tools", "map:de_dust2", "The map viewer on de_dust2 with the bots' nav drawn", async (page) => {
+    const sw = page.getByRole("switch", { name: /Bots' nav/ }).or(page.getByRole("checkbox", { name: /Bots' nav/ })).first();
+    if (await sw.count()) await sw.click();
+    else await page.getByText("Bots' nav", { exact: true }).click();
+    await settle(page, 2500);
+  }),
+  spray: plain("tools", "spray", "Spray maker"),
+  playercfg: plain("tools", "playercfg", "Crosshair & config with the crosshair live"),
+  people: plain("tools", "people", "Bot people: who the bots are"),
+  models: plain("tools", "assets", "Textures and models: the AK-47's view model in 3D, with its animations", async (page) => {
+    await page.getByRole("button", { name: "Models", exact: true }).first().click();
+    await settle(page, 1500);
+    await page.getByPlaceholder(/Search models/i).first().fill("v_ak47");
+    await settle(page, 1500);
+    // the game's own (not a downloaded skin): the one listed under "cstrike"
+    const own = page.locator("button, li").filter({ hasText: /^v_ak47\s*cstrike$/ }).first();
+    if (await own.count()) await own.click();
+    else await page.getByText(/^v_ak47$/).last().click();
+    await settle(page, 4000);
+  }),
+
   editor: {
     group: "editor",
     about: "The map editor on br_valley in 3D, with the outline, Inspect and the Content browser",
@@ -285,14 +334,33 @@ async function start() {
   const real = process.env.LS_TEST_GAME || GUESSES.find((p) => existsSync(join(p, "cstrike")));
   if (!real) throw new Error("Couldn't find Half-Life. Set LS_TEST_GAME.");
   if ((await listening(RUST_PORT)) || (await listening(VITE_PORT))) throw new Error(`Port ${RUST_PORT} or ${VITE_PORT} is in use: another site-shots run?`);
-  const game = join(tmp, "Half-Life");
+  // (inside the game's CrossOver bottle when there is one, so the app can run its compilers on it:
+  // a copy-on-write clone there costs no space either; the app is told about it as a game folder)
+  const bottle = real.includes("/drive_c/") ? join(real.slice(0, real.indexOf("/drive_c/") + 8), "Loner-Strike", "SiteShots") : tmp;
+  const game = join(bottle, "Half-Life");
   const app = join(tmp, "app");
   if (!flag("--keep")) rmSync(app, { recursive: true, force: true });
   mkdirSync(app, { recursive: true });
+  mkdirSync(dirname(game), { recursive: true });
   if (!existsSync(join(game, "cstrike"))) {
     // copy-on-write clone: the real folder is never written to
     const r = spawnSync("cp", ["-cR", real, game]);
     if (r.status !== 0) throw new Error("Couldn't clone the game folder (needs APFS): " + r.stderr);
+  }
+  // the app's settings: the clone as a game folder (Plugin Studio's and the editor's compilers run there)
+  const settingsFile = join(app, "settings.json");
+  let settings = {};
+  try {
+    settings = JSON.parse(readFileSync(settingsFile, "utf8"));
+  } catch {
+    /* a new app folder */
+  }
+  writeFileSync(settingsFile, JSON.stringify({ ...settings, game_folders: [game] }));
+  // SDHLT for the editor's Compile, from an earlier dev run when there is one (never downloaded here)
+  const sdhlt = join(tmpdir(), "ls-tools-dev", "tools", "sdhlt");
+  if (existsSync(sdhlt) && !existsSync(join(app, "tools", "sdhlt"))) {
+    mkdirSync(join(app, "tools"), { recursive: true });
+    spawnSync("cp", ["-cR", sdhlt, join(app, "tools", "sdhlt")]);
   }
   console.log(`game clone ${game}\napp data ${app}`);
   started = { game, app };

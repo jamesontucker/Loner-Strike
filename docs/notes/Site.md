@@ -218,6 +218,14 @@ a real compile, and the face sheet / I/O / leak jpgs. The rest waits for QA4-T1/
 Checked: docs.html and index.html at 1440 and 390 wide in Chromium and WebKit, no sideways scroll, every new picture
 loads. The PNG fallbacks are full colour (~0.2-0.75 MB) because pngquant isn't installed here; `brew install pngquant`
 and a re-run makes them 256 colours like the old ones.
+**Second pass (2026-11-14, after the T1/T2/CORE and contrast fixes):** every editor and Studio shot again (new
+colors) plus `tools`, `plugins` (antiflood.sma open, compiled), `navfix`, `doctor`, `callouts`, `radar`, `viewer-nav`
+(the bots' nav on), `spray`, `playercfg`, `people`, `models` (the game's own AK-47). The script now clones the game
+inside the CrossOver bottle (`drive_c/Loner-Strike/SiteShots`, copy-on-write) and names it as a game folder in the
+throwaway settings, so the compilers run; Tools pages without Focus are shot without the dev page's tool list.
+Still to take: `creatures` and `community` (held: creature sharing is changing them), the map simulator report
+and Replay, `studio-debugger` and `editor-compile` (each needs one sim; none started while the load was 45+).
+`demos` isn't retaken: the clone lists the user's own demo files.
 How the shots are set up: Tools pages in Focus with the hints already seen; the editor imports the map through its
 own Import (the dev server answers the file dialog with a copy of the maps-src file), hides triggers and flies in a
 little; King of the Hill is framed on its round start and scoring chain; the Timeline is a "Hill Glow" pulse added to
