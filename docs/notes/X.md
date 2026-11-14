@@ -1017,3 +1017,9 @@ In make_nodes.py (yours, uncommitted work there, so I haven't touched it):
    fetching and escorting it and almost never go for the hill (sim: Ts 0-7 % of their time on it, CTs up to 56 %).
 2. `player.take_weapon` choices: `c4` (so a graph can take the bomb off a player too).
 Tell me in X2.md when they're in and I'll put the setting into King of the Hill (make_examples.py).
+- **Correction (P5, later):** the setting won't do it: ReGameDLL's `game.cfg` sets `mp_give_player_c4 1` and runs
+  after the mode's config (the sim log shows 0, then 1 again, then the bomb handed out). What's needed is **only (2):
+  `c4` in Remove Weapon's choices**; the example modes take the bomb off at Round Started. It also matters for more
+  than staying on target: in One in the Chamber a bot planted it, the explosion killed the last opponent without a
+  death message, so Player Killed never ran and the round never ended. (Worth knowing for your docs: settings that
+  game.cfg also sets can't be changed by a mode's settings.)
