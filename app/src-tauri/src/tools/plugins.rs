@@ -515,6 +515,169 @@ pub fn save(g: &Game, f: Folder, name: &str, text: &str, encoding: &str, create:
     Ok(json!({"ok": true, "name": name, "folder": f.id(), "size": meta.len(), "modified": modified(&meta)}))
 }
 
+// ---- export and import (Community doesn't take plugins: they're shared by hand) ------------
+
+/// The files `#include` names that sit in the plugin's own folder as .inc files (and theirs),
+/// for Export: the game's and AMX Mod X's own includes aren't copied.
+pub fn own_includes(dir: &Path, text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut todo: Vec<String> = vec![text.to_string()];
+    while let Some(t) = todo.pop() {
+        for line in t.lines() {
+            let l = line.trim_start();
+            let Some(rest) = l.strip_prefix("#include").or_else(|| l.strip_prefix("#tryinclude")) else { continue };
+            let name = rest.trim().trim_matches(|c| c == '<' || c == '>' || c == '"').trim();
+            let file = if name.to_ascii_lowercase().ends_with(".inc") { name.to_string() } else { format!("{name}.inc") };
+            if !safe_file(&file) || out.iter().any(|x| x.eq_ignore_ascii_case(&file)) {
+                continue;
+            }
+            let p = dir.join(&file);
+            if p.is_file() && std::fs::symlink_metadata(&p).is_ok_and(|m| m.is_file()) {
+                if let Ok(b) = crate::caps::read_file(&p, "include", MAX_SOURCE as u64) {
+                    todo.push(String::from_utf8_lossy(&b).into_owned());
+                }
+                out.push(file);
+            }
+        }
+    }
+    out
+}
+
+/// Copies the .sma to `dest` (the save dialog's pick) and its own .inc files beside it. An
+/// .inc already there with other contents is left alone (and named in `kept`).
+pub fn export_to(dir: &Path, name: &str, dest: &Path) -> Result<Value, String> {
+    let src = resolve(dir, name)?;
+    if !src.is_file() {
+        return Err("That file isn't there any more.".into());
+    }
+    let bytes = crate::caps::read_file(&src, "file", MAX_SOURCE as u64)?;
+    std::fs::write(dest, &bytes).map_err(|e| format!("Couldn't save it there ({e})."))?;
+    let mut saved = vec![dest.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()];
+    let mut kept = Vec::new();
+    let to = dest.parent().unwrap_or(Path::new("."));
+    for inc in own_includes(dir, &String::from_utf8_lossy(&bytes)) {
+        let b = crate::caps::read_file(&dir.join(&inc), "include", MAX_SOURCE as u64)?;
+        let d = to.join(&inc);
+        if d.exists() && std::fs::read(&d).ok().as_deref() != Some(&b[..]) {
+            kept.push(inc);
+            continue;
+        }
+        std::fs::write(&d, &b).map_err(|e| format!("Couldn't save {inc} there ({e})."))?;
+        saved.push(inc);
+    }
+    let msg = if kept.is_empty() { format!("Saved {}.", saved.join(", ")) } else { format!("Saved {}. Left {} as it was there (a different file of that name).", saved.join(", "), kept.join(", ")) };
+    Ok(json!({"ok": true, "saved": saved, "kept": kept, "message": msg}))
+}
+
+/// Why a picked file can't come in (None: it can): a plugin source or include, plain text,
+/// 2 MB at most, a name Windows and the compiler can use.
+pub fn import_problem(name: &str, bytes: &[u8]) -> Option<String> {
+    let lower = name.to_ascii_lowercase();
+    if !(lower.ends_with(".sma") || lower.ends_with(".inc")) {
+        return Some(format!("{name}: only .sma and .inc files."));
+    }
+    if crate::setup::record::windows_unsafe(name) {
+        return Some(format!("{name}: {RESERVED_NAME}"));
+    }
+    if !safe_file(name) {
+        return Some(format!("{name}: {BAD_NAME}"));
+    }
+    if bytes.len() > MAX_SOURCE {
+        return Some(format!("{name} is too big (over 2 MB)."));
+    }
+    // text: no NUL bytes, and nearly all printable (a binary renamed .sma isn't)
+    let odd = bytes.iter().filter(|&&b| b == 0 || (b < 0x20 && !b"\t\r\n\x0c".contains(&b))).count();
+    if bytes.contains(&0) || odd * 100 > bytes.len().max(1) {
+        return Some(format!("{name} isn't a text file."));
+    }
+    None
+}
+
+/// Files picked for Import, waiting for new names when theirs are taken (by pick id).
+static PICKED: std::sync::Mutex<Vec<(String, Vec<PathBuf>)>> = std::sync::Mutex::new(Vec::new());
+
+/// What Import would do with these files: each one's name, why it can't come in, or that its
+/// name is taken in My plugins.
+pub fn import_plan(dir: &Path, files: &[PathBuf]) -> Vec<Value> {
+    files
+        .iter()
+        .map(|p| {
+            let name = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let problem = match std::fs::symlink_metadata(p) {
+                Ok(m) if m.is_file() && m.len() <= MAX_SOURCE as u64 => std::fs::read(p).ok().and_then(|b| import_problem(&name, &b)),
+                Ok(m) if m.is_file() => Some(format!("{name} is too big (over 2 MB).")),
+                _ => Some(format!("{name} isn't a file Import can read.")),
+            };
+            let taken = problem.is_none() && dir.join(&name).exists();
+            json!({"name": name, "problem": problem, "taken": taken})
+        })
+        .collect()
+}
+
+/// Copies the picked files into My plugins, under `renames` for taken names; never over a file
+/// that's there. Nothing is copied if any name is still taken or a new name can't be used.
+pub fn import_into(dir: &Path, files: &[PathBuf], renames: &std::collections::HashMap<String, String>) -> Result<Value, String> {
+    let mut plan: Vec<(PathBuf, String)> = Vec::new();
+    let mut refused = Vec::new();
+    for v in import_plan(dir, files).into_iter().zip(files) {
+        let (info, p) = v;
+        if let Some(why) = info["problem"].as_str() {
+            refused.push(why.to_string());
+            continue;
+        }
+        let name = info["name"].as_str().unwrap_or_default().to_string();
+        let to = renames.get(&name).cloned().unwrap_or_else(|| name.clone());
+        if to != name {
+            if let Some(why) = import_problem(&to, b"") {
+                return Err(why);
+            }
+            if !to.to_ascii_lowercase().ends_with(&name.to_ascii_lowercase()[name.len() - 4..]) {
+                return Err(format!("{to}: keep the {} ending.", &name[name.len() - 4..]));
+            }
+        }
+        if dir.join(&to).exists() || plan.iter().any(|(_, n)| n.eq_ignore_ascii_case(&to)) {
+            return Err(format!("There's already a file called {to} in My plugins."));
+        }
+        plan.push((p.clone(), to));
+    }
+    std::fs::create_dir_all(dir).map_err(|e| format!("Couldn't make My plugins ({e})."))?;
+    let mut done = Vec::new();
+    for (p, to) in &plan {
+        let b = std::fs::read(p).map_err(|e| format!("Couldn't read {} ({e}).", p.display()))?;
+        let dest = dir.join(to);
+        // (create_new: a file that turned up meanwhile is never overwritten)
+        let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&dest).map_err(|e| format!("Couldn't add {to} ({e})."))?;
+        std::io::Write::write_all(&mut f, &b).map_err(|e| format!("Couldn't add {to} ({e})."))?;
+        done.push(to.clone());
+    }
+    let first = done.iter().find(|n| n.to_ascii_lowercase().ends_with(".sma")).or(done.first()).cloned();
+    let mut msg = match done.len() {
+        0 => "Nothing was imported.".to_string(),
+        1 => format!("Imported {}.", done[0]),
+        n => format!("Imported {n} files."),
+    };
+    if !refused.is_empty() {
+        msg.push_str(&format!(" Left out: {}", refused.join(" ")));
+    }
+    Ok(json!({"ok": !done.is_empty(), "imported": done, "refused": refused, "first": first, "message": msg}))
+}
+
+/// Shows the source file in Finder / Explorer (the folder on Linux), so it can be posted on
+/// GameBanana or AlliedModders: the community list doesn't take plugins.
+pub fn reveal(g: &Game, f: Folder, name: &str) -> Result<Value, String> {
+    let path = resolve(&folder_dir(g, f), name)?;
+    if !path.is_file() {
+        return Err("That file isn't there any more.".into());
+    }
+    #[cfg(target_os = "macos")]
+    let r = std::process::Command::new("open").arg("-R").arg(&path).spawn().map(crate::sys::reap);
+    #[cfg(windows)]
+    let r = std::process::Command::new("explorer").arg(format!("/select,{}", path.display())).spawn().map(crate::sys::reap);
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let r = std::process::Command::new("xdg-open").arg(path.parent().unwrap_or(&path)).spawn().map(crate::sys::reap);
+    r.map(|_| json!({"ok": true})).map_err(|e| format!("Couldn't show the folder ({e})."))
+}
+
 pub fn delete(g: &Game, f: Folder, name: &str) -> Result<Value, String> {
     if f != Folder::Mine {
         return Err("Only files in My plugins can be deleted here.".into());
@@ -1006,6 +1169,90 @@ async fn api_delete(State(st): State<Shared>, h: HeaderMap, Json(r): Json<FileRe
     blocking(move || delete(&g, folder_of(&r.folder)?, &r.name)).await
 }
 
+async fn api_reveal(State(st): State<Shared>, h: HeaderMap, Json(r): Json<FileReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let g = match own_game(&st) {
+        Ok(g) => g,
+        Err(e) => return answer(Err(e)),
+    };
+    blocking(move || reveal(&g, folder_of(&r.folder)?, &r.name)).await
+}
+
+async fn api_export(State(st): State<Shared>, h: HeaderMap, Json(r): Json<FileReq>) -> Response {
+    use tauri_plugin_dialog::DialogExt;
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let g = match own_game(&st) {
+        Ok(g) => g,
+        Err(e) => return answer(Err(e)),
+    };
+    let Some(app) = st.app.get().cloned() else { return answer(Err("The save dialog isn't available.".into())) };
+    blocking(move || {
+        let dir = folder_dir(&g, folder_of(&r.folder)?);
+        let Some(picked) = app.dialog().file().set_title("Export the plugin").set_file_name(&r.name).add_filter("Plugin source", &["sma", "inc"]).blocking_save_file() else {
+            return Ok(json!({"cancelled": true}));
+        };
+        let dest = picked.into_path().map_err(|e| e.to_string())?;
+        export_to(&dir, &r.name, &dest)
+    })
+    .await
+}
+
+async fn api_import_pick(State(st): State<Shared>, h: HeaderMap) -> Response {
+    use tauri_plugin_dialog::DialogExt;
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let g = match own_game(&st) {
+        Ok(g) => g,
+        Err(e) => return answer(Err(e)),
+    };
+    let Some(app) = st.app.get().cloned() else { return answer(Err("The file picker isn't available.".into())) };
+    blocking(move || {
+        let Some(picked) = app.dialog().file().set_title("Import plugins").add_filter("Plugin source", &["sma", "inc"]).blocking_pick_files() else {
+            return Ok(json!({"cancelled": true}));
+        };
+        let files: Vec<PathBuf> = picked.into_iter().filter_map(|f| f.into_path().ok()).take(50).collect();
+        let plan = import_plan(&folder_dir(&g, Folder::Mine), &files);
+        let id = format!("{:x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0));
+        let mut list = PICKED.lock().unwrap_or_else(|e| e.into_inner());
+        list.push((id.clone(), files));
+        if list.len() > 4 {
+            list.remove(0);
+        }
+        Ok(json!({"id": id, "files": plan}))
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct ImportReq {
+    id: String,
+    #[serde(default)]
+    renames: std::collections::HashMap<String, String>,
+}
+
+async fn api_import(State(st): State<Shared>, h: HeaderMap, Json(r): Json<ImportReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let g = match own_game(&st) {
+        Ok(g) => g,
+        Err(e) => return answer(Err(e)),
+    };
+    blocking(move || {
+        let files = PICKED.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|(id, _)| *id == r.id).map(|(_, f)| f.clone()).ok_or("Pick the files again.")?;
+        keep_mine(&g);
+        let v = import_into(&folder_dir(&g, Folder::Mine), &files, &r.renames)?;
+        PICKED.lock().unwrap_or_else(|e| e.into_inner()).retain(|(id, _)| *id != r.id);
+        Ok(v)
+    })
+    .await
+}
+
 async fn api_reset(State(st): State<Shared>, h: HeaderMap, Json(r): Json<FileReq>) -> Response {
     if !crate::panel_api::from_panel(&h) {
         return forbidden();
@@ -1144,6 +1391,10 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/plugins", get(api_overview))
         .route("/api/tools/plugins/file", get(api_read).post(api_save))
         .route("/api/tools/plugins/delete", post(api_delete))
+        .route("/api/tools/plugins/reveal", post(api_reveal))
+        .route("/api/tools/plugins/export", post(api_export))
+        .route("/api/tools/plugins/import/pick", post(api_import_pick))
+        .route("/api/tools/plugins/import", post(api_import))
         .route("/api/tools/plugins/rename", post(api_rename))
         .route("/api/tools/plugins/reset", post(api_reset))
         .route("/api/tools/plugins/words", get(api_words))
@@ -1444,6 +1695,54 @@ mod tests {
         assert_eq!(l.len(), 2);
         assert_eq!((l[0]["slow"].as_bool(), l[0]["error"].as_bool()), (Some(true), Some(false)));
         assert_eq!(l[1]["slow"], false);
+    }
+
+    #[test]
+    fn export_carries_own_includes_and_import_never_overwrites() {
+        let root = std::env::temp_dir().join(format!("ls-plugins-io-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (mine, out, pick) = (root.join("mine"), root.join("out"), root.join("pick"));
+        for d in [&mine, &out, &pick] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        std::fs::write(mine.join("hello.sma"), "#include <amxmodx>\n#include \"helpers\"\npublic plugin_init() {}\n").unwrap();
+        std::fs::write(mine.join("helpers.inc"), "#include <more.inc>\nstock x() {}\n").unwrap();
+        std::fs::write(mine.join("more.inc"), "stock y() {}\n").unwrap();
+        assert_eq!(own_includes(&mine, &std::fs::read_to_string(mine.join("hello.sma")).unwrap()), vec!["helpers.inc", "more.inc"]);
+        // export: the .sma where picked, its own includes beside it; a different file there stays
+        std::fs::write(out.join("more.inc"), "theirs").unwrap();
+        let v = export_to(&mine, "hello.sma", &out.join("hello_v2.sma")).unwrap();
+        assert_eq!(v["saved"], json!(["hello_v2.sma", "helpers.inc"]));
+        assert_eq!(v["kept"], json!(["more.inc"]));
+        assert_eq!(std::fs::read_to_string(out.join("more.inc")).unwrap(), "theirs");
+        // import: refusals
+        assert!(import_problem("con.sma", b"x").unwrap().contains("Windows keeps"));
+        assert!(import_problem("NUL.inc", b"x").is_some() && import_problem("lpt3.sma", b"x").is_some());
+        assert!(import_problem("a;b.sma", b"x").is_some());
+        assert!(import_problem("x.amxx", b"x").unwrap().contains(".sma and .inc"));
+        assert!(import_problem("bin.sma", &[0x4d, 0x5a, 0, 1, 2, 3]).unwrap().contains("isn't a text file"));
+        assert!(import_problem("big.sma", &vec![b'a'; MAX_SOURCE + 1]).unwrap().contains("too big"));
+        assert_eq!(import_problem("ok.sma", b"public plugin_init() {}\r\n\tx();\n"), None);
+        // import: a taken name is never overwritten; renamed, it comes in
+        std::fs::write(pick.join("hello.sma"), "new one").unwrap();
+        std::fs::write(pick.join("con.inc"), "x").unwrap();
+        let files = vec![pick.join("hello.sma"), pick.join("con.inc")];
+        let plan = import_plan(&mine, &files);
+        assert_eq!(plan[0]["taken"], true);
+        assert!(plan[1]["problem"].as_str().unwrap().contains("Windows keeps"));
+        let none = std::collections::HashMap::new();
+        assert!(import_into(&mine, &files, &none).unwrap_err().contains("already a file called hello.sma"));
+        assert!(std::fs::read_to_string(mine.join("hello.sma")).unwrap().contains("plugin_init"));
+        let mut ren = std::collections::HashMap::new();
+        ren.insert("hello.sma".to_string(), "hello2.inc".to_string());
+        assert!(import_into(&mine, &files, &ren).unwrap_err().contains("keep the .sma ending"));
+        ren.insert("hello.sma".to_string(), "hello2.sma".to_string());
+        let v = import_into(&mine, &files, &ren).unwrap();
+        assert_eq!(v["imported"], json!(["hello2.sma"]));
+        assert_eq!(v["first"], "hello2.sma");
+        assert_eq!(std::fs::read_to_string(mine.join("hello2.sma")).unwrap(), "new one");
+        assert!(!mine.join("con.inc").exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

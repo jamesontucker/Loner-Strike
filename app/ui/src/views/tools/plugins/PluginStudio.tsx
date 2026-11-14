@@ -6,7 +6,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePoll } from "../../../api";
-import { useDirty } from "../../../store";
+import { useDirty, useNav } from "../../../store";
 import { useToolArg } from "../../../stores/tools";
 import { useReportAddress } from "../common/address";
 import { useToolCrumbs } from "../common/shell";
@@ -17,7 +17,7 @@ import type { ToolProps } from "../registry";
 import { HelpPanel } from "./Help";
 import type { EditorHandle } from "./monaco";
 import { RESERVED_NAME, windowsReserved } from "../common/fileNames";
-import { compile, deleteFile, overview, pluginLog, readFile, renameFile, resetFile, saveFile, stopTrying, tryIt, words, type CompileResult, type Diag, type FolderId, type LogLine, type OpenedFile, type SourceFile } from "./pluginsApi";
+import { compile, deleteFile, exportFile, importFiles, importPick, overview, revealFile, pluginLog, readFile, renameFile, resetFile, saveFile, stopTrying, tryIt, words, type CompileResult, type Diag, type FolderId, type LogLine, type OpenedFile, type SourceFile } from "./pluginsApi";
 import { TEMPLATES } from "./templates";
 import "./plugins.css";
 
@@ -42,6 +42,8 @@ export default function PluginStudio(_: ToolProps) {
   const toast = useToast();
   const confirm = useConfirm();
   const askText = useAskText();
+  const go = useNav((s) => s.go);
+  const [io, setIo] = useState<"export" | "import" | null>(null);
   const arg = useToolArg();
   const ov = useQuery({ queryKey: ["tools", "plugins"], queryFn: overview, retry: false });
   const wq = useQuery({ queryKey: ["tools", "plugins", "words"], queryFn: words, retry: false, staleTime: Infinity });
@@ -170,6 +172,60 @@ export default function PluginStudio(_: ToolProps) {
   }, [editorReady, arg]);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["tools", "plugins"], exact: true });
+  // Export / Import: Community doesn't take plugins, so they're shared by hand
+  const exportNow = async () => {
+    if (!open) return;
+    setIo("export");
+    try {
+      const r = await exportFile(open.folder, open.name);
+      if (r.error) toast(r.error, true);
+      else if (!r.cancelled) toast(r.message || "Exported.");
+    } finally {
+      setIo(null);
+    }
+  };
+  const importNow = async () => {
+    setIo("import");
+    try {
+      const p = await importPick();
+      if (p.error) return toast(p.error, true);
+      if (p.cancelled || !p.id || !p.files) return;
+      const ok = p.files.filter((f) => !f.problem);
+      const refused = p.files.filter((f) => f.problem).map((f) => f.problem);
+      if (!ok.length) return toast(refused.join(" ") || "Nothing to import.", true);
+      const taken = new Set(ok.map((f) => f.name.toLowerCase()));
+      const have = new Set((ov.data?.folders.find((f) => f.id === "mine")?.files ?? []).map((f) => f.name.toLowerCase()));
+      const renames: Record<string, string> = {};
+      for (const f of ok.filter((x) => x.taken)) {
+        const ext = f.name.slice(-4);
+        const typed = await askText(
+          `There's already a ${f.name} in My plugins. Import it under another name (it's never overwritten).`,
+          { label: "New name", value: f.name.slice(0, -4) + "_2" + ext, max: 64 },
+          {
+            ok: "Import as this",
+            check: (v) => {
+              const n = v.trim().toLowerCase().endsWith(ext.toLowerCase()) ? v.trim() : v.trim() + ext;
+              if (windowsReserved(n)) return RESERVED_NAME;
+              if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(n) || n.includes("..") || n.length > 64) return "Use letters, numbers, - and _.";
+              if (have.has(n.toLowerCase()) || (taken.has(n.toLowerCase()) && n.toLowerCase() !== f.name.toLowerCase())) return `There's already a file called ${n}.`;
+              return null;
+            },
+          },
+        );
+        if (typed === null) return;
+        const n = typed.trim().toLowerCase().endsWith(ext.toLowerCase()) ? typed.trim() : typed.trim() + ext;
+        renames[f.name] = n;
+        have.add(n.toLowerCase());
+      }
+      const r = await importFiles(p.id, renames);
+      if (r.error) return toast(r.error, true);
+      toast(r.message || "Imported.", !r.ok);
+      await refresh();
+      if (r.first) await openFile("mine", r.first);
+    } finally {
+      setIo(null);
+    }
+  };
 
   // History restored a file (or Undo put one back): read the open one again, unless it has
   // unsaved changes
@@ -528,9 +584,25 @@ export default function PluginStudio(_: ToolProps) {
           remove: () => open && remove(open.name),
           history: () => open && setHistory(open.history),
           reset,
+          reveal: () => {
+            if (!open) return;
+            void revealFile(open.folder, open.name).then((r) => r.error && toast(r.error, true));
+          },
         })}
         reset={false}
-      />
+      >
+        <div className="ps-share row">
+          <BusyButton className="btn small" busy={io === "export"} disabled={!open || !!io} label="Export…" busyLabel="Exporting…" onClick={() => void exportNow()} />
+          <BusyButton className="btn small" busy={io === "import"} disabled={!!io} label="Import…" busyLabel="Importing…" onClick={() => void importNow()} />
+        <p className="ps-share-note muted">
+          Community doesn't take plugins. To share one, post its .sma on GameBanana or AlliedModders yourself ({SHOW_IN} under More). To share a mode here, make it in{" "}
+          <button type="button" className="link inline" onClick={() => go("tools", "studio")}>
+            Game Mode Studio
+          </button>
+          .
+        </p>
+        </div>
+      </ActionBar>
       {history && (
         <Sheet className="sheet wide hist-sheet" label="History & restore" onClose={() => setHistory(null)}>
           <div className="sheet-body">
@@ -548,12 +620,15 @@ export default function PluginStudio(_: ToolProps) {
 }
 
 /** The action bar's More menu for the open file. */
-function moreActions(p: { open: Open | null; busy: boolean; saveCopy: () => void; rename: () => void; remove: () => void; history: () => void; reset: () => void }): BarAction[] {
+const SHOW_IN = navigator.userAgent.includes("Windows") ? "Show in Explorer" : navigator.userAgent.includes("Mac") ? "Show in Finder" : "Show in folder";
+
+function moreActions(p: { open: Open | null; busy: boolean; saveCopy: () => void; rename: () => void; remove: () => void; history: () => void; reset: () => void; reveal: () => void }): BarAction[] {
   const o = p.open;
   if (!o) return [];
   const mine = o.folder === "mine";
   return [
     { label: "Save a copy in My plugins…", onClick: p.saveCopy, note: "Your own version to change and try" },
+    { label: SHOW_IN, onClick: p.reveal, note: "The .sma file, to post it yourself" },
     { label: "Rename…", onClick: p.rename, hidden: !mine },
     { label: "Restore a previous version…", onClick: p.history, note: "Earlier saves of this file: compare and restore", hidden: o.folder === "include" && !o.reset },
     { label: "Reset to Loner-Strike's version…", onClick: p.reset, danger: true, hidden: !o.reset?.differs, note: o.folder === "game" ? "The source and the plugin in your game" : "The copy in your game's include folder" },

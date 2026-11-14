@@ -75,7 +75,7 @@
 .monaco-editor .suggest-widget .monaco-list .monaco-list-row > .contents > .main { flex-direction: row; min-height: 0; }
 
 /* read only: the lock in the file list and the note over the editor */
-.ps-ro { margin-left: auto; font-size: 11px; opacity: .7; flex: none; }
+.ps-ro { margin-left: auto; font-size: 11px; color: var(--bone-dim); flex: none; }
 .ps-changed { color: var(--warn); font-size: 10px; flex: none; }
 .ps-readonly { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; padding: 6px 10px; border-radius: 3px; background: var(--side); box-shadow: var(--sunken); font-size: 14px; color: var(--bone-dim); }
 .ps-readonly-text { flex: 1 1 300px; min-width: 0; }
@@ -133,3 +133,8 @@
   .ps-bottom { flex-basis: 30%; min-height: 120px; }
 }
 .ps-new-error { color: #f0b9a6; }
+
+/* where sharing would be: plugins aren't shared, modes are */
+.ps-share-note { margin: 4px 0 0; font-size: 12px; }
+.ps-share { gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.ps-share .ps-share-note { margin: 0; flex: 1 1 260px; }

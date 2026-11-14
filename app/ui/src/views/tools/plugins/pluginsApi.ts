@@ -67,6 +67,11 @@ export const saveFile = (folder: FolderId, name: string, text: string, encoding 
 export const renameFile = (folder: FolderId, name: string, to: string) => post<{ ok?: boolean; name?: string }>("/api/tools/plugins/rename", { folder, name, to });
 export const resetFile = (folder: FolderId, name: string) => post<{ ok?: boolean; message?: string }>("/api/tools/plugins/reset", { folder, name });
 export const deleteFile = (folder: FolderId, name: string) => post<{ ok?: boolean }>("/api/tools/plugins/delete", { folder, name });
+export type ImportPick = { cancelled?: boolean; error?: string; id?: string; files?: { name: string; problem: string | null; taken: boolean }[] };
+export const exportFile = (folder: FolderId, name: string) => post<{ ok?: boolean; cancelled?: boolean; error?: string; message?: string }>("/api/tools/plugins/export", { folder, name });
+export const importPick = () => post<ImportPick>("/api/tools/plugins/import/pick", {});
+export const importFiles = (id: string, renames: Record<string, string>) => post<{ ok?: boolean; error?: string; message?: string; first?: string | null; imported?: string[] }>("/api/tools/plugins/import", { id, renames });
+export const revealFile = (folder: FolderId, name: string) => post<{ ok?: boolean; error?: string }>("/api/tools/plugins/reveal", { folder, name });
 export const compile = (folder: FolderId, name: string) => post<CompileResult>("/api/tools/plugins/compile", { folder, name });
 export const tryIt = (folder: FolderId, name: string) => post<CompileResult>("/api/tools/plugins/try", { folder, name });
 export const stopTrying = (name: string, restart: boolean) => post<{ ok?: boolean; message?: string; trying?: string[] }>("/api/tools/plugins/untry", { name, restart });
