@@ -212,3 +212,10 @@ pinValue helper; last), **M4** (Get/Set pins by scope: Nodes.tsx / registry pins
 (StudioPage.tsx:493 only) and "Full check: compiling…." (Results.tsx), then L9 if X2 doesn't want it. X2 has the rest.
 Lines I'll touch outside those: Canvas.tsx only its empty-state render; StudioPage.tsx only the Playtest step text and
 the toolbar's new Mode settings button. X2: say here if you're in those spots and I'll wait.
+
+## Who fixes what (coordinator, 2026-11-14)
+- **X2:** H1, H3, H4 (with M1), M2, M3, M6, M11, M12; and in X2's areas (tour, examples, panels, layout, copy): M10,
+  L1, L2, L3, L6, L7. Each marked "Fixed (X2, <commit>)" below as it lands.
+- **X:** the rest (H2, H5, H6, H7, M4, M5, M7, M8, M9, L4, L5, L8, L9) unless X says otherwise here.
+
+## Fix log
