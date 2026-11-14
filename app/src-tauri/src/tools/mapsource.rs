@@ -37,6 +37,68 @@ pub struct Source {
     pub remix_of: Option<RemixCredit>,
 }
 
+/// A WAD named by a document, as a plain file name (`C:\x\mine.wad` -> `mine.wad`, a UNC
+/// `\\host\share\a.wad` -> `a.wad`); None when nothing safe is left (no share, drive or folder
+/// ever survives).
+pub fn wad_base_name(w: &str) -> Option<String> {
+    let base = w.rsplit(['\\', '/']).next().unwrap_or("").trim();
+    let ok = !base.is_empty()
+        && base.len() <= 64
+        && base.to_ascii_lowercase().ends_with(".wad")
+        && !base.starts_with('.')
+        && base.chars().all(|c| c.is_ascii_alphanumeric() || "_-. ".contains(c));
+    ok.then(|| base.to_string())
+}
+
+/// A key value that's a path on someone's computer (a drive, a UNC share, a leading slash, ~).
+fn absolute_path(v: &str) -> bool {
+    let b = v.as_bytes();
+    v.starts_with('/') || v.starts_with('\\') || v.starts_with("~/") || v.starts_with("~\\") || (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/'))
+}
+
+/// The one sanitizer for a shared project, both ways (P5, security review): what Publish puts in
+/// a package and what Remix takes from one. The editor settings come from an allowlist (no FGD
+/// path: it's a file on the author's computer, or a UNC share on the remixer's); every WAD,
+/// in the WAD list and in the texture table, is a plain file name the editor then looks up only
+/// in its own folders (the project's, the game's); an entity key that holds an absolute path
+/// keeps only the part from the game folder on (or the file name).
+pub fn sanitize(doc: &mut MapDocument) {
+    let old = std::mem::take(&mut doc.editor);
+    doc.editor = crate::editor::doc::EditorSettings { vis_sets: old.vis_sets, cordon: old.cordon, remix_of: old.remix_of, ..Default::default() };
+    let mut wads: Vec<String> = Vec::new();
+    for w in doc.world.wads.iter().filter_map(|w| wad_base_name(w)) {
+        if !wads.iter().any(|x| x.eq_ignore_ascii_case(&w)) {
+            wads.push(w);
+        }
+    }
+    doc.world.wads = wads;
+    for m in doc.materials.values_mut() {
+        m.wad = m.wad.as_deref().and_then(wad_base_name);
+    }
+    let rel = |v: &str| -> String {
+        let norm = v.replace('\\', "/");
+        let low = norm.to_ascii_lowercase();
+        for g in ["/cstrike/", "/czero/", "/valve/", "/cstrike_downloads/", "/czero_downloads/", "/valve_downloads/"] {
+            if let Some(i) = low.rfind(g) {
+                return norm[i + g.len()..].to_string();
+            }
+        }
+        norm.rsplit('/').next().unwrap_or("").to_string()
+    };
+    for (_, v) in doc.world.keys.iter_mut() {
+        if absolute_path(v) {
+            *v = rel(v);
+        }
+    }
+    for e in doc.entities.values_mut() {
+        for (_, v) in e.keys.iter_mut() {
+            if absolute_path(v) {
+                *v = rel(v);
+            }
+        }
+    }
+}
+
 /// The textures a document's brushes use (lower case, without the editor's own special names).
 pub fn used_textures(doc: &MapDocument) -> BTreeSet<String> {
     doc.brushes.values().flat_map(|b| b.faces.iter().map(|f| f.texture.to_ascii_lowercase())).filter(|t| !t.is_empty() && t.len() <= 15).collect()
@@ -93,8 +155,9 @@ pub fn build(project: &Path, hl: &Path, czero: bool, name: &str) -> Result<Sourc
         wads.push(wad_name.clone());
     }
     doc.world.wads = wads;
-    // (a shared project gets a fresh id, so a remix of it is never taken for the author's own)
-    doc.editor.uid = None;
+    // (no path from the author's computer goes out; a shared project gets no id of its own, so a
+    // remix of it is never taken for the author's)
+    sanitize(&mut doc);
     let map_text = mapfile::write_map(&doc, &mapfile::WriteOptions::default())?;
     let (map_bytes, _, _) = mapfile::encode_for_game(&map_text);
     let mut files = vec![(format!("source/{name}.lsmap"), doc.to_json().into_bytes()), (format!("source/{name}.map"), map_bytes)];
@@ -154,7 +217,9 @@ pub fn read_package(src: &Path) -> Result<(MapDocument, Option<(String, Vec<u8>)
     }
     let Some(project) = project else { return refuse("it has no project (.lsmap).") };
     let text = std::fs::read_to_string(&project).map_err(|_| "This map's editable source can't be used: its project isn't text.".to_string())?;
-    let doc = MapDocument::from_json(&text).map_err(|e| format!("This map's editable source can't be used: {e}"))?;
+    let mut doc = MapDocument::from_json(&text).map_err(|e| format!("This map's editable source can't be used: {e}"))?;
+    // (nothing from the package may point outside: no FGD path, no WAD folder, no UNC share)
+    sanitize(&mut doc);
     if doc.brushes.len() > MAX_BRUSHES || doc.entities.len() > MAX_ENTITIES {
         return refuse("its project is bigger than any the editor makes.");
     }
@@ -302,6 +367,80 @@ mod tests {
         // the remix's own source carries the credit on
         let again = build(&a, &hl, false, "aim_qa_remix").unwrap();
         assert_eq!(again.remix_of.as_ref().map(|c| c.gb), Some(777));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// What a path on someone's computer looks like in the shared JSON or .map text.
+    fn leaks(text: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for pat in ["/Users/", "Users\\\\", "C:\\\\", "c:\\\\", "\\\\\\\\", "\"/", "\"~", "\"\\\\", "\\\\host", "Users\\"] {
+            if text.contains(pat) {
+                out.push(pat.to_string());
+            }
+        }
+        // a drive letter at the start of any string value ("X:\\..." or "X:/...")
+        let b = text.as_bytes();
+        for i in 0..b.len().saturating_sub(4) {
+            if b[i] == b'"' && b[i + 1].is_ascii_alphabetic() && b[i + 2] == b':' && (b[i + 3] == b'\\' || b[i + 3] == b'/') {
+                out.push(String::from_utf8_lossy(&b[i..(i + 12).min(b.len())]).to_string());
+            }
+        }
+        out
+    }
+
+    /// A project with paths from the author's computer everywhere they can be.
+    fn leaky(doc: &mut MapDocument) {
+        doc.editor.fgd = Some("/Users/jam/fgds/mine.fgd".into());
+        doc.world.wads = vec!["\\\\evilhost\\share\\cstrike.wad".into(), "C:\\Users\\jam\\maps\\mine.wad".into(), "../../secret.wad".into(), "~/x/y.wad".into()];
+        for m in doc.materials.values_mut() {
+            m.wad = Some("\\\\evilhost\\share\\mine.wad".into());
+        }
+        doc.world.keys.push(("skyname".into(), "C:\\Users\\jam\\sky\\des".into()));
+        if let Some(e) = doc.entities.values_mut().next() {
+            e.keys.push(("model".into(), "C:\\Users\\jam\\Half-Life\\cstrike\\models\\x.mdl".into()));
+            e.keys.push(("noise".into(), "\\\\evilhost\\share\\a.wav".into()));
+        }
+    }
+
+    #[test]
+    fn a_published_project_carries_no_path_from_the_authors_computer() {
+        let root = tmp("leak-out");
+        let (hl, project) = super::fixture_project(&root);
+        let (mut doc, _) = super::super::editor::load_file(&project).unwrap();
+        leaky(&mut doc);
+        std::fs::write(&project, doc.to_json()).unwrap();
+        let s = build(&project, &hl, false, "aim_qa").unwrap();
+        for (name, body) in s.files.iter().filter(|(n, _)| n.ends_with(".lsmap") || n.ends_with(".map")) {
+            let text = String::from_utf8_lossy(body);
+            assert!(leaks(&text).is_empty(), "{name}: {:?}", leaks(&text));
+        }
+        let shared = MapDocument::from_json(std::str::from_utf8(&s.files[0].1).unwrap()).unwrap();
+        assert!(shared.editor.fgd.is_none() && shared.editor.uid.is_none());
+        assert!(shared.world.wads.iter().all(|w| !w.contains(['/', '\\'])), "{:?}", shared.world.wads);
+        let model = shared.entities.values().flat_map(|e| e.keys.iter()).find(|(k, _)| k == "model").map(|(_, v)| v.clone());
+        assert_eq!(model.as_deref(), Some("models/x.mdl"), "the part from the game folder on");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_remix_takes_no_path_from_the_package() {
+        let root = tmp("leak-in");
+        let src = root.join("pkg/source");
+        std::fs::create_dir_all(&src).unwrap();
+        let mut doc = mapfile::read_map("{\n\"classname\" \"worldspawn\"\n}\n{\n\"classname\" \"info_player_start\"\n\"origin\" \"0 0 0\"\n}\n").unwrap();
+        doc.materials.insert("brick".into(), crate::editor::doc::Material { name: "brick".into(), width: 64, height: 64, wad: None });
+        leaky(&mut doc);
+        doc.editor.fgd = Some("\\\\evilhost\\share\\x.fgd".into());
+        std::fs::write(src.join("m.lsmap"), doc.to_json()).unwrap();
+        assert!(leaks(&doc.to_json()).len() >= 3, "the check sees them: {:?}", leaks(&doc.to_json()));
+        let (back, _) = read_package(&root.join("pkg")).unwrap();
+        assert!(back.editor.fgd.is_none());
+        assert_eq!(back.world.wads, ["cstrike.wad", "mine.wad", "secret.wad", "y.wad"]);
+        assert!(back.materials.values().all(|m| m.wad.as_deref() == Some("mine.wad")));
+        assert!(leaks(&back.to_json()).is_empty(), "{:?}", leaks(&back.to_json()));
+        let path = save_remix(&root.join("remixes"), "m", back, None, RemixCredit::default()).unwrap();
+        let saved = std::fs::read_to_string(path).unwrap();
+        assert!(leaks(&saved).is_empty(), "{:?}", leaks(&saved));
         let _ = std::fs::remove_dir_all(&root);
     }
 
