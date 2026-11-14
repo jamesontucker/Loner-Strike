@@ -1409,7 +1409,11 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         const r = await fetch(INDEX_URL, { cache: "no-cache" });
         if (!r.ok) throw new Error(String(r.status));
         const doc = await r.json();
-        items = (Array.isArray(doc.items) ? doc.items : []).filter((it) => it && it.status === "listed" && KINDS[it.kind] && typeof it.name === "string");
+        // only what's explicitly listed: unlisted, withdrawn, hidden, pending, revoked and any
+        // state added later stay out, and so does anything on the revoked list ("mod:123")
+        const gone = new Set(Array.isArray(doc.revoked) ? doc.revoked.map(String) : []);
+        items = (Array.isArray(doc.items) ? doc.items : []).filter((it) => it && it.status === "listed" && KINDS[it.kind] && typeof it.name === "string"
+          && !gone.has(`${String(it.model || "mod").toLowerCase()}:${it.gb}`));
       } catch {
         items = [];
       }

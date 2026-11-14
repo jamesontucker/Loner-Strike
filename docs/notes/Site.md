@@ -268,3 +268,6 @@ learn CS 1.6 maps before an editor Playtest.
 - **Preview:** a local-only override, `?community=<url>` on localhost/127.0.0.1 (ignored on the real site); checked on
   the site server (8088) with a sample of 7 entries (a hidden one and a spray left out, a broken picture falling back,
   risky words on a mode) on desktop (1440) and phone (390), the empty index, and the real URL (blocked: the message).
+- **Item states (after MCP's 4a178c08):** only `status: "listed"` shows; unlisted, withdrawn, hidden, pending,
+  revoked, a missing status and any state added later stay out, and so does a listed item whose key ("mod:<gb>")
+  is in the index's `revoked`. Checked with a sample of 11 entries in every state: only the 3 listed ones show.
