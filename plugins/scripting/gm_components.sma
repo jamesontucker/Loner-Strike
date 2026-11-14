@@ -13098,9 +13098,11 @@ public n_wave_cap_now(plugin, params)
 	return wt_alive_cap();
 }
 
+/* before a wave table is set up (a mode reading it at Round Started, before its first wave):
+   whether this server can spawn creatures at all; after: whether they still spawn (QA4-B) */
 public bool:n_wave_creatures_ok(plugin, params)
 {
-	return g_wtCreatures;
+	return g_wtOn ? g_wtCreatures : g_upCreatures;
 }
 
 /* ls_turret_setup(price, Float:life, per_player, const type[], health, bool:bots) */
