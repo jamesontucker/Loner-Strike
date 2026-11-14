@@ -27,6 +27,8 @@ import { Results, fullText, testText } from "./Results";
 import { DebugPanel } from "./DebugPanel";
 import { NodeHelp } from "./NodeHelp";
 import { HelpMenu } from "./HelpMenu";
+import { BookmarksMenu } from "./BookmarksMenu";
+import { VersionHistory } from "./VersionHistory";
 import { DeleteDialogHost } from "./DeleteDialog";
 import { TableEditorHost } from "./TableEditor";
 import { StudioTour, TourOffer, startStudioTour } from "./Tour";
@@ -180,6 +182,7 @@ function Studio({ maps }: ToolProps) {
   const [canvas, setCanvas] = useState<CanvasApi | null>(null);
   /** node help: null closed, "" the list, else a node's type */
   const [helpFor, setHelpFor] = useState<string | null>(null);
+  const [versions, setVersions] = useState(false);
   const onApi = useCallback((a: CanvasApi) => {
     focusRef.current = a.focus;
     setCanvas(a);
@@ -724,6 +727,10 @@ function Studio({ maps }: ToolProps) {
         <button type="button" className="btn" onClick={layout} title="Lay the nodes out left to right">
           Tidy up
         </button>
+        <BookmarksMenu />
+        <button type="button" className="btn" aria-pressed={versions} onClick={() => setVersions(!versions)} title="The last 50 saves: compare and restore" data-testid="studio-versions-button">
+          Versions
+        </button>
         <FindBox graph={graph} onPick={(id) => focusRef.current(id)} />
         <HelpMenu onNodeHelp={() => setHelpFor("")} onTour={() => void tour()} />
         <span className="st-grow" />
@@ -843,6 +850,7 @@ function Studio({ maps }: ToolProps) {
           setTimeout(() => useStudio.getState().select(ids.filter((id) => (g!.nodes.find((n) => n.id === id)?.graph ?? "") === home)), 120);
         }}
       />
+      {versions && <VersionHistory onClose={() => setVersions(false)} toast={toast} />}
       {helpFor !== null && <NodeHelp open={helpFor} onClose={() => setHelpFor(null)} canvas={canvas} toast={toast} />}
       <ActionBar
         dirty={dirty}

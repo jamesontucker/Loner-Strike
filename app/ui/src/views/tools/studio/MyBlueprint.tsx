@@ -18,6 +18,7 @@ import { saveSnippet, deleteSnippet } from "./snippets";
 import { useAskText, useConfirm } from "../../../ui";
 import { askDelete } from "./DeleteDialog";
 import { addTable } from "./tables";
+import { dragHint } from "./dropOps";
 import { openTableEditor } from "./TableEditor";
 
 function Section({ title, count, onAdd, addTitle, children, open: start = true }: { title: string; count: number; onAdd?: () => void; addTitle?: string; children: ReactNode; open?: boolean }) {
@@ -362,6 +363,14 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
   const functions = graph.functions ?? [];
   const macros = graph.macros ?? [];
   const tabFn = functions.find((x) => x.id === tab);
+  /** drag props for a My mode item: what it is, for the canvas's drop (dropOps.ts) */
+  const dragAs = (payload: string) => ({
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.setData(DRAG_PART, payload);
+      e.dataTransfer.effectAllowed = "copy";
+    },
+  });
   const varItem = (v: (typeof graph.variables)[number], local = false) => (
     <button
       key={v.id}
@@ -374,7 +383,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
       className={`st-mb-item${selectedVar === v.id ? " on" : ""}`}
       onClick={() => selectVar(v.id)}
       {...itemKeys(v.id, v.name)}
-      title={`${typeLabel(graph, v.type)}${local ? ", this Function's own" : ""}: drag onto the canvas for Get or Set`}
+      title={`${typeLabel(graph, v.type)}${local ? ", this Function's own" : ""}. ${dragHint("var")}`}
     >
       <span className={`st-mb-pin${/^array</.test(v.type) ? " arr" : /^map</.test(v.type) ? " map" : ""}`} style={{ background: typeColor(v.type) }} /> {v.name}
       <span className="st-muted st-mb-note">{v.scope === "player" ? "per player" : v.scope === "team" ? "per team" : ""}</span>
@@ -394,7 +403,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
       onClick={() => selectPart(id)}
       onDoubleClick={() => openable && openTab(id)}
       {...itemKeys(id, name)}
-      title={openable ? "Double-click to open its graph; drag onto the canvas to call it" : drag ? "Drag onto the canvas" : undefined}
+      title={openable ? `Double-click to open its graph. ${dragHint("fn")}` : drag?.startsWith("make:") ? dragHint("struct") : drag?.startsWith("enum:") ? dragHint("enum") : drag ? "Drag onto the canvas" : undefined}
     >
       <span className={`st-mb-dot ${dot}`} /> {name}
       {note && <span className="st-muted st-mb-note">{note}</span>}
@@ -493,7 +502,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
       >
         {(graph.timelines ?? []).length === 0 && <p className="st-muted st-mb-empty">Values that change over time (a moving platform, a pulsing glow) and events at set moments.</p>}
         {(graph.timelines ?? []).map((t) => (
-          <button key={t.id} type="button" className={`st-mb-item${tab === t.id ? " open" : ""}`} onClick={() => openTab(t.id)} title="Open its editor">
+          <button key={t.id} type="button" className={`st-mb-item${tab === t.id ? " open" : ""}`} onClick={() => openTab(t.id)} title={`Open its editor. ${dragHint("tline")}`} {...dragAs(`tline:${t.id}`)}>
             <span className="st-mb-dot fn" /> {t.name}
             <span className="st-muted st-mb-note">{t.length} s</span>
           </button>
@@ -512,7 +521,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
       >
         {(graph.dataTables ?? []).length === 0 && <p className="st-muted st-mb-empty">Rows of values to look up: a gun list, prices, waves. Paste them from a spreadsheet.</p>}
         {(graph.dataTables ?? []).map((t) => (
-          <button key={t.id} type="button" className="st-mb-item" onClick={() => openTableEditor(t.id)} title="Open the table">
+          <button key={t.id} type="button" className="st-mb-item" onClick={() => openTableEditor(t.id)} title={`Open the table. ${dragHint("table")}`} {...dragAs(`table:${t.id}`)}>
             <span className="st-mb-dot struct" /> {t.name}
             <span className="st-muted st-mb-note">{t.rows.length} rows</span>
           </button>
@@ -531,7 +540,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
       >
         {(graph.customEvents ?? []).length === 0 && <p className="st-muted st-mb-empty">Your own events: call them from anywhere, from a timer, or from the map.</p>}
         {(graph.customEvents ?? []).map((c) => (
-          <button key={c.id} type="button" className={`st-mb-item${part === c.id ? " on" : ""}`} onClick={() => selectPart(c.id)} title="Its inputs and whether the map can fire it">
+          <button key={c.id} type="button" className={`st-mb-item${part === c.id ? " on" : ""}`} onClick={() => selectPart(c.id)} title={`Its inputs and whether the map can fire it. ${dragHint("cevent")}`} {...dragAs(`cevent:${c.id}`)}>
             <span className="st-mb-dot ev" /> {c.name}
             {c.map && <span className="st-muted st-mb-note">map</span>}
           </button>
@@ -540,7 +549,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
       <Section title="Events" count={events.length} onAdd={() => api?.search("Events")} addTitle="Add an event">
         {events.length === 0 && <p className="st-muted st-mb-empty">Nothing starts this mode yet.</p>}
         {events.map((n) => (
-          <button key={n.id} type="button" className={`st-mb-item${selected.includes(n.id) ? " on" : ""}`} onClick={() => api?.focus(n.id)} {...itemKeys(n.id, label(n.id))}>
+          <button key={n.id} type="button" className={`st-mb-item${selected.includes(n.id) ? " on" : ""}`} onClick={() => api?.focus(n.id)} {...itemKeys(n.id, label(n.id))} title={dragHint("event")} {...dragAs(`event:${n.id}`)}>
             <span className="st-mb-dot ev" /> {label(n.id)}
           </button>
         ))}
@@ -642,7 +651,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
         open={!!graph.enums?.length}
       >
         {!graph.enums?.length && <p className="st-muted st-mb-empty">Named choices (Class: Scout, Tank, Medic).</p>}
-        {(graph.enums ?? []).map((e) => partItem(e.id, e.name, "en", null, `${e.values.length} values`))}
+        {(graph.enums ?? []).map((e) => partItem(e.id, e.name, "en", `enum:${e.id}`, `${e.values.length} values`))}
       </Section>
       <Section
         title="Map markers"

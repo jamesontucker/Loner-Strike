@@ -7,6 +7,16 @@ import { CATEGORIES, NODE_DEFS, nodeDef, typeColor, PIN_TYPES } from "./registry
 import type { Snippet } from "./graphOps";
 import type { CanvasApi } from "./Canvas";
 import type { Graph } from "./schema";
+import { QUICK_ADD, quickAddList } from "./tidyOps";
+import { dragHint } from "./dropOps";
+
+/** Ways to add a node without the list: a quick-add key, or a drag from My mode. */
+export function addTip(type: string): string | null {
+  const k = Object.entries(QUICK_ADD).find(([, q]) => q.type === type)?.[0];
+  if (k) return `Quick add: hold ${k.toUpperCase()} and click empty space.`;
+  const from: Record<string, string> = { "var.get": "var", "var.set": "var", "event.call": "cevent", "event.custom": "cevent", "timer.by_event": "cevent", "table.get_row": "table", "table.for_each": "table", "flow.switch_enum": "enum", "enum.value": "enum", "struct.make": "struct", "struct.break": "struct", "timeline.play": "tline" };
+  return from[type] ? `From My mode: ${dragHint(from[type]).replace(/^Drag onto the canvas/, "drag the item onto the canvas")}.` : null;
+}
 
 export type HelpPin = { id: string; dir: "in" | "out"; help: string };
 export type HelpEntry = {
@@ -167,6 +177,7 @@ export function NodeHelp({ open, onClose, canvas, toast }: { open: string; onClo
               </ul>
             </>
           )}
+          {addTip(cur) && <p className="st-help-note">{addTip(cur)}</p>}
           {h.cost && (
             <p className="st-help-note cost">
               <strong>Cost: </strong>
@@ -246,6 +257,9 @@ export function NodeHelp({ open, onClose, canvas, toast }: { open: string; onClo
               }
             }}
           />
+          <p className="st-help-pad st-muted st-help-quick">
+            Quick add: hold a key and click empty space: {quickAddList().map((q) => `${q.key} ${q.title}`).join(" · ")}.
+          </p>
           <div className="st-help-list" ref={list} role="listbox" aria-label="Nodes">
             {found.length === 0 && <div className="st-palette-none">No node matches that.</div>}
             {(byCat ?? [["", found] as [string, string[]]]).map(([c, ts]) => (

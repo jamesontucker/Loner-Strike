@@ -127,3 +127,90 @@ test("deleting a variable in use: the choices, Find uses, one undo step", async 
   await expect(page.locator('.react-flow__node[data-id="getk"]')).toHaveCount(1);
   await expect(page.getByRole("complementary", { name: "My mode" }).getByText("Kills Made")).toBeVisible();
 });
+
+test("polish: drops with Ctrl and Alt, quick add, Promote to Variable, align, versions", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("ls.studio.tour", JSON.stringify({ offered: true, never: false })));
+  const g = (await (await page.request.get(`/api/tools/studio/graph/${ID}`)).json()).graph;
+  g.variables = [{ id: "v1", name: "Kills Made", type: "number", scope: "mode", default: 0 }];
+  const saved = await (await page.request.post(`/api/tools/studio/graph/${ID}`, { data: { graph: g }, headers: H })).json();
+  expect(saved.ok, JSON.stringify(saved)).toBeTruthy();
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await expect(page.locator(".st-mb").getByText("Kills Made")).toBeVisible();
+  const canvas = page.locator(".st-canvas");
+  await canvas.waitFor();
+  const nodes = () => page.locator(".react-flow__node").count();
+  // a drop with a key held, as the browser sends it
+  const drop = (payloadType: string, value: string, mods: { ctrl?: boolean; alt?: boolean }, at = { x: 200, y: 150 }) =>
+    page.evaluate(
+      ({ payloadType, value, mods, at }) => {
+        const dt = new DataTransfer();
+        dt.setData(payloadType, value);
+        const el = document.querySelector(".st-canvas")!;
+        const r = el.getBoundingClientRect();
+        at = { x: r.left + at.x, y: r.top + at.y };
+        for (const type of ["dragover", "drop"]) el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt, clientX: at.x, clientY: at.y, ctrlKey: !!mods.ctrl, altKey: !!mods.alt }));
+      },
+      { payloadType, value, mods, at },
+    );
+  const VAR = "application/x-studio-variable";
+  const PART = "application/x-studio-part";
+  let n = await nodes();
+  await drop(VAR, "v1", { ctrl: true });
+  await expect.poll(nodes).toBe(n + 1);
+  await expect(page.locator(".react-flow__node").filter({ hasText: "Get Kills Made" })).toHaveCount(1);
+  await drop(VAR, "v1", { alt: true }, { x: 200, y: 260 });
+  await expect(page.locator(".react-flow__node").filter({ hasText: "Set Kills Made" })).toHaveCount(1);
+  // no key: a choice
+  await drop(VAR, "v1", {}, { x: 320, y: 150 });
+  await expect(page.getByTestId("studio-drop-choice")).toBeVisible();
+  await page.getByTestId("studio-drop-choice").getByRole("button", { name: "Cancel" }).click();
+  // an event that's already here: jump to it, no new node
+  n = await nodes();
+  await drop(PART, "event:killed", {});
+  await expect(page.getByText("Already in this graph")).toBeVisible();
+  expect(await nodes()).toBe(n);
+  // quick add: hold B and click empty space
+  await canvas.focus();
+  await page.keyboard.down("b");
+  const spot = await page.evaluate(() => {
+    const r = document.querySelector(".react-flow__pane")!.getBoundingClientRect();
+    for (let y = r.top + 40; y < r.bottom - 40; y += 30)
+      for (let x = r.left + 40; x < r.right - 160; x += 30) if (document.elementFromPoint(x, y)?.classList.contains("react-flow__pane")) return { x, y };
+    return null;
+  });
+  await page.mouse.click(spot!.x, spot!.y);
+  await page.keyboard.up("b");
+  await expect(page.locator(".react-flow__node").filter({ hasText: "Branch" })).toHaveCount(1);
+  // Promote to Variable from a pin
+  await page.locator('.react-flow__node[data-id="give_m4"] .st-pin', { hasText: "Spare bullets" }).dispatchEvent("contextmenu", { bubbles: true, clientX: 600, clientY: 400 });
+  await page.getByRole("menuitem", { name: "Promote to Variable" }).click();
+  await expect(page.locator(".st-mb").getByText("Spare bullets", { exact: true })).toBeVisible();
+  // align two nodes' left edges (everything in view first)
+  await page.locator(".st-canvas").focus();
+  await page.keyboard.press("Home");
+  await page.waitForTimeout(400);
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.locator(".react-flow__node-logic .st-node-head").first().dispatchEvent("contextmenu", { bubbles: true, clientX: 600, clientY: 400 });
+  await page.getByRole("menuitem", { name: "Align left edges" }).click();
+  // versions: save, change, save; pick the first: marks on the canvas; restore is one undo
+  await page.locator(".tl-actionbar").getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("No unsaved changes")).toBeVisible();
+  const after = (await (await page.request.get(`/api/tools/studio/graph/${ID}`)).json()).graph;
+  const pos = (id: string) => after.nodes.find((x: { id: string }) => x.id === id).pos.x;
+  expect(pos("give_m4")).toBe(pos("give_ak"));
+  await page.getByTestId("studio-versions-button").click();
+  const panel = page.getByTestId("studio-versions");
+  await expect(panel.getByRole("option").first()).toBeVisible();
+  const versions = await panel.getByRole("option").count();
+  await panel.getByRole("option").last().click();
+  await expect(panel).toContainText(/Since then: [1-9]\d* added/);
+  // (everything in view: only what's in view is drawn)
+  await page.locator(".st-canvas").focus();
+  await page.keyboard.press("Home");
+  await expect(page.locator(".st-node.st-mark-added").first()).toBeVisible();
+  await panel.getByTestId("studio-version-restore").click();
+  await expect(page.locator(".react-flow__node").filter({ hasText: "Branch" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.locator(".react-flow__node").filter({ hasText: "Branch" })).toHaveCount(1);
+  expect(versions).toBeGreaterThanOrEqual(2);
+});

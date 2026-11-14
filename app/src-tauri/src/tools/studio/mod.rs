@@ -25,6 +25,7 @@ pub mod graph;
 pub mod kit;
 pub mod testrun;
 pub mod tables;
+pub mod history;
 pub mod settings;
 #[cfg(test)]
 mod help_tests;
@@ -244,6 +245,10 @@ fn save_graph(dir: &Path, id: &str, g: &Graph) -> Result<(), String> {
     // (graphs live in the app's own folder; the safety net keeps a copy where it looks after files)
     crate::safety::before("Game Mode Studio", "save a graph", &path);
     crate::sys::write_atomic(&path, text.as_bytes()).map_err(|e| format!("Couldn't save the graph ({e})."))?;
+    // the version history (the History panel): only what changed since the last save
+    if let Ok(v) = serde_json::to_value(g) {
+        let _ = history::record(dir, id, &v);
+    }
     // its mode map kit beside it (made again from the graph each save)
     if !graph::has_errors(&graph::validate(g)) {
         let kit = serde_json::to_string_pretty(&kit::kit_of(g)).map_err(|_| INTERNAL.to_string())?;
@@ -759,6 +764,28 @@ async fn api_kit(UrlPath(id): UrlPath<String>) -> Response {
     .await
 }
 
+/// The mode's kept saves, newest first, with what changed in each (the History panel).
+async fn api_history(UrlPath(id): UrlPath<String>) -> Response {
+    blocking(move || {
+        if !graph::valid_mode_id(&id) {
+            return Err(BAD_ID.into());
+        }
+        Ok(history::list(&graphs_dir(), &id))
+    })
+    .await
+}
+
+/// One kept save, whole.
+async fn api_history_version(UrlPath((id, n)): UrlPath<(String, usize)>) -> Response {
+    blocking(move || {
+        if !graph::valid_mode_id(&id) {
+            return Err(BAD_ID.into());
+        }
+        history::get(&graphs_dir(), &id, n).map(|g| json!({"graph": g})).ok_or_else(|| "That version isn't kept any more.".to_string())
+    })
+    .await
+}
+
 async fn api_delete(UrlPath(id): UrlPath<String>, h: HeaderMap) -> Response {
     if !crate::panel_api::from_panel(&h) {
         return forbidden();
@@ -769,6 +796,7 @@ async fn api_delete(UrlPath(id): UrlPath<String>, h: HeaderMap) -> Response {
         }
         crate::safety::before("Game Mode Studio", "delete a graph", &graph_path(&id));
         let _ = std::fs::remove_file(graphs_dir().join(format!("{id}.kit.json")));
+        history::delete(&graphs_dir(), &id);
         match std::fs::remove_file(graph_path(&id)) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("Couldn't delete the graph ({e}).")),
             _ => Ok(json!({"ok": true})),
@@ -1162,6 +1190,8 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/studio/graphs", get(api_graphs))
         .route("/api/tools/studio/graph/:id", get(api_graph).post(api_save))
         .route("/api/tools/studio/graph/:id/delete", post(api_delete))
+        .route("/api/tools/studio/history/:id", get(api_history))
+        .route("/api/tools/studio/history/:id/:n", get(api_history_version))
         .route("/api/tools/studio/validate", post(api_validate))
         .route("/api/tools/studio/generate", post(api_generate))
         .route("/api/tools/studio/compile", post(api_compile))

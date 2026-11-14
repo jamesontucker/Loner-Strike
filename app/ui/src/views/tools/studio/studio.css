@@ -413,3 +413,14 @@
 .st-table-csv textarea { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; }
 .st-help-menu-list a.st-help-menu-link { padding: 6px 10px; border-radius: 5px; color: var(--text); text-decoration: none; }
 .st-help-menu-list a.st-help-menu-link:hover, .st-help-menu-list a.st-help-menu-link:focus-visible { background: color-mix(in srgb, var(--signal) 25%, transparent); }
+.st-bookmarks { min-width: 280px; }
+.st-bookmark-row { display: flex; align-items: center; }
+.st-bookmark-row > button:first-child { flex: 1; }
+.st-bookmark-x { flex: none !important; }
+/* Version history marks on the canvas (VersionHistory.tsx) */
+.st-node.st-mark-added { box-shadow: 0 0 0 3px #4caf50, 0 2px 6px rgba(0,0,0,.4); }
+.st-node.st-mark-changed { box-shadow: 0 0 0 3px #e0a030, 0 2px 6px rgba(0,0,0,.4); }
+.st-mark.added { color: #6fcf73; }
+.st-mark.changed { color: #e8b04a; }
+.st-versions-pick { border-top: 1px solid var(--line); }
+.st-help-quick { font-size: 12.5px; margin: 0; padding-top: 0; }

@@ -69,3 +69,14 @@ GUI-subsystem exe; the single-instance plugin is safe with restarts; `sys::canon
 canonicalize + starts_with check canonicalizes both sides; UNC game folders; registry SteamPath and WOW6432Node;
 7-Zip with `-sns-`; archive listings drop drive letters; long paths; the voice agent (no microphone in the UI, no
 console windows, `ls-voice.exe` and `ls-intent.exe` ended with `taskkill /T`, whisper.cpp opens models with wide paths).
+
+## From X2 (2026-11-14): Studio keys to check on Windows
+- The Game Mode Studio now uses **Ctrl+1-9** (jump to a bookmark) and **Ctrl+Shift+1-9** (keep the view as one),
+  read from `e.code` (Digit1-9) on the Studio canvas only; on a Mac, Cmd. In a browser, Ctrl+1-9 switches tabs
+  first, but the app's WebView2 gets them. Please check on Windows that WebView2 doesn't take Ctrl+1-9 or
+  Ctrl+Shift+1-9 first, and whether the map editor's Windows handling of these keys (or of Alt) clashes.
+- **Alt while dragging** from My mode onto the Studio canvas drops a Set (Ctrl a Get). On Windows, Alt alone
+  focuses the window menu in some setups; during a drag it shouldn't, but please confirm in the app, along with
+  the editor's own Alt handling. Alt+click on a wire still breaks it (unchanged).
+- **Quick-add keys** (hold B, S, D, F, L, G, O, N, R, P, W and click the canvas) only act while the canvas has
+  focus.

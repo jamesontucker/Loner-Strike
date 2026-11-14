@@ -10,6 +10,7 @@ import { allVariables, nodeTitle, typeLabel } from "./pins";
 import { showValue } from "./Inspector";
 import type { GNode, GVariable, Graph } from "./schema";
 import { pinsFor, problemsFor, structureOf, watchKey, wiringOf } from "./nodeView";
+import { useMarks } from "./versionOps";
 
 const CAT_CLASS: Record<string, string> = { Events: "ev", Conditions: "cond", Numbers: "num", Text: "num", Variables: "var", Timers: "timer", Players: "player", Messages: "msg", Scoring: "score", Components: "comp", "Map markers": "comp", Creatures: "creature", Flow: "flow", Arrays: "var", Maps: "var", Structs: "var", Enums: "var", Vectors: "num" };
 
@@ -81,6 +82,7 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
   const paused = useStudio((s) => s.debug.paused?.node === id);
   const playing = useStudio((s) => !!s.playing);
   const bpsOff = useStudio((s) => s.bpsOff);
+  const mark = useMarks((m) => m.marks[id]);
   const edit = useStudio((s) => s.edit);
   const wiredKey = graph ? wiringOf(graph).wired.get(id) ?? "" : "";
   const def = n && nodeDef(n.type);
@@ -122,6 +124,7 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
   const failed = run?.result === "false";
   const cls = [
     "st-node",
+    mark ? `st-mark-${mark}` : "",
     `st-kind-${kindOf(def)}`,
     `st-cat-${CAT_CLASS[def.category] ?? "flow"}`,
     selected ? "selected" : "",

@@ -225,3 +225,100 @@ test("data tables: nodes take their pins from the table", () => {
   assert.equal(pinsOf(g, add("table.keys", {})).outputs.find((p) => p.id === "out")?.type, "array<number>");
   assert.ok(tablePins(g, g.nodes[0]));
 });
+
+// ---- polish: promote, align, distribute, linked, drops, quick add, versions
+import { align, distribute, linked, promoteToVariable, promotable, QUICK_ADD } from "../src/views/tools/studio/tidyOps";
+import { dropPlan, sameEventHere } from "../src/views/tools/studio/dropOps";
+import { compareGraphs } from "../src/views/tools/studio/versionOps";
+import { addFunction as addFn2, addCustomEvent as addCe2 } from "../src/views/tools/studio/graphOps";
+
+const kills = () => {
+  const p = parseGraph(JSON.parse(templateRawForPolish));
+  if ("error" in p) throw new Error(p.error);
+  return p.graph;
+};
+import templateRawForPolish from "../src/views/tools/studio/templates/team-dm.graph.json?raw";
+
+test("Promote to Variable: an input gets a Get from its setting, an output feeds a Set run next", () => {
+  let g = kills();
+  // Give Weapon's Spare bullets (a number with a setting of 90)
+  assert.ok(promotable(g, { node: "give_m4", pin: "ammo" }, "in"));
+  assert.equal(promotable(g, { node: "give_m4", pin: "exec" }, "in"), null, "flow pins can't");
+  let r = promoteToVariable(g, { node: "give_m4", pin: "ammo" }, "in");
+  assert.ok(!("error" in r));
+  g = r.graph;
+  const v = g.variables.find((x) => x.id === r.id)!;
+  assert.equal(v.type, "number");
+  assert.equal(v.default, 90);
+  assert.ok(g.edges.some((e) => e.to.node === "give_m4" && e.to.pin === "ammo" && g.nodes.find((n) => n.id === e.from.node)?.type === "var.get"));
+  // an output: Player Killed's Headshot -> a yes/no variable, set right after (Then was free? no: Is CT is there)
+  r = promoteToVariable(g, { node: "killed", pin: "headshot" }, "out");
+  assert.ok(!("error" in r));
+  assert.equal(r.graph.variables.find((x) => x.id === r.id)!.type, "bool");
+  assert.ok(r.graph.edges.some((e) => e.from.node === "killed" && e.from.pin === "headshot"));
+  // inside a Function: a local of it
+  let f = addFn2(emptyGraph("pf", "Pf"));
+  const add = addNode(f.graph, "player.set_health", { x: 300, y: 0 }, f.id);
+  const loc = promoteToVariable(add.graph, { node: add.id, pin: "amount" }, "in");
+  assert.ok(!("error" in loc));
+  assert.ok(loc.graph.functions![0].locals?.some((l) => l.id === loc.id));
+  void f;
+});
+
+test("align, space evenly, select linked", () => {
+  const boxes = new Map([
+    ["a", { x: 0, y: 0, w: 100, h: 50 }],
+    ["b", { x: 50, y: 200, w: 200, h: 50 }],
+    ["c", { x: 400, y: 90, w: 100, h: 50 }],
+  ]);
+  assert.deepEqual([...align(boxes, "left").values()].map((p) => p.x), [0, 0, 0]);
+  assert.deepEqual([...align(boxes, "right").values()].map((p) => p.x), [400, 300, 400]);
+  assert.deepEqual([...align(boxes, "top").values()].map((p) => p.y), [0, 0, 0]);
+  const across = distribute(boxes, true);
+  // first and last stay; the middle one sits with equal gaps: (500 - 400) / 2 = 50
+  assert.deepEqual([across.get("a")!.x, across.get("b")!.x, across.get("c")!.x], [0, 150, 400]);
+  assert.equal(distribute(new Map([...boxes].slice(0, 2)), true).size, 0, "needs three");
+  const g = kills();
+  assert.deepEqual(new Set(linked(g, ["give_ak"], "up")), new Set(["give_ak", "is_t", "is_ct", "killed"]));
+  assert.deepEqual(new Set(linked(g, ["is_t"], "down")), new Set(["is_t", "give_ak"]));
+  assert.ok(linked(g, ["give_m4"], "all").includes("give_ak"));
+});
+
+test("drops from My mode: Ctrl Get, Alt Set, a choice, events found, tables and enums", () => {
+  let g = kills();
+  const v = addVariable(g, { name: "Kills", type: "number", scope: "player" });
+  g = v.graph;
+  const none = { ctrl: false, alt: false };
+  assert.deepEqual(dropPlan(g, `var:${v.id}`, { ctrl: true, alt: false }, ""), { kind: "add", make: { type: "var.get", params: { var: v.id } } });
+  assert.equal((dropPlan(g, `var:${v.id}`, { ctrl: false, alt: true }, "") as { make: { type: string } }).make.type, "var.set");
+  assert.equal(dropPlan(g, `var:${v.id}`, none, "").kind, "choose");
+  // an event already on this graph: jump to it
+  const ev = dropPlan(g, "event:killed", none, "");
+  assert.deepEqual(ev, { kind: "jump", node: "killed", message: "Already in this graph" });
+  assert.equal(sameEventHere(g, "other", "event.player_killed", {}), null);
+  // a custom event: Ctrl calls, no key offers Call, Set Timer and its event node
+  const c = addCe2(g, "Open Gate");
+  g = c.graph;
+  assert.equal((dropPlan(g, `cevent:${c.id}`, { ctrl: true, alt: false }, "") as { make: { type: string } }).make.type, "event.call");
+  const ch = dropPlan(g, `cevent:${c.id}`, none, "");
+  assert.ok(ch.kind === "choose" && ch.options.map((o) => o.make.type).join() === "event.call,timer.by_event,event.custom");
+  assert.equal((dropPlan(g, "table:dt1", { ctrl: false, alt: true }, "") as { make: { type: string } }).make.type, "table.for_each");
+  assert.equal((dropPlan(g, "enum:e1", { ctrl: true, alt: false }, "") as { make: { type: string } }).make.type, "enum.value");
+  assert.equal((dropPlan(g, "make:s1", { ctrl: false, alt: true }, "") as { make: { type: string } }).make.type, "struct.break");
+  // a Function into itself: refused
+  const f = addFn2(g);
+  assert.equal(dropPlan(f.graph, `fn:${f.id}`, none, f.id).kind, "error");
+  // quick-add keys name real nodes
+  for (const q of Object.values(QUICK_ADD)) assert.ok(nodeDef(q.type), q.type);
+});
+
+test("version compare: added and changed nodes are marked, removed ones listed", () => {
+  const old = kills();
+  let now = kills();
+  now = { ...now, nodes: [...now.nodes.filter((n) => n.id !== "hello").map((n) => (n.id === "give_m4" ? { ...n, params: { ...n.params, ammo: 10 } } : n.id === "start" ? { ...n, pos: { x: 999, y: 999 } } : n)), { id: "new1", type: "debug.print", pos: { x: 0, y: 0 }, params: {} }] };
+  const c = compareGraphs(now, old);
+  assert.equal(c.marks.new1, "added");
+  assert.equal(c.marks.give_m4, "changed");
+  assert.equal(c.marks.start, undefined, "a move isn't a change");
+  assert.deepEqual(c.gone.map((x) => x.id), ["hello"]);
+});

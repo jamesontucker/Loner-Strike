@@ -24,8 +24,10 @@ import { Palette, type PaletteAt, type PaletteItem } from "./Palette";
 import { collapse, insertSnippet, tabView, type Snippet } from "./graphOps";
 import { addComment, addNode, canConnect, connect, copy, insertReroute, inType, moveItems, outType, paste, remove, toggleBreakpoint } from "./graphOps";
 import { compatible, nodeDef, typeColor, type PinType } from "./registry";
-import { allVariables, pinsOf } from "./pins";
+import { pinsOf } from "./pins";
 import { insertItem, type LibItem } from "./library";
+import { dropPlan, knownMake, type Make } from "./dropOps";
+import { align, distribute, linked, loadBookmarks, promotable, promoteToVariable, QUICK_ADD, saveBookmarks, type AlignHow, type Box } from "./tidyOps";
 
 /** A library item into the mode, and (for a Function or Macro) a call to it at `at`. */
 export function addFromLibrary(g: Graph, it: LibItem, at: { x: number; y: number } | null, home?: string): { graph: Graph; message: string } {
@@ -42,7 +44,7 @@ export function addFromLibrary(g: Graph, it: LibItem, at: { x: number; y: number
 }
 import { pathPairs } from "./debugState";
 import { structureOf } from "./nodeView";
-import { useContextMenu } from "./ContextMenu";
+import { useContextMenu, type MenuItem } from "./ContextMenu";
 import type { Graph } from "./schema";
 
 /** The real ends of a wire (through reroutes), for lighting up the path the flow took. */
@@ -123,7 +125,9 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
   const connecting = useRef(false);
 
   // a variable dropped on the canvas: Get or Set?
-  const [varDrop, setVarDrop] = useState<{ left: number; top: number; flow: { x: number; y: number }; id: string } | null>(null);
+  const [varDrop, setVarDrop] = useState<{ left: number; top: number; flow: { x: number; y: number }; title: string; options: { label: string; make: Make }[] } | null>(null);
+  /** a quick-add key held down (B, S, D, F...), and whether a click used it */
+  const held = useRef<{ key: string; used: boolean } | null>(null);
 
   const center = useCallback(() => {
     const box = wrap.current?.getBoundingClientRect();
@@ -428,6 +432,29 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       select(r.ids);
     }
   }, [rf, home, edit, select]);
+  /** Q: each selected node lines its first wired input up with what feeds it */
+  const straighten = useCallback(() => {
+        const g = useStudio.getState().graph;
+        const ids = useStudio.getState().selected;
+        if (!g || !ids.length) return;
+        const moves = new Map<string, { x: number; y: number }>();
+        const rowOf = (node: string, pin: string, dir: "in" | "out") => {
+          const n = g.nodes.find((x) => x.id === node);
+          if (!n) return 0;
+          const p = pinsOf(g, n);
+          return Math.max(0, (dir === "in" ? p.inputs : p.outputs).findIndex((x) => x.id === pin));
+        };
+        for (const id of ids) {
+          const n = g.nodes.find((x) => x.id === id);
+          const e2 = n && g.edges.find((x) => x.to.node === id && !ids.includes(x.from.node));
+          const src = e2 && g.nodes.find((x) => x.id === e2.from.node);
+          if (!n || !e2 || !src) continue;
+          const y = src.pos.y + (rowOf(src.id, e2.from.pin, "out") - rowOf(id, e2.to.pin, "in")) * 22;
+          moves.set(id, { x: n.pos.x, y });
+        }
+        if (moves.size) edit((g2) => moveItems(g2, moves));
+  }, [edit]);
+
   const cm = useContextMenu();
   const MOD = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl+";
 
@@ -437,6 +464,33 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       if (t.closest("input, textarea, select, .st-palette")) return;
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
+      // bookmarks: Ctrl+Shift+1-9 keeps this view, Ctrl+1-9 goes back to it
+      const digit = /^Digit([1-9])$/.exec(e.code);
+      if (mod && digit && !e.altKey) {
+        e.preventDefault();
+        const i = Number(digit[1]) - 1;
+        const g = useStudio.getState().graph;
+        const uid = g?.mode.uid || g?.mode.id || "";
+        const list = loadBookmarks(uid);
+        if (e.shiftKey) {
+          const vp = rf.getViewport();
+          const t = useStudio.getState().tab;
+          list[i] = { tab: t, x: vp.x, y: vp.y, zoom: vp.zoom, name: list[i]?.name || `Bookmark ${i + 1}` };
+          saveBookmarks(uid, list);
+          toast(`Bookmark ${i + 1} set (${MOD}${i + 1} comes back here).`);
+        } else if (list[i]) {
+          const b = list[i]!;
+          if (b.tab !== useStudio.getState().tab) openTab(b.tab);
+          setTimeout(() => void rf.setViewport({ x: b.x, y: b.y, zoom: b.zoom }, { duration: 250 }), b.tab !== useStudio.getState().tab ? 120 : 0);
+        } else toast(`No bookmark ${i + 1} yet: ${MOD}Shift+${i + 1} keeps the view.`);
+        return;
+      }
+      // quick-add: hold B, S, D, F... and click empty space (F alone still frames, on release)
+      if (!mod && !e.altKey && !e.shiftKey && QUICK_ADD[k]) {
+        if (!e.repeat) held.current = { key: k, used: false };
+        if (k !== "f") return;
+        return;
+      }
       if (mod && k === "z") {
         e.preventDefault();
         if (e.shiftKey) redo();
@@ -488,35 +542,11 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       } else if (mod && k === "d") {
         e.preventDefault();
         duplicateSelected();
-      } else if (k === "f" && !mod) {
-        // frame the selection (or everything)
-        const ids = new Set(useStudio.getState().selected);
-        const nodes = rf.getNodes().filter((n) => ids.has(n.id));
-        void rf.fitView({ nodes: nodes.length ? nodes : undefined, padding: 0.3, maxZoom: 1.5, duration: 250 });
       } else if (e.key === "Home") {
         e.preventDefault();
         void rf.fitView({ padding: 0.2, maxZoom: 1.1, duration: 250 });
       } else if (k === "q" && !mod) {
-        // straighten: each selected node lines its first wired input up with what feeds it
-        const g = useStudio.getState().graph;
-        const ids = useStudio.getState().selected;
-        if (!g || !ids.length) return;
-        const moves = new Map<string, { x: number; y: number }>();
-        const rowOf = (node: string, pin: string, dir: "in" | "out") => {
-          const n = g.nodes.find((x) => x.id === node);
-          if (!n) return 0;
-          const p = pinsOf(g, n);
-          return Math.max(0, (dir === "in" ? p.inputs : p.outputs).findIndex((x) => x.id === pin));
-        };
-        for (const id of ids) {
-          const n = g.nodes.find((x) => x.id === id);
-          const e2 = n && g.edges.find((x) => x.to.node === id && !ids.includes(x.from.node));
-          const src = e2 && g.nodes.find((x) => x.id === e2.from.node);
-          if (!n || !e2 || !src) continue;
-          const y = src.pos.y + (rowOf(src.id, e2.from.pin, "out") - rowOf(id, e2.to.pin, "in")) * 22;
-          moves.set(id, { x: n.pos.x, y });
-        }
-        if (moves.size) edit((g2) => moveItems(g2, moves));
+        straighten();
       } else if (k === "c" && !mod) {
         commentAround();
       } else if (e.key === "F9") {
@@ -533,6 +563,21 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       ref={wrap}
       tabIndex={0}
       onKeyDown={onKey}
+      onKeyUp={(e) => {
+        const k = e.key.toLowerCase();
+        const h = held.current;
+        if (!h || h.key !== k) return;
+        held.current = null;
+        // F tapped (no click while held): frame the selection (or everything)
+        if (k === "f" && !h.used) {
+          const ids = new Set(useStudio.getState().selected);
+          const nodes = rf.getNodes().filter((n) => ids.has(n.id));
+          void rf.fitView({ nodes: nodes.length ? nodes : undefined, padding: 0.3, maxZoom: 1.5, duration: 250 });
+        }
+      }}
+      onBlur={() => {
+        held.current = null;
+      }}
       onMouseMove={(e) => {
         mouse.current = { x: e.clientX, y: e.clientY };
       }}
@@ -559,23 +604,55 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
           }
           return;
         }
-        if (part) {
-          const [k, pid] = part.split(":");
-          const g = useStudio.getState().graph;
-          const f = g?.functions?.find((x) => x.id === pid);
-          const made: [string, Record<string, string>] | null =
-            k === "fn" && f ? [f.pure ? "fn.call_pure" : "fn.call", { func: pid }] : k === "macro" ? ["macro.use", { macro: pid }] : k === "make" ? ["struct.make", { struct: pid }] : k === "break" ? ["struct.break", { struct: pid }] : k === "marker" ? ["marker.find", { marker: pid }] : null;
-          if (!made || pid === tab) return toast("A Function or Macro can't call itself.", true);
-          edit((g2) => addNode(g2, made[0], { x: flow.x - 20, y: flow.y - 20 }, home, made[1]).graph);
-          return;
-        }
         if (sn) {
           const found = snippets.find((x) => x.id === sn);
           if (found) dropSnippet(found, flow);
           return;
         }
-        const box = wrap.current?.getBoundingClientRect();
-        if (box) setVarDrop({ left: e.clientX - box.left, top: e.clientY - box.top, flow, id: v });
+        const mods = { ctrl: e.ctrlKey || e.metaKey, alt: e.altKey };
+        const g = useStudio.getState().graph!;
+        // a variable onto an input pin: a Get wired in; onto a flow wire: a Set in it
+        if (v) {
+          const t = e.target as HTMLElement;
+          const handle = t.closest?.(".react-flow__handle.target") as HTMLElement | null;
+          const nodeId = handle?.getAttribute("data-nodeid");
+          const pinId = handle?.getAttribute("data-handleid");
+          if (nodeId && pinId) {
+            const r = addNode(g, "var.get", { x: flow.x - 220, y: flow.y - 20 }, home, { var: v });
+            const c = connect(r.graph, { node: r.id, pin: "out" }, { node: nodeId, pin: pinId });
+            if ("error" in c) return toast(c.error, true);
+            edit(() => c.graph);
+            return;
+          }
+          const edgeEl = t.closest?.(".react-flow__edge") as HTMLElement | null;
+          const edge = edgeEl && g.edges.find((x) => edgeEl.getAttribute("data-id") === x.id || edgeEl.getAttribute("data-testid") === `rf__edge-${x.id}`);
+          if (edge && outType(g, edge.from) === "exec") {
+            const r = addNode(remove(g, [edge.id]), "var.set", { x: flow.x - 20, y: flow.y - 20 }, home, { var: v });
+            const a = connect(r.graph, edge.from, { node: r.id, pin: "exec" });
+            const b = "error" in a ? a : connect(a.graph, { node: r.id, pin: "then" }, edge.to);
+            if ("error" in b) return toast(b.error, true);
+            edit(() => b.graph);
+            return;
+          }
+        }
+        const plan = dropPlan(g, v ? `var:${v}` : part, mods, tab);
+        if (plan.kind === "error") return toast(plan.message, true);
+        if (plan.kind === "jump") {
+          useStudio.getState().select([plan.node]);
+          const n = g.nodes.find((x) => x.id === plan.node);
+          if (n && (n.graph ?? "") !== tab) openTab(n.graph ?? "");
+          if (n) setTimeout(() => void rf.setCenter(n.pos.x + 110, n.pos.y + 50, { zoom: Math.max(rf.getZoom(), 1), duration: 300 }), 60);
+          return toast(plan.message);
+        }
+        if (plan.kind === "add") {
+          if (!knownMake(plan.make)) return toast("That can't go on the canvas.", true);
+          edit((g2) => addNode(g2, plan.make.type, { x: flow.x - 20, y: flow.y - 20 }, home, plan.make.params).graph);
+          return;
+        }
+        {
+          const box = wrap.current?.getBoundingClientRect();
+          if (box) setVarDrop({ left: e.clientX - box.left, top: e.clientY - box.top, flow, title: plan.title, options: plan.options });
+        }
       }}
     >
       <ReactFlow
@@ -627,7 +704,61 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
           const n = st.graph?.nodes.find((x) => x.id === node.id);
           const target = n && (n.type === "fn.call" || n.type === "fn.call_pure" ? n.params.func : n.type === "macro.use" ? n.params.macro : n.type === "timeline.play" ? n.params.timeline : null);
           const many = Math.max(1, useStudio.getState().selected.length);
+          // a pin right-clicked: Promote to Variable (or to Local in a Function)
+          const pinEl = (e.target as HTMLElement).closest?.(".st-pin");
+          const handle = pinEl?.querySelector(".react-flow__handle");
+          const pinId = handle?.getAttribute("data-handleid");
+          if (n && pinId && st.graph) {
+            const dir = handle!.classList.contains("target") ? "in" : "out";
+            const ref = { node: n.id, pin: pinId };
+            const inFn = !!n.graph && (st.graph.functions ?? []).some((f) => f.id === n.graph);
+            const ok = promotable(st.graph, ref, dir);
+            cm.open(e, "Pin", [
+              {
+                label: inFn ? "Promote to Local Variable" : "Promote to Variable",
+                disabled: !ok,
+                help: ok ? (dir === "in" ? "A new variable, read into this pin" : "A new variable, set from this pin") : "Flow pins and pins of any type can't be variables",
+                run: () => {
+                  const r = promoteToVariable(useStudio.getState().graph!, ref, dir);
+                  if ("error" in r) return toast(r.error, true);
+                  edit(() => r.graph);
+                  useStudio.getState().selectVar(r.id);
+                  toast(r.message);
+                },
+              },
+            ]);
+            return;
+          }
+          const sizeBox = (id: string): Box | null => {
+            const rn = rf.getNode(id);
+            const gn = st.graph?.nodes.find((x) => x.id === id);
+            return rn && gn ? { x: gn.pos.x, y: gn.pos.y, w: rn.measured?.width ?? 230, h: rn.measured?.height ?? 110 } : null;
+          };
+          const boxes = () => new Map(useStudio.getState().selected.map((id) => [id, sizeBox(id)] as const).filter((x): x is [string, Box] => !!x[1]));
+          const lineUp = (how: AlignHow) => () => edit((g) => moveItems(g, align(boxes(), how)));
+          const spread = (across: boolean) => () => edit((g) => moveItems(g, distribute(boxes(), across)));
+          const pickLinked = (which: "up" | "down" | "all") => () => select(linked(useStudio.getState().graph!, useStudio.getState().selected, which));
+          const tidy: (MenuItem | "-")[] =
+            many > 1
+              ? [
+                  { label: "Align left edges", run: lineUp("left") },
+                  { label: "Align right edges", run: lineUp("right") },
+                  { label: "Align top edges", run: lineUp("top") },
+                  { label: "Align bottom edges", run: lineUp("bottom") },
+                  { label: "Align centers across", run: lineUp("center") },
+                  { label: "Align middles down", run: lineUp("middle") },
+                  { label: "Space evenly across", disabled: many < 3, help: many < 3 ? "Pick 3 or more nodes" : undefined, run: spread(true) },
+                  { label: "Space evenly down", disabled: many < 3, help: many < 3 ? "Pick 3 or more nodes" : undefined, run: spread(false) },
+                  { label: "Straighten wires", keys: "Q", run: straighten },
+                  "-",
+                ]
+              : [];
           cm.open(e, nodeDef(n?.type ?? "")?.title ?? "Node", [
+            ...tidy,
+            { label: "Select what feeds it", help: "Everything wired upstream", run: pickLinked("up") },
+            { label: "Select what it feeds", help: "Everything wired downstream", run: pickLinked("down") },
+            { label: "Select everything linked", run: pickLinked("all") },
+            "-",
             ...(typeof target === "string" && target ? [{ label: "Open its graph", run: () => openTab(target) }, "-" as const] : []),
             { label: many > 1 ? `Duplicate ${many} nodes` : "Duplicate", keys: `${MOD}D`, run: duplicateSelected },
             { label: "Comment around", keys: "C", run: commentAround },
@@ -644,7 +775,17 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
             { label: "Break the wire", keys: "Alt+click", danger: true, run: () => edit((g) => remove(g, [edge.id])) },
           ]);
         }}
-        onPaneClick={() => Date.now() - paletteAt.current > 400 && setPalette(null)}
+        onPaneClick={(e) => {
+          const h = held.current;
+          if (h && QUICK_ADD[h.key]) {
+            h.used = true;
+            const q = QUICK_ADD[h.key];
+            const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+            edit((g) => addNode(g, q.type, { x: p.x - 20, y: p.y - 20 }, useStudio.getState().tab || undefined, q.params).graph);
+            return;
+          }
+          if (Date.now() - paletteAt.current > 400) setPalette(null);
+        }}
         onNodeDoubleClick={(_, node) => {
           const n = useStudio.getState().graph?.nodes.find((x) => x.id === node.id);
           const target = n && (n.type === "fn.call" || n.type === "fn.call_pure" ? n.params.func : n.type === "macro.use" ? n.params.macro : n.type === "timeline.play" ? n.params.timeline : null);
@@ -677,19 +818,20 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       {cm.menu}
       {palette && <Palette at={palette} graph={graph} tab={tab} onPick={pick} onComment={commentAround} onCollapse={selected.length ? collapseSelected : undefined} onClose={() => setPalette(null)} />}
       {varDrop && (
-        <div className="st-vardrop" style={{ left: varDrop.left, top: varDrop.top }} role="menu">
-          {(["get", "set"] as const).map((k) => (
+        <div className="st-vardrop" style={{ left: varDrop.left, top: varDrop.top }} role="menu" aria-label={varDrop.title} data-testid="studio-drop-choice">
+          {varDrop.options.map((o) => (
             <button
-              key={k}
+              key={o.label}
               type="button"
+              role="menuitem"
               className="st-palette-item"
               onClick={() => {
                 const d = varDrop;
                 setVarDrop(null);
-                edit((g) => addNode(g, k === "get" ? "var.get" : "var.set", { x: d.flow.x - 20, y: d.flow.y - 20 }, home, { var: d.id }).graph);
+                edit((g) => addNode(g, o.make.type, { x: d.flow.x - 20, y: d.flow.y - 20 }, home, o.make.params).graph);
               }}
             >
-              <span className="st-palette-title">{k === "get" ? "Get" : "Set"} {allVariables(graph).find((x) => x.id === varDrop.id)?.name ?? ""}</span>
+              <span className="st-palette-title">{o.label}</span>
             </button>
           ))}
           <button type="button" className="st-palette-item" onClick={() => setVarDrop(null)}>
