@@ -911,3 +911,4 @@ Cvars are the mode's switches (a Studio mode can set them with its cvar node).
 - **Knocked down in squads:** W1's `ls_down_*` (your nodes) plus `ls_squad_*`: Battle Royale turns it on with team 0
   and returns PLUGIN_HANDLED from `ls_on_down` when no squad mate is up (the squad is out).
 ## ==== end W3 ====
+- **W2 (2026-11-14):** `ls_event` is in `lonerstrike.fgd` with your keys as written (tools 9c1f5097).
