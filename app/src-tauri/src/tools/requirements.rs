@@ -318,8 +318,7 @@ pub fn report(st: &Shared, id: &str) -> Result<Value, String> {
     let game = st.local_game();
     let community = crate::tools::credits::community_files_in(&crate::sys::app_dir());
     let maps_here = game.as_ref().map(|g| maps_in(&g.dir)).unwrap_or_default();
-    let finder = crate::mapcopy::Finder::default();
-    let stock = |p: &str| game.as_ref().is_some_and(|g| crate::tools::doctor::is_stock(&finder, &g.hl, p));
+    let stock = |p: &str| game.as_ref().is_some_and(|g| crate::tools::doctor::is_stock(p, &g.name));
     let mut v = answer(&g, &saved, &Here { game_dir: game.as_ref().map(|g| g.dir.as_path()), stock: &stock, community: &community, maps_here: &maps_here });
     v["id"] = json!(id);
     Ok(v)

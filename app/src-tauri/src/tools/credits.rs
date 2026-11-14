@@ -395,7 +395,7 @@ fn credits_for_files_with(ctx: &Ctx, hl: &Path, game: &str, files: &[String]) ->
         .iter()
         .map(|rel| {
             let p = path.iter().find_map(|d| f.find(d, rel));
-            resolve(rel, &p.as_deref().map(sha256_file).unwrap_or_default(), super::doctor::is_stock(&f, hl, rel), ctx)
+            resolve(rel, &p.as_deref().map(sha256_file).unwrap_or_default(), super::doctor::is_stock(rel, game), ctx)
         })
         .collect();
     for_publish(&assets).0
@@ -597,7 +597,7 @@ pub fn assets_for(m: &super::mapinfo::MapFile, files: &[String], ctx: &Ctx) -> V
         .map(|rel| {
             let p = path.iter().find_map(|d| f.find(d, rel));
             let sha = p.as_deref().map(sha256_file).unwrap_or_default();
-            resolve(rel, &sha, super::doctor::is_stock(&f, &m.hl, rel), ctx)
+            resolve(rel, &sha, super::doctor::is_stock(rel, &m.game), ctx)
         })
         .collect()
 }
@@ -664,7 +664,7 @@ async fn api_asset(State(st): State<Shared>, axum::extract::Query(q): axum::extr
         let f = crate::mapcopy::Finder::default();
         let p = f.find(&g.hl.join(folder), &rel).ok_or("That file isn't there.")?;
         let ctx = Ctx::load(&crate::sys::app_dir());
-        let a = resolve(&rel, &sha256_file(&p), super::doctor::is_stock(&f, &g.hl, &rel), &ctx);
+        let a = resolve(&rel, &sha256_file(&p), super::doctor::is_stock(&rel, &g.name), &ctx);
         Ok(asset_answer(&a))
     })
     .await

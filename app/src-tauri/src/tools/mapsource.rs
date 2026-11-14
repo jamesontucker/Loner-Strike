@@ -125,9 +125,10 @@ pub fn build(project: &Path, hl: &Path, czero: bool, name: &str) -> Result<Sourc
     let mut dirs: Vec<PathBuf> = project.parent().map(|d| vec![d.to_path_buf()]).unwrap_or_default();
     dirs.extend(wad::search_dirs(hl, czero));
     let names = doc.world.wad_names();
-    let stock_names: Vec<String> = crate::mapcopy::stock_wads().iter().map(|s| s.to_string()).collect();
+    let game = if czero { "czero" } else { "cstrike" };
+    let stock_names = super::doctor::stock_wad_names(game);
     let stock = wad::WadSet::open(&finder, &dirs, &stock_names);
-    let custom_names: Vec<String> = names.iter().filter(|n| !crate::mapcopy::stock_wad(n)).cloned().collect();
+    let custom_names: Vec<String> = names.iter().filter(|n| !super::doctor::is_stock(n, game)).cloned().collect();
     let custom = wad::WadSet::open(&finder, &dirs, &custom_names);
     let mut lumps: Vec<wadwrite::Lump> = Vec::new();
     let (mut textures, mut missing) = (Vec::new(), Vec::new());
@@ -150,7 +151,7 @@ pub fn build(project: &Path, hl: &Path, czero: bool, name: &str) -> Result<Sourc
     }
     // the project and the .map name the game's WADs it uses, plus the one with its own textures
     let wad_name = format!("{name}_custom.wad");
-    let mut wads: Vec<String> = names.iter().filter(|n| crate::mapcopy::stock_wad(n)).cloned().collect();
+    let mut wads: Vec<String> = names.iter().filter(|n| super::doctor::is_stock(n, game)).cloned().collect();
     if !lumps.is_empty() {
         wads.push(wad_name.clone());
     }
@@ -338,6 +339,37 @@ mod tests {
         // not a project: refused
         assert!(build(&root.join("x.map"), &hl, false, "x").is_err());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// QA4-T2: Condition Zero's own texture files are the game's on a CZ map (left out, named as
+    /// they are) but a mapper's on a CS 1.6 one (packed into the map's own WAD), whether or not
+    /// CZ is installed on the author's computer
+    #[test]
+    fn czero_texture_files_are_stock_on_czero_maps_only() {
+        use crate::goldsrc::bsp::fixture;
+        for cz_installed in [true, false] {
+            let root = tmp(if cz_installed { "czwad" } else { "czwad-nocz" });
+            let (hl, project) = super::fixture_project(&root);
+            // the CZ texture file next to the project (as an author without CZ would have it) or in czero/
+            let dir = if cz_installed { hl.join("czero") } else { project.parent().unwrap().to_path_buf() };
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("czde_aztec.wad"), wad::build_wad(&[("brick", fixture::miptex("brick", false))])).unwrap();
+            let (mut doc, _) = super::super::editor::load_file(&project).unwrap();
+            doc.world.wads = vec!["cstrike.wad".into(), "czde_aztec.wad".into()];
+            std::fs::write(&project, doc.to_json()).unwrap();
+            if cz_installed {
+                let s = build(&project, &hl, true, "de_qa").unwrap();
+                assert!(s.textures.is_empty(), "CZ's own texture on a CZ map: {:?}", s.textures);
+                let doc = MapDocument::from_json(std::str::from_utf8(&s.files[0].1).unwrap()).unwrap();
+                assert_eq!(doc.world.wads, ["cstrike.wad", "czde_aztec.wad"]);
+                assert!(!s.files.iter().any(|(n, _)| n.ends_with("_custom.wad")));
+            }
+            let s = build(&project, &hl, false, "de_qa").unwrap();
+            assert_eq!(s.textures, ["brick"], "a CZ texture on a CS 1.6 map goes in the map's own WAD");
+            let doc = MapDocument::from_json(std::str::from_utf8(&s.files[0].1).unwrap()).unwrap();
+            assert_eq!(doc.world.wads, ["cstrike.wad", "de_qa_custom.wad"]);
+            let _ = std::fs::remove_dir_all(&root);
+        }
     }
 
     #[test]

@@ -1244,7 +1244,7 @@ async fn api_item(State(st): State<Shared>, UrlPath((model, id)): UrlPath<(Strin
                 "have": it.as_ref().and_then(|i| i.map.as_ref()).is_some_and(|m| have.contains(&m.name.to_ascii_lowercase())),
                 "installed": installed_json(model, id, &idx, &page),
                 // a mode's "Plays on" and "Needs", each with whether you have it and where to get it
-                "needs": it.as_ref().and_then(|i| i.mode.as_ref()).and_then(|m| m.requirements.as_ref()).map(|r| needs_json(r, &idx, &have, &|p: &str| game.as_deref().is_some_and(|g| g.dir.join(p).is_file() || crate::tools::doctor::is_stock(&crate::mapcopy::Finder::default(), &g.hl, p)), game.as_deref().map(|g| super::requirements::brain_here(&g.dir)).as_ref())),
+                "needs": it.as_ref().and_then(|i| i.mode.as_ref()).and_then(|m| m.requirements.as_ref()).map(|r| needs_json(r, &idx, &have, &|p: &str| game.as_deref().is_some_and(|g| g.dir.join(p).is_file() || crate::tools::doctor::is_stock(p, &g.name)), game.as_deref().map(|g| super::requirements::brain_here(&g.dir)).as_ref())),
             }))
         })
         .await,
@@ -3325,7 +3325,7 @@ mod tests {
         let mut files = r.files.clone();
         files.sort();
         assert!(files.contains(&"test.wad".to_string()) && files.contains(&"overviews/de_lonely.bmp".to_string()), "{files:?}");
-        assert!(files.iter().any(|f| f.starts_with("gfx/env/desert")));
+        assert!(!files.iter().any(|f| f.starts_with("gfx/env/desert")), "Half-Life's desert sky is on Valve's list: every player has it");
 
         let out = root.join("packages");
         let req = PublishReq { title: "De Lonely".into(), summary: "Quiet".into(), author: "jam".into(), modes: vec!["Classic".into(), "bad mode!".into()], screenshots: vec![Shot { name: "a".into(), data: png() }], ..Default::default() };

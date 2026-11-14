@@ -78,8 +78,8 @@ pub fn kind_of(rel: &str) -> &'static str {
 /// Where one file the map needs is.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Found {
-    /// where the game looks (the folder's name); `stock`: only in valve/ or a texture file
-    /// every game has, so it doesn't go in the .res
+    /// where the game looks (the folder's name); `stock`: on Valve's own lists for this game
+    /// (is_stock), so every player has it and it doesn't go in the .res
     Here { folder: String, stock: bool },
     /// not where the game looks, but in another game folder here (that folder's name)
     Elsewhere { folder: String, path: PathBuf },
@@ -92,29 +92,44 @@ pub struct FileCheck {
     pub found: Found,
 }
 
-/// A file every player has: a texture file of Half-Life's or CS 1.6's own, or a sky, model,
-/// sprite or sound Half-Life has, or both CS 1.6 and Condition Zero have (Condition Zero ships its own copy of
-/// what the two share; a downloaded map's files are in one of them at most).
-pub fn is_stock(f: &Finder, hl: &Path, rel: &str) -> bool {
-    if rel.to_lowercase().ends_with(".wad") {
-        return mapcopy::stock_wad(rel);
+/// A file every player of `game` has: on Valve's own lists only (Steam's depot manifests for
+/// Half-Life, CS 1.6 and Condition Zero: stock_valve.txt, stock_cstrike.txt, stock_czero.txt), never
+/// "it's in the other game's folder too" (mods install into both, and a CZ prop isn't a CS 1.6
+/// player's: QA4-T2). CS 1.6 plays on Half-Life's and its own; Condition Zero also falls back to
+/// CS 1.6's (its liblist's fallback_dir), so CS 1.6's count there too. Texture files: Half-Life's
+/// and CS 1.6's, and for Condition Zero its own czcs_/czde_ ones as well.
+pub fn is_stock(rel: &str, game: &str) -> bool {
+    let key = rel.trim_start_matches(['/', '\\']).replace('\\', "/").to_lowercase();
+    let czero = game.eq_ignore_ascii_case("czero");
+    if key.ends_with(".wad") {
+        return mapcopy::stock_wad(&key) || (czero && !key.contains('/') && on_list(STOCK_CZERO, &key));
     }
-    // P5 (QA4-A): CS 1.6's own files by name (without Condition Zero installed, nothing in
-    // cstrike was in czero too, so every stock model looked unknown); a file someone replaced
-    // keeps the stock name, which is still the game's own as far as sharing goes
-    let in_cstrike = f.find(&hl.join("cstrike"), rel).is_some();
-    f.find(&hl.join("valve"), rel).is_some() || (in_cstrike && (stock_cstrike(rel) || f.find(&hl.join("czero"), rel).is_some()))
+    on_list(STOCK_VALVE, &key) || on_list(STOCK_CSTRIKE, &key) || (czero && on_list(STOCK_CZERO, &key))
 }
 
-/// CS 1.6's own models, sprites, sounds and gfx, by path: the files Valve's dedicated server
-/// (app 90) ships in cstrike/, listed once (stock_cstrike.txt, lower case).
-pub fn stock_cstrike(rel: &str) -> bool {
+const STOCK_VALVE: usize = 0;
+const STOCK_CSTRIKE: usize = 1;
+const STOCK_CZERO: usize = 2;
+
+/// Whether a lower-case game path is on one of Valve's lists (read once).
+fn on_list(which: usize, key: &str) -> bool {
     use std::collections::HashSet;
     use std::sync::OnceLock;
-    static LIST: OnceLock<HashSet<&'static str>> = OnceLock::new();
-    let list = LIST.get_or_init(|| include_str!("stock_cstrike.txt").lines().map(str::trim).filter(|l| !l.is_empty()).collect());
-    let key = rel.trim_start_matches(['/', '\\']).replace('\\', "/").to_lowercase();
-    list.contains(key.as_str())
+    static LISTS: OnceLock<[HashSet<&'static str>; 3]> = OnceLock::new();
+    let read = |t: &'static str| t.lines().map(str::trim).filter(|l| !l.is_empty()).collect::<HashSet<_>>();
+    let lists = LISTS.get_or_init(|| [read(include_str!("stock_valve.txt")), read(include_str!("stock_cstrike.txt")), read(include_str!("stock_czero.txt"))]);
+    lists[which].contains(key)
+}
+
+/// The game's own texture files by name (Half-Life's and CS 1.6's; Condition Zero's too for it).
+pub fn stock_wad_names(game: &str) -> Vec<String> {
+    use std::sync::OnceLock;
+    static CZ: OnceLock<Vec<String>> = OnceLock::new();
+    let mut v: Vec<String> = mapcopy::stock_wads().iter().map(|s| s.to_string()).collect();
+    if game.eq_ignore_ascii_case("czero") {
+        v.extend(CZ.get_or_init(|| include_str!("stock_czero.txt").lines().map(str::trim).filter(|l| l.ends_with(".wad") && !l.contains('/')).map(String::from).collect()).iter().cloned());
+    }
+    v
 }
 
 /// One of the games' own maps (CS 1.6's classics, Condition Zero's _cz maps): every player
@@ -124,11 +139,16 @@ pub fn stock_map(name: &str, game: &str) -> bool {
     crate::maps::STOCK_CS.contains(&l.as_str()) || (game == "czero" && l.ends_with("_cz"))
 }
 
+/// The game a search path is for (its first folder: "czero" or "cstrike").
+fn game_of(path: &[PathBuf]) -> String {
+    path.first().map(|d| folder_name(d)).filter(|n| n == "czero").unwrap_or_else(|| "cstrike".into())
+}
+
 pub fn find_file(f: &Finder, hl: &Path, path: &[PathBuf], rel: &str) -> Found {
     for d in path {
         if f.find(d, rel).is_some() {
             let folder = folder_name(d);
-            return Found::Here { stock: folder == "valve" || is_stock(f, hl, rel), folder };
+            return Found::Here { stock: is_stock(rel, &game_of(path)), folder };
         }
     }
     for name in OTHER_FOLDERS {
@@ -545,23 +565,58 @@ mod tests {
     use super::*;
     use crate::goldsrc::bsp::fixture;
 
-    /// P5 (QA4-A): CS 1.6's own files are stock without Condition Zero installed; a model
-    /// someone added isn't, and neither is a stock name in a downloads folder only
+    /// P5 (QA4-A, QA4-T2): with no Condition Zero installed, CS 1.6's and Half-Life's own files
+    /// are stock (on Valve's lists, whatever the case or slashes); an added model isn't
     #[test]
     fn cs16_stock_without_czero() {
         let root = std::env::temp_dir().join(format!("ls-doctor-stock-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let hl = root.join("Half-Life");
-        for rel in ["cstrike/models/v_ak47.mdl", "cstrike/models/player/gign/gign.mdl", "cstrike/sound/weapons/ak47-1.wav", "cstrike/models/zombie_custom.mdl", "cstrike_downloads/models/w_c4.mdl"] {
+        for rel in ["cstrike/models/v_ak47.mdl", "cstrike/models/player/gign/gign.mdl", "cstrike/sound/weapons/ak47-1.wav", "cstrike/models/zombie_custom.mdl", "cstrike/models/hostage.mdl", "valve/gfx/env/desertup.tga"] {
             put(hl.join(rel), b"x");
         }
         let f = Finder::default();
-        assert!(stock_cstrike("models/V_AK47.mdl") && stock_cstrike("\\models\\v_ak47.mdl"));
-        assert!(is_stock(&f, &hl, "models/v_ak47.mdl"));
-        assert!(is_stock(&f, &hl, "models/player/gign/gign.mdl"));
-        assert!(is_stock(&f, &hl, "sound/weapons/ak47-1.wav"));
-        assert!(!is_stock(&f, &hl, "models/zombie_custom.mdl"), "an added model");
-        assert!(!is_stock(&f, &hl, "models/w_c4.mdl"), "not in cstrike itself");
+        let path = game_path(&hl, "cstrike");
+        assert!(is_stock("models/V_AK47.mdl", "cstrike") && is_stock("\\models\\v_ak47.mdl", "cstrike"));
+        for rel in ["models/v_ak47.mdl", "models/player/gign/gign.mdl", "sound/weapons/ak47-1.wav", "models/hostage.mdl", "gfx/env/desertup.tga"] {
+            assert!(matches!(find_file(&f, &hl, &path, rel), Found::Here { stock: true, .. }), "{rel}");
+        }
+        assert!(matches!(find_file(&f, &hl, &path, "models/zombie_custom.mdl"), Found::Here { stock: false, .. }), "an added model");
+        assert!(is_stock("halflife.wad", "cstrike") && is_stock("cs_dust.wad", "cstrike"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// QA4-T2: with Condition Zero installed next to CS 1.6, stock means on Valve's lists, never
+    /// "it's in the other game too": a CZ prop on a CS 1.6 map isn't stock, nor is a mod's file
+    /// copied into both games; CZ's own files and texture files are stock on a CZ map only
+    #[test]
+    fn stock_with_czero_installed() {
+        let root = std::env::temp_dir().join(format!("ls-doctor-stockcz-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let hl = root.join("Half-Life");
+        for rel in ["cstrike/models/v_ak47.mdl", "cstrike/models/hostage.mdl", "czero/models/gibs_crate.mdl", "czero/czde_aztec.wad", "cstrike/models/mod_thing.mdl", "czero/models/mod_thing.mdl", "valve/halflife.wad"] {
+            put(hl.join(rel), b"x");
+        }
+        let f = Finder::default();
+        let cs = game_path(&hl, "cstrike");
+        let cz = game_path(&hl, "czero");
+        // a CZ prop: stock on a CZ map, not on a CS 1.6 one (and not where CS 1.6 looks)
+        assert!(is_stock("models/gibs_crate.mdl", "czero") && !is_stock("models/gibs_crate.mdl", "cstrike"));
+        assert!(matches!(find_file(&f, &hl, &cz, "models/gibs_crate.mdl"), Found::Here { stock: true, .. }));
+        assert!(matches!(find_file(&f, &hl, &cs, "models/gibs_crate.mdl"), Found::Elsewhere { .. }));
+        // a mod's file in both games: in neither game's own list
+        for path in [&cs, &cz] {
+            assert!(matches!(find_file(&f, &hl, path, "models/mod_thing.mdl"), Found::Here { stock: false, .. }));
+        }
+        // CS 1.6's files are a CZ player's too (CZ falls back to cstrike)
+        assert!(matches!(find_file(&f, &hl, &cz, "models/hostage.mdl"), Found::Here { stock: true, .. }));
+        assert!(is_stock("models/v_ak47.mdl", "czero"));
+        // CZ's own texture files: stock on a CZ map, custom on a CS 1.6 one
+        assert!(is_stock("czde_aztec.wad", "czero") && is_stock("CZDE_AZTEC.WAD", "czero"));
+        assert!(!is_stock("czde_aztec.wad", "cstrike"));
+        assert!(stock_wad_names("czero").iter().any(|w| w == "czde_aztec.wad"));
+        assert!(!stock_wad_names("cstrike").iter().any(|w| w == "czde_aztec.wad"));
+        assert!(is_stock("halflife.wad", "czero") && !is_stock("my_custom.wad", "czero"));
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -659,13 +714,15 @@ mod tests {
         let ents = read_map_parts(&fx.m.bsp).unwrap().0;
         let files = file_checks(&f, &fx.m.hl, "cstrike", "de_doc", &ents);
         let wanted = res_wanted(&files);
-        // valve's files and cstrike.wad (every game has them) and missing ones are left out
-        assert!(!wanted.iter().any(|w| w == "test.wad" || w == "cstrike.wad" || w.contains("wind_x") || w.contains("lost") || w.contains("glow_x")), "{wanted:?}");
-        assert_eq!(wanted[..6].iter().filter(|w| w.starts_with("gfx/env/mysky")).count(), 6, "{wanted:?}");
-        assert_eq!(wanted.last().unwrap(), "models/props/barrel.mdl");
+        // cstrike.wad (every game has it) and missing ones are left out; files someone put in
+        // valve/ aren't Valve's (not on its list: QA4-T2), so they're listed
+        assert!(!wanted.iter().any(|w| w == "cstrike.wad" || w.contains("lost") || w.contains("glow_x")), "{wanted:?}");
+        assert!(wanted.iter().any(|w| w == "test.wad") && wanted.iter().any(|w| w.contains("wind_x")), "{wanted:?}");
+        assert_eq!(wanted.iter().filter(|w| w.starts_with("gfx/env/mysky")).count(), 6, "{wanted:?}");
+        assert_eq!(wanted.last().unwrap(), "sound/ambience/wind_x.wav", "sorted by kind: sounds last");
 
         let out = write_res(&fx.m).unwrap();
-        assert_eq!(out["listed"], 7);
+        assert_eq!(out["listed"], 9);
         let res = fx.m.hl.join("cstrike/maps/de_doc.res");
         let text = std::fs::read_to_string(&res).unwrap();
         assert_eq!(mapcopy::res_files(&text), wanted);
@@ -678,7 +735,7 @@ mod tests {
         std::fs::write(&res, "// mine\noverviews/extra.txt\nmodels/nothere.mdl\n").unwrap();
         let v = diagnose(&fx.m);
         assert_eq!(v["res"]["broken"], json!(["models/nothere.mdl"]));
-        assert_eq!(v["res"]["missing"].as_array().unwrap().len(), 7);
+        assert_eq!(v["res"]["missing"].as_array().unwrap().len(), 9);
         let out = write_res(&fx.m).unwrap();
         assert!(out["message"].as_str().unwrap().contains("Left out 1 line"), "{out}");
         let text = std::fs::read_to_string(&res).unwrap();

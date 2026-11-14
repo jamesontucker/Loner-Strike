@@ -140,7 +140,6 @@ fn downloads(app: &Path, game_dir: &Path) -> Downloads {
 }
 
 pub fn list(hl: &Path, game: &str, app: &Path, project: Option<&Path>, kind: Kind) -> Value {
-    let f = Finder::default();
     let dl = downloads(app, &hl.join(game));
     // (T: files a Loner-Strike Community creation installed, listed under Community)
     let community = crate::tools::credits::community_files_in(app);
@@ -166,7 +165,7 @@ pub fn list(hl: &Path, game: &str, app: &Path, project: Option<&Path>, kind: Kin
                 let e = pages.entry(key.clone()).or_insert((name.clone(), url.clone(), 0));
                 e.2 += 1;
                 ("downloaded", Some(json!({"key": key, "name": name, "url": url, "author": dl.pages.get(key).and_then(|r| r["author"].as_str()).unwrap_or("")})))
-            } else if doctor::is_stock(&f, hl, &rel) || !folder.ends_with("_downloads") {
+            } else if doctor::is_stock(&rel, game) || !folder.ends_with("_downloads") {
                 // the game's own folders (Steam's files; there's no list of them, so files copied
                 // in by hand count too), not a download folder without a record
                 ("game", None)

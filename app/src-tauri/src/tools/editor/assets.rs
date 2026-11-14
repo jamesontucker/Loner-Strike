@@ -792,8 +792,8 @@ mod tests {
     fn named_found_missing_and_copied() {
         let root = tmp("a");
         let hl = root.join("Half-Life");
-        // the game: one model and the sky in cstrike, a sound only in valve
-        for (rel, what) in [("cstrike/models/barney.mdl", MDL), ("valve/sound/ambience/wind1.wav", WAV)] {
+        // the game: a model someone added to cstrike (not on Valve's lists), a sound and the sky in valve
+        for (rel, what) in [("cstrike/models/barney_mine.mdl", MDL), ("valve/sound/ambience/wind1.wav", WAV)] {
             std::fs::create_dir_all(hl.join(rel).parent().unwrap()).unwrap();
             std::fs::write(hl.join(rel), what).unwrap();
         }
@@ -809,7 +809,7 @@ mod tests {
         let d = doc_with(&[
             ("env_sprite", &[("model", "sprites/de_kobbl/blin.spr")]),
             ("env_glow", &[("model", "sprites\\de_kobbl\\BLIN.spr")]),
-            ("cycler", &[("model", "models/barney.mdl")]),
+            ("cycler", &[("model", "models/barney_mine.mdl")]),
             ("ambient_generic", &[("message", "ambience/wind1.wav")]),
             ("func_door", &[("noise1", "doors/custom_door.wav"), ("model", "*3")]),
             ("trigger_once", &[("message", "!HG_ALERT")]),
@@ -824,7 +824,7 @@ mod tests {
         let a = locate(named, &places);
         let st = |rel: &str| a.iter().find(|x| x.named.rel.eq_ignore_ascii_case(rel)).unwrap().status.clone();
         assert!(matches!(st("sprites/de_kobbl/blin.spr"), Status::Beside(_)));
-        assert!(matches!(st("models/barney.mdl"), Status::Game { stock: false }));
+        assert!(matches!(st("models/barney_mine.mdl"), Status::Game { stock: false }));
         assert!(matches!(st("sound/ambience/wind1.wav"), Status::Game { stock: true }));
         assert_eq!(st("sound/doors/custom_door.wav"), Status::Missing);
         let iss = issues(&a, true);
@@ -846,7 +846,7 @@ mod tests {
         std::fs::create_dir_all(&proj).unwrap();
         let mut done = copy_to_project(&again, &places, &proj).unwrap();
         done.sort();
-        assert_eq!(done, vec!["models/barney.mdl".to_string(), "sprites/de_kobbl/blin.spr".to_string()]);
+        assert_eq!(done, vec!["models/barney_mine.mdl".to_string(), "sprites/de_kobbl/blin.spr".to_string()]);
         let _ = std::fs::remove_dir_all(&root);
     }
 
