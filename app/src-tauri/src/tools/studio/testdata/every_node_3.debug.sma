@@ -3316,7 +3316,10 @@ public lsg_ev_use(ent, caller, activator)
 	}
 	if (k < 0)
 		return HAM_IGNORED
-	new who = activator >= 1 && activator <= MaxClients && is_user_connected(activator) ? activator : 0
+	// who set it off: Ham_Use's first value is really the activator (the engine's Use(pActivator,
+	// pCaller): ham_const.inc's names are the wrong way round), the second the trigger; take
+	// whichever is a player (QA4-B: it was always nobody)
+	new who = caller >= 1 && caller <= MaxClients && is_user_connected(caller) ? caller : activator >= 1 && activator <= MaxClients && is_user_connected(activator) ? activator : 0
 	switch (k)
 	{
 		case 0: lsg_ce0(who, str_to_float(va), vb)

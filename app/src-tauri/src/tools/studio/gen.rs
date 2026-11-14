@@ -3609,7 +3609,10 @@ public lsg_ev_use(ent, caller, activator)
 	}}
 	if (k < 0)
 		return HAM_IGNORED
-	new who = activator >= 1 && activator <= MaxClients && is_user_connected(activator) ? activator : 0
+	// who set it off: Ham_Use's first value is really the activator (the engine's Use(pActivator,
+	// pCaller): ham_const.inc's names are the wrong way round), the second the trigger; take
+	// whichever is a player (QA4-B: it was always nobody)
+	new who = caller >= 1 && caller <= MaxClients && is_user_connected(caller) ? caller : activator >= 1 && activator <= MaxClients && is_user_connected(activator) ? activator : 0
 	switch (k)
 	{{
 {calls}	}}
@@ -6147,6 +6150,27 @@ mod tests {
             assert!(src.contains(&format!("\"{w}\"")), "{w}");
         }
         assert!(src.contains("if (!isalnum(map[i]) && map[i] != '_' && map[i] != '-' && map[i] != '.')"));
+    }
+
+    /// A Custom Event the map fires: its Player is who walked into the trigger. Ham_Use's first
+    /// value is the activator (ham_const.inc names it the caller); the generated code takes
+    /// whichever of the two is a player (QA4-B: it read only the second, so always nobody).
+    #[test]
+    fn map_fired_custom_events_know_who() {
+        let g = super::super::graph::from_value(serde_json::json!({
+            "schema": "loner-strike/graph", "version": 3, "mode": {"id": "xev", "name": "Map event"},
+            "customEvents": [{"id": "ce1", "name": "Gate", "inputs": [{"id": "who", "name": "Player", "type": "player"}], "map": true}],
+            "nodes": [{"id": "ev", "type": "event.custom", "params": {"event": "ce1"}}, {"id": "pr", "type": "debug.print", "params": {"text": "who", "chat": false}}],
+            "edges": [{"id": "w1", "from": {"node": "ev", "pin": "then"}, "to": {"node": "pr", "pin": "exec"}}, {"id": "w2", "from": {"node": "ev", "pin": "who"}, "to": {"node": "pr", "pin": "value"}}]
+        }))
+        .unwrap();
+        let src = generate(&g, false).source;
+        assert!(src.contains("public lsg_ev_use(ent, caller, activator)"));
+        let who = src.lines().find(|l| l.trim_start().starts_with("new who =")).unwrap();
+        let c = who.find("caller >= 1").unwrap();
+        let a = who.find("activator >= 1").unwrap();
+        assert!(c < a, "the first Ham_Use value (the activator) first: {who}");
+        assert!(src.contains("lsg_ce0(who)"), "the Player input gets who");
     }
 
     /// A timer that comes due while a breakpoint has the world paused keeps its schedule after
