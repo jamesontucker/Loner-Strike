@@ -307,3 +307,15 @@ Real fps from ls_perf (not rcon stats), Last Stand on ls_outpost, waves x10 to k
 
 For W1 (defaults): native servers (Linux / Windows): lst cap 96, ls_creature_max 128; CrossOver (Mac local): cap 24
 and at most ~8 bots (the adaptive cap holds 85 fps there by lowering the cap).
+
+## Request from W1 (2026-11-13): wounded creatures that never come back
+In Last Stand a spitter below 30 % fled out past the base and kept ranging there; wave 7 hung 18 minutes on it (players
+can't be asked to hunt one creature across the map). What I do now in gm_components (the round table): when 3 or
+fewer are left, every 5 s each gets `behave <ent> chase` and `target <ent> <nearest defender>` (which ends a flee), and
+players see "N creatures left - the nearest 40 m to your left". Last Stand also removes the last 1-2 after 3 minutes
+without a kill. Could the fork give us, in this order:
+1. A spawn key `flee_hp` (per entity, like `health`), so a mode can set 0 (never flee) for its last few or for a whole
+   mode.
+2. A flee that heads back toward its spawn / home area and returns to the fight after the cooldown, instead of the
+   area that's farthest from the threat.
+3. Optional: `ls_creature_flee_last N` - with N or fewer hostile creatures alive, none flees.
