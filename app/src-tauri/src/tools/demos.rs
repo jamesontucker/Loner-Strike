@@ -83,7 +83,16 @@ pub struct Header {
     pub segments: Vec<Segment>,
 }
 
+/// What the page says about a demo with no list of parts at its end.
+pub const CUT_SHORT: &str = "This demo looks cut short (still being recorded, or damaged).";
+
 impl Header {
+    /// No list of parts at the end: the game writes it last, so the demo is still being
+    /// recorded or was cut short (the game can't play it).
+    pub fn cut_short(&self) -> bool {
+        self.segments.is_empty()
+    }
+
     /// The playback's length in seconds (the "Playback" segment's, else the longest).
     pub fn seconds(&self) -> f32 {
         self.segments.iter().find(|s| s.title.eq_ignore_ascii_case("playback")).or_else(|| self.segments.iter().max_by(|a, b| a.seconds.total_cmp(&b.seconds))).map(|s| s.seconds.max(0.0)).unwrap_or(0.0)
@@ -331,6 +340,18 @@ pub fn playable_name(name: &str) -> bool {
     safe_name(name) && name.chars().all(|c| c.is_ascii_alphanumeric() || " _-.()[]".contains(c))
 }
 
+/// Why a demo can't be renamed to this (None: it's fine): a name the game can be told to
+/// play (Watch), and not one Windows keeps for a device (CON, NUL, COM1...).
+pub fn rename_problem(to: &str) -> Option<&'static str> {
+    if crate::setup::record::windows_unsafe(to) {
+        return Some("Windows keeps that name for a device (like CON or NUL). Pick another name.");
+    }
+    if !playable_name(to) || to.starts_with(' ') || demo_stem(to).trim().is_empty() {
+        return Some("That name can't be used. Use letters, numbers, spaces and - _ . ( ) [ ].");
+    }
+    None
+}
+
 /// A safe name for a demo the game can't be told to play as it's named: other characters
 /// become `_`.
 pub fn safe_rename(name: &str) -> String {
@@ -421,6 +442,9 @@ fn list(places: &[Place]) -> Value {
                         v["seconds"] = json!(h.seconds());
                         v["protocol"] = json!(h.net_protocol);
                         v["demoGame"] = json!(h.game);
+                        if h.cut_short() {
+                            v["problem"] = json!(CUT_SHORT);
+                        }
                     }
                     Err(e) => v["error"] = json!(e),
                 }
@@ -438,14 +462,20 @@ fn detail(path: &Path) -> Result<Value, String> {
     let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let len = f.metadata().map(|m| m.len()).unwrap_or(0);
     let h = read_header(&mut f, len)?;
-    let d = if len <= MAX_SCAN { scan(&mut f, &h) } else { Details { problem: Some("This demo is too big to look inside.".into()), ..Default::default() } };
+    let d = if h.cut_short() {
+        Details { problem: Some(CUT_SHORT.into()), ..Default::default() }
+    } else if len <= MAX_SCAN {
+        scan(&mut f, &h)
+    } else {
+        Details { problem: Some("This demo is too big to look inside.".into()), ..Default::default() }
+    };
     let pov = d.path.iter().filter(|s| !s.spectator).count();
     Ok(json!({
         "map": h.map, "game": h.game, "protocol": h.net_protocol, "demoProtocol": h.demo_protocol,
         "seconds": h.seconds(),
         "parts": h.segments.iter().map(|s| json!({"title": s.title, "seconds": s.seconds, "frames": s.frames})).collect::<Vec<_>>(),
         "names": d.names, "server": d.server, "maxPlayers": d.max_players,
-        "frames": d.frames, "problem": d.problem,
+        "frames": d.frames, "problem": d.problem, "cutShort": h.cut_short(),
         // a path worth replaying: the recorder was playing, not spectating, for a while
         "canReplay": pov >= 10,
     }))
@@ -462,8 +492,8 @@ fn maybe_recording(p: &Place, path: &Path) -> bool {
 fn rename(places: &[Place], at: &str, name: &str, to: &str) -> Result<Value, String> {
     let (p, path) = find(places, at, name).ok_or(GONE)?;
     let to = if to.to_lowercase().ends_with(".dem") { to.trim().to_string() } else { format!("{}.dem", to.trim()) };
-    if !safe_name(&to) {
-        return Err("That name can't be used. Use letters, numbers, - and _.".into());
+    if let Some(why) = rename_problem(&to) {
+        return Err(why.into());
     }
     if to == name {
         return Ok(json!({"ok": true, "name": to}));
@@ -513,6 +543,9 @@ fn play(places: &[Place], game: &crate::game::Game, at: &str, name: &str) -> Res
     }
     // the game needs the demo's map, or it stops with "couldn't open"
     if let Ok(h) = header_of(&path) {
+        if h.cut_short() {
+            return Err(format!("{CUT_SHORT} The game can't play it."));
+        }
         if !h.map.is_empty() && crate::maps::safe_arg(&h.map) && super::mapinfo::locate(game, &h.map).is_none() {
             return Err(format!("This demo was recorded on {}, which isn't in your game. Get that map first (Maps or Get more), then watch it.", h.map));
         }
@@ -937,6 +970,23 @@ mod tests {
         let one = demos.iter().find(|d| d["name"] == "one.dem").unwrap();
         assert_eq!(one["map"], "de_dust2");
         assert!(demos.iter().find(|d| d["name"] == "broken.dem").unwrap()["error"].is_string());
+        assert!(one["problem"].is_null());
+        // cut short (no list of parts at the end): said in the list and the detail (QA4-T1 T1-6)
+        let full = fixture::build();
+        std::fs::write(dir.join("cut.dem"), &full[..full.len() - 200]).unwrap();
+        let mut rec = full.clone();
+        rec[540..544].copy_from_slice(&0i32.to_le_bytes());
+        std::fs::write(dir.join("recording.dem"), &rec).unwrap();
+        let v = list(&places);
+        for n in ["cut.dem", "recording.dem"] {
+            let d = v["demos"].as_array().unwrap().iter().find(|d| d["name"] == n).unwrap().clone();
+            assert_eq!(d["map"], "de_dust2", "{n}");
+            assert_eq!(d["problem"], CUT_SHORT, "{n}");
+            let det = detail(&dir.join(n)).unwrap();
+            assert_eq!(det["problem"], CUT_SHORT, "{n}");
+            assert_eq!(det["cutShort"], true);
+            std::fs::remove_file(dir.join(n)).unwrap();
+        }
         let d = detail(&dir.join("one.dem")).unwrap();
         assert_eq!(d["names"], json!(["Alice", "[LS] Bob"]));
         assert_eq!(d["canReplay"], true);
@@ -944,6 +994,15 @@ mod tests {
         assert!(rename(&places, "game:cstrike", "one.dem", "two").unwrap_err().contains("already"));
         assert!(rename(&places, "game:cstrike", "one.dem", "../x").is_err());
         assert_eq!(rename(&places, "game:cstrike", "one.dem", "first match").unwrap()["name"], "first match.dem");
+        // names Windows keeps for devices, and names the game couldn't be told to play (QA4-T1 T1-4)
+        for bad in ["CON", "con", "con.dem", "Nul", "aux.x", "COM1", "lpt9.dem", "prn"] {
+            assert!(rename(&places, "game:cstrike", "first match.dem", bad).unwrap_err().contains("Windows keeps"), "{bad}");
+        }
+        for bad in ["a;quit", "a\";quit", "caf\u{e9}", "a'b", "x/y", "..."] {
+            let e = rename(&places, "game:cstrike", "first match.dem", bad).unwrap_err();
+            assert!(e.contains("letters, numbers"), "{bad}: {e}");
+        }
+        assert!(places[0].dirs[0].join("first match.dem").is_file());
         assert!(dir.join("first match.dem").is_file() && !dir.join("one.dem").exists());
         assert!(delete(&places, "game:cstrike", "one.dem").is_err());
         assert!(delete(&places, "game:nowhere", "two.dem").is_err());

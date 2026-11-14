@@ -95,6 +95,8 @@ pub fn plain(code: u32, msg: &str) -> String {
         28 => format!("{name} isn't an array (or has fewer dimensions), so it can't take [ ] here."),
         29 => "The compiler couldn't read this expression. Look for a missing value, operator or bracket.".into(),
         32 => "An array index is out of bounds: the number between [ ] is too big for the array's size.".into(),
+        // (the compiler says "-unknown-" for a value with no name, like "a" in new x = "a")
+        33 if quoted(msg) == Some("-unknown-") => "This value is an array (text in quotes is one), so a plain variable can't hold it. Make the variable an array, like new x[32], and copy the text in with copy(x, charsmax(x), \"text\").".into(),
         33 => format!("{name} is an array: use one element ({}[0]), or pass the whole array to a function that takes one.", quoted(msg).unwrap_or("x")),
         34 => "Only the last parameters of a function can have default values.".into(),
         35 => "A value passed to this function has the wrong type, e.g. a number where text (an array) is expected, or the other way round.".into(),
@@ -168,6 +170,13 @@ mod tests {
     const OK: &str = include_str!("../testdata/amxxpc/ok.txt");
     const FATAL: &str = include_str!("../testdata/amxxpc/fatal.txt");
     const INCLUDE: &str = include_str!("../testdata/amxxpc/include.txt");
+
+    #[test]
+    fn unnamed_array_value() {
+        let p = plain(33, "array must be indexed (variable \"-unknown-\")");
+        assert!(!p.contains("unknown") && p.contains("This value is an array") && p.contains("copy("), "{p}");
+        assert!(plain(33, "array must be indexed (variable \"names\")").contains("names[0]"));
+    }
 
     #[test]
     fn errors_and_warnings() {

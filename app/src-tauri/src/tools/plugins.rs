@@ -37,6 +37,7 @@ pub const APP_INCS: &[(&str, &str)] = &[("loner.inc", LONER_INC), ("ls_component
 const NO_GAME: &str = "Set up the game on this computer first.";
 const INTERNAL: &str = "Loner-Strike hit an internal error. Try again, and copy the diagnostics from Settings if it keeps happening.";
 const BAD_NAME: &str = "Use a file name with only letters, numbers, - and _, ending in .sma (or .inc).";
+const RESERVED_NAME: &str = "Windows keeps that name for a device (like CON or NUL). Pick another name.";
 const MAX_SOURCE: usize = 2 << 20;
 const STUDIO_INI: &str = "plugins-studio.ini";
 const CROSSOVER_WINE: &str = "/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/bin/wine";
@@ -96,6 +97,18 @@ pub fn safe_file(name: &str) -> bool {
         && name.chars().next().is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
         && name.chars().all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c))
         && !name.contains("..")
+        && !crate::setup::record::windows_unsafe(name)
+}
+
+/// Why a file name can't be used, in a sentence (None: it's fine).
+pub fn name_problem(name: &str) -> Option<&'static str> {
+    if safe_file(name) {
+        None
+    } else if crate::setup::record::windows_unsafe(name) {
+        Some(RESERVED_NAME)
+    } else {
+        Some(BAD_NAME)
+    }
 }
 
 /// A plugin's name (the file name without .sma): what goes in plugins.ini and the logs.
@@ -106,8 +119,8 @@ pub fn stem(name: &str) -> &str {
 /// The file's path, checked: a safe name, directly inside the folder, and (if it's there) a
 /// real file whose folder is that folder (no link out of it).
 pub fn resolve(dir: &Path, name: &str) -> Result<PathBuf, String> {
-    if !safe_file(name) {
-        return Err(BAD_NAME.into());
+    if let Some(why) = name_problem(name) {
+        return Err(why.into());
     }
     let p = dir.join(name);
     if let Ok(meta) = std::fs::symlink_metadata(&p) {
@@ -361,6 +374,23 @@ fn file_path(g: &Game, f: Folder, name: &str) -> Result<PathBuf, String> {
     }
 }
 
+/// Source files in a folder the Studio leaves out for their names (spaces, accents, CON...),
+/// so the page can say so.
+fn hidden(g: &Game, f: Folder) -> usize {
+    if f == Folder::Include {
+        return 0;
+    }
+    std::fs::read_dir(folder_dir(g, f))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_lowercase();
+            (name.ends_with(".sma") || name.ends_with(".inc")) && !safe_file(&e.file_name().to_string_lossy()) && e.path().is_file()
+        })
+        .count()
+}
+
 fn list(g: &Game, f: Folder) -> Vec<Value> {
     let mut files: Vec<Value> = if f == Folder::Include {
         include_files(g).into_iter().map(|(name, _, size, m)| json!({"name": name, "size": size, "modified": m, "readOnly": true, "changed": differs_from_shipped(g, f, &name) == Some(true)})).collect()
@@ -592,7 +622,7 @@ fn compiler(g: &Game) -> Result<(PathBuf, crate::steam::Install), String> {
     if !exe.is_file() {
         return Err("Your game has no AMX Mod X compiler yet. Install the basics (Mods page) first.".into());
     }
-    let install = install_of(g).ok_or("Couldn't find your game's install to run the compiler in.")?;
+    let install = install_of(g).ok_or("Couldn't find your game's install to run the compiler in. Set up your game on the Setup page first.")?;
     if install.kind == "crossover" && !Path::new(CROSSOVER_WINE).is_file() {
         return Err("CrossOver isn't installed in Applications, so plugins can't be compiled on this Mac.".into());
     }
@@ -834,7 +864,9 @@ pub fn plugin_lines(text: &str, stem: &str, errors: bool) -> Vec<Value> {
             in_trace = false;
         }
         if mentions || in_trace {
-            out.push(json!({"at": at, "text": body.trim_end(), "error": errors || lower.contains("error") || lower.contains("failed")}));
+            // debug mode's "performance issue ... executed more than 1.1ms" notes: harmless, the page folds them
+            let slow = lower.contains("performance issue") || lower.contains("executed more than");
+            out.push(json!({"at": at, "text": body.trim_end(), "error": !slow && (errors || lower.contains("error") || lower.contains("failed")), "slow": slow}));
         }
     }
     out
@@ -908,9 +940,9 @@ async fn api_overview(State(st): State<Shared>) -> Response {
             "running": g.state()["online"] == json!(true),
             "trying": trying(&g),
             "folders": [
-                {"id": "mine", "label": "My plugins", "path": folder_dir(&g, Folder::Mine), "files": list(&g, Folder::Mine)},
-                {"id": "game", "label": "Game's plugins", "path": folder_dir(&g, Folder::Game), "files": list(&g, Folder::Game)},
-                {"id": "include", "label": "Include files", "path": folder_dir(&g, Folder::Include), "files": list(&g, Folder::Include)},
+                {"id": "mine", "label": "My plugins", "path": folder_dir(&g, Folder::Mine), "files": list(&g, Folder::Mine), "hidden": hidden(&g, Folder::Mine)},
+                {"id": "game", "label": "Game's plugins", "path": folder_dir(&g, Folder::Game), "files": list(&g, Folder::Game), "hidden": hidden(&g, Folder::Game)},
+                {"id": "include", "label": "Include files", "path": folder_dir(&g, Folder::Include), "files": list(&g, Folder::Include), "hidden": hidden(&g, Folder::Include)},
             ],
         }))
     })
@@ -1076,8 +1108,13 @@ async fn api_untry(State(st): State<Shared>, h: HeaderMap, Json(r): Json<StopReq
     blocking(move || {
         let stem = stem(&r.name).to_string();
         remove_trial(&g, &stem)?;
-        let reloaded = r.restart && restart_map(&g).unwrap_or(false);
-        let message = if reloaded { format!("{stem} is out of your game. The map is restarting.") } else { format!("{stem} is out of your game. It stops with the next map.") };
+        // the map restarts the same way Try it does (QA4-T1 L13)
+        let (reloaded, message) = match if r.restart { restart_map(&g) } else { Ok(false) } {
+            Ok(true) => (true, format!("{stem} is out of your game. The map is restarting without it.")),
+            Ok(false) if g.state()["online"] != json!(true) => (false, format!("{stem} is out of your game.")),
+            Ok(false) => (false, format!("{stem} is out of your game. It stops with the next map.")),
+            Err(e) => (false, format!("{stem} is out of your game, but the map couldn't be restarted: {e} It stops with the next map.")),
+        };
         Ok(json!({"ok": true, "message": message, "reloaded": reloaded, "trying": trying(&g)}))
     })
     .await
@@ -1140,6 +1177,15 @@ mod tests {
         for bad in ["../x.sma", "a/b.sma", "a\\b.sma", ".hidden.sma", "x.txt", ".sma", "x..sma", "a b.sma", "", "x.sma.part", &format!("{}.sma", "a".repeat(70)), "ü.sma", "-x.sma"] {
             assert!(!safe_file(bad), "{bad}");
         }
+        // names Windows keeps for devices, any case, with or without more after a dot (QA4-T1 T1-4)
+        for bad in ["con.sma", "CON.sma", "Nul.inc", "aux.sma", "prn.sma", "com1.sma", "COM9.sma", "lpt3.inc", "con.x.sma"] {
+            assert!(!safe_file(bad), "{bad}");
+            assert_eq!(name_problem(bad), Some(RESERVED_NAME), "{bad}");
+        }
+        for ok in ["console.sma", "com0.sma", "com10.sma", "lpt.sma", "nul_mode.sma"] {
+            assert!(safe_file(ok), "{ok}");
+        }
+        assert_eq!(name_problem("a;quit.sma"), Some(BAD_NAME));
         let (root, g) = game("paths");
         let dir = folder_dir(&g, Folder::Mine);
         std::fs::create_dir_all(&dir).unwrap();
@@ -1392,6 +1438,15 @@ mod tests {
     }
 
     #[test]
+    fn slow_function_notes_are_marked() {
+        let text = "L 11/14/2026 - 10:00:00: [AMXX] Plugin (\"qa.amxx\") has a performance issue. Function cmd_x executed more than 1.1ms.\nL 11/14/2026 - 10:00:01: [qa.amxx] hello\n";
+        let l = plugin_lines(text, "qa", false);
+        assert_eq!(l.len(), 2);
+        assert_eq!((l[0]["slow"].as_bool(), l[0]["error"].as_bool()), (Some(true), Some(false)));
+        assert_eq!(l[1]["slow"], false);
+    }
+
+    #[test]
     fn rename_in_my_plugins() {
         let (root, g) = game("rename");
         save(&g, Folder::Mine, "a.sma", "// a\n", "utf8", true).unwrap();
@@ -1400,6 +1455,11 @@ mod tests {
         assert!(rename(&g, Folder::Mine, "a.sma", "a.inc").is_err());
         assert!(rename(&g, Folder::Mine, "a.sma", "../a.sma").is_err());
         assert!(rename(&g, Folder::Mine, "nothere.sma", "c.sma").is_err());
+        // QA4-T1 T1-4: a name Windows keeps for a device, or with ; in it
+        assert_eq!(rename(&g, Folder::Mine, "a.sma", "con.sma").unwrap_err(), RESERVED_NAME);
+        assert_eq!(rename(&g, Folder::Mine, "a.sma", "LPT1.sma").unwrap_err(), RESERVED_NAME);
+        assert!(save(&g, Folder::Mine, "Nul.sma", "// x\n", "utf8", true).is_err());
+        assert!(rename(&g, Folder::Mine, "a.sma", "a;quit.sma").unwrap_err().contains("only letters"));
         rename(&g, Folder::Mine, "a.sma", "c.sma").unwrap();
         assert_eq!(read(&g, Folder::Mine, "c.sma").unwrap()["text"], "// a\n");
         assert!(read(&g, Folder::Mine, "a.sma").is_err());
