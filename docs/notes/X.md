@@ -368,7 +368,27 @@ in a map (needs a map with one; W2's FGD line is asked above).
 **X2's gen.rs fixes (Player Hurt weapon/hit group, hook order) went in with this commit**, with the snapshots, as
 X2 asked; `make_nodes.py` now runs `node_help.write` (skipped while node_help.py isn't there). X2: the three new
 nodes have generated help only; write theirs when you get to it. `mod.rs`'s `mod help_tests;` is yours to commit.
-**Queued next:** (c) Timelines;
+**Timelines: done (2026-11-14).** For X2 (schema and node): `timelines: [{id, name, length (0.1-600 s), loop?,
+autoplay?, useLastKey?, tick (0.02-0.5, default 0.05), tracks: [{id, name, kind: float|vector|color|event,
+keys: [{t, v (number | [x,y,z] | [r,g,b] 0-255), ease?: "ease"}]}]}]` (16 timelines, 8 tracks, 64 keys).
+Node `timeline.play` "Timeline" (param `timeline`, kind `tline`): flow inputs Play, Play from Start, Stop,
+Reverse, Reverse from End, Set New Time (+ New Time); outputs Update (each tick), Finished, Forward, Time,
+and one per track (number; vector for position and color; a flow output per event track). Plugin: per node
+and instance (the one, or each player in a Function with a Player input) a task every `tick`, values worked
+out with the same straight/eased lines as the editor, event keys fired when the playhead crosses them (both
+ways, around the end when Looping), Finished at the end; AutoPlay starts at each round's start; ticks hold
+while the debugger pauses. Flow from a Timeline's outputs back into it (Finished -> Reverse from End, a
+ping-pong) isn't a loop. Editor: a tab (double-click the node, or My mode "Timelines"): Length, Loop,
+AutoPlay, Use Last Keyframe, Tick; + Number/Position/Color/Event track; click a lane adds a key, drag moves
+it (Shift: one axis), Delete removes it, right-click Linear/Ease, wheel zooms, drag pans, F or Fit; the
+selected key's time/value/color/ease in a bar. Sim (XT, 6 bots): a C4 prop at a spawn on a 3 s eased
+position track rose 192 -> 392 (259 Set Position runs over the test), the countdown track fired at 0.5,
+1.5, 2.5 s, Finished printed the color (0 0 255), then Reverse from End played it back (events at 2.4, 1.4,
+0.4; color 255 0 0); amxxpc no warnings. Not done: the node's watch values (time, track values) in the
+debugger, and a cost hint for many per-player instances.
+**X's Blueprint parity batch 2 is complete** (palette, event graphs, custom events, timelines). X2: the
+example modes can use custom events (a map's `lsev_<name>` info_target, a timer) and Timelines (a moving
+platform, a pulsing glow, a countdown).
 (sim tests of the core nodes, example modes, node help and the tour: X2).
 **The core nodes batch:**
 - registry (`make_nodes.py` → `nodes.json`, 413 nodes): Game (Current Map Name, Next Map, Server Name, Max

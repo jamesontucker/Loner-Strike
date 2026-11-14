@@ -276,9 +276,11 @@ stock lsg_set_ammo(id, clip, reserve)
 {
 	if (!lsg_ok(id) || !is_user_alive(id))
 		return
-	new c, a, wid = get_user_weapon(id, c, a)
+	// (the held weapon from the active item: get_user_weapon says 0 while a gun is being drawn,
+	// and the reserve can't be set for weapon 0)
 	new w = get_ent_data_entity(id, "CBasePlayer", "m_pActiveItem")
-	if (w > 0 && pev_valid(w) && wid != CSW_KNIFE)
+	new wid = w > 0 && pev_valid(w) ? cs_get_weapon_id(w) : 0
+	if (wid > 0 && wid != CSW_KNIFE)
 	{
 		cs_set_weapon_ammo(w, clamp(clip, 0, 200))
 		cs_set_user_bpammo(id, wid, clamp(reserve, 0, 255))
@@ -289,7 +291,8 @@ stock lsg_give_ammo(id, n)
 {
 	if (!lsg_ok(id) || !is_user_alive(id))
 		return
-	new c, a, wid = get_user_weapon(id, c, a)
+	new w = get_ent_data_entity(id, "CBasePlayer", "m_pActiveItem")
+	new wid = w > 0 && pev_valid(w) ? cs_get_weapon_id(w) : 0
 	if (wid > 0 && wid != CSW_KNIFE)
 		cs_set_user_bpammo(id, wid, clamp(cs_get_user_bpammo(id, wid) + n, 0, 255))
 }
@@ -2039,6 +2042,13 @@ stock lsg_sound_at(v, const snd[])
 	new Float:o[3]
 	lsg_vto(v, o)
 	engfunc(EngFunc_EmitAmbientSound, 0, o, snd, 1.0, ATTN_NORM, 0, PITCH_NORM)
+}
+
+// Timelines: smooth in and out between two keys (0..1 -> 0..1)
+stock Float:lsg_tl_ease(Float:x)
+{
+	x = floatclamp(x, 0.0, 1.0)
+	return x * x * (3.0 - 2.0 * x)
 }
 
 

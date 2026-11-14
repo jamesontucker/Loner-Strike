@@ -398,11 +398,11 @@ fn kind_of(ty: &str) -> char {
 }
 
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
-const CTX_KINDS: [&str; 11] = ["marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
+const CTX_KINDS: [&str; 12] = ["timeline.play", "marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
 const STORE_KINDS: [&str; 9] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call"];
 /// Nodes with more than one flow input: one Pawn function each.
-const MULTI_IN: [&str; 5] = ["flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array"];
+const MULTI_IN: [&str; 6] = ["timeline.play", "flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array"];
 /// The vector and struct rings: values that aren't in variables live here for a while.
 const VEC_RING: usize = 256;
 const REC_RING: usize = 64;
@@ -1222,6 +1222,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     // custom events (and the map's ones)
     custom_events_block(&gen, &mut o);
+    let mut auto_tl: Vec<usize> = Vec::new();
     let map_events = g.custom_events.iter().any(|c| c.map);
     let uses_spawn = has("creature.spawn");
     if uses_spawn {
@@ -1317,6 +1318,18 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if map_events {
         o.line("\tRegisterHam(Ham_Use, \"info_target\", \"lsg_ev_use\", 1)");
     }
+    // Timelines with AutoPlay: from the start at each round's start (the one instance)
+    let autoplay: Vec<usize> = gen
+        .live
+        .iter()
+        .filter(|id| gen.v.defs[*id].kind == "timeline.play")
+        .filter(|id| gen.v.nodes[*id].params.get("timeline").and_then(Value::as_str).and_then(|t| g.timelines.iter().find(|x| x.id == t)).is_some_and(|t| t.autoplay))
+        .map(|id| gen.index(id))
+        .collect();
+    if !autoplay.is_empty() {
+        o.line("\tregister_logevent(\"lsg_tl_auto\", 2, \"1=Round_Start\")");
+        auto_tl = autoplay;
+    }
     if uses_pre {
         o.line("\tRegisterHamPlayer(Ham_TakeDamage, \"lsg_pre_damage\", 0)");
     }
@@ -1368,6 +1381,13 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     o.line("}");
     o.blank();
+    if !auto_tl.is_empty() {
+        let mut f = String::from("// Timelines with AutoPlay\npublic lsg_tl_auto()\n{\n\tnew c[LSG_CTX]");
+        for i in &auto_tl {
+            f.push_str(&format!("\n\tlsg_tl{i}_save(0, c)\n\tlsg_tl{i}_go(0, 0.0, 1)"));
+        }
+        o.line(format!("{f}\n}}\n"));
+    }
     if new_round {
         o.line("// a new round: timers stop, round variables start again\npublic lsg_new_round()\n{\n\tlsg_stop_timers()");
         if uses_clock {
@@ -2463,6 +2483,25 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 b.line(e);
             }
         }
+        "timeline.play" => {
+            if let Some(tl) = n.params.get("timeline").and_then(Value::as_str).and_then(|t| g_of(gen).timelines.iter().find(|x| x.id == t)) {
+                let inst = timeline_instance(gen, id);
+                // (its state first: the other inputs' functions use it)
+                after.push(timeline_code(gen, id, tl, &next));
+                b.line(format!("\tnew inst = {inst}\n\tlsg_tl{i}_save(inst, ctx)\n\tlsg_tl{i}_go(inst, -1.0, 1)"));
+                let mut ctl = |pin: &str, body: &str| after.push(format!("stock {}(ctx[])\n{{\n\tnew inst = {inst}\n{body}\n}}", gen.pin_fname(id, pin)));
+                ctl("play_start", &format!("\tlsg_tl{i}_save(inst, ctx)\n\tlsg_tl{i}_go(inst, 0.0, 1)"));
+                ctl("stop", &format!("\t#pragma unused ctx\n\tlsg_tl{i}_stop(inst)"));
+                ctl("reverse", &format!("\tlsg_tl{i}_save(inst, ctx)\n\tlsg_tl{i}_go(inst, -1.0, -1)"));
+                ctl("reverse_end", &format!("\tlsg_tl{i}_save(inst, ctx)\n\tlsg_tl{i}_go(inst, {}, -1)", float_lit(tl.play_length())));
+                let nt = gen.input(id, "new_time").map(|x| x.expr).unwrap_or_else(|| "0.0".into());
+                ctl("set_time", &format!("\tlsg_tl{i}_save(inst, ctx)\n\tg_lsgTlT{i}[inst] = floatclamp({nt}, 0.0, {})", float_lit(tl.play_length())));
+            }
+            let e = exit("playing");
+            if !e.is_empty() {
+                b.line(e);
+            }
+        }
         "event.call" => {
             if let Some((ci, c)) = custom_event_of(g_of(gen), n) {
                 let args: Vec<String> = c.inputs.iter().map(|m| gen.need(id, &m.id, &m.ty)).collect();
@@ -2903,7 +2942,7 @@ fn multi_fn(gen: &Gen, id: &str, pin: &str, body: &str) -> String {
 
 /// Node kinds that need the version 3 helpers (by prefix).
 const V3_KINDS: &[&str] = &[
-    "player.transform", "player.set_transform", "player.set_rotation", "player.look_at", "ent.", "fx.",
+    "timeline.", "player.transform", "player.set_transform", "player.set_rotation", "player.look_at", "ent.", "fx.",
     "marker.",
     "fn.", "macro.", "struct.", "enum.", "array.", "map.", "vec.", "flow.sequence", "flow.do_", "flow.gate", "flow.flipflop", "flow.for_loop", "flow.while", "flow.for_each_array", "flow.switch_", "flow.if_valid", "timer.retrigger", "timer.by_function",
     "timer.clear", "timer.is_active", "debug.print", "logic.equal", "logic.select", "cond.is_valid", "player.is_player", "creature.is", "math.fn", "math.clamp", "math.lerp", "math.in_range", "math.number", "text.literal", "text.append", "text.format", "text.contains", "text.length", "text.to_number", "text.from",
@@ -2985,6 +3024,122 @@ fn v3_stocks(gen: &Gen, o: &mut Out) {
         }
         o.blank();
     }
+}
+
+/// A Timeline node's instance: in a Function with a Player input, that player (each player has
+/// their own); else the one.
+fn timeline_instance(gen: &Gen, id: &str) -> String {
+    let home = gen.v.graph_of(id);
+    if let Some(f) = gen.v.g.functions.iter().find(|f| f.id == home) {
+        if let Some(m) = f.inputs.iter().find(|m| m.ty == "player") {
+            let entry = gen.live.iter().copied().find(|e| gen.v.defs[e].kind == "fn.entry" && gen.v.graph_of(e) == f.id);
+            if let Some(sl) = entry.and_then(|e| gen.slot(e, &m.id)) {
+                return format!("clamp(ctx[{sl}], 0, 32)");
+            }
+        }
+    }
+    "0".into()
+}
+
+/// A track's value at time t, for one component (a straight line between keys, or eased).
+fn track_eval(name: &str, keys: &[&super::graph::Key], comp: Option<usize>) -> String {
+    let val = |k: &super::graph::Key| -> f64 {
+        match comp {
+            Some(c) => k.v.as_array().and_then(|a| a.get(c)).and_then(Value::as_f64).unwrap_or(0.0),
+            None => k.v.as_f64().unwrap_or(0.0),
+        }
+    };
+    let mut b = format!("stock Float:{name}(Float:t)\n{{");
+    if keys.is_empty() {
+        b.push_str("\n\t#pragma unused t\n\treturn 0.0\n}");
+        return b;
+    }
+    b.push_str(&format!("\n\tif (t <= {})\n\t\treturn {}", float_lit(keys[0].t), float_lit(val(keys[0]))));
+    for w in keys.windows(2) {
+        let (a, z) = (w[0], w[1]);
+        let span = (z.t - a.t).max(0.0001);
+        let x = format!("(t - {}) / {}", float_lit(a.t), float_lit(span));
+        let f = if a.ease.as_deref() == Some("ease") { "lsg_tl_ease" } else { "" };
+        b.push_str(&format!("\n\tif (t <= {})\n\t\treturn {} + ({} - {}) * {f}({x})", float_lit(z.t), float_lit(val(a)), float_lit(val(z)), float_lit(val(a))));
+    }
+    b.push_str(&format!("\n\treturn {}\n}}", float_lit(val(keys[keys.len() - 1]))));
+    b
+}
+
+/// A Timeline node's own pieces: its state per instance, play/stop, the tick (the values, the
+/// event keys crossed, Update, Finished at the end or around again when Looping).
+fn timeline_code(gen: &Gen, id: &str, tl: &super::graph::Timeline, next: &dyn Fn(&str) -> Option<String>) -> String {
+    let i = gen.index(id);
+    let len = float_lit(tl.play_length());
+    let tick = float_lit(tl.tick);
+    let mut o = format!(
+        "// Timeline: {name}\nstock Float:g_lsgTlT{i}[33], g_lsgTlDir{i}[33], bool:g_lsgTlOn{i}[33], g_lsgTlC{i}[33][LSG_CTX]\n\
+stock lsg_tl{i}_save(inst, ctx[])\n{{\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tg_lsgTlC{i}[inst][k] = ctx[k]\n}}\n\
+stock lsg_tl{i}_go(inst, Float:from, dir)\n{{\n\tif (from >= 0.0)\n\t\tg_lsgTlT{i}[inst] = from\n\telse if (!g_lsgTlOn{i}[inst] && ((dir > 0 && g_lsgTlT{i}[inst] >= {len}) || (dir < 0 && g_lsgTlT{i}[inst] <= 0.0)))\n\t\tg_lsgTlT{i}[inst] = dir > 0 ? 0.0 : {len}\n\tg_lsgTlDir{i}[inst] = dir\n\tif (!g_lsgTlOn{i}[inst])\n\t{{\n\t\tg_lsgTlOn{i}[inst] = true\n\t\tset_task({tick}, \"lsg_tl{i}_tick\", LSG_TASK + 50000 + {i} * 33 + inst, _, _, \"b\")\n\t}}\n}}\n\
+stock lsg_tl{i}_stop(inst)\n{{\n\tg_lsgTlOn{i}[inst] = false\n\tremove_task(LSG_TASK + 50000 + {i} * 33 + inst)\n}}\n",
+        name = comment_text(&tl.name)
+    );
+    // the tracks' values
+    for (k, tr) in tl.tracks.iter().enumerate() {
+        let keys = tr.sorted();
+        match tr.kind.as_str() {
+            "float" => o.push_str(&format!("{}\n", track_eval(&format!("lsg_tl{i}_v{k}"), &keys, None))),
+            "vector" | "color" => {
+                for c in 0..3 {
+                    o.push_str(&format!("{}\n", track_eval(&format!("lsg_tl{i}_v{k}_{c}"), &keys, Some(c))));
+                }
+            }
+            _ => {}
+        }
+    }
+    let hold = if gen.debug { "\tif (lsd_hold_timer())\n\t\treturn\n" } else { "" };
+    o.push_str(&format!("public lsg_tl{i}_tick(task)\n{{\n{hold}\tnew inst = task - (LSG_TASK + 50000 + {i} * 33)\n\tif (inst < 0 || inst > 32)\n\t\treturn\n\tnew Float:was = g_lsgTlT{i}[inst], dir = g_lsgTlDir{i}[inst]\n\tnew Float:t = was + {tick} * float(dir)\n\tnew bool:done, bool:wrapped\n"));
+    if tl.looping {
+        o.push_str(&format!("\tif (dir > 0 && t > {len})\n\t{{\n\t\tt -= {len}\n\t\twrapped = true\n\t}}\n\telse if (dir < 0 && t < 0.0)\n\t{{\n\t\tt += {len}\n\t\twrapped = true\n\t}}\n"));
+    } else {
+        o.push_str(&format!("\tif (dir > 0 && t >= {len})\n\t{{\n\t\tt = {len}\n\t\tdone = true\n\t}}\n\telse if (dir < 0 && t <= 0.0)\n\t{{\n\t\tt = 0.0\n\t\tdone = true\n\t}}\n"));
+    }
+    o.push_str(&format!("\tg_lsgTlT{i}[inst] = t\n\tnew c[LSG_CTX]\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tc[k] = g_lsgTlC{i}[inst][k]\n"));
+    let mut uses_c = false;
+    if let Some(sl) = gen.slot(id, "forward") {
+        o.push_str(&format!("\tc[{sl}] = dir > 0 ? 1 : 0\n"));
+    }
+    if let Some(sl) = gen.slot(id, "time") {
+        o.push_str(&format!("\tc[{sl}] = _:t\n"));
+    }
+    for (k, tr) in tl.tracks.iter().enumerate() {
+        let Some(sl) = gen.slot(id, &tr.id) else { continue };
+        match tr.kind.as_str() {
+            "float" => o.push_str(&format!("\tc[{sl}] = _:lsg_tl{i}_v{k}(t)\n")),
+            "vector" | "color" => o.push_str(&format!("\tc[{sl}] = lsg_vec(lsg_tl{i}_v{k}_0(t), lsg_tl{i}_v{k}_1(t), lsg_tl{i}_v{k}_2(t))\n")),
+            _ => {}
+        }
+    }
+    // event keys the playhead crossed this tick (both ways; around the end when Looping)
+    for tr in tl.tracks.iter().filter(|t| t.kind == "event") {
+        let Some(call) = next(&tr.id) else { continue };
+        let call = call.replace("(ctx)", "(c)");
+        uses_c = true;
+        for k in tr.sorted() {
+            let kt = float_lit(k.t);
+            o.push_str(&format!("\tif ((!wrapped && ((dir > 0 && was < {kt} && t >= {kt}) || (dir < 0 && was > {kt} && t <= {kt}))) || (wrapped && ((dir > 0 && (was < {kt} || t >= {kt})) || (dir < 0 && (was > {kt} || t <= {kt})))))\n\t\t{call}\n"));
+        }
+    }
+    if let Some(call) = next("update") {
+        uses_c = true;
+        o.push_str(&format!("\t{}\n", call.replace("(ctx)", "(c)")));
+    }
+    o.push_str(&format!("\tif (done)\n\t{{\n\t\tlsg_tl{i}_stop(inst)\n"));
+    if let Some(call) = next("finished") {
+        uses_c = true;
+        o.push_str(&format!("\t\t{}\n", call.replace("(ctx)", "(c)")));
+    }
+    o.push_str("\t}\n");
+    if !uses_c {
+        o.push_str("\t#pragma unused c\n");
+    }
+    o.push_str("\t#pragma unused wrapped, done, was\n}\n");
+    o
 }
 
 /// The graph a generator works on.
@@ -3776,9 +3931,11 @@ stock lsg_set_ammo(id, clip, reserve)
 {
 	if (!lsg_ok(id) || !is_user_alive(id))
 		return
-	new c, a, wid = get_user_weapon(id, c, a)
+	// (the held weapon from the active item: get_user_weapon says 0 while a gun is being drawn,
+	// and the reserve can't be set for weapon 0)
 	new w = get_ent_data_entity(id, "CBasePlayer", "m_pActiveItem")
-	if (w > 0 && pev_valid(w) && wid != CSW_KNIFE)
+	new wid = w > 0 && pev_valid(w) ? cs_get_weapon_id(w) : 0
+	if (wid > 0 && wid != CSW_KNIFE)
 	{
 		cs_set_weapon_ammo(w, clamp(clip, 0, 200))
 		cs_set_user_bpammo(id, wid, clamp(reserve, 0, 255))
@@ -3789,7 +3946,8 @@ stock lsg_give_ammo(id, n)
 {
 	if (!lsg_ok(id) || !is_user_alive(id))
 		return
-	new c, a, wid = get_user_weapon(id, c, a)
+	new w = get_ent_data_entity(id, "CBasePlayer", "m_pActiveItem")
+	new wid = w > 0 && pev_valid(w) ? cs_get_weapon_id(w) : 0
 	if (wid > 0 && wid != CSW_KNIFE)
 		cs_set_user_bpammo(id, wid, clamp(cs_get_user_bpammo(id, wid) + n, 0, 255))
 }

@@ -625,7 +625,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
           const st = useStudio.getState();
           if (!st.selected.includes(node.id)) select([node.id]);
           const n = st.graph?.nodes.find((x) => x.id === node.id);
-          const target = n && (n.type === "fn.call" || n.type === "fn.call_pure" ? n.params.func : n.type === "macro.use" ? n.params.macro : null);
+          const target = n && (n.type === "fn.call" || n.type === "fn.call_pure" ? n.params.func : n.type === "macro.use" ? n.params.macro : n.type === "timeline.play" ? n.params.timeline : null);
           const many = Math.max(1, useStudio.getState().selected.length);
           cm.open(e, nodeDef(n?.type ?? "")?.title ?? "Node", [
             ...(typeof target === "string" && target ? [{ label: "Open its graph", run: () => openTab(target) }, "-" as const] : []),
@@ -647,8 +647,9 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         onPaneClick={() => Date.now() - paletteAt.current > 400 && setPalette(null)}
         onNodeDoubleClick={(_, node) => {
           const n = useStudio.getState().graph?.nodes.find((x) => x.id === node.id);
-          const target = n && (n.type === "fn.call" || n.type === "fn.call_pure" ? n.params.func : n.type === "macro.use" ? n.params.macro : null);
-          if (typeof target === "string" && target) openTab(target);
+          const target = n && (n.type === "fn.call" || n.type === "fn.call_pure" ? n.params.func : n.type === "macro.use" ? n.params.macro : n.type === "timeline.play" ? n.params.timeline : null);
+          // (after the click's own selection work, which keeps the node's tab otherwise)
+          if (typeof target === "string" && target) setTimeout(() => openTab(target), 0);
         }}
         onEdgeClick={(e, edge) => {
           if (e.altKey) edit((g) => remove(g, [edge.id]));

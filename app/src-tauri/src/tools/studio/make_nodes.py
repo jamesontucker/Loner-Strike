@@ -456,6 +456,9 @@ node("event.custom", "Custom Event", "Events", "Runs when something calls this C
      outputs=[E()], params=[prm("event","Custom event","cevent","")], event=True, keywords="dispatcher signal trigger map")
 node("event.call", "Call Custom Event", "Flow", "Runs a Custom Event now, with these values (every Custom Event node for it, in the graphs' order).",
      inputs=[X], outputs=[E()], params=[prm("event","Custom event","cevent","")], keywords="fire broadcast signal")
+node("timeline.play", "Timeline", "Timers", "Plays a Timeline (My mode, Timelines): values that change over time (a number, a position, a color) and events at set moments. Update runs every tick while it plays; Finished at the end. In a Function with a Player input, each player has their own. Double-click to edit its tracks.",
+     inputs=[E("exec","Play"), E("play_start","Play from Start"), E("stop","Stop"), E("reverse","Reverse"), E("reverse_end","Reverse from End"), E("set_time","Set New Time"), P("new_time","number","New Time")],
+     outputs=[E("update","Update"), E("finished","Finished"), P("forward","bool","Forward"), P("time","number","Time")], params=[prm("timeline","Timeline","tline","")], keywords="animation curve keyframe tween interpolate move platform")
 node("timer.clear", "Clear Timer", "Timers", "Stops a timer (a Delay, Repeat, Countdown or Set Timer's handle).", inputs=[X, P("handle","timer","Timer",required=True)], outputs=[E()])
 node("timer.is_active", "Is Timer Active", "Timers", "Is the timer waiting to run?", inputs=[P("handle","timer","Timer",required=True)], outputs=[P("out","bool","Active")], pure=True)
 node("debug.print", "Print String", "Messages", "Prints text (and a value wired in) to the server console and the Studio's output, and to chat if you like.", inputs=[X, P("value","any","Value",optional=True)], outputs=[E()],

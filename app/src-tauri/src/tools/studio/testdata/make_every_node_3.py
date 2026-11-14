@@ -20,7 +20,12 @@ def W(a, ap, b, bp):
 # the Custom Event nodes name one of these (Gate Opened: what the map fires, with inputs; Tick: a timer's)
 CUSTOM = [{"id": "ce1", "name": "Gate Opened", "map": True, "inputs": [{"id": "who", "name": "Who", "type": "player"}, {"id": "n", "name": "Count", "type": "number"}, {"id": "t", "name": "Label", "type": "text"}]},
           {"id": "ce2", "name": "Tick", "inputs": []}]
-PARAMS = {"event.custom": {"event": "ce1"}, "event.call": {"event": "ce1"}, "timer.by_event": {"event": "ce2", "secs": 5, "loop": True}}
+TIMELINES = [{"id": "tl1", "name": "Platform", "length": 4, "loop": True, "autoplay": True, "tick": 0.05, "tracks": [
+    {"id": "lift", "name": "Lift", "kind": "float", "keys": [{"t": 0, "v": 0, "ease": "ease"}, {"t": 2, "v": 128}, {"t": 4, "v": 0}]},
+    {"id": "pos", "name": "Position", "kind": "vector", "keys": [{"t": 0, "v": [0, 0, 0]}, {"t": 4, "v": [256, 0, 64]}]},
+    {"id": "glow", "name": "Glow", "kind": "color", "keys": [{"t": 0, "v": [255, 0, 0]}, {"t": 2, "v": [0, 0, 255], "ease": "ease"}, {"t": 4, "v": [255, 0, 0]}]},
+    {"id": "beat", "name": "Beat", "kind": "event", "keys": [{"t": 1}, {"t": 3}]}]}]
+PARAMS = {"timeline.play": {"timeline": "tl1"}, "event.custom": {"event": "ce1"}, "event.call": {"event": "ce1"}, "timer.by_event": {"event": "ce2", "secs": 5, "loop": True}}
 N("ps", "event.player_spawned", {}, 0, 0)
 N("tick", "event.custom", {"event": "ce2"}, 0, 4)
 N("ent", "comp.find", {"name": "spot1"}, 0, 2)
@@ -52,6 +57,6 @@ for i, d in enumerate(todo):
             last = (nid, "then" if "then" in outs else outs[0])
 
 g = {"schema": "loner-strike/graph", "version": 3, "mode": {"id": "every_node_3", "name": "Every Node 3", "description": "Game, world, players, effects, interop"},
-     "variables": [], "nodes": nodes, "edges": edges, "comments": [], "customEvents": CUSTOM}
+     "variables": [], "nodes": nodes, "edges": edges, "comments": [], "customEvents": CUSTOM, "timelines": TIMELINES}
 json.dump(g, open("every_node_3.graph.json", "w"), indent=1)
 print(len(todo), "new kinds;", len(nodes), "nodes", len(edges), "wires")

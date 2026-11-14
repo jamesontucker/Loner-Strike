@@ -14,9 +14,9 @@
 #include <cellarray>
 
 #define LSG_MODE "every_node_3"
-#define LSG_CTX 10
+#define LSG_CTX 15
 #define LSG_TXT 2
-#define LSG_N 67
+#define LSG_N 68
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -35,9 +35,9 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_O 4
 #define LSG_OT 1
 
-#define LSD_N 67
-new const g_lsdIds[LSD_N][] = { "ps", "tick", "n12", "n13", "n14", "n15", "n17", "n19", "n21", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n67", "n68", "n69", "n70", "n71", "n72", "n73", "n74", "n75", "n76", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n114" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 68
+new const g_lsdIds[LSD_N][] = { "ps", "tick", "n12", "n13", "n14", "n15", "n17", "n19", "n21", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n67", "n68", "n69", "n70", "n71", "n72", "n73", "n74", "n75", "n76", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n114", "n115" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -800,9 +800,11 @@ stock lsg_set_ammo(id, clip, reserve)
 {
 	if (!lsg_ok(id) || !is_user_alive(id))
 		return
-	new c, a, wid = get_user_weapon(id, c, a)
+	// (the held weapon from the active item: get_user_weapon says 0 while a gun is being drawn,
+	// and the reserve can't be set for weapon 0)
 	new w = get_ent_data_entity(id, "CBasePlayer", "m_pActiveItem")
-	if (w > 0 && pev_valid(w) && wid != CSW_KNIFE)
+	new wid = w > 0 && pev_valid(w) ? cs_get_weapon_id(w) : 0
+	if (wid > 0 && wid != CSW_KNIFE)
 	{
 		cs_set_weapon_ammo(w, clamp(clip, 0, 200))
 		cs_set_user_bpammo(id, wid, clamp(reserve, 0, 255))
@@ -813,7 +815,8 @@ stock lsg_give_ammo(id, n)
 {
 	if (!lsg_ok(id) || !is_user_alive(id))
 		return
-	new c, a, wid = get_user_weapon(id, c, a)
+	new w = get_ent_data_entity(id, "CBasePlayer", "m_pActiveItem")
+	new wid = w > 0 && pev_valid(w) ? cs_get_weapon_id(w) : 0
 	if (wid > 0 && wid != CSW_KNIFE)
 		cs_set_user_bpammo(id, wid, clamp(cs_get_user_bpammo(id, wid) + n, 0, 255))
 }
@@ -2565,6 +2568,13 @@ stock lsg_sound_at(v, const snd[])
 	engfunc(EngFunc_EmitAmbientSound, 0, o, snd, 1.0, ATTN_NORM, 0, PITCH_NORM)
 }
 
+// Timelines: smooth in and out between two keys (0..1 -> 0..1)
+stock Float:lsg_tl_ease(Float:x)
+{
+	x = floatclamp(x, 0.0, 1.0)
+	return x * x * (3.0 - 2.0 * x)
+}
+
 
 lsd_graph_vars()
 {
@@ -2766,8 +2776,17 @@ public plugin_init()
 	register_logevent("lsg_on_hostage_rescued", 3, "2=Rescued_A_Hostage")
 	register_logevent("lsg_on_vip_escaped", 3, "2=Escaped_As_VIP")
 	RegisterHam(Ham_Use, "info_target", "lsg_ev_use", 1)
+	register_logevent("lsg_tl_auto", 2, "1=Round_Start")
 	register_clcmd("say", "lsg_gag_say")
 	register_clcmd("say_team", "lsg_gag_say")
+}
+
+// Timelines with AutoPlay
+public lsg_tl_auto()
+{
+	new c[LSG_CTX]
+	lsg_tl67_save(0, c)
+	lsg_tl67_go(0, 0.0, 1)
 }
 
 public plugin_end()
@@ -3727,6 +3746,181 @@ lsg_n66(ctx[])
 		return
 	lsg_ce0(0, 0.0, "")
 	lsd_exit(66, "called")
+	lsg_n67(ctx)
+}
+
+// Timeline (n115)
+lsg_n67(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(67, ctx))
+		return
+	new inst = 0
+	lsg_tl67_save(inst, ctx)
+	lsg_tl67_go(inst, -1.0, 1)
+	lsd_exit(67, "playing")
+}
+
+// Timeline: Platform
+stock Float:g_lsgTlT67[33], g_lsgTlDir67[33], bool:g_lsgTlOn67[33], g_lsgTlC67[33][LSG_CTX]
+stock lsg_tl67_save(inst, ctx[])
+{
+	for (new k = 0; k < LSG_CTX; k++)
+		g_lsgTlC67[inst][k] = ctx[k]
+}
+stock lsg_tl67_go(inst, Float:from, dir)
+{
+	if (from >= 0.0)
+		g_lsgTlT67[inst] = from
+	else if (!g_lsgTlOn67[inst] && ((dir > 0 && g_lsgTlT67[inst] >= 4.0) || (dir < 0 && g_lsgTlT67[inst] <= 0.0)))
+		g_lsgTlT67[inst] = dir > 0 ? 0.0 : 4.0
+	g_lsgTlDir67[inst] = dir
+	if (!g_lsgTlOn67[inst])
+	{
+		g_lsgTlOn67[inst] = true
+		set_task(0.05, "lsg_tl67_tick", LSG_TASK + 50000 + 67 * 33 + inst, _, _, "b")
+	}
+}
+stock lsg_tl67_stop(inst)
+{
+	g_lsgTlOn67[inst] = false
+	remove_task(LSG_TASK + 50000 + 67 * 33 + inst)
+}
+stock Float:lsg_tl67_v0(Float:t)
+{
+	if (t <= 0.0)
+		return 0.0
+	if (t <= 2.0)
+		return 0.0 + (128.0 - 0.0) * lsg_tl_ease((t - 0.0) / 2.0)
+	if (t <= 4.0)
+		return 128.0 + (0.0 - 128.0) * ((t - 2.0) / 2.0)
+	return 0.0
+}
+stock Float:lsg_tl67_v1_0(Float:t)
+{
+	if (t <= 0.0)
+		return 0.0
+	if (t <= 4.0)
+		return 0.0 + (256.0 - 0.0) * ((t - 0.0) / 4.0)
+	return 256.0
+}
+stock Float:lsg_tl67_v1_1(Float:t)
+{
+	if (t <= 0.0)
+		return 0.0
+	if (t <= 4.0)
+		return 0.0 + (0.0 - 0.0) * ((t - 0.0) / 4.0)
+	return 0.0
+}
+stock Float:lsg_tl67_v1_2(Float:t)
+{
+	if (t <= 0.0)
+		return 0.0
+	if (t <= 4.0)
+		return 0.0 + (64.0 - 0.0) * ((t - 0.0) / 4.0)
+	return 64.0
+}
+stock Float:lsg_tl67_v2_0(Float:t)
+{
+	if (t <= 0.0)
+		return 255.0
+	if (t <= 2.0)
+		return 255.0 + (0.0 - 255.0) * ((t - 0.0) / 2.0)
+	if (t <= 4.0)
+		return 0.0 + (255.0 - 0.0) * lsg_tl_ease((t - 2.0) / 2.0)
+	return 255.0
+}
+stock Float:lsg_tl67_v2_1(Float:t)
+{
+	if (t <= 0.0)
+		return 0.0
+	if (t <= 2.0)
+		return 0.0 + (0.0 - 0.0) * ((t - 0.0) / 2.0)
+	if (t <= 4.0)
+		return 0.0 + (0.0 - 0.0) * lsg_tl_ease((t - 2.0) / 2.0)
+	return 0.0
+}
+stock Float:lsg_tl67_v2_2(Float:t)
+{
+	if (t <= 0.0)
+		return 0.0
+	if (t <= 2.0)
+		return 0.0 + (255.0 - 0.0) * ((t - 0.0) / 2.0)
+	if (t <= 4.0)
+		return 255.0 + (0.0 - 255.0) * lsg_tl_ease((t - 2.0) / 2.0)
+	return 0.0
+}
+public lsg_tl67_tick(task)
+{
+	if (lsd_hold_timer())
+		return
+	new inst = task - (LSG_TASK + 50000 + 67 * 33)
+	if (inst < 0 || inst > 32)
+		return
+	new Float:was = g_lsgTlT67[inst], dir = g_lsgTlDir67[inst]
+	new Float:t = was + 0.05 * float(dir)
+	new bool:done, bool:wrapped
+	if (dir > 0 && t > 4.0)
+	{
+		t -= 4.0
+		wrapped = true
+	}
+	else if (dir < 0 && t < 0.0)
+	{
+		t += 4.0
+		wrapped = true
+	}
+	g_lsgTlT67[inst] = t
+	new c[LSG_CTX]
+	for (new k = 0; k < LSG_CTX; k++)
+		c[k] = g_lsgTlC67[inst][k]
+	c[10] = dir > 0 ? 1 : 0
+	c[11] = _:t
+	c[12] = _:lsg_tl67_v0(t)
+	c[13] = lsg_vec(lsg_tl67_v1_0(t), lsg_tl67_v1_1(t), lsg_tl67_v1_2(t))
+	c[14] = lsg_vec(lsg_tl67_v2_0(t), lsg_tl67_v2_1(t), lsg_tl67_v2_2(t))
+	if (done)
+	{
+		lsg_tl67_stop(inst)
+	}
+	#pragma unused c
+	#pragma unused wrapped, done, was
+}
+
+
+stock lsg_n67_play_start(ctx[])
+{
+	new inst = 0
+	lsg_tl67_save(inst, ctx)
+	lsg_tl67_go(inst, 0.0, 1)
+}
+
+stock lsg_n67_stop(ctx[])
+{
+	new inst = 0
+	#pragma unused ctx
+	lsg_tl67_stop(inst)
+}
+
+stock lsg_n67_reverse(ctx[])
+{
+	new inst = 0
+	lsg_tl67_save(inst, ctx)
+	lsg_tl67_go(inst, -1.0, -1)
+}
+
+stock lsg_n67_reverse_end(ctx[])
+{
+	new inst = 0
+	lsg_tl67_save(inst, ctx)
+	lsg_tl67_go(inst, 4.0, -1)
+}
+
+stock lsg_n67_set_time(ctx[])
+{
+	new inst = 0
+	lsg_tl67_save(inst, ctx)
+	g_lsgTlT67[inst] = floatclamp(0.0, 0.0, 4.0)
 }
 
 lsd_call(n, const data[])
@@ -3803,5 +3997,6 @@ lsd_call(n, const data[])
 		case 64: lsg_n64(ctx)
 		case 65: lsg_n65(ctx)
 		case 66: lsg_n66(ctx)
+		case 67: lsg_n67(ctx)
 	}
 }

@@ -1094,6 +1094,17 @@
    "params": {
     "event": "ce1"
    }
+  },
+  {
+   "id": "n115",
+   "type": "timeline.play",
+   "pos": {
+    "x": 2340,
+    "y": 3080
+   },
+   "params": {
+    "timeline": "tl1"
+   }
   }
  ],
  "edges": [
@@ -2251,6 +2262,17 @@
     "node": "n114",
     "pin": "exec"
    }
+  },
+  {
+   "id": "w106",
+   "from": {
+    "node": "n114",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n115",
+    "pin": "exec"
+   }
   }
  ],
  "comments": [],
@@ -2281,6 +2303,106 @@
    "id": "ce2",
    "name": "Tick",
    "inputs": []
+  }
+ ],
+ "timelines": [
+  {
+   "id": "tl1",
+   "name": "Platform",
+   "length": 4,
+   "loop": true,
+   "autoplay": true,
+   "tick": 0.05,
+   "tracks": [
+    {
+     "id": "lift",
+     "name": "Lift",
+     "kind": "float",
+     "keys": [
+      {
+       "t": 0,
+       "v": 0,
+       "ease": "ease"
+      },
+      {
+       "t": 2,
+       "v": 128
+      },
+      {
+       "t": 4,
+       "v": 0
+      }
+     ]
+    },
+    {
+     "id": "pos",
+     "name": "Position",
+     "kind": "vector",
+     "keys": [
+      {
+       "t": 0,
+       "v": [
+        0,
+        0,
+        0
+       ]
+      },
+      {
+       "t": 4,
+       "v": [
+        256,
+        0,
+        64
+       ]
+      }
+     ]
+    },
+    {
+     "id": "glow",
+     "name": "Glow",
+     "kind": "color",
+     "keys": [
+      {
+       "t": 0,
+       "v": [
+        255,
+        0,
+        0
+       ]
+      },
+      {
+       "t": 2,
+       "v": [
+        0,
+        0,
+        255
+       ],
+       "ease": "ease"
+      },
+      {
+       "t": 4,
+       "v": [
+        255,
+        0,
+        0
+       ]
+      }
+     ]
+    },
+    {
+     "id": "beat",
+     "name": "Beat",
+     "kind": "event",
+     "keys": [
+      {
+       "t": 1
+      },
+      {
+       "t": 3
+      }
+     ]
+    }
+   ]
   }
  ]
 }

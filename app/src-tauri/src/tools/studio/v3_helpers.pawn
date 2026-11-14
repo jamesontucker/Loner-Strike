@@ -1013,3 +1013,10 @@ stock lsg_sound_at(v, const snd[])
 	lsg_vto(v, o)
 	engfunc(EngFunc_EmitAmbientSound, 0, o, snd, 1.0, ATTN_NORM, 0, PITCH_NORM)
 }
+
+// Timelines: smooth in and out between two keys (0..1 -> 0..1)
+stock Float:lsg_tl_ease(Float:x)
+{
+	x = floatclamp(x, 0.0, 1.0)
+	return x * x * (3.0 - 2.0 * x)
+}

@@ -77,7 +77,7 @@ type Studio = {
 
 /** The tabs still there after a change (a removed Function's tab closes). */
 function keepTabs(g: Graph, tab: string, tabs: string[]) {
-  const there = new Set([...(g.functions ?? []).map((f) => f.id), ...(g.macros ?? []).map((m) => m.id)]);
+  const there = new Set([...(g.functions ?? []).map((f) => f.id), ...(g.macros ?? []).map((m) => m.id), ...(g.timelines ?? []).map((t) => t.id)]);
   const egs = new Set((g.eventGraphs ?? []).map((e) => e.id));
   const next = tabs.filter((t) => there.has(t));
   const ok = (t: string) => !t || there.has(t) || egs.has(t);

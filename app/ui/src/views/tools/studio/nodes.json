@@ -13388,6 +13388,80 @@
    "keywords": "fire broadcast signal"
   },
   {
+   "type": "timeline.play",
+   "title": "Timeline",
+   "category": "Timers",
+   "help": "Plays a Timeline (My mode, Timelines): values that change over time (a number, a position, a color) and events at set moments. Update runs every tick while it plays; Finished at the end. In a Function with a Player input, each player has their own. Double-click to edit its tracks.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": "Play"
+    },
+    {
+     "id": "play_start",
+     "type": "exec",
+     "label": "Play from Start"
+    },
+    {
+     "id": "stop",
+     "type": "exec",
+     "label": "Stop"
+    },
+    {
+     "id": "reverse",
+     "type": "exec",
+     "label": "Reverse"
+    },
+    {
+     "id": "reverse_end",
+     "type": "exec",
+     "label": "Reverse from End"
+    },
+    {
+     "id": "set_time",
+     "type": "exec",
+     "label": "Set New Time"
+    },
+    {
+     "id": "new_time",
+     "type": "number",
+     "label": "New Time"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "update",
+     "type": "exec",
+     "label": "Update"
+    },
+    {
+     "id": "finished",
+     "type": "exec",
+     "label": "Finished"
+    },
+    {
+     "id": "forward",
+     "type": "bool",
+     "label": "Forward"
+    },
+    {
+     "id": "time",
+     "type": "number",
+     "label": "Time"
+    }
+   ],
+   "params": [
+    {
+     "id": "timeline",
+     "label": "Timeline",
+     "kind": "tline",
+     "default": ""
+    }
+   ],
+   "keywords": "animation curve keyframe tween interpolate move platform"
+  },
+  {
    "type": "timer.clear",
    "title": "Clear Timer",
    "category": "Timers",

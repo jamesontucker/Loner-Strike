@@ -82,6 +82,7 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
     </select>
   );
   if (p.kind === "fn") return pick((graph.functions ?? []).filter((f) => !!f.pure === (node.type === "fn.call_pure") && f.id !== node.graph).map((f) => [f.id, f.name]), "Add a Function under My mode first");
+  if (p.kind === "tline") return pick((graph.timelines ?? []).map((t) => [t.id, t.name]), "Add a Timeline under My mode first");
   if (p.kind === "cevent") return pick((graph.customEvents ?? []).filter((c) => node.type !== "timer.by_event" || c.inputs.length === 0).map((c) => [c.id, c.name]), node.type === "timer.by_event" ? "Add a Custom Event with no inputs under My mode first" : "Add a Custom Event under My mode first");
   if (p.kind === "macro") return pick((graph.macros ?? []).filter((m) => m.id !== node.graph).map((m) => [m.id, m.name]), "Add a Macro under My mode first");
   if (p.kind === "struct") return pick((graph.structs ?? []).map((x) => [x.id, x.name]), "Add a struct under My mode first");

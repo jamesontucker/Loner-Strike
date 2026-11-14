@@ -53,6 +53,9 @@ function ownItems(g: Graph, tab: string): PaletteItem[] {
     if (m.id === tab) continue;
     add("macro.use", m.name, "Use this mode's Macro (copied in when the mode is made).", "Macros", { macro: m.id });
   }
+  for (const t of g.timelines ?? []) {
+    add("timeline.play", `Timeline: ${t.name}`, `Plays ${t.name}: its tracks' values every tick, its events at their moments.`, "Timelines", { timeline: t.id });
+  }
   for (const c of g.customEvents ?? []) {
     add("event.custom", `Custom Event: ${c.name}`, `Runs when ${c.name} is called (or the map fires it).`, "Custom events", { event: c.id });
     add("event.call", `Call ${c.name}`, `Runs ${c.name} now${c.inputs.length ? " with these values" : ""}.`, "Custom events", { event: c.id });

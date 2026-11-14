@@ -139,6 +139,31 @@ export const graphSchema = z.object({
   /** more event graphs after the first, to organize (a node's graph names one); compiled as one */
   eventGraphs: z.array(z.object({ id, name: label(30) })).max(16).optional(),
   /** the mode's own events: Custom Event nodes run when called (Call, Set Timer by Event, the map) */
+  timelines: z
+    .array(
+      z.object({
+        id,
+        name: label(30),
+        length: z.number().min(0.1).max(600),
+        loop: z.boolean().optional(),
+        autoplay: z.boolean().optional(),
+        useLastKey: z.boolean().optional(),
+        tick: z.number().min(0.02).max(0.5).default(0.05),
+        tracks: z
+          .array(
+            z.object({
+              id,
+              name: label(30),
+              kind: z.enum(["float", "vector", "color", "event"]),
+              keys: z.array(z.object({ t: z.number().min(0).max(600), v: z.union([z.number(), z.array(z.number()).length(3), z.null()]).optional(), ease: z.enum(["linear", "ease"]).optional() })).max(64).default([]),
+            }),
+          )
+          .max(8)
+          .default([]),
+      }),
+    )
+    .max(16)
+    .optional(),
   customEvents: z.array(z.object({ id, name: label(26), inputs: z.array(memberSchema).max(8).default([]), map: z.boolean().optional() })).max(32).optional(),
   markers: z.array(markerSchema).max(32).optional(),
   mapKit: mapKitSchema.optional(),

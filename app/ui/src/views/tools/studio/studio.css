@@ -368,3 +368,19 @@
 .st-tour-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .st-tour-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 0; }
 @media (prefers-reduced-motion: reduce) { .st-tour-ring { transition: none; } }
+/* the Timeline editor */
+.st-tl { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; background: var(--sunken, #15181b); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; outline: none; }
+.st-tl-bar, .st-tl-key { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.st-tl-bar label, .st-tl-key label { display: inline-flex; align-items: center; gap: 4px; }
+.st-tl-key { background: color-mix(in srgb, var(--signal) 8%, transparent); }
+.st-tl-ruler { padding-top: 2px; }
+.st-tl-tracks { flex: 1 1 0; overflow-y: auto; }
+.st-tl-track { display: flex; border-bottom: 1px solid var(--line); }
+.st-tl-head { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 4px 8px; position: relative; font-size: 12px; box-sizing: border-box; }
+.st-tl-head .st-field { width: 100%; padding: 2px 4px; font-size: 12px; }
+.st-tl-x { position: absolute; top: 2px; right: 2px; background: none; border: 0; color: var(--bone-dim, #9aa); cursor: pointer; }
+.st-tl-lane { flex: none; cursor: crosshair; touch-action: none; }
+.st-tl-k { fill: var(--panel, #22262b); stroke: var(--signal, #e8c35a); stroke-width: 2; cursor: grab; }
+.st-tl-k.ease { stroke-dasharray: 2 1; }
+.st-tl-k.on { fill: var(--signal, #e8c35a); }
+.st-tl-empty { padding: 12px; }

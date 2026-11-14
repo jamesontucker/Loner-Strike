@@ -13,8 +13,8 @@ export function TabBar() {
   const [dragging, setDragging] = useState<string | null>(null);
   const cm = useContextMenu();
   if (!graph) return null;
-  const nameOf = (id: string) => graph.functions?.find((f) => f.id === id)?.name ?? graph.macros?.find((m) => m.id === id)?.name ?? id;
-  const kindOf = (id: string) => (graph.macros?.some((m) => m.id === id) ? "mac" : "fn");
+  const nameOf = (id: string) => graph.functions?.find((f) => f.id === id)?.name ?? graph.macros?.find((m) => m.id === id)?.name ?? graph.timelines?.find((t) => t.id === id)?.name ?? id;
+  const kindOf = (id: string) => (graph.macros?.some((m) => m.id === id) ? "mac" : graph.timelines?.some((t) => t.id === id) ? "tl" : "fn");
   return (
     <div className="st-tabs" role="tablist" aria-label="Graphs">
       <button type="button" role="tab" aria-selected={tab === ""} className={`st-tab${tab === "" ? " on" : ""}`} onClick={() => openTab("")}>
@@ -57,7 +57,7 @@ export function TabBar() {
               { label: "Close all", run: () => [...tabs].forEach(closeTab) },
             ])
           }
-          title={kindOf(id) === "mac" ? "Macro" : "Function"}
+          title={kindOf(id) === "mac" ? "Macro" : kindOf(id) === "tl" ? "Timeline" : "Function"}
         >
           <span className={`st-mb-dot ${kindOf(id)}`} /> {nameOf(id)}
           <button

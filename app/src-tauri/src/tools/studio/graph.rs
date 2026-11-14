@@ -181,6 +181,139 @@ pub struct Graph {
     /// Set Timer by Event, a map entity)
     #[serde(default, rename = "customEvents", skip_serializing_if = "Vec::is_empty")]
     pub custom_events: Vec<CustomEvent>,
+    /// values over time (number, position, color tracks) and events at set moments, played by
+    /// Timeline nodes
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub timelines: Vec<Timeline>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct Timeline {
+    pub id: String,
+    pub name: String,
+    /// seconds
+    pub length: f64,
+    #[serde(default, rename = "loop")]
+    pub looping: bool,
+    #[serde(default)]
+    pub autoplay: bool,
+    /// the length is the last key's time
+    #[serde(default, rename = "useLastKey")]
+    pub use_last_key: bool,
+    /// seconds between updates on the server (cost: lower is smoother and dearer)
+    #[serde(default = "tick_default")]
+    pub tick: f64,
+    #[serde(default)]
+    pub tracks: Vec<Track>,
+}
+
+fn tick_default() -> f64 {
+    0.05
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct Track {
+    pub id: String,
+    pub name: String,
+    /// "float", "vector", "color" or "event"
+    pub kind: String,
+    #[serde(default)]
+    pub keys: Vec<Key>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct Key {
+    pub t: f64,
+    /// a number (float), [x, y, z] (vector), [r, g, b] (color); nothing for an event
+    #[serde(default)]
+    pub v: Value,
+    /// "ease" (smooth in and out) to the next key; else straight
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ease: Option<String>,
+}
+
+impl Timeline {
+    /// How long it plays: its length, or the last key's time (Use Last Keyframe).
+    pub fn play_length(&self) -> f64 {
+        if self.use_last_key {
+            let last = self.tracks.iter().flat_map(|t| t.keys.iter().map(|k| k.t)).fold(0.0f64, f64::max);
+            if last > 0.0 {
+                return last;
+            }
+        }
+        self.length
+    }
+}
+
+impl Track {
+    /// Its keys in time order.
+    pub fn sorted(&self) -> Vec<&Key> {
+        let mut k: Vec<&Key> = self.keys.iter().collect();
+        k.sort_by(|a, b| a.t.partial_cmp(&b.t).unwrap_or(std::cmp::Ordering::Equal));
+        k
+    }
+    /// The output pin's type: number, vector (vector and color) or exec (event).
+    pub fn pin_type(&self) -> &'static str {
+        match self.kind.as_str() {
+            "vector" | "color" => "vector",
+            "event" => "exec",
+            _ => "number",
+        }
+    }
+}
+
+/// The checks on the Timelines: sizes, keys within the length, values of the track's kind.
+fn timeline_problems(g: &Graph, p: &mut Vec<Problem>) {
+    if g.timelines.len() > 16 {
+        p.push(Problem::err(None, "A mode has at most 16 Timelines."));
+    }
+    let mut ids = HashSet::new();
+    for tl in &g.timelines {
+        let name = short(&tl.name);
+        if !valid_id(&tl.id) || !ids.insert(tl.id.as_str()) {
+            p.push(Problem::err(None, "A Timeline has a bad or repeated id."));
+        }
+        if tl.name.trim().is_empty() || !valid_label(&tl.name, 30) {
+            p.push(Problem::err(None, "Give each Timeline a name (up to 30 letters, digits, spaces or plain punctuation)."));
+        }
+        if !(0.1..=600.0).contains(&tl.length) {
+            p.push(Problem::err(None, format!("The Timeline \u{201c}{name}\u{201d} lasts 0.1 to 600 seconds.")));
+        }
+        if !(0.02..=0.5).contains(&tl.tick) {
+            p.push(Problem::err(None, format!("The Timeline \u{201c}{name}\u{201d} updates every 0.02 to 0.5 seconds.")));
+        }
+        if tl.tracks.len() > 8 {
+            p.push(Problem::err(None, format!("The Timeline \u{201c}{name}\u{201d} has more than 8 tracks.")));
+        }
+        let mut tids = HashSet::new();
+        for tr in &tl.tracks {
+            if !valid_id(&tr.id) || !tids.insert(tr.id.as_str()) || RESERVED_PINS.contains(&tr.id.as_str()) || ["update", "finished", "forward", "time", "play_start", "stop", "reverse", "reverse_end", "set_time", "new_time"].contains(&tr.id.as_str()) {
+                p.push(Problem::err(None, format!("The Timeline \u{201c}{name}\u{201d} has a bad or repeated track id.")));
+            }
+            if !valid_label(&tr.name, 30) || tr.name.trim().is_empty() {
+                p.push(Problem::err(None, format!("Give each track of \u{201c}{name}\u{201d} a name.")));
+            }
+            if !["float", "vector", "color", "event"].contains(&tr.kind.as_str()) {
+                p.push(Problem::err(None, format!("A track of \u{201c}{name}\u{201d} isn't a number, position, color or event track.")));
+            }
+            if tr.keys.len() > 64 {
+                p.push(Problem::err(None, format!("The track \u{201c}{}\u{201d} has more than 64 keys.", short(&tr.name))));
+            }
+            for k in &tr.keys {
+                let in_range = |x: f64| x.is_finite() && x.abs() <= NUMBER_LIMIT;
+                let ok_v = match tr.kind.as_str() {
+                    "float" => k.v.as_f64().is_some_and(in_range),
+                    "vector" => k.v.as_array().is_some_and(|a| a.len() == 3 && a.iter().all(|x| x.as_f64().is_some_and(in_range))),
+                    "color" => k.v.as_array().is_some_and(|a| a.len() == 3 && a.iter().all(|x| x.as_f64().is_some_and(|c| (0.0..=255.0).contains(&c)))),
+                    _ => true,
+                };
+                if !k.t.is_finite() || k.t < 0.0 || k.t > tl.length.max(0.1) || !ok_v || k.ease.as_deref().is_some_and(|e| e != "ease" && e != "linear") {
+                    p.push(Problem::err(None, format!("A key of the track \u{201c}{}\u{201d} is out of range (its time 0 to the length, its value the track's kind).", short(&tr.name))));
+                    break;
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -913,6 +1046,12 @@ impl<'a> View<'a> {
                     p.outputs.extend(f.inputs.iter().map(|m| member_pin(m, false)));
                 }
             }
+            "timeline.play" => {
+                let tl = n.params.get("timeline").and_then(Value::as_str).and_then(|c| self.g.timelines.iter().find(|x| x.id == c));
+                if let Some(t) = tl {
+                    p.outputs.extend(t.tracks.iter().map(|tr| PinDef { id: tr.id.clone(), ty: tr.pin_type().into(), label: tr.name.clone(), required: false, optional: true, param: None }));
+                }
+            }
             "event.custom" | "event.call" => {
                 let ce = n.params.get("event").and_then(Value::as_str).and_then(|c| self.g.custom_events.iter().find(|x| x.id == c));
                 if let Some(c) = ce {
@@ -1441,6 +1580,7 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
     // Functions and Macros: their graphs share one set of ids
     let mut gids = HashSet::new();
     let mut fnames = HashSet::new();
+    timeline_problems(g, &mut p);
     let mut cnames = HashSet::new();
     for c in &g.custom_events {
         if !valid_id(&c.id) || !gids.insert(c.id.as_str()) {
@@ -1576,6 +1716,10 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
                 },
                 "macro" => match sval.and_then(|id| v.macros.get(id)) {
                     None => Err("Pick which Macro to use.".into()),
+                    _ => Ok(()),
+                },
+                "tline" => match sval.and_then(|id| g.timelines.iter().find(|t| t.id == id)) {
+                    None => Err(format!("Pick a Timeline for {} (add one under My mode, Timelines).", def.title)),
                     _ => Ok(()),
                 },
                 "cevent" => match sval.and_then(|id| g.custom_events.iter().find(|c| c.id == id)) {
@@ -2068,7 +2212,9 @@ fn find_cycle<'a>(v: &View<'a>) -> Option<&'a str> {
             _ => {}
         }
         state.insert(n, 1);
-        for (t, on) in v.next_nodes(n) {
+        // (a Timeline's outputs run later, on its own ticks: flow round to it isn't a loop)
+        let later = v.defs.get(n).is_some_and(|d| d.kind == "timeline.play");
+        for (t, on) in if later { Vec::new() } else { v.next_nodes(n) } {
             if on {
                 if let Some(hit) = visit(v, t, state) {
                     return Some(hit);
@@ -2251,7 +2397,7 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
             Some(s) if valid_keys(s, def.max.unwrap_or(120.0) as usize) => Ok(()),
             _ => Err(format!("{} are words like radius=160 (letters, digits, _ - . = : and spaces; no quotes).", def.label)),
         },
-        "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases" | "marker" | "cevent" => Ok(()),
+        "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases" | "marker" | "cevent" | "tline" => Ok(()),
         _ => Err(format!("{} has a setting this app doesn't know.", def.label)),
     }
 }
@@ -2282,6 +2428,7 @@ mod tests {
     /// Nodes whose pins come from the graph (a Macro's, a Function's): the registry only has
     /// their fixed part.
     const DYNAMIC: [&str; 4] = ["macro.use", "macro.exit", "macro.entry", "event.call"];
+    // (Timeline: its tracks add outputs, event tracks flow ones)
 
     #[test]
     fn registry_is_complete() {

@@ -107,6 +107,11 @@ export function pinsOf(g: Graph, n: GNode): Pins {
       if (f) inputs = [...inputs, ...f.outputs.map((x) => memberPin(x, false))];
       break;
     }
+    case "timeline.play": {
+      const tl = (g.timelines ?? []).find((x) => x.id === n.params.timeline);
+      if (tl) outputs = [...outputs, ...tl.tracks.map((t): PinDef => ({ id: t.id, type: t.kind === "event" ? "exec" : t.kind === "float" ? "number" : "vector", label: t.name, optional: true }))];
+      break;
+    }
     case "event.custom":
     case "event.call": {
       const c = (g.customEvents ?? []).find((x) => x.id === n.params.event);
@@ -225,6 +230,10 @@ export function nodeTitle(g: Graph, n: GNode): string {
       return fnOf(g, n.params.func)?.name ?? "Call (pick a Function)";
     case "fn.entry":
       return fnOf(g, n.graph)?.name ?? def.title;
+    case "timeline.play": {
+      const tl = (g.timelines ?? []).find((x) => x.id === n.params.timeline);
+      return tl ? `Timeline: ${tl.name}` : def.title;
+    }
     case "event.custom":
     case "event.call":
     case "timer.by_event": {

@@ -21,6 +21,7 @@ import type { Snippet } from "./graphOps";
 import { Inspector } from "./Inspector";
 import { MyBlueprint } from "./MyBlueprint";
 import { TabBar } from "./TabBar";
+import { TimelineEditor } from "./TimelineEditor";
 import { tabView } from "./graphOps";
 import { Results, fullText, testText } from "./Results";
 import { DebugPanel } from "./DebugPanel";
@@ -286,7 +287,7 @@ function Studio({ maps }: ToolProps) {
       else {
         st.open(p.graph, true);
         // an address with a tab ("studio:<id>/<tab>") opens that Function's or Macro's graph too
-        if (tabId && [...(p.graph.functions ?? []), ...(p.graph.macros ?? []), ...(p.graph.eventGraphs ?? [])].some((x) => x.id === tabId)) useStudio.getState().openTab(tabId);
+        if (tabId && [...(p.graph.functions ?? []), ...(p.graph.macros ?? []), ...(p.graph.eventGraphs ?? []), ...(p.graph.timelines ?? [])].some((x) => x.id === tabId)) useStudio.getState().openTab(tabId);
       }
     } catch (e) {
       toast(errorText(e), true);
@@ -334,7 +335,7 @@ function Studio({ maps }: ToolProps) {
     const [gid, tabId = ""] = arg.split("/");
     if (cur?.mode.id === gid) {
       const st = useStudio.getState();
-      if (st.tab !== tabId && (!tabId || [...(cur.functions ?? []), ...(cur.macros ?? []), ...(cur.eventGraphs ?? [])].some((x) => x.id === tabId))) st.openTab(tabId);
+      if (st.tab !== tabId && (!tabId || [...(cur.functions ?? []), ...(cur.macros ?? []), ...(cur.eventGraphs ?? []), ...(cur.timelines ?? [])].some((x) => x.id === tabId))) st.openTab(tabId);
       if (!tabId) st.setFuncFocus(null);
       return;
     }
@@ -823,7 +824,7 @@ function Studio({ maps }: ToolProps) {
         <MyBlueprint api={canvas} snippets={snippets} reloadSnippets={reloadSnippets} toast={toast} />
         <div className="st-center">
           <TabBar />
-          <Canvas toast={toast} snippets={snippets} onApi={onApi} />
+          {(graph.timelines ?? []).some((t) => t.id === tab) ? <TimelineEditor id={tab} /> : <Canvas toast={toast} snippets={snippets} onApi={onApi} />}
         </div>
         <Inspector />
       </div>

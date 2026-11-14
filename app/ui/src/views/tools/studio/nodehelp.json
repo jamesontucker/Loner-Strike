@@ -28922,7 +28922,7 @@
 "related":[
 "timer.by_function",
 "timer.by_event",
-"timer.clear"
+"timeline.play"
 ],
 "example":{
 "caption":"When a round starts, Retriggerable Delay runs.",
@@ -29006,7 +29006,7 @@
 "related":[
 "timer.retrigger",
 "timer.by_event",
-"timer.clear"
+"timeline.play"
 ]
 },
 "timer.by_event":{
@@ -29052,7 +29052,7 @@
 "related":[
 "timer.by_function",
 "timer.retrigger",
-"timer.clear"
+"timeline.play"
 ]
 },
 "event.custom":{
@@ -29106,6 +29106,79 @@
 "flow.while"
 ]
 },
+"timeline.play":{
+"title":"Timeline",
+"category":"Timers",
+"what":"Plays a Timeline (My mode, Timelines): values that change over time (a number, a position, a color) and events at set moments. Update runs every tick while it plays; Finished at the end. In a Function with a Player input, each player has their own. Double-click to edit its tracks.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"play_start",
+"dir":"in",
+"help":"Runs Play from Start."
+},
+{
+"id":"stop",
+"dir":"in",
+"help":"Runs Stop."
+},
+{
+"id":"reverse",
+"dir":"in",
+"help":"Runs Reverse."
+},
+{
+"id":"reverse_end",
+"dir":"in",
+"help":"Runs Reverse from End."
+},
+{
+"id":"set_time",
+"dir":"in",
+"help":"Runs Set New Time."
+},
+{
+"id":"new_time",
+"dir":"in",
+"help":"New Time: a number."
+},
+{
+"id":"update",
+"dir":"out",
+"help":"Runs on Update."
+},
+{
+"id":"finished",
+"dir":"out",
+"help":"Runs on Finished."
+},
+{
+"id":"forward",
+"dir":"out",
+"help":"Forward: yes or no."
+},
+{
+"id":"time",
+"dir":"out",
+"help":"Time: a number."
+}
+],
+"settings":[
+{
+"id":"timeline",
+"help":"Picked from this mode's own pieces."
+}
+],
+"related":[
+"timer.clear",
+"timer.is_active",
+"timer.by_event"
+]
+},
 "timer.clear":{
 "title":"Clear Timer",
 "category":"Timers",
@@ -29129,9 +29202,9 @@
 ],
 "settings":[],
 "related":[
+"timeline.play",
 "timer.is_active",
-"timer.by_event",
-"timer.by_function"
+"timer.by_event"
 ]
 },
 "timer.is_active":{
@@ -29153,8 +29226,8 @@
 "settings":[],
 "related":[
 "timer.clear",
-"timer.by_event",
-"timer.by_function"
+"timeline.play",
+"timer.by_event"
 ]
 },
 "debug.print":{

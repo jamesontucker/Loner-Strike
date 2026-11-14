@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useStudio } from "./store";
 import { nodeDef, typeColor } from "./registry";
-import { addCustomEvent, addEnum, addEventGraph, addFunction, addLocal, addMacro, addMarker, addStruct, addVariable, makeSnippet, removeEventGraph, renameEventGraph, type Snippet } from "./graphOps";
+import { addCustomEvent, addTimeline, addEnum, addEventGraph, addFunction, addLocal, addMacro, addMarker, addStruct, addVariable, makeSnippet, removeEventGraph, renameEventGraph, type Snippet } from "./graphOps";
 import { addFromLibrary, DRAG_LIB, DRAG_PART, DRAG_SNIPPET, DRAG_VAR, type CanvasApi } from "./Canvas";
 import { extractItem, itemFile, itemId, LIBRARY_SET, readItem, type LibItem } from "./library";
 import { deleteItem, saveItem } from "./libraryApi";
@@ -467,6 +467,25 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
             title="Right-click to rename or delete"
           >
             <span className="st-mb-dot ev" /> {e.name}
+          </button>
+        ))}
+      </Section>
+      <Section
+        title="Timelines"
+        count={(graph.timelines ?? []).length}
+        onAdd={() => {
+          const r = addTimeline(graph);
+          edit(() => r.graph);
+          setTimeout(() => openTab(r.id), 0);
+        }}
+        addTitle="Add a Timeline (values over time, events at set moments)"
+        open={(graph.timelines ?? []).length > 0}
+      >
+        {(graph.timelines ?? []).length === 0 && <p className="st-muted st-mb-empty">Values that change over time (a moving platform, a pulsing glow) and events at set moments.</p>}
+        {(graph.timelines ?? []).map((t) => (
+          <button key={t.id} type="button" className={`st-mb-item${tab === t.id ? " open" : ""}`} onClick={() => openTab(t.id)} title="Open its editor">
+            <span className="st-mb-dot fn" /> {t.name}
+            <span className="st-muted st-mb-note">{t.length} s</span>
           </button>
         ))}
       </Section>

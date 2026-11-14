@@ -685,3 +685,33 @@ export function removeCustomEvent(g: Graph, id: string): Graph {
 
 /** The name a map uses for a Custom Event ("Open Gate" -> open_gate), as the plugin does. */
 export const mapName = (name: string) => [...name.trim().toLowerCase()].map((c) => (/[a-z0-9]/.test(c) ? c : "_")).join("").slice(0, 26);
+
+export type GTimeline = NonNullable<Graph["timelines"]>[number];
+export type GTrack = GTimeline["tracks"][number];
+export type GKey = GTrack["keys"][number];
+
+/** A Timeline (values over time and events at set moments), 3 seconds, with no tracks yet. */
+export function addTimeline(g: Graph, name?: string): { graph: Graph; id: string } {
+  const id = freshPartId(g, "tl");
+  const taken = (g.timelines ?? []).map((t) => t.name);
+  return { graph: { ...g, timelines: [...(g.timelines ?? []), { id, name: uniqueName(taken, name ?? "Timeline"), length: 3, tick: 0.05, tracks: [] }] }, id };
+}
+
+export function updateTimeline(g: Graph, id: string, f: (t: GTimeline) => GTimeline): Graph {
+  return { ...g, timelines: (g.timelines ?? []).map((t) => (t.id === id ? f(t) : t)) };
+}
+
+export function removeTimeline(g: Graph, id: string): Graph {
+  const left = (g.timelines ?? []).filter((t) => t.id !== id);
+  return { ...g, timelines: left.length ? left : undefined };
+}
+
+const TRACK_IDS = new Set(["exec", "then", "in", "out", "update", "finished", "forward", "time", "play_start", "stop", "reverse", "reverse_end", "set_time", "new_time"]);
+/** A new track of a kind, with a free id. */
+export function newTrack(t: GTimeline, kind: GTrack["kind"]): GTrack {
+  const base = { float: "value", vector: "position", color: "color", event: "event" }[kind];
+  let n = 1;
+  while (t.tracks.some((x) => x.id === `${base}${n}`) || TRACK_IDS.has(`${base}${n}`)) n++;
+  const label = { float: "Value", vector: "Position", color: "Color", event: "Event" }[kind];
+  return { id: `${base}${n}`, name: `${label} ${n}`, kind, keys: [] };
+}

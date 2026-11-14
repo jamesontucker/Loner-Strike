@@ -621,6 +621,64 @@ test("custom events: add one with an input, its Custom Event and Call nodes get 
   expect((await saved(page)).customEvents[0].inputs).toHaveLength(1);
 });
 
+test("Timelines: the editor (tracks, add / drag / delete keys, ease, fit), the node's pins, double-click opens it", async ({ page }) => {
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await expect(node(page, "give_m4")).toBeVisible({ timeout: 20_000 });
+  const side = page.getByRole("complementary", { name: "My mode" });
+  await side.getByRole("button", { name: "Add a Timeline (values over time, events at set moments)" }).click();
+  const ed = page.getByTestId("timeline-editor");
+  await expect(ed).toBeVisible();
+  await expect(selectedTab(page)).toContainText("Timeline");
+  await ed.getByRole("button", { name: "+ Number track" }).click();
+  await ed.getByRole("button", { name: "+ Event track" }).click();
+  const lane = ed.getByLabel("Value 1 lane");
+  const lb = (await lane.boundingBox())!;
+  // two clicks: two keys; the second is selected and shows its details
+  await lane.click({ position: { x: 10, y: lb.height - 10 } });
+  await lane.click({ position: { x: lb.width / 2, y: 10 } });
+  await expect(lane.locator("[data-key]")).toHaveCount(2);
+  await expect(page.getByTestId("timeline-key")).toBeVisible();
+  // drag the selected key to the right: its time grows
+  const t0 = Number(await page.getByLabel("Key time").inputValue());
+  const k = lane.locator('[data-key="1"]');
+  const kb = (await k.boundingBox())!;
+  await page.mouse.move(kb.x + kb.width / 2, kb.y + kb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(kb.x + kb.width / 2 + 60, kb.y + kb.height / 2, { steps: 5 });
+  await page.mouse.up();
+  expect(Number(await page.getByLabel("Key time").inputValue())).toBeGreaterThan(t0);
+  // ease from the key's menu, then Delete removes it
+  await k.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Ease" }).click();
+  await expect(page.getByLabel("Key interpolation")).toHaveValue("ease");
+  await ed.focus();
+  await page.keyboard.press("Delete");
+  await expect(lane.locator("[data-key]")).toHaveCount(1);
+  // an event key, Loop, Fit
+  await ed.getByLabel("Event 1 lane").click({ position: { x: 40, y: 10 } });
+  await ed.getByLabel("Loop").check();
+  await ed.getByRole("button", { name: "Fit", exact: true }).click();
+  // the node: its track pins; double-click opens the editor again
+  await tabs(page).getByRole("tab", { name: "Event Graph" }).click();
+  const pb = (await page.locator(".react-flow__pane").boundingBox())!;
+  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 40, y: 30 } });
+  const pal = page.getByRole("dialog", { name: "Add a node" });
+  await pal.getByRole("textbox").fill("timeline");
+  await pal.getByRole("button", { name: /^Timeline: Timeline/ }).click();
+  const tn = page.locator(".react-flow__node").filter({ hasText: "Timeline: Timeline" });
+  await expect(tn).toContainText("Value 1");
+  await expect(tn).toContainText("Event 1");
+  await tn.click({ position: { x: 30, y: 8 } });
+  await tn.dblclick({ position: { x: 30, y: 8 } });
+  await expect(page.getByTestId("timeline-editor")).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect.poll(async () => (await saved(page)).timelines?.[0]?.tracks?.length).toBe(2);
+  const tl = (await saved(page)).timelines[0];
+  expect(tl.loop).toBe(true);
+  expect(tl.tracks[0].keys).toHaveLength(1);
+  expect(tl.tracks[1].keys).toHaveLength(1);
+});
+
 test.describe("leaving with unsaved edits", () => {
   // in the page, as a person gets there: Overview → Game Mode Studio → the mode → its Function
   const dirty = async (page: Page) => {
