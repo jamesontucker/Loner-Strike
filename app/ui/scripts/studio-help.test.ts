@@ -32,7 +32,9 @@ test("help search: titles first, then what nodes do", async () => {
   assert.deepEqual(searchHelp(help, "zzzz nothing like it"), []);
   // a question in plain words (QA4-B F6.6)
   const t = (q: string) => searchHelp(help, q).slice(0, 5).map((x) => help[x].title);
-  assert.ok(t("move a player somewhere").some((x) => /teleport|position|move/i.test(x)), JSON.stringify(t("move a player somewhere")));
+  assert.ok(t("move a player somewhere").includes("Teleport"), JSON.stringify(t("move a player somewhere")));
+  // ("move" is a word of its own, not the end of "remove")
+  assert.ok(!t("move a player somewhere").some((x) => x.startsWith("Remove")));
   assert.equal(t("how do I end the round")[0], "End Round", JSON.stringify(t("how do I end the round")));
   assert.ok(t("how do I end the round").includes("Round Ended"));
   assert.equal(searchHelp(help, "").length, NODE_DEFS.length);

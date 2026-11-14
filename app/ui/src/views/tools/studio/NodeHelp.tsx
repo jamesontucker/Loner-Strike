@@ -64,11 +64,13 @@ export function searchHelp(help: Record<string, HelpEntry>, query: string): stri
     let score = 0;
     let matched = 0;
     for (const w of words) {
+      // (at a word's start: "move" isn't in "remove"; a long word anywhere, as before)
+      const at = new RegExp(`(^|[^a-z0-9])${w.replace(/[^a-z0-9]/g, "\\$&")}`);
       let s = 0;
       if (title.startsWith(w)) s = 4;
       else if (titleWords.some((x) => x.startsWith(w))) s = 3;
-      else if (title.includes(w)) s = 2;
-      else if (body.includes(w)) s = 1;
+      else if (w.length > 4 && title.includes(w)) s = 2;
+      else if (at.test(body) || (w.length > 4 && body.includes(w))) s = 1;
       if (s) matched++;
       score += s;
     }
