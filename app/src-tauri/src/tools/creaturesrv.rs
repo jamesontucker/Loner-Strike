@@ -38,7 +38,20 @@ pub fn carry_block(local_game: &Path, server_game: &Path, id: &str) -> Result<Op
         cp::uninstall_pack(server_game, id)?;
         return Ok(None);
     };
-    cp::install_trusted(server_game, id, &text, Some(local_game)).map(Some)
+    cp::install_trusted(server_game, id, &only_written(&text), Some(local_game)).map(Some)
+}
+
+/// A block as it goes to a server: its files are only the ones its package wrote into this
+/// computer's game. A file the block names that the player already had (their own, private) is
+/// never copied anywhere.
+fn only_written(block: &str) -> String {
+    let (_, mut blocks) = cp::split_blocks(block);
+    for b in blocks.iter_mut() {
+        let wrote = b.wrote.clone();
+        b.files.retain(|f| wrote.iter().any(|w| w.eq_ignore_ascii_case(f)));
+        b.wrote.clear();
+    }
+    cp::join_blocks("", &blocks)
 }
 
 /// Takes a package's block (and the files only it needed) off a server.
@@ -85,7 +98,8 @@ fn collect(local_ini: &str, used: &BTreeSet<String>) -> Vec<(String, String, Vec
         }
         let b = blocks.iter().find(|b| b.types.iter().any(|t| t.eq_ignore_ascii_case(n)))?;
         let s: Vec<String> = sections(&b.body).into_iter().filter(|(x, _)| x == n).map(|(_, b)| b).collect();
-        (!s.is_empty()).then(|| (s.concat(), b.files.clone()))
+        // (an installed type's files: only those its package wrote here, never a player's own)
+        (!s.is_empty()).then(|| (s.concat(), b.wrote.clone()))
     };
     let mut order: Vec<(String, String, Vec<String>)> = Vec::new();
     for n in used {
@@ -146,6 +160,7 @@ pub fn carry_map(local_game: &Path, game: &str, server_game: &Path, map: &str, e
     let used = cp::types_in_entity_text(entities);
     let local_ini = std::fs::read(local_game.join(INI)).map(|b| b.iter().map(|c| *c as char).collect::<String>()).unwrap_or_default();
     let found = collect(&local_ini, &used);
+    let own_names: BTreeSet<String> = sections(&cp::split_blocks(&local_ini).0).into_iter().map(|(n, _)| n).collect();
     let server_ini_path = server_game.join(INI);
     let old = std::fs::read(&server_ini_path).map(|b| b.iter().map(|c| *c as char).collect::<String>()).unwrap_or_default();
     let (server_user, _) = cp::split_blocks(&old);
@@ -156,14 +171,16 @@ pub fn carry_map(local_game: &Path, game: &str, server_game: &Path, map: &str, e
     let mut skipped: Vec<String> = Vec::new();
     let mut body = String::new();
     let mut files: Vec<String> = Vec::new();
-    for (n, s, block_files) in &found {
+    for (n, s, wrote_files) in &found {
         if theirs.contains(n) {
             skipped.push(n.clone());
             continue;
         }
         types.push(n.clone());
         body.push_str(s);
-        let mut fs = if block_files.is_empty() { files_of(s, game) } else { block_files.iter().filter(|f| files_of(s, game).iter().any(|x| x.eq_ignore_ascii_case(f))).cloned().collect() };
+        // the player's own type: the files it names; an installed one: what its package wrote
+        let installed = !own_names.contains(n);
+        let mut fs: Vec<String> = if installed { wrote_files.iter().filter(|f| files_of(s, game).iter().any(|x| x.eq_ignore_ascii_case(f))).cloned().collect() } else { files_of(s, game) };
         fs.retain(|f| !files.iter().any(|x| x.eq_ignore_ascii_case(f)));
         files.extend(fs);
     }
@@ -270,7 +287,7 @@ mod tests {
         (root, local, server)
     }
 
-    const PACK: &str = "; types: qa.runner_x\n; files: models/qa/runner_x.mdl sound/qa/x.wav\n[qa.runner_x]\nbase = runner\nhp = 77\nmodel = models/qa/runner_x.mdl\nsnd_pain = qa/x.wav\n";
+    const PACK: &str = "; types: gb7.runner_x\n; files: models/gb7/runner_x.mdl sound/gb7/x.wav\n[gb7.runner_x]\nbase = runner\nhp = 77\nmodel = models/gb7/runner_x.mdl\nsnd_pain = gb7/x.wav\n";
     const SERVER_OWN: &str = "; the server's own\n[srv_type]\nbase = zombie\nhp = 5\n";
 
     fn ini(dir: &Path) -> String {
@@ -281,37 +298,65 @@ mod tests {
     fn a_mode_to_a_server_carries_its_block_and_files_and_takes_them_back() {
         let (root, local, server) = dirs("mode");
         let pkg = root.join("pkg");
-        std::fs::create_dir_all(pkg.join("models/qa")).unwrap();
-        std::fs::create_dir_all(pkg.join("sound/qa")).unwrap();
-        std::fs::write(pkg.join("models/qa/runner_x.mdl"), b"IDST model").unwrap();
-        std::fs::write(pkg.join("sound/qa/x.wav"), b"RIFF wav").unwrap();
+        std::fs::create_dir_all(pkg.join("models/gb7")).unwrap();
+        std::fs::create_dir_all(pkg.join("sound/gb7")).unwrap();
+        std::fs::write(pkg.join("models/gb7/runner_x.mdl"), b"IDST model").unwrap();
+        std::fs::write(pkg.join("sound/gb7/x.wav"), b"RIFF wav").unwrap();
         // installed on this computer (as CP-core's install does), then put on the server
-        cp::install_pack(&local, "mod-1", PACK, Some(&pkg), "qa").unwrap();
+        cp::install_pack(&local, "mod-1", PACK, Some(&pkg), "gb7").unwrap();
         std::fs::write(server.join(INI), SERVER_OWN).unwrap();
         let done = carry_block(&local, &server, "mod-1").unwrap().unwrap();
-        assert_eq!(done.types, vec!["qa.runner_x"]);
-        assert!(server.join("models/qa/runner_x.mdl").is_file() && server.join("sound/qa/x.wav").is_file());
+        assert_eq!(done.types, vec!["gb7.runner_x"]);
+        assert!(server.join("models/gb7/runner_x.mdl").is_file() && server.join("sound/gb7/x.wav").is_file());
         let text = ini(&server);
         assert!(text.starts_with(SERVER_OWN), "the server's own part is byte-identical: {text}");
-        assert!(text.contains("; >>> from mod-1") && text.contains("[qa.runner_x]"));
+        assert!(text.contains("; >>> from mod-1") && text.contains("[gb7.runner_x]"));
         // a second item (a map's block) uses the same type: dropping the mode keeps it
         std::fs::create_dir_all(server.join("maps")).unwrap();
         std::fs::write(server.join("maps/qa_map.bsp"), b"x").unwrap();
-        let r = carry_map(&local, "cstrike", &server, "qa_map", "{\n\"classname\" \"ls_creature\"\n\"type\" \"qa.runner_x\"\n}\n").unwrap();
-        assert_eq!(r["types"], json!(["qa.runner_x"]));
+        let r = carry_map(&local, "cstrike", &server, "qa_map", "{\n\"classname\" \"ls_creature\"\n\"type\" \"gb7.runner_x\"\n}\n").unwrap();
+        assert_eq!(r["types"], json!(["gb7.runner_x"]));
         drop_block(&server, "mod-1").unwrap();
         let text = ini(&server);
         assert!(text.starts_with(SERVER_OWN));
-        assert!(!text.contains("from mod-1") && text.contains("from map.qa_map") && text.contains("[qa.runner_x]"));
-        assert!(server.join("models/qa/runner_x.mdl").is_file(), "the map's block still needs the model");
+        assert!(!text.contains("from mod-1") && text.contains("from map.qa_map") && text.contains("[gb7.runner_x]"));
+        assert!(server.join("models/gb7/runner_x.mdl").is_file(), "the map's block still needs the model");
         // the map goes from the server: its block (and the files only it needed) go too
         std::fs::remove_file(server.join("maps/qa_map.bsp")).unwrap();
         assert!(prune(&server).unwrap());
         assert_eq!(ini(&server), SERVER_OWN);
-        assert!(!server.join("models/qa/runner_x.mdl").exists() && !server.join("sound/qa/x.wav").exists());
+        assert!(!server.join("models/gb7/runner_x.mdl").exists() && !server.join("sound/gb7/x.wav").exists());
         assert!(!prune(&server).unwrap());
         // nothing for a package with no block here
         assert!(carry_block(&local, &server, "mod-2").unwrap().is_none());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A file the block names that the player already had (their own copy, not written by the
+    /// package) never leaves their computer, for a mode or a map.
+    #[test]
+    fn a_players_private_file_is_never_carried() {
+        let (root, local, server) = dirs("private");
+        let pkg = root.join("pkg");
+        for d in [&pkg, &local] {
+            std::fs::create_dir_all(d.join("models/gb7")).unwrap();
+            std::fs::create_dir_all(d.join("sound/gb7")).unwrap();
+        }
+        std::fs::write(pkg.join("models/gb7/runner_x.mdl"), b"IDST pkg").unwrap();
+        std::fs::write(pkg.join("sound/gb7/x.wav"), b"RIFF pkg").unwrap();
+        // the player already had their own sound at that path: kept, not written by the package
+        std::fs::write(local.join("sound/gb7/x.wav"), b"RIFF private").unwrap();
+        let d = cp::install_pack(&local, "mod-1", PACK, Some(&pkg), "gb7").unwrap();
+        assert_eq!(d.kept, vec!["sound/gb7/x.wav"]);
+        carry_block(&local, &server, "mod-1").unwrap().unwrap();
+        assert!(server.join("models/gb7/runner_x.mdl").is_file());
+        assert!(!server.join("sound/gb7/x.wav").exists(), "the player's own file stays on their computer");
+        std::fs::create_dir_all(server.join("maps")).unwrap();
+        std::fs::write(server.join("maps/m.bsp"), b"x").unwrap();
+        let server2 = root.join("srv2/cstrike");
+        std::fs::create_dir_all(server2.parent().unwrap().join("valve")).unwrap();
+        carry_map(&local, "cstrike", &server2, "m", "{\n\"classname\" \"ls_creature\"\n\"type\" \"gb7.runner_x\"\n}\n").unwrap();
+        assert!(server2.join("models/gb7/runner_x.mdl").is_file() && !server2.join("sound/gb7/x.wav").exists());
         let _ = std::fs::remove_dir_all(&root);
     }
 
