@@ -22,7 +22,7 @@ map, `-insecure`; table in QA4.md (area E self-check), recordings in ~/loner-str
 gm_drrec, console, `drruns.py` with DRMAPS set to a sim's maps folder). No crash on any map. For you:
 - **deathrun_death**: 313 of 314 runner deaths are one trigger_hurt near (-3540, 170, -219), 4-8 s into the round,
   with no press (0 presses in 45 rounds); 6 finishes (2%). Your DR3 runs at 01:51 and 02:06 show the same.
-- **deathrun_jigsaw2**: every runner stuck at 81% of the course until the round timer (2 rounds in 15 min), 0 presses.
+- **deathrun_jigsaw2**: removed by the user from 1.0 (not supported for bots: puzzle-gated, like dojo). Was: every runner stuck at 81% of the course until the round timer (2 rounds in 15 min), 0 presses.
 - **deathrun_starwars**: 7 of 14 runs reach the end but the rounds go to the timer (finishers don't end them); 0 presses
   ("20 traps, 0 the terrorist can walk to").
 - **deathrun_temple**: traps fire (10 presses, 23 trap deaths) but only 2 of 77 runs reach the end (3%).
