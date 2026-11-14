@@ -920,10 +920,10 @@ mod tests {
         assert!(a["internet"].is_null(), "nothing set: no internet address");
         e.public_address = Some("home.example.com".into());
         assert_eq!(addresses(&e, 27020, lan)["internet"], "home.example.com:27020");
-        e.remote = serde_json::from_value(json!({"host": "178.156.241.180", "key": "/k"})).unwrap();
+        e.remote = serde_json::from_value(json!({"host": "203.0.113.10", "key": "/k"})).unwrap();
         e.public_address = None;
         let a = addresses(&e, 27020, lan);
-        assert_eq!(a["internet"], "178.156.241.180:27020");
+        assert_eq!(a["internet"], "203.0.113.10:27020");
         assert!(a["network"].is_null());
         // a port in the public address is the game's, not HLTV's
         e.public_address = Some("play.lonerstrike.com:27016".into());

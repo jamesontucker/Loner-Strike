@@ -4075,8 +4075,8 @@ mod tests {
         assert_eq!(ok(" Play.LonerStrike.com "), Some("play.lonerstrike.com".into()));
         assert_eq!(ok("play.example.com:27016"), Some("play.example.com:27016".into()));
         assert_eq!(ok("play.example.com."), Some("play.example.com".into()));
-        assert_eq!(ok("178.156.241.180"), Some("178.156.241.180".into()));
-        assert_eq!(ok("178.156.241.180:27015"), Some("178.156.241.180:27015".into()));
+        assert_eq!(ok("203.0.113.10"), Some("203.0.113.10".into()));
+        assert_eq!(ok("203.0.113.10:27015"), Some("203.0.113.10:27015".into()));
         assert_eq!(ok("my-home.duckdns.org:65535"), Some("my-home.duckdns.org:65535".into()));
         assert_eq!(ok("localhost"), Some("localhost".into()));
         let long = format!("{}.com", vec!["a".repeat(60); 5].join("."));
@@ -4118,9 +4118,9 @@ mod tests {
         e.listen_ip.clear();
         e.public_address = None;
         e.port = 27015;
-        e.remote = serde_json::from_value(serde_json::json!({"host": "178.156.241.180", "key": "/k"})).unwrap();
-        assert_eq!(e.connect(), "178.156.241.180:27015");
-        assert_eq!(e.join_address(), "178.156.241.180:27015");
+        e.remote = serde_json::from_value(serde_json::json!({"host": "203.0.113.10", "key": "/k"})).unwrap();
+        assert_eq!(e.connect(), "203.0.113.10:27015");
+        assert_eq!(e.join_address(), "203.0.113.10:27015");
         assert_eq!(e.public_at(27020), None);
         e.public_address = Some("play.lonerstrike.com".into());
         assert_eq!(e.connect(), "play.lonerstrike.com", "27015 is the game's usual port: left off");
