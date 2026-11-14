@@ -108,6 +108,7 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| ee729420 | Combined re-check, prepared (not run): docs/notes/Recheck.md lists every fix and feature commit since QA round 4 began with the test, spec or sim… | (none of its own) the full suites |
 | 1aeec7f1 | QA4-CORE fixes: the top strip's map picture (name tile underneath, the radar right away while GameBanana is looked up, asks again with ?v=); every… | Rust `a_kept_regamedll_reaches_the_done_screen`, `test_builds_keep_every_app_path_in_the_test_folder`, `which_server_code_is_kept`; Playwright `qa4-core.spec.ts`; node `test-panel-gets.mjs` |
 | 56f3ca19 | Game modes: a map with more models than the engine can load with a mode can't hang the server (preset skips it, mode and map picks refuse it, vote… | (none of its own) the full suites |
 
@@ -115,12 +116,16 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| 8b606315 | Specs that broke on a full game (re-check shakedown): QA4-T2's F1 re-check reads trash.mdl's own row in the file list (the check's whole list also… | Playwright `editor-coverage-panels.spec.ts`, `qa4-t2-fixes.spec.ts` |
 | e140b681 | Editor coverage sweep: every command, key, dialog, panel and tool of the map editor run once with its effect and Undo checked (Chromium, WebKit… | Playwright `editor-coverage-commands.spec.ts`, `editor-coverage-dialogs.spec.ts`, `editor-coverage-file.spec.ts` (+4) |
 
 ### Node coverage
 
 | Commit | What | Verified by |
 |---|---|---|
+| 709ca00e | Studio: bots revive a player downed by Down Player - the two nearest get a use goal on the spot, not on the player (the brain keeps a use goal on… | (none of its own) the full suites |
+| bbc7f5b4 | Components: a lap that ends at a checkpoint counts again only once the player has left it - a one-checkpoint course (or a last checkpoint that is… | (none of its own) the full suites |
+| ab946fa2 | Studio: Chat Command runs with arguments ("/give 5"), and every flow node tells the debugger how it went (node coverage sweep) | Rust `chat_commands_take_arguments`, `every_flow_node_reports_a_result` |
 | 08b63471 | Studio: long flows no longer crash, the Playtest stream no longer loses events, numbers and short vectors print with decimals (node coverage sweep) | Rust `event_buffer_fits_one_fputs`, `printed_numbers_keep_decimals`, `short_vectors_as_text_keep_decimals` (+1) |
 | 7783e9e7 | Studio: a mode that reads the round clock (Round Time Left, Set Round Clock...) with no Round Time Up event compiles again - its empty time-up… | (none of its own) the full suites |
 
@@ -134,6 +139,7 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| 82bd0a29 | Site: the remaining screenshots after the QA4 fixes and the contrast pass (Tools, Plugin Studio, Nav fixer, Map doctor, Callouts, Radar maker, the… | (none of its own) the full Playwright run (screenshots by eye) |
 | 48e3f86d | App-wide contrast to WCAG AA (QA4-T1 M1, QA4-T2 UX-H1): panels a shade darker and text tokens lighter, same hues (selected tabs 2.8 -> 4.6:1,… | (none of its own) the full Playwright run (screenshots by eye) |
 
 ### Base Builder
@@ -152,6 +158,8 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| bde650c4 | Docs and changelog catch up: Studio's Status Icon, Objective Marker, Remove Marker and Kill Feed Line; the map-fit rule and gm_mapfit;… | (none of its own) Rust mapsource tests; community-remix.spec.ts |
+| e14e23b9 | Map editor (EditorCoverage F-1, TB-1..TB-4): Esc closes the top dialog wherever focus is and the editor ignores keys while one is open;… | Rust `trenchbroom_layers_round_trip`; Playwright `editor-coverage-panels.spec.ts`, `editor-coverage-trenchbroom.spec.ts` |
 | 1d74d66e | Docs: shared creatures (How creatures work: sharing, Share/Remix, installed blocks, servers; Share and remix maps: a map's custom creatures go… | (none of its own) Rust mapsource tests; community-remix.spec.ts |
 | 54e534ff | Community's creature kind: Creature Studio's Share… packs one of your types (its custom bases, models and sounds, named for your GameBanana… | Rust `a_creature_package_has_the_list_services_layout`, `get_update_go_back_and_remix_with_blocks`, `install_namespace_comes_only_from_the_lists_verified_uploader` (+2); Playwright `community-creature-kind.spec.ts` |
 | 644032a3 | Community list, creature security mirrors: every brain key that names a file is path-checked (model/models, sounds and snd_* relative to sound/,… | list service `test_creatures.py` |
@@ -165,6 +173,10 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| 57c4828b | Shared creatures, security (second review): Community installs carry a strict flag in their own job (Try it, updates, Go back; maps, sprays, any… | Rust `a_handed_over_file_stays_with_the_block_that_needs_it`, `no_download_plants_files_in_a_makers_folder` |
+| f60237fb | Archives and shared creatures, security: a zip whose own directory can't be read here refuses any entry carrying a Unicode name field (the… | Rust `a_pack_only_brings_files_in_its_uploaders_folders` |
+| fc279729 | Shared creatures on servers: a block goes to a server with only the files its package wrote here (a file the player already had stays on their… | Rust `a_players_private_file_is_never_carried` |
+| 2e6b662b | Archives and shared creatures, security: every archive the app unpacks is checked on the paths it really writes (a stored name a Unicode name… | Rust `an_update_cant_vouch_for_its_own_stale_copy`, `every_archive_is_checked_on_the_paths_it_writes`, `listed_files_are_only_the_creatures_own` |
 | 3110edc9 | Shared creatures: an ignored QA round trip on real game folders (publish a Studio mode that spawns the author's own type, unpack the package as… | Rust `creature_round_trip` |
 | 4d583fd2 | Community downloads unpack strictly: only a zip, every entry name plain ASCII (letters, digits, spaces, _ . / -) with no part that climbs out, is… | (none of its own) Rust creaturepack and community tests; list-service test_creatures.py |
 | 7f3fe82e | Community list: package entry names follow the app's strict archive rule: plain ASCII letters, digits, _ . space and - only, no part ending in a… | list service `test_creatures.py` |
@@ -209,6 +221,7 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| f7422f56 | Map editor, NPCs and interactables: their own Outline icons (a person with a speech bubble, a pointing hand), an NPC with no model of its own… | Playwright `npc-editor.spec.ts` |
 | f7d1ddd5 | QA4-A fixes: CS 1.6's own models, sprites, sounds and gfx count as stock without Condition Zero (a list of what Valve's dedicated server ships in… | Rust `cs16_stock_without_czero`; Playwright `editor-filequeue.spec.ts`; node `test-mapname.mjs` |
 | 5c3dee1a | Map editor (QA4-A A-1, A-5): the Budget's last compile is the one this document ran, whatever name it was compiled as (each compile notes the… | Rust `last_compile_is_the_documents_own`; Playwright `editor-budget.spec.ts`, `editor-flat.spec.ts` |
 | 88e7c630 | Condition Zero learns maps with Loner-Strike's brain: the hidden server brings our mp.dll into every server whose DLL isn't ours (Valve's CZ… | Rust `condition_zero_learns_with_our_brain`; Playwright `files-update.spec.ts` |
@@ -218,6 +231,23 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| 77ea3999 | Shakedown fixes: Creature Studio in a small window keeps the preview in the form's column (the types list, which stays put as the page scrolls,… | Playwright `tools.spec.ts` |
+| 9a380f44 | Fields: every text field and text box has the app's field look by default (styles.css, zero specificity so components still win; checkboxes,… | Playwright `field-look.spec.ts` |
+| af7b8814 | Studio Timeline tab, small window: the toolbar stays one line and scrolls sideways (wrapped, it took the lanes' room: the lanes area was 2 px high… | Playwright `studio-ux.spec.ts` |
+| 4eb35cad | Studio: Status Icon, Objective Marker, Remove Marker and Kill Feed Line | Rust `marker_sprites_travel_like_npc_files`, `ui_nodes_generate` |
+| 7c4fc93b | Studio tests: The Quest Giver is the sixth example (kept tiny: at least 10 nodes for it) | (none of its own) the studio Playwright specs; a playtest by the user |
+| 4a47559d | Studio: a Problems note when bots won't know about something they could use, with its fix and Don't warn for this one | Rust `bots_are_told_or_warned` |
+| 801fbeed | NPCs: bots answer Say and Choose (gm_components picks one of the replies for a bot after a moment; the Studio no longer skips bots), so a quest… | (none of its own) the studio Playwright specs; a playtest by the user |
+| 69c6eb74 | Studio tests: the built-in Run Dialog item brings its Dialog table (once; a clashing name gets a free one) and a saved part takes the tables it reads | (none of its own) the studio Playwright specs; a playtest by the user |
+| fca57e61 | Studio: a built-in library item, Run Dialog - a conversation from a Dialog data table | Rust `builtin_library_items_check_clean`, `dialogue_links_are_checked` |
+| b5bb94c7 | Game Mode Studio, NPCs: Talked To NPC and Used Interactable events, Say and Choose (a line and up to 6 replies, every text wirable for… | Rust `bots_offer_an_interactable`, `npc_dialogue_from_a_table_in_a_loop`, `npc_text_stays_data` (+1); Playwright `studio-help.spec.ts`, `studio-npc.spec.ts` |
+| 07f832b7 | Site: every picture reviewed; retaken where it looked off (face sheet, I/O and leak on ls_outpost as PNG/WebP instead of the old JPGs, Studio… | (none of its own) the studio Playwright specs; a playtest by the user |
+| b14771d7 | Studio Timeline tab: each track's header is one line exactly its lane's height (name, kind, a × to remove), the value range beside the lane… | Playwright `studio-timeline-layout.spec.ts` |
+| d0e8e369 | Docs: NPCs and interactables (map editor, Game Mode Studio, dialogue from a table, sharing) | (none of its own) the studio Playwright specs; a playtest by the user |
+| 9ecd0b87 | Creature Studio: a line pointing to NPCs and interactables (map editor, Game Mode Studio); test | Playwright `creatures-qa4.spec.ts` |
+| be9b35b9 | Studio: Buy Perk's Bought is kept, component pins check their kind, Wave Spawned One says Spawner (Y's components sweep) | Rust `buy_perk_keeps_bought`, `component_pins_check_their_kind`, `wave_spawn_says_spawner` |
+| aeadcc47 | Site shots: notes on the shots the dev server can't take (simulator, Replay, the Studio debugger) | (none of its own) the studio Playwright specs; a playtest by the user |
+| 1753e4f2 | Site: Creature Studio and Community screenshots (sample cards from Loner-Strike's own maps and example modes, credited to Loner-Strike), and a… | (none of its own) the studio Playwright specs; a playtest by the user |
 | b7ddd814 | Site: fresh map editor and Game Mode Studio screenshots (br_valley, Quad on ls_outpost, Checks, a new Budget section, King of the Hill, the start… | (none of its own) the studio Playwright specs; a playtest by the user |
 | 56aba2a0 | QA4-G F6: a shared Studio mode says what it needs: requirements::mode_needs (Loner-Strike's components and which ones, creature types, the… | Rust `a_mode_package_says_what_it_needs`, `needs_list_components_creatures_and_the_brain_versions`, `the_brain_here_from_its_mp_dll`; Playwright `community-needs.spec.ts`; list service `test_community.py` |
 | 76f1cfce | One in the Chamber: a round is decided once (QA4-B: a kill in the round-end delay after time ran out ended it again) - a Round Over flag, reset… | (none of its own) the studio Playwright specs; a playtest by the user |
@@ -280,6 +310,8 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| 59bf1359 | Bot brain pin: ReGameDLL 5.30.0.814-ls21 (ls-next3 b1061777, CI run 43651450817, 5.30.0.1314-dev: Y's chat # fix, crash-log time and map, revive… | Rust `pinned_brain_installs` |
+| 036706ff | Re-check runner after its shakedown: builds the UI first (the app embeds app/ui/dist), makes the Linux voice and intent resource folders CI fills,… | (none of its own) sim laststand; the client part by the user |
 | 377a0a42 | Setup copy: mention Last Stand, Battle Royale and making; nav pack maps tip; Make tip; Privacy policy wording; Mac docs link | (none of its own) sim laststand; the client part by the user |
 | c51cf442 | QA4-C fixes: bots upgrade their primary at the bench/armory (a person still upgrades what they hold); a wedged boss or heavy is never just removed… | (none of its own) sim laststand; the client part by the user |
 | 2b7e651f | Downed state: revive goals re-sent every 3 s where the downed player lies now; with squads to every living squad mate within 2500 u (Last Stand:… | (none of its own) sim laststand; the client part by the user |
@@ -292,6 +324,8 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| bd208b9c | Components: interactables bots may use are offered as the brain's own 'use' kind from ls_mode_ver 3 (walk there, face it, press USE, team-minded… | (none of its own) sim br; the client part by the user |
+| db9fbd86 | Battle Royale: a bot meant for the high ground lands right on its high crate when it's open to the sky (br_valley's high-tagged drop spots are… | (none of its own) sim br; the client part by the user |
 | 23e73883 | Battle Royale: bots meant for the high ground take only guns and crates up there in the loot-up (none up there: no gun goal, the brain takes them… | (none of its own) sim br; the client part by the user |
 | 0ec9a400 | Battle Royale: a squad with nobody standing is out at once - its downed players go, the kill to whoever knocked them (QA4-DE F4); the game's… | (none of its own) sim br; the client part by the user |
 | 7ce4d619 | For W2: ls_mode down <id> 1/0 when a player goes down / gets up, dies, respawns or leaves; a bot that hasn't come within 300 u of a gate 9 s after… | (none of its own) sim br; the client part by the user |
@@ -309,6 +343,7 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| b70cd2c3 | Server names up to 63 bytes of UTF-8 (Steam's k_cbMaxGameServerName, 64 with the NUL), was 48 characters: one sharing::clean_name for every place… | Rust `server_names_up_to_63_bytes`; Playwright `server-name-bytes.spec.ts`; list service `test_serverlist.py` |
 | 72d42c46 | Crashes (QA4-F F1, F2, F3, F9): ls_crash.log is read as one crash per entry (each counted and posted to Discord once; an older brain's double… | Rust `a_crash_log_holds_one_entry_per_crash` |
 | e315c267 | Servers and the nav learner (QA4-F F6, F8): on a Mac, ending a server or the hidden learner also ends its Windows-side hlds.exe (by its own… | Rust `wine_side_ends_a_leftover_server`, `wine_side_is_found_by_its_windows_path` |
 | ae80eca1 | Update path fixes (QA4-F F5, F7): a server made before 1.0 gets panel_rcon.txt from its own rcon_password (else a new one) at app start and before… | Rust `a_stripped_server_download_is_never_taken_for_whole`, `panel_rcon_for_servers_made_before_1_0` |
@@ -346,6 +381,7 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| 34ee1899 | Community list, NPC files: a package's ; npc: line (an NPC's or interactable's own model and sounds) is checked as plain models/....mdl and… | list service `test_creatures.py` |
 | e0ece72a | Community list, creature files: a creature-carrying package ships none of the games' own files (the app's stock lists, copied to stock/ and… | list service `test_creatures.py` |
 | 564fc781 | Community list, creatures.ini rule as the app packs it: model lists models/....mdl paths and snd_* keys .wav paths relative to sound/ (several,… | list service `test_creatures.py` |
 | f2d1c7d4 | Caps test: the screenshot message names the file now (QA4-G F3) | (none of its own) list-service tests; the live list by the user |
@@ -385,6 +421,10 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| 35360b25 | The Quest Giver: bring the note back and Sam pays - two per-player flags (On Sam's Quest, Has the Note), the note can be picked up again, Sam pays… | (none of its own) by eye (site not deployed) |
+| e1413a8a | Docs: dialog, not dialogue (US English check), in NPCs and interactables | (none of its own) by eye (site not deployed) |
+| 92398ec1 | Docs, NPCs: the built-in Run Dialog library item and its Dialog table (Dialog from a table) | (none of its own) by eye (site not deployed) |
+| 49a22208 | Site: the editor's Compile shot after a real Fast compile of ls_outpost (its result and the compiler's output), in docs and the home tour | (none of its own) by eye (site not deployed) |
 | 5e5202a3 | Site and editor: TrenchBroom import said where the importers are listed (docs feature list, the editor's start buttons, the import page's heading… | (none of its own) by eye (site not deployed) |
 | 76d50844 | Public-repo cleanups: no home paths in health.rs and the docs (relative or generic paths); the Discord IDs in community.env.example blank with how… | (none of its own) by eye (site not deployed) |
 | 2f0e24c2 | Site: support cards all the same size, last row centered (no stretched card) | (none of its own) by eye (site not deployed) |
@@ -393,6 +433,16 @@ Playwright runs.
 
 | Commit | What | Verified by |
 |---|---|---|
+| 9b4c53cc | Server names: the punctuation test expects letters of any language to stay (clean_name keeps UTF-8 up to 63 bytes since b70cd2c3; ", ; and \ still go) | (none of its own) the full suites |
+| 9692d18f | NPCs (Y's check): a killable NPC is solid so bullets hit it, its own side hurts it only with mp_friendlyfire, and bots shoot it only when the map… | Rust `npc_model_fallback_is_loaded_and_named_right` |
+| f1c8d136 | Demos: the HLTV and name scans are linear (one pass over the zero-separated strings, at most 64 HLTV userinfos looked at), worked out once per… | (none of its own) the full suites |
+| 83369369 | Demos: a demo HLTV recorded (its own slot is the *hltv one) offers no Show my path in Replay, wherever it's kept; the replay endpoint refuses it too | (none of its own) the full suites |
+| 5a644150 | From the site screenshots: Zoom to selection frames a picked face (it framed the whole map), Inspect says center, the Playtest Bots box sits by… | (none of its own) the full suites |
+| 4549be8c | Demos: HLTV's own slot isn't listed among the players seen (its userinfo has *hltv); fixture with an HLTV slot | (none of its own) the full suites |
+| 910cf03b | NPCs and interactables in the editor and in shared packages: an NPC's or interactable's own model and sounds travel with maps, modes and prefabs… | Rust `npc_files_are_found_packed_under_the_owner_and_renamed`, `npc_files_install_from_the_owners_folder_only_and_go_with_the_package`, `npcs_and_interactables_fire_their_targets` (+1) |
+| 3dc4b143 | NPCs and interactables (components): ls_npc - any model, a name, stand/wander/patrol/follow, faces the speaker, unkillable by default (bots never… | Rust `npcs_and_interactables_are_in_the_library_and_the_fgd` |
+| 08b2d783 | Components: ls_npc and ls_interactable natives and forwards (ls_on_npc_talk, ls_on_interact, ls_on_npc_choice; ls_npc_say, ls_npc_choose,… | (none of its own) the full suites |
+| 2b2a12a3 | Creature kind tests: packed files sit under models/gb<id>/ (CP-core 2e6b662b) | (none of its own) the full suites |
 | b8ee5f19 | Release prep: no box address or owner id defaults in the live QA harness (LS_BOX required), made-up Discord ids in modbot tests, gitleaks:allow on… | list service `test_modbot.py` |
 | 7319babb | QA: live test harness (services/serverlist/qa/live.py: private QA-tests category and #qa-live channel, QA-Tester role, bot checks, test list… | (none of its own) the full suites |
 | c5ef240d | Editor small-window fixes from Parity A's sweep: in short panes (a small window's 1+3 or Quad) the axes triad is smaller, and gone in the… | Playwright `editor-content.spec.ts`, `tools.spec.ts` |
