@@ -219,7 +219,10 @@ test("M8, M9: the Timeline editor (name, fitted length, the key row's place, lab
   await lane.click({ position: { x: 80, y: 12 } });
   await expect(page.getByTestId("timeline-key")).toBeVisible();
   expect(Math.abs((await lane.boundingBox())!.y - y0)).toBeLessThan(2);
-  await expect(page.getByRole("button", { name: /^Remove track/ })).toHaveText("Remove");
+  // (b14771d7: a track's remove is the × in its one-line header, named for the track; the toolbar's
+  // own says Delete timeline)
+  await expect(page.getByRole("button", { name: /^Remove track/ }).first()).toHaveText("×");
+  await expect(page.getByRole("button", { name: "Delete timeline" })).toBeVisible();
   await shot(page, "m8-timeline");
 });
 

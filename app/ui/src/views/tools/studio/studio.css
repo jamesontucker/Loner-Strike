@@ -388,6 +388,12 @@
 /* (UX review M8) the key row keeps its space; a lane's bottom edge resizes it */
 .st-tl-key { height: 44px; box-sizing: border-box; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; }
 .st-tl-key-hint { font-size: 12px; }
+/* (a small window) the toolbar stays one line and scrolls sideways: wrapped, it took the lanes'
+   room, and the lanes scrolled under a click (P5 re-check: a new key moved the lane 12 px) */
+.st-tl-bar { flex: none; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; }
+.st-tl-bar > *, .st-tl-bar label { flex: none; white-space: nowrap; }
+.st-tl-ruler, .st-tl-key { flex: none; }
+.st-tl-tracks { min-height: 120px; }
 .st-tl-key > span, .st-tl-key label { white-space: nowrap; flex: none; }
 .st-tl-resize { position: absolute; left: 0; right: 0; bottom: -3px; height: 6px; cursor: ns-resize; z-index: 1; }
 /* a game setting's whole name (UX review M9) */
