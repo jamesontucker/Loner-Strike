@@ -10547,12 +10547,18 @@
    "type": "bots.phase",
    "title": "Bots: Phase",
    "category": "Bots",
-   "help": "Tells the bots what part of the game it is: Loot (nobody is an enemy: they gear up and keep apart), Fight, or back to normal.",
+   "help": "Tells the bots what part of the game it is: Loot (nobody is an enemy: they gear up and keep apart), Fight, or back to normal. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later).",
    "inputs": [
     {
      "id": "exec",
      "type": "exec",
      "label": ""
+    },
+    {
+     "id": "influence",
+     "type": "number",
+     "label": "Personality influence",
+     "param": "influence"
     }
    ],
    "outputs": [
@@ -10582,9 +10588,18 @@
        "Normal"
       ]
      ]
+    },
+    {
+     "id": "influence",
+     "label": "Personality influence (0-100)",
+     "kind": "number",
+     "default": 50,
+     "min": 0,
+     "max": 100
     }
    ],
-   "needs": "components"
+   "needs": "components",
+   "keywords": "personality obey skill"
   },
   {
    "type": "bots.no_buy",
@@ -10775,7 +10790,7 @@
    "type": "bots.layer",
    "title": "Bots: Prefer Layer",
    "category": "Bots",
-   "help": "Bots look for loot and hold on this layer of the map: below (tunnels, basements), the surface, or high (roofs, ridges); or their own choice again.",
+   "help": "Bots look for loot and hold on this layer of the map: below (tunnels, basements), the surface, or high (roofs, ridges); or their own choice again. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later).",
    "inputs": [
     {
      "id": "exec",
@@ -10787,6 +10802,12 @@
      "type": "player",
      "label": "Bot",
      "optional": true
+    },
+    {
+     "id": "influence",
+     "type": "number",
+     "label": "Personality influence",
+     "param": "influence"
     }
    ],
    "outputs": [
@@ -10854,9 +10875,18 @@
        "Their own choice"
       ]
      ]
+    },
+    {
+     "id": "influence",
+     "label": "Personality influence (0-100)",
+     "kind": "number",
+     "default": 50,
+     "min": 0,
+     "max": 100
     }
    ],
-   "needs": "components"
+   "needs": "components",
+   "keywords": "personality obey skill"
   },
   {
    "type": "bots.creature_enemies",
@@ -10897,7 +10927,7 @@
    "type": "bots.goal",
    "title": "Bots: Goal",
    "category": "Bots",
-   "help": "Gives bots something to do at an entity: defend or capture it, use it (hold USE), loot it, or go and hold there, with a priority (0-100), for some seconds, within a radius.",
+   "help": "Gives bots something to do at an entity: defend or capture it, use it (hold USE), loot it, or go and hold there, with a priority (0-100), for some seconds, within a radius. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later).",
    "inputs": [
     {
      "id": "exec",
@@ -10927,6 +10957,12 @@
      "type": "number",
      "label": "For (seconds)",
      "param": "secs"
+    },
+    {
+     "id": "influence",
+     "type": "number",
+     "label": "Personality influence",
+     "param": "influence"
     }
    ],
    "outputs": [
@@ -11022,9 +11058,18 @@
      "default": 64,
      "min": 8,
      "max": 4000
+    },
+    {
+     "id": "influence",
+     "label": "Personality influence (0-100)",
+     "kind": "number",
+     "default": 50,
+     "min": 0,
+     "max": 100
     }
    ],
-   "needs": "components"
+   "needs": "components",
+   "keywords": "personality obey skill"
   },
   {
    "type": "bots.goal_clear",
@@ -11125,7 +11170,7 @@
    "type": "bots.offer",
    "title": "Bots: Offer",
    "category": "Bots",
-   "help": "Tells bots something here can be bought or used for a price (a perk, an upgrade bench, a mystery box, a trap, a turret spot); they take it like a person would, when they can afford it and it's calm.",
+   "help": "Tells bots something here can be bought or used for a price (a perk, an upgrade bench, a mystery box, a trap, a turret spot); they take it like a person would, when they can afford it and it's calm. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later).",
    "inputs": [
     {
      "id": "exec",
@@ -11149,6 +11194,12 @@
      "type": "number",
      "label": "Price",
      "param": "cost"
+    },
+    {
+     "id": "influence",
+     "type": "number",
+     "label": "Personality influence",
+     "param": "influence"
     }
    ],
    "outputs": [
@@ -11236,9 +11287,18 @@
      "default": 0,
      "min": 0,
      "max": 20
+    },
+    {
+     "id": "influence",
+     "label": "Personality influence (0-100)",
+     "kind": "number",
+     "default": 50,
+     "min": 0,
+     "max": 100
     }
    ],
-   "needs": "components"
+   "needs": "components",
+   "keywords": "personality obey skill"
   },
   {
    "type": "bots.offer_clear",
@@ -11397,7 +11457,7 @@
    "type": "bot.follow",
    "title": "Bot Follow",
    "category": "Bots",
-   "help": "Makes a bot follow a player for some seconds.",
+   "help": "Makes a bot follow a player for some seconds. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later).",
    "inputs": [
     {
      "id": "exec",
@@ -11415,6 +11475,12 @@
      "type": "player",
      "label": "Follow",
      "required": true
+    },
+    {
+     "id": "influence",
+     "type": "number",
+     "label": "Personality influence",
+     "param": "influence"
     }
    ],
    "outputs": [
@@ -11432,8 +11498,17 @@
      "default": 30,
      "min": 1,
      "max": 600
+    },
+    {
+     "id": "influence",
+     "label": "Personality influence (0-100)",
+     "kind": "number",
+     "default": 50,
+     "min": 0,
+     "max": 100
     }
-   ]
+   ],
+   "keywords": "personality obey skill"
   },
   {
    "type": "bot.release",

@@ -23622,12 +23622,17 @@
 "bots.phase":{
 "title":"Bots: Phase",
 "category":"Bots",
-"what":"Tells the bots what part of the game it is: Loot (nobody is an enemy: they gear up and keep apart), Fight, or back to normal.",
+"what":"Tells the bots what part of the game it is: Loot (nobody is an enemy: they gear up and keep apart), Fight, or back to normal. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later).",
 "pins":[
 {
 "id":"exec",
 "dir":"in",
 "help":"Runs this node."
+},
+{
+"id":"influence",
+"dir":"in",
+"help":"Personality influence: a number. Leave it empty to use the setting."
 },
 {
 "id":"then",
@@ -23639,6 +23644,10 @@
 {
 "id":"phase",
 "help":"Pick one: Loot (no enemies), Fight, Normal."
+},
+{
+"id":"influence",
+"help":"A number from 0 to 100. A wire into the pin of the same name is used instead."
 }
 ],
 "needs":"Needs Loner-Strike's components plugin, which comes with the app.",
@@ -23667,7 +23676,8 @@
 "y":0
 },
 "params":{
-"phase":"loot"
+"phase":"loot",
+"influence":50
 }
 }
 ],
@@ -23946,7 +23956,7 @@
 "bots.layer":{
 "title":"Bots: Prefer Layer",
 "category":"Bots",
-"what":"Bots look for loot and hold on this layer of the map: below (tunnels, basements), the surface, or high (roofs, ridges); or their own choice again.",
+"what":"Bots look for loot and hold on this layer of the map: below (tunnels, basements), the surface, or high (roofs, ridges); or their own choice again. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later).",
 "pins":[
 {
 "id":"exec",
@@ -23957,6 +23967,11 @@
 "id":"player",
 "dir":"in",
 "help":"Bot: a player. Optional."
+},
+{
+"id":"influence",
+"dir":"in",
+"help":"Personality influence: a number. Leave it empty to use the setting."
 },
 {
 "id":"then",
@@ -23976,6 +23991,10 @@
 {
 "id":"layer",
 "help":"Pick one: Below, Surface, High, Their own choice."
+},
+{
+"id":"influence",
+"help":"A number from 0 to 100. A wire into the pin of the same name is used instead."
 }
 ],
 "needs":"Needs Loner-Strike's components plugin, which comes with the app.",
@@ -24006,7 +24025,8 @@
 "params":{
 "who":"all",
 "tag":"",
-"layer":"surface"
+"layer":"surface",
+"influence":50
 }
 }
 ],
@@ -24100,7 +24120,7 @@
 "bots.goal":{
 "title":"Bots: Goal",
 "category":"Bots",
-"what":"Gives bots something to do at an entity: defend or capture it, use it (hold USE), loot it, or go and hold there, with a priority (0-100), for some seconds, within a radius.",
+"what":"Gives bots something to do at an entity: defend or capture it, use it (hold USE), loot it, or go and hold there, with a priority (0-100), for some seconds, within a radius. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later).",
 "pins":[
 {
 "id":"exec",
@@ -24126,6 +24146,11 @@
 "id":"secs",
 "dir":"in",
 "help":"For (seconds): a number. Leave it empty to use the setting."
+},
+{
+"id":"influence",
+"dir":"in",
+"help":"Personality influence: a number. Leave it empty to use the setting."
 },
 {
 "id":"then",
@@ -24157,6 +24182,10 @@
 {
 "id":"radius",
 "help":"A number from 8 to 4000."
+},
+{
+"id":"influence",
+"help":"A number from 0 to 100. A wire into the pin of the same name is used instead."
 }
 ],
 "needs":"Needs Loner-Strike's components plugin, which comes with the app.",
@@ -24190,7 +24219,8 @@
 "kind":"defend",
 "prio":50,
 "secs":60,
-"radius":64
+"radius":64,
+"influence":50
 }
 },
 {
@@ -24328,7 +24358,7 @@
 "bots.offer":{
 "title":"Bots: Offer",
 "category":"Bots",
-"what":"Tells bots something here can be bought or used for a price (a perk, an upgrade bench, a mystery box, a trap, a turret spot); they take it like a person would, when they can afford it and it's calm.",
+"what":"Tells bots something here can be bought or used for a price (a perk, an upgrade bench, a mystery box, a trap, a turret spot); they take it like a person would, when they can afford it and it's calm. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later).",
 "pins":[
 {
 "id":"exec",
@@ -24349,6 +24379,11 @@
 "id":"cost",
 "dir":"in",
 "help":"Price: a number. Leave it empty to use the setting."
+},
+{
+"id":"influence",
+"dir":"in",
+"help":"Personality influence: a number. Leave it empty to use the setting."
 },
 {
 "id":"then",
@@ -24376,6 +24411,10 @@
 {
 "id":"order",
 "help":"A number from 0 to 20."
+},
+{
+"id":"influence",
+"help":"A number from 0 to 100. A wire into the pin of the same name is used instead."
 }
 ],
 "needs":"Needs Loner-Strike's components plugin, which comes with the app.",
@@ -24408,7 +24447,8 @@
 "tag":"",
 "kind":"perk",
 "cost":1000,
-"order":0
+"order":0,
+"influence":50
 }
 },
 {
@@ -24720,7 +24760,7 @@
 "bot.follow":{
 "title":"Bot Follow",
 "category":"Bots",
-"what":"Makes a bot follow a player for some seconds.",
+"what":"Makes a bot follow a player for some seconds. Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later).",
 "pins":[
 {
 "id":"exec",
@@ -24738,6 +24778,11 @@
 "help":"Follow: a player. Needs a wire."
 },
 {
+"id":"influence",
+"dir":"in",
+"help":"Personality influence: a number. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -24747,6 +24792,10 @@
 {
 "id":"secs",
 "help":"A number from 1 to 600."
+},
+{
+"id":"influence",
+"help":"A number from 0 to 100. A wire into the pin of the same name is used instead."
 }
 ],
 "related":[
@@ -24774,7 +24823,8 @@
 "y":0
 },
 "params":{
-"secs":30
+"secs":30,
+"influence":50
 }
 }
 ],

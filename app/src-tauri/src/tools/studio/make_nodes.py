@@ -589,6 +589,16 @@ node("map.values", "Map Values", "Maps", "An array of a map's values.", inputs=[
 
 node("flow.reroute", "Reroute", "Flow", "A bend in a wire, to keep the graph tidy. Passes on whatever comes in.", inputs=[P("in","any","")], outputs=[P("out","any","")], reroute=True)
 
+# Personality influence (W2's protocol, ls_mode_ver 2): how much a bot's own personality and skill decide whether,
+# when and how it follows an order (0 exactly as told, 50 as before, 100 its personality decides)
+INFLUENCE_HELP = " Personality influence: 0 they obey exactly; 50 as usual; 100 each bot's personality and skill decide (a careful one may turn a risky job down, a slow one starts later)."
+for d in nodes:
+    if d["type"] in ("bots.goal", "bots.offer", "bots.phase", "bots.layer", "bot.follow"):
+        d["inputs"].append(P("influence","number","Personality influence",param="influence"))
+        d["params"].append(prm("influence","Personality influence (0-100)","number",50,min=0,max=100))
+        d["help"] += INFLUENCE_HELP
+        d["keywords"] = (d.get("keywords", "") + " personality obey skill").strip()
+
 data = {
   "version": 4,
   "pinTypes": {

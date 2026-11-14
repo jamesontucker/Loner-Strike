@@ -1263,6 +1263,13 @@ stock lsg_freeze(id, on)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
 }
 
+// a follow with a personality influence (0-100: 50 as usual; W2's ls_mode_ver 2)
+stock lsg_bot_follow(bot, who, secs, influence)
+{
+	if (ls_is_bot(bot) && is_user_connected(who))
+		server_cmd("ls_bot %d follow %d %d %d", bot, who, secs, influence)
+}
+
 stock lsg_bot_goto(bot, const name[], secs)
 {
 	new Float:o[3]
@@ -5427,16 +5434,18 @@ lsg_n108(ctx[])
 {
 	new lsi0 = ctx[13]
 	new lsi1 = ctx[1]
+	new Float:lsi2 = 50.0
 	lsd_begin()
 	lsd_in_player("Bot", lsi0)
 	lsd_in_player("Follow", lsi1)
+	lsd_in_number("Personality influence", lsi2)
 	if (lsd_enter(108, ctx))
 		return
 	if (!ls_alive(lsi0) || !is_user_bot(lsi0))
 		lsd_error(108, "Nothing done: that player isn't a living bot.")
 	else
 	{
-		ls_bot_follow(lsi0, lsi1, 10)
+		lsg_bot_follow(lsi0, lsi1, 10, clamp(floatround(lsi2), 0, 100))
 		lsd_exit(108, "ordered")
 	}
 	lsg_n109(ctx)

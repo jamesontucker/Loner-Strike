@@ -714,6 +714,13 @@ stock lsg_freeze(id, on)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
 }
 
+// a follow with a personality influence (0-100: 50 as usual; W2's ls_mode_ver 2)
+stock lsg_bot_follow(bot, who, secs, influence)
+{
+	if (ls_is_bot(bot) && is_user_connected(who))
+		server_cmd("ls_bot %d follow %d %d %d", bot, who, secs, influence)
+}
+
 stock lsg_bot_goto(bot, const name[], secs)
 {
 	new Float:o[3]
@@ -2376,7 +2383,7 @@ lsg_n3(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
-		if (!lsg_hint(fmt("layer %s %s", lsg_who(3, ctx[0], ""), "high")))
+		if (!lsg_hint(fmt("layer %s %s %d", lsg_who(3, ctx[0], ""), "high", clamp(floatround(50.0), 0, 100))))
 			{}
 	}
 }
@@ -2392,7 +2399,7 @@ lsg_n5(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
-		if (!lsg_hint(fmt("phase %s", "loot")))
+		if (!lsg_hint(fmt("phase %s %d", "loot", clamp(floatround(50.0), 0, 100))))
 			{}
 	}
 	lsg_n6(ctx)
@@ -2425,7 +2432,7 @@ lsg_n8(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
-		if (!lsg_hint(fmt("goal %s defend %s %d %d %d %d", lsg_who(1, 0, ""), lsg_ptext(lsg_find("gate1")), lsg_find("gate1"), clamp(floatround(40.0), 0, 100), max(floatround(30.0), 1), 128)))
+		if (!lsg_hint(fmt("goal %s defend %s %d %d %d %d %d", lsg_who(1, 0, ""), lsg_ptext(lsg_find("gate1")), lsg_find("gate1"), clamp(floatround(40.0), 0, 100), max(floatround(30.0), 1), 128, clamp(floatround(50.0), 0, 100))))
 			{}
 	}
 	lsg_n9(ctx)
@@ -2436,7 +2443,7 @@ lsg_n9(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
-		if (!lsg_hint(fmt("offer %s trap %s %d %d %d", lsg_who(0, 0, ""), lsg_ptext(lsg_find("gate1")), lsg_find("gate1"), max(floatround(500.0), 0), 0)))
+		if (!lsg_hint(fmt("offer %s trap %s %d %d %d %d", lsg_who(0, 0, ""), lsg_ptext(lsg_find("gate1")), lsg_find("gate1"), max(floatround(500.0), 0), 0, clamp(floatround(50.0), 0, 100))))
 			{}
 	}
 	lsg_n10(ctx)
@@ -2622,7 +2629,7 @@ lsg_n28(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
-		if (!lsg_hint(fmt("phase %s", "fight")))
+		if (!lsg_hint(fmt("phase %s %d", "fight", clamp(floatround(50.0), 0, 100))))
 			{}
 	}
 	lsg_n25(ctx)

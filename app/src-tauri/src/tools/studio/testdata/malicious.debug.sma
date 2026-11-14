@@ -1228,6 +1228,13 @@ stock lsg_freeze(id, on)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
 }
 
+// a follow with a personality influence (0-100: 50 as usual; W2's ls_mode_ver 2)
+stock lsg_bot_follow(bot, who, secs, influence)
+{
+	if (ls_is_bot(bot) && is_user_connected(who))
+		server_cmd("ls_bot %d follow %d %d %d", bot, who, secs, influence)
+}
+
 stock lsg_bot_goto(bot, const name[], secs)
 {
 	new Float:o[3]

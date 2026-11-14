@@ -1241,6 +1241,13 @@ stock lsg_freeze(id, on)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
 }
 
+// a follow with a personality influence (0-100: 50 as usual; W2's ls_mode_ver 2)
+stock lsg_bot_follow(bot, who, secs, influence)
+{
+	if (ls_is_bot(bot) && is_user_connected(who))
+		server_cmd("ls_bot %d follow %d %d %d", bot, who, secs, influence)
+}
+
 stock lsg_bot_goto(bot, const name[], secs)
 {
 	new Float:o[3]
@@ -2935,15 +2942,17 @@ lsg_n2(ctx[])
 lsg_n3(ctx[])
 {
 	new lsi0 = ctx[0]
+	new Float:lsi1 = 50.0
 	lsd_begin()
 	lsd_in_player("Bot", lsi0)
+	lsd_in_number("Personality influence", lsi1)
 	if (lsd_enter(3, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(3, "gm_components isn't running on this server.")
 	else
 	{
-		if (!lsg_hint(fmt("layer %s %s", lsg_who(3, lsi0, ""), "high")))
+		if (!lsg_hint(fmt("layer %s %s %d", lsg_who(3, lsi0, ""), "high", clamp(floatround(lsi1), 0, 100))))
 			lsd_error(3, "This server's bot brain doesn't take hints (ls_mode).")
 		else
 			lsd_exit(3, "told")
@@ -2963,14 +2972,16 @@ lsg_n4(ctx[])
 // Bots: Phase (ph)
 lsg_n5(ctx[])
 {
+	new Float:lsi0 = 50.0
 	lsd_begin()
+	lsd_in_number("Personality influence", lsi0)
 	if (lsd_enter(5, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(5, "gm_components isn't running on this server.")
 	else
 	{
-		if (!lsg_hint(fmt("phase %s", "loot")))
+		if (!lsg_hint(fmt("phase %s %d", "loot", clamp(floatround(lsi0), 0, 100))))
 			lsd_error(5, "This server's bot brain doesn't take hints (ls_mode).")
 		else
 			lsd_exit(5, "told")
@@ -3024,17 +3035,19 @@ lsg_n8(ctx[])
 	new lsi1 = lsg_find("gate1")
 	new Float:lsi2 = 40.0
 	new Float:lsi3 = 30.0
+	new Float:lsi4 = 50.0
 	lsd_begin()
 	lsd_in_entity("At", lsi1)
 	lsd_in_number("Priority", lsi2)
 	lsd_in_number("For (seconds)", lsi3)
+	lsd_in_number("Personality influence", lsi4)
 	if (lsd_enter(8, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(8, "gm_components isn't running on this server.")
 	else
 	{
-		if (!lsg_hint(fmt("goal %s defend %s %d %d %d %d", lsg_who(1, 0, ""), lsg_ptext(lsi1), lsi1, clamp(floatround(lsi2), 0, 100), max(floatround(lsi3), 1), 128)))
+		if (!lsg_hint(fmt("goal %s defend %s %d %d %d %d %d", lsg_who(1, 0, ""), lsg_ptext(lsi1), lsi1, clamp(floatround(lsi2), 0, 100), max(floatround(lsi3), 1), 128, clamp(floatround(lsi4), 0, 100))))
 			lsd_error(8, "This server's bot brain doesn't take hints (ls_mode).")
 		else
 			lsd_exit(8, "told")
@@ -3047,16 +3060,18 @@ lsg_n9(ctx[])
 {
 	new lsi1 = lsg_find("gate1")
 	new Float:lsi2 = 500.0
+	new Float:lsi3 = 50.0
 	lsd_begin()
 	lsd_in_entity("At", lsi1)
 	lsd_in_number("Price", lsi2)
+	lsd_in_number("Personality influence", lsi3)
 	if (lsd_enter(9, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(9, "gm_components isn't running on this server.")
 	else
 	{
-		if (!lsg_hint(fmt("offer %s trap %s %d %d %d", lsg_who(0, 0, ""), lsg_ptext(lsi1), lsi1, max(floatround(lsi2), 0), 0)))
+		if (!lsg_hint(fmt("offer %s trap %s %d %d %d %d", lsg_who(0, 0, ""), lsg_ptext(lsi1), lsi1, max(floatround(lsi2), 0), 0, clamp(floatround(lsi3), 0, 100))))
 			lsd_error(9, "This server's bot brain doesn't take hints (ls_mode).")
 		else
 			lsd_exit(9, "told")
@@ -3401,14 +3416,16 @@ lsg_n27(ctx[])
 // Bots: Phase (ph2)
 lsg_n28(ctx[])
 {
+	new Float:lsi0 = 50.0
 	lsd_begin()
+	lsd_in_number("Personality influence", lsi0)
 	if (lsd_enter(28, ctx))
 		return
 	if (!ls_components_running())
 		lsd_error(28, "gm_components isn't running on this server.")
 	else
 	{
-		if (!lsg_hint(fmt("phase %s", "fight")))
+		if (!lsg_hint(fmt("phase %s %d", "fight", clamp(floatround(lsi0), 0, 100))))
 			lsd_error(28, "This server's bot brain doesn't take hints (ls_mode).")
 		else
 			lsd_exit(28, "told")

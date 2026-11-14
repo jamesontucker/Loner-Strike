@@ -2155,7 +2155,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let call = match def.kind.as_str() {
                 "bot.goto" => format!("lsg_bot_goto({bot}, {}, {})", pawn_str(&name_text(gen.text(n, def, "name"))), gen.num(n, def, "secs").round() as i64),
                 "bot.hold" => format!("ls_bot_hold({bot}, max(floatround({}), 1))", inp("secs", "number")),
-                "bot.follow" => format!("ls_bot_follow({bot}, {}, {})", inp("who", "player"), gen.num(n, def, "secs").round() as i64),
+                "bot.follow" => format!("lsg_bot_follow({bot}, {}, {}, clamp(floatround({}), 0, 100))", inp("who", "player"), gen.num(n, def, "secs").round() as i64, inp("influence", "number")),
                 _ => format!("ls_bot_release({bot})"),
             };
             check(&mut b, &format!("!ls_alive({bot}) || !is_user_bot({bot})"), "Nothing done: that player isn't a living bot.", &[format!("\t{call}"), exit("ordered")]);
@@ -2526,23 +2526,24 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 format!("lsg_who({code}, {player}, {})", pawn_str(&tag))
             };
             let num = |p: &str| inp(p, "number");
+            let infl = || format!("clamp(floatround({}), 0, 100)", inp("influence", "number"));
             let line = match def.kind.as_str() {
-                "bots.phase" => format!("\"phase %s\", {}", pawn_str(match gen.choice(n, def, "phase") { "fight" => "fight", "off" => "off", _ => "loot" })),
+                "bots.phase" => format!("\"phase %s %d\", {}, {}", pawn_str(match gen.choice(n, def, "phase") { "fight" => "fight", "off" => "off", _ => "loot" }), infl()),
                 "bots.no_buy" => format!("\"nobuy %d\", {}", bool01(&inp("on", "bool"))),
                 "bots.creature_enemies" => format!("\"enemyclass ls_creature %d\", {}", bool01(&inp("on", "bool"))),
                 "bots.tag" => format!("\"role %d %s\", {}, {}", inp("player", "player"), pawn_str(&name_text(gen.text(n, def, "tag")))),
                 "bots.friends" => format!("\"friend %s %s %d\", {}, {}, {}", who("a", "a_tag", "a_player"), who("b", "b_tag", "b_player"), bool01(&inp("on", "bool"))),
-                "bots.layer" => format!("\"layer %s %s\", {}, {}", who("who", "tag", "player"), pawn_str(match gen.choice(n, def, "layer") { "below" => "below", "high" => "high", "-" => "-", _ => "surface" })),
+                "bots.layer" => format!("\"layer %s %s %d\", {}, {}, {}", who("who", "tag", "player"), pawn_str(match gen.choice(n, def, "layer") { "below" => "below", "high" => "high", "-" => "-", _ => "surface" }), infl()),
                 "bots.goal" => {
                     let kind = match gen.choice(n, def, "kind") { "capture" => "capture", "use" => "use", "loot" => "loot", "go_hold" => "go_hold", _ => "defend" };
                     let at = inp("at", "entity");
-                    format!("\"goal %s {kind} %s %d %d %d %d\", {}, lsg_ptext({at}), {at}, clamp(floatround({}), 0, 100), max(floatround({}), 1), {}", who("who", "tag", "player"), num("prio"), num("secs"), gen.num(n, def, "radius").round().clamp(8.0, 4000.0) as i64)
+                    format!("\"goal %s {kind} %s %d %d %d %d %d\", {}, lsg_ptext({at}), {at}, clamp(floatround({}), 0, 100), max(floatround({}), 1), {}, {}", who("who", "tag", "player"), num("prio"), num("secs"), gen.num(n, def, "radius").round().clamp(8.0, 4000.0) as i64, infl())
                 }
                 "bots.goal_clear" => format!("\"goal_clear %s %s\", {}, {}", who("who", "tag", "player"), pawn_str(match gen.choice(n, def, "kind") { "defend" => "defend", "capture" => "capture", "use" => "use", "loot" => "loot", "go_hold" => "go_hold", _ => "0" })),
                 "bots.offer" => {
                     let kind = match gen.choice(n, def, "kind") { "bench" => "bench", "box" => "box", "trap" => "trap", "turret" => "turret", _ => "perk" };
                     let at = inp("at", "entity");
-                    format!("\"offer %s {kind} %s %d %d %d\", {}, lsg_ptext({at}), {at}, max(floatround({}), 0), {}", who("who", "tag", "player"), num("cost"), gen.num(n, def, "order").round().clamp(0.0, 20.0) as i64)
+                    format!("\"offer %s {kind} %s %d %d %d %d\", {}, lsg_ptext({at}), {at}, max(floatround({}), 0), {}, {}", who("who", "tag", "player"), num("cost"), gen.num(n, def, "order").round().clamp(0.0, 20.0) as i64, infl())
                 }
                 _ => {
                     if v.data_source(id, "at").is_some() {
@@ -4705,6 +4706,13 @@ stock lsg_drop(id)
 	{
 		engclient_cmd(id, "drop")
 		return
+// a follow with a personality influence (0-100: 50 as usual; W2's ls_mode_ver 2)
+stock lsg_bot_follow(bot, who, secs, influence)
+{
+	if (ls_is_bot(bot) && is_user_connected(who))
+		server_cmd("ls_bot %d follow %d %d %d", bot, who, secs, influence)
+}
+
 	}
 	new wid = get_user_weapon(id)
 	if (!wid || wid == CSW_KNIFE)

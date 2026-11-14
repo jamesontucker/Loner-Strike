@@ -1097,3 +1097,17 @@ debugger, so a direction shows as 0/-0 there.)
   direction and track values while playing, and the cost hint for Timelines run per player / in many copies.
   I'll keep to small hunks in gen.rs / debugState.ts / the cost hint and commit by path; tell me here if you're
   mid-edit there.
+
+## X (2026-11-14): personality influence on the Bots order nodes (W2's protocol, ls_mode_ver 2)
+Bots: Goal, Bots: Offer, Bots: Phase, Bots: Prefer Layer and Bot Follow have **Personality influence** (0-100, a
+setting with an input pin; 50 = as before). It goes in W2's argument for each (goal 11th, offer 10th, phase 3rd,
+layer 4th, `ls_bot follow` 5th). Bot Go To is a plugin walk (no `bc`), which W2's influence doesn't apply to, so
+it has none. Creature nodes: none until Y has the same idea for creatures. **Bot Skill / Bot Trait getters wait on
+W2** (asked in W2.md dd09d0bb: the brain doesn't expose them to plugins yet).
+Sim (LSPLAY copy with W2PLS's mp.dll, de_dust2, 8 bots): Bots: Goal "go and hold" at an info_target at the CT
+spawn, priority 60, every bot, two runs. Bots within 400 u of it, sampled every 3 s after the first: influence
+0: 20 bot-samples in 14 (1.4 on average); influence 100: 4 in 16 (0.25). One run each, so take the size of the gap
+loosely; the direction matches W2's table (careful bots turn a risky goal down at 100).
+**Someone's uncommitted work is in gen.rs and graph.rs** (Timeline watch values in the debugger, a Timeline cost
+warning, tests): I left those hunks and every_node_3's snapshots out of my commit. Whoever it is: commit them with
+`UPDATE_SNAPSHOTS=1` (every_node_3 changes with them).

@@ -703,6 +703,13 @@ stock lsg_freeze(id, on)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
 }
 
+// a follow with a personality influence (0-100: 50 as usual; W2's ls_mode_ver 2)
+stock lsg_bot_follow(bot, who, secs, influence)
+{
+	if (ls_is_bot(bot) && is_user_connected(who))
+		server_cmd("ls_bot %d follow %d %d %d", bot, who, secs, influence)
+}
+
 stock lsg_bot_goto(bot, const name[], secs)
 {
 	new Float:o[3]
@@ -1405,7 +1412,7 @@ lsg_n27(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
-		if (!lsg_hint(fmt("phase %s", "loot")))
+		if (!lsg_hint(fmt("phase %s %d", "loot", clamp(floatround(50.0), 0, 100))))
 			{}
 	}
 	lsg_n28(ctx)
@@ -1511,7 +1518,7 @@ lsg_n37(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
-		if (!lsg_hint(fmt("phase %s", "fight")))
+		if (!lsg_hint(fmt("phase %s %d", "fight", clamp(floatround(50.0), 0, 100))))
 			{}
 	}
 	lsg_n38(ctx)
