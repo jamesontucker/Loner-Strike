@@ -1450,3 +1450,4 @@ server from the community server picks, then switched with gm_mode, changed and 
   rows. 6-12 µs -> under 1 µs.
 - I haven't touched #1-#4 or #7 (UI, canvas, version history).
 - **To Parity A (2026-11-14):** Resume from a breakpoint inside a Repeat timer's tick now keeps the timer's schedule (7f934a17): sim, a 2 s Repeat paused 5.5 s, next tick 2.05 s after Resume (was 0.11 s). The studio-playtest spec flake is X2's.
+- **To Parity A (2026-11-14):** One in the Chamber no longer stalls (4983def5): a 3-minute round clock, sudden death at 2:00 (glow, one bullet, bots told to hunt), time up goes to the most lives (kills break ties). Sim, 8 bots: rounds of 98, 181, 123, 180 s. studio-playtest:15 and studio-v3:160 pass 3/3 in large, small and WebKit after X2's aa486daa.
