@@ -120,7 +120,17 @@ export function NodeHelp({ open, onClose, canvas, toast }: { open: string; onClo
   }, [found, query, help]);
 
   return (
-    <aside className="st-help" role="complementary" aria-label="Node help" data-testid="studio-help" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), cur && !open ? setCur("") : onClose())}>
+    <aside
+      className="st-help"
+      role="complementary"
+      aria-label="Node help"
+      data-testid="studio-help"
+      tabIndex={-1}
+      ref={(el) => {
+        // (the panel has the keyboard when it opens, so Escape closes it: UX review L2)
+        if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
+      }}
+      onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), cur && !open ? setCur("") : onClose())}>
       <div className="st-help-head">
         {cur ? (
           <button type="button" className="btn small" onClick={() => setCur("")} aria-label="Back to all nodes">

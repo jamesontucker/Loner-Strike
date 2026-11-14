@@ -347,3 +347,39 @@ test("Timeline curves: step, eases and custom tangents", () => {
     last = v;
   }
 });
+
+// ---- UX review: a readable first view (H1), new nodes in a free spot (M3)
+import { freeSpot, READABLE, startView } from "../src/views/tools/studio/tidyOps";
+
+test("startView: a small graph fits; a big one opens on its first part at a readable zoom", () => {
+  const box = (x: number, y: number, w = 230, h = 110) => ({ x, y, w, h });
+  assert.deepEqual(startView([], [], { w: 800, h: 600 }), { fit: true });
+  assert.deepEqual(startView([box(0, 0), box(300, 0)], [], { w: 800, h: 600 }), { fit: true });
+  // 30 nodes in a row, 9000 px wide: fitting it all would be far under READABLE
+  const row = Array.from({ length: 30 }, (_, k) => box(k * 300, 50));
+  const v = startView(row, [box(-20, 0, 700, 300), box(4000, 0, 700, 300)], { w: 800, h: 600 });
+  assert.equal(v.fit, false);
+  assert.deepEqual(!v.fit && v.rect, box(-20, 0, 700, 300), "the top-left comment box");
+  const n = startView(row, [], { w: 800, h: 600 });
+  assert.deepEqual(!n.fit && n.rect, box(0, 50), "no comments: the first node");
+  assert.ok(READABLE > 0.3 && READABLE < 1);
+});
+
+test("freeSpot: a new node doesn't land on another one of the same graph", () => {
+  let g = emptyGraph("fs", "Fs");
+  g = addNode(g, "debug.print", { x: 0, y: 0 }).graph;
+  const p = freeSpot(g, { x: 20, y: 10 });
+  assert.equal(p.x, 20);
+  assert.ok(p.y !== 10, "moved off the node");
+  const node = g.nodes[0];
+  const far = Math.abs(p.y - node.pos.y);
+  assert.ok(far >= 110, `clear of it (${far})`);
+  // a node of another graph doesn't count
+  assert.deepEqual(freeSpot(g, { x: 20, y: 10 }, "fn_other"), { x: 20, y: 10 });
+  // promote puts its Get in a free spot too
+  const k = kills();
+  const r = promoteToVariable(k, { node: "give_m4", pin: "ammo" }, "in");
+  assert.ok(!("error" in r));
+  const get = r.graph.nodes.find((n) => n.type === "var.get" && n.params.var === r.id)!;
+  assert.deepEqual(freeSpot(k, get.pos, get.graph), get.pos, "its spot was free");
+});

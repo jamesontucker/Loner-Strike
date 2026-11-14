@@ -438,6 +438,7 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
     <aside className="st-mb" aria-label="My mode">
       {cm.menu}
       {saving && <SaveToLibrary partId={saving} onDone={() => setSaving(null)} toast={toast} />}
+      {/* (the order: what's used most first; UX review L3) */}
       <Section
         title="Graphs"
         count={1 + (graph.eventGraphs ?? []).length}
@@ -490,6 +491,109 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
         ))}
       </Section>
       <Section
+        title="Functions"
+        count={functions.length + funcs.length}
+        onAdd={() => {
+          const r = addFunction(graph);
+          edit(() => r.graph);
+          selectPart(r.id);
+          openTab(r.id);
+        }}
+        addTitle="Add a Function (its own graph)"
+      >
+        {functions.length + funcs.length === 0 && <p className="st-muted st-mb-empty">Pieces you call from several places, each on its own graph.</p>}
+        {functions.map((f) => partItem(f.id, f.name, "fn", `fn:${f.id}`, f.pure ? "pure" : "", true))}
+        {funcs.map((n) => (
+          <button
+            key={n.id}
+            type="button"
+            className={`st-mb-item${selected.includes(n.id) ? " on" : ""}`}
+            onClick={() => {
+              api?.focus(n.id);
+              setFuncFocus(n.id);
+            }}
+            {...itemKeys(n.id, String(n.params.name ?? n.id))}
+          >
+            <span className="st-mb-dot fn" /> {String(n.params.name ?? n.id)}
+          </button>
+        ))}
+      </Section>
+      {tabFn && (
+        <Section
+          title={`Local variables: ${tabFn.name}`}
+          count={tabFn.locals?.length ?? 0}
+          onAdd={() => {
+            const r = addLocal(graph, tabFn.id, { name: `Local ${(tabFn.locals?.length ?? 0) + 1}`, type: "number", scope: "mode", default: 0 });
+            edit(() => r.graph);
+            selectVar(r.id);
+          }}
+          addTitle="Add a local variable"
+        >
+          {!tabFn.locals?.length && <p className="st-muted st-mb-empty">Values only this Function sees, fresh each time it runs.</p>}
+          {(tabFn.locals ?? []).map((v) => varItem(v, true))}
+        </Section>
+      )}
+      <Section
+        title="Variables"
+        count={graph.variables.length}
+        onAdd={() => {
+          const r = addVariable(graph, { name: `Variable ${graph.variables.length + 1}`, type: "number", scope: "mode", default: 0 });
+          edit(() => r.graph);
+          selectVar(r.id);
+        }}
+        addTitle="Add a variable"
+      >
+        {graph.variables.length === 0 && <p className="st-muted st-mb-empty">Values the mode keeps.</p>}
+        {graph.variables.map((v) => varItem(v))}
+      </Section>
+      <Section
+        title="Custom events"
+        count={(graph.customEvents ?? []).length}
+        onAdd={() => {
+          const r = addCustomEvent(graph);
+          edit(() => r.graph);
+          selectPart(r.id);
+        }}
+        addTitle="Add a Custom Event (call it from anywhere, a timer or the map)"
+        open={(graph.customEvents ?? []).length > 0}
+      >
+        {(graph.customEvents ?? []).length === 0 && <p className="st-muted st-mb-empty">Your own events: call them from anywhere, from a timer, or from the map.</p>}
+        {(graph.customEvents ?? []).map((c) => (
+          <button key={c.id} type="button" className={`st-mb-item${part === c.id ? " on" : ""}`} onClick={() => selectPart(c.id)} title={`Its inputs and whether the map can fire it. ${dragHint("cevent")}`} {...dragAs(`cevent:${c.id}`)}>
+            <span className="st-mb-dot ev" /> {c.name}
+            {c.map && <span className="st-muted st-mb-note">map</span>}
+          </button>
+        ))}
+      </Section>
+      <Section title="Events" count={events.length} onAdd={() => api?.search("Events")} addTitle="Add an event">
+        {events.length === 0 && <p className="st-muted st-mb-empty">Nothing starts this mode yet.</p>}
+        {events.map((n) => (
+          <button key={n.id} type="button" className={`st-mb-item${selected.includes(n.id) ? " on" : ""}`} onClick={() => api?.focus(n.id)} {...itemKeys(n.id, label(n.id))} title={dragHint("event")} {...dragAs(`event:${n.id}`)}>
+            <span className="st-mb-dot ev" /> {label(n.id)}
+            {(() => {
+              // two of the same event: which one (UX review L1)
+              const same = events.filter((x) => label(x.id) === label(n.id));
+              return same.length > 1 ? <span className="st-muted"> ({same.indexOf(n) + 1})</span> : null;
+            })()}
+          </button>
+        ))}
+      </Section>
+      <Section
+        title="Macros"
+        count={macros.length}
+        onAdd={() => {
+          const r = addMacro(graph);
+          edit(() => r.graph);
+          selectPart(r.id);
+          openTab(r.id);
+        }}
+        addTitle="Add a Macro"
+        open={macros.length > 0}
+      >
+        {macros.length === 0 && <p className="st-muted st-mb-empty">Pieces copied in where they're used (several flows in and out).</p>}
+        {macros.map((m) => partItem(m.id, m.name, "mac", `macro:${m.id}`, "", true))}
+      </Section>
+      <Section
         title="Timelines"
         count={(graph.timelines ?? []).length}
         onAdd={() => {
@@ -526,104 +630,6 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
             <span className="st-muted st-mb-note">{t.rows.length} rows</span>
           </button>
         ))}
-      </Section>
-      <Section
-        title="Custom events"
-        count={(graph.customEvents ?? []).length}
-        onAdd={() => {
-          const r = addCustomEvent(graph);
-          edit(() => r.graph);
-          selectPart(r.id);
-        }}
-        addTitle="Add a Custom Event (call it from anywhere, a timer or the map)"
-        open={(graph.customEvents ?? []).length > 0}
-      >
-        {(graph.customEvents ?? []).length === 0 && <p className="st-muted st-mb-empty">Your own events: call them from anywhere, from a timer, or from the map.</p>}
-        {(graph.customEvents ?? []).map((c) => (
-          <button key={c.id} type="button" className={`st-mb-item${part === c.id ? " on" : ""}`} onClick={() => selectPart(c.id)} title={`Its inputs and whether the map can fire it. ${dragHint("cevent")}`} {...dragAs(`cevent:${c.id}`)}>
-            <span className="st-mb-dot ev" /> {c.name}
-            {c.map && <span className="st-muted st-mb-note">map</span>}
-          </button>
-        ))}
-      </Section>
-      <Section title="Events" count={events.length} onAdd={() => api?.search("Events")} addTitle="Add an event">
-        {events.length === 0 && <p className="st-muted st-mb-empty">Nothing starts this mode yet.</p>}
-        {events.map((n) => (
-          <button key={n.id} type="button" className={`st-mb-item${selected.includes(n.id) ? " on" : ""}`} onClick={() => api?.focus(n.id)} {...itemKeys(n.id, label(n.id))} title={dragHint("event")} {...dragAs(`event:${n.id}`)}>
-            <span className="st-mb-dot ev" /> {label(n.id)}
-          </button>
-        ))}
-      </Section>
-      <Section
-        title="Functions"
-        count={functions.length + funcs.length}
-        onAdd={() => {
-          const r = addFunction(graph);
-          edit(() => r.graph);
-          selectPart(r.id);
-          openTab(r.id);
-        }}
-        addTitle="Add a Function (its own graph)"
-      >
-        {functions.length + funcs.length === 0 && <p className="st-muted st-mb-empty">Pieces you call from several places, each on its own graph.</p>}
-        {functions.map((f) => partItem(f.id, f.name, "fn", `fn:${f.id}`, f.pure ? "pure" : "", true))}
-        {funcs.map((n) => (
-          <button
-            key={n.id}
-            type="button"
-            className={`st-mb-item${selected.includes(n.id) ? " on" : ""}`}
-            onClick={() => {
-              api?.focus(n.id);
-              setFuncFocus(n.id);
-            }}
-            {...itemKeys(n.id, String(n.params.name ?? n.id))}
-          >
-            <span className="st-mb-dot fn" /> {String(n.params.name ?? n.id)}
-          </button>
-        ))}
-      </Section>
-      <Section
-        title="Macros"
-        count={macros.length}
-        onAdd={() => {
-          const r = addMacro(graph);
-          edit(() => r.graph);
-          selectPart(r.id);
-          openTab(r.id);
-        }}
-        addTitle="Add a Macro"
-        open={macros.length > 0}
-      >
-        {macros.length === 0 && <p className="st-muted st-mb-empty">Pieces copied in where they're used (several flows in and out).</p>}
-        {macros.map((m) => partItem(m.id, m.name, "mac", `macro:${m.id}`, "", true))}
-      </Section>
-      {tabFn && (
-        <Section
-          title={`Local variables: ${tabFn.name}`}
-          count={tabFn.locals?.length ?? 0}
-          onAdd={() => {
-            const r = addLocal(graph, tabFn.id, { name: `Local ${(tabFn.locals?.length ?? 0) + 1}`, type: "number", scope: "mode", default: 0 });
-            edit(() => r.graph);
-            selectVar(r.id);
-          }}
-          addTitle="Add a local variable"
-        >
-          {!tabFn.locals?.length && <p className="st-muted st-mb-empty">Values only this Function sees, fresh each time it runs.</p>}
-          {(tabFn.locals ?? []).map((v) => varItem(v, true))}
-        </Section>
-      )}
-      <Section
-        title="Variables"
-        count={graph.variables.length}
-        onAdd={() => {
-          const r = addVariable(graph, { name: `Variable ${graph.variables.length + 1}`, type: "number", scope: "mode", default: 0 });
-          edit(() => r.graph);
-          selectVar(r.id);
-        }}
-        addTitle="Add a variable"
-      >
-        {graph.variables.length === 0 && <p className="st-muted st-mb-empty">Values the mode keeps.</p>}
-        {graph.variables.map((v) => varItem(v))}
       </Section>
       <Section
         title="Structs"

@@ -27,7 +27,7 @@ import { compatible, nodeDef, typeColor, type PinType } from "./registry";
 import { pinsOf } from "./pins";
 import { insertItem, type LibItem } from "./library";
 import { dropPlan, knownMake, type Make } from "./dropOps";
-import { align, distribute, linked, loadBookmarks, promotable, promoteToVariable, QUICK_ADD, saveBookmarks, type AlignHow, type Box } from "./tidyOps";
+import { READABLE, startView, align, distribute, linked, loadBookmarks, promotable, promoteToVariable, QUICK_ADD, saveBookmarks, type AlignHow, type Box } from "./tidyOps";
 
 /** A library item into the mode, and (for a Function or Macro) a call to it at `at`. */
 export function addFromLibrary(g: Graph, it: LibItem, at: { x: number; y: number } | null, home?: string): { graph: Graph; message: string } {
@@ -45,6 +45,8 @@ export function addFromLibrary(g: Graph, it: LibItem, at: { x: number; y: number
 import { pathPairs } from "./debugState";
 import { structureOf } from "./nodeView";
 import { useContextMenu, type MenuItem } from "./ContextMenu";
+import { createPortal } from "react-dom";
+import { usePanels } from "./panels";
 import type { Graph } from "./schema";
 
 /** The real ends of a wire (through reroutes), for lighting up the path the flow took. */
@@ -115,6 +117,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
   const home = tab || undefined;
   const rf = useReactFlow();
   const wrap = useRef<HTMLDivElement>(null);
+  const showMap = usePanels((p) => p.minimap);
   const mouse = useRef({ x: 200, y: 200 });
   const [palette, setPalette] = useState<PaletteAt | null>(null);
   const paletteAt = useRef(0);
@@ -126,6 +129,15 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
 
   // a variable dropped on the canvas: Get or Set?
   const [varDrop, setVarDrop] = useState<{ left: number; top: number; flow: { x: number; y: number }; title: string; options: { label: string; make: Make }[] } | null>(null);
+  // the drop choice closes on a click anywhere else (UX review M2)
+  useEffect(() => {
+    if (!varDrop) return;
+    const away = (e: PointerEvent) => {
+      if (!(e.target as HTMLElement).closest?.(".st-vardrop")) setVarDrop(null);
+    };
+    window.addEventListener("pointerdown", away, true);
+    return () => window.removeEventListener("pointerdown", away, true);
+  }, [varDrop]);
   /** a quick-add key held down (B, S, D, F...), and whether a click used it */
   const held = useRef<{ key: string; used: boolean } | null>(null);
 
@@ -165,9 +177,20 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
     [edit, select, sizeOf, toast, openTab, rf],
   );
 
-  // a new tab: show its graph
+  // a new tab: show its graph, readable (all of it, or its first part when all of it would be
+  // too small to read: UX review H1)
   useEffect(() => {
-    const t = setTimeout(() => void rf.fitView({ padding: 0.2, maxZoom: 1.1 }), 30);
+    const t = setTimeout(() => {
+      const box = wrap.current?.getBoundingClientRect();
+      const ns = rf.getNodes().filter((n) => n.type !== "comment");
+      const cs = rf.getNodes().filter((n) => n.type === "comment");
+      const r = (n: (typeof ns)[number]) => ({ x: n.position.x, y: n.position.y, w: n.measured?.width ?? (n.width as number) ?? 230, h: n.measured?.height ?? (n.height as number) ?? 110 });
+      const v = startView(ns.map(r), cs.map(r), { w: box?.width ?? 800, h: box?.height ?? 600 });
+      if (v.fit || !box) return void rf.fitView({ padding: 0.2, maxZoom: 1.1 });
+      // the part's top left at the canvas's top left, at a readable zoom (the whole part when it fits)
+      const zoom = Math.max(READABLE + 0.2, Math.min(1, box.width / (v.rect.w + 60), box.height / (v.rect.h + 60)));
+      void rf.setViewport({ x: -v.rect.x * zoom + 24, y: -v.rect.y * zoom + 24, zoom });
+    }, 60);
     return () => clearTimeout(t);
   }, [tab, rf]);
 
@@ -459,6 +482,13 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         if (moves.size) edit((g2) => moveItems(g2, moves));
   }, [edit]);
 
+  /** where the node list goes on the page: at the click, kept inside the window */
+  const pageAt = (p: PaletteAt): PaletteAt => {
+    const box = wrap.current?.getBoundingClientRect();
+    const left = Math.max(8, Math.min((box?.left ?? 0) + p.left, window.innerWidth - 340));
+    const top = Math.max(8, Math.min((box?.top ?? 0) + p.top, window.innerHeight - 390));
+    return { ...p, left, top };
+  };
   const cm = useContextMenu();
   const MOD = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl+";
 
@@ -821,7 +851,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         <Background id="minor" variant={BackgroundVariant.Lines} gap={16} lineWidth={1} color="var(--st-grid)" />
         <Background id="major" variant={BackgroundVariant.Lines} gap={128} lineWidth={1} color="var(--st-grid-major)" />
         <Controls showInteractive={false} />
-        <MiniMap pannable zoomable className="st-minimap" />
+        {showMap && <MiniMap pannable zoomable className="st-minimap" />}
       </ReactFlow>
       {view.nodes.length === 0 && view.comments.length === 0 && (!tab || (graph.eventGraphs ?? []).some((e) => e.id === tab)) && (
         // an empty event graph: where to start (UX review H7)
@@ -857,9 +887,37 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         </div>
       )}
       {cm.menu}
-      {palette && <Palette at={palette} graph={graph} tab={tab} onPick={pick} onComment={commentAround} onCollapse={selected.length ? collapseSelected : undefined} onClose={() => setPalette(null)} />}
+      {palette &&
+        // (drawn over the page, not inside the canvas, so a small canvas doesn't cut it off: UX review H4)
+        createPortal(
+          <div className="st-portal">
+            <Palette at={pageAt(palette)} graph={graph} tab={tab} onPick={pick} onComment={commentAround} onCollapse={selected.length ? collapseSelected : undefined} onClose={() => setPalette(null)} />
+          </div>,
+          document.body,
+        )}
       {varDrop && (
-        <div className="st-vardrop" style={{ left: varDrop.left, top: varDrop.top }} role="menu" aria-label={varDrop.title} data-testid="studio-drop-choice">
+        <div
+          className="st-vardrop"
+          style={{ left: varDrop.left, top: varDrop.top }}
+          role="menu"
+          aria-label={varDrop.title}
+          data-testid="studio-drop-choice"
+          ref={(el) => el?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true })}
+          onKeyDown={(e) => {
+            // the keyboard, as in the right-click menus: arrows move, Escape closes (UX review M2)
+            const items = [...e.currentTarget.querySelectorAll<HTMLButtonElement>("button")];
+            const i = items.indexOf(document.activeElement as HTMLButtonElement);
+            if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              setVarDrop(null);
+              wrap.current?.focus({ preventScroll: true });
+            } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus();
+            }
+          }}
+        >
           {varDrop.options.map((o) => (
             <button
               key={o.label}

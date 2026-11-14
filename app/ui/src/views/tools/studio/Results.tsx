@@ -5,11 +5,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { checkKey, useStudio, type ResultsTab } from "./store";
-import { nodeDef } from "./registry";
+import { nodeTitle } from "./pins";
 import type { Problem, TestRunState } from "./studioApi";
 import { cancelTestRun } from "./studioApi";
 
 /** "Full check: ..." for the status line and the toolbar icon's hover text. */
+/** A sentence's end: none after an ellipsis ("compiling…", not "compiling….") */
+export const withStop = (t: string) => (t.endsWith("…") ? t : `${t}.`);
+
 export function fullText(state: string, stale: boolean): string {
   if (state === "running") return "Full check: compiling…";
   if (state === "none") return "Full check: needs compiling";
@@ -181,7 +184,7 @@ export function Results({ focus }: { focus: (id: string) => void }) {
       {open && tab === "problems" && (
         <ul className="st-results-list">
           <li className="st-muted st-results-status" data-testid="studio-check-status">
-            {quick} (updated as you edit). {fullText(full.state, stale)}.
+            {quick} (updated as you edit). {withStop(fullText(full.state, stale))}
           </li>
           {items.map(({ p, from }, i) => (
             <li key={i} className={`${p.level}${from === "full" && stale ? " stale" : ""}`}>
@@ -191,7 +194,10 @@ export function Results({ focus }: { focus: (id: string) => void }) {
               </span>
               {p.node ? (
                 <button type="button" className="st-link" onClick={() => focus(p.node!)}>
-                  {nodeDef(graph.nodes.find((n) => n.id === p.node)?.type ?? "")?.title ?? p.node}
+                  {(() => {
+                    const n = graph.nodes.find((x) => x.id === p.node);
+                    return n ? nodeTitle(graph, n) : p.node;
+                  })()}
                 </button>
               ) : (
                 <span className="st-muted">The mode</span>
@@ -201,7 +207,10 @@ export function Results({ focus }: { focus: (id: string) => void }) {
           ))}
         </ul>
       )}
-      {open && tab === "testrun" && <TestRunTab focus={focus} titleOf={(id) => nodeDef(graph.nodes.find((n) => n.id === id)?.type ?? "")?.title ?? id} />}
+      {open && tab === "testrun" && <TestRunTab focus={focus} titleOf={(id) => {
+            const n = graph.nodes.find((x) => x.id === id);
+            return n ? nodeTitle(graph, n) : id;
+          }} />}
       {open && tab === "output" && <pre className="st-results-out">{output ?? "Nothing compiled yet in this session."}</pre>}
     </section>
   );

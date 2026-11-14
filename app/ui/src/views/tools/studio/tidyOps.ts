@@ -5,6 +5,7 @@
 import { addLocal, addNode, addVariable, connect, inType, outType, startValue, uniqueName, type PinRef } from "./graphOps";
 import { allVariables, pinsOf, typeOk } from "./pins";
 import { nodeDef } from "./registry";
+import { estimateSize } from "./layout";
 import type { GVariable, Graph } from "./schema";
 
 // ---- Promote to Variable --------------------------------------------------------------------
@@ -39,12 +40,12 @@ export function promoteToVariable(g: Graph, ref: PinRef, dir: "in" | "out"): { g
   let g2 = made.graph;
   const home = n.graph;
   if (dir === "in") {
-    const get = addNode(g2, "var.get", { x: n.pos.x - 240, y: n.pos.y + 20 }, home, { var: made.id });
+    const get = addNode(g2, "var.get", freeSpot(g2, { x: n.pos.x - 260, y: n.pos.y }, home), home, { var: made.id });
     const c = connect(get.graph, { node: get.id, pin: "out" }, ref);
     if ("error" in c) return { error: c.error };
     g2 = c.graph;
   } else {
-    const set = addNode(g2, "var.set", { x: n.pos.x + 280, y: n.pos.y + 40 }, home, { var: made.id });
+    const set = addNode(g2, "var.set", freeSpot(g2, { x: n.pos.x + 280, y: n.pos.y }, home), home, { var: made.id });
     let c = connect(set.graph, ref, { node: set.id, pin: "value" });
     if ("error" in c) return { error: c.error };
     // run it right after the node, when the node's Then goes nowhere yet
@@ -56,6 +57,20 @@ export function promoteToVariable(g: Graph, ref: PinRef, dir: "in" | "out"): { g
     g2 = c.graph;
   }
   return { graph: g2, id: made.id, message: `${fn ? "Local variable" : "Variable"} “${name}” made and wired in.` };
+}
+
+/** The nearest spot to `want` (looking down, then up) where a new node doesn't sit on another
+ *  node of the same graph (UX review M3). */
+export function freeSpot(g: Graph, want: { x: number; y: number }, home?: string, size = { w: 230, h: 110 }): { x: number; y: number } {
+  const others = g.nodes.filter((o) => (o.graph ?? "") === (home ?? "")).map((o) => ({ ...o.pos, ...estimateSize(o.type, o.params) }));
+  const clear = (p: { x: number; y: number }) => others.every((o) => p.x + size.w + 16 <= o.x || o.x + o.w + 16 <= p.x || p.y + size.h + 16 <= o.y || o.y + o.h + 16 <= p.y);
+  for (let k = 0; k < 40; k++) {
+    for (const dy of k ? [k * 40, -k * 40] : [0]) {
+      const p = { x: want.x, y: want.y + dy };
+      if (clear(p)) return p;
+    }
+  }
+  return want;
 }
 
 // ---- align and distribute -------------------------------------------------------------------
@@ -168,3 +183,24 @@ export const quickAddList = () =>
   Object.entries(QUICK_ADD)
     .filter(([, q]) => nodeDef(q.type))
     .map(([k, q]) => ({ key: k.toUpperCase(), title: nodeDef(q.type)!.title }));
+
+// ---- a readable first view (UX review H1) ----------------------------------------------------
+
+export type Rect = { x: number; y: number; w: number; h: number };
+/** Below this the text on nodes can't be read. */
+export const READABLE = 0.6;
+
+/** What to show first on a graph: all of it when that's readable; else its first part (the
+ *  comment box nearest the top left, or the first node) at a readable zoom. */
+export function startView(nodes: Rect[], comments: Rect[], canvas: { w: number; h: number }): { fit: true } | { fit: false; rect: Rect } {
+  const all = [...nodes, ...comments];
+  if (!all.length) return { fit: true };
+  const x0 = Math.min(...all.map((r) => r.x)),
+    y0 = Math.min(...all.map((r) => r.y));
+  const x1 = Math.max(...all.map((r) => r.x + r.w)),
+    y1 = Math.max(...all.map((r) => r.y + r.h));
+  const zoom = Math.min(canvas.w / ((x1 - x0) * 1.2), canvas.h / ((y1 - y0) * 1.2));
+  if (zoom >= READABLE) return { fit: true };
+  const first = [...(comments.length ? comments : nodes)].sort((a, b) => a.y - b.y || a.x - b.x)[0];
+  return { fit: false, rect: first };
+}

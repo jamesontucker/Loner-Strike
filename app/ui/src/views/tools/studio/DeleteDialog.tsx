@@ -1,6 +1,6 @@
 // The delete question for something the graph uses (a variable, a local, a Function, a Custom
 // Event): how many nodes use it and where, Find uses, and what to do with them: Replace with…
-// another that fits, Remove it and its nodes (the flow joined up round them), or Remove and keep
+// another that fits, Remove it and its nodes (the flow joined up around them), or Remove and keep
 // the nodes (they show a problem until changed). Whatever is picked is one undo step.
 
 import { useEffect, useRef, useState } from "react";
@@ -106,7 +106,7 @@ export function DeleteDialogHost({ findUses }: { findUses: (ids: string[]) => vo
             <input ref={first} type="radio" name="del" value="nodes" checked={choice === "nodes"} onChange={() => setChoice("nodes")} />
             <span>
               <strong>Remove it and its nodes</strong>
-              <span className="st-muted st-del-help">Its {what} go too. The flow is joined up round them; inputs they fed show a problem to fix.</span>
+              <span className="st-muted st-del-help">Its {what} go too. The flow is joined up around them; inputs they fed show a problem to fix.</span>
             </span>
           </label>
           <label>

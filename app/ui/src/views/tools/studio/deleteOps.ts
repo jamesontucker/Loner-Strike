@@ -1,6 +1,6 @@
 // Deleting something the graph uses (a variable, a Function's local, a Function, a Custom Event):
 // what uses it, what could take its place, and the three ways to delete it (Replace with…,
-// Remove it and its nodes with the flow joined up round them, Remove and keep the nodes). Each
+// Remove it and its nodes with the flow joined up around them, Remove and keep the nodes). Each
 // returns the whole new graph, so the page records it as one undo step.
 
 import { remove, removeCustomEvent, removeGraphPart, removeVariable } from "./graphOps";
@@ -123,7 +123,7 @@ export function removeBridged(g: Graph, ids: Iterable<string>): Graph {
   return cur;
 }
 
-/** Removes it and every node that uses it, the flow joined up round them. */
+/** Removes it and every node that uses it, the flow joined up around them. */
 export function removeWithNodes(g: Graph, r: DeleteRef): Graph {
   return removeThing(removeBridged(g, usesOfRef(g, r).map((n) => n.id)), r);
 }

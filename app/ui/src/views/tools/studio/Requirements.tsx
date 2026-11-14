@@ -34,6 +34,56 @@ export function parseLink(text: string): Link | null {
   return id > 0 && id < 1e8 ? { model: m[1].toLowerCase() === "sprays" ? "Spray" : "Mod", id, name: "" } : null;
 }
 
+/** Base-game maps first, then community ones, then the rest; by name inside each. */
+const sortMaps = (l: MapReq[]) => [...l].sort((a, b) => ["base", "community", "local"].indexOf(a.source) - ["base", "community", "local"].indexOf(b.source) || a.name.localeCompare(b.name));
+
+/** Recommended maps: the picked ones as chips, and a search to add more (UX review H3). */
+export function MapPicker({ maps, picked, disabled, onChange }: { maps: MapReq[]; picked: MapReq[]; disabled: boolean; onChange: (names: string[]) => void }) {
+  const [q, setQ] = useState("");
+  const names = picked.map((m) => m.name);
+  const found = q.trim() ? sortMaps(maps).filter((m) => !names.includes(m.name) && m.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 8) : [];
+  return (
+    <div className="st-req-picker">
+      {picked.length > 0 ? (
+        <ul className="st-req-chips" aria-label="Recommended maps">
+          {picked.map((m) => (
+            <li key={m.name} className="st-req-chip" title={m.warning ?? SOURCE[m.source]}>
+              {m.name}
+              {m.warning && <span className="warn"> !</span>}
+              <button type="button" aria-label={`Remove ${m.name}`} disabled={disabled} onClick={() => onChange(names.filter((x) => x !== m.name))}>
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted small-note">None yet.</p>
+      )}
+      <input className="st-field" type="search" placeholder={`Add a map (${maps.length} on this computer)`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Add a recommended map" disabled={disabled} />
+      {found.length > 0 && (
+        <ul className="st-req-found" role="listbox" aria-label="Maps found">
+          {found.map((m) => (
+            <li key={m.name}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={false}
+                onClick={() => {
+                  onChange([...names, m.name]);
+                  setQ("");
+                }}
+              >
+                {m.name} <span className="muted">· {SOURCE[m.source]}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {q.trim() && found.length === 0 && <p className="muted small-note">No map matches that.</p>}
+    </div>
+  );
+}
+
 export function Requirements({ id }: { id: string }) {
   const [r, setR] = useState<Report | null>(null);
   const [error, setError] = useState("");
@@ -74,7 +124,6 @@ export function Requirements({ id }: { id: string }) {
         Reading the mode's requirements…
       </p>
     );
-  const picked = new Set(r.maps.map((m) => m.name));
   return (
     <section className="st-requirements" aria-label="Requirements">
       {saving && (
@@ -85,9 +134,10 @@ export function Requirements({ id }: { id: string }) {
       )}
       {error && <p className="err-text small-note">{error}</p>}
       <h4>Default map</h4>
-      <select value={r.defaultMap?.name ?? ""} onChange={(e) => void save({ defaultMap: e.target.value })} disabled={saving} aria-label="Default map">
+      <p className="st-side-help">The map a Playtest and the mode's first game start on.</p>
+      <select className="st-field" value={r.defaultMap?.name ?? ""} onChange={(e) => void save({ defaultMap: e.target.value })} disabled={saving} aria-label="Default map">
         <option value="">(none)</option>
-        {r.installedMaps.map((m) => (
+        {sortMaps(r.installedMaps).map((m) => (
           <option key={m.name} value={m.name}>
             {m.name} · {SOURCE[m.source]}
           </option>
@@ -95,17 +145,8 @@ export function Requirements({ id }: { id: string }) {
       </select>
       {r.defaultMap?.warning && <p className="small-note warn">{r.defaultMap.warning}</p>}
       <h4>Recommended maps</h4>
-      <ul className="st-req-maps">
-        {r.installedMaps.map((m) => (
-          <li key={m.name}>
-            <label>
-              <input type="checkbox" checked={picked.has(m.name)} disabled={saving} onChange={(e) => void save({ maps: e.target.checked ? [...picked, m.name] : [...picked].filter((x) => x !== m.name) })} /> {m.name}{" "}
-              <span className="muted">· {SOURCE[m.source]}</span>
-              {picked.has(m.name) && m.warning && <span className="small-note warn"> {m.warning}</span>}
-            </label>
-          </li>
-        ))}
-      </ul>
+      <p className="st-side-help">Maps that suit the mode. Players who install it see them, and the app offers to get the ones they don't have.</p>
+      <MapPicker maps={r.installedMaps} picked={r.maps} disabled={saving} onChange={(maps) => void save({ maps })} />
       <h4>Content</h4>
       {r.content.length === 0 ? (
         <p className="muted small-note">The mode uses only the game's own models, sounds and sprites.</p>

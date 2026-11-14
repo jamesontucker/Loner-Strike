@@ -9,6 +9,13 @@ import { readFileSync } from "node:fs";
 const H = { "X-Panel": "1" };
 const ID = "pw_v3";
 
+/** The whole graph in view: a big graph opens on its first part, readable (UX review H1). */
+async function fitAll(page: Page) {
+  await page.locator(".react-flow__node").first().waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(250); // (after the opening view)
+  await page.locator(".react-flow__controls-fitview").click();
+}
+
 async function seed(page: Page) {
   const tpl = await (await page.request.get("/src/views/tools/studio/templates/team-dm.graph.json")).json();
   tpl.mode.id = ID;
@@ -154,6 +161,7 @@ test("library: Export all, Import a whole library", async ({ page }, info) => {
   const items = async () => (await (await page.request.get("/api/tools/studio/library")).json()).items as { id: string }[];
   const had = new Set((await items()).map((x) => x.id));
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await fitAll(page);
   await expect(selectedTab(page)).toContainText("Event Graph", { timeout: 20_000 });
   // keep the Function twice under two names (right-click → Save to my library)
   // (a second Function for the second item: saving one twice is a new version, not an item)
@@ -188,6 +196,7 @@ test("library: Export all, Import a whole library", async ({ page }, info) => {
 
 test("map markers make the mode's kit", async ({ page }) => {
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await fitAll(page);
   await expect(selectedTab(page)).toContainText("Event Graph", { timeout: 20_000 });
   await page.getByRole("button", { name: "Add a map marker" }).click();
   const details = page.getByRole("complementary", { name: "Details" });
@@ -220,6 +229,7 @@ test("our right-click menus: sidebar items, nodes; delete; dismiss", async ({ pa
   g.nodes.push({ id: "call1", type: "fn.call", pos: { x: 600, y: 400 }, params: { func: "fa" } });
   expect((await (await page.request.post(`/api/tools/studio/graph/${ID}`, { data: { graph: g }, headers: H })).json()).ok).toBeTruthy();
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await fitAll(page);
   await expect(selectedTab(page)).toContainText("Event Graph", { timeout: 20_000 });
   // what the browser would have done with each right-click: shown its own menu or not
   await page.evaluate(() => {
@@ -390,6 +400,7 @@ test("Compile: the full check's status, its problems tied to nodes, Compile on s
     await r.fulfill({ json: answer });
   });
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await fitAll(page);
   const icon = page.getByTestId("studio-check-icon");
   const status = page.getByTestId("studio-check-status");
   await expect(icon).toHaveAttribute("data-state", "none");
@@ -467,6 +478,7 @@ test("Test run: steps with seconds, cancel, the summary, problems tied to nodes,
   });
   await page.route("**/api/tools/studio/testrun/cancel", (r) => ((cancelled = true), r.fulfill({ json: { ok: true } })));
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await fitAll(page);
   await page.getByTestId("studio-test").click();
   const tab = page.getByTestId("studio-testrun");
   await expect(tab).toContainText("Starting a hidden server on de_dust2… ");
@@ -491,6 +503,7 @@ test("Test run: steps with seconds, cancel, the summary, problems tied to nodes,
 
 test("All Actions palette: folders, search opens them, keys, favorites, recents, Context Sensitive", async ({ page }) => {
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await fitAll(page);
   await expect(node(page, "give_m4")).toBeVisible({ timeout: 20_000 });
   const before = await page.locator(".react-flow__node").count();
   await page.locator(".react-flow__pane").click({ button: "right", position: { x: 40, y: 40 } });
@@ -550,6 +563,7 @@ test("All Actions palette: folders, search opens them, keys, favorites, recents,
 test("several event graphs: add, copy and paste across them keeping inner wires, events on any, saved and checked", async ({ page, browserName }) => {
   if (browserName === "chromium") await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await fitAll(page);
   await expect(node(page, "give_m4")).toBeVisible({ timeout: 20_000 });
   // copy two wired nodes from the Event Graph
   await node(page, "is_ct").click();
@@ -593,6 +607,7 @@ test("several event graphs: add, copy and paste across them keeping inner wires,
 
 test("custom events: add one with an input, its Custom Event and Call nodes get the pins, the timer only for one without inputs", async ({ page }) => {
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await fitAll(page);
   await expect(node(page, "give_m4")).toBeVisible({ timeout: 20_000 });
   const side = page.getByRole("complementary", { name: "My mode" });
   await side.getByRole("button", { name: "Add a Custom Event (call it from anywhere, a timer or the map)" }).click();
@@ -621,6 +636,7 @@ test("custom events: add one with an input, its Custom Event and Call nodes get 
 
 test("Timelines: the editor (tracks, add / drag / delete keys, ease, fit), the node's pins, double-click opens it", async ({ page }) => {
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await fitAll(page);
   await expect(node(page, "give_m4")).toBeVisible({ timeout: 20_000 });
   const side = page.getByRole("complementary", { name: "My mode" });
   await side.getByRole("button", { name: "Add a Timeline (values over time, events at set moments)" }).click();
@@ -658,8 +674,9 @@ test("Timelines: the editor (tracks, add / drag / delete keys, ease, fit), the n
   await ed.getByRole("button", { name: "Fit", exact: true }).click();
   // the node: its track pins; double-click opens the editor again
   await tabs(page).getByRole("tab", { name: "Event Graph" }).click();
+  await page.waitForTimeout(250); // (after the tab's opening view)
   const pb = (await page.locator(".react-flow__pane").boundingBox())!;
-  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 40, y: 30 } });
+  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 300, y: 30 } });
   const pal = page.getByRole("dialog", { name: "Add a node" });
   await pal.getByRole("textbox").fill("timeline");
   await pal.getByRole("button", { name: /^Timeline: Timeline/ }).click();

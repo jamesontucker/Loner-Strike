@@ -23,12 +23,13 @@ import { MyBlueprint } from "./MyBlueprint";
 import { TabBar } from "./TabBar";
 import { TimelineEditor } from "./TimelineEditor";
 import { tabView } from "./graphOps";
-import { Results, fullText, testText } from "./Results";
+import { Results, fullText, testText, withStop } from "./Results";
 import { DebugPanel } from "./DebugPanel";
 import { NodeHelp } from "./NodeHelp";
 import { HelpMenu } from "./HelpMenu";
-import { BookmarksMenu } from "./BookmarksMenu";
+import { ViewMenu } from "./BookmarksMenu";
 import { VersionHistory } from "./VersionHistory";
+import { usePanels } from "./panels";
 import { DeleteDialogHost } from "./DeleteDialog";
 import { TableEditorHost } from "./TableEditor";
 import { StudioTour, TourOffer, startStudioTour } from "./Tour";
@@ -157,6 +158,9 @@ function findNodes(g: Graph, q: string) {
     .slice(0, 30);
 }
 
+/** the shortcut key, as the shortcut list writes it (one notation: UX review M12) */
+const MODK = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl+";
+
 function Studio({ maps }: ToolProps) {
   const graph = useStudio((s) => s.graph);
   const saved = useStudio((s) => s.saved);
@@ -184,6 +188,9 @@ function Studio({ maps }: ToolProps) {
   /** node help: null closed, "" the list, else a node's type */
   const [helpFor, setHelpFor] = useState<string | null>(null);
   const [versions, setVersions] = useState(false);
+  const panels = usePanels();
+  /** an example open to look at (its label), until Make it mine */
+  const [exampleOpen, setExampleOpen] = useState<string | null>(null);
   const onApi = useCallback((a: CanvasApi) => {
     focusRef.current = a.focus;
     setCanvas(a);
@@ -321,14 +328,38 @@ function Studio({ maps }: ToolProps) {
   };
 
   /** The tour, on the Infection example: opened as a new mode that isn't saved until you save it. */
-  const tour = async () => {
-    if (dirty && !(await ask("This graph has changes that aren't saved. Start the tour anyway?", { ok: "Start the tour", danger: true }))) return;
-    const ex = EXAMPLES[0];
+  /** An example opened to look at: not saved (nothing is made in Your modes) until Make it mine
+   *  (UX review M10). The tour opens Infection this way. */
+  const openExample = async (ex: (typeof EXAMPLES)[number], label = "example") => {
+    if (dirty && !(await ask("This graph has changes that aren't saved. Open the example anyway?", { ok: "Open it", danger: true }))) return false;
     const p = parseGraph(JSON.parse(ex.raw));
-    if ("error" in p) return toast(p.error, true);
-    const id = idFrom(`${ex.label} tour`, new Set((list ?? []).map((g) => g.id)));
-    st.open({ ...p.graph, mode: { ...p.graph.mode, id, uid: newUid(), name: `${ex.label} (tour)` } }, true);
-    setTimeout(startStudioTour, 300);
+    if ("error" in p) return toast(p.error, true), false;
+    const id = idFrom(`${ex.label} ${label}`, new Set((list ?? []).map((g) => g.id)));
+    st.open({ ...p.graph, mode: { ...p.graph.mode, id, uid: newUid(), name: `${ex.label} (${label})` } }, true);
+    setExampleOpen(ex.label);
+    return true;
+  };
+  /** Make it mine: name it and save it as a mode of your own. */
+  const makeMine = async () => {
+    const g = useStudio.getState().graph;
+    if (!g) return;
+    const name = await askText("What's your copy called?", { label: "Name", placeholder: exampleOpen ?? "My mode", max: 40 }, { ok: "Make it mine" });
+    if (name == null) return;
+    const clean = [...name.trim()].filter((c) => /[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$]/u.test(c)).join("").slice(0, 40) || exampleOpen || "My mode";
+    const id = idFrom(clean, new Set((list ?? []).map((x) => x.id)));
+    const mine = { ...g, mode: { ...g.mode, id, name: clean } };
+    const r = await busy("studio-save", "Saving your copy…", () => api.saveGraph(mine));
+    if (r.error) return toast(r.error, true);
+    st.edit(() => mine);
+    useStudio.getState().markSaved();
+    setExampleOpen(null);
+    void refreshList();
+    toast(`"${clean}" is yours now: it's in Your modes.`);
+  };
+  const tour = async () => {
+    // the tour points at both side panels
+    usePanels.getState().set({ left: true, right: true });
+    if (await openExample(EXAMPLES[0], "tour")) setTimeout(startStudioTour, 400);
   };
 
   // the address says which graph is open: open it (Back, a crumb, a link), or the list
@@ -491,7 +522,7 @@ function Studio({ maps }: ToolProps) {
       if (!g) return;
       setStep("Saving");
       if (!(await save()) || cancelled.current) return;
-      setStep("Compiling (the first time under CrossOver takes longer)");
+      setStep("Compiling (the first time takes longer)");
       const r = await api.playtest(g, activeBreakpoints(g, useStudio.getState().bpsOff));
       if (r.output) st.setOutput(r.output);
       if (!showCompile(r) || cancelled.current) return;
@@ -644,20 +675,29 @@ function Studio({ maps }: ToolProps) {
     return (
       <div className="st-start tl-page">
         <Empty title="Game Mode Studio (Beta)" text="Make a game mode out of nodes: when something happens (a round starts, a player dies), check things and do things. The Studio turns it into a plugin and Playtest starts the game in your mode with bots.">
-          {TEMPLATES.map((t, k) => (
-            <button key={t.id} type="button" className={k === 0 ? "btn primary" : "btn"} title={t.blurb} onClick={() => void newGraph(t)}>
-              {t.label}
-            </button>
-          ))}
-          <button type="button" className="btn" onClick={() => void newGraph()}>
+          <button type="button" className="btn primary" onClick={() => void newGraph()}>
             Blank mode
+          </button>
+          <button type="button" className="btn" onClick={() => void tour()}>
+            Take the tour
           </button>
         </Empty>
         <TourOffer onStart={() => void tour()} />
         <h3 className="st-start-head">Example modes</h3>
-        <p className="st-muted">Small, finished modes with notes on every part: open one to see how it's made, play it, or make it your own.</p>
+        <p className="st-muted">Small, finished modes with notes on every part: open one to see how it's made and play it; Make it mine keeps a copy to change.</p>
         <ul className="st-examples" data-testid="studio-examples">
           {EXAMPLES.map((t) => (
+            <li key={t.id}>
+              <button type="button" className="st-graph-open" onClick={() => void openExample(t)}>
+                <strong>{t.label}</strong>
+                <span className="st-muted">{t.blurb}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <h3 className="st-start-head">Start from a template</h3>
+        <ul className="st-examples" data-testid="studio-templates">
+          {TEMPLATES.map((t) => (
             <li key={t.id}>
               <button type="button" className="st-graph-open" onClick={() => void newGraph(t)}>
                 <strong>{t.label}</strong>
@@ -703,6 +743,7 @@ function Studio({ maps }: ToolProps) {
   return (
     <div className={`st-page st-skin-${skin}${playing ? " playing" : ""}`}>
       <div className="st-toolbar tools-bar">
+        <span className="st-tgroup">
         <button
           type="button"
           className="btn"
@@ -728,37 +769,36 @@ function Studio({ maps }: ToolProps) {
         >
           Mode settings
         </button>
-        <span className="st-sep" />
-        <button type="button" className="btn" onClick={st.undo} disabled={!history.past.length} title="Undo (⌘Z)">
+        </span>
+        <span className="st-tgroup">
+        <button type="button" className="btn" onClick={st.undo} disabled={!history.past.length} title={`Undo (${MODK}Z)`}>
           Undo
         </button>
-        <button type="button" className="btn" onClick={st.redo} disabled={!history.future.length} title="Redo (⇧⌘Z)">
+        <button type="button" className="btn" onClick={st.redo} disabled={!history.future.length} title={`Redo (${MODK}Shift+Z)`}>
           Redo
         </button>
-        <button type="button" className="btn" onClick={layout} title="Lay the nodes out left to right">
-          Tidy up
-        </button>
-        <BookmarksMenu />
+        <ViewMenu onTidy={layout} />
         <button type="button" className="btn" aria-pressed={versions} onClick={() => setVersions(!versions)} title="The last 50 saves: compare and restore" data-testid="studio-versions-button">
           Versions
         </button>
         <FindBox graph={graph} onPick={(id) => focusRef.current(id)} />
         <HelpMenu onNodeHelp={() => setHelpFor("")} onTour={() => void tour()} />
-        <span className="st-grow" />
+        </span>
+        <span className="st-tgroup run">
         <span className="st-check">
           {full.state === "running" ? (
             <span className="st-step" role="status" aria-live="polite" data-testid="studio-compiling">
               <span className="spinner" /> Compiling…
             </span>
           ) : (
-            <button type="button" className="btn" data-testid="studio-compile" onClick={() => void compileNow()} disabled={!!working} title="Run the real compiler on this mode, without installing it or starting the game (⌘B or F7)">
+            <button type="button" className="btn" data-testid="studio-compile" onClick={() => void compileNow()} disabled={!!working} title={`Run the real compiler on this mode, without installing it or starting the game (${MODK}B or F7)`}>
               Compile
             </button>
           )}
           {(() => {
             const shown = full.state === "running" ? "running" : fullStale || full.state === "none" ? "none" : full.state;
             const icon = shown === "ok" ? "\u2713" : shown === "warn" ? "!" : shown === "error" || shown === "failed" ? "\u2715" : shown === "running" ? "\u2026" : "?";
-            const text = fullText(full.state, fullStale) + (full.message ? `: ${full.message}` : "") + ". Click to see Problems.";
+            const text = withStop(fullText(full.state, fullStale) + (full.message ? `: ${full.message}` : "")) + " Click to see Problems.";
             return (
               <button type="button" className={`st-check-icon ${shown}`} data-testid="studio-check-icon" data-state={shown} onClick={() => st.showResults("problems")} title={text} aria-label={text}>
                 {icon}
@@ -770,7 +810,7 @@ function Studio({ maps }: ToolProps) {
               <span className="spinner" /> Test run…
             </span>
           ) : (
-            <button type="button" className="btn" data-testid="studio-test" onClick={() => void startTest()} disabled={!!working} title="Play the mode on a hidden server with bots for about a minute and a half and report what happened (your game isn't touched)">
+            <button type="button" className="btn" data-testid="studio-test" onClick={() => void startTest()} disabled={!!working} title="Play the mode on a hidden server with bots for about two minutes and report what happened (your game isn't touched)">
               Test run
             </button>
           )}
@@ -785,9 +825,10 @@ function Studio({ maps }: ToolProps) {
               {testText(testRun, testStale, testNow)}
             </button>
           )}
-          <label className="st-check-auto" title="Compile in the background each time you save">
+          <label className="st-check-auto" title="Compile on save: compile in the background each time you save">
             <input
               type="checkbox"
+              aria-label="Compile on save"
               checked={prefs.compileOnSave}
               onChange={(e) => {
                 const p = { ...prefs, compileOnSave: e.target.checked };
@@ -795,7 +836,7 @@ function Studio({ maps }: ToolProps) {
                 savePrefs(p);
               }}
             />
-            Compile on save
+            on save
           </label>
         </span>
         <select className="st-field" value={prefs.map} onChange={(e) => (setPrefs({ ...prefs, map: e.target.value }), savePrefs({ ...prefs, map: e.target.value }))} aria-label="Map">
@@ -803,6 +844,7 @@ function Studio({ maps }: ToolProps) {
             <option key={m}>{m}</option>
           ))}
         </select>
+        <label className="st-bots" title="How many bots join a Playtest">
         <input
           className="st-field st-field-num"
           type="number"
@@ -810,13 +852,14 @@ function Studio({ maps }: ToolProps) {
           max={31}
           value={prefs.bots}
           aria-label="Bots"
-          title="Bots"
           onChange={(e) => {
             const n = Math.max(0, Math.min(31, Math.round(Number(e.target.value) || 0)));
             setPrefs({ ...prefs, bots: n });
             savePrefs({ ...prefs, bots: n });
           }}
         />
+        bots
+        </label>
         {step ? (
           <>
             <span className="st-step" role="status" aria-live="polite">
@@ -839,14 +882,52 @@ function Studio({ maps }: ToolProps) {
             Playtest
           </button>
         )}
+        </span>
       </div>
-      <div className="st-main">
-        <MyBlueprint api={canvas} snippets={snippets} reloadSnippets={reloadSnippets} toast={toast} />
+      {exampleOpen && graph.mode.name.endsWith("(example)") && (
+        <div className="banner st-example-bar" role="status" data-testid="studio-example-bar">
+          <span>
+            <strong>{exampleOpen}</strong> is an example: look around, play it, change things to try them. It isn't saved until you make it yours.
+          </span>
+          <button type="button" className="btn small primary" onClick={() => void makeMine()}>
+            Make it mine
+          </button>
+        </div>
+      )}
+      <div className={`st-main${panels.left ? "" : " no-left"}${panels.right ? "" : " no-right"}`}>
+        {panels.left ? (
+          <div className="st-panel">
+            <div className="st-panel-head">
+              <span>My mode</span>
+              <button type="button" className="st-panel-fold" onClick={() => panels.set({ left: false })} title="Fold My mode away (more room for the graph)" aria-label="Fold My mode">
+                ‹
+              </button>
+            </div>
+            <MyBlueprint api={canvas} snippets={snippets} reloadSnippets={reloadSnippets} toast={toast} />
+          </div>
+        ) : (
+          <button type="button" className="st-rail" onClick={() => panels.set({ left: true })} title="Show My mode" data-testid="studio-rail-left">
+            <span>My mode</span>
+          </button>
+        )}
         <div className="st-center">
           <TabBar />
           {(graph.timelines ?? []).some((t) => t.id === tab) ? <TimelineEditor id={tab} /> : <Canvas toast={toast} snippets={snippets} onApi={onApi} />}
         </div>
-        <Inspector />
+        {panels.right ? (
+          <div className="st-panel">
+            <div className="st-panel-head">
+              <button type="button" className="st-panel-fold" onClick={() => panels.set({ right: false })} title="Fold Details away (more room for the graph)" aria-label="Fold Details">
+                ›
+              </button>
+            </div>
+            <Inspector />
+          </div>
+        ) : (
+          <button type="button" className="st-rail" onClick={() => panels.set({ right: true })} title="Show Details" data-testid="studio-rail-right">
+            <span>Details</span>
+          </button>
+        )}
       </div>
       <Results focus={(id) => focusRef.current(id)} />
       <StudioTour />

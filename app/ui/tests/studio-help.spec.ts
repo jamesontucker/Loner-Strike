@@ -8,6 +8,13 @@ const H = { "X-Panel": "1" };
 const ID = "pw_help";
 const WRITES = ["compile", "check", "testrun", "testrun/cancel", "playtest", "switch", "source", "uninstall/**", "debug/command"];
 
+/** The whole graph in view: a big graph opens on its first part, readable (UX review H1). */
+async function fitAll(page: Page) {
+  await page.locator(".react-flow__node").first().waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(250); // (after the opening view)
+  await page.locator(".react-flow__controls-fitview").click();
+}
+
 async function seed(page: Page) {
   const tpl = await (await page.request.get("/src/views/tools/studio/templates/team-dm.graph.json")).json();
   tpl.mode.id = ID;
@@ -28,6 +35,7 @@ test("node help: the ? menu, search, F1 on a node, an example dropped in", async
   // (the tour isn't offered: it has been seen)
   await page.addInitScript(() => localStorage.setItem("ls.studio.tour", JSON.stringify({ offered: true, never: false })));
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await fitAll(page);
   await page.getByTestId("studio-help-menu").click();
   await page.getByRole("menuitem", { name: /Node help/ }).click();
   const help = page.getByTestId("studio-help");
@@ -103,6 +111,7 @@ test("deleting a variable in use: the choices, Find uses, one undo step", async 
   tpl.edges.push({ id: "wa", from: { node: "addk", pin: "then" }, to: { node: "is_ct", pin: "exec" } }, { id: "wb", from: { node: "killed", pin: "attacker" }, to: { node: "addk", pin: "player" } }, { id: "wc", from: { node: "killed", pin: "attacker" }, to: { node: "getk", pin: "player" } });
   await page.request.post(`/api/tools/studio/graph/${ID}`, { data: { graph: tpl }, headers: H });
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await fitAll(page);
   await page.getByRole("complementary", { name: "My mode" }).getByText("Kills Made").click();
   await page.getByRole("button", { name: "Remove this variable" }).click();
   const dlg = page.getByTestId("studio-delete-dialog");
@@ -135,6 +144,7 @@ test("polish: drops with Ctrl and Alt, quick add, Promote to Variable, align, ve
   const saved = await (await page.request.post(`/api/tools/studio/graph/${ID}`, { data: { graph: g }, headers: H })).json();
   expect(saved.ok, JSON.stringify(saved)).toBeTruthy();
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await fitAll(page);
   await expect(page.locator(".st-mb").getByText("Kills Made")).toBeVisible();
   const canvas = page.locator(".st-canvas");
   await canvas.waitFor();

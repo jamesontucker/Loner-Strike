@@ -104,7 +104,7 @@ export function VersionHistory({ onClose, toast }: { onClose: () => void; toast:
                 {i === 0 ? " (the last save)" : ""}
               </span>
               <span className="st-palette-help">
-                {v.nodes} nodes{v.added || v.removed || v.changed ? ` · +${v.added} −${v.removed} ~${v.changed}` : ""}
+                {v.nodes} nodes{v.added || v.removed || v.changed ? ` · ${[v.added && `${v.added} added`, v.removed && `${v.removed} removed`, v.changed && `${v.changed} changed`].filter(Boolean).join(", ")}` : ""}
               </span>
             </button>
           ))}

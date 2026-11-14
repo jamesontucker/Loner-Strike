@@ -301,8 +301,6 @@
 .st-check-icon.warn { color: var(--st-warn); }
 .st-check-icon.error, .st-check-icon.failed { color: var(--st-bad); }
 .st-check-auto { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
-/* a short window: the canvas is too small for the minimap to help, and it would hide nodes */
-@media (max-height: 760px), (max-width: 1100px) { .st-minimap { display: none; } }
 /* Test run (Results tab) */
 .st-test { padding: 6px 8px; overflow-y: auto; font-size: 13px; display: grid; gap: 6px; align-content: start; }
 .st-test-empty { padding: 6px 8px; margin: 0; font-size: 13px; }
@@ -429,3 +427,58 @@
 .st-versions-pick { border-top: 1px solid var(--line); }
 .st-help-quick { font-size: 12.5px; margin: 0; padding-top: 0; }
 .st-tl-tan { fill: var(--panel, #22262b); stroke: var(--signal, #e8c35a); stroke-width: 1.5; cursor: grab; }
+
+/* UX review H4: the node list drawn over the page (Canvas.tsx), so a small canvas doesn't clip it */
+.st-portal .st-palette { position: fixed; z-index: 70; max-height: min(370px, calc(100vh - 24px)); }
+/* folding side panels (panels.ts) */
+.st-main.no-left { grid-template-columns: 26px minmax(0, 1fr) 290px; }
+.st-main.no-right { grid-template-columns: 230px minmax(0, 1fr) 26px; }
+.st-main.no-left.no-right { grid-template-columns: 26px minmax(0, 1fr) 26px; }
+.st-center { min-width: 320px; }
+.st-panel { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.st-panel > .st-mb, .st-panel > .st-side { flex: 1; min-height: 0; }
+.st-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 2px 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--bone-dim, #9aa); }
+.st-panel-fold { width: 20px; height: 20px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: var(--panel, #22262b); color: var(--bone-dim, #9aa); cursor: pointer; line-height: 1; }
+.st-panel-fold:hover, .st-rail:hover { color: var(--text); border-color: var(--signal); }
+.st-rail { border: 1px solid var(--line); border-radius: 6px; background: var(--panel, #22262b); color: var(--bone-dim, #9aa); cursor: pointer; padding: 8px 0; font: 600 12px/1 inherit; }
+.st-rail span { writing-mode: vertical-rl; letter-spacing: .04em; }
+.st-menu-head { padding: 8px 10px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--bone-dim, #9aa); border-top: 1px solid var(--line); margin-top: 4px; }
+.st-menu-note { padding: 4px 10px; margin: 0; font-size: 12.5px; }
+/* the minimap (only when asked for): small and see-through, so it doesn't hide nodes (UX review M1) */
+.st-canvas .react-flow__minimap.st-minimap { width: 150px; height: 100px; opacity: .75; }
+.st-canvas .react-flow__minimap.st-minimap svg { width: 150px; height: 100px; }
+
+/* the toolbar in three groups that wrap as wholes (UX review M6): the mode, editing, running it */
+.st-tgroup { display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.st-tgroup.run { margin-left: auto; }
+.st-bots { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--bone-dim, #9aa); white-space: nowrap; }
+
+/* Requirements (Requirements.tsx; UX review H3): compact, no sideways scroll */
+.st-requirements { display: grid; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.st-requirements h4 { margin: 10px 0 0; font-size: 13px; }
+.st-requirements .st-side-help { margin: 0; }
+.st-requirements select, .st-requirements input { width: 100%; box-sizing: border-box; }
+.st-req-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.st-req-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--line); border-radius: 12px; font-size: 12.5px; background: rgba(255,255,255,.04); }
+.st-req-chip button { background: none; border: 0; color: var(--bone-dim, #9aa); cursor: pointer; padding: 0 2px; font: inherit; }
+.st-req-chip button:hover { color: var(--text); }
+.st-req-found { list-style: none; margin: 0; padding: 2px; border: 1px solid var(--line); border-radius: 6px; max-height: 220px; overflow-y: auto; }
+.st-req-found button { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text); padding: 4px 6px; border-radius: 4px; cursor: pointer; font: inherit; }
+.st-req-found button:hover, .st-req-found button:focus-visible { background: color-mix(in srgb, var(--signal) 25%, transparent); }
+.st-req-content { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.st-req-content code { overflow-wrap: anywhere; }
+.st-req-content .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.st-req-content input { flex: 1 1 140px; min-width: 0; }
+.st-example-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 6px; font-size: 13px; }
+/* Version history docks on the left, over My mode, so it doesn't cover the nodes it marks (UX review L6) */
+.st-help.st-versions { left: 16px; right: auto; width: min(300px, calc(100vw - 32px)); }
+/* Data table header cells look like headers; the column remove sits apart (UX review L7) */
+.st-table-grid thead th { background: color-mix(in srgb, var(--signal) 10%, var(--panel, #22262b)); font-weight: 600; }
+.st-table-grid thead th .st-field { font-weight: 600; }
+.st-table-colbar { justify-content: space-between; gap: 8px; }
+.st-table-colbar .btn.icon { margin-left: auto; }
+/* (one row at 1440 px: a narrower Find and map list; UX review M6) */
+.st-toolbar .st-find .st-field { width: 130px; }
+.st-tgroup.run > select.st-field { max-width: 130px; }
+.st-tgroup.run .st-field-num { width: 46px; }
+.st-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

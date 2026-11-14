@@ -1,4 +1,4 @@
-// The Studio tour: a short walk round the Studio on one of the example modes (Infection):
+// The Studio tour: a short walk around the Studio on one of the example modes (Infection):
 // the canvas, adding nodes, the notes, My mode and Details, the three checks, Playtest and
 // Install, and the help. Offered once on the first visit ("Not now", "Don't show again"); the
 // "?" menu's "Take the Studio tour" starts it any time. Each step rings the real control and
@@ -38,7 +38,7 @@ export const useStudioTour = create<TourState>((set) => ({ ...read(), step: -1, 
 export type TourStep = { at?: string; title: string; text: string };
 
 export const TOUR_STEPS: TourStep[] = [
-  { title: "Welcome to the Game Mode Studio", text: "This is Infection, one of the example modes. A mode is made of nodes: when something happens (a round starts, a player dies), check things and do things. Let's look round. It takes about a minute." },
+  { title: "Welcome to the Game Mode Studio", text: "This is Infection, one of the example modes. A mode is made of nodes: when something happens (a round starts, a player dies), check things and do things. Let's look around. It takes about a minute." },
   { at: ".st-canvas", title: "The canvas", text: "Each box is a node and the wires carry the flow (white) and values (colored) between them. Drag to move, scroll to zoom, drag empty space to pan. The colored boxes are notes that explain each part." },
   { at: ".st-canvas", title: "Adding nodes", text: "Right-click empty space, press Space, or drag a wire out of a pin and let go: the node list opens, and you can search it. Dropping a wire only lists nodes that fit. Shortcuts: hold B (Branch), S (Sequence), D (Delay) or F (For Each Player) and click empty space." },
   { at: ".st-mb", title: "My mode", text: "The mode's own pieces: its variables (Infection Started, here), Functions (Infect: what makes a zombie), graphs and snippets. Drag any of them onto the canvas: a variable with Ctrl (⌘) held drops a Get, with Alt (⌥) a Set. Double-click a Function to open its graph." },

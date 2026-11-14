@@ -1,6 +1,6 @@
 // Auto-layout ("Tidy up"): left-to-right flow with dagre (MIT; ELK is EPL-2.0 and stays out of
 // the app). Comment boxes are dagre clusters: the nodes inside a box stay together and the box
-// is fitted round them afterwards, so boxes never end up on top of other nodes.
+// is fitted around them afterwards, so boxes never end up on top of other nodes.
 
 import dagre from "@dagrejs/dagre";
 import { nodeDef } from "./registry";
