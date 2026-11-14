@@ -322,3 +322,4 @@ Screenshots are in `/private/tmp/claude-501/-Users-jameson/a1c85d27-df33-445d-9b
 | Editor icons, preview, Checks; Studio nodes and the example | PASS (Playwright) | npc-editor and studio-npc specs, Chromium and WebKit |
 | Talking through the menu, timeouts and walking away with a real player | NEEDS USER | Menus are drawn only for people; bots answer by themselves |
 | Bots using an interactable on their own ("Bots may use") | NEEDS USER / W2 | W2 owns the bot side; not watched in this sim |
+| The Quest Giver, bring it back (after 35360b25's fix) | PASS | Sim/T1QG (brain run 43648864150, 1310-dev: the newest green; the ls-next3 head run was still building; plugins fresh from 35360b25), rcon-driven with a bot: talk → Yes (`take true`, `thanks`); talk → hint (`still`); use note → `got true`, `found`; use again → `meh`; talk → `reward`, `pay done` ($1000), both flags cleared; another player's use → `meh` |
