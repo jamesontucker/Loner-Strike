@@ -101,8 +101,11 @@ Checked on the newest ls-next3 (3b71d06, CI 43594358020) with plugins from tools
 | deathrun_death | **works** | 27% (47 of 176) | was 1-2%: bots now jump the pit at its edge and land on the spinning stones |
 | deathrun_crash_egypt | **works** | 20% (8 of 40); 19-29% in earlier runs | teleports, lasers and traps handled |
 | deathrun_temple | partial | 0% here, 3% in QA4 | traps fire (11 presses); runners die on the strip the activator breaks under them |
-| deathrun_starwars | not working | none | bots open the start door some rounds, but the start sequence drops the start-room floor, and the activator's side is a teleport network the nav doesn't cover (he reaches no traps) |
+| deathrun_starwars | removed by the user (was: not working) | none | bots open the start door some rounds, but the start sequence drops the start-room floor, and the activator's side is a teleport network the nav doesn't cover (he reaches no traps) |
 | deathrun_dojo, deathrun_jigsaw2 | removed by the user | - | not supported for bots in 1.0 |
+
+User's decision (2026-11-14): starwars dropped from bot support (out of the download, rotation and nav pack; still
+playable by hand); temple kept as is. The general fixes made for starwars stay (walkable seams, door links, door buttons).
 
 Recommendation (the user's decision):
 - **deathrun_starwars**: drop it from bot support for 1.0, like dojo. Making it work needs the bots to learn its start
