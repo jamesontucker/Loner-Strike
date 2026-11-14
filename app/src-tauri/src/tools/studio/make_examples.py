@@ -75,6 +75,16 @@ class Mode:
 
 
 # ---- Infection ------------------------------------------------------------------------------
+
+def no_bomb(m):
+    """A part that takes the bomb away at Round Started (bomb maps hand one out each round)."""
+    m.part("No bomb in this mode: on a bomb map the game hands one out each round, so at Round Started everyone loses it (Remove Weapon, the bomb). Bots then play the mode instead of the bomb, and a bomb can't end a round behind the mode's back.")
+    m.n("nb_rs", "event.round_started")
+    m.n("nb_each", "flow.for_each_player", {"which": "all"})
+    m.n("nb_take", "player.take_weapon", {"weapon": "c4"})
+    m.flow("nb_rs", "nb_each", "nb_each.each", "nb_take")
+    m.w("nb_each.player", "nb_take.player")
+
 def infection():
     m = Mode("infection", "Infection", "One zombie; its victims turn; humans must outlast the clock",
              "6d1f0f3e-4c1b-4a7e-9a51-2b7e3c9d0a11",
@@ -341,6 +351,8 @@ def koth():
     m.flow("win.true", "stop", "crown", "end")
     m.w("who.out", "end.winner")
 
+    no_bomb(m)
+
     m.graph = "hill"
     m.part("Make Hill: a capture point at the place given, kept in the Hill variable. Taking it alone takes 6 seconds, faster with friends.")
     m.n("fe", "fn.entry")
@@ -454,6 +466,7 @@ def oitc():
     m.w("n.out", "last.a")
     m.w("last.out", "over.cond")
     m.w("winner.player", "cheer.value")
+    no_bomb(m)
     m.save("one-in-the-chamber.graph.json")
 
 
@@ -554,6 +567,8 @@ def juggernaut():
     m.flow("bots.each", "other", "other.true", "chase")
     m.w("bots.player", "chase.player")
     m.w("j.out", "chase.at")
+
+    no_bomb(m)
 
     m.graph = "crown"
     m.part("Make Juggernaut: lots of health, slower, a machine gun and a red glow, and everyone is told.")

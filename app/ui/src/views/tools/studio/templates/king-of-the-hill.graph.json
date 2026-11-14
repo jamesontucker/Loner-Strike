@@ -180,7 +180,7 @@
    "type": "comp.on_capture",
    "pos": {
     "x": 65,
-    "y": 1630
+    "y": 1844
    },
    "params": {}
   },
@@ -189,7 +189,7 @@
    "type": "var.set",
    "pos": {
     "x": 565,
-    "y": 1617
+    "y": 1831
    },
    "params": {
     "var": "holder"
@@ -200,7 +200,7 @@
    "type": "var.set",
    "pos": {
     "x": 1065,
-    "y": 1617
+    "y": 1831
    },
    "params": {
     "var": "held",
@@ -212,7 +212,7 @@
    "type": "msg.broadcast",
    "pos": {
     "x": 1565,
-    "y": 1639
+    "y": 1853
    },
    "params": {
     "text": "The hill has a new king!",
@@ -224,7 +224,7 @@
    "type": "comp.on_capture_lost",
    "pos": {
     "x": 1065,
-    "y": 1815
+    "y": 2029
    },
    "params": {}
   },
@@ -233,7 +233,7 @@
    "type": "var.set",
    "pos": {
     "x": 1565,
-    "y": 1791
+    "y": 2005
    },
    "params": {
     "var": "held",
@@ -379,11 +379,42 @@
    "params": {}
   },
   {
+   "id": "nb_rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 1416
+   },
+   "params": {}
+  },
+  {
+   "id": "nb_each",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 565,
+    "y": 1381
+   },
+   "params": {
+    "which": "all"
+   }
+  },
+  {
+   "id": "nb_take",
+   "type": "player.take_weapon",
+   "pos": {
+    "x": 1065,
+    "y": 1392
+   },
+   "params": {
+    "weapon": "c4"
+   }
+  },
+  {
    "id": "fe",
    "type": "fn.entry",
    "pos": {
     "x": 65,
-    "y": 1427
+    "y": 1641
    },
    "params": {},
    "graph": "hill"
@@ -393,7 +424,7 @@
    "type": "comp.create",
    "pos": {
     "x": 565,
-    "y": 1403
+    "y": 1617
    },
    "params": {
     "kind": "ls_capture_point",
@@ -406,7 +437,7 @@
    "type": "var.set",
    "pos": {
     "x": 1065,
-    "y": 1381
+    "y": 1595
    },
    "params": {
     "var": "point"
@@ -803,6 +834,39 @@
   {
    "id": "w36",
    "from": {
+    "node": "nb_rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "nb_each",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "nb_each",
+    "pin": "each"
+   },
+   "to": {
+    "node": "nb_take",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "nb_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "nb_take",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
     "node": "fe",
     "pin": "at"
    },
@@ -812,7 +876,7 @@
    }
   },
   {
-   "id": "w37",
+   "id": "w40",
    "from": {
     "node": "make",
     "pin": "out"
@@ -823,7 +887,7 @@
    }
   },
   {
-   "id": "w38",
+   "id": "w41",
    "from": {
     "node": "fe",
     "pin": "then"
@@ -834,7 +898,7 @@
    }
   },
   {
-   "id": "w39",
+   "id": "w42",
    "from": {
     "node": "make",
     "pin": "then"
@@ -863,7 +927,7 @@
    "text": "Who holds the hill: Point Captured says which team took it, Point Lost that nobody has it now.",
    "pos": {
     "x": 41,
-    "y": 1571
+    "y": 1785
    },
    "size": {
     "w": 1778,
@@ -884,10 +948,22 @@
   },
   {
    "id": "c4",
-   "text": "Make Hill: a capture point at the place given, kept in the Hill variable. Taking it alone takes 6 seconds, faster with friends.",
+   "text": "No bomb in this mode: on a bomb map the game hands one out each round, so at Round Started everyone loses it (Remove Weapon, the bomb). Bots then play the mode instead of the bomb, and a bomb can't end a round behind the mode's back.",
    "pos": {
     "x": 41,
     "y": 1335
+   },
+   "size": {
+    "w": 1278,
+    "h": 202
+   }
+  },
+  {
+   "id": "c5",
+   "text": "Make Hill: a capture point at the place given, kept in the Hill variable. Taking it alone takes 6 seconds, faster with friends.",
+   "pos": {
+    "x": 41,
+    "y": 1549
    },
    "size": {
     "w": 1278,

@@ -247,7 +247,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 1862
+    "y": 2076
    },
    "params": {}
   },
@@ -256,7 +256,7 @@
    "type": "player.get_frags",
    "pos": {
     "x": 565,
-    "y": 1789
+    "y": 2003
    },
    "params": {}
   },
@@ -265,7 +265,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 1765
+    "y": 1979
    },
    "params": {
     "op": "ge",
@@ -277,7 +277,7 @@
    "type": "var.get",
    "pos": {
     "x": 565,
-    "y": 1893
+    "y": 2107
    },
    "params": {
     "var": "over"
@@ -288,7 +288,7 @@
    "type": "logic.not",
    "pos": {
     "x": 1065,
-    "y": 1917
+    "y": 2131
    },
    "params": {}
   },
@@ -297,7 +297,7 @@
    "type": "logic.and_or",
    "pos": {
     "x": 1565,
-    "y": 1829
+    "y": 2043
    },
    "params": {
     "op": "and"
@@ -308,7 +308,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 2065,
-    "y": 1872
+    "y": 2086
    },
    "params": {}
   },
@@ -317,7 +317,7 @@
    "type": "var.set",
    "pos": {
     "x": 2565,
-    "y": 1850
+    "y": 2064
    },
    "params": {
     "var": "over",
@@ -329,7 +329,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 3065,
-    "y": 1915
+    "y": 2129
    },
    "params": {
     "text": "Juggernaut won by"
@@ -340,7 +340,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 3565,
-    "y": 1926
+    "y": 2140
    },
    "params": {
     "winner": "draw"
@@ -351,7 +351,7 @@
    "type": "event.new_round",
    "pos": {
     "x": 2565,
-    "y": 2185
+    "y": 2399
    },
    "params": {}
   },
@@ -360,7 +360,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 3065,
-    "y": 2150
+    "y": 2364
    },
    "params": {
     "which": "all"
@@ -371,7 +371,7 @@
    "type": "player.set_frags",
    "pos": {
     "x": 3565,
-    "y": 2150
+    "y": 2364
    },
    "params": {
     "n": 0
@@ -382,7 +382,7 @@
    "type": "event.round_started",
    "pos": {
     "x": 65,
-    "y": 1360
+    "y": 1574
    },
    "params": {}
   },
@@ -391,7 +391,7 @@
    "type": "timer.repeat",
    "pos": {
     "x": 565,
-    "y": 1325
+    "y": 1539
    },
    "params": {
     "every": 5,
@@ -403,7 +403,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 1065,
-    "y": 1325
+    "y": 1539
    },
    "params": {
     "which": "bots"
@@ -414,7 +414,7 @@
    "type": "var.get",
    "pos": {
     "x": 1065,
-    "y": 1499
+    "y": 1713
    },
    "params": {
     "var": "jugg"
@@ -425,7 +425,7 @@
    "type": "logic.equal",
    "pos": {
     "x": 1565,
-    "y": 1271
+    "y": 1485
    },
    "params": {
     "of": "player"
@@ -436,7 +436,7 @@
    "type": "logic.not",
    "pos": {
     "x": 2065,
-    "y": 1295
+    "y": 1509
    },
    "params": {}
   },
@@ -445,7 +445,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 2565,
-    "y": 1314
+    "y": 1528
    },
    "params": {}
   },
@@ -454,7 +454,7 @@
    "type": "bots.goal",
    "pos": {
     "x": 3065,
-    "y": 1404
+    "y": 1618
    },
    "params": {
     "who": "player",
@@ -465,11 +465,42 @@
    }
   },
   {
+   "id": "nb_rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 1301
+   },
+   "params": {}
+  },
+  {
+   "id": "nb_each",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 565,
+    "y": 1266
+   },
+   "params": {
+    "which": "all"
+   }
+  },
+  {
+   "id": "nb_take",
+   "type": "player.take_weapon",
+   "pos": {
+    "x": 1065,
+    "y": 1277
+   },
+   "params": {
+    "weapon": "c4"
+   }
+  },
+  {
    "id": "fe",
    "type": "fn.entry",
    "pos": {
     "x": 65,
-    "y": 2690
+    "y": 2915
    },
    "params": {},
    "graph": "crown"
@@ -479,7 +510,7 @@
    "type": "var.set",
    "pos": {
     "x": 565,
-    "y": 2364
+    "y": 2578
    },
    "params": {
     "var": "jugg"
@@ -491,7 +522,7 @@
    "type": "player.set_health",
    "pos": {
     "x": 1065,
-    "y": 2429
+    "y": 2643
    },
    "params": {
     "amount": 1000
@@ -503,7 +534,7 @@
    "type": "player.give_item",
    "pos": {
     "x": 1565,
-    "y": 2489
+    "y": 2703
    },
    "params": {
     "item": "vesthelm"
@@ -515,7 +546,7 @@
    "type": "player.give_weapon",
    "pos": {
     "x": 2065,
-    "y": 2532
+    "y": 2724
    },
    "params": {
     "weapon": "m249",
@@ -528,7 +559,7 @@
    "type": "player.set_speed",
    "pos": {
     "x": 2565,
-    "y": 2564
+    "y": 2789
    },
    "params": {
     "speed": 200
@@ -540,7 +571,7 @@
    "type": "player.set_glow",
    "pos": {
     "x": 3065,
-    "y": 2646
+    "y": 2871
    },
    "params": {
     "color": "red"
@@ -552,7 +583,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 3565,
-    "y": 2687
+    "y": 2912
    },
    "params": {
     "text": "The Juggernaut is"
@@ -1136,6 +1167,39 @@
   {
    "id": "w53",
    "from": {
+    "node": "nb_rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "nb_each",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "nb_each",
+    "pin": "each"
+   },
+   "to": {
+    "node": "nb_take",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "nb_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "nb_take",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
     "node": "fe",
     "pin": "who"
    },
@@ -1145,7 +1209,7 @@
    }
   },
   {
-   "id": "w54",
+   "id": "w57",
    "from": {
     "node": "fe",
     "pin": "then"
@@ -1156,7 +1220,7 @@
    }
   },
   {
-   "id": "w55",
+   "id": "w58",
    "from": {
     "node": "set",
     "pin": "then"
@@ -1167,7 +1231,7 @@
    }
   },
   {
-   "id": "w56",
+   "id": "w59",
    "from": {
     "node": "hp",
     "pin": "then"
@@ -1178,7 +1242,7 @@
    }
   },
   {
-   "id": "w57",
+   "id": "w60",
    "from": {
     "node": "armor",
     "pin": "then"
@@ -1189,7 +1253,7 @@
    }
   },
   {
-   "id": "w58",
+   "id": "w61",
    "from": {
     "node": "gun",
     "pin": "then"
@@ -1200,7 +1264,7 @@
    }
   },
   {
-   "id": "w59",
+   "id": "w62",
    "from": {
     "node": "slow",
     "pin": "then"
@@ -1211,7 +1275,7 @@
    }
   },
   {
-   "id": "w60",
+   "id": "w63",
    "from": {
     "node": "glow",
     "pin": "then"
@@ -1222,7 +1286,7 @@
    }
   },
   {
-   "id": "w61",
+   "id": "w64",
    "from": {
     "node": "fe",
     "pin": "who"
@@ -1233,7 +1297,7 @@
    }
   },
   {
-   "id": "w62",
+   "id": "w65",
    "from": {
     "node": "fe",
     "pin": "who"
@@ -1244,7 +1308,7 @@
    }
   },
   {
-   "id": "w63",
+   "id": "w66",
    "from": {
     "node": "fe",
     "pin": "who"
@@ -1255,7 +1319,7 @@
    }
   },
   {
-   "id": "w64",
+   "id": "w67",
    "from": {
     "node": "fe",
     "pin": "who"
@@ -1266,7 +1330,7 @@
    }
   },
   {
-   "id": "w65",
+   "id": "w68",
    "from": {
     "node": "fe",
     "pin": "who"
@@ -1277,7 +1341,7 @@
    }
   },
   {
-   "id": "w66",
+   "id": "w69",
    "from": {
     "node": "fe",
     "pin": "who"
@@ -1318,7 +1382,7 @@
    "text": "20 points (kills, and 2 more for killing the Juggernaut) win the round, once: Round Over stops kills in the last seconds from ending it again. Scores start again next round.",
    "pos": {
     "x": 41,
-    "y": 1719
+    "y": 1933
    },
    "size": {
     "w": 3778,
@@ -1330,7 +1394,7 @@
    "text": "Bots go after the Juggernaut: every 5 seconds each other bot gets a goal at the place the Juggernaut is now (Bots: Goal, go and hold there). A bot in a fight keeps fighting, so in a crowded free for all this mostly moves the ones with nobody to shoot. Bot Follow would not do: it only follows teammates, and here everyone is an enemy.",
    "pos": {
     "x": 41,
-    "y": 1225
+    "y": 1439
    },
    "size": {
     "w": 3278,
@@ -1339,14 +1403,26 @@
   },
   {
    "id": "c5",
+   "text": "No bomb in this mode: on a bomb map the game hands one out each round, so at Round Started everyone loses it (Remove Weapon, the bomb). Bots then play the mode instead of the bomb, and a bomb can't end a round behind the mode's back.",
+   "pos": {
+    "x": 41,
+    "y": 1220
+   },
+   "size": {
+    "w": 1278,
+    "h": 202
+   }
+  },
+  {
+   "id": "c6",
    "text": "Make Juggernaut: lots of health, slower, a machine gun and a red glow, and everyone is told.",
    "pos": {
     "x": 41,
-    "y": 2318
+    "y": 2532
    },
    "size": {
     "w": 3778,
-    "h": 525
+    "h": 536
    },
    "graph": "crown"
   }
