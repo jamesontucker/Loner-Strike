@@ -33,6 +33,7 @@ import io
 import ipaddress
 import json
 import re
+import secrets
 import sqlite3
 import struct
 import sys
@@ -74,6 +75,10 @@ ADMIN_FAILS_PER_HOUR = 10
 GB_FETCHES_PER_MIN = 30
 MIN_TOKEN = 32
 REPORTS_PER_IP_HOUR = 5
+UNLIST_PER_IP_HOUR = 20       # unlist/list-again tries (each needs the page's code anyway)
+UNLIST_CODE_TTL = 86400       # a code is good for a day
+UNLIST_HOW = ("Put {code} anywhere in your GameBanana page's description (Edit, then save), then click again here. "
+              "It shows the list that you're the page's owner. You can take it off afterwards.")
 REPORTS_PER_DAY = 300         # all together; more and the button says "try later"
 REPORT_REASONS = ("broken", "malware", "stolen", "offensive", "not-loner-strike", "other")
 MAX_NOTE = 500
@@ -1244,8 +1249,13 @@ MIGRATIONS = [
 #   moderator          approve (pending/waiting file) -> listed; restore (hidden/pulled) -> listed;
 #                      hide -> hidden; pull -> pulled; reject -> rejected (or drops a waiting file);
 #                      block/unblock a creator; Undo puts back the exact row before the action
-#   re-check           gone/untagged/flagged -> pulled (waiting: rejected); listed file replaced
-#                      -> hidden; a team hold stays marked as the team's
+#   re-check           untagged/flagged/moved -> pulled (waiting: rejected); page gone (deleted,
+#                      private, withheld) or the listed file removed -> withdrawn, and back to listed
+#                      by itself when the page and its file return; listed file replaced -> hidden;
+#                      a team hold stays marked as the team's
+#   creator (proven)   unlist (listed) -> unlisted; list again (unlisted) -> listed. Proof: a code
+#                      the service gives, put on the GameBanana page by its submitter (unlist()).
+#                      Never undoes a team hold. A new file for an unlisted page keeps it unlisted.
 
 
 class Store:
@@ -1689,7 +1699,7 @@ def index_item(row):
     type the app's reader wants (a wrong type or an unknown enum value would make it drop the
     whole list)."""
     it = _j(row["item"])
-    status = {"listed": "listed", "hidden": "hidden", "pulled": "revoked"}[row["state"]]
+    status = {"listed": "listed", "hidden": "hidden", "pulled": "revoked", "unlisted": "unlisted", "withdrawn": "withdrawn"}[row["state"]]
     out = {"kind": it["kind"], "model": row["model"], "gb": int(row["gb"]), "file": int(it.get("file", 0)),
            "md5": it.get("md5", ""), "name": it["name"], "author": it.get("author", ""),
            "summary": it.get("summary", ""), "games": list(it.get("games") or ["cstrike"])}
@@ -1719,7 +1729,7 @@ def build_index(store):
     """community/index.json as bytes (UTF-8, compact) and its sha256. The same database gives
     the same bytes, so an unchanged index isn't uploaded again."""
     items, revoked = [], set()
-    for row in store.rows(("listed", "hidden", "pulled")):
+    for row in store.rows(("listed", "hidden", "pulled", "unlisted", "withdrawn")):
         if row["state"] == "pulled":
             revoked.add(row["key"])
         if row["item"]:
@@ -1764,6 +1774,8 @@ class Community:
         self.checker_cmd = None  # (tests put a stand-in child here)
         self.checking = None     # the running checker child, if any
         self.report_ip = Window(REPORTS_PER_IP_HOUR, 3600)
+        self.unlist_ip = Window(UNLIST_PER_IP_HOUR, 3600)
+        self.unlist_codes = {}  # (key, action) -> (code, valid until)
         self.report_same = Window(1, 86400)
         self.report_all = Window(REPORTS_PER_DAY, 86400)
         self.report_day = Window(REPORTS_PER_VISITOR_DAY, 86400)
@@ -1967,7 +1979,11 @@ class Community:
             action = "submit"
         else:
             # new, listed, or out of the list only by the re-check (and passing every check now)
-            row.update(item=data, proposed=None, rejected_md5="", state="listed", hidden_by="", reason="", check_note="")
+            # (the author's own unlisting stays until they list it again)
+            if was == "unlisted":
+                row.update(item=data, proposed=None, rejected_md5="", check_note="")
+            else:
+                row.update(item=data, proposed=None, rejected_md5="", state="listed", hidden_by="", reason="", check_note="")
             action = "list"
         conflicts = self.store.put(row, action, f"md5 {item['md5']} file {item['file']} app {app}",
                                    claim=self._claim(uids, facts["submitterId"], facts["author"], file_at, may_take=not look))
@@ -2057,6 +2073,61 @@ class Community:
         return out
 
     # -- reports --
+
+    def unlist(self, body, ip, now_=None):
+        """(status, answer) for the app's POST /community/unlist {key, action: unlist|list}: the
+        author takes a creation off the list (or puts it back). The app never signs in to
+        GameBanana, so the proof is the page itself, as for registrations: the first ask gets a
+        short code; the author puts it anywhere in the page's description on GameBanana and asks
+        again; the service reads the page and acts only when the code is there and the page's
+        submitter is the member who registered it. A team hold is never undone."""
+        ip = visitor_key(ip)
+        if not self.unlist_ip.allow(ip):
+            return 429, {"error": "Too many tries from here. Try again in an hour."}
+        try:
+            req = json.loads(body.decode("utf-8")) if len(body) <= 2048 else None
+        except (UnicodeDecodeError, ValueError):
+            req = None
+        if not isinstance(req, dict) or req.get("action") not in ("unlist", "list") or not isinstance(req.get("key"), str):
+            return 400, {"error": "Say which creation and what to do."}
+        p = parse_key(req["key"])
+        row = self.store.get(key_of(*p)) if p else None
+        if not row:
+            return 404, {"error": "That creation isn't on the list."}
+        action = req["action"]
+        want_from = "listed" if action == "unlist" else "unlisted"
+        if row["hidden_by"] == "team" or row["state"] in ("pulled", "rejected"):
+            return 409, {"error": "The Loner-Strike team has a hold on this one, so only they can change it. Ask in the Discord."}
+        if row["state"] != want_from:
+            return 409, {"error": "It's already unlisted." if action == "unlist" and row["state"] == "unlisted"
+                         else "It's already on the list." if action == "list" and row["state"] == "listed"
+                         else f"It can't be {'unlisted' if action == 'unlist' else 'listed again'} while it's {row['state']}."}
+        t = now_ or now()
+        ck = (row["key"], action)
+        held = self.unlist_codes.get(ck)
+        if not held or held[1] < t:
+            code = f"ls-{'unlist' if action == 'unlist' else 'list'}-" + "".join(secrets.choice("abcdefghjkmnpqrstuvwxyz23456789") for _ in range(6))
+            self.unlist_codes[ck] = (code, t + UNLIST_CODE_TTL)
+            return 200, {"state": "needs-proof", "code": code, "how": UNLIST_HOW.format(code=code)}
+        code = held[0]
+        got, page = fetch_page(row["model"], row["gb"], self.get)
+        if got != "ok":
+            return 200, {"state": "needs-proof", "code": code, "how": UNLIST_HOW.format(code=code),
+                         "note": "GameBanana didn't show the page just now. Try again in a minute."}
+        submitter = (page_facts(page, row["model"]) or {}).get("submitterId")
+        if code not in json.dumps(page, ensure_ascii=False).lower():
+            return 200, {"state": "needs-proof", "code": code, "how": UNLIST_HOW.format(code=code),
+                         "note": "The code isn't on the page yet (GameBanana can take a minute to show an edit)."}
+        if not submitter or submitter != row["submitter_id"]:
+            return 403, {"error": "That page's submitter isn't the GameBanana member who registered it, so it can't be changed from here. Ask in the Discord."}
+        del self.unlist_codes[ck]
+        if action == "unlist":
+            row.update(state="unlisted", hidden_by="creator", reason="Unlisted by the author.", updated=t)
+        else:
+            row.update(state="listed", hidden_by="", reason="", updated=t)
+        self.store.put(row, f"creator {action}", f"code {code}")
+        log(f"creator {action} {row['key']}")
+        return 200, {"state": row["state"], "note": "You can take the code off the page now." }
 
     def report(self, body, ip):
         """(status, answer) for the app's POST /community/report: a player says something's wrong
@@ -2290,8 +2361,8 @@ class Community:
         except Exception as e:  # (never stops the re-check)
             log(f"housekeeping failed: {e}")
         try:
-            rows = [self.store.get(k) for k in keys] if keys else self.store.rows(("pending", "listed", "hidden"))
-            rows = [r for r in rows if r and r["state"] in ("pending", "listed", "hidden")]
+            rows = [self.store.get(k) for k in keys] if keys else self.store.rows(("pending", "listed", "hidden", "withdrawn"))
+            rows = [r for r in rows if r and r["state"] in ("pending", "listed", "hidden", "withdrawn")]
             verdicts = []
             for i, row in enumerate(rows):
                 if i and pause:
@@ -2299,14 +2370,14 @@ class Community:
                 verdicts.append((row, *self._verdict(row)))
             # many pages leaving the list at once is more likely GameBanana's API having a bad day (or
             # changing shape) than real: more than 3, or 2+ and over a quarter, waits for a person
-            gone = sum(1 for _, v, _ in verdicts if v in ("pull", "reject", "hide"))
+            gone = sum(1 for _, v, _ in verdicts if v in ("pull", "reject", "hide", "withdraw"))
             suspicious = not keys and (gone > 3 or (gone >= 2 and gone > len(rows) * RECHECK_GONE_SHARE))
             changed, t = [], now()
             for row, verdict, why in verdicts:
                 if verdict == "error":
                     self.store.touch(row["key"], row["checked"], f"couldn't check: {why}")
                     continue
-                if suspicious and verdict in ("pull", "reject", "hide"):
+                if suspicious and verdict in ("pull", "reject", "hide", "withdraw"):
                     self.store.touch(row["key"], row["checked"], f"would be {verdict}ed ({why}), held back")
                     continue
                 self.store.touch(row["key"], t, why if verdict != "ok" else "")
@@ -2315,7 +2386,7 @@ class Community:
                 row = self.store.get(row["key"])
                 # a hold the team put on stays the team's (only a moderator lifts it)
                 by = "team" if row["hidden_by"] == "team" else "recheck"
-                if verdict in ("pull", "reject", "hide"):
+                if verdict in ("pull", "reject", "hide", "withdraw"):
                     row["hidden_by"] = by
                 if verdict == "pull":
                     row.update(state="pulled", reason=why, updated=t, proposed=None)
@@ -2326,6 +2397,13 @@ class Community:
                     row.update(state="hidden", reason=why, updated=t)
                 elif verdict == "drop":
                     row.update(proposed=None, updated=t)
+                elif verdict == "withdraw":
+                    row.update(state="withdrawn", reason=why, updated=t)
+                elif verdict == "relist":
+                    # (the page and its file came back; a team hold never lifts by itself)
+                    if row["hidden_by"] == "team":
+                        continue
+                    row.update(state="listed", reason="", hidden_by="", updated=t)
                 self.store.put(row, f"recheck {verdict}", why)
                 changed.append((row["key"], verdict, why))
             summary = {"at": t, "checked": len(rows), "changed": len(changed), "heldBack": suspicious}
@@ -2350,10 +2428,14 @@ class Community:
         got, page = fetch_page(row["model"], row["gb"], self.get)
         if got == "error":
             return "error", page
-        listed = row["state"] in ("listed", "hidden")
+        withdrawn = row["state"] == "withdrawn"
+        listed = row["state"] in ("listed", "hidden", "withdrawn")
         lose = "pull" if listed else "reject"
         if got == "gone":
-            return lose, page
+            # (a page taken down may come back: withdrawn, not pulled)
+            if withdrawn:
+                return "ok", row["reason"] or page
+            return ("withdraw" if listed else lose), page
         if _d(page.get("_aGame")).get("_idRow") != CS16_GAME:
             return lose, "The page moved out of Counter-Strike 1.6."
         if page.get("_bIsFlagged"):
@@ -2366,10 +2448,16 @@ class Community:
             f = files.get(it.get("file"))
             if f and f["md5"] == it.get("md5") and f["av"] and f["av"] != "clean":
                 return "pull", "GameBanana's virus check flagged the file."
-            if not f or f["md5"] != it.get("md5"):
+            if not f:
+                if withdrawn:
+                    return "ok", row["reason"] or ""
+                return "withdraw", "The listed file was removed from GameBanana."
+            if f["md5"] != it.get("md5"):
                 if row["state"] == "hidden":
                     return "ok", row["check_note"] or ""
-                return "hide", "The listed file was replaced or removed on GameBanana."
+                return "hide", "The listed file was replaced on GameBanana."
+            if withdrawn:
+                return "relist", "The page and its file are back on GameBanana."
             prop = _j(row["proposed"])
             if prop and prop.get("md5") not in (x["md5"] for x in files.values()):
                 return "drop", "The waiting update's file is no longer on the page."
@@ -2420,11 +2508,11 @@ class Community:
         try:
             if parts == ["health"] and method == "GET":
                 return reply(h, 200, {"ok": True})
-            if parts in (["submit"], ["report"]):
+            if parts in (["submit"], ["report"], ["unlist"]):
                 if method != "POST":
                     return reply(h, 405, {"error": "POST only."})
                 body = read_body(h)
-                code, answer = (self.submit if parts == ["submit"] else self.report)(body, ip)
+                code, answer = {"submit": self.submit, "report": self.report, "unlist": self.unlist}[parts[0]](body, ip)
                 return reply(h, code, answer, cors=False)
             if len(parts) == 3 and parts[0] == "submission" and method == "GET":
                 if not self.status_limit.allow(visitor_key(ip)):

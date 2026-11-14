@@ -161,7 +161,7 @@ export const launch = (map: string | null, mode?: string) => post<{ ok?: boolean
 export type Credit = { model: Model; gb: number; name: string; author: string };
 export type Installed = {
   key: string; kind: Kind; model: Model; gb: number; file: number; md5: string; name: string; author: string; game: string; section: string;
-  maps: string[]; prefabs: string[]; mode: string; installed: number; url: string; update: number | null; pulled: boolean; remixOf: Credit | null;
+  maps: string[]; prefabs: string[]; mode: string; installed: number; url: string; update: number | null; pulled: boolean; gone?: string | null; remixOf: Credit | null;
   /** a newer file waiting for the map or mode to be free */
   pending: number; previousFile: number; canGoBack: boolean;
 };

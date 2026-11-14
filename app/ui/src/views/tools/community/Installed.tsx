@@ -107,6 +107,7 @@ export function InstalledActions({ d, it: given, onChanged }: { d?: Details; it?
           </div>
         </div>
       )}
+      {it.gone && !it.pulled && <p className="muted small-note">{it.gone}</p>}
       {it.pulled && <p className="cm-warn small-note">The Loner-Strike team pulled this from Community since you installed it. You may want to remove it.</p>}
     </div>
   );

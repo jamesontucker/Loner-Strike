@@ -1476,13 +1476,13 @@ class Transitions(unittest.TestCase):
         c.get.pages[("Mod", 739197)]["_aFiles"].pop(0)  # the listed file is gone from the page
         c.recheck(pause=0)
         row = c.store.get("mod:739197")
-        self.assertEqual((row["state"], row["hidden_by"]), ("hidden", "recheck"))
+        self.assertEqual((row["state"], row["hidden_by"]), ("withdrawn", "recheck"), "the listed file was removed: withdrawn")
         untagged = copy.deepcopy(c.get.pages[("Mod", 739197)])
         untagged["_aTags"] = []
         c.get.pages[("Mod", 739197)], ok = untagged, c.get.pages[("Mod", 739197)]
         c.get_range.files[2000000] = c.get_range.files[1885247]
         self.assertEqual(c.submit(body(map_item(file=2000000, md5="1" * 32)), "a")[0], 422, "only when it passes")
-        self.assertEqual(c.store.get("mod:739197")["state"], "hidden")
+        self.assertEqual(c.store.get("mod:739197")["state"], "withdrawn")
         c.get.pages[("Mod", 739197)] = ok
         self.assertEqual(c.submit(body(map_item(file=2000000, md5="1" * 32)), "a")[1]["state"], "listed")
         row = c.store.get("mod:739197")
@@ -1882,3 +1882,109 @@ class Migrations(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Withdrawn(unittest.TestCase):
+    """A page deleted or its file removed is withdrawn (kept out, installed copies stay) and comes
+    back by itself when the page and its file return."""
+
+    def test_a_deleted_page_is_withdrawn_and_comes_back(self):
+        c, _ = make()
+        c.submit(body(map_item()), "a")
+        page = c.get.pages[("Mod", 739197)]
+        trashed = copy.deepcopy(page)
+        trashed["_bIsTrashed"] = True
+        c.get.pages[("Mod", 739197)] = trashed
+        c.recheck(pause=0)
+        row = c.store.get("mod:739197")
+        self.assertEqual((row["state"], row["hidden_by"]), ("withdrawn", "recheck"))
+        idx = json.loads(cm.build_index(c.store)[0])
+        self.assertEqual(idx["items"][0]["status"], "withdrawn")
+        self.assertEqual(idx["revoked"], [], "not pulled: it may come back")
+        # still gone: no change
+        c.recheck(pause=0)
+        self.assertEqual(c.store.get("mod:739197")["state"], "withdrawn")
+        # back on GameBanana with its file
+        c.get.pages[("Mod", 739197)] = page
+        c.recheck(pause=0)
+        row = c.store.get("mod:739197")
+        self.assertEqual((row["state"], row["hidden_by"], row["reason"]), ("listed", "", ""))
+
+    def test_a_team_hold_never_comes_back_by_itself(self):
+        c, _ = make()
+        c.submit(body(map_item()), "a")
+        page = c.get.pages[("Mod", 739197)]
+        del c.get.pages[("Mod", 739197)]
+        c.recheck(pause=0)
+        row = c.store.get("mod:739197")
+        row["hidden_by"] = "team"
+        c.store.put(row, "test", "")
+        c.get.pages[("Mod", 739197)] = page
+        c.recheck(pause=0)
+        self.assertEqual(c.store.get("mod:739197")["state"], "withdrawn")
+
+
+class Unlist(unittest.TestCase):
+    """The author unlists (and lists again) with the page's proof: a code on the GameBanana page."""
+
+    def setUp(self):
+        self.c, _ = make()
+        self.c.submit(body(map_item()), "a")
+        self.page = self.c.get.pages[("Mod", 739197)]
+
+    def ask(self, action, ip="u"):
+        return self.c.unlist(json.dumps({"key": "mod:739197", "action": action}).encode(), ip)
+
+    def put_on_page(self, code, submitter=None):
+        p = copy.deepcopy(self.page)
+        p["_sText"] = (p.get("_sText") or "") + f" {code} "
+        if submitter is not None:
+            p["_aSubmitter"]["_idRow"] = submitter
+        self.c.get.pages[("Mod", 739197)] = p
+
+    def test_unlist_then_list_again_with_the_code(self):
+        code, a = self.ask("unlist")
+        self.assertEqual((code, a["state"]), (200, "needs-proof"))
+        self.assertIn(a["code"], a["how"])
+        # not on the page yet: nothing changes
+        code, b = self.ask("unlist")
+        self.assertEqual((b["state"], b["code"]), ("needs-proof", a["code"]))
+        self.assertEqual(self.c.store.get("mod:739197")["state"], "listed")
+        self.put_on_page(a["code"])
+        code, d = self.ask("unlist")
+        self.assertEqual((code, d["state"]), (200, "unlisted"))
+        row = self.c.store.get("mod:739197")
+        self.assertEqual((row["state"], row["hidden_by"]), ("unlisted", "creator"))
+        self.assertEqual(json.loads(cm.build_index(self.c.store)[0])["items"][0]["status"], "unlisted")
+        # an update keeps it unlisted
+        self.assertEqual(self.c.submit(body(map_item()), "a")[1]["state"], "unlisted")
+        # list again: a new code
+        _, e = self.ask("list")
+        self.assertNotEqual(e["code"], a["code"])
+        self.put_on_page(e["code"])
+        self.assertEqual(self.ask("list")[1]["state"], "listed")
+
+    def test_another_member_cant(self):
+        _, a = self.ask("unlist")
+        self.put_on_page(a["code"], submitter=424242)
+        code, b = self.ask("unlist")
+        self.assertEqual(code, 403)
+        self.assertEqual(self.c.store.get("mod:739197")["state"], "listed")
+
+    def test_a_team_hold_stays(self):
+        self.c.moderate("mod:739197", "hide", {"reason": "Checking."})
+        code, a = self.ask("unlist")
+        self.assertEqual(code, 409)
+        self.assertIn("team", a["error"])
+
+    def test_bad_requests(self):
+        self.assertEqual(self.c.unlist(b"{nope", "x")[0], 400)
+        self.assertEqual(self.c.unlist(json.dumps({"key": "mod:1", "action": "unlist"}).encode(), "x")[0], 404)
+        self.assertEqual(self.c.unlist(json.dumps({"key": "mod:739197", "action": "delete"}).encode(), "x")[0], 400)
+        self.assertEqual(self.ask("list")[0], 409, "it's listed already")
+
+    def test_codes_expire(self):
+        _, a = self.ask("unlist")
+        later = cm.now() + cm.UNLIST_CODE_TTL + 5
+        _, b = self.c.unlist(json.dumps({"key": "mod:739197", "action": "unlist"}).encode(), "u", now_=later)
+        self.assertNotEqual(a["code"], b["code"])

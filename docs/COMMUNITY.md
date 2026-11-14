@@ -116,7 +116,7 @@ reads 1 refuses 2 and says "update Loner-Strike".
 | `health` | The newest Loner-Strike map simulation (the map simulator, tools/health.rs) of that map version. Not filled by the list service for now: an author's numbers can't be proven (see section 7, health from our side). |
 | `screenshots` | https links on `images.gamebanana.com` or `dl.lonerstrike.com` only. |
 | `featured` | A team pick; listed first. |
-| `status` | `listed`; `hidden` (kept out of lists, still openable by link); `revoked` (never offered or installed). |
+| `status` | `listed`; `hidden` (kept out of lists, still openable by link); `unlisted` (the author took it off the list: kept out, installed copies stay with a quiet note, no updates offered); `withdrawn` (its GameBanana page or file is gone: the same, and it comes back by itself when the page does; Get says it can't be downloaded any more); `revoked` (never offered or installed). Older apps read the two new values as `hidden`. |
 | `revoked` (top) | GameBanana pages pulled even though they carry the tag (the page may not be in `items`). |
 | `verifiedAuthors` | GameBanana names whose modes may be marked `verified`. Informational for the app; the index's `review` field is what counts. |
 
@@ -188,6 +188,27 @@ and anything outside the mode's content and settings.
   any GameBanana download, and can be removed in Get more.
 - Also: GameBanana's own report button, and the Loner-Strike Discord. Featured picks are a
   field, not an algorithm.
+
+### Unlisting and withdrawn pages
+
+**Unlist (the author).** Community › Yours has **Unlist** (and **List again**) on each creation this computer
+registered (`POST /api/tools/community/unlist {key, action}` → the list service's `POST /community/unlist`). The app
+never signs in to GameBanana, so the proof is the page itself, exactly as for registering and updating (what's listed
+always comes from the page, and a page belongs to the GameBanana member who submitted it): the first click gets a
+short code (`ls-unlist-xxxxxx`, good for a day); the author puts it anywhere in the page's description on GameBanana
+and clicks again; the service reads the page and acts only when the code is there **and** the page's submitter is
+the member who registered it. The code can come off the page afterwards. A team hold (hidden, pulled, turned down)
+is never undone this way. Unlisted entries stay in the index as `unlisted` (so installed copies get the note) and
+out of every list; a new file for an unlisted page keeps it unlisted until the author lists it again. (The website
+has no community section reading the index yet; when it gets one it must show `listed` only.)
+
+**Withdrawn pages (automatic).** The list service's re-check (every few hours, one page every two seconds) asks
+GameBanana about every listed page: a page deleted, made private or withheld, or a listed file removed, is
+`withdrawn` (kept out of lists, the same "you can keep yours" note, no updates) and comes back to `listed` by itself
+when the page and its file return. Untagged, flagged or moved pages are still pulled, and many pages leaving at once
+still waits for a person. Try it on a withdrawn creation says "This creation was withdrawn from GameBanana (its page
+or file is gone), so it can't be downloaded any more."; a file that vanished between looking and downloading gets
+"The file isn't on GameBanana any more (the author may have removed it)."
 
 ### Index integrity
 

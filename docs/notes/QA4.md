@@ -167,6 +167,10 @@ Expected messages are the app's own words; a row fails if a failure shows a raw 
 ### Moderation and ownership
 | Item | Steps | Pass when |
 |---|---|---|
+| Unlist and list again (live: test entry) | In Community › Yours click Unlist on the test entry; put the shown code in the GameBanana page's description; click again; then List again the same way | First click: the code and how-to, nothing changes; without the code on the page: "The code isn't on the page yet…"; with it: unlisted, gone from the browser after the next publish, the code can come off; List again brings it back; a moderator's hide can't be undone this way ("…only they can change it") |
+| Unlisted while installed (live: test entry) | Install the test entry on a second computer, unlist it | Installed shows "The author unlisted this. You can keep yours, or remove it."; no update is offered; Remove still works and leaves nothing behind |
+| Withdrawn page (live: test page) | Delete (trash) the test GameBanana page; run `lsmod.py recheck`; restore the page; recheck again | Withdrawn: out of the browser, installed copies show "…withdrawn from GameBanana. You can keep yours…", Try it says it can't be downloaded any more; restored: listed again by itself |
+| A file that vanished (live: test page) | Open a test entry's page in Community, then remove its file on GameBanana, then Try it | "The file this creation lists isn't on its GameBanana page any more…" (or "The file isn't on GameBanana any more…"), never a raw download error |
 | Report (live: test entry) | Report a test entry with each reason and a 500-character note | Sent once; the moderators' channel gets the card; a second quick report is rate-limited politely |
 | Taken down after install | Pull a test entry you installed | Installed copy stays and shows the pulled note; Try it is gone; Update never offered |
 | Ownership after reinstall | Remove and reinstall the app (keep the GameBanana account), update your test entry | Updating still works: ownership is the GameBanana member, not the app copy |

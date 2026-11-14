@@ -50,6 +50,11 @@ pub const INDEX_URL: &str = "https://dl.lonerstrike.com/community/index.json";
 pub const SUBMIT_URL: &str = "https://list.lonerstrike.com/community/submit";
 /// Where the Report button's reports go (the team's private moderation channel hears about them).
 pub const REPORT_URL: &str = "https://list.lonerstrike.com/community/report";
+/// What Get says for a creation whose page or file is gone.
+pub const WITHDRAWN: &str = "This creation was withdrawn from GameBanana (its page or file is gone), so it can't be downloaded any more.";
+
+/// Unlisting and listing again (the author, with the page's proof: docs/COMMUNITY.md "Unlisting").
+pub const UNLIST_URL: &str = "https://list.lonerstrike.com/community/unlist";
 /// What a report can say is wrong (the list service takes exactly these).
 pub const REPORT_REASONS: [&str; 6] = ["broken", "malware", "stolen", "offensive", "not-loner-strike", "other"];
 const MAX_NOTE: usize = 500;
@@ -402,11 +407,31 @@ pub enum Status {
     Listed,
     /// pulled: never offered, never installed
     Revoked,
+    /// the author unlisted it (with the page's proof): out of lists, installed copies stay
+    Unlisted,
+    /// its GameBanana page (or its file) is gone; back by itself if the page returns
+    Withdrawn,
     /// kept out of lists (asked by the author, or waiting on a question), still openable;
     /// also what a newer index's unknown value reads as, so one entry can't break the list
     /// (serde wants the catch-all last)
     #[serde(other)]
     Hidden,
+}
+
+impl Status {
+    /// Kept out of the browser's lists (still openable by link; installed copies stay).
+    pub fn kept_out(self) -> bool {
+        matches!(self, Status::Hidden | Status::Unlisted | Status::Withdrawn)
+    }
+
+    /// The quiet note for someone who has it installed.
+    pub fn note(self) -> Option<&'static str> {
+        match self {
+            Status::Unlisted => Some("The author unlisted this. You can keep yours, or remove it."),
+            Status::Withdrawn => Some("This creation's page was withdrawn from GameBanana. You can keep yours, or remove it."),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -899,7 +924,7 @@ pub fn entry(hit: Option<&Hit>, it: Option<&Item>, revoked: bool, have: &HashSet
     };
     let kind = it.map(|i| i.kind).or(hit.map(|h| h.kind)).unwrap_or_default();
     let tr = trust(kind, it, revoked);
-    if tr.level == "blocked" || it.is_some_and(|i| i.status == Status::Hidden) {
+    if tr.level == "blocked" || it.is_some_and(|i| i.status.kept_out()) {
         return None;
     }
     let map = it.and_then(|i| i.map.as_ref());
@@ -1039,6 +1064,9 @@ fn profile(model: Model, id: i64) -> Result<Value, String> {
     if v.get("_sErrorCode").is_some() || v["_idRow"].as_i64() != Some(id) {
         return Err("That page isn't on GameBanana (any more).".into());
     }
+    if ["_bIsTrashed", "_bIsPrivate", "_bIsWithheld"].iter().any(|k| v[*k] == json!(true)) {
+        return Err(WITHDRAWN.into());
+    }
     Ok(v)
 }
 
@@ -1130,7 +1158,7 @@ pub fn pick_file(files: &[Value], asked: Option<i64>, listed: i64) -> Result<i64
     let ok = |f: &&Value| f["clean"] == json!(true) && f["supported"] == json!(true);
     let want = asked.filter(|a| *a > 0).or((listed > 0).then_some(listed));
     if let Some(w) = want {
-        return files.iter().filter(ok).find(|f| f["id"].as_i64() == Some(w)).and_then(|f| f["id"].as_i64()).ok_or("That file isn't on the page, or GameBanana flagged it.");
+        return files.iter().filter(ok).find(|f| f["id"].as_i64() == Some(w)).and_then(|f| f["id"].as_i64()).ok_or("The file this creation lists isn't on its GameBanana page any more (the author removed or replaced it), or GameBanana flagged it.");
     }
     files.iter().find(ok).and_then(|f| f["id"].as_i64()).ok_or("There's no file on the page the app can install.")
 }
@@ -1163,6 +1191,9 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
     let game = st.local_game().ok_or(NO_GAME)?;
     let (idx, _) = index(false);
     let it = idx.items.iter().find(|i| i.model == model && i.gb == id).cloned();
+    if it.as_ref().is_some_and(|i| i.status == Status::Withdrawn) {
+        return Err(WITHDRAWN.into());
+    }
     let page = profile(model, id)?;
     if !has_tag(&page["_aTags"]) {
         return Err("This page doesn't carry the Loner-Strike tag, so it isn't installed from here. Use Get more instead.".into());
@@ -1268,6 +1299,9 @@ fn fetch_unpacked(file: i64, fname: &str, md5: &str, limit: u64, bare_map: bool)
     let host = r.url().host_str().unwrap_or("").to_lowercase();
     if !HOSTS.iter().any(|h| host == *h || host.ends_with(&format!(".{h}"))) {
         return Err(format!("The download was redirected somewhere unexpected ({host})."));
+    }
+    if matches!(r.status().as_u16(), 404 | 410) {
+        return Err("The file isn't on GameBanana any more (the author may have removed it).".into());
     }
     if !r.status().is_success() {
         return Err("GameBanana didn't send the file. Try again in a minute.".into());
@@ -2452,6 +2486,48 @@ async fn api_report(h: HeaderMap, Json(req): Json<ReportReq>) -> Response {
     )
 }
 
+#[derive(Deserialize)]
+struct UnlistReq {
+    key: String,
+    /// "unlist" or "list"
+    action: String,
+}
+
+/// The author's Unlist / List again for an entry in Yours: sent to the list service, which
+/// answers with a code to put on the GameBanana page first, then does it once the page shows it.
+async fn api_unlist(h: HeaderMap, Json(req): Json<UnlistReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    json_answer(
+        blocking(move || {
+            let fail = |m: String| Fail::new(StatusCode::OK, m);
+            let ok_key = req.key.split_once(':').is_some_and(|(m, id)| matches!(m, "mod" | "spray") && id.parse::<i64>().is_ok_and(|i| i > 0));
+            if !ok_key || !matches!(req.action.as_str(), "unlist" | "list") {
+                return Err(fail("That isn't one of your creations.".into()));
+            }
+            let r = crate::sys::http()
+                .post(UNLIST_URL)
+                .header("User-Agent", USER_AGENT)
+                .header("Content-Type", "application/json")
+                .timeout(Duration::from_secs(20))
+                .body(json!({"schema": 1, "key": req.key, "action": req.action}).to_string())
+                .send()
+                .map_err(|_| fail("Couldn't reach the Loner-Strike list. Check your internet connection, or tell us in the Discord.".into()))?;
+            let status = r.status();
+            let mut out = Vec::new();
+            let _ = r.take(16 << 10).read_to_end(&mut out);
+            let v: Value = serde_json::from_slice(&out).unwrap_or(Value::Null);
+            if status.is_success() {
+                // (only the fields the page needs, each a short line)
+                return Ok(json!({"state": v["state"].as_str().map(|x| one_line(x, 20)), "code": v["code"].as_str().map(|x| one_line(x, 40)), "how": v["how"].as_str().map(|x| one_line(x, 400)), "note": v["note"].as_str().map(|x| one_line(x, 300))}));
+            }
+            Err(fail(v["error"].as_str().map(|e| one_line(e, 300)).unwrap_or_else(|| "The Loner-Strike list couldn't do that right now. Try again later.".into())))
+        })
+        .await,
+    )
+}
+
 fn forbidden() -> Response {
     (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"}))).into_response()
 }
@@ -2470,6 +2546,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/community/mine", get(api_mine))
         .route("/api/tools/community/reveal", post(api_reveal))
         .route("/api/tools/community/report", post(api_report))
+        .route("/api/tools/community/unlist", post(api_unlist))
 }
 
 // ---- MD5 (GameBanana lists each file's MD5; the package is matched by it) ---------------------------
@@ -3154,5 +3231,32 @@ mod requirement_tests {
         assert_eq!(v["content"][0]["have"], false);
         assert_eq!(v["content"][0]["link"]["id"], 77);
         assert_eq!(v["content"][1]["have"], true);
+    }
+}
+
+#[cfg(test)]
+mod unlist_tests {
+    use super::*;
+
+    #[test]
+    fn unlisted_and_withdrawn_stay_out_of_lists_and_get_no_updates() {
+        let idx = parse_index(br#"{"schema": 1, "items": [
+            {"kind": "map", "gb": 1, "name": "a", "file": 9, "map": {"name": "a"}, "status": "unlisted"},
+            {"kind": "map", "gb": 2, "name": "b", "file": 9, "map": {"name": "b"}, "status": "withdrawn"},
+            {"kind": "map", "gb": 3, "name": "c", "file": 9, "map": {"name": "c"}, "status": "listed"}]}"#).unwrap();
+        let st = |gb: i64| idx.items.iter().find(|i| i.gb == gb).unwrap().status;
+        assert_eq!(st(1), Status::Unlisted);
+        assert_eq!(st(2), Status::Withdrawn);
+        assert!(st(1).kept_out() && st(2).kept_out() && !st(3).kept_out());
+        assert!(st(1).note().unwrap().contains("The author unlisted this"));
+        assert!(st(2).note().unwrap().contains("withdrawn"));
+        // installed older files: an update only for the listed one
+        let lib = |gb: i64| super::super::communitylib::Installed { kind: Kind::Map, model: Model::Mod, gb, file: 1, ..Default::default() };
+        assert_eq!(super::super::communitylib::newer(&lib(1), &idx), None);
+        assert_eq!(super::super::communitylib::newer(&lib(2), &idx), None);
+        assert_eq!(super::super::communitylib::newer(&lib(3), &idx), Some(9));
+        // an older app's reader would take both as hidden; ours too where it matters (out of lists)
+        let old = parse_index(br#"{"schema": 1, "items": [{"kind": "map", "gb": 4, "name": "d", "map": {"name": "d"}, "status": "something-new"}]}"#).unwrap();
+        assert_eq!(old.items[0].status, Status::Hidden);
     }
 }

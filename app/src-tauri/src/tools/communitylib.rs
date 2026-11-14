@@ -148,6 +148,10 @@ fn forget(dir: &Path, model: Model, gb: i64) {
 /// file ids only grow), or the installed one's MD5 no longer matches what it lists.
 pub fn newer(it: &Installed, idx: &Index) -> Option<i64> {
     let e = listed_entry(it, idx)?;
+    // (unlisted by its author or withdrawn from GameBanana: no updates offered)
+    if matches!(e.status, super::community::Status::Unlisted | super::community::Status::Withdrawn) {
+        return None;
+    }
     if e.model != it.model || e.gb != it.gb {
         // (the same creation, now on another page: any listed file there is newer for us)
         return (e.file > 0).then_some(e.file);
@@ -169,7 +173,7 @@ pub fn listed_entry<'a>(it: &Installed, idx: &'a Index) -> Option<&'a super::com
     if it.uid.is_empty() || it.owner_id <= 0 {
         return None;
     }
-    idx.items.iter().find(|e| e.uid == it.uid && e.owner_id == it.owner_id && e.status != super::community::Status::Revoked)
+    idx.items.iter().find(|e| e.uid == it.uid && e.owner_id == it.owner_id && e.status == super::community::Status::Listed)
 }
 
 /// Whether a library entry was pulled by the Loner-Strike team since it was installed.
@@ -208,6 +212,8 @@ pub fn summary(items: &[Installed], idx: &Index) -> Value {
             v["url"] = json!(it.url());
             v["update"] = json!(newer(it, idx).filter(|f| *f != it.pending));
             v["pulled"] = json!(pulled(it, idx));
+            // (the author unlisted it, or its page was withdrawn: a quiet note; it stays installed)
+            v["gone"] = json!(idx.items.iter().find(|e| e.model == it.model && e.gb == it.gb).and_then(|e| e.status.note()));
             v["canGoBack"] = json!(it.previous_file > 0 || lib_dir().join(it.key()).join("previous").join("meta.json").is_file());
             v
         })
