@@ -3,7 +3,8 @@
 
 import type { ReactNode } from "react";
 import { useToolArg } from "../../../stores/tools";
-import { ChecksPanel, Inspector, TextureBrowser, Visibility } from "./Panels";
+import { Inspector, TextureBrowser, Visibility } from "./Panels";
+import { ChecksPanel } from "./ChecksPanel"; // Checks: its own file now
 import { OutlinePanel } from "./OutlinePanel";
 import { LibraryPanel } from "./LibraryPanel";
 import { CompilePanel } from "./CompilePanel";

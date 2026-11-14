@@ -29,7 +29,26 @@ export type Doc = DocState & {
   stats: Stats;
 };
 
-export type Issue = { level: "info" | "warning" | "error"; code: string; message: string; brush?: number; entity?: number; texture?: string; fix?: string; /** P5: a mode kit marker or component to place, "<mode>:<id>" */ place?: string };
+/** Checks: what a deeper check's fix needs (sent back with the fix as is). */
+export type FixData = { face?: number; otherBrush?: number; otherFace?: number; to?: Vec3; dist?: number };
+export type MoreFix = { fix: string; brush?: number; entity?: number; fixData?: FixData };
+export type Issue = {
+  level: "info" | "warning" | "error";
+  code: string;
+  message: string;
+  brush?: number;
+  entity?: number;
+  texture?: string;
+  fix?: string;
+  /** P5: a mode kit marker or component to place, "<mode>:<id>" */
+  place?: string;
+  /** Checks: where it is (GoldSrc), the face, the suggested fix, the fix's details and other fixes */
+  at?: Vec3;
+  face?: number;
+  hint?: string;
+  fixData?: FixData;
+  moreFixes?: MoreFix[];
+};
 export type Checks = { docId: number; revision: number; issues: Issue[]; stats: Stats; texturesChecked: boolean };
 
 export type WadTextures = { name: string; found: boolean; error?: string; textures: { name: string; width: number; height: number }[] };
@@ -137,7 +156,21 @@ async function post<T>(path: string, body: unknown = {}): Promise<T & Err> {
 const E = "/api/tools/editor";
 
 export const getDoc = () => getJson<Doc>(`${E}/doc`);
-export const getChecks = () => getJson<Checks>(`${E}/checks`);
+/** Checks: the stretched-texture limits (the Checks panel's settings, kept per computer). */
+export const CHECK_LIMITS_KEY = "ls.editor.checkLimits";
+export function checkLimits(): { minScale: number; maxScale: number } {
+  try {
+    const v = JSON.parse(localStorage.getItem(CHECK_LIMITS_KEY) ?? "null");
+    if (v && v.minScale > 0 && v.maxScale > 0) return { minScale: Number(v.minScale), maxScale: Number(v.maxScale) };
+  } catch {
+    /* defaults */
+  }
+  return { minScale: 0.1, maxScale: 4 };
+}
+export const getChecks = () => {
+  const l = checkLimits();
+  return getJson<Checks>(`${E}/checks?minScale=${l.minScale}&maxScale=${l.maxScale}`);
+};
 export const getTextures = () => getJson<{ wads: WadTextures[]; noGame?: boolean }>(`${E}/textures`);
 export const getGameWads = () => getJson<{ wads: { name: string; game: string }[] }>(`${E}/wads`);
 export const texUrl = (name: string) => `${E}/tex/${encodeURIComponent(name)}.png`;

@@ -19,6 +19,7 @@ import type { Draw } from "../viewer/bundle";
 import { texUrl, type DocEntity } from "./editorApi";
 import { facesOf, groupMembers, keyOf, originOf, selectionBounds, snap, topGroup, useEditor, type BrushGeo, type FaceRef, type ViewId } from "./store";
 import { LeakLine } from "./LeakLine";
+import { CheckMarkers } from "./CheckMarkers"; // Checks
 import { DIM_MATERIAL, P4SceneParts } from "./P4Scene"; // P4: cordon, drag and drop, 3D box select
 import { useCordonDim } from "./extras";
 import { MarqueeHot, startMarquee, useMarquee } from "./Marquee";
@@ -1013,6 +1014,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
       <KitOverlay />
       <DropTarget />
       <LeakLine />
+      <CheckMarkers /> {/* Checks: the live checks' findings */}
       <P4SceneParts />
       <MarqueeHot />
       {clip.map((p, i) => (
