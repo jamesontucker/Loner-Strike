@@ -788,13 +788,8 @@ pub fn pack_types(hl: &Path, game: &str, names: &[String], namespace: &str) -> R
             for (k, v) in first_section_keys(&ini, n) {
                 body.push_str(&format!("{k} = {v}\n"));
             }
-            let own = custom_files(hl, game, &t.settled());
-            for (r, p) in &own {
-                if !files.iter().any(|(x, _)| x.eq_ignore_ascii_case(r)) {
-                    files.push((r.clone(), p.clone()));
-                }
-            }
-            types.push(PackedType { name: to.clone(), from: n.clone(), files: own.into_iter().map(|(r, _)| r).collect() });
+            // (its files are its maker's: they come with the maker's own item, never in this one)
+            types.push(PackedType { name: to.clone(), from: n.clone(), files: vec![] });
             continue;
         }
         if !base_name.is_empty() {
@@ -1240,7 +1235,15 @@ fn install_inner(game_dir: &Path, id: &str, text: &str, src: Option<&Path>, publ
     let is_own = |t: &str| owner.is_empty() || t.split('.').next() == Some(owner.as_str());
     let own_types: Vec<String> = p.types.iter().filter(|t| is_own(t)).cloned().collect();
     let body: String = p.sections.iter().filter(|(t, _)| is_own(t)).map(|(_, s)| s.as_str()).collect();
-    let own_files: Vec<String> = p.files.iter().filter(|f| p.refs.iter().any(|(t, r)| is_own(t) && r.iter().any(|x| x.eq_ignore_ascii_case(f)))).cloned().collect();
+    // every file it brings is in its uploader's own folders (models/gb<id>/, sound/gb<id>/)
+    let in_owner = |f: &str| {
+        let low = f.to_ascii_lowercase();
+        owner.is_empty() || low.starts_with(&format!("models/{owner}/")) || low.starts_with(&format!("sound/{owner}/"))
+    };
+    if let Some(f) = p.files.iter().find(|f| !in_owner(f)) {
+        return Err(format!("The download brings {f}, which isn't in its uploader's own folder, so it wasn't installed."));
+    }
+    let own_files: Vec<String> = p.files.iter().filter(|f| in_owner(f) && p.refs.iter().any(|(t, r)| is_own(t) && r.iter().any(|x| x.eq_ignore_ascii_case(f)))).cloned().collect();
     let old = read_ini(game_dir)?;
     let (user, mut blocks) = split_blocks(&old);
     let prev = blocks.iter().position(|b| b.id == id).map(|i| blocks.remove(i));
@@ -1777,6 +1780,19 @@ mod tests {
         let b2 = blocks.iter().find(|b| b.id == "mod-2").unwrap();
         assert_eq!((b2.types.clone(), b2.owner.as_str()), (vec!["gb11.z".to_string()], "gb11"));
         assert!(!b2.body.contains("[gb22.y]"));
+        let _ = std::fs::remove_dir_all(&hl);
+    }
+
+    #[test]
+    fn a_pack_only_brings_files_in_its_uploaders_folders() {
+        let (hl, gd) = game("");
+        install_pack(&gd, "mod-1", "[gb22.y]\nbase = runner\nmodel = models/gb22/y.mdl\n", None, "gb22").unwrap();
+        // gb11's pack carrying gb22's type and listing gb22's file: refused (it's gb22's to bring)
+        let t = "; files: models/gb22/y.mdl\n[gb22.y]\nbase = runner\nmodel = models/gb22/y.mdl\n[gb11.z]\nbase = gb22.y\n";
+        assert!(parse_pack(t).is_ok(), "the list rule alone lets a carried type's file through");
+        assert!(install_pack(&gd, "mod-2", t, None, "gb11").unwrap_err().contains("isn't in its uploader's own folder"));
+        // its own folder: fine
+        install_pack(&gd, "mod-3", "; files: models/gb11/z.mdl\n[gb11.z]\nmodel = models/gb11/z.mdl\n", None, "gb11").unwrap();
         let _ = std::fs::remove_dir_all(&hl);
     }
 

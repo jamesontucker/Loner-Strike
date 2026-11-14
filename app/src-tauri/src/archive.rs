@@ -559,6 +559,17 @@ fn raw_names(path: &Path) -> Option<Vec<Vec<u8>>> {
     Some(out)
 }
 
+/// An entry's name check: against its stored name when the zip's own directory could be read;
+/// when it couldn't, an entry with a Unicode Path field (which can rename it) is refused, since
+/// the reader's own "raw" name may already be that field's.
+pub fn name_check(stored: Option<&[u8]>, unicode_field: bool, reader_raw: &[u8], resolved: &str) -> Option<&'static str> {
+    match stored {
+        Some(raw) => written_name_problem(raw, resolved),
+        None if unicode_field => Some("it carries a Unicode name field this download's directory can't confirm"),
+        None => written_name_problem(reader_raw, resolved),
+    }
+}
+
 /// After another unpacker (tar, 7-Zip, unar): every written path checked as a zip's entries are,
 /// and as many files as its listing had (a twin written over another leaves fewer).
 fn check_tree(dest: &Path, listed_files: Option<usize>) -> Result<(), String> {
@@ -636,8 +647,13 @@ fn extract_zip_with(archive: &Path, dest: &Path, budget: u64, strict_always: boo
         }
         // every archive: the path really written is checked (after any Unicode name field), and the
         // download is refused when it could land anywhere but where its listing says
-        let raw = raw.as_ref().and_then(|r| r.get(i)).map(|v| v.as_slice()).unwrap_or(m.name_raw());
-        if let Some(why) = written_name_problem(raw, &m.name().map(|n| n.to_string()).unwrap_or_default()) {
+        let stored = raw.as_ref().and_then(|r| r.get(i)).map(|v| v.as_slice());
+        let renamed = m.extra_data_fields().any(|f| match f {
+            zip::extra_fields::ExtraField::UnicodePath(_) => true,
+            zip::extra_fields::ExtraField::Custom(c) => c.header_id == 0x7075,
+            _ => false,
+        });
+        if let Some(why) = name_check(stored, renamed, m.name_raw(), &m.name().map(|n| n.to_string()).unwrap_or_default()) {
             return Err(format!("This download has a file whose name doesn't add up ({shown}: {why}), so it wasn't installed."));
         }
         let Some(rel) = m.enclosed_name() else {
@@ -1310,6 +1326,11 @@ mod tests {
         let d2 = r.join("bad");
         std::fs::create_dir_all(&d2).unwrap();
         assert!(extract(&bad, &d2, MAX_UNPACKED).unwrap_err().contains("points outside"));
+        // a zip whose own directory can't be read here: an entry with a Unicode name field is refused
+        assert!(name_check(None, true, b"maps/a.bsp", "maps/a.bsp").is_some());
+        assert!(name_check(None, false, b"maps/a.bsp", "maps/a.bsp").is_none());
+        assert!(name_check(Some(b"maps/a.bsp"), true, b"x", "creatures/creatures.ini").is_some());
+        assert!(name_check(Some(b"maps/a.bsp"), true, b"x", "maps/a.bsp").is_none());
         assert!(!r.join("escape.txt").exists() && !r.parent().unwrap().join("escape.txt").exists());
 
         let small = r.join("small");
