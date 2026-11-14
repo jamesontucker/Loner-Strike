@@ -214,7 +214,7 @@ def roles_cmd(srv, tok, a):
                   f"owner {'linked' if x['owner_linked'] else 'not linked'}  "
                   + " ".join(k for k, v in x["settings"].items() if v))
     elif a.rcmd == "official":
-        x = call(srv, tok, "POST", f"roles/servers/{urllib.parse.quote(a.server, safe='')}/official", {"on": a.onoff == "on"})
+        x = call(srv, tok, "POST", f"roles/servers/{urllib.parse.quote(a.target, safe='')}/official", {"on": a.onoff == "on"})
         print(f"{x['name']} ({x['address']}): official {'on' if x['official'] else 'off'}.")
     elif a.rcmd == "log":
         for x in reversed(call(srv, tok, "GET", f"roles/log?n={a.n}")["log"]):
@@ -282,7 +282,7 @@ def main(argv=None):
     rs = s.add_subparsers(dest="rcmd", required=True)
     rs.add_parser("servers")
     o = rs.add_parser("official")
-    o.add_argument("server")
+    o.add_argument("target", metavar="server")  # (not "server": that's --server, the service's address)
     o.add_argument("onoff", choices=("on", "off"))
     rs.add_parser("log").add_argument("-n", type=int, default=100)
     rs.add_parser("show").add_argument("id", type=int)
