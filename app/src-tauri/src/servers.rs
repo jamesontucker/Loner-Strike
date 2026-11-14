@@ -1896,7 +1896,7 @@ pub fn update_files(e: Entry, res: Option<PathBuf>) -> Result<String, String> {
 /// engine with ReHLDS's fixes, and it tells the bots who is talking on voice), ReAPI for
 /// plugins, and relocalizebugfix (blocks names and chat that crash other players' games).
 /// The Valve files it replaces are kept in .valve-engine the first time, to go back to.
-fn install_engine(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
+fn install_engine(job: &dyn setup::Progress, dir: &Path, game: &str) -> Result<(), String> {
     use setup::foundation::{REAPI, REHLDS, RELOCALIZEBUGFIX};
     let tmp = setup::TempDir::new()?;
     let get = |p: &setup::foundation::Pinned, sub: &str| -> Result<PathBuf, String> {
@@ -4299,6 +4299,31 @@ mod tests {
         let win: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"cstrike","port":27016,"dir":"/x","kind":"windows","bottle":null}"#).unwrap();
         assert_eq!(creature_cap(&mac), CREATURES_CROSSOVER);
         assert_eq!(creature_cap(&win), CREATURES_NATIVE);
+    }
+
+    /// The engine install as an update runs it, on a copy of a server: `LS_ENGINE_TEST_DIR=<a
+    /// copy> cargo test -- --ignored engine_install_on_a_copy` (network: the pinned downloads).
+    /// Our ReHLDS goes in, the files it replaced are kept in .valve-engine (the first time only).
+    #[test]
+    #[ignore]
+    fn engine_install_on_a_copy() {
+        use sha2::Digest;
+        let dir = PathBuf::from(std::env::var("LS_ENGINE_TEST_DIR").expect("LS_ENGINE_TEST_DIR"));
+        let sum = |p: &Path| -> String { sha2::Sha256::digest(std::fs::read(p).unwrap()).iter().map(|b| format!("{b:02x}")).collect() };
+        let kept_before = dir.join(".valve-engine/swds.dll").is_file().then(|| sum(&dir.join(".valve-engine/swds.dll")));
+        let engine_before = sum(&dir.join("swds.dll"));
+        install_engine(&setup::Quiet, &dir, "cstrike").unwrap();
+        let file = setup::fetch::download(setup::foundation::REHLDS.url, Some(setup::foundation::REHLDS.sha256), "ReHLDS", &setup::Quiet).unwrap();
+        let tmp = setup::TempDir::new().unwrap();
+        setup::fetch::unpack(&file, &tmp.0).unwrap();
+        assert_eq!(sum(&dir.join("swds.dll")), sum(&tmp.0.join("bin/win32/swds.dll")), "our ReHLDS is in");
+        let kept = sum(&dir.join(".valve-engine/swds.dll"));
+        match kept_before {
+            Some(k) => assert_eq!(kept, k, "the kept engine stays as it was"),
+            None => assert_eq!(kept, engine_before, "the replaced engine is kept"),
+        }
+        assert!(dir.join("cstrike/addons/amxmodx/modules/reapi_amxx.dll").is_file());
+        assert!(std::fs::read_to_string(dir.join("cstrike/addons/metamod/plugins.ini")).unwrap_or_default().contains("relocalizebugfix"));
     }
 
     #[test]
