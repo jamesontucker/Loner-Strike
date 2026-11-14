@@ -2,7 +2,7 @@
 # modes): Infection, Gun Game Lite, King of the Hill, One in the Chamber, Juggernaut. Each is a
 # small graph with comment boxes that explain each part, so it teaches the Studio as it's read.
 # Run from this folder, then lay them out the way Tidy up does:
-#   python3 make_examples.py && (cd ../../../../ui && node scripts/tidy-studio-templates.mjs <the files>)
+#   python3 make_examples.py [names] && (cd ../../../../ui && node scripts/tidy-studio-templates.mjs <the files>)
 # Text in graphs: letters, digits, spaces and plain punctuation only (no slash, star or quotes).
 import json, os
 
@@ -118,20 +118,26 @@ def infection():
     for t in ("was_human.player", "turn.player", "say.value", "back1.player", "inf.who", "back5.player", "inf2.who"):
         m.w("pk.victim", t)
 
-    m.part("The round ends when no human is left (the zombies win) or when the clock runs out (the humans win). Checked after every death.")
+    m.part("The round ends when no human is left (the zombies win) or when the clock runs out (the humans win). Checked after every death. Infection Started goes off as the round ends, so it can only end once.")
     m.n("pk2", "event.player_killed")
     m.n("left", "game.count_alive", {"team": "ct"}, below=True)
     m.n("none", "math.compare", {"op": "eq", "b": 0}, below=True)
+    m.n("going", "var.get", {"var": "started"}, below=True)
+    m.n("both", "logic.and_or", {"op": "and"}, below=True)
     m.n("check", "flow.branch")
+    m.n("off1", "var.set", {"var": "started", "value": False})
     m.n("zwin", "msg.broadcast", {"text": "The zombies took everyone!", "seconds": 5})
     m.n("zend", "score.end_round", {"winner": "t"})
     m.n("up", "event.time_up")
+    m.n("off2", "var.set", {"var": "started", "value": False})
     m.n("hwin", "msg.broadcast", {"text": "The humans survived!", "seconds": 5})
     m.n("hend", "score.end_round", {"winner": "ct"})
     m.w("left.out", "none.a")
-    m.w("none.out", "check.cond")
-    m.flow("pk2", "check", "check.true", "zwin", "zend")
-    m.flow("up", "hwin", "hend")
+    m.w("none.out", "both.a")
+    m.w("going.out", "both.b")
+    m.w("both.out", "check.cond")
+    m.flow("pk2", "check", "check.true", "off1", "zwin", "zend")
+    m.flow("up", "off2", "hwin", "hend")
 
     m.part("Zombies keep to their claws: one that picks up a gun and fires it loses it again. Weapon Fired runs often, so it does as little as it can.")
     m.n("fired", "event.weapon_fired")
@@ -535,9 +541,10 @@ def juggernaut():
 
 
 if __name__ == "__main__":
-    infection()
-    gungame()
-    koth()
-    oitc()
-    juggernaut()
-    print("wrote 5 example modes")
+    # python3 make_examples.py [infection gungame koth oitc juggernaut]: only those (default all)
+    import sys
+    every = {"infection": infection, "gungame": gungame, "koth": koth, "oitc": oitc, "juggernaut": juggernaut}
+    want = sys.argv[1:] or list(every)
+    for k in want:
+        every[k]()
+    print("wrote", ", ".join(want))
