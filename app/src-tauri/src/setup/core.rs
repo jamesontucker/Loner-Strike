@@ -207,8 +207,15 @@ pub fn plugins_ini(pl: &str, mine: &[String]) -> String {
         .collect();
     let mut out = pl.to_string();
     if !add.is_empty() {
-        let lines: String = add.iter().map(|n| format!("{n}.amxx\t\t; Loner-Strike\r\n")).collect();
+        let lines: String = add.iter().map(|n| format!("{n}.amxx debug\t\t; Loner-Strike\r\n")).collect();
         out = format!("{}\r\n{lines}", pl.trim_end_matches(['\r', '\n']));
+    }
+    // our plugins run with AMX Mod X's debug flag, so a run time error in the log names the
+    // plugin's line (crash tracking) instead of "debug not enabled"; a line already there
+    // without a flag gets it, one the player gave its own flag keeps theirs
+    for n in ALWAYS_ON {
+        let re = Regex::new(&format!(r"(?m)^(\s*{}\.amxx)([ \t]*;[^\r\n]*)?(\r?)$", regex::escape(n))).unwrap();
+        out = re.replace_all(&out, "$1 debug$2$3").into_owned();
     }
     // (a plugins.ini an older Loner-Strike put back to stock gets the block again)
     if !mine.is_empty() {
@@ -576,7 +583,11 @@ mod tests {
     fn plugins_ini_keeps_the_players_lines() {
         let stock = "; AMX Mod X plugins\r\nadmin.amxx\r\n;restmenu.amxx\r\n";
         let first = plugins_ini(stock, &[]);
-        assert!(first.starts_with(stock.trim_end()) && first.contains("\r\ngamemodes.amxx\t\t; Loner-Strike\r\n"));
+        assert!(first.starts_with(stock.trim_end()) && first.contains("\r\ngamemodes.amxx debug\t\t; Loner-Strike\r\n"));
+        // an older line without the flag gets it; the same twice
+        let old = format!("{}\r\ngamemodes.amxx\t\t; Loner-Strike\r\n", stock.trim_end());
+        assert!(plugins_ini(&old, &[]).contains("\r\ngamemodes.amxx debug\t\t; Loner-Strike\r\n"));
+        assert_eq!(plugins_ini(&first, &[]), first);
         // their own line, a Loner-Strike plugin they moved, and the Mods page's block all stay
         let theirs = format!("{first}myline.amxx debug\r\n");
         let with_block = crate::plugins::rewrite_ini(&theirs, &["mine".into()]);
@@ -588,7 +599,7 @@ mod tests {
         assert!(back.contains("\r\nmine.amxx\r\n") && back.contains("gm_people.amxx"));
         assert_eq!(plugins_ini(&back, &["mine".into()]), back);
         // an always-on plugin they switched off stays off; restmenu (stock: off) is switched on
-        assert!(first.contains("\r\nrestmenu.amxx\t\t; Loner-Strike\r\n"));
+        assert!(first.contains("\r\nrestmenu.amxx debug\t\t; Loner-Strike\r\n"));
         let off = first.replace("\r\ngm_botping.amxx", "\r\n;gm_botping.amxx");
         assert_eq!(plugins_ini(&off, &[]), off);
         assert!(!plugins_ini(&off, &[]).contains("\r\ngm_botping.amxx"));
