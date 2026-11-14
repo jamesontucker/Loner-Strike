@@ -33,88 +33,74 @@ pub fn is_builtin(name: &str) -> bool {
     creatures::builtin(name).is_some()
 }
 
+/// Whether any of `names` is a custom type that would be packed.
+pub fn has_custom(names: &[String]) -> bool {
+    names.iter().any(|n| !not_a_type(n) && !is_builtin(n))
+}
+
 /// Names a mode or map may use that aren't types to pack: the wave spawner's "all", and Last
 /// Stand's round-table names a stand-in plays until the game has them.
 fn not_a_type(name: &str) -> bool {
     name.is_empty() || name == "all" || ["controller", "stukabat"].contains(&name)
 }
 
-/// The type part: small letters, digits and _ (1-29), not only digits.
+/// The type part: small letters, digits and _ (1-29).
 fn plain_part(s: &str) -> bool {
-    !s.is_empty() && s.len() <= 29 && s.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'_') && !s.bytes().all(|c| c.is_ascii_digit())
+    (1..=29).contains(&s.len()) && s.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'_')
 }
 
-/// The author part, as the community list checks it: `[a-z0-9][a-z0-9_-]{0,23}`.
+/// The namespace part: `gb` and a member id (no leading 0, 9 digits at most).
 fn author_part(s: &str) -> bool {
-    !s.is_empty() && s.len() <= 24 && s.as_bytes()[0].is_ascii_alphanumeric() && !s.as_bytes()[0].is_ascii_uppercase() && s.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'_' || c == b'-')
+    let Some(d) = s.strip_prefix("gb") else { return false };
+    (1..=9).contains(&d.len()) && d.bytes().all(|c| c.is_ascii_digit()) && !d.starts_with('0')
 }
 
-/// A shared type's name: `<author>.<type>`, one dot, small letters, digits and _, 31 at most.
+/// A shared type's name, exactly as the community list checks it (formats.py):
+/// `^gb[1-9][0-9]{0,8}\.[a-z0-9_]{1,29}$`, 31 at most.
 pub fn is_shared_name(n: &str) -> bool {
     shared_name_problem(n).is_none()
 }
 
 pub fn shared_name_problem(n: &str) -> Option<String> {
-    let Some((a, t)) = n.split_once('.') else { return Some(format!("{n} isn't named for who made it (author.type).")) };
+    let Some((a, t)) = n.split_once('.') else { return Some(format!("{n} isn't named for who made it (gb<member id>.type).")) };
     if n.len() > 31 || !author_part(a) || !plain_part(t) {
-        return Some(format!("{n} isn't a shared creature name (author.type: small letters, digits and _, 31 at most)."));
+        return Some(format!("{n} isn't a shared creature name (gb<member id>.type: small letters, digits and _, 31 at most)."));
     }
     None
 }
 
-/// The author part of shared names, from the author's name as the package gives it.
-pub fn author_slug(author: &str) -> String {
-    let mut s = String::new();
-    for c in author.trim().to_lowercase().chars() {
-        if c.is_ascii_alphanumeric() {
-            s.push(c);
-        } else if !s.ends_with('_') && !s.is_empty() {
-            s.push('_');
-        }
-    }
-    let s = s.trim_matches('_').to_string();
-    if s.is_empty() || s.bytes().all(|c| c.is_ascii_digit()) {
-        format!("a{s}").chars().take(20).collect()
-    } else {
-        s.chars().take(20).collect::<String>().trim_end_matches('_').to_string()
-    }
+/// The namespace of someone's shared creatures: their GameBanana member id, `gb<id>` (the
+/// community list binds each entry to its uploader's id). People see "runner_x by <name>".
+pub fn namespace_of(member: i64) -> Option<String> {
+    (member > 0 && member < 1_000_000_000).then(|| format!("gb{member}"))
 }
 
-/// The namespace for someone's shared creatures when the community list hasn't assigned one (no
-/// member id to ask with, or an unlisted creation): their name's slug, the list's first choice.
-pub fn namespace_for(author: &str) -> String {
-    author_slug(author)
-}
-
-/// The namespace the community list assigned to a GameBanana member (services/serverlist:
-/// `GET /community/namespace?member=<id>&name=<name>`; the first member to claim a slug keeps it,
-/// another gets it with a suffix from their id).
-pub fn fetch_namespace(member: i64, name: &str) -> Result<String, String> {
-    if member <= 0 {
-        return Ok(namespace_for(name));
-    }
-    let r = crate::sys::http()
-        .get(NAMESPACE_URL)
-        .query(&[("member", member.to_string()), ("name", name.to_string())])
-        .timeout(std::time::Duration::from_secs(20))
-        .send()
-        .map_err(|_| "Couldn't reach the community list to get your creature names. Check your internet connection.".to_string())?;
-    if r.status().as_u16() == 429 {
-        return Err("The community list is busy. Try again in a minute.".into());
-    }
-    let v: Value = r.json().map_err(|_| "The community list's answer couldn't be read.".to_string())?;
-    let ns = v["namespace"].as_str().unwrap_or("").to_string();
-    if !author_part(&ns) {
-        return Err("The community list didn't give a name for your creatures. Try again later.".into());
-    }
-    Ok(ns)
-}
-
-pub const NAMESPACE_URL: &str = "https://list.lonerstrike.com/community/namespace";
-
-/// An index entry's namespace, cleaned ("" when it isn't one).
+/// A list entry's namespace, cleaned ("" unless it's `gb<id>`).
 pub fn clean_namespace(ns: &str) -> String {
-    if author_part(ns) { ns.to_string() } else { String::new() }
+    match ns.strip_prefix("gb").and_then(|d| d.parse::<i64>().ok()) {
+        Some(m) if namespace_of(m).as_deref() == Some(ns) => ns.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// A shared type's name for people: (the type, its maker's member id). "gb123.runner_x" is
+/// ("runner_x", Some(123)); a type of your own is (its name, None).
+pub fn display_name(shared: &str) -> (String, Option<i64>) {
+    match shared.split_once('.') {
+        Some((ns, t)) if !clean_namespace(ns).is_empty() => (t.to_string(), ns[2..].parse().ok()),
+        Some((_, t)) => (t.to_string(), None),
+        None => (shared.to_string(), None),
+    }
+}
+
+/// A GameBanana member id from what someone typed: the id, or their profile link
+/// (gamebanana.com/members/123456).
+pub fn member_from_link(s: &str) -> Option<i64> {
+    let t = s.trim().trim_end_matches('/');
+    let last = t.rsplit('/').next().unwrap_or(t);
+    let id: i64 = last.parse().ok()?;
+    let ok = t == last || t.contains("gamebanana.com/members/");
+    (ok && namespace_of(id).is_some()).then_some(id)
 }
 
 /// `<author>.<type>`. The author part is always the whole namespace (installs check it against
@@ -125,7 +111,7 @@ pub fn shared_name(slug: &str, name: &str) -> Result<String, String> {
     }
     let room = 31usize.saturating_sub(slug.len() + 1);
     let short: String = name.chars().take(room).collect::<String>().trim_end_matches('_').to_string();
-    if short.is_empty() || short.bytes().all(|c| c.is_ascii_digit()) {
+    if short.is_empty() {
         return Err(format!("{name} can't be shared under your name: rename it in the Creature Studio."));
     }
     let n = format!("{slug}.{short}");
@@ -400,6 +386,47 @@ pub fn rewrite_entity_text(text: &str, renames: &BTreeMap<String, String>) -> St
     s
 }
 
+/// The waves.ini sections a graph's wave tables read (`wave.table`'s section; "" is the mode's
+/// built-in mix).
+pub fn wave_sections_in_graph(g: &super::studio::graph::Graph) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for n in g.nodes.iter().filter(|n| n.kind == "wave.table") {
+        let s = n.params.get("section").and_then(Value::as_str).unwrap_or("").trim().to_ascii_lowercase();
+        if !s.is_empty() && !out.contains(&s) {
+            out.push(s);
+        }
+    }
+    out
+}
+
+/// Every type the named sections of a waves.ini use.
+pub fn types_in_wave_sections(text: &str, sections: &[String]) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for w in creatures::parse_waves(text).into_iter().filter(|w| sections.iter().any(|s| s.eq_ignore_ascii_case(&w.mode))) {
+        add(&mut out, &w.boss);
+        for r in &w.rows {
+            for (t, n) in &r.mix {
+                if *n > 0 {
+                    add(&mut out, t);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// What a mode's graph needs packed: the types its nodes name and those of the waves.ini sections
+/// its wave tables read (in the game at `game_dir`).
+pub fn types_for_mode(g: &super::studio::graph::Graph, game_dir: Option<&Path>) -> Vec<String> {
+    let mut t = types_in_graph(g);
+    let secs = wave_sections_in_graph(g);
+    if let (false, Some(d)) = (secs.is_empty(), game_dir) {
+        let text = crate::sys::read_latin1(&d.join(creatures::WAVES_REL)).unwrap_or_default();
+        t.extend(types_in_wave_sections(&text, &secs));
+    }
+    t.into_iter().collect()
+}
+
 /// Every type a waves.ini's rows and bosses name.
 pub fn types_in_waves(text: &str) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
@@ -620,15 +647,17 @@ fn custom_files(hl: &Path, game: &str, t: &creatures::Creature) -> Vec<(String, 
 /// The Publish step's line for the custom creatures `names` use: {"includes": ["runner_x (with
 /// its model)", ...]} or {"problem": why it can't be shared}.
 pub fn listing(hl: &Path, game: &str, names: &[String]) -> Value {
-    match pack_types(hl, game, names, "you") {
+    // (named under a typical member id here: the real one is the publisher's, on Make the package)
+    match pack_types(hl, game, names, "gb1234567") {
         Ok(p) => {
             let carried: Vec<String> = p
                 .types
                 .iter()
                 .filter(|t| is_shared_name(&t.from))
                 .map(|t| {
-                    let a = t.name.split('.').next().unwrap_or("");
-                    format!("{} is {a}'s: it can be listed once {a}'s own item is, and only unchanged.", t.name)
+                    let (ty, member) = display_name(&t.name);
+                    let who = member.and_then(maker_name).unwrap_or_else(|| "someone else".into());
+                    format!("{ty} is {who}'s: it can be listed once their own item is, and only unchanged.")
                 })
                 .collect();
             let mut notes = p.notes.clone();
@@ -639,8 +668,16 @@ pub fn listing(hl: &Path, game: &str, names: &[String]) -> Value {
     }
 }
 
+/// Who a member is, by the community list's entries under their namespace (the UI shows
+/// "runner_x by <name>", never the id).
+pub fn maker_name(member: i64) -> Option<String> {
+    let ns = namespace_of(member)?;
+    let _ = ns;
+    super::community::index_cached().items.into_iter().find(|i| i.owner_id == member && !i.author.is_empty()).map(|i| i.author)
+}
+
 /// Packs the custom types `names` use (with their custom bases), named under `namespace` (from
-/// `fetch_namespace`, or `namespace_for`). Built-ins,
+/// `namespace_of` the publisher's member id). Built-ins,
 /// "all" and Last Stand's planned names are left out; a shared type installed from someone
 /// else keeps its name.
 pub fn pack_types(hl: &Path, game: &str, names: &[String], namespace: &str) -> Result<Pack, String> {
@@ -1028,7 +1065,7 @@ fn write_ini(game_dir: &Path, text: &str, why: &str) -> Result<(), String> {
 
 /// Whether a pack would go in (before anything else of the download is installed): it reads,
 /// and none of its types is one of the player's own.
-/// `namespace`: the uploader's, as the community list's entry says (else `namespace_for` their
+/// `namespace`: the uploader's, as the community list's entry says (`gb<member id>`; never one the
 /// GameBanana name): its types must be named under it (see `namespace_problem`).
 pub fn check_pack(game_dir: &Path, text: &str, namespace: &str) -> Result<Parsed, String> {
     let p = parse_pack(text)?;
@@ -1059,7 +1096,8 @@ fn namespace_problem(p: &Parsed, installed: &[Block], namespace: &str) -> Option
         if installed.iter().any(|b| b.types.iter().any(|x| x == t) && keys_of(&b.body, t) == mine) {
             continue;
         }
-        return Some(format!("This download brings {t}, which is named for {author}, not for who uploaded it. Install {author}'s creation with that creature first."));
+        let _ = author;
+        return Some(format!("{t} isn't the uploader's (theirs are named {slug}.…) and isn't the same as that creator's installed one, so it wasn't added. Install that creator's own item first."));
     }
     None
 }
@@ -1260,7 +1298,8 @@ pub fn remix_type(game_dir: &Path, shared: &str, new_name: &str) -> Result<(), S
     let mut chain = vec![shared.to_ascii_lowercase()];
     chain.extend(base_chain(&b.body, shared));
     let root = chain.iter().rev().find(|c| is_builtin(c)).cloned().unwrap_or_else(|| "zombie".into());
-    let mut s = format!("; Remixed from {shared} (shared by {})\n[{new_name}]\nbase = {root}\n", shared.split('.').next().unwrap_or(""));
+    // (the credit: which shared type, so its maker is known; the copy is yours, named by you)
+    let mut s = format!("; Remixed from {shared}\n[{new_name}]\nbase = {root}\n");
     for n in chain.iter().rev().filter(|c| !is_builtin(c)) {
         for (k, v) in keys_of(&b.body, n) {
             if !k.eq_ignore_ascii_case("base") {
@@ -1416,15 +1455,31 @@ mod tests {
 
     #[test]
     fn names_say_who_made_them() {
-        assert_eq!(author_slug("Jam Tucker!"), "jam_tucker");
-        assert_eq!(author_slug("  "), "a");
-        assert_eq!(author_slug("1234"), "a1234");
-        assert_eq!(shared_name("jam", "runner_x").unwrap(), "jam.runner_x");
-        assert_eq!(shared_name("averyveryverylongname", "a_rather_long_name_xx").unwrap(), "averyveryverylongname.a_rather");
-        assert_eq!(shared_name("averyveryverylongname", "short").unwrap(), "averyveryverylongname.short");
-        assert_eq!(shared_name("jam", "bob.x").unwrap(), "bob.x", "an installed shared type keeps its name");
-        assert_eq!(shared_name("jam", &"x".repeat(29)).unwrap().len(), 31);
-        assert!(shared_name("averyveryverylongname", "123456789_abc").is_err(), "cut to digits only");
+        assert_eq!(namespace_of(123456).as_deref(), Some("gb123456"));
+        assert_eq!(namespace_of(0), None);
+        assert_eq!(clean_namespace("gb123456"), "gb123456");
+        for bad in ["gb0", "gb", "gb012", "jam", "gb12x", "GB12"] {
+            assert_eq!(clean_namespace(bad), "", "{bad}");
+        }
+        assert_eq!(display_name("gb123456.runner_x"), ("runner_x".to_string(), Some(123456)));
+        assert_eq!(display_name("runner_x"), ("runner_x".to_string(), None));
+        assert_eq!(member_from_link("https://gamebanana.com/members/123456/"), Some(123456));
+        assert_eq!(member_from_link(" 98765 "), Some(98765));
+        assert_eq!(member_from_link("https://evil.example/members/1"), None);
+        assert_eq!(member_from_link("abc"), None);
+        assert!(is_shared_name("gb123456.runner_x"));
+        assert_eq!(shared_name("gb11", "runner_x").unwrap(), "gb11.runner_x");
+        assert_eq!(shared_name("gb123456789", "a_rather_long_name_with_more").unwrap(), "gb123456789.a_rather_long_name", "the type is cut, never the id");
+        assert_eq!(shared_name("gb123456789", "short").unwrap(), "gb123456789.short");
+        assert_eq!(shared_name("gb11", "gb22.x").unwrap(), "gb22.x", "an installed shared type keeps its name");
+        assert_eq!(shared_name("gb11", &"x".repeat(29)).unwrap().len(), 31);
+        // exactly the list's rule
+        for ok in ["gb1.a", "gb123456789.x", "gb5.123"] {
+            assert!(is_shared_name(ok), "{ok}");
+        }
+        for bad in ["gb0.x", "gb1234567890.x", "jam.x", "gb1.X", "gb1.", "gb1.a.b", "gb01.x", "gb1.a-b"] {
+            assert!(!is_shared_name(bad), "{bad}");
+        }
         assert!(!is_shared_name("runner_x") && !is_shared_name("a.b.c") && !is_shared_name("A.b"));
     }
 
@@ -1435,23 +1490,23 @@ mod tests {
         std::fs::write(gd.join("models/qa/runner_x.mdl"), b"IDST model").unwrap();
         std::fs::create_dir_all(gd.join("sound/qa")).unwrap();
         std::fs::write(gd.join("sound/qa/die.wav"), b"RIFF").unwrap();
-        let p = pack_types(&hl, "cstrike", &["runner_x".into(), "zombie".into(), "all".into()], "jam").unwrap();
-        assert_eq!(p.types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), vec!["jam.runner_x", "jam.tough_base"]);
-        assert_eq!(p.renames["runner_x"], "jam.runner_x");
-        assert!(p.text.contains("[jam.tough_base]\nbase = brute\nhp = 900\n[jam.runner_x]\nbase = jam.tough_base\n"), "{}", p.text);
+        let p = pack_types(&hl, "cstrike", &["runner_x".into(), "zombie".into(), "all".into()], "gb11").unwrap();
+        assert_eq!(p.types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), vec!["gb11.runner_x", "gb11.tough_base"]);
+        assert_eq!(p.renames["runner_x"], "gb11.runner_x");
+        assert!(p.text.contains("[gb11.tough_base]\nbase = brute\nhp = 900\n[gb11.runner_x]\nbase = gb11.tough_base\n"), "{}", p.text);
         assert!(!p.text.contains("[zombie]") && !p.text.contains("fast"));
         assert_eq!(p.files.iter().map(|f| f.0.as_str()).collect::<Vec<_>>(), vec!["models/qa/runner_x.mdl", "sound/qa/die.wav"], "the game's own zombie.mdl isn't packed");
         assert_eq!(p.summary()[0], "runner_x (with its model and 1 sound)");
-        assert!(pack_types(&hl, "cstrike", &["ghost".into()], "jam").unwrap_err().contains("isn't one of your creature types"));
-        assert!(pack_types(&hl, "cstrike", &["zombie".into()], "jam").unwrap().is_empty());
+        assert!(pack_types(&hl, "cstrike", &["ghost".into()], "gb11").unwrap_err().contains("isn't one of your creature types"));
+        assert!(pack_types(&hl, "cstrike", &["zombie".into()], "gb11").unwrap().is_empty());
 
         // the package's references follow the new names
         let mut g = serde_json::json!({"nodes": [{"id": "a", "type": "creature.spawn", "params": {"kind": "runner_x"}}, {"id": "e", "type": "comp.create", "params": {"kind": "ls_wave_spawner", "keys": "types=runner_x brute waves=3"}}]});
         rewrite_graph_json(&mut g, &p.renames);
-        assert_eq!(g["nodes"][0]["params"]["kind"], "jam.runner_x");
-        assert_eq!(g["nodes"][1]["params"]["keys"], "types=jam.runner_x brute waves=3");
+        assert_eq!(g["nodes"][0]["params"]["kind"], "gb11.runner_x");
+        assert_eq!(g["nodes"][1]["params"]["keys"], "types=gb11.runner_x brute waves=3");
         let ents = "{\n\"classname\" \"ls_wave_spawner\"\n\"types\" \"runner_x zombie\"\n\"targetname\" \"runner_x\"\n}\n";
-        assert_eq!(rewrite_entity_text(ents, &p.renames), "{\n\"classname\" \"ls_wave_spawner\"\n\"types\" \"jam.runner_x zombie\"\n\"targetname\" \"runner_x\"\n}\n");
+        assert_eq!(rewrite_entity_text(ents, &p.renames), "{\n\"classname\" \"ls_wave_spawner\"\n\"types\" \"gb11.runner_x zombie\"\n\"targetname\" \"runner_x\"\n}\n");
         // the map's entity lump, replaced
         let mut bsp = vec![0u8; 124];
         bsp[0] = 30;
@@ -1459,7 +1514,7 @@ mod tests {
         bsp[8..12].copy_from_slice(&(ents.len() as u32).to_le_bytes());
         bsp.extend_from_slice(ents.as_bytes());
         let new = bsp_with_entities(&bsp, &rewrite_entity_text(ents, &p.renames)).unwrap();
-        assert!(bsp_entities(&new).unwrap().contains("jam.runner_x zombie"));
+        assert!(bsp_entities(&new).unwrap().contains("gb11.runner_x zombie"));
         assert!(bsp_with_entities(b"nope", "").is_err());
         let _ = std::fs::remove_dir_all(&hl);
     }
@@ -1468,12 +1523,12 @@ mod tests {
     fn refuses_built_ins_and_names_not_for_who_made_them() {
         assert!(parse_pack("[zombie]\nhp = 5\n").unwrap_err().contains("built-in creature zombie"));
         assert!(parse_pack("[runner_x]\nhp = 5\n").unwrap_err().contains("aren't named for who made them"));
-        assert!(parse_pack("[jam.x]\nbase = bob.y\n").unwrap_err().contains("doesn't bring"));
-        assert!(parse_pack("[jam.x]\nrun_shell = 1\n").unwrap_err().contains("doesn't know"));
-        assert!(parse_pack("; files: ../../x.mdl\n[jam.x]\n").unwrap_err().contains("can't use"));
-        assert!(parse_pack("; files: models/con.mdl\n[jam.x]\n").is_err());
-        let p = parse_pack("; types: jam.x\n; files: models/jam/x.mdl\n[jam.x]\nbase = runner\nhp = 5\n").unwrap();
-        assert_eq!((p.types, p.files), (vec!["jam.x".to_string()], vec!["models/jam/x.mdl".to_string()]));
+        assert!(parse_pack("[gb11.x]\nbase = gb22.y\n").unwrap_err().contains("doesn't bring"));
+        assert!(parse_pack("[gb11.x]\nrun_shell = 1\n").unwrap_err().contains("doesn't know"));
+        assert!(parse_pack("; files: ../../x.mdl\n[gb11.x]\n").unwrap_err().contains("can't use"));
+        assert!(parse_pack("; files: models/con.mdl\n[gb11.x]\n").is_err());
+        let p = parse_pack("; types: gb11.x\n; files: models/jam/x.mdl\n[gb11.x]\nbase = runner\nhp = 5\n").unwrap();
+        assert_eq!((p.types, p.files), (vec!["gb11.x".to_string()], vec!["models/jam/x.mdl".to_string()]));
     }
 
     #[test]
@@ -1483,24 +1538,24 @@ mod tests {
         let src = hl.join("pkg");
         std::fs::create_dir_all(src.join("models/jam")).unwrap();
         std::fs::write(src.join("models/jam/x.mdl"), b"IDST x").unwrap();
-        let pack = "; types: jam.x\n; files: models/jam/x.mdl\n[jam.x]\nbase = runner\nhp = 50\n";
-        let d = install_pack(&gd, "mod-1", pack, Some(&src), "jam").unwrap();
+        let pack = "; types: gb11.x\n; files: models/jam/x.mdl\n[gb11.x]\nbase = runner\nhp = 50\n";
+        let d = install_pack(&gd, "mod-1", pack, Some(&src), "gb11").unwrap();
         assert_eq!(d.wrote, vec!["models/jam/x.mdl"]);
         assert!(gd.join("models/jam/x.mdl").is_file());
         let text = std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap();
-        assert!(text.starts_with(mine) && text.contains("; >>> from mod-1 +nl") && text.contains("[jam.x]\nbase = runner\nhp = 50\n; <<< end mod-1\n"), "{text}");
+        assert!(text.starts_with(mine) && text.contains("; >>> from mod-1 +nl") && text.contains("[gb11.x]\nbase = runner\nhp = 50\n; <<< end mod-1\n"), "{text}");
         // the game (and the Studio) read the type
         let r = creatures::resolve(&creatures::Doc::parse(&text));
-        assert_eq!(r.iter().find(|x| x.t.name == "jam.x").unwrap().t.hp, 50.0);
+        assert_eq!(r.iter().find(|x| x.t.name == "gb11.x").unwrap().t.hp, 50.0);
         assert_eq!(r.iter().find(|x| x.t.name == "pet").unwrap().t.hp, 5.0);
 
         // a second package that shares the type and the model
-        install_pack(&gd, "mod-2", pack, None, "jam").unwrap();
-        assert_eq!(installed_types(&gd)["jam.x"], vec!["mod-1", "mod-2"]);
+        install_pack(&gd, "mod-2", pack, None, "gb11").unwrap();
+        assert_eq!(installed_types(&gd)["gb11.x"], vec!["mod-1", "mod-2"]);
         // the first goes: the type and the model stay for the second
         assert!(uninstall_pack(&gd, "mod-1").unwrap().is_empty());
         assert!(gd.join("models/jam/x.mdl").is_file());
-        assert_eq!(installed_types(&gd)["jam.x"], vec!["mod-2"]);
+        assert_eq!(installed_types(&gd)["gb11.x"], vec!["mod-2"]);
         // the second goes: everything of ours is gone, the player's part is byte for byte as it was
         assert_eq!(uninstall_pack(&gd, "mod-2").unwrap(), vec!["models/jam/x.mdl"]);
         assert!(!gd.join("models/jam/x.mdl").exists());
@@ -1511,16 +1566,16 @@ mod tests {
 
     #[test]
     fn never_overwrites_the_players_files_or_types() {
-        let (hl, gd) = game("[jam.x]\nhp = 1\n");
-        let pack = "; files: models/jam/x.mdl\n[jam.x]\nbase = runner\n";
-        assert!(install_pack(&gd, "mod-1", pack, None, "jam").unwrap_err().contains("already have a creature type called jam.x"));
+        let (hl, gd) = game("[gb11.x]\nhp = 1\n");
+        let pack = "; files: models/jam/x.mdl\n[gb11.x]\nbase = runner\n";
+        assert!(install_pack(&gd, "mod-1", pack, None, "gb11").unwrap_err().contains("already have a creature type called gb11.x"));
         std::fs::write(gd.join(creatures::FILE_REL), "").unwrap();
         std::fs::create_dir_all(gd.join("models/jam")).unwrap();
         std::fs::write(gd.join("models/jam/x.mdl"), b"theirs").unwrap();
         let src = hl.join("pkg");
         std::fs::create_dir_all(src.join("models/jam")).unwrap();
         std::fs::write(src.join("models/jam/x.mdl"), b"ours").unwrap();
-        let d = install_pack(&gd, "mod-1", pack, Some(&src), "jam").unwrap();
+        let d = install_pack(&gd, "mod-1", pack, Some(&src), "gb11").unwrap();
         assert_eq!(d.kept, vec!["models/jam/x.mdl"]);
         uninstall_pack(&gd, "mod-1").unwrap();
         assert_eq!(std::fs::read(gd.join("models/jam/x.mdl")).unwrap(), b"theirs");
@@ -1530,18 +1585,18 @@ mod tests {
     #[test]
     fn updates_replace_the_block_and_go_back_restores_it() {
         let (hl, gd) = game("[pet]\nbase = hound\n");
-        let v1 = "[jam.x]\nbase = runner\nhp = 50\n";
-        let v2 = "[jam.x]\nbase = runner\nhp = 80\n[jam.y]\nbase = jam.x\n";
-        install_pack(&gd, "mod-1", v1, None, "jam").unwrap();
+        let v1 = "[gb11.x]\nbase = runner\nhp = 50\n";
+        let v2 = "[gb11.x]\nbase = runner\nhp = 80\n[gb11.y]\nbase = gb11.x\n";
+        install_pack(&gd, "mod-1", v1, None, "gb11").unwrap();
         let kept = block_text(&gd, "mod-1");
-        install_pack(&gd, "mod-1", v2, None, "jam").unwrap();
+        install_pack(&gd, "mod-1", v2, None, "gb11").unwrap();
         let t = std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap();
         assert_eq!(t.matches("; >>> from mod-1").count(), 1, "one block per package");
-        assert!(t.contains("hp = 80") && t.contains("[jam.y]"));
+        assert!(t.contains("hp = 80") && t.contains("[gb11.y]"));
         // Go back (or an update that failed): the old block as it was
         restore_block(&gd, "mod-1", kept.as_deref()).unwrap();
         let t = std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap();
-        assert!(t.contains("hp = 50") && !t.contains("[jam.y]"));
+        assert!(t.contains("hp = 50") && !t.contains("[gb11.y]"));
         assert!(t.starts_with("[pet]\nbase = hound\n"));
         // nothing kept: the block goes
         restore_block(&gd, "mod-1", None).unwrap();
@@ -1552,17 +1607,17 @@ mod tests {
     #[test]
     fn remix_makes_a_shared_type_your_own() {
         let (hl, gd) = game("[pet]\nbase = hound\n");
-        install_pack(&gd, "mod-1", "[jam.base]\nbase = brute\nhp = 900\n[jam.x]\nbase = jam.base\nspeed = 320\n", None, "jam").unwrap();
-        remix_type(&gd, "jam.x", "my_x").unwrap();
+        install_pack(&gd, "mod-1", "[gb11.base]\nbase = brute\nhp = 900\n[gb11.x]\nbase = gb11.base\nspeed = 320\n", None, "gb11").unwrap();
+        remix_type(&gd, "gb11.x", "my_x").unwrap();
         let t = std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap();
         let (user, blocks) = split_blocks(&t);
-        assert!(user.contains("; Remixed from jam.x (shared by jam)\n[my_x]\nbase = brute\nhp = 900\nspeed = 320\n"), "{user}");
+        assert!(user.contains("; Remixed from gb11.x\n[my_x]\nbase = brute\nhp = 900\nspeed = 320\n"), "{user}");
         assert_eq!(blocks.len(), 1);
         let r = creatures::resolve(&creatures::Doc::parse(&t));
         let x = r.iter().find(|x| x.t.name == "my_x").unwrap();
         assert_eq!((x.t.hp, x.t.speed), (900.0, 320.0));
-        assert!(remix_type(&gd, "jam.x", "pet").is_err());
-        assert!(remix_type(&gd, "jam.nope", "other").is_err());
+        assert!(remix_type(&gd, "gb11.x", "pet").is_err());
+        assert!(remix_type(&gd, "gb11.nope", "other").is_err());
         let _ = std::fs::remove_dir_all(&hl);
     }
 
@@ -1575,17 +1630,17 @@ mod tests {
                 if *k == "name" && !v.contains("..") && !v.contains('\\') && !v.contains(':') {
                     continue;
                 }
-                let t = format!("[jam.x]\n{k} = {v}\n");
+                let t = format!("[gb11.x]\n{k} = {v}\n");
                 assert!(parse_pack(&t).is_err(), "{k} = {v} got through");
             }
         }
         // the aliases and ls = / sounds = aren't taken at all
         for k in ["ls = model=models/jam/x.mdl", "sounds = jam/a.wav", "models = models/jam/x.mdl", "health = 5"] {
-            assert!(parse_pack(&format!("[jam.x]\n{k}\n")).is_err(), "{k}");
+            assert!(parse_pack(&format!("[gb11.x]\n{k}\n")).is_err(), "{k}");
         }
-        assert!(parse_pack("[jam.x]\nmodel = jam/x.mdl\n").is_err(), "a model outside models/");
-        assert!(parse_pack("[jam.x]\nsnd_die = jam/x.mp3\n").is_err());
-        assert!(parse_pack("[jam.x]\nmodel = models/jam/x.mdl | models/zombie.mdl\nsnd_die = jam/a.wav jam/b.wav | player/die1.wav\n").is_ok());
+        assert!(parse_pack("[gb11.x]\nmodel = jam/x.mdl\n").is_err(), "a model outside models/");
+        assert!(parse_pack("[gb11.x]\nsnd_die = jam/x.mp3\n").is_err());
+        assert!(parse_pack("[gb11.x]\nmodel = models/jam/x.mdl | models/zombie.mdl\nsnd_die = jam/a.wav jam/b.wav | player/die1.wav\n").is_ok());
     }
 
     #[test]
@@ -1597,13 +1652,13 @@ mod tests {
             std::fs::write(src.join("models/jam/x.mdl"), body).unwrap();
             src
         };
-        let pack = "; files: models/jam/x.mdl\n[jam.x]\nmodel = models/jam/x.mdl\n";
-        install_pack(&gd, "mod-1", pack, Some(&mk("a", b"from A")), "jam").unwrap();
-        let d = install_pack(&gd, "mod-2", pack, Some(&mk("b", b"from B")), "jam").unwrap();
+        let pack = "; files: models/jam/x.mdl\n[gb11.x]\nmodel = models/jam/x.mdl\n";
+        install_pack(&gd, "mod-1", pack, Some(&mk("a", b"from A")), "gb11").unwrap();
+        let d = install_pack(&gd, "mod-2", pack, Some(&mk("b", b"from B")), "gb11").unwrap();
         assert_eq!(d.kept, vec!["models/jam/x.mdl"]);
         assert_eq!(std::fs::read(gd.join("models/jam/x.mdl")).unwrap(), b"from A");
         // A's own update may replace its file
-        install_pack(&gd, "mod-1", pack, Some(&mk("c", b"A v2")), "jam").unwrap();
+        install_pack(&gd, "mod-1", pack, Some(&mk("c", b"A v2")), "gb11").unwrap();
         assert_eq!(std::fs::read(gd.join("models/jam/x.mdl")).unwrap(), b"A v2");
         // A goes: B still needs the file, so it stays (now B's to remove)
         uninstall_pack(&gd, "mod-1").unwrap();
@@ -1615,34 +1670,34 @@ mod tests {
     #[test]
     fn types_are_bound_to_who_uploaded_them() {
         let (hl, gd) = game("");
-        let pack = "[jam.x]\nbase = runner\nhp = 50\n";
-        assert!(install_pack(&gd, "mod-1", pack, None, "bob").unwrap_err().contains("named for jam"));
+        let pack = "[gb11.x]\nbase = runner\nhp = 50\n";
+        assert!(install_pack(&gd, "mod-1", pack, None, "gb22").unwrap_err().contains("isn't the uploader's"));
         assert!(install_pack(&gd, "mod-1", pack, None, "").is_err() && install_pack(&gd, "mod-1", pack, None, "Jam").is_err());
-        install_pack(&gd, "mod-1", pack, None, "jam").unwrap();
-        // Bob's mode carries jam.x: fine when it's the same as the one installed from Jam
-        install_pack(&gd, "mod-2", "[jam.x]\nbase = runner\nhp = 50\n[bob.y]\nbase = jam.x\n", None, "bob").unwrap();
+        install_pack(&gd, "mod-1", pack, None, "gb11").unwrap();
+        // Bob's mode carries gb11.x: fine when it's the same as the one installed from Jam
+        install_pack(&gd, "mod-2", "[gb11.x]\nbase = runner\nhp = 50\n[gb22.y]\nbase = gb11.x\n", None, "gb22").unwrap();
         // ... but not a changed copy (that would replace Jam's creature)
-        assert!(install_pack(&gd, "mod-3", "[jam.x]\nbase = runner\nhp = 9999\n", None, "bob").unwrap_err().contains("named for jam"));
+        assert!(install_pack(&gd, "mod-3", "[gb11.x]\nbase = runner\nhp = 9999\n", None, "gb22").unwrap_err().contains("isn't the uploader's"));
         let _ = std::fs::remove_dir_all(&hl);
     }
 
     #[test]
     fn someone_elses_type_is_carried_unchanged() {
-        let (hl, gd) = game("[mine]\nbase = bob.y\nhp = 5\n");
-        let bob = "[bob.y]\nbase = runner\nhp = 44\nspeed = 300\n";
-        install_pack(&gd, "mod-7", bob, None, "bob").unwrap();
-        let p = pack_types(&hl, "cstrike", &["mine".into()], "jam").unwrap();
-        assert_eq!(p.types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), vec!["jam.mine", "bob.y"]);
-        assert!(p.text.contains("[bob.y]\nbase = runner\nhp = 44\nspeed = 300\n[jam.mine]\nbase = bob.y\n"), "{}", p.text);
+        let (hl, gd) = game("[mine]\nbase = gb22.y\nhp = 5\n");
+        let bob = "[gb22.y]\nbase = runner\nhp = 44\nspeed = 300\n";
+        install_pack(&gd, "mod-7", bob, None, "gb22").unwrap();
+        let p = pack_types(&hl, "cstrike", &["mine".into()], "gb11").unwrap();
+        assert_eq!(p.types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), vec!["gb11.mine", "gb22.y"]);
+        assert!(p.text.contains("[gb22.y]\nbase = runner\nhp = 44\nspeed = 300\n[gb11.mine]\nbase = gb22.y\n"), "{}", p.text);
         let l = listing(&hl, "cstrike", &["mine".into()]);
-        assert_eq!(l["notes"][0], "bob.y is bob's: it can be listed once bob's own item is, and only unchanged.");
+        assert_eq!(l["notes"][0], "y is someone else's: it can be listed once their own item is, and only unchanged.");
         // installing Jam's package elsewhere: only where Bob's own is in, unchanged
         let (hl2, other) = game("");
-        assert!(install_pack(&other, "mod-8", &p.text, None, "jam").unwrap_err().contains("named for bob"));
-        install_pack(&other, "mod-7", bob, None, "bob").unwrap();
-        install_pack(&other, "mod-8", &p.text, None, "jam").unwrap();
+        assert!(install_pack(&other, "mod-8", &p.text, None, "gb11").unwrap_err().contains("isn't the uploader's"));
+        install_pack(&other, "mod-7", bob, None, "gb22").unwrap();
+        install_pack(&other, "mod-8", &p.text, None, "gb11").unwrap();
         let r = creatures::resolve(&creatures::Doc::parse(&std::fs::read_to_string(other.join(creatures::FILE_REL)).unwrap()));
-        assert_eq!(r.iter().find(|x| x.t.name == "jam.mine").unwrap().t.hp, 5.0);
+        assert_eq!(r.iter().find(|x| x.t.name == "gb11.mine").unwrap().t.hp, 5.0);
         let _ = std::fs::remove_dir_all(&hl);
         let _ = std::fs::remove_dir_all(&hl2);
     }
@@ -1658,6 +1713,13 @@ mod tests {
         }
         assert_eq!(crate::archive::package_twin(&names(&["loner-strike.json", "creatures/", "creatures/creatures.ini"])), None);
         assert_eq!(crate::archive::package_twin(&names(&["a.bsp", "A.bsp"])), None, "only Loner-Strike packages");
+        // nothing climbing out, from the root or a drive, in a package
+        for bad in ["a/../creatures/creatures.ini", "../x.mdl", "/etc/x", "\\\\srv\\x", "C:\\x.mdl", "models/a:b.mdl"] {
+            let l = names(&["loner-strike.json", "creatures/creatures.ini", bad]);
+            assert!(crate::archive::package_problem(&l).is_some_and(|w| w.contains("points outside")), "{bad}");
+        }
+        assert!(crate::archive::package_problem(&names(&["loner-strike.json", "creatures/creatures.ini", "models/jam/x.mdl"])).is_none());
+        assert!(crate::archive::package_problem(&names(&["a/../b.bsp"])).is_none(), "other downloads keep their own rules");
         // unpacking one is refused
         let dir = std::env::temp_dir().join(format!("ls-twin-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -1666,13 +1728,26 @@ mod tests {
         {
             let mut z = zip::ZipWriter::new(std::fs::File::create(&zp).unwrap());
             let o = zip::write::SimpleFileOptions::default();
-            for (n, b) in [("loner-strike.json", "{}"), ("creatures/creatures.ini", "[jam.x]\n"), ("CREATURES/creatures.ini", "[jam.x]\nhp = 1\n")] {
+            for (n, b) in [("loner-strike.json", "{}"), ("creatures/creatures.ini", "[gb11.x]\n"), ("CREATURES/creatures.ini", "[gb11.x]\nhp = 1\n")] {
                 z.start_file(n, o).unwrap();
                 z.write_all(b.as_bytes()).unwrap();
             }
             z.finish().unwrap();
         }
         assert!(crate::archive::extract(&zp, &dir.join("out"), 1 << 20).unwrap_err().contains("two files that unpack as creatures/creatures.ini"));
+        // a Loner-Strike package that isn't a zip (a tarball here) is refused, its files cleared
+        if Path::new("/usr/bin/tar").exists() {
+            let pk = dir.join("pk");
+            std::fs::create_dir_all(pk.join("creatures")).unwrap();
+            std::fs::write(pk.join("loner-strike.json"), "{}").unwrap();
+            std::fs::write(pk.join("creatures/creatures.ini"), "[gb11.x]\n").unwrap();
+            let tp = dir.join("p.tar");
+            assert!(std::process::Command::new("/usr/bin/tar").arg("-cf").arg(&tp).arg("-C").arg(&pk).arg(".").status().unwrap().success());
+            let out = dir.join("out2");
+            std::fs::create_dir_all(&out).unwrap();
+            assert!(crate::archive::extract(&tp, &out, 1 << 20).unwrap_err().contains("come as .zip"));
+            assert!(!out.join("loner-strike.json").exists());
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

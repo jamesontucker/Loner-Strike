@@ -6,18 +6,33 @@ import { expect, test } from "@playwright/test";
 const MODE = "zombie_rush";
 
 test("Publish a mode: its custom creatures are listed as included", async ({ page }) => {
-  await page.route(`**/api/tools/community/publish-mode/${MODE}`, (r) =>
-    r.fulfill({
+  let sent: { member?: number } | null = null;
+  await page.route(`**/api/tools/community/publish-mode/${MODE}`, (r) => {
+    if (r.request().method() === "POST") {
+      sent = r.request().postDataJSON();
+      return r.fulfill({ json: { error: "stop here" } });
+    }
+    return r.fulfill({
       json: {
         id: MODE, name: "Zombie Rush", description: "", nodes: 12, blockers: [], remixOf: null, botsSuggested: "",
-        creatures: ["runner_x (with its model)", "tough_base"],
+        creatures: ["runner_x (with its model)", "tough_base"], member: 0,
       },
-    }),
-  );
+    });
+  });
   await page.goto(`/tools-dev.html?open=${encodeURIComponent(`community:publish:mode:${MODE}`)}`);
   const row = page.getByText(/Includes: runner_x \(with its model\), tough_base\./);
   await expect(row).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Custom creatures", { exact: true })).toBeVisible();
+  // they're named for the publisher's GameBanana account: asked for when it isn't known yet
+  const field = page.getByTestId("cm-member");
+  await expect(field).toBeVisible();
+  await field.getByRole("textbox").fill("not a link");
+  await expect(field).toContainText("Paste your profile link");
+  await field.getByRole("textbox").fill("https://gamebanana.com/members/123456/");
+  await page.getByRole("textbox", { name: "Made by" }).fill("qa");
+  await page.getByRole("textbox", { name: "Name" }).fill("Zombie Rush");
+  await page.getByRole("button", { name: "Make the package" }).click();
+  await expect.poll(() => sent?.member).toBe(123456);
 });
 
 test("a card says how many creatures come with it, and its page names them", async ({ page }) => {

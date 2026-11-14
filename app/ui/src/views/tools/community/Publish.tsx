@@ -235,6 +235,28 @@ function PrefabList({ onPick }: { onPick: (id: string) => void }) {
 // ---- a map ----------------------------------------------------------------------------------------
 
 /** The map's checks as a status list (from the server's readiness), each with its fix. */
+/** A GameBanana member id from a profile link (gamebanana.com/members/123456) or the bare number. */
+export function memberFrom(text: string): number {
+  const t = text.trim().replace(/\/+$/, "");
+  const m = /^(?:https?:\/\/)?(?:www\.)?gamebanana\.com\/members\/(\d{1,9})$/i.exec(t) ?? /^(\d{1,9})$/.exec(t);
+  const n = m ? Number(m[1]) : 0;
+  return n > 0 ? n : 0;
+}
+
+/** Shared creatures are named for the publisher's GameBanana account: asked for once, when this
+ * computer doesn't know it yet (an earlier registration tells it). */
+function MemberField({ known, value, setValue }: { known: number; value: string; setValue: (v: string) => void }) {
+  if (known > 0) return null;
+  const bad = value.trim() !== "" && !memberFrom(value);
+  return (
+    <label className="cm-field" data-testid="cm-member">
+      <span>Your GameBanana profile</span>
+      <input className="search" value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://gamebanana.com/members/123456" aria-label="Your GameBanana profile" />
+      <span className={bad ? "cs-error small-note" : "muted small-note"}>{bad ? "Paste your profile link, or its number." : "Your creatures are named for your account, so they never clash with anyone else's."}</span>
+    </label>
+  );
+}
+
 /** The custom creatures a creation brings (packed with it, named for who made it). */
 function creatureCheck(list?: string[]): Check | null {
   if (!list?.length) return null;
@@ -313,6 +335,7 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [author, setAuthor, remember] = useAuthor();
+  const [memberText, setMemberText] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [shots, setShots] = useState<Shot[]>([]);
   const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
@@ -362,7 +385,7 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
   const build = () =>
     run("Packing…", async () => {
       remember();
-      const res = await publish(map, { title, summary, author, modes: picked, screenshots: shots, project: project ?? "", source: withSource && !!project });
+      const res = await publish(map, { title, summary, author, modes: picked, screenshots: shots, project: project ?? "", source: withSource && !!project, member: r.member || memberFrom(memberText) });
       if (res.error) return toast(res.error, true);
       setDone({ pkg: res.package, form: res.form });
     });
@@ -381,6 +404,7 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
       </Step>
       <Step n={2} title="Details">
         <Details title={title} setTitle={setTitle} author={author} setAuthor={setAuthor} summary={summary} setSummary={setSummary} about="One or two sentences: what it is and what makes it fun" />
+        {(r.creatures?.length ?? 0) > 0 && <MemberField known={r.member ?? 0} value={memberText} setValue={setMemberText} />}
       </Step>
       <Step n={3} title="Game modes it's made for" note="Picked from the map's own Made for list when it has one. Players see these on its card.">
         {choices.length ? <Chips choices={choices} picked={picked} onToggle={toggle} label="Game modes" /> : <p className="muted small-note">No modes found in your game; it's listed for the usual mode.</p>}
@@ -426,6 +450,7 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [author, setAuthor, remember] = useAuthor();
+  const [memberText, setMemberText] = useState("");
   const [maps, setMaps] = useState("");
   const [bots, setBots] = useState("");
   const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
@@ -501,7 +526,7 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
   const cr = creatureCheck(r.creatures);
   if (cr) checks.push(cr);
       remember();
-      const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: shotsToSend(), bots });
+      const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: shotsToSend(), bots, member: r.member || memberFrom(memberText) });
       if (res.error) return toast(res.error, true);
       setDone({ pkg: res.package, form: res.form });
     });
@@ -511,6 +536,7 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
       <Step n={1} title="Checks"><Checks rows={checks} /></Step>
       <Step n={2} title="Details">
         <Details title={title} setTitle={setTitle} author={author} setAuthor={setAuthor} summary={summary} setSummary={setSummary} about="How it plays, in a sentence or two" />
+        {(r.creatures?.length ?? 0) > 0 && <MemberField known={r.member ?? 0} value={memberText} setValue={setMemberText} />}
       </Step>
       <Step n={3} title="How well bots play it" note={`${BOT_RATING_INFO}${r.botsSuggested ? " The Studio suggested one from the graph." : ""}`}>
         <Chips
@@ -577,7 +603,7 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
 
 // ---- a prefab -------------------------------------------------------------------------------------
 
-type PrefabReady = { id: string; name: string; description: string; author: string; tags: string[]; brushes: number; entities: number; credits: AssetCredit[]; creatures?: string[]; blockers?: string[]; warnings?: string[] };
+type PrefabReady = { id: string; name: string; description: string; author: string; tags: string[]; brushes: number; entities: number; credits: AssetCredit[]; creatures?: string[]; blockers?: string[]; warnings?: string[]; member?: number };
 
 function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void; onDone: () => void }) {
   const toast = useToast();
@@ -585,6 +611,7 @@ function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void;
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [author, setAuthor, remember] = useAuthor();
+  const [memberText, setMemberText] = useState("");
   const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
   const { working, run } = useBusy();
   useEffect(() => {
@@ -601,7 +628,7 @@ function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void;
   const build = () =>
     run("Packing…", async () => {
       remember();
-      const res = await post<{ package: Package; form: Form }>(`/api/tools/community/publish-prefab/${encodeURIComponent(id)}`, { title, summary, author, modes: [], screenshots: [] });
+      const res = await post<{ package: Package; form: Form }>(`/api/tools/community/publish-prefab/${encodeURIComponent(id)}`, { title, summary, author, modes: [], screenshots: [], member: r.member || memberFrom(memberText) });
       if (res.error) return toast(res.error, true);
       setDone({ pkg: res.package, form: res.form });
     });
@@ -621,6 +648,7 @@ function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void;
           ...[creatureCheck(r.creatures)].filter((c): c is Check => !!c),
           ...(r.warnings ?? []).map((w) => ({ state: "warn" as const, title: "Creature names", why: w })),
         <Details title={title} setTitle={setTitle} author={author} setAuthor={setAuthor} summary={summary} setSummary={setSummary} about="What it is, in a sentence" />
+        {(r.creatures?.length ?? 0) > 0 && <MemberField known={r.member ?? 0} value={memberText} setValue={setMemberText} />}
       </Step>
       {r.credits.length > 0 && (
         <Step n={3} title="Credits" note="Carried in the package, so whoever uses the prefab credits these too.">

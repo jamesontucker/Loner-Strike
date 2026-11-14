@@ -932,21 +932,21 @@ impl MapStore {
         if !plan.iter().any(|(_, d)| d.to_lowercase().ends_with(".bsp")) {
             return Err(bad("No map (.bsp) found in that download."));
         }
+        // a Loner-Strike map that brings its creatures (creatures/creatures.ini): checked before
+        // anything goes in, added to creatures.ini as its own block once the map is in
+        let pack = if src.join("loner-strike.json").is_file() { crate::tools::creaturepack::find_pack(&src).map(|(_, t)| t) } else { None };
+        // (named under the uploader's namespace: the community list's entry, else their name)
+        let idx = crate::tools::community::index_cached();
+        let ns = if pack.is_some() { crate::tools::community::install_namespace(idx.items.iter().find(|i| i.model == crate::tools::community::Model::Mod && i.gb == mod_id)).map_err(|e| bad(&e))? } else { String::new() };
+        if let Some(t) = &pack {
+            crate::tools::creaturepack::check_pack(&self.cstrike, t, &ns).map_err(|e| bad(&format!("{e} The map wasn't installed.")))?;
+        }
         // (a map that names a model or sprite neither the download nor the game has crashes the
         // game or server the moment it loads: refused, with what's missing named)
         let provided: HashSet<String> = plan.iter().map(|(_, d)| d.to_lowercase().replace('\\', "/")).collect();
         let game_dirs: Vec<PathBuf> = ["cstrike", "valve", "czero", "cstrike_downloads", "valve_downloads"].iter().filter_map(|g| self.cstrike.parent().map(|hl| hl.join(g))).collect();
         for (path, dest) in &plan {
             if !dest.to_lowercase().ends_with(".bsp") {
-        // a Loner-Strike map that brings its creatures (creatures/creatures.ini): checked before
-        // anything goes in, added to creatures.ini as its own block once the map is in
-        let pack = if src.join("loner-strike.json").is_file() { crate::tools::creaturepack::find_pack(&src).map(|(_, t)| t) } else { None };
-        // (named under the uploader's namespace: the community list's entry, else their name)
-        let idx = crate::tools::community::index_cached();
-        let ns = crate::tools::community::expected_namespace(idx.items.iter().find(|i| i.model == crate::tools::community::Model::Mod && i.gb == mod_id), &s(&info["author"]));
-        if let Some(t) = &pack {
-            crate::tools::creaturepack::check_pack(&self.cstrike, t, &ns).map_err(|e| bad(&format!("{e} The map wasn't installed.")))?;
-        }
                 continue;
             }
             let missing = missing_map_files(path, &provided, &game_dirs);
@@ -987,16 +987,16 @@ impl MapStore {
             }
         }
 
+        if let Some(t) = &pack {
+            let key = crate::tools::communitylib::dir_name(crate::tools::community::Model::Mod, mod_id);
+            crate::tools::creaturepack::install_pack(&self.cstrike, &key, t, None, &ns).map_err(|e| bad(&e))?;
+        }
         if !maps.is_empty() || !installed.is_empty() {
             self.save_shot(&info, &maps);
             let _g = RECORDS.lock().unwrap_or_else(|e| e.into_inner());
             let mut rec = self.records();
             let old = rec.get(&mod_id.to_string()).cloned().unwrap_or(json!({}));
             let merge = |key: &str, new: &[String]| {
-        if let Some(t) = &pack {
-            let key = crate::tools::communitylib::dir_name(crate::tools::community::Model::Mod, mod_id);
-            crate::tools::creaturepack::install_pack(&self.cstrike, &key, t, None, &ns).map_err(|e| bad(&e))?;
-        }
                 let mut set: Vec<String> = old[key].as_array().into_iter().flatten().map(s).chain(new.iter().cloned()).collect();
                 set.sort();
                 set.dedup();
@@ -1233,7 +1233,11 @@ impl MapStore {
     pub fn uninstall_section(&self, section: &str, mod_id: i64) -> Result<Value, StoreError> {
         let sec = content::section(section).ok_or_else(|| StoreError::Bad("unknown section".into()))?;
         if sec.key == "maps" {
-            return self.uninstall_maps(mod_id).map(|m| json!({"maps": m}));
+            let maps = self.uninstall_maps(mod_id)?;
+            // the shared creatures it brought (its block in creatures.ini; types another item brings stay)
+            let key = crate::tools::communitylib::dir_name(crate::tools::community::Model::Mod, mod_id);
+            let files = crate::tools::creaturepack::uninstall_pack(&self.cstrike, &key).map_err(StoreError::Bad)?;
+            return Ok(json!({"maps": maps, "files": files}));
         }
         if self.server && (sec.key == "skins" || sec.key == "players") {
             let files = crate::servercontent::remove(&self.game_dir, sec.key, mod_id).map_err(StoreError::Bad)?;

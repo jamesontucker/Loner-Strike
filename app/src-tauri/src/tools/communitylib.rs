@@ -405,7 +405,7 @@ pub fn install_mode(st: &Shared, src: &Path, mut it: Installed) -> Result<Value,
     // its creatures (creatures/creatures.ini) go in first, so the build finds its types
     let pack = super::creaturepack::find_pack(src).map(|(_, t)| t);
     if let Some(t) = &pack {
-        super::creaturepack::install_pack(&game.dir, &it.key(), t, Some(src), &super::community::expected_namespace(super::community::index_cached().items.iter().find(|i| i.model == it.model && i.gb == it.gb), &it.author))?;
+        super::creaturepack::install_pack(&game.dir, &it.key(), t, Some(src), &super::community::install_namespace(super::community::index_cached().items.iter().find(|i| i.model == it.model && i.gb == it.gb))?)?;
     }
     let built = super::studio::compile(st, g.clone(), false);
     let r = match built {
@@ -790,6 +790,10 @@ pub fn keep_previous(game_root: Option<&Path>, records: &serde_json::Map<String,
             let _ = std::fs::copy(&g, pd.join(format!("{}.graph.json", it.mode)));
         }
     }
+    // its shared creatures' block as it is (Go back, or an update that fails, puts it back)
+    if let Some(b) = game_root.and_then(|root| super::creaturepack::block_text(root, &it.key())) {
+        std::fs::write(pd.join("creatures.block"), b).map_err(|e| format!("Couldn't keep the version you have ({e})."))?;
+    }
     let rec = records.get(&it.gb.to_string()).cloned().unwrap_or(Value::Null);
     std::fs::write(pd.join("record.json"), serde_json::to_vec(&rec).unwrap_or_default()).map_err(|e| e.to_string())?;
     crate::sys::write_atomic(&pd.join("meta.json"), &serde_json::to_vec_pretty(it).unwrap_or_default()).map_err(|e| e.to_string())
@@ -801,9 +805,9 @@ pub fn keep_previous(game_root: Option<&Path>, records: &serde_json::Map<String,
 pub fn restore_previous(game: Option<&crate::game::Game>, st: Option<&Shared>, dir: &Path, key: &str) -> Result<Installed, String> {
     let pd = prev_dir(dir, key);
     let prev: Installed = std::fs::read(pd.join("meta.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).ok_or("There's no earlier version kept.")?;
-    // its shared creatures' block as it is (Go back, or an update that fails, puts it back)
-    if let Some(b) = game_root.and_then(|root| super::creaturepack::block_text(root, &it.key())) {
-        std::fs::write(pd.join("creatures.block"), b).map_err(|e| format!("Couldn't keep the version you have ({e})."))?;
+    // its shared creatures' block as it was (first: a mode's build needs its types)
+    if let (Some(g), Ok(b)) = (game, std::fs::read_to_string(pd.join("creatures.block"))) {
+        super::creaturepack::restore_block(&g.dir, key, Some(&b))?;
     }
     if prev.kind == Kind::Map {
         let g = game.ok_or("Set up the game on this computer first.")?;
@@ -816,10 +820,6 @@ pub fn restore_previous(game: Option<&crate::game::Game>, st: Option<&Shared>, d
             if !dst.exists() {
                 if let Some(p) = dst.parent() {
                     let _ = std::fs::create_dir_all(p);
-    // its shared creatures' block as it was (first: a mode's build needs its types)
-    if let (Some(g), Ok(b)) = (game, std::fs::read_to_string(pd.join("creatures.block"))) {
-        super::creaturepack::restore_block(&g.dir, key, Some(&b))?;
-    }
                 }
                 std::fs::copy(&f, &dst).map_err(|e| format!("Couldn't put the earlier version back ({e})."))?;
             }

@@ -209,7 +209,7 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
         let (ok, err) = run_limited(c, dest, budget)?;
         strip_links(dest);
         if ok {
-            return Ok(());
+            return not_a_zip_package(dest);
         }
         tar_err = Some(err);
     }
@@ -233,7 +233,7 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
                 let (ok, err) = run_limited(c, dest, budget)?;
                 strip_links(dest);
                 if ok {
-                    return Ok(());
+                    return not_a_zip_package(dest);
                 }
                 tar_err = Some(seven_zip_error(&err));
             }
@@ -258,7 +258,7 @@ pub fn extract(archive: &Path, dest: &Path, budget: u64) -> Result<(), String> {
             let (ok, _) = run_limited(c, dest, budget)?;
             strip_links(dest);
             if ok {
-                return Ok(());
+                return not_a_zip_package(dest);
             }
         }
     }
@@ -416,15 +416,49 @@ pub fn normalized_entry(name: &str) -> String {
     name.replace('\\', "/").split('/').filter(|p| !p.is_empty() && *p != ".").collect::<Vec<_>>().join("/").to_lowercase()
 }
 
-/// In a Loner-Strike package (loner-strike.json at the root): the first name two entries share
-/// once normalized (folders left out).
-pub fn package_twin(names: &[String]) -> Option<String> {
-    let norm: Vec<String> = names.iter().filter(|n| !n.ends_with('/') && !n.ends_with('\\')).map(|n| normalized_entry(n)).collect();
-    if !norm.iter().any(|n| n == "loner-strike.json") {
+/// Loner-Strike packages come only as zips (their entries are checked before they unpack): one
+/// that came out of a rar, 7z or tarball is refused and its files cleared.
+fn not_a_zip_package(dest: &Path) -> Result<(), String> {
+    if dest.join("loner-strike.json").exists() || std::fs::read_dir(dest).into_iter().flatten().flatten().any(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case("loner-strike.json")) {
+        clear_dir(dest);
+        return Err("Loner-Strike packages come as .zip files; this one isn't, so it wasn't installed.".into());
+    }
+    Ok(())
+}
+
+/// Is this archive listing a Loner-Strike package (loner-strike.json at its root)?
+pub fn is_ls_package(names: &[String]) -> bool {
+    names.iter().any(|n| normalized_entry(n) == "loner-strike.json")
+}
+
+/// A Loner-Strike package's entry names, checked before anything unpacks: none may climb out (a
+/// `..` part), start at the root or name a drive, and no two may unpack to the same file. The
+/// first problem, said plainly.
+pub fn package_problem(names: &[String]) -> Option<String> {
+    if !is_ls_package(names) {
         return None;
     }
     let mut seen = std::collections::HashSet::new();
-    norm.into_iter().find(|n| !seen.insert(n.clone()))
+    for n in names.iter().filter(|n| !n.ends_with('/') && !n.ends_with('\\')) {
+        let parts: Vec<&str> = n.split(['/', '\\']).collect();
+        if n.starts_with(['/', '\\']) || parts.iter().any(|p| *p == ".." || p.contains(':')) {
+            return Some(format!("This Loner-Strike package has a file that points outside it ({}), so it wasn't installed.", n.chars().filter(|c| !c.is_control()).take(80).collect::<String>()));
+        }
+        let key = normalized_entry(n);
+        if !seen.insert(key.clone()) {
+            return Some(format!("This Loner-Strike package has two files that unpack as {key}, so it wasn't installed."));
+        }
+    }
+    None
+}
+
+/// The first name two entries share once normalized (folders left out), in a Loner-Strike package.
+pub fn package_twin(names: &[String]) -> Option<String> {
+    if !is_ls_package(names) {
+        return None;
+    }
+    let mut seen = std::collections::HashSet::new();
+    names.iter().filter(|n| !n.ends_with('/') && !n.ends_with('\\')).map(|n| normalized_entry(n)).find(|n| !seen.insert(n.clone()))
 }
 
 fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String> {
@@ -444,9 +478,12 @@ fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String>
     // a Loner-Strike package (loner-strike.json at its root) never holds two entries that unpack
     // to the same file: the community list checks each, so a later twin can't replace a checked one
     let names: Vec<String> = (0..z.len()).filter_map(|i| z.by_index_raw(i).ok().and_then(|m| m.name().ok().map(|n| n.to_string()))).collect();
-    if let Some(twin) = package_twin(&names) {
-        return Err(format!("This Loner-Strike package has two files that unpack as {twin}, so it wasn't installed."));
+    if let Some(why) = package_problem(&names) {
+        return Err(why);
     }
+    let package = is_ls_package(&names);
+    // (and again from what's really written: the extractor's own path, lower case)
+    let mut wrote_names: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut written: u64 = 0; // the sizes in a zip's index can lie, so count while writing too
     let mut buf = vec![0u8; 1024 * 1024];
     for i in 0..z.len() {
@@ -464,10 +501,13 @@ fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String>
             note_dropped(format!("{shown} (points outside the download)"));
             continue;
         };
-        let target = dest.join(rel);
+        let target = dest.join(&rel);
         if !target.starts_with(dest) || target == dest {
             note_dropped(format!("{shown} (points outside the download)"));
             continue;
+        }
+        if package && !wrote_names.insert(rel.to_string_lossy().replace('\\', "/").to_lowercase()) {
+            return Err(format!("This Loner-Strike package has two files that unpack as {shown}, so it wasn't installed."));
         }
         if let Some(d) = target.parent() {
             std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
