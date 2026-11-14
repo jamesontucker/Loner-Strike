@@ -121,10 +121,13 @@ may only talk to this machine; an Admin's calls reach it through a spool in the 
   **The Supporter role in Discord is our bot's to keep right:** Polar's Discord benefit takes the role away when a
   monthly support ends, but a payment made them a supporter for good. So on every `benefit_grant.revoked`, and hourly
   for everyone Polar told us about (at most 500 a check, 0.5 s between calls, stopping when Discord answers 429), the
-  bot gives Supporter back to whoever is a supporter by our rules and takes it from anyone whose every payment was
-  refunded (and who has no active monthly grant). Accounts we never saw a payment for are left alone (a role given by
-  hand stays). Someone not in the server gets it at the first check after they're back (the bot doesn't hear joins).
-  Each add and remove is logged (`discord-role`).
+  bot gives Supporter back to whoever is a supporter by our rules and takes it from anyone it or Polar gave it to
+  (`role_granted`), or whose payment was refunded, once they don't qualify any more (a customer whose Discord account
+  changed: the old account loses it, the new one gets it). A role given by hand (never in `role_granted`) stays.
+  Whatever couldn't be done (not in the server, Discord said 429, an error) waits in `role_pending` and is tried again
+  first in a later check (2, 4, 8… minutes, at most six hours apart); the hourly check goes on from where the last
+  one stopped (`roles_meta.role_cursor`) and wraps round, so everyone is checked in turn. Each add and remove is logged
+  (`discord-role`).
 - **To servers:** a supporter's VIP follows their current link. Official servers: ls-control (a timer, every 5 min)
   `GET /roles/vip` → every supporter's SteamID. Other servers that turned on **Honor Loner-Strike supporters** (off by
   default): `POST /roles/vip/check {steamids}` with the players on the server now (at most 64), answered with the ones

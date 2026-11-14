@@ -109,6 +109,14 @@ MIGRATIONS = [
     ALTER TABLE polar_orders ADD COLUMN ignored INTEGER NOT NULL DEFAULT 0;
     UPDATE polar_orders SET applied_to=COALESCE((SELECT discord_id FROM polar_customers c WHERE c.customer_id=polar_orders.customer_id), '') WHERE applied=1
     """,
+    # the Supporter role: who Polar or our bot gave it to (only those are ever taken away again; a role
+    # given by hand is never in here), checks to try again, and where the hourly check got to
+    """
+    CREATE TABLE role_granted (discord_id TEXT PRIMARY KEY, source TEXT NOT NULL, at INTEGER NOT NULL);
+    CREATE TABLE role_pending (discord_id TEXT PRIMARY KEY, tries INTEGER NOT NULL DEFAULT 0, next_at INTEGER NOT NULL, why TEXT NOT NULL DEFAULT '');
+    CREATE TABLE roles_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+    INSERT OR IGNORE INTO role_granted(discord_id, source, at) SELECT DISTINCT discord_id, 'polar', at FROM polar_grants WHERE granted=1
+    """,
 ]
 
 
@@ -592,11 +600,16 @@ class Roles:
                 return
             before = self.s.one("SELECT discord_id FROM polar_customers WHERE customer_id=?", (cust,))
             self.s.run("INSERT OR REPLACE INTO polar_customers(customer_id, discord_id) VALUES (?,?)", (cust, account))
+            if granted:
+                # Polar's Discord benefit gives the role: ours to take away again when they don't qualify
+                self.granted_by(account, "polar")
             if before and before["discord_id"] != account:
                 # the customer's Discord account changed: their donations go with them
                 self.s.run("UPDATE polar_orders SET applied_to=? WHERE customer_id=? AND applied=1", (account, cust))
                 self._recompute(before["discord_id"])
                 self._recompute(account)
+                self.sync_later(before["discord_id"])
+                self.sync_later(account)
                 self.log("supporter", "polar", 0, account, f"customer {cust}: Discord account changed from {before['discord_id']}; donations moved")
             self.s.run("INSERT OR REPLACE INTO polar_grants(grant_id, customer_id, discord_id, monthly, granted, at, event_at) VALUES (?,?,?,?,?,?,?)",
                        (gid, cust, account, monthly, granted, at, when))
@@ -777,20 +790,44 @@ class Roles:
     # when a monthly support ends, while a payment made them a supporter for good) ----
 
     def role_wanted(self, discord_id):
-        """True: they should have Supporter; False: our bot takes it away (every payment of theirs
-        was refunded and no monthly grant is active); None: not ours to say (never paid through us)."""
+        """True: they should have Supporter; False: our bot takes it away (Polar or our bot gave it to
+        them, or a payment of theirs was refunded, and they don't qualify any more); None: not ours to
+        say (a role given by hand, or someone we never gave it to)."""
         if self.is_supporter(discord_id):
             return True
+        if self.s.one("SELECT 1 AS x FROM role_granted WHERE discord_id=?", (discord_id,)):
+            return False
         refunded = self.s.one("SELECT 1 AS x FROM polar_orders WHERE applied_to=? AND refunded=1", (discord_id,))
         return False if refunded else None
 
+    def granted_by(self, discord_id, source):
+        self.s.run("INSERT OR IGNORE INTO role_granted(discord_id, source, at) VALUES (?,?,?)", (discord_id, source, cm.now()))
+
+    def _retry(self, discord_id, why):
+        """Tried again later: 2, 4, 8... minutes, at most six hours apart."""
+        r = self.s.one("SELECT tries FROM role_pending WHERE discord_id=?", (discord_id,))
+        tries = (r["tries"] if r else 0) + 1
+        self.s.run("INSERT OR REPLACE INTO role_pending(discord_id, tries, next_at, why) VALUES (?,?,?,?)",
+                   (discord_id, tries, cm.now() + min(60 * 2 ** tries, 6 * 3600), why))
+
     def sync_role(self, discord_id):
         """Gives or takes the Supporter role as our rules say. 'added', 'removed', 'ok', 'gone' (not in
-        the server: tried again at the next check), 'limited' (Discord asked us to slow down) or 'skip'."""
+        the server), 'limited' (Discord asked us to slow down), 'failed' or 'skip'. Whatever didn't get
+        done is kept and tried again (role_pending)."""
+        out = self._sync_role(discord_id)
+        if out in ("gone", "limited", "failed"):
+            self._retry(discord_id, out)
+        else:
+            self.s.run("DELETE FROM role_pending WHERE discord_id=?", (discord_id,))
+        return out
+
+    def _sync_role(self, discord_id):
         want = self.role_wanted(discord_id)
-        rid = self.guild_role(SUPPORTER_ROLE_NAME) if want is not None else None
-        if want is None or not rid:
+        if want is None:
             return "skip"
+        rid = self.guild_role(SUPPORTER_ROLE_NAME)
+        if not rid:
+            return "failed" if self.mod and self.mod.bot else "skip"
         bot, guild = self.mod.bot, self.mod.guild
         code, member = bot.api("GET", f"/guilds/{guild}/members/{discord_id}")
         if code == 404:
@@ -798,38 +835,60 @@ class Roles:
         if code == 429:
             return "limited"
         if code != 200 or not isinstance(member, dict):
-            return "skip"
+            return "failed"
         has = rid in {str(x) for x in member.get("roles") or []}
         if want == has:
+            if not want:
+                self.s.run("DELETE FROM role_granted WHERE discord_id=?", (discord_id,))
             return "ok"
         code, _ = bot.api("PUT" if want else "DELETE", f"/guilds/{guild}/members/{discord_id}/roles/{rid}",
-                          reason="Loner-Strike supporter" if want else "Loner-Strike: every payment was refunded")
+                          reason="Loner-Strike supporter" if want else "Loner-Strike: not a supporter any more")
         if code == 429:
             return "limited"
         if code not in (200, 204):
             self.log("discord-role", "bot", 0, discord_id, f"Supporter {'add' if want else 'remove'} failed (status {code})")
-            return "skip"
-        self.log("discord-role", "bot", 0, discord_id, "Supporter added" if want else "Supporter removed (refunded)")
+            return "failed"
+        if want:
+            self.granted_by(discord_id, "bot")
+        else:
+            self.s.run("DELETE FROM role_granted WHERE discord_id=?", (discord_id,))
+        self.log("discord-role", "bot", 0, discord_id, "Supporter added" if want else "Supporter removed (not a supporter any more)")
         return "added" if want else "removed"
 
     def sync_later(self, discord_id):
         if self.mod and self.mod.bot and discord_id:
             self.mod._later(lambda: self.sync_role(discord_id))
 
-    def sync_all(self, pause=SYNC_PAUSE):
-        """Everyone Polar told us about: the role as our rules say (at most SYNC_MAX, slowly). Returns
-        the outcome counts."""
-        ids = [r["discord_id"] for r in self.s.all(
-            "SELECT DISTINCT discord_id FROM polar_customers UNION SELECT DISTINCT applied_to FROM polar_orders WHERE applied_to != '' "
-            "UNION SELECT discord_id FROM supporters")][:SYNC_MAX]
+    def known_accounts(self):
+        return sorted(r["discord_id"] for r in self.s.all(
+            "SELECT discord_id FROM polar_customers UNION SELECT applied_to AS discord_id FROM polar_orders WHERE applied_to != '' "
+            "UNION SELECT discord_id FROM supporters UNION SELECT discord_id FROM role_granted") if r["discord_id"])
+
+    def sync_all(self, pause=SYNC_PAUSE, budget=SYNC_MAX):
+        """One check: first what's waiting to be tried again (when due), then the next accounts from
+        where the last check stopped (round and round), at most `budget` in all. Returns the counts."""
         counts = {}
-        for d in ids:
+
+        def one(d):
             out = self.sync_role(d)
             counts[out] = counts.get(out, 0) + 1
-            if out == "limited":
-                break
             if pause:
                 time.sleep(pause)
+            return out
+        for r in self.s.all("SELECT discord_id FROM role_pending WHERE next_at<=? ORDER BY next_at LIMIT ?", (cm.now(), budget)):
+            budget -= 1
+            if one(r["discord_id"]) == "limited":
+                return counts
+        ids = self.known_accounts()
+        if not ids or budget <= 0:
+            return counts
+        cur = (self.s.one("SELECT v FROM roles_meta WHERE k='role_cursor'") or {}).get("v", "")
+        start = next((i for i, d in enumerate(ids) if d > cur), 0)
+        for d in (ids[start:] + ids[:start])[:budget]:
+            out = one(d)
+            self.s.run("INSERT OR REPLACE INTO roles_meta(k, v) VALUES ('role_cursor', ?)", (d,))
+            if out == "limited":
+                break
         return counts
 
     def sync_loop(self, every=SYNC_EVERY):

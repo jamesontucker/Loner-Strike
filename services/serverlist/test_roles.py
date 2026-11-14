@@ -444,7 +444,7 @@ class SupporterRole(unittest.TestCase):
         self.paid(r, "o1", "cus_o")
         polar(r, {"type": "order.refunded", "data": {"id": "o1", "customer_id": "cus_o", "status": "refunded"}})
         self.assertNotIn("900077", bot.members[OTHER])
-        self.assertIn("Supporter removed (refunded)", [x["detail"] for x in r.s.all("SELECT detail FROM roles_log")])
+        self.assertIn("Supporter removed (not a supporter any more)", [x["detail"] for x in r.s.all("SELECT detail FROM roles_log")])
         self.assertEqual(r.sync_role("460000000000000006"), "skip")
         self.assertIn("900077", bot.members["460000000000000006"])
 
@@ -472,6 +472,70 @@ class SupporterRole(unittest.TestCase):
         out = r.sync_all(pause=0)
         self.assertEqual(out.get("limited"), 1)
         self.assertEqual(sum(out.values()), 1)
+
+
+class SupporterRoleCoverage(unittest.TestCase):
+    def paid(self, r, oid, cust):
+        return polar(r, {"type": "order.paid", "data": {"id": oid, "customer_id": cust, "net_amount": 500, "currency": "usd", "product_id": "prod_once"}})
+
+    def test_the_old_account_loses_it_when_the_customer_moves(self):
+        r, mod, bot, fs, _ = make()
+        r.days = 0
+        bot.members[PLAYER] = {"900077"}
+        bot.members[OTHER] = set()
+        bot.members["480000000000000008"] = {"900077"}  # by hand: never ours
+        polar(r, grant(PLAYER, gid="g", cust="cus_c"))
+        self.paid(r, "o1", "cus_c")
+        # the customer's Discord account changes: the role moves with the donation
+        polar(r, grant(OTHER, gid="g", cust="cus_c", kind="benefit_grant.updated"))
+        self.assertNotIn("900077", bot.members[PLAYER])
+        self.assertIn("900077", bot.members[OTHER])
+        self.assertIs(r.role_wanted("480000000000000008"), None)
+        r.sync_all(pause=0)
+        self.assertIn("900077", bot.members["480000000000000008"])
+        self.assertIsNone(r.s.one("SELECT * FROM role_granted WHERE discord_id=?", (PLAYER,)))
+
+    def test_every_account_in_turn_and_failures_tried_again(self):
+        r, mod, bot, fs, _ = make()
+        r.days = 0
+        ids = [f"49000000000000000{i}" for i in range(5)]
+        for i, uid in enumerate(ids):
+            bot.members[uid] = set()
+            polar(r, grant(uid, gid=f"g{i}", cust=f"c{i}"))
+            self.paid(r, f"o{i}", f"c{i}")
+        for uid in ids:
+            bot.members[uid] = set()
+        # two a check: the third check wraps round to the start
+        seen = []
+        for _ in range(3):
+            n = len(bot.calls)
+            r.sync_all(pause=0, budget=2)
+            seen.append([p.split("/")[4] for m, p, *_ in bot.calls[n:] if m == "GET" and "/members/" in p])
+            for uid in ids:
+                bot.members[uid] = set()
+        self.assertEqual(seen[0], ids[:2])
+        self.assertEqual(seen[1], ids[2:4])
+        self.assertEqual(seen[2], [ids[4], ids[0]])
+        # someone not in the server: kept and tried again when due, first in the next check
+        bot.members[ids[1]] = None
+        self.assertEqual(r.sync_role(ids[1]), "gone")
+        pend = r.s.one("SELECT * FROM role_pending WHERE discord_id=?", (ids[1],))
+        self.assertEqual(pend["tries"], 1)
+        self.assertGreater(pend["next_at"], cm.now())
+        r.s.run("UPDATE role_pending SET next_at=0")
+        bot.members[ids[1]] = set()
+        n = len(bot.calls)
+        r.sync_all(pause=0, budget=1)
+        self.assertIn(ids[1], bot.calls[n][1])
+        self.assertIsNone(r.s.one("SELECT * FROM role_pending WHERE discord_id=?", (ids[1],)))
+        self.assertIn("900077", bot.members[ids[1]])
+        # Discord says slow down: tried again later, with a longer wait each time
+        bot.limit_after = 0
+        self.assertEqual(r.sync_role(ids[2]), "limited")
+        self.assertEqual(r.sync_role(ids[2]), "limited")
+        p2 = r.s.one("SELECT * FROM role_pending WHERE discord_id=?", (ids[2],))
+        self.assertEqual(p2["tries"], 2)
+        self.assertGreater(p2["next_at"], cm.now() + 200)
 
 
 class Refunds(unittest.TestCase):
