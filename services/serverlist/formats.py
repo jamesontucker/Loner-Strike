@@ -595,6 +595,9 @@ def creatures_ini_problem(data):
         return "it isn't text"
     text = data.decode("latin-1")
     names, bases = [], []
+    npc = creatures_ini_npc(data)
+    if npc is None:
+        return "it lists an NPC file outside models/....mdl or sound/....wav"
     for raw in text.splitlines():
         if len(raw) > 511:
             return "it has a line longer than the game reads"
@@ -652,7 +655,7 @@ def creatures_ini_problem(data):
         elif key not in ("name", "display") and "/" in value:
             # (no other key takes a file)
             return f"[{names[-1]}] {key} names a file where it shouldn't"
-    if not names:
+    if not names and not npc:
         return "it has no creature types"
     if len(names) > CREATURES_TYPES:
         return f"it has {len(names)} types; the game holds {CREATURES_TYPES} of your own"
@@ -704,6 +707,27 @@ def creatures_ini_refs(data):
         elif key.startswith("snd_"):
             out.update("sound/" + t for t in toks)
     return out
+
+
+NPC_FILE = re.compile(r"^(models/[a-z0-9_./-]{1,150}\.mdl|sound/[a-z0-9_-][a-z0-9_./-]{0,150}\.wav)$")
+
+
+def creatures_ini_npc(data):
+    """NPC-editor: the files a pack's `; npc:` lines list (an NPC's or interactable's own model
+    and sounds, game paths); None if one isn't a plain models/....mdl or sound/....wav path or
+    there are more than 64."""
+    out = []
+    for raw in data.decode("latin-1").splitlines():
+        t = raw.strip()
+        if not t.lower().startswith("; npc:"):
+            continue
+        for w in t[6:].split():
+            w = w.lower()
+            if ".." in w or "\\" in w or ":" in w or "//" in w or not NPC_FILE.match(w):
+                return None
+            if w not in out:
+                out.append(w)
+    return out if len(out) <= 64 else None
 
 
 def creatures_ini_types(data):

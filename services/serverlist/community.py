@@ -2028,6 +2028,8 @@ class Community:
             raise Reject(422, result.get("error") or "The package couldn't be checked.")
         log(f"checked {key_of(model, gb)}: {result['files']} files")
         out = {"files": result["files"], "kinds": result["kinds"], "bytes": f["size"], "at": now()}
+        if isinstance(result.get("npcFiles"), list):
+            out["npcFiles"] = [r for r in result["npcFiles"] if isinstance(r, str)][:64]
         if isinstance(result.get("creatures"), list):
             out["creatures"] = [n for n in result["creatures"] if isinstance(n, str)][:64]
             secs = result.get("creatureSections")
@@ -2406,7 +2408,7 @@ class Community:
         member's (a carried creature) only when byte-identical to that member's listed file. A
         creature package ships nothing in models/ or sound/ its creatures don't use."""
         checks = item.get("checks", {})
-        if not checks.get("creatureSections") and item.get("kind") != "creature":
+        if not checks.get("creatureSections") and not checks.get("npcFiles") and item.get("kind") != "creature":
             return
         member = int(facts["submitterId"])
         refs = set(checks.get("creatureRefs") or [])

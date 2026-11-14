@@ -367,3 +367,66 @@ class Registration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def npc_bsp(model):
+    """A tiny map with an NPC whose model is `model` (NPC-editor)."""
+    import struct
+    ents = b'{\n"classname" "worldspawn"\n}\n{\n"classname" "ls_npc"\n"name" "Joe"\n"model" "' + model.encode() + b'"\n}\n\0'
+    lumps = [(0, 0)] * 15
+    lumps[0] = (124, len(ents))
+    lumps[14] = (124 + len(ents), 64)
+    head = struct.pack("<i", 30) + b"".join(struct.pack("<ii", o, n) for o, n in lumps)
+    return head + ents + bytes(64)
+
+
+class NpcFiles(unittest.TestCase):
+    """NPC-editor: an NPC's or interactable's own model travels in the uploader's folder, listed on
+    the pack's `; npc:` line and named by the package's own map."""
+
+    def test_the_npc_line_is_checked(self):
+        self.assertIsNone(formats.creatures_ini_problem(b"; types:\n; npc: models/gb1/qa/joe.mdl sound/gb1/hi.wav\n"))
+        self.assertEqual(formats.creatures_ini_npc(b"; npc: models/gb1/qa/joe.mdl\n"), ["models/gb1/qa/joe.mdl"])
+        for bad in (b"; npc: models/../x.mdl\n", b"; npc: /etc/x.mdl\n", b"; npc: c:/x.mdl\n", b"; npc: maps/x.bsp\n", b"; npc: models\\x.mdl\n"):
+            with self.subTest(bad=bad):
+                self.assertIsNotNone(formats.creatures_ini_problem(bad))
+        self.assertIsNotNone(formats.creatures_ini_problem(b"; types:\n"), "nothing at all: refused")
+
+    def setup(self, data):
+        gb, ff = FakeGB(), FakeFiles()
+        ff.files[1885247] = data
+        return make(gb=gb, files=ff)[0]
+
+    def npc_map(self, named, listed, ship):
+        files = {"maps/de_marakesh.bsp": npc_bsp(named), "creatures/creatures.ini": b"; types:\n; npc: " + listed.encode() + b"\n",
+                 ship: model(), "loner-strike.json": manifest(MAP_MANIFEST)}
+        return zip_of(["README.txt"], files)
+
+    def test_a_map_brings_its_npcs_model(self):
+        mine = "models/gb6096365/qa/joe.mdl"
+        c = self.setup(self.npc_map(mine, mine, mine))
+        code, ans = c.submit(body(map_item()), "a")
+        self.assertEqual((code, ans.get("state")), (200, "listed"), ans)
+
+    def test_an_npc_file_the_map_doesnt_use(self):
+        mine = "models/gb6096365/qa/joe.mdl"
+        c = self.setup(self.npc_map("models/barney.mdl", mine, mine))
+        code, ans = c.submit(body(map_item()), "a")
+        self.assertEqual(code, 422, ans)
+        self.assertIn("isn't used by any of the package's NPCs", ans["error"])
+
+    def test_an_npc_file_in_someone_elses_folder(self):
+        theirs = "models/gb1001/qa/joe.mdl"
+        c = self.setup(self.npc_map(theirs, theirs, theirs))
+        code, ans = c.submit(body(map_item()), "a")
+        self.assertEqual(code, 422, ans)
+        self.assertIn("isn't the same as that creator's listed file", ans["error"])
+
+    def test_an_unlisted_file_in_the_owners_folder(self):
+        mine = "models/gb6096365/qa/joe.mdl"
+        files = {"maps/de_marakesh.bsp": npc_bsp(mine), "creatures/creatures.ini": b"; types:\n; npc: " + mine.encode() + b"\n",
+                 mine: model(), "models/gb6096365/qa/stray.mdl": model(), "loner-strike.json": manifest(MAP_MANIFEST)}
+        c = self.setup(zip_of(["README.txt"], files))
+        code, ans = c.submit(body(map_item()), "a")
+        self.assertEqual(code, 422, ans)
+        self.assertIn("stray.mdl isn't used", ans["error"])

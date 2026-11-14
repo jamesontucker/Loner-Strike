@@ -11,6 +11,7 @@ Prints one line of JSON: {"ok": true, "files": n, "kinds": {...}} or {"ok": fals
 import hashlib
 import json
 import os
+import struct
 import sys
 import tempfile
 import time
@@ -46,6 +47,9 @@ def run(path, name, seconds):
     sections = {}
     refs = set()
     files = {}  # models/ and sound/ files: sha256 (creature files are compared with their owner's)
+    npc = []  # NPC-editor: the pack's NPC files, each named by the package's own maps or graphs
+    texts = []  # (lower-cased) entity lumps, .map files and graphs, to find them in
+    text_bytes = [0]
 
     def one(fname, fh, size):
         try:
@@ -61,7 +65,23 @@ def run(path, name, seconds):
             creatures.extend(formats.creatures_ini_types(data))
             sections.update(formats.creatures_ini_sections(data))
             refs.update(formats.creatures_ini_refs(data))
+            npc.extend(formats.creatures_ini_npc(data) or [])
         low = fname.replace("\\", "/").lower()
+        if low.endswith((".bsp", ".map", ".graph.json")) and text_bytes[0] < 96 << 20:
+            fh.seek(0)
+            got = b""
+            if low.endswith(".bsp"):
+                head = fh.read(12)
+                if len(head) == 12:
+                    off, ln = struct.unpack("<II", head[4:12])
+                    if ln <= 8 << 20 and off + ln <= size:
+                        fh.seek(off)
+                        got = fh.read(ln)
+            elif size <= 64 << 20:
+                got = fh.read(size)
+            if got:
+                texts.append(got.lower())
+                text_bytes[0] += len(got)
         if low.startswith(("models/", "sound/")) and len(files) < 2048:
             fh.seek(0)
             h = hashlib.sha256()
@@ -107,7 +127,15 @@ def run(path, name, seconds):
                     one(i.filename, fh, got)
                 os.remove(part)
     out = {"ok": True, "files": sum(kinds.values()), "kinds": kinds}
-    if creatures:
+    # an NPC file the package's own maps and graphs don't name isn't one of its NPCs'
+    for p in npc:
+        forms = [p.encode()] + ([p[len("sound/"):].encode()] if p.startswith("sound/") else [])
+        if not any(f in t for t in texts for f in forms):
+            raise Refused(f"{p} isn't used by any of the package's NPCs. Make it again with Publish.")
+    refs.update(npc)
+    if npc:
+        out["npcFiles"] = sorted(set(npc))
+    if creatures or npc:
         out["creatures"] = creatures
         out["creatureSections"] = sections
         out["creatureRefs"] = sorted(refs)
