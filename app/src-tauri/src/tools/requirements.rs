@@ -171,6 +171,9 @@ pub fn answer(g: &Graph, saved: &Saved, h: &Here) -> Value {
     if !local.is_empty() {
         warnings.push(format!("Only on this computer (share them first so players can get them): {}.", local.join(", ")));
     }
+    if let Some(w) = custom_creatures_warning(&needs.creatures) {
+        warnings.push(w);
+    }
     json!({
         "defaultMap": if saved.default_map.is_empty() { Value::Null } else { map(&saved.default_map) },
         "maps": maps,
@@ -310,6 +313,19 @@ fn maps_in(game_dir: &Path) -> Vec<String> {
     v
 }
 
+/// Creature types a mode spawns that aren't the game's own: a package only names them (their
+/// creatures.ini sections aren't in it), so players have to make them in the Creature Studio.
+/// ("all": the wave spawner's own; controller and stukabat are Last Stand's round-table names a
+/// stand-in plays until the game has them.)
+pub fn custom_creatures(names: &[String]) -> Vec<String> {
+    names.iter().filter(|n| *n != "all" && !["controller", "stukabat"].contains(&n.as_str()) && crate::tools::creatures::builtin(n).is_none()).cloned().collect()
+}
+
+fn custom_creatures_warning(names: &[String]) -> Option<String> {
+    let c = custom_creatures(names);
+    (!c.is_empty()).then(|| format!("Custom creatures aren't included yet: players need to make {} themselves (Creature Studio).", c.join(", ")))
+}
+
 /// Everything about a mode's requirements on this computer.
 pub fn report(st: &Shared, id: &str) -> Result<Value, String> {
     let dir = crate::tools::studio::graphs_dir();
@@ -379,6 +395,18 @@ mod tests {
         let mut same = inf;
         same.nodes[0].params.insert("influence".into(), json!(50));
         assert_eq!(mode_needs(&same)["modeVer"], 1);
+    }
+
+    #[test]
+    fn custom_creatures_are_named_as_not_included() {
+        let names = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(custom_creatures_warning(&names(&["zombie", "all", "gonarch", "controller"])), None);
+        let w = custom_creatures_warning(&names(&["zombie", "qa_runner_", "my_brute_2"])).unwrap();
+        assert_eq!(w, "Custom creatures aren't included yet: players need to make qa_runner_, my_brute_2 themselves (Creature Studio).");
+        // the report a Publish check shows
+        let gr = g(&[("creature.spawn", "kind", "qa_runner_")]);
+        let v = answer(&gr, &Default::default(), &Here { game_dir: None, stock: &|_: &str| false, community: &Default::default(), maps_here: &[] });
+        assert!(v["warnings"].as_array().unwrap().iter().any(|x| x.as_str().is_some_and(|s| s.contains("qa_runner_ themselves"))), "{v}");
     }
 
     #[test]

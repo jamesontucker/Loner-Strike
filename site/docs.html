@@ -1207,6 +1207,14 @@ public on_spawn(id)
   <p><b>Behavior</b>: stand, wander, patrol, guard, horde or keep away; target the nearest, weakest or last attacker; flee when hurt or not. New models and sounds load on the next map.</p>
   <h2 id="creature-waves">Waves</h2>
   <p>In <b>Waves &amp; spawn groups</b>, pick the mode, then set the <b>Boss</b> and how often it comes, enemies and health per wave, and <b>The mix</b> of creatures per wave. <b>Start from the mode's own mix</b> is a good start. <b>Save waves</b>; <b>Place in map…</b> opens the map editor to place spawners.</p>
+  <h2 id="creatures-how">How creatures work</h2>
+  <ul>
+    <li><b>What it edits.</b> The Studio changes <code>creatures.ini</code> and <code>waves.ini</code> in the game picked at the top: your Counter-Strike 1.6 or Condition Zero, or a server on this computer. Servers on another computer can't be edited from here.</li>
+    <li><b>When changes apply.</b> After <b>Apply to game</b> (the running map reads your types again) or the next map change. New models and sounds load with the next map.</li>
+    <li><b>Waves.</b> The Waves tab starts from Last Stand's own lineup. Saving makes this game's Last Stand use your list. <b>Reset to Last Stand's own</b> removes your list, and the mode goes back to its own.</li>
+    <li><b>Who gets them.</b> Only games you host from this computer use your creatures. Nothing is sent to other players or to servers elsewhere.</li>
+    <li><b>Sharing a mode.</b> A published Game Mode Studio mode lists the creature types it uses, but custom types aren't included yet. Players need to make them themselves with the same names; Publish warns you about this.</li>
+  </ul>
 </section>
 
 <!-- ============ Map tools ============ -->
