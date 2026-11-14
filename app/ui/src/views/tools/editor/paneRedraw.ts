@@ -125,3 +125,9 @@ export function QuietWhileDragging() {
   }, []);
   return null;
 }
+
+/** Every pane draws on the next frame (shared buffers changed in place). */
+export function redrawAll() {
+  markAll();
+  rootInvalidate?.();
+}

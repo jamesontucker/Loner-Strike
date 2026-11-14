@@ -21,7 +21,6 @@ import { facesOf, groupMembers, keyOf, originOf, selectionBounds, snap, topGroup
 import { LeakLine } from "./LeakLine";
 import { CheckMarkers } from "./CheckMarkers"; // Checks
 import { DIM_MATERIAL, P4SceneParts } from "./P4Scene"; // P4: cordon, drag and drop, 3D box select
-import { useCordonDim } from "./extras";
 import { MarqueeHot, startMarquee, useMarquee } from "./Marquee";
 // P5: panes (quad view): one canvas, a drei <View> per pane
 import { PaneBoxes } from "./Layout";
@@ -30,8 +29,8 @@ import { useP5 } from "./p5store";
 import { duplicateWith } from "./commands";
 import { shiftHeld, snapToGeometry } from "./snapGeo";
 import { edgeLook, flatMaterial, usePaneMode } from "./renderModes";
-import { EntityModelMesh, SpriteGlow, useEntityModel } from "./EntityModels";
-import { MergedBrushes } from "./MergedBrushes";
+import { PickedOverlay, SharedBrushes } from "./SharedBrushes"; // Parity A: shared brush buffers
+import { syncBrushBuffers, useBrushBuffers } from "./brushBuffers"; // Parity A
 import { brushRaycast } from "./pickRay";
 import { KitOverlay } from "./KitOverlay"; // P5: mode kit areas and paths
 import { FlatHandles, startFlatMove } from "./FlatHandles"; // Parity A: 2D handles and moves
@@ -47,7 +46,7 @@ import { TriadFeed } from "./AxisTriad"; // P5: the axes in each view's corner
 import { markerColour, useKits } from "./kits";
 import { useNav } from "./navigation";
 import { NavCamera } from "./NavCamera";
-import { Bookmarks, MeasureLine, sameP, SelectRect, TexHandles, useVisibleBrush, VertexHandles } from "./SceneExtras";
+import { Bookmarks, MeasureLine, sameP, SelectRect, TexHandles, VertexHandles } from "./SceneExtras";
 
 // ---- small helpers ---------------------------------------------------------------------
 
@@ -172,19 +171,12 @@ function BrushMesh({ b, mats, picked, hideSky, version, dim }: { b: BrushGeo; ma
   );
 }
 
-/** P5: dev builds can draw brushes one by one (?nomerge) to compare speeds. */
-const NO_MERGE = import.meta.env.DEV && typeof location !== "undefined" && location.search.includes("nomerge");
 
 function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
-  const brushes = useEditor((s) => s.brushes);
-  const sel = useEditor((s) => s.sel);
   const preview = useEditor((s) => s.preview);
-  const groups = useEditor((s) => s.doc?.groups);
   const camera = useTools((s) => s.camera);
   const view = usePaneView(); // P5
   const hideSky = !(view === "3d" && camera === "fly");
-  const visible = useVisibleBrush();
-  const dim = useCordonDim(); // P4: outside the cordon
   const moving = useRef<THREE.Group>(null);
   useEffect(() => {
     const g = moving.current;
@@ -192,39 +184,22 @@ function Brushes({ mats, version }: { mats: MapMaterials; version: number }) {
     g.matrix.copy(preview ?? new THREE.Matrix4());
     g.matrixWorldNeedsUpdate = true;
   }, [preview]);
-  void groups;
-  // P5: the unpicked brushes are drawn merged (MergedBrushes); brushes dimmed by the cordon keep
-  // their own mesh for the dimming. Rebuilt only when these change.
   const mode = usePaneMode();
-  const cordon = useEditor((s) => s.doc?.editor?.cordon);
-  const { merged, own, picked } = useMemo(() => {
-    const merged: BrushGeo[] = [];
-    const own: BrushGeo[] = [];
-    const picked: BrushGeo[] = [];
-    for (const b of brushes.values()) {
-      if (!visible(b)) continue;
-      if (isPicked(b, sel)) picked.push(b);
-      else if (dim?.(b)) own.push(b);
-      else merged.push(b);
-    }
-    return { merged, own, picked };
-  }, [brushes, sel, visible, cordon]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Parity A: the brushes live in buffers shared by every pane and updated per brush
+  // (brushBuffers.ts); the selection is an overlay; brushes dimmed by the cordon keep their own mesh
+  const overlay = useBrushBuffers((s) => s.overlay);
+  const dimmed = useBrushBuffers((s) => s.dimmed);
+  useEffect(() => syncBrushBuffers(), []);
   return (
     <>
       <group>
-        {NO_MERGE ? (
-          merged.map((b) => <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} version={version} />)
-        ) : (
-          <MergedBrushes list={merged} mats={mats} version={version} mode={mode} hideSky={hideSky} />
-        )}
-        {own.map((b) => (
+        <SharedBrushes mats={mats} version={version} mode={mode} hideSky={hideSky} />
+        {dimmed.map((b) => (
           <BrushMesh key={b.id} b={b} mats={mats} picked={false} hideSky={hideSky} version={version} dim />
         ))}
       </group>
       <group ref={moving} matrixAutoUpdate={false}>
-        {picked.map((b) => (
-          <BrushMesh key={b.id} b={b} mats={mats} picked hideSky={hideSky} version={version} />
-        ))}
+        {overlay && <PickedOverlay overlay={overlay} mats={mats} version={version} mode={mode} />}
         <PickedEntities />
       </group>
       <FaceOutline />
@@ -275,33 +250,6 @@ function yawOf(e: DocEntity): number | null {
   return v && v.length === 3 && Number.isFinite(v[1]) ? v[1] : null;
 }
 
-function EntityBox({ e, picked }: { e: DocEntity; picked: boolean }) {
-  const o = originOf(e.keys);
-  const look = entityLook(e);
-  const yaw = yawOf(e);
-  const [sx, sy, sz] = look.size;
-  const outline = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(sx, sy, sz)), [sx, sy, sz]);
-  useEffect(() => () => outline.dispose(), [outline]);
-  const model = useEntityModel(e); // P5: the studio model in place of the box (View > Models)
-  if (!o) return null;
-  const len = Math.max(look.size[0], 24);
-  const dir: Vec3 = yaw == null ? [0, 0, 0] : [Math.cos((yaw * Math.PI) / 180) * len, Math.sin((yaw * Math.PI) / 180) * len, 0];
-  return (
-    <group position={o}>
-      <mesh userData={{ kind: "entity", id: e.id }} visible={!model}>
-        <boxGeometry args={look.size} />
-        <meshLambertMaterial color={look.colour} transparent opacity={0.85} />
-      </mesh>
-      {model && <EntityModelMesh got={model} yaw={yaw ?? 0} body={Number(keyOf(e.keys, "body") ?? 0) || 0} skin={Number(keyOf(e.keys, "skin") ?? 0) || 0} />}
-      <SpriteGlow e={e} />
-      <lineSegments geometry={outline} renderOrder={picked ? 3 : 1}>
-        <lineBasicMaterial color={picked ? "#ffd84a" : "#11140e"} depthTest={!picked} />
-      </lineSegments>
-      {yaw != null && <Line points={[[0, 0, 0], dir]} color={picked ? "#ffd84a" : look.colour} lineWidth={2} />}
-    </group>
-  );
-}
-
 function pointEntities(ents: DocEntity[] | undefined) {
   return (ents ?? []).filter((e) => !e.brushes.length && e.classname !== "worldspawn");
 }
@@ -313,7 +261,7 @@ function Entities() {
   const hiddenHere = useEditor((s) => s.hidden.entities);
   useKits((k) => k.kits); // P5: markers take their kit's colour when the kits arrive
   const hidden = useMemo(() => new Set((groups ?? []).filter((g) => g.hidden).map((g) => g.id)), [groups]);
-  // Parity A: drawn batched (a few draws for all of them); the picked ones stay EntityBox
+  // Parity A: drawn batched (a few draws for all of them; the picked ones too, in PickedEntities)
   const list = useMemo(() => pointEntities(ents).filter((e) => !sel.includes(e.id) && !hiddenHere.has(e.id) && (e.group == null || !hidden.has(e.group))), [ents, sel, hiddenHere, hidden]);
   return <EntityBatch ents={list} look={entityLook} yaw={yawOf} />;
 }
@@ -321,15 +269,12 @@ function Entities() {
 function PickedEntities() {
   const ents = useEditor((s) => s.doc?.entities);
   const sel = useEditor((s) => s.sel.entities);
-  return (
-    <>
-      {pointEntities(ents)
-        .filter((e) => sel.includes(e.id))
-        .map((e) => (
-          <EntityBox key={e.id} e={e} picked />
-        ))}
-    </>
-  );
+  // Parity A: batched like the unpicked ones (a big box select picks hundreds)
+  const list = useMemo(() => {
+    const ids = new Set(sel);
+    return pointEntities(ents).filter((e) => ids.has(e.id));
+  }, [ents, sel]);
+  return list.length ? <EntityBatch ents={list} look={entityLook} yaw={yawOf} picked /> : null;
 }
 
 /** Where an entity is: its origin, or the middle of its brushes. */

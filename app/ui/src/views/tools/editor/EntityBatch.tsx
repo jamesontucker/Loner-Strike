@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import type { Vec3 } from "../viewer/coords";
 import type { DocEntity } from "./editorApi";
-import { loadModel, modelGeometry, modelMaterials, modelOf, type Got } from "./EntityModels";
+import { loadModel, modelOf, sharedModelGeometry, sharedModelMaterials, type Got } from "./EntityModels";
 import { useKits } from "./kits";
 import { useP5 } from "./p5store";
 import { keyOf, originOf } from "./store";
@@ -19,6 +19,12 @@ import { keyOf, originOf } from "./store";
 type Look = { size: Vec3; colour: string; up: number };
 
 const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
+// shared for the session: a rebuild never disposes a material, so three never drops and
+// recompiles its shader program on an edit (PerfAudit #1)
+const BOX_MATERIAL = new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.85 });
+const PICK_MATERIAL = new THREE.MeshBasicMaterial();
+const LINK_MATERIAL = new THREE.LineDashedMaterial({ color: "#7fb7c9", dashSize: 12, gapSize: 8, transparent: true, opacity: 0.6 });
+const MARKER_MATERIAL = new THREE.MeshBasicMaterial();
 const BOX_EDGES: number[] = (() => {
   const e = new THREE.EdgesGeometry(UNIT_BOX).getAttribute("position");
   return Array.from(e.array as Float32Array);
@@ -69,12 +75,17 @@ const GLOW_FRAG = /* glsl */ `
 type ModelGroup = { key: string; got: NonNullable<Got>; body: number; skin: number; mats: THREE.Matrix4[] };
 
 /** Every unpicked point entity in a few draws. `look`/`yaw`: EditorScene's box size, colour and facing. */
-export function EntityBatch({ ents, look, yaw }: { ents: DocEntity[]; look: (e: DocEntity) => Look; yaw: (e: DocEntity) => number | null }) {
+export function EntityBatch({ ents, look, yaw, picked = false }: { ents: DocEntity[]; look: (e: DocEntity) => Look; yaw: (e: DocEntity) => number | null; picked?: boolean }) {
   const invalidate = useThree((s) => s.invalidate);
   const showModels = useP5((s) => s.showModels);
   const creatures = useKits((k) => k.creatures);
   useKits((k) => k.kits); // markers take their kit's colour when the kits arrive
 
+  // what's drawn, as text: a refreshed document with the same entities keeps everything
+  const sig = useMemo(
+    () => ents.map((e) => `${e.id}|${e.classname}|${e.keys.map((k) => k.join("=")).join(";")}|${look(e).colour}`).join("\n"),
+    [ents, look],
+  );
   // models: load each path once; entities wait as boxes until theirs arrives
   const paths = useMemo(() => {
     const m = new Map<number, string>();
@@ -83,7 +94,7 @@ export function EntityBatch({ ents, look, yaw }: { ents: DocEntity[]; look: (e: 
       if (p) m.set(e.id, p);
     }
     return m;
-  }, [ents, showModels, creatures]);
+  }, [sig, showModels, creatures]); // eslint-disable-line react-hooks/exhaustive-deps
   const [loaded, setLoaded] = useState<Map<string, Got>>(() => new Map());
   useEffect(() => {
     let live = true;
@@ -154,11 +165,11 @@ export function EntityBatch({ ents, look, yaw }: { ents: DocEntity[]; look: (e: 
       }
     }
     return { boxIds, boxMats, boxCols, pickIds, pickMats, edges, arrows, arrowCols, glowPos, glowSize, glowTint, models: [...models.values()] };
-  }, [ents, look, yaw, paths, loaded, showModels]);
+  }, [sig, paths, loaded, showModels]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const boxes = useMemo(() => {
     if (!built.boxIds.length) return null;
-    const mesh = new THREE.InstancedMesh(UNIT_BOX, new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.85 }), built.boxIds.length);
+    const mesh = new THREE.InstancedMesh(UNIT_BOX, BOX_MATERIAL, built.boxIds.length);
     built.boxMats.forEach((m, i) => mesh.setMatrixAt(i, m));
     built.boxCols.forEach((col, i) => mesh.setColorAt(i, col));
     mesh.computeBoundingSphere();
@@ -167,7 +178,7 @@ export function EntityBatch({ ents, look, yaw }: { ents: DocEntity[]; look: (e: 
   }, [built]);
   const picks = useMemo(() => {
     if (!built.pickIds.length) return null;
-    const mesh = new THREE.InstancedMesh(UNIT_BOX, new THREE.MeshBasicMaterial(), built.pickIds.length);
+    const mesh = new THREE.InstancedMesh(UNIT_BOX, PICK_MATERIAL, built.pickIds.length);
     built.pickMats.forEach((m, i) => mesh.setMatrixAt(i, m));
     mesh.computeBoundingSphere();
     mesh.visible = false; // picks, never drawn (rays still find invisible meshes)
@@ -205,32 +216,27 @@ export function EntityBatch({ ents, look, yaw }: { ents: DocEntity[]; look: (e: 
   const models = useMemo(
     () =>
       built.models.map((g) => {
-        const geo = modelGeometry(g.got.bundle, g.body);
-        const mats = modelMaterials(g.got.bundle, g.got.item, g.skin, () => invalidate());
+        // shared for the session: textures are uploaded once per model and skin (PerfAudit #1)
+        const geo = sharedModelGeometry(g.got.bundle, g.body);
+        const mats = sharedModelMaterials(g.got.bundle, g.got.item, g.skin);
         const mesh = new THREE.InstancedMesh(geo, mats, g.mats.length);
         g.mats.forEach((m, i) => mesh.setMatrixAt(i, m));
         mesh.computeBoundingSphere();
         mesh.raycast = () => null; // the entity's (invisible) box picks
         return mesh;
       }),
-    [built, invalidate],
+    [built],
   );
   useEffect(
     () => () => {
-      for (const m of [boxes, picks]) if (m) (m.material as THREE.Material).dispose();
+      for (const m of [boxes, picks]) m?.dispose(); // per-instance buffers (the materials are shared)
       lines.dispose();
       arrows.dispose();
       if (glow) {
         glow.geometry.dispose();
         (glow.material as THREE.Material).dispose();
       }
-      for (const m of models) {
-        m.geometry.dispose();
-        for (const mat of m.material as THREE.MeshLambertMaterial[]) {
-          mat.map?.dispose();
-          mat.dispose();
-        }
-      }
+      for (const m of models) m.dispose(); // per-instance buffers only: geometry and materials are shared
     },
     [boxes, picks, lines, arrows, glow, models],
   );
@@ -243,11 +249,12 @@ export function EntityBatch({ ents, look, yaw }: { ents: DocEntity[]; look: (e: 
       {models.map((m, i) => (
         <primitive key={i} object={m} />
       ))}
-      <lineSegments geometry={lines} renderOrder={1} raycast={() => null}>
-        <lineBasicMaterial color="#11140e" />
+      {/* picked: yellow outlines and arrows drawn through walls, as EntityBox drew them */}
+      <lineSegments geometry={lines} renderOrder={picked ? 3 : 1} raycast={() => null}>
+        <lineBasicMaterial color={picked ? "#ffd84a" : "#11140e"} depthTest={!picked} />
       </lineSegments>
       <lineSegments geometry={arrows} raycast={() => null}>
-        <lineBasicMaterial vertexColors />
+        {picked ? <lineBasicMaterial color="#ffd84a" /> : <lineBasicMaterial vertexColors />}
       </lineSegments>
       {glow && <primitive object={glow} />}
     </group>
@@ -259,7 +266,7 @@ export function LinkBatch({ lines }: { lines: { a: Vec3; b: Vec3 }[] }) {
   const obj = useMemo(() => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(lines.flatMap((l) => [...l.a, ...l.b]), 3));
-    const seg = new THREE.LineSegments(g, new THREE.LineDashedMaterial({ color: "#7fb7c9", dashSize: 12, gapSize: 8, transparent: true, opacity: 0.6 }));
+    const seg = new THREE.LineSegments(g, LINK_MATERIAL);
     seg.computeLineDistances();
     seg.raycast = () => null;
     return seg;
@@ -267,20 +274,19 @@ export function LinkBatch({ lines }: { lines: { a: Vec3; b: Vec3 }[] }) {
   useEffect(
     () => () => {
       obj.geometry.dispose();
-      (obj.material as THREE.Material).dispose();
     },
     [obj],
   );
   return lines.length ? <primitive object={obj} /> : null;
 }
 
-const MARKER_GEOMETRY = { octahedron: new THREE.OctahedronGeometry(1), sphere: new THREE.SphereGeometry(1, 10, 8) };
+const MARKER_GEOMETRY = { octahedron: new THREE.OctahedronGeometry(1), sphere: new THREE.SphereGeometry(1, 10, 8), box: new THREE.BoxGeometry(2, 2, 2) };
 
 /** Many small solid markers (one colour each) in one draw: component points, check dots. Not pickable. */
-export function InstancedMarkers({ items, shape, size, renderOrder = 0 }: { items: { at: Vec3; color: string }[]; shape: keyof typeof MARKER_GEOMETRY; size: number; renderOrder?: number }) {
+export function InstancedMarkers({ items, shape, size, renderOrder = 0, material }: { items: { at: Vec3; color: string }[]; shape: keyof typeof MARKER_GEOMETRY; size: number; renderOrder?: number; material?: THREE.Material }) {
   const mesh = useMemo(() => {
     if (!items.length) return null;
-    const m = new THREE.InstancedMesh(MARKER_GEOMETRY[shape], new THREE.MeshBasicMaterial(), items.length);
+    const m = new THREE.InstancedMesh(MARKER_GEOMETRY[shape], material ?? MARKER_MATERIAL, items.length);
     const mat = new THREE.Matrix4();
     const c = new THREE.Color();
     items.forEach((it, i) => {
@@ -293,6 +299,12 @@ export function InstancedMarkers({ items, shape, size, renderOrder = 0 }: { item
     return m;
     // a new list from its owner each render: rebuild only when what it says changes
   }, [JSON.stringify(items), shape, size, renderOrder]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => (mesh?.material as THREE.Material | undefined)?.dispose(), [mesh]);
+  useEffect(
+    () => () => {
+      if (!mesh) return;
+      mesh.dispose(); // per-instance buffers (materials are shared or the caller's)
+    },
+    [mesh, material],
+  );
   return mesh ? <primitive object={mesh} /> : null;
 }

@@ -13,6 +13,7 @@ import type { DocEntity } from "./editorApi";
 import { loadCreatures, useKits, type Creature } from "./kits";
 import { useP5 } from "./p5store";
 import { keyOf } from "./store";
+import { redrawAll } from "./paneRedraw"; // Parity A
 
 const FOLDERS = ["cstrike", "cstrike_downloads", "czero", "valve"];
 const ARMOURY = ["mp5", "tmp", "p90", "mac10", "ak47", "sg552", "m4a1", "aug", "scout", "g3sg1", "awp", "m3", "xm1014", "m249", "flashbang", "hegrenade", "kevlar", "assault", "smokegrenade"];
@@ -103,6 +104,26 @@ export function useEntityModel(e: DocEntity): Got {
 
 const texLoader = new THREE.TextureLoader();
 
+// Parity A (PerfAudit #1): one geometry per model+body and one set of materials (textures
+// uploaded once) per model+skin, for the whole session: edits never reload model textures.
+const geoCache = new WeakMap<ModelBundle, Map<number, THREE.BufferGeometry>>();
+const matCache = new Map<string, THREE.MeshLambertMaterial[]>();
+/** The shared geometry of a model's body (never disposed by its users). */
+export function sharedModelGeometry(b: ModelBundle, body: number): THREE.BufferGeometry {
+  let m = geoCache.get(b);
+  if (!m) geoCache.set(b, (m = new Map()));
+  let g = m.get(body);
+  if (!g) m.set(body, (g = modelGeometry(b, body)));
+  return g;
+}
+/** The shared materials of a model's skin (never disposed by their users). */
+export function sharedModelMaterials(b: ModelBundle, item: { folder: string; path: string }, skin: number): THREE.MeshLambertMaterial[] {
+  const key = `${item.folder}/${item.path}|${skin}`.toLowerCase();
+  let m = matCache.get(key);
+  if (!m) matCache.set(key, (m = modelMaterials(b, item, skin, () => redrawAll())));
+  return m;
+}
+
 /** Parity A: a model's geometry for one body (shared by the single mesh and the instanced batch). */
 export function modelGeometry(b: ModelBundle, body: number): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
@@ -142,17 +163,9 @@ export function modelMaterials(b: ModelBundle, item: { folder: string; path: str
 export function EntityModelMesh({ got, yaw, body = 0, skin = 0 }: { got: NonNullable<Got>; yaw: number; body?: number; skin?: number }) {
   const invalidate = useThree((s) => s.invalidate);
   const { bundle: b, item } = got;
-  const geometry = useMemo(() => modelGeometry(b, body), [b, body]);
-  useEffect(() => () => geometry.dispose(), [geometry]);
-  const materials = useMemo(() => modelMaterials(b, item, skin, () => invalidate()), [b, item, skin, invalidate]);
-  useEffect(
-    () => () =>
-      materials.forEach((m) => {
-        m.map?.dispose();
-        m.dispose();
-      }),
-    [materials],
-  );
+  // Parity A: shared, cached for the session (not disposed here)
+  const geometry = useMemo(() => sharedModelGeometry(b, body), [b, body]);
+  const materials = useMemo(() => sharedModelMaterials(b, item, skin), [b, item, skin]);
   useEffect(() => invalidate(), [geometry, materials, invalidate]);
   return <mesh geometry={geometry} material={materials} rotation={[0, 0, (yaw * Math.PI) / 180]} raycast={() => null} />;
 }

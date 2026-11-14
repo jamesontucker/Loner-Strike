@@ -63,6 +63,44 @@ itself by whole grid steps, the opposite edge stays (a box becomes a slanted wal
 axis twice or a bad number is refused with a reason. Texture lock and scale lock apply. Tests: shear.rs units (every
 axis pair on a spike, a box's corners on whole units), the command test, `editor-flat.spec.ts` (Chromium + WebKit).
 
+**6. Editor rendering, PerfAudit #1-#3 (from the coordinator)**: `brushBuffers.ts` + `SharedBrushes.tsx`.
+- One set of brush buffers for the whole map, shared by all panes: a triangle pool per texture and outline pools
+  (world / brush-entity / sky-only). Each brush owns its ranges for good; an edit rewrites only touched brushes in
+  place (BufferAttribute update ranges; a pool switches to one whole upload past 256 ranges); picking, hiding and the
+  cordon fill a brush's range with NaN and refill it later. A pool only regrows (new geometry, old disposed) when full.
+- Selection is an overlay (one mesh per texture + one outline draw from cached per-brush edges), disposed 1 s after
+  it's replaced (disposing at once let a pane re-upload it: that was a leak). One picker object per pane (box test,
+  then pickRay's brush raycast through a stand-in mesh) replaces 5,400 invisible meshes per pane.
+- Box-select highlight: one shared mesh (`sharedTriangles`) instead of a mesh per brush, which had uploaded every
+  touched brush's geometry and kept it (3,882 GPU geometries after a deselect -> 156).
+- Picked point entities through EntityBatch (picked style); hot point entities through InstancedMarkers.
+- Model geometry/materials cached per model+body / model+skin for the session (no texture reloads on edits);
+  EntityBatch keyed on entity content, materials shared (no program drop/recompile), InstancedMesh.dispose() kept.
+- MergedBrushes.tsx (P5's) is no longer used; EntityBox removed from EditorScene (PickedEntities batches).
+
+Numbers, br_valley Quad, WebKit, `tests/editor-bigedit.spec.ts` (load 12-18; prod = vite build + preview):
+
+| | before (audit prod / my dev) | after prod | after dev |
+|---|---|---|---|
+| click select, worst frame | 291 / 176 ms | 45-46 ms | 53 ms |
+| nudge+undo x10, frame p95 | 177 / 213 ms | 30-31 ms (p50 17) | 61 ms |
+| box select ~3200 brushes | 1.4 s / 1245 ms (1961) | 112 ms (3214) | 115-151 ms |
+| deselect | - / 1750 ms | 43-47 ms | 61-67 ms |
+| 10 select/deselect cycles | +300 MB RSS each (audit) | - | geometries 235 -> 157, textures 70 -> 70 |
+
+Chromium (software GL): JS heap 79 -> 77 MB over 10 cycles (after GC), geometries flat; frame times there are
+~450-550 ms per redraw of the 4 textured panes and not meaningful. Chromium editor suite: 51 passed, 1 skipped.
+
+## Where I am (paused 2026-11-13 ~19:35 for the usage limit)
+- Committed: the rendering work above. Tested: Chromium full editor suite (51 passed), WebKit bigedit perf spec.
+- **Next:** re-run the WebKit editor suite (`-c <scratch>/pw-pa-webkit-all.config.ts`: testDir app/ui/tests,
+  testMatch editor-*.spec.ts, browserName webkit) - it was stopped mid-run with no failures so far.
+- Nudge p95 is 30 ms (target 16): the rest is the 654 KB doc refresh and React re-rendering doc readers. P5 has
+  document deltas (`applyChanges`/`catchUp`, checks debounce) in progress in store.ts/editorApi.ts/tools/editor.rs;
+  re-measure with editor-bigedit.spec.ts once that lands. A little shader-program churn remains per edit (drei Line
+  programs released/recompiled; not from brush/entity drawing) - worth a look after that.
+- Always: Playwright under `nice -n 15 --workers=1`, only while load < 20 (coordinator).
+
 ## Left / ideas
 - Extrude in the flat views (Shift is box-pick there), edge-move mode for slanted edges.
 - Entities drawn one by one dominate the flat panes on big maps (request to P5).

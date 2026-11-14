@@ -13,7 +13,9 @@ import * as THREE from "three";
 import { create } from "zustand";
 import { useTools } from "../../../stores/tools";
 import { gsToThree, type Vec3 } from "../viewer/coords";
-import { groupMembers, isHiddenBrush, topGroup, useEditor, type FaceRef } from "./store";
+import { groupMembers, isHiddenBrush, topGroup, useEditor, type BrushGeo, type FaceRef } from "./store";
+import { sharedTriangles } from "./brushBuffers"; // Parity A
+import { InstancedMarkers } from "./EntityBatch"; // Parity A
 import "./p4.css";
 
 export type MarqueeMode = "auto" | "inside" | "touching";
@@ -355,18 +357,19 @@ export function MarqueeHot() {
   const points = (doc?.entities ?? []).filter((e) => hot.entities.has(e.id) && !e.brushes.length);
   return (
     <>
-      {list.map((b) => (
-        <mesh key={b!.id} geometry={b!.geometry} material={HOT_MATERIAL} renderOrder={7} raycast={() => null} />
-      ))}
-      {points.map((e) => {
-        const o = e.keys.find(([k]) => k === "origin")?.[1]?.trim().split(/\s+/).map(Number);
-        if (!o || o.length < 3) return null;
-        return (
-          <mesh key={`e${e.id}`} position={[o[0], o[1], o[2]]} material={HOT_MATERIAL} renderOrder={7} raycast={() => null}>
-            <boxGeometry args={[24, 24, 24]} />
-          </mesh>
-        );
-      })}
+      {/* Parity A: one shared mesh for all of them (a mesh per brush uploaded every brush's geometry) */}
+      {list.length > 0 && <mesh geometry={sharedTriangles(hot, list as BrushGeo[])} material={HOT_MATERIAL} renderOrder={7} raycast={() => null} frustumCulled={false} />}
+      {/* Parity A: the point entities in one instanced draw */}
+      <InstancedMarkers
+        items={points.flatMap((e) => {
+          const o = e.keys.find(([k]) => k === "origin")?.[1]?.trim().split(/\s+/).map(Number);
+          return o && o.length >= 3 && o.every(Number.isFinite) ? [{ at: [o[0], o[1], o[2]] as Vec3, color: "#ffffff" }] : [];
+        })}
+        shape="box"
+        size={12}
+        renderOrder={7}
+        material={HOT_MATERIAL}
+      />
       {hot.faces.slice(0, 800).map((f) => {
         const poly = brushes.get(f.brush)?.polys.get(f.face);
         return poly ? <Line key={`${f.brush}:${f.face}`} points={[...poly, poly[0]]} color="#5fc8ff" lineWidth={2} depthTest={false} renderOrder={7} /> : null;
