@@ -40,6 +40,7 @@ mod admins {
 
 mod api;
 mod game;
+mod roles;
 mod store;
 
 use serde::{Deserialize, Serialize};
@@ -163,11 +164,12 @@ pub fn valid_url(u: &str) -> bool {
 const USAGE: &str = "ls-control: Loner-Strike's shared control for a server on this machine.
   ls-control version
   ls-control serve  --server <id> --port <port>          (the service; systemd runs it)
-  ls-control invite --server <id> --role admin|moderator [--steam STEAM_0:1:2]
+  ls-control invite --server <id> --role admin|moderator [--steam STEAM_0:1:2] [--app <application>]
   ls-control list   --server <id> [--log <entries>]
   ls-control role   --server <id> --member <member id> --role admin|moderator
   ls-control remove --server <id> --member <member id>
   ls-control cancel --server <id> --invite <invite id>
+  ls-control revoke-app --server <id> --app <application>  (a community roles Moderator, or their invite)
 Every command but serve prints one line of JSON.";
 
 /// --name value pairs after the command.
@@ -204,14 +206,25 @@ fn run(args: &[String]) -> Result<Value, String> {
     match cmd {
         "serve" => {
             let port: u16 = f.get("port").and_then(|p| p.parse().ok()).filter(|p| *p >= 1024).ok_or("Say which port to listen on (--port, 1024 or above).")?;
+            roles::start(Paths { home: paths.home.clone(), id: paths.id.clone() });
             api::serve(paths, port)?;
             Ok(json!({"ok": true}))
         }
         "invite" => {
             let role = f.get("role").and_then(|r| Role::parse(r)).ok_or("Pick Admin or Moderator.")?;
             let config = Config::read(&paths)?;
-            let (iid, text) = files.invite(&config, role, f.get("steam").map(String::as_str).unwrap_or(""), "owner")?;
-            Ok(json!({"ok": true, "invite": text, "id": iid}))
+            let steam = f.get("steam").map(String::as_str).unwrap_or("");
+            // a Moderator invite for a community roles application (--app N): redeeming it is told to the list service
+            let app = f.get("app").and_then(|a| a.parse::<u64>().ok()).unwrap_or(0);
+            let (iid, text) = if app != 0 {
+                if role != Role::Moderator {
+                    return Err("Invites for applications are Moderator invites.".into());
+                }
+                files.invite_for_application(&config, steam, "owner", app)?
+            } else {
+                files.invite(&config, role, steam, "owner")?
+            };
+            Ok(json!({"ok": true, "invite": text, "id": iid, "expires": store::now() + 24 * 3600}))
         }
         "list" => {
             let n = f.get("log").and_then(|n| n.parse::<usize>().ok()).unwrap_or(200).min(3000);
@@ -224,7 +237,22 @@ fn run(args: &[String]) -> Result<Value, String> {
         }
         "remove" => {
             let gone = files.remove(f.get("member").ok_or("Say who (--member).")?)?;
+            for m in gone.iter().filter(|m| m.app != 0) {
+                let _ = roles::revoked(&paths, m.app, "owner");
+            }
             Ok(json!({"ok": true, "removed": gone.iter().map(store::member_view).collect::<Vec<_>>()}))
+        }
+        "revoke-app" => {
+            // a community roles application's Moderator (or its unused invite) goes; the list service is told
+            let app = f.get("app").and_then(|a| a.parse::<u64>().ok()).filter(|a| *a != 0).ok_or("Say which application (--app).")?;
+            let gone = match files.member_of_application(app) {
+                Some(m) => files.remove(&m.id)?,
+                None => vec![],
+            };
+            files.cancel_application(app)?;
+            // removed here whatever the list service says (a claim that ended can't be told any more)
+            let told = roles::revoked(&paths, app, "owner");
+            Ok(json!({"ok": true, "removed": gone.iter().map(store::member_view).collect::<Vec<_>>(), "warning": told.err()}))
         }
         "cancel" => {
             files.cancel(f.get("invite").ok_or("Say which invite (--invite).")?)?;

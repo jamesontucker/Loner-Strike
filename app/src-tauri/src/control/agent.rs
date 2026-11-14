@@ -271,6 +271,16 @@ pub fn put_roles_token(e: &Entry, token: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// MCP: the claim ended: the server's copy goes too (its relay and supporters check stop).
+pub fn forget_roles_token(e: &Entry) -> Result<(), String> {
+    let r = e.remote.as_ref().ok_or("That server isn't on a Linux machine.")?;
+    let (code, out) = remote::exec(r, &format!("cd \"$HOME\" && rm -f {}", shell_quote(&format!("{}/roles-token", data_dir(&e.id)))))?;
+    if code != 0 {
+        return Err(format!("Couldn't remove the claim on the server ({}).", out.trim()));
+    }
+    Ok(())
+}
+
 /// One of ls-control's commands for this server, over SSH: its JSON answer, or its error.
 pub fn cli(e: &Entry, args: &[&str]) -> Result<Value, String> {
     let r = e.remote.as_ref().ok_or("Shared control on the server is for servers on a Linux machine.")?;

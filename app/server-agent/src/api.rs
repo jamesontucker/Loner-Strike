@@ -175,7 +175,7 @@ pub fn handle(ctx: &Ctx, req: Req, count_redeem: bool) -> Resp {
         if count_redeem && too_many(&ctx.redeems, req.peer, TRIES_MAX, None) {
             return refuse(429, "Too many tries. Wait a few minutes.");
         }
-        return redeem(&files, &config, &req.body);
+        return redeem(&ctx.paths, &files, &config, &req.body);
     }
     if locked_out(&ctx.bad_keys, req.peer) {
         return refuse(429, "Too many tries. Wait a few minutes.");
@@ -239,7 +239,7 @@ fn outranks(files: &Files, io: &dyn GameIo, steamid: &str) -> bool {
 }
 
 /// A friend's app accepting an invite (no key yet).
-fn redeem(files: &Files, config: &Config, body: &[u8]) -> Resp {
+fn redeem(paths: &crate::Paths, files: &Files, config: &Config, body: &[u8]) -> Resp {
     let Ok(b) = serde_json::from_slice::<Value>(body) else { return refuse(400, "That isn't something Loner-Strike sends.") };
     let version = b["version"].as_str().unwrap_or("");
     if !crate::same_series(version, VERSION) {
@@ -249,7 +249,11 @@ fn redeem(files: &Files, config: &Config, body: &[u8]) -> Resp {
     let name = b["name"].as_str().unwrap_or("");
     match files.redeem(invite, name) {
         Ok((m, key)) => {
-            files.log_change(&m, "/api/control/redeem", Some(&json!({"invited_by": m.invited_by})));
+            files.log_change(&m, "/api/control/redeem", Some(&json!({"invited_by": m.invited_by, "application": m.app})));
+            // came in by a community roles application: the list service gives the Discord role
+            if m.app != 0 {
+                crate::roles::redeemed(paths, m.app, &m.id);
+            }
             ok(json!({"ok": true, "key": key, "member": m.id, "role": m.role, "server": {"id": config.id, "name": config.name(), "game": config.game}}))
         }
         Err(e) => err(e),
@@ -308,6 +312,50 @@ fn act(ctx: &Ctx, config: &Config, files: &Files, io: &dyn GameIo, m: &Member, m
             Ok((iid, text)) => ok(json!({"ok": true, "invite": text, "id": iid})),
             Err(e) => err(e),
         },
+        // community roles: an Admin of this server sees its moderator applications, makes Moderator
+        // invites for approved ones and revokes them (rules.rs allowed it, pinned to this server)
+        ("GET", ["api", "roles", "server", _, "applications"]) => match crate::roles::applications(&ctx.paths) {
+            Ok(v) => ok(v),
+            Err(e) => err(e),
+        },
+        ("POST", ["api", "roles", "server", _, "applications", aid, "invite"]) => {
+            let Ok(aid) = aid.parse::<u64>() else { return err("That isn't an application.") };
+            let a = match crate::roles::application(&ctx.paths, aid) {
+                Ok(a) => a,
+                Err(e) => return err(e),
+            };
+            if a["state"] != "approved" {
+                return err(format!("That application is {}, not waiting for an invite.", a["state"].as_str().unwrap_or("?")));
+            }
+            let (_iid, text) = match files.invite_for_application(config, a["steamid"].as_str().unwrap_or(""), &m.id, aid) {
+                Ok(t) => t,
+                Err(e) => return err(e),
+            };
+            match crate::roles::call(&ctx.paths, "POST", &format!("applications/{aid}/invite"), Some(&json!({"invite": text, "expires": crate::store::now() + 24 * 3600, "by": m.id}))) {
+                Ok(v) if v["dm"].as_bool() == Some(true) => ok(json!({"ok": true, "dm": true})),
+                Ok(_) => ok(json!({"ok": true, "dm": false, "invite": text})),
+                Err(e) => {
+                    let _ = files.cancel_application(aid);
+                    err(e)
+                }
+            }
+        }
+        ("POST", ["api", "roles", "server", _, "applications", aid, "revoke"]) => {
+            let Ok(aid) = aid.parse::<u64>() else { return err("That isn't an application.") };
+            if let Some(target) = files.member_of_application(aid) {
+                if target.role != Role::Moderator {
+                    return refuse(403, "Admins can only remove Moderators.");
+                }
+                if let Err(e) = files.remove(&target.id) {
+                    return err(e);
+                }
+            }
+            let _ = files.cancel_application(aid);
+            match crate::roles::revoked(&ctx.paths, aid, &m.id) {
+                Ok(()) => ok(json!({"ok": true})),
+                Err(e) => err(e),
+            }
+        }
         // where to join, with the join password (helpers are people the owner trusts; their
         // app joins with it and doesn't show it)
         ("POST", ["api", "control", "join"]) => {
@@ -867,6 +915,25 @@ mod tests {
         assert_eq!(s.ask(&key, "GET", "/api/../etc/passwd", Value::Null).status, 404);
         let me = s.ask(&key, "GET", "/api/control/me", Value::Null).body;
         assert_eq!((me["role"].as_str(), me["server"]["id"].as_str(), me["server"]["state"].as_str()), (Some("admin"), Some("friday"), Some("running")));
+    }
+
+    #[test]
+    fn community_roles_for_admins_here() {
+        let s = setup("");
+        let (a, m) = (s.person(Role::Admin, ""), s.person(Role::Moderator, ""));
+        // not claimed (no roles-token): said in words, not a crash
+        let r = s.ask(&a, "GET", "/api/roles/server/friday/applications", json!({}));
+        assert!(r.body["error"].as_str().unwrap().contains("claim"), "{:?}", r.body);
+        assert_eq!(s.ask(&m, "GET", "/api/roles/server/friday/applications", json!({})).status, 403);
+        assert_eq!(s.ask(&a, "GET", "/api/roles/server/other/applications", json!({})).status, 403);
+        assert_eq!(s.ask(&a, "POST", "/api/roles/server/friday/claim", json!({})).status, 403);
+        // an application's invite carries its number into the member who redeems it
+        let (_, text) = s.files.invite_for_application(&s.config, "STEAM_0:1:77", "owner", 42).unwrap();
+        let (mem, _) = s.files.redeem(&secret_of(&text), "Applicant").unwrap();
+        assert_eq!((mem.app, mem.role, mem.steam.as_str()), (42, Role::Moderator, "STEAM_0:1:77"));
+        assert_eq!(s.files.member_of_application(42).unwrap().id, mem.id);
+        assert!(s.files.invite_for_application(&s.config, "", "owner", 43).is_err());
+        assert!(s.files.member_of_application(0).is_none());
     }
 
     #[test]

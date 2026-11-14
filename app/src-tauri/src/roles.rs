@@ -318,7 +318,7 @@ async fn api_owner_code(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Op
 }
 
 fn unclaim(id: &str) -> Result<Value, String> {
-    entry(id)?;
+    let e = entry(id)?;
     let v = match call(Some(id), "DELETE", "server", None) {
         Ok(v) => v,
         Err(e) if e == UNCLAIMED => json!({"revoked": []}),
@@ -326,6 +326,20 @@ fn unclaim(id: &str) -> Result<Value, String> {
     };
     // its moderators lose their app access and in-game role here (the service took the Discord role)
     let mut removed = 0;
+    if e.remote.is_some() {
+        // a Linux server keeps its people itself
+        for r in v["revoked"].as_array().into_iter().flatten() {
+            let app = r["application"].as_u64().unwrap_or(0).to_string();
+            if let Ok(v) = crate::control::agent::cli(&e, &["revoke-app", "--app", &app]) {
+                let gone: Vec<Value> = v["removed"].as_array().cloned().unwrap_or_default();
+                removed += gone.len();
+                crate::control::server_game_admins_gone(&e, &gone);
+            }
+        }
+        let _ = crate::control::agent::forget_roles_token(&e);
+        forget(id);
+        return Ok(json!({"ok": true, "removed": removed}));
+    }
     for r in v["revoked"].as_array().into_iter().flatten() {
         let app = r["application"].as_u64().unwrap_or(0);
         if let Some(m) = crate::control::member_of_application(id, app) {
@@ -395,10 +409,20 @@ fn invite(id: &str, aid: u64, who: &Who) -> Result<Value, String> {
         return Err(format!("That application is {}, not waiting for an invite.", a["state"].as_str().unwrap_or("?")));
     }
     let steam = a["steamid"].as_str().unwrap_or("");
-    if e.remote.is_some() {
-        return Err("Moderator invites for a server on a Linux machine are made by its shared control service: update the server's files, then try again.".into());
-    }
-    let (_iid, text, expires) = crate::control::invite_for_application(id, steam, &who.by(), aid)?;
+    let (text, expires) = if e.remote.is_some() {
+        // a Linux server keeps its people itself (ls-control): it makes the invite and tells the
+        // list service when it's redeemed
+        if crate::control::agent::url(&e).is_none() {
+            return Err("Helpers reach a Linux server at its website status address. Set up Website status for it first (Overview).".into());
+        }
+        let aid_s = aid.to_string();
+        let v = crate::control::agent::cli(&e, &["invite", "--role", "moderator", "--steam", steam, "--app", &aid_s])?;
+        let text = v["invite"].as_str().filter(|t| crate::control::decode_invite(t).is_some()).ok_or("Shared control on the server made an invite that doesn't work. Try again.")?;
+        (text.to_string(), v["expires"].as_u64().unwrap_or(now() + 24 * 3600))
+    } else {
+        let (_iid, text, expires) = crate::control::invite_for_application(id, steam, &who.by(), aid)?;
+        (text, expires)
+    };
     match call(Some(id), "POST", &format!("applications/{aid}/invite"), Some(&json!({"invite": text, "expires": expires, "by": who.by()}))) {
         Ok(v) => {
             let dm = v["dm"].as_bool().unwrap_or(false);
@@ -406,7 +430,11 @@ fn invite(id: &str, aid: u64, who: &Who) -> Result<Value, String> {
         }
         Err(err) => {
             // nobody can be told: the invite stops working at once
-            crate::control::cancel_application_invites(id, aid);
+            if e.remote.is_some() {
+                let _ = crate::control::agent::cli(&e, &["revoke-app", "--app", &aid.to_string()]);
+            } else {
+                crate::control::cancel_application_invites(id, aid);
+            }
             Err(err)
         }
     }
@@ -419,7 +447,14 @@ async fn api_invite(UrlPath((id, aid)): UrlPath<(String, String)>, headers: Head
 }
 
 fn revoke(id: &str, aid: u64, who: &Who) -> Result<Value, String> {
-    entry(id)?;
+    let e = entry(id)?;
+    if e.remote.is_some() {
+        // ls-control removes them (or their invite) and tells the list service
+        let v = crate::control::agent::cli(&e, &["revoke-app", "--app", &aid.to_string()])?;
+        let gone: Vec<Value> = v["removed"].as_array().cloned().unwrap_or_default();
+        crate::control::server_game_admins_gone(&e, &gone);
+        return Ok(json!({"ok": true}));
+    }
     match crate::control::member_of_application(id, aid) {
         // removing them tells the service (control::remove_member → revoked)
         Some(m) => {

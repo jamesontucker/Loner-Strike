@@ -856,6 +856,12 @@ fn server_invite(st: &Shared, e: &crate::servers::Entry, role: Role, steam: &str
 
 /// People on a Linux server's own list with a SteamID are in-game admins there with their
 /// role (`gone`: no longer). Kept in this app's copy of the server's admins and sent up.
+/// MCP: people a Linux server's ls-control removed (community roles revoke) lose their in-game role
+/// in this app's copy of its admins too.
+pub fn server_game_admins_gone(e: &crate::servers::Entry, people: &[Value]) {
+    server_game_admins(e, people, true);
+}
+
 fn server_game_admins(e: &crate::servers::Entry, people: &[Value], gone: bool) {
     let Some(g) = crate::servers::game_for(&e.id, || None) else { return };
     let mut changed = false;
