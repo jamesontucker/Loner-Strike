@@ -271,7 +271,7 @@ def gungame():
 def koth():
     m = Mode("king_of_the_hill", "King of the Hill", "Hold the hill to score; the first team to 120 wins",
              "9b3e5d27-7f1a-4c08-b6e2-4a9d8c1f5e73",
-             [("mp_round_infinite", 1), ("mp_give_player_c4", 0)])
+             [("mp_round_infinite", 1)])
     m.g["markers"] = [{"id": "hill", "label": "Hill", "description": "Where the hill is: a capture point is made here.", "type": "point", "min": 0, "max": 1, "colour": "#ffb347", "icon": "flag"}]
     m.func("hill", "Make Hill", inputs=[("at", "At", "entity")])
     m.var("point", "Hill", "entity", "mode")
@@ -279,7 +279,7 @@ def koth():
     m.var("held", "Is Held", "bool", "mode", False, "round")
     m.var("score", "Hill Score", "number", "team", 0, "round")
 
-    m.part("Each round a capture point is made on the hill: the map's Hill marker, else bomb site A, else where the hostages are. Bots go for it by themselves. Nobody gets the bomb (a mode setting), so the hill is the only goal.")
+    m.part("Each round a capture point is made on the hill: the map's Hill marker, else bomb site A, else where the hostages are. Bots go for it by themselves.")
     m.n("rs", "event.round_started")
     m.n("no", "var.set", {"var": "held", "value": False})
     m.n("mk", "marker.find", {"marker": "hill", "n": 1}, below=True)
