@@ -223,6 +223,14 @@ Cvars: `ls_creature_ver` (1, for detection), `ls_creature_file`, `ls_creature_pr
 `ls_creature_budget`, `ls_creature_debug` (1 beams for mode/target, 2 path debug, 3 console lines), `ls_creature_last`,
 `ls_creature_alive`, `ls_creature_frags` (0: kills don't add score).
 
+**For plugins (ls_creature_ver 2).** Each `ls_creature` keeps, every think: `pev_iuser3` = its state (1 idle, 2 wander,
+3 patrol, 4 guard, 5 chase, 6 flee, 7 attack, 8 search, 9 dead; a creature at home shows its behaviour, a hunter at home
+5) and `pev_enemy` = whom it's after (a player or a creature; 0 when none). Commands:
+`ls_creature behave <entity|all|type> default` (back to its own spawn behaviour, its spawn spot as home, no forced
+target; a hunter picks its next target itself), `ls_creature speed <entity|all|type> <0.2..3>` (times its normal walk
+and run, until it dies; enraged comes on top), `ls_creature tier <entity|all|type> <0..3>` (also the spawn key `tier`;
+health keeps its share). Not iuser4: the bots read `pev_iuser4 1` on ls_* entities as "bullets go through".
+
 **Fleeing.** A type's `flee_hp` (and the spawn key `flee_hp=0.3`, per creature, which also works on a live one through
 DispatchKeyValue) is the share of health below which it runs; `flee_hp=0` on a creature means it never runs, not even
 a passive one. `flee_home` (type key, default 1) sends it back toward where it spawned and it comes back into the fight
