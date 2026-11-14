@@ -13,6 +13,7 @@ mod community;
 mod consolehints;
 mod control;
 mod content;
+mod crashes; // MCP: crash tracking for the player's servers
 mod diagnostics;
 mod extras;
 mod game;
@@ -127,6 +128,8 @@ fn main() {
             // ready-made bot navigation for the maps this computer's game has (navpack.rs)
             navpack::start_loop();
             notify::watch(app.handle().clone(), state.clone());
+            // crash alerts to Discord, for servers that asked for them
+            crashes::watch();
             // Smarter chat's llama-server: only while it's on and a game is hosted here
             smartchat::watch(state.clone());
             // AI agents (MCP), if turned on in Settings

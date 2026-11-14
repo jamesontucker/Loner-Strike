@@ -26,6 +26,7 @@ import { DailyRestart, ServerExtras } from "./ServerExtras";
 import { TabLink } from "./goto";
 import { Sounds } from "./Sounds";
 import { Welcome } from "./Welcome";
+import { CrashBadge, CrashPanel } from "./CrashPanel"; // MCP: crash tracking
 
 // only servers that use it open this tab
 const Hltv = lazyPage(() => import("./Hltv").then((m) => ({ default: m.Hltv })));
@@ -302,6 +303,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
                 </p>
               </div>
               <StateTag s={s} />
+              {!s.shared && <CrashBadge id={s.id} />}
             </div>
             {s.error && <p className="err-text">{s.error}</p>}
             <UpdateNote s={s} busy={busy(`${s.id}:apply-updates`)} onUpdate={() => updateNow(s)} />
@@ -741,7 +743,7 @@ export function ServerPage(props: {
           <div>
             <h2 className="server-title">{s.name}{role && <> <span className={`tag role-${role}`}>{ROLE_NAME[role]}</span></>}</h2>
             <p className="muted">
-              {role ? `Shared with you · ${GAME[s.game]}${s.connect ? ` · ${s.connect}` : ""}` : `${s.host ? "Linux server" : "Dedicated server"} · ${GAME[s.game]} · ${s.host || s.public_address ? serverAddress(s) : `port ${s.port}`}`} <span style={{ whiteSpace: "nowrap" }}>· <StateTag s={s} inline /></span>
+              {role ? `Shared with you · ${GAME[s.game]}${s.connect ? ` · ${s.connect}` : ""}` : `${s.host ? "Linux server" : "Dedicated server"} · ${GAME[s.game]} · ${s.host || s.public_address ? serverAddress(s) : `port ${s.port}`}`} <span style={{ whiteSpace: "nowrap" }}>· <StateTag s={s} inline /></span>{!role && <> <CrashBadge id={s.id} inline /></>}
             </p>
           </div>
           <div className="row">
@@ -1222,6 +1224,7 @@ function HealthTab({ server, others, installed, act, rebuild, wipeRebuild, busy,
       <SectionHead title="Health" note="Keeping the server up to date, safe and backed up, and repairing it when something's wrong." />
       {(server.loner || !server.imported) && <Updates server={server} act={act} busy={busy} onChanged={onChanged} />}
       {server.host && <SecurityPanel key={server.id} server={server} />}
+      {!server.shared && <CrashPanel key={`crash-${server.id}`} server={server} />}
       {ON_THIS_COMPUTER && <BackupPanel server={server} others={others} onChanged={onChanged} />}
       <DailyRestart target={server.id} />
       {ON_THIS_COMPUTER ? (

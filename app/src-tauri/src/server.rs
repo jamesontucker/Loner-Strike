@@ -310,6 +310,7 @@ pub fn router(state: Shared, listener: Listener) -> Router {
         .merge(crate::admins::routes())
         .merge(crate::setup_api::routes())
         .merge(crate::servers::routes())
+        .merge(crate::crashes::routes()) // MCP: crash tracking
         .merge(crate::hltv::routes())
         .merge(crate::voice::routes())
         .merge(crate::webstatus::routes())

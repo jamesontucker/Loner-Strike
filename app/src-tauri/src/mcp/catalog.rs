@@ -212,6 +212,7 @@ pub fn specs() -> Vec<Spec> {
     .chain(super::editor_tools::specs())
     .chain(super::studio_tools::specs())
     .chain(super::selection_tools::specs())
+    .chain(super::server_tools::specs())
     .collect()
 }
 
@@ -764,7 +765,10 @@ async fn run(ctx: &Ctx, name: &str, a: &Value) -> Done {
                         Some(r) => r,
                         None => match super::selection_tools::run(ctx, name, a).await {
                             Some(r) => r,
-                            None => Err(err(format!("Unknown tool: {name}"))),
+                            None => match super::server_tools::run(ctx, name, a).await {
+                                Some(r) => r,
+                                None => Err(err(format!("Unknown tool: {name}"))),
+                            },
                         },
                     },
                 },

@@ -154,7 +154,7 @@ With changes on, any single console line goes and is logged, but `quit`, `exit`,
 `changelevel`, `restart`, `exec` and `sv_downloadurl` ask first. Never allowed: `;` chains,
 `rcon_password` and `rcon`.
 
-## Tools (169)
+## Tools (170)
 R = read (works with changes off). C = needs Allow changes (edits to the open map or draft are undoable).
 A = needs Allow changes and may ask the person.
 
@@ -175,7 +175,7 @@ A = needs Allow changes and may ask the person.
 | Nav fixer | `nav_open`, `nav_problems`, `nav_reach` (R); `nav_add_area`, `nav_link`, `nav_unlink`, `nav_edit`, `nav_undo`, `nav_redo` (C); `nav_save` (A) |
 | Callouts | `callouts_read`, `callouts_suggest` (R); `callouts_save` (A) |
 | Replay | `replay_list`, `replay_summary`, `replay_trace` (a bot's trace in a time window; `every` gives its path) (R) |
-| Servers and play | `servers_list`, `server_status` (R); `server_start`, `server_set_bots` (C); `server_stop`, `server_change_map` (A). Everything else (making and configuring servers, rotation, HLTV, admins, the web panel's controls, launching the game) goes through `app_call` |
+| Servers and play | `servers_list`, `server_status`, `server_crashes` (R: crashes newest first with the fault, stack and last lines, the 24-hour count, known-bad module warnings such as the official Ham Sandwich; Discord crash alerts are turned on in the app, and through `app_call` they ask); `server_start`, `server_set_bots` (C); `server_stop`, `server_change_map` (A). Everything else (making and configuring servers, rotation, HLTV, admins, the web panel's controls, launching the game) goes through `app_call` |
 | **Console and logs** | `console_send` (allowlist above), `console_log` (console / amxx / errors; `contains`, `prefixes`, `errors`; `cursor` to follow) |
 | **Bot brain** | `brain_settings`, `brain_trace_read`, `mode_status`, `creatures_list` (R); `brain_set` (typed switches: `bot_ls_trace`, `bot_ls_surf` 0/1/2, `bot_ls_fight`...), `brain_trace` (on/off plus `ls_mark` notes) (C) |
 | Recorder | `recording_status` (R), `recording_set` (C: pause or resume gm_simrec where it's loaded) |
@@ -298,7 +298,7 @@ Any other client: `http://127.0.0.1:<port>/mcp` (Streamable HTTP), with the head
    - Turn the setting off: it should fail to connect.
    - With the HTTP setup and a wrong token you should get 401, "Wrong or missing token…".
    - Restart Loner-Strike: the stdio setup should still connect, with no change to the config.
-2. **List tools.** In Claude Code, run `/mcp` and pick loner-strike. You should see 169 tools, 10 resources
+2. **List tools.** In Claude Code, run `/mcp` and pick loner-strike. You should see 170 tools, 10 resources
    and 5 prompts.
 3. **Read a map.** Ask: "Use loner-strike to tell me about de_dust2: its spawns, nav and whether bots know
    it". The agent should call `map_info`, `map_nav_summary` and `map_knowledge`. Settings > AI agents >

@@ -340,3 +340,34 @@ Not finished:
   (or `behave flee`) and compare flee distance with flee_home 1/0, then round 2 (ls_creature_flee_last 10 = no flee).
 - ReHLDS HL25 limits: evaluated, not done (see the Linux section above); waiting for a yes on the opt-in plan.
 - Sim/YF1 can be deleted after the flee test.
+
+## Requests from MCP (2026-11-14): crash tracking, the app side, and the data format
+I'm building the app side (the server page: "3 crashes in 24 h", a list with details and Copy, a warning for a known-bad
+module, an optional Discord post, and MCP `server_crashes`). Proposed format; tell me in docs/notes/MCP.md what you'd
+change before you write it, and I'll follow yours.
+- **Where:** `<game folder>/crashes/` on every server (cstrike/ or czero/ of the server's folder: the same relative
+  path on a Linux machine, a Windows PC and a Mac's CrossOver server). One file per crash, never rewritten:
+  `<UTC yyyymmdd-hhmmss>-<pid>.json`. Keep the newest 100 (delete older ones yourself; the app only reads).
+- **One crash:**
+  ```json
+  {"schema": "loner-strike/crash", "version": 1,
+   "time": "2026-11-14T06:12:03Z", "map": "de_dust2", "mode": "last_stand", "uptimeSec": 5400, "mapSec": 312,
+   "players": 4, "bots": 10,
+   "kind": "crash" | "hang" | "abort",          // hang: the watchdog saw no frames for 10 s
+   "fault": "SIGSEGV" | "0xc0000005", "address": "0x...", "module": "amxmodx_mm_i386.so", "offset": "0x21ebd",
+   "stack": ["amxmodx_mm_i386.so+0x21ebd CLangMngr::CLang::Clear", "..."],   // newest first, up to 64
+   "marks": ["1704.88 bot think end 2", "..."],                               // ls_crash.log's last marks, up to 50
+   "lastLines": ["L 11/14/2026 - 06:12:01: ...", "..."],                       // the console/log's last 40 lines
+   "atStop": false,                                // the server was being stopped (SIGTERM, quit): shown apart
+   "build": {"brain": "ls-next3 797048d", "amxx": "1.10.0.5467", "metamod": "1.3.0.149"},
+   "files": {"crashLog": "ls_crash.20261114-0612.log", "core": "core.1234"}}  // beside it, for the person
+  ```
+- **Module check** (written at each start): `<game folder>/crashes/modules.json`
+  `{"schema": "loner-strike/modules", "version": 1, "time": "...", "modules": [{"file": "addons/amxmodx/modules/hamsandwich_amxx_i386.so", "name": "hamsandwich", "sha256": "...", "version": "1.10.0.5467", "verdict": "ok" | "bad" | "unknown", "why": "plain sentence"}]}`.
+  The app also checks Ham Sandwich itself (the fixed one's hash against what's on the server), so this file is for
+  what only you can tell (other modules, versions).
+- **Until your files exist** the app reads what's there now: the fork's `ls_crash*.log` in the game folder (time,
+  exception, stack, last marks; 0xfff4fadc faults shown as "debugger attach or shutdown", not counted).
+- **Discord:** the app posts new crashes to the server's Discord status channel (the "live" webhook) while it runs.
+  For a Linux server it'd be better from the machine, so it works with the app closed: could the status service
+  (webstatus.py, `--discord-state`) watch `crashes/` and post? I can write that part if you prefer; say which.

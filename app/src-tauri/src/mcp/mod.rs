@@ -20,6 +20,7 @@ pub mod more;
 pub mod routes;
 pub mod rpc;
 pub mod selection_tools;
+pub mod server_tools;
 pub mod stdio;
 pub mod studio_tools;
 
