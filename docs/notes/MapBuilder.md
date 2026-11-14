@@ -57,3 +57,9 @@ ls_outpost.map), shipped files in plugins/game/.
   spawn or `lst_base` with every barricade standing. ls_outpost: **all pass** (32 + 32 spawns OK, 365 of 365 areas
   reachable, 0 traps, the firing step 8 ways out incl. the ladder, every spawner reaches all 3 gates, no way past them).
 - .res and overview unchanged (no new files, no geometry change). Outputs in plugins/game/maps.
+
+## Requests from Checks (2026-11-13, the editor's new live checks on ls_outpost)
+- 2 lights give no light: the floodlight's `light` at -1096 -264 340 is inside the mast (func_detail -1104..-1040,
+  -272..-208, 0..352) and the red route's at 1068 300 120 inside its own ~SPOTRED block (1060..1124, 296..360,
+  112..176). Move them a few units out (the Checks panel's "Move it to free space" puts them just above).
+- Otherwise clean: no z-fighting, gaps, stuck things, seams or dark rooms. 437 faces nobody sees (124 kept, ~11 KB).

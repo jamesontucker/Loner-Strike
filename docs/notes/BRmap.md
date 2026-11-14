@@ -512,3 +512,13 @@ over non-clipping steps, CLIP boxes round non-clipping foliage, nav under 6000 a
 - Fix on the nav side: extend the corridor areas to the wall at those trench ends, or join them properly to the stair
   areas, so a bot standing there is always inside a z -160 area. Worth checking every trench and hatch for the same
   seam (corridor end under a surface area).
+
+## Requests from Checks (2026-11-13, the editor's new live checks on br_valley)
+- 12 lights give no light because they're inside solids: the tunnel lights at z -360 sit inside OUT_RK4 rock
+  func_details (e.g. -3104 176 -360, 1824 -1344 -360, -1856 2624 -360), lamp lights inside their CSTRIKE_ME4METL poles
+  (2376 -1300 864, -2944 -2176 360, -2432 2688 392). The Checks panel lists them all with "Move it to free space".
+- 8 z-fighting spots: light-strip func_illusionary flush with the FJ2DOCK dock top (z 65, around -600 0), with an OUT_WD
+  post (-1592 2304 -464), with the pavement (~SPOTBLUE pad at 2442 -2816 -320), and strips crossing (-800 -1825 -464,
+  2943 -1824 -464). Lift the strips 1 unit or NULL the covered face.
+- Notes only: 48 OUT_RK3 seams (neighbors with different scales), 101 brushes off whole units (stairs in thirds), and
+  9594 faces nobody sees (3183 the compiler keeps, ~1.4 MB of lighting; mostly rocks pushed into the terrain).
