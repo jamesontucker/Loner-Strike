@@ -205,6 +205,8 @@ function saved(key: string, fallback: number) {
 }
 
 let checksTimer: ReturnType<typeof setTimeout> | null = null;
+let checksBusy = false; // Checks
+let checksAgain = false;
 let meshChain: Promise<void> = Promise.resolve();
 
 export const useEditor = create<EditorState>((set, get) => ({
@@ -331,10 +333,26 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   // checks follow edits, a moment after they settle
   refreshChecks: () => {
+    // Checks: debounced, one run at a time (another after it when edits came in meanwhile);
+    // a run that saw an older document answers `stale` and is dropped (the next run follows)
     if (checksTimer) clearTimeout(checksTimer);
     checksTimer = setTimeout(async () => {
-      const c = await api.getChecks();
-      if (!c.error) set({ checks: c });
+      if (checksBusy) {
+        checksAgain = true;
+        return;
+      }
+      checksBusy = true;
+      try {
+        const c = await api.getChecks();
+        if (!c.error && !c.stale) set({ checks: c });
+        if (c.stale) checksAgain = true;
+      } finally {
+        checksBusy = false;
+        if (checksAgain) {
+          checksAgain = false;
+          get().refreshChecks();
+        }
+      }
     }, 350);
   },
 

@@ -190,11 +190,13 @@ pub struct Editor {
     /// Texture pictures and lists, by WAD stamp.
     pngs: Mutex<HashMap<String, Arc<Vec<u8>>>>,
     lists: Mutex<HashMap<String, Arc<Value>>>,
+    /// Checks: the last answer, by (document, revision, scale limits)
+    checks_last: Mutex<Option<((u64, u64, u64, u64), Value)>>,
 }
 
 impl Editor {
     fn with_dir(dir: PathBuf) -> Editor {
-        Editor { session: Mutex::new(None), dir, next_id: AtomicU64::new(1), pngs: Mutex::default(), lists: Mutex::default() }
+        Editor { session: Mutex::new(None), dir, next_id: AtomicU64::new(1), pngs: Mutex::default(), lists: Mutex::default(), checks_last: Mutex::default() }
     }
     fn lock(&self) -> MutexGuard<'_, Option<Session>> {
         self.session.lock().unwrap_or_else(|e| e.into_inner())
@@ -420,24 +422,42 @@ fn meshes_bundle(s: &Session, doc_id: Option<u64>, since: Option<u64>) -> Vec<u8
     goldsrc::mesh::write_bundle(header, &[Section::f32("pos", 3, &pos), Section::f32("uv", 2, &uv)])
 }
 
-/// Checks: `opts` for the deeper checks (map name, scale limits, VIS data).
-fn checks_json(s: &mut Session, dirs: &[PathBuf], places: Option<&assets::Places>, opts: &checks::Options) -> Value {
-    let known: Option<HashSet<String>> = s.wads(dirs).map(|set| {
+/// Checks: what the checks need, taken under a brief lock so they run off it (on br_valley they
+/// take ~0.4 s; edits mustn't wait for them).
+struct CheckSnap {
+    id: u64,
+    revision: u64,
+    doc: MapDocument,
+    name: String,
+    wads: Option<Arc<wad::WadSet>>,
+    places: assets::Places,
+}
+
+impl CheckSnap {
+    fn take(s: &mut Session, st: &Shared, dirs: &[PathBuf]) -> CheckSnap {
+        CheckSnap { id: s.id, revision: s.doc.revision, doc: s.doc.clone(), name: s.name.clone(), wads: s.wads(dirs), places: assets::Places::of(st, s) }
+    }
+}
+
+/// Checks: every check on a snapshot, with `opts` for the deeper ones (map name, scale limits,
+/// VIS data). Runs without the editor's lock.
+fn checks_json(c: &CheckSnap, places: Option<&assets::Places>, opts: &checks::Options) -> Value {
+    let known: Option<HashSet<String>> = c.wads.as_ref().map(|set| {
         let mut k = HashSet::new();
         for w in set.wads.iter().filter_map(|(_, w)| w.as_ref().ok()) {
             k.extend(w.entries.iter().filter(|(n, _)| w.has_texture(n)).map(|(n, _)| n.clone()));
         }
         k
     });
-    let opts = checks::Options { map: if opts.map.is_empty() { s.name.clone() } else { opts.map.clone() }, ..opts.clone() };
-    let mut issues = checks::run_with(&s.doc, known.as_ref(), &opts);
+    let opts = checks::Options { map: if opts.map.is_empty() { c.name.clone() } else { opts.map.clone() }, ..opts.clone() };
+    let mut issues = checks::run_with(&c.doc, known.as_ref(), &opts);
     // P5: models, sprites, sounds and the sky the entities name
     if let Some(p) = places {
-        issues.extend(assets::issues(&assets::locate(assets::named_files(&s.doc), p), p.hl.is_some()));
+        issues.extend(assets::issues(&assets::locate(assets::named_files(&c.doc), p), p.hl.is_some()));
         // and what each mode the map is made for still needs (mode map kits)
-        issues.extend(kits::issues(&s.doc, &kits::cached()));
+        issues.extend(kits::issues(&c.doc, &kits::cached()));
     }
-    json!({"docId": s.id, "revision": s.doc.revision, "issues": issues, "stats": checks::stats(&s.doc), "texturesChecked": known.is_some()})
+    json!({"docId": c.id, "revision": c.revision, "issues": issues, "stats": checks::stats(&c.doc), "texturesChecked": known.is_some()})
 }
 
 // ---- commands -------------------------------------------------------------------------
@@ -1561,14 +1581,32 @@ async fn api_checks(State(st): State<Shared>, Extension(ed): Extension<Ed>, q: O
     let dirs = wad_dirs(&st);
     let q = q.map(|q| q.0).unwrap_or_default();
     blocking(move || {
-        let mut g = ed.lock();
-        let s = g.as_mut().ok_or(NO_DOC)?;
-        let places = assets::Places::of(&st, s); // P5
-        // Checks: the map's name, the scale limits and the last compile's VIS data
+        // Checks: a snapshot under a brief lock; the checks run without it
+        let snap = {
+            let mut g = ed.lock();
+            let s = g.as_mut().ok_or(NO_DOC)?;
+            CheckSnap::take(s, &st, &dirs)
+        };
         let d = checks::Options::default();
         let lim = |x: Option<f64>, def: f64| x.filter(|v| v.is_finite() && *v > 0.0 && *v <= 1024.0).unwrap_or(def);
-        let opts = checks::Options { map: s.name.clone(), min_scale: lim(q.min_scale, d.min_scale), max_scale: lim(q.max_scale, d.max_scale), vis: heavy::vis_for(&st, &s.name) };
-        Ok(checks_json(s, &dirs, Some(&places), &opts))
+        let (min_scale, max_scale) = (lim(q.min_scale, d.min_scale), lim(q.max_scale, d.max_scale));
+        // the same document and settings as last time: the same answer
+        let key = (snap.id, snap.revision, min_scale.to_bits(), max_scale.to_bits());
+        let last = &ed.checks_last;
+        if let Some((k, v)) = last.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            if *k == key {
+                return Ok(v.clone());
+            }
+        }
+        let opts = checks::Options { map: snap.name.clone(), min_scale, max_scale, vis: heavy::vis_for(&st, &snap.name) };
+        let v = checks_json(&snap, Some(&snap.places), &opts);
+        // the document changed while they ran: the answer is stale (the page asks again)
+        let now = ed.lock().as_ref().map(|s| (s.id, s.doc.revision));
+        if now != Some((snap.id, snap.revision)) {
+            return Ok(json!({"stale": true, "docId": snap.id, "revision": snap.revision}));
+        }
+        *last.lock().unwrap_or_else(|e| e.into_inner()) = Some((key, v.clone()));
+        Ok(v)
     })
     .await
 }
@@ -2271,6 +2309,55 @@ mod tests {
             assert_eq!(s, StatusCode::OK);
             goldsrc::mesh::read_bundle(&b)
         }
+    }
+
+    /// Checks: the checks run on a snapshot, without the editor's lock: an edit made while they
+    /// run on a big map goes through at once, the run that saw the old document answers
+    /// `stale`, and a fix from the last answer still applies by id after another edit.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn checks_run_off_the_lock() {
+        let t = T::new();
+        let mut d = starter_map();
+        for i in 0..60 {
+            for j in 0..60 {
+                let (x, y) = (-3000.0 + i as f64 * 96.0, -3000.0 + j as f64 * 96.0);
+                d.insert_brush(ops::make_box(v3(x, y, 300.0), v3(x + 64.0, y + 64.0, 300.0 + 16.0 + (i % 5) as f64 * 8.0), "CRATE"));
+            }
+        }
+        let mut sp = Entity::new("info_player_deathmatch");
+        sp.set("origin", "200 200 30"); // sunk 6 units into the starter floor
+        let spawn = d.insert_entity(sp);
+        t.ed.install(d, "de_offlock".into(), None, &[]);
+        let t2 = T { st: t.st.clone(), ed: t.ed.clone() };
+        let started = std::time::Instant::now();
+        let run = tokio::spawn(async move {
+            let v = t2.get("/api/tools/editor/checks").await;
+            (v, started.elapsed())
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        let t0 = std::time::Instant::now();
+        t.cmd(json!({"op": "add_box", "min": [0, 0, 400], "max": [64, 64, 464], "texture": "CRATE"})).await;
+        let edit = t0.elapsed();
+        let (v, checks) = run.await.unwrap();
+        assert!(checks > std::time::Duration::from_millis(400), "the checks were too quick to show anything: {checks:?}");
+        assert!(edit * 3 < checks, "the edit waited for the checks: edit {edit:?}, checks {checks:?}");
+        assert_eq!(v["stale"], true, "{v}");
+        // asked again: the current document, then the same answer from memory
+        let c = t.get("/api/tools/editor/checks").await;
+        assert!(c.get("stale").is_none());
+        let doc = t.get("/api/tools/editor/doc").await;
+        assert_eq!(c["revision"], doc["revision"]);
+        let t1 = std::time::Instant::now();
+        assert_eq!(t.get("/api/tools/editor/checks").await, c);
+        assert!(t1.elapsed() < std::time::Duration::from_millis(400));
+        // a fix from that answer, after another edit: still applied by id
+        let stuck = c["issues"].as_array().unwrap().iter().find(|i| i["code"] == "stuck-in-solid" && i["entity"] == spawn.0).cloned().expect("stuck spawn");
+        t.cmd(json!({"op": "add_box", "min": [512, 0, 400], "max": [576, 64, 464], "texture": "CRATE"})).await;
+        let r = t.cmd(json!({"op": "fix", "fixes": [{"fix": stuck["fix"], "entity": spawn.0, "fixData": stuck["fixData"]}]})).await;
+        assert!(r.get("error").is_none(), "{r}");
+        let doc = t.get("/api/tools/editor/doc").await;
+        let e = doc["entities"].as_array().unwrap().iter().find(|e| e["id"] == spawn.0).unwrap();
+        assert!(e["keys"].as_array().unwrap().iter().any(|kv| kv[0] == "origin" && kv[1] == "200 200 36"), "{e}");
     }
 
     /// For trying the page without the app: serves only the editor routes on 127.0.0.1:8027

@@ -52,3 +52,11 @@ scale limits.
   `FIX_LABEL` in Panels.tsx are unused now: please delete them when you next commit Panels.tsx (I left your file alone).
   Also `assets.rs` builds its Issue with `..checks::issue(..)` now (Issue grew fields), and `budget::work_dirs` is
   `pub(super)` (heavy.rs reads the compiled .bsp from there).
+
+## 2026-11-13 — the checks run off the editor's lock
+`GET checks` takes a snapshot under a brief lock (a clone of the document, the cached WAD set, the asset places),
+runs every check without the lock, and answers `{"stale": true}` when the document changed meanwhile (the page drops
+it and asks again). The last answer is kept per editor by (document, revision, scale limits), so asking again for the
+same document is instant. The page debounces (350 ms) and runs one check at a time (another after it when edits
+came in). Fixes apply to the current document by id, as before. Test: `checks_run_off_the_lock` (an edit made while
+the checks run on a 3600-box map goes through at once; the run answers stale; a fix still applies after another edit).

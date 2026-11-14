@@ -49,7 +49,7 @@ export type Issue = {
   fixData?: FixData;
   moreFixes?: MoreFix[];
 };
-export type Checks = { docId: number; revision: number; issues: Issue[]; stats: Stats; texturesChecked: boolean };
+export type Checks = { docId: number; revision: number; issues: Issue[]; stats: Stats; texturesChecked: boolean; /** Checks: the document changed while they ran (asked again) */ stale?: boolean };
 
 export type WadTextures = { name: string; found: boolean; error?: string; textures: { name: string; width: number; height: number }[] };
 
