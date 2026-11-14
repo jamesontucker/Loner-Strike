@@ -394,9 +394,9 @@ stock lsd_flush()
 // (the reader sees it shrink and reads from the top: a "reset")
 #define LSD_CAP 8000000
 #define LSD_HARD 32000000
-// each node writes at most this many runs a quarter second; the rest are counted, and the
-// next run written carries the count ("skipped"), so totals stay right
-#define LSD_PER 8
+// each node writes at most this many runs a half second (4 a second: plenty to watch it); the
+// rest are counted, and the next run written carries the count ("skipped"), so totals stay right
+#define LSD_PER 2
 new bool:g_lsdAway, g_lsdRead = -1
 new Float:g_lsdWin[LSD_N], g_lsdWinN[LSD_N], g_lsdSkipped[LSD_N], bool:g_lsdMute[LSD_N]
 
@@ -430,7 +430,9 @@ stock lsd_rotate()
 }
 
 // Is node n's run to be written? (its inputs are only worked out into JSON when it is)
-stock bool:lsd_want(n)
+// `run`: false for a note that isn't a run (a Timeline's progress): it shares the budget but
+// doesn't count as a skipped run
+stock bool:lsd_want(n, bool:run = true)
 {
 	if (g_lsdBp[n])
 	{
@@ -439,19 +441,21 @@ stock bool:lsd_want(n)
 	}
 	if (g_lsdAway)
 	{
-		g_lsdSkipped[n]++
+		if (run)
+			g_lsdSkipped[n]++
 		g_lsdMute[n] = true
 		return false
 	}
 	new Float:now = get_gametime()
-	if (now - g_lsdWin[n] >= 0.25)
+	if (now - g_lsdWin[n] >= 0.5)
 	{
 		g_lsdWin[n] = now
 		g_lsdWinN[n] = 0
 	}
 	if (++g_lsdWinN[n] > LSD_PER)
 	{
-		g_lsdSkipped[n]++
+		if (run)
+			g_lsdSkipped[n]++
 		g_lsdMute[n] = true
 		return false
 	}
@@ -651,6 +655,13 @@ stock bool:lsd_enter(n, const ctx[])
 stock lsd_exit(n, const result[])
 {
 	if (!g_lsdMute[n])
+		lsd_emitf("^"e^":^"node_exit^",^"node^":^"%s^",^"result^":^"%s^"", g_lsdIds[n], result)
+}
+
+// a note that's always written while someone watches (a Timeline's Finished)
+stock lsd_note(n, const result[])
+{
+	if (!g_lsdAway)
 		lsd_emitf("^"e^":^"node_exit^",^"node^":^"%s^",^"result^":^"%s^"", g_lsdIds[n], result)
 }
 
@@ -5306,7 +5317,9 @@ public lsg_tl84_tick(task)
 	c[19] = lsg_vec(lsg_tl84_v1_0(t), lsg_tl84_v1_1(t), lsg_tl84_v1_2(t))
 	c[20] = lsg_vec(lsg_tl84_v2_0(t), lsg_tl84_v2_1(t), lsg_tl84_v2_2(t))
 	static Float:dbg[33]
-	if (done || get_gametime() - dbg[inst] >= 0.25)
+	if (done)
+		lsd_note(84, fmt("%.2f of 4.00 s, %s; Lift: %.2f; Position: %.0f %.0f %.0f; Glow: %.0f %.0f %.0f", t, dir > 0 ? "forward" : "backward", lsg_tl84_v0(t), lsg_tl84_v1_0(t), lsg_tl84_v1_1(t), lsg_tl84_v1_2(t), lsg_tl84_v2_0(t), lsg_tl84_v2_1(t), lsg_tl84_v2_2(t)))
+	else if (get_gametime() - dbg[inst] >= 0.25 && lsd_want(84, false))
 	{
 		dbg[inst] = get_gametime()
 		lsd_exit(84, fmt("%.2f of 4.00 s, %s; Lift: %.2f; Position: %.0f %.0f %.0f; Glow: %.0f %.0f %.0f", t, dir > 0 ? "forward" : "backward", lsg_tl84_v0(t), lsg_tl84_v1_0(t), lsg_tl84_v1_1(t), lsg_tl84_v1_2(t), lsg_tl84_v2_0(t), lsg_tl84_v2_1(t), lsg_tl84_v2_2(t)))

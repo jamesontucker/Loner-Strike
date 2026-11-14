@@ -171,9 +171,9 @@ stock lsd_flush()
 // (the reader sees it shrink and reads from the top: a "reset")
 #define LSD_CAP 8000000
 #define LSD_HARD 32000000
-// each node writes at most this many runs a quarter second; the rest are counted, and the
-// next run written carries the count ("skipped"), so totals stay right
-#define LSD_PER 8
+// each node writes at most this many runs a half second (4 a second: plenty to watch it); the
+// rest are counted, and the next run written carries the count ("skipped"), so totals stay right
+#define LSD_PER 2
 new bool:g_lsdAway, g_lsdRead = -1
 new Float:g_lsdWin[LSD_N], g_lsdWinN[LSD_N], g_lsdSkipped[LSD_N], bool:g_lsdMute[LSD_N]
 
@@ -207,7 +207,9 @@ stock lsd_rotate()
 }
 
 // Is node n's run to be written? (its inputs are only worked out into JSON when it is)
-stock bool:lsd_want(n)
+// `run`: false for a note that isn't a run (a Timeline's progress): it shares the budget but
+// doesn't count as a skipped run
+stock bool:lsd_want(n, bool:run = true)
 {
 	if (g_lsdBp[n])
 	{
@@ -216,19 +218,21 @@ stock bool:lsd_want(n)
 	}
 	if (g_lsdAway)
 	{
-		g_lsdSkipped[n]++
+		if (run)
+			g_lsdSkipped[n]++
 		g_lsdMute[n] = true
 		return false
 	}
 	new Float:now = get_gametime()
-	if (now - g_lsdWin[n] >= 0.25)
+	if (now - g_lsdWin[n] >= 0.5)
 	{
 		g_lsdWin[n] = now
 		g_lsdWinN[n] = 0
 	}
 	if (++g_lsdWinN[n] > LSD_PER)
 	{
-		g_lsdSkipped[n]++
+		if (run)
+			g_lsdSkipped[n]++
 		g_lsdMute[n] = true
 		return false
 	}
@@ -428,6 +432,13 @@ stock bool:lsd_enter(n, const ctx[])
 stock lsd_exit(n, const result[])
 {
 	if (!g_lsdMute[n])
+		lsd_emitf("^"e^":^"node_exit^",^"node^":^"%s^",^"result^":^"%s^"", g_lsdIds[n], result)
+}
+
+// a note that's always written while someone watches (a Timeline's Finished)
+stock lsd_note(n, const result[])
+{
+	if (!g_lsdAway)
 		lsd_emitf("^"e^":^"node_exit^",^"node^":^"%s^",^"result^":^"%s^"", g_lsdIds[n], result)
 }
 

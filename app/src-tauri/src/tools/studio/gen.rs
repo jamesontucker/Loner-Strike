@@ -3421,7 +3421,9 @@ stock lsg_tl{i}_stop(inst)\n{{\n\tg_lsgTlOn{i}[inst] = false\n\tremove_task(LSG_
             }
         }
         let fmt = fmt.replace("{len_s}", &format!("{:.2}", tl.play_length()));
-        o.push_str(&format!("\tstatic Float:dbg[33]\n\tif (done || get_gametime() - dbg[inst] >= 0.25)\n\t{{\n\t\tdbg[inst] = get_gametime()\n\t\tlsd_exit({i}, fmt({}, {args}))\n\t}}\n", pawn_str(&fmt)));
+        // (Finished always; on the way at most 4 times a second a copy, within the node's share of
+        // the events file like every node's runs: StudioPerfAudit #5)
+        o.push_str(&format!("\tstatic Float:dbg[33]\n\tif (done)\n\t\tlsd_note({i}, fmt({f}, {args}))\n\telse if (get_gametime() - dbg[inst] >= 0.25 && lsd_want({i}, false))\n\t{{\n\t\tdbg[inst] = get_gametime()\n\t\tlsd_exit({i}, fmt({f}, {args}))\n\t}}\n", f = pawn_str(&fmt)));
     }
     o.push_str(&format!("\tif (done)\n\t{{\n\t\tlsg_tl{i}_stop(inst)\n"));
     if let Some(call) = next("finished") {
