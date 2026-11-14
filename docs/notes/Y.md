@@ -474,3 +474,24 @@ A copy of prod on 127.0.0.1:27016, Last Stand on ls_outpost with today's gm_last
   (`scripts/fork-release.sh rehlds 3.15.0.896-ls8` from this green build) and pin its URL + sha256 in
   setup/foundation.rs (REHLDS); the app installs it on setup / its engine update (Linux servers too).
 - Rotate the RCON password before going live (it was in logs before today).
+
+## QA4-F: relocalizebugfix (F4) and crash tracking (F1, F2, F3, F9), Nov 14
+- **relocalizebugfix never loaded on our ReHLDS**, not an ls8 regression: v2.8 is built with ReHLDS API major 2;
+  ls6, ls7, ls8 and upstream ReHLDS are all major 3 (since 2016), so `meta list` showed it as "fail" on every
+  server, prod included (prod's ls6 days too). Its RehldsApi_Init is only that check; its job is turning '#' and
+  '%' in say/say_team into fullwidth signs. Instead of a rebuilt fork: the brain does it (a chat message starting
+  with '#' starts with U+FF03, 3828a97 + 3ee2710 on ls-creatures, merged to ls-next3; '%' in chat and '%'/'#' in names were
+  already handled) and the app stops installing relocalizebugfix and takes its line out of Metamod's plugins.ini
+  (local: install_engine; Linux: SETUP_SH foundation step). No ls9 needed: the engine didn't change.
+  (A first try changed every '#' in chat: the CI demo test caught it as a byte change in a recorded say; a '#' that
+  isn't first isn't looked up by the game anyway.)
+- Prod: plugins.ini backed up (`plugins.ini.pre-f4-20261114`), the line removed, restarted: `meta list` 7 plugins,
+  7 running; `amxx modules` 8 correct. ReAPI isn't loaded on prod (no plugin requires it, it's not in modules.ini).
+- Sim YF4 (A's clone, ls8, the app's engine install with an old relocalizebugfix line: line and folder gone):
+  `meta list` all RUN; with `reapi` in modules.ini, ReAPI 5.29.0.359 RUN (API 3 is what it's built for);
+  `say #Cstrike_TitlesTXT_...` from a bot went out as `＃Cstrike_...`.
+- Crash log (brain 2c587cd): each entry has `unix time: <s>` and `map: <name>`; on Windows one fault is written once
+  (the unhandled filter wrote the vectored handler's entry again). App (crashes.rs): one crash per entry, ids
+  `<file stem>@<time>`, module from `where:`, map; local servers link a Discord webhook on Health › Crashes
+  (POST /api/servers/:id/crashes/discord). Two forced crashes on YF4 (de_dust2, de_inferno) read as 2 crashes,
+  fakemeta_amxx.dll, with their maps.

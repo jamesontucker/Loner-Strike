@@ -106,3 +106,6 @@ Sim copy used: Sim/PCX (port 27400), stopped. Scratch compile dir: drive_c/Loner
   or unknown Ham Sandwich (modules.json). Prod gets unit 8 at the app's next start of it.
 - The "double free on stop" I noted earlier came from test copies of this same server, so it was most likely the same
   corruption (official module) showing at exit; not re-checked separately with the fixed module.
+
+- Nov 14 (QA4-F F4): relocalizebugfix line taken out of addons/metamod/plugins.ini (backup plugins.ini.pre-f4-20261114);
+  it never loaded on ReHLDS API 3. Restarted: meta list 7/7 RUN. See Y.md.
