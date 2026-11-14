@@ -10,7 +10,7 @@ StateDirectory=lonerstrike-list
 # service's user). Optional: without it the community part still answers, without moderation.
 EnvironmentFile=-/etc/lonerstrike-list/community.env
 # moderation (the admin API) answers only on this machine; add --admin-remote to open it through the tunnel
-ExecStart=/usr/bin/python3 /opt/lonerstrike-list/serverlist.py --listen 8100 --state %S/lonerstrike-list/list.json --community-db %S/lonerstrike-list/community.db
+ExecStart=/usr/bin/python3 /opt/lonerstrike-list/serverlist.py --listen 8100 --state %S/lonerstrike-list/list.json --community-db %S/lonerstrike-list/community.db --roles-db %S/lonerstrike-list/roles.db
 Restart=always
 RestartSec=5
 NoNewPrivileges=yes

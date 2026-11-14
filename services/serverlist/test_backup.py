@@ -42,6 +42,22 @@ class Backup(unittest.TestCase):
         self.assertEqual(copy.execute("SELECT count(*) FROM t").fetchone()[0], 2)
         copy.close()
 
+    def test_the_roles_database_too(self):
+        r = sqlite3.connect(os.path.join(self.d, "roles.db"))
+        r.execute("CREATE TABLE links (steamid TEXT)")
+        r.execute("INSERT INTO links VALUES ('STEAM_0:1:1')")
+        r.commit()
+        out = os.path.join(self.d, "backups")
+        os.makedirs(out, exist_ok=True)
+        open(os.path.join(out, "roles-2026-10-01.db"), "w").close()
+        made, removed = backup.backup(self.d, today=datetime.date(2026, 11, 13))
+        self.assertIn("roles-2026-11-13.db", [os.path.basename(p) for p in made])
+        self.assertIn("roles-2026-10-01.db", removed)
+        copy = sqlite3.connect(os.path.join(out, "roles-2026-11-13.db"))
+        self.assertEqual(copy.execute("SELECT steamid FROM links").fetchone()[0], "STEAM_0:1:1")
+        copy.close()
+        r.close()
+
     def test_nothing_yet(self):
         empty = tempfile.mkdtemp()
         self.assertEqual(backup.backup(empty), ([], []))

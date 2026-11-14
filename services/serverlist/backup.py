@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Daily backup of the community database (and the server list), run by lonerstrike-list-backup.timer.
+"""Daily backup of the community and roles databases (and the server list), run by lonerstrike-list-backup.timer.
 
 Takes a consistent copy while the service is running (SQLite's backup API, not a file copy that can
 catch a write half done), checks the copy opens and passes SQLite's integrity check, and keeps the
@@ -18,13 +18,16 @@ KEEP_DAYS = 14
 
 def backup(state_dir, keep_days=KEEP_DAYS, today=None):
     today = today or datetime.date.today()
-    db = os.path.join(state_dir, "community.db")
     out = os.path.join(state_dir, "backups")
     os.makedirs(out, mode=0o700, exist_ok=True)
     stamp = today.isoformat()
     made = []
-    if os.path.exists(db):
-        dest = os.path.join(out, f"community-{stamp}.db")
+    # the community database and the roles database (links, supporters, server moderators)
+    for name in ("community", "roles"):
+        db = os.path.join(state_dir, f"{name}.db")
+        if not os.path.exists(db):
+            continue
+        dest = os.path.join(out, f"{name}-{stamp}.db")
         tmp = dest + ".part"
         if os.path.exists(tmp):
             os.remove(tmp)
@@ -38,7 +41,7 @@ def backup(state_dir, keep_days=KEEP_DAYS, today=None):
             src.close()
         if ok != "ok":
             os.remove(tmp)
-            raise SystemExit(f"The backup copy failed SQLite's integrity check: {ok}")
+            raise SystemExit(f"The backup copy of {name}.db failed SQLite's integrity check: {ok}")
         os.chmod(tmp, 0o600)
         os.replace(tmp, dest)
         made.append(dest)
@@ -51,7 +54,7 @@ def backup(state_dir, keep_days=KEEP_DAYS, today=None):
     cutoff = today - datetime.timedelta(days=keep_days)
     removed = []
     for name in sorted(os.listdir(out)):
-        for prefix, suffix in (("community-", ".db"), ("list-", ".json")):
+        for prefix, suffix in (("community-", ".db"), ("roles-", ".db"), ("list-", ".json")):
             if name.startswith(prefix) and name.endswith(suffix):
                 try:
                     day = datetime.date.fromisoformat(name[len(prefix):-len(suffix)])
