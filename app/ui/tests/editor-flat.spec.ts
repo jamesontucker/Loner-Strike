@@ -5,7 +5,9 @@
 // (npm run test:tools -- tests/editor-flat.spec.ts; WebKit: -c tests/webkit.config.ts after adding it there).
 import { expect, test, type Page } from "@playwright/test";
 
-test.use({ screenshot: "only-on-failure" });
+// (pixel drags on the panes: at the "small" project's 1024x680 the Content dock leaves 2D panes about
+// 120 px tall, too small for these gestures; layouts at that size are covered by editor-batch/tools)
+test.use({ screenshot: "only-on-failure", viewport: { width: 1440, height: 900 } });
 
 const api = (page: Page, path: string, body?: unknown) =>
   page.evaluate(
