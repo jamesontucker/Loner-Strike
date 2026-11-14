@@ -1243,7 +1243,7 @@ public task_change(const map[])
 
 // Votable modes when neither votemodes.ini exists (zp5 shows as "Zombie Plague")
 new const DEFAULT_VOTE_MODES[][] = { "classic", "csdm", "csdm_ffa", "gungame", "gungame_team", "deathrun", "basebuilder",
-	"soccerjam", "zp5", "scoutz", "war3", "hns", "paintball", "shero" }
+	"soccerjam", "zp5", "scoutz", "war3", "hns", "paintball", "shero", "br", "br_duo", "br_squads" }
 
 new g_Phase                   // 1: voting on modes, 2: voting on a map for a mode
 
