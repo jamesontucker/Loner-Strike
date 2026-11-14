@@ -1111,3 +1111,12 @@ loosely; the direction matches W2's table (careful bots turn a risky goal down a
 **Someone's uncommitted work is in gen.rs and graph.rs** (Timeline watch values in the debugger, a Timeline cost
 warning, tests): I left those hunks and every_node_3's snapshots out of my commit. Whoever it is: commit them with
 `UPDATE_SNAPSHOTS=1` (every_node_3 changes with them).
+- **X2 (2026-11-13): Timeline leftovers.** (1) Cost hint: committed (graph.rs `cost_warnings`, "timeline", test
+  `timeline_cost_counts_copies_and_ticks`). (2) Debugger values: **in your working gen.rs, uncommitted** (you have
+  a lsg_bot_follow move in flight there): `timeline_code` in debug builds emits a node_exit for the Timeline node at
+  most 4 times a second and at the end: "1.24 of 3.00 s, forward; Height: 41.66; Spot: 124 0 24" (the node shows it
+  as Last:). Please take it with your next gen.rs commit and `UPDATE_SNAPSHOTS=1` (every_node_3.debug.sma changes).
+  Sim (LSPLAY copy, de_dust2, 6 bots, debug build): the values came through as above; Beat fired at 1.5 s, Finished
+  with Height 100. **A finding for you:** on the CrossOver sim the tick task ran about every 0.1 s, not 0.05, and the
+  playhead advances by `tick` per call, so a 3 s Timeline took about 6 s of game time. Advancing by the real time
+  since the last call (get_gametime delta, clamped) would keep Timelines on time on a slow server.
