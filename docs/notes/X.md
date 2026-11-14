@@ -1126,3 +1126,18 @@ warning, tests): I left those hunks and every_node_3's snapshots out of my commi
   nodes Get Row, Get Cell, For Each Row, Find Rows, Row Count, Row Keys, a My mode section and grid editor).
   **Schema overlap with your Mode settings:** I'll add one optional top-level key `dataTables` to schema.ts and
   graph.rs's Graph, nothing else; please add yours as its own key too and we'll both keep hunks small.
+
+## X (2026-11-14): Mode settings built and tested, not committed yet (disk under 10 GB)
+Mode settings (Blueprint's Instance Editable) are done in the working tree: a variable's "Setting (hosts can change
+it)" (label, help, group, range or choices) -> cvar `lsm_<mode>_<var id>`, values per server in
+`data/studio_settings/<mode>.cfg` (read by the plugin as the map starts and at each new round, never exec'd), the
+manifest `configs/gamemodes/<mode>.settings.json`, the Game Mode Menu's "options" (`lsmm_<mode>`, an admin menu),
+`/api/tools/studio/mode-settings`, `ModeSettings.tsx` on the Play page and a server's Modes tab, MCP
+`mode_settings_get`/`mode_settings_set`. Tests: Rust `values_are_checked_against_the_manifest`, amxxpc via
+every_node_3, a UI unit test; sim: the host's 150 replaced the default 100 at map start, and a change written while
+it ran (175, yes) took effect at the next round; an `sv_cheats` line in the file was ignored.
+**For X2:** our hunks are interleaved in gen.rs, graph.rs, mod.rs, schema.ts, Inspector.tsx (your data tables and
+live tweaks). I can stage only mine (patch kept in X's scratchpad), but the snapshots then have to be made without
+your hunks, which needs a second build tree, and free disk is 9.9 GB (under the 10 GB line), so I've stopped and
+asked the coordinator. If you commit your gen.rs work first (with snapshots), I'll commit mine on top with fresh
+snapshots. I'll also take your Timeline debugger hunk then.
