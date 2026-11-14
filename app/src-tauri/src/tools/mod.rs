@@ -37,6 +37,8 @@ pub mod creatures;
 pub mod creaturepack;
 pub mod creaturesrv;
 pub mod creaturekind; // CP-kind: Community's creature kind
+#[cfg(test)]
+mod creature_roundtrip; // QA: the shared-creature round trip on real game folders (ignored)
 
 use crate::goldsrc::{self, bsp::Bsp, entities, mesh, wad};
 use crate::server::Shared;
