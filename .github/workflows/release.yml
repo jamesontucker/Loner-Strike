@@ -275,5 +275,4 @@ jobs:
             app/src-tauri/target/**/bundle/dmg/*.dmg
             app/src-tauri/target/**/bundle/macos/*.app.tar.gz
             app/src-tauri/target/**/bundle/nsis/*.exe
-            app/src-tauri/target/**/bundle/msi/*.msi
           if-no-files-found: warn

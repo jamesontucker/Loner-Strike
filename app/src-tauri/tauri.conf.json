@@ -27,8 +27,7 @@
     "targets": [
       "app",
       "dmg",
-      "nsis",
-      "msi"
+      "nsis"
     ],
     "category": "Game",
     "shortDescription": "Solo Counter-Strike with bots that play like people.",

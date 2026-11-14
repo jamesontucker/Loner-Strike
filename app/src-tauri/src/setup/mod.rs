@@ -530,8 +530,40 @@ fn menu_contents(rec: &Record, catalog: &[Value]) -> (BTreeSet<String>, BTreeSet
 }
 
 /// Runs a step, marking it running then done (or failed: the error stops the job).
+/// Setup is changing a game players start themselves (not a dedicated server): every step
+/// checks first that the game isn't running (it can be started during the downloads).
+static WATCH_GAME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// What a step says while it waits for the game to close.
+pub const WAIT_FOR_GAME: &str = "Close Counter-Strike to continue. Setup goes on by itself once it's closed.";
+/// When it's still open after the wait.
+pub const STILL_OPEN: &str = "Counter-Strike is still open. Close it, then click Retry: setup can't change the game's files while it's running.";
+
+/// Waits (pausing, with a plain note) while the game runs: Ok once it's closed, Err after `tries` looks.
+pub fn wait_for_closed_game(running: impl Fn() -> bool, note: impl Fn(&str), pause: impl Fn(), tries: usize) -> Result<(), String> {
+    if !running() {
+        return Ok(());
+    }
+    note(WAIT_FOR_GAME);
+    for _ in 0..tries {
+        pause();
+        if !running() {
+            note("");
+            return Ok(());
+        }
+    }
+    Err(STILL_OPEN.into())
+}
+
 fn run_step<T>(job: &Job, id: &str, f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
     job.start(id);
+    if WATCH_GAME.load(std::sync::atomic::Ordering::Relaxed) {
+        // (15 minutes at most, a look every 2 s)
+        if let Err(e) = wait_for_closed_game(crate::sys::game_running, |t| job.detail(t), || std::thread::sleep(std::time::Duration::from_secs(2)), 450) {
+            job.fail(&e);
+            return Err(e);
+        }
+    }
     let r = f();
     match &r {
         Ok(_) => job.finish(id, None),
@@ -895,10 +927,35 @@ impl InstallPlan {
 /// Runs an install plan as part of a bigger job (no complete() at the end).
 pub fn install_into(job: &Job, plan: &InstallPlan, res: &Path, store: Option<Arc<MapStore>>) -> Result<(), String> {
     let ctx = Ctx { install: &plan.install, res, progress: job, store };
-    for g in &plan.games {
-        install_game(job, plan, &ctx, g)?;
+    WATCH_GAME.store(!plan.install.dedicated && !cfg!(test), std::sync::atomic::Ordering::Relaxed);
+    let r = (|| {
+        for g in &plan.games {
+            install_game(job, plan, &ctx, g)?;
+        }
+        Ok(())
+    })();
+    WATCH_GAME.store(false, std::sync::atomic::Ordering::Relaxed);
+    r
+}
+
+#[cfg(test)]
+mod wait_tests {
+    use super::*;
+    use std::cell::{Cell, RefCell};
+
+    #[test]
+    fn setup_pauses_while_the_game_runs() {
+        // closed: goes straight on
+        assert!(wait_for_closed_game(|| false, |_| panic!("no note"), || panic!("no pause"), 5).is_ok());
+        // closed after three looks: the note, then on
+        let looks = Cell::new(0);
+        let notes = RefCell::new(vec![]);
+        let r = wait_for_closed_game(|| { looks.set(looks.get() + 1); looks.get() < 4 }, |t| notes.borrow_mut().push(t.to_string()), || {}, 10);
+        assert!(r.is_ok());
+        assert_eq!(notes.borrow().first().map(String::as_str), Some(WAIT_FOR_GAME));
+        // never closed: the plain message with Retry
+        assert_eq!(wait_for_closed_game(|| true, |_| {}, || {}, 3).unwrap_err(), STILL_OPEN);
     }
-    Ok(())
 }
 
 // ---- test helpers ------------------------------------------------------------------------

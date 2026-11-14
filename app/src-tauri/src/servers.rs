@@ -2293,7 +2293,8 @@ fn spawn(e: &Entry) -> Result<Child, String> {
     // not tied to the app: whether servers stop with it is decided when it quits
     // (main.rs), so turning "Keep servers running" on also keeps the ones already going.
     // Its pid is kept, so one the app lost track of (a crash) can still be ended.
-    let _ = std::fs::write(pid_file(e), child.id().to_string());
+    // (with its start time: a pid alone can belong to another program after a while, procmatch.rs)
+    let _ = std::fs::write(pid_file(e), crate::procmatch::pid_file_text(child.id()));
     Ok(child)
 }
 
@@ -2308,29 +2309,12 @@ fn end_leftover(e: &Entry) {
     let file = pid_file(e);
     let Ok(text) = std::fs::read_to_string(&file) else { return };
     let _ = std::fs::remove_file(&file);
-    #[cfg(unix)]
-    if let Ok(pid) = text.trim().parse::<i32>() {
-        let mut c = sys::command("ps");
-        c.args(["-p", &pid.to_string(), "-o", "command="]);
-        if let Some((_, out, _)) = sys::run_output(c, Duration::from_secs(3)) {
-            // CrossOver's wine is given the server's Windows path (C:\...\hlds.exe)
-            let win = windows_path(&e.hlds());
-            if out.contains(&*e.dir.to_string_lossy()) || win.is_some_and(|w| !w.is_empty() && out.contains(&w)) {
-                unsafe { libc::kill(pid, libc::SIGKILL) };
-            }
-        }
-    }
-    #[cfg(windows)]
-    if let Ok(pid) = text.trim().parse::<u32>() {
-        let mut c = sys::command("tasklist");
-        c.args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"]);
-        if let Some((_, out, _)) = sys::run_output(c, Duration::from_secs(3)) {
-            if out.to_lowercase().contains("hlds.exe") {
-                let mut k = sys::command("taskkill");
-                k.args(["/PID", &pid.to_string(), "/F"]);
-                let _ = sys::run_output(k, Duration::from_secs(5));
-            }
-        }
+    // only the very program the app started: the pid, its executable and its start time
+    // (Windows reuses pids quickly; another server or program may have this one now)
+    if let Some((pid, started)) = crate::procmatch::parse_pid_file(&text) {
+        // (CrossOver's wine is given the server's Windows path, C:\...\hlds.exe)
+        let win = windows_path(&e.hlds());
+        crate::procmatch::end_if_ours(pid, started, &e.hlds(), win.as_deref());
     }
 }
 
@@ -2445,6 +2429,11 @@ pub fn start(id: &str) -> Result<(), String> {
     crate::hamguard::before_start(&e.dir.join(&e.game), &format!("starting {}", e.name));
     if let Some(other) = load().iter().find(|o| o.id != e.id && o.port == e.port && with_runs(|r| r.procs.contains_key(&o.id))) {
         return Err(format!("\"{}\" is using port {} already. Stop it first, or change this server's port.", other.name, e.port));
+    }
+    // another program on this computer (or a server the app doesn't know): Windows' hlds would
+    // quietly take the next port, and the app couldn't reach it (procmatch.rs / sys.rs)
+    if !sys::udp_port_free(e.bind_ip().as_deref(), e.port) {
+        return Err(format!("Port {} is in use by another program on this computer. Close it, or change this server's port.", e.port));
     }
     let child = spawn(&e)?;
     with_runs(|r| {

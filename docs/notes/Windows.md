@@ -20,37 +20,31 @@ Studio, and installer leftovers. Fixed items have tests that run on any OS. What
 | 9 | ui windowsGuards.ts (main.tsx) | WebView2 acts like a browser: unhandled F5/Ctrl+R reload the app (in the editor's fly mode, in text fields, Plugin Studio, Spray), Ctrl+P prints, Ctrl+F/F3 find bar, F7 caret browsing; a file dropped from Explorer replaces the app; right-click shows Back/Refresh/Print | Guards that run last: such keys, outside-file drops and the browser menu (except in text and selections) are stopped when nothing in the app handled them | scripts/test-windows.mjs |
 | 10 | Play.tsx | (from the Ham work) the note is shown | quiet toast | — |
 
+## Fixed, round 2 (2026-11-14)
+The Windows-only code (procmatch's Win32 calls, SetErrorMode) was type-checked against the x86_64-pc-windows-msvc
+target in a scratch crate (the app itself can't be checked for Windows on a Mac: ring's C build).
+| # | Where | What went wrong on Windows | Fix | Test |
+|---|---|---|---|---|
+| 11 | sys.rs `quiet_crash_dialogs`, main.rs | A crashed hlds.exe sat behind "has stopped working" until clicked (the watcher killed it after 120 + 90 s) | `SetErrorMode(SEM_FAILCRITICALERRORS \| SEM_NOGPFAULTERRORBOX \| SEM_NOOPENFILEERRORBOX)` at app start; every child inherits it (no launch uses CREATE_DEFAULT_ERROR_MODE). Valve's own fatal MessageBox still shows | Windows PC (QA4 H) |
+| 12 | setup/mod.rs `run_step`, record.rs `couldnt` | The running-game check ran once, before minutes of downloads; a game started meanwhile broke the install with "os error 32" | Every step checks first; while the game runs it pauses with "Close Counter-Strike to continue. Setup goes on by itself once it's closed." (15 minutes, then "…still open. Close it, then click Retry"); error 32/33 says to close the game and Retry | `setup_pauses_while_the_game_runs` |
+| 13 | procmatch.rs, servers.rs `end_leftover` | A leftover server was ended by pid (only "hlds.exe" in the name checked): Windows reuses pids, so another server or program could be ended | The pid file holds the start time; a leftover is ended only when the pid, its full executable path and its start time (±15 s) all match (Windows: QueryFullProcessImageNameW + GetProcessTimes; Mac: ps etime + command) | `ends_only_the_process_it_started` (a real child), pid file, start-time and etime tests |
+| 14 | servers.rs start, sys.rs `udp_port_free` | Only the app's own servers were compared; Windows HLDS quietly took the next port and RCON then failed in a restart loop | UDP test-bind on all addresses and on the server's own (or 127.0.0.1) before starting: "Port … is in use by another program on this computer…" | `a_port_another_program_holds_isnt_free` |
+| 15 | tauri.conf.json, release.yml | The MSI was built too: NSIS hooks don't run for it, it installs per machine, and an update could leave two installs | **NSIS only** (the user's decision): `bundle.targets` without "msi", the manual-run artifacts without it. The mirror and Polar already took only `*_x64-setup.exe`; the site and docs never linked an MSI. latest.json's Windows entry is now the setup.exe; 0.1.2's NSIS installs (currentUser, passive updates) update in place | release build (not run here) |
+| 17 | main.rs, sys.rs | The startup update dialog could update during a setup or restore (cutting steamcmd off); WebView2 asked before a page read the clipboard (editor/Studio paste from other programs); a read-only file couldn't be replaced by a save | The dialog checks the same rule as Settings' Install (and says "Update later" when busy); both windows get `enable_clipboard_access()`; `rename_over` clears the read-only flag first on Windows | settings rule shared; Windows PC for the clipboard |
+| 16 | site/docs.html, Servers.tsx | Firewall: the user keeps Defender's own prompt (their decision, no elevated rule) | "Friends can't join" explains the prompt per server and how to fix a Cancel (Windows Security › Allow an app through firewall › hlds.exe, Private and Public); "A server won't start" names the new port message | — |
+
+## Decided by the user (2026-11-14)
+- Firewall: keep Defender's prompt; a plain hint where it helps (done, #16).
+- Installer: NSIS only (done, #15). Not pushed, tagged or released.
+
 ## Open: needs a decision or a Windows machine
 High:
-- **Firewall** (servers.rs start, hltv.rs, app_api phone access, control): each server's own hlds.exe/hltv.exe gets a
-  Defender prompt; Cancel or a "Public" Wi-Fi network quietly blocks friends; nothing explains it, nothing cleans the
-  rules. Proposal: a note before a server's first start and one elevated `netsh advfirewall firewall add rule
-  name="Loner-Strike <id>" dir=in action=allow program=<hlds.exe> profile=private,public` (+ hltv.exe); removed by
-  name in Remove everything and the uninstaller. Needs the user's OK (an elevation prompt).
-- **Crash dialogs keep a dead hlds.exe alive** (servers.rs crash watch): "has stopped working" and Valve's fatal
-  MessageBox hold the process until clicked; the watcher kills it after 120 + 90 s. Proposal: `SetErrorMode(...
-  SEM_NOGPFAULTERRORBOX ...)` at start (children inherit it; windows-sys feature `Win32_System_Diagnostics_Debug`).
-- **Setup checks for a running game only at the start** (setup_api.rs): a game started during the downloads makes
-  the copies fail with "os error 32" mid-install. Check again before the first write; map 32/5 to "Close
-  Counter-Strike".
 - **WebView2 accelerator keys at the source**: also turn them off in Rust (`ICoreWebView2Settings3::
   SetAreBrowserAcceleratorKeysEnabled(false)` via `with_webview`, needs the webview2-com crate), and add
   `.on_navigation` so the window never leaves the app's own address. The page guard (#9) covers the keys today.
 Medium:
-- **MSI and NSIS both built** (tauri.conf.json `targets`): the NSIS hooks (stop helpers, clean up) don't run for the
-  MSI, which installs per machine; updates could leave two installs. Proposal: Windows builds NSIS only. Release
-  owner's call.
-- **The startup update dialog skips the safety checks** (main.rs check_for_update): it can update during a setup or
-  restore (killing steamcmd). Share `api_update_install`'s guard.
-- **Leftover hlds.exe clean-up by PID** (servers.rs end_leftover, voice.rs, sharing.rs): Windows reuses PIDs; check the
-  image's full path (QueryFullProcessImageNameW) before killing.
-- **Port checks** (servers.rs start, hltv.rs, voice.rs): only the app's own list is compared; Windows HLDS quietly
-  moves to the next port and RCON then fails in a restart loop. Test-bind the exact address first.
 - **Record keys case-sensitive** (setup/record.rs): two components shipping `Sound/x.wav` and `sound/x.wav` make two
   entries and the second backs up the first's file as the player's. Look keys up case-blind.
-- **Read-only rename targets** (sys.rs rename_over, backup.rs restore): clear the flag first (as content.rs does).
-- **Clipboard read prompts** (main.rs window builders): add `.enable_clipboard_access()` so editor/Studio paste from
-  outside works without a permission prompt.
 - **Alt key** in the editor (snap off while held, Alt+right-click wrap, Alt-drag): Windows may enter menu mode or
   ding; if so, swallow SC_KEYMENU in a window subclass.
 - **Ctrl+1-9** in the editor are camera bookmarks, so on Windows they can't switch app sections (⌘1-9 on the Mac).

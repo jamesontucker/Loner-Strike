@@ -94,6 +94,10 @@ pub fn tighten(path: &Path) {
 /// reading the file can hold it for a moment, which fails the rename: tried a few times
 /// before giving up. The temporary file is removed when it fails.
 pub fn rename_over(tmp: &Path, path: &Path) -> std::io::Result<()> {
+    // (Windows: a read-only target can't be replaced; players mark config.cfg read-only)
+    if cfg!(windows) {
+        make_writable(path);
+    }
     let mut tries = 0;
     loop {
         match std::fs::rename(tmp, path) {
@@ -115,6 +119,40 @@ pub fn rename_over(tmp: &Path, path: &Path) -> std::io::Result<()> {
 /// it "uncategorized", not PermissionDenied) or a part of it locked (33).
 pub fn transient_lock(e: &std::io::Error) -> bool {
     e.kind() == std::io::ErrorKind::PermissionDenied || matches!(e.raw_os_error(), Some(5 | 32 | 33))
+}
+
+/// Windows: no "has stopped working" or "can't find a file" boxes for this app and every
+/// program it starts (they inherit the error mode): a crashed hlds.exe exits at once, so the
+/// server watcher and the crash records see it, instead of sitting behind a dialog until
+/// someone clicks. (Valve's own fatal-error message boxes still show.)
+pub fn quiet_crash_dialogs() {
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn SetErrorMode(mode: u32) -> u32;
+        }
+        const SEM_FAILCRITICALERRORS: u32 = 0x0001;
+        const SEM_NOGPFAULTERRORBOX: u32 = 0x0002;
+        const SEM_NOOPENFILEERRORBOX: u32 = 0x8000;
+        // (SAFETY: SetErrorMode only sets this process's error mode flags)
+        unsafe {
+            let old = SetErrorMode(0);
+            SetErrorMode(old | SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+        }
+    }
+}
+
+/// A UDP port nothing holds: tried on every address and, when the server binds one, on that
+/// address too (on Windows a bind to all addresses can succeed while another program holds the
+/// port on one of them).
+pub fn udp_port_free(ip: Option<&str>, port: u16) -> bool {
+    let all = std::net::UdpSocket::bind(("0.0.0.0", port)).is_ok();
+    let one = match ip.filter(|i| !i.is_empty()) {
+        Some(i) => std::net::UdpSocket::bind((i, port)).is_ok(),
+        None => std::net::UdpSocket::bind(("127.0.0.1", port)).is_ok(),
+    };
+    all && one
 }
 
 /// Two Windows paths name the same folder: case-blind for every letter (not only ASCII:
@@ -584,6 +622,16 @@ mod windows_tests {
         assert!(same_windows_path(r"\\?\C:\Program Files (x86)\Steam", r"C:\Program Files (x86)\Steam\"));
         assert!(same_windows_path(r"\\server\share\Half-Life", r"\\SERVER\Share\half-life"));
         assert!(!same_windows_path(r"C:\Half-Life", r"D:\Half-Life"));
+    }
+
+    #[test]
+    fn a_port_another_program_holds_isnt_free() {
+        let held = std::net::UdpSocket::bind(("127.0.0.1", 0)).unwrap();
+        let port = held.local_addr().unwrap().port();
+        assert!(!udp_port_free(None, port), "held on 127.0.0.1");
+        assert!(!udp_port_free(Some("127.0.0.1"), port));
+        drop(held);
+        assert!(udp_port_free(None, port));
     }
 
     #[test]

@@ -1928,7 +1928,7 @@ const GOOD_PRACTICE: { title: string; points: string[] }[] = [
     points: [
       "This network: only your Wi-Fi or LAN. Anyone with the address: friends you send it to. Listed on Steam: anyone, and it shows the server's address publicly (for a server on your PC, that's your home address).",
       "Friends outside your network need a way in: forward the server's UDP port on your router, or all play over a virtual LAN (ZeroTier, Radmin VPN, Tailscale). See the server's Who can join tab.",
-      "On Windows, allow Loner-Strike and the server through the firewall when it asks, or people can't connect.",
+      "On Windows, allow Loner-Strike and the server through the firewall when it asks, or people can't connect. Clicked Cancel? Windows Security › Allow an app through firewall › hlds.exe: tick Private and Public.",
     ],
   },
   {

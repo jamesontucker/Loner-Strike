@@ -15,6 +15,7 @@ mod control;
 mod content;
 mod crashes; // MCP: crash tracking for the player's servers
 mod hamguard; // MCP: the fixed Ham Sandwich kept in place before Play and local starts
+mod procmatch; // MCP: a leftover process is ended only if it's still the one the app started
 mod diagnostics;
 mod extras;
 mod game;
@@ -64,6 +65,9 @@ fn main() {
     if mcp::stdio::wanted() {
         return mcp::stdio::run();
     }
+
+    // Windows: crashed servers exit at once instead of waiting behind a dialog (sys.rs)
+    sys::quiet_crash_dialogs();
 
     // Bind before opening the window so the page never loads too early.
     // If the Python panel already has 8027, take any free port.
@@ -168,7 +172,7 @@ fn main() {
                     let label = format!("panel-{}", next_panel.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
                     let Ok(blank) = "about:blank".parse() else { return tauri::webview::NewWindowResponse::Deny };
                     // (P5: the page's own drag and drop, as in the main window)
-                    match WebviewWindowBuilder::new(&handle, label, WebviewUrl::External(blank)).window_features(features).title("Loner-Strike").min_inner_size(260.0, 200.0).disable_drag_drop_handler().build() {
+                    match WebviewWindowBuilder::new(&handle, label, WebviewUrl::External(blank)).window_features(features).title("Loner-Strike").min_inner_size(260.0, 200.0).disable_drag_drop_handler().enable_clipboard_access().build() {
                         Ok(window) => tauri::webview::NewWindowResponse::Create { window },
                         Err(_) => tauri::webview::NewWindowResponse::Deny,
                     }
@@ -179,6 +183,9 @@ fn main() {
                 // sprites, sounds and textures onto the map, and nothing in the app takes files
                 // dropped from the desktop
                 .disable_drag_drop_handler()
+                // (Windows: WebView2 asks the person before a page reads the clipboard; the editor
+                // and the Studio paste .map text and nodes from other programs)
+                .enable_clipboard_access()
                 .inner_size(w, h)
                 .min_inner_size(820.0, 600.0) // the sidebar scrolls when it doesn't fit
                 .center()
@@ -246,6 +253,12 @@ async fn check_for_update(app: tauri::AppHandle) {
 
     let Ok(updater) = app.updater_builder().on_before_exit(before_update_exit).build() else { return };
     let Ok(Some(update)) = updater.check().await else { return };
+    // (the same rule as Settings' Install: never in the middle of a setup or a restore, which
+    // the exit would cut off)
+    let busy = || crate::setup::current().state == "running" || crate::backup::restoring_any();
+    if busy() {
+        return;
+    }
     let install = app
         .dialog()
         .message(format!(
@@ -255,6 +268,10 @@ async fn check_for_update(app: tauri::AppHandle) {
         .title("Update available")
         .buttons(MessageDialogButtons::OkCancelCustom("Install".into(), "Later".into()))
         .blocking_show();
+    if install && busy() {
+        app.dialog().message("Something is being set up or restored. Update from Settings once it's finished.").title("Update later").blocking_show();
+        return;
+    }
     if install && update.download_and_install(|_, _| {}, || {}).await.is_ok() {
         app.restart();
     }

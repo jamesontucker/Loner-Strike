@@ -339,6 +339,10 @@ impl Record {
 }
 
 fn couldnt(what: &str, rel: &str, e: std::io::Error) -> String {
+    // (Windows: in use by another program, usually the game itself)
+    if matches!(e.raw_os_error(), Some(32 | 33)) && cfg!(windows) {
+        return format!("Couldn't {what} {rel}: another program has it open. Close Counter-Strike (and any server using this folder), then click Retry.");
+    }
     format!("Couldn't {what} {rel} ({e}).")
 }
 

@@ -1752,13 +1752,15 @@ args = ["--mcp-stdio"]</code></pre>
     <li>They need the same game: a Condition Zero server needs Condition Zero.</li>
     <li>Check the address and join password.</li>
     <li>Over the internet without a tunnel, forward UDP 27015 on your router and allow it in your firewall (or use playit.gg or Tailscale).</li>
-    <li>Allow the game when Windows Defender Firewall asks (on a Mac, when macOS asks), on private networks at least.</li>
+    <li>Allow the game when Windows Defender Firewall asks (on a Mac, when macOS asks), on private networks at least. Each server has its own <code>hlds.exe</code>, so a new server asks again.</li>
+    <li>Clicked <b>Cancel</b> by mistake? Open Windows Security › Firewall &amp; network protection › <b>Allow an app through firewall</b> › Change settings, find <code>hlds.exe</code> (add it with Allow another app… from the server's folder if it isn't there) and tick both <b>Private</b> and <b>Public</b>.</li>
     <li>"Failed to contact game server" on Linux: allow UDP 27015 to 27020 in <a href="#open-ports">the provider's firewall</a>.</li>
   </ul>
 
   <h2 id="server-wont-start" data-keywords="crash port in use" data-short="Server won't start">A server won't start <a class="anchor" href="#server-wont-start" aria-label="Link to this">#</a></h2>
   <ul>
     <li><b>"… is using port … already"</b>: stop the server it names, or change this one's port on Overview.</li>
+    <li><b>"Port … is in use by another program"</b>: something else on this computer has it (another game server, a server Loner-Strike isn't managing). Close it, or change this server's port on Overview.</li>
     <li><b>"keeps crashing, so it was left off"</b>: check the console on Overview. A newly added mod is the usual cause: remove it.</li>
     <li>On this computer, <b>Reinstall Loner-Strike and its mods</b> (Health tab) fixes lost files.</li>
     <li>Mac (CrossOver): CrossOver must be in Applications and the servers folder inside the game's bottle.</li>
