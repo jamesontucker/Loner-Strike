@@ -1636,7 +1636,11 @@ public tick()
 	bots_shop_tick();
 	/* with the map's own spots the brain decides (offers); else the armory fallback */
 	if (g_nsp)
+	{
 		offers_tick();
+		/* (traps: a bot near one switches it on when its gate is pressed, until the brain does) */
+		bots_traps();
+	}
 	else
 		bots_upgrades();
 	shop_hint();
