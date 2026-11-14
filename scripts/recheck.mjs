@@ -24,8 +24,11 @@
 // It stops (marking the rest SKIPPED) whenever free disk is under 8 GB, and cleans up its own
 // clones, servers (by their own hlds.exe PID) and worktree at the end, keeping the logs.
 //
+// RECHECK_BRAIN_ZIP=path: the pinned bot brain's zip when it isn't released yet (checked against
+// the pin's SHA-256 either way); the sims always run the brain the commit pins.
 // GITLEAKS=path picks gitleaks (else the one on the PATH). Run it outside a sandbox: a sandboxed
 // shell can't stop CrossOver processes (the sim's hlds.exe), and says nothing when it fails.
+// RECHECK_WORKERS=n: Playwright workers (default 1, at most 3; low priority either way).
 // Options: --out DIR (default $TMPDIR/ls-recheck-<stamp>), --target DIR (cargo target, default
 // ~/Library/Caches/loner-strike-recheck-target), --game DIR (the Half-Life folder to clone,
 // default CrossOver Steam's), --sim-base NAME (default LSPLAY, under Loner-Strike/Sim), --keep
@@ -97,7 +100,7 @@ function run(name, cmd, argv, opts = {}) {
   return { code: r.status ?? 1, out };
 }
 async function step(name, f) {
-  if (!only.includes(name)) return;
+  if (!only.includes(name) && name !== "build") return;
   if (stopped) return rows.push({ step: name, result: "SKIPPED", secs: 0, detail: stopped });
   if (!diskOk(name)) return rows.push({ step: name, result: "SKIPPED", secs: 0, detail: stopped });
   const t = Date.now();
@@ -112,16 +115,35 @@ async function step(name, f) {
 }
 
 // ---- the commit -------------------------------------------------------------------------------
+/** rm -rf that also takes read-only folders (the game has some: valve_hd/gfx/env). */
+function removeAll(p) {
+  if (!existsSync(p)) return;
+  spawnSync("chmod", ["-R", "u+w", p]);
+  try {
+    rmSync(p, { recursive: true, force: true });
+  } catch (e) {
+    log(`couldn't remove ${p}: ${e.message}`);
+  }
+}
 function makeTree() {
   if (DRY) return;
   rmSync(TREE, { recursive: true, force: true });
   execFileSync("git", ["-C", repo, "worktree", "add", "--detach", TREE, commit], { stdio: "ignore" });
+  // (the Linux voice and intent agents: CI downloads them here; git keeps no empty folder, and
+  // the app's build script wants the resource folders to exist)
+  for (const d of ["ls-voice", "ls-intent"]) mkdirSync(join(TREE, "app/src-tauri/resources/linux", d), { recursive: true });
   const nm = join(repo, "app/ui/node_modules");
   if (existsSync(nm)) symlinkSync(nm, join(TREE, "app/ui/node_modules"));
 }
 function dropTree() {
   if (DRY || flag("--keep")) return;
   spawnSync("git", ["-C", repo, "worktree", "remove", "--force", TREE]);
+}
+
+// ---- the UI build (the app embeds app/ui/dist) ---------------------------------------------------
+function buildUi() {
+  const r = run("build", "npx", ["vite", "build"], { cwd: join(TREE, "app/ui") });
+  return { ok: r.code === 0, detail: r.code === 0 ? "app/ui/dist built" : "vite build failed (build.log)" };
 }
 
 // ---- 2. Rust ------------------------------------------------------------------------------------
@@ -131,7 +153,7 @@ function rust() {
   const res = [...r.out.matchAll(/test result: \w+\. (\d+) passed; (\d+) failed; (\d+) ignored/g)].map((m) => m.slice(1).map(Number));
   const failed = [...r.out.matchAll(/^test (\S+) \.\.\. FAILED$/gm)].map((m) => m[1]);
   const [p, f, i] = res.reduce((a, b) => a.map((x, k) => x + b[k]), [0, 0, 0]);
-  const compileError = /could not compile/.test(r.out);
+  const compileError = /could not compile|failed to run custom build command/.test(r.out) || !res.length;
   return { ok: r.code === 0, detail: compileError ? "did not compile (see rust.log)" : `${p} passed, ${f} failed, ${i} ignored${failed.length ? `: ${failed.slice(0, 12).join(", ")}${failed.length > 12 ? "…" : ""}` : ""}` };
 }
 
@@ -149,12 +171,37 @@ function node() {
 function cloneGame() {
   if (DRY) return;
   if (!existsSync(join(GAME, "cstrike"))) throw new Error(`no game at ${GAME} (--game)`);
-  rmSync(GAME_CLONE, { recursive: true, force: true });
+  removeAll(GAME_CLONE);
   // an APFS clone: the whole game, sharing its blocks until something writes
   execFileSync("cp", ["-c", "-R", GAME, GAME_CLONE]);
 }
+/** What some specs expect of their game, written into the clone (never the real game):
+ *  creature-picker.spec.ts wants your own type my_runner, jo.ghoul installed by a package
+ *  (mode-77) and Last Stand's waves using my_runner. */
+function specFixtures() {
+  if (DRY) return;
+  const gm = join(GAME_CLONE, "cstrike/addons/amxmodx/configs/gamemodes");
+  mkdirSync(gm, { recursive: true });
+  const ini = join(gm, "creatures.ini");
+  const had = existsSync(ini) ? readFileSync(ini, "latin1") : "; creatures.ini\n";
+  if (!/^\[my_runner\]/m.test(had)) {
+    // yours first, then the installed block at the end (as the app keeps them)
+    const block = "; >>> from mode-77\n; types: jo.ghoul\n[jo.ghoul]\nbase = zombie\nname = Ghoul\nhp = 333\n; <<< end mode-77\n";
+    const at = had.indexOf("; >>> from ");
+    const mine = "[my_runner]\nbase = runner\nname = My runner\nhp = 70\n";
+    const text = at < 0 ? `${had.trimEnd()}\n${mine}${block}` : `${had.slice(0, at)}${mine}${had.slice(at)}${block}`;
+    writeFileSync(ini, text, "latin1");
+  }
+  const waves = join(gm, "waves.ini");
+  const w = existsSync(waves) ? readFileSync(waves, "latin1") : "; waves.ini\n";
+  if (!/my_runner/.test(w)) {
+    const text = /^\[laststand\]/m.test(w) ? w.replace(/^\[laststand\]\s*\n/m, (m) => `${m}wave 1+ = my_runner 2\n`) : `${w.trimEnd()}\n[laststand]\nwave 1+ = my_runner 2 zombie 3\n`;
+    writeFileSync(waves, text, "latin1");
+  }
+}
 function ui() {
   cloneGame();
+  specFixtures();
   rmSync(APP_DIR, { recursive: true, force: true });
   mkdirSync(APP_DIR, { recursive: true });
   const json = join(OUT, "playwright.json");
@@ -162,9 +209,12 @@ function ui() {
     ...rustEnv, LS_APP_DIR: APP_DIR, LS_TEST_GAME: GAME_CLONE, LS_DEV_PORT: DEV_PORT, LS_VITE_PORT: VITE_PORT,
     LS_WEBKIT_ALL: "1", PLAYWRIGHT_JSON_OUTPUT_NAME: json, CI: "1",
   };
-  const r = run("ui", "npx", ["playwright", "test", "--project", "large", "--project", "small", "--project", "webkit", "--reporter=list,json"], { cwd: join(TREE, "app/ui"), env });
+  // a few at a time, at low priority: other agents' game servers share this machine, and a starved
+  // one can freeze CrossOver's wineserver for everyone (RECHECK_WORKERS, default 1, at most 3)
+  const workers = Math.min(3, Math.max(1, Number(process.env.RECHECK_WORKERS) || 1));
+  const r = run("ui", "nice", ["-n", "10", "npx", "playwright", "test", "--project", "large", "--project", "small", "--project", "webkit", `--workers=${workers}`, "--reporter=list,json"], { cwd: join(TREE, "app/ui"), env });
   if (DRY) return { ok: true, detail: "" };
-  let detail = `exit ${r.code}`;
+  let detail = `exit ${r.code}: ${r.out.trim().split("\n").filter((l) => /error|Error|failed/.test(l)).slice(-1)[0]?.slice(0, 160) ?? "see ui.log"}`;
   try {
     const rep = JSON.parse(readFileSync(json, "utf8"));
     const by = {};
@@ -181,7 +231,7 @@ function ui() {
     };
     for (const s of rep.suites ?? []) walk(s);
     writeFileSync(join(OUT, "ui-failed.txt"), failed.join("\n") + "\n");
-    detail = Object.entries(by).map(([p, c]) => `${p} ${c.passed}✓ ${c.failed}✗ ${c.flaky} flaky ${c.skipped} skipped`).join("; ") + (failed.length ? ` (failed list: ui-failed.txt)` : "");
+    if (Object.keys(by).length) detail = Object.entries(by).map(([p, c]) => `${p} ${c.passed}✓ ${c.failed}✗ ${c.flaky} flaky ${c.skipped} skipped`).join("; ") + (failed.length ? ` (failed list: ui-failed.txt)` : "");
   } catch {
     /* the list reporter's output is in ui.log */
   }
@@ -261,7 +311,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, DRY ? 0 : ms));
 function prepareSim() {
   const base = join(SIMS, SIM_BASE);
   if (!existsSync(join(base, "hlds.exe"))) throw new Error(`no sim base ${base} (--sim-base)`);
-  rmSync(SIM, { recursive: true, force: true });
+  removeAll(SIM);
   execFileSync("cp", ["-c", "-R", base, SIM]);
   const am = join(SIM, "cstrike/addons/amxmodx");
   // the mods' data and configs (lang files, ini) for mods this server has, then ours
@@ -298,11 +348,38 @@ function prepareSim() {
     if (r.code !== 0 || !/Done\./.test(r.out)) bad.push(f);
     else built++;
   }
+  // the bot brain the commit pins (setup/foundation.rs REGAMEDLL), as setup would install it
+  const brain = pinnedBrain();
+  copyFileSync(brain.dll, join(SIM, "cstrike/dlls/mp.dll"));
+  log(`   sim: bot brain ${brain.name} (sha256 checked)`);
   // bots only, logs to the console, our rcon password, after every map
   const friends = join(am, "data/gamemodes/friends.cfg");
   writeFileSync(friends, `// recheck\nsv_lan 1\nbot_join_after_player 0\nbot_auto_vacate 0\nrcon_password "${PW}"\nlog on\nmp_logecho 1\nmp_logdetail 3\n`);
   writeFileSync(join(SIM, "cstrike/recheck.cfg"), `rcon_password "${PW}"\nsv_lan 1\nbot_quota 5\nlog on\nmp_logecho 1\n`);
   return { built, bad };
+}
+/** The pinned ReGameDLL zip (RECHECK_BRAIN_ZIP, else the app's download cache, else downloaded),
+ *  its SHA-256 checked against the pin, and its win32 mp.dll unpacked into <out>/brain. */
+function pinnedBrain() {
+  const src = readFileSync(join(TREE, "app/src-tauri/src/setup/foundation.rs"), "utf8");
+  const m = /pub const REGAMEDLL: Pinned = Pinned \{\s*url: "([^"]+)",\s*sha256: "([0-9a-f]{64})"/.exec(src);
+  if (!m) throw new Error("couldn't read the REGAMEDLL pin in setup/foundation.rs");
+  const [, url, sha] = m;
+  const name = basename(url);
+  const cache = join(homedir(), "Library/Caches/loner-strike/downloads");
+  const cached = existsSync(cache) ? readdirSync(cache).find((f) => f.endsWith(`-${name}`)) : undefined;
+  let zip = process.env.RECHECK_BRAIN_ZIP || (cached ? join(cache, cached) : join(OUT, name));
+  if (!existsSync(zip)) {
+    const r = spawnSync("curl", ["-fsSL", "-o", zip, url]);
+    if (r.status !== 0) throw new Error(`couldn't download the pinned brain ${url} (set RECHECK_BRAIN_ZIP to a local copy)`);
+  }
+  const got = execFileSync("shasum", ["-a", "256", zip], { encoding: "utf8" }).split(" ")[0];
+  if (got !== sha) throw new Error(`the brain zip ${zip} isn't the pinned one (sha256 ${got}, the pin says ${sha})`);
+  const dir = join(OUT, "brain");
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  execFileSync("unzip", ["-q", "-o", zip, "bin/win32/cstrike/dlls/mp.dll", "-d", dir]);
+  return { name, dll: join(dir, "bin/win32/cstrike/dlls/mp.dll") };
 }
 function borrowMap(map) {
   const dst = join(SIM, "cstrike");
@@ -430,10 +507,29 @@ function summary() {
   console.log("\n" + text);
 }
 
+// Ctrl+C or a kill: clean up as at the end (the sim server, the clones, the worktree)
+let cleaning = false;
+function cleanUp() {
+  if (cleaning) return;
+  cleaning = true;
+  if (!DRY) {
+    stopSim();
+    if (!flag("--keep")) for (const p of [GAME_CLONE, SIM, APP_DIR]) removeAll(p);
+  }
+  try {
+    dropTree();
+  } catch (e) {
+    log(`couldn't remove the worktree: ${e.message}`);
+  }
+}
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(sig, () => (log(`stopped by ${sig}`), cleanUp(), process.exit(130)));
+
 log(`recheck ${commit} → ${OUT}${DRY ? " (dry run)" : ""}; free disk ${freeGb()} GB`);
 try {
   if (diskOk("the worktree")) {
     makeTree();
+    // the app embeds the built UI (app/ui/dist): the Rust build and the dev server need it
+    if (only.some((s) => ["rust", "ui"].includes(s))) await step("build", buildUi);
     await step("rust", rust);
     await step("node", node);
     await step("ui", ui);
@@ -444,15 +540,7 @@ try {
     await step("sims", sims);
   }
 } finally {
-  if (!DRY) {
-    stopSim();
-    if (!flag("--keep")) {
-      rmSync(GAME_CLONE, { recursive: true, force: true });
-      rmSync(SIM, { recursive: true, force: true });
-      rmSync(APP_DIR, { recursive: true, force: true });
-    }
-  }
-  dropTree();
+  cleanUp();
   summary();
 }
 process.exit(rows.some((r) => r.result === "FAIL") || stopped ? 1 : 0);

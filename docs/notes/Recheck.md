@@ -49,6 +49,33 @@ node scripts/recheck.mjs                # HEAD; or --commit <sha>
 Bot behavior numbers (revive rates, BR high ground, Last Stand difficulty) are W1's and W2's A/B
 sims (`~/loner-strike-sim`), not this re-check.
 
+## Release gates (not a test: check them before the release push)
+- **The Community index workflow runs from `main` only.** `scripts/community-index-check.py` (the
+  check `.github/workflows/community-publish.yml` runs before uploading the index) has to reach
+  `main` with the release push, before the first creature listing. Until then, `main`'s older check
+  doesn't know creature packages. Check: `git show origin/main:scripts/community-index-check.py`
+  matches the release commit's copy before anyone lists a creature.
+
+- **The bot brain pin moves to the newest green ls-next3 before the re-check.** As of 2026-11-14
+  that's b1061777, CI run 43651450817 (5.30.0.1314-dev). It has Y's chat `#` fix, the crash-log
+  time and map, the revive and turret fixes, W2's high ground and the "use" offer kind
+  (ls_mode_ver 3), and every brain fix since ls20.
+  - Already built and checked (not published): `RUN=43651450817 BUILD_ONLY=1
+    scripts/fork-release.sh regamedll 5.30.0.814-ls21` gives `regamedll-bin-5.30.0.814-ls21.zip`
+    with sha256 `11f07e132b70410f9eef77166bf1e87a6a11adb80eff6a371368abd492cb4a9d`.
+    Its win32 mp.dll (sha256 `bdba4116…25db`) is byte for byte the CI artifact's.
+  - Needs the go (it publishes): `RUN=<newest green ls-next3 run> scripts/fork-release.sh
+    regamedll 5.30.0.814-ls21` (a GitHub release on the fork), then `scripts/r2-sync.sh` (the
+    download mirror). Then the pin in `app/src-tauri/src/setup/foundation.rs` (`REGAMEDLL`: url
+    and sha256) changes, committed by path. If a newer green build has landed, use that run and
+    the next `-lsNN`.
+  - The re-check's sims always install the brain the commit pins (sha256 checked). Before the
+    release exists, `RECHECK_BRAIN_ZIP=<the built zip>` lets them use the built one, checked
+    against the pin, so the pin has to be changed first.
+  - The app's install path takes it from the pin: mirror first, then GitHub, SHA-256 checked.
+    The Files bar offers it as an update, because `foundation_version()` comes from the pin's
+    hash.
+
 ## Only the user can check these (the real client, accounts, hardware)
 - **The game itself:** starting a game from Play and playing a first match. Seeing in the client
   that turrets do damage, the Mk II bench upgrades on a gun, and a person revives a downed squad
