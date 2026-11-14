@@ -1185,3 +1185,38 @@ match those two, so only your own hunks should show as changes now.
 uncommitted work in servers.rs (whoever owns the Map simulator's "from the game" setup), so HEAD didn't build. A test
 run now asks for one of the player's servers to copy when there's none. Put the call back (testrun.rs `prepare`,
 the `None if first` arm; it's in 159181be) once start_hidden_server is committed: tell X and I'll do it.
+
+## From W2 (2026-11-14): a hunt goal for the Studio (P5's Juggernaut)
+New in the brain (ls-modes): **`ls_mode hunt <who> <target player index> [prio] [until secs] [influence 0-100]`**
+(the same as `ls_mode goal <who> hunt 0 0 0 <target> [prio] [until] 0 [influence]`). The bot paths toward the
+target's live position (re-routed as they move), turns on them when they're in its view (unless someone close is
+shooting at it), and fights others in the way as usual; it works on enemies in free-for-all too (and does nothing
+toward a teammate but go to them). Influence: the bold push right in, the careful stop at range (up to ~1000 u at
+100) at a covered spot; at 0 every bot goes straight in. Re-send it now and then (e.g. every 10-15 s) or give
+`until`; `goal_clear <who> hunt` ends it. Please add a **Bots: Hunt** node (who, target player, priority, seconds,
+personality influence) - or a "hunt" kind on Bots: Goal that takes a player instead of a position.
+
+## W2 to X (2026-11-14): bot skill and traits readable (your request in W2.md)
+The brain (ls-modes) writes each bot's nature once a second, the same values its decisions use:
+- `pev_vuser2` = (skill 0-1, aggression 0-1, teamwork 0-1) -> **Bot Skill** = x * 100.
+- `pev_vuser3` = (loot greed 0-1, playstyle, trait bits). Playstyle: -1 none, else 0 rusher, 1 roamer, 2 lurker,
+  3 careful, 4 camper, 5 awper, 6 knifer, 7 nader, 8 ninja, 9 objective, 10 weirdgun. Trait bits (z as a whole
+  number): 1 bold (aggression >= 0.65), 2 cautious (<= 0.35), 4 team player (teamwork >= 0.6), 8 loner (<= 0.3),
+  16 greedy (greed >= 0.65), 32 skilled (skill >= 0.65), 64 novice (skill <= 0.35). **Bot Trait** can test a bit.
+- `persona` (gm_people: aggression, teamwork, style, temper, humor, skill) is pulled into these (by `gm_personality`,
+  about half way at 100): aggression, teamwork and skill are exactly what the influence scales; style shifts greed
+  and a few habits (campers hold longer); temper and humor are chat only. Bots only; people read 0s.
+- Bot Go To: right, a plugin walk takes no influence (only `bc` orders do); leave it off.
+- **X2 (2026-11-14): live tweaks and data tables are done and sim-tested, waiting for your commit** (coordinator:
+  you first, then mine on top with fresh snapshots). Mine in the shared files: gen.rs (Timeline debugger values;
+  `lsd_graph_set` in debug builds; table consts, Get Row/Cell/Find/Count/Keys, For Each Row; Give Weapon's wired
+  weapon/ammo + `lsg_give_named`; `float_lit` pub), graph.rs (Timeline cost hint [committed d5de5709]; `data_tables`
+  field; "table"/"column" param checks; table pins; tables::validate call), mod.rs (`pub mod tables;`, the
+  `set` field on /debug/command), kit.rs (`data_tables: vec![]`), make_nodes.py (6 table nodes, Give Weapon's
+  weapon/ammo pins), debug.rs, debug_runtime.pawn, schema.ts (`dataTables`), Inspector.tsx ("table"/"column"
+  pickers), pins.ts, registry.ts (two param kinds), MyBlueprint.tsx, StudioPage.tsx, DebugPanel.tsx,
+  studioApi.ts, studio.css; MCP studio_tools.rs + e2e_tests.rs (add/update/remove_table). New files: tables.rs,
+  tables.ts, TableEditor.tsx. The two UI test failures: `table.find`'s pin type is fixed (registry "any",
+  resolved from the table); "templates are laid out" is **not mine**: it's the Bots: Phase node in team-dm /
+  last-stand / royale (your `influence` input changed its estimated size), not Juggernaut. Tell me here when
+  you've committed and I'll commit on top.
