@@ -613,4 +613,28 @@ forward ls_on_box(ent, id, const weapon[]);
 forward ls_on_pickup(ent, id, const kind[]);
 /** A creature took damage (after it was dealt); headshot 1 when the hit was a head. */
 forward ls_on_creature_hurt(ent, attacker, Float:dmg, headshot);
+
+/**
+ * ls_shop: a counter (a point with a radius, or a brush) where USE opens a menu.
+ * Keys: items = "Name|price|give|what; ..." (give: what ls_give_item gives - ammo,
+ * vesthelm, hp:50, hegrenade, weapon names - or @word, given by the mode in
+ * ls_on_shop_buy), price_rise (dearer by this share each wave), scale, upgrades=1
+ * (perks and the bench when the map has no machine or bench), buy_menu=1 (the game's
+ * buy menu as the last line), keeper (barney, gman, none or a model), keeper_name,
+ * greet, hint, title, open, team.
+ */
+native bool:ls_shop_buy(ent, id, const item[], bool:tell = true);
+/** An item's price now (by its name or what it gives); -1 if the shop has none. */
+native ls_shop_price(ent, const item[]);
+native ls_shop_menu(ent, id);
+native ls_shop_open(ent, bool:open);
+native bool:ls_shop_is_open(ent);
+/** Is the player in the shop? */
+native bool:ls_shop_at(ent, id);
+/** Inside ls_on_shop_item: the reason the menu shows. */
+native ls_shop_why(const reason[]);
+/** Can this player buy this item now? Handled: no (the line is greyed; ls_shop_why says why). */
+forward ls_on_shop_item(ent, id, const item[]);
+/** An item is being bought. Handled: refused. An @item is the mode's to give here. */
+forward ls_on_shop_buy(ent, id, const item[], price);
 /* ==== end W1 ==== */

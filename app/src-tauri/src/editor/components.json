@@ -277,6 +277,20 @@
       ]
     },
     {
+      "class": "ls_shop",
+      "group": "Upgrades",
+      "title": "Shop",
+      "blurb": "A counter where USE opens a menu of priced items, with a shopkeeper if you like.",
+      "visual": "ring",
+      "radius_key": "radius",
+      "size_key": "size",
+      "colour": [
+        255,
+        200,
+        60
+      ]
+    },
+    {
       "class": "ls_meeting_point",
       "group": "Social",
       "title": "Meeting point",

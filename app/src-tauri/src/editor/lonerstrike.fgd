@@ -249,6 +249,21 @@
 	bots(choices) : "Bots use it" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
 ]
 
+@PointClass base(LsName, LsTeam, LsArea) size(-16 -16 0, 16 16 72) color(255 200 60) = ls_shop : "A shop counter: players inside press USE for a menu of priced items. Can have a shopkeeper (Barney or the G-Man) who greets and thanks them."
+[
+	items(string) : "Items" : "Armor|650|vesthelm|kevlar + helmet; Ammo|300|ammo|refill all your guns; Medkit|500|hp:50|+50 HP" : "Name|price|give|what, separated by ;. give: an item (ammo, vesthelm, hp:50, hegrenade, a weapon name) or @word for the mode to hand out."
+	price_rise(float) : "Dearer each wave" : 0 : "0.05 = 5 % more each wave."
+	scale(float) : "Price scale" : 1 : ""
+	upgrades(choices) : "Sells upgrades" : 0 : "The perks and the gun upgrade, when the map has no perk machine or bench." = [ 0 : "No" 1 : "Yes" ]
+	buy_menu(choices) : "Gun menu line" : 0 : "A last line opening the game's buy menu (works where it's a buy zone)." = [ 0 : "No" 1 : "Yes" ]
+	keeper(string) : "Shopkeeper" : "none" : "barney, gman, none, or a model (loaded with the map)."
+	keeper_name(string) : "Shopkeeper's name" : : "Empty: Barney or G-Man."
+	greet(string) : "Greeting" : : "What the shopkeeper says to someone walking in (their first 3 visits)."
+	hint(string) : "Hint" : : "Shown on walking in."
+	title(string) : "Menu title" : : "Empty: the Name, else Shop."
+	open(choices) : "Open" : 1 : "A mode can open and close it." = [ 1 : "Yes" 0 : "No" ]
+]
+
 @SolidClass base(LsName, LsTarget, LsTeam) color(180 120 60) = ls_barricade : "A wall that can be shot or hit down and repaired (hold USE). Bots defend behind it and go round it while it stands."
 [
 	hp(integer) : "Health" : 500 : ""

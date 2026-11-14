@@ -89,8 +89,6 @@ new g_puThisWave;
    state); the armory menu sells them where the map has no machine */
 enum { PK_TOUGH = 0, PK_HANDS, PK_DOUBLE, PK_REVIVE, PK_FEET, PK_COUNT };
 new const PK_ID[PK_COUNT][] = { "tough", "hands", "doubletap", "revive", "feet" };
-new const PK_NAME[PK_COUNT][] = { "Tough", "Quick hands", "Double tap", "Quick revive", "Light feet" };
-new const PK_WHAT[PK_COUNT][] = { "+50% max health", "faster reloads and weapon swaps", "+25% damage", "revive in 2 s; alone, get back up once", "+10% speed" };
 #define PERK_MAX 4
 #define MK2_PRICE 5000
 #define MK3_PRICE 9000
@@ -116,10 +114,9 @@ new g_mapname[64];
 new g_classZombie;
 new g_kills;
 new g_hePack[33];
-new g_keeper;
-new g_keeperKind;	/* 0 none, 1 barney, 2 gman, 3 a CS model standing in */
-new bool:g_inShop[33];
-new g_shopVisits[33];
+new g_cKeeper;
+/* the armory is a gm_components ls_shop (the map's own, or made here at the shop spot) */
+new g_shopEnt;
 new g_repairing[33];
 new Float:g_repairNext[33];
 new Float:g_repairUntil[33];
@@ -231,7 +228,6 @@ public plugin_init()
 	register_srvcmd("lst_holds", "cmd_holds");
 	register_srvcmd("lst_perf", "cmd_perf");
 	register_srvcmd("lst_jump", "cmd_jump");
-	register_forward(FM_PlayerPreThink, "fm_prethink");
 	register_forward(FM_SetModel, "fm_setmodel_post", 1);
 
 	g_msgShake = get_user_msgid("ScreenShake");
@@ -258,7 +254,6 @@ public plugin_init()
 	g_record = record_load();
 	set_task(1.0, "tick", TASK_TICK, _, _, "b");
 	set_task(0.25, "tick_revive", TASK_REV, _, _, "b");
-	set_task(0.2, "keeper_tick", TASK_REV + 1, _, _, "b");
 }
 
 public plugin_cfg()
@@ -421,7 +416,6 @@ public round_setup()
 	set_cvar_num("mp_buy_anywhere", get_pcvar_num(g_cBuyAnywhere) ? 1 : 0);
 	find_shop();
 	find_upgrades();
-	keeper_spawn();
 	round_clock(floatround(get_pcvar_float(g_cPrepare)));
 	toast(0, 5.0, false, "Last Stand: hold the base! First wave in %d seconds", get_pcvar_num(g_cPrepare));
 	bots_to_shop(get_pcvar_num(g_cPrepare));
@@ -1604,8 +1598,9 @@ public tick()
 	bots_shop_tick();
 	/* with the map's own machines the brain decides (gm_components' offers); else the armory */
 	down_sync();
+	if (g_shopEnt)
+		ls_shop_open(g_shopEnt, g_phase != PH_IDLE && g_phase != PH_OVER);
 	bots_upgrades();
-	shop_hint();
 }
 
 /* A creature that hasn't moved for a minute with no defender within 800 units is stuck
@@ -1889,7 +1884,7 @@ stock hud()
 			ls_hud(p, LS_HUD_TOP, 1.1, "%s^nDOWN - %d s to be revived", top, floatround(ls_down_left(p)));
 		else if (g_down[p])
 			ls_hud(p, LS_HUD_TOP, 1.1, "%s^nDOWN - %d s to be revived", top, max(floatround(get_pcvar_float(g_cRevive) - (now - g_downAt[p])), 0));
-		else if (g_inShop[p])
+		else if (at_shop(p))
 			ls_hud(p, LS_HUD_TOP, 1.1, "%s^nArmory  -  B: weapons   USE at the counter: supplies%s%s", top, tags[0] ? "^n" : "", tags);
 		else
 			ls_hud(p, LS_HUD_TOP, 1.1, "%s%s%s", top, tags[0] ? "^n" : "", tags);
@@ -2645,12 +2640,7 @@ stock clear_powerups()
  * ========================================================================= */
 
 new Float:g_useNext[33];
-new Float:g_menuUntil[33];
-
-new const SHOP_NAME[][] = { "Barricade repair kit", "Armor", "3 HE grenades", "Ammo", "Medkit" };
-new const SHOP_WHAT[][] = { "rebuild the most broken barricade fully", "kevlar + helmet", "three HE grenades", "refill all your guns", "+50 HP" };
-new const SHOP_PRICE[] = { 600, 650, 900, 300, 500 };
-new g_shopCb;
+new const SHOP_ITEMS[] = "Barricade repair kit|600|@repair|rebuild the most broken barricade fully; Armor|650|vesthelm|kevlar + helmet; 3 HE grenades|900|@he3|three HE grenades; Ammo|300|ammo|refill all your guns; Medkit|500|hp:50|+50 HP";
 
 /* an entity or component named lst_shop (the map's armory), else the base */
 stock find_shop()
@@ -2671,6 +2661,72 @@ stock find_shop()
 	}
 	else if (!buyzone_spot(g_shop))
 		g_shop = g_base;
+	shop_component();
+}
+
+/* the map's ls_shop if it has one, else one made at the shop spot with Last Stand's items */
+stock shop_component()
+{
+	if (!g_shopEnt || !ls_comp_is(g_shopEnt))
+		g_shopEnt = ls_comp_find("ls_shop");
+	if (g_shopEnt)
+	{
+		shop_scale();
+		return;
+	}
+	new keeper[32];
+	get_pcvar_string(g_cKeeper, keeper, charsmax(keeper));
+	new keys[512], Float:o[3];
+	o = g_shop;
+	formatex(keys, charsmax(keys), "name=Armory radius=160 height=200 team=ct price_rise=0.05 upgrades=1 buy_menu=1 keeper=%s hint=^"Armory: B for weapons - USE at the counter for supplies^" greet=^"%s^" items=^"%s^"",
+		keeper, equali(keeper, "gman") ? "Weapons... on the B menu. Supplies... from me." : "Guns are on the B menu, supplies from me.", SHOP_ITEMS);
+	g_shopEnt = ls_comp_create("ls_shop", o, keys);
+	if (!g_shopEnt)
+		log_amx("Last Stand: couldn't make the armory");
+	else
+		shop_scale();
+}
+
+stock shop_scale()
+{
+	new v[16];
+	formatex(v, charsmax(v), "%.2f", get_pcvar_float(g_cShopScale));
+	ls_comp_set(g_shopEnt, "scale", v);
+}
+
+/* the armory's own items */
+public ls_on_shop_item(ent, id, const item[])
+{
+	if (equal(item, "@repair") && !most_broken_barricade())
+	{
+		ls_shop_why("the barricades are fine");
+		return PLUGIN_HANDLED;
+	}
+	if (equal(item, "@he3") && g_hePack[id] >= 3)
+	{
+		ls_shop_why("you have 3 already");
+		return PLUGIN_HANDLED;
+	}
+	return PLUGIN_CONTINUE;
+}
+
+public ls_on_shop_buy(ent, id, const item[], price)
+{
+	if (equal(item, "@repair"))
+		ls_barricade_repair(most_broken_barricade(), 0);
+	else if (equal(item, "@he3"))
+	{
+		/* the game carries one HE at a time (the client shows and throws only one), so the
+		   pack is one in hand and two more: each throw brings out the next, and it says how
+		   many are left */
+		if (!user_has_weapon(id, CSW_HEGRENADE))
+			ls_give_item(id, "he");
+		cs_set_user_bpammo(id, CSW_HEGRENADE, 1);
+		g_hePack[id] = 3;
+		if (!is_user_bot(id))
+			client_print(id, print_center, "3 HE grenades: throw one and the next comes out");
+	}
+	return PLUGIN_CONTINUE;
 }
 
 /* stock maps: a clear spot in the CT buy zone nearest the base, off the spawn points */
@@ -2730,33 +2786,6 @@ stock bool:at_shop(id)
 	return get_distance_f(o, g_shop) < 160.0 && floatabs(o[2] - g_shop[2]) < 120.0;
 }
 
-/* 5 % dearer each wave, rounded to $50 so prices stay readable */
-stock shop_price(i)
-{
-	new Float:p = float(SHOP_PRICE[i]) * (1.0 + 0.05 * float(max(g_wave - 1, 0))) * get_pcvar_float(g_cShopScale);
-	return max(floatround(p / 50.0) * 50, 50);
-}
-
-/* why an item can't be bought now ("" = it can) */
-stock shop_why_not(id, i, out[], len)
-{
-	out[0] = EOS;
-	switch (i)
-	{
-		case 0: if (!most_broken_barricade()) copy(out, len, "the barricades are fine");
-		case 1:
-		{
-			new CsArmorType:t;
-			if (cs_get_user_armor(id, t) >= 100 && t == CS_ARMOR_VESTHELM)
-				copy(out, len, "you have full armor");
-		}
-		case 2: if (g_hePack[id] >= 3) copy(out, len, "you have 3 already");
-		case 4: if (get_user_health(id) >= 100) copy(out, len, "you're at full health");
-	}
-	if (!out[0] && cs_get_user_money(id) < shop_price(i))
-		copy(out, len, "not enough money");
-}
-
 stock most_broken_barricade()
 {
 	new best = 0, worst = 100;
@@ -2773,18 +2802,6 @@ stock most_broken_barricade()
 	return best;
 }
 
-public shop_item_cb(id, menu, item)
-{
-	new info[4], name[2], access, cb;
-	menu_item_getinfo(menu, item, access, info, charsmax(info), name, 0, cb);
-	new i = str_to_num(info);
-	if (i < 0 || i >= sizeof SHOP_NAME)
-		return ITEM_ENABLED;
-	new why[48];
-	shop_why_not(id, i, why, charsmax(why));
-	return why[0] ? ITEM_DISABLED : ITEM_ENABLED;
-}
-
 public cmd_shop(id)
 {
 	if (g_phase == PH_IDLE || !is_user_alive(id))
@@ -2794,134 +2811,8 @@ public cmd_shop(id)
 		ls_chat(id, "The armory is at the base: go there and press USE (or say /shop).");
 		return PLUGIN_HANDLED;
 	}
-	shop_menu(id);
+	ls_shop_menu(g_shopEnt, id);
 	return PLUGIN_HANDLED;
-}
-
-stock shop_menu(id)
-{
-	if (!g_shopCb)
-		g_shopCb = menu_makecallback("shop_item_cb");
-	new title[64];
-	formatex(title, charsmax(title), "\yArmory  \d(you have $%d)", cs_get_user_money(id));
-	new m = menu_create(title, "menu_shop");
-	new text[128], info[4], why[48];
-	for (new i = 0; i < sizeof SHOP_NAME; i++)
-	{
-		shop_why_not(id, i, why, charsmax(why));
-		if (why[0])
-			formatex(text, charsmax(text), "\d%s - %s ($%d)  \r%s", SHOP_NAME[i], SHOP_WHAT[i], shop_price(i), why);
-		else
-			formatex(text, charsmax(text), "%s \d- %s \y($%d)", SHOP_NAME[i], SHOP_WHAT[i], shop_price(i));
-		num_to_str(i, info, charsmax(info));
-		menu_additem(m, text, info, 0, g_shopCb);
-	}
-	/* the map has no perk machines / bench: they're here (the box is at the armory) */
-	new money = cs_get_user_money(id);
-	if (!g_hasPerkM)
-	{
-		new price = ls_perk_price(id), n = ls_perk_count(id);
-		for (new k = 0; k < PK_COUNT; k++)
-		{
-			why[0] = EOS;
-			if (ls_perk_has(id, PK_ID[k]))
-				copy(why, charsmax(why), "you have it");
-			else if (n >= PERK_MAX)
-				formatex(why, charsmax(why), "%d perks at most", PERK_MAX);
-			else if (money < price)
-				copy(why, charsmax(why), "not enough money");
-			formatex(text, charsmax(text), "%sPerk: %s \d- %s \y($%d)%s%s", why[0] ? "\d" : "", PK_NAME[k], PK_WHAT[k], price, why[0] ? "  \r" : "", why);
-			num_to_str(100 + k, info, charsmax(info));
-			menu_additem(m, text, info);
-		}
-	}
-	if (!g_hasBench)
-	{
-		new lv = ls_weapon_level(id);
-		new price = lv >= 2 ? MK3_PRICE : MK2_PRICE;
-		why[0] = EOS;
-		if (!lv)
-			copy(why, charsmax(why), "hold a gun");
-		else if (lv >= 3)
-			copy(why, charsmax(why), "it's Mk III already");
-		else if (money < price)
-			copy(why, charsmax(why), "not enough money");
-		formatex(text, charsmax(text), "%sUpgrade the gun in hand to Mk %s \y($%d)%s%s", why[0] ? "\d" : "", lv >= 2 ? "III" : "II", price, why[0] ? "  \r" : "", why);
-		menu_additem(m, text, "200");
-	}
-	menu_additem(m, "Open the gun menu \d(B)", "99");
-	g_menuUntil[id] = get_gametime() + 30.0;
-	menu_display(id, m);
-}
-
-public menu_shop(id, menu, item)
-{
-	if (item < 0)
-	{
-		g_menuUntil[id] = 0.0;
-		menu_destroy(menu);
-		return PLUGIN_HANDLED;
-	}
-	new info[4], name[64], access, cb;
-	menu_item_getinfo(menu, item, access, info, charsmax(info), name, charsmax(name), cb);
-	menu_destroy(menu);
-	g_menuUntil[id] = 0.0;
-	if (str_to_num(info) == 99)
-	{
-		/* the game's own buy menu (works here: the armory is a buy zone) */
-		engclient_cmd(id, "buy");
-		return PLUGIN_HANDLED;
-	}
-	new code = str_to_num(info);
-	if (is_user_alive(id) && at_shop(id))
-	{
-		if (code >= 100 && code < 100 + PK_COUNT)
-			ls_perk_buy(id, PK_ID[code - 100], true);
-		else if (code == 200)
-			ls_bench_use(id, true);
-		else
-			shop_buy(id, code, true);
-	}
-	return PLUGIN_HANDLED;
-}
-
-stock bool:shop_buy(id, i, bool:tell)
-{
-	new price = shop_price(i), money = cs_get_user_money(id);
-	new why[48];
-	shop_why_not(id, i, why, charsmax(why));
-	if (why[0])
-	{
-		if (tell)
-			client_print(id, print_center, "%s: %s", SHOP_NAME[i], why);
-		return false;
-	}
-	switch (i)
-	{
-		case 0: ls_barricade_repair(most_broken_barricade(), 0);
-		case 1: cs_set_user_armor(id, 100, CS_ARMOR_VESTHELM);
-		case 2:
-		{
-			/* the game carries one HE at a time (the client shows and throws only one), so the
-			   pack is one in hand and two more: each throw brings out the next, and it says how
-			   many are left */
-			if (!user_has_weapon(id, CSW_HEGRENADE))
-				ls_give_item(id, "he");
-			cs_set_user_bpammo(id, CSW_HEGRENADE, 1);
-			g_hePack[id] = 3;
-			if (!is_user_bot(id))
-				client_print(id, print_center, "3 HE grenades: throw one and the next comes out");
-		}
-		case 3: ls_give_item(id, "ammo");
-		case 4: set_user_health(id, min(get_user_health(id) + 50, 100));
-	}
-	cs_set_user_money(id, money - price);
-	if (tell)
-	{
-		client_print(id, print_center, "%s bought", SHOP_NAME[i]);
-		keeper_thanks(id);
-	}
-	return true;
 }
 
 /* an HE grenade leaving someone's hand: one less owed from their pack */
@@ -2954,22 +2845,6 @@ public task_he_next(tid)
 		ls_give_item(id, "he");
 	else if (cs_get_user_bpammo(id, CSW_HEGRENADE) < 1)
 		cs_set_user_bpammo(id, CSW_HEGRENADE, 1);
-}
-
-/* USE at the armory opens the shop; a hint when close */
-public fm_prethink(id)
-{
-	if (g_phase == PH_IDLE || g_phase == PH_OVER || !is_user_alive(id))
-		return FMRES_IGNORED;
-	new b = pev(id, pev_button), ob = pev(id, pev_oldbuttons);
-	if (is_user_bot(id))
-		return FMRES_IGNORED;
-	if ((b & IN_USE) && !(ob & IN_USE) && get_gametime() >= g_useNext[id] && at_shop(id))
-	{
-		g_useNext[id] = get_gametime() + 1.0;
-		shop_menu(id);
-	}
-	return FMRES_IGNORED;
 }
 
 /* bots: some go to the armory at a break, stock up, and go back to playing */
@@ -3007,7 +2882,7 @@ stock bots_shop_tick()
 	   the rifle's money kept */
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		if (!is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT || !at_shop(p))
+		if (!g_shopEnt || !is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT || !at_shop(p))
 			continue;
 		if (get_gametime() < g_useNext[p])
 			continue;
@@ -3015,14 +2890,14 @@ stock bots_shop_tick()
 		new bool:rifle = bot_gun_rank(p) <= RIFLE_LAST;
 		new keep = rifle ? 0 : g_botGunCost[0];
 		new CsArmorType:t;
-		if (cs_get_user_armor(p, t) < 60 && cs_get_user_money(p) - shop_price(1) >= keep)
-			shop_buy(p, 1, false);
-		if (cs_get_user_money(p) - shop_price(3) >= keep)
-			shop_buy(p, 3, false);
-		if (random_num(0, 2) == 0 && cs_get_user_money(p) - shop_price(2) >= keep)
-			shop_buy(p, 2, false);
-		if (random_num(0, 3) == 0 && cs_get_user_money(p) - shop_price(0) >= keep)
-			shop_buy(p, 0, false);
+		if (cs_get_user_armor(p, t) < 60 && cs_get_user_money(p) - ls_shop_price(g_shopEnt, "vesthelm") >= keep)
+			ls_shop_buy(g_shopEnt, p, "vesthelm", false);
+		if (cs_get_user_money(p) - ls_shop_price(g_shopEnt, "ammo") >= keep)
+			ls_shop_buy(g_shopEnt, p, "ammo", false);
+		if (random_num(0, 2) == 0 && cs_get_user_money(p) - ls_shop_price(g_shopEnt, "@he3") >= keep)
+			ls_shop_buy(g_shopEnt, p, "@he3", false);
+		if (random_num(0, 3) == 0 && cs_get_user_money(p) - ls_shop_price(g_shopEnt, "@repair") >= keep)
+			ls_shop_buy(g_shopEnt, p, "@repair", false);
 	}
 }
 
@@ -3087,35 +2962,6 @@ stock bot_buy_guns(p)
 	}
 }
 
-/* Both ways to buy, made obvious: on walking into the armory a centre message (in full the first
-   3 visits on a map, short after), a line on the HUD while inside, and the shopkeeper says it */
-/* walking out: shut the supplies menu and the game's buy menu, clear the armory line */
-stock leave_shop(p)
-{
-	if (g_menuUntil[p] > 0.0)
-	{
-		g_menuUntil[p] = 0.0;
-		menu_cancel(p);
-	}
-	new menu, keys;
-	get_user_menu(p, menu, keys);
-	if (menu != 0)
-		show_menu(p, 0, "^n", 1);
-	/* the buy menu (VGUI on the Steam client): the game's own "close" */
-	client_cmd(p, "slot10");
-}
-
-public task_keeper_greet(tid)
-{
-	new p = tid - TASK_REV - 200;
-	if (!is_user_connected(p) || !g_inShop[p] || !g_keeper || !is_valid_ent(g_keeper))
-		return;
-	if (g_keeperKind == 2)
-		client_print_color(p, print_team_default, "^4G-Man:^1 Weapons... on the B menu. Supplies... from me.");
-	else if (g_keeperKind == 1)
-		client_print_color(p, print_team_default, "^4Barney:^1 Guns are on the B menu, supplies from me.");
-}
-
 /* big announcements go on gm_components' toast line: one at a time, never two on top of each other */
 stock toast(id, Float:secs, bool:replace, const fmt[], any:...)
 {
@@ -3124,43 +2970,10 @@ stock toast(id, Float:secs, bool:replace, const fmt[], any:...)
 	ls_toast(id, secs, msg, 255, 200, 60, replace ? 1 : 0);
 }
 
-stock shop_hint()
-{
-	for (new p = 1; p <= MaxClients; p++)
-	{
-		if (!is_user_alive(p) || is_user_bot(p))
-			continue;
-		new bool:in = at_shop(p);
-		if (in && !g_inShop[p])
-		{
-			/* walking in: a short hint (and the shopkeeper's line the first 3 visits) */
-			g_shopVisits[p]++;
-			/* once, on walking in: the game's centre text; the shopkeeper says it in chat a
-			   moment later (the first 3 visits), not on the same frame */
-			client_print(p, print_center, "Armory: B for weapons - USE at the counter for supplies");
-			if (g_shopVisits[p] <= 3 && g_keeper && is_valid_ent(g_keeper))
-				set_task(1.5, "task_keeper_greet", TASK_REV + 200 + p);
-		}
-		else if (!in && g_inShop[p])
-			leave_shop(p);
-		g_inShop[p] = in;
-	}
-}
-
 /* =========================================================================
- * The shopkeeper: Barney (or the G-Man) at the armory, from Half-Life's own models
+ * The shopkeeper: Barney (or the G-Man) at the armory, from Half-Life's own models; the
+ * ls_shop component places and animates him (keeper=), the model is loaded here
  * ========================================================================= */
-
-new g_cKeeper;
-new g_keeperModel[64];
-new Float:g_keeperNext;
-new Float:g_keeperBackAt;
-new bool:g_keeperSolid;
-
-new const BARNEY_FIDGETS[][] = { "idle2", "idle3", "idle4" };
-new const GMAN_FIDGETS[][] = { "idlebrush", "idlelook", "idle02" };
-new const BARNEY_LINES[][] = { "Need ammo?", "Stay safe out there.", "That'll hold 'em.", "Watch your back, pal." };
-new const GMAN_LINES[][] = { "Prepare for... the next wave.", "Wise... choice.", "Time to... choose.", "Rise and... shine." };
 
 stock keeper_precache()
 {
@@ -3169,165 +2982,16 @@ stock keeper_precache()
 	get_pcvar_string(g_cKeeper, want, charsmax(want));
 	if (equali(want, "none"))
 		return;
-	g_keeperKind = equali(want, "gman") ? 2 : 1;
-	formatex(g_keeperModel, charsmax(g_keeperModel), "models/%s.mdl", g_keeperKind == 2 ? "gman" : "barney");
+	new m[64], alt[96];
+	formatex(m, charsmax(m), "models/%s.mdl", equali(want, "gman") ? "gman" : "barney");
 	/* Half-Life's models live in valve/, which the engine reads from cstrike too */
-	new alt[96];
-	formatex(alt, charsmax(alt), "../valve/%s", g_keeperModel);
-	if (!file_exists(g_keeperModel) && !file_exists(alt))
+	formatex(alt, charsmax(alt), "../valve/%s", m);
+	if (!file_exists(m) && !file_exists(alt))
 	{
-		log_amx("Last Stand: %s not found on this server; the shopkeeper is a CS model instead.", g_keeperModel);
-		copy(g_keeperModel, charsmax(g_keeperModel), "models/player/gign/gign.mdl");
-		g_keeperKind = 3;
-	}
-	precache_model(g_keeperModel);
-}
-
-stock keeper_spawn()
-{
-	if (!g_keeperKind)
+		log_amx("Last Stand: %s not found on this server; the shopkeeper is a CS model instead.", m);
 		return;
-	if (!g_keeper || !is_valid_ent(g_keeper))
-	{
-		g_keeper = create_entity("info_target");
-		if (!g_keeper)
-			return;
-		entity_set_string(g_keeper, EV_SZ_classname, "lst_shopkeeper");
-		entity_set_model(g_keeper, g_keeperModel);
 	}
-	/* (not solid while placed, and the floor trace looks past him) */
-	set_pev(g_keeper, pev_solid, SOLID_NOT);
-	new Float:o[3];
-	keeper_spot(o);
-	entity_set_origin(g_keeper, o);
-	entity_set_size(g_keeper, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 72.0});
-	set_pev(g_keeper, pev_movetype, MOVETYPE_NONE);
-	set_pev(g_keeper, pev_solid, SOLID_NOT);
-	set_pev(g_keeper, pev_takedamage, DAMAGE_NO);
-	set_pev(g_keeper, pev_controller_0, 127);
-	set_pev(g_keeper, pev_controller_1, 127);
-	g_keeperSolid = false;
-	keeper_play(g_keeperKind == 2 ? "idle01" : "idle1");
-	g_keeperNext = get_gametime() + random_float(6.0, 12.0);
-}
-
-/* by the shop marker, on the floor (a marker on a counter puts him beside it, not on it), with
-   room to stand, the closest such spot */
-stock keeper_spot(Float:out[3])
-{
-	new Float:base = floor_under(g_shop, g_keeper);
-	out = g_shop;
-	out[2] = base + 1.0;
-	new Float:best = 99999.0, Float:lowest = base;
-	for (new ring = 0; ring <= 3; ring++)
-	{
-		for (new k = 0; k < (ring ? 8 : 1); k++)
-		{
-			new Float:p[3];
-			p[0] = g_shop[0] + 40.0 * float(ring) * floatcos(45.0 * float(k), degrees);
-			p[1] = g_shop[1] + 40.0 * float(ring) * floatsin(45.0 * float(k), degrees);
-			p[2] = g_shop[2];
-			new Float:f = floor_under(p, g_keeper);
-			new Float:c[3];
-			c = p;
-			c[2] = f + 37.0;
-			engfunc(EngFunc_TraceHull, c, c, IGNORE_MONSTERS, HULL_HUMAN, g_keeper, 0);
-			if (get_tr2(0, TR_StartSolid) || get_tr2(0, TR_AllSolid))
-				continue;
-			/* lower floor first (the ground, not a counter), then closer */
-			new Float:score = (f - lowest) * 10.0 + 40.0 * float(ring);
-			if (f < lowest - 4.0)
-			{
-				lowest = f;
-				score = 40.0 * float(ring);
-				best = 99999.0;
-			}
-			if (score < best)
-			{
-				best = score;
-				out[0] = p[0];
-				out[1] = p[1];
-				out[2] = f + 1.0;
-			}
-		}
-	}
-}
-
-stock keeper_play(const seq[])
-{
-	new Float:fr, bool:loops;
-	new n = lookup_sequence(g_keeper, seq, fr, loops);
-	set_pev(g_keeper, pev_sequence, n >= 0 ? n : 0);
-	set_pev(g_keeper, pev_frame, 0.0);
-	set_pev(g_keeper, pev_framerate, 1.0);
-	set_pev(g_keeper, pev_animtime, get_gametime());
-}
-
-/* faces whoever's nearest within 300 units, fidgets now and then, solid once nobody's in him */
-public keeper_tick()
-{
-	if (!g_keeper || !is_valid_ent(g_keeper))
-		return;
-	new Float:now = get_gametime(), Float:o[3], Float:po[3];
-	pev(g_keeper, pev_origin, o);
-	new near = 0, Float:nd = 300.0;
-	new bool:overlap = false;
-	for (new p = 1; p <= MaxClients; p++)
-	{
-		if (!is_user_alive(p))
-			continue;
-		pev(p, pev_origin, po);
-		new Float:d = get_distance_f(o, po);
-		if (floatabs(po[0] - o[0]) < 34.0 && floatabs(po[1] - o[1]) < 34.0 && po[2] - o[2] < 110.0 && po[2] - o[2] > -40.0)
-			overlap = true;
-		if (d < nd)
-		{
-			nd = d;
-			near = p;
-		}
-	}
-	if (!g_keeperSolid && !overlap)
-	{
-		g_keeperSolid = true;
-		set_pev(g_keeper, pev_solid, SOLID_BBOX);
-		entity_set_origin(g_keeper, o);
-	}
-	if (near)
-	{
-		pev(near, pev_origin, po);
-		new Float:ang[3];
-		pev(g_keeper, pev_angles, ang);
-		new Float:want = floatatan2(po[1] - o[1], po[0] - o[0], degrees);
-		new Float:d = want - ang[1];
-		while (d > 180.0) d -= 360.0;
-		while (d < -180.0) d += 360.0;
-		ang[1] += floatclamp(d, -25.0, 25.0);
-		set_pev(g_keeper, pev_angles, ang);
-	}
-	if (g_keeperBackAt > 0.0 && now >= g_keeperBackAt)
-	{
-		g_keeperBackAt = 0.0;
-		keeper_play(g_keeperKind == 2 ? "idle01" : "idle1");
-	}
-	if (now >= g_keeperNext && g_keeperBackAt <= 0.0 && g_keeperKind != 3)
-	{
-		g_keeperNext = now + random_float(8.0, 15.0);
-		keeper_play(g_keeperKind == 2 ? GMAN_FIDGETS[random(sizeof GMAN_FIDGETS)] : BARNEY_FIDGETS[random(sizeof BARNEY_FIDGETS)]);
-		g_keeperBackAt = now + 2.5;
-	}
-}
-
-/* a nod (or Barney's wave) and a line after a purchase */
-stock keeper_thanks(id)
-{
-	if (!g_keeper || !is_valid_ent(g_keeper) || g_keeperKind == 3)
-		return;
-	keeper_play(g_keeperKind == 2 ? (random_num(0, 1) ? "yes" : "bigyes") : "barn_wave");
-	g_keeperBackAt = get_gametime() + 2.5;
-	if (g_keeperKind == 2)
-		client_print_color(id, print_team_default, "^4G-Man:^1 %s", GMAN_LINES[random(sizeof GMAN_LINES)]);
-	else
-		client_print_color(id, print_team_default, "^4Barney:^1 %s", BARNEY_LINES[random(sizeof BARNEY_LINES)]);
+	precache_model(m);
 }
 
 /* =========================================================================

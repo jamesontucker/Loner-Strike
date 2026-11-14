@@ -53,7 +53,7 @@ enum
 	K_RESPAWN, K_WEAPON, K_DAMAGE, K_DOOR, K_TRAP, K_CAPTURE, K_ZONE, K_SHRINKER,
 	K_LOOT, K_DROP, K_BARRICADE, K_WAVE, K_EXTRACT, K_CHECKPOINT, K_PLATFORM,
 	K_CLASS, K_MEETING, K_CRATE,
-	K_PERK, K_BENCH, K_BOX, K_PICKUP, /* W1 */
+	K_PERK, K_BENCH, K_BOX, K_PICKUP, K_SHOP, /* W1 */
 	K_COUNT
 };
 
@@ -64,7 +64,7 @@ new const KIND_NAME[K_COUNT][] =
 	"ls_capture_point", "ls_safe_zone", "ls_zone_shrinker", "ls_loot_container", "ls_supply_drop",
 	"ls_barricade", "ls_wave_spawner", "ls_extraction_zone", "ls_checkpoint", "ls_moving_platform",
 	"ls_player_class", "ls_meeting_point", "ls_supply_crate",
-	"ls_perk_machine", "ls_upgrade_bench", "ls_mystery_box", "ls_pickup" /* W1 */
+	"ls_perk_machine", "ls_upgrade_bench", "ls_mystery_box", "ls_pickup", "ls_shop" /* W1 */
 };
 
 /* where a component came from */
@@ -650,7 +650,7 @@ public fm_keyvalue(ent, kvd)
 {
 	if (ent <= 0 || ent >= MAX_ENTS)
 		return FMRES_IGNORED;
-	new key[32], val[128];
+	new key[32], val[512]; /* W1: long values (a shop's items) */
 	get_kvd(kvd, KV_KeyName, key, charsmax(key));
 	get_kvd(kvd, KV_Value, val, charsmax(val));
 	if (equal(key, "classname"))
@@ -871,7 +871,7 @@ stock kvec(s, const key[], Float:out[3])
 stock parse_keys(Trie:keys, const text[])
 {
 	new len = strlen(text), i = 0, n = 0;
-	new key[32], val[128];
+	new key[32], val[512]; /* W1: long values (a shop's items) */
 	while (i < len)
 	{
 		while (i < len && text[i] <= ' ')
@@ -9602,11 +9602,36 @@ new bool:g_upCreatures;
 
 new g_fwPerk, g_fwDown, g_fwRevive, g_fwBledOut, g_fwUpgraded, g_fwBox, g_fwPickup, g_fwCreatureHurt;
 
+/* shop */
+#define SH_NEXT     0
+#define SH_BACK     1
+#define SH_SOLID    2
+#define SH_KIND     3
+#define SH_MAX_ITEMS 12
+
+new g_shopIn[33];
+new g_shopVisits[33];
+new Float:g_shopMenuUntil[33];
+new g_shopMenuSlot[33];
+new g_shopWhy[64];
+new g_shopCb;
+new g_fwShopItem, g_fwShopBuy;
+
+new const KEEPER_FIDGETS[3][3][] = { { "", "", "" }, { "idle2", "idle3", "idle4" }, { "idlebrush", "idlelook", "idle02" } };
+new const KEEPER_LINES[3][4][] =
+{
+	{ "", "", "", "" },
+	{ "Need ammo?", "Stay safe out there.", "That'll hold 'em.", "Watch your back, pal." },
+	{ "Prepare for... the next wave.", "Wise... choice.", "Time to... choose.", "Rise and... shine." }
+};
+
+
 stock up_precache()
 {
 	precache_model_once("models/w_battery.mdl");
 	precache_sound("buttons/spark5.wav");
 	precache_sound("items/suitchargeok1.wav");
+	shop_precache();
 	for (new p = 0; p <= 32; p++)
 		for (new m = 0; m < MOD_COUNT; m++)
 			g_modSet[p][m] = 1.0;
@@ -9634,6 +9659,13 @@ stock up_natives()
 	register_native("ls_bench_use", "n_bench_use");
 	register_native("ls_box_use", "n_box_use");
 	register_native("ls_pickup_spawn", "n_pickup_spawn");
+	register_native("ls_shop_buy", "n_shop_buy");
+	register_native("ls_shop_price", "n_shop_price");
+	register_native("ls_shop_menu", "n_shop_menu");
+	register_native("ls_shop_open", "n_shop_open");
+	register_native("ls_shop_is_open", "n_shop_is_open");
+	register_native("ls_shop_why", "n_shop_why");
+	register_native("ls_shop_at", "n_shop_at");
 }
 
 stock up_plugin_init()
@@ -9646,6 +9678,8 @@ stock up_plugin_init()
 	g_fwBox = CreateMultiForward("ls_on_box", ET_STOP, FP_CELL, FP_CELL, FP_STRING);
 	g_fwPickup = CreateMultiForward("ls_on_pickup", ET_STOP, FP_CELL, FP_CELL, FP_STRING);
 	g_fwCreatureHurt = CreateMultiForward("ls_on_creature_hurt", ET_IGNORE, FP_CELL, FP_CELL, FP_FLOAT, FP_CELL);
+	g_fwShopItem = CreateMultiForward("ls_on_shop_item", ET_STOP, FP_CELL, FP_CELL, FP_STRING);
+	g_fwShopBuy = CreateMultiForward("ls_on_shop_buy", ET_STOP, FP_CELL, FP_CELL, FP_STRING, FP_CELL);
 
 	register_forward(FM_PlayerPreThink, "up_prethink");
 	RegisterHamPlayer(Ham_TakeDamage, "up_player_hurt");
@@ -10322,6 +10356,14 @@ stock up_comp_reset(s)
 			if (up_trap_paid(s))
 				render(g_ent[s], kRenderFxGlowShell, 80, 160, 255, kRenderNormal, 14);
 		}
+		case K_SHOP:
+		{
+			new v[8];
+			if (!ks(s, "radius", v, charsmax(v)))
+				g_r[s] = 128.0;
+			g_state[s] = ki(s, "open", 1) ? 0 : 1;
+			keeper_spawn(s);
+		}
 	}
 }
 
@@ -10473,11 +10515,25 @@ stock up_near(id)
 		new Float:o[3];
 		pev(g_ent[s], pev_origin, o);
 		new Float:d = get_distance_f(g_porg[id], o);
-		if (d < bd)
+		if (d >= bd)
+			continue;
+		/* people: roughly looking at it (a box by a shop counter isn't bought by accident) */
+		if (!g_bot[id] && d > 32.0)
 		{
-			bd = d;
-			best = s;
+			new Float:eye[3], Float:ang[3], Float:fwd[3];
+			pev(id, pev_view_ofs, eye);
+			for (new i = 0; i < 3; i++)
+				eye[i] += g_porg[id][i];
+			pev(id, pev_v_angle, ang);
+			engfunc(EngFunc_MakeVectors, ang);
+			global_get(glb_v_forward, fwd);
+			o[2] += 8.0;
+			new Float:de = get_distance_f(eye, o);
+			if (de > 1.0 && ((o[0] - eye[0]) * fwd[0] + (o[1] - eye[1]) * fwd[1] + (o[2] - eye[2]) * fwd[2]) / de < 0.6)
+				continue;
 		}
+		bd = d;
+		best = s;
 	}
 	return best;
 }
@@ -10542,11 +10598,17 @@ public up_prethink(id)
 	if (now < g_upUseNext[id])
 		return FMRES_IGNORED;
 	g_now = now;
+	g_bot[id] = bot;
 	pev(id, pev_origin, g_porg[id]);
 	g_pteam[id] = get_user_team(id);
 	new s = up_near(id);
 	if (s < 0)
+	{
+		/* in a shop: its menu */
+		if (!bot && shop_use(id))
+			g_upUseNext[id] = now + 1.0;
 		return FMRES_IGNORED;
+	}
 	g_upUseNext[id] = now + 1.0;
 	up_use(s, id, !bot);
 	if (bot)
@@ -10795,6 +10857,10 @@ public up_player_killed(id, killer, gib)
 
 stock up_disconnected(id)
 {
+	g_shopIn[id] = 0;
+	g_shopVisits[id] = 0;
+	g_shopMenuUntil[id] = 0.0;
+	remove_task(TASK_MENU + 400 + id);
 	g_down[id] = false;
 	g_bledOut[id] = false;
 	g_perks[id] = 0;
@@ -10939,7 +11005,7 @@ stock up_bots_traps()
 stock up_tick(bool:sec)
 {
 	down_tick();
-	new bool:any = false;
+	new bool:any = false, bool:shops = false;
 	for (new s = 0; s < g_nslots; s++)
 	{
 		if (!g_ent[s] || !g_on[s])
@@ -10948,9 +11014,16 @@ stock up_tick(bool:sec)
 		{
 			case K_PICKUP: up_pickup_tick(s);
 			case K_PERK, K_BENCH, K_BOX: any = true;
+			case K_SHOP:
+			{
+				keeper_tick(s);
+				shops = true;
+			}
 			case K_TRAP: if (up_trap_paid(s)) any = true;
 		}
 	}
+	if (shops)
+		shop_people();
 	if (!any)
 		return;
 	if (sec)
@@ -10974,6 +11047,533 @@ stock up_tick(bool:sec)
 			if (g_alive[p] && g_bot[p])
 				up_offers(p);
 	}
+}
+
+/* ---- the shop (ls_shop): a counter with a menu of priced items, maybe a keeper ----
+   items = "Name|price|give|what; ..." (give: an item ls_give_item knows - ammo, vesthelm,
+   hp:50, hegrenade, weapon names - or @word for the mode to give in ls_on_shop_buy);
+   price_rise = dearer by this share each wave; scale; upgrades=1 adds the perks and the bench
+   where the map has no machine or bench; buy_menu=1 adds the game's buy menu; keeper = barney,
+   gman, none or a model; title, hint (said on walking in), greet (the keeper's first words) */
+
+stock shop_precache()
+{
+	/* Last Stand's keeper: its model has to be loaded with the map (lst_shopkeeper) */
+	read_mode_id();
+	if (!equal(g_modeId, "laststand"))
+		return;
+	new want[64] = "barney";
+	if (get_cvar_pointer("lst_shopkeeper"))
+		get_cvar_string("lst_shopkeeper", want, charsmax(want));
+	if (equali(want, "none"))
+		return;
+	new m[96];
+	keeper_model(want, m, charsmax(m));
+	new alt[128];
+	formatex(alt, charsmax(alt), "../valve/%s", m);
+	if (file_exists(m) || file_exists(alt))
+		precache_model_once(m);
+}
+
+stock keeper_model(const want[], out[], len)
+{
+	if (equali(want, "barney") || equali(want, "gman"))
+		formatex(out, len, "models/%s.mdl", want);
+	else
+		copy(out, len, want);
+}
+
+/* item i of the shop: false past the last */
+stock bool:shop_item(s, i, name[], nlen, &price, give[], glen, what[], wlen)
+{
+	new list[512];
+	ks(s, "items", list, charsmax(list));
+	new at = 0, n = 0;
+	new len = strlen(list);
+	while (at < len)
+	{
+		new end = at;
+		while (end < len && list[end] != ';')
+			end++;
+		if (n == i)
+		{
+			new entry[192];
+			copy(entry, min(end - at, charsmax(entry)), list[at]);
+			new f[4][96], fi = 0, fo = 0;
+			for (new c = 0; entry[c] && fi < 4; c++)
+			{
+				if (entry[c] == '|')
+				{
+					f[fi][fo] = EOS;
+					fi++;
+					fo = 0;
+					continue;
+				}
+				if (fo < 95)
+					f[fi][fo++] = entry[c];
+			}
+			if (fi < 4)
+				f[fi][fo] = EOS;
+			for (new k = 0; k < 4; k++)
+				trim(f[k]);
+			copy(name, nlen, f[0]);
+			price = str_to_num(f[1]);
+			copy(give, glen, f[2][0] ? f[2] : f[0]);
+			copy(what, wlen, f[3]);
+			return name[0] != EOS;
+		}
+		n++;
+		at = end + 1;
+	}
+	return false;
+}
+
+/* the price now: dearer each wave (price_rise), times scale, rounded to $50 */
+stock shop_price_now(s, base)
+{
+	new Float:p = float(base) * (1.0 + kf(s, "price_rise", 0.0) * float(max(g_wave - 1, 0))) * kf(s, "scale", 1.0);
+	return max(floatround(p / 50.0) * 50, base > 0 ? 50 : 0);
+}
+
+/* the item whose name or give is `item`: its index, or -1 */
+stock shop_find(s, const item[])
+{
+	new name[64], give[64], what[96], price;
+	for (new i = 0; i < SH_MAX_ITEMS && shop_item(s, i, name, charsmax(name), price, give, charsmax(give), what, charsmax(what)); i++)
+		if (equali(name, item) || equali(give, item))
+			return i;
+	return -1;
+}
+
+/* why it can't be bought now ("" = it can) */
+stock shop_why_not(s, id, const give[], price, out[], len)
+{
+	out[0] = EOS;
+	if (equali(give, "vesthelm") || equali(give, "assault") || equali(give, "armor", 5) || equali(give, "vest") || equali(give, "kevlar"))
+	{
+		new CsArmorType:t;
+		if (cs_get_user_armor(id, t) >= 100 && (t == CS_ARMOR_VESTHELM || !equali(give, "vesthelm")))
+			copy(out, len, "you have full armor");
+	}
+	else if (equali(give, "hp", 2) || equali(give, "medkit"))
+	{
+		if (float(get_user_health(id)) >= floatmax(entity_max_health(id), 100.0))
+			copy(out, len, "you're at full health");
+	}
+	if (!out[0])
+	{
+		g_shopWhy[0] = EOS;
+		new ret;
+		ExecuteForward(g_fwShopItem, ret, g_ent[s], id, give);
+		if (ret == PLUGIN_HANDLED)
+			copy(out, len, g_shopWhy[0] ? g_shopWhy : "not now");
+	}
+	if (!out[0] && cs_get_user_money(id) < price)
+		copy(out, len, "not enough money");
+}
+
+stock bool:shop_buy_item(s, id, i, bool:tell)
+{
+	new name[64], give[64], what[96], base;
+	if (!is_user_alive(id) || g_down[id] || !shop_item(s, i, name, charsmax(name), base, give, charsmax(give), what, charsmax(what)))
+		return false;
+	if (g_state[s] != 0)
+	{
+		if (tell)
+			client_print(id, print_center, "The %s is closed", g_label[s][0] ? g_label[s] : "shop");
+		return false;
+	}
+	new price = shop_price_now(s, base);
+	new why[64];
+	shop_why_not(s, id, give, price, why, charsmax(why));
+	if (why[0])
+	{
+		if (tell)
+			client_print(id, print_center, "%s: %s", name, why);
+		return false;
+	}
+	new ret;
+	ExecuteForward(g_fwShopBuy, ret, g_ent[s], id, give, price);
+	if (ret == PLUGIN_HANDLED)
+		return false;
+	if (give[0] != '@' && !give_thing(id, give))
+	{
+		if (tell)
+			client_print(id, print_center, "%s: you can't carry it", name);
+		return false;
+	}
+	cs_set_user_money(id, cs_get_user_money(id) - price);
+	log_amx("Shop: %d bought %s for $%d in wave %d", id, name, price, g_wave);
+	if (tell)
+	{
+		client_print(id, print_center, "%s bought", name);
+		keeper_thanks(s, id);
+	}
+	return true;
+}
+
+public shop_item_cb(id, menu, item)
+{
+	new info[8], name[2], access, cb;
+	menu_item_getinfo(menu, item, access, info, charsmax(info), name, charsmax(name), cb);
+	return info[0] == 'x' ? ITEM_DISABLED : ITEM_IGNORE;
+}
+
+stock shop_menu(s, id)
+{
+	if (!g_shopCb)
+		g_shopCb = menu_makecallback("shop_item_cb");
+	new title[96], label[32];
+	ks(s, "title", label, charsmax(label), g_label[s][0] ? g_label[s] : "Shop");
+	formatex(title, charsmax(title), "\y%s  \d(you have $%d)", label, cs_get_user_money(id));
+	new m = menu_create(title, "menu_shop_pick");
+	new text[160], info[8], why[64], name[64], give[64], what[96], base;
+	for (new i = 0; i < SH_MAX_ITEMS && shop_item(s, i, name, charsmax(name), base, give, charsmax(give), what, charsmax(what)); i++)
+	{
+		new price = shop_price_now(s, base);
+		shop_why_not(s, id, give, price, why, charsmax(why));
+		if (why[0])
+			formatex(text, charsmax(text), "\d%s%s%s ($%d)  \r%s", name, what[0] ? " - " : "", what, price, why);
+		else
+			formatex(text, charsmax(text), "%s%s%s%s \y($%d)", name, what[0] ? " \d- " : "", what, what[0] ? "" : "", price);
+		formatex(info, charsmax(info), "%s%d", why[0] ? "x" : "", i);
+		menu_additem(m, text, info, 0, g_shopCb);
+	}
+	/* no perk machine / bench on the map: they're here */
+	if (ki(s, "upgrades", 0))
+	{
+		new bool:machine = count_comps(K_PERK) > 0, bool:bench = count_comps(K_BENCH) > 0;
+		if (!machine)
+			for (new k = 0; k < PK_COUNT; k++)
+			{
+				perk_why_not(-1, id, k, why, charsmax(why));
+				formatex(text, charsmax(text), "%sPerk: %s \d- %s \y($%d)%s%s", why[0] ? "\d" : "", PK_NAME[k], PK_WHAT[k], perk_price_at(-1, id), why[0] ? "  \r" : "", why);
+				formatex(info, charsmax(info), "%s%d", why[0] ? "x" : "", 100 + k);
+				menu_additem(m, text, info, 0, g_shopCb);
+			}
+		if (!bench)
+		{
+			new w = bench_why_not(-1, id, why, charsmax(why));
+			new lv = w ? wpn_level(w) : 1;
+			formatex(text, charsmax(text), "%sUpgrade the gun in hand to Mk %s \y($%d)%s%s", why[0] ? "\d" : "", lv >= 2 ? "III" : "II", bench_price(-1, lv), why[0] ? "  \r" : "", why);
+			formatex(info, charsmax(info), "%s200", why[0] ? "x" : "");
+			menu_additem(m, text, info, 0, g_shopCb);
+		}
+	}
+	if (ki(s, "buy_menu", 0))
+		menu_additem(m, "Open the gun menu \d(B)", "99");
+	g_shopMenuUntil[id] = get_gametime() + 30.0;
+	g_shopMenuSlot[id] = s + 1;
+	menu_display(id, m);
+}
+
+public menu_shop_pick(id, menu, item)
+{
+	if (item < 0)
+	{
+		g_shopMenuUntil[id] = 0.0;
+		menu_destroy(menu);
+		return PLUGIN_HANDLED;
+	}
+	new info[8], name[2], access, cb;
+	menu_item_getinfo(menu, item, access, info, charsmax(info), name, charsmax(name), cb);
+	menu_destroy(menu);
+	g_shopMenuUntil[id] = 0.0;
+	new s = g_shopMenuSlot[id] - 1;
+	if (s < 0 || !g_ent[s] || g_kind[s] != K_SHOP || info[0] == 'x')
+		return PLUGIN_HANDLED;
+	new code = str_to_num(info);
+	if (code == 99)
+	{
+		/* the game's own buy menu (works where it's a buy zone) */
+		engclient_cmd(id, "buy");
+		return PLUGIN_HANDLED;
+	}
+	g_bot[id] = is_user_bot(id) != 0;
+	if (!is_user_alive(id) || !inside(s, g_porg[id]))
+		return PLUGIN_HANDLED;
+	if (code >= 100 && code < 100 + PK_COUNT)
+	{
+		if (perk_buy(-1, id, code - 100, true))
+			keeper_thanks(s, id);
+	}
+	else if (code == 200)
+	{
+		if (bench_use(-1, id, true))
+			keeper_thanks(s, id);
+	}
+	else
+		shop_buy_item(s, id, code, true);
+	return PLUGIN_HANDLED;
+}
+
+/* walking in: the hint, the keeper's greeting; walking out: menus shut */
+stock shop_people()
+{
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!g_alive[p] || g_bot[p])
+		{
+			g_shopIn[p] = 0;
+			continue;
+		}
+		new in = 0;
+		for (new s = 0; s < g_nslots && !in; s++)
+			if (g_ent[s] && g_on[s] && g_kind[s] == K_SHOP && (!g_team[s] || g_pteam[p] == g_team[s]) && inside(s, g_porg[p]))
+				in = s + 1;
+		if (in && in != g_shopIn[p])
+		{
+			new s = in - 1, hintText[128];
+			if (ks(s, "hint", hintText, charsmax(hintText)))
+				client_print(p, print_center, "%s", hintText);
+			g_shopVisits[p]++;
+			if (g_shopVisits[p] <= 3 && g_aux[s] > 0 && pev_valid(g_aux[s]))
+				set_task(1.5, "task_keeper_greet", TASK_MENU + 400 + p);
+		}
+		else if (!in && g_shopIn[p])
+			shop_leave(p);
+		g_shopIn[p] = in;
+	}
+}
+
+stock shop_leave(p)
+{
+	if (g_shopMenuUntil[p] > 0.0)
+	{
+		g_shopMenuUntil[p] = 0.0;
+		menu_cancel(p);
+		new menu, keys;
+		get_user_menu(p, menu, keys);
+		if (menu != 0)
+			show_menu(p, 0, "^n", 1);
+	}
+	/* the game's buy menu (VGUI on the Steam client): its own "close" */
+	client_cmd(p, "slot10");
+}
+
+public task_keeper_greet(tid)
+{
+	new p = tid - TASK_MENU - 400;
+	new s = g_shopIn[p] - 1;
+	if (!is_user_connected(p) || s < 0 || !g_ent[s] || g_kind[s] != K_SHOP)
+		return;
+	new greet[160], who[32];
+	keeper_name(s, who, charsmax(who));
+	if (!ks(s, "greet", greet, charsmax(greet)) || !who[0])
+		return;
+	client_print_color(p, print_team_default, "^4%s:^1 %s", who, greet);
+}
+
+stock keeper_name(s, out[], len)
+{
+	new k = floatround(g_pf[s][SH_KIND]);
+	ks(s, "keeper_name", out, len, k == 1 ? "Barney" : (k == 2 ? "G-Man" : ""));
+}
+
+/* the keeper: Barney or the G-Man (Half-Life's models) or any model, by the counter */
+stock keeper_spawn(s)
+{
+	new want[64];
+	ks(s, "keeper", want, charsmax(want), "none");
+	new e = g_aux[s];
+	if (equali(want, "none"))
+	{
+		if (e > 0 && pev_valid(e))
+			engfunc(EngFunc_RemoveEntity, e);
+		g_aux[s] = 0;
+		return;
+	}
+	new m[96];
+	keeper_model(want, m, charsmax(m));
+	new kind = equali(want, "barney") ? 1 : (equali(want, "gman") ? 2 : 0);
+	if (!TrieKeyExists(g_models, m) && !usable_model(m))
+	{
+		/* (not loaded with the map: a CS player model stands in, no gestures) */
+		copy(m, charsmax(m), "models/player/gign/gign.mdl");
+		kind = 0;
+	}
+	g_pf[s][SH_KIND] = float(kind);
+	if (e <= 0 || !pev_valid(e))
+	{
+		e = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"));
+		if (!e)
+			return;
+		set_pev(e, pev_classname, "ls_shopkeeper");
+		g_aux[s] = e;
+	}
+	engfunc(EngFunc_SetModel, e, m);
+	set_pev(e, pev_solid, SOLID_NOT);
+	new Float:o[3];
+	keeper_spot(s, e, o);
+	engfunc(EngFunc_SetOrigin, e, o);
+	engfunc(EngFunc_SetSize, e, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 72.0});
+	set_pev(e, pev_movetype, MOVETYPE_NONE);
+	set_pev(e, pev_takedamage, DAMAGE_NO);
+	set_pev(e, pev_controller_0, 127);
+	set_pev(e, pev_controller_1, 127);
+	g_pf[s][SH_SOLID] = 0.0;
+	keeper_play(e, kind == 2 ? "idle01" : "idle1");
+	g_pf[s][SH_NEXT] = g_now + random_float(6.0, 12.0);
+	g_pf[s][SH_BACK] = 0.0;
+}
+
+/* by the shop, on the floor (a spot on a counter puts the keeper beside it), with room to stand */
+stock keeper_spot(s, e, Float:out[3])
+{
+	new Float:c0[3];
+	vcopy(g_org[s], c0);
+	if (!g_box[s])
+		c0[2] = g_floor[s] + 36.0;
+	new Float:base = quiet_floor(c0, e);
+	vcopy(c0, out);
+	out[2] = base + 1.0;
+	new Float:best = 99999.0, Float:lowest = base;
+	for (new ring = 0; ring <= 3; ring++)
+	{
+		for (new k = 0; k < (ring ? 8 : 1); k++)
+		{
+			new Float:p[3];
+			p[0] = c0[0] + 40.0 * float(ring) * floatcos(45.0 * float(k), degrees);
+			p[1] = c0[1] + 40.0 * float(ring) * floatsin(45.0 * float(k), degrees);
+			p[2] = c0[2];
+			new Float:f = quiet_floor(p, e);
+			new Float:c[3];
+			vcopy(p, c);
+			c[2] = f + 37.0;
+			engfunc(EngFunc_TraceHull, c, c, IGNORE_MONSTERS, HULL_HUMAN, e, 0);
+			if (get_tr2(0, TR_StartSolid) || get_tr2(0, TR_AllSolid))
+				continue;
+			/* the lower floor first (the ground, not a counter), then closer */
+			new Float:score = (f - lowest) * 10.0 + 40.0 * float(ring);
+			if (f < lowest - 4.0)
+			{
+				lowest = f;
+				score = 40.0 * float(ring);
+				best = 99999.0;
+			}
+			if (score < best)
+			{
+				best = score;
+				out[0] = p[0];
+				out[1] = p[1];
+				out[2] = f + 1.0;
+			}
+		}
+	}
+}
+
+/* the floor under a point (no warning when it starts in a wall: the keeper's search tries those) */
+stock Float:quiet_floor(const Float:p[3], ignore)
+{
+	new Float:a[3], Float:b[3], Float:frac;
+	vcopy(p, a);
+	vcopy(p, b);
+	a[2] += 8.0;
+	b[2] -= 4096.0;
+	engfunc(EngFunc_TraceLine, a, b, IGNORE_MONSTERS, ignore, 0);
+	get_tr2(0, TR_flFraction, frac);
+	if (get_tr2(0, TR_StartSolid) || get_tr2(0, TR_AllSolid) || frac >= 1.0)
+		return p[2] - 36.0;
+	get_tr2(0, TR_vecEndPos, b);
+	return b[2];
+}
+
+stock keeper_play(e, const seq[])
+{
+	new Float:fr, bool:loops;
+	new n = lookup_sequence(e, seq, fr, loops);
+	set_pev(e, pev_sequence, n >= 0 ? n : 0);
+	set_pev(e, pev_frame, 0.0);
+	set_pev(e, pev_framerate, 1.0);
+	set_pev(e, pev_animtime, get_gametime());
+}
+
+/* faces whoever's nearest within 300 units, fidgets now and then, solid once nobody's in him */
+stock keeper_tick(s)
+{
+	new e = g_aux[s];
+	if (e <= 0 || !pev_valid(e))
+		return;
+	new kind = floatround(g_pf[s][SH_KIND]);
+	new Float:o[3];
+	pev(e, pev_origin, o);
+	new near = 0, Float:nd = 300.0, bool:overlap = false;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!g_alive[p])
+			continue;
+		new Float:po[3];
+		vcopy(g_porg[p], po);
+		if (floatabs(po[0] - o[0]) < 34.0 && floatabs(po[1] - o[1]) < 34.0 && po[2] - o[2] < 110.0 && po[2] - o[2] > -40.0)
+			overlap = true;
+		new Float:d = get_distance_f(o, po);
+		if (d < nd)
+		{
+			nd = d;
+			near = p;
+		}
+	}
+	if (g_pf[s][SH_SOLID] == 0.0 && !overlap)
+	{
+		g_pf[s][SH_SOLID] = 1.0;
+		set_pev(e, pev_solid, SOLID_BBOX);
+		engfunc(EngFunc_SetOrigin, e, o);
+	}
+	if (near)
+	{
+		new Float:ang[3];
+		pev(e, pev_angles, ang);
+		new Float:want = floatatan2(g_porg[near][1] - o[1], g_porg[near][0] - o[0], degrees);
+		new Float:d = want - ang[1];
+		while (d > 180.0) d -= 360.0;
+		while (d < -180.0) d += 360.0;
+		ang[1] += floatclamp(d, -25.0, 25.0);
+		set_pev(e, pev_angles, ang);
+	}
+	if (!kind)
+		return;
+	if (g_pf[s][SH_BACK] > 0.0 && g_now >= g_pf[s][SH_BACK])
+	{
+		g_pf[s][SH_BACK] = 0.0;
+		keeper_play(e, kind == 2 ? "idle01" : "idle1");
+	}
+	if (g_now >= g_pf[s][SH_NEXT] && g_pf[s][SH_BACK] <= 0.0)
+	{
+		g_pf[s][SH_NEXT] = g_now + random_float(8.0, 15.0);
+		keeper_play(e, KEEPER_FIDGETS[kind][random(3)]);
+		g_pf[s][SH_BACK] = g_now + 2.5;
+	}
+}
+
+/* a nod (or Barney's wave) and a line after a purchase */
+stock keeper_thanks(s, id)
+{
+	new e = g_aux[s];
+	if (e <= 0 || !pev_valid(e))
+		return;
+	new kind = floatround(g_pf[s][SH_KIND]);
+	if (!kind)
+		return;
+	keeper_play(e, kind == 2 ? (random_num(0, 1) ? "yes" : "bigyes") : "barn_wave");
+	g_pf[s][SH_BACK] = get_gametime() + 2.5;
+	new who[32];
+	keeper_name(s, who, charsmax(who));
+	client_print_color(id, print_team_default, "^4%s:^1 %s", who, KEEPER_LINES[kind][random(4)]);
+}
+
+/* USE in the shop opens its menu (people; bots buy with ls_shop_buy) */
+stock bool:shop_use(id)
+{
+	new s = g_shopIn[id] - 1;
+	if (s < 0 || !g_ent[s] || g_kind[s] != K_SHOP || !g_on[s])
+		return false;
+	if (g_state[s] != 0)
+	{
+		client_print(id, print_center, "The %s is closed now", g_label[s][0] ? g_label[s] : "shop");
+		return true;
+	}
+	shop_menu(s, id);
+	return true;
 }
 
 /* lst_perk / lst_bench / lst_box / lst_trap markers (Last Stand's kit) are these components */
@@ -11207,5 +11807,78 @@ public n_pickup_spawn(plugin, params)
 		format(keys, charsmax(keys), "%s model=%s", keys, model);
 	g_now = get_gametime();
 	return comp_make(K_PICKUP, o, keys, SRC_RUNTIME);
+}
+
+/* ls_shop_buy(ent, id, const item[], bool:tell = true): by its name or what it gives */
+public bool:n_shop_buy(plugin, params)
+{
+	new s = arg_slot(1, K_SHOP), id = get_param(2);
+	if (s < 0 || !(1 <= id <= 32))
+		return false;
+	new item[64];
+	get_string(3, item, charsmax(item));
+	new i = shop_find(s, item);
+	if (i < 0)
+		return false;
+	g_bot[id] = is_user_bot(id) != 0;
+	g_now = get_gametime();
+	return shop_buy_item(s, id, i, get_param(4) != 0);
+}
+
+/* ls_shop_price(ent, const item[]): its price now, -1 if the shop has no such item */
+public n_shop_price(plugin, params)
+{
+	new s = arg_slot(1, K_SHOP);
+	if (s < 0)
+		return -1;
+	new item[64];
+	get_string(2, item, charsmax(item));
+	new i = shop_find(s, item);
+	if (i < 0)
+		return -1;
+	new name[64], give[64], what[96], base;
+	shop_item(s, i, name, charsmax(name), base, give, charsmax(give), what, charsmax(what));
+	return shop_price_now(s, base);
+}
+
+public n_shop_menu(plugin, params)
+{
+	new s = arg_slot(1, K_SHOP), id = get_param(2);
+	if (s < 0 || !(1 <= id <= 32) || !is_user_alive(id))
+		return 0;
+	shop_menu(s, id);
+	return 1;
+}
+
+public n_shop_open(plugin, params)
+{
+	new s = arg_slot(1, K_SHOP);
+	if (s < 0)
+		return 0;
+	g_state[s] = get_param(2) ? 0 : 1;
+	return 1;
+}
+
+public bool:n_shop_is_open(plugin, params)
+{
+	new s = arg_slot(1, K_SHOP);
+	return s >= 0 && g_state[s] == 0;
+}
+
+/* ls_shop_why(const reason[]): inside ls_on_shop_item, what the menu says */
+public n_shop_why(plugin, params)
+{
+	get_string(1, g_shopWhy, charsmax(g_shopWhy));
+	return 1;
+}
+
+public bool:n_shop_at(plugin, params)
+{
+	new s = arg_slot(1, K_SHOP), id = get_param(2);
+	if (s < 0 || !(1 <= id <= 32) || !is_user_alive(id))
+		return false;
+	new Float:o[3];
+	pev(id, pev_origin, o);
+	return inside(s, o);
 }
 /* ==== end W1 ==== */

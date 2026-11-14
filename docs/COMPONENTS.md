@@ -476,6 +476,21 @@ creatures are within 300 u.
 blinking its last 5 s); a player of `team` walking within `radius` (56 u) takes it. Forward
 `ls_on_pickup(ent, id, kind[])` *(handled: it stays)*. Last Stand's power-ups are these.
 
+### ls_shop
+A counter (a point with a `radius`, 128, or a brush): a player inside presses USE for a menu of priced
+items. `items` = `Name|price|give|what; ...`, where give is anything `ls_give_item` gives (ammo,
+vesthelm, hp:50, hegrenade, weapon names) or `@word`, which the mode hands out in `ls_on_shop_buy`.
+Armor and health lines are greyed when full. Keys `price_rise` (dearer by this share each wave), `scale`,
+`upgrades=1` (the perks and the gun upgrade, when the map has no perk machine or bench), `buy_menu=1`
+(the game's buy menu as the last line), `keeper` (barney, gman, none, or a model loaded with the map;
+he stands by the counter, turns to whoever is near, fidgets, nods and says a line after a purchase),
+`keeper_name`, `greet` (said to someone walking in, their first 3 visits), `hint` (shown on walking in),
+`title`, `open`, `team`. Walking out shuts the menus.
+- Natives: `ls_shop_buy(ent, id, item[], tell)` (by name or give; bots buy with it), `ls_shop_price(ent, item[])`,
+  `ls_shop_menu`, `ls_shop_open(ent, open)`, `ls_shop_is_open`, `ls_shop_at(ent, id)`, `ls_shop_why(reason[])`.
+- Forwards: `ls_on_shop_item(ent, id, item[])` *(handled: greyed, with ls_shop_why's reason)*,
+  `ls_on_shop_buy(ent, id, item[], price)` *(handled: refused)*. Last Stand's armory is one of these.
+
 ### Creatures
 Forward `ls_on_creature_hurt(ent, attacker, dmg, headshot)` after each hit (the damage modifier and gun
 level are applied to players' hits on creatures and on players).
