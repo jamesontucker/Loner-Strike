@@ -397,6 +397,12 @@ def clean_item(raw):
         if t and t not in tags:
             tags.append(t)
     it["tags"] = tags
+    # P5: a map shipped with its editable source (source/: the project, a .map, its own textures)
+    src = raw.get("source", False)
+    if not isinstance(src, bool) or (src and kind != "map"):
+        _bad("source")
+    if src:
+        it["source"] = True
 
     m = _obj(raw, "map")
     if kind == "map" and m is None:
@@ -814,7 +820,9 @@ def allowed_path(kind, p):
     root_wad = len(parts) == 1 and ext == ".wad" and p not in STOCK_WADS
     content = len(parts) >= 2 and top in CONTENT and ext in CONTENT[top]
     if kind == "map":
-        return content or root_wad
+        # (P5: the editable source: the editor project, a .map, its own textures, a note)
+        source = top == "source" and len(parts) == 2 and ext in (".lsmap", ".map", ".wad", ".txt")
+        return content or root_wad or source
     if kind == "texture":
         return root_wad
     if kind == "spray":
@@ -1037,6 +1045,9 @@ def build_item(model, gb, facts, sizes, manifest):
         if not it.get("map"):
             raise Reject(422, "The package's loner-strike.json doesn't name its map. Make it again with Publish.")
         it["map"] = map_facts(it["map"], sizes)
+        # P5: "with its source" only when the package really has the project in source/
+        if it.get("source") and not any(p.lower().startswith("source/") and p.lower().endswith(".lsmap") for p in sizes):
+            it.pop("source", None)
     it.pop("health", None)
     it.update(kind=kind, model=model, gb=gb, file=f["id"], md5=f["md5"], name=facts["title"], author=facts["author"],
               screenshots=facts["screenshots"], featured=False, status="listed")
@@ -1767,6 +1778,8 @@ def index_item(row):
     out["ownerId"] = int(row["submitter_id"] or 0)
     if it.get("remixOf"):
         out["remixOf"] = it["remixOf"]
+    if it.get("source"):
+        out["source"] = True
     out.update(screenshots=list(it.get("screenshots") or [])[:MAX_SHOTS], tags=list(it.get("tags") or []),
                featured=bool(row["featured"]), added=int(row["added"]), updated=int(row["updated"]), status=status)
     return out

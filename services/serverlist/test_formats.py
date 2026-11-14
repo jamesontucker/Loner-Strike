@@ -54,6 +54,12 @@ class Formats(unittest.TestCase):
                 self.assertIsNotNone(check(name, data))
         self.assertEqual(check("README.txt", b"hello"), "text")
         self.assertEqual(check("x.json", b'{"a": 1}'), "text")
+        # P5: a map's editable source: the project is JSON, the .map is text
+        self.assertEqual(check("source/a.lsmap", b'{"version": 3}'), "text")
+        self.assertEqual(check("source/a.map", b'{\n"classname" "worldspawn"\n}\n'), "text")
+        for name, data in (("source/a.lsmap", b"{nope"), ("source/a.lsmap", b"a\0b"), ("source/a.map", b"a\0b")):
+            with self.assertRaises(formats.FormatError):
+                check(name, data)
         self.assertIsNone(check("x.unknown", b"whatever"))
 
     def test_every_cut_is_refused(self):

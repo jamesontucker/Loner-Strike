@@ -1701,6 +1701,33 @@ class Hardening(unittest.TestCase):
         self.assertIn("settings", e.exception.message)
 
 
+class MapSource(unittest.TestCase):
+    """P5: a map package with its editable source (source/: the project, a .map, its own textures)."""
+
+    def facts(self):
+        return {"kind": "map", "file": {"id": 9, "md5": "ab" * 16}, "title": "Market", "author": "someone", "screenshots": []}
+
+    def test_source_files_are_allowed_in_map_packages_only(self):
+        cm.check_package(["maps/a.bsp", "source/a.lsmap", "source/a.map", "source/a_custom.wad", "source/README-source.txt", "README.txt"], "map")
+        for bad, kind in (("source/a.exe", "map"), ("source/sub/a.lsmap", "map"), ("source/a.lsmap", "prefab"), ("source/a.dll", "map")):
+            with self.subTest(bad=bad, kind=kind):
+                with self.assertRaises(cm.Reject):
+                    cm.check_package(["README.txt", bad], kind)
+
+    def test_the_entry_says_source_only_when_the_project_ships(self):
+        man = manifest(dict(MAP_MANIFEST, source=True))
+        sizes = {"maps/de_marakesh.bsp": 10, "source/de_marakesh.lsmap": 5, "source/de_marakesh.map": 5}
+        it = cm.build_item("Mod", 7, self.facts(), sizes, man)
+        self.assertTrue(it.get("source"))
+        it = cm.build_item("Mod", 7, self.facts(), {"maps/de_marakesh.bsp": 10}, man)
+        self.assertNotIn("source", it, "no project in source/: not 'with source'")
+        with self.assertRaises(cm.Reject):
+            cm.package_item(manifest(dict(MAP_MANIFEST, source="yes")), "map")
+        row = {"item": json.dumps(dict(cm.build_item("Mod", 7, self.facts(), sizes, man))), "state": "listed", "model": "Mod", "gb": 7,
+               "submitter_id": 1, "featured": 0, "added": 1, "updated": 2}
+        self.assertTrue(cm.index_item(row)["source"])
+
+
 class FileChecks(unittest.TestCase):
     """Every file in a package is checked (formats.py) before it's listed."""
 

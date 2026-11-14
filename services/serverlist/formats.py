@@ -548,7 +548,9 @@ def check_text(r, as_json=False, limit=16 << 20):
 CHECKS = {".bsp": check_bsp, ".wad": check_wad, ".mdl": check_mdl, ".spr": check_spr, ".wav": check_wav,
           ".mp3": check_mp3, ".bmp": check_bmp, ".tga": check_tga, ".png": check_png, ".jpg": check_jpg,
           ".jpeg": check_jpg, ".nav": check_nav, ".lsv": check_lsv, ".res": check_text, ".txt": check_text,
-          ".ini": check_text, ".map": check_text, ".json": lambda r: check_text(r, as_json=True)}
+          ".ini": check_text, ".map": lambda r: check_text(r, limit=64 << 20), ".json": lambda r: check_text(r, as_json=True),
+          # P5: a map's editable source (the editor's project is JSON; big maps run to tens of MB)
+          ".lsmap": lambda r: check_text(r, as_json=True, limit=64 << 20)}
 
 
 def check(name, f, size):
