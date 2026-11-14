@@ -26,7 +26,7 @@ export const nodeSchema = z.object({
   pos: pos.default({ x: 0, y: 0 }),
   // (choices from the registry may hold a /, like radio/go; the app checks each setting by its
   // kind, and a / in text is refused there)
-  params: z.record(z.union([z.string().max(120).regex(/^[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$/]*$/u, "letters, digits, spaces and plain punctuation only"), z.number().finite(), z.boolean()])).default({}),
+  params: z.record(z.union([z.string().max(400).regex(/^[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$/|]*$/u, "letters, digits, spaces and plain punctuation only"), z.number().finite(), z.boolean()])).default({}),
   breakpoint: z.boolean().optional(),
   /** the Function or Macro whose graph (tab) it's on; none: the Event Graph */
   graph: id.optional(),

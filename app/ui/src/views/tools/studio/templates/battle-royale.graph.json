@@ -1,6 +1,6 @@
 {
  "schema": "loner-strike/graph",
- "version": 2,
+ "version": 3,
  "mode": {
   "id": "royale_lite",
   "name": "Royale Lite",
@@ -38,7 +38,7 @@
    "type": "event.map_started",
    "pos": {
     "x": 65,
-    "y": 63
+    "y": 74
    },
    "params": {}
   },
@@ -47,7 +47,7 @@
    "type": "comp.load_pack",
    "pos": {
     "x": 565,
-    "y": 50
+    "y": 61
    },
    "params": {
     "pack": "br"
@@ -58,7 +58,7 @@
    "type": "event.round_started",
    "pos": {
     "x": 65,
-    "y": 512
+    "y": 728
    },
    "params": {}
   },
@@ -66,8 +66,8 @@
    "id": "rs_zone",
    "type": "flow.for_each_entity",
    "pos": {
-    "x": 1065,
-    "y": 806
+    "x": 3065,
+    "y": 693
    },
    "params": {
     "by": "class",
@@ -78,8 +78,8 @@
    "id": "rs_start",
    "type": "comp.start",
    "pos": {
-    "x": 1565,
-    "y": 723
+    "x": 3565,
+    "y": 648
    },
    "params": {}
   },
@@ -87,8 +87,8 @@
    "id": "rs_msg",
    "type": "msg.broadcast",
    "pos": {
-    "x": 1565,
-    "y": 886
+    "x": 3565,
+    "y": 774
    },
    "params": {
     "text": "Loot up and stay in the zone. Last one standing wins!",
@@ -99,8 +99,8 @@
    "id": "rs_alive",
    "type": "var.set",
    "pos": {
-    "x": 2065,
-    "y": 864
+    "x": 4065,
+    "y": 752
    },
    "params": {
     "var": "alive",
@@ -111,8 +111,8 @@
    "id": "rs_drops",
    "type": "timer.repeat",
    "pos": {
-    "x": 2565,
-    "y": 875
+    "x": 4565,
+    "y": 763
    },
    "params": {
     "every": 60,
@@ -123,8 +123,8 @@
    "id": "rs_pick",
    "type": "flow.pick_entity",
    "pos": {
-    "x": 3065,
-    "y": 982
+    "x": 5065,
+    "y": 763
    },
    "params": {
     "by": "class",
@@ -135,8 +135,8 @@
    "id": "rs_drop",
    "type": "comp.drop_call",
    "pos": {
-    "x": 3565,
-    "y": 993
+    "x": 5565,
+    "y": 774
    },
    "params": {}
   },
@@ -145,7 +145,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 1596
+    "y": 1802
    },
    "params": {}
   },
@@ -154,7 +154,7 @@
    "type": "var.set",
    "pos": {
     "x": 565,
-    "y": 1593
+    "y": 1799
    },
    "params": {
     "var": "alive"
@@ -165,7 +165,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 1065,
-    "y": 1658
+    "y": 1864
    },
    "params": {
     "text": "Squads left:",
@@ -178,7 +178,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 1880
+    "y": 2085
    },
    "params": {
     "op": "le",
@@ -190,7 +190,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 1773
+    "y": 1973
    },
    "params": {}
   },
@@ -199,7 +199,7 @@
    "type": "flow.pick_player",
    "pos": {
     "x": 2065,
-    "y": 1762
+    "y": 1962
    },
    "params": {
     "which": "alive"
@@ -210,7 +210,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 2565,
-    "y": 1590
+    "y": 1790
    },
    "params": {
     "text": "Winner:",
@@ -223,7 +223,7 @@
    "type": "player.add_frags",
    "pos": {
     "x": 3065,
-    "y": 1638
+    "y": 1838
    },
    "params": {
     "amount": 5
@@ -234,7 +234,7 @@
    "type": "player.get_team",
    "pos": {
     "x": 3065,
-    "y": 1823
+    "y": 2029
    },
    "params": {}
   },
@@ -243,7 +243,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 3565,
-    "y": 1724
+    "y": 1930
    },
    "params": {}
   },
@@ -252,7 +252,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 2565,
-    "y": 1885
+    "y": 2091
    },
    "params": {
     "winner": "draw"
@@ -263,7 +263,7 @@
    "type": "comp.on_zone_tick",
    "pos": {
     "x": 65,
-    "y": 1204
+    "y": 244
    },
    "params": {}
   },
@@ -272,7 +272,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 565,
-    "y": 1202
+    "y": 242
    },
    "params": {
     "text": "Get back in the zone!",
@@ -285,7 +285,7 @@
    "type": "comp.on_loot",
    "pos": {
     "x": 65,
-    "y": 1389
+    "y": 429
    },
    "params": {}
   },
@@ -294,7 +294,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 565,
-    "y": 1376
+    "y": 416
    },
    "params": {
     "text": "Crate opened."
@@ -305,7 +305,7 @@
    "type": "br.hud",
    "pos": {
     "x": 1065,
-    "y": 50
+    "y": 61
    },
    "params": {
     "on": true
@@ -316,7 +316,7 @@
    "type": "kd.enable",
    "pos": {
     "x": 1565,
-    "y": 50
+    "y": 61
    },
    "params": {
     "on": true,
@@ -341,7 +341,7 @@
    "type": "bots.no_buy",
    "pos": {
     "x": 565,
-    "y": 300
+    "y": 704
    },
    "params": {
     "on": true
@@ -352,7 +352,7 @@
    "type": "bots.phase",
    "pos": {
     "x": 1065,
-    "y": 300
+    "y": 715
    },
    "params": {
     "phase": "loot"
@@ -363,7 +363,7 @@
    "type": "var.set",
    "pos": {
     "x": 1565,
-    "y": 300
+    "y": 682
    },
    "params": {
     "var": "looting",
@@ -375,7 +375,7 @@
    "type": "br.hud_text",
    "pos": {
     "x": 2065,
-    "y": 300
+    "y": 704
    },
    "params": {
     "text": "Squads forming: say slash squad"
@@ -386,7 +386,7 @@
    "type": "br.lobby",
    "pos": {
     "x": 2565,
-    "y": 300
+    "y": 704
    },
    "params": {
     "secs": 15
@@ -397,7 +397,7 @@
    "type": "br.on_lobby_end",
    "pos": {
     "x": 65,
-    "y": 2150
+    "y": 1508
    },
    "params": {}
   },
@@ -406,7 +406,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 565,
-    "y": 2150
+    "y": 1484
    },
    "params": {
     "which": "alive"
@@ -417,7 +417,7 @@
    "type": "player.strip",
    "pos": {
     "x": 1065,
-    "y": 2150
+    "y": 1372
    },
    "params": {
     "knife": true
@@ -428,7 +428,7 @@
    "type": "br.drop_in",
    "pos": {
     "x": 1565,
-    "y": 2150
+    "y": 1417
    },
    "params": {}
   },
@@ -437,7 +437,7 @@
    "type": "br.hud_text",
    "pos": {
     "x": 1065,
-    "y": 2350
+    "y": 1576
    },
    "params": {
     "text": "Loot up: the fight starts in 45 s"
@@ -448,7 +448,7 @@
    "type": "timer.delay",
    "pos": {
     "x": 1565,
-    "y": 2350
+    "y": 1576
    },
    "params": {
     "secs": 45
@@ -459,7 +459,7 @@
    "type": "bots.phase",
    "pos": {
     "x": 2065,
-    "y": 2350
+    "y": 1587
    },
    "params": {
     "phase": "fight"
@@ -470,7 +470,7 @@
    "type": "var.set",
    "pos": {
     "x": 2565,
-    "y": 2350
+    "y": 1554
    },
    "params": {
     "var": "looting",
@@ -482,7 +482,7 @@
    "type": "br.hud_text",
    "pos": {
     "x": 3065,
-    "y": 2350
+    "y": 1576
    },
    "params": {
     "text": ""
@@ -493,7 +493,7 @@
    "type": "event.player_about_hurt",
    "pos": {
     "x": 65,
-    "y": 2650
+    "y": 988
    },
    "params": {}
   },
@@ -502,7 +502,7 @@
    "type": "var.get",
    "pos": {
     "x": 65,
-    "y": 2850
+    "y": 1180
    },
    "params": {
     "var": "looting"
@@ -513,7 +513,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 565,
-    "y": 2650
+    "y": 1083
    },
    "params": {}
   },
@@ -522,7 +522,7 @@
    "type": "dmg.block",
    "pos": {
     "x": 1065,
-    "y": 2650
+    "y": 1107
    },
    "params": {}
   },
@@ -531,7 +531,7 @@
    "type": "br.squads_alive",
    "pos": {
     "x": 65,
-    "y": 1884
+    "y": 2089
    },
    "params": {}
   }
@@ -1108,8 +1108,8 @@
     "y": 4
    },
    "size": {
-    "w": 2300,
-    "h": 158
+    "w": 2278,
+    "h": 180
    }
   },
   {
@@ -1117,11 +1117,11 @@
    "text": "The round: bots skip buying and loot in peace, a 15 s squad lobby (people say slash squad in chat), the zone starts closing, a supply drop every minute.",
    "pos": {
     "x": 41,
-    "y": 180
+    "y": 602
    },
    "size": {
-    "w": 4278,
-    "h": 800
+    "w": 4778,
+    "h": 328
    }
   },
   {
@@ -1129,11 +1129,11 @@
    "text": "When one squad is left, a player of it is named the winner (5 points) and the round ends.",
    "pos": {
     "x": 41,
-    "y": 1544
+    "y": 1744
    },
    "size": {
     "w": 3778,
-    "h": 475
+    "h": 481
    }
   },
   {
@@ -1141,7 +1141,7 @@
    "text": "Tips for players.",
    "pos": {
     "x": 41,
-    "y": 1156
+    "y": 196
    },
    "size": {
     "w": 778,
@@ -1153,11 +1153,11 @@
    "text": "Lobby over: everyone drops in from the sky with a knife (the map's br_drop markers, no damage until landing). 45 s of looting with nobody hurt (bots too), then the fight.",
    "pos": {
     "x": 41,
-    "y": 2090
+    "y": 1326
    },
    "size": {
-    "w": 3400,
-    "h": 420
+    "w": 3278,
+    "h": 406
    }
   },
   {
@@ -1165,11 +1165,11 @@
    "text": "While looting, no damage.",
    "pos": {
     "x": 41,
-    "y": 2590
+    "y": 942
    },
    "size": {
-    "w": 1400,
-    "h": 360
+    "w": 1278,
+    "h": 372
    }
   }
  ]
