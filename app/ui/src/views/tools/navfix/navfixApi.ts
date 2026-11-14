@@ -13,7 +13,9 @@ export type Op =
   | { op: "link"; a: number; b: number; oneWay?: boolean }
   | { op: "unlink"; a: number; b: number; both?: boolean }
   | { op: "attr"; ids: number[]; set?: number; clear?: number }
-  | { op: "place"; ids: number[]; name: string };
+  | { op: "place"; ids: number[]; name: string }
+  /** several edits as one step: one Undo takes them all back */
+  | { op: "batch"; ops: Op[]; label?: string };
 
 export type Problem = { kind: string; text: string; hint: string; areas: number[]; at: Vec3; fix: { label: string; op: Op } | null };
 

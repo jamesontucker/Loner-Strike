@@ -156,3 +156,50 @@ test("UX-M1: toasts sit above the save bar in Creature Studio and Plugin Studio 
   }
   expect(problems.filter((p) => !p.includes("A QA toast"))).toEqual([]);
 });
+
+const NAV_MAP = process.env.LS_TOOLS_NAV_MAP || "cs_rats2";
+
+test("L1: one click on Fix N is one Undo step", async ({ page }) => {
+  const problems = watch(page);
+  await open(page, `navfix:${NAV_MAP}`);
+  await expect(page.getByText("No unsaved changes")).toBeVisible({ timeout: 60_000 });
+  const fix = page.getByRole("button", { name: /^Fix \d+$/ }).first();
+  test.skip(!(await fix.count()), `${NAV_MAP} has no group of fixable problems here`);
+  const n = Number((await fix.innerText()).replace(/\D/g, ""));
+  await fix.click();
+  const bar = page.locator(".tl-actionbar");
+  await expect(bar).toContainText("1 change", { timeout: 30_000 });
+  await expect(bar).toContainText(`Fix ${n} problems`);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.getByText("No unsaved changes")).toBeVisible({ timeout: 30_000 });
+  expect(problems).toEqual([]);
+});
+
+test("UX-L2: the crosshair preview's sizes are named", async ({ page }) => {
+  await open(page, "playercfg");
+  const bar = page.locator(".pc-stage-bar");
+  await expect(bar).toBeVisible({ timeout: 20_000 });
+  await expect(bar.locator(".pc-labelled", { hasText: "Screen" })).toBeVisible();
+  await expect(bar.locator(".pc-labelled", { hasText: "Zoom" })).toBeVisible();
+});
+
+test("UX-L7: installing the template's NAME asks first", async ({ page }) => {
+  let installs = 0;
+  await page.route("**/api/tools/spray/install", (r) => (installs++, r.fulfill({ status: 200, contentType: "application/json", body: '{"error":"not in this test"}' })));
+  await open(page, "spray");
+  await expect(page.locator(".sc-stage svg")).toBeVisible({ timeout: 20_000 });
+  await page.locator(".tl-actionbar").getByRole("button", { name: "Install spray" }).click();
+  await expect(page.locator("#ask-text")).toContainText("still says “NAME”");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  expect(installs).toBe(0);
+});
+
+test("F1 re-check: Condition Zero props in a 1.6 map aren't 'every player has it'", async ({ page, request }) => {
+  const r = await (await request.get("/api/tools/doctor/kz_urban")).json().catch(() => ({ error: "none" }));
+  test.skip(!!r.error, "kz_urban isn't in this game");
+  await open(page, "doctor:kz_urban");
+  await page.getByRole("button", { name: "All checks" }).click({ timeout: 30_000 }).catch(() => {});
+  const row = page.locator(".doc-lines li", { hasText: "models/props/trash.mdl" });
+  await expect(row.first()).toBeVisible({ timeout: 30_000 });
+  await expect(row.first()).not.toContainText("every player has it");
+});

@@ -307,8 +307,9 @@ function Editor({ map, onBack }: { map: string; onBack: () => void }) {
             )}
           </div>
           <div className="tools-status">
-            <span className="mono">{areas.length} areas · {counts.length} places</span>
-            <span className="tools-hover">{hover ? <>{hover.place || <span className="muted">no name</span>}<span className="muted"> · area {hover.id} · height {Math.round(hover.z)}</span></> : picked.length ? `${picked.length} picked` : ""}</span>
+            {/* the pick count stays while the pointer is over the map (QA4-T2 L8) */}
+            <span className="mono">{areas.length} areas · {counts.length} places{picked.length ? ` · ${picked.length} picked` : ""}</span>
+            <span className="tools-hover">{hover ? <>{hover.place || <span className="muted">no name</span>}<span className="muted"> · area {hover.id} · height {Math.round(hover.z)}</span></> : ""}</span>
             <span className="tools-hint">{TOOL_HINT[tool]}</span>
           </div>
         </div>

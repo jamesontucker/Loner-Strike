@@ -436,6 +436,19 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// QA4-T2 L5: bad radar settings answer {error} in words, not serde's plain text.
+    #[tokio::test]
+    async fn radar_settings_errors_are_words() {
+        let (root, g) = game("radarq");
+        let st = state(Some(g));
+        let (s, h, b) = call(&st, "/api/tools/overview/Room/preview.png?style=none", None).await;
+        assert_eq!(s, StatusCode::BAD_REQUEST);
+        assert!(h.get(header::CONTENT_TYPE).unwrap().to_str().unwrap().contains("json"));
+        let e = json_of(&b)["error"].as_str().unwrap().to_string();
+        assert!(e.contains("Radar maker") && !e.contains("variant"), "{e}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[tokio::test]
     async fn routes_over_the_cube_room() {
         let (root, g) = game("routes");

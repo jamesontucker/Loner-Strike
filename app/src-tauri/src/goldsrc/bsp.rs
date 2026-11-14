@@ -110,7 +110,8 @@ pub fn header(b: &[u8]) -> Result<[Lump; LUMPS]> {
         let detail = match &b[0..4] {
             b"IBSP" | b"VBSP" => "it's a Quake 2 / Source map".to_string(),
             _ if version == 29 => "it's a Quake map".to_string(),
-            _ => format!("map version {version}, not 30"),
+            // plain words, not the version number (QA4-T2 UX-L5)
+            _ => "it was made for another game".to_string(),
         };
         return Err(Error::NotFormat { what: WHAT, detail });
     }
@@ -118,7 +119,7 @@ pub fn header(b: &[u8]) -> Result<[Lump; LUMPS]> {
     for (i, l) in lumps.iter_mut().enumerate() {
         let (o, n) = (r.i32(4 + i * 8)?, r.i32(8 + i * 8)?);
         if o < 0 || n < 0 || (o as u64 + n as u64) > b.len() as u64 {
-            return Err(Error::damaged(WHAT, format!("part {i} points outside the file")));
+            return Err(Error::damaged(WHAT, "it's cut short or broken inside"));
         }
         *l = Lump { offset: o as u32, length: n as u32 };
     }
@@ -328,7 +329,7 @@ pub fn read_lumps(path: &Path, which: &[usize]) -> Result<Vec<Vec<u8>>> {
     let r = Le::new(&head, WHAT);
     let version = r.u32(0)?;
     if version != VERSION {
-        return Err(Error::NotFormat { what: WHAT, detail: format!("map version {version}, not 30") });
+        return Err(Error::NotFormat { what: WHAT, detail: "it was made for another game".to_string() });
     }
     let mut out = Vec::with_capacity(which.len());
     for &i in which {
@@ -337,7 +338,7 @@ pub fn read_lumps(path: &Path, which: &[usize]) -> Result<Vec<Vec<u8>>> {
         }
         let (o, n) = (r.i32(4 + i * 8)?, r.i32(8 + i * 8)?);
         if o < 0 || n < 0 || o as u64 + n as u64 > size {
-            return Err(Error::damaged(WHAT, format!("part {i} points outside the file")));
+            return Err(Error::damaged(WHAT, "it's cut short or broken inside"));
         }
         f.seek(SeekFrom::Start(o as u64))?;
         let mut buf = vec![0u8; n as usize];

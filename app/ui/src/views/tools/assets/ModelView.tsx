@@ -46,8 +46,10 @@ export function ModelView(p: Props) {
       camera={{ fov: 45, near: 0.5, far: 20000, position: [80, 40, 80] }}
     >
       <color attach="background" args={["#2a2f27"]} />
-      <hemisphereLight args={["#ffffff", "#4c5046", 1.1]} />
-      <directionalLight position={[0.6, 1, 0.8]} intensity={1.4} />
+      {/* brighter: models were lit very dark (QA4-T2 UX-L1) */}
+      <ambientLight intensity={0.6} />
+      <hemisphereLight args={["#ffffff", "#5c6056", 1.5]} />
+      <directionalLight position={[0.6, 1, 0.8]} intensity={1.6} />
       <Floor bundle={p.bundle} />
       <group rotation={ROOT_ROTATION} scale={p.scale ?? 1}>
         <ModelMesh {...p} />

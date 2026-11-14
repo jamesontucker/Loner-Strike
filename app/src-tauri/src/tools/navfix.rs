@@ -266,7 +266,17 @@ pub enum Op {
     },
     /// The place name of areas ("" for none); a new name joins the nav's place list.
     Place { ids: Vec<u32>, name: String },
+    /// Several edits as one step (one Undo takes them all back): "Fix 2" on the problems list.
+    /// `label` names the step ("Fix 2 problems").
+    Batch {
+        ops: Vec<Op>,
+        #[serde(default)]
+        label: Option<String>,
+    },
 }
+
+/// The most edits one batch takes.
+const MAX_BATCH: usize = 500;
 
 /// What an edit did.
 #[derive(Debug)]
@@ -353,6 +363,23 @@ fn plural(n: usize, one: &str, many: &str) -> String {
 
 /// Applies one edit. The document isn't changed: the result is a new version (or why not).
 pub fn apply(doc: &Doc, op: &Op, ground: Option<&dyn Ground>) -> Result<Edited, String> {
+    // several edits, one step: each on the last one's result, all or none
+    if let Op::Batch { ops, label } = op {
+        if ops.is_empty() || ops.len() > MAX_BATCH || ops.iter().any(|o| matches!(o, Op::Batch { .. })) {
+            return Err("That edit isn't one the nav fixer knows.".into());
+        }
+        let mut cur: Option<Edited> = None;
+        let mut notes = Vec::new();
+        for o in ops {
+            let e = apply(cur.as_ref().map(|e| &e.doc).unwrap_or(doc), o, ground)?;
+            notes.extend(e.notes.iter().cloned());
+            cur = Some(e);
+        }
+        let last = cur.expect("at least one edit");
+        let label: String = label.as_deref().map(|l| l.chars().filter(|c| !c.is_control()).take(60).collect::<String>()).filter(|l| !l.trim().is_empty()).unwrap_or_else(|| format!("{} edits", ops.len()));
+        notes.dedup();
+        return Ok(Edited { doc: last.doc, label, notes, new_id: last.new_id });
+    }
     let mut d = doc.next();
     let mut notes = Vec::new();
     let mut new_id = None;
@@ -497,6 +524,8 @@ pub fn apply(doc: &Doc, op: &Op, ground: Option<&dyn Ground>) -> Result<Edited, 
                 _ => format!("Change how bots move on {whose}"),
             }
         }
+        // (handled above)
+        Op::Batch { .. } => return Err("That edit isn't one the nav fixer knows.".into()),
         Op::Place { ids, name } => {
             if ids.is_empty() {
                 return Err("Pick the areas first.".into());
@@ -1813,6 +1842,23 @@ mod tests {
         // somewhere a player doesn't fit
         let e = apply(&d, &serde_json::from_value(json!({"op": "add", "x": [900, 950], "y": [0, 80], "z": 0})).unwrap(), Some(&Floor)).unwrap();
         assert!(e.notes.iter().any(|n| n.contains("doesn't fit")), "{:?}", e.notes);
+    }
+
+    /// QA4-T2 L1: several fixes in one click are one edit (one Undo), all or none.
+    #[test]
+    fn a_batch_is_one_step() {
+        let d = rooms();
+        let op = json!({"op": "batch", "label": "Fix 2 problems", "ops": [{"op": "link", "a": 3, "b": 4}, {"op": "link", "a": 1, "b": 4, "oneWay": true}]});
+        let e = apply(&d, &serde_json::from_value(op).unwrap(), None).unwrap();
+        assert_eq!(e.label, "Fix 2 problems");
+        assert!(conns(&e.doc, 3).iter().flatten().any(|&x| x == 4) && conns(&e.doc, 1).iter().flatten().any(|&x| x == 4));
+        assert!(!conns(&d, 1).iter().flatten().any(|&x| x == 4), "the old document is untouched");
+        // one bad edit: nothing changes
+        let bad = json!({"op": "batch", "ops": [{"op": "link", "a": 3, "b": 4}, {"op": "link", "a": 3, "b": 999}]});
+        assert!(apply(&d, &serde_json::from_value(bad).unwrap(), None).is_err());
+        for bad in [json!({"op": "batch", "ops": []}), json!({"op": "batch", "ops": [{"op": "batch", "ops": [{"op": "link", "a": 3, "b": 4}]}]})] {
+            assert!(apply(&d, &serde_json::from_value(bad.clone()).unwrap(), None).is_err(), "{bad}");
+        }
     }
 
     #[test]

@@ -389,8 +389,15 @@ export default function PlayerConfig() {
             <div className="pc-stage-bar">
               <Segmented label="What you're doing" values="still run jump shoot" labels="Standing|Running|Jumping|Shooting" current={motion} onPick={(v) => setMotion(v as Motion)} />
               <span className="pc-stage-bar-row">
-                <Segmented label="Screen size" values="800 1024 1920" labels="800|1024|1920" current={res} onPick={setRes} />
-                <Segmented label="Zoom" values="1 2" labels="1×|2×" current={String(zoom)} onPick={(v) => setZoom(Number(v))} />
+                {/* named, so the numbers mean something (QA4-T2 UX-L2) */}
+                <span className="pc-labelled">
+                  <span className="muted">Screen</span>
+                  <Segmented label="Screen size" values="800 1024 1920" labels="800|1024|1920" current={res} onPick={setRes} />
+                </span>
+                <span className="pc-labelled">
+                  <span className="muted">Zoom</span>
+                  <Segmented label="Zoom" values="1 2" labels="1×|2×" current={String(zoom)} onPick={(v) => setZoom(Number(v))} />
+                </span>
               </span>
             </div>
           </section>

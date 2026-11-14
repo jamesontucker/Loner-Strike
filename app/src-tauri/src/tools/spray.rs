@@ -298,7 +298,14 @@ pub fn use_drawn(name: &str, data_url: &str) -> Result<Value, String> {
     limits.max_image_width = Some(2048);
     limits.max_image_height = Some(2048);
     r.limits(limits);
-    let img = r.decode().map_err(|_| "The drawn spray was damaged.".to_string())?.to_rgba8();
+    let img = r
+        .decode()
+        .map_err(|e| match e {
+            // QA4-T2 L4: too big isn't damaged
+            image::ImageError::Limits(_) => "The drawn spray is too big: 2048 pixels each way at most.".to_string(),
+            _ => "The drawn spray was damaged.".to_string(),
+        })?
+        .to_rgba8();
     let name: String = name.chars().filter(|c| !c.is_control()).take(60).collect();
     let name = if name.trim().is_empty() { "Your design".to_string() } else { name };
     let v = json!({"name": name, "width": img.width(), "height": img.height()});
@@ -787,6 +794,12 @@ mod tests {
         assert_eq!((v["width"].as_u64(), v["height"].as_u64()), (Some(64), Some(48)));
         assert!(use_drawn("x", "data:image/jpeg;base64,AAAA").is_err());
         assert!(use_drawn("x", "data:image/png;base64,!!!!").is_err());
+        // QA4-T2 L4: too wide says too big, not damaged
+        let wide = crate::goldsrc::png(3000, 2, &[200; 3000 * 2 * 4], true).unwrap();
+        let e = use_drawn("x", &format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&wide))).unwrap_err();
+        assert!(e.contains("too big"), "{e}");
+        // the good one is still the picked picture
+        use_drawn("My design", &url).unwrap();
         install(&hl, &app, &picked(|p| p.img.clone()).unwrap(), &Choice::default(), &["cstrike".into()], false).unwrap();
 
         // save, list, open, save again under the same id, delete

@@ -1334,7 +1334,11 @@ async fn api_info(State(st): State<Shared>, UrlPath(name): UrlPath<String>) -> R
     json_answer(r)
 }
 
-async fn api_preview(State(st): State<Shared>, UrlPath(name): UrlPath<String>, Query(o): Query<Options>) -> Response {
+/// Bad picture settings, in words (QA4-T2 L5: not serde's "unknown variant").
+const BAD_SETTINGS: &str = "Those overview settings aren't ones the Radar maker knows.";
+
+async fn api_preview(State(st): State<Shared>, UrlPath(name): UrlPath<String>, q: Result<Query<Options>, axum::extract::rejection::QueryRejection>) -> Response {
+    let Ok(Query(o)) = q else { return png_answer(Err(Fail::new(StatusCode::BAD_REQUEST, BAD_SETTINGS))) };
     let r = match find_map(&st, &name) {
         Err(f) => Err(f),
         Ok((game, name)) => {
@@ -1367,7 +1371,8 @@ async fn write_route(st: Shared, h: HeaderMap, name: String, act: impl FnOnce(&M
     json_answer(r)
 }
 
-async fn api_install(State(st): State<Shared>, h: HeaderMap, UrlPath(name): UrlPath<String>, Json(req): Json<InstallReq>) -> Response {
+async fn api_install(State(st): State<Shared>, h: HeaderMap, UrlPath(name): UrlPath<String>, req: Result<Json<InstallReq>, axum::extract::rejection::JsonRejection>) -> Response {
+    let Ok(Json(req)) = req else { return (StatusCode::BAD_REQUEST, Json(json!({"error": BAD_SETTINGS}))).into_response() };
     write_route(st, h, name, move |m| install(m, &req)).await
 }
 

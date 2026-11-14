@@ -198,8 +198,10 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
       setBusy(null);
     }
   };
+  // one click, one Undo step (QA4-T2 L1)
   const fixAll = async (list: Problem[]) => {
-    for (const p of list) if (p.fix) await edit("Fixing…", p.fix.op);
+    const ops = list.flatMap((p) => (p.fix ? [p.fix.op] : []));
+    if (ops.length) await edit("Fixing…", ops.length === 1 ? ops[0] : { op: "batch", ops, label: `Fix ${ops.length} problems` });
   };
   const showReach = (r: number) => {
     if (!st) return;
@@ -700,7 +702,7 @@ function Problems({ st, busy, onShow, edit, fixAll }: { st: FixState; busy: bool
                   <span className="navfix-caret" aria-hidden="true">{isOpen ? "▾" : "▸"}</span>
                   {label} <span className="muted">{list.length}</span>
                 </button>
-                {fixable.length > 1 && <button className="btn small" disabled={busy} title="Each fix is its own step: Undo takes them back one at a time" onClick={() => void fixAll(fixable)}>Fix {fixable.length}</button>}
+                {fixable.length > 1 && <button className="btn small" disabled={busy} title="One Undo takes them all back" onClick={() => void fixAll(fixable)}>Fix {fixable.length}</button>}
               </div>
               {isOpen && (
                 <ul className="navfix-problems">

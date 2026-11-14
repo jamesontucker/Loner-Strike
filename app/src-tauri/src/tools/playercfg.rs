@@ -546,10 +546,12 @@ pub fn save(hl: &Path, app: &Path, game: &str, choice: &Choice) -> Result<Value,
     let block = block_for(choice, &base)?;
     let old = read_small(&dir.join(FILE)).unwrap_or_default();
     let text = with_block(&old, &block);
-    if text != old {
-        put(app, game, &dir, &text, true)?;
+    // QA4-T2 L10: settings the game already has write nothing, and say so
+    if text == old {
+        return Ok(json!({"ok": true, "changed": false, "message": "Nothing to change: the game already uses these settings.", "status": game_status(app, game, label, &dir)}));
     }
-    Ok(json!({"ok": true, "message": after_save(label), "status": game_status(app, game, label, &dir)}))
+    put(app, game, &dir, &text, true)?;
+    Ok(json!({"ok": true, "changed": true, "message": after_save(label), "status": game_status(app, game, label, &dir)}))
 }
 
 /// The lines a save would write (for the page's "What gets saved").
@@ -765,6 +767,13 @@ mod tests {
         remove(&hl, &app, "cstrike").unwrap();
         assert_eq!(std::fs::read_to_string(dir.join(FILE)).unwrap(), "say_team_hello 1\r\n");
         assert!(save(&hl, &app, "czero", &c).is_err());
+        // QA4-T2 L10: the game's own value (config.cfg's 3) writes nothing and says so
+        let mut same = Choice::default();
+        same.settings.insert("sensitivity".into(), "3".into());
+        let v = save(&hl, &app, "cstrike", &same).unwrap();
+        assert_eq!(v["changed"], false, "{v}");
+        assert!(v["message"].as_str().unwrap().starts_with("Nothing to change"));
+        assert_eq!(std::fs::read_to_string(dir.join(FILE)).unwrap(), "say_team_hello 1\r\n");
         std::fs::remove_dir_all(&root).ok();
     }
 }

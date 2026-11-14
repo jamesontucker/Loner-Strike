@@ -283,7 +283,7 @@ impl MapHulls {
         }
         let v = r.u32(0)?;
         if v != BSP_VERSION {
-            return Err(Error::NotFormat { what: WHAT, detail: format!("BSP version {v}, not 30") });
+            return Err(Error::NotFormat { what: WHAT, detail: "it was made for another game".to_string() });
         }
         let (po, pn) = lump(&r, 1, 20, "plane")?;
         let mut planes = Vec::with_capacity(pn);

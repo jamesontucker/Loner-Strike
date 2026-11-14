@@ -431,6 +431,10 @@ pub fn diagnose(m: &MapFile) -> Value {
 pub fn write_res(m: &MapFile) -> Result<Value, String> {
     // P5: under test (the editor's Playtest writes one), never into the real game
     super::studio::guard_real_game(&m.hl)?;
+    // QA4-T2 L6: a stock map's own .res is Valve's, and every player has the map's files
+    if stock_map(&m.name, &m.game) {
+        return Err(format!("{} came with the game, so it needs no download list.", m.name));
+    }
     let f = Finder::default();
     let (ents, _) = read_map_parts(&m.bsp).map_err(|e| format!("The map file can't be read: {e}"))?;
     let files = file_checks(&f, &m.hl, &m.game, &m.name, &ents);
@@ -463,8 +467,11 @@ pub fn copy_files(m: &MapFile, asked: &[String]) -> Result<Value, String> {
     let f = Finder::default();
     let path = game_path(&m.hl, &m.game);
     let dest_root = m.hl.join(&m.game);
-    let (mut copied, mut skipped) = (Vec::new(), Vec::new());
-    for rel in asked.iter().take(MAX_COPY) {
+    let (mut copied, mut skipped): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+    // each path once, whatever its case (QA4-T2 L7: duplicates were each echoed as skipped)
+    let mut seen = std::collections::HashSet::new();
+    let asked: Vec<&String> = asked.iter().filter(|r| seen.insert(r.to_lowercase())).collect();
+    for &rel in asked.iter().take(MAX_COPY) {
         let Some(rel) = mapcopy::clean_rel(rel) else {
             skipped.push(rel.clone());
             continue;
@@ -745,6 +752,19 @@ mod tests {
         // (the .bak is the first one, not the last)
         assert!(std::fs::read_to_string(res.with_file_name("de_doc.res.bak")).unwrap().contains("nothere"));
         assert!(!res.with_file_name("de_doc.res.part").exists());
+    }
+
+    /// QA4-T2 L6 and L7: a stock map's .res isn't rewritten; a path asked twice is copied or
+    /// skipped once.
+    #[test]
+    fn stock_maps_keep_their_res_and_copies_dedupe() {
+        let fx = fixture_game("stockres");
+        let stock = MapFile { name: "de_dust2".into(), bsp: fx.m.bsp.clone(), ..fx.m.clone() };
+        assert!(write_res(&stock).unwrap_err().contains("needs no download list"));
+        let asked: Vec<String> = ["czonly.wad", "CZONLY.WAD", "gone.wad", "gone.wad", "Gone.wad"].iter().map(|s| s.to_string()).collect();
+        let out = copy_files(&fx.m, &asked).unwrap();
+        assert_eq!(out["copied"], json!(["czonly.wad"]));
+        assert_eq!(out["skipped"], json!(["gone.wad"]));
     }
 
     #[test]

@@ -51,6 +51,15 @@ export function Models() {
     if (!picked && models.data?.length) setPicked(models.data.find((m) => m.kind === "player") ?? models.data[0]);
   }, [models.data, picked]);
 
+  // the model in the 3D view is the one lit up in the list, and in sight (QA4-T2 UX-L1)
+  const at = picked ? list.findIndex((m) => m.folder === picked.folder && m.path === picked.path) : -1;
+  useEffect(() => {
+    if (at >= shown) setShown(Math.ceil((at + 1) / PAGE) * PAGE);
+  }, [at, shown]);
+  useEffect(() => {
+    if (at >= 0) requestAnimationFrame(() => document.querySelector(".assets-list .assets-list-item[aria-pressed='true']")?.scrollIntoView({ block: "nearest" }));
+  }, [at]);
+
   if (models.isLoading) return <Skeleton rows={6} />;
   if (models.error) return <LoadError text={(models.error as Error).message} onRetry={() => models.refetch()} />;
 

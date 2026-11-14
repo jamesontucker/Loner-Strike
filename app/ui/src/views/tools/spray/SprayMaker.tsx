@@ -23,6 +23,9 @@ import { Stage } from "./Stage";
 import { StartFrom } from "./StartFrom";
 import { FALLBACK, fontsReady } from "./sysfonts";
 import { TEMPLATES } from "./templates";
+
+/** a template's stand-in words, to be replaced by the player's */
+const PLACEHOLDERS = ["NAME", "YOUR\nTAG", "YOUR TAG"];
 import "./spray.css";
 
 const SIZE_NOTE: Record<Choice["size"], string> = {
@@ -278,7 +281,16 @@ export function SprayMaker() {
     if (design.id === d.id) setDesign((x) => ({ ...x, id: null, saved: null }));
     qc.invalidateQueries({ queryKey: ["tools", "spray", "designs"] });
   };
-  const install = () =>
+  // the template's own words still there (QA4-T2 UX-L7): ask before installing "NAME"
+  const placeholder = doc.layers.find((l) => l.kind === "text" && PLACEHOLDERS.includes(l.text.trim().toUpperCase()));
+  const install = async () => {
+    if (placeholder && placeholder.kind === "text" && !(await ask(`Your spray still says “${placeholder.text.replace(/\n/g, " ")}”. Install it anyway?`, { ok: "Install anyway" }))) {
+      setSelected(placeholder.id);
+      return;
+    }
+    return installNow();
+  };
+  const installNow = () =>
     run("Installing…", async () => {
       // the drawing the preview showed is the one installed
       await imagesReady(doc);
