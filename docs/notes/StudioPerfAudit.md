@@ -90,8 +90,13 @@ If they blur, set the property only while panning or dragging, or draw wires per
 
 **Fixed (X2, 38949bf8).** `.st-canvas .react-flow__edges { will-change: transform }` in `studio.css`. Sharpness: in
 Playwright's WebKit, the wires at zoom 2 (after opening at 0.25 and zooming in) are pixel-identical with and without
-it. **Not checked in the real Mac app (WKWebView)**: it needs a build run against a copy of the user's data; worth a
-look in the next Mac build at a big zoom. Measured (every_node, dev UI, WebKit; the spec's open is to the first
+it. **Checked in the real Mac app too (X2, 2026-11-14):** the debug build (`target/debug/loner-strike`) run with a
+throwaway `HOME` and `CFFIXED_USER_HOME` (its settings, WebKit data and caches all landed there; the real
+`~/Library` WebKit, Caches and Preferences entries unchanged, no game found), its window pointed at a dev page by
+`LONER_UI_URL`, every_node opened, zoomed 0.25 → 2.5 → 1.6 with the wire layer promoted, plain, then promoted again;
+`screencapture -l` of the window: promoted and promoted-again identical, plain differs in 249 of 250,000 pixels
+(where several green wires overlap), edge sharpness within 0.13%, no visible difference. Kept on (no need to gate it
+to interaction). Measured (every_node, dev UI, WebKit; the spec's open is to the first
 node drawn): open 1,320 → 657 ms; undo p95 within 44–48 ms (was up to 212 ms).
 
 ## 2. Mac (WebKit): the debugger's "node ran" flash makes a big canvas run at 13–20 fps while a Playtest streams
