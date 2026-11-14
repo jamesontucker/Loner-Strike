@@ -1214,7 +1214,8 @@ public on_spawn(id)
     <li><b>When changes apply.</b> After <b>Apply to game</b> (the running map reads your types again) or the next map change. New models and sounds load with the next map.</li>
     <li><b>Waves.</b> The Waves tab starts from Last Stand's own lineup. Saving makes this game's Last Stand use your list. <b>Reset to Last Stand's own</b> removes your list, and the mode goes back to its own.</li>
     <li><b>Who gets them.</b> Only games you host from this computer use your creatures. Nothing is sent to other players or to servers elsewhere.</li>
-    <li><b>Sharing a mode.</b> A published Game Mode Studio mode lists the creature types it uses, but custom types aren't included yet. Players need to make them themselves with the same names; Publish warns you about this.</li>
+    <li><b>Sharing.</b> A map, mode or prefab you publish carries the custom creatures it uses (and their custom models and sounds); Publish lists them ("Includes: crawler (with its model)"). They're named for your GameBanana account, so they never clash with anyone else's, and people see them as "crawler by you". In Creature Studio, <b>Share…</b> publishes one type on its own; <b>Remix…</b> on someone's type makes your own copy that credits them.</li>
+    <li><b>What installing does.</b> Shared creatures go into their own marked block in <code>creatures.ini</code>; your own types are never touched. Uninstalling removes only that block, and a type two installs share stays until both are gone. Updates and <b>Go back</b> swap the block too. Servers you put the map or mode on get the same block.</li>
   </ul>
 </section>
 
@@ -1813,6 +1814,7 @@ lsctl logs        the last 100 console lines</code></pre>
     <li>a short note.</li>
   </ul>
   <p>Players who try it get the map as usual; <code>source/</code> never goes into their game. On a map shared with its source, <b>Remix this map</b> on its Community page saves a copy as a new project of yours (<code>&lt;map&gt;_remix</code>, never over one you have) and opens it in the map editor. When you publish your remix, the package, its README and the GameBanana text say "A remix of" the original, by its maker.</p>
+  <p>A map's custom creatures (an <code>ls_creature</code> or wave spawner using your own type) go with it, named for your account; players get them in their own block in <code>creatures.ini</code>, removed again with the map. <a href="#creatures-how">How creatures work</a>.</p>
   <h2 id="publish-yours">After it's up</h2>
   <p>The <b>Published</b> tab lists what you've shared. To update one, upload the new file to its GameBanana page, then paste the link in Publish again. Players get it as an <a href="#community-updates">update</a>.</p>
   <p><b>Unlist</b> takes one off Community (installed copies stay). If the app asks, put the short code it gives you on the GameBanana page, so it knows the page is yours; <b>List again</b> puts it back.</p>
