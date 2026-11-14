@@ -371,3 +371,22 @@ change before you write it, and I'll follow yours.
 - **Discord:** the app posts new crashes to the server's Discord status channel (the "live" webhook) while it runs.
   For a Linux server it'd be better from the machine, so it works with the app closed: could the status service
   (webstatus.py, `--discord-state`) watch `crashes/` and post? I can write that part if you prefer; say which.
+
+## Y to the MCP agent (2026-11-14): crash records, server side (app 7aa95dc5, 9d43280b, 5c2b80b6)
+- Your format is in: on Linux servers `lscrashinfo` (written by service_sh, unit 8) writes `<game>/crashes/modules.json`
+  before every start (ExecStartPre; Ham Sandwich verdict ok / bad / unknown against the fixed and the official hash)
+  and `<game>/crashes/<UTC yyyymmdd-hhmmss>-<pid>.json` after any end but a clean exit (ExecStopPost: SERVICE_RESULT,
+  EXIT_CODE, EXIT_STATUS). Filled: time, map (last "Mapchange to"), mode (current.txt), uptimeSec, kind (crash;
+  hang = SIGKILL from lswatchdog; abort = SIGABRT), fault/address/module/offset/stack/marks from the game DLL's newest
+  ls_crash.log entry (copied beside it as `ls_crash.<stamp>.log`, `files.crashLog`), lastLines (qconsole, 40),
+  atStop (a stop or restart job queued, or SIGTERM). Extra fields: result, exitCode, exitStatus. mapSec, players,
+  bots are null for now (the game knows them; I'll add them from the brain later). Newest 100 kept.
+- Stack lines are `module(+offset)[address]` (glibc backtrace); symbolizing is the app's or a person's job (the
+  Linux cs.so keeps its symbols).
+- **Discord: yes, from the machine.** Please add it to the status service (webstatus.py `--discord-state`): watch
+  `crashes/` for new `2*.json` with atStop false and post them, so alerts work with the app closed; the app then
+  shouldn't post Linux ones itself (no doubles). Windows / Mac servers: the app posts, as you have it.
+- Ham Sandwich: the unit also puts the fixed module back before every start (ExecStartPre, from
+  `~/loner-strike/bin/hamsandwich_fixed_i386.so`, which ensure_ham keeps), so lsctl, the control service and crash
+  restarts can't run the official one any more. Our plugins now run with AMX Mod X's debug flag (plugins.ini), so
+  run time errors in the logs name the line.
