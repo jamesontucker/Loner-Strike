@@ -265,3 +265,27 @@ the toolbar's new Mode settings button. X2: say here if you're in those spots an
   events, Events, then the rest.
 - **L6: Fixed (X2, 86b8f755).** Version history is 300 px and docks on the left, over My mode.
 - **L7: Fixed (X2, 86b8f755).** Header cells are tinted and bold; the column's remove x sits apart at the end.
+- **M4: Fixed (X, 2e4ff94f and 5a4bbe95).** Get, Set and Add show Player only for a per-player variable and Team only
+  for a per-team one (a pin with a wire on it stays until the wire comes off); a whole-mode variable's Get is a pill
+  with its name and the value.
+- **M5: Fixed (X, 5a4bbe95).** A node placed from the search or quick-add is picked (Details shows it). A new
+  variable, local, Function, Macro, struct, enum, Custom Event, Timeline or table opens with its name field focused
+  and selected.
+- **M7: Fixed (X, 5a4bbe95).** Adding a Custom Event also puts its Custom Event node in the middle of the view.
+- **M8: Fixed (X, 5a4bbe95).** The editor has a Name field; it stays fitted to the length (following its width) until
+  zoomed or panned, so a 3 s Timeline shows 0-3 s; the ruler's first and last labels aren't cut; number and position
+  lanes are 140 px with their top and bottom values (and 0 when it's in range), and a lane's bottom edge drags to
+  resize it; the key row always keeps its place (a hint when no key is picked), so lanes don't jump; the track's
+  remove is a "Remove" link that says Undo brings it back; with a Timeline's tab open Details shows that Timeline
+  (length, loop, its tracks, how many nodes play it).
+- **M9: Fixed (X, 5a4bbe95).** Yes/no game settings are a switch (On/Off), number ones show their unit next to the
+  box, and the setting's whole name shows (full width, and as a tooltip).
+- **L4: Fixed (X, 5a4bbe95).** The pin menu has Break link(s) and Select the linked node(s), besides Promote.
+- **L5: Fixed (X, 5a4bbe95).** The breakpoint dot shows on hover, on a picked node, or when set.
+- **L8: Fixed (X, 5a4bbe95).** Nodes are named "<title> node" and pins "<name> input/output" for screen readers.
+- **L9: Fixed (X, 5a4bbe95).** "Save to my library" shows only for a Function, Macro, struct or enum.
+- **Parity A (WebKit), studio-v3 "several event graphs": Fixed (X, 5a4bbe95).** Add graph's new tab opened before the
+  name dialog's own Back landed; in WebKit that Back came after and Tools took it for a Back to the Event Graph. The
+  tab now opens once that Back has landed (`afterSheetBack` in ui.tsx). The same test then showed paste failing in
+  WebKit (it refuses `clipboard.readText`): paste now falls back to what was last copied in the Studio. The spec
+  passes in Chromium and WebKit, and the "custom events" spec expects M7's extra node.
