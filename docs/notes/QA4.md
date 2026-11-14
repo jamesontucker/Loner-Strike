@@ -366,6 +366,31 @@ Use a Windows user account made for the test (a fresh profile), not someone's re
    with map/maxplayers, prefs), the 1.0.0 bundle replaced it in place and started on the same profile: version 1.0.0,
    settings.json and servers.json unchanged byte for byte, prefs kept (updates off, keep servers on), server listed.
 
+## Live test harness (community roles, the live list; user-approved overnight tests)
+`services/serverlist/qa/live.py` (run on the Mac; never prints a token; everything it makes is named QA-/qa- and
+recorded in `~/.config/lonerstrike/qa-live.json`, mode 600):
+- `discord-setup`: private category **QA-tests** and channel **#qa-live** (only the bot and the owner see them) and the
+  role **QA-Tester**. Done on 2026-11-14 (channel 1571131443671728168).
+- `discord-check [--target <discord id>]`: the bot posts, edits and deletes in #qa-live and gives QA-Tester to the target
+  and takes it back (the same calls the roles service makes for Supporter and Server Moderator). Passed 2026-11-14.
+- `community-add mod:<id> --file <file id>`: registers a test page on the live list the way the app does, then
+  `community-check`. **Needs a real GameBanana page** (private/WIP, the LonerStrike tag, a package file): agents can't
+  upload to GameBanana, so the user makes it and gives the ids.
+- `link-add <steamid> <discord id>`: records a test link for cleanup (links are made in game with /link).
+- `cleanup`: removes every QA- channel and role, pulls and deletes the recorded test entries, unlinks the recorded links;
+  then `verify-clean` (exit 1 and a list when anything is left). Needs the admin tunnel (`ssh -f -N -L
+  8100:127.0.0.1:8100 cs@<box>`) and ssh to the box.
+- The roles service from a terminal (admin tunnel): `lsmod.py roles servers | log | show <id> | supporters | unlink |
+  supporter-remove | supporter-restore`; the server side with Alone Together's token
+  (`~/Library/Application Support/Loner-Strike/secrets/roles-loner-strike-alone-together.token`): `GET /roles/server`,
+  `/roles/vip`, `/roles/applications`, `POST /roles/server` (settings).
+
+**Rows that need a human** (a bot can't invoke slash commands, press buttons or play): `/link` in game and
+`/link code:` in Discord; `/server claim`; Apply › Server moderator (the button, the server pick and the form);
+Approve/Deny on a card; accepting an invite in the app; anything said in voice. Everything else (role changes, the
+service's answers, the supporter list, users.ini on Alone Together, cleanup) runs unassisted. Alone Together must be
+left running and healthy (check `systemctl is-active lonerstrike-loner-strike-alone-together*` at the end).
+
 ## Round 3 items to re-check
 From QA.md "Round 3": the brain drop crash (30 rounds of drop/drop_all/drop_dead), Last Stand bots buying guns, the
 BR start loadout and drop-in, and the Studio's gm_components loading for templates.
