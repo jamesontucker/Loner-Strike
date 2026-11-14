@@ -9139,11 +9139,13 @@
 "help":"A number from 0 to 100000. A wire into the pin of the same name is used instead."
 }
 ],
+"more":"A setting changed for the rest of the map. For settings the mode always wants, add them under This mode's Game settings instead (set every map).",
 "related":[
 "entity.use",
 "game.map_name",
 "game.next_map"
 ],
+"risk":"A few settings are set again by the game's own game.cfg after the mode's, so they don't stick: the bomb for the Terrorists (mp_give_player_c4) is one. Take the bomb with Remove Weapon (c4) at Round Started instead.",
 "example":{
 "caption":"When a round starts, Set Setting runs.",
 "nodes":[
@@ -20707,6 +20709,7 @@
 "help":"Pick one: AK-47, M4A1, AWP, Scout, FAMAS, Galil, AUG, SG 552, MP5, P90, UMP 45, MAC-10…."
 }
 ],
+"more":"Takes one weapon away; the C4 choice takes the bomb (a mode without bomb sites should, at Round Started: the bomb can't be turned off with a setting).",
 "related":[
 "player.give_ammo",
 "player.switch_weapon",

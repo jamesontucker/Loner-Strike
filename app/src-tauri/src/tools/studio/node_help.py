@@ -78,6 +78,8 @@ NOTES = {
     "player.set_team": {"more": "Moves the player to the other team at once, without killing them."},
     "player.strip": {"more": "Takes every weapon away; keeps the knife unless you turn Knife off."},
     "player.give_weapon": {"more": "Gives the weapon with reserve ammo. A player who already has one in that slot gets it as well; Strip first for a clean loadout."},
+    "game.set_cvar": {"more": "A setting changed for the rest of the map. For settings the mode always wants, add them under This mode's Game settings instead (set every map).", "risk": "A few settings are set again by the game's own game.cfg after the mode's, so they don't stick: the bomb for the Terrorists (mp_give_player_c4) is one. Take the bomb with Remove Weapon (c4) at Round Started instead."},
+    "player.take_weapon": {"more": "Takes one weapon away; the C4 choice takes the bomb (a mode without bomb sites should, at Round Started: the bomb can't be turned off with a setting)."},
     "player.to_spectators": {"more": "Moves the player to the spectators. They choose a team again to come back."},
     "var.set": {"more": "Sets a variable. A per-player variable needs a Player wired in, a per-team one a Team."},
     "msg.hud": {"more": "Shows a line of text on the player's screen (everyone's when no player is wired in) for a few seconds. Each of the four slots holds one line, so a new message in the same slot replaces the old one."},

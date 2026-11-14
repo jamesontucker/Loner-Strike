@@ -169,3 +169,13 @@ test("delete a Custom Event: Call nodes and its event nodes go", () => {
   assert.ok(!out.nodes.some((n) => n.id === on.id || n.id === call.id));
   assert.ok(!(out.customEvents ?? []).length);
 });
+
+test("setting names may hold digits after the first letter (mp_give_player_c4)", () => {
+  const base = emptyGraph("cvars", "Cvars");
+  const ok = parseGraph({ ...base, mode: { ...base.mode, settings: [{ cvar: "mp_give_player_c4", value: 0 }] } });
+  assert.ok("graph" in ok);
+  for (const bad of ["4mp", "mp-x", "MP_X", "mp_x;exec"]) {
+    const r = parseGraph({ ...base, mode: { ...base.mode, settings: [{ cvar: bad, value: 0 }] } });
+    assert.ok("error" in r, bad);
+  }
+});
