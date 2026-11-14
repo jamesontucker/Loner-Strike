@@ -45,6 +45,9 @@ function query(c: Choice): string {
 
 export const overviewInfo = (map: string, signal?: AbortSignal) => get<OverviewInfo>(base(map), signal);
 
+/** Our picture for these choices, as PNG bytes (safe to cache: no URL to revoke). */
+export const previewBytes = (map: string, c: Choice, signal?: AbortSignal) => getBytes(`${base(map)}/preview.png?${query(c)}`, signal);
+
 /** Our picture for these choices, as an object URL (the caller revokes it). */
 export async function previewUrl(map: string, c: Choice, signal?: AbortSignal): Promise<string> {
   const b = await getBytes(`${base(map)}/preview.png?${query(c)}`, signal);

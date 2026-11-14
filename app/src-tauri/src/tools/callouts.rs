@@ -151,6 +151,8 @@ pub fn write_checked(before: &nav::Nav, after: &nav::Nav) -> Result<Vec<u8>, Str
 /// nav uses goes into BotChatter.db as an entry of its own with no voice line: the radio skips
 /// the place (the rest of the line is said), and the Location message and bot chat use it.
 pub const CHATTER: &str = "BotChatter.db";
+/// (only under test: studio::guard_real_game lets everything through otherwise)
+const UNDER_TEST: &str = "Under test, Callouts doesn't save into your real game. Point LS_TEST_GAME at a copy (a sim server) for that.";
 
 /// The `Place <Name>` entries in a BotChatter.db (not `Place = <Name>` conditions inside a
 /// phrase), lower case.
@@ -191,6 +193,8 @@ pub fn chatter_additions(text: &str, names: &[String]) -> Option<(String, Vec<St
 /// file (the game then keeps only its built-in names), or it couldn't be written. `history`:
 /// keep the old file in the app's History first (the player's own game; not a server's copy).
 pub fn teach_places(game_dir: &Path, names: &[String], history: bool) -> Result<Vec<String>, String> {
+    // (under test: never into a real Half-Life install; LS_TEST_GAME points at a copy)
+    super::studio::guard_real_game(game_dir).map_err(|_| UNDER_TEST.to_string())?;
     let p = game_dir.join(CHATTER);
     let Ok(bytes) = std::fs::read(&p) else { return Err(format!("There's no {CHATTER} in {}.", game_dir.display())) };
     let text: String = bytes.iter().map(|&c| c as char).collect();
@@ -510,6 +514,7 @@ fn teach_game(m: &MapFile, places: &[String]) -> String {
 
 /// Saves `changes` to the map's nav. `seen`: the stamp the page loaded.
 pub fn save(m: &MapFile, seen: &str, changes: &[(u32, String)]) -> Result<Value, String> {
+    super::studio::guard_real_game(&m.hl).map_err(|_| UNDER_TEST.to_string())?;
     let p = m.sibling("nav").ok_or(NO_NAV)?;
     if stamp(&p) != seen {
         return Err(CHANGED.into());
@@ -761,6 +766,15 @@ mod tests {
         t.areas[1].ne_z = 200.0;
         t.areas[1].sw_z = 200.0;
         assert!(!names_from(&t, &src, 64.0).iter().any(|(id, _)| *id == 6));
+    }
+
+    #[test]
+    fn tests_never_save_into_the_real_game() {
+        let home = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default());
+        let real = home.join("Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life");
+        let m = MapFile { name: "de_dust2".into(), bsp: real.join("cstrike/maps/de_dust2.bsp"), game: "cstrike".into(), hl: real.clone(), czero: false };
+        assert!(save(&m, "", &[]).unwrap_err().contains("real game"));
+        assert!(teach_places(&real.join("cstrike"), &["Zork".to_string()], false).unwrap_err().contains("real game"));
     }
 
     #[test]

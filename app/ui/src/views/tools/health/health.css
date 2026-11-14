@@ -96,3 +96,4 @@
 .sim-round.w1 { background: var(--t); }
 .sim-round.w2 { background: var(--ct); }
 .sim-never { margin: 10px 0 0; }
+.health-finding-actions { gap: 8px; flex-wrap: wrap; }

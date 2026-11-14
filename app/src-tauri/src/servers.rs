@@ -557,6 +557,11 @@ pub fn find_install(hl: &Path) -> Option<Install> {
 /// Where servers live: inside the game's CrossOver bottle on a Mac (so wine sees
 /// them as C:\Loner-Strike Servers), the app's local data folder on Windows.
 pub(crate) fn root_for(client: &Install) -> Result<PathBuf, String> {
+    // (testing: LS_SERVERS_DIR puts servers and the hidden ones somewhere of their own)
+    if let Some(dir) = std::env::var_os("LS_SERVERS_DIR").map(PathBuf::from) {
+        servers_dir_ok(&dir, client)?;
+        return Ok(dir);
+    }
     // the folder picked in Settings, if it suits this game (on a Mac: in its bottle)
     if let Some(dir) = crate::app_api::load_settings().servers_dir.map(PathBuf::from) {
         if servers_dir_ok(&dir, client).is_ok() {
@@ -1017,6 +1022,58 @@ fn local_setup(entry: Entry, base: PathBuf, source: Option<PathBuf>, components:
                 }
             })
         }))
+    })
+}
+
+/// A server only the map simulator uses, when there's none on this computer: built the way
+/// local_setup builds one from the "Your game" template (Valve's download in `.base`, shared
+/// with every server and kept; a copy of it at `dir`; Loner-Strike with the mods the game has;
+/// the engine; the game's mode settings). It isn't in the server list, and the caller deletes
+/// `dir` when it's done. Runs as the setup job; returns its id.
+pub(crate) fn start_hidden_server(client: Install, dir: PathBuf, game: String, res: PathBuf) -> Result<String, String> {
+    if !["cstrike", "czero"].contains(&game.as_str()) {
+        return Err("Pick Counter-Strike 1.6 or Condition Zero.".into());
+    }
+    let catalog = setup::components::load_catalog(&res)?;
+    let (source, components) = template_source("local", &game, &client, &catalog).ok_or("The game's own files couldn't be read.")?;
+    let base = root_for(&client)?.join(".base");
+    let g = game.clone();
+    let steps = vec![
+        setup::server_step(&g, "sim-steamcmd", "Getting SteamCMD (Valve's server downloader)", 1.0),
+        setup::server_step(&g, "sim-download", "Downloading the server from Valve (the first time only)", 8.0),
+        setup::server_step(&g, "sim-copy", "Making the map simulator's hidden server", 1.0),
+        setup::server_step(&g, "sim-engine", "Installing Loner-Strike's server engine", 0.5),
+        setup::server_step(&g, "sim-settings", "Copying your game's modes", 0.3),
+    ];
+    setup::start_job("server", steps, move |job| {
+        job.run(&format!("{g}/sim-steamcmd"), || ensure_steamcmd(job))?;
+        job.run(&format!("{g}/sim-download"), || download_hlds(job, &base, &g))?;
+        job.run(&format!("{g}/sim-copy"), || {
+            let other = if g == "cstrike" { "czero" } else { "cstrike" };
+            let keep_other = g == "czero";
+            copy_tree(&base, &dir, false, &|rel: &Path| {
+                let first = rel.components().next().map(|c| c.as_os_str().to_string_lossy().to_string()).unwrap_or_default();
+                first != "steamapps" && (keep_other || first != other)
+            })
+            .map(|_| ())
+        })?;
+        let install = Install { hl: dir.clone(), kind: client.kind.clone(), bottle: client.bottle.clone(), games: vec![g.clone()], dedicated: true };
+        let plan = setup::plan_install(install, &[g.clone()], &components, &res, false)?;
+        job.insert_before(&format!("{g}/sim-engine"), plan.step_list());
+        setup::install_into(job, &plan, &res, None)?;
+        job.run(&format!("{g}/sim-engine"), || install_engine(job, &dir, &g))?;
+        job.run(&format!("{g}/sim-settings"), || {
+            let data = dir.join(&g).join("addons/amxmodx/data/gamemodes");
+            copy_tree(&source.join("addons/amxmodx/data/gamemodes"), &data, true, &settings_filter)?;
+            let _ = std::fs::create_dir_all(&data);
+            for f in ["banned.cfg", "listip.cfg"] {
+                let p = dir.join(&g).join(f);
+                if !p.exists() {
+                    let _ = std::fs::write(p, "");
+                }
+            }
+            Ok(())
+        })
     })
 }
 

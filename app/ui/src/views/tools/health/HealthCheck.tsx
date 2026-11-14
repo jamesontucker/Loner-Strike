@@ -31,6 +31,8 @@ import { SimMap } from "./SimMap";
 import "./health.css";
 
 const MINUTES = ["2", "5", "10", "15"];
+/** the server name a run made from the game's own files has (health.rs Source) */
+const FROM_GAME_NAME = "your game";
 const BOTS = ["6", "12", "20"];
 
 /** "4 min", "1 min 20 s", "45 s" */
@@ -224,7 +226,7 @@ function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) 
         <BusyButton className="btn primary" busy={starting} disabled={!o || !!blocked} label="Run the simulation" busyLabel="Starting…" onClick={go} />
         {o && !blocked && (
           <span className="muted">
-            About {duration(Number(minutes) * 60 + 60)}. {o.servers.length === 1 ? `Uses a hidden copy of your server “${o.servers[0].name}”.` : ""}
+            About {duration(Number(minutes) * 60 + 60)}{o.fromGame ? ", plus a few minutes to set the hidden server up" : ""}. {o.fromGame ?? (o.servers.length === 1 ? `Uses a hidden copy of your server “${o.servers[0].name}”.` : "")}
           </span>
         )}
         {!map && <span className="muted">Choose a map first.</span>}
@@ -262,7 +264,7 @@ function Running({ p }: { p: Progress }) {
       />
       <div className="row between health-running-foot">
         <span className="muted">
-          {PHASE[run.phase] ?? ""} · {run.bots} bots for {run.minutes} min, on a hidden copy of “{run.server}”. You can leave this page; it carries on.
+          {PHASE[run.phase] ?? ""} · {run.bots} bots for {run.minutes} min, {run.server === FROM_GAME_NAME ? "on a hidden temporary server made from your game" : `on a hidden copy of “${run.server}”`}. You can leave this page; it carries on.
         </span>
         <BusyButton className="btn" busy={stopping} label="Stop" busyLabel="Stopping…" onClick={stop} />
       </div>
@@ -270,15 +272,33 @@ function Running({ p }: { p: Progress }) {
   );
 }
 
-function FindingRow({ f, map }: { f: Finding; map: string }) {
+/** "Watch in Replay" at the moment a spot's worst case began (a little before), following that bot. */
+function WatchButton({ s, recording }: { s: Spot; recording: string | null }) {
+  const toast = useToast();
+  const [opening, setOpening] = useState(false);
+  if (s.t == null || !recording) return null;
+  const watch = async () => {
+    setOpening(true);
+    const rid = await recordingId(recording);
+    setOpening(false);
+    if (!rid) return toast("That recording isn't in the recordings folder any more.", true);
+    useNav.getState().go("tools", `replay:${rid}@${Math.max(0, s.t! - 3).toFixed(1)}${s.bot ? `,${s.bot}` : ""}`);
+  };
+  return <BusyButton className="btn small" busy={opening} label="Watch in Replay" busyLabel="Opening…" onClick={watch} />;
+}
+
+function FindingRow({ f, map, recording }: { f: Finding; map: string; recording: string | null }) {
   return (
     <li className={`health-finding ${f.level}`}>
       <span className="health-dot" aria-hidden="true" />
       <span className="health-finding-text">{f.text}</span>
       {f.spot && (
-        <button type="button" className="btn small" onClick={() => openInViewer(map, f.spot!)}>
-          Open in map viewer
-        </button>
+        <span className="row health-finding-actions">
+          <WatchButton s={f.spot} recording={recording} />
+          <button type="button" className="btn small" onClick={() => openInViewer(map, f.spot!)}>
+            Open in map viewer
+          </button>
+        </span>
       )}
     </li>
   );
@@ -297,7 +317,7 @@ function Stat({ label, value, note, help }: { label: string; value: string; note
   );
 }
 
-function SpotList({ title, spots, map, what }: { title: string; spots: Spot[]; map: string; what: (s: Spot) => string }) {
+function SpotList({ title, spots, map, what, recording }: { title: string; spots: Spot[]; map: string; what: (s: Spot) => string; recording: string | null }) {
   if (spots.length === 0) return null;
   return (
     <div className="panel">
@@ -307,6 +327,7 @@ function SpotList({ title, spots, map, what }: { title: string; spots: Spot[]; m
           <li key={i}>
             <span className="health-spot-place">{capital(where(s))}</span>
             <span className="muted">{what(s)}</span>
+            <WatchButton s={s} recording={recording} />
             <button type="button" className="btn small" onClick={() => openInViewer(map, s)}>
               Open in map viewer
             </button>
@@ -358,7 +379,7 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
             </h3>
             <p className="muted">
               {r.modeName || r.mode} · {r.botsWanted} bots · {duration(r.seconds)} recorded · {when(r.when)}
-              {r.server ? ` · plugins and modes from “${r.server}”` : ""}
+              {r.server ? (r.server === FROM_GAME_NAME ? " · plugins and modes from your game" : ` · plugins and modes from “${r.server}”`) : ""}
             </p>
           </div>
           <div className="row">
@@ -370,7 +391,7 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
         </div>
         <ul className="health-findings">
           {r.findings.map((f, i) => (
-            <FindingRow key={i} f={f} map={r.map} />
+            <FindingRow key={i} f={f} map={r.map} recording={r.recording} />
           ))}
         </ul>
       </div>
@@ -388,7 +409,7 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
         <div className="health-stats">
           <Stat label="Bots that played" value={`${r.botsSeen} of ${r.botsWanted}`} />
           <Stat label="Kills a bot-minute" value={r.killsPerBotMin.toFixed(2)} note={`${r.kills} kills, ${Math.round(r.botMinutes)} bot-minutes`} help="Kills for every minute a bot was alive and in play. Fighting modes usually sit around 0.6 to 1.2." />
-          <Stat label="Stuck" value={pct(r.stuckPct)} note="of bot time" help="Barely moving for 8 seconds or more with no enemy in sight, during play." />
+          <Stat label="Stuck" value={pct(r.stuckPct)} note="of bot time" help="Trying to move (walking keys held) but staying within a few steps of one spot for 8 seconds or more, with no enemy in sight. Holding an angle, camping, planting and defusing don't count." />
           <Stat label="Standing still" value={pct(r.stillPct)} note="with no enemy in sight" help="Some is normal: holding an angle, waiting for a teammate." />
           <Stat label="Map used" value={pct(r.coveragePct)} note={r.navAreas ? `of ${r.navAreas} nav areas` : "no nav"} help="How much of the bots' nav they walked over. Low means parts of the map are hard to reach or not worth going to." />
           <Stat label="Never left spawn" value={`${r.spawnSitters} of ${r.botRounds}`} note="times in a round" />
@@ -399,9 +420,9 @@ function ReportView({ id, onBack }: { id: string; onBack: () => void }) {
         {r.compared.length > 0 && <p className="muted health-compared">Compared with other {r.modeName || r.mode} maps simulated on this computer.</p>}
       </div>
 
-      <SpotList title="Where bots fell" spots={r.fallSpots} map={r.map} what={(s) => `${s.count} ${s.count === 1 ? "time" : "times"}${s.drop > 0 ? ` · drops of up to ${Math.round(s.drop)} units` : ""}`} />
-      <SpotList title="Where bots got stuck" spots={r.stuckSpots} map={r.map} what={(s) => `${duration(s.seconds)} in all · ${s.count} ${s.count === 1 ? "time" : "times"}`} />
-      <SpotList title="Where the map killed bots" spots={r.hurtSpots} map={r.map} what={(s) => `${s.count} ${s.count === 1 ? "time" : "times"} (hurt areas, crushers, explosions)`} />
+      <SpotList title="Where bots fell" recording={r.recording} spots={r.fallSpots} map={r.map} what={(s) => `${s.count} ${s.count === 1 ? "time" : "times"}${s.drop > 0 ? ` · drops of up to ${Math.round(s.drop)} units` : ""}`} />
+      <SpotList title="Where bots got stuck" recording={r.recording} spots={r.stuckSpots} map={r.map} what={(s) => `${duration(s.seconds)} in all · ${s.count} ${s.count === 1 ? "time" : "times"}`} />
+      <SpotList title="Where the map killed bots" recording={r.recording} spots={r.hurtSpots} map={r.map} what={(s) => `${s.count} ${s.count === 1 ? "time" : "times"} (hurt areas, crushers, explosions)`} />
 
       {(r.pluginErrorList.length > 0 || r.fatal.length > 0) && (
         <div className="panel">

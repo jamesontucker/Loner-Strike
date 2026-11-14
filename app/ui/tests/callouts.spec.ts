@@ -8,10 +8,15 @@
 // COPY of the game) it really saves, reads the nav back through the API and puts the old names
 // back after; LS_CALLOUTS_KEEP=1 leaves the new names on disk (for a game test).
 // LS_CALLOUTS_MAP picks the map (cs_office: any map with a nav, bomb sites or hostages, spawns).
+// A real save needs the dev server on a COPY: start it with LS_TEST_GAME=<a sim server's folder,
+// e.g. drive_c/Loner-Strike/Sim/<copy>> (the server also refuses to write into a real Half-Life
+// install under test: studio::guard_real_game, used by callouts.rs for the nav and BotChatter.db).
 import { expect, test, type Page } from "@playwright/test";
 
 const MAP = process.env.LS_CALLOUTS_MAP || "cs_office";
-const SAVE = process.env.LS_CALLOUTS_SAVE === "1";
+const REAL = /steamapps[\\/]common[\\/]Half-Life/i;
+// (a real save only against a copy: LS_TEST_GAME set, and not a Steam install)
+const SAVE = process.env.LS_CALLOUTS_SAVE === "1" && !!process.env.LS_TEST_GAME && !REAL.test(process.env.LS_TEST_GAME);
 const KEEP = process.env.LS_CALLOUTS_KEEP === "1";
 const API = `/api/tools/callouts/${MAP}`;
 

@@ -23,10 +23,16 @@ pub const MAX_FILE: u64 = 200 << 20;
 pub const SAFE_FALL_SPEED: f32 = 580.0;
 /// Heat grid cell size, as sweepreport.py.
 pub const CELL: f32 = 128.0;
-/// Stuck: slower than this...
-pub const STUCK_SPEED: f32 = 20.0;
-/// ...for at least this long, with no enemy in view.
+/// Stuck: trying to move (forward, back or strafe held), no enemy in view, yet never more
+/// than STUCK_RADIUS from where it began (pushing into a wall, or going back and forth
+/// between a few spots), for at least STUCK_SECS. Holding an angle, camping, planting,
+/// defusing and waiting press no movement keys, so they never count.
 pub const STUCK_SECS: f32 = 8.0;
+pub const STUCK_RADIUS: f32 = 160.0;
+/// IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT
+const MOVE_KEYS: u32 = 8 | 16 | 512 | 1024;
+/// A pause in pressing this long (a bot working out a new path) doesn't end a stretch.
+const STUCK_LAPSE: f32 = 1.0;
 /// Samples further apart than this aren't one stretch of living (a death, a disconnect).
 const GAP: f32 = 0.25;
 /// Coordinates beyond this aren't real (GoldSrc's world is +-32768 at most).
@@ -467,29 +473,36 @@ pub fn parse_recording(r: impl BufRead) -> Result<Recording, String> {
 
     // stuck spans
     for (id, list) in &samples {
-        let mut since: Option<usize> = None;
-        let close = |since: &mut Option<usize>, end: usize, out: &mut Vec<Stuck>| {
-            if let Some(s) = since.take() {
-                if list[end].t - list[s].t >= STUCK_SECS {
-                    out.push(Stuck { id: *id, from: list[s].t, to: list[end].t, at: list[s].pos });
+        let close = |span: Option<(usize, usize)>, out: &mut Vec<Stuck>| {
+            if let Some((a, last)) = span {
+                if list[last].t - list[a].t >= STUCK_SECS {
+                    out.push(Stuck { id: *id, from: list[a].t, to: list[last].t, at: list[a].pos });
                 }
             }
         };
+        // (first sample, last one that was trying to move)
+        let mut span: Option<(usize, usize)> = None;
         for i in 0..list.len() {
             let s = &list[i];
             if i > 0 && s.t - list[i - 1].t > GAP {
-                close(&mut since, i - 1, &mut rec.stuck);
+                close(span.take(), &mut rec.stuck);
             }
-            let speed = (s.vel[0] * s.vel[0] + s.vel[1] * s.vel[1]).sqrt();
-            if speed < STUCK_SPEED && s.venemy == 0 && in_play(s.t) {
-                since.get_or_insert(i);
-            } else {
-                close(&mut since, i.saturating_sub(1), &mut rec.stuck);
+            let calm = s.venemy == 0 && s.hp > 0 && in_play(s.t);
+            let trying = calm && s.keys & MOVE_KEYS != 0;
+            if let Some((a, last)) = span {
+                let from = list[a].pos;
+                let far = (s.pos[0] - from[0]).hypot(s.pos[1] - from[1]) > STUCK_RADIUS;
+                if far || !calm || (!trying && s.t - list[last].t > STUCK_LAPSE) {
+                    close(span.take(), &mut rec.stuck);
+                } else if trying {
+                    span = Some((a, i));
+                }
+            }
+            if span.is_none() && trying {
+                span = Some((i, i));
             }
         }
-        if !list.is_empty() {
-            close(&mut since, list.len() - 1, &mut rec.stuck);
-        }
+        close(span, &mut rec.stuck);
     }
     rec.stuck.sort_by(|a, b| a.from.total_cmp(&b.from));
 
@@ -792,9 +805,10 @@ mod tests {
     fn causes_and_stuck() {
         let mut csv = String::new();
         csv += "P,3,Bob,1\nP,4,Al,1\nR,0.00,start\n";
-        // bot 3 stands still for 10 s with nobody in view, then a trigger_hurt gets it
+        // bot 3 holds forward for 10 s but goes nowhere (into a wall), with nobody in view,
+        // then a trigger_hurt gets it; bot 4 stands still on purpose (no keys): not stuck
         for i in 0..=100 {
-            csv += &format!("S,{:.2},3,1,100,200,0,0,0,0,0.0,0.0,0,1,28,30,0,100,0,99999,99999\n", i as f32 * 0.1);
+            csv += &format!("S,{:.2},3,1,100,200,0,0,0,0,0.0,0.0,0,1,28,30,8,100,0,99999,99999\n", i as f32 * 0.1);
             csv += &format!("S,{:.2},4,2,500,200,0,250,0,0,0.0,0.0,0,1,28,30,0,100,0,99999,99999\n", i as f32 * 0.1);
         }
         csv += "K,10.05,0,3,0,trigger_hurt\nK,10.06,4,4,0,grenade\nK,10.07,0,4,0,worldspawn\n";
@@ -807,6 +821,26 @@ mod tests {
         assert!((r.stuck[0].to - r.stuck[0].from - 10.0).abs() < 0.01);
         let c = r.heat.cell_of(100.0, 200.0).unwrap();
         assert!((r.heat.stuck[c] - 10.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn stuck_is_trying_to_move_and_going_nowhere() {
+        let mut csv = String::from("P,1,Camper,1\nP,2,Pacer,1\nP,3,Walker,1\nR,0.00,start\n");
+        for i in 0..=150 {
+            let t = i as f32 * 0.1;
+            // camping crouched, looking about: no movement keys
+            csv += &format!("S,{t:.2},1,1,0,0,0,0,0,0,{},0.0,1,1,28,30,4,100,0,99999,99999\n", (t * 20.0) % 360.0);
+            // back and forth between two spots 120 units apart, holding forward
+            let x = if (t as i32) % 2 == 0 { 1000.0 + (t % 1.0) * 120.0 } else { 1120.0 - (t % 1.0) * 120.0 };
+            csv += &format!("S,{t:.2},2,1,{x},0,0,120,0,0,0.0,0.0,0,1,28,30,8,100,0,99999,99999\n");
+            // walking somewhere, pausing 0.5 s now and then to look
+            let walking = (t % 3.0) < 2.5;
+            csv += &format!("S,{t:.2},3,1,{},500,0,{},0,0,0.0,0.0,0,1,28,30,{},100,0,99999,99999\n", 2000.0 + t * 200.0, if walking { 250 } else { 0 }, if walking { 8 } else { 0 });
+        }
+        let r = parse_recording(csv.as_bytes()).unwrap();
+        let ids: Vec<u8> = r.stuck.iter().map(|s| s.id).collect();
+        assert_eq!(ids, [2], "{:?}", r.stuck);
+        assert!(r.stuck[0].to - r.stuck[0].from > 14.0);
     }
 
     #[test]

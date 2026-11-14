@@ -5,6 +5,7 @@
 //   <tool>:<map>                 a tool on a map (map viewer "map", nav fixer "navfix", ...)
 //   <tool>:<map>@x,y,z[,size]    ...looking at that spot (GoldSrc units)
 //   replay:<id>                  a recording
+//   replay:<id>@t[,player]       ...at that moment (game time), following that player
 //
 // Each open tool says where it is (useReportAddress); the map viewer and Replay are worked
 // out from the shared view state. Tools uses that to come back to the last map per tool,

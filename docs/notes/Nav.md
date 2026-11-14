@@ -128,6 +128,37 @@ owner: on an unknown place name, add it as a place with no voice line instead of
 message; add `Place ZorkBase`/`End` and restart -> it appears). Not checked: what the client
 shows for an unknown `#Name` on the scoreboard.
 
+## 5. After the user's test of the map simulator
+
+- **No server on this computer**: the simulator makes a hidden temporary server from the game's
+  own files, built the way a new server is with the "Your game" template:
+  `servers::start_hidden_server` (Valve's download in `.base`, shared and kept; a copy of it;
+  Loner-Strike plus the mods the game has; the engine; the game's mode settings). It runs as the
+  setup job, with its steps shown as the run's progress, and it's deleted after the run (the
+  `.health-check` folder). The setup page says so in one line. It takes about 4 minutes before
+  bots start, because it installs every mod the game has. A faster version could install only
+  the chosen mode's component. `LS_SERVERS_DIR` points servers and hidden servers at a test
+  folder; `LS_KEEP_SIM_SERVER` keeps the temporary server to look into a failed run.
+  `pkill_hidden` now matches only this servers folder's `.health-check`, not every one.
+- **Map picture gone after coming back**: the picture's object URL was cached in TanStack
+  Query and revoked when the page closed, so the cached URL was dead on return. Now the bytes
+  are cached and each visit makes its own URL. Tested by leaving and reopening the report twice
+  and via another tool (the blob URL must fetch).
+- **Stuck false positives**: stuck was "slower than 20 u/s for 8 s with no enemy in view", which
+  matched holding, camping, buying and defusing. Now it means trying to move: movement keys
+  held (forward, back, strafe), no enemy in view, alive, in play, and never more than 160 units
+  from where it began (pushing into a wall, or pacing between a few spots) for 8 s or more.
+  Pauses in pressing of up to 1 s don't break a stretch (replay.rs, so Replay's stuck heat
+  follows it too). Checked against the brain trace on the user's 5-minute de_dust2 run:
+  all 21 old stuck spans had no movement keys pressed, and the brain was in Hide, Buy or
+  DefuseBomb during them. The new rule finds none ("No problems found"). On cs_rats2 v5 it still
+  finds real ones (bot 7 in Hunt with a goal, holding strafe at about 20 u/s for 88 s at
+  -638 632).
+- Findings and spot lists with a place have **Watch in Replay**: it opens the kept recording 3 s
+  before the moment, following that bot (`replay:<id>@<time>,<player>`). The spot keeps when and
+  who (`Spot.t`, `Spot.bot`) from the recording that's kept, which is now chosen by the number
+  of samples in both places.
+
 ## Requests
 
 - Owner of app/src-tauri/src/mcp/routes.rs: line ~725's route list says "health check"; it can

@@ -13,6 +13,8 @@ export type Options = Err & {
   hasNav: boolean;
   hasKnowledge: boolean;
   servers: { id: string; name: string }[];
+  /** with no server on this computer: the one line saying a temporary one is made from the game */
+  fromGame?: string | null;
   server: string | null;
   modes: { id: string; name: string }[];
   mode: string;
@@ -44,7 +46,8 @@ export type Run = {
 };
 export type Progress = { run: Run | null; active?: boolean; elapsed?: number; left?: number; fraction?: number };
 
-export type Spot = { at: Vec3; place: string; count: number; seconds: number; drop: number };
+/** t, bot: the moment to watch in Replay (game time in the report's recording) and who */
+export type Spot = { at: Vec3; place: string; count: number; seconds: number; drop: number; t?: number; bot?: number };
 export type FightSpot = { at: Vec3; place: string; deaths: number; tDeaths: number; ctDeaths: number };
 /** cell (cx, cy) covers x0 + cx*cell .. and y0 + cy*cell .., row-major */
 export type HeatGrid = { cell: number; x0: number; y0: number; w: number; h: number; time: number[]; deaths: number[]; kills: number[] };

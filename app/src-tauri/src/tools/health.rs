@@ -78,7 +78,17 @@ pub struct Spot {
     /// for stuck spots: seconds stuck in all; for falls: the biggest drop
     pub seconds: f32,
     pub drop: f32,
+    /// the moment to watch in Replay (game time in the kept recording) and who: the worst
+    /// case here, when it's in that recording
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub t: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bot: Option<u8>,
 }
+
+/// One thing that happened somewhere: (where, weight, drop, the moment and who, if it's in
+/// the kept recording).
+type Item = ([f32; 3], f32, f32, Option<(f32, u8)>);
 
 /// One plugin's errors in the console.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -169,7 +179,8 @@ pub struct Report {
     pub bot_minutes: f32,
     pub kills: usize,
     pub kills_per_bot_min: f32,
-    /// stuck (slower than 20 u/s for 8 s+, no enemy in view, in play), % of bot time
+    /// stuck (trying to move but staying within 160 units for 8 s+, no enemy in view, in
+    /// play; replay.rs), % of bot time
     pub stuck_pct: f32,
     /// standing still with no enemy in view, % of calm time
     pub still_pct: f32,
@@ -306,9 +317,10 @@ pub fn place_at(nav: Option<&Nav>, p: [f32; 3]) -> String {
 
 /// Spots grouped by place name (or, without one, by a grid cell of `cell` units), biggest
 /// first. Each item: (where, weight, drop).
-fn group_spots(items: &[([f32; 3], f32, f32)], nav: Option<&Nav>, cell: f32) -> Vec<Spot> {
+fn group_spots(items: &[Item], nav: Option<&Nav>, cell: f32) -> Vec<Spot> {
     let mut groups: Vec<(String, Spot, f32)> = Vec::new();
-    for &(at, weight, drop) in items {
+    for &(at, weight, drop, moment) in items {
+        let (t, bot) = moment.map(|(t, b)| (Some(t), Some(b))).unwrap_or((None, None));
         let place = place_at(nav, at);
         let key = if place.is_empty() {
             format!("{},{},{}", (at[0] / cell).floor(), (at[1] / cell).floor(), (at[2] / cell).floor())
@@ -324,9 +336,14 @@ fn group_spots(items: &[([f32; 3], f32, f32)], nav: Option<&Nav>, cell: f32) -> 
                 if weight > g.2 {
                     g.1.at = at;
                     g.2 = weight;
+                    if t.is_some() {
+                        (g.1.t, g.1.bot) = (t, bot);
+                    }
+                } else if g.1.t.is_none() && t.is_some() {
+                    (g.1.t, g.1.bot) = (t, bot);
                 }
             }
-            None => groups.push((key, Spot { at, place, count: 1, seconds: weight, drop }, weight)),
+            None => groups.push((key, Spot { at, place, count: 1, seconds: weight, drop, t, bot }, weight)),
         }
     }
     let mut out: Vec<Spot> = groups.into_iter().map(|g| g.1).collect();
@@ -335,6 +352,7 @@ fn group_spots(items: &[([f32; 3], f32, f32)], nav: Option<&Nav>, cell: f32) -> 
         s.at = s.at.map(|v| v.round());
         s.seconds = (s.seconds * 10.0).round() / 10.0;
         s.drop = s.drop.round();
+        s.t = s.t.map(|t| (t * 10.0).round() / 10.0);
     }
     out
 }
@@ -363,7 +381,10 @@ pub fn build_report(recs: &[Recording], console: &str, nav: Option<&Nav>, asked:
     let mut stuck_items = Vec::new();
     let mut fall_items = Vec::new();
     let mut hurt_items = Vec::new();
-    for rec in recs {
+    // the recording kept for Replay (run() keeps the one with the most samples)
+    let main = recs.iter().enumerate().max_by_key(|(_, r)| r.cols.t.len()).map(|(i, _)| i);
+    for (ri, rec) in recs.iter().enumerate() {
+        let here = |t: f32, id: u8| (Some(ri) == main).then_some((t, id));
         r.seconds += rec.seconds();
         let any_bots = rec.players.iter().any(|p| p.bot);
         let players: Vec<&replay::Player> = rec.players.iter().filter(|p| p.count > 0 && (p.bot || !any_bots)).collect();
@@ -411,7 +432,7 @@ pub fn build_report(recs: &[Recording], console: &str, nav: Option<&Nav>, asked:
         for s in rec.stuck.iter().filter(|s| who.contains(&s.id)) {
             let secs = s.to - s.from;
             stuck_secs += secs;
-            stuck_items.push((s.at, secs, 0.0));
+            stuck_items.push((s.at, secs, 0.0, here(s.from, s.id)));
         }
         for k in &rec.kills {
             r.deaths += 1;
@@ -422,9 +443,9 @@ pub fn build_report(recs: &[Recording], console: &str, nav: Option<&Nav>, asked:
             match (&k.fall, k.at) {
                 (Some(f), _) => {
                     r.falls += 1;
-                    fall_items.push((f.from, 1.0, f.drop));
+                    fall_items.push((f.from, 1.0, f.drop, here(f.from_t, k.victim)));
                 }
-                (None, Some(at)) if k.cause != "suicide" => hurt_items.push((at, 1.0, 0.0)),
+                (None, Some(at)) if k.cause != "suicide" => hurt_items.push((at, 1.0, 0.0, here(k.t, k.victim))),
                 _ => {}
             }
         }
@@ -888,12 +909,39 @@ fn modes_of(server_game_dir: &Path) -> Vec<(String, String)> {
     crate::extras::parse_modes(&crate::sys::read_latin1(&server_game_dir.join("addons/amxmodx/configs/gamemodes/modes.ini")).unwrap_or_default())
 }
 
+/// The modes a source has: the server's, or the game's own (Classic when it has none listed:
+/// setting the hidden server up installs the modes).
+fn modes_from(src: &Source, hl: &Path) -> Vec<(String, String)> {
+    let m = modes_of(&src.dir.clone().unwrap_or_else(|| hl.to_path_buf()).join(&src.game));
+    if m.is_empty() && src.dir.is_none() {
+        return vec![("classic".into(), "Classic".into())];
+    }
+    m
+}
+
 /// What a run needs, checked before it starts.
+/// What the hidden server is made from: one of the player's servers, or (with none on this
+/// computer) the game's own files, into a temporary server removed after the run.
+struct Source {
+    id: String,
+    name: String,
+    game: String,
+    /// the server's folder; None: build one from the game
+    dir: Option<PathBuf>,
+}
+
+/// The mark of a hidden server built from the game (not a copy of a server).
+const FROM_GAME: &str = "game";
+/// How the page says it, when there's no server to copy.
+const FROM_GAME_NOTE: &str = "There's no server on this computer, so the simulator makes a hidden temporary one from your game's files and removes it afterward (the first time it downloads Valve's server, about 1 GB).";
+
 struct Plan {
     asked: Asked,
     mode_name: String,
     client: crate::steam::Install,
-    src: crate::servers::Entry,
+    src: Source,
+    /// the app's resources (to set up a server from the game)
+    res: Option<PathBuf>,
     map: super::mapinfo::MapFile,
     nav: PathBuf,
     lsv: Option<PathBuf>,
@@ -1158,14 +1206,18 @@ enum Ended {
     NoStart,
 }
 
-fn pkill_hidden() {
-    // under CrossOver the server can outlive the wine launcher we started
+fn pkill_hidden(hidden: &Path) {
+    // under CrossOver the server can outlive the wine launcher we started (only this one:
+    // its servers folder's name is in the pattern, so a test run elsewhere leaves the app's be)
     #[cfg(target_os = "macos")]
     {
+        let parent = hidden.parent().and_then(|p| p.file_name()).map(|n| regex::escape(&n.to_string_lossy())).unwrap_or_default();
         let mut c = crate::sys::command("pkill");
-        c.arg("-f").arg(r"\.health-check.hlds\.exe");
+        c.arg("-f").arg(format!(r"{parent}.\.health-check.hlds\.exe"));
         let _ = crate::sys::run_output(c, Duration::from_secs(5));
     }
+    #[cfg(not(target_os = "macos"))]
+    let _ = hidden;
 }
 
 /// Runs the bots and records them; the recordings and the console's text.
@@ -1192,17 +1244,30 @@ fn play(p: &Plan, gdir: &Path) -> Result<(Ended, Vec<PathBuf>, String), String> 
     let game = p.src.game.clone();
     let mut child = spawn(&p.client, &p.hidden, &server_args(&game, port, &password, &p.asked.map), out)?;
     crate::sys::tie_to_app(&child);
-    let rcon = crate::rcon::Rcon::at(password, "127.0.0.1", port);
+    let rcon = crate::rcon::Rcon::at(password.clone(), "127.0.0.1", port);
     let total = Duration::from_secs(p.asked.minutes as u64 * 60);
     let started = Instant::now();
     let mut playing: Option<Instant> = None;
     let (mut nudges, mut last_nudge, mut last_check) = (0, started, started);
+    let mut retries = 0;
     let ended = loop {
         std::thread::sleep(Duration::from_millis(500));
         if STOP.load(Ordering::SeqCst) {
             break Ended::Stopped;
         }
         if matches!(child.try_wait(), Ok(Some(_))) {
+            // a server that couldn't reach Steam's library as it came up (seen on the first
+            // start of a freshly set up one under CrossOver) usually does on a second try
+            if playing.is_none() && retries < 2 && tail(&logs[2], 1 << 16).contains("Unable to initialize Steam") {
+                retries += 1;
+                pkill_hidden(&p.hidden);
+                update(|r| r.detail = format!("Starting the hidden server on {} again (Steam didn't answer)", p.asked.map));
+                std::thread::sleep(Duration::from_secs(3));
+                let out = std::fs::OpenOptions::new().append(true).open(&logs[2]).map_err(|e| e.to_string())?;
+                child = spawn(&p.client, &p.hidden, &server_args(&game, port, &password, &p.asked.map), out)?;
+                crate::sys::tie_to_app(&child);
+                continue;
+            }
             break Ended::Closed;
         }
         if last_check.elapsed() >= Duration::from_secs(10) {
@@ -1243,7 +1308,7 @@ fn play(p: &Plan, gdir: &Path) -> Result<(Ended, Vec<PathBuf>, String), String> 
         std::thread::sleep(Duration::from_millis(200));
     }
     crate::sys::stop_child(child, Duration::from_secs(3));
-    pkill_hidden();
+    pkill_hidden(&p.hidden);
     let mut recs: Vec<PathBuf> = std::fs::read_dir(&simrec)
         .map(|d| d.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("csv"))).collect())
         .unwrap_or_default();
@@ -1339,10 +1404,19 @@ fn run(p: Plan) -> Result<Option<String>, String> {
         std::fs::remove_dir_all(&p.hidden).map_err(|e| format!("Couldn't clear the old hidden server ({e})."))?;
     }
     let first = !p.hidden.join("hlds.exe").is_file();
-    update(|r| r.detail = if first { format!("Making a hidden copy of \u{201c}{}\u{201d} (the first time takes a while)", p.src.name) } else { format!("Bringing the hidden copy of \u{201c}{}\u{201d} up to date", p.src.name) });
-    std::fs::create_dir_all(&p.hidden).map_err(|e| format!("Couldn't make the hidden server's folder ({e})."))?;
-    let _ = std::fs::write(&mark, &p.src.id);
-    sync_copy(&p.src.dir, &p.hidden, &STOP)?;
+    match &p.src.dir {
+        Some(dir) => {
+            update(|r| r.detail = if first { format!("Making a hidden copy of \u{201c}{}\u{201d} (the first time takes a while)", p.src.name) } else { format!("Bringing the hidden copy of \u{201c}{}\u{201d} up to date", p.src.name) });
+            std::fs::create_dir_all(&p.hidden).map_err(|e| format!("Couldn't make the hidden server's folder ({e})."))?;
+            let _ = std::fs::write(&mark, &p.src.id);
+            sync_copy(dir, &p.hidden, &STOP)?;
+        }
+        None if first => {
+            build_from_game(&p)?;
+            let _ = std::fs::write(&mark, &p.src.id);
+        }
+        None => {}
+    }
     update(|r| r.detail = format!("Copying {} and its nav", p.map.name));
     copy_map(&p, &gdir)?;
     let install = crate::steam::Install { hl: p.hidden.clone(), kind: p.client.kind.clone(), bottle: p.client.bottle.clone(), games: vec![p.src.game.clone()], dedicated: true };
@@ -1387,13 +1461,46 @@ fn run(p: Plan) -> Result<Option<String>, String> {
     rep.compared = compare(&rep, &load_reports(&dir));
     rep.findings = findings(&rep);
     rep.verdict = verdict(&rep.findings);
-    let biggest = parsed.iter().max_by_key(|(f, _)| std::fs::metadata(f).map(|m| m.len()).unwrap_or(0)).map(|(f, _)| f.clone());
+    // (the one with the most samples: the same one the report's "Watch in Replay" moments come from)
+    let biggest = parsed.iter().max_by_key(|(_, r)| r.cols.t.len()).map(|(f, _)| f.clone());
     rep.recording = biggest.and_then(|f| keep_recording(&p.id, &f, &p.hidden.join("lstrace.csv")));
     save_report(&dir, &rep)?;
     Ok(Some(rep.id))
 }
 
 /// After a run, whatever happened: the map, recordings, trace and password go.
+/// A hidden temporary server from the game's own files (servers::start_hidden_server, the
+/// setup job), waited for here with its progress shown as the run's.
+fn build_from_game(p: &Plan) -> Result<(), String> {
+    let res = p.res.clone().ok_or(INTERNAL)?;
+    update(|r| r.detail = "Setting up a hidden temporary server from your game's files".into());
+    let job = crate::servers::start_hidden_server(p.client.clone(), p.hidden.clone(), p.src.game.clone(), res)?;
+    loop {
+        std::thread::sleep(Duration::from_millis(500));
+        let v = crate::setup::current();
+        if v.id != job {
+            return Err("The hidden server's setup was replaced by another setup job. Try again.".into());
+        }
+        let step = v.steps.iter().find(|s| s.state == "running").map(|s| s.label.clone()).unwrap_or_default();
+        let stopping = STOP.load(Ordering::SeqCst);
+        update(|r| {
+            r.detail = if stopping {
+                "Stopping when the server setup step in progress finishes".into()
+            } else if step.is_empty() {
+                "Setting up a hidden temporary server from your game's files".into()
+            } else {
+                format!("Hidden server: {step} ({:.0}%)", v.progress * 100.0)
+            }
+        });
+        match v.state.as_str() {
+            "running" => continue,
+            "done" if stopping => return Err(STOPPED.into()),
+            "done" => return Ok(()),
+            _ => return Err(format!("The hidden server couldn't be set up: {}", v.error.unwrap_or_else(|| "setup stopped.".into()))),
+        }
+    }
+}
+
 fn tidy(hidden: &Path, game: &str) {
     let gdir = hidden.join(game);
     let _ = std::fs::remove_dir_all(gdir.join("maps"));
@@ -1433,13 +1540,18 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
     let nav = nav.ok_or_else(|| format!("Bots don't know {} yet: it has no nav. Teach them the map first (Maps, then Teach bots), then check it.", map.name))?;
     let gf = game_folder(&game);
     let list = sources(gf);
-    let src = match req.server.as_deref().filter(|s| !s.is_empty()) {
-        Some(id) => list.into_iter().find(|e| e.id == id).ok_or("That server isn't on this computer any more.")?,
-        None => list.into_iter().next().ok_or_else(|| {
-            format!("Make a server for {} on this computer first (Servers, then New server). The map simulator runs bots on a hidden copy of it, with your plugins and modes.", crate::setup::game_name(gf))
-        })?,
+    let entry = match req.server.as_deref().filter(|s| !s.is_empty()) {
+        Some(id) => Some(list.into_iter().find(|e| e.id == id).ok_or("That server isn't on this computer any more.")?),
+        None => list.into_iter().next(),
     };
-    let modes = modes_of(&src.dir.join(&src.game));
+    let (src, res) = match entry {
+        Some(e) => (Source { id: e.id.clone(), name: e.name.clone(), game: e.game.clone(), dir: Some(e.dir.clone()) }, None),
+        None => (
+            Source { id: FROM_GAME.into(), name: "your game".into(), game: gf.to_string(), dir: None },
+            Some(crate::setup_api::resources_for(st).map_err(|_| "Loner-Strike's own files couldn't be found, so a hidden server can't be set up. Reinstall the app.".to_string())?),
+        ),
+    };
+    let modes = modes_from(&src, &game.hl);
     let mode = if req.mode.is_empty() { "classic".to_string() } else { req.mode.clone() };
     let mode_name = modes.iter().find(|(id, _)| *id == mode).map(|(_, n)| n.clone()).ok_or("Pick one of the server's game modes.")?;
     let root = crate::servers::root_for(&client)?;
@@ -1454,6 +1566,7 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
         mode_name,
         client,
         src,
+        res,
         map,
         nav,
         lsv,
@@ -1487,10 +1600,19 @@ fn start(st: &Shared, req: StartReq) -> Result<Value, String> {
     STOP.store(false, Ordering::SeqCst);
     let id = p.id.clone();
     std::thread::spawn(move || {
-        let (hidden, game) = (p.hidden.clone(), p.src.game.clone());
+        let (hidden, game, temporary) = (p.hidden.clone(), p.src.game.clone(), p.src.dir.is_none());
         let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(p))).unwrap_or_else(|_| Err(INTERNAL.into()));
-        pkill_hidden();
-        tidy(&hidden, &game);
+        pkill_hidden(&hidden);
+        if temporary {
+            // made from the game for this run: it goes (Valve's download in .base stays)
+            update(|run| run.detail = "Removing the hidden server".into());
+            // (LS_KEEP_SIM_SERVER: kept, to look into a failed run)
+            if hidden.file_name().is_some_and(|n| n == HIDDEN) && std::env::var_os("LS_KEEP_SIM_SERVER").is_none() {
+                let _ = std::fs::remove_dir_all(&hidden);
+            }
+        } else {
+            tidy(&hidden, &game);
+        }
         update(|run| match r {
             Ok(rep) => {
                 run.phase = "done";
@@ -1545,21 +1667,20 @@ fn options(st: &Shared, map: &str) -> Result<Value, String> {
     let gf = game_folder(&game);
     let list = sources(gf);
     let first = list.first();
-    let gdir = first.map(|e| e.dir.join(&e.game));
-    let modes: Vec<Value> = gdir.as_deref().map(modes_of).unwrap_or_default().into_iter().map(|(id, name)| json!({"id": id, "name": name})).collect();
-    let presets = gdir.as_ref().map(|d| crate::sys::read_latin1(&d.join("addons/amxmodx/configs/gamemodes/mappresets.ini")).unwrap_or_default()).unwrap_or_default();
-    let mode = preset_mode(&presets, &m.name).filter(|x| modes.iter().any(|v| v["id"] == json!(x))).unwrap_or_else(|| "classic".into());
-    let why = if nav.is_none() {
-        Some(format!("Bots don't know {} yet: it has no nav. Teach them the map first (Maps, then Teach bots), then check it.", m.name))
-    } else if first.is_none() {
-        Some(format!("Make a server for {} on this computer first (Servers, then New server). The map simulator runs bots on a hidden copy of it, with your plugins and modes.", crate::setup::game_name(gf)))
-    } else {
-        None
+    let src = match first {
+        Some(e) => Source { id: e.id.clone(), name: e.name.clone(), game: e.game.clone(), dir: Some(e.dir.clone()) },
+        None => Source { id: FROM_GAME.into(), name: "your game".into(), game: gf.to_string(), dir: None },
     };
+    let gdir = src.dir.clone().unwrap_or_else(|| game.hl.clone()).join(&src.game);
+    let modes: Vec<Value> = modes_from(&src, &game.hl).into_iter().map(|(id, name)| json!({"id": id, "name": name})).collect();
+    let presets = crate::sys::read_latin1(&gdir.join("addons/amxmodx/configs/gamemodes/mappresets.ini")).unwrap_or_default();
+    let mode = preset_mode(&presets, &m.name).filter(|x| modes.iter().any(|v| v["id"] == json!(x))).unwrap_or_else(|| "classic".into());
+    let why = nav.is_none().then(|| format!("Bots don't know {} yet: it has no nav. Teach them the map first (Maps, then Teach bots), then check it.", m.name));
     Ok(json!({
         "map": m.name, "game": gf, "hasNav": nav.is_some(), "hasKnowledge": lsv.is_some(),
         "servers": list.iter().map(|e| json!({"id": e.id, "name": e.name})).collect::<Vec<_>>(),
         "server": first.map(|e| e.id.clone()), "modes": modes, "mode": mode,
+        "fromGame": first.is_none().then_some(FROM_GAME_NOTE),
         "bots": 12, "minutes": 5, "limits": {"minutes": [MINUTES.0, MINUTES.1], "bots": [BOTS.0, BOTS.1]},
         "why": why, "busy": setup_busy().or_else(user_busy), "running": running_now(),
     }))
@@ -1794,7 +1915,8 @@ R,95.50,end,2\nR,100.00,start\nR,104.00,end\n";
     /// A report from a sim recording, for trying the report page with real data (the
     /// dev harness reads reports from its temp app folder):
     ///   LS_REPORT_REC=<gm_simrec .csv> LS_REPORT_NAV=<.nav> LS_REPORT_MAP=de_dust2
-    ///   LS_REPORT_OUT=$TMPDIR/ls-tools-dev/tools/health cargo test report_from_recording -- --ignored
+    ///   LS_REPORT_OUT=$TMPDIR/ls-tools-dev/tools/health [LS_REPORT_RECDIR=$TMPDIR/ls-tools-dev/tools/recordings]
+    ///   cargo test report_from_recording -- --ignored
     #[test]
     #[ignore]
     fn report_from_recording() {
@@ -1808,6 +1930,13 @@ R,95.50,end,2\nR,100.00,start\nR,104.00,end\n";
         rep.knowledge = "loaded".into();
         rep.findings = findings(&rep);
         rep.verdict = verdict(&rep.findings);
+        // LS_REPORT_RECDIR: also put the recording there (the app's recordings folder), for Replay
+        if let Ok(dir) = std::env::var("LS_REPORT_RECDIR") {
+            let name = format!("health-{}_{}.csv", rep.id, rep.map);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::copy(var("LS_REPORT_REC"), Path::new(&dir).join(&name)).unwrap();
+            rep.recording = Some(name);
+        }
         save_report(Path::new(&var("LS_REPORT_OUT")), &rep).unwrap();
         println!("{} rounds, T {} CT {}, {} fight spots, {} unvisited areas, places nobody went: {:?}", rep.rounds.len(),
             rep.rounds.iter().filter(|r| r.winner == 1).count(), rep.rounds.iter().filter(|r| r.winner == 2).count(),
@@ -1853,7 +1982,7 @@ R,95.50,end,2\nR,100.00,start\nR,104.00,end\n";
         assert_eq!(f.len(), 1);
         assert_eq!(f[0].level, "good");
         assert_eq!(f[0].text, "No problems found. Bots played (1.10 kills a bot-minute), used 44% of the map and rarely got stuck or fell.");
-        r.stuck_spots = vec![Spot { at: [-832.0, -320.0, -576.0], place: "Sink".into(), count: 6, seconds: 291.0, drop: 0.0 }, Spot { seconds: 20.0, count: 2, ..Default::default() }];
+        r.stuck_spots = vec![Spot { at: [-832.0, -320.0, -576.0], place: "Sink".into(), count: 6, seconds: 291.0, drop: 0.0, ..Default::default() }, Spot { seconds: 20.0, count: 2, ..Default::default() }];
         let f = findings(&r);
         assert_eq!(f.len(), 1);
         assert_eq!(f[0].text, "Bots get stuck near Sink: 4 min 51 s in all, 6 times.");
@@ -1865,21 +1994,27 @@ R,95.50,end,2\nR,100.00,start\nR,104.00,end\n";
 
     #[test]
     fn stuck_spans_from_a_recording() {
-        // one bot standing still for 12 s in play, then walking
-        let mut text = String::from("P,1,Bot,1\nR,0.0,start\n");
+        // one bot pushing into a wall for 12 s in play, then walking; another holding an
+        // angle the whole time (no movement keys), which isn't stuck
+        let mut text = String::from("P,1,Bot,1\nP,2,Holder,1\nR,0.0,start\n");
         for i in 0..200 {
             let t = i as f32 * 0.1;
             let (x, vx) = if t < 12.0 { (100.0, 0.0) } else { (100.0 + (t - 12.0) * 200.0, 200.0) };
-            text.push_str(&format!("S,{t:.1},1,2,{x},50,36,{vx},0,0,0,0,0,1,16,12,0,100,0,99999,99999\n"));
+            text.push_str(&format!("S,{t:.1},1,2,{x},50,36,{vx},0,0,0,0,0,1,16,12,8,100,0,99999,99999\n"));
+            text.push_str(&format!("S,{t:.1},2,2,150,150,36,0,0,0,0,0,1,1,16,12,0,100,0,99999,99999\n"));
         }
         let n = nav(&[("Tunnel", [0.0, 0.0, 0.0], [200.0, 200.0, 0.0]), ("", [200.0, 0.0, 0.0], [2000.0, 200.0, 0.0])]);
         let rep = build_report(&[rec(&text)], "", Some(&n), &Asked { map: "x".into(), mode: "classic".into(), bots: 1, minutes: 1 });
         assert_eq!(rep.stuck_spots.len(), 1);
         assert_eq!(rep.stuck_spots[0].place, "Tunnel");
-        assert!((rep.stuck_spots[0].seconds - 11.9).abs() < 0.2, "{:?}", rep.stuck_spots);
-        assert!((rep.stuck_pct - 60.0).abs() < 2.0, "{}", rep.stuck_pct);
+        // (12 s, and the moment it took to walk out of the 160-unit circle)
+        assert!(rep.stuck_spots[0].seconds > 11.8 && rep.stuck_spots[0].seconds < 12.9, "{:?}", rep.stuck_spots);
+        assert_eq!(rep.stuck_spots[0].count, 1);
+        assert!((rep.stuck_pct - 31.5).abs() < 2.0, "{}", rep.stuck_pct);
         assert_eq!(rep.coverage_pct, Some(100.0));
         assert_eq!(rep.bot_rounds, 0);
+        // the spot remembers who and when, for "Watch in Replay"
+        assert_eq!((rep.stuck_spots[0].bot, rep.stuck_spots[0].t), (Some(1), Some(0.0)));
     }
 
     #[test]

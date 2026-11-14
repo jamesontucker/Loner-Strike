@@ -49,7 +49,7 @@ export function useToolCrumbs(tool: string, trail: Crumb[] | null) {
   useEffect(() => () => useShell.setState((s) => ({ crumbs: { ...s.crumbs, [tool]: null } })), [tool]);
 }
 
-/** Opens an address: "overview", "<tool>", "<tool>:<map>[@x,y,z[,size]]", "replay:<id>".
+/** Opens an address: "overview", "<tool>", "<tool>:<map>[@x,y,z[,size]]", "replay:<id>[@time[,player]]".
  *  A bare "<tool>" comes back to its last map, unless `exact` (then it's the tool's start
  *  page); `exact` also starts the tool's page over when it's the one already open. */
 export function openAddress(focus: string, exact = false) {
@@ -80,8 +80,14 @@ export function openAddress(focus: string, exact = false) {
     if (a.at) t.look(a.at as Vec3, a.size ?? 192);
   } else if (what === "replay") {
     t.setTool("replay");
-    if (a.arg) t.openReplay(a.arg);
-    else if (exact) t.openReplay(null);
+    // "replay:<id>@<time>[,<player>]": a moment, following someone (the map simulator's links)
+    const [id, moment] = a.arg.split("@");
+    if (id) {
+      t.openReplay(id);
+      const [time, who] = (moment ?? "").split(",").map(Number);
+      if (moment && Number.isFinite(time)) t.setTime(time);
+      if (moment && Number.isFinite(who) && who > 0) t.setFollow(who);
+    } else if (exact) t.openReplay(null);
   } else if (TOOLS.some((x) => x.id === what)) {
     // "<tool>:<map>@x,y,z": the map, and a spot to look at; no map asked for: the last one
     const b = a.arg || exact ? a : parseAddress(lastAddress(what) ?? what);

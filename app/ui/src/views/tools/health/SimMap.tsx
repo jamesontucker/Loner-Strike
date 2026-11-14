@@ -7,7 +7,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type PointerEvent as RPointerEvent } from "react";
 import { LoadError, Segmented, Skeleton } from "../../../ui";
-import { DEFAULT_CHOICE, overviewInfo, previewUrl, type OverviewInfo } from "../overview/overviewApi";
+import { DEFAULT_CHOICE, overviewInfo, previewBytes, type OverviewInfo } from "../overview/overviewApi";
 import { FIT, PanZoom, type View } from "../overview/PanZoom";
 import "../overview/overview.css";
 import type { Report, Spot } from "./healthApi";
@@ -73,15 +73,23 @@ export function SimMap({ r }: { r: Report }) {
   const [view, setView] = useState<View>(FIT);
   const [hover, setHover] = useState<string | null>(null);
   const info = useQuery({ queryKey: ["tools", "overview", "info", r.map], queryFn: ({ signal }) => overviewInfo(r.map, signal), retry: false, staleTime: 60_000 });
+  // the picture's bytes are cached (by map); the page makes its own object URL from them each
+  // time it's shown (a cached URL would be revoked when the page was left, and come back blank)
   const pic = useQuery({
     queryKey: ["tools", "health", "picture", r.map],
-    queryFn: ({ signal }) => previewUrl(r.map, { ...DEFAULT_CHOICE, style: "clean", marks: ["bomb", "rescue", "spawns"], background: "black" }, signal),
+    queryFn: ({ signal }) => previewBytes(r.map, { ...DEFAULT_CHOICE, style: "clean", marks: ["bomb", "rescue", "spawns"], background: "black" }, signal),
     enabled: !!info.data,
     retry: false,
     staleTime: Infinity,
-    gcTime: 60_000,
+    gcTime: 5 * 60_000,
   });
-  useEffect(() => () => void (pic.data && URL.revokeObjectURL(pic.data)), [pic.data]);
+  const [picUrl, setPicUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pic.data) return setPicUrl(null);
+    const url = URL.createObjectURL(new Blob([pic.data], { type: "image/png" }));
+    setPicUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pic.data]);
   const f = info.data?.frame;
   const heat = r.heat;
   const allPins = useMemo(() => pinsOf(r), [r]);
@@ -140,12 +148,12 @@ export function SimMap({ r }: { r: Report }) {
         </label>
       </div>
       <div className="sim-map-pic">
-        {pic.isPending ? (
+        {pic.isPending || (pic.data && !picUrl) ? (
           <Skeleton rows={6} />
         ) : (
           <PanZoom view={view} onView={setView} label={`${r.map} from above: ${LAYERS.find((l) => l[0] === layer)![1].toLowerCase()}`}>
             <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" className="sim-map-svg" onPointerMove={readout} onPointerLeave={() => setHover(null)}>
-              {pic.data ? <image href={pic.data} width={W} height={H} /> : <rect width={W} height={H} className="sim-map-blank" />}
+              {picUrl ? <image href={picUrl} width={W} height={H} /> : <rect width={W} height={H} className="sim-map-blank" />}
               <g className={`sim-heat ${layer}`}>
                 {cells.map((c, i) => (
                   <rect key={i} x={c.x} y={c.y} width={c.w} height={c.h} opacity={c.a} />
