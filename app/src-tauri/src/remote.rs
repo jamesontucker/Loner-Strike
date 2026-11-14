@@ -1006,6 +1006,8 @@ Environment=LD_LIBRARY_PATH=$SRV
 # put back from the machine's copy before every start, whoever starts it (the app, lsctl, a
 # restart after a crash), if anything replaced it ($$: systemd's own escape for a shell variable)
 ExecStartPre=-/bin/sh -c 'f="$HOME/loner-strike/bin/hamsandwich_fixed_i386.so"; m="$SRV/{game}/addons/amxmodx/modules/hamsandwich_amxx_i386.so"; if [ -f "\$\$f" ] && [ -f "\$\$m" ] && ! cmp -s "\$\$f" "\$\$m"; then cp "\$\$f" "\$\$m.new" && mv -f "\$\$m.new" "\$\$m"; fi'
+ExecStartPre=-/usr/local/bin/lscrashinfo start $SRV {game} {unit}
+ExecStopPost=-/usr/local/bin/lscrashinfo stop $SRV {game} {unit}
 ExecStart=$SRV/hlds_linux {args}
 Restart=always
 RestartSec=5
@@ -1108,6 +1110,137 @@ while True:
     time.sleep(EVERY)
 LSWATCH
 sudo chmod 755 /usr/local/bin/lswatchdog
+sudo tee /usr/local/bin/lscrashinfo >/dev/null <<'LSCRASH'
+#!/usr/bin/env python3
+# lscrashinfo start|stop <server folder> <game> <unit>: the server's crash records, for the app
+# (crashes.rs) and the status service. start (ExecStartPre): crashes/modules.json, the modules
+# and whether Ham Sandwich is the fixed one. stop (ExecStopPost): when the game ended any way
+# but a clean exit, crashes/<UTC time>-<pid>.json with the map, the last log lines and the
+# game DLL's ls_crash.log entry (stack, marks); the newest 100 are kept.
+import glob, hashlib, json, os, subprocess, sys, time
+cmd, srv, game, unit = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+g = os.path.join(srv, game)
+out = os.path.join(g, "crashes")
+os.makedirs(out, exist_ok=True)
+HAM_FIXED = "HAMSHA_FIXED"
+HAM_OFFICIAL = ("d6197ed086b8c7ba92fff623ae399f7f0139e957c3ac9b37e061e982573256b6",)
+SIGNAMES = dict(zip(["11", "6", "7", "8", "4"], ["SEGV", "ABRT", "BUS", "FPE", "ILL"]))
+def sha(p):
+    try:
+        with open(p, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return ""
+def now_iso():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+if cmd == "start":
+    mods = []
+    paths = glob.glob(os.path.join(g, "addons/amxmodx/modules/*.so")) + glob.glob(os.path.join(g, "addons/amxmodx/dlls/*.so")) + glob.glob(os.path.join(g, "dlls/*.so"))
+    for p in sorted(paths):
+        rel = os.path.relpath(p, g)
+        h = sha(p)
+        name = os.path.basename(p).split("_amxx")[0].split("_mm")[0].split(".")[0]
+        verdict, why = "unknown", ""
+        if name == "hamsandwich":
+            if h == HAM_FIXED:
+                verdict, why = "ok", "the fixed Ham Sandwich"
+            elif h in HAM_OFFICIAL:
+                verdict, why = "bad", "the official Ham Sandwich: it corrupts memory at map changes (the server crashes after a map vote)"
+            else:
+                why = "a Ham Sandwich the app doesn't know"
+        mods.append(dict(file=rel, name=name, sha256=h, verdict=verdict, why=why))
+    with open(os.path.join(out, "modules.json"), "w") as f:
+        json.dump(dict(schema="loner-strike/modules", version=1, time=now_iso(), modules=mods), f)
+    with open(os.path.join(out, ".started"), "w") as f:
+        f.write(str(time.time()))
+    sys.exit(0)
+result = os.environ.get("SERVICE_RESULT", "")
+code = os.environ.get("EXIT_CODE", "")
+status = os.environ.get("EXIT_STATUS", "")
+if result == "success" and code == "exited":
+    sys.exit(0)
+try:
+    jobs = subprocess.run(["systemctl", "list-jobs", "--no-legend", unit], capture_output=True, text=True).stdout.split()
+except OSError:
+    jobs = []
+at_stop = "stop" in jobs or "restart" in jobs or status == "TERM"
+kind = "hang" if status == "KILL" else ("abort" if status == "ABRT" else "crash")
+try:
+    with open(os.path.join(out, ".started")) as f:
+        started = float(f.read().strip())
+except (OSError, ValueError):
+    started = 0.0
+lines = []
+try:
+    with open(os.path.join(g, "qconsole.log"), "rb") as f:
+        f.seek(0, 2)
+        f.seek(max(0, f.tell() - 65536))
+        lines = f.read().decode("latin-1", "replace").splitlines()
+except OSError:
+    pass
+mp = ""
+for l in reversed(lines):
+    if "Mapchange to " in l:
+        mp = l.split("Mapchange to ", 1)[1].split()[0]
+        break
+mode = ""
+try:
+    with open(os.path.join(g, "addons/amxmodx/data/gamemodes/current.txt")) as f:
+        mode = f.read().strip()
+except OSError:
+    pass
+entry, stack, marks, fault, addr, module, offset = "", [], [], status, "", "", ""
+crashlog = os.path.join(g, "ls_crash.log")
+try:
+    if time.time() - os.path.getmtime(crashlog) < 300:
+        with open(crashlog, "r", errors="replace") as f:
+            parts = [p for p in f.read().split("\n\n") if p.strip()]
+        if parts:
+            entry = parts[-1]
+            sec = ""
+            for l in entry.splitlines():
+                t = l.strip()
+                if t.startswith("signal "):
+                    w = t.split()
+                    fault = "SIG" + SIGNAMES.get(w[1], w[1])
+                    addr = w[3] if len(w) > 3 else ""
+                elif t.startswith("where:"):
+                    module = t.split()[1].rsplit("/", 1)[-1]
+                    if "+0x" in t:
+                        offset = "0x" + t.split("+0x", 1)[1].split(")")[0]
+                elif t.startswith("stack"):
+                    sec = "stack"
+                elif t.startswith("last marks"):
+                    sec = "marks"
+                elif sec == "stack" and t:
+                    stack.append(t.rsplit("/", 1)[-1])
+                elif sec == "marks" and t and not t.startswith("("):
+                    marks.append(t)
+except OSError:
+    pass
+stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+pid = os.environ.get("MAINPID", "0")
+files = dict()
+if entry:
+    name = "ls_crash." + stamp + ".log"
+    with open(os.path.join(out, name), "w") as f:
+        f.write(entry + "\n")
+    files["crashLog"] = name
+rec = dict(schema="loner-strike/crash", version=1, time=now_iso(), map=mp, mode=mode,
+           uptimeSec=int(time.time() - started) if started else None, mapSec=None, players=None, bots=None,
+           kind=kind, fault=fault, address=addr, module=module, offset=offset,
+           stack=stack[:64], marks=marks[-50:], lastLines=lines[-40:], atStop=at_stop,
+           result=result, exitCode=code, exitStatus=status, files=files)
+with open(os.path.join(out, stamp + "-" + pid + ".json"), "w") as f:
+    json.dump(rec, f)
+for old in sorted(glob.glob(os.path.join(out, "2*.json")))[:-100]:
+    try:
+        os.remove(old)
+    except OSError:
+        pass
+LSCRASH
+sudo sed -i "s/HAMSHA_FIXED/{ham_sha}/" /usr/local/bin/lscrashinfo
+sudo chmod 755 /usr/local/bin/lscrashinfo
 sudo tee /etc/systemd/system/{unit}-watchdog.service >/dev/null <<EOF
 [Unit]
 Description=Loner-Strike server {id} watchdog (starts it again if it freezes)
@@ -1129,13 +1262,14 @@ echo "@@STEP ready"
 "#,
         sandbox = SANDBOX,
         sandbox_paths = SANDBOX_PATHS,
-        rev = SERVICE_REV
+        rev = SERVICE_REV,
+        ham_sha = HAM_LINUX_SHA
     )
 }
 
 /// A line in the game's unit naming how it's written: a unit without it is written again
 /// before the server's next start (raise it whenever service_sh's unit changes)
-pub const SERVICE_REV: &str = "loner-strike unit 7";
+pub const SERVICE_REV: &str = "loner-strike unit 8";
 
 /// Whether the server's HLTV unit on the machine is the one this version writes (true when it
 /// has none).
