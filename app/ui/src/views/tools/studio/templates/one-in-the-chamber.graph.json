@@ -27,6 +27,14 @@
    "reset": "round"
   },
   {
+   "id": "back",
+   "name": "Coming Back",
+   "type": "bool",
+   "scope": "player",
+   "default": false,
+   "reset": "round"
+  },
+  {
    "id": "playing",
    "name": "Still In",
    "type": "number",
@@ -39,7 +47,7 @@
    "id": "rs",
    "type": "event.round_started",
    "pos": {
-    "x": 565,
+    "x": 1065,
     "y": 74
    },
    "params": {}
@@ -48,7 +56,7 @@
    "id": "nobuy",
    "type": "buy.where",
    "pos": {
-    "x": 1065,
+    "x": 1565,
     "y": 61
    },
    "params": {
@@ -59,7 +67,7 @@
    "id": "bots",
    "type": "bots.no_buy",
    "pos": {
-    "x": 1565,
+    "x": 2065,
     "y": 50
    },
    "params": {
@@ -70,7 +78,7 @@
    "id": "hello",
    "type": "msg.broadcast",
    "pos": {
-    "x": 2065,
+    "x": 2565,
     "y": 50
    },
    "params": {
@@ -83,7 +91,7 @@
    "type": "event.player_spawned",
    "pos": {
     "x": 65,
-    "y": 315
+    "y": 310
    },
    "params": {}
   },
@@ -92,7 +100,7 @@
    "type": "player.strip",
    "pos": {
     "x": 565,
-    "y": 201
+    "y": 137
    },
    "params": {
     "knife": true
@@ -103,7 +111,7 @@
    "type": "player.give_weapon",
    "pos": {
     "x": 1065,
-    "y": 244
+    "y": 201
    },
    "params": {
     "weapon": "deagle",
@@ -115,7 +123,7 @@
    "type": "player.switch_weapon",
    "pos": {
     "x": 1565,
-    "y": 287
+    "y": 244
    },
    "params": {
     "weapon": "deagle"
@@ -126,7 +134,7 @@
    "type": "player.set_ammo",
    "pos": {
     "x": 2065,
-    "y": 308
+    "y": 265
    },
    "params": {
     "clip": 1,
@@ -134,11 +142,23 @@
    }
   },
   {
+   "id": "here",
+   "type": "var.set",
+   "pos": {
+    "x": 2565,
+    "y": 319
+   },
+   "params": {
+    "var": "back",
+    "value": false
+   }
+  },
+  {
    "id": "ah",
    "type": "event.player_about_hurt",
    "pos": {
     "x": 65,
-    "y": 596
+    "y": 617
    },
    "params": {}
   },
@@ -147,7 +167,7 @@
    "type": "player.weapon_held",
    "pos": {
     "x": 565,
-    "y": 597
+    "y": 618
    },
    "params": {}
   },
@@ -156,7 +176,7 @@
    "type": "text.equals",
    "pos": {
     "x": 1065,
-    "y": 573
+    "y": 594
    },
    "params": {
     "b": "deagle"
@@ -167,7 +187,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 616
+    "y": 637
    },
    "params": {}
   },
@@ -176,7 +196,7 @@
    "type": "dmg.set",
    "pos": {
     "x": 2065,
-    "y": 616
+    "y": 637
    },
    "params": {
     "amount": 400
@@ -187,7 +207,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 1126
+    "y": 1168
    },
    "params": {}
   },
@@ -196,7 +216,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 1104
+    "y": 1136
    },
    "params": {}
   },
@@ -205,7 +225,7 @@
    "type": "logic.and_or",
    "pos": {
     "x": 565,
-    "y": 1061
+    "y": 1093
    },
    "params": {
     "op": "or"
@@ -216,7 +236,7 @@
    "type": "logic.not",
    "pos": {
     "x": 1065,
-    "y": 1085
+    "y": 1117
    },
    "params": {}
   },
@@ -225,7 +245,7 @@
    "type": "player.switch_weapon",
    "pos": {
     "x": 2065,
-    "y": 965
+    "y": 997
    },
    "params": {
     "weapon": "deagle"
@@ -236,7 +256,7 @@
    "type": "player.give_ammo",
    "pos": {
     "x": 2565,
-    "y": 1083
+    "y": 1115
    },
    "params": {
     "n": 1
@@ -247,7 +267,7 @@
    "type": "var.add",
    "pos": {
     "x": 3065,
-    "y": 1145
+    "y": 1162
    },
    "params": {
     "var": "lives",
@@ -259,7 +279,7 @@
    "type": "var.get",
    "pos": {
     "x": 2565,
-    "y": 835
+    "y": 867
    },
    "params": {
     "var": "lives"
@@ -270,7 +290,7 @@
    "type": "math.compare",
    "pos": {
     "x": 3065,
-    "y": 835
+    "y": 867
    },
    "params": {
     "op": "gt",
@@ -282,16 +302,28 @@
    "type": "flow.branch",
    "pos": {
     "x": 3565,
-    "y": 1052
+    "y": 1058
    },
    "params": {}
+  },
+  {
+   "id": "coming",
+   "type": "var.set",
+   "pos": {
+    "x": 4065,
+    "y": 1090
+   },
+   "params": {
+    "var": "back",
+    "value": true
+   }
   },
   {
    "id": "wait",
    "type": "timer.delay",
    "pos": {
-    "x": 4065,
-    "y": 835
+    "x": 4565,
+    "y": 1112
    },
    "params": {
     "secs": 2
@@ -301,8 +333,8 @@
    "id": "back",
    "type": "player.respawn",
    "pos": {
-    "x": 4565,
-    "y": 1168
+    "x": 5065,
+    "y": 1266
    },
    "params": {}
   },
@@ -311,7 +343,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 4065,
-    "y": 1308
+    "y": 1466
    },
    "params": {
     "text": "Out of lives:"
@@ -322,7 +354,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 1590
+    "y": 1866
    },
    "params": {}
   },
@@ -331,7 +363,7 @@
    "type": "var.set",
    "pos": {
     "x": 565,
-    "y": 1632
+    "y": 1908
    },
    "params": {
     "var": "playing",
@@ -343,7 +375,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 1065,
-    "y": 1643
+    "y": 1919
    },
    "params": {
     "which": "all"
@@ -354,7 +386,7 @@
    "type": "var.get",
    "pos": {
     "x": 1565,
-    "y": 1654
+    "y": 1790
    },
    "params": {
     "var": "lives"
@@ -365,7 +397,7 @@
    "type": "math.compare",
    "pos": {
     "x": 2065,
-    "y": 1654
+    "y": 1790
    },
    "params": {
     "op": "gt",
@@ -373,11 +405,53 @@
    }
   },
   {
+   "id": "alive",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 1565,
+    "y": 1954
+   },
+   "params": {}
+  },
+  {
+   "id": "bk",
+   "type": "var.get",
+   "pos": {
+    "x": 1565,
+    "y": 2058
+   },
+   "params": {
+    "var": "back"
+   }
+  },
+  {
+   "id": "either",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 2065,
+    "y": 2042
+   },
+   "params": {
+    "op": "or"
+   }
+  },
+  {
+   "id": "both",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 2565,
+    "y": 1967
+   },
+   "params": {
+    "op": "and"
+   }
+  },
+  {
    "id": "in",
    "type": "flow.branch",
    "pos": {
-    "x": 2565,
-    "y": 1632
+    "x": 3065,
+    "y": 1924
    },
    "params": {}
   },
@@ -385,8 +459,8 @@
    "id": "count",
    "type": "var.add",
    "pos": {
-    "x": 3065,
-    "y": 1610
+    "x": 3565,
+    "y": 1902
    },
    "params": {
     "var": "playing",
@@ -398,7 +472,7 @@
    "type": "var.get",
    "pos": {
     "x": 565,
-    "y": 1833
+    "y": 2226
    },
    "params": {
     "var": "playing"
@@ -409,7 +483,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 1833
+    "y": 2226
    },
    "params": {
     "op": "le",
@@ -421,7 +495,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 1827
+    "y": 2220
    },
    "params": {}
   },
@@ -430,7 +504,7 @@
    "type": "flow.pick_player",
    "pos": {
     "x": 2065,
-    "y": 1816
+    "y": 2209
    },
    "params": {
     "which": "alive"
@@ -441,7 +515,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 2565,
-    "y": 1816
+    "y": 2209
    },
    "params": {
     "text": "Last one standing:"
@@ -452,7 +526,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 3065,
-    "y": 1827
+    "y": 2220
    },
    "params": {
     "winner": "draw"
@@ -540,12 +614,12 @@
   {
    "id": "w8",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "one",
+    "pin": "then"
    },
    "to": {
-    "node": "strip",
-    "pin": "player"
+    "node": "here",
+    "pin": "exec"
    }
   },
   {
@@ -555,7 +629,7 @@
     "pin": "player"
    },
    "to": {
-    "node": "give",
+    "node": "strip",
     "pin": "player"
    }
   },
@@ -566,7 +640,7 @@
     "pin": "player"
    },
    "to": {
-    "node": "hold",
+    "node": "give",
     "pin": "player"
    }
   },
@@ -577,12 +651,34 @@
     "pin": "player"
    },
    "to": {
-    "node": "one",
+    "node": "hold",
     "pin": "player"
    }
   },
   {
    "id": "w12",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "one",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "here",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w14",
    "from": {
     "node": "ah",
     "pin": "attacker"
@@ -593,7 +689,7 @@
    }
   },
   {
-   "id": "w13",
+   "id": "w15",
    "from": {
     "node": "gun",
     "pin": "out"
@@ -604,7 +700,7 @@
    }
   },
   {
-   "id": "w14",
+   "id": "w16",
    "from": {
     "node": "isdeagle",
     "pin": "out"
@@ -615,7 +711,7 @@
    }
   },
   {
-   "id": "w15",
+   "id": "w17",
    "from": {
     "node": "ah",
     "pin": "then"
@@ -626,7 +722,7 @@
    }
   },
   {
-   "id": "w16",
+   "id": "w18",
    "from": {
     "node": "check",
     "pin": "true"
@@ -637,7 +733,7 @@
    }
   },
   {
-   "id": "w17",
+   "id": "w19",
    "from": {
     "node": "pk",
     "pin": "suicide"
@@ -648,7 +744,7 @@
    }
   },
   {
-   "id": "w18",
+   "id": "w20",
    "from": {
     "node": "pk",
     "pin": "world"
@@ -659,7 +755,7 @@
    }
   },
   {
-   "id": "w19",
+   "id": "w21",
    "from": {
     "node": "other",
     "pin": "out"
@@ -670,7 +766,7 @@
    }
   },
   {
-   "id": "w20",
+   "id": "w22",
    "from": {
     "node": "notother",
     "pin": "out"
@@ -681,7 +777,7 @@
    }
   },
   {
-   "id": "w21",
+   "id": "w23",
    "from": {
     "node": "pk",
     "pin": "then"
@@ -692,7 +788,7 @@
    }
   },
   {
-   "id": "w22",
+   "id": "w24",
    "from": {
     "node": "byplayer",
     "pin": "true"
@@ -703,7 +799,7 @@
    }
   },
   {
-   "id": "w23",
+   "id": "w25",
    "from": {
     "node": "swap",
     "pin": "then"
@@ -714,7 +810,7 @@
    }
   },
   {
-   "id": "w24",
+   "id": "w26",
    "from": {
     "node": "bullet",
     "pin": "then"
@@ -725,7 +821,7 @@
    }
   },
   {
-   "id": "w25",
+   "id": "w27",
    "from": {
     "node": "byplayer",
     "pin": "false"
@@ -736,7 +832,7 @@
    }
   },
   {
-   "id": "w26",
+   "id": "w28",
    "from": {
     "node": "pk",
     "pin": "attacker"
@@ -747,7 +843,7 @@
    }
   },
   {
-   "id": "w27",
+   "id": "w29",
    "from": {
     "node": "pk",
     "pin": "attacker"
@@ -758,7 +854,7 @@
    }
   },
   {
-   "id": "w28",
+   "id": "w30",
    "from": {
     "node": "pk",
     "pin": "victim"
@@ -769,7 +865,7 @@
    }
   },
   {
-   "id": "w29",
+   "id": "w31",
    "from": {
     "node": "pk",
     "pin": "victim"
@@ -780,7 +876,7 @@
    }
   },
   {
-   "id": "w30",
+   "id": "w32",
    "from": {
     "node": "left",
     "pin": "out"
@@ -791,7 +887,7 @@
    }
   },
   {
-   "id": "w31",
+   "id": "w33",
    "from": {
     "node": "any",
     "pin": "out"
@@ -802,7 +898,7 @@
    }
   },
   {
-   "id": "w32",
+   "id": "w34",
    "from": {
     "node": "lose",
     "pin": "then"
@@ -813,10 +909,21 @@
    }
   },
   {
-   "id": "w33",
+   "id": "w35",
    "from": {
     "node": "more",
     "pin": "true"
+   },
+   "to": {
+    "node": "coming",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "coming",
+    "pin": "then"
    },
    "to": {
     "node": "wait",
@@ -824,7 +931,7 @@
    }
   },
   {
-   "id": "w34",
+   "id": "w37",
    "from": {
     "node": "wait",
     "pin": "then"
@@ -835,7 +942,18 @@
    }
   },
   {
-   "id": "w35",
+   "id": "w38",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "coming",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w39",
    "from": {
     "node": "pk",
     "pin": "victim"
@@ -846,7 +964,7 @@
    }
   },
   {
-   "id": "w36",
+   "id": "w40",
    "from": {
     "node": "more",
     "pin": "false"
@@ -857,7 +975,7 @@
    }
   },
   {
-   "id": "w37",
+   "id": "w41",
    "from": {
     "node": "pk",
     "pin": "victim"
@@ -868,7 +986,7 @@
    }
   },
   {
-   "id": "w38",
+   "id": "w42",
    "from": {
     "node": "pk2",
     "pin": "then"
@@ -879,7 +997,7 @@
    }
   },
   {
-   "id": "w39",
+   "id": "w43",
    "from": {
     "node": "zero",
     "pin": "then"
@@ -890,7 +1008,7 @@
    }
   },
   {
-   "id": "w40",
+   "id": "w44",
    "from": {
     "node": "each",
     "pin": "each"
@@ -901,7 +1019,7 @@
    }
   },
   {
-   "id": "w41",
+   "id": "w45",
    "from": {
     "node": "in",
     "pin": "true"
@@ -912,7 +1030,7 @@
    }
   },
   {
-   "id": "w42",
+   "id": "w46",
    "from": {
     "node": "each",
     "pin": "player"
@@ -923,7 +1041,7 @@
    }
   },
   {
-   "id": "w43",
+   "id": "w47",
    "from": {
     "node": "l2",
     "pin": "out"
@@ -934,9 +1052,75 @@
    }
   },
   {
-   "id": "w44",
+   "id": "w48",
+   "from": {
+    "node": "each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "alive",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "bk",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "alive",
+    "pin": "out"
+   },
+   "to": {
+    "node": "either",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "bk",
+    "pin": "out"
+   },
+   "to": {
+    "node": "either",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w52",
    "from": {
     "node": "has",
+    "pin": "out"
+   },
+   "to": {
+    "node": "both",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "either",
+    "pin": "out"
+   },
+   "to": {
+    "node": "both",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "both",
     "pin": "out"
    },
    "to": {
@@ -945,7 +1129,7 @@
    }
   },
   {
-   "id": "w45",
+   "id": "w55",
    "from": {
     "node": "each",
     "pin": "then"
@@ -956,7 +1140,7 @@
    }
   },
   {
-   "id": "w46",
+   "id": "w56",
    "from": {
     "node": "over",
     "pin": "true"
@@ -967,7 +1151,7 @@
    }
   },
   {
-   "id": "w47",
+   "id": "w57",
    "from": {
     "node": "winner",
     "pin": "then"
@@ -978,7 +1162,7 @@
    }
   },
   {
-   "id": "w48",
+   "id": "w58",
    "from": {
     "node": "cheer",
     "pin": "then"
@@ -989,7 +1173,7 @@
    }
   },
   {
-   "id": "w49",
+   "id": "w59",
    "from": {
     "node": "n",
     "pin": "out"
@@ -1000,7 +1184,7 @@
    }
   },
   {
-   "id": "w50",
+   "id": "w60",
    "from": {
     "node": "last",
     "pin": "out"
@@ -1011,7 +1195,7 @@
    }
   },
   {
-   "id": "w51",
+   "id": "w61",
    "from": {
     "node": "winner",
     "pin": "player"
@@ -1031,8 +1215,8 @@
     "y": 4
    },
    "size": {
-    "w": 2278,
-    "h": 482
+    "w": 2778,
+    "h": 493
    }
   },
   {
@@ -1040,7 +1224,7 @@
    "text": "A deagle bullet always kills (the knife hurts as usual). Player About To Be Hurt can change the damage before it lands.",
    "pos": {
     "x": 41,
-    "y": 527
+    "y": 548
    },
    "size": {
     "w": 2278,
@@ -1052,23 +1236,23 @@
    "text": "A kill gives the killer one more bullet. The one who died loses a life, and comes back after 2 seconds if they have any left.",
    "pos": {
     "x": 41,
-    "y": 789
+    "y": 821
    },
    "size": {
-    "w": 4778,
-    "h": 675
+    "w": 5278,
+    "h": 801
    }
   },
   {
    "id": "c4",
-   "text": "After each death, count who still has lives. When only one is left, they win and a new round starts with three lives each.",
+   "text": "After each death, count who is still in: lives left, and alive or about to come back (someone who joins mid-round waits for the next round). When only one is left, they win and a new round starts with three lives each.",
    "pos": {
     "x": 41,
-    "y": 1544
+    "y": 1744
    },
    "size": {
-    "w": 3278,
-    "h": 428
+    "w": 3778,
+    "h": 621
    }
   }
  ]
