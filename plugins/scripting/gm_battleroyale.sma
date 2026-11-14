@@ -165,22 +165,30 @@ stock toast(id, Float:secs, const fmt[], any:...)
 /* server: each bot's loot-up target and how far it is (for tests) */
 public cmd_goals()
 {
-	new Float:o[3], Float:t[3];
+	new Float:o[3], Float:t[3], ln[12];
 	for (new p = 1; p <= MaxClients; p++)
 	{
 		if (!is_user_alive(p) || !is_user_bot(p))
 			continue;
 		pev(p, pev_origin, o);
+		layer_name(p, ln, charsmax(ln));
 		new e = g_gunGoal[p];
 		if (e && pev_valid(e))
 		{
 			pev(e, pev_origin, t);
-			server_print("bot %d at %.0f %.0f %.0f falling %d armed %d -> gun %d (state %d) %.0f away, dz %.0f", p, o[0], o[1], o[2], ls_dropping(p), has_gun(p), e, ls_comp_state(e), get_distance_f(o, t), o[2] - t[2]);
+			server_print("bot %d (%s) at %.0f %.0f %.0f falling %d armed %d -> gun %d (state %d) %.0f away, dz %.0f", p, ln, o[0], o[1], o[2], ls_dropping(p), has_gun(p), e, ls_comp_state(e), get_distance_f(o, t), o[2] - t[2]);
 		}
 		else
-			server_print("bot %d at %.0f %.0f %.0f falling %d armed %d, no gun goal", p, o[0], o[1], o[2], ls_dropping(p), has_gun(p));
+			server_print("bot %d (%s) at %.0f %.0f %.0f falling %d armed %d, no gun goal", p, ln, o[0], o[1], o[2], ls_dropping(p), has_gun(p));
 	}
 	return PLUGIN_HANDLED;
+}
+
+stock layer_name(p, out[], len)
+{
+	static const NAMES[][] = { "below", "surface", "high", "-" };
+	new l = g_layer[p];
+	copy(out, len, NAMES[(l >= 0 && l <= 2) ? l : 3]);
 }
 
 public cmd_nobuy(id)
@@ -1019,10 +1027,10 @@ stock loot_goal_on_landing(p)
 			/* (one another bot is already after counts a bit further) */
 			if (g_gunTaken[e < sizeof g_gunTaken ? e : 0])
 				d += 1500.0;
-			/* (a bot meant for the high ground looks up there first: W2 saw "high" bots spend the
-			   loot-up on ground loot, 0-2 up at the fight start) */
+			/* (a bot meant for the high ground takes only guns up there: W2 saw "high" bots spend
+			   the loot-up fetching ground guns, 1 of 16 up at first contact) */
 			if (g_layer[p] == LAYER_HIGH && o[2] <= g_medianZ + 200.0)
-				d += 900.0;
+				continue;
 			if (d < bd)
 			{
 				bd = d;
@@ -1032,7 +1040,7 @@ stock loot_goal_on_landing(p)
 		if (!best)
 			for (new e = ls_comp_find("ls_loot_container"); e; e = ls_comp_find("ls_loot_container", e))
 			{
-				if (ls_comp_state(e) != 0)
+				if (ls_comp_state(e) != 0 || (g_layer[p] == LAYER_HIGH && crate_layer(e) != LAYER_HIGH))
 					continue;
 				pev(e, pev_origin, o);
 				new Float:d = get_distance_f(o, po);
@@ -1123,6 +1131,16 @@ stock landing_spot(id, Float:out[3])
 			out[1] += random_float(-120.0, 120.0);
 			return 1;
 		}
+	}
+	/* meant for the high ground with no crate up there: land on a high spot all the same */
+	if (is_user_bot(id) && g_layer[id] == LAYER_HIGH)
+	{
+		new Float:o[3];
+		o = c;
+		o[0] += random_float(-1500.0, 1500.0);
+		o[1] += random_float(-1500.0, 1500.0);
+		if (nearest_landing(o, out, LAYER_HIGH))
+			return 1;
 	}
 	if (is_user_bot(id) && g_trait[id] == TR_LOOTER)
 	{
