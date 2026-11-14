@@ -543,7 +543,8 @@ fn setup_commands() {
         let text = s["text"].as_str().unwrap();
         assert!(text.contains("--mcp-stdio") && !text.contains("TOKEN") && !text.contains("8029"), "{text}");
     }
-    assert_eq!(get("claude-code", "stdio"), r#"claude mcp add --scope user --transport stdio loner-strike -- "C:\\Program Files\\Loner-Strike\\loner-strike.exe" --mcp-stdio"#);
+    // (a terminal line: the path as typed, backslashes single - cmd and PowerShell don't unescape)
+    assert_eq!(get("claude-code", "stdio"), r#"claude mcp add --scope user --transport stdio loner-strike -- "C:\Program Files\Loner-Strike\loner-strike.exe" --mcp-stdio"#);
     // JSON snippets parse, with the path escaped right
     for client in ["opencode", "cursor", "claude-desktop", "vscode", "other"] {
         let v: Value = serde_json::from_str(&get(client, "stdio")).unwrap_or_else(|e| panic!("{client}: {e}"));

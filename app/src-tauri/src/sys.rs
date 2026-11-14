@@ -98,7 +98,7 @@ pub fn rename_over(tmp: &Path, path: &Path) -> std::io::Result<()> {
     loop {
         match std::fs::rename(tmp, path) {
             Ok(()) => return Ok(()),
-            Err(e) if cfg!(windows) && tries < 5 && e.kind() == std::io::ErrorKind::PermissionDenied => {
+            Err(e) if cfg!(windows) && tries < 5 && transient_lock(&e) => {
                 tries += 1;
                 std::thread::sleep(std::time::Duration::from_millis(60 * tries));
             }
@@ -108,6 +108,25 @@ pub fn rename_over(tmp: &Path, path: &Path) -> std::io::Result<()> {
             }
         }
     }
+}
+
+/// A Windows error that usually clears by itself in a moment: access denied (5) while an
+/// antivirus or the indexer has the file, the file in use by another process (32: Rust calls
+/// it "uncategorized", not PermissionDenied) or a part of it locked (33).
+pub fn transient_lock(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::PermissionDenied || matches!(e.raw_os_error(), Some(5 | 32 | 33))
+}
+
+/// Two Windows paths name the same folder: case-blind for every letter (not only ASCII:
+/// D:\Игры and d:\игры), "/" and "\" alike, a trailing separator ignored, a "\\?\" prefix
+/// dropped.
+pub fn same_windows_path(a: &str, b: &str) -> bool {
+    let norm = |s: &str| {
+        let s = s.replace('/', "\\");
+        let s = s.strip_prefix("\\\\?\\").unwrap_or(&s).to_string();
+        s.trim_end_matches('\\').to_lowercase()
+    };
+    norm(a) == norm(b)
 }
 
 /// A JSON file that's there but doesn't parse is kept aside (name.bad) rather than
@@ -549,9 +568,47 @@ fn game_dir_in(line: &str) -> Option<String> {
 pub fn same_game_dir(running: &str, ours: &Path) -> bool {
     let name = |s: &str| s.trim_end_matches(['\\', '/']).rsplit(['\\', '/']).next().unwrap_or("").to_lowercase();
     if cfg!(windows) {
-        return running.trim_end_matches('\\').eq_ignore_ascii_case(ours.to_string_lossy().trim_end_matches('\\'));
+        return same_windows_path(running, &ours.to_string_lossy());
     }
     name(running) == name(&ours.to_string_lossy())
+}
+
+#[cfg(test)]
+mod windows_tests {
+    use super::*;
+
+    #[test]
+    fn windows_paths_compare_like_windows() {
+        assert!(same_windows_path(r"D:\Игры\Steam\steamapps\common\Half-Life\", r"d:\игры\steam\steamapps\common\half-life"));
+        assert!(same_windows_path(r"C:/Users/Zoë/Games/Half-Life", r"c:\users\ZOË\games\half-life"));
+        assert!(same_windows_path(r"\\?\C:\Program Files (x86)\Steam", r"C:\Program Files (x86)\Steam\"));
+        assert!(same_windows_path(r"\\server\share\Half-Life", r"\\SERVER\Share\half-life"));
+        assert!(!same_windows_path(r"C:\Half-Life", r"D:\Half-Life"));
+    }
+
+    #[test]
+    fn lock_errors_that_clear_by_themselves() {
+        for code in [5, 32, 33] {
+            assert!(transient_lock(&std::io::Error::from_raw_os_error(code)), "{code}");
+        }
+        assert!(transient_lock(&std::io::Error::from(std::io::ErrorKind::PermissionDenied)));
+        assert!(!transient_lock(&std::io::Error::from(std::io::ErrorKind::NotFound)));
+    }
+
+    #[test]
+    fn read_only_files_can_be_made_writable() {
+        let d = std::env::temp_dir().join(format!("ls-ro-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let f = d.join("config.cfg");
+        std::fs::write(&f, "a").unwrap();
+        let mut p = std::fs::metadata(&f).unwrap().permissions();
+        p.set_readonly(true);
+        std::fs::set_permissions(&f, p).unwrap();
+        make_writable(&f);
+        assert!(!std::fs::metadata(&f).unwrap().permissions().readonly());
+        std::fs::write(&f, "b").unwrap();
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }
 
 #[cfg(test)]

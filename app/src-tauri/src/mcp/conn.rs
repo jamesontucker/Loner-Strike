@@ -70,13 +70,24 @@ fn lit(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_default()
 }
 
+/// The app's path as one argument on a command line: a Windows path in plain double quotes
+/// (cmd and PowerShell don't treat backslashes as escapes, so JSON's doubled ones would stay
+/// doubled), a Mac or Linux path in single quotes.
+fn shell_arg(exe: &str) -> String {
+    if exe.contains('\\') || exe.get(1..3) == Some(":/") {
+        format!("\"{}\"", exe.replace('"', ""))
+    } else {
+        format!("'{}'", exe.replace('\'', "'\\''"))
+    }
+}
+
 /// Setups for the clients people use: the stdio bridge where the client can start programs
 /// (valid forever), and the HTTP form with the address and token.
 pub fn snippets(exe: &str, url: Option<&str>, token: &str) -> Vec<Value> {
     let e = lit(exe);
     let mut v = vec![
         json!({"client": "claude-code", "label": "Claude Code", "kind": "stdio", "where": "Run in a terminal",
-               "text": format!("claude mcp add --scope user --transport stdio loner-strike -- {e} --mcp-stdio")}),
+               "text": format!("claude mcp add --scope user --transport stdio loner-strike -- {} --mcp-stdio", shell_arg(exe))}),
         json!({"client": "codex", "label": "Codex", "kind": "stdio", "where": "~/.codex/config.toml",
                "text": format!("[mcp_servers.loner-strike]\ncommand = {e}\nargs = [\"--mcp-stdio\"]\n")}),
         json!({"client": "opencode", "label": "OpenCode", "kind": "stdio", "where": "opencode.json (merge into \"mcp\")",
@@ -108,4 +119,17 @@ pub fn snippets(exe: &str, url: Option<&str>, token: &str) -> Vec<Value> {
         ]);
     }
     v
+}
+
+#[cfg(test)]
+mod shell_tests {
+    #[test]
+    fn the_terminal_line_has_the_path_as_typed() {
+        assert_eq!(super::shell_arg(r"C:\Users\Zoë\AppData\Local\Loner-Strike\loner-strike.exe"), r#""C:\Users\Zoë\AppData\Local\Loner-Strike\loner-strike.exe""#);
+        assert_eq!(super::shell_arg("/Applications/Loner-Strike.app/Contents/MacOS/loner-strike"), "'/Applications/Loner-Strike.app/Contents/MacOS/loner-strike'");
+        assert_eq!(super::shell_arg("/home/o'neil/loner-strike"), r"'/home/o'\''neil/loner-strike'");
+        let v = super::snippets(r"C:\Program Files\Loner-Strike\loner-strike.exe", None, "t");
+        let cc = v.iter().find(|s| s["client"] == "claude-code").unwrap()["text"].as_str().unwrap().to_string();
+        assert!(cc.contains(r#"-- "C:\Program Files\Loner-Strike\loner-strike.exe" --mcp-stdio"#), "{cc}");
+    }
 }

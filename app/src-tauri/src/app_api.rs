@@ -796,7 +796,10 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, on: Option<axu
         game_args.extend(["+exec".into(), START_CFG.into()]);
     }
     // the fixed Ham Sandwich, if something put another one in since setup (hamguard.rs)
-    let restored = crate::hamguard::before_start(&g.dir, "Play");
+    let restored = {
+        let dir = g.dir.clone();
+        tokio::task::spawn_blocking(move || crate::hamguard::before_start(&dir, "Play")).await.ok().flatten()
+    };
     match crate::steam::launch(&g.hl, appid, &game_args) {
         Ok(()) => (StatusCode::OK, Json(json!({"ok": true, "note": restored}))),
         Err(e) => (StatusCode::OK, Json(json!({"error": e}))),
@@ -848,9 +851,9 @@ async fn api_remove_everything(State(st): State<Shared>, headers: HeaderMap) -> 
         }
         for d in dirs_to_go {
             if d.is_dir() {
-                if let Err(err) = std::fs::remove_dir_all(&d) {
-                    failed.push(format!("{} ({err})", d.display()));
-                }
+                // (Windows: the open window's WebView2 data is in use until the app quits; the
+                // uninstaller removes it)
+                failed.extend(remove_dir_except(&d, if cfg!(windows) { &["EBWebView"] } else { &[] }));
             }
         }
         json!({"ok": true, "servers": servers, "failed": failed})
@@ -929,6 +932,41 @@ pub fn routes() -> Router<Shared> {
         .route("/api/app/lan", get(api_lan))
         .route("/api/app/direct", get(api_direct).post(api_direct_set))
         .route("/api/app/vlans", get(api_vlans))
+}
+
+/// Removes a folder and everything in it, except entries named in `keep` at its top (those and
+/// the folder stay). What couldn't be removed, in words.
+fn remove_dir_except(d: &std::path::Path, keep: &[&str]) -> Vec<String> {
+    if keep.is_empty() {
+        return std::fs::remove_dir_all(d).err().map(|e| format!("{} ({e})", d.display())).into_iter().collect();
+    }
+    let mut failed = vec![];
+    for e in std::fs::read_dir(d).into_iter().flatten().flatten() {
+        if keep.iter().any(|k| e.file_name().to_string_lossy().eq_ignore_ascii_case(k)) {
+            continue;
+        }
+        let p = e.path();
+        let r = if p.is_dir() { std::fs::remove_dir_all(&p) } else { std::fs::remove_file(&p) };
+        if let Err(err) = r {
+            failed.push(format!("{} ({err})", p.display()));
+        }
+    }
+    failed
+}
+
+#[cfg(test)]
+mod remove_tests {
+    #[test]
+    fn the_windows_webview_folder_is_left_for_the_uninstaller() {
+        let d = std::env::temp_dir().join(format!("ls-remove-{}", std::process::id()));
+        std::fs::create_dir_all(d.join("EBWebView/Default")).unwrap();
+        std::fs::create_dir_all(d.join("logs")).unwrap();
+        std::fs::write(d.join("settings.json"), "{}").unwrap();
+        assert!(super::remove_dir_except(&d, &["EBWebView"]).is_empty());
+        assert!(d.join("EBWebView/Default").is_dir() && !d.join("logs").exists() && !d.join("settings.json").exists());
+        assert!(super::remove_dir_except(&d, &[]).is_empty());
+        assert!(!d.exists());
+    }
 }
 
 #[cfg(test)]

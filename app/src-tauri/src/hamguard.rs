@@ -119,6 +119,12 @@ pub fn ensure_in(game_dir: &Path, fixed: &Path) -> Result<Outcome, String> {
 /// stops the start; says what it did in the diagnostics. Some(note) when it put ours back.
 pub fn before_start(game_dir: &Path, what: &str) -> Option<String> {
     let fixed = fixed_dll()?;
+    // (a loaded DLL can't be replaced on Windows: with the game open, say so instead of failing)
+    let p = game_dir.join(REL);
+    if what == "Play" && p.is_file() && !is_fixed(&p) && crate::sys::game_running() {
+        crate::diagnostics::log_error("ham sandwich", &format!("{what}: not the fixed one, but the game is open"));
+        return Some("Loner-Strike's fixed Ham Sandwich goes back in the next time the game starts from a closed game.".into());
+    }
     match ensure_in(game_dir, &fixed) {
         Ok(Outcome::Restored(kept)) => {
             let note = "Restored Loner-Strike's fixed Ham Sandwich.".to_string();

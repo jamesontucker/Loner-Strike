@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { PageBoundary } from "./ui";
 import "./styles.css";
+import { installWindowsGuards } from "./windowsGuards"; // MCP: WebView2 acts like a browser on Windows
 
 // "Loner-Strike" never splits at its hyphen at the end of a line: an invisible word
 // joiner after the hyphen, added to the text wherever the name appears (toasts and
@@ -58,6 +59,8 @@ if (["127.0.0.1", "localhost"].includes(location.hostname)) {
     return null;
   };
 }
+
+installWindowsGuards();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
