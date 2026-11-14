@@ -524,3 +524,22 @@ dev server: a clean map with `install: true` gets your refusal and nothing lands
 editor-assets.spec.ts keeps its real call (the missing sprite still stops it first) with a note. Your message says
 "the Game Mode Studio" for these too; a wording like "Under test Loner-Strike doesn't write into your real game"
 would fit both, your call.
+
+## ==== W3: Battle Royale components for Studio nodes (from W3, 2026-11-13) ====
+W3 builds the BR systems as gm_components features (W1's queue item 9). Each is landed (committed) when listed here;
+full text in COMPONENTS.md "Battle Royale pieces", signatures in ls_components.inc ("W3: Battle Royale pieces").
+Cvars are the mode's switches (a Studio mode can set them with its cvar node).
+- **Healing items** (25140068): cvars `ls_heal_carry 1` (carried, else instant), `ls_heal_limits "6 2 3"`,
+  `ls_heal_secs "3 7 4"`, `ls_heal_key 1` (F), `ls_heal_bots 1`. Kinds `bandage`, `medkit`, `drink`.
+  `ls_heal_give(id, const kind[], n = 1)` → taken; `ls_heal_count(id, const kind[] = "")`;
+  `ls_heal_use(id, const kind[] = "")` → 1 started; `ls_heal_cancel(id)`; `bool:ls_heal_using(id)`.
+  Forward `ls_on_heal(id, const kind[], stage)` (0 starting, PLUGIN_HANDLED refuses; 1 used; 2 stopped).
+- **Armor levels** (6b4aecdf): cvar `ls_armor_levels 1`; loot `vest1..3`, `helmet1..3`.
+  `ls_armor_set(id, vest, helmet)` (-1 keeps one); `ls_armor_get(id, &vest, &helmet)` → armor points.
+  Forward `ls_on_armor(id, vest, helmet)`.
+- **Scarce ammo** (060d9a90): cvars `ls_ammo_scarce 1`, `ls_ammo_mags 1`; items `ammo` (two magazines per gun) and
+  typed `ammo:762`, `ammo:556:60`... through `ls_give_item`. No natives of its own.
+- **Rarity glow** (bed0141b): cvar `ls_rarity_glow 1`; `ls_item_tier(const item[])` → 1-5; `ls_glow(ent, tier)`
+  (0 = off). Colours white, green, blue, purple, gold.
+Next: death crates, the match HUD (kill feed, spectate), drop-in (`ls_drop_in`), squads + lobby, knocked-down squads.
+## ==== end W3 ====
