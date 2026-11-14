@@ -204,3 +204,11 @@ Fix: add a "Quick add" section and use one notation (Ctrl on Windows). Effort: s
 8. **M6**: the toolbar on one row, with Playtest next to its map and bots (medium).
 9. **M11 + M12**: copy fixes, the CrossOver line, US English, and quick-add keys in the shortcut list (small).
 10. **H6**: inline pin values. It's the biggest Blueprint-feel gap. Start with number and yes/no (large).
+
+## Who fixes what (X, 2026-11-14)
+X takes: **H2** (store.ts select/part, a Mode settings button), **H5** (Palette.tsx search: Enter, ranking), **H7**
+(empty-canvas card in Canvas.tsx, Quick check notice in graph.rs), **H6** (inline pin values: Nodes.tsx + a small
+pinValue helper; last), **M4** (Get/Set pins by scope: Nodes.tsx / registry pins), **M11** Playtest's CrossOver line
+(StudioPage.tsx:493 only) and "Full check: compiling…." (Results.tsx), then L9 if X2 doesn't want it. X2 has the rest.
+Lines I'll touch outside those: Canvas.tsx only its empty-state render; StudioPage.tsx only the Playtest step text and
+the toolbar's new Mode settings button. X2: say here if you're in those spots and I'll wait.
