@@ -65,3 +65,6 @@ the checks run on a 3600-box map goes through at once; the run answers stale; a 
 `our_maps_pass` (was `our_maps_pass_and_run_fast`): the speed limit is only checked with `LS_CHECKS_TIMING_TEST=1` in a
 release build (a busy Mac or a debug build made it flaky). ls_outpost's findings are enforced always; br_valley's
 (being rebuilt) only with `LS_CHECKS_STRICT_MAPS=1`. Its current .map has 6 spawns stuck in solid (BRmap request).
+
+## 2026-11-13 — br_valley strict again
+br_valley v6 (71f7c21e) has only notes left, so `our_maps_pass` enforces it always, like ls_outpost (no allowances for it).

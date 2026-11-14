@@ -355,11 +355,7 @@ const KNOWN: &[(&str, &str, usize)] = &[
     // ls_outpost: the floodlight's light is inside the mast (func_detail), the red route
     // light inside its own ~SPOTRED block: both give no light
     ("ls_outpost", "light-in-solid", 2),
-    // br_valley: tunnel lights at z -360 inside OUT_RK4 rocks, lamp lights inside their poles
-    // (CSTRIKE_ME4METL); light-strip func_illusionary flush with the dock, a post and the
-    // pavement, and two strips crossing
-    ("br_valley", "light-in-solid", 16),
-    ("br_valley", "z-fighting", 12),
+    // (br_valley v6, 71f7c21e: only notes left)
 ];
 
 /// Our own maps (and the last compile's VIS data when there is one): no warnings or problems
@@ -389,11 +385,7 @@ fn our_maps_pass() {
         let known = |code: &str| KNOWN.iter().find(|(m, c, _)| *m == name && *c == code).map(|k| k.2);
         let count = |code: &str| all.iter().filter(|i| i.code == code).count();
         let bad: Vec<String> = all.iter().filter(|i| i.level != Level::Info).filter(|i| known(i.code).is_none_or(|n| count(i.code) > n)).map(|i| format!("{} {} at {:?}", i.code, i.message, i.at)).collect();
-        // br_valley is being rebuilt by its builder: its findings are listed (LS_CHECKS_MAPS=1) and
-        // only enforced on request (LS_CHECKS_STRICT_MAPS=1); ls_outpost is enforced always
-        if name == "ls_outpost" || std::env::var("LS_CHECKS_STRICT_MAPS").is_ok() {
-            assert!(bad.is_empty(), "{name}: {bad:#?}");
-        }
+        assert!(bad.is_empty(), "{name}: {bad:#?}");
         assert!(all.iter().filter(|i| i.level != Level::Info).all(|i| i.at.is_some() || i.brush.is_some() || i.entity.is_some()), "{name}: a finding with no location");
         timing(&name, ms);
     }
