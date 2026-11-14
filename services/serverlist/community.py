@@ -835,8 +835,10 @@ def check_package(names, kind="map"):
 
 
 def fetch_page(model, gb, get=http_get):
-    """("ok", page) / ("gone", reason) / ("error", reason). "gone" only on GameBanana's own
-    clear answer (no such page, trashed, private, withheld), never on a network problem."""
+    """("ok", page) / ("gone" | "private" | "withheld", reason) / ("error", reason). Those three
+    only on GameBanana's own clear answer, never on a network problem: "gone" = no such page or
+    deleted (author or moderator, GameBanana doesn't say), "private" = the author hid it,
+    "withheld" = GameBanana's moderators took it down."""
     try:
         status, data = get(page_url(model, gb), MAX_PAGE)
     except (FetchError, OSError) as e:
@@ -853,9 +855,15 @@ def fetch_page(model, gb, get=http_get):
         return "error", f"status {status}"
     if page.get("_idRow") != gb:
         return "error", "a different page answered"
-    for flag, why in (("_bIsTrashed", "was deleted"), ("_bIsPrivate", "is private"), ("_bIsWithheld", "was withheld by GameBanana")):
-        if page.get(flag) is True:
-            return "gone", f"The page {why}."
+    # (what kind of gone matters: GameBanana withholding a page is moderation, fail closed; a page the
+    # author made private comes back with them; deleted/trashed can't be told apart from a moderator's
+    # removal, so it waits for ours)
+    if page.get("_bIsWithheld") is True:
+        return "withheld", "GameBanana withheld the page."
+    if page.get("_bIsTrashed") is True:
+        return "gone", "The page was deleted."
+    if page.get("_bIsPrivate") is True:
+        return "private", "The page is private."
     return "ok", page
 
 
@@ -1249,11 +1257,14 @@ MIGRATIONS = [
 #   moderator          approve (pending/waiting file) -> listed; restore (hidden/pulled) -> listed;
 #                      hide -> hidden; pull -> pulled; reject -> rejected (or drops a waiting file);
 #                      block/unblock a creator; Undo puts back the exact row before the action
-#   re-check           untagged/flagged/moved -> pulled (waiting: rejected); page gone (deleted,
-#                      private, withheld) or the listed file removed -> withdrawn, and back to listed
-#                      by itself when the page and its file return; listed file replaced -> hidden;
-#                      a team hold stays marked as the team's
-#   creator (proven)   unlist (listed) -> unlisted; list again (unlisted) -> listed. Proof: a code
+#   re-check           untagged/flagged/moved/withheld by GameBanana -> pulled (waiting: rejected),
+#                      unlisted ones too; page private or the listed file removed -> withdrawn, back
+#                      to listed by itself when they return; page deleted (author or moderator,
+#                      GameBanana can't tell) -> withdrawn for review: only a moderator lists it
+#                      again (restore; the creator's new file waits for one); listed file replaced
+#                      -> hidden; a team hold stays marked as the team's
+#   creator (proven)   unlist (listed) -> unlisted; list again (unlisted) -> listed, after the page
+#                      is checked again (anything that pulls it pulls it). Proof: a code
 #                      the service gives, put on the GameBanana page by its submitter (unlist()).
 #                      Never undoes a team hold. A new file for an unlisted page keeps it unlisted.
 
@@ -1792,7 +1803,7 @@ class Community:
 
     def _page(self, model, gb):
         got, page = fetch_page(model, gb, self.get)
-        if got == "gone":
+        if got in ("gone", "private", "withheld"):
             raise Reject(422, page)
         if got == "error":
             log(f"GameBanana didn't answer for {key_of(model, gb)}: {page}")
@@ -1958,7 +1969,8 @@ class Community:
             # entry is written (settle_uid), and conflicts go to the moderators
             uids = item_uids(item)
             file_at = self._uid_evidence(model, gb, facts, item, uids)
-            team_hold = bool(row) and row["hidden_by"] == "team"
+            # (a page deleted on GameBanana and back waits for a moderator too: hidden_by "review")
+            team_hold = bool(row) and row["hidden_by"] in ("team", "review")
             blocked = self.store.is_blocked(facts["submitterId"])
             look = blocked or team_hold
             if look and not (row and row["proposed"]) and self.store.count("pending") >= MAX_PENDING:
@@ -2114,12 +2126,25 @@ class Community:
         if got != "ok":
             return 200, {"state": "needs-proof", "code": code, "how": UNLIST_HOW.format(code=code),
                          "note": "GameBanana didn't show the page just now. Try again in a minute."}
-        submitter = (page_facts(page, row["model"]) or {}).get("submitterId")
+        # (straight from the page: page_facts refuses an untagged page, which List again must still see)
+        submitter = _d(page.get("_aSubmitter")).get("_idRow")
         if code not in json.dumps(page, ensure_ascii=False).lower():
             return 200, {"state": "needs-proof", "code": code, "how": UNLIST_HOW.format(code=code),
                          "note": "The code isn't on the page yet (GameBanana can take a minute to show an edit)."}
         if not submitter or submitter != row["submitter_id"]:
             return 403, {"error": "That page's submitter isn't the GameBanana member who registered it, so it can't be changed from here. Ask in the Discord."}
+        if action == "list":
+            # the page as it is now: anything that would pull it pulls it; a missing or replaced
+            # file means registering the new one first
+            check = dict(row)
+            check["state"] = "listed"
+            verdict, why = self._verdict(check)
+            if verdict == "pull":
+                row.update(state="pulled", reason=why, updated=t, proposed=None, hidden_by="recheck")
+                self.store.put(row, "recheck pull", why)
+                return 409, {"error": f"It can't be listed again: {why}"}
+            if verdict != "ok":
+                return 409, {"error": f"It can't be listed again yet: {why or 'the page has changed'} Register the page's current file in Publish first."}
         del self.unlist_codes[ck]
         if action == "unlist":
             row.update(state="unlisted", hidden_by="creator", reason="Unlisted by the author.", updated=t)
@@ -2274,8 +2299,8 @@ class Community:
             self.store.put(row, "pull", reason)
         elif action == "restore":
             row = self._need(key)
-            if row["state"] not in ("hidden", "pulled") or not row["item"]:
-                raise Reject(409, f"{row['key']} is {row['state']}; only a hidden or pulled entry that was listed can be restored.")
+            if row["state"] not in ("hidden", "pulled", "withdrawn") or not row["item"]:
+                raise Reject(409, f"{row['key']} is {row['state']}; only a hidden, pulled or withdrawn entry that was listed can be restored.")
             item = self._verify_live(row, _j(row["item"]))
             row.update(item=json.dumps(item, ensure_ascii=False), state="listed", reason="", updated=t, check_note="", hidden_by="")
             self.store.put(row, "restore", reason)
@@ -2361,8 +2386,8 @@ class Community:
         except Exception as e:  # (never stops the re-check)
             log(f"housekeeping failed: {e}")
         try:
-            rows = [self.store.get(k) for k in keys] if keys else self.store.rows(("pending", "listed", "hidden", "withdrawn"))
-            rows = [r for r in rows if r and r["state"] in ("pending", "listed", "hidden", "withdrawn")]
+            rows = [self.store.get(k) for k in keys] if keys else self.store.rows(("pending", "listed", "hidden", "withdrawn", "unlisted"))
+            rows = [r for r in rows if r and r["state"] in ("pending", "listed", "hidden", "withdrawn", "unlisted")]
             verdicts = []
             for i, row in enumerate(rows):
                 if i and pause:
@@ -2370,14 +2395,14 @@ class Community:
                 verdicts.append((row, *self._verdict(row)))
             # many pages leaving the list at once is more likely GameBanana's API having a bad day (or
             # changing shape) than real: more than 3, or 2+ and over a quarter, waits for a person
-            gone = sum(1 for _, v, _ in verdicts if v in ("pull", "reject", "hide", "withdraw"))
+            gone = sum(1 for _, v, _ in verdicts if v in ("pull", "reject", "hide", "withdraw", "withdraw-review"))
             suspicious = not keys and (gone > 3 or (gone >= 2 and gone > len(rows) * RECHECK_GONE_SHARE))
             changed, t = [], now()
             for row, verdict, why in verdicts:
                 if verdict == "error":
                     self.store.touch(row["key"], row["checked"], f"couldn't check: {why}")
                     continue
-                if suspicious and verdict in ("pull", "reject", "hide", "withdraw"):
+                if suspicious and verdict in ("pull", "reject", "hide", "withdraw", "withdraw-review"):
                     self.store.touch(row["key"], row["checked"], f"would be {verdict}ed ({why}), held back")
                     continue
                 self.store.touch(row["key"], t, why if verdict != "ok" else "")
@@ -2388,6 +2413,11 @@ class Community:
                 by = "team" if row["hidden_by"] == "team" else "recheck"
                 if verdict in ("pull", "reject", "hide", "withdraw"):
                     row["hidden_by"] = by
+                if verdict == "review-back":
+                    # (back on GameBanana, but the removal may have been a moderator's: ours decide)
+                    self.notifier.say(f"**Back on GameBanana:** `{row['key']}` was deleted there and is back. "
+                                      f"`lsmod.py restore {row['key']}` lists it again after a look.")
+                    continue
                 if verdict == "pull":
                     row.update(state="pulled", reason=why, updated=t, proposed=None)
                 elif verdict == "reject":
@@ -2399,9 +2429,12 @@ class Community:
                     row.update(proposed=None, updated=t)
                 elif verdict == "withdraw":
                     row.update(state="withdrawn", reason=why, updated=t)
+                elif verdict == "withdraw-review":
+                    # hidden like a withdrawal, but only a moderator lists it again (restore)
+                    row.update(state="withdrawn", reason=why, updated=t, hidden_by="review" if row["hidden_by"] != "team" else "team")
                 elif verdict == "relist":
-                    # (the page and its file came back; a team hold never lifts by itself)
-                    if row["hidden_by"] == "team":
+                    # (the page and its file came back; a team hold or a moderator review never lifts by itself)
+                    if row["hidden_by"] in ("team", "review"):
                         continue
                     row.update(state="listed", reason="", hidden_by="", updated=t)
                 self.store.put(row, f"recheck {verdict}", why)
@@ -2429,13 +2462,20 @@ class Community:
         if got == "error":
             return "error", page
         withdrawn = row["state"] == "withdrawn"
-        listed = row["state"] in ("listed", "hidden", "withdrawn")
+        unlisted = row["state"] == "unlisted"
+        listed = row["state"] in ("listed", "hidden", "withdrawn", "unlisted")
         lose = "pull" if listed else "reject"
-        if got == "gone":
-            # (a page taken down may come back: withdrawn, not pulled)
-            if withdrawn:
+        if got == "withheld":
+            # GameBanana's moderation: fail closed, whatever state it's in (installed copies are told)
+            return lose, page
+        if got in ("gone", "private"):
+            if withdrawn or unlisted:
                 return "ok", row["reason"] or page
-            return ("withdraw" if listed else lose), page
+            if not listed:
+                return lose, page
+            # a private page is the author's doing and comes back with them; a deleted one may have
+            # been a moderator's: hidden the same, but only our moderators list it again
+            return ("withdraw" if got == "private" else "withdraw-review"), page
         if _d(page.get("_aGame")).get("_idRow") != CS16_GAME:
             return lose, "The page moved out of Counter-Strike 1.6."
         if page.get("_bIsFlagged"):
@@ -2449,14 +2489,16 @@ class Community:
             if f and f["md5"] == it.get("md5") and f["av"] and f["av"] != "clean":
                 return "pull", "GameBanana's virus check flagged the file."
             if not f:
-                if withdrawn:
+                if withdrawn or unlisted:
                     return "ok", row["reason"] or ""
                 return "withdraw", "The listed file was removed from GameBanana."
             if f["md5"] != it.get("md5"):
-                if row["state"] == "hidden":
+                if row["state"] in ("hidden", "unlisted"):
                     return "ok", row["check_note"] or ""
                 return "hide", "The listed file was replaced on GameBanana."
             if withdrawn:
+                if row["hidden_by"] == "review":
+                    return "review-back", "The page is back on GameBanana; a moderator can list it again."
                 return "relist", "The page and its file are back on GameBanana."
             prop = _j(row["proposed"])
             if prop and prop.get("md5") not in (x["md5"] for x in files.values()):

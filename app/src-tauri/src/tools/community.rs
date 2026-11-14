@@ -50,6 +50,18 @@ pub const INDEX_URL: &str = "https://dl.lonerstrike.com/community/index.json";
 pub const SUBMIT_URL: &str = "https://list.lonerstrike.com/community/submit";
 /// Where the Report button's reports go (the team's private moderation channel hears about them).
 pub const REPORT_URL: &str = "https://list.lonerstrike.com/community/report";
+/// What Try it says for a creation the author unlisted.
+pub const UNLISTED: &str = "The author unlisted this creation, so it isn't installed from Community any more.";
+
+/// Why Try it won't install an entry with this status (unlisted, withdrawn), if it won't.
+pub fn try_refusal(s: Status) -> Option<&'static str> {
+    match s {
+        Status::Unlisted => Some(UNLISTED),
+        Status::Withdrawn => Some(WITHDRAWN),
+        _ => None,
+    }
+}
+
 /// What Get says for a creation whose page or file is gone.
 pub const WITHDRAWN: &str = "This creation was withdrawn from GameBanana (its page or file is gone), so it can't be downloaded any more.";
 
@@ -1191,8 +1203,8 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
     let game = st.local_game().ok_or(NO_GAME)?;
     let (idx, _) = index(false);
     let it = idx.items.iter().find(|i| i.model == model && i.gb == id).cloned();
-    if it.as_ref().is_some_and(|i| i.status == Status::Withdrawn) {
-        return Err(WITHDRAWN.into());
+    if let Some(why) = it.as_ref().and_then(|i| try_refusal(i.status)) {
+        return Err(why.into());
     }
     let page = profile(model, id)?;
     if !has_tag(&page["_aTags"]) {
@@ -3249,6 +3261,10 @@ mod unlist_tests {
         assert_eq!(st(2), Status::Withdrawn);
         assert!(st(1).kept_out() && st(2).kept_out() && !st(3).kept_out());
         assert!(st(1).note().unwrap().contains("The author unlisted this"));
+        // Try it refuses both, with a plain reason; listed ones go on
+        assert_eq!(try_refusal(st(1)), Some(UNLISTED));
+        assert_eq!(try_refusal(st(2)), Some(WITHDRAWN));
+        assert_eq!(try_refusal(st(3)), None);
         assert!(st(2).note().unwrap().contains("withdrawn"));
         // installed older files: an update only for the listed one
         let lib = |gb: i64| super::super::communitylib::Installed { kind: Kind::Map, model: Model::Mod, gb, file: 1, ..Default::default() };

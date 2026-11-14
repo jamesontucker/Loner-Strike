@@ -203,10 +203,19 @@ out of every list; a new file for an unlisted page keeps it unlisted until the a
 has no community section reading the index yet; when it gets one it must show `listed` only.)
 
 **Withdrawn pages (automatic).** The list service's re-check (every few hours, one page every two seconds) asks
-GameBanana about every listed page: a page deleted, made private or withheld, or a listed file removed, is
-`withdrawn` (kept out of lists, the same "you can keep yours" note, no updates) and comes back to `listed` by itself
-when the page and its file return. Untagged, flagged or moved pages are still pulled, and many pages leaving at once
-still waits for a person. Try it on a withdrawn creation says "This creation was withdrawn from GameBanana (its page
+GameBanana about every listed **and unlisted** page:
+- **withheld by GameBanana** (its moderators took it down): pulled, fail closed, installed copies are told; only our
+  moderators restore it;
+- **private** (the author hid it) or **the listed file removed**: `withdrawn` (kept out of lists, the same "you can keep
+  yours" note, no updates), back to `listed` by itself when the page and its file return;
+- **deleted** (no such page, or trashed: GameBanana's API doesn't say whether the author or a moderator did it):
+  `withdrawn` for review: kept out the same way, but it never comes back by itself; when the page returns the
+  moderators get a card and `lsmod.py restore <key>` lists it again after a look (a new registration waits for them too);
+- **untagged, flagged or moved**: pulled, as before, unlisted entries included;
+- many pages leaving at once still waits for a person.
+List again checks the page first: anything that would pull it pulls it, and a missing or replaced file means
+registering the current file in Publish first. Try it refuses unlisted ones too ("The author unlisted this creation,
+so it isn't installed from Community any more."). Try it on a withdrawn creation says "This creation was withdrawn from GameBanana (its page
 or file is gone), so it can't be downloaded any more."; a file that vanished between looking and downloading gets
 "The file isn't on GameBanana any more (the author may have removed it)."
 

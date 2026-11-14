@@ -1885,43 +1885,84 @@ if __name__ == "__main__":
 
 
 class Withdrawn(unittest.TestCase):
-    """A page deleted or its file removed is withdrawn (kept out, installed copies stay) and comes
-    back by itself when the page and its file return."""
+    """What kind of "gone" decides: GameBanana's moderation (withheld) pulls; a private page or a
+    removed file is withdrawn and comes back by itself; a deleted page (author or moderator, the API
+    can't tell) is withdrawn for review and only a moderator lists it again."""
 
-    def test_a_deleted_page_is_withdrawn_and_comes_back(self):
-        c, _ = make()
-        c.submit(body(map_item()), "a")
-        page = c.get.pages[("Mod", 739197)]
-        trashed = copy.deepcopy(page)
-        trashed["_bIsTrashed"] = True
-        c.get.pages[("Mod", 739197)] = trashed
-        c.recheck(pause=0)
-        row = c.store.get("mod:739197")
-        self.assertEqual((row["state"], row["hidden_by"]), ("withdrawn", "recheck"))
-        idx = json.loads(cm.build_index(c.store)[0])
-        self.assertEqual(idx["items"][0]["status"], "withdrawn")
-        self.assertEqual(idx["revoked"], [], "not pulled: it may come back")
-        # still gone: no change
-        c.recheck(pause=0)
-        self.assertEqual(c.store.get("mod:739197")["state"], "withdrawn")
-        # back on GameBanana with its file
-        c.get.pages[("Mod", 739197)] = page
-        c.recheck(pause=0)
-        row = c.store.get("mod:739197")
-        self.assertEqual((row["state"], row["hidden_by"], row["reason"]), ("listed", "", ""))
+    def setUp(self):
+        self.c, self.rec = make()
+        self.c.submit(body(map_item()), "a")
+        self.page = self.c.get.pages[("Mod", 739197)]
+
+    def set_page(self, **flags):
+        p = copy.deepcopy(self.page)
+        p.update(flags)
+        self.c.get.pages[("Mod", 739197)] = p
+
+    def state(self):
+        r = self.c.store.get("mod:739197")
+        return r["state"], r["hidden_by"]
+
+    def test_withheld_by_gamebanana_is_pulled(self):
+        self.set_page(_bIsWithheld=True)
+        self.c.recheck(pause=0)
+        self.assertEqual(self.state(), ("pulled", "recheck"))
+        self.assertEqual(json.loads(cm.build_index(self.c.store)[0])["revoked"], ["mod:739197"])
+        # back: still pulled (only a moderator restores)
+        self.c.get.pages[("Mod", 739197)] = self.page
+        self.c.recheck(pause=0)
+        self.assertEqual(self.state()[0], "pulled")
+
+    def test_a_private_page_comes_back_by_itself(self):
+        self.set_page(_bIsPrivate=True)
+        self.c.recheck(pause=0)
+        self.assertEqual(self.state(), ("withdrawn", "recheck"))
+        idx = json.loads(cm.build_index(self.c.store)[0])
+        self.assertEqual((idx["items"][0]["status"], idx["revoked"]), ("withdrawn", []))
+        self.c.recheck(pause=0)
+        self.assertEqual(self.state()[0], "withdrawn", "still private: no change")
+        self.c.get.pages[("Mod", 739197)] = self.page
+        self.c.recheck(pause=0)
+        self.assertEqual(self.state(), ("listed", ""))
+
+    def test_a_deleted_page_waits_for_a_moderator(self):
+        self.set_page(_bIsTrashed=True)
+        self.c.recheck(pause=0)
+        self.assertEqual(self.state(), ("withdrawn", "review"))
+        self.c.get.pages[("Mod", 739197)] = self.page
+        self.c.recheck(pause=0)
+        self.assertEqual(self.state(), ("withdrawn", "review"), "never back by itself")
+        self.assertIn("Back on GameBanana", self.rec.sent[-1][1]["content"])
+        # the creator registering it again doesn't list it either
+        self.assertNotEqual(self.c.submit(body(map_item()), "a")[1]["state"], "listed")
+        self.assertEqual(self.state()[0], "withdrawn")
+        self.c.moderate("mod:739197", "restore", {"reason": "Looked: fine."})
+        self.assertEqual(self.state(), ("listed", ""))
+
+    def test_no_such_page_is_a_deletion_too(self):
+        del self.c.get.pages[("Mod", 739197)]
+        self.c.recheck(pause=0)
+        self.assertEqual(self.state(), ("withdrawn", "review"))
+
+    def test_a_removed_file_comes_back_by_itself(self):
+        p = copy.deepcopy(self.page)
+        p["_aFiles"] = []
+        self.c.get.pages[("Mod", 739197)] = p
+        self.c.recheck(pause=0)
+        self.assertEqual(self.state(), ("withdrawn", "recheck"))
+        self.c.get.pages[("Mod", 739197)] = self.page
+        self.c.recheck(pause=0)
+        self.assertEqual(self.state(), ("listed", ""))
 
     def test_a_team_hold_never_comes_back_by_itself(self):
-        c, _ = make()
-        c.submit(body(map_item()), "a")
-        page = c.get.pages[("Mod", 739197)]
-        del c.get.pages[("Mod", 739197)]
-        c.recheck(pause=0)
-        row = c.store.get("mod:739197")
+        self.set_page(_bIsPrivate=True)
+        self.c.recheck(pause=0)
+        row = self.c.store.get("mod:739197")
         row["hidden_by"] = "team"
-        c.store.put(row, "test", "")
-        c.get.pages[("Mod", 739197)] = page
-        c.recheck(pause=0)
-        self.assertEqual(c.store.get("mod:739197")["state"], "withdrawn")
+        self.c.store.put(row, "test", "")
+        self.c.get.pages[("Mod", 739197)] = self.page
+        self.c.recheck(pause=0)
+        self.assertEqual(self.state()[0], "withdrawn")
 
 
 class Unlist(unittest.TestCase):
@@ -1988,3 +2029,54 @@ class Unlist(unittest.TestCase):
         later = cm.now() + cm.UNLIST_CODE_TTL + 5
         _, b = self.c.unlist(json.dumps({"key": "mod:739197", "action": "unlist"}).encode(), "u", now_=later)
         self.assertNotEqual(a["code"], b["code"])
+
+    def unlisted(self):
+        _, a = self.ask("unlist")
+        self.put_on_page(a["code"])
+        self.assertEqual(self.ask("unlist")[1]["state"], "unlisted")
+
+    def test_unlisted_entries_are_still_rechecked(self):
+        for change in ("untagged", "flagged", "withheld"):
+            with self.subTest(change):
+                self.setUp()
+                self.unlisted()
+                p = copy.deepcopy(self.page)
+                if change == "untagged":
+                    p["_aTags"] = []
+                elif change == "flagged":
+                    p["_aFiles"][0]["_sAvResult"] = "infected"
+                else:
+                    p["_bIsWithheld"] = True
+                self.c.get.pages[("Mod", 739197)] = p
+                self.c.recheck(pause=0)
+                self.assertEqual(self.c.store.get("mod:739197")["state"], "pulled", change)
+                self.assertEqual(json.loads(cm.build_index(self.c.store)[0])["revoked"], ["mod:739197"])
+
+    def test_unlisted_and_deleted_stays_unlisted(self):
+        self.unlisted()
+        del self.c.get.pages[("Mod", 739197)]
+        self.c.recheck(pause=0)
+        self.assertEqual(self.c.store.get("mod:739197")["state"], "unlisted")
+
+    def test_list_again_checks_the_page_first(self):
+        self.unlisted()
+        _, a = self.ask("list")
+        p = copy.deepcopy(self.page)
+        p["_aTags"] = []
+        p["_sText"] = (p.get("_sText") or "") + f" {a['code']} "
+        self.c.get.pages[("Mod", 739197)] = p
+        code, b = self.ask("list")
+        self.assertEqual(code, 409)
+        self.assertIn("can't be listed again", b["error"])
+        self.assertEqual(self.c.store.get("mod:739197")["state"], "pulled", "anything that pulls it pulls it")
+
+    def test_list_again_needs_the_listed_file(self):
+        self.unlisted()
+        _, a = self.ask("list")
+        p = copy.deepcopy(self.page)
+        p["_aFiles"] = []
+        p["_sText"] = (p.get("_sText") or "") + f" {a['code']} "
+        self.c.get.pages[("Mod", 739197)] = p
+        code, b = self.ask("list")
+        self.assertEqual(code, 409)
+        self.assertEqual(self.c.store.get("mod:739197")["state"], "unlisted")
