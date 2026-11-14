@@ -254,7 +254,7 @@ footer a { color: var(--dim); }
   <p>A new <a href="#tools">Tools</a> section (Beta):</p>
   <ul>
     <li><a href="#map-editor">Map editor</a> with <a href="#compile-playtest">compile and playtest</a>, <a href="#map-import">Hammer and J.A.C.K. import</a> and a <a href="#content-browser">Content Browser</a>.</li>
-    <li><a href="#game-mode-studio">Game Mode Studio</a>, <a href="#plugin-studio">Plugin Studio</a> and <a href="#creature-studio">Creature Studio</a>.</li>
+    <li><a href="#game-mode-studio">Game Mode Studio</a> with five <a href="#studio-examples">example modes</a>, a tour, <a href="#studio-help">node help</a>, <a href="#studio-checks">three checks</a> (Quick check, Compile, Test run), <a href="#studio-timelines">Timelines</a>, <a href="#studio-tables">data tables</a> and <a href="#studio-live-tweaks">live tweaks</a>; <a href="#plugin-studio">Plugin Studio</a> and <a href="#creature-studio">Creature Studio</a>.</li>
     <li><a href="#map-doctor">Map doctor</a>, <a href="#map-simulator">Map simulator</a>, <a href="#nav-fixer">Nav fixer</a>, <a href="#callouts">Callouts</a>, <a href="#radar-maker">Radar maker</a>.</li>
     <li><a href="#crosshair-config">Crosshair &amp; config</a>, <a href="#bot-people">Bot people</a>, <a href="#spray-maker">Spray maker</a>.</li>
     <li><a href="#map-viewer">Map viewer</a>, <a href="#replay">Replay</a>, <a href="#demos">Demos</a>, <a href="#textures-models">Textures &amp; models</a>.</li>
@@ -896,44 +896,61 @@ footer a { color: var(--dim); }
 <section class="topic" id="game-mode-studio" data-group="Create">
   <p class="crumb">Create</p>
   <h1>Game Mode Studio</h1>
-  <p class="lead">Make a game mode from nodes, like Unreal's Blueprints: when something happens, check things and do things. The Studio turns the graph into a plugin.</p>
+  <p class="lead">Make a game mode from nodes, like Unreal's Blueprints: when something happens, check things and do things. The Studio turns the graph into a plugin, tests it on a hidden server with bots, and installs it.</p>
   <figure class="shot">
     <picture><source srcset="img/1.0/studio.webp" type="image/webp"><img src="img/1.0/studio.png" alt="Game Mode Studio: My mode on the left with events and variables, the graph in the middle, Details on the right" width="1440" height="900" loading="lazy"></picture>
     <figcaption>The Last Stand template open in the Studio.</figcaption>
   </figure>
   <h2 id="studio-start">Start a mode</h2>
-  <p>In <b>Tools › Game Mode Studio</b>, start from <b>Rifle Reward</b> (a good first read), <b>Last Stand</b>, <b>Battle Royale</b> or <b>Blank mode</b>. Name it and it's saved; <b>Your modes</b> lists them.</p>
+  <p>In <b>Tools › Game Mode Studio</b>, start from a template (<b>Rifle Reward</b>, <b>Last Stand</b>, <b>Battle Royale</b>), one of the five <a href="#studio-examples">example modes</a>, or <b>Blank mode</b>. Name it and it's saved; <b>Your modes</b> lists them.</p>
+  <p>New to the Studio? The first time you open it, it offers a one-minute <b>tour</b> on the Infection example: the canvas, adding nodes, My mode, Details, the three checks, Playtest and Install. <b>Not now</b> or <b>Don't show again</b> skip it, and the <b>?</b> menu next to <b>Find</b> has <b>Take the Studio tour</b> any time.</p>
+  <h2 id="studio-first-mode" data-keywords="tutorial first beginner how to make a mode">Make your first mode</h2>
+  <p>Five minutes, start to finish: every kill gives the killer 300 money and a chat line.</p>
+  <ol>
+    <li>Start a <b>Blank mode</b> and call it <b>Kill Bonus</b>.</li>
+    <li>Right-click the canvas (or press <span class="kbd">Space</span>), type <b>killed</b> and pick <b>Player Killed</b>.</li>
+    <li>Drag from its <b>Attacker</b> pin and let go on empty space: the list shows only nodes that take a player. Pick <b>Give Money</b> and set it to 300. Wire Player Killed's white flow pin into it.</li>
+    <li>From Give Money's flow pin, add <b>Chat Message</b> with the text <b>Bounty paid to</b>, and wire Attacker into its <b>Value</b>.</li>
+    <li>The <b>Problems</b> tab at the bottom should say no problems. Press <b>Compile</b>: the icon beside it turns green.</li>
+    <li>Press <b>Playtest</b>. The game starts in your mode with bots, and the nodes light up as kills happen.</li>
+    <li>Happy with it? <b>Install</b> adds it to Play and the in-game <span class="kbd">F3</span> menu.</li>
+  </ol>
+  <p>A kill by the world (a fall) has no attacker, so nothing is paid: Give Money says so in the debugger. Add an <b>Is Valid?</b> before it to skip those.</p>
   <h2 id="studio-layout">The editor</h2>
   <ul>
-    <li><b>My mode</b> (left): events, functions, macros, variables, structs, enums, map markers, snippets and <a href="#studio-library">My library</a>. Drag a variable onto the graph to get or set it.</li>
-    <li><b>The graph</b> (middle): the <b>Event Graph</b>, plus a tab per open function or macro.</li>
+    <li><b>My mode</b> (left): graphs, Timelines, custom events, data tables, events, functions, macros, variables, structs, enums, map markers, snippets and <a href="#studio-library">My library</a>. Drag a variable onto the graph to get or set it.</li>
+    <li><b>The graph</b> (middle): the <b>Event Graph</b> and any other event graphs, plus a tab per open function, macro or Timeline.</li>
     <li><b>Details</b> (right): help and settings for the picked node, or the mode's name, description and game settings.</li>
-    <li><b>Results</b> (bottom): <b>Problems</b> (click to jump to the node) and <b>Compiler output</b>.</li>
+    <li><b>Results</b> (bottom): <b>Problems</b> (click one to jump to the node), <b>Compiler output</b> and <b>Test run</b>.</li>
   </ul>
   <p>Right-click anything for <b>Rename…</b>, <b>Duplicate</b>, <b>Find uses</b>, <b>Save to my library…</b> and <b>Delete…</b>.</p>
   <h2 id="studio-nodes">Nodes and wires</h2>
   <ul>
-    <li>Right-click or <span class="kbd">Space</span> adds a node. Drag from a pin to empty space to see only nodes that fit.</li>
+    <li>Right-click or <span class="kbd">Space</span> opens the node list. It's in folders by kind (Players › Actions, Game › Settings…); typing searches titles, help and other words (gravity finds sv_gravity). <b>Favorites</b> (the star) and <b>Recently used</b> sit at the top. Arrow keys open folders and <span class="kbd">Enter</span> places a node.</li>
+    <li>Drag from a pin to empty space to see only nodes that fit (<b>Context Sensitive</b>; untick it to see everything).</li>
     <li>White pentagon pins carry the flow; round pins carry values, colored by type.</li>
     <li><span class="kbd">C</span> adds a comment box, double-clicking a wire adds a reroute point, and <b>Tidy up</b> lays nodes out.</li>
   </ul>
-  <p>Over 220 nodes, for example:</p>
+  <p>Over 440 nodes, for example:</p>
   <div class="table"><table>
     <thead><tr><th>Kind</th><th>For example</th></tr></thead>
     <tbody>
-      <tr><td><b>Events</b></td><td>Round Started, Player Killed, Player Hurt, Chat Command</td></tr>
-      <tr><td><b>Flow</b></td><td>Branch, Sequence, Do Once, For Each Player</td></tr>
-      <tr><td><b>Players</b></td><td>Give Weapon, Set Health, Teleport, Respawn, Make Downed</td></tr>
-      <tr><td><b>Timers and the round</b></td><td>Delay, Countdown, Set Round Clock, End Round</td></tr>
+      <tr><td><b>Events</b></td><td>Round Started, Player Killed (weapon, headshot, distance, team kill), Player Hurt (hit where, weapon), Chat Command, Weapon Fired</td></tr>
+      <tr><td><b>Flow</b></td><td>Branch, Sequence, Do Once, For Each Player, Switch, loops</td></tr>
+      <tr><td><b>Players</b></td><td>Give Weapon, Set Health, Teleport, Respawn, Set Ammo, God Mode, Screen Fade</td></tr>
+      <tr><td><b>Game and World</b></td><td>Round Number, Team Score, Change Map; Gravity, Round Time, Friendly Fire and the other settings, to read or set</td></tr>
+      <tr><td><b>Entities and effects</b></td><td>Find Entities, Spawn Prop, Get Entity Transform, Explosion, Beam, Play Sound At</td></tr>
+      <tr><td><b>Timers and the round</b></td><td>Delay, Repeat, Countdown, Timeline, Set Round Clock, End Round</td></tr>
       <tr><td><b>Damage</b></td><td>Block Damage, Scale Damage (after Player About To Be Hurt)</td></tr>
-      <tr><td><b>Squads and buying</b></td><td>Set Squad, Squads Left, Allow Buying</td></tr>
       <tr><td><b>Messages</b></td><td>Show Message, Show HUD Text, Chat Message, Menu, Play Sound</td></tr>
-      <tr><td><b>Bots</b></td><td>Bot Go To, Bot Hold, Bot Follow, Bot Free</td></tr>
-      <tr><td><b>Components and creatures</b></td><td>Zones, crates, waves, supply drops, Spawn Creature</td></tr>
-      <tr><td><b>Map markers</b></td><td>Find Marker, For Each Marker, Marker Key</td></tr>
+      <tr><td><b>Bots and creatures</b></td><td>Bots: Goal, Bots: Friends, Bot Follow; Spawn Creature, Creature Go To (<a href="#studio-bots">more</a>)</td></tr>
+      <tr><td><b>Components</b></td><td>Zones, crates, waves, supply drops, shops, perks, capture points</td></tr>
+      <tr><td><b>Data tables</b></td><td>Get Row, Get Cell, For Each Row, Find Rows</td></tr>
       <tr><td><b>Saved</b></td><td>Numbers kept between maps and restarts</td></tr>
     </tbody>
   </table></div>
+  <h2 id="studio-help" data-keywords="help f1 what does this node do">Node help</h2>
+  <p>The <b>?</b> menu next to <b>Find</b> › <b>Node help</b>, or <span class="kbd">F1</span> with a node picked, opens a panel beside the graph that explains every node: what it does, each pin and setting, related nodes, and a note when it's costly or needs care. Most nodes have an example: <b>Add the example</b> drops it into your graph. Search it like the node list.</p>
   <h2 id="studio-variables">Variables, functions and macros</h2>
   <ul>
     <li><b>Variables</b>: number, yes/no, text, player, team, vector and more, per mode, player or team, kept for the map or reset each round. Lists and maps too.</li>
@@ -942,16 +959,102 @@ footer a { color: var(--dim); }
     <li><b>Structs</b> group values (a loadout); <b>enums</b> are named choices (scout, tank, medic).</li>
     <li><b>Collapse to Function</b> or <b>Collapse to Macro</b> tidies picked nodes.</li>
   </ul>
+  <p>Deleting a variable, function or custom event that's in use asks what to do with the nodes that use it (it says how many and where, with <b>Find uses</b>): <b>Replace with</b> another of the same kind (wires stay), <b>Remove it and its nodes</b> (the flow is joined up round them), or <b>Remove it, keep the nodes</b>. Each is one <b>Undo</b>.</p>
+  <h2 id="studio-graphs" data-keywords="event graph tabs organize custom event dispatcher">Event graphs and custom events</h2>
+  <ul>
+    <li><b>Graphs</b> in My mode adds more event graphs, to keep a big mode tidy (one for the shop, one for scoring). They're only for you: two of the same event, in different graphs, both run, in tab order.</li>
+    <li><b>Custom events</b> are your own events, with inputs you choose. <b>Call Custom Event</b> runs every <b>Custom Event</b> node for it, from anywhere; <b>Set Timer by Event</b> runs one later or again and again.</li>
+    <li>A map can fire one too: tick <b>The map can fire it</b>, and in the map editor point a button or trigger at an <b>ls_event</b> entity with the event's name. Player is whoever set it off.</li>
+  </ul>
+  <h2 id="studio-timelines" data-keywords="animation curve keyframe moving platform pulse">Timelines</h2>
+  <p>A <b>Timeline</b> is values that change over time and events at set moments: a lifting platform, a pulsing glow, a 3-2-1 countdown. Add one under <b>Timelines</b>, add tracks (a number, a position, a color, or events), click to add keys and drag them. A <b>Timeline</b> node plays it: <b>Update</b> runs every tick with the tracks' values, <b>Finished</b> at the end, and each event track has its own pin. It can loop, reverse and jump to a time.</p>
+  <p>In a function with a Player input, each player gets their own copy. That's up to 32 copies, each ticking 20 times a second; the Quick check warns when that adds up. A Tick of 0.1 s still looks smooth.</p>
+  <h2 id="studio-tables" data-keywords="data table spreadsheet csv lookup list">Data tables</h2>
+  <p>A <b>data table</b> is a grid of values to look up: a gun list, prices, waves. Under <b>Data tables</b>, add one and fill it in: each column has a type (number, text, yes/no, an enum, a weapon or an entity name), and the <b>key column</b> names each row. <b>Paste or import CSV…</b> takes rows straight from a spreadsheet; <b>Copy as CSV</b> goes the other way.</p>
+  <ul>
+    <li><b>Get Row</b>: the row with this key, every cell as a pin. <b>Get Cell</b>: one cell by row number (from 0).</li>
+    <li><b>For Each Row</b>, <b>Find Rows</b> (where a column has a value), <b>Row Count</b>, <b>Row Keys</b>.</li>
+  </ul>
+  <p>Tables are built into the plugin, so reading them costs almost nothing. A mode can have 16 tables of up to 12 columns and 256 rows. Gun Game Lite's gun list is a table: change the order there.</p>
   <h2 id="studio-snippets">Snippets</h2>
   <p><b>Snippets</b> has 14 ready-made pieces, like a wave system, shop menu, revive and shrinking zone. Click or drag one in; its variables join yours. <b>Save the selection as a snippet</b> makes your own.</p>
   <h2 id="studio-library">My library</h2>
   <p><b>Save to my library…</b> on a function, macro, struct or enum makes it usable in any mode; drag it in from <b>My library</b>. Modes using an older version offer <b>Update from library</b> in Details. Items and the whole library export and import as files. Library items can't go to Community yet.</p>
   <h2 id="studio-markers">Map markers</h2>
   <p>Under <b>Map markers</b>, list the spots, areas or paths a map needs for your mode, how many, and their keys; the marker nodes read them. Installing the mode makes a <b>mode kit</b> from them for the map editor's <b>Gameplay › Mode kits</b> and checks (<a href="#editor-library">more</a>). <b>Map advice</b> tells mappers the size and player count that suit it.</p>
+  <h2 id="studio-bots" data-keywords="bot ai creatures zombies goals friends">Bots and creatures</h2>
+  <p>Your mode can tell Loner-Strike's bots how to play it, and steer the creatures:</p>
+  <ul>
+    <li><b>Bots: Goal</b> gives bots something to do at an entity: defend or capture it, use it, loot it, or go and hold there, with a priority and for how long. <b>Bots: Clear Goals</b> takes them back.</li>
+    <li><b>Bots: Friends</b> (teams, a tag, a player) and <b>Bots: Tag</b>; <b>Bots: Phase</b> (a loot phase where nobody is an enemy, then the fight); <b>Bots: Don't Buy</b>; <b>Bots: Prefer Layer</b>; <b>Bots: Offer</b> (something here can be bought or used for a price); <b>Bots: Fight Creatures</b>.</li>
+    <li><b>Bot Go To</b>, <b>Bot Hold</b>, <b>Bot Follow</b> and <b>Bot Free</b> order one bot.</li>
+    <li>Creatures: <b>Spawn Creature</b> (health, tier, pay), <b>For Each Creature</b>, <b>Nearest Creature</b>, <b>Can See</b>, <b>Creature Go To</b>, <b>Attack</b>, <b>Hold</b>, <b>Flee To</b>, <b>Resume AI</b>, <b>Set Creature Health</b>, <b>Remove Creature</b>, and the <b>Creature Idle</b> event (one that has stood still: send it to the gate).</li>
+  </ul>
+  <p>Bots still fight on the way and keep their own judgment: a goal is a strong suggestion, not a script.</p>
+  <h2 id="studio-commands" data-keywords="server command rcon amx security safe allowed refused">Server commands: what's allowed</h2>
+  <p><b>Run Server Command</b> and <b>Run AMX Command</b> are power tools for what no node does yet. So that a shared mode can't harm a server, they only run commands that change the game:</p>
+  <ul>
+    <li><b>Run Server Command</b>: game rules (<code>mp_</code> settings), gameplay <code>sv_</code> settings (gravity, air control…), bot settings and commands, Loner-Strike's gameplay commands, <code>say</code> and <code>humans_join_team</code>.</li>
+    <li><b>Run AMX Command</b>: slap, slay, kick, the say commands, <code>amx_cvar</code> on the settings above, and map changes to maps the server has.</li>
+    <li>Anything touching passwords, files, logs, plugins, rcon, configs or quitting is refused, and so is more than one command at a time (no <code>;</code>), quotes and other tricks. The node's <b>Ran</b> pin says No and the debugger says why.</li>
+  </ul>
+  <p>The same check runs twice: when you build the mode, and in the plugin as it runs (for commands put together from text). Modes that use these nodes, <b>Kick</b>, or <b>Call Plugin Function</b> say so on their Community page, in plain words, before anyone installs them.</p>
   <h2 id="studio-install">Install and play</h2>
-  <p><b>Install</b> builds the plugin and adds the mode to Play and the <span class="kbd">F3</span> menu. <b>More › Remove from the game</b> takes it out, <b>More › Show code</b> shows the plugin, and <b>Open in Plugin Studio</b> carries on in code. To test as you build, use <a href="#studio-debugging">Playtest</a>.</p>
+  <p><b>Install</b> builds the plugin and adds the mode to Play and the <span class="kbd">F3</span> menu. <b>More › Remove from the game</b> takes it out, <b>More › Show code</b> shows the plugin, and <b>Open in Plugin Studio</b> carries on in code. To test as you build, use the <a href="#studio-checks">checks</a> and <a href="#studio-debugging">Playtest</a>.</p>
   <h2 id="studio-share">Share a mode</h2>
-  <p>Package it from <b>Tools › Community › Publish › A game mode</b> and upload it to GameBanana (<a href="#publishing">how</a>). Only the graph is shared: each player's app builds the mode, so nothing that runs code travels. Others can <b>Remix in Game Mode Studio</b>, which makes a new mode that credits yours.</p>
+  <p>Package it from <b>Tools › Community › Publish › A game mode</b> and upload it to GameBanana (<a href="#publishing">how</a>). Only the graph is shared: each player's app builds the mode, so nothing that runs code travels. A mode that uses a power tool (server or AMX commands, kicking, calling other plugins) shows a badge for each, and players confirm before installing. Others can <b>Remix in Game Mode Studio</b>, which makes a new mode that credits yours.</p>
+  <p>Before you share: run a <b>Test run</b>, give it a clear description, and list the map markers it needs, so a mapper can make maps for it.</p>
+</section>
+
+<section class="topic" id="studio-examples" data-group="Create">
+  <p class="crumb">Create</p>
+  <h1>Example modes</h1>
+  <p class="lead">Five small, finished modes with a note on every part. Open one from the Studio's start screen to see how it's made, play it, or make it your own; they're also on Community.</p>
+  <div class="table"><table>
+    <thead><tr><th>Mode</th><th>The rules</th><th>What it shows</th></tr></thead>
+    <tbody>
+      <tr><td><b>Infection</b></td><td>One player turns zombie 15 seconds in. Whoever a zombie kills turns too; zombies come back. The humans win if anyone is left when the 3-minute clock runs out.</td><td>Teams, a function (Infect), the round clock, ending a round once</td></tr>
+      <tr><td><b>Gun Game Lite</b></td><td>Free for all. Each kill gives you the next of 14 guns; a knife kill after the last one wins. 2 seconds of God Mode on spawn.</td><td>Per-player variables, a data table, spawn protection</td></tr>
+      <tr><td><b>King of the Hill</b></td><td>Hold the hill (a capture point) to score a point a second; the first team to 120 wins.</td><td>Components, a map marker with fallbacks, a Repeat timer, team scores</td></tr>
+      <tr><td><b>One in the Chamber</b></td><td>A deagle with one bullet that always kills; a kill gives another. Three lives; last one standing wins.</td><td>Ammo, changing damage, lives</td></tr>
+      <tr><td><b>Juggernaut</b></td><td>One big, slow, tough player with a machine gun. Whoever kills them becomes it; 20 points win.</td><td>Player looks, a bonus, bots told to hunt</td></tr>
+    </tbody>
+  </table></div>
+  <p>Each one passes all three checks and was played with 12 bots before it shipped.</p>
+</section>
+
+<section class="topic" id="studio-checks" data-group="Create">
+  <p class="crumb">Create</p>
+  <h1>Checking a mode</h1>
+  <p class="lead">Three checks, from instant to real: the Quick check as you edit, Compile with the real compiler, and a Test run on a hidden server with bots.</p>
+  <h2 id="studio-quick-check">Quick check</h2>
+  <p>Runs as you edit. <b>Problems</b> lists what won't work (a pin that needs a wire, a node nothing runs, a setting that's out of range) and what will cost the server (a scan on every hit, a fast timer with messages in it). Click a problem to jump to its node. Errors stop a compile; warnings don't.</p>
+  <h2 id="studio-compile">Compile</h2>
+  <p><b>Compile</b> (<span class="kbd">Ctrl+B</span> or <span class="kbd">F7</span>) runs the real compiler without installing anything or starting the game. The icon beside it: gray, not compiled since your last change; green, compiled; yellow, warnings; red, errors (click it for Problems). <b>Compile on save</b> does it in the background each time you save.</p>
+  <h2 id="studio-test-run" data-keywords="test run hidden server bots verify">Test run</h2>
+  <p><b>Test run</b> plays the mode on a hidden server of its own, with 8 bots, for about two minutes: a stretch without the mode (to measure the server), then the mode, a round restart and a map change. Your game isn't touched, open or closed. It reports:</p>
+  <ul>
+    <li><b>Pass</b>, <b>Warn</b> or <b>Fail</b>, and why.</li>
+    <li>Errors while it ran, tied to their nodes, and a crash if there was one.</li>
+    <li>How heavy the mode was against the server without it, and the busiest nodes.</li>
+    <li>Nodes that never ran (fine for things the bots didn't do, like buying).</li>
+  </ul>
+  <p>The log is under <b>Copy the log</b>. The toolbar says <b>Tested ✓</b> until you change the mode.</p>
+  <h2 id="studio-why-not" data-keywords="won't compile error fails problem fix why">Why won't it compile?</h2>
+  <ul>
+    <li><b>The Quick check has errors.</b> Fix those first: Problems lists them, red, with the node.</li>
+    <li><b>Pick a variable, table, Timeline or custom event.</b> A node that names one needs it set in Details.</li>
+    <li><b>A pin needs a wire.</b> Required pins (often Player) have nothing to fall back on.</li>
+    <li><b>The flow loops back.</b> Wires can't go round in a circle: use a loop node, a Repeat or a custom event.</li>
+    <li><b>A compiler line not tied to a node.</b> That's our fault, not yours: <b>More › Show code</b> shows the line, and please report it.</li>
+  </ul>
+  <h2 id="studio-why-not-work" data-keywords="doesn't work nothing happens test">It compiles, but nothing happens</h2>
+  <ul>
+    <li>Run a <b>Test run</b> and read <b>nodes that never ran</b>: the event above them didn't happen, or a condition went the other way.</li>
+    <li>Playtest and watch the nodes light up; put a breakpoint where it should run.</li>
+    <li>Give Weapon and friends say in the debugger why they did nothing (dead, already has one, nobody there).</li>
+    <li>A setting the game sets again each map (the bomb, <code>mp_give_player_c4</code>) can't be changed from Game settings: take the bomb with <b>Remove Weapon</b> (C4) at Round Started instead.</li>
+  </ul>
 </section>
 
 <section class="topic" id="studio-debugging" data-group="Create">
@@ -960,24 +1063,27 @@ footer a { color: var(--dim); }
   <h2 id="studio-playtest">Playtest</h2>
   <ol>
     <li>Pick a map and the number of bots in the Studio's toolbar.</li>
-    <li>Press <b>Playtest</b>. It saves, compiles with the debugger and starts the game in your mode, showing each step, with <b>Cancel</b>. Fix anything under <b>Results</b> first.</li>
+    <li>Press <b>Playtest</b> (<span class="kbd">F5</span>). It saves, compiles with the debugger and starts the game in your mode, showing each step, with <b>Cancel</b>. Fix anything under <b>Results</b> first.</li>
     <li>If the game is open, <b>Switch the open game</b> changes the map and keeps the bots.</li>
   </ol>
   <p>The first start can take a minute. The panel says <b>Playing on</b> the map once connected.</p>
   <h2 id="studio-watch">Watch it run</h2>
   <ul>
     <li>Nodes light up as they run and wires show the last flow. False conditions and errors are marked.</li>
-    <li>Hover a pin for its last value.</li>
+    <li>Hover a pin for its last value. A playing Timeline shows its time, direction and each track's value.</li>
     <li><b>Details</b> › <b>Last time it ran</b>: how often, the result and the inputs.</li>
     <li><b>What happened</b> lists the last 40 things that ran.</li>
   </ul>
   <h2 id="studio-breakpoints">Breakpoints</h2>
   <p>Click a node's dot, or <span class="kbd">F9</span>, to pause the world when it runs. <b>Live values</b> shows the round, time left, who's alive, your variables and each player's health and weapon. <b>Resume</b> carries on. There's no stepping node by node.</p>
+  <h2 id="studio-live-tweaks" data-keywords="change value while playing tweak tune balance">Change values while it plays</h2>
+  <p>In <b>Live values</b>, <b>Change</b> next to a variable (a number, yes/no, text or enum; for the whole mode, a player or a team) sets it in the running game at once, with no recompile: tune a speed, a price or a timer while you watch. <b>What happened</b> logs each change. <b>Use as start value</b> copies the value into your graph as the variable's start value, so the next build starts with it. Changes only reach a Playtest (the debugger's build), never an installed mode.</p>
   <h2 id="studio-limits">Good to know</h2>
   <ul>
     <li>Menus need a person to answer: bots won't.</li>
     <li>Up to 400 nodes and 64 variables per mode.</li>
     <li>Component and creature nodes need Loner-Strike's mode pieces on the server (your own game has them).</li>
+    <li>The Playtest build records every node it runs, so don't judge the mode's speed by it: Test run measures the real build.</li>
   </ul>
 </section>
 
@@ -1407,6 +1513,9 @@ public on_spawn(id)
     <li><b>Wipe and rebuild</b> (Linux) deletes the server's folder and sets it up again in 5 to 15 minutes. Bans, admins, stats and added maps go. Last resort only.</li>
     <li><b>Delete the server</b> stops it and deletes its folder. Servers added with Add one you already run have <b>Remove</b>, which leaves the folder alone.</li>
   </ul>
+  <h2 id="crashes" data-keywords="crash crashing ham sandwich hamsandwich module discord">Crashes</h2>
+  <p>A server that crashed shows a badge on its card and page (like <b>3 crashes in 24 h</b>). <b>Health › Crashes</b> lists each one, newest first: when, the map, what went wrong and the last log lines, with <b>Copy</b> to send it to a mod's maker. Turn on <b>Post crashes to Discord</b> to get new ones in the server's Discord status channel while Loner-Strike runs.</p>
+  <p>A <b>Crash-prone module</b> warning means the server runs a module known to crash servers. The usual one is the official Ham Sandwich, which crashes on map changes: Loner-Strike puts its fixed copy back before every Play and local server start (a Linux server does it before each start), keeping the replaced file beside it.</p>
 </section>
 
 <section class="topic" id="vps" data-group="Servers">
@@ -1513,9 +1622,6 @@ lsctl logs        the last 100 console lines</code></pre>
   <p class="lead">Friends help run your server from their Loner-Strike, through <a href="#website-status">Website status</a> (Linux) or TCP 27030 on this computer while the app is open (<b>Open the port on my router</b> opens it).</p>
   <ol>
     <li>In the server's <b>Shared control</b> tab, make an invite and pick a role. Adding their SteamID is recommended (they see it with <code>status</code> in the console). An invite works once, for 24 hours.</li>
-  <h2 id="crashes" data-keywords="crash crashing ham sandwich hamsandwich module discord">Crashes</h2>
-  <p>A server that crashed shows a badge on its card and page (like <b>3 crashes in 24 h</b>). <b>Health › Crashes</b> lists each one, newest first: when, the map, what went wrong and the last log lines, with <b>Copy</b> to send it to a mod's maker. Turn on <b>Post crashes to Discord</b> to get new ones in the server's Discord status channel while Loner-Strike runs.</p>
-  <p>A <b>Crash-prone module</b> warning means the server runs a module known to crash servers. The usual one is the official Ham Sandwich, which crashes on map changes: Loner-Strike puts its fixed copy back before every Play and local server start (a Linux server does it before each start), keeping the replaced file beside it.</p>
     <li>They paste it in <b>Servers</b> › <b>Add a shared server</b>.</li>
   </ol>
   <h2 id="roles">What each role can do</h2>
@@ -1573,6 +1679,7 @@ lsctl logs        the last 100 console lines</code></pre>
     <li><b>Play with bots</b>. A prefab opens in the map editor instead.</li>
   </ol>
   <p>Installed things appear in their usual places, marked <b>From Community</b>. <b>Installed</b> has <b>Update</b>, <b>Remove</b> and <b>Remix in Game Mode Studio</b>. Servers carry it from <b>Library › Community content</b>.</p>
+  <p>On <a href="index.html#creations">lonerstrike.com</a>, <b>Open in Loner-Strike</b> opens a creation's page in the app. It only opens the page: installing still takes <b>Try it</b> and <b>Install it</b>.</p>
   <h2 id="community-updates">Updates</h2>
   <p>A count on <b>Tools</b> and <b>Community</b> shows waiting updates; <b>Installed</b> lists them first, with the creator's notes. Press <b>Update</b> or <b>Update all</b>.</p>
   <ul>
@@ -1588,6 +1695,7 @@ lsctl logs        the last 100 console lines</code></pre>
     <li><b>Settings only</b>: a Game Mode Studio mode, built on your computer.</li>
     <li>On modes, as the maker rated it: <b>Bots play this well</b>, <b>Bots are so-so</b>, <b>Best with a friend</b> or <b>Solo, no bots</b>.</li>
     <li><b>Featured</b>: picked by the Loner-Strike team.</li>
+    <li>On modes that do more than their own game: <b>Runs server commands</b>, <b>Runs AMX Mod X commands</b>, <b>Calls other plugins</b> or <b>Can kick players</b>. You're asked before one installs, and asked again if the mode does more than its listing said.</li>
   </ul>
   <h2 id="community-safe">What it will install</h2>
   <p>Content and Game Mode Studio modes (built by your app); never anything that runs code. Items marked <b>Plugins</b>, <b>Not checked</b> or <b>Pulled</b> won't install.</p>
@@ -1641,6 +1749,7 @@ lsctl logs        the last 100 console lines</code></pre>
   <p>The credits go into <code>README.txt</code>, the rows for GameBanana's Credits module, and the Community listing.</p>
   <h2 id="publish-yours">After it's up</h2>
   <p>The <b>Published</b> tab lists what you've shared. To update one, upload the new file to its GameBanana page, then paste the link in Publish again. Players get it as an <a href="#community-updates">update</a>.</p>
+  <p><b>Unlist</b> takes one off Community (installed copies stay). If the app asks, put the short code it gives you on the GameBanana page, so it knows the page is yours; <b>List again</b> puts it back.</p>
 </section>
 
 <section class="topic" id="community-privacy" data-group="Share">
@@ -1686,7 +1795,6 @@ args = ["--mcp-stdio"]</code></pre>
   <h3>OpenCode</h3>
   <p>In <code>opencode.json</code>:</p>
 <pre><code>"mcp": {"servers": {"loner-strike": {"type": "local", "command": ["&lt;app&gt;", "--mcp-stdio"]}}}</code></pre>
-  <p>On <a href="index.html#creations">lonerstrike.com</a>, <b>Open in Loner-Strike</b> opens a creation's page in the app. It only opens the page: installing still takes <b>Try it</b> and <b>Install it</b>.</p>
   <h3>Cursor</h3>
   <p>In <code>~/.cursor/mcp.json</code>:</p>
 <pre><code>"mcpServers": {"loner-strike": {"type": "stdio", "command": "&lt;app&gt;", "args": ["--mcp-stdio"]}}</code></pre>
@@ -1701,10 +1809,11 @@ args = ["--mcp-stdio"]</code></pre>
   <h2 id="mcp-what">What agents can do</h2>
   <ul>
     <li>Read and check maps, build, compile and playtest in the map editor, fix navs, name places, make overviews.</li>
+    <li>See what you've picked in the map editor, so "make this taller" works, and pick things for you to look at.</li>
     <li>Work in Game Mode Studio and Plugin Studio, read replays and demos.</li>
-    <li>On modes that do more than their own game: <b>Runs server commands</b>, <b>Runs AMX Mod X commands</b>, <b>Calls other plugins</b> or <b>Can kick players</b>. You're asked before one installs, and asked again if the mode does more than its listing said.</li>
     <li>Run your servers and read their consoles, logs, crashes and bots' thinking.</li>
   </ul>
+  <p>More than 170 tools in all; <code>/mcp</code> in Claude Code (or your agent's tool list) shows them.</p>
   <p>Try: "make a small aim arena, check it for bots and playtest it".</p>
   <h2 id="mcp-safety">What keeps you in charge</h2>
   <ul>
@@ -1749,7 +1858,6 @@ args = ["--mcp-stdio"]</code></pre>
   <p>You started a copy Loner-Strike isn't set up in. Close it and start from <b>Play</b>, or switch copies in Settings › <b>Game</b>.</p>
 
 </section>
-  <p><b>Unlist</b> takes one off Community (installed copies stay). If the app asks, put the short code it gives you on the GameBanana page, so it knows the page is yours; <b>List again</b> puts it back.</p>
 
 <section class="topic" id="setup-help" data-group="Help">
   <p class="crumb">Help</p>
@@ -1809,11 +1917,9 @@ args = ["--mcp-stdio"]</code></pre>
     <li><b>"Port … is in use by another program"</b>: something else on this computer has it (another game server, a server Loner-Strike isn't managing). Close it, or change this server's port on Overview.</li>
     <li><b>"keeps crashing, so it was left off"</b>: check the console on Overview. A newly added mod is the usual cause: remove it.</li>
     <li>On this computer, <b>Reinstall Loner-Strike and its mods</b> (Health tab) fixes lost files.</li>
-    <li>See what you've picked in the map editor, so "make this taller" works, and pick things for you to look at.</li>
     <li>Mac (CrossOver): CrossOver must be in Applications and the servers folder inside the game's bottle.</li>
     <li>Windows user name in another language than Windows? The old server can trip over it. Move servers to a plain folder like <code>C:\LonerStrike</code> in Settings › <b>Servers folder</b>.</li>
   </ul>
-  <p>More than 170 tools in all; <code>/mcp</code> in Claude Code (or your agent's tool list) shows them.</p>
 
   <h2 id="ssh-problems" data-short="Linux machine connection">Can't connect to a Linux machine <a class="anchor" href="#ssh-problems" aria-label="Link to this">#</a></h2>
   <ul>
