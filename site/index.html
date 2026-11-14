@@ -261,7 +261,7 @@ p { text-wrap: pretty; }
 .hero { padding: 64px 0 40px; }
 .hero .wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; }
 .hero-logo { width: 112px; height: 112px; margin-bottom: 18px; }
-.hero .byline { color: var(--faint); font-size: 14px; letter-spacing: .02em; margin: 6px 0 0; }
+.hero .byline { color: var(--faint); font-size: 14px; letter-spacing: .02em; margin: 0 0 24px; }
 .hero .byline a { color: var(--dim); text-decoration: underline; text-underline-offset: 2px; }
 .hero .byline a:hover, .hero .byline a:focus-visible { color: var(--signal); }
 .hero h1 { font: 400 clamp(38px, 5.2vw, 66px)/1 var(--stencil); letter-spacing: .01em; white-space: nowrap; }
@@ -461,7 +461,8 @@ html { scroll-padding-top: 72px; }
 .thanks .lead { color: var(--dim); max-width: 64ch; margin: 6px 0 20px; }
 .thanks-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 1060px) { .thanks-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .thanks-grid { grid-template-columns: 1fr; } }
+.thanks-grid a:last-child:nth-child(odd) { grid-column: span 2; }
+@media (max-width: 560px) { .thanks-grid { grid-template-columns: 1fr; } .thanks-grid a:last-child:nth-child(odd) { grid-column: auto; } }
 .thanks-grid a { display: block; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; padding: 14px 16px; text-decoration: none; }
 .thanks-grid a:hover { background: var(--panel-2); }
 .thanks-grid b { display: block; color: var(--bone); font-size: 18px; margin-bottom: 4px; }
@@ -616,7 +617,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 }
 
 /* ---- 1.0 ------------------------------------------------------------------ */
-.tagline-2 { margin: -12px 0 24px; color: var(--faint); font-size: 18px; max-width: 40ch; }
+.tagline-2 { margin: -12px 0 10px; color: var(--faint); font-size: 18px; max-width: 40ch; }
 .feature .more { margin-top: 18px; }
 
 /* the modes list */
@@ -722,9 +723,9 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       <div>
         <img class="hero-logo" src="img/logo.svg" alt="" width="112" height="112">
         <h1>Loner-Strike</h1>
-        <p class="byline">A <a href="https://nanoshrine.com" target="_blank" rel="noopener">nanoshrine</a> side project</p>
         <p class="tagline">Play <span class="nobr">Counter-Strike</span> like it's 2004,<br>alone or with the friends you don't have.</p>
-        <p class="tagline-2">Then build your own maps and modes, try them on bots that play like people, host your own servers, and share it all. One free app.</p>
+        <p class="tagline-2">Then build your own maps and modes, try them on bots that play like people, host your own servers, and share it all.</p>
+        <p class="byline">A <a href="https://nanoshrine.com" target="_blank" rel="noopener">nanoshrine</a> side project</p>
         <div class="ctas">
           <a class="btn primary" href="#get" data-event="Get it (hero)">Get Loner-Strike</a>
         </div>
@@ -1094,10 +1095,6 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <a href="https://github.com/Bots-United/metamod-p" target="_blank" rel="noopener">
           <b>Bots-United</b>
           <span>Metamod-P, which every plugin loads through, and two decades of keeping bots alive in these games.</span>
-        </a>
-        <a href="https://github.com/ggml-org/whisper.cpp" target="_blank" rel="noopener">
-          <b>The open-source tools</b>
-          <span>whisper.cpp and llama.cpp (ggml) hear your voice commands; Tauri, React and many more libraries build the app. All are in our credits.</span>
         </a>
         <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CREDITS.md" target="_blank" rel="noopener">
           <b>The mod and map makers</b>
