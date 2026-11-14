@@ -94,7 +94,7 @@ export default function Creatures() {
 
   const dirty = !!types && !!saved && JSON.stringify(types) !== JSON.stringify(saved);
   useDirty("creatures", dirty);
-  useToolCrumbs("creatures", tab === "waves" ? [{ label: "Waves" }] : inst ? [{ label: inst.display || inst.name }] : placed ? [{ label: placed.title }] : t ? [{ label: t.display || t.name }] : null);
+  useToolCrumbs("creatures", tab === "waves" ? [{ label: "Waves" }] : inst ? [{ label: inst.label ?? inst.name }] : placed ? [{ label: placed.title }] : t ? [{ label: t.display || t.name }] : null);
 
   const filtered = useMemo(() => {
     const w = searchWords(q);
@@ -317,8 +317,8 @@ export default function Creatures() {
                     <li key={x.name}>
                       <button type="button" role="option" aria-selected={instName === x.name} className={`cs-item${instName === x.name ? " on" : ""}`} onClick={() => (setPlacedId(null), setInstName(x.name))}>
                         <span className="cs-item-name">
-                          <strong>{x.display || x.name}</strong>
-                          <span className="muted">{x.name}</span>
+                          <strong>{x.label ?? x.name}</strong>
+                          {x.display && <span className="muted">{x.display}</span>}
                         </span>
                         <span className="cs-tag">from Community</span>
                       </button>
@@ -521,13 +521,13 @@ function UsedBy({ name }: { name: string }) {
 
 /** A type a community item installed: what it is and where from. Read only; "Remix…" (a copy
  *  under your name) goes here once the creature remix lands (CP fork, `onRemix`). */
-export function InstalledView({ t, onRemix }: { t: { name: string; display: string; base: string; summary: string; from: string[] }; onRemix?: (name: string) => void }) {
+export function InstalledView({ t, onRemix }: { t: { name: string; label?: string; display: string; base: string; summary: string; from: string[] }; onRemix?: (name: string) => void }) {
   return (
     <>
-      <h3>{t.display || t.name}</h3>
+      <h3>{t.label ?? t.name}</h3>
       <p className="cs-summary">{t.summary}</p>
       <p className="banner cs-placed-how">
-        <strong>From Community, read only.</strong> It came with {t.from.length === 1 ? "an item" : `${t.from.length} items`} you installed ({t.from.join(", ")}) and goes when {t.from.length === 1 ? "it's" : "they're all"} removed.
+        <strong>From Community, read only.</strong> It came with {t.from.length === 1 ? "an item" : `${t.from.length} items`} you installed and goes when {t.from.length === 1 ? "it's" : "they're all"} removed.
         {t.base ? ` It starts from ${t.base}.` : ""}
       </p>
       <UsedBy name={t.name} />

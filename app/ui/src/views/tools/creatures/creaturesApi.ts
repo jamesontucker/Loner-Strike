@@ -81,7 +81,7 @@ export type PlacedKey = { name: string; type: string; label: string; default?: s
 /** A creature a mapper places in the map editor (ls_barnacle; turrets as ls_creature) instead of a mode's waves. */
 export type Placed = { id: string; entity: string; type: string; title: string; model: string; about: string; how: string; keys: PlacedKey[] };
 /** A type a community item installed (its block in creatures.ini): read only in the Studio. */
-export type InstalledType = { name: string; display: string; base: string; model: string; category: string; from: string[]; summary: string };
+export type InstalledType = { name: string; label?: string; display: string; base: string; model: string; category: string; from: string[]; summary: string };
 export type Status = { game: string; server?: boolean; installed?: InstalledType[]; file: string; exists: boolean; types: TypeRow[]; templates: Creature[]; problems: Problem[]; limits: Limits; placed?: Placed[] };
 
 export type Candidate = { path: string; found: boolean; folder?: string; kind: "game" | "hl" | "custom" | "missing" | "bad"; note: string };

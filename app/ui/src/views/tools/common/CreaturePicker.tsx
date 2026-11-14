@@ -9,7 +9,7 @@ import { useId } from "react";
 import { tryGet } from "./api";
 import "./creaturePicker.css";
 
-export type CreatureNames = { builtin: string[]; planned?: string[]; own: string[]; installed: { name: string; from: string }[] };
+export type CreatureNames = { builtin: string[]; planned?: string[]; own: string[]; installed: { name: string; label?: string; from: string[] }[] };
 
 /** The names this game knows (null while loading, or when the game isn't set up). */
 export function useCreatureNames(): CreatureNames | null {
@@ -104,10 +104,11 @@ export function CreaturePicker({
             <option key={t} value={t} label="Yours" />
           ))}
           {names.installed.map((t) => (
-            <option key={t.name} value={t.name} label="Installed" />
+            <option key={t.name} value={t.name} label={t.label ?? t.name} />
           ))}
         </datalist>
       )}
+      {!list && names?.installed.find((t) => t.name === value)?.label && <span className="creature-picker-shown muted">{names.installed.find((t) => t.name === value)!.label}</span>}
       {unknown.length > 0 && (
         <span className="creature-picker-warn" role="status">
           {unknown.length === 1 ? `This game has no creature type called ${unknown[0]}.` : `This game has no creature types called ${unknown.join(", ")}.`} Make it in the Creature Studio, or pick one.
@@ -140,7 +141,7 @@ function Groups({ n }: { n: CreatureNames }) {
         <optgroup label="Installed">
           {n.installed.map((t) => (
             <option key={t.name} value={t.name}>
-              {t.name}
+              {t.label ?? t.name}
             </option>
           ))}
         </optgroup>

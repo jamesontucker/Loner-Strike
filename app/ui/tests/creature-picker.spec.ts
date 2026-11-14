@@ -16,7 +16,7 @@ test("the server lists built-in, your own and installed types", async ({ request
   const n = await (await request.get("/api/tools/creatures/names")).json();
   expect(n.builtin).toContain("zombie");
   expect(n.own).toContain("my_runner");
-  expect(n.installed).toContainEqual({ name: "jo.ghoul", from: ["mode-77"] });
+  expect(n.installed).toContainEqual({ name: "jo.ghoul", label: "ghoul by jo", from: ["mode-77"] });
 });
 
 test("map editor: the creature type picker, its warning and the Checks entry", async ({ page }) => {
@@ -51,6 +51,9 @@ test("map editor: the creature type picker, its warning and the Checks entry", a
   await pick.selectOption("jo.ghoul");
   await expect.poll(async () => Object.fromEntries((await api(page, "/api/tools/editor/doc")).entities.find((e: { id: number }) => e.id === id).keys).type).toBe("jo.ghoul");
   await expect(field.locator(".creature-picker-warn")).toHaveCount(0);
+  // an installed type reads "<type> by <author>"; the key keeps the full name
+  await expect(field.locator(".creature-picker-shown")).toHaveText("ghoul by jo");
+  await expect(pick.locator('option[value="jo.ghoul"]')).toHaveText("ghoul by jo");
   await expect.poll(async () => ((await api(page, "/api/tools/editor/checks")).issues ?? []).some((i: { code: string }) => i.code === "unknown-creature"), { timeout: 20_000 }).toBe(false);
   // typing still works
   await input.fill("my_runner");
@@ -103,7 +106,7 @@ test.describe("Game Mode Studio", () => {
     await expect(page.getByRole("listbox", { name: "Creature types" }).getByRole("option", { name: /Ghoul/ })).toHaveCount(0);
     await page.getByRole("listbox", { name: "From Community" }).getByRole("option", { name: /Ghoul/ }).click();
     await expect(page.locator(".cs-main")).toContainText("From Community, read only.");
-    await expect(page.locator(".cs-main")).toContainText("mode-77");
+    await expect(page.locator(".cs-main h3")).toHaveText("ghoul by jo");
     await expect(page.getByLabel("Used by")).toContainText("none of your maps, modes or waves yet");
   });
 });
