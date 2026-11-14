@@ -16,6 +16,7 @@ mod content;
 mod crashes; // MCP: crash tracking for the player's servers
 mod deeplink; // P5: loner-strike:// links (Open in Loner-Strike on the website)
 mod localdata; // MCP: big folders in Local AppData on Windows, moved once from Roaming
+mod roles; // MCP: community roles, the host's side (claim, /link relay, supporters, moderator invites)
 mod hamguard; // MCP: the fixed Ham Sandwich kept in place before Play and local starts
 mod procmatch; // MCP: a leftover process is ended only if it's still the one the app started
 mod diagnostics;
@@ -133,6 +134,8 @@ fn main() {
             servers::sync_loop();
             // voice for servers kept running while the app was closed
             servers::resume_voice();
+            // MCP: community roles: the /link relay and supporters for claimed servers here
+            roles::start();
             // servers' Loner-Strike updates, once nobody is playing
             setup_api::auto_update_loop(state.clone());
             // Linux servers' bans, admins and settings kept here too, once a day

@@ -177,6 +177,32 @@ pub struct Admins {
     pub perks: Perks,
     #[serde(default)]
     pub abilities: Abilities,
+    /// MCP: what Loner-Strike supporters get here (community roles)
+    #[serde(default)]
+    pub supporters: SupporterPerks,
+}
+
+/// MCP: Loner-Strike supporters' VIP on this server (flag "s", gm_vip): cosmetic and convenience
+/// only; gear, money and abilities are never theirs unless the host's ability grid says so.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct SupporterPerks {
+    /// the [VIP] chat tag
+    pub tag: bool,
+    /// the scoreboard's VIP mark
+    pub scoreboard: bool,
+    /// a reserved slot (with `slots` > 0)
+    pub reserve: bool,
+    /// slots kept for VIPs (and supporters with `reserve`)
+    pub slots: u8,
+    /// "<name>, a Loner-Strike supporter, joined."
+    pub joinmsg: bool,
+}
+
+impl Default for SupporterPerks {
+    fn default() -> Self {
+        SupporterPerks { tag: true, scoreboard: true, reserve: false, slots: 0, joinmsg: true }
+    }
 }
 
 // ---- checks ------------------------------------------------------------------
@@ -316,6 +342,16 @@ fn vip_cfg(a: &Admins) -> String {
         out.push_str(&format!("{cvar} {}\r\n", role_mask(roles)));
     }
     out.push_str(&format!("gm_vip_anymode {}\r\n", b(a.abilities.every_mode)));
+    // MCP: Loner-Strike supporters (16 in the role masks)
+    let sp = &a.supporters;
+    out.push_str(&format!(
+        "gm_vip_sup_chat {}\r\ngm_vip_sup_score {}\r\ngm_vip_slots {}\r\ngm_vip_reserve {}\r\ngm_vip_joinmsg {}\r\n",
+        b(sp.tag),
+        b(sp.scoreboard),
+        sp.slots.min(4),
+        1 | if sp.reserve { 16 } else { 0 },
+        if sp.joinmsg { 16 } else { 0 }
+    ));
     out
 }
 
@@ -350,6 +386,62 @@ fn write_files(g: &Game, a: &Admins) -> Result<bool, String> {
         let _ = std::fs::write(&cfg, text);
     }
     Ok(changed)
+}
+
+// ---- MCP: Loner-Strike supporters (community roles, roles.rs) ----------------------------
+
+pub(crate) const SUPPORTERS_BEGIN: &str = "; ---- Loner-Strike supporters (from the Loner-Strike Discord; rewritten automatically) ----";
+pub(crate) const SUPPORTERS_END: &str = "; ---- end of Loner-Strike supporters ----";
+/// gm_vip's supporter flag (ADMIN_LEVEL_G): the cosmetic perks by default, never the host's VIP gear
+pub const SUPPORTER_FLAG: &str = "s";
+
+/// users.ini with the supporters' block set to `steamids` (none: the block goes); everything else
+/// kept. SteamIDs that aren't valid are left out.
+pub fn with_supporters(text: &str, steamids: &[String]) -> String {
+    let nl = if text.contains("\r\n") || text.is_empty() { "\r\n" } else { "\n" };
+    let mut ids: Vec<String> = steamids.iter().map(|s| s.trim().to_uppercase()).filter(|s| valid_steamid(s)).collect();
+    ids.sort();
+    ids.dedup();
+    let block = if ids.is_empty() {
+        String::new()
+    } else {
+        let mut out = vec![SUPPORTERS_BEGIN.to_string()];
+        out.extend(ids.iter().map(|id| format!("\"{id}\" \"\" \"{SUPPORTER_FLAG}\" \"ce\"")));
+        out.push(SUPPORTERS_END.to_string());
+        out.join(nl)
+    };
+    let rest = match (text.find(SUPPORTERS_BEGIN), text.find(SUPPORTERS_END)) {
+        (Some(s), Some(e)) if e > s => format!("{}{}", text[..s].trim_end_matches(['\r', '\n']), &text[e + SUPPORTERS_END.len()..]),
+        _ => text.to_string(),
+    };
+    let base = rest.trim_end_matches(['\r', '\n']);
+    match (base.is_empty(), block.is_empty()) {
+        (true, true) => String::new(),
+        (true, false) => format!("{block}{nl}"),
+        (false, true) => format!("{base}{nl}"),
+        (false, false) => format!("{base}{nl}{nl}{block}{nl}"),
+    }
+}
+
+/// Puts the supporters on a server on this computer into its users.ini and reloads admins when
+/// that changed. Ok(true): changed.
+pub fn set_supporters(g: &Game, steamids: &[String]) -> Result<bool, String> {
+    if g.remote.is_some() {
+        return Err("Supporters on a Linux server come from its own shared control service.".into());
+    }
+    let users = g.dir.join("addons/amxmodx/configs/users.ini");
+    if !users.parent().is_some_and(|d| d.is_dir()) {
+        return Ok(false);
+    }
+    let _lock = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let old = crate::sys::read_latin1(&users).unwrap_or_default();
+    let new = with_supporters(&old, steamids);
+    if new == old {
+        return Ok(false);
+    }
+    crate::sys::write_latin1(&users, &new).map_err(|e| format!("Couldn't write users.ini ({e})."))?;
+    let _ = tell_game(g, "amx_reloadadmins");
+    Ok(true)
 }
 
 /// The closest role for an existing users.ini entry's access flags.
@@ -387,11 +479,11 @@ pub fn take_users(text: &str) -> (String, Vec<Person>) {
     let mut label = String::new();
     for line in text.lines() {
         let t = line.trim();
-        if t == BEGIN {
+        if t == BEGIN || t == SUPPORTERS_BEGIN {
             in_block = true;
         }
         if in_block {
-            if t == END {
+            if t == END || t == SUPPORTERS_END {
                 in_block = false;
             }
             out.push(line.to_string());
@@ -943,6 +1035,63 @@ pub fn routes() -> Router<Shared> {
         .route("/api/admins/ban", post(api_ban))
         .route("/api/admins/unban", post(api_unban))
         .route("/api/admins/kick", post(api_kick))
+        .route("/api/admins/supporters", get(api_supporters).post(api_set_supporters))
+}
+
+// ---- MCP: Loner-Strike supporters' VIP (community roles) ----------------------------------
+
+fn supporters_view(g: &Game) -> Value {
+    let sp = load(&g.data).supporters;
+    let roles = crate::servers::id_of(g).and_then(|id| crate::roles::status_of(&id));
+    json!({
+        "claimed": roles.is_some(),
+        "official": roles.map(|r| r.0).unwrap_or(false),
+        "honor": roles.map(|r| r.1).unwrap_or(false),
+        "tag": sp.tag, "scoreboard": sp.scoreboard, "reserve": sp.reserve, "slots": sp.slots, "joinmsg": sp.joinmsg,
+    })
+}
+
+async fn api_supporters(State(st): State<Shared>, headers: HeaderMap) -> Reply {
+    if !from_panel(&headers) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    answer(with_game(&st, |g| Ok(supporters_view(g))).await)
+}
+
+async fn api_set_supporters(State(st): State<Shared>, headers: HeaderMap, Json(req): Json<Value>) -> Reply {
+    if !from_panel(&headers) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    answer(
+        with_game(&st, move |g| {
+            if let Some(h) = req.get("honor").and_then(Value::as_bool) {
+                let id = crate::servers::id_of(g).ok_or("Supporters can be honored on your servers, after claiming them (Shared control › Loner-Strike roles).")?;
+                crate::roles::set_honor(&id, h)?;
+            }
+            change(g, |a| {
+                let sp = &mut a.supporters;
+                let flag = |k: &str| req.get(k).and_then(Value::as_bool);
+                if let Some(v) = flag("tag") {
+                    sp.tag = v;
+                }
+                if let Some(v) = flag("scoreboard") {
+                    sp.scoreboard = v;
+                }
+                if let Some(v) = flag("reserve") {
+                    sp.reserve = v;
+                }
+                if let Some(v) = flag("joinmsg") {
+                    sp.joinmsg = v;
+                }
+                if let Some(n) = req.get("slots").and_then(Value::as_u64) {
+                    sp.slots = n.min(4) as u8;
+                }
+                Ok(())
+            })?;
+            Ok(supporters_view(g))
+        })
+        .await,
+    )
 }
 
 // ---- shared between servers (lists.rs) ----------------------------------------------
@@ -1050,6 +1199,35 @@ pub(crate) fn copy_bans(from: &Game, to: &Game) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn supporters_have_their_own_block() {
+        let ours = rewrite_users("; top\r\n\"STEAM_0:0:9\" \"\" \"abc\" \"ce\"\r\n", &[], "2026-11-14");
+        let with = with_supporters(&ours, &["steam_0:1:2".into(), "STEAM_0:1:2".into(), "nope".into(), "STEAM_0:0:3\"; quit".into()]);
+        assert!(with.contains("\"STEAM_0:1:2\" \"\" \"s\" \"ce\"\r\n"));
+        assert_eq!(with.matches("STEAM_0:1:2").count(), 1);
+        assert!(!with.contains("quit") && with.contains("\"STEAM_0:0:9\"") && with.contains(BEGIN));
+        // again: the block is replaced, not added twice
+        let again = with_supporters(&with, &["STEAM_0:0:5".into()]);
+        assert_eq!(again.matches(SUPPORTERS_BEGIN).count(), 1);
+        assert!(again.contains("STEAM_0:0:5") && !again.contains("STEAM_0:1:2"));
+        // nobody: the block goes, the rest stays
+        let none = with_supporters(&again, &[]);
+        assert!(!none.contains(SUPPORTERS_BEGIN) && none.contains("\"STEAM_0:0:9\""));
+        assert_eq!(with_supporters("", &[]), "");
+        // the Admins page's own block doesn't touch it
+        assert!(rewrite_users(&with, &[], "2026-11-14").contains("STEAM_0:1:2"));
+        // vip.cfg: supporters cosmetic by default, slots off; older admins.json without the field
+        let a: Admins = serde_json::from_str("{}").unwrap();
+        let cfg = vip_cfg(&a);
+        for line in ["gm_vip_sup_chat 1", "gm_vip_sup_score 1", "gm_vip_slots 0", "gm_vip_reserve 1\r", "gm_vip_joinmsg 16"] {
+            assert!(cfg.contains(line), "{line}");
+        }
+        let mut b = a.clone();
+        b.supporters = SupporterPerks { reserve: true, slots: 9, joinmsg: false, ..SupporterPerks::default() };
+        let cfg = vip_cfg(&b);
+        assert!(cfg.contains("gm_vip_slots 4") && cfg.contains("gm_vip_reserve 17") && cfg.contains("gm_vip_joinmsg 0"));
+    }
 
     fn person(id: &str, role: Role, expires: Option<&str>) -> Person {
         Person { id: id.into(), name: "Sam".into(), role, expires: expires.map(String::from), note: String::new() }

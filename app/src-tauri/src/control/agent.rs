@@ -251,6 +251,26 @@ pub fn ensure(e: &Entry, res: &Path) -> Result<(), String> {
     install(e, res)
 }
 
+/// MCP: the server's community roles claim (roles.rs), beside its ls-control: only the game
+/// server's user can read it; ls-control relays /link and keeps supporters with it.
+pub fn put_roles_token(e: &Entry, token: &str) -> Result<(), String> {
+    let r = e.remote.as_ref().ok_or("That server isn't on a Linux machine.")?;
+    if !token.starts_with("lsr1_") || !token[5..].chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("That isn't a claim token.".into());
+    }
+    let (code, out) = remote::exec(r, &format!("install -d -m 700 \"$HOME/loner-strike/control\" \"$HOME/{}\"", data_dir(&e.id)))?;
+    if code != 0 {
+        return Err(format!("Couldn't make shared control's folder on the server ({}).", out.trim()));
+    }
+    let file = format!("{}/roles-token", data_dir(&e.id));
+    remote::write_file(r, &format!("{file}.new"), token.as_bytes())?;
+    let (code, out) = remote::exec(r, &format!("cd \"$HOME\" && chmod 600 {n} && mv -f {n} {f}", n = shell_quote(&format!("{file}.new")), f = shell_quote(&file)))?;
+    if code != 0 {
+        return Err(format!("Couldn't save the claim on the server ({}).", out.trim()));
+    }
+    Ok(())
+}
+
 /// One of ls-control's commands for this server, over SSH: its JSON answer, or its error.
 pub fn cli(e: &Entry, args: &[&str]) -> Result<Value, String> {
     let r = e.remote.as_ref().ok_or("Shared control on the server is for servers on a Linux machine.")?;

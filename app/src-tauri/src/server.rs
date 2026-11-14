@@ -325,6 +325,7 @@ pub fn router(state: Shared, listener: Listener) -> Router {
         .merge(crate::plugins::routes())
         .merge(crate::sounds::routes())
         .merge(crate::saved::routes())
+        .merge(crate::roles::routes()) // MCP: community roles (owner, or a shared-control Admin for applications)
         .fallback(ui);
     // X-Target is applied after the computer-only routes are merged (a layer only covers
     // routes already there), and the listener's guard stays outermost

@@ -27,6 +27,20 @@
 	Say /vip   what VIPs get, and what you can use
 	Say /donate  the server's donate link (donations are handled outside the game)
 
+	Loner-Strike supporters (community roles, docs/ROLES.md): access flag "s" (the app writes
+	them in their own block of users.ini, from the Loner-Strike Discord). They're role bit 16
+	in the ability masks, which no default mask has: by default a supporter gets the [VIP] tag,
+	the scoreboard mark, a reserved slot and a join message, never the host's gear, money or
+	abilities. A VIP who also supports counts as a VIP.
+	  gm_vip_reserve  roles mask with a reserved slot (default 17: VIPs and supporters)
+	  gm_vip_slots    reserved slots (default 0, off): sv_visiblemaxplayers is set to
+	                  maxplayers - slots; someone without a reservation who takes a hidden slot
+	                  is kicked ("That slot is kept for supporters"), unless a bot can make room
+	                  (a bot is kicked first; bot_quota fills its place again later)
+	  gm_vip_joinmsg  roles mask announced when they join (default 16: supporters)
+	  gm_vip_sup_chat, gm_vip_sup_score  1/0: the [VIP] chat tag and the scoreboard mark for
+	                  supporters (default 1)
+
 	Settings: data/gamemodes/vip.cfg (written by the app), re-read with gm_vipreload.
 	Cvars: gm_vip_armor, gm_vip_defuse, gm_vip_nades 0/1, gm_vip_money <amount>,
 	       gm_vip_tag, gm_vip_chat 0/1, gm_vip_host 0/1, gm_vip_donate "<url>",
@@ -47,10 +61,13 @@
 #include <hamsandwich>
 
 #define PLUGIN  "VIP perks"
-#define VERSION "1.1"
+#define VERSION "1.2"
 #define AUTHOR  "gamemodes"
 
 #define VIP_FLAG     ADMIN_LEVEL_H
+// a Loner-Strike supporter (community roles): "s"
+#define SUPPORTER_FLAG ADMIN_LEVEL_G
+#define TASK_JOIN    6200
 #define TASK_SPAWN   6100
 #define SCORE_VIP    (1<<2)
 
@@ -63,6 +80,7 @@ enum { PERKS_NONE, PERKS_LIGHT, PERKS_FULL }
 #define ROLE_MOD     2
 #define ROLE_ADMIN   4
 #define ROLE_OWNER   8
+#define ROLE_SUPPORTER 16
 
 enum { AB_GEAR, AB_HOOK, AB_JUMP, AB_RESPAWN, AB_NOCLIP, AB_GOD, AB_TP, AB_COUNT }
 new const AB_CVAR[AB_COUNT][] = { "gm_vip_gear", "gm_vip_hook", "gm_vip_jump", "gm_vip_respawn", "gm_vip_noclip", "gm_vip_god", "gm_vip_tp" }
@@ -74,6 +92,7 @@ new const bool:AB_UNFAIR[AB_COUNT] = { false, false, true, true, true, true, fal
 
 new g_pArmor, g_pDefuse, g_pNades, g_pMoney, g_pTag, g_pChat, g_pHost, g_pDonate
 new g_pAb[AB_COUNT], g_pAnyMode
+new g_pReserve, g_pSlots, g_pJoinMsg, g_pSupChat, g_pSupScore, bool:g_SetVisible
 new g_DataDir[128]
 new g_Perks = PERKS_NONE
 new bool:g_Career
@@ -96,6 +115,11 @@ public plugin_init()
 	for (new i = 0; i < AB_COUNT; i++)
 		g_pAb[i] = register_cvar(AB_CVAR[i], AB_DEFAULT[i])
 	g_pAnyMode = register_cvar("gm_vip_anymode", "0")
+	g_pReserve = register_cvar("gm_vip_reserve", "17")
+	g_pSlots   = register_cvar("gm_vip_slots", "0")
+	g_pJoinMsg = register_cvar("gm_vip_joinmsg", "16")
+	g_pSupChat = register_cvar("gm_vip_sup_chat", "1")
+	g_pSupScore = register_cvar("gm_vip_sup_score", "1")
 
 	// RegisterHamPlayer also covers Condition Zero bots (a different class)
 	RegisterHamPlayer(Ham_Spawn, "fw_spawn_post", 1)
@@ -126,6 +150,8 @@ public plugin_cfg()
 	g_Perks = g_Career ? PERKS_NONE : mode_perks(mode)
 
 	load_settings(false)
+	// after vip.cfg ran (it's in the queue at map start)
+	set_task(1.0, "apply_slots")
 	if (file_exists("banned.cfg"))
 		server_cmd("exec banned.cfg")
 	if (file_exists("listip.cfg"))
@@ -189,8 +215,24 @@ public srv_reload()
 			client_print_color(id, print_team_default, "%s God mode was switched off by the host.", TAG)
 		}
 	}
+	apply_slots()
 	server_print("[VIP] settings reloaded")
 	return PLUGIN_HANDLED
+}
+
+// The [VIP] tag (chat) or the scoreboard mark: VIPs, and Loner-Strike supporters when the host
+// lets them have it.
+bool:is_marked(id, bool:chat)
+{
+	if (is_vip(id))
+		return true
+	if (!get_pcvar_num(chat ? g_pSupChat : g_pSupScore))
+		return false
+	if (!is_user_connected(id) || is_user_bot(id) || is_user_hltv(id))
+		return false
+	if (id == 1 && !is_dedicated_server())
+		return false
+	return (get_user_flags(id) & SUPPORTER_FLAG) != 0
 }
 
 bool:is_vip(id)
@@ -222,6 +264,8 @@ role_bit(id)
 		return ROLE_MOD
 	if (flags & VIP_FLAG)
 		return ROLE_VIP
+	if (flags & SUPPORTER_FLAG)
+		return ROLE_SUPPORTER
 	return 0
 }
 
@@ -301,11 +345,65 @@ public task_spawn(taskid)
 public client_putinserver(id)
 {
 	reset_player(id)
+	// admin.amxx gives flags as they come in: look a moment later
+	if (!is_user_bot(id) && !is_user_hltv(id))
+		set_task(1.0, "task_joined", TASK_JOIN + id)
+}
+
+// ---- reserved slots and join messages ------------------------------------------------------
+
+public apply_slots()
+{
+	new slots = clamp(get_pcvar_num(g_pSlots), 0, MaxClients - 1)
+	if (slots > 0)
+	{
+		set_cvar_num("sv_visiblemaxplayers", MaxClients - slots)
+		g_SetVisible = true
+	}
+	else if (g_SetVisible)
+	{
+		set_cvar_num("sv_visiblemaxplayers", -1)
+		g_SetVisible = false
+	}
+}
+
+public task_joined(taskid)
+{
+	new id = taskid - TASK_JOIN
+	if (!is_user_connected(id))
+		return
+	new role = role_bit(id)
+	new slots = clamp(get_pcvar_num(g_pSlots), 0, MaxClients - 1)
+	if (slots > 0 && get_playersnum(1) > MaxClients - slots)
+	{
+		// into a kept slot: a bot makes room if there is one; else only someone with a reservation stays
+		new bot = 0
+		for (new i = 1; i <= MaxClients; i++)
+			if (i != id && is_user_connected(i) && is_user_bot(i))
+				bot = i
+		if (bot)
+			server_cmd("kick #%d ^"Making room^"", get_user_userid(bot))
+		else if (!(get_pcvar_num(g_pReserve) & role))
+		{
+			server_cmd("kick #%d ^"That slot is kept for supporters.^"", get_user_userid(id))
+			return
+		}
+	}
+	if (role && (get_pcvar_num(g_pJoinMsg) & role))
+	{
+		new name[32]
+		get_user_name(id, name, charsmax(name))
+		if (role == ROLE_SUPPORTER)
+			client_print_color(0, id, "^4[VIP]^3 %s^1, a Loner-Strike supporter, joined. Thank you!", name)
+		else
+			client_print_color(0, id, "^4[VIP]^3 %s^1 joined.", name)
+	}
 }
 
 public client_disconnected(id)
 {
 	remove_task(id + TASK_SPAWN)
+	remove_task(TASK_JOIN + id)
 	reset_player(id)
 }
 
@@ -524,7 +622,7 @@ cmd_tp(id)
 public msg_scoreattrib(msgid, dest, receiver)
 {
 	new id = get_msg_arg_int(1)
-	if (id >= 1 && id <= MaxClients && get_pcvar_num(g_pTag) && is_vip(id))
+	if (id >= 1 && id <= MaxClients && get_pcvar_num(g_pTag) && is_marked(id, false))
 		set_msg_arg_int(2, ARG_BYTE, get_msg_arg_int(2) | SCORE_VIP)
 	return PLUGIN_CONTINUE
 }
@@ -538,7 +636,7 @@ public msg_saytext(msgid, dest, receiver)
 	if (get_msg_args() < 4 || !get_pcvar_num(g_pChat))
 		return PLUGIN_CONTINUE
 	new id = get_msg_arg_int(1)
-	if (id < 1 || id > MaxClients || !is_vip(id))
+	if (id < 1 || id > MaxClients || !is_marked(id, true))
 		return PLUGIN_CONTINUE
 
 	new token[32]
@@ -681,6 +779,8 @@ show_vip(id)
 	}
 	if (is_vip(id))
 		client_print_color(id, print_team_default, "^4[VIP]^1 You're a VIP. Thanks for the support!")
+	else if (role_bit(id) == ROLE_SUPPORTER)
+		client_print_color(id, print_team_default, "^4[VIP]^1 You support Loner-Strike: thank you!")
 	else
 	{
 		new url[8]

@@ -50,6 +50,13 @@
 	       gm_joins, gm_joins_country, gm_joins_skipbots, gm_votekick, gm_voteban,
 	       gm_vote_percent, gm_vote_min, gm_vote_bantime, gm_vote_cooldown, gm_vote_bots,
 	       gm_empty, gm_empty_map, gm_empty_mode
+	Community roles (docs/ROLES.md): say /link asks for a code to link your SteamID to your
+	  Discord account. The plugin only writes `"Name<uid><SteamID><team>" triggered "ls_link"`
+	  in the log; the host's Loner-Strike (or a Linux server's ls-control) asks Loner-Strike's
+	  list service for a code and answers with the server command ls_link_show <uid> <code>, or
+	  ls_link_fail <uid> <away|limit|unclaimed|steamid|error>. Nothing within 10 seconds: the
+	  server can't make codes. ls_claim (public, empty) is set by the app for a moment while it
+	  claims the server for community roles.
 */
 
 #include <amxmodx>
@@ -109,6 +116,10 @@ new bool:g_Geo
 // the vote going on (g_VoteMenu -1: none)
 new g_VoteMenu = -1, bool:g_VoteBan, g_VoteUid, g_VoteName[32], g_VoteAuth[40], g_VoteIp[24]
 new g_VoteYes, g_VoteNo, g_VoteVoters, bool:g_CanVote[33], g_Voted[33], Float:g_VoteEnded
+// /link (community roles): when each player last asked
+#define TASK_LINK 7300
+#define LINK_COOLDOWN 30.0
+new Float:g_LinkAsked[33]
 
 public plugin_init()
 {
@@ -128,6 +139,8 @@ public plugin_init()
 	// public (in the server's rules): the Loner-Strike server list only lists servers set to 1,
 	// which the app does through friends.cfg when the host asks for it
 	register_cvar("ls_list", "0", FCVAR_SERVER)
+	// public too: the list service reads it back while the app claims the server (community roles)
+	register_cvar("ls_claim", "", FCVAR_SERVER)
 	g_pJoins         = register_cvar("gm_joins", "0")
 	g_pJoinsCountry  = register_cvar("gm_joins_country", "1")
 	g_pJoinsSkipBots = register_cvar("gm_joins_skipbots", "1")
@@ -145,6 +158,8 @@ public plugin_init()
 
 	register_srvcmd("gm_extrasreload", "srv_reload")
 	register_srvcmd("gm_extraswarn", "srv_warn")
+	register_srvcmd("ls_link_show", "srv_link_show")
+	register_srvcmd("ls_link_fail", "srv_link_fail")
 	register_event("30", "ev_intermission", "a")
 	register_forward(FM_CmdStart, "fw_cmdstart")
 	// the game's own disconnect: not called on a map change (AMX Mod X's client_disconnected is)
@@ -157,6 +172,7 @@ public plugin_init()
 		register_clcmd(fmt("%s votekick", say), "cmd_votekick")
 		register_clcmd(fmt("%s /voteban", say), "cmd_voteban")
 		register_clcmd(fmt("%s voteban", say), "cmd_voteban")
+		register_clcmd(fmt("%s /link", say), "cmd_link")
 	}
 	// RegisterHamPlayer also covers Condition Zero bots; the callback ignores them
 	RegisterHamPlayer(Ham_Spawn, "fw_spawn_post", 1)
@@ -632,6 +648,96 @@ public client_putinserver(id)
 public client_disconnected(id)
 {
 	g_Watch[id] = false
+	g_LinkAsked[id] = 0.0
+	remove_task(TASK_LINK + id)
+}
+
+// ---- /link (community roles) ----------------------------------------------------------------
+
+public cmd_link(id)
+{
+	if (is_user_bot(id) || is_user_hltv(id))
+		return PLUGIN_HANDLED
+	new auth[40]
+	get_user_authid(id, auth, charsmax(auth))
+	if (!equal(auth, "STEAM_", 6) || containi(auth, "ID_") != -1)
+	{
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Linking needs a Steam account the server can see (yours shows as %s).", auth)
+		return PLUGIN_HANDLED
+	}
+	new Float:now = get_gametime()
+	if (g_LinkAsked[id] > 0.0 && now - g_LinkAsked[id] < LINK_COOLDOWN)
+	{
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Wait a few seconds before asking again.")
+		return PLUGIN_HANDLED
+	}
+	g_LinkAsked[id] = now
+	new name[32], team[16]
+	get_user_name(id, name, charsmax(name))
+	get_user_team(id, team, charsmax(team))
+	log_message("^"%s<%d><%s><%s>^" triggered ^"ls_link^"", name, get_user_userid(id), auth, team)
+	client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Getting your link code...")
+	remove_task(TASK_LINK + id)
+	set_task(10.0, "task_link_none", TASK_LINK + id)
+	return PLUGIN_HANDLED
+}
+
+public task_link_none(taskid)
+{
+	new id = taskid - TASK_LINK
+	if (is_user_connected(id))
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 This server can't make link codes right now. Type /link on an official Loner-Strike server.")
+}
+
+// the player a server command names by userid (0: gone)
+link_player(const arg[])
+{
+	new uid = str_to_num(arg)
+	if (uid <= 0)
+		return 0
+	return find_player("k", uid)
+}
+
+public srv_link_show()
+{
+	new arg[12], code[16]
+	read_argv(1, arg, charsmax(arg))
+	read_argv(2, code, charsmax(code))
+	new id = link_player(arg)
+	// XXXX-XXXX: letters, digits and the hyphen only
+	if (!id || strlen(code) != 9)
+		return PLUGIN_HANDLED
+	for (new i = 0; code[i]; i++)
+		if (!isalnum(code[i]) && code[i] != '-')
+			return PLUGIN_HANDLED
+	remove_task(TASK_LINK + id)
+	client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Your code: ^4%s^1. In the Loner-Strike Discord type ^4/link %s^1 (works for 10 minutes).", code, code)
+	client_print(id, print_console, "[Loner-Strike] Your link code: %s  (in the Loner-Strike Discord: /link %s)", code, code)
+	set_hudmessage(80, 255, 80, -1.0, 0.3, 0, 0.0, 12.0, 0.2, 0.5, -1)
+	show_hudmessage(id, "Link code: %s^nIn the Loner-Strike Discord: /link %s", code, code)
+	return PLUGIN_HANDLED
+}
+
+public srv_link_fail()
+{
+	new arg[12], why[16]
+	read_argv(1, arg, charsmax(arg))
+	read_argv(2, why, charsmax(why))
+	new id = link_player(arg)
+	if (!id)
+		return PLUGIN_HANDLED
+	remove_task(TASK_LINK + id)
+	if (equal(why, "away"))
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 The list service didn't see you on this server yet. Stay a moment and try /link again.")
+	else if (equal(why, "limit"))
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Too many link codes for now. Use your newest code, or try again later.")
+	else if (equal(why, "unclaimed"))
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 This server can't make link codes. Type /link on an official Loner-Strike server.")
+	else if (equal(why, "steamid"))
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Your SteamID can't be linked (bots, LAN and pending ids can't).")
+	else
+		client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Couldn't get a link code right now. Try again in a minute.")
+	return PLUGIN_HANDLED
 }
 
 public client_infochanged(id)
