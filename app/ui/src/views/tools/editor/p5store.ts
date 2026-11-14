@@ -4,8 +4,8 @@
 
 import { create } from "zustand";
 import { postJsonAt } from "../../../api";
-import type { DocState } from "./editorApi";
-import { useEditor } from "./store";
+import type { DocChanges, DocState } from "./editorApi";
+import { mergeState, useEditor } from "./store";
 
 export type SideTab = "inspect" | "outline" | "textures" | "checks" | "compile" | "history" | "project" | (string & {});
 export type P5Dialog = "palette" | "cheats" | "keys" | "find" | "transform" | "goto" | "grid" | "replaceWith" | "info" | "coords" | null;
@@ -159,6 +159,8 @@ export type Cmd2Result = Err & {
   changed?: boolean;
   docChanged?: boolean;
   state?: DocState;
+  /** P5 (perf): what it changed in the document */
+  changes?: DocChanges | null;
 };
 
 export const getProject = () => get<{ files: ProjectFile[]; project: ProjectInfo }>(`${E}/project`);
@@ -170,7 +172,7 @@ export const copyAssets = (to: "game" | "project") => post<AssetsInfo & { copied
 export const findAssets = () => post<{ cancelled?: boolean; found: number; missing: string[]; copied: string[]; message: string; assets: AssetsInfo }>(`${E}/assets/find`);
 export const importRmf = () => post<{ cancelled?: boolean; notes?: string[] }>(`${E}/import-other`);
 export const getHistory = () => get<{ undo: string[]; redo: string[]; dirty: boolean }>(`${E}/history`);
-export const jumpHistory = (steps: number) => post<{ changed: boolean; steps: number; state?: DocState }>(`${E}/history/jump`, { steps });
+export const jumpHistory = (steps: number) => post<{ changed: boolean; steps: number; state?: DocState; changes?: DocChanges | null }>(`${E}/history/jump`, { steps });
 
 /** A many-things command; edits refresh the view like the editor's own commands. */
 export async function cmd2(body: Record<string, unknown>, opts: { quiet?: boolean } = {}): Promise<Cmd2Result> {
@@ -179,15 +181,15 @@ export async function cmd2(body: Record<string, unknown>, opts: { quiet?: boolea
   // (until the view has caught up: the status bar's "Working…" covers it all)
   try {
     const r = await post<Cmd2Result>(`${E}/cmd2`, body);
-    const d = useEditor.getState().doc;
-    if (r.state && d) useEditor.setState({ doc: { ...d, ...r.state } });
+    if (r.state) mergeState(r.state);
     if (r.error) {
       if (!opts.quiet) s.notify(r.error, true);
       return r;
     }
     if (r.changed) await useEditor.getState().syncMeshes();
     if (r.changed || r.docChanged) {
-      await useEditor.getState().refreshDoc();
+      // P5 (perf): its own changes; the whole document only when they don't fit
+      if (!useEditor.getState().applyChanges(r.changes)) await useEditor.getState().catchUp();
       useEditor.getState().refreshChecks();
     }
     return r;
@@ -197,10 +199,11 @@ export async function cmd2(body: Record<string, unknown>, opts: { quiet?: boolea
 }
 
 /** After an undo/redo-like jump or a file opened from the project list. */
-export async function afterJump(state?: DocState | null) {
+export async function afterJump(state?: DocState | null, changes?: DocChanges | null) {
   const s = useEditor.getState();
-  if (state && s.doc) useEditor.setState({ doc: { ...s.doc, ...state } });
+  if (state) mergeState(state);
   await s.syncMeshes();
-  await s.refreshDoc();
+  // P5 (perf): a jump answers with its changes; a file from the list is a new document
+  if (!useEditor.getState().applyChanges(changes)) await useEditor.getState().catchUp();
   s.refreshChecks();
 }

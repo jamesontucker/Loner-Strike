@@ -16,7 +16,9 @@ export const queryClient = new QueryClient({
       retry: 1,
       // polling is per query; a window coming back to the front checks again
       refetchOnWindowFocus: true,
-      staleTime: 1000,
+      // P5 (perf audit #10): a window coming back refetches only what's older than this (it
+      // refetched everything after a second); polls and invalidations are unaffected
+      staleTime: 30_000,
     },
   },
 });
@@ -51,7 +53,9 @@ export function useGameState() {
   const q = useQuery({
     queryKey: ["state", target],
     queryFn: ({ signal }) => getJsonAt<GameState>("/api/state", target, signal),
-    refetchInterval: 2000,
+    // P5 (perf audit #10): every 2 s while a game or server is up (or its window is open),
+    // else every 5 s: an idle app asked 30 times a minute
+    refetchInterval: (q) => (q.state.data && (q.state.data.online || q.state.data.game_open) ? 2000 : 5000),
     retry: 0,
   });
   const last = useRef<{ target: string | null; gen: number; data: Online; at: number } | null>(null);
@@ -137,7 +141,9 @@ export function useServers(on = true) {
   return useQuery({
     queryKey: ["servers"],
     queryFn: ({ signal }) => getJsonAt<ServerList>("/api/servers", null, signal),
-    refetchInterval: 5000,
+    // P5 (perf audit #10): with no servers there's nothing to follow: every 30 s (a new one
+    // invalidates the list anyway)
+    refetchInterval: (q) => (q.state.data && !q.state.data.servers?.length ? 30_000 : 5000),
     enabled: on,
   });
 }

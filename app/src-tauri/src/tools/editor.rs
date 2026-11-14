@@ -36,6 +36,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::time::Duration;
 
 pub mod components;
 pub mod prefabs;
@@ -83,7 +84,13 @@ struct Session {
     removed: Vec<(BrushId, u64)>,
     /// Asks older than this get the whole map (removed notes were dropped).
     horizon: u64,
-    prev: BTreeMap<BrushId, Brush>,
+    /// P5 (perf): the revision each entity last changed at, and entities removed since (for
+    /// the document changes each command answers with)
+    estamps: HashMap<EntityId, u64>,
+    eremoved: Vec<(EntityId, u64)>,
+    /// P5 (perf): each brush's bounds, kept as brushes change (the document answer used to
+    /// work them out for every brush every time)
+    bounds: HashMap<BrushId, Bounds>,
     drag: Option<Drag>,
     wads: Option<(Vec<String>, Vec<PathBuf>, Arc<wad::WadSet>)>,
     /// P5: the folder the map was imported from in this run (assets.rs searches it)
@@ -98,31 +105,48 @@ impl Session {
         }
         let rev = doc.revision;
         let stamps = doc.brushes.keys().map(|b| (*b, rev)).collect();
-        let prev = doc.brushes.clone();
+        let estamps = doc.entities.keys().map(|e| (*e, rev)).collect();
+        let bounds = doc.brushes.iter().map(|(id, b)| (*id, brush_bounds(b))).collect();
+        doc.take_touched();
         let folder = project.as_deref().and_then(Path::parent).map(Path::to_path_buf);
-        Session { id, doc, history: History::default(), name, project, folder, stamps, removed: Vec::new(), horizon: 0, prev, drag: None, wads: None, import_dir: None }
+        Session {
+            id, doc, history: History::default(), name, project, folder, stamps, removed: Vec::new(), horizon: 0, estamps, eremoved: Vec::new(), bounds,
+            drag: None, wads: None, import_dir: None,
+        }
     }
 
-    /// Notes which brushes changed since the last look (cheap: brushes compare by value).
+    /// Notes which brushes and entities changed since the last look. P5 (perf): from the
+    /// document's own change notes (history writes them as it edits), not by comparing and
+    /// copying the whole map after every command.
     fn track(&mut self) {
         let rev = self.doc.revision;
-        for (id, b) in &self.doc.brushes {
-            if self.prev.get(id) != Some(b) {
-                self.stamps.insert(*id, rev);
+        let t = self.doc.take_touched();
+        for id in t.brushes {
+            if let Some(b) = self.doc.brushes.get(&id) {
+                self.stamps.insert(id, rev);
+                self.bounds.insert(id, brush_bounds(b));
+            } else if self.stamps.remove(&id).is_some() {
+                self.bounds.remove(&id);
+                self.removed.push((id, rev));
             }
         }
-        for id in self.prev.keys() {
-            if !self.doc.brushes.contains_key(id) {
-                self.stamps.remove(id);
-                self.removed.push((*id, rev));
+        for id in t.entities {
+            if self.doc.entities.contains_key(&id) {
+                self.estamps.insert(id, rev);
+            } else if self.estamps.remove(&id).is_some() {
+                self.eremoved.push((id, rev));
             }
         }
         if self.removed.len() > MAX_REMOVED {
             let cut = self.removed.len() - MAX_REMOVED / 2;
-            self.horizon = self.removed[cut - 1].1;
+            self.horizon = self.horizon.max(self.removed[cut - 1].1);
             self.removed.drain(..cut);
         }
-        self.prev = self.doc.brushes.clone();
+        if self.eremoved.len() > MAX_REMOVED {
+            let cut = self.eremoved.len() - MAX_REMOVED / 2;
+            self.horizon = self.horizon.max(self.eremoved[cut - 1].1);
+            self.eremoved.drain(..cut);
+        }
     }
 
     /// The document's WADs, opened (kept until the WAD list or the game changes).
@@ -345,10 +369,45 @@ fn vec_json(p: Vec3) -> Value {
     json!([p.x, p.y, p.z])
 }
 
+fn brush_json(s: &Session, id: BrushId, b: &Brush) -> Value {
+    let bb = s.bounds.get(&id).cloned().unwrap_or_else(|| brush_bounds(b));
+    json!({"id": id.0, "entity": b.entity.map(|e| e.0), "group": b.group.map(|g| g.0), "min": vec_json(bb.min), "max": vec_json(bb.max)})
+}
+
+fn entity_json(id: EntityId, e: &crate::editor::doc::Entity, owned: &HashMap<EntityId, Vec<u64>>) -> Value {
+    json!({"id": id.0, "classname": e.classname(), "keys": e.keys, "group": e.group.map(|g| g.0), "brushes": owned.get(&id).cloned().unwrap_or_default()})
+}
+
+/// The parts of the document answer that are small and always sent whole: world, settings,
+/// groups, the map's bounds and its counts.
+fn doc_common(s: &Session, v: &mut Value) {
+    let d = &s.doc;
+    // P5 (perf): bounds from the kept per-brush bounds
+    let mut bounds = Bounds::empty();
+    for bb in s.bounds.values() {
+        if !bb.is_empty() {
+            bounds = bounds.union(bb);
+        }
+    }
+    for e in d.entities.values() {
+        if let Some(o) = e.origin() {
+            bounds.add(o);
+        }
+    }
+    if bounds.is_empty() {
+        bounds = Bounds { min: v3(-512.0, -512.0, 0.0), max: v3(512.0, 512.0, 256.0) };
+    }
+    let groups: Vec<Value> = d.groups.iter().map(|(id, g)| json!({"id": id.0, "name": g.name, "parent": g.parent.map(|p| p.0), "hidden": g.hidden, "locked": g.locked})).collect();
+    v["world"] = json!({"wads": d.world.wads, "keys": d.world.keys});
+    v["editor"] = settings_json(d);
+    v["groups"] = Value::Array(groups);
+    v["bounds"] = json!([vec_json(bounds.min), vec_json(bounds.max)]);
+    v["stats"] = serde_json::to_value(checks::stats(d)).unwrap_or(Value::Null);
+}
+
 fn doc_json(s: &Session) -> Value {
     let d = &s.doc;
     let mut owned: HashMap<EntityId, Vec<u64>> = HashMap::new();
-    let mut bounds = Bounds::empty();
     let brushes: Vec<Value> = d
         .brushes
         .iter()
@@ -356,36 +415,48 @@ fn doc_json(s: &Session) -> Value {
             if let Some(e) = b.entity {
                 owned.entry(e).or_default().push(id.0);
             }
-            let bb = brush_bounds(b);
-            if !bb.is_empty() {
-                bounds = bounds.union(&bb);
-            }
-            json!({"id": id.0, "entity": b.entity.map(|e| e.0), "group": b.group.map(|g| g.0), "min": vec_json(bb.min), "max": vec_json(bb.max)})
+            brush_json(s, *id, b)
         })
         .collect();
-    let entities: Vec<Value> = d
-        .entities
-        .iter()
-        .map(|(id, e)| {
-            if let Some(o) = e.origin() {
-                bounds.add(o);
-            }
-            json!({"id": id.0, "classname": e.classname(), "keys": e.keys, "group": e.group.map(|g| g.0), "brushes": owned.get(id).cloned().unwrap_or_default()})
-        })
-        .collect();
-    let groups: Vec<Value> = d.groups.iter().map(|(id, g)| json!({"id": id.0, "name": g.name, "parent": g.parent.map(|p| p.0), "hidden": g.hidden, "locked": g.locked})).collect();
-    if bounds.is_empty() {
-        bounds = Bounds { min: v3(-512.0, -512.0, 0.0), max: v3(512.0, 512.0, 256.0) };
-    }
+    let entities: Vec<Value> = d.entities.iter().map(|(id, e)| entity_json(*id, e, &owned)).collect();
     let mut v = s.state();
-    v["world"] = json!({"wads": d.world.wads, "keys": d.world.keys});
-    v["editor"] = settings_json(d);
     v["brushes"] = Value::Array(brushes);
     v["entities"] = Value::Array(entities);
-    v["groups"] = Value::Array(groups);
-    v["bounds"] = json!([vec_json(bounds.min), vec_json(bounds.max)]);
-    v["stats"] = serde_json::to_value(checks::stats(d)).unwrap_or(Value::Null);
+    doc_common(s, &mut v);
     v
+}
+
+/// P5 (perf): what changed in the document since revision `since`: the changed and removed
+/// brushes and entities (in the document answer's own shape) plus the small parts whole.
+/// None when that's too far back (removed notes dropped) or ahead: the page asks for it all.
+///   {docId, from, revision, brushes[], removedBrushes[], entities[], removedEntities[], groups,
+///    world, editor, bounds, stats} (+ the state: name, dirty, undo, redo…)
+fn changes_json(s: &Session, since: u64) -> Option<Value> {
+    if since < s.horizon || since > s.doc.revision {
+        return None;
+    }
+    let d = &s.doc;
+    let brushes: Vec<Value> = d.brushes.iter().filter(|(id, _)| s.stamps.get(id).is_some_and(|r| *r > since)).map(|(id, b)| brush_json(s, *id, b)).collect();
+    let changed_ents: Vec<EntityId> = s.estamps.iter().filter(|(_, r)| **r > since).map(|(e, _)| *e).collect();
+    let mut owned: HashMap<EntityId, Vec<u64>> = HashMap::new();
+    if !changed_ents.is_empty() {
+        let want: HashSet<EntityId> = changed_ents.iter().copied().collect();
+        for (id, b) in &d.brushes {
+            if let Some(e) = b.entity.filter(|e| want.contains(e)) {
+                owned.entry(e).or_default().push(id.0);
+            }
+        }
+    }
+    let mut entities: Vec<Value> = changed_ents.iter().filter_map(|id| d.entities.get(id).map(|e| (id, e))).map(|(id, e)| entity_json(*id, e, &owned)).collect();
+    entities.sort_by_key(|e| e["id"].as_u64());
+    let mut v = s.state();
+    v["from"] = json!(since);
+    v["brushes"] = Value::Array(brushes);
+    v["removedBrushes"] = json!(s.removed.iter().filter(|(_, r)| *r > since).map(|(id, _)| id.0).collect::<Vec<_>>());
+    v["entities"] = Value::Array(entities);
+    v["removedEntities"] = json!(s.eremoved.iter().filter(|(_, r)| *r > since).map(|(id, _)| id.0).collect::<Vec<_>>());
+    doc_common(s, &mut v);
+    Some(v)
 }
 
 /// The brush meshes changed since `since` (all of them when `since` is missing, too old, or for
@@ -395,34 +466,54 @@ fn doc_json(s: &Session) -> Value {
 /// rotation, u scale, v scale]` (Valve 220); sections `pos` (f32 x3, GoldSrc units) and `uv` (f32 x2, divided by the
 /// texture size).
 fn meshes_bundle(s: &Session, doc_id: Option<u64>, since: Option<u64>) -> Vec<u8> {
-    let full = since.is_none();
-    let since = since.unwrap_or(0);
-    let full = full || doc_id != Some(s.id) || since < s.horizon || since > s.doc.revision;
-    let mut pos: Vec<f32> = Vec::new();
-    let mut uv: Vec<f32> = Vec::new();
-    let mut list = Vec::new();
-    for (id, b) in &s.doc.brushes {
-        if !full && s.stamps.get(id).is_none_or(|r| *r <= since) {
-            continue;
-        }
-        let faces: Vec<Value> = ops::brush_mesh(b, |t| s.doc.texture_size(t))
-            .into_iter()
-            .map(|f| {
-                let a = &b.faces[f.face].align;
-                let start = pos.len() / 3;
-                for (p, (u, v)) in f.vertices.iter().zip(&f.uvs) {
-                    pos.extend([p.x as f32, p.y as f32, p.z as f32]);
-                    uv.extend([*u as f32, *v as f32]);
-                }
-                json!({"face": f.face, "texture": f.texture, "normal": vec_json(f.normal), "start": start, "count": f.vertices.len(),
-                    "align": [a.u_axis.x, a.u_axis.y, a.u_axis.z, a.u_offset, a.v_axis.x, a.v_axis.y, a.v_axis.z, a.v_offset, a.rotation, a.scale_u, a.scale_v]})
-            })
-            .collect();
-        list.push(json!({"id": id.0, "entity": b.entity.map(|e| e.0), "group": b.group.map(|g| g.0), "faces": faces}));
+    MeshSnap::take(s, doc_id, since).build()
+}
+
+/// P5 (perf): what a meshes answer needs, copied under a brief lock (the changed brushes and
+/// the texture sizes); the meshes are built off it, so edits and other asks don't wait for them.
+struct MeshSnap {
+    id: u64,
+    revision: u64,
+    full: bool,
+    brushes: Vec<(BrushId, Brush)>,
+    removed: Vec<u64>,
+    materials: BTreeMap<String, Material>,
+}
+
+impl MeshSnap {
+    fn take(s: &Session, doc_id: Option<u64>, since: Option<u64>) -> MeshSnap {
+        let full = since.is_none();
+        let since = since.unwrap_or(0);
+        let full = full || doc_id != Some(s.id) || since < s.horizon || since > s.doc.revision;
+        let brushes = s.doc.brushes.iter().filter(|(id, _)| full || s.stamps.get(id).is_some_and(|r| *r > since)).map(|(id, b)| (*id, b.clone())).collect();
+        let removed = if full { Vec::new() } else { s.removed.iter().filter(|(_, r)| *r > since).map(|(id, _)| id.0).collect() };
+        MeshSnap { id: s.id, revision: s.doc.revision, full, brushes, removed, materials: s.doc.materials.clone() }
     }
-    let removed: Vec<u64> = if full { Vec::new() } else { s.removed.iter().filter(|(_, r)| *r > since).map(|(id, _)| id.0).collect() };
-    let header = json!({"format": "LSMB", "kind": "editor", "docId": s.id, "revision": s.doc.revision, "full": full, "removed": removed, "brushes": list});
-    goldsrc::mesh::write_bundle(header, &[Section::f32("pos", 3, &pos), Section::f32("uv", 2, &uv)])
+
+    fn build(self) -> Vec<u8> {
+        let size = |t: &str| self.materials.get(&t.to_ascii_lowercase()).map(|m| (m.width.max(1) as f64, m.height.max(1) as f64)).unwrap_or((64.0, 64.0));
+        let mut pos: Vec<f32> = Vec::new();
+        let mut uv: Vec<f32> = Vec::new();
+        let mut list = Vec::new();
+        for (id, b) in &self.brushes {
+            let faces: Vec<Value> = ops::brush_mesh(b, size)
+                .into_iter()
+                .map(|f| {
+                    let a = &b.faces[f.face].align;
+                    let start = pos.len() / 3;
+                    for (p, (u, v)) in f.vertices.iter().zip(&f.uvs) {
+                        pos.extend([p.x as f32, p.y as f32, p.z as f32]);
+                        uv.extend([*u as f32, *v as f32]);
+                    }
+                    json!({"face": f.face, "texture": f.texture, "normal": vec_json(f.normal), "start": start, "count": f.vertices.len(),
+                        "align": [a.u_axis.x, a.u_axis.y, a.u_axis.z, a.u_offset, a.v_axis.x, a.v_axis.y, a.v_axis.z, a.v_offset, a.rotation, a.scale_u, a.scale_v]})
+                })
+                .collect();
+            list.push(json!({"id": id.0, "entity": b.entity.map(|e| e.0), "group": b.group.map(|g| g.0), "faces": faces}));
+        }
+        let header = json!({"format": "LSMB", "kind": "editor", "docId": self.id, "revision": self.revision, "full": self.full, "removed": self.removed, "brushes": list});
+        goldsrc::mesh::write_bundle(header, &[Section::f32("pos", 3, &pos), Section::f32("uv", 2, &uv)])
+    }
 }
 
 /// Checks: what the checks need, taken under a brief lock so they run off it (on br_valley they
@@ -1277,15 +1368,22 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
 
 /// A command against the open document, with what the page needs to catch up.
 fn apply(s: &mut Session, cmd: Cmd, dirs: &[PathBuf]) -> Value {
-    let before = (s.doc.revision, s.doc.entities.clone(), s.doc.groups.clone(), s.doc.world.clone());
+    // P5 (perf): no copies of the entities, groups and world per command: the change notes
+    // say what changed (groups and world are small and compared as before)
+    let before = (s.doc.revision, s.doc.groups.len(), s.doc.world.clone());
     match run_cmd(s, cmd) {
         Ok(mut v) => {
             s.learn_textures(dirs);
+            let ents = !s.doc.touched.entities.is_empty();
             s.track();
-            let doc_changed = s.doc.entities != before.1 || s.doc.groups != before.2 || s.doc.world != before.3;
+            let doc_changed = ents || s.doc.groups.len() != before.1 || s.doc.world != before.2;
             v["changed"] = json!(s.doc.revision != before.0);
             v["docChanged"] = json!(doc_changed);
             v["state"] = s.state();
+            // P5 (perf): what changed, so the page patches its copy instead of asking for all of it
+            if s.doc.revision != before.0 {
+                v["changes"] = changes_json(s, before.0).unwrap_or(Value::Null);
+            }
             v
         }
         Err(e) => {
@@ -1548,14 +1646,37 @@ fn recent_json(dir: &Path) -> Value {
 
 /// Writes the open document to the autosave file when it has unsaved changes.
 fn autosave(dir: &Path, s: &Session) -> Result<bool, String> {
-    if !s.history.is_dirty() {
-        return Ok(false);
+    match AutosaveSnap::take(s) {
+        Some(a) => a.write(dir).map(|_| true),
+        None => Ok(false),
     }
-    std::fs::create_dir_all(dir).map_err(|_| "Couldn't make the autosave folder.".to_string())?;
-    write_atomic(&dir.join(AUTOSAVE), &s.doc.to_json())?;
-    let meta = json!({"name": s.name, "project": s.project, "uid": s.doc.editor.uid, "time": now_secs(), "brushes": s.doc.brushes.len(), "entities": s.doc.entities.len()});
-    std::fs::write(dir.join(AUTOSAVE_META), meta.to_string()).map_err(|_| "Couldn't write the autosave.".to_string())?;
-    Ok(true)
+}
+
+/// P5 (perf): an autosave copies the document under a brief lock and writes it without the
+/// lock (on br_valley, writing took 80-150 ms that every edit waited for).
+struct AutosaveSnap {
+    doc: MapDocument,
+    meta: Value,
+}
+
+impl AutosaveSnap {
+    fn take(s: &Session) -> Option<AutosaveSnap> {
+        if !s.history.is_dirty() {
+            return None;
+        }
+        let meta = json!({"name": s.name, "project": s.project, "uid": s.doc.editor.uid, "time": now_secs(), "brushes": s.doc.brushes.len(), "entities": s.doc.entities.len()});
+        Some(AutosaveSnap { doc: s.doc.clone(), meta })
+    }
+
+    fn write(self, dir: &Path) -> Result<(), String> {
+        // one autosave at a time (two in a row mustn't interleave their files)
+        static WRITING: Mutex<()> = Mutex::new(());
+        let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+        std::fs::create_dir_all(dir).map_err(|_| "Couldn't make the autosave folder.".to_string())?;
+        write_atomic(&dir.join(AUTOSAVE), &self.doc.to_json())?;
+        std::fs::write(dir.join(AUTOSAVE_META), self.meta.to_string()).map_err(|_| "Couldn't write the autosave.".to_string())?;
+        Ok(())
+    }
 }
 
 fn recovery_json(dir: &Path) -> Value {
@@ -1574,10 +1695,20 @@ struct Since {
     since: Option<u64>,
 }
 
-async fn api_doc(Extension(ed): Extension<Ed>) -> Response {
+/// The whole document, or (P5, perf) with `?doc=<id>&since=<revision>` only what changed since
+/// (`changes_json`, marked `"changes": true`; the whole document when that's too far back).
+async fn api_doc(Extension(ed): Extension<Ed>, q: Option<Query<Since>>) -> Response {
     blocking(move || {
         let g = ed.lock();
         let s = g.as_ref().ok_or(NO_DOC)?;
+        if let Some(Query(Since { doc: Some(d), since: Some(r) })) = q {
+            if d == s.id {
+                if let Some(mut v) = changes_json(s, r) {
+                    v["changes"] = json!(true);
+                    return Ok(v);
+                }
+            }
+        }
         Ok(doc_json(s))
     })
     .await
@@ -1585,8 +1716,9 @@ async fn api_doc(Extension(ed): Extension<Ed>) -> Response {
 
 async fn api_meshes(Extension(ed): Extension<Ed>, Query(q): Query<Since>) -> Response {
     let r = tokio::task::spawn_blocking(move || {
-        let g = ed.lock();
-        g.as_ref().map(|s| meshes_bundle(s, q.doc, q.since))
+        // P5 (perf): copy what's needed under the lock, build the meshes without it
+        let snap = ed.lock().as_ref().map(|s| MeshSnap::take(s, q.doc, q.since));
+        snap.map(MeshSnap::build)
     })
     .await;
     match r {
@@ -1667,9 +1799,11 @@ async fn undo_redo(ed: Ed, h: HeaderMap, redo: bool) -> Response {
         let mut g = ed.lock();
         let s = g.as_mut().ok_or(NO_DOC)?;
         s.drag = None;
+        let from = s.doc.revision;
         let label = if redo { s.history.redo(&mut s.doc) } else { s.history.undo(&mut s.doc) };
         s.track();
-        Ok(json!({"label": label, "changed": label.is_some(), "docChanged": label.is_some(), "state": s.state()}))
+        let changes = if label.is_some() { changes_json(s, from).unwrap_or(Value::Null) } else { Value::Null };
+        Ok(json!({"label": label, "changed": label.is_some(), "docChanged": label.is_some(), "state": s.state(), "changes": changes}))
     })
     .await
 }
@@ -1948,7 +2082,38 @@ fn settings_json(d: &MapDocument) -> Value {
 
 /// Where the document is (cheap): the page polls this to pick up changes made from outside
 /// (AI agents over MCP, another window).
-async fn api_state(Extension(ed): Extension<Ed>) -> Response {
+/// P5 (perf): `?wait=<revision>&doc=<id>`: answers when the document isn't that any more (an
+/// agent's edit, another window, an undo), or after 25 s: the page's watch for outside changes
+/// waits here instead of asking every 1.5 s.
+#[derive(Deserialize)]
+struct WaitQ {
+    wait: Option<u64>,
+    doc: Option<u64>,
+}
+
+const STATE_WAIT: Duration = Duration::from_secs(25);
+
+async fn api_state(Extension(ed): Extension<Ed>, q: Option<Query<WaitQ>>) -> Response {
+    if let Some(Query(WaitQ { wait: Some(rev), doc })) = q {
+        let until = std::time::Instant::now() + STATE_WAIT;
+        loop {
+            // (never queue behind a long command: a busy lock is "not yet")
+            let now = match ed.session.try_lock() {
+                Ok(g) => Some(g.as_ref().map(|s| (s.id, s.doc.revision, s.state()))),
+                Err(std::sync::TryLockError::Poisoned(e)) => Some(e.into_inner().as_ref().map(|s| (s.id, s.doc.revision, s.state()))),
+                Err(std::sync::TryLockError::WouldBlock) => None,
+            };
+            match now {
+                Some(None) => return Json(json!({"error": NO_DOC})).into_response(),
+                Some(Some((id, r, st))) if r != rev || doc.is_some_and(|d| d != id) || std::time::Instant::now() >= until => return Json(st).into_response(),
+                _ => {}
+            }
+            if std::time::Instant::now() >= until {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    }
     blocking(move || {
         let g = ed.lock();
         let s = g.as_ref().ok_or(NO_DOC)?;
@@ -2154,9 +2319,15 @@ async fn api_autosave(Extension(ed): Extension<Ed>, h: HeaderMap) -> Response {
         return forbidden();
     }
     blocking(move || {
-        let g = ed.lock();
-        let s = g.as_ref().ok_or(NO_DOC)?;
-        Ok(json!({"saved": autosave(&ed.dir, s)?}))
+        let snap = {
+            let g = ed.lock();
+            AutosaveSnap::take(g.as_ref().ok_or(NO_DOC)?)
+        };
+        let saved = match snap {
+            Some(a) => a.write(&ed.dir).map(|_| true)?,
+            None => false,
+        };
+        Ok(json!({"saved": saved}))
     })
     .await
 }
@@ -2917,6 +3088,69 @@ mod tests {
         // the entity definitions
         let f = t.get("/api/tools/editor/fgd").await;
         assert!(f["classes"].as_array().unwrap().iter().any(|c| c["name"] == "func_buyzone"));
+    }
+
+    /// P5 (perf): each command answers with what changed (the page patches its copy), /doc
+    /// gives the same since a revision, and /state waits for a change.
+    #[tokio::test]
+    async fn commands_answer_with_their_changes() {
+        let t = T::new();
+        let st = t.post("/api/tools/editor/new", json!({})).await;
+        let doc_id = st["docId"].as_u64().unwrap();
+        let full = t.get("/api/tools/editor/doc").await;
+        let n_brushes = full["brushes"].as_array().unwrap().len();
+        let rev0 = full["revision"].as_u64().unwrap();
+        let b = full["brushes"][0]["id"].as_u64().unwrap();
+        let before = full["brushes"][0].clone();
+        // a nudge: just that brush, its bounds moved; no entities
+        let r = t.cmd(json!({"op": "transform", "brushes": [b], "entities": [], "translate": [16, 0, 0]})).await;
+        let c = &r["changes"];
+        assert_eq!(c["from"], rev0);
+        assert_eq!(c["revision"], r["state"]["revision"]);
+        assert_eq!(c["brushes"].as_array().unwrap().len(), 1, "{c}");
+        assert_eq!(c["brushes"][0]["id"], b);
+        assert_eq!(c["brushes"][0]["min"][0].as_f64().unwrap(), before["min"][0].as_f64().unwrap() + 16.0);
+        assert_eq!(c["entities"], json!([]));
+        assert!(c["stats"]["brushes"].as_u64().unwrap() as usize == n_brushes && c["bounds"].is_array() && c["groups"].is_array());
+        // an entity: added, then a key changed, then deleted
+        let e = t.cmd(json!({"op": "add_entity", "classname": "light", "origin": [0, 0, 64]})).await;
+        let eid = e["created"]["entities"][0].as_u64().unwrap();
+        assert_eq!(e["changes"]["entities"][0]["id"], eid);
+        assert_eq!(e["changes"]["brushes"], json!([]));
+        let k = t.cmd(json!({"op": "set_key", "entity": eid, "key": "_light", "value": "255 0 0 200"})).await;
+        assert!(k["changes"]["entities"][0]["keys"].to_string().contains("255 0 0 200"));
+        let d = t.cmd(json!({"op": "delete", "brushes": [b], "entities": [eid]})).await;
+        assert_eq!(d["changes"]["removedBrushes"], json!([b]));
+        assert_eq!(d["changes"]["removedEntities"], json!([eid]));
+        // undo answers with them back
+        let u = t.post("/api/tools/editor/undo", json!({})).await;
+        assert_eq!(u["changes"]["brushes"][0]["id"], b);
+        assert_eq!(u["changes"]["entities"][0]["id"], eid);
+        // a brush tied to an entity: the entity's brush list comes with the change
+        let tie = t.cmd(json!({"op": "tie", "brushes": [b], "classname": "func_wall"})).await;
+        let w = tie["created"]["entities"][0].as_u64().unwrap();
+        let ent = tie["changes"]["entities"].as_array().unwrap().iter().find(|x| x["id"] == w).cloned().unwrap();
+        assert_eq!(ent["brushes"], json!([b]));
+        // /doc since a revision: everything since then; a mismatched doc id: the whole document
+        let since = t.get(&format!("/api/tools/editor/doc?doc={doc_id}&since={rev0}")).await;
+        assert_eq!(since["changes"], true);
+        assert!(since["entities"].as_array().unwrap().iter().any(|x| x["id"] == w));
+        let whole = t.get(&format!("/api/tools/editor/doc?doc={}&since={rev0}", doc_id + 99)).await;
+        assert!(whole["changes"].is_null() && whole["brushes"].as_array().unwrap().len() >= n_brushes);
+        // /state?wait: at once when the revision moved on, else after a change (or 25 s)
+        let now = t.get("/api/tools/editor/state").await["revision"].as_u64().unwrap();
+        assert_eq!(t.get(&format!("/api/tools/editor/state?wait={}&doc={doc_id}", now - 1)).await["revision"], now);
+        let ed = t.ed.clone();
+        let waiter = tokio::spawn({
+            let uri = format!("/api/tools/editor/state?wait={now}&doc={doc_id}");
+            let t2 = T { st: t.st.clone(), ed };
+            async move { t2.get(&uri).await }
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        assert!(!waiter.is_finished(), "it waits while nothing changes");
+        t.cmd(json!({"op": "transform", "brushes": [b], "entities": [w], "translate": [16, 0, 0]})).await;
+        let got = tokio::time::timeout(std::time::Duration::from_secs(3), waiter).await.unwrap().unwrap();
+        assert!(got["revision"].as_u64().unwrap() > now);
     }
 
     /// P5: a big map's pieces paste in one request (over axum's default 2 MB limit).

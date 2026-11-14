@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { create } from "zustand";
 import type { Vec3 } from "../viewer/coords";
 import * as api from "./editorApi";
-import type { Checks, CmdResult, Doc, DocState, MeshBrush, MeshFace, MeshUpdate } from "./editorApi";
+import type { Checks, CmdResult, Doc, DocChanges, DocState, MeshBrush, MeshFace, MeshUpdate } from "./editorApi";
 
 export type ToolId = "select" | "move" | "rotate" | "scale" | "vertex" | "box" | "shape" | "clip" | "entity" | "texture" | "measure";
 export type ShapeKind = "cylinder" | "wedge" | "spike" | "sphere" | "arch" | "cone" | "torus"; // Parity A: cone, torus
@@ -166,6 +166,10 @@ type EditorState = {
   load: () => Promise<void>;
   syncMeshes: () => Promise<void>;
   refreshDoc: () => Promise<void>;
+  /** P5 (perf): patch the document with a command's changes; false when they don't fit (ask for all) */
+  applyChanges: (c: DocChanges | null | undefined) => boolean;
+  /** P5 (perf): catch up after a change the page didn't make (only what changed, when it can) */
+  catchUp: () => Promise<void>;
   refreshChecks: () => void;
   cmd: (body: Record<string, unknown>, opts?: { doc?: boolean; quiet?: boolean }) => Promise<CmdResult>;
   undo: () => Promise<void>;
@@ -207,6 +211,12 @@ function saved(key: string, fallback: number) {
 let checksTimer: ReturnType<typeof setTimeout> | null = null;
 let checksBusy = false; // Checks
 let checksAgain = false;
+let lastLocalEdit = 0;
+/** P5 (perf): when this page last sent an edit (ms). */
+export const localEditAt = () => lastLocalEdit;
+/** P5 (perf): the document (and limits) the shown checks are for; the same again isn't re-run */
+let checksRev: string | null = null;
+const CHECKS_DEBOUNCE_MS = 1200;
 let meshChain: Promise<void> = Promise.resolve();
 
 export const useEditor = create<EditorState>((set, get) => ({
@@ -331,7 +341,49 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ doc: d, ...(entities.length !== sel.entities.length ? { sel: { ...sel, entities } } : {}) });
   },
 
-  // checks follow edits, a moment after they settle
+  applyChanges: (c) => {
+    const d = get().doc;
+    if (!c || !d || c.docId !== d.docId || c.from !== d.revision) return false;
+    // unchanged brushes and entities keep their objects (memoized views see only what moved)
+    const patch = <T extends { id: number }>(list: T[], changed: T[], removed: number[]) => {
+      if (!changed.length && !removed.length) return list;
+      const gone = new Set(removed);
+      const fresh = new Map(changed.map((x) => [x.id, x]));
+      const out = list.filter((x) => !gone.has(x.id)).map((x) => fresh.get(x.id) ?? x);
+      const have = new Set(out.map((x) => x.id));
+      const added = changed.filter((x) => !have.has(x.id));
+      return added.length ? [...out, ...added].sort((a, b) => a.id - b.id) : out;
+    };
+    const { from: _from, brushes, removedBrushes, entities, removedEntities, changes: _c, ...rest } = c;
+    void _from;
+    void _c;
+    const doc: Doc = { ...d, ...rest, brushes: patch(d.brushes, brushes, removedBrushes), entities: patch(d.entities, entities, removedEntities) };
+    const ids = new Set(doc.entities.map((e) => e.id));
+    const { sel } = get();
+    const ents = sel.entities.filter((id) => ids.has(id));
+    set({ doc, ...(ents.length !== sel.entities.length ? { sel: { ...sel, entities: ents } } : {}) });
+    return true;
+  },
+
+  catchUp: async () => {
+    const d = get().doc;
+    if (!d) return get().refreshDoc();
+    const r = await api.getDocSince(d.docId, d.revision);
+    if (r.error) return get().notify(r.error, true);
+    if ("changes" in r && r.changes === true) {
+      if (!get().applyChanges(r as DocChanges)) await get().refreshDoc();
+      return;
+    }
+    const full = r as Doc;
+    if (full.docId !== d.docId) return get().load();
+    const ids = new Set(full.entities.map((e) => e.id));
+    const { sel } = get();
+    const ents = sel.entities.filter((id) => ids.has(id));
+    set({ doc: full, ...(ents.length !== sel.entities.length ? { sel: { ...sel, entities: ents } } : {}) });
+  },
+
+  // checks follow edits, once they settle (P5, perf: 1.2 s, and not again for a revision
+  // they've seen: on br_valley a run is about half a second of the app's time)
   refreshChecks: () => {
     // Checks: debounced, one run at a time (another after it when edits came in meanwhile);
     // a run that saw an older document answers `stale` and is dropped (the next run follows)
@@ -341,10 +393,17 @@ export const useEditor = create<EditorState>((set, get) => ({
         checksAgain = true;
         return;
       }
+      // still editing (a command or a drag on its way): wait for it to settle
+      if (get().working > 0 || get().preview) return get().refreshChecks();
+      const rev = get().doc ? `${get().doc!.docId}:${get().doc!.revision}:${JSON.stringify(api.checkLimits())}` : null;
+      if (rev && rev === checksRev) return;
       checksBusy = true;
       try {
         const c = await api.getChecks();
-        if (!c.error && !c.stale) set({ checks: c });
+        if (!c.error && !c.stale) {
+          set({ checks: c });
+          checksRev = rev;
+        }
         if (c.stale) checksAgain = true;
       } finally {
         checksBusy = false;
@@ -353,7 +412,7 @@ export const useEditor = create<EditorState>((set, get) => ({
           get().refreshChecks();
         }
       }
-    }, 350);
+    }, CHECKS_DEBOUNCE_MS);
   },
 
   cmd: async (body, opts = {}) => {
@@ -362,6 +421,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     // (each step of a drag is quick and the drag shows itself: not counted)
     // P5: every move, turn and stretch follows the scale lock (one place, not every caller)
     if (body.op === "transform" && body.keep_scale === undefined) body = { ...body, keep_scale: !get().scaleLock };
+    lastLocalEdit = Date.now(); // P5 (perf): the outside-changes watch lets the page's own edits land first
     const counts = !(body as { drag?: unknown }).drag;
     if (counts) set((s) => ({ working: s.working + 1 }));
     try {
@@ -375,7 +435,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       if (r.note && body.op !== "group") get().notify(r.note);
       if (r.changed) await get().syncMeshes();
       if (opts.doc !== false) {
-        await get().refreshDoc();
+        // P5 (perf): the command's own changes; the whole document only when they don't fit
+        if ((r.changed || r.docChanged) && !get().applyChanges(r.changes)) await get().catchUp();
         get().refreshChecks();
       }
       return r;
@@ -392,7 +453,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       if (r.state) mergeState(r.state);
       if (!r.changed) return;
       await get().syncMeshes();
-      await get().refreshDoc();
+      if (!get().applyChanges(r.changes)) await get().catchUp(); // P5 (perf)
       get().refreshChecks();
       if (r.label) get().notify(`Undid ${r.label.toLowerCase()}`);
     } finally {
@@ -407,7 +468,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       if (r.state) mergeState(r.state);
       if (!r.changed) return;
       await get().syncMeshes();
-      await get().refreshDoc();
+      if (!get().applyChanges(r.changes)) await get().catchUp(); // P5 (perf)
       get().refreshChecks();
       if (r.label) get().notify(`Redid ${r.label.toLowerCase()}`);
     } finally {
@@ -451,8 +512,17 @@ export const useEditor = create<EditorState>((set, get) => ({
 /** Undo labels, dirty state and the like arrive with every answer. */
 function mergeState(st: DocState) {
   const d = useEditor.getState().doc;
-  if (d) useEditor.setState({ doc: { ...d, ...st } });
+  // P5 (perf): not the revision: that's the revision of the content the page holds, moved by
+  // the changes (applyChanges) or a whole document, so "what changed since" stays right
+  // (nor the document id: another document is loaded whole)
+  if (d) {
+    const { revision: _r, docId: _i, ...rest } = st;
+    void _r;
+    void _i;
+    useEditor.setState({ doc: { ...d, ...rest } });
+  }
 }
+export { mergeState };
 
 /** Grid snapping (off while Alt is held). */
 export function snap(v: number, grid = useEditor.getState().grid) {
@@ -547,3 +617,6 @@ export function groupMembers(g: number, doc = useEditor.getState().doc): { brush
   const brushes = doc.brushes.filter((b) => b.group != null && inside.has(b.group) && (b.entity == null || !owned.has(b.entity))).map((b) => b.id);
   return { brushes, entities };
 }
+
+// P5: dev builds let the browser tests drive the store (like __lsEditorGl for draw counts)
+if (import.meta.env.DEV) (window as unknown as { __lsEditor?: typeof useEditor }).__lsEditor = useEditor;

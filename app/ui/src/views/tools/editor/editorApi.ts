@@ -130,6 +130,25 @@ export type CmdResult = {
   docChanged?: boolean;
   label?: string | null;
   state?: DocState;
+  /** P5 (perf): what the command changed in the document (null: ask for all of it) */
+  changes?: DocChanges | null;
+};
+
+/** P5 (perf): the document's changes since revision `from` (a command's answer, or
+ *  GET doc?doc=&since=): changed and removed brushes and entities in the document's own shape,
+ *  and the small parts whole. */
+export type DocChanges = DocState & {
+  from: number;
+  brushes: DocBrush[];
+  removedBrushes: number[];
+  entities: DocEntity[];
+  removedEntities: number[];
+  groups: DocGroup[];
+  world: Doc["world"];
+  editor?: EditorSettings;
+  bounds: [Vec3, Vec3];
+  stats: Stats;
+  changes?: true;
 };
 
 
@@ -156,6 +175,11 @@ async function post<T>(path: string, body: unknown = {}): Promise<T & Err> {
 const E = "/api/tools/editor";
 
 export const getDoc = () => getJson<Doc>(`${E}/doc`);
+/** P5 (perf): only what changed since a revision (or the whole document when that's too far back). */
+export const getDocSince = (doc: number, since: number) => getJson<Doc | (DocChanges & { changes: true })>(`${E}/doc?doc=${doc}&since=${since}`);
+/** P5 (perf): answers when the document moves past `revision` (or after 25 s). */
+export const waitState = (doc: number, revision: number, signal?: AbortSignal) =>
+  fetch(`${E}/state?wait=${revision}&doc=${doc}`, { signal }).then((r) => r.json() as Promise<DocState & Err>, () => ({ error: "not reached" }) as DocState & Err);
 /** Checks: the stretched-texture limits (the Checks panel's settings, kept per computer). */
 export const CHECK_LIMITS_KEY = "ls.editor.checkLimits";
 export function checkLimits(): { minScale: number; maxScale: number } {

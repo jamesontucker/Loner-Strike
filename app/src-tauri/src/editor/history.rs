@@ -46,8 +46,15 @@ impl Change {
 
     fn apply_items(doc: &mut MapDocument, items: &[Item], forward: bool) {
         let mut apply = |it: &Item| match it {
-            Item::Brush { id, before, after } => put(&mut doc.brushes, *id, if forward { after } else { before }),
-            Item::Entity { id, before, after } => put(&mut doc.entities, *id, if forward { after } else { before }),
+            Item::Brush { id, before, after } => {
+                // P5 (perf): noted for the editor (what to redraw and send)
+                doc.touch_brush(*id, [before.as_ref().and_then(|b| b.entity), after.as_ref().and_then(|b| b.entity)]);
+                put(&mut doc.brushes, *id, if forward { after } else { before })
+            }
+            Item::Entity { id, before, after } => {
+                doc.touch_entity(*id);
+                put(&mut doc.entities, *id, if forward { after } else { before })
+            }
             Item::Group { id, before, after } => put(&mut doc.groups, *id, if forward { after } else { before }),
             Item::World { before, after } => doc.world = if forward { after.clone() } else { before.clone() },
         };
@@ -142,10 +149,12 @@ impl<'a> Tx<'a> {
     }
     pub fn set_brush(&mut self, id: BrushId, b: Brush) {
         let before = self.doc.brushes.insert(id, b.clone());
+        self.doc.touch_brush(id, [before.as_ref().and_then(|x| x.entity), b.entity]);
         record(&mut self.change.items, Item::Brush { id, before, after: Some(b) });
     }
     pub fn remove_brush(&mut self, id: BrushId) -> Option<Brush> {
         let before = self.doc.brushes.remove(&id)?;
+        self.doc.touch_brush(id, [before.entity, None]);
         record(&mut self.change.items, Item::Brush { id, before: Some(before.clone()), after: None });
         Some(before)
     }
@@ -155,11 +164,13 @@ impl<'a> Tx<'a> {
         id
     }
     pub fn set_entity(&mut self, id: EntityId, e: Entity) {
+        self.doc.touch_entity(id);
         let before = self.doc.entities.insert(id, e.clone());
         record(&mut self.change.items, Item::Entity { id, before, after: Some(e) });
     }
     pub fn remove_entity(&mut self, id: EntityId) -> Option<Entity> {
         let before = self.doc.entities.remove(&id)?;
+        self.doc.touch_entity(id);
         record(&mut self.change.items, Item::Entity { id, before: Some(before.clone()), after: None });
         Some(before)
     }

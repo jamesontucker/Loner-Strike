@@ -6,7 +6,7 @@
 
 use super::math::{Plane, Vec3};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Bump when the JSON layout changes; `from_json` upgrades older versions.
 pub const DOC_VERSION: u32 = 1;
@@ -289,6 +289,24 @@ pub struct MapDocument {
     /// Bumped on every change, so the view can tell when to redraw. Not saved.
     #[serde(skip)]
     pub revision: u64,
+    /// P5 (perf): the brushes and entities changed since the editor last looked (history notes
+    /// them as it applies edits), so it needn't compare or copy the whole map after each
+    /// command. Not saved, never part of equality.
+    #[serde(skip)]
+    pub touched: Touched,
+}
+
+/// What changed since the last `take_touched` (P5, perf).
+#[derive(Clone, Debug, Default)]
+pub struct Touched {
+    pub brushes: BTreeSet<BrushId>,
+    pub entities: BTreeSet<EntityId>,
+}
+
+impl PartialEq for Touched {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
 }
 
 impl Default for MapDocument {
@@ -309,7 +327,20 @@ impl MapDocument {
             next_id: 1,
             editor: EditorSettings::default(),
             revision: 0,
+            touched: Touched::default(),
         }
+    }
+
+    /// P5 (perf): a brush changed (and the entities it left or joined: their brush lists did too).
+    pub fn touch_brush(&mut self, id: BrushId, owners: [Option<EntityId>; 2]) {
+        self.touched.brushes.insert(id);
+        self.touched.entities.extend(owners.into_iter().flatten());
+    }
+    pub fn touch_entity(&mut self, id: EntityId) {
+        self.touched.entities.insert(id);
+    }
+    pub fn take_touched(&mut self) -> Touched {
+        std::mem::take(&mut self.touched)
     }
 
     fn take_id(&mut self) -> u64 {

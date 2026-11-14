@@ -26,7 +26,7 @@ export function HistoryPanel() {
     try {
       const r = await jumpHistory(steps);
       if (r.error) return useEditor.getState().notify(r.error, true);
-      if (r.changed) await afterJump(r.state);
+      if (r.changed) await afterJump(r.state, r.changes);
     } finally {
       setBusy(false);
     }

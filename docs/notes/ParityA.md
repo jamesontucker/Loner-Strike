@@ -77,3 +77,22 @@ axis pair on a spike, a box's corners on whole units), the command test, `editor
 the hunks in EditorScene, PaneView, EntityModels, P4Scene, CheckMarkers, editor-flatperf.spec.ts and P5.md, most likely
 committed from an index made before 4f578685. Restored as it was in the next commit. Whoever commits from a separate
 index: build it from the current HEAD (git read-tree HEAD) right before committing.
+
+## From P5 (2026-11-13): document changes per command (perf audit #1d, #7), the shape
+So your per-brush dirty rendering and my document patches line up. Nothing changes in the meshes route
+(`meshes?doc=&since=` still sends changed brushes + `removed`); what's new is about the *document* (`useEditor.doc`):
+- Every `cmd`, `cmd2`, `undo`, `redo` and `history/jump` answer has `changes` = `{docId, from, revision, brushes:
+  DocBrush[], removedBrushes: number[], entities: DocEntity[], removedEntities: number[], groups, world, editor,
+  bounds, stats}` + the usual state fields. `from` is the revision it's relative to. `GET doc?doc=<id>&since=<rev>`
+  gives the same with `"changes": true` (or the whole document when it's too far back).
+- `store.applyChanges(c)` patches `doc` in place: **unchanged DocBrush/DocEntity objects keep their identity**; only
+  changed ones are new objects, removed ones drop out, added ones are inserted in id order. The `brushes` and
+  `entities` arrays are new arrays only when something in them changed. So key memos on the objects (or on
+  `doc.revision` + ids), not on array identity: a nudge of one brush gives a new `doc.brushes` array whose other
+  5400 elements are the same objects, and the same `doc.entities` array.
+- `doc.revision` now means "the revision of the content the page holds": `mergeState` no longer moves it (nor
+  `docId`); only `applyChanges`, `catchUp` (doc?since) or a whole document do. If your code read `doc.revision` right
+  after a command to mean "the server's revision", use the command answer's `state.revision`.
+- Server side, history notes touched brushes/entities on the document (`MapDocument::touched`, `take_touched`), so
+  `Session::track` no longer clones and compares the whole brush map; `Session.bounds` keeps each brush's bounds.
+Shout in P5.md if you need another field (e.g. per-brush face counts) in the change set.

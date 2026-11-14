@@ -172,14 +172,19 @@ fn run2(s: &mut Session, cmd: Cmd2) -> Result<Value, String> {
 
 /// Like tools/editor.rs `apply`: run, then say what changed and where things are.
 fn apply2(s: &mut Session, cmd: Cmd2, dirs: &[PathBuf]) -> Value {
-    let before = (s.doc.revision, s.doc.entities.clone(), s.doc.groups.clone(), s.doc.world.clone());
+    // P5 (perf): no whole copies per command; the change notes say what changed
+    let before = (s.doc.revision, s.doc.groups.clone(), s.doc.world.clone());
     match run2(s, cmd) {
         Ok(mut v) => {
             s.learn_textures(dirs);
+            let ents = !s.doc.touched.entities.is_empty();
             s.track();
             v["changed"] = json!(s.doc.revision != before.0);
-            v["docChanged"] = json!(s.doc.entities != before.1 || s.doc.groups != before.2 || s.doc.world != before.3);
+            v["docChanged"] = json!(ents || s.doc.groups != before.1 || s.doc.world != before.2);
             v["state"] = s.state();
+            if s.doc.revision != before.0 {
+                v["changes"] = super::changes_json(s, before.0).unwrap_or(Value::Null);
+            }
             v
         }
         Err(e) => {
@@ -228,6 +233,7 @@ async fn api_history_jump(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req):
         let mut g = ed.lock();
         let s = g.as_mut().ok_or(NO_DOC)?;
         s.drag = None;
+        let from = s.doc.revision;
         let mut n = 0;
         for _ in 0..req.steps.unsigned_abs().min(1000) {
             let r = if req.steps > 0 { s.history.undo(&mut s.doc) } else { s.history.redo(&mut s.doc) };
@@ -237,7 +243,8 @@ async fn api_history_jump(Extension(ed): Extension<Ed>, h: HeaderMap, Json(req):
             n += 1;
         }
         s.track();
-        Ok(json!({"changed": n > 0, "docChanged": n > 0, "steps": n, "state": s.state()}))
+        let changes = if n > 0 { super::changes_json(s, from).unwrap_or(Value::Null) } else { Value::Null };
+        Ok(json!({"changed": n > 0, "docChanged": n > 0, "steps": n, "state": s.state(), "changes": changes}))
     })
     .await
 }

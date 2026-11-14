@@ -13,7 +13,7 @@ import { create } from "zustand";
 import { gsToThree, threeToGs, type Vec3 } from "../viewer/coords";
 import * as api from "./editorApi";
 import type { Cordon, CordonBox, Doc, VisSet } from "./editorApi";
-import { useEditor } from "./store";
+import { localEditAt, mergeState, useEditor } from "./store";
 import { hangPlacement } from "./ceiling"; // Y: barnacles hang from the ceiling
 
 // ---- the views, from outside the canvas ---------------------------------------------------
@@ -362,39 +362,69 @@ export function useCordonDim(): ((b: { min: Vec3; max: Vec3 }) => boolean) | nul
 
 // ---- changes made from outside -----------------------------------------------------------
 
-const POLL_MS = 1500;
-
 /** Picks up changes made to the document from outside the page (AI agents over MCP, another
- *  window): the app's revision is checked every moment while the page is visible. */
+ *  window). P5 (perf audit #10): it waits on the app (`state?wait=`: answered when the
+ *  document moves on, or after 25 s) instead of asking every 1.5 s, only while the page is
+ *  visible, and takes only what changed (`catchUp`). */
 export function useOutsideChanges() {
   useEffect(() => {
-    let busy = false;
-    const tick = async () => {
-      const s = useEditor.getState();
-      if (busy || document.hidden || !s.doc || s.working > 0 || s.fileBusy || s.preview) return;
-      busy = true;
+    let stop = false;
+    let running = false;
+    let ctl: AbortController | null = null;
+    const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const run = async () => {
+      if (running) return;
+      running = true;
       try {
-        const st = await api.getState();
-        const now = useEditor.getState();
-        if (st.error || !now.doc || now.working > 0) return;
-        if (st.docId !== now.doc.docId) {
-          await now.load();
-          return;
-        }
-        if (st.revision !== now.doc.revision || st.undo !== now.doc.undo || st.dirty !== now.doc.dirty) {
-          await now.syncMeshes();
-          await now.refreshDoc();
-          now.refreshChecks();
+        while (!stop && !document.hidden) {
+          const s = useEditor.getState();
+          if (!s.doc) {
+            await pause(2000);
+            continue;
+          }
+          if (s.working > 0 || s.fileBusy || s.preview || Date.now() - localEditAt() < 800) {
+            await pause(400);
+            continue;
+          }
+          ctl = new AbortController();
+          const st = await api.waitState(s.doc.docId, s.doc.revision, ctl.signal);
+          ctl = null;
+          if (stop) break;
+          const now = useEditor.getState();
+          if (st.error || !now.doc) {
+            await pause(3000);
+            continue;
+          }
+          // the page's own edit (it lands by itself): look again in a moment
+          if (now.working > 0 || Date.now() - localEditAt() < 800) continue;
+          if (st.docId !== now.doc.docId) {
+            await now.load();
+            continue;
+          }
+          if (st.revision !== now.doc.revision) {
+            await now.syncMeshes();
+            await now.catchUp();
+            now.refreshChecks();
+          } else if (st.undo !== now.doc.undo || st.dirty !== now.doc.dirty) {
+            mergeState(st);
+          }
         }
       } finally {
-        busy = false;
+        running = false;
       }
     };
-    const id = setInterval(tick, POLL_MS);
-    window.addEventListener("focus", tick);
+    const wake = () => {
+      if (!document.hidden) void run();
+      else ctl?.abort();
+    };
+    void run();
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("focus", wake);
     return () => {
-      clearInterval(id);
-      window.removeEventListener("focus", tick);
+      stop = true;
+      ctl?.abort();
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("focus", wake);
     };
   }, []);
 }
