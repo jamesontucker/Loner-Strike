@@ -14,8 +14,7 @@ import time
 import community as cm
 
 ROLES = (("playtester", "Playtester"), ("map_maker", "Map Maker"), ("mode_maker", "Mode Maker"),
-         ("bug_hunter", "Bug Hunter"), ("surf_legend", "Surf Legend"), ("deathrun_legend", "Deathrun Legend"),
-         ("moderator", "Moderator"))
+         ("bug_hunter", "Bug Hunter"), ("moderator", "Moderator"))
 NAMES = dict(ROLES)
 WHY_MIN, WHY_MAX, LINKS_MAX = 20, 1000, 400
 COOLDOWN = 14 * 86400        # after a no, before the same role can be asked for again

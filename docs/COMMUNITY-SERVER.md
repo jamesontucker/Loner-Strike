@@ -220,7 +220,7 @@ button ids, done-once handling, audit lines and Undo as the mod cards.
 
 - **Public #📝・apply** (read-only for members; made by `discord-setup.py --apply`): one pinned
   message with **[Apply for a role]**. Anyone in the server may press it: a private menu of roles
-  (Playtester, Map Maker, Mode Maker, Bug Hunter, Surf Legend, Deathrun Legend, Moderator), then a
+  (Playtester, Map Maker, Mode Maker, Bug Hunter, Moderator), then a
   form: "Why?" (20–1000 characters, required) and "Links" (up to 400, optional).
 - Refused politely: a role you already have; a second open application for the same role; the same
   role again within 14 days of a no; more than 5 applications a day.
@@ -228,8 +228,7 @@ button ids, done-once handling, audit lines and Undo as the mod cards.
   account age, when they joined, why, links; text escaped and capped, mentions off) with
   **[Approve] [Deny]**. Only Moderator, Dev, G-Man (`DISCORD_APPLY_ROLES`) or the owner may press
   them; anyone else gets "You can't do that." Nobody decides on their own application (the owner
-  excepted). Earned roles (Playtester, Map Maker, Mode Maker, Bug Hunter, Surf Legend, Deathrun
-  Legend) can be approved, denied and undone by any of them. Roles with powers — Moderator, plus any
+  excepted). Earned roles (Playtester, Map Maker, Mode Maker, Bug Hunter) can be approved, denied and undone by any of them. Roles with powers — Moderator, plus any
   named in `DISCORD_APPLY_PRIVILEGED` (default just Moderator) — can only be given or taken back
   (Approve, Undo) by the owner or someone who already has that role: a Dev or G-Man can't make
   someone a Moderator unless they are one. Approve gives that one role (roles are found by name,

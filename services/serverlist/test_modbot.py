@@ -25,7 +25,7 @@ GUILD, CHANNEL, MOD_ROLE, DEV_ROLE, OWNER = "1568421500636233748", "157064082132
 
 
 ROLE_IDS = {"Playtester": "900001", "🗺️・Map Maker": "900002", "Mode Maker": "900003", "Bug Hunter": "900004",
-            "Surf Legend": "900005", "Deathrun Legend": "900006", "Moderator": "1568425985504968768"}
+            "Moderator": "1568425985504968768"}
 
 
 class FakeBot(modbot.Bot):

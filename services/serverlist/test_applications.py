@@ -223,11 +223,11 @@ class Deciding(unittest.TestCase):
 
     def test_privileged_roles_can_be_added(self):
         c, mod, bot = make()
-        mod.apps = applications.Applications(mod, APPS, [MOD_ROLE, DEV_ROLE, GMAN], ["Surf Legend"])
-        apply(mod, applicant(), key="surf_legend")
+        mod.apps = applications.Applications(mod, APPS, [MOD_ROLE, DEV_ROLE, GMAN], ["Bug Hunter"])
+        apply(mod, applicant(), key="bug_hunter")
         ok = card_buttons(bot)["Approve"]["custom_id"]
-        self.assertIn("Only someone who has the Surf Legend role", interact(mod, 3, ok, member("444", roles=[DEV_ROLE]))["data"]["content"])
-        self.assertEqual(interact(mod, 3, ok, member("445", roles=[DEV_ROLE, ROLE_IDS["Surf Legend"]]))["type"], 7)
+        self.assertIn("Only someone who has the Bug Hunter role", interact(mod, 3, ok, member("444", roles=[DEV_ROLE]))["data"]["content"])
+        self.assertEqual(interact(mod, 3, ok, member("445", roles=[DEV_ROLE, ROLE_IDS["Bug Hunter"]]))["type"], 7)
 
     def test_moderator_applications(self):
         apply(self.mod, applicant("999"), key="moderator")
