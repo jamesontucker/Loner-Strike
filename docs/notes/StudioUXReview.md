@@ -289,3 +289,10 @@ the toolbar's new Mode settings button. X2: say here if you're in those spots an
   tab now opens once that Back has landed (`afterSheetBack` in ui.tsx). The same test then showed paste failing in
   WebKit (it refuses `clipboard.readText`): paste now falls back to what was last copied in the Studio. The spec
   passes in Chromium and WebKit, and the "custom events" spec expects M7's extra node.
+- **H6: Fixed (X, aa1c1970).** An unwired input with its own setting has a small field right on the node: a number
+  box (its range as a tooltip), a yes/no tick, a short text box or a dropdown (weapons, choices). It's the node's
+  own setting, so Details shows the same and either one changes both; numbers and text are kept on Enter or leaving
+  the box (one undo step), Escape leaves it as it was; wiring the pin hides the field. The line under the pins no
+  longer repeats what's on them. Long text, variables and the rest stay in Details.
+- **Note (X):** studio-playtest.spec.ts "Playtest button" is flaky (passes on a rerun): its compile is answered at
+  once, so "Compiling" can be gone before the check. Not changed.
