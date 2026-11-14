@@ -58,6 +58,7 @@ lsd_init()
 // (gen.rs's plugin_end calls this)
 stock lsd_end()
 {
+	lsd_flush()
 	// a map change while paused: the bots mustn't stay stopped, rounds must end again
 	if (g_lsdPaused >= 0)
 		set_cvar_num("bot_stop", g_lsdBotStop)
@@ -110,15 +111,37 @@ public lsd_round_end()
 	copy(g_lsdPhase, charsmax(g_lsdPhase), "ended")
 }
 
+// events wait in memory and go to the file every 0.25 s (lsd_poll), when the buffer is nearly
+// full, and at once for a pause (the page shows it); one open/write/close per flush, not per
+// event (PerfAudit #5: 181 us an event)
+#define LSD_BUF 24000
+new g_lsdBuf[LSD_BUF], g_lsdBufLen
+
+stock lsd_flush()
+{
+	if (!g_lsdBufLen)
+		return
+	new f = fopen(g_lsdEvents, "at")
+	if (f)
+	{
+		fputs(f, g_lsdBuf)
+		fclose(f)
+	}
+	g_lsdBuf[0] = 0
+	g_lsdBufLen = 0
+}
+
 stock lsd_emitf(const fmt[], any:...)
 {
-	static body[1400]
+	static body[1400], line[1500]
 	vformat(body, charsmax(body), fmt, 2)
-	new f = fopen(g_lsdEvents, "at")
-	if (!f)
-		return
-	fprintf(f, "{^"s^":%d,^"t^":%.2f,%s}^n", ++g_lsdSeq, get_gametime(), body)
-	fclose(f)
+	new n = formatex(line, charsmax(line), "{^"s^":%d,^"t^":%.2f,%s}^n", ++g_lsdSeq, get_gametime(), body)
+	if (g_lsdBufLen + n >= LSD_BUF - 1)
+		lsd_flush()
+	g_lsdBufLen += copy(g_lsdBuf[g_lsdBufLen], LSD_BUF - 1 - g_lsdBufLen, line)
+	// a pause, or the world stopping or going on: the page needs it now
+	if (containi(body, "breakpoint_hit") >= 0 || containi(body, "world_") >= 0 || containi(body, "session") >= 0)
+		lsd_flush()
 }
 
 stock lsd_esc(const src[], dst[], len)
@@ -457,6 +480,7 @@ stock lsd_resume()
 
 public lsd_poll()
 {
+	lsd_flush()
 	if (g_lsdPaused >= 0)
 	{
 		for (new id = 1; id <= MaxClients; id++)

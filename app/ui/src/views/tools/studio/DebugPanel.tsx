@@ -61,7 +61,7 @@ export function DebugPanel({ onResume, onBpsOff, onRefresh, onStop, focus }: { o
               {d.paused.inputs && Object.keys(d.paused.inputs).length > 0 ? <Values values={d.paused.inputs} /> : <p className="st-muted">This node has no inputs.</p>}
             </>
           ) : (
-            <p className="st-muted">Nodes light up as they run; the wires show the path the last flow took. Add a breakpoint (the dot on a node, or F9) to pause the world there.</p>
+            <p className="st-muted">Nodes light up as they run; the wires show the path the last flow took. Add a breakpoint (the dot on a node, or F9) to pause the world there. (A Playtest build records every node it runs: don't judge the mode's speed by it; Install makes the fast build.)</p>
           )}
         </div>
         <div className="st-debug-col">

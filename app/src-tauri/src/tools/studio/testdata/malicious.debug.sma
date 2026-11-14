@@ -88,6 +88,7 @@ lsd_init()
 // (gen.rs's plugin_end calls this)
 stock lsd_end()
 {
+	lsd_flush()
 	// a map change while paused: the bots mustn't stay stopped, rounds must end again
 	if (g_lsdPaused >= 0)
 		set_cvar_num("bot_stop", g_lsdBotStop)
@@ -140,15 +141,37 @@ public lsd_round_end()
 	copy(g_lsdPhase, charsmax(g_lsdPhase), "ended")
 }
 
+// events wait in memory and go to the file every 0.25 s (lsd_poll), when the buffer is nearly
+// full, and at once for a pause (the page shows it); one open/write/close per flush, not per
+// event (PerfAudit #5: 181 us an event)
+#define LSD_BUF 24000
+new g_lsdBuf[LSD_BUF], g_lsdBufLen
+
+stock lsd_flush()
+{
+	if (!g_lsdBufLen)
+		return
+	new f = fopen(g_lsdEvents, "at")
+	if (f)
+	{
+		fputs(f, g_lsdBuf)
+		fclose(f)
+	}
+	g_lsdBuf[0] = 0
+	g_lsdBufLen = 0
+}
+
 stock lsd_emitf(const fmt[], any:...)
 {
-	static body[1400]
+	static body[1400], line[1500]
 	vformat(body, charsmax(body), fmt, 2)
-	new f = fopen(g_lsdEvents, "at")
-	if (!f)
-		return
-	fprintf(f, "{^"s^":%d,^"t^":%.2f,%s}^n", ++g_lsdSeq, get_gametime(), body)
-	fclose(f)
+	new n = formatex(line, charsmax(line), "{^"s^":%d,^"t^":%.2f,%s}^n", ++g_lsdSeq, get_gametime(), body)
+	if (g_lsdBufLen + n >= LSD_BUF - 1)
+		lsd_flush()
+	g_lsdBufLen += copy(g_lsdBuf[g_lsdBufLen], LSD_BUF - 1 - g_lsdBufLen, line)
+	// a pause, or the world stopping or going on: the page needs it now
+	if (containi(body, "breakpoint_hit") >= 0 || containi(body, "world_") >= 0 || containi(body, "session") >= 0)
+		lsd_flush()
 }
 
 stock lsd_esc(const src[], dst[], len)
@@ -487,6 +510,7 @@ stock lsd_resume()
 
 public lsd_poll()
 {
+	lsd_flush()
 	if (g_lsdPaused >= 0)
 	{
 		for (new id = 1; id <= MaxClients; id++)
@@ -628,9 +652,13 @@ stock lsg_zone_of(ent)
 	return 0
 }
 
-// counted now (the brain's ls_creature_alive is only brought up to date a moment later)
+// counted now (the brain's ls_creature_alive is only brought up to date a moment later); once a
+// server frame (one scan however often it's read), again after the mode makes a creature
+stock Float:g_lsgCrAt = -1.0, g_lsgCrN
 stock lsg_creatures_alive()
 {
+	if (get_gametime() == g_lsgCrAt)
+		return g_lsgCrN
 	new n, e = MaxClients, Float:hp
 	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
 	{
@@ -638,6 +666,8 @@ stock lsg_creatures_alive()
 		if (pev(e, pev_deadflag) == DEAD_NO && hp > 0.0)
 			n++
 	}
+	g_lsgCrAt = get_gametime()
+	g_lsgCrN = n
 	return n
 }
 
@@ -821,8 +851,27 @@ stock lsg_name(id)
 	return name
 }
 
+// (a scan of every entity: the answer is kept for the rest of the server frame, so a Find in a
+// loop or read many times costs one scan; PerfAudit #9)
 stock lsg_find(const name[])
-	return name[0] ? max(find_ent_by_tname(-1, name), 0) : 0
+{
+	static Trie:seen = Invalid_Trie, Float:at = -1.0
+	if (!name[0])
+		return 0
+	new Float:now = get_gametime(), e
+	if (seen == Invalid_Trie)
+		seen = TrieCreate()
+	if (now != at)
+	{
+		TrieClear(seen)
+		at = now
+	}
+	if (TrieGetCell(seen, name, e) && (!e || pev_valid(e)))
+		return e
+	e = max(find_ent_by_tname(-1, name), 0)
+	TrieSetCell(seen, name, e)
+	return e
+}
 
 stock bool:lsg_named(ent, const name[])
 {

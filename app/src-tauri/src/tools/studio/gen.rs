@@ -1199,6 +1199,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         o.line("\tset_task(1.0, \"lsg_clock_tick\", LSG_TASK - 2, _, _, \"b\")");
     }
     if uses_save {
+        o.line("\tset_task(5.0, \"lsg_saved_flush\", LSG_TASK - 3, _, _, \"b\")");
+    }
+    if uses_save {
         o.line("\tlsg_saved_load()");
     }
     // arrays and maps are made once; vectors and structs start at their start value (0)
@@ -2755,6 +2758,8 @@ stock lsg_creature_x(const kind[], const at[], tier, Float:hp, pay)
 	}
 	if (ent < sizeof g_lsgPay)
 		g_lsgPay[ent] = clamp(pay, 0, 16000)
+	// (Creatures Alive counts again)
+	g_lsgCrAt = -1.0
 	return ent
 }
 
@@ -3073,9 +3078,13 @@ stock lsg_zone_of(ent)
 	return 0
 }
 
-// counted now (the brain's ls_creature_alive is only brought up to date a moment later)
+// counted now (the brain's ls_creature_alive is only brought up to date a moment later); once a
+// server frame (one scan however often it's read), again after the mode makes a creature
+stock Float:g_lsgCrAt = -1.0, g_lsgCrN
 stock lsg_creatures_alive()
 {
+	if (get_gametime() == g_lsgCrAt)
+		return g_lsgCrN
 	new n, e = MaxClients, Float:hp
 	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
 	{
@@ -3083,6 +3092,8 @@ stock lsg_creatures_alive()
 		if (pev(e, pev_deadflag) == DEAD_NO && hp > 0.0)
 			n++
 	}
+	g_lsgCrAt = get_gametime()
+	g_lsgCrN = n
 	return n
 }
 
@@ -3266,8 +3277,27 @@ stock lsg_name(id)
 	return name
 }
 
+// (a scan of every entity: the answer is kept for the rest of the server frame, so a Find in a
+// loop or read many times costs one scan; PerfAudit #9)
 stock lsg_find(const name[])
-	return name[0] ? max(find_ent_by_tname(-1, name), 0) : 0
+{
+	static Trie:seen = Invalid_Trie, Float:at = -1.0
+	if (!name[0])
+		return 0
+	new Float:now = get_gametime(), e
+	if (seen == Invalid_Trie)
+		seen = TrieCreate()
+	if (now != at)
+	{
+		TrieClear(seen)
+		at = now
+	}
+	if (TrieGetCell(seen, name, e) && (!e || pev_valid(e)))
+		return e
+	e = max(find_ent_by_tname(-1, name), 0)
+	TrieSetCell(seen, name, e)
+	return e
+}
 
 stock bool:lsg_named(ent, const name[])
 {
@@ -3700,9 +3730,9 @@ stock lsg_saved_set(id, const key[], Float:value)
 	new k[96]
 	lsg_saved_key(id, key, k, charsmax(k))
 	TrieSetCell(g_lsgSaved, k, value)
+	// written within 5 s (a timer), at a new round, when the player leaves and at map end: not
+	// the whole file on every call (PerfAudit #6: about 1 ms a write)
 	g_lsgSavedDirty = true
-	// written straight away: a crash or a killed server keeps it
-	lsg_saved_flush()
 }"#;
 
 /// The mode's own round clock (the game's time limit is held off while it runs).
@@ -3964,10 +3994,11 @@ mod tests {
     #[test]
     fn every_node_snapshot() {
         let g = parse(EVERY_NODE).unwrap();
-        let p = validate(&g);
+        // (these graphs nest loops on purpose: the cost advice is left out)
+        let p = super::super::graph::validate_core(&g);
         assert!(p.is_empty(), "{:#?}", p);
         let g2 = parse(EVERY_NODE_2).unwrap();
-        let p2 = validate(&g2);
+        let p2 = super::super::graph::validate_core(&g2);
         assert!(p2.is_empty(), "every_node_2: {:#?}", p2);
         let used: BTreeSet<&str> = g.nodes.iter().chain(g2.nodes.iter()).map(|n| n.kind.as_str()).collect();
         for d in &registry().nodes {

@@ -1,14 +1,15 @@
 // How nodes look on the canvas: a logic node (header, pins, settings, last result), a reroute
 // dot and a comment box. They read the graph, problems and debug state from the store by id.
 
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
 import { useStudio } from "./store";
 import { container, nodeDef, typeColor, type NodeDef, type PinDef } from "./registry";
 import { outType, resizeComment, setCommentText, toggleBreakpoint } from "./graphOps";
-import { allVariables, nodeTitle, pinsOf, typeLabel } from "./pins";
+import { allVariables, nodeTitle, typeLabel } from "./pins";
 import { showValue } from "./Inspector";
 import type { GNode, GVariable, Graph } from "./schema";
+import { pinsFor, problemsFor, structureOf, watchKey, wiringOf } from "./nodeView";
 
 const CAT_CLASS: Record<string, string> = { Events: "ev", Conditions: "cond", Numbers: "num", Text: "num", Variables: "var", Timers: "timer", Players: "player", Messages: "msg", Scoring: "score", Components: "comp", "Map markers": "comp", Creatures: "creature", Flow: "flow", Arrays: "var", Maps: "var", Structs: "var", Enums: "var", Vectors: "num" };
 
@@ -69,39 +70,53 @@ function Pin({ pin, side, color, wired, problem, watch }: { pin: PinDef; side: "
 }
 
 export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
+  // (each piece by this node's id, so a drag step or a debugger batch re-renders only the nodes
+  // it touches; docs/notes/PerfAudit.md #4, #8)
   const n = useStudio((s) => s.graph?.nodes.find((x) => x.id === id));
-  const graph = useStudio((s) => s.graph);
-  const problems = useStudio((s) => s.problems);
+  const graph = useStudio((s) => structureOf(s.graph));
+  const mine = useStudio((s) => problemsFor(s.problems, id));
   const run = useStudio((s) => s.debug.runs[id]);
+  const watched = useStudio((s) => watchKey(structureOf(s.graph), s.debug.runs, id));
   const paused = useStudio((s) => s.debug.paused?.node === id);
   const playing = useStudio((s) => !!s.playing);
   const bpsOff = useStudio((s) => s.bpsOff);
-  const runs = useStudio((s) => s.debug.runs);
   const edit = useStudio((s) => s.edit);
+  const wiredKey = graph ? wiringOf(graph).wired.get(id) ?? "" : "";
+  const def = n && nodeDef(n.type);
+  // (titles, pins and the settings line: only when the node or the structure changes)
+  const shape = useMemo(() => {
+    if (!n || !graph || !def) return null;
+    const wired = new Set(wiredKey.split("|"));
+    const wiredIn = (pin: string) => wired.has(`i:${pin}`);
+    return { wired, title: nodeTitle(graph, n), summary: paramSummary(def, n, wiredIn, allVariables(graph), graph), pins: pinsFor(graph, n) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [n?.type, n?.params, n?.graph, graph, wiredKey, def]);
+  const watchOuts = useMemo(() => {
+    const m = new Map<string, unknown>();
+    for (const part of watched.split("\u0002")) {
+      if (!part) continue;
+      const [pin, v] = part.split("\u0001");
+      m.set(pin, JSON.parse(v));
+    }
+    return m;
+  }, [watched]);
   if (!n || !graph) return null;
-  const def = nodeDef(n.type);
-  if (!def) return <div className="st-node st-node-unknown">Unknown node: {n.type}</div>;
-  const mine = problems.filter((p) => p.node === id);
+  if (!def || !shape) return <div className="st-node st-node-unknown">Unknown node: {n.type}</div>;
   const errors = mine.filter((p) => p.level === "error");
-  const wiredIn = (pin: string) => graph.edges.some((e) => e.to.node === id && e.to.pin === pin);
-  const wiredOut = (pin: string) => graph.edges.some((e) => e.from.node === id && e.from.pin === pin);
+  const wiredIn = (pin: string) => shape.wired.has(`i:${pin}`);
+  const wiredOut = (pin: string) => shape.wired.has(`o:${pin}`);
   const pinProblem = (pin: string) => mine.find((p) => p.pin === pin)?.message;
-  const summary = paramSummary(def, n, wiredIn, allVariables(graph), graph);
-  const pins = pinsOf(graph, n);
+  const summary = shape.summary;
+  const pins = shape.pins;
   // watch values: what the game last saw on a pin (the node's inputs as it ran; an output as the
   // nodes it feeds saw it)
   const watchIn = (p: PinDef) => {
-    const v = runs[id]?.inputs?.[p.label];
+    const v = run?.inputs?.[p.label];
     return v === undefined ? undefined : `${p.label || "Value"}: ${showValue(v)}`;
   };
   const watchOut = (p: PinDef) => {
-    for (const e of graph.edges.filter((x) => x.from.node === id && x.from.pin === p.id)) {
-      const to = graph.nodes.find((x) => x.id === e.to.node);
-      const label = to && pinsOf(graph, to).inputs.find((q) => q.id === e.to.pin)?.label;
-      const v = label !== undefined ? runs[e.to.node]?.inputs?.[label] : undefined;
-      if (v !== undefined) return `${p.label || "Value"}: ${showValue(v)}`;
-    }
-    return undefined;
+    if (!watchOuts.has(p.id)) return undefined;
+    return `${p.label || "Value"}: ${showValue(watchOuts.get(p.id))}`;
   };
   const failed = run?.result === "false";
   const cls = [
@@ -128,7 +143,7 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
             edit((g) => toggleBreakpoint(g, id));
           }}
         />
-        <span className="st-node-title">{nodeTitle(graph, n)}</span>
+        <span className="st-node-title">{shape.title}</span>
         {mine.length > 0 && (
           <span className={`st-node-badge ${errors.length ? "err" : "warn"}`} title={mine.map((p) => p.message).join("\n")}>
             {errors.length ? "!" : "?"}
@@ -160,8 +175,8 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
 });
 
 export const RerouteNode = memo(function RerouteNode({ id, selected }: NodeProps) {
-  const graph = useStudio((s) => s.graph);
-  const bad = useStudio((s) => s.problems.some((p) => p.node === id));
+  const graph = useStudio((s) => structureOf(s.graph));
+  const bad = useStudio((s) => problemsFor(s.problems, id).length > 0);
   if (!graph) return null;
   const t = outType(graph, { node: id, pin: "out" }) ?? "any";
   const color = typeColor(t);

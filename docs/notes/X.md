@@ -271,6 +271,80 @@ FM_Spawn in its plugin's plugin_precache, the same rules: `kind`, `mode` incl. c
 **Checks** (the editor's map check, the Studio's Playtest): each marker's count within `required`, each
 component's count, path markers with 2+ points and no repeated `order`, keys of the right type.
 
+## 2026-11-13: Studio performance (PerfAudit #4, #5, #6, #8, #9) and the Last Stand side-by-side
+**Canvas** (every_node, 374 nodes / 509 wires, WebKit headless, `tests/studio-perf.spec.ts`, ms per drag
+step over 40 mouse moves; before → after, two runs each):
+| | before | after |
+|---|---|---|
+| drag a node, zoom 1 | 11-13 | 3 |
+| drag a node, zoomed out (0.25) | 53-188 (frames up to 2.4 s) | 8-9 |
+| drag a new wire | 3-4 | 3-4 |
+| pan, zoom 1 / zoomed out | 9 / 7 | 3 / 5 |
+- Nodes read only what's theirs (`nodeView.ts`): the node by id; a "structure" graph that stays the same
+  object while a drag only moves things (pins, titles and settings lines aren't worked out again); their
+  wired pins from one pass over the wires per structure; their problems from a per-list map; the
+  debugger's values for their outputs as a key worked out once per debugger batch. A debugger batch or a
+  drag step re-renders only the nodes it touches (the debugger part is by construction, not measured live).
+- React Flow's node and wire objects are kept while unchanged (one shared `data`), wire types and ends
+  come from the structure; only what's in view is drawn (`onlyRenderVisibleElements`: 61 → 8-9 ms a step
+  zoomed out; measured both ways, culling kept); far out (under 0.35) wires are straight with no arrows.
+- **Playtest builds:** debugger events go to a 24 KB buffer, written every 0.25 s (and at once for a
+  pause), not opened/written/closed per event.
+- **Saved values:** Set marks them changed; a 5 s timer, the new round, a player leaving and map end write
+  the file (not every call).
+- **Scans:** Find Component and Creatures Alive are worked out once per server frame (Creatures Alive again
+  after the mode makes a creature).
+- **Cost warnings** (Checks and the node badges; advice, never errors; `graph::cost_warnings`, test
+  `cost_warnings_name_the_costly_patterns`): For Each / Pick Entity in a frequent event or a fast timer;
+  a Delay in a frequent event or inside a loop (use Retrigger); a long or looping flow on a hurt event;
+  a message to every player on every hit or kill; big loops inside big loops; a Repeat faster than 0.5 s
+  with loops, messages or bot orders (or faster than 1 s with an entity scan). Patterns 1 and 2 (Save in
+  a frequent event, a scan read in a loop) aren't warned: the save and scan changes above fixed their cost.
+  Pattern 9 (debug builds aren't for judging performance) is in the Playtest panel's notes.
+
+**Side-by-side, Last Stand vs Last Stand Lite** (ls_outpost, 12 bots, 8 minutes each, copies of LSPLAY with the
+committed components; the real one with `lst_wait_human 0`):
+| | Last Stand | Last Stand Lite |
+|---|---|---|
+| wave 1 / 2 / 3 held in | 30 / 56 / 54 s | 36 / 38 / 63 s |
+| wave 4 | still on at the end | started at 211 s |
+| creatures, health, bosses, cap | the round table | the same round table |
+| downed / revived | yes | yes |
+| bought: perks, box rolls, guns | 4 perks, box rolls, 24 guns | the shop's guns; perks/box not seen |
+| power-ups (Full resupply...) | yes | no |
+| stuck creatures removed after a minute | yes | no |
+| prepare/break phases, best-wave record, Nightmare lives, last chance | yes | no |
+| shopkeeper | Barney | none (W1's precache hook pending) |
+**Not only the keeper:** the remaining differences are power-ups (Lite can do it now with Drop Pickup on
+Creature Killed), the stuck-creature cleanup and bots buying guns between waves (both still inside
+gm_laststand: asked W1 to move them into components), and the stand's extras (phases, record, lives).
+The site line stays unproven until these are in and a rerun matches.
+
+## Plan (approved, after the node work): example modes, node help, a Studio tour
+**Example modes** (templates in `studio/templates/`, each small: 30-80 nodes; comment boxes explain each
+part; bots told how to play with the Bots nodes; a one-line description; a kit with the markers it needs;
+each checked on a sim with 12 bots before it ships):
+| Mode | Rules | Pieces it shows | Bots |
+|---|---|---|---|
+| Gun Game Lite | a kill moves you to the next gun in a list; first through the list wins | arrays, a per-player variable, Give Weapon, Strip, the winner | Don't Buy |
+| King of the Hill | hold a capture point (or a `hill` marker area) to score; first to N wins | components (capture point), timers, team scores, HUD | Goal: capture/defend the hill |
+| Infection | one zombie; whoever it kills turns; last human standing wins, or the humans survive the clock | teams, Set Team, Set Health/Speed/Model, the round clock | Fight Creatures off; Friends by team |
+| One in the Chamber | a deagle with one bullet; a kill gives a bullet; three lives | Set Ammo, lives in a variable, respawn | Don't Buy |
+| Juggernaut | one big slow player with lots of health; whoever kills them becomes it | player modifiers, glow, score | Goal: hunt the juggernaut (tag) |
+| Knife Arena | knives only, low gravity, a ring zone that shrinks | Strip, gravity, the zone | Phase: fight |
+| Capture the Flag (simple) | carry the enemy `flag` marker's flag back to your `base` marker | markers, pickups, Player Touched/Used, team scores | Goal: capture/defend, offers |
+The user picks the final set; each one ships with its comment boxes as the lesson.
+
+**Node help:** a searchable panel (the "?" next to Find, and F1 on a picked node): for each node what it
+does, each pin (type, meaning), a small example (a snippet that drops in), related nodes ("see also"),
+and its cost advice. Written in `nodes.json` (`help`, `example`, `related`, per-pin `help`), checked by
+a test that every node has them; MCP's node list carries the same text.
+
+**Studio tour:** dismissable and replayable (Settings › Tours, like the editor's first-map tour): 5 steps
+that build a tiny mode on an empty graph: (1) add Round Started, (2) For Each Player, (3) Give Weapon
+wired in, (4) Save and Playtest, (5) watch the nodes light up and set a breakpoint. Each step points at
+the real control, waits for the action, and can be skipped; a browser test walks it in Chromium and WebKit.
+
 ## 2026-11-13: W1's and W3's pieces as nodes; the templates move onto them
 - **Upgrades:** Set Player Modifier / Player Modifier (max health, speed, reload, swap, damage, revive time,
   fire rate), Give / Buy / Has Perk, Perk Count, Weapon Level, Upgrade Gun (bench), Roll Mystery Box, Drop

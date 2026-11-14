@@ -10,6 +10,7 @@ import {
   MiniMap,
   ReactFlow,
   useReactFlow,
+  useStore,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -40,6 +41,7 @@ export function addFromLibrary(g: Graph, it: LibItem, at: { x: number; y: number
   return { graph: g2, message: n ? `Added “${it.name}” from your library (${n} part${n === 1 ? "" : "s"} with what it needs).` : `“${it.name}” is already in this mode.` };
 }
 import { pathPairs } from "./debugState";
+import { structureOf } from "./nodeView";
 import { useContextMenu } from "./ContextMenu";
 import type { Graph } from "./schema";
 
@@ -92,6 +94,12 @@ export const DRAG_PART = "application/x-studio-part";
 /** a library item's id */
 export const DRAG_LIB = "application/x-studio-library";
 export const DRAG_SNIPPET = "application/x-studio-snippet";
+
+/** (one data object for every React Flow node: a new {} each render would defeat their memo) */
+const NO_DATA = {};
+/** Only what's in view (with a margin) is in the page: measured faster on every_node (PerfAudit #4).
+ *  (window.__studioAll = true before the Studio opens draws everything, for comparing.) */
+const VISIBLE_ONLY = typeof window === "undefined" || !(window as unknown as { __studioAll?: boolean }).__studioAll;
 
 export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error?: boolean) => void; onApi?: (api: CanvasApi) => void; snippets: Snippet[] }) {
   const graph = useStudio((s) => s.graph)!;
@@ -200,39 +208,68 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
   }, [onApi, rf, select, center, edit, dropSnippet, openTab]);
 
   const sel = useMemo(() => new Set(selected), [selected]);
-  const nodes: Node[] = useMemo(
-    () => [
-      ...view.comments.map((c) => ({ id: c.id, type: "comment", position: c.pos, data: {}, selected: sel.has(c.id), zIndex: -1, dragHandle: ".st-comment-head", style: { width: c.size.w, height: c.size.h } })),
-      ...view.nodes.map((n) => ({ id: n.id, type: nodeDef(n.type)?.reroute ? "reroute" : "logic", position: n.pos, data: {}, selected: sel.has(n.id) })),
-    ],
-    [view.comments, view.nodes, sel],
-  );
+  // React Flow's node objects are kept while their node, comment and selection are the same, so
+  // a drag step hands React Flow new objects only for what moved (PerfAudit #4)
+  const rfNodes = useRef(new Map<string, { src: unknown; sel: boolean; node: Node }>());
+  const nodes: Node[] = useMemo(() => {
+    const cache = rfNodes.current;
+    const keep = new Set<string>();
+    const out: Node[] = [];
+    const get = (id: string, src: unknown, isSel: boolean, make: () => Node) => {
+      keep.add(id);
+      const c = cache.get(id);
+      if (c && c.src === src && c.sel === isSel) return c.node;
+      const node = make();
+      cache.set(id, { src, sel: isSel, node });
+      return node;
+    };
+    for (const c of view.comments) out.push(get(c.id, c, sel.has(c.id), () => ({ id: c.id, type: "comment", position: c.pos, data: NO_DATA, selected: sel.has(c.id), zIndex: -1, dragHandle: ".st-comment-head", style: { width: c.size.w, height: c.size.h } })));
+    for (const n of view.nodes) out.push(get(n.id, n, sel.has(n.id), () => ({ id: n.id, type: nodeDef(n.type)?.reroute ? "reroute" : "logic", position: n.pos, data: NO_DATA, selected: sel.has(n.id) })));
+    for (const id of [...cache.keys()]) if (!keep.has(id)) cache.delete(id);
+    return out;
+  }, [view.comments, view.nodes, sel]);
+  // far out, wires are drawn plainly (straight, no arrows)
+  const far = useStore((s) => s.transform[2] < 0.35);
 
   const onPath = useMemo(() => pathPairs(path), [path]);
   const badEdges = useMemo(() => new Set(problems.filter((p) => p.edge && p.level === "error").map((p) => p.edge!)), [problems]);
-  const edges: Edge[] = useMemo(
-    () =>
-      view.edges.map((e) => {
-        const t: PinType = outType(graph, e.from) ?? "any";
+  // wires: their types and ends from the structure (the same through a drag), and each wire's
+  // object kept while nothing about it changed
+  const structure = useMemo(() => structureOf(graph)!, [graph]);
+  const rfEdges = useRef(new Map<string, { key: string; edge: Edge }>());
+  const edges: Edge[] = useMemo(() => {
+    const cache = rfEdges.current;
+    const keep = new Set<string>();
+    const out = view.edges.map((e) => {
+        keep.add(e.id);
+        const t: PinType = outType(structure, e.from) ?? "any";
         const exec = t === "exec";
-        const [a, b] = realEnds(graph, e);
+        const [a, b] = realEnds(structure, e);
         const lit = playing && onPath.has(`${a}>${b}`);
         const color = badEdges.has(e.id) ? "var(--st-bad)" : exec ? "var(--st-exec)" : typeColor(t);
-        return {
+        const isSel = selEdges.includes(e.id);
+        const key = `${e.from.node}.${e.from.pin}>${e.to.node}.${e.to.pin}|${color}|${lit}|${isSel}|${far}`;
+        const c = cache.get(e.id);
+        if (c && c.key === key) return c.edge;
+        const edge: Edge = {
           id: e.id,
           source: e.from.node,
           sourceHandle: e.from.pin,
           target: e.to.node,
           targetHandle: e.to.pin,
-          selected: selEdges.includes(e.id),
+          selected: isSel,
           animated: lit,
           className: `${exec ? "st-edge-exec" : "st-edge-data"}${lit ? " lit" : ""}`,
           style: { stroke: color, strokeWidth: exec ? 3 : 2 },
-          markerEnd: exec ? { type: MarkerType.ArrowClosed, color, width: 14, height: 14 } : undefined,
+          markerEnd: exec && !far ? { type: MarkerType.ArrowClosed, color, width: 14, height: 14 } : undefined,
+          ...(far ? { type: "straight" } : {}),
         };
-      }),
-    [graph, view.edges, onPath, badEdges, selEdges, playing],
-  );
+        cache.set(e.id, { key, edge });
+        return edge;
+      });
+    for (const id of [...cache.keys()]) if (!keep.has(id)) cache.delete(id);
+    return out;
+  }, [structure, view.edges, onPath, badEdges, selEdges, playing, far]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -540,6 +577,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        onlyRenderVisibleElements={VISIBLE_ONLY}
         nodeTypes={NODE_TYPES}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}

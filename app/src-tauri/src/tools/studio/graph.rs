@@ -33,7 +33,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::OnceLock;
 
 pub const SCHEMA: &str = "loner-strike/graph";
@@ -1198,6 +1198,15 @@ pub fn default_fits(g: &Graph, ty: &str, v: &Value) -> bool {
 
 /// Every problem with a graph: errors stop a compile, warnings are shown on the nodes.
 pub fn validate(g: &Graph) -> Vec<Problem> {
+    let mut p = validate_core(g);
+    if !has_errors(&p) {
+        p.extend(cost_warnings(g, &View::new(g)));
+    }
+    p
+}
+
+/// The checks without the cost advice (tests of graphs that loop on purpose use this).
+pub fn validate_core(g: &Graph) -> Vec<Problem> {
     let reg = registry();
     let mut p = Vec::new();
     if g.schema != SCHEMA || g.version != VERSION {
@@ -1626,6 +1635,108 @@ pub fn validate(g: &Graph) -> Vec<Problem> {
                     p.push(Problem::err(Some(&n.id), format!("{label} ({}) doesn't last through a Delay, Repeat or Countdown: keep it in a variable first.", v.type_label(&v.output(src, spin).map(|o| o.ty.clone()).unwrap_or_default()))).pin(&ip.id));
                 }
             }
+        }
+    }
+    p
+}
+
+/// The loops (and the output pins their body hangs off).
+const LOOPS: [(&str, &str); 7] = [
+    ("flow.for_each_player", "each"),
+    ("flow.for_each_entity", "each"),
+    ("flow.for_loop", "body"),
+    ("flow.for_loop_break", "body"),
+    ("flow.while", "body"),
+    ("flow.for_each_array", "body"),
+    ("marker.for_each", "each"),
+];
+
+/// Events that can fire many times a second (a hit, a kill in a busy fight, a zone tick, a spawn).
+const FREQUENT: [&str; 7] = ["event.player_hurt", "event.player_about_hurt", "up.on_creature_hurt", "comp.on_zone_tick", "creature.on_killed", "comp.on_wave_spawn", "comp.on_barricade_damaged"];
+const HURT: [&str; 3] = ["event.player_hurt", "event.player_about_hurt", "up.on_creature_hurt"];
+
+/// Everything the flow from these output pins runs (through any further flow pins).
+fn flow_from<'a>(v: &View<'a>, node: &'a str, pins: &[&str]) -> BTreeSet<&'a str> {
+    let mut seen = BTreeSet::new();
+    let mut todo: Vec<&'a str> = Vec::new();
+    for pin in pins {
+        if let Some((to, _)) = v.exec_target(node, pin) {
+            todo.push(to);
+        }
+    }
+    while let Some(n) = todo.pop() {
+        if !seen.insert(n) {
+            continue;
+        }
+        for pin in v.exec_outs(n) {
+            if let Some((to, _)) = v.exec_target(n, &pin) {
+                todo.push(to);
+            }
+        }
+    }
+    seen
+}
+
+/// Warnings about what costs the server (docs/notes/PerfAudit.md, the 9 patterns): each says
+/// what happens and what to do instead. They never stop a compile.
+pub fn cost_warnings(g: &Graph, v: &View) -> Vec<Problem> {
+    let mut p = Vec::new();
+    let kind = |id: &str| v.defs.get(id).map(|d| d.kind.as_str()).unwrap_or("");
+    let is_loop = |id: &str| LOOPS.iter().any(|(k, _)| *k == kind(id));
+    let is_msg = |id: &str| kind(id).starts_with("msg.");
+    let mut said: BTreeSet<(String, &str)> = BTreeSet::new();
+    let mut warn = |p: &mut Vec<Problem>, id: &str, what: &'static str, text: String| {
+        if said.insert((id.to_string(), what)) {
+            p.push(Problem::warn(Some(id), text));
+        }
+    };
+    // frequent events: what they run, every time
+    for e in g.nodes.iter().filter(|n| FREQUENT.contains(&kind(&n.id))) {
+        let id = e.id.as_str();
+        let title = v.defs.get(id).map(|d| d.title.clone()).unwrap_or_else(|| "This event".into());
+        let body = flow_from(v, id, &["then"]);
+        for n in &body {
+            match kind(n) {
+                "flow.for_each_entity" | "flow.pick_entity" => warn(&mut p, n, "scan", format!("This runs on every {title}, and each time it looks through every entity on the map (about 0.1 ms, more on big maps). Keep what it finds in a variable at round start instead.")),
+                "timer.delay" => warn(&mut p, n, "delay", format!("A Delay in {title} starts another timer on every fire (they pile up). Use Retrigger Delay, which starts over instead.")),
+                _ => {}
+            }
+        }
+        if HURT.contains(&kind(id)) && (body.len() > 15 || body.iter().any(|n| is_loop(n))) {
+            warn(&mut p, id, "heavy", format!("{title} runs once per hit: with shotguns and creatures, hundreds of times a second. This flow is long or loops; keep it short (a few nodes), or move the work to a timer."));
+        }
+        for l in body.iter().filter(|n| kind(n) == "flow.for_each_player") {
+            let pin = LOOPS.iter().find(|(k, _)| *k == kind(l)).map(|(_, p)| *p).unwrap_or("each");
+            for m in flow_from(v, l, &[pin]).into_iter().filter(|m| is_msg(m)) {
+                warn(&mut p, m, "msgs", format!("A message to every player on every {title}: about 32 network messages each time. Show it once a second at most (a Repeat timer), or only to the players who need it."));
+            }
+        }
+    }
+    // loops: inside another loop, a Delay inside
+    for l in g.nodes.iter().filter(|n| is_loop(&n.id)) {
+        let pin = LOOPS.iter().find(|(k, _)| *k == kind(&l.id)).map(|(_, p)| *p).unwrap_or("each");
+        // (For Each Player and For Each Marker are short: 32 players, 128 markers at most)
+        let big = |id: &str| matches!(kind(id), "flow.for_loop" | "flow.for_loop_break" | "flow.while" | "flow.for_each_array" | "flow.for_each_entity");
+        for n in flow_from(v, &l.id, &[pin]) {
+            if big(&l.id) && big(n) {
+                warn(&mut p, n, "nested", "A loop inside a loop: up to 10,000 x 10,000 passes in one server frame can freeze the server. Loop over less, or Break out early.".into());
+            }
+            if kind(n) == "timer.delay" {
+                warn(&mut p, n, "delay", "A Delay inside a loop starts another timer on every pass (they pile up). Use Retrigger Delay, or do the waiting outside the loop.".into());
+            }
+        }
+    }
+    // fast timers: real work many times a second
+    for t in g.nodes.iter().filter(|n| matches!(kind(&n.id), "timer.repeat" | "timer.retrigger")) {
+        let every = t.params.get("every").or_else(|| t.params.get("secs")).and_then(Value::as_f64).unwrap_or(1.0);
+        if every >= 1.0 {
+            continue;
+        }
+        let body = flow_from(v, &t.id, &["tick", "then"]);
+        let scans = body.iter().any(|n| matches!(kind(n), "flow.for_each_entity" | "flow.pick_entity"));
+        let work = body.iter().any(|n| is_loop(n) || is_msg(n) || kind(n).starts_with("bots.") || kind(n).starts_with("bot."));
+        if scans || (every < 0.5 && work) {
+            warn(&mut p, &t.id, "fast", format!("This runs {} times a second{}. Every 1 s is usually enough; HUD text faster than that is also network spam.", (1.0 / every.max(0.1)).round(), if scans { " and looks through every entity each time" } else { " with loops, messages or bot orders inside" }));
         }
     }
     p
@@ -2170,12 +2281,44 @@ mod tests {
     }
 
     #[test]
+    fn cost_warnings_name_the_costly_patterns() {
+        let g = graph(
+            json!([
+                {"id":"h","type":"event.player_hurt","params":{}},
+                {"id":"fe","type":"flow.for_each_entity","params":{"by":"class","name":"info_target"}},
+                {"id":"d","type":"timer.delay","params":{"secs":1}},
+                {"id":"rs","type":"event.round_started","params":{}},
+                {"id":"rp","type":"timer.repeat","params":{"every":0.2,"times":0}},
+                {"id":"hud","type":"msg.hud","params":{"text":"x"}},
+                {"id":"l1","type":"flow.for_loop","params":{"first":1,"last":100}},
+                {"id":"l2","type":"flow.for_loop","params":{"first":1,"last":100}}
+            ]),
+            json!([
+                {"id":"w1","from":{"node":"h","pin":"then"},"to":{"node":"fe","pin":"exec"}},
+                {"id":"w2","from":{"node":"fe","pin":"then"},"to":{"node":"d","pin":"exec"}},
+                {"id":"w3","from":{"node":"rs","pin":"then"},"to":{"node":"rp","pin":"exec"}},
+                {"id":"w4","from":{"node":"rp","pin":"tick"},"to":{"node":"hud","pin":"exec"}},
+                {"id":"w5","from":{"node":"hud","pin":"then"},"to":{"node":"l1","pin":"exec"}},
+                {"id":"w6","from":{"node":"l1","pin":"body"},"to":{"node":"l2","pin":"exec"}}
+            ]),
+        );
+        let w: Vec<(String, String)> = cost_warnings(&g, &View::new(&g)).into_iter().map(|p| (p.node.unwrap_or_default(), p.message)).collect();
+        let has = |node: &str, words: &str| w.iter().any(|(n, m)| n == node && m.contains(words));
+        assert!(has("fe", "every entity"), "{w:#?}");
+        assert!(has("d", "Retrigger"), "{w:#?}");
+        assert!(has("rp", "times a second"), "{w:#?}");
+        assert!(has("l2", "loop inside a loop"), "{w:#?}");
+        // advice only: never an error
+        assert!(cost_warnings(&g, &View::new(&g)).iter().all(|p| p.level == "warning"));
+    }
+
+    #[test]
     fn loops_with_break_and_gates() {
         // a body wired back into Break, a Gate opened from later in its own flow: not a flow loop
         let g = v3(json!({"nodes": [{"id": "r", "type": "event.round_started"}, {"id": "l", "type": "flow.for_loop_break", "params": {"last": 3}},
                       {"id": "b", "type": "flow.branch"}, {"id": "g", "type": "flow.gate"}, {"id": "p", "type": "debug.print"}],
             "edges": [e("w1","r","then","l","exec"), e("w2","l","body","b","exec"), e("w3","b","true","l","break"), e("w4","l","then","g","exec"), e("w5","g","then","p","exec"), e("w6","p","then","g","open")]}));
-        assert!(validate(&g).is_empty(), "{:?}", msgs(&validate(&g)));
+        assert!(validate_core(&g).is_empty(), "{:?}", msgs(&validate_core(&g)));
     }
 
     #[test]
