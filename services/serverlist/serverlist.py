@@ -445,7 +445,9 @@ def main():
                                             polar_secret=os.environ.pop("POLAR_WEBHOOK_SECRET", "").strip(),
                                             mod=community.notifier if hasattr(community.notifier, "interaction") else None,
                                             deciders=os.environ.get("DISCORD_SERVERMOD_DECIDERS", "").split(","),
-                                            days=int(os.environ.get("SUPPORTER_DAYS", "30") or 30))
+                                            # days per one-time donation, stacking (0: for good), and what it has to be
+                                            days=int(os.environ.get("POLAR_SUPPORTER_DAYS", os.environ.get("SUPPORTER_DAYS", "30")) or 0),
+                                            min_cents=int(os.environ.get("POLAR_SUPPORTER_MIN_CENTS", "300") or 0))
         if a.recheck_hours > 0:
             threading.Thread(target=community.recheck_loop, args=(a.recheck_hours,), daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(registry, RateLimit(MAX_REGISTER), community=community))

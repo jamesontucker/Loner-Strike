@@ -31,7 +31,12 @@ import community as cm
 
 CODE_SECS = 600                 # link codes, owner codes and claims
 INVITE_SECS = 24 * 3600 + 120   # a shared-control invite works a day (a little slack for clocks)
-SUPPORTER_DAYS = 30             # per one-time donation, stacking
+SUPPORTER_DAYS = 30             # per one-time donation, stacking (0: for good)
+SUPPORTER_MIN_CENTS = 300       # a donation counts from this much (net of discounts), in cents
+FOREVER = 253402300799          # 9999-12-31: "for good" (SUPPORTER_DAYS 0)
+# currencies a donation counts in, by their own cents: each is worth at least a US dollar, so the
+# minimum is never undercut. Others aren't counted automatically (logged for the team).
+CURRENCIES = ("usd", "eur", "gbp", "chf")
 WEBHOOK_SKEW = 300
 MAX_STEAMIDS = 64
 MAX_BODY = 16 * 1024
@@ -90,6 +95,15 @@ MIGRATIONS = [
     ALTER TABLE polar_orders ADD COLUMN refunded INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE polar_orders ADD COLUMN applied_at REAL NOT NULL DEFAULT 0;
     UPDATE polar_orders SET applied_at=at WHERE applied=1
+    """,
+    # each donation keeps the Discord account it counted for (a customer's account can change), and
+    # what it was (amounts under the minimum, or in another currency, never count)
+    """
+    ALTER TABLE polar_orders ADD COLUMN applied_to TEXT NOT NULL DEFAULT '';
+    ALTER TABLE polar_orders ADD COLUMN amount_cents INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE polar_orders ADD COLUMN currency TEXT NOT NULL DEFAULT '';
+    ALTER TABLE polar_orders ADD COLUMN ignored INTEGER NOT NULL DEFAULT 0;
+    UPDATE polar_orders SET applied_to=COALESCE((SELECT discord_id FROM polar_customers c WHERE c.customer_id=polar_orders.customer_id), '') WHERE applied=1
     """,
 ]
 
@@ -174,7 +188,8 @@ class Store:
 
 
 class Roles:
-    def __init__(self, store, clean=None, asker=None, players=None, polar_secret="", mod=None, deciders=(), days=SUPPORTER_DAYS):
+    def __init__(self, store, clean=None, asker=None, players=None, polar_secret="", mod=None, deciders=(), days=SUPPORTER_DAYS,
+                 min_cents=SUPPORTER_MIN_CENTS):
         self.s = store
         # serverlist.clean_address, serverlist.check and serverlist.players (A2S), passed in to keep
         # the imports one way
@@ -182,7 +197,9 @@ class Roles:
         self.polar_key = webhook_key(polar_secret)
         self.mod = mod
         self.deciders = {str(r) for r in deciders if r}
-        self.days = days
+        # days per one-time donation (stacking); 0: a donation makes them a supporter for good
+        self.days = max(0, int(days))
+        self.min_cents = max(0, int(min_cents))
         self.lock = threading.RLock()
         if mod is not None:
             mod.rolesvc = self
@@ -490,18 +507,20 @@ class Roles:
         return sorted(r["steamid"] for r in rows if self.is_supporter(r["discord_id"]))
 
     def _apply(self, order_id, discord_id, when):
-        """A one-time donation counts from `when`; the supporter's time is worked out again."""
-        self.s.run("UPDATE polar_orders SET applied=1, applied_at=? WHERE order_id=?", (when, order_id))
+        """A one-time donation counts for `discord_id` from `when`; their time is worked out again."""
+        self.s.run("UPDATE polar_orders SET applied=1, applied_at=?, applied_to=? WHERE order_id=?", (when, discord_id, order_id))
         return self._recompute(discord_id)
 
     def _recompute(self, discord_id):
-        """A supporter's time from their one-time donations that count (applied, not refunded): each
-        adds `days`, from the later of when it came and the end of what they had."""
-        orders = self.s.all("SELECT o.applied_at FROM polar_orders o JOIN polar_customers c ON c.customer_id=o.customer_id "
-                            "WHERE c.discord_id=? AND o.applied=1 AND o.refunded=0 ORDER BY o.applied_at", (discord_id,))
+        """A supporter's time from the one-time donations that counted for this Discord account (applied
+        to it, not refunded): each adds `days`, from the later of when it came and the end of what they
+        had; with days 0, any one makes them a supporter for good."""
+        if not discord_id:
+            return 0
+        orders = self.s.all("SELECT applied_at FROM polar_orders WHERE applied_to=? AND applied=1 AND refunded=0 ORDER BY applied_at", (discord_id,))
         until = 0
         for o in orders:
-            until = max(int(o["applied_at"]), until) + self.days * 86400
+            until = FOREVER if self.days == 0 else max(int(o["applied_at"]), until) + self.days * 86400
         self.s.run("INSERT OR REPLACE INTO supporters(discord_id, until) VALUES (?,?)", (discord_id, until))
         return until
 
@@ -558,20 +577,34 @@ class Roles:
             if have and (when < have["event_at"] or (when == have["event_at"] and granted and not have["granted"])):
                 self.log("supporter", "polar", 0, account, f"{kind} older than what's kept: ignored")
                 return
+            before = self.s.one("SELECT discord_id FROM polar_customers WHERE customer_id=?", (cust,))
             self.s.run("INSERT OR REPLACE INTO polar_customers(customer_id, discord_id) VALUES (?,?)", (cust, account))
+            if before and before["discord_id"] != account:
+                # the customer's Discord account changed: their donations go with them
+                self.s.run("UPDATE polar_orders SET applied_to=? WHERE customer_id=? AND applied=1", (account, cust))
+                self._recompute(before["discord_id"])
+                self._recompute(account)
+                self.log("supporter", "polar", 0, account, f"customer {cust}: Discord account changed from {before['discord_id']}; donations moved")
             self.s.run("INSERT OR REPLACE INTO polar_grants(grant_id, customer_id, discord_id, monthly, granted, at, event_at) VALUES (?,?,?,?,?,?,?)",
                        (gid, cust, account, monthly, granted, at, when))
             # donations that came before Polar told us whose Discord this customer is
-            for o in self.s.all("SELECT * FROM polar_orders WHERE customer_id=? AND applied=0 AND refunded=0 ORDER BY at", (cust,)):
+            # (amounts checked again: orders kept before amounts were, have none and don't count)
+            for o in self.s.all("SELECT * FROM polar_orders WHERE customer_id=? AND applied=0 AND refunded=0 AND ignored=0 AND amount_cents>=? AND amount_cents>0 ORDER BY at",
+                                (cust, self.min_cents)):
                 self._apply(o["order_id"], account, o["at"] if o["at"] > at - 86400 else at)
             self.log("supporter", "polar", 0, account, f"{kind} {'monthly' if monthly else 'one-time'} {'granted' if granted else 'revoked'}")
         elif kind == "order.paid":
             oid, cust = str(d.get("id") or ""), str(d.get("customer_id") or "")
             if not oid or not cust or d.get("subscription_id"):
                 return
+            cents, currency, why = self.order_counts(d)
             try:
-                self.s.run("INSERT INTO polar_orders(order_id, customer_id, at) VALUES (?,?,?)", (oid, cust, at))
+                self.s.run("INSERT INTO polar_orders(order_id, customer_id, at, amount_cents, currency, ignored) VALUES (?,?,?,?,?,?)",
+                           (oid, cust, at, cents, currency, 0 if why is None else 1))
             except sqlite3.IntegrityError:
+                return
+            if why is not None:
+                self.log("donation", "polar", 0, cust, f"order {oid}: {why}, not counted")
                 return
             c = self.s.one("SELECT discord_id FROM polar_customers WHERE customer_id=?", (cust,))
             if c:
@@ -600,13 +633,31 @@ class Roles:
             if row["refunded"]:
                 return
             self.s.run("UPDATE polar_orders SET refunded=1 WHERE order_id=?", (oid,))
-            c = self.s.one("SELECT discord_id FROM polar_customers WHERE customer_id=?", (cust,))
-            if c and row["applied"]:
-                until = self._recompute(c["discord_id"])
-                self.log("refund", "polar", 0, c["discord_id"], f"order {oid}: refunded, supporter until "
+            if row["applied"] and row["applied_to"]:
+                until = self._recompute(row["applied_to"])
+                self.log("refund", "polar", 0, row["applied_to"], f"order {oid}: refunded, supporter until "
                                                                  + (time.strftime('%Y-%m-%d', time.gmtime(until)) if until else "none"))
             else:
                 self.log("refund", "polar", 0, cust, f"order {oid}: refunded (it hadn't counted yet)")
+
+    def order_counts(self, d):
+        """(cents, currency, why not) for a one-time order: it counts (why None) when what was paid,
+        net of discounts and before tax, is at least the minimum, in a currency worth at least a dollar."""
+        def num(k):
+            v = d.get(k)
+            return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else None
+        cents = num("net_amount")
+        if cents is None:
+            amount, discount = num("amount"), num("discount_amount") or 0
+            cents = max(0, amount - discount) if amount is not None else num("total_amount")
+        currency = str(d.get("currency") or "usd").lower()[:8]
+        if cents is None:
+            return 0, currency, "no amount"
+        if currency not in CURRENCIES:
+            return cents, currency, f"paid in {currency.upper()} (check by hand)"
+        if cents < self.min_cents or cents == 0:
+            return cents, currency, f"{cents} {currency} cents, under the minimum of {self.min_cents}"
+        return cents, currency, None
 
     def vip(self, srv):
         if not srv["official"]:

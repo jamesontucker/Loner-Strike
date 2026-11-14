@@ -102,6 +102,12 @@ may only talk to this machine; an Admin's calls reach it through a spool in the 
   is worked out again from the donations that still count); a partial refund keeps them (logged); a refund that
   comes before its payment makes the payment count for nothing; the same refund twice changes nothing. Monthly
   refunds are left to the grant's revoke.
+  Each donation keeps the Discord account it counted for (`applied_to`): a refund takes the days off that account, and
+  when a customer's Discord account changes their donations move with them (both accounts worked out again).
+  **Amounts:** an order counts only when what was paid, net of discounts and before tax, is at least
+  `POLAR_SUPPORTER_MIN_CENTS` (default 300) in USD, EUR, GBP or CHF (each worth at least a dollar, so compared by
+  their own cents); other currencies aren't counted automatically (logged "check by hand"); $0 never counts.
+  **Duration:** `POLAR_SUPPORTER_DAYS` (default 30, stacking; 0 = a donation makes them a supporter for good).
 - **To servers:** a supporter's VIP follows their current link. Official servers: ls-control (a timer, every 5 min)
   `GET /roles/vip` → every supporter's SteamID. Other servers that turned on **Honor Loner-Strike supporters** (off by
   default): `POST /roles/vip/check {steamids}` with the players on the server now (at most 64), answered with the ones
