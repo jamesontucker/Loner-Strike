@@ -357,3 +357,11 @@
 	speed(float) : "Haul speed" : 80 : "How fast it pulls a player up (units a second)."
 	hates(choices) : "Catches" : "all" : "" = [ "all" : "Everyone" "t" : "Terrorists" "ct" : "Counter-Terrorists" ]
 ]
+
+@PointClass size(-8 -8 -8, 8 8 8) color(255 160 0) = ls_event : "Loner-Strike: fires a Studio custom event when triggered"
+[
+	targetname(target_source) : "Name (trigger this)"
+	event(string) : "Custom event name" : "my_event"
+	a(string) : "Value A (optional)" : ""
+	b(string) : "Value B (optional)" : ""
+]
