@@ -15,7 +15,7 @@ import { getJson } from "../../../api";
 import { useToolArg } from "../../../stores/tools";
 import { useNav } from "../../../store";
 import type { GbJob } from "../../../types";
-import type { NeedLink, Needs } from "./communityApi";
+import type { BrainNeeds, NeedLink, Needs } from "./communityApi";
 import { Banner, BusyButton, LoadError, Segmented, useToast } from "../../../ui";
 import { errorText, useBusy } from "../common/api";
 import { useReportAddress } from "../common/address";
@@ -196,9 +196,42 @@ function SourceNote({ data }: { data: { index: string; gamebanana: string } }) {
   if (data.gamebanana === "offline" && data.index === "none")
     return <Banner>Couldn't reach GameBanana or the Loner-Strike list. Check your internet connection and Refresh.</Banner>;
   if (data.gamebanana === "offline") return <Banner>GameBanana didn't answer, so this is the Loner-Strike list only. Trying one still needs GameBanana.</Banner>;
+  if (data.index === "newer") return <Banner>Update Loner-Strike to see the newest list: the Loner-Strike list is in a newer format than this version reads{data.gamebanana === "offline" ? "." : ", so badges may be missing or from earlier."}</Banner>;
   if (data.index === "none") return <p className="muted small-note">The Loner-Strike list couldn't be reached: badges (works with bots, checked, modes) are missing for now.</p>;
   if (data.index === "cached") return <p className="muted small-note">Showing the Loner-Strike list from earlier (the download server didn't answer).</p>;
   return null;
+}
+
+export const needsSomething = (b: BrainNeeds) => b.componentsPlugin || b.components.length > 0 || b.creatures.length > 0 || b.features.length > 0;
+
+/** What a mode needs beyond the game: Loner-Strike's components, creatures and bot-brain features,
+ *  each marked "You have it" or "Update Loner-Strike" (the app's setup brings the newer brain; QA4-G F6). */
+export function BrainNeedsList({ b }: { b: BrainNeeds }) {
+  if (!needsSomething(b)) return null;
+  const mark = (have: boolean | undefined) =>
+    have ? <span className="tag cm-badge-bots">You have it</span> : <span className="tag cm-trust-unreviewed" title="Settings › Updates brings the newest bot brain">{b.here ? "Update Loner-Strike" : "Needs the game set up"}</span>;
+  return (
+    <>
+      <h4>Needs</h4>
+      <ul data-testid="cm-brain-needs">
+        {(b.componentsPlugin || b.components.length > 0) && (
+          <li>
+            Loner-Strike's components{b.components.length ? `: ${b.components.join(", ")}` : ""} {mark(true)} <span className="muted small-note">they come with the app</span>
+          </li>
+        )}
+        {b.creatures.length > 0 && (
+          <li>
+            Creatures: {b.creatures.includes("all") ? "the wave spawner's types" : b.creatures.join(", ")} {mark(b.creaturesHave)}
+          </li>
+        )}
+        {b.features.map((f) => (
+          <li key={f.id}>
+            {f.name} <span className="muted small-note">(bot brain: {f.brain === "creature" ? "creatures" : "bots"} version {f.ver} or newer)</span> {mark(f.have)}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
 }
 
 /** A mode's "Plays on" and "Needs", each with whether you have it. */
@@ -219,9 +252,10 @@ function ModeNeeds({ needs }: { needs: Needs }) {
           </ul>
         </>
       )}
+      {needs.brain && <BrainNeedsList b={needs.brain} />}
       {needs.content.length > 0 && (
         <>
-          <h4>Needs</h4>
+          <h4>{needs.brain && needsSomething(needs.brain) ? "Also needs" : "Needs"}</h4>
           <ul>
             {needs.content.map((c) => (
               <li key={c.path}>
@@ -267,6 +301,7 @@ function Card({ e, onOpen }: { e: Entry; onOpen: () => void }) {
         </span>
         {e.modes.length > 0 && <span className="muted small-note">Modes: {e.modes.join(", ")}</span>}
         {e.kind === "mode" && e.bots && <span className={`bots-note ${e.bots}`} title={BOT_RATING_INFO}>{BOT_NOTE[e.bots]}</span>}
+        {e.otherGame && <span className="tag cm-risk" title="Made for the other game: it may not work in yours. You're asked before it installs.">For {(e.games ?? []).includes("czero") ? "Condition Zero" : "Counter-Strike 1.6"}</span>}
         <Badges list={e.badges} trust={e.trust} />
       </span>
     </button>
@@ -509,6 +544,7 @@ function Creation({ d }: { d: Details }) {
                 <p key={n} className="muted small-note">{n}</p>
               ))}
               {d.why && <p className="muted small-note">{d.why}</p>}
+              {d.otherGame && <p className="muted small-note">{d.otherGame.replace(/ Install it anyway\?$/, "")}</p>}
             </>
           )}
           {stage.state === "failed" && <p className="cm-bad" role="alert">{stage.message}</p>}

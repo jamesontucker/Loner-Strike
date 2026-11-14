@@ -45,11 +45,15 @@ export type Entry = {
   trust: Trust;
   canTry: boolean;
   url: string;
+  /** the games it's made for ("cstrike", "czero"; empty: not said), and whether that's only the
+   *  other game (P5, QA4-G F5) */
+  games?: string[];
+  otherGame?: boolean;
 };
 
 export type Browse = {
   items: Entry[];
-  index: "live" | "cached" | "none";
+  index: "live" | "cached" | "none" | "newer";
   gamebanana: "live" | "cached" | "offline";
   indexUpdated: number;
   tag: string;
@@ -73,6 +77,8 @@ export type Details = {
   model: Model; id: number; kind: Kind; name: string; author: string; category: string; text: string; images: string[];
   files: GbFile[]; url: string; tagged: boolean; likes: number; downloads: number; item: Item | null; trust: Trust;
   canTry: boolean; why: string | null; have: boolean; installed: InstalledInfo | null;
+  /** made for the other game only: what's asked before it installs (P5) */
+  otherGame?: string | null;
   /** a mode's "Plays on" and "Needs" (its requirements), each with whether you have it */
   needs?: Needs | null;
 };
@@ -82,6 +88,15 @@ export type Needs = {
   defaultMap: string | null;
   maps: { name: string; have: boolean; base: boolean; item: NeedLink | null }[];
   content: { path: string; kind: string; have: boolean; link: NeedLink | null }[];
+  /** components, creatures and bot-brain features, each with whether this computer has them (QA4-G F6) */
+  brain?: BrainNeeds;
+};
+export type BrainFeature = { id: string; name: string; brain: "mode" | "creature"; ver: number; have?: boolean };
+export type BrainNeeds = {
+  componentsPlugin: boolean; components: string[]; creatures: string[]; creaturesHave?: boolean; modeVer: number; creatureVer: number;
+  features: BrainFeature[];
+  /** this computer's bot brain (none: no game set up) */
+  here?: { modeVer: number; creatureVer: number } | null;
 };
 
 export type Author = { name: string; role: string; url: string };
@@ -181,7 +196,7 @@ export const remix = (key: string) => post<{ ok: boolean; id: string; name: stri
 export type ModeReady = {
   id: string; name: string; description: string; nodes: number; blockers: string[]; remixOf: Credit | null; botsSuggested: string;
   /** the mode's requirements (requirements.rs), when the game is set up here */
-  requirements?: { maps: { name: string }[]; known: { creatures: string[] } };
+  requirements?: { maps: { name: string }[]; known: { creatures: string[] }; needs?: BrainNeeds; brainHere?: { modeVer: number; creatureVer: number } | null };
   requirementWarnings?: string[];
 };
 export const modeReadiness = (id: string, signal?: AbortSignal) => get<ModeReady>(`${base}/publish-mode/${encodeURIComponent(id)}`, signal);

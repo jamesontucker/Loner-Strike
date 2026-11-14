@@ -391,7 +391,28 @@ fn lsar_entries(lsar: &Path, archive: &Path) -> Option<Vec<serde_json::Value>> {
 }
 
 /// Zip files are read here directly. Ok(false): not a zip we can read, let tar try.
+thread_local! {
+    /// Entries the last unpack on this thread left out for safety (links, paths outside the
+    /// download): plan() lists them with what it skipped, so they aren't dropped silently.
+    static DROPPED: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn note_dropped(what: String) {
+    DROPPED.with(|d| {
+        let mut d = d.borrow_mut();
+        if d.len() < 40 {
+            d.push(what);
+        }
+    });
+}
+
+/// What the last unpack on this thread left out for safety, once.
+pub fn take_dropped() -> Vec<String> {
+    DROPPED.with(|d| std::mem::take(&mut *d.borrow_mut()))
+}
+
 fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String> {
+    let _ = take_dropped(); // (a fresh list for this archive)
     use std::io::{Read, Write};
     let Ok(f) = std::fs::File::open(archive) else { return Ok(false) };
     let Ok(mut z) = zip::ZipArchive::new(f) else { return Ok(false) };
@@ -408,12 +429,22 @@ fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String>
     let mut buf = vec![0u8; 1024 * 1024];
     for i in 0..z.len() {
         let Ok(mut m) = z.by_index(i) else { return Ok(false) };
-        if m.is_dir() || m.is_symlink() {
+        if m.is_dir() {
+            continue;
+        }
+        // (left out, and said so in the install's "skipped": P5, QA4-G)
+        let shown: String = m.name().map(|n| n.to_string()).unwrap_or_default().chars().filter(|c| !c.is_control()).take(120).collect();
+        if m.is_symlink() {
+            note_dropped(format!("{shown} (a link: never unpacked)"));
             continue; // links are never unpacked
         }
-        let Some(rel) = m.enclosed_name() else { continue };
+        let Some(rel) = m.enclosed_name() else {
+            note_dropped(format!("{shown} (points outside the download)"));
+            continue;
+        };
         let target = dest.join(rel);
         if !target.starts_with(dest) || target == dest {
+            note_dropped(format!("{shown} (points outside the download)"));
             continue;
         }
         if let Some(d) = target.parent() {
@@ -587,8 +618,12 @@ fn normpath(p: &str) -> String {
 pub fn plan(root: &Path) -> (Vec<(PathBuf, String)>, Vec<String>) {
     let files = walk(root);
     let rels: Vec<Vec<String>> = files.iter().map(|p| rel_parts(root, p)).collect();
-    let (picked, skipped) = plan_rels(&rels);
-    (picked.into_iter().map(|(i, d)| (files[i].clone(), d)).collect(), skipped)
+    let (picked, mut skipped) = plan_rels(&rels);
+    // what the unpack left out for safety comes first, so it shows within the 40
+    let mut dropped = take_dropped();
+    dropped.append(&mut skipped);
+    dropped.truncate(40);
+    (picked.into_iter().map(|(i, d)| (files[i].clone(), d)).collect(), dropped)
 }
 
 /// The parts of path below root ("a/b/c.bsp" -> ["a", "b", "c.bsp"]).
@@ -1040,6 +1075,7 @@ mod tests {
             z.write_all(&[7u8; 5000]).unwrap();
             z.start_file("../../escape.txt", o).unwrap();
             z.write_all(b"nope").unwrap();
+            z.add_symlink("maps/link.bsp", "/etc/hosts", o).unwrap();
             z.finish().unwrap();
         }
         let dest = r.join("ok");
@@ -1047,6 +1083,12 @@ mod tests {
         extract(&archive, &dest, MAX_UNPACKED).unwrap();
         assert_eq!(std::fs::read(dest.join("maps/de_a.bsp")).unwrap().len(), 5000);
         assert!(!r.join("escape.txt").exists() && !r.parent().unwrap().join("escape.txt").exists());
+        // P5 (QA4-G): the left-out entry is listed with what plan() skipped
+        let (picked, skipped) = plan(&dest);
+        assert!(picked.iter().any(|(_, d)| d == "maps/de_a.bsp"));
+        assert!(skipped.iter().any(|x| x.contains("escape.txt") && x.contains("outside the download")), "{skipped:?}");
+        assert!(skipped.iter().any(|x| x.contains("link.bsp") && x.contains("a link")), "{skipped:?}");
+        assert!(take_dropped().is_empty(), "listed once");
 
         let small = r.join("small");
         std::fs::create_dir_all(&small).unwrap();

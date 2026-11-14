@@ -624,22 +624,32 @@ pub enum Source {
     Cached,
     /// none at all: GameBanana's tag search only
     None,
+    /// the download server sent a list in a newer format than this app reads: the kept copy
+    /// (if any) is shown, and the page says to update Loner-Strike (P5, QA4-G F4)
+    Newer,
 }
 
 /// The index: downloaded (and kept at `cache`), else the kept copy, else empty.
 pub fn load_index(fetch: &dyn Fn() -> Result<Vec<u8>, String>, cache: &Path) -> (Index, Source) {
+    let mut newer = false;
     if let Ok(b) = fetch() {
-        if let Ok(idx) = parse_index(&b) {
-            if let Some(d) = cache.parent() {
-                let _ = std::fs::create_dir_all(d);
+        match parse_index(&b) {
+            Ok(idx) => {
+                if let Some(d) = cache.parent() {
+                    let _ = std::fs::create_dir_all(d);
+                }
+                let _ = crate::sys::write_atomic(cache, &b);
+                return (idx, Source::Live);
             }
-            let _ = crate::sys::write_atomic(cache, &b);
-            return (idx, Source::Live);
+            Err(e) => newer = e.contains("newer than this app"),
         }
     }
-    match std::fs::read(cache).ok().and_then(|b| parse_index(&b).ok()) {
-        Some(idx) => (idx, Source::Cached),
-        None => (Index { schema: SCHEMA, ..Default::default() }, Source::None),
+    let kept = std::fs::read(cache).ok().and_then(|b| parse_index(&b).ok());
+    match (kept, newer) {
+        (Some(idx), true) => (idx, Source::Newer),
+        (None, true) => (Index { schema: SCHEMA, ..Default::default() }, Source::Newer),
+        (Some(idx), false) => (idx, Source::Cached),
+        (None, false) => (Index { schema: SCHEMA, ..Default::default() }, Source::None),
     }
 }
 
@@ -927,6 +937,26 @@ fn badges(it: Option<&Item>, kind: Kind) -> Vec<&'static str> {
     b
 }
 
+/// The game's id ("cstrike" or "czero") from its folder.
+fn game_id(g: &crate::game::Game) -> String {
+    g.dir.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default()
+}
+
+fn game_name(id: &str) -> &'static str {
+    if id == "czero" { "Condition Zero" } else { "Counter-Strike 1.6" }
+}
+
+/// When a creation is made for the other game only (its list entry's `games`), what to say
+/// before installing it (P5, QA4-G F5); None when it's for this game, or the list doesn't say.
+pub(crate) fn other_game_note(it: Option<&Item>, game: &str) -> Option<String> {
+    let games = &it?.games;
+    if games.is_empty() || game.is_empty() || games.iter().any(|g| g == game) {
+        return None;
+    }
+    let made_for = games.iter().map(|g| game_name(g)).collect::<Vec<_>>().join(" and ");
+    Some(format!("This was made for {made_for}, and you're playing {}. It may not work here. Install it anyway?", game_name(game)))
+}
+
 /// One row of the list: GameBanana's facts, the index's extras, the trust rules' answer.
 pub fn entry(hit: Option<&Hit>, it: Option<&Item>, revoked: bool, have: &HashSet<String>) -> Option<Value> {
     let (model, id) = match (hit, it) {
@@ -957,6 +987,7 @@ pub fn entry(hit: Option<&Hit>, it: Option<&Item>, revoked: bool, have: &HashSet
         "modes": map.map(|m| if m.mode_refs.is_empty() { m.modes.clone() } else { m.mode_refs.iter().map(|r| if r.name.is_empty() { r.id.clone() } else { r.name.clone() }).collect() }).unwrap_or_default(),
         "have": map.is_some_and(|m| have.contains(&m.name.to_ascii_lowercase())),
         "badges": badges(it, kind),
+        "games": it.map(|i| i.games.clone()).unwrap_or_default(),
         "trust": tr,
         "canTry": tr.allowed && kind.can_install(),
         "url": model.url(id),
@@ -1040,8 +1071,15 @@ async fn api_browse(State(st): State<Shared>, Query(q): Query<BrowseQ>) -> Respo
             };
             let have = game.as_deref().map(maps_here).unwrap_or_default();
             let kind = Kind::parse(&q.kind);
-            let items = merge(&idx, &hits, &have, kind, &q.q.chars().take(60).collect::<String>(), &q.sort);
-            Ok(json!({"items": items, "index": src, "gamebanana": gb, "indexUpdated": idx.updated, "tag": format!("{TAG_TITLE}: {TAG_VALUE}")}))
+            let mut items = merge(&idx, &hits, &have, kind, &q.q.chars().take(60).collect::<String>(), &q.sort);
+            // a creation made for the other game only is marked (P5, QA4-G F5)
+            if let Some(gid) = game.as_deref().map(game_id) {
+                for row in &mut items {
+                    let other = row["games"].as_array().is_some_and(|g| !g.is_empty() && !g.iter().any(|x| x.as_str() == Some(gid.as_str())));
+                    row["otherGame"] = json!(other);
+                }
+            }
+            Ok(json!({"game": game.as_deref().map(game_id), "items": items, "index": src, "gamebanana": gb, "indexUpdated": idx.updated, "tag": format!("{TAG_TITLE}: {TAG_VALUE}")}))
         })
         .await,
     )
@@ -1097,7 +1135,12 @@ async fn api_item(State(st): State<Shared>, UrlPath((model, id)): UrlPath<(Strin
             let cat = s(&page["_aCategory"]["_sName"]);
             let kind = it.as_ref().map(|i| i.kind).unwrap_or_else(|| kind_of(model.path(), if root.is_empty() { &cat } else { &root }, &cat));
             let revoked = idx.revoked.iter().any(|r| *r == key(model, id));
-            let tr = trust(kind, it.as_ref(), revoked);
+            let mut tr = trust(kind, it.as_ref(), revoked);
+            // made for the other game: asked before it installs (with any other question)
+            let other = game.as_deref().and_then(|g| other_game_note(it.as_ref(), &game_id(g)));
+            if let Some(q) = &other {
+                tr.confirm = Some(match tr.confirm.take() { Some(c) => format!("{q} {c}"), None => q.clone() });
+            }
             let images: Vec<String> = page["_aPreviewMedia"]["_aImages"]
                 .as_array()
                 .into_iter()
@@ -1116,7 +1159,7 @@ async fn api_item(State(st): State<Shared>, UrlPath((model, id)): UrlPath<(Strin
                 "text": crate::gamebanana::plain(&s(&page["_sText"]), 1500),
                 "images": images, "files": files_of(&page), "url": model.url(id), "tagged": tagged,
                 "likes": page["_nLikeCount"].as_i64().unwrap_or(0), "downloads": page["_nDownloadCount"].as_i64().unwrap_or(0),
-                "item": it, "trust": tr, "canTry": tr.allowed && kind.can_install() && tagged,
+                "item": it, "trust": tr, "canTry": tr.allowed && kind.can_install() && tagged, "otherGame": other,
                 "why": if !tagged { Some("This page doesn't carry the Loner-Strike tag any more.") } else if !kind.can_install() { Some(kind.no_installer()) } else { None },
                 "have": it.as_ref().and_then(|i| i.map.as_ref()).is_some_and(|m| have.contains(&m.name.to_ascii_lowercase())),
                 "installed": installed_json(model, id, &idx, &page),
@@ -1221,7 +1264,7 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
     if !tr.allowed {
         return Err(tr.note);
     }
-    if tr.confirm.is_some() && !confirmed {
+    if (tr.confirm.is_some() || other_game_note(it.as_ref(), &game_id(&game)).is_some()) && !confirmed {
         return Err("Confirm first.".into());
     }
     let author = one_line(&s(&page["_aSubmitter"]["_sName"]), 40);
@@ -1468,6 +1511,20 @@ pub fn made_for_refs(bsp: &Path) -> Vec<ModeRef> {
 }
 
 /// Checks a map the way the map doctor does and lists what would go in the package.
+/// "N files the map uses aren't where the game looks", naming them (P5, QA4-G F2).
+pub(crate) fn missing_files_warning(missing: &[String]) -> String {
+    const SHOWN: usize = 8;
+    let mut names = missing.iter().take(SHOWN).cloned().collect::<Vec<_>>().join(", ");
+    if missing.len() > SHOWN {
+        names.push_str(&format!(" and {} more", missing.len() - SHOWN));
+    }
+    if missing.len() == 1 {
+        format!("1 file the map uses isn't where the game looks ({names}); it'd be missing for players. The map doctor can copy or find it.")
+    } else {
+        format!("{} files the map uses aren't where the game looks ({names}); they'd be missing for players. The map doctor can copy or find them.", missing.len())
+    }
+}
+
 pub fn readiness(m: &MapFile, reports: &Path) -> Readiness {
     let mut r = Readiness { game: m.game.clone(), ..Default::default() };
     let doc = super::doctor::diagnose(m);
@@ -1486,16 +1543,16 @@ pub fn readiness(m: &MapFile, reports: &Path) -> Readiness {
     let f = crate::mapcopy::Finder::default();
     let ents = crate::goldsrc::bsp::read_lumps(&m.bsp, &[crate::goldsrc::bsp::LUMP_ENTITIES]).map(|l| crate::rcon::latin1(&l[0]).trim_end_matches('\0').to_string()).unwrap_or_default();
     let checks = super::doctor::file_checks(&f, &m.hl, &m.game, &m.name, &ents);
-    let mut missing = 0;
+    let mut missing: Vec<String> = Vec::new();
     for c in &checks {
         match &c.found {
             super::doctor::Found::Here { stock: false, .. } => r.files.push(c.rel.clone()),
             super::doctor::Found::Here { stock: true, .. } => {}
-            _ => missing += 1,
+            _ => missing.push(c.rel.clone()),
         }
     }
-    if missing > 0 {
-        r.warnings.push(format!("{missing} files the map uses aren't where the game looks; they'd be missing for players. The map doctor can copy or find them."));
+    if !missing.is_empty() {
+        r.warnings.push(missing_files_warning(&missing));
     }
     r.map.name = m.name.clone();
     r.map.bsp_size = std::fs::metadata(&m.bsp).map(|x| x.len()).unwrap_or(0);
@@ -1586,21 +1643,30 @@ pub(crate) fn package_too_big(zipped: u64) -> String {
     )
 }
 
+/// A screenshot's name for a message, with a space before it (` "desert.png"`; short, plain), or "".
+fn shot_name(n: &str) -> String {
+    let n: String = n.chars().filter(|c| !c.is_control()).take(60).collect();
+    let n = n.trim();
+    if n.is_empty() { String::new() } else { format!(" \"{n}\"") }
+}
+
 /// A screenshot from the page: PNG or JPEG, not too big.
 pub fn decode_shot(s: &Shot) -> Result<(Vec<u8>, &'static str), String> {
     use base64::Engine;
     let data = s.data.split_once(";base64,").map(|x| x.1).unwrap_or(&s.data);
+    // (each message names the screenshot: P5, QA4-G F3)
+    let which = shot_name(&s.name);
     if data.len() > MAX_SHOT * 4 / 3 + 8 {
-        return Err("A screenshot is over 8 MB.".into());
+        return Err(format!("The screenshot{which} is over 8 MB."));
     }
-    let b = base64::engine::general_purpose::STANDARD.decode(data.trim()).map_err(|_| "A screenshot couldn't be read.".to_string())?;
+    let b = base64::engine::general_purpose::STANDARD.decode(data.trim()).map_err(|_| format!("The screenshot{which} couldn't be read."))?;
     let ext = match image::guess_format(&b) {
         Ok(image::ImageFormat::Png) => "png",
         Ok(image::ImageFormat::Jpeg) => "jpg",
-        _ => return Err("Screenshots have to be PNG or JPEG pictures.".into()),
+        _ => return Err(format!("The screenshot{which} isn't a PNG or JPEG picture.")),
     };
     // a picture that says it's one but isn't is refused too; [Caps] by pixels as well
-    crate::caps::decode_picture(&b, None, crate::caps::MAX_PICTURE_SIDE).map_err(|e| if e.contains("too big") { e.replacen("That picture", "A screenshot", 1) } else { "A screenshot is damaged.".to_string() })?;
+    crate::caps::decode_picture(&b, None, crate::caps::MAX_PICTURE_SIDE).map_err(|e| if e.contains("too big") { e.replacen("That picture", &format!("The screenshot{which}"), 1) } else { format!("The screenshot{which} is damaged.") })?;
     Ok((b, ext))
 }
 
@@ -2683,6 +2749,9 @@ mod tests {
         let cache = d.join("index.json");
         let (_, src) = load_index(&|| Err("offline".into()), &cache);
         assert_eq!(src, Source::None);
+        // P5 (QA4-G F4): a newer format says so (with the kept copy, or none)
+        let (_, src) = load_index(&|| Ok(br#"{"schema": 99, "items": []}"#.to_vec()), &tmp("newer-none").join("index.json"));
+        assert_eq!(src, Source::Newer);
         let (idx, src) = load_index(&|| Ok(INDEX.as_bytes().to_vec()), &cache);
         assert_eq!((src, idx.items.len()), (Source::Live, 6));
         assert!(cache.is_file(), "a good copy is kept");
@@ -2915,6 +2984,63 @@ mod tests {
         let mut b = Vec::new();
         image::RgbImage::new(4, 4).write_to(&mut std::io::Cursor::new(&mut b), image::ImageFormat::Png).unwrap();
         format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(b))
+    }
+
+    /// P5 (QA4-G F1): a map that uses only the game's own files (CS 1.6's desert sky, the
+    /// hostage model, which isn't in czero) packs none of them, with CS 1.6 alone or both games.
+    #[test]
+    fn a_stock_only_map_ships_no_game_files() {
+        for both in [false, true] {
+            let root = tmp(if both { "stock-both" } else { "stock-cs" });
+            let hl = root.join("Half-Life");
+            let mut bsp = fixture::build();
+            while bsp.len() % 4 != 0 {
+                bsp.push(0);
+            }
+            let at = bsp.len() as u32;
+            let mut text = b"{\n\"classname\" \"worldspawn\"\n\"skyname\" \"des\"\n}\n{\n\"classname\" \"cycler\"\n\"model\" \"models/hostage.mdl\"\n}\n".to_vec();
+            text.push(0);
+            bsp[4..8].copy_from_slice(&at.to_le_bytes());
+            bsp[8..12].copy_from_slice(&(text.len() as u32).to_le_bytes());
+            bsp.extend(text);
+            put(hl.join("cstrike/maps/aim_qa.bsp"), &bsp);
+            for side in ["up", "dn", "lf", "rt", "ft", "bk"] {
+                put(hl.join(format!("cstrike/gfx/env/des{side}.tga")), b"tga");
+                if both {
+                    put(hl.join(format!("czero/gfx/env/des{side}.tga")), b"tga");
+                }
+            }
+            put(hl.join("cstrike/models/hostage.mdl"), b"mdl");
+            put(hl.join("valve/liblist.gam"), b"");
+            let m = MapFile { name: "aim_qa".into(), bsp: hl.join("cstrike/maps/aim_qa.bsp"), game: "cstrike".into(), hl, czero: false };
+            let r = readiness(&m, &root.join("reports"));
+            assert!(r.files.iter().all(|f| !f.starts_with("gfx/env/des") && f != "models/hostage.mdl"), "both={both}: {:?}", r.files);
+            assert!(r.warnings.iter().all(|w| !w.contains("credit")), "both={both}: {:?}", r.warnings);
+        }
+    }
+
+    /// P5 (QA4-G F2): the files not where the game looks are named, singular and plural.
+    #[test]
+    fn missing_files_are_named() {
+        let one = missing_files_warning(&["models/x.mdl".into()]);
+        assert!(one.starts_with("1 file the map uses isn't where the game looks (models/x.mdl)"), "{one}");
+        let many: Vec<String> = (0..10).map(|i| format!("sound/s{i}.wav")).collect();
+        let w = missing_files_warning(&many);
+        assert!(w.starts_with("10 files the map uses aren't where the game looks (sound/s0.wav, ") && w.contains(" and 2 more)"), "{w}");
+    }
+
+    /// P5 (QA4-G F3, F5): a screenshot's problems name it; a creation for the other game is asked about.
+    #[test]
+    fn screenshots_named_and_other_game_asked() {
+        let big = Shot { name: "desert.png".into(), data: format!("data:image/png;base64,{}", "A".repeat(MAX_SHOT * 2)) };
+        assert_eq!(decode_shot(&big).unwrap_err(), "The screenshot \"desert.png\" is over 8 MB.");
+        let junk = Shot { name: "".into(), data: "data:image/png;base64,AAAA".into() };
+        assert!(decode_shot(&junk).unwrap_err().starts_with("The screenshot isn't"));
+        let it: Item = serde_json::from_value(json!({"model": "Mod", "gb": 5, "name": "x", "games": ["czero"]})).unwrap();
+        assert!(other_game_note(Some(&it), "cstrike").unwrap().contains("made for Condition Zero, and you're playing Counter-Strike 1.6"));
+        assert!(other_game_note(Some(&it), "czero").is_none());
+        let any: Item = serde_json::from_value(json!({"model": "Mod", "gb": 6, "name": "y"})).unwrap();
+        assert!(other_game_note(Some(&any), "cstrike").is_none(), "not said: no question");
     }
 
     #[test]

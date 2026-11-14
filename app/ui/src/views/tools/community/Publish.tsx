@@ -76,8 +76,9 @@ function Checks({ rows }: { rows: Check[] }) {
   const go = useNav((s) => s.go);
   return (
     <ul className="cm-checks">
-      {rows.map((c) => (
-        <li key={c.title} className={`cm-check ${c.state}`}>
+      {rows.map((c, i) => (
+        // (two checks can share a title: "Requirements" for each file, P5 QA4-G)
+        <li key={`${i}:${c.title}`} className={`cm-check ${c.state}`}>
           <span className="cm-check-mark" role="img" aria-label={MARK[c.state][1]} title={MARK[c.state][1]}>{MARK[c.state][0]}</span>
           <span className="cm-check-title">{c.title}</span>
           <span className="cm-check-why muted">{c.why}</span>
@@ -441,6 +442,13 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
     : [{ state: "ok", title: "The graph", why: `Passes the Studio's checks (${r.nodes} nodes).` }];
   // (MCP: the mode's requirements: what players may not have)
   for (const w of r.requirementWarnings ?? []) checks.push({ state: "warn", title: "Requirements", why: w, fix: { label: "Open in the Studio", to: `studio:${id}` } });
+  // what players need beyond the game: the package and its page say so (QA4-G F6)
+  const nd = r.requirements?.needs;
+  if (nd && (nd.componentsPlugin || nd.creatures.length || nd.features.length)) {
+    const brain = [nd.modeVer ? `bots version ${nd.modeVer}` : "", nd.creatureVer ? `creatures version ${nd.creatureVer}` : ""].filter(Boolean).join(" and ");
+    const parts = [nd.componentsPlugin ? "Loner-Strike's components" : "", nd.creatures.length ? `creatures (${nd.creatures.includes("all") ? "the wave spawner's types" : nd.creatures.join(", ")})` : "", brain ? `the bot brain, ${brain} or newer (${nd.features.map((f) => f.name).join("; ")})` : ""].filter(Boolean);
+    checks.push({ state: "ok", title: "What players need", why: `Needs ${parts.join(", ")}. The package, its README and the page say so; players with an older Loner-Strike are told to update.` });
+  }
   if (r.remixOf) checks.push({ state: "ok", title: "Remix credit", why: `A remix of ${r.remixOf.name}${r.remixOf.author ? ` by ${r.remixOf.author}` : ""}: the package and its page credit them.` });
   const build = () =>
     run("Packing…", async () => {
