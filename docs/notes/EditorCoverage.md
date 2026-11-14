@@ -117,7 +117,10 @@ than the Rust build under test: not counted; rerun on one build).
 ### Fixed (Parity A, 2026-11-14)
 - **F-1:** a sheet now closes on Esc wherever focus is (a window listener for the top sheet, `ui.tsx`), and the
   page behind never gets that Esc; the editor's own key handler ignores keys while any sheet is open
-  (`sheetOpen()`, `MapEditor.tsx`). Both `editor-coverage-dialogs` Esc tests pass.
+  (`sheetOpen()`, `MapEditor.tsx`). Both `editor-coverage-dialogs` Esc tests pass. (The `ui.tsx` part went in with P5's
+  1aeec7f1, which committed that file whole; the rest in e14e23b9.) Rerun: dialogs, panels and keys in Chromium and
+  WebKit 245 passed (the panels "tools in the views" test failed once and passed on its rerun), TrenchBroom 9/9,
+  editor-kits and editor-bar 14/14 in both engines.
 - **TB-1:** a layer's `_tb_layer_hidden` / `_tb_layer_locked` come in as the group's hidden / locked.
 - **TB-2:** `_tb_layer_omit_from_export` is kept (`Group.omit_export`); File › Export, Share and remix's source
   .map, prefabs and compiles leave that layer and what's in it out (a copied selection keeps it).
