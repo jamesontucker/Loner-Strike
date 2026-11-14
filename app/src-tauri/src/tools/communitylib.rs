@@ -554,6 +554,7 @@ pub fn apply_picks(st: &Shared, server: &crate::servers::Entry, new: ServerPick)
     let game_dir = server.dir.join(&server.game);
     let mut problems: Vec<String> = Vec::new();
     let mut changed = false;
+    let mut modes_changed = false;
     for it in &drop_maps {
         match map_off_server(&server.id, it) {
             Ok(()) => changed = true,
@@ -563,7 +564,7 @@ pub fn apply_picks(st: &Shared, server: &crate::servers::Entry, new: ServerPick)
     for it in &drop_modes {
         if super::studio::installed(&game_dir, &it.mode) {
             match super::studio::uninstall(&game_dir, &it.mode) {
-                Ok(()) => changed = true,
+                Ok(()) => (changed, modes_changed) = (true, true),
                 Err(e) => problems.push(format!("{}: {e}", it.name)),
             }
         }
@@ -573,7 +574,7 @@ pub fn apply_picks(st: &Shared, server: &crate::servers::Entry, new: ServerPick)
     kept.stale = old.stale.iter().filter(|k| new.maps.contains(k) || new.modes.contains(k)).cloned().collect();
     for it in &add_modes {
         match mode_to_server(st, it, &game_dir) {
-            Ok(()) => changed = true,
+            Ok(()) => (changed, modes_changed) = (true, true),
             Err(e) => {
                 kept.modes.retain(|k| *k != it.key());
                 problems.push(format!("{}: {e}", it.name));
@@ -588,6 +589,8 @@ pub fn apply_picks(st: &Shared, server: &crate::servers::Entry, new: ServerPick)
             uploaded = Some(crate::servers::sync(server, false).is_ok());
         }
     }
+    // (the menu there lists the modes now; not before the files are up)
+    let reload = if modes_changed && uploaded != Some(false) { Some(super::studio::modes_reload::for_server(server)) } else { None };
     let maps: Vec<String> = add_maps.iter().flat_map(|i| i.maps.clone()).collect();
     let job = if maps.is_empty() {
         None
@@ -601,7 +604,11 @@ pub fn apply_picks(st: &Shared, server: &crate::servers::Entry, new: ServerPick)
             }
         }
     };
-    Ok(json!({"ok": true, "job": job, "problems": problems, "uploaded": uploaded, "picks": kept}))
+    let mut v = json!({"ok": true, "job": job, "problems": problems, "uploaded": uploaded, "picks": kept});
+    if let (Value::Object(o), Some(Value::Object(r))) = (&mut v, reload.map(|r| r.json())) {
+        o.extend(r);
+    }
+    Ok(v)
 }
 
 /// What a server carries and could carry: the library's maps and Studio modes.

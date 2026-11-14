@@ -194,7 +194,15 @@ export type ServerItem = { key: string; kind: Kind; name: string; author: string
 export type ServerView = { server: { id: string; name: string; remote: boolean; ready: boolean; game: string }; items: ServerItem[] };
 export const serverContent = (id: string, signal?: AbortSignal) => get<ServerView>(`${base}/server/${encodeURIComponent(id)}`, signal);
 export const setServerContent = (id: string, picks: { maps: string[]; modes: string[] }) =>
-  post<{ ok: boolean; job: string | null; problems: string[]; uploaded: boolean | null }>(`${base}/server/${encodeURIComponent(id)}`, picks);
+  post<{
+    ok: boolean;
+    job: string | null;
+    problems: string[];
+    uploaded: boolean | null;
+    /** after a mode went on or came off: the server's menu lists it now, after its next map, or when it starts */
+    modes?: "now" | "next_map" | "off";
+    modesNote?: string | null;
+  }>(`${base}/server/${encodeURIComponent(id)}`, picks);
 
 export const KIND_LABEL: Record<Kind, string> = { map: "Map", mode: "Game mode", prefab: "Prefab", spray: "Spray", texture: "Textures", other: "Other" };
 

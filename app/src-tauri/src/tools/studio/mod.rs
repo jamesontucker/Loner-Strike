@@ -27,6 +27,7 @@ pub mod testrun;
 pub mod tables;
 pub mod history;
 pub mod settings;
+pub mod modes_reload;
 #[cfg(test)]
 mod help_tests;
 #[cfg(test)]
@@ -559,6 +560,16 @@ pub fn compile(st: &Shared, mut g: Graph, debug: bool) -> Result<Value, String> 
     // installed under the short id this game has for its uid (another mode may have its own)
     let installed_as = install_id(&game.dir, &g);
     g.mode.id = installed_as.clone();
+    // (a mode new to the game: the open game's menu reads modes.ini again once it's in)
+    let new_here = !installed(&game.dir, &installed_as);
+    let reload = |mut v: Value| {
+        if new_here {
+            if let (Value::Object(o), Value::Object(r)) = (&mut v, modes_reload::for_local_game(&game).json()) {
+                o.extend(r);
+            }
+        }
+        v
+    };
     let install = compiler_install(st, &game.dir).ok_or(NO_GAME)?;
     let _one = COMPILING.lock().unwrap_or_else(|e| e.into_inner());
     let out = gen::generate(&g, debug);
@@ -580,7 +591,7 @@ pub fn compile(st: &Shared, mut g: Graph, debug: bool) -> Result<Value, String> 
     let stamp = source_hash(&out.source);
     if dest.is_file() && built.is_file() && std::fs::read_to_string(&stamp_path).is_ok_and(|s| s.trim() == stamp) {
         register_mode(&am.join("configs"), &g, &plugin)?;
-        return Ok(json!({"ok": true, "problems": problems, "output": "Unchanged since the last compile: the installed plugin is used as it is.", "plugin": plugin, "installedAs": installed_as, "debug": debug, "cached": true, "secs": 0.0}));
+        return Ok(reload(json!({"ok": true, "problems": problems, "output": "Unchanged since the last compile: the installed plugin is used as it is.", "plugin": plugin, "installedAs": installed_as, "debug": debug, "cached": true, "secs": 0.0})));
     }
     let _ = std::fs::remove_file(&stamp_path);
     let (ok, output) = run_amxxpc(&install, &scripting, &src, &inc, &built)?;
@@ -597,7 +608,7 @@ pub fn compile(st: &Shared, mut g: Graph, debug: bool) -> Result<Value, String> 
     std::fs::copy(&built, &dest).map_err(|e| format!("Couldn't install the plugin ({e})."))?;
     let _ = std::fs::write(&stamp_path, &stamp);
     register_mode(&am.join("configs"), &g, &plugin)?;
-    Ok(json!({"ok": true, "problems": problems, "output": output, "plugin": plugin, "installedAs": installed_as, "debug": debug, "secs": (started.elapsed().as_secs_f64() * 10.0).round() / 10.0}))
+    Ok(reload(json!({"ok": true, "problems": problems, "output": output, "plugin": plugin, "installedAs": installed_as, "debug": debug, "secs": (started.elapsed().as_secs_f64() * 10.0).round() / 10.0})))
 }
 
 /// Compile (the full check): the real amxxpc on the mode's plugin, without installing it or
@@ -945,11 +956,16 @@ async fn api_uninstall(State(st): State<Shared>, UrlPath(id): UrlPath<String>, h
         if !graph::valid_mode_id(&id) {
             return Err(BAD_ID.into());
         }
-        let dir = local_game(&st)?.dir.clone();
+        let game = local_game(&st)?;
+        let dir = game.dir.clone();
         // a Studio graph's mode: wherever its uid is installed
         let short = read_graph(&graphs_dir(), &id).map(|g| install_id(&dir, &g)).unwrap_or(id);
         uninstall(&dir, &short)?;
-        Ok(json!({"ok": true}))
+        let mut v = json!({"ok": true});
+        if let (Value::Object(o), Value::Object(r)) = (&mut v, modes_reload::for_local_game(&game).json()) {
+            o.extend(r);
+        }
+        Ok(v)
     })
     .await
 }

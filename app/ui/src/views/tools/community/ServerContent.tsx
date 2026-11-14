@@ -21,6 +21,8 @@ export default function ServerContent({ server }: { server: { id: string; name: 
   const [modes, setModes] = useState<Set<string>>(new Set());
   const [copying, setCopying] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
+  // (a server whose menu couldn't read the mode list again on the spot)
+  const [modesNote, setModesNote] = useState<string | null>(null);
   const { working, run } = useBusy();
   useEffect(() => {
     if (!q.data) return;
@@ -51,6 +53,7 @@ export default function ServerContent({ server }: { server: { id: string; name: 
       const r = await setServerContent(server.id, { maps: [...maps], modes: [...modes] });
       if (r.error) return toast(r.error, true);
       setProblems(r.problems ?? []);
+      setModesNote(r.modes === "next_map" ? (r.modesNote ?? "Available after the next map change") : null);
       if (r.uploaded === false) toast(`Saved, but ${server.name} couldn't be reached to upload the changes. They go with the next upload.`, true);
       if (r.job) setCopying(true);
       else toast("Done.");
@@ -104,6 +107,7 @@ export default function ServerContent({ server }: { server: { id: string; name: 
         <section className="panel">
           <h3>Game modes</h3>
           <ul className="cm-srv">{modeRows.map(row)}</ul>
+          {modesNote && <p className="muted small-note">{modesNote}: {server.name} lists mode changes once its map changes.</p>}
         </section>
       )}
       {problems.length > 0 && (

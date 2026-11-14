@@ -356,6 +356,7 @@ new bool:g_LearnGuard, Float:g_LearnTimelimit
 new bool:g_Reloading
 new bool:g_FirstMap               // the first map since the server started
 new g_ProfileLoaded[48]           // bot_profile_db as this map loaded (CZ reads it before plugins)
+new g_CurGone                     // gm_modes_reload: the mode playing now was taken off (listed until the map changes, not picked again)
 new g_GoMode = -1                 // the mode picked for the next map (-1: the current one)
 new g_NextMode = -1, g_NextMap[32] // a vote's mode for when this map ends (gm_pubserver), and its map
 new bool:g_NextByRotation         // ... picked by the mode rotation, not a vote
@@ -502,6 +503,7 @@ public plugin_init()
 	// Control panel API (sent over RCON by the companion web app)
 	register_srvcmd("gm_status", "srv_status")
 	register_srvcmd("gm_mode", "srv_mode")
+	register_srvcmd("gm_modes_reload", "srv_modes_reload")
 	register_srvcmd("gm_map", "srv_map")
 	register_srvcmd("gm_set", "srv_set")
 	register_srvcmd("gm_addon", "srv_addon")
@@ -831,6 +833,51 @@ load_modes()
 		g_ModeCount++
 	}
 	fclose(f)
+}
+
+// gm_modes_reload: reads modes.ini again now (the app sends it after adding or taking off a
+// mode), so gm_mode <new> works on this map. Picks held by index keep pointing at the same
+// mode by id; the mode playing now stays listed until the map changes even if it went.
+public srv_modes_reload()
+{
+	status_stale()
+	new cur[32], go[32], next[32], pick[33][32]
+	copy(cur, charsmax(cur), g_ModeId[g_Cur])
+	if (g_GoMode >= 0)
+		copy(go, charsmax(go), g_ModeId[g_GoMode])
+	if (g_NextMode >= 0)
+		copy(next, charsmax(next), g_ModeId[g_NextMode])
+	for (new i = 1; i <= 32; i++)
+		if (g_PickMode[i] >= 0 && g_PickMode[i] < g_ModeCount)
+			copy(pick[i], charsmax(pick[]), g_ModeId[g_PickMode[i]])
+	new name[48], desc[64], cmd[32], flags[8]
+	copy(name, charsmax(name), g_ModeName[g_Cur])
+	copy(desc, charsmax(desc), g_ModeDesc[g_Cur])
+	copy(cmd, charsmax(cmd), g_ModeCmd[g_Cur])
+	copy(flags, charsmax(flags), g_ModeFlags[g_Cur])
+
+	g_ModeCount = 0
+	load_modes()
+	new listed = g_ModeCount
+
+	g_Cur = find_mode(cur)
+	g_CurGone = g_Cur < 0
+	if (g_CurGone)
+	{
+		g_Cur = g_ModeCount < MAX_MODES ? g_ModeCount++ : 0
+		copy(g_ModeId[g_Cur], charsmax(g_ModeId[]), cur)
+		copy(g_ModeName[g_Cur], charsmax(g_ModeName[]), name)
+		copy(g_ModeDesc[g_Cur], charsmax(g_ModeDesc[]), desc)
+		copy(g_ModeCmd[g_Cur], charsmax(g_ModeCmd[]), cmd)
+		copy(g_ModeFlags[g_Cur], charsmax(g_ModeFlags[]), flags)
+	}
+	g_GoMode = go[0] ? find_mode(go) : -1
+	g_NextMode = next[0] ? find_mode(next) : -1
+	for (new i = 1; i <= 32; i++)
+		if (g_PickMode[i] >= 0)
+			g_PickMode[i] = pick[i][0] ? find_mode(pick[i]) : -1
+	server_print("[Game Mode] Modes reloaded: %d", listed)
+	return PLUGIN_HANDLED
 }
 
 find_mode(const id[])
@@ -3807,7 +3854,7 @@ public srv_mode()
 	read_argv(1, id, charsmax(id))
 	read_argv(2, map, charsmax(map))
 	new mode = find_mode(id)
-	if (mode < 0)
+	if (mode < 0 || (g_CurGone && mode == g_Cur))
 	{
 		server_print("[Game Mode] Unknown mode: %s", id)
 		return PLUGIN_HANDLED
