@@ -401,54 +401,6 @@ stock lsg_call(const plugin[], const func[], nargs, a, b, &r)
 	return 1
 }
 
-// one server command, never one that reaches passwords, files, plugins, bans or quits the
-// server (amx: an AMX Mod X command, never rcon, cvars that are secret, plugins, bans or admins)
-stock bool:lsg_safe_cmd(const cmd[], amx)
-{
-	lsg_cmd_ok = false
-	new c[128], w[32], rest[96], w2[48]
-	copy(c, charsmax(c), cmd)
-	trim(c)
-	// (checked on the final string: no ; and no control characters at all, quotes in pairs)
-	new quotes
-	for (new i = 0; c[i]; i++)
-	{
-		if (c[i] < 32 || c[i] == ';')
-			return false
-		if (c[i] == '"')
-			quotes++
-	}
-	if (!c[0] || quotes % 2 || containi(c, "password") >= 0 || containi(c, "rcon") >= 0)
-		return false
-	strtok(c, w, charsmax(w), rest, charsmax(rest), ' ')
-	strtolower(w)
-	trim(rest)
-	strtok(rest, w2, charsmax(w2), rest, charsmax(rest), ' ')
-	static const BLOCK[][] = { "quit", "exit", "_restart", "exec", "writecfg", "writeid", "writeip", "sv_downloadurl", "logaddress", "logaddress_add", "logaddress_del", "log", "meta", "amxx", "alias", "banid", "addip", "removeid", "removeip", "listid", "listip", "sv_logfile", "mp_logfile", "mp_logdetail", "rcon", "sv_password", "changelevel2", "sys_ticrate", "plugin_unload", "plugin_load" }
-	if (amx)
-	{
-		static const AMX_BLOCK[][] = { "amx_rcon", "amx_ban", "amx_banip", "amx_addban", "amx_unban", "amx_addadmin", "amx_reloadadmins", "amx_pause", "amx_unpause", "amx_pausecfg", "amx_plugins", "amx_cfg", "amx_execcfg", "amx_exec", "amx_execall", "amx_logs" }
-		if (!equal(w, "amx_", 4))
-			return false
-		for (new i = 0; i < sizeof AMX_BLOCK; i++)
-			if (equal(w, AMX_BLOCK[i]))
-				return false
-		if (equal(w, "amx_cvar") && (!w2[0] || lsg_secret(w2)))
-			return false
-	}
-	else
-	{
-		for (new i = 0; i < sizeof BLOCK; i++)
-			if (equal(w, BLOCK[i]))
-				return false
-		if (equal(w, "log", 3) || lsg_secret(w))
-			return false
-	}
-	server_cmd("%s", c)
-	lsg_cmd_ok = true
-	return true
-}
-
 stock lsg_hitgroup(v)
 {
 	new t[12]
@@ -954,6 +906,75 @@ stock lsg_round_time(secs)
 	write_short(max(secs, 0))
 	message_end()
 }
+// one server command, only an allowed one (graph::cmd_rules: the app checks the same). The
+// engine splits words on spaces and on { } ( ) ' : , and drops quotes: none of those may be in
+// it, so the first word checked is the one that runs. amx: an AMX Mod X command instead.
+stock bool:lsg_cmd_denied(const w[])
+{
+	static const DENY_WORDS[][] = { "quit", "exit", "restart", "_restart", "changelevel", "changelevel2", "map", "meta", "amxx", "condump", "logaddress" }
+	static const DENY_PARTS[][] = { "file", "cfg", "log", "password", "rcon", "downloadurl", "motd", "exec", "dump", "alias", "plugin", "write", "save", "load", "admin", "ban", "sql" }
+	for (new i = 0; i < sizeof DENY_WORDS; i++)
+		if (equal(w, DENY_WORDS[i]))
+			return true
+	for (new i = 0; i < sizeof DENY_PARTS; i++)
+		if (contain(w, DENY_PARTS[i]) >= 0)
+			return true
+	return equal(w, "logaddress", 10) != 0
+}
+
+stock bool:lsg_server_word(const w[])
+{
+	static const WORDS[][] = { "say", "humans_join_team", "sv_gravity", "sv_airaccelerate", "sv_accelerate", "sv_maxspeed", "sv_friction", "sv_stopspeed", "sv_alltalk", "sv_maxvelocity", "sv_stepsize", "sv_wateraccelerate", "sv_waterfriction", "sv_bounce", "sv_restart", "sv_restartround", "sv_clienttrace", "sv_voiceenable" }
+	static const PREFIXES[][] = { "mp_", "bot_", "ls_" }
+	if (lsg_cmd_denied(w))
+		return false
+	for (new i = 0; i < sizeof WORDS; i++)
+		if (equal(w, WORDS[i]))
+			return true
+	for (new i = 0; i < sizeof PREFIXES; i++)
+		if (equal(w, PREFIXES[i], strlen(PREFIXES[i])) && strlen(w) > strlen(PREFIXES[i]))
+			return true
+	return false
+}
+
+stock bool:lsg_safe_cmd(const cmd[], amx)
+{
+	lsg_cmd_ok = false
+	new c[128], w[48], w2[48], n, k
+	copy(c, charsmax(c), cmd)
+	trim(c)
+	if (!c[0] || strlen(c) > 120)
+		return false
+	for (new i = 0; c[i]; i++)
+		if (!isalnum(c[i]) && c[i] != ' ' && c[i] != '_' && c[i] != '.' && c[i] != '-' && c[i] != '+' && c[i] != '!' && c[i] != '?' && c[i] != '@' && c[i] != '#')
+			return false
+	// the first two words, lower case
+	for (k = 0; c[k] == ' '; k++) {}
+	for (n = 0; c[k] && c[k] != ' ' && n < charsmax(w); k++)
+		w[n++] = tolower(c[k])
+	w[n] = 0
+	for (; c[k] == ' '; k++) {}
+	for (n = 0; c[k] && c[k] != ' ' && n < charsmax(w2); k++)
+		w2[n++] = tolower(c[k])
+	w2[n] = 0
+	if (amx)
+	{
+		static const AMX_BLOCK[][] = { "amx_rcon", "amx_ban", "amx_banip", "amx_addban", "amx_unban", "amx_addadmin", "amx_reloadadmins", "amx_pause", "amx_unpause", "amx_pausecfg", "amx_plugins", "amx_modules", "amx_cfg", "amx_execcfg", "amx_exec", "amx_execall", "amx_logs", "amx_map", "amx_votemap", "amx_extendmap", "amx_last", "amx_who", "amx_off", "amx_on", "amx_nick", "amx_leave" }
+		if (!equal(w, "amx_", 4) || lsg_cmd_denied(w))
+			return false
+		for (new i = 0; i < sizeof AMX_BLOCK; i++)
+			if (equal(w, AMX_BLOCK[i]))
+				return false
+		if (equal(w, "amx_cvar") && !lsg_server_word(w2))
+			return false
+	}
+	else if (equal(w, "amx_", 4) || !lsg_server_word(w))
+		return false
+	server_cmd("%s", c)
+	lsg_cmd_ok = true
+	return true
+}
+
 
 public plugin_init()
 {

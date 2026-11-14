@@ -1647,42 +1647,73 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
     p
 }
 
-/// Why a server or AMX Mod X command is refused (the same rules the plugin checks at run time,
-/// gen.rs `lsg_safe_cmd`): None when it's allowed.
+/// The commands a mode may send (Run Server Command and Run AMX Command). One list for the app's
+/// check (`cmd_refused`) and the plugin's (`lsg_safe_cmd`, generated from these by
+/// `gen::safe_cmd_stock`), so the two can't drift apart.
+///
+/// The engine splits a command into words on spaces and also on `{ } ( ) ' : ,` and drops quotes;
+/// a mode's command may hold none of those (nor `;`, control characters or `"`), so the first
+/// word the check sees is the one the engine runs.
+///
+/// Run Server Command: an allowlist of first words. AMX Mod X commands go through Run AMX
+/// Command only, which has its own list; amx_cvar may only set what Run Server Command may.
+pub mod cmd_rules {
+    /// the characters a command may have
+    pub fn allowed_char(c: char) -> bool {
+        c.is_ascii_alphanumeric() || " _.-+!?@#".contains(c)
+    }
+    /// first words that start like these are allowed (game rules, bots, our own plugins)
+    pub const SERVER_PREFIXES: [&str; 3] = ["mp_", "bot_", "ls_"];
+    /// and these exactly (gameplay settings and the commands our nodes need)
+    pub const SERVER_WORDS: [&str; 18] = ["say", "humans_join_team", "sv_gravity", "sv_airaccelerate", "sv_accelerate", "sv_maxspeed", "sv_friction", "sv_stopspeed", "sv_alltalk", "sv_maxvelocity", "sv_stepsize", "sv_wateraccelerate", "sv_waterfriction", "sv_bounce", "sv_restart", "sv_restartround", "sv_clienttrace", "sv_voiceenable"];
+    /// never, even when allowed above: any word with one of these in it
+    pub const DENY_PARTS: [&str; 17] = ["file", "cfg", "log", "password", "rcon", "downloadurl", "motd", "exec", "dump", "alias", "plugin", "write", "save", "load", "admin", "ban", "sql"];
+    /// never: these words exactly
+    pub const DENY_WORDS: [&str; 11] = ["quit", "exit", "restart", "_restart", "changelevel", "changelevel2", "map", "meta", "amxx", "condump", "logaddress"];
+    /// Run AMX Command: never these (bans, admins, plugins, configs, rcon, the map, who's who)
+    pub const AMX_BLOCK: [&str; 26] = ["amx_rcon", "amx_ban", "amx_banip", "amx_addban", "amx_unban", "amx_addadmin", "amx_reloadadmins", "amx_pause", "amx_unpause", "amx_pausecfg", "amx_plugins", "amx_modules", "amx_cfg", "amx_execcfg", "amx_exec", "amx_execall", "amx_logs", "amx_map", "amx_votemap", "amx_extendmap", "amx_last", "amx_who", "amx_off", "amx_on", "amx_nick", "amx_leave"];
+
+    pub fn denied(w: &str) -> bool {
+        DENY_WORDS.contains(&w) || DENY_PARTS.iter().any(|p| w.contains(p)) || w.starts_with("logaddress")
+    }
+    /// a first word Run Server Command (and amx_cvar) may use
+    pub fn server_word(w: &str) -> bool {
+        !denied(w) && (SERVER_WORDS.contains(&w) || SERVER_PREFIXES.iter().any(|p| w.starts_with(p) && w.len() > p.len()))
+    }
+}
+
+/// Why a mode's server command (or, with `amx`, AMX Mod X command) is refused; None: it's fine.
+/// The same rules as the plugin's `lsg_safe_cmd` (both from `cmd_rules`).
 pub fn cmd_refused(cmd: &str, amx: bool) -> Option<&'static str> {
+    use cmd_rules::*;
     let c = cmd.trim();
-    let low = c.to_ascii_lowercase();
     if c.is_empty() {
         return Some("it's empty");
     }
-    if c.contains(';') || c.chars().any(|ch| (ch as u32) < 32) {
-        return Some("one command at a time (no ; and no control characters)");
+    if c.len() > 120 || !c.chars().all(allowed_char) {
+        return Some("only letters, digits, spaces and _ . - + ! ? @ # (no quotes, ; or other punctuation), up to 120");
     }
-    if c.matches('"').count() % 2 == 1 {
-        return Some("its quotes don't pair up");
-    }
-    if low.contains("password") || low.contains("rcon") {
-        return Some("passwords and rcon are off limits");
-    }
-    let mut words = low.split_whitespace();
+    let low = c.to_ascii_lowercase();
+    let mut words = low.split(' ').filter(|w| !w.is_empty());
     let w = words.next().unwrap_or("");
     let w2 = words.next().unwrap_or("");
     if amx {
-        const AMX_BLOCK: [&str; 16] = ["amx_rcon", "amx_ban", "amx_banip", "amx_addban", "amx_unban", "amx_addadmin", "amx_reloadadmins", "amx_pause", "amx_unpause", "amx_pausecfg", "amx_plugins", "amx_cfg", "amx_execcfg", "amx_exec", "amx_execall", "amx_logs"];
         if !w.starts_with("amx_") {
             return Some("an AMX Mod X command starts with amx_");
         }
-        if AMX_BLOCK.contains(&w) {
-            return Some("bans, admin edits, plugin control, configs and rcon are off limits");
+        if AMX_BLOCK.contains(&w) || denied(w) {
+            return Some("bans, admin edits, plugin control, configs, logs, the map and rcon are off limits");
         }
-        if w == "amx_cvar" && (w2.is_empty() || super::gen::secret_cvar(w2)) {
-            return Some("amx_cvar can't touch secret settings");
+        if w == "amx_cvar" && !server_word(w2) {
+            return Some("amx_cvar can only change the settings Run Server Command may (mp_, bot_, ls_ and gameplay sv_ settings)");
         }
         return None;
     }
-    const BLOCK: [&str; 30] = ["quit", "exit", "_restart", "exec", "writecfg", "writeid", "writeip", "sv_downloadurl", "logaddress", "logaddress_add", "logaddress_del", "log", "meta", "amxx", "alias", "banid", "addip", "removeid", "removeip", "listid", "listip", "sv_logfile", "mp_logfile", "mp_logdetail", "rcon", "sv_password", "changelevel2", "sys_ticrate", "plugin_unload", "plugin_load"];
-    if BLOCK.contains(&w) || w.starts_with("log") || super::gen::secret_cvar(w) {
-        return Some("quitting, files, configs, logs, plugins, bans and passwords are off limits");
+    if w.starts_with("amx_") {
+        return Some("AMX Mod X commands go in Run AMX Command");
+    }
+    if !server_word(w) {
+        return Some("only game rules (mp_), bots (bot_), our plugins (ls_), gameplay sv_ settings, say and humans_join_team");
     }
     None
 }
@@ -2393,9 +2424,29 @@ mod tests {
         assert!(cmd_refused("amx_rcon quit", true).is_some());
         assert!(cmd_refused("amx_cvar rcon_password x", true).is_some());
         assert!(cmd_refused("amx_ban 0 x", true).is_some());
-        assert!(cmd_refused("sv_gravity 400", false).is_none());
-        assert!(cmd_refused("say \"hello there\"", false).is_none());
-        assert!(cmd_refused("amx_slap @T 0", true).is_none());
+        // the engine drops quotes: a quoted first word is still that word (refused: no quotes at all)
+        for q in ["\"rcon_password\" x", "\"exec\" foo.cfg", "\"quit\"", "\"sv_gravity\" 1", "'exec' x", "exec:x", "mp_x(exec"] {
+            assert!(cmd_refused(q, false).is_some(), "{q}");
+            assert!(cmd_refused(q, true).is_some(), "amx {q}");
+        }
+        // AMX Mod X commands only through Run AMX Command (with its block list)
+        for a in ["amx_rcon quit", "amx_ban 0 x", "amx_addadmin x", "amx_execcfg x", "amx_slap x", "amx_cvar sv_gravity 1"] {
+            assert!(cmd_refused(a, false).is_some(), "{a}");
+        }
+        for a in ["amx_rcon quit", "amx_ban 0 x", "amx_addadmin x", "amx_execcfg x", "amx_plugins", "amx_map de_dust", "amx_last", "amx_cvar rcon_password x", "amx_cvar sv_password x", "amx_cvar mp_logfile 1", "amx_cvar hostname x", "amx_cvar"] {
+            assert!(cmd_refused(a, true).is_some(), "{a}");
+        }
+        // names with file, cfg, log and the like; commands that quit, change the map or alias
+        for w in ["mp_logfile 1", "mp_logdetail 3", "ls_cfg_write x", "bot_profile_file x", "ls_savenav", "mp_motdfile x", "writecfg x", "motd_write x", "condump", "logaddress_add 1.2.3.4 1", "sv_downloadurl x", "changelevel de_dust", "map de_dust", "restart", "_restart", "alias x", "meta list", "hostname x", "sv_cheats 1", "rcon_password x", "plugin_load x"] {
+            assert!(cmd_refused(w, false).is_some(), "{w}");
+        }
+        for ok in ["sv_gravity 400", "sv_airaccelerate 100", "mp_friendlyfire 1", "bot_quota 10", "bot_add_t", "ls_wave 3", "say hello there!", "humans_join_team CT", "sv_restart 1"] {
+            assert!(cmd_refused(ok, false).is_none(), "{ok}");
+        }
+        assert!(cmd_refused("say \"hello there\"", false).is_some(), "no quotes");
+        for ok in ["amx_slap @T 0", "amx_say hello", "amx_cvar sv_gravity 400", "amx_cvar mp_roundtime 3"] {
+            assert!(cmd_refused(ok, true).is_none(), "{ok}");
+        }
         // a node with a refused command doesn't build
         let g = graph(
             json!([

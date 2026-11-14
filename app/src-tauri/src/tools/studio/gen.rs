@@ -1146,6 +1146,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
 
     o.line(HELPERS);
+    o.line(&safe_cmd_stock());
     o.blank();
     if uses_v3 {
         o.line(V3_HELPERS);
@@ -2311,7 +2312,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let store = k.map_or(String::new(), |k| format!("g_lsgO[{k}] = "));
             b.line(format!("\t{store}lsg_safe_cmd({}, {}) ? 1 : 0", inp("cmd", "text"), if amx { 1 } else { 0 }));
             if debug {
-                b.line(format!("\tif (!lsg_cmd_ok)\n\t\t{}", err("Refused: that command isn't allowed from a mode (passwords, files, plugins, quitting, bans and admin edits are off limits; one command at a time).")));
+                b.line(format!("\tif (!lsg_cmd_ok)\n\t\t{}", err("Refused: a mode may only send game rules (mp_), bots (bot_), our plugins (ls_), gameplay sv_ settings, say and humans_join_team; AMX commands never bans, admins, plugins, configs or the map.")));
             }
             then_line(&mut b, "then");
         }
@@ -3232,6 +3233,81 @@ fn lsg_secs(v: &Option<Val>) -> String {
 /// graph can't read or write outside them.
 const V3_HELPERS: &str = include_str!("v3_helpers.pawn");
 
+/// The plugin's command check, from the same lists as the app's (`graph::cmd_rules`).
+pub fn safe_cmd_stock() -> String {
+    use super::graph::cmd_rules::*;
+    let arr = |l: &[&str]| l.iter().map(|w| format!("\"{w}\"")).collect::<Vec<_>>().join(", ");
+    format!(r#"// one server command, only an allowed one (graph::cmd_rules: the app checks the same). The
+// engine splits words on spaces and on {{ }} ( ) ' : , and drops quotes: none of those may be in
+// it, so the first word checked is the one that runs. amx: an AMX Mod X command instead.
+stock bool:lsg_cmd_denied(const w[])
+{{
+	static const DENY_WORDS[][] = {{ {dw} }}
+	static const DENY_PARTS[][] = {{ {dp} }}
+	for (new i = 0; i < sizeof DENY_WORDS; i++)
+		if (equal(w, DENY_WORDS[i]))
+			return true
+	for (new i = 0; i < sizeof DENY_PARTS; i++)
+		if (contain(w, DENY_PARTS[i]) >= 0)
+			return true
+	return equal(w, "logaddress", 10) != 0
+}}
+
+stock bool:lsg_server_word(const w[])
+{{
+	static const WORDS[][] = {{ {sw} }}
+	static const PREFIXES[][] = {{ {sp} }}
+	if (lsg_cmd_denied(w))
+		return false
+	for (new i = 0; i < sizeof WORDS; i++)
+		if (equal(w, WORDS[i]))
+			return true
+	for (new i = 0; i < sizeof PREFIXES; i++)
+		if (equal(w, PREFIXES[i], strlen(PREFIXES[i])) && strlen(w) > strlen(PREFIXES[i]))
+			return true
+	return false
+}}
+
+stock bool:lsg_safe_cmd(const cmd[], amx)
+{{
+	lsg_cmd_ok = false
+	new c[128], w[48], w2[48], n, k
+	copy(c, charsmax(c), cmd)
+	trim(c)
+	if (!c[0] || strlen(c) > 120)
+		return false
+	for (new i = 0; c[i]; i++)
+		if (!isalnum(c[i]) && c[i] != ' ' && c[i] != '_' && c[i] != '.' && c[i] != '-' && c[i] != '+' && c[i] != '!' && c[i] != '?' && c[i] != '@' && c[i] != '#')
+			return false
+	// the first two words, lower case
+	for (k = 0; c[k] == ' '; k++) {{}}
+	for (n = 0; c[k] && c[k] != ' ' && n < charsmax(w); k++)
+		w[n++] = tolower(c[k])
+	w[n] = 0
+	for (; c[k] == ' '; k++) {{}}
+	for (n = 0; c[k] && c[k] != ' ' && n < charsmax(w2); k++)
+		w2[n++] = tolower(c[k])
+	w2[n] = 0
+	if (amx)
+	{{
+		static const AMX_BLOCK[][] = {{ {ab} }}
+		if (!equal(w, "amx_", 4) || lsg_cmd_denied(w))
+			return false
+		for (new i = 0; i < sizeof AMX_BLOCK; i++)
+			if (equal(w, AMX_BLOCK[i]))
+				return false
+		if (equal(w, "amx_cvar") && !lsg_server_word(w2))
+			return false
+	}}
+	else if (equal(w, "amx_", 4) || !lsg_server_word(w))
+		return false
+	server_cmd("%s", c)
+	lsg_cmd_ok = true
+	return true
+}}
+"#, dw = arr(&DENY_WORDS), dp = arr(&DENY_PARTS), sw = arr(&SERVER_WORDS), sp = arr(&SERVER_PREFIXES), ab = arr(&AMX_BLOCK))
+}
+
 /// Helpers every plugin gets (stocks: the ones a graph doesn't use cost nothing).
 const HELPERS: &str = r##"// ---- the game and the server (Game, World, Players, Entities, Effects, Advanced nodes) ----
 stock g_lsgRounds, g_lsgScore[3], bool:g_lsgFreeze, Float:g_lsgGagTill[33], g_lsgFw = -1, bool:lsg_cmd_ok, g_lsgSprExp, g_lsgSprBeam
@@ -3611,54 +3687,6 @@ stock lsg_call(const plugin[], const func[], nargs, a, b, &r)
 		callfunc_push_int(b)
 	r = callfunc_end()
 	return 1
-}
-
-// one server command, never one that reaches passwords, files, plugins, bans or quits the
-// server (amx: an AMX Mod X command, never rcon, cvars that are secret, plugins, bans or admins)
-stock bool:lsg_safe_cmd(const cmd[], amx)
-{
-	lsg_cmd_ok = false
-	new c[128], w[32], rest[96], w2[48]
-	copy(c, charsmax(c), cmd)
-	trim(c)
-	// (checked on the final string: no ; and no control characters at all, quotes in pairs)
-	new quotes
-	for (new i = 0; c[i]; i++)
-	{
-		if (c[i] < 32 || c[i] == ';')
-			return false
-		if (c[i] == '"')
-			quotes++
-	}
-	if (!c[0] || quotes % 2 || containi(c, "password") >= 0 || containi(c, "rcon") >= 0)
-		return false
-	strtok(c, w, charsmax(w), rest, charsmax(rest), ' ')
-	strtolower(w)
-	trim(rest)
-	strtok(rest, w2, charsmax(w2), rest, charsmax(rest), ' ')
-	static const BLOCK[][] = { "quit", "exit", "_restart", "exec", "writecfg", "writeid", "writeip", "sv_downloadurl", "logaddress", "logaddress_add", "logaddress_del", "log", "meta", "amxx", "alias", "banid", "addip", "removeid", "removeip", "listid", "listip", "sv_logfile", "mp_logfile", "mp_logdetail", "rcon", "sv_password", "changelevel2", "sys_ticrate", "plugin_unload", "plugin_load" }
-	if (amx)
-	{
-		static const AMX_BLOCK[][] = { "amx_rcon", "amx_ban", "amx_banip", "amx_addban", "amx_unban", "amx_addadmin", "amx_reloadadmins", "amx_pause", "amx_unpause", "amx_pausecfg", "amx_plugins", "amx_cfg", "amx_execcfg", "amx_exec", "amx_execall", "amx_logs" }
-		if (!equal(w, "amx_", 4))
-			return false
-		for (new i = 0; i < sizeof AMX_BLOCK; i++)
-			if (equal(w, AMX_BLOCK[i]))
-				return false
-		if (equal(w, "amx_cvar") && (!w2[0] || lsg_secret(w2)))
-			return false
-	}
-	else
-	{
-		for (new i = 0; i < sizeof BLOCK; i++)
-			if (equal(w, BLOCK[i]))
-				return false
-		if (equal(w, "log", 3) || lsg_secret(w))
-			return false
-	}
-	server_cmd("%s", c)
-	lsg_cmd_ok = true
-	return true
 }
 
 stock lsg_hitgroup(v)
@@ -4763,7 +4791,11 @@ mod tests {
         let line = src.lines().find(|l| l.contains("lsg_kick(ctx")).unwrap();
         assert!(!line.contains("\\\"") && line.matches('"').count() == 2, "{line}");
         assert!(src.contains("lsg_clean(reason, r, charsmax(r))"));
-        assert!(src.contains("if (c[i] < 32 || c[i] == ';')"), "the command check runs on the final string");
+        assert!(src.contains("stock bool:lsg_safe_cmd(const cmd[], amx)") && src.contains("if (!isalnum(c[i]) && c[i] != ' '"), "the command check runs on the final string");
+        // the plugin's lists are the app's
+        for w in super::super::graph::cmd_rules::AMX_BLOCK.iter().chain(&super::super::graph::cmd_rules::DENY_WORDS).chain(&super::super::graph::cmd_rules::SERVER_WORDS) {
+            assert!(src.contains(&format!("\"{w}\"")), "{w}");
+        }
         assert!(src.contains("if (!isalnum(map[i]) && map[i] != '_' && map[i] != '-' && map[i] != '.')"));
     }
 
