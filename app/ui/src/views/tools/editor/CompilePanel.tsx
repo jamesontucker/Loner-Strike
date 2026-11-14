@@ -515,7 +515,7 @@ export function CompilePanel() {
       <p className="small-note muted compile-foot">
         SDHLT {status.version} ·{" "}
         <a href="https://github.com/seedee/SDHLT" target="_blank" rel="noreferrer">
-          its own licence
+          its own license
         </a>
       </p>
     </section>

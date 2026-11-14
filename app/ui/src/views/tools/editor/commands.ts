@@ -333,7 +333,7 @@ export function commands(): Command[] {
     ...LAYOUTS.map((l, i): Command => ({ id: `view.layout.${l.id}`, label: `Layout: ${l.label}`, menu: "View", hint: l.tip, run: () => setLayout(l.id), fly: true, sep: i === 0 })),
     { id: "view.maximise", label: "Maximize the pane / put it back", menu: "View", when: () => usePanes.getState().layout !== "single", run: () => toggleMaximise(), fly: true },
     ...(["3d", "top", "front", "side"] as ViewId[]).map((v, i): Command => ({ id: `view.${v}`, label: `${v === "3d" ? "3D" : v[0].toUpperCase() + v.slice(1)} view`, menu: "View", sep: i === 0, hint: "In the active pane", run: () => setView(v), fly: true })),
-    { id: "view.frame", label: "Zoom to selection", menu: "View", sep: true, when: hasSel, run: () => frame(false) },
+    { id: "view.frame", label: "Zoom to selection", menu: "View", sep: true, when: () => hasSel() || !!S().sel.face, run: () => frame(false) },
     { id: "view.frameAll", label: "Zoom to the whole map", menu: "View", run: () => frame(true) },
     { id: "view.fly", label: "Fly / orbit camera", menu: "View", run: () => useTools.getState().setCamera(useTools.getState().camera === "fly" ? "orbit" : "fly"), fly: true },
     { id: "view.gridDown", label: "Smaller grid", menu: "View", sep: true, run: () => stepGrid(-1), fly: true },

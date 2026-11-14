@@ -308,7 +308,7 @@ function SelectionPanel() {
         {n && sel.entities.length ? " and " : ""}
         {sel.entities.length ? `${sel.entities.length} entit${sel.entities.length === 1 ? "y" : "ies"}` : ""}
       </h3>
-      {size && <p className="small-note muted">Size {fmt(size as Vec3)} · centre {fmt(centre!)}</p>}
+      {size && <p className="small-note muted">Size {fmt(size as Vec3)} · center {fmt(centre!)}</p>}
       <TransformSection /> {/* P5: location, rotation, scale */}
       <BrushFacts brushIds={ids.brushes} /> {/* P5: textures, owner, visgroups */}
       <MultiEntityKeys /> {/* P5: keys of several entities at once */}

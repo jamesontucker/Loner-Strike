@@ -30,3 +30,6 @@
 .compile-problems .editor-issue .linklike { text-align: left; overflow-wrap: anywhere; }
 .p4-cordon-line { display: grid; gap: 6px; min-width: 0; padding: 8px; border: 1px solid var(--bevel-lo, rgba(255,255,255,0.1)); border-radius: 2px; }
 .p4-cordon-line .ed-check { min-width: 0; }
+/* Parity A (site screenshots): "Bots" and its box side by side, not the box pushed to the far edge
+   (.editor-row .editor-field's "auto 70px" gave the spare room to the label) */
+.compile-panel .editor-field.compile-inline { justify-content: start; column-gap: 8px; }

@@ -592,7 +592,7 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
         />
       </Step>
       <Step n={4} title="Maps it's made for" note="Optional: map names, separated by commas.">
-        <input className="cm-wide-input" value={maps} onChange={(e) => setMaps(e.target.value)} placeholder="de_dust2, cs_office" aria-label="Maps it's made for" />
+        <input className="search cm-wide-input" value={maps} onChange={(e) => setMaps(e.target.value)} placeholder="de_dust2, cs_office" aria-label="Maps it's made for" />
       </Step>
       <Step n={5} title="Screenshots" note="PNG or JPEG, up to 8 MB each, up to 6. The cover card comes first; saved next to the package for GameBanana's picture upload.">
         <div className="cm-shots">

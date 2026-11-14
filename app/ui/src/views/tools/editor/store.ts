@@ -625,6 +625,8 @@ export function selectionBounds(s = useEditor.getState()): [Vec3, Vec3] | null {
       if (o) add(o);
     }
   }
+  // picked faces (the Texture tool, a face pick): their corners, so Zoom to selection frames the face
+  if (!any) for (const f of facesOf(s.sel)) for (const p of s.brushes.get(f.brush)?.polys.get(f.face) ?? []) add(p);
   return any ? [min, max] : null;
 }
 
