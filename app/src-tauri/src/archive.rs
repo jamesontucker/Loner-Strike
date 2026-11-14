@@ -421,6 +421,15 @@ pub fn normalized_entry(name: &str) -> String {
     name.replace('\\', "/").split('/').filter(|p| !p.is_empty() && *p != ".").collect::<Vec<_>>().join("/").to_lowercase()
 }
 
+/// A creature maker's own folder (models/gb<id>/..., sound/gb<id>/...): only that maker's own
+/// creature list puts files there (creaturepack::install_pack), never a download's file plan.
+pub fn creature_folder(dest: &str) -> bool {
+    let low = dest.replace('\\', "/").to_ascii_lowercase();
+    ["models/", "sound/"].iter().any(|top| {
+        low.strip_prefix(top).and_then(|r| r.split('/').next()).and_then(|ns| ns.strip_prefix("gb")).is_some_and(|d| !d.is_empty() && d.bytes().all(|c| c.is_ascii_digit()))
+    })
+}
+
 /// Files an installer acts on (a Loner-Strike package's manifest, its shared creatures, a map's
 /// editable source): an archive carrying any of them is checked strictly (`strict_problem`) and
 /// unpacked only from a zip.
@@ -623,8 +632,9 @@ fn extract_zip_with(archive: &Path, dest: &Path, budget: u64, strict_always: boo
     // a Community download, or any zip carrying a file an installer acts on, is checked strictly
     // (the community list checks each entry, so a later twin can't replace a checked one)
     let names: Vec<String> = (0..z.len()).filter_map(|i| z.by_index_raw(i).ok().map(|m| m.name_raw().iter().map(|b| *b as char).collect())).collect();
-    // (Community installs: also plain ASCII names only, every one checked before anything unpacks)
-    if strict_always {
+    // (Community installs, and any zip carrying a file an installer acts on: plain ASCII names only,
+    // every one checked before anything unpacks)
+    if strict_always || has_marker(&names) {
         if let Some(why) = strict_problem(&names) {
             return Err(why);
         }
@@ -940,6 +950,11 @@ pub fn plan_rels(rels: &[Vec<String>]) -> (Vec<(usize, String)>, Vec<String>) {
         };
         let dest = normpath(&dest);
         if dest.is_empty() || dest.starts_with("..") || seen.contains(&dest.to_lowercase()) {
+            continue;
+        }
+        // a creature maker's own folder only comes through that maker's own creature list
+        if creature_folder(&dest) {
+            skipped.push(format!("{rel} (a creature maker's own folder)"));
             continue;
         }
         if dest.starts_with("maps/") && !safe_map(stem_of(&file)) {

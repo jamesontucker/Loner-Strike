@@ -1294,12 +1294,16 @@ fn install_inner(game_dir: &Path, id: &str, text: &str, src: Option<&Path>, publ
     // (what it needs, so a file another block wrote passes to it before it'd go: only files in its
     // uploader's own folder, so no download can claim another maker's files)
     let block_files = own_files.clone();
-    // the previous version's files nobody needs now
+    // the previous version's files: the new one keeps those it still needs (as its own), the rest
+    // pass to another block that needs them, else go
     if let Some(b) = &prev {
-        let mut others: Vec<Block> = blocks.clone();
-        others.push(Block { files: block_files.clone(), ..Default::default() });
+        for w in &b.wrote {
+            if block_files.iter().any(|x| x.eq_ignore_ascii_case(w)) && !wrote.iter().any(|x| x.eq_ignore_ascii_case(w)) {
+                wrote.push(w.clone());
+            }
+        }
         let gone: Vec<String> = b.wrote.iter().filter(|w| !wrote.iter().any(|x| x.eq_ignore_ascii_case(w))).cloned().collect();
-        drop_files(game_dir, &gone, &mut others);
+        drop_files(game_dir, &gone, &mut blocks);
     }
     done.wrote = wrote.clone();
     blocks.push(Block { id: id.to_string(), types: own_types, files: block_files, wrote, joined: false, body, owner });
@@ -1366,13 +1370,16 @@ pub fn restore_block(game_dir: &Path, id: &str, kept: Option<&str>) -> Result<()
     let now = blocks.iter().position(|b| b.id == id).map(|i| blocks.remove(i));
     if let Some(k) = kept {
         let (_, mut back) = split_blocks(k);
-        let Some(b) = back.pop().filter(|b| b.id == id) else { return Err("The kept creature list couldn't be read.".into()) };
+        let Some(mut b) = back.pop().filter(|b| b.id == id) else { return Err("The kept creature list couldn't be read.".into()) };
         // files the newer block wrote that the old one doesn't list go
         if let Some(n) = &now {
+            for w in &n.wrote {
+                if b.files.iter().any(|x| x.eq_ignore_ascii_case(w)) && !b.wrote.iter().any(|x| x.eq_ignore_ascii_case(w)) {
+                    b.wrote.push(w.clone());
+                }
+            }
             let gone: Vec<String> = n.wrote.iter().filter(|w| !b.files.iter().any(|x| x.eq_ignore_ascii_case(w))).cloned().collect();
-            let mut others = blocks.clone();
-            others.push(b.clone());
-            drop_files(game_dir, &gone, &mut others);
+            drop_files(game_dir, &gone, &mut blocks);
         }
         blocks.push(b);
     } else if let Some(n) = &now {
@@ -1794,6 +1801,59 @@ mod tests {
         // its own folder: fine
         install_pack(&gd, "mod-3", "; files: models/gb11/z.mdl\n[gb11.z]\nmodel = models/gb11/z.mdl\n", None, "gb11").unwrap();
         let _ = std::fs::remove_dir_all(&hl);
+    }
+
+    #[test]
+    fn a_handed_over_file_stays_with_the_block_that_needs_it() {
+        let (hl, gd) = game("");
+        let src = hl.join("pk");
+        std::fs::create_dir_all(src.join("models/gb11")).unwrap();
+        std::fs::write(src.join("models/gb11/x.mdl"), b"m").unwrap();
+        let with = "; files: models/gb11/x.mdl\n[gb11.x]\nmodel = models/gb11/x.mdl\n";
+        install_pack(&gd, "mod-1", with, Some(&src), "gb11").unwrap();
+        install_pack(&gd, "mod-2", with, Some(&src), "gb11").unwrap();
+        // mod-1's update no longer uses the model: mod-2 (which needs it) now owns it, on disk
+        install_pack(&gd, "mod-1", "[gb11.x]\nhp = 5\n", None, "gb11").unwrap();
+        let (_, blocks) = split_blocks(&std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap());
+        assert_eq!(blocks.iter().find(|b| b.id == "mod-2").unwrap().wrote, vec!["models/gb11/x.mdl"]);
+        assert!(gd.join("models/gb11/x.mdl").is_file());
+        // so when mod-2 goes, so does the model
+        assert_eq!(uninstall_pack(&gd, "mod-2").unwrap(), vec!["models/gb11/x.mdl"]);
+        // Go back: the kept block takes back the file it lists from the newer one
+        let kept = block_text(&gd, "mod-1");
+        install_pack(&gd, "mod-1", with, Some(&src), "gb11").unwrap();
+        restore_block(&gd, "mod-1", kept.as_deref()).unwrap();
+        assert!(!gd.join("models/gb11/x.mdl").exists(), "the kept version doesn't need it: gone");
+        let _ = std::fs::remove_dir_all(&hl);
+    }
+
+    #[test]
+    fn no_download_plants_files_in_a_makers_folder() {
+        assert!(crate::archive::creature_folder("models/gb123/x.mdl") && crate::archive::creature_folder("sound/gb9/a/b.wav") && crate::archive::creature_folder("MODELS\\GB1\\x.mdl"));
+        assert!(!crate::archive::creature_folder("models/gbx/x.mdl") && !crate::archive::creature_folder("models/gb/x.mdl") && !crate::archive::creature_folder("models/x.mdl"));
+        let rels: Vec<Vec<String>> = ["maps/m.bsp", "models/gb123/runner.mdl", "sound/gb123/die.wav", "models/mine/x.mdl"].iter().map(|r| r.split('/').map(String::from).collect()).collect();
+        let (plan, skipped) = crate::archive::plan_rels(&rels);
+        let dests: Vec<&str> = plan.iter().map(|(_, d)| d.as_str()).collect();
+        assert!(dests.contains(&"maps/m.bsp") && dests.contains(&"models/mine/x.mdl"), "{dests:?}");
+        assert!(!dests.iter().any(|d| d.contains("gb123")), "{dests:?}");
+        assert_eq!(skipped.iter().filter(|x| x.contains("creature maker's own folder")).count(), 2, "{skipped:?}");
+        // a marker zip from any page is checked strictly (plain ASCII names)
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("ls-plant-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("o")).unwrap();
+        let zp = dir.join("m.zip");
+        {
+            let mut z = zip::ZipWriter::new(std::fs::File::create(&zp).unwrap());
+            let o = zip::write::SimpleFileOptions::default();
+            for n in ["creatures/creatures.ini", "models/caf\u{e9}.mdl"] {
+                z.start_file(n, o).unwrap();
+                z.write_all(b"x").unwrap();
+            }
+            z.finish().unwrap();
+        }
+        assert!(crate::archive::extract(&zp, &dir.join("o"), 1 << 20).unwrap_err().contains("only letters, digits"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

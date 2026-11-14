@@ -198,15 +198,6 @@ impl Semaphore {
     }
 }
 
-/// A page whose downloads install strictly (only a zip, plain ASCII names, every file new): a
-/// Community creation, by this computer's Community library or the community list. Decided by the
-/// install job itself from those records, whichever way it was started (Try it, Install, an
-/// update, a server's copy).
-pub fn community_page(mod_id: i64) -> bool {
-    use crate::tools::community::Model;
-    crate::tools::communitylib::load(&crate::tools::communitylib::lib_dir(), Model::Mod, mod_id).is_some() || crate::tools::community::index_cached().items.iter().any(|i| i.model == Model::Mod && i.gb == mod_id)
-}
-
 #[derive(Clone, Serialize)]
 pub struct Job {
     pub id: String,
@@ -229,6 +220,10 @@ pub struct Job {
     /// a file the player picked on their computer, instead of a GameBanana download
     #[serde(skip)]
     pub local: Option<PathBuf>,
+    /// a Community creation (started from Community's Try it, an update or Go back): only a zip,
+    /// plain ASCII names, every file new (`archive::extract_strict`)
+    #[serde(skip)]
+    pub strict: bool,
 }
 
 /// Single files a section takes as they are (anything else has to be an archive).
@@ -783,6 +778,15 @@ impl MapStore {
     }
 
     pub fn start_section_install(self: &Arc<Self>, section: &str, mod_id: i64, file_id: i64) -> Result<String, StoreError> {
+        self.start_job(section, mod_id, file_id, false)
+    }
+
+    /// A Community creation's download (Try it, an update, Go back): installed strictly.
+    pub fn start_community_install(self: &Arc<Self>, section: &str, mod_id: i64, file_id: i64) -> Result<String, StoreError> {
+        self.start_job(section, mod_id, file_id, true)
+    }
+
+    fn start_job(self: &Arc<Self>, section: &str, mod_id: i64, file_id: i64, strict: bool) -> Result<String, StoreError> {
         let sec = content::section(section).ok_or_else(|| StoreError::Bad("unknown section".into()))?;
         let job_id = {
             let mut jobs = self.jobs.lock().unwrap();
@@ -796,7 +800,7 @@ impl MapStore {
                 id.clone(),
                 Job {
                     id: id.clone(), mod_id, file: file_id, section: sec.key.into(), state: "queued".into(), got: 0, size: 0,
-                    message: "Waiting".into(), maps: vec![], kept: vec![], skipped: vec![], replaced: vec![], ended: None, local: None,
+                    message: "Waiting".into(), maps: vec![], kept: vec![], skipped: vec![], replaced: vec![], ended: None, local: None, strict,
                 },
             );
             id
@@ -827,7 +831,7 @@ impl MapStore {
             id.clone(),
             Job {
                 id: id.clone(), mod_id, file: 0, section: sec.key.into(), state: "queued".into(), got: 0, size: meta.len(),
-                message: format!("Adding {name}"), maps: vec![], kept: vec![], skipped: vec![], replaced: vec![], ended: None, local: Some(path.to_path_buf()),
+                message: format!("Adding {name}"), maps: vec![], kept: vec![], skipped: vec![], replaced: vec![], ended: None, local: Some(path.to_path_buf()), strict: false,
             },
         );
         let me = self.clone();
@@ -1004,7 +1008,7 @@ impl MapStore {
 
         if let Some(t) = &pack {
             let key = crate::tools::communitylib::dir_name(crate::tools::community::Model::Mod, mod_id);
-            crate::tools::creaturepack::install_pack(&self.cstrike, &key, t, None, &ns).map_err(|e| bad(&e))?;
+            crate::tools::creaturepack::install_pack(&self.cstrike, &key, t, Some(&src), &ns).map_err(|e| bad(&e))?;
         }
         if !maps.is_empty() || !installed.is_empty() {
             self.save_shot(&info, &maps);
@@ -1150,7 +1154,7 @@ impl MapStore {
             // only the file name from GameBanana, never a path
             let base = Path::new(&fname.replace('\\', "/")).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| format!("file{ext}"));
             std::fs::rename(&download, src.join(base)).map_err(|e| StoreError::Bad(e.to_string()))?;
-        } else if self.jobs.lock().unwrap().get(id).map(|j| j.mod_id).is_some_and(community_page) {
+        } else if self.jobs.lock().unwrap().get(id).is_some_and(|j| j.strict) {
             // a Community creation: only a zip, every name checked, nothing nested unpacked
             archive::extract_strict(&download, &src, MAX_UNPACKED).map_err(StoreError::Bad)?;
         } else {
@@ -1187,6 +1191,10 @@ impl MapStore {
         let rels: Vec<Vec<String>> = files.iter().map(|p| archive::rel_parts(&src, p)).collect();
         let existing = content::Existing::scan(&self.game_dirs());
         let (plan, mut skipped) = content::plan(sec.key, &rels, &existing);
+        // (a creature maker's own folder, models/gb<id>/ or sound/gb<id>/, only through that
+        // maker's own creature list: never planted by another download)
+        let (plan, kept_out): (Vec<_>, Vec<_>) = plan.into_iter().partition(|(_, d)| !archive::creature_folder(d));
+        skipped.extend(kept_out.into_iter().map(|(_, d)| format!("{d} (a creature maker's own folder)")));
         // never replace what the installer or a map download put there
         let theirs = content::installer_files(&self.game_dir);
         let maps_files: HashSet<String> = if self.game_dir == self.cstrike {
