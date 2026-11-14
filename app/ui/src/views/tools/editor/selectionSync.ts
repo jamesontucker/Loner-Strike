@@ -7,6 +7,7 @@
 
 import { useEffect } from "react";
 import { post, tryGet } from "../common/api";
+import { follow } from "./selectionFollow";
 import { facesOf, useEditor, type Selection } from "./store";
 
 const PATH = "/api/tools/editor/selection";
@@ -41,37 +42,40 @@ export function useSelectionSync() {
       timer = setTimeout(send, QUIET_MS);
     });
     // an agent's selection: selected here too. A long look (the app answers when the selection
-    // is newer than `seen`, or after 25 s), only while the page is in view.
+    // is newer than `seen`, or after 25 s), only while the page is in view; paced and backed off
+    // in selectionFollow.ts.
     let ctl: AbortController | null = null;
     let running = false;
-    const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
     const listen = async () => {
       if (running) return;
       running = true;
       try {
-        while (!stopped && !document.hidden) {
-          if (!useEditor.getState().doc) {
-            await pause(2000);
-            continue;
-          }
-          ctl = new AbortController();
-          const r = await tryGet<Reported>(`${PATH}?after=${seen}`, ctl.signal).catch(() => null);
-          ctl = null;
-          if (stopped || !r) break;
-          if (r.error || typeof r.seq !== "number") {
-            await pause(3000);
-            continue;
-          }
-          if (r.seq <= seen) continue;
-          seen = r.seq;
-          if (r.by !== "agent") continue;
-          const faces = (r.faces ?? []).map(([brush, face]) => ({ brush, face }));
-          const sel: Selection = { brushes: r.brushes ?? [], entities: r.entities ?? [], face: faces[0] ?? null, faces };
-          const s = useEditor.getState();
-          // (not sent back: it came from there)
-          sent = keyOf(sel, s.tool, s.view);
-          s.select(sel);
-        }
+        await follow({
+          look: async (after) => {
+            // nothing open: answer "no news" so the pacing waits before looking again
+            if (!useEditor.getState().doc) return { seq: seen };
+            ctl = new AbortController();
+            const r = await tryGet<Reported>(`${PATH}?after=${after}`, ctl.signal).catch(() => null);
+            ctl = null;
+            return stopped ? null : r;
+          },
+          pause: (ms) => new Promise((r) => setTimeout(r, ms)),
+          now: () => Date.now(),
+          going: () => !stopped && !document.hidden,
+          seen: () => seen,
+          setSeen: (n) => {
+            seen = n;
+          },
+          apply: (a) => {
+            const r = a as Reported;
+            const faces = (r.faces ?? []).map(([brush, face]) => ({ brush, face }));
+            const sel: Selection = { brushes: r.brushes ?? [], entities: r.entities ?? [], face: faces[0] ?? null, faces };
+            const s = useEditor.getState();
+            // (not sent back: it came from there)
+            sent = keyOf(sel, s.tool, s.view);
+            s.select(sel);
+          },
+        });
       } finally {
         running = false;
       }

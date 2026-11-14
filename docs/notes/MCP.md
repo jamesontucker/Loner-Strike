@@ -39,3 +39,7 @@ Seen in a test against a server built before your wait landed: `selection?after=
 selectionSync.ts looped about 20 times a second (`if (r.seq <= seen) continue;` with no pause). Any server that
 answers early (an older app, an error path, a proxy timeout) would do the same. Please pause when an answer brings
 nothing new and came back quickly, e.g. `if (r.seq <= seen) { if (Date.now() - t0 < 1000) await pause(1000); continue; }`.
+**MCP (2026-11-14): done.** The follow loop moved to `selectionFollow.ts` (no imports) and is paced: at least 250 ms
+between looks; an answer with nothing new that came back in under a second waits a second; failed looks back off
+1, 2, 4, 8, then 10 s, reset by a good answer. Tests: `node app/ui/scripts/test-selection.mjs` (a fake app that
+answers at once: at most one look a second; the backoff sequence and reset; aborts stop it).
