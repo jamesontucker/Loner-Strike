@@ -133,7 +133,7 @@
   },
   {
    "id": "n0",
-   "type": "game.map_name",
+   "type": "npc.on_talk",
    "pos": {
     "x": 520,
     "y": 1100
@@ -142,7 +142,7 @@
   },
   {
    "id": "n1",
-   "type": "game.next_map",
+   "type": "npc.on_use",
    "pos": {
     "x": 780,
     "y": 1100
@@ -151,7 +151,7 @@
   },
   {
    "id": "n2",
-   "type": "game.server_name",
+   "type": "npc.choose",
    "pos": {
     "x": 1040,
     "y": 1100
@@ -160,7 +160,7 @@
   },
   {
    "id": "n3",
-   "type": "game.max_players",
+   "type": "npc.say",
    "pos": {
     "x": 1300,
     "y": 1100
@@ -169,7 +169,7 @@
   },
   {
    "id": "n4",
-   "type": "game.player_count",
+   "type": "npc.behave",
    "pos": {
     "x": 1560,
     "y": 1100
@@ -178,7 +178,7 @@
   },
   {
    "id": "n5",
-   "type": "game.time",
+   "type": "npc.look_at",
    "pos": {
     "x": 1820,
     "y": 1100
@@ -187,7 +187,7 @@
   },
   {
    "id": "n6",
-   "type": "game.clock",
+   "type": "npc.spawn",
    "pos": {
     "x": 2080,
     "y": 1100
@@ -196,7 +196,7 @@
   },
   {
    "id": "n7",
-   "type": "game.mode_id",
+   "type": "npc.spawn_use",
    "pos": {
     "x": 2340,
     "y": 1100
@@ -205,7 +205,7 @@
   },
   {
    "id": "n8",
-   "type": "game.round_number",
+   "type": "game.map_name",
    "pos": {
     "x": 2600,
     "y": 1100
@@ -214,7 +214,7 @@
   },
   {
    "id": "n9",
-   "type": "game.team_score",
+   "type": "game.next_map",
    "pos": {
     "x": 2860,
     "y": 1100
@@ -223,7 +223,7 @@
   },
   {
    "id": "n10",
-   "type": "game.freeze_time",
+   "type": "game.server_name",
    "pos": {
     "x": 3120,
     "y": 1100
@@ -232,7 +232,7 @@
   },
   {
    "id": "n11",
-   "type": "game.get_setting",
+   "type": "game.max_players",
    "pos": {
     "x": 260,
     "y": 1320
@@ -241,7 +241,7 @@
   },
   {
    "id": "n12",
-   "type": "game.change_map",
+   "type": "game.player_count",
    "pos": {
     "x": 520,
     "y": 1320
@@ -250,7 +250,7 @@
   },
   {
    "id": "n13",
-   "type": "game.restart_round",
+   "type": "game.time",
    "pos": {
     "x": 780,
     "y": 1320
@@ -259,7 +259,7 @@
   },
   {
    "id": "n14",
-   "type": "game.run_command",
+   "type": "game.clock",
    "pos": {
     "x": 1040,
     "y": 1320
@@ -268,7 +268,7 @@
   },
   {
    "id": "n15",
-   "type": "game.amx_command",
+   "type": "game.mode_id",
    "pos": {
     "x": 1300,
     "y": 1320
@@ -277,7 +277,7 @@
   },
   {
    "id": "n16",
-   "type": "world.gravity",
+   "type": "game.round_number",
    "pos": {
     "x": 1560,
     "y": 1320
@@ -286,7 +286,7 @@
   },
   {
    "id": "n17",
-   "type": "world.set_gravity",
+   "type": "game.team_score",
    "pos": {
     "x": 1820,
     "y": 1320
@@ -295,7 +295,7 @@
   },
   {
    "id": "n18",
-   "type": "world.friction",
+   "type": "game.freeze_time",
    "pos": {
     "x": 2080,
     "y": 1320
@@ -304,7 +304,7 @@
   },
   {
    "id": "n19",
-   "type": "world.set_friction",
+   "type": "game.get_setting",
    "pos": {
     "x": 2340,
     "y": 1320
@@ -313,7 +313,7 @@
   },
   {
    "id": "n20",
-   "type": "world.max_speed",
+   "type": "game.change_map",
    "pos": {
     "x": 2600,
     "y": 1320
@@ -322,7 +322,7 @@
   },
   {
    "id": "n21",
-   "type": "world.set_max_speed",
+   "type": "game.restart_round",
    "pos": {
     "x": 2860,
     "y": 1320
@@ -331,7 +331,7 @@
   },
   {
    "id": "n22",
-   "type": "world.round_time",
+   "type": "game.run_command",
    "pos": {
     "x": 3120,
     "y": 1320
@@ -340,7 +340,7 @@
   },
   {
    "id": "n23",
-   "type": "world.set_round_time",
+   "type": "game.amx_command",
    "pos": {
     "x": 260,
     "y": 1540
@@ -349,7 +349,7 @@
   },
   {
    "id": "n24",
-   "type": "world.freeze_time",
+   "type": "world.gravity",
    "pos": {
     "x": 520,
     "y": 1540
@@ -358,7 +358,7 @@
   },
   {
    "id": "n25",
-   "type": "world.set_freeze_time",
+   "type": "world.set_gravity",
    "pos": {
     "x": 780,
     "y": 1540
@@ -367,7 +367,7 @@
   },
   {
    "id": "n26",
-   "type": "world.buy_time",
+   "type": "world.friction",
    "pos": {
     "x": 1040,
     "y": 1540
@@ -376,7 +376,7 @@
   },
   {
    "id": "n27",
-   "type": "world.set_buy_time",
+   "type": "world.set_friction",
    "pos": {
     "x": 1300,
     "y": 1540
@@ -385,7 +385,7 @@
   },
   {
    "id": "n28",
-   "type": "world.friendly_fire",
+   "type": "world.max_speed",
    "pos": {
     "x": 1560,
     "y": 1540
@@ -394,7 +394,7 @@
   },
   {
    "id": "n29",
-   "type": "world.set_friendly_fire",
+   "type": "world.set_max_speed",
    "pos": {
     "x": 1820,
     "y": 1540
@@ -403,7 +403,7 @@
   },
   {
    "id": "n30",
-   "type": "world.team_balance",
+   "type": "world.round_time",
    "pos": {
     "x": 2080,
     "y": 1540
@@ -412,7 +412,7 @@
   },
   {
    "id": "n31",
-   "type": "world.set_team_balance",
+   "type": "world.set_round_time",
    "pos": {
     "x": 2340,
     "y": 1540
@@ -421,7 +421,7 @@
   },
   {
    "id": "n32",
-   "type": "world.team_limit",
+   "type": "world.freeze_time",
    "pos": {
     "x": 2600,
     "y": 1540
@@ -430,7 +430,7 @@
   },
   {
    "id": "n33",
-   "type": "world.set_team_limit",
+   "type": "world.set_freeze_time",
    "pos": {
     "x": 2860,
     "y": 1540
@@ -439,7 +439,7 @@
   },
   {
    "id": "n34",
-   "type": "world.start_money",
+   "type": "world.buy_time",
    "pos": {
     "x": 3120,
     "y": 1540
@@ -448,7 +448,7 @@
   },
   {
    "id": "n35",
-   "type": "world.set_start_money",
+   "type": "world.set_buy_time",
    "pos": {
     "x": 260,
     "y": 1760
@@ -457,7 +457,7 @@
   },
   {
    "id": "n36",
-   "type": "world.c4_timer",
+   "type": "world.friendly_fire",
    "pos": {
     "x": 520,
     "y": 1760
@@ -466,7 +466,7 @@
   },
   {
    "id": "n37",
-   "type": "world.set_c4_timer",
+   "type": "world.set_friendly_fire",
    "pos": {
     "x": 780,
     "y": 1760
@@ -475,7 +475,7 @@
   },
   {
    "id": "n38",
-   "type": "world.fall_damage",
+   "type": "world.team_balance",
    "pos": {
     "x": 1040,
     "y": 1760
@@ -484,7 +484,7 @@
   },
   {
    "id": "n39",
-   "type": "world.set_fall_damage",
+   "type": "world.set_team_balance",
    "pos": {
     "x": 1300,
     "y": 1760
@@ -493,7 +493,7 @@
   },
   {
    "id": "n40",
-   "type": "world.footsteps",
+   "type": "world.team_limit",
    "pos": {
     "x": 1560,
     "y": 1760
@@ -502,7 +502,7 @@
   },
   {
    "id": "n41",
-   "type": "world.set_footsteps",
+   "type": "world.set_team_limit",
    "pos": {
     "x": 1820,
     "y": 1760
@@ -511,7 +511,7 @@
   },
   {
    "id": "n42",
-   "type": "world.alltalk",
+   "type": "world.start_money",
    "pos": {
     "x": 2080,
     "y": 1760
@@ -520,7 +520,7 @@
   },
   {
    "id": "n43",
-   "type": "world.set_alltalk",
+   "type": "world.set_start_money",
    "pos": {
     "x": 2340,
     "y": 1760
@@ -529,7 +529,7 @@
   },
   {
    "id": "n44",
-   "type": "world.time_limit",
+   "type": "world.c4_timer",
    "pos": {
     "x": 2600,
     "y": 1760
@@ -538,7 +538,7 @@
   },
   {
    "id": "n45",
-   "type": "world.set_time_limit",
+   "type": "world.set_c4_timer",
    "pos": {
     "x": 2860,
     "y": 1760
@@ -547,7 +547,7 @@
   },
   {
    "id": "n46",
-   "type": "world.win_limit",
+   "type": "world.fall_damage",
    "pos": {
     "x": 3120,
     "y": 1760
@@ -556,7 +556,7 @@
   },
   {
    "id": "n47",
-   "type": "world.set_win_limit",
+   "type": "world.set_fall_damage",
    "pos": {
     "x": 260,
     "y": 1980
@@ -565,7 +565,7 @@
   },
   {
    "id": "n48",
-   "type": "world.frag_limit",
+   "type": "world.footsteps",
    "pos": {
     "x": 520,
     "y": 1980
@@ -574,7 +574,7 @@
   },
   {
    "id": "n49",
-   "type": "world.set_frag_limit",
+   "type": "world.set_footsteps",
    "pos": {
     "x": 780,
     "y": 1980
@@ -583,7 +583,7 @@
   },
   {
    "id": "n50",
-   "type": "player.armor",
+   "type": "world.alltalk",
    "pos": {
     "x": 1040,
     "y": 1980
@@ -592,7 +592,7 @@
   },
   {
    "id": "n51",
-   "type": "player.has_helmet",
+   "type": "world.set_alltalk",
    "pos": {
     "x": 1300,
     "y": 1980
@@ -601,7 +601,7 @@
   },
   {
    "id": "n52",
-   "type": "player.weapon_held",
+   "type": "world.time_limit",
    "pos": {
     "x": 1560,
     "y": 1980
@@ -610,7 +610,7 @@
   },
   {
    "id": "n53",
-   "type": "player.ammo",
+   "type": "world.set_time_limit",
    "pos": {
     "x": 1820,
     "y": 1980
@@ -619,7 +619,7 @@
   },
   {
    "id": "n54",
-   "type": "player.has_weapon",
+   "type": "world.win_limit",
    "pos": {
     "x": 2080,
     "y": 1980
@@ -628,7 +628,7 @@
   },
   {
    "id": "n55",
-   "type": "player.is_admin",
+   "type": "world.set_win_limit",
    "pos": {
     "x": 2340,
     "y": 1980
@@ -637,7 +637,7 @@
   },
   {
    "id": "n56",
-   "type": "player.is_vip",
+   "type": "world.frag_limit",
    "pos": {
     "x": 2600,
     "y": 1980
@@ -646,7 +646,7 @@
   },
   {
    "id": "n57",
-   "type": "player.ping",
+   "type": "world.set_frag_limit",
    "pos": {
     "x": 2860,
     "y": 1980
@@ -655,7 +655,7 @@
   },
   {
    "id": "n58",
-   "type": "player.steam_id",
+   "type": "player.armor",
    "pos": {
     "x": 3120,
     "y": 1980
@@ -664,7 +664,7 @@
   },
   {
    "id": "n59",
-   "type": "player.is_spectator",
+   "type": "player.has_helmet",
    "pos": {
     "x": 260,
     "y": 2200
@@ -673,7 +673,7 @@
   },
   {
    "id": "n60",
-   "type": "player.time_connected",
+   "type": "player.weapon_held",
    "pos": {
     "x": 520,
     "y": 2200
@@ -682,7 +682,7 @@
   },
   {
    "id": "n61",
-   "type": "player.by_name",
+   "type": "player.ammo",
    "pos": {
     "x": 780,
     "y": 2200
@@ -691,7 +691,7 @@
   },
   {
    "id": "n62",
-   "type": "player.by_index",
+   "type": "player.has_weapon",
    "pos": {
     "x": 1040,
     "y": 2200
@@ -700,7 +700,7 @@
   },
   {
    "id": "n63",
-   "type": "player.gravity",
+   "type": "player.is_admin",
    "pos": {
     "x": 1300,
     "y": 2200
@@ -709,7 +709,7 @@
   },
   {
    "id": "n64",
-   "type": "player.speed",
+   "type": "player.is_vip",
    "pos": {
     "x": 1560,
     "y": 2200
@@ -718,7 +718,7 @@
   },
   {
    "id": "n65",
-   "type": "player.model",
+   "type": "player.ping",
    "pos": {
     "x": 1820,
     "y": 2200
@@ -727,7 +727,7 @@
   },
   {
    "id": "n66",
-   "type": "player.transform",
+   "type": "player.steam_id",
    "pos": {
     "x": 2080,
     "y": 2200
@@ -736,7 +736,7 @@
   },
   {
    "id": "n67",
-   "type": "player.set_transform",
+   "type": "player.is_spectator",
    "pos": {
     "x": 2340,
     "y": 2200
@@ -745,7 +745,7 @@
   },
   {
    "id": "n68",
-   "type": "player.set_rotation",
+   "type": "player.time_connected",
    "pos": {
     "x": 2600,
     "y": 2200
@@ -754,7 +754,7 @@
   },
   {
    "id": "n69",
-   "type": "player.look_at",
+   "type": "player.by_name",
    "pos": {
     "x": 2860,
     "y": 2200
@@ -763,7 +763,7 @@
   },
   {
    "id": "n70",
-   "type": "player.slap",
+   "type": "player.by_index",
    "pos": {
     "x": 3120,
     "y": 2200
@@ -772,7 +772,7 @@
   },
   {
    "id": "n71",
-   "type": "player.fade",
+   "type": "player.gravity",
    "pos": {
     "x": 260,
     "y": 2420
@@ -781,7 +781,7 @@
   },
   {
    "id": "n72",
-   "type": "player.shake",
+   "type": "player.speed",
    "pos": {
     "x": 520,
     "y": 2420
@@ -790,7 +790,7 @@
   },
   {
    "id": "n73",
-   "type": "player.godmode",
+   "type": "player.model",
    "pos": {
     "x": 780,
     "y": 2420
@@ -799,7 +799,7 @@
   },
   {
    "id": "n74",
-   "type": "player.noclip",
+   "type": "player.transform",
    "pos": {
     "x": 1040,
     "y": 2420
@@ -808,7 +808,7 @@
   },
   {
    "id": "n75",
-   "type": "player.render",
+   "type": "player.set_transform",
    "pos": {
     "x": 1300,
     "y": 2420
@@ -817,7 +817,7 @@
   },
   {
    "id": "n76",
-   "type": "player.set_ammo",
+   "type": "player.set_rotation",
    "pos": {
     "x": 1560,
     "y": 2420
@@ -826,7 +826,7 @@
   },
   {
    "id": "n77",
-   "type": "player.give_ammo",
+   "type": "player.look_at",
    "pos": {
     "x": 1820,
     "y": 2420
@@ -835,7 +835,7 @@
   },
   {
    "id": "n78",
-   "type": "player.take_weapon",
+   "type": "player.slap",
    "pos": {
     "x": 2080,
     "y": 2420
@@ -844,7 +844,7 @@
   },
   {
    "id": "n79",
-   "type": "player.switch_weapon",
+   "type": "player.fade",
    "pos": {
     "x": 2340,
     "y": 2420
@@ -853,7 +853,7 @@
   },
   {
    "id": "n80",
-   "type": "player.set_frags",
+   "type": "player.shake",
    "pos": {
     "x": 2600,
     "y": 2420
@@ -862,7 +862,7 @@
   },
   {
    "id": "n81",
-   "type": "player.set_deaths",
+   "type": "player.godmode",
    "pos": {
     "x": 2860,
     "y": 2420
@@ -871,7 +871,7 @@
   },
   {
    "id": "n82",
-   "type": "player.to_spectators",
+   "type": "player.noclip",
    "pos": {
     "x": 3120,
     "y": 2420
@@ -880,7 +880,7 @@
   },
   {
    "id": "n83",
-   "type": "player.kick",
+   "type": "player.render",
    "pos": {
     "x": 260,
     "y": 2640
@@ -889,7 +889,7 @@
   },
   {
    "id": "n84",
-   "type": "player.mute",
+   "type": "player.set_ammo",
    "pos": {
     "x": 520,
     "y": 2640
@@ -898,7 +898,7 @@
   },
   {
    "id": "n85",
-   "type": "player.gag",
+   "type": "player.give_ammo",
    "pos": {
     "x": 780,
     "y": 2640
@@ -907,7 +907,7 @@
   },
   {
    "id": "n86",
-   "type": "msg.team_chat",
+   "type": "player.take_weapon",
    "pos": {
     "x": 1040,
     "y": 2640
@@ -916,7 +916,7 @@
   },
   {
    "id": "n87",
-   "type": "msg.notify_admins",
+   "type": "player.switch_weapon",
    "pos": {
     "x": 1300,
     "y": 2640
@@ -925,7 +925,7 @@
   },
   {
    "id": "n88",
-   "type": "ent.class",
+   "type": "player.set_frags",
    "pos": {
     "x": 1560,
     "y": 2640
@@ -934,7 +934,7 @@
   },
   {
    "id": "n89",
-   "type": "ent.name",
+   "type": "player.set_deaths",
    "pos": {
     "x": 1820,
     "y": 2640
@@ -943,7 +943,7 @@
   },
   {
    "id": "n90",
-   "type": "ent.find_all",
+   "type": "player.to_spectators",
    "pos": {
     "x": 2080,
     "y": 2640
@@ -952,7 +952,7 @@
   },
   {
    "id": "n91",
-   "type": "ent.spawn_prop",
+   "type": "player.kick",
    "pos": {
     "x": 2340,
     "y": 2640
@@ -961,7 +961,7 @@
   },
   {
    "id": "n92",
-   "type": "ent.remove",
+   "type": "player.mute",
    "pos": {
     "x": 2600,
     "y": 2640
@@ -970,7 +970,7 @@
   },
   {
    "id": "n93",
-   "type": "ent.set_position",
+   "type": "player.gag",
    "pos": {
     "x": 2860,
     "y": 2640
@@ -979,7 +979,7 @@
   },
   {
    "id": "n94",
-   "type": "ent.set_angles",
+   "type": "msg.team_chat",
    "pos": {
     "x": 3120,
     "y": 2640
@@ -988,7 +988,7 @@
   },
   {
    "id": "n95",
-   "type": "ent.set_visible",
+   "type": "msg.notify_admins",
    "pos": {
     "x": 260,
     "y": 2860
@@ -997,7 +997,7 @@
   },
   {
    "id": "n96",
-   "type": "fx.explosion",
+   "type": "ent.class",
    "pos": {
     "x": 520,
     "y": 2860
@@ -1006,7 +1006,7 @@
   },
   {
    "id": "n97",
-   "type": "fx.beam",
+   "type": "ent.name",
    "pos": {
     "x": 780,
     "y": 2860
@@ -1015,7 +1015,7 @@
   },
   {
    "id": "n98",
-   "type": "fx.sound_at",
+   "type": "ent.find_all",
    "pos": {
     "x": 1040,
     "y": 2860
@@ -1024,7 +1024,7 @@
   },
   {
    "id": "n99",
-   "type": "fx.sound_to",
+   "type": "ent.spawn_prop",
    "pos": {
     "x": 1300,
     "y": 2860
@@ -1033,7 +1033,7 @@
   },
   {
    "id": "n100",
-   "type": "fx.lights",
+   "type": "ent.remove",
    "pos": {
     "x": 1560,
     "y": 2860
@@ -1042,7 +1042,7 @@
   },
   {
    "id": "n101",
-   "type": "amx.call",
+   "type": "ent.set_position",
    "pos": {
     "x": 1820,
     "y": 2860
@@ -1051,7 +1051,7 @@
   },
   {
    "id": "n102",
-   "type": "amx.plugin_running",
+   "type": "ent.set_angles",
    "pos": {
     "x": 2080,
     "y": 2860
@@ -1060,7 +1060,7 @@
   },
   {
    "id": "n103",
-   "type": "amx.fire",
+   "type": "ent.set_visible",
    "pos": {
     "x": 2340,
     "y": 2860
@@ -1069,7 +1069,7 @@
   },
   {
    "id": "n104",
-   "type": "amx.on_event",
+   "type": "fx.explosion",
    "pos": {
     "x": 2600,
     "y": 2860
@@ -1078,7 +1078,7 @@
   },
   {
    "id": "n105",
-   "type": "event.player_said",
+   "type": "fx.beam",
    "pos": {
     "x": 2860,
     "y": 2860
@@ -1087,7 +1087,7 @@
   },
   {
    "id": "n106",
-   "type": "event.freeze_ended",
+   "type": "fx.sound_at",
    "pos": {
     "x": 3120,
     "y": 2860
@@ -1096,7 +1096,7 @@
   },
   {
    "id": "n107",
-   "type": "event.map_ending",
+   "type": "fx.sound_to",
    "pos": {
     "x": 260,
     "y": 3080
@@ -1105,7 +1105,7 @@
   },
   {
    "id": "n108",
-   "type": "event.weapon_fired",
+   "type": "fx.lights",
    "pos": {
     "x": 520,
     "y": 3080
@@ -1114,7 +1114,7 @@
   },
   {
    "id": "n109",
-   "type": "event.reloaded",
+   "type": "msg.status_icon",
    "pos": {
     "x": 780,
     "y": 3080
@@ -1123,7 +1123,7 @@
   },
   {
    "id": "n110",
-   "type": "event.hostage_rescued",
+   "type": "fx.marker",
    "pos": {
     "x": 1040,
     "y": 3080
@@ -1132,7 +1132,7 @@
   },
   {
    "id": "n111",
-   "type": "event.vip_escaped",
+   "type": "fx.marker_remove",
    "pos": {
     "x": 1300,
     "y": 3080
@@ -1141,7 +1141,7 @@
   },
   {
    "id": "n112",
-   "type": "bot.skill",
+   "type": "msg.killfeed",
    "pos": {
     "x": 1560,
     "y": 3080
@@ -1150,7 +1150,7 @@
   },
   {
    "id": "n113",
-   "type": "bot.trait",
+   "type": "amx.call",
    "pos": {
     "x": 1820,
     "y": 3080
@@ -1159,7 +1159,7 @@
   },
   {
    "id": "n114",
-   "type": "comp.revive_pay",
+   "type": "amx.plugin_running",
    "pos": {
     "x": 2080,
     "y": 3080
@@ -1168,42 +1168,34 @@
   },
   {
    "id": "n115",
-   "type": "timer.by_event",
+   "type": "amx.fire",
    "pos": {
     "x": 2340,
     "y": 3080
    },
-   "params": {
-    "event": "ce2",
-    "secs": 5,
-    "loop": true
-   }
+   "params": {}
   },
   {
    "id": "n116",
-   "type": "event.custom",
+   "type": "amx.on_event",
    "pos": {
     "x": 2600,
     "y": 3080
    },
-   "params": {
-    "event": "ce1"
-   }
+   "params": {}
   },
   {
    "id": "n117",
-   "type": "event.call",
+   "type": "event.player_said",
    "pos": {
     "x": 2860,
     "y": 3080
    },
-   "params": {
-    "event": "ce1"
-   }
+   "params": {}
   },
   {
    "id": "n118",
-   "type": "creature.for_each",
+   "type": "event.freeze_ended",
    "pos": {
     "x": 3120,
     "y": 3080
@@ -1212,7 +1204,7 @@
   },
   {
    "id": "n119",
-   "type": "creature.of_type",
+   "type": "event.map_ending",
    "pos": {
     "x": 260,
     "y": 3300
@@ -1221,7 +1213,7 @@
   },
   {
    "id": "n120",
-   "type": "creature.nearest",
+   "type": "event.weapon_fired",
    "pos": {
     "x": 520,
     "y": 3300
@@ -1230,7 +1222,7 @@
   },
   {
    "id": "n121",
-   "type": "creature.type",
+   "type": "event.reloaded",
    "pos": {
     "x": 780,
     "y": 3300
@@ -1239,7 +1231,7 @@
   },
   {
    "id": "n122",
-   "type": "creature.idle_for",
+   "type": "event.hostage_rescued",
    "pos": {
     "x": 1040,
     "y": 3300
@@ -1248,7 +1240,7 @@
   },
   {
    "id": "n123",
-   "type": "creature.can_see",
+   "type": "event.vip_escaped",
    "pos": {
     "x": 1300,
     "y": 3300
@@ -1257,7 +1249,7 @@
   },
   {
    "id": "n124",
-   "type": "creature.go_to",
+   "type": "bot.skill",
    "pos": {
     "x": 1560,
     "y": 3300
@@ -1266,7 +1258,7 @@
   },
   {
    "id": "n125",
-   "type": "creature.attack",
+   "type": "bot.trait",
    "pos": {
     "x": 1820,
     "y": 3300
@@ -1275,7 +1267,7 @@
   },
   {
    "id": "n126",
-   "type": "creature.hold",
+   "type": "comp.revive_pay",
    "pos": {
     "x": 2080,
     "y": 3300
@@ -1284,34 +1276,42 @@
   },
   {
    "id": "n127",
-   "type": "creature.resume",
+   "type": "timer.by_event",
    "pos": {
     "x": 2340,
     "y": 3300
    },
-   "params": {}
+   "params": {
+    "event": "ce2",
+    "secs": 5,
+    "loop": true
+   }
   },
   {
    "id": "n128",
-   "type": "creature.flee_to",
+   "type": "event.custom",
    "pos": {
     "x": 2600,
     "y": 3300
    },
-   "params": {}
+   "params": {
+    "event": "ce1"
+   }
   },
   {
    "id": "n129",
-   "type": "creature.set_health",
+   "type": "event.call",
    "pos": {
     "x": 2860,
     "y": 3300
    },
-   "params": {}
+   "params": {
+    "event": "ce1"
+   }
   },
   {
    "id": "n130",
-   "type": "creature.remove",
+   "type": "creature.for_each",
    "pos": {
     "x": 3120,
     "y": 3300
@@ -1320,7 +1320,7 @@
   },
   {
    "id": "n131",
-   "type": "creature.on_idle",
+   "type": "creature.of_type",
    "pos": {
     "x": 260,
     "y": 3520
@@ -1328,127 +1328,71 @@
    "params": {}
   },
   {
-   "id": "cs1",
-   "type": "creature.state",
-   "pos": {
-    "x": 2860,
-    "y": 3700
-   },
-   "params": {}
-  },
-  {
-   "id": "cs2",
-   "type": "creature.target",
-   "pos": {
-    "x": 3060,
-    "y": 3700
-   },
-   "params": {}
-  },
-  {
-   "id": "cs3",
-   "type": "creature.set_speed",
-   "pos": {
-    "x": 3260,
-    "y": 3700
-   },
-   "params": {
-    "mult": 1.5
-   }
-  },
-  {
-   "id": "cs4",
-   "type": "creature.set_tier",
-   "pos": {
-    "x": 3460,
-    "y": 3700
-   },
-   "params": {
-    "tier": 2
-   }
-  },
-  {
    "id": "n132",
-   "type": "table.get_row",
+   "type": "creature.nearest",
    "pos": {
     "x": 520,
     "y": 3520
    },
-   "params": {
-    "table": "dt1"
-   }
+   "params": {}
   },
   {
    "id": "n133",
-   "type": "table.get_cell",
+   "type": "creature.type",
    "pos": {
     "x": 780,
     "y": 3520
    },
-   "params": {
-    "table": "dt1",
-    "column": "gun"
-   }
+   "params": {}
   },
   {
    "id": "n134",
-   "type": "table.for_each",
+   "type": "creature.idle_for",
    "pos": {
     "x": 1040,
     "y": 3520
    },
-   "params": {
-    "table": "dt1"
-   }
+   "params": {}
   },
   {
    "id": "n135",
-   "type": "table.find",
+   "type": "creature.can_see",
    "pos": {
     "x": 1300,
     "y": 3520
    },
-   "params": {
-    "table": "dt1",
-    "column": "lvl"
-   }
+   "params": {}
   },
   {
    "id": "n136",
-   "type": "table.count",
+   "type": "creature.go_to",
    "pos": {
     "x": 1560,
     "y": 3520
    },
-   "params": {
-    "table": "dt1"
-   }
+   "params": {}
   },
   {
    "id": "n137",
-   "type": "table.keys",
+   "type": "creature.attack",
    "pos": {
     "x": 1820,
     "y": 3520
    },
-   "params": {
-    "table": "dt1"
-   }
+   "params": {}
   },
   {
    "id": "n138",
-   "type": "timeline.play",
+   "type": "creature.hold",
    "pos": {
     "x": 2080,
     "y": 3520
    },
-   "params": {
-    "timeline": "tl1"
-   }
+   "params": {}
   },
   {
    "id": "n139",
-   "type": "ent.transform",
+   "type": "creature.resume",
    "pos": {
     "x": 2340,
     "y": 3520
@@ -1457,7 +1401,7 @@
   },
   {
    "id": "n140",
-   "type": "ent.position",
+   "type": "creature.state",
    "pos": {
     "x": 2600,
     "y": 3520
@@ -1466,7 +1410,7 @@
   },
   {
    "id": "n141",
-   "type": "ent.rotation",
+   "type": "creature.target",
    "pos": {
     "x": 2860,
     "y": 3520
@@ -1475,7 +1419,7 @@
   },
   {
    "id": "n142",
-   "type": "ent.distance",
+   "type": "creature.set_speed",
    "pos": {
     "x": 3120,
     "y": 3520
@@ -1484,10 +1428,170 @@
   },
   {
    "id": "n143",
-   "type": "ent.direction",
+   "type": "creature.set_tier",
    "pos": {
     "x": 260,
     "y": 3740
+   },
+   "params": {}
+  },
+  {
+   "id": "n144",
+   "type": "creature.flee_to",
+   "pos": {
+    "x": 520,
+    "y": 3740
+   },
+   "params": {}
+  },
+  {
+   "id": "n145",
+   "type": "creature.set_health",
+   "pos": {
+    "x": 780,
+    "y": 3740
+   },
+   "params": {}
+  },
+  {
+   "id": "n146",
+   "type": "creature.remove",
+   "pos": {
+    "x": 1040,
+    "y": 3740
+   },
+   "params": {}
+  },
+  {
+   "id": "n147",
+   "type": "creature.on_idle",
+   "pos": {
+    "x": 1300,
+    "y": 3740
+   },
+   "params": {}
+  },
+  {
+   "id": "n148",
+   "type": "table.get_row",
+   "pos": {
+    "x": 1560,
+    "y": 3740
+   },
+   "params": {
+    "table": "dt1"
+   }
+  },
+  {
+   "id": "n149",
+   "type": "table.get_cell",
+   "pos": {
+    "x": 1820,
+    "y": 3740
+   },
+   "params": {
+    "table": "dt1",
+    "column": "gun"
+   }
+  },
+  {
+   "id": "n150",
+   "type": "table.for_each",
+   "pos": {
+    "x": 2080,
+    "y": 3740
+   },
+   "params": {
+    "table": "dt1"
+   }
+  },
+  {
+   "id": "n151",
+   "type": "table.find",
+   "pos": {
+    "x": 2340,
+    "y": 3740
+   },
+   "params": {
+    "table": "dt1",
+    "column": "lvl"
+   }
+  },
+  {
+   "id": "n152",
+   "type": "table.count",
+   "pos": {
+    "x": 2600,
+    "y": 3740
+   },
+   "params": {
+    "table": "dt1"
+   }
+  },
+  {
+   "id": "n153",
+   "type": "table.keys",
+   "pos": {
+    "x": 2860,
+    "y": 3740
+   },
+   "params": {
+    "table": "dt1"
+   }
+  },
+  {
+   "id": "n154",
+   "type": "timeline.play",
+   "pos": {
+    "x": 3120,
+    "y": 3740
+   },
+   "params": {
+    "timeline": "tl1"
+   }
+  },
+  {
+   "id": "n155",
+   "type": "ent.transform",
+   "pos": {
+    "x": 260,
+    "y": 3960
+   },
+   "params": {}
+  },
+  {
+   "id": "n156",
+   "type": "ent.position",
+   "pos": {
+    "x": 520,
+    "y": 3960
+   },
+   "params": {}
+  },
+  {
+   "id": "n157",
+   "type": "ent.rotation",
+   "pos": {
+    "x": 780,
+    "y": 3960
+   },
+   "params": {}
+  },
+  {
+   "id": "n158",
+   "type": "ent.distance",
+   "pos": {
+    "x": 1040,
+    "y": 3960
+   },
+   "params": {}
+  },
+  {
+   "id": "n159",
+   "type": "ent.direction",
+   "pos": {
+    "x": 1300,
+    "y": 3960
    },
    "params": {}
   },
@@ -1500,126 +1604,6 @@
    },
    "params": {
     "value": 1
-   }
-  },
-  {
-   "id": "npc_t",
-   "type": "npc.on_talk",
-   "pos": {
-    "x": 0,
-    "y": 8000
-   },
-   "params": {
-    "name": ""
-   }
-  },
-  {
-   "id": "npc_s",
-   "type": "npc.say",
-   "pos": {
-    "x": 260,
-    "y": 8000
-   },
-   "params": {
-    "text": "Hello there, friend",
-    "speaker": "Sam"
-   }
-  },
-  {
-   "id": "npc_b",
-   "type": "npc.behave",
-   "pos": {
-    "x": 520,
-    "y": 8000
-   },
-   "params": {
-    "do": "follow"
-   }
-  },
-  {
-   "id": "npc_l",
-   "type": "npc.look_at",
-   "pos": {
-    "x": 780,
-    "y": 8000
-   },
-   "params": {}
-  },
-  {
-   "id": "npc_v",
-   "type": "vec.make",
-   "pos": {
-    "x": 780,
-    "y": 8220
-   },
-   "params": {
-    "x": 1,
-    "y": 2,
-    "z": 3
-   }
-  },
-  {
-   "id": "npc_n",
-   "type": "npc.spawn",
-   "pos": {
-    "x": 1040,
-    "y": 8000
-   },
-   "params": {
-    "model": "models/barney.mdl",
-    "name": "Sam",
-    "yaw": 90
-   }
-  },
-  {
-   "id": "npc_i",
-   "type": "npc.spawn_use",
-   "pos": {
-    "x": 1300,
-    "y": 8000
-   },
-   "params": {
-    "model": "models/w_weaponbox.mdl",
-    "prompt": "Press E to read",
-    "bots": true
-   }
-  },
-  {
-   "id": "npc_c",
-   "type": "npc.choose",
-   "pos": {
-    "x": 1560,
-    "y": 8000
-   },
-   "params": {
-    "text": "Help me?",
-    "o1": "Yes",
-    "o2": "No",
-    "o3": "Tell me more",
-    "count": 3,
-    "secs": 20
-   }
-  },
-  {
-   "id": "npc_u",
-   "type": "npc.on_use",
-   "pos": {
-    "x": 0,
-    "y": 8440
-   },
-   "params": {
-    "name": ""
-   }
-  },
-  {
-   "id": "npc_s2",
-   "type": "npc.say",
-   "pos": {
-    "x": 260,
-    "y": 8440
-   },
-   "params": {
-    "text": "Used."
    }
   }
  ],
@@ -1672,72 +1656,127 @@
    "id": "w5",
    "from": {
     "node": "ps",
-    "pin": "then"
+    "pin": "player"
    },
    "to": {
-    "node": "n12",
-    "pin": "exec"
+    "node": "n2",
+    "pin": "player"
    }
   },
   {
    "id": "w6",
    "from": {
-    "node": "n12",
+    "node": "ps",
     "pin": "then"
    },
    "to": {
-    "node": "n13",
+    "node": "n2",
     "pin": "exec"
    }
   },
   {
    "id": "w7",
    "from": {
-    "node": "n13",
-    "pin": "then"
+    "node": "n2",
+    "pin": "r1"
    },
    "to": {
-    "node": "n14",
+    "node": "n3",
     "pin": "exec"
    }
   },
   {
    "id": "w8",
    "from": {
-    "node": "n14",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n15",
-    "pin": "exec"
+    "node": "n4",
+    "pin": "npc"
    }
   },
   {
    "id": "w9",
    "from": {
-    "node": "n15",
+    "node": "n3",
     "pin": "then"
    },
    "to": {
-    "node": "n17",
+    "node": "n4",
     "pin": "exec"
    }
   },
   {
    "id": "w10",
    "from": {
-    "node": "n17",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n19",
-    "pin": "exec"
+    "node": "n5",
+    "pin": "npc"
    }
   },
   {
    "id": "w11",
    "from": {
-    "node": "n19",
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n5",
+    "pin": "target"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "n4",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "n5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n6",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "n6",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n7",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "n7",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n20",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "n20",
     "pin": "then"
    },
    "to": {
@@ -1746,9 +1785,20 @@
    }
   },
   {
-   "id": "w12",
+   "id": "w17",
    "from": {
     "node": "n21",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n22",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "n22",
     "pin": "then"
    },
    "to": {
@@ -1757,7 +1807,7 @@
    }
   },
   {
-   "id": "w13",
+   "id": "w19",
    "from": {
     "node": "n23",
     "pin": "then"
@@ -1768,7 +1818,7 @@
    }
   },
   {
-   "id": "w14",
+   "id": "w20",
    "from": {
     "node": "n25",
     "pin": "then"
@@ -1779,7 +1829,7 @@
    }
   },
   {
-   "id": "w15",
+   "id": "w21",
    "from": {
     "node": "n27",
     "pin": "then"
@@ -1790,7 +1840,7 @@
    }
   },
   {
-   "id": "w16",
+   "id": "w22",
    "from": {
     "node": "n29",
     "pin": "then"
@@ -1801,7 +1851,7 @@
    }
   },
   {
-   "id": "w17",
+   "id": "w23",
    "from": {
     "node": "n31",
     "pin": "then"
@@ -1812,7 +1862,7 @@
    }
   },
   {
-   "id": "w18",
+   "id": "w24",
    "from": {
     "node": "n33",
     "pin": "then"
@@ -1823,7 +1873,7 @@
    }
   },
   {
-   "id": "w19",
+   "id": "w25",
    "from": {
     "node": "n35",
     "pin": "then"
@@ -1834,7 +1884,7 @@
    }
   },
   {
-   "id": "w20",
+   "id": "w26",
    "from": {
     "node": "n37",
     "pin": "then"
@@ -1845,7 +1895,7 @@
    }
   },
   {
-   "id": "w21",
+   "id": "w27",
    "from": {
     "node": "n39",
     "pin": "then"
@@ -1856,7 +1906,7 @@
    }
   },
   {
-   "id": "w22",
+   "id": "w28",
    "from": {
     "node": "n41",
     "pin": "then"
@@ -1867,7 +1917,7 @@
    }
   },
   {
-   "id": "w23",
+   "id": "w29",
    "from": {
     "node": "n43",
     "pin": "then"
@@ -1878,7 +1928,7 @@
    }
   },
   {
-   "id": "w24",
+   "id": "w30",
    "from": {
     "node": "n45",
     "pin": "then"
@@ -1889,7 +1939,7 @@
    }
   },
   {
-   "id": "w25",
+   "id": "w31",
    "from": {
     "node": "n47",
     "pin": "then"
@@ -1900,95 +1950,51 @@
    }
   },
   {
-   "id": "w26",
+   "id": "w32",
    "from": {
-    "node": "ps",
-    "pin": "player"
-   },
-   "to": {
-    "node": "n50",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w27",
-   "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n49",
+    "pin": "then"
    },
    "to": {
     "node": "n51",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w28",
-   "from": {
-    "node": "ps",
-    "pin": "player"
-   },
-   "to": {
-    "node": "n52",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w29",
-   "from": {
-    "node": "ps",
-    "pin": "player"
-   },
-   "to": {
-    "node": "n53",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w30",
-   "from": {
-    "node": "ps",
-    "pin": "player"
-   },
-   "to": {
-    "node": "n54",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w31",
-   "from": {
-    "node": "ps",
-    "pin": "player"
-   },
-   "to": {
-    "node": "n55",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w32",
-   "from": {
-    "node": "ps",
-    "pin": "player"
-   },
-   "to": {
-    "node": "n56",
-    "pin": "player"
+    "pin": "exec"
    }
   },
   {
    "id": "w33",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n51",
+    "pin": "then"
    },
    "to": {
-    "node": "n57",
-    "pin": "player"
+    "node": "n53",
+    "pin": "exec"
    }
   },
   {
    "id": "w34",
+   "from": {
+    "node": "n53",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n55",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "n55",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n57",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w36",
    "from": {
     "node": "ps",
     "pin": "player"
@@ -1999,7 +2005,7 @@
    }
   },
   {
-   "id": "w35",
+   "id": "w37",
    "from": {
     "node": "ps",
     "pin": "player"
@@ -2010,7 +2016,7 @@
    }
   },
   {
-   "id": "w36",
+   "id": "w38",
    "from": {
     "node": "ps",
     "pin": "player"
@@ -2021,35 +2027,13 @@
    }
   },
   {
-   "id": "w37",
-   "from": {
-    "node": "ps",
-    "pin": "player"
-   },
-   "to": {
-    "node": "n63",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w38",
-   "from": {
-    "node": "ps",
-    "pin": "player"
-   },
-   "to": {
-    "node": "n64",
-    "pin": "player"
-   }
-  },
-  {
    "id": "w39",
    "from": {
     "node": "ps",
     "pin": "player"
    },
    "to": {
-    "node": "n65",
+    "node": "n61",
     "pin": "player"
    }
   },
@@ -2060,7 +2044,7 @@
     "pin": "player"
    },
    "to": {
-    "node": "n66",
+    "node": "n62",
     "pin": "player"
    }
   },
@@ -2071,19 +2055,19 @@
     "pin": "player"
    },
    "to": {
-    "node": "n67",
+    "node": "n63",
     "pin": "player"
    }
   },
   {
    "id": "w42",
    "from": {
-    "node": "n49",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n67",
-    "pin": "exec"
+    "node": "n64",
+    "pin": "player"
    }
   },
   {
@@ -2093,30 +2077,30 @@
     "pin": "player"
    },
    "to": {
-    "node": "n68",
+    "node": "n65",
     "pin": "player"
    }
   },
   {
    "id": "w44",
    "from": {
-    "node": "vec",
-    "pin": "out"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n68",
-    "pin": "angles"
+    "node": "n66",
+    "pin": "player"
    }
   },
   {
    "id": "w45",
    "from": {
-    "node": "n67",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n68",
-    "pin": "exec"
+    "node": "n67",
+    "pin": "player"
    }
   },
   {
@@ -2126,19 +2110,19 @@
     "pin": "player"
    },
    "to": {
-    "node": "n69",
+    "node": "n68",
     "pin": "player"
    }
   },
   {
    "id": "w47",
    "from": {
-    "node": "n68",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n69",
-    "pin": "exec"
+    "node": "n71",
+    "pin": "player"
    }
   },
   {
@@ -2148,19 +2132,19 @@
     "pin": "player"
    },
    "to": {
-    "node": "n70",
+    "node": "n72",
     "pin": "player"
    }
   },
   {
    "id": "w49",
    "from": {
-    "node": "n69",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n70",
-    "pin": "exec"
+    "node": "n73",
+    "pin": "player"
    }
   },
   {
@@ -2170,62 +2154,62 @@
     "pin": "player"
    },
    "to": {
-    "node": "n71",
+    "node": "n74",
     "pin": "player"
    }
   },
   {
    "id": "w51",
    "from": {
-    "node": "n70",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n71",
-    "pin": "exec"
+    "node": "n75",
+    "pin": "player"
    }
   },
   {
    "id": "w52",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n57",
+    "pin": "then"
    },
    "to": {
-    "node": "n72",
-    "pin": "player"
+    "node": "n75",
+    "pin": "exec"
    }
   },
   {
    "id": "w53",
    "from": {
-    "node": "n71",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n72",
-    "pin": "exec"
+    "node": "n76",
+    "pin": "player"
    }
   },
   {
    "id": "w54",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "vec",
+    "pin": "out"
    },
    "to": {
-    "node": "n73",
-    "pin": "player"
+    "node": "n76",
+    "pin": "angles"
    }
   },
   {
    "id": "w55",
    "from": {
-    "node": "n72",
+    "node": "n75",
     "pin": "then"
    },
    "to": {
-    "node": "n73",
+    "node": "n76",
     "pin": "exec"
    }
   },
@@ -2236,18 +2220,18 @@
     "pin": "player"
    },
    "to": {
-    "node": "n74",
+    "node": "n77",
     "pin": "player"
    }
   },
   {
    "id": "w57",
    "from": {
-    "node": "n73",
+    "node": "n76",
     "pin": "then"
    },
    "to": {
-    "node": "n74",
+    "node": "n77",
     "pin": "exec"
    }
   },
@@ -2258,18 +2242,18 @@
     "pin": "player"
    },
    "to": {
-    "node": "n75",
+    "node": "n78",
     "pin": "player"
    }
   },
   {
    "id": "w59",
    "from": {
-    "node": "n74",
+    "node": "n77",
     "pin": "then"
    },
    "to": {
-    "node": "n75",
+    "node": "n78",
     "pin": "exec"
    }
   },
@@ -2280,18 +2264,18 @@
     "pin": "player"
    },
    "to": {
-    "node": "n76",
+    "node": "n79",
     "pin": "player"
    }
   },
   {
    "id": "w61",
    "from": {
-    "node": "n75",
+    "node": "n78",
     "pin": "then"
    },
    "to": {
-    "node": "n76",
+    "node": "n79",
     "pin": "exec"
    }
   },
@@ -2302,18 +2286,18 @@
     "pin": "player"
    },
    "to": {
-    "node": "n77",
+    "node": "n80",
     "pin": "player"
    }
   },
   {
    "id": "w63",
    "from": {
-    "node": "n76",
+    "node": "n79",
     "pin": "then"
    },
    "to": {
-    "node": "n77",
+    "node": "n80",
     "pin": "exec"
    }
   },
@@ -2324,18 +2308,18 @@
     "pin": "player"
    },
    "to": {
-    "node": "n78",
+    "node": "n81",
     "pin": "player"
    }
   },
   {
    "id": "w65",
    "from": {
-    "node": "n77",
+    "node": "n80",
     "pin": "then"
    },
    "to": {
-    "node": "n78",
+    "node": "n81",
     "pin": "exec"
    }
   },
@@ -2346,18 +2330,18 @@
     "pin": "player"
    },
    "to": {
-    "node": "n79",
+    "node": "n82",
     "pin": "player"
    }
   },
   {
    "id": "w67",
    "from": {
-    "node": "n78",
+    "node": "n81",
     "pin": "then"
    },
    "to": {
-    "node": "n79",
+    "node": "n82",
     "pin": "exec"
    }
   },
@@ -2368,18 +2352,18 @@
     "pin": "player"
    },
    "to": {
-    "node": "n80",
+    "node": "n83",
     "pin": "player"
    }
   },
   {
    "id": "w69",
    "from": {
-    "node": "n79",
+    "node": "n82",
     "pin": "then"
    },
    "to": {
-    "node": "n80",
+    "node": "n83",
     "pin": "exec"
    }
   },
@@ -2390,18 +2374,18 @@
     "pin": "player"
    },
    "to": {
-    "node": "n81",
+    "node": "n84",
     "pin": "player"
    }
   },
   {
    "id": "w71",
    "from": {
-    "node": "n80",
+    "node": "n83",
     "pin": "then"
    },
    "to": {
-    "node": "n81",
+    "node": "n84",
     "pin": "exec"
    }
   },
@@ -2412,18 +2396,18 @@
     "pin": "player"
    },
    "to": {
-    "node": "n82",
+    "node": "n85",
     "pin": "player"
    }
   },
   {
    "id": "w73",
    "from": {
-    "node": "n81",
+    "node": "n84",
     "pin": "then"
    },
    "to": {
-    "node": "n82",
+    "node": "n85",
     "pin": "exec"
    }
   },
@@ -2434,18 +2418,18 @@
     "pin": "player"
    },
    "to": {
-    "node": "n83",
+    "node": "n86",
     "pin": "player"
    }
   },
   {
    "id": "w75",
    "from": {
-    "node": "n82",
+    "node": "n85",
     "pin": "then"
    },
    "to": {
-    "node": "n83",
+    "node": "n86",
     "pin": "exec"
    }
   },
@@ -2456,18 +2440,18 @@
     "pin": "player"
    },
    "to": {
-    "node": "n84",
+    "node": "n87",
     "pin": "player"
    }
   },
   {
    "id": "w77",
    "from": {
-    "node": "n83",
+    "node": "n86",
     "pin": "then"
    },
    "to": {
-    "node": "n84",
+    "node": "n87",
     "pin": "exec"
    }
   },
@@ -2478,80 +2462,80 @@
     "pin": "player"
    },
    "to": {
-    "node": "n85",
+    "node": "n88",
     "pin": "player"
    }
   },
   {
    "id": "w79",
    "from": {
-    "node": "n84",
+    "node": "n87",
     "pin": "then"
    },
    "to": {
-    "node": "n85",
+    "node": "n88",
     "pin": "exec"
    }
   },
   {
    "id": "w80",
    "from": {
-    "node": "n85",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n86",
-    "pin": "exec"
+    "node": "n89",
+    "pin": "player"
    }
   },
   {
    "id": "w81",
    "from": {
-    "node": "n86",
+    "node": "n88",
     "pin": "then"
    },
    "to": {
-    "node": "n87",
+    "node": "n89",
     "pin": "exec"
    }
   },
   {
    "id": "w82",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n88",
-    "pin": "in"
+    "node": "n90",
+    "pin": "player"
    }
   },
   {
    "id": "w83",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n89",
+    "pin": "then"
    },
    "to": {
-    "node": "n89",
-    "pin": "in"
+    "node": "n90",
+    "pin": "exec"
    }
   },
   {
    "id": "w84",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
     "node": "n91",
-    "pin": "at"
+    "pin": "player"
    }
   },
   {
    "id": "w85",
    "from": {
-    "node": "n87",
+    "node": "n90",
     "pin": "then"
    },
    "to": {
@@ -2562,12 +2546,12 @@
   {
    "id": "w86",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
     "node": "n92",
-    "pin": "in"
+    "pin": "player"
    }
   },
   {
@@ -2584,27 +2568,16 @@
   {
    "id": "w88",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
     "node": "n93",
-    "pin": "in"
+    "pin": "player"
    }
   },
   {
    "id": "w89",
-   "from": {
-    "node": "vec",
-    "pin": "out"
-   },
-   "to": {
-    "node": "n93",
-    "pin": "pos"
-   }
-  },
-  {
-   "id": "w90",
    "from": {
     "node": "n92",
     "pin": "then"
@@ -2615,29 +2588,7 @@
    }
   },
   {
-   "id": "w91",
-   "from": {
-    "node": "ent",
-    "pin": "out"
-   },
-   "to": {
-    "node": "n94",
-    "pin": "in"
-   }
-  },
-  {
-   "id": "w92",
-   "from": {
-    "node": "vec",
-    "pin": "out"
-   },
-   "to": {
-    "node": "n94",
-    "pin": "angles"
-   }
-  },
-  {
-   "id": "w93",
+   "id": "w90",
    "from": {
     "node": "n93",
     "pin": "then"
@@ -2648,18 +2599,7 @@
    }
   },
   {
-   "id": "w94",
-   "from": {
-    "node": "ent",
-    "pin": "out"
-   },
-   "to": {
-    "node": "n95",
-    "pin": "in"
-   }
-  },
-  {
-   "id": "w95",
+   "id": "w91",
    "from": {
     "node": "n94",
     "pin": "then"
@@ -2670,36 +2610,80 @@
    }
   },
   {
-   "id": "w96",
+   "id": "w92",
    "from": {
-    "node": "vec",
+    "node": "ent",
     "pin": "out"
    },
    "to": {
     "node": "n96",
-    "pin": "pos"
+    "pin": "in"
    }
   },
   {
-   "id": "w97",
+   "id": "w93",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n97",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w94",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n99",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w95",
    "from": {
     "node": "n95",
     "pin": "then"
    },
    "to": {
-    "node": "n96",
+    "node": "n99",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w96",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n100",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w97",
+   "from": {
+    "node": "n99",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n100",
     "pin": "exec"
    }
   },
   {
    "id": "w98",
    "from": {
-    "node": "vec",
+    "node": "ent",
     "pin": "out"
    },
    "to": {
-    "node": "n97",
-    "pin": "a"
+    "node": "n101",
+    "pin": "in"
    }
   },
   {
@@ -2709,294 +2693,294 @@
     "pin": "out"
    },
    "to": {
-    "node": "n97",
-    "pin": "b"
+    "node": "n101",
+    "pin": "pos"
    }
   },
   {
    "id": "w100",
    "from": {
-    "node": "n96",
+    "node": "n100",
     "pin": "then"
    },
    "to": {
-    "node": "n97",
+    "node": "n101",
     "pin": "exec"
    }
   },
   {
    "id": "w101",
    "from": {
-    "node": "vec",
+    "node": "ent",
     "pin": "out"
    },
    "to": {
-    "node": "n98",
-    "pin": "pos"
+    "node": "n102",
+    "pin": "in"
    }
   },
   {
    "id": "w102",
    "from": {
-    "node": "n97",
-    "pin": "then"
+    "node": "vec",
+    "pin": "out"
    },
    "to": {
-    "node": "n98",
-    "pin": "exec"
+    "node": "n102",
+    "pin": "angles"
    }
   },
   {
    "id": "w103",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n101",
+    "pin": "then"
    },
    "to": {
-    "node": "n99",
-    "pin": "player"
+    "node": "n102",
+    "pin": "exec"
    }
   },
   {
    "id": "w104",
    "from": {
-    "node": "n98",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n99",
-    "pin": "exec"
+    "node": "n103",
+    "pin": "in"
    }
   },
   {
    "id": "w105",
    "from": {
-    "node": "n99",
+    "node": "n102",
     "pin": "then"
    },
    "to": {
-    "node": "n100",
+    "node": "n103",
     "pin": "exec"
    }
   },
   {
    "id": "w106",
    "from": {
-    "node": "n100",
-    "pin": "then"
+    "node": "vec",
+    "pin": "out"
    },
    "to": {
-    "node": "n101",
-    "pin": "exec"
+    "node": "n104",
+    "pin": "pos"
    }
   },
   {
    "id": "w107",
    "from": {
-    "node": "n101",
+    "node": "n103",
     "pin": "then"
    },
    "to": {
-    "node": "n103",
+    "node": "n104",
     "pin": "exec"
    }
   },
   {
    "id": "w108",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "vec",
+    "pin": "out"
    },
    "to": {
-    "node": "n112",
-    "pin": "bot"
+    "node": "n105",
+    "pin": "a"
    }
   },
   {
    "id": "w109",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "vec",
+    "pin": "out"
    },
    "to": {
-    "node": "n113",
-    "pin": "bot"
+    "node": "n105",
+    "pin": "b"
    }
   },
   {
    "id": "w110",
    "from": {
-    "node": "n103",
+    "node": "n104",
     "pin": "then"
    },
    "to": {
-    "node": "n114",
+    "node": "n105",
     "pin": "exec"
    }
   },
   {
    "id": "w111",
    "from": {
-    "node": "n114",
-    "pin": "then"
+    "node": "vec",
+    "pin": "out"
    },
    "to": {
-    "node": "n115",
-    "pin": "exec"
+    "node": "n106",
+    "pin": "pos"
    }
   },
   {
    "id": "w112",
    "from": {
-    "node": "n115",
+    "node": "n105",
     "pin": "then"
    },
    "to": {
-    "node": "n117",
+    "node": "n106",
     "pin": "exec"
    }
   },
   {
    "id": "w113",
    "from": {
-    "node": "n117",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n118",
-    "pin": "exec"
+    "node": "n107",
+    "pin": "player"
    }
   },
   {
    "id": "w114",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n106",
+    "pin": "then"
    },
    "to": {
-    "node": "n121",
-    "pin": "creature"
+    "node": "n107",
+    "pin": "exec"
    }
   },
   {
    "id": "w115",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n107",
+    "pin": "then"
    },
    "to": {
-    "node": "n122",
-    "pin": "creature"
+    "node": "n108",
+    "pin": "exec"
    }
   },
   {
    "id": "w116",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n108",
+    "pin": "then"
    },
    "to": {
-    "node": "n123",
-    "pin": "creature"
+    "node": "n109",
+    "pin": "exec"
    }
   },
   {
    "id": "w117",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n109",
+    "pin": "then"
    },
    "to": {
-    "node": "n123",
-    "pin": "what"
+    "node": "n110",
+    "pin": "exec"
    }
   },
   {
    "id": "w118",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n110",
+    "pin": "then"
    },
    "to": {
-    "node": "n124",
-    "pin": "creature"
+    "node": "n111",
+    "pin": "exec"
    }
   },
   {
    "id": "w119",
    "from": {
-    "node": "n118",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n124",
-    "pin": "exec"
+    "node": "n112",
+    "pin": "victim"
    }
   },
   {
    "id": "w120",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n111",
+    "pin": "then"
    },
    "to": {
-    "node": "n125",
-    "pin": "creature"
+    "node": "n112",
+    "pin": "exec"
    }
   },
   {
    "id": "w121",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n112",
+    "pin": "then"
    },
    "to": {
-    "node": "n125",
-    "pin": "target"
+    "node": "n113",
+    "pin": "exec"
    }
   },
   {
    "id": "w122",
    "from": {
-    "node": "n124",
+    "node": "n113",
     "pin": "then"
    },
    "to": {
-    "node": "n125",
+    "node": "n115",
     "pin": "exec"
    }
   },
   {
    "id": "w123",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n126",
-    "pin": "creature"
+    "node": "n124",
+    "pin": "bot"
    }
   },
   {
    "id": "w124",
    "from": {
-    "node": "n125",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n126",
-    "pin": "exec"
+    "node": "n125",
+    "pin": "bot"
    }
   },
   {
    "id": "w125",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n115",
+    "pin": "then"
    },
    "to": {
-    "node": "n127",
-    "pin": "creature"
+    "node": "n126",
+    "pin": "exec"
    }
   },
   {
@@ -3013,22 +2997,22 @@
   {
    "id": "w127",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n127",
+    "pin": "then"
    },
    "to": {
-    "node": "n128",
-    "pin": "creature"
+    "node": "n129",
+    "pin": "exec"
    }
   },
   {
    "id": "w128",
    "from": {
-    "node": "n127",
+    "node": "n129",
     "pin": "then"
    },
    "to": {
-    "node": "n128",
+    "node": "n130",
     "pin": "exec"
    }
   },
@@ -3039,19 +3023,19 @@
     "pin": "out"
    },
    "to": {
-    "node": "n129",
+    "node": "n133",
     "pin": "creature"
    }
   },
   {
    "id": "w130",
    "from": {
-    "node": "n128",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n129",
-    "pin": "exec"
+    "node": "n134",
+    "pin": "creature"
    }
   },
   {
@@ -3061,40 +3045,40 @@
     "pin": "out"
    },
    "to": {
-    "node": "n130",
+    "node": "n135",
     "pin": "creature"
    }
   },
   {
    "id": "w132",
    "from": {
-    "node": "n129",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n130",
-    "pin": "exec"
+    "node": "n135",
+    "pin": "what"
    }
   },
   {
    "id": "w133",
    "from": {
-    "node": "n130",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "cs3",
-    "pin": "exec"
+    "node": "n136",
+    "pin": "creature"
    }
   },
   {
    "id": "w134",
    "from": {
-    "node": "n134",
+    "node": "n130",
     "pin": "then"
    },
    "to": {
-    "node": "n138",
+    "node": "n136",
     "pin": "exec"
    }
   },
@@ -3105,8 +3089,8 @@
     "pin": "out"
    },
    "to": {
-    "node": "n139",
-    "pin": "in"
+    "node": "n137",
+    "pin": "creature"
    }
   },
   {
@@ -3116,327 +3100,272 @@
     "pin": "out"
    },
    "to": {
-    "node": "n140",
-    "pin": "in"
+    "node": "n137",
+    "pin": "target"
    }
   },
   {
    "id": "w137",
+   "from": {
+    "node": "n136",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n137",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w138",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n138",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w139",
+   "from": {
+    "node": "n137",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n138",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w140",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n139",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w141",
+   "from": {
+    "node": "n138",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n139",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w142",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n140",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w143",
    "from": {
     "node": "ent",
     "pin": "out"
    },
    "to": {
     "node": "n141",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w144",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n142",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w145",
+   "from": {
+    "node": "n139",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n142",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w146",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n143",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w147",
+   "from": {
+    "node": "n142",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n143",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w148",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n144",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w149",
+   "from": {
+    "node": "n143",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n144",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w150",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n145",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w151",
+   "from": {
+    "node": "n144",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n145",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w152",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n146",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w153",
+   "from": {
+    "node": "n145",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n146",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w154",
+   "from": {
+    "node": "n146",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n150",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w155",
+   "from": {
+    "node": "n150",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n154",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w156",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n155",
     "pin": "in"
    }
   },
   {
-   "id": "w138",
+   "id": "w157",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n156",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w158",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n157",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w159",
    "from": {
     "node": "num",
     "pin": "out"
    },
    "to": {
-    "node": "n132",
+    "node": "n148",
     "pin": "key"
    }
   },
   {
-   "id": "w139",
+   "id": "w160",
    "from": {
     "node": "num",
     "pin": "out"
    },
    "to": {
-    "node": "n135",
+    "node": "n151",
     "pin": "value"
-   }
-  },
-  {
-   "id": "cw1",
-   "from": {
-    "node": "ent",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cs1",
-    "pin": "creature"
-   }
-  },
-  {
-   "id": "cw2",
-   "from": {
-    "node": "ent",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cs2",
-    "pin": "creature"
-   }
-  },
-  {
-   "id": "cw3",
-   "from": {
-    "node": "ent",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cs3",
-    "pin": "creature"
-   }
-  },
-  {
-   "id": "cw4",
-   "from": {
-    "node": "ent",
-    "pin": "out"
-   },
-   "to": {
-    "node": "cs4",
-    "pin": "creature"
-   }
-  },
-  {
-   "id": "cw5",
-   "from": {
-    "node": "cs3",
-    "pin": "then"
-   },
-   "to": {
-    "node": "cs4",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "cw6",
-   "from": {
-    "node": "cs4",
-    "pin": "then"
-   },
-   "to": {
-    "node": "n134",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "cw7",
-   "from": {
-    "node": "cs1",
-    "pin": "state"
-   },
-   "to": {
-    "node": "cs4",
-    "pin": "tier"
-   }
-  },
-  {
-   "id": "wnpc146",
-   "from": {
-    "node": "npc_t",
-    "pin": "then"
-   },
-   "to": {
-    "node": "npc_s",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "wnpc147",
-   "from": {
-    "node": "npc_t",
-    "pin": "player"
-   },
-   "to": {
-    "node": "npc_s",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "wnpc148",
-   "from": {
-    "node": "npc_t",
-    "pin": "npc"
-   },
-   "to": {
-    "node": "npc_s",
-    "pin": "npc"
-   }
-  },
-  {
-   "id": "wnpc149",
-   "from": {
-    "node": "npc_s",
-    "pin": "then"
-   },
-   "to": {
-    "node": "npc_b",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "wnpc150",
-   "from": {
-    "node": "npc_t",
-    "pin": "npc"
-   },
-   "to": {
-    "node": "npc_b",
-    "pin": "npc"
-   }
-  },
-  {
-   "id": "wnpc151",
-   "from": {
-    "node": "npc_t",
-    "pin": "player"
-   },
-   "to": {
-    "node": "npc_b",
-    "pin": "follow"
-   }
-  },
-  {
-   "id": "wnpc152",
-   "from": {
-    "node": "npc_b",
-    "pin": "then"
-   },
-   "to": {
-    "node": "npc_l",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "wnpc153",
-   "from": {
-    "node": "npc_t",
-    "pin": "npc"
-   },
-   "to": {
-    "node": "npc_l",
-    "pin": "npc"
-   }
-  },
-  {
-   "id": "wnpc154",
-   "from": {
-    "node": "npc_t",
-    "pin": "player"
-   },
-   "to": {
-    "node": "npc_l",
-    "pin": "target"
-   }
-  },
-  {
-   "id": "wnpc155",
-   "from": {
-    "node": "npc_l",
-    "pin": "then"
-   },
-   "to": {
-    "node": "npc_n",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "wnpc156",
-   "from": {
-    "node": "npc_t",
-    "pin": "player"
-   },
-   "to": {
-    "node": "npc_n",
-    "pin": "at_ent"
-   }
-  },
-  {
-   "id": "wnpc157",
-   "from": {
-    "node": "npc_n",
-    "pin": "then"
-   },
-   "to": {
-    "node": "npc_i",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "wnpc158",
-   "from": {
-    "node": "npc_v",
-    "pin": "out"
-   },
-   "to": {
-    "node": "npc_i",
-    "pin": "pos"
-   }
-  },
-  {
-   "id": "wnpc159",
-   "from": {
-    "node": "npc_i",
-    "pin": "then"
-   },
-   "to": {
-    "node": "npc_c",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "wnpc160",
-   "from": {
-    "node": "npc_t",
-    "pin": "player"
-   },
-   "to": {
-    "node": "npc_c",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "wnpc161",
-   "from": {
-    "node": "npc_n",
-    "pin": "out"
-   },
-   "to": {
-    "node": "npc_c",
-    "pin": "npc"
-   }
-  },
-  {
-   "id": "wnpc162",
-   "from": {
-    "node": "npc_c",
-    "pin": "r1"
-   },
-   "to": {
-    "node": "npc_s",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "wnpc163",
-   "from": {
-    "node": "npc_u",
-    "pin": "then"
-   },
-   "to": {
-    "node": "npc_s2",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "wnpc164",
-   "from": {
-    "node": "npc_u",
-    "pin": "player"
-   },
-   "to": {
-    "node": "npc_s2",
-    "pin": "player"
    }
   }
  ],

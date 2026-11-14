@@ -16,9 +16,9 @@
 #define LSG_MODE "every_node_3"
 #define LSG_CTX 21
 #define LSG_TXT 2
-#define LSG_N 94
+#define LSG_N 97
 #define LSG_TASK 7310000
-#pragma dynamic 64256
+#pragma dynamic 66176
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -246,7 +246,7 @@ public lsg_settings_one_h(id, menu, item)
 	return PLUGIN_HANDLED
 }
 
-stock g_lsgM91[33][LSG_CTX]
+stock g_lsgM8[33][LSG_CTX]
 stock g_lsgAsk[33], g_lsgAskK[33][6]
 
 stock lsg_npc_line(out[], len, const speaker[], const text[])
@@ -279,21 +279,14 @@ public ls_on_npc_choice(id, npc, choice)
 	g_lsgAsk[id] = 0
 	switch (k)
 	{
-		case 92:
-			lsg_ask91(id, choice)
+		case 9:
+			lsg_ask8(id, choice)
 	}
 	return PLUGIN_CONTINUE
 }
-
-stock bool:lsg_npc_at(v, Float:o[3])
-{
-	for (new k = 0; k < 3; k++)
-		o[k] = lsg_vc(v, k)
-	return true
-}
-#define LSD_N 94
-new const g_lsdIds[LSD_N][] = { "ps", "tick", "ph", "phx", "ch", "chp", "n12", "n13", "n14", "n15", "n17", "n19", "n21", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n67", "n68", "n69", "n70", "n71", "n72", "n73", "n74", "n75", "n76", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111", "n114", "n115", "n116", "n117", "n118", "n124", "n125", "n126", "n127", "n128", "n129", "n130", "n131", "cs3", "cs4", "n134", "n138", "npc_t", "npc_s", "npc_b", "npc_l", "npc_n", "npc_i", "npc_c", "npc_u", "npc_s2" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 97
+new const g_lsdIds[LSD_N][] = { "ps", "tick", "ph", "phx", "ch", "chp", "n0", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n20", "n21", "n22", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n51", "n53", "n55", "n57", "n75", "n76", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n88", "n89", "n90", "n91", "n92", "n93", "n94", "n95", "n99", "n100", "n101", "n102", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n115", "n116", "n117", "n118", "n119", "n120", "n121", "n122", "n123", "n126", "n127", "n128", "n129", "n130", "n136", "n137", "n138", "n139", "n142", "n143", "n144", "n145", "n146", "n147", "n150", "n154" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -1010,6 +1003,191 @@ stock lsg_pre_sound(const p[])
 		g_lsgHave = TrieCreate()
 	TrieSetCell(g_lsgHave, p, 1)
 	return precache_sound(p)
+}
+
+// ---- Status Icon, Objective Marker, Kill Feed Line ----
+stock g_lsgIcon[33][16]
+stock lsg_icon_send(to, status, const name[], r, g, b)
+{
+	if (to && !is_user_connected(to))
+		return
+	static msg
+	if (!msg)
+		msg = get_user_msgid("StatusIcon")
+	message_begin(to ? MSG_ONE : MSG_ALL, msg, _, to)
+	write_byte(status)
+	write_string(name)
+	if (status)
+	{
+		write_byte(r)
+		write_byte(g)
+		write_byte(b)
+	}
+	message_end()
+}
+
+// to 0: everyone; death: noted, so it's taken away when they die
+stock lsg_icon(to, status, const name[], r, g, b, death)
+{
+	if (to && !lsg_ok(to))
+		return
+	lsg_icon_send(to, status, name, r, g, b)
+	if (!death)
+		return
+	for (new p = to ? to : 1; p <= (to ? to : MaxClients); p++)
+		if (is_user_connected(p))
+			copy(g_lsgIcon[p], 15, status ? name : "")
+}
+
+stock lsg_icon_clear(id)
+{
+	if (id < 1 || id > MaxClients || !g_lsgIcon[id][0])
+		return
+	lsg_icon_send(id, 0, g_lsgIcon[id], 0, 0, 0)
+	g_lsgIcon[id][0] = 0
+}
+
+// markers: a sprite on an info_target, moved by one task to what it follows (no think each frame)
+#define LSG_MKS 32
+stock g_lsgMk[LSG_MKS], g_lsgMkF[LSG_MKS], Float:g_lsgMkH[LSG_MKS], g_lsgMkWho[2048], g_lsgMkFor[2048]
+
+stock lsg_marker(const spr[], follow, const Float:at[3], hasAt, Float:h, Float:scale, r, g, b, pulse, who, forp)
+{
+	// (a sprite that wasn't there when the map loaded: no marker)
+	if (!lsg_have(spr) || (follow <= 0 && !hasAt) || (follow > 0 && !pev_valid(follow)))
+		return 0
+	new slot = -1
+	for (new k = 0; k < LSG_MKS; k++)
+	{
+		if (g_lsgMk[k] && !pev_valid(g_lsgMk[k]))
+			g_lsgMk[k] = 0
+		if (!g_lsgMk[k])
+		{
+			slot = k
+			break
+		}
+	}
+	if (slot < 0)
+		return 0
+	new e = create_entity("info_target")
+	if (e <= 0)
+		return 0
+	set_pev(e, pev_classname, "ls_studio_marker")
+	engfunc(EngFunc_SetModel, e, spr)
+	set_pev(e, pev_movetype, MOVETYPE_NOCLIP)
+	set_pev(e, pev_solid, SOLID_NOT)
+	set_pev(e, pev_rendermode, kRenderTransAdd)
+	set_pev(e, pev_renderamt, 255.0)
+	new Float:c[3]
+	c[0] = float(r)
+	c[1] = float(g)
+	c[2] = float(b)
+	set_pev(e, pev_rendercolor, c)
+	set_pev(e, pev_scale, scale)
+	if (pulse)
+		set_pev(e, pev_renderfx, kRenderFxPulseSlow)
+	new Float:o[3]
+	if (follow > 0)
+		pev(follow, pev_origin, o)
+	else
+		o = at
+	o[2] += h
+	engfunc(EngFunc_SetOrigin, e, o)
+	g_lsgMk[slot] = e
+	g_lsgMkF[slot] = follow
+	g_lsgMkH[slot] = h
+	g_lsgMkWho[e] = who
+	g_lsgMkFor[e] = forp
+	return e
+}
+
+stock lsg_mk_free(k)
+{
+	new e = g_lsgMk[k]
+	g_lsgMk[k] = 0
+	if (e > 0 && e < 2048)
+	{
+		g_lsgMkWho[e] = 0
+		g_lsgMkFor[e] = 0
+	}
+	if (e > 0 && pev_valid(e))
+		remove_entity(e)
+}
+
+stock lsg_mk_follow()
+{
+	for (new k = 0; k < LSG_MKS; k++)
+	{
+		new e = g_lsgMk[k], f = g_lsgMkF[k]
+		if (!e)
+			continue
+		if (!pev_valid(e))
+		{
+			g_lsgMk[k] = 0
+			continue
+		}
+		if (f <= 0)
+			continue
+		// what it was on is gone (or the player left): so is the marker
+		if (!pev_valid(f) || (f <= MaxClients && !is_user_connected(f)))
+		{
+			lsg_mk_free(k)
+			continue
+		}
+		// (a dead player's marker waits, out of sight)
+		new fx = pev(e, pev_effects)
+		if (f <= MaxClients && !is_user_alive(f))
+		{
+			set_pev(e, pev_effects, fx | EF_NODRAW)
+			continue
+		}
+		set_pev(e, pev_effects, fx & ~EF_NODRAW)
+		new Float:o[3]
+		pev(f, pev_origin, o)
+		o[2] += g_lsgMkH[k]
+		engfunc(EngFunc_SetOrigin, e, o)
+	}
+}
+
+// 0 or a marker: that one, or all of them
+stock lsg_marker_remove(m)
+{
+	for (new k = 0; k < LSG_MKS; k++)
+		if (g_lsgMk[k] && (!m || g_lsgMk[k] == m))
+			lsg_mk_free(k)
+}
+
+stock bool:lsg_mk_sees(ent, host)
+{
+	new w = g_lsgMkWho[ent]
+	if (w == 3)
+		return host == g_lsgMkFor[ent]
+	return host >= 1 && host <= MaxClients && get_user_team(host) == w
+}
+
+// a line in the kill feed, to each person's game (one at a time: plugins that count deaths from
+// the game's own DeathMsg, the mode's Player Killed among them, don't see it as a death)
+stock lsg_killfeed(killer, victim, hs, const w[])
+{
+	if (!lsg_ok(victim))
+		return 0
+	if (!lsg_ok(killer))
+		killer = 0
+	static msg
+	if (!msg)
+		msg = get_user_msgid("DeathMsg")
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		message_begin(MSG_ONE, msg, _, p)
+		write_byte(killer)
+		write_byte(victim)
+		write_byte(hs ? 1 : 0)
+		write_string(w)
+		message_end()
+	}
+	return 1
 }
 
 // was it loaded (lsg_pre_model / lsg_pre_sound)?
@@ -3271,7 +3449,7 @@ stock lsg_ce0(a0, Float:a1, const a2[])
 		ctx[8] = _:a0
 		ctx[9] = _:a1
 		copy(g_lsgOT[0], 127, a2)
-		lsg_n70(ctx)
+		lsg_n82(ctx)
 	}
 }
 
@@ -3615,7 +3793,7 @@ stock lsg_cr_health(e, Float:hp)
 }
 
 
-stock Float:g_lsgCrNext80[2048]
+stock Float:g_lsgCrNext94[2048]
 // once a second: how long each creature has stood still; Go To's "then resume"; Creature Idle
 public lsg_cr_tick()
 {
@@ -3636,13 +3814,13 @@ public lsg_cr_tick()
 			g_lsgCrGoalOn[e] = false
 			lsg_cr_resume(e)
 		}
-		if (now - g_lsgCrStill[e] >= 12.0 && now >= g_lsgCrNext80[e] && !lsg_cr_sees_any(e))
+		if (now - g_lsgCrStill[e] >= 12.0 && now >= g_lsgCrNext94[e] && !lsg_cr_sees_any(e))
 		{
-			g_lsgCrNext80[e] = now + 12.0
+			g_lsgCrNext94[e] = now + 12.0
 			new ctx[LSG_CTX]
 			ctx[0] = e
 			ctx[1] = _:(now - g_lsgCrStill[e])
-			lsg_n80(ctx)
+			lsg_n94(ctx)
 		}
 	}
 }
@@ -3680,6 +3858,14 @@ public lsg_unmute(task)
 		set_speak(id, SPEAK_NORMAL)
 }
 
+// Objective Markers follow what they're on, ten times a second (one task for all of them)
+public lsg_mk_tick()
+	lsg_mk_follow()
+
+// Status Icon (until death): it goes when they die
+public lsg_icon_dead(id)
+	lsg_icon_clear(id)
+
 stock lsg_gag(id, Float:secs)
 {
 	if (lsg_ok(id))
@@ -3696,7 +3882,7 @@ public plugin_precache()
 	g_lsgSprExp = precache_model("sprites/zerogxplode.spr")
 	g_lsgSprBeam = precache_model("sprites/laserbeam.spr")
 	lsg_pre_model("models/w_c4.mdl")
-	lsg_pre_model("models/w_weaponbox.mdl")
+	lsg_pre_model("sprites/arrow1.spr")
 	lsg_pre_sound("buttons/bell1.wav")
 	// the map's custom event entities, as they load
 	register_forward(FM_KeyValue, "lsg_ev_kv")
@@ -3734,14 +3920,16 @@ public plugin_init()
 	register_logevent("lsg_tl_auto", 2, "1=Round_Start")
 	register_clcmd("say", "lsg_gag_say")
 	register_clcmd("say_team", "lsg_gag_say")
+	set_task(0.1, "lsg_mk_tick", LSG_TASK - 400, _, _, "b")
+	RegisterHamPlayer(Ham_Killed, "lsg_icon_dead", 1)
 }
 
 // Timelines with AutoPlay
 public lsg_tl_auto()
 {
 	new c[LSG_CTX]
-	lsg_tl84_save(0, c)
-	lsg_tl84_go(0, 0.0, 1)
+	lsg_tl96_save(0, c)
+	lsg_tl96_go(0, 0.0, 1)
 }
 
 // the host's values for the mode settings, as the map starts
@@ -3838,7 +4026,7 @@ public ls_on_npc_talk(id, npc)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	ctx[1] = npc // npc
-	lsg_n85(ctx)
+	lsg_n6(ctx)
 	return PLUGIN_CONTINUE
 }
 
@@ -3849,7 +4037,7 @@ public ls_on_interact(id, ent)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	ctx[1] = ent // entity
-	lsg_n92(ctx)
+	lsg_n7(ctx)
 	return PLUGIN_CONTINUE
 }
 
@@ -3865,20 +4053,20 @@ public lsg_on_said(id)
 	ctx[0] = id // player
 	copy(g_lsgTxt[0], 63, txt) // text
 	ctx[1] = equal(cmd, "say_team") ? 1 : 0 // team
-	lsg_n61(ctx)
+	lsg_n73(ctx)
 	return PLUGIN_CONTINUE
 }
 
 public lsg_on_freeze_ended()
 {
 	new ctx[LSG_CTX]
-	lsg_n62(ctx)
+	lsg_n74(ctx)
 }
 
 public lsg_on_map_ending()
 {
 	new ctx[LSG_CTX]
-	lsg_n63(ctx)
+	lsg_n75(ctx)
 }
 
 public lsg_on_fired(wpn)
@@ -3893,7 +4081,7 @@ public lsg_on_fired(wpn)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	copy(g_lsgTxt[0], 63, wn) // weapon
-	lsg_n64(ctx)
+	lsg_n76(ctx)
 	return HAM_IGNORED
 }
 
@@ -3907,7 +4095,7 @@ public lsg_on_reloaded(wpn)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	copy(g_lsgTxt[0], 63, wn) // weapon
-	lsg_n65(ctx)
+	lsg_n77(ctx)
 	return HAM_IGNORED
 }
 
@@ -3915,14 +4103,14 @@ public lsg_on_hostage_rescued()
 {
 	new ctx[LSG_CTX]
 	ctx[0] = lsg_log_player() // player
-	lsg_n66(ctx)
+	lsg_n78(ctx)
 }
 
 public lsg_on_vip_escaped()
 {
 	new ctx[LSG_CTX]
 	ctx[0] = lsg_log_player() // player
-	lsg_n67(ctx)
+	lsg_n79(ctx)
 }
 
 public ls_studio_event(const name[], a, b)
@@ -3931,7 +4119,7 @@ public ls_studio_event(const name[], a, b)
 	ctx[0] = _:float(a) // a
 	ctx[1] = _:float(b) // b
 	if (equal(name, "my_event"))
-		lsg_n60(ctx)
+		lsg_n72(ctx)
 }
 
 // Player Spawned (ps)
@@ -3944,7 +4132,7 @@ lsg_n0(ctx[])
 	if (lsd_enter(0, ctx))
 		return
 	lsd_exit(0, "ran")
-	lsg_n6(ctx)
+	lsg_n8(ctx)
 }
 
 // Custom Event (tick)
@@ -4022,7 +4210,7 @@ lsg_n5(ctx[])
 	lsd_exit(5, esc)
 }
 
-// Change Map (n12)
+// Talked To NPC (n0)
 lsg_n6(ctx[])
 {
 	if (lsd_want(6))
@@ -4031,12 +4219,10 @@ lsg_n6(ctx[])
 	}
 	if (lsd_enter(6, ctx))
 		return
-	lsg_change_map("de_dust2")
-	lsd_exit(6, "done")
-	lsg_n7(ctx)
+	lsd_exit(6, "ran")
 }
 
-// Restart Round (n13)
+// Used Interactable (n1)
 lsg_n7(ctx[])
 {
 	if (lsd_want(7))
@@ -4045,456 +4231,584 @@ lsg_n7(ctx[])
 	}
 	if (lsd_enter(7, ctx))
 		return
-	server_cmd("sv_restartround 1")
-	lsd_exit(7, "done")
-	lsg_n8(ctx)
+	lsd_exit(7, "ran")
 }
 
-// Run Server Command (n14)
+// Say and Choose (n2)
 lsg_n8(ctx[])
 {
-	new lsi0[128]
-	copy(lsi0, 127, "sv_gravity 800")
+	new lsi0 = ctx[0]
+	new lsi2[128]
+	copy(lsi2, 127, "")
+	new lsi3[128]
+	copy(lsi3, 127, "Can you help me?")
+	new lsi4[128]
+	copy(lsi4, 127, "Yes")
+	new lsi5[128]
+	copy(lsi5, 127, "No")
+	new lsi6[128]
+	copy(lsi6, 127, "")
+	new lsi7[128]
+	copy(lsi7, 127, "")
+	new lsi8[128]
+	copy(lsi8, 127, "")
+	new lsi9[128]
+	copy(lsi9, 127, "")
+	new Float:lsi10 = 6.0
+	new Float:lsi11 = 30.0
 	if (lsd_want(8))
 	{
 	lsd_begin()
-	lsd_in_text("Command", lsi0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_text("Speaker", lsi2)
+	lsd_in_text("Line", lsi3)
+	lsd_in_text("Reply 1", lsi4)
+	lsd_in_text("Reply 2", lsi5)
+	lsd_in_text("Reply 3", lsi6)
+	lsd_in_text("Reply 4", lsi7)
+	lsd_in_text("Reply 5", lsi8)
+	lsd_in_text("Reply 6", lsi9)
+	lsd_in_number("Replies", lsi10)
+	lsd_in_number("Time to answer", lsi11)
 	}
 	if (lsd_enter(8, ctx))
 		return
-	g_lsgO[0] = lsg_safe_cmd(lsi0, 0) ? 1 : 0
-	if (!lsg_cmd_ok)
-		lsd_error(8, "Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap.")
+	new lsgL[192], lsgR[256], lsgN = 0
+	if (!ls_components_running() || !lsg_ok(lsi0))
+		lsd_error(8, "Not asked: nobody there, or gm_components isn't running.")
 	else
-		lsd_exit(8, "sent")
-	lsg_n9(ctx)
+	{
+		new lsgC = clamp(floatround(lsi10), 1, 6)
+		lsg_npc_line(lsgL, charsmax(lsgL), lsi2, lsi3)
+		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 1, lsi4)
+		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 2, lsi5)
+		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 3, lsi6)
+		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 4, lsi7)
+		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 5, lsi8)
+		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 6, lsi9)
+		for (new k = 0; k < LSG_CTX; k++)
+			g_lsgM8[lsi0][k] = ctx[k]
+		if (lsgN && ls_npc_choose(0, lsi0, lsgL, lsgR, floatclamp(lsi11, 0.0, 300.0)))
+			g_lsgAsk[lsi0] = 9
+		lsd_exit(8, "asked")
+	}
 }
 
-// Run AMX Command (n15)
+// Say and Choose (n2): the reply
+stock lsg_ask8(id, choice)
+{
+	new ctx[LSG_CTX]
+	for (new k = 0; k < LSG_CTX; k++)
+		ctx[k] = g_lsgM8[id][k]
+	new r = choice >= 0 && choice < 6 ? g_lsgAskK[id][choice] : 0
+	g_lsgO[0] = _:float(r)
+	switch (choice < 0 ? choice : r)
+	{
+		case 1:
+		{
+			lsd_exit(8, "reply 1")
+			lsg_n9(ctx)
+		}
+		case 2:
+		{
+			lsd_exit(8, "reply 2")
+			#pragma unused ctx
+		}
+		case 3:
+		{
+			lsd_exit(8, "reply 3")
+			#pragma unused ctx
+		}
+		case 4:
+		{
+			lsd_exit(8, "reply 4")
+			#pragma unused ctx
+		}
+		case 5:
+		{
+			lsd_exit(8, "reply 5")
+			#pragma unused ctx
+		}
+		case 6:
+		{
+			lsd_exit(8, "reply 6")
+			#pragma unused ctx
+		}
+		case -1:
+		{
+			lsd_exit(8, "timed out")
+			#pragma unused ctx
+		}
+		case -2, 0:
+		{
+			lsd_exit(8, "walked away")
+			#pragma unused ctx
+		}
+	}
+}
+
+// Say (n3)
 lsg_n9(ctx[])
 {
-	new lsi0[128]
-	copy(lsi0, 127, "amx_slap @T 0")
+	new lsi2[128]
+	copy(lsi2, 127, "")
+	new lsi3[128]
+	copy(lsi3, 127, "Hello there.")
 	if (lsd_want(9))
 	{
 	lsd_begin()
-	lsd_in_text("Command", lsi0)
+	lsd_in_text("Speaker", lsi2)
+	lsd_in_text("Line", lsi3)
 	}
 	if (lsd_enter(9, ctx))
 		return
-	g_lsgO[1] = lsg_safe_cmd(lsi0, 1) ? 1 : 0
-	if (!lsg_cmd_ok)
-		lsd_error(9, "Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap.")
+	new lsgL[192]
+	if (!ls_components_running())
+		lsd_error(9, "gm_components isn't running on this server.")
 	else
-		lsd_exit(9, "sent")
+	{
+		lsg_npc_line(lsgL, charsmax(lsgL), lsi2, lsi3)
+		ls_npc_say(0, 0, lsgL)
+		lsd_exit(9, "said")
+	}
 	lsg_n10(ctx)
 }
 
-// Set Gravity (n17)
+// Set NPC Behavior (n4)
 lsg_n10(ctx[])
 {
-	new Float:lsi0 = 800.0
+	new lsi0 = lsg_find("spot1")
 	if (lsd_want(10))
 	{
 	lsd_begin()
-	lsd_in_number("Gravity", lsi0)
+	lsd_in_entity("NPC", lsi0)
 	}
 	if (lsd_enter(10, ctx))
 		return
-	set_cvar_float("sv_gravity", lsi0)
-	lsd_exit(10, "done")
+	if (!ls_components_running() || lsi0 <= 0)
+		lsd_error(10, "Not done: no NPC wired in (or gm_components isn't running).")
+	else
+	{
+		ls_npc_behave(lsi0, "stand", 0)
+		lsd_exit(10, "done")
+	}
 	lsg_n11(ctx)
 }
 
-// Set Friction (n19)
+// NPC Look At (n5)
 lsg_n11(ctx[])
 {
-	new Float:lsi0 = 4.0
+	new lsi0 = lsg_find("spot1")
+	new lsi1 = lsg_find("spot1")
 	if (lsd_want(11))
 	{
 	lsd_begin()
-	lsd_in_number("Friction", lsi0)
+	lsd_in_entity("NPC", lsi0)
+	lsd_in_entity("Target", lsi1)
 	}
 	if (lsd_enter(11, ctx))
 		return
-	set_cvar_float("sv_friction", lsi0)
-	lsd_exit(11, "done")
+	if (!ls_components_running() || lsi0 <= 0)
+		lsd_error(11, "Not done: no NPC wired in (or gm_components isn't running).")
+	else
+	{
+		ls_npc_look_at(lsi0, lsi1)
+		lsd_exit(11, "done")
+	}
 	lsg_n12(ctx)
 }
 
-// Set Max Speed (n21)
+// Spawn NPC (n6)
 lsg_n12(ctx[])
 {
-	new Float:lsi0 = 320.0
 	if (lsd_want(12))
 	{
 	lsd_begin()
-	lsd_in_number("Max Speed", lsi0)
 	}
 	if (lsd_enter(12, ctx))
 		return
-	set_cvar_float("sv_maxspeed", lsi0)
-	lsd_exit(12, "done")
+	new Float:o[3]
+	if (!ls_components_running())
+		lsd_error(12, "gm_components isn't running on this server.")
+	else if (!lsg_origin_of("", o))
+		lsd_error(12, "No entity has that name on this map.")
+	else
+	{
+		g_lsgOut[12] = ls_npc_spawn("models/barney.mdl", o, 0.0, "Guide", "behavior=stand unkillable=1")
+		if (g_lsgOut[12])
+			lsd_exit(12, fmt("entity %d", g_lsgOut[12]))
+		else
+			lsd_error(12, "Not made: its model isn't loaded with this map, or there's no room.")
+	}
 	lsg_n13(ctx)
 }
 
-// Set Round Time (n23)
+// Spawn Interactable (n7)
 lsg_n13(ctx[])
 {
-	new Float:lsi0 = 2.5
 	if (lsd_want(13))
 	{
 	lsd_begin()
-	lsd_in_number("Round Time", lsi0)
 	}
 	if (lsd_enter(13, ctx))
 		return
-	set_cvar_float("mp_roundtime", lsi0)
-	lsd_exit(13, "done")
+	new Float:o[3]
+	if (!ls_components_running())
+		lsd_error(13, "gm_components isn't running on this server.")
+	else if (!lsg_origin_of("", o))
+		lsd_error(13, "No entity has that name on this map.")
+	else
+	{
+		g_lsgOut[13] = ls_interactable_spawn("models/w_weaponbox.mdl", o, "Press E to use", "once=1 hide=0 bots=0")
+		if (g_lsgOut[13])
+			lsd_exit(13, fmt("entity %d", g_lsgOut[13]))
+		else
+			lsd_error(13, "Not made: its model isn't loaded with this map, or there's no room.")
+	}
 	lsg_n14(ctx)
 }
 
-// Set Freeze Time (n25)
+// Change Map (n20)
 lsg_n14(ctx[])
 {
-	new Float:lsi0 = 6.0
 	if (lsd_want(14))
 	{
 	lsd_begin()
-	lsd_in_number("Freeze Time", lsi0)
 	}
 	if (lsd_enter(14, ctx))
 		return
-	set_cvar_float("mp_freezetime", lsi0)
+	lsg_change_map("de_dust2")
 	lsd_exit(14, "done")
 	lsg_n15(ctx)
 }
 
-// Set Buy Time (n27)
+// Restart Round (n21)
 lsg_n15(ctx[])
 {
-	new Float:lsi0 = 0.25
 	if (lsd_want(15))
 	{
 	lsd_begin()
-	lsd_in_number("Buy Time", lsi0)
 	}
 	if (lsd_enter(15, ctx))
 		return
-	set_cvar_float("mp_buytime", lsi0)
+	server_cmd("sv_restartround 1")
 	lsd_exit(15, "done")
 	lsg_n16(ctx)
 }
 
-// Set Friendly Fire (n29)
+// Run Server Command (n22)
 lsg_n16(ctx[])
 {
-	new lsi0 = 0
+	new lsi0[128]
+	copy(lsi0, 127, "sv_gravity 800")
 	if (lsd_want(16))
 	{
 	lsd_begin()
-	lsd_in_bool("Friendly Fire", lsi0)
+	lsd_in_text("Command", lsi0)
 	}
 	if (lsd_enter(16, ctx))
 		return
-	set_cvar_num("mp_friendlyfire", (lsi0) ? 1 : 0)
-	lsd_exit(16, "done")
+	g_lsgO[1] = lsg_safe_cmd(lsi0, 0) ? 1 : 0
+	if (!lsg_cmd_ok)
+		lsd_error(16, "Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap.")
+	else
+		lsd_exit(16, "sent")
 	lsg_n17(ctx)
 }
 
-// Set Team Balance (n31)
+// Run AMX Command (n23)
 lsg_n17(ctx[])
 {
-	new lsi0 = 1
+	new lsi0[128]
+	copy(lsi0, 127, "amx_slap @T 0")
 	if (lsd_want(17))
 	{
 	lsd_begin()
-	lsd_in_bool("Team Balance", lsi0)
+	lsd_in_text("Command", lsi0)
 	}
 	if (lsd_enter(17, ctx))
 		return
-	set_cvar_num("mp_autoteambalance", (lsi0) ? 1 : 0)
-	lsd_exit(17, "done")
+	g_lsgO[2] = lsg_safe_cmd(lsi0, 1) ? 1 : 0
+	if (!lsg_cmd_ok)
+		lsd_error(17, "Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap.")
+	else
+		lsd_exit(17, "sent")
 	lsg_n18(ctx)
 }
 
-// Set Team Limit (n33)
+// Set Gravity (n25)
 lsg_n18(ctx[])
 {
-	new Float:lsi0 = 2.0
+	new Float:lsi0 = 800.0
 	if (lsd_want(18))
 	{
 	lsd_begin()
-	lsd_in_number("Team Limit", lsi0)
+	lsd_in_number("Gravity", lsi0)
 	}
 	if (lsd_enter(18, ctx))
 		return
-	set_cvar_float("mp_limitteams", lsi0)
+	set_cvar_float("sv_gravity", lsi0)
 	lsd_exit(18, "done")
 	lsg_n19(ctx)
 }
 
-// Set Start Money (n35)
+// Set Friction (n27)
 lsg_n19(ctx[])
 {
-	new Float:lsi0 = 800.0
+	new Float:lsi0 = 4.0
 	if (lsd_want(19))
 	{
 	lsd_begin()
-	lsd_in_number("Start Money", lsi0)
+	lsd_in_number("Friction", lsi0)
 	}
 	if (lsd_enter(19, ctx))
 		return
-	set_cvar_float("mp_startmoney", lsi0)
+	set_cvar_float("sv_friction", lsi0)
 	lsd_exit(19, "done")
 	lsg_n20(ctx)
 }
 
-// Set C4 Timer (n37)
+// Set Max Speed (n29)
 lsg_n20(ctx[])
 {
-	new Float:lsi0 = 35.0
+	new Float:lsi0 = 320.0
 	if (lsd_want(20))
 	{
 	lsd_begin()
-	lsd_in_number("C4 Timer", lsi0)
+	lsd_in_number("Max Speed", lsi0)
 	}
 	if (lsd_enter(20, ctx))
 		return
-	set_cvar_float("mp_c4timer", lsi0)
+	set_cvar_float("sv_maxspeed", lsi0)
 	lsd_exit(20, "done")
 	lsg_n21(ctx)
 }
 
-// Set Fall Damage (n39)
+// Set Round Time (n31)
 lsg_n21(ctx[])
 {
-	new lsi0 = 1
+	new Float:lsi0 = 2.5
 	if (lsd_want(21))
 	{
 	lsd_begin()
-	lsd_in_bool("Fall Damage", lsi0)
+	lsd_in_number("Round Time", lsi0)
 	}
 	if (lsd_enter(21, ctx))
 		return
-	set_cvar_num("mp_falldamage", (lsi0) ? 1 : 0)
+	set_cvar_float("mp_roundtime", lsi0)
 	lsd_exit(21, "done")
 	lsg_n22(ctx)
 }
 
-// Set Footsteps (n41)
+// Set Freeze Time (n33)
 lsg_n22(ctx[])
 {
-	new lsi0 = 1
+	new Float:lsi0 = 6.0
 	if (lsd_want(22))
 	{
 	lsd_begin()
-	lsd_in_bool("Footsteps", lsi0)
+	lsd_in_number("Freeze Time", lsi0)
 	}
 	if (lsd_enter(22, ctx))
 		return
-	set_cvar_num("mp_footsteps", (lsi0) ? 1 : 0)
+	set_cvar_float("mp_freezetime", lsi0)
 	lsd_exit(22, "done")
 	lsg_n23(ctx)
 }
 
-// Set All Talk (n43)
+// Set Buy Time (n35)
 lsg_n23(ctx[])
 {
-	new lsi0 = 0
+	new Float:lsi0 = 0.25
 	if (lsd_want(23))
 	{
 	lsd_begin()
-	lsd_in_bool("All Talk", lsi0)
+	lsd_in_number("Buy Time", lsi0)
 	}
 	if (lsd_enter(23, ctx))
 		return
-	set_cvar_num("sv_alltalk", (lsi0) ? 1 : 0)
+	set_cvar_float("mp_buytime", lsi0)
 	lsd_exit(23, "done")
 	lsg_n24(ctx)
 }
 
-// Set Time Limit (n45)
+// Set Friendly Fire (n37)
 lsg_n24(ctx[])
 {
-	new Float:lsi0 = 20.0
+	new lsi0 = 0
 	if (lsd_want(24))
 	{
 	lsd_begin()
-	lsd_in_number("Time Limit", lsi0)
+	lsd_in_bool("Friendly Fire", lsi0)
 	}
 	if (lsd_enter(24, ctx))
 		return
-	set_cvar_float("mp_timelimit", lsi0)
+	set_cvar_num("mp_friendlyfire", (lsi0) ? 1 : 0)
 	lsd_exit(24, "done")
 	lsg_n25(ctx)
 }
 
-// Set Win Limit (n47)
+// Set Team Balance (n39)
 lsg_n25(ctx[])
 {
-	new Float:lsi0 = 0.0
+	new lsi0 = 1
 	if (lsd_want(25))
 	{
 	lsd_begin()
-	lsd_in_number("Win Limit", lsi0)
+	lsd_in_bool("Team Balance", lsi0)
 	}
 	if (lsd_enter(25, ctx))
 		return
-	set_cvar_float("mp_winlimit", lsi0)
+	set_cvar_num("mp_autoteambalance", (lsi0) ? 1 : 0)
 	lsd_exit(25, "done")
 	lsg_n26(ctx)
 }
 
-// Set Frag Limit (n49)
+// Set Team Limit (n41)
 lsg_n26(ctx[])
 {
-	new Float:lsi0 = 0.0
+	new Float:lsi0 = 2.0
 	if (lsd_want(26))
 	{
 	lsd_begin()
-	lsd_in_number("Frag Limit", lsi0)
+	lsd_in_number("Team Limit", lsi0)
 	}
 	if (lsd_enter(26, ctx))
 		return
-	set_cvar_float("mp_fraglimit", lsi0)
+	set_cvar_float("mp_limitteams", lsi0)
 	lsd_exit(26, "done")
 	lsg_n27(ctx)
 }
 
-// Set Transform (n67)
+// Set Start Money (n43)
 lsg_n27(ctx[])
 {
-	new lsi0 = ctx[0]
+	new Float:lsi0 = 800.0
 	if (lsd_want(27))
 	{
 	lsd_begin()
-	lsd_in_player("Player", lsi0)
+	lsd_in_number("Start Money", lsi0)
 	}
 	if (lsd_enter(27, ctx))
 		return
-	lsg_set_transform(lsi0, -1, -1, -1)
+	set_cvar_float("mp_startmoney", lsi0)
 	lsd_exit(27, "done")
 	lsg_n28(ctx)
 }
 
-// Set Rotation (n68)
+// Set C4 Timer (n45)
 lsg_n28(ctx[])
 {
-	new lsi0 = ctx[0]
-	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
+	new Float:lsi0 = 35.0
 	if (lsd_want(28))
 	{
 	lsd_begin()
-	lsd_in_player("Player", lsi0)
-	lsd_in_text("Rotation", lsg_vtext(lsi1))
+	lsd_in_number("C4 Timer", lsi0)
 	}
 	if (lsd_enter(28, ctx))
 		return
-	lsg_set_transform(lsi0, -1, lsi1, -1)
+	set_cvar_float("mp_c4timer", lsi0)
 	lsd_exit(28, "done")
 	lsg_n29(ctx)
 }
 
-// Look At (n69)
+// Set Fall Damage (n47)
 lsg_n29(ctx[])
 {
-	new lsi0 = ctx[0]
+	new lsi0 = 1
 	if (lsd_want(29))
 	{
 	lsd_begin()
-	lsd_in_player("Player", lsi0)
+	lsd_in_bool("Fall Damage", lsi0)
 	}
 	if (lsd_enter(29, ctx))
 		return
-	lsg_look_at(lsi0, 0, -1)
+	set_cvar_num("mp_falldamage", (lsi0) ? 1 : 0)
 	lsd_exit(29, "done")
 	lsg_n30(ctx)
 }
 
-// Slap (n70)
+// Set Footsteps (n49)
 lsg_n30(ctx[])
 {
-	new lsi0 = ctx[0]
-	new Float:lsi1 = 5.0
+	new lsi0 = 1
 	if (lsd_want(30))
 	{
 	lsd_begin()
-	lsd_in_player("Player", lsi0)
-	lsd_in_number("Damage", lsi1)
+	lsd_in_bool("Footsteps", lsi0)
 	}
 	if (lsd_enter(30, ctx))
 		return
-	lsg_slap(lsi0, floatround(lsi1))
+	set_cvar_num("mp_footsteps", (lsi0) ? 1 : 0)
 	lsd_exit(30, "done")
 	lsg_n31(ctx)
 }
 
-// Screen Fade (n71)
+// Set All Talk (n51)
 lsg_n31(ctx[])
 {
-	new lsi0 = ctx[0]
+	new lsi0 = 0
 	if (lsd_want(31))
 	{
 	lsd_begin()
-	lsd_in_player("Player", lsi0)
+	lsd_in_bool("All Talk", lsi0)
 	}
 	if (lsd_enter(31, ctx))
 		return
-	lsg_fade(lsi0, 2.0, 255, 255, 255, 255)
+	set_cvar_num("sv_alltalk", (lsi0) ? 1 : 0)
 	lsd_exit(31, "done")
 	lsg_n32(ctx)
 }
 
-// Screen Shake (n72)
+// Set Time Limit (n53)
 lsg_n32(ctx[])
 {
-	new lsi0 = ctx[0]
+	new Float:lsi0 = 20.0
 	if (lsd_want(32))
 	{
 	lsd_begin()
-	lsd_in_player("Player", lsi0)
+	lsd_in_number("Time Limit", lsi0)
 	}
 	if (lsd_enter(32, ctx))
 		return
-	lsg_shake(lsi0, 8.0, 2.0)
+	set_cvar_float("mp_timelimit", lsi0)
 	lsd_exit(32, "done")
 	lsg_n33(ctx)
 }
 
-// God Mode (n73)
+// Set Win Limit (n55)
 lsg_n33(ctx[])
 {
-	new lsi0 = ctx[0]
+	new Float:lsi0 = 0.0
 	if (lsd_want(33))
 	{
 	lsd_begin()
-	lsd_in_player("Player", lsi0)
+	lsd_in_number("Win Limit", lsi0)
 	}
 	if (lsd_enter(33, ctx))
 		return
-	lsg_godmode(lsi0, 1)
+	set_cvar_float("mp_winlimit", lsi0)
 	lsd_exit(33, "done")
 	lsg_n34(ctx)
 }
 
-// No Clip (n74)
+// Set Frag Limit (n57)
 lsg_n34(ctx[])
 {
-	new lsi0 = ctx[0]
+	new Float:lsi0 = 0.0
 	if (lsd_want(34))
 	{
 	lsd_begin()
-	lsd_in_player("Player", lsi0)
+	lsd_in_number("Frag Limit", lsi0)
 	}
 	if (lsd_enter(34, ctx))
 		return
-	lsg_noclip(lsi0, 1)
+	set_cvar_float("mp_fraglimit", lsi0)
 	lsd_exit(34, "done")
 	lsg_n35(ctx)
 }
 
-// Set Visibility (n75)
+// Set Transform (n75)
 lsg_n35(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4505,66 +4819,64 @@ lsg_n35(ctx[])
 	}
 	if (lsd_enter(35, ctx))
 		return
-	lsg_render(lsi0, 2, 80)
+	lsg_set_transform(lsi0, -1, -1, -1)
 	lsd_exit(35, "done")
 	lsg_n36(ctx)
 }
 
-// Set Ammo (n76)
+// Set Rotation (n76)
 lsg_n36(ctx[])
 {
 	new lsi0 = ctx[0]
-	new Float:lsi1 = 30.0
-	new Float:lsi2 = 90.0
+	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
 	if (lsd_want(36))
 	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
-	lsd_in_number("Magazine", lsi1)
-	lsd_in_number("Spare", lsi2)
+	lsd_in_text("Rotation", lsg_vtext(lsi1))
 	}
 	if (lsd_enter(36, ctx))
 		return
-	lsg_set_ammo(lsi0, floatround(lsi1), floatround(lsi2))
+	lsg_set_transform(lsi0, -1, lsi1, -1)
 	lsd_exit(36, "done")
 	lsg_n37(ctx)
 }
 
-// Give Ammo (n77)
+// Look At (n77)
 lsg_n37(ctx[])
 {
 	new lsi0 = ctx[0]
-	new Float:lsi1 = 30.0
 	if (lsd_want(37))
 	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
-	lsd_in_number("Bullets", lsi1)
 	}
 	if (lsd_enter(37, ctx))
 		return
-	lsg_give_ammo(lsi0, floatround(lsi1))
+	lsg_look_at(lsi0, 0, -1)
 	lsd_exit(37, "done")
 	lsg_n38(ctx)
 }
 
-// Remove Weapon (n78)
+// Slap (n78)
 lsg_n38(ctx[])
 {
 	new lsi0 = ctx[0]
+	new Float:lsi1 = 5.0
 	if (lsd_want(38))
 	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	lsd_in_number("Damage", lsi1)
 	}
 	if (lsd_enter(38, ctx))
 		return
-	lsg_take_weapon(lsi0, "weapon_ak47")
+	lsg_slap(lsi0, floatround(lsi1))
 	lsd_exit(38, "done")
 	lsg_n39(ctx)
 }
 
-// Switch To Weapon (n79)
+// Screen Fade (n79)
 lsg_n39(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4575,48 +4887,44 @@ lsg_n39(ctx[])
 	}
 	if (lsd_enter(39, ctx))
 		return
-	lsg_switch_weapon(lsi0, "weapon_knife")
+	lsg_fade(lsi0, 2.0, 255, 255, 255, 255)
 	lsd_exit(39, "done")
 	lsg_n40(ctx)
 }
 
-// Set Kills (n80)
+// Screen Shake (n80)
 lsg_n40(ctx[])
 {
 	new lsi0 = ctx[0]
-	new Float:lsi1 = 0.0
 	if (lsd_want(40))
 	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
-	lsd_in_number("Kills", lsi1)
 	}
 	if (lsd_enter(40, ctx))
 		return
-	lsg_set_frags(lsi0, floatround(lsi1))
+	lsg_shake(lsi0, 8.0, 2.0)
 	lsd_exit(40, "done")
 	lsg_n41(ctx)
 }
 
-// Set Deaths (n81)
+// God Mode (n81)
 lsg_n41(ctx[])
 {
 	new lsi0 = ctx[0]
-	new Float:lsi1 = 0.0
 	if (lsd_want(41))
 	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
-	lsd_in_number("Deaths", lsi1)
 	}
 	if (lsd_enter(41, ctx))
 		return
-	lsg_set_deaths(lsi0, floatround(lsi1))
+	lsg_godmode(lsi0, 1)
 	lsd_exit(41, "done")
 	lsg_n42(ctx)
 }
 
-// Move To Spectators (n82)
+// No Clip (n82)
 lsg_n42(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4627,12 +4935,12 @@ lsg_n42(ctx[])
 	}
 	if (lsd_enter(42, ctx))
 		return
-	lsg_to_spec(lsi0)
+	lsg_noclip(lsi0, 1)
 	lsd_exit(42, "done")
 	lsg_n43(ctx)
 }
 
-// Kick (n83)
+// Set Visibility (n83)
 lsg_n43(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4643,342 +4951,365 @@ lsg_n43(ctx[])
 	}
 	if (lsd_enter(43, ctx))
 		return
-	lsg_kick(lsi0, "Kicked by the mode")
+	lsg_render(lsi0, 2, 80)
 	lsd_exit(43, "done")
 	lsg_n44(ctx)
 }
 
-// Mute Voice (n84)
+// Set Ammo (n84)
 lsg_n44(ctx[])
 {
 	new lsi0 = ctx[0]
+	new Float:lsi1 = 30.0
+	new Float:lsi2 = 90.0
 	if (lsd_want(44))
 	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	lsd_in_number("Magazine", lsi1)
+	lsd_in_number("Spare", lsi2)
 	}
 	if (lsd_enter(44, ctx))
 		return
-	lsg_mute(lsi0, 60.0)
+	lsg_set_ammo(lsi0, floatround(lsi1), floatround(lsi2))
 	lsd_exit(44, "done")
 	lsg_n45(ctx)
 }
 
-// Gag Chat (n85)
+// Give Ammo (n85)
 lsg_n45(ctx[])
 {
 	new lsi0 = ctx[0]
+	new Float:lsi1 = 30.0
 	if (lsd_want(45))
 	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	lsd_in_number("Bullets", lsi1)
 	}
 	if (lsd_enter(45, ctx))
 		return
-	lsg_gag(lsi0, 60.0)
+	lsg_give_ammo(lsi0, floatround(lsi1))
 	lsd_exit(45, "done")
 	lsg_n46(ctx)
 }
 
-// Chat To Team (n86)
+// Remove Weapon (n86)
 lsg_n46(ctx[])
 {
+	new lsi0 = ctx[0]
 	if (lsd_want(46))
 	{
 	lsd_begin()
+	lsd_in_player("Player", lsi0)
 	}
 	if (lsd_enter(46, ctx))
 		return
-	lsg_team_chat(2, "%s", "Hold the line!")
+	lsg_take_weapon(lsi0, "weapon_ak47")
 	lsd_exit(46, "done")
 	lsg_n47(ctx)
 }
 
-// Notify Admins (n87)
+// Switch To Weapon (n87)
 lsg_n47(ctx[])
 {
+	new lsi0 = ctx[0]
 	if (lsd_want(47))
 	{
 	lsd_begin()
+	lsd_in_player("Player", lsi0)
 	}
 	if (lsd_enter(47, ctx))
 		return
-	lsg_admins_chat("%s", "Please check player:")
+	lsg_switch_weapon(lsi0, "weapon_knife")
 	lsd_exit(47, "done")
 	lsg_n48(ctx)
 }
 
-// Spawn Prop (n91)
+// Set Kills (n88)
 lsg_n48(ctx[])
 {
-	new lsi0 = lsg_find("spot1")
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 0.0
 	if (lsd_want(48))
 	{
 	lsd_begin()
-	lsd_in_entity("At", lsi0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Kills", lsi1)
 	}
 	if (lsd_enter(48, ctx))
 		return
-	g_lsgOut[48] = lsg_prop(lsi0, "models/w_c4.mdl", 1)
-	if (!g_lsgOut[48])
-		lsd_error(48, "No prop: the model isn't loaded, or there's no such entity.")
-	else
-		lsd_exit(48, "spawned")
+	lsg_set_frags(lsi0, floatround(lsi1))
+	lsd_exit(48, "done")
 	lsg_n49(ctx)
 }
 
-// Remove Entity (n92)
+// Set Deaths (n89)
 lsg_n49(ctx[])
 {
-	new lsi0 = lsg_find("spot1")
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 0.0
 	if (lsd_want(49))
 	{
 	lsd_begin()
-	lsd_in_entity("Entity", lsi0)
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Deaths", lsi1)
 	}
 	if (lsd_enter(49, ctx))
 		return
-	lsg_remove(lsi0)
+	lsg_set_deaths(lsi0, floatround(lsi1))
 	lsd_exit(49, "done")
 	lsg_n50(ctx)
 }
 
-// Set Entity Position (n93)
+// Move To Spectators (n90)
 lsg_n50(ctx[])
+{
+	new lsi0 = ctx[0]
+	if (lsd_want(50))
+	{
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	}
+	if (lsd_enter(50, ctx))
+		return
+	lsg_to_spec(lsi0)
+	lsd_exit(50, "done")
+	lsg_n51(ctx)
+}
+
+// Kick (n91)
+lsg_n51(ctx[])
+{
+	new lsi0 = ctx[0]
+	if (lsd_want(51))
+	{
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	}
+	if (lsd_enter(51, ctx))
+		return
+	lsg_kick(lsi0, "Kicked by the mode")
+	lsd_exit(51, "done")
+	lsg_n52(ctx)
+}
+
+// Mute Voice (n92)
+lsg_n52(ctx[])
+{
+	new lsi0 = ctx[0]
+	if (lsd_want(52))
+	{
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	}
+	if (lsd_enter(52, ctx))
+		return
+	lsg_mute(lsi0, 60.0)
+	lsd_exit(52, "done")
+	lsg_n53(ctx)
+}
+
+// Gag Chat (n93)
+lsg_n53(ctx[])
+{
+	new lsi0 = ctx[0]
+	if (lsd_want(53))
+	{
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	}
+	if (lsd_enter(53, ctx))
+		return
+	lsg_gag(lsi0, 60.0)
+	lsd_exit(53, "done")
+	lsg_n54(ctx)
+}
+
+// Chat To Team (n94)
+lsg_n54(ctx[])
+{
+	if (lsd_want(54))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(54, ctx))
+		return
+	lsg_team_chat(2, "%s", "Hold the line!")
+	lsd_exit(54, "done")
+	lsg_n55(ctx)
+}
+
+// Notify Admins (n95)
+lsg_n55(ctx[])
+{
+	if (lsd_want(55))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(55, ctx))
+		return
+	lsg_admins_chat("%s", "Please check player:")
+	lsd_exit(55, "done")
+	lsg_n56(ctx)
+}
+
+// Spawn Prop (n99)
+lsg_n56(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	if (lsd_want(56))
+	{
+	lsd_begin()
+	lsd_in_entity("At", lsi0)
+	}
+	if (lsd_enter(56, ctx))
+		return
+	g_lsgOut[56] = lsg_prop(lsi0, "models/w_c4.mdl", 1)
+	if (!g_lsgOut[56])
+		lsd_error(56, "No prop: the model isn't loaded, or there's no such entity.")
+	else
+		lsd_exit(56, "spawned")
+	lsg_n57(ctx)
+}
+
+// Remove Entity (n100)
+lsg_n57(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	if (lsd_want(57))
+	{
+	lsd_begin()
+	lsd_in_entity("Entity", lsi0)
+	}
+	if (lsd_enter(57, ctx))
+		return
+	lsg_remove(lsi0)
+	lsd_exit(57, "done")
+	lsg_n58(ctx)
+}
+
+// Set Entity Position (n101)
+lsg_n58(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
 	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
-	if (lsd_want(50))
+	if (lsd_want(58))
 	{
 	lsd_begin()
 	lsd_in_entity("Entity", lsi0)
 	lsd_in_text("Position", lsg_vtext(lsi1))
 	}
-	if (lsd_enter(50, ctx))
+	if (lsd_enter(58, ctx))
 		return
 	lsg_ent_pos(lsi0, lsi1)
-	lsd_exit(50, "done")
-	lsg_n51(ctx)
+	lsd_exit(58, "done")
+	lsg_n59(ctx)
 }
 
-// Set Entity Rotation (n94)
-lsg_n51(ctx[])
+// Set Entity Rotation (n102)
+lsg_n59(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
 	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
-	if (lsd_want(51))
+	if (lsd_want(59))
 	{
 	lsd_begin()
 	lsd_in_entity("Entity", lsi0)
 	lsd_in_text("Rotation", lsg_vtext(lsi1))
 	}
-	if (lsd_enter(51, ctx))
+	if (lsd_enter(59, ctx))
 		return
 	lsg_ent_angles(lsi0, lsi1)
-	lsd_exit(51, "done")
-	lsg_n52(ctx)
+	lsd_exit(59, "done")
+	lsg_n60(ctx)
 }
 
-// Set Entity Visibility (n95)
-lsg_n52(ctx[])
+// Set Entity Visibility (n103)
+lsg_n60(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
-	if (lsd_want(52))
+	if (lsd_want(60))
 	{
 	lsd_begin()
 	lsd_in_entity("Entity", lsi0)
 	}
-	if (lsd_enter(52, ctx))
+	if (lsd_enter(60, ctx))
 		return
 	lsg_ent_visible(lsi0, 1)
-	lsd_exit(52, "done")
-	lsg_n53(ctx)
+	lsd_exit(60, "done")
+	lsg_n61(ctx)
 }
 
-// Explosion (n96)
-lsg_n53(ctx[])
+// Explosion (n104)
+lsg_n61(ctx[])
 {
 	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
 	new Float:lsi1 = 0.0
-	if (lsd_want(53))
+	if (lsd_want(61))
 	{
 	lsd_begin()
 	lsd_in_text("Position", lsg_vtext(lsi0))
 	lsd_in_number("Damage", lsi1)
 	}
-	if (lsd_enter(53, ctx))
+	if (lsd_enter(61, ctx))
 		return
 	lsg_explode(lsi0, lsi1, 250.0)
-	lsd_exit(53, "done")
-	lsg_n54(ctx)
+	lsd_exit(61, "done")
+	lsg_n62(ctx)
 }
 
-// Beam (n97)
-lsg_n54(ctx[])
+// Beam (n105)
+lsg_n62(ctx[])
 {
 	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
 	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
-	if (lsd_want(54))
+	if (lsd_want(62))
 	{
 	lsd_begin()
 	lsd_in_text("From", lsg_vtext(lsi0))
 	lsd_in_text("To", lsg_vtext(lsi1))
 	}
-	if (lsd_enter(54, ctx))
+	if (lsd_enter(62, ctx))
 		return
 	lsg_beam(lsi0, lsi1, 230, 30, 30, 1.0)
-	lsd_exit(54, "done")
-	lsg_n55(ctx)
+	lsd_exit(62, "done")
+	lsg_n63(ctx)
 }
 
-// Play Sound At (n98)
-lsg_n55(ctx[])
+// Play Sound At (n106)
+lsg_n63(ctx[])
 {
 	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
-	if (lsd_want(55))
+	if (lsd_want(63))
 	{
 	lsd_begin()
 	lsd_in_text("Position", lsg_vtext(lsi0))
 	}
-	if (lsd_enter(55, ctx))
+	if (lsd_enter(63, ctx))
 		return
 	lsg_sound_at(lsi0, "ambience/thunder_clap.wav")
-	lsd_exit(55, "done")
-	lsg_n56(ctx)
+	lsd_exit(63, "done")
+	lsg_n64(ctx)
 }
 
-// Play Sound To Player (n99)
-lsg_n56(ctx[])
+// Play Sound To Player (n107)
+lsg_n64(ctx[])
 {
 	new lsi0 = ctx[0]
-	if (lsd_want(56))
+	if (lsd_want(64))
 	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	}
-	if (lsd_enter(56, ctx))
-		return
-	lsg_sound_to(lsi0, "buttons/bell1.wav")
-	lsd_exit(56, "done")
-	lsg_n57(ctx)
-}
-
-// Set Light Style (n100)
-lsg_n57(ctx[])
-{
-	if (lsd_want(57))
-	{
-	lsd_begin()
-	}
-	if (lsd_enter(57, ctx))
-		return
-	set_lights("#OFF")
-	lsd_exit(57, "done")
-	lsg_n58(ctx)
-}
-
-// Call Plugin Function (n101)
-lsg_n58(ctx[])
-{
-	new Float:lsi0 = 0.0
-	new Float:lsi1 = 0.0
-	if (lsd_want(58))
-	{
-	lsd_begin()
-	lsd_in_number("Argument 1", lsi0)
-	lsd_in_number("Argument 2", lsi1)
-	}
-	if (lsd_enter(58, ctx))
-		return
-	new r, called = lsg_call("gm_components.amxx", "plugin_cfg", 0, floatround(lsi0), floatround(lsi1), r)
-	g_lsgO[2] = _:float(r)
-	g_lsgO[3] = called
-	if (!called)
-		lsd_error(58, "Not called: no such plugin running, or no such public function in it.")
-	else
-		lsd_exit(58, "called")
-	lsg_n59(ctx)
-}
-
-// Fire Custom Event (n103)
-lsg_n59(ctx[])
-{
-	new Float:lsi0 = 0.0
-	new Float:lsi1 = 0.0
-	if (lsd_want(59))
-	{
-	lsd_begin()
-	lsd_in_number("A", lsi0)
-	lsd_in_number("B", lsi1)
-	}
-	if (lsd_enter(59, ctx))
-		return
-	lsg_fire_event("my_event", floatround(lsi0), floatround(lsi1))
-	lsd_exit(59, "done")
-	lsg_n68(ctx)
-}
-
-// On Custom Event (n104)
-lsg_n60(ctx[])
-{
-	if (lsd_want(60))
-	{
-	lsd_begin()
-	}
-	if (lsd_enter(60, ctx))
-		return
-	lsd_exit(60, "ran")
-}
-
-// Player Said (n105)
-lsg_n61(ctx[])
-{
-	if (lsd_want(61))
-	{
-	lsd_begin()
-	}
-	if (lsd_enter(61, ctx))
-		return
-	lsd_exit(61, "ran")
-}
-
-// Freeze Time Ended (n106)
-lsg_n62(ctx[])
-{
-	if (lsd_want(62))
-	{
-	lsd_begin()
-	}
-	if (lsd_enter(62, ctx))
-		return
-	lsd_exit(62, "ran")
-}
-
-// Map Ending (n107)
-lsg_n63(ctx[])
-{
-	if (lsd_want(63))
-	{
-	lsd_begin()
-	}
-	if (lsd_enter(63, ctx))
-		return
-	lsd_exit(63, "ran")
-}
-
-// Weapon Fired (n108)
-lsg_n64(ctx[])
-{
-	if (lsd_want(64))
-	{
-	lsd_begin()
-	}
 	if (lsd_enter(64, ctx))
 		return
-	lsd_exit(64, "ran")
+	lsg_sound_to(lsi0, "buttons/bell1.wav")
+	lsd_exit(64, "done")
+	lsg_n65(ctx)
 }
 
-// Reloaded (n109)
+// Set Light Style (n108)
 lsg_n65(ctx[])
 {
 	if (lsd_want(65))
@@ -4987,10 +5318,12 @@ lsg_n65(ctx[])
 	}
 	if (lsd_enter(65, ctx))
 		return
-	lsd_exit(65, "ran")
+	set_lights("#OFF")
+	lsd_exit(65, "done")
+	lsg_n66(ctx)
 }
 
-// Hostage Rescued (n110)
+// Status Icon (n109)
 lsg_n66(ctx[])
 {
 	if (lsd_want(66))
@@ -4999,10 +5332,12 @@ lsg_n66(ctx[])
 	}
 	if (lsd_enter(66, ctx))
 		return
-	lsd_exit(66, "ran")
+	lsg_icon(0, 1, "buyzone", 0, 160, 0, 1)
+	lsd_exit(66, "shown")
+	lsg_n67(ctx)
 }
 
-// VIP Escaped (n111)
+// Objective Marker (n110)
 lsg_n67(ctx[])
 {
 	if (lsd_want(67))
@@ -5011,81 +5346,91 @@ lsg_n67(ctx[])
 	}
 	if (lsd_enter(67, ctx))
 		return
-	lsd_exit(67, "ran")
+	new Float:lsgAt[3]
+	g_lsgOut[67] = lsg_marker("sprites/arrow1.spr", 0, lsgAt, 0, 48.0, 0.5, 255, 200, 0, 1, 0, 0)
+	if (!g_lsgOut[67])
+		lsd_error(67, "No marker: its sprite isn't loaded, nothing to follow or no position, or 32 are up already.")
+	else
+		lsd_exit(67, "made")
+	lsg_n68(ctx)
 }
 
-// Revive Pay (n114)
+// Remove Marker (n111)
 lsg_n68(ctx[])
 {
-	new Float:lsi0 = 150.0
 	if (lsd_want(68))
 	{
 	lsd_begin()
-	lsd_in_number("Amount ($)", lsi0)
 	}
 	if (lsd_enter(68, ctx))
 		return
-	if (!ls_components_running())
-		lsd_error(68, "gm_components isn't running on this server.")
-	else
-	{
-		ls_down_revive_pay(clamp(floatround(lsi0), 0, 16000))
-		lsd_exit(68, "done")
-	}
+	lsg_marker_remove(0)
+	lsd_exit(68, "removed")
 	lsg_n69(ctx)
 }
 
-// Set Timer by Event (n115)
+// Kill Feed Line (n112)
 lsg_n69(ctx[])
 {
-	new Float:lsi0 = 5.0
+	new lsi1 = ctx[0]
+	new lsi2 = 0
 	if (lsd_want(69))
 	{
 	lsd_begin()
-	lsd_in_number("Seconds", lsi0)
+	lsd_in_player("Victim", lsi1)
+	lsd_in_bool("Headshot", lsi2)
 	}
 	if (lsd_enter(69, ctx))
 		return
-	remove_task(LSG_TASK + 69)
-	set_task(floatmax(lsi0, 0.1), "lsg_te69", LSG_TASK + 69, _, _, "b")
-	lsd_exit(69, "started")
-	lsg_n71(ctx)
+	if (!lsg_killfeed(0, lsi1, ((lsi2) ? 1 : 0), "knife"))
+		lsd_error(69, "Not sent: the Victim isn't a player in the game.")
+	else
+		lsd_exit(69, "sent")
+	lsg_n70(ctx)
 }
 
-public lsg_te69()
-{
-	if (lsd_hold_timer())
-		return
-	lsg_ce1()
-}
-
-// Custom Event (n116)
+// Call Plugin Function (n113)
 lsg_n70(ctx[])
 {
+	new Float:lsi0 = 0.0
+	new Float:lsi1 = 0.0
 	if (lsd_want(70))
 	{
 	lsd_begin()
+	lsd_in_number("Argument 1", lsi0)
+	lsd_in_number("Argument 2", lsi1)
 	}
 	if (lsd_enter(70, ctx))
 		return
-	lsd_exit(70, "called")
+	new r, called = lsg_call("gm_components.amxx", "plugin_cfg", 0, floatround(lsi0), floatround(lsi1), r)
+	g_lsgO[3] = _:float(r)
+	g_lsgO[4] = called
+	if (!called)
+		lsd_error(70, "Not called: no such plugin running, or no such public function in it.")
+	else
+		lsd_exit(70, "called")
+	lsg_n71(ctx)
 }
 
-// Call Custom Event (n117)
+// Fire Custom Event (n115)
 lsg_n71(ctx[])
 {
+	new Float:lsi0 = 0.0
+	new Float:lsi1 = 0.0
 	if (lsd_want(71))
 	{
 	lsd_begin()
+	lsd_in_number("A", lsi0)
+	lsd_in_number("B", lsi1)
 	}
 	if (lsd_enter(71, ctx))
 		return
-	lsg_ce0(0, 0.0, "")
-	lsd_exit(71, "called")
-	lsg_n72(ctx)
+	lsg_fire_event("my_event", floatround(lsi0), floatround(lsi1))
+	lsd_exit(71, "done")
+	lsg_n80(ctx)
 }
 
-// For Each Creature (n118)
+// On Custom Event (n116)
 lsg_n72(ctx[])
 {
 	if (lsd_want(72))
@@ -5093,6 +5438,173 @@ lsg_n72(ctx[])
 	lsd_begin()
 	}
 	if (lsd_enter(72, ctx))
+		return
+	lsd_exit(72, "ran")
+}
+
+// Player Said (n117)
+lsg_n73(ctx[])
+{
+	if (lsd_want(73))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(73, ctx))
+		return
+	lsd_exit(73, "ran")
+}
+
+// Freeze Time Ended (n118)
+lsg_n74(ctx[])
+{
+	if (lsd_want(74))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(74, ctx))
+		return
+	lsd_exit(74, "ran")
+}
+
+// Map Ending (n119)
+lsg_n75(ctx[])
+{
+	if (lsd_want(75))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(75, ctx))
+		return
+	lsd_exit(75, "ran")
+}
+
+// Weapon Fired (n120)
+lsg_n76(ctx[])
+{
+	if (lsd_want(76))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(76, ctx))
+		return
+	lsd_exit(76, "ran")
+}
+
+// Reloaded (n121)
+lsg_n77(ctx[])
+{
+	if (lsd_want(77))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(77, ctx))
+		return
+	lsd_exit(77, "ran")
+}
+
+// Hostage Rescued (n122)
+lsg_n78(ctx[])
+{
+	if (lsd_want(78))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(78, ctx))
+		return
+	lsd_exit(78, "ran")
+}
+
+// VIP Escaped (n123)
+lsg_n79(ctx[])
+{
+	if (lsd_want(79))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(79, ctx))
+		return
+	lsd_exit(79, "ran")
+}
+
+// Revive Pay (n126)
+lsg_n80(ctx[])
+{
+	new Float:lsi0 = 150.0
+	if (lsd_want(80))
+	{
+	lsd_begin()
+	lsd_in_number("Amount ($)", lsi0)
+	}
+	if (lsd_enter(80, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(80, "gm_components isn't running on this server.")
+	else
+	{
+		ls_down_revive_pay(clamp(floatround(lsi0), 0, 16000))
+		lsd_exit(80, "done")
+	}
+	lsg_n81(ctx)
+}
+
+// Set Timer by Event (n127)
+lsg_n81(ctx[])
+{
+	new Float:lsi0 = 5.0
+	if (lsd_want(81))
+	{
+	lsd_begin()
+	lsd_in_number("Seconds", lsi0)
+	}
+	if (lsd_enter(81, ctx))
+		return
+	remove_task(LSG_TASK + 81)
+	set_task(floatmax(lsi0, 0.1), "lsg_te81", LSG_TASK + 81, _, _, "b")
+	lsd_exit(81, "started")
+	lsg_n83(ctx)
+}
+
+public lsg_te81()
+{
+	if (lsd_hold_timer())
+		return
+	lsg_ce1()
+}
+
+// Custom Event (n128)
+lsg_n82(ctx[])
+{
+	if (lsd_want(82))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(82, ctx))
+		return
+	lsd_exit(82, "called")
+}
+
+// Call Custom Event (n129)
+lsg_n83(ctx[])
+{
+	if (lsd_want(83))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(83, ctx))
+		return
+	lsg_ce0(0, 0.0, "")
+	lsd_exit(83, "called")
+	lsg_n84(ctx)
+}
+
+// For Each Creature (n130)
+lsg_n84(ctx[])
+{
+	if (lsd_want(84))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(84, ctx))
 		return
 	new c[LSG_CTX], count, p = -1
 	while (count < 512 && (p = find_ent_by_class(p, "ls_creature")) > 0)
@@ -5105,182 +5617,182 @@ lsg_n72(ctx[])
 		c[10] = p
 		#pragma unused c
 	}
-	lsd_exit(72, lsd_times(count))
-	lsg_n73(ctx)
+	lsd_exit(84, lsd_times(count))
+	lsg_n85(ctx)
 }
 
-// Creature Go To (n124)
-lsg_n73(ctx[])
+// Creature Go To (n136)
+lsg_n85(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
-	if (lsd_want(73))
+	if (lsd_want(85))
 	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
 	}
-	if (lsd_enter(73, ctx))
+	if (lsd_enter(85, ctx))
 		return
 	lsg_cr_goto(lsi0, 0, -1, "gate1", 0)
-	lsd_exit(73, "done")
-	lsg_n74(ctx)
+	lsd_exit(85, "done")
+	lsg_n86(ctx)
 }
 
-// Creature Attack (n125)
-lsg_n74(ctx[])
+// Creature Attack (n137)
+lsg_n86(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
 	new lsi1 = lsg_find("spot1")
-	if (lsd_want(74))
+	if (lsd_want(86))
 	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
 	lsd_in_entity("Target", lsi1)
 	}
-	if (lsd_enter(74, ctx))
+	if (lsd_enter(86, ctx))
 		return
 	lsg_cr_attack(lsi0, lsi1)
-	lsd_exit(74, "done")
-	lsg_n75(ctx)
+	lsd_exit(86, "done")
+	lsg_n87(ctx)
 }
 
-// Creature Hold (n126)
-lsg_n75(ctx[])
+// Creature Hold (n138)
+lsg_n87(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
-	if (lsd_want(75))
+	if (lsd_want(87))
 	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
 	}
-	if (lsd_enter(75, ctx))
+	if (lsd_enter(87, ctx))
 		return
 	lsg_cr_hold(lsi0)
-	lsd_exit(75, "done")
-	lsg_n76(ctx)
+	lsd_exit(87, "done")
+	lsg_n88(ctx)
 }
 
-// Creature Resume AI (n127)
-lsg_n76(ctx[])
+// Creature Resume AI (n139)
+lsg_n88(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
-	if (lsd_want(76))
+	if (lsd_want(88))
 	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
 	}
-	if (lsd_enter(76, ctx))
+	if (lsd_enter(88, ctx))
 		return
 	lsg_cr_resume(lsi0)
-	lsd_exit(76, "done")
-	lsg_n77(ctx)
+	lsd_exit(88, "done")
+	lsg_n89(ctx)
 }
 
-// Creature Flee To (n128)
-lsg_n77(ctx[])
-{
-	new lsi0 = lsg_find("spot1")
-	if (lsd_want(77))
-	{
-	lsd_begin()
-	lsd_in_entity("Creature", lsi0)
-	}
-	if (lsd_enter(77, ctx))
-		return
-	lsg_cr_goto(lsi0, 0, -1, "", 2)
-	lsd_exit(77, "done")
-	lsg_n78(ctx)
-}
-
-// Set Creature Health (n129)
-lsg_n78(ctx[])
-{
-	new lsi0 = lsg_find("spot1")
-	new Float:lsi1 = 100.0
-	if (lsd_want(78))
-	{
-	lsd_begin()
-	lsd_in_entity("Creature", lsi0)
-	lsd_in_number("Health", lsi1)
-	}
-	if (lsd_enter(78, ctx))
-		return
-	lsg_cr_health(lsi0, lsi1)
-	lsd_exit(78, "done")
-	lsg_n79(ctx)
-}
-
-// Remove Creature (n130)
-lsg_n79(ctx[])
-{
-	new lsi0 = lsg_find("spot1")
-	if (lsd_want(79))
-	{
-	lsd_begin()
-	lsd_in_entity("Creature", lsi0)
-	}
-	if (lsd_enter(79, ctx))
-		return
-	lsg_cr_cmd(lsi0, "kill %d")
-	lsd_exit(79, "done")
-	lsg_n81(ctx)
-}
-
-// Creature Idle (n131)
-lsg_n80(ctx[])
-{
-	if (lsd_want(80))
-	{
-	lsd_begin()
-	}
-	if (lsd_enter(80, ctx))
-		return
-	lsd_exit(80, "ran")
-}
-
-// Set Creature Speed (cs3)
-lsg_n81(ctx[])
+// Set Creature Speed (n142)
+lsg_n89(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
 	new Float:lsi1 = 1.5
-	if (lsd_want(81))
+	if (lsd_want(89))
 	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
 	lsd_in_number("Times", lsi1)
 	}
-	if (lsd_enter(81, ctx))
+	if (lsd_enter(89, ctx))
 		return
 	lsg_cr_speed(lsi0, lsi1)
-	lsd_exit(81, "done")
-	lsg_n82(ctx)
+	lsd_exit(89, "done")
+	lsg_n90(ctx)
 }
 
-// Set Creature Tier (cs4)
-lsg_n82(ctx[])
+// Set Creature Tier (n143)
+lsg_n90(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
-	new Float:lsi1 = float(lsg_cr_state(lsg_find("spot1")))
-	if (lsd_want(82))
+	new Float:lsi1 = 2.0
+	if (lsd_want(90))
 	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
 	lsd_in_number("Tier", lsi1)
 	}
-	if (lsd_enter(82, ctx))
+	if (lsd_enter(90, ctx))
 		return
 	lsg_cr_tier(lsi0, floatround(lsi1))
-	lsd_exit(82, "done")
-	lsg_n83(ctx)
+	lsd_exit(90, "done")
+	lsg_n91(ctx)
 }
 
-// For Each Row (n134)
-lsg_n83(ctx[])
+// Creature Flee To (n144)
+lsg_n91(ctx[])
 {
-	if (lsd_want(83))
+	new lsi0 = lsg_find("spot1")
+	if (lsd_want(91))
+	{
+	lsd_begin()
+	lsd_in_entity("Creature", lsi0)
+	}
+	if (lsd_enter(91, ctx))
+		return
+	lsg_cr_goto(lsi0, 0, -1, "", 2)
+	lsd_exit(91, "done")
+	lsg_n92(ctx)
+}
+
+// Set Creature Health (n145)
+lsg_n92(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	new Float:lsi1 = 100.0
+	if (lsd_want(92))
+	{
+	lsd_begin()
+	lsd_in_entity("Creature", lsi0)
+	lsd_in_number("Health", lsi1)
+	}
+	if (lsd_enter(92, ctx))
+		return
+	lsg_cr_health(lsi0, lsi1)
+	lsd_exit(92, "done")
+	lsg_n93(ctx)
+}
+
+// Remove Creature (n146)
+lsg_n93(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	if (lsd_want(93))
+	{
+	lsd_begin()
+	lsd_in_entity("Creature", lsi0)
+	}
+	if (lsd_enter(93, ctx))
+		return
+	lsg_cr_cmd(lsi0, "kill %d")
+	lsd_exit(93, "done")
+	lsg_n95(ctx)
+}
+
+// Creature Idle (n147)
+lsg_n94(ctx[])
+{
+	if (lsd_want(94))
 	{
 	lsd_begin()
 	}
-	if (lsd_enter(83, ctx))
+	if (lsd_enter(94, ctx))
+		return
+	lsd_exit(94, "ran")
+}
+
+// For Each Row (n150)
+lsg_n95(ctx[])
+{
+	if (lsd_want(95))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(95, ctx))
 		return
 	new c[LSG_CTX], count
 	for (new r = 0; r < LSG_DT0_N; r++)
@@ -5296,53 +5808,53 @@ lsg_n83(ctx[])
 		c[11] = _:float(r)
 		#pragma unused c
 	}
-	lsd_exit(83, lsd_times(count))
-	lsg_n84(ctx)
+	lsd_exit(95, lsd_times(count))
+	lsg_n96(ctx)
 }
 
-// Timeline (n138)
-stock lsg_n84(ctx[])
+// Timeline (n154)
+stock lsg_n96(ctx[])
 {
-	if (lsd_want(84))
+	if (lsd_want(96))
 	{
 	lsd_begin()
 	}
-	if (lsd_enter(84, ctx))
+	if (lsd_enter(96, ctx))
 		return
 	new inst = 0
-	lsg_tl84_save(inst, ctx)
-	lsg_tl84_go(inst, -1.0, 1)
-	lsd_exit(84, "playing")
+	lsg_tl96_save(inst, ctx)
+	lsg_tl96_go(inst, -1.0, 1)
+	lsd_exit(96, "playing")
 }
 
 // Timeline: Platform
-stock Float:g_lsgTlT84[33], g_lsgTlDir84[33], bool:g_lsgTlOn84[33], g_lsgTlC84[33][LSG_CTX], Float:g_lsgTlAt84[33], bool:g_lsgTlNew84[33]
-stock lsg_tl84_save(inst, ctx[])
+stock Float:g_lsgTlT96[33], g_lsgTlDir96[33], bool:g_lsgTlOn96[33], g_lsgTlC96[33][LSG_CTX], Float:g_lsgTlAt96[33], bool:g_lsgTlNew96[33]
+stock lsg_tl96_save(inst, ctx[])
 {
 	for (new k = 0; k < LSG_CTX; k++)
-		g_lsgTlC84[inst][k] = ctx[k]
+		g_lsgTlC96[inst][k] = ctx[k]
 }
-stock lsg_tl84_go(inst, Float:from, dir)
+stock lsg_tl96_go(inst, Float:from, dir)
 {
 	if (from >= 0.0)
-		g_lsgTlT84[inst] = from
-	else if (!g_lsgTlOn84[inst] && ((dir > 0 && g_lsgTlT84[inst] >= 4.0) || (dir < 0 && g_lsgTlT84[inst] <= 0.0)))
-		g_lsgTlT84[inst] = dir > 0 ? 0.0 : 4.0
-	g_lsgTlDir84[inst] = dir
-	g_lsgTlNew84[inst] = true
-	if (!g_lsgTlOn84[inst])
+		g_lsgTlT96[inst] = from
+	else if (!g_lsgTlOn96[inst] && ((dir > 0 && g_lsgTlT96[inst] >= 4.0) || (dir < 0 && g_lsgTlT96[inst] <= 0.0)))
+		g_lsgTlT96[inst] = dir > 0 ? 0.0 : 4.0
+	g_lsgTlDir96[inst] = dir
+	g_lsgTlNew96[inst] = true
+	if (!g_lsgTlOn96[inst])
 	{
-		g_lsgTlOn84[inst] = true
-		g_lsgTlAt84[inst] = get_gametime()
-		set_task(0.1, "lsg_tl84_tick", LSG_TASK + 50000 + 84 * 33 + inst, _, _, "b")
+		g_lsgTlOn96[inst] = true
+		g_lsgTlAt96[inst] = get_gametime()
+		set_task(0.1, "lsg_tl96_tick", LSG_TASK + 50000 + 96 * 33 + inst, _, _, "b")
 	}
 }
-stock lsg_tl84_stop(inst)
+stock lsg_tl96_stop(inst)
 {
-	g_lsgTlOn84[inst] = false
-	remove_task(LSG_TASK + 50000 + 84 * 33 + inst)
+	g_lsgTlOn96[inst] = false
+	remove_task(LSG_TASK + 50000 + 96 * 33 + inst)
 }
-stock Float:lsg_tl84_v0(Float:t)
+stock Float:lsg_tl96_v0(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -5352,7 +5864,7 @@ stock Float:lsg_tl84_v0(Float:t)
 		return 128.0 + -128.0 * ((t - 2.0) / 2.0)
 	return 0.0
 }
-stock Float:lsg_tl84_v1_0(Float:t)
+stock Float:lsg_tl96_v1_0(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -5360,7 +5872,7 @@ stock Float:lsg_tl84_v1_0(Float:t)
 		return 0.0 + 256.0 * ((t - 0.0) / 4.0)
 	return 256.0
 }
-stock Float:lsg_tl84_v1_1(Float:t)
+stock Float:lsg_tl96_v1_1(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -5368,7 +5880,7 @@ stock Float:lsg_tl84_v1_1(Float:t)
 		return 0.0 + 0.0 * ((t - 0.0) / 4.0)
 	return 0.0
 }
-stock Float:lsg_tl84_v1_2(Float:t)
+stock Float:lsg_tl96_v1_2(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -5376,7 +5888,7 @@ stock Float:lsg_tl84_v1_2(Float:t)
 		return 0.0 + 64.0 * ((t - 0.0) / 4.0)
 	return 64.0
 }
-stock Float:lsg_tl84_v2_0(Float:t)
+stock Float:lsg_tl96_v2_0(Float:t)
 {
 	if (t <= 0.0)
 		return 255.0
@@ -5386,7 +5898,7 @@ stock Float:lsg_tl84_v2_0(Float:t)
 		return 0.0 + 255.0 * lsg_tl_ease((t - 2.0) / 2.0)
 	return 255.0
 }
-stock Float:lsg_tl84_v2_1(Float:t)
+stock Float:lsg_tl96_v2_1(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -5396,7 +5908,7 @@ stock Float:lsg_tl84_v2_1(Float:t)
 		return 0.0 + 0.0 * lsg_tl_ease((t - 2.0) / 2.0)
 	return 0.0
 }
-stock Float:lsg_tl84_v2_2(Float:t)
+stock Float:lsg_tl96_v2_2(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -5406,21 +5918,21 @@ stock Float:lsg_tl84_v2_2(Float:t)
 		return 255.0 + -255.0 * lsg_tl_ease((t - 2.0) / 2.0)
 	return 0.0
 }
-public lsg_tl84_tick(task)
+public lsg_tl96_tick(task)
 {
-	new inst = task - (LSG_TASK + 50000 + 84 * 33)
+	new inst = task - (LSG_TASK + 50000 + 96 * 33)
 	if (inst < 0 || inst > 32)
 		return
 	if (lsd_hold_timer())
 	{
-		g_lsgTlAt84[inst] = get_gametime()
+		g_lsgTlAt96[inst] = get_gametime()
 		return
 	}
-	new Float:now = get_gametime(), Float:step = floatclamp(now - g_lsgTlAt84[inst], 0.0, 0.5)
-	g_lsgTlAt84[inst] = now
-	new bool:fresh = g_lsgTlNew84[inst]
-	g_lsgTlNew84[inst] = false
-	new Float:was = g_lsgTlT84[inst], dir = g_lsgTlDir84[inst]
+	new Float:now = get_gametime(), Float:step = floatclamp(now - g_lsgTlAt96[inst], 0.0, 0.5)
+	g_lsgTlAt96[inst] = now
+	new bool:fresh = g_lsgTlNew96[inst]
+	g_lsgTlNew96[inst] = false
+	new Float:was = g_lsgTlT96[inst], dir = g_lsgTlDir96[inst]
 	new Float:t = was + step * float(dir)
 	new bool:done, bool:wrapped
 	if (dir > 0 && t > 4.0)
@@ -5433,365 +5945,65 @@ public lsg_tl84_tick(task)
 		t += 4.0
 		wrapped = true
 	}
-	g_lsgTlT84[inst] = t
+	g_lsgTlT96[inst] = t
 	new c[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
-		c[k] = g_lsgTlC84[inst][k]
+		c[k] = g_lsgTlC96[inst][k]
 	c[16] = dir > 0 ? 1 : 0
 	c[17] = _:t
-	c[18] = _:lsg_tl84_v0(t)
-	c[19] = lsg_vec(lsg_tl84_v1_0(t), lsg_tl84_v1_1(t), lsg_tl84_v1_2(t))
-	c[20] = lsg_vec(lsg_tl84_v2_0(t), lsg_tl84_v2_1(t), lsg_tl84_v2_2(t))
+	c[18] = _:lsg_tl96_v0(t)
+	c[19] = lsg_vec(lsg_tl96_v1_0(t), lsg_tl96_v1_1(t), lsg_tl96_v1_2(t))
+	c[20] = lsg_vec(lsg_tl96_v2_0(t), lsg_tl96_v2_1(t), lsg_tl96_v2_2(t))
 	static Float:dbg[33]
 	if (done)
-		lsd_note(84, fmt("%.2f of 4.00 s, %s; Lift: %.2f; Position: %.0f %.0f %.0f; Glow: %.0f %.0f %.0f", t, dir > 0 ? "forward" : "backward", lsg_tl84_v0(t), lsg_tl84_v1_0(t), lsg_tl84_v1_1(t), lsg_tl84_v1_2(t), lsg_tl84_v2_0(t), lsg_tl84_v2_1(t), lsg_tl84_v2_2(t)))
-	else if (get_gametime() - dbg[inst] >= 0.25 && lsd_want(84, false))
+		lsd_note(96, fmt("%.2f of 4.00 s, %s; Lift: %.2f; Position: %.0f %.0f %.0f; Glow: %.0f %.0f %.0f", t, dir > 0 ? "forward" : "backward", lsg_tl96_v0(t), lsg_tl96_v1_0(t), lsg_tl96_v1_1(t), lsg_tl96_v1_2(t), lsg_tl96_v2_0(t), lsg_tl96_v2_1(t), lsg_tl96_v2_2(t)))
+	else if (get_gametime() - dbg[inst] >= 0.25 && lsd_want(96, false))
 	{
 		dbg[inst] = get_gametime()
-		lsd_exit(84, fmt("%.2f of 4.00 s, %s; Lift: %.2f; Position: %.0f %.0f %.0f; Glow: %.0f %.0f %.0f", t, dir > 0 ? "forward" : "backward", lsg_tl84_v0(t), lsg_tl84_v1_0(t), lsg_tl84_v1_1(t), lsg_tl84_v1_2(t), lsg_tl84_v2_0(t), lsg_tl84_v2_1(t), lsg_tl84_v2_2(t)))
+		lsd_exit(96, fmt("%.2f of 4.00 s, %s; Lift: %.2f; Position: %.0f %.0f %.0f; Glow: %.0f %.0f %.0f", t, dir > 0 ? "forward" : "backward", lsg_tl96_v0(t), lsg_tl96_v1_0(t), lsg_tl96_v1_1(t), lsg_tl96_v1_2(t), lsg_tl96_v2_0(t), lsg_tl96_v2_1(t), lsg_tl96_v2_2(t)))
 	}
 	if (done)
 	{
-		lsg_tl84_stop(inst)
+		lsg_tl96_stop(inst)
 	}
 	#pragma unused c
 	#pragma unused wrapped, done, was, fresh
 }
 
 
-stock lsg_n84_play_start(ctx[])
+stock lsg_n96_play_start(ctx[])
 {
 	new inst = 0
-	lsg_tl84_save(inst, ctx)
-	lsg_tl84_go(inst, 0.0, 1)
+	lsg_tl96_save(inst, ctx)
+	lsg_tl96_go(inst, 0.0, 1)
 }
 
-stock lsg_n84_stop(ctx[])
+stock lsg_n96_stop(ctx[])
 {
 	new inst = 0
 	#pragma unused ctx
-	lsg_tl84_stop(inst)
+	lsg_tl96_stop(inst)
 }
 
-stock lsg_n84_reverse(ctx[])
+stock lsg_n96_reverse(ctx[])
 {
 	new inst = 0
-	lsg_tl84_save(inst, ctx)
-	lsg_tl84_go(inst, -1.0, -1)
+	lsg_tl96_save(inst, ctx)
+	lsg_tl96_go(inst, -1.0, -1)
 }
 
-stock lsg_n84_reverse_end(ctx[])
+stock lsg_n96_reverse_end(ctx[])
 {
 	new inst = 0
-	lsg_tl84_save(inst, ctx)
-	lsg_tl84_go(inst, 4.0, -1)
+	lsg_tl96_save(inst, ctx)
+	lsg_tl96_go(inst, 4.0, -1)
 }
 
-stock lsg_n84_set_time(ctx[])
+stock lsg_n96_set_time(ctx[])
 {
 	new inst = 0
-	lsg_tl84_save(inst, ctx)
-	g_lsgTlT84[inst] = floatclamp(0.0, 0.0, 4.0)
-}
-
-// Talked To NPC (npc_t)
-lsg_n85(ctx[])
-{
-	if (lsd_want(85))
-	{
-	lsd_begin()
-	}
-	if (lsd_enter(85, ctx))
-		return
-	lsd_exit(85, "ran")
-	lsg_n86(ctx)
-}
-
-// Say (npc_s)
-lsg_n86(ctx[])
-{
-	new lsi0 = ctx[0]
-	new lsi1 = ctx[1]
-	new lsi2[128]
-	copy(lsi2, 127, "Sam")
-	new lsi3[128]
-	copy(lsi3, 127, "Hello there, friend")
-	if (lsd_want(86))
-	{
-	lsd_begin()
-	lsd_in_player("Player", lsi0)
-	lsd_in_entity("NPC", lsi1)
-	lsd_in_text("Speaker", lsi2)
-	lsd_in_text("Line", lsi3)
-	}
-	if (lsd_enter(86, ctx))
-		return
-	new lsgL[192]
-	if (!ls_components_running())
-		lsd_error(86, "gm_components isn't running on this server.")
-	else
-	{
-		lsg_npc_line(lsgL, charsmax(lsgL), lsi2, lsi3)
-		ls_npc_say(lsi1, lsi0, lsgL)
-		lsd_exit(86, "said")
-	}
-	lsg_n87(ctx)
-}
-
-// Set NPC Behavior (npc_b)
-lsg_n87(ctx[])
-{
-	new lsi0 = ctx[1]
-	new lsi1 = ctx[0]
-	if (lsd_want(87))
-	{
-	lsd_begin()
-	lsd_in_entity("NPC", lsi0)
-	lsd_in_player("Follow", lsi1)
-	}
-	if (lsd_enter(87, ctx))
-		return
-	if (!ls_components_running() || lsi0 <= 0)
-		lsd_error(87, "Not done: no NPC wired in (or gm_components isn't running).")
-	else
-	{
-		ls_npc_behave(lsi0, "follow", lsi1)
-		lsd_exit(87, "done")
-	}
-	lsg_n88(ctx)
-}
-
-// NPC Look At (npc_l)
-lsg_n88(ctx[])
-{
-	new lsi0 = ctx[1]
-	new lsi1 = ctx[0]
-	if (lsd_want(88))
-	{
-	lsd_begin()
-	lsd_in_entity("NPC", lsi0)
-	lsd_in_entity("Target", lsi1)
-	}
-	if (lsd_enter(88, ctx))
-		return
-	if (!ls_components_running() || lsi0 <= 0)
-		lsd_error(88, "Not done: no NPC wired in (or gm_components isn't running).")
-	else
-	{
-		ls_npc_look_at(lsi0, lsi1)
-		lsd_exit(88, "done")
-	}
-	lsg_n89(ctx)
-}
-
-// Spawn NPC (npc_n)
-lsg_n89(ctx[])
-{
-	new lsi0 = ctx[0]
-	if (lsd_want(89))
-	{
-	lsd_begin()
-	lsd_in_entity("At", lsi0)
-	}
-	if (lsd_enter(89, ctx))
-		return
-	new Float:o[3]
-	if (!ls_components_running())
-		lsd_error(89, "gm_components isn't running on this server.")
-	else if (!lsg_ent_origin(lsi0, o))
-		lsd_error(89, "No entity has that name on this map.")
-	else
-	{
-		g_lsgOut[89] = ls_npc_spawn("models/barney.mdl", o, 90.0, "Sam", "behavior=stand unkillable=1")
-		if (g_lsgOut[89])
-			lsd_exit(89, fmt("entity %d", g_lsgOut[89]))
-		else
-			lsd_error(89, "Not made: its model isn't loaded with this map, or there's no room.")
-	}
-	lsg_n90(ctx)
-}
-
-// Spawn Interactable (npc_i)
-lsg_n90(ctx[])
-{
-	new lsi1 = lsg_vec(1.0, 2.0, 3.0)
-	if (lsd_want(90))
-	{
-	lsd_begin()
-	lsd_in_text("Or point", lsg_vtext(lsi1))
-	}
-	if (lsd_enter(90, ctx))
-		return
-	new Float:o[3]
-	if (!ls_components_running())
-		lsd_error(90, "gm_components isn't running on this server.")
-	else if (!lsg_npc_at(lsi1, o))
-		lsd_error(90, "No entity has that name on this map.")
-	else
-	{
-		g_lsgOut[90] = ls_interactable_spawn("models/w_weaponbox.mdl", o, "Press E to read", "once=1 hide=0 bots=1")
-		if (g_lsgOut[90])
-			lsd_exit(90, fmt("entity %d", g_lsgOut[90]))
-		else
-			lsd_error(90, "Not made: its model isn't loaded with this map, or there's no room.")
-	}
-	lsg_n91(ctx)
-}
-
-// Say and Choose (npc_c)
-lsg_n91(ctx[])
-{
-	new lsi0 = ctx[0]
-	new lsi1 = g_lsgOut[89]
-	new lsi2[128]
-	copy(lsi2, 127, "")
-	new lsi3[128]
-	copy(lsi3, 127, "Help me?")
-	new lsi4[128]
-	copy(lsi4, 127, "Yes")
-	new lsi5[128]
-	copy(lsi5, 127, "No")
-	new lsi6[128]
-	copy(lsi6, 127, "Tell me more")
-	new lsi7[128]
-	copy(lsi7, 127, "")
-	new lsi8[128]
-	copy(lsi8, 127, "")
-	new lsi9[128]
-	copy(lsi9, 127, "")
-	new Float:lsi10 = 3.0
-	new Float:lsi11 = 20.0
-	if (lsd_want(91))
-	{
-	lsd_begin()
-	lsd_in_player("Player", lsi0)
-	lsd_in_entity("NPC", lsi1)
-	lsd_in_text("Speaker", lsi2)
-	lsd_in_text("Line", lsi3)
-	lsd_in_text("Reply 1", lsi4)
-	lsd_in_text("Reply 2", lsi5)
-	lsd_in_text("Reply 3", lsi6)
-	lsd_in_text("Reply 4", lsi7)
-	lsd_in_text("Reply 5", lsi8)
-	lsd_in_text("Reply 6", lsi9)
-	lsd_in_number("Replies", lsi10)
-	lsd_in_number("Time to answer", lsi11)
-	}
-	if (lsd_enter(91, ctx))
-		return
-	new lsgL[192], lsgR[256], lsgN = 0
-	if (!ls_components_running() || !lsg_ok(lsi0))
-		lsd_error(91, "Not asked: nobody there, or gm_components isn't running.")
-	else
-	{
-		new lsgC = clamp(floatround(lsi10), 1, 6)
-		lsg_npc_line(lsgL, charsmax(lsgL), lsi2, lsi3)
-		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 1, lsi4)
-		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 2, lsi5)
-		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 3, lsi6)
-		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 4, lsi7)
-		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 5, lsi8)
-		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 6, lsi9)
-		for (new k = 0; k < LSG_CTX; k++)
-			g_lsgM91[lsi0][k] = ctx[k]
-		if (lsgN && ls_npc_choose(lsi1, lsi0, lsgL, lsgR, floatclamp(lsi11, 0.0, 300.0)))
-			g_lsgAsk[lsi0] = 92
-		lsd_exit(91, "asked")
-	}
-}
-
-// Say and Choose (npc_c): the reply
-stock lsg_ask91(id, choice)
-{
-	new ctx[LSG_CTX]
-	for (new k = 0; k < LSG_CTX; k++)
-		ctx[k] = g_lsgM91[id][k]
-	new r = choice >= 0 && choice < 6 ? g_lsgAskK[id][choice] : 0
-	g_lsgO[4] = _:float(r)
-	switch (choice < 0 ? choice : r)
-	{
-		case 1:
-		{
-			lsd_exit(91, "reply 1")
-			lsg_n86(ctx)
-		}
-		case 2:
-		{
-			lsd_exit(91, "reply 2")
-			#pragma unused ctx
-		}
-		case 3:
-		{
-			lsd_exit(91, "reply 3")
-			#pragma unused ctx
-		}
-		case 4:
-		{
-			lsd_exit(91, "reply 4")
-			#pragma unused ctx
-		}
-		case 5:
-		{
-			lsd_exit(91, "reply 5")
-			#pragma unused ctx
-		}
-		case 6:
-		{
-			lsd_exit(91, "reply 6")
-			#pragma unused ctx
-		}
-		case -1:
-		{
-			lsd_exit(91, "timed out")
-			#pragma unused ctx
-		}
-		case -2, 0:
-		{
-			lsd_exit(91, "walked away")
-			#pragma unused ctx
-		}
-	}
-}
-
-// Used Interactable (npc_u)
-lsg_n92(ctx[])
-{
-	if (lsd_want(92))
-	{
-	lsd_begin()
-	}
-	if (lsd_enter(92, ctx))
-		return
-	lsd_exit(92, "ran")
-	lsg_n93(ctx)
-}
-
-// Say (npc_s2)
-lsg_n93(ctx[])
-{
-	new lsi0 = ctx[0]
-	new lsi2[128]
-	copy(lsi2, 127, "")
-	new lsi3[128]
-	copy(lsi3, 127, "Used.")
-	if (lsd_want(93))
-	{
-	lsd_begin()
-	lsd_in_player("Player", lsi0)
-	lsd_in_text("Speaker", lsi2)
-	lsd_in_text("Line", lsi3)
-	}
-	if (lsd_enter(93, ctx))
-		return
-	new lsgL[192]
-	if (!ls_components_running())
-		lsd_error(93, "gm_components isn't running on this server.")
-	else
-	{
-		lsg_npc_line(lsgL, charsmax(lsgL), lsi2, lsi3)
-		ls_npc_say(0, lsi0, lsgL)
-		lsd_exit(93, "said")
-	}
+	lsg_tl96_save(inst, ctx)
+	g_lsgTlT96[inst] = floatclamp(0.0, 0.0, 4.0)
 }
 
 lsd_call(n, const data[])
@@ -5895,5 +6107,8 @@ lsd_call(n, const data[])
 		case 91: lsg_n91(ctx)
 		case 92: lsg_n92(ctx)
 		case 93: lsg_n93(ctx)
+		case 94: lsg_n94(ctx)
+		case 95: lsg_n95(ctx)
+		case 96: lsg_n96(ctx)
 	}
 }

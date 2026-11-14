@@ -71,6 +71,191 @@ stock lsg_pre_sound(const p[])
 	return precache_sound(p)
 }
 
+// ---- Status Icon, Objective Marker, Kill Feed Line ----
+stock g_lsgIcon[33][16]
+stock lsg_icon_send(to, status, const name[], r, g, b)
+{
+	if (to && !is_user_connected(to))
+		return
+	static msg
+	if (!msg)
+		msg = get_user_msgid("StatusIcon")
+	message_begin(to ? MSG_ONE : MSG_ALL, msg, _, to)
+	write_byte(status)
+	write_string(name)
+	if (status)
+	{
+		write_byte(r)
+		write_byte(g)
+		write_byte(b)
+	}
+	message_end()
+}
+
+// to 0: everyone; death: noted, so it's taken away when they die
+stock lsg_icon(to, status, const name[], r, g, b, death)
+{
+	if (to && !lsg_ok(to))
+		return
+	lsg_icon_send(to, status, name, r, g, b)
+	if (!death)
+		return
+	for (new p = to ? to : 1; p <= (to ? to : MaxClients); p++)
+		if (is_user_connected(p))
+			copy(g_lsgIcon[p], 15, status ? name : "")
+}
+
+stock lsg_icon_clear(id)
+{
+	if (id < 1 || id > MaxClients || !g_lsgIcon[id][0])
+		return
+	lsg_icon_send(id, 0, g_lsgIcon[id], 0, 0, 0)
+	g_lsgIcon[id][0] = 0
+}
+
+// markers: a sprite on an info_target, moved by one task to what it follows (no think each frame)
+#define LSG_MKS 32
+stock g_lsgMk[LSG_MKS], g_lsgMkF[LSG_MKS], Float:g_lsgMkH[LSG_MKS], g_lsgMkWho[2048], g_lsgMkFor[2048]
+
+stock lsg_marker(const spr[], follow, const Float:at[3], hasAt, Float:h, Float:scale, r, g, b, pulse, who, forp)
+{
+	// (a sprite that wasn't there when the map loaded: no marker)
+	if (!lsg_have(spr) || (follow <= 0 && !hasAt) || (follow > 0 && !pev_valid(follow)))
+		return 0
+	new slot = -1
+	for (new k = 0; k < LSG_MKS; k++)
+	{
+		if (g_lsgMk[k] && !pev_valid(g_lsgMk[k]))
+			g_lsgMk[k] = 0
+		if (!g_lsgMk[k])
+		{
+			slot = k
+			break
+		}
+	}
+	if (slot < 0)
+		return 0
+	new e = create_entity("info_target")
+	if (e <= 0)
+		return 0
+	set_pev(e, pev_classname, "ls_studio_marker")
+	engfunc(EngFunc_SetModel, e, spr)
+	set_pev(e, pev_movetype, MOVETYPE_NOCLIP)
+	set_pev(e, pev_solid, SOLID_NOT)
+	set_pev(e, pev_rendermode, kRenderTransAdd)
+	set_pev(e, pev_renderamt, 255.0)
+	new Float:c[3]
+	c[0] = float(r)
+	c[1] = float(g)
+	c[2] = float(b)
+	set_pev(e, pev_rendercolor, c)
+	set_pev(e, pev_scale, scale)
+	if (pulse)
+		set_pev(e, pev_renderfx, kRenderFxPulseSlow)
+	new Float:o[3]
+	if (follow > 0)
+		pev(follow, pev_origin, o)
+	else
+		o = at
+	o[2] += h
+	engfunc(EngFunc_SetOrigin, e, o)
+	g_lsgMk[slot] = e
+	g_lsgMkF[slot] = follow
+	g_lsgMkH[slot] = h
+	g_lsgMkWho[e] = who
+	g_lsgMkFor[e] = forp
+	return e
+}
+
+stock lsg_mk_free(k)
+{
+	new e = g_lsgMk[k]
+	g_lsgMk[k] = 0
+	if (e > 0 && e < 2048)
+	{
+		g_lsgMkWho[e] = 0
+		g_lsgMkFor[e] = 0
+	}
+	if (e > 0 && pev_valid(e))
+		remove_entity(e)
+}
+
+stock lsg_mk_follow()
+{
+	for (new k = 0; k < LSG_MKS; k++)
+	{
+		new e = g_lsgMk[k], f = g_lsgMkF[k]
+		if (!e)
+			continue
+		if (!pev_valid(e))
+		{
+			g_lsgMk[k] = 0
+			continue
+		}
+		if (f <= 0)
+			continue
+		// what it was on is gone (or the player left): so is the marker
+		if (!pev_valid(f) || (f <= MaxClients && !is_user_connected(f)))
+		{
+			lsg_mk_free(k)
+			continue
+		}
+		// (a dead player's marker waits, out of sight)
+		new fx = pev(e, pev_effects)
+		if (f <= MaxClients && !is_user_alive(f))
+		{
+			set_pev(e, pev_effects, fx | EF_NODRAW)
+			continue
+		}
+		set_pev(e, pev_effects, fx & ~EF_NODRAW)
+		new Float:o[3]
+		pev(f, pev_origin, o)
+		o[2] += g_lsgMkH[k]
+		engfunc(EngFunc_SetOrigin, e, o)
+	}
+}
+
+// 0 or a marker: that one, or all of them
+stock lsg_marker_remove(m)
+{
+	for (new k = 0; k < LSG_MKS; k++)
+		if (g_lsgMk[k] && (!m || g_lsgMk[k] == m))
+			lsg_mk_free(k)
+}
+
+stock bool:lsg_mk_sees(ent, host)
+{
+	new w = g_lsgMkWho[ent]
+	if (w == 3)
+		return host == g_lsgMkFor[ent]
+	return host >= 1 && host <= MaxClients && get_user_team(host) == w
+}
+
+// a line in the kill feed, to each person's game (one at a time: plugins that count deaths from
+// the game's own DeathMsg, the mode's Player Killed among them, don't see it as a death)
+stock lsg_killfeed(killer, victim, hs, const w[])
+{
+	if (!lsg_ok(victim))
+		return 0
+	if (!lsg_ok(killer))
+		killer = 0
+	static msg
+	if (!msg)
+		msg = get_user_msgid("DeathMsg")
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		message_begin(MSG_ONE, msg, _, p)
+		write_byte(killer)
+		write_byte(victim)
+		write_byte(hs ? 1 : 0)
+		write_string(w)
+		message_end()
+	}
+	return 1
+}
+
 // was it loaded (lsg_pre_model / lsg_pre_sound)?
 stock bool:lsg_have(const p[])
 	return g_lsgHave != Invalid_Trie && TrieKeyExists(g_lsgHave, p)

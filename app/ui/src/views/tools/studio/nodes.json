@@ -10813,6 +10813,509 @@
    "keywords": "light dark night"
   },
   {
+   "type": "msg.status_icon",
+   "title": "Status Icon",
+   "category": "Messages",
+   "help": "Shows, flashes or hides one of the game's own HUD status icons (the buy zone cart, C4, the defuser, the rescue zone...) for a player or everyone (no Player), in a color. Only the icons every player's game has (its hud.txt): for your own pictures use Objective Marker or Show HUD Text. Until death: it goes when they die or leave.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "icon",
+     "label": "Icon",
+     "kind": "choice",
+     "default": "buyzone",
+     "choices": [
+      [
+       "buyzone",
+       "Buy zone (cart)"
+      ],
+      [
+       "c4",
+       "C4"
+      ],
+      [
+       "defuser",
+       "Defuser"
+      ],
+      [
+       "rescue",
+       "Rescue zone"
+      ],
+      [
+       "escape",
+       "Escape zone"
+      ],
+      [
+       "vipsafety",
+       "VIP safety zone"
+      ],
+      [
+       "stopwatch",
+       "Stopwatch"
+      ],
+      [
+       "smallskull",
+       "Skull"
+      ],
+      [
+       "smallc4",
+       "Small C4"
+      ],
+      [
+       "smallvip",
+       "Small VIP"
+      ],
+      [
+       "hostage",
+       "Hostage"
+      ],
+      [
+       "dollar",
+       "Dollar sign"
+      ],
+      [
+       "cross",
+       "Cross"
+      ],
+      [
+       "item_healthkit",
+       "Health kit"
+      ],
+      [
+       "item_battery",
+       "Battery"
+      ],
+      [
+       "item_longjump",
+       "Long jump"
+      ],
+      [
+       "dmg_poison",
+       "Poison"
+      ],
+      [
+       "dmg_bio",
+       "Biohazard"
+      ],
+      [
+       "dmg_chem",
+       "Chemical"
+      ],
+      [
+       "dmg_drown",
+       "Drowning"
+      ],
+      [
+       "dmg_gas",
+       "Gas"
+      ],
+      [
+       "dmg_cold",
+       "Cold"
+      ],
+      [
+       "dmg_heat",
+       "Heat"
+      ],
+      [
+       "dmg_rad",
+       "Radiation"
+      ],
+      [
+       "dmg_shock",
+       "Shock"
+      ]
+     ]
+    },
+    {
+     "id": "show",
+     "label": "Show",
+     "kind": "choice",
+     "default": "on",
+     "choices": [
+      [
+       "on",
+       "On"
+      ],
+      [
+       "flash",
+       "Flashing"
+      ],
+      [
+       "off",
+       "Off"
+      ]
+     ]
+    },
+    {
+     "id": "r",
+     "label": "Red",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "g",
+     "label": "Green",
+     "kind": "number",
+     "default": 160,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "b",
+     "label": "Blue",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "death",
+     "label": "Until death",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "hud icon status buyzone c4 defuser objective"
+  },
+  {
+   "type": "fx.marker",
+   "title": "Objective Marker",
+   "category": "Effects",
+   "help": "A sprite that floats over an entity (wired into Follow: a player, an NPC, an interactable, a component; it follows it) or at a position, for everyone, one team or one player. The sprite is one of the game's (sprites/arrow1.spr) or your own (sprites/...spr: it goes with the mode, like its other files). Remove it with Remove Marker; it goes by itself when what it follows is gone.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "follow",
+     "type": "entity",
+     "label": "Follow"
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position",
+     "optional": true
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player (for one player)",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Marker"
+    }
+   ],
+   "params": [
+    {
+     "id": "sprite",
+     "label": "Sprite",
+     "kind": "path",
+     "default": "sprites/arrow1.spr"
+    },
+    {
+     "id": "who",
+     "label": "Seen by",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "Everyone"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ],
+      [
+       "player",
+       "The wired player"
+      ]
+     ]
+    },
+    {
+     "id": "height",
+     "label": "Height above",
+     "kind": "number",
+     "default": 48,
+     "min": 0,
+     "max": 512
+    },
+    {
+     "id": "scale",
+     "label": "Size",
+     "kind": "number",
+     "default": 0.5,
+     "min": 0.05,
+     "max": 5
+    },
+    {
+     "id": "r",
+     "label": "Red",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "g",
+     "label": "Green",
+     "kind": "number",
+     "default": 200,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "b",
+     "label": "Blue",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "pulse",
+     "label": "Pulse",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "waypoint objective arrow icon sprite marker quest"
+  },
+  {
+   "type": "fx.marker_remove",
+   "title": "Remove Marker",
+   "category": "Effects",
+   "help": "Takes away an Objective Marker (the one wired in, or all of them with none).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "marker",
+     "type": "entity",
+     "label": "Marker",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "waypoint objective arrow"
+  },
+  {
+   "type": "msg.killfeed",
+   "title": "Kill Feed Line",
+   "category": "Messages",
+   "help": "A line in the top-right kill feed for everyone: Killer (or none: the world), the weapon's icon, Victim, and the headshot mark. Only the feed: nobody dies, nothing is counted (Player Killed doesn't run).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "killer",
+     "type": "player",
+     "label": "Killer",
+     "optional": true
+    },
+    {
+     "id": "victim",
+     "type": "player",
+     "label": "Victim",
+     "required": true
+    },
+    {
+     "id": "hs",
+     "type": "bool",
+     "label": "Headshot",
+     "param": "hs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "weapon",
+     "label": "Weapon icon",
+     "kind": "choice",
+     "default": "knife",
+     "choices": [
+      [
+       "knife",
+       "knife"
+      ],
+      [
+       "ak47",
+       "ak47"
+      ],
+      [
+       "m4a1",
+       "m4a1"
+      ],
+      [
+       "awp",
+       "awp"
+      ],
+      [
+       "deagle",
+       "deagle"
+      ],
+      [
+       "usp",
+       "usp"
+      ],
+      [
+       "glock18",
+       "glock18"
+      ],
+      [
+       "p228",
+       "p228"
+      ],
+      [
+       "fiveseven",
+       "fiveseven"
+      ],
+      [
+       "elite",
+       "elite"
+      ],
+      [
+       "scout",
+       "scout"
+      ],
+      [
+       "g3sg1",
+       "g3sg1"
+      ],
+      [
+       "sg550",
+       "sg550"
+      ],
+      [
+       "sg552",
+       "sg552"
+      ],
+      [
+       "aug",
+       "aug"
+      ],
+      [
+       "famas",
+       "famas"
+      ],
+      [
+       "galil",
+       "galil"
+      ],
+      [
+       "mp5navy",
+       "mp5navy"
+      ],
+      [
+       "tmp",
+       "tmp"
+      ],
+      [
+       "mac10",
+       "mac10"
+      ],
+      [
+       "ump45",
+       "ump45"
+      ],
+      [
+       "p90",
+       "p90"
+      ],
+      [
+       "m3",
+       "m3"
+      ],
+      [
+       "xm1014",
+       "xm1014"
+      ],
+      [
+       "m249",
+       "m249"
+      ],
+      [
+       "grenade",
+       "grenade"
+      ],
+      [
+       "skull",
+       "skull"
+      ],
+      [
+       "tracktrain",
+       "tracktrain"
+      ]
+     ]
+    },
+    {
+     "id": "hs",
+     "label": "Headshot",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "kill feed death notice frag"
+  },
+  {
    "type": "amx.call",
    "title": "Call Plugin Function",
    "category": "Advanced",

@@ -22412,8 +22412,8 @@
 ],
 "related":[
 "msg.notify_admins",
-"debug.print",
-"game.play_sound"
+"msg.status_icon",
+"msg.killfeed"
 ],
 "example":{
 "caption":"When a round starts, Chat To Team runs.",
@@ -22484,8 +22484,8 @@
 ],
 "related":[
 "msg.team_chat",
-"debug.print",
-"game.play_sound"
+"msg.status_icon",
+"msg.killfeed"
 ],
 "example":{
 "caption":"When a round starts, Notify Admins runs.",
@@ -23796,7 +23796,7 @@
 "related":[
 "fx.sound_to",
 "fx.sound_at",
-"fx.beam"
+"fx.marker"
 ],
 "example":{
 "caption":"When a round starts, Set Light Style runs.",
@@ -23825,6 +23825,452 @@
 "edges":[
 {
 "id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"msg.status_icon":{
+"title":"Status Icon",
+"category":"Messages",
+"what":"Shows, flashes or hides one of the game's own HUD status icons (the buy zone cart, C4, the defuser, the rescue zone...) for a player or everyone (no Player), in a color. Only the icons every player's game has (its hud.txt): for your own pictures use Objective Marker or Show HUD Text. Until death: it goes when they die or leave.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"icon",
+"help":"Pick one: Buy zone (cart), C4, Defuser, Rescue zone, Escape zone, VIP safety zone, Stopwatch, Skull, Small C4, Small VIP, Hostage, Dollar sign…."
+},
+{
+"id":"show",
+"help":"Pick one: On, Flashing, Off."
+},
+{
+"id":"r",
+"help":"A number from 0 to 255."
+},
+{
+"id":"g",
+"help":"A number from 0 to 255."
+},
+{
+"id":"b",
+"help":"A number from 0 to 255."
+},
+{
+"id":"death",
+"help":"On or off."
+}
+],
+"related":[
+"msg.killfeed",
+"msg.notify_admins",
+"msg.team_chat"
+],
+"example":{
+"caption":"When a round starts, Status Icon runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"msg.status_icon",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"icon":"buyzone",
+"show":"on",
+"r":0,
+"g":160,
+"b":0,
+"death":true
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"fx.marker":{
+"title":"Objective Marker",
+"category":"Effects",
+"what":"A sprite that floats over an entity (wired into Follow: a player, an NPC, an interactable, a component; it follows it) or at a position, for everyone, one team or one player. The sprite is one of the game's (sprites/arrow1.spr) or your own (sprites/...spr: it goes with the mode, like its other files). Remove it with Remove Marker; it goes by itself when what it follows is gone.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"follow",
+"dir":"in",
+"help":"Follow: an entity (a thing in the map)."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"The position. Optional."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"Player (for one player): a player. Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Marker: an entity (a thing in the map)."
+}
+],
+"settings":[
+{
+"id":"sprite",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"who",
+"help":"Pick one: Everyone, Terrorists, Counter-Terrorists, The wired player."
+},
+{
+"id":"height",
+"help":"A number from 0 to 512."
+},
+{
+"id":"scale",
+"help":"A number from 0.05 to 5."
+},
+{
+"id":"r",
+"help":"A number from 0 to 255."
+},
+{
+"id":"g",
+"help":"A number from 0 to 255."
+},
+{
+"id":"b",
+"help":"A number from 0 to 255."
+},
+{
+"id":"pulse",
+"help":"On or off."
+}
+],
+"related":[
+"fx.marker_remove",
+"fx.lights",
+"fx.sound_to"
+],
+"example":{
+"caption":"When a round starts, Objective Marker runs and its result is printed.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"fx.marker",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"sprite":"sprites/arrow1.spr",
+"who":"all",
+"height":48,
+"scale":0.5,
+"r":255,
+"g":200,
+"b":0,
+"pulse":true
+}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Marker:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"follow"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+},
+{
+"id":"w4",
+"from":{
+"node":"it",
+"pin":"out"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w5",
+"from":{
+"node":"it",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"fx.marker_remove":{
+"title":"Remove Marker",
+"category":"Effects",
+"what":"Takes away an Objective Marker (the one wired in, or all of them with none).",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"marker",
+"dir":"in",
+"help":"Marker: an entity (a thing in the map). Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[],
+"related":[
+"fx.marker",
+"fx.lights",
+"fx.sound_to"
+],
+"example":{
+"caption":"When a round starts, Remove Marker runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"fx.marker_remove",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"msg.killfeed":{
+"title":"Kill Feed Line",
+"category":"Messages",
+"what":"A line in the top-right kill feed for everyone: Killer (or none: the world), the weapon's icon, Victim, and the headshot mark. Only the feed: nobody dies, nothing is counted (Player Killed doesn't run).",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"killer",
+"dir":"in",
+"help":"Killer: a player. Optional."
+},
+{
+"id":"victim",
+"dir":"in",
+"help":"Victim: a player. Needs a wire."
+},
+{
+"id":"hs",
+"dir":"in",
+"help":"Headshot: yes or no. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"weapon",
+"help":"Pick one: knife, ak47, m4a1, awp, deagle, usp, glock18, p228, fiveseven, elite, scout, g3sg1…."
+},
+{
+"id":"hs",
+"help":"On or off. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"msg.status_icon",
+"msg.notify_admins",
+"msg.team_chat"
+],
+"example":{
+"caption":"When a player spawns, Kill Feed Line runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"msg.killfeed",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"weapon":"knife",
+"hs":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"victim"
+}
+},
+{
+"id":"w2",
 "from":{
 "node":"ev",
 "pin":"then"
@@ -32706,9 +33152,9 @@
 ],
 "more":"Writes a line to the server console (and the chat, unless Chat is off). Handy while you build: Test run's log shows these lines.",
 "related":[
-"msg.notify_admins",
-"msg.team_chat",
-"game.play_sound"
+"msg.killfeed",
+"msg.status_icon",
+"msg.notify_admins"
 ],
 "example":{
 "caption":"When a round starts, Print String runs.",

@@ -2331,6 +2331,24 @@ fn advanced_problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
             "amx.call" => p.push(Problem::warn(Some(&n.id), "Advanced: this calls into another plugin, which can do anything. Community players see \"calls other plugins\".")),
             "player.kick" => p.push(Problem::warn(Some(&n.id), "This kicks people from the server. Community players see \"kicks players\".")),
             "game.change_map" => p.push(Problem::warn(Some(&n.id), "This changes the map for everyone.")),
+            "fx.marker" => {
+                let spr = n.params.get("sprite").and_then(Value::as_str).unwrap_or("sprites/arrow1.spr").to_ascii_lowercase();
+                if !(spr.starts_with("sprites/") && spr.ends_with(".spr")) {
+                    p.push(Problem::err(Some(&n.id), "Objective Marker's sprite is a sprites/....spr file."));
+                }
+                if v.data_source(&n.id, "follow").is_none() && v.data_source(&n.id, "pos").is_none() {
+                    p.push(Problem::err(Some(&n.id), "Objective Marker needs something to follow (an entity wired into Follow) or a Position."));
+                }
+                if n.params.get("who").and_then(Value::as_str) == Some("player") && v.data_source(&n.id, "player").is_none() {
+                    p.push(Problem::err(Some(&n.id), "Objective Marker is for one player: wire the player into Player."));
+                }
+            }
+            "msg.status_icon" | "msg.killfeed" => {
+                let (k, list): (&str, &[&str]) = if def.kind == "msg.status_icon" { ("icon", &super::gen::STATUS_ICONS) } else { ("weapon", &super::gen::KILL_ICONS) };
+                if n.params.get(k).and_then(Value::as_str).is_some_and(|x| !list.contains(&x)) {
+                    p.push(Problem::err(Some(&n.id), format!("{} only shows the game's own icons: pick one from the list.", def.title)));
+                }
+            }
             _ => {}
         }
     }

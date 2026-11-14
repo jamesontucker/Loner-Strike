@@ -621,7 +621,8 @@ fn find_file(hl: &Path, game: &str, rel: &str) -> Option<PathBuf> {
 fn safe_rel(rel: &str) -> bool {
     let low = rel.to_ascii_lowercase();
     let parts: Vec<&str> = rel.split('/').collect();
-    ((low.starts_with("models/") && low.ends_with(".mdl")) || (low.starts_with("sound/") && low.ends_with(".wav")))
+    // (sprites: an Objective Marker's own)
+    ((low.starts_with("models/") && low.ends_with(".mdl")) || (low.starts_with("sound/") && low.ends_with(".wav")) || (low.starts_with("sprites/") && low.ends_with(".spr")))
         && parts.len() >= 2
         && parts.len() <= 6
         && rel.len() <= 120
@@ -655,7 +656,7 @@ fn custom_files(hl: &Path, game: &str, t: &creatures::Creature) -> Vec<(String, 
 /// sound/<ns>/...), so no download can land on another creature's or the game's files.
 fn relocate(rel: &str, ns: &str) -> String {
     let low = rel.to_ascii_lowercase();
-    for top in ["models/", "sound/"] {
+    for top in ["models/", "sound/", "sprites/"] {
         if let Some(rest) = low.strip_prefix(top) {
             if rest.starts_with(&format!("{ns}/")) {
                 return low;
@@ -1552,7 +1553,7 @@ pub const NPC_CLASSES: &[&str] = &["ls_npc", "ls_interactable", "ls_interactable
 /// A value that names a model or a sound: (game path, it's a sound named under sound/).
 fn npc_file(v: &str) -> Option<(String, bool)> {
     let w = v.trim().replace('\\', "/").to_ascii_lowercase();
-    if w.starts_with("models/") && w.ends_with(".mdl") {
+    if (w.starts_with("models/") && w.ends_with(".mdl")) || (w.starts_with("sprites/") && w.ends_with(".spr")) {
         return safe_rel(&w).then_some((w, false));
     }
     if w.ends_with(".wav") {
@@ -1587,7 +1588,8 @@ pub fn npc_files_in_entity_text(text: &str) -> BTreeSet<String> {
 /// component made at run time as one (`comp.create` of ls_npc / ls_interactable: its keys).
 fn npc_node(n: &Value) -> bool {
     let kind = n["type"].as_str().unwrap_or("");
-    kind.starts_with("npc.") || kind.starts_with("interact") || (kind == "comp.create" && NPC_CLASSES.contains(&n["params"]["kind"].as_str().unwrap_or("")))
+    // (an Objective Marker's own sprite travels the same way)
+    kind.starts_with("npc.") || kind.starts_with("interact") || kind == "fx.marker" || (kind == "comp.create" && NPC_CLASSES.contains(&n["params"]["kind"].as_str().unwrap_or("")))
 }
 
 /// Words of a param value that may be paths (a comp.create's `k=v;k=v` keys, or a plain value).
@@ -2384,6 +2386,29 @@ mod tests {
     // ---- NPC-editor ------------------------------------------------------------------------
 
     const NPC_MAP: &str = "{\n\"classname\" \"worldspawn\"\n}\n{\n\"classname\" \"ls_npc\"\n\"name\" \"Joe\"\n\"model\" \"models/qa/joe.mdl\"\n\"greet_snd\" \"qa/hello.wav\"\n}\n{\n\"classname\" \"ls_interactable\"\n\"model\" \"models/w_battery.mdl\"\n}\n{\n\"classname\" \"cycler\"\n\"model\" \"models/qa/other.mdl\"\n}\n";
+
+    #[test]
+    fn marker_sprites_travel_like_npc_files() {
+        // an Objective Marker's own sprite goes with the mode; the game's arrow stays as it is
+        let g = serde_json::json!({"nodes": [
+            {"type": "fx.marker", "params": {"sprite": "sprites/qa/flag.spr"}},
+            {"type": "fx.marker", "params": {"sprite": "sprites/arrow1.spr"}},
+            {"type": "fx.beam", "params": {"sprite": "sprites/qa/not_this.spr"}}
+        ]});
+        let found = npc_files_in_graph_json(&g);
+        assert_eq!(found.iter().map(String::as_str).collect::<Vec<_>>(), vec!["sprites/arrow1.spr", "sprites/qa/flag.spr"]);
+        let (hl, gd) = game("");
+        std::fs::create_dir_all(gd.join("sprites/qa")).unwrap();
+        std::fs::write(gd.join("sprites/qa/flag.spr"), b"spr").unwrap();
+        let pack = Pack::default().with_npc(&hl, "cstrike", &found, "gb7").unwrap();
+        let rels: Vec<&str> = pack.npc.iter().map(|(r, _)| r.as_str()).collect();
+        assert_eq!(rels, vec!["sprites/gb7/qa/flag.spr"]);
+        let mut gv = g.clone();
+        pack.rewrite_graph(&mut gv);
+        assert_eq!(gv["nodes"][0]["params"]["sprite"], "sprites/gb7/qa/flag.spr");
+        assert_eq!(gv["nodes"][1]["params"]["sprite"], "sprites/arrow1.spr");
+        let _ = std::fs::remove_dir_all(&hl);
+    }
 
     #[test]
     fn npc_files_are_found_packed_under_the_owner_and_renamed() {

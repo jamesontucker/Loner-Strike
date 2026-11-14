@@ -132,6 +132,12 @@ fn model_text(s: &str) -> String {
     if t.starts_with("models/") && t.ends_with(".mdl") && !t.contains("..") { t } else { "models/w_c4.mdl".into() }
 }
 
+/// A sprite path (under sprites/, .spr) for a string literal: the marker's default otherwise.
+fn sprite_text(s: &str) -> String {
+    let t: String = s.chars().filter(|c| c.is_ascii_alphanumeric() || "_-./".contains(*c)).take(64).collect();
+    if t.starts_with("sprites/") && t.ends_with(".spr") && !t.contains("..") { t } else { "sprites/arrow1.spr".into() }
+}
+
 /// A sound path (under sound/, .wav) for a string literal.
 fn sound_text(s: &str) -> String {
     let t: String = s.chars().filter(|c| c.is_ascii_alphanumeric() || "_-./".contains(*c)).take(64).collect();
@@ -1401,7 +1407,12 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     let uses_exp = has("fx.explosion");
     let uses_beam = has("fx.beam");
     let npc_models: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "npc.spawn").map(|n| model_text(n.params.get("model").and_then(Value::as_str).unwrap_or("models/barney.mdl"))).collect();
-    let props: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "ent.spawn_prop" || n.kind == "npc.spawn_use").map(|n| model_text(n.params.get("model").and_then(Value::as_str).unwrap_or(""))).collect();
+    let mut props: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "ent.spawn_prop" || n.kind == "npc.spawn_use").map(|n| model_text(n.params.get("model").and_then(Value::as_str).unwrap_or(""))).collect();
+    // an Objective Marker's sprite: loaded with the map, only when a marker is used (and there)
+    props.extend(g.nodes.iter().filter(|n| n.kind == "fx.marker").map(|n| sprite_text(n.params.get("sprite").and_then(Value::as_str).unwrap_or(""))));
+    let uses_mk = has("fx.marker");
+    let mk_some = g.nodes.iter().any(|n| n.kind == "fx.marker" && n.params.get("who").and_then(Value::as_str).is_some_and(|w| w != "all"));
+    let icon_death = g.nodes.iter().any(|n| n.kind == "msg.status_icon" && n.params.get("death").and_then(Value::as_bool).unwrap_or(true));
     let sounds: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "fx.sound_at").map(|n| sound_text(n.params.get("sound").and_then(Value::as_str).unwrap_or(""))).collect();
     if uses_rounds {
         o.line("public lsg_count_round()\n\tg_lsgRounds++\n");
@@ -1414,6 +1425,15 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     if uses_mute {
         o.line("stock lsg_mute(id, Float:secs)\n{\n\tif (!lsg_ok(id))\n\t\treturn\n\tset_speak(id, SPEAK_MUTED)\n\tremove_task(LSG_TASK - 300 - id)\n\tif (secs > 0.0)\n\t\tset_task(secs, \"lsg_unmute\", LSG_TASK - 300 - id)\n}\n\npublic lsg_unmute(task)\n{\n\tnew id = LSG_TASK - 300 - task\n\tif (lsg_ok(id))\n\t\tset_speak(id, SPEAK_NORMAL)\n}\n");
+    }
+    if uses_mk {
+        o.line("// Objective Markers follow what they're on, ten times a second (one task for all of them)\npublic lsg_mk_tick()\n\tlsg_mk_follow()\n");
+    }
+    if mk_some {
+        o.line("// a marker for one team or one player: the others' games aren't sent it\npublic lsg_mk_full(es, e, ent, host, flags, player, pset)\n{\n\tif (ent < 1 || ent >= 2048 || !g_lsgMkWho[ent])\n\t\treturn FMRES_IGNORED\n\tif (lsg_mk_sees(ent, host))\n\t\treturn FMRES_IGNORED\n\tforward_return(FMV_CELL, 0)\n\treturn FMRES_SUPERCEDE\n}\n");
+    }
+    if icon_death {
+        o.line("// Status Icon (until death): it goes when they die\npublic lsg_icon_dead(id)\n\tlsg_icon_clear(id)\n");
     }
     if uses_gag {
         o.line("stock lsg_gag(id, Float:secs)\n{\n\tif (lsg_ok(id))\n\t\tg_lsgGagTill[id] = secs > 0.0 ? get_gametime() + secs : 99999999.0\n}\n\npublic lsg_gag_say(id)\n\treturn lsg_ok(id) && get_gametime() < g_lsgGagTill[id] ? PLUGIN_HANDLED : PLUGIN_CONTINUE\n");
@@ -1523,6 +1543,15 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     if uses_gag {
         o.line("\tregister_clcmd(\"say\", \"lsg_gag_say\")\n\tregister_clcmd(\"say_team\", \"lsg_gag_say\")");
+    }
+    if uses_mk {
+        o.line("\tset_task(0.1, \"lsg_mk_tick\", LSG_TASK - 400, _, _, \"b\")");
+    }
+    if mk_some {
+        o.line("\tregister_forward(FM_AddToFullPack, \"lsg_mk_full\", 0)");
+    }
+    if icon_death {
+        o.line("\tRegisterHamPlayer(Ham_Killed, \"lsg_icon_dead\", 1)");
     }
     if uses_down {
         o.line("\tset_task(0.25, \"lsg_revive_tick\", LSG_TASK - 1, _, _, \"b\")");
@@ -2720,6 +2749,68 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             b.line(format!("\t{store}lsg_safe_cmd({}, {}) ? 1 : 0", inp("cmd", "text"), if amx { 1 } else { 0 }));
             if debug {
                 b.line(format!("\tif (!lsg_cmd_ok)\n\t\t{}\n\telse\n\t{}", err("Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap."), exit("sent")));
+            }
+            then_line(&mut b, "then");
+        }
+        "msg.status_icon" => {
+            let who = if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
+            let icon = gen.choice(n, def, "icon");
+            // (one of the game's own hud.txt names, from the list: never a typed name)
+            let icon = if STATUS_ICONS.contains(&icon) { icon } else { "buyzone" };
+            let show = match gen.choice(n, def, "show") { "off" => 0, "flash" => 2, _ => 1 };
+            let c = |k: &str| gen.num(n, def, k).round().clamp(0.0, 255.0) as i64;
+            b.line(format!("\tlsg_icon({who}, {show}, {}, {}, {}, {}, {})", pawn_str(icon), c("r"), c("g"), c("b"), if gen.boolean(n, def, "death") { 1 } else { 0 }));
+            let e = exit(if show == 0 { "hidden" } else { "shown" });
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "fx.marker" => {
+            let follow = if v.data_source(id, "follow").is_some() { inp("follow", "entity") } else { "0".into() };
+            let pos = v.data_source(id, "pos").is_some();
+            if pos {
+                b.line(format!("\tnew Float:lsgAt[3]\n\tlsg_vto({}, lsgAt)", inp("pos", "vector")));
+            } else {
+                b.line("\tnew Float:lsgAt[3]");
+            }
+            let who = match gen.choice(n, def, "who") { "t" => 1, "ct" => 2, "player" => 3, _ => 0 };
+            let forp = if who == 3 && v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
+            let c = |k: &str| gen.num(n, def, k).round().clamp(0.0, 255.0) as i64;
+            b.line(format!(
+                "\tg_lsgOut[{i}] = lsg_marker({}, {follow}, lsgAt, {}, {}, {}, {}, {}, {}, {}, {who}, {forp})",
+                pawn_str(&sprite_text(gen.text(n, def, "sprite"))),
+                if pos { 1 } else { 0 },
+                float_lit(gen.num(n, def, "height").clamp(0.0, 512.0)),
+                float_lit(gen.num(n, def, "scale").clamp(0.05, 5.0)),
+                c("r"),
+                c("g"),
+                c("b"),
+                if gen.boolean(n, def, "pulse") { 1 } else { 0 }
+            ));
+            if debug {
+                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}\n\telse\n\t{}", err("No marker: its sprite isn't loaded, nothing to follow or no position, or 32 are up already."), exit("made")));
+            }
+            then_line(&mut b, "then");
+        }
+        "fx.marker_remove" => {
+            let m = if v.data_source(id, "marker").is_some() { inp("marker", "entity") } else { "0".into() };
+            b.line(format!("\tlsg_marker_remove({m})"));
+            let e = exit("removed");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "msg.killfeed" => {
+            let killer = if v.data_source(id, "killer").is_some() { inp("killer", "player") } else { "0".into() };
+            let w = gen.choice(n, def, "weapon");
+            let w = if KILL_ICONS.contains(&w) { w } else { "skull" };
+            let call = format!("lsg_killfeed({killer}, {}, {}, {})", inp("victim", "player"), bool01(&inp("hs", "bool")), pawn_str(w));
+            if debug {
+                b.line(format!("\tif (!{call})\n\t\t{}\n\telse\n\t{}", err("Not sent: the Victim isn't a player in the game."), exit("sent")));
+            } else {
+                b.line(format!("\t{call}"));
             }
             then_line(&mut b, "then");
         }
@@ -4639,6 +4730,15 @@ stock bool:lsg_safe_cmd(const cmd[], amx)
 "#, dw = arr(&DENY_WORDS), dp = arr(&DENY_PARTS), sw = arr(&SERVER_WORDS), sp = arr(&SERVER_PREFIXES), ab = arr(&AMX_WORDS), wm = WORD_MAX, wl = WORD_MAX + 1)
 }
 
+/// The game's own HUD status icons (cstrike/sprites/hud.txt; Condition Zero uses the same file).
+pub const STATUS_ICONS: [&str; 25] = [
+    "buyzone", "c4", "defuser", "rescue", "escape", "vipsafety", "stopwatch", "smallskull", "smallc4", "smallvip", "hostage", "dollar", "cross", "item_healthkit", "item_battery", "item_longjump", "dmg_poison", "dmg_bio", "dmg_chem", "dmg_drown", "dmg_gas", "dmg_cold", "dmg_heat", "dmg_rad", "dmg_shock",
+];
+/// The kill feed's weapon icons (hud.txt's d_<name> sprites).
+pub const KILL_ICONS: [&str; 28] = [
+    "knife", "ak47", "m4a1", "awp", "deagle", "usp", "glock18", "p228", "fiveseven", "elite", "scout", "g3sg1", "sg550", "sg552", "aug", "famas", "galil", "mp5navy", "tmp", "mac10", "ump45", "p90", "m3", "xm1014", "m249", "grenade", "skull", "tracktrain",
+];
+
 /// Helpers every plugin gets (stocks: the ones a graph doesn't use cost nothing).
 const HELPERS: &str = r##"// ---- the game and the server (Game, World, Players, Entities, Effects, Advanced nodes) ----
 stock g_lsgRounds, g_lsgScore[3], bool:g_lsgFreeze, Float:g_lsgGagTill[33], g_lsgFw = -1, bool:lsg_cmd_ok, g_lsgSprExp, g_lsgSprBeam, Trie:g_lsgHave = Invalid_Trie
@@ -4671,6 +4771,191 @@ stock lsg_pre_sound(const p[])
 		g_lsgHave = TrieCreate()
 	TrieSetCell(g_lsgHave, p, 1)
 	return precache_sound(p)
+}
+
+// ---- Status Icon, Objective Marker, Kill Feed Line ----
+stock g_lsgIcon[33][16]
+stock lsg_icon_send(to, status, const name[], r, g, b)
+{
+	if (to && !is_user_connected(to))
+		return
+	static msg
+	if (!msg)
+		msg = get_user_msgid("StatusIcon")
+	message_begin(to ? MSG_ONE : MSG_ALL, msg, _, to)
+	write_byte(status)
+	write_string(name)
+	if (status)
+	{
+		write_byte(r)
+		write_byte(g)
+		write_byte(b)
+	}
+	message_end()
+}
+
+// to 0: everyone; death: noted, so it's taken away when they die
+stock lsg_icon(to, status, const name[], r, g, b, death)
+{
+	if (to && !lsg_ok(to))
+		return
+	lsg_icon_send(to, status, name, r, g, b)
+	if (!death)
+		return
+	for (new p = to ? to : 1; p <= (to ? to : MaxClients); p++)
+		if (is_user_connected(p))
+			copy(g_lsgIcon[p], 15, status ? name : "")
+}
+
+stock lsg_icon_clear(id)
+{
+	if (id < 1 || id > MaxClients || !g_lsgIcon[id][0])
+		return
+	lsg_icon_send(id, 0, g_lsgIcon[id], 0, 0, 0)
+	g_lsgIcon[id][0] = 0
+}
+
+// markers: a sprite on an info_target, moved by one task to what it follows (no think each frame)
+#define LSG_MKS 32
+stock g_lsgMk[LSG_MKS], g_lsgMkF[LSG_MKS], Float:g_lsgMkH[LSG_MKS], g_lsgMkWho[2048], g_lsgMkFor[2048]
+
+stock lsg_marker(const spr[], follow, const Float:at[3], hasAt, Float:h, Float:scale, r, g, b, pulse, who, forp)
+{
+	// (a sprite that wasn't there when the map loaded: no marker)
+	if (!lsg_have(spr) || (follow <= 0 && !hasAt) || (follow > 0 && !pev_valid(follow)))
+		return 0
+	new slot = -1
+	for (new k = 0; k < LSG_MKS; k++)
+	{
+		if (g_lsgMk[k] && !pev_valid(g_lsgMk[k]))
+			g_lsgMk[k] = 0
+		if (!g_lsgMk[k])
+		{
+			slot = k
+			break
+		}
+	}
+	if (slot < 0)
+		return 0
+	new e = create_entity("info_target")
+	if (e <= 0)
+		return 0
+	set_pev(e, pev_classname, "ls_studio_marker")
+	engfunc(EngFunc_SetModel, e, spr)
+	set_pev(e, pev_movetype, MOVETYPE_NOCLIP)
+	set_pev(e, pev_solid, SOLID_NOT)
+	set_pev(e, pev_rendermode, kRenderTransAdd)
+	set_pev(e, pev_renderamt, 255.0)
+	new Float:c[3]
+	c[0] = float(r)
+	c[1] = float(g)
+	c[2] = float(b)
+	set_pev(e, pev_rendercolor, c)
+	set_pev(e, pev_scale, scale)
+	if (pulse)
+		set_pev(e, pev_renderfx, kRenderFxPulseSlow)
+	new Float:o[3]
+	if (follow > 0)
+		pev(follow, pev_origin, o)
+	else
+		o = at
+	o[2] += h
+	engfunc(EngFunc_SetOrigin, e, o)
+	g_lsgMk[slot] = e
+	g_lsgMkF[slot] = follow
+	g_lsgMkH[slot] = h
+	g_lsgMkWho[e] = who
+	g_lsgMkFor[e] = forp
+	return e
+}
+
+stock lsg_mk_free(k)
+{
+	new e = g_lsgMk[k]
+	g_lsgMk[k] = 0
+	if (e > 0 && e < 2048)
+	{
+		g_lsgMkWho[e] = 0
+		g_lsgMkFor[e] = 0
+	}
+	if (e > 0 && pev_valid(e))
+		remove_entity(e)
+}
+
+stock lsg_mk_follow()
+{
+	for (new k = 0; k < LSG_MKS; k++)
+	{
+		new e = g_lsgMk[k], f = g_lsgMkF[k]
+		if (!e)
+			continue
+		if (!pev_valid(e))
+		{
+			g_lsgMk[k] = 0
+			continue
+		}
+		if (f <= 0)
+			continue
+		// what it was on is gone (or the player left): so is the marker
+		if (!pev_valid(f) || (f <= MaxClients && !is_user_connected(f)))
+		{
+			lsg_mk_free(k)
+			continue
+		}
+		// (a dead player's marker waits, out of sight)
+		new fx = pev(e, pev_effects)
+		if (f <= MaxClients && !is_user_alive(f))
+		{
+			set_pev(e, pev_effects, fx | EF_NODRAW)
+			continue
+		}
+		set_pev(e, pev_effects, fx & ~EF_NODRAW)
+		new Float:o[3]
+		pev(f, pev_origin, o)
+		o[2] += g_lsgMkH[k]
+		engfunc(EngFunc_SetOrigin, e, o)
+	}
+}
+
+// 0 or a marker: that one, or all of them
+stock lsg_marker_remove(m)
+{
+	for (new k = 0; k < LSG_MKS; k++)
+		if (g_lsgMk[k] && (!m || g_lsgMk[k] == m))
+			lsg_mk_free(k)
+}
+
+stock bool:lsg_mk_sees(ent, host)
+{
+	new w = g_lsgMkWho[ent]
+	if (w == 3)
+		return host == g_lsgMkFor[ent]
+	return host >= 1 && host <= MaxClients && get_user_team(host) == w
+}
+
+// a line in the kill feed, to each person's game (one at a time: plugins that count deaths from
+// the game's own DeathMsg, the mode's Player Killed among them, don't see it as a death)
+stock lsg_killfeed(killer, victim, hs, const w[])
+{
+	if (!lsg_ok(victim))
+		return 0
+	if (!lsg_ok(killer))
+		killer = 0
+	static msg
+	if (!msg)
+		msg = get_user_msgid("DeathMsg")
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		message_begin(MSG_ONE, msg, _, p)
+		write_byte(killer)
+		write_byte(victim)
+		write_byte(hs ? 1 : 0)
+		write_string(w)
+		message_end()
+	}
+	return 1
 }
 
 // was it loaded (lsg_pre_model / lsg_pre_sound)?

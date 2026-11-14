@@ -1310,6 +1310,72 @@ mod tests {
         assert!(src.contains("Run Dialog: no row of Dialog has the id") && src.contains("stopped after 64 lines"));
     }
 
+    /// Status Icon, Objective Marker (on a bot, and at a spot for that bot only), Kill Feed Line
+    /// and Remove Marker in one mode (the compile test and the sim run use it).
+    pub fn ui_nodes_mode() -> Graph {
+        let n = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        let nodes = vec![
+            n("rs", "event.round_started", json!({})),
+            n("d", "timer.delay", json!({"secs": 3})),
+            n("pk", "flow.pick_player", json!({"which": "bots"})),
+            n("ic1", "msg.status_icon", json!({"icon": "c4", "show": "flash", "r": 255, "g": 0, "b": 0, "death": true})),
+            n("ic2", "msg.status_icon", json!({"icon": "buyzone", "show": "on", "death": false})),
+            n("mk1", "fx.marker", json!({"sprite": "sprites/arrow1.spr", "who": "all", "height": 64})),
+            n("vp", "vec.player", json!({})),
+            n("mk2", "fx.marker", json!({"sprite": "sprites/glow01.spr", "who": "player", "pulse": false})),
+            n("kf", "msg.killfeed", json!({"weapon": "ak47", "hs": true})),
+            n("p1", "debug.print", json!({"text": "UI marker", "chat": false})),
+            n("d2", "timer.delay", json!({"secs": 4})),
+            n("rm1", "fx.marker_remove", json!({})),
+            n("rm2", "fx.marker_remove", json!({})),
+        ];
+        let edges = vec![
+            e(1, "rs", "then", "d", "exec"), e(2, "d", "then", "pk", "exec"), e(3, "pk", "then", "ic1", "exec"), e(4, "pk", "player", "ic1", "player"),
+            e(5, "ic1", "then", "ic2", "exec"), e(6, "ic2", "then", "mk1", "exec"), e(7, "pk", "player", "mk1", "follow"),
+            e(8, "pk", "player", "vp", "player"), e(9, "mk1", "then", "mk2", "exec"), e(10, "vp", "out", "mk2", "pos"), e(11, "pk", "player", "mk2", "player"),
+            e(12, "mk2", "then", "kf", "exec"), e(13, "pk", "player", "kf", "killer"), e(14, "pk", "player", "kf", "victim"),
+            e(15, "kf", "then", "p1", "exec"), e(16, "mk1", "out", "p1", "value"), e(17, "p1", "then", "d2", "exec"),
+            e(18, "d2", "then", "rm1", "exec"), e(19, "mk1", "out", "rm1", "marker"), e(20, "rm1", "then", "rm2", "exec"),
+        ];
+        graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "ui_nodes", "name": "UI nodes"}, "nodes": nodes, "edges": edges})).unwrap()
+    }
+
+    /// The UI nodes check clean and make what they say: the icon message (to one, to all), the
+    /// marker's sprite loaded with the map only when used, the task that moves markers, the
+    /// one-player marker's send filter, the death hook for icons until death, and the kill feed
+    /// sent to each game one at a time (never a global DeathMsg other plugins would count).
+    #[test]
+    fn ui_nodes_generate() {
+        let g = ui_nodes_mode();
+        let p = graph::validate(&g);
+        assert!(p.is_empty(), "{p:#?}");
+        let src = gen::generate(&g, false).source;
+        for want in [
+            "lsg_icon(g_lsgCtx", "lsg_pre_model(\"sprites/arrow1.spr\")", "lsg_pre_model(\"sprites/glow01.spr\")", "set_task(0.1, \"lsg_mk_tick\"", "register_forward(FM_AddToFullPack, \"lsg_mk_full\", 0)",
+            "RegisterHamPlayer(Ham_Killed, \"lsg_icon_dead\", 1)", "\"ak47\")", "message_begin(MSG_ONE, msg, _, p)", "lsg_marker_remove(0)",
+        ] {
+            assert!(src.contains(want) || (want.starts_with("lsg_icon(") && src.contains("lsg_icon(")), "{want}");
+        }
+        assert!(!src.contains("message_begin(MSG_ALL, get_user_msgid(\"DeathMsg\")"));
+        // no marker: none of it
+        let mut bare = g.clone();
+        bare.nodes.retain(|n| !n.kind.starts_with("fx.marker"));
+        bare.edges.retain(|e| bare.nodes.iter().any(|n| n.id == e.from.node) && bare.nodes.iter().any(|n| n.id == e.to.node));
+        let src = gen::generate(&bare, false).source;
+        assert!(!src.contains("lsg_mk_tick\"") && !src.contains("sprites/arrow1.spr") && !src.contains("FM_AddToFullPack"));
+        // the checks
+        let mut bad = g.clone();
+        for n in bad.nodes.iter_mut().filter(|n| n.id == "mk1") {
+            n.params.insert("sprite".into(), json!("models/x.mdl"));
+        }
+        bad.edges.retain(|e| !(e.to.node == "mk2" && (e.to.pin == "pos" || e.to.pin == "player")));
+        let p: Vec<String> = graph::validate(&bad).into_iter().map(|p| p.message).collect();
+        assert!(p.iter().any(|m| m.contains("sprites/....spr")), "{p:?}");
+        assert!(p.iter().any(|m| m.contains("needs something to follow")), "{p:?}");
+        assert!(p.iter().any(|m| m.contains("wire the player into Player")), "{p:?}");
+    }
+
     pub fn snippet_as_graph(id: &str, v: &Value) -> Graph {
         let mut g = v.clone();
         let o = g.as_object_mut().unwrap();
@@ -1544,6 +1610,7 @@ mod tests {
             graphs.push((format!("sn_{id}"), serde_json::to_string(&snippet_as_graph(&id, &v)).unwrap()));
         }
         graphs.push(("dialogue".into(), serde_json::to_string(&dialogue_mode()).unwrap()));
+        graphs.push(("ui_nodes".into(), serde_json::to_string(&ui_nodes_mode()).unwrap()));
         // the round clock read with no Round Time Up in the graph (its empty hook didn't compile:
         // the node coverage sweep found it)
         graphs.push(("clock_no_time_up".into(), serde_json::json!({"schema": "loner-strike/graph", "version": 3, "mode": {"id": "clock_no_time_up", "name": "Clock"},
