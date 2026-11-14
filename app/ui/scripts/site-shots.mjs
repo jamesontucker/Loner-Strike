@@ -228,7 +228,8 @@ const SHOTS = {
     await page.waitForTimeout(8000);
     await settle(page, 500);
   }),
-  navfix: plain("tools", "navfix:cs_rats2", "Nav fixer on cs_rats2: where bots can go and get back from"),
+  // (de_dust2: cs_rats2 showed the back of a poster panel, never seen in the game, as a big black slab from outside)
+  navfix: plain("tools", "navfix:de_dust2", "Nav fixer on de_dust2: where bots can go and get back from"),
   doctor: plain("tools", "doctor:de_dust2", "Map doctor on de_dust2: every check, grouped"),
   callouts: plain("tools", "callouts:de_dust2", "Callouts on de_dust2: places painted by name"),
   radar: plain("tools", "radar:de_dust2", "Radar maker on de_dust2"),

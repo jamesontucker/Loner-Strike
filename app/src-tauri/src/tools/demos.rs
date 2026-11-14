@@ -38,8 +38,10 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 
 pub const HEADER_SIZE: usize = 544;
@@ -176,28 +178,42 @@ pub struct Details {
     pub problem: Option<String>,
 }
 
-/// The names in userinfo strings (`\name\<name>\`) in a message, in order.
+/// The names in userinfo strings (`\name\<name>\`) in a message, in order. One pass: the message is
+/// cut at its zero bytes (each userinfo is one such string) and each piece looked through once, so a
+/// crafted message can't make it slow (security review: no search back for every match).
 fn names_in(msg: &[u8], out: &mut Vec<String>) {
     const KEY: &[u8] = b"\\name\\";
-    let mut i = 0;
-    while i + KEY.len() <= msg.len() {
-        if &msg[i..i + KEY.len()] == KEY {
+    for piece in msg.split(|&c| c == 0) {
+        if out.len() >= MAX_NAMES {
+            return;
+        }
+        // (HLTV's own slot, `\*hltv\1` in its userinfo, is the recorder, not a player)
+        if piece.len() < KEY.len() || has(piece, HLTV_KEY) {
+            continue;
+        }
+        let mut i = 0;
+        while i + KEY.len() <= piece.len() {
+            if &piece[i..i + KEY.len()] != KEY {
+                i += 1;
+                continue;
+            }
             let s = i + KEY.len();
-            let e = msg[s..].iter().position(|&c| c == b'\\' || c == 0).map(|k| s + k).unwrap_or(msg.len());
-            let name = String::from_utf8(msg[s..e].to_vec()).unwrap_or_else(|_| crate::rcon::latin1(&msg[s..e]));
+            let e = piece[s..].iter().position(|&c| c == b'\\').map_or(piece.len(), |k| s + k);
+            let name = String::from_utf8(piece[s..e].to_vec()).unwrap_or_else(|_| crate::rcon::latin1(&piece[s..e]));
             let name = name.trim().to_string();
-            // (HLTV's own slot, `\*hltv\1` in its userinfo, is the recorder, not a player)
-            let from = msg[..i].iter().rposition(|&c| c == 0).map_or(0, |k| k + 1);
-            let to = msg[e..].iter().position(|&c| c == 0).map_or(msg.len(), |k| e + k);
-            let hltv = msg[from..to].windows(7).any(|w| w == b"\\*hltv\\");
-            if !hltv && !name.is_empty() && name.len() <= 64 && !out.contains(&name) && out.len() < MAX_NAMES {
+            if !name.is_empty() && name.len() <= 64 && !out.contains(&name) && out.len() < MAX_NAMES {
                 out.push(name);
             }
-            i = e;
-        } else {
-            i += 1;
+            i = e.max(i + 1);
         }
     }
+}
+
+const HLTV_KEY: &[u8] = b"\\*hltv\\";
+
+/// Whether `hay` holds `key` (short keys: linear in `hay`).
+fn has(hay: &[u8], key: &[u8]) -> bool {
+    hay.windows(key.len()).any(|w| w == key)
 }
 
 /// The server's name from svc_serverinfo (11, protocol 48: i32 protocol, i32 spawn count,
@@ -419,21 +435,28 @@ fn find(places: &[Place], at: &str, name: &str) -> Option<(Place, PathBuf)> {
 /// Whether HLTV recorded this demo (rather than a player): the slot the demo was recorded from (the
 /// player number in svc_serverinfo) is the one whose userinfo (svc_updateuserinfo: 13, u8 slot, i32
 /// user id, the string) has `\*hltv\`. Looked for in the first part of the file, where both are
-/// sent; a player's demo on a server with an HLTV has that HLTV in another slot.
+/// sent; a player's demo on a server with an HLTV has that HLTV in another slot. One forward pass
+/// over the zero-separated strings, at most HLTV_TRIES of them checked (security review).
 fn recorded_by_hltv(head: &[u8]) -> bool {
     let Some(at) = head.windows(5).position(|w| w == [11, 48, 0, 0, 0]) else { return false };
     let Some(&me) = head.get(at + 1 + 29) else { return false };
-    let key: &[u8] = b"\\*hltv\\";
-    let mut i = 0;
-    while let Some(k) = head[i..].windows(key.len()).position(|w| w == key).map(|k| i + k) {
-        let start = head[..k].iter().rposition(|&c| c == 0).map_or(0, |z| z + 1);
-        if start >= 6 && head[start - 6] == 13 && head[start - 5] == me {
-            return true;
+    let mut start = 0;
+    let mut tries = 0;
+    for piece in head.split(|&c| c == 0) {
+        if has(piece, HLTV_KEY) {
+            if start >= 6 && head[start - 6] == 13 && head[start - 5] == me {
+                return true;
+            }
+            tries += 1;
+            if tries >= HLTV_TRIES {
+                return false;
+            }
         }
-        i = k + 1;
+        start += piece.len() + 1;
     }
     false
 }
+const HLTV_TRIES: usize = 64;
 
 /// The start of a demo file, for `recorded_by_hltv`.
 fn head_of(path: &Path) -> Vec<u8> {
@@ -444,6 +467,27 @@ fn head_of(path: &Path) -> Vec<u8> {
     buf
 }
 const HEAD_BYTES: u64 = 256 * 1024;
+
+/// `recorded_by_hltv` for a file, worked out once per version of it (size and time changed: again),
+/// shared by the list, the closer look and Replay.
+fn by_hltv(path: &Path) -> bool {
+    static SEEN: Mutex<Option<HashMap<PathBuf, (u64, u64, bool)>>> = Mutex::new(None);
+    let Ok(meta) = std::fs::metadata(path) else { return false };
+    let key = (meta.len(), modified(&meta));
+    if let Some(&(len, when, v)) = SEEN.lock().unwrap().get_or_insert_with(HashMap::new).get(path) {
+        if (len, when) == key {
+            return v;
+        }
+    }
+    let v = recorded_by_hltv(&head_of(path));
+    let mut seen = SEEN.lock().unwrap();
+    let m = seen.get_or_insert_with(HashMap::new);
+    if m.len() >= 1024 {
+        m.clear();
+    }
+    m.insert(path.to_path_buf(), (key.0, key.1, v));
+    v
+}
 
 fn header_of(path: &Path) -> Result<Header, String> {
     let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
@@ -471,7 +515,7 @@ fn list(places: &[Place]) -> Value {
                                    "name": name, "size": meta.len(), "modified": when, "playable": playable_name(&name), "safeName": safe_rename(&name)});
                 match header_of(&f.path()) {
                     Ok(h) => {
-                        v["byHltv"] = json!(recorded_by_hltv(&head_of(&f.path())));
+                        v["byHltv"] = json!(by_hltv(&f.path()));
                         v["map"] = json!(h.map);
                         v["seconds"] = json!(h.seconds());
                         v["protocol"] = json!(h.net_protocol);
@@ -504,7 +548,7 @@ fn detail(path: &Path) -> Result<Value, String> {
         Details { problem: Some("This demo is too big to look inside.".into()), ..Default::default() }
     };
     let pov = d.path.iter().filter(|s| !s.spectator).count();
-    let by_hltv = recorded_by_hltv(&head_of(path));
+    let by_hltv = by_hltv(path);
     Ok(json!({
         "map": h.map, "game": h.game, "protocol": h.net_protocol, "demoProtocol": h.demo_protocol,
         "seconds": h.seconds(),
@@ -682,7 +726,7 @@ fn to_replay(places: &[Place], at: &str, name: &str) -> Result<Value, String> {
     }
     let h = read_header(&mut f, len)?;
     let d = scan(&mut f, &h);
-    if d.path.iter().filter(|s| !s.spectator).count() < 10 || recorded_by_hltv(&head_of(&path)) {
+    if d.path.iter().filter(|s| !s.spectator).count() < 10 || by_hltv(&path) {
         return Err("This demo has no player walking around in it (an HLTV demo follows a camera, not a player).".into());
     }
     let who = d.names.first().cloned().unwrap_or_else(|| "You".into());
@@ -998,6 +1042,27 @@ mod tests {
         // a player's demo (slot 1) on a server with an HLTV (slot 2)
         assert!(!recorded_by_hltv(&info(1)));
         assert!(!recorded_by_hltv(b"HLDEMO"));
+        // a crafted start of file (security review): a serverinfo, then the whole head one long string of
+        // `\*hltv\` and `\name\` with no zero byte, then many short ones; both scans stay linear
+        let mut big = info(9);
+        let pattern: &[u8] = b"\\*hltv\\\\name\\x";
+        while big.len() < HEAD_BYTES as usize / 2 {
+            big.extend(pattern);
+        }
+        while big.len() < HEAD_BYTES as usize {
+            big.extend(b"\\*hltv\\\0");
+        }
+        let t = std::time::Instant::now();
+        assert!(!recorded_by_hltv(&big));
+        let mut names = Vec::new();
+        names_in(&big, &mut names);
+        names_in(&vec![b'\\'; 1 << 20], &mut names);
+        let mut nm = Vec::new();
+        for _ in 0..(1 << 17) {
+            nm.extend(b"\\name\\");
+        }
+        names_in(&nm, &mut names);
+        assert!(t.elapsed() < std::time::Duration::from_secs(2), "{:?}", t.elapsed());
         assert!(!safe_name("../x.dem") && !safe_name("a/b.dem") && !safe_name(".dem") && !safe_name("x.txt") && !safe_name("a\u{7}.dem"));
         assert!(playable_name("my_demo-1.dem") && playable_name("TopFrag-DUST2only.dem") && playable_name("my demo.dem"));
         for bad in ["a\";quit.dem", "a;quit.dem", "../x.dem", "x\u{122}; quit.dem", "x\u{13B}.dem", "x\u{FF02}.dem", "a'b.dem", "a\nb.dem", "caf\u{e9}.dem"] {
