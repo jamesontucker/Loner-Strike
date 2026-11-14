@@ -182,8 +182,9 @@ fn read_events(text: &str) -> (BTreeMap<String, u64>, Vec<(String, String)>, boo
         let node = e["node"].as_str().unwrap_or_default().to_string();
         match e["e"].as_str() {
             Some("node_enter") | Some("node_exit") if !node.is_empty() => {
+                // (a sampled run carries how many runs before it weren't written)
                 if e["e"] == "node_enter" || !ran.contains_key(&node) {
-                    *ran.entry(node).or_insert(0) += u64::from(e["e"] == "node_enter");
+                    *ran.entry(node).or_insert(0) += u64::from(e["e"] == "node_enter") * (1 + e["skipped"].as_u64().unwrap_or(0));
                 }
             }
             Some("session") => session = true,
@@ -642,9 +643,10 @@ L 11/14/2026 - 10:00:02: [AMXX] Plugin \"studio_x.amxx\" failed to load: Plugin 
         let d = std::env::temp_dir().join(format!("ls-testrun-{}", std::process::id()));
         std::fs::create_dir_all(&d).unwrap();
         let f = d.join("x.events");
-        std::fs::write(&f, "{\"e\":\"node_enter\",\"node\":\"a\"}\n{\"e\":\"node_enter\",\"node\":\"a\"}\n{\"e\":\"node_exit\",\"node\":\"b\",\"result\":\"ran\"}\n{\"e\":\"node_error\",\"node\":\"c\",\"message\":\"Refused\"}\nnot json\n").unwrap();
+        std::fs::write(&f, "{\"e\":\"node_enter\",\"node\":\"a\"}\n{\"e\":\"node_enter\",\"node\":\"a\",\"skipped\":5}\n{\"e\":\"node_exit\",\"node\":\"b\",\"result\":\"ran\"}\n{\"e\":\"node_error\",\"node\":\"c\",\"message\":\"Refused\"}\nnot json\n").unwrap();
         let (ran, errs, _) = read_events(&std::fs::read_to_string(&f).unwrap());
-        assert_eq!(ran.get("a"), Some(&2));
+        // (a sampled run carries the runs before it that weren't written)
+        assert_eq!(ran.get("a"), Some(&7));
         assert!(ran.contains_key("b"), "an event node shows by its exit");
         assert_eq!(errs, vec![("c".to_string(), "Refused".to_string())]);
         let _ = std::fs::remove_dir_all(&d);

@@ -150,6 +150,40 @@ fn lit(c: &Column, v: &Value) -> String {
     }
 }
 
+/// Get Row's search (StudioPerfAudit #6): the row with this key, or -1. The tables never change,
+/// so the last key's row is kept (a Get Row with two pins wired searches once); number keys in
+/// order (as the editor makes them) are found by halving, text keys of a bigger table through a
+/// Trie made at the first search; otherwise row by row. The first row with the key wins, as
+/// before.
+fn find_fn(t: usize, k: usize, kc: &Column, tb: &DataTable) -> String {
+    let n = tb.rows.len();
+    let arr = format!("g_lsgDt{t}_{k}");
+    if kc.is_text() {
+        let search = if n >= 16 {
+            format!("\tstatic Trie:idx\n\tif (!idx)\n\t{{\n\t\tidx = TrieCreate()\n\t\tfor (new r = 0; r < LSG_DT{t}_N; r++)\n\t\t\tTrieSetCell(idx, {arr}[r], r, false)\n\t}}\n\tnew v\n\tif (TrieGetCell(idx, key, v))\n\t\trow = float(v)\n")
+        } else {
+            format!("\tfor (new r = 0; r < LSG_DT{t}_N; r++)\n\t\tif (equal({arr}[r], key))\n\t\t{{\n\t\t\trow = float(r)\n\t\t\tbreak\n\t\t}}\n")
+        };
+        return format!("stock Float:lsg_dt{t}_find(const key[])\n{{\n\t// (the same key as last time: the same row)\n\tstatic bool:had, last[{}], Float:lastRow\n\tif (had && equal(key, last))\n\t\treturn lastRow\n\tnew Float:row = -1.0\n{search}\thad = true\n\tcopy(last, charsmax(last), key)\n\tlastRow = row\n\treturn row\n}}\n", MAX_TEXT + 1);
+    }
+    let (arg, ty) = if kc.ty == "number" { ("Float:key", "Float:") } else { ("key", "") };
+    let num = |r: &Vec<Value>| -> f64 {
+        match kc.ty.as_str() {
+            "number" => r[k].as_f64().unwrap_or(0.0),
+            "bool" => f64::from(u8::from(r[k].as_bool().unwrap_or(false))),
+            _ => r[k].as_u64().unwrap_or(0) as f64,
+        }
+    };
+    let vals: Vec<f64> = tb.rows.iter().map(num).collect();
+    let ordered = n >= 8 && vals.windows(2).all(|w| w[0] < w[1]);
+    let search = if ordered {
+        format!("\tnew lo = 0, hi = LSG_DT{t}_N - 1\n\twhile (lo <= hi)\n\t{{\n\t\tnew mid = (lo + hi) / 2\n\t\tif ({arr}[mid] < key)\n\t\t\tlo = mid + 1\n\t\telse if ({arr}[mid] > key)\n\t\t\thi = mid - 1\n\t\telse\n\t\t{{\n\t\t\trow = float(mid)\n\t\t\tbreak\n\t\t}}\n\t}}\n")
+    } else {
+        format!("\tfor (new r = 0; r < LSG_DT{t}_N; r++)\n\t\tif ({arr}[r] == key)\n\t\t{{\n\t\t\trow = float(r)\n\t\t\tbreak\n\t\t}}\n")
+    };
+    format!("stock Float:lsg_dt{t}_find({arg})\n{{\n\t// (the same key as last time: the same row)\n\tstatic bool:had, {ty}last, Float:lastRow\n\tif (had && key == last)\n\t\treturn lastRow\n\tnew Float:row = -1.0\n{search}\thad = true\n\tlast = key\n\tlastRow = row\n\treturn row\n}}\n")
+}
+
 /// The tables as constant arrays, with an accessor per column (a row out of range gives 0,
 /// no, or empty text) and a key search per table. `used` says which tables any node reads.
 pub fn pawn(tables: &[DataTable], used: &dyn Fn(&str) -> bool) -> String {
@@ -177,14 +211,7 @@ pub fn pawn(tables: &[DataTable], used: &dyn Fn(&str) -> bool) -> String {
         }
         // the key search: the row (as a number) with this key, or -1
         if let Some((k, kc)) = tb.key_col() {
-            let (arg, test) = if kc.is_text() {
-                ("const key[]".to_string(), format!("equal(g_lsgDt{t}_{k}[r], key)"))
-            } else if kc.ty == "number" {
-                ("Float:key".to_string(), format!("g_lsgDt{t}_{k}[r] == key"))
-            } else {
-                ("key".to_string(), format!("g_lsgDt{t}_{k}[r] == key"))
-            };
-            o.push_str(&format!("stock Float:lsg_dt{t}_find({arg})\n{{\n\tfor (new r = 0; r < LSG_DT{t}_N; r++)\n\t\tif ({test})\n\t\t\treturn float(r)\n\treturn -1.0\n}}\n"));
+            o.push_str(&find_fn(t, k, kc, tb));
             // the keys, as an array
             let push = if kc.is_text() { format!("ArrayPushString((Array:a), g_lsgDt{t}_{k}[r])") } else { format!("ArrayPushCell((Array:a), g_lsgDt{t}_{k}[r])") };
             o.push_str(&format!("stock lsg_dt{t}_keys()\n{{\n\tnew a = lsg_atmp()\n\tfor (new r = 0; r < LSG_DT{t}_N; r++)\n\t\t{push}\n\treturn a\n}}\n"));
@@ -332,6 +359,33 @@ mod graph_tests {
         graph::from_value(v).unwrap()
     }
 
+    /// The same graph with 20 rows in each table: Get Row halves the ordered number keys and
+    /// goes through a Trie for the text ones.
+    pub fn big_table_graph() -> graph::Graph {
+        let mut g = table_graph();
+        g.data_tables[0].rows = (0..20).map(|i| vec![json!(i), json!("ak47"), json!(30 + i), json!(i % 2 == 0)]).collect();
+        g.data_tables[1].rows = (0..20).map(|i| vec![json!(format!("de_map{i}")), json!(format!("Map {i}"))]).collect();
+        g
+    }
+
+    /// Get Row's search (StudioPerfAudit #6): the last key's row kept; ordered number keys by
+    /// halving; a bigger text-keyed table through a Trie; small or unordered ones row by row.
+    #[test]
+    fn get_row_search_by_kind() {
+        let small = super::pawn(&table_graph().data_tables, &|_| true);
+        assert!(small.contains("static bool:had, Float:last, Float:lastRow") && small.contains("if (had && key == last)"), "{small}");
+        assert!(small.contains("if (g_lsgDt0_0[r] == key)") && !small.contains("while (lo <= hi)"), "3 rows: row by row");
+        assert!(small.contains("if (had && equal(key, last))") && !small.contains("TrieCreate"), "1 text row: row by row");
+        let big = super::pawn(&big_table_graph().data_tables, &|_| true);
+        assert!(big.contains("while (lo <= hi)") && big.contains("if (g_lsgDt0_0[mid] < key)"), "{big}");
+        assert!(big.contains("TrieSetCell(idx, g_lsgDt1_0[r], r, false)") && big.contains("TrieGetCell(idx, key, v)"), "{big}");
+        // not in order: row by row (the first row with the key wins, as always)
+        let mut g = big_table_graph();
+        g.data_tables[0].rows.swap(3, 4);
+        let unordered = super::pawn(&g.data_tables, &|_| true);
+        assert!(!unordered.contains("while (lo <= hi)") && unordered.contains("if (g_lsgDt0_0[r] == key)"));
+    }
+
     #[test]
     fn table_nodes_check_clean_and_generate() {
         let g = table_graph();
@@ -365,13 +419,15 @@ mod graph_tests {
         let install = crate::steam::Install { hl: PathBuf::new(), kind: "crossover".into(), bottle: Some("Steam".into()), games: vec![], dedicated: false };
         let work = std::env::temp_dir().join(format!("ls-studio-tables-{}", std::process::id()));
         write_includes(&work.join("include")).unwrap();
-        let g = table_graph();
-        for debug in [false, true] {
-            let file = format!("studio_tables{}.sma", if debug { "_dbg" } else { "" });
-            std::fs::write(work.join(&file), gen::generate(&g, debug).source).unwrap();
-            let (ok, output) = run_amxxpc(&install, &scripting, &work.join(&file), &work.join("include"), &work.join(file.replace(".sma", ".amxx"))).unwrap();
-            assert!(ok, "{file}:\n{output}");
-            assert!(parse_compiler(&output, &file).is_empty(), "{file} has warnings:\n{output}");
+        // (the big one: Get Row by halving and through a Trie)
+        for (size, g) in [("", table_graph()), ("_big", big_table_graph())] {
+            for debug in [false, true] {
+                let file = format!("studio_tables{size}{}.sma", if debug { "_dbg" } else { "" });
+                std::fs::write(work.join(&file), gen::generate(&g, debug).source).unwrap();
+                let (ok, output) = run_amxxpc(&install, &scripting, &work.join(&file), &work.join("include"), &work.join(file.replace(".sma", ".amxx"))).unwrap();
+                assert!(ok, "{file}:\n{output}");
+                assert!(parse_compiler(&output, &file).is_empty(), "{file} has warnings:\n{output}");
+            }
         }
         let _ = std::fs::remove_dir_all(&work);
     }

@@ -68,7 +68,7 @@ new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, fal
 new const g_lsdBool[][] = { "false", "true" }
 new const g_lsdTeams[][] = { "none", "T", "CT", "spectator" }
 #define LSD_TASK 9475100
-new g_lsdEvents[160], g_lsdCmd[160]
+new g_lsdEvents[160], g_lsdCmd[160], g_lsdSeen[160]
 new g_lsdSeq, g_lsdTick, g_lsdRound
 new g_lsdPhase[8] = "freeze"
 new g_lsdIn[600]
@@ -97,6 +97,7 @@ lsd_init()
 		mkdir(dir)
 	formatex(g_lsdEvents, charsmax(g_lsdEvents), "%s/%s.events", dir, LSG_MODE)
 	formatex(g_lsdCmd, charsmax(g_lsdCmd), "%s/%s.cmd", dir, LSG_MODE)
+	formatex(g_lsdSeen, charsmax(g_lsdSeen), "%s/%s.seen", dir, LSG_MODE)
 	new f = fopen(g_lsdEvents, "wt")
 	if (f)
 		fclose(f)
@@ -181,6 +182,8 @@ public lsd_round_end()
 // event (PerfAudit #5: 181 us an event)
 #define LSD_BUF 24000
 new g_lsdBuf[LSD_BUF], g_lsdBufLen
+// how big the events file is now (it starts empty at each map)
+new g_lsdBytes
 
 stock lsd_flush()
 {
@@ -191,9 +194,84 @@ stock lsd_flush()
 	{
 		fputs(f, g_lsdBuf)
 		fclose(f)
+		g_lsdBytes += g_lsdBufLen
 	}
 	g_lsdBuf[0] = 0
 	g_lsdBufLen = 0
+}
+
+// ---- who's watching, and how much is written (StudioPerfAudit #5) ----
+// The app writes <mode>.seen (how far it has read) each time the page reads. Not changed for
+// 15 s: nobody is watching, so nodes' runs aren't written (breakpoints still pause). With no
+// .seen at all (a Test run, or before the page's first read) everything is written.
+#define LSD_AWAY 15
+// the file starts over once the reader has had all of it past 8 MB, or regardless at 32 MB
+// (the reader sees it shrink and reads from the top: a "reset")
+#define LSD_CAP 8000000
+#define LSD_HARD 32000000
+// each node writes at most this many runs a quarter second; the rest are counted, and the
+// next run written carries the count ("skipped"), so totals stay right
+#define LSD_PER 8
+new bool:g_lsdAway, g_lsdRead = -1
+new Float:g_lsdWin[LSD_N], g_lsdWinN[LSD_N], g_lsdSkipped[LSD_N], bool:g_lsdMute[LSD_N]
+
+stock lsd_watchers()
+{
+	if (!file_exists(g_lsdSeen))
+	{
+		g_lsdAway = false
+		g_lsdRead = -1
+		return
+	}
+	g_lsdAway = get_systime() - GetFileTime(g_lsdSeen, FileTime_LastChange) > LSD_AWAY
+	new f = fopen(g_lsdSeen, "rt"), line[24]
+	if (f)
+	{
+		fgets(f, line, charsmax(line))
+		fclose(f)
+		g_lsdRead = str_to_num(line)
+	}
+}
+
+stock lsd_rotate()
+{
+	if (g_lsdBytes > LSD_HARD || (g_lsdBytes > LSD_CAP && g_lsdRead >= g_lsdBytes))
+	{
+		new f = fopen(g_lsdEvents, "wt")
+		if (f)
+			fclose(f)
+		g_lsdBytes = 0
+	}
+}
+
+// Is node n's run to be written? (its inputs are only worked out into JSON when it is)
+stock bool:lsd_want(n)
+{
+	if (g_lsdBp[n])
+	{
+		g_lsdMute[n] = false
+		return true
+	}
+	if (g_lsdAway)
+	{
+		g_lsdSkipped[n]++
+		g_lsdMute[n] = true
+		return false
+	}
+	new Float:now = get_gametime()
+	if (now - g_lsdWin[n] >= 0.25)
+	{
+		g_lsdWin[n] = now
+		g_lsdWinN[n] = 0
+	}
+	if (++g_lsdWinN[n] > LSD_PER)
+	{
+		g_lsdSkipped[n]++
+		g_lsdMute[n] = true
+		return false
+	}
+	g_lsdMute[n] = false
+	return true
 }
 
 stock lsd_emitf(const fmt[], any:...)
@@ -373,18 +451,29 @@ stock bool:lsd_enter(n, const ctx[])
 		lsd_freeze()
 		return true
 	}
-	lsd_emitf("^"e^":^"node_enter^",^"node^":^"%s^",^"inputs^":{%s}", g_lsdIds[n], g_lsdIn)
+	if (g_lsdMute[n])
+		return false
+	if (g_lsdSkipped[n])
+	{
+		lsd_emitf("^"e^":^"node_enter^",^"node^":^"%s^",^"skipped^":%d,^"inputs^":{%s}", g_lsdIds[n], g_lsdSkipped[n], g_lsdIn)
+		g_lsdSkipped[n] = 0
+	}
+	else
+		lsd_emitf("^"e^":^"node_enter^",^"node^":^"%s^",^"inputs^":{%s}", g_lsdIds[n], g_lsdIn)
 	return false
 }
 
 stock lsd_exit(n, const result[])
 {
-	lsd_emitf("^"e^":^"node_exit^",^"node^":^"%s^",^"result^":^"%s^"", g_lsdIds[n], result)
+	if (!g_lsdMute[n])
+		lsd_emitf("^"e^":^"node_exit^",^"node^":^"%s^",^"result^":^"%s^"", g_lsdIds[n], result)
 }
 
 stock lsd_error(n, const msg[])
 {
-	lsd_emitf("^"e^":^"node_error^",^"node^":^"%s^",^"message^":^"%s^"", g_lsdIds[n], msg)
+	// (a sampled run's error still shows, unless nobody is watching)
+	if (!g_lsdAway)
+		lsd_emitf("^"e^":^"node_error^",^"node^":^"%s^",^"message^":^"%s^"", g_lsdIds[n], msg)
 }
 
 stock lsd_time_left()
@@ -569,12 +658,19 @@ stock lsd_resume()
 
 public lsd_poll()
 {
+	// (who's watching and how far they've read: once a second; the old part of the file goes
+	// before this flush, so nothing unread is lost)
+	if (++g_lsdTick % 4 == 1)
+	{
+		lsd_watchers()
+		lsd_rotate()
+	}
 	lsd_flush()
 	if (g_lsdPaused >= 0)
 	{
 		for (new id = 1; id <= MaxClients; id++)
 			lsd_hold_player(id)
-		if (++g_lsdTick % 4 == 0)
+		if (g_lsdTick % 4 == 0)
 			lsd_vars()
 	}
 	else if (g_lsdHolding && lsd_time_left() <= 0)
@@ -3964,7 +4060,10 @@ public lsg_on_creature_killed(ent, killer)
 // Round Started (rs)
 lsg_n0(ctx[])
 {
+	if (lsd_want(0))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(0, ctx))
 		return
 	lsd_exit(0, "ran")
@@ -3975,8 +4074,11 @@ lsg_n0(ctx[])
 lsg_n1(ctx[])
 {
 	new Float:lsi2 = ((g_v1) + (1.0))
+	if (lsd_want(1))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi2)
+	}
 	if (lsd_enter(1, ctx))
 		return
 	g_v1 = lsi2
@@ -3987,7 +4089,10 @@ lsg_n1(ctx[])
 // Countdown (rs_cd)
 lsg_n2(ctx[])
 {
+	if (lsd_want(2))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(2, ctx))
 		return
 	remove_task(LSG_TASK + 2)
@@ -4025,7 +4130,10 @@ public lsg_t2(const data[], task)
 // Show Message (rs_msg)
 lsg_n3(ctx[])
 {
+	if (lsd_want(3))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(3, ctx))
 		return
 	ls_announce(0, 2.0, "%s", "Go!")
@@ -4036,8 +4144,11 @@ lsg_n3(ctx[])
 lsg_n4(ctx[])
 {
 	new Float:lsi0 = 10.0
+	if (lsd_want(4))
+	{
 	lsd_begin()
 	lsd_in_number("Every (s)", lsi0)
+	}
 	if (lsd_enter(4, ctx))
 		return
 	remove_task(LSG_TASK + 4)
@@ -4070,8 +4181,11 @@ public lsg_t4(const data[], task)
 lsg_n5(ctx[])
 {
 	new Float:lsi1 = float(ls_count_alive(CsTeams:(0)))
+	if (lsd_want(5))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi1)
+	}
 	if (lsd_enter(5, ctx))
 		return
 	ls_hud(0, LsHud:2, 5.0, "%s %d", "Alive:", floatround(lsi1))
@@ -4082,8 +4196,11 @@ lsg_n5(ctx[])
 lsg_n6(ctx[])
 {
 	new Float:lsi0 = 5.0
+	if (lsd_want(6))
+	{
 	lsd_begin()
 	lsd_in_number("Seconds", lsi0)
+	}
 	if (lsd_enter(6, ctx))
 		return
 	set_task(floatmax(lsi0, 0.1), "lsg_t6", LSG_TASK + 6, ctx, LSG_CTX)
@@ -4109,8 +4226,11 @@ public lsg_t6(const data[], task)
 lsg_n7(ctx[])
 {
 	new Float:lsi0 = 0.0
+	if (lsd_want(7))
+	{
 	lsd_begin()
 	lsd_in_number("Wave", lsi0)
+	}
 	if (lsd_enter(7, ctx))
 		return
 	if (!ls_components_running())
@@ -4126,7 +4246,10 @@ lsg_n7(ctx[])
 // Stop Waves (rs_wstop)
 lsg_n8(ctx[])
 {
+	if (lsd_want(8))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(8, ctx))
 		return
 	if (!ls_components_running())
@@ -4142,7 +4265,10 @@ lsg_n8(ctx[])
 // Reset Components (rs_reset)
 lsg_n9(ctx[])
 {
+	if (lsd_want(9))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(9, ctx))
 		return
 	if (!ls_components_running())
@@ -4157,7 +4283,10 @@ lsg_n9(ctx[])
 // Player Killed (pk)
 lsg_n10(ctx[])
 {
+	if (lsd_want(10))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(10, ctx))
 		return
 	lsd_exit(10, "ran")
@@ -4168,8 +4297,11 @@ lsg_n10(ctx[])
 lsg_n11(ctx[])
 {
 	new lsi0 = ctx[2]
+	if (lsd_want(11))
+	{
 	lsd_begin()
 	lsd_in_bool("Condition", lsi0)
+	}
 	if (lsd_enter(11, ctx))
 		return
 	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
@@ -4185,9 +4317,12 @@ lsg_n12(ctx[])
 {
 	new lsi0 = ctx[1]
 	new Float:lsi2 = 2.0
+	if (lsd_want(12))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Amount", lsi2)
+	}
 	if (lsd_enter(12, ctx))
 		return
 	g_pv0[lsg_slot(lsi0)] += lsi2
@@ -4200,9 +4335,12 @@ lsg_n13(ctx[])
 {
 	new lsi0 = ctx[1]
 	new Float:lsi2 = lsg_random(1.0, 3.0, 0)
+	if (lsd_want(13))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Amount", lsi2)
+	}
 	if (lsd_enter(13, ctx))
 		return
 	g_pv0[lsg_slot(lsi0)] += lsi2
@@ -4214,9 +4352,12 @@ lsg_n14(ctx[])
 {
 	new lsi0 = ctx[1]
 	new lsi1 = 2
+	if (lsd_want(14))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_team("Team", lsi1)
+	}
 	if (lsd_enter(14, ctx))
 		return
 	new ok = ((lsg_team(lsi0) == lsi1) ? 1 : 0)
@@ -4232,9 +4373,12 @@ lsg_n15(ctx[])
 {
 	new lsi0 = ctx[1]
 	new Float:lsi2 = 60.0
+	if (lsd_want(15))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Spare bullets", lsi2)
+	}
 	if (lsd_enter(15, ctx))
 		return
 	if (ls_give_weapon(lsi0, "m4a1", 60))
@@ -4249,9 +4393,12 @@ lsg_n16(ctx[])
 {
 	new lsi0 = ctx[1]
 	new Float:lsi1 = ((lsg_health(ctx[1])) + (10.0))
+	if (lsd_want(16))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Health", lsi1)
+	}
 	if (lsd_enter(16, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -4269,9 +4416,12 @@ lsg_n17(ctx[])
 	new lsi0 = ctx[1]
 	new lsi1[128]
 	copy(lsi1, 127, lsg_name(ctx[0]))
+	if (lsd_want(17))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_text("Value", lsi1)
+	}
 	if (lsd_enter(17, ctx))
 		return
 	ls_hud(lsi0, LsHud:3, 4.0, "%s %s", "You got", lsi1)
@@ -4281,7 +4431,10 @@ lsg_n17(ctx[])
 // Player Spawned (ps)
 lsg_n18(ctx[])
 {
+	if (lsd_want(18))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(18, ctx))
 		return
 	lsd_exit(18, "ran")
@@ -4292,8 +4445,11 @@ lsg_n18(ctx[])
 lsg_n19(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(19))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(19, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -4311,9 +4467,12 @@ lsg_n20(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 50.0
+	if (lsd_want(20))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Armor", lsi1)
+	}
 	if (lsd_enter(20, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -4331,9 +4490,12 @@ lsg_n21(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 300.0
+	if (lsd_want(21))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Speed", lsi1)
+	}
 	if (lsd_enter(21, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -4351,9 +4513,12 @@ lsg_n22(ctx[])
 {
 	new lsi0 = ctx[0]
 	new lsi1 = 1
+	if (lsd_want(22))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_team("Team", lsi1)
+	}
 	if (lsd_enter(22, ctx))
 		return
 	if (lsi0 < 1 || lsi0 > MaxClients || !is_user_connected(lsi0))
@@ -4370,8 +4535,11 @@ lsg_n22(ctx[])
 lsg_n23(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(23))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(23, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -4388,9 +4556,12 @@ lsg_n24(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi2 = 0.0
+	if (lsd_want(24))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Value", lsi2)
+	}
 	if (lsd_enter(24, ctx))
 		return
 	g_pv0[lsg_slot(lsi0)] = lsi2
@@ -4400,7 +4571,10 @@ lsg_n24(ctx[])
 // Player Joined (pj)
 lsg_n25(ctx[])
 {
+	if (lsd_want(25))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(25, ctx))
 		return
 	lsd_exit(25, "ran")
@@ -4412,9 +4586,12 @@ lsg_n26(ctx[])
 {
 	new lsi0 = ctx[0]
 	new lsi1 = lsg_is_bot(ctx[0])
+	if (lsd_want(26))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_bool("Value", lsi1)
+	}
 	if (lsd_enter(26, ctx))
 		return
 	ls_hud(lsi0, LsHud:1, 4.0, "%s %s", "Bot:", g_lsgYesNo[(lsi1) ? 1 : 0])
@@ -4426,8 +4603,11 @@ lsg_n26(ctx[])
 lsg_n27(ctx[])
 {
 	new lsi0 = (ls_alive(ctx[0]) ? 1 : 0)
+	if (lsd_want(27))
+	{
 	lsd_begin()
 	lsd_in_bool("Condition", lsi0)
+	}
 	if (lsd_enter(27, ctx))
 		return
 	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
@@ -4437,7 +4617,10 @@ lsg_n27(ctx[])
 // Player Left (pl)
 lsg_n28(ctx[])
 {
+	if (lsd_want(28))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(28, ctx))
 		return
 	lsd_exit(28, "ran")
@@ -4449,8 +4632,11 @@ lsg_n29(ctx[])
 {
 	new lsi2[128]
 	copy(lsi2, 127, "someone left")
+	if (lsd_want(29))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi2)
+	}
 	if (lsd_enter(29, ctx))
 		return
 	copy(g_v3, 63, lsi2)
@@ -4460,7 +4646,10 @@ lsg_n29(ctx[])
 // Bomb Planted (bp)
 lsg_n30(ctx[])
 {
+	if (lsd_want(30))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(30, ctx))
 		return
 	lsd_exit(30, "ran")
@@ -4471,8 +4660,11 @@ lsg_n30(ctx[])
 lsg_n31(ctx[])
 {
 	new lsi1 = lsg_team(ctx[0])
+	if (lsd_want(31))
+	{
 	lsd_begin()
 	lsd_in_team("Value", lsi1)
+	}
 	if (lsd_enter(31, ctx))
 		return
 	ls_hud(0, LsHud:3, 4.0, "%s %s", "Planted by", g_lsgTeamName[clamp(lsi1, 0, 3)])
@@ -4482,7 +4674,10 @@ lsg_n31(ctx[])
 // Bomb Defused (bd)
 lsg_n32(ctx[])
 {
+	if (lsd_want(32))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(32, ctx))
 		return
 	lsd_exit(32, "ran")
@@ -4493,8 +4688,11 @@ lsg_n32(ctx[])
 lsg_n33(ctx[])
 {
 	new lsi0 = 2
+	if (lsd_want(33))
+	{
 	lsd_begin()
 	lsd_in_team("Winner", lsi0)
+	}
 	if (lsd_enter(33, ctx))
 		return
 	lsg_end_round(lsi0)
@@ -4504,7 +4702,10 @@ lsg_n33(ctx[])
 // Bomb Exploded (bx)
 lsg_n34(ctx[])
 {
+	if (lsd_want(34))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(34, ctx))
 		return
 	lsd_exit(34, "ran")
@@ -4515,8 +4716,11 @@ lsg_n34(ctx[])
 lsg_n35(ctx[])
 {
 	new lsi0 = 1
+	if (lsd_want(35))
+	{
 	lsd_begin()
 	lsd_in_team("Winner", lsi0)
+	}
 	if (lsd_enter(35, ctx))
 		return
 	lsg_end_round(lsi0)
@@ -4526,7 +4730,10 @@ lsg_n35(ctx[])
 // Round Ended (re)
 lsg_n36(ctx[])
 {
+	if (lsd_want(36))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(36, ctx))
 		return
 	lsd_exit(36, "ran")
@@ -4537,8 +4744,11 @@ lsg_n36(ctx[])
 lsg_n37(ctx[])
 {
 	new lsi0 = ((((float(ls_count_alive(CsTeams:(ctx[0])))) > (0.0) ? 1 : 0)) && (((g_v2) ? 0 : 1)) ? 1 : 0)
+	if (lsd_want(37))
+	{
 	lsd_begin()
 	lsd_in_bool("Condition", lsi0)
+	}
 	if (lsd_enter(37, ctx))
 		return
 	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
@@ -4553,8 +4763,11 @@ lsg_n37(ctx[])
 lsg_n38(ctx[])
 {
 	new lsi2 = 1
+	if (lsd_want(38))
+	{
 	lsd_begin()
 	lsd_in_bool("Value", lsi2)
+	}
 	if (lsd_enter(38, ctx))
 		return
 	g_v2 = ((lsi2) ? 1 : 0)
@@ -4564,7 +4777,10 @@ lsg_n38(ctx[])
 // Stop Timers (re_stop)
 lsg_n39(ctx[])
 {
+	if (lsd_want(39))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(39, ctx))
 		return
 	lsg_stop_timers()
@@ -4574,7 +4790,10 @@ lsg_n39(ctx[])
 // Player Used (pu)
 lsg_n40(ctx[])
 {
+	if (lsd_want(40))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(40, ctx))
 		return
 	lsd_exit(40, "ran")
@@ -4585,8 +4804,11 @@ lsg_n40(ctx[])
 lsg_n41(ctx[])
 {
 	new lsi0 = ctx[1]
+	if (lsd_want(41))
+	{
 	lsd_begin()
 	lsd_in_entity("Door", lsi0)
+	}
 	if (lsd_enter(41, ctx))
 		return
 	if (!ls_components_running())
@@ -4603,8 +4825,11 @@ lsg_n41(ctx[])
 lsg_n42(ctx[])
 {
 	new lsi0 = lsg_find("trap1")
+	if (lsd_want(42))
+	{
 	lsd_begin()
 	lsd_in_entity("Trap", lsi0)
+	}
 	if (lsd_enter(42, ctx))
 		return
 	if (!ls_components_running())
@@ -4619,7 +4844,10 @@ lsg_n42(ctx[])
 // Player Touched (pt)
 lsg_n43(ctx[])
 {
+	if (lsd_want(43))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(43, ctx))
 		return
 	lsd_exit(43, "ran")
@@ -4631,9 +4859,12 @@ lsg_n44(ctx[])
 {
 	new lsi0 = ctx[1]
 	new lsi1 = ctx[0]
+	if (lsd_want(44))
+	{
 	lsd_begin()
 	lsd_in_entity("Container", lsi0)
 	lsd_in_player("Player", lsi1)
+	}
 	if (lsd_enter(44, ctx))
 		return
 	if (!ls_components_running())
@@ -4648,7 +4879,10 @@ lsg_n44(ctx[])
 // Point Captured (cc)
 lsg_n45(ctx[])
 {
+	if (lsd_want(45))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(45, ctx))
 		return
 	lsd_exit(45, "ran")
@@ -4660,9 +4894,12 @@ lsg_n46(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 20.0
+	if (lsd_want(46))
+	{
 	lsd_begin()
 	lsd_in_entity("Point", lsi0)
 	lsd_in_number("Seconds", lsi1)
+	}
 	if (lsd_enter(46, ctx))
 		return
 	if (!ls_components_running())
@@ -4679,8 +4916,11 @@ lsg_n46(ctx[])
 lsg_n47(ctx[])
 {
 	new lsi1 = ctx[1]
+	if (lsd_want(47))
+	{
 	lsd_begin()
 	lsd_in_team("Value", lsi1)
+	}
 	if (lsd_enter(47, ctx))
 		return
 	ls_hud(0, LsHud:0, 4.0, "%s %s", "Taken by", g_lsgTeamName[clamp(lsi1, 0, 3)])
@@ -4690,7 +4930,10 @@ lsg_n47(ctx[])
 // Point Lost (cl)
 lsg_n48(ctx[])
 {
+	if (lsd_want(48))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(48, ctx))
 		return
 	lsd_exit(48, "ran")
@@ -4702,9 +4945,12 @@ lsg_n49(ctx[])
 {
 	new lsi0 = lsg_find("ex1")
 	new lsi1 = 1
+	if (lsd_want(49))
+	{
 	lsd_begin()
 	lsd_in_entity("Point", lsi0)
 	lsd_in_bool("Open", lsi1)
+	}
 	if (lsd_enter(49, ctx))
 		return
 	if (!ls_components_running())
@@ -4719,7 +4965,10 @@ lsg_n49(ctx[])
 // Zone Stage (zs)
 lsg_n50(ctx[])
 {
+	if (lsd_want(50))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(50, ctx))
 		return
 	lsd_exit(50, "ran")
@@ -4731,9 +4980,12 @@ lsg_n51(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi2 = ((Float:ctx[1]) * (100.0))
+	if (lsd_want(51))
+	{
 	lsd_begin()
 	lsd_in_entity("Zone", lsi0)
 	lsd_in_number("Radius", lsi2)
+	}
 	if (lsd_enter(51, ctx))
 		return
 	new Float:o[3], zz = !ls_components_running() ? 0 : lsg_zone_of(lsi0)
@@ -4753,7 +5005,10 @@ lsg_n51(ctx[])
 // Zone Hurt Player (zt)
 lsg_n52(ctx[])
 {
+	if (lsd_want(52))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(52, ctx))
 		return
 	lsd_exit(52, "ran")
@@ -4765,9 +5020,12 @@ lsg_n53(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi2 = 900.0
+	if (lsd_want(53))
+	{
 	lsd_begin()
 	lsd_in_entity("Zone", lsi0)
 	lsd_in_number("Radius", lsi2)
+	}
 	if (lsd_enter(53, ctx))
 		return
 	new Float:o[3], zz = !ls_components_running() ? 0 : lsg_zone_of(lsi0)
@@ -4790,9 +5048,12 @@ lsg_n54(ctx[])
 {
 	new lsi0 = ctx[1]
 	new Float:lsi1 = Float:ctx[2]
+	if (lsd_want(54))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Value", lsi1)
+	}
 	if (lsd_enter(54, ctx))
 		return
 	ls_hud(lsi0, LsHud:3, 4.0, "%s %d", "Ouch", floatround(lsi1))
@@ -4802,7 +5063,10 @@ lsg_n54(ctx[])
 // Player Extracted (ex)
 lsg_n55(ctx[])
 {
+	if (lsd_want(55))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(55, ctx))
 		return
 	lsd_exit(55, "ran")
@@ -4814,9 +5078,12 @@ lsg_n56(ctx[])
 {
 	new lsi0 = ctx[1]
 	new Float:lsi2 = 5.0
+	if (lsd_want(56))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Amount", lsi2)
+	}
 	if (lsd_enter(56, ctx))
 		return
 	g_pv0[lsg_slot(lsi0)] += lsi2
@@ -4826,7 +5093,10 @@ lsg_n56(ctx[])
 // Wave Started (ws)
 lsg_n57(ctx[])
 {
+	if (lsd_want(57))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(57, ctx))
 		return
 	lsd_exit(57, "ran")
@@ -4837,8 +5107,11 @@ lsg_n57(ctx[])
 lsg_n58(ctx[])
 {
 	new Float:lsi1 = Float:ctx[0]
+	if (lsd_want(58))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi1)
+	}
 	if (lsd_enter(58, ctx))
 		return
 	ls_hud(0, LsHud:0, 4.0, "%s %d", "Wave", floatround(lsi1))
@@ -4848,7 +5121,10 @@ lsg_n58(ctx[])
 // Wave Spawned One (wp)
 lsg_n59(ctx[])
 {
+	if (lsd_want(59))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(59, ctx))
 		return
 	lsd_exit(59, "ran")
@@ -4859,8 +5135,11 @@ lsg_n59(ctx[])
 lsg_n60(ctx[])
 {
 	new lsi1 = ctx[0]
+	if (lsd_want(60))
+	{
 	lsd_begin()
 	lsd_in_entity("Value", lsi1)
+	}
 	if (lsd_enter(60, ctx))
 		return
 	ls_hud(0, LsHud:2, 4.0, "%s %d", "In:", lsi1)
@@ -4870,7 +5149,10 @@ lsg_n60(ctx[])
 // Wave Cleared (wc)
 lsg_n61(ctx[])
 {
+	if (lsd_want(61))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(61, ctx))
 		return
 	lsd_exit(61, "ran")
@@ -4881,8 +5163,11 @@ lsg_n61(ctx[])
 lsg_n62(ctx[])
 {
 	new Float:lsi0 = ((Float:ctx[0]) + (1.0))
+	if (lsd_want(62))
+	{
 	lsd_begin()
 	lsd_in_number("Wave", lsi0)
+	}
 	if (lsd_enter(62, ctx))
 		return
 	if (!ls_components_running())
@@ -4897,7 +5182,10 @@ lsg_n62(ctx[])
 // Crate Opened (lo)
 lsg_n63(ctx[])
 {
+	if (lsd_want(63))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(63, ctx))
 		return
 	lsd_exit(63, "ran")
@@ -4908,8 +5196,11 @@ lsg_n63(ctx[])
 lsg_n64(ctx[])
 {
 	new lsi0 = ctx[1]
+	if (lsd_want(64))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(64, ctx))
 		return
 	ls_hud(lsi0, LsHud:1, 4.0, "%s", "Looted")
@@ -4919,7 +5210,10 @@ lsg_n64(ctx[])
 // Checkpoint Reached (ck)
 lsg_n65(ctx[])
 {
+	if (lsd_want(65))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(65, ctx))
 		return
 	lsd_exit(65, "ran")
@@ -4930,8 +5224,11 @@ lsg_n65(ctx[])
 lsg_n66(ctx[])
 {
 	new Float:lsi2 = Float:ctx[2]
+	if (lsd_want(66))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi2)
+	}
 	if (lsd_enter(66, ctx))
 		return
 	g_v1 = lsi2
@@ -4941,7 +5238,10 @@ lsg_n66(ctx[])
 // Barricade Broken (bb)
 lsg_n67(ctx[])
 {
+	if (lsd_want(67))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(67, ctx))
 		return
 	lsd_exit(67, "ran")
@@ -4951,7 +5251,10 @@ lsg_n67(ctx[])
 // Show Message (bb_msg)
 lsg_n68(ctx[])
 {
+	if (lsd_want(68))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(68, ctx))
 		return
 	ls_announce(0, 3.0, "%s", "The barricade is down!")
@@ -4961,7 +5264,10 @@ lsg_n68(ctx[])
 // Meeting Ended (me)
 lsg_n69(ctx[])
 {
+	if (lsd_want(69))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(69, ctx))
 		return
 	lsd_exit(69, "ran")
@@ -4972,8 +5278,11 @@ lsg_n69(ctx[])
 lsg_n70(ctx[])
 {
 	new lsi1 = ctx[1]
+	if (lsd_want(70))
+	{
 	lsd_begin()
 	lsd_in_player("Value", lsi1)
+	}
 	if (lsd_enter(70, ctx))
 		return
 	ls_hud(0, LsHud:3, 4.0, "%s %s", "Out:", lsg_name(lsi1))
@@ -4983,7 +5292,10 @@ lsg_n70(ctx[])
 // Creature Killed (ck2)
 lsg_n71(ctx[])
 {
+	if (lsd_want(71))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(71, ctx))
 		return
 	lsd_exit(71, "ran")
@@ -4995,8 +5307,11 @@ lsg_n72(ctx[])
 {
 	new lsi2[128]
 	copy(lsi2, 127, g_lsgTxt[0])
+	if (lsd_want(72))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi2)
+	}
 	if (lsd_enter(72, ctx))
 		return
 	copy(g_v3, 63, lsi2)
@@ -5007,7 +5322,10 @@ lsg_n72(ctx[])
 // Create Component (ck2_make)
 lsg_n73(ctx[])
 {
+	if (lsd_want(73))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(73, ctx))
 		return
 	new Float:o[3]
@@ -5031,9 +5349,12 @@ lsg_n74(ctx[])
 {
 	new Float:lsi1 = 0.0
 	new Float:lsi2 = 0.0
+	if (lsd_want(74))
+	{
 	lsd_begin()
 	lsd_in_number("Health", lsi1)
 	lsd_in_number("Pay", lsi2)
+	}
 	if (lsd_enter(74, ctx))
 		return
 	if (!get_cvar_pointer("ls_creature_ver"))
@@ -5049,8 +5370,11 @@ lsg_n74(ctx[])
 lsg_n75(ctx[])
 {
 	new lsi1 = g_lsgOut[74]
+	if (lsd_want(75))
+	{
 	lsd_begin()
 	lsd_in_entity("Value", lsi1)
+	}
 	if (lsd_enter(75, ctx))
 		return
 	ls_hud(0, LsHud:2, 4.0, "%s %d", "New one:", lsi1)
@@ -5064,9 +5388,12 @@ lsg_n76(ctx[])
 	new lsi0 = ctx[1]
 	new lsi1[128]
 	copy(lsi1, 127, g_v3)
+	if (lsd_want(76))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_text("Value", lsi1)
+	}
 	if (lsd_enter(76, ctx))
 		return
 	ls_hud(lsi0, LsHud:1, 4.0, "%s %s", "Killed:", lsi1)
@@ -5076,7 +5403,10 @@ lsg_n76(ctx[])
 // Player Hurt (hurt)
 lsg_n77(ctx[])
 {
+	if (lsd_want(77))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(77, ctx))
 		return
 	lsd_exit(77, "ran")
@@ -5088,9 +5418,12 @@ lsg_n78(ctx[])
 {
 	new lsi1 = lsg_team(ctx[1])
 	new Float:lsi2 = 1.0
+	if (lsd_want(78))
+	{
 	lsd_begin()
 	lsd_in_team("Team", lsi1)
 	lsd_in_number("Amount", lsi2)
+	}
 	if (lsd_enter(78, ctx))
 		return
 	g_tv4[clamp(lsi1, 0, 3)] += lsi2
@@ -5102,8 +5435,11 @@ lsg_n78(ctx[])
 lsg_n79(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(79))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(79, ctx))
 		return
 	if (!lsg_ok(lsi0))
@@ -5118,7 +5454,10 @@ lsg_n79(ctx[])
 // Team Changed (tc)
 lsg_n80(ctx[])
 {
+	if (lsd_want(80))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(80, ctx))
 		return
 	lsd_exit(80, "ran")
@@ -5129,8 +5468,11 @@ lsg_n80(ctx[])
 lsg_n81(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(81))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(81, ctx))
 		return
 	if (!lsg_ok(lsi0))
@@ -5145,7 +5487,10 @@ lsg_n81(ctx[])
 // New Round (nr)
 lsg_n82(ctx[])
 {
+	if (lsd_want(82))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(82, ctx))
 		return
 	lsd_exit(82, "ran")
@@ -5156,8 +5501,11 @@ lsg_n82(ctx[])
 lsg_n83(ctx[])
 {
 	new Float:lsi0 = 0.0
+	if (lsd_want(83))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(83, ctx))
 		return
 	set_cvar_float("mp_freeforall", lsi0)
@@ -5168,7 +5516,10 @@ lsg_n83(ctx[])
 // For Each Player (nr_each)
 lsg_n84(ctx[])
 {
+	if (lsd_want(84))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(84, ctx))
 		return
 	new c[LSG_CTX], count
@@ -5190,8 +5541,11 @@ lsg_n84(ctx[])
 lsg_n85(ctx[])
 {
 	new lsi0 = ctx[8]
+	if (lsd_want(85))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(85, ctx))
 		return
 	if (!lsg_ok(lsi0) || is_user_alive(lsi0) || lsg_team(lsi0) < 1 || lsg_team(lsi0) > 2)
@@ -5206,7 +5560,10 @@ lsg_n85(ctx[])
 // Pick Random Entity (nr_pick)
 lsg_n86(ctx[])
 {
+	if (lsd_want(86))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(86, ctx))
 		return
 	new list[256], count
@@ -5229,7 +5586,10 @@ lsg_n86(ctx[])
 // For Each Entity (nr_ents)
 lsg_n87(ctx[])
 {
+	if (lsd_want(87))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(87, ctx))
 		return
 	new c[LSG_CTX], count
@@ -5249,7 +5609,10 @@ lsg_n87(ctx[])
 // Use Entity (nr_use)
 lsg_n88(ctx[])
 {
+	if (lsd_want(88))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(88, ctx))
 		return
 	if (!lsg_use("door1"))
@@ -5264,8 +5627,11 @@ lsg_n89(ctx[])
 {
 	new lsi2[128]
 	copy(lsi2, 127, "play")
+	if (lsd_want(89))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi2)
+	}
 	if (lsd_enter(89, ctx))
 		return
 	copy(g_v5, 63, lsi2)
@@ -5275,7 +5641,10 @@ lsg_n89(ctx[])
 // Stop Timer (nr_stop)
 lsg_n90(ctx[])
 {
+	if (lsd_want(90))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(90, ctx))
 		return
 	remove_task(LSG_TASK + 4)
@@ -5286,8 +5655,11 @@ lsg_n90(ctx[])
 lsg_n91(ctx[])
 {
 	new lsi1 = ctx[9]
+	if (lsd_want(91))
+	{
 	lsd_begin()
 	lsd_in_entity("Value", lsi1)
+	}
 	if (lsd_enter(91, ctx))
 		return
 	ls_hud(0, LsHud:0, 4.0, "%s %d", "Spot:", lsi1)
@@ -5297,7 +5669,10 @@ lsg_n91(ctx[])
 // Chat Command (cmd)
 lsg_n92(ctx[])
 {
+	if (lsd_want(92))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(92, ctx))
 		return
 	lsd_exit(92, "called")
@@ -5308,8 +5683,11 @@ lsg_n92(ctx[])
 lsg_n93(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(93))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(93, ctx))
 		return
 	if (!lsg_ok(lsi0) || is_user_bot(lsi0))
@@ -5362,8 +5740,11 @@ public lsg_mh93(id, menu, item)
 lsg_n94(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(94))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(94, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -5380,9 +5761,12 @@ lsg_n95(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = -500.0
+	if (lsd_want(95))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Amount", lsi1)
+	}
 	if (lsd_enter(95, ctx))
 		return
 	if (!lsg_ok(lsi0))
@@ -5399,9 +5783,12 @@ lsg_n96(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 0.5
+	if (lsd_want(96))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Gravity", lsi1)
+	}
 	if (lsd_enter(96, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -5417,8 +5804,11 @@ lsg_n96(ctx[])
 lsg_n97(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(97))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(97, ctx))
 		return
 	lsg_bar(lsi0, 3)
@@ -5431,9 +5821,12 @@ lsg_n98(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = lsg_get_money(ctx[0])
+	if (lsd_want(98))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Value", lsi1)
+	}
 	if (lsd_enter(98, ctx))
 		return
 	ls_chat(lsi0, "%s %d", "Money:", floatround(lsi1))
@@ -5443,7 +5836,10 @@ lsg_n98(ctx[])
 // Function (fn)
 lsg_n99(ctx[])
 {
+	if (lsd_want(99))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(99, ctx))
 		return
 	lsd_exit(99, "called")
@@ -5455,9 +5851,12 @@ lsg_n100(ctx[])
 {
 	new lsi0 = ctx[11]
 	new Float:lsi1 = Float:ctx[12]
+	if (lsd_want(100))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Amount", lsi1)
+	}
 	if (lsd_enter(100, ctx))
 		return
 	if (!lsg_ok(lsi0))
@@ -5474,8 +5873,11 @@ lsg_n100(ctx[])
 lsg_n101(ctx[])
 {
 	new lsi0 = ctx[11]
+	if (lsd_want(101))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(101, ctx))
 		return
 	client_cmd(lsi0, "spk %s", "buttons/bell1")
@@ -5487,8 +5889,11 @@ lsg_n101(ctx[])
 lsg_n102(ctx[])
 {
 	new lsi0 = ctx[11]
+	if (lsd_want(102))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(102, ctx))
 		return
 	if (!lsg_ok(lsi0))
@@ -5503,7 +5908,10 @@ lsg_n102(ctx[])
 // Player Extracted (pk2)
 lsg_n103(ctx[])
 {
+	if (lsd_want(103))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(103, ctx))
 		return
 	lsd_exit(103, "ran")
@@ -5515,9 +5923,12 @@ lsg_n104(ctx[])
 {
 	new lsi0 = ctx[1]
 	new Float:lsi1 = 3.0
+	if (lsd_want(104))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Number", lsi1)
+	}
 	if (lsd_enter(104, ctx))
 		return
 	new c[LSG_CTX]
@@ -5531,7 +5942,10 @@ lsg_n104(ctx[])
 // Pick Random Player (pk2_pick)
 lsg_n105(ctx[])
 {
+	if (lsd_want(105))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(105, ctx))
 		return
 	new list[256], count
@@ -5554,8 +5968,11 @@ lsg_n105(ctx[])
 lsg_n106(ctx[])
 {
 	new lsi0 = ctx[13]
+	if (lsd_want(106))
+	{
 	lsd_begin()
 	lsd_in_player("Bot", lsi0)
+	}
 	if (lsd_enter(106, ctx))
 		return
 	if (!ls_alive(lsi0) || !is_user_bot(lsi0))
@@ -5573,9 +5990,12 @@ lsg_n107(ctx[])
 {
 	new lsi0 = ctx[13]
 	new Float:lsi1 = 10.0
+	if (lsd_want(107))
+	{
 	lsd_begin()
 	lsd_in_player("Bot", lsi0)
 	lsd_in_number("Seconds", lsi1)
+	}
 	if (lsd_enter(107, ctx))
 		return
 	if (!ls_alive(lsi0) || !is_user_bot(lsi0))
@@ -5594,10 +6014,13 @@ lsg_n108(ctx[])
 	new lsi0 = ctx[13]
 	new lsi1 = ctx[1]
 	new Float:lsi2 = 50.0
+	if (lsd_want(108))
+	{
 	lsd_begin()
 	lsd_in_player("Bot", lsi0)
 	lsd_in_player("Follow", lsi1)
 	lsd_in_number("Personality influence", lsi2)
+	}
 	if (lsd_enter(108, ctx))
 		return
 	if (!ls_alive(lsi0) || !is_user_bot(lsi0))
@@ -5614,8 +6037,11 @@ lsg_n108(ctx[])
 lsg_n109(ctx[])
 {
 	new lsi0 = ctx[13]
+	if (lsd_want(109))
+	{
 	lsd_begin()
 	lsd_in_player("Bot", lsi0)
+	}
 	if (lsd_enter(109, ctx))
 		return
 	if (!ls_alive(lsi0) || !is_user_bot(lsi0))
@@ -5632,8 +6058,11 @@ lsg_n109(ctx[])
 lsg_n110(ctx[])
 {
 	new lsi0 = ctx[1]
+	if (lsd_want(110))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(110, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -5651,9 +6080,12 @@ lsg_n111(ctx[])
 {
 	new lsi0 = ctx[1]
 	new lsi1 = 1
+	if (lsd_want(111))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_bool("Frozen", lsi1)
+	}
 	if (lsd_enter(111, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -5670,8 +6102,11 @@ lsg_n111(ctx[])
 lsg_n112(ctx[])
 {
 	new lsi0 = ctx[1]
+	if (lsd_want(112))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(112, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -5686,7 +6121,10 @@ lsg_n112(ctx[])
 // Point Lost (lo2)
 lsg_n113(ctx[])
 {
+	if (lsd_want(113))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(113, ctx))
 		return
 	lsd_exit(113, "ran")
@@ -5697,8 +6135,11 @@ lsg_n113(ctx[])
 lsg_n114(ctx[])
 {
 	new lsi0 = (equali(g_v5, "play") ? 1 : 0)
+	if (lsd_want(114))
+	{
 	lsd_begin()
 	lsd_in_bool("Condition", lsi0)
+	}
 	if (lsd_enter(114, ctx))
 		return
 	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
@@ -5710,7 +6151,10 @@ lsg_n114(ctx[])
 // Pick Random Player (lo2_pick)
 lsg_n115(ctx[])
 {
+	if (lsd_want(115))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(115, ctx))
 		return
 	new list[256], count
@@ -5733,8 +6177,11 @@ lsg_n115(ctx[])
 lsg_n116(ctx[])
 {
 	new lsi0 = (((ls_components_running() && ls_zone_inside(lsg_find("zone1"), ctx[14]) ? 1 : 0)) || ((ls_is_role(ctx[14], "hero") ? 1 : 0)) ? 1 : 0)
+	if (lsd_want(116))
+	{
 	lsd_begin()
 	lsd_in_bool("Condition", lsi0)
+	}
 	if (lsd_enter(116, ctx))
 		return
 	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
@@ -5749,8 +6196,11 @@ lsg_n116(ctx[])
 lsg_n117(ctx[])
 {
 	new lsi0 = ctx[14]
+	if (lsd_want(117))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(117, ctx))
 		return
 	if (!ls_components_running() || !lsg_ok(lsi0))
@@ -5765,7 +6215,10 @@ lsg_n117(ctx[])
 // Call Supply Drop (lo2_drop)
 lsg_n118(ctx[])
 {
+	if (lsd_want(118))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(118, ctx))
 		return
 	new Float:o[3]
@@ -5785,8 +6238,11 @@ lsg_n118(ctx[])
 lsg_n119(ctx[])
 {
 	new Float:lsi1 = ((float(ls_count_role("hero"))) + (float(lsg_creatures_alive())))
+	if (lsd_want(119))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi1)
+	}
 	if (lsd_enter(119, ctx))
 		return
 	ls_hud(0, LsHud:1, 4.0, "%s %d", "Heroes and creatures:", floatround(lsi1))
@@ -5798,8 +6254,11 @@ lsg_n119(ctx[])
 lsg_n120(ctx[])
 {
 	new lsi0 = ((lsg_get_frags(ctx[14])) > (lsg_get_deaths(ctx[14])) ? 1 : 0)
+	if (lsd_want(120))
+	{
 	lsd_begin()
 	lsd_in_bool("Condition", lsi0)
+	}
 	if (lsd_enter(120, ctx))
 		return
 	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
@@ -5812,8 +6271,11 @@ lsg_n120(ctx[])
 lsg_n121(ctx[])
 {
 	new lsi0 = ctx[1]
+	if (lsd_want(121))
+	{
 	lsd_begin()
 	lsd_in_team("Winner", lsi0)
+	}
 	if (lsd_enter(121, ctx))
 		return
 	lsg_end_round(lsi0)
@@ -5823,7 +6285,10 @@ lsg_n121(ctx[])
 // Map Started (ms)
 lsg_n122(ctx[])
 {
+	if (lsd_want(122))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(122, ctx))
 		return
 	lsd_exit(122, "ran")
@@ -5833,7 +6298,10 @@ lsg_n122(ctx[])
 // Load Map Pack (ms_pack)
 lsg_n123(ctx[])
 {
+	if (lsd_want(123))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(123, ctx))
 		return
 	if (!ls_components_running())
@@ -5853,7 +6321,10 @@ lsg_n123(ctx[])
 // Pick Random Entity (ms_pick)
 lsg_n124(ctx[])
 {
+	if (lsd_want(124))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(124, ctx))
 		return
 	new list[256], count
@@ -5876,8 +6347,11 @@ lsg_n124(ctx[])
 lsg_n125(ctx[])
 {
 	new lsi0 = ctx[15]
+	if (lsd_want(125))
+	{
 	lsd_begin()
 	lsd_in_entity("Component", lsi0)
+	}
 	if (lsd_enter(125, ctx))
 		return
 	if (!ls_components_running())
@@ -5894,8 +6368,11 @@ lsg_n125(ctx[])
 lsg_n126(ctx[])
 {
 	new lsi0 = ctx[15]
+	if (lsd_want(126))
+	{
 	lsd_begin()
 	lsd_in_entity("Component", lsi0)
+	}
 	if (lsd_enter(126, ctx))
 		return
 	if (!ls_components_running())
@@ -5912,8 +6389,11 @@ lsg_n126(ctx[])
 lsg_n127(ctx[])
 {
 	new lsi0 = ctx[15]
+	if (lsd_want(127))
+	{
 	lsd_begin()
 	lsd_in_entity("At", lsi0)
+	}
 	if (lsd_enter(127, ctx))
 		return
 	new Float:o[3]
@@ -5936,8 +6416,11 @@ lsg_n127(ctx[])
 lsg_n128(ctx[])
 {
 	new lsi0 = ctx[15]
+	if (lsd_want(128))
+	{
 	lsd_begin()
 	lsd_in_entity("At", lsi0)
+	}
 	if (lsd_enter(128, ctx))
 		return
 	new Float:o[3]
@@ -5956,7 +6439,10 @@ lsg_n128(ctx[])
 // For Each Player (ms_each)
 lsg_n129(ctx[])
 {
+	if (lsd_want(129))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(129, ctx))
 		return
 	new c[LSG_CTX], count
@@ -5978,9 +6464,12 @@ lsg_n130(ctx[])
 {
 	new lsi0 = ctx[16]
 	new lsi1 = ctx[15]
+	if (lsd_want(130))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_entity("To", lsi1)
+	}
 	if (lsd_enter(130, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -5994,7 +6483,10 @@ lsg_n130(ctx[])
 // Player About To Be Hurt (ah)
 lsg_n131(ctx[])
 {
+	if (lsd_want(131))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(131, ctx))
 		return
 	lsd_exit(131, "called")
@@ -6005,8 +6497,11 @@ lsg_n131(ctx[])
 lsg_n132(ctx[])
 {
 	new lsi0 = (equali(g_lsgTxt[0], "fall") ? 1 : 0)
+	if (lsd_want(132))
+	{
 	lsd_begin()
 	lsd_in_bool("Condition", lsi0)
+	}
 	if (lsd_enter(132, ctx))
 		return
 	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
@@ -6020,7 +6515,10 @@ lsg_n132(ctx[])
 // Block Damage (ah_block)
 lsg_n133(ctx[])
 {
+	if (lsd_want(133))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(133, ctx))
 		return
 	g_lsgDmgBlock = true
@@ -6034,8 +6532,11 @@ lsg_n133(ctx[])
 lsg_n134(ctx[])
 {
 	new Float:lsi0 = 0.5
+	if (lsd_want(134))
+	{
 	lsd_begin()
 	lsd_in_number("Times", lsi0)
+	}
 	if (lsd_enter(134, ctx))
 		return
 	g_lsgDmg = g_lsgDmg * floatmax(lsi0, 0.0)
@@ -6050,8 +6551,11 @@ lsg_n134(ctx[])
 lsg_n135(ctx[])
 {
 	new Float:lsi0 = 5.0
+	if (lsd_want(135))
+	{
 	lsd_begin()
 	lsd_in_number("Damage", lsi0)
+	}
 	if (lsd_enter(135, ctx))
 		return
 	g_lsgDmg = floatmax(lsi0, 0.0)
@@ -6064,7 +6568,10 @@ lsg_n135(ctx[])
 // Player Killed (dk)
 lsg_n136(ctx[])
 {
+	if (lsd_want(136))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(136, ctx))
 		return
 	lsd_exit(136, "ran")
@@ -6075,8 +6582,11 @@ lsg_n136(ctx[])
 lsg_n137(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(137))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(137, ctx))
 		return
 	if (!lsg_make_down(lsi0, 20.0, 2.0, 40))
@@ -6088,7 +6598,10 @@ lsg_n137(ctx[])
 // Player Revived (rv)
 lsg_n138(ctx[])
 {
+	if (lsd_want(138))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(138, ctx))
 		return
 	lsd_exit(138, "called")
@@ -6100,9 +6613,12 @@ lsg_n139(ctx[])
 {
 	new lsi0 = ctx[0]
 	new lsi1 = ctx[1]
+	if (lsd_want(139))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_player("Value", lsi1)
+	}
 	if (lsd_enter(139, ctx))
 		return
 	ls_hud(lsi0, LsHud:3, 4.0, "%s %s", "Saved by", lsg_name(lsi1))
@@ -6112,7 +6628,10 @@ lsg_n139(ctx[])
 // Downed Player Out (to)
 lsg_n140(ctx[])
 {
+	if (lsd_want(140))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(140, ctx))
 		return
 	lsd_exit(140, "called")
@@ -6124,9 +6643,12 @@ lsg_n141(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 1.0
+	if (lsd_want(141))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Amount", lsi1)
+	}
 	if (lsd_enter(141, ctx))
 		return
 	if (!lsg_ok(lsi0) || g_lsgSaved == Invalid_Trie)
@@ -6144,9 +6666,12 @@ lsg_n142(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 1.0
+	if (lsd_want(142))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Value", lsi1)
+	}
 	if (lsd_enter(142, ctx))
 		return
 	if (!lsg_ok(lsi0) || g_lsgSaved == Invalid_Trie)
@@ -6164,9 +6689,12 @@ lsg_n143(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = lsg_saved_get(ctx[0], "outs")
+	if (lsd_want(143))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Value", lsi1)
+	}
 	if (lsd_enter(143, ctx))
 		return
 	ls_hud(lsi0, LsHud:1, 4.0, "%s %d", "Times out:", floatround(lsi1))
@@ -6178,8 +6706,11 @@ lsg_n143(ctx[])
 lsg_n144(ctx[])
 {
 	new lsi0 = (g_lsgDown[lsg_slot(ctx[0])] ? 1 : 0)
+	if (lsd_want(144))
+	{
 	lsd_begin()
 	lsd_in_bool("Condition", lsi0)
+	}
 	if (lsd_enter(144, ctx))
 		return
 	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
@@ -6189,7 +6720,10 @@ lsg_n144(ctx[])
 // Player Spawned (sq)
 lsg_n145(ctx[])
 {
+	if (lsd_want(145))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(145, ctx))
 		return
 	lsd_exit(145, "ran")
@@ -6200,8 +6734,11 @@ lsg_n145(ctx[])
 lsg_n146(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(146))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(146, ctx))
 		return
 	g_lsgNoFall[lsg_slot(lsi0)] = 2
@@ -6214,9 +6751,12 @@ lsg_n147(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 2.0
+	if (lsd_want(147))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Squad", lsi1)
+	}
 	if (lsd_enter(147, ctx))
 		return
 	if (!lsg_ok(lsi0))
@@ -6233,8 +6773,11 @@ lsg_n147(ctx[])
 lsg_n148(ctx[])
 {
 	new lsi0 = 0
+	if (lsd_want(148))
+	{
 	lsd_begin()
 	lsd_in_bool("On", lsi0)
+	}
 	if (lsd_enter(148, ctx))
 		return
 	g_lsgSquadFF = bool:((lsi0) ? 1 : 0)
@@ -6246,8 +6789,11 @@ lsg_n148(ctx[])
 lsg_n149(ctx[])
 {
 	new Float:lsi1 = ((float(g_lsgSquad[lsg_slot(ctx[0])])) + (float(lsg_squads_alive())))
+	if (lsd_want(149))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi1)
+	}
 	if (lsd_enter(149, ctx))
 		return
 	ls_hud(0, LsHud:1, 4.0, "%s %d", "Squad:", floatround(lsi1))
@@ -6258,7 +6804,10 @@ lsg_n149(ctx[])
 // Buying (sq_buy)
 lsg_n150(ctx[])
 {
+	if (lsd_want(150))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(150, ctx))
 		return
 	g_lsgBuyOff = false
@@ -6270,7 +6819,10 @@ lsg_n150(ctx[])
 // Allow Buying (sq_allow)
 lsg_n151(ctx[])
 {
+	if (lsd_want(151))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(151, ctx))
 		return
 	g_lsgBuyAllow = 1
@@ -6283,9 +6835,12 @@ lsg_n152(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 600.0
+	if (lsd_want(152))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Speed", lsi1)
+	}
 	if (lsd_enter(152, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -6301,8 +6856,11 @@ lsg_n152(ctx[])
 lsg_n153(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(153))
+	{
 	lsd_begin()
 	lsd_in_player("Bot", lsi0)
+	}
 	if (lsd_enter(153, ctx))
 		return
 	if (!ls_alive(lsi0) || !is_user_bot(lsi0))
@@ -6318,7 +6876,10 @@ lsg_n153(ctx[])
 // Round Started (ck3)
 lsg_n154(ctx[])
 {
+	if (lsd_want(154))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(154, ctx))
 		return
 	lsd_exit(154, "ran")
@@ -6329,8 +6890,11 @@ lsg_n154(ctx[])
 lsg_n155(ctx[])
 {
 	new Float:lsi0 = 180.0
+	if (lsd_want(155))
+	{
 	lsd_begin()
 	lsd_in_number("Seconds", lsi0)
+	}
 	if (lsd_enter(155, ctx))
 		return
 	lsg_clock_set(lsi0)
@@ -6342,8 +6906,11 @@ lsg_n155(ctx[])
 lsg_n156(ctx[])
 {
 	new Float:lsi0 = 30.0
+	if (lsd_want(156))
+	{
 	lsd_begin()
 	lsd_in_number("Seconds", lsi0)
+	}
 	if (lsd_enter(156, ctx))
 		return
 	lsg_clock_add(lsi0)
@@ -6354,7 +6921,10 @@ lsg_n156(ctx[])
 // Pause Round Clock (ck3_p)
 lsg_n157(ctx[])
 {
+	if (lsd_want(157))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(157, ctx))
 		return
 	lsg_clock_pause(1)
@@ -6365,7 +6935,10 @@ lsg_n157(ctx[])
 // Pause Round Clock (ck3_r)
 lsg_n158(ctx[])
 {
+	if (lsd_want(158))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(158, ctx))
 		return
 	lsg_clock_pause(0)
@@ -6377,8 +6950,11 @@ lsg_n158(ctx[])
 lsg_n159(ctx[])
 {
 	new Float:lsi1 = lsg_clock_left()
+	if (lsd_want(159))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi1)
+	}
 	if (lsd_enter(159, ctx))
 		return
 	ls_hud(0, LsHud:1, 4.0, "%s %d", "Time:", floatround(lsi1))
@@ -6388,7 +6964,10 @@ lsg_n159(ctx[])
 // Round Time Up (tu)
 lsg_n160(ctx[])
 {
+	if (lsd_want(160))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(160, ctx))
 		return
 	lsd_exit(160, "called")
@@ -6399,8 +6978,11 @@ lsg_n160(ctx[])
 lsg_n161(ctx[])
 {
 	new lsi0 = 2
+	if (lsd_want(161))
+	{
 	lsd_begin()
 	lsd_in_team("Winner", lsi0)
+	}
 	if (lsd_enter(161, ctx))
 		return
 	lsg_end_round(lsi0)
@@ -6410,7 +6992,10 @@ lsg_n161(ctx[])
 // Round Started (a0)
 lsg_n162(ctx[])
 {
+	if (lsd_want(162))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(162, ctx))
 		return
 	lsd_exit(162, "ran")
@@ -6420,7 +7005,10 @@ lsg_n162(ctx[])
 // Sequence (a_seq)
 lsg_n163(ctx[])
 {
+	if (lsd_want(163))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(163, ctx))
 		return
 	lsd_exit(163, "ran")
@@ -6435,9 +7023,12 @@ lsg_n164(ctx[])
 {
 	new Float:lsi0 = 1.0
 	new Float:lsi1 = 5.0
+	if (lsd_want(164))
+	{
 	lsd_begin()
 	lsd_in_number("First", lsi0)
 	lsd_in_number("Last", lsi1)
+	}
 	if (lsd_enter(164, ctx))
 		return
 	new c[LSG_CTX], n
@@ -6459,9 +7050,12 @@ lsg_n165(ctx[])
 {
 	new lsi0 = g_v9
 	new Float:lsi1 = Float:ctx[17]
+	if (lsd_want(165))
+	{
 	lsd_begin()
 	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	lsd_in_number("Item", lsi1)
+	}
 	if (lsd_enter(165, ctx))
 		return
 	g_lsgO[0] = _:float(lsg_apushc(lsi0, _:(lsi1)))
@@ -6472,8 +7066,11 @@ lsg_n165(ctx[])
 lsg_n166(ctx[])
 {
 	new lsi0 = g_v9
+	if (lsd_want(166))
+	{
 	lsd_begin()
 	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	}
 	if (lsd_enter(166, ctx))
 		return
 	lsg_asort(lsi0, 0, 1)
@@ -6485,8 +7082,11 @@ lsg_n166(ctx[])
 lsg_n167(ctx[])
 {
 	new lsi0 = g_v9
+	if (lsd_want(167))
+	{
 	lsd_begin()
 	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	}
 	if (lsd_enter(167, ctx))
 		return
 	lsg_ashuffle(lsi0)
@@ -6500,10 +7100,13 @@ lsg_n168(ctx[])
 	new lsi0 = g_v9
 	new Float:lsi1 = 99.0
 	new Float:lsi2 = 0.0
+	if (lsd_want(168))
+	{
 	lsd_begin()
 	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	lsd_in_number("Item", lsi1)
 	lsd_in_number("Index", lsi2)
+	}
 	if (lsd_enter(168, ctx))
 		return
 	lsg_ainsc(lsi0, lsi2, _:(lsi1))
@@ -6516,9 +7119,12 @@ lsg_n169(ctx[])
 {
 	new lsi0 = g_v9
 	new Float:lsi1 = 1.0
+	if (lsd_want(169))
+	{
 	lsd_begin()
 	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	lsd_in_number("Index", lsi1)
+	}
 	if (lsd_enter(169, ctx))
 		return
 	lsg_aremi(lsi0, lsi1)
@@ -6532,10 +7138,13 @@ lsg_n170(ctx[])
 	new lsi0 = g_v9
 	new Float:lsi1 = 0.0
 	new Float:lsi2 = 7.0
+	if (lsd_want(170))
+	{
 	lsd_begin()
 	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	lsd_in_number("Index", lsi1)
 	lsd_in_number("Item", lsi2)
+	}
 	if (lsd_enter(170, ctx))
 		return
 	lsg_asetc(lsi0, lsi1, _:(lsi2))
@@ -6548,9 +7157,12 @@ lsg_n171(ctx[])
 {
 	new lsi0 = g_v9
 	new Float:lsi1 = 99.0
+	if (lsd_want(171))
+	{
 	lsd_begin()
 	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	lsd_in_number("Item", lsi1)
+	}
 	if (lsd_enter(171, ctx))
 		return
 	g_lsgO[1] = lsg_aremc(lsi0, _:(lsi1)) ? 1 : 0
@@ -6562,8 +7174,11 @@ lsg_n171(ctx[])
 stock lsg_n172(ctx[])
 {
 	new lsi0 = g_v9
+	if (lsd_want(172))
+	{
 	lsd_begin()
 	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	}
 	if (lsd_enter(172, ctx))
 		return
 	new c[LSG_CTX], n
@@ -6598,8 +7213,11 @@ stock lsg_n172_break(ctx[])
 lsg_n173(ctx[])
 {
 	new lsi0 = ((Float:ctx[18]) > (3.0) ? 1 : 0)
+	if (lsd_want(173))
+	{
 	lsd_begin()
 	lsd_in_bool("Condition", lsi0)
+	}
 	if (lsd_enter(173, ctx))
 		return
 	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
@@ -6615,8 +7233,11 @@ lsg_n174(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, lsg_ntext(Float:ctx[18]))
+	if (lsd_want(174))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(174, ctx))
 		return
 	new t[192]
@@ -6632,8 +7253,11 @@ lsg_n175(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, fmt("%s items, has 7 %s at %s, one is %s (100%%)", lsg_ntext(float(lsg_alen(g_v9))), g_lsgYesNo[((lsg_afindc(g_v9, _:(7.0)) >= 0 ? 1 : 0)) ? 1 : 0], lsg_ntext(float(lsg_afindc(g_v9, _:(7.0)))), lsg_ntext(Float:lsg_arandc(g_v9))))
+	if (lsd_want(175))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(175, ctx))
 		return
 	new t[192]
@@ -6649,8 +7273,11 @@ lsg_n175(ctx[])
 lsg_n176(ctx[])
 {
 	new lsi0 = g_v9
+	if (lsd_want(176))
+	{
 	lsd_begin()
 	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	}
 	if (lsd_enter(176, ctx))
 		return
 	lsg_aclear(lsi0)
@@ -6661,8 +7288,11 @@ lsg_n176(ctx[])
 lsg_n177(ctx[])
 {
 	new lsi2 = lsg_mka231("a", lsg_tcat("b", "c"))
+	if (lsd_want(177))
+	{
 	lsd_begin()
 	lsd_in_text("Value", fmt("%d items", lsg_alen(lsi2)))
+	}
 	if (lsd_enter(177, ctx))
 		return
 	lsg_acopy(g_v8, lsi2)
@@ -6673,8 +7303,11 @@ lsg_n177(ctx[])
 // While Loop (b_wh)
 lsg_n178(ctx[])
 {
+	if (lsd_want(178))
+	{
 	lsd_begin()
 	lsd_in_bool("Condition", ((float(lsg_alen(g_v8))) < (5.0) ? 1 : 0))
+	}
 	if (lsd_enter(178, ctx))
 		return
 	new c[LSG_CTX], n
@@ -6695,9 +7328,12 @@ lsg_n179(ctx[])
 	new lsi0 = g_v8
 	new lsi1[128]
 	copy(lsi1, 127, fmt("%s items", lsg_ntext(float(lsg_alen(g_v8)))))
+	if (lsd_want(179))
+	{
 	lsd_begin()
 	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	lsd_in_text("Item", lsi1)
+	}
 	if (lsd_enter(179, ctx))
 		return
 	g_lsgO[2] = _:float(lsg_apushs(lsi0, lsi1))
@@ -6709,8 +7345,11 @@ lsg_n180(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, lsg_agets(g_v8, 0.0))
+	if (lsd_want(180))
+	{
 	lsd_begin()
 	lsd_in_text("Selection", lsi0)
+	}
 	if (lsd_enter(180, ctx))
 		return
 	new x[128]
@@ -6732,7 +7371,10 @@ lsg_n180(ctx[])
 // Print String (b_pr1)
 lsg_n181(ctx[])
 {
+	if (lsd_want(181))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(181, ctx))
 		return
 	new t[192]
@@ -6747,8 +7389,11 @@ lsg_n181(ctx[])
 lsg_n182(ctx[])
 {
 	new Float:lsi0 = str_to_float("2")
+	if (lsd_want(182))
+	{
 	lsd_begin()
 	lsd_in_number("Selection", lsi0)
+	}
 	if (lsd_enter(182, ctx))
 		return
 	new Float:x = lsi0
@@ -6770,7 +7415,10 @@ lsg_n182(ctx[])
 // Print String (b_pr2)
 lsg_n183(ctx[])
 {
+	if (lsd_want(183))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(183, ctx))
 		return
 	new t[192]
@@ -6786,8 +7434,11 @@ lsg_n184(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, fmt("%s long, %s", lsg_ntext(float(strlen(lsg_arands(g_v8)))), g_lsgYesNo[((containi(lsg_arands(g_v8), "item") >= 0 ? 1 : 0)) ? 1 : 0]))
+	if (lsd_want(184))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(184, ctx))
 		return
 	new t[192]
@@ -6801,7 +7452,10 @@ lsg_n184(ctx[])
 // For Each Player (c_each)
 lsg_n185(ctx[])
 {
+	if (lsd_want(185))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(185, ctx))
 		return
 	new c[LSG_CTX], count
@@ -6824,9 +7478,12 @@ lsg_n186(ctx[])
 {
 	new lsi0 = ctx[20]
 	new lsi2 = lsg_vplayer(ctx[20], 3)
+	if (lsd_want(186))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_text("Value", lsg_vtext(lsi2))
+	}
 	if (lsd_enter(186, ctx))
 		return
 	lsg_vset((LSG_VR + 1 + lsg_slot(lsi0)), lsi2)
@@ -6839,9 +7496,12 @@ lsg_n187(ctx[])
 {
 	new lsi0 = ctx[20]
 	new lsi1 = lsg_vadd(lsg_vplayer(ctx[20], 0), lsg_vec(0.0, 0.0, 36.0), 1.0)
+	if (lsd_want(187))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_text("Position", lsg_vtext(lsi1))
+	}
 	if (lsd_enter(187, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -6859,9 +7519,12 @@ lsg_n188(ctx[])
 {
 	new lsi0 = ctx[20]
 	new lsi1 = lsg_vscale(lsg_vnorm(lsg_vdir(lsg_vplayer(ctx[20], 0), lsg_vent(ctx[20]))), 300.0)
+	if (lsd_want(188))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_text("Velocity", lsg_vtext(lsi1))
+	}
 	if (lsd_enter(188, ctx))
 		return
 	if (!ls_alive(lsi0))
@@ -6879,8 +7542,11 @@ lsg_n189(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, fmt("%s away, %s, at %s", lsg_ntext(lsg_vdist((LSG_VR + 1 + lsg_slot(ctx[20])), (LSG_VR + 0))), lsg_ntext(((lsg_vc(lsg_vplayer(ctx[20], 3), 2)) + (lsg_vlen(lsg_vadd(lsg_vplayer(ctx[20], 0), lsg_vec(0.0, 0.0, 36.0), 1.0))))), lsg_vtext(lsg_vplayer(ctx[20], 3))))
+	if (lsd_want(189))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(189, ctx))
 		return
 	new t[192]
@@ -6895,7 +7561,10 @@ lsg_n189(ctx[])
 lsg_n190(ctx[])
 {
 	new lsi2 = lsg_mks0(30.0, "kit", lsg_vec(0.0, 0.0, 36.0), 0, 1)
+	if (lsd_want(190))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(190, ctx))
 		return
 	lsg_rset((LSG_RR + 0), lsi2)
@@ -6907,8 +7576,11 @@ lsg_n190(ctx[])
 lsg_n191(ctx[])
 {
 	new Float:lsi0 = lsg_clampf(50.0, 0.0, 40.0)
+	if (lsd_want(191))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(191, ctx))
 		return
 	g_lsgRec[lsg_ri((LSG_RR + 0))][0] = _:(lsi0)
@@ -6920,8 +7592,11 @@ lsg_n191(ctx[])
 lsg_n192(ctx[])
 {
 	new lsi0 = (LSG_VR + 0)
+	if (lsd_want(192))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsg_vtext(lsi0))
+	}
 	if (lsd_enter(192, ctx))
 		return
 	lsg_rsetvec((LSG_RR + 0), 1, lsi0)
@@ -6934,8 +7609,11 @@ lsg_n193(ctx[])
 {
 	new lsi0 = g_v11
 	new lsi1 = (LSG_RR + 0)
+	if (lsd_want(193))
+	{
 	lsd_begin()
 	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
+	}
 	if (lsd_enter(193, ctx))
 		return
 	g_lsgO[3] = _:float(lsg_apushr(lsi0, lsi1))
@@ -6948,8 +7626,11 @@ lsg_n194(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, fmt("%s %s %s %s", lsg_ntext(Float:g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][0]), g_lsgRecT[lsg_ri(lsg_agetr(g_v11, 0.0))][0], g_lsgE0[clamp(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5], 0, 2)], lsg_vtext(lsg_rvec(lsg_agetr(g_v11, 0.0), 1))))
+	if (lsd_want(194))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(194, ctx))
 		return
 	new t[192]
@@ -6965,8 +7646,11 @@ lsg_n194(ctx[])
 lsg_n195(ctx[])
 {
 	new lsi0 = g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5]
+	if (lsd_want(195))
+	{
 	lsd_begin()
 	lsd_in_text("Selection", g_lsgE0[clamp(lsi0, 0, 2)])
+	}
 	if (lsd_enter(195, ctx))
 		return
 	switch (lsi0)
@@ -6988,7 +7672,10 @@ lsg_n195(ctx[])
 // Print String (c_pr3)
 lsg_n196(ctx[])
 {
+	if (lsd_want(196))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(196, ctx))
 		return
 	new t[192]
@@ -7003,8 +7690,11 @@ lsg_n196(ctx[])
 lsg_n197(ctx[])
 {
 	new Float:lsi0 = float(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5])
+	if (lsd_want(197))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(197, ctx))
 		return
 	new t[192]
@@ -7018,7 +7708,10 @@ lsg_n197(ctx[])
 // For Each Player (d_each)
 lsg_n198(ctx[])
 {
+	if (lsd_want(198))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(198, ctx))
 		return
 	new c[LSG_CTX], count
@@ -7042,10 +7735,13 @@ lsg_n199(ctx[])
 	new lsi0 = g_v12
 	new lsi1 = ctx[21]
 	new Float:lsi2 = ((Float:lsg_mgetc(g_v12, lsg_kp(ctx[21]))) + (1.0))
+	if (lsd_want(199))
+	{
 	lsd_begin()
 	lsd_in_text("Map", fmt("%d keys", lsg_mlen(lsi0)))
 	lsd_in_player("Key", lsi1)
 	lsd_in_number("Value", lsi2)
+	}
 	if (lsd_enter(199, ctx))
 		return
 	lsg_msetc(lsi0, lsg_kp(lsi1), _:(lsi2))
@@ -7060,10 +7756,13 @@ lsg_n200(ctx[])
 	new Float:lsi1 = 5.0
 	new lsi2[128]
 	copy(lsi2, 127, "kill")
+	if (lsd_want(200))
+	{
 	lsd_begin()
 	lsd_in_player("Who", lsi0)
 	lsd_in_number("Amount", lsi1)
 	lsd_in_text("Why", lsi2)
+	}
 	if (lsd_enter(200, ctx))
 		return
 	lsg_fr0(lsi0, lsi1, lsi2)
@@ -7078,8 +7777,11 @@ lsg_n201(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, g_lsgOT[0])
+	if (lsd_want(201))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(201, ctx))
 		return
 	new t[192]
@@ -7095,8 +7797,11 @@ lsg_n201(ctx[])
 lsg_n202(ctx[])
 {
 	new Float:lsi0 = Float:g_lsgO[4]
+	if (lsd_want(202))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(202, ctx))
 		return
 	new t[192]
@@ -7115,10 +7820,13 @@ lsg_n203(ctx[])
 	copy(lsi1, 127, "k")
 	new lsi2[128]
 	copy(lsi2, 127, "k")
+	if (lsd_want(203))
+	{
 	lsd_begin()
 	lsd_in_text("Map", fmt("%d keys", lsg_mlen(lsi0)))
 	lsd_in_text("Key", lsi1)
 	lsd_in_text("Value", lsi2)
+	}
 	if (lsd_enter(203, ctx))
 		return
 	lsg_msets(lsi0, lsi1, lsi2)
@@ -7132,10 +7840,13 @@ lsg_n204(ctx[])
 	new lsi0 = g_v14
 	new Float:lsi1 = 1.0
 	new lsi2 = lsg_vec(0.0, 0.0, 36.0)
+	if (lsd_want(204))
+	{
 	lsd_begin()
 	lsd_in_text("Map", fmt("%d keys", lsg_mlen(lsi0)))
 	lsd_in_number("Key", lsi1)
 	lsd_in_text("Value", lsg_vtext(lsi2))
+	}
 	if (lsd_enter(204, ctx))
 		return
 	lsg_msetv(lsi0, lsg_kn(lsi1), lsi2)
@@ -7149,9 +7860,12 @@ lsg_n205(ctx[])
 	new lsi0 = g_v13
 	new lsi1[128]
 	copy(lsi1, 127, "kill")
+	if (lsd_want(205))
+	{
 	lsd_begin()
 	lsd_in_text("Map", fmt("%d keys", lsg_mlen(lsi0)))
 	lsd_in_text("Key", lsi1)
+	}
 	if (lsd_enter(205, ctx))
 		return
 	lsg_mdel(lsi0, lsi1)
@@ -7164,8 +7878,11 @@ lsg_n206(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, fmt("%s %s %s %s", lsg_ntext(float(lsg_mlen(g_v12))), g_lsgYesNo[((lsg_mhas(g_v13, "k") ? 1 : 0)) ? 1 : 0], lsg_ntext(float(lsg_alen(lsg_mkeys(g_v12, 2)))), lsg_ntext(float(lsg_alen(lsg_mvalues(g_v14, 2))))))
+	if (lsd_want(206))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(206, ctx))
 		return
 	new t[192]
@@ -7181,8 +7898,11 @@ lsg_n206(ctx[])
 lsg_n207(ctx[])
 {
 	new lsi0 = g_v14
+	if (lsd_want(207))
+	{
 	lsd_begin()
 	lsd_in_text("Map", fmt("%d keys", lsg_mlen(lsi0)))
+	}
 	if (lsd_enter(207, ctx))
 		return
 	lsg_mclear(lsi0)
@@ -7194,8 +7914,11 @@ lsg_n207(ctx[])
 lsg_n208(ctx[])
 {
 	new Float:lsi0 = lsg_pf1_0(4.0)
+	if (lsd_want(208))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(208, ctx))
 		return
 	new t[192]
@@ -7212,8 +7935,11 @@ lsg_n209(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, lsg_pf1_1(4.0))
+	if (lsd_want(209))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(209, ctx))
 		return
 	new t[192]
@@ -7229,8 +7955,11 @@ lsg_n209(ctx[])
 lsg_n210(ctx[])
 {
 	new Float:lsi0 = 2.0
+	if (lsd_want(210))
+	{
 	lsd_begin()
 	lsd_in_number("Seconds", lsi0)
+	}
 	if (lsd_enter(210, ctx))
 		return
 	remove_task(LSG_TASK + 210)
@@ -7250,8 +7979,11 @@ public lsg_tf210()
 lsg_n211(ctx[])
 {
 	new lsi2 = (LSG_TASK + 210)
+	if (lsd_want(211))
+	{
 	lsd_begin()
 	lsd_in_text("Value", g_lsgRun[lsg_tactive(lsi2) ? 1 : 0])
+	}
 	if (lsd_enter(211, ctx))
 		return
 	g_v17 = lsi2
@@ -7263,8 +7995,11 @@ lsg_n211(ctx[])
 lsg_n212(ctx[])
 {
 	new lsi0 = (lsg_tactive(g_v17) ? 1 : 0)
+	if (lsd_want(212))
+	{
 	lsd_begin()
 	lsd_in_bool("Value", lsi0)
+	}
 	if (lsd_enter(212, ctx))
 		return
 	new t[192]
@@ -7280,8 +8015,11 @@ lsg_n212(ctx[])
 lsg_n213(ctx[])
 {
 	new lsi0 = g_v17
+	if (lsd_want(213))
+	{
 	lsd_begin()
 	lsd_in_text("Timer", g_lsgRun[lsg_tactive(lsi0) ? 1 : 0])
+	}
 	if (lsd_enter(213, ctx))
 		return
 	lsg_tclear(lsi0)
@@ -7293,8 +8031,11 @@ lsg_n213(ctx[])
 lsg_n214(ctx[])
 {
 	new Float:lsi0 = ((3.0) * (2.0))
+	if (lsd_want(214))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(214, ctx))
 		return
 	new t[192]
@@ -7308,7 +8049,10 @@ lsg_n214(ctx[])
 // Player Killed (e0)
 lsg_n215(ctx[])
 {
+	if (lsd_want(215))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(215, ctx))
 		return
 	lsd_exit(215, "ran")
@@ -7318,7 +8062,10 @@ lsg_n215(ctx[])
 // Do Once (e_once)
 stock lsg_n216(ctx[])
 {
+	if (lsd_want(216))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(216, ctx))
 		return
 	if (g_lsgLeft[216])
@@ -7341,8 +8088,11 @@ stock lsg_n216_reset(ctx[])
 stock lsg_n217(ctx[])
 {
 	new Float:lsi0 = 3.0
+	if (lsd_want(217))
+	{
 	lsd_begin()
 	lsd_in_number("N", lsi0)
+	}
 	if (lsd_enter(217, ctx))
 		return
 	if (g_lsgLeft[217] >= floatround(lsi0))
@@ -7365,7 +8115,10 @@ stock lsg_n217_reset(ctx[])
 // Gate (e_gate)
 stock lsg_n218(ctx[])
 {
+	if (lsd_want(218))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(218, ctx))
 		return
 	if (!g_lsgLeft[218])
@@ -7398,7 +8151,10 @@ stock lsg_n218_toggle(ctx[])
 // Flip Flop (e_ff)
 lsg_n219(ctx[])
 {
+	if (lsd_want(219))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(219, ctx))
 		return
 	g_lsgLeft[219] ^= 1
@@ -7419,8 +8175,11 @@ lsg_n219(ctx[])
 lsg_n220(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(220))
+	{
 	lsd_begin()
 	lsd_in_entity("Object", lsi0)
+	}
 	if (lsd_enter(220, ctx))
 		return
 	if (lsg_valid(lsi0))
@@ -7439,8 +8198,11 @@ lsg_n220(ctx[])
 lsg_n221(ctx[])
 {
 	new Float:lsi0 = 2.0
+	if (lsd_want(221))
+	{
 	lsd_begin()
 	lsd_in_number("Seconds", lsi0)
+	}
 	if (lsd_enter(221, ctx))
 		return
 	remove_task(LSG_TASK + 221)
@@ -7468,8 +8230,11 @@ lsg_n222(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, lsg_ntext(Float:g_lsgO[5]))
+	if (lsd_want(222))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(222, ctx))
 		return
 	new t[192]
@@ -7486,8 +8251,11 @@ lsg_n223(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, g_lsgYesNo[(g_lsgO[6]) ? 1 : 0])
+	if (lsd_want(223))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(223, ctx))
 		return
 	new t[192]
@@ -7502,7 +8270,10 @@ lsg_n223(ctx[])
 // Sequence (e_seq)
 lsg_n224(ctx[])
 {
+	if (lsd_want(224))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(224, ctx))
 		return
 	lsd_exit(224, "ran")
@@ -7514,7 +8285,10 @@ lsg_n224(ctx[])
 // Player Spawned (f0)
 lsg_n225(ctx[])
 {
+	if (lsd_want(225))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(225, ctx))
 		return
 	lsd_exit(225, "ran")
@@ -7526,9 +8300,12 @@ stock lsg_n226(ctx[])
 {
 	new Float:lsi0 = 0.0
 	new Float:lsi1 = 10.0
+	if (lsd_want(226))
+	{
 	lsd_begin()
 	lsd_in_number("First", lsi0)
 	lsd_in_number("Last", lsi1)
+	}
 	if (lsd_enter(226, ctx))
 		return
 	new c[LSG_CTX], n
@@ -7558,8 +8335,11 @@ stock lsg_n226_break(ctx[])
 lsg_n227(ctx[])
 {
 	new lsi0 = ((Float:ctx[22]) >= (3.0) && (Float:ctx[22]) <= (5.0) ? 1 : 0)
+	if (lsd_want(227))
+	{
 	lsd_begin()
 	lsd_in_bool("Condition", lsi0)
+	}
 	if (lsd_enter(227, ctx))
 		return
 	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
@@ -7575,8 +8355,11 @@ lsg_n228(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, fmt("%s %s %s %s", lsg_ntext(floatabs(Float:ctx[22])), lsg_ntext(((Float:ctx[22]) + ((10.0) - (Float:ctx[22])) * (0.25))), lsg_ntext((((((Float:ctx[22]) == (2.0) ? 1 : 0)) ? 1 : 0) ? (floatsqroot(floatmax(Float:ctx[22], 0.0))) : (lsg_mod(Float:ctx[22], 3.0)))), lsg_ntext(lsg_pow(Float:ctx[22], 2.0))))
+	if (lsd_want(228))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(228, ctx))
 		return
 	new t[192]
@@ -7592,8 +8375,11 @@ lsg_n229(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, lsg_tsel((((lsg_valid(ctx[0]) ? 1 : 0)) ? 1 : 0), "valid", "gone"))
+	if (lsd_want(229))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(229, ctx))
 		return
 	new t[192]
@@ -7609,8 +8395,11 @@ lsg_n229(ctx[])
 lsg_n230(ctx[])
 {
 	new lsi0 = (lsg_ok(ctx[0]) ? 1 : 0)
+	if (lsd_want(230))
+	{
 	lsd_begin()
 	lsd_in_bool("Value", lsi0)
+	}
 	if (lsd_enter(230, ctx))
 		return
 	new t[192]
@@ -7626,8 +8415,11 @@ lsg_n230(ctx[])
 lsg_n231(ctx[])
 {
 	new lsi0 = (lsg_is_creature(ctx[0]) ? 1 : 0)
+	if (lsd_want(231))
+	{
 	lsd_begin()
 	lsd_in_bool("Value", lsi0)
+	}
 	if (lsd_enter(231, ctx))
 		return
 	new t[192]
@@ -7644,9 +8436,12 @@ lsg_n232(ctx[])
 {
 	new lsi0 = ctx[0]
 	new lsi2 = 2
+	if (lsd_want(232))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_text("Value", g_lsgE0[clamp(lsi2, 0, 2)])
+	}
 	if (lsd_enter(232, ctx))
 		return
 	g_pv16[lsg_slot(lsi0)] = lsi2
@@ -7658,8 +8453,11 @@ lsg_n232(ctx[])
 lsg_n233(ctx[])
 {
 	new lsi0 = g_pv16[lsg_slot(ctx[0])]
+	if (lsd_want(233))
+	{
 	lsd_begin()
 	lsd_in_text("Selection", g_lsgE0[clamp(lsi0, 0, 2)])
+	}
 	if (lsd_enter(233, ctx))
 		return
 	switch (lsi0)
@@ -7681,8 +8479,11 @@ lsg_n233(ctx[])
 lsg_n234(ctx[])
 {
 	new lsi0 = ((g_pv16[lsg_slot(ctx[0])]) == (2) ? 1 : 0)
+	if (lsd_want(234))
+	{
 	lsd_begin()
 	lsd_in_bool("Value", lsi0)
+	}
 	if (lsd_enter(234, ctx))
 		return
 	new t[192]
@@ -7698,8 +8499,11 @@ lsg_n234(ctx[])
 lsg_n235(ctx[])
 {
 	new lsi2 = lsg_aplayers(1)
+	if (lsd_want(235))
+	{
 	lsd_begin()
 	lsd_in_text("Value", fmt("%d items", lsg_alen(lsi2)))
+	}
 	if (lsd_enter(235, ctx))
 		return
 	lsg_acopy(g_v10, lsi2)
@@ -7711,8 +8515,11 @@ lsg_n235(ctx[])
 lsg_n236(ctx[])
 {
 	new Float:lsi0 = float(lsg_alen(lsg_aplayers(1)))
+	if (lsd_want(236))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(236, ctx))
 		return
 	new t[192]
@@ -7726,7 +8533,10 @@ lsg_n236(ctx[])
 // Function Entry (fa_e)
 stock lsg_n237(ctx[])
 {
+	if (lsd_want(237))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(237, ctx))
 		return
 	lsd_exit(237, "called")
@@ -7737,8 +8547,11 @@ stock lsg_n237(ctx[])
 stock lsg_n238(ctx[])
 {
 	new Float:lsi2 = ((Float:ctx[24]) + (g_v18))
+	if (lsd_want(238))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi2)
+	}
 	if (lsd_enter(238, ctx))
 		return
 	g_v18 = lsi2
@@ -7751,9 +8564,12 @@ stock lsg_n239(ctx[])
 {
 	new lsi0 = g_v19
 	new lsi1 = ctx[23]
+	if (lsd_want(239))
+	{
 	lsd_begin()
 	lsd_in_text("Array", fmt("%d items", lsg_alen(lsi0)))
 	lsd_in_player("Item", lsi1)
+	}
 	if (lsd_enter(239, ctx))
 		return
 	g_lsgO[7] = _:float(lsg_apushc(lsi0, lsi1))
@@ -7765,8 +8581,11 @@ stock lsg_n239(ctx[])
 stock lsg_n240(ctx[])
 {
 	new lsi0 = (ls_alive(ctx[23]) ? 1 : 0)
+	if (lsd_want(240))
+	{
 	lsd_begin()
 	lsd_in_bool("Condition", lsi0)
+	}
 	if (lsd_enter(240, ctx))
 		return
 	new ok = ((((lsi0) ? 1 : 0)) ? 1 : 0)
@@ -7783,9 +8602,12 @@ stock lsg_n241(ctx[])
 	new Float:lsi0 = g_v18
 	new lsi1[128]
 	copy(lsi1, 127, lsg_tcat(g_lsgOT[1], "!"))
+	if (lsd_want(241))
+	{
 	lsd_begin()
 	lsd_in_number("Total", lsi0)
 	lsd_in_text("Message", lsi1)
+	}
 	if (lsd_enter(241, ctx))
 		return
 	g_lsgR0_0 = lsi0
@@ -7797,7 +8619,10 @@ stock lsg_n241(ctx[])
 // Return Node (fa_r2)
 stock lsg_n242(ctx[])
 {
+	if (lsd_want(242))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(242, ctx))
 		return
 	g_lsgR0_0 = 0.0
@@ -7809,7 +8634,10 @@ stock lsg_n242(ctx[])
 // Function Entry (fb_e)
 stock lsg_n243(ctx[])
 {
+	if (lsd_want(243))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(243, ctx))
 		return
 	lsd_exit(243, "called")
@@ -7822,9 +8650,12 @@ stock lsg_n244(ctx[])
 	new Float:lsi0 = ((Float:ctx[25]) * (2.0))
 	new lsi1[128]
 	copy(lsi1, 127, lsg_ntext(((Float:ctx[25]) * (2.0))))
+	if (lsd_want(244))
+	{
 	lsd_begin()
 	lsd_in_number("Y", lsi0)
 	lsd_in_text("As text", lsi1)
+	}
 	if (lsd_enter(244, ctx))
 		return
 	g_lsgR1_0 = lsi0
@@ -7836,7 +8667,10 @@ stock lsg_n244(ctx[])
 // Function Entry (fc_e)
 stock lsg_n245(ctx[])
 {
+	if (lsd_want(245))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(245, ctx))
 		return
 	lsd_exit(245, "called")
@@ -7846,7 +8680,10 @@ stock lsg_n245(ctx[])
 // For Each Marker (mk_fe)
 stock lsg_n246(ctx[])
 {
+	if (lsd_want(246))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(246, ctx))
 		return
 	new c[LSG_CTX], count
@@ -7871,8 +8708,11 @@ stock lsg_n246(ctx[])
 stock lsg_n247(ctx[])
 {
 	new Float:lsi0 = float(lsg_mk_count(0))
+	if (lsd_want(247))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(247, ctx))
 		return
 	new t[192]
@@ -7887,8 +8727,11 @@ stock lsg_n247(ctx[])
 stock lsg_n248(ctx[])
 {
 	new lsi0 = lsg_vent(lsg_mk_get(1, floatround(str_to_float(lsg_mk_key(ctx[26], "wave")))))
+	if (lsd_want(248))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsg_vtext(lsi0))
+	}
 	if (lsd_enter(248, ctx))
 		return
 	new t[192]
@@ -7903,8 +8746,11 @@ stock lsg_n248(ctx[])
 lsg_n249(ctx[])
 {
 	new Float:lsi0 = 3.0
+	if (lsd_want(249))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(249, ctx))
 		return
 	new t[192]

@@ -497,3 +497,11 @@ test("UX review M4: Get/Set show Player and Team only for a per-player or per-te
     }
   }
 });
+
+test("StudioPerfAudit #5: a sampled run's count includes the runs before it that weren't written", () => {
+  const d = applyEvents(emptyDebug(), [
+    { s: 1, t: 1, e: "node_enter", node: "a" },
+    { s: 2, t: 2, e: "node_enter", node: "a", skipped: 30 },
+  ], () => false);
+  assert.equal(d.runs.a.count, 32);
+});

@@ -46,7 +46,7 @@ new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, fal
 new const g_lsdBool[][] = { "false", "true" }
 new const g_lsdTeams[][] = { "none", "T", "CT", "spectator" }
 #define LSD_TASK 9475100
-new g_lsdEvents[160], g_lsdCmd[160]
+new g_lsdEvents[160], g_lsdCmd[160], g_lsdSeen[160]
 new g_lsdSeq, g_lsdTick, g_lsdRound
 new g_lsdPhase[8] = "freeze"
 new g_lsdIn[600]
@@ -75,6 +75,7 @@ lsd_init()
 		mkdir(dir)
 	formatex(g_lsdEvents, charsmax(g_lsdEvents), "%s/%s.events", dir, LSG_MODE)
 	formatex(g_lsdCmd, charsmax(g_lsdCmd), "%s/%s.cmd", dir, LSG_MODE)
+	formatex(g_lsdSeen, charsmax(g_lsdSeen), "%s/%s.seen", dir, LSG_MODE)
 	new f = fopen(g_lsdEvents, "wt")
 	if (f)
 		fclose(f)
@@ -159,6 +160,8 @@ public lsd_round_end()
 // event (PerfAudit #5: 181 us an event)
 #define LSD_BUF 24000
 new g_lsdBuf[LSD_BUF], g_lsdBufLen
+// how big the events file is now (it starts empty at each map)
+new g_lsdBytes
 
 stock lsd_flush()
 {
@@ -169,9 +172,84 @@ stock lsd_flush()
 	{
 		fputs(f, g_lsdBuf)
 		fclose(f)
+		g_lsdBytes += g_lsdBufLen
 	}
 	g_lsdBuf[0] = 0
 	g_lsdBufLen = 0
+}
+
+// ---- who's watching, and how much is written (StudioPerfAudit #5) ----
+// The app writes <mode>.seen (how far it has read) each time the page reads. Not changed for
+// 15 s: nobody is watching, so nodes' runs aren't written (breakpoints still pause). With no
+// .seen at all (a Test run, or before the page's first read) everything is written.
+#define LSD_AWAY 15
+// the file starts over once the reader has had all of it past 8 MB, or regardless at 32 MB
+// (the reader sees it shrink and reads from the top: a "reset")
+#define LSD_CAP 8000000
+#define LSD_HARD 32000000
+// each node writes at most this many runs a quarter second; the rest are counted, and the
+// next run written carries the count ("skipped"), so totals stay right
+#define LSD_PER 8
+new bool:g_lsdAway, g_lsdRead = -1
+new Float:g_lsdWin[LSD_N], g_lsdWinN[LSD_N], g_lsdSkipped[LSD_N], bool:g_lsdMute[LSD_N]
+
+stock lsd_watchers()
+{
+	if (!file_exists(g_lsdSeen))
+	{
+		g_lsdAway = false
+		g_lsdRead = -1
+		return
+	}
+	g_lsdAway = get_systime() - GetFileTime(g_lsdSeen, FileTime_LastChange) > LSD_AWAY
+	new f = fopen(g_lsdSeen, "rt"), line[24]
+	if (f)
+	{
+		fgets(f, line, charsmax(line))
+		fclose(f)
+		g_lsdRead = str_to_num(line)
+	}
+}
+
+stock lsd_rotate()
+{
+	if (g_lsdBytes > LSD_HARD || (g_lsdBytes > LSD_CAP && g_lsdRead >= g_lsdBytes))
+	{
+		new f = fopen(g_lsdEvents, "wt")
+		if (f)
+			fclose(f)
+		g_lsdBytes = 0
+	}
+}
+
+// Is node n's run to be written? (its inputs are only worked out into JSON when it is)
+stock bool:lsd_want(n)
+{
+	if (g_lsdBp[n])
+	{
+		g_lsdMute[n] = false
+		return true
+	}
+	if (g_lsdAway)
+	{
+		g_lsdSkipped[n]++
+		g_lsdMute[n] = true
+		return false
+	}
+	new Float:now = get_gametime()
+	if (now - g_lsdWin[n] >= 0.25)
+	{
+		g_lsdWin[n] = now
+		g_lsdWinN[n] = 0
+	}
+	if (++g_lsdWinN[n] > LSD_PER)
+	{
+		g_lsdSkipped[n]++
+		g_lsdMute[n] = true
+		return false
+	}
+	g_lsdMute[n] = false
+	return true
 }
 
 stock lsd_emitf(const fmt[], any:...)
@@ -351,18 +429,29 @@ stock bool:lsd_enter(n, const ctx[])
 		lsd_freeze()
 		return true
 	}
-	lsd_emitf("^"e^":^"node_enter^",^"node^":^"%s^",^"inputs^":{%s}", g_lsdIds[n], g_lsdIn)
+	if (g_lsdMute[n])
+		return false
+	if (g_lsdSkipped[n])
+	{
+		lsd_emitf("^"e^":^"node_enter^",^"node^":^"%s^",^"skipped^":%d,^"inputs^":{%s}", g_lsdIds[n], g_lsdSkipped[n], g_lsdIn)
+		g_lsdSkipped[n] = 0
+	}
+	else
+		lsd_emitf("^"e^":^"node_enter^",^"node^":^"%s^",^"inputs^":{%s}", g_lsdIds[n], g_lsdIn)
 	return false
 }
 
 stock lsd_exit(n, const result[])
 {
-	lsd_emitf("^"e^":^"node_exit^",^"node^":^"%s^",^"result^":^"%s^"", g_lsdIds[n], result)
+	if (!g_lsdMute[n])
+		lsd_emitf("^"e^":^"node_exit^",^"node^":^"%s^",^"result^":^"%s^"", g_lsdIds[n], result)
 }
 
 stock lsd_error(n, const msg[])
 {
-	lsd_emitf("^"e^":^"node_error^",^"node^":^"%s^",^"message^":^"%s^"", g_lsdIds[n], msg)
+	// (a sampled run's error still shows, unless nobody is watching)
+	if (!g_lsdAway)
+		lsd_emitf("^"e^":^"node_error^",^"node^":^"%s^",^"message^":^"%s^"", g_lsdIds[n], msg)
 }
 
 stock lsd_time_left()
@@ -547,12 +636,19 @@ stock lsd_resume()
 
 public lsd_poll()
 {
+	// (who's watching and how far they've read: once a second; the old part of the file goes
+	// before this flush, so nothing unread is lost)
+	if (++g_lsdTick % 4 == 1)
+	{
+		lsd_watchers()
+		lsd_rotate()
+	}
 	lsd_flush()
 	if (g_lsdPaused >= 0)
 	{
 		for (new id = 1; id <= MaxClients; id++)
 			lsd_hold_player(id)
-		if (++g_lsdTick % 4 == 0)
+		if (g_lsdTick % 4 == 0)
 			lsd_vars()
 	}
 	else if (g_lsdHolding && lsd_time_left() <= 0)
@@ -3009,7 +3105,10 @@ public lsg_on_creature_killed(ent, killer)
 // Player Spawned (ps)
 lsg_n0(ctx[])
 {
+	if (lsd_want(0))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(0, ctx))
 		return
 	lsd_exit(0, "ran")
@@ -3020,8 +3119,11 @@ lsg_n0(ctx[])
 lsg_n1(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(1))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(1, ctx))
 		return
 	if (!ls_components_running())
@@ -3040,8 +3142,11 @@ lsg_n1(ctx[])
 lsg_n2(ctx[])
 {
 	new lsi2 = 1
+	if (lsd_want(2))
+	{
 	lsd_begin()
 	lsd_in_bool("Friends", lsi2)
+	}
 	if (lsd_enter(2, ctx))
 		return
 	if (!ls_components_running())
@@ -3061,9 +3166,12 @@ lsg_n3(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 50.0
+	if (lsd_want(3))
+	{
 	lsd_begin()
 	lsd_in_player("Bot", lsi0)
 	lsd_in_number("Personality influence", lsi1)
+	}
 	if (lsd_enter(3, ctx))
 		return
 	if (!ls_components_running())
@@ -3080,7 +3188,10 @@ lsg_n3(ctx[])
 // Round Started (rs)
 lsg_n4(ctx[])
 {
+	if (lsd_want(4))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(4, ctx))
 		return
 	lsd_exit(4, "ran")
@@ -3091,8 +3202,11 @@ lsg_n4(ctx[])
 lsg_n5(ctx[])
 {
 	new Float:lsi0 = 50.0
+	if (lsd_want(5))
+	{
 	lsd_begin()
 	lsd_in_number("Personality influence", lsi0)
+	}
 	if (lsd_enter(5, ctx))
 		return
 	if (!ls_components_running())
@@ -3111,8 +3225,11 @@ lsg_n5(ctx[])
 lsg_n6(ctx[])
 {
 	new lsi0 = 1
+	if (lsd_want(6))
+	{
 	lsd_begin()
 	lsd_in_bool("Don't buy", lsi0)
+	}
 	if (lsd_enter(6, ctx))
 		return
 	if (!ls_components_running())
@@ -3131,8 +3248,11 @@ lsg_n6(ctx[])
 lsg_n7(ctx[])
 {
 	new lsi0 = 1
+	if (lsd_want(7))
+	{
 	lsd_begin()
 	lsd_in_bool("Fight them", lsi0)
+	}
 	if (lsd_enter(7, ctx))
 		return
 	if (!ls_components_running())
@@ -3154,11 +3274,14 @@ lsg_n8(ctx[])
 	new Float:lsi2 = 40.0
 	new Float:lsi3 = 30.0
 	new Float:lsi4 = 50.0
+	if (lsd_want(8))
+	{
 	lsd_begin()
 	lsd_in_entity("At", lsi1)
 	lsd_in_number("Priority", lsi2)
 	lsd_in_number("For (seconds)", lsi3)
 	lsd_in_number("Personality influence", lsi4)
+	}
 	if (lsd_enter(8, ctx))
 		return
 	if (!ls_components_running())
@@ -3179,10 +3302,13 @@ lsg_n9(ctx[])
 	new lsi1 = lsg_find("gate1")
 	new Float:lsi2 = 500.0
 	new Float:lsi3 = 50.0
+	if (lsd_want(9))
+	{
 	lsd_begin()
 	lsd_in_entity("At", lsi1)
 	lsd_in_number("Price", lsi2)
 	lsd_in_number("Personality influence", lsi3)
+	}
 	if (lsd_enter(9, ctx))
 		return
 	if (!ls_components_running())
@@ -3200,7 +3326,10 @@ lsg_n9(ctx[])
 // Bots: Clear Goals (gc)
 lsg_n10(ctx[])
 {
+	if (lsd_want(10))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(10, ctx))
 		return
 	if (!ls_components_running())
@@ -3219,8 +3348,11 @@ lsg_n10(ctx[])
 lsg_n11(ctx[])
 {
 	new lsi1 = lsg_find("gate1")
+	if (lsd_want(11))
+	{
 	lsd_begin()
 	lsd_in_entity("At", lsi1)
+	}
 	if (lsd_enter(11, ctx))
 		return
 	if (!ls_components_running())
@@ -3240,9 +3372,12 @@ lsg_n12(ctx[])
 {
 	new lsi0 = lsg_find("gate1")
 	new Float:lsi1 = 50.0
+	if (lsd_want(12))
+	{
 	lsd_begin()
 	lsd_in_entity("Barricade", lsi0)
 	lsd_in_number("Health", lsi1)
+	}
 	if (lsd_enter(12, ctx))
 		return
 	if (!ls_components_running())
@@ -3259,8 +3394,11 @@ lsg_n12(ctx[])
 lsg_n13(ctx[])
 {
 	new Float:lsi0 = float(ls_components_running() ? ls_barricade_hp(lsg_find("gate1")) : 0)
+	if (lsd_want(13))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(13, ctx))
 		return
 	new t[192]
@@ -3276,8 +3414,11 @@ lsg_n13(ctx[])
 lsg_n14(ctx[])
 {
 	new lsi0 = lsg_find("gate1")
+	if (lsd_want(14))
+	{
 	lsd_begin()
 	lsd_in_entity("Barricade", lsi0)
+	}
 	if (lsd_enter(14, ctx))
 		return
 	if (!ls_components_running())
@@ -3294,8 +3435,11 @@ lsg_n14(ctx[])
 lsg_n15(ctx[])
 {
 	new Float:lsi0 = float(ls_components_running() ? ls_barricade_hp(lsg_find("gate1")) : 0)
+	if (lsd_want(15))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(15, ctx))
 		return
 	new t[192]
@@ -3311,8 +3455,11 @@ lsg_n15(ctx[])
 lsg_n16(ctx[])
 {
 	new Float:lsi0 = 1.0
+	if (lsd_want(16))
+	{
 	lsd_begin()
 	lsd_in_number("Tier", lsi0)
+	}
 	if (lsd_enter(16, ctx))
 		return
 	new x[64], ok
@@ -3332,8 +3479,11 @@ lsg_n17(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, g_lsgOT[0])
+	if (lsd_want(17))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(17, ctx))
 		return
 	new t[192]
@@ -3349,8 +3499,11 @@ lsg_n17(ctx[])
 lsg_n18(ctx[])
 {
 	new lsi0 = g_lsgO[0]
+	if (lsd_want(18))
+	{
 	lsd_begin()
 	lsd_in_bool("Value", lsi0)
+	}
 	if (lsd_enter(18, ctx))
 		return
 	new t[192]
@@ -3366,8 +3519,11 @@ lsg_n18(ctx[])
 lsg_n19(ctx[])
 {
 	new lsi0 = lsg_find("shr")
+	if (lsd_want(19))
+	{
 	lsd_begin()
 	lsd_in_entity("Zone", lsi0)
+	}
 	if (lsd_enter(19, ctx))
 		return
 	if (!ls_components_running())
@@ -3384,8 +3540,11 @@ lsg_n19(ctx[])
 lsg_n20(ctx[])
 {
 	new Float:lsi0 = float(ls_components_running() ? ls_zone_stage(lsg_find("shr")) : 0)
+	if (lsd_want(20))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(20, ctx))
 		return
 	new t[192]
@@ -3402,8 +3561,11 @@ lsg_n21(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, fmt("X2 zone next: %s s, radius %s, closing %s", lsg_ntext(lsg_zone_next(lsg_find("shr"), 0)), lsg_ntext(lsg_zone_next(lsg_find("shr"), 1)), g_lsgYesNo[(_:lsg_zone_next(lsg_find("shr"), 2)) ? 1 : 0]))
+	if (lsd_want(21))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(21, ctx))
 		return
 	new t[192]
@@ -3420,9 +3582,12 @@ lsg_n22(ctx[])
 {
 	new Float:lsi1 = 300.0
 	new Float:lsi2 = 150.0
+	if (lsd_want(22))
+	{
 	lsd_begin()
 	lsd_in_number("Health", lsi1)
 	lsd_in_number("Pay", lsi2)
+	}
 	if (lsd_enter(22, ctx))
 		return
 	if (!get_cvar_pointer("ls_creature_ver"))
@@ -3438,8 +3603,11 @@ lsg_n22(ctx[])
 lsg_n23(ctx[])
 {
 	new lsi0 = g_lsgOut[22]
+	if (lsd_want(23))
+	{
 	lsd_begin()
 	lsd_in_entity("Value", lsi0)
+	}
 	if (lsd_enter(23, ctx))
 		return
 	new t[192]
@@ -3455,8 +3623,11 @@ lsg_n23(ctx[])
 lsg_n24(ctx[])
 {
 	new Float:lsi0 = lsg_ehp(g_lsgOut[22])
+	if (lsd_want(24))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(24, ctx))
 		return
 	new t[192]
@@ -3472,8 +3643,11 @@ lsg_n24(ctx[])
 lsg_n25(ctx[])
 {
 	new Float:lsi0 = 2.0
+	if (lsd_want(25))
+	{
 	lsd_begin()
 	lsd_in_number("Seconds", lsi0)
+	}
 	if (lsd_enter(25, ctx))
 		return
 	set_task(floatmax(lsi0, 0.1), "lsg_t25", LSG_TASK + 25, ctx, LSG_CTX)
@@ -3499,8 +3673,11 @@ public lsg_t25(const data[], task)
 lsg_n26(ctx[])
 {
 	new Float:lsi0 = float(ls_components_running() ? ls_zone_stage(lsg_find("shr")) : 0)
+	if (lsd_want(26))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(26, ctx))
 		return
 	new t[192]
@@ -3515,7 +3692,10 @@ lsg_n26(ctx[])
 // Call Supply Drop (drop)
 lsg_n27(ctx[])
 {
+	if (lsd_want(27))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(27, ctx))
 		return
 	new Float:o[3]
@@ -3535,8 +3715,11 @@ lsg_n27(ctx[])
 lsg_n28(ctx[])
 {
 	new Float:lsi0 = 50.0
+	if (lsd_want(28))
+	{
 	lsd_begin()
 	lsd_in_number("Personality influence", lsi0)
+	}
 	if (lsd_enter(28, ctx))
 		return
 	if (!ls_components_running())
@@ -3554,7 +3737,10 @@ lsg_n28(ctx[])
 // Barricade Damaged (bd)
 lsg_n29(ctx[])
 {
+	if (lsd_want(29))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(29, ctx))
 		return
 	lsd_exit(29, "ran")
@@ -3565,8 +3751,11 @@ lsg_n29(ctx[])
 lsg_n30(ctx[])
 {
 	new Float:lsi0 = Float:ctx[2]
+	if (lsd_want(30))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(30, ctx))
 		return
 	new t[192]
@@ -3580,7 +3769,10 @@ lsg_n30(ctx[])
 // Barricade Repaired (br)
 lsg_n31(ctx[])
 {
+	if (lsd_want(31))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(31, ctx))
 		return
 	lsd_exit(31, "ran")
@@ -3591,8 +3783,11 @@ lsg_n31(ctx[])
 lsg_n32(ctx[])
 {
 	new Float:lsi0 = Float:ctx[2]
+	if (lsd_want(32))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(32, ctx))
 		return
 	new t[192]
@@ -3606,7 +3801,10 @@ lsg_n32(ctx[])
 // Supply Drop Landed (dl)
 lsg_n33(ctx[])
 {
+	if (lsd_want(33))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(33, ctx))
 		return
 	lsd_exit(33, "ran")
@@ -3617,8 +3815,11 @@ lsg_n33(ctx[])
 lsg_n34(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(34))
+	{
 	lsd_begin()
 	lsd_in_entity("Value", lsi0)
+	}
 	if (lsd_enter(34, ctx))
 		return
 	new t[192]
@@ -3632,7 +3833,10 @@ lsg_n34(ctx[])
 // Creature Killed (ck)
 lsg_n35(ctx[])
 {
+	if (lsd_want(35))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(35, ctx))
 		return
 	lsd_exit(35, "ran")
@@ -3643,8 +3847,11 @@ lsg_n35(ctx[])
 lsg_n36(ctx[])
 {
 	new lsi0 = ctx[1]
+	if (lsd_want(36))
+	{
 	lsd_begin()
 	lsd_in_player("Value", lsi0)
+	}
 	if (lsd_enter(36, ctx))
 		return
 	new t[192]
@@ -3658,7 +3865,10 @@ lsg_n36(ctx[])
 // Player Spawned (ps2)
 lsg_n37(ctx[])
 {
+	if (lsd_want(37))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(37, ctx))
 		return
 	lsd_exit(37, "ran")
@@ -3670,9 +3880,12 @@ lsg_n38(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 1.1
+	if (lsd_want(38))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Times", lsi1)
+	}
 	if (lsd_enter(38, ctx))
 		return
 	if (!ls_components_running())
@@ -3689,8 +3902,11 @@ lsg_n38(ctx[])
 lsg_n39(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(39))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(39, ctx))
 		return
 	if (!ls_components_running())
@@ -3707,8 +3923,11 @@ lsg_n39(ctx[])
 lsg_n40(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(40))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(40, ctx))
 		return
 	if (!ls_components_running())
@@ -3725,8 +3944,11 @@ lsg_n40(ctx[])
 lsg_n41(ctx[])
 {
 	new lsi0 = g_lsgOut[40]
+	if (lsd_want(41))
+	{
 	lsd_begin()
 	lsd_in_bool("Value", lsi0)
+	}
 	if (lsd_enter(41, ctx))
 		return
 	new t[192]
@@ -3742,8 +3964,11 @@ lsg_n41(ctx[])
 lsg_n42(ctx[])
 {
 	new lsi0 = (ls_components_running() && ls_perk_has(ctx[0], "tough") ? 1 : 0)
+	if (lsd_want(42))
+	{
 	lsd_begin()
 	lsd_in_bool("Value", lsi0)
+	}
 	if (lsd_enter(42, ctx))
 		return
 	new t[192]
@@ -3759,8 +3984,11 @@ lsg_n42(ctx[])
 lsg_n43(ctx[])
 {
 	new Float:lsi0 = float(ls_components_running() ? ls_perk_count(ctx[0]) : 0)
+	if (lsd_want(43))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(43, ctx))
 		return
 	new t[192]
@@ -3776,8 +4004,11 @@ lsg_n43(ctx[])
 lsg_n44(ctx[])
 {
 	new Float:lsi0 = (ls_components_running() ? ls_player_mod_get(ctx[0], "speed") : 1.0)
+	if (lsd_want(44))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(44, ctx))
 		return
 	new t[192]
@@ -3793,8 +4024,11 @@ lsg_n44(ctx[])
 lsg_n45(ctx[])
 {
 	new Float:lsi0 = float(ls_components_running() && lsg_ok(ctx[0]) ? ls_weapon_level(ctx[0]) : 0)
+	if (lsd_want(45))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(45, ctx))
 		return
 	new t[192]
@@ -3810,8 +4044,11 @@ lsg_n45(ctx[])
 lsg_n46(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(46))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(46, ctx))
 		return
 	if (!ls_components_running())
@@ -3828,8 +4065,11 @@ lsg_n46(ctx[])
 lsg_n47(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(47))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(47, ctx))
 		return
 	if (!ls_components_running())
@@ -3846,8 +4086,11 @@ lsg_n47(ctx[])
 lsg_n48(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(48))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(48, ctx))
 		return
 	if (!ls_components_running())
@@ -3864,8 +4107,11 @@ lsg_n48(ctx[])
 lsg_n49(ctx[])
 {
 	new lsi0 = (ls_components_running() && ls_is_down(ctx[0]) ? 1 : 0)
+	if (lsd_want(49))
+	{
 	lsd_begin()
 	lsd_in_bool("Value", lsi0)
+	}
 	if (lsd_enter(49, ctx))
 		return
 	new t[192]
@@ -3881,8 +4127,11 @@ lsg_n49(ctx[])
 lsg_n50(ctx[])
 {
 	new Float:lsi0 = (ls_components_running() ? ls_down_left(ctx[0]) : 0.0)
+	if (lsd_want(50))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(50, ctx))
 		return
 	new t[192]
@@ -3898,8 +4147,11 @@ lsg_n50(ctx[])
 lsg_n51(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(51))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(51, ctx))
 		return
 	if (!ls_components_running())
@@ -3917,9 +4169,12 @@ lsg_n52(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 2.0
+	if (lsd_want(52))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("How many", lsi1)
+	}
 	if (lsd_enter(52, ctx))
 		return
 	if (!ls_components_running())
@@ -3936,8 +4191,11 @@ lsg_n52(ctx[])
 lsg_n53(ctx[])
 {
 	new Float:lsi0 = float(ls_components_running() ? ls_heal_count(ctx[0]) : 0)
+	if (lsd_want(53))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(53, ctx))
 		return
 	new t[192]
@@ -3953,8 +4211,11 @@ lsg_n53(ctx[])
 lsg_n54(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(54))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(54, ctx))
 		return
 	if (!ls_components_running())
@@ -3971,8 +4232,11 @@ lsg_n54(ctx[])
 lsg_n55(ctx[])
 {
 	new Float:lsi0 = float(ls_components_running() ? ls_kills(ctx[0]) : 0)
+	if (lsd_want(55))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(55, ctx))
 		return
 	new t[192]
@@ -3988,8 +4252,11 @@ lsg_n55(ctx[])
 lsg_n56(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(56))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(56, ctx))
 		return
 	if (!ls_components_running())
@@ -4005,7 +4272,10 @@ lsg_n56(ctx[])
 // Map Started (rs3)
 lsg_n57(ctx[])
 {
+	if (lsd_want(57))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(57, ctx))
 		return
 	lsd_exit(57, "ran")
@@ -4015,7 +4285,10 @@ lsg_n57(ctx[])
 // Knocked Down On (kde)
 lsg_n58(ctx[])
 {
+	if (lsd_want(58))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(58, ctx))
 		return
 	if (!ls_components_running())
@@ -4031,7 +4304,10 @@ lsg_n58(ctx[])
 // Create Component (mkshop)
 lsg_n59(ctx[])
 {
+	if (lsd_want(59))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(59, ctx))
 		return
 	new Float:o[3]
@@ -4055,9 +4331,12 @@ lsg_n60(ctx[])
 {
 	new lsi0 = g_lsgOut[59]
 	new lsi1 = 1
+	if (lsd_want(60))
+	{
 	lsd_begin()
 	lsd_in_entity("Shop", lsi0)
 	lsd_in_bool("Open", lsi1)
+	}
 	if (lsd_enter(60, ctx))
 		return
 	if (!ls_components_running())
@@ -4074,8 +4353,11 @@ lsg_n60(ctx[])
 lsg_n61(ctx[])
 {
 	new Float:lsi0 = float(ls_components_running() ? ls_shop_price(g_lsgOut[59], "Ammo") : -1)
+	if (lsd_want(61))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(61, ctx))
 		return
 	new t[192]
@@ -4091,8 +4373,11 @@ lsg_n61(ctx[])
 lsg_n62(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
+	if (lsd_want(62))
+	{
 	lsd_begin()
 	lsd_in_entity("At", lsi0)
+	}
 	if (lsd_enter(62, ctx))
 		return
 	new Float:o[3]
@@ -4110,8 +4395,11 @@ lsg_n62(ctx[])
 lsg_n63(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
+	if (lsd_want(63))
+	{
 	lsd_begin()
 	lsd_in_entity("At", lsi0)
+	}
 	if (lsd_enter(63, ctx))
 		return
 	new Float:o[3]
@@ -4130,9 +4418,12 @@ lsg_n64(ctx[])
 {
 	new lsi0 = g_lsgOut[63]
 	new Float:lsi1 = 4.0
+	if (lsd_want(64))
+	{
 	lsd_begin()
 	lsd_in_entity("Entity", lsi0)
 	lsd_in_number("Rarity", lsi1)
+	}
 	if (lsd_enter(64, ctx))
 		return
 	if (!ls_components_running())
@@ -4148,7 +4439,10 @@ lsg_n64(ctx[])
 // Match HUD (hud)
 lsg_n65(ctx[])
 {
+	if (lsd_want(65))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(65, ctx))
 		return
 	if (!ls_components_running())
@@ -4166,8 +4460,11 @@ lsg_n66(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, "Loot up!")
+	if (lsd_want(66))
+	{
 	lsd_begin()
 	lsd_in_text("Text", lsi0)
+	}
 	if (lsd_enter(66, ctx))
 		return
 	if (!ls_components_running())
@@ -4185,8 +4482,11 @@ lsg_n67(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, "X2 feed line")
+	if (lsd_want(67))
+	{
 	lsd_begin()
 	lsd_in_text("Text", lsi0)
+	}
 	if (lsd_enter(67, ctx))
 		return
 	if (!ls_components_running())
@@ -4203,8 +4503,11 @@ lsg_n67(ctx[])
 lsg_n68(ctx[])
 {
 	new Float:lsi0 = 2.0
+	if (lsd_want(68))
+	{
 	lsd_begin()
 	lsd_in_number("Size", lsi0)
+	}
 	if (lsd_enter(68, ctx))
 		return
 	if (!ls_components_running())
@@ -4221,8 +4524,11 @@ lsg_n68(ctx[])
 lsg_n69(ctx[])
 {
 	new Float:lsi0 = 5.0
+	if (lsd_want(69))
+	{
 	lsd_begin()
 	lsd_in_number("Seconds", lsi0)
+	}
 	if (lsd_enter(69, ctx))
 		return
 	if (!ls_components_running())
@@ -4239,8 +4545,11 @@ lsg_n69(ctx[])
 lsg_n70(ctx[])
 {
 	new Float:lsi0 = float(ls_components_running() ? ls_squads_alive() : 0)
+	if (lsd_want(70))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(70, ctx))
 		return
 	new t[192]
@@ -4256,8 +4565,11 @@ lsg_n70(ctx[])
 lsg_n71(ctx[])
 {
 	new lsi2 = g_lsgOut[59]
+	if (lsd_want(71))
+	{
 	lsd_begin()
 	lsd_in_entity("Value", lsi2)
+	}
 	if (lsd_enter(71, ctx))
 		return
 	g_v0 = lsi2
@@ -4269,9 +4581,12 @@ lsg_n72(ctx[])
 {
 	new lsi0 = g_v0
 	new lsi1 = ctx[0]
+	if (lsd_want(72))
+	{
 	lsd_begin()
 	lsd_in_entity("Shop", lsi0)
 	lsd_in_player("Player", lsi1)
+	}
 	if (lsd_enter(72, ctx))
 		return
 	if (!ls_components_running())
@@ -4286,7 +4601,10 @@ lsg_n72(ctx[])
 // Round Table On (wt)
 lsg_n73(ctx[])
 {
+	if (lsd_want(73))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(73, ctx))
 		return
 	if (!ls_components_running())
@@ -4304,9 +4622,12 @@ lsg_n74(ctx[])
 {
 	new Float:lsi0 = 1.2
 	new Float:lsi1 = 1.1
+	if (lsd_want(74))
+	{
 	lsd_begin()
 	lsd_in_number("Count times", lsi0)
 	lsd_in_number("Health times", lsi1)
+	}
 	if (lsd_enter(74, ctx))
 		return
 	if (!ls_components_running())
@@ -4323,8 +4644,11 @@ lsg_n74(ctx[])
 lsg_n75(ctx[])
 {
 	new Float:lsi0 = 24.0
+	if (lsd_want(75))
+	{
 	lsd_begin()
 	lsd_in_number("At once", lsi0)
+	}
 	if (lsd_enter(75, ctx))
 		return
 	if (!ls_components_running())
@@ -4340,7 +4664,10 @@ lsg_n75(ctx[])
 // Creature Tiers (wti)
 lsg_n76(ctx[])
 {
+	if (lsd_want(76))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(76, ctx))
 		return
 	if (!ls_components_running())
@@ -4356,7 +4683,10 @@ lsg_n76(ctx[])
 // Turrets (tset)
 lsg_n77(ctx[])
 {
+	if (lsd_want(77))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(77, ctx))
 		return
 	if (!ls_components_running())
@@ -4374,8 +4704,11 @@ lsg_n78(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, fmt("X2 round: planned %s, made %s, health x%s, boss %s", lsg_ntext(float(ls_components_running() ? ls_wave_planned() : 0)), lsg_ntext(float(ls_components_running() ? ls_wave_spawned() : 0)), lsg_ntext((ls_components_running() ? ls_wave_hp_mult() : 1.0)), g_lsgYesNo[((lsg_wave_kind() == 1 ? 1 : 0)) ? 1 : 0]))
+	if (lsd_want(78))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(78, ctx))
 		return
 	new t[192]
@@ -4392,8 +4725,11 @@ lsg_n79(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, fmt("X2 pack %s type %s pay %s", g_lsgYesNo[((lsg_wave_kind() == 2 ? 1 : 0)) ? 1 : 0], lsg_wave_type(), lsg_ntext(float(ls_components_running() ? ls_wave_type_pay(lsg_wave_type()) : 0))))
+	if (lsd_want(79))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(79, ctx))
 		return
 	new t[192]
@@ -4409,8 +4745,11 @@ lsg_n79(ctx[])
 lsg_n80(ctx[])
 {
 	new lsi0 = (ls_components_running() && ls_wave_creatures_ok() ? 1 : 0)
+	if (lsd_want(80))
+	{
 	lsd_begin()
 	lsd_in_bool("Value", lsi0)
+	}
 	if (lsd_enter(80, ctx))
 		return
 	new t[192]
@@ -4425,7 +4764,10 @@ lsg_n80(ctx[])
 // Round Table Off (wtoff)
 lsg_n81(ctx[])
 {
+	if (lsd_want(81))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(81, ctx))
 		return
 	if (!ls_components_running())
@@ -4442,9 +4784,12 @@ lsg_n82(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 1.0
+	if (lsd_want(82))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("How many", lsi1)
+	}
 	if (lsd_enter(82, ctx))
 		return
 	if (!ls_components_running())
@@ -4461,8 +4806,11 @@ lsg_n82(ctx[])
 lsg_n83(ctx[])
 {
 	new Float:lsi0 = float(ls_components_running() ? ls_turret_kits(ctx[0]) : 0)
+	if (lsd_want(83))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(83, ctx))
 		return
 	new t[192]
@@ -4478,8 +4826,11 @@ lsg_n83(ctx[])
 lsg_n84(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(84))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(84, ctx))
 		return
 	if (!ls_components_running())
@@ -4496,8 +4847,11 @@ lsg_n84(ctx[])
 lsg_n85(ctx[])
 {
 	new lsi0 = g_lsgOut[84]
+	if (lsd_want(85))
+	{
 	lsd_begin()
 	lsd_in_entity("Value", lsi0)
+	}
 	if (lsd_enter(85, ctx))
 		return
 	new t[192]
@@ -4513,8 +4867,11 @@ lsg_n85(ctx[])
 lsg_n86(ctx[])
 {
 	new Float:lsi0 = float(ls_components_running() ? ls_turret_count(ctx[0]) : 0)
+	if (lsd_want(86))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(86, ctx))
 		return
 	new t[192]
@@ -4528,7 +4885,10 @@ lsg_n86(ctx[])
 // Perk Bought (e_perk)
 lsg_n87(ctx[])
 {
+	if (lsd_want(87))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(87, ctx))
 		return
 	lsd_exit(87, "ran")
@@ -4540,8 +4900,11 @@ lsg_n88(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, g_lsgTxt[0])
+	if (lsd_want(88))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(88, ctx))
 		return
 	new t[192]
@@ -4555,7 +4918,10 @@ lsg_n88(ctx[])
 // Gun Upgraded (e_up)
 lsg_n89(ctx[])
 {
+	if (lsd_want(89))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(89, ctx))
 		return
 	lsd_exit(89, "ran")
@@ -4566,8 +4932,11 @@ lsg_n89(ctx[])
 lsg_n90(ctx[])
 {
 	new Float:lsi0 = Float:ctx[1]
+	if (lsd_want(90))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(90, ctx))
 		return
 	new t[192]
@@ -4581,7 +4950,10 @@ lsg_n90(ctx[])
 // Mystery Box Gave (e_box)
 lsg_n91(ctx[])
 {
+	if (lsd_want(91))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(91, ctx))
 		return
 	lsd_exit(91, "ran")
@@ -4593,8 +4965,11 @@ lsg_n92(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, g_lsgTxt[0])
+	if (lsd_want(92))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(92, ctx))
 		return
 	new t[192]
@@ -4608,7 +4983,10 @@ lsg_n92(ctx[])
 // Pickup Taken (e_pick)
 lsg_n93(ctx[])
 {
+	if (lsd_want(93))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(93, ctx))
 		return
 	lsd_exit(93, "ran")
@@ -4620,8 +4998,11 @@ lsg_n94(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, g_lsgTxt[0])
+	if (lsd_want(94))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(94, ctx))
 		return
 	new t[192]
@@ -4635,7 +5016,10 @@ lsg_n94(ctx[])
 // Creature Hurt (e_ch)
 lsg_n95(ctx[])
 {
+	if (lsd_want(95))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(95, ctx))
 		return
 	lsd_exit(95, "ran")
@@ -4646,8 +5030,11 @@ lsg_n95(ctx[])
 lsg_n96(ctx[])
 {
 	new Float:lsi0 = Float:ctx[2]
+	if (lsd_want(96))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(96, ctx))
 		return
 	new t[192]
@@ -4661,7 +5048,10 @@ lsg_n96(ctx[])
 // Knocked Down (e_kd)
 lsg_n97(ctx[])
 {
+	if (lsd_want(97))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(97, ctx))
 		return
 	lsd_exit(97, "ran")
@@ -4672,8 +5062,11 @@ lsg_n97(ctx[])
 lsg_n98(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(98))
+	{
 	lsd_begin()
 	lsd_in_player("Value", lsi0)
+	}
 	if (lsd_enter(98, ctx))
 		return
 	new t[192]
@@ -4687,7 +5080,10 @@ lsg_n98(ctx[])
 // Got Up (e_ku)
 lsg_n99(ctx[])
 {
+	if (lsd_want(99))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(99, ctx))
 		return
 	lsd_exit(99, "ran")
@@ -4698,8 +5094,11 @@ lsg_n99(ctx[])
 lsg_n100(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(100))
+	{
 	lsd_begin()
 	lsd_in_player("Value", lsi0)
+	}
 	if (lsd_enter(100, ctx))
 		return
 	new t[192]
@@ -4713,7 +5112,10 @@ lsg_n100(ctx[])
 // Bled Out (e_bo)
 lsg_n101(ctx[])
 {
+	if (lsd_want(101))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(101, ctx))
 		return
 	lsd_exit(101, "ran")
@@ -4724,8 +5126,11 @@ lsg_n101(ctx[])
 lsg_n102(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(102))
+	{
 	lsd_begin()
 	lsd_in_player("Value", lsi0)
+	}
 	if (lsd_enter(102, ctx))
 		return
 	new t[192]
@@ -4739,7 +5144,10 @@ lsg_n102(ctx[])
 // Shop Purchase (e_buy)
 lsg_n103(ctx[])
 {
+	if (lsd_want(103))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(103, ctx))
 		return
 	lsd_exit(103, "ran")
@@ -4751,8 +5159,11 @@ lsg_n104(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, g_lsgTxt[0])
+	if (lsd_want(104))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsi0)
+	}
 	if (lsd_enter(104, ctx))
 		return
 	new t[192]
@@ -4766,7 +5177,10 @@ lsg_n104(ctx[])
 // Landed (e_land)
 lsg_n105(ctx[])
 {
+	if (lsd_want(105))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(105, ctx))
 		return
 	lsd_exit(105, "ran")
@@ -4777,8 +5191,11 @@ lsg_n105(ctx[])
 lsg_n106(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(106))
+	{
 	lsd_begin()
 	lsd_in_player("Value", lsi0)
+	}
 	if (lsd_enter(106, ctx))
 		return
 	new t[192]
@@ -4793,7 +5210,10 @@ lsg_n106(ctx[])
 // Lobby Ended (e_lob)
 lsg_n107(ctx[])
 {
+	if (lsd_want(107))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(107, ctx))
 		return
 	lsd_exit(107, "ran")
@@ -4804,8 +5224,11 @@ lsg_n107(ctx[])
 lsg_n108(ctx[])
 {
 	new Float:lsi0 = Float:ctx[0]
+	if (lsd_want(108))
+	{
 	lsd_begin()
 	lsd_in_number("Value", lsi0)
+	}
 	if (lsd_enter(108, ctx))
 		return
 	new t[192]
@@ -4819,7 +5242,10 @@ lsg_n108(ctx[])
 // Turret Placed (e_tur)
 lsg_n109(ctx[])
 {
+	if (lsd_want(109))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(109, ctx))
 		return
 	lsd_exit(109, "ran")
@@ -4830,8 +5256,11 @@ lsg_n109(ctx[])
 lsg_n110(ctx[])
 {
 	new lsi0 = ctx[1]
+	if (lsd_want(110))
+	{
 	lsd_begin()
 	lsd_in_player("Value", lsi0)
+	}
 	if (lsd_enter(110, ctx))
 		return
 	new t[192]

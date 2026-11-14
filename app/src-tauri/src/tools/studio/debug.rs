@@ -24,6 +24,18 @@ pub fn events_file(game_dir: &Path, mode: &str) -> PathBuf {
     dir(game_dir).join(format!("{mode}.events"))
 }
 
+/// How far the page has read the events (written at each read): the plugin writes node runs
+/// only while it's fresh, and starts the events file over once it's all been read (gen.rs).
+pub fn seen_file(game_dir: &Path, mode: &str) -> PathBuf {
+    dir(game_dir).join(format!("{mode}.seen"))
+}
+
+/// Notes that the page read up to `next` (best effort: a missing note only means the plugin
+/// keeps writing everything).
+pub fn mark_seen(game_dir: &Path, mode: &str, next: u64) {
+    let _ = std::fs::write(seen_file(game_dir, mode), format!("{next}\n"));
+}
+
 pub fn cmd_file(game_dir: &Path, mode: &str) -> PathBuf {
     dir(game_dir).join(format!("{mode}.cmd"))
 }
@@ -158,6 +170,7 @@ pub fn start(game_dir: &Path, mode: &str, breakpoints: Vec<String>) -> std::io::
     std::fs::create_dir_all(dir(game_dir))?;
     let _ = std::fs::remove_file(events_file(game_dir, mode));
     let _ = std::fs::remove_file(cmd_file(game_dir, mode));
+    let _ = std::fs::remove_file(seen_file(game_dir, mode));
     set_breakpoints(game_dir, mode, breakpoints)
 }
 
@@ -183,6 +196,13 @@ mod tests {
         assert_eq!(std::fs::read_to_string(bp_file(&d, "mymode")).unwrap(), "n1\n");
         send(&cmd, &[Command::Resume, Command::Breakpoints(vec![])]).unwrap();
         assert_eq!(std::fs::read_to_string(&cmd).unwrap(), "bp n1\nresume\nbp\n");
+
+        // how far the page has read (the plugin writes runs only while it's fresh); a new
+        // Playtest starts without it
+        mark_seen(&d, "mymode", 1234);
+        assert_eq!(std::fs::read_to_string(seen_file(&d, "mymode")).unwrap(), "1234\n");
+        start(&d, "mymode", vec![]).unwrap();
+        assert!(!seen_file(&d, "mymode").exists());
 
         let ev = events_file(&d, "mymode");
         assert_eq!(read_events(&ev, 0).unwrap(), Batch { events: vec![], next: 0, reset: false });

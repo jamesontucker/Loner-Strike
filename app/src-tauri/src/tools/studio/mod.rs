@@ -986,6 +986,10 @@ async fn api_events(State(st): State<Shared>, Query(q): Query<EventsQuery>) -> R
         }
         let game = local_game(&st)?;
         let b = debug::read_events(&debug::events_file(&game.dir, &q.mode), q.from).map_err(|e| format!("Couldn't read the debugger's events ({e})."))?;
+        // (only for a Playtest that's running: the plugin made the folder)
+        if debug::dir(&game.dir).is_dir() {
+            debug::mark_seen(&game.dir, &q.mode, b.next);
+        }
         Ok(json!({"events": b.events, "next": b.next, "reset": b.reset}))
     })
     .await

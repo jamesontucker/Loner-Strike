@@ -61,7 +61,8 @@ export function applyEvents(s: DebugState, events: DebugEvent[], isEvent: (node:
         break;
       case "node_enter":
         if (!node) break;
-        touch(node, (r) => ({ ...r, count: r.count + 1, at: now, inputs: ev.inputs, error: undefined, result: undefined }));
+        // (a sampled run carries how many before it weren't written: the count stays right)
+        touch(node, (r) => ({ ...r, count: r.count + 1 + (typeof ev.skipped === "number" ? ev.skipped : 0), at: now, inputs: ev.inputs, error: undefined, result: undefined }));
         path = isEvent(node) || !path.length ? [node] : [...path, node];
         // (only Resume ends a pause: other runs of a loop come in while it's paused)
         break;

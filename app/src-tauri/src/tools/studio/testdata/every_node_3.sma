@@ -2428,10 +2428,21 @@ stock lsg_dt0_3(Float:row)
 }
 stock Float:lsg_dt0_find(Float:key)
 {
+	// (the same key as last time: the same row)
+	static bool:had, Float:last, Float:lastRow
+	if (had && key == last)
+		return lastRow
+	new Float:row = -1.0
 	for (new r = 0; r < LSG_DT0_N; r++)
 		if (g_lsgDt0_0[r] == key)
-			return float(r)
-	return -1.0
+		{
+			row = float(r)
+			break
+		}
+	had = true
+	last = key
+	lastRow = row
+	return row
 }
 stock lsg_dt0_keys()
 {

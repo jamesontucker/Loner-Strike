@@ -253,7 +253,7 @@ new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, fal
 new const g_lsdBool[][] = { "false", "true" }
 new const g_lsdTeams[][] = { "none", "T", "CT", "spectator" }
 #define LSD_TASK 9475100
-new g_lsdEvents[160], g_lsdCmd[160]
+new g_lsdEvents[160], g_lsdCmd[160], g_lsdSeen[160]
 new g_lsdSeq, g_lsdTick, g_lsdRound
 new g_lsdPhase[8] = "freeze"
 new g_lsdIn[600]
@@ -282,6 +282,7 @@ lsd_init()
 		mkdir(dir)
 	formatex(g_lsdEvents, charsmax(g_lsdEvents), "%s/%s.events", dir, LSG_MODE)
 	formatex(g_lsdCmd, charsmax(g_lsdCmd), "%s/%s.cmd", dir, LSG_MODE)
+	formatex(g_lsdSeen, charsmax(g_lsdSeen), "%s/%s.seen", dir, LSG_MODE)
 	new f = fopen(g_lsdEvents, "wt")
 	if (f)
 		fclose(f)
@@ -366,6 +367,8 @@ public lsd_round_end()
 // event (PerfAudit #5: 181 us an event)
 #define LSD_BUF 24000
 new g_lsdBuf[LSD_BUF], g_lsdBufLen
+// how big the events file is now (it starts empty at each map)
+new g_lsdBytes
 
 stock lsd_flush()
 {
@@ -376,9 +379,84 @@ stock lsd_flush()
 	{
 		fputs(f, g_lsdBuf)
 		fclose(f)
+		g_lsdBytes += g_lsdBufLen
 	}
 	g_lsdBuf[0] = 0
 	g_lsdBufLen = 0
+}
+
+// ---- who's watching, and how much is written (StudioPerfAudit #5) ----
+// The app writes <mode>.seen (how far it has read) each time the page reads. Not changed for
+// 15 s: nobody is watching, so nodes' runs aren't written (breakpoints still pause). With no
+// .seen at all (a Test run, or before the page's first read) everything is written.
+#define LSD_AWAY 15
+// the file starts over once the reader has had all of it past 8 MB, or regardless at 32 MB
+// (the reader sees it shrink and reads from the top: a "reset")
+#define LSD_CAP 8000000
+#define LSD_HARD 32000000
+// each node writes at most this many runs a quarter second; the rest are counted, and the
+// next run written carries the count ("skipped"), so totals stay right
+#define LSD_PER 8
+new bool:g_lsdAway, g_lsdRead = -1
+new Float:g_lsdWin[LSD_N], g_lsdWinN[LSD_N], g_lsdSkipped[LSD_N], bool:g_lsdMute[LSD_N]
+
+stock lsd_watchers()
+{
+	if (!file_exists(g_lsdSeen))
+	{
+		g_lsdAway = false
+		g_lsdRead = -1
+		return
+	}
+	g_lsdAway = get_systime() - GetFileTime(g_lsdSeen, FileTime_LastChange) > LSD_AWAY
+	new f = fopen(g_lsdSeen, "rt"), line[24]
+	if (f)
+	{
+		fgets(f, line, charsmax(line))
+		fclose(f)
+		g_lsdRead = str_to_num(line)
+	}
+}
+
+stock lsd_rotate()
+{
+	if (g_lsdBytes > LSD_HARD || (g_lsdBytes > LSD_CAP && g_lsdRead >= g_lsdBytes))
+	{
+		new f = fopen(g_lsdEvents, "wt")
+		if (f)
+			fclose(f)
+		g_lsdBytes = 0
+	}
+}
+
+// Is node n's run to be written? (its inputs are only worked out into JSON when it is)
+stock bool:lsd_want(n)
+{
+	if (g_lsdBp[n])
+	{
+		g_lsdMute[n] = false
+		return true
+	}
+	if (g_lsdAway)
+	{
+		g_lsdSkipped[n]++
+		g_lsdMute[n] = true
+		return false
+	}
+	new Float:now = get_gametime()
+	if (now - g_lsdWin[n] >= 0.25)
+	{
+		g_lsdWin[n] = now
+		g_lsdWinN[n] = 0
+	}
+	if (++g_lsdWinN[n] > LSD_PER)
+	{
+		g_lsdSkipped[n]++
+		g_lsdMute[n] = true
+		return false
+	}
+	g_lsdMute[n] = false
+	return true
 }
 
 stock lsd_emitf(const fmt[], any:...)
@@ -558,18 +636,29 @@ stock bool:lsd_enter(n, const ctx[])
 		lsd_freeze()
 		return true
 	}
-	lsd_emitf("^"e^":^"node_enter^",^"node^":^"%s^",^"inputs^":{%s}", g_lsdIds[n], g_lsdIn)
+	if (g_lsdMute[n])
+		return false
+	if (g_lsdSkipped[n])
+	{
+		lsd_emitf("^"e^":^"node_enter^",^"node^":^"%s^",^"skipped^":%d,^"inputs^":{%s}", g_lsdIds[n], g_lsdSkipped[n], g_lsdIn)
+		g_lsdSkipped[n] = 0
+	}
+	else
+		lsd_emitf("^"e^":^"node_enter^",^"node^":^"%s^",^"inputs^":{%s}", g_lsdIds[n], g_lsdIn)
 	return false
 }
 
 stock lsd_exit(n, const result[])
 {
-	lsd_emitf("^"e^":^"node_exit^",^"node^":^"%s^",^"result^":^"%s^"", g_lsdIds[n], result)
+	if (!g_lsdMute[n])
+		lsd_emitf("^"e^":^"node_exit^",^"node^":^"%s^",^"result^":^"%s^"", g_lsdIds[n], result)
 }
 
 stock lsd_error(n, const msg[])
 {
-	lsd_emitf("^"e^":^"node_error^",^"node^":^"%s^",^"message^":^"%s^"", g_lsdIds[n], msg)
+	// (a sampled run's error still shows, unless nobody is watching)
+	if (!g_lsdAway)
+		lsd_emitf("^"e^":^"node_error^",^"node^":^"%s^",^"message^":^"%s^"", g_lsdIds[n], msg)
 }
 
 stock lsd_time_left()
@@ -754,12 +843,19 @@ stock lsd_resume()
 
 public lsd_poll()
 {
+	// (who's watching and how far they've read: once a second; the old part of the file goes
+	// before this flush, so nothing unread is lost)
+	if (++g_lsdTick % 4 == 1)
+	{
+		lsd_watchers()
+		lsd_rotate()
+	}
 	lsd_flush()
 	if (g_lsdPaused >= 0)
 	{
 		for (new id = 1; id <= MaxClients; id++)
 			lsd_hold_player(id)
-		if (++g_lsdTick % 4 == 0)
+		if (g_lsdTick % 4 == 0)
 			lsd_vars()
 	}
 	else if (g_lsdHolding && lsd_time_left() <= 0)
@@ -2981,10 +3077,21 @@ stock lsg_dt0_3(Float:row)
 }
 stock Float:lsg_dt0_find(Float:key)
 {
+	// (the same key as last time: the same row)
+	static bool:had, Float:last, Float:lastRow
+	if (had && key == last)
+		return lastRow
+	new Float:row = -1.0
 	for (new r = 0; r < LSG_DT0_N; r++)
 		if (g_lsgDt0_0[r] == key)
-			return float(r)
-	return -1.0
+		{
+			row = float(r)
+			break
+		}
+	had = true
+	last = key
+	lastRow = row
+	return row
 }
 stock lsg_dt0_keys()
 {
@@ -3701,7 +3808,10 @@ public ls_studio_event(const name[], a, b)
 // Player Spawned (ps)
 lsg_n0(ctx[])
 {
+	if (lsd_want(0))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(0, ctx))
 		return
 	lsd_exit(0, "ran")
@@ -3711,7 +3821,10 @@ lsg_n0(ctx[])
 // Custom Event (tick)
 lsg_n1(ctx[])
 {
+	if (lsd_want(1))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(1, ctx))
 		return
 	lsd_exit(1, "called")
@@ -3720,7 +3833,10 @@ lsg_n1(ctx[])
 // Player Hurt (ph)
 lsg_n2(ctx[])
 {
+	if (lsd_want(2))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(2, ctx))
 		return
 	lsd_exit(2, "ran")
@@ -3732,9 +3848,12 @@ lsg_n3(ctx[])
 {
 	new lsi0 = ctx[5]
 	new Float:lsi1 = 0.0
+	if (lsd_want(3))
+	{
 	lsd_begin()
 	lsd_in_text("Position", lsg_vtext(lsi0))
 	lsd_in_number("Damage", lsi1)
+	}
 	if (lsd_enter(3, ctx))
 		return
 	lsg_explode(lsi0, lsi1, 250.0)
@@ -3744,7 +3863,10 @@ lsg_n3(ctx[])
 // Creature Hurt (ch)
 lsg_n4(ctx[])
 {
+	if (lsd_want(4))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(4, ctx))
 		return
 	lsd_exit(4, "ran")
@@ -3755,8 +3877,11 @@ lsg_n4(ctx[])
 lsg_n5(ctx[])
 {
 	new lsi0 = ctx[5]
+	if (lsd_want(5))
+	{
 	lsd_begin()
 	lsd_in_text("Value", lsg_vtext(lsi0))
+	}
 	if (lsd_enter(5, ctx))
 		return
 	new t[192]
@@ -3771,7 +3896,10 @@ lsg_n5(ctx[])
 // Change Map (n12)
 lsg_n6(ctx[])
 {
+	if (lsd_want(6))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(6, ctx))
 		return
 	lsg_change_map("de_dust2")
@@ -3782,7 +3910,10 @@ lsg_n6(ctx[])
 // Restart Round (n13)
 lsg_n7(ctx[])
 {
+	if (lsd_want(7))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(7, ctx))
 		return
 	server_cmd("sv_restartround 1")
@@ -3795,8 +3926,11 @@ lsg_n8(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, "sv_gravity 800")
+	if (lsd_want(8))
+	{
 	lsd_begin()
 	lsd_in_text("Command", lsi0)
+	}
 	if (lsd_enter(8, ctx))
 		return
 	g_lsgO[0] = lsg_safe_cmd(lsi0, 0) ? 1 : 0
@@ -3810,8 +3944,11 @@ lsg_n9(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, "amx_slap @T 0")
+	if (lsd_want(9))
+	{
 	lsd_begin()
 	lsd_in_text("Command", lsi0)
+	}
 	if (lsd_enter(9, ctx))
 		return
 	g_lsgO[1] = lsg_safe_cmd(lsi0, 1) ? 1 : 0
@@ -3824,8 +3961,11 @@ lsg_n9(ctx[])
 lsg_n10(ctx[])
 {
 	new Float:lsi0 = 800.0
+	if (lsd_want(10))
+	{
 	lsd_begin()
 	lsd_in_number("Gravity", lsi0)
+	}
 	if (lsd_enter(10, ctx))
 		return
 	set_cvar_float("sv_gravity", lsi0)
@@ -3837,8 +3977,11 @@ lsg_n10(ctx[])
 lsg_n11(ctx[])
 {
 	new Float:lsi0 = 4.0
+	if (lsd_want(11))
+	{
 	lsd_begin()
 	lsd_in_number("Friction", lsi0)
+	}
 	if (lsd_enter(11, ctx))
 		return
 	set_cvar_float("sv_friction", lsi0)
@@ -3850,8 +3993,11 @@ lsg_n11(ctx[])
 lsg_n12(ctx[])
 {
 	new Float:lsi0 = 320.0
+	if (lsd_want(12))
+	{
 	lsd_begin()
 	lsd_in_number("Max Speed", lsi0)
+	}
 	if (lsd_enter(12, ctx))
 		return
 	set_cvar_float("sv_maxspeed", lsi0)
@@ -3863,8 +4009,11 @@ lsg_n12(ctx[])
 lsg_n13(ctx[])
 {
 	new Float:lsi0 = 2.5
+	if (lsd_want(13))
+	{
 	lsd_begin()
 	lsd_in_number("Round Time", lsi0)
+	}
 	if (lsd_enter(13, ctx))
 		return
 	set_cvar_float("mp_roundtime", lsi0)
@@ -3876,8 +4025,11 @@ lsg_n13(ctx[])
 lsg_n14(ctx[])
 {
 	new Float:lsi0 = 6.0
+	if (lsd_want(14))
+	{
 	lsd_begin()
 	lsd_in_number("Freeze Time", lsi0)
+	}
 	if (lsd_enter(14, ctx))
 		return
 	set_cvar_float("mp_freezetime", lsi0)
@@ -3889,8 +4041,11 @@ lsg_n14(ctx[])
 lsg_n15(ctx[])
 {
 	new Float:lsi0 = 0.25
+	if (lsd_want(15))
+	{
 	lsd_begin()
 	lsd_in_number("Buy Time", lsi0)
+	}
 	if (lsd_enter(15, ctx))
 		return
 	set_cvar_float("mp_buytime", lsi0)
@@ -3902,8 +4057,11 @@ lsg_n15(ctx[])
 lsg_n16(ctx[])
 {
 	new lsi0 = 0
+	if (lsd_want(16))
+	{
 	lsd_begin()
 	lsd_in_bool("Friendly Fire", lsi0)
+	}
 	if (lsd_enter(16, ctx))
 		return
 	set_cvar_num("mp_friendlyfire", (lsi0) ? 1 : 0)
@@ -3915,8 +4073,11 @@ lsg_n16(ctx[])
 lsg_n17(ctx[])
 {
 	new lsi0 = 1
+	if (lsd_want(17))
+	{
 	lsd_begin()
 	lsd_in_bool("Team Balance", lsi0)
+	}
 	if (lsd_enter(17, ctx))
 		return
 	set_cvar_num("mp_autoteambalance", (lsi0) ? 1 : 0)
@@ -3928,8 +4089,11 @@ lsg_n17(ctx[])
 lsg_n18(ctx[])
 {
 	new Float:lsi0 = 2.0
+	if (lsd_want(18))
+	{
 	lsd_begin()
 	lsd_in_number("Team Limit", lsi0)
+	}
 	if (lsd_enter(18, ctx))
 		return
 	set_cvar_float("mp_limitteams", lsi0)
@@ -3941,8 +4105,11 @@ lsg_n18(ctx[])
 lsg_n19(ctx[])
 {
 	new Float:lsi0 = 800.0
+	if (lsd_want(19))
+	{
 	lsd_begin()
 	lsd_in_number("Start Money", lsi0)
+	}
 	if (lsd_enter(19, ctx))
 		return
 	set_cvar_float("mp_startmoney", lsi0)
@@ -3954,8 +4121,11 @@ lsg_n19(ctx[])
 lsg_n20(ctx[])
 {
 	new Float:lsi0 = 35.0
+	if (lsd_want(20))
+	{
 	lsd_begin()
 	lsd_in_number("C4 Timer", lsi0)
+	}
 	if (lsd_enter(20, ctx))
 		return
 	set_cvar_float("mp_c4timer", lsi0)
@@ -3967,8 +4137,11 @@ lsg_n20(ctx[])
 lsg_n21(ctx[])
 {
 	new lsi0 = 1
+	if (lsd_want(21))
+	{
 	lsd_begin()
 	lsd_in_bool("Fall Damage", lsi0)
+	}
 	if (lsd_enter(21, ctx))
 		return
 	set_cvar_num("mp_falldamage", (lsi0) ? 1 : 0)
@@ -3980,8 +4153,11 @@ lsg_n21(ctx[])
 lsg_n22(ctx[])
 {
 	new lsi0 = 1
+	if (lsd_want(22))
+	{
 	lsd_begin()
 	lsd_in_bool("Footsteps", lsi0)
+	}
 	if (lsd_enter(22, ctx))
 		return
 	set_cvar_num("mp_footsteps", (lsi0) ? 1 : 0)
@@ -3993,8 +4169,11 @@ lsg_n22(ctx[])
 lsg_n23(ctx[])
 {
 	new lsi0 = 0
+	if (lsd_want(23))
+	{
 	lsd_begin()
 	lsd_in_bool("All Talk", lsi0)
+	}
 	if (lsd_enter(23, ctx))
 		return
 	set_cvar_num("sv_alltalk", (lsi0) ? 1 : 0)
@@ -4006,8 +4185,11 @@ lsg_n23(ctx[])
 lsg_n24(ctx[])
 {
 	new Float:lsi0 = 20.0
+	if (lsd_want(24))
+	{
 	lsd_begin()
 	lsd_in_number("Time Limit", lsi0)
+	}
 	if (lsd_enter(24, ctx))
 		return
 	set_cvar_float("mp_timelimit", lsi0)
@@ -4019,8 +4201,11 @@ lsg_n24(ctx[])
 lsg_n25(ctx[])
 {
 	new Float:lsi0 = 0.0
+	if (lsd_want(25))
+	{
 	lsd_begin()
 	lsd_in_number("Win Limit", lsi0)
+	}
 	if (lsd_enter(25, ctx))
 		return
 	set_cvar_float("mp_winlimit", lsi0)
@@ -4032,8 +4217,11 @@ lsg_n25(ctx[])
 lsg_n26(ctx[])
 {
 	new Float:lsi0 = 0.0
+	if (lsd_want(26))
+	{
 	lsd_begin()
 	lsd_in_number("Frag Limit", lsi0)
+	}
 	if (lsd_enter(26, ctx))
 		return
 	set_cvar_float("mp_fraglimit", lsi0)
@@ -4045,8 +4233,11 @@ lsg_n26(ctx[])
 lsg_n27(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(27))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(27, ctx))
 		return
 	lsg_set_transform(lsi0, -1, -1, -1)
@@ -4059,9 +4250,12 @@ lsg_n28(ctx[])
 {
 	new lsi0 = ctx[0]
 	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
+	if (lsd_want(28))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_text("Rotation", lsg_vtext(lsi1))
+	}
 	if (lsd_enter(28, ctx))
 		return
 	lsg_set_transform(lsi0, -1, lsi1, -1)
@@ -4073,8 +4267,11 @@ lsg_n28(ctx[])
 lsg_n29(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(29))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(29, ctx))
 		return
 	lsg_look_at(lsi0, 0, -1)
@@ -4087,9 +4284,12 @@ lsg_n30(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 5.0
+	if (lsd_want(30))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Damage", lsi1)
+	}
 	if (lsd_enter(30, ctx))
 		return
 	lsg_slap(lsi0, floatround(lsi1))
@@ -4101,8 +4301,11 @@ lsg_n30(ctx[])
 lsg_n31(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(31))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(31, ctx))
 		return
 	lsg_fade(lsi0, 2.0, 255, 255, 255, 255)
@@ -4114,8 +4317,11 @@ lsg_n31(ctx[])
 lsg_n32(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(32))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(32, ctx))
 		return
 	lsg_shake(lsi0, 8.0, 2.0)
@@ -4127,8 +4333,11 @@ lsg_n32(ctx[])
 lsg_n33(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(33))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(33, ctx))
 		return
 	lsg_godmode(lsi0, 1)
@@ -4140,8 +4349,11 @@ lsg_n33(ctx[])
 lsg_n34(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(34))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(34, ctx))
 		return
 	lsg_noclip(lsi0, 1)
@@ -4153,8 +4365,11 @@ lsg_n34(ctx[])
 lsg_n35(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(35))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(35, ctx))
 		return
 	lsg_render(lsi0, 2, 80)
@@ -4168,10 +4383,13 @@ lsg_n36(ctx[])
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 30.0
 	new Float:lsi2 = 90.0
+	if (lsd_want(36))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Magazine", lsi1)
 	lsd_in_number("Spare", lsi2)
+	}
 	if (lsd_enter(36, ctx))
 		return
 	lsg_set_ammo(lsi0, floatround(lsi1), floatround(lsi2))
@@ -4184,9 +4402,12 @@ lsg_n37(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 30.0
+	if (lsd_want(37))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Bullets", lsi1)
+	}
 	if (lsd_enter(37, ctx))
 		return
 	lsg_give_ammo(lsi0, floatround(lsi1))
@@ -4198,8 +4419,11 @@ lsg_n37(ctx[])
 lsg_n38(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(38))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(38, ctx))
 		return
 	lsg_take_weapon(lsi0, "weapon_ak47")
@@ -4211,8 +4435,11 @@ lsg_n38(ctx[])
 lsg_n39(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(39))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(39, ctx))
 		return
 	lsg_switch_weapon(lsi0, "weapon_knife")
@@ -4225,9 +4452,12 @@ lsg_n40(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 0.0
+	if (lsd_want(40))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Kills", lsi1)
+	}
 	if (lsd_enter(40, ctx))
 		return
 	lsg_set_frags(lsi0, floatround(lsi1))
@@ -4240,9 +4470,12 @@ lsg_n41(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 0.0
+	if (lsd_want(41))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Deaths", lsi1)
+	}
 	if (lsd_enter(41, ctx))
 		return
 	lsg_set_deaths(lsi0, floatround(lsi1))
@@ -4254,8 +4487,11 @@ lsg_n41(ctx[])
 lsg_n42(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(42))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(42, ctx))
 		return
 	lsg_to_spec(lsi0)
@@ -4267,8 +4503,11 @@ lsg_n42(ctx[])
 lsg_n43(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(43))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(43, ctx))
 		return
 	lsg_kick(lsi0, "Kicked by the mode")
@@ -4280,8 +4519,11 @@ lsg_n43(ctx[])
 lsg_n44(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(44))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(44, ctx))
 		return
 	lsg_mute(lsi0, 60.0)
@@ -4293,8 +4535,11 @@ lsg_n44(ctx[])
 lsg_n45(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(45))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(45, ctx))
 		return
 	lsg_gag(lsi0, 60.0)
@@ -4305,7 +4550,10 @@ lsg_n45(ctx[])
 // Chat To Team (n86)
 lsg_n46(ctx[])
 {
+	if (lsd_want(46))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(46, ctx))
 		return
 	lsg_team_chat(2, "%s", "Hold the line!")
@@ -4316,7 +4564,10 @@ lsg_n46(ctx[])
 // Notify Admins (n87)
 lsg_n47(ctx[])
 {
+	if (lsd_want(47))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(47, ctx))
 		return
 	lsg_admins_chat("%s", "Please check player:")
@@ -4328,8 +4579,11 @@ lsg_n47(ctx[])
 lsg_n48(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
+	if (lsd_want(48))
+	{
 	lsd_begin()
 	lsd_in_entity("At", lsi0)
+	}
 	if (lsd_enter(48, ctx))
 		return
 	g_lsgOut[48] = lsg_prop(lsi0, "models/w_c4.mdl", 1)
@@ -4342,8 +4596,11 @@ lsg_n48(ctx[])
 lsg_n49(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
+	if (lsd_want(49))
+	{
 	lsd_begin()
 	lsd_in_entity("Entity", lsi0)
+	}
 	if (lsd_enter(49, ctx))
 		return
 	lsg_remove(lsi0)
@@ -4356,9 +4613,12 @@ lsg_n50(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
 	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
+	if (lsd_want(50))
+	{
 	lsd_begin()
 	lsd_in_entity("Entity", lsi0)
 	lsd_in_text("Position", lsg_vtext(lsi1))
+	}
 	if (lsd_enter(50, ctx))
 		return
 	lsg_ent_pos(lsi0, lsi1)
@@ -4371,9 +4631,12 @@ lsg_n51(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
 	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
+	if (lsd_want(51))
+	{
 	lsd_begin()
 	lsd_in_entity("Entity", lsi0)
 	lsd_in_text("Rotation", lsg_vtext(lsi1))
+	}
 	if (lsd_enter(51, ctx))
 		return
 	lsg_ent_angles(lsi0, lsi1)
@@ -4385,8 +4648,11 @@ lsg_n51(ctx[])
 lsg_n52(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
+	if (lsd_want(52))
+	{
 	lsd_begin()
 	lsd_in_entity("Entity", lsi0)
+	}
 	if (lsd_enter(52, ctx))
 		return
 	lsg_ent_visible(lsi0, 1)
@@ -4399,9 +4665,12 @@ lsg_n53(ctx[])
 {
 	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
 	new Float:lsi1 = 0.0
+	if (lsd_want(53))
+	{
 	lsd_begin()
 	lsd_in_text("Position", lsg_vtext(lsi0))
 	lsd_in_number("Damage", lsi1)
+	}
 	if (lsd_enter(53, ctx))
 		return
 	lsg_explode(lsi0, lsi1, 250.0)
@@ -4414,9 +4683,12 @@ lsg_n54(ctx[])
 {
 	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
 	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
+	if (lsd_want(54))
+	{
 	lsd_begin()
 	lsd_in_text("From", lsg_vtext(lsi0))
 	lsd_in_text("To", lsg_vtext(lsi1))
+	}
 	if (lsd_enter(54, ctx))
 		return
 	lsg_beam(lsi0, lsi1, 230, 30, 30, 1.0)
@@ -4428,8 +4700,11 @@ lsg_n54(ctx[])
 lsg_n55(ctx[])
 {
 	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
+	if (lsd_want(55))
+	{
 	lsd_begin()
 	lsd_in_text("Position", lsg_vtext(lsi0))
+	}
 	if (lsd_enter(55, ctx))
 		return
 	lsg_sound_at(lsi0, "ambience/thunder_clap.wav")
@@ -4441,8 +4716,11 @@ lsg_n55(ctx[])
 lsg_n56(ctx[])
 {
 	new lsi0 = ctx[0]
+	if (lsd_want(56))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	}
 	if (lsd_enter(56, ctx))
 		return
 	lsg_sound_to(lsi0, "buttons/bell1.wav")
@@ -4453,7 +4731,10 @@ lsg_n56(ctx[])
 // Set Light Style (n100)
 lsg_n57(ctx[])
 {
+	if (lsd_want(57))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(57, ctx))
 		return
 	set_lights("#OFF")
@@ -4466,9 +4747,12 @@ lsg_n58(ctx[])
 {
 	new Float:lsi0 = 0.0
 	new Float:lsi1 = 0.0
+	if (lsd_want(58))
+	{
 	lsd_begin()
 	lsd_in_number("Argument 1", lsi0)
 	lsd_in_number("Argument 2", lsi1)
+	}
 	if (lsd_enter(58, ctx))
 		return
 	new r, called = lsg_call("gm_components.amxx", "plugin_cfg", 0, floatround(lsi0), floatround(lsi1), r)
@@ -4484,9 +4768,12 @@ lsg_n59(ctx[])
 {
 	new Float:lsi0 = 0.0
 	new Float:lsi1 = 0.0
+	if (lsd_want(59))
+	{
 	lsd_begin()
 	lsd_in_number("A", lsi0)
 	lsd_in_number("B", lsi1)
+	}
 	if (lsd_enter(59, ctx))
 		return
 	lsg_fire_event("my_event", floatround(lsi0), floatround(lsi1))
@@ -4497,7 +4784,10 @@ lsg_n59(ctx[])
 // On Custom Event (n104)
 lsg_n60(ctx[])
 {
+	if (lsd_want(60))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(60, ctx))
 		return
 	lsd_exit(60, "ran")
@@ -4506,7 +4796,10 @@ lsg_n60(ctx[])
 // Player Said (n105)
 lsg_n61(ctx[])
 {
+	if (lsd_want(61))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(61, ctx))
 		return
 	lsd_exit(61, "ran")
@@ -4515,7 +4808,10 @@ lsg_n61(ctx[])
 // Freeze Time Ended (n106)
 lsg_n62(ctx[])
 {
+	if (lsd_want(62))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(62, ctx))
 		return
 	lsd_exit(62, "ran")
@@ -4524,7 +4820,10 @@ lsg_n62(ctx[])
 // Map Ending (n107)
 lsg_n63(ctx[])
 {
+	if (lsd_want(63))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(63, ctx))
 		return
 	lsd_exit(63, "ran")
@@ -4533,7 +4832,10 @@ lsg_n63(ctx[])
 // Weapon Fired (n108)
 lsg_n64(ctx[])
 {
+	if (lsd_want(64))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(64, ctx))
 		return
 	lsd_exit(64, "ran")
@@ -4542,7 +4844,10 @@ lsg_n64(ctx[])
 // Reloaded (n109)
 lsg_n65(ctx[])
 {
+	if (lsd_want(65))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(65, ctx))
 		return
 	lsd_exit(65, "ran")
@@ -4551,7 +4856,10 @@ lsg_n65(ctx[])
 // Hostage Rescued (n110)
 lsg_n66(ctx[])
 {
+	if (lsd_want(66))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(66, ctx))
 		return
 	lsd_exit(66, "ran")
@@ -4560,7 +4868,10 @@ lsg_n66(ctx[])
 // VIP Escaped (n111)
 lsg_n67(ctx[])
 {
+	if (lsd_want(67))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(67, ctx))
 		return
 	lsd_exit(67, "ran")
@@ -4570,8 +4881,11 @@ lsg_n67(ctx[])
 lsg_n68(ctx[])
 {
 	new Float:lsi0 = 150.0
+	if (lsd_want(68))
+	{
 	lsd_begin()
 	lsd_in_number("Amount ($)", lsi0)
+	}
 	if (lsd_enter(68, ctx))
 		return
 	if (!ls_components_running())
@@ -4588,8 +4902,11 @@ lsg_n68(ctx[])
 lsg_n69(ctx[])
 {
 	new Float:lsi0 = 5.0
+	if (lsd_want(69))
+	{
 	lsd_begin()
 	lsd_in_number("Seconds", lsi0)
+	}
 	if (lsd_enter(69, ctx))
 		return
 	remove_task(LSG_TASK + 69)
@@ -4608,7 +4925,10 @@ public lsg_te69()
 // Custom Event (n116)
 lsg_n70(ctx[])
 {
+	if (lsd_want(70))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(70, ctx))
 		return
 	lsd_exit(70, "called")
@@ -4617,7 +4937,10 @@ lsg_n70(ctx[])
 // Call Custom Event (n117)
 lsg_n71(ctx[])
 {
+	if (lsd_want(71))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(71, ctx))
 		return
 	lsg_ce0(0, 0.0, "")
@@ -4628,7 +4951,10 @@ lsg_n71(ctx[])
 // For Each Creature (n118)
 lsg_n72(ctx[])
 {
+	if (lsd_want(72))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(72, ctx))
 		return
 	new c[LSG_CTX], count, p = -1
@@ -4650,8 +4976,11 @@ lsg_n72(ctx[])
 lsg_n73(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
+	if (lsd_want(73))
+	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
+	}
 	if (lsd_enter(73, ctx))
 		return
 	lsg_cr_goto(lsi0, 0, -1, "gate1", 0)
@@ -4664,9 +4993,12 @@ lsg_n74(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
 	new lsi1 = lsg_find("spot1")
+	if (lsd_want(74))
+	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
 	lsd_in_entity("Target", lsi1)
+	}
 	if (lsd_enter(74, ctx))
 		return
 	lsg_cr_attack(lsi0, lsi1)
@@ -4678,8 +5010,11 @@ lsg_n74(ctx[])
 lsg_n75(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
+	if (lsd_want(75))
+	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
+	}
 	if (lsd_enter(75, ctx))
 		return
 	lsg_cr_hold(lsi0)
@@ -4691,8 +5026,11 @@ lsg_n75(ctx[])
 lsg_n76(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
+	if (lsd_want(76))
+	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
+	}
 	if (lsd_enter(76, ctx))
 		return
 	lsg_cr_resume(lsi0)
@@ -4704,8 +5042,11 @@ lsg_n76(ctx[])
 lsg_n77(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
+	if (lsd_want(77))
+	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
+	}
 	if (lsd_enter(77, ctx))
 		return
 	lsg_cr_goto(lsi0, 0, -1, "", 2)
@@ -4718,9 +5059,12 @@ lsg_n78(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
 	new Float:lsi1 = 100.0
+	if (lsd_want(78))
+	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
 	lsd_in_number("Health", lsi1)
+	}
 	if (lsd_enter(78, ctx))
 		return
 	lsg_cr_health(lsi0, lsi1)
@@ -4732,8 +5076,11 @@ lsg_n78(ctx[])
 lsg_n79(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
+	if (lsd_want(79))
+	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
+	}
 	if (lsd_enter(79, ctx))
 		return
 	lsg_cr_cmd(lsi0, "kill %d")
@@ -4744,7 +5091,10 @@ lsg_n79(ctx[])
 // Creature Idle (n131)
 lsg_n80(ctx[])
 {
+	if (lsd_want(80))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(80, ctx))
 		return
 	lsd_exit(80, "ran")
@@ -4755,9 +5105,12 @@ lsg_n81(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
 	new Float:lsi1 = 1.5
+	if (lsd_want(81))
+	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
 	lsd_in_number("Times", lsi1)
+	}
 	if (lsd_enter(81, ctx))
 		return
 	lsg_cr_speed(lsi0, lsi1)
@@ -4770,9 +5123,12 @@ lsg_n82(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
 	new Float:lsi1 = float(lsg_cr_state(lsg_find("spot1")))
+	if (lsd_want(82))
+	{
 	lsd_begin()
 	lsd_in_entity("Creature", lsi0)
 	lsd_in_number("Tier", lsi1)
+	}
 	if (lsd_enter(82, ctx))
 		return
 	lsg_cr_tier(lsi0, floatround(lsi1))
@@ -4783,7 +5139,10 @@ lsg_n82(ctx[])
 // For Each Row (n134)
 lsg_n83(ctx[])
 {
+	if (lsd_want(83))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(83, ctx))
 		return
 	new c[LSG_CTX], count
@@ -4807,7 +5166,10 @@ lsg_n83(ctx[])
 // Timeline (n138)
 stock lsg_n84(ctx[])
 {
+	if (lsd_want(84))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(84, ctx))
 		return
 	new inst = 0

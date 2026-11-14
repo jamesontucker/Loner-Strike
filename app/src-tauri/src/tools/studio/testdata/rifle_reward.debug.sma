@@ -30,7 +30,7 @@ new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false }
 new const g_lsdBool[][] = { "false", "true" }
 new const g_lsdTeams[][] = { "none", "T", "CT", "spectator" }
 #define LSD_TASK 9475100
-new g_lsdEvents[160], g_lsdCmd[160]
+new g_lsdEvents[160], g_lsdCmd[160], g_lsdSeen[160]
 new g_lsdSeq, g_lsdTick, g_lsdRound
 new g_lsdPhase[8] = "freeze"
 new g_lsdIn[600]
@@ -59,6 +59,7 @@ lsd_init()
 		mkdir(dir)
 	formatex(g_lsdEvents, charsmax(g_lsdEvents), "%s/%s.events", dir, LSG_MODE)
 	formatex(g_lsdCmd, charsmax(g_lsdCmd), "%s/%s.cmd", dir, LSG_MODE)
+	formatex(g_lsdSeen, charsmax(g_lsdSeen), "%s/%s.seen", dir, LSG_MODE)
 	new f = fopen(g_lsdEvents, "wt")
 	if (f)
 		fclose(f)
@@ -143,6 +144,8 @@ public lsd_round_end()
 // event (PerfAudit #5: 181 us an event)
 #define LSD_BUF 24000
 new g_lsdBuf[LSD_BUF], g_lsdBufLen
+// how big the events file is now (it starts empty at each map)
+new g_lsdBytes
 
 stock lsd_flush()
 {
@@ -153,9 +156,84 @@ stock lsd_flush()
 	{
 		fputs(f, g_lsdBuf)
 		fclose(f)
+		g_lsdBytes += g_lsdBufLen
 	}
 	g_lsdBuf[0] = 0
 	g_lsdBufLen = 0
+}
+
+// ---- who's watching, and how much is written (StudioPerfAudit #5) ----
+// The app writes <mode>.seen (how far it has read) each time the page reads. Not changed for
+// 15 s: nobody is watching, so nodes' runs aren't written (breakpoints still pause). With no
+// .seen at all (a Test run, or before the page's first read) everything is written.
+#define LSD_AWAY 15
+// the file starts over once the reader has had all of it past 8 MB, or regardless at 32 MB
+// (the reader sees it shrink and reads from the top: a "reset")
+#define LSD_CAP 8000000
+#define LSD_HARD 32000000
+// each node writes at most this many runs a quarter second; the rest are counted, and the
+// next run written carries the count ("skipped"), so totals stay right
+#define LSD_PER 8
+new bool:g_lsdAway, g_lsdRead = -1
+new Float:g_lsdWin[LSD_N], g_lsdWinN[LSD_N], g_lsdSkipped[LSD_N], bool:g_lsdMute[LSD_N]
+
+stock lsd_watchers()
+{
+	if (!file_exists(g_lsdSeen))
+	{
+		g_lsdAway = false
+		g_lsdRead = -1
+		return
+	}
+	g_lsdAway = get_systime() - GetFileTime(g_lsdSeen, FileTime_LastChange) > LSD_AWAY
+	new f = fopen(g_lsdSeen, "rt"), line[24]
+	if (f)
+	{
+		fgets(f, line, charsmax(line))
+		fclose(f)
+		g_lsdRead = str_to_num(line)
+	}
+}
+
+stock lsd_rotate()
+{
+	if (g_lsdBytes > LSD_HARD || (g_lsdBytes > LSD_CAP && g_lsdRead >= g_lsdBytes))
+	{
+		new f = fopen(g_lsdEvents, "wt")
+		if (f)
+			fclose(f)
+		g_lsdBytes = 0
+	}
+}
+
+// Is node n's run to be written? (its inputs are only worked out into JSON when it is)
+stock bool:lsd_want(n)
+{
+	if (g_lsdBp[n])
+	{
+		g_lsdMute[n] = false
+		return true
+	}
+	if (g_lsdAway)
+	{
+		g_lsdSkipped[n]++
+		g_lsdMute[n] = true
+		return false
+	}
+	new Float:now = get_gametime()
+	if (now - g_lsdWin[n] >= 0.25)
+	{
+		g_lsdWin[n] = now
+		g_lsdWinN[n] = 0
+	}
+	if (++g_lsdWinN[n] > LSD_PER)
+	{
+		g_lsdSkipped[n]++
+		g_lsdMute[n] = true
+		return false
+	}
+	g_lsdMute[n] = false
+	return true
 }
 
 stock lsd_emitf(const fmt[], any:...)
@@ -335,18 +413,29 @@ stock bool:lsd_enter(n, const ctx[])
 		lsd_freeze()
 		return true
 	}
-	lsd_emitf("^"e^":^"node_enter^",^"node^":^"%s^",^"inputs^":{%s}", g_lsdIds[n], g_lsdIn)
+	if (g_lsdMute[n])
+		return false
+	if (g_lsdSkipped[n])
+	{
+		lsd_emitf("^"e^":^"node_enter^",^"node^":^"%s^",^"skipped^":%d,^"inputs^":{%s}", g_lsdIds[n], g_lsdSkipped[n], g_lsdIn)
+		g_lsdSkipped[n] = 0
+	}
+	else
+		lsd_emitf("^"e^":^"node_enter^",^"node^":^"%s^",^"inputs^":{%s}", g_lsdIds[n], g_lsdIn)
 	return false
 }
 
 stock lsd_exit(n, const result[])
 {
-	lsd_emitf("^"e^":^"node_exit^",^"node^":^"%s^",^"result^":^"%s^"", g_lsdIds[n], result)
+	if (!g_lsdMute[n])
+		lsd_emitf("^"e^":^"node_exit^",^"node^":^"%s^",^"result^":^"%s^"", g_lsdIds[n], result)
 }
 
 stock lsd_error(n, const msg[])
 {
-	lsd_emitf("^"e^":^"node_error^",^"node^":^"%s^",^"message^":^"%s^"", g_lsdIds[n], msg)
+	// (a sampled run's error still shows, unless nobody is watching)
+	if (!g_lsdAway)
+		lsd_emitf("^"e^":^"node_error^",^"node^":^"%s^",^"message^":^"%s^"", g_lsdIds[n], msg)
 }
 
 stock lsd_time_left()
@@ -531,12 +620,19 @@ stock lsd_resume()
 
 public lsd_poll()
 {
+	// (who's watching and how far they've read: once a second; the old part of the file goes
+	// before this flush, so nothing unread is lost)
+	if (++g_lsdTick % 4 == 1)
+	{
+		lsd_watchers()
+		lsd_rotate()
+	}
 	lsd_flush()
 	if (g_lsdPaused >= 0)
 	{
 		for (new id = 1; id <= MaxClients; id++)
 			lsd_hold_player(id)
-		if (++g_lsdTick % 4 == 0)
+		if (g_lsdTick % 4 == 0)
 			lsd_vars()
 	}
 	else if (g_lsdHolding && lsd_time_left() <= 0)
@@ -1708,7 +1804,10 @@ public lsg_on_player_killed()
 // Round Started (start)
 lsg_n0(ctx[])
 {
+	if (lsd_want(0))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(0, ctx))
 		return
 	lsd_exit(0, "ran")
@@ -1718,7 +1817,10 @@ lsg_n0(ctx[])
 // Show Message (hello)
 lsg_n1(ctx[])
 {
+	if (lsd_want(1))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(1, ctx))
 		return
 	ls_announce(0, 4.0, "%s", "Every kill earns you a rifle!")
@@ -1728,7 +1830,10 @@ lsg_n1(ctx[])
 // Player Killed (killed)
 lsg_n2(ctx[])
 {
+	if (lsd_want(2))
+	{
 	lsd_begin()
+	}
 	if (lsd_enter(2, ctx))
 		return
 	lsd_exit(2, "ran")
@@ -1740,9 +1845,12 @@ lsg_n3(ctx[])
 {
 	new lsi0 = ctx[1]
 	new lsi1 = 2
+	if (lsd_want(3))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_team("Team", lsi1)
+	}
 	if (lsd_enter(3, ctx))
 		return
 	new ok = ((lsg_team(lsi0) == lsi1) ? 1 : 0)
@@ -1758,9 +1866,12 @@ lsg_n4(ctx[])
 {
 	new lsi0 = ctx[1]
 	new Float:lsi2 = 90.0
+	if (lsd_want(4))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Spare bullets", lsi2)
+	}
 	if (lsd_enter(4, ctx))
 		return
 	if (ls_give_weapon(lsi0, "m4a1", 90))
@@ -1774,9 +1885,12 @@ lsg_n5(ctx[])
 {
 	new lsi0 = ctx[1]
 	new lsi1 = 1
+	if (lsd_want(5))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_team("Team", lsi1)
+	}
 	if (lsd_enter(5, ctx))
 		return
 	new ok = ((lsg_team(lsi0) == lsi1) ? 1 : 0)
@@ -1790,9 +1904,12 @@ lsg_n6(ctx[])
 {
 	new lsi0 = ctx[1]
 	new Float:lsi2 = 90.0
+	if (lsd_want(6))
+	{
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Spare bullets", lsi2)
+	}
 	if (lsd_enter(6, ctx))
 		return
 	if (ls_give_weapon(lsi0, "ak47", 90))

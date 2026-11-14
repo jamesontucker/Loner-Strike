@@ -1772,7 +1772,9 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             gen.pinned.borrow_mut().push((id.to_string(), ip.id.clone(), local));
         }
-        b.line("\tlsd_begin()");
+        // (the inputs as JSON only for a run that's written: hot nodes are sampled and nothing is
+        // written while nobody watches, StudioPerfAudit #5)
+        b.line(format!("\tif (lsd_want({i}))\n\t{{\n\tlsd_begin()"));
         for ip in v.inputs(id).iter().filter(|p| p.ty != "exec") {
             let Some(val) = gen.input(id, &ip.id) else { continue };
             let label = pawn_str(&safe_text(&ip.label, 30));
@@ -1792,6 +1794,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             };
             b.line(format!("\t{f}({label}, {})", val.expr));
         }
+        b.line("\t}");
         b.line(format!("\tif (lsd_enter({i}, ctx))\n\t\treturn"));
     }
     let next = |pin: &str| -> Option<String> { v.exec_target(id, pin).map(|(t, tp)| format!("{}(ctx)", gen.pin_fname(t, tp))) };
