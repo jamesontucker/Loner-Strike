@@ -2441,6 +2441,8 @@ pub fn start(id: &str) -> Result<(), String> {
     crate::navs::copy_to_server(&e, None, true);
     // Half-Life's monster models as the players' games have them (hlmodels.rs)
     crate::hlmodels::copy_to_server(&e);
+    // the fixed Ham Sandwich, if something put another one in since setup (hamguard.rs)
+    crate::hamguard::before_start(&e.dir.join(&e.game), &format!("starting {}", e.name));
     if let Some(other) = load().iter().find(|o| o.id != e.id && o.port == e.port && with_runs(|r| r.procs.contains_key(&o.id))) {
         return Err(format!("\"{}\" is using port {} already. Stop it first, or change this server's port.", other.name, e.port));
     }

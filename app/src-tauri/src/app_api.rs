@@ -795,8 +795,10 @@ async fn api_launch(State(st): State<Shared>, headers: HeaderMap, on: Option<axu
     if !start.is_empty() {
         game_args.extend(["+exec".into(), START_CFG.into()]);
     }
+    // the fixed Ham Sandwich, if something put another one in since setup (hamguard.rs)
+    let restored = crate::hamguard::before_start(&g.dir, "Play");
     match crate::steam::launch(&g.hl, appid, &game_args) {
-        Ok(()) => (StatusCode::OK, Json(json!({"ok": true}))),
+        Ok(()) => (StatusCode::OK, Json(json!({"ok": true, "note": restored}))),
         Err(e) => (StatusCode::OK, Json(json!({"error": e}))),
     }
 }

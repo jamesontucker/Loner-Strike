@@ -189,6 +189,15 @@ impl Record {
     }
 
     pub fn copy(&mut self, src: &Path, rel: &str) -> Result<(), String> {
+        // Loner-Strike's fixed Ham Sandwich is never replaced by another build (an AMX Mod X
+        // package, an add-on's modules): the official one crashes on map changes (hamguard.rs)
+        if crate::hamguard::is_ham(rel) {
+            if let Some(dst) = inside(&self.game, rel) {
+                if crate::hamguard::keep_ours(&dst, src) {
+                    return Ok(());
+                }
+            }
+        }
         let full = self.prepare(rel)?;
         copy2(src, &full).map_err(|e| couldnt("write", rel, e))
     }

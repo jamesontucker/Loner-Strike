@@ -14,6 +14,7 @@ mod consolehints;
 mod control;
 mod content;
 mod crashes; // MCP: crash tracking for the player's servers
+mod hamguard; // MCP: the fixed Ham Sandwich kept in place before Play and local starts
 mod diagnostics;
 mod extras;
 mod game;
@@ -130,6 +131,10 @@ fn main() {
             notify::watch(app.handle().clone(), state.clone());
             // crash alerts to Discord, for servers that asked for them
             crashes::watch();
+            // where the fixed Ham Sandwich is, for putting it back before Play and local starts
+            if let Some(res) = tauri::Manager::path(app).resolve("catalog", tauri::path::BaseDirectory::Resource).ok().and_then(|p| p.parent().map(std::path::Path::to_path_buf)) {
+                hamguard::init(res);
+            }
             // Smarter chat's llama-server: only while it's on and a game is hosted here
             smartchat::watch(state.clone());
             // AI agents (MCP), if turned on in Settings
