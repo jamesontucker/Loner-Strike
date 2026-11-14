@@ -450,6 +450,9 @@ def main():
                                             min_cents=int(os.environ.get("POLAR_SUPPORTER_MIN_CENTS", "300") or 0),
                                             # the support products' ids (one-time and monthly); none: nothing counts
                                             products=os.environ.get("POLAR_SUPPORTER_PRODUCTS", "").split(","))
+        if getattr(community, "rolesvc", None) and community.rolesvc.mod:
+            # the Supporter role in Discord, kept as the roles' rules say (hourly)
+            threading.Thread(target=community.rolesvc.sync_loop, daemon=True).start()
         if a.recheck_hours > 0:
             threading.Thread(target=community.recheck_loop, args=(a.recheck_hours,), daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(registry, RateLimit(MAX_REGISTER), community=community))

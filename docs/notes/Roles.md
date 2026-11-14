@@ -118,6 +118,13 @@ may only talk to this machine; an Admin's calls reach it through a spool in the 
   order's. Anything else is logged "other product: ignored" and never counts later; a grant for another product still
   says whose Discord a customer is, but never makes them a monthly supporter. None set: nothing counts (fails
   closed, a warning at start).
+  **The Supporter role in Discord is our bot's to keep right:** Polar's Discord benefit takes the role away when a
+  monthly support ends, but a payment made them a supporter for good. So on every `benefit_grant.revoked`, and hourly
+  for everyone Polar told us about (at most 500 a check, 0.5 s between calls, stopping when Discord answers 429), the
+  bot gives Supporter back to whoever is a supporter by our rules and takes it from anyone whose every payment was
+  refunded (and who has no active monthly grant). Accounts we never saw a payment for are left alone (a role given by
+  hand stays). Someone not in the server gets it at the first check after they're back (the bot doesn't hear joins).
+  Each add and remove is logged (`discord-role`).
 - **To servers:** a supporter's VIP follows their current link. Official servers: ls-control (a timer, every 5 min)
   `GET /roles/vip` → every supporter's SteamID. Other servers that turned on **Honor Loner-Strike supporters** (off by
   default): `POST /roles/vip/check {steamids}` with the players on the server now (at most 64), answered with the ones

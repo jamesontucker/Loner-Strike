@@ -41,8 +41,8 @@ Nothing here is live until these are done (each needs the user's OK):
 1. **Box:** deploy with `services/serverlist/install.sh` (it copies roles.py and the unit now runs with
    `--roles-db`); set `DISCORD_SERVERMOD_DECIDERS` (default: the Moderator role) and, later,
    `POLAR_WEBHOOK_SECRET` with `set-env.sh` from stdin; restart. The daily backup includes roles.db.
-2. **Discord:** create the roles **Supporter** (for Polar's bot) and **Server Moderator** (ours), with the
-   Loner-Strike bot's role above Server Moderator. Register the commands:
+2. **Discord:** create the roles **Supporter** (Polar's bot and ours both give it) and **Server Moderator** (ours),
+   with the Loner-Strike bot's role above both. Register the commands:
    `python3 discord-setup.py --apply --roles` (adds /link, /unlink, /server claim beside /community).
 3. **Polar:** Benefits › New benefit › Discord: connect the server, role Supporter (Polar's bot above it);
    attach it to the monthly and the one-time products. Settings › Webhooks › Add endpoint
@@ -53,7 +53,9 @@ Nothing here is live until these are done (each needs the user's OK):
    pay-what-you-want download never counts) and gives `POLAR_SUPPORTER_DAYS` days, stacking (default 30; 0: for
    good). Only the support products count: put the one-time and the monthly product ids in
    `POLAR_SUPPORTER_PRODUCTS` (comma separated). Anything else the organization sells never makes a Supporter
-   (logged "other product: ignored"); with none set nothing counts and the service says so at start.
+   (logged "other product: ignored"); with none set nothing counts and the service says so at start. Our bot keeps
+   the Supporter role right afterwards (gives it back when Polar takes it at a monthly support's end, takes it on a
+   full refund, checks everyone hourly), so its role must be above Supporter too.
 4. **Official servers:** claim each one from the app, then `lsmod.py roles official <server> on`. Turn on
    Accept moderator applications. Set Supporters › Reserved slots to 1 in its Admins page.
 5. Moderation from a terminal: `lsmod.py roles servers | log | show <id> | supporters | unlink <steamid>`.

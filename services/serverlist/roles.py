@@ -50,6 +50,10 @@ STEAMID = re.compile(r"^STEAM_[0-5]:[01]:\d{1,10}$")
 SNOWFLAKE = re.compile(r"^\d{15,21}$")
 SETTINGS = ("applications", "discord_mods_decide", "honor_supporters")
 MOD_ROLE_NAME = "Server Moderator"
+SUPPORTER_ROLE_NAME = "Supporter"
+SYNC_EVERY = 3600               # the supporters' Discord role checked for everyone known
+SYNC_PAUSE = 0.5                # between Discord calls in a check (well inside its rate limits)
+SYNC_MAX = 500                  # accounts in one check (the rest at the next)
 STEAMS_PER_DAY = 20
 # the Discord side's actions (signed button ids, modbot.Mod.custom_id)
 PUBLIC_ACTIONS = ("smpick", "smform")
@@ -221,7 +225,6 @@ class Roles:
         self.bad_token = cm.Window(20, 3600)
         self.webhook_limit = cm.Window(120, 60)
         self.per_day = cm.Window(PER_DAY, 86400)
-        self._role_id, self._role_at = None, 0.0
 
     # ---- the log ----
 
@@ -603,6 +606,10 @@ class Roles:
                                 (cust, self.min_cents)):
                 self._apply(o["order_id"], account, o["at"] if o["at"] > at - 86400 else at)
             self.log("supporter", "polar", 0, account, f"{kind} {'monthly' if monthly else 'one-time'} {'granted' if granted else 'revoked'}")
+            # Polar's own Discord benefit takes the role away on a revoke; someone who's a supporter for
+            # good by their payments gets it back from our bot
+            if not granted:
+                self.sync_later(account)
         elif kind == "order.paid":
             # one-time donations and each paid month of a subscription alike: every payment from the minimum
             # counts (with POLAR_SUPPORTER_DAYS 0 the first makes them a supporter for good, so cancelling,
@@ -650,6 +657,7 @@ class Roles:
             self.s.run("UPDATE polar_orders SET refunded=1 WHERE order_id=?", (oid,))
             if row["applied"] and row["applied_to"]:
                 until = self._recompute(row["applied_to"])
+                self.sync_later(row["applied_to"])
                 self.log("refund", "polar", 0, row["applied_to"], f"order {oid}: refunded, supporter until "
                                                                  + (time.strftime('%Y-%m-%d', time.gmtime(until)) if until else "none"))
             else:
@@ -741,18 +749,98 @@ class Roles:
         self.audit(f"Server moderator invite for application #{a['id']} ({cm.discord_text(srv['name'], 40)})" + ("" if dm else ": their DMs are closed, the host sends it"))
         return {"ok": True, "dm": dm}
 
-    def mod_role(self):
+    def guild_role(self, name):
+        """A Discord role's id by its name (cached ten minutes), or None."""
         if not self.mod or not self.mod.bot:
             return None
-        if self._role_id and time.time() - self._role_at < 600:
-            return self._role_id
+        cache = getattr(self, "_roles_cache", None)
+        if cache is None:
+            cache = self._roles_cache = {}
+        hit = cache.get(name)
+        if hit and time.time() - hit[1] < 600:
+            return hit[0]
         code, ans = self.mod.bot.api("GET", f"/guilds/{self.mod.guild}/roles")
+        found = None
         if code == 200 and isinstance(ans, list):
-            want = "".join(c for c in MOD_ROLE_NAME.lower() if c.isalnum())
+            want = "".join(c for c in name.lower() if c.isalnum())
             for r in ans:
                 if isinstance(r, dict) and "".join(c for c in str(r.get("name", "")).lower() if c.isalnum() and c.isascii()) == want:
-                    self._role_id, self._role_at = str(r.get("id")), time.time()
-        return self._role_id
+                    found = str(r.get("id"))
+        if found:
+            cache[name] = (found, time.time())
+        return found
+
+    def mod_role(self):
+        return self.guild_role(MOD_ROLE_NAME)
+
+    # ---- the Supporter role in Discord (ours to keep right; Polar's own benefit takes it away
+    # when a monthly support ends, while a payment made them a supporter for good) ----
+
+    def role_wanted(self, discord_id):
+        """True: they should have Supporter; False: our bot takes it away (every payment of theirs
+        was refunded and no monthly grant is active); None: not ours to say (never paid through us)."""
+        if self.is_supporter(discord_id):
+            return True
+        refunded = self.s.one("SELECT 1 AS x FROM polar_orders WHERE applied_to=? AND refunded=1", (discord_id,))
+        return False if refunded else None
+
+    def sync_role(self, discord_id):
+        """Gives or takes the Supporter role as our rules say. 'added', 'removed', 'ok', 'gone' (not in
+        the server: tried again at the next check), 'limited' (Discord asked us to slow down) or 'skip'."""
+        want = self.role_wanted(discord_id)
+        rid = self.guild_role(SUPPORTER_ROLE_NAME) if want is not None else None
+        if want is None or not rid:
+            return "skip"
+        bot, guild = self.mod.bot, self.mod.guild
+        code, member = bot.api("GET", f"/guilds/{guild}/members/{discord_id}")
+        if code == 404:
+            return "gone"
+        if code == 429:
+            return "limited"
+        if code != 200 or not isinstance(member, dict):
+            return "skip"
+        has = rid in {str(x) for x in member.get("roles") or []}
+        if want == has:
+            return "ok"
+        code, _ = bot.api("PUT" if want else "DELETE", f"/guilds/{guild}/members/{discord_id}/roles/{rid}",
+                          reason="Loner-Strike supporter" if want else "Loner-Strike: every payment was refunded")
+        if code == 429:
+            return "limited"
+        if code not in (200, 204):
+            self.log("discord-role", "bot", 0, discord_id, f"Supporter {'add' if want else 'remove'} failed (status {code})")
+            return "skip"
+        self.log("discord-role", "bot", 0, discord_id, "Supporter added" if want else "Supporter removed (refunded)")
+        return "added" if want else "removed"
+
+    def sync_later(self, discord_id):
+        if self.mod and self.mod.bot and discord_id:
+            self.mod._later(lambda: self.sync_role(discord_id))
+
+    def sync_all(self, pause=SYNC_PAUSE):
+        """Everyone Polar told us about: the role as our rules say (at most SYNC_MAX, slowly). Returns
+        the outcome counts."""
+        ids = [r["discord_id"] for r in self.s.all(
+            "SELECT DISTINCT discord_id FROM polar_customers UNION SELECT DISTINCT applied_to FROM polar_orders WHERE applied_to != '' "
+            "UNION SELECT discord_id FROM supporters")][:SYNC_MAX]
+        counts = {}
+        for d in ids:
+            out = self.sync_role(d)
+            counts[out] = counts.get(out, 0) + 1
+            if out == "limited":
+                break
+            if pause:
+                time.sleep(pause)
+        return counts
+
+    def sync_loop(self, every=SYNC_EVERY):
+        """Hourly, for as long as the service runs (someone who left the server gets the role again
+        at the first check after they're back: the bot doesn't hear joins)."""
+        while True:
+            time.sleep(every)
+            try:
+                self.sync_all()
+            except Exception as e:  # never let the loop die
+                cm.log(f"roles: supporter role check: {type(e).__name__}")
 
     def redeemed(self, srv, aid, body):
         a = self._app_of(srv, aid)

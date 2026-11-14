@@ -50,10 +50,39 @@ class FakeServers:
 _ids = iter(range(10 ** 6))
 
 
+class GuildBot(FakeBot):
+    """FakeBot with members: who's in the server and their roles (None: not in the server)."""
+
+    def __init__(self):
+        super().__init__()
+        self.members = {}
+        self.limit_after = None
+
+    def send(self, method, path, b, reason=None):
+        if "/members/" in path:
+            parts = path.split("/")
+            uid = parts[parts.index("members") + 1]
+            if self.limit_after is not None:
+                if self.limit_after <= 0:
+                    self.calls.append((method, path, b, reason))
+                    return 429, {}
+                self.limit_after -= 1
+            if method == "GET":
+                self.calls.append((method, path, b, reason))
+                if self.members.get(uid) is None:
+                    return 404, {"code": 10007}
+                return 200, {"user": {"id": uid}, "roles": sorted(self.members[uid])}
+            if uid in self.members and self.members[uid] is not None and "/roles/" in path:
+                rid = parts[-1]
+                (self.members[uid].add if method == "PUT" else self.members[uid].discard)(rid)
+        return super().send(method, path, b, reason)
+
+
 def make():
     c = cm.Community(cm.Store(os.path.join(tempfile.mkdtemp(), "c.db")), token="t" * 40)
-    bot = FakeBot()
+    bot = GuildBot()
     bot.roles["Server Moderator"] = "900099"
+    bot.roles["Supporter"] = "900077"
     mod = modbot.Mod(c, bot, PUB.hex(), GUILD, [MOD_ROLE], OWNER, background=False, apply_channel=APPS, apply_roles=[MOD_ROLE])
     fs = FakeServers()
     r = roles.Roles(roles.Store(os.path.join(tempfile.mkdtemp(), "r.db")), clean=fs.clean, asker=fs.ask, players=fs.players, polar_secret=POLAR, products=["prod_once", "prod_monthly"],
@@ -383,6 +412,66 @@ class Review3(unittest.TestCase):
         polar(r, g2, ts=int(time.time()) - 60)
         self.assertFalse(r.is_supporter(OTHER))
         self.assertIsNone(roles.event_time("not a time"))
+
+
+class SupporterRole(unittest.TestCase):
+    def paid(self, r, oid, cust, **extra):
+        return polar(r, {"type": "order.paid", "data": dict({"id": oid, "customer_id": cust, "net_amount": 500, "currency": "usd",
+                                                             "product_id": "prod_monthly" if extra.get("subscription_id") else "prod_once"}, **extra)})
+
+    def test_a_lifetime_supporter_gets_the_role_back_after_a_cancel(self):
+        r, mod, bot, fs, _ = make()
+        r.days = 0
+        bot.members[PLAYER] = {"900077"}
+        polar(r, grant(PLAYER, gid="gm", cust="cus_m", sub="sub_1"))
+        self.paid(r, "m1", "cus_m", subscription_id="sub_1")
+        # Polar's Discord benefit takes the role away when the subscription ends...
+        bot.members[PLAYER].discard("900077")
+        polar(r, grant(PLAYER, gid="gm", cust="cus_m", sub="sub_1", kind="benefit_grant.revoked", revoked=True))
+        # ...and our bot gives it back (it's theirs for good)
+        self.assertIn("900077", bot.members[PLAYER])
+        self.assertIn("Supporter added", [x["detail"] for x in r.s.all("SELECT detail FROM roles_log")])
+        # already there: nothing done
+        n = len(bot.calls)
+        self.assertEqual(r.sync_role(PLAYER), "ok")
+        self.assertFalse(any(m in ("PUT", "DELETE") for m, *_ in bot.calls[n:]))
+
+    def test_a_refund_takes_the_role_and_someone_unknown_is_left_alone(self):
+        r, mod, bot, fs, _ = make()
+        bot.members[OTHER] = {"900077"}
+        bot.members["460000000000000006"] = {"900077"}  # given Supporter by hand: not ours to change
+        polar(r, grant(OTHER, gid="g", cust="cus_o"))
+        self.paid(r, "o1", "cus_o")
+        polar(r, {"type": "order.refunded", "data": {"id": "o1", "customer_id": "cus_o", "status": "refunded"}})
+        self.assertNotIn("900077", bot.members[OTHER])
+        self.assertIn("Supporter removed (refunded)", [x["detail"] for x in r.s.all("SELECT detail FROM roles_log")])
+        self.assertEqual(r.sync_role("460000000000000006"), "skip")
+        self.assertIn("900077", bot.members["460000000000000006"])
+
+    def test_someone_who_left_gets_it_at_the_next_check(self):
+        r, mod, bot, fs, _ = make()
+        r.days = 0
+        polar(r, grant(PLAYER, gid="g", cust="cus_p"))
+        self.paid(r, "p1", "cus_p")  # not in the server
+        self.assertEqual(r.sync_role(PLAYER), "gone")
+        bot.members[PLAYER] = set()  # back
+        self.assertEqual(r.sync_all(pause=0), {"added": 1})
+        self.assertIn("900077", bot.members[PLAYER])
+
+    def test_the_check_stops_when_discord_says_slow_down(self):
+        r, mod, bot, fs, _ = make()
+        r.days = 0
+        for i, uid in enumerate(("470000000000000001", "470000000000000002", "470000000000000003")):
+            bot.members[uid] = set()
+            polar(r, grant(uid, gid=f"g{i}", cust=f"c{i}"))
+        for i in range(3):
+            self.paid(r, f"o{i}", f"c{i}")
+        for uid in ("470000000000000001", "470000000000000002", "470000000000000003"):
+            bot.members[uid] = set()
+        bot.limit_after = 1  # one more call, then 429
+        out = r.sync_all(pause=0)
+        self.assertEqual(out.get("limited"), 1)
+        self.assertEqual(sum(out.values()), 1)
 
 
 class Refunds(unittest.TestCase):
