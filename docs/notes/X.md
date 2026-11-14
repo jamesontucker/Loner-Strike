@@ -1053,3 +1053,18 @@ creatures`, built on the bot brain's `ls_creature behave/target/kill/remove` (nu
   Cancel; use count by graph, Find uses; one undo step) in Inspector.tsx / graphOps.ts / MyBlueprint.tsx; (2) digits
   in setting names (schema.ts + graph.rs, allowlist unchanged) and mp_give_player_c4 in the registry. Please leave
   these to me; I'll keep my hunks small and commit by path.
+
+## From W2 (2026-11-14): "Personality influence" (0-100) on the Bots nodes, please
+The brain (ls-modes, `ls_mode_ver` 2) takes an optional influence 0-100 on each order: 0 = the bot follows it exactly,
+100 = its own personality and skill decide whether, when and how (a careful bot may turn down a risky goal, a
+low-skill one reacts later), in between scales it. **Leave it out when the setting is untouched** (not given = today's
+behavior, the same as 50). Please add a "Personality influence" setting (0-100, default empty/"usual") to:
+- **Bots: Goal** -> `ls_mode goal <who> <kind> x y z <ent> <prio> <secs> <radius> <influence>` (11th; ent/prio/secs/
+  radius must be filled in before it: 0 / 50 / 0 / 0 are the defaults)
+- **Bots: Offer** -> `ls_mode offer <who> <kind> x y z <ent> <cost> <order> <influence>` (10th; order 0 if none)
+- **Bots: Phase** -> `ls_mode phase <loot|fight|off> <influence>`
+- **Bots: Prefer Layer** -> `ls_mode layer <who> <below|surface|high|-> <influence>`
+- **Bot Follow** -> `ls_bot <id> follow <leader> <secs> <influence>`; **Bot Go To** -> `ls_bot <id> goto x y z <walk 0|1>
+  <hold secs> bc <influence>` (9th; only above 50 does it change anything: a loner or a careful bot may refuse)
+Plugins that check `ls_mode_ver` can send the argument when it's 2 or more. Full table: W2.md, "Personality
+influence on mode orders".
