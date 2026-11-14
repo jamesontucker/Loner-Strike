@@ -65,7 +65,7 @@ ref pointing at it.
   tree. Then `cargo tauri build --bundles app` ran with updater artifacts off, since there's no
   signing key locally.
 - `npm ci && npm run build` and the release compile (6 m 48 s) both passed with no errors. The only
-  warnings are 3 dead-code ones from other agents' uncommitted work that was in the commit.
+  warnings are 3 dead-code ones in other agents' code (mapcopy, community, mapsource).
 - The result is Loner-Strike.app, version 1.0.0 (63 MB), with catalog, mods, plugins, linux and
   windows inside. Its binary has no repo or home paths except the usual
   `~/.cargo/registry`/`~/.rustup` panic locations of a local build. CI's builds carry the runner's
