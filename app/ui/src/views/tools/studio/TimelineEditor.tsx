@@ -70,7 +70,10 @@ export function TimelineEditor({ id }: { id: string }) {
     setWidth(el.clientWidth);
     return () => ro.disconnect();
   }, []);
-  const v = view ?? { pps: laneW / Math.max(tl?.length ?? 1, 0.1), at: 0 };
+  // fitted: the whole length with a little room at both ends, so keys at 0 and at the end are whole
+  const FIT_PAD = 10;
+  const fitPps = (laneW - 2 * FIT_PAD) / Math.max(tl?.length ?? 1, 0.1);
+  const v = view ?? { pps: fitPps, at: -FIT_PAD / fitPps };
   const xOf = (t: number) => (t - v.at) * v.pps;
   const tOf = (x: number) => x / v.pps + v.at;
   const set = (f: (t: GTimeline) => GTimeline) => edit((g) => updateTimeline(g, id, f));
@@ -341,9 +344,12 @@ export function TimelineEditor({ id }: { id: string }) {
         <button type="button" className="btn small" onClick={fit} title="Fit the whole length (F)">
           Fit
         </button>
+        {/* (what it removes, said: the whole Timeline; set apart from Fit) */}
+        <span className="st-tl-sep" aria-hidden="true" />
         <button
           type="button"
           className="btn small danger"
+          title="Delete this Timeline (the nodes that play it show a problem until changed)"
           onClick={async () => {
             const used = graph.nodes.filter((n) => n.type === "timeline.play" && n.params.timeline === id).length;
             if (!(await ask(`Remove the Timeline “${tl.name}”?${used ? ` ${used} node${used === 1 ? "" : "s"} play it and show a problem until changed.` : ""}`, { ok: "Remove", danger: true }))) return;
@@ -352,7 +358,7 @@ export function TimelineEditor({ id }: { id: string }) {
             edit((g) => removeTimeline(g, id));
           }}
         >
-          Remove
+          Delete timeline
         </button>
       </div>
       {!(selKey && selTrack && sel) && <div className="st-tl-key st-tl-key-hint st-muted">Click a lane to add a key; click a key to change it (right-click: how it goes to the next).</div>}
@@ -440,7 +446,8 @@ export function TimelineEditor({ id }: { id: string }) {
           const h = laneH(tr);
           return (
             <div key={tr.id} className="st-tl-track" data-track={tr.id}>
-              <div className="st-tl-head" style={{ width: HEAD, height: h }}>
+              {/* the header is the lane's height, on one line: name, kind, remove (UX: site shots) */}
+              <div className="st-tl-head" style={{ width: HEAD, height: h }} data-testid="timeline-head">
                 <input className="st-field" value={tr.name} maxLength={30} onChange={(e) => setTrack(tr.id, (x) => ({ ...x, name: e.target.value.slice(0, 30) }))} aria-label={`Track name ${tr.name}`} />
                 <span className="st-muted">
                   {KIND_NAME[tr.kind]}
@@ -455,9 +462,21 @@ export function TimelineEditor({ id }: { id: string }) {
                     </>
                   )}
                 </span>
-                <button type="button" className="st-tl-x" aria-label={`Remove track ${tr.name}`} title="Remove this track (Undo brings it back)" onClick={() => (set((t) => ({ ...t, tracks: t.tracks.filter((x) => x.id !== tr.id) })), setSel(null))}>
-                  Remove
+                <button type="button" className="st-tl-x" aria-label={`Remove track ${tr.name}`} title={`Remove the track “${tr.name}” (Undo brings it back)`} onClick={() => (set((t) => ({ ...t, tracks: t.tracks.filter((x) => x.id !== tr.id) })), setSel(null))}>
+                  ×
                 </button>
+                {/* the lane's value range, beside it (inside the lane the numbers sat under keys) */}
+                {comps(tr).length > 0 &&
+                  (() => {
+                    const [lo, hi] = range(tr);
+                    const f = (x: number) => (Math.abs(x) >= 100 ? x.toFixed(0) : x.toFixed(1));
+                    return (
+                      <>
+                        <span className="st-tl-ax hi" title="The lane's top">{f(hi)}</span>
+                        <span className="st-tl-ax lo" title="The lane's bottom">{f(lo)}</span>
+                      </>
+                    );
+                  })()}
               </div>
               <svg className="st-tl-lane" width={laneW} height={h} onPointerDown={(e) => press(e, tr, null)} aria-label={`${tr.name} lane`}>
                 <rect width={laneW} height={h} fill="transparent" />
@@ -467,13 +486,10 @@ export function TimelineEditor({ id }: { id: string }) {
                 <rect x={xOf(length)} y={0} width={laneW} height={h} fill="rgba(0,0,0,.25)" pointerEvents="none" />
                 {comps(tr).length > 0 &&
                   (() => {
-                    // the value axis: what the lane's top and bottom are (UX review M8)
+                    // the zero line (the top and bottom values are in the header, UX review M8)
                     const [lo, hi] = range(tr);
-                    const f = (x: number) => (Math.abs(x) >= 100 ? x.toFixed(0) : x.toFixed(1));
                     return (
-                      <g pointerEvents="none" fontSize={10} fill="var(--bone-dim, #9aa)">
-                        <text x={3} y={11}>{f(hi)}</text>
-                        <text x={3} y={h - 3}>{f(lo)}</text>
+                      <g pointerEvents="none">
                         {lo < 0 && hi > 0 && <line x1={0} x2={laneW} y1={(hi / (hi - lo)) * h} y2={(hi / (hi - lo)) * h} stroke="var(--line)" strokeDasharray="3 3" />}
                       </g>
                     );

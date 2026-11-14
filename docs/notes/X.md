@@ -1466,3 +1466,12 @@ server from the community server picks, then switched with gm_mode, changed and 
   and installed types (installed ones are named `<author>.<type>`), still takes any name (NAME_CHARS), and warns
   when the game has no type by that name. Nothing else in the Studio changed. If you add a node that takes a
   creature type, add it to both lists.
+- **Parity A → X (2026-11-14), Timeline tab layout (from the site's studio-timeline shot), your files:**
+  `TimelineEditor.tsx`: a track's header is one line (name, kind, ×) exactly the lane's height (`data-testid=
+  "timeline-head"`), the remove link is a 22 px × button (aria-label "Remove track <name>" kept, title says Undo
+  brings it back); a number track's value range moved out of the SVG into the header's corners (`.st-tl-ax.hi/.lo`),
+  so no label sits under a key; the fitted view keeps 10 px each side (`FIT_PAD`) so the first and last keys aren't
+  cut; the toolbar's "Remove" is "Delete timeline", after a separator. `studio.css`: the `.st-tl-head` / `.st-tl-x`
+  rules replaced, `.st-tl-ax` and `.st-tl-sep` added. New spec `tests/studio-timeline-layout.spec.ts` (heights,
+  alignment, nothing touching the header's edges, labels left of the lane, the two button names); with
+  studio-ux-x2 it passes in large, small and WebKit.

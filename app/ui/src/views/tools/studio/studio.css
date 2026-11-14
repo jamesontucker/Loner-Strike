@@ -406,9 +406,17 @@
 .st-pin-text { width: 92px; }
 .st-pin-choice { max-width: 120px; padding: 0 1px; }
 input[type="checkbox"].st-pin-value { width: 13px; height: 13px; padding: 0; accent-color: var(--signal, #e8c35a); }
-.st-tl-head { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 4px 8px; position: relative; font-size: 12px; box-sizing: border-box; }
-.st-tl-head .st-field { width: 100%; padding: 2px 4px; font-size: 12px; }
-.st-tl-x { align-self: flex-start; padding: 0; background: none; border: 0; color: var(--bone-dim, #9aa); cursor: pointer; font-size: 11px; text-decoration: underline; }
+/* a track's header: exactly its lane's height, one line (name, kind, ×), centered on the lane; the lane's
+   value range in its corners (beside the lane, never under a key) */
+.st-tl-head { flex: none; display: flex; flex-direction: row; align-items: center; gap: 6px; padding: 0 6px 0 8px; position: relative; font-size: 12px; box-sizing: border-box; overflow: hidden; }
+.st-tl-head .st-field { flex: 1 1 auto; min-width: 0; height: 24px; padding: 0 6px; font-size: 12px; line-height: 22px; box-sizing: border-box; }
+.st-tl-head > .st-muted { flex: none; white-space: nowrap; }
+.st-tl-x { flex: none; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; background: none; border: 1px solid transparent; border-radius: 3px; color: var(--bone-dim, #9aa); cursor: pointer; font-size: 15px; line-height: 1; }
+.st-tl-x:hover, .st-tl-x:focus-visible { color: var(--danger, #f2c3b2); border-color: var(--line); }
+.st-tl-ax { position: absolute; right: 6px; font-size: 10px; color: var(--bone-dim, #9aa); font-variant-numeric: tabular-nums; pointer-events: none; }
+.st-tl-ax.hi { top: 3px; }
+.st-tl-ax.lo { bottom: 3px; }
+.st-tl-sep { width: 1px; align-self: stretch; margin: 2px 2px; background: var(--line); }
 .st-tl-lane { flex: none; cursor: crosshair; touch-action: none; }
 .st-tl-k { fill: var(--panel, #22262b); stroke: var(--signal, #e8c35a); stroke-width: 2; cursor: grab; }
 .st-tl-k.ease { stroke-dasharray: 2 1; }
