@@ -201,17 +201,16 @@ pub async fn run(ctx: &Ctx, name: &str, a: &Value) -> Option<Done> {
         }
         .await,
         "studio_compile" => async {
-            let g = graph_of(ctx, a).await?;
-            ask(ctx, format!("An AI agent wants to compile the game mode \"{}\" and install it into your game (its plugin and a line in the modes list). Allow it?", g["mode"]["name"].as_str().or(s(a, "id")).unwrap_or("?"))).await?;
+            let (id, g) = graph_to_install(ctx, a).await?;
+            ask(ctx, format!("An AI agent wants to compile a Game Mode Studio mode and install it into your game: {} (the plugin and a line in the modes list). Allow it?", install_target(&id, &g))).await?;
             post(ctx, "/api/tools/studio/compile", json!({"graph": g, "debug": a["debug"].as_bool().unwrap_or(false)})).await
         }
         .await,
         "studio_playtest" => async {
-            let id = id_arg(a, "id")?;
+            let (id, g) = graph_to_install(ctx, a).await?;
             let map = map_arg(a)?;
             let bots = a.get("bots").and_then(Value::as_u64).map(|n| n.min(31));
-            ask(ctx, format!("An AI agent wants to start Counter-Strike on {map} in the Studio mode \"{id}\"{} with the debugger. If the game is open it's closed first. Allow it?", bots.map(|n| format!(" with {n} bots")).unwrap_or_default())).await?;
-            let g = graph_of(ctx, a).await?;
+            ask(ctx, format!("An AI agent wants to install {} with the debugger and start Counter-Strike on {map} in that mode{}. If the game is open it's closed first. Allow it?", install_target(&id, &g), bots.map(|n| format!(" with {n} bots")).unwrap_or_default())).await?;
             let bps = a.get("breakpoints").cloned().unwrap_or_else(|| json!([]));
             let built = post(ctx, "/api/tools/studio/playtest", json!({"graph": g, "breakpoints": bps})).await?;
             if built["ok"] != true {
@@ -366,10 +365,50 @@ fn mode_arg(a: &Value) -> Result<Option<String>, Fail> {
 async fn studio_save(ctx: &Ctx, a: &Value) -> Done {
     let id = id_arg(a, "id")?;
     let graph = a.get("graph").filter(|g| g.is_object()).ok_or_else(|| err("graph is the whole graph object."))?;
-    if get(ctx, &format!("/api/tools/studio/graph/{id}")).await.is_ok() {
-        ask(ctx, format!("An AI agent wants to save over the game mode graph \"{id}\". Allow it?")).await?;
-    }
+    ask_if_graph_there(ctx, &id).await?;
     post(ctx, &format!("/api/tools/studio/graph/{id}"), json!({"graph": graph})).await
+}
+
+/// What the Studio says when there's no graph file with an id (tools/studio read_graph).
+const NO_SUCH_GRAPH: &str = "That graph isn't there any more.";
+
+/// Asks before a save replaces a graph: skipped only when the Studio says there's no graph with
+/// that id. Any other answer (a damaged file, an error, a changed message) asks.
+pub(super) async fn ask_if_graph_there(ctx: &Ctx, id: &str) -> Result<(), Fail> {
+    match get(ctx, &format!("/api/tools/studio/graph/{id}")).await {
+        Err(Fail::Error(e)) if e == NO_SUCH_GRAPH => Ok(()),
+        _ => ask(ctx, format!("An AI agent wants to save over the game mode graph \"{id}\". Allow it?")).await,
+    }
+}
+
+/// The graph to build and install: the saved one or the agent's draft, by its checked id (no
+/// graph handed in), and its mode id must be that id.
+async fn graph_to_install(ctx: &Ctx, a: &Value) -> Result<(String, Value), Fail> {
+    if a.get("graph").is_some() {
+        return Err(err("Compile and playtest take a saved graph or your draft by id (draft: true), not a graph object."));
+    }
+    let id = id_arg(a, "id")?;
+    if !crate::tools::studio::graph::valid_mode_id(&id) {
+        return Err(err("A graph id is 2 to 24 small letters, digits or _."));
+    }
+    let g = graph_of(ctx, a).await?;
+    if g["mode"]["id"].as_str() != Some(id.as_str()) {
+        return Err(err(format!("That graph's mode id isn't \"{id}\". Set the mode id to match the graph's id first.")));
+    }
+    Ok((id, g))
+}
+
+/// A graph's name for a question to the person: plain characters only, at most 40.
+fn shown_name(g: &Value) -> String {
+    let n: String = g["mode"]["name"].as_str().unwrap_or("").chars().filter(|c| c.is_alphanumeric() || " -_'.,!()".contains(*c)).take(40).collect();
+    n.trim().to_string()
+}
+
+/// The install target, as the person is asked about it: the mode id and its plugin file.
+fn install_target(id: &str, g: &Value) -> String {
+    let plugin = crate::tools::studio::gen::plugin_name(id);
+    let name = shown_name(g);
+    format!("the mode id \"{id}\" (plugin {plugin}.amxx){}", if name.is_empty() { String::new() } else { format!(", named \"{name}\" in the graph") })
 }
 
 /// The Studio's node catalog, compiled in (the same file the Studio and its generator use).

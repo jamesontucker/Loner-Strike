@@ -287,6 +287,9 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/tools/editor/fgd/clear"),
     ("POST", "/api/tools/editor/fgd/pick"),
     ("GET", "/api/tools/editor/history"),
+    ("GET", "/api/tools/editor/leak"),
+    ("POST", "/api/tools/editor/leak/clear"),
+    ("POST", "/api/tools/editor/leak/load"),
     ("POST", "/api/tools/editor/history/jump"),
     ("POST", "/api/tools/editor/import-map"),
     ("POST", "/api/tools/editor/import-other"),
@@ -433,6 +436,7 @@ pub const USER_ONLY_LIST: &[&str] = &[
     "Showing or changing server console passwords and website-status secrets.",
     "A server's extra start options, putting back all of Loner-Strike's default files, and clearing old backups.",
     "Recording that a creator gave permission to use their asset, or typing a credit for a file (Publish credits).",
+    "Applying or dropping a waiting update to one of their prefabs.",
 ];
 
 /// The parts of a path, matched against a pattern's (":x" matches any one part, but never an
@@ -551,6 +555,9 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
             p => p,
         };
     }
+    if route == "/api/tools/editor/prefabs/update" {
+        return user_only("Applying or dropping a waiting prefab update is the person's decision.");
+    }
     if route == "/api/tools/credits/permission" || route == "/api/tools/credits/manual" {
         return user_only("Saying a creator gave permission (or who made a file) is a statement only the person can make.");
     }
@@ -615,6 +622,34 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
         ("/api/tools/editor/save", "save the editor's map (overwrites its file)"),
         ("/api/tools/compile/setup", "download and set up the map compilers"),
         ("/api/tools/navfix/:name/save", "save the map's nav (overwrites the bots' nav)"),
+        ("/api/app/game", "switch the game Loner-Strike runs (Counter-Strike or Condition Zero)"),
+        ("/api/app/game-folder", "change which game folder Loner-Strike uses"),
+        ("/api/app/servers-folder", "move or change your servers' folder"),
+        ("/api/backup/open", "open a backup file from your computer"),
+        ("/api/gb/add-file", "add a file to your game"),
+        ("/api/mapcopy", "copy maps between your game and your servers"),
+        ("/api/mods/plugins/add", "install a plugin into your game"),
+        ("/api/navs/learn", "run a hidden server to teach bots a map (writes its nav and bot knowledge into the game)"),
+        ("/api/sounds/add", "add sounds to your game"),
+        ("/api/sounds/addon", "install a sound add-on into your game"),
+        ("/api/tools/assets/add-file", "add a file to your game"),
+        ("/api/tools/assets/texture/save", "save a texture into a texture file (WAD)"),
+        ("/api/tools/community/reveal", "open a folder on your computer"),
+        ("/api/tools/demos/rename", "rename a demo file"),
+        ("/api/tools/doctor/:name/copy", "copy the map's missing files into your game"),
+        ("/api/tools/doctor/:name/res", "write the map's .res file (the files players download)"),
+        ("/api/tools/editor/discard-recovery", "throw away the editor's recovered work"),
+        ("/api/tools/editor/open-recent", "open another map in the editor (unsaved changes are lost)"),
+        ("/api/tools/editor/project/action", "open, show, rename or delete a file of the editor project"),
+        ("/api/tools/editor/recover", "open the recovered map in the editor (unsaved changes are lost)"),
+        ("/api/tools/navfix/:name/reload", "reload the nav from disk (unsaved nav edits are lost)"),
+        ("/api/tools/overview/:name/install", "install a radar picture into your game"),
+        ("/api/tools/people/shipped", "put back the shipped bot people"),
+        ("/api/tools/playercfg/save", "save your game config (crosshair and settings)"),
+        ("/api/tools/plugins/rename", "rename a plugin source file"),
+        ("/api/tools/spray/install", "install your spray into the game"),
+        ("/api/tools/studio/source", "write a Studio mode's plugin source into your game (Open as code)"),
+        ("/api/voice/:action", "install, remove or change the voice chat add-on"),
         ("/api/tools/callouts/:name", "save place names into the map's nav (overwrites the bots' nav)"),
         ("/api/tools/studio/graph/:id", "save a Game Mode Studio graph (overwrites it)"),
         ("/api/tools/studio/uninstall/:id", "take a Studio mode out of the game"),
@@ -635,6 +670,9 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
         return Policy::Ask("save a prefab over one of yours in the library".into());
     }
     // the map's missing models, sprites and sounds: into the game asks, beside the project doesn't
+    if route == "/api/tools/editor/assets/find" {
+        return Policy::Ask("look for the map's missing files in a folder and copy them into the game's download folder".into());
+    }
     if route == "/api/tools/editor/assets/copy" && b("to").and_then(Value::as_str) != Some("project") {
         return Policy::Ask("copy the map's files into the game's download folder".into());
     }
@@ -691,8 +729,111 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
     if route.contains("/delete") || route.contains("/remove") {
         return Policy::Ask(format!("delete or remove something ({route})"));
     }
-    Policy::Change
+    if CHANGES.contains(&route) {
+        return Policy::Change;
+    }
+    // not reviewed yet: asked, never let through quietly (test every_route_has_an_explicit_policy)
+    Policy::Ask(format!("use {route} (not reviewed for agents yet)"))
 }
+
+/// POST routes reviewed as plain changes: they edit the open editor document or a nav fixer
+/// session (undoable), make something new, or change a setting that's easy to change back;
+/// none overwrites a file the person keeps, installs into the game or goes outward without
+/// the rules above catching it first. Any POST route not caught above and not here is asked.
+pub const CHANGES: &[&str] = &[
+    "/api/admins/person",
+    "/api/admins/settings",
+    "/api/admins/unban",
+    "/api/app/prefs",
+    "/api/app/saved-settings",
+    "/api/app/saved-settings/addon",
+    "/api/app/saved-settings/bots",
+    "/api/backup/estimate",
+    "/api/backup/export",
+    "/api/botchat/reply",
+    "/api/community/gag",
+    "/api/community/reports",
+    "/api/community/settings",
+    "/api/community/ungag",
+    "/api/extras/export",
+    "/api/extras/rotation",
+    "/api/extras/schedule",
+    "/api/extras/settings",
+    "/api/lists",
+    "/api/mapcopy/stop",
+    "/api/mapflag",
+    "/api/modevote",
+    "/api/navs/learn/stop",
+    "/api/scrim/action",
+    "/api/scrim/settings",
+    "/api/servercontent/set",
+    "/api/servers/:id",
+    "/api/servers/:id/console/hints",
+    "/api/servers/:id/hltv",
+    "/api/servers/:id/hltv-folder",
+    "/api/servers/:id/hltv/:action",
+    "/api/servers/:id/security/fix",
+    "/api/servers/:id/voice",
+    "/api/servers/import",
+    "/api/servers/pick-folder",
+    "/api/servers/pick-key",
+    "/api/servers/select",
+    "/api/smartchat/set",
+    "/api/smartchat/try",
+    "/api/smartchat/try/start",
+    "/api/smartchat/try/stop",
+    "/api/sounds/announcer",
+    "/api/sounds/pack",
+    "/api/sounds/track",
+    "/api/tools/assets/export",
+    "/api/tools/editor/assets/copy",
+    "/api/tools/assets/texture/pick",
+    "/api/tools/assets/texture/preview",
+    "/api/tools/community/remix",
+    "/api/tools/compile/cancel",
+    "/api/tools/compile/start",
+    "/api/tools/demos/replay",
+    "/api/tools/editor/autosave",
+    "/api/tools/editor/cmd",
+    "/api/tools/editor/cmd2",
+    "/api/tools/editor/components/load-pack",
+    "/api/tools/editor/copy",
+    "/api/tools/editor/export-map",
+    "/api/tools/editor/fgd/pick",
+    "/api/tools/editor/leak/load",
+    "/api/tools/editor/history/jump",
+    "/api/tools/editor/prefabs/edit",
+    "/api/tools/editor/prefabs/export",
+    "/api/tools/editor/prefabs/import",
+    "/api/tools/editor/prefabs/save",
+    "/api/tools/editor/redo",
+    "/api/tools/editor/settings",
+    "/api/tools/editor/undo",
+    "/api/tools/health/cancel",
+    "/api/tools/health/start",
+    "/api/tools/navfix/:name/edit",
+    "/api/tools/navfix/:name/redo",
+    "/api/tools/navfix/:name/undo",
+    "/api/tools/creatures/check",
+    "/api/tools/creatures/reload",
+    "/api/tools/creatures/save",
+    "/api/tools/creatures/spawn",
+    "/api/tools/creatures/waves/save",
+    "/api/tools/people/check",
+    "/api/tools/people/export",
+    "/api/tools/people/import",
+    "/api/tools/people/save",
+    "/api/tools/playercfg/preview",
+    "/api/tools/plugins/compile",
+    "/api/tools/recordings/open",
+    "/api/tools/screenshot",
+    "/api/tools/spray/pick",
+    "/api/tools/spray/preview",
+    "/api/tools/studio/debug/command",
+    "/api/tools/studio/generate",
+    "/api/tools/studio/validate",
+    "/api/welcome",
+];
 
 /// Keys whose values are never shown to agents.
 fn secret_key(k: &str) -> bool {

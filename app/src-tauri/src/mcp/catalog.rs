@@ -92,7 +92,7 @@ pub fn specs() -> Vec<Spec> {
             description: "Runs the map doctor and returns its report: missing textures/models/sounds/sky, the .res download list, nav and knowledge, and fixes it can make." },
         Spec { name: "map_doctor_write_res", title: "Write the .res list", kind: Risky, schema: map_only,
             description: "Writes or updates the map's .res download list (custom files only; a .bak is kept). Asks the person first if a .res is already there." },
-        Spec { name: "map_doctor_copy_files", title: "Copy missing files", kind: Change,
+        Spec { name: "map_doctor_copy_files", title: "Copy missing files", kind: Risky,
             schema: || obj(json!({"map": map_prop(), "files": {"type": "array", "items": {"type": "string"}, "description": "Files the doctor found only in another game folder (as it lists them)"}}), &["map", "files"]),
             description: "Copies files the doctor found only in another game folder into the map's game folder (never replaces a file)." },
         Spec { name: "health_options", title: "Map simulator options", kind: Read, schema: map_only,
@@ -478,12 +478,15 @@ async fn run(ctx: &Ctx, name: &str, a: &Value) -> Done {
             let report = get(ctx, &format!("/api/tools/doctor/{m}")).await?;
             if report["res"]["exists"] == true {
                 ask(ctx, format!("An AI agent wants to update {m}.res, the list of files players download with the map. A .bak copy is kept. Allow it?")).await?;
+            } else {
+                ask(ctx, format!("An AI agent wants to write {m}.res, the list of files players download with the map, into your game. Allow it?")).await?;
             }
             post(ctx, &format!("/api/tools/doctor/{m}/res"), json!({})).await
         }
         "map_doctor_copy_files" => {
             let m = map_arg(a)?;
             let files = a.get("files").filter(|f| f.as_array().is_some_and(|l| l.iter().all(Value::is_string))).ok_or_else(|| err("files must be a list of file names."))?;
+            ask(ctx, format!("An AI agent wants to copy {} missing file(s) for {m} into your game. Allow it?", files.as_array().map(Vec::len).unwrap_or(0))).await?;
             post(ctx, &format!("/api/tools/doctor/{m}/copy"), json!({"files": files})).await
         }
         "health_options" => get(ctx, &format!("/api/tools/health/options?map={}", map_arg(a)?)).await,

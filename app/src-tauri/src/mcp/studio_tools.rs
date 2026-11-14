@@ -713,9 +713,7 @@ pub async fn run(ctx: &Ctx, name: &str, a: &Value) -> Option<Done> {
         "studio_draft_save" => async {
             let id = mode_id(a)?;
             let g = draft_graph(&id).ok_or_else(|| err(NO_DRAFT))?;
-            if get(ctx, &format!("/api/tools/studio/graph/{id}")).await.is_ok() {
-                ask(ctx, format!("An AI agent wants to save over the game mode graph \"{id}\". Allow it?")).await?;
-            }
+            super::more::ask_if_graph_there(ctx, &id).await?;
             let v = post(ctx, &format!("/api/tools/studio/graph/{id}"), json!({"graph": g})).await?;
             if let Some(x) = lock().get_mut(&id) {
                 x.dirty = false;

@@ -845,7 +845,7 @@ fn what_agents_may_do_with_each_route() {
     assert_eq!(policy("POST", "/api/servers", &json!({"name": "x"})), Policy::Change);
     assert_eq!(policy("POST", "/api/servers/import", &none), Policy::Change, "the literal route, not /api/servers/:id");
     assert_eq!(policy("POST", "/api/servers/abc/hltv", &none), Policy::Change);
-    assert_eq!(policy("POST", "/api/navs/learn", &none), Policy::Change);
+    assert!(matches!(policy("POST", "/api/navs/learn", &none), Policy::Ask(_)), "a hidden server writes the nav into the game");
     assert_eq!(policy("GET", "/api/state", &none), Policy::Read);
     assert_eq!(policy("GET", "/api/servers/abc/console", &none), Policy::Read);
     assert_eq!(policy("GET", "/api/gb/browse", &none), Policy::Read);
@@ -1235,4 +1235,32 @@ async fn typed_tools_are_never_stronger_than_app_call() {
     println!("risky tools not reached: {unreached:?}");
     assert!(weaker.is_empty(), "app_call is weaker than the typed tool for:\n{}", weaker.join("\n"));
     assert!(checked.len() >= 30, "only {} tool routes were reached: {checked:?}", checked.len());
+}
+
+
+/// Every route has a policy someone chose: GETs read, and every POST is caught by a rule or is
+/// on the reviewed list of plain changes (a new route is asked about until it's reviewed).
+#[test]
+fn every_route_has_an_explicit_policy() {
+    let mut unreviewed = vec![];
+    for (m, p) in routes::ROUTES {
+        let path = p.split('/').map(|x| if x.starts_with(':') { "x1" } else { x }).collect::<Vec<_>>().join("/");
+        if let routes::Policy::Ask(w) = routes::policy(m, &path, &json!({})) {
+            if w.contains("not reviewed") {
+                unreviewed.push(format!("{m} {p}"));
+            }
+        }
+    }
+    assert!(unreviewed.is_empty(), "routes with no explicit policy (add a rule or list them in routes::CHANGES):\n{}", unreviewed.join("\n"));
+    // the reviewed list names real POST routes only
+    for c in routes::CHANGES {
+        assert!(routes::ROUTES.contains(&("POST", c)), "{c} isn't a POST route");
+    }
+    // the ones the review named
+    let none = json!({});
+    assert!(matches!(routes::policy("POST", "/api/tools/editor/prefabs/update", &none), routes::Policy::UserOnly(_)));
+    for p in ["/api/tools/editor/assets/find", "/api/tools/editor/assets/copy", "/api/tools/studio/compile", "/api/tools/doctor/de_x/copy", "/api/tools/overview/de_x/install", "/api/tools/editor/project/action"] {
+        assert!(matches!(routes::policy("POST", p, &none), routes::Policy::Ask(_)), "{p}");
+    }
+    assert_eq!(routes::policy("POST", "/api/tools/editor/assets/copy", &json!({"to": "project"})), routes::Policy::Change);
 }
