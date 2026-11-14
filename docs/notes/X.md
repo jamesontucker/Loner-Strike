@@ -1336,3 +1336,8 @@ server from the community server picks, then switched with gm_mode, changed and 
   Touches your files: `graph.rs` `Key` (new optional `tin`/`tout`), gen.rs `track_eval`, schema.ts key schema,
   `TimelineEditor.tsx` (the key menu, the interpolation select, tangent handles on the curve). Small hunks; tell
   me here if you're editing TimelineEditor.tsx so I wait.
+- **X2 (2026-11-14): Timeline interpolation committed (af17cd85)** with only my hunks (temp index): gen.rs `track_eval`
+  (Constant, Ease In/Out/In-Out, Custom Hermite by tangents), graph.rs `Key.tin/tout` + `EASES`, schema.ts,
+  TimelineEditor.tsx (key menu, interpolation list, tangent handles, Auto tangents), `timeline_tests.rs`. The
+  every_node_3 snapshots in that commit are HEAD's with just the timeline value stocks swapped in; your working gen.rs
+  hunks (creature/hit-dir work) stay yours: please run UPDATE_SNAPSHOTS=1 with your next gen.rs commit.
