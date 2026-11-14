@@ -209,6 +209,7 @@ public plugin_init()
 	register_srvcmd("lst_gates", "cmd_gates");
 	register_srvcmd("lst_holds", "cmd_holds");
 	register_srvcmd("lst_perf", "cmd_perf");
+	register_srvcmd("lst_jump", "cmd_jump");
 	register_forward(FM_PlayerPreThink, "fm_prethink");
 	register_forward(FM_SetModel, "fm_setmodel_post", 1);
 
@@ -248,6 +249,20 @@ public plugin_cfg()
 	log_amx("Last Stand on %s: enemies are %s (best wave here: %d)", g_mapname, g_creatures ? "creatures" : "zombie bots", g_record);
 }
 
+/* server, for tests: the next wave is this one (lst_jump <n> during a break or the prepare time) */
+public cmd_jump()
+{
+	new a[8];
+	read_argv(1, a, charsmax(a));
+	new n = str_to_num(a);
+	if (n >= 1 && (g_phase == PH_BREAK || g_phase == PH_PREPARE))
+	{
+		g_wave = n - 1;
+		log_amx("Last Stand: next wave set to %d (test)", n);
+	}
+	return PLUGIN_HANDLED;
+}
+
 /* server: entities, creatures alive, defenders up (for big-team tests) */
 public cmd_perf()
 {
@@ -259,9 +274,22 @@ public cmd_perf()
 			if (is_user_alive(p))
 				up++;
 		}
+	new shell = 0, red = 0;
 	while ((e = find_ent_by_class(e, "ls_creature")))
 		if (pev(e, pev_deadflag) == DEAD_NO)
+		{
 			cr++;
+			/* tier / enrage looks: a glow shell, red-ish for tier 3 and enraged ones */
+			if (pev(e, pev_renderfx) == kRenderFxGlowShell)
+			{
+				shell++;
+				new Float:c[3];
+				pev(e, pev_rendercolor, c);
+				if (c[0] > 150.0 && c[1] < 120.0)
+					red++;
+			}
+		}
+	log_amx("Last Stand perf: %d creatures with a glow shell (%d red)", shell, red);
 	new capnow = get_cvar_pointer("ls_creature_cap_now") ? get_cvar_num("ls_creature_cap_now") : -1;
 	log_amx("Last Stand perf: %d entities of %d, %d creatures alive (cap %d, ls_creature_cap_now %d), %d of %d defenders up, phase %d wave %d", engfunc(EngFunc_NumberOfEntities), global_get(glb_maxEntities), cr, alive_cap(), capnow, up, ct, g_phase, g_wave);
 	return PLUGIN_HANDLED;
