@@ -1416,6 +1416,9 @@ stock bot_goals()
 		/* (the loot-up and the first 90 s of the fight are the brain's own looting) */
 		if (g_trait[p] != TR_LOOTER || now < g_nextGoal[p] || g_phase == PH_WAIT || g_phase == PH_DROP || now - g_playAt < 90.0)
 			continue;
+		/* (not a bot on the high ground: it holds sightline spots there, the brain's call) */
+		if (g_layer[p] == LAYER_HIGH)
+			continue;
 		g_nextGoal[p] = now + random_float(15.0, 30.0);
 		/* the nearest full crate that's inside the zone (and not too far) */
 		new Float:po[3], best = 0, Float:bd = 1500.0;
