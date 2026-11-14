@@ -33,8 +33,8 @@ pub const AMXX_CSTRIKE: Pinned = Pinned {
 };
 /// Loner-Strike's fork of ReGameDLL (github.com/jamesontucker/ReGameDLL_CS, branch loner-strike)
 pub const REGAMEDLL: Pinned = Pinned {
-    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls20/regamedll-bin-5.30.0.814-ls20.zip",
-    sha256: "0f2a60be49663e6f1b49cd567ebbaa54555af764635d10771ed7fe159c5ed3e5",
+    url: "https://github.com/jamesontucker/ReGameDLL_CS/releases/download/5.30.0.814-ls21/regamedll-bin-5.30.0.814-ls21.zip",
+    sha256: "f28586b42f134c96f3d4336b863e44754e8502f385f862b24ed955d1f3bc0650",
     what: "ReGameDLL",
 };
 /// Loner-Strike's fork of ReHLDS (github.com/jamesontucker/ReHLDS, branch loner-strike): the
@@ -333,6 +333,35 @@ mod tests {
         kept.sort();
         assert_eq!(kept, ["addons/amxmodx/configs/maps/de_dust2.cfg", "addons/amxmodx/configs/plugins.ini", "addons/amxmodx/configs/users.ini"]);
         assert!(present(&root.join("nothing-here")).is_empty());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A fresh install's server code is the pinned brain (ls21: 5.30.0.1314-dev): the pinned
+    /// ReGameDLL through the app's own download path (mirror first, SHA-256 checked) into a
+    /// scratch game, as setup's ReGameDLL step puts it in. Network:
+    /// `LS_APP_DIR=<scratch> cargo test -- --ignored pinned_brain_installs`.
+    #[test]
+    #[ignore]
+    fn pinned_brain_installs() {
+        let root = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "brain-install-").unwrap();
+        let hl = root.join("Half-Life");
+        let game = hl.join("cstrike");
+        std::fs::create_dir_all(game.join("dlls")).unwrap();
+        std::fs::write(game.join("liblist.gam"), "game \"Counter-Strike\"\r\ngamedll \"dlls\\mp.dll\"\r\n").unwrap();
+        std::fs::write(game.join("dlls/mp.dll"), b"MZ Valve's own server code").unwrap();
+        let install = crate::steam::Install { hl: hl.clone(), kind: "crossover".into(), bottle: Some("Steam".into()), games: vec!["cstrike".into()], dedicated: false };
+        let res = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let ctx = Ctx { install: &install, res: &res, progress: &crate::setup::Quiet, store: None };
+        let mut rec = Record::open(&game);
+        rec.begin("foundation");
+        let tmp = TempDir::new().unwrap();
+        regamedll(&mut rec, &ctx, &tmp).unwrap();
+        let dll = std::fs::read(game.join("dlls/mp.dll")).unwrap();
+        let has = |s: &[u8]| dll.windows(s.len()).any(|w| w == s);
+        assert!(has(b"5.30.0.1314-dev") && has(b"bot_ls_"), "the pinned brain");
+        assert!(REGAMEDLL.url.ends_with("regamedll-bin-5.30.0.814-ls21.zip"));
+        // Valve's was backed up, and is what an uninstall puts back
+        assert!(rec.ours("dlls/mp.dll"));
         let _ = std::fs::remove_dir_all(&root);
     }
 

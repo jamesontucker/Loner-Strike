@@ -56,25 +56,22 @@ sims (`~/loner-strike-sim`), not this re-check.
   doesn't know creature packages. Check: `git show origin/main:scripts/community-index-check.py`
   matches the release commit's copy before anyone lists a creature.
 
-- **The bot brain pin moves to the newest green ls-next3 before the re-check.** As of 2026-11-14
-  that's b1061777, CI run 43651450817 (5.30.0.1314-dev). It has Y's chat `#` fix, the crash-log
-  time and map, the revive and turret fixes, W2's high ground and the "use" offer kind
-  (ls_mode_ver 3), and every brain fix since ls20.
-  - Already built and checked (not published): `RUN=43651450817 BUILD_ONLY=1
-    scripts/fork-release.sh regamedll 5.30.0.814-ls21` gives `regamedll-bin-5.30.0.814-ls21.zip`
-    with sha256 `11f07e132b70410f9eef77166bf1e87a6a11adb80eff6a371368abd492cb4a9d`.
-    Its win32 mp.dll (sha256 `bdba4116…25db`) is byte for byte the CI artifact's.
-  - Needs the go (it publishes): `RUN=<newest green ls-next3 run> scripts/fork-release.sh
-    regamedll 5.30.0.814-ls21` (a GitHub release on the fork), then `scripts/r2-sync.sh` (the
-    download mirror). Then the pin in `app/src-tauri/src/setup/foundation.rs` (`REGAMEDLL`: url
-    and sha256) changes, committed by path. If a newer green build has landed, use that run and
-    the next `-lsNN`.
-  - The re-check's sims always install the brain the commit pins (sha256 checked). Before the
-    release exists, `RECHECK_BRAIN_ZIP=<the built zip>` lets them use the built one, checked
-    against the pin, so the pin has to be changed first.
-  - The app's install path takes it from the pin: mirror first, then GitHub, SHA-256 checked.
-    The Files bar offers it as an update, because `foundation_version()` comes from the pin's
-    hash.
+- **The bot brain pin: done (2026-11-14).** It's ls21, the newest green ls-next3: b1061777, CI
+  run 43651450817, 5.30.0.1314-dev. It has Y's chat `#` fix, the crash-log time and map, the
+  revive and turret fixes, W2's high ground and the "use" offer kind (ls_mode_ver 3), and every
+  brain fix since ls20.
+  - Released at https://github.com/jamesontucker/ReGameDLL_CS/releases/tag/5.30.0.814-ls21.
+  - Mirrored at https://dl.lonerstrike.com/regamedll-bin-5.30.0.814-ls21.zip. `r2-sync.sh` also
+    took ls20 and the no-longer-pinned relocalizebugfix-v2.8 off the mirror; the app falls back
+    to GitHub for those.
+  - The pin is in `setup/foundation.rs` `REGAMEDLL`, sha256
+    `f28586b42f134c96f3d4336b863e44754e8502f385f862b24ed955d1f3bc0650`. Both downloads match it,
+    and the win32 mp.dll inside is byte for byte the CI artifact's.
+  - `pinned_brain_installs` (ignored, network) puts it into a scratch game through setup's own
+    path.
+  - The re-check's sims install the brain the commit pins. If a newer green ls-next3 has to go
+    in before the re-check: `RUN=<id> scripts/fork-release.sh regamedll 5.30.0.814-ls22`, then
+    the pin, then `scripts/r2-sync.sh`.
 
 ## Only the user can check these (the real client, accounts, hardware)
 - **The game itself:** starting a game from Play and playing a first match. Seeing in the client
