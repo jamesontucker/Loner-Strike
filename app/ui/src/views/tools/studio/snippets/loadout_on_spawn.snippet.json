@@ -18,7 +18,7 @@
    "type": "player.strip",
    "pos": {
     "x": 340,
-    "y": 203
+    "y": 225
    },
    "params": {
     "knife": true
@@ -41,7 +41,7 @@
    "type": "player.give_weapon",
    "pos": {
     "x": 980,
-    "y": 117
+    "y": 106
    },
    "params": {
     "weapon": "deagle",

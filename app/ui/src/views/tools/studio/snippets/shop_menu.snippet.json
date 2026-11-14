@@ -9,7 +9,7 @@
    "type": "event.chat_command",
    "pos": {
     "x": 20,
-    "y": 711
+    "y": 751
    },
    "params": {
     "command": "shop"
@@ -20,7 +20,7 @@
    "type": "msg.menu",
    "pos": {
     "x": 660,
-    "y": 504
+    "y": 544
    },
    "params": {
     "title": "Shop",
@@ -35,7 +35,7 @@
    "type": "player.get_money",
    "pos": {
     "x": 340,
-    "y": 179
+    "y": 212
    },
    "params": {}
   },
@@ -44,7 +44,7 @@
    "type": "math.compare",
    "pos": {
     "x": 660,
-    "y": 155
+    "y": 188
    },
    "params": {
     "op": "ge",
@@ -56,7 +56,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 980,
-    "y": 145
+    "y": 178
    },
    "params": {}
   },
@@ -77,7 +77,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 1620,
-    "y": 144
+    "y": 172
    },
    "params": {
     "amount": -2500
@@ -88,7 +88,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 1300,
-    "y": 177
+    "y": 216
    },
    "params": {
     "text": "Not enough money for that."
@@ -99,7 +99,7 @@
    "type": "player.get_money",
    "pos": {
     "x": 340,
-    "y": 746
+    "y": 786
    },
    "params": {}
   },
@@ -108,7 +108,7 @@
    "type": "math.compare",
    "pos": {
     "x": 660,
-    "y": 722
+    "y": 762
    },
    "params": {
     "op": "ge",
@@ -120,7 +120,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 980,
-    "y": 630
+    "y": 669
    },
    "params": {}
   },
@@ -129,7 +129,7 @@
    "type": "player.give_item",
    "pos": {
     "x": 1300,
-    "y": 673
+    "y": 712
    },
    "params": {
     "item": "vesthelm"
@@ -140,7 +140,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 1620,
-    "y": 829
+    "y": 869
    },
    "params": {
     "amount": -1000
@@ -151,7 +151,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 1300,
-    "y": 385
+    "y": 425
    },
    "params": {
     "text": "Not enough money for that."
@@ -162,7 +162,7 @@
    "type": "player.get_money",
    "pos": {
     "x": 340,
-    "y": 1030
+    "y": 1069
    },
    "params": {}
   },
@@ -171,7 +171,7 @@
    "type": "math.compare",
    "pos": {
     "x": 660,
-    "y": 1006
+    "y": 1045
    },
    "params": {
     "op": "ge",
@@ -183,7 +183,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 980,
-    "y": 996
+    "y": 1035
    },
    "params": {}
   },
@@ -192,7 +192,7 @@
    "type": "player.give_weapon",
    "pos": {
     "x": 1300,
-    "y": 1178
+    "y": 1217
    },
    "params": {
     "weapon": "hegrenade",
@@ -204,7 +204,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 1620,
-    "y": 1211
+    "y": 1282
    },
    "params": {
     "amount": -300
@@ -215,7 +215,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 1300,
-    "y": 889
+    "y": 928
    },
    "params": {
     "text": "Not enough money for that."
