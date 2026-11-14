@@ -1463,7 +1463,7 @@ lsg_n24(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
-		ls_down_enable(true, 30.0, 0, false)
+		ls_down_enable(true, 45.0, 0, false)
 	}
 	lsg_n25(ctx)
 }
