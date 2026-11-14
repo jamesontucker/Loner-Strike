@@ -28,6 +28,17 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/safety/changed"),
     ("POST", "/api/safety/restore"),
     ("POST", "/api/safety/defaults"),
+    // P5 UI, MCP's routes (docs/notes/Roles.md): community roles
+    ("GET", "/api/roles/server/:id"),
+    ("POST", "/api/roles/server/:id/claim"),
+    ("POST", "/api/roles/server/:id/settings"),
+    ("POST", "/api/roles/server/:id/owner-code"),
+    ("POST", "/api/roles/server/:id/unclaim"),
+    ("GET", "/api/roles/server/:id/applications"),
+    ("POST", "/api/roles/server/:id/applications/:aid/invite"),
+    ("POST", "/api/roles/server/:id/applications/:aid/revoke"),
+    ("GET", "/api/admins/supporters"),
+    ("POST", "/api/admins/supporters"),
     ("POST", "/api/safety/undo"),
     ("POST", "/api/safety/clear"),
     ("GET", "/api/admins"),
@@ -527,6 +538,10 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
     if route.starts_with("/api/app/update") || route.starts_with("/api/app/remove-everything") || route == "/api/app/restart" {
         return user_only("Updating, restarting or removing Loner-Strike is off limits to agents.");
     }
+    // P5: a Discord owner code makes whoever types it the server's owner on Discord
+    if route == "/api/roles/server/:id/owner-code" {
+        return user_only("A server's Discord owner code is the owner's alone (it makes whoever types it the owner).");
+    }
     // P5: the website's link waiting for the app's page (taking it would lose it)
     if route == "/api/app/deep-link" {
         return user_only("The app's waiting website link is for its own page, not for agents.");
@@ -602,6 +617,12 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
         ("/api/servers/:id/webstatus", "change the server's public website status / Discord posting"),
         ("/api/servers/:id/crashes/alerts", "post (or stop posting) this server's crashes to its Discord channel"),
         ("/api/tools/community/register", "register a creation on the community list (public)"),
+        ("/api/roles/server/:id/claim", "claim this server on Loner-Strike's list for community roles (public)"),
+        ("/api/roles/server/:id/settings", "change who can apply to moderate this server, who decides, and whether supporters get VIP"),
+        ("/api/roles/server/:id/unclaim", "unclaim this server (open moderator applications close)"),
+        ("/api/roles/server/:id/applications/:aid/invite", "make a Moderator invite for an approved applicant (gives them access to this server)"),
+        ("/api/roles/server/:id/applications/:aid/revoke", "take a Moderator's access away (app, game and Discord role)"),
+        ("/api/admins/supporters", "change the Loner-Strike supporters' VIP on this server (honoring it asks Loner-Strike about the players on it)"),
         ("/api/tools/community/report", "report a community creation to the Loner-Strike moderators"),
         ("/api/tools/community/unlist", "unlist one of your creations from the public community list (or list it again)"),
         ("/api/tools/community/publish/:map", "build a package of this map for publishing"),
@@ -878,7 +899,7 @@ pub const CHANGES: &[&str] = &[
 /// Keys whose values are never shown to agents.
 fn secret_key(k: &str) -> bool {
     let k = k.to_ascii_lowercase();
-    ["password", "passwd", "rcon", "token", "secret", "apikey", "api_key", "webhook", "cookie", "privatekey", "private_key", "invite", "steamid", "steam_id", "qr"]
+    ["password", "passwd", "rcon", "token", "secret", "apikey", "api_key", "webhook", "cookie", "privatekey", "private_key", "invite", "steamid", "steam_id", "qr", "owner_code"]
         .iter()
         .any(|w| k.contains(w))
         && !k.starts_with("has")
@@ -944,6 +965,7 @@ pub const AREAS: &[(&str, &str)] = &[
     ("/api/setup", "setup: scan, job progress; installing or removing named add-ons asks"),
     ("/api/share", "sharing (reading only)"),
     ("/api/control", "shared control (reading only)"),
+    ("/api/roles", "Loner-Strike community roles: server claim, moderator applications, invites (each change asks)"),
     ("/api/tools", "Tools: maps, viewer data, editor, nav fixer, doctor, map simulator, replay, studios, compile, radar, demos, community, people, config"),
     ("/thumb", "map pictures"),
     ("/api/mcp", "the AI agents settings (the person's alone)"),
@@ -952,4 +974,35 @@ pub const AREAS: &[(&str, &str)] = &[
 
 pub fn area_of(path: &str) -> &'static str {
     AREAS.iter().filter(|(p, _)| path.starts_with(p)).max_by_key(|(p, _)| p.len()).map(|(_, d)| *d).unwrap_or("")
+}
+
+#[cfg(test)]
+mod roles_policy_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// P5: community roles: reading is reading; anything that grants or takes access, or is
+    /// public, asks; the Discord owner code (a credential) is the person's alone and hidden.
+    #[test]
+    fn roles_routes_ask_before_access() {
+        let none = json!({});
+        assert_eq!(policy("GET", "/api/roles/server/abc", &none), Policy::Read);
+        assert_eq!(policy("GET", "/api/roles/server/abc/applications", &none), Policy::Read);
+        assert_eq!(policy("GET", "/api/admins/supporters", &none), Policy::Read);
+        for p in [
+            "/api/roles/server/abc/claim",
+            "/api/roles/server/abc/settings",
+            "/api/roles/server/abc/unclaim",
+            "/api/roles/server/abc/applications/a1/invite",
+            "/api/roles/server/abc/applications/a1/revoke",
+            "/api/admins/supporters",
+        ] {
+            assert!(matches!(policy("POST", p, &none), Policy::Ask(_)), "{p} asks");
+        }
+        assert!(matches!(policy("POST", "/api/roles/server/abc/owner-code", &none), Policy::UserOnly(_)));
+        let mut v = json!({"claimed": true, "owner_code": "ABCD2345", "applications": [{"steamid": "STEAM_0:1:5", "invite": "LS1.x"}]});
+        redact(&mut v);
+        let t = v.to_string();
+        assert!(!t.contains("ABCD2345") && !t.contains("STEAM_0:1:5") && !t.contains("LS1.x"), "{t}");
+    }
 }

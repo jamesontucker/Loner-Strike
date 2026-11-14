@@ -4,6 +4,7 @@ import { queryClient, reloadServers } from "../queries";
 import type { ServerInfo, ServerList } from "../types";
 import { BusyButton, Info, Sheet, Switch, useConfirm, useToast } from "../ui";
 import { openTab } from "./goto";
+import { describeRoles, previewInvite } from "./communityRoles"; // P5: community roles
 
 /**
  * Shared control (control/ in the app): friends with Loner-Strike help run a server from
@@ -64,7 +65,7 @@ function until(unix: number) {
 }
 
 /** A new invite: hidden like a password until the eye shows it; Copy copies it either way. */
-function InviteBox({ invite, note }: { invite: string; note: string }) {
+export function InviteBox({ invite, note }: { invite: string; note: string }) {
   const toast = useToast();
   const [shown, setShown] = useState(false);
   const copy = async () => toast((await copyText(invite)) ? "Invite copied" : "Couldn't copy it: show it, then select it and copy it yourself", false);
@@ -132,6 +133,8 @@ function describe(a: Activity) {
   if (p === "/api/community/reports") return "Marked a report handled or reopened it";
   if (p.startsWith("/api/community")) return "Changed stats and moderation";
   if (p === "/api/mapflag") return "Changed a map's favorite or hidden mark";
+  const roles = describeRoles(p, b); // P5
+  if (roles) return roles;
   if (p === "/api/control/redeem") return "Accepted an invite";
   if (p === "/api/control/invite") return "Made an invite for a Moderator";
   if (/^\/api\/servers\/[^/]+\/console\/send$/.test(p)) return `Typed in the console: ${String(b.command ?? "").slice(0, 80)}`;
@@ -486,6 +489,8 @@ export function AddShared({ initial = "", onClose, onAdded }: { initial?: string
   }, []);
   const { run, busy } = useActions();
   const looks = invite.trim().startsWith("LS1.");
+  // P5: what the invite says (the server and the role), shown before it's used
+  const preview = looks ? previewInvite(invite) : null;
   const add = () => run("shared:add", async () => {
     setProblem("");
     try {
@@ -499,10 +504,10 @@ export function AddShared({ initial = "", onClose, onAdded }: { initial?: string
     onAdded(r.id!);
   }, "Connecting to the owner's Loner-Strike…");
   return (
-    <Sheet label="Add a shared server" onClose={busy("shared:add") ? undefined : onClose}>
+    <Sheet label="Join as moderator" onClose={busy("shared:add") ? undefined : onClose}>
       <div className="sheet-body">
-        <h2>Add a shared server</h2>
-        <p className="muted">Someone who runs a server with Loner-Strike sent you an invite. Paste it here. For a server on their own computer, their Loner-Strike has to be open.</p>
+        <h2>{preview?.role === "admin" ? "Join as Admin" : "Join as moderator"}</h2>
+        <p className="muted">Someone who runs a server with Loner-Strike sent you an invite (maybe through the Loner-Strike Discord). Paste it here. For a server on their own computer, their Loner-Strike has to be open.</p>
         <label className="field">
           <span>Invite</span>
           <textarea className="search invite-input" rows={3} placeholder="LS1.…" value={invite} onChange={(e) => { setInvite(e.target.value); setProblem(""); }} spellCheck={false} aria-invalid={!!problem || (!!invite.trim() && !looks)} />
@@ -512,9 +517,21 @@ export function AddShared({ initial = "", onClose, onAdded }: { initial?: string
           <span>Your name<Info text="What the owner sees in their list of people, and next to what you change." /></span>
           <input className="search" maxLength={32} placeholder="Like your Steam name" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
+        {preview && (
+          <div className="roles-join" aria-label="What you'll be able to do">
+            <p>
+              You'll join <b>{preview.server}</b> as {preview.role === "admin" ? "an Admin" : "a Moderator"}. You'll be able to:
+            </p>
+            <ul>
+              {ROLE_CAN[preview.role].map((c) => <li key={c}>{c}</li>)}
+            </ul>
+            <p className="muted small-note">{OWNER_ONLY} Everything you change shows in the owner's activity log, and they can remove you any time.</p>
+          </div>
+        )}
+        {looks && !preview && <small className="err-text">That invite looks cut off. Copy the whole thing.</small>}
         {problem && <p className="err-text" role="alert">{problem}</p>}
         <div className="row">
-          <BusyButton className="btn primary" busy={busy("shared:add")} disabled={!looks} label="Add the server" busyLabel="Connecting…" onClick={add} />
+          <BusyButton className="btn primary" busy={busy("shared:add")} disabled={!preview} label={preview?.role === "admin" ? "Join as Admin" : "Join as moderator"} busyLabel="Joining…" onClick={add} />
           <button className="btn" disabled={busy("shared:add")} onClick={onClose}>Cancel</button>
         </div>
       </div>

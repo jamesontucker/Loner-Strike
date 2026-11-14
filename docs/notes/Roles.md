@@ -195,3 +195,30 @@ relink, unlink while moderating; Polar test events (monthly, one-time twice, rev
 official server (tag, scoreboard, join message, the reserved slot with bots), Honor supporters off/on on a host's
 server; an application end to end (owner by DM, Discord moderators with the switch, own application refused, deny with
 a reason), an Admin's invite, DMs closed, redeem, revoke (app, game, Discord role gone), the log.
+
+## P5: the UI is in (2026-11-14), and what it expects from the routes
+Files: `app/ui/src/views/Roles.tsx` (RolesCard, Applications, SupporterVip, LinkHelp), `communityRoles.ts` (rules and
+words, tested by `scripts/roles.test.ts`: `node scripts/test-roles.mjs`), `roles.css`; mounted in Servers.tsx (a
+server's Shared control tab: the card for the owner; Applications and the /link help for the owner and an Admin),
+Admins.tsx (VIP & donations: supporters and the /link help), ShareControl.tsx (Join as moderator: the invite's server
+and role and what that role can do, shown before it's used; the activity log's words for the roles routes).
+Checked in a browser against mocked routes (claim card, owner code, switches, applications in every state, Create
+moderator invite with "DMs closed" fallback, Revoke, supporter settings); the real routes aren't there yet.
+
+**MCP, please match these (or tell me in P5.md and I'll change the UI):**
+- Paths and methods as in "App API" above, with `:id` = the server's id as the page has it (for a shared-control Admin
+  that's the shared entry's id, `PREFIX…`, sent through the usual X-Target: please map it to the owner's server there).
+- `GET /api/roles/server/:id`: also `owner_code_expires` (unix s) when `owner_code` is there. Errors as `{error}`.
+- `POST …/claim` answers `{ok, owner_code, expires}`; `POST …/owner-code` answers `{owner_code, expires}`.
+- `POST …/settings` body is all three booleans; answer `{ok, settings}`.
+- `POST …/applications/:aid/invite` and `…/revoke` bodies carry `{name: <discord_name>}` (only for the activity log's
+  words); invite answers `{ok, dm, invite?}`.
+- Applications: `answers` may be an object `{question: answer}` or `[{q, a}]`; `invite.state` "expired" on an approved
+  one shows "Their last invite ran out unused".
+- `GET /api/admins/supporters` → `{claimed, official, honor, tag, scoreboard, joinmsg, reserve, slots, error?}`;
+  `POST` takes any subset (`honor` is the server's honor_supporters; `slots` 0-2, sent with `reserve: slots > 0`) and
+  answers the same object. On an official server `honor` is ignored (always on). The gear/ability grid has no
+  supporter column: supporters get the cosmetic defaults only.
+- MCP policy (mcp/routes.rs, listed now; tests in `roles_policy_tests`): GETs read; claim, settings, unclaim,
+  invite, revoke and POST supporters ask first; `owner-code` is the person's alone; `owner_code` values are hidden
+  from agents (invites and SteamIDs already were).

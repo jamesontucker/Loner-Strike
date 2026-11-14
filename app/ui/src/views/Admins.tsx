@@ -6,6 +6,7 @@ import { setAdminList, sharedRole, useGameState } from "../queries";
 import { TabLink } from "./goto";
 import { NeedsSetup } from "./MatchMode";
 import { ShareList } from "./ShareList";
+import { LinkHelp, SupporterVip } from "./Roles"; // P5: community roles
 import { useDirty, useNav } from "../store";
 
 type Role = "owner" | "admin" | "moderator" | "vip";
@@ -359,8 +360,11 @@ export function Admins({ data, installed }: { data: Online | null; installed?: s
         </div>
         <p className="muted small-note">
           To keep things fair, modes like Zombie, Hide and Seek, Deathrun, Kreedz and Knife arena skip the spawn perks, and deathmatch and one-weapon modes only give
-          armour and the kit. Changes reach a running game straight away; the mode check happens on the next map.
+          armor and the kit. Changes reach a running game straight away; the mode check happens on the next map.
         </p>
+        {/* P5: Loner-Strike supporters' VIP, and how /link works */}
+        <SupporterVip />
+        <LinkHelp compact />
       </div>
       )}
     </div>

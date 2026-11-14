@@ -1,0 +1,22 @@
+/* Community roles (P5): Roles.tsx */
+.roles-card, .roles-apps { margin-top: 16px; }
+.roles-card > .row, .roles-apps > .row { align-items: center; gap: 10px; }
+.roles-chip.good { color: var(--ok); }
+.roles-chip.warn { color: var(--warn); }
+.roles-code { margin: 10px 0; padding: 10px 12px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; }
+.roles-code p { margin: 0 0 8px; }
+.roles-code .row { align-items: center; gap: 8px; flex-wrap: wrap; }
+.roles-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.roles-app { padding: 10px 12px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; }
+.roles-app > .row { align-items: center; gap: 8px; flex-wrap: wrap; }
+.roles-app p { margin: 6px 0 0; }
+.roles-app details { margin-top: 6px; }
+.roles-answers { margin: 6px 0 0; }
+.roles-answers dt { font-weight: 700; margin-top: 6px; }
+.roles-answers dd { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.roles-link { margin-top: 16px; }
+.roles-link summary { cursor: pointer; font-weight: 700; }
+.roles-link ol { margin: 10px 0 6px; padding-left: 20px; }
+.roles-vip { margin-top: 20px; }
+.roles-join { margin: 10px 0; padding: 10px 12px; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; }
+.roles-join ul { margin: 6px 0; padding-left: 20px; }

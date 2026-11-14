@@ -11,6 +11,7 @@ import { BusyButton, Info, lazyPage, LoadError, PageBoundary, SectionHead, Sheet
 import { Admins } from "./Admins";
 import { BackupSheet, RestoreSheet } from "./Backup";
 import { AddShared, InviteModerator, ROLE_CAN, ROLE_NAME, ShareControl } from "./ShareControl";
+import { Applications, LinkHelp, RolesCard } from "./Roles"; // P5: community roles
 import { Bots } from "./Bots";
 import { Friends } from "./Friends";
 import { GetMore, ServerSkins } from "./GetMore";
@@ -261,7 +262,7 @@ export function Servers({ scan, list, loadError, onOpen, onChanged }: { scan: Sc
   return (
     <div className="stack">
       <SectionHead title="Servers" note={`Optional: dedicated servers that run without your game open, for friends or anyone. Each has its own modes, maps, admins and password, separate from your game. ${RUNS_WHILE}`}>
-        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setAddingShared("")}>Add a shared server</button>}
+        {ON_THIS_COMPUTER && <button className="btn" onClick={() => setAddingShared("")} title="Paste a Moderator or Admin invite someone sent you">Join as moderator</button>}
         {ON_THIS_COMPUTER && <button className="btn primary" onClick={() => setCreating(true)}>New server</button>}
       </SectionHead>
 
@@ -908,6 +909,10 @@ export function ServerPage(props: {
           {tab === "stats" && <Community key="stats" target={s.id} part="stats" />}
           {tab === "share" && !role && <ShareControl server={s} />}
           {tab === "share" && role === "admin" && <InviteModerator server={s} />}
+          {/* P5: Loner-Strike roles (claim and switches for the owner; applications for the owner and Admins) */}
+          {tab === "share" && !role && <RolesCard server={s} />}
+          {tab === "share" && (!role || role === "admin") && <Applications server={s} />}
+          {tab === "share" && (!role || role === "admin") && <LinkHelp compact />}
           </>
           )}
         </>
