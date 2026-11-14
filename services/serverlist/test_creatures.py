@@ -35,10 +35,14 @@ FILES_NS = {"models/ann/qa/runner_x.mdl": model()}
 ASSETS = ["sound/ann/hit.wav", "sound/ann/hit2.wav"]
 
 
+MEMBERS = {"Ann": 1001, "Bob": 1002, "ann!": 7771234}
+
+
 def creature_page(gb=706630, file_id=1789869, author="Ann"):
     """A tagged page among the game's skins (the prefab fixture, moved, renumbered, by Ann)."""
     p = copy.deepcopy(PREFAB)
     p["_aSubmitter"]["_sName"] = author
+    p["_aSubmitter"]["_idRow"] = MEMBERS.get(author, 5795251)
     p["_idRow"] = gb
     p["_aFiles"] = p["_aFiles"][:1]
     p["_aFiles"][0]["_idRow"] = file_id
@@ -109,6 +113,8 @@ class Rules(unittest.TestCase):
         self.assertTrue(cm.namespace_is("jam_tucker.x", "jam_tucker"))
         self.assertFalse(cm.namespace_is("jam.x", "jam_tucker"))
         self.assertFalse(cm.namespace_is("bob.x", "bobby"), "someone else's shorter name")
+        self.assertFalse(cm.namespace_is("ab.x", "abc"), "a shorter author part never matches")
+        self.assertFalse(cm.namespace_is("abc.x", "ab"))
         long_slug = "abcdefghijklmnopqrst"
         self.assertTrue(cm.namespace_is(long_slug + ".y", long_slug))
         self.assertFalse(cm.namespace_is("abcdefghij." + "y" * 20, long_slug), "the author part is never shortened")
@@ -196,6 +202,46 @@ class Registration(unittest.TestCase):
         self.refused(zip_of(ASSETS, dict(no_ini, **{"loner-strike.json": manifest({"kind": "creature", "name": "x", "creatures": CREATURES})})), "doesn't include them")
         self.refused(zip_of(ASSETS, dict(FILES, **{"models/ann/runner_x.mdl": b"not a model",
                                                    "loner-strike.json": manifest({"kind": "creature", "name": "x", "creatures": CREATURES})})), "runner_x.mdl")
+
+    def test_a_namespace_belongs_to_one_member(self):
+        c = self.setup(creature_zip())
+        self.assertEqual(c.store.namespace_for(1001, "Ann"), ("ann", False), "free: not taken by asking")
+        self.assertEqual(c.submit(body(creature_item()), "ann")[0], 200)
+        it = [x for x in json.loads(cm.build_index(c.store)[0])["items"] if x["gb"] == 706630][0]
+        self.assertEqual(it["namespace"], "ann")
+        self.assertEqual(c.store.namespace_for(1001, "Ann renamed"), ("ann", True), "kept when the name changes")
+        # "ann!" slugs to ann too: another member gets a suffix from their id, and can't use ann
+        self.assertEqual(c.store.namespace_for(7771234, "ann!"), ("ann_1234", False))
+        c.get.pages[("Mod", 706631)] = creature_page(gb=706631, file_id=1789870, author="ann!")
+        c.get_range.files[1789870] = creature_zip(ini=GOOD_INI.replace(b"hp = 80", b"hp = 5000"))
+        code, ans = c.submit(body(creature_item(gb=706631, file=1789870)), "imposter")
+        self.assertEqual(code, 422, ans)
+        self.assertIn("isn't in your name (ann_1234.", ans["error"])
+        mine = [dict(x, name=x["name"].replace("ann.", "ann_1234.")) for x in CREATURES]
+        c.get_range.files[1789870] = creature_zip(ini=GOOD_INI.replace(b"ann.", b"ann_1234."), man={"kind": "creature", "name": "x", "creatures": mine})
+        code, ans = c.submit(body(creature_item(gb=706631, file=1789870, creatures=mine)), "ann!")
+        self.assertEqual(code, 200, ans)
+        self.assertEqual(c.store.namespace_owner("ann_1234"), 7771234)
+        self.assertEqual(c.store.namespace_owner("ann"), 1001)
+
+    def test_duplicate_entries(self):
+        import io as _io
+        import warnings
+        import zipfile as _zf
+        for twin in ("creatures/creatures.ini", "Creatures/creatures.ini", "creatures//creatures.ini", "./creatures/creatures.ini", "creatures\\creatures.ini"):
+            b = _io.BytesIO()
+            with warnings.catch_warnings(), _zf.ZipFile(b, "w") as z:
+                warnings.simplefilter("ignore")
+                for n, data in dict(FILES, **{"loner-strike.json": manifest({"kind": "creature", "name": "x", "creatures": CREATURES})}).items():
+                    z.writestr(n, data)
+                for n in ASSETS:
+                    z.writestr(n, b"RIFF")
+                z.writestr(twin, b"[ann.runner_x]\n[ann.boss_y]\n")
+            with self.subTest(twin=twin):
+                c = self.setup(b.getvalue())
+                code, ans = c.submit(body(creature_item()), "ann")
+                self.assertEqual(code, 422, ans)
+                self.assertRegex(ans["error"], "twice|file names|same file")
 
     def map_with(self, c, ini):
         c.get_range.files[1885247] = zip_of(["maps/de_marakesh.bsp", "README.txt", *ASSETS],

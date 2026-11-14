@@ -66,7 +66,13 @@ def run(path, name, seconds):
             said = sum(i.file_size for i in z.infolist())  # [Caps]
             if said > TOTAL_MAX:
                 raise Refused(f"The package unpacks to {said >> 20} MB; the most is {TOTAL_MAX >> 20} MB.")
+            seen = set()
             for i in z.infolist():
+                # one entry per name however it's spelled (case, \\, ./, //): a second would replace the first
+                key = "/".join(x for x in i.filename.replace("\\", "/").lower().split("/") if x not in ("", "."))
+                if key in seen:
+                    raise Refused(f"The package has {i.filename} twice.")
+                seen.add(key)
                 if i.is_dir():
                     continue
                 if i.file_size > ENTRY_MAX:

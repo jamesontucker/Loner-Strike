@@ -7,6 +7,9 @@
 #   GET  /community/submission/<mod|spray>/<id> where a registration stands (listed, pending...)
 #   POST /community/report                      a player's report from the app's Report button
 #   GET  /community/health                      {"ok": true}
+#   GET  /community/namespace?member=<id>&name=<GameBanana name>
+#                                               {"member", "namespace", "claimed"}: the author part of the
+#                                               member's shared creature names
 #   /community/admin/...                        moderation, admin token only (lsmod.py)
 #
 # A registration is never taken on the app's word: the GameBanana page is fetched again here
@@ -778,6 +781,9 @@ def read_package(f, get=range_get):
             if len(infos) != total:
                 raise Reject(422, "The zip's file list is damaged.")
             check_layout(rf, infos, cd_off)
+            # the same name twice (one would hide the other; check_package catches case and slash variants)
+            if len({i.filename for i in infos}) != len(infos):
+                raise Reject(422, "The package has the same file twice. Make it again with Publish.")
             sizes = {i.filename: i.file_size for i in infos}
             manifest = None
             found = [i for i in infos if i.filename.lower() == "loner-strike.json"]
@@ -1329,6 +1335,15 @@ MIGRATIONS = [
         settled_by TEXT NOT NULL DEFAULT ''
     )
     """,
+    # 6: shared creature names: each author part ("ann" in ann.runner_x) belongs to one GameBanana
+    # member, the first to publish under it; another member whose name slugs the same gets a suffix
+    """
+    CREATE TABLE namespaces (
+        ns TEXT PRIMARY KEY,
+        member INTEGER NOT NULL UNIQUE,
+        at INTEGER NOT NULL
+    )
+    """,
 ]
 
 # Every way an entry's state changes, and who may do it (a creator's registration never undoes a
@@ -1501,6 +1516,37 @@ class Store:
         return dict(r) if r else None
 
     # -- blocked creators --
+
+    # ---- creature namespaces ----
+
+    @staticmethod
+    def _ns_candidates(member, author):
+        """The author parts a member may get, best first: the name's slug, then the slug cut with
+        the end of the member id, then the whole id (all deterministic)."""
+        slug = author_slug(author)
+        m = int(member)
+        out = [slug, f"{slug[:15].rstrip('_')}_{m % 10000:04d}", f"{slug[:13].rstrip('_')}_{m % 1000000:06d}", f"m{m}"]
+        return list(dict.fromkeys(out))
+
+    def namespace_for(self, member, author, claim=False):
+        """(namespace, claimed) for a GameBanana member: the one they hold, else the first candidate
+        nobody else holds (taken for them when `claim`)."""
+        with self.lock:
+            r = self.db.execute("SELECT ns FROM namespaces WHERE member=?", (int(member),)).fetchone()
+            if r:
+                return r[0], True
+            for ns in self._ns_candidates(member, author):
+                if not self.db.execute("SELECT 1 FROM namespaces WHERE ns=?", (ns,)).fetchone():
+                    if claim:
+                        self.db.execute("INSERT INTO namespaces (ns, member, at) VALUES (?, ?, ?)", (ns, int(member), now()))
+                        self.db.commit()
+                    return ns, claim
+        raise Reject(409, "No creature name is free for this member. Ask in the Discord.")
+
+    def namespace_owner(self, ns):
+        with self.lock:
+            r = self.db.execute("SELECT member FROM namespaces WHERE ns=?", (ns,)).fetchone()
+        return r[0] if r else None
 
     def is_blocked(self, submitter_id):
         with self.lock:
@@ -1821,6 +1867,8 @@ def index_item(row):
         out["source"] = True
     if it.get("creatures"):
         out["creatures"] = it["creatures"]
+    if it.get("namespace"):
+        out["namespace"] = it["namespace"]
     out.update(screenshots=list(it.get("screenshots") or [])[:MAX_SHOTS], tags=list(it.get("tags") or []),
                featured=bool(row["featured"]), added=int(row["added"]), updated=int(row["updated"]), status=status)
     return out
@@ -1929,26 +1977,27 @@ class Community:
         return item
 
     def _creature_names_owned(self, item, facts):
-        """Every type a package defines is in its publisher's namespace (the GameBanana submitter's
-        name, slugged as the app does), or is an exact copy of a type listed by the author whose
-        namespace it is (a creation carrying someone else's creature it uses). A remix is published
-        in the remixer's namespace (remixOf keeps the credit)."""
+        """Every type a package defines is in its publisher's own namespace (bound to their
+        GameBanana member id: Store.namespace_for), or is an exact copy of a type the namespace's
+        owner has listed (a creation carrying someone else's creature it uses). A remix is published
+        in the remixer's namespace (remixOf keeps the credit). The publisher's namespace is taken
+        for them here and kept on the entry."""
         secs = item.get("checks", {}).get("creatureSections", {})
-        mine = author_slug(facts.get("author", ""))
-        foreign = {n: h for n, h in secs.items() if not namespace_is(n, mine)}
-        if not foreign:
+        if not secs:
             return
-        listed = {}
-        for row in self.store.rows(("listed",)):
-            it = _j(row["item"]) or {}
-            slug = author_slug(it.get("author", ""))
-            for n, h in ((it.get("checks") or {}).get("creatureSections") or {}).items():
-                if namespace_is(n, slug):
-                    listed.setdefault(n, set()).add(h)
+        member = facts["submitterId"]
+        mine, _ = self.store.namespace_for(member, facts.get("author", ""))
+        foreign = {n: h for n, h in secs.items() if not namespace_is(n, mine)}
         for n, h in foreign.items():
-            if h not in listed.get(n, ()):
+            owner = self.store.namespace_owner(n.partition(".")[0])
+            ok = owner is not None and owner != member and any(
+                (( _j(r["item"]) or {}).get("checks") or {}).get("creatureSections", {}).get(n) == h
+                for r in self.store.rows(("listed",)) if r["submitter_id"] == owner)
+            if not ok:
                 raise Reject(422, f"{n} isn't in your name ({mine}.…) and isn't a listed creature by its author, unchanged. "
                                   "Publish your own creatures under your name, or use the listed one as it is.")
+        if len(foreign) < len(secs):
+            item["namespace"], _ = self.store.namespace_for(member, facts.get("author", ""), claim=True)
 
     def check_files(self, model, gb, f, kind):
         """Downloads the page's file (range requests to GameBanana's file hosts, at most
@@ -2686,6 +2735,15 @@ class Community:
                 if not p:
                     return reply(h, 404, {"error": "not found"})
                 return reply(h, 200, self.status(*p))
+            if parts == ["namespace"] and method == "GET":
+                # GET /community/namespace?member=<GameBanana member id>&name=<their GameBanana name>
+                if not self.status_limit.allow(visitor_key(ip)):
+                    return reply(h, 429, {"error": "Too many questions from here. Try again in a minute."})
+                member, name = (query.get("member") or [""])[0], (query.get("name") or [""])[0]
+                if not member.isdigit() or not 0 < int(member) < 100_000_000 or len(name) > 80:
+                    return reply(h, 400, {"error": "Give member=<GameBanana member id> and name=<their name>."})
+                ns, claimed = self.store.namespace_for(int(member), name)
+                return reply(h, 200, {"member": int(member), "namespace": ns, "claimed": claimed})
             if parts[:1] == ["publish"] and method == "GET" and parts[1:] in (["index"], ["index.sha256"]):
                 return self.publish_export(h, visitor_key(ip), parts[1] == "index.sha256")
             if parts[:1] == ["admin"]:
