@@ -127,6 +127,13 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
   const paletteAt = useRef(0);
   const [selEdges, setSelEdges] = useState<string[]>([]);
   const dragBefore = useRef<Graph | null>(null);
+  // a drag's positions: React Flow draws them, the graph gets them once at the drop (one commit, not
+  // one per mouse move: every node re-rendered each step, StudioPerfAudit #3)
+  const dragMoves = useRef<Map<string, { x: number; y: number }> | null>(null);
+  // each node's measured size: handed back with every new node object, or React Flow takes a node
+  // object without it for a new node and measures it again (its wires' ends too) on every move
+  const sizes = useRef(new Map<string, { width: number; height: number }>());
+  const [dragPos, setDragPos] = useState<Map<string, { x: number; y: number }> | null>(null);
   /** nodes riding along with a dragged comment: id -> offset from the comment */
   const riders = useRef(new Map<string, { comment: string; dx: number; dy: number }>());
   const connecting = useRef(false);
@@ -252,16 +259,23 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       keep.add(id);
       const c = cache.get(id);
       if (c && c.src === src && c.sel === isSel) return c.node;
-      const node = make();
+      const size = sizes.current.get(id);
+      const node = size ? { ...make(), measured: size } : make();
       cache.set(id, { src, sel: isSel, node });
       return node;
     };
-    for (const c of view.comments) out.push(get(c.id, c, sel.has(c.id), () => ({ id: c.id, type: "comment", position: c.pos, data: NO_DATA, selected: sel.has(c.id), zIndex: -1, dragHandle: ".st-comment-head", style: { width: c.size.w, height: c.size.h } })));
+    // (mid-drag: where the drag has it)
+    const at = (id: string, node: Node) => {
+      const p = dragPos?.get(id);
+      const size = sizes.current.get(id);
+      return p ? { ...node, position: p, ...(size ? { measured: size } : {}) } : node;
+    };
+    for (const c of view.comments) out.push(at(c.id, get(c.id, c, sel.has(c.id), () => ({ id: c.id, type: "comment", position: c.pos, data: NO_DATA, selected: sel.has(c.id), zIndex: -1, dragHandle: ".st-comment-head", style: { width: c.size.w, height: c.size.h } }))));
     // (each node named for screen readers: "Give Weapon node", UX review L8)
-    for (const n of view.nodes) out.push(get(n.id, n, sel.has(n.id), () => ({ id: n.id, type: nodeDef(n.type)?.reroute ? "reroute" : "logic", position: n.pos, data: NO_DATA, selected: sel.has(n.id), ariaLabel: `${nodeDef(n.type)?.title ?? n.type} node` })));
+    for (const n of view.nodes) out.push(at(n.id, get(n.id, n, sel.has(n.id), () => ({ id: n.id, type: nodeDef(n.type)?.reroute ? "reroute" : "logic", position: n.pos, data: NO_DATA, selected: sel.has(n.id), ariaLabel: `${nodeDef(n.type)?.title ?? n.type} node` }))));
     for (const id of [...cache.keys()]) if (!keep.has(id)) cache.delete(id);
     return out;
-  }, [view.comments, view.nodes, sel]);
+  }, [view.comments, view.nodes, sel, dragPos]);
   // far out, wires are drawn plainly (straight, no arrows)
   const far = useStore((s) => s.transform[2] < 0.35);
 
@@ -313,13 +327,26 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         if (c.type === "position" && c.position) {
           moves.set(c.id, c.position);
           for (const [rid, r] of riders.current) if (r.comment === c.id && !moves.has(rid)) moves.set(rid, { x: c.position.x + r.dx, y: c.position.y + r.dy });
+        } else if (c.type === "dimensions" && c.dimensions) {
+          sizes.current.set(c.id, c.dimensions);
         } else if (c.type === "select") {
           selection ??= new Set(useStudio.getState().selected);
           if (c.selected) selection.add(c.id);
           else selection.delete(c.id);
         }
       }
-      if (moves.size) live((g) => moveItems(g, moves));
+      if (moves.size) {
+        if (changes.some((c) => c.type === "position" && c.dragging)) {
+          const m = new Map(dragMoves.current ?? []);
+          for (const [id, p] of moves) m.set(id, p);
+          dragMoves.current = m;
+          setDragPos(m);
+        } else {
+          // (the drop's own last positions: kept for the drag's end too)
+          if (dragMoves.current) for (const [id, p] of moves) dragMoves.current.set(id, p);
+          live((g) => moveItems(g, moves));
+        }
+      }
       // (only a real change: a deselect echo would also clear the My mode item just picked)
       if (selection) {
         const cur = useStudio.getState().selected;
@@ -328,6 +355,17 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
     },
     [live, select],
   );
+
+  /** A drag ends: its moves into the graph at once, one undo step. */
+  const endDrag = useCallback(() => {
+    riders.current.clear();
+    const m = dragMoves.current;
+    dragMoves.current = null;
+    if (m?.size) live((g) => moveItems(g, m));
+    setDragPos(null);
+    if (dragBefore.current) commit(dragBefore.current);
+    dragBefore.current = null;
+  }, [live, commit]);
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
     setSelEdges((cur) => {
@@ -730,11 +768,12 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
           }
           void node;
         }}
-        onNodeDragStop={() => {
+        onNodeDragStop={endDrag}
+        onSelectionDragStart={() => {
+          dragBefore.current = useStudio.getState().graph;
           riders.current.clear();
-          if (dragBefore.current) commit(dragBefore.current);
-          dragBefore.current = null;
         }}
+        onSelectionDragStop={endDrag}
         onPaneContextMenu={(e) => {
           e.preventDefault();
           openPalette(e.clientX, e.clientY);

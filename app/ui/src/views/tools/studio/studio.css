@@ -73,8 +73,11 @@
 .st-node-count { opacity: .6; float: right; }
 .st-node-problem { padding: 4px 10px; font-size: 12px; color: #ffb3ad; border-top: 1px solid #333a42; }
 .st-node-unknown { padding: 8px; color: var(--st-bad); }
-.st-flash { position: absolute; inset: -3px; border-radius: 9px; pointer-events: none; animation: st-flash .9s ease-out forwards; }
-@keyframes st-flash { from { box-shadow: 0 0 0 3px var(--st-run), 0 0 22px var(--st-run); } to { box-shadow: 0 0 0 0 transparent; } }
+/* "node ran": a glow drawn once that fades by opacity only (the compositor's work, no repaint per
+   frame: an animated box-shadow repainted every frame, 13-20 fps on a big canvas in WebKit,
+   StudioPerfAudit #2) */
+.st-flash { position: absolute; inset: -3px; border-radius: 9px; pointer-events: none; box-shadow: 0 0 0 3px var(--st-run), 0 0 22px var(--st-run); opacity: 0; animation: st-flash .9s ease-out; }
+@keyframes st-flash { from { opacity: 1; } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .st-flash { animation-duration: 2s; } }
 
 .st-reroute { width: 16px; height: 16px; border-radius: 50%; background: #15181b; border: 3px solid #aaa; }
@@ -89,6 +92,10 @@
 .st-comment-edit { width: 100%; min-height: 48px; font: inherit; background: #111; color: #eee; border: 1px solid var(--signal); }
 
 /* (no filters on wires or nodes: a filter makes WebKit draw that layer as a bitmap, blurry when zoomed) */
+/* the wires on a layer of their own: WebKit otherwise repaints the whole graph-sized wire layer on
+   any change (a commit, a selection, a sheet over the canvas): seconds to open, edit and undo a big
+   graph on a Mac (StudioPerfAudit #1). A transform hint, not a filter: wires stay sharp when zoomed */
+.st-canvas .react-flow__edges { will-change: transform; }
 .st-edge-exec.lit path, .react-flow__edge.lit .react-flow__edge-path { stroke: var(--st-run) !important; stroke-width: 4px !important; }
 .react-flow__edge.selected .react-flow__edge-path { stroke: var(--signal) !important; }
 

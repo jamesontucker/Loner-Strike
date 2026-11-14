@@ -145,6 +145,10 @@ function Pin({ pin, side, color, wired, problem, watch, value }: { pin: PinDef; 
   );
 }
 
+/** A node's drawing depends on its id and whether it's picked, not where it is: React Flow's
+ *  position props change on every drag step (StudioPerfAudit #3). */
+const sameNode = (a: NodeProps, b: NodeProps) => a.id === b.id && a.selected === b.selected;
+
 export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
   // (each piece by this node's id, so a drag step or a debugger batch re-renders only the nodes
   // it touches; docs/notes/PerfAudit.md #4, #8)
@@ -230,7 +234,8 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
   }
   return (
     <div className={cls}>
-      {run && playing && <div key={run.at} className="st-flash" />}
+      {/* (started again at most twice a second: a node in a loop runs far more often than that) */}
+      {run && playing && <div key={Math.floor(run.at / 500)} className="st-flash" />}
       <div className="st-node-head">
         <button
           type="button"
@@ -271,7 +276,7 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
       {errors.length > 0 && !run && <div className="st-node-problem">{errors[0].message}</div>}
     </div>
   );
-});
+}, sameNode);
 
 export const RerouteNode = memo(function RerouteNode({ id, selected }: NodeProps) {
   const graph = useStudio((s) => structureOf(s.graph));
@@ -285,7 +290,7 @@ export const RerouteNode = memo(function RerouteNode({ id, selected }: NodeProps
       <Handle type="source" position={Position.Right} id="out" className="st-handle st-handle-reroute" />
     </div>
   );
-});
+}, sameNode);
 
 /** The graph when a comment's resize began (one undo step for the whole resize). */
 let resizeBefore: Graph | null = null;
@@ -335,6 +340,6 @@ export const CommentNode = memo(function CommentNode({ id, selected }: NodeProps
       </div>
     </div>
   );
-});
+}, sameNode);
 
 export const NODE_TYPES = { logic: LogicNode, reroute: RerouteNode, comment: CommentNode };
