@@ -258,3 +258,42 @@ Screenshots are in `/private/tmp/claude-501/-Users-jameson/a1c85d27-df33-445d-9b
 - Agent F (Map simulator, health.rs): T1-5; UX M5.
 - Shared shell/theme (P8/P1): UX H1, H2, M1, L6 (Docs button).
 - Replay (agent C / B): UX M2, L8.
+
+## Fixed (2026-11-14)
+- **T1-1** (73bb3fef): the Waves tab starts from Last Stand's real round table: every type by round, with `own_rounds = 1`
+  so the mode keeps its own boss waves, hound/snark rounds and heavies. gm_components reads `own_rounds` and takes 16
+  types a line. Saving with one type added keeps all 18 (Rust test). Added "Reset to Last Stand's own" and the line "Saving
+  makes this game's Last Stand use your list". The save message now reads "Saved Last Stand's waves." (L4).
+  - Sim check (Sim/T1FIX, brain run 43634247724, 1306-dev; plugins from 9fcb59db plus this gm_components): "creature
+    types for this map: zombie qa_runner_ runner babycrab headcrab spitter brute vortigaunt assassin soldier controller
+    stukabat hound snark babygarg boss gonarch turret".
+  - On the very first load after a server start, gm_laststand reads `lst_waves` before the cvar exists. So it takes types
+    up to wave 10 only, and controller and stukabat come in from the next map. This was there before the fix.
+  - Pack rounds and heavies in a long run weren't watched.
+- **T1-2** (73bb3fef): an empty or non-number field shows "Type a number." under it. Save is blocked with the count to fix,
+  and no request goes out.
+- **T1-3** (73bb3fef): the toast matches the brain's "wasn't precached". In Last Stand it says to add the type to its
+  waves, save, then change map (anywhere else it names the cvar).
+  - Sim check: the spawn was refused with that text. After following it, "qa_other spawned".
+- **T1-4** (d1812542, 8bf396a2): Plugin Studio names and Demos rename refuse CON/PRN/AUX/NUL/COM1-9/LPT1-9 in any
+  case, with or without an extension. They use `setup::record::windows_unsafe`. Demos rename uses Watch's rule (no `;`).
+- **T1-5** (389ba573): map coverage is judged only on runs of 3+ minutes and 20+ bot-minutes, with a lower bar under 40
+  bot-minutes. "Nobody went to" shows only on runs of 4+ minutes.
+- **T1-6** (d1812542, 8bf396a2): a demo with no directory at its end shows "This demo looks cut short (still being
+  recorded, or damaged)." and Watch is off.
+- **UX:**
+  - H1: Creature Studio 73bb3fef, Plugin Studio 8bf396a2.
+  - M2, M5: 389ba573.
+  - M3: 73bb3fef.
+  - M4: 8bf396a2 (shared dialog `check`), plus Creature Studio's new-type name in 73bb3fef.
+  - L1, L5, L7, L9, L10, L12, L13: d1812542 and 8bf396a2.
+  - L2, L3, L4, L6 (Docs button): 73bb3fef. L6 (Demos): 8bf396a2.
+  - L8, L11 (simulator): 389ba573. L11 (Demos): 8bf396a2.
+- **Creature Studio scope** (73bb3fef, 5d9516a4):
+  - A line names what the Studio edits and who it reaches.
+  - Docs gained "How creatures work" (docs.html#creatures-how).
+  - Publish now warns: "Custom creatures aren't included yet: players need to make <name> themselves". Definitions
+    aren't packaged.
+- Not done here: H2 (toasts) and M1 (contrast) belong to the app-wide pass.
+- Left behind: `Sim/T1FIX` (1.4 GB, an APFS clone, stopped). The safety hook blocks deleting it from here, so delete it
+  by hand.
