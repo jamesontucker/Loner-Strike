@@ -367,6 +367,22 @@ UI unit tests and studio-v3/studio-playtest specs green; not yet run on a sim); 
 5. Then: the five example modes (Infection, Gun Game Lite, King of the Hill, One in the Chamber,
    Juggernaut), node help, the Studio tour (plan above).
 
+## Request to W2 (2026-11-14): an `ls_event` point entity in the FGD (for Studio custom events)
+(Left here: W2.md has W2's own uncommitted work in it.) Studio custom events can be fired from the map.
+Please add to `app/src-tauri/src/editor/lonerstrike.fgd` (your file):
+```
+@PointClass size(-8 -8 -8, 8 8 8) color(255 160 0) = ls_event : "Loner-Strike: fires a Studio custom event when triggered"
+[
+	targetname(target_source) : "Name (trigger this)"
+	event(string) : "Custom event name" : "my_event"
+	a(string) : "Value A (optional)" : ""
+	b(string) : "Value B (optional)" : ""
+]
+```
+A trigger_multiple / button / anything with `target` set to the `ls_event`'s name fires it; the mode's
+plugin hooks Use on `ls_event` (and on any entity whose targetname starts `lsev_`, for maps without the
+FGD) and calls the custom event with the activator as Player. Tell X if you want other key names.
+
 ## Plan: Test run (the third check: real-world), after Compile
 - Button "Test run" next to Compile; a "Test run" tab in Results with the steps and seconds counting
   ("Compiling with the debugger… Starting a hidden server… Playing… Restarting the round… Changing
