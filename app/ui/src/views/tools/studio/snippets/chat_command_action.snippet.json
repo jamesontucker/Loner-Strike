@@ -9,7 +9,7 @@
    "type": "event.chat_command",
    "pos": {
     "x": 20,
-    "y": 31
+    "y": 20
    },
    "params": {
     "command": "heal"

@@ -591,6 +591,12 @@ pub fn valid_name(s: &str) -> bool {
 }
 
 /// An entity's name as the map has it (Find Component): a name, and spaces.
+/// A file under the game folder for a model or a sound (`models/x.mdl`, `ambience/x.wav`): letters,
+/// digits, `_ - . /`, up to 64, never `..` or a leading `/`.
+pub fn valid_path(s: &str) -> bool {
+    s.len() <= 64 && !s.contains("..") && !s.starts_with('/') && s.chars().all(|c| c.is_ascii_alphanumeric() || "_-./".contains(c))
+}
+
 pub fn valid_ent_name(s: &str) -> bool {
     s.len() <= 32 && s.chars().all(|c| c.is_ascii_alphanumeric() || " _-.".contains(c))
 }
@@ -1199,6 +1205,7 @@ pub fn default_fits(g: &Graph, ty: &str, v: &Value) -> bool {
 /// Every problem with a graph: errors stop a compile, warnings are shown on the nodes.
 pub fn validate(g: &Graph) -> Vec<Problem> {
     let mut p = validate_core(g);
+    advanced_problems(g, &View::new(g), &mut p);
     if !has_errors(&p) {
         p.extend(cost_warnings(g, &View::new(g)));
     }
@@ -1640,6 +1647,94 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
     p
 }
 
+/// Why a server or AMX Mod X command is refused (the same rules the plugin checks at run time,
+/// gen.rs `lsg_safe_cmd`): None when it's allowed.
+pub fn cmd_refused(cmd: &str, amx: bool) -> Option<&'static str> {
+    let c = cmd.trim();
+    let low = c.to_ascii_lowercase();
+    if c.is_empty() {
+        return Some("it's empty");
+    }
+    if c.contains(';') || c.chars().any(|ch| (ch as u32) < 32) {
+        return Some("one command at a time (no ; and no control characters)");
+    }
+    if c.matches('"').count() % 2 == 1 {
+        return Some("its quotes don't pair up");
+    }
+    if low.contains("password") || low.contains("rcon") {
+        return Some("passwords and rcon are off limits");
+    }
+    let mut words = low.split_whitespace();
+    let w = words.next().unwrap_or("");
+    let w2 = words.next().unwrap_or("");
+    if amx {
+        const AMX_BLOCK: [&str; 16] = ["amx_rcon", "amx_ban", "amx_banip", "amx_addban", "amx_unban", "amx_addadmin", "amx_reloadadmins", "amx_pause", "amx_unpause", "amx_pausecfg", "amx_plugins", "amx_cfg", "amx_execcfg", "amx_exec", "amx_execall", "amx_logs"];
+        if !w.starts_with("amx_") {
+            return Some("an AMX Mod X command starts with amx_");
+        }
+        if AMX_BLOCK.contains(&w) {
+            return Some("bans, admin edits, plugin control, configs and rcon are off limits");
+        }
+        if w == "amx_cvar" && (w2.is_empty() || super::gen::secret_cvar(w2)) {
+            return Some("amx_cvar can't touch secret settings");
+        }
+        return None;
+    }
+    const BLOCK: [&str; 30] = ["quit", "exit", "_restart", "exec", "writecfg", "writeid", "writeip", "sv_downloadurl", "logaddress", "logaddress_add", "logaddress_del", "log", "meta", "amxx", "alias", "banid", "addip", "removeid", "removeip", "listid", "listip", "sv_logfile", "mp_logfile", "mp_logdetail", "rcon", "sv_password", "changelevel2", "sys_ticrate", "plugin_unload", "plugin_load"];
+    if BLOCK.contains(&w) || w.starts_with("log") || super::gen::secret_cvar(w) {
+        return Some("quitting, files, configs, logs, plugins, bans and passwords are off limits");
+    }
+    None
+}
+
+/// What a mode does beyond its own game, for community badges and the agents' asks.
+pub fn capabilities(g: &Graph) -> Vec<&'static str> {
+    let mut out = Vec::new();
+    let has = |k: &str| g.nodes.iter().any(|n| n.kind == k);
+    if has("game.run_command") || has("game.change_map") {
+        out.push("server_commands");
+    }
+    if has("game.amx_command") {
+        out.push("amx_commands");
+    }
+    if has("amx.call") {
+        out.push("plugin_calls");
+    }
+    if has("player.kick") {
+        out.push("kicks_players");
+    }
+    out
+}
+
+/// Checks for the advanced nodes: what they can't do (an error) and what they are (a note).
+fn advanced_problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
+    for n in &g.nodes {
+        let Some(def) = v.defs.get(n.id.as_str()) else { continue };
+        match def.kind.as_str() {
+            "game.get_setting" => {
+                let c = n.params.get("cvar").and_then(Value::as_str).unwrap_or("");
+                if super::gen::secret_cvar(c) {
+                    p.push(Problem::err(Some(&n.id), "That setting can't be read by a mode (passwords, rcon, files and logs)."));
+                }
+            }
+            "game.run_command" | "game.amx_command" => {
+                let amx = def.kind == "game.amx_command";
+                if v.data_source(&n.id, "cmd").is_none() {
+                    let c = n.params.get("cmd").and_then(Value::as_str).unwrap_or("");
+                    if let Some(why) = cmd_refused(c, amx) {
+                        p.push(Problem::err(Some(&n.id), format!("That command is refused: {why}.")));
+                    }
+                }
+                p.push(Problem::warn(Some(&n.id), "Advanced: this runs a command on the server. Commands that reach passwords, files, plugins, bans or quit the server are refused when it runs; community players see \"runs server commands\"."));
+            }
+            "amx.call" => p.push(Problem::warn(Some(&n.id), "Advanced: this calls into another plugin, which can do anything. Community players see \"calls other plugins\".")),
+            "player.kick" => p.push(Problem::warn(Some(&n.id), "This kicks people from the server. Community players see \"kicks players\".")),
+            "game.change_map" => p.push(Problem::warn(Some(&n.id), "This changes the map for everyone.")),
+            _ => {}
+        }
+    }
+}
+
 /// The loops (and the output pins their body hangs off).
 const LOOPS: [(&str, &str); 7] = [
     ("flow.for_each_player", "each"),
@@ -1923,6 +2018,10 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
             Some(s) if valid_name(s) => Ok(()),
             _ => Err(format!("{} is a name of up to 32 letters, digits, _ - or .", def.label)),
         },
+        "path" => match v.as_str() {
+            Some(s) if valid_path(s) => Ok(()),
+            _ => Err(format!("{} is a file path of up to 64 letters, digits, _ - . or /.", def.label)),
+        },
         "entname" => match v.as_str() {
             Some(s) if valid_ent_name(s) => Ok(()),
             _ => Err(format!("{} is a name of up to 32 letters, digits, spaces, _ - or .", def.label)),
@@ -1983,7 +2082,7 @@ mod tests {
                 }
             }
             for pin in n.inputs.iter().chain(&n.outputs) {
-                assert!(TYPES.contains(&pin.ty.as_str()) || pin.ty == "array<player>" || pin.ty == "array<$K>", "{} {} {}", n.kind, pin.id, pin.ty);
+                assert!(TYPES.contains(&pin.ty.as_str()) || pin.ty == "array<player>" || pin.ty == "array<entity>" || pin.ty == "array<$K>", "{} {} {}", n.kind, pin.id, pin.ty);
                 if let Some(pp) = &pin.param {
                     assert!(n.param(pp).is_some(), "{} {}", n.kind, pin.id);
                 }
@@ -2278,6 +2377,34 @@ mod tests {
         let g = v3(json!({"macros": [{"id": "m1", "name": "Self", "inputs": [], "outputs": []}],
             "nodes": [{"id": "me", "type": "macro.entry", "graph": "m1"}, {"id": "u", "type": "macro.use", "graph": "m1", "params": {"macro": "m1"}}], "edges": []}));
         assert!(msgs(&validate(&g)).iter().any(|m| m.contains("can't use itself")));
+    }
+
+    #[test]
+    fn commands_from_a_mode_cant_break_out() {
+        let evil = "x\";rcon_password hacked;\"";
+        assert!(cmd_refused(evil, false).is_some());
+        assert!(cmd_refused(evil, true).is_some());
+        assert!(cmd_refused(&format!("say {evil}"), false).is_some());
+        assert!(cmd_refused("say hi\nquit", false).is_some());
+        assert!(cmd_refused("say \"hi", false).is_some(), "an unpaired quote");
+        assert!(cmd_refused("quit", false).is_some());
+        assert!(cmd_refused("exec evil.cfg", false).is_some());
+        assert!(cmd_refused("meta unload amxx", false).is_some());
+        assert!(cmd_refused("amx_rcon quit", true).is_some());
+        assert!(cmd_refused("amx_cvar rcon_password x", true).is_some());
+        assert!(cmd_refused("amx_ban 0 x", true).is_some());
+        assert!(cmd_refused("sv_gravity 400", false).is_none());
+        assert!(cmd_refused("say \"hello there\"", false).is_none());
+        assert!(cmd_refused("amx_slap @T 0", true).is_none());
+        // a node with a refused command doesn't build
+        let g = graph(
+            json!([
+                {"id":"e","type":"event.round_started","params":{}},
+                {"id":"c","type":"game.run_command","params":{"cmd":"sv_gravity 400; quit"}}
+            ]),
+            json!([{"id":"w","from":{"node":"e","pin":"then"},"to":{"node":"c","pin":"exec"}}]),
+        );
+        assert!(validate(&g).iter().any(|p| p.level == "error" && p.node.as_deref() == Some("c")), "{:?}", validate(&g));
     }
 
     #[test]

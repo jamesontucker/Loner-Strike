@@ -13,7 +13,7 @@ export type ParamDef = {
   label: string;
   /** name: an entity's name; keys: component keys; var: one of the graph's variables;
    *  varvalue: a value of that variable's type */
-  kind: "choice" | "number" | "text" | "bool" | "name" | "entname" | "marker" | "keys" | "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases";
+  kind: "choice" | "number" | "text" | "bool" | "name" | "entname" | "path" | "marker" | "keys" | "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases";
   default: string | number | boolean;
   choices?: [string, string][];
   min?: number;
@@ -31,6 +31,12 @@ export type NodeDef = {
   pure?: boolean;
   /** "components" (gm_components) or "creatures" (the bot brain's creatures) */
   needs?: string;
+  /** more words search finds it by (gravity -> sv_gravity) */
+  keywords?: string;
+  /** the cvar a World node reads or sets */
+  cvar?: string;
+  /** a power tool (server/AMX commands, plugin calls): flagged on community modes */
+  advanced?: boolean;
   inputs: PinDef[];
   outputs: PinDef[];
   params: ParamDef[];
@@ -76,6 +82,8 @@ export function typeColor(t: PinType): string {
 export const NAME_CHARS = /^[A-Za-z0-9_.-]{0,32}$/;
 /** An entity's name as a map gives it (some maps' component names have spaces). */
 export const ENT_NAME_CHARS = /^[A-Za-z0-9_. -]{0,32}$/;
+/** a model or sound file (models/x.mdl, ambience/x.wav) */
+export const PATH_CHARS = /^[A-Za-z0-9_./-]{0,64}$/;
 export const KEYS_CHARS = /^[A-Za-z0-9 _.=:,|;@-]*$/;
 
 export function defaultParams(def: NodeDef): Record<string, string | number | boolean> {
@@ -92,12 +100,13 @@ export function searchNodes(query: string, wire?: { type: PinType; dir: "in" | "
       if (!pins.some((p) => fits(wire, p.type))) return false;
     }
     if (!q) return true;
-    return `${d.title} ${d.category} ${d.help}`.toLowerCase().includes(q);
+    return `${d.title} ${d.category} ${d.help} ${d.keywords ?? ""} ${d.cvar ?? ""}`.toLowerCase().includes(q);
   }).sort((a, b) => {
-    // titles that start with the words first, then by category order
+    // titles that start with the words first, then by category order, then the registry's order
+    // (the everyday nodes come first in each category: Give Weapon before Give Ammo)
     const sa = a.title.toLowerCase().startsWith(q) ? 0 : 1;
     const sb = b.title.toLowerCase().startsWith(q) ? 0 : 1;
-    return sa - sb || CATEGORIES.indexOf(a.category) - CATEGORIES.indexOf(b.category) || a.title.localeCompare(b.title);
+    return sa - sb || CATEGORIES.indexOf(a.category) - CATEGORIES.indexOf(b.category);
   });
 }
 

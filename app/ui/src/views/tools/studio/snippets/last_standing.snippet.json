@@ -9,7 +9,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 340,
-    "y": 218
+    "y": 191
    },
    "params": {}
   },
@@ -18,7 +18,7 @@
    "type": "squad.alive",
    "pos": {
     "x": 20,
-    "y": 90
+    "y": 63
    },
    "params": {}
   },
@@ -27,7 +27,7 @@
    "type": "math.compare",
    "pos": {
     "x": 340,
-    "y": 66
+    "y": 39
    },
    "params": {
     "op": "le",

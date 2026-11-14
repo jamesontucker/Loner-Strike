@@ -3,7 +3,7 @@
 // shows the nodes running. The graph is our own JSON (schema.ts); the app does the checks,
 // the Pawn and the compiling (app/src-tauri/src/tools/studio/).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import type { ToolProps } from "../registry";
 import { Sheet, useAskText, useConfirm, useToast } from "../../../ui";
@@ -14,7 +14,7 @@ import { ActionBar } from "../common/ActionBar";
 import { useReportAddress } from "../common/address";
 import { useToolArg } from "../../../stores/tools";
 import { useDirty, useNav } from "../../../store";
-import { useStudio, activeBreakpoints } from "./store";
+import { useStudio, activeBreakpoints, checkKey } from "./store";
 import { Canvas, type CanvasApi } from "./Canvas";
 import { builtInSnippets, mySnippets } from "./snippets";
 import type { Snippet } from "./graphOps";
@@ -22,7 +22,7 @@ import { Inspector } from "./Inspector";
 import { MyBlueprint } from "./MyBlueprint";
 import { TabBar } from "./TabBar";
 import { tabView } from "./graphOps";
-import { Results } from "./Results";
+import { Results, fullText } from "./Results";
 import { DebugPanel } from "./DebugPanel";
 import { applyLayout, autoLayout } from "./layout";
 import { nativeMenuOk } from "./ContextMenu";
@@ -43,16 +43,17 @@ const TEMPLATES = [
   { id: "royale", label: "Battle Royale", blurb: "Everyone for themselves, a shrinking zone, loot; last one standing wins.", raw: royaleRaw },
 ];
 
-function loadPrefs(): { map: string; bots: number } {
+type Prefs = { map: string; bots: number; compileOnSave: boolean };
+function loadPrefs(): Prefs {
   try {
     const v = JSON.parse(localStorage.getItem(PREFS) ?? "{}");
-    return { map: typeof v.map === "string" ? v.map : "de_dust2", bots: Number.isInteger(v.bots) ? v.bots : 9 };
+    return { map: typeof v.map === "string" ? v.map : "de_dust2", bots: Number.isInteger(v.bots) ? v.bots : 9, compileOnSave: v.compileOnSave !== false };
   } catch {
-    return { map: "de_dust2", bots: 9 };
+    return { map: "de_dust2", bots: 9, compileOnSave: true };
   }
 }
 
-function savePrefs(p: { map: string; bots: number }) {
+function savePrefs(p: Prefs) {
   try {
     localStorage.setItem(PREFS, JSON.stringify(p));
   } catch {
@@ -164,6 +165,10 @@ function Studio({ maps }: ToolProps) {
   const [working, setWorking] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
   const [prefs, setPrefs] = useState(loadPrefs);
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
+  const full = useStudio((s) => s.full);
+  const fullStale = useMemo(() => !!graph && full.state !== "running" && full.state !== "none" && full.key !== checkKey(graph), [graph, full]);
   const focusRef = useRef<(id: string) => void>(() => {});
   const [canvas, setCanvas] = useState<CanvasApi | null>(null);
   const onApi = useCallback((a: CanvasApi) => {
@@ -329,7 +334,43 @@ function Studio({ maps }: ToolProps) {
     }
     useStudio.getState().markSaved();
     void refreshList();
+    // Compile on save: in the background (never blocks typing), only when the quick check is clean
+    if (prefsRef.current.compileOnSave && !useStudio.getState().problems.some((p) => p.level === "error")) void compileNow(true);
     return true;
+  };
+
+  // Compile (the full check): the real compiler, nothing installed or started. `quiet`: from a
+  // save (no toasts unless it finds errors).
+  const compileNow = async (quiet = false) => {
+    const s0 = useStudio.getState();
+    const g = s0.graph;
+    if (!g || s0.full.state === "running") return;
+    const key = checkKey(g);
+    if (s0.problems.some((p) => p.level === "error")) {
+      s0.setFull({ state: "none", key: "", problems: [] });
+      if (!quiet) (toast("Fix the quick check's errors first (Problems, below).", true), s0.showResults("problems"));
+      return;
+    }
+    s0.setFull({ ...s0.full, state: "running" });
+    const r = await api.checkCompile(g);
+    const s1 = useStudio.getState();
+    if (s1.graph?.mode.id !== g.mode.id) return;
+    if (r.error) {
+      s1.setFull({ state: "failed", key, problems: [], message: r.error });
+      if (!quiet) toast(r.error, true);
+      return;
+    }
+    if (r.problems) s1.setProblems(r.problems);
+    if (r.output) s1.setOutput(r.output);
+    const found = r.compiler ?? [];
+    const state = r.stopped ? "none" : found.some((p) => p.level === "error") ? "error" : found.length ? "warn" : "ok";
+    s1.setFull({ state, key: r.stopped ? "" : key, problems: found });
+    if (state === "error") {
+      toast("The compiler found errors (Problems, below).", true);
+      s1.showResults("problems");
+      const first = found.find((p) => p.level === "error" && p.node);
+      if (first?.node && !quiet) focusRef.current(first.node);
+    } else if (!quiet) toast(state === "ok" ? `Compiled: no problems${r.secs ? ` (${r.secs} s)` : ""}.` : "Compiled with warnings (Problems, below).");
   };
 
   const run = async <T,>(label: string, f: () => Promise<T>) => {
@@ -484,8 +525,8 @@ function Studio({ maps }: ToolProps) {
   }, []);
 
   // keys anywhere on the page (the canvas has its own for the graph): never while typing
-  const keyActions = useRef({ save, playtest, errors: 0, working: false });
-  keyActions.current = { save, playtest, errors: problems.filter((p) => p.level === "error").length, working: !!working };
+  const keyActions = useRef({ save, playtest, compileNow, errors: 0, working: false });
+  keyActions.current = { save, playtest, compileNow, errors: problems.filter((p) => p.level === "error").length, working: !!working };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!useStudio.getState().graph) return;
@@ -497,6 +538,9 @@ function Studio({ maps }: ToolProps) {
       if (mod && k === "s") {
         e.preventDefault();
         void keyActions.current.save();
+      } else if ((mod && k === "b") || e.key === "F7") {
+        e.preventDefault();
+        void keyActions.current.compileNow();
       } else if (e.key === "F5") {
         e.preventDefault();
         if (!keyActions.current.working && !keyActions.current.errors) void keyActions.current.playtest();
@@ -597,6 +641,39 @@ function Studio({ maps }: ToolProps) {
           ?
         </button>
         <span className="st-grow" />
+        <span className="st-check">
+          {full.state === "running" ? (
+            <span className="st-step" role="status" aria-live="polite" data-testid="studio-compiling">
+              <span className="spinner" /> Compiling…
+            </span>
+          ) : (
+            <button type="button" className="btn" data-testid="studio-compile" onClick={() => void compileNow()} disabled={!!working} title="Run the real compiler on this mode, without installing it or starting the game (⌘B or F7)">
+              Compile
+            </button>
+          )}
+          {(() => {
+            const shown = full.state === "running" ? "running" : fullStale || full.state === "none" ? "none" : full.state;
+            const icon = shown === "ok" ? "\u2713" : shown === "warn" ? "!" : shown === "error" || shown === "failed" ? "\u2715" : shown === "running" ? "\u2026" : "?";
+            const text = fullText(full.state, fullStale) + (full.message ? `: ${full.message}` : "") + ". Click to see Problems.";
+            return (
+              <button type="button" className={`st-check-icon ${shown}`} data-testid="studio-check-icon" data-state={shown} onClick={() => st.showResults("problems")} title={text} aria-label={text}>
+                {icon}
+              </button>
+            );
+          })()}
+          <label className="st-check-auto" title="Compile in the background each time you save">
+            <input
+              type="checkbox"
+              checked={prefs.compileOnSave}
+              onChange={(e) => {
+                const p = { ...prefs, compileOnSave: e.target.checked };
+                setPrefs(p);
+                savePrefs(p);
+              }}
+            />
+            Compile on save
+          </label>
+        </span>
         <select className="st-field" value={prefs.map} onChange={(e) => (setPrefs({ ...prefs, map: e.target.value }), savePrefs({ ...prefs, map: e.target.value }))} aria-label="Map">
           {(mapNames.includes(prefs.map) ? mapNames : [prefs.map, ...mapNames]).map((m) => (
             <option key={m}>{m}</option>

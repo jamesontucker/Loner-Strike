@@ -9,7 +9,7 @@
    "type": "event.round_started",
    "pos": {
     "x": 20,
-    "y": 55
+    "y": 66
    },
    "params": {}
   },
@@ -18,7 +18,7 @@
    "type": "flow.for_each_entity",
    "pos": {
     "x": 340,
-    "y": 20
+    "y": 31
    },
    "params": {
     "by": "name",
@@ -30,7 +30,7 @@
    "type": "creature.spawn",
    "pos": {
     "x": 660,
-    "y": 31
+    "y": 20
    },
    "params": {
     "kind": "zombie",
@@ -42,7 +42,7 @@
    "type": "creature.on_killed",
    "pos": {
     "x": 20,
-    "y": 196
+    "y": 207
    },
    "params": {}
   },
@@ -51,7 +51,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 340,
-    "y": 194
+    "y": 205
    },
    "params": {
     "amount": 100

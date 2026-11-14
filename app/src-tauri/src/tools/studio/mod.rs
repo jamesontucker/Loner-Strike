@@ -286,7 +286,11 @@ fn diag_problems(diags: &[Diag], out: &gen::Generated) -> Vec<Problem> {
             node: out.node_at(d.line).map(str::to_string),
             pin: None,
             edge: None,
-            message: format!("The compiler said (line {}): {}", d.line, d.message),
+            message: if out.node_at(d.line).is_some() {
+                format!("The compiler said (line {}): {}", d.line, d.message)
+            } else {
+                format!("The compiler said (line {} of the plugin, not tied to a node; Show code in the menu shows that line): {}", d.line, d.message)
+            },
         })
         .collect()
 }
@@ -557,6 +561,50 @@ pub fn compile(st: &Shared, mut g: Graph, debug: bool) -> Result<Value, String> 
     Ok(json!({"ok": true, "problems": problems, "output": output, "plugin": plugin, "installedAs": installed_as, "debug": debug, "secs": (started.elapsed().as_secs_f64() * 10.0).round() / 10.0}))
 }
 
+/// Compile (the full check): the real amxxpc on the mode's plugin, without installing it or
+/// starting anything. Built in `scripting/studio/check/` (never `plugins/` or the configs), so an
+/// installed mode keeps running as it was. `compiler` is what the compiler found, each tied to the
+/// node whose code it is on (or `node: null` with the line when it can't be); `problems` are the
+/// quick check's as well. An unchanged plugin isn't compiled again (the last answer is kept).
+pub fn check_compile(st: &Shared, mut g: Graph) -> Result<Value, String> {
+    let problems = graph::validate(&g);
+    if graph::has_errors(&problems) {
+        return Ok(json!({"ok": false, "problems": problems, "compiler": [], "stopped": true}));
+    }
+    let game = local_game(st)?;
+    guard_real_game(&game.dir)?;
+    g.mode.id = install_id(&game.dir, &g);
+    let install = crate::servers::client(st).ok_or(NO_GAME)?;
+    let out = gen::generate(&g, false);
+    let plugin = gen::plugin_name(&g.mode.id);
+    let scripting = game.dir.join("addons/amxmodx/scripting");
+    let work = scripting.join("studio");
+    let check = work.join("check");
+    let inc = work.join("include");
+    let started = std::time::Instant::now();
+    let stamp = source_hash(&out.source);
+    let last = check.join(format!("{plugin}.json"));
+    if let Some(v) = std::fs::read_to_string(&last).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).filter(|v| v["hash"] == stamp.as_str()) {
+        return Ok(json!({"ok": v["ok"], "problems": problems, "compiler": v["compiler"], "output": v["output"], "cached": true, "secs": 0.0}));
+    }
+    let _one = COMPILING.lock().unwrap_or_else(|e| e.into_inner());
+    std::fs::create_dir_all(&check).map_err(|e| format!("Couldn't write the plugin ({e})."))?;
+    write_includes(&inc).map_err(|e| format!("Couldn't write the plugin ({e})."))?;
+    let src = check.join(format!("{plugin}.sma"));
+    crate::sys::write_atomic(&src, out.source.as_bytes()).map_err(|e| format!("Couldn't write the plugin ({e})."))?;
+    let built = check.join(format!("{plugin}.amxx"));
+    let (ran, output) = run_amxxpc(&install, &scripting, &src, &inc, &built)?;
+    let _ = std::fs::remove_file(&built);
+    let diags = parse_compiler(&output, &format!("{plugin}.sma"));
+    let mut compiler = diag_problems(&diags, &out);
+    let ok = ran && !diags.iter().any(|d| d.level == "error");
+    if !ran && diags.iter().all(|d| d.level == "warning") {
+        compiler.push(Problem { level: "error", node: None, pin: None, edge: None, message: "The compiler stopped without saying why. Try again; Copy diagnostics in Settings has its output.".into() });
+    }
+    let _ = std::fs::write(&last, json!({"hash": stamp, "ok": ok, "compiler": compiler, "output": output}).to_string());
+    Ok(json!({"ok": ok, "problems": problems, "compiler": compiler, "output": output, "secs": (started.elapsed().as_secs_f64() * 10.0).round() / 10.0}))
+}
+
 /// What decides whether a compile can be skipped: the source and the includes it's built with.
 fn source_hash(source: &str) -> String {
     use sha2::Digest;
@@ -727,6 +775,13 @@ async fn api_generate(h: HeaderMap, Json(req): Json<BuildReq>) -> Response {
         Ok(json!({"problems": problems, "source": out.source, "spans": out.spans, "plugin": gen::plugin_name(&g.mode.id)}))
     })
     .await
+}
+
+async fn api_check(State(st): State<Shared>, h: HeaderMap, Json(req): Json<BuildReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || check_compile(&st, graph_of(req.graph)?)).await
 }
 
 async fn api_compile(State(st): State<Shared>, h: HeaderMap, Json(req): Json<BuildReq>) -> Response {
@@ -1033,6 +1088,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/studio/validate", post(api_validate))
         .route("/api/tools/studio/generate", post(api_generate))
         .route("/api/tools/studio/compile", post(api_compile))
+        .route("/api/tools/studio/check", post(api_check))
         .route("/api/tools/studio/source", post(api_source))
         .route("/api/tools/studio/snippets", get(api_snippets))
         .route("/api/tools/studio/snippet/:id", post(api_snippet_save))
@@ -1289,7 +1345,8 @@ mod tests {
         let br = include_str!("../../../../ui/src/views/tools/studio/templates/battle-royale.graph.json");
         let mk = include_str!("testdata/markers.graph.json");
         let every2 = include_str!("testdata/every_node_2.graph.json");
-        let mut graphs: Vec<(String, String)> = [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br), ("markers", mk), ("every_node_2", every2)].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+        let every3 = include_str!("testdata/every_node_3.graph.json");
+        let mut graphs: Vec<(String, String)> = [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br), ("markers", mk), ("every_node_2", every2), ("every_node_3", every3)].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
         for (id, v) in builtin_snippets() {
             graphs.push((format!("sn_{id}"), serde_json::to_string(&snippet_as_graph(&id, &v)).unwrap()));
         }

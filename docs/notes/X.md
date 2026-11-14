@@ -271,6 +271,168 @@ FM_Spawn in its plugin's plugin_precache, the same rules: `kind`, `mode` incl. c
 **Checks** (the editor's map check, the Studio's Playtest): each marker's count within `required`, each
 component's count, path markers with 2+ points and no repeated `order`, keys of the right type.
 
+## Where X is (2026-11-13, paused for the usage limit)
+**Done and committed (this commit):** the security fix for Kick and the console commands; the core
+nodes batch below (Rust studio tests green with every_node_3 in coverage and amxxpc with no warnings;
+UI unit tests and studio-v3/studio-playtest specs green; not yet run on a sim); and the **Compile button**:
+- `POST /api/tools/studio/check` (`studio::check_compile`): the real amxxpc in
+  `scripting/studio/check/`, never `plugins/` or the configs, so nothing is installed or started; the
+  last answer is kept per source hash (an unchanged mode answers at once). Returns the quick check's
+  `problems` and the compiler's own as `compiler` (each tied to its node by the generated spans, or
+  "line N of the plugin, not tied to a node; Show code in the menu shows that line").
+- Toolbar: Compile (Mod+B or F7; "Compiling…" with a spinner), a status icon (gray needs compiling /
+  edited since, green compiled, yellow warnings, red errors; hover says which; click opens Problems),
+  "Compile on save" (on by default, in the background, only when the quick check has no errors).
+  An edit means anything but positions (`checkKey`).
+- Problems: the status line "Quick check: ... (updated as you edit). Full check: ...", each item says
+  "Quick check" or "Full check" (full-check items from before the latest edits are dimmed).
+- The minimap hides on short/narrow windows (it covered nodes at 1024x680).
+- Search finds nodes by `keywords`/`cvar`; ties keep the registry's order (Give Weapon before Give
+  Ammo). New param kind `path` (models/sounds: letters, digits, `_ - . /`, up to 64, no `..`).
+- Event values per flow raised 4 -> 8 (`CTX`): Player Killed now carries 7.
+**Not yet:** a sim run of `check_compile` itself (only its route is stubbed in the specs; amxxpc is
+exercised by `generated_plugins_compile_with_amxxpc`).
+**Queued next, in order:** (a) the **Test run** button (below); (b) the Blueprint parity batch 2 plan;
+(c) sim tests for the core nodes; (d) example modes, node help, tour.
+**The core nodes batch:**
+- registry (`make_nodes.py` → `nodes.json`, 413 nodes): Game (Current Map Name, Next Map, Server Name, Max
+  Players, Player Count, Game Time, Real Date and Time, Current Mode, Round Number, Team Score, Is Freeze
+  Time, Get Setting, Change Map, Restart Round), World (17 named get/set pairs: gravity, friction, max speed,
+  round/freeze/buy time, friendly fire, team balance/limit, start money, C4 timer, fall damage, footsteps,
+  alltalk, time/win/frag limit), Players (Armor Of, Has Helmet, Weapon Held, Ammo Of, Has Weapon, Is Admin,
+  Is VIP, Ping, Steam ID, Is Spectator, Time Connected, By Name/Index, Gravity/Speed/Model Of, Get/Set
+  Transform, Set Rotation, Look At, Slap, Screen Fade, Screen Shake, God Mode, No Clip, Set Visibility, Set/
+  Give Ammo, Remove Weapon, Switch To Weapon, Set Kills/Deaths, Move To Spectators, Kick, Mute Voice, Gag
+  Chat), Messages (Chat To Team, Notify Admins), Entities (Class/Name Of, Find Entities, Spawn Prop, Remove,
+  Set Position/Rotation/Visibility), Effects (Explosion, Beam, Play Sound At/To Player, Set Light Style),
+  Advanced (Run Server Command, Run AMX Command, Call Plugin Function, Plugin Is Running, Fire Custom Event,
+  On Custom Event), events (Player Said, Freeze Time Ended, Map Ending, Weapon Fired (throttled),
+  Reloaded, Hostage Rescued, VIP Escaped) and richer Player Killed (weapon, distance, team kill, suicide,
+  by the world), Player Hurt (headshot, health left, hit group, weapon), Chat Command (arguments), Round
+  Ended (round number). Search words (`keywords`) on the defs.
+- codegen (`gen.rs` arms, the HELPERS stocks, `v3_helpers.pawn` vector stocks, hooks/precaches),
+  `graph.rs` (`cmd_refused`, `capabilities`, advanced-node checks), kit `capabilities`, the third test
+  graph (`testdata/make_every_node_3.py`, 112 kinds).
+**Next, in order:**
+1. Build: `cargo test studio` with `UPDATE_SNAPSHOTS=1`, add every_node_3 to the coverage test and the
+   amxxpc list (fix any compile warnings), the UI: `keywords` in `registry.ts` NodeDef and `searchNodes`.
+2. Sim: gravity via World Set Gravity and Run Server Command, a refused command, a kill with weapon and
+   headshot, a chat command with arguments, Call Plugin Function into gm_components, an allowed and a
+   refused AMX command.
+3. Still to add from the coordinator's lists: Change Mode (needs gamemodes' native), a Players On Team
+   array (Players Array covers it), Set Round Win Message, fog (not in GoldSrc), Item Bought, Grenade
+   Thrown/Exploded, Weapon Picked Up/Dropped, Player Landed, Hostage Touched, Bot Added, Player Left's
+   reason, Round Ended's reason, Bomb site/time left, Creature Killed's weapon/headshot/tier, an assister.
+4. Tell T: kits now carry `capabilities` (server_commands, amx_commands, plugin_calls, kicks_players) for
+   the community badges; MCP's compile ask can name them (`graph::capabilities`).
+5. Then: the five example modes (Infection, Gun Game Lite, King of the Hill, One in the Chamber,
+   Juggernaut), node help, the Studio tour (plan above).
+
+## Plan: Test run (the third check: real-world), after Compile
+- Button "Test run" next to Compile; a "Test run" tab in Results with the steps and seconds counting
+  ("Compiling with the debugger… Starting a hidden server… Playing… Restarting the round… Changing
+  map… Checking"), Cancel, then a pass / warn / fail summary and the log behind a Copy button; its
+  own toolbar status ("Tested ✓ 2 min ago", stale after edits, same `checkKey`).
+- Server: the hidden-server path the editor's nav teaching and the Map simulator use (find it in
+  `tools/health` / the simulator, reuse, no new infrastructure), a throwaway copy, never the user's
+  game or open game; works with the game open or closed; cleaned up after; counts toward the crew's
+  sim limit on this Mac.
+- Run: compile with debug on into that copy, mode + bots on a stock map, ~75 s, one `sv_restart`, one
+  map change, then stop.
+- Catches: the plugin not loading (amxx plugins status, missing native/module from the AMXX log),
+  AMXX runtime errors with lines mapped back to nodes (the debug build's spans; click focuses),
+  crashes (Y's crash capture if merged), cost (frame time, timers and entity scans vs. a baseline run
+  without the mode, using the debug runtime's counters: warn when heavy), and which nodes ran (the
+  debug events): "these 4 nodes never ran during the test" as information.
+- MCP: `studio_test_run` with the Ask policy (tell the MCP owner).
+- Tests: Rust unit for log parsing (runtime error -> node, load failures); UI spec with the route
+  stubbed (steps, cancel, summary, copy); one real run on a sim with an example mode.
+
+## Plan: Blueprint parity batch 2 (queued after the Kick fix and the core-nodes batch; order: palette, graphs, custom events, timelines)
+**What's there today:** `Palette.tsx` is one flat list sorted by category with headers, word search,
+Arrow keys, wire filtering when a wire is dropped (always on, no toggle), `only` for the sidebar's +
+buttons. No folders, favorites or recents. One event graph: a node's `graph` is "" (event graph) or a
+Function/Macro id. `amx.fire`/`amx.on_event` are a cross-plugin forward with two fixed numbers (A, B),
+not typed. Map triggers reach Studio only as Player Touched (trigger_multiple by name). Timers:
+Delay, Retriggerable Delay, Repeat, Countdown, Set Timer by Function, Clear Timer.
+
+1. **All Actions palette** (`Palette.tsx`, `registry.ts`):
+   - a tree: category folders, collapsible, with sub-folders from a `sub` key on defs where a category
+     is big (Players: Getters / Actions / Weapons / Movement; Game: Info / Settings / Round; Effects;
+     Battle Royale / Last Stand pieces), the mode's own (Functions, Macros, Custom Events, Structs,
+     Enums) as folders first;
+   - search over title, category, help and `keywords`; folders holding matches open, others close,
+     matches ranked (title starts with > title word > keyword > help);
+   - a "Context Sensitive" checkbox (on by default when a wire is dropped or a pin is selected; off
+     shows everything, as Unreal);
+   - Favorites (star on hover, kept per user in the app's settings) and Recently Used (last 10) at
+     the top; keys: Up/Down move, Right/Left open/close a folder, Enter places, Escape closes, typing
+     goes to the search.
+2. **Several event graphs** (`schema.ts` `eventGraphs: [{id, name}]`, Rust `Graph` the same; a node's
+   `graph` may name one; "" stays the first, "Event Graph"):
+   - My Mode sidebar "Graphs": add, rename, delete (moves its nodes to the first after asking), tabs
+     open like Functions;
+   - events allowed in any event graph; Functions, Macros, variables, custom events shared;
+   - copy/paste across graphs (the clipboard already keeps wires inside the selection; paste sets the
+     target tab's `graph`, refusing events into a Function, as today);
+   - compile: graphs are only an editor grouping; **two of the same built-in event merge, in tab
+     order then top-to-bottom on the canvas** (both run, one after the other; the Results panel notes
+     "Round Started is in Rounds and Shop: they run in that order"). Chosen over an error because
+     splitting by topic is the point of several graphs. Same rule inside one graph (today's
+     behaviour, to check).
+3. **Custom events** (`make_nodes.py`, `gen.rs`, `graph.rs`, the sidebar):
+   - `customEvents: [{id, name, inputs: [member]}]` in the graph (shared), made from the sidebar or
+     the palette ("Add Custom Event..."); node `event.custom` (param `event`: id) with outputs from its
+     inputs, allowed in any event graph, one per custom event;
+   - `event.call` "Call <Name>" with matching inputs, from anywhere (event graphs, Functions, Macros);
+     compiled as a direct call `ce_<id>(args)` (a stock per custom event; locals as today);
+   - `timer.by_event` "Set Timer by Event" (Custom Event with no inputs, or its inputs from the
+     node, seconds, looping) -> handle, Clear Timer works on it;
+   - map triggers: a custom event with "Map can fire it" on registers it by name; a mapper sets an
+     entity's `target` to `ls_<name>` with a `ls_event` point entity (FGD: `ls_event` with `name` and
+     up to two keys) or any trigger_* with target `lsev_<name>`: the plugin hooks `Use` on
+     `ls_event`/the named target (fakemeta `FM_Use` on entities whose targetname starts `lsev_`) and
+     calls the custom event with the activator as Player; inputs filled from the entity's keys. The
+     editor's FGD gets `ls_event` (ask the editor owner, W2, for the FGD line; say so in their notes).
+   - event dispatchers: later, only if asked again (bind/broadcast to several = several Custom Event
+     nodes on the same name already covers it after the merge rule).
+4. **Timelines** (the user: "mostly closes the gap"):
+   - data: `timelines: [{id, name, length, loop, autoplay, useLastKey, tick (0.05 s default, 0.02-0.5),
+     tracks: [{id, name, kind: float|vector|color|event, keys: [{t, v (number | [x,y,z] | [r,g,b]),
+     ease: linear|ease}]}]}]` (shared like Functions; at most 16 timelines, 8 tracks, 64 keys a track);
+   - node `timeline.play` (param `timeline`): exec inputs Play, Play from Start, Stop, Reverse, Reverse
+     from End, Set New Time (+ New Time number); exec outputs Update, Finished, one per event track;
+     data outputs Direction (Forward/Backward) and one per float/vector/color track (pins from the
+     timeline, like Make Struct's from its struct);
+   - editor: double-click the node (or the timeline in the sidebar) opens a tab like a Function's:
+     settings bar (Length, Loop, AutoPlay, Use Last Keyframe, Tick), tracks as rows with an SVG curve
+     each (vector: X/Y/Z curves in three colours; color: a gradient strip with stops; event: diamonds),
+     click to add a key, drag to move (time and value; Shift locks an axis), Delete removes, right-click
+     a key for Linear/Ease, wheel zooms time, drag empty space pans, F fits; the Studio's tokens and
+     the canvas's look; undo through the same store as the graph;
+   - compile: per instance a slot in `g_lsgTl<i>[slot][time, dir, playing, ctxslot]`; an instance is
+     the node in its context (in a Function with a player input: one per player, slot = player id; in
+     an event graph: one); one `set_task(tick, "lsg_tl<i>", LSG_TASK_TL + i*33 + slot, .flags="b")`
+     only while playing, removed on Stop/Finished/round end; each tick: time += tick*dir, the tracks
+     evaluated with a generated `lsg_tl<i>_eval(t)` (binary-free: keys are sorted, a straight if-chain,
+     ease = smoothstep), event keys fired when the playhead crosses them (both directions), Update run,
+     Finished at the end (or wrap when Loop); values kept per instance for the output pins; AutoPlay
+     starts at the round start; the cost hint counts timelines x instances / tick (warn above ~200 calls
+     a second);
+   - debugger: ticks go through the same paused-world gate as Delay, and the node shows the time and
+     each track's value as watch values (buffered like other debug events);
+   - tests: a moving platform (a vector track into Set Entity Position on a func_wall named in the
+     test map), a pulsing glow colour (a color track into Set Visibility's colour), a countdown event
+     track (three event keys printing 3, 2, 1), reverse and Set New Time, one per player in a
+     Function; amxxpc with no warnings; UI: add/drag/delete keys, fit, zoom; sim: the platform moves
+     and the countdown prints in the debug log.
+5. **Tests:** Rust: two graphs with the same event merge in order; a custom event with number/text/
+   player inputs called from a Call, a Set Timer by Event and a map entity; every_node coverage;
+   amxxpc with no warnings. UI: palette folders/search/context toggle/favorites/keys, add graph, copy
+   from Rounds paste into Shop keeps inner wires and drops outer, custom event inputs rename updates
+   Call nodes. Sim (a sim copy, never the real game): a custom event from a timer and from a
+   trigger_multiple targeting an `lsev_` entity on a small test map, checked via the debug log.
+
 ## 2026-11-13: Studio performance (PerfAudit #4, #5, #6, #8, #9) and the Last Stand side-by-side
 **Canvas** (every_node, 374 nodes / 509 wires, WebKit headless, `tests/studio-perf.spec.ts`, ms per drag
 step over 40 mouse moves; before → after, two runs each):
@@ -331,9 +493,7 @@ each checked on a sim with 12 bots before it ships):
 | Infection | one zombie; whoever it kills turns; last human standing wins, or the humans survive the clock | teams, Set Team, Set Health/Speed/Model, the round clock | Fight Creatures off; Friends by team |
 | One in the Chamber | a deagle with one bullet; a kill gives a bullet; three lives | Set Ammo, lives in a variable, respawn | Don't Buy |
 | Juggernaut | one big slow player with lots of health; whoever kills them becomes it | player modifiers, glow, score | Goal: hunt the juggernaut (tag) |
-| Knife Arena | knives only, low gravity, a ring zone that shrinks | Strip, gravity, the zone | Phase: fight |
-| Capture the Flag (simple) | carry the enemy `flag` marker's flag back to your `base` marker | markers, pickups, Player Touched/Used, team scores | Goal: capture/defend, offers |
-The user picks the final set; each one ships with its comment boxes as the lesson.
+The user picked these five (Knife Arena and Capture the Flag dropped); they're also the community seed modes.
 
 **Node help:** a searchable panel (the "?" next to Find, and F1 on a picked node): for each node what it
 does, each pin (type, meaning), a small example (a snippet that drops in), related nodes ("see also"),

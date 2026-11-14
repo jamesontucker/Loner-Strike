@@ -862,3 +862,154 @@ stock lsg_tclear(h)
 	if (h >= LSG_TASK && h < LSG_TASK + LSG_N)
 		remove_task(h)
 }
+
+// ---- (vectors) transforms, entities, effects ----
+stock lsg_vpev(id, field)
+{
+	new Float:o[3]
+	if (id > 0 && pev_valid(id))
+		pev(id, field, o)
+	return lsg_vfrom(o)
+}
+
+stock lsg_set_transform(id, pos, ang, vel)
+{
+	if (!lsg_ok(id) || !is_user_alive(id))
+		return
+	new Float:o[3]
+	if (pos >= 0)
+	{
+		lsg_vto(pos, o)
+		engfunc(EngFunc_SetOrigin, id, o)
+	}
+	if (ang >= 0)
+	{
+		lsg_vto(ang, o)
+		set_pev(id, pev_angles, o)
+		set_pev(id, pev_v_angle, o)
+		set_pev(id, pev_fixangle, 1)
+	}
+	if (vel >= 0)
+	{
+		lsg_vto(vel, o)
+		set_pev(id, pev_velocity, o)
+	}
+}
+
+stock lsg_look_at(id, ent, pos)
+{
+	if (!lsg_ok(id) || !is_user_alive(id))
+		return
+	new Float:t[3], Float:me[3], Float:ofs[3], Float:d[3], Float:ang[3]
+	if (ent > 0)
+	{
+		if (!lsg_ent_origin(ent, t))
+			return
+	}
+	else if (pos >= 0)
+		lsg_vto(pos, t)
+	else
+		return
+	pev(id, pev_origin, me)
+	pev(id, pev_view_ofs, ofs)
+	for (new k = 0; k < 3; k++)
+		d[k] = t[k] - (me[k] + ofs[k])
+	vector_to_angle(d, ang)
+	ang[0] = -ang[0]
+	set_pev(id, pev_angles, ang)
+	set_pev(id, pev_v_angle, ang)
+	set_pev(id, pev_fixangle, 1)
+}
+
+stock lsg_find_all(byname, const name[])
+{
+	new a = lsg_atmp(), e = -1, n
+	while (n < 512 && (e = engfunc(EngFunc_FindEntityByString, e, byname ? "targetname" : "classname", name)) > 0)
+	{
+		ArrayPushCell((Array:a), e)
+		n++
+	}
+	return a
+}
+
+stock lsg_ent_pos(e, v)
+{
+	if (e > MaxClients && pev_valid(e))
+	{
+		new Float:o[3]
+		lsg_vto(v, o)
+		engfunc(EngFunc_SetOrigin, e, o)
+	}
+}
+
+stock lsg_ent_angles(e, v)
+{
+	if (e > MaxClients && pev_valid(e))
+	{
+		new Float:o[3]
+		lsg_vto(v, o)
+		set_pev(e, pev_angles, o)
+	}
+}
+
+stock lsg_explode(v, Float:dmg, Float:radius)
+{
+	new Float:o[3]
+	lsg_vto(v, o)
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_EXPLOSION)
+	engfunc(EngFunc_WriteCoord, o[0])
+	engfunc(EngFunc_WriteCoord, o[1])
+	engfunc(EngFunc_WriteCoord, o[2])
+	write_short(g_lsgSprExp)
+	write_byte(30)
+	write_byte(15)
+	write_byte(0)
+	message_end()
+	if (dmg <= 0.0)
+		return
+	new Float:p[3]
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (!is_user_alive(id))
+			continue
+		pev(id, pev_origin, p)
+		new Float:d = get_distance_f(o, p)
+		if (d < radius)
+			ExecuteHamB(Ham_TakeDamage, id, 0, 0, dmg * (1.0 - d / radius), DMG_BLAST)
+	}
+}
+
+stock lsg_beam(a, b, r, g, bl, Float:secs)
+{
+	new Float:x[3], Float:y[3]
+	lsg_vto(a, x)
+	lsg_vto(b, y)
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_BEAMPOINTS)
+	engfunc(EngFunc_WriteCoord, x[0])
+	engfunc(EngFunc_WriteCoord, x[1])
+	engfunc(EngFunc_WriteCoord, x[2])
+	engfunc(EngFunc_WriteCoord, y[0])
+	engfunc(EngFunc_WriteCoord, y[1])
+	engfunc(EngFunc_WriteCoord, y[2])
+	write_short(g_lsgSprBeam)
+	write_byte(0)
+	write_byte(0)
+	write_byte(clamp(floatround(secs * 10.0), 1, 255))
+	write_byte(20)
+	write_byte(0)
+	write_byte(r)
+	write_byte(g)
+	write_byte(bl)
+	write_byte(200)
+	write_byte(0)
+	message_end()
+}
+
+stock lsg_sound_at(v, const snd[])
+{
+	new Float:o[3]
+	lsg_vto(v, o)
+	engfunc(EngFunc_EmitAmbientSound, 0, o, snd, 1.0, ATTN_NORM, 0, PITCH_NORM)
+}

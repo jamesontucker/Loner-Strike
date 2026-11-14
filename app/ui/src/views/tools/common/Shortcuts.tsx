@@ -83,6 +83,7 @@ export const SHORTCUTS: Record<string, Keys> = {
     ["C", "Comment around the selection"],
     ["Q", "Straighten: line the selected nodes up with what feeds them"],
     ["F9", "Breakpoint on the selected node"],
+    ["Mod+B or F7", "Compile (the full check: the real compiler, nothing installed)"],
     ["F5", "Playtest"],
     ["Mod+W", "Close this graph tab"],
     ["Ctrl+Tab / Ctrl+Shift+Tab", "Next / previous graph tab"],

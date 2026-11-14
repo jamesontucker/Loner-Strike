@@ -28,7 +28,7 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 
 /// How many event cell values a flow can carry (victim, attacker...).
-const CTX: usize = 4;
+const CTX: usize = 8;
 /// How many event text values (a creature's type) a flow can carry.
 const TXT: usize = 2;
 /// Task ids for timers: LSG_TASK + the node's index.
@@ -120,6 +120,18 @@ fn name_text(s: &str) -> String {
     s.chars().filter(|c| c.is_ascii_alphanumeric() || "_-.".contains(*c)).take(32).collect()
 }
 
+/// A model path for a string literal: models/....mdl only.
+fn model_text(s: &str) -> String {
+    let t: String = s.chars().filter(|c| c.is_ascii_alphanumeric() || "_-./".contains(*c)).take(64).collect();
+    if t.starts_with("models/") && t.ends_with(".mdl") && !t.contains("..") { t } else { "models/w_c4.mdl".into() }
+}
+
+/// A sound path (under sound/, .wav) for a string literal.
+fn sound_text(s: &str) -> String {
+    let t: String = s.chars().filter(|c| c.is_ascii_alphanumeric() || "_-./".contains(*c)).take(64).collect();
+    if t.ends_with(".wav") && !t.contains("..") && !t.starts_with('/') { t } else { "buttons/bell1.wav".into() }
+}
+
 /// An entity's name as the map has it (spaces kept) for a string literal.
 fn ent_name_text(s: &str) -> String {
     s.chars().filter(|c| c.is_ascii_alphanumeric() || " _-.".contains(*c)).take(32).collect()
@@ -181,7 +193,7 @@ const EVENTS: &[EventKind] = &[
         ],
         prelude: "public lsg_on_round_end_t()\n\tlsg_on_round_ended(1)\n\npublic lsg_on_round_end_ct()\n\tlsg_on_round_ended(2)\n\npublic lsg_on_round_end_draw()\n\tlsg_on_round_ended(0)\n",
         guard: "",
-        values: &[("winner", "winner")],
+        values: &[("winner", "winner"), ("round", "_:float(g_lsgRounds)")],
         tail: "",
         named: None,
     },
@@ -190,8 +202,8 @@ const EVENTS: &[EventKind] = &[
         sig: "public lsg_on_player_killed()",
         register: &["register_event(\"DeathMsg\", \"lsg_on_player_killed\", \"a\")"],
         prelude: "",
-        guard: "",
-        values: &[("victim", "read_data(2)"), ("attacker", "read_data(1)"), ("headshot", "read_data(3) ? 1 : 0")],
+        guard: "\tnew v = read_data(2), a = read_data(1), wpn[24]\n\tread_data(4, wpn, charsmax(wpn))",
+        values: &[("victim", "v"), ("attacker", "a"), ("headshot", "read_data(3) ? 1 : 0"), ("weapon", "@str:wpn"), ("distance", "_:lsg_dist(a, v)"), ("team_kill", "a != v && lsg_ok(a) && lsg_ok(v) && get_user_team(a) == get_user_team(v) ? 1 : 0"), ("suicide", "a == v ? 1 : 0"), ("world", "lsg_ok(a) ? 0 : 1")],
         tail: "",
         named: None,
     },
@@ -256,7 +268,7 @@ const EVENTS: &[EventKind] = &[
         // damage was blocked, less when it was scaled down or armour took some
         prelude: "new Float:g_lsgHurtHp[33]\n\npublic lsg_hurt_before(victim, inflictor, attacker, Float:damage, bits)\n{\n\t#pragma unused inflictor\n\t#pragma unused attacker\n\t#pragma unused damage\n\t#pragma unused bits\n\tif (victim >= 1 && victim <= MaxClients)\n\t\tpev(victim, pev_health, g_lsgHurtHp[victim])\n\treturn HAM_IGNORED\n}",
         guard: "\t#pragma unused inflictor\n\t#pragma unused bits\n\tif (victim < 1 || victim > MaxClients)\n\t\treturn HAM_IGNORED\n\tnew Float:hp\n\tpev(victim, pev_health, hp)\n\tdamage = g_lsgHurtHp[victim] - hp\n\tif (damage <= 0.0)\n\t\treturn HAM_IGNORED",
-        values: &[("victim", "victim"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:damage")],
+        values: &[("victim", "victim"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:damage"), ("headshot", "get_ent_data(victim, \"CBaseMonster\", \"m_LastHitGroup\") == HIT_HEAD ? 1 : 0"), ("left", "_:hp"), ("hitgroup", "@fn:lsg_hitgroup(victim)"), ("weapon", "@fn:lsg_wpn_of(attacker)")],
         tail: "\treturn HAM_IGNORED",
         named: None,
     },
@@ -308,6 +320,14 @@ const EVENTS: &[EventKind] = &[
     EventKind { kind: "br.on_landed", sig: "public ls_on_landed(id)", register: &[], prelude: "", guard: "", values: &[("player", "id")], tail: "", named: None },
     EventKind { kind: "br.on_lobby_end", sig: "public ls_on_lobby_end(squads)", register: &[], prelude: "", guard: "", values: &[("squads", "_:float(squads)")], tail: "", named: None },
     EventKind { kind: "turret.on_placed", sig: "public ls_on_turret(ent, owner)", register: &[], prelude: "", guard: "", values: &[("turret", "ent"), ("owner", "owner >= 1 && owner <= MaxClients ? owner : 0")], tail: "", named: None },
+    EventKind { kind: "event.player_said", sig: "public lsg_on_said(id)", register: &["register_clcmd(\"say\", \"lsg_on_said\")", "register_clcmd(\"say_team\", \"lsg_on_said\")"], prelude: "", guard: "\tnew txt[128], cmd[12]\n\tread_argv(0, cmd, charsmax(cmd))\n\tread_args(txt, charsmax(txt))\n\tremove_quotes(txt)\n\tif (!lsg_ok(id))\n\t\treturn PLUGIN_CONTINUE", values: &[("player", "id"), ("text", "@str:txt"), ("team", "equal(cmd, \"say_team\") ? 1 : 0")], tail: "\treturn PLUGIN_CONTINUE", named: None },
+    EventKind { kind: "event.freeze_ended", sig: "public lsg_on_freeze_ended()", register: &["register_logevent(\"lsg_on_freeze_ended\", 2, \"1=Round_Start\")"], prelude: "", guard: "", values: &[], tail: "", named: None },
+    EventKind { kind: "event.map_ending", sig: "public lsg_on_map_ending()", register: &["register_event(\"30\", \"lsg_on_map_ending\", \"a\")"], prelude: "", guard: "", values: &[], tail: "", named: None },
+    EventKind { kind: "event.weapon_fired", sig: "public lsg_on_fired(wpn)", register: &["lsg_hook_weapons(\"lsg_on_fired\", Ham_Weapon_PrimaryAttack)"], prelude: "", guard: "\tstatic Float:last[33]\n\tnew id = pev_valid(wpn) ? pev(wpn, pev_owner) : 0, wn[24]\n\tif (!lsg_ok(id) || get_gametime() - last[id] < 0.1)\n\t\treturn HAM_IGNORED\n\tlast[id] = get_gametime()\n\tpev(wpn, pev_classname, wn, charsmax(wn))\n\treplace(wn, charsmax(wn), \"weapon_\", \"\")", values: &[("player", "id"), ("weapon", "@str:wn")], tail: "\treturn HAM_IGNORED", named: None },
+    EventKind { kind: "event.reloaded", sig: "public lsg_on_reloaded(wpn)", register: &["lsg_hook_weapons(\"lsg_on_reloaded\", Ham_Weapon_Reload)"], prelude: "", guard: "\tnew id = pev_valid(wpn) ? pev(wpn, pev_owner) : 0, wn[24]\n\tif (!lsg_ok(id))\n\t\treturn HAM_IGNORED\n\tpev(wpn, pev_classname, wn, charsmax(wn))\n\treplace(wn, charsmax(wn), \"weapon_\", \"\")", values: &[("player", "id"), ("weapon", "@str:wn")], tail: "\treturn HAM_IGNORED", named: None },
+    EventKind { kind: "event.hostage_rescued", sig: "public lsg_on_hostage_rescued()", register: &["register_logevent(\"lsg_on_hostage_rescued\", 3, \"2=Rescued_A_Hostage\")"], prelude: "", guard: "", values: &[("player", "lsg_log_player()")], tail: "", named: None },
+    EventKind { kind: "event.vip_escaped", sig: "public lsg_on_vip_escaped()", register: &["register_logevent(\"lsg_on_vip_escaped\", 3, \"2=Escaped_As_VIP\")"], prelude: "", guard: "", values: &[("player", "lsg_log_player()")], tail: "", named: None },
+    EventKind { kind: "amx.on_event", sig: "public ls_studio_event(const name[], a, b)", register: &[], prelude: "", guard: "", values: &[("a", "_:float(a)"), ("b", "_:float(b)")], tail: "", named: Some("@name") },
     EventKind { kind: "comp.on_barricade_broken", sig: "public ls_on_barricade_broken(ent, attacker)", register: &[], prelude: "", guard: "", values: &[("barricade", "ent"), ("attacker", "attacker")], tail: "", named: None },
     EventKind { kind: "comp.on_meeting_end", sig: "public ls_on_meeting_end(ent, ejected)", register: &[], prelude: "", guard: "", values: &[("meeting", "ent"), ("ejected", "ejected")], tail: "", named: None },
     EventKind {
@@ -380,7 +400,7 @@ fn kind_of(ty: &str) -> char {
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
 const CTX_KINDS: [&str; 10] = ["marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
-const STORE_KINDS: [&str; 6] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll"];
+const STORE_KINDS: [&str; 9] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call"];
 /// Nodes with more than one flow input: one Pawn function each.
 const MULTI_IN: [&str; 5] = ["flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array"];
 /// The vector and struct rings: values that aren't in variables live here for a while.
@@ -712,6 +732,56 @@ impl<'a> Gen<'a> {
             "br.heal_count" => format!("float(ls_components_running() ? ls_heal_count({}) : 0)", i("player", "player")),
             "br.kills" => format!("float(ls_components_running() ? ls_kills({}) : 0)", i("player", "player")),
             "br.squads_alive" => "float(ls_components_running() ? ls_squads_alive() : 0)".into(),
+            "game.map_name" => "lsg_map_name()".into(),
+            "game.next_map" => "lsg_cvar_text(\"amx_nextmap\")".into(),
+            "game.server_name" => "lsg_cvar_text(\"hostname\")".into(),
+            "game.max_players" => "float(MaxClients)".into(),
+            "game.player_count" => format!("float(lsg_count({}))", match self.choice(n, def, "which") { "humans" => 1, "bots" => 2, "t" => 3, "ct" => 4, "spec" => 5, "alive" => 6, _ => 0 }),
+            "game.time" => "get_gametime()".into(),
+            "game.clock" => if pin == "unix" { "float(get_systime())".into() } else { format!("lsg_clock({})", pawn_str(match self.choice(n, def, "format") { "date" => "%Y-%m-%d", "time" => "%H:%M", "weekday" => "%A", "hour" => "%H", _ => "%Y-%m-%d %H:%M" })) },
+            "game.mode_id" => "LSG_MODE".into(),
+            "game.round_number" => "float(g_lsgRounds)".into(),
+            "game.team_score" => format!("float(g_lsgScore[{}])", if self.choice(n, def, "team") == "t" { 1 } else { 2 }),
+            "game.freeze_time" => "(g_lsgFreeze ? 1 : 0)".into(),
+            "game.get_setting" => {
+                let c = pawn_str(&name_text(self.text(n, def, "cvar")));
+                if pin == "text" { format!("lsg_cvar_text({c})") } else { format!("lsg_cvar_num({c})") }
+            }
+            k if k.starts_with("world.") && !k.starts_with("world.set_") => match world_of(k) {
+                Some((cvar, true, _)) => format!("(get_cvar_num({}) ? 1 : 0)", pawn_str(cvar)),
+                Some((cvar, false, _)) => format!("get_cvar_float({})", pawn_str(cvar)),
+                None => "0".into(),
+            },
+            "player.armor" => format!("float(lsg_ok({p}) ? get_user_armor({p}) : 0)", p = i("player", "player")),
+            "player.has_helmet" => format!("(lsg_helmet({}) ? 1 : 0)", i("player", "player")),
+            "player.weapon_held" => format!("lsg_held({})", i("player", "player")),
+            "player.ammo" => format!("float(lsg_ammo({}, {}))", i("player", "player"), if pin == "reserve" { 1 } else { 0 }),
+            "player.has_weapon" => format!("(lsg_ok({p}) && user_has_weapon({p}, get_weaponid({})) ? 1 : 0)", pawn_str(&format!("weapon_{}", self.choice(n, def, "weapon"))), p = i("player", "player")),
+            "player.is_admin" => format!("(lsg_ok({p}) && (get_user_flags({p}) & ADMIN_KICK) ? 1 : 0)", p = i("player", "player")),
+            "player.is_vip" => format!("(lsg_ok({p}) && (get_user_flags({p}) & ADMIN_RESERVATION) ? 1 : 0)", p = i("player", "player")),
+            "player.ping" => format!("float(lsg_ping({}))", i("player", "player")),
+            "player.steam_id" => format!("lsg_steam_id({})", i("player", "player")),
+            "player.is_spectator" => format!("(lsg_ok({p}) && (get_user_team({p}) != 1 && get_user_team({p}) != 2) ? 1 : 0)", p = i("player", "player")),
+            "player.time_connected" => format!("float(lsg_ok({p}) ? get_user_time({p}) : 0)", p = i("player", "player")),
+            "player.by_name" => format!("lsg_by_name({})", i("name", "text")),
+            "player.by_index" => format!("lsg_slot_ok(floatround({}))", i("i", "number")),
+            "player.gravity" => format!("lsg_pevf({}, pev_gravity)", i("player", "player")),
+            "player.speed" => format!("lsg_pevf({}, pev_maxspeed)", i("player", "player")),
+            "player.model" => format!("lsg_model({})", i("player", "player")),
+            "player.transform" => {
+                let p = i("player", "player");
+                match pin {
+                    "angles" => format!("lsg_vpev({p}, pev_v_angle)"),
+                    "vel" => format!("lsg_vpev({p}, pev_velocity)"),
+                    "ground" => format!("(lsg_ok({p}) && (pev({p}, pev_flags) & FL_ONGROUND) ? 1 : 0)"),
+                    "duck" => format!("(lsg_ok({p}) && (pev({p}, pev_flags) & FL_DUCKING) ? 1 : 0)"),
+                    _ => format!("lsg_vpev({p}, pev_origin)"),
+                }
+            }
+            "ent.class" => format!("lsg_eclass({})", i("in", "entity")),
+            "ent.name" => format!("lsg_ename({})", i("in", "entity")),
+            "ent.find_all" => format!("lsg_find_all({}, {})", if self.choice(n, def, "by") == "name" { 1 } else { 0 }, pawn_str(&ent_name_text(self.text(n, def, "name")))),
+            "amx.plugin_running" => format!("(lsg_plugin_on({}) ? 1 : 0)", pawn_str(&name_text(self.text(n, def, "plugin")))),
             "wave.info" => {
                 let on = "ls_components_running()";
                 match pin {
@@ -1151,14 +1221,51 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if uses_spawn {
         o.line(CREATURES_X);
     }
+    // the game and server nodes' own hooks
+    let uses_rounds = has("event.round_ended") || pure_used(&gen, "game.round_number");
+    let uses_score = pure_used(&gen, "game.team_score");
+    let uses_freeze = pure_used(&gen, "game.freeze_time");
+    let uses_mute = has("player.mute");
+    let uses_gag = has("player.gag");
+    let uses_exp = has("fx.explosion");
+    let uses_beam = has("fx.beam");
+    let props: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "ent.spawn_prop").map(|n| model_text(n.params.get("model").and_then(Value::as_str).unwrap_or(""))).collect();
+    let sounds: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "fx.sound_at").map(|n| sound_text(n.params.get("sound").and_then(Value::as_str).unwrap_or(""))).collect();
+    if uses_rounds {
+        o.line("public lsg_count_round()\n\tg_lsgRounds++\n");
+    }
+    if uses_score {
+        o.line("public lsg_team_score()\n{\n\tnew t[2]\n\tread_data(1, t, charsmax(t))\n\tg_lsgScore[t[0] == 'T' ? 1 : 2] = read_data(2)\n}\n");
+    }
+    if uses_freeze {
+        o.line("public lsg_freeze_on()\n\tg_lsgFreeze = true\n\npublic lsg_freeze_off()\n\tg_lsgFreeze = false\n");
+    }
+    if uses_mute {
+        o.line("stock lsg_mute(id, Float:secs)\n{\n\tif (!lsg_ok(id))\n\t\treturn\n\tset_speak(id, SPEAK_MUTED)\n\tremove_task(LSG_TASK - 300 - id)\n\tif (secs > 0.0)\n\t\tset_task(secs, \"lsg_unmute\", LSG_TASK - 300 - id)\n}\n\npublic lsg_unmute(task)\n{\n\tnew id = LSG_TASK - 300 - task\n\tif (lsg_ok(id))\n\t\tset_speak(id, SPEAK_NORMAL)\n}\n");
+    }
+    if uses_gag {
+        o.line("stock lsg_gag(id, Float:secs)\n{\n\tif (lsg_ok(id))\n\t\tg_lsgGagTill[id] = secs > 0.0 ? get_gametime() + secs : 99999999.0\n}\n\npublic lsg_gag_say(id)\n\treturn lsg_ok(id) && get_gametime() < g_lsgGagTill[id] ? PLUGIN_HANDLED : PLUGIN_CONTINUE\n");
+    }
     // a shop the mode makes at run time with a keeper: the keeper's model is loaded with the map
     let keepers: Vec<&str> = g.nodes.iter().filter(|n| n.kind == "comp.create" && n.params.get("kind").and_then(Value::as_str) == Some("ls_shop"))
         .filter_map(|n| n.params.get("keys").and_then(Value::as_str))
         .filter_map(|k| k.split_whitespace().find_map(|w| w.strip_prefix("keeper=")))
         .filter_map(|k| match k { "barney" => Some("models/barney.mdl"), "gman" => Some("models/gman.mdl"), _ => None })
         .collect::<BTreeSet<_>>().into_iter().collect();
-    if !need.creatures.is_empty() || uses_markers || !keepers.is_empty() {
+    if !need.creatures.is_empty() || uses_markers || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() {
         let mut pre = String::from("public plugin_precache()\n{");
+        if uses_exp {
+            pre.push_str("\n\tg_lsgSprExp = precache_model(\"sprites/zerogxplode.spr\")");
+        }
+        if uses_beam {
+            pre.push_str("\n\tg_lsgSprBeam = precache_model(\"sprites/laserbeam.spr\")");
+        }
+        for m in &props {
+            pre.push_str(&format!("\n\tprecache_model({})", pawn_str(m)));
+        }
+        for snd in &sounds {
+            pre.push_str(&format!("\n\tprecache_sound({})", pawn_str(snd)));
+        }
         for m in &keepers {
             pre.push_str(&format!("\n\t// the shopkeeper of a shop the mode makes\n\tprecache_model({})", pawn_str(m)));
         }
@@ -1191,6 +1298,18 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     if uses_spawn {
         o.line("\tif (get_cvar_pointer(\"ls_creature_ver\"))\n\t\tRegisterHam(Ham_Killed, \"ls_creature\", \"lsg_pay_killer\", 1)");
+    }
+    if uses_rounds {
+        o.line("\tregister_event(\"HLTV\", \"lsg_count_round\", \"a\", \"1=0\", \"2=0\")");
+    }
+    if uses_score {
+        o.line("\tregister_event(\"TeamScore\", \"lsg_team_score\", \"a\")");
+    }
+    if uses_freeze {
+        o.line("\tregister_event(\"HLTV\", \"lsg_freeze_on\", \"a\", \"1=0\", \"2=0\")\n\tregister_logevent(\"lsg_freeze_off\", 2, \"1=Round_Start\")");
+    }
+    if uses_gag {
+        o.line("\tregister_clcmd(\"say\", \"lsg_gag_say\")\n\tregister_clcmd(\"say_team\", \"lsg_gag_say\")");
     }
     if uses_down {
         o.line("\tset_task(0.25, \"lsg_revive_tick\", LSG_TASK - 1, _, _, \"b\")");
@@ -1252,7 +1371,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.chat_command") {
         let i = gen.index(id);
-        o.line(format!("public lsg_chat{i}(id)\n{{\n\tnew ctx[LSG_CTX]\n\tctx[0] = id // player\n\t{}(ctx)\n\treturn PLUGIN_CONTINUE\n}}\n", gen.fname(id)));
+        o.line(format!("public lsg_chat{i}(id)\n{{\n\tnew ctx[LSG_CTX]\n\tctx[0] = id // player\n\tread_args(g_lsgTxt[0], 63) // args\n\tremove_quotes(g_lsgTxt[0])\n\tlsg_after_word(g_lsgTxt[0])\n\t{}(ctx)\n\treturn PLUGIN_CONTINUE\n}}\n", gen.fname(id)));
     }
     if debug || uses_save || uses_clock {
         o.line("public plugin_end()\n{");
@@ -1378,6 +1497,8 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
                         o.line(format!("\tpev(ent, pev_netname, g_lsgTxt[{i}], 63) // {pin}"));
                     } else if let Some(param) = read.strip_prefix("@str:") {
                         o.line(format!("\tcopy(g_lsgTxt[{i}], 63, {param}) // {pin}"));
+                    } else if let Some(call) = read.strip_prefix("@fn:") {
+                        o.line(format!("\tcopy(g_lsgTxt[{i}], 63, {call}) // {pin}"));
                     }
                 }
                 Some((false, i)) => o.line(format!("\tctx[{i}] = {read} // {pin}")),
@@ -1387,6 +1508,11 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         for id in gen.live.iter().filter(|id| v.defs[*id].kind == k.kind) {
             let call = format!("{}(ctx)", gen.fname(id));
             match k.named {
+                Some("@name") => {
+                    // (a custom event: only the ones with this node's name)
+                    let name = name_text(gen.text(v.nodes[id], v.defs[id], "name"));
+                    o.line(format!("\tif (equal(name, {}))\n\t\t{call}", pawn_str(&name)));
+                }
                 Some(ent) => {
                     let name = name_text(gen.text(v.nodes[id], v.defs[id], "name"));
                     if name.is_empty() {
@@ -2104,6 +2230,116 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\t{store}ls_perk_buy({}, {}) ? 1 : 0", inp("player", "player"), pawn_str(gen.choice(n, def, "perk"))), exit("done")]);
             then_line(&mut b, "then");
         }
+        k if (k.starts_with("world.set_")) => {
+            let (cvar, yes_no, _) = world_of(k).unwrap_or(("sv_gravity", false, true));
+            let val = inp("v", if yes_no { "bool" } else { "number" });
+            // (a fixed yes/no is written as 1 or 0: amxxpc warns on a constant test)
+            let val = if yes_no && (val == "0" || val == "1") { val.clone() } else if yes_no { format!("({val}) ? 1 : 0") } else { val };
+            b.line(if yes_no { format!("\tset_cvar_num({}, {val})", pawn_str(cvar)) } else { format!("\tset_cvar_float({}, {val})", pawn_str(cvar)) });
+            let e = exit("done");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "game.change_map" | "game.restart_round" | "player.set_transform" | "player.set_rotation" | "player.look_at" | "player.slap" | "player.fade" | "player.shake" | "player.godmode" | "player.noclip" | "player.render"
+        | "player.set_ammo" | "player.give_ammo" | "player.take_weapon" | "player.switch_weapon" | "player.set_frags" | "player.set_deaths" | "player.to_spectators" | "player.kick" | "player.mute" | "player.gag"
+        | "msg.team_chat" | "msg.notify_admins" | "ent.remove" | "ent.set_position" | "ent.set_angles" | "ent.set_visible" | "fx.explosion" | "fx.beam" | "fx.sound_at" | "fx.sound_to" | "fx.lights" | "amx.fire" => {
+            let p = || inp("player", "player");
+            let num = |k: &str| float_lit(gen.num(n, def, k));
+            let on = |k: &str| if gen.boolean(n, def, k) { "1" } else { "0" };
+            let wired = |pin: &str| v.data_source(id, pin).is_some();
+            let call = match def.kind.as_str() {
+                "game.change_map" => format!("lsg_change_map({})", pawn_str(&name_text(gen.text(n, def, "map")))),
+                "game.restart_round" => "server_cmd(\"sv_restartround 1\")".into(),
+                "player.set_transform" => format!("lsg_set_transform({}, {}, {}, {})", p(), if wired("pos") { inp("pos", "vector") } else { "-1".into() }, if wired("angles") { inp("angles", "vector") } else { "-1".into() }, if wired("vel") { inp("vel", "vector") } else { "-1".into() }),
+                "player.set_rotation" => format!("lsg_set_transform({}, -1, {}, -1)", p(), inp("angles", "vector")),
+                "player.look_at" => format!("lsg_look_at({}, {}, {})", p(), if wired("at") { inp("at", "entity") } else { "0".into() }, if wired("pos") { inp("pos", "vector") } else { "-1".into() }),
+                "player.slap" => format!("lsg_slap({}, floatround({}))", p(), inp("dmg", "number")),
+                "player.fade" => {
+                    let (r, g_, bl) = match gen.choice(n, def, "colour") { "black" => (0, 0, 0), "red" => (220, 20, 20), "green" => (20, 200, 40), _ => (255, 255, 255) };
+                    format!("lsg_fade({}, {}, {r}, {g_}, {bl}, {})", p(), num("secs"), gen.num(n, def, "alpha").round().clamp(0.0, 255.0) as i64)
+                }
+                "player.shake" => format!("lsg_shake({}, {}, {})", p(), num("amp"), num("secs")),
+                "player.godmode" => format!("lsg_godmode({}, {})", p(), on("on")),
+                "player.noclip" => format!("lsg_noclip({}, {})", p(), on("on")),
+                "player.render" => format!("lsg_render({}, {}, {})", p(), match gen.choice(n, def, "mode") { "normal" => 0, "see" => 1, _ => 2 }, gen.num(n, def, "amount").round().clamp(0.0, 255.0) as i64),
+                "player.set_ammo" => format!("lsg_set_ammo({}, floatround({}), floatround({}))", p(), inp("clip", "number"), inp("reserve", "number")),
+                "player.give_ammo" => format!("lsg_give_ammo({}, floatround({}))", p(), inp("n", "number")),
+                "player.take_weapon" => format!("lsg_take_weapon({}, {})", p(), pawn_str(&format!("weapon_{}", gen.choice(n, def, "weapon")))),
+                "player.switch_weapon" => format!("lsg_switch_weapon({}, {})", p(), pawn_str(&format!("weapon_{}", gen.choice(n, def, "weapon")))),
+                "player.set_frags" => format!("lsg_set_frags({}, floatround({}))", p(), inp("n", "number")),
+                "player.set_deaths" => format!("lsg_set_deaths({}, floatround({}))", p(), inp("n", "number")),
+                "player.to_spectators" => format!("lsg_to_spec({})", p()),
+                "player.kick" => format!("lsg_kick({}, {})", p(), pawn_str(&safe_text(gen.text(n, def, "reason"), 60))),
+                "player.mute" => format!("lsg_mute({}, {})", p(), num("secs")),
+                "player.gag" => format!("lsg_gag({}, {})", p(), num("secs")),
+                "msg.team_chat" => {
+                    let text = pawn_str(&safe_text(gen.text(n, def, "text"), 100));
+                    let args = text_args(gen, &text, gen.input(id, "value"));
+                    format!("lsg_team_chat({}, {args})", if gen.choice(n, def, "team") == "t" { 1 } else { 2 })
+                }
+                "msg.notify_admins" => {
+                    let text = pawn_str(&safe_text(gen.text(n, def, "text"), 100));
+                    let args = text_args(gen, &text, gen.input(id, "value"));
+                    format!("lsg_admins_chat({args})")
+                }
+                "ent.remove" => format!("lsg_remove({})", inp("in", "entity")),
+                "ent.set_position" => format!("lsg_ent_pos({}, {})", inp("in", "entity"), inp("pos", "vector")),
+                "ent.set_angles" => format!("lsg_ent_angles({}, {})", inp("in", "entity"), inp("angles", "vector")),
+                "ent.set_visible" => format!("lsg_ent_visible({}, {})", inp("in", "entity"), on("on")),
+                "fx.explosion" => format!("lsg_explode({}, {}, {})", inp("pos", "vector"), inp("dmg", "number"), num("radius")),
+                "fx.beam" => {
+                    let (r, g_, bl) = match gen.choice(n, def, "colour") { "green" => (40, 220, 60), "blue" => (60, 120, 255), "white" => (255, 255, 255), "gold" => (255, 200, 40), _ => (230, 30, 30) };
+                    format!("lsg_beam({}, {}, {r}, {g_}, {bl}, {})", inp("a", "vector"), inp("b", "vector"), num("secs"))
+                }
+                "fx.sound_at" => format!("lsg_sound_at({}, {})", inp("pos", "vector"), pawn_str(&sound_text(gen.text(n, def, "sound")))),
+                "fx.sound_to" => format!("lsg_sound_to({}, {})", p(), pawn_str(&sound_text(gen.text(n, def, "sound")))),
+                "fx.lights" => format!("set_lights({})", pawn_str(match gen.choice(n, def, "style") { "dark" => "e", "darkest" => "b", "bright" => "z", "flicker" => "mmnmmommommnonmmonqnmmo", _ => "#OFF" })),
+                _ => format!("lsg_fire_event({}, floatround({}), floatround({}))", pawn_str(&name_text(gen.text(n, def, "name"))), inp("a", "number"), inp("b", "number")),
+            };
+            b.line(format!("\t{call}"));
+            let e = exit("done");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "game.run_command" | "game.amx_command" => {
+            let amx = def.kind == "game.amx_command";
+            let k = gen.out_index(id, "ok");
+            let store = k.map_or(String::new(), |k| format!("g_lsgO[{k}] = "));
+            b.line(format!("\t{store}lsg_safe_cmd({}, {}) ? 1 : 0", inp("cmd", "text"), if amx { 1 } else { 0 }));
+            if debug {
+                b.line(format!("\tif (!lsg_cmd_ok)\n\t\t{}", err("Refused: that command isn't allowed from a mode (passwords, files, plugins, quitting, bans and admin edits are off limits; one command at a time).")));
+            }
+            then_line(&mut b, "then");
+        }
+        "ent.spawn_prop" => {
+            b.line(format!("\tg_lsgOut[{i}] = lsg_prop({}, {}, {})", inp("at", "entity"), pawn_str(&model_text(gen.text(n, def, "model"))), if gen.boolean(n, def, "solid") { 1 } else { 0 }));
+            if debug {
+                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}", err("No prop: the model isn't loaded, or there's no such entity.")));
+            }
+            then_line(&mut b, "then");
+        }
+        "amx.call" => {
+            let k = gen.out_index(id, "out");
+            let ok = gen.out_index(id, "ok");
+            let nargs = gen.choice(n, def, "args").parse::<i64>().unwrap_or(0).clamp(0, 2);
+            b.line(format!("\tnew r, called = lsg_call({}, {}, {nargs}, floatround({}), floatround({}), r)", pawn_str(&name_text(gen.text(n, def, "plugin"))), pawn_str(&name_text(gen.text(n, def, "func"))), inp("a", "number"), inp("b", "number")));
+            if let Some(k) = k {
+                b.line(format!("\tg_lsgO[{k}] = _:float(r)"));
+            }
+            if let Some(ok) = ok {
+                b.line(format!("\tg_lsgO[{ok}] = called"));
+            }
+            if debug {
+                b.line(format!("\tif (!called)\n\t\t{}", err("Not called: no such plugin running, or no such public function in it.")));
+            } else if k.is_none() && ok.is_none() {
+                b.line("\t#pragma unused r\n\t#pragma unused called");
+            }
+            then_line(&mut b, "then");
+        }
         "turret.place" => {
             check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\tg_lsgOut[{i}] = ls_turret_place({}, {})", inp("player", "player"), if gen.boolean(n, def, "pay") { "true" } else { "false" }), exit("done")]);
             then_line(&mut b, "then");
@@ -2628,6 +2864,7 @@ fn multi_fn(gen: &Gen, id: &str, pin: &str, body: &str) -> String {
 
 /// Node kinds that need the version 3 helpers (by prefix).
 const V3_KINDS: &[&str] = &[
+    "player.transform", "player.set_transform", "player.set_rotation", "player.look_at", "ent.", "fx.",
     "marker.",
     "fn.", "macro.", "struct.", "enum.", "array.", "map.", "vec.", "flow.sequence", "flow.do_", "flow.gate", "flow.flipflop", "flow.for_loop", "flow.while", "flow.for_each_array", "flow.switch_", "flow.if_valid", "timer.retrigger", "timer.by_function",
     "timer.clear", "timer.is_active", "debug.print", "logic.equal", "logic.select", "cond.is_valid", "player.is_player", "creature.is", "math.fn", "math.clamp", "math.lerp", "math.in_range", "math.number", "text.literal", "text.append", "text.format", "text.contains", "text.length", "text.to_number", "text.from",
@@ -2774,6 +3011,25 @@ public lsg_pay_killer(ent, killer)
 	return HAM_IGNORED
 }
 "##;
+
+/// World settings: node key -> (cvar, a yes/no setting).
+pub const WORLD: [(&str, &str, bool); 17] = [
+    ("gravity", "sv_gravity", false), ("friction", "sv_friction", false), ("max_speed", "sv_maxspeed", false), ("round_time", "mp_roundtime", false), ("freeze_time", "mp_freezetime", false),
+    ("buy_time", "mp_buytime", false), ("friendly_fire", "mp_friendlyfire", true), ("team_balance", "mp_autoteambalance", true), ("team_limit", "mp_limitteams", false), ("start_money", "mp_startmoney", false),
+    ("c4_timer", "mp_c4timer", false), ("fall_damage", "mp_falldamage", true), ("footsteps", "mp_footsteps", true), ("alltalk", "sv_alltalk", true), ("time_limit", "mp_timelimit", false),
+    ("win_limit", "mp_winlimit", false), ("frag_limit", "mp_fraglimit", false),
+];
+fn world_of(kind: &str) -> Option<(&'static str, bool, bool)> {
+    let key = kind.strip_prefix("world.")?;
+    let (set, key) = match key.strip_prefix("set_") { Some(k) => (true, k), None => (false, key) };
+    WORLD.iter().find(|(k, _, _)| *k == key).map(|(_, c, b)| (*c, *b, set))
+}
+
+/// Cvars no mode may read: passwords, the rcon, and where files and logs go.
+pub fn secret_cvar(c: &str) -> bool {
+    let c = c.to_ascii_lowercase();
+    c.contains("password") || c.contains("rcon") || c.starts_with("sv_downloadurl") || c.starts_with("log") || c.contains("_file") || c.starts_with("amx_sql") || c.starts_with("sv_contact") || c == "hostport" || c == "ip"
+}
 
 /// A marker id's place in the graph's markers (what the plugin's tables use).
 fn marker_index(g: &Graph, id: &str) -> usize {
@@ -2977,7 +3233,501 @@ fn lsg_secs(v: &Option<Val>) -> String {
 const V3_HELPERS: &str = include_str!("v3_helpers.pawn");
 
 /// Helpers every plugin gets (stocks: the ones a graph doesn't use cost nothing).
-const HELPERS: &str = r##"// the round table's kind of round (0 normal, 1 boss, 2 pack) and its type
+const HELPERS: &str = r##"// ---- the game and the server (Game, World, Players, Entities, Effects, Advanced nodes) ----
+stock g_lsgRounds, g_lsgScore[3], bool:g_lsgFreeze, Float:g_lsgGagTill[33], g_lsgFw = -1, bool:lsg_cmd_ok, g_lsgSprExp, g_lsgSprBeam
+
+stock lsg_map_name()
+{
+	new m[32]
+	get_mapname(m, charsmax(m))
+	return m
+}
+
+// cvars no mode may read (passwords, rcon, where files and logs go)
+stock bool:lsg_secret(const c[])
+{
+	return containi(c, "password") >= 0 || containi(c, "rcon") >= 0 || equali(c, "sv_downloadurl") || equali(c, "log", 3) || containi(c, "_file") >= 0 || equali(c, "amx_sql", 7) || equali(c, "hostport") || equali(c, "ip")
+}
+
+stock lsg_cvar_text(const c[])
+{
+	new t[64]
+	if (!lsg_secret(c) && get_cvar_pointer(c))
+		get_cvar_string(c, t, charsmax(t))
+	return t
+}
+
+stock Float:lsg_cvar_num(const c[])
+	return !lsg_secret(c) && get_cvar_pointer(c) ? get_cvar_float(c) : 0.0
+
+// 0 all, 1 people, 2 bots, 3 T, 4 CT, 5 spectators, 6 alive
+stock lsg_count(which)
+{
+	new n
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p))
+			continue
+		new t = get_user_team(p)
+		switch (which)
+		{
+			case 1: if (!is_user_bot(p)) n++
+			case 2: if (is_user_bot(p)) n++
+			case 3: if (t == 1) n++
+			case 4: if (t == 2) n++
+			case 5: if (t != 1 && t != 2) n++
+			case 6: if (is_user_alive(p)) n++
+			default: n++
+		}
+	}
+	return n
+}
+
+stock lsg_clock(const fmt[])
+{
+	new t[40]
+	get_time(fmt, t, charsmax(t))
+	return t
+}
+
+stock bool:lsg_helmet(id)
+{
+	if (!lsg_ok(id))
+		return false
+	new CsArmorType:t
+	cs_get_user_armor(id, t)
+	return t == CS_ARMOR_VESTHELM
+}
+
+stock lsg_held(id)
+{
+	new w[24]
+	if (lsg_ok(id) && is_user_alive(id))
+	{
+		new clip, ammo, wid = get_user_weapon(id, clip, ammo)
+		if (wid > 0)
+			get_weaponname(wid, w, charsmax(w))
+		replace(w, charsmax(w), "weapon_", "")
+	}
+	return w
+}
+
+stock lsg_ammo(id, reserve)
+{
+	if (!lsg_ok(id) || !is_user_alive(id))
+		return 0
+	new clip, ammo
+	get_user_weapon(id, clip, ammo)
+	return reserve ? ammo : max(clip, 0)
+}
+
+stock lsg_ping(id)
+{
+	new ping, loss
+	if (lsg_ok(id))
+		get_user_ping(id, ping, loss)
+	return ping
+}
+
+stock lsg_steam_id(id)
+{
+	new s[44]
+	if (lsg_ok(id) && !is_user_bot(id))
+	{
+		get_user_authid(id, s, charsmax(s))
+		if (!equal(s, "STEAM_", 6))
+			s[0] = 0
+	}
+	return s
+}
+
+stock lsg_by_name(const name[])
+	return name[0] ? max(find_player("bl", name), 0) : 0
+
+stock lsg_slot_ok(i)
+	return lsg_ok(i) ? i : 0
+
+stock Float:lsg_pevf(id, field)
+{
+	new Float:f
+	if (lsg_ok(id))
+		pev(id, field, f)
+	return f
+}
+
+stock lsg_model(id)
+{
+	new m[32]
+	if (lsg_ok(id))
+		cs_get_user_model(id, m, charsmax(m))
+	return m
+}
+
+stock lsg_eclass(e)
+{
+	new t[32]
+	if (e > 0 && pev_valid(e))
+		pev(e, pev_classname, t, charsmax(t))
+	return t
+}
+
+stock lsg_ename(e)
+{
+	new t[32]
+	if (e > 0 && pev_valid(e))
+		pev(e, pev_targetname, t, charsmax(t))
+	return t
+}
+
+stock bool:lsg_plugin_on(const file[])
+	return is_plugin_loaded(file, true) != -1
+
+// (a map name is letters, digits, _ - . only, and the server must have it: nothing else reaches the console)
+stock lsg_change_map(const map[])
+{
+	if (!map[0])
+		return
+	for (new i = 0; map[i]; i++)
+		if (!isalnum(map[i]) && map[i] != '_' && map[i] != '-' && map[i] != '.')
+			return
+	if (is_map_valid(map))
+		server_cmd("changelevel %s", map)
+}
+
+// text that goes into a console command's quotes: letters, digits, spaces and . , ! ? - ' ( ) only
+// (no quote, semicolon, new line or other control character can end the quotes or add a command)
+stock lsg_clean(const src[], dst[], len)
+{
+	new j
+	for (new i = 0; src[i] && j < len; i++)
+	{
+		new c = src[i]
+		if (isalnum(c) || c == ' ' || c == '.' || c == ',' || c == '!' || c == '?' || c == '-' || c == 39 || c == '(' || c == ')')
+			dst[j++] = c
+	}
+	dst[j] = 0
+}
+
+stock lsg_slap(id, dmg)
+{
+	if (lsg_ok(id) && is_user_alive(id))
+		user_slap(id, clamp(dmg, 0, 100))
+}
+
+stock lsg_fade(id, Float:secs, r, g, b, alpha)
+{
+	if (!lsg_ok(id))
+		return
+	static msg
+	if (!msg)
+		msg = get_user_msgid("ScreenFade")
+	new units = clamp(floatround(secs * 4096.0), 0, 65535)
+	message_begin(MSG_ONE_UNRELIABLE, msg, _, id)
+	write_short(units)
+	write_short(units)
+	write_short(0)
+	write_byte(r)
+	write_byte(g)
+	write_byte(b)
+	write_byte(alpha)
+	message_end()
+}
+
+stock lsg_shake(id, Float:amp, Float:secs)
+{
+	if (!lsg_ok(id))
+		return
+	static msg
+	if (!msg)
+		msg = get_user_msgid("ScreenShake")
+	message_begin(MSG_ONE_UNRELIABLE, msg, _, id)
+	write_short(clamp(floatround(amp * 4096.0), 0, 65535))
+	write_short(clamp(floatround(secs * 4096.0), 0, 65535))
+	write_short(clamp(floatround(amp * 4096.0), 0, 65535))
+	message_end()
+}
+
+stock lsg_godmode(id, on)
+{
+	if (lsg_ok(id))
+		set_pev(id, pev_takedamage, on ? DAMAGE_NO : DAMAGE_AIM)
+}
+
+stock lsg_noclip(id, on)
+{
+	if (lsg_ok(id) && is_user_alive(id))
+		set_pev(id, pev_movetype, on ? MOVETYPE_NOCLIP : MOVETYPE_WALK)
+}
+
+// 0 normal, 1 see-through by amount, 2 invisible
+stock lsg_render(id, mode, amount)
+{
+	if (!lsg_ok(id))
+		return
+	set_pev(id, pev_rendermode, mode ? kRenderTransAlpha : kRenderNormal)
+	set_pev(id, pev_renderamt, mode == 2 ? 0.0 : (mode ? float(amount) : 255.0))
+}
+
+stock lsg_set_ammo(id, clip, reserve)
+{
+	if (!lsg_ok(id) || !is_user_alive(id))
+		return
+	new c, a, wid = get_user_weapon(id, c, a)
+	new w = get_ent_data_entity(id, "CBasePlayer", "m_pActiveItem")
+	if (w > 0 && pev_valid(w) && wid != CSW_KNIFE)
+	{
+		cs_set_weapon_ammo(w, clamp(clip, 0, 200))
+		cs_set_user_bpammo(id, wid, clamp(reserve, 0, 255))
+	}
+}
+
+stock lsg_give_ammo(id, n)
+{
+	if (!lsg_ok(id) || !is_user_alive(id))
+		return
+	new c, a, wid = get_user_weapon(id, c, a)
+	if (wid > 0 && wid != CSW_KNIFE)
+		cs_set_user_bpammo(id, wid, clamp(cs_get_user_bpammo(id, wid) + n, 0, 255))
+}
+
+stock lsg_take_weapon(id, const wname[])
+{
+	if (!lsg_ok(id) || !is_user_alive(id))
+		return
+	new wid = get_weaponid(wname), e = -1
+	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", wname)) > 0)
+		if (pev(e, pev_owner) == id)
+			break
+	if (e <= 0)
+		return
+	if (get_user_weapon(id) == wid)
+		ExecuteHamB(Ham_Weapon_RetireWeapon, e)
+	if (!ExecuteHamB(Ham_RemovePlayerItem, id, e))
+		return
+	ExecuteHamB(Ham_Item_Kill, e)
+	set_pev(id, pev_weapons, pev(id, pev_weapons) & ~(1 << wid))
+}
+
+stock lsg_switch_weapon(id, const wname[])
+{
+	if (lsg_ok(id) && is_user_alive(id) && user_has_weapon(id, get_weaponid(wname)))
+		engclient_cmd(id, wname)
+}
+
+stock lsg_set_frags(id, n)
+{
+	if (!lsg_ok(id))
+		return
+	set_pev(id, pev_frags, float(n))
+	static msg
+	if (!msg)
+		msg = get_user_msgid("ScoreInfo")
+	message_begin(MSG_ALL, msg)
+	write_byte(id)
+	write_short(n)
+	write_short(cs_get_user_deaths(id))
+	write_short(0)
+	write_short(get_user_team(id))
+	message_end()
+}
+
+stock lsg_set_deaths(id, n)
+{
+	if (lsg_ok(id))
+		cs_set_user_deaths(id, max(n, 0))
+}
+
+stock lsg_to_spec(id)
+{
+	if (!lsg_ok(id))
+		return
+	if (is_user_alive(id))
+		user_kill(id, 1)
+	cs_set_user_team(id, CS_TEAM_SPECTATOR)
+}
+
+stock lsg_kick(id, const reason[])
+{
+	if (!lsg_ok(id))
+		return
+	new r[61]
+	lsg_clean(reason, r, charsmax(r))
+	server_cmd("kick #%d ^"%s^"", get_user_userid(id), r)
+}
+
+stock lsg_team_chat(team, const fmt[], any:...)
+{
+	new msg[192]
+	vformat(msg, charsmax(msg), fmt, 3)
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_connected(p) && get_user_team(p) == team)
+			client_print(p, print_chat, "%s", msg)
+}
+
+stock lsg_admins_chat(const fmt[], any:...)
+{
+	new msg[192]
+	vformat(msg, charsmax(msg), fmt, 2)
+	for (new p = 1; p <= MaxClients; p++)
+		if (is_user_connected(p) && (get_user_flags(p) & ADMIN_KICK))
+			client_print(p, print_chat, "[Admins] %s", msg)
+}
+
+stock lsg_remove(e)
+{
+	if (e > MaxClients && pev_valid(e))
+		engfunc(EngFunc_RemoveEntity, e)
+}
+
+stock lsg_ent_visible(e, on)
+{
+	if (e > 0 && pev_valid(e))
+		set_pev(e, pev_effects, on ? (pev(e, pev_effects) & ~EF_NODRAW) : (pev(e, pev_effects) | EF_NODRAW))
+}
+
+stock lsg_sound_to(id, const snd[])
+{
+	if (lsg_ok(id))
+		client_cmd(id, "spk ^"%s^"", snd)
+}
+
+stock lsg_fire_event(const name[], a, b)
+{
+	if (g_lsgFw < 0)
+		g_lsgFw = CreateMultiForward("ls_studio_event", ET_IGNORE, FP_STRING, FP_CELL, FP_CELL)
+	new ret
+	ExecuteForward(g_lsgFw, ret, name, a, b)
+}
+
+// a public function in another plugin with up to two numbers; 1 if it was called
+stock lsg_call(const plugin[], const func[], nargs, a, b, &r)
+{
+	r = 0
+	if (callfunc_begin(func, plugin) != 1)
+		return 0
+	if (nargs >= 1)
+		callfunc_push_int(a)
+	if (nargs >= 2)
+		callfunc_push_int(b)
+	r = callfunc_end()
+	return 1
+}
+
+// one server command, never one that reaches passwords, files, plugins, bans or quits the
+// server (amx: an AMX Mod X command, never rcon, cvars that are secret, plugins, bans or admins)
+stock bool:lsg_safe_cmd(const cmd[], amx)
+{
+	lsg_cmd_ok = false
+	new c[128], w[32], rest[96], w2[48]
+	copy(c, charsmax(c), cmd)
+	trim(c)
+	// (checked on the final string: no ; and no control characters at all, quotes in pairs)
+	new quotes
+	for (new i = 0; c[i]; i++)
+	{
+		if (c[i] < 32 || c[i] == ';')
+			return false
+		if (c[i] == '"')
+			quotes++
+	}
+	if (!c[0] || quotes % 2 || containi(c, "password") >= 0 || containi(c, "rcon") >= 0)
+		return false
+	strtok(c, w, charsmax(w), rest, charsmax(rest), ' ')
+	strtolower(w)
+	trim(rest)
+	strtok(rest, w2, charsmax(w2), rest, charsmax(rest), ' ')
+	static const BLOCK[][] = { "quit", "exit", "_restart", "exec", "writecfg", "writeid", "writeip", "sv_downloadurl", "logaddress", "logaddress_add", "logaddress_del", "log", "meta", "amxx", "alias", "banid", "addip", "removeid", "removeip", "listid", "listip", "sv_logfile", "mp_logfile", "mp_logdetail", "rcon", "sv_password", "changelevel2", "sys_ticrate", "plugin_unload", "plugin_load" }
+	if (amx)
+	{
+		static const AMX_BLOCK[][] = { "amx_rcon", "amx_ban", "amx_banip", "amx_addban", "amx_unban", "amx_addadmin", "amx_reloadadmins", "amx_pause", "amx_unpause", "amx_pausecfg", "amx_plugins", "amx_cfg", "amx_execcfg", "amx_exec", "amx_execall", "amx_logs" }
+		if (!equal(w, "amx_", 4))
+			return false
+		for (new i = 0; i < sizeof AMX_BLOCK; i++)
+			if (equal(w, AMX_BLOCK[i]))
+				return false
+		if (equal(w, "amx_cvar") && (!w2[0] || lsg_secret(w2)))
+			return false
+	}
+	else
+	{
+		for (new i = 0; i < sizeof BLOCK; i++)
+			if (equal(w, BLOCK[i]))
+				return false
+		if (equal(w, "log", 3) || lsg_secret(w))
+			return false
+	}
+	server_cmd("%s", c)
+	lsg_cmd_ok = true
+	return true
+}
+
+stock lsg_hitgroup(v)
+{
+	new t[12]
+	if (!lsg_ok(v))
+		return t
+	switch (get_ent_data(v, "CBaseMonster", "m_LastHitGroup"))
+	{
+		case HIT_HEAD: copy(t, charsmax(t), "head")
+		case HIT_CHEST: copy(t, charsmax(t), "chest")
+		case HIT_STOMACH: copy(t, charsmax(t), "stomach")
+		case HIT_LEFTARM, HIT_RIGHTARM: copy(t, charsmax(t), "arm")
+		case HIT_LEFTLEG, HIT_RIGHTLEG: copy(t, charsmax(t), "leg")
+		default: copy(t, charsmax(t), "body")
+	}
+	return t
+}
+
+stock lsg_wpn_of(a)
+	return lsg_held(a)
+
+stock Float:lsg_dist(a, b)
+{
+	if (!lsg_ok(a) || !lsg_ok(b))
+		return 0.0
+	new Float:x[3], Float:y[3]
+	pev(a, pev_origin, x)
+	pev(b, pev_origin, y)
+	return get_distance_f(x, y)
+}
+
+// what's after the first word ("/give 5" -> "5")
+stock lsg_after_word(s[])
+{
+	new i
+	while (s[i] && s[i] != ' ')
+		i++
+	while (s[i] == ' ')
+		i++
+	copy(s, 63, s[i])
+}
+
+stock lsg_hook_weapons(const fn[], Ham:h)
+{
+	static const W[][] = { "weapon_p228", "weapon_scout", "weapon_hegrenade", "weapon_xm1014", "weapon_mac10", "weapon_aug", "weapon_smokegrenade", "weapon_elite", "weapon_fiveseven", "weapon_ump45", "weapon_sg550", "weapon_galil", "weapon_famas", "weapon_usp", "weapon_glock18", "weapon_awp", "weapon_mp5navy", "weapon_m249", "weapon_m3", "weapon_m4a1", "weapon_tmp", "weapon_g3sg1", "weapon_flashbang", "weapon_deagle", "weapon_sg552", "weapon_ak47", "weapon_knife", "weapon_p90" }
+	for (new i = 0; i < sizeof W; i++)
+		RegisterHam(h, W[i], fn, 1)
+}
+
+stock lsg_prop(at, const model[], solid)
+{
+	new Float:o[3]
+	if (!lsg_ent_origin(at, o))
+		return 0
+	new e = create_entity("info_target")
+	if (e <= 0)
+		return 0
+	set_pev(e, pev_classname, "ls_studio_prop")
+	engfunc(EngFunc_SetModel, e, model)
+	engfunc(EngFunc_SetOrigin, e, o)
+	set_pev(e, pev_solid, solid ? SOLID_BBOX : SOLID_NOT)
+	set_pev(e, pev_movetype, MOVETYPE_NONE)
+	if (solid)
+		engfunc(EngFunc_SetSize, e, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 32.0})
+	return e
+}
+
+// the round table's kind of round (0 normal, 1 boss, 2 pack) and its type
 stock lsg_wave_kind()
 {
 	new t[32]
@@ -3832,6 +4582,7 @@ mod tests {
     pub const EVERY_NODE: &str = include_str!("testdata/every_node.graph.json");
     /// the nodes every_node has no room for (a graph holds 400): the mode-building pieces
     pub const EVERY_NODE_2: &str = include_str!("testdata/every_node_2.graph.json");
+    pub const EVERY_NODE_3: &str = include_str!("testdata/every_node_3.graph.json");
     pub const MALICIOUS: &str = include_str!("testdata/malicious.graph.json");
 
     fn snapshot(name: &str, got: &str) {
@@ -3989,6 +4740,33 @@ mod tests {
         assert!(dbg.source.contains("new bool:g_lsdBp[LSD_N] = { false, false, true"), "{}", dbg.source.lines().find(|l| l.contains("g_lsdBp[LSD_N]")).unwrap_or(""));
     }
 
+    /// A kick's reason never reaches the console as written: quotes are refused by the checks,
+    /// and the plugin keeps only letters, digits, spaces and plain punctuation (no ; or control
+    /// characters) inside the quotes; Change Map takes map-name letters only.
+    #[test]
+    fn kick_and_map_change_cant_inject_commands() {
+        let g = parse(&serde_json::json!({
+            "schema": super::super::graph::SCHEMA, "version": super::super::graph::VERSION, "mode": {"id": "inj", "name": "Inj"}, "variables": [], "comments": [],
+            "nodes": [
+                {"id": "e", "type": "event.player_spawned", "pos": {"x": 0, "y": 0}, "params": {}},
+                {"id": "k", "type": "player.kick", "pos": {"x": 300, "y": 0}, "params": {"reason": "x\";rcon_password hacked;\""}}
+            ],
+            "edges": [
+                {"id": "w1", "from": {"node": "e", "pin": "then"}, "to": {"node": "k", "pin": "exec"}},
+                {"id": "w2", "from": {"node": "e", "pin": "player"}, "to": {"node": "k", "pin": "player"}}
+            ]
+        }).to_string()).unwrap();
+        // the quote is refused by the checks
+        assert!(validate(&g).iter().any(|p| p.level == "error" && p.node.as_deref() == Some("k")));
+        // and even generated anyway: the literal has no quote, and the stock cleans what's left
+        let src = generate(&g, false).source;
+        let line = src.lines().find(|l| l.contains("lsg_kick(ctx")).unwrap();
+        assert!(!line.contains("\\\"") && line.matches('"').count() == 2, "{line}");
+        assert!(src.contains("lsg_clean(reason, r, charsmax(r))"));
+        assert!(src.contains("if (c[i] < 32 || c[i] == ';')"), "the command check runs on the final string");
+        assert!(src.contains("if (!isalnum(map[i]) && map[i] != '_' && map[i] != '-' && map[i] != '.')"));
+    }
+
     /// One graph with every node in the registry: it checks clean, every flow node becomes a
     /// function, and both builds are snapshotted (and compiled with amxxpc in mod.rs).
     #[test]
@@ -4000,11 +4778,14 @@ mod tests {
         let g2 = parse(EVERY_NODE_2).unwrap();
         let p2 = super::super::graph::validate_core(&g2);
         assert!(p2.is_empty(), "every_node_2: {:#?}", p2);
-        let used: BTreeSet<&str> = g.nodes.iter().chain(g2.nodes.iter()).map(|n| n.kind.as_str()).collect();
+        let g3 = parse(EVERY_NODE_3).unwrap();
+        let p3 = super::super::graph::validate_core(&g3);
+        assert!(p3.is_empty(), "every_node_3: {:#?}", p3);
+        let used: BTreeSet<&str> = g.nodes.iter().chain(g2.nodes.iter()).chain(g3.nodes.iter()).map(|n| n.kind.as_str()).collect();
         for d in &registry().nodes {
-            assert!(used.contains(d.kind.as_str()), "every_node(_2).graph.json lacks {}", d.kind);
+            assert!(used.contains(d.kind.as_str()), "every_node(_2/_3).graph.json lacks {}", d.kind);
         }
-        for (name, gg) in [("every_node_2", &g2)] {
+        for (name, gg) in [("every_node_2", &g2), ("every_node_3", &g3)] {
             let r = generate(gg, false);
             for n in gg.nodes.iter().filter(|n| { let d = registry().get(&n.kind).unwrap(); !d.pure && !d.reroute }) {
                 assert!(r.spans.iter().any(|s| s.node == n.id), "{name}: {} isn't in the plugin", n.id);

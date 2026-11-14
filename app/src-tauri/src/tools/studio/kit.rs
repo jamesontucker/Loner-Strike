@@ -110,6 +110,8 @@ pub fn kit_of(g: &Graph) -> Value {
         "components": components.iter().map(|c| json!({"classname": c, "min": 1, "max": Value::Null, "note": ""})).collect::<Vec<_>>(),
         "creatures": creatures,
         "notes": g.map_kit.as_ref().map(|k| k.notes.clone()).unwrap_or_default(),
+        // what the mode does beyond its own game (community badges: "runs server commands"...)
+        "capabilities": graph::capabilities(g),
     });
     if let Some(k) = &g.map_kit {
         let mut map = json!({});

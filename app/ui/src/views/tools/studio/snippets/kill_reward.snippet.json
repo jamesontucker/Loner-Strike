@@ -9,7 +9,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 20,
-    "y": 31
+    "y": 20
    },
    "params": {}
   },
@@ -18,7 +18,7 @@
    "type": "player.is_alive",
    "pos": {
     "x": 340,
-    "y": 153
+    "y": 197
    },
    "params": {}
   },
@@ -27,7 +27,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 660,
-    "y": 160
+    "y": 204
    },
    "params": {}
   },
@@ -36,7 +36,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 980,
-    "y": 106
+    "y": 150
    },
    "params": {
     "amount": 300
@@ -47,7 +47,7 @@
    "type": "player.add_frags",
    "pos": {
     "x": 1300,
-    "y": 58
+    "y": 102
    },
    "params": {
     "amount": 1
@@ -58,7 +58,7 @@
    "type": "game.play_sound",
    "pos": {
     "x": 1620,
-    "y": 20
+    "y": 64
    },
    "params": {
     "sound": "buttons/blip1"

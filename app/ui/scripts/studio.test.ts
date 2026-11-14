@@ -49,7 +49,7 @@ test("schema refuses other files, newer versions and unsafe text", () => {
 test("every node in the registry is well formed", () => {
   for (const d of NODE_DEFS) {
     assert.ok(d.title && d.category && d.help, d.type);
-    for (const p of [...d.inputs, ...d.outputs]) assert.ok(["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "array<$K>", "array<player>"].includes(p.type), `${d.type}.${p.id}`);
+    for (const p of [...d.inputs, ...d.outputs]) assert.ok(["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "array<$K>", "array<player>", "array<entity>"].includes(p.type), `${d.type}.${p.id}`);
   }
   for (const t of ["event.round_started", "event.player_killed", "cond.is_team", "player.give_weapon", "score.end_round"]) assert.ok(nodeDef(t), t);
 });

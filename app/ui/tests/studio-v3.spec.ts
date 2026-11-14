@@ -32,7 +32,7 @@ const canvasKey = async (page: Page, key: string) => {
 // Nothing here installs, compiles or plays in a game: those routes are answered in the page
 // (a test that wants a Playtest answer routes it itself, later routes win). The dev server also
 // refuses to write into a real Half-Life install while under test (studio::guard_real_game).
-const WRITES = ["compile", "playtest", "switch", "source", "uninstall/**", "debug/command"];
+const WRITES = ["compile", "check", "playtest", "switch", "source", "uninstall/**", "debug/command"];
 test.beforeEach(async ({ page }) => {
   for (const r of WRITES) await page.route(`**/api/tools/studio/${r}`, (route) => route.fulfill({ json: { ok: true, problems: [], output: "(a test: not installed)", installedAs: ID } }));
   await page.route("**/api/app/launch", (r) => r.fulfill({ json: { ok: true } }));
@@ -381,6 +381,68 @@ test("the Studio never scrolls as a whole (every-node graph: long panels scroll 
   } finally {
     await page.request.post("/api/tools/studio/graph/pw_tall/delete", { headers: H });
   }
+});
+
+test("Compile: the full check's status, its problems tied to nodes, Compile on save, keys", async ({ page }) => {
+  let calls = 0;
+  let answer: object = { ok: true, problems: [], compiler: [], output: "Done." };
+  await page.route("**/api/tools/studio/check", async (r) => {
+    calls++;
+    await new Promise((res) => setTimeout(res, 300));
+    await r.fulfill({ json: answer });
+  });
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  const icon = page.getByTestId("studio-check-icon");
+  const status = page.getByTestId("studio-check-status");
+  await expect(icon).toHaveAttribute("data-state", "none");
+  await expect(status).toContainText("Quick check: no problems (updated as you edit). Full check: needs compiling.");
+  // the button: a spinner while it runs, then green
+  await page.getByTestId("studio-compile").click();
+  await expect(page.getByTestId("studio-compiling")).toContainText("Compiling…");
+  await expect(icon).toHaveAttribute("data-state", "ok");
+  await expect(icon).toHaveAttribute("title", /compiled, no problems/);
+  await expect(status).toContainText("Full check: compiled, no problems");
+  // an edit makes it stale (gray); a move doesn't count as an edit to the compiler
+  await canvasKey(page, "Escape");
+  await node(page, "give_m4").click();
+  await page.keyboard.press("Delete");
+  await expect(icon).toHaveAttribute("data-state", "none");
+  await expect(status).toContainText("needs compiling (edited since the last compile)");
+  // F7: a warning tied to a node (click focuses it) and a line with no node
+  answer = { ok: true, problems: [], compiler: [{ level: "warning", node: "is_t", message: "The compiler said (line 40): loose indentation" }, { level: "warning", message: "The compiler said (line 9 of the plugin, not tied to a node; Show code in the menu shows that line): x" }], output: "2 Warnings." };
+  await canvasKey(page, "F7");
+  await expect(icon).toHaveAttribute("data-state", "warn");
+  const list = page.locator(".st-results-list");
+  await expect(list.locator("li.warning")).toHaveCount(2);
+  await expect(list.locator("li.warning").first()).toContainText("Full check");
+  await expect(list.locator("li.warning").nth(1)).toContainText("not tied to a node");
+  await list.getByRole("button", { name: /Is Team/ }).first().click();
+  await expect(node(page, "is_t")).toHaveClass(/selected/);
+  // errors: red, and clicking the icon opens Problems
+  answer = { ok: false, problems: [], compiler: [{ level: "error", node: "is_t", message: "The compiler said (line 41): undefined symbol" }], output: "1 Error." };
+  await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press("ControlOrMeta+b");
+  await expect(icon).toHaveAttribute("data-state", "error");
+  await page.locator(".st-results-tabs").getByRole("tab", { name: "Compiler output" }).click();
+  await icon.click();
+  await expect(page.locator(".st-results-tabs").getByRole("tab", { name: /Problems/ })).toHaveAttribute("aria-selected", "true");
+  // Compile on save (on by default): a save compiles in the background
+  answer = { ok: true, problems: [], compiler: [], output: "Done." };
+  const before = calls;
+  await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(icon).toHaveAttribute("data-state", "ok");
+  expect(calls).toBe(before + 1);
+  // off: a save doesn't
+  await page.getByLabel("Compile on save").uncheck();
+  // (an edit: Undo brings the deleted node back)
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press("ControlOrMeta+s");
+  await page.waitForTimeout(800);
+  expect(calls).toBe(before + 1);
+  await expect(icon).toHaveAttribute("data-state", "none");
+  await page.getByLabel("Compile on save").check();
 });
 
 test.describe("leaving with unsaved edits", () => {

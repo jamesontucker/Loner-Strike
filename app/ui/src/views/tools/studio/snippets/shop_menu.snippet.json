@@ -9,7 +9,7 @@
    "type": "event.chat_command",
    "pos": {
     "x": 20,
-    "y": 722
+    "y": 711
    },
    "params": {
     "command": "shop"

@@ -83,6 +83,11 @@
   "Map markers",
   "Waves",
   "Upgrades",
+  "Game",
+  "World",
+  "Entities",
+  "Effects",
+  "Advanced",
   "Downed",
   "Shop",
   "Battle Royale",
@@ -121,6 +126,11 @@
      "id": "winner",
      "type": "team",
      "label": "Winner"
+    },
+    {
+     "id": "round",
+     "type": "number",
+     "label": "Round number"
     }
    ],
    "params": [],
@@ -152,6 +162,31 @@
      "id": "headshot",
      "type": "bool",
      "label": "Headshot"
+    },
+    {
+     "id": "weapon",
+     "type": "text",
+     "label": "Weapon"
+    },
+    {
+     "id": "distance",
+     "type": "number",
+     "label": "Distance"
+    },
+    {
+     "id": "team_kill",
+     "type": "bool",
+     "label": "Team kill"
+    },
+    {
+     "id": "suicide",
+     "type": "bool",
+     "label": "Suicide"
+    },
+    {
+     "id": "world",
+     "type": "bool",
+     "label": "Killed by the world"
     }
    ],
    "params": [],
@@ -3061,6 +3096,26 @@
      "id": "damage",
      "type": "number",
      "label": "Damage"
+    },
+    {
+     "id": "headshot",
+     "type": "bool",
+     "label": "Headshot"
+    },
+    {
+     "id": "left",
+     "type": "number",
+     "label": "Health left"
+    },
+    {
+     "id": "hitgroup",
+     "type": "text",
+     "label": "Hit where"
+    },
+    {
+     "id": "weapon",
+     "type": "text",
+     "label": "Weapon"
     }
    ],
    "params": [],
@@ -3128,7 +3183,7 @@
    "type": "event.chat_command",
    "title": "Chat Command",
    "category": "Events",
-   "help": "Runs when a player says /command or !command in chat (shop for /shop and !shop).",
+   "help": "Runs when a player says /command or !command in chat (shop for /shop and !shop); Arguments is the rest of the line (\"/give 5\": 5).",
    "inputs": [],
    "outputs": [
     {
@@ -3140,6 +3195,11 @@
      "id": "player",
      "type": "player",
      "label": "Player"
+    },
+    {
+     "id": "args",
+     "type": "text",
+     "label": "Arguments"
     }
    ],
    "params": [
@@ -6591,6 +6651,3869 @@
    "params": [],
    "event": true,
    "needs": "components"
+  },
+  {
+   "type": "game.map_name",
+   "title": "Current Map Name",
+   "category": "Game",
+   "help": "The map being played (de_dust2).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Map"
+    }
+   ],
+   "params": [],
+   "keywords": "level",
+   "pure": true
+  },
+  {
+   "type": "game.next_map",
+   "title": "Next Map",
+   "category": "Game",
+   "help": "The map the server goes to next (from the map cycle or vote); empty if it doesn't know.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Map"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "game.server_name",
+   "title": "Server Name",
+   "category": "Game",
+   "help": "The server's name (hostname).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Name"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "game.max_players",
+   "title": "Max Players",
+   "category": "Game",
+   "help": "How many players the server takes.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Max"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "game.player_count",
+   "title": "Player Count",
+   "category": "Game",
+   "help": "How many players there are: everyone, people, bots, a team, or spectators.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Players"
+    }
+   ],
+   "params": [
+    {
+     "id": "which",
+     "label": "Who",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "Everyone"
+      ],
+      [
+       "humans",
+       "People"
+      ],
+      [
+       "bots",
+       "Bots"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ],
+      [
+       "spec",
+       "Spectators"
+      ],
+      [
+       "alive",
+       "Alive"
+      ]
+     ]
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "game.time",
+   "title": "Game Time",
+   "category": "Game",
+   "help": "Seconds since the map started (for timing things: keep it in a variable, compare later).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Seconds"
+    }
+   ],
+   "params": [],
+   "keywords": "clock timer seconds",
+   "pure": true
+  },
+  {
+   "type": "game.clock",
+   "title": "Real Date and Time",
+   "category": "Game",
+   "help": "The server computer's date and time, as text (2026-11-13, 21:30, Friday) and as seconds since 1970.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "text",
+     "type": "text",
+     "label": "Text"
+    },
+    {
+     "id": "unix",
+     "type": "number",
+     "label": "Seconds since 1970"
+    }
+   ],
+   "params": [
+    {
+     "id": "format",
+     "label": "As",
+     "kind": "choice",
+     "default": "datetime",
+     "choices": [
+      [
+       "datetime",
+       "Date and time"
+      ],
+      [
+       "date",
+       "Date"
+      ],
+      [
+       "time",
+       "Time"
+      ],
+      [
+       "weekday",
+       "Day of the week"
+      ],
+      [
+       "hour",
+       "Hour (0-23)"
+      ]
+     ]
+    }
+   ],
+   "keywords": "date now today",
+   "pure": true
+  },
+  {
+   "type": "game.mode_id",
+   "title": "Current Mode",
+   "category": "Game",
+   "help": "This mode's id (as the Game Mode Menu and modes.ini know it).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Mode id"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "game.round_number",
+   "title": "Round Number",
+   "category": "Game",
+   "help": "Which round this is on this map (1 for the first).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Round"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "game.team_score",
+   "title": "Team Score",
+   "category": "Game",
+   "help": "A team's rounds won on this map (as the scoreboard shows).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Score"
+    }
+   ],
+   "params": [
+    {
+     "id": "team",
+     "label": "Team",
+     "kind": "choice",
+     "default": "ct",
+     "choices": [
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ]
+     ]
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "game.freeze_time",
+   "title": "Is Freeze Time",
+   "category": "Game",
+   "help": "Is it the freeze time at a round's start (nobody can move)?",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Freeze time"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "game.get_setting",
+   "title": "Get Setting",
+   "category": "Game",
+   "help": "Reads a server setting (a cvar), as a number and as text: the counterpart of Set Setting. Passwords and the like can't be read.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "num",
+     "type": "number",
+     "label": "Number"
+    },
+    {
+     "id": "text",
+     "type": "text",
+     "label": "Text"
+    }
+   ],
+   "params": [
+    {
+     "id": "cvar",
+     "label": "Setting (cvar)",
+     "kind": "name",
+     "default": "mp_roundtime"
+    }
+   ],
+   "keywords": "cvar get_cvar",
+   "pure": true
+  },
+  {
+   "type": "game.change_map",
+   "title": "Change Map",
+   "category": "Game",
+   "help": "Changes the map (if the server has it). The mode changes too only if the next map's preset says so. Asks first when an agent does it.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "map",
+     "label": "Map",
+     "kind": "name",
+     "default": "de_dust2"
+    }
+   ],
+   "keywords": "level changelevel",
+   "advanced": true
+  },
+  {
+   "type": "game.restart_round",
+   "title": "Restart Round",
+   "category": "Game",
+   "help": "Restarts the round now (scores stay).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "sv_restartround reset"
+  },
+  {
+   "type": "game.run_command",
+   "title": "Run Server Command",
+   "category": "Advanced",
+   "help": "Runs a server console command, like sv_gravity 400 or mp_restartgame 1. Commands that touch passwords, files, plugins or quit the server are refused, and only one command at a time (no ; ). Community modes that use it show \"runs server commands\".",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "cmd",
+     "type": "text",
+     "label": "Command",
+     "param": "cmd"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ok",
+     "type": "bool",
+     "label": "Ran"
+    }
+   ],
+   "params": [
+    {
+     "id": "cmd",
+     "label": "Command",
+     "kind": "text",
+     "default": "sv_gravity 800",
+     "max": 100
+    }
+   ],
+   "keywords": "console server_cmd rcon",
+   "advanced": true
+  },
+  {
+   "type": "game.amx_command",
+   "title": "Run AMX Command",
+   "category": "Advanced",
+   "help": "Runs an AMX Mod X admin command (amx_slay, amx_slap...). amx_rcon, amx_cvar on passwords, plugin loading, bans and admin edits are refused.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "cmd",
+     "type": "text",
+     "label": "Command",
+     "param": "cmd"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ok",
+     "type": "bool",
+     "label": "Ran"
+    }
+   ],
+   "params": [
+    {
+     "id": "cmd",
+     "label": "Command",
+     "kind": "text",
+     "default": "amx_slap @T 0",
+     "max": 100
+    }
+   ],
+   "keywords": "amxx admin",
+   "advanced": true
+  },
+  {
+   "type": "world.gravity",
+   "title": "Gravity",
+   "category": "World",
+   "help": "How strongly everyone falls (800 normal). (sv_gravity)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Gravity"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "sv_gravity get",
+   "cvar": "sv_gravity"
+  },
+  {
+   "type": "world.set_gravity",
+   "title": "Set Gravity",
+   "category": "World",
+   "help": "How strongly everyone falls (800 normal). (sv_gravity)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "Gravity",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Gravity",
+     "kind": "number",
+     "default": 800,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "sv_gravity set",
+   "cvar": "sv_gravity"
+  },
+  {
+   "type": "world.friction",
+   "title": "Friction",
+   "category": "World",
+   "help": "How quickly players stop sliding (4 normal). (sv_friction)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Friction"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "sv_friction get",
+   "cvar": "sv_friction"
+  },
+  {
+   "type": "world.set_friction",
+   "title": "Set Friction",
+   "category": "World",
+   "help": "How quickly players stop sliding (4 normal). (sv_friction)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "Friction",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Friction",
+     "kind": "number",
+     "default": 4,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "sv_friction set",
+   "cvar": "sv_friction"
+  },
+  {
+   "type": "world.max_speed",
+   "title": "Max Speed",
+   "category": "World",
+   "help": "The fastest anyone can run (320 normal). (sv_maxspeed)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Max Speed"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "sv_maxspeed get",
+   "cvar": "sv_maxspeed"
+  },
+  {
+   "type": "world.set_max_speed",
+   "title": "Set Max Speed",
+   "category": "World",
+   "help": "The fastest anyone can run (320 normal). (sv_maxspeed)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "Max Speed",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Max Speed",
+     "kind": "number",
+     "default": 320,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "sv_maxspeed set",
+   "cvar": "sv_maxspeed"
+  },
+  {
+   "type": "world.round_time",
+   "title": "Round Time",
+   "category": "World",
+   "help": "Minutes a round lasts. (mp_roundtime)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Round Time"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_roundtime get",
+   "cvar": "mp_roundtime"
+  },
+  {
+   "type": "world.set_round_time",
+   "title": "Set Round Time",
+   "category": "World",
+   "help": "Minutes a round lasts. (mp_roundtime)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "Round Time",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Round Time",
+     "kind": "number",
+     "default": 2.5,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "mp_roundtime set",
+   "cvar": "mp_roundtime"
+  },
+  {
+   "type": "world.freeze_time",
+   "title": "Freeze Time",
+   "category": "World",
+   "help": "Seconds frozen at a round's start. (mp_freezetime)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Freeze Time"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_freezetime get",
+   "cvar": "mp_freezetime"
+  },
+  {
+   "type": "world.set_freeze_time",
+   "title": "Set Freeze Time",
+   "category": "World",
+   "help": "Seconds frozen at a round's start. (mp_freezetime)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "Freeze Time",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Freeze Time",
+     "kind": "number",
+     "default": 6,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "mp_freezetime set",
+   "cvar": "mp_freezetime"
+  },
+  {
+   "type": "world.buy_time",
+   "title": "Buy Time",
+   "category": "World",
+   "help": "Minutes players can buy after the round starts. (mp_buytime)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Buy Time"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_buytime get",
+   "cvar": "mp_buytime"
+  },
+  {
+   "type": "world.set_buy_time",
+   "title": "Set Buy Time",
+   "category": "World",
+   "help": "Minutes players can buy after the round starts. (mp_buytime)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "Buy Time",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Buy Time",
+     "kind": "number",
+     "default": 0.25,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "mp_buytime set",
+   "cvar": "mp_buytime"
+  },
+  {
+   "type": "world.friendly_fire",
+   "title": "Friendly Fire",
+   "category": "World",
+   "help": "Can teammates hurt each other? (mp_friendlyfire)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Friendly Fire"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_friendlyfire get",
+   "cvar": "mp_friendlyfire"
+  },
+  {
+   "type": "world.set_friendly_fire",
+   "title": "Set Friendly Fire",
+   "category": "World",
+   "help": "Can teammates hurt each other? (mp_friendlyfire)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "bool",
+     "label": "Friendly Fire",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Friendly Fire",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "mp_friendlyfire set",
+   "cvar": "mp_friendlyfire"
+  },
+  {
+   "type": "world.team_balance",
+   "title": "Team Balance",
+   "category": "World",
+   "help": "Does the game move players to even the teams? (mp_autoteambalance)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Team Balance"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_autoteambalance get",
+   "cvar": "mp_autoteambalance"
+  },
+  {
+   "type": "world.set_team_balance",
+   "title": "Set Team Balance",
+   "category": "World",
+   "help": "Does the game move players to even the teams? (mp_autoteambalance)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "bool",
+     "label": "Team Balance",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Team Balance",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "mp_autoteambalance set",
+   "cvar": "mp_autoteambalance"
+  },
+  {
+   "type": "world.team_limit",
+   "title": "Team Limit",
+   "category": "World",
+   "help": "How many more players one team may have (0: no limit). (mp_limitteams)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Team Limit"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_limitteams get",
+   "cvar": "mp_limitteams"
+  },
+  {
+   "type": "world.set_team_limit",
+   "title": "Set Team Limit",
+   "category": "World",
+   "help": "How many more players one team may have (0: no limit). (mp_limitteams)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "Team Limit",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Team Limit",
+     "kind": "number",
+     "default": 2,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "mp_limitteams set",
+   "cvar": "mp_limitteams"
+  },
+  {
+   "type": "world.start_money",
+   "title": "Start Money",
+   "category": "World",
+   "help": "Money at the start. (mp_startmoney)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Start Money"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_startmoney get",
+   "cvar": "mp_startmoney"
+  },
+  {
+   "type": "world.set_start_money",
+   "title": "Set Start Money",
+   "category": "World",
+   "help": "Money at the start. (mp_startmoney)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "Start Money",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Start Money",
+     "kind": "number",
+     "default": 800,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "mp_startmoney set",
+   "cvar": "mp_startmoney"
+  },
+  {
+   "type": "world.c4_timer",
+   "title": "C4 Timer",
+   "category": "World",
+   "help": "Seconds until a planted bomb explodes. (mp_c4timer)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "C4 Timer"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_c4timer get",
+   "cvar": "mp_c4timer"
+  },
+  {
+   "type": "world.set_c4_timer",
+   "title": "Set C4 Timer",
+   "category": "World",
+   "help": "Seconds until a planted bomb explodes. (mp_c4timer)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "C4 Timer",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "C4 Timer",
+     "kind": "number",
+     "default": 35,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "mp_c4timer set",
+   "cvar": "mp_c4timer"
+  },
+  {
+   "type": "world.fall_damage",
+   "title": "Fall Damage",
+   "category": "World",
+   "help": "Falls hurt (realistic) or not. (mp_falldamage)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Fall Damage"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_falldamage get",
+   "cvar": "mp_falldamage"
+  },
+  {
+   "type": "world.set_fall_damage",
+   "title": "Set Fall Damage",
+   "category": "World",
+   "help": "Falls hurt (realistic) or not. (mp_falldamage)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "bool",
+     "label": "Fall Damage",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Fall Damage",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "mp_falldamage set",
+   "cvar": "mp_falldamage"
+  },
+  {
+   "type": "world.footsteps",
+   "title": "Footsteps",
+   "category": "World",
+   "help": "Can footsteps be heard? (mp_footsteps)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Footsteps"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_footsteps get",
+   "cvar": "mp_footsteps"
+  },
+  {
+   "type": "world.set_footsteps",
+   "title": "Set Footsteps",
+   "category": "World",
+   "help": "Can footsteps be heard? (mp_footsteps)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "bool",
+     "label": "Footsteps",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Footsteps",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "mp_footsteps set",
+   "cvar": "mp_footsteps"
+  },
+  {
+   "type": "world.alltalk",
+   "title": "All Talk",
+   "category": "World",
+   "help": "Can everyone hear everyone's voice? (sv_alltalk)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "All Talk"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "sv_alltalk get",
+   "cvar": "sv_alltalk"
+  },
+  {
+   "type": "world.set_alltalk",
+   "title": "Set All Talk",
+   "category": "World",
+   "help": "Can everyone hear everyone's voice? (sv_alltalk)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "bool",
+     "label": "All Talk",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "All Talk",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "sv_alltalk set",
+   "cvar": "sv_alltalk"
+  },
+  {
+   "type": "world.time_limit",
+   "title": "Time Limit",
+   "category": "World",
+   "help": "Minutes before the map changes (0: none). (mp_timelimit)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Time Limit"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_timelimit get",
+   "cvar": "mp_timelimit"
+  },
+  {
+   "type": "world.set_time_limit",
+   "title": "Set Time Limit",
+   "category": "World",
+   "help": "Minutes before the map changes (0: none). (mp_timelimit)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "Time Limit",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Time Limit",
+     "kind": "number",
+     "default": 20,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "mp_timelimit set",
+   "cvar": "mp_timelimit"
+  },
+  {
+   "type": "world.win_limit",
+   "title": "Win Limit",
+   "category": "World",
+   "help": "Rounds won before the map changes (0: none). (mp_winlimit)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Win Limit"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_winlimit get",
+   "cvar": "mp_winlimit"
+  },
+  {
+   "type": "world.set_win_limit",
+   "title": "Set Win Limit",
+   "category": "World",
+   "help": "Rounds won before the map changes (0: none). (mp_winlimit)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "Win Limit",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Win Limit",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "mp_winlimit set",
+   "cvar": "mp_winlimit"
+  },
+  {
+   "type": "world.frag_limit",
+   "title": "Frag Limit",
+   "category": "World",
+   "help": "Kills before the map changes (0: none). (mp_fraglimit)",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Frag Limit"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mp_fraglimit get",
+   "cvar": "mp_fraglimit"
+  },
+  {
+   "type": "world.set_frag_limit",
+   "title": "Set Frag Limit",
+   "category": "World",
+   "help": "Kills before the map changes (0: none). (mp_fraglimit)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "v",
+     "type": "number",
+     "label": "Frag Limit",
+     "param": "v"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "v",
+     "label": "Frag Limit",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "keywords": "mp_fraglimit set",
+   "cvar": "mp_fraglimit"
+  },
+  {
+   "type": "player.armor",
+   "title": "Armor Of",
+   "category": "Players",
+   "help": "A player's armor points.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Armor"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.has_helmet",
+   "title": "Has Helmet",
+   "category": "Players",
+   "help": "Does the player have a helmet?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Helmet"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.weapon_held",
+   "title": "Weapon Held",
+   "category": "Players",
+   "help": "The gun in the player's hands (ak47, knife...).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Weapon"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.ammo",
+   "title": "Ammo Of",
+   "category": "Players",
+   "help": "Bullets in the held gun's magazine, and spare ones.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "clip",
+     "type": "number",
+     "label": "In the magazine"
+    },
+    {
+     "id": "reserve",
+     "type": "number",
+     "label": "Spare"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.has_weapon",
+   "title": "Has Weapon",
+   "category": "Players",
+   "help": "Does the player carry this weapon?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Has it"
+    }
+   ],
+   "params": [
+    {
+     "id": "weapon",
+     "label": "Weapon",
+     "kind": "choice",
+     "default": "ak47",
+     "choices": [
+      [
+       "ak47",
+       "AK-47"
+      ],
+      [
+       "m4a1",
+       "M4A1"
+      ],
+      [
+       "awp",
+       "AWP"
+      ],
+      [
+       "scout",
+       "Scout"
+      ],
+      [
+       "famas",
+       "FAMAS"
+      ],
+      [
+       "galil",
+       "Galil"
+      ],
+      [
+       "aug",
+       "AUG"
+      ],
+      [
+       "sg552",
+       "SG 552"
+      ],
+      [
+       "mp5navy",
+       "MP5"
+      ],
+      [
+       "p90",
+       "P90"
+      ],
+      [
+       "ump45",
+       "UMP 45"
+      ],
+      [
+       "mac10",
+       "MAC-10"
+      ],
+      [
+       "tmp",
+       "TMP"
+      ],
+      [
+       "m3",
+       "M3 shotgun"
+      ],
+      [
+       "xm1014",
+       "XM1014 shotgun"
+      ],
+      [
+       "m249",
+       "M249"
+      ],
+      [
+       "deagle",
+       "Desert Eagle"
+      ],
+      [
+       "usp",
+       "USP"
+      ],
+      [
+       "glock18",
+       "Glock"
+      ],
+      [
+       "p228",
+       "P228"
+      ],
+      [
+       "fiveseven",
+       "Five-SeveN"
+      ],
+      [
+       "elite",
+       "Dual Elites"
+      ],
+      [
+       "hegrenade",
+       "HE grenade"
+      ],
+      [
+       "flashbang",
+       "Flashbang"
+      ],
+      [
+       "smokegrenade",
+       "Smoke grenade"
+      ]
+     ]
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "player.is_admin",
+   "title": "Is Admin",
+   "category": "Players",
+   "help": "Is the player an admin (the app's admins: AMX Mod X kick rights)?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Admin"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.is_vip",
+   "title": "Is VIP",
+   "category": "Players",
+   "help": "Is the player a VIP (a reserved slot)?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "VIP"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.ping",
+   "title": "Ping",
+   "category": "Players",
+   "help": "The player's ping in milliseconds.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Ping"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.steam_id",
+   "title": "Steam ID",
+   "category": "Players",
+   "help": "The player's Steam ID (STEAM_0:1:2345): the same each visit, for keeping things per player. Bots and LAN players have none (empty).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Steam ID"
+    }
+   ],
+   "params": [],
+   "keywords": "authid id",
+   "pure": true
+  },
+  {
+   "type": "player.is_spectator",
+   "title": "Is Spectator",
+   "category": "Players",
+   "help": "Is the player watching (not on a team)?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Spectator"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.time_connected",
+   "title": "Time Connected",
+   "category": "Players",
+   "help": "Seconds since the player joined.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Seconds"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.by_name",
+   "title": "Player By Name",
+   "category": "Players",
+   "help": "The player whose name has this text (none: no player).",
+   "inputs": [
+    {
+     "id": "name",
+     "type": "text",
+     "label": "Name",
+     "param": "name"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Name has",
+     "kind": "text",
+     "default": "",
+     "max": 30
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "player.by_index",
+   "title": "Player By Index",
+   "category": "Players",
+   "help": "The player in this slot (1 to Max Players; none if empty).",
+   "inputs": [
+    {
+     "id": "i",
+     "type": "number",
+     "label": "Slot",
+     "param": "i"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [
+    {
+     "id": "i",
+     "label": "Slot",
+     "kind": "number",
+     "default": 1,
+     "min": 1,
+     "max": 32
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "player.gravity",
+   "title": "Gravity Of",
+   "category": "Players",
+   "help": "A player's own gravity (1 normal; Set Gravity changes it).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Gravity"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.speed",
+   "title": "Speed Of",
+   "category": "Players",
+   "help": "A player's top speed now (Set Speed changes it).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Speed"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.model",
+   "title": "Model Of",
+   "category": "Players",
+   "help": "A player's model (Set Model changes it).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Model"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "player.transform",
+   "title": "Get Transform",
+   "category": "Players",
+   "help": "Where a player is, where they look (pitch, yaw), how fast they move, and whether they're on the ground or ducking.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position"
+    },
+    {
+     "id": "angles",
+     "type": "vector",
+     "label": "Rotation"
+    },
+    {
+     "id": "vel",
+     "type": "vector",
+     "label": "Velocity"
+    },
+    {
+     "id": "ground",
+     "type": "bool",
+     "label": "On ground"
+    },
+    {
+     "id": "duck",
+     "type": "bool",
+     "label": "Ducking"
+    }
+   ],
+   "params": [],
+   "keywords": "location rotation velocity position transform angles",
+   "pure": true
+  },
+  {
+   "type": "player.set_transform",
+   "title": "Set Transform",
+   "category": "Players",
+   "help": "Moves a player, turns their view (pitch, yaw) and sets their velocity at once (unwired parts stay).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position",
+     "optional": true
+    },
+    {
+     "id": "angles",
+     "type": "vector",
+     "label": "Rotation",
+     "optional": true
+    },
+    {
+     "id": "vel",
+     "type": "vector",
+     "label": "Velocity",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "location rotation teleport transform"
+  },
+  {
+   "type": "player.set_rotation",
+   "title": "Set Rotation",
+   "category": "Players",
+   "help": "Turns a player's view (pitch, yaw).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "angles",
+     "type": "vector",
+     "label": "Rotation",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "angles view turn"
+  },
+  {
+   "type": "player.look_at",
+   "title": "Look At",
+   "category": "Players",
+   "help": "Turns a player's view toward an entity or a position.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "at",
+     "type": "entity",
+     "label": "At",
+     "optional": true
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "aim face rotation"
+  },
+  {
+   "type": "player.slap",
+   "title": "Slap",
+   "category": "Players",
+   "help": "Slaps a player: some damage and a push.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "dmg",
+     "type": "number",
+     "label": "Damage",
+     "param": "dmg"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "dmg",
+     "label": "Damage",
+     "kind": "number",
+     "default": 5,
+     "min": 0,
+     "max": 100
+    }
+   ]
+  },
+  {
+   "type": "player.fade",
+   "title": "Screen Fade",
+   "category": "Players",
+   "help": "Fills the player's screen with a colour for some seconds (white: blinded).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "colour",
+     "label": "Colour",
+     "kind": "choice",
+     "default": "white",
+     "choices": [
+      [
+       "white",
+       "White"
+      ],
+      [
+       "black",
+       "Black"
+      ],
+      [
+       "red",
+       "Red"
+      ],
+      [
+       "green",
+       "Green"
+      ]
+     ]
+    },
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 2,
+     "min": 0.1,
+     "max": 30
+    },
+    {
+     "id": "alpha",
+     "label": "How strong (0-255)",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    }
+   ],
+   "keywords": "blind flash"
+  },
+  {
+   "type": "player.shake",
+   "title": "Screen Shake",
+   "category": "Players",
+   "help": "Shakes the player's screen.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "amp",
+     "label": "How hard (1-16)",
+     "kind": "number",
+     "default": 8,
+     "min": 1,
+     "max": 16
+    },
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 2,
+     "min": 0.1,
+     "max": 30
+    }
+   ]
+  },
+  {
+   "type": "player.godmode",
+   "title": "God Mode",
+   "category": "Players",
+   "help": "Nothing hurts the player (or back to normal).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "On",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "invincible"
+  },
+  {
+   "type": "player.noclip",
+   "title": "No Clip",
+   "category": "Players",
+   "help": "The player flies through walls (or back to normal).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "On",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "fly"
+  },
+  {
+   "type": "player.render",
+   "title": "Set Visibility",
+   "category": "Players",
+   "help": "How a player is drawn: normal, see-through (an amount), or invisible.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "mode",
+     "label": "Look",
+     "kind": "choice",
+     "default": "invisible",
+     "choices": [
+      [
+       "normal",
+       "Normal"
+      ],
+      [
+       "see",
+       "See-through"
+      ],
+      [
+       "invisible",
+       "Invisible"
+      ]
+     ]
+    },
+    {
+     "id": "amount",
+     "label": "See-through amount (0-255)",
+     "kind": "number",
+     "default": 80,
+     "min": 0,
+     "max": 255
+    }
+   ],
+   "keywords": "invisible render alpha"
+  },
+  {
+   "type": "player.set_ammo",
+   "title": "Set Ammo",
+   "category": "Players",
+   "help": "Sets the held gun's magazine and spare bullets.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "clip",
+     "type": "number",
+     "label": "Magazine",
+     "param": "clip"
+    },
+    {
+     "id": "reserve",
+     "type": "number",
+     "label": "Spare",
+     "param": "reserve"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "clip",
+     "label": "Magazine",
+     "kind": "number",
+     "default": 30,
+     "min": 0,
+     "max": 200
+    },
+    {
+     "id": "reserve",
+     "label": "Spare",
+     "kind": "number",
+     "default": 90,
+     "min": 0,
+     "max": 255
+    }
+   ]
+  },
+  {
+   "type": "player.give_ammo",
+   "title": "Give Ammo",
+   "category": "Players",
+   "help": "Adds spare bullets for the held gun (a minus takes them).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "n",
+     "type": "number",
+     "label": "Bullets",
+     "param": "n"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "n",
+     "label": "Bullets",
+     "kind": "number",
+     "default": 30,
+     "min": -255,
+     "max": 255
+    }
+   ]
+  },
+  {
+   "type": "player.take_weapon",
+   "title": "Remove Weapon",
+   "category": "Players",
+   "help": "Takes one weapon from a player (the others stay).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "weapon",
+     "label": "Weapon",
+     "kind": "choice",
+     "default": "ak47",
+     "choices": [
+      [
+       "ak47",
+       "AK-47"
+      ],
+      [
+       "m4a1",
+       "M4A1"
+      ],
+      [
+       "awp",
+       "AWP"
+      ],
+      [
+       "scout",
+       "Scout"
+      ],
+      [
+       "famas",
+       "FAMAS"
+      ],
+      [
+       "galil",
+       "Galil"
+      ],
+      [
+       "aug",
+       "AUG"
+      ],
+      [
+       "sg552",
+       "SG 552"
+      ],
+      [
+       "mp5navy",
+       "MP5"
+      ],
+      [
+       "p90",
+       "P90"
+      ],
+      [
+       "ump45",
+       "UMP 45"
+      ],
+      [
+       "mac10",
+       "MAC-10"
+      ],
+      [
+       "tmp",
+       "TMP"
+      ],
+      [
+       "m3",
+       "M3 shotgun"
+      ],
+      [
+       "xm1014",
+       "XM1014 shotgun"
+      ],
+      [
+       "m249",
+       "M249"
+      ],
+      [
+       "deagle",
+       "Desert Eagle"
+      ],
+      [
+       "usp",
+       "USP"
+      ],
+      [
+       "glock18",
+       "Glock"
+      ],
+      [
+       "p228",
+       "P228"
+      ],
+      [
+       "fiveseven",
+       "Five-SeveN"
+      ],
+      [
+       "elite",
+       "Dual Elites"
+      ],
+      [
+       "hegrenade",
+       "HE grenade"
+      ],
+      [
+       "flashbang",
+       "Flashbang"
+      ],
+      [
+       "smokegrenade",
+       "Smoke grenade"
+      ]
+     ]
+    }
+   ],
+   "keywords": "strip drop"
+  },
+  {
+   "type": "player.switch_weapon",
+   "title": "Switch To Weapon",
+   "category": "Players",
+   "help": "Makes the player take out this weapon (if they have it).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "weapon",
+     "label": "Weapon",
+     "kind": "choice",
+     "default": "knife",
+     "choices": [
+      [
+       "ak47",
+       "AK-47"
+      ],
+      [
+       "m4a1",
+       "M4A1"
+      ],
+      [
+       "awp",
+       "AWP"
+      ],
+      [
+       "scout",
+       "Scout"
+      ],
+      [
+       "famas",
+       "FAMAS"
+      ],
+      [
+       "galil",
+       "Galil"
+      ],
+      [
+       "aug",
+       "AUG"
+      ],
+      [
+       "sg552",
+       "SG 552"
+      ],
+      [
+       "mp5navy",
+       "MP5"
+      ],
+      [
+       "p90",
+       "P90"
+      ],
+      [
+       "ump45",
+       "UMP 45"
+      ],
+      [
+       "mac10",
+       "MAC-10"
+      ],
+      [
+       "tmp",
+       "TMP"
+      ],
+      [
+       "m3",
+       "M3 shotgun"
+      ],
+      [
+       "xm1014",
+       "XM1014 shotgun"
+      ],
+      [
+       "m249",
+       "M249"
+      ],
+      [
+       "deagle",
+       "Desert Eagle"
+      ],
+      [
+       "usp",
+       "USP"
+      ],
+      [
+       "glock18",
+       "Glock"
+      ],
+      [
+       "p228",
+       "P228"
+      ],
+      [
+       "fiveseven",
+       "Five-SeveN"
+      ],
+      [
+       "elite",
+       "Dual Elites"
+      ],
+      [
+       "hegrenade",
+       "HE grenade"
+      ],
+      [
+       "flashbang",
+       "Flashbang"
+      ],
+      [
+       "smokegrenade",
+       "Smoke grenade"
+      ],
+      [
+       "knife",
+       "Knife"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "type": "player.set_frags",
+   "title": "Set Kills",
+   "category": "Players",
+   "help": "Sets a player's kills on the scoreboard.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "n",
+     "type": "number",
+     "label": "Kills",
+     "param": "n"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "n",
+     "label": "Kills",
+     "kind": "number",
+     "default": 0,
+     "min": -1000,
+     "max": 10000
+    }
+   ],
+   "keywords": "frags score"
+  },
+  {
+   "type": "player.set_deaths",
+   "title": "Set Deaths",
+   "category": "Players",
+   "help": "Sets a player's deaths on the scoreboard.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "n",
+     "type": "number",
+     "label": "Deaths",
+     "param": "n"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "n",
+     "label": "Deaths",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 10000
+    }
+   ]
+  },
+  {
+   "type": "player.to_spectators",
+   "title": "Move To Spectators",
+   "category": "Players",
+   "help": "Moves a player out of the game to watch.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "player.kick",
+   "title": "Kick",
+   "category": "Players",
+   "help": "Kicks a player from the server with a reason. Asks first when an agent does it; community modes that use it show \"kicks players\". (Bans stay with the app's admins: use Notify Admins.)",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "reason",
+     "label": "Reason",
+     "kind": "text",
+     "default": "Kicked by the mode",
+     "max": 60
+    }
+   ],
+   "advanced": true
+  },
+  {
+   "type": "player.mute",
+   "title": "Mute Voice",
+   "category": "Players",
+   "help": "The player's voice isn't heard for some seconds (0: until the map ends).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 60,
+     "min": 0,
+     "max": 3600
+    }
+   ]
+  },
+  {
+   "type": "player.gag",
+   "title": "Gag Chat",
+   "category": "Players",
+   "help": "The player's chat isn't shown for some seconds (0: until the map ends).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 60,
+     "min": 0,
+     "max": 3600
+    }
+   ]
+  },
+  {
+   "type": "msg.team_chat",
+   "title": "Chat To Team",
+   "category": "Messages",
+   "help": "A chat line only one team sees.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "value",
+     "type": "any",
+     "label": "Value",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "team",
+     "label": "Team",
+     "kind": "choice",
+     "default": "ct",
+     "choices": [
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ]
+     ]
+    },
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "Hold the line!",
+     "max": 100
+    }
+   ]
+  },
+  {
+   "type": "msg.notify_admins",
+   "title": "Notify Admins",
+   "category": "Messages",
+   "help": "A chat line only admins see (for things a mode can't do itself, like a ban).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "value",
+     "type": "any",
+     "label": "Value",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "Please check player:",
+     "max": 100
+    }
+   ]
+  },
+  {
+   "type": "ent.class",
+   "title": "Entity Class Of",
+   "category": "Entities",
+   "help": "An entity's class (func_door, ls_creature...).",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Class"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "ent.name",
+   "title": "Entity Name Of",
+   "category": "Entities",
+   "help": "An entity's name (targetname) as the map gives it.",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "text",
+     "label": "Name"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
+   "type": "ent.find_all",
+   "title": "Find Entities",
+   "category": "Entities",
+   "help": "Every entity of a class or with a name, as an array (at most 512). Looks through the whole map: keep it in a variable instead of in a loop.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "array<entity>",
+     "label": "Entities"
+    }
+   ],
+   "params": [
+    {
+     "id": "by",
+     "label": "By",
+     "kind": "choice",
+     "default": "class",
+     "choices": [
+      [
+       "class",
+       "Class"
+      ],
+      [
+       "name",
+       "Name"
+      ]
+     ]
+    },
+    {
+     "id": "name",
+     "label": "Class or name",
+     "kind": "entname",
+     "default": "info_target"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "ent.spawn_prop",
+   "title": "Spawn Prop",
+   "category": "Entities",
+   "help": "A model (models/...mdl, loaded with the map) at an entity's place; solid or not.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "at",
+     "type": "entity",
+     "label": "At",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Prop"
+    }
+   ],
+   "params": [
+    {
+     "id": "model",
+     "label": "Model",
+     "kind": "path",
+     "default": "models/w_c4.mdl"
+    },
+    {
+     "id": "solid",
+     "label": "Solid",
+     "kind": "bool",
+     "default": true
+    }
+   ]
+  },
+  {
+   "type": "ent.remove",
+   "title": "Remove Entity",
+   "category": "Entities",
+   "help": "Removes an entity (never a player).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": []
+  },
+  {
+   "type": "ent.set_position",
+   "title": "Set Entity Position",
+   "category": "Entities",
+   "help": "Moves an entity.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "location"
+  },
+  {
+   "type": "ent.set_angles",
+   "title": "Set Entity Rotation",
+   "category": "Entities",
+   "help": "Turns an entity (pitch, yaw, roll).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    },
+    {
+     "id": "angles",
+     "type": "vector",
+     "label": "Rotation",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "angles"
+  },
+  {
+   "type": "ent.set_visible",
+   "title": "Set Entity Visibility",
+   "category": "Entities",
+   "help": "Shows or hides an entity.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "Visible",
+     "kind": "bool",
+     "default": true
+    }
+   ]
+  },
+  {
+   "type": "fx.explosion",
+   "title": "Explosion",
+   "category": "Effects",
+   "help": "An explosion at a position: the look and sound, and damage to players within the radius (0: none).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position",
+     "required": true
+    },
+    {
+     "id": "dmg",
+     "type": "number",
+     "label": "Damage",
+     "param": "dmg"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "dmg",
+     "label": "Damage",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 500
+    },
+    {
+     "id": "radius",
+     "label": "Radius",
+     "kind": "number",
+     "default": 250,
+     "min": 16,
+     "max": 2000
+    }
+   ]
+  },
+  {
+   "type": "fx.beam",
+   "title": "Beam",
+   "category": "Effects",
+   "help": "A beam of light from one position to another for some seconds.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "a",
+     "type": "vector",
+     "label": "From",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "vector",
+     "label": "To",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "colour",
+     "label": "Colour",
+     "kind": "choice",
+     "default": "red",
+     "choices": [
+      [
+       "red",
+       "Red"
+      ],
+      [
+       "green",
+       "Green"
+      ],
+      [
+       "blue",
+       "Blue"
+      ],
+      [
+       "white",
+       "White"
+      ],
+      [
+       "gold",
+       "Gold"
+      ]
+     ]
+    },
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 1,
+     "min": 0.1,
+     "max": 25
+    }
+   ]
+  },
+  {
+   "type": "fx.sound_at",
+   "title": "Play Sound At",
+   "category": "Effects",
+   "help": "A sound (sound/...wav, loaded with the map) heard around a position.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "sound",
+     "label": "Sound",
+     "kind": "path",
+     "default": "ambience/thunder_clap.wav"
+    }
+   ]
+  },
+  {
+   "type": "fx.sound_to",
+   "title": "Play Sound To Player",
+   "category": "Effects",
+   "help": "A sound only one player hears (from the game's own sounds).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "sound",
+     "label": "Sound",
+     "kind": "path",
+     "default": "buttons/bell1.wav"
+    }
+   ]
+  },
+  {
+   "type": "fx.lights",
+   "title": "Set Light Style",
+   "category": "Effects",
+   "help": "How bright the whole map is: normal, dark, darkest, bright, or flickering.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "style",
+     "label": "Light",
+     "kind": "choice",
+     "default": "normal",
+     "choices": [
+      [
+       "normal",
+       "Normal"
+      ],
+      [
+       "dark",
+       "Dark"
+      ],
+      [
+       "darkest",
+       "Darkest"
+      ],
+      [
+       "bright",
+       "Bright"
+      ],
+      [
+       "flicker",
+       "Flickering"
+      ]
+     ]
+    }
+   ],
+   "keywords": "light dark night"
+  },
+  {
+   "type": "amx.call",
+   "title": "Call Plugin Function",
+   "category": "Advanced",
+   "help": "Calls a public function in another AMX Mod X plugin (by its file, like gm_components.amxx) with up to two numbers; Result is what it returns. Community modes that use it show \"calls other plugins\".",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "a",
+     "type": "number",
+     "label": "Argument 1",
+     "param": "a"
+    },
+    {
+     "id": "b",
+     "type": "number",
+     "label": "Argument 2",
+     "param": "b"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Result"
+    },
+    {
+     "id": "ok",
+     "type": "bool",
+     "label": "Called"
+    }
+   ],
+   "params": [
+    {
+     "id": "plugin",
+     "label": "Plugin file",
+     "kind": "name",
+     "default": "gm_components.amxx"
+    },
+    {
+     "id": "func",
+     "label": "Function",
+     "kind": "name",
+     "default": "plugin_cfg"
+    },
+    {
+     "id": "args",
+     "label": "Arguments",
+     "kind": "choice",
+     "default": "0",
+     "choices": [
+      [
+       "0",
+       "None"
+      ],
+      [
+       "1",
+       "One"
+      ],
+      [
+       "2",
+       "Two"
+      ]
+     ]
+    },
+    {
+     "id": "a",
+     "label": "Argument 1",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "b",
+     "label": "Argument 2",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    }
+   ],
+   "keywords": "callfunc interop",
+   "advanced": true
+  },
+  {
+   "type": "amx.plugin_running",
+   "title": "Plugin Is Running",
+   "category": "Advanced",
+   "help": "Is this AMX Mod X plugin loaded and running?",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Running"
+    }
+   ],
+   "params": [
+    {
+     "id": "plugin",
+     "label": "Plugin file",
+     "kind": "name",
+     "default": "gm_components.amxx"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "type": "amx.fire",
+   "title": "Fire Custom Event",
+   "category": "Advanced",
+   "help": "Sends an event with a name and two numbers that other plugins (and other Studio modes, with On Custom Event) can listen to (forward ls_studio_event(name[], a, b)).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "a",
+     "type": "number",
+     "label": "A",
+     "param": "a"
+    },
+    {
+     "id": "b",
+     "type": "number",
+     "label": "B",
+     "param": "b"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Event name",
+     "kind": "name",
+     "default": "my_event"
+    },
+    {
+     "id": "a",
+     "label": "A",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    },
+    {
+     "id": "b",
+     "label": "B",
+     "kind": "number",
+     "default": 0,
+     "min": -100000,
+     "max": 100000
+    }
+   ],
+   "keywords": "forward interop"
+  },
+  {
+   "type": "amx.on_event",
+   "title": "On Custom Event",
+   "category": "Advanced",
+   "help": "Runs when this mode or another plugin fires a custom event with this name.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "a",
+     "type": "number",
+     "label": "A"
+    },
+    {
+     "id": "b",
+     "type": "number",
+     "label": "B"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Event name",
+     "kind": "name",
+     "default": "my_event"
+    }
+   ],
+   "event": true
+  },
+  {
+   "type": "event.player_said",
+   "title": "Player Said",
+   "category": "Events",
+   "help": "Runs when a player chats (anything; Team Only for team chat).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "text",
+     "type": "text",
+     "label": "Text"
+    },
+    {
+     "id": "team",
+     "type": "bool",
+     "label": "Team only"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.freeze_ended",
+   "title": "Freeze Time Ended",
+   "category": "Events",
+   "help": "Runs when the freeze time ends and players can move.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.map_ending",
+   "title": "Map Ending",
+   "category": "Events",
+   "help": "Runs when the map ends (the scoreboard shows), just before the next map.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.weapon_fired",
+   "title": "Weapon Fired",
+   "category": "Events",
+   "help": "Runs when a player shoots (at most 10 times a second per player). Frequent: keep the flow short.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "weapon",
+     "type": "text",
+     "label": "Weapon"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.reloaded",
+   "title": "Reloaded",
+   "category": "Events",
+   "help": "Runs when a player starts reloading.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "weapon",
+     "type": "text",
+     "label": "Weapon"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.hostage_rescued",
+   "title": "Hostage Rescued",
+   "category": "Events",
+   "help": "Runs when a player rescues a hostage.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [],
+   "event": true
+  },
+  {
+   "type": "event.vip_escaped",
+   "title": "VIP Escaped",
+   "category": "Events",
+   "help": "Runs when the VIP escapes.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [],
+   "event": true
   },
   {
    "type": "bots.phase",

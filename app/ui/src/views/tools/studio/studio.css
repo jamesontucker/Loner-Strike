@@ -287,3 +287,15 @@
 .st-side-field > .btn { justify-self: start; }
 .st-mk-key-row { display: grid; grid-template-columns: minmax(0, 1fr) 96px auto; gap: 4px; align-items: center; }
 .st-num-row > .st-field-num { flex: 1 1 0; width: auto; }
+.st-results-from { display: inline-block; min-width: 82px; font-size: 11px; color: var(--st-muted, #999); }
+.st-results-list li.stale { opacity: 0.6; }
+.st-results-status { list-style: none; }
+/* Compile: the button, its status icon (gray stale, green ok, yellow warnings, red errors) */
+.st-check { display: inline-flex; align-items: center; gap: 6px; }
+.st-check-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid currentColor; background: none; font-size: 12px; line-height: 1; cursor: pointer; color: var(--st-muted, #999); padding: 0; }
+.st-check-icon.ok { color: var(--st-ok, #5cb85c); }
+.st-check-icon.warn { color: var(--st-warn); }
+.st-check-icon.error, .st-check-icon.failed { color: var(--st-bad); }
+.st-check-auto { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
+/* a short window: the canvas is too small for the minimap to help, and it would hide nodes */
+@media (max-height: 760px), (max-width: 1100px) { .st-minimap { display: none; } }

@@ -58,7 +58,7 @@
    "type": "event.round_started",
    "pos": {
     "x": 65,
-    "y": 728
+    "y": 720
    },
    "params": {}
   },
@@ -67,7 +67,7 @@
    "type": "flow.for_each_entity",
    "pos": {
     "x": 3065,
-    "y": 693
+    "y": 685
    },
    "params": {
     "by": "class",
@@ -145,7 +145,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 1802
+    "y": 1795
    },
    "params": {}
   },
@@ -154,7 +154,7 @@
    "type": "var.set",
    "pos": {
     "x": 565,
-    "y": 1799
+    "y": 1847
    },
    "params": {
     "var": "alive"
@@ -165,7 +165,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 1065,
-    "y": 1864
+    "y": 1900
    },
    "params": {
     "text": "Squads left:",
@@ -178,7 +178,7 @@
    "type": "math.compare",
    "pos": {
     "x": 1065,
-    "y": 2085
+    "y": 2121
    },
    "params": {
     "op": "le",
@@ -190,7 +190,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 1973
+    "y": 1984
    },
    "params": {}
   },
@@ -199,7 +199,7 @@
    "type": "flow.pick_player",
    "pos": {
     "x": 2065,
-    "y": 1962
+    "y": 1973
    },
    "params": {
     "which": "alive"
@@ -234,7 +234,7 @@
    "type": "player.get_team",
    "pos": {
     "x": 3065,
-    "y": 2029
+    "y": 2064
    },
    "params": {}
   },
@@ -243,7 +243,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 3565,
-    "y": 1930
+    "y": 1951
    },
    "params": {}
   },
@@ -252,7 +252,7 @@
    "type": "score.end_round",
    "pos": {
     "x": 2565,
-    "y": 2091
+    "y": 2126
    },
    "params": {
     "winner": "draw"
@@ -341,7 +341,7 @@
    "type": "bots.no_buy",
    "pos": {
     "x": 565,
-    "y": 704
+    "y": 696
    },
    "params": {
     "on": true
@@ -352,7 +352,7 @@
    "type": "bots.phase",
    "pos": {
     "x": 1065,
-    "y": 715
+    "y": 707
    },
    "params": {
     "phase": "loot"
@@ -363,7 +363,7 @@
    "type": "var.set",
    "pos": {
     "x": 1565,
-    "y": 682
+    "y": 674
    },
    "params": {
     "var": "looting",
@@ -375,7 +375,7 @@
    "type": "br.hud_text",
    "pos": {
     "x": 2065,
-    "y": 704
+    "y": 696
    },
    "params": {
     "text": "Squads forming: say slash squad"
@@ -386,7 +386,7 @@
    "type": "br.lobby",
    "pos": {
     "x": 2565,
-    "y": 704
+    "y": 696
    },
    "params": {
     "secs": 15
@@ -397,7 +397,7 @@
    "type": "br.on_lobby_end",
    "pos": {
     "x": 65,
-    "y": 1508
+    "y": 1495
    },
    "params": {}
   },
@@ -406,7 +406,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 565,
-    "y": 1484
+    "y": 1471
    },
    "params": {
     "which": "alive"
@@ -513,7 +513,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 565,
-    "y": 1083
+    "y": 1069
    },
    "params": {}
   },
@@ -522,7 +522,7 @@
    "type": "dmg.block",
    "pos": {
     "x": 1065,
-    "y": 1107
+    "y": 1093
    },
    "params": {}
   },
@@ -531,7 +531,7 @@
    "type": "br.squads_alive",
    "pos": {
     "x": 65,
-    "y": 2089
+    "y": 2125
    },
    "params": {}
   }
@@ -1133,7 +1133,7 @@
    },
    "size": {
     "w": 3778,
-    "h": 481
+    "h": 516
    }
   },
   {

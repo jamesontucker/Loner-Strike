@@ -18,6 +18,8 @@ export const validate = (g: Graph) => post<{ problems?: Problem[] }>(`${S}/valid
 export const generate = (g: Graph, debug = false) => post<{ problems?: Problem[]; source?: string; plugin?: string }>(`${S}/generate`, { graph: g, debug });
 export const openAsCode = (g: Graph) => post<{ ok?: boolean; folder?: string; name?: string; problems?: Problem[] }>(`${S}/source`, { graph: g });
 export const compile = (g: Graph, debug = false) => post<CompileResult>(`${S}/compile`, { graph: g, debug });
+/** Compile (the full check): the real compiler, nothing installed or started. */
+export const checkCompile = (g: Graph) => post<{ ok?: boolean; problems?: Problem[]; compiler?: Problem[]; output?: string; stopped?: boolean; cached?: boolean; secs?: number; error?: string }>(`${S}/check`, { graph: g });
 export const playtest = (g: Graph, breakpoints: string[]) => post<CompileResult>(`${S}/playtest`, { graph: g, breakpoints });
 export const switchOpenGame = (mode: string, map: string) => post<{ ok?: boolean }>(`${S}/switch`, { mode, map });
 export const uninstall = (id: string) => post<{ ok?: boolean }>(`${S}/uninstall/${encodeURIComponent(id)}`);

@@ -33,7 +33,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 396
+    "y": 334
    },
    "params": {}
   },
@@ -76,7 +76,7 @@
    "type": "player.give_weapon",
    "pos": {
     "x": 1565,
-    "y": 459
+    "y": 463
    },
    "params": {
     "weapon": "ak47",
@@ -195,7 +195,7 @@
    },
    "size": {
     "w": 1778,
-    "h": 447
+    "h": 451
    }
   }
  ]

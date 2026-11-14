@@ -18,7 +18,7 @@
    "type": "player.down",
    "pos": {
     "x": 340,
-    "y": 29
+    "y": 84
    },
    "params": {
     "secs": 30,
@@ -31,7 +31,7 @@
    "type": "event.player_revived",
    "pos": {
     "x": 20,
-    "y": 194
+    "y": 300
    },
    "params": {}
   },
@@ -40,7 +40,7 @@
    "type": "player.add_money",
    "pos": {
     "x": 340,
-    "y": 181
+    "y": 287
    },
    "params": {
     "amount": 200

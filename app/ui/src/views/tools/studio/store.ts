@@ -31,6 +31,12 @@ type Studio = {
   funcFocus: string | null;
   /** the compiler's last words (Results panel) */
   output: string | null;
+  /** the full check (Compile: the real compiler) and what it found */
+  full: FullCheck;
+  setFull: (f: FullCheck) => void;
+  /** a request to show the Results panel on a tab (n changes each time) */
+  resultsAsk: { tab: "problems" | "output"; n: number };
+  showResults: (tab: "problems" | "output") => void;
   /** the graph tab shown: "" the Event Graph, else a Function's or Macro's id */
   tab: string;
   /** the tabs open after the Event Graph, in order */
@@ -77,6 +83,23 @@ const isEventNode = (g: Graph | null) => (id: string) => {
   return !!(n && nodeDef(n.type)?.event);
 };
 
+/** The full check (Compile): "none" not run for this graph, "running", or what the compiler said
+ *  ("ok", "warn", "error"; "failed" when it couldn't run). `key` is the graph it checked
+ *  (`checkKey`): an edit since then makes it stale. */
+export type FullCheck = { state: "none" | "running" | "ok" | "warn" | "error" | "failed"; key: string; problems: Problem[]; message?: string };
+export const NO_FULL: FullCheck = { state: "none", key: "", problems: [] };
+
+/** What the compiler sees of a graph: everything but where things sit on the canvas. */
+const keyCache = new WeakMap<Graph, string>();
+export function checkKey(g: Graph): string {
+  let k = keyCache.get(g);
+  if (k === undefined) {
+    k = JSON.stringify({ ...g, nodes: g.nodes.map(({ pos: _p, ...n }) => n), comments: [] });
+    keyCache.set(g, k);
+  }
+  return k;
+}
+
 export const useStudio = create<Studio>((set, get) => ({
   graph: null,
   saved: null,
@@ -90,6 +113,8 @@ export const useStudio = create<Studio>((set, get) => ({
   selectedVar: null,
   funcFocus: null,
   output: null,
+  full: NO_FULL,
+  resultsAsk: { tab: "problems", n: 0 },
   tab: "",
   tabs: [],
   part: null,
@@ -121,8 +146,10 @@ export const useStudio = create<Studio>((set, get) => ({
   selectVar: (selectedVar) => set(selectedVar ? { selectedVar, selected: [], part: null } : { selectedVar }),
   setFuncFocus: (funcFocus) => set({ funcFocus }),
   setOutput: (output) => set({ output }),
-  open: (g, saved) => set({ selectedVar: null, funcFocus: null, output: null, tab: "", tabs: [], part: null, graph: g, saved: saved ? g : null, history: emptyHistory(), problems: [], selected: [], playing: null, debug: emptyDebug() }),
-  close: () => set({ graph: null, saved: null, tab: "", tabs: [], part: null, history: emptyHistory(), problems: [], selected: [], playing: null, debug: emptyDebug() }),
+  setFull: (full) => set({ full }),
+  showResults: (tab) => set({ resultsAsk: { tab, n: get().resultsAsk.n + 1 } }),
+  open: (g, saved) => set({ selectedVar: null, funcFocus: null, output: null, full: NO_FULL, tab: "", tabs: [], part: null, graph: g, saved: saved ? g : null, history: emptyHistory(), problems: [], selected: [], playing: null, debug: emptyDebug() }),
+  close: () => set({ full: NO_FULL, graph: null, saved: null, tab: "", tabs: [], part: null, history: emptyHistory(), problems: [], selected: [], playing: null, debug: emptyDebug() }),
   edit: (f) => {
     const g = get().graph;
     if (!g) return;
