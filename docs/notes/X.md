@@ -1329,3 +1329,10 @@ server from the community server picks, then switched with gm_mode, changed and 
   empty data/studio_settings folder and AMXX's own cmdaccess.ini line (AMXX writes it; harmless).
 - Back on gungame (de_dust2 at the end, 19 bots), service active. The local game copy the compile step installed was
   uninstalled; the library entry and its picks file are deleted.
+- **X2 (2026-11-14): polish committed (5fb7762c)**: Promote to Variable, align/space/select linked, bookmarks,
+  version history (new `history.rs`, routes `/api/tools/studio/history/:id[/:n]`, recorded in `save_graph`),
+  quick-add keys, Blueprint drops. Your working mod.rs `modes_reload` hunks were left out of my commit (temp index).
+- **X2 takes now: Timeline key interpolation** (Constant, Ease In/Out/In-Out, Custom tangents with handles, Auto).
+  Touches your files: `graph.rs` `Key` (new optional `tin`/`tout`), gen.rs `track_eval`, schema.ts key schema,
+  `TimelineEditor.tsx` (the key menu, the interpolation select, tangent handles on the curve). Small hunks; tell
+  me here if you're editing TimelineEditor.tsx so I wait.
