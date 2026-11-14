@@ -245,3 +245,52 @@ Screenshots are in `/private/tmp/claude-501/-Users-jameson/a1c85d27-df33-445d-9b
 - Consistent action bars: Saved / Unsaved changes / N to look at, "Fixing…" and "Saving…" labels, and History and Undo
   after every write.
 - Plain, specific refusals in every write route (playercfg, people, navfix, doctor).
+
+---
+
+## Fixed (fix agent, 2026-11-14)
+
+Tested on a small APFS-clone game in the agent's scratch folder (never the real game), with its own dev server,
+Vite cache, `LS_APP_DIR`, `LS_SERVERS_DIR` and `TMPDIR`. Rust: 939 passed, 0 failed. Playwright:
+`tests/qa4-t2-fixes.spec.ts` 11 tests x Chromium 1440, Chromium 1024 and WebKit: 33 passed; `callouts.spec.ts`
+(with the real-save path) passed in Chromium and WebKit.
+
+- **F1** (P5, b6e1d39f): re-checked. kz_urban with CZ installed: the CZ props (`models/props/trash.mdl`,
+  `radio.mdl`, `ac_large.mdl`...) are `stock: false` and the doctor no longer says "every player has it" (spec test).
+- **F2** maps in `cstrike_downloads` / `czero_downloads`: **a7782410**. One lookup for every map tool
+  (`mapcopy::find_local`): the game's own folder, then its `_downloads`, then the other game's (CZ: czero,
+  czero_downloads, cstrike, cstrike_downloads). The Tools list shows them with "From a server"; their files are found
+  and copied to hidden servers with them.
+- **F3** spray "Put back" left the file read-only: **c50168f2**. The old file comes back with its own mode.
+  Checked on the clone: `-r--r--r--` after Install, `-rw-r--r--` after Put back, same md5 as before (78583230…).
+- **UX-M1 to M6**: **9fcb59db**.
+  - M1: toasts sit above the save bar on every page that has one: tools and the Studios (shared toast styles plus
+    the shared ActionBar). A save's message and its "Undo that save?" are now one toast.
+  - M2: the spray canvas comes first in a small window. A new design says "Not saved yet" only.
+  - M3: texture search covers every texture file unless you picked one. Each hit shows its file, and the files that
+    can't be read are listed with the reason.
+  - M4: a map that can't be read shows only that problem ("Other checks need a readable map"). Viewer, Radar and
+    Simulate are hidden for it. The double period is gone.
+  - M5: the radar's zoom buttons sit on a dark backing. The status says what Install writes ("Writes north up (Auto)
+    · zoom 1.15").
+  - M6: a damaged map's Radar maker and Nav fixer offer "Check it in the Map doctor" instead of "Try again".
+- **Low items**: **dbea3d2c** (plus 9fcb59db for L2's double period, UX-L4's title and L3's Draw/Link).
+  - L1 / UX-L6: Nav fixer's "Fix N" is one edit and one Undo.
+  - L3: the error title names the map when the map is broken. Draw area and Link wait until the nav has loaded.
+  - L4: a drawn spray over 2048 px says it's too big.
+  - L5: bad radar settings answer with `{error}` in words.
+  - L6: the doctor won't rewrite a stock map's .res.
+  - L7: copy handles each asked path once.
+  - L8: the status keeps "N picked" while the pointer is on the map.
+  - L10: "Nothing to change: the game already uses these settings."
+  - UX-L1: the model shown is lit up and scrolled into sight, with brighter lighting.
+  - UX-L2: "Screen" and "Zoom" labels.
+  - UX-L5: map file errors in plain words.
+  - UX-L7: installing the template's NAME asks first.
+- **Not done here:**
+  - L9 and UX-L3 (simulator): another agent owns the simulator.
+  - UX-H1 contrast: waits for one pass across the whole app.
+  - UX-H2's "which players have it" wording: left with F1's owner.
+- **Not verified:** the game itself picking a spray in Options after Put back (needs the real client). The
+  shared-ux and tools.spec Creature/Plugin Studio and map-browser specs fail on the small clone game: too few maps
+  for the keyboard test, no people.ini, and Studio files the clone lacks. They weren't re-run on a full game copy.
