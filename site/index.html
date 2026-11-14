@@ -993,7 +993,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   <section class="creations" id="creations" aria-labelledby="creations-title">
     <div class="wrap">
       <h2 id="creations-title">Made by players</h2>
-      <p class="lead">Maps, Studio modes and prefabs people shared on GameBanana through Community. Open them in Loner-Strike to play them with bots, or look them up on GameBanana.</p>
+      <p class="lead">Maps, game modes and prefabs that players made in Loner-Strike and shared on GameBanana. Install any of them in a click from the app's Community tab, or browse them on GameBanana.</p>
       <div class="cr-bar" hidden>
         <div class="cr-seg" role="group" aria-label="What to show">
           <button type="button" aria-pressed="true" data-kind="">All</button>
@@ -1328,7 +1328,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         msg.append(" ");
         const a = document.createElement("a");
         a.href = "docs#community";
-        a.textContent = "How Community works";
+        a.textContent = "How sharing works";
         msg.append(a);
       }
       msg.hidden = false;
@@ -1401,7 +1401,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
       list = list.slice().sort(sort === "new" ? (a, b) => (b.added || 0) - (a.added || 0) : (a, b) => (b.featured - a.featured) || (b.updated || 0) - (a.updated || 0));
       grid.replaceChildren(...list.slice(0, shown).map(card));
       more.hidden = list.length <= shown;
-      if (!list.length) say(items.length ? `No ${KINDS[kind].toLowerCase()}s yet.` : "Community creations show up here once people share them.", !items.length);
+      if (!list.length) say(items.length ? `No ${KINDS[kind].toLowerCase()}s yet.` : "Nothing shared yet. Make a map or a game mode in Loner-Strike, share it from the Community tab, and it shows up here.", !items.length);
       else msg.hidden = true;
     };
     const load = async () => {
