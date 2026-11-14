@@ -12,7 +12,7 @@
 //! lines into the commands the bots know); its answer is used when it's one of those.
 
 mod clean;
-mod rcon;
+mod game;
 mod steam;
 
 use std::collections::HashMap;
@@ -81,13 +81,12 @@ struct Clip {
 
 fn main() {
     let a = args();
-    let password = match std::fs::read_to_string(&a.rcon_password_file) {
-        Ok(p) => p.trim().to_string(),
-        Err(e) => {
-            eprintln!("ls-voice: can't read the rcon password ({}): {e}", a.rcon_password_file);
-            std::process::exit(1);
-        }
-    };
+    // (the password file only says where the server's data folder is: requests go through files
+    // there, not RCON, so its password never lands in the server's console log; game.rs)
+    if let Err(e) = std::fs::metadata(&a.rcon_password_file) {
+        eprintln!("ls-voice: can't find the server's data folder ({}): {e}", a.rcon_password_file);
+        std::process::exit(1);
+    }
     let feed = match UdpSocket::bind(("127.0.0.1", a.feed)) {
         Ok(s) => s,
         Err(e) => {
@@ -99,11 +98,11 @@ fn main() {
 
     // the hearing: one thread, one line at a time, so voice keeps coming in while it works
     let (tx, rx) = mpsc::channel::<Clip>();
-    let (model, threads, rcon_port, pw) = (a.model.clone(), a.threads, a.rcon_port, password.clone());
+    let (model, threads, data) = (a.model.clone(), a.threads, a.rcon_password_file.clone());
     let intent = (!a.intent.is_empty() && !a.intent_model.is_empty()).then(|| (a.intent.clone(), a.intent_model.clone()));
-    let worker = thread::spawn(move || hear(rx, &model, threads, rcon::Rcon::new(rcon_port, pw), intent));
+    let worker = thread::spawn(move || hear(rx, &model, threads, game::Game::beside(std::path::Path::new(&data)), intent));
 
-    let console = rcon::Rcon::new(a.rcon_port, password);
+    let console = game::Game::beside(std::path::Path::new(&a.rcon_password_file));
     let mut told = Instant::now() - Duration::from_secs(3600);
     // (its server gone for a few minutes, and no app to stop it: a crash, or the server ended by hand)
     let mut unanswered = 0;
@@ -113,7 +112,8 @@ fn main() {
     loop {
         // (the server is told where to send, and again now and then: after a restart it has forgotten)
         if told.elapsed() > Duration::from_secs(30) {
-            if console.reach(&format!("sv_ls_voice_feed {}", a.feed)).is_some() {
+            // (the plugin's status.txt, fresh, says the server is up)
+            if console.send(&format!("feed {}", a.feed)) && console.status().is_some() {
                 unanswered = 0;
             } else {
                 unanswered += 1;
@@ -200,7 +200,7 @@ impl Drop for Intent {
 }
 
 /// Lines in, text out to the bots.
-fn hear(rx: mpsc::Receiver<Clip>, model: &str, threads: i32, console: rcon::Rcon, intent: Option<(String, String)>) {
+fn hear(rx: mpsc::Receiver<Clip>, model: &str, threads: i32, console: game::Game, intent: Option<(String, String)>) {
     let mut understanding = intent.as_ref().and_then(|(p, m)| Intent::start(p, m, threads));
     whisper_rs::install_logging_hooks();
     let ctx = match whisper_rs::WhisperContext::new_with_params(model, whisper_rs::WhisperContextParameters::default()) {
@@ -230,7 +230,7 @@ fn hear(rx: mpsc::Receiver<Clip>, model: &str, threads: i32, console: rcon::Rcon
         }
         let audio = steam::to_16k(&pcm, rate);
         if looked.elapsed() > Duration::from_secs(10) {
-            let (bots, m) = rcon::status(&console.cmd("status"));
+            let (bots, m) = console.status().unwrap_or_default();
             names = clean::name_parts(&bots);
             map = m;
             looked = Instant::now();
@@ -281,6 +281,6 @@ fn hear(rx: mpsc::Receiver<Clip>, model: &str, threads: i32, console: rcon::Rcon
         }
         let line = clean::with_intent(&line, answer.as_deref(), &names);
         println!("ls-voice: #{} ({:.1}s of talk, heard in {} ms): {}", clip.userid, audio.len() as f32 / 16000.0, t0.elapsed().as_millis(), line);
-        console.cmd(&format!("gm_botchat_ask {} \"{}\" team", clip.userid, line));
+        console.send(&format!("ask {} {}", clip.userid, line));
     }
 }

@@ -135,7 +135,7 @@ const REMOTE_INTENT: &str = "loner-strike/voice/gemma3-270m-ls-intent-1-Q4_K_M.g
 /// The model on the machine, shared by its servers
 const REMOTE_MODEL: &str = "loner-strike/voice/ggml-base.en.bin";
 /// Raised whenever the unit's text changes: a unit without it is written again
-const UNIT_REV: &str = "loner-strike voice unit 2";
+const UNIT_REV: &str = "loner-strike voice unit 3";
 
 pub fn unit(id: &str) -> String {
     format!("lonerstrike-{id}-voice")
@@ -212,6 +212,7 @@ if [ "$(sha256sum "$I" 2>/dev/null | cut -c1-64)" != "{isha}" ]; then
   [ "$(sha256sum "$I.part" | cut -c1-64)" = "{isha}" ] || {{ rm -f "$I.part"; fail "The understanding model didn't download whole."; }}
   mv -f "$I.part" "$I"
 fi
+install -d -m 755 "$HOME/{vdir}"
 sudo tee /etc/systemd/system/{u}.service >/dev/null <<EOF
 [Unit]
 # {rev}
@@ -228,6 +229,8 @@ Nice=10
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=read-only
+# MCP: its requests to the game go through files there (gm_extras reads them), not RCON
+ReadWritePaths=$HOME/{vdir}
 PrivateTmp=yes
 PrivateDevices=yes
 RestrictAddressFamilies=AF_INET AF_UNIX
@@ -268,6 +271,7 @@ echo "@@STEP ready"
         feed = feed_port(e),
         port = e.port,
         pw = pw,
+        vdir = format!("{}/{}/addons/amxmodx/data/gamemodes/lsvoice", remote::server_dir(&e.id), e.game),
         intent = REMOTE_INTENT,
         isha = INTENT_SHA,
         iurl = INTENT_URL,
@@ -545,8 +549,11 @@ pub fn stop(e: &Entry) {
         r.pending.remove(&e.id);
         r.procs.remove(&e.id).map(|p| p.child)
     });
-    if let Some(r) = e.rcon() {
-        let _ = r.send("sv_ls_voice_feed 0");
+    // the engine stops sending voice: through gm_extras' file channel, not RCON (its password would
+    // land in the console log)
+    let dir = e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes/lsvoice");
+    if dir.is_dir() {
+        let _ = std::fs::write(dir.join("stop.tmp"), "feed 0\n").and_then(|_| std::fs::rename(dir.join("stop.tmp"), dir.join("stop.cmd")));
     }
     if let Some(child) = child {
         sys::stop_child(child, Duration::from_secs(2));
@@ -790,7 +797,7 @@ mod tests {
         let on = remote_sh(&e, true);
         assert!(on.contains("lonerstrike-a-voice.service") && on.contains("PartOf=lonerstrike-a.service"));
         assert!(on.contains("--feed 27617 --rcon-port 27017") && on.contains("IPAddressAllow=localhost") && on.contains("IPAddressDeny=any"));
-        assert!(on.contains(MODEL_SHA) && on.contains(INTENT_SHA) && on.contains("# loner-strike voice unit 2"));
+        assert!(on.contains(MODEL_SHA) && on.contains(INTENT_SHA) && on.contains("# loner-strike voice unit 3") && on.contains("ReadWritePaths=$HOME/loner-strike/servers/") && on.contains("/lsvoice"));
         assert!(on.contains("--intent $HOME/loner-strike/bin/ls-intent --intent-model $I"));
         let off = remote_sh(&e, false);
         assert!(off.contains("disable --now lonerstrike-a-voice") && off.contains("rm -f /etc/systemd/system/lonerstrike-a-voice.service"));

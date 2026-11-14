@@ -167,6 +167,8 @@ public plugin_init()
 	register_srvcmd("ls_link_fail", "srv_link_fail")
 	// community roles: who's here and "reload admins", through files (no RCON echoed into the console log)
 	set_task(10.0, "task_lslink_files", TASK_LINK_POLL + 1, _, _, "b")
+	// the bots' voice helper (ls-voice): its requests come as files too (no RCON echoed into the console log)
+	set_task(0.5, "task_lsvoice", TASK_LINK_POLL + 2, _, _, "b")
 	register_event("30", "ev_intermission", "a")
 	register_forward(FM_CmdStart, "fw_cmdstart")
 	// the game's own disconnect: not called on a map change (AMX Mod X's client_disconnected is)
@@ -700,7 +702,7 @@ public cmd_link(id)
 	if (file_exists(req) && file_size(req) > 65536)
 		delete_file(req)
 	write_file(req, line)
-	client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Getting your link code...")
+	client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Getting your link code... It will also be in your console: press ~.")
 	remove_task(TASK_LINK + id)
 	set_task(15.0, "task_link_none", TASK_LINK + id)
 	// answers come in a file: look every second for a while
@@ -753,6 +755,9 @@ public task_link_none(taskid)
 public task_lslink_files()
 {
 	new dir[160]
+	formatex(dir, charsmax(dir), "%s/lsvoice", g_DataDir)
+	if (dir_exists(dir))
+		voice_status(dir)
 	formatex(dir, charsmax(dir), "%s/lslink", g_DataDir)
 	if (!dir_exists(dir))
 		return
@@ -778,6 +783,89 @@ public task_lslink_files()
 		get_user_authid(id, auth, charsmax(auth))
 		if (equal(auth, "STEAM_", 6) && containi(auth, "ID_") == -1)
 			fprintf(f, "%s^n", auth)
+	}
+	fclose(f)
+	if (file_exists(path))
+		delete_file(path)
+	rename_file(tmp, path, 1)
+}
+
+// ---- ls-voice's requests, through data/gamemodes/lsvoice ----------------------------------
+// ls-voice (the bots' voice helper) writes one file per request, "<number>.cmd": "feed <port>"
+// (where the engine sends players' voice) or "ask <userid> <words>" (a line the bots answer). Only
+// these two, checked here; every 10 s this plugin writes status.txt (the map, then the bots' names)
+// for it. The folder only exists when voice is on.
+
+public task_lsvoice()
+{
+	new dir[160]
+	formatex(dir, charsmax(dir), "%s/lsvoice", g_DataDir)
+	if (!dir_exists(dir))
+		return
+	new file[64], FileType:type, line[256], path[240]
+	new h = open_dir(dir, file, charsmax(file), type)
+	if (!h)
+		return
+	do
+	{
+		new len = strlen(file)
+		if (len < 5 || !equal(file[len - 4], ".cmd"))
+			continue
+		formatex(path, charsmax(path), "%s/%s", dir, file)
+		new f = fopen(path, "rt")
+		line[0] = 0
+		if (f)
+		{
+			fgets(f, line, charsmax(line))
+			fclose(f)
+		}
+		delete_file(path)
+		trim(line)
+		voice_request(line)
+	}
+	while (next_file(h, file, charsmax(file), type))
+	close_dir(h)
+}
+
+voice_request(line[])
+{
+	new word[8], rest[240]
+	strtok2(line, word, charsmax(word), rest, charsmax(rest), ' ', TRIM_FULL)
+	if (equal(word, "feed"))
+	{
+		new port = str_to_num(rest)
+		if (port >= 0 && port <= 65535 && get_cvar_pointer("sv_ls_voice_feed"))
+			set_cvar_num("sv_ls_voice_feed", port)
+	}
+	else if (equal(word, "ask"))
+	{
+		new uid[12], words[224]
+		strtok2(rest, uid, charsmax(uid), words, charsmax(words), ' ', TRIM_FULL)
+		// plain words only: nothing that could end the command or start another
+		replace_all(words, charsmax(words), "^"", "")
+		replace_all(words, charsmax(words), ";", " ")
+		if (str_to_num(uid) > 0 && words[0])
+			server_cmd("gm_botchat_ask %d ^"%s^" team", str_to_num(uid), words)
+	}
+}
+
+voice_status(const dir[])
+{
+	new path[180], tmp[180], map[64], name[32]
+	formatex(path, charsmax(path), "%s/status.txt", dir)
+	formatex(tmp, charsmax(tmp), "%s/status.txt.new", dir)
+	new f = fopen(tmp, "wt")
+	if (!f)
+		return
+	get_mapname(map, charsmax(map))
+	fprintf(f, "map %s^n", map)
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (is_user_connected(id) && is_user_bot(id))
+		{
+			get_user_name(id, name, charsmax(name))
+			fprintf(f, "bot %s^n", name)
+		}
 	}
 	fclose(f)
 	if (file_exists(path))
@@ -814,8 +902,8 @@ link_show(id, const code[])
 		if (!isalnum(code[i]) && code[i] != '-')
 			return
 	remove_task(TASK_LINK + id)
-	client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Your code: ^4%s^1. In the Loner-Strike Discord type ^4/link %s^1 (works for 10 minutes).", code, code)
-	client_print(id, print_console, "[Loner-Strike] Your link code: %s  (in the Loner-Strike Discord: /link %s)", code, code)
+	client_print_color(id, print_team_default, "^4[Loner-Strike]^1 Your link code is ^4%s^1. In the Loner-Strike Discord type ^4/link %s^1 (10 minutes). It's also in your console: press ~.", code, code)
+	client_print(id, print_console, "^n[Loner-Strike] Your link code is %s^n[Loner-Strike] In the Loner-Strike Discord type:  /link %s^n[Loner-Strike] (It works for 10 minutes.)^n", code, code)
 	set_hudmessage(80, 255, 80, -1.0, 0.3, 0, 0.0, 12.0, 0.2, 0.5, -1)
 	show_hudmessage(id, "Link code: %s^nIn the Loner-Strike Discord: /link %s", code, code)
 }
