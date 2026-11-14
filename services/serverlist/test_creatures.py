@@ -107,11 +107,11 @@ class Rules(unittest.TestCase):
         self.assertEqual((cm.author_slug("Jam Tucker!"), cm.author_slug("  "), cm.author_slug("1234"), cm.author_slug("Texture_Woman66")),
                          ("jam_tucker", "a", "a1234", "texture_woman66"))
         self.assertTrue(cm.namespace_is("jam_tucker.x", "jam_tucker"))
-        self.assertFalse(cm.namespace_is("jam.x", "jam_tucker"), "a cut only when the name needs it")
+        self.assertFalse(cm.namespace_is("jam.x", "jam_tucker"))
         self.assertFalse(cm.namespace_is("bob.x", "bobby"), "someone else's shorter name")
         long_slug = "abcdefghijklmnopqrst"
-        self.assertTrue(cm.namespace_is("abcdefghij." + "y" * 20, long_slug))
-        self.assertFalse(cm.namespace_is("abcdefghi." + "y" * 20, long_slug))
+        self.assertTrue(cm.namespace_is(long_slug + ".y", long_slug))
+        self.assertFalse(cm.namespace_is("abcdefghij." + "y" * 20, long_slug), "the author part is never shortened")
         sec = cm.creatures_ini_sections(GOOD_INI)
         self.assertEqual(sorted(sec), ["ann.boss_y", "ann.runner_x"])
         # comments and spacing don't change a section; a value does

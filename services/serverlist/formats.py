@@ -584,11 +584,9 @@ def author_slug(author):
 
 
 def namespace_is(name, slug):
-    """Is a shared type's author part this slug, cut exactly as the app cuts it to fit 31?"""
-    part, _, rest = name.partition(".")
-    # (the app cuts the slug only as far as the name needs: creaturepack.rs shared_name)
-    want = slug[:max(0, 31 - len(rest) - 1)].rstrip("_")
-    return bool(part) and part == want
+    """Is a shared type's author part exactly this slug (the app never shortens it)?"""
+    part = name.partition(".")[0]
+    return bool(part) and part == slug
 
 
 def creature_name_ok(n):
