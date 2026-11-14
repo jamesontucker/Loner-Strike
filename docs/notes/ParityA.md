@@ -40,6 +40,23 @@ at their middle (`merge_vertices`); dropping a corner on its neighbor already me
 and `VertexActions.tsx`. Tests: extrude.rs and vertex.rs units (convexity, volumes, textures, refusals),
 `extrude_split_and_merge` (the commands, one undo step per drag), `tests/editor-extrude.spec.ts` (Chromium + WebKit).
 
+**4. Big-map drawing (from the coordinator)**: point entities batched (`EntityBatch.tsx`: one instanced box mesh
+with a colour per entity, one set of outlines, one of facing arrows, sprite glows as one point cloud, one instanced
+mesh per studio model+body+skin; picking kept: each instance hits as a stand-in object with `{kind: "entity", id}`, so
+hitOf/extras/Marquee are unchanged); target lines in one dashed draw; P4's component points and the Checks dots via
+`InstancedMarkers`. Per-pane redraws (`paneRedraw.ts`): each pane's portal has its own invalidate (camera moves, the
+cross-hair, a ghost mark only that pane); store changes and the canvas's invalidate mark every pane; a catch-up redraw of
+all panes 250 ms after pane-only changes; `preserveDrawingBuffer` keeps panes that aren't redrawn. While the camera is
+dragged (middle/right button) a pane stops its hover raycasts. br_valley Quad, Top view (editor-flatperf.spec.ts):
+
+| | before | after |
+|---|---|---|
+| draws per pane (Top) | ~1200 | ~46 (brushes 3, entities ~6, overlays) |
+| WebKit pan / zoom | 31 / 108 fps | 55 / 122 fps (4.4 ms per pane render; the pan figure is page frames under Playwright's synthetic mouse moves) |
+| Chromium (software) pan / zoom | 4 / 9 fps | 22-28 / 50-54 fps |
+
+Editor suites: Chromium 44 passed (P5's editor-perf failed once at load 38, passes alone), WebKit 45 passed.
+
 ## Left / ideas
 - Extrude in the flat views (Shift is box-pick there), shear in 2D, edge-move mode for slanted edges.
 - Entities drawn one by one dominate the flat panes on big maps (request to P5).
