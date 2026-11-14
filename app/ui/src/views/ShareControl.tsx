@@ -5,6 +5,7 @@ import type { ServerInfo, ServerList } from "../types";
 import { BusyButton, Info, Sheet, Switch, useConfirm, useToast } from "../ui";
 import { openTab } from "./goto";
 import { describeRoles, previewInvite } from "./communityRoles"; // P5: community roles
+import { DocsLink } from "./DocsLink"; // P5
 
 /**
  * Shared control (control/ in the app): friends with Loner-Strike help run a server from
@@ -357,7 +358,9 @@ export function ShareControl({ server }: { server: ServerInfo }) {
         {c?.error && <p className="err-text">{c.error}</p>}
         <div className="panel">
           <div className="row between">
-            <h3 style={{ margin: 0 }}>People who can run it</h3>
+            <h3 style={{ margin: 0 }}>
+              People who can run it <DocsLink to="shared-control" what="shared control" />
+            </h3>
             <label className="check-row">
               <Switch on={helperNotes} label="Tell me when helpers start, stop or restart it, or change downloads" disabled={busy(`${server.id}:notify`)} onChange={setHelperNotes} />
               <span className="small-note">Tell me when helpers start, stop or restart it, or change downloads</span>

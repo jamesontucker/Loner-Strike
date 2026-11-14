@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { getJson, postJson } from "../api";
 import { Info, useToast } from "../ui";
+import { DocsLink } from "./DocsLink"; // P5
 
 type Setting = {
   cvar: string;
@@ -61,7 +62,7 @@ export function ModeSettings({ mode, live }: { mode: string; live?: boolean }) {
   return (
     <section className="mode-settings" aria-label="Mode settings" data-testid="mode-settings">
       <h3>
-        Mode settings
+        Mode settings <DocsLink to="mode-settings" what="mode settings" />
         <Info text={`Set by the mode's maker for hosts to change. This ${live ? "server" : "game"} keeps its own values; the mode uses them from the next map${live ? " or the next round" : ""}. Admins also find them in the game's mode menu (options).`} />
         {changed > 0 && (
           <button type="button" className="link mode-settings-reset" disabled={!!saving} onClick={() => void send("all", { reset_all: true })}>

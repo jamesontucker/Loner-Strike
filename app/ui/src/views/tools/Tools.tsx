@@ -3,6 +3,7 @@
 // an address: go("tools", "<id>") or go("tools", "<id>:<arg>"), go("tools", "overview") for
 // the cards. The page itself loads lazily too, with three.js in its own chunk.
 
+import { DocsLink, TOOL_DOCS } from "../DocsLink"; // P5
 import { Suspense, useEffect } from "react";
 import { ON_THIS_COMPUTER } from "../../api";
 import { useNav } from "../../store";
@@ -68,6 +69,7 @@ export default function Tools({ maps }: { maps: MapInfo[] }) {
           <h2>{entry.label}</h2>
           <div className="section-actions">
             <ToolHistory tool={entry.id} />
+            {TOOL_DOCS[entry.id] && <DocsLink to={TOOL_DOCS[entry.id]} what={entry.label} />}
             <FocusButton />
           </div>
         </div>

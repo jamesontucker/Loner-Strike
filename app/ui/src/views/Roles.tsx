@@ -9,6 +9,7 @@ import { copyText, getJson, postJson, useActions } from "../api";
 import type { ServerInfo } from "../types";
 import { BusyButton, Info, Switch, useConfirm, useToast } from "../ui";
 import { InviteBox } from "./ShareControl";
+import { DocsLink } from "./DocsLink";
 import { actionsFor, answerPairs, codeShown, inTime, isState, sortApplications, STATE_TONE, STATE_WORD, type Application, type RolesServer, type RolesSettings } from "./communityRoles";
 import "./roles.css";
 
@@ -108,6 +109,7 @@ export function RolesCard({ server }: { server: ServerInfo }) {
     <section className="panel roles-card" aria-label="Loner-Strike roles">
       <div className="row">
         <h3 style={{ margin: 0 }}>Loner-Strike roles</h3>
+        <DocsLink to="moderate" what="Loner-Strike roles" />
         {s?.claimed && <span className="tag roles-chip good">Claimed</span>}
         {s?.official && <span className="tag roles-chip">Official server</span>}
       </div>
@@ -252,6 +254,7 @@ export function Applications({ server }: { server: ServerInfo }) {
       <div className="row">
         <h3 style={{ margin: 0 }}>Moderator applications</h3>
         <span className="push" />
+        <DocsLink to="moderate" what="moderator applications" />
         <BusyButton className="btn small" busy={busy(`roles:apps:${server.id}`)} label="Check again" busyLabel="Checking…" onClick={() => run(`roles:apps:${server.id}`, load, "Checking applications…")} />
       </div>
       <p className="muted measure">

@@ -8,6 +8,7 @@ import { create } from "zustand";
 import { copyText, getJson, postJson } from "../api";
 import type { ServerInfo } from "../types";
 import { BusyButton, Switch, useToast } from "../ui";
+import { DocsLink } from "./DocsLink"; // P5
 
 export type Crash = {
   id: string;
@@ -152,7 +153,10 @@ export function CrashPanel({ server }: { server: ServerInfo }) {
     <div className="panel">
       <div className="row between">
         <h3>Crashes</h3>
-        <BusyButton className="btn small" busy={loading && !!r} label="Check again" busyLabel="Checking…" onClick={() => void load(true)} />
+        <span className="row">
+          <DocsLink to="crashes" what="crash tracking" />
+          <BusyButton className="btn small" busy={loading && !!r} label="Check again" busyLabel="Checking…" onClick={() => void load(true)} />
+        </span>
       </div>
       {error && <p className="err-text small-note">{error}</p>}
       {!r && !error && (
