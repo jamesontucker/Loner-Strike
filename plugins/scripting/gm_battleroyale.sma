@@ -55,6 +55,8 @@ enum { PH_IDLE = 0, PH_WAIT, PH_LOBBY, PH_DROP, PH_PLAY, PH_OVER };
 enum { TR_HUNTER = 0, TR_LOOTER, TR_CAMPER };
 
 new g_cSquad, g_cStart, g_cDrop, g_cZoneStart, g_cDrops, g_cWaitHuman, g_cDropIn, g_cDropHeight, g_cLobby, g_cLateFill, g_cBleed;
+new g_knocker[33];
+new bool:g_contactLogged;
 
 new Float:g_dropSpots[33][2];
 new g_ndropSpots;
@@ -387,6 +389,7 @@ stock start_play()
 {
 	g_phase = PH_PLAY;
 	g_playAt = get_gametime();
+	g_contactLogged = false;
 	g_knocks = 0;
 	g_revives = 0;
 	ls_comp_bots_hint("phase fight");
@@ -530,6 +533,7 @@ public tick()
 			g_dropsDone++;
 			supply_drop();
 		}
+		squads_none_up();
 		if (check_winner())
 			return;
 		late_joiners();
@@ -652,9 +656,15 @@ stock bool:check_winner()
 	if (sides > 1)
 		return false;
 	g_phase = PH_OVER;
+	new went = 0;
+	for (new p = 1; p <= MaxClients; p++)
+		if (g_wentBelow[p])
+			went++;
 	if (sides == 0 || !last)
 	{
 		toast(0, 6.0, "Nobody survived");
+		/* (the game's figures even with no winner - QA4-DE F5) */
+		log_amx("Battle Royale on %s: nobody survived, after %d s of fighting; %d players went below ground, %d%% of the time there; %d knocked down, %d revived", g_mapname, floatround(get_gametime() - g_playAt), went, g_secsAll ? 100 * g_secsBelow / g_secsAll : 0, g_knocks, g_revives);
 		server_cmd("endround");
 		return true;
 	}
@@ -664,10 +674,6 @@ stock bool:check_winner()
 		toast(0, 8.0, "%s's squad wins!", name);
 	else
 		toast(0, 8.0, "%s wins! (%d kills)", name, ls_kills(last));
-	new went = 0;
-	for (new p = 1; p <= MaxClients; p++)
-		if (g_wentBelow[p])
-			went++;
 	log_amx("Battle Royale on %s won by %s (%d kills) after %d s of fighting; %d players went below ground, %d%% of the time there; %d knocked down, %d revived", g_mapname, name, ls_kills(last), floatround(get_gametime() - g_playAt), went, g_secsAll ? 100 * g_secsBelow / g_secsAll : 0, g_knocks, g_revives);
 	server_cmd(cs_get_user_team(last) == CS_TEAM_T ? "endround T" : "endround CT");
 	return true;
@@ -819,6 +825,31 @@ stock give_start(id)
    the game (a share of each: about 3 in 10 below, 1 in 4 high, the rest the surface; looters
    lean below, campers high), told to the brain (ls_mode layer <i> <below|surface|high>) so its
    own loot choice can weigh it, and used for where it lands ---- */
+stock layer_split(secs)
+{
+	new below = 0, high = 0, alive = 0, hb = 0, hu = 0;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p))
+			continue;
+		alive++;
+		new Float:o[3];
+		pev(p, pev_origin, o);
+		new bool:up = o[2] > g_medianZ + 200.0;
+		if (o[2] < BELOW_Z)
+			below++;
+		else if (up)
+			high++;
+		if (g_layer[p] == LAYER_HIGH)
+		{
+			hb++;
+			if (up)
+				hu++;
+		}
+	}
+	log_amx("Battle Royale: first contact at %d s: %d below ground, %d high, %d on the surface (%d of %d meant for high are up)", secs, below, high, alive - below - high, hu, hb);
+}
+
 stock crate_layer(e)
 {
 	new Float:o[3];
@@ -975,7 +1006,7 @@ stock loot_goal_on_landing(p)
 	pev(p, pev_origin, po);
 	new left = max(floatround(g_phaseEnd - get_gametime()), 0) + 20;
 	/* (a bot meant for below ground heads straight down: there are guns down there too) */
-	if (!has_gun(p) && !(g_layer[p] == LAYER_BELOW && g_lootTarget[p]))
+	if (!has_gun(p) && !((g_layer[p] == LAYER_BELOW || g_layer[p] == LAYER_HIGH) && g_lootTarget[p]))
 	{
 		new best = 0, Float:bd = 1600.0, Float:o[3];
 		for (new e = ls_comp_find("ls_weapon_spawner"); e; e = ls_comp_find("ls_weapon_spawner", e))
@@ -988,6 +1019,10 @@ stock loot_goal_on_landing(p)
 			/* (one another bot is already after counts a bit further) */
 			if (g_gunTaken[e < sizeof g_gunTaken ? e : 0])
 				d += 1500.0;
+			/* (a bot meant for the high ground looks up there first: W2 saw "high" bots spend the
+			   loot-up on ground loot, 0-2 up at the fight start) */
+			if (g_layer[p] == LAYER_HIGH && o[2] <= g_medianZ + 200.0)
+				d += 900.0;
 			if (d < bd)
 			{
 				bd = d;
@@ -1027,7 +1062,7 @@ stock loot_goal_on_landing(p)
 	new t = g_lootTarget[p];
 	/* (the brain picks loot by itself, layer and crowding counted; only a bot meant for below
 	   ground is walked to its crate, the trenches and hatches being far) */
-	if (t && pev_valid(t) && ls_comp_state(t) == 0 && g_layer[p] == LAYER_BELOW)
+	if (t && pev_valid(t) && ls_comp_state(t) == 0 && (g_layer[p] == LAYER_BELOW || g_layer[p] == LAYER_HIGH))
 	{
 		new Float:o[3];
 		pev(t, pev_origin, o);
@@ -1216,6 +1251,12 @@ public ham_takedamage(victim, inflictor, attacker, Float:dmg, bits)
 		return HAM_SUPERCEDE;
 	if (!(1 <= attacker <= MaxClients) || attacker == victim || !is_user_connected(attacker))
 		return HAM_IGNORED;
+	/* the first hit between players: where everyone is then */
+	if (g_phase == PH_PLAY && !g_contactLogged && dmg > 0.0)
+	{
+		g_contactLogged = true;
+		layer_split(floatround(get_gametime() - g_playAt));
+	}
 	/* nobody hurts anybody while waiting for people */
 	if (g_phase == PH_WAIT || g_phase == PH_LOBBY)
 		return HAM_SUPERCEDE;
@@ -1246,6 +1287,7 @@ public ham_killed(victim, killer, gib)
    down takes the whole squad out */
 public ls_on_down(id, attacker)
 {
+	g_knocker[id] = attacker;
 	if (g_phase != PH_PLAY || get_pcvar_num(g_cSquad) <= 1)
 		return PLUGIN_HANDLED;
 	new sq = ls_squad_get(id);
@@ -1282,6 +1324,32 @@ public ls_on_revive(id, by)
 	{
 		g_revives++;
 		log_amx("Battle Royale: player %d revived by %d", id, by);
+	}
+}
+
+/* a squad with nobody standing (the last one up left the server, or died some other way): its
+   downed players are out at once, the kill going to whoever knocked them (QA4-DE F4) */
+stock squads_none_up()
+{
+	if (get_pcvar_num(g_cSquad) <= 1)
+		return;
+	for (new d = 1; d <= MaxClients; d++)
+	{
+		if (!is_user_alive(d) || !ls_is_down(d))
+			continue;
+		new sq = ls_squad_get(d);
+		new bool:up = false;
+		for (new q = 1; q <= MaxClients && sq && !up; q++)
+			if (q != d && is_user_alive(q) && ls_squad_get(q) == sq && !ls_is_down(q))
+				up = true;
+		if (up)
+			continue;
+		new k = g_knocker[d];
+		log_amx("Battle Royale: player %d out: nobody of squad %d is up", d, sq);
+		if (1 <= k <= MaxClients && k != d && is_user_connected(k))
+			ExecuteHamB(Ham_Killed, d, k, 0);
+		else
+			user_kill(d, 1);
 	}
 }
 
