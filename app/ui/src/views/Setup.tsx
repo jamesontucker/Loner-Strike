@@ -153,7 +153,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             <img src={logo} alt="" width={112} height={112} />
             <h1>Loner-Strike</h1>
             <p className="tagline">Play Counter-Strike like it's 2004,<br />alone or with the friends you don't have.</p>
-            <p>Setup adds bots that play like people, 22 classic community modes and this control panel to your game. Everything it changes is backed up and can be removed again.</p>
+            <p>Setup adds bots that play like people, 22 classic community modes, Last Stand and Battle Royale. This app also makes maps and game modes. Everything it changes is backed up and can be removed again.</p>
             <p className="muted">Close Counter-Strike before you start.</p>
             <div className="row">
               <button className="btn primary big-btn" onClick={() => setStage("games")}>Set it up</button>
@@ -161,7 +161,7 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             </div>
             <p className="muted later">Later, you can add or remove any of it under Mods.</p>
             {/* (terms: shown where people start using the app, so setting it up is agreeing) */}
-            <p className="muted later">By using Loner-Strike you agree to the <a href="https://lonerstrike.com/terms" target="_blank" rel="noreferrer">Terms</a> and <a href="https://lonerstrike.com/privacy" target="_blank" rel="noreferrer">Privacy</a> page.</p>
+            <p className="muted later">By using Loner-Strike you agree to the <a href="https://lonerstrike.com/terms" target="_blank" rel="noreferrer">Terms</a> and <a href="https://lonerstrike.com/privacy" target="_blank" rel="noreferrer">Privacy policy</a>.</p>
             <p className="made-by setup-by">by <a href="https://nanoshrine.com" target="_blank" rel="noreferrer">nanoshrine</a><span aria-hidden="true"> · </span><a href="https://lonerstrike.com/docs" target="_blank" rel="noreferrer">Docs</a></p>
           </section>
         )}
@@ -328,7 +328,8 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             <p>Start the game and Loner-Strike connects by itself.</p>
             <ul className="done-tips">
               <li><span className="kbd">F3</span><span>In the game: modes, maps, bots and settings. <b>F4</b> is the quick menu.</span></li>
-              <li><span className="kbd">Maps</span><span>The first time you play a map, the bots spend a few minutes learning it.</span></li>
+              <li><span className="kbd">Maps</span><span>Most maps come ready for the bots. A new one takes them a few minutes to learn.</span></li>
+              <li><span className="kbd">Make</span><span>Build maps and game modes, or host a server, under Tools and Servers.</span></li>
               <li><span className="kbd">Phone</span><span>Run everything from here, or from your phone (see Use on your phone in Settings).</span></li>
               {new Set([...games, ...(install?.games.filter((g) => g.installed).map((g) => g.id) ?? [])]).size > 1 && (
                 <li><span className="kbd">Games</span><span>Two games: switch between them with the CS 1.6 and CZ buttons at the top.</span></li>
@@ -391,9 +392,9 @@ function NoGame({ nativeMac, onRescan, onClose }: { nativeMac: boolean; onRescan
           <img src={logo} alt="" width={96} height={96} />
           <h1>No game found</h1>
           {nativeMac ? (
-            <p>You have the Mac version of Half-Life, which mods can't run on. Install the Windows version of Steam in CrossOver, install Counter-Strike 1.6 or Condition Zero there, then click Look again. With Parallels, install the game and the Windows version of Loner-Strike inside Windows instead.</p>
+            <p>You have the Mac version of Half-Life, which mods can't run on. Install the Windows version of Steam in CrossOver, install Counter-Strike 1.6 or Condition Zero there, then click Look again (<a href="https://lonerstrike.com/docs#mac" target="_blank" rel="noreferrer">how</a>). With Parallels, use the Windows version of Loner-Strike inside Windows.</p>
           ) : (
-            <p>Loner-Strike needs Counter-Strike 1.6 or Condition Zero from Steam{navigator.platform.startsWith("Mac") ? ", installed through Steam in CrossOver (or, with Parallels, use the Windows version of Loner-Strike inside Windows)" : ""}. Install one, then click Look again.</p>
+            <p>Loner-Strike needs Counter-Strike 1.6 or Condition Zero from Steam{navigator.platform.startsWith("Mac") ? ", installed through Steam in CrossOver (or, with Parallels, use the Windows version of Loner-Strike inside Windows)" : ""}. Install one, then click Look again{navigator.platform.startsWith("Mac") ? <> (<a href="https://lonerstrike.com/docs#mac" target="_blank" rel="noreferrer">how</a>)</> : null}.</p>
           )}
           <div className="row">
             <BusyButton className="btn primary" busy={looking} label="Look again" busyLabel="Looking…" onClick={() => { setLooking(true); onRescan(); setTimeout(() => setLooking(false), 1500); }} />
