@@ -760,4 +760,9 @@ native ls_npc_talking(id);
  * same from the start.
  */
 native bool:ls_interactable_offer(ent, bool:on);
+/**
+ * Bots may shoot this killable NPC (on) or not (the default; unkillable ones never). The map
+ * key bots_attack=1 does the same. Players on its team side hurt it only with mp_friendlyfire.
+ */
+native bool:ls_npc_targetable(npc, bool:on);
 /* ==== end NPCs and interactables ==== */

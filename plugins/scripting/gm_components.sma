@@ -13322,6 +13322,8 @@ public bool:n_shop_at(plugin, params)
 #define NPC_TALK_RANGE  110.0
 #define NPC_WALK_AWAY   200.0
 #define NPC_SPEED       90.0
+/* shown when an NPC's model isn't loaded (loaded with every map, in npc_precache) */
+#define NPC_FALLBACK    "models/player/gign/gign.mdl"
 /* g_pf slots: NPC */
 #define NP_PAUSE    0
 #define NP_GOALX    1
@@ -13343,12 +13345,15 @@ new g_cvNpc[33];
 new bool:g_cvOpen[33];
 new g_cvSerial[33];
 new Float:g_npcUseNext[33];
+new g_cFriendlyFire;
+new bool:g_npcFoeSent;
 
 stock npc_precache()
 {
 	/* models for NPCs made while the map runs (ls_npc_spawn): ls_npc_models = "barney models/x.mdl",
 	   set in the mode's cfg (it runs before the map loads), or ls_npc_precache from a plugin */
 	register_cvar("ls_npc_models", "");
+	precache_model_once(NPC_FALLBACK);
 	new list[192], tok[64], at = 0;
 	get_cvar_string("ls_npc_models", list, charsmax(list));
 	for (;;)
@@ -13374,6 +13379,7 @@ stock npc_natives()
 	register_native("ls_interactable_spawn", "n_interactable_spawn");
 	register_native("ls_npc_talking", "n_npc_talking");
 	register_native("ls_interactable_offer", "n_interactable_offer");
+	register_native("ls_npc_targetable", "n_npc_targetable");
 }
 
 stock npc_init()
@@ -13382,6 +13388,8 @@ stock npc_init()
 	g_fwInteract = CreateMultiForward("ls_on_interact", ET_IGNORE, FP_CELL, FP_CELL);
 	g_fwNpcChoice = CreateMultiForward("ls_on_npc_choice", ET_IGNORE, FP_CELL, FP_CELL, FP_CELL);
 	register_forward(FM_PlayerPreThink, "npc_prethink");
+	RegisterHam(Ham_TakeDamage, "info_target", "npc_takedamage");
+	g_cFriendlyFire = get_cvar_pointer("mp_friendlyfire");
 	RegisterHamPlayer(Ham_Killed, "npc_player_killed", 1);
 	/* rcon tests without a person: ls_npc_use <player> <entity>, ls_npc_pick <player> <reply 0-5> */
 	register_srvcmd("ls_npc_use", "cmd_npc_use");
@@ -13456,8 +13464,13 @@ stock npc_comp_init(s)
 	if (k == K_NPC)
 	{
 		if (!usable_model(m))
-			copy(m, charsmax(m), "models/player/gign/gign.mdl");
-		set_model(ent, m, "models/player/gign/gign.mdl");
+		{
+			/* (the name asked for, not the stand-in) */
+			log_amx("NPC %s: model %s isn't loaded; showing %s instead.", g_label[s][0] ? g_label[s] : "(no name)", m[0] ? m : "(none)", NPC_FALLBACK);
+			engfunc(EngFunc_SetModel, ent, NPC_FALLBACK);
+		}
+		else
+			set_model(ent, m, NPC_FALLBACK);
 		new Float:o[3];
 		vcopy(g_org[s], o);
 		o[2] = g_floor[s] + 1.0;
@@ -13507,6 +13520,8 @@ stock npc_comp_reset(s)
 		g_val[s] = float(npc_behavior_id(s, ""));
 		new bool:god = ki(s, "unkillable", 1) != 0;
 		set_pev(ent, pev_takedamage, god ? DAMAGE_NO : DAMAGE_YES);
+		set_pev(ent, pev_solid, SOLID_NOT);
+		npc_set_target(s, !god && ki(s, "bots_attack", 0) != 0);
 		if (!god)
 		{
 			new Float:hp = floatmax(kf(s, "health", 100.0), 1.0);
@@ -13681,8 +13696,9 @@ stock npc_tick_one(s)
 	new e = g_ent[s];
 	if (!pev_valid(e) || pev(e, pev_deadflag) != DEAD_NO)
 		return;
-	/* solid once nobody stands in it (so it can't trap a player who spawned inside) */
-	if (pev(e, pev_solid) == SOLID_NOT)
+	/* a killable one is solid (bullets hit it) once nobody stands in it, so it can't trap a player
+	   who spawned inside; an unkillable one stays walk-through (bots path round its avoid patch) */
+	if (pev(e, pev_solid) == SOLID_NOT && pev(e, pev_takedamage) != DAMAGE_NO)
 	{
 		new Float:o[3];
 		pev(e, pev_origin, o);
@@ -14179,6 +14195,39 @@ public menu_npc_reply(id, menu, item)
 	new ret;
 	ExecuteForward(g_fwNpcChoice, ret, id, npc, choice);
 	return PLUGIN_HANDLED;
+}
+
+/* players on a killable NPC's side hurt it only with mp_friendlyfire on */
+public npc_takedamage(ent, inflictor, attacker, Float:dmg, bits)
+{
+	new s = npc_slot(ent);
+	if (s < 0 || !g_team[s] || !(1 <= attacker <= MaxClients) || !is_user_connected(attacker))
+		return HAM_IGNORED;
+	if (get_user_team(attacker) == g_team[s] && !(g_cFriendlyFire && get_pcvar_num(g_cFriendlyFire)))
+		return HAM_SUPERCEDE;
+	return HAM_IGNORED;
+}
+
+/* bots shoot a killable NPC only when the map (bots_attack=1) or the mode (ls_npc_targetable)
+   says so: those go by the classname ls_npc_target, the one class the brain is told to shoot
+   (ls_mode enemyclass); the rest stay ls_npc, which no bot ever picks */
+stock npc_set_target(s, bool:on)
+{
+	new e = g_ent[s];
+	if (!e || !pev_valid(e))
+		return;
+	set_pev(e, pev_classname, on ? "ls_npc_target" : "ls_npc");
+	if (on && !g_npcFoeSent)
+		g_npcFoeSent = hint("enemyclass ls_npc_target 1") != 0;
+}
+
+public n_npc_targetable(plugin, params)
+{
+	new s = npc_slot(get_param(1));
+	if (s < 0 || pev(g_ent[s], pev_takedamage) == DAMAGE_NO)
+		return 0;
+	npc_set_target(s, get_param(2) != 0);
+	return 1;
 }
 
 public npc_player_killed(id, killer, gib)

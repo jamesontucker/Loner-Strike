@@ -291,6 +291,7 @@
 	follow_secs(float) : "Follows for" : 10 : "Seconds it follows someone after a talk."
 	unkillable(choices) : "Unkillable" : 1 : "Unkillable NPCs take no damage, and bots never shoot them." = [ 1 : "Yes" 0 : "No" ]
 	health(integer) : "Health" : 100 : "Only when it can be killed."
+	bots_attack(choices) : "Bots may shoot it" : 0 : "Only when it can be killed. Its own side hurts it only with friendly fire on." = [ 0 : "No" 1 : "Yes" ]
 	greet(string) : "Greeting" : : "What it says when someone starts talking."
 	angle(angle) : "Facing" : 0 : ""
 	team(choices) : "Talks to" : 0 : "Who can talk to it." = [ 0 : "Anyone" 1 : "Terrorists" 2 : "Counter-Terrorists" ]

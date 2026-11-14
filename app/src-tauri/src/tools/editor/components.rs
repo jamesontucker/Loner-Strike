@@ -313,6 +313,24 @@ mod tests {
         }
     }
 
+    /// gm_components (the plugin, read as source): an NPC's stand-in model is loaded with every
+    /// map, and the log names the model that was asked for, not the stand-in twice (Y's check).
+    #[test]
+    fn npc_model_fallback_is_loaded_and_named_right() {
+        let src = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/scripting/gm_components.sma")).unwrap();
+        let block = &src[src.find("/* ==== NPCs and interactables (T1fix) ==== */").unwrap()..];
+        let pre = &block[block.find("stock npc_precache()").unwrap()..];
+        let pre = &pre[..pre.find("\n}\n").unwrap()];
+        assert!(pre.contains("precache_model_once(NPC_FALLBACK)"), "the stand-in loads with the map");
+        let init = &block[block.find("stock npc_comp_init(s)").unwrap()..];
+        let init = &init[..init.find("\n}\n").unwrap()];
+        assert!(!init.contains("copy(m, charsmax(m), NPC_FALLBACK)") && !init.contains("copy(m, charsmax(m), \"models/player/gign/gign.mdl\")"), "the asked-for name isn't overwritten before the log");
+        assert!(init.contains("isn't loaded; showing %s instead.\", g_label[s][0] ? g_label[s] : \"(no name)\", m[0] ? m : \"(none)\", NPC_FALLBACK)"));
+        // killable ones are solid (bullets hit them), unkillable ones walk-through; bots shoot one only by opt-in
+        assert!(block.contains("pev(e, pev_solid) == SOLID_NOT && pev(e, pev_takedamage) != DAMAGE_NO"));
+        assert!(block.contains("ki(s, \"bots_attack\", 0)") && block.contains("\"ls_npc_target\" : \"ls_npc\""));
+    }
+
     #[test]
     fn packs_round_trip() {
         let mut d = MapDocument::new();
