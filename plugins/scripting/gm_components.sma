@@ -2544,7 +2544,7 @@ stock spawner_show(s, bool:on)
 		vcopy(g_org[s], o);
 		o[2] = g_floor[s] + 8.0;
 		engfunc(EngFunc_SetOrigin, ent, o);
-		tier_glow(ent, floatround(g_pf[s][W_TIER]));
+		tier_glow(ent, w3_spawner_tier(s, floatround(g_pf[s][W_TIER]))); /* W3 */
 	}
 	else
 		set_pev(ent, pev_effects, pev(ent, pev_effects) | EF_NODRAW);
@@ -5092,7 +5092,7 @@ stock tier_glow(ent, tier)
 {
 	switch (clamp(tier, 1, 5))
 	{
-		case 1: render(ent, kRenderFxGlowShell, 180, 180, 180, kRenderNormal, 4);
+		case 1: render(ent, kRenderFxGlowShell, 230, 230, 230, kRenderNormal, 4); /* W3: white */
 		case 2: render(ent, kRenderFxGlowShell, 60, 200, 60, kRenderNormal, 6);
 		case 3: render(ent, kRenderFxGlowShell, 60, 120, 255, kRenderNormal, 8);
 		case 4: render(ent, kRenderFxGlowShell, 190, 60, 255, kRenderNormal, 10);
@@ -5156,6 +5156,8 @@ new const Float:W3_VEST_F[4] = { 1.0, 1.0, 0.85, 0.7 };
 /* a helmet takes this much of head hits before it breaks; the share that gets through */
 new const Float:W3_HELM_HP[4] = { 0.0, 100.0, 150.0, 200.0 };
 new const Float:W3_HELM_F[4] = { 1.0, 0.7, 0.6, 0.45 };
+/* rarity glow */
+new g_w3cRarity;
 /* scarce ammo */
 new g_w3cAmmoScarce, g_w3cAmmoMags;
 /* every gun that takes ammo (primaries and pistols) */
@@ -5170,6 +5172,8 @@ stock w3_natives()
 	register_native("ls_heal_using", "n_w3_heal_using");
 	register_native("ls_armor_set", "n_w3_armor_set");
 	register_native("ls_armor_get", "n_w3_armor_get");
+	register_native("ls_item_tier", "n_w3_item_tier");
+	register_native("ls_glow", "n_w3_glow");
 }
 
 stock w3_init()
@@ -5199,6 +5203,9 @@ stock w3_init()
 	/* 1: ammo is loot: a gun found comes with its magazine and ls_ammo_mags more, "ammo" gives 2 magazines */
 	g_w3cAmmoScarce = register_cvar("ls_ammo_scarce", "0");
 	g_w3cAmmoMags = register_cvar("ls_ammo_mags", "1");
+	/* 1: floor items glow by their own rarity (white, green, blue, purple, gold), guns players drop too */
+	g_w3cRarity = register_cvar("ls_rarity_glow", "0");
+	register_forward(FM_SetModel, "fm_w3_setmodel", 1);
 	RegisterHamPlayer(Ham_TraceAttack, "ham_w3_trace");
 	g_w3Hooked = true;
 }
@@ -6006,6 +6013,92 @@ stock w3_can_take_ammo(id, const item[])
 			return 1;
 	}
 	return 0;
+}
+
+/* ---- rarity glow: white, green, blue, purple, gold ---- */
+
+/* an item's rarity 1-5: the highest tier the loot tables give it, else by what it is */
+stock w3_item_tier(const item[])
+{
+	new best = 0, row[26];
+	for (new t = 0; t < g_ntables; t++)
+	{
+		new n = ArraySize(g_ltItems[t]);
+		for (new i = 0; i < n; i++)
+		{
+			ArrayGetArray(g_ltItems[t], i, row);
+			if (equali(row, item))
+				best = max(best, row[25]);
+		}
+	}
+	if (best)
+		return clamp(best, 1, 5);
+	new kind = w3_heal_kind(item);
+	if (kind >= 0)
+		return kind == HEAL_MEDKIT ? 3 : (kind == HEAL_DRINK ? 2 : 1);
+	new lv, part = w3_armor_item(item, lv);
+	if (part >= 0)
+		return max(lv, 1);
+	if (equali(item, "ammo", 4))
+		return 1;
+	new w[32];
+	weapon_name(item, w, charsmax(w));
+	switch (get_weaponid(w))
+	{
+		case CSW_AWP, CSW_M249, CSW_SG550, CSW_G3SG1: return 5;
+		case CSW_AK47, CSW_M4A1, CSW_SG552, CSW_AUG: return 4;
+		case CSW_FAMAS, CSW_GALIL, CSW_P90, CSW_XM1014: return 3;
+		case CSW_MP5NAVY, CSW_UMP45, CSW_M3, CSW_SCOUT, CSW_DEAGLE, CSW_MAC10, CSW_TMP, CSW_HEGRENADE: return 2;
+	}
+	return 1;
+}
+
+/* a weapon spawner: its item's rarity when ls_rarity_glow is on, else its own tier */
+stock w3_spawner_tier(s, tier)
+{
+	if (!get_pcvar_num(g_w3cRarity) || !g_item[s][0])
+		return tier;
+	return w3_item_tier(g_item[s]);
+}
+
+/* a gun a player dropped (a weaponbox) glows by its rarity */
+public fm_w3_setmodel(ent, const model[])
+{
+	if (!pev_valid(ent) || !get_pcvar_num(g_w3cRarity) || !equal(model, "models/w_", 9))
+		return FMRES_IGNORED;
+	new cls[12];
+	pev(ent, pev_classname, cls, charsmax(cls));
+	if (!equal(cls, "weaponbox"))
+		return FMRES_IGNORED;
+	new w[24];
+	copyc(w, charsmax(w), model[9], '.');
+	if (equal(w, "mp5"))
+		copy(w, charsmax(w), "mp5navy");
+	if (equal(w, "weaponbox") || equal(w, "backpack"))
+		return FMRES_IGNORED;
+	tier_glow(ent, w3_item_tier(w));
+	return FMRES_IGNORED;
+}
+
+/* native ls_item_tier(const item[]) */
+public n_w3_item_tier(plugin, params)
+{
+	new item[32];
+	get_string(1, item, charsmax(item));
+	return w3_item_tier(item);
+}
+
+/* native ls_glow(ent, tier): 1-5 white..gold, 0 none */
+public n_w3_glow(plugin, params)
+{
+	new ent = get_param(1), tier = get_param(2);
+	if (!pev_valid(ent))
+		return 0;
+	if (tier <= 0)
+		render(ent, kRenderFxNone, 0, 0, 0, kRenderNormal, 255);
+	else
+		tier_glow(ent, tier);
+	return 1;
 }
 
 /* ==== end W3 ==== */

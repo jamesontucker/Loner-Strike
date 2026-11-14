@@ -81,7 +81,7 @@ loaded up front.
   ring dimmer) for players within 1500 u of the edge, plus the 3 nearest areas (16 segments, 12 when
   far; boxes as 4-segment outlines). A `TE_BEAMCYLINDER` pulse when the zone starts closing. Supply
   crates get one vertical beacon beam a second.
-- **Glow** by loot tier (gray, green, blue, purple, gold); spawn protection glows.
+- **Glow** by loot tier (white, green, blue, purple, gold); spawn protection glows.
 - `ls_comp_radar 1`: a radar dot at the zone center (when outside), an open extraction or a crate,
   using a free player slot's `Radar` message. Not yet checked on the stock client.
 
@@ -355,4 +355,11 @@ isn't full). Typed ammo, any time: `ammo:762`, `ammo:556`, `ammo:9mm`, `ammo:45`
 `ammo:50`, `ammo:357`, `ammo:12g`, `ammo:box` (M249) or `ammo:<weapon>` (two magazines' worth),
 `ammo:762:60` for 60 rounds; reserve ammo is kept per type even without the gun, as in the game.
 No natives of its own: `ls_give_item(id, "ammo:762")`.
+
+### Rarity glow
+White, green, blue, purple, gold for tiers 1-5 (tier 1 was gray before). Crates and spawners glow by
+their tier as before; with `ls_rarity_glow 1` a weapon spawner glows by its item's own rarity and guns
+players drop (weaponboxes) glow too. An item's rarity is the highest tier the loot tables give it, else
+by what it is (AWP/M249/auto-snipers 5, AK/M4/SG552/AUG 4, FAMAS/Galil/P90/XM1014 3, SMGs/M3/Scout/Deagle
+2; medkit 3, drink 2, bandage 1; armor by level). Natives `ls_item_tier(item[])`, `ls_glow(ent, tier)`.
 <!-- ==== end W3 ==== -->

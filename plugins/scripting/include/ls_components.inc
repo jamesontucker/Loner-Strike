@@ -445,4 +445,12 @@ forward ls_on_armor(id, vest, helmet);
  * more (1); the loot item "ammo" gives two magazines for each gun carried. Typed ammo works either way:
  * "ammo:762", "ammo:556", "ammo:9mm", "ammo:45", "ammo:338", "ammo:57", "ammo:50", "ammo:357", "ammo:12g",
  * "ammo:box" (M249) or "ammo:<weapon>", two magazines' worth, or "ammo:762:60" for 60 rounds (ls_give_item). */
+
+/* Rarity glow: 1 white, 2 green, 3 blue, 4 purple, 5 gold. Crates and spawners glow by tier; with the cvar
+ * ls_rarity_glow 1 a spawner glows by its item's own rarity and guns players drop glow too. */
+
+/** An item's rarity 1-5 (the highest tier the loot tables give it, else by what it is). */
+native ls_item_tier(const item[]);
+/** Makes any entity glow in a rarity's colour (0 = no glow). */
+native ls_glow(ent, tier);
 /* ==== end W3 ==== */
