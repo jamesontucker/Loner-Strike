@@ -33,7 +33,7 @@ export function LinkHelp({ compact }: { compact?: boolean }) {
           <a href={DISCORD} target="_blank" rel="noreferrer">
             Loner-Strike Discord
           </a>
-          , type <code>/link code:ABCD-EFGH</code>. Only you see the answer.
+          {" "}server, type <code>/link code:ABCD-EFGH</code> in any channel (not in a DM to the bot). Only you see the reply.
         </li>
       </ol>
       <p className="muted small-note">
