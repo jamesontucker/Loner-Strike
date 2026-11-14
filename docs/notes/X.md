@@ -568,5 +568,17 @@ Cvars are the mode's switches (a Studio mode can set them with its cvar node).
   typed `ammo:762`, `ammo:556:60`... through `ls_give_item`. No natives of its own.
 - **Rarity glow** (bed0141b): cvar `ls_rarity_glow 1`; `ls_item_tier(const item[])` → 1-5; `ls_glow(ent, tier)`
   (0 = off). Colours white, green, blue, purple, gold.
-Next: death crates, the match HUD (kill feed, spectate), drop-in (`ls_drop_in`), squads + lobby, knocked-down squads.
+- **Death crates** (5ca3ad76): cvar `ls_death_crates 1`. `ls_crate_make(const Float:origin[3], const items[] = "",
+  const name[] = "")` returns the ent; `ls_crate_add(ent, const item[])`; `ls_crate_count(ent)`; `ls_crate_item(ent, i,
+  out[], len)`; `ls_crate_open(id, ent)`. Forwards `ls_on_death_crate(ent, victim)`, `ls_on_crate_take(ent, id, const
+  item[])` (handled: refused). Item text `ak47@30@60`, `bandage:3`, `vest2@85`.
+- **Match HUD** (1d543873): cvar `ls_match_hud 1`. `ls_match_hud(bool:on)`; `ls_match_hud_text(const text[])` (the
+  mode's words in place of the zone timer, "" = zone); `ls_feed(const text[])`; `ls_kills(id)`; `ls_spectate(id,
+  target)`.
+- **Drop-in** (2c89e395, your `ls_drop_in(id, spread)` ask): `ls_drop_in(id, const Float:spot[3] = {0,0,0},
+  Float:height = 0.0)` (spot 0 = a spread-out landing spot; height 0 = cvar `ls_drop_height`); `bool:ls_dropping(id)`;
+  `bool:ls_drop_spot(const Float:near[3], Float:out[3], const layer[] = "")`; `ls_drop_reset()`. Forward
+  `ls_on_landed(id)`. Uses `br_drop` markers (and their `layer` key), else respawn points.
+- **Heals for the brain** (31c6ac7f): `ls_mode heals <bot> b m d` is sent by the component; nothing for a node.
+Next: squads + the squad lobby, knocked-down squads (on W1's `ls_down_*`), Battle Royale moved onto all of it.
 ## ==== end W3 ====
