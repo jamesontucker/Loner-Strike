@@ -93,6 +93,7 @@ new g_special = -1;
 new g_heavyLeft;
 new g_cAliveMax;
 new g_cTiers;
+new g_capShown;
 #define ROUND_SOUND "buttons/bell1.wav"
 new g_record;
 new g_mapname[64];
@@ -194,7 +195,7 @@ public plugin_init()
 	g_cDefenders = register_cvar("lst_defenders", "4");
 	g_cWaveMoney = register_cvar("lst_wave_money", "800");
 	g_cAliveMax = register_cvar("lst_alive_max", "0");
-	g_cTiers = register_cvar("lst_tiers", "0");
+	g_cTiers = register_cvar("lst_tiers", "1");
 	g_cWaitHuman = register_cvar("lst_wait_human", "1");
 	g_cOverrun = register_cvar("lst_overrun", "15");
 	g_cLastChance = register_cvar("lst_last_chance", "30");
@@ -261,7 +262,8 @@ public cmd_perf()
 	while ((e = find_ent_by_class(e, "ls_creature")))
 		if (pev(e, pev_deadflag) == DEAD_NO)
 			cr++;
-	log_amx("Last Stand perf: %d entities of %d, %d creatures alive (cap %d), %d of %d defenders up, phase %d wave %d", engfunc(EngFunc_NumberOfEntities), global_get(glb_maxEntities), cr, alive_cap(), up, ct, g_phase, g_wave);
+	new capnow = get_cvar_pointer("ls_creature_cap_now") ? get_cvar_num("ls_creature_cap_now") : -1;
+	log_amx("Last Stand perf: %d entities of %d, %d creatures alive (cap %d, ls_creature_cap_now %d), %d of %d defenders up, phase %d wave %d", engfunc(EngFunc_NumberOfEntities), global_get(glb_maxEntities), cr, alive_cap(), capnow, up, ct, g_phase, g_wave);
 	return PLUGIN_HANDLED;
 }
 
@@ -970,9 +972,9 @@ stock Float:fast_share(n)
 	return floatmin(0.1 * float(n - 2), 0.72);
 }
 
-/* a creature tier for the round (0 plain; 1 from round 10, 2 from 15, 3 from 20): a hook for
-   Y's visual/enrage tiers - sent as the creature's "tier" key once the game DLL reads it
-   (lst_tiers 1) */
+/* a creature tier for the round, sent as the creature's "tier" key (lst_tiers): 0 and 1 are
+   normal in the game DLL, 2 (from round 15) a yellow shell, 3 (from round 20) red-orange and 8 %
+   bigger; health stays Last Stand's */
 stock round_tier(n)
 {
 	return n >= 20 ? 3 : (n >= 15 ? 2 : (n >= 10 ? 1 : 0));
@@ -983,9 +985,13 @@ stock round_tier(n)
 stock alive_cap()
 {
 	new c = get_pcvar_num(g_cAliveMax);
-	if (c > 0)
-		return c;
-	return clamp(16 + 2 * defenders(), 20, 48);
+	if (c <= 0)
+		c = clamp(16 + 2 * defenders(), 20, 48);
+	/* the game DLL's own adaptive cap (it lowers it when the server can't keep up) */
+	new p = get_cvar_pointer("ls_creature_cap_now");
+	if (p && get_pcvar_num(p) > 0)
+		c = min(c, get_pcvar_num(p));
+	return c;
 }
 
 stock type_hp(const type[])
@@ -1521,6 +1527,15 @@ public tick()
 		attack_barricades();
 		weigh_defenders();
 		count_height();
+		/* the alive cap follows the game DLL's adaptive one through the round */
+		new cap = alive_cap();
+		if (cap != g_capShown)
+		{
+			if (g_capShown)
+				log_amx("Last Stand: creature cap now %d (wave %d)", cap, g_wave);
+			g_capShown = cap;
+			set_cvar_num("ls_comp_wave_alive_max", cap);
+		}
 		if (now >= g_stuckAt)
 		{
 			g_stuckAt = now + 15.0;
