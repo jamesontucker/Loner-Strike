@@ -41,6 +41,7 @@ def run(path, name, seconds):
     import formats
     formats.set_deadline(time.monotonic() + seconds)
     kinds = {}
+    creatures = []
 
     def one(fname, fh, size):
         try:
@@ -49,6 +50,10 @@ def run(path, name, seconds):
             raise Refused(f"{fname} didn't pass the checks: {e}.")
         if k:
             kinds[k] = kinds.get(k, 0) + 1
+        if k == "creatures":
+            # the types it defines (the service checks the listing against them)
+            fh.seek(0)
+            creatures.extend(formats.creatures_ini_types(fh.read(formats.CREATURES_MAX)))
 
     if not name.lower().endswith(".zip"):
         with open(path, "rb") as fh:
@@ -78,7 +83,10 @@ def run(path, name, seconds):
                 with open(part, "rb") as fh:
                     one(i.filename, fh, got)
                 os.remove(part)
-    return {"ok": True, "files": sum(kinds.values()), "kinds": kinds}
+    out = {"ok": True, "files": sum(kinds.values()), "kinds": kinds}
+    if creatures:
+        out["creatures"] = creatures
+    return out
 
 
 class Refused(Exception):

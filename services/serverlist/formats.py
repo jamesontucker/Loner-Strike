@@ -22,6 +22,7 @@
 # downloads folder, our nav pack and real GameBanana packages without one false refusal
 # (docs/COMMUNITY-SERVER.md, "Format checks").
 import json
+import re
 import struct
 import time
 
@@ -545,6 +546,96 @@ def check_text(r, as_json=False, limit=16 << 20):
     return "text"
 
 
+# ---- custom creatures (keep in step with the app's tools/creatures.rs): a creatures.ini fragment a map, mode,
+# prefab or creature package carries ----
+# where a package keeps them: one creatures.ini fragment; their models and sounds go in models/ and sound/
+CREATURES_FILE = "creatures/creatures.ini"
+CREATURES_MAX = 64 << 10      # the fragment's size
+CREATURES_TYPES = 32          # the bot brain holds 32 types of its own besides the built-in ones
+# the bot brain's built-in types: a package may never define these (it would change everyone's)
+BUILTIN_CREATURES = ("zombie", "runner", "brute", "spitter", "hound", "turret", "boss", "headcrab", "vortigaunt",
+                     "babygarg", "snark", "babycrab", "miniturret", "assassin", "soldier", "gonarch")
+# a shared type's name says who made it: "<author>.<name>", 31 characters at most (the brain's)
+_CREATURE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,23}\.[a-z0-9_]{1,29}$")
+_CREATURE_ASSET = re.compile(r"^(models/[a-z0-9_./ -]{1,150}\.mdl|sound/[a-z0-9_./ -]{1,150}\.wav)$")
+
+
+def creature_name_ok(n):
+    """A shared creature type's name: namespaced "<author>.<name>", not all digits after the dot,
+    never a built-in type's name."""
+    if not isinstance(n, str) or len(n) > 31 or not _CREATURE.match(n):
+        return False
+    rest = n.split(".", 1)[1]
+    return not rest.isdigit() and n not in BUILTIN_CREATURES
+
+
+def creatures_ini_problem(data):
+    """Why a package's creatures.ini can't be installed (None: it can). It must be text, small,
+    every [type] namespaced and none a built-in type, and every model or sound it names a plain
+    path in models/ or sound/ (the app writes nothing outside the game's folders)."""
+    if len(data) > CREATURES_MAX:
+        return "it's too big"
+    if b"\0" in data:
+        return "it isn't text"
+    text = data.decode("latin-1")
+    names = []
+    for raw in text.splitlines():
+        if len(raw) > 511:
+            return "it has a line longer than the game reads"
+        line = raw
+        for mark in (";", "#", "//"):
+            i = line.find(mark)
+            if i >= 0:
+                line = line[:i]
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("["):
+            name = line[1:].split("]", 1)[0].strip()
+            if name.lower() in BUILTIN_CREATURES:
+                return f"it changes the built-in type {name.lower()}"
+            if not creature_name_ok(name):
+                return f"the type {name[:40]!r} isn't named <author>.<name>"
+            if name not in names:
+                names.append(name)
+            continue
+        if not names:
+            continue  # (the brain skips keys before the first [type])
+        if "=" not in line:
+            continue
+        _key, value = line.split("=", 1)
+        if "\\" in value or ":" in value or ".." in value:
+            return f"[{names[-1]}] names a file outside the game's folders"
+        for tok in value.split():
+            if "/" in tok and not _CREATURE_ASSET.match(tok.lower()):
+                return f"[{names[-1]}] names a file that isn't a model or sound ({tok[:60]})"
+    if not names:
+        return "it has no creature types"
+    if len(names) > CREATURES_TYPES:
+        return f"it has {len(names)} types; the game holds {CREATURES_TYPES} of your own"
+    return None
+
+
+def creatures_ini_types(data):
+    """The [type] names in a creatures.ini fragment, in order."""
+    out = []
+    for raw in data.decode("latin-1").splitlines():
+        line = raw.split(";", 1)[0].split("#", 1)[0].split("//", 1)[0].strip()
+        if line.startswith("["):
+            n = line[1:].split("]", 1)[0].strip()
+            if n not in out:
+                out.append(n)
+    return out
+
+
+
+def check_creatures(r):
+    _need(r.size <= CREATURES_MAX, "it's too big")
+    why = creatures_ini_problem(r.at(0, r.size))
+    _need(why is None, why or "")
+    return "creatures"
+
+
 CHECKS = {".bsp": check_bsp, ".wad": check_wad, ".mdl": check_mdl, ".spr": check_spr, ".wav": check_wav,
           ".mp3": check_mp3, ".bmp": check_bmp, ".tga": check_tga, ".png": check_png, ".jpg": check_jpg,
           ".jpeg": check_jpg, ".nav": check_nav, ".lsv": check_lsv, ".res": check_text, ".txt": check_text,
@@ -558,7 +649,7 @@ def check(name, f, size):
     its kind ("map", "model", ...) or None when there's no check for it; FormatError if bad."""
     low = name.lower()
     ext = low[low.rfind("."):] if "." in low.rsplit("/", 1)[-1] else ""
-    fn = CHECKS.get(ext)
+    fn = check_creatures if low.replace("\\", "/") == CREATURES_FILE else CHECKS.get(ext)
     if fn is None:
         return None
     try:

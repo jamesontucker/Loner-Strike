@@ -387,7 +387,7 @@ class Pages(unittest.TestCase):
         self.assertEqual(facts["file"]["md5"], "bb48b1faf89c4daad7545c4f3a2ce681")
         self.assertTrue(facts["screenshots"] and all(u.startswith("https://images.gamebanana.com/") for u in facts["screenshots"]))
         nocat = copy.deepcopy(MAP)
-        nocat["_aCategory"], nocat["_aSuperCategory"] = {"_idRow": 1, "_sName": "Skins"}, {"_idRow": 2, "_sName": "Skins"}
+        nocat["_aCategory"], nocat["_aSuperCategory"] = {"_idRow": 1, "_sName": "Sounds"}, {"_idRow": 2, "_sName": "Sounds"}
         cases = {
             "untagged": (fixture("mod_739197_untagged.json"), 1885247, "tag"),
             "game": (dict(MAP, _aGame={"_idRow": 1}), 1885247, "1.6"),

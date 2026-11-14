@@ -54,7 +54,7 @@ TAG_ALSO = "Loner-Strike"
 GB_HOST = "gamebanana.com"
 GB_API = f"https://{GB_HOST}/apiv11"
 USER_AGENT = "LonerStrike/1.0 (community server; +https://lonerstrike.com)"
-KINDS = ("map", "mode", "prefab", "spray", "texture")
+KINDS = ("map", "mode", "prefab", "spray", "texture", "creature")
 MODELS = {"mod": "Mod", "mods": "Mod", "spray": "Spray", "sprays": "Spray"}
 # GameBanana's CS 1.6 categories (COMMUNITY.md section 1)
 CAT_MAPS, CAT_PREFABS, CAT_TEXTURES, CAT_AMXX = 5474, 451, 681, 3521
@@ -139,6 +139,24 @@ class Reject(Exception):
 _HEX32 = re.compile(r"^[0-9a-f]{32}$")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _MODE_ID = re.compile(r"^[A-Za-z0-9_]{1,32}$")
+
+# custom creatures a map, mode, prefab or creature package carries: the rules live in formats.py
+# (the checker child reads the fragment itself)
+from formats import BUILTIN_CREATURES, CREATURES_FILE, CREATURES_TYPES, creature_name_ok, creatures_ini_problem, creatures_ini_types  # noqa: E402,F401
+
+
+def _creatures(raw, kind):
+    """The custom creatures an item says it carries: [{name, model, sounds}] (names checked)."""
+    out = []
+    for c in _list(raw, "creatures", CREATURES_TYPES):
+        if not isinstance(c, dict) or not creature_name_ok(c.get("name")):
+            _bad("creatures")
+        if kind not in ("map", "mode", "prefab", "creature"):
+            _bad("creatures")
+        if any(x["name"] == c["name"] for x in out):
+            continue
+        out.append({"name": c["name"], "model": _bool(c, "model"), "sounds": _int(c, "sounds", 0, 64)})
+    return out
 # a mode's (or kit's, or library item's) permanent id, beside its short game id (entries that already
 # had one when the uids table came in are its owners from the start: migration 4 backfills them)
 _UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -403,6 +421,11 @@ def clean_item(raw):
         _bad("source")
     if src:
         it["source"] = True
+    creatures = _creatures(raw, kind)
+    if kind == "creature" and not creatures:
+        _bad("creatures")
+    if creatures:
+        it["creatures"] = creatures
 
     m = _obj(raw, "map")
     if kind == "map" and m is None:
@@ -817,6 +840,13 @@ def allowed_path(kind, p):
     top = parts[0]
     if p in ("readme.txt", "loner-strike.json"):
         return True
+    if p == CREATURES_FILE:
+        return kind in ("map", "mode", "prefab", "creature")
+    if kind == "creature":
+        # one shared type: its creatures.ini section(s), its models and sounds, a preview picture
+        assets = len(parts) >= 2 and top in ("models", "sound") and ext in (".mdl", ".wav")
+        preview = top == "creatures" and len(parts) == 2 and parts[1].startswith("preview") and ext in (".png", ".jpg", ".jpeg")
+        return assets or preview
     root_wad = len(parts) == 1 and ext == ".wad" and p not in STOCK_WADS
     content = len(parts) >= 2 and top in CONTENT and ext in CONTENT[top]
     if kind == "map":
@@ -829,7 +859,9 @@ def allowed_path(kind, p):
         return p == "tempdecal.wad" or root_wad or (top == "logos" and len(parts) == 2 and ext == ".bmp") \
             or (len(parts) == 1 and ext in (".bmp", ".tga", ".png", ".jpg", ".jpeg"))
     if kind == "prefab":
-        return root_wad or (top == "prefabs" and len(parts) == 2 and ext in (".map", ".json", ".png"))
+        # (its creatures' models and sounds too)
+        creature_files = len(parts) >= 2 and top in ("models", "sound") and ext in (".mdl", ".wav")
+        return root_wad or creature_files or (top == "prefabs" and len(parts) == 2 and ext in (".map", ".json", ".png"))
     if kind == "mode":
         # Game Mode Studio data (provisional until the Studio's package format is fixed): its
         # graphs and settings, and the content it uses; never plugins or their lists
@@ -950,6 +982,9 @@ def page_kind(page, model):
         return "texture"
     if CAT_AMXX in ids or "amxx" in sub:
         return "mode"
+    # a Loner-Strike creature (a tagged page among the game's skins and models)
+    if root in ("skins", "models"):
+        return "creature"
     return None
 
 
@@ -992,7 +1027,7 @@ def page_facts(page, model):
     kind = page_kind(page, model)
     if not kind:
         raise Reject(422, "The page isn't in a category the list takes: Maps, Prefabs, Textures, Resources > AMXX Plugins & Mods "
-                          "(Game Mode Studio modes) or Sprays.")
+                          "(Game Mode Studio modes), Skins (creatures) or Sprays.")
     title = one_line(str(page.get("_sName") or ""), 80)
     if not title:
         raise Reject(422, "The page has no name.")
@@ -1037,7 +1072,7 @@ def build_item(model, gb, facts, sizes, manifest):
     kind, f = facts["kind"], facts["file"]
     if manifest is not None:
         it = package_item(manifest, kind)
-    elif kind in ("map", "mode", "prefab"):
+    elif kind in ("map", "mode", "prefab", "creature"):
         raise Reject(422, "The package has no loner-strike.json. Make it with the app's Publish and upload that zip unchanged.")
     else:
         it = {"kind": kind, "summary": "", "games": ["cstrike"], "tags": []}
@@ -1048,6 +1083,10 @@ def build_item(model, gb, facts, sizes, manifest):
         # P5: "with its source" only when the package really has the project in source/
         if it.get("source") and not any(p.lower().startswith("source/") and p.lower().endswith(".lsmap") for p in sizes):
             it.pop("source", None)
+    # custom creatures: listed only when the package really carries creatures/creatures.ini (its
+    # contents are checked with the other files, creatures_ini_problem)
+    if it.get("creatures") and not any(p.replace("\\", "/").lower() == CREATURES_FILE for p in sizes):
+        raise Reject(422, "The package lists custom creatures but doesn't include them. Make it again with Publish.")
     it.pop("health", None)
     it.update(kind=kind, model=model, gb=gb, file=f["id"], md5=f["md5"], name=facts["title"], author=facts["author"],
               screenshots=facts["screenshots"], featured=False, status="listed")
@@ -1780,6 +1819,8 @@ def index_item(row):
         out["remixOf"] = it["remixOf"]
     if it.get("source"):
         out["source"] = True
+    if it.get("creatures"):
+        out["creatures"] = it["creatures"]
     out.update(screenshots=list(it.get("screenshots") or [])[:MAX_SHOTS], tags=list(it.get("tags") or []),
                featured=bool(row["featured"]), added=int(row["added"]), updated=int(row["updated"]), status=status)
     return out
@@ -1878,6 +1919,10 @@ class Community:
         item = build_item(model, gb, dict(facts, file=f), sizes, manifest)
         # the files themselves, one by one (kept with the entry; not part of the index)
         item["checks"] = self.check_files(model, gb, f, facts["kind"])
+        # every creature the entry lists must be defined in the package's creatures.ini
+        missing = [c["name"] for c in item.get("creatures", []) if c["name"] not in item["checks"].get("creatures", [])]
+        if missing:
+            raise Reject(422, f"The package lists {missing[0]} but its creatures.ini doesn't define it. Make it again with Publish.")
         # the upload's GameBanana date: the evidence when two pages declare the same uid (not indexed)
         item["fileAt"] = f.get("added") or 0
         return item
@@ -1918,7 +1963,10 @@ class Community:
         if not result.get("ok"):
             raise Reject(422, result.get("error") or "The package couldn't be checked.")
         log(f"checked {key_of(model, gb)}: {result['files']} files")
-        return {"files": result["files"], "kinds": result["kinds"], "bytes": f["size"], "at": now()}
+        out = {"files": result["files"], "kinds": result["kinds"], "bytes": f["size"], "at": now()}
+        if isinstance(result.get("creatures"), list):
+            out["creatures"] = [n for n in result["creatures"] if isinstance(n, str)][:64]
+        return out
 
     def run_checker(self, path, name, seconds, cwd):
         """Runs the checker child and waits for it to exit (killed and reaped at `seconds`)."""

@@ -15,7 +15,7 @@ import sys
 
 MAX_BYTES = 8 << 20
 MAX_ITEMS = 5000
-KINDS = {"map", "mode", "prefab", "spray", "texture"}
+KINDS = {"map", "mode", "prefab", "spray", "texture", "creature"}
 STATUSES = {"listed", "hidden", "revoked"}
 KEY = re.compile(r"^(mod|spray):[1-9][0-9]{0,7}$")
 
