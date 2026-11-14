@@ -145,6 +145,8 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
   const dropItem = async (it: LibItem) => {
+    // (one that ships with the app stays: it can only be added)
+    if (it.builtIn) return;
     if (!(await ask(`Delete “${it.name}” from your library? Modes that use it keep their copy.`, { ok: "Delete", danger: true }))) return;
     const r = await deleteItem(it.id);
     if (r.error) toast(r.error, true);
@@ -157,7 +159,7 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
   const exportAll = async () => {
     await useStudio.getState().reloadLibrary();
     const items = useStudio.getState().library;
-    download({ schema: LIBRARY_SET, version: 1, items: items.map((it) => ({ id: it.id, item: itemFile(it) })) }, "my-studio-library.lib.json");
+    download({ schema: LIBRARY_SET, version: 1, items: items.filter((it) => !it.builtIn).map((it) => ({ id: it.id, item: itemFile(it) })) }, "my-studio-library.lib.json");
   };
   const importFiles = async (files: FileList | null) => {
     await useStudio.getState().reloadLibrary();
@@ -214,8 +216,7 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
                   cm.open(e, it.name, [
                     { label: "Add to this mode", run: () => add(it) },
                     { label: "Export as a file", run: () => exportItem(it) },
-                    "-",
-                    { label: "Delete from my library…", danger: true, run: () => void dropItem(it) },
+                    ...(it.builtIn ? [] : ["-" as const, { label: "Delete from my library…", danger: true, run: () => void dropItem(it) }]),
                   ])
                 }
                 onKeyDown={(e) => {
@@ -225,23 +226,25 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
                   }
                 }}
                 onMouseUp={(e) => e.button === 0 && e.currentTarget.focus({ preventScroll: true })}
-                title={`${it.description || it.name} · version ${it.itemVersion} (double-click or drag it in)`}
+                title={`${it.description || it.name} · ${it.builtIn ? "comes with the app" : `version ${it.itemVersion}`} (double-click or drag it in)`}
               >
                 <span className={`st-mb-dot ${it.kind === "function" ? "fn" : it.kind === "macro" ? "mac" : it.kind === "struct" ? "st" : "en"}`} /> {it.name}
-                <span className="st-muted st-mb-note">v{it.itemVersion}</span>
+                <span className="st-muted st-mb-note">{it.builtIn ? "built in" : `v${it.itemVersion}`}</span>
               </button>
               <button type="button" className="st-mb-add" title="Export as a file" aria-label={`Export ${it.name}`} onClick={() => exportItem(it)}>
                 ⤓
               </button>
-              <button
-                type="button"
-                className="st-mb-add"
-                title="Delete from my library"
-                aria-label={`Delete ${it.name}`}
-                onClick={() => void dropItem(it)}
-              >
-                ×
-              </button>
+              {!it.builtIn && (
+                <button
+                  type="button"
+                  className="st-mb-add"
+                  title="Delete from my library"
+                  aria-label={`Delete ${it.name}`}
+                  onClick={() => void dropItem(it)}
+                >
+                  ×
+                </button>
+              )}
             </div>
           </div>
         );

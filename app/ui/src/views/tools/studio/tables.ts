@@ -17,7 +17,7 @@ export const COLUMN_TYPES: [string, string][] = [
   ["entname", "Entity name"],
 ];
 export const WEAPONS = ["ak47", "m4a1", "awp", "scout", "famas", "galil", "aug", "sg552", "mp5navy", "p90", "ump45", "mac10", "tmp", "m3", "xm1014", "m249", "deagle", "usp", "glock18", "p228", "fiveseven", "elite", "hegrenade", "flashbang", "smokegrenade", "knife", "c4"];
-export const LIMITS = { tables: 16, columns: 12, rows: 256, text: 48, cells: 6000 };
+export const LIMITS = { tables: 16, columns: 16, rows: 256, text: 48, cells: 6000 };
 
 /** A column's values as a pin type. */
 export const pinType = (c: TableColumn) => (c.type === "weapon" || c.type === "entname" ? "text" : c.type);

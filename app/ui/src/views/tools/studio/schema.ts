@@ -197,8 +197,8 @@ export const graphSchema = z.object({
         id,
         name: label(30),
         key: id,
-        columns: z.array(z.object({ id, name: label(30), type: z.string().regex(/^(number|text|bool|weapon|entname|enum:[A-Za-z0-9_]{1,24})$/) })).min(1).max(12),
-        rows: z.array(z.array(z.union([z.number().finite(), z.string().max(48), z.boolean()])).max(12)).max(256).default([]),
+        columns: z.array(z.object({ id, name: label(30), type: z.string().regex(/^(number|text|bool|weapon|entname|enum:[A-Za-z0-9_]{1,24})$/) })).min(1).max(16),
+        rows: z.array(z.array(z.union([z.number().finite(), z.string().max(48), z.boolean()])).max(16)).max(256).default([]),
       }),
     )
     .max(16)

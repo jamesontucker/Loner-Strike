@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub const MAX_TABLES: usize = 16;
-pub const MAX_COLUMNS: usize = 12;
+/// (16: a dialog table is an id, a speaker, a line and six replies with where each goes)
+pub const MAX_COLUMNS: usize = 16;
 pub const MAX_ROWS: usize = 256;
 pub const MAX_TEXT: usize = 48;
 /// all the tables' cells together (the plugin's data stays small)
@@ -114,9 +115,33 @@ pub fn validate(tables: &[DataTable], enums: &[(String, usize)]) -> Vec<Problem>
             }
         }
         cells += t.rows.len() * t.columns.len();
+        p.extend(dialogue_links(t));
     }
     if cells > MAX_CELLS {
         p.push(err(format!("The data tables have {cells} cells together; the most a mode can hold is {MAX_CELLS}. Split the data, or keep fewer rows.")));
+    }
+    p
+}
+
+/// A dialog table (the bundled "Dialog" template: key column id, columns next1..next6):
+/// every reply's next row is a row's id, "end" or empty. A missing one would end the talk there
+/// (Run Dialog stops cleanly), so it's a note, not an error.
+pub fn dialogue_links(t: &DataTable) -> Vec<Problem> {
+    let Some((k, kc)) = t.key_col() else { return Vec::new() };
+    let nexts: Vec<(usize, &Column)> = t.columns.iter().enumerate().filter(|(_, c)| c.id.len() == 5 && c.id.starts_with("next") && c.ty == "text").collect();
+    if kc.id != "id" || kc.ty != "text" || nexts.is_empty() {
+        return Vec::new();
+    }
+    let ids: std::collections::HashSet<&str> = t.rows.iter().filter_map(|r| r.get(k)?.as_str()).collect();
+    let mut p = Vec::new();
+    for row in &t.rows {
+        let here = row.get(k).and_then(Value::as_str).unwrap_or("");
+        for (i, c) in &nexts {
+            let to = row.get(*i).and_then(Value::as_str).unwrap_or("").trim();
+            if !to.is_empty() && !to.eq_ignore_ascii_case("end") && !ids.contains(to) {
+                p.push(Problem { level: "warning", node: None, pin: None, edge: None, message: format!("In \u{201c}{}\u{201d}, {} of row \u{201c}{here}\u{201d} goes to \u{201c}{to}\u{201d}, which no row has as its id: the talk ends there. Use a row's id, or end.", t.name, c.name) });
+            }
+        }
     }
     p
 }
@@ -291,6 +316,37 @@ mod tests {
         assert!(src.contains("stock const Float:g_lsgDt0_2[3] = { 120.0, 120.0, 90.0 }"), "{src}");
         assert!(src.contains("stock Float:lsg_dt0_find(Float:key)"));
         assert!(pawn(&[guns()], &|_| false).is_empty());
+    }
+
+    /// The bundled Dialog table (16 columns may be had now: id, speaker, line, six replies and
+    /// six next rows) checks clean; a reply going to an id no row has is a note naming it, never
+    /// an error (Run Dialog ends cleanly there).
+    #[test]
+    fn dialogue_links_are_checked() {
+        let item: Value = serde_json::from_str(include_str!("../../../../ui/src/views/tools/studio/library/run_dialog.lib.json")).unwrap();
+        let mut t: DataTable = serde_json::from_value(item["dataTables"][0].clone()).unwrap();
+        assert_eq!(t.columns.len(), 15);
+        assert!(validate(&[t.clone()], &[]).is_empty(), "{:?}", validate(&[t.clone()], &[]));
+        let n2 = t.col("next2").unwrap().0;
+        t.rows[0][n2] = json!("nowhere");
+        let p = validate(&[t.clone()], &[]);
+        assert_eq!(p.len(), 1, "{p:?}");
+        assert_eq!(p[0].level, "warning");
+        assert!(p[0].message.contains("Next 2 of row \u{201c}start\u{201d} goes to \u{201c}nowhere\u{201d}"), "{}", p[0].message);
+        // "end" (any case) and empty are fine; other tables aren't looked at
+        t.rows[0][n2] = json!("END");
+        assert!(validate(&[t.clone()], &[]).is_empty());
+        assert!(dialogue_links(&guns()).is_empty());
+        t.columns.push(Column { id: "x0".into(), name: "X 0".into(), ty: "number".into() });
+        for r in t.rows.iter_mut() {
+            r.push(json!(0));
+        }
+        assert!(validate(&[t.clone()], &[]).is_empty(), "16 columns");
+        t.columns.push(Column { id: "x9".into(), name: "X 9".into(), ty: "number".into() });
+        for r in t.rows.iter_mut() {
+            r.push(json!(0));
+        }
+        assert!(validate(&[t], &[]).iter().any(|p| p.message.contains("1 to 16 columns")));
     }
 }
 

@@ -15,8 +15,10 @@ export const LIBRARY = "loner-strike/graph-library";
 export const LIBRARY_SET = "loner-strike/graph-library-set";
 export type LibKind = "function" | "macro" | "struct" | "enum";
 
-export type LibBody = { enums: GEnum[]; structs: GStruct[]; functions: GFunction[]; macros: GMacro[]; variables: GVariable[]; nodes: GNode[]; edges: GEdge[]; comments: GComment[] };
-export type LibItem = { id: string; name: string; description: string; category: string; kind: LibKind; root: string; itemVersion: number; body: LibBody };
+type GTable = NonNullable<Graph["dataTables"]>[number];
+export type LibBody = { enums: GEnum[]; structs: GStruct[]; functions: GFunction[]; macros: GMacro[]; variables: GVariable[]; nodes: GNode[]; edges: GEdge[]; comments: GComment[]; dataTables?: GTable[] };
+/** builtIn: shipped with the app (library/*.lib.json), read-only: it can be added, not deleted */
+export type LibItem = { id: string; name: string; description: string; category: string; kind: LibKind; root: string; itemVersion: number; body: LibBody; builtIn?: boolean };
 
 const TYPE_REF = /(struct|enum):([A-Za-z0-9_]{1,24})/g;
 const refs = (t: string) => [...t.matchAll(TYPE_REF)].map((m) => m[2]);
@@ -59,6 +61,7 @@ export function extractItem(g: Graph, root: string): { kind: LibKind; body: LibB
   }
   const graphs = new Set([...want].filter((id) => fns.has(id) || macs.has(id)));
   const nodes = g.nodes.filter((n) => n.graph && graphs.has(n.graph)).map((n) => ({ ...n, breakpoint: undefined }));
+  const tables = new Set(nodes.map((n) => n.params.table).filter((t): t is string => typeof t === "string"));
   const ids = new Set(nodes.map((n) => n.id));
   const strip = <T extends { id: string; from?: unknown }>(x: T): T => (x.id === root ? { ...x, from: undefined } : x);
   return {
@@ -72,6 +75,7 @@ export function extractItem(g: Graph, root: string): { kind: LibKind; body: LibB
       nodes,
       edges: g.edges.filter((e) => ids.has(e.from.node) && ids.has(e.to.node)),
       comments: g.comments.filter((c) => c.graph && graphs.has(c.graph)),
+      ...(tables.size ? { dataTables: (g.dataTables ?? []).filter((t) => tables.has(t.id)) } : {}),
     },
   };
 }
@@ -97,6 +101,7 @@ export function itemFile(it: Omit<LibItem, "id" | "itemVersion"> & { itemVersion
       nodes: b.nodes,
       edges: b.edges,
       comments: b.comments,
+      ...(b.dataTables?.length ? { dataTables: b.dataTables } : {}),
     }),
   );
 }
@@ -120,7 +125,7 @@ export function readItem(id: string, v: unknown): LibItem | null {
     kind: kind as LibKind,
     root,
     itemVersion: typeof itemVersion === "number" ? itemVersion : 1,
-    body: { enums: g.enums ?? [], structs: g.structs ?? [], functions: g.functions ?? [], macros: g.macros ?? [], variables: g.variables, nodes: g.nodes, edges: g.edges, comments: g.comments },
+    body: { enums: g.enums ?? [], structs: g.structs ?? [], functions: g.functions ?? [], macros: g.macros ?? [], variables: g.variables, nodes: g.nodes, edges: g.edges, comments: g.comments, ...(g.dataTables?.length ? { dataTables: g.dataTables } : {}) },
   };
 }
 
@@ -188,6 +193,23 @@ export function insertItem(g0: Graph, it: LibItem, replace?: string): { graph: G
     map.set(v.id, id);
     g.variables.push({ ...v, id, type, name: uniqueName(allVariables(g).map((x) => x.name), v.name) });
   }
+  // data tables: one with the same name and columns is used again (its rows are the mode's);
+  // another comes in with its rows, a fresh id and a free name
+  const tmap = new Map<string, string>();
+  if (b.dataTables?.length) {
+    g.dataTables = [...(g.dataTables ?? [])];
+    for (const t of b.dataTables) {
+      const same = g.dataTables.find((x) => x.name === t.name && JSON.stringify(x.columns) === JSON.stringify(t.columns));
+      if (same) {
+        tmap.set(t.id, same.id);
+        continue;
+      }
+      let i = 1;
+      while (g.dataTables.some((x) => x.id === `t${i}`)) i++;
+      tmap.set(t.id, `t${i}`);
+      g.dataTables.push({ ...t, id: `t${i}`, name: uniqueName(g.dataTables.map((x) => x.name), t.name) });
+    }
+  }
   // Functions and Macros: the same copy again is used again; the one being updated keeps its id
   const parts: (["fn", GFunction] | ["mac", GMacro])[] = [...b.functions.map((f): ["fn", GFunction] => ["fn", f]), ...b.macros.map((m): ["mac", GMacro] => ["mac", m])];
   const newGraphs = new Set<string>();
@@ -247,6 +269,7 @@ export function insertItem(g0: Graph, it: LibItem, replace?: string): { graph: G
     const params = { ...n.params };
     for (const k of ["func", "macro", "struct", "enum", "var"]) if (typeof params[k] === "string" && map.has(params[k] as string)) params[k] = map.get(params[k] as string)!;
     if (typeof params.of === "string") params.of = mapType(params.of);
+    if (typeof params.table === "string" && tmap.has(params.table)) params.table = tmap.get(params.table)!;
     g.nodes.push({ ...n, id, graph: map.get(n.graph!)!, params });
   }
   for (const e of b.edges) {
@@ -276,7 +299,7 @@ export function newerInLibrary(items: LibItem[], from: { lib: string; version: n
 
 /** An id for a new library item from its name. */
 export function itemId(name: string, taken: string[]): string {
-  let base = (name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "item").replace(/^([^a-z])/, "l_$1").slice(0, 20);
+  let base = (name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "item").replace(/^([^a-z])/, "l_$1").replace(/^builtin_/, "my_").slice(0, 20);
   if (base.length < 2) base = "item";
   let id = base;
   for (let n = 2; taken.includes(id); n++) id = `${base}_${n}`.slice(0, 24);

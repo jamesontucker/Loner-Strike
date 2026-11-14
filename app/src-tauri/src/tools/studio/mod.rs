@@ -1259,6 +1259,57 @@ mod tests {
         out
     }
 
+    /// The library items that ship with the app (ui/.../studio/library, make_library.py).
+    pub fn builtin_library() -> Vec<(String, Value)> {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ui/src/views/tools/studio/library");
+        let mut out: Vec<(String, Value)> = std::fs::read_dir(dir).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().ends_with(".lib.json")).map(|e| (e.file_name().to_string_lossy().replace(".lib.json", ""), serde_json::from_str(&std::fs::read_to_string(e.path()).unwrap()).unwrap())).collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
+
+    /// Run Dialog in a mode, as a player would wire it: Talked To NPC -> Run Dialog (row
+    /// "start") -> a Print of the row it ended at.
+    pub fn dialogue_mode() -> Graph {
+        let (_, item) = builtin_library().into_iter().find(|(id, _)| id == "run_dialog").unwrap();
+        let mut g = item.clone();
+        let o = g.as_object_mut().unwrap();
+        for k in ["name", "description", "category", "kind", "root"] {
+            o.remove(k);
+        }
+        o.insert("schema".into(), json!(graph::SCHEMA));
+        o.insert("version".into(), json!(graph::VERSION));
+        o.insert("mode".into(), json!({"id": "dialogue_test", "name": "Dialog test"}));
+        let nodes = o.get_mut("nodes").unwrap().as_array_mut().unwrap();
+        nodes.extend([
+            json!({"id": "talk", "type": "npc.on_talk", "pos": {"x": 0, "y": 0}, "params": {}}),
+            json!({"id": "from", "type": "text.literal", "pos": {"x": 0, "y": 200}, "params": {"value": "start"}}),
+            json!({"id": "run", "type": "macro.use", "pos": {"x": 300, "y": 0}, "params": {"macro": "rundlg"}}),
+            json!({"id": "said", "type": "debug.print", "pos": {"x": 600, "y": 0}, "params": {"text": "Dialog ended at", "chat": false}}),
+        ]);
+        let edges = o.get_mut("edges").unwrap().as_array_mut().unwrap();
+        for (i, (a, ap, b, bp)) in [("talk", "then", "run", "go"), ("talk", "npc", "run", "npc"), ("talk", "player", "run", "who"), ("from", "out", "run", "start"), ("run", "end", "said", "exec"), ("run", "last", "said", "value")].iter().enumerate() {
+            edges.push(json!({"id": format!("u{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}}));
+        }
+        graph::from_value(g).unwrap()
+    }
+
+    /// Every built-in library item passes the library check (graph data only, no events), and
+    /// Run Dialog wired into a mode checks clean (its Dialog table's rows link up).
+    #[test]
+    fn builtin_library_items_check_clean() {
+        let items = builtin_library();
+        assert!(items.iter().any(|(id, _)| id == "run_dialog"));
+        for (id, v) in &items {
+            check_library_item(v).unwrap_or_else(|e| panic!("{id}: {e}"));
+        }
+        let g = dialogue_mode();
+        let p: Vec<_> = graph::validate(&g).into_iter().filter(|p| p.level != "info").collect();
+        assert!(p.is_empty(), "{p:#?}");
+        let src = gen::generate(&g, false).source;
+        // the guard and the clean end
+        assert!(src.contains("Run Dialog: no row of Dialog has the id") && src.contains("stopped after 64 lines"));
+    }
+
     pub fn snippet_as_graph(id: &str, v: &Value) -> Graph {
         let mut g = v.clone();
         let o = g.as_object_mut().unwrap();
@@ -1492,6 +1543,7 @@ mod tests {
         for (id, v) in builtin_snippets() {
             graphs.push((format!("sn_{id}"), serde_json::to_string(&snippet_as_graph(&id, &v)).unwrap()));
         }
+        graphs.push(("dialogue".into(), serde_json::to_string(&dialogue_mode()).unwrap()));
         // the round clock read with no Round Time Up in the graph (its empty hook didn't compile:
         // the node coverage sweep found it)
         graphs.push(("clock_no_time_up".into(), serde_json::json!({"schema": "loner-strike/graph", "version": 3, "mode": {"id": "clock_no_time_up", "name": "Clock"},
