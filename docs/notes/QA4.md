@@ -27,9 +27,11 @@ they haven't landed, and noted as "not in this build".
 | F | Platform: crash tracking, MCP live, site and legal, setup | QA4C 27410 (crash tests); the Linux test machine | 1 |
 | D | Battle Royale (squads, downed, revives) | QA4B 27406 (squads), QA4B2 27407 (duos/solo) | 2 |
 | E | Deathrun maps and the mode vote | QA4D 27408 | 2 |
+| G | Community: share and import | QA4G 27412 (mode installs and play); the user's test GameBanana page | 2 |
+| H | Windows (real Windows 10 and 11 PCs; see docs/notes/Windows.md) | local servers on the PC | any (a separate machine) |
 
-Wave 1 runs A, B, C and F side by side (5 sims at most, 6 while a Test run is going). Wave 2 starts D and E when A and
-F have stopped their sims (3 more). The real client is needed in C, D and E (one at a time: the user's game).
+Wave 1 runs A, B, C and F side by side (5 sims at most, 6 while a Test run is going). Wave 2 starts D, E and G when
+A and F have stopped their sims (4 more). G's offline and malicious-archive rows need no sim and can start in wave 1. The real client is needed in C, D and E (one at a time: the user's game).
 
 ---
 
@@ -110,6 +112,93 @@ br_valley v6; squads on QA4B (16 bots), duos/solo on QA4B2.
 | Site (8553153e, 183fc15e, ac912386, e6cd1d71) | Homepage sections, titles and meta as in Site.md; no version numbers; every link works; Windows-first docs; phone width without sideways scroll |
 | Legal (91a31d52, 9faeebc8, 302761ea, ee7222f1) | Terms and Privacy linked under Set it up and in About; Publish requires "I have the right to share this"; DMCA agent and legal email right; the warranty panel is bold and bordered |
 | Fresh setup and update | A clean bottle: setup end to end, then an update; the fixed Ham Sandwich is installed on Windows/CrossOver |
+
+## G. Community: share and import (T's browser and library, the list service, the publish workflow)
+How it works today (docs/COMMUNITY.md, COMMUNITY-SERVER.md, notes/T.md, notes/community.md): files live on
+GameBanana (tagged pages); the Loner-Strike index (`dl.lonerstrike.com/community/index.json` + `.sha256`, published from
+the list service on the box by the GitHub workflow to R2) adds what GameBanana can't say; Publish builds a package zip
+(`<app dir>/tools/community/packages/`), the person uploads it on GameBanana and pastes the link; Try it installs
+through the existing installers and notes it in `<app dir>/community/<key>/meta.json`; uids belong to the first
+GameBanana member who registered them. Kinds: map, mode (Game Mode Studio graph + its map kit), prefab, spray,
+texture. **Creature presets have no community kind yet.**
+
+**Needs the user's OK first:** every row that registers, updates or reports on the live list, or uploads to GameBanana.
+Use a test GameBanana page (a private/WIP submission) and test entries only, and clean them up afterwards with the
+user (`lsmod.py` pull/delete, and delete the GameBanana page). Rows marked (local) touch nothing outside this computer.
+Expected messages are the app's own words; a row fails if a failure shows a raw error, a stack, or nothing.
+
+### Sharing
+| Item | Steps | Pass when |
+|---|---|---|
+| A map with custom content (local) | Make a map in the editor using a custom WAD texture, a model (cycler_sprite), a sound (ambient_generic) and a sprite (env_sprite), compile it into the sim's game, Publish › Check, Make the package | The zip holds the .bsp, nav/knowledge when they fit, a fresh .res and every custom file where the game looks; no stock/Valve file; README and loner-strike.json; credits listed for each file |
+| …depending on content not in the pack (local) | Reference a model that isn't on this computer | Check shows a warning naming the missing file ("…isn't on this computer"), the package is still made without it, nothing outside the game folder is pulled in |
+| A Studio mode using components/creatures + a kit (local) | A mode with ls_* component nodes, a creature node and two map markers; Publish › A game mode | The package has `modes/<id>/<id>.graph.json` and its kit; no plugin, no .amxx/.sma; the description says what it needs (components, creatures, the bot brain) |
+| A mode needing a newer brain (local) | A graph using a node that needs the brain (creatures) | Publish says which brain it needs; the package records it |
+| Prefabs (local) | Content › Prefabs › Share on a prefab using a downloaded model | Zip has `.map`, `.json` (with credits), `.png`; the credits name the model's page and author |
+| Creature presets | Look for a share path | **Not shareable yet**: note it as a gap for T/Y (no community kind), not a failure of this round |
+| Names with spaces or Unicode (local) | A map named `de_my map`, a mode named "Zoë's Rush", a prefab "Café sign" | A map name with a space is refused with "Map names can only use letters, numbers, _ and -"; the mode and prefab names keep their text in README/json, ids stay plain |
+| Huge files and caps (local) | A map with 1.1 GB of custom files; a screenshot over 8 MB; a package zip over 256 MB | "The package would be over 1 GB."; the big screenshot refused by name; nothing half-written left in packages/ |
+| Registering (live: user's OK) | Upload the package to the test GameBanana page, paste the link | Listed (or "pending" for a blocked creator); Yours shows it; the moderators' channel gets the card |
+| Updating something shared (live) | Upload a new file to the same page, register again; then try registering another member's page declaring the same mode uid | The same entry updates; the other member's is refused: "…belongs to another GameBanana member's creation… remix it" |
+| Unlisting/deleting (live) | Moderator pull (`lsmod.py`) or delete the GameBanana page | Gone from the list after the next publish (≤ 15 min + the workflow); Yours says it was pulled |
+
+### Importing
+| Item | Steps | Pass when |
+|---|---|---|
+| Happy path (map) | Community › a listed map › Try it, then Play with bots | Installed through the Get more job; the Maps page shows it with the Community chip; Play starts with bots |
+| Happy path (mode with kit) | Try it on a Studio mode | Built with the Studio's compiler on this computer, its kit in the kits folder, Play buttons per mode; **(check)** a risky-node badge and an ask before installing — the community page has no risky badge today: if missing, file for T/X |
+| Missing content | Install a map whose WAD/model/sound isn't in the pack; a mode needing a component/brain this game lacks | The map installs and the Map doctor names what's missing; the mode says what it needs and links to Mods; nothing crashes the game |
+| CS 1.6 item into CZ and back | Switch the game to Condition Zero, Try it on a cstrike-only item | Refused or warned in plain words ("made for Counter-Strike 1.6"); a both-games item installs into czero/ |
+| Name clash | Install a map with the same name as a map you made; a mode whose id clashes with yours | The installer never writes over existing files (it says which); the mode is refused: the id clashes with a mode you have |
+| Older/newer format | Point the app at a test index with `"schema": 2`; a graph file with a newer `version` | "Update Loner-Strike" for the index (the kept copy used); the graph refused with "made by a newer Loner-Strike… Update the app" |
+| Corrupt/partial download, then retry | Cut the network mid-download (Wi-Fi off); then a file whose MD5 doesn't match | A plain error, nothing half-installed, retry works once back; the MD5 mismatch is refused, never installed |
+| Malicious archives (local, test zips via a local test server or Get more's Add file) | Zips with `../../evil.bsp`, `C:\x.bsp`, `/etc/x`, a symlink, `.dll/.so/.exe/.amxx` inside, a nested zip, a zip bomb (200:1, > 65,536 files) | Each refused or the bad files skipped with a reason; nothing written outside the game folder; the bomb stopped at the caps ("…over 256 MB" / file count) |
+| Install then uninstall | Install a map, a mode and a prefab; uninstall each in Installed | Every file the install put in is gone, files it replaced are back, the user's own files untouched (compare a file list before/after); the mode is out of modes.ini |
+| Re-import the same item | Try it again on an installed item | Says it's installed (or offers Update); no duplicates |
+| While the game is open | Try it/Update for the map being played | The update waits ("pending") and goes in at the next map change; nothing replaced under the running game |
+
+### Moderation and ownership
+| Item | Steps | Pass when |
+|---|---|---|
+| Report (live: test entry) | Report a test entry with each reason and a 500-character note | Sent once; the moderators' channel gets the card; a second quick report is rate-limited politely |
+| Taken down after install | Pull a test entry you installed | Installed copy stays and shows the pulled note; Try it is gone; Update never offered |
+| Ownership after reinstall | Remove and reinstall the app (keep the GameBanana account), update your test entry | Updating still works: ownership is the GameBanana member, not the app copy |
+
+### Offline
+| Item | Steps | Pass when |
+|---|---|---|
+| Box/R2 down | Block list.lonerstrike.com and dl.lonerstrike.com (hosts file) | The list shows "from earlier" with the kept index; with no kept copy, GameBanana's tag search alone (no badges, modes can't be installed, content can); registering waits and retries |
+| GameBanana down | Block gamebanana.com | A plain message, the Installed tab still works, nothing hangs the page |
+
+## H. Windows (real Windows 10 and 11; release build; docs/notes/Windows.md)
+Two PCs if possible: one with a Unicode user name (e.g. `Zoë`) and Documents redirected to OneDrive, one plain. A
+Steam library on a second drive. Defender on. Note every prompt, window and message word for word.
+| Item | Steps | Pass when |
+|---|---|---|
+| Install and first run | Run the NSIS setup.exe; open the app; Set it up | No console windows flash; the game is found (also in the second-drive library); setup ends without "os error" |
+| Old libraryfolders.vdf | On a PC whose Steam library list is the old format (or edit a copy), Settings › rescan | The game in that library is found |
+| Game started during setup | Start setup, start Counter-Strike while it downloads | A plain "close Counter-Strike" message, not "os error 32"; Repair afterwards finishes |
+| Read-only config | Mark cstrike\config.cfg and liblist.gam read-only; Repair | Repair finishes; the files are written |
+| Ham Sandwich | Replace the module with the official hamsandwich_amxx.dll; press Play with the game closed | Ours is back (hash), `.replaced-<date>` beside it, the quiet toast; with the game open: the "next time" note, nothing broken |
+| Browser keys | In the editor (a view, a property field, fly mode), the Studio (Monaco), Plugin Studio, Spray: press F5, Ctrl+R, Ctrl+P, Ctrl+F, F3, F7 | No reload, print dialog, find bar or caret prompt; the editor's own F5 (Playtest) and Ctrl+F (Find) still work |
+| Explorer drops | Drag a .map, .bsp and .png from Explorer onto the editor, the sidebar and the Studio | Nothing happens; the app stays |
+| Right-click | On a sidebar item, an editor panel, empty space; in a text field; on selected text | No Back/Refresh/Print menu outside text; cut/copy/paste in fields and selections |
+| Clipboard | Copy brush text from Notepad, Ctrl+V in the editor; same in the Studio | Pastes (note any permission prompt) |
+| Alt in the editor | Tap Alt alone then Q; Alt+1; Alt+right-click a face (Texture tool); Alt-drag a texture | No ding, no stuck menu mode, the action happens |
+| Ctrl+1-9 | In the editor and the Studio | Note what it does (bookmarks vs sections) |
+| Offline fonts | Unplug the network, start the app | Labels aren't cut off |
+| Local server | Make a server, start it | Note the firewall prompt (Private and Public ticked?); a friend on the LAN can join; no console window; the log fills |
+| Second server, same port taken | Start another program on 27015 first | A plain "port in use" message, no restart loop |
+| Crash dialog | Crash hlds (bad metamod DLL) | Time until the app restarts it; does a dialog cover a full-screen game? |
+| Keep servers running | Keep running on, close the app, open it again | The server kept running and is picked up |
+| Voice | Voice on for a local server, talk in game, stop the server | ls-voice.exe and ls-intent.exe are gone in Task Manager |
+| MCP stdio | `'{"jsonrpc":"2.0","id":1,"method":"ping"}' \| & "$env:LOCALAPPDATA\Loner-Strike\loner-strike.exe" --mcp-stdio` with agents on; then Settings › AI agents › Copy for Claude Code and run it in PowerShell | One JSON line back; `claude mcp list` shows loner-strike Connected |
+| Update | One server with Keep running, one without, voice and an MCP bridge on; update in passive mode | Which processes survive; voice comes back; the agent reconnects; latest.json's windows entry is the setup.exe |
+| Remove everything | With the window open | Only EBWebView is left for the uninstaller; no failure list otherwise |
+| Uninstall | With "Delete app data" ticked | List what's left in %APPDATA%, %LOCALAPPDATA%, firewall rules, the game folder, %SystemDrive%\Loner-Strike, %USERPROFILE%\.loner-strike |
+| Spray fonts | Open the spray font picker the first time; a per-user installed font | Time it; the per-user font loads |
+| Pointer lock | Unreal preset right-drag; Hammer preset Z; Esc | Esc releases and the camera stops looking around |
+| OneDrive Documents | Save a project into Documents (OneDrive, files on demand) | Saves and reopens; no lock errors in the diagnostics |
 
 ## Round 3 items to re-check
 From QA.md "Round 3": the brain drop crash (30 rounds of drop/drop_all/drop_dead), Last Stand bots buying guns, the
