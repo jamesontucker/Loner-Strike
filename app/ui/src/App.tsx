@@ -483,6 +483,8 @@ function Shell() {
           <WhatsNew version={app?.version} />
           {/* (not on the servers list: it's about your servers, which show their own updates) */}
           {!setupOpen && !current?.shared && !(section === "servers" && !openServer) && <FilesUpdate key={openServer ?? "local"} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} server={current?.name} />}
+          {/* Parity A: the other game set up in the same Half-Life folder, when its parts are behind */}
+          {!setupOpen && !current?.shared && !openServer && section !== "servers" && app?.game?.others?.map((o) => <FilesUpdate key={`local-${o.id}`} app={app} scan={scan} gameOpen={gameOpen || !!online} reloadApp={reloadApp} other={o} />)}
           {state === null ? (
             <Skeleton rows={4} />
           ) : needsGame && !lost ? (

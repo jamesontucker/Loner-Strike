@@ -1528,6 +1528,13 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
     };
     let mut layout = layout_for(&client, &install_from, false)?;
     layout.threads = Some(compile_threads(cores(), req.all_cores));
+    // Parity A: test builds (the dev server agents use) can cap the threads, so compiles there keep
+    // to the crew's limit (TOOLS-CREW.md: -threads 6) on a shared Mac; the app ignores it
+    if cfg!(test) {
+        if let Some(n) = std::env::var("LS_COMPILE_THREADS").ok().and_then(|v| v.parse::<usize>().ok()).filter(|n| *n >= 1) {
+            layout.threads = Some(n);
+        }
+    }
     let wad_dirs = crate::goldsrc::wad::search_dirs(&game.hl, game.is_czero());
     let folder = super::editor::open_document_folder();
     Ok(Plan { layout, install_from, name, preset: req.preset, doc, wad_dirs, maps, warnings, folder, assets })

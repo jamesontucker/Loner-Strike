@@ -9,16 +9,18 @@ import { JobProgress } from "./JobProgress";
 /** After an app update: the parts of Loner-Strike in this game whose files changed, and
  *  mods the player had before Loner-Strike (without its bot fixes). One button puts the
  *  current versions in; settings, admins and maps stay. */
-export function FilesUpdate({ app, scan, gameOpen, reloadApp, server }: { app: AppInfo | null; scan: Scan | null; gameOpen: boolean; reloadApp: () => void; server?: string }) {
+export function FilesUpdate({ app, scan, gameOpen, reloadApp, server, other }: { app: AppInfo | null; scan: Scan | null; gameOpen: boolean; reloadApp: () => void; server?: string; other?: { id: string; dir: string; hl: string; outdated: string[] } }) {
   const toast = useToast();
   const [running, setRunning] = useState(false);
   const [skip, setSkip] = useState(false);
   const [open, setOpen] = useState(false);
   const { run, busy } = useActions();
   // one update at a time, whichever button started it
-  const key = `files:${targetKey()}:update`;
+  const key = `files:${targetKey()}:${other?.id ?? "game"}:update`;
   const updating = busy(key);
-  const g = app?.game;
+  // Parity A: the other game in this Half-Life folder (CZ while CS 1.6 is picked, or the
+  // other way round) gets its own bar: its parts update separately and used to be missed
+  const g = other ? { ...other, dedicated: false, unmanaged: [] as string[] } : app?.game;
   const outdated = g?.outdated ?? [];
   const theirs = g?.unmanaged ?? [];
   if (!g || skip || (!outdated.length && !theirs.length && !running)) return null;
@@ -50,7 +52,11 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp, server }: { app: A
         ? `${whose}: ${plural(outdated.length, "part", "parts")} of Loner-Strike ${outdated.length === 1 ? "has" : "have"} updates waiting.`
         : `${whose}: ${plural(theirs.length, "mod is", "mods are")} here without the bot fixes.`;
   // a server is updated on this computer, then uploaded; your game and other servers aren't touched
-  const scope = server ? " Your game and other servers are updated separately." : " This is the game you play in; your servers update on their own (see Servers).";
+  const scope = server
+    ? " Your game and other servers are updated separately."
+    : other
+      ? ` ${gameTitle(other.id)} is set up here too, and its files are updated separately from the game you have picked.`
+      : " This is the game you play in; your servers update on their own (see Servers).";
   if (running)
     return (
       <div className="panel files-update">

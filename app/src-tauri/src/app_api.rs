@@ -264,7 +264,27 @@ async fn api_app(State(st): State<Shared>) -> Json<Value> {
             };
             // installed, but a plugin of theirs didn't build (setup marks them)
             let unbuilt: Vec<String> = rec.data.components.iter().filter(|(_, v)| v["unbuilt"] == Value::Bool(true)).map(|(k, _)| k.clone()).collect();
-            json!({"id": g.name, "dir": g.dir, "hl": g.hl, "dedicated": g.dedicated, "port": g.port, "installed": rec.component_ids(), "outdated": outdated, "unmanaged": theirs, "unbuilt": unbuilt})
+            // Parity A: the other game in the same Half-Life folder, when it's set up and has parts
+            // waiting: updates follow the game picked, so a CZ set up once and played rarely kept
+            // an old bot brain (its record said so, but nothing offered the update)
+            let others: Vec<Value> = if g.dedicated {
+                vec![]
+            } else {
+                crate::setup::GAMES
+                    .iter()
+                    .filter(|(id, _)| *id != g.name)
+                    .filter_map(|(id, _)| {
+                        let dir = g.hl.join(id);
+                        let r = crate::setup::record::Record::open(&dir);
+                        if !r.data.components.contains_key("core") {
+                            return None;
+                        }
+                        let out = res.as_ref().map(|x| crate::setup::outdated(x, &r)).unwrap_or_default();
+                        (!out.is_empty()).then(|| json!({"id": id, "dir": dir, "hl": g.hl, "outdated": out}))
+                    })
+                    .collect()
+            };
+            json!({"id": g.name, "dir": g.dir, "hl": g.hl, "dedicated": g.dedicated, "port": g.port, "installed": rec.component_ids(), "outdated": outdated, "unmanaged": theirs, "unbuilt": unbuilt, "others": others})
         })
         .await
         .ok(),

@@ -171,6 +171,17 @@ canvas size (one box: 960x600 p95 18, 1440x900 19-20, 1920x1200 20-21 ms) and is
 (a minimal host, GPU composited: nudge p95 26 / worst 37, drag 21 / 31 ms), so it's WebKit presenting the canvas,
 not our work. Stopped there (Windows first).
 
+**10. Wine incident, 2026-11-14 00:50 (my first QA4Z start; W1's three sims went silent)**
+Timeline from process start times: 00:50:21 I started a fresh Valve CZ server (Sim/QA4Z, straight from SteamCMD)
+without `-insecure` and without `steam_appid.txt`; 00:50:34 it died with "FATAL ERROR: Unable to initialize Steam" (its
+wine wrapper stayed behind, PID 5004, since stopped); 00:50:46 the Steam bottle's wineserver started again from nothing
+(with services.exe, explorer.exe, plugplay, winedevice at 00:50:47-49), so the one every sim was attached to had gone;
+W1's sims stopped answering within that minute. The likely cause is the Steam API in a server started without
+`-insecure` reaching for the bottle's Steam client and taking the wine session down when that fails; I can't prove the
+last step (that run's logs were overwritten). **Crew rule I'm following now: never start a Valve server in the shared
+bottle without `-insecure` (and a `steam_appid.txt`, as LSPLAY clones have).** The app's hidden server is not this path:
+navs.rs `learn_args` always passes `-insecure`, which is why CS 1.6 learning has run without a `steam_appid.txt`.
+
 ## Left / ideas
 - Extrude in the flat views (Shift is box-pick there), edge-move mode for slanted edges.
 - Entities drawn one by one dominate the flat panes on big maps (request to P5).

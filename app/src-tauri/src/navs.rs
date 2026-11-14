@@ -693,16 +693,31 @@ fn has_bot_profile(gdir: &Path) -> bool {
     find_file(gdir, "botprofile", "db").is_some()
 }
 
+/// The marker Loner-Strike's bot brain (its ReGameDLL) carries.
+const BRAIN: &[u8] = b"lonerstrike_mapknow";
+
+/// Whether a game folder's server DLL is Loner-Strike's bot brain.
+fn has_brain(gdir: &Path) -> bool {
+    std::fs::read(gdir.join("dlls/mp.dll")).is_ok_and(|b| b.windows(BRAIN.len()).any(|w| w == BRAIN))
+}
+
 /// Copies the game's bot brain into a hidden server's game folder: its server DLL (only when
 /// it is Loner-Strike's ReGameDLL, which has the bots) and the bot profile and chatter files.
 pub(crate) fn bring_bots(game: &Path, gdir: &Path) -> Result<(), String> {
     let dll_rel = "dlls/mp.dll";
-    let src = game.join(dll_rel);
-    let bytes = std::fs::read(&src).map_err(|_| "Your game's bot brain isn't installed. Open Mods and click Repair, then try again.".to_string())?;
-    let needle = b"lonerstrike_mapknow";
-    if !bytes.windows(needle.len()).any(|w| w == needle) {
-        return Err("Your game has a different server DLL than Loner-Strike's bot brain, so bots can't learn maps with it. Open Mods and click Repair, then try again.".into());
-    }
+    // Parity A: the brain from the game being learned, else from the other game in the same
+    // Half-Life folder: setup puts the same ReGameDLL build in both, and a Condition Zero that
+    // hasn't been updated since (CZ updates when it's the game picked) still learns with ours
+    let siblings = game.parent().map(|hl| crate::setup::GAMES.iter().map(|(g, _)| hl.join(g)).filter(|d| d.as_path() != game).collect::<Vec<_>>()).unwrap_or_default();
+    let found = std::iter::once(game.to_path_buf()).chain(siblings).find(|d| has_brain(d));
+    let Some(src_game) = found else {
+        return Err(if game.join(dll_rel).is_file() {
+            "Your game has a different server DLL than Loner-Strike's bot brain, so bots can't learn maps with it. Open Mods and click Repair, then try again.".into()
+        } else {
+            "Your game's bot brain isn't installed. Open Mods and click Repair, then try again.".into()
+        });
+    };
+    let bytes = std::fs::read(src_game.join(dll_rel)).map_err(|e| format!("The bot brain couldn't be read ({e})."))?;
     let dest = gdir.join(dll_rel);
     if let Some(d) = dest.parent() {
         std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
@@ -775,9 +790,10 @@ impl Learner for LocalLearner {
         servers::copy_tree(&self.base, &self.dir, false, &|rel: &Path| rel.components().next().is_some_and(|c| c.as_os_str() != "steamapps"))?;
         for g in games {
             let gdir = self.dir.join(g);
-            // Valve's Counter-Strike 1.6 server has no bots (only Condition Zero's does): the
-            // game's own bot brain (Loner-Strike's ReGameDLL and its bot files) goes in instead
-            if !has_bot_profile(&gdir) {
+            // Valve's servers run Valve's bots (CS 1.6's has none; Condition Zero's has its own):
+            // the bots learn with Loner-Strike's brain on both (its ReGameDLL and bot files), so
+            // what they learn is what our bots use (Parity A: CZ was learned by Valve's bots)
+            if !has_brain(&gdir) {
                 job.detail("Bringing the bots in from your game");
                 bring_bots(&self.client.hl.join(g), &gdir)?;
             }
@@ -979,6 +995,33 @@ mod tests {
         assert!(has_bot_profile(&server) && server.join("BotChatter.db").is_file());
         assert_eq!(std::fs::read(server.join("dlls/mp.dll")).unwrap(), b"...lonerstrike_mapknow...");
         assert!(LEARN_CFG.contains("bot_enable 1"));
+    }
+
+    #[test]
+    fn condition_zero_learns_with_our_brain() {
+        // Parity A: Valve's CZ server ships a bot profile, which used to mean "keep Valve's bots";
+        // and a CZ install not updated since keeps an older ReGameDLL: the brain comes from CS 1.6
+        let hl = temp("bots-hl-cz");
+        let (cs, cz) = (hl.join("cstrike"), hl.join("czero"));
+        for g in [&cs, &cz] {
+            std::fs::create_dir_all(g.join("dlls")).unwrap();
+        }
+        std::fs::write(cs.join("dlls/mp.dll"), b"...lonerstrike_mapknow v2...").unwrap();
+        std::fs::write(cz.join("dlls/mp.dll"), b"ReGameDLL 5.30.0.814-dev (older)").unwrap();
+        std::fs::write(cz.join("BotProfile.db"), b"cz profiles").unwrap();
+        let server = temp("bots-server-cz");
+        std::fs::create_dir_all(server.join("dlls")).unwrap();
+        std::fs::write(server.join("dlls/mp.dll"), b"valve cz server code").unwrap();
+        std::fs::write(server.join("BotProfile.db"), b"valve cz profiles").unwrap();
+        assert!(has_bot_profile(&server) && !has_brain(&server));
+        bring_bots(&cz, &server).unwrap();
+        assert!(has_brain(&server));
+        assert_eq!(std::fs::read(server.join("dlls/mp.dll")).unwrap(), b"...lonerstrike_mapknow v2...");
+        // CZ's own bot profile (the game's) is what the brain reads there
+        assert_eq!(std::fs::read(server.join("BotProfile.db")).unwrap(), b"cz profiles");
+        // no brain in either game: refused, with the repair hint
+        std::fs::write(cs.join("dlls/mp.dll"), b"valve").unwrap();
+        assert!(bring_bots(&cz, &server).unwrap_err().contains("Repair"));
     }
 
     fn nav_bytes(version: u32, bsp: u32, len: usize) -> Vec<u8> {
