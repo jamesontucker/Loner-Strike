@@ -456,3 +456,21 @@ A copy of prod on 127.0.0.1:27016, Last Stand on ls_outpost with today's gm_last
 - Also fixed (8d190d8): speed changes didn't reach the movement (`ls_creature speed` and enrage did nothing).
   Checked after: a zombie told to attack a bot shows `pev_enemy` = that bot and state 5 (chase), 7 (attack), 9 (dead);
   its ground speed went from 202-230 to 395 after `ls_creature speed <e> 2`.
+
+## Y (2026-11-14): RCON password masked in the engine's console and logs (ReHLDS loner-strike 9cc62e4)
+- `Rcon from <addr>:` / `rcon <challenge> "***" <command>` and the log's `Rcon: "rcon <challenge> "***" ..."` /
+  `Bad Rcon: ...` lines show the password as ***; the challenge, command and sender stay. Only what's printed
+  changes: the check, the command run and the replies are the engine's own code path, untouched.
+  `sv_rcon_mask_password 0` shows it as before (registered in every build). README + unit test (Linux CI runs it).
+- Other places checked: the rcon_password cvar isn't a server cvar (no "Server cvar changed" line); condebug
+  (qconsole.log) and logaddress streaming both go through the two masked lines.
+- Our parsers (control/common.rs without_polls, the agent's redaction, Servers.tsx) split on `" ` after the
+  password, so `"***"` reads the same: no change needed.
+- Sim (Windows build 4599): status, a setting change, kick, bad password, external RCON all answer as before; with
+  masking on the password appears nowhere; `sv_rcon_mask_password 0` brings the old line back.
+- Prod: engine_i486.so replaced (backup `engine_i486.so.pre-rconmask-20261114`), restarted; RCON (stats), bad
+  password, status / control / voice / list services fine; journal shows `rcon <n> "***" stats`.
+- **Local Windows and Mac servers** get it through the app's pinned engine: cut a fork release
+  (`scripts/fork-release.sh rehlds 3.15.0.896-ls8` from this green build) and pin its URL + sha256 in
+  setup/foundation.rs (REHLDS); the app installs it on setup / its engine update (Linux servers too).
+- Rotate the RCON password before going live (it was in logs before today).
