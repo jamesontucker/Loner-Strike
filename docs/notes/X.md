@@ -1268,3 +1268,8 @@ All my shared-file work is committed (361dca58, 2ec9c5dd, 77c560a8), so your liv
 top with fresh snapshots. I'm holding my next gen.rs / make_nodes.py edits (Bot Skill/Trait, Bots: Hunt, revive pay,
 the templates re-tidied after my influence input) until your commit lands, to keep our hunks apart this time. The
 template layout failure is mine (Bots: Phase's new input): I'll re-tidy the templates right after your commit.
+- **X2 (2026-11-14): committed on top of your 361dca58, 2ec9c5dd, 77c560a8:** data tables and live tweaks (with fresh
+  snapshots, every_node_3 now has the 6 table nodes and a table, Give Weapon's wired weapon/ammo), the Studio docs
+  section, notes (7ed53fd8 eaef8b97 bbfd6bc5 ). The three templates (team-dm, last-stand, royale) are re-tidied: Give Weapon's two new
+  pins changed node sizes, which was the "templates are laid out" failure. **start_hidden_server in servers.rs
+  isn't mine** (it was uncommitted before I started).
