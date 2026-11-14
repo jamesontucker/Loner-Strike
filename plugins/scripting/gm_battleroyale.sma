@@ -23,6 +23,12 @@
  * go for a nearby full crate inside the zone now and then, campers settle somewhere inside the
  * next circle each stage, hunters get nothing (the brain hunts and third-parties by noise).
  * Every goal has an end time, so stale ones go.
+ *
+ * Built on gm_components' pieces (docs/COMPONENTS.md, "Battle Royale pieces"), the same ones Game
+ * Mode Studio offers: squads and the squad lobby (ls_squad_*), the drop-in (ls_drop_in), healing
+ * items, armor levels, scarce ammo, rarity glow and death crates (switched on in br.cfg), and the
+ * match HUD (ls_match_hud: players left, kills, zone, kill feed, watching your killer). This plugin
+ * keeps the game's flow (lobby, drop, loot-up, fight, winner) and where its bots land and loot.
  */
 
 #include <amxmodx>
@@ -45,10 +51,10 @@ native people_get(id, const key[]);
 #define TASK_SETUP 7738200
 #define TASK_GEAR  7738300
 
-enum { PH_IDLE = 0, PH_WAIT, PH_DROP, PH_PLAY, PH_OVER };
+enum { PH_IDLE = 0, PH_WAIT, PH_LOBBY, PH_DROP, PH_PLAY, PH_OVER };
 enum { TR_HUNTER = 0, TR_LOOTER, TR_CAMPER };
 
-new g_cSquad, g_cStart, g_cDrop, g_cZoneStart, g_cDrops, g_cWaitHuman, g_cDropIn, g_cDropHeight;
+new g_cSquad, g_cStart, g_cDrop, g_cZoneStart, g_cDrops, g_cWaitHuman, g_cDropIn, g_cDropHeight, g_cLobby, g_cLateFill, g_cBleed;
 
 new Float:g_dropSpots[33][2];
 new g_ndropSpots;
@@ -74,17 +80,14 @@ new bool:g_zoneStarted;
 new g_dropsDone;
 new Float:g_dropAt[8];
 new g_ndrops;
-new g_squad[33];
-new g_nsquads;
-new g_kills[33];
 new g_trait[33];
 new Float:g_nextGoal[33];
 new g_lastStage;
 new g_mapname[64];
 new Float:g_pace = 1.0;
-new bool:g_falling[33];
-new Float:g_fallAt[33];
 new Float:g_startPos[33][3];
+new g_lateMate[33];
+new g_knocks, g_revives;
 new g_unstuckTries[33];
 new Float:g_releaseAt[33];
 new g_stagesOrig[256];
@@ -114,7 +117,13 @@ public plugin_init()
 	g_cWaitHuman = register_cvar("br_wait_human", "1");
 	g_cDropIn = register_cvar("br_dropin", "1");
 	g_cDropHeight = register_cvar("br_drop_height", "3000");
-	register_forward(FM_PlayerPostThink, "fm_postthink", 1);
+	/* squads: seconds of lobby before the game (teaming up with /squad); 0 none */
+	g_cLobby = register_cvar("br_lobby", "30");
+	/* squads: someone who joins during the first N s of fighting fills a squad that's short (else watches) */
+	g_cLateFill = register_cvar("br_late_fill", "120");
+	/* squads: a deadly hit knocks you down instead; a squad mate holding USE gets you up; you bleed out
+	   after this many seconds, and you're out when your whole squad is down (0: no knocking down) */
+	g_cBleed = register_cvar("br_bleed", "30");
 
 	register_event("HLTV", "ev_new_round", "a", "1=0", "2=0");
 	register_logevent("ev_round_start", 2, "1=Round_Start");
@@ -123,6 +132,7 @@ public plugin_init()
 	RegisterHamPlayer(Ham_TakeDamage, "ham_takedamage");
 
 	register_clcmd("say /br", "cmd_help");
+	register_clcmd("say /squads", "cmd_squads");
 	register_srvcmd("br_goals", "cmd_goals");
 	/* no shopping in Battle Royale: what you find is what you get */
 	new const buycmds[][] = { "buy", "buyequip", "autobuy", "rebuy", "client_buy_open", "cl_autobuy", "cl_rebuy", "cl_setautobuy", "cl_setrebuy", "buyammo1", "buyammo2" };
@@ -137,6 +147,8 @@ public plugin_end()
 {
 	if (cvar_exists("ls_mode_ver"))
 		server_cmd("ls_mode nobuy 0");
+	if (ls_components_running())
+		ls_down_enable(false);
 }
 
 /* big announcements on gm_components' toast line: one at a time, never on top of each other */
@@ -160,10 +172,10 @@ public cmd_goals()
 		if (e && pev_valid(e))
 		{
 			pev(e, pev_origin, t);
-			server_print("bot %d at %.0f %.0f %.0f falling %d armed %d -> gun %d (state %d) %.0f away, dz %.0f", p, o[0], o[1], o[2], g_falling[p], has_gun(p), e, ls_comp_state(e), get_distance_f(o, t), o[2] - t[2]);
+			server_print("bot %d at %.0f %.0f %.0f falling %d armed %d -> gun %d (state %d) %.0f away, dz %.0f", p, o[0], o[1], o[2], ls_dropping(p), has_gun(p), e, ls_comp_state(e), get_distance_f(o, t), o[2] - t[2]);
 		}
 		else
-			server_print("bot %d at %.0f %.0f %.0f falling %d armed %d, no gun goal", p, o[0], o[1], o[2], g_falling[p], has_gun(p));
+			server_print("bot %d at %.0f %.0f %.0f falling %d armed %d, no gun goal", p, o[0], o[1], o[2], ls_dropping(p), has_gun(p));
 	}
 	return PLUGIN_HANDLED;
 }
@@ -176,6 +188,13 @@ public cmd_nobuy(id)
 public cmd_help(id)
 {
 	ls_chat(id, "Battle Royale: loot crates (hold USE) and floor weapons, stay inside the zone, be the last one standing.");
+	ls_chat(id, "F or say /heal: healing items. USE on a crate where someone fell: what they had. Squads: say /squad.");
+	return PLUGIN_HANDLED;
+}
+
+public cmd_squads(id)
+{
+	ls_squad_menu(id);
 	return PLUGIN_HANDLED;
 }
 
@@ -191,18 +210,17 @@ public ev_new_round()
 	g_lastStage = 0;
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		g_kills[p] = 0;
-		g_squad[p] = 0;
 		g_nextGoal[p] = 0.0;
 		g_startPos[p][0] = 0.0;
 		g_startPos[p][1] = 0.0;
 		g_unstuckTries[p] = 0;
 		g_releaseAt[p] = 0.0;
-		if (g_falling[p])
-			land(p);
 	}
 	if (ls_components_running())
+	{
 		ls_comp_stop(0);
+		ls_drop_reset();
+	}
 }
 
 public ev_round_start()
@@ -225,13 +243,47 @@ public game_setup()
 	ls_comp_bots_hint("phase off");
 	/* nothing to buy here: bots don't wait in the buy state */
 	ls_comp_bots_hint("nobuy 1");
-	make_squads();
+	/* the pieces: squads of br_squad, the match HUD (heals, armor levels, scarce ammo, glow and
+	   death crates are switched on in br.cfg) */
+	ls_squad_max(clamp(get_pcvar_num(g_cSquad), 1, 8));
+	for (new p = 1; p <= MaxClients; p++)
+		ls_squad_set(p, 0);
+	ls_match_hud(true);
+	ls_match_hud_text("");
+	/* squads: knocked down first (gm_components' downed state), out when the whole squad is down */
+	if (get_pcvar_num(g_cSquad) > 1 && get_pcvar_num(g_cBleed) > 0)
+		ls_down_enable(true, get_pcvar_float(g_cBleed), 0, false);
+	else
+		ls_down_enable(false);
 	pick_traits();
 	if (get_pcvar_num(g_cWaitHuman) && !humans())
 	{
 		g_phase = PH_WAIT;
 		return;
 	}
+	start_lobby();
+}
+
+/* squads: a lobby to team up first (say /squad), then the squads are filled and the drop starts */
+stock start_lobby()
+{
+	new secs = get_pcvar_num(g_cLobby);
+	if (get_pcvar_num(g_cSquad) > 1 && secs > 0)
+	{
+		g_phase = PH_LOBBY;
+		ls_squad_lobby(float(secs));
+		log_amx("Battle Royale on %s: squad lobby, %d s", g_mapname, secs);
+		return;
+	}
+	ls_squad_fill();
+	start_drop();
+}
+
+public ls_on_lobby_end(squads)
+{
+	if (g_phase != PH_LOBBY)
+		return;
+	log_amx("Battle Royale: lobby over, %d squads", squads);
 	start_drop();
 }
 
@@ -306,7 +358,7 @@ stock start_drop()
 	if (get_pcvar_num(g_cDropIn))
 		for (new p = 1; p <= MaxClients; p++)
 			if (is_user_alive(p))
-				drop_in(p);
+				br_drop_in(p);
 	/* while nobody can be hurt, bots loot and keep apart instead of chasing each other (else
 	   they start the fight in knife range: half a 20-bot lobby went in the first 15 s on br_valley) */
 	ls_comp_bots_hint("phase loot");
@@ -318,7 +370,7 @@ stock start_drop()
 	g_phaseEnd = get_gametime() + float(drop);
 	/* anyone who couldn't drop in (no sky over their spot) goes for a gun now */
 	for (new p = 1; p <= MaxClients; p++)
-		if (is_user_alive(p) && !g_falling[p])
+		if (is_user_alive(p) && !ls_dropping(p))
 			loot_goal_on_landing(p);
 	toast(0, 5.0, "Battle Royale: loot up! Fighting starts in %d seconds", drop);
 	log_amx("Battle Royale on %s: game starts, %d players, pace %.2f, loot-up %d s", g_mapname, alive_count(), g_pace, drop);
@@ -330,6 +382,8 @@ stock start_play()
 {
 	g_phase = PH_PLAY;
 	g_playAt = get_gametime();
+	g_knocks = 0;
+	g_revives = 0;
 	ls_comp_bots_hint("phase fight");
 	/* how close people are when the fighting starts (the peace phase should keep them apart) */
 	new close = 0, near = 0;
@@ -359,7 +413,7 @@ stock start_play()
 			high++;
 	}
 	log_amx("Battle Royale: fight starts, %d pairs within 100 u, %d more within 350 u; %d of %d armed (%d guns picked up in the loot-up, %d sent for one), %d below ground, %d high, %d on the surface", close, near, armed, alive, g_lootupGuns, g_gunGoals, below, high, alive - below - high);
-	toast(0, 3.0, "Fight! %d left", alive_sides());
+	toast(0, 3.0, "Fight! %d left", ls_squads_alive());
 	/* supply drops spread over the game */
 	g_ndrops = min(get_pcvar_num(g_cDrops), sizeof g_dropAt);
 	for (new i = 0; i < g_ndrops; i++)
@@ -403,77 +457,12 @@ stock ensure_zone()
 	log_amx("Battle Royale: no map pack for %s, so a zone goes round the spawns (radius %.0f).", g_mapname, r);
 }
 
-/* squads: br_squad players each, kept on one CS team, friends to the brain */
-stock make_squads()
-{
-	new size = clamp(get_pcvar_num(g_cSquad), 1, 8);
-	new list[32], n = 0;
-	for (new p = 1; p <= MaxClients; p++)
-		if (is_user_connected(p) && (cs_get_user_team(p) == CS_TEAM_T || cs_get_user_team(p) == CS_TEAM_CT))
-			list[n++] = p;
-	/* shuffle, then deal */
-	for (new i = n - 1; i > 0; i--)
-	{
-		new j = random(i + 1), t = list[i];
-		list[i] = list[j];
-		list[j] = t;
-	}
-	g_nsquads = 0;
-	new line[64];
-	for (new i = 0; i < n; i++)
-	{
-		new p = list[i];
-		if (size == 1)
-		{
-			g_squad[p] = i + 1;
-			continue;
-		}
-		new sq = i / size + 1;
-		g_squad[p] = sq;
-		g_nsquads = max(g_nsquads, sq);
-		cs_set_user_team(p, (sq % 2) ? CS_TEAM_T : CS_TEAM_CT);
-		formatex(line, charsmax(line), "role %d sq%d", p, sq);
-		ls_comp_bots_hint(line);
-	}
-	squad_friends();
-}
-
-stock squad_friends()
-{
-	new line[64];
-	for (new sq = 1; sq <= g_nsquads; sq++)
-	{
-		formatex(line, charsmax(line), "friend @sq%d @sq%d 1", sq, sq);
-		ls_comp_bots_hint(line);
-	}
-}
-
 stock humans()
 {
 	new n = 0;
 	for (new p = 1; p <= MaxClients; p++)
 		if (is_user_connected(p) && !is_user_bot(p) && (cs_get_user_team(p) == CS_TEAM_T || cs_get_user_team(p) == CS_TEAM_CT))
 			n++;
-	return n;
-}
-
-/* how many sides still have someone alive (players, or squads) */
-stock alive_sides(&last = 0)
-{
-	new seen[66], n = 0;
-	for (new p = 1; p <= MaxClients; p++)
-	{
-		if (!is_user_alive(p))
-			continue;
-		/* (someone who joined late has no squad: a side of their own) */
-		new key = g_squad[p] ? min(g_squad[p], 32) : 33 + p;
-		if (!seen[key])
-		{
-			seen[key] = 1;
-			n++;
-			last = p;
-		}
-	}
 	return n;
 }
 
@@ -507,12 +496,18 @@ public tick()
 		hud_line("Battle Royale starts when a player joins");
 		return;
 	}
+	if (g_phase == PH_LOBBY)
+		return;
 	if (g_phase == PH_DROP)
 	{
-		/* people who join while looting up still play */
+		/* people who join while looting up still play (in a squad that's short, or their own) */
 		for (new p = 1; p <= MaxClients; p++)
 			if (is_user_connected(p) && !is_user_bot(p) && !is_user_alive(p) && (cs_get_user_team(p) == CS_TEAM_T || cs_get_user_team(p) == CS_TEAM_CT))
+			{
+				if (!ls_squad_get(p))
+					ls_squad_fill();
 				ExecuteHamB(Ham_CS_RoundRespawn, p);
+			}
 		if (now >= g_phaseEnd)
 			start_play();
 	}
@@ -532,6 +527,7 @@ public tick()
 		}
 		if (check_winner())
 			return;
+		late_joiners();
 	}
 	bot_goals();
 	unstick_bots();
@@ -541,7 +537,7 @@ public tick()
 		for (new p = 1; p <= MaxClients; p++)
 		{
 			new e = g_gunGoal[p];
-			if (e && is_user_alive(p) && is_user_bot(p) && !g_falling[p] && pev_valid(e) && ls_comp_state(e) != 0 && !has_gun(p))
+			if (e && is_user_alive(p) && is_user_bot(p) && !ls_dropping(p) && pev_valid(e) && ls_comp_state(e) != 0 && !has_gun(p))
 			{
 				g_gunGoal[p] = 0;
 				loot_goal_on_landing(p);
@@ -585,7 +581,7 @@ stock unstick_bots()
 			server_cmd("ls_bot %d release", p);
 		}
 		/* (campers stand still on purpose) */
-		if (g_falling[p] || g_unstuckTries[p] >= 3 || g_trait[p] == TR_CAMPER)
+		if (ls_dropping(p) || g_unstuckTries[p] >= 3 || g_trait[p] == TR_CAMPER)
 			continue;
 		pev(p, pev_origin, o);
 		if (g_startPos[p][0] == 0.0 && g_startPos[p][1] == 0.0)
@@ -647,7 +643,7 @@ stock bool:nearby_target(const Float:o[3], Float:out[3])
 stock bool:check_winner()
 {
 	new last;
-	new sides = alive_sides(last);
+	new sides = ls_squads_alive(last);
 	if (sides > 1)
 		return false;
 	g_phase = PH_OVER;
@@ -662,14 +658,62 @@ stock bool:check_winner()
 	if (get_pcvar_num(g_cSquad) > 1)
 		toast(0, 8.0, "%s's squad wins!", name);
 	else
-		toast(0, 8.0, "%s wins! (%d kills)", name, g_kills[last]);
+		toast(0, 8.0, "%s wins! (%d kills)", name, ls_kills(last));
 	new went = 0;
 	for (new p = 1; p <= MaxClients; p++)
 		if (g_wentBelow[p])
 			went++;
-	log_amx("Battle Royale on %s won by %s (%d kills) after %d s of fighting; %d players went below ground, %d%% of the time there", g_mapname, name, g_kills[last], floatround(get_gametime() - g_playAt), went, g_secsAll ? 100 * g_secsBelow / g_secsAll : 0);
+	log_amx("Battle Royale on %s won by %s (%d kills) after %d s of fighting; %d players went below ground, %d%% of the time there; %d knocked down, %d revived", g_mapname, name, ls_kills(last), floatround(get_gametime() - g_playAt), went, g_secsAll ? 100 * g_secsBelow / g_secsAll : 0, g_knocks, g_revives);
 	server_cmd(cs_get_user_team(last) == CS_TEAM_T ? "endround T" : "endround CT");
 	return true;
+}
+
+/* squads: someone who joins in the first br_late_fill s of fighting fills a squad that's short, next
+   to a squad mate who's alive; anyone else watches until the next game */
+stock late_joiners()
+{
+	if (get_pcvar_num(g_cSquad) <= 1 || get_gametime() - g_playAt > get_pcvar_float(g_cLateFill))
+		return;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p) || is_user_alive(p) || ls_squad_get(p)
+			|| (cs_get_user_team(p) != CS_TEAM_T && cs_get_user_team(p) != CS_TEAM_CT))
+			continue;
+		new sq = ls_squad_short();
+		if (!sq)
+			continue;
+		new mate = 0;
+		for (new q = 1; q <= MaxClients && !mate; q++)
+			if (q != p && is_user_alive(q) && ls_squad_get(q) == sq)
+				mate = q;
+		if (!mate)
+			continue;
+		ls_squad_set(p, sq);
+		cs_set_user_team(p, (sq % 2) ? CS_TEAM_T : CS_TEAM_CT);
+		ExecuteHamB(Ham_CS_RoundRespawn, p);
+		if (!is_user_alive(p))
+			continue;
+		/* next to the mate once gm_components has placed the spawn (0.1 s) */
+		g_lateMate[p] = mate;
+		set_task(0.5, "task_late_place", TASK_GEAR + 96 + p);
+		new name[32];
+		get_user_name(mate, name, charsmax(name));
+		toast(p, 5.0, "You're in %s's squad: they need you!", name);
+		log_amx("Battle Royale: player %d joined late into squad %d", p, sq);
+	}
+}
+
+public task_late_place(tid)
+{
+	new p = tid - TASK_GEAR - 96, mate = g_lateMate[p];
+	g_lateMate[p] = 0;
+	if (!is_user_alive(p) || !mate || !is_user_alive(mate))
+		return;
+	new Float:o[3];
+	pev(mate, pev_origin, o);
+	o[2] += 80.0;
+	engfunc(EngFunc_SetOrigin, p, o);
+	set_pev(p, pev_velocity, Float:{0.0, 0.0, 0.0});
 }
 
 stock supply_drop()
@@ -736,7 +780,7 @@ public task_gear(tid)
 		return;
 	give_start(id);
 	if (g_phase == PH_DROP && get_pcvar_num(g_cDropIn))
-		drop_in(id);
+		br_drop_in(id);
 }
 
 stock give_start(id)
@@ -911,44 +955,9 @@ stock bool:open_above(const Float:p[3])
 /* the open landing spot (br_drop marker, else respawn point) nearest to a point */
 stock bool:nearest_landing(const Float:p[3], Float:out[3], layer = -1)
 {
-	new best = 0, Float:bd = 999999.0, Float:o[3];
-	/* a map can tag landing spots by layer (`layer` below / surface / high on the br_drop marker:
-	   spots by the stair-trench mouths are "below"); a bot for that layer takes those first */
-	new bool:tagged = false;
-	if (layer >= 0)
-		for (new e = ls_marker_find("br_drop"); e && !tagged; e = ls_marker_find("br_drop", e))
-			tagged = marker_layer(e) == layer;
-	for (new e = ls_marker_find("br_drop"); e; e = ls_marker_find("br_drop", e))
-	{
-		if (tagged && marker_layer(e) != layer)
-			continue;
-		pev(e, pev_origin, o);
-		new Float:d = get_distance_f(o, p);
-		/* (one someone already drops on is as good as further away: no crowd at one spot) */
-		for (new i = 0; i < g_ndropSpots; i++)
-			if (floatabs(o[0] - g_dropSpots[i][0]) < 300.0 && floatabs(o[1] - g_dropSpots[i][1]) < 300.0)
-				d += 1500.0;
-		if (d < bd && open_above(o))
-		{
-			bd = d;
-			best = e;
-		}
-	}
-	if (!best)
-		for (new e = ls_comp_find("ls_respawn_point"); e; e = ls_comp_find("ls_respawn_point", e))
-		{
-			pev(e, pev_origin, o);
-			new Float:d = get_distance_f(o, p);
-			if (d < bd && open_above(o))
-			{
-				bd = d;
-				best = e;
-			}
-		}
-	if (!best)
-		return false;
-	pev(best, pev_origin, out);
-	return true;
+	/* (gm_components' landing search: br_drop markers, layer-tagged ones first, crowded spots further) */
+	static const NAMES[][] = { "below", "surface", "high" };
+	return ls_drop_spot(p, out, layer >= 0 ? NAMES[layer] : "");
 }
 
 /* landed: an unarmed bot goes for the nearest gun on the floor (else a crate); a looter with a
@@ -1173,108 +1182,37 @@ stock spread_pick(const ents[], n)
 	return best;
 }
 
-stock drop_in(id)
+/* drops a player in over the landing spot their habit picks (gm_components' ls_drop_in does the fall:
+   slow, steered, no damage, ls_on_landed when down) */
+stock br_drop_in(id)
 {
 	new Float:land[3];
 	landing_spot(id, land);
-	/* nobody drops on top of somebody else (they'd hang in the air on each other) */
-	for (new tries = 0; tries < 8; tries++)
-	{
-		new bool:clash = false;
-		for (new i = 0; i < g_ndropSpots && !clash; i++)
-			clash = floatabs(land[0] - g_dropSpots[i][0]) < 96.0 && floatabs(land[1] - g_dropSpots[i][1]) < 96.0;
-		if (!clash)
-			break;
-		land[0] += random_float(-160.0, 160.0);
-		land[1] += random_float(-160.0, 160.0);
-	}
 	if (g_ndropSpots < sizeof g_dropSpots)
 	{
 		g_dropSpots[g_ndropSpots][0] = land[0];
 		g_dropSpots[g_ndropSpots][1] = land[1];
 		g_ndropSpots++;
 	}
-	/* as high as the sky allows (or br_drop_height), with room for a player */
-	new Float:a[3], Float:b[3], Float:hit[3];
-	a = land;
-	a[2] += 40.0;
-	b = a;
-	b[2] += get_pcvar_float(g_cDropHeight);
-	engfunc(EngFunc_TraceHull, a, b, IGNORE_MONSTERS, HULL_HUMAN, id, 0);
-	get_tr2(0, TR_vecEndPos, hit);
-	if (get_tr2(0, TR_StartSolid) || hit[2] - a[2] < 250.0)
-		return;
-	hit[2] -= 16.0;
-	engfunc(EngFunc_SetOrigin, id, hit);
-	set_pev(id, pev_velocity, Float:{0.0, 0.0, 0.0});
-	/* (the "on the ground" flag from where they stood stays until the next physics frame:
-	   cleared now, or the very next think would count as the landing) */
-	set_pev(id, pev_flags, pev(id, pev_flags) & ~FL_ONGROUND);
-	set_pev(id, pev_groundentity, 0);
-	set_user_gravity(id, 0.2);
-	g_falling[id] = true;
-	g_fallAt[id] = get_gametime();
-	if (!is_user_bot(id))
-		toast(id, 4.0, "Pick your landing! (steer as you fall)");
+	ls_drop_in(id, land, get_pcvar_float(g_cDropHeight));
 }
 
-/* landed (or hurt by someone close to the ground): normal gravity again */
-stock land(id)
+public ls_on_landed(id)
 {
-	if (!g_falling[id])
-		return;
-	g_falling[id] = false;
-	if (is_user_alive(id))
-	{
-		set_user_gravity(id, 1.0);
-		if (g_phase == PH_DROP)
-			loot_goal_on_landing(id);
-	}
-}
-
-public fm_postthink(id)
-{
-	if (!g_falling[id] || !is_user_alive(id))
-		return FMRES_IGNORED;
-	/* landed: standing on something, a moment after the drop began, no longer falling */
-	if ((pev(id, pev_flags) & FL_ONGROUND) && get_gametime() - g_fallAt[id] > 0.5)
-	{
-		new Float:v[3];
-		pev(id, pev_velocity, v);
-		if (v[2] > -50.0)
-		{
-			/* (the landing's fall damage came before this and was refused) */
-			land(id);
-			return FMRES_IGNORED;
-		}
-	}
-	/* bots come straight down on the spot they picked (people steer) */
-	if (is_user_bot(id))
-	{
-		new Float:v[3];
-		pev(id, pev_velocity, v);
-		v[0] = 0.0;
-		v[1] = 0.0;
-		set_pev(id, pev_velocity, v);
-	}
-	return FMRES_IGNORED;
+	if (g_phase == PH_DROP && is_user_alive(id))
+		loot_goal_on_landing(id);
 }
 
 public ham_takedamage(victim, inflictor, attacker, Float:dmg, bits)
 {
-	/* falling in: nothing hurts (not a hit, not the landing) and gravity stays low until
-	   touchdown, which ends the fall in fm_postthink */
-	if (g_falling[victim])
-		return HAM_SUPERCEDE;
+	/* (falling in, the squad lobby and squad mates: gm_components refuses those) */
 	/* the loot-up: nothing hurts at all (a bot that landed on a high roof and walked off died) */
 	if (g_phase == PH_DROP)
 		return HAM_SUPERCEDE;
 	if (!(1 <= attacker <= MaxClients) || attacker == victim || !is_user_connected(attacker))
 		return HAM_IGNORED;
-	/* nobody hurts anybody while looting up; squad mates never hurt each other */
-	if (g_phase == PH_WAIT || g_phase == PH_DROP)
-		return HAM_SUPERCEDE;
-	if (get_pcvar_num(g_cSquad) > 1 && g_squad[victim] && g_squad[victim] == g_squad[attacker])
+	/* nobody hurts anybody while waiting for people */
+	if (g_phase == PH_WAIT || g_phase == PH_LOBBY)
 		return HAM_SUPERCEDE;
 	return HAM_IGNORED;
 }
@@ -1282,18 +1220,13 @@ public ham_takedamage(victim, inflictor, attacker, Float:dmg, bits)
 public ham_killed(victim, killer, gib)
 {
 	if (g_phase == PH_DROP)
-		log_amx("Battle Royale: player %d died during the drop-in/loot-up (falling %d)", victim, g_falling[victim]);
-	g_falling[victim] = false;
+		log_amx("Battle Royale: player %d died during the drop-in/loot-up (falling %d)", victim, ls_dropping(victim));
 	if (g_phase != PH_PLAY)
 		return HAM_IGNORED;
-	if (1 <= killer <= MaxClients && killer != victim)
-		g_kills[killer]++;
+	/* (kills, the kill feed and watching the killer: gm_components' match HUD) */
 	if (get_pcvar_num(g_cSquad) > 1)
-		set_task(4.0, "task_watch_squad", TASK_GEAR + 64 + victim);
+		set_task(4.5, "task_watch_squad", TASK_GEAR + 64 + victim);
 	new place = alive_count() + 1;
-	new name[32];
-	get_user_name(victim, name, charsmax(name));
-	ls_chat(0, "%s is out (#%d).", name, place);
 	new wpn[24] = "world", Float:dist = 0.0;
 	if (1 <= killer <= MaxClients && killer != victim && is_user_connected(killer))
 	{
@@ -1304,18 +1237,68 @@ public ham_killed(victim, killer, gib)
 	return HAM_IGNORED;
 }
 
+/* squads: a deadly hit knocks a player down while a squad mate is still up; the last one standing going
+   down takes the whole squad out */
+public ls_on_down(id, attacker)
+{
+	if (g_phase != PH_PLAY || get_pcvar_num(g_cSquad) <= 1)
+		return PLUGIN_HANDLED;
+	new sq = ls_squad_get(id);
+	new bool:up = false;
+	for (new q = 1; q <= MaxClients && sq; q++)
+		if (q != id && is_user_alive(q) && ls_squad_get(q) == sq && !ls_is_down(q))
+			up = true;
+	if (!sq || !up)
+	{
+		/* the squad's out: the others who are down go too */
+		for (new q = 1; q <= MaxClients && sq; q++)
+			if (q != id && is_user_alive(q) && ls_squad_get(q) == sq && ls_is_down(q))
+				set_task(0.1, "task_squad_out", TASK_GEAR + 128 + q);
+		return PLUGIN_HANDLED;
+	}
+	new vn[32], kn[32], line[96];
+	get_user_name(id, vn, charsmax(vn));
+	if (1 <= attacker <= MaxClients && attacker != id && is_user_connected(attacker))
+	{
+		get_user_name(attacker, kn, charsmax(kn));
+		formatex(line, charsmax(line), "%s knocked down %s", kn, vn);
+	}
+	else
+		formatex(line, charsmax(line), "%s is down", vn);
+	ls_feed(line);
+	g_knocks++;
+	log_amx("Battle Royale: player %d knocked down at %d s by %d", id, floatround(get_gametime() - g_playAt), attacker);
+	return PLUGIN_CONTINUE;
+}
+
+public ls_on_revive(id, by)
+{
+	if (g_phase == PH_PLAY)
+	{
+		g_revives++;
+		log_amx("Battle Royale: player %d revived by %d", id, by);
+	}
+}
+
+public task_squad_out(tid)
+{
+	new q = tid - TASK_GEAR - 128;
+	if (is_user_alive(q) && ls_is_down(q))
+		user_kill(q, 1);
+}
+
 /* out: watch a squad mate who's still in it */
 public task_watch_squad(tid)
 {
 	new id = tid - TASK_GEAR - 64;
 	if (!is_user_connected(id) || is_user_alive(id) || is_user_bot(id))
 		return;
-	for (new q = 1; q <= MaxClients; q++)
+	new sq = ls_squad_get(id);
+	for (new q = 1; q <= MaxClients && sq; q++)
 	{
-		if (q != id && is_user_alive(q) && g_squad[q] && g_squad[q] == g_squad[id])
+		if (q != id && is_user_alive(q) && ls_squad_get(q) == sq)
 		{
-			set_pev(id, pev_iuser1, 4);	/* first person */
-			set_pev(id, pev_iuser2, q);
+			ls_spectate(id, q);
 			new name[32];
 			get_user_name(q, name, charsmax(name));
 			ls_chat(id, "Watching %s from your squad.", name);
@@ -1460,46 +1443,13 @@ stock hud_line(const text[])
 
 stock hud()
 {
+	/* (players left, kills, zone, armor, heals, the kill feed and the squad list: gm_components'
+	   match HUD; this adds the game's phase in place of the zone timer until the zone starts) */
 	new Float:now = get_gametime();
-	new top[128];
-	new alive = alive_count();
+	new text[96];
 	if (g_phase == PH_DROP)
-		formatex(top, charsmax(top), "ALIVE %d   Loot up: fighting in %d s", alive, max(floatround(g_phaseEnd - now), 0));
-	else
-	{
-		new Float:c[3], Float:r, closing;
-		new Float:secs = ls_zone_next(0, c, r, closing);
-		if (!g_zoneStarted)
-			formatex(top, charsmax(top), "ALIVE %d   The zone starts closing in %d s", alive, max(floatround(get_pcvar_float(g_cZoneStart) * g_pace - (now - g_playAt)), 0));
-		else if (closing)
-			formatex(top, charsmax(top), "ALIVE %d   ZONE CLOSING (%d s)", alive, floatround(secs));
-		else if (secs >= 0.0)
-			formatex(top, charsmax(top), "ALIVE %d   Zone closes in %d:%02d", alive, floatround(secs) / 60, floatround(secs) % 60);
-		else
-			formatex(top, charsmax(top), "ALIVE %d   Final zone", alive);
-	}
-	for (new p = 1; p <= MaxClients; p++)
-	{
-		if (!is_user_connected(p) || is_user_bot(p))
-			continue;
-		ls_hud(p, LS_HUD_TOP, 1.1, "%s", top);
-		/* kills and the squad on the right (menus open on the left) */
-		if (!(get_pcvar_num(g_cSquad) > 1 && g_squad[p]))
-			ls_hud(p, LS_HUD_RIGHT, 1.1, "Kills %d", g_kills[p]);
-		if (get_pcvar_num(g_cSquad) > 1 && g_squad[p])
-		{
-			new team[256], name[24], len = 0;
-			for (new q = 1; q <= MaxClients; q++)
-			{
-				if (q == p || g_squad[q] != g_squad[p] || !is_user_connected(q))
-					continue;
-				get_user_name(q, name, charsmax(name));
-				if (is_user_alive(q))
-					len += formatex(team[len], charsmax(team) - len, "%s  %d^n", name, get_user_health(q));
-				else
-					len += formatex(team[len], charsmax(team) - len, "%s  out^n", name);
-			}
-			ls_hud(p, LS_HUD_RIGHT, 1.1, "Kills %d^n^nSquad^n%s", g_kills[p], team);
-		}
-	}
+		formatex(text, charsmax(text), "Loot up: fighting in %d s", max(floatround(g_phaseEnd - now), 0));
+	else if (g_phase == PH_PLAY && !g_zoneStarted)
+		formatex(text, charsmax(text), "The zone starts closing in %d s", max(floatround(get_pcvar_float(g_cZoneStart) * g_pace - (now - g_playAt)), 0));
+	ls_match_hud_text(text);
 }
