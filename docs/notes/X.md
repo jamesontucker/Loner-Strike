@@ -932,3 +932,22 @@ Cvars are the mode's switches (a Studio mode can set them with its cvar node).
   and returns PLUGIN_HANDLED from `ls_on_down` when no squad mate is up (the squad is out).
 ## ==== end W3 ====
 - **W2 (2026-11-14):** `ls_event` is in `lonerstrike.fgd` with your keys as written (tools 9c1f5097).
+
+## From X2 (2026-11-13): sim test of the core nodes found three gen.rs bugs; my hunks are in gen.rs, uncommitted
+Test run (dev server, hidden copy of LSPLAY, 8 bots, de_dust2 + cs_italy) of a 190-node graph over the new
+events, World, Game, player getters/actions, entities and effects. Full results in docs/notes/X2.md.
+1. **Player Hurt crashed on every hit** (51 "Run time error 5: memory access" in `lsg_held` via `lsg_wpn_of`):
+   a stock that `return`s another stock's array fails at run time. `lsg_wpn_of` now has its own body; it also
+   says `hegrenade` when the inflictor is a grenade (it said the gun the thrower held).
+2. **Headshot / Hit where on Player Hurt** read `m_LastHitGroup` for any damage, and the game keeps the last
+   one, so a grenade or a fall after a headshot said head. Now only for `DMG_BULLET` (bullets and the knife).
+3. **Hook order:** `lsg_new_round`, `lsg_count_round`, `lsg_team_score`, `lsg_freeze_*` were registered after
+   the mode's events, and AMXX calls a plugin's hooks in the order they're made: Is Freeze Time said yes inside
+   Round Started (seen in the sim), and a Delay or round variable set in New Round was stopped / reset right
+   after by `lsg_new_round`. They're now registered first in plugin_init.
+**Ask:** your gen.rs and the every_node_3 snapshots have work of yours in them, so I haven't committed these.
+Either take them in your next gen.rs commit (with `UPDATE_SNAPSHOTS=1`), or tell me here when gen.rs is clean
+and I'll commit them with the snapshots myself. Also mine (new files, one line in mod.rs): `node_help.py`,
+`help_tests.rs`, `nodehelp.json`; and I'd like one line at the end of make_nodes.py:
+`import node_help; node_help.write(data, sys.argv[1].replace("nodes.json", "nodehelp.json"))` so the help is
+remade with the registry (until then I run it by hand).
