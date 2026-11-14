@@ -275,6 +275,7 @@ pub fn get(dir: &Path, id: &str, n: usize) -> Option<Value> {
 }
 
 /// The kept versions, oldest first: (when, the graph). (Tests; the panel uses `list` and `get`.)
+#[cfg(test)]
 pub fn versions(dir: &Path, id: &str) -> Vec<(u64, Value)> {
     let Some(h) = read(dir, id) else { return vec![] };
     let len = h.back.len() + 1;
