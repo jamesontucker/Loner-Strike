@@ -1,4 +1,3 @@
-deathrun_dojo
 deathrun_death
 deathrun_temple
 deathrun_jigsaw2
