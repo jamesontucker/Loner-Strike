@@ -404,6 +404,7 @@ forward ls_on_meeting_start(ent, caller);
 forward ls_on_meeting_vote(ent, voter, target);
 /** A meeting ended; ejected = the player voted out (0 nobody). */
 forward ls_on_meeting_end(ent, ejected);
+
 /* ==== W3: Battle Royale pieces ==== */
 /* ---------------------------------------------------------------------------
  * Battle Royale pieces (any mode can use them)
@@ -578,6 +579,7 @@ native ls_perk_tags(id, out[], len);
  * and bleed out over bleed_secs; a teammate within 80 u holding USE for 4 s
  * (bots: standing there) gets them back up with 50 HP. Off: nobody new goes down.
  */
+/* (cvar ls_down_finish 1: a downed player has ls_down_hp health and enemies' hits can finish them) */
 native ls_down_enable(bool:on, Float:bleed_secs = 30.0, team = 0, bool:lose_perks = true);
 native bool:ls_is_down(id);
 /** Puts a player down now. */
@@ -590,7 +592,7 @@ native Float:ls_down_left(id);
 /** The level of a weapon (1, 2 Mk II, 3 Mk III); weapon 0 = the one in hand. */
 native ls_weapon_level(id, weapon = 0);
 native ls_weapon_set_level(weapon, level);
-/** An upgrade of the gun in hand at the first bench's prices (or 5000 / 9000). */
+/** An upgrade of the gun in hand at the first bench's prices (or 3000 / 6000). */
 native bool:ls_bench_use(id, bool:tell = true);
 /** A roll of the box that's out (ent 0) or of that box. */
 native bool:ls_box_use(ent, id, bool:tell = true);
@@ -674,7 +676,7 @@ native ls_wave_table(const section[] = "", team = 2, bool:creatures = true);
 native ls_wave_table_off();
 /** The mode's difficulty: times the count and the health. */
 native ls_wave_scale(Float:count, Float:hp);
-/** Alive at once (0: 16 + 2 a defender, 20-48); never over the game DLL's adaptive cap. */
+/** Alive at once (0: 16 + 2 a defender, 20-96); never over the game DLL's adaptive cap. */
 native ls_wave_cap(n);
 native ls_wave_cap_now();
 /** Tiers (yellow from round 15, red-orange from 20) on or off. */

@@ -31,6 +31,7 @@
 #include <hamsandwich>
 #include <cstrike>
 #include <fun>
+#include <engine> /* W1: lookup_sequence (the downed pose) */
 
 #pragma semicolon 1
 
@@ -9563,6 +9564,15 @@ new bool:g_dnOn;
 new Float:g_dnBleed = 30.0;
 new g_dnTeam;
 new bool:g_dnLosePerks = true;
+new g_cDownFinish, g_cDownHp;
+/* how a downed player looks and plays: lying (a death sequence held on its last frame), a low
+   view, a red pulse, a bleed-out bar, the pistol only */
+new g_downSeq[33];
+new g_downPistol[33][24];
+new g_downPrev[33][24];
+new g_downGave[33];
+new Float:g_downFadeAt[33];
+new Float:g_downSwitchAt[33];
 new bool:g_down[33];
 new bool:g_bledOut[33];
 new Float:g_downAt[33];
@@ -9575,6 +9585,7 @@ new Float:g_selfRevAt[33];
 new bool:g_headLast[MAX_ENTS];
 new Float:g_upUseNext[33];
 new Float:g_offerAt;
+new g_boxWave[33];
 new bool:g_upCreatures;
 #define OFS_NEXT_ATTACK 83
 #define OFS_WPN_IDLE    48
@@ -9633,6 +9644,7 @@ enum { WX_HOUND = 0, WX_SNARK, WX_HEAVY, WX_GARG, WX_GONARCH };
 new bool:g_wtOn, bool:g_wtCreatures, g_wtTeam = 2, Float:g_wtCountScale = 1.0, Float:g_wtHpScale = 1.0, g_wtCap, bool:g_wtTiers = true;
 new g_wtRowFrom[WT_MAX_ROWS], g_wtRowTo[WT_MAX_ROWS], g_wtMixType[WT_MAX_ROWS][WT_MAX_MIX][16], g_wtMixW[WT_MAX_ROWS][WT_MAX_MIX], g_wtMixN[WT_MAX_ROWS], g_wtNrows;
 new g_wtFileBoss[16] = "boss", g_wtFileEvery = 5, Float:g_wtFileCount = 1.0, Float:g_wtFileHp = 1.0, bool:g_wtTypeHp;
+new Float:g_wtCallAt;
 new g_wtBoss[16], bool:g_wtBossDone = true, g_wtSpecial = -1, g_wtHeavyLeft, g_wtPlanned, g_wtSpawned, g_wtFail;
 
 /* shop */
@@ -9735,9 +9747,15 @@ stock up_plugin_init()
 	g_fwShopItem = CreateMultiForward("ls_on_shop_item", ET_STOP, FP_CELL, FP_CELL, FP_STRING);
 	g_fwShopBuy = CreateMultiForward("ls_on_shop_buy", ET_STOP, FP_CELL, FP_CELL, FP_STRING, FP_CELL);
 
+	/* BR-style knock-downs: players who aren't friends can finish a downed player (down HP) */
+	g_cDownFinish = register_cvar("ls_down_finish", "0");
+	g_cDownHp = register_cvar("ls_down_hp", "100");
 	register_forward(FM_PlayerPreThink, "up_prethink");
 	RegisterHamPlayer(Ham_TakeDamage, "up_player_hurt");
 	RegisterHamPlayer(Ham_Killed, "up_player_killed", 1);
+	RegisterHamPlayer(Ham_Player_PostThink, "up_postthink", 1);
+	register_srvcmd("ls_down_list", "cmd_down_list");
+	RegisterHamPlayer(Ham_Spawn, "up_player_spawn", 1);
 	RegisterHamPlayer(Ham_CS_Player_ResetMaxSpeed, "up_maxspeed", 1);
 	g_upCreatures = get_cvar_pointer("ls_creature_ver") != 0;
 	if (g_upCreatures)
@@ -9975,6 +9993,22 @@ stock perk_tags(id, out[], len)
 
 /* ---- weapon levels (the bench) ---- */
 
+/* the gun the bench works on: the one in hand, else the primary, else the pistol (a bot at the
+   bench often has its knife out) */
+stock gun_of(id)
+{
+	new w = active_weapon(id);
+	if (w)
+		return w;
+	for (new slot = 368; slot <= 369; slot++)	/* m_rgpPlayerItems[1], [2] */
+	{
+		new it = get_pdata_cbase(id, slot, 5);
+		if (it > 0 && pev_valid(it))
+			return it;
+	}
+	return 0;
+}
+
 stock active_weapon(id)
 {
 	new w = get_pdata_cbase(id, 373, 5);	/* m_pActiveItem */
@@ -10015,14 +10049,14 @@ stock Float:wpn_mult(w)
 stock bench_price(s, level)
 {
 	if (level >= 2)
-		return s >= 0 ? floatround(g_pf[s][BN_PRICE3]) : 9000;
-	return s >= 0 ? floatround(g_pf[s][BN_PRICE2]) : 5000;
+		return s >= 0 ? floatround(g_pf[s][BN_PRICE3]) : 6000;
+	return s >= 0 ? floatround(g_pf[s][BN_PRICE2]) : 3000;
 }
 
 stock bench_why_not(s, id, out[], len)
 {
 	out[0] = EOS;
-	new w = active_weapon(id);
+	new w = gun_of(id);
 	if (!w)
 	{
 		copy(out, len, "hold a gun");
@@ -10061,7 +10095,7 @@ stock bool:bench_use(s, id, bool:tell)
 	cs_set_weapon_ammo(w, max(clip, 1) * 3 / 2 + 5);
 	give_thing(id, "ammo");
 	new wname[32];
-	get_weaponname(get_user_weapon(id), wname, charsmax(wname));
+	pev(w, pev_classname, wname, charsmax(wname));
 	replace(wname, charsmax(wname), "weapon_", "");
 	strtoupper(wname);
 	if (!g_bot[id])
@@ -10158,6 +10192,7 @@ stock bool:box_use(s, id, bool:tell)
 	if (ret == PLUGIN_HANDLED)
 		return false;
 	cs_set_user_money(id, cs_get_user_money(id) - price);
+	g_boxWave[id] = g_wave;
 	new bool:secondary = ((1 << csw) & SECONDARY_BITS) != 0;
 	/* drop what it replaces */
 	new weapons[32], n;
@@ -10385,8 +10420,8 @@ stock up_comp_reset(s)
 		}
 		case K_BENCH:
 		{
-			g_pf[s][BN_PRICE2] = kf(s, "price2", 5000.0);
-			g_pf[s][BN_PRICE3] = kf(s, "price3", 9000.0);
+			g_pf[s][BN_PRICE2] = kf(s, "price2", 3000.0);
+			g_pf[s][BN_PRICE3] = kf(s, "price3", 6000.0);
 			g_pf[s][BN_L3FROM] = float(ki(s, "level3_from", 12));
 			g_pf[s][BN_DMG2] = kf(s, "dmg2", 1.4);
 			g_pf[s][BN_DMG3] = kf(s, "dmg3", 1.9);
@@ -10729,9 +10764,14 @@ public up_player_hurt(victim, inflictor, attacker, Float:dmg, bits)
 {
 	if (!is_user_alive(victim) || GetHamReturnStatus() >= HAM_SUPERCEDE)
 		return HAM_IGNORED;
-	/* (downed: nothing more hurts them; they bleed out on the clock) */
+	/* (downed: nothing more hurts them, they bleed out on the clock; with ls_down_finish 1 a
+	   player who isn't a friend can finish them) */
 	if (g_down[victim])
+	{
+		if (get_pcvar_num(g_cDownFinish) && 1 <= attacker <= 32 && attacker != victim && is_user_connected(attacker) && !w3_friends(attacker, victim))
+			return HAM_IGNORED;
 		return HAM_SUPERCEDE;
+	}
 	/* the attacker's damage modifier and gun level, against players too */
 	if (1 <= attacker <= 32 && attacker != victim && is_user_alive(attacker))
 	{
@@ -10760,7 +10800,7 @@ stock go_down(victim)
 	new bool:selfrev = g_selfRev[victim];
 	if (g_dnLosePerks)
 		perk_clear(victim);
-	set_user_health(victim, 1);
+	set_user_health(victim, get_pcvar_num(g_cDownFinish) ? clamp(get_pcvar_num(g_cDownHp), 1, 1000) : 1);
 	g_down[victim] = true;
 	g_bledOut[victim] = false;
 	g_downAt[victim] = get_gametime();
@@ -10776,8 +10816,7 @@ stock go_down(victim)
 	}
 	set_pev(victim, pev_flags, pev(victim, pev_flags) | FL_NOTARGET);
 	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, victim);
-	if (!is_user_bot(victim))
-		client_cmd(victim, "+duck");
+	down_look_on(victim);
 	render(victim, kRenderFxGlowShell, 255, 40, 40, kRenderNormal, 12);
 	act_cancel(victim);
 	send_revive(victim);
@@ -10826,7 +10865,10 @@ stock send_revive(victim)
 stock down_clear(p)
 {
 	if (g_down[p])
+	{
 		hint("goal_clear all %d", p);
+		down_look_off(p);
+	}
 	if (g_revBy[p] && is_user_connected(g_revBy[p]))
 		bar_time(g_revBy[p], 0);
 	g_down[p] = false;
@@ -10844,8 +10886,6 @@ stock get_up(d, by)
 	render(d, kRenderFxNone, 0, 0, 0, kRenderNormal, 255);
 	set_user_health(d, 50);
 	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, d);
-	if (!is_user_bot(d))
-		client_cmd(d, "-duck");
 	new ret;
 	ExecuteForward(g_fwRevive, ret, d, by);
 	if (by && by != d)
@@ -10879,6 +10919,12 @@ stock down_tick()
 			render(d, kRenderFxNone, 0, 0, 0, kRenderNormal, 255);
 			user_kill(d, 1);
 			continue;
+		}
+		/* the red pulse, stronger as bleeding out nears */
+		if (now >= g_downFadeAt[d])
+		{
+			g_downFadeAt[d] = now + 1.0;
+			down_fade(d, 60 + floatround(140.0 * floatclamp((now - g_downAt[d]) / g_dnBleed, 0.0, 1.0)));
 		}
 		/* a teammate close: people hold USE, bots just stay */
 		new who = 0, Float:dO[3], t = get_user_team(d);
@@ -10914,10 +10960,171 @@ stock down_tick()
 	}
 }
 
-public up_player_killed(id, killer, gib)
+/* ---- how a downed player looks and plays ---- */
+
+stock down_look_on(id)
+{
+	/* lying: a death sequence that ends on the back or side, held on its last frame */
+	static const SEQS[][] = { "death1", "back", "death2", "die_backwards", "die_simple", "crouch_die" };
+	g_downSeq[id] = 0;
+	for (new i = 0; i < sizeof SEQS && !g_downSeq[id]; i++)
+	{
+		new n = lookup_sequence(id, SEQS[i]);
+		if (n > 0)
+			g_downSeq[id] = n;
+	}
+	/* the pistol only: theirs, or a basic one by team (taken back after) */
+	g_downPrev[id][0] = EOS;
+	new cur = get_user_weapon(id);
+	if (cur)
+		get_weaponname(cur, g_downPrev[id], charsmax(g_downPrev[]));
+	g_downGave[id] = 0;
+	g_downPistol[id][0] = EOS;
+	new weapons[32], n;
+	get_user_weapons(id, weapons, n);
+	for (new i = 0; i < n; i++)
+		if ((1 << weapons[i]) & SECONDARY_BITS)
+		{
+			get_weaponname(weapons[i], g_downPistol[id], charsmax(g_downPistol[]));
+			break;
+		}
+	if (!g_downPistol[id][0])
+	{
+		new bool:t = get_user_team(id) == 1;
+		copy(g_downPistol[id], charsmax(g_downPistol[]), t ? "weapon_glock18" : "weapon_usp");
+		if (give_item(id, g_downPistol[id]) > 0)
+		{
+			g_downGave[id] = t ? CSW_GLOCK18 : CSW_USP;
+			ExecuteHamB(Ham_GiveAmmo, id, 48, t ? "9mm" : "45ACP", 48);
+		}
+	}
+	engclient_cmd(id, g_downPistol[id]);
+	g_downSwitchAt[id] = 0.0;
+	g_downFadeAt[id] = 0.0;
+	set_pev(id, pev_view_ofs, Float:{0.0, 0.0, 14.0});
+	/* the bleed-out bar */
+	bar_time2(id, floatround(g_dnBleed), 0);
+}
+
+stock down_look_off(id)
+{
+	g_downSeq[id] = 0;
+	if (!is_user_connected(id))
+		return;
+	bar_time(id, 0);
+	down_fade(id, 0);
+	if (!is_user_alive(id))
+	{
+		g_downGave[id] = 0;
+		return;
+	}
+	set_pev(id, pev_framerate, 1.0);
+	new Float:vo[3];
+	vo[2] = (pev(id, pev_flags) & FL_DUCKING) ? 12.0 : 17.0;
+	set_pev(id, pev_view_ofs, vo);
+	/* the pistol given goes, the gun they had comes back */
+	if (g_downGave[id])
+	{
+		strip_weapon(id, g_downGave[id]);
+		g_downGave[id] = 0;
+	}
+	if (g_downPrev[id][0])
+	{
+		new csw = get_weaponid(g_downPrev[id]);
+		if (csw && user_has_weapon(id, csw))
+			engclient_cmd(id, g_downPrev[id]);
+	}
+}
+
+stock strip_weapon(id, csw)
+{
+	new name[24];
+	get_weaponname(csw, name, charsmax(name));
+	new w = -1;
+	while ((w = engfunc(EngFunc_FindEntityByString, w, "classname", name)) > 0)
+	{
+		if (pev(w, pev_owner) != id)
+			continue;
+		ExecuteHamB(Ham_Weapon_RetireWeapon, w);
+		if (ExecuteHamB(Ham_RemovePlayerItem, id, w))
+		{
+			ExecuteHamB(Ham_Item_Kill, w);
+			set_pev(id, pev_weapons, pev(id, pev_weapons) & ~(1 << csw));
+		}
+		break;
+	}
+}
+
+/* a red ScreenFade that fades out over a second (alpha 0 clears it) */
+stock down_fade(id, alpha)
+{
+	if (!g_msgFade || !is_user_connected(id) || is_user_bot(id))
+		return;
+	message_begin(MSG_ONE_UNRELIABLE, g_msgFade, _, id);
+	write_short(alpha > 0 ? 4096 : 0);
+	write_short(0);
+	write_short(0);
+	write_byte(200);
+	write_byte(0);
+	write_byte(0);
+	write_byte(clamp(alpha, 0, 255));
+	message_end();
+}
+
+/* after the game's own animation each frame: the pose, the low view, the pistol */
+public up_postthink(id)
+{
+	if (!g_down[id] || !is_user_alive(id))
+		return HAM_IGNORED;
+	if (g_downSeq[id])
+	{
+		set_pev(id, pev_sequence, g_downSeq[id]);
+		set_pev(id, pev_gaitsequence, 0);
+		set_pev(id, pev_frame, 255.0);
+		set_pev(id, pev_framerate, 0.0);
+	}
+	set_pev(id, pev_view_ofs, Float:{0.0, 0.0, 14.0});
+	new Float:now = get_gametime();
+	new cur = get_user_weapon(id);
+	if (g_downPistol[id][0] && !((1 << cur) & SECONDARY_BITS) && now >= g_downSwitchAt[id])
+	{
+		g_downSwitchAt[id] = now + 0.3;
+		engclient_cmd(id, g_downPistol[id]);
+	}
+	return HAM_IGNORED;
+}
+
+/* ls_down_list: who's down, their pose, view and weapon (tests) */
+public cmd_down_list()
+{
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || !g_down[p])
+			continue;
+		new Float:vo[3], Float:fr, w[24];
+		pev(p, pev_view_ofs, vo);
+		pev(p, pev_frame, fr);
+		get_weaponname(get_user_weapon(p), w, charsmax(w));
+		server_print("down %d: sequence %d (want %d) gait %d frame %.0f view %.0f weapon %s hp %d left %.0f s", p, pev(p, pev_sequence), g_downSeq[p],
+			pev(p, pev_gaitsequence), fr, vo[2], w, get_user_health(p), floatmax(g_dnBleed - (get_gametime() - g_downAt[p]), 0.0));
+	}
+	return PLUGIN_HANDLED;
+}
+
+public up_player_spawn(id)
 {
 	if (g_down[id])
 		down_clear(id);
+	return HAM_IGNORED;
+}
+
+public up_player_killed(id, killer, gib)
+{
+	if (g_down[id])
+	{
+		down_clear(id);
+		render(id, kRenderFxNone, 0, 0, 0, kRenderNormal, 255);
+	}
 	set_pev(id, pev_flags, pev(id, pev_flags) & ~FL_NOTARGET);
 	g_perks[id] = 0;
 	g_nperks[id] = 0;
@@ -10929,6 +11136,7 @@ public up_player_killed(id, killer, gib)
 
 stock up_disconnected(id)
 {
+	g_boxWave[id] = 0;
 	g_turKits[id] = 0;
 	g_turOffered[id] = false;
 	g_shopIn[id] = 0;
@@ -10988,7 +11196,15 @@ stock up_offers(p)
 		return;
 	new team = get_user_team(p);
 	g_turOffered[p] = false;
-	if (g_turPrice > 0 && g_turBots && turret_count(p) < g_turPer)
+	/* perks first: where perks are sold (a machine, or a shop with upgrades), a bot with fewer
+	   than 2 isn't offered turrets or the box (balance stands: the box and turrets took the
+	   money, 6-8 perks for 6 bots by round 10); the box once a round each */
+	new bool:perksFirst = g_nperks[p] < 2 && perks_sold();
+	/* then the gun: from round 6, with 2 perks and a level-1 gun, no more perks until a bench
+	   upgrade (stands: bots bought perks 3 and 4 and never the bench) */
+	new w = gun_of(p);
+	new bool:benchFirst = g_nperks[p] >= 2 && g_wave >= 6 && w && wpn_level(w) == 1 && count_comps(K_BENCH) > 0;
+	if (!perksFirst && g_turPrice > 0 && g_turBots && turret_count(p) < g_turPer)
 	{
 		/* where: a gate (barricade), a different one per bot */
 		new gates[16], ng = 0;
@@ -11016,7 +11232,7 @@ stock up_offers(p)
 			{
 				new k = g_aux[s];
 				new mx = floatround(g_pf[s][PM_MAX]);
-				if (perk_has(p, k) || (mx > 0 && g_nperks[p] >= mx))
+				if (perk_has(p, k) || (mx > 0 && g_nperks[p] >= mx) || benchFirst)
 					continue;
 				hint("offer %d perk %.0f %.0f %.0f %d %d %d", p, o[0], o[1], o[2], g_ent[s], perk_price_at(s, p), PK_ORDER[k]);
 			}
@@ -11030,7 +11246,7 @@ stock up_offers(p)
 			}
 			case K_BOX:
 			{
-				if (g_state[s] != 1)
+				if (g_state[s] != 1 || perksFirst || g_boxWave[p] == g_wave)
 					continue;
 				hint("offer %d box %.0f %.0f %.0f %d %d", p, o[0], o[1], o[2], g_ent[s], floatround(g_pf[s][BX_PRICE]));
 			}
@@ -11061,6 +11277,14 @@ stock up_offers(p)
 	}
 }
 
+stock bool:perks_sold()
+{
+	for (new s = 0; s < g_nslots; s++)
+		if (g_ent[s] && g_on[s] && (g_kind[s] == K_PERK || (g_kind[s] == K_SHOP && ki(s, "upgrades", 0))))
+			return true;
+	return false;
+}
+
 /* bots switch a paid trap on when 4+ creatures are near it (bots_auto=0: only by the brain's offers) */
 stock up_bots_traps()
 {
@@ -11077,12 +11301,14 @@ stock up_bots_traps()
 			if (get_distance_f(o, g_org[s]) < 300.0)
 				n++;
 		}
-		if (n < 4)
+		/* (6+: a crowd, not a few passing by; and a bot with money to spare - traps had eaten the
+		   money for the bench) */
+		if (n < 6)
 			continue;
 		new cost = floatround(kf(s, "cost", 0.0));
 		for (new p = 1; p <= MaxClients; p++)
 		{
-			if (!g_alive[p] || !g_bot[p] || g_down[p] || (g_team[s] && g_pteam[p] != g_team[s]) || cs_get_user_money(p) < cost + 500)
+			if (!g_alive[p] || !g_bot[p] || g_down[p] || (g_team[s] && g_pteam[p] != g_team[s]) || cs_get_user_money(p) < cost + 2500)
 				continue;
 			if (get_distance_f(g_porg[p], g_org[s]) > 700.0)
 				continue;
@@ -11096,6 +11322,7 @@ stock up_bots_traps()
 stock up_tick(bool:sec)
 {
 	down_tick();
+	wt_tick(sec);
 	new bool:any = false, bool:shops = false;
 	for (new s = 0; s < g_nslots; s++)
 	{
@@ -11165,7 +11392,29 @@ stock up_tick(bool:sec)
 
 stock shop_precache()
 {
-	/* Last Stand's keeper: its model has to be loaded with the map (lst_shopkeeper) */
+	/* shopkeepers for shops made while the map runs (a Studio mode's ls_shop): their models
+	   must load with the map. ls_shop_keepers = "barney gman models/x.mdl", set in the mode's
+	   cfg (it runs before the map loads) */
+	register_cvar("ls_shop_keepers", "");
+	new list[192], tok[64], at = 0;
+	get_cvar_string("ls_shop_keepers", list, charsmax(list));
+	for (;;)
+	{
+		new n = next_token(list[at], tok, charsmax(tok));
+		if (!tok[0])
+			break;
+		at += n;
+		if (equali(tok, "none"))
+			continue;
+		new m[96], alt[128];
+		keeper_model(tok, m, charsmax(m));
+		formatex(alt, charsmax(alt), "../valve/%s", m);
+		if (file_exists(m) || file_exists(alt))
+			precache_model_once(m);
+		else
+			log_amx("ls_shop_keepers: %s isn't on this server", m);
+	}
+	/* Last Stand's keeper (lst_shopkeeper) */
 	read_mode_id();
 	if (!equal(g_modeId, "laststand"))
 		return;
@@ -11885,13 +12134,13 @@ stock wt_round_tier(n)
 	return n >= 20 ? 3 : (n >= 15 ? 2 : (n >= 10 ? 1 : 0));
 }
 
-/* alive at once: ls_wave_cap, or by the team's size (16 + 2 a player, 20-48), never over the
+/* alive at once: ls_wave_cap, or by the team's size (16 + 2 a player, 20-96: Y's native-host cap), never over the
    game DLL's adaptive cap */
 stock wt_alive_cap()
 {
 	new c = g_wtCap;
 	if (c <= 0)
-		c = clamp(16 + 2 * wt_defenders(), 20, 48);
+		c = clamp(16 + 2 * wt_defenders(), 20, 96);
 	new p = get_cvar_pointer("ls_creature_cap_now");
 	if (p && get_pcvar_num(p) > 0)
 		c = min(c, get_pcvar_num(p));
@@ -11998,6 +12247,71 @@ stock wt_plan()
 	}
 	log_amx("Wave %d: %d %s against %d defenders (creature health x%.2f, %d%% of the walkers run, %d alive at most%s%s%s)", n, g_wtPlanned, g_wtCreatures ? "creatures" : "zombie bots", wt_defenders(), wt_hp_mult(), floatround(100.0 * wt_fast_share(n)), wt_alive_cap(),
 		g_wtBossDone ? "" : ", boss wave", g_wtSpecial == WX_HOUND ? ", hound pack" : (g_wtSpecial == WX_SNARK ? ", snark swarm" : ""), g_wtHeavyLeft ? ", with heavies" : "");
+}
+
+/* the last 3 of a round: "N creatures left - the nearest 40 m to your left" for people, and
+   every 5 s they're told to come and fight (a wounded spitter otherwise keeps fleeing round the
+   map and nobody can end the round) */
+stock wt_tick(bool:sec)
+{
+	if (!g_wtOn || !g_waveOn || !g_wtCreatures || g_wtPlanned > g_wtSpawned)
+		return;
+	new left[3], n = 0;
+	for (new i = 0; i < g_ntrack && n < 4; i++)
+	{
+		new e = g_track[i];
+		if (e <= MaxClients || !pev_valid(e) || pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
+			continue;
+		if (n < 3)
+			left[n] = e;
+		n++;
+	}
+	if (n == 0 || n > 3)
+		return;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!g_alive[p] || g_bot[p] || get_user_team(p) != g_wtTeam)
+			continue;
+		new best = 0, Float:bd = 999999.0, Float:o[3];
+		for (new k = 0; k < n; k++)
+		{
+			pev(left[k], pev_origin, o);
+			new Float:d = get_distance_f(g_porg[p], o);
+			if (d < bd)
+			{
+				bd = d;
+				best = left[k];
+			}
+		}
+		new dir[16];
+		pev(best, pev_origin, o);
+		dir_word(p, o, dir, charsmax(dir));
+		hud_add(p, false, "%d creature%s left - the nearest %d m %s", n, n == 1 ? "" : "s", floatround(bd / 40.0), dir);
+	}
+	if (sec && g_now >= g_wtCallAt)
+	{
+		g_wtCallAt = g_now + 5.0;
+		for (new k = 0; k < n; k++)
+		{
+			/* at the nearest defender standing (this ends a flee too) */
+			new Float:o[3], who = 0, Float:bd = 999999.0;
+			pev(left[k], pev_origin, o);
+			for (new p = 1; p <= MaxClients; p++)
+			{
+				if (!g_alive[p] || g_down[p] || get_user_team(p) != g_wtTeam)
+					continue;
+				new Float:d = get_distance_f(g_porg[p], o);
+				if (d < bd)
+				{
+					bd = d;
+					who = p;
+				}
+			}
+			server_cmd("ls_creature behave %d chase", left[k]);
+			if (who)
+				server_cmd("ls_creature target %d %d", left[k], who);
+		}
+	}
 }
 
 /* a spawner wants one: 1 made, -1 couldn't (try again), 0 not ours (the table is off) */
@@ -12540,7 +12854,7 @@ public n_weapon_level(plugin, params)
 	new id = get_param(1);
 	new w = get_param(2);
 	if (!w && 1 <= id <= 32 && is_user_alive(id))
-		w = active_weapon(id);
+		w = gun_of(id);
 	return w ? wpn_level(w) : 0;
 }
 

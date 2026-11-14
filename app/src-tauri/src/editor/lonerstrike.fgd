@@ -212,7 +212,7 @@
 	creature_dps(float) : "Creature damage a second" : 80 : "While on."
 	creature_dps_pct(float) : "Creature damage a second (share of health)" : 0.16 : "While on, on top: 0.16 = 16 % of a creature's full health."
 	player_dps(float) : "Player damage a second" : 4 : "While on, to players inside (never below 5 health)."
-	bots_auto(choices) : "Bots switch it on" : 1 : "A bot close by pays for it when 4+ creatures are near." = [ 1 : "Yes" 0 : "No (only by the bots' brain)" ]
+	bots_auto(choices) : "Bots switch it on" : 1 : "A bot close by with money to spare pays for it when 6+ creatures are near." = [ 1 : "Yes" 0 : "No (only by the bots' brain)" ]
 ]
 
 @PointClass base(LsName, LsTeam) size(-8 -8 0, 8 8 16) color(220 60 60) studio("models/w_medkit.mdl") = ls_perk_machine : "Sells one perk for as long as the player lives (lost when downed). Hold USE at it to buy."
@@ -227,8 +227,8 @@
 
 @PointClass base(LsName, LsTeam) size(-8 -8 0, 8 8 16) color(255 140 0) studio("models/w_assault.mdl") = ls_upgrade_bench : "Upgrades the gun in hand: Mk II (+40% damage, a magazine and a half), then Mk III (+90%). The level stays with the gun."
 [
-	price2(integer) : "Mk II price" : 5000 : ""
-	price3(integer) : "Mk III price" : 9000 : ""
+	price2(integer) : "Mk II price" : 3000 : ""
+	price3(integer) : "Mk III price" : 6000 : ""
 	level3_from(integer) : "Mk III from wave" : 12 : "0 = any time."
 	dmg2(float) : "Mk II damage" : 1.4 : "Times the gun's own."
 	dmg3(float) : "Mk III damage" : 1.9 : ""

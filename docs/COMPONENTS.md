@@ -447,12 +447,19 @@ Kept until the player dies or goes down.
 `team` puts them down instead (1 HP, red glow, crawling, creatures ignore them, nothing hurts them). A
 teammate within 80 u holding USE for 4 s (bots: standing there) gets them up with 50 HP; they bleed out
 after `bleed_secs`. The two nearest bots are sent to revive (`goal use`, priority 75).
+- **How it looks and plays:** a downed player (people and bots alike) lies on the ground (a CS death sequence held on
+  its last frame; the server's hitboxes follow it) and crawls at 50, sees from 14 units up with a red pulse that
+  grows as bleeding out nears and a bleed-out bar, and holds only a pistol (theirs, or a glock/usp by team that's
+  taken back after). Getting up brings back the view, the animation and the gun they had. `ls_down_list` (server
+  console) prints each downed player's pose, view, weapon and time left.
+- `ls_down_finish 1` (Battle Royale knock-downs): a downed player has `ls_down_hp` (100) health and players who
+  aren't their friends (squad mates, else teammates) can finish them; everything else still can't hurt them.
 - Natives: `ls_is_down`, `ls_down(id)`, `ls_revive(id, by)`, `ls_down_left(id)`. Forwards
   `ls_on_down(id, attacker)` *(handled: they die as usual)*, `ls_on_revive(id, by)`, `ls_on_bled_out(id)`.
 
 ### Weapon levels and ls_upgrade_bench
 A gun's level (1, Mk II, Mk III) stays with the gun entity (`pev_iuser3`), dropped or picked up.
-- **ls_upgrade_bench:** hold USE with a gun in hand. Keys `price2` (5000), `price3` (9000),
+- **ls_upgrade_bench:** hold USE with a gun in hand. Keys `price2` (3000), `price3` (6000),
   `level3_from` (wave 12), `dmg2` (1.4), `dmg3` (1.9), `model`, `team`, `bots`. An upgrade also gives a
   magazine and a half and fills the reserve.
 - Natives: `ls_weapon_level(id, weapon = 0)`, `ls_weapon_set_level(weapon, level)`, `ls_bench_use(id, tell)`.
@@ -468,7 +475,7 @@ forward `ls_on_box(ent, id, weapon[])` *(handled: nothing given, nothing paid)*.
 With `fire_on=use` and a `cost`, a player holding USE at the trap's spot pays and sets it off; with
 `active_secs` it then stays on that long, hurting creatures inside by `creature_dps` (80) plus
 `creature_dps_pct` (0.16) of their health a second and players by `player_dps` (4, never below 5 HP),
-then recharges `rearm_secs`. `bots_auto=1`: a bot within 700 u with the money switches it on when 4+
+then recharges `rearm_secs`. `bots_auto=1`: a bot within 700 u with $2500 to spare switches it on when 6+
 creatures are within 300 u.
 
 ### ls_pickup
@@ -486,6 +493,9 @@ Armor and health lines are greyed when full. Keys `price_rise` (dearer by this s
 he stands by the counter, turns to whoever is near, fidgets, nods and says a line after a purchase),
 `keeper_name`, `greet` (said to someone walking in, their first 3 visits), `hint` (shown on walking in),
 `title`, `open`, `team`. Walking out shuts the menus.
+A shop made while the map runs (`ls_comp_create`, a Studio mode) can only show a keeper whose model loaded with the
+map: list them in `ls_shop_keepers` ("barney gman models/x.mdl") in the mode's cfg, which runs before the map loads;
+otherwise a CS player model stands in, without gestures. Last Stand's keeper (`lst_shopkeeper`) is loaded by itself.
 - Natives: `ls_shop_buy(ent, id, item[], tell)` (by name or give; bots buy with it), `ls_shop_price(ent, item[])`,
   `ls_shop_menu`, `ls_shop_open(ent, open)`, `ls_shop_is_open`, `ls_shop_at(ent, id)`, `ls_shop_why(reason[])`.
 - Forwards: `ls_on_shop_item(ent, id, item[])` *(handled: greyed, with ls_shop_why's reason)*,
@@ -509,7 +519,7 @@ on; each `ls_wave_start(n)` then plans the round and the spawners make the creat
 `ls_on_wave_spawn` still comes first):
 - **How many:** (11 + 1.4 per round + a few more in rounds 1-4) x (0.5 + 0.2 per defender, up to 16) x the
   mode's count scale; 60 % of that in a boss round, 70 % in a pack round. Alive at once: `ls_wave_cap(n)`, or
-  16 + 2 per defender (20-48), never over the game DLL's adaptive cap (followed through the round).
+  16 + 2 per defender (20-96), never over the game DLL's adaptive cap (followed through the round).
 - **Which:** types unlock by round (zombie 1, runner 2, babycrab and spitter 4, brute 5, vortigaunt 8,
   assassin 9, soldier 10, controller 12, stukabat 14), picked by role (fodder, flankers, ranged, tanks: the
   others grow each round) and weight; a type the server lacks gets its stand-in. Walkers start running from

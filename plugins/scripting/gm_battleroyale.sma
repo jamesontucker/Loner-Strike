@@ -255,6 +255,8 @@ public game_setup()
 		ls_down_enable(true, get_pcvar_float(g_cBleed), 0, false);
 	else
 		ls_down_enable(false);
+	/* a knocked-down player can be finished by the other squads (ls_down_hp health), as in PUBG */
+	set_cvar_num("ls_down_finish", get_pcvar_num(g_cSquad) > 1 ? 1 : 0);
 	pick_traits();
 	if (get_pcvar_num(g_cWaitHuman) && !humans())
 	{

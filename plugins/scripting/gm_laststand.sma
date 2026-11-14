@@ -73,8 +73,8 @@ new g_puThisWave;
 enum { PK_TOUGH = 0, PK_HANDS, PK_DOUBLE, PK_REVIVE, PK_FEET, PK_COUNT };
 new const PK_ID[PK_COUNT][] = { "tough", "hands", "doubletap", "revive", "feet" };
 #define PERK_MAX 4
-#define MK2_PRICE 5000
-#define MK3_PRICE 9000
+#define MK2_PRICE 3000
+#define MK3_PRICE 6000
 #define BOX_PRICE 950
 #define TURRET_PRICE 2500
 #define RIFLE_LAST 2
@@ -106,7 +106,12 @@ new Float:g_repairResend[33];
 new g_botRepaired;
 new Float:g_beatAt;
 new Float:g_stuckAt;
+new Float:g_lastKillAt;
 new Float:g_crPos[2048][3];
+new Float:g_idlePos[2048][3];
+new Float:g_idleAt[2048];
+new Float:g_recallAt[2048];
+new Float:g_recallTick;
 new g_crStill[2048];
 new g_overrun;
 new Float:g_lastChanceEnd;
@@ -994,6 +999,7 @@ stock start_wave(n)
 	g_floorSecs = 0;
 	g_kills = 0;
 	g_waveAt = get_gametime();
+	g_lastKillAt = g_waveAt;
 	/* the round's start: a clear cue */
 	if (g_special == 1)
 		toast(0, 4.0, true, "Wave %d: a boss is coming!", n);
@@ -1227,10 +1233,32 @@ public tick()
 			g_capShown = cap;
 			set_cvar_num("ls_comp_wave_alive_max", cap);
 		}
+		if (now >= g_recallTick)
+		{
+			g_recallTick = now + 3.0;
+			recall_idle();
+		}
 		if (now >= g_stuckAt)
 		{
 			g_stuckAt = now + 15.0;
 			unstick_creatures();
+			/* the last one or two that nobody has killed for 3 minutes (one that keeps moving
+			   somewhere nobody goes): they go, so a round can't hang */
+			if (g_creatures && enemies_left() <= 2 && ls_wave_planned() <= ls_wave_spawned() && g_lastKillAt > 0.0 && now - g_lastKillAt > 180.0)
+			{
+				new e = -1;
+				while ((e = find_ent_by_class(e, "ls_creature")) > 0)
+					if (pev(e, pev_deadflag) == DEAD_NO && pev(e, pev_team) != 1)
+					{
+						new Float:o[3];
+						pev(e, pev_origin, o);
+						new type[16];
+						pev(e, pev_netname, type, charsmax(type));
+						log_amx("Last Stand: creature %d (%s) at %.0f %.0f %.0f not killed for 3 minutes at the end of wave %d; removed", e, type, o[0], o[1], o[2], g_wave);
+						server_cmd("ls_creature kill %d", e);
+					}
+				g_lastKillAt = now;
+			}
 		}
 	}
 	if (now >= g_beatAt)
@@ -1255,6 +1283,9 @@ stock unstick_creatures()
 	if (!g_creatures)
 		return;
 	new e = -1, Float:o[3], Float:po[3];
+	/* the last few: 30 s without moving is enough, near a defender or not (balance stands: they
+	   wedged south of the south gate, inside 800 u of the base, and held rounds for minutes) */
+	new bool:few = enemies_left() <= 3;
 	while ((e = find_ent_by_class(e, "ls_creature")) > 0)
 	{
 		if (e >= sizeof g_crPos || pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
@@ -1266,22 +1297,120 @@ stock unstick_creatures()
 			g_crStill[e] = 0;
 			continue;
 		}
-		if (++g_crStill[e] < 4)
+		if (++g_crStill[e] < (few ? 2 : 4))
 			continue;
-		new bool:near = false;
-		for (new p = 1; p <= MaxClients && !near; p++)
+		new Float:dmin = 99999.0;
+		for (new p = 1; p <= MaxClients; p++)
 		{
 			if (!is_user_alive(p) || cs_get_user_team(p) != CS_TEAM_CT)
 				continue;
 			pev(p, pev_origin, po);
-			near = get_distance_f(o, po) < 800.0;
+			dmin = floatmin(dmin, get_distance_f(o, po));
 		}
-		if (near)
+		/* (one of the last few that stands still while fighting - at a gate, or within 500 u of a
+		   defender - is busy, not stuck; a ranged one counts as fighting from where it shoots) */
+		if (few)
+		{
+			new bool:atGate = false;
+			for (new b = ls_comp_find("ls_barricade"); b && !atGate; b = ls_comp_find("ls_barricade", b))
+			{
+				if (ls_barricade_hp(b) <= 0)
+					continue;
+				new Float:mn[3], Float:mx[3];
+				pev(b, pev_absmin, mn);
+				pev(b, pev_absmax, mx);
+				atGate = near_box(e, mn, mx, 160.0);
+			}
+			if (atGate || dmin < 500.0)
+				continue;
+		}
+		else if (dmin < 800.0)
 			continue;
-		log_amx("Last Stand: creature %d stuck at %.0f %.0f %.0f for a minute; removed", e, o[0], o[1], o[2]);
+		new type[16];
+		pev(e, pev_netname, type, charsmax(type));
+		log_amx("Last Stand: creature %d (%s) stuck at %.0f %.0f %.0f for %s; removed", e, type, o[0], o[1], o[2], few ? "30 s (one of the last)" : "a minute");
 		g_crStill[e] = 0;
 		server_cmd("ls_creature kill %d", e);
 	}
+}
+
+/* A ranged creature (spitter, vortigaunt, soldier) that knows where a defender is but can't see
+   one stops where it is and waits (balance stands: four held wave 8 for 9 minutes from the south
+   road, out of sight of everyone). After 12 s still and out of sight it's sent to guard the
+   outside of the nearest gate, where it sees through the boards and fights. */
+stock recall_idle()
+{
+	if (!g_creatures || g_base[0] == 0.0 && g_base[1] == 0.0)
+		return;
+	new Float:now = get_gametime();
+	new e = -1, Float:o[3];
+	while ((e = find_ent_by_class(e, "ls_creature")) > 0)
+	{
+		if (e >= sizeof g_idlePos || pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
+			continue;
+		pev(e, pev_origin, o);
+		if (get_distance_f(o, g_idlePos[e]) > 32.0 || g_idleAt[e] <= 0.0)
+		{
+			g_idlePos[e] = o;
+			g_idleAt[e] = now;
+			continue;
+		}
+		if (now - g_idleAt[e] < 12.0 || now < g_recallAt[e])
+			continue;
+		/* busy at a gate, or someone in sight: it's fighting */
+		new best = 0, Float:bd = 99999.0, Float:gc[3], bool:atGate = false;
+		for (new b = ls_comp_find("ls_barricade"); b; b = ls_comp_find("ls_barricade", b))
+		{
+			new Float:c[3];
+			gate_centre(b, c);
+			new Float:d = get_distance_f(o, c);
+			if (d < 220.0)
+				atGate = true;
+			if (d < bd)
+			{
+				bd = d;
+				best = b;
+				gc = c;
+			}
+		}
+		if (atGate || !best || creature_sees_defender(e, o))
+			continue;
+		/* right outside the gate (64 u out from its middle, away from the base): it hits the boards there */
+		new Float:dx = gc[0] - g_base[0], Float:dy = gc[1] - g_base[1];
+		new Float:ln = floatsqroot(dx * dx + dy * dy);
+		if (ln < 1.0)
+			continue;
+		new Float:t[3];
+		t[0] = gc[0] + 64.0 * dx / ln;
+		t[1] = gc[1] + 64.0 * dy / ln;
+		t[2] = gc[2];
+		t[2] = floor_under(t) + 8.0;
+		new type[16];
+		pev(e, pev_netname, type, charsmax(type));
+		log_amx("Last Stand: creature %d (%s) idle out of sight at %.0f %.0f %.0f; sent to the gate at %.0f %.0f", e, type, o[0], o[1], o[2], t[0], t[1]);
+		server_cmd("ls_creature behave %d guard %.0f %.0f %.0f;ls_creature target %d 0", e, t[0], t[1], t[2], e);
+		g_recallAt[e] = now + 20.0;
+		g_idleAt[e] = now;
+	}
+}
+
+stock bool:creature_sees_defender(e, const Float:o[3])
+{
+	new Float:a[3], Float:b[3], Float:frac;
+	a = o;
+	a[2] += 32.0;
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p) || cs_get_user_team(p) != CS_TEAM_CT)
+			continue;
+		pev(p, pev_origin, b);
+		b[2] += 17.0;
+		engfunc(EngFunc_TraceLine, a, b, IGNORE_MONSTERS, e, 0);
+		get_tr2(0, TR_flFraction, frac);
+		if (frac >= 1.0)
+			return true;
+	}
+	return false;
 }
 
 /* Bots repair barricades: in breaks and the prepare time, and mid-wave only while that gate is
@@ -1946,6 +2075,7 @@ public ham_creature_killed(ent, killer, gib)
 	if (pev(ent, pev_team) == 1)
 		return HAM_IGNORED;
 	g_kills++;
+	g_lastKillAt = get_gametime();
 	if (!(1 <= killer <= MaxClients) || !is_user_connected(killer))
 		return HAM_IGNORED;
 	new type[16];
@@ -2063,6 +2193,13 @@ stock bots_upgrades()
 		g_upNext[p] = get_gametime() + 4.0;
 		new money = cs_get_user_money(p);
 		new n = ls_perk_count(p);
+		/* from wave 6, with 2 perks: the gun's Mk II before more perks (stands: no bench ever) */
+		if (!g_hasBench && n >= 2 && g_wave >= 6 && ls_weapon_level(p) == 1)
+		{
+			if (money >= MK2_PRICE + 300)
+				ls_bench_use(p, false);
+			continue;
+		}
 		if (!g_hasPerkM && n < PERK_MAX && money >= ls_perk_price(p) + 400)
 		{
 			for (new k = 0; k < sizeof ORDER; k++)
