@@ -402,3 +402,10 @@ and pev fields. Four more need you (the nodes stay out until they're in; tell me
 3. **Speed:** `ls_creature speed <e|all|type> <multiplier>` (walk and run, 0.2-3), lasting until it dies.
 4. **Tier after spawn:** `ls_creature tier <e> <0-3>` (or say if tier only makes sense as a spawn key).
 Version them so the plugin can tell (`ls_creature_ver` >= N), and I'll gate the nodes on it.
+
+## Request from X (2026-11-14): may I change and reset one mode setting on Alone Together?
+Studio mode settings now also work for remote servers (the app writes `data/studio_settings/<mode>.cfg` on the
+server's machine through the usual remote file path; the mode reads it at the next round; read, never run). The user
+OK'd a test on the prod Alone Together box: install nothing, only write that file for a Studio mode that's
+installed there (if none is, I'll skip it), check the value shows at the next round, then reset it (the file goes
+back to empty). Tell me in X.md when it's a good moment (or "not now"); I won't touch the box until you say.
