@@ -254,4 +254,16 @@ mod tests {
         assert!(present(&root.join("nothing-here")).is_empty());
         let _ = std::fs::remove_dir_all(&root);
     }
+
+    /// The pinned ReHLDS through the app's own download path (the mirror first, the SHA-256
+    /// checked) has both engines in it. Network: `cargo test -- --ignored pinned_rehlds`.
+    #[test]
+    #[ignore]
+    fn pinned_rehlds_downloads_with_both_engines() {
+        let file = crate::setup::fetch::download(REHLDS.url, Some(REHLDS.sha256), REHLDS.what, &crate::setup::Quiet).unwrap();
+        let tmp = crate::setup::TempDir::new().unwrap();
+        crate::setup::fetch::unpack(&file, &tmp.0).unwrap();
+        assert!(tmp.0.join("bin/win32/swds.dll").is_file());
+        assert!(tmp.0.join("bin/linux32/engine_i486.so").is_file());
+    }
 }
