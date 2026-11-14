@@ -50,7 +50,7 @@
  },
  "isAccessibleForFree": true,
  "license": "https://www.gnu.org/licenses/gpl-3.0.html",
- "downloadUrl": "https://github.com/jamesontucker/Loner-Strike/releases/latest",
+ "downloadUrl": ["https://dl.lonerstrike.com/download/Loner-Strike-windows-x64-setup.exe", "https://dl.lonerstrike.com/download/Loner-Strike-mac.dmg", "https://github.com/jamesontucker/Loner-Strike/releases/latest"],
  "codeRepository": "https://github.com/jamesontucker/Loner-Strike",
  "image": "https://lonerstrike.com/img/og.jpg",
  "screenshot": [
@@ -362,8 +362,15 @@ html { scroll-padding-top: 72px; }
 .box { background: var(--panel); box-shadow: var(--raised); padding: 24px 26px; border-radius: 3px; }
 .box h3 { font: 400 26px/1.1 var(--stencil); margin-bottom: 8px; }
 .box p { color: var(--dim); margin: 0 0 18px; }
-.price { font: 400 54px/1 var(--stencil); margin: 6px 0 4px; }
-.price small { font: 600 16px var(--text); color: var(--faint); margin-left: 6px; }
+.get .wrap { grid-template-columns: minmax(0, 1fr); max-width: 900px; }
+.dl-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 4px 0 12px; }
+.btn.dl { flex-direction: column; align-items: flex-start; gap: 2px; min-height: 72px; padding: 12px 18px; text-align: left; }
+.btn.dl .dl-name { font-size: 1.15rem; font-weight: 700; }
+.btn.dl .dl-note { font-size: .85rem; font-weight: 500; opacity: .8; }
+.btn.dl.yours { background: var(--signal); color: var(--ink); box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
+.btn.dl.yours:hover { background: #d4c55d; color: var(--ink); }
+.dl-fine { font-size: .9rem; }
+@media (max-width: 560px) { .dl-pair { grid-template-columns: 1fr; } }
 .steps { list-style: none; margin: 18px 0 0; padding: 0; }
 .steps li { position: relative; padding: 0 0 14px 30px; color: var(--dim); }
 .steps li::before { content: ""; position: absolute; left: 1px; top: 6px; width: 14px; height: 14px; background: var(--signal); box-shadow: inset -2px -2px 0 #8c7f33, inset 2px 2px 0 #e3d683; }
@@ -1100,24 +1107,34 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
 
   <section class="get" id="get">
     <div class="wrap">
-      <div class="box">
-        <h3>Name your price</h3>
-        <p>Loner-Strike is free and open source. If it gave you a good night of Counter-Strike and you'd like to say thanks, pay what you like.</p>
-        <div class="price">$0<small>and up</small></div>
-        <p class="fine">You get the same download either way.</p>
-        <a class="btn primary polar" id="polar" href="#" data-polar-checkout data-polar-checkout-theme="dark" data-event="Name your price">Name your price</a>
-      </div>
-      <div class="box">
-        <h3>Download free</h3>
-        <p>Every release is also free on GitHub.</p>
-        <a class="btn release" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download free">Download from GitHub</a>
-        <p class="fine" id="which-file">On the release page, Windows takes the <code>-setup.exe</code> and a Mac the <code>.dmg</code>.</p>
+      <div class="box get-main">
+        <h3>Download Loner-Strike</h3>
+        <p>Free, for Counter-Strike 1.6 and Condition Zero on Steam. No account, no sign-up and no ads.</p>
+        <!-- The fixed-name copies on the download server (the release workflow puts them there);
+             until they're up, both go to the GitHub release (the script below checks) -->
+        <div class="dl-pair">
+          <a class="btn dl" id="dl-win" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download for Windows">
+            <span class="dl-name">Download for Windows</span><span class="dl-note">Windows 10 and 11, 64-bit</span>
+          </a>
+          <a class="btn dl" id="dl-mac" href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download for Mac">
+            <span class="dl-name">Download for Mac</span><span class="dl-note">Apple silicon and Intel, with CrossOver</span>
+          </a>
+        </div>
+        <p class="fine dl-fine">Also on <a href="https://github.com/jamesontucker/Loner-Strike/releases/latest" data-event="Download from GitHub">GitHub</a>, with every release. Windows may say it protected your PC (SmartScreen): click <b>More info</b>, then <b>Run anyway</b>. On a Mac, set up the game in CrossOver first (<a href="docs#mac">how</a>).</p>
         <ol class="steps">
           <li><b>Have the game.</b> Counter-Strike 1.6 or Condition Zero on Steam. On a Mac, in Windows Steam through <a href="https://www.codeweavers.com/crossover">CrossOver</a>, or use the Windows version of Loner-Strike in Parallels.</li>
           <li><b>Open Loner-Strike.</b> It finds the game and walks you through setup. Everything it changes is backed up.</li>
           <li><b>Press Play.</b> Bots fill the server.</li>
         </ol>
-        <p class="fine">It updates itself from the app. Something not working? <a href="docs#no-bots-help">The docs</a> cover the usual problems. No account, no sign-up and no ads.</p>
+        <p class="fine">It updates itself from the app. Something not working? <a href="docs#no-bots-help">The docs</a> cover the usual problems.</p>
+      </div>
+      <div class="box get-support">
+        <h3>Support Loner-Strike</h3>
+        <p>Loner-Strike is a free <a href="terms.html#side-project">side project</a> by nanoshrine, and it always will be free. If you'd like to chip in, any amount from <span class="support-min">$3</span> makes you a Supporter, for good: a gold role in our Discord and a [VIP] tag with a reserved slot on our official servers.</p>
+        <a class="btn primary polar" id="polar" href="#" data-polar-checkout data-polar-checkout-theme="dark" data-event="Support Loner-Strike">Support Loner-Strike</a>
+        <p class="fine">Prefer to chip in every month, from <span class="support-min">$3</span>? You can do that too. Same thanks, and stopping never takes anything away.</p>
+        <p class="fine">It's a thank-you, not a store, and since it's a side project, there are no promises about updates or how long the servers run.</p>
+        <p class="fine">Connect your Discord account on Polar's receipt to get the role. For the in-game perks, say <code>/link</code> in the game on any Loner-Strike server and type the code in our Discord, so they find your Steam account (<a href="docs#link">how</a>).</p>
       </div>
     </div>
   </section>
@@ -1543,7 +1560,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
   }
 
-  // Name your price: Polar's checkout opens over the page. Without a link yet, it goes to the download.
+  // Support Loner-Strike: Polar's checkout opens over the page. Without a link yet, it goes to the download.
   for (const a of document.querySelectorAll("a.polar")) {
     if (POLAR_CHECKOUT) {
       a.href = POLAR_CHECKOUT;
@@ -1579,13 +1596,26 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     }
   }
 
-  // Which file to take from the release page, for this computer
+  // Downloads: the fixed-name copies on the download server (mirror-release.yml puts them there
+  // with each release), checked first; until they're there, both buttons go to the GitHub release.
+  // This computer's button is the bright one; both stay.
   {
-    const p = document.getElementById("which-file");
+    const DL = "https://dl.lonerstrike.com/download/";
+    const files = { "dl-win": "Loner-Strike-windows-x64-setup.exe", "dl-mac": "Loner-Strike-mac.dmg" };
+    for (const [id, name] of Object.entries(files)) {
+      fetch(DL + name, { method: "HEAD", cache: "no-store" })
+        .then((r) => { if (r.ok) document.getElementById(id).href = DL + name; })
+        .catch(() => {});
+    }
     const ua = navigator.userAgent;
-    if (/Macintosh|Mac OS X/.test(ua) && !/iPhone|iPad/.test(ua)) p.innerHTML = 'You\'re on a Mac: take the <code>.dmg</code>, and set up the game in CrossOver first (<a href="docs#mac">how</a>).';
-    else if (/Windows/.test(ua)) p.innerHTML = "You're on Windows: take the <code>-setup.exe</code>.";
+    const mine = /Windows/.test(ua) ? "dl-win" : /Macintosh|Mac OS X/.test(ua) && !/iPhone|iPad/.test(ua) ? "dl-mac" : null;
+    if (mine) document.getElementById(mine).classList.add("yours");
+    else for (const id of Object.keys(files)) document.getElementById(id).classList.add("yours");
   }
+
+  // The supporter minimum, in one place (set in Polar; keep this in step with it)
+  const SUPPORT_MIN = "$3";
+  for (const el of document.querySelectorAll(".support-min")) el.textContent = SUPPORT_MIN;
 
   // ---- screenshots: inline, in each section's app window ---------------------------
   // Each section's window flips through its own shots: arrows on the picture, a thumbnail strip,

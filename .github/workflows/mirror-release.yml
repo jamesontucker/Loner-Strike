@@ -5,6 +5,9 @@
 #   app/<tag>/<file>   the release's files (installers, update bundles, their signatures)
 #   app/latest.json    the updater's file, pointing at the mirror's copies (the app asks
 #                      for this first and GitHub's after it)
+#   download/Loner-Strike-windows-x64-setup.exe, download/Loner-Strike-mac.dmg
+#                      the newest installers under fixed names, for the website's download
+#                      buttons (the Mac build is universal: Apple silicon and Intel)
 #
 # Updates stay signed with the app's updater key and the app checks that signature, so a
 # copy on the mirror can't be swapped for something else. Only the newest release writes
@@ -109,6 +112,22 @@ jobs:
             s3 put-object --bucket "$R2_BUCKET" --key app/latest.json --body mirror-latest.json \
               --content-type application/json --cache-control "public, max-age=60" >/dev/null
             echo "app/latest.json now offers $TAG"
+
+            # fixed-name copies for the website's download buttons (lonerstrike.com#get): the
+            # newest installers under download/, with a short cache so a new release shows soon
+            fixed() {
+              local pattern=$1 key=$2 type=$3 src
+              src=$(ls dist/$pattern 2>/dev/null | head -n 1)
+              [ -n "$src" ] || { echo "::error::No $pattern in the release for $key."; exit 1; }
+              s3 put-object --bucket "$R2_BUCKET" --key "$key" --body "$src" --content-type "$type" \
+                --content-disposition "attachment; filename=\"${key##*/}\"" \
+                --cache-control "public, max-age=300" >/dev/null
+              size=$(s3 head-object --bucket "$R2_BUCKET" --key "$key" --query ContentLength --output text)
+              [ "$size" = "$(stat -c %s "$src")" ] || { echo "::error::$key didn't arrive whole on the mirror."; exit 1; }
+              echo "$key is now $(basename "$src")"
+            }
+            fixed '*_x64-setup.exe' download/Loner-Strike-windows-x64-setup.exe application/vnd.microsoft.portable-executable
+            fixed '*_universal.dmg' download/Loner-Strike-mac.dmg application/x-apple-diskimage
           else
             echo "$TAG isn't the newest release ($newest): latest.json left as it is"
           fi
