@@ -1002,6 +1002,10 @@ Wants=network-online.target
 User=$(whoami)
 WorkingDirectory=$SRV
 Environment=LD_LIBRARY_PATH=$SRV
+# the fixed Ham Sandwich (the official one corrupts memory at map changes, see ensure_ham):
+# put back from the machine's copy before every start, whoever starts it (the app, lsctl, a
+# restart after a crash), if anything replaced it ($$: systemd's own escape for a shell variable)
+ExecStartPre=-/bin/sh -c 'f="$HOME/loner-strike/bin/hamsandwich_fixed_i386.so"; m="$SRV/{game}/addons/amxmodx/modules/hamsandwich_amxx_i386.so"; if [ -f "\$\$f" ] && [ -f "\$\$m" ] && ! cmp -s "\$\$f" "\$\$m"; then cp "\$\$f" "\$\$m.new" && mv -f "\$\$m.new" "\$\$m"; fi'
 ExecStart=$SRV/hlds_linux {args}
 Restart=always
 RestartSec=5
@@ -1131,7 +1135,7 @@ echo "@@STEP ready"
 
 /// A line in the game's unit naming how it's written: a unit without it is written again
 /// before the server's next start (raise it whenever service_sh's unit changes)
-pub const SERVICE_REV: &str = "loner-strike unit 6";
+pub const SERVICE_REV: &str = "loner-strike unit 7";
 
 /// Whether the server's HLTV unit on the machine is the one this version writes (true when it
 /// has none).
@@ -1392,6 +1396,17 @@ const HAM_LINUX_SHA: &str = "dd398607f0dd15d22493dce920eb59f5bc62d5f6710205bff8b
 /// (or AMX Mod X isn't). Sent beside the old one and renamed over it, so a server running
 /// now keeps the copy it loaded; the fixed one loads from the next start. Whether it was sent.
 pub fn ensure_ham(r: &RemoteInfo, id: &str, game: &str) -> Result<bool, String> {
+    // the machine's own copy, which the unit puts back before every start (ExecStartPre)
+    let keep = "loner-strike/bin/hamsandwich_fixed_i386.so";
+    let (_, out) = exec_quick(r, &format!("cd \"$HOME\" && if [ -f {keep} ]; then sha256sum {keep} | cut -c1-64; else echo none; fi"))?;
+    if out.trim() != HAM_LINUX_SHA {
+        let (_, _) = exec_quick(r, "mkdir -p \"$HOME/loner-strike/bin\"")?;
+        write_file(r, &format!("{keep}.new"), HAM_LINUX)?;
+        let (code, out) = exec_quick(r, &format!("cd \"$HOME\" && mv -f {keep}.new {keep}"))?;
+        if code != 0 {
+            return Err(format!("Couldn't keep a copy of the fixed Ham Sandwich ({}).", out.trim()));
+        }
+    }
     let rel = format!("{}/{game}/addons/amxmodx/modules/hamsandwich_amxx_i386.so", server_dir(id));
     let q = shell_quote(&rel);
     let (_, out) = exec_quick(r, &format!("cd \"$HOME\" && if [ -f {q} ]; then sha256sum {q} | cut -c1-64; else echo none; fi"))?;
