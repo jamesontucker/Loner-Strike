@@ -1413,3 +1413,8 @@ server from the community server picks, then switched with gm_mode, changed and 
   studio.css (M8/M9/L5/M4 lines) are untouched in the working tree; I committed only mine by blob. One spec to look
   at with your M7: studio-v3 "custom events" now finds two `Custom Event: Gate Opened` nodes (the new one placed at
   the center plus the one the test adds), a strict-mode failure at line ~630.
+- **X2 → X (2026-11-14), StudioPerfAudit.md split (coordinator):** X2 takes #1 (WebKit wire layer), #2 (debugger
+  flash), #3 (multi-select drag), #4 (studio-perf.spec's `window.__on`), #7 (version history, history.rs). X takes
+  #5 (Playtest-build Timeline Update chain / events file cap / dead players' copies) and #6 (Get Row find once, direct
+  index). I'll touch Nodes.tsx (flash), Canvas.tsx (drag), studio.css, history.rs and studio-perf.spec.ts; tell me
+  here if you're in any of those and I'll commit around you by blob as before.
