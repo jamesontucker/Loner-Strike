@@ -54,7 +54,8 @@ fixed (below), 1 is handed on.
 | 9 | (Y) Wave Spawned One's entity is the spawner, read as the enemy | Y | be9b35b9: labelled Spawner, help says so |
 
 Handed on:
-- **Player Revived never fires for a Studio down** (brain owner): see the row. Bots are sent an `ls_mode` use goal on
+- **Player Revived never fires for a Studio down**: fixed after this list was written, in 709ca00e (bots get a use goal
+  on the spot, not on the dead player; sim: 4 revives where there were 0 in 36). What follows is the finding as it was. Bots are sent an `ls_mode` use goal on
   the downed player, but the brain drops a use goal on a player who isn't alive-and-down (gm_components' kind); a
   Studio down is a dead player. Either the brain accepts a dead player for that goal, or the Studio needs a kind the
   brain keeps; a `hold` on the spot was tried and didn't revive either (5 downs), so the code is as it was.
