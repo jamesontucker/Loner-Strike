@@ -276,6 +276,27 @@ const SHOTS = {
       await settle(page, 1500);
     },
   },
+  health: {
+    group: "sim",
+    about: "Map simulator: a 3-minute match on de_dust2 with 10 bots, its report (one hidden server). Needs the built app's own files or a server of yours to copy: the dev server has neither, so it stops at the start",
+    async take(page) {
+      await tool(page, "health", 3000);
+      const r = await api(page, "/api/tools/health/start", { map: "de_dust2", mode: "classic", minutes: 3, bots: 10 });
+      if (r.error) throw new Error(`start: ${r.error}`);
+      step("simulating (about 4 minutes)…");
+      await page.waitForFunction(async () => {
+        const p = await (await fetch("/api/tools/health/progress")).json();
+        return p && p.run && !p.active;
+      }, null, { timeout: 1_200_000, polling: 5000 });
+      await page.reload();
+      await settle(page, 3000);
+      // the newest report
+      const first = page.locator(".health-report-row, .hc-report, [data-report]").first();
+      if (await first.count()) await first.click();
+      await settle(page, 3000);
+    },
+  },
+  replay: plain("sim", "replay", "Replay: the simulator's match played back"),
   "editor-compile": {
     group: "compile",
     about: "Compile on ls_outpost: the Fast preset run with SDHLT, its steps and the finished map",
@@ -489,7 +510,10 @@ async function rustFor(pick) {
     rust.kill("SIGINT");
     for (let i = 0; i < 40 && (await listening(RUST_PORT)); i++) await new Promise((r) => setTimeout(r, 250));
   }
-  const env = { ...process.env, LS_TEST_GAME: started.game, LS_DEV_PORT: String(RUST_PORT), LS_APP_DIR: started.app };
+  // (hidden servers, like the map simulator's, in a folder of their own beside the clone, never
+  // the app's real servers folder)
+  const env = { ...process.env, LS_TEST_GAME: started.game, LS_DEV_PORT: String(RUST_PORT), LS_APP_DIR: started.app, LS_SERVERS_DIR: join(dirname(started.game), "Servers") };
+  mkdirSync(env.LS_SERVERS_DIR, { recursive: true });
   if (pick) {
     // a copy, named as the map: the editor names the document after the file
     const copy = join(tmp, "maps", pick.split("/").pop());

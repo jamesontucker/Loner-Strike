@@ -232,6 +232,12 @@ people; no "Includes N creatures" card, since no Loner-Strike example ships cust
 `models-game` is a second version of `models` with only the game's own models in the list (the clone's downloaded
 models set aside for that shot): **the user picks** which goes on the site (`models` is the one wired now). The
 Community card's "1 days ago" now says "yesterday".
+**Fourth pass:** `editor-compile` after a real Fast compile of ls_outpost (SDHLT from the throwaway app folder; its
+work files go to the shared `C:\Loner-Strike\Compiler\work\ls_outpost` scratch folder, as any compile's do).
+Not possible under the dev server: the map simulator report and Replay (`health`, `replay` in the script) need a
+hidden server, which needs the built app's own files or one of your servers to copy (the dev server has neither:
+"Loner-Strike's own files couldn't be found"); the Studio debugger needs a Playtest that starts the game. These
+three need the built app (or a server registered in the throwaway app folder): the `replay` draft stays in the tour.
 How the shots are set up: Tools pages in Focus with the hints already seen; the editor imports the map through its
 own Import (the dev server answers the file dialog with a copy of the maps-src file), hides triggers and flies in a
 little; King of the Hill is framed on its round start and scoring chain; the Timeline is a "Hill Glow" pulse added to
