@@ -700,3 +700,58 @@ native ls_wave_types(out[], len, upto = 0);
 /** False once creatures wouldn't spawn (the table fell back to dead players). */
 native bool:ls_wave_creatures_ok();
 /* ==== end W1 ==== */
+
+/* ==== NPCs and interactables (T1fix) ==== */
+/**
+ * ls_npc: a character players talk to (USE). Keys: model (models/barney.mdl, gman, scientist,
+ * or any .mdl loaded with the map; a bare word means models/<word>.mdl), name, behavior
+ * (stand | wander | patrol | follow), targets (patrol: entity names, space-separated, visited in
+ * order), radius (wander range, 160), follow_secs (follow: how long after a talk, 10),
+ * unkillable (1), health (killable ones, 100), team (0 anyone, 1 T, 2 CT: who can talk to it),
+ * greet (said when someone starts talking), target (set off on a talk), angle.
+ * It faces whoever talks to it; bots never target it (no damage taken while unkillable).
+ *
+ * ls_interactable: any model or brush made usable. Keys: prompt ("Press E to use"), range
+ * (96), cooldown (1 s), once (0: again after the cooldown; 1: once a round), hide (1: gone
+ * once used, back next round), team (0 anyone, 1 T, 2 CT), target (set off on use), model.
+ *
+ * Text from maps and modes goes to players only (chat, center text, menus), never to the
+ * server console.
+ */
+
+/** Someone pressed USE on an NPC (after its greeting). */
+forward ls_on_npc_talk(id, npc);
+/** Someone used an interactable (its targets fire too). */
+forward ls_on_interact(id, ent);
+/**
+ * A reply to ls_npc_choose: 0-5 the reply picked, -1 timed out, -2 walked away (over 200
+ * units from the NPC), died, left, closed the menu, or a new conversation replaced it.
+ */
+forward ls_on_npc_choice(id, npc, choice);
+
+/** The NPC (0: a narrator) says a line to a player (0: everyone). */
+native ls_npc_say(npc, id, const text[]);
+/**
+ * The NPC (0: a narrator) says a line and the player picks one of up to 6 replies
+ * ("Yes|No|Tell me more", separated by |). One conversation per player: a new one closes the
+ * old (its choice comes as -2). timeout: seconds (0 = no limit). Returns false when nothing
+ * was shown (no such player, no replies).
+ */
+native bool:ls_npc_choose(npc, id, const text[], const replies[], Float:timeout = 0.0);
+/** stand, wander, patrol (its targets) or follow (follows `target` for its follow_secs). */
+native bool:ls_npc_behave(npc, const behavior[], target = 0);
+/** Turns the NPC to face an entity (a player, another NPC...). */
+native bool:ls_npc_look_at(npc, target);
+/**
+ * An NPC made now. model: models/x.mdl (or barney, gman, scientist...) loaded with the map
+ * (see ls_npc_precache); yaw: facing; keys: more keys ("behavior=wander unkillable=1").
+ * Returns its entity or 0.
+ */
+native ls_npc_spawn(const model[], const Float:origin[3], Float:yaw = 0.0, const name[] = "", const keys[] = "");
+/** Loads an NPC model with the map: call it from plugin_precache. True when it's loaded. */
+native bool:ls_npc_precache(const model[]);
+/** An interactable made now (model: a .mdl loaded with the map, or "" for an invisible one). */
+native ls_interactable_spawn(const model[], const Float:origin[3], const prompt[] = "", const keys[] = "");
+/** The NPC a player is talking to now (0 none or a narrator). */
+native ls_npc_talking(id);
+/* ==== end NPCs and interactables ==== */
