@@ -95,6 +95,59 @@ impl Log {
     }
 }
 
+// ---- for Publish's AI disclosure --------------------------------------------------------
+
+static CLIENT: Mutex<Option<String>> = Mutex::new(None);
+
+/// The client that connected (its clientInfo name), kept for this run.
+pub fn note_client(name: &str) {
+    let name: String = name.chars().filter(|c| !c.is_control()).take(60).collect();
+    if !name.trim().is_empty() {
+        *CLIENT.lock().unwrap_or_else(|e| e.into_inner()) = Some(name.trim().to_string());
+    }
+}
+
+/// An AI client's name as people know it ("claude-code" → "Claude (Anthropic)").
+pub fn agent_label(raw: &str) -> String {
+    let l = raw.to_ascii_lowercase();
+    if l.contains("claude") {
+        "Claude (Anthropic)".into()
+    } else if l.contains("codex") || l.contains("openai") || l.contains("chatgpt") {
+        "ChatGPT / Codex (OpenAI)".into()
+    } else if l.contains("gemini") {
+        "Gemini (Google)".into()
+    } else if l.contains("copilot") {
+        "GitHub Copilot".into()
+    } else if l.contains("cursor") {
+        "Cursor".into()
+    } else {
+        raw.to_string()
+    }
+}
+
+/// The AI that connected this run, in words ("" if none did).
+pub fn last_agent() -> String {
+    CLIENT.lock().unwrap_or_else(|e| e.into_inner()).as_deref().map(agent_label).unwrap_or_default()
+}
+
+/// Whether an agent changed something that names `what` this run (the activity log: a done
+/// call whose arguments mention it, reads left out). Cheap, and only this run's.
+pub fn agent_touched(what: &str) -> bool {
+    touched_in(&mcp().log.rows(), what)
+}
+
+pub fn touched_in(rows: &[Value], what: &str) -> bool {
+    let what = what.trim().to_lowercase();
+    if what.len() < 2 {
+        return false;
+    }
+    const READS: &[&str] = &["read", "get", "list", "find", "search", "describe", "show", "check", "explain"];
+    rows.iter().any(|r| {
+        let tool = r["tool"].as_str().unwrap_or("").to_lowercase();
+        r["outcome"] == "done" && !READS.iter().any(|p| tool.starts_with(p)) && r["detail"].as_str().unwrap_or("").to_lowercase().contains(&what)
+    })
+}
+
 /// A tool's arguments in one short line for the log.
 pub fn short(args: &Value) -> String {
     let parts: Vec<String> = args

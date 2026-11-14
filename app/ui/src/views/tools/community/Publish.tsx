@@ -150,6 +150,45 @@ function Chips({ choices, picked, onToggle, label }: { choices: { id: string; na
   );
 }
 
+/** "AI agents helped make this" (GameBanana's AI Generated Content Policy): ticked to start with
+ *  when an agent changed `about` through the AI connection this run, with the AI's name from that
+ *  connection. `value` goes in the publish request ("" = not ticked). */
+function useAiUse(about: string) {
+  const q = useQuery({
+    queryKey: ["community-ai-use", about],
+    queryFn: () => getJson<{ touched?: boolean; agent?: string }>(`/api/tools/community/ai-use?about=${encodeURIComponent(about)}`).catch(() => ({ touched: false, agent: "" })),
+    staleTime: 60_000,
+  });
+  const [on, setOn] = useState<boolean | null>(null);
+  const [by, setBy] = useState<string | null>(null);
+  const checked = on ?? !!q.data?.touched;
+  const name = by ?? (q.data?.agent || "");
+  return { checked, setOn, name, setBy, value: checked ? name.trim() || "not named" : "" };
+}
+
+function AiStep({ n, ai }: { n: number; ai: ReturnType<typeof useAiUse> }) {
+  return (
+    <Step n={n} title="AI use" note="GameBanana asks people to say when AI helped make something.">
+      <label className="check-row">
+        <input type="checkbox" checked={ai.checked} onChange={(e) => ai.setOn(e.target.checked)} />
+        <span>AI agents helped make this</span>
+      </label>
+      {ai.checked && (
+        <>
+          <label className="field cm-ai-name">
+            <span>Which AI</span>
+            <input className="search" value={ai.name} maxLength={60} placeholder="Claude (Anthropic)" onChange={(e) => ai.setBy(e.target.value)} />
+          </label>
+          <p className="muted small-note">
+            The GameBanana text says so. Also fill in the AI Usage section on GameBanana (
+            <a href="https://gamebanana.com/wikis/2175" target="_blank" rel="noreferrer">its AI policy</a>): what you upload needs real creative work of your own.
+          </p>
+        </>
+      )}
+    </Step>
+  );
+}
+
 function Action({ children, note }: { children: ReactNode; note?: ReactNode }) {
   return (
     <div className="cm-action panel">
@@ -333,6 +372,7 @@ function SourceStep({ projects, project, setProject, on, setOn }: { projects: So
 }
 
 function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; onDone: () => void }) {
+  const ai = useAiUse(map);
   const toast = useToast();
   const q = useQuery({ queryKey: ["tools", "community", "ready", map], queryFn: ({ signal }) => readiness(map, signal), retry: false });
   const [title, setTitle] = useState("");
@@ -388,7 +428,7 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
   const build = () =>
     run("Packing…", async () => {
       remember();
-      const res = await publish(map, { title, summary, author, modes: picked, screenshots: shots, project: project ?? "", source: withSource && !!project, member: r.member || memberFrom(memberText) });
+      const res = await publish(map, { title, summary, author, modes: picked, screenshots: shots, project: project ?? "", source: withSource && !!project, member: r.member || memberFrom(memberText), ai: ai.value });
       if (res.error) return toast(res.error, true);
       setDone({ pkg: res.package, form: res.form });
     });
@@ -438,6 +478,7 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
       <Step n={6} title="Editable source" note="Optional. Others can open the map in Loner-Strike's editor (Remix this map), or the .map in Hammer, J.A.C.K. or TrenchBroom, and make their own version that credits yours.">
         <SourceStep projects={q.data.projects ?? []} project={project ?? ""} setProject={setProject} on={withSource} setOn={setWithSource} />
       </Step>
+      <AiStep n={7} ai={ai} />
       <Action note={blocked ? "Fix the checks marked Must fix first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana and register the page."}>
         <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || !title.trim() || !author.trim() || (withSource && !project)} onClick={build} />
       </Action>
@@ -448,6 +489,7 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
 // ---- a game mode ----------------------------------------------------------------------------------
 
 function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; onDone: () => void }) {
+  const ai = useAiUse(id);
   const toast = useToast();
   const q = useQuery({ queryKey: ["tools", "community", "ready-mode", id], queryFn: ({ signal }) => modeReadiness(id, signal), retry: false });
   const [title, setTitle] = useState("");
@@ -529,7 +571,7 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
   const build = () =>
     run("Packing…", async () => {
       remember();
-      const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: shotsToSend(), bots, member: r.member || memberFrom(memberText) });
+      const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: shotsToSend(), bots, member: r.member || memberFrom(memberText), ai: ai.value });
       if (res.error) return toast(res.error, true);
       setDone({ pkg: res.package, form: res.form });
     });
@@ -597,6 +639,7 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
           </>
         )}
       </Step>
+      <AiStep n={6} ai={ai} />
       <Action note={blocked ? "Fix the graph first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana and register the page."}>
         <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || !title.trim() || !author.trim()} onClick={build} />
       </Action>
@@ -609,6 +652,7 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
 type PrefabReady = { id: string; name: string; description: string; author: string; tags: string[]; brushes: number; entities: number; credits: AssetCredit[]; creatures?: string[]; blockers?: string[]; warnings?: string[]; member?: number };
 
 function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void; onDone: () => void }) {
+  const ai = useAiUse(id);
   const toast = useToast();
   const q = useQuery({ queryKey: ["tools", "community", "ready-prefab", id], queryFn: () => getJson<PrefabReady & { error?: string }>(`/api/tools/community/publish-prefab/${encodeURIComponent(id)}`), retry: false });
   const [title, setTitle] = useState("");
@@ -631,7 +675,7 @@ function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void;
   const build = () =>
     run("Packing…", async () => {
       remember();
-      const res = await post<{ package: Package; form: Form }>(`/api/tools/community/publish-prefab/${encodeURIComponent(id)}`, { title, summary, author, modes: [], screenshots: [], member: r.member || memberFrom(memberText) });
+      const res = await post<{ package: Package; form: Form }>(`/api/tools/community/publish-prefab/${encodeURIComponent(id)}`, { title, summary, author, modes: [], screenshots: [], member: r.member || memberFrom(memberText), ai: ai.value });
       if (res.error) return toast(res.error, true);
       setDone({ pkg: res.package, form: res.form });
     });
@@ -662,6 +706,7 @@ function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void;
           </ul>
         </Step>
       )}
+      <AiStep n={r.credits.length > 0 ? 4 : 3} ai={ai} />
       <Action note={!title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana's Prefabs and register the page."}>
         <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={!title.trim() || !author.trim()} onClick={build} />
       </Action>
@@ -676,6 +721,7 @@ type CreatureReady = { name: string; includes: string[]; blockers: string[]; rem
 
 /** One of your creature types, packed under your name with its models and sounds and a picture of it. */
 function PublishCreature({ name, onBack, onDone }: { name: string; onBack: () => void; onDone: () => void }) {
+  const ai = useAiUse(name);
   const toast = useToast();
   const q = useQuery({ queryKey: ["tools", "community", "ready-creature", name], queryFn: () => getJson<CreatureReady>(`/api/tools/community/publish-creature/${encodeURIComponent(name)}`), retry: false });
   const types = useQuery({ queryKey: ["tools", "creatures"], queryFn: ({ signal }) => creatureStatus(signal), retry: false });
@@ -713,7 +759,7 @@ function PublishCreature({ name, onBack, onDone }: { name: string; onBack: () =>
   const build = () =>
     run("Packing…", async () => {
       remember();
-      const res = await post<{ package: Package; form: Form }>(`/api/tools/community/publish-creature/${encodeURIComponent(name)}`, { title, summary, author, modes: [], screenshots: [], member: r.member || memberFrom(memberText), preview: { name: "preview.png", data: picture ?? "" } });
+      const res = await post<{ package: Package; form: Form }>(`/api/tools/community/publish-creature/${encodeURIComponent(name)}`, { title, summary, author, modes: [], screenshots: [], member: r.member || memberFrom(memberText), preview: { name: "preview.png", data: picture ?? "" }, ai: ai.value });
       if (res.error) return toast(res.error, true);
       setDone({ pkg: res.package, form: res.form });
     });
@@ -751,6 +797,7 @@ function PublishCreature({ name, onBack, onDone }: { name: string; onBack: () =>
           </div>
         </div>
       </Step>
+      <AiStep n={4} ai={ai} />
       <Action note={blocked ? "Fix what's above first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : !(r.member || memberFrom(memberText)) ? "Add your GameBanana profile." : !picture ? "Take its picture." : "Next: upload it to GameBanana's Skins and register the page."}>
         <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || !title.trim() || !author.trim() || !picture || !(r.member || memberFrom(memberText))} onClick={build} />
       </Action>
@@ -804,9 +851,7 @@ function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () =>
           <CopyRow label="Name" value={form.title} />
           <CopyRow label="Description" value={form.text} long />
           <CopyRow label={`Attribute: ${form.tag.title}`} value={form.tag.value} />
-          {form.credits && form.credits.length > 0 && (
-            <CopyRow label="Credits module (group | name | role)" value={form.credits.map((c) => `${c.group} | ${c.name} | ${c.role}${c.url ? ` | ${c.url}` : ""}`).join("\n")} long />
-          )}
+          {form.authors && form.authors.length > 0 && <CopyRow label="Credits for GameBanana's Authors module (one per person)" value={form.authors.join("\n")} long />}
         </div>
         <p className="muted small-note">The attribute <code>{form.tag.title}: {form.tag.value}</code> is how Community finds it.</p>
       </Step>

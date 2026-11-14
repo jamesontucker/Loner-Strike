@@ -131,6 +131,10 @@ export type Form = {
   submitUrl: string; game: string; category: string; title: string; text: string; tag: { title: string; value: string }; file: string; md5: string;
   /** rows for GameBanana's Credits module */
   credits?: { group: string; name: string; role: string; url: string }[];
+  /** GameBanana's Authors module: "<name> — <role>", one line per person, the publisher first */
+  authors?: string[];
+  /** the AI named in the disclosure, when AI agents helped */
+  ai?: string;
 };
 
 /** listed / pending (a moderator looks first) / refused (error says why) / waiting (not sent yet); "sent" from older versions */
@@ -155,7 +159,7 @@ export const readiness = (map: string, signal?: AbortSignal) =>
 export type SourceProject = { path: string; name: string; match: boolean; remixOf?: { gb: number; name: string; author: string } | null };
 
 export type Shot = { name: string; data: string };
-export const publish = (map: string, body: { title: string; summary: string; author: string; modes: string[]; screenshots: Shot[]; project?: string; source?: boolean; member?: number }) =>
+export const publish = (map: string, body: { title: string; summary: string; author: string; modes: string[]; screenshots: Shot[]; project?: string; source?: boolean; member?: number; ai?: string }) =>
   post<{ package: Package; form: Form }>(`${base}/publish/${encodeURIComponent(map)}`, body);
 
 /** P5: "Remix this map": the map's editable source as a new project, opened in the editor. */
@@ -220,7 +224,7 @@ export type ModeReady = {
   member?: number;
 };
 export const modeReadiness = (id: string, signal?: AbortSignal) => get<ModeReady>(`${base}/publish-mode/${encodeURIComponent(id)}`, signal);
-export const publishMode = (id: string, body: { title: string; summary: string; author: string; maps: string[]; screenshots: Shot[]; bots: string; member?: number }) =>
+export const publishMode = (id: string, body: { title: string; summary: string; author: string; maps: string[]; screenshots: Shot[]; bots: string; member?: number; ai?: string }) =>
   post<{ package: Package; form: Form }>(`${base}/publish-mode/${encodeURIComponent(id)}`, body);
 export type StudioGraph = { id: string; name: string; description?: string; nodes?: number; damaged?: boolean; installed?: boolean };
 export const studioGraphs = () => tryGet<{ graphs: StudioGraph[] }>("/api/tools/studio/graphs");

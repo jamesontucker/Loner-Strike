@@ -240,6 +240,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/tools/community/browse"),
     ("GET", "/api/tools/community/item/:model/:id"),
     ("GET", "/api/tools/community/library"),
+    ("GET", "/api/tools/community/ai-use"),
     ("GET", "/api/tools/credits/asset"),
     ("GET", "/api/tools/credits/map/:name"),
     ("POST", "/api/tools/credits/permission"),

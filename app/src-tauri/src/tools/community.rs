@@ -1779,6 +1779,8 @@ pub struct PublishReq {
     /// the publisher's GameBanana member id (their profile link's number): their shared creatures
     /// are named `gb<id>.<type>`; 0 = the one an earlier registration of theirs found
     pub member: i64,
+    /// "AI agents helped make this": the AI that did, for GameBanana's disclosure ("" = none)
+    pub ai: String,
 }
 
 /// The namespace this publish names its creatures under (asked of the community list only when
@@ -2092,6 +2094,81 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
     // kept for registering later
     let _ = std::fs::write(out_dir.join(format!("{stem}.json")), serde_json::to_vec_pretty(&pkg).unwrap_or_default());
     Ok(pkg)
+}
+
+/// What to type into GameBanana's submit form, with the Authors module's credits and, when AI
+/// agents helped, the disclosure GameBanana asks for (its AI Generated Content Policy, wiki 2175).
+/// Never a Support Pack or donation line: GameBanana doesn't allow advertising.
+pub fn publish_form(p: &Package, ai: &str, member: i64) -> Value {
+    let own = super::creaturepack::namespace_of(publish_member(member, &p.item.author, &load_mine(&mine_path()))).unwrap_or_default();
+    let lib = super::communitylib::load_all(&super::communitylib::lib_dir());
+    let idx = index_cached();
+    let maker = |id: i64| {
+        lib.iter().find(|i| i.owner_id == id && !i.author.trim().is_empty()).map(|i| i.author.clone()).or_else(|| idx.items.iter().find(|i| i.owner_id == id && !i.author.trim().is_empty()).map(|i| i.author.clone()))
+    };
+    with_credits(gamebanana_form(p), &p.item, ai, &own, &maker)
+}
+
+/// The form plus GameBanana's Authors block and the AI disclosure (publish_form, testable).
+pub fn with_credits(mut form: Value, it: &Item, ai: &str, own: &str, maker: &dyn Fn(i64) -> Option<String>) -> Value {
+    form["authors"] = json!(authors_block(it, own, maker));
+    let ai: String = ai.chars().filter(|c| !c.is_control()).collect::<String>().trim().chars().take(60).collect();
+    if !ai.is_empty() {
+        let text = format!("{}\n\nAI disclosure: AI agents helped make this ({ai}).", form["text"].as_str().unwrap_or("").trim_end());
+        form["text"] = json!(text);
+        form["ai"] = json!(ai);
+    }
+    form
+}
+
+/// GameBanana's Authors module, ready to paste: one line per person, "<name> — <role>", the
+/// publisher first. Only people who made something in it: a remix's original, the makers of
+/// shared creatures it carries (`gb<id>.type`, named by `maker` from the community list or the
+/// library; the publisher's own, under `own`, are theirs already) and the authors of the custom
+/// files its credits know.
+pub fn authors_block(it: &Item, own: &str, maker: &dyn Fn(i64) -> Option<String>) -> Vec<String> {
+    let mut people: Vec<(String, Vec<String>)> = Vec::new();
+    let mut add = |name: &str, role: String| {
+        let name: String = name.chars().filter(|c| !c.is_control()).collect::<String>().trim().chars().take(60).collect();
+        if name.is_empty() || role.is_empty() {
+            return;
+        }
+        match people.iter_mut().find(|(n, _)| n.eq_ignore_ascii_case(&name)) {
+            Some((_, roles)) if !roles.contains(&role) => roles.push(role),
+            Some(_) => {}
+            None => people.push((name, vec![role])),
+        }
+    };
+    let (what, word) = match it.kind {
+        Kind::Map => ("Map", "map"),
+        Kind::Mode => ("Game mode", "mode"),
+        Kind::Prefab => ("Prefab", "prefab"),
+        Kind::Creature => ("Creature", "creature"),
+        Kind::Spray => ("Spray", "spray"),
+        Kind::Texture => ("Textures", "textures"),
+        Kind::Other => ("Author", "work"),
+    };
+    add(&it.author, what.into());
+    if let Some(r) = &it.remix_of {
+        add(&r.author, format!("Original {word} ({})", r.name));
+    }
+    if it.kind != Kind::Creature {
+        for c in &it.creatures {
+            let Some((ns, _)) = c.name.split_once('.') else { continue };
+            if ns == own {
+                continue;
+            }
+            let Some(id) = ns.strip_prefix("gb").and_then(|d| d.parse::<i64>().ok()) else { continue };
+            add(&maker(id).unwrap_or_else(|| format!("GameBanana member {id}")), format!("Creature {}", c.name));
+        }
+    }
+    for c in &it.credits {
+        for a in &c.authors {
+            let role = if a.role.trim().is_empty() { "Assets".to_string() } else { a.role.trim().to_string() };
+            add(&a.name, if c.name.trim().is_empty() { role } else { format!("{role} ({})", c.name.trim()) });
+        }
+    }
+    people.into_iter().map(|(n, roles)| format!("{n} — {}", roles.join(", "))).collect()
 }
 
 /// What to type into GameBanana's submit form.
@@ -2802,12 +2879,19 @@ async fn api_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(name): UrlP
                 }
                 let r = readiness(&m, &crate::sys::app_dir().join("tools").join("health"));
                 let pkg = build_package(&m, &r, &req, &packages_dir()).map_err(|e| Fail::new(StatusCode::OK, e))?;
-                Ok(json!({"package": pkg, "form": gamebanana_form(&pkg)}))
+                Ok(json!({"package": pkg, "form": publish_form(&pkg, &req.ai, req.member)}))
             })
             .await
         }
     };
     json_answer(r)
+}
+
+/// Publish's "AI agents helped make this": ticked to start with when an agent changed `about` (a
+/// map, mode, prefab or creature name) through the AI connection this run, and the AI's name.
+async fn api_ai_use(Query(q): Query<std::collections::HashMap<String, String>>) -> Response {
+    let about = q.get("about").cloned().unwrap_or_default();
+    Json(json!({"touched": crate::mcp::agent_touched(&about), "agent": crate::mcp::last_agent()})).into_response()
 }
 
 async fn api_prefab_ready(State(st): State<Shared>, UrlPath(id): UrlPath<String>) -> Response {
@@ -2823,7 +2907,7 @@ async fn api_prefab_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(id):
     json_answer(
         blocking(move || {
             let pkg = build_prefab_package(game.as_deref(), &id, &req, &packages_dir()).map_err(|e| Fail::new(StatusCode::OK, e))?;
-            Ok(json!({"package": pkg, "form": gamebanana_form(&pkg)}))
+            Ok(json!({"package": pkg, "form": publish_form(&pkg, &req.ai, req.member)}))
         })
         .await,
     )
@@ -2876,7 +2960,7 @@ async fn api_mode_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(id): U
             let game = st.local_game();
             let at = game.as_ref().map(|g| (g.hl.clone(), g.name.clone()));
             let pkg = build_mode_package(&super::studio::graphs_dir(), &super::communitylib::lib_dir(), &id, &req, &packages_dir(), needs.as_ref(), at.as_ref().map(|(h, n)| (h.as_path(), n.as_str()))).map_err(|e| Fail::new(StatusCode::OK, e))?;
-            Ok(json!({"package": pkg, "form": gamebanana_form(&pkg)}))
+            Ok(json!({"package": pkg, "form": publish_form(&pkg, &req.ai, req.member)}))
         })
         .await,
     )
@@ -3012,6 +3096,7 @@ pub fn routes() -> Router<Shared> {
         // [Caps] up to MAX_SHOTS screenshots of MAX_SHOT each, as base64 (axum's 2 MB default refused real ones)
         .route("/api/tools/community/publish/:map", get(api_ready).post(api_publish).layer(axum::extract::DefaultBodyLimit::max(PUBLISH_BODY)))
         .route("/api/tools/community/publish-mode/:id", get(api_mode_ready).post(api_mode_publish))
+        .route("/api/tools/community/ai-use", get(api_ai_use))
         .route("/api/tools/community/publish-prefab/:id", get(api_prefab_ready).post(api_prefab_publish))
         .route("/api/tools/community/register", post(api_register))
         .route("/api/tools/community/mine", get(api_mine))
@@ -3328,6 +3413,61 @@ mod tests {
         assert!(pick_file(&f, Some(2), 0).is_err(), "flagged by GameBanana");
         assert!(pick_file(&f, Some(3), 0).is_err(), "not something the installer takes");
         assert!(pick_file(&[], None, 0).is_err());
+    }
+
+    /// GameBanana's Authors block: one line per person with their roles, the publisher first,
+    /// only people who made something in it; the AI disclosure only when asked, and never a
+    /// Support Pack or donation line (GameBanana's rules)
+    #[test]
+    fn gamebanana_credits_and_ai_disclosure() {
+        use super::super::creaturepack::ItemCreature;
+        use super::super::credits::{AssetCredit, Author};
+        let names = |id: i64| (id == 77).then(|| "Zed".to_string());
+        let mode = Item {
+            kind: Kind::Mode,
+            author: "jam".into(),
+            remix_of: Some(super::super::communitylib::Credit { name: "Zombie Rush".into(), author: "someone".into(), gb: 5, ..Default::default() }),
+            creatures: vec![
+                ItemCreature { name: "gb42.mine".into(), model: true, sounds: 0 },
+                ItemCreature { name: "gb77.runner".into(), model: true, sounds: 2 },
+                ItemCreature { name: "gb88.crawler".into(), model: false, sounds: 0 },
+            ],
+            credits: vec![
+                AssetCredit { name: "Crate pack".into(), authors: vec![Author { name: "Zed".into(), role: "Models".into(), url: String::new() }], ..Default::default() },
+                AssetCredit { name: String::new(), authors: vec![Author { name: "JAM".into(), role: String::new(), url: String::new() }], ..Default::default() },
+            ],
+            ..Default::default()
+        };
+        assert_eq!(
+            authors_block(&mode, "gb42", &names),
+            [
+                "jam — Game mode, Assets",
+                "someone — Original mode (Zombie Rush)",
+                "Zed — Creature gb77.runner, Models (Crate pack)",
+                "GameBanana member 88 — Creature gb88.crawler",
+            ]
+        );
+        // a creature's own type is the publisher's work, not a carried one
+        let creature = Item { kind: Kind::Creature, author: "jam".into(), creatures: vec![ItemCreature { name: "gb42.mine".into(), model: true, sounds: 0 }], ..Default::default() };
+        assert_eq!(authors_block(&creature, "", &names), ["jam — Creature"]);
+        // maps, prefabs and sprays name their kind
+        for (kind, what) in [(Kind::Map, "Map"), (Kind::Prefab, "Prefab"), (Kind::Spray, "Spray")] {
+            assert_eq!(authors_block(&Item { kind, author: "jam".into(), ..Default::default() }, "", &names), [format!("jam — {what}")]);
+        }
+        // the form: authors always, the disclosure only with an AI named
+        let form = json!({"text": "A mode.\n"});
+        let plain = with_credits(form.clone(), &mode, "  ", "gb42", &names);
+        assert_eq!(plain["authors"].as_array().unwrap().len(), 4);
+        assert!(!plain["text"].as_str().unwrap().contains("AI") && plain.get("ai").is_none());
+        let ai = with_credits(form, &mode, "Claude (Anthropic)", "gb42", &names);
+        assert_eq!(ai["text"], "A mode.\n\nAI disclosure: AI agents helped make this (Claude (Anthropic)).");
+        assert_eq!(ai["ai"], "Claude (Anthropic)");
+        // nothing commercial in GameBanana's text, for any kind
+        let pkg = Package { item: mode.clone(), ..Default::default() };
+        for f in [gamebanana_form(&pkg), gamebanana_form(&Package { item: Item { kind: Kind::Map, ..Default::default() }, ..Default::default() })] {
+            let t = f["text"].as_str().unwrap().to_lowercase();
+            assert!(!["support pack", "polar", "donat", "patreon"].iter().any(|w| t.contains(w)), "{t}");
+        }
     }
 
     #[test]

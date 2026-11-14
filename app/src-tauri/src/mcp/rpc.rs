@@ -172,6 +172,10 @@ pub async fn handle(ctx: &Ctx, sessions: &Sessions, h: &HeaderMap, body: &[u8]) 
         return Reply::error(StatusCode::BAD_REQUEST, id.as_ref(), INVALID_PARAMS, "params must be an object.", None);
     }
     let meta_version = params.get("_meta").and_then(|m| m.get(META_VERSION)).and_then(Value::as_str).map(String::from);
+    // who's connecting, for Publish's AI disclosure (legacy initialize, or a modern request's _meta)
+    if let Some(n) = params.get("clientInfo").filter(|_| method == "initialize").or_else(|| params.get("_meta").and_then(|m| m.get("io.modelcontextprotocol/clientInfo"))).and_then(|c| c.get("name")).and_then(Value::as_str) {
+        super::note_client(n);
+    }
 
     // a notification: nothing to answer (initialized, cancelled, ...)
     let Some(id) = id else {

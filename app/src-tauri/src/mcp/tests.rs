@@ -1275,3 +1275,24 @@ fn a_risky_mode_install_names_its_risks_in_the_question() {
     let Policy::Ask(q) = policy("POST", "/api/tools/community/try", &json!({"model": "Mod", "id": 1})) else { panic!() };
     assert_eq!(q, "download and install something from GameBanana");
 }
+
+/// Publish's AI disclosure: the connecting client's name in words, and whether an agent changed
+/// something about a creation this run (reads don't count)
+#[test]
+fn publish_hears_which_ai_and_what_it_changed() {
+    assert_eq!(super::agent_label("claude-code"), "Claude (Anthropic)");
+    assert_eq!(super::agent_label("Claude Desktop"), "Claude (Anthropic)");
+    assert_eq!(super::agent_label("codex-mcp-client"), "ChatGPT / Codex (OpenAI)");
+    assert_eq!(super::agent_label("my-agent"), "my-agent");
+    let rows = vec![
+        json!({"tool": "get_map", "detail": "name: de_mine", "outcome": "done"}),
+        json!({"tool": "studio_set_node", "detail": "id: zombie_rush, node: 4", "outcome": "refused"}),
+        json!({"tool": "editor_add_brush", "detail": "doc: aim_alley, size: 64", "outcome": "done"}),
+    ];
+    assert!(!super::touched_in(&rows, "de_mine"), "a read");
+    assert!(!super::touched_in(&rows, "zombie_rush"), "refused");
+    assert!(super::touched_in(&rows, "AIM_ALLEY"));
+    assert!(!super::touched_in(&rows, "a"), "too short to tell");
+    super::note_client("claude-code");
+    assert_eq!(super::last_agent(), "Claude (Anthropic)");
+}
