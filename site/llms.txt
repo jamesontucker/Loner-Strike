@@ -1,4 +1,4 @@
-# Loner-Strike
+# Loner-Strike: Human-like bots, map & mode tools, and servers for CS 1.6 + CZ
 
 > Loner-Strike is a free, open-source (GPL-3.0) desktop app for Counter-Strike 1.6 and Counter-Strike: Condition Zero on Steam. It makes bots play like people, installs classic community mods patched so bots can play them, adds its own modes (Last Stand and Battle Royale), and gives you one control panel for your own game or a dedicated server, including from your phone. Version 1.0 adds Tools for making things (a map editor that compiles and playtests with bots, Game Mode Studio, Plugin Studio and more), a Community browser for sharing maps and modes, and an MCP connector for AI coding agents. Windows, and Mac through CrossOver. Made by nanoshrine.
 

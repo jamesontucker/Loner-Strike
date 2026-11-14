@@ -1,4 +1,4 @@
-# Loner-Strike: full details
+# Loner-Strike: Human-like bots, map & mode tools, and servers for CS 1.6 + CZ (full details)
 
 Loner-Strike is a free, open-source (GPL-3.0) desktop app for Counter-Strike 1.6 and Counter-Strike: Condition Zero on Steam. Tagline: "Play Counter-Strike like it's 2004, alone or with the friends you don't have."
 
