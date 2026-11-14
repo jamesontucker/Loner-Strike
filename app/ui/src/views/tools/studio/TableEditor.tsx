@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { Sheet, useConfirm } from "../../../ui";
 import { useStudio } from "./store";
-import { COLUMN_TYPES, LIMITS, WEAPONS, addColumn, blank, importCsv, readCell, removeColumn, removeTable, retypeColumn, tableProblems, toCsv, updateTable, type Cell, type DataTable, type TableColumn } from "./tables";
+import { COLUMN_TYPES, LIMITS, WEAPONS, addColumn, blank, importCsv, readCell, refusedCsv, type RefusedRow, removeColumn, removeTable, retypeColumn, tableProblems, toCsv, updateTable, type Cell, type DataTable, type TableColumn } from "./tables";
 import { LABEL_CHARS } from "./schema";
 import { useFreshFocus } from "./freshFocus";
 
@@ -67,7 +67,9 @@ export function TableEditorHost({ toast }: { toast: (m: string, bad?: boolean) =
   const area = useRef<HTMLTextAreaElement>(null);
   const nameRef = useFreshFocus<HTMLInputElement>(id ?? undefined);
   const ask = useConfirm();
-  useEffect(() => setCsv(null), [id]);
+  // rows the last import refused, with why (they're back in the box to fix)
+  const [refused, setRefused] = useState<RefusedRow[]>([]);
+  useEffect(() => (setCsv(null), setRefused([])), [id]);
   const t = graph?.dataTables?.find((x) => x.id === id);
   if (!id || !graph) return null;
   const close = () => useOpen.getState().set(null);
@@ -113,7 +115,7 @@ export function TableEditorHost({ toast }: { toast: (m: string, bad?: boolean) =
             {t.rows.length} of {LIMITS.rows} rows · used by {uses} node{uses === 1 ? "" : "s"}
           </span>
           <span className="st-grow" />
-          <button type="button" className="btn small" onClick={() => setCsv("")}>
+          <button type="button" className="btn small" onClick={() => (setCsv(""), setRefused([]))}>
             Paste or import CSV…
           </button>
           <button type="button" className="btn small" onClick={() => void navigator.clipboard.writeText(toCsv(t)).then(() => toast("Copied as CSV."), () => toast("Couldn't copy.", true))}>
@@ -148,6 +150,21 @@ export function TableEditorHost({ toast }: { toast: (m: string, bad?: boolean) =
               </label>
               .
             </p>
+            {refused.length > 0 && (
+              <div className="st-table-refused" role="alert" data-testid="studio-csv-refused">
+                <strong>
+                  {refused.length} row{refused.length === 1 ? " wasn't" : "s weren't"} imported. Fix {refused.length === 1 ? "it" : "them"} below and import again:
+                </strong>
+                <ul>
+                  {refused.slice(0, 20).map((x) => (
+                    <li key={x.line}>
+                      Line {x.line}: {x.reason}
+                    </li>
+                  ))}
+                  {refused.length > 20 && <li>and {refused.length - 20} more</li>}
+                </ul>
+              </div>
+            )}
             <textarea ref={area} className="st-field" rows={6} value={csv} onChange={(e) => setCsv(e.target.value)} aria-label="CSV to import" autoFocus />
             <div className="row">
               <label className="st-side-check st-inline">
@@ -155,7 +172,7 @@ export function TableEditorHost({ toast }: { toast: (m: string, bad?: boolean) =
                 <span>Replace the rows there are</span>
               </label>
               <span className="st-grow" />
-              <button type="button" className="btn small" onClick={() => setCsv(null)}>
+              <button type="button" className="btn small" onClick={() => (setCsv(null), setRefused([]))}>
                 Cancel
               </button>
               <button
@@ -163,10 +180,13 @@ export function TableEditorHost({ toast }: { toast: (m: string, bad?: boolean) =
                 className="btn small primary"
                 disabled={!csv.trim()}
                 onClick={() => {
-                  const r = importCsv(t, csv, replace);
+                  const r = importCsv(t, csv, replace, useStudio.getState().graph?.enums);
                   up(() => r.table);
-                  toast(r.message);
-                  setCsv(null);
+                  toast(r.message, r.refused.length > 0);
+                  // refused rows stay in the box, with why, to fix and import again
+                  setRefused(r.refused);
+                  setCsv(r.refused.length ? refusedCsv(t, r.refused) : null);
+                  if (r.refused.length) setReplace(false);
                 }}
               >
                 Import

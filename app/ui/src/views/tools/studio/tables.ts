@@ -142,16 +142,70 @@ export function parseCsv(text: string): string[][] {
 
 /** CSV into a table: a first row that matches the column names is a header and is skipped;
  *  `replace` drops the rows there were. Says what happened. */
-export function importCsv(t: DataTable, text: string, replace: boolean): { table: DataTable; message: string } {
+/** Why a CSV cell can't go into a column as it is (null: it can). Import never changes a value to
+ *  something else without saying so (QA4-B F5: "abc" in a number column went in as 0). `values`:
+ *  an enum column's value names (a cell may be the name or its number). */
+export function cellProblem(c: TableColumn, text: string, values?: string[]): string | null {
+  const s = text.trim();
+  if (c.type === "number") {
+    if (!s) return "is empty (a number is needed)";
+    const n = Number(s);
+    if (!Number.isFinite(n)) return `“${s}” isn't a number`;
+    if (Math.abs(n) > 1e6) return `${s} is out of range (-1,000,000 to 1,000,000)`;
+    return null;
+  }
+  if (c.type === "bool") return /^(1|0|yes|no|true|false|y|n|on|off)$/i.test(s) ? null : `“${s}” isn't yes or no`;
+  if (c.type.startsWith("enum:")) {
+    if (values?.some((v) => v.toLowerCase() === s.toLowerCase())) return null;
+    const n = Number(s);
+    if (s && Number.isInteger(n) && n >= 0 && (!values || n < values.length)) return null;
+    return `“${s}” isn't one of ${values?.length ? values.join(", ") : "its values"}`;
+  }
+  if (c.type === "weapon") return WEAPONS.includes(s.toLowerCase().replace(/^weapon_/, "")) ? null : `“${s}” isn't a weapon name (ak47, awp, knife...)`;
+  if ([...s].length > LIMITS.text) return `is longer than ${LIMITS.text} letters`;
+  const bad = [...new Set([...s].filter((ch) => !/[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$]/u.test(ch)))];
+  return bad.length ? `has ${bad.map((ch) => `“${ch}”`).join(" ")}, which a table can't hold` : null;
+}
+
+export type RefusedRow = { line: number; cells: string[]; reason: string };
+
+/** Rows from CSV: the good ones added (or replacing the rows there are), every other one refused with
+ *  its line and why, none changed into something else. */
+export function importCsv(t: DataTable, text: string, replace: boolean, enums?: { id: string; values: string[] }[]): { table: DataTable; message: string; refused: RefusedRow[]; header: boolean } {
   let rows = parseCsv(text);
-  const header = rows[0] && rows[0].length >= t.columns.length && t.columns.every((c, i) => rows[0][i]?.trim().toLowerCase() === c.name.toLowerCase());
+  const header = !!rows[0] && rows[0].length >= t.columns.length && t.columns.every((c, i) => rows[0][i]?.trim().toLowerCase() === c.name.toLowerCase());
+  const first = header ? 2 : 1;
   if (header) rows = rows.slice(1);
-  const room = LIMITS.rows - (replace ? 0 : t.rows.length);
-  const took = rows.slice(0, Math.max(0, room));
-  const read = took.map((r) => t.columns.map((c, i) => readCell(c, r[i] ?? "")));
-  const table = { ...t, rows: [...(replace ? [] : t.rows), ...read] };
-  const cut = rows.length - took.length;
-  return { table, message: `Added ${read.length} row${read.length === 1 ? "" : "s"}${header ? " (the first row was the column names)" : ""}${cut ? `; ${cut} didn't fit (${LIMITS.rows} rows at most)` : ""}.` };
+  const values = (c: TableColumn) => enums?.find((e) => `enum:${e.id}` === c.type)?.values;
+  const refused: RefusedRow[] = [];
+  const good: Cell[][] = [];
+  rows.forEach((r, i) => {
+    const line = i + first;
+    if (r.length < t.columns.length) return refused.push({ line, cells: r, reason: `${r.length} value${r.length === 1 ? "" : "s"}, ${t.columns.length} needed (${t.columns.map((c) => c.name).join(", ")})` });
+    for (const [k, c] of t.columns.entries()) {
+      const why = cellProblem(c, r[k] ?? "", values(c));
+      if (why) return refused.push({ line, cells: r, reason: `${c.name} ${why}` });
+    }
+    good.push(t.columns.map((c, k) => {
+      const vs = values(c);
+      const named = vs?.findIndex((v) => v.toLowerCase() === r[k].trim().toLowerCase()) ?? -1;
+      return named >= 0 ? named : readCell(c, r[k]);
+    }));
+  });
+  const room = Math.max(0, LIMITS.rows - (replace ? 0 : t.rows.length));
+  const took = good.slice(0, room);
+  const table = { ...t, rows: [...(replace ? [] : t.rows), ...took] };
+  const cut = good.length - took.length;
+  const parts = [`Added ${took.length} row${took.length === 1 ? "" : "s"}${header ? " (the first row was the column names)" : ""}`];
+  if (cut) parts.push(`${cut} didn't fit (${LIMITS.rows} rows at most)`);
+  if (refused.length) parts.push(`${refused.length} refused: ${refused.slice(0, 3).map((x) => `line ${x.line}, ${x.reason}`).join("; ")}${refused.length > 3 ? `; and ${refused.length - 3} more` : ""}`);
+  return { table, message: parts.join("; ") + ".", refused, header };
+}
+
+/** Refused rows back as CSV, to fix and import again. */
+export function refusedCsv(t: DataTable, refused: RefusedRow[]): string {
+  const q = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+  return [t.columns.map((c) => q(c.name)).join(","), ...refused.map((r) => r.cells.map(q).join(","))].join("\n");
 }
 
 /** The table as CSV (with the column names first). */
