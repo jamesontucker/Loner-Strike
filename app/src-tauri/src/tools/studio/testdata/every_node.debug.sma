@@ -3084,6 +3084,8 @@ stock lsg_squads_alive()
 
 stock bool:g_lsgDown[33], Float:g_lsgDownAt[33], Float:g_lsgDownOrg[33][3], g_lsgRevBy[33], Float:g_lsgRevProg[33]
 stock Float:g_lsgDownSecs[33], Float:g_lsgDownHold[33], g_lsgDownHp[33]
+// the two bots sent to each downed player
+stock g_lsgRevBots[33][2]
 
 stock lsg_make_down(p, Float:secs, Float:hold, hp)
 {
@@ -3129,15 +3131,24 @@ stock lsg_send_revive(victim)
 		}
 	}
 	new left = max(floatround(g_lsgDownSecs[victim] - (get_gametime() - g_lsgDownAt[victim])), 1)
+	// (a use goal on the spot, not on the player: the brain keeps a use goal on a player only while
+	// they're alive and down gm_components' way, and this one is dead; on the spot it stays by them)
 	for (new i = 0; i < 2; i++)
+	{
+		g_lsgRevBots[victim][i] = near[i]
 		if (near[i])
-			server_cmd("ls_mode goal %d use %.0f %.0f %.0f %d 75 %d 64", near[i], g_lsgDownOrg[victim][0], g_lsgDownOrg[victim][1], g_lsgDownOrg[victim][2], victim, left)
+			server_cmd("ls_mode goal %d use %.0f %.0f %.0f 0 75 %d 64", near[i], g_lsgDownOrg[victim][0], g_lsgDownOrg[victim][1], g_lsgDownOrg[victim][2], left)
+	}
 }
 
 stock lsg_clear_down(p)
 {
 	if (g_lsgDown[p] && get_cvar_pointer("ls_mode_ver"))
-		server_cmd("ls_mode goal_clear all %d", p)
+		for (new i = 0; i < 2; i++)
+			if (g_lsgRevBots[p][i] && is_user_connected(g_lsgRevBots[p][i]))
+				server_cmd("ls_mode goal_clear %d use", g_lsgRevBots[p][i])
+	g_lsgRevBots[p][0] = 0
+	g_lsgRevBots[p][1] = 0
 	if (g_lsgRevBy[p] && lsg_ok(g_lsgRevBy[p]) && !is_user_bot(g_lsgRevBy[p]))
 		lsg_bar(g_lsgRevBy[p], 0)
 	g_lsgDown[p] = false
