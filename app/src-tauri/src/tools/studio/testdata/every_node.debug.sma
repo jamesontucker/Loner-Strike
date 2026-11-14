@@ -1351,6 +1351,16 @@ stock Float:lsg_zone_next(ent, what)
 	return secs
 }
 
+// is ent a component of this kind ("": any component)? gm_components' natives raise an error on
+// another kind, which ends the whole flow; the node checks first and says so instead
+stock bool:lsg_kind_ok(ent, const kind[])
+{
+	new k[24]
+	if (ent <= 0 || !ls_components_running() || !ls_comp_kind(ent, k, charsmax(k)))
+		return false
+	return !kind[0] || equal(k, kind)
+}
+
 // the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
 stock lsg_zone_of(ent)
 {
@@ -4851,8 +4861,8 @@ lsg_n41(ctx[])
 	}
 	if (lsd_enter(41, ctx))
 		return
-	if (!ls_components_running())
-		lsd_error(41, "gm_components isn't running on this server.")
+	if (!ls_components_running() || !lsg_kind_ok(lsi0, "ls_timed_door"))
+		lsd_error(41, "Not done: that isn't a Timed door (or gm_components isn't running).")
 	else
 	{
 		ls_door_open(lsi0)
@@ -4872,8 +4882,8 @@ lsg_n42(ctx[])
 	}
 	if (lsd_enter(42, ctx))
 		return
-	if (!ls_components_running())
-		lsd_error(42, "gm_components isn't running on this server.")
+	if (!ls_components_running() || !lsg_kind_ok(lsi0, "ls_trigger_trap"))
+		lsd_error(42, "Not done: that isn't a Trap (or gm_components isn't running).")
 	else
 	{
 		ls_trap_fire(lsi0)
@@ -4942,8 +4952,8 @@ lsg_n46(ctx[])
 	}
 	if (lsd_enter(46, ctx))
 		return
-	if (!ls_components_running())
-		lsd_error(46, "gm_components isn't running on this server.")
+	if (!ls_components_running() || !lsg_kind_ok(lsi0, "ls_capture_point"))
+		lsd_error(46, "Not done: that isn't a Capture point (or gm_components isn't running).")
 	else
 	{
 		ls_cp_lock(lsi0, lsi1)
@@ -4993,8 +5003,8 @@ lsg_n49(ctx[])
 	}
 	if (lsd_enter(49, ctx))
 		return
-	if (!ls_components_running())
-		lsd_error(49, "gm_components isn't running on this server.")
+	if (!ls_components_running() || !lsg_kind_ok(lsi0, "ls_extraction_zone"))
+		lsd_error(49, "Not done: that isn't an Extraction zone (or gm_components isn't running).")
 	else
 	{
 		ls_extract_open(lsi0, bool:((lsi1) ? 1 : 0))
@@ -6394,8 +6404,8 @@ lsg_n125(ctx[])
 	}
 	if (lsd_enter(125, ctx))
 		return
-	if (!ls_components_running())
-		lsd_error(125, "gm_components isn't running on this server.")
+	if (!ls_components_running() || !lsg_kind_ok(lsi0, ""))
+		lsd_error(125, "Not done: that isn't a component (or gm_components isn't running).")
 	else
 	{
 		ls_comp_start(lsi0)
@@ -6415,8 +6425,8 @@ lsg_n126(ctx[])
 	}
 	if (lsd_enter(126, ctx))
 		return
-	if (!ls_components_running())
-		lsd_error(126, "gm_components isn't running on this server.")
+	if (!ls_components_running() || !lsg_kind_ok(lsi0, ""))
+		lsd_error(126, "Not done: that isn't a component (or gm_components isn't running).")
 	else
 	{
 		ls_comp_stop(lsi0)

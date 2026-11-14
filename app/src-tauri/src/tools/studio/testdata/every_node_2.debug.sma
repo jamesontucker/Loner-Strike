@@ -33,7 +33,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 1
+#define LSG_O 2
 #define LSG_OT 1
 
 // The mode's variables
@@ -1327,6 +1327,16 @@ stock Float:lsg_zone_next(ent, what)
 		case 2: return closing ? 1.0 : 0.0
 	}
 	return secs
+}
+
+// is ent a component of this kind ("": any component)? gm_components' natives raise an error on
+// another kind, which ends the whole flow; the node checks first and says so instead
+stock bool:lsg_kind_ok(ent, const kind[])
+{
+	new k[24]
+	if (ent <= 0 || !ls_components_running() || !ls_comp_kind(ent, k, charsmax(k)))
+		return false
+	return !kind[0] || equal(k, kind)
 }
 
 // the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
@@ -3426,8 +3436,8 @@ lsg_n12(ctx[])
 	}
 	if (lsd_enter(12, ctx))
 		return
-	if (!ls_components_running())
-		lsd_error(12, "gm_components isn't running on this server.")
+	if (!ls_components_running() || !lsg_kind_ok(lsi0, "ls_barricade"))
+		lsd_error(12, "Not done: that isn't a Barricade (or gm_components isn't running).")
 	else
 	{
 		ls_barricade_set_hp(lsi0, max(floatround(lsi1), 0))
@@ -3439,7 +3449,7 @@ lsg_n12(ctx[])
 // Print String (p_bhp)
 lsg_n13(ctx[])
 {
-	new Float:lsi0 = float(ls_components_running() ? ls_barricade_hp(lsg_find("gate1")) : 0)
+	new Float:lsi0 = float(lsg_kind_ok(lsg_find("gate1"), "ls_barricade") ? ls_barricade_hp(lsg_find("gate1")) : 0)
 	if (lsd_want(13))
 	{
 	lsd_begin()
@@ -3467,8 +3477,8 @@ lsg_n14(ctx[])
 	}
 	if (lsd_enter(14, ctx))
 		return
-	if (!ls_components_running())
-		lsd_error(14, "gm_components isn't running on this server.")
+	if (!ls_components_running() || !lsg_kind_ok(lsi0, "ls_barricade"))
+		lsd_error(14, "Not done: that isn't a Barricade (or gm_components isn't running).")
 	else
 	{
 		ls_barricade_repair(lsi0, 0)
@@ -3480,7 +3490,7 @@ lsg_n14(ctx[])
 // Print String (p_bhp2)
 lsg_n15(ctx[])
 {
-	new Float:lsi0 = float(ls_components_running() ? ls_barricade_hp(lsg_find("gate1")) : 0)
+	new Float:lsi0 = float(lsg_kind_ok(lsg_find("gate1"), "ls_barricade") ? ls_barricade_hp(lsg_find("gate1")) : 0)
 	if (lsd_want(15))
 	{
 	lsd_begin()
@@ -3572,8 +3582,8 @@ lsg_n19(ctx[])
 	}
 	if (lsd_enter(19, ctx))
 		return
-	if (!ls_components_running())
-		lsd_error(19, "gm_components isn't running on this server.")
+	if (!ls_components_running() || !lsg_kind_ok(lsi0, "ls_zone_shrinker"))
+		lsd_error(19, "Not done: that isn't a Shrinking zone (or gm_components isn't running).")
 	else
 	{
 		ls_zone_skip(lsi0)
@@ -3977,7 +3987,7 @@ lsg_n40(ctx[])
 		lsd_error(40, "gm_components isn't running on this server.")
 	else
 	{
-		ls_perk_buy(lsi0, "hands") ? 1 : 0
+		g_lsgO[1] = ls_perk_buy(lsi0, "hands") ? 1 : 0
 		lsd_exit(40, "done")
 	}
 	lsg_n41(ctx)
@@ -3986,7 +3996,7 @@ lsg_n40(ctx[])
 // Print String (p_pb)
 lsg_n41(ctx[])
 {
-	new lsi0 = g_lsgOut[40]
+	new lsi0 = g_lsgO[1]
 	if (lsd_want(41))
 	{
 	lsd_begin()
@@ -4382,8 +4392,8 @@ lsg_n60(ctx[])
 	}
 	if (lsd_enter(60, ctx))
 		return
-	if (!ls_components_running())
-		lsd_error(60, "gm_components isn't running on this server.")
+	if (!ls_components_running() || !lsg_kind_ok(lsi0, "ls_shop"))
+		lsd_error(60, "Not done: that isn't a Shop (or gm_components isn't running).")
 	else
 	{
 		ls_shop_open(lsi0, bool:((lsi1) ? 1 : 0))
@@ -4395,7 +4405,7 @@ lsg_n60(ctx[])
 // Print String (p_sp)
 lsg_n61(ctx[])
 {
-	new Float:lsi0 = float(ls_components_running() ? ls_shop_price(g_lsgOut[59], "Ammo") : -1)
+	new Float:lsi0 = float(lsg_kind_ok(g_lsgOut[59], "ls_shop") ? ls_shop_price(g_lsgOut[59], "Ammo") : -1)
 	if (lsd_want(61))
 	{
 	lsd_begin()
@@ -4632,8 +4642,8 @@ lsg_n72(ctx[])
 	}
 	if (lsd_enter(72, ctx))
 		return
-	if (!ls_components_running())
-		lsd_error(72, "gm_components isn't running on this server.")
+	if (!ls_components_running() || !lsg_kind_ok(lsi0, "ls_shop"))
+		lsd_error(72, "Not done: that isn't a Shop (or gm_components isn't running).")
 	else
 	{
 		ls_shop_menu(lsi0, lsi1)

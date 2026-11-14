@@ -42,7 +42,7 @@ node("comp.on_zone_stage", "Zone Stage", "Components", "A shrinking zone started
 node("comp.on_zone_tick", "Zone Hurt Player", "Components", "A player outside the zone took damage.", outputs=[E(), P("zone","entity","Zone"), P("player","player","Player"), P("damage","number","Damage")], **cev)
 node("comp.on_extract", "Player Extracted", "Components", "A player got out at an extraction point.", outputs=[E(), P("point","entity","Point"), P("player","player","Player")], **cev)
 node("comp.on_wave_start", "Wave Started", "Components", "A wave of enemies started.", outputs=[E(), P("wave","number","Wave")], **cev)
-node("comp.on_wave_spawn", "Wave Spawned One", "Components", "One enemy of a wave came in.", outputs=[E(), P("spawned","entity","Spawned"), P("wave","number","Wave")], **cev)
+node("comp.on_wave_spawn", "Wave Spawned One", "Components", "A wave's spawner is about to bring in one enemy. Spawner is the wave spawner, not the enemy (it isn't made yet): to act on its enemies, use For Each Creature (a moment later) or Creature Killed.", outputs=[E(), P("spawned","entity","Spawner"), P("wave","number","Wave")], **cev)
 node("comp.on_wave_cleared", "Wave Cleared", "Components", "Every enemy of a wave is dead.", outputs=[E(), P("wave","number","Wave")], **cev)
 node("comp.on_loot", "Crate Opened", "Components", "A player opened a loot container.", outputs=[E(), P("container","entity","Container"), P("player","player","Player")], **cev)
 node("comp.on_checkpoint", "Checkpoint Reached", "Components", "A player reached a checkpoint.", outputs=[E(), P("point","entity","Checkpoint"), P("player","player","Player"), P("order","number","Order")], **cev)

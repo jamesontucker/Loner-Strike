@@ -406,7 +406,7 @@ fn kind_of(ty: &str) -> char {
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
 const CTX_KINDS: [&str; 14] = ["table.for_each", "creature.for_each", "timeline.play", "marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
-const STORE_KINDS: [&str; 9] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call"];
+const STORE_KINDS: [&str; 10] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call", "up.perk_buy"];
 /// Nodes with more than one flow input: one Pawn function each.
 const MULTI_IN: [&str; 6] = ["timeline.play", "flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array"];
 /// The vector and struct rings: values that aren't in variables live here for a while.
@@ -740,7 +740,7 @@ impl<'a> Gen<'a> {
             "up.weapon_level" => format!("float(ls_components_running() && lsg_ok({p}) ? ls_weapon_level({p}) : 0)", p = i("player", "player")),
             "kd.is" => format!("(ls_components_running() && ls_is_down({}) ? 1 : 0)", i("player", "player")),
             "kd.left" => format!("(ls_components_running() ? ls_down_left({}) : 0.0)", i("player", "player")),
-            "shop.price" => format!("float(ls_components_running() ? ls_shop_price({}, {}) : -1)", i("shop", "entity"), pawn_str(&safe_text(self.text(n, def, "item"), 40))),
+            "shop.price" => format!("float(lsg_kind_ok({0}, \"ls_shop\") ? ls_shop_price({0}, {1}) : -1)", i("shop", "entity"), pawn_str(&safe_text(self.text(n, def, "item"), 40))),
             "br.heal_count" => format!("float(ls_components_running() ? ls_heal_count({}) : 0)", i("player", "player")),
             "br.kills" => format!("float(ls_components_running() ? ls_kills({}) : 0)", i("player", "player")),
             "br.squads_alive" => "float(ls_components_running() ? ls_squads_alive() : 0)".into(),
@@ -809,7 +809,7 @@ impl<'a> Gen<'a> {
             "wave.creatures_ok" => "(ls_components_running() && ls_wave_creatures_ok() ? 1 : 0)".into(),
             "turret.kits" => format!("float(ls_components_running() ? ls_turret_kits({}) : 0)", i("player", "player")),
             "turret.count" => format!("float(ls_components_running() ? ls_turret_count({}) : 0)", i("player", "player")),
-            "comp.barricade_hp" => format!("float(ls_components_running() ? ls_barricade_hp({}) : 0)", i("barricade", "entity")),
+            "comp.barricade_hp" => format!("float(lsg_kind_ok({0}, \"ls_barricade\") ? ls_barricade_hp({0}) : 0)", i("barricade", "entity")),
             "comp.zone_stage" => format!("float(ls_components_running() ? ls_zone_stage({}) : 0)", i("zone", "entity")),
             "comp.zone_next" => format!("{}lsg_zone_next({}, {})", if pin == "closing" { "_:" } else { "" }, i("zone", "entity"), match pin { "radius" => 1, "closing" => 2, _ => 0 }),
             "comp.in_zone" => format!("(ls_components_running() && ls_zone_inside({}, {}) ? 1 : 0)", i("zone", "entity"), i("player", "player")),
@@ -2489,7 +2489,26 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 "comp.capture_lock" => format!("ls_cp_lock({}, {})", inp("point", "entity"), inp("secs", "number")),
                 _ => "ls_comp_reset()".into(),
             };
-            check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\t{call}"), exit("done")]);
+            // (an entity pin wired with another kind of component: said, not a native error)
+            let kind = match def.kind.as_str() {
+                "comp.door" => Some(("door", "ls_timed_door", "a Timed door")),
+                "comp.trap_fire" => Some(("trap", "ls_trigger_trap", "a Trap")),
+                "comp.capture_lock" => Some(("point", "ls_capture_point", "a Capture point")),
+                "comp.extract_open" => Some(("point", "ls_extraction_zone", "an Extraction zone")),
+                "comp.barricade_set_hp" | "comp.barricade_repair" => Some(("barricade", "ls_barricade", "a Barricade")),
+                "comp.zone_skip" => Some(("zone", "ls_zone_shrinker", "a Shrinking zone")),
+                "shop.menu" | "shop.open" => Some(("shop", "ls_shop", "a Shop")),
+                "up.box" if v.data_source(id, "box").is_some() => Some(("box", "ls_mystery_box", "a Mystery box")),
+                "comp.start" | "comp.stop" => Some(("comp", "", "a component")),
+                _ => None,
+            };
+            match kind {
+                Some((pin, class, what)) => {
+                    let e = inp(pin, "entity");
+                    check(&mut b, &format!("{comps} || !lsg_kind_ok({e}, {})", pawn_str(class)), &format!("Not done: that isn't {what} (or gm_components isn't running)."), &[format!("\t{call}"), exit("done")]);
+                }
+                None => check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\t{call}"), exit("done")]),
+            }
             then_line(&mut b, "then");
         }
         "up.perk_buy" => {
@@ -5110,6 +5129,16 @@ stock Float:lsg_zone_next(ent, what)
 	return secs
 }
 
+// is ent a component of this kind ("": any component)? gm_components' natives raise an error on
+// another kind, which ends the whole flow; the node checks first and says so instead
+stock bool:lsg_kind_ok(ent, const kind[])
+{
+	new k[24]
+	if (ent <= 0 || !ls_components_running() || !ls_comp_kind(ent, k, charsmax(k)))
+		return false
+	return !kind[0] || equal(k, kind)
+}
+
 // the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
 stock lsg_zone_of(ent)
 {
@@ -6400,6 +6429,78 @@ mod tests {
             }
         }
         assert!(missing.is_empty(), "{missing:#?}");
+    }
+
+    /// Buy Perk's Bought is kept for what reads it (Y's components sweep: always "no", the
+    /// result was thrown away).
+    #[test]
+    fn buy_perk_keeps_bought() {
+        let g = parse(&serde_json::json!({
+            "schema": super::super::graph::SCHEMA, "version": super::super::graph::VERSION, "mode": {"id": "pk", "name": "Pk"}, "variables": [], "comments": [],
+            "nodes": [
+                {"id": "e", "type": "event.player_spawned", "pos": {"x": 0, "y": 0}, "params": {}},
+                {"id": "b", "type": "up.perk_buy", "pos": {"x": 300, "y": 0}, "params": {}},
+                {"id": "p", "type": "debug.print", "pos": {"x": 600, "y": 0}, "params": {"text": "bought", "chat": false}}
+            ],
+            "edges": [
+                {"id": "w1", "from": {"node": "e", "pin": "then"}, "to": {"node": "b", "pin": "exec"}},
+                {"id": "w2", "from": {"node": "e", "pin": "player"}, "to": {"node": "b", "pin": "player"}},
+                {"id": "w3", "from": {"node": "b", "pin": "then"}, "to": {"node": "p", "pin": "exec"}},
+                {"id": "w4", "from": {"node": "b", "pin": "bought"}, "to": {"node": "p", "pin": "value"}}
+            ]
+        }).to_string()).unwrap();
+        assert!(!has_errors(&validate(&g)));
+        let src = generate(&g, false).source;
+        assert!(src.contains("g_lsgO[0] = ls_perk_buy("), "stored");
+        assert!(src.contains("g_lsgYesNo[(g_lsgO[0]) ? 1 : 0]"), "read back by the Print");
+    }
+
+    /// A component pin wired with another kind of component (a barricade into Door) is checked and
+    /// said, not left to gm_components' native error, which ended the whole flow silently (Y's
+    /// components sweep).
+    #[test]
+    fn component_pins_check_their_kind() {
+        let g = parse(&serde_json::json!({
+            "schema": super::super::graph::SCHEMA, "version": super::super::graph::VERSION, "mode": {"id": "ck", "name": "Ck"}, "variables": [], "comments": [],
+            "nodes": [
+                {"id": "e", "type": "event.round_started", "pos": {"x": 0, "y": 0}, "params": {}},
+                {"id": "f", "type": "flow.pick_entity", "pos": {"x": 300, "y": 0}, "params": {"by": "class", "name": "ls_barricade"}},
+                {"id": "d", "type": "comp.door", "pos": {"x": 600, "y": 0}, "params": {}},
+                {"id": "s", "type": "shop.open", "pos": {"x": 900, "y": 0}, "params": {}},
+                {"id": "h", "type": "comp.barricade_hp", "pos": {"x": 600, "y": 200}, "params": {}},
+                {"id": "p", "type": "debug.print", "pos": {"x": 1200, "y": 0}, "params": {"text": "hp", "chat": false}}
+            ],
+            "edges": [
+                {"id": "w1", "from": {"node": "e", "pin": "then"}, "to": {"node": "f", "pin": "exec"}},
+                {"id": "w2", "from": {"node": "f", "pin": "then"}, "to": {"node": "d", "pin": "exec"}},
+                {"id": "w3", "from": {"node": "f", "pin": "entity"}, "to": {"node": "d", "pin": "door"}},
+                {"id": "w4", "from": {"node": "d", "pin": "then"}, "to": {"node": "s", "pin": "exec"}},
+                {"id": "w5", "from": {"node": "f", "pin": "entity"}, "to": {"node": "s", "pin": "shop"}},
+                {"id": "w6", "from": {"node": "s", "pin": "then"}, "to": {"node": "p", "pin": "exec"}},
+                {"id": "w7", "from": {"node": "f", "pin": "entity"}, "to": {"node": "h", "pin": "barricade"}},
+                {"id": "w8", "from": {"node": "h", "pin": "out"}, "to": {"node": "p", "pin": "value"}}
+            ]
+        }).to_string()).unwrap();
+        assert!(!has_errors(&validate(&g)), "{:?}", validate(&g));
+        let src = generate(&g, true).source;
+        assert!(src.contains("stock bool:lsg_kind_ok(ent, const kind[])"));
+        assert!(src.contains("!lsg_kind_ok(") && src.contains("\"ls_timed_door\")") && src.contains("\"ls_shop\")"), "the actions check");
+        assert!(src.contains("Not done: that isn't a Timed door (or gm_components isn't running).") && src.contains("that isn't a Shop"));
+        assert!(src.contains("lsg_kind_ok(") && src.contains("\"ls_barricade\") ? ls_barricade_hp("), "the value checks");
+        // (the native only runs past the check)
+        let door = &src[src.find("ls_door_open(").unwrap().saturating_sub(400)..src.find("ls_door_open(").unwrap()];
+        assert!(door.contains("\"ls_timed_door\""), "{door}");
+    }
+
+    /// Wave Spawned One's entity is the spawner (gm_components asks before the enemy is made):
+    /// it says so (Y's components sweep: it was labelled Spawned and read as the enemy).
+    #[test]
+    fn wave_spawn_says_spawner() {
+        let nodes: Value = serde_json::from_str(include_str!("../../../../ui/src/views/tools/studio/nodes.json")).unwrap();
+        let n = nodes["nodes"].as_array().unwrap().iter().find(|n| n["type"] == "comp.on_wave_spawn").unwrap();
+        let pin = n["outputs"].as_array().unwrap().iter().find(|p| p["id"] == "spawned").unwrap();
+        assert_eq!(pin["label"], "Spawner");
+        assert!(n["help"].as_str().unwrap().contains("not the enemy"));
     }
 
     /// Chat Command runs with arguments too: AMX Mod X matches a "say /give" registration only

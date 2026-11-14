@@ -662,6 +662,16 @@ stock Float:lsg_zone_next(ent, what)
 	return secs
 }
 
+// is ent a component of this kind ("": any component)? gm_components' natives raise an error on
+// another kind, which ends the whole flow; the node checks first and says so instead
+stock bool:lsg_kind_ok(ent, const kind[])
+{
+	new k[24]
+	if (ent <= 0 || !ls_components_running() || !ls_comp_kind(ent, k, charsmax(k)))
+		return false
+	return !kind[0] || equal(k, kind)
+}
+
 // the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
 stock lsg_zone_of(ent)
 {
@@ -3691,7 +3701,7 @@ lsg_n40(ctx[])
 // Door (pu_door)
 lsg_n41(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_kind_ok(ctx[1], "ls_timed_door")))
 	{
 		ls_door_open(ctx[1])
 	}
@@ -3701,7 +3711,7 @@ lsg_n41(ctx[])
 // Fire Trap (pu_trap)
 lsg_n42(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_kind_ok(lsg_find("trap1"), "ls_trigger_trap")))
 	{
 		ls_trap_fire(lsg_find("trap1"))
 	}
@@ -3732,7 +3742,7 @@ lsg_n45(ctx[])
 // Lock Point (cc_lock)
 lsg_n46(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_kind_ok(ctx[0], "ls_capture_point")))
 	{
 		ls_cp_lock(ctx[0], 20.0)
 	}
@@ -3754,7 +3764,7 @@ lsg_n48(ctx[])
 // Open Extraction (cl_ex)
 lsg_n49(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_kind_ok(lsg_find("ex1"), "ls_extraction_zone")))
 	{
 		ls_extract_open(lsg_find("ex1"), bool:1)
 	}
@@ -4410,7 +4420,7 @@ lsg_n124(ctx[])
 // Start Component (ms_start)
 lsg_n125(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_kind_ok(ctx[15], "")))
 	{
 		ls_comp_start(ctx[15])
 	}
@@ -4420,7 +4430,7 @@ lsg_n125(ctx[])
 // Stop Component (ms_stop)
 lsg_n126(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_kind_ok(ctx[15], "")))
 	{
 		ls_comp_stop(ctx[15])
 	}

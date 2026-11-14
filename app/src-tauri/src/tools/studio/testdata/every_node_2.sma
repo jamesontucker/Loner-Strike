@@ -32,7 +32,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 1
+#define LSG_O 2
 #define LSG_OT 1
 
 // The mode's variables
@@ -638,6 +638,16 @@ stock Float:lsg_zone_next(ent, what)
 		case 2: return closing ? 1.0 : 0.0
 	}
 	return secs
+}
+
+// is ent a component of this kind ("": any component)? gm_components' natives raise an error on
+// another kind, which ends the whole flow; the node checks first and says so instead
+stock bool:lsg_kind_ok(ent, const kind[])
+{
+	new k[24]
+	if (ent <= 0 || !ls_components_running() || !ls_comp_kind(ent, k, charsmax(k)))
+		return false
+	return !kind[0] || equal(k, kind)
 }
 
 // the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
@@ -2566,7 +2576,7 @@ lsg_n11(ctx[])
 // Set Barricade Health (bset)
 lsg_n12(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_kind_ok(lsg_find("gate1"), "ls_barricade")))
 	{
 		ls_barricade_set_hp(lsg_find("gate1"), max(floatround(50.0), 0))
 	}
@@ -2577,7 +2587,7 @@ lsg_n12(ctx[])
 lsg_n13(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "X2 barricade at:", lsg_ntext(float(ls_components_running() ? ls_barricade_hp(lsg_find("gate1")) : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 barricade at:", lsg_ntext(float(lsg_kind_ok(lsg_find("gate1"), "ls_barricade") ? ls_barricade_hp(lsg_find("gate1")) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n14(ctx)
 }
@@ -2585,7 +2595,7 @@ lsg_n13(ctx[])
 // Repair Barricade (brep)
 lsg_n14(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_kind_ok(lsg_find("gate1"), "ls_barricade")))
 	{
 		ls_barricade_repair(lsg_find("gate1"), 0)
 	}
@@ -2596,7 +2606,7 @@ lsg_n14(ctx[])
 lsg_n15(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "X2 barricade mended:", lsg_ntext(float(ls_components_running() ? ls_barricade_hp(lsg_find("gate1")) : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 barricade mended:", lsg_ntext(float(lsg_kind_ok(lsg_find("gate1"), "ls_barricade") ? ls_barricade_hp(lsg_find("gate1")) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n16(ctx)
 }
@@ -2633,7 +2643,7 @@ lsg_n18(ctx[])
 // Next Zone Stage Now (skip)
 lsg_n19(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_kind_ok(lsg_find("shr"), "ls_zone_shrinker")))
 	{
 		ls_zone_skip(lsg_find("shr"))
 	}
@@ -2814,7 +2824,7 @@ lsg_n40(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
-		ls_perk_buy(ctx[0], "hands") ? 1 : 0
+		g_lsgO[1] = ls_perk_buy(ctx[0], "hands") ? 1 : 0
 	}
 	lsg_n41(ctx)
 }
@@ -2823,7 +2833,7 @@ lsg_n40(ctx[])
 lsg_n41(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "X2 bought hands:", g_lsgYesNo[(g_lsgOut[40]) ? 1 : 0])
+	formatex(t, charsmax(t), "%s %s", "X2 bought hands:", g_lsgYesNo[(g_lsgO[1]) ? 1 : 0])
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n42(ctx)
 }
@@ -2998,7 +3008,7 @@ lsg_n59(ctx[])
 // Open or Close Shop (sopen)
 lsg_n60(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_kind_ok(g_lsgOut[59], "ls_shop")))
 	{
 		ls_shop_open(g_lsgOut[59], bool:1)
 	}
@@ -3009,7 +3019,7 @@ lsg_n60(ctx[])
 lsg_n61(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %s", "X2 shop ammo price:", lsg_ntext(float(ls_components_running() ? ls_shop_price(g_lsgOut[59], "Ammo") : -1)))
+	formatex(t, charsmax(t), "%s %s", "X2 shop ammo price:", lsg_ntext(float(lsg_kind_ok(g_lsgOut[59], "ls_shop") ? ls_shop_price(g_lsgOut[59], "Ammo") : -1)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n62(ctx)
 }
@@ -3115,7 +3125,7 @@ lsg_n71(ctx[])
 // Open Shop Menu (smenu)
 lsg_n72(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_kind_ok(g_v0, "ls_shop")))
 	{
 		ls_shop_menu(g_v0, ctx[0])
 	}

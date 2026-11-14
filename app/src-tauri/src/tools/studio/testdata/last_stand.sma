@@ -642,6 +642,16 @@ stock Float:lsg_zone_next(ent, what)
 	return secs
 }
 
+// is ent a component of this kind ("": any component)? gm_components' natives raise an error on
+// another kind, which ends the whole flow; the node checks first and says so instead
+stock bool:lsg_kind_ok(ent, const kind[])
+{
+	new k[24]
+	if (ent <= 0 || !ls_components_running() || !ls_comp_kind(ent, k, charsmax(k)))
+		return false
+	return !kind[0] || equal(k, kind)
+}
+
 // the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
 stock lsg_zone_of(ent)
 {
@@ -2865,7 +2875,7 @@ lsg_n40(ctx[])
 // Open Shop Menu (sh_menu)
 lsg_n41(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_kind_ok(g_v1, "ls_shop")))
 	{
 		ls_shop_menu(g_v1, ctx[0])
 	}

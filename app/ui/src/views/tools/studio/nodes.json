@@ -551,7 +551,7 @@
    "type": "comp.on_wave_spawn",
    "title": "Wave Spawned One",
    "category": "Components",
-   "help": "One enemy of a wave came in.",
+   "help": "A wave's spawner is about to bring in one enemy. Spawner is the wave spawner, not the enemy (it isn't made yet): to act on its enemies, use For Each Creature (a moment later) or Creature Killed.",
    "inputs": [],
    "outputs": [
     {
@@ -562,7 +562,7 @@
     {
      "id": "spawned",
      "type": "entity",
-     "label": "Spawned"
+     "label": "Spawner"
     },
     {
      "id": "wave",
