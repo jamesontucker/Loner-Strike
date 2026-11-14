@@ -1993,3 +1993,9 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
   .files-bar > span:first-child .muted { display: none; }
   .files-bar-actions { flex: none; }
 }
+
+/* the setup card: no empty scrollbar track beside content that (nearly) fits (QA4-CORE) */
+.setup-pane { scrollbar-width: thin; scrollbar-color: var(--panel-2) transparent; }
+.setup-pane::-webkit-scrollbar { width: 8px; background: transparent; }
+.setup-pane::-webkit-scrollbar-track { background: transparent; box-shadow: none; }
+.setup-pane::-webkit-scrollbar-thumb { background: var(--panel-2); box-shadow: var(--raised); min-height: 24px; }

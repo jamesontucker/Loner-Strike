@@ -213,7 +213,7 @@ function PersonalitySlider({ setting, refresh, nextGame }: { setting: Setting; r
     <div className="slider-row wide-out">
       <label htmlFor="botPersonality">
         Personality
-        <Info text="How strongly each bot's personality shows. At 0 they play their style plainly: no tilt, quirks, show-off moments or habits, and they hardly chat. 100 is normal, 200 exaggerates it." />
+        <Info text="How strongly each bot's personality shows. At 0% they play their style plainly: no tilt, quirks, show-off moments or habits, and they hardly chat. 100% is normal, 200% exaggerates it." />
       </label>
       <div className="slider-step">
         <input
@@ -237,7 +237,7 @@ function PersonalitySlider({ setting, refresh, nextGame }: { setting: Setting; r
           onKeyUp={(e) => SLIDER_KEYS.includes(e.key) && save(value)}
         />
       </div>
-      <output htmlFor="botPersonality">{value}</output>
+      <output htmlFor="botPersonality">{value}%</output>
       <span className="muted" aria-live="polite">
         {saving ? (
           <>
