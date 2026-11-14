@@ -1087,3 +1087,9 @@ DeathMsg-time origin (5 of 5 deaths, e.g. -1179 2417 57 both); Creature Killed's
 victim's origin on every hit; a prop and a creature at one spawn: positions, center, On Ground, Distance 48,
 Direction 0 0 -1. So no position pins on the killed/spawned events. (Vectors print as whole numbers in the
 debugger, so a direction shows as 0/-0 there.)
+- **X2, done (2026-11-13):** (1) the delete question (, ; Inspector's variable,
+  Function and Custom Event removes and My mode's Delete for variables and Functions call `askDelete`; Macros, structs,
+  enums and markers keep the old question). (2) Digits in setting names: you had already done it in 6059738b (schema,
+  graph.rs test, mp_give_player_c4, c4 in Remove Weapon), so I only added the node help (the bomb can't be turned off
+  with a setting) and a UI test. Commits: bc82e620 7c7e0585 . FYI your working tree fails studio.test's "templates are laid out"
+  (a bots.phase node's y in a template, after the registry change), not from my files.
