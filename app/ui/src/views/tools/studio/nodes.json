@@ -13973,7 +13973,7 @@
    "type": "creature.resume",
    "title": "Creature Resume AI",
    "category": "Creatures",
-   "help": "Lets a creature choose its own targets again (hunting).",
+   "help": "Gives a creature back to its own AI: what its type does by itself (wander, patrol, guard or hunt), its spawn spot as home, no target forced. With an older bot brain it hunts instead.",
    "inputs": [
     {
      "id": "exec",
@@ -13995,7 +13995,150 @@
     }
    ],
    "params": [],
-   "keywords": "release free",
+   "keywords": "release free default",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.state",
+   "title": "Creature State",
+   "category": "Creatures",
+   "help": "What a creature is doing now: 1 idle, 2 wander, 3 patrol, 4 guard, 5 chase, 6 flee, 7 attack, 8 search, 9 dead (0: not a creature). Name gives the word (idle ... dead). Needs a bot brain with creature control 2 (ls_creature_ver 2); the mode says so in the server log when it's older.",
+   "inputs": [
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "state",
+     "type": "number",
+     "label": "State"
+    },
+    {
+     "id": "name",
+     "type": "text",
+     "label": "Name"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "mode doing ai behavior chasing fleeing",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.target",
+   "title": "Creature Target",
+   "category": "Creatures",
+   "help": "Who a creature is after now: a player or another creature; nobody when none. Needs a bot brain with creature control 2 (ls_creature_ver 2); the mode says so in the server log when it's older.",
+   "inputs": [
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Target"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "enemy chasing whom hunting",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.set_speed",
+   "title": "Set Creature Speed",
+   "category": "Creatures",
+   "help": "Times a creature's normal walk and run speed (0.2 to 3; 1 is its own) until it dies. Enraged comes on top. Needs a bot brain with creature control 2 (ls_creature_ver 2); the mode says so in the server log when it's older.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    },
+    {
+     "id": "mult",
+     "type": "number",
+     "label": "Times",
+     "param": "mult"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "mult",
+     "label": "Times its speed",
+     "kind": "number",
+     "default": 1.5,
+     "min": 0.2,
+     "max": 3
+    }
+   ],
+   "keywords": "fast slow haste",
+   "needs": "creatures"
+  },
+  {
+   "type": "creature.set_tier",
+   "title": "Set Creature Tier",
+   "category": "Creatures",
+   "help": "Makes a creature tier 0 to 3 (2: a yellow shell, 3: red-orange and a bit bigger), as the spawn key tier does; its health keeps its share. Needs a bot brain with creature control 2 (ls_creature_ver 2); the mode says so in the server log when it's older.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    },
+    {
+     "id": "tier",
+     "type": "number",
+     "label": "Tier",
+     "param": "tier"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "tier",
+     "label": "Tier",
+     "kind": "number",
+     "default": 2,
+     "min": 0,
+     "max": 3
+    }
+   ],
+   "keywords": "elite rank glow upgrade",
    "needs": "creatures"
   },
   {

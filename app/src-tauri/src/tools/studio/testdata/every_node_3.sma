@@ -15,7 +15,7 @@
 #define LSG_MODE "every_node_3"
 #define LSG_CTX 21
 #define LSG_TXT 2
-#define LSG_N 83
+#define LSG_N 85
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -2756,13 +2756,61 @@ stock lsg_cr_hold(e)
 	server_cmd("ls_creature behave %d guard %.0f %.0f %.0f;ls_creature target %d 0", e, o[0], o[1], o[2], e)
 }
 
-// its own choice of targets again (until the bot brain says what its type does by itself: chase)
+// creature control 2 in the bot brain: state, target, default behavior, speed, tier
+stock bool:lsg_cr_v2()
+{
+	return get_cvar_pointer("ls_creature_ver") && get_cvar_num("ls_creature_ver") >= 2
+}
+
+// back to its own AI: its type's spawn behavior, its spawn spot as home, no forced target
+// (an older brain has no "default": it hunts)
 stock lsg_cr_resume(e)
 {
 	if (e > 0 && e < 2048)
 		g_lsgCrGoalOn[e] = false
-	if (lsg_cr_match(e, "") && get_cvar_pointer("ls_creature_ver"))
+	if (!lsg_cr_match(e, "") || !get_cvar_pointer("ls_creature_ver"))
+		return
+	if (lsg_cr_v2())
+		server_cmd("ls_creature behave %d default", e)
+	else
 		server_cmd("ls_creature behave %d chase;ls_creature target %d 0", e, e)
+}
+
+// 1 idle, 2 wander, 3 patrol, 4 guard, 5 chase, 6 flee, 7 attack, 8 search, 9 dead; 0 not a creature
+stock lsg_cr_state(e)
+{
+	if (!lsg_cr_v2() || !lsg_is_creature(e))
+		return 0
+	new s = pev(e, pev_iuser3)
+	return s >= 1 && s <= 9 ? s : 0
+}
+
+stock lsg_cr_state_name(e)
+{
+	static const names[][] = { "", "idle", "wander", "patrol", "guard", "chase", "flee", "attack", "search", "dead" }
+	new t[8]
+	copy(t, charsmax(t), names[lsg_cr_state(e)])
+	return t
+}
+
+stock lsg_cr_target(e)
+{
+	if (!lsg_cr_v2() || !lsg_cr_match(e, ""))
+		return 0
+	new t = pev(e, pev_enemy)
+	return t > 0 && pev_valid(t) ? t : 0
+}
+
+stock lsg_cr_speed(e, Float:x)
+{
+	if (lsg_cr_v2() && lsg_cr_match(e, ""))
+		server_cmd("ls_creature speed %d %.2f", e, floatclamp(x, 0.2, 3.0))
+}
+
+stock lsg_cr_tier(e, t)
+{
+	if (lsg_cr_v2() && lsg_cr_match(e, ""))
+		server_cmd("ls_creature tier %d %d", e, clamp(t, 0, 3))
 }
 
 stock lsg_cr_health(e, Float:hp)
@@ -2885,6 +2933,8 @@ public plugin_init()
 	if (get_cvar_pointer("ls_creature_ver"))
 		RegisterHam(Ham_TraceAttack, "ls_creature", "lsg_hit_trace", 0)
 	set_task(1.0, "lsg_cr_tick", LSG_TASK + 60000, _, _, "b")
+	if (get_cvar_pointer("ls_creature_ver") && get_cvar_num("ls_creature_ver") < 2)
+		log_amx("This mode's Creature State, Target, Speed and Tier nodes need a newer Loner-Strike bot brain (creature control 2): update the server. Until then they do nothing.")
 	register_logevent("lsg_tl_auto", 2, "1=Round_Start")
 	register_clcmd("say", "lsg_gag_say")
 	register_clcmd("say_team", "lsg_gag_say")
@@ -2894,8 +2944,8 @@ public plugin_init()
 public lsg_tl_auto()
 {
 	new c[LSG_CTX]
-	lsg_tl82_save(0, c)
-	lsg_tl82_go(0, 0.0, 1)
+	lsg_tl84_save(0, c)
+	lsg_tl84_go(0, 0.0, 1)
 }
 
 // the host's values for the mode settings, as the map starts
@@ -3637,8 +3687,22 @@ lsg_n80(ctx[])
 	#pragma unused ctx
 }
 
-// For Each Row (n134)
+// Set Creature Speed (cs3)
 lsg_n81(ctx[])
+{
+	lsg_cr_speed(lsg_find("spot1"), 1.5)
+	lsg_n82(ctx)
+}
+
+// Set Creature Tier (cs4)
+lsg_n82(ctx[])
+{
+	lsg_cr_tier(lsg_find("spot1"), floatround(float(lsg_cr_state(lsg_find("spot1")))))
+	lsg_n83(ctx)
+}
+
+// For Each Row (n134)
+lsg_n83(ctx[])
 {
 	new c[LSG_CTX], count
 	for (new r = 0; r < LSG_DT0_N; r++)
@@ -3655,43 +3719,45 @@ lsg_n81(ctx[])
 		#pragma unused c
 	}
 	#pragma unused count
-	lsg_n82(ctx)
+	lsg_n84(ctx)
 }
 
 // Timeline (n138)
-lsg_n82(ctx[])
+lsg_n84(ctx[])
 {
 	new inst = 0
-	lsg_tl82_save(inst, ctx)
-	lsg_tl82_go(inst, -1.0, 1)
+	lsg_tl84_save(inst, ctx)
+	lsg_tl84_go(inst, -1.0, 1)
 }
 
 // Timeline: Platform
-stock Float:g_lsgTlT82[33], g_lsgTlDir82[33], bool:g_lsgTlOn82[33], g_lsgTlC82[33][LSG_CTX]
-stock lsg_tl82_save(inst, ctx[])
+stock Float:g_lsgTlT84[33], g_lsgTlDir84[33], bool:g_lsgTlOn84[33], g_lsgTlC84[33][LSG_CTX], Float:g_lsgTlAt84[33], bool:g_lsgTlNew84[33]
+stock lsg_tl84_save(inst, ctx[])
 {
 	for (new k = 0; k < LSG_CTX; k++)
-		g_lsgTlC82[inst][k] = ctx[k]
+		g_lsgTlC84[inst][k] = ctx[k]
 }
-stock lsg_tl82_go(inst, Float:from, dir)
+stock lsg_tl84_go(inst, Float:from, dir)
 {
 	if (from >= 0.0)
-		g_lsgTlT82[inst] = from
-	else if (!g_lsgTlOn82[inst] && ((dir > 0 && g_lsgTlT82[inst] >= 4.0) || (dir < 0 && g_lsgTlT82[inst] <= 0.0)))
-		g_lsgTlT82[inst] = dir > 0 ? 0.0 : 4.0
-	g_lsgTlDir82[inst] = dir
-	if (!g_lsgTlOn82[inst])
+		g_lsgTlT84[inst] = from
+	else if (!g_lsgTlOn84[inst] && ((dir > 0 && g_lsgTlT84[inst] >= 4.0) || (dir < 0 && g_lsgTlT84[inst] <= 0.0)))
+		g_lsgTlT84[inst] = dir > 0 ? 0.0 : 4.0
+	g_lsgTlDir84[inst] = dir
+	g_lsgTlNew84[inst] = true
+	if (!g_lsgTlOn84[inst])
 	{
-		g_lsgTlOn82[inst] = true
-		set_task(0.05, "lsg_tl82_tick", LSG_TASK + 50000 + 82 * 33 + inst, _, _, "b")
+		g_lsgTlOn84[inst] = true
+		g_lsgTlAt84[inst] = get_gametime()
+		set_task(0.05, "lsg_tl84_tick", LSG_TASK + 50000 + 84 * 33 + inst, _, _, "b")
 	}
 }
-stock lsg_tl82_stop(inst)
+stock lsg_tl84_stop(inst)
 {
-	g_lsgTlOn82[inst] = false
-	remove_task(LSG_TASK + 50000 + 82 * 33 + inst)
+	g_lsgTlOn84[inst] = false
+	remove_task(LSG_TASK + 50000 + 84 * 33 + inst)
 }
-stock Float:lsg_tl82_v0(Float:t)
+stock Float:lsg_tl84_v0(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3701,7 +3767,7 @@ stock Float:lsg_tl82_v0(Float:t)
 		return 128.0 + -128.0 * ((t - 2.0) / 2.0)
 	return 0.0
 }
-stock Float:lsg_tl82_v1_0(Float:t)
+stock Float:lsg_tl84_v1_0(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3709,7 +3775,7 @@ stock Float:lsg_tl82_v1_0(Float:t)
 		return 0.0 + 256.0 * ((t - 0.0) / 4.0)
 	return 256.0
 }
-stock Float:lsg_tl82_v1_1(Float:t)
+stock Float:lsg_tl84_v1_1(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3717,7 +3783,7 @@ stock Float:lsg_tl82_v1_1(Float:t)
 		return 0.0 + 0.0 * ((t - 0.0) / 4.0)
 	return 0.0
 }
-stock Float:lsg_tl82_v1_2(Float:t)
+stock Float:lsg_tl84_v1_2(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3725,7 +3791,7 @@ stock Float:lsg_tl82_v1_2(Float:t)
 		return 0.0 + 64.0 * ((t - 0.0) / 4.0)
 	return 64.0
 }
-stock Float:lsg_tl82_v2_0(Float:t)
+stock Float:lsg_tl84_v2_0(Float:t)
 {
 	if (t <= 0.0)
 		return 255.0
@@ -3735,7 +3801,7 @@ stock Float:lsg_tl82_v2_0(Float:t)
 		return 0.0 + 255.0 * lsg_tl_ease((t - 2.0) / 2.0)
 	return 255.0
 }
-stock Float:lsg_tl82_v2_1(Float:t)
+stock Float:lsg_tl84_v2_1(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3745,7 +3811,7 @@ stock Float:lsg_tl82_v2_1(Float:t)
 		return 0.0 + 0.0 * lsg_tl_ease((t - 2.0) / 2.0)
 	return 0.0
 }
-stock Float:lsg_tl82_v2_2(Float:t)
+stock Float:lsg_tl84_v2_2(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3755,13 +3821,17 @@ stock Float:lsg_tl82_v2_2(Float:t)
 		return 255.0 + -255.0 * lsg_tl_ease((t - 2.0) / 2.0)
 	return 0.0
 }
-public lsg_tl82_tick(task)
+public lsg_tl84_tick(task)
 {
-	new inst = task - (LSG_TASK + 50000 + 82 * 33)
+	new inst = task - (LSG_TASK + 50000 + 84 * 33)
 	if (inst < 0 || inst > 32)
 		return
-	new Float:was = g_lsgTlT82[inst], dir = g_lsgTlDir82[inst]
-	new Float:t = was + 0.05 * float(dir)
+	new Float:now = get_gametime(), Float:step = floatclamp(now - g_lsgTlAt84[inst], 0.0, 0.5)
+	g_lsgTlAt84[inst] = now
+	new bool:fresh = g_lsgTlNew84[inst]
+	g_lsgTlNew84[inst] = false
+	new Float:was = g_lsgTlT84[inst], dir = g_lsgTlDir84[inst]
+	new Float:t = was + step * float(dir)
 	new bool:done, bool:wrapped
 	if (dir > 0 && t > 4.0)
 	{
@@ -3773,56 +3843,56 @@ public lsg_tl82_tick(task)
 		t += 4.0
 		wrapped = true
 	}
-	g_lsgTlT82[inst] = t
+	g_lsgTlT84[inst] = t
 	new c[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
-		c[k] = g_lsgTlC82[inst][k]
+		c[k] = g_lsgTlC84[inst][k]
 	c[16] = dir > 0 ? 1 : 0
 	c[17] = _:t
-	c[18] = _:lsg_tl82_v0(t)
-	c[19] = lsg_vec(lsg_tl82_v1_0(t), lsg_tl82_v1_1(t), lsg_tl82_v1_2(t))
-	c[20] = lsg_vec(lsg_tl82_v2_0(t), lsg_tl82_v2_1(t), lsg_tl82_v2_2(t))
+	c[18] = _:lsg_tl84_v0(t)
+	c[19] = lsg_vec(lsg_tl84_v1_0(t), lsg_tl84_v1_1(t), lsg_tl84_v1_2(t))
+	c[20] = lsg_vec(lsg_tl84_v2_0(t), lsg_tl84_v2_1(t), lsg_tl84_v2_2(t))
 	if (done)
 	{
-		lsg_tl82_stop(inst)
+		lsg_tl84_stop(inst)
 	}
 	#pragma unused c
-	#pragma unused wrapped, done, was
+	#pragma unused wrapped, done, was, fresh
 }
 
 
-stock lsg_n82_play_start(ctx[])
+stock lsg_n84_play_start(ctx[])
 {
 	new inst = 0
-	lsg_tl82_save(inst, ctx)
-	lsg_tl82_go(inst, 0.0, 1)
+	lsg_tl84_save(inst, ctx)
+	lsg_tl84_go(inst, 0.0, 1)
 }
 
-stock lsg_n82_stop(ctx[])
+stock lsg_n84_stop(ctx[])
 {
 	new inst = 0
 	#pragma unused ctx
-	lsg_tl82_stop(inst)
+	lsg_tl84_stop(inst)
 }
 
-stock lsg_n82_reverse(ctx[])
+stock lsg_n84_reverse(ctx[])
 {
 	new inst = 0
-	lsg_tl82_save(inst, ctx)
-	lsg_tl82_go(inst, -1.0, -1)
+	lsg_tl84_save(inst, ctx)
+	lsg_tl84_go(inst, -1.0, -1)
 }
 
-stock lsg_n82_reverse_end(ctx[])
+stock lsg_n84_reverse_end(ctx[])
 {
 	new inst = 0
-	lsg_tl82_save(inst, ctx)
-	lsg_tl82_go(inst, 4.0, -1)
+	lsg_tl84_save(inst, ctx)
+	lsg_tl84_go(inst, 4.0, -1)
 }
 
-stock lsg_n82_set_time(ctx[])
+stock lsg_n84_set_time(ctx[])
 {
 	new inst = 0
-	lsg_tl82_save(inst, ctx)
-	g_lsgTlT82[inst] = floatclamp(0.0, 0.0, 4.0)
+	lsg_tl84_save(inst, ctx)
+	g_lsgTlT84[inst] = floatclamp(0.0, 0.0, 4.0)
 }
 

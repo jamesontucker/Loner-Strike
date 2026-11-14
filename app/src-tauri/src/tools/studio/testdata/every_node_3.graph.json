@@ -1328,6 +1328,46 @@
    "params": {}
   },
   {
+   "id": "cs1",
+   "type": "creature.state",
+   "pos": {
+    "x": 2860,
+    "y": 3700
+   },
+   "params": {}
+  },
+  {
+   "id": "cs2",
+   "type": "creature.target",
+   "pos": {
+    "x": 3060,
+    "y": 3700
+   },
+   "params": {}
+  },
+  {
+   "id": "cs3",
+   "type": "creature.set_speed",
+   "pos": {
+    "x": 3260,
+    "y": 3700
+   },
+   "params": {
+    "mult": 1.5
+   }
+  },
+  {
+   "id": "cs4",
+   "type": "creature.set_tier",
+   "pos": {
+    "x": 3460,
+    "y": 3700
+   },
+   "params": {
+    "tier": 2
+   }
+  },
+  {
    "id": "n132",
    "type": "table.get_row",
    "pos": {
@@ -2923,7 +2963,7 @@
     "pin": "then"
    },
    "to": {
-    "node": "n134",
+    "node": "cs3",
     "pin": "exec"
    }
   },
@@ -2991,6 +3031,83 @@
    "to": {
     "node": "n135",
     "pin": "value"
+   }
+  },
+  {
+   "id": "cw1",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cs1",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "cw2",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cs2",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "cw3",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cs3",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "cw4",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cs4",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "cw5",
+   "from": {
+    "node": "cs3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cs4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "cw6",
+   "from": {
+    "node": "cs4",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n134",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "cw7",
+   "from": {
+    "node": "cs1",
+    "pin": "state"
+   },
+   "to": {
+    "node": "cs4",
+    "pin": "tier"
    }
   }
  ],

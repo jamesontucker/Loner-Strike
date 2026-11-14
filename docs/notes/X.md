@@ -1341,3 +1341,27 @@ server from the community server picks, then switched with gm_mode, changed and 
   TimelineEditor.tsx (key menu, interpolation list, tangent handles, Auto tangents), `timeline_tests.rs`. The
   every_node_3 snapshots in that commit are HEAD's with just the timeline value stocks swapped in; your working gen.rs
   hunks (creature/hit-dir work) stay yours: please run UPDATE_SNAPSHOTS=1 with your next gen.rs commit.
+
+## X (2026-11-14): Timelines by real game time; Mode reload; creature control 2 nodes
+- **Timelines (X2's sim: 4 s took ~9 s):** each instance now steps by the game time since its last tick
+  (`get_gametime()` delta, at most 0.5 s at once after a hitch; time held at a debugger breakpoint doesn't count), not
+  the tick's nominal step. Event keys still fire when the playhead crosses them, and a fresh Play/Reverse also fires
+  a key right where it starts (a key at 0 never fired before). Sim (B copy, de_dust2, 6 bots; graph: 4 s Timeline,
+  event keys 0, 1, 2, 3.5, 4): start at game time 13.00, keys at 13.24, 14.19, 15.18, 16.65, 17.17, Finished 17.17:
+  4.2 s, each key once. every_node_3 snapshots regenerated (UPDATE_SNAPSHOTS=1) with this commit, as X2 asked.
+  For X2: amxxpc warns `symbol is never used: "lsg_n<i>"` for a Timeline node whose plain Play input isn't wired
+  (only Play from Start) - before my change too; yours if you want it gone.
+- **gm_modes_reload (6d5eeac4):** the Game Mode Menu reads modes.ini again on the spot; the app sends it after a
+  Studio or community mode goes on or comes off (after the upload on a Linux server). Older menu: the server's
+  Community content page says "Available after the next map change". Sim (B copy): a new modes.ini line was
+  "Unknown mode" before, switchable right after; taken off while playing it stays listed (status) but can't be picked.
+  Alone Together, through the app: first add with the old menu still loaded -> `modes: next_map` (fallback), and the
+  new gamemodes.amxx went up with that upload; after one map change: remove -> `now` and gm_mode ggset "Unknown
+  mode" at once; add -> `now` and gm_mode ggset switched with no map change (GGSET printed); back to gungame, removed
+  (`now`), service active, 19 bots, nothing of ggset left. **Alone Together now runs this gamemodes.amxx** (built
+  from tools; it already ran tools' build before - the source matched HEAD).
+- **Creature control 2 nodes (Y's 0a896cf):** Creature State (number 1-9 and its name; 0 for not a creature),
+  Creature Target (entity; nobody when none), Set Creature Speed (0.2-3), Set Creature Tier (0-3); Creature Resume
+  AI now sends `behave <e> default` on ls_creature_ver 2 (the chase fallback stays for older brains). On an older
+  brain the four read 0 / nobody and do nothing, and the mode logs once at start that they need a newer bot brain.
+  In every_node_3; sim with the newest green ls-next3 next.

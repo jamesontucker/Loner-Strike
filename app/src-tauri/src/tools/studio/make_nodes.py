@@ -480,7 +480,16 @@ node("creature.go_to", "Creature Go To", "Creatures", "Sends a creature to a pla
      params=[prm("name","Or the entity named","entname","gate1"), prm("then","Then","choice","guard",choices=[["guard","Guard there"],["resume","Resume hunting"]])], keywords="move send walk gate guard", **CRN)
 node("creature.attack", "Creature Attack", "Creatures", "Makes a creature go after a player or an entity (a gate, a turret) until it's gone.", inputs=[X, CR_IN, P("target","entity","Target",required=True)], outputs=[E()], keywords="target chase hunt", **CRN)
 node("creature.hold", "Creature Hold", "Creatures", "Makes a creature stay where it is (it guards the spot: it still fights what comes close, then comes back) until Resume AI or Go To.", inputs=[X, CR_IN], outputs=[E()], keywords="stop freeze wait", **CRN)
-node("creature.resume", "Creature Resume AI", "Creatures", "Lets a creature choose its own targets again (hunting).", inputs=[X, CR_IN], outputs=[E()], keywords="release free", **CRN)
+node("creature.resume", "Creature Resume AI", "Creatures", "Gives a creature back to its own AI: what its type does by itself (wander, patrol, guard or hunt), its spawn spot as home, no target forced. With an older bot brain it hunts instead.", inputs=[X, CR_IN], outputs=[E()], keywords="release free default", **CRN)
+CR_V2 = " Needs a bot brain with creature control 2 (ls_creature_ver 2); the mode says so in the server log when it's older."
+node("creature.state", "Creature State", "Creatures", "What a creature is doing now: 1 idle, 2 wander, 3 patrol, 4 guard, 5 chase, 6 flee, 7 attack, 8 search, 9 dead (0: not a creature). Name gives the word (idle ... dead)." + CR_V2,
+     inputs=[CR_IN], outputs=[P("state","number","State"), P("name","text","Name")], pure=True, keywords="mode doing ai behavior chasing fleeing", **CRN)
+node("creature.target", "Creature Target", "Creatures", "Who a creature is after now: a player or another creature; nobody when none." + CR_V2,
+     inputs=[CR_IN], outputs=[P("out","entity","Target")], pure=True, keywords="enemy chasing whom hunting", **CRN)
+node("creature.set_speed", "Set Creature Speed", "Creatures", "Times a creature's normal walk and run speed (0.2 to 3; 1 is its own) until it dies. Enraged comes on top." + CR_V2,
+     inputs=[X, CR_IN, P("mult","number","Times",param="mult")], outputs=[E()], params=[prm("mult","Times its speed","number",1.5,min=0.2,max=3)], keywords="fast slow haste", **CRN)
+node("creature.set_tier", "Set Creature Tier", "Creatures", "Makes a creature tier 0 to 3 (2: a yellow shell, 3: red-orange and a bit bigger), as the spawn key tier does; its health keeps its share." + CR_V2,
+     inputs=[X, CR_IN, P("tier","number","Tier",param="tier")], outputs=[E()], params=[prm("tier","Tier","number",2,min=0,max=3)], keywords="elite rank glow upgrade", **CRN)
 node("creature.flee_to", "Creature Flee To", "Creatures", "Makes a creature run away to a place (an entity wired in, a point, or the entity with this name).",
      inputs=[X, CR_IN, P("to","entity","To entity",optional=True), P("pos","vector","To point",optional=True)], outputs=[E()], params=[prm("name","Or the entity named","entname","")], keywords="run away retreat", **CRN)
 node("creature.set_health", "Set Creature Health", "Creatures", "Sets a creature's health (and its full health, so it isn't over).", inputs=[X, CR_IN, P("hp","number","Health",param="hp")], outputs=[E()], params=[prm("hp","Health","number",100,min=1,max=100000)], keywords="hp heal", **CRN)

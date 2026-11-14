@@ -879,6 +879,8 @@ impl<'a> Gen<'a> {
                 format!("lsg_cr_nearest({}, {pos}, {to})", pawn_str(&name_text(self.text(n, def, "type"))))
             }
             "creature.type" => format!("lsg_cr_type({})", i("creature", "entity")),
+            "creature.state" => if pin == "name" { format!("lsg_cr_state_name({})", i("creature", "entity")) } else { format!("float(lsg_cr_state({}))", i("creature", "entity")) },
+            "creature.target" => format!("lsg_cr_target({})", i("creature", "entity")),
             "creature.idle_for" => format!("lsg_cr_idle({})", i("creature", "entity")),
             "creature.can_see" => format!("(lsg_cr_sees({}, {}) ? 1 : 0)", i("creature", "entity"), i("what", "entity")),
             "timer.is_active" => format!("(lsg_tactive({}) ? 1 : 0)", i("handle", "timer")),
@@ -1455,6 +1457,10 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     if cr_watch {
         o.line("\tset_task(1.0, \"lsg_cr_tick\", LSG_TASK + 60000, _, _, \"b\")");
+    }
+    // (State, Target, Speed and Tier read and change what only creature control 2 has)
+    if g.nodes.iter().any(|n| CREATURE_V2.contains(&n.kind.as_str())) {
+        o.line("\tif (get_cvar_pointer(\"ls_creature_ver\") && get_cvar_num(\"ls_creature_ver\") < 2)\n\t\tlog_amx(\"This mode's Creature State, Target, Speed and Tier nodes need a newer Loner-Strike bot brain (creature control 2): update the server. Until then they do nothing.\")");
     }
     // Timelines with AutoPlay: from the start at each round's start (the one instance)
     let autoplay: Vec<usize> = gen
@@ -2494,7 +2500,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         "game.change_map" | "game.restart_round" | "player.set_transform" | "player.set_rotation" | "player.look_at" | "player.slap" | "player.fade" | "player.shake" | "player.godmode" | "player.noclip" | "player.render"
         | "player.set_ammo" | "player.give_ammo" | "player.take_weapon" | "player.switch_weapon" | "player.set_frags" | "player.set_deaths" | "player.to_spectators" | "player.kick" | "player.mute" | "player.gag"
         | "msg.team_chat" | "msg.notify_admins" | "ent.remove" | "ent.set_position" | "ent.set_angles" | "ent.set_visible" | "fx.explosion" | "fx.beam" | "fx.sound_at" | "fx.sound_to" | "fx.lights" | "amx.fire"
-        | "creature.go_to" | "creature.attack" | "creature.hold" | "creature.resume" | "creature.flee_to" | "creature.set_health" | "creature.remove" => {
+        | "creature.go_to" | "creature.attack" | "creature.hold" | "creature.resume" | "creature.flee_to" | "creature.set_health" | "creature.remove" | "creature.set_speed" | "creature.set_tier" => {
             let p = || inp("player", "player");
             let num = |k: &str| float_lit(gen.num(n, def, k));
             let on = |k: &str| if gen.boolean(n, def, k) { "1" } else { "0" };
@@ -2553,6 +2559,8 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 "creature.hold" => format!("lsg_cr_hold({})", inp("creature", "entity")),
                 "creature.resume" => format!("lsg_cr_resume({})", inp("creature", "entity")),
                 "creature.set_health" => format!("lsg_cr_health({}, {})", inp("creature", "entity"), inp("hp", "number")),
+                "creature.set_speed" => format!("lsg_cr_speed({}, {})", inp("creature", "entity"), inp("mult", "number")),
+                "creature.set_tier" => format!("lsg_cr_tier({}, floatround({}))", inp("creature", "entity"), inp("tier", "number")),
                 "creature.remove" => format!("lsg_cr_cmd({}, {})", inp("creature", "entity"), pawn_str(if gen.choice(n, def, "how") == "remove" { "remove %d" } else { "kill %d" })),
                 "fx.sound_at" => format!("lsg_sound_at({}, {})", inp("pos", "vector"), pawn_str(&sound_text(gen.text(n, def, "sound")))),
                 "fx.sound_to" => format!("lsg_sound_to({}, {})", p(), pawn_str(&sound_text(gen.text(n, def, "sound")))),
@@ -3328,9 +3336,9 @@ fn timeline_code(gen: &Gen, id: &str, tl: &super::graph::Timeline, next: &dyn Fn
     let len = float_lit(tl.play_length());
     let tick = float_lit(tl.tick);
     let mut o = format!(
-        "// Timeline: {name}\nstock Float:g_lsgTlT{i}[33], g_lsgTlDir{i}[33], bool:g_lsgTlOn{i}[33], g_lsgTlC{i}[33][LSG_CTX]\n\
+        "// Timeline: {name}\nstock Float:g_lsgTlT{i}[33], g_lsgTlDir{i}[33], bool:g_lsgTlOn{i}[33], g_lsgTlC{i}[33][LSG_CTX], Float:g_lsgTlAt{i}[33], bool:g_lsgTlNew{i}[33]\n\
 stock lsg_tl{i}_save(inst, ctx[])\n{{\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tg_lsgTlC{i}[inst][k] = ctx[k]\n}}\n\
-stock lsg_tl{i}_go(inst, Float:from, dir)\n{{\n\tif (from >= 0.0)\n\t\tg_lsgTlT{i}[inst] = from\n\telse if (!g_lsgTlOn{i}[inst] && ((dir > 0 && g_lsgTlT{i}[inst] >= {len}) || (dir < 0 && g_lsgTlT{i}[inst] <= 0.0)))\n\t\tg_lsgTlT{i}[inst] = dir > 0 ? 0.0 : {len}\n\tg_lsgTlDir{i}[inst] = dir\n\tif (!g_lsgTlOn{i}[inst])\n\t{{\n\t\tg_lsgTlOn{i}[inst] = true\n\t\tset_task({tick}, \"lsg_tl{i}_tick\", LSG_TASK + 50000 + {i} * 33 + inst, _, _, \"b\")\n\t}}\n}}\n\
+stock lsg_tl{i}_go(inst, Float:from, dir)\n{{\n\tif (from >= 0.0)\n\t\tg_lsgTlT{i}[inst] = from\n\telse if (!g_lsgTlOn{i}[inst] && ((dir > 0 && g_lsgTlT{i}[inst] >= {len}) || (dir < 0 && g_lsgTlT{i}[inst] <= 0.0)))\n\t\tg_lsgTlT{i}[inst] = dir > 0 ? 0.0 : {len}\n\tg_lsgTlDir{i}[inst] = dir\n\tg_lsgTlNew{i}[inst] = true\n\tif (!g_lsgTlOn{i}[inst])\n\t{{\n\t\tg_lsgTlOn{i}[inst] = true\n\t\tg_lsgTlAt{i}[inst] = get_gametime()\n\t\tset_task({tick}, \"lsg_tl{i}_tick\", LSG_TASK + 50000 + {i} * 33 + inst, _, _, \"b\")\n\t}}\n}}\n\
 stock lsg_tl{i}_stop(inst)\n{{\n\tg_lsgTlOn{i}[inst] = false\n\tremove_task(LSG_TASK + 50000 + {i} * 33 + inst)\n}}\n",
         name = comment_text(&tl.name)
     );
@@ -3347,8 +3355,12 @@ stock lsg_tl{i}_stop(inst)\n{{\n\tg_lsgTlOn{i}[inst] = false\n\tremove_task(LSG_
             _ => {}
         }
     }
-    let hold = if gen.debug { "\tif (lsd_hold_timer())\n\t\treturn\n" } else { "" };
-    o.push_str(&format!("public lsg_tl{i}_tick(task)\n{{\n{hold}\tnew inst = task - (LSG_TASK + 50000 + {i} * 33)\n\tif (inst < 0 || inst > 32)\n\t\treturn\n\tnew Float:was = g_lsgTlT{i}[inst], dir = g_lsgTlDir{i}[inst]\n\tnew Float:t = was + {tick} * float(dir)\n\tnew bool:done, bool:wrapped\n"));
+    // (stopped at a breakpoint: the time held there doesn't count)
+    let hold = if gen.debug { format!("\tif (lsd_hold_timer())\n\t{{\n\t\tg_lsgTlAt{i}[inst] = get_gametime()\n\t\treturn\n\t}}\n") } else { String::new() };
+    // by the game time since the last tick, not the tick's nominal step (a timer under load or
+    // CrossOver comes late: a 4 s Timeline took 9), at most half a second at once after a hitch;
+    // a fresh Play or Reverse also counts a key right where it starts
+    o.push_str(&format!("public lsg_tl{i}_tick(task)\n{{\n\tnew inst = task - (LSG_TASK + 50000 + {i} * 33)\n\tif (inst < 0 || inst > 32)\n\t\treturn\n{hold}\tnew Float:now = get_gametime(), Float:step = floatclamp(now - g_lsgTlAt{i}[inst], 0.0, 0.5)\n\tg_lsgTlAt{i}[inst] = now\n\tnew bool:fresh = g_lsgTlNew{i}[inst]\n\tg_lsgTlNew{i}[inst] = false\n\tnew Float:was = g_lsgTlT{i}[inst], dir = g_lsgTlDir{i}[inst]\n\tnew Float:t = was + step * float(dir)\n\tnew bool:done, bool:wrapped\n"));
     if tl.looping {
         o.push_str(&format!("\tif (dir > 0 && t > {len})\n\t{{\n\t\tt -= {len}\n\t\twrapped = true\n\t}}\n\telse if (dir < 0 && t < 0.0)\n\t{{\n\t\tt += {len}\n\t\twrapped = true\n\t}}\n"));
     } else {
@@ -3377,7 +3389,7 @@ stock lsg_tl{i}_stop(inst)\n{{\n\tg_lsgTlOn{i}[inst] = false\n\tremove_task(LSG_
         uses_c = true;
         for k in tr.sorted() {
             let kt = float_lit(k.t);
-            o.push_str(&format!("\tif ((!wrapped && ((dir > 0 && was < {kt} && t >= {kt}) || (dir < 0 && was > {kt} && t <= {kt}))) || (wrapped && ((dir > 0 && (was < {kt} || t >= {kt})) || (dir < 0 && (was > {kt} || t <= {kt})))))\n\t\t{call}\n"));
+            o.push_str(&format!("\tif ((!wrapped && ((dir > 0 && (was < {kt} || (fresh && was == {kt})) && t >= {kt}) || (dir < 0 && (was > {kt} || (fresh && was == {kt})) && t <= {kt}))) || (wrapped && ((dir > 0 && (was < {kt} || t >= {kt})) || (dir < 0 && (was > {kt} || t <= {kt})))))\n\t\t{call}\n"));
         }
     }
     if let Some(call) = next("update") {
@@ -3415,7 +3427,7 @@ stock lsg_tl{i}_stop(inst)\n{{\n\tg_lsgTlOn{i}[inst] = false\n\tremove_task(LSG_
     if !uses_c {
         o.push_str("\t#pragma unused c\n");
     }
-    o.push_str("\t#pragma unused wrapped, done, was\n}\n");
+    o.push_str("\t#pragma unused wrapped, done, was, fresh\n}\n");
     o
 }
 
@@ -3892,6 +3904,9 @@ stock lsg_hit_dir(v, from)
 
 /// Creature control (the bot brain's `ls_creature` commands; numbers only, so nothing else can
 /// ride along): finding, sending, attacking, holding, health, removing, and what the watch keeps.
+/// Nodes that need creature control 2 in the bot brain (ls_creature_ver 2).
+const CREATURE_V2: [&str; 4] = ["creature.state", "creature.target", "creature.set_speed", "creature.set_tier"];
+
 const CREATURE_CTL: &str = r##"// ---- creature control ----
 stock Float:g_lsgCrPos[2048][3], Float:g_lsgCrStill[2048], g_lsgCrSerial[2048], g_lsgCrSeen[2048]
 stock bool:g_lsgCrGoalOn[2048], Float:g_lsgCrGoal[2048][3]
@@ -4049,13 +4064,61 @@ stock lsg_cr_hold(e)
 	server_cmd("ls_creature behave %d guard %.0f %.0f %.0f;ls_creature target %d 0", e, o[0], o[1], o[2], e)
 }
 
-// its own choice of targets again (until the bot brain says what its type does by itself: chase)
+// creature control 2 in the bot brain: state, target, default behavior, speed, tier
+stock bool:lsg_cr_v2()
+{
+	return get_cvar_pointer("ls_creature_ver") && get_cvar_num("ls_creature_ver") >= 2
+}
+
+// back to its own AI: its type's spawn behavior, its spawn spot as home, no forced target
+// (an older brain has no "default": it hunts)
 stock lsg_cr_resume(e)
 {
 	if (e > 0 && e < 2048)
 		g_lsgCrGoalOn[e] = false
-	if (lsg_cr_match(e, "") && get_cvar_pointer("ls_creature_ver"))
+	if (!lsg_cr_match(e, "") || !get_cvar_pointer("ls_creature_ver"))
+		return
+	if (lsg_cr_v2())
+		server_cmd("ls_creature behave %d default", e)
+	else
 		server_cmd("ls_creature behave %d chase;ls_creature target %d 0", e, e)
+}
+
+// 1 idle, 2 wander, 3 patrol, 4 guard, 5 chase, 6 flee, 7 attack, 8 search, 9 dead; 0 not a creature
+stock lsg_cr_state(e)
+{
+	if (!lsg_cr_v2() || !lsg_is_creature(e))
+		return 0
+	new s = pev(e, pev_iuser3)
+	return s >= 1 && s <= 9 ? s : 0
+}
+
+stock lsg_cr_state_name(e)
+{
+	static const names[][] = { "", "idle", "wander", "patrol", "guard", "chase", "flee", "attack", "search", "dead" }
+	new t[8]
+	copy(t, charsmax(t), names[lsg_cr_state(e)])
+	return t
+}
+
+stock lsg_cr_target(e)
+{
+	if (!lsg_cr_v2() || !lsg_cr_match(e, ""))
+		return 0
+	new t = pev(e, pev_enemy)
+	return t > 0 && pev_valid(t) ? t : 0
+}
+
+stock lsg_cr_speed(e, Float:x)
+{
+	if (lsg_cr_v2() && lsg_cr_match(e, ""))
+		server_cmd("ls_creature speed %d %.2f", e, floatclamp(x, 0.2, 3.0))
+}
+
+stock lsg_cr_tier(e, t)
+{
+	if (lsg_cr_v2() && lsg_cr_match(e, ""))
+		server_cmd("ls_creature tier %d %d", e, clamp(t, 0, 3))
 }
 
 stock lsg_cr_health(e, Float:hp)
