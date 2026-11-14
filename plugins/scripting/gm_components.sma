@@ -14065,7 +14065,9 @@ stock interact_offers()
 			if (!is_user_connected(p) || !is_user_bot(p))
 				continue;
 			if (want && (!g_team[s] || get_user_team(p) == g_team[s]))
-				hint("offer %d box %.0f %.0f %.0f %d 0", p, c[0], c[1], c[2], g_ent[s]);
+				/* (W2: the brain's own "use" offer - walk there, face it, press USE, the team-minded likelier;
+				   a brain before ls_mode_ver 3 doesn't know it: the free "box" it took now and then) */
+				hint("offer %d %s %.0f %.0f %.0f %d 0", p, get_cvar_num("ls_mode_ver") >= 3 ? "use" : "box", c[0], c[1], c[2], g_ent[s]);
 			else if (had)
 				hint("offer_clear %d %d", p, g_ent[s]);
 		}
