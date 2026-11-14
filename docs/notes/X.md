@@ -331,7 +331,14 @@ UI unit tests and studio-v3/studio-playtest specs green; not yet run on a sim); 
   `free_port`, `tail` made `pub(crate)` for this; nothing else changed there); MCP: the new tool and
   its routes are listed (`routes.rs`, `more.rs`). On this Mac a test run is one more hidden server:
   count it toward the crew's sim limit.
-**Queued next, in order:** (b) the Blueprint parity batch 2 plan;
+**All Actions palette: done (2026-11-14).** `Palette.tsx`: category folders (closed until opened;
+open by themselves while searching, for a short list, or from the sidebar's + buttons), big categories
+split into Events / Values / Actions, search over titles, help, keywords and cvars, Favorites (star on
+hover; kept in this browser) and Recently used (last 10) at the top, Context Sensitive on a dropped
+wire (on by default; off lists everything), keys: Up/Down, Right/Left open/close a folder, Enter places
+or toggles, Escape closes. Found on the way: a wire dropped on empty space opened the palette and the
+same release's pane click closed it again (Chromium); fixed in `Canvas.tsx`.
+**Queued next, in order:** (b) the rest of the Blueprint parity batch 2 plan (graphs, custom events, timelines);
 (c) sim tests for the core nodes; (d) example modes, node help, tour.
 **The core nodes batch:**
 - registry (`make_nodes.py` → `nodes.json`, 413 nodes): Game (Current Map Name, Next Map, Server Name, Max

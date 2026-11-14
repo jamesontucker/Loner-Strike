@@ -72,6 +72,36 @@ function itemFits(g: Graph, it: PaletteItem, wire: { type: PinType; dir: "in" | 
   return list.some((p) => (wire.dir === "out" ? compatible(wire.type, p.type) : compatible(p.type, wire.type)) && (p.type === "exec") === (wire.type === "exec"));
 }
 
+const FAVS = "ls.studio.palette.favs";
+const RECENT = "ls.studio.palette.recent";
+function loadList(key: string): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(key) ?? "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, 60) : [];
+  } catch {
+    return [];
+  }
+}
+function saveList(key: string, v: string[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(v));
+  } catch {
+    /* private window */
+  }
+}
+/** An item's identity (its node type and the settings it comes with). */
+export const itemKey = (it: PaletteItem) => `${it.def.type}:${JSON.stringify(it.params ?? {})}`;
+
+/** A big category splits into sub-folders: Events, Values (no flow), Actions. */
+function subOf(it: PaletteItem, big: boolean): string {
+  if (!big) return "";
+  if (it.def.event) return "Events";
+  if (it.def.pure) return "Values";
+  return "Actions";
+}
+
+type Row = { kind: "folder"; id: string; label: string; depth: number; open: boolean; count: number } | { kind: "item"; it: PaletteItem; depth: number; i: number; folder: string };
+
 export function Palette({
   at,
   graph,
@@ -91,17 +121,66 @@ export function Palette({
 }) {
   const [q, setQ] = useState("");
   const [cur, setCur] = useState(0);
+  const [context, setContext] = useState(true);
+  const [favs, setFavs] = useState(() => loadList(FAVS));
+  const recent = useMemo(() => loadList(RECENT), []);
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
+  const wire = context ? at.wire : undefined;
   const list = useMemo(() => {
     const words = q.trim().toLowerCase();
-    const reg: PaletteItem[] = searchNodes(q, at.wire && { type: at.wire.type, dir: at.wire.dir })
+    const reg: PaletteItem[] = searchNodes(q, wire && { type: wire.type, dir: wire.dir })
       .filter((d) => fitsTab(graph, tab, d))
       .map((d) => ({ def: d, title: d.title, help: d.help, category: d.category }));
-    const own = ownItems(graph, tab).filter((it, k) => (!words || `${it.title} ${it.category}`.toLowerCase().includes(words)) && (!at.wire || itemFits(graph, it, at.wire, k)));
+    const own = ownItems(graph, tab).filter((it, k) => (!words || `${it.title} ${it.category}`.toLowerCase().includes(words)) && (!wire || itemFits(graph, it, wire, k)));
     const all = [...own, ...reg].filter((it) => !at.only || it.category === at.only);
-    return all.sort((a, b) => CATEGORIES.indexOf(a.category) - CATEGORIES.indexOf(b.category));
-  }, [q, at.wire, at.only, graph, tab]);
+    // (stable: the search's own order inside a category)
+    return all.map((it, k) => ({ it, k })).sort((a, b) => CATEGORIES.indexOf(a.it.category) - CATEGORIES.indexOf(b.it.category) || a.k - b.k).map((x) => x.it);
+  }, [q, wire, at.only, graph, tab]);
+  const searching = q.trim() !== "";
+  // folders: open while searching (those with matches), when the list is short, or when opened
+  const rows = useMemo(() => {
+    const out: Row[] = [];
+    let i = 0;
+    const byKey = new Map(list.map((it) => [itemKey(it), it]));
+    const openAll = searching || list.length <= 40 || !!at.only;
+    const isOpen = (id: string, dflt: boolean) => opened[id] ?? dflt;
+    const section = (id: string, label: string, items: PaletteItem[], dflt: boolean) => {
+      if (!items.length) return;
+      const open = isOpen(id, dflt);
+      out.push({ kind: "folder", id, label, depth: 0, open, count: items.length });
+      if (open) for (const it of items) out.push({ kind: "item", it, depth: 1, i: i++, folder: id });
+    };
+    if (!searching && !at.only) {
+      section("fav", "Favorites", favs.map((k) => byKey.get(k)).filter((x): x is PaletteItem => !!x), true);
+      section("recent", "Recently used", recent.map((k) => byKey.get(k)).filter((x): x is PaletteItem => !!x).slice(0, 10), true);
+    }
+    const cats: string[] = [];
+    for (const it of list) if (!cats.includes(it.category)) cats.push(it.category);
+    for (const c of cats) {
+      const items = list.filter((it) => it.category === c);
+      const id = `cat:${c}`;
+      const open = isOpen(id, openAll);
+      out.push({ kind: "folder", id, label: c, depth: 0, open, count: items.length });
+      if (!open) continue;
+      const big = items.length > 24;
+      const subs: string[] = [];
+      for (const it of items) if (!subs.includes(subOf(it, big))) subs.push(subOf(it, big));
+      for (const sub of subs) {
+        const inSub = items.filter((it) => subOf(it, big) === sub);
+        if (!sub) {
+          for (const it of inSub) out.push({ kind: "item", it, depth: 1, i: i++, folder: id });
+          continue;
+        }
+        const sid = `${id}/${sub}`;
+        const sopen = isOpen(sid, openAll);
+        out.push({ kind: "folder", id: sid, label: sub, depth: 1, open: sopen, count: inSub.length });
+        if (sopen) for (const it of inSub) out.push({ kind: "item", it, depth: 2, i: i++, folder: sid });
+      }
+    }
+    return out;
+  }, [list, favs, recent, opened, searching, at.only]);
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => setCur(0), [q]);
+  useEffect(() => setCur(0), [q, context]);
   useEffect(() => {
     const away = (e: PointerEvent) => {
       if (box.current && !box.current.contains(e.target as Node)) onClose();
@@ -110,44 +189,92 @@ export function Palette({
     return () => window.removeEventListener("pointerdown", away, true);
   }, [onClose]);
   useEffect(() => {
-    box.current?.querySelector<HTMLElement>(`[data-i="${cur}"]`)?.scrollIntoView({ block: "nearest" });
+    box.current?.querySelector<HTMLElement>(`[data-row="${cur}"]`)?.scrollIntoView({ block: "nearest" });
   }, [cur]);
-  let lastCat = "";
+  const toggle = (id: string, open?: boolean) => setOpened((o) => ({ ...o, [id]: open ?? !(rows.find((r) => r.kind === "folder" && r.id === id) as { open: boolean } | undefined)?.open }));
+  const pick = (it: PaletteItem) => {
+    const k = itemKey(it);
+    saveList(RECENT, [k, ...recent.filter((x) => x !== k)].slice(0, 10));
+    onPick(it);
+  };
+  const star = (it: PaletteItem) => {
+    const k = itemKey(it);
+    const next = favs.includes(k) ? favs.filter((x) => x !== k) : [...favs, k];
+    setFavs(next);
+    saveList(FAVS, next);
+  };
   return (
     <div className="st-palette" ref={box} style={{ left: at.left, top: at.top }} role="dialog" aria-label="Add a node">
-      <input
-        className="st-palette-search"
-        autoFocus
-        placeholder={at.wire ? `Nodes for this ${typeLabel(graph, at.wire.type)} wire…` : "Search nodes…"}
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-          if (e.key === "Escape") onClose();
-          else if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setCur((c) => Math.min(c + 1, list.length - 1));
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setCur((c) => Math.max(c - 1, 0));
-          } else if (e.key === "Enter" && list[cur]) onPick(list[cur]);
-        }}
-      />
-      <div className="st-palette-list">
-        {list.length === 0 && <div className="st-palette-none">No node matches{at.wire ? " this wire" : ""}.</div>}
-        {list.map((it, i) => {
-          const head = it.category !== lastCat ? it.category : null;
-          lastCat = it.category;
-          return (
-            <div key={`${it.def.type}:${JSON.stringify(it.params ?? {})}`}>
-              {head && <div className="st-palette-cat">{head}</div>}
-              <button type="button" data-i={i} className={`st-palette-item${i === cur ? " cur" : ""}`} onMouseEnter={() => setCur(i)} onClick={() => onPick(it)} title={it.help}>
-                <span className="st-palette-title">{it.title}</span>
-                <span className="st-palette-help">{it.help}</span>
+      <div className="st-palette-head">
+        <input
+          className="st-palette-search"
+          autoFocus
+          placeholder={wire ? `Nodes for this ${typeLabel(graph, wire.type)} wire…` : "Search all actions…"}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            const row = rows[cur];
+            if (e.key === "Escape") onClose();
+            else if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setCur((c) => Math.min(c + 1, rows.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setCur((c) => Math.max(c - 1, 0));
+            } else if (e.key === "ArrowRight" && row?.kind === "folder" && !row.open) {
+              e.preventDefault();
+              toggle(row.id, true);
+            } else if (e.key === "ArrowLeft" && row) {
+              const fid = row.kind === "folder" ? (row.open ? row.id : null) : row.folder;
+              if (fid) {
+                e.preventDefault();
+                toggle(fid, false);
+                const at2 = rows.findIndex((r) => r.kind === "folder" && r.id === fid);
+                if (at2 >= 0) setCur(at2);
+              }
+            } else if (e.key === "Enter" && row) {
+              e.preventDefault();
+              if (row.kind === "item") pick(row.it);
+              else toggle(row.id);
+            }
+          }}
+        />
+        {at.wire && (
+          <label className="st-palette-context" title="Only nodes that can attach to the wire you're dragging">
+            <input type="checkbox" checked={context} onChange={(e) => setContext(e.target.checked)} /> Context Sensitive
+          </label>
+        )}
+      </div>
+      <div className="st-palette-list" role="tree">
+        {rows.length === 0 && <div className="st-palette-none">No node matches{wire ? " this wire" : ""}.</div>}
+        {rows.map((r, n) =>
+          r.kind === "folder" ? (
+            <button
+              key={r.id}
+              type="button"
+              role="treeitem"
+              aria-expanded={r.open}
+              data-row={n}
+              className={`st-palette-folder${n === cur ? " cur" : ""}`}
+              style={{ paddingLeft: 8 + r.depth * 14 }}
+              onMouseEnter={() => setCur(n)}
+              onClick={() => toggle(r.id)}
+            >
+              <span className="st-palette-caret">{r.open ? "▾" : "▸"}</span> {r.label} <span className="st-palette-count">{r.count}</span>
+            </button>
+          ) : (
+            <div key={`${r.folder}|${itemKey(r.it)}`} className={`st-palette-row${n === cur ? " cur" : ""}`} role="treeitem" style={{ paddingLeft: 8 + r.depth * 14 }} onMouseEnter={() => setCur(n)}>
+              <button type="button" data-row={n} className="st-palette-item" onClick={() => pick(r.it)} title={r.it.help}>
+                <span className="st-palette-title">{r.it.title}</span>
+                <span className="st-palette-help">{r.it.help}</span>
+              </button>
+              <button type="button" className={`st-palette-star${favs.includes(itemKey(r.it)) ? " on" : ""}`} onClick={() => star(r.it)} title={favs.includes(itemKey(r.it)) ? "Take out of Favorites" : "Add to Favorites"} aria-label={favs.includes(itemKey(r.it)) ? `Take ${r.it.title} out of Favorites` : `Add ${r.it.title} to Favorites`}>
+                {favs.includes(itemKey(r.it)) ? "★" : "☆"}
               </button>
             </div>
-          );
-        })}
+          ),
+        )}
         {!at.wire && !q && (onComment || onCollapse) && (
           <>
             <div className="st-palette-cat">Selection</div>

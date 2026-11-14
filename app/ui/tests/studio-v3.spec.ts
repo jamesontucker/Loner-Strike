@@ -491,6 +491,64 @@ test("Test run: steps with seconds, cancel, the summary, problems tied to nodes,
   await expect(page.getByTestId("studio-test-status")).toContainText("(edited since)");
 });
 
+test("All Actions palette: folders, search opens them, keys, favorites, recents, Context Sensitive", async ({ page }) => {
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await expect(node(page, "give_m4")).toBeVisible({ timeout: 20_000 });
+  const before = await page.locator(".react-flow__node").count();
+  await page.locator(".react-flow__pane").click({ button: "right", position: { x: 40, y: 40 } });
+  const pal = page.getByRole("dialog", { name: "Add a node" });
+  await expect(pal).toBeVisible();
+  // folders, closed at first; one opens with a click
+  const players = pal.getByRole("treeitem", { name: /^▸ Players/ });
+  await expect(players).toBeVisible();
+  await expect(pal.getByRole("button", { name: /^Give Weapon/ })).toHaveCount(0);
+  await players.click();
+  await expect(pal.getByRole("treeitem", { name: /^▾ Players/ })).toBeVisible();
+  await expect(pal.getByRole("treeitem", { name: /Actions/ }).first()).toBeVisible();
+  // search: folders with matches open by themselves
+  await pal.getByRole("textbox").fill("give weap");
+  await expect(pal.getByRole("button", { name: /^Give Weapon/ })).toBeVisible();
+  // star it, then keys: Down to the item, Enter places it
+  await pal.getByRole("button", { name: /^Give Weapon/ }).hover();
+  await pal.getByRole("button", { name: "Add Give Weapon to Favorites" }).click();
+  await pal.getByRole("textbox").focus();
+  for (let i = 0; i < 6; i++) {
+    if ((await pal.locator(".cur").getAttribute("class"))?.includes("st-palette-row")) break;
+    await page.keyboard.press("ArrowDown");
+  }
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".react-flow__node")).toHaveCount(before + 1);
+  // again: Favorites and Recently used at the top
+  const pb = (await page.locator(".react-flow__pane").boundingBox())!;
+  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 30, y: 30 } });
+  await expect(pal.getByRole("treeitem", { name: /^▾ Favorites/ })).toBeVisible();
+  await expect(pal.getByRole("treeitem", { name: /^▾ Recently used/ })).toBeVisible();
+  // Left closes the folder the cursor is in, Right opens it again
+  await pal.getByRole("textbox").focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(pal.getByRole("treeitem", { name: /^▸ Favorites/ })).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(pal.getByRole("treeitem", { name: /^▾ Favorites/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(pal).toHaveCount(0);
+  // a wire dropped on empty space: Context Sensitive on (only what fits), off shows everything
+  const out = page.locator('.react-flow__node[data-id="killed"] .react-flow__handle.source').nth(1);
+  const hb = (await out.boundingBox())!;
+  await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+  await page.mouse.down();
+  const pane = (await page.locator(".react-flow__pane").boundingBox())!;
+  await page.mouse.move(pane.x + pane.width - 40, pane.y + 40, { steps: 8 });
+  await page.mouse.up();
+  await expect(pal).toBeVisible();
+  const ctx = pal.getByLabel("Context Sensitive");
+  await expect(ctx).toBeChecked();
+  const count = async () => Number((await pal.locator(".st-palette-count").allTextContents()).reduce((a, t) => a + Number(t), 0));
+  const fitting = await count();
+  await ctx.uncheck();
+  await expect.poll(count).toBeGreaterThan(fitting);
+  await page.keyboard.press("Escape");
+});
+
 test.describe("leaving with unsaved edits", () => {
   // in the page, as a person gets there: Overview → Game Mode Studio → the mode → its Function
   const dirty = async (page: Page) => {

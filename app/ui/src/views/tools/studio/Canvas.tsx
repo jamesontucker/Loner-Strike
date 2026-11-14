@@ -115,6 +115,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
   const wrap = useRef<HTMLDivElement>(null);
   const mouse = useRef({ x: 200, y: 200 });
   const [palette, setPalette] = useState<PaletteAt | null>(null);
+  const paletteAt = useRef(0);
   const [selEdges, setSelEdges] = useState<string[]>([]);
   const dragBefore = useRef<Graph | null>(null);
   /** nodes riding along with a dragged comment: id -> offset from the comment */
@@ -341,6 +342,8 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       const type = (dir === "out" ? outType(g, ref) : inType(g, ref)) ?? "any";
       const pt = "changedTouches" in event ? event.changedTouches[0] : event;
       openPalette(pt.clientX, pt.clientY, { type, dir, ...ref });
+      // (the release also clicks the pane, which would close it again)
+      paletteAt.current = Date.now();
     },
     [openPalette],
   );
@@ -640,7 +643,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
             { label: "Break the wire", keys: "Alt+click", danger: true, run: () => edit((g) => remove(g, [edge.id])) },
           ]);
         }}
-        onPaneClick={() => setPalette(null)}
+        onPaneClick={() => Date.now() - paletteAt.current > 400 && setPalette(null)}
         onNodeDoubleClick={(_, node) => {
           const n = useStudio.getState().graph?.nodes.find((x) => x.id === node.id);
           const target = n && (n.type === "fn.call" || n.type === "fn.call_pure" ? n.params.func : n.type === "macro.use" ? n.params.macro : null);
