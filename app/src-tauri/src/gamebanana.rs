@@ -269,7 +269,7 @@ pub struct MapStore {
 
 impl MapStore {
     pub fn new(hl: &Path, game_dir: &Path, app_dir: &Path, maps_cache: Arc<Mutex<Option<Vec<Value>>>>) -> MapStore {
-        let shots = app_dir.join("cache").join("gbshots");
+        let shots = crate::localdata::join(app_dir, "cache").join("gbshots");
         let _ = std::fs::create_dir_all(&shots);
         let store = MapStore {
             server: false,
@@ -277,7 +277,7 @@ impl MapStore {
             game_dir: game_dir.to_path_buf(),
             record_path: app_dir.join("installed_maps.json"),
             shots,
-            work: app_dir.join("cache").join("downloads"),
+            work: crate::localdata::join(app_dir, "cache").join("downloads"),
             lookups: Semaphore { left: Mutex::new(3), cv: Condvar::new() },
             later: Mutex::new(Later::default()),
             jobs: Mutex::new(HashMap::new()),

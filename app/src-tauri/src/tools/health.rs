@@ -1257,7 +1257,7 @@ fn reports_dir() -> PathBuf {
 }
 
 fn recordings_dir() -> PathBuf {
-    crate::sys::app_dir().join("tools").join("recordings")
+    crate::localdata::dir("tools/recordings")
 }
 
 /// Every saved report (damaged files skipped), newest first.

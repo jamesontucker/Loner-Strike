@@ -136,7 +136,7 @@ impl Game {
     pub fn with_app_dir(hl: &Path, name: &str, app: &Path) -> Game {
         let dir = hl.join(name);
         let data = dir.join("addons/amxmodx/data/gamemodes");
-        let _ = std::fs::create_dir_all(app.join("cache"));
+        let _ = std::fs::create_dir_all(crate::localdata::join(app, "cache"));
         // The plugin reads the same file, so both sides share the RCON password. A game
         // without Loner-Strike (never set up, or removed) gets nothing written into it: the
         // file is written once it's set up (ensure_password_file)

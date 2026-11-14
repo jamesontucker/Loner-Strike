@@ -176,7 +176,7 @@ pub(super) fn work_dirs(st: &Shared, map: &str) -> Vec<PathBuf> {
             v.push(PathBuf::from(&hl[..i + 8]).join("Loner-Strike").join("Compiler").join("work").join(map));
         }
     }
-    v.push(crate::sys::app_dir().join("tools").join("compile").join("work").join(map));
+    v.push(crate::localdata::dir("tools/compile").join("work").join(map));
     v
 }
 
@@ -241,7 +241,7 @@ pub(super) fn report(st: &Shared, s: &Session) -> Value {
         c
     });
     // (where the app's own compiles keep their log, for "where does this come from")
-    let log_at = crate::sys::app_dir().join("tools").join("compile").join("work").join(&map).join(format!("{map}.log"));
+    let log_at = crate::localdata::dir("tools/compile").join("work").join(&map).join(format!("{map}.log"));
     json!({"map": map, "compile": compile, "live": live(d), "precache": precache(d), "revision": d.revision, "logAt": log_at.to_string_lossy()})
 }
 

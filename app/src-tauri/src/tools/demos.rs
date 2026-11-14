@@ -616,7 +616,7 @@ fn to_replay(places: &[Place], at: &str, name: &str) -> Result<Value, String> {
         return Err("This demo has no player walking around in it (an HLTV demo follows a camera, not a player).".into());
     }
     let who = d.names.first().cloned().unwrap_or_else(|| "You".into());
-    let dir = crate::sys::app_dir().join("tools").join("recordings");
+    let dir = crate::localdata::dir("tools/recordings");
     std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn't make the recordings folder ({e})."))?;
     let file = replay_file(&dir, name, &h.map).ok_or("This demo's name or map can't be used for a file.")?;
     crate::sys::write_atomic(&file, replay_csv(&who, &d).as_bytes()).map_err(|e| format!("Couldn't save it ({e})."))?;

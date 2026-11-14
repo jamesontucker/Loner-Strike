@@ -252,6 +252,7 @@ Steam library on a second drive. Defender on. Note every prompt, window and mess
 | Alt in the editor | Tap Alt alone then Q; Alt+1; Alt+right-click a face (Texture tool); Alt-drag a texture | No ding, no stuck menu mode, the action happens |
 | Ctrl+1-9 | In the editor and the Studio | Note what it does (bookmarks vs sections) |
 | Offline fonts | Unplug the network, start the app | Labels aren't cut off |
+| Big folders out of Roaming | Before updating, an older version with voice on, a server made (steamcmd), a backup and a compiled map; note the size of %APPDATA%\Loner-Strike; update and open the app; then, on a PC whose AppData is on another drive or redirected, the same | `backups`, `cache`, `control-log`, `editor\backups`, `smarter-chat`, `steamcmd`, `voice` and `tools\compile`, `tools\recordings`, `tools\sdhlt`, `tools\community\packages`, `tools\wad-backups` are in %LOCALAPPDATA%\gg.lonerstrike.app\data; settings and records stay in %APPDATA%\Loner-Strike; backups restore, voice works without downloading again, the map is still listed as made here; quitting during the copy and opening again finishes it with nothing lost |
 | Local server | Make a server, start it | Note the firewall prompt (Private and Public ticked?); a friend on the LAN can join; no console window; the log fills |
 | Second server, same port taken | Start another program on 27015 first | A plain "port in use" message, no restart loop |
 | Crash dialog | Crash hlds (bad metamod DLL) | Time until the app restarts it; does a dialog cover a full-screen game? |

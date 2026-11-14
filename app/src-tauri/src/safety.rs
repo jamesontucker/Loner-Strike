@@ -541,7 +541,7 @@ fn default_root() -> PathBuf {
     if cfg!(test) {
         std::env::temp_dir().join(format!("ls-safety-test-{}", std::process::id()))
     } else {
-        crate::sys::app_dir().join("backups")
+        crate::localdata::dir("backups")
     }
 }
 
@@ -556,7 +556,7 @@ pub fn use_game(g: &crate::game::Game) {
     if g.remote.is_some() {
         return;
     }
-    let root = g.app.join("backups");
+    let root = crate::localdata::join(&g.app, "backups");
     let lock = STORE.get_or_init(|| RwLock::new(Arc::new(Store::new(root.clone()))));
     if lock.read().unwrap().root != root {
         let old = lock.read().unwrap().roots.read().unwrap().clone();

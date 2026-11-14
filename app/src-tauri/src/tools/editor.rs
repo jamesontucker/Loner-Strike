@@ -1872,7 +1872,7 @@ async fn api_save(State(st): State<Shared>, Extension(ed): Extension<Ed>, h: Hea
         if req.save_as && s.project.as_ref().is_some_and(|p| p != &path) {
             s.doc.editor.uid = Some(crate::editor::doc::new_uid());
         }
-        save_project(s, &path, Some(&ed.dir.join("backups")))?;
+        save_project(s, &path, Some(&crate::localdata::join(&ed.dir, "backups")))?;
         let _ = std::fs::remove_file(ed.dir.join(AUTOSAVE));
         let _ = std::fs::remove_file(ed.dir.join(AUTOSAVE_META));
         remember(&ed.dir, &path, true);

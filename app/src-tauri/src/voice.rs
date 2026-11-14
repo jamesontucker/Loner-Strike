@@ -60,7 +60,7 @@ pub struct Settings {
 
 /// The add-on's folder on this computer.
 fn dir() -> PathBuf {
-    sys::app_dir().join("voice")
+    crate::localdata::dir("voice")
 }
 
 fn model() -> PathBuf {

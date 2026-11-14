@@ -361,7 +361,7 @@ impl Game {
         if kind == "radar" && looking {
             return (None, true);
         }
-        let cache = self.app.join("cache");
+        let cache = crate::localdata::join(&self.app, "cache");
         let _ = std::fs::create_dir_all(&cache);
         let base = format!("{kind}-{}", name.to_lowercase());
         let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();

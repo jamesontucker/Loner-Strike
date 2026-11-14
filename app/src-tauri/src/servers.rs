@@ -688,7 +688,7 @@ pub(crate) fn safe_start_map(m: &str) -> bool {
 // ---- SteamCMD ----------------------------------------------------------------------
 
 fn steamcmd_dir() -> PathBuf {
-    sys::app_dir().join("steamcmd")
+    crate::localdata::dir("steamcmd")
 }
 
 fn steamcmd_exe() -> PathBuf {

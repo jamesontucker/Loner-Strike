@@ -343,7 +343,7 @@ fn collect(st: &Shared, ed: &Ed) -> Result<(Vec<FileRow>, Value), String> {
         rows.push(row("Project", format!("{} (not saved yet)", s.name), None, Kind::Project, false, "Save the map to make a project file"));
     }
     // backups made on save
-    let backups = ed.dir.join("backups");
+    let backups = crate::localdata::join(&ed.dir, "backups");
     if let Ok(rd) = std::fs::read_dir(&backups) {
         // P5: this project's by its uid (also after a rename), and old ones by name; newest first
         let mut b: Vec<(u64, PathBuf)> = rd.flatten().map(|e| e.path()).filter_map(|p| super::backup_of(&p, &s.name, s.doc.editor.uid.as_deref()).map(|t| (t, p))).collect();
@@ -361,7 +361,7 @@ fn collect(st: &Shared, ed: &Ed) -> Result<(Vec<FileRow>, Value), String> {
             work.push(PathBuf::from(&hl[..i + 8]).join("Loner-Strike").join("Compiler").join("work").join(&map));
         }
     }
-    work.push(crate::sys::app_dir().join("tools").join("compile").join("work").join(&map));
+    work.push(crate::localdata::dir("tools/compile").join("work").join(&map));
     for w in work.iter().filter(|w| w.is_dir()) {
         for ext in ["bsp", "log", "err", "pts", "lin", "prt", "map"] {
             let f = w.join(format!("{map}.{ext}"));

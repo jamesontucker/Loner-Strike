@@ -15,6 +15,7 @@ mod control;
 mod content;
 mod crashes; // MCP: crash tracking for the player's servers
 mod deeplink; // P5: loner-strike:// links (Open in Loner-Strike on the website)
+mod localdata; // MCP: big folders in Local AppData on Windows, moved once from Roaming
 mod hamguard; // MCP: the fixed Ham Sandwich kept in place before Play and local starts
 mod procmatch; // MCP: a leftover process is ended only if it's still the one the app started
 mod diagnostics;
@@ -69,6 +70,8 @@ fn main() {
 
     // Windows: crashed servers exit at once instead of waiting behind a dialog (sys.rs)
     sys::quiet_crash_dialogs();
+    // Windows: the big folders move from Roaming to Local AppData once (localdata.rs)
+    localdata::start();
 
     // Bind before opening the window so the page never loads too early.
     // If the Python panel already has 8027, take any free port.

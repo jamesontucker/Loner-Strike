@@ -1083,8 +1083,8 @@ async fn api_origins() -> Response {
             &load_all(&dir),
             &credits(&dir),
             &super::studio::graphs_dir(),
-            &crate::sys::app_dir().join("tools").join("community").join("packages"),
-            &crate::sys::app_dir().join("tools").join("compile").join("made.json"),
+            &crate::localdata::dir("tools/community/packages"),
+            &crate::localdata::dir("tools/compile").join("made.json"),
             &super::editor::prefabs::mine(&prefab_dir),
         ))
     })

@@ -51,8 +51,12 @@ Medium:
 - **Fonts** (fixed): Barlow Semi Condensed and Big Shoulders Stencil ship in `app/ui/public/fonts` (OFL, `fonts.css`),
   so the app never asks Google Fonts and looks the same offline; Bahnschrift SemiCondensed is in the text stack and
   Consolas in every monospace stack (`ui-monospace` isn't on Windows Chromium).
-- **Roaming AppData**: `app_dir()` is `%APPDATA%` (Roaming) and holds steamcmd, voice and chat models (GBs). Move big
-  data to `%LOCALAPPDATA%`.
+- **Roaming AppData** (fixed): the big folders (backups, cache, steamcmd, voice and chat models, compile work,
+  recordings, logs; the list is `localdata::BIG`) live in `%LOCALAPPDATA%\gg.lonerstrike.app\data`; settings and
+  records stay in `%APPDATA%\Loner-Strike`. `localdata::start()` moves an older install's folders once: a rename on
+  one drive, otherwise a background copy checked byte for byte before Roaming's is removed (the app keeps using Roaming
+  until then), resumed at the next start, a differing file kept in `data\from-roaming`. Remove everything and the
+  uninstaller's "Delete app data" already take `%LOCALAPPDATA%\gg.lonerstrike.app`.
 Low: `game_running` fails open when tasklist is slow; HLTV has no pid file; the uninstaller's `taskkill /IM
 playitd.exe` hits a user's own playit; uninstall leaves firewall rules, game-folder mods, `%SystemDrive%\Loner-Strike
 \Servers` and `%USERPROFILE%\.loner-strike\downloads`; ⌘ shown in some Studio labels; Win key and AltGr count as

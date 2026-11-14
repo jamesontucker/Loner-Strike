@@ -315,7 +315,7 @@ fn path_of(id: &str) -> Done<PathBuf> {
 
 /// Where recordings are kept: the app's own folder and gm_simrec's in the game.
 fn recording_dirs(game: Option<&crate::game::Game>) -> Vec<PathBuf> {
-    let mut v = vec![crate::sys::app_dir().join("tools").join("recordings")];
+    let mut v = vec![crate::localdata::dir("tools/recordings")];
     if let Some(g) = game {
         for d in [g.dir.clone(), g.hl.join("cstrike")] {
             let p = d.join("addons").join("amxmodx").join("data").join("simrec");

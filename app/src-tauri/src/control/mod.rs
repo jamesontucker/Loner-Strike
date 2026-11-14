@@ -395,7 +395,7 @@ fn seen(id: &str) {
 // ---- activity ----------------------------------------------------------------------
 
 fn log_dir() -> PathBuf {
-    crate::sys::app_dir().join("control-log")
+    crate::localdata::dir("control-log")
 }
 
 /// A change a helper made goes in the server's log (bodies without anything secret-looking).

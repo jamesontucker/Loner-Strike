@@ -677,7 +677,7 @@ fn install_music(g: &Game, p: &Pack) -> Result<String, String> {
     if g.store.content.for_game(&g.dir).contains_key(&key) {
         return Err("That pack is already in.".into());
     }
-    let work = g.app.join("cache").join("downloads");
+    let work = crate::localdata::join(&g.app, "cache").join("downloads");
     std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
     let tmp = crate::sys::make_temp_dir(&work, "snd-").map_err(|e| e.to_string())?;
     let res = (|| {

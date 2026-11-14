@@ -2246,7 +2246,7 @@ struct RegisterReq {
 }
 
 fn packages_dir() -> PathBuf {
-    dir().join("packages")
+    crate::localdata::join(&dir(), "packages")
 }
 
 fn load_packages(d: &Path) -> Vec<Package> {

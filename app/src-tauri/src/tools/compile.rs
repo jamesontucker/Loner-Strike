@@ -71,11 +71,11 @@ const KEEP_BACKUPS: usize = 5;
 
 /// `<app dir>/tools/sdhlt/v1.3.1`: the unpacked release (tools/, LICENSE.md, README.md).
 pub fn install_dir() -> PathBuf {
-    crate::sys::app_dir().join("tools").join("sdhlt").join(format!("v{SDHLT_VERSION}"))
+    crate::localdata::dir("tools/sdhlt").join(format!("v{SDHLT_VERSION}"))
 }
 
 fn compile_dir() -> PathBuf {
-    crate::sys::app_dir().join("tools").join("compile")
+    crate::localdata::dir("tools/compile")
 }
 
 const MARKER: &str = "loner-strike-verified.json";

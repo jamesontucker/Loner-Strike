@@ -825,7 +825,7 @@ fn save_texture(game_dir: &Path, folder_name: &str, app: &Path, wad: &str, t: &w
         let bytes = goldsrc::read_capped(&path, "texture file", MAX_CUSTOM_WAD).map_err(|e| e.to_string())?;
         lumps = wadwrite::read_lumps(&bytes).map_err(|e| e.to_string())?;
         // the old version, in case
-        let dir = app.join("tools").join("wad-backups");
+        let dir = crate::localdata::join(app, "tools/wad-backups");
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let stem = real[..real.len() - 4].to_lowercase();
         std::fs::write(dir.join(format!("{folder_name}-{stem}-{}.wad", (crate::sys::now() * 1000.0) as u64)), &bytes).map_err(|e| e.to_string())?;
