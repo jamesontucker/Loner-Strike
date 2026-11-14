@@ -9574,6 +9574,7 @@ new g_downPrev[33][24];
 new g_downGave[33];
 new Float:g_downFadeAt[33];
 new Float:g_downSwitchAt[33];
+new Float:g_reviveSendAt[33];
 new bool:g_down[33];
 new bool:g_bledOut[33];
 new Float:g_downAt[33];
@@ -10837,6 +10838,7 @@ stock go_down(victim)
 	render(victim, kRenderFxGlowShell, 255, 40, 40, kRenderNormal, 12);
 	act_cancel(victim);
 	send_revive(victim);
+	g_reviveSendAt[victim] = get_gametime() + 3.0;
 }
 
 stock bool:other_up(id)
@@ -10870,11 +10872,26 @@ stock send_revive(victim)
 			nd[1] = d; near[1] = p;
 		}
 	}
+	new left = max(floatround(g_dnBleed - (get_gametime() - g_downAt[victim])), 1);
+	/* squads (BR): every living squad mate within 2500 u is asked (the brain weighs the risk); a team
+	   (Last Stand): the two nearest, so the rest keep defending */
+	if (g_w3SquadMax > 1)
+	{
+		for (new p = 1; p <= MaxClients; p++)
+		{
+			if (p == victim || !is_user_alive(p) || !is_user_bot(p) || g_down[p] || get_user_team(p) != t || !w3_friends(p, victim))
+				continue;
+			new Float:o[3];
+			pev(p, pev_origin, o);
+			if (get_distance_f(o, g_downOrg[victim]) < 2500.0)
+				hint("goal %d use %.0f %.0f %.0f %d 75 %d 64", p, g_downOrg[victim][0], g_downOrg[victim][1], g_downOrg[victim][2], victim, left);
+		}
+		return;
+	}
 	for (new i = 0; i < 2; i++)
 	{
 		if (!near[i])
 			continue;
-		new left = max(floatround(g_dnBleed - (get_gametime() - g_downAt[victim])), 1);
 		hint("goal %d use %.0f %.0f %.0f %d 75 %d 64", near[i], g_downOrg[victim][0], g_downOrg[victim][1], g_downOrg[victim][2], victim, left);
 	}
 }
@@ -10949,6 +10966,14 @@ stock down_tick()
 			render(d, kRenderFxNone, 0, 0, 0, kRenderNormal, 255);
 			user_kill(d, 1);
 			continue;
+		}
+		/* the revive goals again every 3 s, where they lie now (they crawl): the brain's goal runs
+		   out, and a mate who was busy may be free now */
+		if (now >= g_reviveSendAt[d])
+		{
+			g_reviveSendAt[d] = now + 3.0;
+			pev(d, pev_origin, g_downOrg[d]);
+			send_revive(d);
 		}
 		/* the red pulse, stronger as bleeding out nears */
 		if (now >= g_downFadeAt[d])
