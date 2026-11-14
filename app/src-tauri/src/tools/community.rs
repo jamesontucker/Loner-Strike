@@ -262,6 +262,28 @@ pub fn risk_words<S: AsRef<str>>(codes: &[S]) -> Vec<&'static str> {
     RISKS.iter().filter(|(c, _)| codes.iter().any(|x| x.as_ref() == *c)).map(|(_, w)| *w).collect()
 }
 
+/// The known codes among these, in RISKS order.
+pub fn known_codes<S: AsRef<str>>(codes: &[S]) -> Vec<String> {
+    RISKS.iter().filter(|(c, _)| codes.iter().any(|x| x.as_ref() == *c)).map(|(c, _)| c.to_string()).collect()
+}
+
+/// What a downloaded mode's graph does (`graph`) against what its list entry said (`listed`)
+/// and what the player said yes to (`said_yes_to`): None to install; else the question to ask
+/// again, naming what it really does, with a warning when the listing said less (or other).
+pub fn risk_gate(graph: &[String], listed: &[String], said_yes_to: &[String]) -> Option<Value> {
+    let real = known_codes(graph);
+    if real.iter().all(|c| said_yes_to.iter().any(|y| y == c)) {
+        return None;
+    }
+    let words = risk_words(&real);
+    let differs = known_codes(listed) != real;
+    let mut q = risk_question(&words);
+    if differs {
+        q = format!("This mode does more than its listing says. {q}");
+    }
+    Some(json!({"ok": false, "needsConfirm": q, "risks": words, "riskCodes": real, "differs": differs}))
+}
+
 /// The question before installing a mode that does these things.
 pub fn risk_question(words: &[&str]) -> String {
     format!(
@@ -734,6 +756,9 @@ pub struct Trust {
     /// what a mode does beyond its own game, in plain words (a badge each)
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub risks: Vec<&'static str>,
+    /// the same as codes, sent back with the yes (the install checks the mode against them)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub risk_codes: Vec<String>,
     /// one plain sentence about why
     pub note: String,
 }
@@ -748,7 +773,7 @@ pub struct Trust {
 ///   verified author (verified: installs after a stronger warning). Anything else, including
 ///   a tagged mode the index doesn't know, isn't installed from the app.
 pub fn trust(kind: Kind, item: Option<&Item>, revoked: bool) -> Trust {
-    let t = |level, label, allowed, confirm: Option<String>, note: &str| Trust { level, label, allowed, confirm, note: note.into(), risks: vec![] };
+    let t = |level, label, allowed, confirm: Option<String>, note: &str| Trust { level, label, allowed, confirm, note: note.into(), risks: vec![], risk_codes: vec![] };
     if revoked || item.is_some_and(|i| i.status == Status::Revoked) {
         return t("blocked", "Pulled", false, None, "The Loner-Strike team pulled this one, so the app won't install it.");
     }
@@ -765,6 +790,7 @@ pub fn trust(kind: Kind, item: Option<&Item>, revoked: bool) -> Trust {
         }
         let mut tr = t("data", "Settings only", true, Some(risk_question(&risks)), "A Game Mode Studio mode: no plugins of its own, but it does more than its own game (see the badges).");
         tr.risks = risks;
+        tr.risk_codes = known_codes(&mode.capabilities);
         return tr;
     }
     // plugin modes aren't shared or installed from the community for now (whatever an index
@@ -1009,6 +1035,10 @@ struct TryReq {
     /// the player answered the trust question
     #[serde(default)]
     confirmed: bool,
+    /// the risk codes the player was shown and said yes to (a mode installs only when what its
+    /// graph really does is among them)
+    #[serde(default)]
+    risks: Vec<String>,
 }
 
 /// The file to install: the one asked for, else the index's, else the newest clean supported one.
@@ -1031,7 +1061,7 @@ async fn api_try(State(st): State<Shared>, h: HeaderMap, Json(req): Json<TryReq>
     if st.local_game().is_none() {
         return json_answer(Err(Fail::new(StatusCode::CONFLICT, NO_GAME)));
     }
-    json_answer(blocking(move || start_try(&st, model, req.id, req.file, req.confirmed).map_err(|e| Fail::new(StatusCode::OK, e))).await)
+    json_answer(blocking(move || start_try(&st, model, req.id, req.file, req.confirmed, &req.risks).map_err(|e| Fail::new(StatusCode::OK, e))).await)
 }
 
 /// The library entry for a page, and whether a newer file is out (from the index, else the page).
@@ -1045,7 +1075,7 @@ fn installed_json(model: Model, id: i64, idx: &Index, page: &Value) -> Value {
 
 /// Try it (and Update): the page read again, the trust rules, the file picked, then the
 /// installer for its kind. Every install is noted in the community library.
-pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirmed: bool) -> Result<Value, String> {
+pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirmed: bool, said_yes_to: &[String]) -> Result<Value, String> {
     let game = st.local_game().ok_or(NO_GAME)?;
     let (idx, _) = index(false);
     let it = idx.items.iter().find(|i| i.model == model && i.gb == id).cloned();
@@ -1107,11 +1137,13 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
                 if let Some(why) = package_refusal(&Item { kind, ..Default::default() }, &names) {
                     return Err(why);
                 }
-                // what the mode really does (its graph, whatever the list said): asked first
-                let caps = super::communitylib::mode_graph(&src).map(|g| super::studio::graph::capabilities(&g)).unwrap_or_default();
-                let words = risk_words(&caps);
-                if !words.is_empty() && !confirmed {
-                    return Ok(json!({"ok": false, "needsConfirm": risk_question(&words), "risks": words}));
+                // what the mode really does (its graph, whatever the list said); installed only
+                // when that's among what the player said yes to, else asked again
+                let g = super::communitylib::mode_graph(&src)?;
+                let caps: Vec<String> = super::studio::graph::capabilities(&g).iter().map(|c| c.to_string()).collect();
+                let listed: Vec<String> = it.as_ref().and_then(|i| i.mode.as_ref()).map(|m| m.capabilities.clone()).unwrap_or_default();
+                if let Some(ask) = risk_gate(&caps, &listed, said_yes_to) {
+                    return Ok(ask);
                 }
                 return super::communitylib::install_mode(st, &src, note.clone());
             }
@@ -2938,6 +2970,33 @@ mod risk_tests {
         // shown on the card and the details as badges
         assert_eq!(serde_json::to_value(trust(Kind::Mode, Some(loud), false)).unwrap()["risks"], json!(["Runs server commands", "Can kick players"]));
         assert!(serde_json::to_value(trust(Kind::Mode, Some(calm), false)).unwrap().get("risks").is_none());
+    }
+
+    fn v(x: &[&str]) -> Vec<String> {
+        x.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn the_install_is_bound_to_what_the_player_saw() {
+        // a calm graph: nothing to ask
+        assert!(risk_gate(&[], &[], &[]).is_none());
+        // confirmed nothing (a calm listing), the download runs server commands: asked again
+        let a = risk_gate(&v(&["server_commands"]), &[], &[]).expect("asks");
+        assert_eq!(a["riskCodes"], json!(["server_commands"]));
+        assert_eq!(a["differs"], true);
+        assert!(a["needsConfirm"].as_str().unwrap().starts_with("This mode does more than its listing says."));
+        // said yes to exactly that: installs
+        assert!(risk_gate(&v(&["server_commands"]), &v(&["server_commands"]), &v(&["server_commands"])).is_none());
+        // said yes to the listing's server commands, the graph also kicks: asked again, naming both
+        let a = risk_gate(&v(&["kicks_players", "server_commands"]), &v(&["server_commands"]), &v(&["server_commands"])).expect("asks");
+        assert_eq!(a["risks"], json!(["Runs server commands", "Can kick players"]));
+        assert_eq!(a["differs"], true);
+        // the listing was right but nobody said yes (a bare confirmed: true): asked, no warning
+        let a = risk_gate(&v(&["amx_commands"]), &v(&["amx_commands"]), &[]).expect("asks");
+        assert_eq!(a["differs"], false);
+        // a yes to more than it does is fine; unknown codes count for nothing
+        assert!(risk_gate(&v(&["plugin_calls"]), &[], &v(&["plugin_calls", "kicks_players"])).is_none());
+        assert!(risk_gate(&v(&["plugin_calls"]), &[], &v(&["everything"])).is_some());
     }
 
     #[test]

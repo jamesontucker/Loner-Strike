@@ -272,6 +272,8 @@ function Creation({ d }: { d: Details }) {
   const [stage, setStage] = useState<Stage>({ state: "idle" });
   // (the question the app asked after reading the mode itself; the list's own is d.trust.confirm)
   const [ask, setAsk] = useState<string | null>(null);
+  // (the risk codes that question named: sent back with the yes)
+  const [askCodes, setAskCodes] = useState<string[] | null>(null);
   const [pic, setPic] = useState(0);
   const modes = useQuery({ queryKey: ["tools", "community", "modes"], queryFn: () => startModes(), staleTime: 60_000 });
   const map = d.item?.map?.name ?? null;
@@ -305,10 +307,13 @@ function Creation({ d }: { d: Details }) {
   const go = async (confirmed: boolean) => {
     if (d.trust.confirm && !confirmed) return setStage({ state: "asking" });
     setStage({ state: "installing", job: "" });
-    const r = await tryIt(d.model, d.id, confirmed);
-    // the mode's own graph does more than the list said: asked before anything is installed
+    // exactly the risks the question showed (none when nothing was asked)
+    const codes = confirmed ? (askCodes ?? d.trust.riskCodes ?? []) : [];
+    const r = await tryIt(d.model, d.id, confirmed, undefined, codes);
+    // the mode's own graph does more than what was shown: asked again before anything installs
     if (!r.error && r.needsConfirm) {
       setAsk(r.needsConfirm);
+      setAskCodes(r.riskCodes ?? []);
       return setStage({ state: "asking" });
     }
     if (!r.error && r.kind === "prefab") {

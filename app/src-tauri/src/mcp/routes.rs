@@ -616,6 +616,17 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
         ("/api/safety/restore", "put an earlier version of a game file back"),
         ("/api/safety/undo", "undo the last change to game files"),
     ];
+    // a mode's risky nodes the agent says yes to are named in the question, so the person
+    // approves exactly what installs (community.rs installs only what's among them)
+    if route == "/api/tools/community/try" {
+        let codes: Vec<String> = b("risks").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default();
+        let words = crate::tools::community::risk_words(&codes);
+        return Policy::Ask(if words.is_empty() {
+            "download and install something from GameBanana".into()
+        } else {
+            format!("download and install a game mode from GameBanana that {}", words.iter().map(|w| w.to_lowercase()).collect::<Vec<_>>().join(", "))
+        });
+    }
     if let Some((_, what)) = outward.iter().find(|(p, _)| *p == route) {
         return Policy::Ask(what.to_string());
     }

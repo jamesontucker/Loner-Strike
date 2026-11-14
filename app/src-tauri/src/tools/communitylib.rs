@@ -864,7 +864,8 @@ pub fn apply_update(st: &Shared, it: &Installed, file: i64) -> Result<Value, Str
     marked.pending = 0;
     marked.previous_file = it.file;
     save(&dir, &marked)?;
-    match super::community::start_try(st, it.model, it.gb, Some(file), true) {
+    // (an update may only do what the installed version does: anything more is asked on its page)
+    match super::community::start_try(st, it.model, it.gb, Some(file), true, &approved_risks(&dir, it)).and_then(not_asking) {
         Ok(mut v) => {
             // (the new entry is noted by the installer; it keeps where it came from)
             if let Some(mut now_it) = load(&dir, it.model, it.gb) {
@@ -898,7 +899,7 @@ pub fn go_back(st: &Shared, it: &Installed) -> Result<Value, String> {
     }
     if it.previous_file > 0 {
         remove_files(game.as_deref(), it)?;
-        let v = super::community::start_try(st, it.model, it.gb, Some(it.previous_file), true)?;
+        let v = super::community::start_try(st, it.model, it.gb, Some(it.previous_file), true, &approved_risks(&dir, it)).and_then(not_asking)?;
         mark_servers_stale(&dir, &it.key());
         return Ok(v);
     }
@@ -1541,5 +1542,27 @@ mod tests {
         std::fs::write(d.join("modes/lava/two.graph.json"), &good).unwrap();
         assert!(mode_graph(&d).unwrap_err().contains("more than one"));
         let _ = std::fs::remove_dir_all(&d);
+    }
+}
+
+/// What the person said yes to for an installed mode: what its installed graph does (asked
+/// before it went in). Nothing for other kinds.
+fn approved_risks(dir: &Path, it: &Installed) -> Vec<String> {
+    if it.mode.is_empty() {
+        return vec![];
+    }
+    let p = dir.join(it.key()).join(format!("{}.graph.json", it.mode));
+    std::fs::read_to_string(p)
+        .ok()
+        .and_then(|t| super::studio::graph::parse(&t).ok())
+        .map(|g| super::studio::graph::capabilities(&g).iter().map(|c| c.to_string()).collect())
+        .unwrap_or_default()
+}
+
+/// An install that stopped to ask (the new version does more than the one you have) as a plain error.
+fn not_asking(v: Value) -> Result<Value, String> {
+    match v["needsConfirm"].as_str() {
+        Some(q) => Err(format!("This version does more than the one you have, so it isn't installed by itself: {q} Open it in Community to install it.")),
+        None => Ok(v),
     }
 }

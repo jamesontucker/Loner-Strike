@@ -14,6 +14,8 @@ export type Trust = {
   note: string;
   /** what a mode does beyond its own game, in plain words ("Runs server commands"): a badge each */
   risks?: string[];
+  /** the same as codes: sent back with the yes, so the install is bound to what was shown */
+  riskCodes?: string[];
 };
 
 export type Badge = "featured" | "bots" | "nav" | "checked" | "data";
@@ -109,8 +111,8 @@ export const browse = (kind: string, q: string, sort: string, refresh = false, s
 
 export const details = (model: Model, id: number, signal?: AbortSignal) => get<Details>(`${base}/item/${model.toLowerCase()}/${id}`, signal);
 
-export const tryIt = (model: Model, id: number, confirmed: boolean, file?: number) =>
-  post<{ ok: boolean; job: string; section: string; map: string | null; kind?: "prefab" | "mode"; prefabs?: string[]; wads?: string[]; mode?: string; name?: string; needsConfirm?: string; risks?: string[] }>(`${base}/try`, { model, id, confirmed, ...(file ? { file } : {}) });
+export const tryIt = (model: Model, id: number, confirmed: boolean, file?: number, risks?: string[]) =>
+  post<{ ok: boolean; job: string; section: string; map: string | null; kind?: "prefab" | "mode"; prefabs?: string[]; wads?: string[]; mode?: string; name?: string; needsConfirm?: string; risks?: string[]; riskCodes?: string[]; differs?: boolean }>(`${base}/try`, { model, id, confirmed, ...(file ? { file } : {}), ...(risks ? { risks } : {}) });
 
 export const readiness = (map: string, signal?: AbortSignal) =>
   get<{ ready: Readiness; suggestedModes: string[]; modeChoices?: { id: string; name: string; uid: string; studio: boolean }[]; tag: string }>(`${base}/publish/${encodeURIComponent(map)}`, signal);

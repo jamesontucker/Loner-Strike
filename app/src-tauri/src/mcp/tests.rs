@@ -1265,3 +1265,13 @@ fn every_route_has_an_explicit_policy() {
     }
     assert_eq!(routes::policy("POST", "/api/tools/editor/assets/copy", &json!({"to": "project"})), routes::Policy::Change);
 }
+
+/// An agent's yes to a mode's risky nodes is the person's question: it names them.
+#[test]
+fn a_risky_mode_install_names_its_risks_in_the_question() {
+    use routes::{policy, Policy};
+    let Policy::Ask(q) = policy("POST", "/api/tools/community/try", &json!({"model": "Mod", "id": 1, "confirmed": true, "risks": ["server_commands", "kicks_players"]})) else { panic!() };
+    assert!(q.contains("runs server commands") && q.contains("can kick players"), "{q}");
+    let Policy::Ask(q) = policy("POST", "/api/tools/community/try", &json!({"model": "Mod", "id": 1})) else { panic!() };
+    assert_eq!(q, "download and install something from GameBanana");
+}
