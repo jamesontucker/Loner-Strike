@@ -5201,6 +5201,12 @@ new g_w3Feed[W3_FEED][96];
 new Float:g_w3FeedAt[W3_FEED];
 new g_w3HudText[128];
 new g_w3Killer[33];
+/* drop-in */
+new g_w3cDropHeight, g_w3fwLanded;
+new bool:g_w3Falling[33];
+new Float:g_w3FallAt[33];
+new Float:g_w3DropSpots[33][2];
+new g_w3NDrop;
 /* rarity glow */
 new g_w3cRarity;
 /* scarce ammo */
@@ -5229,6 +5235,10 @@ stock w3_natives()
 	register_native("ls_feed", "n_w3_feed");
 	register_native("ls_kills", "n_w3_kills");
 	register_native("ls_spectate", "n_w3_spectate");
+	register_native("ls_drop_in", "n_w3_drop_in");
+	register_native("ls_dropping", "n_w3_dropping");
+	register_native("ls_drop_spot", "n_w3_drop_spot");
+	register_native("ls_drop_reset", "n_w3_drop_reset");
 }
 
 stock w3_init()
@@ -5272,6 +5282,11 @@ stock w3_init()
 	g_w3cMatchHud = register_cvar("ls_match_hud", "0");
 	g_w3SyncTop = CreateHudSyncObj();
 	g_w3SyncSide = CreateHudSyncObj();
+	/* drop-in: how high above the landing spot at most (the sky is the real limit) */
+	g_w3cDropHeight = register_cvar("ls_drop_height", "3000");
+	g_w3fwLanded = CreateMultiForward("ls_on_landed", ET_IGNORE, FP_CELL);
+	register_forward(FM_PlayerPostThink, "fm_w3_postthink", 1);
+	RegisterHamPlayer(Ham_TakeDamage, "ham_w3_hurt_pre");
 	RegisterHamPlayer(Ham_TraceAttack, "ham_w3_trace");
 	g_w3Hooked = true;
 }
@@ -5303,6 +5318,8 @@ stock w3_reset_player(p)
 	g_w3Vest[p] = 0;
 	g_w3Helm[p] = 0;
 	g_w3HelmHp[p] = 0.0;
+	if (g_w3Falling[p])
+		w3_land(p, false);
 }
 
 public client_putinserver(id)
@@ -5314,6 +5331,7 @@ public client_putinserver(id)
 public ham_w3_killed(id, killer, gib)
 {
 	w3_heal_stop(id, false);
+	g_w3Falling[id] = false;
 	if (get_pcvar_num(g_w3cDeathCrates) && g_w3SnapN[id])
 		w3_dc_from_death(id);
 	g_w3SnapN[id] = 0;
@@ -5879,7 +5897,7 @@ public cmd_w3_players()
 		}
 		server_print("%2d hp %3d armor %3d vest %d helmet %d (%.0f) heals %d/%d/%d%s%s guns:%s", p, get_user_health(p), get_user_armor(p),
 			g_w3Vest[p], g_w3Helm[p], g_w3HelmHp[p], g_w3Heals[p][0], g_w3Heals[p][1], g_w3Heals[p][2],
-			g_w3Using[p] ? " HEALING" : "", "", list);
+			g_w3Using[p] ? " HEALING" : "", g_w3Falling[p] ? " falling" : "", list);
 	}
 	new n = 0;
 	for (new c = 0; c < W3_DC_MAX; c++)
@@ -7053,6 +7071,277 @@ public n_w3_kills(plugin, params)
 public n_w3_spectate(plugin, params)
 {
 	return w3_spectate(get_param(1), get_param(2));
+}
+
+/* ---- drop-in: start high over a landing spot, fall slowly and steer, land with no fall damage ---- */
+
+/* room to fall from 250 units above a spot */
+stock bool:w3_open_above(const Float:p[3])
+{
+	new Float:a[3], Float:b[3], Float:hit[3];
+	vcopy(p, a);
+	a[2] += 40.0;
+	vcopy(a, b);
+	b[2] += 300.0;
+	engfunc(EngFunc_TraceHull, a, b, IGNORE_MONSTERS, HULL_HUMAN, 0, 0);
+	get_tr2(0, TR_vecEndPos, hit);
+	return !get_tr2(0, TR_StartSolid) && hit[2] - a[2] >= 250.0;
+}
+
+stock w3_marker_layer(e)
+{
+	new v[16];
+	if (!w3_marker_str(e, "layer", v, charsmax(v)))
+		return -1;
+	if (equali(v, "below"))
+		return 0;
+	if (equali(v, "surface"))
+		return 1;
+	if (equali(v, "high"))
+		return 2;
+	return -1;
+}
+
+stock bool:w3_marker_str(ent, const key[], out[], len)
+{
+	out[0] = EOS;
+	if (ent <= 0 || ent >= MAX_ENTS || g_mkKeys[ent] == Invalid_Trie)
+		return false;
+	return bool:TrieGetString(g_mkKeys[ent], key, out, len);
+}
+
+/* the open landing spot (a br_drop marker, else a respawn point) nearest a point; spots someone already
+   drops on count 1500 u further; layer 0 below / 1 surface / 2 high takes markers tagged so first */
+stock bool:w3_drop_spot(const Float:p[3], Float:out[3], layer = -1)
+{
+	new best = 0, Float:bd = 999999.0, Float:o[3];
+	new bool:tagged = false;
+	if (layer >= 0)
+		for (new e = w3_marker_next("br_drop", 0); e && !tagged; e = w3_marker_next("br_drop", e))
+			tagged = w3_marker_layer(e) == layer;
+	for (new e = w3_marker_next("br_drop", 0); e; e = w3_marker_next("br_drop", e))
+	{
+		if (tagged && w3_marker_layer(e) != layer)
+			continue;
+		pev(e, pev_origin, o);
+		new Float:d = get_distance_f(o, p);
+		for (new i = 0; i < g_w3NDrop; i++)
+			if (floatabs(o[0] - g_w3DropSpots[i][0]) < 300.0 && floatabs(o[1] - g_w3DropSpots[i][1]) < 300.0)
+				d += 1500.0;
+		if (d < bd && w3_open_above(o))
+		{
+			bd = d;
+			best = e;
+		}
+	}
+	if (!best)
+		for (new s = 0; s < g_nslots; s++)
+		{
+			if (!g_ent[s] || g_kind[s] != K_RESPAWN)
+				continue;
+			pev(g_ent[s], pev_origin, o);
+			new Float:d = get_distance_f(o, p);
+			if (d < bd && w3_open_above(o))
+			{
+				bd = d;
+				best = g_ent[s];
+			}
+		}
+	if (!best)
+		return false;
+	pev(best, pev_origin, out);
+	return true;
+}
+
+/* the next ls_marker of a kind after ent (0 to begin) */
+stock w3_marker_next(const kind[], start)
+{
+	new k[32];
+	for (new e = start + 1; e < MAX_ENTS; e++)
+	{
+		if (g_mkKeys[e] == Invalid_Trie || !pev_valid(e))
+			continue;
+		pev(e, pev_netname, k, charsmax(k));
+		if (equal(k, kind))
+			return e;
+	}
+	return 0;
+}
+
+/* a spread-out landing spot: of a few random markers (or respawn points), the one furthest from others' drops */
+stock bool:w3_spread_spot(Float:out[3])
+{
+	new pts[96], n = 0;
+	for (new e = w3_marker_next("br_drop", 0); e && n < sizeof pts; e = w3_marker_next("br_drop", e))
+		pts[n++] = e;
+	if (!n)
+		for (new s = 0; s < g_nslots && n < sizeof pts; s++)
+			if (g_ent[s] && g_kind[s] == K_RESPAWN)
+				pts[n++] = g_ent[s];
+	if (!n)
+		return false;
+	new best = pts[random(n)], Float:bestd = -1.0, Float:o[3];
+	for (new t = 0; t < 6; t++)
+	{
+		new e = pts[random(n)];
+		pev(e, pev_origin, o);
+		new Float:d = 99999.0;
+		for (new i = 0; i < g_w3NDrop; i++)
+			d = floatmin(d, floatsqroot((o[0] - g_w3DropSpots[i][0]) * (o[0] - g_w3DropSpots[i][0]) + (o[1] - g_w3DropSpots[i][1]) * (o[1] - g_w3DropSpots[i][1])));
+		if (d > bestd)
+		{
+			bestd = d;
+			best = e;
+		}
+	}
+	pev(best, pev_origin, out);
+	return true;
+}
+
+/* drops a player in over a spot (0 0 0: a spread-out landing spot); false if there's no sky over it */
+stock bool:w3_drop_in(id, const Float:spot[3], Float:height)
+{
+	if (!is_user_alive(id))
+		return false;
+	new Float:land[3];
+	if (spot[0] == 0.0 && spot[1] == 0.0 && spot[2] == 0.0)
+	{
+		if (!w3_spread_spot(land))
+			pev(id, pev_origin, land);
+	}
+	else
+		vcopy(spot, land);
+	/* nobody drops on top of somebody else (they'd hang in the air on each other) */
+	for (new tries = 0; tries < 8; tries++)
+	{
+		new bool:clash = false;
+		for (new i = 0; i < g_w3NDrop && !clash; i++)
+			clash = floatabs(land[0] - g_w3DropSpots[i][0]) < 96.0 && floatabs(land[1] - g_w3DropSpots[i][1]) < 96.0;
+		if (!clash)
+			break;
+		land[0] += random_float(-160.0, 160.0);
+		land[1] += random_float(-160.0, 160.0);
+	}
+	if (g_w3NDrop < sizeof g_w3DropSpots)
+	{
+		g_w3DropSpots[g_w3NDrop][0] = land[0];
+		g_w3DropSpots[g_w3NDrop][1] = land[1];
+		g_w3NDrop++;
+	}
+	/* as high as the sky allows, with room for a player */
+	if (height <= 0.0)
+		height = get_pcvar_float(g_w3cDropHeight);
+	new Float:a[3], Float:b[3], Float:hit[3];
+	vcopy(land, a);
+	a[2] += 40.0;
+	vcopy(a, b);
+	b[2] += height;
+	engfunc(EngFunc_TraceHull, a, b, IGNORE_MONSTERS, HULL_HUMAN, id, 0);
+	get_tr2(0, TR_vecEndPos, hit);
+	if (get_tr2(0, TR_StartSolid) || hit[2] - a[2] < 250.0)
+		return false;
+	hit[2] -= 16.0;
+	engfunc(EngFunc_SetOrigin, id, hit);
+	set_pev(id, pev_velocity, Float:{0.0, 0.0, 0.0});
+	/* (the "on the ground" flag from where they stood stays until the next physics frame: cleared now,
+	   or the very next think would count as the landing) */
+	set_pev(id, pev_flags, pev(id, pev_flags) & ~FL_ONGROUND);
+	set_pev(id, pev_groundentity, 0);
+	set_user_gravity(id, 0.2);
+	g_w3Falling[id] = true;
+	g_w3FallAt[id] = get_gametime();
+	if (!is_user_bot(id))
+		toast_add(id, 255, 200, 60, 4.0, "Pick your landing! (steer as you fall)", false);
+	return true;
+}
+
+stock w3_land(id, bool:tell)
+{
+	if (!g_w3Falling[id])
+		return;
+	g_w3Falling[id] = false;
+	if (is_user_alive(id))
+		set_user_gravity(id, 1.0);
+	if (tell)
+	{
+		new ret;
+		ExecuteForward(g_w3fwLanded, ret, id);
+	}
+}
+
+public fm_w3_postthink(id)
+{
+	if (!g_w3Falling[id] || !is_user_alive(id))
+		return FMRES_IGNORED;
+	/* landed: standing on something, a moment after the drop began, no longer falling */
+	if ((pev(id, pev_flags) & FL_ONGROUND) && get_gametime() - g_w3FallAt[id] > 0.5)
+	{
+		new Float:v[3];
+		pev(id, pev_velocity, v);
+		if (v[2] > -50.0)
+		{
+			w3_land(id, true);
+			return FMRES_IGNORED;
+		}
+	}
+	/* bots come straight down on the spot they picked (people steer) */
+	if (is_user_bot(id))
+	{
+		new Float:v[3];
+		pev(id, pev_velocity, v);
+		v[0] = 0.0;
+		v[1] = 0.0;
+		set_pev(id, pev_velocity, v);
+	}
+	return FMRES_IGNORED;
+}
+
+/* falling in: nothing hurts (not a hit, not the landing) */
+public ham_w3_hurt_pre(victim, inflictor, attacker, Float:dmg, bits)
+{
+	if (1 <= victim <= 32 && g_w3Falling[victim])
+		return HAM_SUPERCEDE;
+	return HAM_IGNORED;
+}
+
+/* native ls_drop_in(id, const Float:spot[3] = {0.0, 0.0, 0.0}, Float:height = 0.0) */
+public n_w3_drop_in(plugin, params)
+{
+	new id = get_param(1), Float:spot[3];
+	get_array_f(2, spot, 3);
+	if (!(1 <= id <= MaxClients))
+		return 0;
+	return w3_drop_in(id, spot, get_param_f(3)) ? 1 : 0;
+}
+
+/* native bool:ls_dropping(id) */
+public n_w3_dropping(plugin, params)
+{
+	new id = get_param(1);
+	return 1 <= id <= MaxClients && g_w3Falling[id];
+}
+
+/* native bool:ls_drop_spot(const Float:near[3], Float:out[3], const layer[] = "") */
+public n_w3_drop_spot(plugin, params)
+{
+	new Float:near[3], Float:out[3], l[12];
+	get_array_f(1, near, 3);
+	get_string(3, l, charsmax(l));
+	new layer = equali(l, "below") ? 0 : (equali(l, "surface") ? 1 : (equali(l, "high") ? 2 : -1));
+	if (!w3_drop_spot(near, out, layer))
+		return 0;
+	set_array_f(2, out, 3);
+	return 1;
+}
+
+/* native ls_drop_reset(): a new game (landing spots taken are forgotten; anyone falling lands) */
+public n_w3_drop_reset(plugin, params)
+{
+	g_w3NDrop = 0;
+	for (new p = 1; p <= 32; p++)
+		if (g_w3Falling[p])
+			w3_land(p, false);
+	return 1;
 }
 
 /* ==== end W3 ==== */

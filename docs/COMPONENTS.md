@@ -387,6 +387,15 @@ in squads, their squad mates with health. A player who's killed watches their ki
 game's `specmode`/`follow`, unverified on a real client). Natives `ls_match_hud(on)`,
 `ls_match_hud_text(text[])`, `ls_feed(text[])`, `ls_kills(id)`, `ls_spectate(id, target)`.
 
+### Drop-in
+`ls_drop_in(id, spot[3] = {0,0,0}, height = 0.0)`: the player starts as high over the spot as the sky
+allows (up to `height`, else `ls_drop_height`, 3000), falls at 0.2 gravity steering as they like (bots
+come straight down), takes no damage until they land, then `ls_on_landed(id)`. Spot 0 0 0: a spread-out
+landing spot (of a few random `br_drop` markers, or respawn points, the one furthest from others' drops).
+Nobody lands within 96 u of another. `ls_drop_spot(near[3], out[3], layer[] = "")`: the open landing spot
+nearest a point (markers tagged `layer=below|surface|high` first when a layer is given; spots others drop
+on count 1500 u further). `ls_dropping(id)`, `ls_drop_reset()` (a new game).
+
 <!-- ==== end W3 ==== -->
 
 <!-- ==== W1: Last Stand pieces ==== -->

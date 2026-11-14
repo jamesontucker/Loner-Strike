@@ -489,6 +489,24 @@ native ls_kills(id);
 /** A dead player watches someone (first person). @return 1 if done */
 native ls_spectate(id, target);
 
+/* Drop-in: a player starts high over a spot (as high as the sky allows, up to ls_drop_height, 3000), falls
+ * at 0.2 gravity steering as they like (bots come straight down), takes no damage until they land, then
+ * ls_on_landed. Landing spots: the map's br_drop markers (Mode map kits; `layer` below/surface/high tags
+ * them), else its ls_respawn_points; nobody lands on someone else. */
+
+/** Drops a player in over a spot (0 0 0: a spread-out landing spot); height 0 = ls_drop_height.
+    @return 0 if there's no sky over it (they stay where they are) */
+native ls_drop_in(id, const Float:spot[3] = {0.0, 0.0, 0.0}, Float:height = 0.0);
+/** Is the player still dropping in? */
+native bool:ls_dropping(id);
+/** The open landing spot nearest a point ("below"/"surface"/"high" markers first when given), spots
+    others already drop on counting 1500 u further. @return false if the map has none */
+native bool:ls_drop_spot(const Float:near[3], Float:out[3], const layer[] = "");
+/** A new game: the landing spots taken are forgotten (and anyone still falling lands). */
+native ls_drop_reset();
+/** A player who dropped in is down on the ground. */
+forward ls_on_landed(id);
+
 /* ==== end W3 ==== */
 
 /* ==== W1: Last Stand pieces ==== */
