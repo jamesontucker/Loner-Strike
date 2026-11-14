@@ -1593,7 +1593,8 @@ fn study(job: &crate::setup::Job, client: &crate::steam::Install, dir: &std::pat
             if [gdir.clone(), dir.join("cstrike"), dir.join("valve")].iter().any(|d| f.find(d, &rel).is_some()) {
                 continue;
             }
-            if let Some(src) = [m.hl.join(&m.game), m.hl.join("cstrike"), m.hl.join("valve")].iter().find_map(|d| f.find(d, &rel)) {
+            // where the game looks (a map it downloaded has its files in a _downloads folder)
+            if let Some(src) = super::doctor::game_path(&m.hl, &m.game).iter().find_map(|d| f.find(d, &rel)) {
                 let dest = gdir.join(&rel);
                 if let Some(d) = dest.parent() {
                     let _ = std::fs::create_dir_all(d);

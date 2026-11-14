@@ -34,7 +34,7 @@ function useDevMaps(): MapInfo[] {
     nav: !!m.nav,
     thumb: null,
     by: "",
-    source: m.source === "download" || m.source === "added" ? m.source : "stock",
+    source: m.source === "download" || m.source === "added" || m.source === "server" ? m.source : "stock",
     fav: false,
     hidden: false,
     recent: 0,

@@ -181,6 +181,46 @@ fn missing_wads(m: &MapFile, finder: &Finder, names: &[String]) -> Vec<String> {
     names.iter().filter(|n| !dirs.iter().any(|d| finder.find(d, n).is_some())).cloned().collect()
 }
 
+/// The maps the Tools list offers: the game's map list, plus the maps it downloaded from
+/// servers (`cstrike_downloads/maps`, `czero_downloads/maps`), which the game plays but the
+/// play lists leave out. Each downloaded one says `"source": "server"`.
+pub fn tool_maps(game: &Game) -> Vec<Value> {
+    let mut list = game.maps(false);
+    let mut have: std::collections::HashSet<String> = list.iter().filter_map(|m| m["name"].as_str().map(str::to_lowercase)).collect();
+    let czero = game.is_czero();
+    let folders: [&str; 2] = if czero { ["czero_downloads", "cstrike_downloads"] } else { ["cstrike_downloads", "czero_downloads"] };
+    for folder in folders {
+        let mut names: Vec<String> = std::fs::read_dir(game.hl.join(folder).join("maps"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.path().is_file())
+            .filter_map(|e| {
+                let f = e.file_name().to_string_lossy().to_string();
+                f.to_lowercase().ends_with(".bsp").then(|| f[..f.len() - 4].to_string())
+            })
+            .filter(|n| crate::maps::safe_arg(n))
+            .collect();
+        names.sort_by_key(|n| n.to_lowercase());
+        for name in names {
+            if !have.insert(name.to_lowercase()) {
+                continue;
+            }
+            let bsp = game.hl.join(folder).join("maps").join(format!("{name}.bsp"));
+            let mut m = json!({"name": name, "cat": crate::maps::map_category(&name), "nav": false, "thumb": null, "by": "Other",
+                               "title": crate::maps::title_from_bsp(&bsp, &name).unwrap_or_default(), "source": "server",
+                               "fav": false, "hidden": false, "recent": -1});
+            // a Condition Zero download in a 1.6 game: 1.6 can't load it
+            if !czero && folder.starts_with("czero") {
+                m["other"] = json!(true);
+                m["otherGame"] = json!("Condition Zero");
+            }
+            list.push(m);
+        }
+    }
+    list
+}
+
 /// `facts` for every map, remembered per map file version (the list asks often).
 pub fn all_facts(game: &Game) -> Vec<Value> {
     use std::sync::{Mutex, OnceLock};
@@ -189,7 +229,7 @@ pub fn all_facts(game: &Game) -> Vec<Value> {
     let finder = Finder::default();
     let czero = game.is_czero();
     let mut out = Vec::new();
-    for m in game.maps(false) {
+    for m in tool_maps(game) {
         let Some(name) = m["name"].as_str().filter(|n| crate::maps::safe_arg(n)) else { continue };
         let Some(lm) = crate::mapcopy::find_local(&finder, &game.hl, name, if czero { "czero" } else { "cstrike" }) else { continue };
         let mf = MapFile { name: lm.name, bsp: lm.bsp, game: lm.game, hl: game.hl.clone(), czero };

@@ -21,7 +21,7 @@ const SEND_INFO = "Sends what bots learned about this map (its .nav file) to all
 const SHOW_INFO = "Hidden maps stay installed but are left out of lists, the in-game map menu and map votes. Bots spend a few minutes learning a map the first time it's played. In Counter-Strike 1.6, Condition Zero's own maps (which 1.6 can't load) show only when you pick them here.";
 const SORTS: [string, string][] = [["name", "A to Z"], ["name-desc", "Z to A"], ["played", "Recently played"], ["favs", "Favorites first"], ["type", "By type"], ["source", "Downloaded first"]];
 const SOURCE_ORDER = ["download", "added", "stock"];
-const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by you" };
+const SOURCE = { stock: "Came with the game", download: "Downloaded from GameBanana", added: "Added by you", server: "From a server you joined" };
 /** Where a map came from: one added with "Add a map file" is filed as a download (with a negative mod) but is yours. */
 const sourceOf = (m: MapInfo): MapInfo["source"] => (m.source === "download" && (m.mod ?? 0) < 0 ? "added" : m.source);
 /** A map only in the other game's folder that this game can't load: a Condition Zero map

@@ -123,6 +123,7 @@ export function MapList({ maps, onPick, placeholder, note, filter, none }: {
                   <span className="tl-map-name">{m.name}</span>
                   {m.title && m.title !== m.name && <span className="muted tl-map-title">{m.title}</span>}
                   {m.source === "download" && <span className="tag">Downloaded</span>}
+                  {m.source === "server" && <span className="tag">From a server</span>}
                   {n && <span className="muted small-note push">{n}</span>}
                 </button>
               </li>

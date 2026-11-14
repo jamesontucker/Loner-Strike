@@ -405,6 +405,37 @@ mod tests {
         serde_json::from_slice(b).unwrap()
     }
 
+    /// QA4-T2 F2: a map the game downloaded from a server (only in cstrike_downloads/maps)
+    /// is in the Tools list, and the map tools open it.
+    #[tokio::test]
+    async fn maps_the_game_downloaded_are_in_every_tool() {
+        let (root, g) = game("downloads");
+        let hl = root.join("Half-Life");
+        std::fs::create_dir_all(hl.join("cstrike_downloads/maps")).unwrap();
+        std::fs::write(hl.join("cstrike_downloads/maps/kz_fromserver.bsp"), fixture::build()).unwrap();
+        // a Condition Zero download isn't one a 1.6 game can play
+        std::fs::create_dir_all(hl.join("czero_downloads/maps")).unwrap();
+        std::fs::write(hl.join("czero_downloads/maps/cz_fromserver.bsp"), fixture::build()).unwrap();
+        let st = state(Some(g));
+        let (s, _, b) = call(&st, "/api/tools/maps", None).await;
+        assert_eq!(s, StatusCode::OK);
+        let v = json_of(&b);
+        let maps = v["maps"].as_array().unwrap();
+        let dl = maps.iter().find(|m| m["name"] == "kz_fromserver").expect("the downloaded map is listed");
+        assert_eq!(dl["source"], "server");
+        assert_eq!(dl["game"], "cstrike");
+        assert!(dl["other"].is_null());
+        let cz = maps.iter().find(|m| m["name"] == "cz_fromserver").expect("listed, as the other game's");
+        assert_eq!(cz["other"], true);
+        for uri in ["/api/tools/doctor/kz_fromserver", "/api/tools/map/kz_fromserver/info", "/api/tools/navfix/kz_fromserver", "/api/tools/overview/kz_fromserver"] {
+            let (s, _, b) = call(&st, uri, None).await;
+            let text = String::from_utf8_lossy(&b);
+            assert!(!text.contains(mapinfo::NO_MAP), "{uri}: {text}");
+            assert_ne!(s, StatusCode::NOT_FOUND, "{uri}: {text}");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[tokio::test]
     async fn routes_over_the_cube_room() {
         let (root, g) = game("routes");

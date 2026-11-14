@@ -188,21 +188,36 @@ pub struct LocalMap {
     /// as its .bsp is named
     pub name: String,
     pub bsp: PathBuf,
-    /// "cstrike" or "czero": the folder the .bsp is in
+    /// "cstrike" or "czero": the game whose folders the .bsp is in
     pub game: String,
+    /// the folder it's really in: the game's own, or its _downloads folder (maps the game
+    /// downloaded from a server)
+    pub folder: String,
     /// only in czero/maps (going to a CS 1.6 server)
     pub cz_only: bool,
 }
 
+/// Where to look for a map, in the order the game does for `target_game`: its own folder,
+/// then its _downloads folder, then the other game's (Condition Zero plays 1.6's maps; a
+/// 1.6 server can be sent a Condition Zero one).
+pub fn map_folders(target_game: &str) -> [&'static str; 4] {
+    if target_game == "czero" {
+        ["czero", "czero_downloads", "cstrike", "cstrike_downloads"]
+    } else {
+        ["cstrike", "cstrike_downloads", "czero", "czero_downloads"]
+    }
+}
+
 /// The map in this computer's game for a server of `target_game`: its own game's version
-/// first (a CS 1.6 server takes the cstrike one, Condition Zero the czero one).
+/// first (a CS 1.6 server takes the cstrike one, Condition Zero the czero one), and a
+/// game's own folder before what it downloaded.
 pub fn find_local(f: &Finder, hl: &Path, map: &str, target_game: &str) -> Option<LocalMap> {
-    let order: [&str; 2] = if target_game == "czero" { ["czero", "cstrike"] } else { ["cstrike", "czero"] };
-    for g in order {
-        if let Some(p) = f.find(&hl.join(g), &format!("maps/{map}.bsp")) {
+    for folder in map_folders(target_game) {
+        if let Some(p) = f.find(&hl.join(folder), &format!("maps/{map}.bsp")) {
             let name = p.file_stem()?.to_string_lossy().to_string();
+            let g = folder.trim_end_matches("_downloads");
             let cz_only = target_game == "cstrike" && g == "czero";
-            return Some(LocalMap { name, bsp: p, game: g.into(), cz_only });
+            return Some(LocalMap { name, bsp: p, game: g.into(), folder: folder.into(), cz_only });
         }
     }
     None
@@ -254,9 +269,11 @@ pub fn needed_files(f: &Finder, hl: &Path, m: &LocalMap) -> (Vec<(String, PathBu
     if let Some(p) = find_nav(f, hl, m) {
         have.push((format!("maps/{}.nav", m.name), p));
     }
-    let mut dirs: Vec<PathBuf> = vec![hl.join(&m.game)];
+    // the game's folder and what it downloaded (a downloaded map's files are there)
+    let mut dirs: Vec<PathBuf> = vec![hl.join(&m.game), hl.join(format!("{}_downloads", m.game))];
     if m.game != "cstrike" {
         dirs.push(hl.join("cstrike"));
+        dirs.push(hl.join("cstrike_downloads"));
     }
     let valve = hl.join("valve");
     for ext in ["bmp", "tga", "txt"] {
@@ -974,6 +991,37 @@ mod tests {
         }
         assert!(missing.contains(&"gfx/env/myskydn.tga".to_string()) && missing.contains(&"evil.wad".to_string()));
         assert!(!missing.contains(&"sound/doors/doormove1.wav".to_string()));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// QA4-T2 F2: maps the game downloaded from a server (cstrike_downloads, czero_downloads)
+    /// are found, after the game's own folder, and their files with them.
+    #[test]
+    fn finds_maps_the_game_downloaded() {
+        let root = temp("mapcopy-dl-");
+        let hl = root.join("hl");
+        let f = Finder::default();
+        put(&hl, "cstrike_downloads/maps/kz_zen.bsp", &bsp(ENTS));
+        put(&hl, "cstrike_downloads/sprites/myglow.spr", b"IDSP");
+        let m = find_local(&f, &hl, "kz_zen", "cstrike").unwrap();
+        assert_eq!((m.game.as_str(), m.folder.as_str(), m.cz_only), ("cstrike", "cstrike_downloads", false));
+        let (files, _) = needed_files(&f, &hl, &m);
+        assert!(files.iter().any(|(r, p)| r == "sprites/myglow.spr" && p.starts_with(hl.join("cstrike_downloads"))), "{files:?}");
+        // a Condition Zero game plays it too
+        assert_eq!(find_local(&f, &hl, "kz_zen", "czero").unwrap().folder, "cstrike_downloads");
+        // the game's own folder wins over what it downloaded
+        put(&hl, "cstrike/maps/kz_zen.bsp", &bsp(ENTS));
+        assert_eq!(find_local(&f, &hl, "kz_zen", "cstrike").unwrap().folder, "cstrike");
+        // Condition Zero: its own downloads before 1.6's folders; for 1.6 it's Condition Zero only
+        put(&hl, "czero_downloads/maps/cz_dl.bsp", &bsp(ENTS));
+        put(&hl, "cstrike_downloads/maps/cz_dl.bsp", &bsp(ENTS));
+        let cz = find_local(&f, &hl, "cz_dl", "czero").unwrap();
+        assert_eq!((cz.game.as_str(), cz.folder.as_str()), ("czero", "czero_downloads"));
+        assert_eq!(find_local(&f, &hl, "cz_dl", "cstrike").unwrap().folder, "cstrike_downloads");
+        put(&hl, "czero_downloads/maps/cz_only.bsp", &bsp(ENTS));
+        let only = find_local(&f, &hl, "cz_only", "cstrike").unwrap();
+        assert!(only.cz_only && only.game == "czero");
+        assert!(find_local(&f, &hl, "nowhere", "cstrike").is_none());
         let _ = std::fs::remove_dir_all(&root);
     }
 

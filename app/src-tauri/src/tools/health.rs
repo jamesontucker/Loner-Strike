@@ -1186,7 +1186,8 @@ fn copy_map(p: &Plan, gdir: &Path) -> Result<(), String> {
         if [gdir.to_path_buf(), root.join("cstrike"), root.join("valve")].iter().any(|d| d.join(&rel).is_file()) {
             continue;
         }
-        if let Some(src) = [hl.join(&p.map.game), hl.join("cstrike"), hl.join("valve")].iter().map(|d| d.join(&rel)).find(|x| x.is_file()) {
+        // where the game looks (a map it downloaded has its files in a _downloads folder)
+        if let Some(src) = super::doctor::game_path(hl, &p.map.game).iter().map(|d| d.join(&rel)).find(|x| x.is_file()) {
             let dest = gdir.join(&rel);
             if let Some(d) = dest.parent() {
                 let _ = std::fs::create_dir_all(d);

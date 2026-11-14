@@ -328,7 +328,7 @@ fn usage(game: &Game) -> Arc<Usage> {
     let finder = crate::mapcopy::Finder::default();
     let czero = game.is_czero();
     let mut files = Vec::new();
-    for m in game.maps(false) {
+    for m in super::mapinfo::tool_maps(game) {
         let Some(name) = m["name"].as_str().filter(|n| crate::maps::safe_arg(n)) else { continue };
         let Some(lm) = crate::mapcopy::find_local(&finder, &game.hl, name, if czero { "czero" } else { "cstrike" }) else { continue };
         let Ok(st) = cache::Stamp::of(&lm.bsp) else { continue };

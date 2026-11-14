@@ -89,7 +89,7 @@ export type MapInfo = {
   nav: boolean;
   thumb: "shot" | "radar" | "lookup" | null;
   by: string;
-  source: "stock" | "download" | "added";
+  source: "stock" | "download" | "added" | "server";
   mod?: number;
   modName?: string;
   pack?: string[];
