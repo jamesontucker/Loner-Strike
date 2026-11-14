@@ -885,7 +885,7 @@ stock lose_checks(why[], len)
 		new enemies = 0, inside = 0;
 		if (g_creatures)
 		{
-			new e = -1, type[16];
+			new e = -1, type[32];
 			while ((e = find_ent_by_class(e, "ls_creature")) > 0 && enemies < 2)
 				if (pev(e, pev_deadflag) == DEAD_NO && pev(e, pev_team) != 1 && in_base(e))
 				{
@@ -1257,7 +1257,7 @@ public tick()
 					{
 						new Float:o[3];
 						pev(e, pev_origin, o);
-						new type[16];
+						new type[32];
 						pev(e, pev_netname, type, charsmax(type));
 						log_amx("Last Stand: creature %d (%s) at %.0f %.0f %.0f not killed for 3 minutes at the end of wave %d; removed", e, type, o[0], o[1], o[2], g_wave);
 						server_cmd("ls_creature kill %d", e);
@@ -1332,7 +1332,7 @@ stock unstick_creatures()
 		}
 		else if (dmin < 800.0)
 			continue;
-		new type[16];
+		new type[32];
 		pev(e, pev_netname, type, charsmax(type));
 		g_crStill[e] = 0;
 		/* a boss or a heavy is never just removed (QA4-C: a garg wedged in a broken gateway went, and
@@ -1451,7 +1451,7 @@ stock recall_idle()
 		t[1] = gc[1] + 64.0 * dy / ln;
 		t[2] = gc[2];
 		t[2] = floor_under(t) + 8.0;
-		new type[16];
+		new type[32];
 		pev(e, pev_netname, type, charsmax(type));
 		log_amx("Last Stand: creature %d (%s) idle out of sight at %.0f %.0f %.0f; sent to the gate at %.0f %.0f", e, type, o[0], o[1], o[2], t[0], t[1]);
 		server_cmd("ls_creature behave %d guard %.0f %.0f %.0f;ls_creature target %d 0", e, t[0], t[1], t[2], e);
@@ -2161,7 +2161,7 @@ public ham_creature_killed(ent, killer, gib)
 	g_lastKillAt = get_gametime();
 	if (!(1 <= killer <= MaxClients) || !is_user_connected(killer))
 		return HAM_IGNORED;
-	new type[16];
+	new type[32];
 	pev(ent, pev_netname, type, charsmax(type));
 	/* points: the type's pay, more for a head or a knife */
 	new money = ls_wave_type_pay(type);
@@ -2328,7 +2328,7 @@ public ham_creature_hurt(ent, inflictor, attacker, Float:dmg, bits)
 	/* (double tap and the gun's Mk: gm_components) one-hit kills: anything but a boss or a heavy goes down to the next hit */
 	if (get_gametime() < g_instaUntil)
 	{
-		new type[16];
+		new type[32];
 		pev(ent, pev_netname, type, charsmax(type));
 		if (!ls_wave_is_big(type))
 			SetHamParamFloat(4, floatmax(dmg, entity_get_float(ent, EV_FL_health) + 1.0));
@@ -2477,7 +2477,7 @@ stock take_powerup(kind, by)
 			{
 				if (pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
 					continue;
-				new type[16];
+				new type[32];
 				pev(e, pev_netname, type, charsmax(type));
 				if (ls_wave_is_big(type))
 					continue;
