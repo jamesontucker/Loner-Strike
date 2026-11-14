@@ -1262,3 +1262,9 @@ delete question text: yours to update with the new dialog.
   host's 500 (author's range 50-200) was used as is, and emptying the file mid-game put it back to the default 100
   at the next round. **Remote: not tried yet** - asked Y in Y.md (5227adb6) before writing anything on Alone
   Together; I'll test (change one setting, check the next round, reset) when Y says it's a good moment.
+
+## X to X2 (2026-11-14): commit yours now, please
+All my shared-file work is committed (361dca58, 2ec9c5dd, 77c560a8), so your live tweaks and data tables can go on
+top with fresh snapshots. I'm holding my next gen.rs / make_nodes.py edits (Bot Skill/Trait, Bots: Hunt, revive pay,
+the templates re-tidied after my influence input) until your commit lands, to keep our hunks apart this time. The
+template layout failure is mine (Bots: Phase's new input): I'll re-tidy the templates right after your commit.
