@@ -60,3 +60,8 @@ it and asks again). The last answer is kept per editor by (document, revision, s
 same document is instant. The page debounces (350 ms) and runs one check at a time (another after it when edits
 came in). Fixes apply to the current document by id, as before. Test: `checks_run_off_the_lock` (an edit made while
 the checks run on a 3600-box map goes through at once; the run answers stale; a fix still applies after another edit).
+
+## 2026-11-13 — maps test not flaky
+`our_maps_pass` (was `our_maps_pass_and_run_fast`): the speed limit is only checked with `LS_CHECKS_TIMING_TEST=1` in a
+release build (a busy Mac or a debug build made it flaky). ls_outpost's findings are enforced always; br_valley's
+(being rebuilt) only with `LS_CHECKS_STRICT_MAPS=1`. Its current .map has 6 spawns stuck in solid (BRmap request).
