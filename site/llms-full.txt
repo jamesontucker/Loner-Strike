@@ -48,22 +48,22 @@ People who still play CS 1.6 or Condition Zero, mostly against bots, and want th
 
 A Tools section in the app for making things:
 - Map editor: brushes, entities and textures in one 3D view (or four, like Hammer), with Unreal, Blender or Hammer camera controls, live checks, prefabs, Hammer .rmf / J.A.C.K. .jmf / .map import (TrenchBroom's too, with its groups and layers) and .map export. Compiles with SDHLT (downloaded on first use; through CrossOver on a Mac) and playtests with bots in one click.
-- Game Mode Studio: game modes from Blueprint-style node graphs (200+ nodes, functions, macros, variables, structs, enums, snippets), compiled to an AMX Mod X plugin; playtest with bots while nodes light up, with breakpoints and live values.
-- Plugin Studio: an AMX Mod X editor with suggestions, docs, plain-language compile errors and "Try it in my game"; loner.inc gives short natives for modes, HUD, players, timers and bots.
-- Creature Studio: creature types (zombies, aliens, animals, turrets, bosses) and the waves they come in.
-- Map tools: Map doctor, Map health check (bots play a map and a report says where they fall or get stuck), Nav fixer, Callouts and Radar maker.
+- Game Mode Studio: game modes from Blueprint-style node graphs (200+ nodes, functions, macros, variables, structs, enums, snippets), compiled to an AMX Mod X plugin; playtest with bots while nodes light up, with breakpoints and live values. NPCs, dialog (Say, Say and Choose, Run Dialog from a table) and interactables for story and RPG modes; the example The Quest Giver shows how. HUD nodes: Status Icon, Objective Marker, Kill Feed Line.
+- Plugin Studio: an AMX Mod X editor with suggestions, docs, plain-language compile errors, "Try it in my game", and Export and Import of plugins; loner.inc gives short natives for modes, HUD, players, timers and bots.
+- Creature Studio: creature types (zombies, aliens, animals, turrets, bosses) and the waves they come in. Custom creatures go with the maps, modes and prefabs that use them, and can be shared on their own.
+- Map tools: Map doctor, Map simulator (bots play a match on a map and a report says where they fight, fall or get stuck), Nav fixer, Callouts and Radar maker.
 - Personalize: Crosshair & config, Bot people, Spray maker.
 - Watch & inspect: Map viewer (with the bots' nav and what they learned), Replay, Demos, Textures & models.
 
 ## New in 1.0: Community and AI agents
 
-- Community browser (Tools, Share): maps, Game Mode Studio modes, prefabs, sprays and textures made with Loner-Strike, hosted on GameBanana (tagged "Software Used: LonerStrike") and moderated. Try one in a click. Only content and Studio modes can be shared; nothing that runs code is downloaded. Publishing is done from the app, which checks and packages a map with its nav, knowledge and overview. Docs: https://lonerstrike.com/docs#community
+- Community browser (Tools, Share): maps, Game Mode Studio modes, prefabs, sprays and textures made with Loner-Strike, hosted on GameBanana (tagged "Software Used: LonerStrike") and moderated. Try one in a click. Only content and Studio modes can be shared; nothing that runs code is downloaded. Publishing is done from the app, which checks and packages a map with its nav, knowledge and overview, fills in the GameBanana credits and asks whether AI helped make it. Remix a creation with credit to the original; a shared map can carry its editable source. Docs: https://lonerstrike.com/docs#community
 - AI agents (Settings): an MCP connector so coding agents such as Claude Code, Codex, OpenCode, Cursor, Claude Desktop and VS Code can use the tools. Off by default, local only, read-only until "Allow changes", and it asks before anything destructive. Setup: https://lonerstrike.com/docs#mcp
 
 ## Playing with friends
 
 - Seven ways to connect: LAN, your router (port forwarding), playit.gg, Tailscale, ZeroTier, Radmin VPN and Hamachi.
-- Server name, join password and a ready-to-send invite. Friends only need Counter-Strike, not Loner-Strike.
+- Server name (up to 63 characters, any language), join password and a ready-to-send invite. Friends only need Counter-Strike, not Loner-Strike.
 - A custom welcome page for people who join, and a notification when someone joins while you're away.
 
 ## Running a server

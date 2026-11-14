@@ -329,6 +329,7 @@ footer a { color: var(--dim); }
   <p>The app's quick-action bar: <b>Pause</b>, <b>Round</b> (with <b>Start a mode vote</b>), <b>Map</b>, bots (<b>Difficulty</b>, <b>Bot style</b>), <b>You</b>, <b>Announce</b> and <b>Record demo</b>.</p>
   <h2 id="modes">Game modes</h2>
   <p><a href="#last-stand">Last Stand</a> and <a href="#battle-royale">Battle Royale</a> come with their own maps. Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf, Paintball and the rest install from <b>Mods</b>; each is patched for bots, with a note on how well they play it. Switch modes from Play or <span class="kbd">F3</span> (the map reloads). Mode chat commands are under <a href="#commands-modes">In-game commands</a>.</p>
+  <p id="map-fit" data-keywords="too many models map skipped refused crash mapfit">The game can load only so many models at once. A map with more models than a mode leaves room for is skipped by that mode's map list, rotation and votes, and refused with a message if you pick it; if it loads anyway, the server switches to a mode that fits instead of crashing. To see the numbers, type <code>gm_mapfit &lt;mode&gt; &lt;map&gt;</code> in the server console (for example <code>gm_mapfit basebuilder bb_aztec</code>).</p>
   <p id="mode-settings">A <a href="#game-mode-studio">Game Mode Studio</a> mode can have <b>settings</b> its maker lets hosts change (points to win, round time and the like). They show under the mode on Play and on a server's <b>Modes</b> tab; each server keeps its own, and they apply from the next map or round. A value outside the maker's range is kept, with a warning.</p>
   <figure class="shot">
     <picture><source srcset="img/1.0/mode-settings.webp" type="image/webp"><img src="img/1.0/mode-settings.png" alt="A Studio mode's settings: points to win, seconds per point, whether the hill moves, and what happens when both teams are on it, two of them changed with Reset" width="852" height="345" loading="lazy"></picture>
@@ -966,16 +967,22 @@ footer a { color: var(--dim); }
       <tr><td><b>Flow</b></td><td>Branch, Sequence, Do Once, For Each Player, Switch, loops</td></tr>
       <tr><td><b>Players</b></td><td>Give Weapon, Set Health, Teleport, Respawn, Set Ammo, God Mode, Screen Fade</td></tr>
       <tr><td><b>Game and World</b></td><td>Round Number, Team Score, Change Map; Gravity, Round Time, Friendly Fire and the other settings, to read or set</td></tr>
-      <tr><td><b>Entities and effects</b></td><td>Find Entities, Spawn Prop, Get Entity Transform, Explosion, Beam, Play Sound At</td></tr>
+      <tr><td><b>Entities and effects</b></td><td>Find Entities, Spawn Prop, Get Entity Transform, Explosion, Beam, Play Sound At, Objective Marker, Remove Marker</td></tr>
       <tr><td><b>Timers and the round</b></td><td>Delay, Repeat, Countdown, Timeline, Set Round Clock, End Round</td></tr>
       <tr><td><b>Damage</b></td><td>Block Damage, Scale Damage (after Player About To Be Hurt)</td></tr>
-      <tr><td><b>Messages</b></td><td>Show Message, Show HUD Text, Chat Message, Menu, Play Sound</td></tr>
+      <tr><td><b>Messages</b></td><td>Show Message, Show HUD Text, Chat Message, Menu, Play Sound, Status Icon, Kill Feed Line</td></tr>
       <tr><td><b>Bots and creatures</b></td><td>Bots: Goal, Bots: Friends, Bot Follow; Spawn Creature, Creature Go To (<a href="#studio-bots">more</a>)</td></tr>
       <tr><td><b>Components</b></td><td>Zones, crates, waves, supply drops, shops, perks, capture points</td></tr>
       <tr><td><b>Data tables</b></td><td>Get Row, Get Cell, For Each Row, Find Rows</td></tr>
       <tr><td><b>Saved</b></td><td>Numbers kept between maps and restarts</td></tr>
     </tbody>
   </table></div>
+  <h2 id="studio-hud" data-keywords="hud icon marker waypoint arrow objective kill feed killfeed status icon sprite">Icons, markers and the kill feed</h2>
+  <ul>
+    <li><b>Status Icon</b>: shows, flashes or hides one of the game's own HUD icons (the buy zone cart, C4, the defuser, the rescue zone and the like) for one player or everyone, in a color, until they die or leave. It can only use icons every player already has; it can't show your own pictures.</li>
+    <li><b>Objective Marker</b>: a sprite floating over something (a player, an NPC, an interactable, a component; it follows it) or at a spot, for everyone, a team or one player. Use one of the game's sprites or your own <code>.spr</code>, which goes with the mode when you share it. <b>Remove Marker</b> takes it away; it also goes when what it follows is gone. For your own pictures, use this instead of Status Icon.</li>
+    <li><b>Kill Feed Line</b>: a line in the top-right kill feed (killer, weapon icon, victim, headshot). It's only the line: nobody dies and nothing is counted.</li>
+  </ul>
   <h2 id="studio-help" data-keywords="help f1 what does this node do">Node help</h2>
   <p>The <b>?</b> menu next to <b>Find</b> › <b>Node help</b>, or <span class="kbd">F1</span> with a node picked, opens a panel beside the graph that explains every node: what it does, each pin and setting, related nodes, and a note when it's costly or needs care. Most nodes have an example: <b>Add the example</b> drops it into your graph. Search it like the node list.</p>
   <figure class="shot">
@@ -1224,11 +1231,12 @@ public on_spawn(id)
 <section class="topic" id="npcs" data-group="Create" data-keywords="npc character dialogue talk interactable lever terminal note pickup quest rpg">
   <p class="crumb">Create</p>
   <h1>NPCs and interactables</h1>
-  <p class="lead">Characters people talk to, and things they use with E. They work in any map with Loner-Strike's components; Game Mode Studio adds dialog choices on top.</p>
+  <p class="lead">Characters people talk to, and things they use with E. They work in any map with Loner-Strike's components; Game Mode Studio adds dialog choices on top, for story or RPG modes.</p>
+  <p>Two good places to start: the example mode <b>The Quest Giver</b>, and <b>Run Dialog</b> from Game Mode Studio's <b>My library</b> (<a href="#npc-dialog-table">below</a>).</p>
   <h2 id="npc-place">In the map editor</h2>
   <ul>
     <li><b>NPC</b> (<code>ls_npc</code>): a character with any model (barney, gman, scientist, or your own <code>.mdl</code>), a name, a behavior (stand, wander, patrol, follow after a talk), an optional greeting, who can talk to it, and <b>Unkillable</b> (on by default: bots never shoot it). Pressing E on it starts a talk and sets off its <b>On talk</b> target.</li>
-    <li><b>Interactable</b> (<code>ls_interactable</code>, or <code>ls_interactable_brush</code> for a brush): a lever, terminal, note or pickup. It shows its prompt when someone looks at it up close ("Press E to open"), has a cooldown, works once or every time, can be for one team only, and sets off its target: doors, buttons, a <code>multi_manager</code>. No mode needed.</li>
+    <li><b>Interactable</b> (<code>ls_interactable</code>, or <code>ls_interactable_brush</code> for a brush): a lever, terminal, note or pickup. It shows its prompt when someone looks at it up close ("Press E to open"), has a cooldown, works once or every time, can be for one team only, and sets off its target: doors, buttons, a <code>multi_manager</code>. No mode needed. Turn on <b>Bots may use</b> and bots press it now and then on their own, when things are calm.</li>
     <li>Both show their model in the 3D view; Checks flag a missing model or an empty name.</li>
   </ul>
   <h2 id="npc-studio">In Game Mode Studio</h2>
@@ -1236,6 +1244,7 @@ public on_spawn(id)
     <li>Events <b>Talked To NPC</b> (player, NPC) and <b>Used Interactable</b> (player, entity).</li>
     <li><b>Say</b>: one line from an NPC or a narrator. <b>Say and Choose</b>: a line and up to 6 replies; one output per reply, plus <b>Timed out</b> and <b>Walked away</b> (closed on death, leaving, or walking off), and the chosen reply as a number. Its texts and the number of replies can come from wires.</li>
     <li>The example <b>The Quest Giver</b>: an NPC asks you to find his note; you pick it up, bring it back to him, and he pays. Two per-player flags keep track.</li>
+    <li>Bots: an interactable needs <b>Bots may use</b> on; for an NPC your mode talks through, add a <b>Bots: Offer</b> or <b>Bots: Goal</b> at it. The Studio's <a href="#studio-checks">checks</a> say when bots won't know about one.</li>
   </ul>
   <h2 id="npc-dialog-table">Dialog from a table</h2>
   <p>A whole dialog tree can be a data table (one row per line: the text, the replies, and which row each reply goes to) plus a macro that reads a row, runs Say and Choose, and goes to the row the chosen reply names.</p>
@@ -1559,6 +1568,7 @@ public on_spawn(id)
     <li><b>This computer</b>: ready in a few minutes. <b>Keep running after I close Loner-Strike</b> keeps it up when you quit the app.</li>
     <li><b>A Linux server (VPS)</b>: always on, on a rented machine, set up over SSH. See <a href="#vps">Run a server on a VPS</a>.</li>
   </ul>
+  <p id="server-name" data-keywords="server name hostname length language">A server's name can be in any language, up to 63 characters. Letters outside plain English take more room, so the name field counts down what's left.</p>
   <p><b>Add one you already run</b> brings in an existing server. <b>Bots play on an empty server</b> (Overview) keeps a few bots on so it looks alive in the list.</p>
   <h2 id="server-tabs">A server's tabs</h2>
   <div class="table">

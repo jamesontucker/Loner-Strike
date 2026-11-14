@@ -45,7 +45,20 @@ The first full release:
 - Map downloads are checked first: one missing a model or sprite it needs, which would crash the game when it loads, isn't installed.
 - Zombie Plague now comes with zm_zod_labtest instead of zm_halloween, which crashed on loading, and zm_tehina is removed (unless you added it yourself). Kreedz now comes with kz_beginner and kz_airmountain; kz_urban (which crashed too), kz_summercliff2 and bkz_goldbhop are removed when you update, unless you added them yourself. Base Builder no longer comes with bb_dust_iplay, which has more models than the game can load with the mode running.
 - Scoutz on scoutzdeaglez gives you the deagle the map is made for.
+- First setup is faster: the fun maps download four at a time, the progress bar moves while they come in, and the time estimate counts them.
+- A map with more models than a mode has room for is skipped by that mode, refused with a message if you pick it, and never crashes the server. `gm_mapfit <mode> <map>` in the server console shows the numbers.
+- Easier to read: stronger contrast throughout, and every text field and box in the app's own style.
 - New installs start with Quake sounds off and bot chat at Normal. Your settings, plugins, admins and edited config files are kept through updates.
+
+### Make and share (Beta)
+- NPCs and interactables: characters people talk to and things they use with E (levers, terminals, notes, pickups), placed in the map editor. In Game Mode Studio, Say and Say and Choose give them lines and replies, Run Dialog plays a whole conversation from a table, and the example The Quest Giver shows a small quest.
+- Bots use interactables marked Bots may use, and Game Mode Studio warns when bots won't know about something your mode wants them to use.
+- New Game Mode Studio nodes: Status Icon, Objective Marker and Remove Marker, and Kill Feed Line.
+- Shared creatures: the custom creatures a map, mode or prefab uses go with it, and Creature Studio shares a creature on its own as a creature kind. Remix one like anything else.
+- Share and remix maps: publish a map with its editable source, ready for the map editor, TrenchBroom, Hammer or J.A.C.K.
+- TrenchBroom: its groups and layers come in on import and go back out on export.
+- Plugin Studio: Export and Import plugins.
+- Publish fills in the GameBanana credits and asks whether AI helped make what you share.
 
 ### Servers
 - A server's tabs are grouped Server, Game, People and Library, with new Health, Who can join, Moderation and Stats tabs. Helpers see what's owner only.
@@ -54,6 +67,7 @@ The first full release:
 - Linux servers are backed up to your computer every day, and Discord hears when one goes down.
 - Shared control is safer: Moderators can't act against the owner or Admins, and can see bans.
 - Choose a server's tick rate in its advanced settings.
+- Server names can be up to 63 characters, in any language.
 - A mode rotation: every few maps the mode changes to the next one on your list, or a random one, even with nobody on. Rock the vote still works on top.
 - Modes played on their own maps (Deathrun, Base Builder, Kreedz, Surf, SoccerJam, the zombie modes, Hide and Seek) go through those maps by themselves, so a switch never lands on de_dust2.
 - From your phone you can now change a server's settings, use its console, run its security checks, set up HLTV, website status and voice chat, share lists between servers, and install maps, sounds and add-ons. Deleting, reinstalling, making servers and shared control stay on the computer.
@@ -68,6 +82,7 @@ The first full release:
 - "Remove everything" no longer deletes the app itself on Windows.
 - Updates show what's new before you install, and once after.
 - Bot pings on the scoreboard stay believable, rarely over 100.
+- Base Builder saves players' progress again.
 
 ## 0.1.2
 
