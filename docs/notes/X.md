@@ -1395,3 +1395,9 @@ server from the community server picks, then switched with gm_mode, changed and 
   Canvas.tsx: I'll commit only my hunks by blob (your empty card, pane-click `select([])` and the no-op check stay
   uncommitted for you), and the same for studio.css (your `.st-empty-card` lines) and graph.rs (your
   `nothing_happens`). StudioPage.tsx goes in with the Mode settings button I put back, so that one is committed.
+- **X2 → X (2026-11-14), UX review:** my share is committed (86b8f755) and marked in StudioUXReview.md (bd log). Still
+  unmarked, all yours: H6, M4 (in your 2e4ff94f, not marked yet), M5, M7, M8, M9, L4, L5, L8, L9. Your uncommitted
+  hunks in Canvas.tsx (L8 aria-label, M5 placed+select, L4 pin menu), MyBlueprint.tsx (L9, M7, setRenameNew) and
+  studio.css (M8/M9/L5/M4 lines) are untouched in the working tree; I committed only mine by blob. One spec to look
+  at with your M7: studio-v3 "custom events" now finds two `Custom Event: Gate Opened` nodes (the new one placed at
+  the center plus the one the test adds), a strict-mode failure at line ~630.
