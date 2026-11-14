@@ -586,6 +586,9 @@ read_mode_id()
 		trim(g_modeId);
 		fclose(f);
 	}
+	/* Battle Royale's Duos and Squads use br's map packs, markers and loot W3 */
+	if (equali(g_modeId, "br_duo") || equali(g_modeId, "br_squads")) /* W3 */
+		copy(g_modeId, charsmax(g_modeId), "br"); /* W3 */
 }
 
 stock precache_model_once(const model[])
@@ -5256,6 +5259,8 @@ stock w3_init()
 	g_w3fwHeal = CreateMultiForward("ls_on_heal", ET_STOP, FP_CELL, FP_STRING, FP_CELL);
 	register_clcmd("ls_heal", "cmd_w3_heal");
 	register_srvcmd("ls_comp_players", "cmd_w3_players");
+	/* for the bots' brain: ls_comp_heal <bot> [kind] starts a heal (it picks the moment, e.g. in cover) */
+	register_srvcmd("ls_comp_heal", "cmd_w3_heal_srv");
 	register_clcmd("say /heal", "cmd_w3_heal_menu");
 	register_clcmd("say_team /heal", "cmd_w3_heal_menu");
 	register_forward(FM_CmdStart, "fm_w3_cmdstart");
@@ -5413,6 +5418,7 @@ stock w3_heal_give(id, kind, n)
 	if (n <= 0)
 		return 0;
 	g_w3Heals[id][kind] += n;
+	w3_heals_hint(id);
 	emit_sound(id, CHAN_ITEM, "items/smallmedkit1.wav", 0.7, ATTN_NORM, 0, PITCH_NORM);
 	if (!is_user_bot(id) && get_pcvar_num(g_w3cHealKey))
 		client_print(id, print_center, "%s x%d  (F or say /heal to use)", W3_HEAL_TITLE[kind], g_w3Heals[id][kind]);
@@ -5510,6 +5516,7 @@ stock w3_heal_finish(id)
 	bar_time(id, 0);
 	if (g_w3Heals[id][kind] > 0)
 		g_w3Heals[id][kind]--;
+	w3_heals_hint(id);
 	g_w3StatHeal[kind]++;
 	w3_heal_apply(id, kind);
 	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, id);
@@ -5614,6 +5621,24 @@ public cmd_w3_heal(id)
 	else
 		w3_heal_start(id, w3_heal_kind(a));
 	return PLUGIN_HANDLED;
+}
+
+public cmd_w3_heal_srv()
+{
+	new a[8], k[16];
+	read_argv(1, a, charsmax(a));
+	read_argv(2, k, charsmax(k));
+	new id = str_to_num(a);
+	if (1 <= id <= MaxClients && is_user_alive(id))
+		w3_heal_start(id, k[0] ? w3_heal_kind(k) : -1);
+	return PLUGIN_HANDLED;
+}
+
+/* bots: the brain hears what healing items each one carries when that changes */
+stock w3_heals_hint(id)
+{
+	if (is_user_bot(id))
+		hint("heals %d %d %d %d", id, g_w3Heals[id][HEAL_BANDAGE], g_w3Heals[id][HEAL_MEDKIT], g_w3Heals[id][HEAL_DRINK]);
 }
 
 public cmd_w3_heal_menu(id)

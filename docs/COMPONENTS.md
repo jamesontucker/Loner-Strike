@@ -331,7 +331,9 @@ more speed). Loot items `bandage`, `medkit`, `drink` (`bandage:3` gives three).
   refused)*, 1 used, 2 stopped).
 - Bots (`ls_heal_bots 1`): a hurt bot not hit for 4 s with no enemy in sight within 1500 u uses the best one,
   standing still; hit while healing, it stops and fights. The brain hears `ls_mode heal <bot> <kind> <secs>`
-  when one starts and `ls_mode heal <bot> -` when it ends.
+  when one starts, `ls_mode heal <bot> -` when it ends, and `ls_mode heals <bot> <bandages> <medkits>
+  <drinks>` whenever what it carries changes; it can start one itself (in cover) with the server command
+  `ls_comp_heal <bot> [kind]`.
 
 ### Armor levels
 `ls_armor_levels 1`: vests and helmets come in levels 1-3 (loot `vest1`..`vest3`, `helmet1`..`helmet3`;
