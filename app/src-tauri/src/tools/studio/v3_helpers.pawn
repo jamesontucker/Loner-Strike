@@ -1009,6 +1009,9 @@ stock lsg_beam(a, b, r, g, bl, Float:secs)
 
 stock lsg_sound_at(v, const snd[])
 {
+	// (a sound that wasn't there when the map loaded: nothing)
+	if (!lsg_have(snd))
+		return
 	new Float:o[3]
 	lsg_vto(v, o)
 	engfunc(EngFunc_EmitAmbientSound, 0, o, snd, 1.0, ATTN_NORM, 0, PITCH_NORM)

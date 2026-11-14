@@ -38,7 +38,41 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 stock g_v0 = 0 // Shop (Entity)
 
 // ---- the game and the server (Game, World, Players, Entities, Effects, Advanced nodes) ----
-stock g_lsgRounds, g_lsgScore[3], bool:g_lsgFreeze, Float:g_lsgGagTill[33], g_lsgFw = -1, bool:lsg_cmd_ok, g_lsgSprExp, g_lsgSprBeam
+stock g_lsgRounds, g_lsgScore[3], bool:g_lsgFreeze, Float:g_lsgGagTill[33], g_lsgFw = -1, bool:lsg_cmd_ok, g_lsgSprExp, g_lsgSprBeam, Trie:g_lsgHave = Invalid_Trie
+
+// a model or sound the graph names, loaded only if the file is there (on the server or in the
+// game's folders): a missing one would stop the map loading. What uses it does without.
+stock lsg_pre_model(const p[])
+{
+	if (!file_exists(p, true))
+	{
+		log_amx("[%s] missing %s: what uses it does without", LSG_MODE, p)
+		return 0
+	}
+	if (g_lsgHave == Invalid_Trie)
+		g_lsgHave = TrieCreate()
+	TrieSetCell(g_lsgHave, p, 1)
+	return precache_model(p)
+}
+
+stock lsg_pre_sound(const p[])
+{
+	new full[128]
+	formatex(full, charsmax(full), "sound/%s", p)
+	if (!file_exists(full, true))
+	{
+		log_amx("[%s] missing %s: what uses it does without", LSG_MODE, full)
+		return 0
+	}
+	if (g_lsgHave == Invalid_Trie)
+		g_lsgHave = TrieCreate()
+	TrieSetCell(g_lsgHave, p, 1)
+	return precache_sound(p)
+}
+
+// was it loaded (lsg_pre_model / lsg_pre_sound)?
+stock bool:lsg_have(const p[])
+	return g_lsgHave != Invalid_Trie && TrieKeyExists(g_lsgHave, p)
 
 stock lsg_map_name()
 {
@@ -497,6 +531,9 @@ stock lsg_prop(at, const model[], solid)
 {
 	new Float:o[3]
 	if (!lsg_ent_origin(at, o))
+		return 0
+	// (a model that wasn't there when the map loaded: no prop)
+	if (!lsg_have(model))
 		return 0
 	new e = create_entity("info_target")
 	if (e <= 0)
@@ -2046,6 +2083,9 @@ stock lsg_beam(a, b, r, g, bl, Float:secs)
 
 stock lsg_sound_at(v, const snd[])
 {
+	// (a sound that wasn't there when the map loaded: nothing)
+	if (!lsg_have(snd))
+		return
 	new Float:o[3]
 	lsg_vto(v, o)
 	engfunc(EngFunc_EmitAmbientSound, 0, o, snd, 1.0, ATTN_NORM, 0, PITCH_NORM)
@@ -2124,7 +2164,7 @@ public lsg_pay_killer(ent, killer)
 public plugin_precache()
 {
 	// the shopkeeper of a shop the mode makes
-	precache_model("models/barney.mdl")
+	lsg_pre_model("models/barney.mdl")
 	// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)
 	if (get_cvar_pointer("ls_creature_precache"))
 		lsg_precache_types("all")

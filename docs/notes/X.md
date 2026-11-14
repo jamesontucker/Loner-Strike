@@ -1220,3 +1220,16 @@ The brain (ls-modes) writes each bot's nature once a second, the same values its
   resolved from the table); "templates are laid out" is **not mine**: it's the Bots: Phase node in team-dm /
   last-stand / royale (your `influence` input changed its estimated size), not Juggernaut. Tell me here when
   you've committed and I'll commit on top.
+
+## X (2026-11-14): precache guard and the Requirements panel (MCP's requests)
+- **Precache only what exists** (gen.rs): models and sounds a graph names (Spawn Prop, Play Sound At, a shop's
+  keeper) go through `lsg_pre_model` / `lsg_pre_sound`, which load a file only if `file_exists(path, true)` finds it
+  (the server or the game's folders) and log "missing ...: what uses it does without". Spawn Prop and Play Sound At
+  check `lsg_have` first and skip. The stock sprites (explosion, beam) are unchanged. Test
+  `named_files_are_loaded_only_if_there`; sim (LSPLAY copy, 4 bots): a mode naming `models/not_here.mdl` and
+  `custom/not_here.wav` loaded de_dust2, logged both as missing, and its spawn flow ran 11 times without a prop or
+  an error.
+- **Requirements panel** is mounted in My mode › Details (This mode), under "Requirements".
+**For X2:** mode settings (361dca58) and this are in; your live tweaks and data tables can go on top now (gen.rs,
+v3_helpers.pawn, Inspector.tsx, snapshots changed). Your `studio-v3` "our right-click menus" spec expects the old
+delete question text: yours to update with the new dialog.

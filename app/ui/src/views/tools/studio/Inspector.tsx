@@ -7,6 +7,7 @@ import { freshMember, mapName, removeGraphPart, updateCustomEvent, removeMarker,
 import { LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { allVariables, itemTypeOk, nodeTitle, typeLabel } from "./pins";
 import { TypePicker } from "./TypePicker";
+import { Requirements } from "./Requirements";
 import { insertItem, newerInLibrary } from "./library";
 import { useConfirm } from "../../../ui";
 import { askDelete } from "./DeleteDialog";
@@ -738,6 +739,8 @@ export function Inspector() {
         </div>
       </div>
       <ModeSettings />
+      <h4 className="st-side-sub">Requirements</h4>
+      <Requirements id={graph.mode.id} />
       <p className="st-side-help st-keys">
         Right-click or Space: add a node · drag from a pin to empty space: nodes for that wire · double-click a wire: reroute point · C: comment · F9:
         breakpoint · ⌘Z / ⇧⌘Z: undo / redo · ⌘C / ⌘V: copy / paste · ?: every shortcut

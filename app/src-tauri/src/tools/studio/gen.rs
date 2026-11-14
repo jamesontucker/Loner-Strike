@@ -1334,14 +1334,15 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         if uses_beam {
             pre.push_str("\n\tg_lsgSprBeam = precache_model(\"sprites/laserbeam.spr\")");
         }
+        // (only what's there: a missing file would stop the map loading)
         for m in &props {
-            pre.push_str(&format!("\n\tprecache_model({})", pawn_str(m)));
+            pre.push_str(&format!("\n\tlsg_pre_model({})", pawn_str(m)));
         }
         for snd in &sounds {
-            pre.push_str(&format!("\n\tprecache_sound({})", pawn_str(snd)));
+            pre.push_str(&format!("\n\tlsg_pre_sound({})", pawn_str(snd)));
         }
         for m in &keepers {
-            pre.push_str(&format!("\n\t// the shopkeeper of a shop the mode makes\n\tprecache_model({})", pawn_str(m)));
+            pre.push_str(&format!("\n\t// the shopkeeper of a shop the mode makes\n\tlsg_pre_model({})", pawn_str(m)));
         }
         if map_events {
             pre.push_str("\n\t// the map's custom event entities, as they load\n\tregister_forward(FM_KeyValue, \"lsg_ev_kv\")\n\tregister_forward(FM_Spawn, \"lsg_ev_spawn\", 1)");
@@ -4271,7 +4272,41 @@ stock bool:lsg_safe_cmd(const cmd[], amx)
 
 /// Helpers every plugin gets (stocks: the ones a graph doesn't use cost nothing).
 const HELPERS: &str = r##"// ---- the game and the server (Game, World, Players, Entities, Effects, Advanced nodes) ----
-stock g_lsgRounds, g_lsgScore[3], bool:g_lsgFreeze, Float:g_lsgGagTill[33], g_lsgFw = -1, bool:lsg_cmd_ok, g_lsgSprExp, g_lsgSprBeam
+stock g_lsgRounds, g_lsgScore[3], bool:g_lsgFreeze, Float:g_lsgGagTill[33], g_lsgFw = -1, bool:lsg_cmd_ok, g_lsgSprExp, g_lsgSprBeam, Trie:g_lsgHave = Invalid_Trie
+
+// a model or sound the graph names, loaded only if the file is there (on the server or in the
+// game's folders): a missing one would stop the map loading. What uses it does without.
+stock lsg_pre_model(const p[])
+{
+	if (!file_exists(p, true))
+	{
+		log_amx("[%s] missing %s: what uses it does without", LSG_MODE, p)
+		return 0
+	}
+	if (g_lsgHave == Invalid_Trie)
+		g_lsgHave = TrieCreate()
+	TrieSetCell(g_lsgHave, p, 1)
+	return precache_model(p)
+}
+
+stock lsg_pre_sound(const p[])
+{
+	new full[128]
+	formatex(full, charsmax(full), "sound/%s", p)
+	if (!file_exists(full, true))
+	{
+		log_amx("[%s] missing %s: what uses it does without", LSG_MODE, full)
+		return 0
+	}
+	if (g_lsgHave == Invalid_Trie)
+		g_lsgHave = TrieCreate()
+	TrieSetCell(g_lsgHave, p, 1)
+	return precache_sound(p)
+}
+
+// was it loaded (lsg_pre_model / lsg_pre_sound)?
+stock bool:lsg_have(const p[])
+	return g_lsgHave != Invalid_Trie && TrieKeyExists(g_lsgHave, p)
 
 stock lsg_map_name()
 {
@@ -4730,6 +4765,9 @@ stock lsg_prop(at, const model[], solid)
 {
 	new Float:o[3]
 	if (!lsg_ent_origin(at, o))
+		return 0
+	// (a model that wasn't there when the map loaded: no prop)
+	if (!lsg_have(model))
 		return 0
 	new e = create_entity("info_target")
 	if (e <= 0)
@@ -5639,6 +5677,33 @@ mod tests {
         assert_eq!(float_lit(1e9), "100000.0");
         assert_eq!(name_text("a\"b);x"), "abx");
         assert_eq!(keys_text("radius=1 \"x\""), "radius=1 x");
+    }
+
+    /// A model or sound the graph names is loaded only if it's there (a missing one stops the map
+    /// loading); what uses it checks it was loaded.
+    #[test]
+    fn named_files_are_loaded_only_if_there() {
+        let g = parse(&serde_json::json!({
+            "schema": super::super::graph::SCHEMA, "version": super::super::graph::VERSION, "mode": {"id": "pre", "name": "Pre"}, "variables": [], "comments": [],
+            "nodes": [
+                {"id": "e", "type": "event.player_spawned", "pos": {"x": 0, "y": 0}, "params": {}},
+                {"id": "p", "type": "ent.spawn_prop", "pos": {"x": 300, "y": 0}, "params": {"model": "models/not_here.mdl"}},
+                {"id": "v", "type": "vec.make", "pos": {"x": 300, "y": 200}, "params": {}},
+                {"id": "s", "type": "fx.sound_at", "pos": {"x": 600, "y": 0}, "params": {"sound": "custom/not_here.wav"}}
+            ],
+            "edges": [
+                {"id": "w1", "from": {"node": "e", "pin": "then"}, "to": {"node": "p", "pin": "exec"}},
+                {"id": "w2", "from": {"node": "e", "pin": "player"}, "to": {"node": "p", "pin": "at"}},
+                {"id": "w3", "from": {"node": "p", "pin": "then"}, "to": {"node": "s", "pin": "exec"}},
+                {"id": "w4", "from": {"node": "v", "pin": "out"}, "to": {"node": "s", "pin": "pos"}}
+            ]
+        }).to_string()).unwrap();
+        let src = generate(&g, false).source;
+        assert!(src.contains("lsg_pre_model(\"models/not_here.mdl\")") && src.contains("lsg_pre_sound(\"custom/not_here.wav\")"), "the guarded loads");
+        let pre = &src[src.find("public plugin_precache()").unwrap()..];
+        let pre = &pre[..pre.find("\n}").unwrap()];
+        assert!(!pre.contains("\tprecache_model(\"models/not_here") && !pre.contains("\tprecache_sound("), "{pre}");
+        assert!(src.contains("if (!lsg_have(model))") && src.contains("if (!lsg_have(snd))"), "the users check");
     }
 
     /// Set Ammo / Give Ammo read the gun from the active item (X2: get_user_weapon says 0 while a gun
