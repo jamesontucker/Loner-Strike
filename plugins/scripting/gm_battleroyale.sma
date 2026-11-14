@@ -1120,6 +1120,14 @@ stock landing_spot(id, Float:out[3])
 		{
 			g_lootTarget[id] = crate;
 			pev(crate, pev_origin, out);
+			/* a high crate open to the sky: land right on it (br_valley's drop spots tagged high are
+			   hilltops under 100 u, below what counts as high, 200 over the crates' median) */
+			if (g_layer[id] == LAYER_HIGH && open_above(out))
+			{
+				out[0] += random_float(-40.0, 40.0);
+				out[1] += random_float(-40.0, 40.0);
+				return 1;
+			}
 			if (g_layer[id] != LAYER_SURFACE || !open_above(out))
 			{
 				new Float:o[3];
