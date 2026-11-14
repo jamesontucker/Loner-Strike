@@ -1492,6 +1492,11 @@ mod tests {
         for (id, v) in builtin_snippets() {
             graphs.push((format!("sn_{id}"), serde_json::to_string(&snippet_as_graph(&id, &v)).unwrap()));
         }
+        // the round clock read with no Round Time Up in the graph (its empty hook didn't compile:
+        // the node coverage sweep found it)
+        graphs.push(("clock_no_time_up".into(), serde_json::json!({"schema": "loner-strike/graph", "version": 3, "mode": {"id": "clock_no_time_up", "name": "Clock"},
+            "nodes": [{"id": "rs", "type": "event.round_started"}, {"id": "left", "type": "clock.left"}, {"id": "p", "type": "debug.print", "params": {"text": "[0]", "chat": false}}],
+            "edges": [{"id": "w1", "from": {"node": "rs", "pin": "then"}, "to": {"node": "p", "pin": "exec"}}, {"id": "w2", "from": {"node": "left", "pin": "out"}, "to": {"node": "p", "pin": "value"}}]}).to_string()));
         for (name, text) in graphs.iter().map(|(a, b)| (a.as_str(), b.as_str())) {
             for debug in [false, true] {
                 let g = graph::parse(text).unwrap();

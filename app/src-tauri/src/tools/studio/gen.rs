@@ -1615,16 +1615,14 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         o.line("}\n");
     }
     if uses_clock {
-        o.line("lsg_time_up_hook()\n{\n\tnew ctx[LSG_CTX]");
-        let mut any_call = false;
-        for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.time_up") {
-            o.line(format!("\t{}(ctx)", gen.fname(id)));
-            any_call = true;
+        // (no Round Time Up in the graph: an empty hook; "new ctx" with only "#pragma unused ctx"
+        // after it doesn't compile, the declaration isn't finished when the pragma is read)
+        let calls: Vec<String> = gen.live.iter().filter(|id| v.defs[*id].kind == "event.time_up").map(|id| format!("\t{}(ctx)", gen.fname(id))).collect();
+        if calls.is_empty() {
+            o.line("lsg_time_up_hook()\n{\n}\n");
+        } else {
+            o.line(format!("lsg_time_up_hook()\n{{\n\tnew ctx[LSG_CTX]\n{}\n}}\n", calls.join("\n")));
         }
-        if !any_call {
-            o.line("\t#pragma unused ctx");
-        }
-        o.line("}\n");
     }
     o.line("stock lsg_stop_timers()\n{\n\tfor (new i = 0; i < LSG_N; i++)\n\t\tremove_task(LSG_TASK + i)\n}");
     o.blank();
