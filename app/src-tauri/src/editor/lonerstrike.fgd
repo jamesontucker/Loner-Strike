@@ -264,6 +264,52 @@
 	open(choices) : "Open" : 1 : "A mode can open and close it." = [ 1 : "Yes" 0 : "No" ]
 ]
 
+// ---- NPCs and interactables (work in any map loaded with the components; modes add talk) -------
+
+@BaseClass = LsInteract
+[
+	prompt(string) : "Prompt" : "Press E to use" : "Shown to someone looking at it from within range."
+	range(float) : "Range" : 96 : "How close they must be (units)."
+	cooldown(float) : "Cooldown" : 1 : "Seconds before it can be used again."
+	once(choices) : "Uses" : 0 : "" = [ 0 : "Again after the cooldown" 1 : "Once a round" ]
+	hide(choices) : "Disappears when used" : 0 : "Gone once used (a note, a pickup); back next round." = [ 0 : "No" 1 : "Yes" ]
+	bots(choices) : "Bots may use" : 0 : "Bots go and use it now and then while it's usable." = [ 0 : "No" 1 : "Yes" ]
+]
+
+@PointClass base(LsName, LsTarget, LsTeam) size(-16 -16 0, 16 16 72) color(120 220 160) studio("models/barney.mdl") = ls_npc : "A character players talk to: press E to start a conversation (a game mode can add lines and replies). It can stand, wander, patrol or follow, and faces whoever talks to it. Bots never shoot it while it's unkillable and walk round it."
+[
+	model(studio) : "Model" : "models/barney.mdl" : "barney, gman, scientist... or any model loaded with the map."
+	behavior(choices) : "Behavior" : "stand" : "" =
+	[
+		"stand" : "Stand (turns to people near)"
+		"wander" : "Wander round its spot"
+		"patrol" : "Patrol its targets"
+		"follow" : "Follow whoever talks to it for a while"
+	]
+	targets(string) : "Patrol targets" : : "Names of entities to walk between, in order, separated by spaces."
+	radius(float) : "Wander range" : 160 : "How far it wanders from its spot (units)."
+	follow_secs(float) : "Follows for" : 10 : "Seconds it follows someone after a talk."
+	unkillable(choices) : "Unkillable" : 1 : "Unkillable NPCs take no damage, and bots never shoot them." = [ 1 : "Yes" 0 : "No" ]
+	health(integer) : "Health" : 100 : "Only when it can be killed."
+	greet(string) : "Greeting" : : "What it says when someone starts talking."
+	angle(angle) : "Facing" : 0 : ""
+	team(choices) : "Talks to" : 0 : "Who can talk to it." = [ 0 : "Anyone" 1 : "Terrorists" 2 : "Counter-Terrorists" ]
+	target(target_destination) : "On talk, sets off" : : "What to set off when someone starts talking to it (a door, a multi_manager...)."
+]
+
+@PointClass base(LsName, LsTarget, LsTeam, LsInteract) size(-8 -8 0, 8 8 16) color(120 220 160) studio("models/w_battery.mdl") = ls_interactable : "Anything players use with E: a lever, a terminal, a note, a pickup. Shows its prompt when looked at, then sets off its targets."
+[
+	model(studio) : "Model" : : "Empty: nothing drawn (an invisible switch)."
+	team(choices) : "Only team" : 0 : "Who can use it." = [ 0 : "Anyone" 1 : "Terrorists" 2 : "Counter-Terrorists" ]
+	target(target_destination) : "On use, sets off" : : "What to set off when it's used (doors, buttons, a multi_manager...)."
+]
+
+@SolidClass base(LsName, LsTarget, LsTeam, LsInteract) color(120 220 160) = ls_interactable_brush : "A brush players use with E (a lever, a console, a hatch). Shows its prompt when looked at, then sets off its targets. In the game it is an ls_interactable."
+[
+	team(choices) : "Only team" : 0 : "Who can use it." = [ 0 : "Anyone" 1 : "Terrorists" 2 : "Counter-Terrorists" ]
+	target(target_destination) : "On use, sets off" : : "What to set off when it's used (doors, buttons, a multi_manager...)."
+]
+
 @SolidClass base(LsName, LsTarget, LsTeam) color(180 120 60) = ls_barricade : "A wall that can be shot or hit down and repaired (hold USE). Bots defend behind it and go round it while it stands."
 [
 	hp(integer) : "Health" : 500 : ""

@@ -283,6 +283,37 @@ mod tests {
     }
 
     #[test]
+    fn npcs_and_interactables_are_in_the_library_and_the_fgd() {
+        let fgd = crate::editor::fgd::parse(&crate::editor::fgd::shipped()).unwrap();
+        let class = |n: &str| fgd.iter().find(|k| k.name == n).unwrap_or_else(|| panic!("{n}"));
+        let npc = class("ls_npc");
+        assert_eq!(npc.kind, "point");
+        for k in ["model", "name", "behavior", "targets", "unkillable", "team", "greet", "target", "targetname"] {
+            assert!(npc.keys.iter().any(|x| x.name == k), "ls_npc {k}");
+        }
+        // what the editor's I/O panel reads: the target key sets things off
+        assert!(npc.keys.iter().any(|x| x.name == "target" && x.kind == "target_destination"));
+        assert_eq!(npc.keys.iter().find(|x| x.name == "unkillable").unwrap().default, "1");
+        let b = npc.keys.iter().find(|x| x.name == "behavior").unwrap();
+        assert_eq!(b.choices.iter().map(|c| c.value.as_str()).collect::<Vec<_>>(), ["stand", "wander", "patrol", "follow"]);
+        for n in ["ls_interactable", "ls_interactable_brush"] {
+            let c = class(n);
+            for k in ["prompt", "range", "cooldown", "once", "hide", "team", "target", "bots"] {
+                assert!(c.keys.iter().any(|x| x.name == k), "{n} {k}");
+            }
+        }
+        assert_eq!(class("ls_interactable_brush").kind, "solid");
+        // no key of theirs reads as a creature type (shared creatures look for creatures.ini in the help)
+        for n in ["ls_npc", "ls_interactable", "ls_interactable_brush"] {
+            assert!(class(n).keys.iter().all(|k| !k.help.contains("creatures.ini")), "{n}");
+        }
+        let lib = library();
+        for n in ["ls_npc", "ls_interactable", "ls_interactable_brush"] {
+            assert!(lib["components"].as_array().unwrap().iter().any(|c| c["class"] == n && c["group"] == "People"), "{n}");
+        }
+    }
+
+    #[test]
     fn packs_round_trip() {
         let mut d = MapDocument::new();
         let mut cp = Entity::new("ls_capture_point");

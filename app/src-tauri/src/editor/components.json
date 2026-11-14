@@ -9,7 +9,8 @@
     "Defense",
     "Upgrades",
     "Social",
-    "Creatures"
+    "Creatures",
+    "People"
   ],
   "components": [
     {
@@ -328,6 +329,44 @@
         200,
         120,
         60
+      ]
+    },
+    {
+      "class": "ls_npc",
+      "group": "People",
+      "title": "NPC",
+      "blurb": "A character players talk to with E; stands, wanders, patrols or follows.",
+      "visual": "point",
+      "colour": [
+        120,
+        220,
+        160
+      ],
+      "needs_nav": true
+    },
+    {
+      "class": "ls_interactable",
+      "group": "People",
+      "title": "Interactable",
+      "blurb": "A lever, terminal, note or pickup: E sets off its targets.",
+      "visual": "point",
+      "colour": [
+        120,
+        220,
+        160
+      ]
+    },
+    {
+      "class": "ls_interactable_brush",
+      "group": "People",
+      "title": "Interactable brush",
+      "blurb": "A brush used with E (a lever, a console); sets off its targets.",
+      "visual": "box",
+      "size_key": "size",
+      "colour": [
+        120,
+        220,
+        160
       ]
     }
   ]

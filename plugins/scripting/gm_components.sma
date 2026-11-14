@@ -55,6 +55,7 @@ enum
 	K_LOOT, K_DROP, K_BARRICADE, K_WAVE, K_EXTRACT, K_CHECKPOINT, K_PLATFORM,
 	K_CLASS, K_MEETING, K_CRATE,
 	K_PERK, K_BENCH, K_BOX, K_PICKUP, K_SHOP, /* W1 */
+	K_NPC, K_INTERACT, /* T1fix */
 	K_COUNT
 };
 
@@ -65,7 +66,8 @@ new const KIND_NAME[K_COUNT][] =
 	"ls_capture_point", "ls_safe_zone", "ls_zone_shrinker", "ls_loot_container", "ls_supply_drop",
 	"ls_barricade", "ls_wave_spawner", "ls_extraction_zone", "ls_checkpoint", "ls_moving_platform",
 	"ls_player_class", "ls_meeting_point", "ls_supply_crate",
-	"ls_perk_machine", "ls_upgrade_bench", "ls_mystery_box", "ls_pickup", "ls_shop" /* W1 */
+	"ls_perk_machine", "ls_upgrade_bench", "ls_mystery_box", "ls_pickup", "ls_shop", /* W1 */
+	"ls_npc", "ls_interactable" /* T1fix */
 };
 
 /* where a component came from */
@@ -328,6 +330,7 @@ public plugin_precache()
 	g_sprSmoke = precache_model("sprites/smokepuff.spr");
 	g_mdlGibs = precache_model("models/woodgibs.mdl");
 	up_precache(); /* W1 */
+	npc_precache(); /* T1fix */
 	precache_model_once(DEFAULT_CRATE);
 	precache_model_once(DEFAULT_BOX);
 	precache_model_once("models/w_kevlar.mdl");
@@ -437,6 +440,7 @@ public plugin_natives()
 	register_native("ls_respawn_at", "n_respawn_at");
 	w3_natives(); /* W3 */
 	up_natives(); /* W1 */
+	npc_natives(); /* T1fix */
 }
 
 public plugin_init()
@@ -533,6 +537,7 @@ public plugin_init()
 	g_fwMeetEnd = CreateMultiForward("ls_on_meeting_end", ET_IGNORE, FP_CELL, FP_CELL);
 	w3_init(); /* W3 */
 	up_plugin_init(); /* W1 */
+	npc_init(); /* T1fix */
 }
 
 public plugin_cfg()
@@ -714,6 +719,8 @@ stock kind_of(const classname[])
 {
 	if (!equal(classname, "ls_", 3))
 		return K_NONE;
+	if (equal(classname, "ls_interactable_brush")) /* T1fix: the FGD's brush form */
+		return K_INTERACT;
 	for (new k = 1; k < K_COUNT; k++)
 		if (equal(classname, KIND_NAME[k]))
 			return k;
@@ -771,6 +778,7 @@ stock comp_add(ent, kind, Trie:keys, src)
 	else
 	{
 		/* set up in plugin_cfg, once traces hit the world; a model key has to be loaded now */
+		npc_preload(s); /* T1fix */
 		new m[64];
 		if (ks(s, "model", m, charsmax(m)) && m[0] != '*')
 			usable_model(m);
@@ -1104,6 +1112,7 @@ stock comp_init(s)
 		}
 	}
 	up_comp_init(s); /* W1 */
+	npc_comp_init(s); /* T1fix */
 	comp_reset(s);
 }
 
@@ -1570,6 +1579,7 @@ stock comp_reset(s)
 		}
 	}
 	up_comp_reset(s); /* W1 */
+	npc_comp_reset(s); /* T1fix */
 	if (ent && g_ready)
 		hint_comp(s);
 }
@@ -1913,6 +1923,7 @@ public tick()
 	tick_acts();
 	use_hints();
 	up_tick(sec); /* W1 */
+	npc_tick(sec); /* T1fix */
 	if (sec)
 	{
 		visuals();
@@ -4289,6 +4300,7 @@ public menu_class(id, menu, item)
 public client_disconnected(id)
 {
 	up_disconnected(id); /* W1 */
+	npc_disconnected(id); /* T1fix */
 	g_tqN[id] = 0;
 	g_tqShown[id][0] = EOS;
 	g_tqUntil[id] = 0.0;
@@ -13296,3 +13308,1075 @@ public bool:n_shop_at(plugin, params)
 	return inside(s, o);
 }
 /* ==== end W1 ==== */
+
+/* ==== NPCs and interactables (T1fix) ==== */
+/* ls_npc: a character (any model) players talk to with USE; it stands, wanders, patrols its
+   targets or follows the speaker for a while, and faces whoever talks to it. Unkillable by
+   default (no damage: bots never pick it as a target). ls_npc_choose shows a line and up to 6
+   replies as a menu, one conversation a player, closed on death, leaving, walking away (over
+   200 units) or a new one. ls_interactable: a model or brush with a prompt when looked at, a
+   cooldown, once or repeat, a team, firing its targets and ls_on_interact. Text from maps and
+   modes only ever goes to players (chat, center text, menus). */
+
+#define NPC_MAX_REPLIES 6
+#define NPC_TALK_RANGE  110.0
+#define NPC_WALK_AWAY   200.0
+#define NPC_SPEED       90.0
+/* g_pf slots: NPC */
+#define NP_PAUSE    0
+#define NP_GOALX    1
+#define NP_GOALY    2
+#define NP_GOALZ    3
+#define NP_FOLLOWTO 4
+#define NP_NEXTGOAL 5
+#define NP_LEG      6
+#define NP_WALKING  7
+/* interactable */
+#define IN_NEXT     0
+#define IN_USED     1
+#define IN_BOTS     2
+#define IN_OFFERED  3
+
+new g_fwNpcTalk, g_fwInteract, g_fwNpcChoice;
+new g_npcFollow[MAX_COMP];
+new g_cvNpc[33];
+new bool:g_cvOpen[33];
+new g_cvSerial[33];
+new Float:g_npcUseNext[33];
+
+stock npc_precache()
+{
+	/* models for NPCs made while the map runs (ls_npc_spawn): ls_npc_models = "barney models/x.mdl",
+	   set in the mode's cfg (it runs before the map loads), or ls_npc_precache from a plugin */
+	register_cvar("ls_npc_models", "");
+	new list[192], tok[64], at = 0;
+	get_cvar_string("ls_npc_models", list, charsmax(list));
+	for (;;)
+	{
+		new n = next_token(list[at], tok, charsmax(tok));
+		if (!tok[0])
+			break;
+		at += n;
+		new m[96];
+		npc_model_path(tok, m, charsmax(m));
+		usable_model(m);
+	}
+}
+
+stock npc_natives()
+{
+	register_native("ls_npc_say", "n_npc_say");
+	register_native("ls_npc_choose", "n_npc_choose");
+	register_native("ls_npc_behave", "n_npc_behave");
+	register_native("ls_npc_look_at", "n_npc_look_at");
+	register_native("ls_npc_spawn", "n_npc_spawn");
+	register_native("ls_npc_precache", "n_npc_precache");
+	register_native("ls_interactable_spawn", "n_interactable_spawn");
+	register_native("ls_npc_talking", "n_npc_talking");
+	register_native("ls_interactable_offer", "n_interactable_offer");
+}
+
+stock npc_init()
+{
+	g_fwNpcTalk = CreateMultiForward("ls_on_npc_talk", ET_IGNORE, FP_CELL, FP_CELL);
+	g_fwInteract = CreateMultiForward("ls_on_interact", ET_IGNORE, FP_CELL, FP_CELL);
+	g_fwNpcChoice = CreateMultiForward("ls_on_npc_choice", ET_IGNORE, FP_CELL, FP_CELL, FP_CELL);
+	register_forward(FM_PlayerPreThink, "npc_prethink");
+	RegisterHamPlayer(Ham_Killed, "npc_player_killed", 1);
+	/* rcon tests without a person: ls_npc_use <player> <entity>, ls_npc_pick <player> <reply 0-5> */
+	register_srvcmd("ls_npc_use", "cmd_npc_use");
+	register_srvcmd("ls_npc_pick", "cmd_npc_pick");
+}
+
+/* barney -> models/barney.mdl; a path stays as it is */
+stock npc_model_path(const want[], out[], len)
+{
+	if (!want[0])
+		copy(out, len, "models/barney.mdl");
+	else if (contain(want, "/") < 0 && contain(want, ".") < 0)
+		formatex(out, len, "models/%s.mdl", want);
+	else
+		copy(out, len, want);
+}
+
+/* while the map loads: an NPC's model key becomes a full path, loaded now */
+stock npc_preload(s)
+{
+	if (g_kind[s] != K_NPC || g_keys[s] == Invalid_Trie)
+		return;
+	new want[64], m[96];
+	ks(s, "model", want, charsmax(want));
+	if (want[0] == '*')
+		return;
+	npc_model_path(want, m, charsmax(m));
+	TrieSetString(g_keys[s], "model", m);
+}
+
+/* text from a map or a mode, for players: no control characters */
+stock npc_clean(const in[], out[], len)
+{
+	new j = 0;
+	for (new i = 0; in[i] && j < len; i++)
+		out[j++] = in[i] < ' ' ? ' ' : in[i];
+	out[j] = EOS;
+}
+
+stock npc_name(s, out[], len)
+{
+	if (s < 0 || !g_label[s][0])
+		copy(out, len, "Stranger");
+	else
+		npc_clean(g_label[s], out, len);
+}
+
+stock npc_play(e, const seq[], const alt[])
+{
+	new Float:fr, bool:loops;
+	new n = lookup_sequence(e, seq, fr, loops);
+	if (n < 0 && alt[0])
+		n = lookup_sequence(e, alt, fr, loops);
+	if (n < 0)
+		n = 0;
+	if (pev(e, pev_sequence) == n)
+		return;
+	set_pev(e, pev_sequence, n);
+	set_pev(e, pev_frame, 0.0);
+	set_pev(e, pev_framerate, 1.0);
+	set_pev(e, pev_animtime, get_gametime());
+}
+
+stock npc_comp_init(s)
+{
+	new k = g_kind[s];
+	if (k != K_NPC && k != K_INTERACT)
+		return;
+	new ent = g_ent[s];
+	new m[96];
+	ks(s, "model", m, charsmax(m));
+	if (k == K_NPC)
+	{
+		if (!usable_model(m))
+			copy(m, charsmax(m), "models/player/gign/gign.mdl");
+		set_model(ent, m, "models/player/gign/gign.mdl");
+		new Float:o[3];
+		vcopy(g_org[s], o);
+		o[2] = g_floor[s] + 1.0;
+		engfunc(EngFunc_SetOrigin, ent, o);
+		vcopy(o, g_org[s]);
+		engfunc(EngFunc_SetSize, ent, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 72.0});
+		set_pev(ent, pev_movetype, MOVETYPE_FLY);
+		set_pev(ent, pev_solid, SOLID_NOT);
+		set_pev(ent, pev_controller_0, 127);
+		set_pev(ent, pev_controller_1, 127);
+		new Float:ang[3];
+		ang[1] = kf(s, "angle", 0.0);
+		set_pev(ent, pev_angles, ang);
+		npc_play(ent, "idle1", "idle01");
+		return;
+	}
+	/* an interactable: a brush shows and blocks; a model sits on the floor */
+	if (g_box[s] && m[0] == '*')
+	{
+		set_pev(ent, pev_effects, pev(ent, pev_effects) & ~EF_NODRAW);
+		set_pev(ent, pev_solid, SOLID_BSP);
+		set_pev(ent, pev_movetype, MOVETYPE_PUSH);
+		engfunc(EngFunc_SetModel, ent, m);
+		return;
+	}
+	if (m[0] && usable_model(m))
+	{
+		set_model(ent, m, DEFAULT_BOX);
+		engfunc(EngFunc_SetSize, ent, Float:{-8.0, -8.0, 0.0}, Float:{8.0, 8.0, 16.0});
+	}
+	set_pev(ent, pev_solid, SOLID_NOT);
+	set_pev(ent, pev_movetype, MOVETYPE_NONE);
+}
+
+stock npc_comp_reset(s)
+{
+	new k = g_kind[s];
+	new ent = g_ent[s];
+	if (k == K_NPC)
+	{
+		g_aux[s] = 0;
+		g_npcFollow[s] = 0;
+		g_pf[s][NP_PAUSE] = 0.0;
+		g_pf[s][NP_NEXTGOAL] = 0.0;
+		g_pf[s][NP_WALKING] = 0.0;
+		g_pf[s][NP_LEG] = 0.0;
+		g_val[s] = float(npc_behavior_id(s, ""));
+		new bool:god = ki(s, "unkillable", 1) != 0;
+		set_pev(ent, pev_takedamage, god ? DAMAGE_NO : DAMAGE_YES);
+		if (!god)
+		{
+			new Float:hp = floatmax(kf(s, "health", 100.0), 1.0);
+			set_pev(ent, pev_health, hp);
+			set_pev(ent, pev_max_health, hp);
+		}
+		/* back at its spot every round */
+		if (ent && g_ready)
+		{
+			engfunc(EngFunc_SetOrigin, ent, g_org[s]);
+			set_pev(ent, pev_velocity, Float:{0.0, 0.0, 0.0});
+		}
+	}
+	else if (k == K_INTERACT)
+	{
+		g_pf[s][IN_NEXT] = 0.0;
+		g_pf[s][IN_USED] = 0.0;
+		g_pf[s][IN_BOTS] = float(ki(s, "bots", 0) != 0);
+		g_pf[s][IN_OFFERED] = 0.0;
+		if (ent && ki(s, "hide", 0))
+		{
+			set_pev(ent, pev_effects, pev(ent, pev_effects) & ~EF_NODRAW);
+			if (g_box[s])
+				set_pev(ent, pev_solid, SOLID_BSP);
+		}
+	}
+}
+
+/* 0 stand, 1 wander, 2 patrol, 3 follow (from a word, or the behavior key when empty) */
+stock npc_behavior_id(s, const word[])
+{
+	new b[16];
+	if (word[0])
+		copy(b, charsmax(b), word);
+	else
+		ks(s, "behavior", b, charsmax(b), "stand");
+	if (equali(b, "wander"))
+		return 1;
+	if (equali(b, "patrol"))
+		return 2;
+	if (equali(b, "follow"))
+		return 3;
+	return 0;
+}
+
+stock npc_slot(ent)
+{
+	new s = slot_of(ent);
+	if (s < 0 || !g_ent[s] || g_kind[s] != K_NPC)
+		return -1;
+	return s;
+}
+
+stock npc_face(e, const Float:to[3], Float:most = 180.0)
+{
+	new Float:o[3], Float:ang[3];
+	pev(e, pev_origin, o);
+	pev(e, pev_angles, ang);
+	new Float:want = floatatan2(to[1] - o[1], to[0] - o[0], degrees);
+	new Float:d = want - ang[1];
+	while (d > 180.0) d -= 360.0;
+	while (d < -180.0) d += 360.0;
+	ang[0] = 0.0;
+	ang[1] += floatclamp(d, -most, most);
+	set_pev(e, pev_angles, ang);
+}
+
+/* a spot it can walk to from where it is (room for a person, nothing in the way) */
+stock bool:npc_can_walk(e, const Float:from[3], const Float:to[3])
+{
+	new Float:a[3], Float:b[3];
+	vcopy(from, a);
+	vcopy(to, b);
+	a[2] += 37.0;
+	b[2] += 37.0;
+	engfunc(EngFunc_TraceHull, a, b, IGNORE_MONSTERS, HULL_HUMAN, e, 0);
+	new Float:frac;
+	get_tr2(0, TR_flFraction, frac);
+	return !get_tr2(0, TR_StartSolid) && frac >= 1.0;
+}
+
+stock npc_stop(s)
+{
+	new e = g_ent[s];
+	set_pev(e, pev_velocity, Float:{0.0, 0.0, 0.0});
+	if (g_pf[s][NP_WALKING] != 0.0)
+	{
+		g_pf[s][NP_WALKING] = 0.0;
+		npc_play(e, "idle1", "idle01");
+	}
+}
+
+/* walks toward a spot (re-aimed 4 times a second); true once there */
+stock bool:npc_walk_to(s, const Float:goal[3], Float:near)
+{
+	new e = g_ent[s];
+	new Float:o[3];
+	pev(e, pev_origin, o);
+	new Float:d = dist2d(o, goal);
+	if (d <= near)
+	{
+		npc_stop(s);
+		return true;
+	}
+	new Float:step = floatmin(NPC_SPEED * 0.3, d);
+	new Float:nx[3];
+	nx[0] = o[0] + (goal[0] - o[0]) / d * step;
+	nx[1] = o[1] + (goal[1] - o[1]) / d * step;
+	nx[2] = o[2] + 18.0;
+	new Float:fz = quiet_floor(nx, e);
+	nx[2] = fz + 1.0;
+	if (floatabs(fz - o[2]) > 40.0 || !npc_can_walk(e, o, nx))
+	{
+		/* blocked (a wall, a drop, a step too high): stop and pick another goal */
+		npc_stop(s);
+		g_pf[s][NP_NEXTGOAL] = 0.0;
+		return true;
+	}
+	new Float:v[3];
+	v[0] = (nx[0] - o[0]) / 0.25;
+	v[1] = (nx[1] - o[1]) / 0.25;
+	v[2] = (nx[2] - o[2]) / 0.25;
+	set_pev(e, pev_velocity, v);
+	npc_face(e, goal, 30.0);
+	if (g_pf[s][NP_WALKING] == 0.0)
+	{
+		g_pf[s][NP_WALKING] = 1.0;
+		npc_play(e, "walk", "walk1");
+	}
+	return false;
+}
+
+/* the origin of the n-th patrol target (false: none) */
+stock bool:npc_leg(s, n, Float:out[3])
+{
+	new list[192], tok[32], at = 0, i = 0;
+	ks(s, "targets", list, charsmax(list));
+	for (;;)
+	{
+		new used = next_token(list[at], tok, charsmax(tok));
+		if (!tok[0])
+			break;
+		at += used;
+		if (i++ != n)
+			continue;
+		new e = engfunc(EngFunc_FindEntityByString, -1, "targetname", tok);
+		if (e <= 0)
+			return false;
+		pev(e, pev_origin, out);
+		return true;
+	}
+	return false;
+}
+
+stock npc_legs(s)
+{
+	new list[192], tok[32], at = 0, n = 0;
+	ks(s, "targets", list, charsmax(list));
+	for (;;)
+	{
+		new used = next_token(list[at], tok, charsmax(tok));
+		if (!tok[0])
+			break;
+		at += used;
+		n++;
+	}
+	return n;
+}
+
+stock npc_tick_one(s)
+{
+	new e = g_ent[s];
+	if (!pev_valid(e) || pev(e, pev_deadflag) != DEAD_NO)
+		return;
+	/* solid once nobody stands in it (so it can't trap a player who spawned inside) */
+	if (pev(e, pev_solid) == SOLID_NOT)
+	{
+		new Float:o[3];
+		pev(e, pev_origin, o);
+		new bool:overlap = false;
+		for (new p = 1; p <= MaxClients && !overlap; p++)
+			if (g_alive[p] && floatabs(g_porg[p][0] - o[0]) < 34.0 && floatabs(g_porg[p][1] - o[1]) < 34.0 && g_porg[p][2] - o[2] < 110.0 && g_porg[p][2] - o[2] > -40.0)
+				overlap = true;
+		if (!overlap)
+		{
+			set_pev(e, pev_solid, SOLID_BBOX);
+			engfunc(EngFunc_SetOrigin, e, o);
+		}
+	}
+	/* talking: stands and faces the speaker */
+	if (g_now < g_pf[s][NP_PAUSE])
+	{
+		npc_stop(s);
+		for (new p = 1; p <= MaxClients; p++)
+			if (g_cvNpc[p] == e && g_alive[p])
+			{
+				npc_face(e, g_porg[p], 40.0);
+				break;
+			}
+		return;
+	}
+	switch (floatround(g_val[s]))
+	{
+		case 0:
+		{
+			npc_stop(s);
+			/* turns to someone close now and then */
+			new near = 0, Float:nd = 220.0, Float:o[3];
+			pev(e, pev_origin, o);
+			for (new p = 1; p <= MaxClients; p++)
+			{
+				if (!g_alive[p])
+					continue;
+				new Float:d = get_distance_f(o, g_porg[p]);
+				if (d < nd)
+				{
+					nd = d;
+					near = p;
+				}
+			}
+			if (near)
+				npc_face(e, g_porg[near], 15.0);
+		}
+		case 1:
+		{
+			new Float:goal[3];
+			goal[0] = g_pf[s][NP_GOALX];
+			goal[1] = g_pf[s][NP_GOALY];
+			goal[2] = g_pf[s][NP_GOALZ];
+			if (g_pf[s][NP_NEXTGOAL] == 0.0 || (g_pf[s][NP_NEXTGOAL] > 0.0 && g_now >= g_pf[s][NP_NEXTGOAL]))
+			{
+				/* a new spot within its radius of home, now and then */
+				new Float:r = floatmax(kf(s, "radius", 160.0), 32.0);
+				new Float:a = random_float(0.0, 360.0), Float:dd = random_float(r * 0.3, r);
+				goal[0] = g_org[s][0] + dd * floatcos(a, degrees);
+				goal[1] = g_org[s][1] + dd * floatsin(a, degrees);
+				goal[2] = g_org[s][2];
+				g_pf[s][NP_GOALX] = goal[0];
+				g_pf[s][NP_GOALY] = goal[1];
+				g_pf[s][NP_GOALZ] = goal[2];
+				g_pf[s][NP_NEXTGOAL] = -1.0;
+			}
+			if (g_pf[s][NP_NEXTGOAL] < 0.0 && npc_walk_to(s, goal, 16.0))
+				g_pf[s][NP_NEXTGOAL] = g_now + random_float(3.0, 8.0);
+		}
+		case 2:
+		{
+			new legs = npc_legs(s);
+			if (!legs)
+			{
+				npc_stop(s);
+				return;
+			}
+			new leg = floatround(g_pf[s][NP_LEG]) % legs;
+			new Float:goal[3];
+			if (!npc_leg(s, leg, goal))
+			{
+				g_pf[s][NP_LEG] = float(leg + 1);
+				return;
+			}
+			if (g_pf[s][NP_NEXTGOAL] > 0.0 && g_now < g_pf[s][NP_NEXTGOAL])
+				return;
+			if (npc_walk_to(s, goal, 20.0))
+			{
+				g_pf[s][NP_LEG] = float(leg + 1);
+				g_pf[s][NP_NEXTGOAL] = g_now + 1.5;
+			}
+		}
+		case 3:
+		{
+			new who = g_npcFollow[s];
+			if (!who || !g_alive[who] || g_now >= g_pf[s][NP_FOLLOWTO])
+			{
+				/* done following: back home, then stands */
+				g_npcFollow[s] = 0;
+				if (npc_walk_to(s, g_org[s], 24.0))
+					npc_face(e, g_org[s], 0.0);
+				return;
+			}
+			npc_walk_to(s, g_porg[who], 72.0);
+		}
+	}
+}
+
+/* what this player looks at within reach: an NPC or an interactable slot, or -1 */
+stock npc_aimed(id, bool:bot)
+{
+	new Float:eye[3], Float:ang[3], Float:fwd[3];
+	pev(id, pev_view_ofs, eye);
+	for (new i = 0; i < 3; i++)
+		eye[i] += g_porg[id][i];
+	pev(id, pev_v_angle, ang);
+	engfunc(EngFunc_MakeVectors, ang);
+	global_get(glb_v_forward, fwd);
+	new best = -1, Float:bd = 99999.0;
+	for (new s = 0; s < g_nslots; s++)
+	{
+		if (!g_ent[s] || !g_on[s] || (g_kind[s] != K_NPC && g_kind[s] != K_INTERACT))
+			continue;
+		if (g_team[s] && g_pteam[id] != g_team[s])
+			continue;
+		new e = g_ent[s];
+		new Float:c[3], Float:range;
+		if (g_kind[s] == K_NPC)
+		{
+			if (!pev_valid(e) || pev(e, pev_deadflag) != DEAD_NO)
+				continue;
+			pev(e, pev_origin, c);
+			c[2] += 48.0;
+			range = NPC_TALK_RANGE;
+		}
+		else
+		{
+			if (g_pf[s][IN_USED] != 0.0 && ki(s, "once", 0))
+				continue;
+			if (g_box[s])
+				for (new i = 0; i < 3; i++)
+					c[i] = floatclamp(eye[i], g_mins[s][i], g_maxs[s][i]);
+			else
+			{
+				pev(e, pev_origin, c);
+				c[2] += 8.0;
+			}
+			range = floatmax(kf(s, "range", 96.0), 32.0);
+		}
+		new Float:d = get_distance_f(eye, c);
+		if (d > range || d >= bd)
+			continue;
+		if (!bot && d > 24.0)
+		{
+			new Float:dot = ((c[0] - eye[0]) * fwd[0] + (c[1] - eye[1]) * fwd[1] + (c[2] - eye[2]) * fwd[2]) / d;
+			if (dot < (g_kind[s] == K_NPC ? 0.75 : 0.85))
+				continue;
+		}
+		/* nothing solid between */
+		engfunc(EngFunc_TraceLine, eye, c, IGNORE_MONSTERS, id, 0);
+		new Float:frac;
+		get_tr2(0, TR_flFraction, frac);
+		new hit = get_tr2(0, TR_pHit);
+		if (frac < 0.98 && hit != e)
+			continue;
+		bd = d;
+		best = s;
+	}
+	return best;
+}
+
+public npc_prethink(id)
+{
+	if (!is_user_alive(id))
+		return FMRES_IGNORED;
+	new b = pev(id, pev_button);
+	if (!(b & IN_USE) || (pev(id, pev_oldbuttons) & IN_USE))
+		return FMRES_IGNORED;
+	new Float:now = get_gametime();
+	if (now < g_npcUseNext[id])
+		return FMRES_IGNORED;
+	g_now = now;
+	pev(id, pev_origin, g_porg[id]);
+	g_pteam[id] = get_user_team(id);
+	new s = npc_aimed(id, is_user_bot(id) != 0);
+	if (s < 0)
+		return FMRES_IGNORED;
+	g_npcUseNext[id] = now + 0.5;
+	npc_use(s, id);
+	return FMRES_IGNORED;
+}
+
+stock npc_use(s, id)
+{
+	if (g_kind[s] == K_NPC)
+		npc_talk(s, id);
+	else
+		interact_use(s, id);
+}
+
+stock npc_talk(s, id)
+{
+	new e = g_ent[s];
+	g_pf[s][NP_PAUSE] = g_now + 4.0;
+	npc_face(e, g_porg[id]);
+	npc_stop(s);
+	npc_play(e, "talk", "idle2");
+	if (floatround(g_val[s]) == 3)
+	{
+		g_npcFollow[s] = id;
+		g_pf[s][NP_FOLLOWTO] = g_now + floatmax(kf(s, "follow_secs", 10.0), 1.0);
+		g_pf[s][NP_PAUSE] = g_now + 1.0;
+	}
+	new greet[160];
+	if (ks(s, "greet", greet, charsmax(greet)))
+		npc_line(s, id, greet);
+	fire_targets(s, id);
+	new ret;
+	ExecuteForward(g_fwNpcTalk, ret, id, e);
+}
+
+/* a line in chat: "Name: text" (a narrator: the text alone) */
+stock npc_line(s, id, const text[])
+{
+	new clean[192], who[32];
+	npc_clean(text, clean, charsmax(clean));
+	if (s >= 0)
+	{
+		npc_name(s, who, charsmax(who));
+		if (id)
+			client_print_color(id, print_team_default, "^4%s:^1 %s", who, clean);
+		else
+			client_print_color(0, print_team_default, "^4%s:^1 %s", who, clean);
+	}
+	else if (id)
+		client_print_color(id, print_team_default, "^1%s", clean);
+	else
+		client_print_color(0, print_team_default, "^1%s", clean);
+}
+
+stock interact_use(s, id)
+{
+	if (g_now < g_pf[s][IN_NEXT])
+		return;
+	if (g_pf[s][IN_USED] != 0.0 && ki(s, "once", 0))
+		return;
+	g_pf[s][IN_USED] = 1.0;
+	g_pf[s][IN_NEXT] = g_now + floatmax(kf(s, "cooldown", 1.0), 0.0);
+	new e = g_ent[s];
+	if (ki(s, "hide", 0))
+	{
+		set_pev(e, pev_effects, pev(e, pev_effects) | EF_NODRAW);
+		set_pev(e, pev_solid, SOLID_NOT);
+	}
+	fire_targets(s, id);
+	new ret;
+	ExecuteForward(g_fwInteract, ret, id, e);
+}
+
+/* the prompt when someone looks at an interactable (and "Talk to <name>" for an NPC) */
+stock npc_hints()
+{
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!g_alive[p] || g_bot[p] || g_cvOpen[p])
+			continue;
+		new s = npc_aimed(p, false);
+		if (s < 0)
+			continue;
+		if (g_kind[s] == K_NPC)
+		{
+			new who[32];
+			npc_name(s, who, charsmax(who));
+			hud_add(p, false, "Press E to talk to %s", who);
+			continue;
+		}
+		if (g_now < g_pf[s][IN_NEXT])
+			continue;
+		new prompt[96], clean[96];
+		ks(s, "prompt", prompt, charsmax(prompt), "Press E to use");
+		npc_clean(prompt, clean, charsmax(clean));
+		hud_add(p, false, "%s", clean);
+	}
+}
+
+stock npc_tick(bool:sec)
+{
+	new hinted = 0;
+	for (new s = 0; s < g_nslots; s++)
+	{
+		if (!g_ent[s] || !g_on[s] || g_kind[s] != K_NPC)
+			continue;
+		npc_tick_one(s);
+		/* bots: a small, cheap-to-cross patch where it stands (they path round it, never
+		   through it); refreshed each second while it lives, so a walking NPC's patch moves.
+		   At most 8 (the brain holds 32 avoids for everything) */
+		if (sec && hinted < 8 && pev_valid(g_ent[s]) && pev(g_ent[s], pev_deadflag) == DEAD_NO)
+		{
+			new Float:o[3];
+			pev(g_ent[s], pev_origin, o);
+			hint("avoid npc%d %.0f %.0f %.0f 40 4 2", g_ent[s], o[0], o[1], o[2]);
+			hinted++;
+		}
+	}
+	/* conversations: closed when the speaker walks away */
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!g_cvOpen[p] || !g_cvNpc[p])
+			continue;
+		new e = g_cvNpc[p];
+		if (!pev_valid(e) || !g_alive[p])
+		{
+			npc_close(p, -2);
+			continue;
+		}
+		new Float:o[3];
+		pev(e, pev_origin, o);
+		if (get_distance_f(o, g_porg[p]) > NPC_WALK_AWAY)
+			npc_close(p, -2);
+	}
+	npc_hints();
+	if (sec)
+		interact_offers();
+}
+
+/* bots may use it (bots=1, or ls_interactable_offer): offered to them while it's usable (the
+   brain walks there and presses USE; its "box" offer is the errand that fits today: taken in a
+   calm moment, now and then), withdrawn while it isn't (cooldown, used once, switched off) */
+stock bool:interact_usable(s)
+{
+	if (!g_on[s] || g_now < g_pf[s][IN_NEXT])
+		return false;
+	return !(g_pf[s][IN_USED] != 0.0 && ki(s, "once", 0));
+}
+
+stock interact_spot(s, Float:c[3])
+{
+	if (g_box[s])
+		for (new i = 0; i < 3; i++)
+			c[i] = (g_mins[s][i] + g_maxs[s][i]) * 0.5;
+	else
+		pev(g_ent[s], pev_origin, c);
+}
+
+stock interact_offers()
+{
+	static Float:resend;
+	new bool:again = g_now >= resend;
+	if (again)
+		resend = g_now + 5.0;
+	for (new s = 0; s < g_nslots; s++)
+	{
+		if (!g_ent[s] || g_kind[s] != K_INTERACT || g_pf[s][IN_BOTS] == 0.0)
+			continue;
+		new bool:want = interact_usable(s);
+		new bool:had = g_pf[s][IN_OFFERED] != 0.0;
+		if (want == had && !(want && again))
+			continue;
+		g_pf[s][IN_OFFERED] = want ? 1.0 : 0.0;
+		new Float:c[3];
+		interact_spot(s, c);
+		for (new p = 1; p <= MaxClients; p++)
+		{
+			if (!is_user_connected(p) || !is_user_bot(p))
+				continue;
+			if (want && (!g_team[s] || get_user_team(p) == g_team[s]))
+				hint("offer %d box %.0f %.0f %.0f %d 0", p, c[0], c[1], c[2], g_ent[s]);
+			else if (had)
+				hint("offer_clear %d %d", p, g_ent[s]);
+		}
+	}
+}
+
+public n_interactable_offer(plugin, params)
+{
+	new s = slot_of(get_param(1));
+	if (s < 0 || g_kind[s] != K_INTERACT)
+		return 0;
+	g_now = get_gametime();
+	g_pf[s][IN_BOTS] = get_param(2) ? 1.0 : 0.0;
+	return 1;
+}
+
+/* ends a player's conversation; choice != -99 tells the mode (-1 timed out, -2 gone) */
+stock npc_close(id, choice)
+{
+	if (!g_cvOpen[id])
+		return;
+	new npc = g_cvNpc[id];
+	g_cvOpen[id] = false;
+	g_cvNpc[id] = 0;
+	g_cvSerial[id]++;
+	if (is_user_connected(id))
+	{
+		new menu, keys;
+		get_user_menu(id, menu, keys);
+		if (menu != 0)
+		{
+			menu_cancel(id);
+			show_menu(id, 0, "^n", 1);
+		}
+	}
+	if (choice != -99)
+	{
+		new ret;
+		ExecuteForward(g_fwNpcChoice, ret, id, npc, choice);
+	}
+}
+
+stock bool:npc_choose(npc, id, const text[], const replies[], Float:timeout)
+{
+	if (!(1 <= id <= MaxClients) || !is_user_connected(id) || !replies[0])
+		return false;
+	new s = npc ? npc_slot(npc) : -1;
+	if (npc && s < 0)
+		return false;
+	/* one conversation a player: the old one ends (its choice comes as -2) */
+	npc_close(id, -2);
+	new title[256], clean[192], who[32];
+	npc_clean(text, clean, charsmax(clean));
+	if (s >= 0)
+	{
+		npc_name(s, who, charsmax(who));
+		formatex(title, charsmax(title), "\y%s:\w %s", who, clean);
+	}
+	else
+		formatex(title, charsmax(title), "\w%s", clean);
+	g_cvSerial[id]++;
+	new m = menu_create(title, "menu_npc_reply");
+	new list[512], one[96], at = 0, n = 0;
+	copy(list, charsmax(list), replies);
+	new len = strlen(list);
+	while (at <= len && n < NPC_MAX_REPLIES)
+	{
+		new end = at;
+		while (end < len && list[end] != '|')
+			end++;
+		new piece[96];
+		copy(piece, min(end - at, charsmax(piece)), list[at]);
+		trim(piece);
+		at = end + 1;
+		if (!piece[0])
+			continue;
+		npc_clean(piece, one, charsmax(one));
+		new info[16];
+		formatex(info, charsmax(info), "%d:%d", g_cvSerial[id], n);
+		menu_additem(m, one, info);
+		n++;
+	}
+	if (!n)
+	{
+		menu_destroy(m);
+		return false;
+	}
+	menu_setprop(m, MPROP_EXIT, MEXIT_ALL);
+	menu_setprop(m, MPROP_EXITNAME, "Walk away");
+	g_cvNpc[id] = npc;
+	g_cvOpen[id] = true;
+	if (s >= 0)
+	{
+		g_pf[s][NP_PAUSE] = g_now + floatmax(timeout, 30.0);
+		pev(id, pev_origin, g_porg[id]);
+		npc_face(npc, g_porg[id]);
+	}
+	new secs = timeout > 0.0 ? max(floatround(timeout), 1) : -1;
+	menu_display(id, m, 0, secs);
+	return true;
+}
+
+public menu_npc_reply(id, menu, item)
+{
+	new serial = -1, pick = -1;
+	if (item >= 0)
+	{
+		new info[16], name[2], access, cb;
+		menu_item_getinfo(menu, item, access, info, charsmax(info), name, charsmax(name), cb);
+		new a[8], b[8];
+		strtok2(info, a, charsmax(a), b, charsmax(b), ':');
+		serial = str_to_num(a);
+		pick = str_to_num(b);
+	}
+	menu_destroy(menu);
+	/* an old menu (closed or replaced already): nothing more to say */
+	if (!g_cvOpen[id] || (item >= 0 && serial != g_cvSerial[id]))
+		return PLUGIN_HANDLED;
+	new npc = g_cvNpc[id];
+	g_cvOpen[id] = false;
+	g_cvNpc[id] = 0;
+	g_cvSerial[id]++;
+	new choice = item >= 0 ? pick : (item == MENU_TIMEOUT ? -1 : -2);
+	new s = npc ? npc_slot(npc) : -1;
+	if (s >= 0)
+		g_pf[s][NP_PAUSE] = g_now + 2.0;
+	new ret;
+	ExecuteForward(g_fwNpcChoice, ret, id, npc, choice);
+	return PLUGIN_HANDLED;
+}
+
+public npc_player_killed(id, killer, gib)
+{
+	npc_close(id, -2);
+	return HAM_IGNORED;
+}
+
+stock npc_disconnected(id)
+{
+	/* (the mode hears -2; the menu's gone with the player) */
+	if (g_cvOpen[id])
+	{
+		new npc = g_cvNpc[id];
+		g_cvOpen[id] = false;
+		g_cvNpc[id] = 0;
+		g_cvSerial[id]++;
+		new ret;
+		ExecuteForward(g_fwNpcChoice, ret, id, npc, -2);
+	}
+	g_npcUseNext[id] = 0.0;
+	for (new s = 0; s < g_nslots; s++)
+		if (g_ent[s] && g_kind[s] == K_NPC && g_npcFollow[s] == id)
+			g_npcFollow[s] = 0;
+}
+
+/* ---- natives ---- */
+
+public n_npc_say(plugin, params)
+{
+	new npc = get_param(1), id = get_param(2);
+	new text[192];
+	get_string(3, text, charsmax(text));
+	new s = npc ? npc_slot(npc) : -1;
+	if (npc && s < 0)
+		return 0;
+	if (id && (!(1 <= id <= MaxClients) || !is_user_connected(id)))
+		return 0;
+	if (s >= 0)
+	{
+		npc_play(npc, "talk", "idle2");
+		if (id && is_user_alive(id))
+		{
+			pev(id, pev_origin, g_porg[id]);
+			npc_face(npc, g_porg[id]);
+			g_pf[s][NP_PAUSE] = floatmax(g_pf[s][NP_PAUSE], get_gametime() + 3.0);
+		}
+	}
+	npc_line(s, id, text);
+	return 1;
+}
+
+public n_npc_choose(plugin, params)
+{
+	new text[192], replies[512];
+	get_string(3, text, charsmax(text));
+	get_string(4, replies, charsmax(replies));
+	g_now = get_gametime();
+	return npc_choose(get_param(1), get_param(2), text, replies, get_param_f(5));
+}
+
+public n_npc_behave(plugin, params)
+{
+	new s = npc_slot(get_param(1));
+	if (s < 0)
+		return 0;
+	new word[16];
+	get_string(2, word, charsmax(word));
+	new b = npc_behavior_id(s, word);
+	if (!word[0] || (b == 0 && !equali(word, "stand")))
+		return 0;
+	g_val[s] = float(b);
+	g_pf[s][NP_NEXTGOAL] = 0.0;
+	g_pf[s][NP_PAUSE] = 0.0;
+	if (b == 3)
+	{
+		new t = get_param(3);
+		g_npcFollow[s] = (1 <= t <= MaxClients) ? t : 0;
+		g_pf[s][NP_FOLLOWTO] = get_gametime() + floatmax(kf(s, "follow_secs", 10.0), 1.0);
+	}
+	else
+		npc_stop(s);
+	return 1;
+}
+
+public n_npc_look_at(plugin, params)
+{
+	new npc = get_param(1), t = get_param(2);
+	new s = npc_slot(npc);
+	if (s < 0 || t <= 0 || !pev_valid(t))
+		return 0;
+	new Float:o[3];
+	pev(t, pev_origin, o);
+	npc_face(npc, o);
+	g_pf[s][NP_PAUSE] = floatmax(g_pf[s][NP_PAUSE], get_gametime() + 2.0);
+	npc_stop(s);
+	return 1;
+}
+
+/* a key value from a mode: no quotes or control characters (it goes inside key="...") */
+stock npc_keyval(const in[], out[], len)
+{
+	new j = 0;
+	for (new i = 0; in[i] && j < len; i++)
+		if (in[i] >= ' ' && in[i] != '"')
+			out[j++] = in[i];
+	out[j] = EOS;
+}
+
+public n_npc_spawn(plugin, params)
+{
+	new want[96], m[96], name[64], extra[256], cn[64];
+	get_string(1, want, charsmax(want));
+	new Float:o[3];
+	get_array_f(2, o, 3);
+	new Float:yaw = get_param_f(3);
+	get_string(4, name, charsmax(name));
+	get_string(5, extra, charsmax(extra));
+	npc_model_path(want, m, charsmax(m));
+	if (!TrieKeyExists(g_models, m))
+		log_amx("ls_npc_spawn: %s wasn't loaded with the map (ls_npc_precache or ls_npc_models); a CS model stands in.", m);
+	npc_keyval(name, cn, charsmax(cn));
+	new keys[512], cm[96];
+	npc_keyval(m, cm, charsmax(cm));
+	formatex(keys, charsmax(keys), "model=^"%s^" name=^"%s^" angle=%.0f %s", cm, cn, yaw, extra);
+	return comp_make(K_NPC, o, keys, SRC_RUNTIME);
+}
+
+public n_npc_precache(plugin, params)
+{
+	new want[96], m[96];
+	get_string(1, want, charsmax(want));
+	npc_model_path(want, m, charsmax(m));
+	return usable_model(m);
+}
+
+public n_interactable_spawn(plugin, params)
+{
+	new m[96], prompt[96], extra[256], cm[96], cp[96];
+	get_string(1, m, charsmax(m));
+	new Float:o[3];
+	get_array_f(2, o, 3);
+	get_string(3, prompt, charsmax(prompt));
+	get_string(4, extra, charsmax(extra));
+	npc_keyval(m, cm, charsmax(cm));
+	npc_keyval(prompt, cp, charsmax(cp));
+	new keys[512];
+	formatex(keys, charsmax(keys), "%s%s%s prompt=^"%s^" %s", cm[0] ? "model=^"" : "", cm, cm[0] ? "^"" : "", cp[0] ? cp : "Press E to use", extra);
+	return comp_make(K_INTERACT, o, keys, SRC_RUNTIME);
+}
+
+public n_npc_talking(plugin, params)
+{
+	new id = get_param(1);
+	if (!(1 <= id <= MaxClients) || !g_cvOpen[id])
+		return 0;
+	return g_cvNpc[id];
+}
+
+/* ---- tests without a person (server console or rcon) ---- */
+
+/* ls_npc_use <player> <entity>: as if the player pressed USE on it */
+public cmd_npc_use()
+{
+	new a[8], b[8];
+	read_argv(1, a, charsmax(a));
+	read_argv(2, b, charsmax(b));
+	new id = str_to_num(a), s = slot_of(str_to_num(b));
+	if (!(1 <= id <= MaxClients) || !is_user_alive(id) || s < 0 || (g_kind[s] != K_NPC && g_kind[s] != K_INTERACT))
+	{
+		server_print("ls_npc_use: needs a living player and an NPC or interactable entity");
+		return PLUGIN_HANDLED;
+	}
+	g_now = get_gametime();
+	pev(id, pev_origin, g_porg[id]);
+	g_pteam[id] = get_user_team(id);
+	npc_use(s, id);
+	server_print("ls_npc_use: %d used %d", id, g_ent[s]);
+	return PLUGIN_HANDLED;
+}
+
+/* ls_npc_pick <player> <reply 0-5 | -1 timed out | -2 walked away>: answers the open conversation */
+public cmd_npc_pick()
+{
+	new a[8], b[8];
+	read_argv(1, a, charsmax(a));
+	read_argv(2, b, charsmax(b));
+	new id = str_to_num(a), pick = str_to_num(b);
+	if (!(1 <= id <= MaxClients) || !g_cvOpen[id] || pick < -2 || pick >= NPC_MAX_REPLIES)
+	{
+		server_print("ls_npc_pick: no conversation open for %d", id);
+		return PLUGIN_HANDLED;
+	}
+	new npc = g_cvNpc[id];
+	npc_close(id, -99);
+	new ret;
+	ExecuteForward(g_fwNpcChoice, ret, id, npc, pick);
+	server_print("ls_npc_pick: %d picked %d", id, pick);
+	return PLUGIN_HANDLED;
+}
+/* ==== end NPCs and interactables ==== */

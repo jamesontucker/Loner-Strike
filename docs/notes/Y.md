@@ -495,3 +495,20 @@ A copy of prod on 127.0.0.1:27016, Last Stand on ls_outpost with today's gm_last
   `<file stem>@<time>`, module from `where:`, map; local servers link a Discord webhook on Health › Crashes
   (POST /api/servers/:id/crashes/discord). Two forced crashes on YF4 (de_dust2, de_inferno) read as 2 crashes,
   fakemeta_amxx.dll, with their maps.
+
+## Requests from T1fix (2026-11-14): NPCs and interactables (gm_components ls_npc, ls_interactable)
+What gm_components does today with the brain as it is:
+- **ls_npc** is an `info_target` (classname `ls_npc`) with a model, MOVETYPE_FLY, SOLID_BBOX once nobody overlaps
+  it. Unkillable ones (the default) have `takedamage DAMAGE_NO`, so `LsModeTargetOk` already skips them and plain
+  bots never pick a non-player. Each second every NPC (up to 8) gets `ls_mode avoid npc<ent> x y z 40 4 2` so bots
+  path round its spot; a walking NPC's patch moves with it.
+- **ls_interactable** with `bots=1` (or `ls_interactable_offer(ent, true)`) is offered as `ls_mode offer <bot> box
+  x y z <ent> 0` while it's usable, and `offer_clear <bot> <ent>` while it isn't.
+Requests (none blocking):
+1. **An NPC flag:** treat `ls_npc` entities like a teammate for steering (local avoidance, not only the avoid
+   patch), never as a target even when killable (`pev_team` 1 or a `ls_mode friend_class ls_npc` line, your call),
+   and don't count them as cover to hide behind.
+2. **A "use" offer kind:** `ls_mode offer <who> use x y z <ent> 0 [order] [influence]` - walk there in a calm moment
+   and press USE, no money kept aside, team-minded bots likelier, give up after 90 s out of reach. Today it rides on
+   `box` (cost 0), which needs the bot's spare money check to pass and is rolled "now and then". Studio's Offer to
+   bots node maps "use" to `trap` (taken only with 2-5 creatures near it): with a `use` kind both can switch.

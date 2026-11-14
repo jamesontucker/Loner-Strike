@@ -754,4 +754,10 @@ native bool:ls_npc_precache(const model[]);
 native ls_interactable_spawn(const model[], const Float:origin[3], const prompt[] = "", const keys[] = "");
 /** The NPC a player is talking to now (0 none or a narrator). */
 native ls_npc_talking(id);
+/**
+ * Bots may use this interactable (on) or not: while it's usable (cooldown over, not used up,
+ * on, their team) bots get it as an errand (walk there, press USE). The map key bots=1 does the
+ * same from the start.
+ */
+native bool:ls_interactable_offer(ent, bool:on);
 /* ==== end NPCs and interactables ==== */
