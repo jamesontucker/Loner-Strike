@@ -467,7 +467,7 @@ barricade("South gate", "south", "y", CY0, 1, -g, g)
 # the routes: cover and landmarks
 
 # field: the floodlight mast, a burnt-out jeep, sandbag lines, crates (all 96+ apart)
-D(box(-1104, -272, 0, -1088, -256, 352, "CSTRIKE_ME4METL"))
+D(box(-1104, -272, 0, -1088, -256, 352, "CSTRIKE_ME4METL", hidden=((0, 0, 1), (0, 0, -1))))   # (its ends sit in the ground and the lamp head)
 D(box(-1128, -296, 352, -1064, -232, 368, "~LIGHT3A", top="CSTRIKE_ME4METL"))
 D(box(-928, -224, 0, -736, -128, 72, "OUT_DMP1A", top="OUT_DMPLID"))
 D(box(-1280, 96, 0, -1088, 128, 48, SB, top=SBT))
@@ -549,11 +549,11 @@ point("light", 0, 320, 120, _light="200 255 200 140")            # keep: the rad
 point("light", 336, 320, 116, _light="255 240 210 320")          # armory: bright
 point("light", 328, 236, 112, _light="255 210 90 180")           # over the armory door
 point("light", -328, 224, 460, _light="255 40 30 80")            # mast beacon
-# field: white-blue floodlight
-for lx, ly, lz in [(-1096, -264, 340), (-760, 300, 200), (-1300, 300, 220), (-1300, -400, 220)]:
+# field: white-blue floodlight (the first under the mast head, clear of the mast; lights inside a brush give none)
+for lx, ly, lz in [(-1096, -288, 340), (-760, 300, 200), (-1300, 300, 220), (-1300, -400, 220)]:
     point("light", lx, ly, lz, _light="190 210 255 300" if lz > 300 else "150 170 230 110")
-# alley: red warning lamps
-for lx, ly, lz in [(1068, 300, 120), (1300, 620, 120), (1600, 500, 120), (900, 0, 160), (1140, 120, 140)]:
+# alley: red warning lamps (the first just under its lamp block, not inside it)
+for lx, ly, lz in [(1068, 300, 100), (1300, 620, 120), (1600, 500, 120), (900, 0, 160), (1140, 120, 140)]:
     point("light", lx, ly, lz, _light="255 50 30 140")
 # road: the burning truck, orange
 for lx, ly, lz in [(336, -1040, 110), (0, -900, 180), (688, -1300, 160)]:

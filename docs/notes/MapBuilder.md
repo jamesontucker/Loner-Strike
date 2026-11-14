@@ -63,3 +63,10 @@ ls_outpost.map), shipped files in plugins/game/.
   -272..-208, 0..352) and the red route's at 1068 300 120 inside its own ~SPOTRED block (1060..1124, 296..360,
   112..176). Move them a few units out (the Checks panel's "Move it to free space" puts them just above).
 - Otherwise clean: no z-fighting, gaps, stuck things, seams or dark rooms. 437 faces nobody sees (124 kept, ~11 KB).
+
+## 2026-11-13 — ls_outpost: the two dark lights (from Checks)
+- The floodlight's `light` was inside the mast (now at -1096 -288 340, under the lamp head and clear of the post); the
+  first red alley light was inside its own ~SPOTRED block (now at 1068 300 100, just under it). The mast's two ends
+  (in the ground and in the lamp head) are NULL. Recompiled (Normal, 6 threads, niced): no leak, no warnings,
+  collision unchanged (clipnodes 1508). Nav re-learned anyway with r43507381531: the same 365 areas and the same
+  knowledge (34100 pairs in sight, 581 wallbang spots); mapcheck.py: all pass. Outputs in plugins/game/maps.
