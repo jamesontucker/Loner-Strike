@@ -23,6 +23,19 @@
    "type": "number",
    "scope": "mode",
    "default": 0
+  },
+  {
+   "id": "shop",
+   "name": "Shop",
+   "type": "entity",
+   "scope": "mode"
+  },
+  {
+   "id": "standing",
+   "name": "Standing",
+   "type": "number",
+   "scope": "mode",
+   "default": 0
   }
  ],
  "nodes": [
@@ -439,19 +452,6 @@
    }
   },
   {
-   "id": "pk_down",
-   "type": "player.down",
-   "pos": {
-    "x": 1065,
-    "y": 2353
-   },
-   "params": {
-    "secs": 25,
-    "hold": 3,
-    "health": 50
-   }
-  },
-  {
    "id": "pk_br",
    "type": "flow.branch",
    "pos": {
@@ -517,23 +517,98 @@
    }
   },
   {
-   "id": "rv",
-   "type": "event.player_revived",
+   "id": "ms_kd",
+   "type": "kd.enable",
    "pos": {
-    "x": 2065,
-    "y": 3002
+    "x": 1065,
+    "y": 50
+   },
+   "params": {
+    "on": true,
+    "bleed": 25,
+    "team": "2",
+    "perks": true
+   }
+  },
+  {
+   "id": "ms_mk",
+   "type": "marker.find",
+   "pos": {
+    "x": 1065,
+    "y": 250
+   },
+   "params": {
+    "marker": "lst_shop",
+    "n": 1
+   }
+  },
+  {
+   "id": "ms_has",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1565,
+    "y": 50
    },
    "params": {}
   },
   {
-   "id": "rv_pay",
-   "type": "player.add_money",
+   "id": "ms_shop",
+   "type": "comp.create",
    "pos": {
-    "x": 2565,
-    "y": 2989
+    "x": 2065,
+    "y": 0
    },
    "params": {
-    "amount": 200
+    "kind": "ls_shop",
+    "at": "",
+    "keys": "items=AK-47|2500|ak47|rifle;Kevlar and helmet|1000|vesthelm|armor;HE grenade|300|hegrenade|grenade;Ammo|200|ammo|ammo upgrades=1 keeper=barney price_rise=0.05"
+   }
+  },
+  {
+   "id": "ms_keep",
+   "type": "var.set",
+   "pos": {
+    "x": 2565,
+    "y": 0
+   },
+   "params": {
+    "var": "shop"
+   }
+  },
+  {
+   "id": "ms_spawn",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 2065,
+    "y": 250
+   },
+   "params": {
+    "by": "class",
+    "name": "info_player_start"
+   }
+  },
+  {
+   "id": "ms_shop2",
+   "type": "comp.create",
+   "pos": {
+    "x": 2565,
+    "y": 250
+   },
+   "params": {
+    "kind": "ls_shop",
+    "at": "",
+    "keys": "items=AK-47|2500|ak47|rifle;Kevlar and helmet|1000|vesthelm|armor;HE grenade|300|hegrenade|grenade;Ammo|200|ammo|ammo upgrades=1 keeper=barney price_rise=0.05"
+   }
+  },
+  {
+   "id": "ms_keep2",
+   "type": "var.set",
+   "pos": {
+    "x": 3065,
+    "y": 250
+   },
+   "params": {
+    "var": "shop"
    }
   },
   {
@@ -541,216 +616,178 @@
    "type": "event.chat_command",
    "pos": {
     "x": 65,
-    "y": 3910
+    "y": 3000
    },
    "params": {
     "command": "shop"
    }
   },
   {
+   "id": "sh_get",
+   "type": "var.get",
+   "pos": {
+    "x": 65,
+    "y": 3200
+   },
+   "params": {
+    "var": "shop"
+   }
+  },
+  {
    "id": "sh_menu",
-   "type": "msg.menu",
-   "pos": {
-    "x": 1065,
-    "y": 3692
-   },
-   "params": {
-    "title": "Shop",
-    "o1": "AK-47 (2500)",
-    "o2": "Kevlar and helmet (1000)",
-    "o3": "HE grenade (300)",
-    "o4": ""
-   }
-  },
-  {
-   "id": "sh_m1",
-   "type": "player.get_money",
+   "type": "shop.menu",
    "pos": {
     "x": 565,
-    "y": 3367
+    "y": 3000
    },
    "params": {}
   },
   {
-   "id": "sh_c1",
-   "type": "math.compare",
+   "id": "up",
+   "type": "kd.on_up",
    "pos": {
-    "x": 1065,
-    "y": 3343
-   },
-   "params": {
-    "op": "ge",
-    "b": 2500
-   }
-  },
-  {
-   "id": "sh_b1",
-   "type": "flow.branch",
-   "pos": {
-    "x": 1565,
-    "y": 3333
+    "x": 65,
+    "y": 3500
    },
    "params": {}
   },
   {
-   "id": "sh_g1",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 2065,
-    "y": 3208
-   },
-   "params": {
-    "weapon": "ak47",
-    "ammo": 90
-   }
-  },
-  {
-   "id": "sh_p1",
+   "id": "up_pay",
    "type": "player.add_money",
-   "pos": {
-    "x": 2565,
-    "y": 3390
-   },
-   "params": {
-    "amount": -2500
-   }
-  },
-  {
-   "id": "sh_n1",
-   "type": "msg.chat",
-   "pos": {
-    "x": 2065,
-    "y": 3365
-   },
-   "params": {
-    "text": "Not enough money for that."
-   }
-  },
-  {
-   "id": "sh_m2",
-   "type": "player.get_money",
    "pos": {
     "x": 565,
-    "y": 3934
+    "y": 3500
+   },
+   "params": {
+    "amount": 200
+   }
+  },
+  {
+   "id": "dn",
+   "type": "kd.on_down",
+   "pos": {
+    "x": 65,
+    "y": 3800
    },
    "params": {}
   },
   {
-   "id": "sh_c2",
-   "type": "math.compare",
-   "pos": {
-    "x": 1065,
-    "y": 3910
-   },
-   "params": {
-    "op": "ge",
-    "b": 1000
-   }
-  },
-  {
-   "id": "sh_b2",
-   "type": "flow.branch",
-   "pos": {
-    "x": 1565,
-    "y": 3819
-   },
-   "params": {}
-  },
-  {
-   "id": "sh_g2",
-   "type": "player.give_item",
-   "pos": {
-    "x": 2065,
-    "y": 3905
-   },
-   "params": {
-    "item": "vesthelm"
-   }
-  },
-  {
-   "id": "sh_p2",
-   "type": "player.add_money",
-   "pos": {
-    "x": 2565,
-    "y": 4076
-   },
-   "params": {
-    "amount": -1000
-   }
-  },
-  {
-   "id": "sh_n2",
-   "type": "msg.chat",
-   "pos": {
-    "x": 2065,
-    "y": 3573
-   },
-   "params": {
-    "text": "Not enough money for that."
-   }
-  },
-  {
-   "id": "sh_m3",
-   "type": "player.get_money",
+   "id": "dn_wait",
+   "type": "timer.delay",
    "pos": {
     "x": 565,
-    "y": 4218
+    "y": 3800
    },
-   "params": {}
+   "params": {
+    "secs": 0.1
+   }
   },
   {
-   "id": "sh_c3",
-   "type": "math.compare",
+   "id": "dn_zero",
+   "type": "var.set",
    "pos": {
     "x": 1065,
-    "y": 4194
+    "y": 3800
    },
    "params": {
-    "op": "ge",
-    "b": 300
+    "var": "standing",
+    "value": 0
    }
   },
   {
-   "id": "sh_b3",
-   "type": "flow.branch",
+   "id": "dn_each",
+   "type": "flow.for_each_player",
    "pos": {
     "x": 1565,
-    "y": 4184
+    "y": 3800
+   },
+   "params": {
+    "which": "alive_ct"
+   }
+  },
+  {
+   "id": "dn_is",
+   "type": "kd.is",
+   "pos": {
+    "x": 1565,
+    "y": 4000
    },
    "params": {}
   },
   {
-   "id": "sh_g3",
-   "type": "player.give_weapon",
+   "id": "dn_br",
+   "type": "flow.branch",
    "pos": {
     "x": 2065,
-    "y": 4366
+    "y": 3800
    },
-   "params": {
-    "weapon": "hegrenade",
-    "ammo": 0
-   }
+   "params": {}
   },
   {
-   "id": "sh_p3",
-   "type": "player.add_money",
+   "id": "dn_add",
+   "type": "var.add",
    "pos": {
     "x": 2565,
-    "y": 4403
+    "y": 3750
    },
    "params": {
-    "amount": -300
+    "var": "standing",
+    "amount": 1
    }
   },
   {
-   "id": "sh_n3",
-   "type": "msg.chat",
+   "id": "dn_get",
+   "type": "var.get",
    "pos": {
-    "x": 2065,
-    "y": 4077
+    "x": 1565,
+    "y": 4150
    },
    "params": {
-    "text": "Not enough money for that."
+    "var": "standing"
+   }
+  },
+  {
+   "id": "dn_cmp",
+   "type": "math.compare",
+   "pos": {
+    "x": 2065,
+    "y": 4150
+   },
+   "params": {
+    "op": "eq",
+    "b": 0
+   }
+  },
+  {
+   "id": "dn_br2",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2565,
+    "y": 4000
+   },
+   "params": {}
+  },
+  {
+   "id": "dn_lost",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 3065,
+    "y": 4000
+   },
+   "params": {
+    "text": "The base is overrun!",
+    "seconds": 5
+   }
+  },
+  {
+   "id": "dn_end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 3565,
+    "y": 4000
+   },
+   "params": {
+    "winner": "t"
    }
   }
  ],
@@ -1262,28 +1299,6 @@
    }
   },
   {
-   "id": "w47",
-   "from": {
-    "node": "pk",
-    "pin": "victim"
-   },
-   "to": {
-    "node": "pk_down",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w48",
-   "from": {
-    "node": "pk_ct",
-    "pin": "true"
-   },
-   "to": {
-    "node": "pk_down",
-    "pin": "exec"
-   }
-  },
-  {
    "id": "w49",
    "from": {
     "node": "pk_none",
@@ -1292,17 +1307,6 @@
    "to": {
     "node": "pk_br",
     "pin": "cond"
-   }
-  },
-  {
-   "id": "w50",
-   "from": {
-    "node": "pk_down",
-    "pin": "then"
-   },
-   "to": {
-    "node": "pk_br",
-    "pin": "exec"
    }
   },
   {
@@ -1394,376 +1398,332 @@
    }
   },
   {
-   "id": "w59",
+   "id": "v4_1",
    "from": {
-    "node": "rv",
+    "node": "ms_pack",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_kd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_2",
+   "from": {
+    "node": "ms_kd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_has",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_3",
+   "from": {
+    "node": "ms_mk",
+    "pin": "found"
+   },
+   "to": {
+    "node": "ms_has",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "v4_4",
+   "from": {
+    "node": "ms_has",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ms_shop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_5",
+   "from": {
+    "node": "ms_mk",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ms_shop",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "v4_6",
+   "from": {
+    "node": "ms_shop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_keep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_7",
+   "from": {
+    "node": "ms_shop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ms_keep",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "v4_8",
+   "from": {
+    "node": "ms_has",
+    "pin": "false"
+   },
+   "to": {
+    "node": "ms_spawn",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_9",
+   "from": {
+    "node": "ms_spawn",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_shop2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_10",
+   "from": {
+    "node": "ms_spawn",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ms_shop2",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "v4_11",
+   "from": {
+    "node": "ms_shop2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_keep2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_12",
+   "from": {
+    "node": "ms_shop2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ms_keep2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "v4_13",
+   "from": {
+    "node": "sh",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sh_menu",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_14",
+   "from": {
+    "node": "sh_get",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sh_menu",
+    "pin": "shop"
+   }
+  },
+  {
+   "id": "v4_15",
+   "from": {
+    "node": "sh",
+    "pin": "player"
+   },
+   "to": {
+    "node": "sh_menu",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "v4_16",
+   "from": {
+    "node": "up",
+    "pin": "then"
+   },
+   "to": {
+    "node": "up_pay",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_17",
+   "from": {
+    "node": "up",
     "pin": "by"
    },
    "to": {
-    "node": "rv_pay",
+    "node": "up_pay",
     "pin": "player"
    }
   },
   {
-   "id": "w60",
+   "id": "v4_18",
    "from": {
-    "node": "rv",
+    "node": "dn",
     "pin": "then"
    },
    "to": {
-    "node": "rv_pay",
+    "node": "dn_wait",
     "pin": "exec"
    }
   },
   {
-   "id": "w61",
+   "id": "v4_19",
    "from": {
-    "node": "sh",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sh_menu",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w62",
-   "from": {
-    "node": "sh",
+    "node": "dn_wait",
     "pin": "then"
    },
    "to": {
-    "node": "sh_menu",
+    "node": "dn_zero",
     "pin": "exec"
    }
   },
   {
-   "id": "w63",
+   "id": "v4_20",
    "from": {
-    "node": "sh",
+    "node": "dn_zero",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dn_each",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_21",
+   "from": {
+    "node": "dn_each",
+    "pin": "each"
+   },
+   "to": {
+    "node": "dn_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_22",
+   "from": {
+    "node": "dn_each",
     "pin": "player"
    },
    "to": {
-    "node": "sh_m1",
+    "node": "dn_is",
     "pin": "player"
    }
   },
   {
-   "id": "w64",
+   "id": "v4_23",
    "from": {
-    "node": "sh_m1",
+    "node": "dn_is",
     "pin": "out"
    },
    "to": {
-    "node": "sh_c1",
-    "pin": "a"
-   }
-  },
-  {
-   "id": "w65",
-   "from": {
-    "node": "sh_c1",
-    "pin": "out"
-   },
-   "to": {
-    "node": "sh_b1",
+    "node": "dn_br",
     "pin": "cond"
    }
   },
   {
-   "id": "w66",
+   "id": "v4_24",
    "from": {
-    "node": "sh_menu",
-    "pin": "c1"
-   },
-   "to": {
-    "node": "sh_b1",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w67",
-   "from": {
-    "node": "sh",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sh_g1",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w68",
-   "from": {
-    "node": "sh_b1",
-    "pin": "true"
-   },
-   "to": {
-    "node": "sh_g1",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w69",
-   "from": {
-    "node": "sh",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sh_p1",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w70",
-   "from": {
-    "node": "sh_g1",
-    "pin": "then"
-   },
-   "to": {
-    "node": "sh_p1",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w71",
-   "from": {
-    "node": "sh",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sh_n1",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w72",
-   "from": {
-    "node": "sh_b1",
+    "node": "dn_br",
     "pin": "false"
    },
    "to": {
-    "node": "sh_n1",
+    "node": "dn_add",
     "pin": "exec"
    }
   },
   {
-   "id": "w73",
+   "id": "v4_25",
    "from": {
-    "node": "sh",
-    "pin": "player"
+    "node": "dn_each",
+    "pin": "then"
    },
    "to": {
-    "node": "sh_m2",
-    "pin": "player"
+    "node": "dn_br2",
+    "pin": "exec"
    }
   },
   {
-   "id": "w74",
+   "id": "v4_26",
    "from": {
-    "node": "sh_m2",
+    "node": "dn_get",
     "pin": "out"
    },
    "to": {
-    "node": "sh_c2",
+    "node": "dn_cmp",
     "pin": "a"
    }
   },
   {
-   "id": "w75",
+   "id": "v4_27",
    "from": {
-    "node": "sh_c2",
+    "node": "dn_cmp",
     "pin": "out"
    },
    "to": {
-    "node": "sh_b2",
+    "node": "dn_br2",
     "pin": "cond"
    }
   },
   {
-   "id": "w76",
+   "id": "v4_28",
    "from": {
-    "node": "sh_menu",
-    "pin": "c2"
-   },
-   "to": {
-    "node": "sh_b2",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w77",
-   "from": {
-    "node": "sh",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sh_g2",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w78",
-   "from": {
-    "node": "sh_b2",
+    "node": "dn_br2",
     "pin": "true"
    },
    "to": {
-    "node": "sh_g2",
+    "node": "dn_lost",
     "pin": "exec"
    }
   },
   {
-   "id": "w79",
+   "id": "v4_29",
    "from": {
-    "node": "sh",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sh_p2",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w80",
-   "from": {
-    "node": "sh_g2",
+    "node": "dn_lost",
     "pin": "then"
    },
    "to": {
-    "node": "sh_p2",
+    "node": "dn_end",
     "pin": "exec"
    }
   },
   {
-   "id": "w81",
+   "id": "v4_30",
    "from": {
-    "node": "sh",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sh_n2",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w82",
-   "from": {
-    "node": "sh_b2",
-    "pin": "false"
-   },
-   "to": {
-    "node": "sh_n2",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w83",
-   "from": {
-    "node": "sh",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sh_m3",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w84",
-   "from": {
-    "node": "sh_m3",
-    "pin": "out"
-   },
-   "to": {
-    "node": "sh_c3",
-    "pin": "a"
-   }
-  },
-  {
-   "id": "w85",
-   "from": {
-    "node": "sh_c3",
-    "pin": "out"
-   },
-   "to": {
-    "node": "sh_b3",
-    "pin": "cond"
-   }
-  },
-  {
-   "id": "w86",
-   "from": {
-    "node": "sh_menu",
-    "pin": "c3"
-   },
-   "to": {
-    "node": "sh_b3",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w87",
-   "from": {
-    "node": "sh",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sh_g3",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w88",
-   "from": {
-    "node": "sh_b3",
+    "node": "pk_ct",
     "pin": "true"
    },
    "to": {
-    "node": "sh_g3",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w89",
-   "from": {
-    "node": "sh",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sh_p3",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w90",
-   "from": {
-    "node": "sh_g3",
-    "pin": "then"
-   },
-   "to": {
-    "node": "sh_p3",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w91",
-   "from": {
-    "node": "sh",
-    "pin": "player"
-   },
-   "to": {
-    "node": "sh_n3",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w92",
-   "from": {
-    "node": "sh_b3",
-    "pin": "false"
-   },
-   "to": {
-    "node": "sh_n3",
+    "node": "pk_br",
     "pin": "exec"
    }
   }
@@ -1771,7 +1731,7 @@
  "comments": [
   {
    "id": "c_setup",
-   "text": "Set up once: Last Stand's map pack (wave spawners, barricades, supply drops). The mode's settings (This mode): rounds only end when the mode says, no team balance.",
+   "text": "Set up once: Last Stand's map pack (wave spawners, barricades, supply drops), knocked down instead of dead for defenders, the armory. The mode's settings (This mode): rounds only end when the mode says, no team balance.",
    "pos": {
     "x": 41,
     "y": 4
@@ -1819,7 +1779,7 @@
   },
   {
    "id": "c_deaths",
-   "text": "Deaths: a fallen defender is downed for 25 s (hold USE on them for 3 s to bring them back: +200 for the helper); the base falls when no defender is standing; each zombie killed pays 300.",
+   "text": "Deaths: a defender who'd die is knocked down instead and bleeds out over 25 s (a teammate holding USE for 4 s gets them up: +200 for the helper); the base falls when no defender is standing; each zombie killed pays 300.",
    "pos": {
     "x": 41,
     "y": 2307
@@ -1831,7 +1791,7 @@
   },
   {
    "id": "c_shop",
-   "text": "The shop: say !shop (or slash shop). Each choice checks the money first.",
+   "text": "The armory: a real shop with a keeper at the map's Armory marker (else a defender spawn); walk up and press USE, or say !shop anywhere. Prices rise 5 % a wave; perks and the gun upgrade are on sale where the map has no machine or bench.",
    "pos": {
     "x": 41,
     "y": 3162
@@ -1840,6 +1800,18 @@
     "w": 2778,
     "h": 1397
    }
+  }
+ ],
+ "markers": [
+  {
+   "id": "lst_shop",
+   "label": "Armory",
+   "description": "Where the armory counter stands (the shopkeeper waits there). Without one, it goes on a defender spawn.",
+   "type": "point",
+   "min": 0,
+   "max": 1,
+   "colour": "#d9c27a",
+   "icon": "crate"
   }
  ]
 }

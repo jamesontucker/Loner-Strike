@@ -127,7 +127,7 @@ fn ent_name_text(s: &str) -> String {
 
 /// Component keys for a string literal.
 fn keys_text(s: &str) -> String {
-    s.chars().filter(|c| c.is_ascii_alphanumeric() || " _-.=:,".contains(*c)).take(120).collect()
+    s.chars().filter(|c| c.is_ascii_alphanumeric() || " _-.=:,|;@".contains(*c)).take(400).collect()
 }
 
 /// A Pawn float literal, finite and inside the graph's limits.
@@ -296,6 +296,17 @@ const EVENTS: &[EventKind] = &[
     EventKind { kind: "comp.on_barricade_damaged", sig: "public ls_on_barricade_damaged(ent, attacker, hp)", register: &[], prelude: "", guard: "", values: &[("barricade", "ent"), ("attacker", "attacker"), ("hp", "_:float(hp)")], tail: "", named: None },
     EventKind { kind: "comp.on_barricade_repaired", sig: "public ls_on_barricade_repaired(ent, id, hp)", register: &[], prelude: "", guard: "", values: &[("barricade", "ent"), ("player", "id >= 1 && id <= MaxClients ? id : 0"), ("hp", "_:float(hp)")], tail: "", named: None },
     EventKind { kind: "comp.on_drop_landed", sig: "public ls_on_drop(ent, stage, const Float:origin[3])", register: &[], prelude: "", guard: "\t#pragma unused origin\n\tif (stage != 1)\n\t\treturn", values: &[("drop", "ent")], tail: "", named: None },
+    EventKind { kind: "up.on_perk", sig: "public ls_on_perk(id, const perk[], price)", register: &[], prelude: "", guard: "", values: &[("player", "id"), ("perk", "@str:perk"), ("price", "_:float(price)")], tail: "\treturn PLUGIN_CONTINUE", named: None },
+    EventKind { kind: "up.on_upgraded", sig: "public ls_on_weapon_upgraded(id, weapon, level, price)", register: &[], prelude: "", guard: "\t#pragma unused weapon", values: &[("player", "id"), ("level", "_:float(level)"), ("price", "_:float(price)")], tail: "", named: None },
+    EventKind { kind: "up.on_box", sig: "public ls_on_box(ent, id, const weapon[])", register: &[], prelude: "", guard: "\t#pragma unused ent", values: &[("player", "id"), ("weapon", "@str:weapon")], tail: "\treturn PLUGIN_CONTINUE", named: None },
+    EventKind { kind: "up.on_pickup", sig: "public ls_on_pickup(ent, id, const kind[])", register: &[], prelude: "", guard: "", values: &[("pickup", "ent"), ("player", "id"), ("kind", "@str:kind")], tail: "\treturn PLUGIN_CONTINUE", named: None },
+    EventKind { kind: "up.on_creature_hurt", sig: "public ls_on_creature_hurt(ent, attacker, Float:dmg, headshot)", register: &[], prelude: "", guard: "", values: &[("creature", "ent"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:dmg"), ("headshot", "headshot ? 1 : 0")], tail: "", named: None },
+    EventKind { kind: "kd.on_down", sig: "public ls_on_down(id, attacker)", register: &[], prelude: "", guard: "", values: &[("player", "id"), ("attacker", "attacker")], tail: "\treturn PLUGIN_CONTINUE", named: None },
+    EventKind { kind: "kd.on_up", sig: "public ls_on_revive(id, by)", register: &[], prelude: "", guard: "", values: &[("player", "id"), ("by", "by >= 1 && by <= MaxClients ? by : 0")], tail: "", named: None },
+    EventKind { kind: "kd.on_bled_out", sig: "public ls_on_bled_out(id)", register: &[], prelude: "", guard: "", values: &[("player", "id")], tail: "", named: None },
+    EventKind { kind: "shop.on_buy", sig: "public ls_on_shop_buy(ent, id, const item[], price)", register: &[], prelude: "", guard: "", values: &[("shop", "ent"), ("player", "id"), ("item", "@str:item"), ("price", "_:float(price)")], tail: "\treturn PLUGIN_CONTINUE", named: None },
+    EventKind { kind: "br.on_landed", sig: "public ls_on_landed(id)", register: &[], prelude: "", guard: "", values: &[("player", "id")], tail: "", named: None },
+    EventKind { kind: "br.on_lobby_end", sig: "public ls_on_lobby_end(squads)", register: &[], prelude: "", guard: "", values: &[("squads", "_:float(squads)")], tail: "", named: None },
     EventKind { kind: "comp.on_barricade_broken", sig: "public ls_on_barricade_broken(ent, attacker)", register: &[], prelude: "", guard: "", values: &[("barricade", "ent"), ("attacker", "attacker")], tail: "", named: None },
     EventKind { kind: "comp.on_meeting_end", sig: "public ls_on_meeting_end(ent, ejected)", register: &[], prelude: "", guard: "", values: &[("meeting", "ent"), ("ejected", "ejected")], tail: "", named: None },
     EventKind {
@@ -690,6 +701,16 @@ impl<'a> Gen<'a> {
             "player.get_deaths" => format!("lsg_get_deaths({})", i("player", "player")),
             "player.is_role" => format!("(ls_is_role({}, {}) ? 1 : 0)", i("player", "player"), pawn_str(&name_text(self.text(n, def, "role")))),
             "game.count_role" => format!("float(ls_count_role({}))", pawn_str(&name_text(self.text(n, def, "role")))),
+            "up.mod_get" => format!("(ls_components_running() ? ls_player_mod_get({}, {}) : 1.0)", i("player", "player"), pawn_str(self.choice(n, def, "what"))),
+            "up.perk_has" => format!("(ls_components_running() && ls_perk_has({}, {}) ? 1 : 0)", i("player", "player"), pawn_str(self.choice(n, def, "perk"))),
+            "up.perk_count" => format!("float(ls_components_running() ? ls_perk_count({}) : 0)", i("player", "player")),
+            "up.weapon_level" => format!("float(ls_components_running() && lsg_ok({p}) ? ls_weapon_level({p}) : 0)", p = i("player", "player")),
+            "kd.is" => format!("(ls_components_running() && ls_is_down({}) ? 1 : 0)", i("player", "player")),
+            "kd.left" => format!("(ls_components_running() ? ls_down_left({}) : 0.0)", i("player", "player")),
+            "shop.price" => format!("float(ls_components_running() ? ls_shop_price({}, {}) : -1)", i("shop", "entity"), pawn_str(&safe_text(self.text(n, def, "item"), 40))),
+            "br.heal_count" => format!("float(ls_components_running() ? ls_heal_count({}) : 0)", i("player", "player")),
+            "br.kills" => format!("float(ls_components_running() ? ls_kills({}) : 0)", i("player", "player")),
+            "br.squads_alive" => "float(ls_components_running() ? ls_squads_alive() : 0)".into(),
             "comp.barricade_hp" => format!("float(ls_components_running() ? ls_barricade_hp({}) : 0)", i("barricade", "entity")),
             "comp.zone_stage" => format!("float(ls_components_running() ? ls_zone_stage({}) : 0)", i("zone", "entity")),
             "comp.zone_next" => format!("{}lsg_zone_next({}, {})", if pin == "closing" { "_:" } else { "" }, i("zone", "entity"), match pin { "radius" => 1, "closing" => 2, _ => 0 }),
@@ -1114,8 +1135,17 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if uses_spawn {
         o.line(CREATURES_X);
     }
-    if !need.creatures.is_empty() || uses_markers {
+    // a shop the mode makes at run time with a keeper: the keeper's model is loaded with the map
+    let keepers: Vec<&str> = g.nodes.iter().filter(|n| n.kind == "comp.create" && n.params.get("kind").and_then(Value::as_str) == Some("ls_shop"))
+        .filter_map(|n| n.params.get("keys").and_then(Value::as_str))
+        .filter_map(|k| k.split_whitespace().find_map(|w| w.strip_prefix("keeper=")))
+        .filter_map(|k| match k { "barney" => Some("models/barney.mdl"), "gman" => Some("models/gman.mdl"), _ => None })
+        .collect::<BTreeSet<_>>().into_iter().collect();
+    if !need.creatures.is_empty() || uses_markers || !keepers.is_empty() {
         let mut pre = String::from("public plugin_precache()\n{");
+        for m in &keepers {
+            pre.push_str(&format!("\n\t// the shopkeeper of a shop the mode makes\n\tprecache_model({})", pawn_str(m)));
+        }
         if uses_markers {
             pre.push_str("\n\t// the map's ls_marker entities, as they load\n\tregister_forward(FM_KeyValue, \"lsg_mk_kv\")\n\tregister_forward(FM_Spawn, \"lsg_mk_spawn\", 1)");
         }
@@ -1327,6 +1357,8 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
                 Some((true, i)) => {
                     if *read == "@netname" {
                         o.line(format!("\tpev(ent, pev_netname, g_lsgTxt[{i}], 63) // {pin}"));
+                    } else if let Some(param) = read.strip_prefix("@str:") {
+                        o.line(format!("\tcopy(g_lsgTxt[{i}], 63, {param}) // {pin}"));
                     }
                 }
                 Some((false, i)) => o.line(format!("\tctx[{i}] = {read} // {pin}")),
@@ -1995,8 +2027,31 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\tnew map[32]\n\t\tget_mapname(map, charsmax(map))\n\t\tif (!ls_comp_load_pack(fmt(\"gamemodes/components/%s.%s.ini\", map, {pack})))"), if debug { format!("\t\tlsd_error({i}, \"This map has no such pack.\")\n\t\telse\n\t\t\tlsd_exit({i}, \"loaded\")") } else { "\t\t{}".into() }]);
             then_line(&mut b, "then");
         }
-        "comp.crate_open" | "comp.wave_start" | "comp.wave_stop" | "comp.extract_open" | "comp.door" | "comp.trap_fire" | "comp.capture_lock" | "comp.reset" | "comp.start" | "comp.stop" | "comp.barricade_set_hp" | "comp.barricade_repair" | "comp.zone_skip" => {
+        "comp.crate_open" | "comp.wave_start" | "comp.wave_stop" | "comp.extract_open" | "comp.door" | "comp.trap_fire" | "comp.capture_lock" | "comp.reset" | "comp.start" | "comp.stop" | "comp.barricade_set_hp" | "comp.barricade_repair" | "comp.zone_skip"
+        | "up.mod" | "up.perk_give" | "up.bench" | "up.box" | "kd.enable" | "kd.down" | "kd.revive" | "shop.menu" | "shop.open" | "br.heal_give" | "br.armor" | "br.glow" | "br.hud" | "br.hud_text" | "br.feed" | "br.drop_in" | "br.lobby" | "br.squad_size" => {
+            let p = || inp("player", "player");
             let call = match def.kind.as_str() {
+                "up.mod" => format!("ls_player_mod({}, {}, {})", p(), pawn_str(gen.choice(n, def, "what")), inp("mult", "number")),
+                "up.perk_give" => format!("ls_perk_give({}, {})", p(), pawn_str(gen.choice(n, def, "perk"))),
+                "up.bench" => format!("ls_bench_use({})", p()),
+                "up.box" => format!("ls_box_use({}, {})", if v.data_source(id, "box").is_some() { inp("box", "entity") } else { "0".into() }, p()),
+                "kd.enable" => format!("ls_down_enable({}, {}, {}, {})", if gen.boolean(n, def, "on") { "true" } else { "false" }, float_lit(gen.num(n, def, "bleed")), gen.choice(n, def, "team").parse::<i64>().unwrap_or(0).clamp(0, 2), if gen.boolean(n, def, "perks") { "true" } else { "false" }),
+                "kd.down" => format!("ls_down({})", p()),
+                "kd.revive" => format!("ls_revive({}, {})", p(), if v.data_source(id, "by").is_some() { inp("by", "player") } else { "0".into() }),
+                "shop.menu" => format!("ls_shop_menu({}, {})", inp("shop", "entity"), p()),
+                "shop.open" => format!("ls_shop_open({}, bool:{})", inp("shop", "entity"), bool01(&inp("open", "bool"))),
+                "br.heal_give" => format!("ls_heal_give({}, {}, max(floatround({}), 1))", p(), pawn_str(match gen.choice(n, def, "kind") { "medkit" => "medkit", "drink" => "drink", _ => "bandage" }), inp("n", "number")),
+                "br.armor" => format!("ls_armor_set({}, {}, {})", p(), gen.choice(n, def, "vest").parse::<i64>().unwrap_or(-1).clamp(-1, 3), gen.choice(n, def, "helmet").parse::<i64>().unwrap_or(-1).clamp(-1, 3)),
+                "br.glow" => format!("ls_glow({}, clamp(floatround({}), 0, 5))", inp("ent", "entity"), inp("tier", "number")),
+                "br.hud" => format!("ls_match_hud({})", if gen.boolean(n, def, "on") { "true" } else { "false" }),
+                "br.hud_text" => format!("ls_match_hud_text({})", inp("text", "text")),
+                "br.feed" => format!("ls_feed({})", inp("text", "text")),
+                "br.drop_in" => match v.data_source(id, "at") {
+                    Some(_) => format!("lsg_drop_in({}, {})", p(), inp("at", "entity")),
+                    None => format!("ls_drop_in({})", p()),
+                },
+                "br.lobby" => format!("ls_squad_lobby(floatmax({}, 0.0))", inp("secs", "number")),
+                "br.squad_size" => format!("ls_squad_max(clamp(floatround({}), 1, 8))", inp("size", "number")),
                 "comp.barricade_set_hp" => format!("ls_barricade_set_hp({}, max(floatround({}), 0))", inp("barricade", "entity"), inp("hp", "number")),
                 "comp.barricade_repair" => format!("ls_barricade_repair({}, {})", inp("barricade", "entity"), if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() }),
                 "comp.zone_skip" => format!("ls_zone_skip({})", inp("zone", "entity")),
@@ -2014,6 +2069,24 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 _ => "ls_comp_reset()".into(),
             };
             check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\t{call}"), exit("done")]);
+            then_line(&mut b, "then");
+        }
+        "up.perk_buy" => {
+            let k = gen.out_index(id, "bought");
+            let store = k.map_or(String::new(), |k| format!("g_lsgO[{k}] = "));
+            check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\t{store}ls_perk_buy({}, {}) ? 1 : 0", inp("player", "player"), pawn_str(gen.choice(n, def, "perk"))), exit("done")]);
+            then_line(&mut b, "then");
+        }
+        "up.pickup" | "br.crate" => {
+            let at = inp("at", "entity");
+            let call = if def.kind == "up.pickup" {
+                let (r, g_, bl) = match gen.choice(n, def, "colour") { "white" => (255, 255, 255), "green" => (80, 220, 80), "blue" => (80, 140, 255), "purple" => (190, 90, 255), "red" => (255, 70, 60), _ => (255, 200, 40) };
+                format!("ls_pickup_spawn({}, o, {}, \"\", {r}, {g_}, {bl})", pawn_str(&name_text(gen.text(n, def, "kind"))), float_lit(gen.num(n, def, "life")))
+            } else {
+                format!("ls_crate_make(o, {})", pawn_str(&keys_text(gen.text(n, def, "items"))))
+            };
+            b.line("\tnew Float:o[3]");
+            check(&mut b, &format!("{comps} || !lsg_ent_origin({at}, o)"), "gm_components isn't running, or there's no such entity.", &[format!("\tg_lsgOut[{i}] = {call}"), exit("done")]);
             then_line(&mut b, "then");
         }
         "comp.loot_roll" => {
@@ -2871,7 +2944,16 @@ fn lsg_secs(v: &Option<Val>) -> String {
 const V3_HELPERS: &str = include_str!("v3_helpers.pawn");
 
 /// Helpers every plugin gets (stocks: the ones a graph doesn't use cost nothing).
-const HELPERS: &str = r##"stock Float:lsg_ehp(e)
+const HELPERS: &str = r##"// a drop-in over an entity's place
+stock lsg_drop_in(id, ent)
+{
+	new Float:o[3]
+	if (!lsg_ent_origin(ent, o))
+		return ls_drop_in(id)
+	return ls_drop_in(id, o)
+}
+
+stock Float:lsg_ehp(e)
 	return e > MaxClients && pev_valid(e) ? entity_get_float(e, EV_FL_health) : 0.0
 
 // ---- bot hints (ls_mode, through gm_components) ----

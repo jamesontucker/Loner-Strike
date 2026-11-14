@@ -76,7 +76,7 @@ export function typeColor(t: PinType): string {
 export const NAME_CHARS = /^[A-Za-z0-9_.-]{0,32}$/;
 /** An entity's name as a map gives it (some maps' component names have spaces). */
 export const ENT_NAME_CHARS = /^[A-Za-z0-9_. -]{0,32}$/;
-export const KEYS_CHARS = /^[A-Za-z0-9 _.=:,-]*$/;
+export const KEYS_CHARS = /^[A-Za-z0-9 _.=:,|;@-]*$/;
 
 export function defaultParams(def: NodeDef): Record<string, string | number | boolean> {
   return Object.fromEntries(def.params.map((p) => [p.id, p.default]));

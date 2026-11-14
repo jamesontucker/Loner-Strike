@@ -598,7 +598,7 @@ pub fn valid_ent_name(s: &str) -> bool {
 /// Component keys (`radius=160 capture_secs=8 name=B`): words of name characters and `=`,
 /// separated by spaces. No quotes, so no value can carry anything else.
 pub fn valid_keys(s: &str, max: usize) -> bool {
-    s.len() <= max && s.chars().all(|c| c.is_ascii_alphanumeric() || " _-.=:,".contains(c))
+    s.len() <= max && s.chars().all(|c| c.is_ascii_alphanumeric() || " _-.=:,|;@".contains(c))
 }
 
 /// A comment box's note: never put into generated code, but held to the same characters

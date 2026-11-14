@@ -6,7 +6,14 @@
   "name": "Every Node 2",
   "description": "Mode-building nodes"
  },
- "variables": [],
+ "variables": [
+  {
+   "id": "shopv",
+   "name": "Shop",
+   "type": "entity",
+   "scope": "mode"
+  }
+ ],
  "nodes": [
   {
    "id": "ps",
@@ -519,6 +526,756 @@
    },
    "params": {
     "text": "X2 creature killed by:",
+    "chat": false
+   }
+  },
+  {
+   "id": "ps2",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 0,
+    "y": 1540
+   },
+   "params": {}
+  },
+  {
+   "id": "mod",
+   "type": "up.mod",
+   "pos": {
+    "x": 260,
+    "y": 1540
+   },
+   "params": {
+    "what": "speed",
+    "mult": 1.1
+   }
+  },
+  {
+   "id": "pg",
+   "type": "up.perk_give",
+   "pos": {
+    "x": 520,
+    "y": 1540
+   },
+   "params": {
+    "perk": "tough"
+   }
+  },
+  {
+   "id": "pb",
+   "type": "up.perk_buy",
+   "pos": {
+    "x": 780,
+    "y": 1540
+   },
+   "params": {
+    "perk": "hands"
+   }
+  },
+  {
+   "id": "p_pb",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 1540
+   },
+   "params": {
+    "text": "X2 bought hands:",
+    "chat": false
+   }
+  },
+  {
+   "id": "ph_",
+   "type": "up.perk_has",
+   "pos": {
+    "x": 1040,
+    "y": 1540
+   },
+   "params": {
+    "perk": "tough"
+   }
+  },
+  {
+   "id": "p_ph",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 1540
+   },
+   "params": {
+    "text": "X2 has tough:",
+    "chat": false
+   }
+  },
+  {
+   "id": "pc",
+   "type": "up.perk_count",
+   "pos": {
+    "x": 0,
+    "y": 1760
+   },
+   "params": {}
+  },
+  {
+   "id": "p_pc",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 1760
+   },
+   "params": {
+    "text": "X2 perks:",
+    "chat": false
+   }
+  },
+  {
+   "id": "mg",
+   "type": "up.mod_get",
+   "pos": {
+    "x": 260,
+    "y": 1760
+   },
+   "params": {
+    "what": "speed"
+   }
+  },
+  {
+   "id": "p_mg",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 1760
+   },
+   "params": {
+    "text": "X2 speed times:",
+    "chat": false
+   }
+  },
+  {
+   "id": "wl",
+   "type": "up.weapon_level",
+   "pos": {
+    "x": 520,
+    "y": 1760
+   },
+   "params": {}
+  },
+  {
+   "id": "p_wl",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 1760
+   },
+   "params": {
+    "text": "X2 gun level:",
+    "chat": false
+   }
+  },
+  {
+   "id": "bench",
+   "type": "up.bench",
+   "pos": {
+    "x": 780,
+    "y": 1760
+   },
+   "params": {}
+  },
+  {
+   "id": "box",
+   "type": "up.box",
+   "pos": {
+    "x": 1040,
+    "y": 1760
+   },
+   "params": {}
+  },
+  {
+   "id": "kdn",
+   "type": "kd.down",
+   "pos": {
+    "x": 0,
+    "y": 1980
+   },
+   "params": {}
+  },
+  {
+   "id": "kis",
+   "type": "kd.is",
+   "pos": {
+    "x": 260,
+    "y": 1980
+   },
+   "params": {}
+  },
+  {
+   "id": "p_kis",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 1980
+   },
+   "params": {
+    "text": "X2 down:",
+    "chat": false
+   }
+  },
+  {
+   "id": "kl",
+   "type": "kd.left",
+   "pos": {
+    "x": 520,
+    "y": 1980
+   },
+   "params": {}
+  },
+  {
+   "id": "p_kl",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 1980
+   },
+   "params": {
+    "text": "X2 bleed left:",
+    "chat": false
+   }
+  },
+  {
+   "id": "kup",
+   "type": "kd.revive",
+   "pos": {
+    "x": 780,
+    "y": 1980
+   },
+   "params": {}
+  },
+  {
+   "id": "hg",
+   "type": "br.heal_give",
+   "pos": {
+    "x": 1040,
+    "y": 1980
+   },
+   "params": {
+    "kind": "bandage",
+    "n": 2
+   }
+  },
+  {
+   "id": "hc",
+   "type": "br.heal_count",
+   "pos": {
+    "x": 1300,
+    "y": 1980
+   },
+   "params": {}
+  },
+  {
+   "id": "p_hc",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 1980
+   },
+   "params": {
+    "text": "X2 healing items:",
+    "chat": false
+   }
+  },
+  {
+   "id": "arm",
+   "type": "br.armor",
+   "pos": {
+    "x": 1560,
+    "y": 1980
+   },
+   "params": {
+    "vest": "2",
+    "helmet": "1"
+   }
+  },
+  {
+   "id": "kills",
+   "type": "br.kills",
+   "pos": {
+    "x": 1560,
+    "y": 1980
+   },
+   "params": {}
+  },
+  {
+   "id": "p_k",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 1980
+   },
+   "params": {
+    "text": "X2 match kills:",
+    "chat": false
+   }
+  },
+  {
+   "id": "din",
+   "type": "br.drop_in",
+   "pos": {
+    "x": 1820,
+    "y": 1980
+   },
+   "params": {}
+  },
+  {
+   "id": "rs3",
+   "type": "event.map_started",
+   "pos": {
+    "x": 0,
+    "y": 2200
+   },
+   "params": {}
+  },
+  {
+   "id": "kde",
+   "type": "kd.enable",
+   "pos": {
+    "x": 260,
+    "y": 2200
+   },
+   "params": {
+    "on": true,
+    "bleed": 30,
+    "team": "0",
+    "perks": true
+   }
+  },
+  {
+   "id": "spot",
+   "type": "comp.find",
+   "pos": {
+    "x": 260,
+    "y": 2200
+   },
+   "params": {
+    "name": "spot1"
+   }
+  },
+  {
+   "id": "mkshop",
+   "type": "comp.create",
+   "pos": {
+    "x": 520,
+    "y": 2200
+   },
+   "params": {
+    "kind": "ls_shop",
+    "at": "spot1",
+    "keys": "items=Ammo|300|ammo|refill;Armor|650|vesthelm|armor keeper=barney"
+   }
+  },
+  {
+   "id": "sopen",
+   "type": "shop.open",
+   "pos": {
+    "x": 780,
+    "y": 2200
+   },
+   "params": {
+    "open": true
+   }
+  },
+  {
+   "id": "sprice",
+   "type": "shop.price",
+   "pos": {
+    "x": 780,
+    "y": 2200
+   },
+   "params": {
+    "item": "Ammo"
+   }
+  },
+  {
+   "id": "p_sp",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 2200
+   },
+   "params": {
+    "text": "X2 shop ammo price:",
+    "chat": false
+   }
+  },
+  {
+   "id": "pick",
+   "type": "up.pickup",
+   "pos": {
+    "x": 1300,
+    "y": 2200
+   },
+   "params": {
+    "kind": "resupply",
+    "life": 60,
+    "colour": "gold"
+   }
+  },
+  {
+   "id": "crate",
+   "type": "br.crate",
+   "pos": {
+    "x": 1560,
+    "y": 2200
+   },
+   "params": {
+    "items": "bandage:2 ammo"
+   }
+  },
+  {
+   "id": "glow",
+   "type": "br.glow",
+   "pos": {
+    "x": 1820,
+    "y": 2200
+   },
+   "params": {
+    "tier": 4
+   }
+  },
+  {
+   "id": "hud",
+   "type": "br.hud",
+   "pos": {
+    "x": 0,
+    "y": 2420
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "hudt",
+   "type": "br.hud_text",
+   "pos": {
+    "x": 260,
+    "y": 2420
+   },
+   "params": {
+    "text": "Loot up!"
+   }
+  },
+  {
+   "id": "feed",
+   "type": "br.feed",
+   "pos": {
+    "x": 520,
+    "y": 2420
+   },
+   "params": {
+    "text": "X2 feed line"
+   }
+  },
+  {
+   "id": "ssz",
+   "type": "br.squad_size",
+   "pos": {
+    "x": 780,
+    "y": 2420
+   },
+   "params": {
+    "size": 2
+   }
+  },
+  {
+   "id": "lob",
+   "type": "br.lobby",
+   "pos": {
+    "x": 1040,
+    "y": 2420
+   },
+   "params": {
+    "secs": 5
+   }
+  },
+  {
+   "id": "sal",
+   "type": "br.squads_alive",
+   "pos": {
+    "x": 1040,
+    "y": 2420
+   },
+   "params": {}
+  },
+  {
+   "id": "p_sal",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 2420
+   },
+   "params": {
+    "text": "X2 sides alive:",
+    "chat": false
+   }
+  },
+  {
+   "id": "svar",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 2420
+   },
+   "params": {
+    "var": "shopv"
+   }
+  },
+  {
+   "id": "sget",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 2420
+   },
+   "params": {
+    "var": "shopv"
+   }
+  },
+  {
+   "id": "smenu",
+   "type": "shop.menu",
+   "pos": {
+    "x": 1820,
+    "y": 2420
+   },
+   "params": {}
+  },
+  {
+   "id": "e_perk",
+   "type": "up.on_perk",
+   "pos": {
+    "x": 0,
+    "y": 2640
+   },
+   "params": {}
+  },
+  {
+   "id": "p_e_perk",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 2640
+   },
+   "params": {
+    "text": "X2 perk bought:",
+    "chat": false
+   }
+  },
+  {
+   "id": "e_up",
+   "type": "up.on_upgraded",
+   "pos": {
+    "x": 520,
+    "y": 2640
+   },
+   "params": {}
+  },
+  {
+   "id": "p_e_up",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 2640
+   },
+   "params": {
+    "text": "X2 gun upgraded to:",
+    "chat": false
+   }
+  },
+  {
+   "id": "e_box",
+   "type": "up.on_box",
+   "pos": {
+    "x": 1040,
+    "y": 2640
+   },
+   "params": {}
+  },
+  {
+   "id": "p_e_box",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 2640
+   },
+   "params": {
+    "text": "X2 box gave:",
+    "chat": false
+   }
+  },
+  {
+   "id": "e_pick",
+   "type": "up.on_pickup",
+   "pos": {
+    "x": 1560,
+    "y": 2640
+   },
+   "params": {}
+  },
+  {
+   "id": "p_e_pick",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 2640
+   },
+   "params": {
+    "text": "X2 pickup taken:",
+    "chat": false
+   }
+  },
+  {
+   "id": "e_ch",
+   "type": "up.on_creature_hurt",
+   "pos": {
+    "x": 0,
+    "y": 2860
+   },
+   "params": {}
+  },
+  {
+   "id": "p_e_ch",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 2860
+   },
+   "params": {
+    "text": "X2 creature hurt:",
+    "chat": false
+   }
+  },
+  {
+   "id": "e_kd",
+   "type": "kd.on_down",
+   "pos": {
+    "x": 520,
+    "y": 2860
+   },
+   "params": {}
+  },
+  {
+   "id": "p_e_kd",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 2860
+   },
+   "params": {
+    "text": "X2 knocked down:",
+    "chat": false
+   }
+  },
+  {
+   "id": "e_ku",
+   "type": "kd.on_up",
+   "pos": {
+    "x": 1040,
+    "y": 2860
+   },
+   "params": {}
+  },
+  {
+   "id": "p_e_ku",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 2860
+   },
+   "params": {
+    "text": "X2 got up:",
+    "chat": false
+   }
+  },
+  {
+   "id": "e_bo",
+   "type": "kd.on_bled_out",
+   "pos": {
+    "x": 1560,
+    "y": 2860
+   },
+   "params": {}
+  },
+  {
+   "id": "p_e_bo",
+   "type": "debug.print",
+   "pos": {
+    "x": 1820,
+    "y": 2860
+   },
+   "params": {
+    "text": "X2 bled out:",
+    "chat": false
+   }
+  },
+  {
+   "id": "e_buy",
+   "type": "shop.on_buy",
+   "pos": {
+    "x": 0,
+    "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "p_e_buy",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 3080
+   },
+   "params": {
+    "text": "X2 shop sold:",
+    "chat": false
+   }
+  },
+  {
+   "id": "e_land",
+   "type": "br.on_landed",
+   "pos": {
+    "x": 520,
+    "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "p_e_land",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 3080
+   },
+   "params": {
+    "text": "X2 landed:",
+    "chat": false
+   }
+  },
+  {
+   "id": "e_lob",
+   "type": "br.on_lobby_end",
+   "pos": {
+    "x": 1040,
+    "y": 3080
+   },
+   "params": {}
+  },
+  {
+   "id": "p_e_lob",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 3080
+   },
+   "params": {
+    "text": "X2 lobby ended, squads:",
     "chat": false
    }
   }
@@ -1193,6 +1950,1029 @@
    "to": {
     "node": "p_ck",
     "pin": "exec"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "mod",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pg",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pb",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "pb",
+    "pin": "bought"
+   },
+   "to": {
+    "node": "p_pb",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ph_",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "ph_",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_ph",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w68",
+   "from": {
+    "node": "ps2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mod",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w69",
+   "from": {
+    "node": "mod",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w70",
+   "from": {
+    "node": "pg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pb",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w71",
+   "from": {
+    "node": "pb",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_pb",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w72",
+   "from": {
+    "node": "p_pb",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_ph",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w73",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "pc",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w74",
+   "from": {
+    "node": "pc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_pc",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w75",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "mg",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w76",
+   "from": {
+    "node": "mg",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_mg",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w77",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "wl",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w78",
+   "from": {
+    "node": "wl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_wl",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w79",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "bench",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w80",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "box",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w81",
+   "from": {
+    "node": "p_ph",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_pc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w82",
+   "from": {
+    "node": "p_pc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_mg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w83",
+   "from": {
+    "node": "p_mg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_wl",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w84",
+   "from": {
+    "node": "p_wl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "bench",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w85",
+   "from": {
+    "node": "bench",
+    "pin": "then"
+   },
+   "to": {
+    "node": "box",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w86",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "kdn",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w87",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "kis",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w88",
+   "from": {
+    "node": "kis",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_kis",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w89",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "kl",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w90",
+   "from": {
+    "node": "kl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_kl",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w91",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "kup",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w92",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hg",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w93",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hc",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w94",
+   "from": {
+    "node": "hc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_hc",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w95",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "arm",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w96",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "kills",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w97",
+   "from": {
+    "node": "kills",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_k",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w98",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "din",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w99",
+   "from": {
+    "node": "box",
+    "pin": "then"
+   },
+   "to": {
+    "node": "kdn",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w100",
+   "from": {
+    "node": "kdn",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_kis",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w101",
+   "from": {
+    "node": "p_kis",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_kl",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w102",
+   "from": {
+    "node": "p_kl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "kup",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w103",
+   "from": {
+    "node": "kup",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hg",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w104",
+   "from": {
+    "node": "hg",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_hc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w105",
+   "from": {
+    "node": "p_hc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "arm",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w106",
+   "from": {
+    "node": "arm",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_k",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w107",
+   "from": {
+    "node": "p_k",
+    "pin": "then"
+   },
+   "to": {
+    "node": "din",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w108",
+   "from": {
+    "node": "mkshop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sopen",
+    "pin": "shop"
+   }
+  },
+  {
+   "id": "w109",
+   "from": {
+    "node": "mkshop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sprice",
+    "pin": "shop"
+   }
+  },
+  {
+   "id": "w110",
+   "from": {
+    "node": "sprice",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_sp",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w111",
+   "from": {
+    "node": "spot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pick",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w112",
+   "from": {
+    "node": "spot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "crate",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w113",
+   "from": {
+    "node": "crate",
+    "pin": "out"
+   },
+   "to": {
+    "node": "glow",
+    "pin": "ent"
+   }
+  },
+  {
+   "id": "w114",
+   "from": {
+    "node": "rs3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "kde",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w115",
+   "from": {
+    "node": "kde",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mkshop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w116",
+   "from": {
+    "node": "mkshop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sopen",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w117",
+   "from": {
+    "node": "sopen",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_sp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w118",
+   "from": {
+    "node": "p_sp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pick",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w119",
+   "from": {
+    "node": "pick",
+    "pin": "then"
+   },
+   "to": {
+    "node": "crate",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w120",
+   "from": {
+    "node": "crate",
+    "pin": "then"
+   },
+   "to": {
+    "node": "glow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w121",
+   "from": {
+    "node": "sal",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_sal",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w122",
+   "from": {
+    "node": "mkshop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "svar",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w123",
+   "from": {
+    "node": "sget",
+    "pin": "out"
+   },
+   "to": {
+    "node": "smenu",
+    "pin": "shop"
+   }
+  },
+  {
+   "id": "w124",
+   "from": {
+    "node": "glow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w125",
+   "from": {
+    "node": "hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hudt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w126",
+   "from": {
+    "node": "hudt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "feed",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w127",
+   "from": {
+    "node": "feed",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ssz",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w128",
+   "from": {
+    "node": "ssz",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lob",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w129",
+   "from": {
+    "node": "lob",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_sal",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w130",
+   "from": {
+    "node": "p_sal",
+    "pin": "then"
+   },
+   "to": {
+    "node": "svar",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w131",
+   "from": {
+    "node": "e_perk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_e_perk",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w132",
+   "from": {
+    "node": "e_perk",
+    "pin": "perk"
+   },
+   "to": {
+    "node": "p_e_perk",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w133",
+   "from": {
+    "node": "e_up",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_e_up",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w134",
+   "from": {
+    "node": "e_up",
+    "pin": "level"
+   },
+   "to": {
+    "node": "p_e_up",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w135",
+   "from": {
+    "node": "e_box",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_e_box",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w136",
+   "from": {
+    "node": "e_box",
+    "pin": "weapon"
+   },
+   "to": {
+    "node": "p_e_box",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w137",
+   "from": {
+    "node": "e_pick",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_e_pick",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w138",
+   "from": {
+    "node": "e_pick",
+    "pin": "kind"
+   },
+   "to": {
+    "node": "p_e_pick",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w139",
+   "from": {
+    "node": "e_ch",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_e_ch",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w140",
+   "from": {
+    "node": "e_ch",
+    "pin": "damage"
+   },
+   "to": {
+    "node": "p_e_ch",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w141",
+   "from": {
+    "node": "e_kd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_e_kd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w142",
+   "from": {
+    "node": "e_kd",
+    "pin": "player"
+   },
+   "to": {
+    "node": "p_e_kd",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w143",
+   "from": {
+    "node": "e_ku",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_e_ku",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w144",
+   "from": {
+    "node": "e_ku",
+    "pin": "player"
+   },
+   "to": {
+    "node": "p_e_ku",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w145",
+   "from": {
+    "node": "e_bo",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_e_bo",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w146",
+   "from": {
+    "node": "e_bo",
+    "pin": "player"
+   },
+   "to": {
+    "node": "p_e_bo",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w147",
+   "from": {
+    "node": "e_buy",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_e_buy",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w148",
+   "from": {
+    "node": "e_buy",
+    "pin": "item"
+   },
+   "to": {
+    "node": "p_e_buy",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w149",
+   "from": {
+    "node": "e_land",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_e_land",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w150",
+   "from": {
+    "node": "e_land",
+    "pin": "player"
+   },
+   "to": {
+    "node": "p_e_land",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w151",
+   "from": {
+    "node": "e_lob",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_e_lob",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w152",
+   "from": {
+    "node": "e_lob",
+    "pin": "squads"
+   },
+   "to": {
+    "node": "p_e_lob",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w153",
+   "from": {
+    "node": "p_e_land",
+    "pin": "then"
+   },
+   "to": {
+    "node": "smenu",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w154",
+   "from": {
+    "node": "e_land",
+    "pin": "player"
+   },
+   "to": {
+    "node": "smenu",
+    "pin": "player"
    }
   }
  ],

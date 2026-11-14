@@ -11,9 +11,9 @@
 #include <loner>
 
 #define LSG_MODE "royale_lite"
-#define LSG_CTX 9
+#define LSG_CTX 8
 #define LSG_TXT 2
-#define LSG_N 33
+#define LSG_N 43
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -23,8 +23,18 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 
 // The mode's variables
 stock Float:g_v0 = 0.0 // Squads left (number)
+stock g_v1 = 0 // Looting (bool)
 
-stock g_lsgNoFall[33]
+stock Float:g_lsgDmg, bool:g_lsgDmgBlock
+// a drop-in over an entity's place
+stock lsg_drop_in(id, ent)
+{
+	new Float:o[3]
+	if (!lsg_ent_origin(ent, o))
+		return ls_drop_in(id)
+	return ls_drop_in(id, o)
+}
+
 stock Float:lsg_ehp(e)
 	return e > MaxClients && pev_valid(e) ? entity_get_float(e, EV_FL_health) : 0.0
 
@@ -416,49 +426,6 @@ stock lsg_round_time(secs)
 	message_end()
 }
 
-stock g_lsgSquad[33], bool:g_lsgSquadFF
-
-stock lsg_set_squad(id, squad)
-{
-	g_lsgSquad[id] = squad
-	// the bots' brain: a squad is one side, both ways
-	if (!get_cvar_pointer("ls_mode_ver"))
-		return
-	if (squad > 0)
-	{
-		server_cmd("ls_mode role %d sq%d", id, squad)
-		server_cmd("ls_mode friend @sq%d @sq%d 1", squad, squad)
-	}
-	else
-		server_cmd("ls_mode role %d -", id)
-}
-
-stock bool:lsg_same_side(a, b)
-{
-	if (g_lsgSquad[a] || g_lsgSquad[b])
-		return g_lsgSquad[a] == g_lsgSquad[b]
-	return !get_cvar_num("mp_freeforall") && lsg_team(a) > 0 && lsg_team(a) == lsg_team(b)
-}
-
-stock lsg_squads_alive()
-{
-	new seen[34], n
-	for (new p = 1; p <= MaxClients; p++)
-	{
-		if (!is_user_alive(p))
-			continue
-		new key = g_lsgSquad[p] ? min(g_lsgSquad[p], 32) : 0
-		if (key == 0)
-			n++
-		else if (!seen[key])
-		{
-			seen[key] = 1
-			n++
-		}
-	}
-	return n
-}
-
 public plugin_precache()
 {
 	// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)
@@ -512,16 +479,26 @@ public lsg_new_round()
 public lsg_pre_damage(victim, inflictor, attacker, Float:damage, bits)
 {
 	#pragma unused inflictor
-	if ((bits & DMG_FALL) && victim >= 1 && victim <= MaxClients && g_lsgNoFall[victim])
+	// (saved and put back: damage done inside the flow comes back here)
+	new Float:was = g_lsgDmg, bool:wasBlock = g_lsgDmgBlock
+	g_lsgDmg = damage
+	g_lsgDmgBlock = false
+	new ctx[LSG_CTX]
+	ctx[0] = victim // victim
+	ctx[1] = attacker >= 1 && attacker <= MaxClients ? attacker : 0 // attacker
+	ctx[2] = _:damage // damage
+	lsg_dmg_kind(bits, g_lsgTxt[0], 63) // kind
+	lsg_n40(ctx)
+	new Float:now = g_lsgDmg, bool:block = g_lsgDmgBlock
+	g_lsgDmg = was
+	g_lsgDmgBlock = wasBlock
+	if (block)
+		return HAM_SUPERCEDE
+	if (now != damage)
 	{
-		if (g_lsgNoFall[victim] == 2)
-			g_lsgNoFall[victim] = 0
-		return HAM_SUPERCEDE
+		SetHamParamFloat(4, now)
+		return HAM_HANDLED
 	}
-	if (!g_lsgSquadFF && attacker != victim && attacker >= 1 && attacker <= MaxClients && g_lsgSquad[victim] && g_lsgSquad[victim] == g_lsgSquad[attacker])
-		return HAM_SUPERCEDE
-	#pragma unused damage
-	#pragma unused bits
 	return HAM_IGNORED
 }
 
@@ -529,12 +506,6 @@ stock lsg_stop_timers()
 {
 	for (new i = 0; i < LSG_N; i++)
 		remove_task(LSG_TASK + i)
-}
-
-public client_putinserver(id)
-{
-	g_lsgSquad[id] = 0
-	g_lsgNoFall[id] = 0
 }
 
 public lsg_on_round_started()
@@ -549,7 +520,7 @@ public lsg_on_player_killed()
 	ctx[0] = read_data(2) // victim
 	ctx[1] = read_data(1) // attacker
 	ctx[2] = read_data(3) ? 1 : 0 // headshot
-	lsg_n20(ctx)
+	lsg_n10(ctx)
 }
 
 public lsg_on_map_started()
@@ -564,7 +535,7 @@ public ls_on_zone_tick(ent, id, Float:dmg)
 	ctx[0] = ent // zone
 	ctx[1] = id // player
 	ctx[2] = _:dmg // damage
-	lsg_n29(ctx)
+	lsg_n19(ctx)
 }
 
 public ls_on_loot(ent, id)
@@ -572,6 +543,13 @@ public ls_on_loot(ent, id)
 	new ctx[LSG_CTX]
 	ctx[0] = ent // container
 	ctx[1] = id // player
+	lsg_n21(ctx)
+}
+
+public ls_on_lobby_end(squads)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = _:float(squads) // squads
 	lsg_n31(ctx)
 }
 
@@ -591,91 +569,17 @@ lsg_n1(ctx[])
 		if (!ls_comp_load_pack(fmt("gamemodes/components/%s.%s.ini", map, "br")))
 			{}
 	}
-	#pragma unused ctx
+	lsg_n23(ctx)
 }
 
 // Round Started (rs)
 lsg_n2(ctx[])
 {
-	lsg_n3(ctx)
-}
-
-// For Each Player (rs_each)
-lsg_n3(ctx[])
-{
-	new c[LSG_CTX], count
-	for (new p = 1; p <= MaxClients; p++)
-	{
-		if (!lsg_match(p, 1))
-			continue
-		count++
-		for (new k = 0; k < LSG_CTX; k++)
-			c[k] = ctx[k]
-		c[4] = p
-		lsg_n4(c)
-	}
-	#pragma unused count
-	lsg_n10(ctx)
-}
-
-// Strip Weapons (rs_strip)
-lsg_n4(ctx[])
-{
-	if (!(!ls_alive(ctx[4])))
-	{
-		ls_strip(ctx[4], true)
-	}
-	lsg_n5(ctx)
-}
-
-// Respawn At Point (rs_spot)
-lsg_n5(ctx[])
-{
-	if (!(!ls_components_running() || !lsg_ok(ctx[4])))
-	{
-		ls_respawn_at(ctx[4], 0)
-	}
-	lsg_n6(ctx)
-}
-
-// Set Squad (rs_sq)
-lsg_n6(ctx[])
-{
-	if (!(!lsg_ok(ctx[4])))
-	{
-		lsg_set_squad(ctx[4], clamp(floatround(lsg_random(1.0, 6.0, 0)), 0, 32))
-	}
-	lsg_n7(ctx)
-}
-
-// No Fall Damage (rs_nofall)
-lsg_n7(ctx[])
-{
-	g_lsgNoFall[lsg_slot(ctx[4])] = 2
-	lsg_n8(ctx)
-}
-
-// Set Gravity (rs_grav)
-lsg_n8(ctx[])
-{
-	if (!(!ls_alive(ctx[4])))
-	{
-		set_user_gravity(ctx[4], 0.25)
-	}
-	lsg_n9(ctx)
-}
-
-// Launch Up (rs_up)
-lsg_n9(ctx[])
-{
-	if (!(!ls_alive(ctx[4])))
-	{
-		lsg_launch(ctx[4], 900.0)
-	}
+	lsg_n26(ctx)
 }
 
 // For Each Entity (rs_zone)
-lsg_n10(ctx[])
+lsg_n3(ctx[])
 {
 	new c[LSG_CTX], count
 	new p = -1
@@ -684,53 +588,266 @@ lsg_n10(ctx[])
 		count++
 		for (new k = 0; k < LSG_CTX; k++)
 			c[k] = ctx[k]
-		c[5] = p
-		lsg_n11(c)
+		c[4] = p
+		lsg_n4(c)
 	}
 	#pragma unused count
-	lsg_n12(ctx)
+	lsg_n5(ctx)
 }
 
 // Start Component (rs_start)
-lsg_n11(ctx[])
+lsg_n4(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
-		ls_comp_start(ctx[5])
+		ls_comp_start(ctx[4])
 	}
 }
 
 // Show Message (rs_msg)
-lsg_n12(ctx[])
+lsg_n5(ctx[])
 {
 	ls_announce(0, 5.0, "%s", "Loot up and stay in the zone. Last one standing wins!")
-	lsg_n13(ctx)
+	lsg_n6(ctx)
 }
 
 // Set Variable (rs_alive)
-lsg_n13(ctx[])
+lsg_n6(ctx[])
 {
 	g_v0 = 0.0
-	lsg_n17(ctx)
+	lsg_n7(ctx)
 }
 
-// Delay (rs_land)
-lsg_n14(ctx[])
+// Repeat (rs_drops)
+lsg_n7(ctx[])
 {
-	set_task(floatmax(8.0, 0.1), "lsg_t14", LSG_TASK + 14, ctx, LSG_CTX)
+	remove_task(LSG_TASK + 7)
+	g_lsgLeft[7] = 4
+	set_task(floatmax(60.0, 0.1), "lsg_t7", LSG_TASK + 7, ctx, LSG_CTX)
 }
 
-public lsg_t14(const data[], task)
+public lsg_t7(const data[], task)
 {
 	#pragma unused task
 	new ctx[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
 		ctx[k] = data[k]
-	lsg_n15(ctx)
+	if (g_lsgLeft[7] > 0 && --g_lsgLeft[7] == 0)
+		remove_task(LSG_TASK + 7)
+	else
+		set_task(floatmax(60.0, 0.1), "lsg_t7", LSG_TASK + 7, data, LSG_CTX)
+	lsg_n8(ctx)
 }
 
-// For Each Player (rs_all)
+// Pick Random Entity (rs_pick)
+lsg_n8(ctx[])
+{
+	new list[256], count
+	new p = -1
+	while (count < 256 && (p = find_ent_by_class(p, "ls_respawn_point")) > 0)
+		list[count++] = p
+	if (count > 0)
+	{
+		ctx[5] = list[random(count)]
+		lsg_n9(ctx)
+	}
+}
+
+// Call Supply Drop (rs_drop)
+lsg_n9(ctx[])
+{
+	new Float:o[3]
+	if (!!ls_components_running() && lsg_ent_origin(ctx[5], o))
+		ls_drop_call(o, "")
+}
+
+// Player Killed (pk)
+lsg_n10(ctx[])
+{
+	lsg_n11(ctx)
+}
+
+// Set Variable (pk_set)
+lsg_n11(ctx[])
+{
+	g_v0 = float(ls_components_running() ? ls_squads_alive() : 0)
+	lsg_n12(ctx)
+}
+
+// Show HUD Text (pk_hud)
+lsg_n12(ctx[])
+{
+	ls_hud(0, LsHud:2, 5.0, "%s %d", "Squads left:", floatround(float(ls_components_running() ? ls_squads_alive() : 0)))
+	lsg_n13(ctx)
+}
+
+// Branch (pk_br)
+lsg_n13(ctx[])
+{
+	new ok = ((((((float(ls_components_running() ? ls_squads_alive() : 0)) <= (1.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
+	if (ok)
+		lsg_n14(ctx)
+}
+
+// Pick Random Player (pk_win)
+lsg_n14(ctx[])
+{
+	new list[256], count
+	for (new p = 1; p <= MaxClients; p++)
+		if (lsg_match(p, 1))
+			list[count++] = p
+	if (count > 0)
+	{
+		ctx[6] = list[random(count)]
+		lsg_n15(ctx)
+	}
+	else
+	{
+		lsg_n18(ctx)
+	}
+}
+
+// Show HUD Text (pk_name)
 lsg_n15(ctx[])
+{
+	ls_hud(0, LsHud:3, 6.0, "%s %s", "Winner:", lsg_name(ctx[6]))
+	lsg_n16(ctx)
+}
+
+// Add Score (pk_pts)
+lsg_n16(ctx[])
+{
+	if (!(!lsg_ok(ctx[6])))
+	{
+		lsg_add_frags(ctx[6], floatround(5.0))
+	}
+	lsg_n17(ctx)
+}
+
+// End Round (pk_end)
+lsg_n17(ctx[])
+{
+	lsg_end_round(lsg_team(ctx[6]))
+}
+
+// End Round (pk_draw)
+lsg_n18(ctx[])
+{
+	server_cmd("endround")
+	#pragma unused ctx
+}
+
+// Zone Hurt Player (zt)
+lsg_n19(ctx[])
+{
+	lsg_n20(ctx)
+}
+
+// Show HUD Text (zt_hud)
+lsg_n20(ctx[])
+{
+	ls_hud(ctx[1], LsHud:3, 1.0, "%s", "Get back in the zone!")
+}
+
+// Crate Opened (lo)
+lsg_n21(ctx[])
+{
+	lsg_n22(ctx)
+}
+
+// Chat Message (lo_chat)
+lsg_n22(ctx[])
+{
+	ls_chat(ctx[1], "%s", "Crate opened.")
+}
+
+// Match HUD (ms_hud)
+lsg_n23(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_match_hud(true)
+	}
+	lsg_n24(ctx)
+}
+
+// Knocked Down On (ms_kd)
+lsg_n24(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_down_enable(true, 30.0, 0, false)
+	}
+	lsg_n25(ctx)
+}
+
+// Squad Size (ms_size)
+lsg_n25(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_squad_max(clamp(floatround(4.0), 1, 8))
+	}
+	#pragma unused ctx
+}
+
+// Bots: Don't Buy (rs_nobuy)
+lsg_n26(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		if (!lsg_hint(fmt("nobuy %d", 1)))
+			{}
+	}
+	lsg_n27(ctx)
+}
+
+// Bots: Phase (rs_loot)
+lsg_n27(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		if (!lsg_hint(fmt("phase %s", "loot")))
+			{}
+	}
+	lsg_n28(ctx)
+}
+
+// Set Variable (rs_looting)
+lsg_n28(ctx[])
+{
+	g_v1 = 1
+	lsg_n29(ctx)
+}
+
+// Match HUD Words (rs_text)
+lsg_n29(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_match_hud_text("Squads forming: say slash squad")
+	}
+	lsg_n30(ctx)
+}
+
+// Squad Lobby (rs_lobby)
+lsg_n30(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_squad_lobby(floatmax(15.0, 0.0))
+	}
+	lsg_n3(ctx)
+}
+
+// Lobby Ended (le)
+lsg_n31(ctx[])
+{
+	lsg_n32(ctx)
+}
+
+// For Each Player (le_each)
+lsg_n32(ctx[])
 {
 	new c[LSG_CTX], count
 	for (new p = 1; p <= MaxClients; p++)
@@ -740,162 +857,103 @@ lsg_n15(ctx[])
 		count++
 		for (new k = 0; k < LSG_CTX; k++)
 			c[k] = ctx[k]
-		c[6] = p
-		lsg_n16(c)
+		c[7] = p
+		lsg_n33(c)
 	}
 	#pragma unused count
+	lsg_n35(ctx)
 }
 
-// Set Gravity (rs_g1)
-lsg_n16(ctx[])
+// Strip Weapons (le_strip)
+lsg_n33(ctx[])
 {
-	if (!(!ls_alive(ctx[6])))
+	if (!(!ls_alive(ctx[7])))
 	{
-		set_user_gravity(ctx[6], 1.0)
+		ls_strip(ctx[7], true)
+	}
+	lsg_n34(ctx)
+}
+
+// Drop In (le_drop)
+lsg_n34(ctx[])
+{
+	if (!(!ls_components_running()))
+	{
+		ls_drop_in(ctx[7])
 	}
 }
 
-// Repeat (rs_drops)
-lsg_n17(ctx[])
+// Match HUD Words (le_text)
+lsg_n35(ctx[])
 {
-	remove_task(LSG_TASK + 17)
-	g_lsgLeft[17] = 4
-	set_task(floatmax(60.0, 0.1), "lsg_t17", LSG_TASK + 17, ctx, LSG_CTX)
-	lsg_n14(ctx)
+	if (!(!ls_components_running()))
+	{
+		ls_match_hud_text("Loot up: the fight starts in 45 s")
+	}
+	lsg_n36(ctx)
 }
 
-public lsg_t17(const data[], task)
+// Delay (le_wait)
+lsg_n36(ctx[])
+{
+	set_task(floatmax(45.0, 0.1), "lsg_t36", LSG_TASK + 36, ctx, LSG_CTX)
+}
+
+public lsg_t36(const data[], task)
 {
 	#pragma unused task
 	new ctx[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
 		ctx[k] = data[k]
-	if (g_lsgLeft[17] > 0 && --g_lsgLeft[17] == 0)
-		remove_task(LSG_TASK + 17)
-	else
-		set_task(floatmax(60.0, 0.1), "lsg_t17", LSG_TASK + 17, data, LSG_CTX)
-	lsg_n18(ctx)
+	lsg_n37(ctx)
 }
 
-// Pick Random Entity (rs_pick)
-lsg_n18(ctx[])
+// Bots: Phase (le_fight)
+lsg_n37(ctx[])
 {
-	new list[256], count
-	new p = -1
-	while (count < 256 && (p = find_ent_by_class(p, "ls_respawn_point")) > 0)
-		list[count++] = p
-	if (count > 0)
+	if (!(!ls_components_running()))
 	{
-		ctx[7] = list[random(count)]
-		lsg_n19(ctx)
+		if (!lsg_hint(fmt("phase %s", "fight")))
+			{}
 	}
+	lsg_n38(ctx)
 }
 
-// Call Supply Drop (rs_drop)
-lsg_n19(ctx[])
+// Set Variable (le_fighting)
+lsg_n38(ctx[])
 {
-	new Float:o[3]
-	if (!!ls_components_running() && lsg_ent_origin(ctx[7], o))
-		ls_drop_call(o, "")
+	g_v1 = 0
+	lsg_n39(ctx)
 }
 
-// Player Killed (pk)
-lsg_n20(ctx[])
+// Match HUD Words (le_text2)
+lsg_n39(ctx[])
 {
-	lsg_n21(ctx)
-}
-
-// Set Variable (pk_set)
-lsg_n21(ctx[])
-{
-	g_v0 = float(lsg_squads_alive())
-	lsg_n22(ctx)
-}
-
-// Show HUD Text (pk_hud)
-lsg_n22(ctx[])
-{
-	ls_hud(0, LsHud:2, 5.0, "%s %d", "Squads left:", floatround(float(lsg_squads_alive())))
-	lsg_n23(ctx)
-}
-
-// Branch (pk_br)
-lsg_n23(ctx[])
-{
-	new ok = ((((((float(lsg_squads_alive())) <= (1.0) ? 1 : 0)) ? 1 : 0)) ? 1 : 0)
-	if (ok)
-		lsg_n24(ctx)
-}
-
-// Pick Random Player (pk_win)
-lsg_n24(ctx[])
-{
-	new list[256], count
-	for (new p = 1; p <= MaxClients; p++)
-		if (lsg_match(p, 1))
-			list[count++] = p
-	if (count > 0)
+	if (!(!ls_components_running()))
 	{
-		ctx[8] = list[random(count)]
-		lsg_n25(ctx)
+		ls_match_hud_text("")
 	}
-	else
-	{
-		lsg_n28(ctx)
-	}
-}
-
-// Show HUD Text (pk_name)
-lsg_n25(ctx[])
-{
-	ls_hud(0, LsHud:3, 6.0, "%s %s", "Winner:", lsg_name(ctx[8]))
-	lsg_n26(ctx)
-}
-
-// Add Score (pk_pts)
-lsg_n26(ctx[])
-{
-	if (!(!lsg_ok(ctx[8])))
-	{
-		lsg_add_frags(ctx[8], floatround(5.0))
-	}
-	lsg_n27(ctx)
-}
-
-// End Round (pk_end)
-lsg_n27(ctx[])
-{
-	lsg_end_round(lsg_team(ctx[8]))
-}
-
-// End Round (pk_draw)
-lsg_n28(ctx[])
-{
-	server_cmd("endround")
 	#pragma unused ctx
 }
 
-// Zone Hurt Player (zt)
-lsg_n29(ctx[])
+// Player About To Be Hurt (ah)
+lsg_n40(ctx[])
 {
-	lsg_n30(ctx)
+	lsg_n41(ctx)
 }
 
-// Show HUD Text (zt_hud)
-lsg_n30(ctx[])
+// Branch (ah_br)
+lsg_n41(ctx[])
 {
-	ls_hud(ctx[1], LsHud:3, 1.0, "%s", "Get back in the zone!")
+	new ok = ((((g_v1) ? 1 : 0)) ? 1 : 0)
+	if (ok)
+		lsg_n42(ctx)
 }
 
-// Crate Opened (lo)
-lsg_n31(ctx[])
+// Block Damage (ah_block)
+lsg_n42(ctx[])
 {
-	lsg_n32(ctx)
-}
-
-// Chat Message (lo_chat)
-lsg_n32(ctx[])
-{
-	ls_chat(ctx[1], "%s", "Crate opened.")
+	g_lsgDmgBlock = true
+	#pragma unused ctx
 }
 

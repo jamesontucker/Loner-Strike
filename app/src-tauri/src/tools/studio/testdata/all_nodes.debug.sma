@@ -524,6 +524,15 @@ public lsd_poll()
 		lsd_resume()
 }
 
+// a drop-in over an entity's place
+stock lsg_drop_in(id, ent)
+{
+	new Float:o[3]
+	if (!lsg_ent_origin(ent, o))
+		return ls_drop_in(id)
+	return ls_drop_in(id, o)
+}
+
 stock Float:lsg_ehp(e)
 	return e > MaxClients && pev_valid(e) ? entity_get_float(e, EV_FL_health) : 0.0
 

@@ -13,7 +13,7 @@ TEAM2 = [["t", "Terrorists"], ["ct", "Counter-Terrorists"]]
 TEAM3 = TEAM2 + [["none", "No team"]]
 WEAPONS = [["ak47","AK-47"],["m4a1","M4A1"],["awp","AWP"],["scout","Scout"],["famas","FAMAS"],["galil","Galil"],["aug","AUG"],["sg552","SG 552"],["mp5navy","MP5"],["p90","P90"],["ump45","UMP 45"],["mac10","MAC-10"],["tmp","TMP"],["m3","M3 shotgun"],["xm1014","XM1014 shotgun"],["m249","M249"],["deagle","Desert Eagle"],["usp","USP"],["glock18","Glock"],["p228","P228"],["fiveseven","Five-SeveN"],["elite","Dual Elites"],["hegrenade","HE grenade"],["flashbang","Flashbang"],["smokegrenade","Smoke grenade"]]
 SLOTS = [["top","Top middle"],["left","Left"],["right","Right"],["center","Middle"]]
-COMPONENTS = [["ls_capture_point","Capture point"],["ls_safe_zone","Safe zone"],["ls_zone_shrinker","Shrinking zone"],["ls_damage_zone","Damage zone"],["ls_loot_container","Loot container"],["ls_weapon_spawner","Weapon spawner"],["ls_supply_drop","Supply drop"],["ls_wave_spawner","Wave spawner"],["ls_extraction","Extraction point"],["ls_checkpoint","Checkpoint"],["ls_trap","Trap"],["ls_respawn_point","Respawn point"]]
+COMPONENTS = [["ls_capture_point","Capture point"],["ls_safe_zone","Safe zone"],["ls_zone_shrinker","Shrinking zone"],["ls_damage_zone","Damage zone"],["ls_loot_container","Loot container"],["ls_weapon_spawner","Weapon spawner"],["ls_supply_drop","Supply drop"],["ls_wave_spawner","Wave spawner"],["ls_extraction","Extraction point"],["ls_checkpoint","Checkpoint"],["ls_trap","Trap"],["ls_respawn_point","Respawn point"],["ls_shop","Shop (a counter, items=Name|price|give|what;...)"],["ls_perk_machine","Perk machine"],["ls_upgrade_bench","Upgrade bench"],["ls_mystery_box","Mystery box"]]
 
 nodes = []
 def node(type, title, cat, help, inputs=(), outputs=(), params=(), **k):
@@ -113,7 +113,7 @@ node("score.end_round", "End Round", "Scoring", "Ends the round now with a winne
 ca = dict(needs="components")
 node("comp.find", "Find Component", "Components", "The component (or any entity) with this name.", outputs=[P("out","entity","Entity")], params=[prm("name","Name","entname","A")], pure=True, **ca)
 node("comp.create", "Create Component", "Components", "Makes a component at an entity (wired into At, or the one with this name), with keys like radius=160 capture_secs=8.", inputs=[X, P("at_ent","entity","At",optional=True)], outputs=[E(), P("out","entity","Component")],
-     params=[prm("kind","Component","choice","ls_capture_point",choices=COMPONENTS), prm("at","At the entity named","name","spot1"), prm("keys","Keys","keys","",max=120)], **ca)
+     params=[prm("kind","Component","choice","ls_capture_point",choices=COMPONENTS), prm("at","At the entity named","name","spot1"), prm("keys","Keys","keys","",max=400)], **ca)
 node("comp.zone_set", "Set Zone", "Components", "Sets a safe zone's radius (wire the Safe zone, or the Shrinking zone that drives it), and moves its center to an entity wired into Center or the one with this name (no name: it stays where it is).", inputs=[X, P("zone","entity","Zone",required=True), P("at_ent","entity","Center",optional=True), P("radius","number","Radius",param="radius")], outputs=[E()],
      params=[prm("at","Center at the entity named","name",""), prm("radius","Radius","number",1500,min=50,max=20000)], **ca)
 node("comp.zone_shrink", "Shrink Zone", "Components", "Shrinks a safe zone (or a Shrinking zone's) over some seconds to a new radius, around an entity wired into Center or the one with this name (no name: its center stays).", inputs=[X, P("zone","entity","Zone",required=True), P("at_ent","entity","Center",optional=True), P("radius","number","Radius",param="radius")], outputs=[E()],
@@ -187,6 +187,58 @@ node("game.set_cvar", "Set Setting", "Game", "Changes one of the game's settings
      params=[prm("cvar","Setting","choice","mp_freeforall",choices=[["mp_freeforall","Free for all (1 on)"],["mp_friendlyfire","Friendly fire (1 on)"],["sv_gravity","Gravity (800 normal)"],["mp_buytime","Buy time (minutes)"],["mp_startmoney","Start money"],["sv_airaccelerate","Air control (10 normal)"],["mp_roundtime","Round time (minutes, next round)"],["mp_freezetime","Freeze time (seconds, next round)"],["mp_round_infinite","Rounds only end when the mode says (1 on)"],["mp_autoteambalance","Team balance (1 on)"],["mp_limitteams","Most players more than the other team (0 any)"]]),
              prm("value","Value","number",1,min=0,max=100000)])
 node("entity.use", "Use Entity", "Game", "Presses (uses) every entity with this name: a door, a button, a trigger.", inputs=[X], outputs=[E()], params=[prm("name","Name","name","door1")])
+# the pieces our Last Stand and Battle Royale are built from (gm_components: W1's and W3's)
+PERKS = [["tough","Tough (+50 % health)"],["hands","Quick hands (reload, swap)"],["doubletap","Double tap (+25 % damage)"],["revive","Quick revive"],["feet","Light feet (+10 % speed)"]]
+MODS = [["health_max","Max health"],["speed","Speed"],["reload","Reload time"],["deploy","Weapon swap time"],["damage","Damage"],["revive_time","Revive time"],["fire_rate","Fire rate"]]
+PL = P("player","player","Player",required=True)
+node("up.mod", "Set Player Modifier", "Upgrades", "Multiplies something about a player until they die: max health, speed, reload or swap time (0.6 = 40 % faster), damage, revive time, fire rate (1.25 = 25 % faster). Perks multiply on top.", inputs=[X, PL, P("mult","number","Times",param="mult")], outputs=[E()], params=[prm("what","What","choice","speed",choices=MODS), prm("mult","Times","number",1.2,min=0.1,max=10)], **ca)
+node("up.mod_get", "Player Modifier", "Upgrades", "What a player's modifier is now (the mode's times the perks').", inputs=[PL], outputs=[P("out","number","Times")], params=[prm("what","What","choice","speed",choices=MODS)], pure=True, needs="components")
+node("up.perk_give", "Give Perk", "Upgrades", "Gives a player a perk (lost when downed or dead).", inputs=[X, PL], outputs=[E()], params=[prm("perk","Perk","choice","tough",choices=PERKS)], **ca)
+node("up.perk_buy", "Buy Perk", "Upgrades", "A player buys a perk for its price (1500 + 1000 per perk they have, 4 at most); Bought says if it worked.", inputs=[X, PL], outputs=[E(), P("bought","bool","Bought")], params=[prm("perk","Perk","choice","tough",choices=PERKS)], **ca)
+node("up.perk_has", "Has Perk", "Upgrades", "Does the player have this perk?", inputs=[PL], outputs=[P("out","bool","Has it")], params=[prm("perk","Perk","choice","tough",choices=PERKS)], pure=True, needs="components")
+node("up.perk_count", "Perk Count", "Upgrades", "How many perks a player has.", inputs=[PL], outputs=[P("out","number","Perks")], pure=True, needs="components")
+node("up.weapon_level", "Weapon Level", "Upgrades", "The level of the gun in the player's hand (1, 2 Mk II, 3 Mk III).", inputs=[PL], outputs=[P("out","number","Level")], pure=True, needs="components")
+node("up.bench", "Upgrade Gun", "Upgrades", "Upgrades the gun in the player's hand at the bench's prices (or 5000 / 9000).", inputs=[X, PL], outputs=[E()], **ca)
+node("up.box", "Roll Mystery Box", "Upgrades", "The player rolls the mystery box (the one that's out, or the wired one) for its price.", inputs=[X, PL, P("box","entity","Box",optional=True)], outputs=[E()], **ca)
+node("up.pickup", "Drop Pickup", "Upgrades", "Drops a pickup at an entity; whoever walks over it takes it (Pickup Taken says what it was). A kind like resupply, doublepay, onehit, airstrike, or anything you handle yourself.", inputs=[X, P("at","entity","At",required=True)], outputs=[E(), P("out","entity","Pickup")],
+     params=[prm("kind","Kind","name","resupply"), prm("life","Lasts (seconds)","number",25,min=1,max=600), prm("colour","Colour","choice","gold",choices=[["white","White"],["green","Green"],["blue","Blue"],["purple","Purple"],["gold","Gold"],["red","Red"]])], **ca)
+node("up.on_perk", "Perk Bought", "Upgrades", "A player bought a perk (at a machine, a shop or Buy Perk).", outputs=[E(), P("player","player","Player"), P("perk","text","Perk"), P("price","number","Price")], **cev)
+node("up.on_upgraded", "Gun Upgraded", "Upgrades", "A player's gun went up a level.", outputs=[E(), P("player","player","Player"), P("level","number","Level"), P("price","number","Price")], **cev)
+node("up.on_box", "Mystery Box Gave", "Upgrades", "The mystery box gave a player a gun.", outputs=[E(), P("player","player","Player"), P("weapon","text","Gun")], **cev)
+node("up.on_pickup", "Pickup Taken", "Upgrades", "A player took a pickup.", outputs=[E(), P("pickup","entity","Pickup"), P("player","player","Player"), P("kind","text","Kind")], **cev)
+node("up.on_creature_hurt", "Creature Hurt", "Creatures", "A creature took damage (Headshot when the hit was a head).", outputs=[E(), P("creature","entity","Creature"), P("attacker","player","Attacker"), P("damage","number","Damage"), P("headshot","bool","Headshot")], **cev)
+# knocked down (the components' downed state, as Last Stand and Battle Royale use it)
+node("kd.enable", "Knocked Down On", "Downed", "On: a hit that would kill a player (of a team, or anyone) knocks them down instead: they crawl and bleed out over some seconds; a teammate (a squad mate, with squads) holding USE for 4 s gets them up with 50 health. Off: nobody new goes down.",
+     inputs=[X], outputs=[E()], params=[prm("on","On","bool",True), prm("bleed","Bleed out after (seconds)","number",30,min=3,max=300), prm("team","Who","choice","0",choices=[["0","Anyone"],["1","Terrorists"],["2","Counter-Terrorists"]]), prm("perks","They lose their perks","bool",True)], **ca)
+node("kd.is", "Is Knocked Down", "Downed", "Is the player knocked down?", inputs=[PL], outputs=[P("out","bool","Down")], pure=True, needs="components")
+node("kd.left", "Bleed Out In", "Downed", "Seconds a knocked-down player has left (0 when they're not down).", inputs=[PL], outputs=[P("out","number","Seconds")], pure=True, needs="components")
+node("kd.down", "Knock Down", "Downed", "Knocks a player down now.", inputs=[X, PL], outputs=[E()], **ca)
+node("kd.revive", "Get Up", "Downed", "Gets a knocked-down player up (by the wired player, or nobody).", inputs=[X, PL, P("by","player","By",optional=True)], outputs=[E()], **ca)
+node("kd.on_down", "Knocked Down", "Downed", "A player was knocked down.", outputs=[E(), P("player","player","Player"), P("attacker","entity","By")], **cev)
+node("kd.on_up", "Got Up", "Downed", "A knocked-down player is back up (By: who helped; themselves for Quick revive; nobody when the mode did it).", outputs=[E(), P("player","player","Player"), P("by","player","By")], **cev)
+node("kd.on_bled_out", "Bled Out", "Downed", "A knocked-down player bled out (they die right after).", outputs=[E(), P("player","player","Player")], **cev)
+# the shop (ls_shop: a counter with a menu of priced items and a keeper)
+node("shop.menu", "Open Shop Menu", "Shop", "Shows a player the shop's menu.", inputs=[X, P("shop","entity","Shop",required=True), PL], outputs=[E()], **ca)
+node("shop.open", "Open or Close Shop", "Shop", "Opens the shop for business, or closes it.", inputs=[X, P("shop","entity","Shop",required=True), P("open","bool","Open",param="open")], outputs=[E()], params=[prm("open","Open","bool",True)], **ca)
+node("shop.price", "Shop Price", "Shop", "An item's price now (by its name or what it gives); -1 if the shop doesn't sell it.", inputs=[P("shop","entity","Shop",required=True)], outputs=[P("out","number","Price")], params=[prm("item","Item","text","ammo",max=40)], pure=True, needs="components")
+node("shop.on_buy", "Shop Purchase", "Shop", "A player bought something at a shop (an @item is the mode's to give here).", outputs=[E(), P("shop","entity","Shop"), P("player","player","Player"), P("item","text","Item"), P("price","number","Price")], **cev)
+# Battle Royale pieces (any mode)
+node("br.heal_give", "Give Healing Item", "Battle Royale", "Gives a player bandages (+15 up to 75), medkits (full health) or drinks (+40 over 10 s), up to the carry limit.", inputs=[X, PL, P("n","number","How many",param="n")], outputs=[E()], params=[prm("kind","Item","choice","bandage",choices=[["bandage","Bandage"],["medkit","Medkit"],["drink","Drink"]]), prm("n","How many","number",1,min=1,max=10)], **ca)
+node("br.heal_count", "Healing Items", "Battle Royale", "How many healing items a player carries.", inputs=[PL], outputs=[P("out","number","How many")], pure=True, needs="components")
+node("br.armor", "Set Armor Levels", "Battle Royale", "Sets a player's vest and helmet levels (1-3; 0 none; keep: as they are).", inputs=[X, PL], outputs=[E()], params=[prm("vest","Vest","choice","2",choices=[["-1","Keep"],["0","None"],["1","1"],["2","2"],["3","3"]]), prm("helmet","Helmet","choice","1",choices=[["-1","Keep"],["0","None"],["1","1"],["2","2"],["3","3"]])], **ca)
+node("br.crate", "Make Crate", "Battle Royale", "Makes a crate at an entity with these items (loot items: ak47@30@60 bandage:2 vest2).", inputs=[X, P("at","entity","At",required=True)], outputs=[E(), P("out","entity","Crate")], params=[prm("items","Items","keys","bandage:2 ammo",max=120)], **ca)
+node("br.glow", "Rarity Glow", "Battle Royale", "Makes an entity glow in a rarity's colour (0 none, 1 white, 2 green, 3 blue, 4 purple, 5 gold).", inputs=[X, P("ent","entity","Entity",required=True), P("tier","number","Rarity",param="tier")], outputs=[E()], params=[prm("tier","Rarity","number",3,min=0,max=5)], **ca)
+node("br.hud", "Match HUD", "Battle Royale", "Turns the match HUD on or off (players left, kills, the zone's timer, armor, healing items, the kill feed and the squad).", inputs=[X], outputs=[E()], params=[prm("on","On","bool",True)], **ca)
+node("br.hud_text", "Match HUD Words", "Battle Royale", "The mode's words in the match HUD in place of the zone's timer (empty: the zone again).", inputs=[X, P("text","text","Text",param="text")], outputs=[E()], params=[prm("text","Text","text","Loot up!",max=60)], **ca)
+node("br.feed", "Kill Feed Line", "Battle Royale", "Adds a line to the match HUD's kill feed.", inputs=[X, P("text","text","Text",param="text")], outputs=[E()], params=[prm("text","Text","text","",max=60)], **ca)
+node("br.kills", "Match Kills", "Battle Royale", "A player's kills this round (counted while the match HUD is on).", inputs=[PL], outputs=[P("out","number","Kills")], pure=True, needs="components")
+node("br.drop_in", "Drop In", "Battle Royale", "Drops a player in from high over a spot (an entity wired into At, else a spread-out landing spot: the map's br_drop markers); they fall slowly and take no damage until they land.", inputs=[X, PL, P("at","entity","At",optional=True)], outputs=[E()], **ca)
+node("br.on_landed", "Landed", "Battle Royale", "A player who dropped in is down on the ground.", outputs=[E(), P("player","player","Player")], **cev)
+node("br.lobby", "Squad Lobby", "Battle Royale", "A lobby of some seconds where people team up (say /squad); then the squads are filled (Lobby Ended). 0: fill them now.", inputs=[X, P("secs","number","Seconds",param="secs")], outputs=[E()], params=[prm("secs","Seconds","number",30,min=0,max=300)], **ca)
+node("br.squad_size", "Squad Size", "Battle Royale", "Sets the squad size: 1 solo, 2 duos, 4 squads...", inputs=[X, P("size","number","Size",param="size")], outputs=[E()], params=[prm("size","Size","number",4,min=1,max=8)], **ca)
+node("br.on_lobby_end", "Lobby Ended", "Battle Royale", "The squad lobby is over and the squads are filled.", outputs=[E(), P("squads","number","Squads")], **cev)
+node("br.squads_alive", "Sides Alive", "Battle Royale", "How many sides have someone alive (squads, and players in none).", outputs=[P("out","number","Sides")], pure=True, needs="components")
+
 # what the mode tells the bots' brain (ls_mode hints, through gm_components): so community modes get bots that play them well
 BH = dict(needs="components")
 BWHO = P("player","player","Bot",optional=True)
@@ -402,7 +454,7 @@ data = {
     "any": {"label": "Anything", "color": "#9a9a9a"},
     "var": {"label": "Variable", "color": "#cccccc"}
   },
-  "categories": ["Events", "Conditions", "Numbers", "Text", "Variables", "Flow", "Functions", "Macros", "Arrays", "Maps", "Structs", "Enums", "Vectors", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Map markers", "Creatures"],
+  "categories": ["Events", "Conditions", "Numbers", "Text", "Variables", "Flow", "Functions", "Macros", "Arrays", "Maps", "Structs", "Enums", "Vectors", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Map markers", "Upgrades", "Downed", "Shop", "Battle Royale", "Creatures"],
   "nodes": nodes,
 }
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)

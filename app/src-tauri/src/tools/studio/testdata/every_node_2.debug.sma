@@ -16,7 +16,7 @@
 #define LSG_MODE "every_node_2"
 #define LSG_CTX 4
 #define LSG_TXT 2
-#define LSG_N 37
+#define LSG_N 95
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -35,9 +35,12 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_O 1
 #define LSG_OT 1
 
-#define LSD_N 37
-new const g_lsdIds[LSD_N][] = { "ps", "tag", "fr", "ly", "rs", "ph", "nb", "ce", "goal", "off", "gc", "oc", "bset", "p_bhp", "brep", "p_bhp2", "loot", "p_loot", "p_rolled", "skip", "p_zst", "p_zn", "cs", "p_cs", "p_chp", "dz", "p_zst2", "drop", "ph2", "bd", "p_bd", "br", "p_br", "dl", "p_dl", "ck", "p_ck" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+// The mode's variables
+stock g_v0 = 0 // Shop (Entity)
+
+#define LSD_N 95
+new const g_lsdIds[LSD_N][] = { "ps", "tag", "fr", "ly", "rs", "ph", "nb", "ce", "goal", "off", "gc", "oc", "bset", "p_bhp", "brep", "p_bhp2", "loot", "p_loot", "p_rolled", "skip", "p_zst", "p_zn", "cs", "p_cs", "p_chp", "dz", "p_zst2", "drop", "ph2", "bd", "p_bd", "br", "p_br", "dl", "p_dl", "ck", "p_ck", "ps2", "mod", "pg", "pb", "p_pb", "p_ph", "p_pc", "p_mg", "p_wl", "bench", "box", "kdn", "p_kis", "p_kl", "kup", "hg", "p_hc", "arm", "p_k", "din", "rs3", "kde", "mkshop", "sopen", "p_sp", "pick", "crate", "glow", "hud", "hudt", "feed", "ssz", "lob", "p_sal", "svar", "smenu", "e_perk", "p_e_perk", "e_up", "p_e_up", "e_box", "p_e_box", "e_pick", "p_e_pick", "e_ch", "p_e_ch", "e_kd", "p_e_kd", "e_ku", "p_e_ku", "e_bo", "p_e_bo", "e_buy", "p_e_buy", "e_land", "p_e_land", "e_lob", "p_e_lob" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -535,6 +538,15 @@ public lsd_poll()
 	lsd_emitf("^"e^":^"commands^",^"resume^":%s", g_lsdBool[resume ? 1 : 0])
 	if (resume)
 		lsd_resume()
+}
+
+// a drop-in over an entity's place
+stock lsg_drop_in(id, ent)
+{
+	new Float:o[3]
+	if (!lsg_ent_origin(ent, o))
+		return ls_drop_in(id)
+	return ls_drop_in(id, o)
 }
 
 stock Float:lsg_ehp(e)
@@ -1796,6 +1808,7 @@ stock lsg_tclear(h)
 
 lsd_graph_vars()
 {
+	lsd_var_text("shopv", 0, lsg_etext(g_v0))
 }
 
 // a creature with the mode's own health, tier and pay for its killer
@@ -1842,6 +1855,8 @@ public lsg_pay_killer(ent, killer)
 
 public plugin_precache()
 {
+	// the shopkeeper of a shop the mode makes
+	precache_model("models/barney.mdl")
 	// creature types this mode spawns: loaded as the map starts (with what other plugins asked for)
 	if (get_cvar_pointer("ls_creature_precache"))
 		lsg_precache_types("zombie")
@@ -1880,6 +1895,7 @@ public plugin_init()
 	lsd_init()
 	register_logevent("lsg_on_round_started", 2, "1=Round_Start")
 	RegisterHamPlayer(Ham_Spawn, "lsg_on_player_spawned", 1)
+	set_task(1.0, "lsg_on_map_started")
 	if (get_cvar_pointer("ls_creature_ver"))
 		RegisterHam(Ham_Killed, "ls_creature", "lsg_on_creature_killed", 1)
 	register_event("HLTV", "lsg_new_round", "a", "1=0", "2=0")
@@ -1917,7 +1933,14 @@ public lsg_on_player_spawned(id)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	lsg_n0(ctx)
+	lsg_n37(ctx)
 	return HAM_IGNORED
+}
+
+public lsg_on_map_started()
+{
+	new ctx[LSG_CTX]
+	lsg_n57(ctx)
 }
 
 public ls_on_barricade_damaged(ent, attacker, hp)
@@ -1946,6 +1969,105 @@ public ls_on_drop(ent, stage, const Float:origin[3])
 	new ctx[LSG_CTX]
 	ctx[0] = ent // drop
 	lsg_n33(ctx)
+}
+
+public ls_on_perk(id, const perk[], price)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	copy(g_lsgTxt[0], 63, perk) // perk
+	ctx[1] = _:float(price) // price
+	lsg_n73(ctx)
+	return PLUGIN_CONTINUE
+}
+
+public ls_on_weapon_upgraded(id, weapon, level, price)
+{
+	#pragma unused weapon
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	ctx[1] = _:float(level) // level
+	ctx[2] = _:float(price) // price
+	lsg_n75(ctx)
+}
+
+public ls_on_box(ent, id, const weapon[])
+{
+	#pragma unused ent
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	copy(g_lsgTxt[0], 63, weapon) // weapon
+	lsg_n77(ctx)
+	return PLUGIN_CONTINUE
+}
+
+public ls_on_pickup(ent, id, const kind[])
+{
+	new ctx[LSG_CTX]
+	ctx[0] = ent // pickup
+	ctx[1] = id // player
+	copy(g_lsgTxt[0], 63, kind) // kind
+	lsg_n79(ctx)
+	return PLUGIN_CONTINUE
+}
+
+public ls_on_creature_hurt(ent, attacker, Float:dmg, headshot)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = ent // creature
+	ctx[1] = attacker >= 1 && attacker <= MaxClients ? attacker : 0 // attacker
+	ctx[2] = _:dmg // damage
+	ctx[3] = headshot ? 1 : 0 // headshot
+	lsg_n81(ctx)
+}
+
+public ls_on_down(id, attacker)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	ctx[1] = attacker // attacker
+	lsg_n83(ctx)
+	return PLUGIN_CONTINUE
+}
+
+public ls_on_revive(id, by)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	ctx[1] = by >= 1 && by <= MaxClients ? by : 0 // by
+	lsg_n85(ctx)
+}
+
+public ls_on_bled_out(id)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	lsg_n87(ctx)
+}
+
+public ls_on_shop_buy(ent, id, const item[], price)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = ent // shop
+	ctx[1] = id // player
+	copy(g_lsgTxt[0], 63, item) // item
+	ctx[2] = _:float(price) // price
+	lsg_n89(ctx)
+	return PLUGIN_CONTINUE
+}
+
+public ls_on_landed(id)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	lsg_n91(ctx)
+}
+
+public ls_on_lobby_end(squads)
+{
+	new ctx[LSG_CTX]
+	ctx[0] = _:float(squads) // squads
+	lsg_n93(ctx)
 }
 
 public lsg_on_creature_killed(ent, killer)
@@ -2596,6 +2718,924 @@ lsg_n36(ctx[])
 	lsd_exit(36, esc)
 }
 
+// Player Spawned (ps2)
+lsg_n37(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(37, ctx))
+		return
+	lsd_exit(37, "ran")
+	lsg_n38(ctx)
+}
+
+// Set Player Modifier (mod)
+lsg_n38(ctx[])
+{
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 1.1
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("Times", lsi1)
+	if (lsd_enter(38, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(38, "gm_components isn't running on this server.")
+	else
+	{
+		ls_player_mod(lsi0, "speed", lsi1)
+		lsd_exit(38, "done")
+	}
+	lsg_n39(ctx)
+}
+
+// Give Perk (pg)
+lsg_n39(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	if (lsd_enter(39, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(39, "gm_components isn't running on this server.")
+	else
+	{
+		ls_perk_give(lsi0, "tough")
+		lsd_exit(39, "done")
+	}
+	lsg_n40(ctx)
+}
+
+// Buy Perk (pb)
+lsg_n40(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	if (lsd_enter(40, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(40, "gm_components isn't running on this server.")
+	else
+	{
+		ls_perk_buy(lsi0, "hands") ? 1 : 0
+		lsd_exit(40, "done")
+	}
+	lsg_n41(ctx)
+}
+
+// Print String (p_pb)
+lsg_n41(ctx[])
+{
+	new lsi0 = g_lsgOut[40]
+	lsd_begin()
+	lsd_in_bool("Value", lsi0)
+	if (lsd_enter(41, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 bought hands:", g_lsgYesNo[(lsi0) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(41, esc)
+	lsg_n42(ctx)
+}
+
+// Print String (p_ph)
+lsg_n42(ctx[])
+{
+	new lsi0 = (ls_components_running() && ls_perk_has(ctx[0], "tough") ? 1 : 0)
+	lsd_begin()
+	lsd_in_bool("Value", lsi0)
+	if (lsd_enter(42, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 has tough:", g_lsgYesNo[(lsi0) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(42, esc)
+	lsg_n43(ctx)
+}
+
+// Print String (p_pc)
+lsg_n43(ctx[])
+{
+	new Float:lsi0 = float(ls_components_running() ? ls_perk_count(ctx[0]) : 0)
+	lsd_begin()
+	lsd_in_number("Value", lsi0)
+	if (lsd_enter(43, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 perks:", floatround(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(43, esc)
+	lsg_n44(ctx)
+}
+
+// Print String (p_mg)
+lsg_n44(ctx[])
+{
+	new Float:lsi0 = (ls_components_running() ? ls_player_mod_get(ctx[0], "speed") : 1.0)
+	lsd_begin()
+	lsd_in_number("Value", lsi0)
+	if (lsd_enter(44, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 speed times:", floatround(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(44, esc)
+	lsg_n45(ctx)
+}
+
+// Print String (p_wl)
+lsg_n45(ctx[])
+{
+	new Float:lsi0 = float(ls_components_running() && lsg_ok(ctx[0]) ? ls_weapon_level(ctx[0]) : 0)
+	lsd_begin()
+	lsd_in_number("Value", lsi0)
+	if (lsd_enter(45, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 gun level:", floatround(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(45, esc)
+	lsg_n46(ctx)
+}
+
+// Upgrade Gun (bench)
+lsg_n46(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	if (lsd_enter(46, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(46, "gm_components isn't running on this server.")
+	else
+	{
+		ls_bench_use(lsi0)
+		lsd_exit(46, "done")
+	}
+	lsg_n47(ctx)
+}
+
+// Roll Mystery Box (box)
+lsg_n47(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	if (lsd_enter(47, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(47, "gm_components isn't running on this server.")
+	else
+	{
+		ls_box_use(0, lsi0)
+		lsd_exit(47, "done")
+	}
+	lsg_n48(ctx)
+}
+
+// Knock Down (kdn)
+lsg_n48(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	if (lsd_enter(48, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(48, "gm_components isn't running on this server.")
+	else
+	{
+		ls_down(lsi0)
+		lsd_exit(48, "done")
+	}
+	lsg_n49(ctx)
+}
+
+// Print String (p_kis)
+lsg_n49(ctx[])
+{
+	new lsi0 = (ls_components_running() && ls_is_down(ctx[0]) ? 1 : 0)
+	lsd_begin()
+	lsd_in_bool("Value", lsi0)
+	if (lsd_enter(49, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 down:", g_lsgYesNo[(lsi0) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(49, esc)
+	lsg_n50(ctx)
+}
+
+// Print String (p_kl)
+lsg_n50(ctx[])
+{
+	new Float:lsi0 = (ls_components_running() ? ls_down_left(ctx[0]) : 0.0)
+	lsd_begin()
+	lsd_in_number("Value", lsi0)
+	if (lsd_enter(50, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 bleed left:", floatround(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(50, esc)
+	lsg_n51(ctx)
+}
+
+// Get Up (kup)
+lsg_n51(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	if (lsd_enter(51, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(51, "gm_components isn't running on this server.")
+	else
+	{
+		ls_revive(lsi0, 0)
+		lsd_exit(51, "done")
+	}
+	lsg_n52(ctx)
+}
+
+// Give Healing Item (hg)
+lsg_n52(ctx[])
+{
+	new lsi0 = ctx[0]
+	new Float:lsi1 = 2.0
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	lsd_in_number("How many", lsi1)
+	if (lsd_enter(52, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(52, "gm_components isn't running on this server.")
+	else
+	{
+		ls_heal_give(lsi0, "bandage", max(floatround(lsi1), 1))
+		lsd_exit(52, "done")
+	}
+	lsg_n53(ctx)
+}
+
+// Print String (p_hc)
+lsg_n53(ctx[])
+{
+	new Float:lsi0 = float(ls_components_running() ? ls_heal_count(ctx[0]) : 0)
+	lsd_begin()
+	lsd_in_number("Value", lsi0)
+	if (lsd_enter(53, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 healing items:", floatround(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(53, esc)
+	lsg_n54(ctx)
+}
+
+// Set Armor Levels (arm)
+lsg_n54(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	if (lsd_enter(54, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(54, "gm_components isn't running on this server.")
+	else
+	{
+		ls_armor_set(lsi0, 2, 1)
+		lsd_exit(54, "done")
+	}
+	lsg_n55(ctx)
+}
+
+// Print String (p_k)
+lsg_n55(ctx[])
+{
+	new Float:lsi0 = float(ls_components_running() ? ls_kills(ctx[0]) : 0)
+	lsd_begin()
+	lsd_in_number("Value", lsi0)
+	if (lsd_enter(55, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 match kills:", floatround(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(55, esc)
+	lsg_n56(ctx)
+}
+
+// Drop In (din)
+lsg_n56(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	if (lsd_enter(56, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(56, "gm_components isn't running on this server.")
+	else
+	{
+		ls_drop_in(lsi0)
+		lsd_exit(56, "done")
+	}
+}
+
+// Map Started (rs3)
+lsg_n57(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(57, ctx))
+		return
+	lsd_exit(57, "ran")
+	lsg_n58(ctx)
+}
+
+// Knocked Down On (kde)
+lsg_n58(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(58, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(58, "gm_components isn't running on this server.")
+	else
+	{
+		ls_down_enable(true, 30.0, 0, true)
+		lsd_exit(58, "done")
+	}
+	lsg_n59(ctx)
+}
+
+// Create Component (mkshop)
+lsg_n59(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(59, ctx))
+		return
+	new Float:o[3]
+	if (!ls_components_running())
+		lsd_error(59, "gm_components isn't running on this server.")
+	else if (!lsg_origin_of("spot1", o))
+		lsd_error(59, "No entity has that name on this map.")
+	else
+	{
+		g_lsgOut[59] = ls_comp_create("ls_shop", o, "items=Ammo|300|ammo|refill;Armor|650|vesthelm|armor keeper=barney")
+		if (g_lsgOut[59])
+			lsd_exit(59, fmt("entity %d", g_lsgOut[59]))
+		else
+			lsd_error(59, "gm_components couldn't make that component (it has no room, or the keys are wrong).")
+	}
+	lsg_n60(ctx)
+}
+
+// Open or Close Shop (sopen)
+lsg_n60(ctx[])
+{
+	new lsi0 = g_lsgOut[59]
+	new lsi1 = 1
+	lsd_begin()
+	lsd_in_entity("Shop", lsi0)
+	lsd_in_bool("Open", lsi1)
+	if (lsd_enter(60, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(60, "gm_components isn't running on this server.")
+	else
+	{
+		ls_shop_open(lsi0, bool:((lsi1) ? 1 : 0))
+		lsd_exit(60, "done")
+	}
+	lsg_n61(ctx)
+}
+
+// Print String (p_sp)
+lsg_n61(ctx[])
+{
+	new Float:lsi0 = float(ls_components_running() ? ls_shop_price(g_lsgOut[59], "Ammo") : -1)
+	lsd_begin()
+	lsd_in_number("Value", lsi0)
+	if (lsd_enter(61, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 shop ammo price:", floatround(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(61, esc)
+	lsg_n62(ctx)
+}
+
+// Drop Pickup (pick)
+lsg_n62(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	lsd_begin()
+	lsd_in_entity("At", lsi0)
+	if (lsd_enter(62, ctx))
+		return
+	new Float:o[3]
+	if (!ls_components_running() || !lsg_ent_origin(lsi0, o))
+		lsd_error(62, "gm_components isn't running, or there's no such entity.")
+	else
+	{
+		g_lsgOut[62] = ls_pickup_spawn("resupply", o, 60.0, "", 255, 200, 40)
+		lsd_exit(62, "done")
+	}
+	lsg_n63(ctx)
+}
+
+// Make Crate (crate)
+lsg_n63(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	lsd_begin()
+	lsd_in_entity("At", lsi0)
+	if (lsd_enter(63, ctx))
+		return
+	new Float:o[3]
+	if (!ls_components_running() || !lsg_ent_origin(lsi0, o))
+		lsd_error(63, "gm_components isn't running, or there's no such entity.")
+	else
+	{
+		g_lsgOut[63] = ls_crate_make(o, "bandage:2 ammo")
+		lsd_exit(63, "done")
+	}
+	lsg_n64(ctx)
+}
+
+// Rarity Glow (glow)
+lsg_n64(ctx[])
+{
+	new lsi0 = g_lsgOut[63]
+	new Float:lsi1 = 4.0
+	lsd_begin()
+	lsd_in_entity("Entity", lsi0)
+	lsd_in_number("Rarity", lsi1)
+	if (lsd_enter(64, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(64, "gm_components isn't running on this server.")
+	else
+	{
+		ls_glow(lsi0, clamp(floatround(lsi1), 0, 5))
+		lsd_exit(64, "done")
+	}
+	lsg_n65(ctx)
+}
+
+// Match HUD (hud)
+lsg_n65(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(65, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(65, "gm_components isn't running on this server.")
+	else
+	{
+		ls_match_hud(true)
+		lsd_exit(65, "done")
+	}
+	lsg_n66(ctx)
+}
+
+// Match HUD Words (hudt)
+lsg_n66(ctx[])
+{
+	new lsi0[128]
+	copy(lsi0, 127, "Loot up!")
+	lsd_begin()
+	lsd_in_text("Text", lsi0)
+	if (lsd_enter(66, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(66, "gm_components isn't running on this server.")
+	else
+	{
+		ls_match_hud_text(lsi0)
+		lsd_exit(66, "done")
+	}
+	lsg_n67(ctx)
+}
+
+// Kill Feed Line (feed)
+lsg_n67(ctx[])
+{
+	new lsi0[128]
+	copy(lsi0, 127, "X2 feed line")
+	lsd_begin()
+	lsd_in_text("Text", lsi0)
+	if (lsd_enter(67, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(67, "gm_components isn't running on this server.")
+	else
+	{
+		ls_feed(lsi0)
+		lsd_exit(67, "done")
+	}
+	lsg_n68(ctx)
+}
+
+// Squad Size (ssz)
+lsg_n68(ctx[])
+{
+	new Float:lsi0 = 2.0
+	lsd_begin()
+	lsd_in_number("Size", lsi0)
+	if (lsd_enter(68, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(68, "gm_components isn't running on this server.")
+	else
+	{
+		ls_squad_max(clamp(floatround(lsi0), 1, 8))
+		lsd_exit(68, "done")
+	}
+	lsg_n69(ctx)
+}
+
+// Squad Lobby (lob)
+lsg_n69(ctx[])
+{
+	new Float:lsi0 = 5.0
+	lsd_begin()
+	lsd_in_number("Seconds", lsi0)
+	if (lsd_enter(69, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(69, "gm_components isn't running on this server.")
+	else
+	{
+		ls_squad_lobby(floatmax(lsi0, 0.0))
+		lsd_exit(69, "done")
+	}
+	lsg_n70(ctx)
+}
+
+// Print String (p_sal)
+lsg_n70(ctx[])
+{
+	new Float:lsi0 = float(ls_components_running() ? ls_squads_alive() : 0)
+	lsd_begin()
+	lsd_in_number("Value", lsi0)
+	if (lsd_enter(70, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 sides alive:", floatround(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(70, esc)
+	lsg_n71(ctx)
+}
+
+// Set Variable (svar)
+lsg_n71(ctx[])
+{
+	new lsi2 = g_lsgOut[59]
+	lsd_begin()
+	lsd_in_entity("Value", lsi2)
+	if (lsd_enter(71, ctx))
+		return
+	g_v0 = lsi2
+	lsd_exit(71, "set")
+}
+
+// Open Shop Menu (smenu)
+lsg_n72(ctx[])
+{
+	new lsi0 = g_v0
+	new lsi1 = ctx[0]
+	lsd_begin()
+	lsd_in_entity("Shop", lsi0)
+	lsd_in_player("Player", lsi1)
+	if (lsd_enter(72, ctx))
+		return
+	if (!ls_components_running())
+		lsd_error(72, "gm_components isn't running on this server.")
+	else
+	{
+		ls_shop_menu(lsi0, lsi1)
+		lsd_exit(72, "done")
+	}
+}
+
+// Perk Bought (e_perk)
+lsg_n73(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(73, ctx))
+		return
+	lsd_exit(73, "ran")
+	lsg_n74(ctx)
+}
+
+// Print String (p_e_perk)
+lsg_n74(ctx[])
+{
+	new lsi0[128]
+	copy(lsi0, 127, g_lsgTxt[0])
+	lsd_begin()
+	lsd_in_text("Value", lsi0)
+	if (lsd_enter(74, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 perk bought:", lsi0)
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(74, esc)
+}
+
+// Gun Upgraded (e_up)
+lsg_n75(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(75, ctx))
+		return
+	lsd_exit(75, "ran")
+	lsg_n76(ctx)
+}
+
+// Print String (p_e_up)
+lsg_n76(ctx[])
+{
+	new Float:lsi0 = Float:ctx[1]
+	lsd_begin()
+	lsd_in_number("Value", lsi0)
+	if (lsd_enter(76, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 gun upgraded to:", floatround(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(76, esc)
+}
+
+// Mystery Box Gave (e_box)
+lsg_n77(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(77, ctx))
+		return
+	lsd_exit(77, "ran")
+	lsg_n78(ctx)
+}
+
+// Print String (p_e_box)
+lsg_n78(ctx[])
+{
+	new lsi0[128]
+	copy(lsi0, 127, g_lsgTxt[0])
+	lsd_begin()
+	lsd_in_text("Value", lsi0)
+	if (lsd_enter(78, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 box gave:", lsi0)
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(78, esc)
+}
+
+// Pickup Taken (e_pick)
+lsg_n79(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(79, ctx))
+		return
+	lsd_exit(79, "ran")
+	lsg_n80(ctx)
+}
+
+// Print String (p_e_pick)
+lsg_n80(ctx[])
+{
+	new lsi0[128]
+	copy(lsi0, 127, g_lsgTxt[0])
+	lsd_begin()
+	lsd_in_text("Value", lsi0)
+	if (lsd_enter(80, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 pickup taken:", lsi0)
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(80, esc)
+}
+
+// Creature Hurt (e_ch)
+lsg_n81(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(81, ctx))
+		return
+	lsd_exit(81, "ran")
+	lsg_n82(ctx)
+}
+
+// Print String (p_e_ch)
+lsg_n82(ctx[])
+{
+	new Float:lsi0 = Float:ctx[2]
+	lsd_begin()
+	lsd_in_number("Value", lsi0)
+	if (lsd_enter(82, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 creature hurt:", floatround(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(82, esc)
+}
+
+// Knocked Down (e_kd)
+lsg_n83(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(83, ctx))
+		return
+	lsd_exit(83, "ran")
+	lsg_n84(ctx)
+}
+
+// Print String (p_e_kd)
+lsg_n84(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Value", lsi0)
+	if (lsd_enter(84, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 knocked down:", lsg_name(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(84, esc)
+}
+
+// Got Up (e_ku)
+lsg_n85(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(85, ctx))
+		return
+	lsd_exit(85, "ran")
+	lsg_n86(ctx)
+}
+
+// Print String (p_e_ku)
+lsg_n86(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Value", lsi0)
+	if (lsd_enter(86, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 got up:", lsg_name(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(86, esc)
+}
+
+// Bled Out (e_bo)
+lsg_n87(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(87, ctx))
+		return
+	lsd_exit(87, "ran")
+	lsg_n88(ctx)
+}
+
+// Print String (p_e_bo)
+lsg_n88(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Value", lsi0)
+	if (lsd_enter(88, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 bled out:", lsg_name(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(88, esc)
+}
+
+// Shop Purchase (e_buy)
+lsg_n89(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(89, ctx))
+		return
+	lsd_exit(89, "ran")
+	lsg_n90(ctx)
+}
+
+// Print String (p_e_buy)
+lsg_n90(ctx[])
+{
+	new lsi0[128]
+	copy(lsi0, 127, g_lsgTxt[0])
+	lsd_begin()
+	lsd_in_text("Value", lsi0)
+	if (lsd_enter(90, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 shop sold:", lsi0)
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(90, esc)
+}
+
+// Landed (e_land)
+lsg_n91(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(91, ctx))
+		return
+	lsd_exit(91, "ran")
+	lsg_n92(ctx)
+}
+
+// Print String (p_e_land)
+lsg_n92(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Value", lsi0)
+	if (lsd_enter(92, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "X2 landed:", lsg_name(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(92, esc)
+	lsg_n72(ctx)
+}
+
+// Lobby Ended (e_lob)
+lsg_n93(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(93, ctx))
+		return
+	lsd_exit(93, "ran")
+	lsg_n94(ctx)
+}
+
+// Print String (p_e_lob)
+lsg_n94(ctx[])
+{
+	new Float:lsi0 = Float:ctx[0]
+	lsd_begin()
+	lsd_in_number("Value", lsi0)
+	if (lsd_enter(94, ctx))
+		return
+	new t[192]
+	formatex(t, charsmax(t), "%s %d", "X2 lobby ended, squads:", floatround(lsi0))
+	server_print("[%s] %s", LSG_MODE, t)
+	new esc[200]
+	lsd_esc(t, esc, charsmax(esc))
+	lsd_exit(94, esc)
+}
+
 lsd_call(n, const data[])
 {
 	new ctx[LSG_CTX]
@@ -2640,5 +3680,63 @@ lsd_call(n, const data[])
 		case 34: lsg_n34(ctx)
 		case 35: lsg_n35(ctx)
 		case 36: lsg_n36(ctx)
+		case 37: lsg_n37(ctx)
+		case 38: lsg_n38(ctx)
+		case 39: lsg_n39(ctx)
+		case 40: lsg_n40(ctx)
+		case 41: lsg_n41(ctx)
+		case 42: lsg_n42(ctx)
+		case 43: lsg_n43(ctx)
+		case 44: lsg_n44(ctx)
+		case 45: lsg_n45(ctx)
+		case 46: lsg_n46(ctx)
+		case 47: lsg_n47(ctx)
+		case 48: lsg_n48(ctx)
+		case 49: lsg_n49(ctx)
+		case 50: lsg_n50(ctx)
+		case 51: lsg_n51(ctx)
+		case 52: lsg_n52(ctx)
+		case 53: lsg_n53(ctx)
+		case 54: lsg_n54(ctx)
+		case 55: lsg_n55(ctx)
+		case 56: lsg_n56(ctx)
+		case 57: lsg_n57(ctx)
+		case 58: lsg_n58(ctx)
+		case 59: lsg_n59(ctx)
+		case 60: lsg_n60(ctx)
+		case 61: lsg_n61(ctx)
+		case 62: lsg_n62(ctx)
+		case 63: lsg_n63(ctx)
+		case 64: lsg_n64(ctx)
+		case 65: lsg_n65(ctx)
+		case 66: lsg_n66(ctx)
+		case 67: lsg_n67(ctx)
+		case 68: lsg_n68(ctx)
+		case 69: lsg_n69(ctx)
+		case 70: lsg_n70(ctx)
+		case 71: lsg_n71(ctx)
+		case 72: lsg_n72(ctx)
+		case 73: lsg_n73(ctx)
+		case 74: lsg_n74(ctx)
+		case 75: lsg_n75(ctx)
+		case 76: lsg_n76(ctx)
+		case 77: lsg_n77(ctx)
+		case 78: lsg_n78(ctx)
+		case 79: lsg_n79(ctx)
+		case 80: lsg_n80(ctx)
+		case 81: lsg_n81(ctx)
+		case 82: lsg_n82(ctx)
+		case 83: lsg_n83(ctx)
+		case 84: lsg_n84(ctx)
+		case 85: lsg_n85(ctx)
+		case 86: lsg_n86(ctx)
+		case 87: lsg_n87(ctx)
+		case 88: lsg_n88(ctx)
+		case 89: lsg_n89(ctx)
+		case 90: lsg_n90(ctx)
+		case 91: lsg_n91(ctx)
+		case 92: lsg_n92(ctx)
+		case 93: lsg_n93(ctx)
+		case 94: lsg_n94(ctx)
 	}
 }

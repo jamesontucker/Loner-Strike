@@ -29,6 +29,7 @@ fn component_of(kind: &str) -> Option<&'static str> {
         "comp.on_meeting_end" => "ls_meeting_point",
         "comp.trap_fire" => "ls_trigger_trap",
         "comp.door" => "ls_timed_door",
+        "shop.menu" | "shop.open" | "shop.price" | "shop.on_buy" => "ls_shop",
         _ => return None,
     })
 }

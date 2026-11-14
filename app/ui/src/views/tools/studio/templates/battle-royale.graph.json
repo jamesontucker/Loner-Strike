@@ -23,6 +23,13 @@
    "type": "number",
    "scope": "mode",
    "default": 0
+  },
+  {
+   "id": "looting",
+   "name": "Looting",
+   "type": "bool",
+   "scope": "mode",
+   "default": false
   }
  ],
  "nodes": [
@@ -54,92 +61,6 @@
     "y": 512
    },
    "params": {}
-  },
-  {
-   "id": "rs_each",
-   "type": "flow.for_each_player",
-   "pos": {
-    "x": 565,
-    "y": 477
-   },
-   "params": {
-    "which": "alive"
-   }
-  },
-  {
-   "id": "rs_strip",
-   "type": "player.strip",
-   "pos": {
-    "x": 1065,
-    "y": 226
-   },
-   "params": {
-    "knife": true
-   }
-  },
-  {
-   "id": "rs_spot",
-   "type": "comp.respawn_at",
-   "pos": {
-    "x": 1565,
-    "y": 282
-   },
-   "params": {}
-  },
-  {
-   "id": "rs_sqn",
-   "type": "math.random",
-   "pos": {
-    "x": 1565,
-    "y": 408
-   },
-   "params": {
-    "min": 1,
-    "max": 6,
-    "frac": false
-   }
-  },
-  {
-   "id": "rs_sq",
-   "type": "squad.set",
-   "pos": {
-    "x": 2065,
-    "y": 327
-   },
-   "params": {}
-  },
-  {
-   "id": "rs_nofall",
-   "type": "player.no_fall",
-   "pos": {
-    "x": 2565,
-    "y": 394
-   },
-   "params": {
-    "mode": "once"
-   }
-  },
-  {
-   "id": "rs_grav",
-   "type": "player.set_gravity",
-   "pos": {
-    "x": 3065,
-    "y": 467
-   },
-   "params": {
-    "gravity": 0.25
-   }
-  },
-  {
-   "id": "rs_up",
-   "type": "player.launch",
-   "pos": {
-    "x": 3565,
-    "y": 516
-   },
-   "params": {
-    "speed": 900
-   }
   },
   {
    "id": "rs_zone",
@@ -187,39 +108,6 @@
    }
   },
   {
-   "id": "rs_land",
-   "type": "timer.delay",
-   "pos": {
-    "x": 3065,
-    "y": 830
-   },
-   "params": {
-    "secs": 8
-   }
-  },
-  {
-   "id": "rs_all",
-   "type": "flow.for_each_player",
-   "pos": {
-    "x": 3565,
-    "y": 819
-   },
-   "params": {
-    "which": "alive"
-   }
-  },
-  {
-   "id": "rs_g1",
-   "type": "player.set_gravity",
-   "pos": {
-    "x": 4065,
-    "y": 819
-   },
-   "params": {
-    "gravity": 1
-   }
-  },
-  {
    "id": "rs_drops",
    "type": "timer.repeat",
    "pos": {
@@ -258,15 +146,6 @@
    "pos": {
     "x": 65,
     "y": 1596
-   },
-   "params": {}
-  },
-  {
-   "id": "pk_left",
-   "type": "squad.alive",
-   "pos": {
-    "x": 65,
-    "y": 1884
    },
    "params": {}
   },
@@ -420,6 +299,241 @@
    "params": {
     "text": "Crate opened."
    }
+  },
+  {
+   "id": "ms_hud",
+   "type": "br.hud",
+   "pos": {
+    "x": 1065,
+    "y": 50
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "ms_kd",
+   "type": "kd.enable",
+   "pos": {
+    "x": 1565,
+    "y": 50
+   },
+   "params": {
+    "on": true,
+    "bleed": 30,
+    "team": "0",
+    "perks": false
+   }
+  },
+  {
+   "id": "ms_size",
+   "type": "br.squad_size",
+   "pos": {
+    "x": 2065,
+    "y": 50
+   },
+   "params": {
+    "size": 4
+   }
+  },
+  {
+   "id": "rs_nobuy",
+   "type": "bots.no_buy",
+   "pos": {
+    "x": 565,
+    "y": 300
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "rs_loot",
+   "type": "bots.phase",
+   "pos": {
+    "x": 1065,
+    "y": 300
+   },
+   "params": {
+    "phase": "loot"
+   }
+  },
+  {
+   "id": "rs_looting",
+   "type": "var.set",
+   "pos": {
+    "x": 1565,
+    "y": 300
+   },
+   "params": {
+    "var": "looting",
+    "value": true
+   }
+  },
+  {
+   "id": "rs_text",
+   "type": "br.hud_text",
+   "pos": {
+    "x": 2065,
+    "y": 300
+   },
+   "params": {
+    "text": "Squads forming: say slash squad"
+   }
+  },
+  {
+   "id": "rs_lobby",
+   "type": "br.lobby",
+   "pos": {
+    "x": 2565,
+    "y": 300
+   },
+   "params": {
+    "secs": 15
+   }
+  },
+  {
+   "id": "le",
+   "type": "br.on_lobby_end",
+   "pos": {
+    "x": 65,
+    "y": 2150
+   },
+   "params": {}
+  },
+  {
+   "id": "le_each",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 565,
+    "y": 2150
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "le_strip",
+   "type": "player.strip",
+   "pos": {
+    "x": 1065,
+    "y": 2150
+   },
+   "params": {
+    "knife": true
+   }
+  },
+  {
+   "id": "le_drop",
+   "type": "br.drop_in",
+   "pos": {
+    "x": 1565,
+    "y": 2150
+   },
+   "params": {}
+  },
+  {
+   "id": "le_text",
+   "type": "br.hud_text",
+   "pos": {
+    "x": 1065,
+    "y": 2350
+   },
+   "params": {
+    "text": "Loot up: the fight starts in 45 s"
+   }
+  },
+  {
+   "id": "le_wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 1565,
+    "y": 2350
+   },
+   "params": {
+    "secs": 45
+   }
+  },
+  {
+   "id": "le_fight",
+   "type": "bots.phase",
+   "pos": {
+    "x": 2065,
+    "y": 2350
+   },
+   "params": {
+    "phase": "fight"
+   }
+  },
+  {
+   "id": "le_fighting",
+   "type": "var.set",
+   "pos": {
+    "x": 2565,
+    "y": 2350
+   },
+   "params": {
+    "var": "looting",
+    "value": false
+   }
+  },
+  {
+   "id": "le_text2",
+   "type": "br.hud_text",
+   "pos": {
+    "x": 3065,
+    "y": 2350
+   },
+   "params": {
+    "text": ""
+   }
+  },
+  {
+   "id": "ah",
+   "type": "event.player_about_hurt",
+   "pos": {
+    "x": 65,
+    "y": 2650
+   },
+   "params": {}
+  },
+  {
+   "id": "ah_get",
+   "type": "var.get",
+   "pos": {
+    "x": 65,
+    "y": 2850
+   },
+   "params": {
+    "var": "looting"
+   }
+  },
+  {
+   "id": "ah_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 565,
+    "y": 2650
+   },
+   "params": {}
+  },
+  {
+   "id": "ah_block",
+   "type": "dmg.block",
+   "pos": {
+    "x": 1065,
+    "y": 2650
+   },
+   "params": {}
+  },
+  {
+   "id": "pk_sides",
+   "type": "br.squads_alive",
+   "pos": {
+    "x": 65,
+    "y": 1884
+   },
+   "params": {}
   }
  ],
  "edges": [
@@ -431,171 +545,6 @@
    },
    "to": {
     "node": "ms_pack",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w2",
-   "from": {
-    "node": "rs",
-    "pin": "then"
-   },
-   "to": {
-    "node": "rs_each",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w3",
-   "from": {
-    "node": "rs_each",
-    "pin": "player"
-   },
-   "to": {
-    "node": "rs_strip",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w4",
-   "from": {
-    "node": "rs_each",
-    "pin": "each"
-   },
-   "to": {
-    "node": "rs_strip",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w5",
-   "from": {
-    "node": "rs_each",
-    "pin": "player"
-   },
-   "to": {
-    "node": "rs_spot",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w6",
-   "from": {
-    "node": "rs_strip",
-    "pin": "then"
-   },
-   "to": {
-    "node": "rs_spot",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w7",
-   "from": {
-    "node": "rs_each",
-    "pin": "player"
-   },
-   "to": {
-    "node": "rs_sq",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w8",
-   "from": {
-    "node": "rs_sqn",
-    "pin": "out"
-   },
-   "to": {
-    "node": "rs_sq",
-    "pin": "squad"
-   }
-  },
-  {
-   "id": "w9",
-   "from": {
-    "node": "rs_spot",
-    "pin": "then"
-   },
-   "to": {
-    "node": "rs_sq",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w10",
-   "from": {
-    "node": "rs_each",
-    "pin": "player"
-   },
-   "to": {
-    "node": "rs_nofall",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w11",
-   "from": {
-    "node": "rs_sq",
-    "pin": "then"
-   },
-   "to": {
-    "node": "rs_nofall",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w12",
-   "from": {
-    "node": "rs_each",
-    "pin": "player"
-   },
-   "to": {
-    "node": "rs_grav",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w13",
-   "from": {
-    "node": "rs_nofall",
-    "pin": "then"
-   },
-   "to": {
-    "node": "rs_grav",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w14",
-   "from": {
-    "node": "rs_each",
-    "pin": "player"
-   },
-   "to": {
-    "node": "rs_up",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w15",
-   "from": {
-    "node": "rs_grav",
-    "pin": "then"
-   },
-   "to": {
-    "node": "rs_up",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w16",
-   "from": {
-    "node": "rs_each",
-    "pin": "then"
-   },
-   "to": {
-    "node": "rs_zone",
     "pin": "exec"
    }
   },
@@ -644,39 +593,6 @@
    }
   },
   {
-   "id": "w21",
-   "from": {
-    "node": "rs_land",
-    "pin": "then"
-   },
-   "to": {
-    "node": "rs_all",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w22",
-   "from": {
-    "node": "rs_all",
-    "pin": "player"
-   },
-   "to": {
-    "node": "rs_g1",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w23",
-   "from": {
-    "node": "rs_all",
-    "pin": "each"
-   },
-   "to": {
-    "node": "rs_g1",
-    "pin": "exec"
-   }
-  },
-  {
    "id": "w24",
    "from": {
     "node": "rs_alive",
@@ -684,17 +600,6 @@
    },
    "to": {
     "node": "rs_drops",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w25",
-   "from": {
-    "node": "rs_drops",
-    "pin": "then"
-   },
-   "to": {
-    "node": "rs_land",
     "pin": "exec"
    }
   },
@@ -732,17 +637,6 @@
    }
   },
   {
-   "id": "w29",
-   "from": {
-    "node": "pk_left",
-    "pin": "out"
-   },
-   "to": {
-    "node": "pk_set",
-    "pin": "value"
-   }
-  },
-  {
    "id": "w30",
    "from": {
     "node": "pk",
@@ -754,17 +648,6 @@
    }
   },
   {
-   "id": "w31",
-   "from": {
-    "node": "pk_left",
-    "pin": "out"
-   },
-   "to": {
-    "node": "pk_hud",
-    "pin": "value"
-   }
-  },
-  {
    "id": "w32",
    "from": {
     "node": "pk_set",
@@ -773,17 +656,6 @@
    "to": {
     "node": "pk_hud",
     "pin": "exec"
-   }
-  },
-  {
-   "id": "w33",
-   "from": {
-    "node": "pk_left",
-    "pin": "out"
-   },
-   "to": {
-    "node": "pk_one",
-    "pin": "a"
    }
   },
   {
@@ -950,31 +822,306 @@
     "node": "lo_chat",
     "pin": "exec"
    }
+  },
+  {
+   "id": "v4_1",
+   "from": {
+    "node": "ms_pack",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_2",
+   "from": {
+    "node": "ms_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_kd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_3",
+   "from": {
+    "node": "ms_kd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ms_size",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_4",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_nobuy",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_5",
+   "from": {
+    "node": "rs_nobuy",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_loot",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_6",
+   "from": {
+    "node": "rs_loot",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_looting",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_7",
+   "from": {
+    "node": "rs_looting",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_text",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_8",
+   "from": {
+    "node": "rs_text",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_lobby",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_9",
+   "from": {
+    "node": "rs_lobby",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rs_zone",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_10",
+   "from": {
+    "node": "le",
+    "pin": "then"
+   },
+   "to": {
+    "node": "le_each",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_11",
+   "from": {
+    "node": "le_each",
+    "pin": "each"
+   },
+   "to": {
+    "node": "le_strip",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_12",
+   "from": {
+    "node": "le_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "le_strip",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "v4_13",
+   "from": {
+    "node": "le_strip",
+    "pin": "then"
+   },
+   "to": {
+    "node": "le_drop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_14",
+   "from": {
+    "node": "le_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "le_drop",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "v4_15",
+   "from": {
+    "node": "le_each",
+    "pin": "then"
+   },
+   "to": {
+    "node": "le_text",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_16",
+   "from": {
+    "node": "le_text",
+    "pin": "then"
+   },
+   "to": {
+    "node": "le_wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_17",
+   "from": {
+    "node": "le_wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "le_fight",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_18",
+   "from": {
+    "node": "le_fight",
+    "pin": "then"
+   },
+   "to": {
+    "node": "le_fighting",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_19",
+   "from": {
+    "node": "le_fighting",
+    "pin": "then"
+   },
+   "to": {
+    "node": "le_text2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_20",
+   "from": {
+    "node": "ah",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ah_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_21",
+   "from": {
+    "node": "ah_get",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ah_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "v4_22",
+   "from": {
+    "node": "ah_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ah_block",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "v4_23",
+   "from": {
+    "node": "pk_sides",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "v4_24",
+   "from": {
+    "node": "pk_sides",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "v4_25",
+   "from": {
+    "node": "pk_sides",
+    "pin": "out"
+   },
+   "to": {
+    "node": "pk_one",
+    "pin": "a"
+   }
   }
  ],
  "comments": [
   {
    "id": "c_setup",
-   "text": "Set up once: Battle Royale's map pack (safe zone, shrinker, respawn points, crates). The mode's settings (This mode): free for all, rounds only end when the mode says.",
+   "text": "Set up once: Battle Royale's map pack (safe zone, shrinker, respawn points, crates), the match HUD, knocked down instead of out (squad mates revive), squads of four. The mode's settings (This mode): free for all, rounds only end when the mode says.",
    "pos": {
     "x": 41,
     "y": 4
    },
    "size": {
-    "w": 778,
+    "w": 2300,
     "h": 158
    }
   },
   {
    "id": "c_start",
-   "text": "The round: everyone into a random squad of the six, dropped in from the sky over a spread-out spot (low gravity, no damage on landing, normal gravity after 8 s) with a knife; the zone starts closing; a supply drop every minute.",
+   "text": "The round: bots skip buying and loot in peace, a 15 s squad lobby (people say slash squad in chat), the zone starts closing, a supply drop every minute.",
    "pos": {
     "x": 41,
     "y": 180
    },
    "size": {
     "w": 4278,
-    "h": 958
+    "h": 800
    }
   },
   {
@@ -999,6 +1146,30 @@
    "size": {
     "w": 778,
     "h": 376
+   }
+  },
+  {
+   "id": "c_lobby",
+   "text": "Lobby over: everyone drops in from the sky with a knife (the map's br_drop markers, no damage until landing). 45 s of looting with nobody hurt (bots too), then the fight.",
+   "pos": {
+    "x": 41,
+    "y": 2090
+   },
+   "size": {
+    "w": 3400,
+    "h": 420
+   }
+  },
+  {
+   "id": "c_safe",
+   "text": "While looting, no damage.",
+   "pos": {
+    "x": 41,
+    "y": 2590
+   },
+   "size": {
+    "w": 1400,
+    "h": 360
    }
   }
  ]

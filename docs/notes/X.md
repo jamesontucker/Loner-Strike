@@ -271,6 +271,39 @@ FM_Spawn in its plugin's plugin_precache, the same rules: `kind`, `mode` incl. c
 **Checks** (the editor's map check, the Studio's Playtest): each marker's count within `required`, each
 component's count, path markers with 2+ points and no repeated `order`, keys of the right type.
 
+## 2026-11-13: W1's and W3's pieces as nodes; the templates move onto them
+- **Upgrades:** Set Player Modifier / Player Modifier (max health, speed, reload, swap, damage, revive time,
+  fire rate), Give / Buy / Has Perk, Perk Count, Weapon Level, Upgrade Gun (bench), Roll Mystery Box, Drop
+  Pickup; events Perk Bought, Gun Upgraded, Mystery Box Gave, Pickup Taken, Creature Hurt (damage, headshot).
+- **Downed** (the components' state, as LS and BR use it): Knocked Down On (bleed seconds, who, lose perks),
+  Is Knocked Down, Bleed Out In, Knock Down, Get Up; events Knocked Down, Got Up, Bled Out.
+- **Shop:** Create Component makes an `ls_shop` (and perk machine, upgrade bench, mystery box); keys now
+  take `| ; @` (W1's `items=Name|price|give|what;...`, up to 400 letters). Open Shop Menu, Open or Close
+  Shop, Shop Price; event Shop Purchase.
+- **Battle Royale:** Give Healing Item, Healing Items, Set Armor Levels, Make Crate, Rarity Glow, Match HUD
+  / Match HUD Words / Kill Feed Line, Match Kills, Drop In, Squad Lobby, Squad Size, Sides Alive; events
+  Landed, Lobby Ended. The Studio's older Set Squad / Squads Left / Down Player nodes stay for old graphs.
+- Events can now give a forward's text parameter as a Text output (`@str:<param>` in gen.rs).
+- **Tests:** every_node_2 grew to 116 nodes (all of these), both builds snapshotted and compiled with
+  amxxpc, no warnings; `cargo test studio` 47.
+- **Sim (copies of LSPLAY, deleted after; the committed gm_components and includes):** modifier, perks
+  (give, has, count), knocked down, bleed left 30 and Got Up for every spawn, healing items 2 then 4,
+  armor, shop made with Ammo at 300, a resupply pickup taken, Creature Hurt with damage. Not seen: Perk
+  Bought / Gun Upgraded / Box Gave (bots spawn with $800), Landed on ls_outpost (no br_drop markers or
+  sky spots there; seen in Royale Lite below).
+- **Royale Lite now:** the match HUD, knocked down in squads, squads of four, a 15 s squad lobby, then
+  everyone drops in with a knife (br_drop markers), 45 s of looting with no damage and bots told it's a
+  loot phase (and not to buy), then the fight; winner by Sides Alive. Sim on br_valley (12 bots): lobby
+  ended, 12 stripped and dropped in, 14 hits blocked while looting, the fight started at 45 s, supply
+  drops, kills counted.
+- **Last Stand Lite now:** defenders knocked down instead of dead (25 s bleed, +200 to the helper), the
+  base falls when no defender is standing, the armory a real `ls_shop` at the map's `lst_shop` marker (else
+  a defender spawn) with !shop opening its menu anywhere; still Terrorist bots as the horde until W1's
+  round table lands. Sim on ls_outpost: defenders went down and got up, the standing count and waves ran,
+  the shop was made. **Open:** the keeper (Barney) isn't shown: gm_components only uses models it loaded
+  itself while the map loaded, so a shop the mode makes later has no keeper (asked W1 for a way to load
+  it, W1.md).
+
 ## 2026-11-13: the mode-building pieces that exist today, as nodes
 From the audit's step 1 (natives that already exist):
 - **Bots** (all through `ls_comp_bots_hint`, so gm_components loads with them): **Bots: Phase**

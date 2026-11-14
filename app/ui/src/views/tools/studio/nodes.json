@@ -81,6 +81,10 @@
   "Bots",
   "Components",
   "Map markers",
+  "Upgrades",
+  "Downed",
+  "Shop",
+  "Battle Royale",
   "Creatures"
  ],
  "nodes": [
@@ -2326,6 +2330,22 @@
       [
        "ls_respawn_point",
        "Respawn point"
+      ],
+      [
+       "ls_shop",
+       "Shop (a counter, items=Name|price|give|what;...)"
+      ],
+      [
+       "ls_perk_machine",
+       "Perk machine"
+      ],
+      [
+       "ls_upgrade_bench",
+       "Upgrade bench"
+      ],
+      [
+       "ls_mystery_box",
+       "Mystery box"
       ]
      ]
     },
@@ -2340,7 +2360,7 @@
      "label": "Keys",
      "kind": "keys",
      "default": "",
-     "max": 120
+     "max": 400
     }
    ],
    "needs": "components"
@@ -4475,6 +4495,1611 @@
      "default": "door1"
     }
    ]
+  },
+  {
+   "type": "up.mod",
+   "title": "Set Player Modifier",
+   "category": "Upgrades",
+   "help": "Multiplies something about a player until they die: max health, speed, reload or swap time (0.6 = 40 % faster), damage, revive time, fire rate (1.25 = 25 % faster). Perks multiply on top.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "mult",
+     "type": "number",
+     "label": "Times",
+     "param": "mult"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "what",
+     "label": "What",
+     "kind": "choice",
+     "default": "speed",
+     "choices": [
+      [
+       "health_max",
+       "Max health"
+      ],
+      [
+       "speed",
+       "Speed"
+      ],
+      [
+       "reload",
+       "Reload time"
+      ],
+      [
+       "deploy",
+       "Weapon swap time"
+      ],
+      [
+       "damage",
+       "Damage"
+      ],
+      [
+       "revive_time",
+       "Revive time"
+      ],
+      [
+       "fire_rate",
+       "Fire rate"
+      ]
+     ]
+    },
+    {
+     "id": "mult",
+     "label": "Times",
+     "kind": "number",
+     "default": 1.2,
+     "min": 0.1,
+     "max": 10
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "up.mod_get",
+   "title": "Player Modifier",
+   "category": "Upgrades",
+   "help": "What a player's modifier is now (the mode's times the perks').",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Times"
+    }
+   ],
+   "params": [
+    {
+     "id": "what",
+     "label": "What",
+     "kind": "choice",
+     "default": "speed",
+     "choices": [
+      [
+       "health_max",
+       "Max health"
+      ],
+      [
+       "speed",
+       "Speed"
+      ],
+      [
+       "reload",
+       "Reload time"
+      ],
+      [
+       "deploy",
+       "Weapon swap time"
+      ],
+      [
+       "damage",
+       "Damage"
+      ],
+      [
+       "revive_time",
+       "Revive time"
+      ],
+      [
+       "fire_rate",
+       "Fire rate"
+      ]
+     ]
+    }
+   ],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "up.perk_give",
+   "title": "Give Perk",
+   "category": "Upgrades",
+   "help": "Gives a player a perk (lost when downed or dead).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "perk",
+     "label": "Perk",
+     "kind": "choice",
+     "default": "tough",
+     "choices": [
+      [
+       "tough",
+       "Tough (+50 % health)"
+      ],
+      [
+       "hands",
+       "Quick hands (reload, swap)"
+      ],
+      [
+       "doubletap",
+       "Double tap (+25 % damage)"
+      ],
+      [
+       "revive",
+       "Quick revive"
+      ],
+      [
+       "feet",
+       "Light feet (+10 % speed)"
+      ]
+     ]
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "up.perk_buy",
+   "title": "Buy Perk",
+   "category": "Upgrades",
+   "help": "A player buys a perk for its price (1500 + 1000 per perk they have, 4 at most); Bought says if it worked.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "bought",
+     "type": "bool",
+     "label": "Bought"
+    }
+   ],
+   "params": [
+    {
+     "id": "perk",
+     "label": "Perk",
+     "kind": "choice",
+     "default": "tough",
+     "choices": [
+      [
+       "tough",
+       "Tough (+50 % health)"
+      ],
+      [
+       "hands",
+       "Quick hands (reload, swap)"
+      ],
+      [
+       "doubletap",
+       "Double tap (+25 % damage)"
+      ],
+      [
+       "revive",
+       "Quick revive"
+      ],
+      [
+       "feet",
+       "Light feet (+10 % speed)"
+      ]
+     ]
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "up.perk_has",
+   "title": "Has Perk",
+   "category": "Upgrades",
+   "help": "Does the player have this perk?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Has it"
+    }
+   ],
+   "params": [
+    {
+     "id": "perk",
+     "label": "Perk",
+     "kind": "choice",
+     "default": "tough",
+     "choices": [
+      [
+       "tough",
+       "Tough (+50 % health)"
+      ],
+      [
+       "hands",
+       "Quick hands (reload, swap)"
+      ],
+      [
+       "doubletap",
+       "Double tap (+25 % damage)"
+      ],
+      [
+       "revive",
+       "Quick revive"
+      ],
+      [
+       "feet",
+       "Light feet (+10 % speed)"
+      ]
+     ]
+    }
+   ],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "up.perk_count",
+   "title": "Perk Count",
+   "category": "Upgrades",
+   "help": "How many perks a player has.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Perks"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "up.weapon_level",
+   "title": "Weapon Level",
+   "category": "Upgrades",
+   "help": "The level of the gun in the player's hand (1, 2 Mk II, 3 Mk III).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Level"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "up.bench",
+   "title": "Upgrade Gun",
+   "category": "Upgrades",
+   "help": "Upgrades the gun in the player's hand at the bench's prices (or 5000 / 9000).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "up.box",
+   "title": "Roll Mystery Box",
+   "category": "Upgrades",
+   "help": "The player rolls the mystery box (the one that's out, or the wired one) for its price.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "box",
+     "type": "entity",
+     "label": "Box",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "up.pickup",
+   "title": "Drop Pickup",
+   "category": "Upgrades",
+   "help": "Drops a pickup at an entity; whoever walks over it takes it (Pickup Taken says what it was). A kind like resupply, doublepay, onehit, airstrike, or anything you handle yourself.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "at",
+     "type": "entity",
+     "label": "At",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Pickup"
+    }
+   ],
+   "params": [
+    {
+     "id": "kind",
+     "label": "Kind",
+     "kind": "name",
+     "default": "resupply"
+    },
+    {
+     "id": "life",
+     "label": "Lasts (seconds)",
+     "kind": "number",
+     "default": 25,
+     "min": 1,
+     "max": 600
+    },
+    {
+     "id": "colour",
+     "label": "Colour",
+     "kind": "choice",
+     "default": "gold",
+     "choices": [
+      [
+       "white",
+       "White"
+      ],
+      [
+       "green",
+       "Green"
+      ],
+      [
+       "blue",
+       "Blue"
+      ],
+      [
+       "purple",
+       "Purple"
+      ],
+      [
+       "gold",
+       "Gold"
+      ],
+      [
+       "red",
+       "Red"
+      ]
+     ]
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "up.on_perk",
+   "title": "Perk Bought",
+   "category": "Upgrades",
+   "help": "A player bought a perk (at a machine, a shop or Buy Perk).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "perk",
+     "type": "text",
+     "label": "Perk"
+    },
+    {
+     "id": "price",
+     "type": "number",
+     "label": "Price"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "up.on_upgraded",
+   "title": "Gun Upgraded",
+   "category": "Upgrades",
+   "help": "A player's gun went up a level.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "level",
+     "type": "number",
+     "label": "Level"
+    },
+    {
+     "id": "price",
+     "type": "number",
+     "label": "Price"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "up.on_box",
+   "title": "Mystery Box Gave",
+   "category": "Upgrades",
+   "help": "The mystery box gave a player a gun.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "weapon",
+     "type": "text",
+     "label": "Gun"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "up.on_pickup",
+   "title": "Pickup Taken",
+   "category": "Upgrades",
+   "help": "A player took a pickup.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "pickup",
+     "type": "entity",
+     "label": "Pickup"
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "kind",
+     "type": "text",
+     "label": "Kind"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "up.on_creature_hurt",
+   "title": "Creature Hurt",
+   "category": "Creatures",
+   "help": "A creature took damage (Headshot when the hit was a head).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "creature",
+     "type": "entity",
+     "label": "Creature"
+    },
+    {
+     "id": "attacker",
+     "type": "player",
+     "label": "Attacker"
+    },
+    {
+     "id": "damage",
+     "type": "number",
+     "label": "Damage"
+    },
+    {
+     "id": "headshot",
+     "type": "bool",
+     "label": "Headshot"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "kd.enable",
+   "title": "Knocked Down On",
+   "category": "Downed",
+   "help": "On: a hit that would kill a player (of a team, or anyone) knocks them down instead: they crawl and bleed out over some seconds; a teammate (a squad mate, with squads) holding USE for 4 s gets them up with 50 health. Off: nobody new goes down.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "On",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "bleed",
+     "label": "Bleed out after (seconds)",
+     "kind": "number",
+     "default": 30,
+     "min": 3,
+     "max": 300
+    },
+    {
+     "id": "team",
+     "label": "Who",
+     "kind": "choice",
+     "default": "0",
+     "choices": [
+      [
+       "0",
+       "Anyone"
+      ],
+      [
+       "1",
+       "Terrorists"
+      ],
+      [
+       "2",
+       "Counter-Terrorists"
+      ]
+     ]
+    },
+    {
+     "id": "perks",
+     "label": "They lose their perks",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "kd.is",
+   "title": "Is Knocked Down",
+   "category": "Downed",
+   "help": "Is the player knocked down?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Down"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "kd.left",
+   "title": "Bleed Out In",
+   "category": "Downed",
+   "help": "Seconds a knocked-down player has left (0 when they're not down).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Seconds"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "kd.down",
+   "title": "Knock Down",
+   "category": "Downed",
+   "help": "Knocks a player down now.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "kd.revive",
+   "title": "Get Up",
+   "category": "Downed",
+   "help": "Gets a knocked-down player up (by the wired player, or nobody).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "by",
+     "type": "player",
+     "label": "By",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "kd.on_down",
+   "title": "Knocked Down",
+   "category": "Downed",
+   "help": "A player was knocked down.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "attacker",
+     "type": "entity",
+     "label": "By"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "kd.on_up",
+   "title": "Got Up",
+   "category": "Downed",
+   "help": "A knocked-down player is back up (By: who helped; themselves for Quick revive; nobody when the mode did it).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "by",
+     "type": "player",
+     "label": "By"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "kd.on_bled_out",
+   "title": "Bled Out",
+   "category": "Downed",
+   "help": "A knocked-down player bled out (they die right after).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "shop.menu",
+   "title": "Open Shop Menu",
+   "category": "Shop",
+   "help": "Shows a player the shop's menu.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "shop",
+     "type": "entity",
+     "label": "Shop",
+     "required": true
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "shop.open",
+   "title": "Open or Close Shop",
+   "category": "Shop",
+   "help": "Opens the shop for business, or closes it.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "shop",
+     "type": "entity",
+     "label": "Shop",
+     "required": true
+    },
+    {
+     "id": "open",
+     "type": "bool",
+     "label": "Open",
+     "param": "open"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "open",
+     "label": "Open",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "shop.price",
+   "title": "Shop Price",
+   "category": "Shop",
+   "help": "An item's price now (by its name or what it gives); -1 if the shop doesn't sell it.",
+   "inputs": [
+    {
+     "id": "shop",
+     "type": "entity",
+     "label": "Shop",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Price"
+    }
+   ],
+   "params": [
+    {
+     "id": "item",
+     "label": "Item",
+     "kind": "text",
+     "default": "ammo",
+     "max": 40
+    }
+   ],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "shop.on_buy",
+   "title": "Shop Purchase",
+   "category": "Shop",
+   "help": "A player bought something at a shop (an @item is the mode's to give here).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "shop",
+     "type": "entity",
+     "label": "Shop"
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "item",
+     "type": "text",
+     "label": "Item"
+    },
+    {
+     "id": "price",
+     "type": "number",
+     "label": "Price"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "br.heal_give",
+   "title": "Give Healing Item",
+   "category": "Battle Royale",
+   "help": "Gives a player bandages (+15 up to 75), medkits (full health) or drinks (+40 over 10 s), up to the carry limit.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "n",
+     "type": "number",
+     "label": "How many",
+     "param": "n"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "kind",
+     "label": "Item",
+     "kind": "choice",
+     "default": "bandage",
+     "choices": [
+      [
+       "bandage",
+       "Bandage"
+      ],
+      [
+       "medkit",
+       "Medkit"
+      ],
+      [
+       "drink",
+       "Drink"
+      ]
+     ]
+    },
+    {
+     "id": "n",
+     "label": "How many",
+     "kind": "number",
+     "default": 1,
+     "min": 1,
+     "max": 10
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "br.heal_count",
+   "title": "Healing Items",
+   "category": "Battle Royale",
+   "help": "How many healing items a player carries.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "How many"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "br.armor",
+   "title": "Set Armor Levels",
+   "category": "Battle Royale",
+   "help": "Sets a player's vest and helmet levels (1-3; 0 none; keep: as they are).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "vest",
+     "label": "Vest",
+     "kind": "choice",
+     "default": "2",
+     "choices": [
+      [
+       "-1",
+       "Keep"
+      ],
+      [
+       "0",
+       "None"
+      ],
+      [
+       "1",
+       "1"
+      ],
+      [
+       "2",
+       "2"
+      ],
+      [
+       "3",
+       "3"
+      ]
+     ]
+    },
+    {
+     "id": "helmet",
+     "label": "Helmet",
+     "kind": "choice",
+     "default": "1",
+     "choices": [
+      [
+       "-1",
+       "Keep"
+      ],
+      [
+       "0",
+       "None"
+      ],
+      [
+       "1",
+       "1"
+      ],
+      [
+       "2",
+       "2"
+      ],
+      [
+       "3",
+       "3"
+      ]
+     ]
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "br.crate",
+   "title": "Make Crate",
+   "category": "Battle Royale",
+   "help": "Makes a crate at an entity with these items (loot items: ak47@30@60 bandage:2 vest2).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "at",
+     "type": "entity",
+     "label": "At",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Crate"
+    }
+   ],
+   "params": [
+    {
+     "id": "items",
+     "label": "Items",
+     "kind": "keys",
+     "default": "bandage:2 ammo",
+     "max": 120
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "br.glow",
+   "title": "Rarity Glow",
+   "category": "Battle Royale",
+   "help": "Makes an entity glow in a rarity's colour (0 none, 1 white, 2 green, 3 blue, 4 purple, 5 gold).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    },
+    {
+     "id": "tier",
+     "type": "number",
+     "label": "Rarity",
+     "param": "tier"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "tier",
+     "label": "Rarity",
+     "kind": "number",
+     "default": 3,
+     "min": 0,
+     "max": 5
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "br.hud",
+   "title": "Match HUD",
+   "category": "Battle Royale",
+   "help": "Turns the match HUD on or off (players left, kills, the zone's timer, armor, healing items, the kill feed and the squad).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "On",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "br.hud_text",
+   "title": "Match HUD Words",
+   "category": "Battle Royale",
+   "help": "The mode's words in the match HUD in place of the zone's timer (empty: the zone again).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "text",
+     "type": "text",
+     "label": "Text",
+     "param": "text"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "Loot up!",
+     "max": 60
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "br.feed",
+   "title": "Kill Feed Line",
+   "category": "Battle Royale",
+   "help": "Adds a line to the match HUD's kill feed.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "text",
+     "type": "text",
+     "label": "Text",
+     "param": "text"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "text",
+     "label": "Text",
+     "kind": "text",
+     "default": "",
+     "max": 60
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "br.kills",
+   "title": "Match Kills",
+   "category": "Battle Royale",
+   "help": "A player's kills this round (counted while the match HUD is on).",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Kills"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "br.drop_in",
+   "title": "Drop In",
+   "category": "Battle Royale",
+   "help": "Drops a player in from high over a spot (an entity wired into At, else a spread-out landing spot: the map's br_drop markers); they fall slowly and take no damage until they land.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "at",
+     "type": "entity",
+     "label": "At",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "br.on_landed",
+   "title": "Landed",
+   "category": "Battle Royale",
+   "help": "A player who dropped in is down on the ground.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "br.lobby",
+   "title": "Squad Lobby",
+   "category": "Battle Royale",
+   "help": "A lobby of some seconds where people team up (say /squad); then the squads are filled (Lobby Ended). 0: fill them now.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 30,
+     "min": 0,
+     "max": 300
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "br.squad_size",
+   "title": "Squad Size",
+   "category": "Battle Royale",
+   "help": "Sets the squad size: 1 solo, 2 duos, 4 squads...",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "size",
+     "type": "number",
+     "label": "Size",
+     "param": "size"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "size",
+     "label": "Size",
+     "kind": "number",
+     "default": 4,
+     "min": 1,
+     "max": 8
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "br.on_lobby_end",
+   "title": "Lobby Ended",
+   "category": "Battle Royale",
+   "help": "The squad lobby is over and the squads are filled.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "squads",
+     "type": "number",
+     "label": "Squads"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "br.squads_alive",
+   "title": "Sides Alive",
+   "category": "Battle Royale",
+   "help": "How many sides have someone alive (squads, and players in none).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Sides"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
   },
   {
    "type": "bots.phase",
