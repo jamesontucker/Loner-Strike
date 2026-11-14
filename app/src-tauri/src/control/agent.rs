@@ -94,7 +94,7 @@ fn config(e: &Entry) -> Value {
 
 /// A line in the service's unit naming how it's written: a unit without this one is set up
 /// again (raise it whenever the unit's text changes)
-const UNIT_REV: &str = "loner-strike unit 4";
+const UNIT_REV: &str = "loner-strike unit 5";
 
 /// The service's unit, and turning it on (or restarting it with a new program or port).
 pub fn install_sh(id: &str, game: &str, port: u16) -> String {
@@ -148,6 +148,8 @@ MemoryMax=128M
 [Install]
 WantedBy=multi-user.target
 EOF
+# the folder gm_extras and the roles unit talk through (/link requests and answers, who's here)
+install -d -m 755 "$HOME/{dir}/{game}/addons/amxmodx/data/gamemodes/lslink"
 # MCP: community roles (ls-control roles): the /link relay and supporters. It needs the internet
 # (Loner-Strike's list service, through curl), which the service above doesn't get; it may write
 # only its own folder and users.ini (in place)
@@ -165,7 +167,7 @@ Restart=always
 RestartSec=10
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=$HOME/{data} -$HOME/{dir}/{game}/addons/amxmodx/configs/users.ini
+ReadWritePaths=$HOME/{data} -$HOME/{dir}/{game}/addons/amxmodx/configs/users.ini $HOME/{dir}/{game}/addons/amxmodx/data/gamemodes/lslink
 PrivateTmp=yes
 PrivateDevices=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

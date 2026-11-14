@@ -440,7 +440,10 @@ pub fn set_supporters(g: &Game, steamids: &[String]) -> Result<bool, String> {
         return Ok(false);
     }
     crate::sys::write_latin1(&users, &new).map_err(|e| format!("Couldn't write users.ini ({e})."))?;
-    let _ = tell_game(g, "amx_reloadadmins");
+    // gm_extras reloads admins when it sees this (no RCON: it would put the password in the console log)
+    let dir = crate::roles::lslink_dir(&g.dir);
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(dir.join("reload-admins"), b"1\n");
     Ok(true)
 }
 

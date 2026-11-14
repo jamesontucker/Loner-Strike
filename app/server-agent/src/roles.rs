@@ -19,7 +19,6 @@
 //! what an Admin asks for through it goes here through a spool folder in the service's own
 //! folder (roles-spool/<id>.req, answered in <id>.resp), and only these calls are passed on.
 
-use crate::game;
 use crate::{Config, Paths};
 use serde_json::{json, Value};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -172,19 +171,48 @@ pub fn call(paths: &Paths, method: &str, path: &str, body: Option<&Value>) -> Re
     Ok(v)
 }
 
-/// A `triggered "ls_link"` line gm_extras wrote: (name, uid, SteamID). (As the app's roles.rs.)
-pub fn link_request(line: &str) -> Option<(String, u32, String)> {
-    let head = line.trim_end().strip_suffix("\" triggered \"ls_link\"")?;
-    let start = head.find(": \"")? + 3;
-    let mut parts = head[start..].rsplitn(4, '<');
-    let _team = parts.next()?;
-    let steam = parts.next()?.strip_suffix('>')?.trim().to_uppercase();
-    let uid = parts.next()?.strip_suffix('>')?.parse::<u32>().ok()?;
+/// A line gm_extras added to lslink/requests.txt, "<unix time> <userid> <SteamID> <name>": (name, uid,
+/// SteamID), or None when it isn't one or is older than half a minute (a relay that just started
+/// doesn't answer old ones). Only the plugin writes that file: a player can't make one up.
+pub fn link_request(line: &str, now: u64) -> Option<(String, u32, String)> {
+    let mut parts = line.trim_end_matches(['\r', '\n']).splitn(4, ' ');
+    let t = parts.next()?.parse::<u64>().ok()?;
+    let uid = parts.next()?.parse::<u32>().ok()?;
+    let steam = parts.next()?.trim().to_uppercase();
     let name = parts.next()?;
-    if !crate::common::valid_steamid(&steam) || name.is_empty() || name.len() > 64 {
+    if now.saturating_sub(t) > 30 || t > now + 30 || !crate::common::valid_steamid(&steam) || name.is_empty() || name.len() > 64 {
         return None;
     }
     Some((name.to_string(), uid, steam))
+}
+
+/// The folder the plugin and the relay talk through (nothing goes over RCON, so no console
+/// password lands in the console log).
+pub fn lslink_dir(game_dir: &std::path::Path) -> std::path::PathBuf {
+    game_dir.join("addons/amxmodx/data/gamemodes/lslink")
+}
+
+/// Answers for the plugin, "<userid> <SteamID> show <code>" or "<userid> <SteamID> fail <word>":
+/// written as answers.txt in one go when the plugin has taken the last one (it reads and removes
+/// it); until then they wait in `pending`.
+pub fn deliver(dir: &std::path::Path, pending: &mut Vec<String>) {
+    if pending.is_empty() || dir.join("answers.txt").exists() {
+        return;
+    }
+    let tmp = dir.join("answers.txt.new");
+    let text = pending.join("\n") + "\n";
+    if std::fs::write(&tmp, text).and_then(|_| std::fs::rename(&tmp, dir.join("answers.txt"))).is_ok() {
+        pending.clear();
+    }
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// A code is plain: XXXX-XXXX.
+fn plain_code(c: &str) -> bool {
+    c.len() == 9 && c.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
 fn fail_word(err: &str) -> &'static str {
@@ -238,24 +266,15 @@ pub fn status_steamids(status: &str) -> Vec<String> {
     out
 }
 
-fn rcon(game_dir: &Path, port: u16, line: &str) -> Option<String> {
-    let pw = game::rcon_password(game_dir)?;
-    game::rcon_udp(port, &pw, line).ok()
-}
-
-/// Where the game's log lines land: qconsole.log (the servers run with -condebug, and the "L ..."
-/// lines are there whether or not logging to files is on), else the newest file in logs/.
-fn log_file(game_dir: &std::path::Path) -> Option<std::path::PathBuf> {
-    for p in [game_dir.join("qconsole.log"), game_dir.parent().map(|d| d.join("qconsole.log")).unwrap_or_default()] {
-        if p.is_file() {
-            return Some(p);
-        }
+/// The SteamIDs gm_extras says are on the server now (lslink/players.txt, written every 10 s; an
+/// older file counts as nobody).
+pub fn players_here(game_dir: &Path) -> Vec<String> {
+    let p = lslink_dir(game_dir).join("players.txt");
+    let fresh = std::fs::metadata(&p).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age < Duration::from_secs(60));
+    if !fresh {
+        return vec![];
     }
-    newest_log(&game_dir.join("logs"))
-}
-
-fn newest_log(dir: &Path) -> Option<PathBuf> {
-    std::fs::read_dir(dir).ok()?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("log"))).max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok())
+    status_steamids(&std::fs::read_to_string(&p).unwrap_or_default())
 }
 
 fn read_new(path: &Path, offset: &mut u64) -> Vec<String> {
@@ -274,12 +293,12 @@ fn read_new(path: &Path, offset: &mut u64) -> Vec<String> {
     String::from_utf8_lossy(&buf[..end]).lines().map(str::to_string).collect()
 }
 
-fn supporters(paths: &Paths, game_dir: &Path, port: u16) -> Result<(), String> {
+fn supporters(paths: &Paths, game_dir: &Path) -> Result<(), String> {
     let v = call(paths, "GET", "server", None)?;
     let ids: Vec<String> = if v["official"].as_bool() == Some(true) {
         call(paths, "GET", "vip", None)?["steamids"].as_array().into_iter().flatten().filter_map(|s| s.as_str().map(str::to_string)).collect()
     } else if v["settings"]["honor_supporters"].as_bool() == Some(true) {
-        let on: Vec<String> = status_steamids(&rcon(game_dir, port, "status").unwrap_or_default()).into_iter().take(64).collect();
+        let on: Vec<String> = players_here(game_dir).into_iter().take(64).collect();
         if on.is_empty() {
             vec![]
         } else {
@@ -301,7 +320,8 @@ fn supporters(paths: &Paths, game_dir: &Path, port: u16) -> Result<(), String> {
             return Err("users.ini is a link; left alone".into());
         }
         std::fs::write(&users, bytes).map_err(|e| format!("users.ini: {e}"))?;
-        let _ = rcon(game_dir, port, "amx_reloadadmins");
+        // gm_extras reloads admins when it sees this (no RCON: it would put the password in the console log)
+        let _ = std::fs::write(lslink_dir(game_dir).join("reload-admins"), b"1\n");
     }
     Ok(())
 }
@@ -309,39 +329,34 @@ fn supporters(paths: &Paths, game_dir: &Path, port: u16) -> Result<(), String> {
 /// The roles unit: the relay, the supporters check and the spool, for as long as it runs.
 pub fn run(paths: Paths) {
     {
-        let mut log: Option<(PathBuf, u64)> = None;
+        // the requests file's offset, and answers waiting for the plugin
+        let mut req_offset: u64 = 0;
+        let mut pending: Vec<String> = Vec::new();
         let mut vip_at: Option<Instant> = None;
         loop {
             std::thread::sleep(Duration::from_secs(1));
             answer_spool(&paths);
             if token(&paths).is_none() {
-                log = None;
                 continue;
             }
             let Ok(config) = Config::read(&paths) else { continue };
             let game_dir = paths.server_dir().join(&config.game);
-            if let Some(path) = log_file(&game_dir) {
-                let state = log.get_or_insert_with(|| (path.clone(), path.metadata().map(|m| m.len()).unwrap_or(0)));
-                if state.0 != path {
-                    *state = (path.clone(), 0);
-                }
-                for line in read_new(&state.0, &mut state.1) {
-                    let Some((name, uid, steam)) = link_request(&line) else { continue };
-                    match call(&paths, "POST", "link/code", Some(&json!({"steamid": steam, "name": name}))) {
-                        Ok(v) => {
-                            if let Some(code) = v["code"].as_str().filter(|c| c.len() == 9 && c.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')) {
-                                let _ = rcon(&game_dir, config.port, &format!("ls_link_show {uid} {code}"));
-                            }
-                        }
-                        Err(e) => {
-                            let _ = rcon(&game_dir, config.port, &format!("ls_link_fail {uid} {}", fail_word(&e)));
+            let dir = lslink_dir(&game_dir);
+            for line in read_new(&dir.join("requests.txt"), &mut req_offset) {
+                let Some((name, uid, steam)) = link_request(&line, now_secs()) else { continue };
+                match call(&paths, "POST", "link/code", Some(&json!({"steamid": steam, "name": name}))) {
+                    Ok(v) => {
+                        if let Some(code) = v["code"].as_str().filter(|c| plain_code(c)) {
+                            pending.push(format!("{uid} {steam} show {code}"));
                         }
                     }
+                    Err(e) => pending.push(format!("{uid} {steam} fail {}", fail_word(&e))),
                 }
             }
+            deliver(&dir, &mut pending);
             if vip_at.map_or(true, |t| t.elapsed() >= VIP_EVERY) {
                 vip_at = Some(Instant::now());
-                if let Err(e) = supporters(&paths, &game_dir, config.port) {
+                if let Err(e) = supporters(&paths, &game_dir) {
                     if e != UNCLAIMED {
                         eprintln!("ls-control: supporters: {e}");
                     }
@@ -400,8 +415,9 @@ mod tests {
 
     #[test]
     fn link_lines_and_supporters() {
-        assert_eq!(link_request(r#"L 11/14/2026 - 10:00:01: "Zoë<12><STEAM_0:1:123><CT>" triggered "ls_link""#), Some(("Zoë".into(), 12, "STEAM_0:1:123".into())));
-        assert_eq!(link_request(r#"L 11/14/2026 - 10:00:01: "B<3><BOT><CT>" triggered "ls_link""#), None);
+        assert_eq!(link_request("1800000000 12 STEAM_0:1:123 Zoë", 1_800_000_005), Some(("Zoë".into(), 12, "STEAM_0:1:123".into())));
+        assert_eq!(link_request("1800000000 3 BOT B", 1_800_000_005), None);
+        assert_eq!(link_request("1700000000 12 STEAM_0:1:123 Zoë", 1_800_000_005), None);
         let t = with_supporters("\"STEAM_0:0:9\" \"\" \"abc\" \"ce\"\n", &["STEAM_0:1:2".into(), "x\"".into()]);
         assert!(t.contains("\"STEAM_0:1:2\" \"\" \"s\" \"ce\"") && t.contains("STEAM_0:0:9") && !t.contains("x\""));
         assert_eq!(with_supporters(&t, &[]), "\"STEAM_0:0:9\" \"\" \"abc\" \"ce\"\n");

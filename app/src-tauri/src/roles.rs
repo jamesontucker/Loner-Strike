@@ -507,22 +507,48 @@ pub fn routes() -> Router<Shared> {
 
 // ---- the /link relay and supporters (servers on this computer) ----------------------------
 
-/// A `triggered "ls_link"` line gm_link wrote: (name, uid, SteamID).
-pub fn link_request(line: &str) -> Option<(String, u32, String)> {
-    let head = line.trim_end().strip_suffix("\" triggered \"ls_link\"")?;
-    // `L 11/14/2026 - 10:00:00: "Name<12><STEAM_0:1:2><CT>`
-    let start = head.find(": \"")? + 3;
-    let who = &head[start..];
-    let mut parts = who.rsplitn(4, '<');
-    let _team = parts.next()?;
-    let steam = parts.next()?.strip_suffix('>')?;
-    let uid = parts.next()?.strip_suffix('>')?.parse::<u32>().ok()?;
+/// A line gm_extras added to lslink/requests.txt, "<unix time> <userid> <SteamID> <name>": (name, uid,
+/// SteamID), or None when it isn't one or is older than half a minute (a relay that just started
+/// doesn't answer old ones). Only the plugin writes that file: a player can't make one up.
+pub fn link_request(line: &str, now: u64) -> Option<(String, u32, String)> {
+    let mut parts = line.trim_end_matches(['\r', '\n']).splitn(4, ' ');
+    let t = parts.next()?.parse::<u64>().ok()?;
+    let uid = parts.next()?.parse::<u32>().ok()?;
+    let steam = parts.next()?.trim().to_uppercase();
     let name = parts.next()?;
-    let steam = steam.trim().to_uppercase();
-    if !crate::admins::valid_steamid(&steam) || name.is_empty() || name.len() > 64 {
+    if now.saturating_sub(t) > 30 || t > now + 30 || !crate::admins::valid_steamid(&steam) || name.is_empty() || name.len() > 64 {
         return None;
     }
     Some((name.to_string(), uid, steam))
+}
+
+/// The folder the plugin and the relay talk through (nothing goes over RCON, so no console
+/// password lands in the console log).
+pub fn lslink_dir(game_dir: &std::path::Path) -> std::path::PathBuf {
+    game_dir.join("addons/amxmodx/data/gamemodes/lslink")
+}
+
+/// Answers for the plugin, "<userid> <SteamID> show <code>" or "<userid> <SteamID> fail <word>":
+/// written as answers.txt in one go when the plugin has taken the last one (it reads and removes
+/// it); until then they wait in `pending`.
+pub fn deliver(dir: &std::path::Path, pending: &mut Vec<String>) {
+    if pending.is_empty() || dir.join("answers.txt").exists() {
+        return;
+    }
+    let tmp = dir.join("answers.txt.new");
+    let text = pending.join("\n") + "\n";
+    if std::fs::write(&tmp, text).and_then(|_| std::fs::rename(&tmp, dir.join("answers.txt"))).is_ok() {
+        pending.clear();
+    }
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// A code is plain: XXXX-XXXX.
+fn plain_code(c: &str) -> bool {
+    c.len() == 9 && c.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
 /// What the plugin says when no code came (a word it knows).
@@ -538,21 +564,6 @@ fn fail_word(err: &str) -> &'static str {
     } else {
         "error"
     }
-}
-
-/// Where the game's log lines land: qconsole.log (the servers run with -condebug, and the "L ..."
-/// lines are there whether or not logging to files is on), else the newest file in logs/.
-fn log_file(game_dir: &std::path::Path) -> Option<std::path::PathBuf> {
-    for p in [game_dir.join("qconsole.log"), game_dir.parent().map(|d| d.join("qconsole.log")).unwrap_or_default()] {
-        if p.is_file() {
-            return Some(p);
-        }
-    }
-    newest_log(&game_dir.join("logs"))
-}
-
-fn newest_log(dir: &std::path::Path) -> Option<PathBuf> {
-    std::fs::read_dir(dir).ok()?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("log"))).max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok())
 }
 
 /// New whole lines of `path` since `offset` (at most 256 KB at a time).
@@ -572,22 +583,30 @@ fn read_new(path: &std::path::Path, offset: &mut u64) -> Vec<String> {
     String::from_utf8_lossy(&buf[..end]).lines().map(str::to_string).collect()
 }
 
-fn relay(e: &crate::servers::Entry, line: &str) {
-    let Some((name, uid, steam)) = link_request(line) else { return };
-    let Some(rcon) = e.rcon() else { return };
+fn relay(e: &crate::servers::Entry, line: &str, pending: &mut Vec<String>) {
+    let Some((name, uid, steam)) = link_request(line, now_secs()) else { return };
     match call(Some(&e.id), "POST", "link/code", Some(&json!({"steamid": steam, "name": name}))) {
         Ok(v) => {
-            if let Some(code) = v["code"].as_str().filter(|c| c.len() == 9 && c.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')) {
-                let _ = rcon.send(&format!("ls_link_show {uid} {code}"));
+            if let Some(code) = v["code"].as_str().filter(|c| plain_code(c)) {
+                pending.push(format!("{uid} {steam} show {code}"));
             }
         }
-        Err(err) => {
-            let _ = rcon.send(&format!("ls_link_fail {uid} {}", fail_word(&err)));
-        }
+        Err(err) => pending.push(format!("{uid} {steam} fail {}", fail_word(&err))),
     }
 }
 
-/// The SteamIDs in a `status` answer.
+/// The SteamIDs gm_extras says are on the server now (lslink/players.txt, written every 10 s; an
+/// older file counts as nobody). No RCON: it would put the password in the console log.
+fn players_here(game_dir: &std::path::Path) -> Vec<String> {
+    let p = lslink_dir(game_dir).join("players.txt");
+    let fresh = std::fs::metadata(&p).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age < Duration::from_secs(60));
+    if !fresh {
+        return vec![];
+    }
+    status_steamids(&std::fs::read_to_string(&p).unwrap_or_default())
+}
+
+/// The SteamIDs in a `status` answer (or players.txt).
 pub fn status_steamids(status: &str) -> Vec<String> {
     let mut out: Vec<String> = status
         .split(|c: char| c.is_whitespace() || c == '"')
@@ -607,8 +626,7 @@ fn supporters(e: &crate::servers::Entry) -> Result<(), String> {
     let ids: Vec<String> = if official {
         call(Some(&e.id), "GET", "vip", None)?["steamids"].as_array().into_iter().flatten().filter_map(|s| s.as_str().map(str::to_string)).collect()
     } else if honor {
-        let status = e.rcon().ok_or("no console password")?.send("status").map_err(|_| "the server didn't answer".to_string())?;
-        let on: Vec<String> = status_steamids(&status).into_iter().take(64).collect();
+        let on: Vec<String> = players_here(&e.dir.join(&e.game)).into_iter().take(64).collect();
         if on.is_empty() {
             vec![]
         } else {
@@ -623,7 +641,8 @@ fn supporters(e: &crate::servers::Entry) -> Result<(), String> {
 /// Starts the relay and the supporters check (once, at app start).
 pub fn start() {
     std::thread::spawn(|| {
-        let mut logs: HashMap<String, (PathBuf, u64)> = HashMap::new();
+        // per server: the requests file's offset, and answers waiting for the plugin
+        let mut logs: HashMap<String, (u64, Vec<String>)> = HashMap::new();
         let mut vip_at: HashMap<String, Instant> = HashMap::new();
         loop {
             std::thread::sleep(Duration::from_secs(2));
@@ -632,20 +651,12 @@ pub fn start() {
                     logs.remove(&e.id);
                     continue;
                 }
-                let Some(path) = log_file(&e.dir.join(&e.game)) else { continue };
-                let state = logs.entry(e.id.clone()).or_insert_with(|| {
-                    // from now on: a line written before the app looked isn't answered
-                    let len = path.metadata().map(|m| m.len()).unwrap_or(0);
-                    (path.clone(), len)
-                });
-                if state.0 != path {
-                    *state = (path.clone(), 0);
+                let dir = lslink_dir(&e.dir.join(&e.game));
+                let state = logs.entry(e.id.clone()).or_insert((0, Vec::new()));
+                for line in read_new(&dir.join("requests.txt"), &mut state.0) {
+                    relay(&e, &line, &mut state.1);
                 }
-                for line in read_new(&state.0, &mut state.1) {
-                    if line.ends_with("triggered \"ls_link\"") {
-                        relay(&e, &line);
-                    }
-                }
+                deliver(&dir, &mut state.1);
                 let due = vip_at.get(&e.id).map_or(true, |t| t.elapsed() >= VIP_EVERY);
                 if due {
                     vip_at.insert(e.id.clone(), Instant::now());
@@ -665,16 +676,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn link_lines() {
-        let l = r#"L 11/14/2026 - 10:00:01: "Zoë <3<12><STEAM_0:1:123><CT>" triggered "ls_link""#;
-        assert_eq!(link_request(l), Some(("Zoë <3".into(), 12, "STEAM_0:1:123".into())));
-        assert_eq!(link_request(r#"L 11/14/2026 - 10:00:01: "Bot<3><BOT><TERRORIST>" triggered "ls_link""#), None);
-        assert_eq!(link_request(r#"L 11/14/2026 - 10:00:01: "x<3><STEAM_ID_LAN><>" triggered "ls_link""#), None);
-        assert_eq!(link_request(r#"L 11/14/2026 - 10:00:01: "x<3><STEAM_0:1:2><>" triggered "ls_other""#), None);
-        // a name that tries to look like a whole line: only the end counts
-        let sly = r#"L 11/14/2026 - 10:00:01: "a<1><STEAM_0:0:1><CT>" triggered "ls_link" x<7><STEAM_0:0:2><CT>" triggered "ls_link""#;
-        assert_eq!(link_request(sly).map(|r| (r.1, r.2)), Some((7, "STEAM_0:0:2".into())));
-        assert_eq!(link_request(r#"L 11/14/2026 - 10:00:01: "x<nope><STEAM_0:1:2><CT>" triggered "ls_link""#), None);
+    fn link_requests_and_answers() {
+        let now = 1_800_000_000;
+        assert_eq!(link_request("1800000000 12 STEAM_0:1:123 Zoë <3", now), Some(("Zoë <3".into(), 12, "STEAM_0:1:123".into())));
+        assert_eq!(link_request("1800000000 12 steam_1:1:123 x y z", now).map(|r| r.2), Some("STEAM_1:1:123".into()));
+        assert_eq!(link_request("1799999960 12 STEAM_0:1:123 Old", now), None, "older than half a minute");
+        for bad in ["", "x 12 STEAM_0:1:1 A", "1800000000 x STEAM_0:1:1 A", "1800000000 3 BOT A", "1800000000 3 STEAM_ID_LAN A", "1800000000 3 STEAM_0:1:1"] {
+            assert_eq!(link_request(bad, now), None, "{bad}");
+        }
+        let d = std::env::temp_dir().join(format!("ls-roles-lslink-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let mut pending = vec!["12 STEAM_0:1:123 show ABCD-EFGH".to_string()];
+        deliver(&d, &mut pending);
+        assert!(pending.is_empty());
+        assert_eq!(std::fs::read_to_string(d.join("answers.txt")).unwrap(), "12 STEAM_0:1:123 show ABCD-EFGH\n");
+        // the plugin hasn't taken it yet: the next waits
+        pending.push("13 STEAM_0:1:5 fail away".into());
+        deliver(&d, &mut pending);
+        assert_eq!(pending.len(), 1);
+        std::fs::remove_file(d.join("answers.txt")).unwrap();
+        deliver(&d, &mut pending);
+        assert_eq!(std::fs::read_to_string(d.join("answers.txt")).unwrap(), "13 STEAM_0:1:5 fail away\n");
+        assert!(plain_code("ABCD-EFGH") && !plain_code("ABCD EFGH") && !plain_code("ABCD-EFGH;"));
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]
