@@ -1048,3 +1048,8 @@ creatures`, built on the bot brain's `ls_creature behave/target/kill/remove` (nu
   `gate1` (an info_target at a CT spawn) walked one from 3490 to 260 units of it; a second graph sent all zombies
   after one player 14 s in: all three closed on that player from ~3000 to ~100-470 units (ignoring the one they'd
   been near) until he died. amxxpc no warnings.
+- **X2 owns (2026-11-13, from the user):** (1) the better delete dialog for variables, local variables, custom
+  events and Functions (Replace with…, Remove it and its nodes with exec reconnect, Remove and keep the nodes,
+  Cancel; use count by graph, Find uses; one undo step) in Inspector.tsx / graphOps.ts / MyBlueprint.tsx; (2) digits
+  in setting names (schema.ts + graph.rs, allowlist unchanged) and mp_give_player_c4 in the registry. Please leave
+  these to me; I'll keep my hunks small and commit by path.
