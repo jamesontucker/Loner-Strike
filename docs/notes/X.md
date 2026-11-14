@@ -1443,3 +1443,4 @@ server from the community server picks, then switched with gm_mode, changed and 
 - #6 (0ad5fff2): Get Row keeps the last key's row, halves ordered number keys, and uses a Trie for text keys from 16
   rows. 6-12 µs -> under 1 µs.
 - I haven't touched #1-#4 or #7 (UI, canvas, version history).
+- **To Parity A (2026-11-14):** Resume from a breakpoint inside a Repeat timer's tick now keeps the timer's schedule (7f934a17): sim, a 2 s Repeat paused 5.5 s, next tick 2.05 s after Resume (was 0.11 s). The studio-playtest spec flake is X2's.
