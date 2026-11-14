@@ -238,6 +238,34 @@ async fn an_agent_builds_checks_compiles_a_map_and_makes_a_mode() {
     let u = ag.call("studio_draft_redo", json!({"id": "agent_e2e"})).await;
     assert_eq!(u["wires"].as_array().unwrap().len(), 2);
 
+    // event graph tabs, custom events and timelines (Studio parity): a custom event on its own tab,
+    // called from the kill event, with an input pin from the custom event's own inputs
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [
+        {"op": "add_event_graph", "name": "Rewards"},
+        {"op": "add_custom_event", "name": "Reward", "inputs": [{"name": "Who", "type": "player"}]},
+        {"op": "add_timeline", "name": "Pulse", "length": 2, "loop": true},
+    ]})).await;
+    let (eg, ce, tl) = (r["results"][0]["result"].as_str().unwrap().to_string(), r["results"][1]["result"].as_str().unwrap().to_string(), r["results"][2]["result"].as_str().unwrap().to_string());
+    assert_eq!((eg.as_str(), ce.as_str(), tl.as_str()), ("eg1", "ce1", "tl1"), "{r}");
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [
+        {"op": "add_node", "type": "event.custom", "params": {"event": ce}, "graph": eg, "x": 0, "y": 300},
+        {"op": "add_node", "type": "event.call", "params": {"event": ce}, "x": 800, "y": 0},
+    ]})).await;
+    let (on, call) = (r["results"][0]["result"].as_str().unwrap().to_string(), r["results"][1]["result"].as_str().unwrap().to_string());
+    let view = ag.call("studio_draft", json!({"id": "agent_e2e"})).await;
+    let on_node = view["nodes"].as_array().unwrap().iter().find(|n| n["id"] == on.as_str()).unwrap();
+    assert_eq!(on_node["graph"], eg.as_str());
+    assert!(on_node["outputs"].as_array().unwrap().iter().any(|p| p["id"] == "a1" && p["type"] == "player"), "the custom event's input is a pin: {on_node}");
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [
+        {"op": "connect", "from": format!("{chat}.then"), "to": format!("{call}.exec")},
+        {"op": "connect", "from": format!("{ev}.attacker"), "to": format!("{call}.a1")},
+    ]})).await;
+    let errors: Vec<&Value> = r["problems"].as_array().unwrap().iter().filter(|p| p["level"] == "error").collect();
+    assert!(errors.is_empty(), "{errors:?}");
+    assert_eq!(ag.call("studio_draft", json!({"id": "agent_e2e"})).await["timelines"][0]["name"], "Pulse");
+    let help = ag.call("studio_node_help", json!({"type": "event.custom"})).await;
+    assert!(help["help"]["what"].is_string(), "{help}");
+
     // ---- 6. compile it -----------------------------------------------------------------------
     let code = ag.call("studio_code", json!({"id": "agent_e2e", "draft": true})).await;
     assert!(code["text"].as_str().unwrap().contains("Nice shot!"), "the plugin says it");

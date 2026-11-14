@@ -154,7 +154,7 @@ With changes on, any single console line goes and is logged, but `quit`, `exit`,
 `changelevel`, `restart`, `exec` and `sv_downloadurl` ask first. Never allowed: `;` chains,
 `rcon_password` and `rcon`.
 
-## Tools (165)
+## Tools (169)
 R = read (works with changes off). C = needs Allow changes (edits to the open map or draft are undoable).
 A = needs Allow changes and may ask the person.
 
@@ -179,9 +179,9 @@ A = needs Allow changes and may ask the person.
 | **Console and logs** | `console_send` (allowlist above), `console_log` (console / amxx / errors; `contains`, `prefixes`, `errors`; `cursor` to follow) |
 | **Bot brain** | `brain_settings`, `brain_trace_read`, `mode_status`, `creatures_list` (R); `brain_set` (typed switches: `bot_ls_trace`, `bot_ls_surf` 0/1/2, `bot_ls_fight`...), `brain_trace` (on/off plus `ls_mark` notes) (C) |
 | Recorder | `recording_status` (R), `recording_set` (C: pause or resume gm_simrec where it's loaded) |
-| Game Mode Studio: graphs | `studio_status`, `studio_nodes`, `studio_graphs`, `studio_graph_read`, `studio_validate`, `studio_code` (paged; also the "does it compile" check, nothing installed) (R); `studio_graph_save`, `studio_graph_delete`, `studio_uninstall` (A) |
-| Game Mode Studio: editing | `studio_draft` (R: every node with its pins resolved, wires, variables, Functions, Macros, structs, enums, comments, markers, problems); `studio_draft_open` (saved, new or a template), `studio_edit` (add/remove nodes and wires, pin values, breakpoints, variables, Functions, Macros, structs, enums, comments, map markers, mode settings, snippets; all or nothing, one undo step), `studio_draft_undo`, `studio_draft_redo` (C); `studio_draft_save` (A) |
-| Game Mode Studio: build and debug | `studio_debug_events` (cursor, kinds) (R); `studio_debug` (breakpoints, vars, resume) (C); `studio_compile` (installs: A), `studio_playtest` (A). `draft: true` on validate, code, compile and playtest uses the open draft |
+| Game Mode Studio: graphs | `studio_status`, `studio_nodes` (the catalog the All Actions palette shows), `studio_node_help` (F1: what a node does, its pins and settings), `studio_graphs`, `studio_graph_read`, `studio_validate` (the quick check), `studio_code` (paged: the plugin made from a graph) (R); `studio_graph_save`, `studio_graph_delete`, `studio_uninstall` (A) |
+| Game Mode Studio: editing | `studio_draft` (R: every node with its pins resolved, wires, variables, Functions, Macros, structs, enums, comments, markers, problems); `studio_draft_open` (saved, new or a template), `studio_edit` (add/remove nodes and wires, pin values, breakpoints, variables, Functions, Macros, structs, enums, comments, map markers, mode settings, snippets, event graph tabs, custom events, Timelines; all or nothing, one undo step), `studio_draft_undo`, `studio_draft_redo` (C); `studio_draft_save` (A) |
+| Game Mode Studio: build and debug | `studio_debug_events` (cursor, kinds), `studio_test_run_status` (R); `studio_check` (the Compile button: the real compiler, nothing installed, problems tied to nodes), `studio_debug` (breakpoints, vars, resume), `studio_test_run_cancel` (C); `studio_compile` (installs), `studio_playtest`, `studio_test_run` (a hidden server of its own plays the mode with bots, 2 to 5 minutes: pass/warn/fail, run-time errors tied to nodes, crash, cost against the baseline, nodes that never ran) (A). `draft: true` on validate, code, check, compile, playtest and test run uses the open draft |
 | Game Mode Studio: reuse | `studio_snippets`, `studio_library`, `studio_kits` (R); saving a snippet or a library piece through `app_call` (asks) |
 | Creature Studio | `creature_types`, `creature_type_read`, `creature_waves` (R); `creature_type_save` (types, tiers and enrage), `creature_waves_save`, `creature_apply` (C). Map-placed hazards (barnacle, sentry, mini turret) are entities: `components_library`, `editor_add_entity` |
 | Plugin Studio | `plugins_list`, `plugin_read` (paged), `plugin_log` (cursor) (R); `plugin_compile` (C); `plugin_save`, `plugin_delete`, `plugin_try`, `plugin_untry` (A) |
@@ -298,7 +298,7 @@ Any other client: `http://127.0.0.1:<port>/mcp` (Streamable HTTP), with the head
    - Turn the setting off: it should fail to connect.
    - With the HTTP setup and a wrong token you should get 401, "Wrong or missing token…".
    - Restart Loner-Strike: the stdio setup should still connect, with no change to the config.
-2. **List tools.** In Claude Code, run `/mcp` and pick loner-strike. You should see 165 tools, 10 resources
+2. **List tools.** In Claude Code, run `/mcp` and pick loner-strike. You should see 169 tools, 10 resources
    and 5 prompts.
 3. **Read a map.** Ask: "Use loner-strike to tell me about de_dust2: its spawns, nav and whether bots know
    it". The agent should call `map_info`, `map_nav_summary` and `map_knowledge`. Settings > AI agents >

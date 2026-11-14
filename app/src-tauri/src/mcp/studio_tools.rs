@@ -85,7 +85,10 @@ add_struct {name, fields: [{name, type}]} -> id; add_enum {name, values} -> id; 
 add_comment {text, x, y, w?, h?, graph?} -> id;\n\
 add_marker {id?, label, type: point|area|path, min?, max?, keys?} -> id; update_marker {marker, ...}; remove_marker {marker};\n\
 set_mode {name?, description?, settings?: [{cvar, value}]};\n\
-insert_snippet {snippet, x?, y?, graph?} (a snippet id from studio_snippets) -> node ids.\n\
+insert_snippet {snippet, x?, y?, graph?} (a snippet id from studio_snippets) -> node ids;\n\
+add_event_graph {name} -> id (another event graph tab: put nodes on it with graph: its id); rename_event_graph {event_graph, name}; remove_event_graph {event_graph} (its nodes move to the first);\n\
+add_custom_event {name, inputs?: [{name, type}], map?} -> id (Custom Event / Call Custom Event nodes take it as their event setting); update_custom_event {custom_event, ...}; remove_custom_event {custom_event};\n\
+add_timeline {name, length?, loop?, autoplay?, tick?, tracks?} -> id (Timeline nodes take it as their timeline setting); update_timeline {timeline, ...}; remove_timeline {timeline}.\n\
 Pin types and node types: studio_nodes."}}), &["id", "ops"]),
             description: "Edits the draft like the Studio's canvas: nodes, wires, pin values, variables, Functions, Macros, structs, enums, comments, map markers, mode settings and snippets. Returns the new ids and the problems left." },
         Spec { name: "studio_draft_undo", title: "Mode Studio: undo", kind: Change, schema: || obj(json!({"id": id_prop()}), &["id"]),
@@ -94,6 +97,16 @@ Pin types and node types: studio_nodes."}}), &["id", "ops"]),
             description: "Redoes an undone studio_edit batch." },
         Spec { name: "studio_draft_save", title: "Mode Studio: save the draft", kind: Risky, schema: || obj(json!({"id": id_prop()}), &["id"]),
             description: "Saves the draft as the graph file (asks the person first when it replaces one)." },
+        Spec { name: "studio_check", title: "Mode Studio: Compile (check only)", kind: Change,
+            schema: || obj(json!({"id": id_prop(), "draft": {"type": "boolean", "description": "Check the agent's open draft instead of the saved graph"}}), &["id"]),
+            description: "The Studio's Compile button: the full check with the game's real compiler (amxxpc), nothing installed. Answers ok and the problems, each tied to its node and pin when it can be." },
+        Spec { name: "studio_test_run_status", title: "Mode Studio: test run status", kind: Read, schema: none,
+            description: "The Test run going on or the last one: phase, steps so far and, when done, the result (pass/warn/fail, run-time errors tied to nodes, crash, cost against the baseline, nodes that never ran)." },
+        Spec { name: "studio_test_run_cancel", title: "Mode Studio: stop the test run", kind: Change, schema: none,
+            description: "Stops the running Test run (its hidden server is closed)." },
+        Spec { name: "studio_node_help", title: "Mode Studio: node help", kind: Read,
+            schema: || obj(json!({"type": {"type": "string", "description": "A node type, e.g. event.player_killed"}, "search": {"type": "string", "description": "Words in a node's title or help"}}), &[]),
+            description: "The Studio's node help (F1 on a node): what a node does, each pin and setting, more advice and related nodes." },
         Spec { name: "studio_snippets", title: "Mode Studio: snippets", kind: Read, schema: none,
             description: "The person's snippets (pieces of graph to drop in): id, name, description, the nodes they hold. Insert one with studio_edit insert_snippet." },
         Spec { name: "studio_library", title: "Mode Studio: My library", kind: Read, schema: none,
@@ -144,7 +157,7 @@ fn fresh_id(g: &Value, prefix: &str) -> String {
 /// A fresh id for a variable, local, Function, Macro, struct or enum (graphOps freshPartId).
 fn fresh_part(g: &Value, prefix: &str) -> String {
     let mut used: Vec<String> = vec![];
-    for k in ["variables", "functions", "macros", "structs", "enums"] {
+    for k in ["variables", "functions", "macros", "structs", "enums", "eventGraphs", "customEvents", "timelines"] {
         for x in g[k].as_array().into_iter().flatten() {
             used.extend(x["id"].as_str().map(String::from));
             for l in x["locals"].as_array().into_iter().flatten() {
@@ -522,6 +535,84 @@ async fn edit(ctx: &Ctx, g: &mut Value, o: &Value) -> Result<Value, String> {
             arr(g, "markers").retain(|m| m["id"] != id.as_str());
             Value::Null
         }
+        "add_event_graph" => {
+            let id = fresh_part(g, "eg");
+            arr(g, "eventGraphs").push(json!({"id": id, "name": o["name"].as_str().unwrap_or("Graph")}));
+            json!(id)
+        }
+        "rename_event_graph" => {
+            let id = text(o, "event_graph")?;
+            let x = arr(g, "eventGraphs").iter_mut().find(|x| x["id"] == id.as_str()).ok_or("there's no such event graph")?;
+            x["name"] = json!(text(o, "name")?);
+            Value::Null
+        }
+        "remove_event_graph" => {
+            // (its nodes and comments move onto the first Event Graph, as in the Studio)
+            let id = text(o, "event_graph")?;
+            for k in ["nodes", "comments"] {
+                for n in arr(g, k).iter_mut().filter(|n| n["graph"] == id.as_str()) {
+                    if let Some(m) = n.as_object_mut() {
+                        m.remove("graph");
+                    }
+                }
+            }
+            arr(g, "eventGraphs").retain(|x| x["id"] != id.as_str());
+            Value::Null
+        }
+        "add_custom_event" => {
+            let id = fresh_part(g, "ce");
+            let mut c = json!({"id": id, "name": o["name"].as_str().unwrap_or("My Event"), "inputs": members(o.get("inputs"), "a")});
+            if o["map"].as_bool() == Some(true) {
+                c["map"] = json!(true);
+            }
+            arr(g, "customEvents").push(c);
+            json!(id)
+        }
+        "update_custom_event" => {
+            let id = text(o, "custom_event")?;
+            let x = arr(g, "customEvents").iter_mut().find(|x| x["id"] == id.as_str()).ok_or("there's no such custom event")?;
+            if let Some(n) = o.get("name") {
+                x["name"] = n.clone();
+            }
+            if let Some(i) = o.get("inputs") {
+                x["inputs"] = members(Some(i), "a");
+            }
+            if let Some(m) = o.get("map") {
+                x["map"] = m.clone();
+            }
+            Value::Null
+        }
+        "remove_custom_event" => {
+            let id = text(o, "custom_event")?;
+            arr(g, "customEvents").retain(|x| x["id"] != id.as_str());
+            Value::Null
+        }
+        "add_timeline" => {
+            let id = fresh_part(g, "tl");
+            let mut t = json!({"id": id, "name": o["name"].as_str().unwrap_or("Timeline"), "length": f("length").unwrap_or(3.0), "tick": f("tick").unwrap_or(0.05), "tracks": o.get("tracks").cloned().unwrap_or(json!([]))});
+            for k in ["loop", "autoplay", "useLastKey"] {
+                if let Some(v) = o.get(k) {
+                    t[k] = v.clone();
+                }
+            }
+            arr(g, "timelines").push(t);
+            json!(id)
+        }
+        "update_timeline" => {
+            let id = text(o, "timeline")?;
+            let x = arr(g, "timelines").iter_mut().find(|x| x["id"] == id.as_str()).ok_or("there's no such timeline")?;
+            for k in ["name", "length", "tick", "tracks", "loop", "autoplay", "useLastKey"] {
+                if let Some(v) = o.get(k) {
+                    x[k] = v.clone();
+                }
+            }
+            Value::Null
+        }
+        "remove_timeline" => {
+            let id = text(o, "timeline")?;
+            arr(g, "timelines").retain(|x| x["id"] != id.as_str());
+            Value::Null
+        }
         "set_mode" => {
             for k in ["name", "description", "settings", "bots"] {
                 if let Some(v) = o.get(k) {
@@ -606,10 +697,14 @@ async fn view(ctx: &Ctx, id: &str, tab: Option<&str>) -> Done {
     let errors = problems.as_array().map(|p| p.iter().filter(|x| x["level"] == "error").count()).unwrap_or(0);
     Ok(json!({"id": id, "mode": g["mode"], "unsaved": dirty, "undo": undo, "redo": redo, "nodes": nodes, "wires": g["edges"],
         "variables": g["variables"], "functions": g["functions"], "macros": g["macros"], "structs": g["structs"], "enums": g["enums"],
-        "comments": g["comments"], "markers": g["markers"], "mapKit": g["mapKit"], "problems": problems, "errors": errors}))
+        "comments": g["comments"], "markers": g["markers"], "mapKit": g["mapKit"],
+        "eventGraphs": g["eventGraphs"], "customEvents": g["customEvents"], "timelines": g["timelines"], "problems": problems, "errors": errors}))
 }
 
 // ---- running them ------------------------------------------------------------------------
+
+/// The Studio's node help (the same file its help panel reads).
+const NODE_HELP: &str = include_str!("../../../ui/src/views/tools/studio/nodehelp.json");
 
 const TEMPLATES: &[(&str, &str)] = &[
     ("team-dm", include_str!("../../../ui/src/views/tools/studio/templates/team-dm.graph.json")),
@@ -719,6 +814,31 @@ pub async fn run(ctx: &Ctx, name: &str, a: &Value) -> Option<Done> {
                 x.dirty = false;
             }
             Ok(v)
+        }
+        .await,
+        "studio_check" => async {
+            let id = mode_id(a)?;
+            let g = if a["draft"].as_bool() == Some(true) { draft_graph(&id).ok_or_else(|| err(NO_DRAFT))? } else { get(ctx, &format!("/api/tools/studio/graph/{id}")).await?["graph"].clone() };
+            post(ctx, "/api/tools/studio/check", json!({"graph": g})).await
+        }
+        .await,
+        "studio_test_run_status" => get(ctx, "/api/tools/studio/testrun").await,
+        "studio_test_run_cancel" => post(ctx, "/api/tools/studio/testrun/cancel", json!({})).await,
+        "studio_node_help" => async {
+            let all: Value = serde_json::from_str(NODE_HELP).map_err(|_| err("The node help couldn't be read."))?;
+            let help = all["help"].as_object().cloned().unwrap_or_default();
+            if let Some(t) = s(a, "type") {
+                return help.get(t).cloned().map(|h| json!({"type": t, "help": h})).ok_or_else(|| err(format!("There's no node type {t} (studio_nodes lists them).")));
+            }
+            let words: Vec<String> = s(a, "search").unwrap_or("").to_lowercase().split_whitespace().map(String::from).collect();
+            if words.is_empty() {
+                return Err(err("Say a node type, or search words."));
+            }
+            let hits: Vec<Value> = help.iter().filter(|(k, h)| {
+                let t = format!("{k} {} {}", h["title"], h["what"]).to_lowercase();
+                words.iter().all(|w| t.contains(w.as_str()))
+            }).take(30).map(|(k, h)| json!({"type": k, "title": h["title"], "what": h["what"]})).collect();
+            Ok(json!({"matched": hits.len(), "nodes": hits}))
         }
         .await,
         "studio_snippets" => get(ctx, "/api/tools/studio/snippets").await,
