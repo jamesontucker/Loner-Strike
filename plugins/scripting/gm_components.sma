@@ -6652,6 +6652,47 @@ stock w3_dc_take(id, c, i, bool:swap)
 	return 1;
 }
 
+/* the rounds in a crate's gun (magazine and spare) for a gun of the same ammo the player carries; the gun stays */
+stock w3_dc_take_ammo(id, c, i)
+{
+	new item[24], base[24], w[32];
+	copy(item, charsmax(item), g_w3DcItem[c][i]);
+	w3_item_base(item, base, charsmax(base));
+	weapon_name(base, w, charsmax(w));
+	new csw = get_weaponid(w);
+	if (!csw || !((1 << csw) & W3_GUN_IDS))
+		return 0;
+	new at = contain(item, "@"), n1 = 0, n2 = 0;
+	if (at < 0)
+		return 0;
+	n1 = str_to_num(item[at + 1]);
+	new at2 = contain(item[at + 1], "@");
+	if (at2 >= 0)
+		n2 = str_to_num(item[at + 1 + at2 + 1]);
+	if (n1 + n2 <= 0)
+		return 0;
+	new type = cs_get_weapon_info(csw, CS_WEAPONINFO_AMMO_TYPE), weapons[32], nw;
+	get_user_weapons(id, weapons, nw);
+	for (new k = 0; k < nw; k++)
+	{
+		new o = weapons[k];
+		if (!((1 << o) & W3_GUN_IDS) || cs_get_weapon_info(o, CS_WEAPONINFO_AMMO_TYPE) != type)
+			continue;
+		new have = cs_get_user_bpammo(id, o), room = ammo_full(o) - have;
+		if (room <= 0)
+			return 0;
+		new take = min(room, n1 + n2);
+		cs_set_user_bpammo(id, o, have + take);
+		/* (what's left stays in the gun: from the spare first, then the magazine) */
+		new left = n1 + n2 - take;
+		formatex(g_w3DcItem[c][i], 23, "%s@%d@%d", base, min(left, n1), max(left - n1, 0));
+		emit_sound(id, CHAN_ITEM, "items/ammopickup1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+		g_w3DcTaken++;
+		return 1;
+	}
+	return 0;
+}
+
 stock w3_strip_weapon(id, const wname[])
 {
 	new csw = get_weaponid(wname), ent = w3_find_weapon(id, wname);
@@ -6771,7 +6812,11 @@ public menu_w3_crate(id, menu, item)
 		/* (a taken item moves the rest up; a part-taken stack is tried again and then skipped) */
 		for (new i = 0; i < g_w3DcN[c]; )
 			if (!w3_dc_take(id, c, i, false))
+			{
+				/* a gun left behind: its rounds, for a gun of yours that takes them */
+				w3_dc_take_ammo(id, c, i);
 				i++;
+			}
 	}
 	else if (!w3_dc_take(id, c, str_to_num(info), true))
 		client_print(id, print_center, "You can't carry that");
@@ -6807,7 +6852,10 @@ stock w3_bot_crate(p)
 					i++;
 			}
 			else
+			{
+				took += w3_dc_take_ammo(p, c, i);
 				i++;
+			}
 		}
 		if (took)
 		{
