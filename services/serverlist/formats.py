@@ -557,7 +557,9 @@ BUILTIN_CREATURES = ("zombie", "runner", "brute", "spitter", "hound", "turret", 
                      "babygarg", "snark", "babycrab", "miniturret", "assassin", "soldier", "gonarch")
 # a shared type's name says who made it: "<author>.<name>", 31 characters at most (the brain's)
 _CREATURE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,23}\.[a-z0-9_]{1,29}$")
-_CREATURE_ASSET = re.compile(r"^(models/[a-z0-9_./ -]{1,150}\.mdl|sound/[a-z0-9_./ -]{1,150}\.wav)$")
+# a model: models/....mdl; a sound: a .wav path relative to sound/ (as the game names sounds)
+_CREATURE_MODEL = re.compile(r"^models/[a-z0-9_./-]{1,150}\.mdl$")
+_CREATURE_SOUND = re.compile(r"^[a-z0-9_-][a-z0-9_./-]{0,150}\.wav$")
 
 
 def creature_name_ok(n):
@@ -571,14 +573,16 @@ def creature_name_ok(n):
 
 def creatures_ini_problem(data):
     """Why a package's creatures.ini can't be installed (None: it can). It must be text, small,
-    every [type] namespaced and none a built-in type, and every model or sound it names a plain
-    path in models/ or sound/ (the app writes nothing outside the game's folders)."""
+    every [type] namespaced and none a built-in type; `model` lists models/....mdl paths and the
+    snd_* keys .wav paths relative to sound/ (several, split by spaces and |); no value may hold
+    .., \\ or : (the app writes nothing outside the game's folders); each base is a built-in type
+    or one defined in the same file."""
     if len(data) > CREATURES_MAX:
         return "it's too big"
     if b"\0" in data:
         return "it isn't text"
     text = data.decode("latin-1")
-    names = []
+    names, bases = [], []
     for raw in text.splitlines():
         if len(raw) > 511:
             return "it has a line longer than the game reads"
@@ -599,20 +603,30 @@ def creatures_ini_problem(data):
             if name not in names:
                 names.append(name)
             continue
-        if not names:
-            continue  # (the brain skips keys before the first [type])
-        if "=" not in line:
-            continue
-        _key, value = line.split("=", 1)
+        if not names or "=" not in line:
+            continue  # (the brain skips keys before the first [type], and lines without =)
+        key, value = (x.strip() for x in line.split("=", 1))
+        key = key.lower()
         if "\\" in value or ":" in value or ".." in value:
             return f"[{names[-1]}] names a file outside the game's folders"
-        for tok in value.split():
-            if "/" in tok and not _CREATURE_ASSET.match(tok.lower()):
-                return f"[{names[-1]}] names a file that isn't a model or sound ({tok[:60]})"
+        toks = value.replace("|", " ").lower().split()
+        if key == "model":
+            bad = [t for t in toks if not _CREATURE_MODEL.match(t)]
+            if bad:
+                return f"[{names[-1]}] model isn't a models/....mdl path ({bad[0][:60]})"
+        elif key.startswith("snd_"):
+            bad = [t for t in toks if not _CREATURE_SOUND.match(t)]
+            if bad:
+                return f"[{names[-1]}] {key} isn't a .wav path in sound/ ({bad[0][:60]})"
+        elif key == "base":
+            bases.append((names[-1], value.lower()))
     if not names:
         return "it has no creature types"
     if len(names) > CREATURES_TYPES:
         return f"it has {len(names)} types; the game holds {CREATURES_TYPES} of your own"
+    for who, base in bases:
+        if base and base not in BUILTIN_CREATURES and base not in names:
+            return f"[{who}] starts from {base[:40]}, which isn't a built-in type or in this file"
     return None
 
 

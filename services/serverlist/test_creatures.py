@@ -16,12 +16,14 @@ from test_community import MAP_MANIFEST, PREFAB, FakeFiles, FakeGB, body, make, 
 from test_formats import model  # noqa: E402
 
 GOOD_INI = b"""; >>> from mod:1234 (made in Loner-Strike)
+; types: ann.runner_x ann.boss_y
+; files: models/ann/runner_x.mdl sound/ann/hit.wav ../not/checked:here
 [ann.runner_x]
 base = runner
-name = Fast One
+name = Fast One / v2
 hp = 80
-model = models/ann/runner_x.mdl
-snd_attack = sound/ann/hit.wav sound/ann/hit2.wav
+model = models/ann/runner_x.mdl models/zombie.mdl
+snd_attack = ann/hit.wav ann/hit2.wav | player/pl_pain2.wav
 [ann.boss_y]
 base = ann.runner_x
 ; <<< end
@@ -62,11 +64,16 @@ class Rules(unittest.TestCase):
 
     def test_ini(self):
         self.assertIsNone(cm.creatures_ini_problem(GOOD_INI))
+        # a base defined later in the same file, and a built-in base in any case
+        self.assertIsNone(cm.creatures_ini_problem(b"[ann.a]\nbase = ann.b\n[ann.b]\nbase = Zombie\n"))
         self.assertEqual(cm.creatures_ini_types(GOOD_INI), ["ann.runner_x", "ann.boss_y"])
         for bad, words in ((b"[zombie]\nhp = 1\n", "built-in"), (b"[Runner]\n", "built-in"), (b"[runner_x]\n", "<author>.<name>"),
                            (b"[ann.x]\nmodel = ../../evil.mdl\n", "outside"), (b"[ann.x]\nmodel = C:/x.mdl\n", "outside"),
-                           (b"[ann.x]\nmodel = models\\\\x.mdl\n", "outside"), (b"[ann.x]\nmodel = maps/x.bsp\n", "isn't a model"),
-                           (b"[ann.x]\nsnd_die = sound/x.exe\n", "isn't a model"), (b"; nothing\n", "no creature"),
+                           (b"[ann.x]\nmodel = models\\\\x.mdl\n", "outside"), (b"[ann.x]\nmodel = maps/x.bsp\n", "models/....mdl"),
+                           (b"[ann.x]\nmodel = models/a.mdl | sound/x.wav\n", "models/....mdl"),
+                           (b"[ann.x]\nsnd_die = x.exe\n", ".wav path"), (b"[ann.x]\nsnd_die = a/1.wav | /etc/x.wav\n", ".wav path"),
+                           (b"[ann.x]\nsnd_pain = a/../../x.wav\n", "outside"), (b"[ann.x]\nbase = ann.nope\n", "isn't a built-in"),
+                           (b"[ann.x]\nbase = bob.y\n[ann.y]\n", "isn't a built-in"), (b"; nothing\n", "no creature"),
                            (b"[ann.x]\n" + b"a" * 600 + b"\n", "longer"), (b"[ann.x]\0", "text"), (b"[ann.x]\n" * 1 + b" " * (65 << 10), "too big"),
                            (b"".join(b"[ann.t%d]\n" % i for i in range(33)), "33 types")):
             self.assertIn(words, cm.creatures_ini_problem(bad) or "", bad[:40])
@@ -137,6 +144,8 @@ class Registration(unittest.TestCase):
         self.refused(creature_zip(ini=b"[zombie]\nhp = 9999\n"), "built-in")
         self.refused(creature_zip(ini=b"[runner_x]\nhp = 9\n"), "<author>.<name>")
         self.refused(creature_zip(ini=b"[ann.runner_x]\nmodel = ../../../evil.mdl\n"), "outside")
+        self.refused(creature_zip(ini=b"[ann.runner_x]\nsnd_die = sound/x.wav sound/../../x.wav\n[ann.boss_y]\n"), "outside")
+        self.refused(creature_zip(ini=b"[ann.runner_x]\nbase = ann.gone\n[ann.boss_y]\n"), "ann.gone")
         self.refused(creature_zip(ini=b"[ann.runner_x]\nhp = 1\n"), "ann.boss_y")  # listed but not defined
         self.refused(creature_zip(extra=["addons/amxmodx/plugins/x.amxx"]), "Plugin")
         self.refused(creature_zip(extra=["dlls/mp.dll"]), "run code")
