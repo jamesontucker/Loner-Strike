@@ -21,6 +21,8 @@ export type Trust = {
 export type Badge = "featured" | "bots" | "nav" | "checked" | "data";
 
 export type Entry = {
+  /** how many shared creatures it brings */
+  creatures?: number;
   model: Model;
   id: number;
   key: string;
@@ -69,6 +71,8 @@ export type Item = {
   added: number; updated: number; status: "listed" | "hidden" | "revoked";
   /** P5: a map shipped with its editable source (it can be remixed) */
   source?: boolean;
+  /** the shared creatures it brings (creatures/creatures.ini in its package) */
+  creatures?: { name: string; model: boolean; sounds: number }[];
 };
 
 export type GbFile = { id: number; file: string; size: number; added: number; md5: string; clean: boolean; supported: boolean };
@@ -111,6 +115,8 @@ export type AssetCredit = { files: string[]; page: string; name: string; authors
 export type Readiness = {
   blockers: string[]; warnings: string[]; tips: string[]; map: MapMeta; health: HealthMeta | null; files: string[]; title: string; game: string;
   assets: CreditAsset[]; credits: AssetCredit[];
+  /** custom creatures it brings: "runner_x (with its model)" */
+  creatures?: string[];
 };
 export const notePermission = (b: { key: string; granted: boolean; note: string; authors?: Author[]; page?: string }) =>
   post<{ ok: boolean }>(`/api/tools/credits/${b.authors ? "manual" : "permission"}`, b);
@@ -206,6 +212,8 @@ export type ModeReady = {
   /** the mode's requirements (requirements.rs), when the game is set up here */
   requirements?: { maps: { name: string }[]; known: { creatures: string[] }; needs?: BrainNeeds; brainHere?: { modeVer: number; creatureVer: number } | null };
   requirementWarnings?: string[];
+  /** custom creatures it brings: "runner_x (with its model)" */
+  creatures?: string[];
 };
 export const modeReadiness = (id: string, signal?: AbortSignal) => get<ModeReady>(`${base}/publish-mode/${encodeURIComponent(id)}`, signal);
 export const publishMode = (id: string, body: { title: string; summary: string; author: string; maps: string[]; screenshots: Shot[]; bots: string }) =>

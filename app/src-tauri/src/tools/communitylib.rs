@@ -292,6 +292,10 @@ fn remove_files(game: Option<&crate::game::Game>, it: &Installed) -> Result<Vec<
         }
         Kind::Other => {}
     }
+    // its shared creatures' block in creatures.ini (types another installed item brings stay)
+    if let Some(g) = game {
+        removed.extend(super::creaturepack::uninstall_pack(&g.dir, &it.key())?);
+    }
     Ok(removed)
 }
 
@@ -398,11 +402,24 @@ pub fn install_mode(st: &Shared, src: &Path, mut it: Installed) -> Result<Value,
     if let Some(why) = mode_clash(&game.dir, &super::studio::graphs_dir(), &lib, &g.mode.id, it.model, it.gb) {
         return Err(why);
     }
-    let r = super::studio::compile(st, g.clone(), false)?;
-    if r["ok"] != json!(true) {
-        let first = r["problems"].as_array().and_then(|p| p.iter().find(|x| x["level"] == "error")).and_then(|x| x["message"].as_str()).unwrap_or("the compiler stopped");
-        return Err(format!("The mode couldn't be built on this computer ({first})."));
+    // its creatures (creatures/creatures.ini) go in first, so the build finds its types
+    let pack = super::creaturepack::find_pack(src).map(|(_, t)| t);
+    if let Some(t) = &pack {
+        super::creaturepack::install_pack(&game.dir, &it.key(), t, Some(src), &super::community::expected_namespace(super::community::index_cached().items.iter().find(|i| i.model == it.model && i.gb == it.gb), &it.author))?;
     }
+    let built = super::studio::compile(st, g.clone(), false);
+    let r = match built {
+        Ok(r) if r["ok"] == json!(true) => r,
+        other => {
+            if pack.is_some() {
+                let _ = super::creaturepack::uninstall_pack(&game.dir, &it.key());
+            }
+            let r = other?;
+            let first = r["problems"].as_array().and_then(|p| p.iter().find(|x| x["level"] == "error")).and_then(|x| x["message"].as_str()).unwrap_or("the compiler stopped");
+            return Err(format!("The mode couldn't be built on this computer ({first})."));
+        }
+    };
+    let _ = r;
     it.mode = g.mode.id.clone();
     if it.uid.is_empty() {
         it.uid = mode_graph_uid(src);
@@ -774,6 +791,10 @@ pub fn keep_previous(game_root: Option<&Path>, records: &serde_json::Map<String,
 pub fn restore_previous(game: Option<&crate::game::Game>, st: Option<&Shared>, dir: &Path, key: &str) -> Result<Installed, String> {
     let pd = prev_dir(dir, key);
     let prev: Installed = std::fs::read(pd.join("meta.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).ok_or("There's no earlier version kept.")?;
+    // its shared creatures' block as it is (Go back, or an update that fails, puts it back)
+    if let Some(b) = game_root.and_then(|root| super::creaturepack::block_text(root, &it.key())) {
+        std::fs::write(pd.join("creatures.block"), b).map_err(|e| format!("Couldn't keep the version you have ({e})."))?;
+    }
     if prev.kind == Kind::Map {
         let g = game.ok_or("Set up the game on this computer first.")?;
         let root = g.store.maps_dir().parent().map(Path::to_path_buf).ok_or("The game folder isn't there.")?;
@@ -785,6 +806,10 @@ pub fn restore_previous(game: Option<&crate::game::Game>, st: Option<&Shared>, d
             if !dst.exists() {
                 if let Some(p) = dst.parent() {
                     let _ = std::fs::create_dir_all(p);
+    // its shared creatures' block as it was (first: a mode's build needs its types)
+    if let (Some(g), Ok(b)) = (game, std::fs::read_to_string(pd.join("creatures.block"))) {
+        super::creaturepack::restore_block(&g.dir, key, Some(&b))?;
+    }
                 }
                 std::fs::copy(&f, &dst).map_err(|e| format!("Couldn't put the earlier version back ({e})."))?;
             }

@@ -300,6 +300,11 @@ function Card({ e, onOpen }: { e: Entry; onOpen: () => void }) {
           {e.have ? " · in your game" : ""}
         </span>
         {e.modes.length > 0 && <span className="muted small-note">Modes: {e.modes.join(", ")}</span>}
+        {(e.creatures ?? 0) > 0 && (
+          <span className="muted small-note" data-testid="cm-card-creatures" title="Custom creatures come with it and go in your game when you install it.">
+            Includes {e.creatures} creature{e.creatures === 1 ? "" : "s"}
+          </span>
+        )}
         {e.kind === "mode" && e.bots && <span className={`bots-note ${e.bots}`} title={BOT_RATING_INFO}>{BOT_NOTE[e.bots]}</span>}
         {e.otherGame && <span className="tag cm-risk" title="Made for the other game: it may not work in yours. You're asked before it installs.">For {(e.games ?? []).includes("czero") ? "Condition Zero" : "Counter-Strike 1.6"}</span>}
         <Badges list={e.badges} trust={e.trust} />
@@ -488,6 +493,20 @@ function Creation({ d }: { d: Details }) {
               <p>{ask || d.trust.confirm}</p>
               <div className="row">
                 <button className="btn primary" onClick={() => go(true)}>Install it</button>
+        {(d.item?.creatures?.length ?? 0) > 0 && (
+          <div className="cm-needs" data-testid="cm-includes-creatures">
+            <h4>Includes</h4>
+            <ul>
+              {d.item!.creatures!.map((c) => (
+                <li key={c.name}>
+                  {c.name}
+                  {c.model || c.sounds ? <span className="muted small-note"> (with its {[c.model ? "model" : "", c.sounds ? `${c.sounds} sound${c.sounds === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ")})</span> : null}
+                </li>
+              ))}
+            </ul>
+            <p className="muted small-note">These creatures go in your game with it, kept apart from your own types.</p>
+          </div>
+        )}
                 <button className="btn" onClick={() => setStage({ state: "idle" })}>Cancel</button>
               </div>
             </div>

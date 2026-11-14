@@ -171,9 +171,7 @@ pub fn answer(g: &Graph, saved: &Saved, h: &Here) -> Value {
     if !local.is_empty() {
         warnings.push(format!("Only on this computer (share them first so players can get them): {}.", local.join(", ")));
     }
-    if let Some(w) = custom_creatures_warning(&needs.creatures) {
-        warnings.push(w);
-    }
+    // (custom creatures travel in the package: creaturepack, listed on the Publish step)
     json!({
         "defaultMap": if saved.default_map.is_empty() { Value::Null } else { map(&saved.default_map) },
         "maps": maps,
@@ -313,17 +311,10 @@ fn maps_in(game_dir: &Path) -> Vec<String> {
     v
 }
 
-/// Creature types a mode spawns that aren't the game's own: a package only names them (their
-/// creatures.ini sections aren't in it), so players have to make them in the Creature Studio.
-/// ("all": the wave spawner's own; controller and stukabat are Last Stand's round-table names a
-/// stand-in plays until the game has them.)
+/// The custom creature types (not built in) among a mode's names. They travel in its package
+/// (creaturepack), named for who made it.
 pub fn custom_creatures(names: &[String]) -> Vec<String> {
     names.iter().filter(|n| *n != "all" && !["controller", "stukabat"].contains(&n.as_str()) && crate::tools::creatures::builtin(n).is_none()).cloned().collect()
-}
-
-fn custom_creatures_warning(names: &[String]) -> Option<String> {
-    let c = custom_creatures(names);
-    (!c.is_empty()).then(|| format!("Custom creatures aren't included yet: players need to make {} themselves (Creature Studio).", c.join(", ")))
 }
 
 /// Everything about a mode's requirements on this computer.
@@ -398,15 +389,13 @@ mod tests {
     }
 
     #[test]
-    fn custom_creatures_are_named_as_not_included() {
+    fn custom_creatures_are_packed_not_warned_about() {
         let names = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(custom_creatures_warning(&names(&["zombie", "all", "gonarch", "controller"])), None);
-        let w = custom_creatures_warning(&names(&["zombie", "qa_runner_", "my_brute_2"])).unwrap();
-        assert_eq!(w, "Custom creatures aren't included yet: players need to make qa_runner_, my_brute_2 themselves (Creature Studio).");
-        // the report a Publish check shows
+        assert!(custom_creatures(&names(&["zombie", "all", "gonarch", "controller"])).is_empty());
+        assert_eq!(custom_creatures(&names(&["zombie", "qa_runner_"])), vec!["qa_runner_"]);
         let gr = g(&[("creature.spawn", "kind", "qa_runner_")]);
         let v = answer(&gr, &Default::default(), &Here { game_dir: None, stock: &|_: &str| false, community: &Default::default(), maps_here: &[] });
-        assert!(v["warnings"].as_array().unwrap().iter().any(|x| x.as_str().is_some_and(|s| s.contains("qa_runner_ themselves"))), "{v}");
+        assert!(!v["warnings"].as_array().unwrap().iter().any(|x| x.as_str().is_some_and(|s| s.contains("aren't included"))), "{v}");
     }
 
     #[test]

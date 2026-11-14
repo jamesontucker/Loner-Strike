@@ -235,6 +235,12 @@ function PrefabList({ onPick }: { onPick: (id: string) => void }) {
 // ---- a map ----------------------------------------------------------------------------------------
 
 /** The map's checks as a status list (from the server's readiness), each with its fix. */
+/** The custom creatures a creation brings (packed with it, named for who made it). */
+function creatureCheck(list?: string[]): Check | null {
+  if (!list?.length) return null;
+  return { state: "ok", title: "Custom creatures", why: `Includes: ${list.join(", ")}. Named for you, so they never clash with players' own types.` };
+}
+
 function mapChecks(map: string, r: Readiness): Check[] {
   const rows: Check[] = r.blockers.map((b) => ({ state: "bad" as const, title: "Can't publish yet", why: b }));
   const credit = (r.assets ?? []).filter((a) => (a.verdict === "ask" || a.verdict === "no") && !a.permission?.granted);
@@ -268,6 +274,9 @@ function mapChecks(map: string, r: Readiness): Check[] {
   return rows;
 }
 
+  const cr = creatureCheck(r.creatures);
+  if (cr) rows.push(cr);
+  for (const w of r.warnings.filter((x) => /can be listed once|the full name is too long/.test(x))) rows.push({ state: "warn", title: "Creature names", why: w });
 /** P5: which editor project is the map's, and whether its editable source goes in the package. */
 function SourceStep({ projects, project, setProject, on, setOn }: { projects: SourceProject[]; project: string; setProject: (p: string) => void; on: boolean; setOn: (v: boolean) => void }) {
   const picked = projects.find((p) => p.path === project);
@@ -489,6 +498,8 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
   if (r.remixOf) checks.push({ state: "ok", title: "Remix credit", why: `A remix of ${r.remixOf.name}${r.remixOf.author ? ` by ${r.remixOf.author}` : ""}: the package and its page credit them.` });
   const build = () =>
     run("Packing…", async () => {
+  const cr = creatureCheck(r.creatures);
+  if (cr) checks.push(cr);
       remember();
       const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: shotsToSend(), bots });
       if (res.error) return toast(res.error, true);
@@ -566,7 +577,7 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
 
 // ---- a prefab -------------------------------------------------------------------------------------
 
-type PrefabReady = { id: string; name: string; description: string; author: string; tags: string[]; brushes: number; entities: number; credits: AssetCredit[] };
+type PrefabReady = { id: string; name: string; description: string; author: string; tags: string[]; brushes: number; entities: number; credits: AssetCredit[]; creatures?: string[]; blockers?: string[]; warnings?: string[] };
 
 function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void; onDone: () => void }) {
   const toast = useToast();
@@ -606,6 +617,9 @@ function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void;
         ]} />
       </Step>
       <Step n={2} title="Details">
+          ...(r.blockers ?? []).map((b) => ({ state: "bad" as const, title: "Can't publish yet", why: b })),
+          ...[creatureCheck(r.creatures)].filter((c): c is Check => !!c),
+          ...(r.warnings ?? []).map((w) => ({ state: "warn" as const, title: "Creature names", why: w })),
         <Details title={title} setTitle={setTitle} author={author} setAuthor={setAuthor} summary={summary} setSummary={setSummary} about="What it is, in a sentence" />
       </Step>
       {r.credits.length > 0 && (

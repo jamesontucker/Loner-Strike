@@ -569,6 +569,13 @@ pub struct Item {
 }
 
 /// The bot-support scale (games.ts BotRating): anything else reads as "" (not said).
+    /// the shared creatures it brings (creatures/creatures.ini in the package), ≤ 32
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub creatures: Vec<super::creaturepack::ItemCreature>,
+    /// the namespace its own creatures are named under (the community list assigns it to the
+    /// uploader's GameBanana member id); installs check the package's types against it
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub namespace: String,
 pub fn clean_bots(s: &str) -> String {
     let l = s.trim().to_ascii_lowercase();
     if ["great", "ok", "weak", "none"].contains(&l.as_str()) { l } else { String::new() }
@@ -667,6 +674,8 @@ pub fn parse_index(bytes: &[u8]) -> Result<Index, String> {
         if let Some(m) = &mut it.mode {
             m.uid = clean_uid(&m.uid);
             if !safe_mode_id(&m.id) {
+        it.creatures = super::creaturepack::clean_item_creatures(std::mem::take(&mut it.creatures));
+        it.namespace = super::creaturepack::clean_namespace(&it.namespace);
                 return false;
             }
             m.maps.retain(|x| crate::maps::safe_arg(x));
@@ -1074,6 +1083,8 @@ pub fn entry(hit: Option<&Hit>, it: Option<&Item>, revoked: bool, have: &HashSet
     }))
 }
 
+        // the shared creatures it brings (packed with it)
+        "creatures": it.map(|i| i.creatures.len()).unwrap_or(0),
 /// Index entries and GameBanana hits as one list (each page once), filtered and sorted.
 pub fn merge(idx: &Index, hits: &[Hit], have: &HashSet<String>, kind: Option<Kind>, q: &str, sort: &str) -> Vec<Value> {
     let revoked: HashSet<&str> = idx.revoked.iter().map(|s| s.as_str()).collect();
@@ -1420,7 +1431,20 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
             // P5: the creation's page and uploader, so only a later version of this one can update
             // the prefabs (after the player says yes); a uid alone never replaces anything
             let origin = crate::editor::prefab::Origin::community(&format!("{}:{}", format!("{:?}", note.model).to_lowercase(), note.gb), note.owner_id);
-            let v = super::editor::prefabs::install_download(&src, &author, Some(&game.dir), &origin)?;
+            // its creatures (creatures/creatures.ini) go in the game, where maps made with it play
+            let pack = super::creaturepack::find_pack(&src).map(|(_, t)| t);
+            if let Some(t) = &pack {
+                super::creaturepack::install_pack(&game.dir, &note.key(), t, Some(&src), &expected_namespace(it.as_ref(), &author))?;
+            }
+            let v = match super::editor::prefabs::install_download(&src, &author, Some(&game.dir), &origin) {
+                Ok(v) => v,
+                Err(e) => {
+                    if pack.is_some() {
+                        let _ = super::creaturepack::uninstall_pack(&game.dir, &note.key());
+                    }
+                    return Err(e);
+                }
+            };
             note.prefabs = v["ids"].as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)).collect();
             note.installed = now();
             super::communitylib::save(&super::communitylib::lib_dir(), &note)?;
@@ -1457,6 +1481,12 @@ fn fetch_unpacked(file: i64, fname: &str, md5: &str, limit: u64, bare_map: bool)
     }
     if matches!(r.status().as_u16(), 404 | 410) {
         return Err("The file isn't on GameBanana any more (the author may have removed it).".into());
+/// The namespace a creation's own creatures must be under: its entry's (the community list bound it
+/// to the uploader), else the uploader's name slug.
+pub fn expected_namespace(it: Option<&Item>, submitter: &str) -> String {
+    it.map(|i| i.namespace.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| super::creaturepack::namespace_for(submitter))
+}
+
     }
     if !r.status().is_success() {
         return Err("GameBanana didn't send the file. Try again in a minute.".into());
@@ -1535,6 +1565,8 @@ pub fn latest_health(reports: &Path, map: &str) -> Option<HealthMeta> {
     }
     best.map(|r| HealthMeta {
         verdict: r.verdict,
+    /// the custom creatures it brings: "runner_x (with its model)"
+    pub creatures: Vec<String>,
         when: r.when,
         mode: r.mode,
         minutes: r.minutes,
@@ -1699,6 +1731,14 @@ pub struct Shot {
 }
 
 #[derive(Deserialize, Default, Clone)]
+    // its custom creatures (an ls_creature or a wave spawner naming one): packed with it
+    let names: Vec<String> = crate::navs::entity_text(&m.bsp).map(|t| super::creaturepack::types_in_entity_text(&t).into_iter().collect()).unwrap_or_default();
+    let l = super::creaturepack::listing(&m.hl, &m.game, &names);
+    r.creatures = l["includes"].as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)).collect();
+    if let Some(p) = l["problem"].as_str() {
+        r.blockers.push(p.to_string());
+    }
+    r.warnings.extend(l["notes"].as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)));
 #[serde(default)]
 pub struct PublishReq {
     pub title: String,
@@ -1731,6 +1771,18 @@ pub struct Package {
     pub screenshots: Vec<String>,
     /// what goes in the index once it's on GameBanana
     pub item: Item,
+    /// the uploader's GameBanana member id, when known: the community list says which namespace
+    /// their shared creatures go under (0: their name's slug)
+    pub member: i64,
+}
+
+/// The namespace this publish names its creatures under (asked of the community list only when
+/// there are custom creatures to name).
+fn publish_namespace(req: &PublishReq, author: &str, any: bool) -> Result<String, String> {
+    if !any {
+        return Ok(super::creaturepack::namespace_for(author));
+    }
+    super::creaturepack::fetch_namespace(req.member, author)
     pub warnings: Vec<String>,
 }
 
@@ -1841,7 +1893,7 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
         (None, Some(p)) => super::editor::load_file(p).ok().and_then(|(d, _)| d.editor.remix_of),
         _ => None,
     };
-    let item = Item {
+    let mut item = Item {
         kind: Kind::Map,
         name: title,
         author,
@@ -1882,8 +1934,26 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
     }
     let mut names: Vec<String> = files.iter().map(|(n, _)| n.clone()).collect();
     names.extend(source.iter().flat_map(|s| s.files.iter().map(|(n, _)| n.clone())));
+    // the custom creatures its entities name travel with it, named for who made it (the map's
+    // entity lump is rewritten to match in the packaged copy only)
+    let ents = crate::navs::entity_text(&m.bsp).unwrap_or_default();
+    let names: Vec<String> = super::creaturepack::types_in_entity_text(&ents).into_iter().collect();
+    let custom = names.iter().any(|n| !super::creaturepack::is_builtin(n) && n != "all");
+    let ns = publish_namespace(req, &item.author, custom)?;
+    let pack = super::creaturepack::pack_types(&m.hl, &m.game, &names, &ns)?;
+    item.creatures = pack.item_creatures();
+    if !pack.is_empty() {
+        item.namespace = ns;
+    }
+    let mut extra: Vec<(String, Vec<u8>)> = pack.entries(MAX_PACKAGE / 4)?;
     if let Some(why) = package_refusal(&item, &names) {
         return Err(why);
+    if !pack.renames.is_empty() {
+        let bsp = std::fs::read(&m.bsp).map_err(|e| format!("Couldn't read the map ({e})."))?;
+        let new = super::creaturepack::bsp_with_entities(&bsp, &super::creaturepack::rewrite_entity_text(&ents, &pack.renames))?;
+        files.clear();
+        extra.insert(0, (format!("maps/{}.bsp", m.name), new));
+    }
     }
     let wanted = r.files.clone();
     let res = super::doctor::res_text(&m.name, &wanted, &[]);
@@ -1897,7 +1967,10 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
         let mut z = zip::ZipWriter::new(std::io::BufWriter::new(out));
         let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated).large_file(false);
         for (name, p) in &files {
+    // (a creature's file the map uses too goes once)
+    files.retain(|(n, _)| !extra.iter().any(|(e, _)| e.eq_ignore_ascii_case(n)));
             // nothing from outside the game folders (a link pointing elsewhere)
+    names.extend(extra.iter().map(|(n, _)| n.clone()));
             let real = std::fs::canonicalize(p).map_err(|e| format!("Couldn't read {name} ({e})."))?;
             if !real.starts_with(std::fs::canonicalize(&m.hl).unwrap_or_else(|_| m.hl.clone())) {
                 return Err(format!("{name} isn't inside the game folder."));
@@ -1928,6 +2001,16 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
             }
             z.start_file(name.as_str(), opts).map_err(|e| e.to_string())?;
             z.write_all(body).map_err(|e| e.to_string())?;
+        // the map with its creatures renamed, and the creatures (creatures/creatures.ini, models, sounds)
+        for (name, body) in &extra {
+            total += body.len() as u64;
+            if total > MAX_PACKAGE {
+                return Err("The package would be over 1 GB.".into());
+            }
+            z.start_file(name.as_str(), opts).map_err(|e| e.to_string())?;
+            z.write_all(body).map_err(|e| e.to_string())?;
+            contents.push(name.clone());
+        }
             contents.push(name.clone());
         }
         z.finish().map_err(|e| format!("Couldn't finish the package ({e})."))?.flush().map_err(|e| e.to_string())?;
@@ -2123,7 +2206,8 @@ fn read_studio_graph(graphs: &Path, id: &str) -> Result<super::studio::graph::Gr
 
 /// Builds the upload package for a Studio mode: `modes/<id>/<id>.graph.json` (only the graph:
 /// each player's app builds the code), README.txt and loner-strike.json; screenshots beside it.
-pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq, out_dir: &Path, needs: Option<&Value>) -> Result<Package, String> {
+/// `game`: (Half-Life folder, game folder) whose creatures.ini has the mode's custom creatures.
+pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq, out_dir: &Path, needs: Option<&Value>, game: Option<(&Path, &str)>) -> Result<Package, String> {
     let g = read_studio_graph(graphs, id)?;
     if super::studio::graph::has_errors(&super::studio::graph::validate(&g)) {
         return Err("The graph has problems. Fix them in Game Mode Studio first.".into());
@@ -2162,12 +2246,24 @@ pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq,
             }),
         }),
         remix_of: super::communitylib::credits(lib).get(id).cloned(),
+    // its custom creatures travel with it, named for who made it
+    let names: Vec<String> = super::creaturepack::types_in_graph(&g).into_iter().collect();
+    let custom = names.iter().any(|n| !super::creaturepack::is_builtin(n) && n != "all");
+    let ns = publish_namespace(req, &author, custom && game.is_some())?;
+    let pack = match game {
+        Some((hl, gm)) => super::creaturepack::pack_types(hl, gm, &names, &ns)?,
+        None => super::creaturepack::Pack::default(),
+    };
         bots: clean_bots(&req.bots),
         added: now(),
+        creatures: pack.item_creatures(),
+        namespace: if pack.is_empty() { String::new() } else { ns.clone() },
         updated: now(),
         ..Default::default()
     };
-    let graph_text = serde_json::to_string_pretty(&g).map_err(|e| e.to_string())?;
+    let mut gv = serde_json::to_value(&g).map_err(|e| e.to_string())?;
+    super::creaturepack::rewrite_graph_json(&mut gv, &pack.renames);
+    let graph_text = serde_json::to_string_pretty(&gv).map_err(|e| e.to_string())?;
     let mut readme = format!("{}\r\nby {}\r\n\r\n{}\r\n\r\nA Game Mode Studio mode made with Loner-Strike (lonerstrike.com).\r\nWith Loner-Strike: find it under Tools > Community and click Try it; the app builds it on your computer.\r\n", item.name, item.author, item.summary);
     if let Some(r) = &item.remix_of {
         readme.push_str(&format!("A remix of {} by {}.\r\n", r.name, r.author));
@@ -2210,6 +2306,7 @@ pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq,
     let bytes = buf.into_inner();
     crate::sys::write_atomic(&zip_path, &bytes).map_err(|e| format!("Couldn't save the package ({e})."))?;
     let shot_dir = out_dir.join(format!("{stem}-screenshots"));
+    entries.extend(pack.entries(MAX_PACKAGE_ZIP)?);
     let _ = std::fs::remove_dir_all(&shot_dir);
     let mut shot_names = Vec::new();
     if !shots.is_empty() {
@@ -2243,7 +2340,7 @@ pub fn prefab_readiness(game: Option<&crate::game::Game>, id: &str) -> Result<Va
     let (frag, meta) = super::editor::prefabs::load(&dir, id)?;
     let credits = game.map(|g| super::editor::prefabs::prefab_credits(&g.hl, if g.is_czero() { "czero" } else { "cstrike" }, &frag, &meta)).unwrap_or_default();
     Ok(json!({"id": id, "name": meta.name, "description": meta.description, "author": meta.author, "tags": meta.tags,
-              "brushes": meta.brushes, "entities": meta.entities, "credits": credits, "blockers": []}))
+              "brushes": meta.brushes, "entities": meta.entities, "credits": credits, "creatures": l["includes"], "blockers": blockers, "warnings": l["notes"]}))
 }
 
 /// Builds the upload package for a prefab (the editor's own package format, with its credits) in
@@ -2262,6 +2359,11 @@ pub fn build_prefab_package(game: Option<&crate::game::Game>, id: &str, req: &Pu
     let credits = game.map(|g| super::editor::prefabs::prefab_credits(&g.hl, if g.is_czero() { "czero" } else { "cstrike" }, &frag, &meta));
     std::fs::create_dir_all(out_dir).map_err(|e| format!("Couldn't make the packages folder ({e})."))?;
     let slug = id.trim_start_matches("mine:");
+    // its custom creatures: packed with it
+    let text = crate::editor::prefab::to_files(&frag, &meta).map(|(m, _)| m).unwrap_or_default();
+    let names: Vec<String> = super::creaturepack::types_in_entity_text(&text).into_iter().collect();
+    let l = game.map(|g| super::creaturepack::listing(&g.hl, &g.name, &names)).unwrap_or_else(|| json!({"includes": []}));
+    let blockers: Vec<Value> = l["problem"].as_str().map(|p| json!(p)).into_iter().collect();
     let stem = format!("{slug}-prefab-loner-strike");
     let zip_path = out_dir.join(format!("{stem}.zip"));
     super::editor::prefabs::package(&dir, id, &zip_path, credits.clone())?;
@@ -2285,6 +2387,15 @@ pub fn build_prefab_package(game: Option<&crate::game::Game>, id: &str, req: &Pu
         return Err(why);
     }
     let pkg = Package {
+    // its creatures (an ls_creature or a wave spawner in it) travel with it, named for who made it
+    let names: Vec<String> = super::creaturepack::types_in_zip_maps(&zip_path)?.into_iter().collect();
+    let custom = names.iter().any(|n| !super::creaturepack::is_builtin(n) && n != "all");
+    let ns = publish_namespace(req, &author, custom && game.is_some())?;
+    let pack = match game {
+        Some(g) => super::creaturepack::pack_types(&g.hl, &g.name, &names, &ns)?,
+        None => super::creaturepack::Pack::default(),
+    };
+    super::creaturepack::repack_zip(&zip_path, &pack, 128 << 20)?;
         file: format!("{stem}.zip"),
         size: bytes.len() as u64,
         md5: md5_hex(&bytes),
@@ -2296,6 +2407,8 @@ pub fn build_prefab_package(game: Option<&crate::game::Game>, id: &str, req: &Pu
     };
     let _ = std::fs::write(out_dir.join(format!("{stem}.json")), serde_json::to_vec_pretty(&pkg).unwrap_or_default());
     Ok(pkg)
+        creatures: pack.item_creatures(),
+        namespace: if pack.is_empty() { String::new() } else { ns.clone() },
 }
 
 // ---- registering ------------------------------------------------------------------------------
@@ -2706,9 +2819,23 @@ async fn api_mode_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(id): U
                 let list: Vec<&str> = missing.iter().filter_map(Value::as_str).collect();
                 return Err(Fail::new(StatusCode::OK, format!("Not on this computer and not linked to an item that has them: {}. Link them in My mode › Details › Requirements first.", list.join(", "))));
             }
-            let pkg = build_mode_package(&super::studio::graphs_dir(), &super::communitylib::lib_dir(), &id, &req, &packages_dir(), needs.as_ref()).map_err(|e| Fail::new(StatusCode::OK, e))?;
+            let game = st.local_game();
+            let at = game.as_ref().map(|g| (g.hl.clone(), g.name.clone()));
+            let pkg = build_mode_package(&super::studio::graphs_dir(), &super::communitylib::lib_dir(), &id, &req, &packages_dir(), needs.as_ref(), at.as_ref().map(|(h, n)| (h.as_path(), n.as_str()))).map_err(|e| Fail::new(StatusCode::OK, e))?;
             Ok(json!({"package": pkg, "form": gamebanana_form(&pkg)}))
         })
+            // its custom creatures: packed with it (a type that can't be shared stops it)
+            if let (Some(game), Ok(g)) = (st.local_game(), read_studio_graph(&super::studio::graphs_dir(), &id)) {
+                let names: Vec<String> = super::creaturepack::types_in_graph(&g).into_iter().collect();
+                let l = super::creaturepack::listing(&game.hl, &game.name, &names);
+                if let (Some(p), Some(b)) = (l["problem"].as_str(), v["blockers"].as_array_mut()) {
+                    b.push(json!(p));
+                }
+                v["creatures"] = l["includes"].clone();
+                let mut w: Vec<Value> = v["requirementWarnings"].as_array().cloned().unwrap_or_default();
+                w.extend(l["notes"].as_array().cloned().unwrap_or_default());
+                v["requirementWarnings"] = json!(w);
+            }
         .await,
     )
 }
@@ -3229,6 +3356,69 @@ mod tests {
             put(hl.join("cstrike/maps/aim_qa.bsp"), &bsp);
             for side in ["up", "dn", "lf", "rt", "ft", "bk"] {
                 put(hl.join(format!("cstrike/gfx/env/des{side}.tga")), b"tga");
+    /// Shared creatures: a map's and a mode's custom creatures go in the package (creatures/creatures.ini
+    /// with the custom model), named for the author, and the map and the graph name them so.
+    #[test]
+    fn maps_and_modes_carry_their_custom_creatures() {
+        let root = tmp("creatures-pkg");
+        let hl = root.join("Half-Life");
+        let mut bsp = fixture::build();
+        while bsp.len() % 4 != 0 {
+            bsp.push(0);
+        }
+        let at = bsp.len() as u32;
+        let mut text = b"{\n\"classname\" \"worldspawn\"\n}\n{\n\"classname\" \"ls_creature\"\n\"type\" \"runner_x\"\n}\n{\n\"classname\" \"ls_wave_spawner\"\n\"types\" \"zombie runner_x\"\n}\n".to_vec();
+        text.push(0);
+        bsp[4..8].copy_from_slice(&at.to_le_bytes());
+        bsp[8..12].copy_from_slice(&(text.len() as u32).to_le_bytes());
+        bsp.extend(text);
+        put(hl.join("cstrike/maps/cr_qa.bsp"), &bsp);
+        put(hl.join("valve/liblist.gam"), b"");
+        put(hl.join("cstrike/models/qa/runner_x.mdl"), b"IDST runner");
+        put(hl.join(format!("cstrike/{}", super::super::creatures::FILE_REL)), b"[runner_x]\nbase = runner\nhp = 77\nmodel = models/qa/runner_x.mdl\n");
+        let m = MapFile { name: "cr_qa".into(), bsp: hl.join("cstrike/maps/cr_qa.bsp"), game: "cstrike".into(), hl: hl.clone(), czero: false };
+        let r = readiness(&m, &root.join("reports"));
+        assert_eq!(r.creatures, vec!["runner_x (with its model)"], "{:?}", r.blockers);
+        let mut r = r;
+        r.blockers.clear();
+        let req = PublishReq { title: "Creature QA".into(), author: "Jam".into(), ..Default::default() };
+        let pkg = build_package(&m, &r, &req, &root.join("p")).unwrap();
+        assert_eq!(pkg.item.creatures, vec![super::super::creaturepack::ItemCreature { name: "jam.runner_x".into(), model: true, sounds: 0 }]);
+        let bytes = std::fs::read(root.join("p").join(&pkg.file)).unwrap();
+        let mut z = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut ini = String::new();
+        z.by_name("creatures/creatures.ini").unwrap().read_to_string(&mut ini).unwrap();
+        assert!(ini.contains("[jam.runner_x]\nbase = runner\n") && ini.contains("hp = 77") && ini.contains("model = models/qa/runner_x.mdl"), "{ini}");
+        assert!(super::super::creaturepack::parse_pack(&ini).is_ok());
+        assert!(z.by_name("models/qa/runner_x.mdl").is_ok());
+        let mut b = Vec::new();
+        z.by_name("maps/cr_qa.bsp").unwrap().read_to_end(&mut b).unwrap();
+        let ents = super::super::creaturepack::bsp_entities(&b).unwrap();
+        assert!(ents.contains("\"type\" \"jam.runner_x\"") && ents.contains("\"types\" \"zombie jam.runner_x\""), "{ents}");
+        // the map on disk is as it was
+        assert!(crate::navs::entity_text(&m.bsp).unwrap().contains("\"type\" \"runner_x\""));
+
+        // a mode: its graph's creature.spawn
+        let graphs = root.join("graphs");
+        std::fs::create_dir_all(&graphs).unwrap();
+        let Ok(good) = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tools/studio/testdata/every_node.graph.json")) else { return };
+        let mut g: Value = serde_json::from_str(&good).unwrap();
+        g["mode"]["id"] = json!("crq");
+        for n in g["nodes"].as_array_mut().unwrap().iter_mut().filter(|n| n["type"] == "creature.spawn") {
+            n["params"]["kind"] = json!("runner_x");
+        }
+        std::fs::write(graphs.join("crq.graph.json"), g.to_string()).unwrap();
+        let pkg = build_mode_package(&graphs, &root.join("lib"), "crq", &req, &root.join("p"), None, Some((hl.as_path(), "cstrike"))).unwrap();
+        assert_eq!(pkg.item.creatures.len(), 1);
+        assert!(pkg.contents.iter().any(|c| c == "creatures/creatures.ini") && pkg.contents.iter().any(|c| c == "models/qa/runner_x.mdl"));
+        let bytes = std::fs::read(root.join("p").join(&pkg.file)).unwrap();
+        let mut z = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut gj = String::new();
+        z.by_name("modes/crq/crq.graph.json").unwrap().read_to_string(&mut gj).unwrap();
+        assert!(gj.contains("\"jam.runner_x\"") && !gj.contains("\"runner_x\""));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
                 if both {
                     put(hl.join(format!("czero/gfx/env/des{side}.tga")), b"tga");
                 }
@@ -3394,7 +3584,7 @@ mod tests {
         assert!(mode_readiness(&graphs, &lib, "../x").is_err());
         let out = root.join("p");
         let req = PublishReq { title: "Lava, mine".into(), author: "me".into(), maps: vec!["de_dust2".into(), "bad;map".into()], bots: "OK".into(), ..Default::default() };
-        let pkg = build_mode_package(&graphs, &lib, "lava_remix", &req, &out, None).unwrap();
+        let pkg = build_mode_package(&graphs, &lib, "lava_remix", &req, &out, None, None).unwrap();
         assert_eq!(pkg.contents[0], "modes/lava_remix/lava_remix.graph.json");
         assert_eq!(pkg.item.kind, Kind::Mode);
         assert_eq!(pkg.item.remix_of.as_ref().unwrap().gb, 102);
@@ -3431,7 +3621,7 @@ mod tests {
         assert!(report["needs"]["creatureVer"].as_u64().unwrap() >= 1 && report["needs"]["modeVer"].as_u64().unwrap() >= 1, "{}", report["needs"]);
         let req = PublishReq { title: "Needy".into(), author: "me".into(), ..Default::default() };
         let out = root.join("p");
-        let pkg = build_mode_package(&graphs, &root.join("lib"), "needy", &req, &out, Some(&report)).unwrap();
+        let pkg = build_mode_package(&graphs, &root.join("lib"), "needy", &req, &out, Some(&report), None).unwrap();
         let needs = &pkg.item.mode.as_ref().unwrap().requirements.as_ref().unwrap().needs;
         assert!(needs.components_plugin && !needs.creatures.is_empty() && !needs.features.is_empty());
         // the README and the GameBanana text say so, and loner-strike.json keeps it
