@@ -271,6 +271,72 @@ FM_Spawn in its plugin's plugin_precache, the same rules: `kind`, `mode` incl. c
 **Checks** (the editor's map check, the Studio's Playtest): each marker's count within `required`, each
 component's count, path markers with 2+ points and no repeated `order`, keys of the right type.
 
+## Audit (2026-11-13): can a Studio user rebuild Last Stand and Battle Royale?
+Short answer today: **the skeleton yes, the game no.** A Studio mode can run waves of creatures from map
+spawners, a shrinking zone, supply drops, squads, revives, buying rules, a HUD and menus, but most of
+what makes our two modes feel finished lives in their own Pawn code, not in pieces the Studio has. So
+the site's "built from the same pieces Game Mode Studio gives you" isn't true yet. Below: each feature,
+where it lives (a = the mode's own code, b = a gm_components native/forward, c = a bot-brain `ls_mode`
+hint, d = not built), whether a Studio user can do it **today**, and the piece that closes the gap.
+"Partly" means it can be imitated with general nodes but not to the same standard.
+
+### Last Stand
+| Feature | Lives in | Studio today | Gap → piece (owner) |
+|---|---|---|---|
+| Waves from spawners, wave start/stop, wave events | b (`ls_wave_*`, `ls_on_wave_*`) | **Yes** (Start/Stop Wave, Wave Started/Spawned/Cleared) | — |
+| Round table (types, counts, health ramp per round, waves.ini) | a (`wave_row`, `round_hp`, `load_waves`) | Partly: Creature Spawn takes a type and a place only; counts and ramps by hand with loops | Creature Spawn with **health, pay, tier** inputs; a **Round Table** component or `ls_wave_*` taking a table (W1 native, X node) |
+| Special rounds (hound pack, snark swarm) and boss rounds (garg 10, gonarch 15) | a | Partly (by hand: branch on the round number, spawn a type) | covered by the table above + a "boss" flag on spawn (health bar) |
+| Creature roster / types / fallbacks | a + Y's DLL | Partly: any type by name; no fallback when the server lacks it | `ls_creature_has(type)` native → "Creature Type Exists" node (Y/W1, X) |
+| Tiers and enrage | a (`tier` key) + Y's DLL | **No** | `tier` input on Creature Spawn (X; key already in the DLL) |
+| Alive cap | a (`alive_cap`) | Partly (Creatures Alive + a branch; no cap on spawners) | cap setting on the wave spawner / `ls_wave_*` (W1), node input (X) |
+| Barricades: break, repair (hold USE) | b (`ls_barricade_*`, forwards) | Partly: Barricade Broken event only | **Barricade HP / Set HP / Repair** nodes, **Barricade Repaired / Damaged** events (X, natives exist) |
+| Armory / trader break (lst_shop, Barney keeper) | a (`shop_menu`, `keeper_*`) | Partly: Show Menu (4 options) + Give Weapon + money nodes; no keeper NPC, no priced shop | **Shop** component (items, prices, a keeper at a marker; bots shop) (W1), Studio "Shop" nodes (X) |
+| Points economy (pay per hit/kill/head, wave money) | a (`pay`, `ham_creature_*`) | Partly: Creature Killed + Add Money; no hit/headshot info on creatures | **Creature Hurt** event with attacker, damage, headshot (Y/W1 forward, X event) |
+| Power-ups (resupply, double pay, one-hit kills, airstrike) | a (`spawn_powerup` …) | **No** (no pickup entity) | **Pickup** component (model, glow, touched-by event) (W1), Spawn Pickup / Pickup Taken nodes (X) |
+| Perks (tough, quick hands, double tap, quick revive, light feet) at `lst_perk` markers | a (`buy_perk`, ham hooks) | Partly: Set Health/Speed; no reload/fire-rate/revive-speed changes | **Player modifiers** natives (reload, deploy, fire rate, revive time) (W1 or X in the Studio plugin), a **Perk Machine** component (W1) |
+| Downed / revive | a | **Yes** (Down Player, Revived, Down Timeout) | revive-speed modifier for perks (above) |
+| Upgrade bench | a (`bench_upgrade`) | Partly (Damage Scale per attacker by hand) | **Weapon level** native/state + Bench component (W1), nodes (X) |
+| Electric trap (bought, zaps creatures at a gate) | a (`trap_on`, `tick_traps`) | Partly: Fire Trap for an `ls_trigger_trap` | **Hurt in radius / Hurt creatures in area** node (X, in the Studio plugin) + a priced trap (Shop/offer) |
+| Turret | d | No | planned by nobody yet: W2 asked for `offer … turret`; Y has a "miniturret" creature |
+| Mystery box (random weapon, moves) | a (`box_use`, `box_move`) | Partly (Player Used + Random + Give Weapon; only func_button uses) | **Player Used Marker** event (X, marker + USE) + a Box component (W1) |
+| Bots: shop, repair, revive, perks, trap, box | c (`goal`, `offer`) | **No** | bot hint nodes (below) |
+
+### Battle Royale
+| Feature | Lives in | Studio today | Gap → piece (owner) |
+|---|---|---|---|
+| Drop-in (from the sky, spread landing, br_drop markers, no fall damage) | a + markers | Partly: Teleport/Set Velocity/No Fall + Find Marker; no spread or open-air search | **Drop In** node (spread landing at markers or open air) (W1 native, X node) |
+| Loot-up phase (no damage, then fight) | a + c (`phase loot/fight`) | Partly: Damage Block + timers; bots not told | **Bots: phase** node (X) |
+| Loot tiers on crates | b (`tier` key, `ls_loot_roll`) | Partly: Create Component with keys `tier=…`; no roll node | **Roll Loot** node (`ls_loot_roll`) (X) |
+| Zone, stages, damage | b (`ls_zone_*`) | **Yes** (Set/Shrink Zone, In Zone, Zone Stage/Tick) | Zone Next / Stage / Skip nodes (X, natives exist) |
+| Supply drops | b (`ls_drop_call`) | **Yes** (Call Supply Drop) | Drop Landed event (`ls_on_drop`) (X) |
+| Squads (squad mates friends, no friendly fire) | a + c (`role`, `friend`) | Partly: Squad nodes; bots not told who's a friend | **Bots: friends / role** nodes (X) |
+| Basic BR HUD (kills, squad health) | a | Partly (Show HUD Text, by hand) | — (a "Squad HUD" node later) |
+| Coming: healing items, armor levels, death crates, rarity glow, scarce ammo, a fuller BR HUD, knocked-down state, squad lobby | d | No | nothing written by W1 yet; each one should come as a component or native with a Studio node, as below |
+
+### Bots: telling the brain how to play
+| Hint (`ls_mode …`) | Used by | Studio today | Piece |
+|---|---|---|---|
+| `set <mode>` | both | No | sent by the Studio plugin itself (the mode's id) |
+| `phase off/loot/fight` (`noenemies`) | BR | No | **Bots: Phase** node |
+| `nobuy 1/0` | BR | No | **Bots: Don't Buy** node |
+| `friend <a> <b> 1/0` (`@sqN`) | BR | Partly (Set Squad tells the bots the squads) | **Bots: Friends** node |
+| `role <p> <tag>` | BR | No | **Bots: Tag** node (for `@tag` targets) |
+| `layer <who> below/surface/high/-` | BR | No | **Bots: Prefer Layer** node |
+| `enemyclass ls_creature 1` | LS | No | **Bots: Enemies Include Creatures** (or automatic when the mode spawns creatures) |
+| `goal <who> <kind> <xyz> <ent> <prio> <secs> <radius>`, `goal_clear` | both | Partly (Bot Go To / Hold / Follow / Release) | **Bots: Goal** (defend, capture, use, loot, go_hold) node |
+| `offer <who> <kind> <xyz> <ent> <cost>`, `offer_clear` | LS | No | **Bots: Offer** node ("this can be bought/used here for N") |
+All of these go through one native that exists today, `ls_comp_bots_hint(line)`, so the bot nodes
+can be built now; they're next.
+
+### Plan (order)
+1. Now (natives exist): bot nodes; Barricade HP/Repair + Repaired/Damaged events; Roll Loot; Zone
+   Next/Stage/Skip; Drop Landed; Creature Spawn with health/tier/pay inputs (keys the DLL reads).
+2. With W1 (interfaces in W1.md): Round Table / wave caps, Shop + keeper, Pickup, Perk Machine and
+   player modifiers, Bench/weapon levels, Box, Drop In, Creature Hurt (with Y), and each coming BR
+   system as a component with natives and forwards. I add the nodes as each lands.
+3. Then the Last Stand Lite and Royale Lite templates move onto those pieces, and the site line is
+   true when a template plays like the real mode (checked side by side on a sim).
+
 ## 2026-11-13: tests never install into the real game
 QA found pw_v3 and pw_v3_2 to _4 ("V3 check") installed in the real game (the coordinator removed them;
 backup in the scratchpad's pw_v3_backup). Now:
