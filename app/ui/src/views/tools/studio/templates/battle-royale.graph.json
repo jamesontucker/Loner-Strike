@@ -352,7 +352,7 @@
    "type": "bots.phase",
    "pos": {
     "x": 1065,
-    "y": 707
+    "y": 696
    },
    "params": {
     "phase": "loot"
@@ -459,7 +459,7 @@
    "type": "bots.phase",
    "pos": {
     "x": 2065,
-    "y": 1587
+    "y": 1576
    },
    "params": {
     "phase": "fight"

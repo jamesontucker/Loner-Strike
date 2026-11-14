@@ -259,23 +259,21 @@ test("our right-click menus: sidebar items, nodes; delete; dismiss", async ({ pa
   await sq.click({ button: "right" });
   await page.locator(".react-flow__pane").click({ position: { x: 20, y: 20 } });
   await expect(menu).toHaveCount(0);
-  // Duplicate, then select the copy and press Delete (asks first)
+  // Duplicate, then select the copy and press Delete (nothing uses it: it goes at once, Undo brings it back)
   await sq.click({ button: "right" });
   await menu.getByRole("menuitem", { name: "Duplicate" }).click();
   const copy = page.locator(".st-mb").getByRole("button", { name: /^Squads left 2/ });
   await expect(copy).toHaveCount(1);
   await copy.click();
   await page.keyboard.press("Delete");
-  const askDel = page.getByRole("alertdialog");
-  await expect(askDel).toContainText("Delete the variable “Squads left 2”?");
-  await askDel.getByRole("button", { name: "Delete" }).click();
   await expect(copy).toHaveCount(0);
   await expect(sq).toHaveCount(1);
 
-  // a Function in use: Delete says where it's used; Cancel keeps it; Find uses selects the call
+  // a Function in use: Delete says where it's used and what to do with the call; Cancel keeps it; Find uses selects the call
   const fn = page.locator(".st-mb").getByRole("button", { name: "Reward", exact: true });
   await fn.click({ button: "right" });
   await menu.getByRole("menuitem", { name: /Delete/ }).click();
+  const askDel = page.getByTestId("studio-delete-dialog");
   await expect(askDel).toContainText("used by 1 node on the Event Graph");
   await askDel.getByRole("button", { name: "Cancel" }).click();
   await expect(fn).toHaveCount(1);

@@ -36,6 +36,12 @@ export function HelpMenu({ onNodeHelp, onTour }: { onNodeHelp: () => void; onTou
           <button type="button" role="menuitem" onClick={pick(() => document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true })))}>
             Keyboard shortcuts <kbd>?</kbd>
           </button>
+          <a role="menuitem" className="st-help-menu-link" href="https://lonerstrike.com/docs#game-mode-studio" target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>
+            Studio guide (online)
+          </a>
+          <a role="menuitem" className="st-help-menu-link" href="https://lonerstrike.com/docs#studio-why-not" target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>
+            Why won't it compile?
+          </a>
           {onTour && (
             <button type="button" role="menuitem" onClick={pick(onTour)}>
               Take the Studio tour

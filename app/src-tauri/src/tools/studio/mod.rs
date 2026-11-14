@@ -24,6 +24,7 @@ pub mod expand;
 pub mod graph;
 pub mod kit;
 pub mod testrun;
+pub mod tables;
 pub mod settings;
 #[cfg(test)]
 mod help_tests;
@@ -952,6 +953,18 @@ struct CommandReq {
     vars: bool,
     #[serde(default)]
     breakpoints: Option<Vec<String>>,
+    /// a live tweak: {var, who, value} (debug builds only; the graph says the variable's type)
+    #[serde(default)]
+    set: Option<SetReq>,
+}
+
+#[derive(Deserialize)]
+struct SetReq {
+    var: String,
+    #[serde(default)]
+    who: u32,
+    value: Value,
+    graph: Value,
 }
 
 async fn api_command(State(st): State<Shared>, h: HeaderMap, Json(req): Json<CommandReq>) -> Response {
@@ -974,6 +987,19 @@ async fn api_command(State(st): State<Shared>, h: HeaderMap, Json(req): Json<Com
         }
         if req.resume {
             cmds.push(debug::Command::Resume);
+        }
+        if let Some(set) = req.set {
+            let g = graph_of(set.graph)?;
+            let v = g.variables.iter().chain(g.functions.iter().flat_map(|f| f.locals.iter())).find(|x| x.id == set.var).ok_or("That variable isn't in the mode.")?;
+            if set.who > 32 || (v.scope == "team" && !(1..=2).contains(&set.who)) || (v.scope == "player" && set.who == 0) {
+                return Err("That player or team isn't right for this variable.".into());
+            }
+            let raw = match &set.value {
+                Value::String(s) => s.clone(),
+                Value::Bool(b) => (if *b { "1" } else { "0" }).into(),
+                other => other.to_string(),
+            };
+            cmds.push(debug::Command::Set { var: v.id.clone(), who: if v.scope == "mode" { 0 } else { set.who }, value: debug::set_value(&v.ty, &raw)? });
         }
         debug::send(&debug::cmd_file(&game.dir, &req.mode), &cmds).map_err(|e| format!("Couldn't reach the plugin ({e})."))?;
         Ok(json!({"ok": true}))

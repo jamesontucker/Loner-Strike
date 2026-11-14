@@ -80,6 +80,10 @@ NOTES = {
     "player.give_weapon": {"more": "Gives the weapon with reserve ammo. A player who already has one in that slot gets it as well; Strip first for a clean loadout."},
     "game.set_cvar": {"more": "A setting changed for the rest of the map. For settings the mode always wants, add them under This mode's Game settings instead (set every map).", "risk": "A few settings are set again by the game's own game.cfg after the mode's, so they don't stick: the bomb for the Terrorists (mp_give_player_c4) is one. Take the bomb with Remove Weapon (c4) at Round Started instead."},
     "player.take_weapon": {"more": "Takes one weapon away; the C4 choice takes the bomb (a mode without bomb sites should, at Round Started: the bomb can't be turned off with a setting)."},
+    "table.get_row": {"more": "Data tables (My mode > Data tables) are grids of values you type or paste from a spreadsheet: a gun list, prices, waves. Get Row finds the row whose key column has this value and gives every cell of it as a pin.", "pins": {"key": "The value to look for in the key column.", "found": "Yes when a row has that key.", "row": "The row's number (from 0), or -1 when none has the key."}, "related": ["table.get_cell", "table.for_each", "table.find"]},
+    "table.get_cell": {"more": "Reads one cell. Rows count from 0, so the first row is 0; a row past the end gives 0, No or empty text.", "related": ["table.get_row", "table.count"]},
+    "table.for_each": {"more": "Runs Each for every row in order, with that row's cells as pins (and Row, its number). Then runs once after the last.", "cost": "A table has at most 256 rows, and reading one costs almost nothing: the plugin holds tables as fixed lists."},
+    "table.find": {"more": "Every row (as row numbers, in order) where the column you pick has this value. Read their cells with Get Cell, or loop over them with For Each.", "related": ["table.get_cell", "flow.for_each_array"]},
     "player.to_spectators": {"more": "Moves the player to the spectators. They choose a team again to come back."},
     "var.set": {"more": "Sets a variable. A per-player variable needs a Player wired in, a per-team one a Team."},
     "msg.hud": {"more": "Shows a line of text on the player's screen (everyone's when no player is wired in) for a few seconds. Each of the four slots holds one line, so a new message in the same slot replaces the old one."},
@@ -103,7 +107,7 @@ def make_example(d, defs):
     """A small piece of graph that uses the node: an event to start it, its needs wired in, and
     a Print String for what it gives. None where the node needs the mode's own pieces (its
     variables, Functions, structs, enums, markers)."""
-    special = {"var", "varvalue", "func", "timer", "fn", "macro", "struct", "enum", "field", "enumvalue", "marker", "cevent", "tline"}
+    special = {"var", "varvalue", "func", "timer", "fn", "macro", "struct", "enum", "field", "enumvalue", "marker", "cevent", "tline", "table", "column"}
     if any(p["kind"] in special for p in d["params"]) or d.get("reroute"):
         return None
     if d["type"].startswith(("fn.", "macro.", "struct.", "enum.", "func.")):

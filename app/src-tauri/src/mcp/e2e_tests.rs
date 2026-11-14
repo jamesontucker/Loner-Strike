@@ -263,6 +263,20 @@ async fn an_agent_builds_checks_compiles_a_map_and_makes_a_mode() {
     let errors: Vec<&Value> = r["problems"].as_array().unwrap().iter().filter(|p| p["level"] == "error").collect();
     assert!(errors.is_empty(), "{errors:?}");
     assert_eq!(ag.call("studio_draft", json!({"id": "agent_e2e"})).await["timelines"][0]["name"], "Pulse");
+    // a data table and a Get Row on it: its columns are pins
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [
+        {"op": "add_table", "name": "Prices", "key": "item", "columns": [{"id": "item", "name": "Item", "type": "text"}, {"id": "cost", "name": "Cost", "type": "number"}], "rows": [["armor", 650], ["helmet", 350]]},
+    ]})).await;
+    let dt = r["results"][0]["result"].as_str().unwrap().to_string();
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [{"op": "add_node", "type": "table.get_row", "params": {"table": dt}, "x": 0, "y": 900}]})).await;
+    let row = r["results"][0]["result"].as_str().unwrap().to_string();
+    let view = ag.call("studio_draft", json!({"id": "agent_e2e"})).await;
+    assert_eq!(view["dataTables"][0]["rows"][1][0], "helmet");
+    let row_node = view["nodes"].as_array().unwrap().iter().find(|n| n["id"] == row.as_str()).unwrap();
+    assert!(row_node["outputs"].as_array().unwrap().iter().any(|p| p["id"] == "cost" && p["type"] == "number"), "{row_node}");
+    let r = ag.call("studio_edit", json!({"id": "agent_e2e", "ops": [{"op": "remove", "ids": [row]}, {"op": "remove_table", "table": dt}]})).await;
+    assert!(r["results"].is_array(), "{r}");
+    assert!(ag.call("studio_draft", json!({"id": "agent_e2e"})).await["dataTables"].as_array().map_or(true, |a| a.is_empty()));
     let help = ag.call("studio_node_help", json!({"type": "event.custom"})).await;
     assert!(help["help"]["what"].is_string(), "{help}");
 

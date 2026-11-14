@@ -25,7 +25,10 @@ TIMELINES = [{"id": "tl1", "name": "Platform", "length": 4, "loop": True, "autop
     {"id": "pos", "name": "Position", "kind": "vector", "keys": [{"t": 0, "v": [0, 0, 0]}, {"t": 4, "v": [256, 0, 64]}]},
     {"id": "glow", "name": "Glow", "kind": "color", "keys": [{"t": 0, "v": [255, 0, 0]}, {"t": 2, "v": [0, 0, 255], "ease": "ease"}, {"t": 4, "v": [255, 0, 0]}]},
     {"id": "beat", "name": "Beat", "kind": "event", "keys": [{"t": 1}, {"t": 3}]}]}]
-PARAMS = {"timeline.play": {"timeline": "tl1"}, "event.custom": {"event": "ce1"}, "event.call": {"event": "ce1"}, "timer.by_event": {"event": "ce2", "secs": 5, "loop": True}}
+# a data table for the Data table nodes (X2): a number key, a weapon, a number, a yes/no
+TABLES = [{"id": "dt1", "name": "Guns", "key": "lvl", "columns": [{"id": "lvl", "name": "Level", "type": "number"}, {"id": "gun", "name": "Gun", "type": "weapon"}, {"id": "ammo", "name": "Ammo", "type": "number"}, {"id": "pistol", "name": "Pistol", "type": "bool"}],
+           "rows": [[0, "glock18", 120, True], [1, "ak47", 90, False]]}]
+PARAMS = {"table.get_row": {"table": "dt1"}, "table.get_cell": {"table": "dt1", "column": "gun"}, "table.for_each": {"table": "dt1"}, "table.find": {"table": "dt1", "column": "lvl"}, "table.count": {"table": "dt1"}, "table.keys": {"table": "dt1"}, "timeline.play": {"timeline": "tl1"}, "event.custom": {"event": "ce1"}, "event.call": {"event": "ce1"}, "timer.by_event": {"event": "ce2", "secs": 5, "loop": True}}
 N("ps", "event.player_spawned", {}, 0, 0)
 N("tick", "event.custom", {"event": "ce2"}, 0, 4)
 # where hits struck (Player Hurt's and Creature Hurt's Hit Position and Direction: kept only when used)
@@ -65,8 +68,15 @@ for i, d in enumerate(todo):
         if outs:
             last = (nid, "then" if "then" in outs else outs[0])
 
+# the table nodes' key and value come from a number
+N("num", "math.number", {"value": 1}, 0, 3)
+for n in nodes:
+    if n["type"] == "table.get_row":
+        W("num", "out", n["id"], "key")
+    if n["type"] == "table.find":
+        W("num", "out", n["id"], "value")
 g = {"schema": "loner-strike/graph", "version": 3, "mode": {"id": "every_node_3", "name": "Every Node 3", "description": "Game, world, players, effects, interop"},
-     "variables": [], "nodes": nodes, "edges": edges, "comments": [], "customEvents": CUSTOM, "timelines": TIMELINES}
+     "variables": [], "nodes": nodes, "edges": edges, "comments": [], "customEvents": CUSTOM, "timelines": TIMELINES, "dataTables": TABLES}
 # mode settings (hosts change them): a number, a yes/no, a choice; one resets each round
 g["variables"] = [
     {"id": "hold", "name": "Hold time", "type": "number", "scope": "mode", "default": 30, "setting": {"label": "Seconds to win", "help": "How long a team holds the hill", "min": 5, "max": 120, "group": "Rules"}},

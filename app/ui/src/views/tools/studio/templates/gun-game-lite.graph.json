@@ -75,7 +75,7 @@
    "type": "event.player_spawned",
    "pos": {
     "x": 65,
-    "y": 219
+    "y": 192
    },
    "params": {}
   },
@@ -117,7 +117,7 @@
    "type": "player.godmode",
    "pos": {
     "x": 2065,
-    "y": 217
+    "y": 202
    },
    "params": {
     "on": false
@@ -157,7 +157,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 3679
+    "y": 1268
    },
    "params": {}
   },
@@ -166,7 +166,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 1065,
-    "y": 3593
+    "y": 1182
    },
    "params": {}
   },
@@ -175,7 +175,7 @@
    "type": "logic.and_or",
    "pos": {
     "x": 565,
-    "y": 3550
+    "y": 1084
    },
    "params": {
     "op": "or"
@@ -186,7 +186,7 @@
    "type": "var.add",
    "pos": {
     "x": 1565,
-    "y": 3224
+    "y": 743
    },
    "params": {
     "var": "level",
@@ -198,11 +198,21 @@
    "type": "math.clamp",
    "pos": {
     "x": 1565,
-    "y": 3420
+    "y": 960
    },
    "params": {
-    "min": 0,
-    "max": 14
+    "min": 0
+   }
+  },
+  {
+   "id": "rows0",
+   "type": "table.count",
+   "pos": {
+    "x": 1065,
+    "y": 1052
+   },
+   "params": {
+    "table": "guns"
    }
   },
   {
@@ -210,7 +220,7 @@
    "type": "var.get",
    "pos": {
     "x": 1065,
-    "y": 3431
+    "y": 900
    },
    "params": {
     "var": "level"
@@ -221,7 +231,7 @@
    "type": "var.set",
    "pos": {
     "x": 2065,
-    "y": 3426
+    "y": 900
    },
    "params": {
     "var": "level"
@@ -232,7 +242,7 @@
    "type": "var.add",
    "pos": {
     "x": 1565,
-    "y": 3886
+    "y": 1476
    },
    "params": {
     "var": "level",
@@ -244,7 +254,7 @@
    "type": "var.get",
    "pos": {
     "x": 1065,
-    "y": 4121
+    "y": 1628
    },
    "params": {
     "var": "level"
@@ -255,11 +265,21 @@
    "type": "math.compare",
    "pos": {
     "x": 1565,
-    "y": 4082
+    "y": 1698
    },
    "params": {
-    "op": "gt",
-    "b": 14
+    "op": "gt"
+   }
+  },
+  {
+   "id": "rows",
+   "type": "table.count",
+   "pos": {
+    "x": 1065,
+    "y": 1780
+   },
+   "params": {
+    "table": "guns"
    }
   },
   {
@@ -267,7 +287,7 @@
    "type": "flow.branch",
    "pos": {
     "x": 2065,
-    "y": 3947
+    "y": 1525
    },
    "params": {}
   },
@@ -276,7 +296,7 @@
    "type": "fn.call",
    "pos": {
     "x": 2565,
-    "y": 3736
+    "y": 1326
    },
    "params": {
     "func": "arm"
@@ -287,7 +307,7 @@
    "type": "msg.hud",
    "pos": {
     "x": 3065,
-    "y": 3790
+    "y": 1369
    },
    "params": {
     "text": "Level",
@@ -300,7 +320,7 @@
    "type": "flow.reroute",
    "pos": {
     "x": 2672,
-    "y": 4524
+    "y": 2261
    },
    "params": {}
   },
@@ -309,7 +329,7 @@
    "type": "msg.chat",
    "pos": {
     "x": 3065,
-    "y": 4465
+    "y": 2202
    },
    "params": {
     "text": "Gun Game won by"
@@ -320,7 +340,7 @@
    "type": "msg.broadcast",
    "pos": {
     "x": 3565,
-    "y": 4476
+    "y": 2213
    },
    "params": {
     "text": "We have a winner! New game in 5 seconds.",
@@ -332,7 +352,7 @@
    "type": "flow.for_each_player",
    "pos": {
     "x": 4065,
-    "y": 4465
+    "y": 2202
    },
    "params": {
     "which": "all"
@@ -343,7 +363,7 @@
    "type": "var.set",
    "pos": {
     "x": 4565,
-    "y": 4367
+    "y": 2104
    },
    "params": {
     "var": "level",
@@ -355,7 +375,7 @@
    "type": "timer.delay",
    "pos": {
     "x": 4565,
-    "y": 4563
+    "y": 2300
    },
    "params": {
     "secs": 5
@@ -366,7 +386,7 @@
    "type": "game.restart_round",
    "pos": {
     "x": 5065,
-    "y": 4587
+    "y": 2324
    },
    "params": {}
   },
@@ -375,7 +395,7 @@
    "type": "fn.entry",
    "pos": {
     "x": 65,
-    "y": 1950
+    "y": 2218
    },
    "params": {},
    "graph": "arm"
@@ -384,8 +404,8 @@
    "id": "strip",
    "type": "player.strip",
    "pos": {
-    "x": 565,
-    "y": 1926
+    "x": 1065,
+    "y": 2147
    },
    "params": {
     "knife": true
@@ -397,7 +417,7 @@
    "type": "var.get",
    "pos": {
     "x": 565,
-    "y": 1774
+    "y": 2299
    },
    "params": {
     "var": "level"
@@ -405,196 +425,37 @@
    "graph": "arm"
   },
   {
-   "id": "sw",
-   "type": "flow.switch_num",
+   "id": "row",
+   "type": "table.get_row",
    "pos": {
     "x": 1065,
-    "y": 1850
+    "y": 2299
    },
    "params": {
-    "cases": "0,1,2,3,4,5,6,7,8,9,10,11,12,13"
+    "table": "guns"
    },
    "graph": "arm"
   },
   {
-   "id": "g0",
-   "type": "player.give_weapon",
+   "id": "has",
+   "type": "flow.branch",
    "pos": {
     "x": 1565,
-    "y": 743
+    "y": 2157
    },
-   "params": {
-    "weapon": "glock18",
-    "ammo": 200
-   },
+   "params": {},
    "graph": "arm"
   },
   {
-   "id": "g1",
+   "id": "gun",
    "type": "player.give_weapon",
    "pos": {
-    "x": 1565,
-    "y": 895
-   },
-   "params": {
-    "weapon": "usp",
-    "ammo": 200
-   },
-   "graph": "arm"
-  },
-  {
-   "id": "g2",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 1565,
-    "y": 1047
-   },
-   "params": {
-    "weapon": "deagle",
-    "ammo": 200
-   },
-   "graph": "arm"
-  },
-  {
-   "id": "g3",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 1565,
-    "y": 1199
-   },
-   "params": {
-    "weapon": "mac10",
-    "ammo": 200
-   },
-   "graph": "arm"
-  },
-  {
-   "id": "g4",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 1565,
-    "y": 1351
-   },
-   "params": {
-    "weapon": "mp5navy",
-    "ammo": 200
-   },
-   "graph": "arm"
-  },
-  {
-   "id": "g5",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 1565,
-    "y": 1503
-   },
-   "params": {
-    "weapon": "ump45",
-    "ammo": 200
-   },
-   "graph": "arm"
-  },
-  {
-   "id": "g6",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 1565,
-    "y": 1655
-   },
-   "params": {
-    "weapon": "p90",
-    "ammo": 200
-   },
-   "graph": "arm"
-  },
-  {
-   "id": "g7",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 1565,
-    "y": 1893
-   },
-   "params": {
-    "weapon": "m3",
-    "ammo": 200
-   },
-   "graph": "arm"
-  },
-  {
-   "id": "g8",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 1565,
-    "y": 2098
-   },
-   "params": {
-    "weapon": "xm1014",
-    "ammo": 200
-   },
-   "graph": "arm"
-  },
-  {
-   "id": "g9",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 1565,
-    "y": 2250
-   },
-   "params": {
-    "weapon": "galil",
-    "ammo": 200
-   },
-   "graph": "arm"
-  },
-  {
-   "id": "g10",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 1565,
-    "y": 2402
-   },
-   "params": {
-    "weapon": "famas",
-    "ammo": 200
-   },
-   "graph": "arm"
-  },
-  {
-   "id": "g11",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 1565,
-    "y": 2554
+    "x": 2065,
+    "y": 2061
    },
    "params": {
     "weapon": "ak47",
-    "ammo": 200
-   },
-   "graph": "arm"
-  },
-  {
-   "id": "g12",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 1565,
-    "y": 2706
-   },
-   "params": {
-    "weapon": "m4a1",
-    "ammo": 200
-   },
-   "graph": "arm"
-  },
-  {
-   "id": "g13",
-   "type": "player.give_weapon",
-   "pos": {
-    "x": 1565,
-    "y": 2858
-   },
-   "params": {
-    "weapon": "awp",
-    "ammo": 200
+    "ammo": 90
    },
    "graph": "arm"
   },
@@ -602,8 +463,8 @@
    "id": "kn",
    "type": "msg.hud",
    "pos": {
-    "x": 1565,
-    "y": 3010
+    "x": 2065,
+    "y": 2361
    },
    "params": {
     "text": "Knife round! One knife kill wins.",
@@ -859,6 +720,17 @@
   {
    "id": "w23",
    "from": {
+    "node": "rows0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "floor",
+    "pin": "max"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
     "node": "floor",
     "pin": "out"
    },
@@ -868,7 +740,7 @@
    }
   },
   {
-   "id": "w24",
+   "id": "w25",
    "from": {
     "node": "pk",
     "pin": "victim"
@@ -879,7 +751,7 @@
    }
   },
   {
-   "id": "w25",
+   "id": "w26",
    "from": {
     "node": "self",
     "pin": "false"
@@ -890,7 +762,7 @@
    }
   },
   {
-   "id": "w26",
+   "id": "w27",
    "from": {
     "node": "up",
     "pin": "then"
@@ -901,7 +773,7 @@
    }
   },
   {
-   "id": "w27",
+   "id": "w28",
    "from": {
     "node": "pk",
     "pin": "attacker"
@@ -912,7 +784,7 @@
    }
   },
   {
-   "id": "w28",
+   "id": "w29",
    "from": {
     "node": "pk",
     "pin": "attacker"
@@ -923,7 +795,7 @@
    }
   },
   {
-   "id": "w29",
+   "id": "w30",
    "from": {
     "node": "lvl",
     "pin": "out"
@@ -934,7 +806,18 @@
    }
   },
   {
-   "id": "w30",
+   "id": "w31",
+   "from": {
+    "node": "rows",
+    "pin": "out"
+   },
+   "to": {
+    "node": "won",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w32",
    "from": {
     "node": "won",
     "pin": "out"
@@ -945,7 +828,7 @@
    }
   },
   {
-   "id": "w31",
+   "id": "w33",
    "from": {
     "node": "end",
     "pin": "false"
@@ -956,7 +839,7 @@
    }
   },
   {
-   "id": "w32",
+   "id": "w34",
    "from": {
     "node": "next",
     "pin": "then"
@@ -967,7 +850,7 @@
    }
   },
   {
-   "id": "w33",
+   "id": "w35",
    "from": {
     "node": "pk",
     "pin": "attacker"
@@ -978,7 +861,7 @@
    }
   },
   {
-   "id": "w34",
+   "id": "w36",
    "from": {
     "node": "pk",
     "pin": "attacker"
@@ -989,7 +872,7 @@
    }
   },
   {
-   "id": "w35",
+   "id": "w37",
    "from": {
     "node": "lvl",
     "pin": "out"
@@ -1000,7 +883,7 @@
    }
   },
   {
-   "id": "w36",
+   "id": "w38",
    "from": {
     "node": "end",
     "pin": "true"
@@ -1011,7 +894,7 @@
    }
   },
   {
-   "id": "w37",
+   "id": "w39",
    "from": {
     "node": "win_r",
     "pin": "out"
@@ -1022,7 +905,7 @@
    }
   },
   {
-   "id": "w38",
+   "id": "w40",
    "from": {
     "node": "pk",
     "pin": "attacker"
@@ -1033,7 +916,7 @@
    }
   },
   {
-   "id": "w39",
+   "id": "w41",
    "from": {
     "node": "cheer",
     "pin": "then"
@@ -1044,7 +927,7 @@
    }
   },
   {
-   "id": "w40",
+   "id": "w42",
    "from": {
     "node": "big",
     "pin": "then"
@@ -1055,7 +938,7 @@
    }
   },
   {
-   "id": "w41",
+   "id": "w43",
    "from": {
     "node": "reset",
     "pin": "each"
@@ -1066,7 +949,7 @@
    }
   },
   {
-   "id": "w42",
+   "id": "w44",
    "from": {
     "node": "reset",
     "pin": "player"
@@ -1077,7 +960,7 @@
    }
   },
   {
-   "id": "w43",
+   "id": "w45",
    "from": {
     "node": "reset",
     "pin": "then"
@@ -1088,7 +971,7 @@
    }
   },
   {
-   "id": "w44",
+   "id": "w46",
    "from": {
     "node": "pause",
     "pin": "then"
@@ -1099,7 +982,7 @@
    }
   },
   {
-   "id": "w45",
+   "id": "w47",
    "from": {
     "node": "fe",
     "pin": "who"
@@ -1107,365 +990,112 @@
    "to": {
     "node": "strip",
     "pin": "player"
-   }
-  },
-  {
-   "id": "w46",
-   "from": {
-    "node": "fe",
-    "pin": "who"
-   },
-   "to": {
-    "node": "lv",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w47",
-   "from": {
-    "node": "lv",
-    "pin": "out"
-   },
-   "to": {
-    "node": "sw",
-    "pin": "in"
    }
   },
   {
    "id": "w48",
    "from": {
     "node": "fe",
-    "pin": "then"
+    "pin": "who"
    },
    "to": {
-    "node": "strip",
-    "pin": "exec"
+    "node": "lv",
+    "pin": "player"
    }
   },
   {
    "id": "w49",
    "from": {
-    "node": "strip",
-    "pin": "then"
+    "node": "lv",
+    "pin": "out"
    },
    "to": {
-    "node": "sw",
-    "pin": "exec"
+    "node": "row",
+    "pin": "key"
    }
   },
   {
    "id": "w50",
    "from": {
-    "node": "sw",
-    "pin": "c0"
+    "node": "row",
+    "pin": "found"
    },
    "to": {
-    "node": "g0",
-    "pin": "exec"
+    "node": "has",
+    "pin": "cond"
    }
   },
   {
    "id": "w51",
    "from": {
     "node": "fe",
-    "pin": "who"
+    "pin": "then"
    },
    "to": {
-    "node": "g0",
-    "pin": "player"
+    "node": "strip",
+    "pin": "exec"
    }
   },
   {
    "id": "w52",
    "from": {
-    "node": "sw",
-    "pin": "c1"
+    "node": "strip",
+    "pin": "then"
    },
    "to": {
-    "node": "g1",
+    "node": "has",
     "pin": "exec"
    }
   },
   {
    "id": "w53",
    "from": {
-    "node": "fe",
-    "pin": "who"
+    "node": "has",
+    "pin": "true"
    },
    "to": {
-    "node": "g1",
-    "pin": "player"
+    "node": "gun",
+    "pin": "exec"
    }
   },
   {
    "id": "w54",
    "from": {
-    "node": "sw",
-    "pin": "c2"
+    "node": "fe",
+    "pin": "who"
    },
    "to": {
-    "node": "g2",
-    "pin": "exec"
+    "node": "gun",
+    "pin": "player"
    }
   },
   {
    "id": "w55",
    "from": {
-    "node": "fe",
-    "pin": "who"
+    "node": "row",
+    "pin": "gun"
    },
    "to": {
-    "node": "g2",
-    "pin": "player"
+    "node": "gun",
+    "pin": "weapon"
    }
   },
   {
    "id": "w56",
    "from": {
-    "node": "sw",
-    "pin": "c3"
+    "node": "row",
+    "pin": "ammo"
    },
    "to": {
-    "node": "g3",
-    "pin": "exec"
+    "node": "gun",
+    "pin": "ammo"
    }
   },
   {
    "id": "w57",
    "from": {
-    "node": "fe",
-    "pin": "who"
-   },
-   "to": {
-    "node": "g3",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w58",
-   "from": {
-    "node": "sw",
-    "pin": "c4"
-   },
-   "to": {
-    "node": "g4",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w59",
-   "from": {
-    "node": "fe",
-    "pin": "who"
-   },
-   "to": {
-    "node": "g4",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w60",
-   "from": {
-    "node": "sw",
-    "pin": "c5"
-   },
-   "to": {
-    "node": "g5",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w61",
-   "from": {
-    "node": "fe",
-    "pin": "who"
-   },
-   "to": {
-    "node": "g5",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w62",
-   "from": {
-    "node": "sw",
-    "pin": "c6"
-   },
-   "to": {
-    "node": "g6",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w63",
-   "from": {
-    "node": "fe",
-    "pin": "who"
-   },
-   "to": {
-    "node": "g6",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w64",
-   "from": {
-    "node": "sw",
-    "pin": "c7"
-   },
-   "to": {
-    "node": "g7",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w65",
-   "from": {
-    "node": "fe",
-    "pin": "who"
-   },
-   "to": {
-    "node": "g7",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w66",
-   "from": {
-    "node": "sw",
-    "pin": "c8"
-   },
-   "to": {
-    "node": "g8",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w67",
-   "from": {
-    "node": "fe",
-    "pin": "who"
-   },
-   "to": {
-    "node": "g8",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w68",
-   "from": {
-    "node": "sw",
-    "pin": "c9"
-   },
-   "to": {
-    "node": "g9",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w69",
-   "from": {
-    "node": "fe",
-    "pin": "who"
-   },
-   "to": {
-    "node": "g9",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w70",
-   "from": {
-    "node": "sw",
-    "pin": "c10"
-   },
-   "to": {
-    "node": "g10",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w71",
-   "from": {
-    "node": "fe",
-    "pin": "who"
-   },
-   "to": {
-    "node": "g10",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w72",
-   "from": {
-    "node": "sw",
-    "pin": "c11"
-   },
-   "to": {
-    "node": "g11",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w73",
-   "from": {
-    "node": "fe",
-    "pin": "who"
-   },
-   "to": {
-    "node": "g11",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w74",
-   "from": {
-    "node": "sw",
-    "pin": "c12"
-   },
-   "to": {
-    "node": "g12",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w75",
-   "from": {
-    "node": "fe",
-    "pin": "who"
-   },
-   "to": {
-    "node": "g12",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w76",
-   "from": {
-    "node": "sw",
-    "pin": "c13"
-   },
-   "to": {
-    "node": "g13",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w77",
-   "from": {
-    "node": "fe",
-    "pin": "who"
-   },
-   "to": {
-    "node": "g13",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w78",
-   "from": {
-    "node": "sw",
-    "pin": "default"
+    "node": "has",
+    "pin": "false"
    },
    "to": {
     "node": "kn",
@@ -1473,7 +1103,7 @@
    }
   },
   {
-   "id": "w79",
+   "id": "w58",
    "from": {
     "node": "fe",
     "pin": "who"
@@ -1499,14 +1129,14 @@
   },
   {
    "id": "c2",
-   "text": "A kill by another player moves the killer up a level and hands over the next gun at once. Level 14 is the knife, and a kill with it wins. A suicide costs a level.",
+   "text": "A kill by another player moves the killer up a level and hands over the next gun at once. After the last gun in the Guns table comes the knife, and a kill with it wins. A suicide costs a level.",
    "pos": {
     "x": 41,
-    "y": 3178
+    "y": 697
    },
    "size": {
     "w": 3278,
-    "h": 1077
+    "h": 1195
    }
   },
   {
@@ -1514,7 +1144,7 @@
    "text": "Someone made it through every gun: everyone hears who, levels go back to 0 and a new round starts.",
    "pos": {
     "x": 2648,
-    "y": 4321
+    "y": 2058
    },
    "size": {
     "w": 2671,
@@ -1523,14 +1153,14 @@
   },
   {
    "id": "c4",
-   "text": "Give Level Gun: takes everything but the knife and gives the gun for the player's level (glock18, usp, deagle, mac10, mp5navy, ump45, p90, m3, xm1014, galil, famas, ak47, m4a1, awp, then the knife).",
+   "text": "Give Level Gun: takes everything but the knife, then looks up the player's level in the Guns table (Get Row) and gives that gun with its spare bullets. Past the last row there's no gun: the knife round.",
    "pos": {
     "x": 41,
-    "y": 697
+    "y": 2015
    },
    "size": {
-    "w": 1778,
-    "h": 2469
+    "w": 2278,
+    "h": 502
    },
    "graph": "arm"
   }
@@ -1547,6 +1177,102 @@
     }
    ],
    "outputs": []
+  }
+ ],
+ "dataTables": [
+  {
+   "id": "guns",
+   "name": "Guns",
+   "key": "level",
+   "columns": [
+    {
+     "id": "level",
+     "name": "Level",
+     "type": "number"
+    },
+    {
+     "id": "gun",
+     "name": "Gun",
+     "type": "weapon"
+    },
+    {
+     "id": "ammo",
+     "name": "Spare bullets",
+     "type": "number"
+    }
+   ],
+   "rows": [
+    [
+     0,
+     "glock18",
+     120
+    ],
+    [
+     1,
+     "usp",
+     100
+    ],
+    [
+     2,
+     "deagle",
+     35
+    ],
+    [
+     3,
+     "mac10",
+     90
+    ],
+    [
+     4,
+     "mp5navy",
+     90
+    ],
+    [
+     5,
+     "ump45",
+     90
+    ],
+    [
+     6,
+     "p90",
+     90
+    ],
+    [
+     7,
+     "m3",
+     32
+    ],
+    [
+     8,
+     "xm1014",
+     32
+    ],
+    [
+     9,
+     "galil",
+     90
+    ],
+    [
+     10,
+     "famas",
+     90
+    ],
+    [
+     11,
+     "ak47",
+     90
+    ],
+    [
+     12,
+     "m4a1",
+     90
+    ],
+    [
+     13,
+     "awp",
+     30
+    ]
+   ]
   }
  ]
 }

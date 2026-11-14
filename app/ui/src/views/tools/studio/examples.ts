@@ -11,7 +11,7 @@ export type Example = { id: string; label: string; blurb: string; raw: string };
 
 export const EXAMPLES: Example[] = [
   { id: "infection", label: "Infection", blurb: "One zombie; whoever it kills turns. Teams, a round clock and a Function.", raw: infectionRaw },
-  { id: "gungame", label: "Gun Game Lite", blurb: "Each kill gives the next gun; a knife kill wins. Per-player variables and Switch.", raw: gunGameRaw },
+  { id: "gungame", label: "Gun Game Lite", blurb: "Each kill gives the next gun; a knife kill wins. Per-player variables and a data table.", raw: gunGameRaw },
   { id: "hill", label: "King of the Hill", blurb: "Hold the hill to score. A capture point, a map marker, a timer and team scores.", raw: hillRaw },
   { id: "chamber", label: "One in the Chamber", blurb: "One bullet, a kill gives one more, three lives. Ammo, damage and lives.", raw: chamberRaw },
   { id: "juggernaut", label: "Juggernaut", blurb: "Kill the big one to become it. Player looks, a bonus, and bots told to hunt.", raw: juggernautRaw },

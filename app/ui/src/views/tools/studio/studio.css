@@ -395,3 +395,21 @@
 .st-del-off { opacity: .55; }
 .st-del-help { font-size: 12.5px; }
 .st-del-actions { justify-content: flex-end; gap: 8px; }
+.st-live-edit { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+
+/* Data tables (TableEditor.tsx) */
+.st-table-sheet { width: min(1100px, calc(100vw - 32px)); max-width: none; }
+.st-table-ed { display: grid; gap: 10px; padding: 14px 16px; }
+.st-table-bar, .st-table-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.st-table-scroll { overflow: auto; max-height: min(60vh, 560px); border: 1px solid var(--line); border-radius: 6px; }
+.st-table-grid { border-collapse: collapse; font-size: 13px; }
+.st-table-grid th, .st-table-grid td { padding: 3px 4px; border-bottom: 1px solid var(--line); vertical-align: top; text-align: left; }
+.st-table-grid th { position: sticky; top: 0; background: var(--panel, #22262b); z-index: 1; }
+.st-table-grid th.key { box-shadow: inset 0 -2px 0 var(--signal, #5ab0ff); }
+.st-table-grid .st-field { width: 100%; min-width: 90px; }
+.st-table-colbar { display: flex; gap: 2px; margin-top: 2px; }
+.st-table-keytag { font-size: 11px; }
+.st-table-csv { display: grid; gap: 6px; }
+.st-table-csv textarea { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.st-help-menu-list a.st-help-menu-link { padding: 6px 10px; border-radius: 5px; color: var(--text); text-decoration: none; }
+.st-help-menu-list a.st-help-menu-link:hover, .st-help-menu-list a.st-help-menu-link:focus-visible { background: color-mix(in srgb, var(--signal) 25%, transparent); }

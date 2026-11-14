@@ -95,6 +95,31 @@ pub enum Command {
     Resume,
     Vars,
     Breakpoints(Vec<String>),
+    /// a live tweak: a variable's value (who: 0 the mode's, a player's index, or 1 / 2 a team's)
+    Set { var: String, who: u32, value: String },
+}
+
+/// A live tweak's value as the plugin reads it: a number, 0 / 1, or text in the label characters
+/// (letters, digits, space, plain punctuation), at most 60, never a new line or a quote.
+pub fn set_value(ty: &str, raw: &str) -> Result<String, String> {
+    let raw = raw.trim();
+    match ty {
+        "number" => raw.parse::<f64>().ok().filter(|n| n.is_finite() && n.abs() <= 100000.0).map(|n| format!("{n}")).ok_or_else(|| "That isn't a number (up to 100000).".into()),
+        "bool" => match raw {
+            "true" | "1" | "yes" => Ok("1".into()),
+            "false" | "0" | "no" => Ok("0".into()),
+            _ => Err("Yes or no only.".into()),
+        },
+        "text" => {
+            if raw.chars().count() > 60 || !raw.chars().all(super::graph::label_char) {
+                Err("Text: up to 60 letters, digits, spaces and plain punctuation.".into())
+            } else {
+                Ok(raw.to_string())
+            }
+        }
+        t if t.starts_with("enum:") => raw.parse::<u32>().ok().filter(|n| *n < 32).map(|n| n.to_string()).ok_or_else(|| "Pick one of the enum's values.".into()),
+        _ => Err("Only numbers, yes/no, text and enum values can be changed while playing.".into()),
+    }
 }
 
 impl Command {
@@ -106,6 +131,7 @@ impl Command {
                 let ids = bp_line(ids);
                 if ids.is_empty() { "bp".into() } else { format!("bp {ids}") }
             }
+            Command::Set { var, who, value } => format!("set {var} {who} {value}"),
         }
     }
 }
@@ -170,5 +196,29 @@ mod tests {
         let r = read_events(&ev, b.next).unwrap();
         assert!(r.reset && r.events.len() == 1);
         let _ = std::fs::remove_dir_all(&d);
+    }
+}
+
+#[cfg(test)]
+mod live_tweak_tests {
+    use super::*;
+
+    #[test]
+    fn live_tweak_values_are_checked_by_type() {
+        assert_eq!(set_value("number", " 42 ").unwrap(), "42");
+        assert_eq!(set_value("number", "1.5").unwrap(), "1.5");
+        assert!(set_value("number", "abc").is_err());
+        assert!(set_value("number", "1e9").is_err());
+        assert_eq!(set_value("bool", "yes").unwrap(), "1");
+        assert_eq!(set_value("bool", "0").unwrap(), "0");
+        assert_eq!(set_value("text", "changed now").unwrap(), "changed now");
+        // nothing that could become a second command or code in the plugin
+        for bad in ["a\nresume", "x\"y", "a;exec x", "^1", "/x"] {
+            assert!(set_value("text", bad).is_err() || !set_value("text", bad).unwrap().contains(['\n', '"', '^', '/']), "{bad}");
+        }
+        assert!(set_value("text", "a\nresume").is_err());
+        assert_eq!(set_value("enum:e1", "2").unwrap(), "2");
+        assert!(set_value("vector", "1 2 3").is_err());
+        assert_eq!(Command::Set { var: "v1".into(), who: 3, value: "7".into() }.line(), "set v1 3 7");
     }
 }

@@ -3718,7 +3718,7 @@
 "player.give_weapon":{
 "title":"Give Weapon",
 "category":"Players",
-"what":"Gives a living player a weapon and spare bullets. Does nothing for a dead player, or one who already has that weapon (the debugger marks that).",
+"what":"Gives a living player a weapon and spare bullets. Does nothing for a dead player, or one who already has that weapon (the debugger marks that). A weapon's name can be wired in (from a data table, say): ak47, deagle, knife...",
 "pins":[
 {
 "id":"exec",
@@ -3731,6 +3731,16 @@
 "help":"The player. Needs a wire."
 },
 {
+"id":"weapon",
+"dir":"in",
+"help":"Weapon: text. Leave it empty to use the setting."
+},
+{
+"id":"ammo",
+"dir":"in",
+"help":"Spare bullets: a number. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -3739,11 +3749,11 @@
 "settings":[
 {
 "id":"weapon",
-"help":"Pick one: AK-47, M4A1, AWP, Scout, FAMAS, Galil, AUG, SG 552, MP5, P90, UMP 45, MAC-10…."
+"help":"Pick one: AK-47, M4A1, AWP, Scout, FAMAS, Galil, AUG, SG 552, MP5, P90, UMP 45, MAC-10…. A wire into the pin of the same name is used instead."
 },
 {
 "id":"ammo",
-"help":"A number from 0 to 250."
+"help":"A number from 0 to 250. A wire into the pin of the same name is used instead."
 }
 ],
 "more":"Gives the weapon with reserve ammo. A player who already has one in that slot gets it as well; Strip first for a clean loadout.",
@@ -12191,7 +12201,7 @@
 "br.glow":{
 "title":"Rarity Glow",
 "category":"Battle Royale",
-"what":"Makes an entity glow in a rarity's colour (0 none, 1 white, 2 green, 3 blue, 4 purple, 5 gold).",
+"what":"Makes an entity glow in a rarity's color (0 none, 1 white, 2 green, 3 blue, 4 purple, 5 gold).",
 "pins":[
 {
 "id":"exec",
@@ -20071,7 +20081,7 @@
 "player.fade":{
 "title":"Screen Fade",
 "category":"Players",
-"what":"Fills the player's screen with a colour for some seconds (white: blinded).",
+"what":"Fills the player's screen with a color for some seconds (white: blinded).",
 "pins":[
 {
 "id":"exec",
@@ -30594,6 +30604,201 @@
 }
 ]
 }
+},
+"table.get_row":{
+"title":"Get Row",
+"category":"Data tables",
+"what":"Finds the row whose key is this (the table's key column) and gives each of its cells. Found is No when no row has that key (the cells are then 0, No or empty).",
+"pins":[
+{
+"id":"key",
+"dir":"in",
+"help":"The value to look for in the key column."
+},
+{
+"id":"found",
+"dir":"out",
+"help":"Yes when a row has that key."
+},
+{
+"id":"row",
+"dir":"out",
+"help":"The row's number (from 0), or -1 when none has the key."
+}
+],
+"settings":[
+{
+"id":"table",
+"help":"Picked from this mode's own pieces."
+}
+],
+"more":"Data tables (My mode > Data tables) are grids of values you type or paste from a spreadsheet: a gun list, prices, waves. Get Row finds the row whose key column has this value and gives every cell of it as a pin.",
+"related":[
+"table.get_cell",
+"table.for_each",
+"table.find"
+]
+},
+"table.get_cell":{
+"title":"Get Cell",
+"category":"Data tables",
+"what":"One cell: a column of a row (rows count from 0). Past the end: 0, No or empty.",
+"pins":[
+{
+"id":"row",
+"dir":"in",
+"help":"Row: a number. Leave it empty to use the setting."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"The value."
+}
+],
+"settings":[
+{
+"id":"table",
+"help":"Picked from this mode's own pieces."
+},
+{
+"id":"column",
+"help":"Picked from this mode's own pieces."
+},
+{
+"id":"row",
+"help":"A number from 0 to 255. A wire into the pin of the same name is used instead."
+}
+],
+"more":"Reads one cell. Rows count from 0, so the first row is 0; a row past the end gives 0, No or empty text.",
+"related":[
+"table.get_row",
+"table.count",
+"table.for_each"
+]
+},
+"table.for_each":{
+"title":"For Each Row",
+"category":"Data tables",
+"what":"Runs Each once for every row of the table, in order, with that row's cells; then Then.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"each",
+"dir":"out",
+"help":"Runs once for every item."
+},
+{
+"id":"row",
+"dir":"out",
+"help":"Row: a number."
+},
+{
+"id":"key",
+"dir":"out",
+"help":"Key: any value."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"table",
+"help":"Picked from this mode's own pieces."
+}
+],
+"more":"Runs Each for every row in order, with that row's cells as pins (and Row, its number). Then runs once after the last.",
+"related":[
+"table.get_cell",
+"table.find",
+"table.get_row"
+],
+"cost":"A table has at most 256 rows, and reading one costs almost nothing: the plugin holds tables as fixed lists."
+},
+"table.find":{
+"title":"Find Rows",
+"category":"Data tables",
+"what":"The rows (as row numbers) where a column has this value, in order. Use Get Cell on each.",
+"pins":[
+{
+"id":"value",
+"dir":"in",
+"help":"The value. Needs a wire."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Rows: any value."
+}
+],
+"settings":[
+{
+"id":"table",
+"help":"Picked from this mode's own pieces."
+},
+{
+"id":"column",
+"help":"Picked from this mode's own pieces."
+}
+],
+"more":"Every row (as row numbers, in order) where the column you pick has this value. Read their cells with Get Cell, or loop over them with For Each.",
+"related":[
+"table.get_cell",
+"flow.for_each_array",
+"table.for_each"
+]
+},
+"table.count":{
+"title":"Row Count",
+"category":"Data tables",
+"what":"How many rows the table has.",
+"pins":[
+{
+"id":"out",
+"dir":"out",
+"help":"Rows: a number."
+}
+],
+"settings":[
+{
+"id":"table",
+"help":"Picked from this mode's own pieces."
+}
+],
+"related":[
+"table.find",
+"table.keys",
+"table.for_each"
+]
+},
+"table.keys":{
+"title":"Row Keys",
+"category":"Data tables",
+"what":"The table's keys (its key column), in row order.",
+"pins":[
+{
+"id":"out",
+"dir":"out",
+"help":"Keys: any value."
+}
+],
+"settings":[
+{
+"id":"table",
+"help":"Picked from this mode's own pieces."
+}
+],
+"related":[
+"table.count",
+"table.find",
+"table.for_each"
+]
 },
 "timeline.play":{
 "title":"Timeline",

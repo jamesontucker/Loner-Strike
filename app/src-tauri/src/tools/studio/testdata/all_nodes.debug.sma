@@ -460,6 +460,30 @@ stock lsd_var_text(const v[], p, const value[])
 	lsd_emitf("^"e^":^"var_value^",^"v^":^"%s^",^"p^":%d,^"value^":^"%s^"", v, p, esc)
 }
 
+// a live tweak from the app: "set <variable id> <who> <value>" (who: 0 the mode's, a player's
+// index, or 1 / 2 a team's; the app checked the value against the variable's type)
+stock lsd_set_cmd(const s[])
+{
+	new vid[32], who[8], pos
+	pos = argparse(s, 0, vid, charsmax(vid))
+	if (pos == -1)
+		return
+	pos = argparse(s, pos, who, charsmax(who))
+	if (pos == -1)
+		return
+	while (s[pos] == ' ')
+		pos++
+	new val[64]
+	copy(val, charsmax(val), s[pos])
+	if (lsd_graph_set(vid, str_to_num(who), val))
+	{
+		new esc[140]
+		lsd_esc(val, esc, charsmax(esc))
+		lsd_emitf("^"e^":^"var_set^",^"v^":^"%s^",^"p^":%d,^"value^":^"%s^"", vid, str_to_num(who), esc)
+		lsd_vars()
+	}
+}
+
 // a timer that fires while the world is paused waits until it isn't
 stock bool:lsd_hold_timer()
 {
@@ -540,6 +564,8 @@ public lsd_poll()
 			lsd_vars()
 		else if (equal(line, "bp", 2) && (line[2] == ' ' || line[2] == 0))
 			lsd_set_bps(line[2])
+		else if (equal(line, "set ", 4))
+			lsd_set_cmd(line[4])
 	}
 	fclose(f)
 	delete_file(take)
@@ -1008,6 +1034,16 @@ stock lsg_wpn_of(a, inflictor)
 		replace(w, charsmax(w), "weapon_", "")
 	}
 	return w
+}
+
+// Give Weapon with a name wired in: only a weapon the game has (ak47, deagle, knife...)
+stock lsg_give_named(id, const name[], ammo)
+{
+	new w[32]
+	formatex(w, charsmax(w), "weapon_%s", name)
+	if (equal(name, "weapon_", 7) || !get_weaponid(w))
+		return 0
+	return ls_give_weapon(id, w, ammo)
 }
 
 stock Float:lsg_dist(a, b)
@@ -1587,6 +1623,12 @@ lsd_graph_vars()
 {
 }
 
+lsd_graph_set(const vid[], who, const val[])
+{
+	#pragma unused vid, who, val
+	return false
+}
+
 public plugin_init()
 {
 	ls_register_mode(LSG_MODE, "All Nodes", "1.0", "Game Mode Studio")
@@ -1680,8 +1722,10 @@ lsg_n3(ctx[])
 lsg_n4(ctx[])
 {
 	new lsi0 = ctx[1]
+	new Float:lsi2 = 30.0
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	lsd_in_number("Spare bullets", lsi2)
 	if (lsd_enter(4, ctx))
 		return
 	if (ls_give_weapon(lsi0, "awp", 30))

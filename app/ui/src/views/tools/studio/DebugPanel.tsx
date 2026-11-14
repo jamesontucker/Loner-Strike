@@ -6,6 +6,118 @@ import { useStudio } from "./store";
 import { nodeDef } from "./registry";
 import { describe } from "./debugState";
 import { Values } from "./Inspector";
+import { allVariables } from "./pins";
+import { updateVariable } from "./graphOps";
+import * as api from "./studioApi";
+import type { VarValue } from "./debugState";
+import type { Graph } from "./schema";
+
+/** Who a live value belongs to, for a live tweak: 0 the mode's, a player's index, 1 / 2 a team's. */
+const whoOf = (x: VarValue) => (x.v.endsWith(":T") ? 1 : x.v.endsWith(":CT") ? 2 : x.p);
+
+/** A live value with Change (debug builds take it at once, no recompile) and Use as start value. */
+function LiveValue({ x, graph, playerName }: { x: VarValue; graph: Graph | null; playerName: string }) {
+  const id = x.v.split(":")[0];
+  const v = graph ? allVariables(graph).find((y) => y.id === id) : undefined;
+  const en = v?.type.startsWith("enum:") ? graph?.enums?.find((e) => `enum:${e.id}` === v.type) : undefined;
+  const editable = !!v && (["number", "bool", "text"].includes(v.type) || !!en);
+  const shown = typeof x.value === "boolean" ? (x.value ? "yes" : "no") : String(x.value);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const playing = useStudio((s) => s.playing);
+  const start = () => {
+    setErr("");
+    if (!v) return;
+    if (v.type === "bool") setDraft(x.value === true || x.value === "yes" ? "1" : "0");
+    else if (en) setDraft(String(Math.max(0, en.values.indexOf(shown))));
+    else setDraft(shown);
+  };
+  const send = async () => {
+    if (!v || draft === null || !playing) return;
+    setBusy(true);
+    const r = await api.debugCommand({ mode: playing, set: { var: v.id, who: whoOf(x), value: draft, graph } }).catch((e: Error) => ({ error: e.message }));
+    setBusy(false);
+    if (r && "error" in r && r.error) setErr(r.error);
+    else setDraft(null);
+  };
+  const asStart = () => {
+    if (!v) return;
+    const d = v.type === "number" ? Number(x.value) : v.type === "bool" ? x.value === true || x.value === "yes" : en ? Math.max(0, en.values.indexOf(shown)) : String(x.value);
+    useStudio.getState().edit((g) => updateVariable(g, v.id, { default: d as never }));
+  };
+  return (
+    <div>
+      <dt>
+        {v?.name ?? x.v}
+        {x.v.includes(":") ? ` (${x.v.split(":")[1]})` : ""}
+        {x.p ? ` (${playerName})` : ""}
+      </dt>
+      <dd>
+        {draft === null ? (
+          <>
+            {shown}
+            {editable && (
+              <>
+                {" "}
+                <button type="button" className="st-link" onClick={start} title="Change it in the running game now (no recompile)">
+                  Change
+                </button>{" "}
+                <button type="button" className="st-link" onClick={asStart} title="Make this the variable's start value in the graph">
+                  Use as start value
+                </button>
+              </>
+            )}
+          </>
+        ) : (
+          <form
+            className="st-live-edit"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void send();
+            }}
+          >
+            {v?.type === "bool" ? (
+              <select className="st-field" value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={`New value for ${v.name}`}>
+                <option value="1">yes</option>
+                <option value="0">no</option>
+              </select>
+            ) : en ? (
+              <select className="st-field" value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={`New value for ${v?.name}`}>
+                {en.values.map((val, i) => (
+                  <option key={val} value={i}>
+                    {val}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input className="st-field" autoFocus type={v?.type === "number" ? "number" : "text"} maxLength={60} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={`New value for ${v?.name}`} />
+            )}
+            <button type="submit" className="btn small primary" disabled={busy}>
+              {busy ? (
+                <>
+                  <span className="spinner" /> Setting…
+                </>
+              ) : (
+                "Set"
+              )}
+            </button>
+            <button type="button" className="btn small" onClick={() => setDraft(null)}>
+              Cancel
+            </button>
+            {err && <span className="st-bad-text">{err}</span>}
+          </form>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+/** "You set Score (Bob) to 5" for the log. */
+function setText(ev: { v?: unknown; p?: unknown; value?: unknown }, graph: Graph | null): string {
+  const v = graph ? allVariables(graph).find((y) => y.id === ev.v) : undefined;
+  return `You set ${v?.name ?? String(ev.v)} to ${String(ev.value)}${v?.scope === "player" ? ` (player ${String(ev.p)})` : v?.scope === "team" ? ` (${ev.p === 1 ? "T" : "CT"})` : ""}`;
+}
 
 export function DebugPanel({ onResume, onBpsOff, onRefresh, onStop, focus }: { onResume: () => void; onBpsOff: (off: boolean) => void; onRefresh: () => void; onStop: () => void; focus: (id: string) => void }) {
   const graph = useStudio((s) => s.graph);
@@ -86,14 +198,7 @@ export function DebugPanel({ onResume, onBpsOff, onRefresh, onStop, focus }: { o
               {d.vars.values.length > 0 && (
                 <dl className="st-values">
                   {d.vars.values.map((x) => (
-                    <div key={`${x.v}-${x.p}`}>
-                      <dt>
-                        {graph?.variables.find((v) => v.id === x.v.split(":")[0])?.name ?? x.v}
-                        {x.v.includes(":") ? ` (${x.v.split(":")[1]})` : ""}
-                        {x.p ? ` (${d.vars!.players.find((p) => p.id === x.p)?.name ?? `player ${x.p}`})` : ""}
-                      </dt>
-                      <dd>{typeof x.value === "boolean" ? (x.value ? "yes" : "no") : String(x.value)}</dd>
-                    </div>
+                    <LiveValue key={`${x.v}-${x.p}`} x={x} graph={graph} playerName={d.vars!.players.find((p) => p.id === x.p)?.name ?? `player ${x.p}`} />
                   ))}
                 </dl>
               )}
@@ -134,7 +239,7 @@ export function DebugPanel({ onResume, onBpsOff, onRefresh, onStop, focus }: { o
               .slice(0, 40)
               .map((ev) => (
                 <li key={`${ev.s}-${ev.t}`} className={ev.e === "node_error" ? "err" : ev.e === "breakpoint_hit" ? "paused" : ""}>
-                  <span className="st-muted">{ev.t.toFixed(1)}s</span> {describe(ev, title)}
+                  <span className="st-muted">{ev.t.toFixed(1)}s</span> {ev.e === "var_set" ? setText(ev as unknown as { v?: unknown; p?: unknown; value?: unknown }, graph) : describe(ev, title)}
                 </li>
               ))}
           </ol>

@@ -13,9 +13,9 @@
 #include <cellarray>
 
 #define LSG_MODE "every_node_3"
-#define LSG_CTX 16
+#define LSG_CTX 21
 #define LSG_TXT 2
-#define LSG_N 81
+#define LSG_N 82
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -32,7 +32,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
 #define LSG_O 4
-#define LSG_OT 1
+#define LSG_OT 2
 
 // The mode's variables
 stock Float:g_v0 = 30.0 // Hold time (number)
@@ -704,6 +704,16 @@ stock lsg_wpn_of(a, inflictor)
 		replace(w, charsmax(w), "weapon_", "")
 	}
 	return w
+}
+
+// Give Weapon with a name wired in: only a weapon the game has (ak47, deagle, knife...)
+stock lsg_give_named(id, const name[], ammo)
+{
+	new w[32]
+	formatex(w, charsmax(w), "weapon_%s", name)
+	if (equal(name, "weapon_", 7) || !get_weaponid(w))
+		return 0
+	return ls_give_weapon(id, w, ammo)
 }
 
 stock Float:lsg_dist(a, b)
@@ -2353,6 +2363,82 @@ stock lsg_ecenter(e)
 }
 
 
+// Data table: Guns
+#define LSG_DT0_N 2
+stock const Float:g_lsgDt0_0[2] = { 0.0, 1.0 }
+stock Float:lsg_dt0_0(Float:row)
+{
+	new r = floatround(row, floatround_floor)
+	return r >= 0 && r < LSG_DT0_N ? g_lsgDt0_0[r] : 0.0
+}
+stock const g_lsgDt0_1[2][49] = { "glock18", "ak47" }
+stock lsg_dt0_1(Float:row)
+{
+	new s[49], r = floatround(row, floatround_floor)
+	if (r >= 0 && r < LSG_DT0_N)
+		copy(s, charsmax(s), g_lsgDt0_1[r])
+	return s
+}
+stock const Float:g_lsgDt0_2[2] = { 120.0, 90.0 }
+stock Float:lsg_dt0_2(Float:row)
+{
+	new r = floatround(row, floatround_floor)
+	return r >= 0 && r < LSG_DT0_N ? g_lsgDt0_2[r] : 0.0
+}
+stock const g_lsgDt0_3[2] = { 1, 0 }
+stock lsg_dt0_3(Float:row)
+{
+	new r = floatround(row, floatround_floor)
+	return r >= 0 && r < LSG_DT0_N ? g_lsgDt0_3[r] : 0
+}
+stock Float:lsg_dt0_find(Float:key)
+{
+	for (new r = 0; r < LSG_DT0_N; r++)
+		if (g_lsgDt0_0[r] == key)
+			return float(r)
+	return -1.0
+}
+stock lsg_dt0_keys()
+{
+	new a = lsg_atmp()
+	for (new r = 0; r < LSG_DT0_N; r++)
+		ArrayPushCell((Array:a), g_lsgDt0_0[r])
+	return a
+}
+stock lsg_dt0_where0(Float:v)
+{
+	new a = lsg_atmp()
+	for (new r = 0; r < LSG_DT0_N; r++)
+		if (g_lsgDt0_0[r] == v)
+			ArrayPushCell((Array:a), _:float(r))
+	return a
+}
+stock lsg_dt0_where1(const v[])
+{
+	new a = lsg_atmp()
+	for (new r = 0; r < LSG_DT0_N; r++)
+		if (equal(g_lsgDt0_1[r], v))
+			ArrayPushCell((Array:a), _:float(r))
+	return a
+}
+stock lsg_dt0_where2(Float:v)
+{
+	new a = lsg_atmp()
+	for (new r = 0; r < LSG_DT0_N; r++)
+		if (g_lsgDt0_2[r] == v)
+			ArrayPushCell((Array:a), _:float(r))
+	return a
+}
+stock lsg_dt0_where3(v)
+{
+	new a = lsg_atmp()
+	for (new r = 0; r < LSG_DT0_N; r++)
+		if (!g_lsgDt0_3[r] == !v)
+			ArrayPushCell((Array:a), _:float(r))
+	return a
+}
+
+
 // Custom Event: Gate Opened
 stock lsg_ce0(a0, Float:a1, const a2[])
 {
@@ -2773,8 +2859,8 @@ public plugin_init()
 public lsg_tl_auto()
 {
 	new c[LSG_CTX]
-	lsg_tl80_save(0, c)
-	lsg_tl80_go(0, 0.0, 1)
+	lsg_tl81_save(0, c)
+	lsg_tl81_go(0, 0.0, 1)
 }
 
 // the host's values for the mode settings, as the map starts
@@ -3506,40 +3592,61 @@ lsg_n79(ctx[])
 	#pragma unused ctx
 }
 
-// Timeline (n129)
+// For Each Row (n131)
 lsg_n80(ctx[])
 {
+	new c[LSG_CTX], count
+	for (new r = 0; r < LSG_DT0_N; r++)
+	{
+		count++
+		for (new j = 0; j < LSG_CTX; j++)
+			c[j] = ctx[j]
+		c[12] = _:lsg_dt0_0(float(r))
+		c[13] = _:lsg_dt0_0(float(r))
+		copy(g_lsgOT[1], 127, lsg_dt0_1(float(r)))
+		c[14] = _:lsg_dt0_2(float(r))
+		c[15] = _:lsg_dt0_3(float(r))
+		c[11] = _:float(r)
+		#pragma unused c
+	}
+	#pragma unused count
+	lsg_n81(ctx)
+}
+
+// Timeline (n135)
+lsg_n81(ctx[])
+{
 	new inst = 0
-	lsg_tl80_save(inst, ctx)
-	lsg_tl80_go(inst, -1.0, 1)
+	lsg_tl81_save(inst, ctx)
+	lsg_tl81_go(inst, -1.0, 1)
 }
 
 // Timeline: Platform
-stock Float:g_lsgTlT80[33], g_lsgTlDir80[33], bool:g_lsgTlOn80[33], g_lsgTlC80[33][LSG_CTX]
-stock lsg_tl80_save(inst, ctx[])
+stock Float:g_lsgTlT81[33], g_lsgTlDir81[33], bool:g_lsgTlOn81[33], g_lsgTlC81[33][LSG_CTX]
+stock lsg_tl81_save(inst, ctx[])
 {
 	for (new k = 0; k < LSG_CTX; k++)
-		g_lsgTlC80[inst][k] = ctx[k]
+		g_lsgTlC81[inst][k] = ctx[k]
 }
-stock lsg_tl80_go(inst, Float:from, dir)
+stock lsg_tl81_go(inst, Float:from, dir)
 {
 	if (from >= 0.0)
-		g_lsgTlT80[inst] = from
-	else if (!g_lsgTlOn80[inst] && ((dir > 0 && g_lsgTlT80[inst] >= 4.0) || (dir < 0 && g_lsgTlT80[inst] <= 0.0)))
-		g_lsgTlT80[inst] = dir > 0 ? 0.0 : 4.0
-	g_lsgTlDir80[inst] = dir
-	if (!g_lsgTlOn80[inst])
+		g_lsgTlT81[inst] = from
+	else if (!g_lsgTlOn81[inst] && ((dir > 0 && g_lsgTlT81[inst] >= 4.0) || (dir < 0 && g_lsgTlT81[inst] <= 0.0)))
+		g_lsgTlT81[inst] = dir > 0 ? 0.0 : 4.0
+	g_lsgTlDir81[inst] = dir
+	if (!g_lsgTlOn81[inst])
 	{
-		g_lsgTlOn80[inst] = true
-		set_task(0.05, "lsg_tl80_tick", LSG_TASK + 50000 + 80 * 33 + inst, _, _, "b")
+		g_lsgTlOn81[inst] = true
+		set_task(0.05, "lsg_tl81_tick", LSG_TASK + 50000 + 81 * 33 + inst, _, _, "b")
 	}
 }
-stock lsg_tl80_stop(inst)
+stock lsg_tl81_stop(inst)
 {
-	g_lsgTlOn80[inst] = false
-	remove_task(LSG_TASK + 50000 + 80 * 33 + inst)
+	g_lsgTlOn81[inst] = false
+	remove_task(LSG_TASK + 50000 + 81 * 33 + inst)
 }
-stock Float:lsg_tl80_v0(Float:t)
+stock Float:lsg_tl81_v0(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3549,7 +3656,7 @@ stock Float:lsg_tl80_v0(Float:t)
 		return 128.0 + (0.0 - 128.0) * ((t - 2.0) / 2.0)
 	return 0.0
 }
-stock Float:lsg_tl80_v1_0(Float:t)
+stock Float:lsg_tl81_v1_0(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3557,7 +3664,7 @@ stock Float:lsg_tl80_v1_0(Float:t)
 		return 0.0 + (256.0 - 0.0) * ((t - 0.0) / 4.0)
 	return 256.0
 }
-stock Float:lsg_tl80_v1_1(Float:t)
+stock Float:lsg_tl81_v1_1(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3565,7 +3672,7 @@ stock Float:lsg_tl80_v1_1(Float:t)
 		return 0.0 + (0.0 - 0.0) * ((t - 0.0) / 4.0)
 	return 0.0
 }
-stock Float:lsg_tl80_v1_2(Float:t)
+stock Float:lsg_tl81_v1_2(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3573,7 +3680,7 @@ stock Float:lsg_tl80_v1_2(Float:t)
 		return 0.0 + (64.0 - 0.0) * ((t - 0.0) / 4.0)
 	return 64.0
 }
-stock Float:lsg_tl80_v2_0(Float:t)
+stock Float:lsg_tl81_v2_0(Float:t)
 {
 	if (t <= 0.0)
 		return 255.0
@@ -3583,7 +3690,7 @@ stock Float:lsg_tl80_v2_0(Float:t)
 		return 0.0 + (255.0 - 0.0) * lsg_tl_ease((t - 2.0) / 2.0)
 	return 255.0
 }
-stock Float:lsg_tl80_v2_1(Float:t)
+stock Float:lsg_tl81_v2_1(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3593,7 +3700,7 @@ stock Float:lsg_tl80_v2_1(Float:t)
 		return 0.0 + (0.0 - 0.0) * lsg_tl_ease((t - 2.0) / 2.0)
 	return 0.0
 }
-stock Float:lsg_tl80_v2_2(Float:t)
+stock Float:lsg_tl81_v2_2(Float:t)
 {
 	if (t <= 0.0)
 		return 0.0
@@ -3603,12 +3710,12 @@ stock Float:lsg_tl80_v2_2(Float:t)
 		return 255.0 + (0.0 - 255.0) * lsg_tl_ease((t - 2.0) / 2.0)
 	return 0.0
 }
-public lsg_tl80_tick(task)
+public lsg_tl81_tick(task)
 {
-	new inst = task - (LSG_TASK + 50000 + 80 * 33)
+	new inst = task - (LSG_TASK + 50000 + 81 * 33)
 	if (inst < 0 || inst > 32)
 		return
-	new Float:was = g_lsgTlT80[inst], dir = g_lsgTlDir80[inst]
+	new Float:was = g_lsgTlT81[inst], dir = g_lsgTlDir81[inst]
 	new Float:t = was + 0.05 * float(dir)
 	new bool:done, bool:wrapped
 	if (dir > 0 && t > 4.0)
@@ -3621,56 +3728,56 @@ public lsg_tl80_tick(task)
 		t += 4.0
 		wrapped = true
 	}
-	g_lsgTlT80[inst] = t
+	g_lsgTlT81[inst] = t
 	new c[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
-		c[k] = g_lsgTlC80[inst][k]
-	c[11] = dir > 0 ? 1 : 0
-	c[12] = _:t
-	c[13] = _:lsg_tl80_v0(t)
-	c[14] = lsg_vec(lsg_tl80_v1_0(t), lsg_tl80_v1_1(t), lsg_tl80_v1_2(t))
-	c[15] = lsg_vec(lsg_tl80_v2_0(t), lsg_tl80_v2_1(t), lsg_tl80_v2_2(t))
+		c[k] = g_lsgTlC81[inst][k]
+	c[16] = dir > 0 ? 1 : 0
+	c[17] = _:t
+	c[18] = _:lsg_tl81_v0(t)
+	c[19] = lsg_vec(lsg_tl81_v1_0(t), lsg_tl81_v1_1(t), lsg_tl81_v1_2(t))
+	c[20] = lsg_vec(lsg_tl81_v2_0(t), lsg_tl81_v2_1(t), lsg_tl81_v2_2(t))
 	if (done)
 	{
-		lsg_tl80_stop(inst)
+		lsg_tl81_stop(inst)
 	}
 	#pragma unused c
 	#pragma unused wrapped, done, was
 }
 
 
-stock lsg_n80_play_start(ctx[])
+stock lsg_n81_play_start(ctx[])
 {
 	new inst = 0
-	lsg_tl80_save(inst, ctx)
-	lsg_tl80_go(inst, 0.0, 1)
+	lsg_tl81_save(inst, ctx)
+	lsg_tl81_go(inst, 0.0, 1)
 }
 
-stock lsg_n80_stop(ctx[])
+stock lsg_n81_stop(ctx[])
 {
 	new inst = 0
 	#pragma unused ctx
-	lsg_tl80_stop(inst)
+	lsg_tl81_stop(inst)
 }
 
-stock lsg_n80_reverse(ctx[])
+stock lsg_n81_reverse(ctx[])
 {
 	new inst = 0
-	lsg_tl80_save(inst, ctx)
-	lsg_tl80_go(inst, -1.0, -1)
+	lsg_tl81_save(inst, ctx)
+	lsg_tl81_go(inst, -1.0, -1)
 }
 
-stock lsg_n80_reverse_end(ctx[])
+stock lsg_n81_reverse_end(ctx[])
 {
 	new inst = 0
-	lsg_tl80_save(inst, ctx)
-	lsg_tl80_go(inst, 4.0, -1)
+	lsg_tl81_save(inst, ctx)
+	lsg_tl81_go(inst, 4.0, -1)
 }
 
-stock lsg_n80_set_time(ctx[])
+stock lsg_n81_set_time(ctx[])
 {
 	new inst = 0
-	lsg_tl80_save(inst, ctx)
-	g_lsgTlT80[inst] = floatclamp(0.0, 0.0, 4.0)
+	lsg_tl81_save(inst, ctx)
+	g_lsgTlT81[inst] = floatclamp(0.0, 0.0, 4.0)
 }
 

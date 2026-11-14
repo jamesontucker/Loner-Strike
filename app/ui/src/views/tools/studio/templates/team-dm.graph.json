@@ -33,7 +33,7 @@
    "type": "event.player_killed",
    "pos": {
     "x": 65,
-    "y": 334
+    "y": 362
    },
    "params": {}
   },
@@ -42,7 +42,7 @@
    "type": "cond.is_team",
    "pos": {
     "x": 565,
-    "y": 192
+    "y": 198
    },
    "params": {
     "team": "ct"
@@ -53,7 +53,7 @@
    "type": "player.give_weapon",
    "pos": {
     "x": 1065,
-    "y": 252
+    "y": 235
    },
    "params": {
     "weapon": "m4a1",
@@ -65,7 +65,7 @@
    "type": "cond.is_team",
    "pos": {
     "x": 1065,
-    "y": 404
+    "y": 431
    },
    "params": {
     "team": "t"
@@ -76,7 +76,7 @@
    "type": "player.give_weapon",
    "pos": {
     "x": 1565,
-    "y": 463
+    "y": 469
    },
    "params": {
     "weapon": "ak47",
@@ -191,11 +191,11 @@
    "text": "The killer's team decides the rifle. A kill by the world (a fall) has no attacker, so nothing is given.",
    "pos": {
     "x": 41,
-    "y": 146
+    "y": 152
    },
    "size": {
     "w": 1778,
-    "h": 451
+    "h": 495
    }
   }
  ]

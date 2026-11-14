@@ -91,7 +91,8 @@
   "Downed",
   "Shop",
   "Battle Royale",
-  "Creatures"
+  "Creatures",
+  "Data tables"
  ],
  "nodes": [
   {
@@ -1710,7 +1711,7 @@
    "type": "player.give_weapon",
    "title": "Give Weapon",
    "category": "Players",
-   "help": "Gives a living player a weapon and spare bullets. Does nothing for a dead player, or one who already has that weapon (the debugger marks that).",
+   "help": "Gives a living player a weapon and spare bullets. Does nothing for a dead player, or one who already has that weapon (the debugger marks that). A weapon's name can be wired in (from a data table, say): ak47, deagle, knife...",
    "inputs": [
     {
      "id": "exec",
@@ -1722,6 +1723,18 @@
      "type": "player",
      "label": "Player",
      "required": true
+    },
+    {
+     "id": "weapon",
+     "type": "text",
+     "label": "Weapon",
+     "param": "weapon"
+    },
+    {
+     "id": "ammo",
+     "type": "number",
+     "label": "Spare bullets",
+     "param": "ammo"
     }
    ],
    "outputs": [
@@ -5040,7 +5053,7 @@
     },
     {
      "id": "colour",
-     "label": "Colour",
+     "label": "Color",
      "kind": "choice",
      "default": "gold",
      "choices": [
@@ -5853,7 +5866,7 @@
    "type": "br.glow",
    "title": "Rarity Glow",
    "category": "Battle Royale",
-   "help": "Makes an entity glow in a rarity's colour (0 none, 1 white, 2 green, 3 blue, 4 purple, 5 gold).",
+   "help": "Makes an entity glow in a rarity's color (0 none, 1 white, 2 green, 3 blue, 4 purple, 5 gold).",
    "inputs": [
     {
      "id": "exec",
@@ -8760,7 +8773,7 @@
    "type": "player.fade",
    "title": "Screen Fade",
    "category": "Players",
-   "help": "Fills the player's screen with a colour for some seconds (white: blinded).",
+   "help": "Fills the player's screen with a color for some seconds (white: blinded).",
    "inputs": [
     {
      "id": "exec",
@@ -8784,7 +8797,7 @@
    "params": [
     {
      "id": "colour",
-     "label": "Colour",
+     "label": "Color",
      "kind": "choice",
      "default": "white",
      "choices": [
@@ -10024,7 +10037,7 @@
    "params": [
     {
      "id": "colour",
-     "label": "Colour",
+     "label": "Color",
      "kind": "choice",
      "default": "red",
      "choices": [
@@ -14010,6 +14023,216 @@
    "event": true,
    "keywords": "stuck wait gate send",
    "needs": "creatures"
+  },
+  {
+   "type": "table.get_row",
+   "title": "Get Row",
+   "category": "Data tables",
+   "help": "Finds the row whose key is this (the table's key column) and gives each of its cells. Found is No when no row has that key (the cells are then 0, No or empty).",
+   "inputs": [
+    {
+     "id": "key",
+     "type": "any",
+     "label": "Key",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "found",
+     "type": "bool",
+     "label": "Found"
+    },
+    {
+     "id": "row",
+     "type": "number",
+     "label": "Row"
+    }
+   ],
+   "params": [
+    {
+     "id": "table",
+     "label": "Table",
+     "kind": "table",
+     "default": ""
+    }
+   ],
+   "pure": true,
+   "keywords": "lookup data table row key csv"
+  },
+  {
+   "type": "table.get_cell",
+   "title": "Get Cell",
+   "category": "Data tables",
+   "help": "One cell: a column of a row (rows count from 0). Past the end: 0, No or empty.",
+   "inputs": [
+    {
+     "id": "row",
+     "type": "number",
+     "label": "Row",
+     "param": "row"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "any",
+     "label": "Value"
+    }
+   ],
+   "params": [
+    {
+     "id": "table",
+     "label": "Table",
+     "kind": "table",
+     "default": ""
+    },
+    {
+     "id": "column",
+     "label": "Column",
+     "kind": "column",
+     "default": ""
+    },
+    {
+     "id": "row",
+     "label": "Row",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 255
+    }
+   ],
+   "pure": true,
+   "keywords": "lookup data table cell"
+  },
+  {
+   "type": "table.for_each",
+   "title": "For Each Row",
+   "category": "Data tables",
+   "help": "Runs Each once for every row of the table, in order, with that row's cells; then Then.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "each",
+     "type": "exec",
+     "label": "Each"
+    },
+    {
+     "id": "row",
+     "type": "number",
+     "label": "Row"
+    },
+    {
+     "id": "key",
+     "type": "any",
+     "label": "Key"
+    },
+    {
+     "id": "then",
+     "type": "exec",
+     "label": "Then"
+    }
+   ],
+   "params": [
+    {
+     "id": "table",
+     "label": "Table",
+     "kind": "table",
+     "default": ""
+    }
+   ],
+   "keywords": "loop data table rows"
+  },
+  {
+   "type": "table.find",
+   "title": "Find Rows",
+   "category": "Data tables",
+   "help": "The rows (as row numbers) where a column has this value, in order. Use Get Cell on each.",
+   "inputs": [
+    {
+     "id": "value",
+     "type": "any",
+     "label": "Value",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "any",
+     "label": "Rows"
+    }
+   ],
+   "params": [
+    {
+     "id": "table",
+     "label": "Table",
+     "kind": "table",
+     "default": ""
+    },
+    {
+     "id": "column",
+     "label": "Column",
+     "kind": "column",
+     "default": ""
+    }
+   ],
+   "pure": true,
+   "keywords": "filter where search data table"
+  },
+  {
+   "type": "table.count",
+   "title": "Row Count",
+   "category": "Data tables",
+   "help": "How many rows the table has.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Rows"
+    }
+   ],
+   "params": [
+    {
+     "id": "table",
+     "label": "Table",
+     "kind": "table",
+     "default": ""
+    }
+   ],
+   "pure": true,
+   "keywords": "length size data table"
+  },
+  {
+   "type": "table.keys",
+   "title": "Row Keys",
+   "category": "Data tables",
+   "help": "The table's keys (its key column), in row order.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "any",
+     "label": "Keys"
+    }
+   ],
+   "params": [
+    {
+     "id": "table",
+     "label": "Table",
+     "kind": "table",
+     "default": ""
+    }
+   ],
+   "pure": true,
+   "keywords": "data table keys list"
   },
   {
    "type": "timeline.play",

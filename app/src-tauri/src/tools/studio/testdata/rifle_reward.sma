@@ -483,6 +483,16 @@ stock lsg_wpn_of(a, inflictor)
 	return w
 }
 
+// Give Weapon with a name wired in: only a weapon the game has (ak47, deagle, knife...)
+stock lsg_give_named(id, const name[], ammo)
+{
+	new w[32]
+	formatex(w, charsmax(w), "weapon_%s", name)
+	if (equal(name, "weapon_", 7) || !get_weaponid(w))
+		return 0
+	return ls_give_weapon(id, w, ammo)
+}
+
 stock Float:lsg_dist(a, b)
 {
 	if (!lsg_ok(a) || !lsg_ok(b))

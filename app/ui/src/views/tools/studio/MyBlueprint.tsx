@@ -17,6 +17,8 @@ import { typeLabel } from "./pins";
 import { saveSnippet, deleteSnippet } from "./snippets";
 import { useAskText, useConfirm } from "../../../ui";
 import { askDelete } from "./DeleteDialog";
+import { addTable } from "./tables";
+import { openTableEditor } from "./TableEditor";
 
 function Section({ title, count, onAdd, addTitle, children, open: start = true }: { title: string; count: number; onAdd?: () => void; addTitle?: string; children: ReactNode; open?: boolean }) {
   const [open, setOpen] = useState(start);
@@ -494,6 +496,25 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
           <button key={t.id} type="button" className={`st-mb-item${tab === t.id ? " open" : ""}`} onClick={() => openTab(t.id)} title="Open its editor">
             <span className="st-mb-dot fn" /> {t.name}
             <span className="st-muted st-mb-note">{t.length} s</span>
+          </button>
+        ))}
+      </Section>
+      <Section
+        title="Data tables"
+        count={(graph.dataTables ?? []).length}
+        onAdd={() => {
+          const r = addTable(graph);
+          edit(() => r.graph);
+          setTimeout(() => openTableEditor(r.id), 0);
+        }}
+        addTitle="Add a data table (rows of values: a gun list, prices, waves)"
+        open={(graph.dataTables ?? []).length > 0}
+      >
+        {(graph.dataTables ?? []).length === 0 && <p className="st-muted st-mb-empty">Rows of values to look up: a gun list, prices, waves. Paste them from a spreadsheet.</p>}
+        {(graph.dataTables ?? []).map((t) => (
+          <button key={t.id} type="button" className="st-mb-item" onClick={() => openTableEditor(t.id)} title="Open the table">
+            <span className="st-mb-dot struct" /> {t.name}
+            <span className="st-muted st-mb-note">{t.rows.length} rows</span>
           </button>
         ))}
       </Section>

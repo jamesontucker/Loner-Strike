@@ -5,6 +5,7 @@
 
 import { container, nodeDef, PIN_TYPES, type NodeDef, type PinDef, type PinType } from "./registry";
 import type { GMember, GNode, Graph } from "./schema";
+import { tablePins } from "./tables";
 
 export const BASE_TYPES = ["number", "bool", "text", "player", "entity", "team", "vector", "timer"] as const;
 export const KEY_TYPES = ["text", "number", "player"] as const;
@@ -105,6 +106,18 @@ export function pinsOf(g: Graph, n: GNode): Pins {
     case "fn.return": {
       const f = fnOf(g, home);
       if (f) inputs = [...inputs, ...f.outputs.map((x) => memberPin(x, false))];
+      break;
+    }
+    case "table.get_row":
+    case "table.get_cell":
+    case "table.for_each":
+    case "table.find":
+    case "table.keys": {
+      const r = tablePins(g, n);
+      if (r) {
+        inputs = inputs.map((p) => ({ ...p, type: r.inType(p.id) ?? p.type }));
+        outputs = [...outputs.map((p) => ({ ...p, type: r.outType(p.id) ?? p.type })), ...r.extra];
+      }
       break;
     }
     case "timeline.play": {
@@ -233,6 +246,15 @@ export function nodeTitle(g: Graph, n: GNode): string {
     case "timeline.play": {
       const tl = (g.timelines ?? []).find((x) => x.id === n.params.timeline);
       return tl ? `Timeline: ${tl.name}` : def.title;
+    }
+    case "table.get_row":
+    case "table.get_cell":
+    case "table.for_each":
+    case "table.find":
+    case "table.count":
+    case "table.keys": {
+      const t = (g.dataTables ?? []).find((x) => x.id === n.params.table);
+      return t ? `${def.title}: ${t.name}` : def.title;
     }
     case "event.custom":
     case "event.call":

@@ -179,3 +179,49 @@ test("setting names may hold digits after the first letter (mp_give_player_c4)",
     assert.ok("error" in r, bad);
   }
 });
+
+// ---- data tables (tables.ts)
+import { addColumn, addTable, importCsv, parseCsv, readCell, removeColumn, retypeColumn, tablePins, tableProblems, toCsv, updateTable } from "../src/views/tools/studio/tables";
+import { pinsOf } from "../src/views/tools/studio/pins";
+
+test("data tables: CSV in (commas, tabs, quotes, a header row) and out", () => {
+  assert.deepEqual(parseCsv('a,b\n"x, y",2\r\n\n3,"say ""hi"""'), [["a", "b"], ["x, y", "2"], ["3", 'say "hi"']]);
+  assert.deepEqual(parseCsv("lvl\tgun\n0\tak47"), [["lvl", "gun"], ["0", "ak47"]]);
+  let g = emptyGraph("tb", "Tb");
+  const r = addTable(g, "Guns");
+  g = updateTable(r.graph, r.id, (t) => retypeColumn({ ...t, columns: [{ id: "c1", name: "Level", type: "number" }, { id: "c2", name: "Gun", type: "text" }], rows: [] }, "c2", "weapon"));
+  const t = g.dataTables![0];
+  const imp = importCsv(t, "Level,Gun\n0,glock18\n1,weapon_AK47\n2,raygun", false);
+  assert.match(imp.message, /Added 3 rows \(the first row was the column names\)/);
+  assert.deepEqual(imp.table.rows, [[0, "glock18"], [1, "ak47"], [2, "knife"]]);
+  assert.equal(toCsv(imp.table).split("\n")[0], "Level,Gun");
+  // a text cell keeps the label characters only
+  assert.equal(readCell({ id: "x", name: "X", type: "text" }, 'Dust "II" /x'), "Dust II x");
+  // the same key twice is a problem the editor shows
+  const dup = { ...imp.table, rows: [...imp.table.rows, [1, "awp"]] };
+  assert.ok(tableProblems({ ...g, dataTables: [dup] }, dup).some((m) => m.includes("same key")));
+  // columns come and go with their cells; the key moves off a removed column
+  const more = addColumn(imp.table, "bool");
+  assert.equal(more.rows[0].length, 3);
+  const less = removeColumn(more, "c1");
+  assert.equal(less.key, "c2");
+});
+
+test("data tables: nodes take their pins from the table", () => {
+  let g = emptyGraph("tp", "Tp");
+  const r = addTable(g, "Guns");
+  g = updateTable(r.graph, r.id, (t) => ({ ...t, key: "c1", columns: [{ id: "c1", name: "Level", type: "number" }, { id: "c2", name: "Gun", type: "weapon" }], rows: [[0, "ak47"]] }));
+  const add = (type: string, params: Record<string, string | number>) => {
+    const x = addNode(g, type, { x: 0, y: 0 }, undefined, { table: r.id, ...params });
+    g = x.graph;
+    return g.nodes.find((n) => n.id === x.id)!;
+  };
+  const row = pinsOf(g, add("table.get_row", {}));
+  assert.equal(row.inputs.find((p) => p.id === "key")?.type, "number");
+  assert.deepEqual(row.outputs.map((p) => p.id), ["found", "row", "c1", "c2"]);
+  assert.equal(row.outputs.find((p) => p.id === "c2")?.type, "text");
+  assert.equal(pinsOf(g, add("table.get_cell", { column: "c2" })).outputs.find((p) => p.id === "out")?.type, "text");
+  assert.equal(pinsOf(g, add("table.find", { column: "c1" })).outputs.find((p) => p.id === "out")?.type, "array<number>");
+  assert.equal(pinsOf(g, add("table.keys", {})).outputs.find((p) => p.id === "out")?.type, "array<number>");
+  assert.ok(tablePins(g, g.nodes[0]));
+});

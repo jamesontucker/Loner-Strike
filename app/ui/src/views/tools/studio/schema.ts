@@ -177,6 +177,19 @@ export const graphSchema = z.object({
     .max(16)
     .optional(),
   customEvents: z.array(z.object({ id, name: label(26), inputs: z.array(memberSchema).max(8).default([]), map: z.boolean().optional() })).max(32).optional(),
+  /** the mode's data tables (tables.ts; the app checks the cells and the size limits: tables.rs) */
+  dataTables: z
+    .array(
+      z.object({
+        id,
+        name: label(30),
+        key: id,
+        columns: z.array(z.object({ id, name: label(30), type: z.string().regex(/^(number|text|bool|weapon|entname|enum:[A-Za-z0-9_]{1,24})$/) })).min(1).max(12),
+        rows: z.array(z.array(z.union([z.number().finite(), z.string().max(48), z.boolean()])).max(12)).max(256).default([]),
+      }),
+    )
+    .max(16)
+    .optional(),
   markers: z.array(markerSchema).max(32).optional(),
   mapKit: mapKitSchema.optional(),
 });

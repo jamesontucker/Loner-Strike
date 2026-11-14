@@ -185,6 +185,9 @@ pub struct Graph {
     /// Timeline nodes
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub timelines: Vec<Timeline>,
+    /// the mode's data tables: typed columns and rows, read by the Data table nodes (tables.rs)
+    #[serde(default, rename = "dataTables", skip_serializing_if = "Vec::is_empty")]
+    pub data_tables: Vec<super::tables::DataTable>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -1101,6 +1104,34 @@ impl<'a> View<'a> {
                     p.outputs.extend(f.inputs.iter().map(|m| member_pin(m, false)));
                 }
             }
+            "table.get_row" | "table.for_each" | "table.get_cell" | "table.find" | "table.keys" => {
+                if let Some((_, t)) = super::tables::table_of(&self.g.data_tables, n) {
+                    let col_pin = |c: &super::tables::Column| PinDef { id: c.id.clone(), ty: c.pin_type(), label: c.name.clone(), required: false, optional: true, param: None };
+                    let key_ty = t.key_col().map(|(_, c)| c.pin_type()).unwrap_or_else(|| "any".into());
+                    let picked = n.params.get("column").and_then(Value::as_str).and_then(|c| t.col(c)).map(|(_, c)| c.pin_type()).unwrap_or_else(|| "any".into());
+                    match def.kind.as_str() {
+                        "table.get_row" | "table.for_each" => p.outputs.extend(t.columns.iter().map(col_pin)),
+                        _ => {}
+                    }
+                    // (the registry says "any" for these; the table says what they are)
+                    for pin in p.inputs.iter_mut() {
+                        match (def.kind.as_str(), pin.id.as_str()) {
+                            ("table.get_row", "key") => pin.ty = key_ty.clone(),
+                            ("table.find", "value") => pin.ty = picked.clone(),
+                            _ => {}
+                        }
+                    }
+                    for pin in p.outputs.iter_mut() {
+                        match (def.kind.as_str(), pin.id.as_str()) {
+                            ("table.get_cell", "out") => pin.ty = picked.clone(),
+                            ("table.keys", "out") => pin.ty = format!("array<{key_ty}>"),
+                            ("table.find", "out") => pin.ty = "array<number>".into(),
+                            ("table.for_each", "key") => pin.ty = key_ty.clone(),
+                            _ => {}
+                        }
+                    }
+                }
+            }
             "timeline.play" => {
                 let tl = n.params.get("timeline").and_then(Value::as_str).and_then(|c| self.g.timelines.iter().find(|x| x.id == c));
                 if let Some(t) = tl {
@@ -1569,6 +1600,8 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
     if !g.mode.uid.is_empty() && !valid_uid(&g.mode.uid) {
         p.push(Problem::err(None, "The mode's uid isn't a UUID this app knows."));
     }
+    // the data tables' own checks (cells, keys, the size limits)
+    p.extend(super::tables::validate(&g.data_tables, &g.enums.iter().map(|e| (e.id.clone(), e.values.len())).collect::<Vec<_>>()));
     if !valid_label(&g.mode.description, 60) {
         p.push(Problem::err(None, "The mode's description can be up to 60 letters, digits, spaces or plain punctuation (no * / \\ \" ^)."));
     }
@@ -1807,6 +1840,14 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
                 },
                 "macro" => match sval.and_then(|id| v.macros.get(id)) {
                     None => Err("Pick which Macro to use.".into()),
+                    _ => Ok(()),
+                },
+                "table" => match sval.and_then(|id| g.data_tables.iter().find(|t| t.id == id)) {
+                    None => Err(format!("Pick a data table for {} (add one under My mode, Data tables).", def.title)),
+                    _ => Ok(()),
+                },
+                "column" => match super::tables::table_of(&g.data_tables, n).map(|(_, t)| t.col(sval.unwrap_or("")).is_some()) {
+                    Some(false) => Err(format!("Pick a column for {}.", def.title)),
                     _ => Ok(()),
                 },
                 "tline" => match sval.and_then(|id| g.timelines.iter().find(|t| t.id == id)) {
@@ -2552,7 +2593,7 @@ mod tests {
                 assert_eq!(n.pure, !n.event && !n.reroute && !n.has_exec_in(), "{}: pure means no flow in", n.kind);
             }
             for prm in &n.params {
-                if !["var", "varvalue", "func", "timer", "fn", "macro", "struct", "enum", "type", "field", "enumvalue"].contains(&prm.kind.as_str()) {
+                if !["var", "varvalue", "func", "timer", "fn", "macro", "struct", "enum", "type", "field", "enumvalue", "table", "column"].contains(&prm.kind.as_str()) {
                     assert!(check_param(prm, &prm.default).is_ok(), "{} {} default", n.kind, prm.id);
                 }
             }

@@ -89,6 +89,7 @@ insert_snippet {snippet, x?, y?, graph?} (a snippet id from studio_snippets) -> 
 add_event_graph {name} -> id (another event graph tab: put nodes on it with graph: its id); rename_event_graph {event_graph, name}; remove_event_graph {event_graph} (its nodes move to the first);\n\
 add_custom_event {name, inputs?: [{name, type}], map?} -> id (Custom Event / Call Custom Event nodes take it as their event setting); update_custom_event {custom_event, ...}; remove_custom_event {custom_event};\n\
 add_timeline {name, length?, loop?, autoplay?, tick?, tracks?} -> id (Timeline nodes take it as their timeline setting); update_timeline {timeline, ...}; remove_timeline {timeline}.\n\
+add_table {name, columns: [{id, name, type: number|text|bool|weapon|entname|enum:<id>}], key: <column id>, rows?: [[cell, ...], ...]} -> id (Get Row, Get Cell, For Each Row, Find Rows, Row Count, Row Keys take it as their table setting; Get Cell and Find Rows a column id too; at most 16 tables, 12 columns, 256 rows, text cells 48 letters); update_table {table, name?, columns?, key?, rows?}; remove_table {table}.\n\
 Pin types and node types: studio_nodes."}}), &["id", "ops"]),
             description: "Edits the draft like the Studio's canvas: nodes, wires, pin values, variables, Functions, Macros, structs, enums, comments, map markers, mode settings and snippets. Returns the new ids and the problems left." },
         Spec { name: "studio_draft_undo", title: "Mode Studio: undo", kind: Change, schema: || obj(json!({"id": id_prop()}), &["id"]),
@@ -163,7 +164,7 @@ fn fresh_id(g: &Value, prefix: &str) -> String {
 /// A fresh id for a variable, local, Function, Macro, struct or enum (graphOps freshPartId).
 fn fresh_part(g: &Value, prefix: &str) -> String {
     let mut used: Vec<String> = vec![];
-    for k in ["variables", "functions", "macros", "structs", "enums", "eventGraphs", "customEvents", "timelines"] {
+    for k in ["variables", "functions", "macros", "structs", "enums", "eventGraphs", "customEvents", "timelines", "dataTables"] {
         for x in g[k].as_array().into_iter().flatten() {
             used.extend(x["id"].as_str().map(String::from));
             for l in x["locals"].as_array().into_iter().flatten() {
@@ -614,6 +615,27 @@ async fn edit(ctx: &Ctx, g: &mut Value, o: &Value) -> Result<Value, String> {
             }
             Value::Null
         }
+        "add_table" => {
+            let id = fresh_part(g, "dt");
+            let t = json!({"id": id, "name": o["name"].as_str().unwrap_or("Table"), "key": o.get("key").cloned().unwrap_or(json!("")), "columns": o.get("columns").cloned().unwrap_or(json!([])), "rows": o.get("rows").cloned().unwrap_or(json!([]))});
+            arr(g, "dataTables").push(t);
+            json!(id)
+        }
+        "update_table" => {
+            let id = text(o, "table")?;
+            let x = arr(g, "dataTables").iter_mut().find(|x| x["id"] == id.as_str()).ok_or("there's no such data table")?;
+            for k in ["name", "columns", "key", "rows"] {
+                if let Some(v) = o.get(k) {
+                    x[k] = v.clone();
+                }
+            }
+            Value::Null
+        }
+        "remove_table" => {
+            let id = text(o, "table")?;
+            arr(g, "dataTables").retain(|x| x["id"] != id.as_str());
+            Value::Null
+        }
         "remove_timeline" => {
             let id = text(o, "timeline")?;
             arr(g, "timelines").retain(|x| x["id"] != id.as_str());
@@ -704,7 +726,7 @@ async fn view(ctx: &Ctx, id: &str, tab: Option<&str>) -> Done {
     Ok(json!({"id": id, "mode": g["mode"], "unsaved": dirty, "undo": undo, "redo": redo, "nodes": nodes, "wires": g["edges"],
         "variables": g["variables"], "functions": g["functions"], "macros": g["macros"], "structs": g["structs"], "enums": g["enums"],
         "comments": g["comments"], "markers": g["markers"], "mapKit": g["mapKit"],
-        "eventGraphs": g["eventGraphs"], "customEvents": g["customEvents"], "timelines": g["timelines"], "problems": problems, "errors": errors}))
+        "eventGraphs": g["eventGraphs"], "customEvents": g["customEvents"], "timelines": g["timelines"], "dataTables": g["dataTables"], "problems": problems, "errors": errors}))
 }
 
 // ---- running them ------------------------------------------------------------------------

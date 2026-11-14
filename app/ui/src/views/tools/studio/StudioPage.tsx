@@ -28,6 +28,7 @@ import { DebugPanel } from "./DebugPanel";
 import { NodeHelp } from "./NodeHelp";
 import { HelpMenu } from "./HelpMenu";
 import { DeleteDialogHost } from "./DeleteDialog";
+import { TableEditorHost } from "./TableEditor";
 import { StudioTour, TourOffer, startStudioTour } from "./Tour";
 import { applyLayout, autoLayout } from "./layout";
 import { nativeMenuOk } from "./ContextMenu";
@@ -831,6 +832,7 @@ function Studio({ maps }: ToolProps) {
       </div>
       <Results focus={(id) => focusRef.current(id)} />
       <StudioTour />
+      <TableEditorHost toast={toast} />
       <DeleteDialogHost
         findUses={(ids) => {
           const g = useStudio.getState().graph;

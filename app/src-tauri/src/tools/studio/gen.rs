@@ -143,7 +143,7 @@ fn keys_text(s: &str) -> String {
 }
 
 /// A Pawn float literal, finite and inside the graph's limits.
-fn float_lit(x: f64) -> String {
+pub fn float_lit(x: f64) -> String {
     let x = if x.is_finite() { x.clamp(-NUMBER_LIMIT, NUMBER_LIMIT) } else { 0.0 };
     let s = format!("{x:.3}");
     let s = s.trim_end_matches('0');
@@ -398,7 +398,7 @@ fn kind_of(ty: &str) -> char {
 }
 
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
-const CTX_KINDS: [&str; 13] = ["creature.for_each", "timeline.play", "marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
+const CTX_KINDS: [&str; 14] = ["table.for_each", "creature.for_each", "timeline.play", "marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
 const STORE_KINDS: [&str; 9] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call"];
 /// Nodes with more than one flow input: one Pawn function each.
@@ -815,6 +815,26 @@ impl<'a> Gen<'a> {
             "save.get" => format!("lsg_saved_get({}, {})", i("player", "player"), pawn_str(&name_text(self.text(n, def, "key")))),
             "clock.left" => "lsg_clock_left()".into(),
             "marker.count" => format!("float(lsg_mk_count({}))", marker_index(self.v.g, self.text(n, def, "marker"))),
+            "table.get_row" | "table.get_cell" | "table.find" | "table.count" | "table.keys" => match super::tables::table_of(&self.v.g.data_tables, n) {
+                None => Self::zero(&ty),
+                Some((t, tb)) => {
+                    let col = |c: &str| tb.col(c).map(|(k, _)| k);
+                    match def.kind.as_str() {
+                        "table.get_row" => {
+                            let row = format!("lsg_dt{t}_find({})", self.needt(node, "key"));
+                            match pin {
+                                "found" => format!("({row} >= 0.0 ? 1 : 0)"),
+                                "row" => row,
+                                c => col(c).map(|k| format!("lsg_dt{t}_{k}({row})")).unwrap_or_else(|| Self::zero(&ty)),
+                            }
+                        }
+                        "table.get_cell" => col(self.text(n, def, "column")).map(|k| format!("lsg_dt{t}_{k}({})", self.need(node, "row", "number"))).unwrap_or_else(|| Self::zero(&ty)),
+                        "table.find" => col(self.text(n, def, "column")).map(|k| format!("lsg_dt{t}_where{k}({})", self.needt(node, "value"))).unwrap_or_else(|| "lsg_atmp()".into()),
+                        "table.count" => format!("float(LSG_DT{t}_N)"),
+                        _ => format!("lsg_dt{t}_keys()"),
+                    }
+                }
+            },
             "marker.find" => {
                 let get = format!("lsg_mk_get({}, floatround({}))", marker_index(self.v.g, self.text(n, def, "marker")), i("n", "number"));
                 match pin {
@@ -1200,6 +1220,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         o.line(V3_HELPERS);
         o.blank();
         v3_stocks(&gen, &mut o);
+        // the data tables the mode reads, as constant arrays
+        let used = |tid: &str| g.nodes.iter().any(|n| n.kind.starts_with("table.") && n.params.get("table").and_then(Value::as_str) == Some(tid));
+        o.line(&super::tables::pawn(&g.data_tables, &used));
     }
     if debug {
         // the graph's variables for the live values
@@ -1236,6 +1259,36 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
             }
         }
         o.line("}");
+        o.blank();
+        // live tweaks: the debugger sets a variable while the game runs (numbers, yes/no, text,
+        // enum values; the app checked the value)
+        o.line("lsd_graph_set(const vid[], who, const val[])\n{");
+        let mut any = false;
+        for (i, x) in gen.vars.iter().enumerate() {
+            let enum_ty = x.ty.starts_with("enum:");
+            if !matches!(x.ty.as_str(), "number" | "bool" | "text") && !enum_ty {
+                continue;
+            }
+            any = true;
+            let at = match x.scope.as_str() {
+                "player" => format!("g_pv{i}[clamp(who, 1, 32)]"),
+                "team" => format!("g_tv{i}[clamp(who, 1, 2)]"),
+                _ => format!("g_v{i}"),
+            };
+            let set = match x.ty.as_str() {
+                "number" => format!("{at} = str_to_float(val)"),
+                "bool" => format!("{at} = str_to_num(val) ? 1 : 0"),
+                "text" => format!("copy({at}, 63, val)"),
+                _ => format!("{at} = str_to_num(val)"),
+            };
+            o.line(format!("\tif (equal(vid, {}))\n\t{{\n\t\t{set}\n\t\treturn true\n\t}}", pawn_str(&id_text(&x.id))));
+        }
+        if !any {
+            o.line("\t#pragma unused vid, who, val");
+        } else if !gen.vars.iter().any(|x| x.scope != "mode" && (matches!(x.ty.as_str(), "number" | "bool" | "text") || x.ty.starts_with("enum:"))) {
+            o.line("\t#pragma unused who");
+        }
+        o.line("\treturn false\n}");
         o.blank();
     }
     if uses_down || uses_squad {
@@ -1791,12 +1844,15 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         "player.give_weapon" => {
             let p = inp("player", "player");
-            let w = pawn_str(gen.choice(n, def, "weapon"));
-            let ammo = gen.num(n, def, "ammo").round() as i64;
+            // a weapon's name wired in (a data table's, say): only a real weapon is given
+            let wired = v.data_source(id, "weapon").is_some();
+            let w = if wired { inp("weapon", "text") } else { pawn_str(gen.choice(n, def, "weapon")) };
+            let ammo = if v.data_source(id, "ammo").is_some() { format!("clamp(floatround({}), 0, 250)", inp("ammo", "number")) } else { (gen.num(n, def, "ammo").round() as i64).to_string() };
+            let give = if wired { format!("lsg_give_named({p}, {w}, {ammo})") } else { format!("ls_give_weapon({p}, {w}, {ammo})") };
             if debug {
-                b.line(format!("\tif (ls_give_weapon({p}, {w}, {ammo}))\n\t{}\n\telse\n\t\t{}", exit("given"), err("Not given: that player is dead or already has one.")));
+                b.line(format!("\tif ({give})\n\t{}\n\telse\n\t\t{}", exit("given"), err(if wired { "Not given: that player is dead, already has one, or that isn't a weapon's name." } else { "Not given: that player is dead or already has one." })));
             } else {
-                b.line(format!("\tls_give_weapon({p}, {w}, {ammo})"));
+                b.line(format!("\t{give}"));
             }
             then_line(&mut b, "then");
         }
@@ -1971,6 +2027,46 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let e = exit("ran");
             if !e.is_empty() {
                 b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "table.for_each" => {
+            // each row: its number, its key and its cells in the flow's values (text ones kept aside)
+            let body = next("each").map(|c| c.replace("(ctx)", "(c)"));
+            let tb = super::tables::table_of(&v.g.data_tables, n);
+            let t = tb.map(|x| x.0).unwrap_or(0);
+            let rows = if tb.is_some() { format!("LSG_DT{t}_N") } else { "0".into() };
+            b.line(format!("\tnew c[LSG_CTX], count\n\tfor (new r = 0; r < {rows}; r++)\n\t{{\n\t\tcount++\n\t\tfor (new j = 0; j < LSG_CTX; j++)\n\t\t\tc[j] = ctx[j]"));
+            if let Some((t, tb)) = tb {
+                let mut put = |pin: &str, k: usize, text: bool| {
+                    if let Some(s) = gen.slot(id, pin) {
+                        b.line(format!("\t\tc[{s}] = {}", if text { "0".into() } else { format!("_:lsg_dt{t}_{k}(float(r))") }));
+                    } else if let Some(o) = gen.tout_index(id, pin) {
+                        b.line(format!("\t\tcopy(g_lsgOT[{o}], 127, lsg_dt{t}_{k}(float(r)))"));
+                    }
+                };
+                if let Some((k, kc)) = tb.key_col() {
+                    put("key", k, kc.pin_type() == "text");
+                }
+                for (k, c) in tb.columns.iter().enumerate() {
+                    put(&c.id, k, c.pin_type() == "text");
+                }
+                if let Some(s) = gen.slot(id, "row") {
+                    b.line(format!("\t\tc[{s}] = _:float(r)"));
+                }
+            }
+            match body {
+                Some(c) => b.line(format!("\t\t{c}")),
+                None => b.line("\t\t#pragma unused c"),
+            }
+            if let Some(stop) = &fn_done {
+                b.line(format!("\t\tif ({stop})\n\t\t\treturn"));
+            }
+            b.line("\t}");
+            if debug {
+                b.line(format!("\tlsd_exit({i}, lsd_times(count))"));
+            } else {
+                b.line("\t#pragma unused count");
             }
             then_line(&mut b, "then");
         }
@@ -3067,7 +3163,7 @@ fn multi_fn(gen: &Gen, id: &str, pin: &str, body: &str) -> String {
 
 /// Node kinds that need the version 3 helpers (by prefix).
 const V3_KINDS: &[&str] = &[
-    "creature.", "timeline.", "player.transform", "player.set_transform", "player.set_rotation", "player.look_at", "ent.", "fx.",
+    "creature.", "timeline.", "table.", "player.transform", "player.set_transform", "player.set_rotation", "player.look_at", "ent.", "fx.",
     "marker.",
     "fn.", "macro.", "struct.", "enum.", "array.", "map.", "vec.", "flow.sequence", "flow.do_", "flow.gate", "flow.flipflop", "flow.for_loop", "flow.while", "flow.for_each_array", "flow.switch_", "flow.if_valid", "timer.retrigger", "timer.by_function",
     "timer.clear", "timer.is_active", "debug.print", "logic.equal", "logic.select", "cond.is_valid", "player.is_player", "creature.is", "math.fn", "math.clamp", "math.lerp", "math.in_range", "math.number", "text.literal", "text.append", "text.format", "text.contains", "text.length", "text.to_number", "text.from",
@@ -4748,6 +4844,16 @@ stock lsg_wpn_of(a, inflictor)
 		replace(w, charsmax(w), "weapon_", "")
 	}
 	return w
+}
+
+// Give Weapon with a name wired in: only a weapon the game has (ak47, deagle, knife...)
+stock lsg_give_named(id, const name[], ammo)
+{
+	new w[32]
+	formatex(w, charsmax(w), "weapon_%s", name)
+	if (equal(name, "weapon_", 7) || !get_weaponid(w))
+		return 0
+	return ls_give_weapon(id, w, ammo)
 }
 
 stock Float:lsg_dist(a, b)

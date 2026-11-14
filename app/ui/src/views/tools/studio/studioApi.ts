@@ -42,7 +42,8 @@ export const uninstall = (id: string) => post<{ ok?: boolean }>(`${S}/uninstall/
 
 export type DebugEvent = { s: number; t: number; e: string; node?: string; inputs?: Record<string, unknown>; result?: string; message?: string; [k: string]: unknown };
 export const debugEvents = (mode: string, from: number) => tryGet<{ events?: DebugEvent[]; next?: number; reset?: boolean }>(`${S}/debug/events?mode=${encodeURIComponent(mode)}&from=${from}`);
-export const debugCommand = (b: { mode: string; resume?: boolean; vars?: boolean; breakpoints?: string[] }) => post<{ ok?: boolean }>(`${S}/debug/command`, b);
+export const debugCommand = (b: { mode: string; resume?: boolean; vars?: boolean; breakpoints?: string[]; set?: { var: string; who: number; value: string | number | boolean; graph: unknown } }) =>
+  post<{ ok?: boolean; error?: string }>(`${S}/debug/command`, b);
 
 export const gameState = () => tryGet<{ game_open?: boolean }>("/api/state");
 export const launchGame = (b: { map: string; bots: number; mode: string; restart?: boolean }) => post<{ ok?: boolean }>("/api/app/launch", b);

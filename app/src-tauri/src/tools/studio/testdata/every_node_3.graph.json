@@ -1302,59 +1302,138 @@
   },
   {
    "id": "n129",
-   "type": "timeline.play",
+   "type": "table.get_row",
    "pos": {
     "x": 2860,
     "y": 3300
+   },
+   "params": {
+    "table": "dt1"
+   }
+  },
+  {
+   "id": "n130",
+   "type": "table.get_cell",
+   "pos": {
+    "x": 3120,
+    "y": 3300
+   },
+   "params": {
+    "table": "dt1",
+    "column": "gun"
+   }
+  },
+  {
+   "id": "n131",
+   "type": "table.for_each",
+   "pos": {
+    "x": 260,
+    "y": 3520
+   },
+   "params": {
+    "table": "dt1"
+   }
+  },
+  {
+   "id": "n132",
+   "type": "table.find",
+   "pos": {
+    "x": 520,
+    "y": 3520
+   },
+   "params": {
+    "table": "dt1",
+    "column": "lvl"
+   }
+  },
+  {
+   "id": "n133",
+   "type": "table.count",
+   "pos": {
+    "x": 780,
+    "y": 3520
+   },
+   "params": {
+    "table": "dt1"
+   }
+  },
+  {
+   "id": "n134",
+   "type": "table.keys",
+   "pos": {
+    "x": 1040,
+    "y": 3520
+   },
+   "params": {
+    "table": "dt1"
+   }
+  },
+  {
+   "id": "n135",
+   "type": "timeline.play",
+   "pos": {
+    "x": 1300,
+    "y": 3520
    },
    "params": {
     "timeline": "tl1"
    }
   },
   {
-   "id": "n130",
+   "id": "n136",
    "type": "ent.transform",
    "pos": {
-    "x": 3120,
-    "y": 3300
+    "x": 1560,
+    "y": 3520
    },
    "params": {}
   },
   {
-   "id": "n131",
+   "id": "n137",
    "type": "ent.position",
    "pos": {
-    "x": 260,
+    "x": 1820,
     "y": 3520
    },
    "params": {}
   },
   {
-   "id": "n132",
+   "id": "n138",
    "type": "ent.rotation",
    "pos": {
-    "x": 520,
+    "x": 2080,
     "y": 3520
    },
    "params": {}
   },
   {
-   "id": "n133",
+   "id": "n139",
    "type": "ent.distance",
    "pos": {
-    "x": 780,
+    "x": 2340,
     "y": 3520
    },
    "params": {}
   },
   {
-   "id": "n134",
+   "id": "n140",
    "type": "ent.direction",
    "pos": {
-    "x": 1040,
+    "x": 2600,
     "y": 3520
    },
    "params": {}
+  },
+  {
+   "id": "num",
+   "type": "math.number",
+   "pos": {
+    "x": 0,
+    "y": 660
+   },
+   "params": {
+    "value": 1
+   }
   }
  ],
  "edges": [
@@ -2784,19 +2863,19 @@
     "pin": "then"
    },
    "to": {
-    "node": "n129",
+    "node": "n131",
     "pin": "exec"
    }
   },
   {
    "id": "w131",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n131",
+    "pin": "then"
    },
    "to": {
-    "node": "n130",
-    "pin": "in"
+    "node": "n135",
+    "pin": "exec"
    }
   },
   {
@@ -2806,7 +2885,7 @@
     "pin": "out"
    },
    "to": {
-    "node": "n131",
+    "node": "n136",
     "pin": "in"
    }
   },
@@ -2817,8 +2896,41 @@
     "pin": "out"
    },
    "to": {
-    "node": "n132",
+    "node": "n137",
     "pin": "in"
+   }
+  },
+  {
+   "id": "w134",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n138",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w135",
+   "from": {
+    "node": "num",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n129",
+    "pin": "key"
+   }
+  },
+  {
+   "id": "w136",
+   "from": {
+    "node": "num",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n132",
+    "pin": "value"
    }
   }
  ],
@@ -2949,6 +3061,49 @@
       }
      ]
     }
+   ]
+  }
+ ],
+ "dataTables": [
+  {
+   "id": "dt1",
+   "name": "Guns",
+   "key": "lvl",
+   "columns": [
+    {
+     "id": "lvl",
+     "name": "Level",
+     "type": "number"
+    },
+    {
+     "id": "gun",
+     "name": "Gun",
+     "type": "weapon"
+    },
+    {
+     "id": "ammo",
+     "name": "Ammo",
+     "type": "number"
+    },
+    {
+     "id": "pistol",
+     "name": "Pistol",
+     "type": "bool"
+    }
+   ],
+   "rows": [
+    [
+     0,
+     "glock18",
+     120,
+     true
+    ],
+    [
+     1,
+     "ak47",
+     90,
+     false
+    ]
    ]
   }
  ]
