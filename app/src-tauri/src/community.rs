@@ -879,9 +879,9 @@ mod tests {
     #[test]
     fn lan_rows_go_into_the_real_one() {
         let row = |rank, name: &str, auth: &str, k, time| StatLine { rank, name: name.into(), auth: auth.into(), k, time, body: vec![0, 1], ..Default::default() };
-        let out = merge_lan_rows(vec![row(1, "nano", "STEAM_ID_LAN", 3, 221), row(2, "nano", "STEAM_0:0:47946581", 2, 32), row(3, "Ann", "STEAM_ID_LAN", 1, 5)]);
+        let out = merge_lan_rows(vec![row(1, "nano", "STEAM_ID_LAN", 3, 221), row(2, "nano", "STEAM_0:1:12345", 2, 32), row(3, "Ann", "STEAM_ID_LAN", 1, 5)]);
         assert_eq!(out.len(), 2, "nano once; Ann has no real ID to go into");
-        assert_eq!((out[0].name.as_str(), out[0].auth.as_str(), out[0].k, out[0].time, out[0].rank, out[0].body[1]), ("nano", "STEAM_0:0:47946581", 5, 253, 1, 2));
+        assert_eq!((out[0].name.as_str(), out[0].auth.as_str(), out[0].k, out[0].time, out[0].rank, out[0].body[1]), ("nano", "STEAM_0:1:12345", 5, 253, 1, 2));
         assert_eq!(out[1].name, "Ann");
         // two real IDs under one name: can't tell who it was, so it stays apart
         let two = merge_lan_rows(vec![row(1, "x", "STEAM_0:0:1", 0, 0), row(2, "x", "STEAM_0:0:2", 0, 0), row(3, "x", "STEAM_ID_LAN", 0, 0)]);

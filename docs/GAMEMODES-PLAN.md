@@ -5,8 +5,8 @@ TOOLS-PLAN.md (§5.4 playtesting, §5.6 game-mode creator), TOOLS-EDITOR.md, TOO
 four research notes in docs/research/ (existing-modes.md, big-maps.md, client-limits.md,
 monstermod.md), which §16 summarises.
 
-Paths: `REPO` = /Users/jameson/loner-strike-tools, `FORK` = the ReGameDLL_CS fork
-(/Users/jameson/Nextcloud/Jameson/Development/Other/ReGameDLL_CS), `APP` = `REPO/app`.
+Paths: `REPO` = this repository, `FORK` = a checkout of the ReGameDLL_CS fork
+(jamesontucker/ReGameDLL_CS), `APP` = `REPO/app`.
 
 ---
 

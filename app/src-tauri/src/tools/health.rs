@@ -2035,7 +2035,7 @@ Host_Error: PF_precache_model_I: Model 'models/barrel.mdl' failed to precache\n"
     }
 
     /// The whole W1-1 run of the rats2_v5 sweep with the fixed nav it ran with:
-    /// `LS_TEST_SIM=/Users/jameson/loner-strike-sim cargo test real_sweep -- --nocapture`.
+    /// `LS_TEST_SIM=~/loner-strike-sim cargo test real_sweep -- --nocapture`.
     /// sweepreport.py said: 12/12 bots, 63 deaths, 14 to the world, 4 of 77 bot-rounds sat in spawn.
     #[test]
     fn real_sweep() {

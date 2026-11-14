@@ -279,7 +279,7 @@ logged):
 | `COMMUNITY_PUBLISH_TOKEN` | Opens only the publish export (the workflow's secret of the same name). install.sh makes one. |
 | `DISCORD_BOT_TOKEN` | The bot application's token (from `~/.config/loner-discord-token`). Without it: no cards, the webhook gets text. |
 | `DISCORD_APP_ID`, `DISCORD_PUBLIC_KEY` | Public; printed by `discord-setup.py`. Without the key, `/discord/interactions` answers 503. |
-| `DISCORD_GUILD_ID`, `DISCORD_CHANNEL_ID`, `DISCORD_MOD_ROLES`, `DISCORD_OWNER_ID` | Filled in by the template: guild 1568421500636233748, channel 1570640821320159252, roles Moderator 1568425985504968768 + Dev 1568425984288362637, owner 310619637727363072. |
+| `DISCORD_GUILD_ID`, `DISCORD_CHANNEL_ID`, `DISCORD_MOD_ROLES`, `DISCORD_OWNER_ID` | Blank in the template: fill them in on the box (Discord's Developer Mode > right-click > Copy ID): the guild, the mod channel, the Moderator and Dev roles, the owner. |
 | `COMMUNITY_MOD_WEBHOOK` | Fallback: the channel's webhook (from `~/.config/lonerstrike/community-webhook`). Only `https://discord.com/api/webhooks/…` is ever posted to. |
 
 No R2 keys go on the box (set-env.sh refuses `R2_*`/`AWS_*` names); install.sh removes the earlier

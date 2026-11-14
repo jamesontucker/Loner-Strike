@@ -54,13 +54,13 @@ people can work in this worktree at once without stepping on each other.
   behind a dev flag.
 
 ## Reference code (real and working; port, don't copy blindly)
-- BSP faces, textures, entities, hull traces: `/Users/jameson/loner-strike-sim/surfsim.py`,
-  `surfpng.py`, `ramps.py`, `surfmap.py`. Nav v5 read/write: `/Users/jameson/loner-strike-sim/navpack/navarea.py`,
-  `navlink.py`. .lsv layout: `/Users/jameson/Nextcloud/Jameson/Development/Other/ReGameDLL_CS/regamedll/dlls/bot/cs_bot_ls.cpp`
-  (LSV save/load) and `/Users/jameson/loner-strike-sim/mapknow.py`. Recordings: `/Users/jameson/loner-strike-sim/gm_simrec.sma`,
-  `analyze.py`; samples in `/Users/jameson/loner-strike-sim/results/rats2_v5/`.
+- BSP faces, textures, entities, hull traces: `~/loner-strike-sim/surfsim.py`,
+  `surfpng.py`, `ramps.py`, `surfmap.py`. Nav v5 read/write: `~/loner-strike-sim/navpack/navarea.py`,
+  `navlink.py`. .lsv layout: `<fork>/regamedll/dlls/bot/cs_bot_ls.cpp`
+  (LSV save/load) and `~/loner-strike-sim/mapknow.py`. Recordings: `~/loner-strike-sim/gm_simrec.sma`,
+  `analyze.py`; samples in `~/loner-strike-sim/results/rats2_v5/`.
 - Game files to test with: `~/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life/cstrike/maps/` (de_dust2, cs_rats2, surf_ski_2...);
-  the fixed nav `/Users/jameson/loner-strike-sim/navpack/fixes/cs_rats2.nav` (+ .lsv).
+  the fixed nav `~/loner-strike-sim/navpack/fixes/cs_rats2.nav` (+ .lsv).
 
 ## When you finish a piece
 Append to `docs/TOOLS-NOTES.md`: what you built, how to try it, what's left, and any requests.

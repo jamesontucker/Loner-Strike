@@ -234,7 +234,7 @@ webview, including pointer lock in WKWebView; the Replay tool (M6) and the nav/k
 **How to try it**
 - `cd app/src-tauri && cargo test nav lsv hull overlays` (fixtures: a 3-area nav, a box room BSP with a
   ladder and a func_wall, a built .lsv, a rats2_v5 recording + trace snippet in `tools/testdata/`).
-- Real files: `LS_TEST_SIM=/Users/jameson/loner-strike-sim LS_TEST_GAME="$HOME/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life" cargo test -- nav lsv hull overlays`
+- Real files: `LS_TEST_SIM=~/loner-strike-sim LS_TEST_GAME="$HOME/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life" cargo test -- nav lsv hull overlays`
   (navs round-trip, .lsv keys match, de_dust2 floors match its nav, de_nuke ladders build, the whole
   W1-1 rats2_v5 recording: 63 kills, falls found, its trace matches).
 - App running: `curl -s 127.0.0.1:<port>/api/tools/map/cs_rats2/nav | head -c 400`,
@@ -454,7 +454,7 @@ timeline of #why notes, bot view cones as meshes, Replay heat by round.
 - `cd app/src-tauri && cargo test tools::health` (snippet of the rats2_v5 W1-1 recording around three falls in
   `tools/health/testdata/`, synthetic navs for places, console lines from the sweeps, presets, cfg edits, the
   copy filter and sync, report save/prune). The whole run against sweepreport's numbers:
-  `LS_TEST_SIM=/Users/jameson/loner-strike-sim cargo test real_sweep -- --nocapture`.
+  `LS_TEST_SIM=~/loner-strike-sim cargo test real_sweep -- --nocapture`.
 - In the app: make sure a server exists on this computer (Servers > New server) and the game is closed, then
   Tools > Map health check > pick cs_rats2 (copy `navpack/fixes/cs_rats2.{nav,lsv}` in first for the fixed
   nav), 2 min, Run. The first run copies the server and compiles the recorder (slower).
@@ -627,7 +627,7 @@ triangle facing agrees with the normals 97% (63k of 2.0M disagree: models' own o
 
 **How to try it**
 - `cd app/src-tauri && cargo test navfix` (13 tests: edits round-trip through the file, one-way links, delete, islands/traps, the other checks, save/backup/refusals, the routes, the rats2 fix).
-- Real files: `LS_TEST_SIM=/Users/jameson/loner-strike-sim LS_TEST_GAME="$HOME/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life" cargo test navfix -- --nocapture`.
+- Real files: `LS_TEST_SIM=~/loner-strike-sim LS_TEST_GAME="$HOME/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Program Files (x86)/Steam/steamapps/common/Half-Life" cargo test navfix -- --nocapture`.
 - In the app: Tools > Nav fixer > cs_rats2. With the raw nav in cstrike/maps: Top-down, Draw area along the beam, Link from 274 along it, Shift-click the drop to area 2, Save, Rebuild bot knowledge.
 
 **Notes for others**
@@ -1035,7 +1035,7 @@ box + checks through the bridge). In the app: Settings > AI agents, then the Cla
   on window focus). Today a box added over MCP shows up only after the page reloads its document.
 
 **W2 status: Phase A brain plumbing done, local commits on `ls-modes` (not pushed)**, in worktree
-`/Users/jameson/regamedll-modes` (the main checkout stays on `ls-surf`). Branched from `loner-strike` 6bd0fea.
+`<a second fork checkout>` (the main checkout stays on `ls-surf`). Branched from `loner-strike` 6bd0fea.
 - `d15d0c5` ls_mode commands + the mode's facts (`dlls/bot/cs_bot_ls_modes.cpp`, ~900 lines; cvar
   `ls_mode_ver 1`; reset on map change from `CCSBotManager::ServerActivate`; CMake + vcxproj entries). Inert.
 - `a163cfb` friend/foe ties in `CBot::BotRelationship` (`game_shared/bot/bot.h`), behind `g_lsModeTies`.
@@ -2328,7 +2328,7 @@ much; with more players or a bigger map it matters more (raise `br_drop` / lower
 ### BR map: br_valley, a map made for Battle Royale — 2026-11-12 (second map builder)
 
 **Limits research (why the map is 7168 across, not bigger)** — everything networked is +/-4096:
-- Engine (our ReHLDS checkout `~/Nextcloud/.../Other/ReHLDS`, `engine/common.cpp`): `MSG_WriteCoord` = `short(f*8)`,
+- Engine (our ReHLDS checkout `<our ReHLDS checkout>`, `engine/common.cpp`): `MSG_WriteCoord` = `short(f*8)`,
   `MSG_ReadCoord` = `short/8` → +/-4096 at 1/8 unit. Every temp entity (beams, the zone ring, sprites, decals), sound
   origin and AMXX `write_coord` goes through it.
 - `cstrike/delta.lst`: `entity_state_t` origin = DT_SIGNED 16 bits, divisor 8 → +/-4095.9; `entity_state_player_t`

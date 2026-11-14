@@ -2,8 +2,8 @@
 
 Implementation plan, 2026-11-12. Planning only; nothing in the repo was changed.
 
-Paths used below: `APP` = `/Users/jameson/Nextcloud/Jameson/Development/Other/loner-strike/app`,
-`SIM` = `/Users/jameson/loner-strike-sim`, `FORK` = `/Users/jameson/Nextcloud/Jameson/Development/Other/ReGameDLL_CS`.
+Paths used below: `APP` = this repository's `app`,
+`SIM` = `~/loner-strike-sim` (the bot simulation folder), `FORK` = a checkout of the ReGameDLL_CS fork.
 
 ---
 
