@@ -673,7 +673,7 @@ pub fn find_wads(doc: &mut MapDocument, dirs: &[PathBuf]) -> String {
     if !missing.is_empty() {
         let mut m: Vec<&String> = missing.clone();
         m.sort();
-        note.push_str(&format!(" {} texture{} aren't in any texture file here (e.g. {}): add their WAD in Map properties.", m.len(), if m.len() == 1 { "" } else { "s" }, m.iter().take(4).map(|s| s.as_str()).collect::<Vec<_>>().join(", ")));
+        note.push_str(&format!(" {} texture{} {} in any texture file here (e.g. {}): add their WAD in Map properties.", m.len(), if m.len() == 1 { "" } else { "s" }, if m.len() == 1 { "isn't" } else { "aren't" }, m.iter().take(4).map(|s| s.as_str()).collect::<Vec<_>>().join(", ")));
     }
     note
 }

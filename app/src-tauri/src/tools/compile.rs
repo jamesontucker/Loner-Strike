@@ -953,13 +953,36 @@ pub fn map_name(doc_name: &str) -> String {
     let s = s.trim_matches('_').chars().take(31).collect::<String>();
     if s.is_empty() || s == "untitled" {
         "ls_newmap".into()
+    } else if map_name_problem(&s).is_some() {
+        // (a document named "con" or "-": a name Windows or the compiler can't take)
+        format!("ls_{s}").chars().take(31).collect::<String>().replace('-', "_")
     } else {
         s
     }
 }
 
 fn valid_map_name(n: &str) -> bool {
-    !n.is_empty() && n.len() <= 31 && n.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-') && crate::maps::safe_arg(n)
+    map_name_problem(n).is_none()
+}
+
+/// What's wrong with a map name, in a sentence (None: it's fine). Besides letters, numbers, _ and
+/// - up to 31: not a name Windows keeps for devices (CON, NUL, COM1...: the .bsp couldn't be
+/// written there), and not only _ and - (P5, QA4-A).
+pub(crate) fn map_name_problem(n: &str) -> Option<&'static str> {
+    if n.is_empty() || n.len() > 31 || !n.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-') || !crate::maps::safe_arg(n) {
+        return Some("Map names can only use letters, numbers, _ and - (up to 31).");
+    }
+    if !n.bytes().any(|c| c.is_ascii_alphanumeric()) {
+        return Some("A map name needs at least one letter or number.");
+    }
+    const RESERVED: &[&str] = &["con", "prn", "aux", "nul", "conin$", "conout$"];
+    let l = n.to_ascii_lowercase();
+    let device = RESERVED.contains(&l.as_str())
+        || ((l.starts_with("com") || l.starts_with("lpt")) && l.len() == 4 && l.as_bytes()[3].is_ascii_digit());
+    if device {
+        return Some("Windows keeps that name for a device (like CON, NUL, AUX or COM1), so the map couldn't be saved. Pick another name.");
+    }
+    None
 }
 
 // ---- reading what the compiler said -------------------------------------------------------
@@ -1247,8 +1270,8 @@ pub fn read_leak(base: &Path) -> Option<(Vec<[f64; 3]>, PathBuf)> {
 pub fn install_bsp(src: &Path, maps: &Path, name: &str, backups: &Path) -> Result<Option<PathBuf>, String> {
     // P5: under test, never into the real game (the route checks first; this is the write)
     super::studio::guard_real_game(maps)?;
-    if !valid_map_name(name) {
-        return Err("That isn't a map name.".into());
+    if let Some(why) = map_name_problem(name) {
+        return Err(why.into());
     }
     if crate::maps::is_stock_file(&format!("maps/{name}.bsp")) {
         return Err(format!("{name} is one of the game's own maps. Give your map another name."));
@@ -1547,7 +1570,7 @@ fn plan(st: &Shared, req: StartReq) -> Result<Plan, String> {
     let client = crate::servers::client(st).ok_or(NO_GAME)?;
     let name = match req.name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()) {
         Some(n) if valid_map_name(&n) => n,
-        Some(_) => return Err("Map names can only use letters, numbers, _ and - (up to 31).".into()),
+        Some(n) => return Err(map_name_problem(&n).unwrap_or("That isn't a map name.").into()),
         None => map_name(&doc_name),
     };
     let mut boxes = req.cordons.clone();
@@ -2390,6 +2413,17 @@ mod tests {
         assert_eq!(map_name(&"a".repeat(60)).len(), 31);
         assert!(valid_map_name("de_test"));
         assert!(!valid_map_name("../x") && !valid_map_name("a b") && !valid_map_name(""));
+        // P5 (QA4-A): Windows device names and names of only _ and -
+        for bad in ["con", "CON", "nul", "Aux", "prn", "com1", "COM9", "lpt3", "_", "-", "__-"] {
+            assert!(!valid_map_name(bad), "{bad}");
+        }
+        assert!(map_name_problem("nul").unwrap().contains("Windows keeps that name"));
+        assert!(map_name_problem("--").unwrap().contains("at least one letter"));
+        assert_eq!(map_name("CON"), "ls_con");
+        assert!(valid_map_name(&map_name("-")) && valid_map_name(&map_name("Nul")));
+        for ok in ["con_rats", "com10", "aux_1", "nul2x", "de_dust2", "a"] {
+            assert!(valid_map_name(ok), "{ok}");
+        }
     }
 
     #[test]

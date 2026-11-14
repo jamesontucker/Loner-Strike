@@ -4,6 +4,7 @@
 // its .res, optionally teach bots the map, and start the game on it with bots.
 // Mounted by the editor as a side tab (`<CompilePanel />`); the leak line is drawn by LeakLine.tsx.
 
+import { mapNameProblem } from "./mapName"; // P5
 import { goToLeak } from "./LeakTools"; // P5
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BusyButton, SteamProgress, useConfirm, useToast } from "../../../ui";
@@ -179,8 +180,9 @@ export function CompilePanel() {
   /** Starts a compile and follows it; the finished job when it compiled. */
   const compile = async (install: boolean): Promise<Job | null> => {
     const n = name.trim();
-    if (n && !/^[A-Za-z0-9_-]{1,31}$/.test(n)) {
-      toast("Map names can only use letters, numbers, _ and - (up to 31).", true);
+    const why = mapNameProblem(n);
+    if (why) {
+      toast(why, true);
       return null;
     }
     api.useLeak.getState().set(null);
@@ -326,7 +328,8 @@ export function CompilePanel() {
   }
 
   const compiling = job?.kind === "compile" && job.running;
-  const nameBad = !!name.trim() && !/^[A-Za-z0-9_-]{1,31}$/.test(name.trim());
+  const nameWhy = mapNameProblem(name.trim());
+  const nameBad = !!nameWhy;
   const problems = job?.kind === "compile" ? job.problems : [];
   const errors = problems.filter((p) => p.level === "error");
   const warnings = problems.filter((p) => p.level === "warning");
@@ -340,7 +343,7 @@ export function CompilePanel() {
       <label className={`editor-field${nameBad ? " compile-field-bad" : ""}`}>
         Map name
         <input value={name} maxLength={31} spellCheck={false} placeholder={status.suggestName ?? "my_map"} disabled={running} aria-invalid={nameBad} onChange={(e) => setName(e.target.value.replace(/\s/g, "_"))} />
-        {nameBad && <span className="compile-bad small-note" role="alert">Letters, numbers, _ and - only (up to 31).</span>}
+        {nameBad && <span className="compile-bad small-note" role="alert">{nameWhy}</span>}
       </label>
 
       <div className="seg compile-presets" role="group" aria-label="Quality">
@@ -520,3 +523,4 @@ export function CompilePanel() {
 }
 
 export default CompilePanel;
+

@@ -99,7 +99,22 @@ pub fn is_stock(f: &Finder, hl: &Path, rel: &str) -> bool {
     if rel.to_lowercase().ends_with(".wad") {
         return mapcopy::stock_wad(rel);
     }
-    f.find(&hl.join("valve"), rel).is_some() || (f.find(&hl.join("cstrike"), rel).is_some() && f.find(&hl.join("czero"), rel).is_some())
+    // P5 (QA4-A): CS 1.6's own files by name (without Condition Zero installed, nothing in
+    // cstrike was in czero too, so every stock model looked unknown); a file someone replaced
+    // keeps the stock name, which is still the game's own as far as sharing goes
+    let in_cstrike = f.find(&hl.join("cstrike"), rel).is_some();
+    f.find(&hl.join("valve"), rel).is_some() || (in_cstrike && (stock_cstrike(rel) || f.find(&hl.join("czero"), rel).is_some()))
+}
+
+/// CS 1.6's own models, sprites, sounds and gfx, by path: the files Valve's dedicated server
+/// (app 90) ships in cstrike/, listed once (stock_cstrike.txt, lower case).
+pub fn stock_cstrike(rel: &str) -> bool {
+    use std::collections::HashSet;
+    use std::sync::OnceLock;
+    static LIST: OnceLock<HashSet<&'static str>> = OnceLock::new();
+    let list = LIST.get_or_init(|| include_str!("stock_cstrike.txt").lines().map(str::trim).filter(|l| !l.is_empty()).collect());
+    let key = rel.trim_start_matches(['/', '\\']).replace('\\', "/").to_lowercase();
+    list.contains(key.as_str())
 }
 
 /// One of the games' own maps (CS 1.6's classics, Condition Zero's _cz maps): every player
@@ -529,6 +544,26 @@ pub fn routes() -> Router<Shared> {
 mod tests {
     use super::*;
     use crate::goldsrc::bsp::fixture;
+
+    /// P5 (QA4-A): CS 1.6's own files are stock without Condition Zero installed; a model
+    /// someone added isn't, and neither is a stock name in a downloads folder only
+    #[test]
+    fn cs16_stock_without_czero() {
+        let root = std::env::temp_dir().join(format!("ls-doctor-stock-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let hl = root.join("Half-Life");
+        for rel in ["cstrike/models/v_ak47.mdl", "cstrike/models/player/gign/gign.mdl", "cstrike/sound/weapons/ak47-1.wav", "cstrike/models/zombie_custom.mdl", "cstrike_downloads/models/w_c4.mdl"] {
+            put(hl.join(rel), b"x");
+        }
+        let f = Finder::default();
+        assert!(stock_cstrike("models/V_AK47.mdl") && stock_cstrike("\\models\\v_ak47.mdl"));
+        assert!(is_stock(&f, &hl, "models/v_ak47.mdl"));
+        assert!(is_stock(&f, &hl, "models/player/gign/gign.mdl"));
+        assert!(is_stock(&f, &hl, "sound/weapons/ak47-1.wav"));
+        assert!(!is_stock(&f, &hl, "models/zombie_custom.mdl"), "an added model");
+        assert!(!is_stock(&f, &hl, "models/w_c4.mdl"), "not in cstrike itself");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     /// The test room with its own entity text (lump 0 moved to the end of the file).
     pub(crate) fn room_with(ents: &str) -> Vec<u8> {

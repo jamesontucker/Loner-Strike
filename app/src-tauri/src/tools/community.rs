@@ -1479,7 +1479,7 @@ pub fn readiness(m: &MapFile, reports: &Path) -> Readiness {
     }
     let missing_tex = doc["textures"]["missing"].as_array().map(|a| a.len()).unwrap_or(0);
     if missing_tex > 0 {
-        r.warnings.push(format!("{missing_tex} textures aren't in any texture file here; players would see a checkerboard. Fix it in the map doctor first."));
+        r.warnings.push(if missing_tex == 1 { "1 texture isn't in any texture file here; players would see a checkerboard. Fix it in the map doctor first.".to_string() } else { format!("{missing_tex} textures aren't in any texture file here; players would see a checkerboard. Fix it in the map doctor first.") });
     }
     // the files that go with it: where the game looks and not something every player has
     let f = crate::mapcopy::Finder::default();

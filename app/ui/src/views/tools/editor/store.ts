@@ -525,7 +525,14 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   file: async (what) => {
     const labels = { new: "Starting a new map…", open: "Opening…", import: "Importing…", save: "Saving…", saveAs: "Saving…", export: "Exporting…", recover: "Recovering…" } as const;
-    if (get().fileBusy) return;
+    // P5 (QA4-A): a file action while another runs (Import clicked during "Starting a new map…")
+    // waits for it and then runs, instead of doing nothing; a second one replaces the first
+    const busy = get().fileBusy;
+    if (busy) {
+      fileQueued = what;
+      get().notify(`${busy.replace(/…$/, "")} first. ${typeof what === "number" ? "Opening it" : labels[what].replace(/…$/, "")} right after.`);
+      return;
+    }
     set({ fileBusy: typeof what === "number" ? "Opening…" : labels[what] });
     try {
       if (what === "save" || what === "saveAs") {
@@ -552,9 +559,15 @@ export const useEditor = create<EditorState>((set, get) => ({
       if (notes?.length) get().notify(`Imported. ${notes.join(" ")}`, true);
     } finally {
       set({ fileBusy: null });
+      const next = fileQueued;
+      fileQueued = null;
+      if (next !== null) void get().file(next);
     }
   },
 }));
+
+/** A file action waiting for the one that's running (P5). */
+let fileQueued: Parameters<EditorState["file"]>[0] | null = null;
 
 /** Undo labels, dirty state and the like arrive with every answer. */
 function mergeState(st: DocState) {
