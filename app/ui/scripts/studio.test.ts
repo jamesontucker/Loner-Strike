@@ -16,6 +16,7 @@ import { applyEvents, emptyDebug, pathPairs } from "../src/views/tools/studio/de
 import { tidyEstimated } from "../src/views/tools/studio/layout";
 import lastStandRaw from "../src/views/tools/studio/templates/last-stand.graph.json?raw";
 import royaleRaw from "../src/views/tools/studio/templates/battle-royale.graph.json?raw";
+import runDialogRaw from "../src/views/tools/studio/library/run_dialog.lib.json?raw";
 
 const template = (): Graph => {
   const r = parseGraph(JSON.parse(templateRaw));
@@ -504,4 +505,32 @@ test("StudioPerfAudit #5: a sampled run's count includes the runs before it that
     { s: 2, t: 2, e: "node_enter", node: "a", skipped: 30 },
   ], () => false);
   assert.equal(d.runs.a.count, 32);
+});
+
+test("the built-in Run Dialog brings its Dialog table; adding it again uses the same table", () => {
+  const it = readItem("builtin_run_dialog", JSON.parse(runDialogRaw));
+  assert.ok(it, "the item reads");
+  assert.equal(it!.kind, "macro");
+  assert.equal(it!.body.dataTables?.[0].name, "Dialog");
+  assert.equal(it!.body.dataTables?.[0].columns.length, 15);
+  const g0 = emptyGraph("talk", "Talk");
+  const r = insertItem(g0, it!);
+  assert.equal(r.graph.dataTables?.length, 1);
+  const t = r.graph.dataTables![0];
+  assert.equal(t.rows.length, 5);
+  // every Get Row in the copy reads the table that came in
+  const rows = r.graph.nodes.filter((n) => n.type === "table.get_row");
+  assert.ok(rows.length > 0 && rows.every((n) => n.params.table === t.id));
+  assert.ok("graph" in parseGraph(JSON.parse(JSON.stringify(r.graph))), "the mode still parses");
+  // the same again: a second macro, the one table (its rows are the mode's)
+  const twice = insertItem(r.graph, it!);
+  assert.equal(twice.graph.dataTables?.length, 1);
+  // a mode that has another table called Dialog: the item's comes in under a free name
+  const other = { ...g0, dataTables: [{ ...t, id: "t1", columns: t.columns.slice(0, 3), rows: [] }] };
+  const r2 = insertItem(other, it!);
+  assert.deepEqual(r2.graph.dataTables!.map((x) => x.name), ["Dialog", "Dialog 2"]);
+  assert.ok(r2.graph.nodes.filter((n) => n.type === "table.get_row").every((n) => n.params.table === r2.graph.dataTables![1].id));
+  // and a Function or Macro that reads a table takes it with it when saved to the library
+  const back = extractItem(r.graph, r.root);
+  assert.ok(!("error" in back) && back.body.dataTables?.[0].id === t.id);
 });
