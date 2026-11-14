@@ -186,8 +186,9 @@ function Start({ onPick, busy, error, open }: { onPick: (w: Pick) => void; busy:
 }
 
 function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
-  const doc = useEditor((s) => s.doc)!;
-  const working = useEditor((s) => s.working);
+  // Parity A (PerfAudit): the document's id only; reading the whole document (or the busy count)
+  // here re-rendered the whole editor, panels and all, on every edit
+  const docId = useEditor((s) => s.doc!.docId);
   // P5: panels live in the dock (dockPanels.tsx); a tab request shows that panel wherever it is
   const setTab = (t: Tab) => {
     useP5.getState().set({ tab: t });
@@ -197,7 +198,7 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
   const [lost, setLost] = useState(0);
   const has3d = useMemo(() => canDraw3d(), []);
   // the camera frames the map once per document, not after every edit
-  const bounds = useMemo(() => doc.bounds, [doc.docId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const bounds = useMemo(() => useEditor.getState().doc!.bounds, [docId]);
 
   useKeys(replace);
   useAutosave();
@@ -239,12 +240,12 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
                   </div>
                 }
               >
-                <EditorScene key={`${doc.docId}-${lost}`} /* P5: views switch inside their panes now */ bounds={bounds} docId={doc.docId} onLost={() => setLost((n) => n + 1)} />
+                <EditorScene key={`${docId}-${lost}`} /* P5: views switch inside their panes now */ bounds={bounds} docId={docId} onLost={() => setLost((n) => n + 1)} />
               </SceneBoundary>
             )}
           </div>
           <DockArea side="bottom" />
-          <Status working={working > 0} />
+          <Status />
         </div>
         <DockArea side="right" /> {/* P5: dockable panels (dockPanels.tsx lists them) */}
       </div>
@@ -255,7 +256,8 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
   );
 }
 
-function Status({ working }: { working: boolean }) {
+function Status() {
+  const working = useEditor((s) => s.working > 0); // Parity A: only the status line listens
   const tool = useEditor((s) => s.tool);
   const cursor = useEditor((s) => s.cursor);
   const hover = useTools((s) => s.hover);

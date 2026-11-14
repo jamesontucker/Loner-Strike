@@ -53,6 +53,25 @@ Use br_valley v6 (3 MB .map) and ls_outpost; WebKit (the app's engine) first, Ch
 | Playtest on QA4E | Compile Normal → install into the sim's game (not the real one) → bots load the map |
 | Round 3 regressions | The Hammer/J.A.C.K. imports from round 3 still re-import → save → export → compile clean |
 
+### Area A self-check (Parity A, 2026-11-14, before QA starts; browser specs, the frame-split spec, Rust tests)
+Run on `tools` at this commit, dev server + production build, WebKit (Playwright) and Chromium, 1440x900, load 10-19.
+| Item | Verified here | Evidence | Left for QA / the user |
+|---|---|---|---|
+| Big-map perf | yes | 2D pan in WebKit 55 fps (editor-flatperf); nudge/drag worst frame 37 / 33 ms WebKit, 17 / 17 ms GPU Chromium (editor-framesplit); idle traffic **failed at 5 requests/min, fixed to 2** (state and selection long polls held 55 s instead of 25 s; editor-idle.spec.ts, both engines) | a check in the built app (a WKWebView host gave nudge p95 26 / worst 37 ms) |
+| Selection for agents | partly | `an_agent_paints_what_the_person_selected` (Rust), editor-sync spec in both engines | the live MCP client and the "network blocked" case |
+| Checks | yes (specs) | editor-checks / editor-checks-webkit in both suites | every Checks.md map by hand |
+| Budget | partly | editor-budget (a compile log fixture, a red bar asks before Playtest/Publish, a Last Stand roster) | bars against a real compile's chart (needs a compile; see Playtest) |
+| Leak tracing | partly | editor-leak (a leak line as SDHLT writes it) | a real compile of a leaking room |
+| Entity I/O view | yes (spec) | editor-io in both suites | ls_outpost by eye |
+| Extrude, split/merge, shear | yes | Rust extrude/vertex/shear tests, editor-extrude, editor-flat (shear) in both engines | - |
+| Primitives | yes | shapes.rs tests (valid, convex, base corners on the grid), editor-shapes in both engines | - |
+| Face sheet | yes (spec) | editor-facesheet in both suites | Alt+right-click wrap by hand |
+| 2D views | yes | editor-flat in both engines (3/3) | - |
+| Content Browser + credits | yes (spec) | editor-content in both suites (one failure under load in a shared run, passes alone) | a GameBanana download |
+| Playtest on QA4E | **not run** | the Mac had 9.9 GB free (TOOLS-CREW: stop under 10 GB before big work); no sim was cloned and nothing compiled | compile Normal into a QA4E sim copy, bots load |
+| Round 3 regressions | partly | br_valley import / autosave / Save as / Recent (editor-bigmap, both engines); rmf/jmf unit tests (9 pass) | QA's real .rmf/.jmf files aren't on this Mac (pmk_m1-3, regamedll_test_map_v8, aim_stadium): re-import, save, export, compile them |
+Suites: Chromium 53 passed / 1 skipped (editor-bigmap, needs env; run separately: passes); WebKit 53 passed / 1 skipped.
+
 ## B. Game Mode Studio (X, X2)
 | Item | Pass when |
 |---|---|

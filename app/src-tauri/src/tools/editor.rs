@@ -2092,7 +2092,9 @@ struct WaitQ {
     doc: Option<u64>,
 }
 
-const STATE_WAIT: Duration = Duration::from_secs(25);
+// Parity A (QA4 area A, idle traffic): 55 s, under WebKit's 60 s request timeout; with the
+// selection's long poll the idle editor asks about twice a minute (25 s made it five)
+const STATE_WAIT: Duration = Duration::from_secs(55);
 
 async fn api_state(Extension(ed): Extension<Ed>, q: Option<Query<WaitQ>>) -> Response {
     if let Some(Query(WaitQ { wait: Some(rev), doc })) = q {

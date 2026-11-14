@@ -161,6 +161,16 @@ per edit (batch the cmd -> meshes -> doc -> checks updates into one), the per-un
 the app's own WKWebView (not done: running the release app would start its background jobs on the user's data).
 Suites: Chromium 52 passed / 1 skipped (+ editor-flat fixed, 3/3 twice); WebKit 53 passed / 1 skipped.
 
+**9. Mac per-edit cost, round 2 (2026-11-14)** - kept: the editor's top component reads only the document id (it read
+the whole document and the busy count, so every edit re-rendered the whole editor); an edit's meshes, document patch,
+note and busy count land in one synchronous step (one React commit; `syncMeshes(after)`); the toast stack has
+`contain: layout style` (it already animated transform/opacity only). React time in WebKit's p95 nudge frame 10 -> 3 ms.
+Frame times (production build, p95 nudge+undo / drag-move): WebKit br_valley 28-29 / 24 -> 29 / 26 ms; WebKit one box
+20 / 20 -> 19 / 20 ms; GPU Chromium 16.7 / 16.8 both maps, before and after. WebKit's remaining frame cost follows the
+canvas size (one box: 960x600 p95 18, 1440x900 19-20, 1920x1200 20-21 ms) and is the same in a real WKWebView window
+(a minimal host, GPU composited: nudge p95 26 / worst 37, drag 21 / 31 ms), so it's WebKit presenting the canvas,
+not our work. Stopped there (Windows first).
+
 ## Left / ideas
 - Extrude in the flat views (Shift is box-pick there), edge-move mode for slanted edges.
 - Entities drawn one by one dominate the flat panes on big maps (request to P5).

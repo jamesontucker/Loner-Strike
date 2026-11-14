@@ -20,6 +20,8 @@ import { resolve } from "node:path";
 const MAP = process.env.LS_TEST_BRVALLEY ?? resolve(process.cwd(), "../../maps-src/br_valley/br_valley.map");
 const MOD = process.platform === "darwin" ? "Meta" : "Control";
 const GPU = process.env.LS_SPLIT_GPU === "1";
+/** LS_SPLIT_MAP=tiny: the same steps on a one-box map (what an edit costs whatever the map's size). */
+const TINY = process.env.LS_SPLIT_MAP === "tiny";
 
 const api = (page: Page, path: string, body?: unknown) =>
   page.evaluate(
@@ -192,12 +194,16 @@ test("br_valley: where a nudge's and a drag-move's slow frames go", async ({ pag
   });
   await page.goto("/editor-dev.html");
   expect((await api(page, "/api/tools/editor/new", {})).error ?? null).toBeNull();
-  expect((await api(page, "/api/tools/editor/cmd", { op: "paste", text: readFileSync(MAP, "utf8"), offset: [0, 0, 0] })).error ?? null).toBeNull();
+  if (TINY) {
+    const d0 = await api(page, "/api/tools/editor/doc");
+    await api(page, "/api/tools/editor/cmd", { op: "delete", brushes: d0.brushes.map((x: { id: number }) => x.id), entities: d0.entities.map((x: { id: number }) => x.id) });
+    await api(page, "/api/tools/editor/cmd", { op: "add_box", min: [-64, -64, 0], max: [64, 64, 128], texture: "CRATE01" });
+  } else expect((await api(page, "/api/tools/editor/cmd", { op: "paste", text: readFileSync(MAP, "utf8"), offset: [0, 0, 0] })).error ?? null).toBeNull();
   await page.reload();
   const back = page.getByRole("button", { name: /^Back to/ });
   await back.waitFor({ timeout: 30_000 });
   await back.click();
-  await page.waitForFunction(() => /\d{4} brushes/.test(document.querySelector(".tools-status")?.textContent || ""), null, { timeout: 120_000 });
+  if (!TINY) await page.waitForFunction(() => /\d{4} brushes/.test(document.querySelector(".tools-status")?.textContent || ""), null, { timeout: 120_000 });
   await page.waitForTimeout(4000);
   const top = (await page.locator('.ed-pane[data-pane="1"]').boundingBox())!;
   const cx = top.x + top.width / 2;
@@ -248,7 +254,7 @@ test("br_valley: where a nudge's and a drag-move's slow frames go", async ({ pag
     const ext = c?.getExtension("WEBGL_debug_renderer_info");
     return c ? `${ext ? c.getParameter(ext.UNMASKED_RENDERER_WEBGL) : c.getParameter(c.RENDERER)}; timer query: ${c.getExtension("EXT_disjoint_timer_query_webgl2") ? "yes" : "no"}` : "no WebGL2";
   });
-  const out = [`${browserName}${GPU ? " (gl.finish pass)" : ""}, ${gpuName}`, summarize("nudge+undo", nudge.frames), summarize("drag-move", drag.frames)];
+  const out = [`${browserName}${GPU ? " (gl.finish pass)" : ""}${TINY ? ", one-box map" : ", br_valley"}, ${gpuName}`, summarize("nudge+undo", nudge.frames), summarize("drag-move", drag.frames)];
   // Chromium's own attribution for the long frames (scripts by function, style/layout)
   for (const [label, r] of [
     ["nudge", nudge],

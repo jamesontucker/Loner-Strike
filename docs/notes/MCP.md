@@ -51,3 +51,7 @@ answers at once: at most one look a second; the backoff sequence and reset; abor
   Y.md; until Y's crashes/*.json exist the app reads the brain's ls_crash*.log. Discord alerts post from the app while
   it runs; asked Y whether the Linux status service should post them so they work with the app closed.
 - docs/notes/QA4.md: the round 4 checklist draft (6 areas, 2 waves, sims and ports, pass criteria). Not run.
+
+## From Parity A (2026-11-14)
+- tools/editor/selection.rs `WAIT` 25 -> 55 s (QA4 area A idle traffic: with the state long poll, 2 requests a minute
+  idle instead of 5; under WebKit's 60 s request timeout). Your selection test and editor-sync pass in both engines.

@@ -164,7 +164,9 @@ type EditorState = {
   set: (p: Partial<EditorState>) => void;
   select: (s: Selection) => void;
   load: () => Promise<void>;
-  syncMeshes: () => Promise<void>;
+  /** `after` runs right after the new meshes are set, in the same synchronous step (Parity A:
+   *  so an edit's meshes, document patch and status land in one React commit) */
+  syncMeshes: (after?: () => void) => Promise<void>;
   refreshDoc: () => Promise<void>;
   /** P5 (perf): patch the document with a command's changes; false when they don't fit (ask for all) */
   applyChanges: (c: DocChanges | null | undefined) => boolean;
@@ -290,7 +292,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   // one mesh request at a time, each picking up from where the last left off
-  syncMeshes: () => {
+  syncMeshes: (after) => {
     meshChain = meshChain.then(async () => {
       const { meshDoc, meshRev } = get();
       let u: MeshUpdate;
@@ -298,6 +300,7 @@ export const useEditor = create<EditorState>((set, get) => ({
         u = await api.getMeshes(meshDoc, meshDoc == null ? null : meshRev);
       } catch (e) {
         get().notify(e instanceof Error ? e.message : String(e), true);
+        after?.();
         return;
       }
       const next = u.full ? new Map<number, BrushGeo>() : new Map(get().brushes);
@@ -328,6 +331,7 @@ export const useEditor = create<EditorState>((set, get) => ({
         ...(verts.length !== get().verts.length ? { verts } : {}),
         ...(brushes.length !== sel.brushes.length || face !== sel.face || faces.length !== (sel.faces ?? []).length ? { sel: { ...sel, brushes, face, faces } } : {}),
       });
+      after?.();
     });
     return meshChain;
   },
@@ -424,55 +428,98 @@ export const useEditor = create<EditorState>((set, get) => ({
     lastLocalEdit = Date.now(); // P5 (perf): the outside-changes watch lets the page's own edits land first
     const counts = !(body as { drag?: unknown }).drag;
     if (counts) set((s) => ({ working: s.working + 1 }));
+    // Parity A: everything an edit changes on the page (its meshes, the document patch, the
+    // status, a note, "working") is set in one synchronous step, so React commits it once
+    let settled = !counts;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      set((s) => ({ working: s.working - 1 }));
+    };
     try {
       const r: CmdResult = await api.sendCmd(body);
-      if (r.state) mergeState(r.state);
       if (r.error) {
+        if (r.state) mergeState(r.state);
         if (!opts.quiet) get().notify(r.error, true);
         set({ preview: null });
         return r;
       }
-      if (r.note && body.op !== "group") get().notify(r.note);
-      if (r.changed) await get().syncMeshes();
-      if (opts.doc !== false) {
+      let catchUp = false;
+      const apply = () => {
+        if (r.state) mergeState(r.state);
+        if (r.note && body.op !== "group") get().notify(r.note);
         // P5 (perf): the command's own changes; the whole document only when they don't fit
-        if ((r.changed || r.docChanged) && !get().applyChanges(r.changes)) await get().catchUp();
+        if (opts.doc !== false && (r.changed || r.docChanged) && !get().applyChanges(r.changes)) catchUp = true;
+        if (!catchUp) settle();
+      };
+      if (r.changed) await get().syncMeshes(apply);
+      else apply();
+      if (opts.doc !== false) {
+        if (catchUp) await get().catchUp();
         get().refreshChecks();
       }
       return r;
     } finally {
-      if (counts) set((s) => ({ working: s.working - 1 }));
+      settle();
     }
   },
 
   undo: async () => {
     set((s) => ({ working: s.working + 1 })); // P5
+    // Parity A: the meshes, the document patch, the note and "working" in one React commit
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      set((s) => ({ working: s.working - 1 }));
+    };
     try {
       const r = await api.undo();
       if (r.error) return get().notify(r.error, true);
-      if (r.state) mergeState(r.state);
-      if (!r.changed) return;
-      await get().syncMeshes();
-      if (!get().applyChanges(r.changes)) await get().catchUp(); // P5 (perf)
+      if (!r.changed) {
+        if (r.state) mergeState(r.state);
+        return;
+      }
+      let catchUp = false;
+      await get().syncMeshes(() => {
+        if (r.state) mergeState(r.state);
+        if (!get().applyChanges(r.changes)) catchUp = true; // P5 (perf)
+        if (r.label) get().notify(`Undid ${r.label.toLowerCase()}`);
+        if (!catchUp) settle();
+      });
+      if (catchUp) await get().catchUp();
       get().refreshChecks();
-      if (r.label) get().notify(`Undid ${r.label.toLowerCase()}`);
     } finally {
-      set((s) => ({ working: s.working - 1 }));
+      settle();
     }
   },
   redo: async () => {
     set((s) => ({ working: s.working + 1 })); // P5
+    // Parity A: the meshes, the document patch, the note and "working" in one React commit
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      set((s) => ({ working: s.working - 1 }));
+    };
     try {
       const r = await api.redo();
       if (r.error) return get().notify(r.error, true);
-      if (r.state) mergeState(r.state);
-      if (!r.changed) return;
-      await get().syncMeshes();
-      if (!get().applyChanges(r.changes)) await get().catchUp(); // P5 (perf)
+      if (!r.changed) {
+        if (r.state) mergeState(r.state);
+        return;
+      }
+      let catchUp = false;
+      await get().syncMeshes(() => {
+        if (r.state) mergeState(r.state);
+        if (!get().applyChanges(r.changes)) catchUp = true; // P5 (perf)
+        if (r.label) get().notify(`Redid ${r.label.toLowerCase()}`);
+        if (!catchUp) settle();
+      });
+      if (catchUp) await get().catchUp();
       get().refreshChecks();
-      if (r.label) get().notify(`Redid ${r.label.toLowerCase()}`);
     } finally {
-      set((s) => ({ working: s.working - 1 }));
+      settle();
     }
   },
 

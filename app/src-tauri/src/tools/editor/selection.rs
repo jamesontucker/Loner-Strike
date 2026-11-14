@@ -149,7 +149,9 @@ struct AfterQ {
 }
 
 /// Longest a `?after=` look waits for a newer selection.
-const WAIT: std::time::Duration = std::time::Duration::from_secs(25);
+/// (Parity A, QA4 area A: 55 s, under WebKit's 60 s request timeout; with the state's long poll
+/// the idle editor asks about twice a minute)
+const WAIT: std::time::Duration = std::time::Duration::from_secs(55);
 
 fn seq_now(ed: &Ed) -> u64 {
     store().lock().unwrap_or_else(|e| e.into_inner()).get(&key(ed)).map_or(0, |s| s.seq)
