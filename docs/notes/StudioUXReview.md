@@ -232,3 +232,36 @@ the toolbar's new Mode settings button. X2: say here if you're in those spots an
 - **H7: Fixed (X, 2e4ff94f).** An empty event graph shows a card (right-click or Space, or Round Started / Player
   Killed / Player Spawned, placed in the middle and picked). Quick check: "Nothing happens yet: add an event..." for
   an empty mode (none for a mode that's only game settings), and "none of the events has anything wired after it".
+- **H1: Fixed (X2, 86b8f755).** A graph that would be under 60% zoom when fitted opens on its top-left comment box (or
+  first node) at a readable zoom (80-100%), not fitted; small graphs still fit. Applies to examples, the tour and your
+  own modes (`startView` in tidyOps.ts, unit-tested). Not done: a saved "Start here" view and a "Next part" button
+  (the tour's steps and Find already move around; can follow after 1.0 if testers ask).
+- **H3: Fixed (X2, 86b8f755).** Requirements is styled and compact (no sideways scroll); recommended maps are chips
+  with a remove x, plus a search box that lists up to 8 matches (base maps first).
+- **H4: Fixed (X2, 86b8f755).** My mode and Details fold to thin rails (kept in this browser; Details starts folded
+  in a window under 1200 px wide), and the node list is drawn over the page, kept inside the window.
+- **M1: Fixed (X2, 86b8f755).** The minimap is off unless turned on in View; when on it's small and see-through.
+- **M2: Fixed (X2, 86b8f755).** The drop choice takes the keyboard (arrows), Escape closes it, a click anywhere else
+  closes it.
+- **M3: Fixed (X2, 86b8f755).** Promote to Variable puts the Get/Set at the nearest free spot (`freeSpot`).
+- **M6: Fixed (X2, 86b8f755).** Three groups that wrap as wholes: the mode (Modes, name, Mode settings), editing
+  (Undo, Redo, View, Versions, Find, ?), and running it on the right (check, Compile, Test run, on save, map,
+  "9 bots", Playtest), so Playtest never leaves Compile and Test run. View holds Tidy up, the minimap and named
+  bookmarks (only the kept ones listed). At 1440 px with both panels open the run group is its own row; with a
+  panel folded or wider it's one row. Won't fix: the page header's History and Focus belong to the Tools shell
+  (every tool has them), not the Studio.
+- **M10: Fixed (X2, 86b8f755).** Examples open without a name prompt and aren't saved; a bar says so with **Make it
+  mine** (name it, saved to Your modes). Templates are cards with their blurbs; Blank mode is the main button, next
+  to Take the tour.
+- **M11: Fixed (X2, 86b8f755; the Timeline key message went in with X's 2e4ff94f).** "Compiling (the first time
+  takes longer)"; Test run "about two minutes"; no period after an ellipsis; "around" everywhere; Versions says
+  "4 added, 1 changed"; Problems and Test run name nodes as the canvas does ("Set Variable 1"); the key message
+  says what's allowed.
+- **M12: Fixed (X2, 86b8f755).** The list has the quick-add keys, F1, bookmarks, Esc and the Ctrl/Alt drags; the
+  toolbar's tooltips use the list's notation (⌘ or Ctrl+, then Shift).
+- **L1: Fixed (X2, 86b8f755).** Two of the same event are listed "Player Killed (1)", "(2)".
+- **L2: Fixed (X2, 86b8f755).** Node help takes the focus when it opens, so Escape closes it.
+- **L3: Fixed (X2, 86b8f755).** My mode: Graphs, Functions (and the open Function's locals), Variables, Custom
+  events, Events, then the rest.
+- **L6: Fixed (X2, 86b8f755).** Version history is 300 px and docks on the left, over My mode.
+- **L7: Fixed (X2, 86b8f755).** Header cells are tinted and bold; the column's remove x sits apart at the end.
