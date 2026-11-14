@@ -88,6 +88,12 @@ Windows (WebView2) is fine.
 
 If they blur, set the property only while panning or dragging, or draw wires per tab section.
 
+**Fixed (X2, 38949bf8).** `.st-canvas .react-flow__edges { will-change: transform }` in `studio.css`. Sharpness: in
+Playwright's WebKit, the wires at zoom 2 (after opening at 0.25 and zooming in) are pixel-identical with and without
+it. **Not checked in the real Mac app (WKWebView)**: it needs a build run against a copy of the user's data; worth a
+look in the next Mac build at a big zoom. Measured (every_node, dev UI, WebKit; the spec's open is to the first
+node drawn): open 1,320 → 657 ms; undo p95 within 44–48 ms (was up to 212 ms).
+
 ## 2. Mac (WebKit): the debugger's "node ran" flash makes a big canvas run at 13–20 fps while a Playtest streams
 
 **What's slow** (one400 attached to a Playtest's events, written the way `debug_runtime.pawn` writes them, a batch
@@ -116,6 +122,12 @@ streamed 364 events/s at p95 18 ms in WebKit.
 - Re-key a node's flash at most every 0.5 s.
 - Skip it for nodes outside the view.
 - **QW**, S.
+
+**Fixed (X2, 38949bf8).** The glow is drawn once (static `box-shadow` on `.st-flash`) and only its `opacity`
+animates, which the compositor handles; a node's flash starts again at most twice a second (`key` on the half
+second). Nodes out of view aren't drawn (React Flow's culling), so they have no flash. Measured with a new
+studio-perf case (every_node, ~1,500 node runs a second through a routed `/debug/events`): WebKit frames p50/p95
+25/33 → 16/24 ms; Chromium 17/17 both.
 
 ## 3. Dragging many selected nodes re-renders every one of them on every step
 
@@ -147,6 +159,14 @@ A single node drags fine:
 - Skip rebuilding wires when only positions changed.
 - M.
 
+**Fixed (X2, 38949bf8).** A drag's positions stay in the Canvas (`dragPos`) and go into the graph once at the drop
+(`endDrag`: one store commit, one undo step; also for a selection-box drag, whose stop wasn't handled before).
+`LogicNode`, `RerouteNode` and `CommentNode` memo on id and picked only (React Flow's position props change every
+step). Found on the way: every new node object we gave React Flow lacked `measured`, so React Flow treated a moved
+node as new and measured it (and its wire ends) again every step; sizes from its dimension changes are now handed
+back. Measured (every_node, all picked, 40-step drag, dev UI): Chromium 89/99 → 18/18 ms a step (zoom 1 / zoomed
+out; 18 ms is the input rate), frame p95 83 → 17 ms; WebKit 112/114 → 5/10 ms a step, frame p95 183/187 → 37/21 ms.
+
 ## 4. The Studio's drag perf test measures nothing
 
 `tests/studio-perf.spec.ts` keeps its frame-loop flag in `window.__on`. d3 (inside React Flow) stores its event
@@ -161,6 +181,11 @@ and throw `TypeError: on.push is not a function`, so nothing moves.
 **Who it affects.** The regression guard for #3 and PerfAudit #4.
 
 **Fix.** Rename the flag (I used `__paOn`) and assert the dragged node's `transform` changed. **QW**, XS.
+
+**Fixed (X2, 38949bf8).** `__lsPerfOn` / `__lsPerfF`; each drag checks its node moved (and the first six picked
+ones for a drag of everything); the view is set with the Studio's `__studioZoom` dev hook so the dragged node is
+really under the mouse; new rows: open, undo, a drag of everything picked, and the debugger stream (#2). The
+testdata path is read relative to the spec file, so it runs from any folder.
 
 ## 5. Playtest builds: per-player Timelines and For Each Creature cost 7–14× more, and the events file grows about 160 MB an hour
 
@@ -295,6 +320,13 @@ Versions panel.
 - Store each version's added, removed and changed counts when it's recorded, so `list()` reads them instead of
   rebuilding.
 - S–M.
+
+**Fixed (X2, e64863ce).** The history file (version 2) keeps the newest save whole (`head`), so a save diffs against
+it with no replay; older saves are the change back from the one after (every tenth whole), with each save's node
+counts kept, so `list` reads them and rebuilds nothing; `diff`/`apply` index by id. Past 50 saves, or while the file
+is over 4 MB, the oldest go. Version 1 files are read and carried on. `history_bench` (ignored test; 60 saves with
+every node moved): 367 nodes save 151 → 29 ms, list 196 → 15 ms, oldest 133 → 24 ms; 952 nodes 738 → 39, 1,099 →
+21, 643 → 30 ms, file 7.5 → 4.0 MB (26 kept). The Versions panel lists and opens through the same routes.
 
 ---
 
