@@ -222,6 +222,9 @@ new bool:g_extracted[33];
 new Float:g_protect[33];
 new g_class[33];
 new g_cpLast[33];
+/* the checkpoint a lap just ended at (+1; 0 none): it counts again once the player has left it (a
+   one-checkpoint course, or a last checkpoint that is also the first, lapped every tick otherwise) */
+new g_cpLapAt[33];
 new g_laps[33];
 new Float:g_lapStart[33];
 new g_vote[33];
@@ -1350,6 +1353,7 @@ public ev_new_round()
 		extract_cancel(p);
 		g_extracted[p] = false;
 		g_cpLast[p] = 0;
+		g_cpLapAt[p] = 0;
 		g_laps[p] = 0;
 		g_calls[p] = 0;
 		g_vote[p] = -1;
@@ -3429,6 +3433,12 @@ stock tick_checkpoint(s)
 	{
 		if (!g_alive[p] || (g_team[s] && g_pteam[p] != g_team[s]))
 			continue;
+		if (g_cpLapAt[p] == s + 1)
+		{
+			if (inside(s, g_porg[p]))
+				continue;
+			g_cpLapAt[p] = 0;
+		}
 		if (g_cpLast[p] + 1 != order || !inside(s, g_porg[p]))
 			continue;
 		if (order == 1)
@@ -3445,6 +3455,7 @@ stock tick_checkpoint(s)
 			if (!g_bot[p])
 				client_print(p, print_center, "Lap %d: %d:%05.2f", g_laps[p], floatround(secs, floatround_floor) / 60, secs - float((floatround(secs, floatround_floor) / 60) * 60));
 			g_cpLast[p] = 0;
+			g_cpLapAt[p] = s + 1;
 		}
 		else if (!g_bot[p])
 			client_cmd(p, "spk buttons/blip1");
@@ -4285,6 +4296,7 @@ public client_disconnected(id)
 	g_xslot[id] = 0;
 	g_class[id] = 0;
 	g_cpLast[id] = 0;
+	g_cpLapAt[id] = 0;
 	g_laps[id] = 0;
 	g_extracted[id] = false;
 	g_protect[id] = 0.0;
@@ -9384,6 +9396,7 @@ public n_checkpoint_reset(plugin, params)
 		if (id && p != id)
 			continue;
 		g_cpLast[p] = 0;
+		g_cpLapAt[p] = 0;
 		g_laps[p] = 0;
 	}
 	return 1;
