@@ -112,6 +112,12 @@ Many agents share one staging area. Never run a bare `git commit`. Always commit
   all (`pgrep -fl 'Sim\\.*hlds.exe' | wc -l`) and the load average is under 20. Only 2 while you're also compiling.
   Delete each sim copy when its run ends. `cargo` builds: `-j 6`.
 - Check `uptime` before a heavy step; if the load average is over 20, wait.
+- Every Vite dev server you start uses its own dependency cache (2026-11-14): `node_modules/.vite` is shared by
+  every Vite on this worktree, and when another agent's Vite re-optimizes it, a page you're testing loads a second
+  React ("Invalid hook call"; the editor's 3D view never mounts and every editor spec times out). Start yours with a
+  small config of your own, e.g. `vite-<you>.config.ts` in app/ui (untracked, removed when done):
+  `import base from "./vite.config"; export default { ...base, cacheDir: "<your scratch>/vitecache" };`
+  then `npx vite --config vite-<you>.config.ts --port <yours> --strictPort`.
 
 ## Commits in a shared worktree (2026-11-13)
 - Everyone shares one git index. Never leave files staged (`git add` then wander off), and never commit from the index:
