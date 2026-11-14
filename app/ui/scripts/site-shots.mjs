@@ -276,6 +276,34 @@ const SHOTS = {
       await settle(page, 1500);
     },
   },
+  "editor-compile": {
+    group: "compile",
+    about: "Compile on ls_outpost: the Fast preset run with SDHLT, its steps and the finished map",
+    pick: "maps-src/ls_outpost/ls_outpost.map",
+    async take(page) {
+      // the Compile panel where Inspect is, tall (as for the Budget)
+      await page.addInitScript(() =>
+        localStorage.setItem("ls.editor.dock2", JSON.stringify({
+          areas: { left: { tabs: [], active: null }, right: { tabs: ["outline"], active: "outline" }, right2: { tabs: ["compile", "inspect", "history"], active: "compile" }, bottom: { tabs: ["content", "library", "textures", "checks", "budget", "io", "project"], active: "content" } },
+          sizes: { left: 300, right: 420, bottom: 240, rightSplit: 0.2 }, floats: [], popped: [],
+        })),
+      );
+      await editorWith(page);
+      await page.getByRole("group", { name: "Quality" }).getByRole("button", { name: "Fast" }).click();
+      await page.getByRole("button", { name: "Compile", exact: true }).click();
+      // a real compile (SDHLT in the throwaway app folder; nothing goes into the game)
+      await page.waitForFunction(async () => {
+        const r = await (await fetch("/api/tools/compile/progress")).json();
+        return r.job && !r.job.running;
+      }, null, { timeout: 900_000, polling: 3000 });
+      await settle(page, 6000); // (the "Compiled" toast goes)
+      // the compiler's own output, opened, at its end
+      await page.getByText("Compiler output", { exact: true }).first().click().catch(() => {});
+      await settle(page, 800);
+      await page.locator("[data-dock-body='right2']").evaluate((el) => el.scrollTo(0, el.scrollHeight)).catch(() => {});
+      await settle(page, 800);
+    },
+  },
   "editor-checks": {
     group: "editor",
     about: "Checks: the map's problems as you build, each with its fix",
