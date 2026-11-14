@@ -264,6 +264,18 @@ export default function Creatures() {
         </a>
       </p>
 
+      <p className="cs-npc-hint muted">
+        Making a talking character or something to use? Place an NPC or interactable in the{" "}
+        <button type="button" className="link inline" onClick={() => useNav.getState().go("tools", "editor")}>
+          map editor
+        </button>{" "}
+        or{" "}
+        <button type="button" className="link inline" onClick={() => useNav.getState().go("tools", "studio")}>
+          Game Mode Studio
+        </button>
+        .
+      </p>
+
       {tab === "waves" && <WavesTab />}
 
       {tab === "types" && (

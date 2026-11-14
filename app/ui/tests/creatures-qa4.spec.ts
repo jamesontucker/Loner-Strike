@@ -21,6 +21,11 @@ test("Creature Studio: target line, blank numbers, keyboard list, new-type dialo
   await open(page, problems);
   await expect(page.locator(".cs-target")).toContainText(/Editing creatures for .* on this computer/);
   await expect(page.locator(".cs-target a")).toHaveAttribute("href", /#creatures-how$/);
+  // a talking character or a usable thing is made elsewhere: links to both
+  const hint = page.locator(".cs-npc-hint");
+  await expect(hint).toHaveText("Making a talking character or something to use? Place an NPC or interactable in the map editor or Game Mode Studio.");
+  await expect(hint.getByRole("button", { name: "map editor" })).toBeVisible();
+  await expect(hint.getByRole("button", { name: "Game Mode Studio" })).toBeVisible();
 
   // arrow keys move through the list
   const list = page.getByRole("listbox", { name: "Creature types" });

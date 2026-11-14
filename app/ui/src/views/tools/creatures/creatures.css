@@ -13,6 +13,7 @@
 /* the three columns */
 /* what the Studio edits, and who it reaches */
 .cs-target { margin: 0 0 12px; font-size: 13px; line-height: 1.45; max-width: 90ch; }
+.cs-npc-hint { margin: -6px 0 12px; font-size: 13px; }
 .cs-grid { display: grid; gap: 14px; grid-template-columns: minmax(200px, 250px) minmax(0, 1fr) minmax(260px, 330px); align-items: start; }
 .cs-list, .cs-side { position: sticky; top: 8px; max-height: calc(100vh - 140px); overflow: auto; display: grid; gap: 10px; align-content: start; min-width: 0; }
 .cs-main { min-width: 0; container-type: inline-size; }
