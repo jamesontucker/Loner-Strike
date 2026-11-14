@@ -31,6 +31,7 @@ pub mod playercfg;
 pub mod people;
 pub mod studio;
 pub mod requirements; // MCP: what a Studio mode plays on and needs
+pub mod playshots; // MCP: playtest screenshots for publishing a mode
 pub mod creatures;
 
 use crate::goldsrc::{self, bsp::Bsp, entities, mesh, wad};
@@ -321,6 +322,7 @@ pub fn local_routes() -> Router<Shared> {
         .merge(people::routes())
         .merge(studio::routes())
         .merge(requirements::routes()) // MCP
+        .merge(playshots::routes()) // MCP
         .merge(creatures::routes())
 }
 

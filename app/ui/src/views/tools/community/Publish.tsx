@@ -18,6 +18,7 @@ import { BusyButton, LoadError, Segmented, useToast } from "../../../ui";
 import { errorText, post, useBusy } from "../common/api";
 import { Empty, Loading, MapList } from "../common";
 import { CreditsPanel } from "./Credits";
+import { drawCover } from "./coverCard"; // MCP: the automatic cover card
 import { BOT_NOTE, BOT_RATING_INFO } from "../../../games";
 import {
   modeReadiness, publish, publishMode, readiness, register, reveal, sizeText, studioGraphs,
@@ -382,6 +383,47 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
   const [bots, setBots] = useState("");
   const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
   const { working, run } = useBusy();
+  // MCP: screenshots - the automatic cover card, playtest shots (F5 in the game), pictures added
+  const [cover, setCover] = useState("");
+  const [useCover, setUseCover] = useState(true);
+  const [picked, setPicked] = useState<Shot[]>([]);
+  const play = useQuery({ queryKey: ["tools", "community", "playtest-shots"], queryFn: () => getJson<{ shots?: (Shot & { map: string; at: number })[]; hint?: string; error?: string }>("/api/tools/community/playtest-shots"), staleTime: 10_000 });
+  const tags = [
+    ...(q.data?.requirements?.known?.creatures?.length ? ["Creatures"] : []),
+    ...(bots && bots !== "none" ? ["With bots"] : []),
+    ...(q.data?.requirements?.maps?.length ? [`${q.data.requirements.maps.length} map${q.data.requirements.maps.length === 1 ? "" : "s"}`] : []),
+  ];
+  useEffect(() => {
+    let gone = false;
+    // drawn again whenever the name, the line or the tags change
+    const t = setTimeout(() => void drawCover({ name: title, line: summary, tags }).then((d) => !gone && setCover(d)), 250);
+    return () => {
+      gone = true;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, summary, tags.join("|")]);
+  const shotsToSend = (): Shot[] => [...(useCover && cover ? [{ name: "cover.png", data: cover }] : []), ...picked].slice(0, MAX_SHOTS);
+  const togglePick = (s: Shot) => setPicked((p) => (p.some((x) => x.name === s.name) ? p.filter((x) => x.name !== s.name) : p.length + (useCover ? 1 : 0) >= MAX_SHOTS ? (toast(`At most ${MAX_SHOTS} screenshots.`, true), p) : [...p, s]));
+  const addFiles = async (files: FileList | null) => {
+    for (const f of Array.from(files ?? [])) {
+      if (!/^image\/(png|jpeg)$/.test(f.type)) {
+        toast(`${f.name} isn't a PNG or JPEG picture.`, true);
+        continue;
+      }
+      if (f.size > MAX_SHOT) {
+        toast(`${f.name} is over 8 MB.`, true);
+        continue;
+      }
+      const data = await new Promise<string>((ok) => {
+        const fr = new FileReader();
+        fr.onload = () => ok(String(fr.result));
+        fr.onerror = () => ok("");
+        fr.readAsDataURL(f);
+      });
+      if (data) togglePick({ name: f.name, data });
+    }
+  };
   useEffect(() => {
     if (!q.data) return;
     setTitle((t) => t || q.data.name);
@@ -397,11 +439,13 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
   const checks: Check[] = blocked
     ? r.blockers.map((b) => ({ state: "bad" as const, title: "The graph has problems", why: b, fix: { label: "Open in the Studio", to: `studio:${id}` } }))
     : [{ state: "ok", title: "The graph", why: `Passes the Studio's checks (${r.nodes} nodes).` }];
+  // (MCP: the mode's requirements: what players may not have)
+  for (const w of r.requirementWarnings ?? []) checks.push({ state: "warn", title: "Requirements", why: w, fix: { label: "Open in the Studio", to: `studio:${id}` } });
   if (r.remixOf) checks.push({ state: "ok", title: "Remix credit", why: `A remix of ${r.remixOf.name}${r.remixOf.author ? ` by ${r.remixOf.author}` : ""}: the package and its page credit them.` });
   const build = () =>
     run("Packing…", async () => {
       remember();
-      const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: [], bots });
+      const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: shotsToSend(), bots });
       if (res.error) return toast(res.error, true);
       setDone({ pkg: res.package, form: res.form });
     });
@@ -422,7 +466,51 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
       </Step>
       <Step n={4} title="Maps it's made for" note="Optional: map names, separated by commas.">
         <input className="cm-wide-input" value={maps} onChange={(e) => setMaps(e.target.value)} placeholder="de_dust2, cs_office" aria-label="Maps it's made for" />
-        <p className="muted small-note">Add screenshots on GameBanana's page itself (a Playtest shot works well).</p>
+      </Step>
+      <Step n={5} title="Screenshots" note="PNG or JPEG, up to 8 MB each, up to 6. The cover card comes first; saved next to the package for GameBanana's picture upload.">
+        <div className="cm-shots">
+          <figure>
+            {cover ? <img src={cover} alt="The cover card" /> : <span className="muted small-note"><span className="spinner" aria-hidden="true" />Drawing the cover card…</span>}
+            <label className="small-note">
+              <input type="checkbox" checked={useCover} onChange={(e) => setUseCover(e.target.checked)} /> Use the cover card (drawn from the name and the line)
+            </label>
+          </figure>
+          {picked.filter((p) => !(play.data?.shots ?? []).some((x) => x.name === p.name)).map((p) => (
+            <figure key={p.name}>
+              <img src={p.data} alt={p.name} />
+              <button type="button" className="btn small" onClick={() => togglePick(p)} aria-label={`Remove ${p.name}`}>Remove</button>
+            </figure>
+          ))}
+          {picked.length + (useCover ? 1 : 0) < MAX_SHOTS && (
+            <label className="btn cm-add">
+              Add pictures
+              <input type="file" accept="image/png,image/jpeg" multiple hidden onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
+            </label>
+          )}
+        </div>
+        <h4>From your playtests</h4>
+        {play.isPending ? (
+          <p className="muted small-note"><span className="spinner" aria-hidden="true" />Looking for playtest screenshots…</p>
+        ) : (play.data?.shots ?? []).length === 0 ? (
+          <p className="muted small-note">{play.data?.error ?? play.data?.hint ?? "No playtest screenshots yet."}</p>
+        ) : (
+          <>
+            <p className="muted small-note">{play.data?.hint} Click to pick.</p>
+            <div className="cm-shots">
+              {(play.data?.shots ?? []).map((sh) => {
+                const on = picked.some((p) => p.name === sh.name);
+                return (
+                  <figure key={sh.name} className={on ? "cm-shot-on" : undefined}>
+                    <button type="button" className="cm-shot-pick" aria-pressed={on} onClick={() => togglePick({ name: sh.name, data: sh.data })} title={`${sh.map}${on ? " (picked)" : ""}`}>
+                      <img src={sh.data} alt={`${sh.map} playtest screenshot`} />
+                    </button>
+                    <figcaption className="small-note">{on ? "Picked · " : ""}{sh.map}</figcaption>
+                  </figure>
+                );
+              })}
+            </div>
+          </>
+        )}
       </Step>
       <Action note={blocked ? "Fix the graph first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana and register the page."}>
         <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || !title.trim() || !author.trim()} onClick={build} />

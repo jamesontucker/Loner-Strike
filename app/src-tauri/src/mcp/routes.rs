@@ -232,6 +232,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/tools/credits/permission"),
     ("POST", "/api/tools/credits/manual"),
     ("GET", "/api/tools/community/origins"),
+    ("GET", "/api/tools/community/playtest-shots"),
     ("GET", "/api/tools/community/mine"),
     ("GET", "/api/tools/community/publish/:map"),
     ("POST", "/api/tools/community/publish/:map"),

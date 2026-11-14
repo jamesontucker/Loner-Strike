@@ -242,6 +242,19 @@ would. Request in section 8.
      entry as text to post in the Discord.
    A mode with plugins is refused before anything is sent, with "Open in Game Mode Studio".
 
+**Publishing a Game Mode Studio mode** (Publish › A game mode) takes the same steps with the mode's graph, plus:
+- **Requirements** (My mode › Details › Requirements, `tools/requirements.rs`): the default and recommended maps and the
+  items that provide the content the mode uses. Unlinked items are a warning; a file found nowhere (not on this
+  computer, not the game's own, not linked) stops Publish. The list entry carries them, and the mode's page shows
+  "Plays on" and "Needs" with Get everything.
+- **Screenshots**: an automatic **cover card** (1280×720, the site's colors: the mode's name, an emblem from its
+  initials, its tags, the short line and "Made with Loner-Strike"; drawn in the page, so it works offline, and drawn
+  again when the name or the line changes; `community/coverCard.ts`) comes first unless unticked, then **playtest
+  screenshots**: press F5 in the game while you playtest (its own screenshot key, `snapshot`); the game writes
+  `<map>NNNN.bmp` (or .tga) into its folder and the form lists the ones from the last two weeks as PNG to pick from
+  (`GET /api/tools/community/playtest-shots`, `tools/playshots.rs`). Pictures can be added too. At most 6, PNG or
+  JPEG, 8 MB each, like a map's.
+
 Other tools open Publish with a map: `go("tools", "community:publish:<map>")`. Other addresses:
 `community:yours`, `community:mod:<id>`, `community:spray:<id>`.
 
