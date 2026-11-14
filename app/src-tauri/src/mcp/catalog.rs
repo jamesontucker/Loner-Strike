@@ -64,6 +64,7 @@ const DEFAULT_TEXTURE: &str = "OUT_WALL5";
 const EDITOR_OPS: &[&str] = &[
     "add_box", "add_cylinder", "add_shape", "delete", "duplicate", "transform", "move_face", "clip", "hollow", "carve", "merge", "snap",
     "set_texture", "align", "wrap_texture", "set_key", "add_entity", "tie", "to_world", "set_world", "group", "ungroup", "group_flags",
+    "move_vertices", "add_vertex", "merge_vertices", "extrude_face", "array", "paste", "fix", "place_prefab", "shear",
 ];
 
 pub fn specs() -> Vec<Spec> {
@@ -208,6 +209,8 @@ pub fn specs() -> Vec<Spec> {
     core.into_iter()
     .chain(super::more::specs())
     .chain(super::debug::specs())
+    .chain(super::editor_tools::specs())
+    .chain(super::studio_tools::specs())
     .collect()
 }
 
@@ -744,7 +747,13 @@ async fn run(ctx: &Ctx, name: &str, a: &Value) -> Done {
             Some(r) => r,
             None => match super::debug::run(ctx, name, a).await {
                 Some(r) => r,
-                None => Err(err(format!("Unknown tool: {name}"))),
+                None => match super::editor_tools::run(ctx, name, a).await {
+                    Some(r) => r,
+                    None => match super::studio_tools::run(ctx, name, a).await {
+                        Some(r) => r,
+                        None => Err(err(format!("Unknown tool: {name}"))),
+                    },
+                },
             },
         },
     }
@@ -758,7 +767,7 @@ pub(super) fn plural(n: usize) -> String {
     }
 }
 
-async fn editor_cmd(ctx: &Ctx, body: Value) -> Done {
+pub(super) async fn editor_cmd(ctx: &Ctx, body: Value) -> Done {
     post(ctx, "/api/tools/editor/cmd", body).await
 }
 

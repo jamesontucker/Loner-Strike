@@ -264,6 +264,10 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/tools/doctor/:name/copy"),
     ("POST", "/api/tools/doctor/:name/res"),
     ("POST", "/api/tools/editor/autosave"),
+    ("GET", "/api/tools/editor/assets"),
+    ("POST", "/api/tools/editor/assets/copy"),
+    ("POST", "/api/tools/editor/assets/find"),
+    ("GET", "/api/tools/editor/budget"),
     ("GET", "/api/tools/editor/checks"),
     ("POST", "/api/tools/editor/cmd"),
     ("POST", "/api/tools/editor/cmd2"),
@@ -271,6 +275,10 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/tools/editor/components/load-pack"),
     ("GET", "/api/tools/editor/components/pack"),
     ("POST", "/api/tools/editor/components/save-pack"),
+    ("GET", "/api/tools/editor/content/list"),
+    ("GET", "/api/tools/editor/content/sound/info"),
+    ("GET", "/api/tools/editor/content/sprite.png"),
+    ("GET", "/api/tools/editor/content/sprite/info"),
     ("POST", "/api/tools/editor/copy"),
     ("POST", "/api/tools/editor/discard-recovery"),
     ("GET", "/api/tools/editor/doc"),
@@ -282,6 +290,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/tools/editor/history/jump"),
     ("POST", "/api/tools/editor/import-map"),
     ("POST", "/api/tools/editor/import-other"),
+    ("GET", "/api/tools/editor/kits"),
     ("GET", "/api/tools/editor/meshes"),
     ("POST", "/api/tools/editor/new"),
     ("POST", "/api/tools/editor/open"),
@@ -293,6 +302,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/tools/editor/prefabs/export"),
     ("POST", "/api/tools/editor/prefabs/import"),
     ("POST", "/api/tools/editor/prefabs/save"),
+    ("POST", "/api/tools/editor/prefabs/update"),
     ("GET", "/api/tools/editor/project"),
     ("POST", "/api/tools/editor/project/action"),
     ("GET", "/api/tools/editor/recent"),
@@ -392,6 +402,11 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/tools/studio/debug/events"),
     ("POST", "/api/tools/studio/generate"),
     ("POST", "/api/tools/studio/source"),
+    ("GET", "/api/tools/studio/kits"),
+    ("GET", "/api/tools/studio/kit/:id"),
+    ("GET", "/api/tools/studio/library"),
+    ("POST", "/api/tools/studio/library/:id"),
+    ("POST", "/api/tools/studio/library/:id/delete"),
     ("GET", "/api/tools/studio/snippets"),
     ("POST", "/api/tools/studio/snippet/:id"),
     ("POST", "/api/tools/studio/snippet/:id/delete"),
@@ -590,6 +605,8 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
     // here too, so app_call is never the way round (test typed_tools_are_never_stronger_than_app_call)
     let overwrites = [
         ("/api/tools/studio/snippet/:id", "save a Game Mode Studio snippet (overwrites one with that name)"),
+        ("/api/tools/studio/library/:id", "save a piece to the Game Mode Studio's My library (overwrites one with that id)"),
+        ("/api/tools/studio/compile", "compile a Studio mode and install it into your game"),
         ("/api/tools/studio/switch", "switch the running game to a Studio mode (changes the map for everyone on it)"),
         ("/api/tools/editor/new", "start a new map in the editor (unsaved changes are lost)"),
         ("/api/tools/editor/open", "open another map in the editor (unsaved changes are lost)"),
@@ -598,6 +615,7 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
         ("/api/tools/editor/save", "save the editor's map (overwrites its file)"),
         ("/api/tools/compile/setup", "download and set up the map compilers"),
         ("/api/tools/navfix/:name/save", "save the map's nav (overwrites the bots' nav)"),
+        ("/api/tools/callouts/:name", "save place names into the map's nav (overwrites the bots' nav)"),
         ("/api/tools/studio/graph/:id", "save a Game Mode Studio graph (overwrites it)"),
         ("/api/tools/studio/uninstall/:id", "take a Studio mode out of the game"),
         ("/api/tools/plugins/file", "save a plugin's source file (overwrites it)"),
@@ -611,6 +629,14 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
     }
     if route == "/api/tools/compile/start" && b("install").and_then(Value::as_bool) == Some(true) {
         return Policy::Ask("compile a map and install it into the game".into());
+    }
+    // a new prefab only adds to the library; replacing one of yours overwrites it
+    if route == "/api/tools/editor/prefabs/save" && b("replace").is_some_and(|v| !v.is_null()) {
+        return Policy::Ask("save a prefab over one of yours in the library".into());
+    }
+    // the map's missing models, sprites and sounds: into the game asks, beside the project doesn't
+    if route == "/api/tools/editor/assets/copy" && b("to").and_then(Value::as_str) != Some("project") {
+        return Policy::Ask("copy the map's files into the game's download folder".into());
     }
     if route == "/api/app/launch" {
         return if b("restart").and_then(Value::as_bool) == Some(true) { Policy::Ask("start the game (closing it first if it's open)".into()) } else { Policy::Ask("start the game".into()) };

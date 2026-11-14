@@ -2241,6 +2241,13 @@ pub fn open_document_folder() -> Option<PathBuf> {
     global().lock().as_ref().and_then(|s| s.folder.clone())
 }
 
+/// Tests elsewhere (the MCP connector's end-to-end test): the editor's routes over their own
+/// editor in `dir`, never the app's (recent files, autosave and prefabs stay in `dir`).
+#[cfg(test)]
+pub fn routes_in(dir: PathBuf) -> Router<Shared> {
+    routes_with(Arc::new(Editor::with_dir(dir)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

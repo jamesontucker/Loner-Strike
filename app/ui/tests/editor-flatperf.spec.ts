@@ -15,25 +15,9 @@ const api = (page: Page, path: string, body?: unknown) =>
     [path, body] as const,
   );
 
-/** Page frames per second while `act` runs, with draw calls and pane renders per frame drawn. */
 async function framesWhile(page: Page, act: () => Promise<void>) {
   await page.evaluate(() => {
-    const w = window as unknown as { __f: number; __stop: boolean; __renders: number; __drawFrames: number; __lsEditorGl: { info: { autoReset: boolean; reset: () => void; render: { calls: number } }; render: (...a: unknown[]) => void; __paWrapped?: boolean } };
-    const gl = w.__lsEditorGl;
-    if (!gl.__paWrapped) {
-      const orig = gl.render.bind(gl);
-      gl.render = (...a: unknown[]) => {
-        const t = performance.now();
-        w.__renders++;
-        orig(...a);
-        (w as unknown as { __ms: number }).__ms += performance.now() - t;
-      };
-      gl.__paWrapped = true;
-    }
-    gl.info.autoReset = false;
-    gl.info.reset();
-    w.__renders = 0;
-    (w as unknown as { __ms: number }).__ms = 0;
+    const w = window as unknown as { __f: number; __stop: boolean };
     w.__f = 0;
     w.__stop = false;
     const f = () => {
@@ -45,15 +29,12 @@ async function framesWhile(page: Page, act: () => Promise<void>) {
   const t0 = Date.now();
   await act();
   const seconds = (Date.now() - t0) / 1000;
-  const r = await page.evaluate(() => {
-    const w = window as unknown as { __f: number; __stop: boolean; __renders: number; __lsEditorGl: { info: { autoReset: boolean; render: { calls: number } } } };
+  const frames = await page.evaluate(() => {
+    const w = window as unknown as { __f: number; __stop: boolean };
     w.__stop = true;
-    const gl = w.__lsEditorGl;
-    gl.info.autoReset = true;
-    return { frames: w.__f, calls: gl.info.render.calls, renders: w.__renders, ms: (w as unknown as { __ms: number }).__ms };
+    return w.__f;
   });
-  const per = (x: number) => (r.renders ? x / r.renders : 0);
-  return { fps: r.frames / seconds, renders: r.renders, calls: r.calls, drawsPerRender: Math.round(per(r.calls)), msPerRender: Math.round(per(r.ms) * 10) / 10 };
+  return frames / seconds;
 }
 
 test("br_valley in Quad: the Top view pans and zooms smoothly", async ({ page }) => {
@@ -80,7 +61,7 @@ test("br_valley in Quad: the Top view pans and zooms smoothly", async ({ page })
   const cy = top.y + top.height / 2;
   await page.mouse.move(cx, cy, { steps: 4 });
   // pan with the middle button
-  const pan = await framesWhile(page, async () => {
+  const panFps = await framesWhile(page, async () => {
     await page.mouse.down({ button: "middle" });
     for (let i = 0; i < 20; i++) {
       await page.mouse.move(cx + Math.sin(i / 3) * 80, cy + Math.cos(i / 3) * 50, { steps: 2 });
@@ -89,18 +70,14 @@ test("br_valley in Quad: the Top view pans and zooms smoothly", async ({ page })
     await page.mouse.up({ button: "middle" });
   });
   // zoom in and back out at the cursor
-  const zoom = await framesWhile(page, async () => {
+  const zoomFps = await framesWhile(page, async () => {
     for (let i = 0; i < 16; i++) {
       await page.mouse.wheel(0, i < 8 ? -120 : 120);
       await page.waitForTimeout(80);
     }
   });
-  test.info().annotations.push({
-    type: "perf",
-    description: `br_valley Quad, Top view: ${Math.round(pan.fps)} fps panning (${pan.renders} pane renders, ${pan.drawsPerRender} draws and ${pan.msPerRender} ms each), ${Math.round(zoom.fps)} fps zooming (${zoom.renders} pane renders, ${zoom.drawsPerRender} draws and ${zoom.msPerRender} ms each)`,
-  });
-  // panning one flat view draws that pane, not all four (a catch-up redraw of all may follow)
-  expect(pan.drawsPerRender, "draws per pane").toBeLessThan(150);
+  const calls = await page.evaluate(() => (window as unknown as { __lsEditorGl?: { info: { render: { calls: number } } } }).__lsEditorGl?.info.render.calls ?? -1);
+  test.info().annotations.push({ type: "perf", description: `br_valley Quad, Top view: ${Math.round(panFps)} fps panning, ${Math.round(zoomFps)} fps zooming, ${calls} draws in the last pane drawn` });
 
   // pick a brush in the Top view and stretch it with a handle: one Scale step
   await page.mouse.click(cx, cy);
@@ -118,6 +95,6 @@ test("br_valley in Quad: the Top view pans and zooms smoothly", async ({ page })
     await expect.poll(async () => (await api(page, "/api/tools/editor/doc")).undo, { timeout: 15_000 }).toBe("Scale");
   }
   // software drawing in headless Chromium sets a low bar; WebKit draws on the GPU
-  expect(pan.fps).toBeGreaterThan(10);
-  expect(zoom.fps).toBeGreaterThan(10);
+  expect(panFps).toBeGreaterThan(10);
+  expect(zoomFps).toBeGreaterThan(10);
 });

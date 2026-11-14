@@ -34,6 +34,10 @@ Code: `app/src-tauri/src/mcp/`. Settings UI: `app/ui/src/views/AgentSettings.tsx
   - stopping a server, or changing its map or mode, while people are on it;
   - downloading the compiler;
   - compiling into the game's maps folder;
+  - compiling a Game Mode Studio mode, which installs it into the game;
+  - copying the editor map's models, sprites and sounds into the game;
+  - saving callouts (place names) into a map's nav;
+  - saving a Studio graph or a prefab over one that's there;
   - starting the game (playtest).
 
   If it can't tell, it asks anyway: when it doesn't know who's on, or can't read the editor's state. With
@@ -142,9 +146,9 @@ With changes on, any single console line goes and is logged, but `quit`, `exit`,
 `changelevel`, `restart`, `exec` and `sv_downloadurl` ask first. Never allowed: `;` chains,
 `rcon_password` and `rcon`.
 
-## Tools (99)
-R = read (works with changes off). C = needs Allow changes. A = needs Allow changes and may ask the
-person.
+## Tools (160)
+R = read (works with changes off). C = needs Allow changes (edits to the open map or draft are undoable).
+A = needs Allow changes and may ask the person.
 
 | Area | Tools |
 |---|---|
@@ -152,23 +156,50 @@ person.
 | Maps | `maps_list`, `map_info`, `map_entities`, `map_nav_summary`, `map_nav_areas`, `map_knowledge`, `map_probe` (R) |
 | Map doctor | `map_doctor` (R), `map_doctor_write_res` (A), `map_doctor_copy_files` (C) |
 | Map simulator (was "health check") | `health_options`, `health_progress`, `health_reports`, `health_report` (R); `health_start`, `health_cancel` (C) |
-| Map editor | `editor_state`, `editor_list_entities`, `editor_checks`, `editor_textures` (R); `editor_add_box`, `editor_add_cylinder`, `editor_add_entity`, `editor_set_key`, `editor_command`, `editor_undo`, `editor_redo`, `editor_export_map` (C); `editor_new`, `editor_open`, `editor_import_map`, `editor_save` (A) |
-| Compile and playtest | `compile_status`, `compile_progress` (R); `compile_start`, `compile_cancel` (C; A with install); `compile_setup`, `playtest` (A) |
+| Map editor: files | `editor_state` (brushes, entities, groups, world keys, visgroups and cordon under `editor`), `editor_list_entities`, `editor_history` (R); `editor_export_map`, `editor_history_jump`, `editor_undo`, `editor_redo` (C); `editor_new`, `editor_open`, `editor_import_map`, `editor_save` (A) |
+| Map editor: building | `editor_add_box`, `editor_add_cylinder`, `editor_add_shape` (box, cylinder, wedge, spike, cone, sphere, arch, torus with every setting), `editor_add_entity`, `editor_set_key`, `editor_set_keys`, `editor_transform` (move, turn, stretch, pivot, texture lock, scale lock), `editor_move_face`, `editor_extrude_face`, `editor_vertices` (move, split, merge corners), `editor_clip`, `editor_hollow`, `editor_carve`, `editor_merge`, `editor_snap`, `editor_delete`, `editor_duplicate`, `editor_array`, `editor_paste`, `editor_group` (group, ungroup, hide, lock, rename, move into), `editor_tie` (to an entity / back to the world), `editor_world` (WADs and worldspawn keys), `editor_replace`, `editor_arrange` (align, distribute), `editor_settings` (visgroups, cordon), `editor_command` (any editor op) (C); `editor_find` (by text, texture, class, value, touching, inside) (R) |
+| Map editor: textures | `editor_textures`, `editor_faces` (each face's index, facing, texture and alignment) (R); `editor_set_texture`, `editor_align_texture` (set, shift, scale, rotate, Fit, Justify, Center, to the world/face/view), `editor_wrap_texture` (C) |
+| Map editor: Checks and Budget | `editor_findings` (R: structured findings: id, kind, severity, message, location, brush/entity/face ids, hint, fixes by `fixId`; the stretched-texture limits as arguments), `editor_checks` (R: the raw panel answer), `editor_budget` (R: every bar with status, the fix and the biggest contributors with ids; precache with the game's share, the modes' creatures and the guard's reserve; red-bar warnings); `editor_apply_fix` (C: one or several fixes by id as one undo step) |
+| Content Browser and prefabs | `content_list` (models, sprites, sounds with sources), `content_credits` (who made it, may it be shared), `editor_assets` (files the map names: found or missing), `prefabs_list` (R); `editor_place_asset`, `editor_place_prefab`, `prefab_save` (C; A when replacing); `editor_copy_assets` (A into the game). Recording permission or typing a credit is the person's alone |
+| Gameplay panel | `components_library`, `components_pack`, `editor_kits` (R); `components_load_pack`, `editor_place_marker`, `editor_made_for` (C); `components_save_pack` (A) |
+| Compile and playtest | `compile_status`, `compile_progress` (R: steps, problems in plain words with brush/entity ids, the leak line) ; `compile_start` (fast, normal, final), `compile_cancel` (C; A with install); `compile_setup`, `playtest` (A) |
 | Nav fixer | `nav_open`, `nav_problems`, `nav_reach` (R); `nav_add_area`, `nav_link`, `nav_unlink`, `nav_edit`, `nav_undo`, `nav_redo` (C); `nav_save` (A) |
+| Callouts | `callouts_read`, `callouts_suggest` (R); `callouts_save` (A) |
 | Replay | `replay_list`, `replay_summary`, `replay_trace` (a bot's trace in a time window; `every` gives its path) (R) |
 | Servers and play | `servers_list`, `server_status` (R); `server_start`, `server_set_bots` (C); `server_stop`, `server_change_map` (A). Everything else (making and configuring servers, rotation, HLTV, admins, the web panel's controls, launching the game) goes through `app_call` |
 | **Console and logs** | `console_send` (allowlist above), `console_log` (console / amxx / errors; `contains`, `prefixes`, `errors`; `cursor` to follow) |
 | **Bot brain** | `brain_settings`, `brain_trace_read`, `mode_status`, `creatures_list` (R); `brain_set` (typed switches: `bot_ls_trace`, `bot_ls_surf` 0/1/2, `bot_ls_fight`...), `brain_trace` (on/off plus `ls_mark` notes) (C) |
 | Recorder | `recording_status` (R), `recording_set` (C: pause or resume gm_simrec where it's loaded) |
-| Game Mode Studio | `studio_status`, `studio_nodes`, `studio_graphs`, `studio_graph_read`, `studio_validate`, `studio_code` (paged), `studio_debug_events` (cursor, kinds) (R); `studio_compile`, `studio_debug` (breakpoints, vars, resume) (C); `studio_graph_save`, `studio_graph_delete`, `studio_playtest`, `studio_uninstall` (A) |
+| Game Mode Studio: graphs | `studio_status`, `studio_nodes`, `studio_graphs`, `studio_graph_read`, `studio_validate`, `studio_code` (paged; also the "does it compile" check, nothing installed) (R); `studio_graph_save`, `studio_graph_delete`, `studio_uninstall` (A) |
+| Game Mode Studio: editing | `studio_draft` (R: every node with its pins resolved, wires, variables, Functions, Macros, structs, enums, comments, markers, problems); `studio_draft_open` (saved, new or a template), `studio_edit` (add/remove nodes and wires, pin values, breakpoints, variables, Functions, Macros, structs, enums, comments, map markers, mode settings, snippets; all or nothing, one undo step), `studio_draft_undo`, `studio_draft_redo` (C); `studio_draft_save` (A) |
+| Game Mode Studio: build and debug | `studio_debug_events` (cursor, kinds) (R); `studio_debug` (breakpoints, vars, resume) (C); `studio_compile` (installs: A), `studio_playtest` (A). `draft: true` on validate, code, compile and playtest uses the open draft |
+| Game Mode Studio: reuse | `studio_snippets`, `studio_library`, `studio_kits` (R); saving a snippet or a library piece through `app_call` (asks) |
+| Creature Studio | `creature_types`, `creature_type_read`, `creature_waves` (R); `creature_type_save` (types, tiers and enrage), `creature_waves_save`, `creature_apply` (C). Map-placed hazards (barnacle, sentry, mini turret) are entities: `components_library`, `editor_add_entity` |
 | Plugin Studio | `plugins_list`, `plugin_read` (paged), `plugin_log` (cursor) (R); `plugin_compile` (C); `plugin_save`, `plugin_delete`, `plugin_try`, `plugin_untry` (A) |
-| Components | `components_library`, `components_pack` (R); `components_load_pack` (C); `components_save_pack` (A) |
+| Publish | `publish_check` (R: a map, mode or prefab); building and registering packages through `app_call` (asks) |
 | Safety net | `backups_list` (R), `backup_restore` (A); compare, undo and defaults through `app_call /api/safety/*` |
 | Radar and demos | `radar_preview` (R: returns the picture), `demos_list` (R); install, restore, details, watch and to-replay through `app_call` |
 | Docs | `docs_read` (R, paged): components, loner-inc, creatures, bot-people, mcp, gamemodes-plan, studio-nodes |
 
-Bot people, the crosshair and config builder, the community browser, prefabs, the project and history
-panels, GetMore / GameBanana, add-ons, sounds, voice, smarter chat, admins, lists, extras, scrims, the
+**Fixing what Checks finds, as an agent.** `editor_findings` gives each finding a short `id` and each one-click
+fix a `fixId`, both worked out from what the finding is about (kind, brush, entity, face, texture, place), so they
+stay the same while the map changes elsewhere. `editor_apply_fix {fixId}` (or `fixIds` for several in one undo step)
+re-reads the checks, finds the fix and sends it the way the Checks panel's button does. Fixes that place something
+(a spawn, a light, a mode marker) use `origin`, or the finding's location; "Replace with the current texture" needs
+`texture`. The answer says how many findings are left.
+
+**The Budget, as an agent.** `editor_budget` answers what the panel draws, including what the page adds on its
+own: the game's share of the precache (197 models, 315 sounds, measured), the creatures of the modes the map is made
+for, and the creature guard's reserve (40 models, 60 sounds). Each bar has `status` (green under 75%, yellow, red
+over 90%), the usual `fix` and `top` contributors with their brush and entity ids.
+
+**Editing a Studio graph, as an agent.** `studio_draft_open` loads a graph (or a new one, or a template) into a draft
+in the app's memory; `studio_edit` takes a list of edits and applies all of them or none (refusing, say, a wire
+between pins whose types don't fit), as one undo step; `studio_draft` reads it back with every pin's type and
+wires. Nothing is written until `studio_draft_save`, which asks before it replaces a graph file. The Studio page
+doesn't show an agent's draft until it's saved.
+
+Bot people, the crosshair and config builder, the community browser, the project panel, GetMore / GameBanana, add-ons, sounds, voice, smarter chat, admins, lists, extras, scrims, the
 server browser, backups, map copy and nav learning are all reachable through `app_call`. Use
 `app_routes` with a search word to find the route.
 
@@ -247,7 +278,7 @@ Any other client: `http://127.0.0.1:<port>/mcp` (Streamable HTTP), with the head
    - Turn the setting off: it should fail to connect.
    - With the HTTP setup and a wrong token you should get 401, "Wrong or missing token…".
    - Restart Loner-Strike: the stdio setup should still connect, with no change to the config.
-2. **List tools.** In Claude Code, run `/mcp` and pick loner-strike. You should see 99 tools, 10 resources
+2. **List tools.** In Claude Code, run `/mcp` and pick loner-strike. You should see 160 tools, 10 resources
    and 5 prompts.
 3. **Read a map.** Ask: "Use loner-strike to tell me about de_dust2: its spawns, nav and whether bots know
    it". The agent should call `map_info`, `map_nav_summary` and `map_knowledge`. Settings > AI agents >

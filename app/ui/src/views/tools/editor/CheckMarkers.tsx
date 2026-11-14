@@ -6,7 +6,6 @@
 import { create } from "zustand";
 import * as THREE from "three";
 import { useEditor } from "./store";
-import { InstancedMarkers } from "./EntityBatch"; // Parity A
 import type { Issue } from "./editorApi";
 
 type MarksState = {
@@ -59,15 +58,18 @@ export function CheckMarkers() {
     <group>
       {show &&
         checks.issues.map((i, n) =>
-          !marked(i) || !HOTSPOT_CODES.has(i.code) ? null : (
+          !marked(i) ? null : HOTSPOT_CODES.has(i.code) ? (
             <mesh key={n} position={i.at!} renderOrder={4} raycast={() => null}>
               <sphereGeometry args={[i.code === "heavy-view" ? 96 : 64, 20, 14]} />
               <meshBasicMaterial color={i.code === "heavy-view" ? "#ff7a3a" : "#5a7dff"} transparent opacity={0.22} depthWrite={false} />
             </mesh>
+          ) : (
+            <mesh key={n} position={i.at!} renderOrder={4} raycast={() => null}>
+              <sphereGeometry args={[5, 10, 8]} />
+              <meshBasicMaterial color={COLOR[i.level]} />
+            </mesh>
           ),
         )}
-      {/* Parity A: the dots in one draw */}
-      {show && <InstancedMarkers items={checks.issues.filter((i) => marked(i) && !HOTSPOT_CODES.has(i.code)).map((i) => ({ at: i.at!, color: COLOR[i.level] }))} shape="sphere" size={5} renderOrder={4} />}
       {f?.at && (
         <mesh position={f.at} renderOrder={9} raycast={() => null}>
           <torusGeometry args={[HOTSPOT_CODES.has(f.code) ? 110 : 14, HOTSPOT_CODES.has(f.code) ? 4 : 2, 8, 32]} />

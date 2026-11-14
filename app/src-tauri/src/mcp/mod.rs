@@ -15,10 +15,12 @@
 pub mod catalog;
 pub mod conn;
 pub mod debug;
+pub mod editor_tools;
 pub mod more;
 pub mod routes;
 pub mod rpc;
 pub mod stdio;
+pub mod studio_tools;
 
 use crate::server::Shared;
 use axum::body::Bytes;
@@ -473,3 +475,5 @@ pub fn local_routes() -> Router<Shared> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod e2e_tests;

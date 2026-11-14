@@ -7,6 +7,9 @@ use super::catalog::{ask, err, get, id_arg, limit, map_arg, map_prop, none, obj,
 use super::Ctx;
 use serde_json::{json, Value};
 
+fn draft_prop() -> Value {
+    json!({"type": "boolean", "description": "Use the agent's open draft of id (studio_draft_open) instead of the saved graph"})
+}
 fn graph_id() -> Value {
     json!({"type": "string", "description": "Mode id: 2-24 characters, a-z, 0-9 and _, starting with a letter"})
 }
@@ -39,16 +42,16 @@ pub fn specs() -> Vec<Spec> {
         Spec { name: "studio_graph_delete", title: "Mode Studio: delete a graph", kind: Risky, schema: || obj(json!({"id": graph_id()}), &["id"]),
             description: "Deletes a game mode graph file. Asks the person first." },
         Spec { name: "studio_validate", title: "Mode Studio: check a graph", kind: Read,
-            schema: || obj(json!({"id": graph_id(), "graph": {"type": "object", "description": "A graph to check instead of the saved one"}}), &[]),
+            schema: || obj(json!({"id": graph_id(), "graph": {"type": "object", "description": "A graph to check instead of the saved one"}, "draft": draft_prop()}), &[]),
             description: "Problems in a graph (unwired pins, wrong types, missing events...) with the node and pin they're on." },
         Spec { name: "studio_code", title: "Mode Studio: show the code", kind: Read,
-            schema: || obj(json!({"id": graph_id(), "graph": {"type": "object"}, "debug": {"type": "boolean"}, "offset": {"type": "integer", "minimum": 0, "description": "Character to start from (long plugins come in pages)"}}), &[]),
+            schema: || obj(json!({"id": graph_id(), "graph": {"type": "object"}, "draft": draft_prop(), "debug": {"type": "boolean"}, "offset": {"type": "integer", "minimum": 0, "description": "Character to start from (long plugins come in pages)"}}), &[]),
             description: "The AMX Mod X plugin source the Studio makes from a graph, with which lines came from which node." },
-        Spec { name: "studio_compile", title: "Mode Studio: compile and install", kind: Change,
-            schema: || obj(json!({"id": graph_id(), "debug": {"type": "boolean", "description": "Build with the debugger hooks"}}), &["id"]),
-            description: "Compiles a saved graph into a plugin and installs it as a game mode in the person's game (its own plugin, plugins list and modes.ini line; only modes the Studio made)." },
+        Spec { name: "studio_compile", title: "Mode Studio: compile and install", kind: Risky,
+            schema: || obj(json!({"id": graph_id(), "draft": draft_prop(), "debug": {"type": "boolean", "description": "Build with the debugger hooks"}}), &["id"]),
+            description: "Compiles a graph into a plugin and installs it as a game mode in the person's game (its own plugin, plugins list and modes.ini line; only modes the Studio made). Asks the person first. To check a graph compiles without installing, use studio_code (the made plugin and its problems)." },
         Spec { name: "studio_playtest", title: "Mode Studio: playtest", kind: Risky,
-            schema: || obj(json!({"id": graph_id(), "map": map_prop(), "bots": {"type": "integer", "minimum": 0, "maximum": 31}, "breakpoints": {"type": "array", "items": {"type": "string"}, "description": "Node ids to stop at"}}), &["id", "map"]),
+            schema: || obj(json!({"id": graph_id(), "draft": draft_prop(), "map": map_prop(), "bots": {"type": "integer", "minimum": 0, "maximum": 31}, "breakpoints": {"type": "array", "items": {"type": "string"}, "description": "Node ids to stop at"}}), &["id", "map"]),
             description: "Compiles the graph with the debugger, then starts the game on a map in that mode with bots (asks the person first). Then read studio_debug_events and use studio_debug." },
         Spec { name: "studio_uninstall", title: "Mode Studio: take a mode out", kind: Risky, schema: || obj(json!({"id": graph_id()}), &["id"]),
             description: "Removes a Studio mode from the game (its plugin, plugins list and modes.ini line; the graph is kept). Asks the person first." },
@@ -141,6 +144,10 @@ async fn graph_of(ctx: &Ctx, a: &Value) -> Result<Value, Fail> {
         return Ok(g.clone());
     }
     let id = id_arg(a, "id")?;
+    // the agent's open draft (studio_tools.rs)
+    if a["draft"].as_bool() == Some(true) {
+        return super::studio_tools::draft_graph(&id).ok_or_else(|| err("That graph isn't open as a draft (studio_draft_open)."));
+    }
     let v = get(ctx, &format!("/api/tools/studio/graph/{id}")).await?;
     Ok(v["graph"].clone())
 }
@@ -195,6 +202,7 @@ pub async fn run(ctx: &Ctx, name: &str, a: &Value) -> Option<Done> {
         .await,
         "studio_compile" => async {
             let g = graph_of(ctx, a).await?;
+            ask(ctx, format!("An AI agent wants to compile the game mode \"{}\" and install it into your game (its plugin and a line in the modes list). Allow it?", g["mode"]["name"].as_str().or(s(a, "id")).unwrap_or("?"))).await?;
             post(ctx, "/api/tools/studio/compile", json!({"graph": g, "debug": a["debug"].as_bool().unwrap_or(false)})).await
         }
         .await,

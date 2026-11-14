@@ -36,8 +36,6 @@ import { brushRaycast } from "./pickRay";
 import { KitOverlay } from "./KitOverlay"; // P5: mode kit areas and paths
 import { FlatHandles, startFlatMove } from "./FlatHandles"; // Parity A: 2D handles and moves
 import { FlatGrid } from "./FlatGrid"; // Parity A
-import { EntityBatch, LinkBatch } from "./EntityBatch"; // Parity A: entities in a few draws
-import { QuietWhileDragging, wrapRootInvalidate } from "./paneRedraw"; // Parity A: redraw only the panes that changed
 import { startExtrude, startSplit } from "./extrude"; // Parity A: Shift-drag extrude, Ctrl-drag split
 import { DropTarget } from "./DropTarget"; // P5: a dragged texture's face
 import { TriadFeed } from "./AxisTriad"; // P5: the axes in each view's corner
@@ -310,9 +308,15 @@ function Entities() {
   const hiddenHere = useEditor((s) => s.hidden.entities);
   useKits((k) => k.kits); // P5: markers take their kit's colour when the kits arrive
   const hidden = useMemo(() => new Set((groups ?? []).filter((g) => g.hidden).map((g) => g.id)), [groups]);
-  // Parity A: drawn batched (a few draws for all of them); the picked ones stay EntityBox
-  const list = useMemo(() => pointEntities(ents).filter((e) => !sel.includes(e.id) && !hiddenHere.has(e.id) && (e.group == null || !hidden.has(e.group))), [ents, sel, hiddenHere, hidden]);
-  return <EntityBatch ents={list} look={entityLook} yaw={yawOf} />;
+  return (
+    <>
+      {pointEntities(ents)
+        .filter((e) => !sel.includes(e.id) && !hiddenHere.has(e.id) && (e.group == null || !hidden.has(e.group)))
+        .map((e) => (
+          <EntityBox key={e.id} e={e} picked={false} />
+        ))}
+    </>
+  );
 }
 
 function PickedEntities() {
@@ -371,12 +375,9 @@ function Links() {
     }
     return out;
   }, [ents, brushes, sel]);
-  // Parity A: the ordinary links in one dashed draw; the picked entity's few stay thick lines
-  const cold = useMemo(() => lines.filter((l) => !l.hot), [lines]);
   return (
     <>
-      <LinkBatch lines={cold} />
-      {lines.filter((l) => l.hot).map((l, i) => (
+      {lines.map((l, i) => (
         <Line key={i} points={[l.a, l.b]} color={l.hot ? "#ffd84a" : "#7fb7c9"} lineWidth={l.hot ? 2.5 : 1} dashed={!l.hot} dashSize={12} gapSize={8} transparent opacity={l.hot ? 1 : 0.6} depthTest={!l.hot} />
       ))}
     </>
@@ -1385,9 +1386,7 @@ export function EditorScene({ bounds, docId, onLost }: { bounds: [Vec3, Vec3]; d
     <div ref={wrap} className="ed-panes">
       <div className="ed-panes-canvas">
         <Canvas
-          onCreated={(state) => {
-            const { gl } = state;
-            wrapRootInvalidate(state); // Parity A: the canvas's own invalidate redraws every pane
+          onCreated={({ gl }) => {
             // P5: dev builds let the perf test read draw counts
             if (import.meta.env.DEV) (window as unknown as { __lsEditorGl?: THREE.WebGLRenderer }).__lsEditorGl = gl;
             gl.domElement.addEventListener("webglcontextlost", (e) => {
@@ -1400,7 +1399,7 @@ export function EditorScene({ bounds, docId, onLost }: { bounds: [Vec3, Vec3]; d
           dpr={[1, 1.5]}
           linear
           flat
-          gl={{ powerPreference: "high-performance", antialias: true, preserveDrawingBuffer: true /* Parity A: panes not redrawn keep their picture */ }}
+          gl={{ powerPreference: "high-performance", antialias: true }}
           camera={{ fov: 70, near: 2, far: 40000, position: [0, 512, 512] }}
           events={pointerEvents}
           eventSource={wrap as React.MutableRefObject<HTMLElement>}
@@ -1443,7 +1442,6 @@ function PaneScene({ view, bounds }: { view: ViewId; bounds: [Vec3, Vec3] }) {
       </group>
       <Gizmo pivot={pivot} />
       <TriadFeed />
-      <QuietWhileDragging /> {/* Parity A: no hover rays while the camera is dragged */}
       {view === "3d" ? (
         <>
           <Persp bounds={bounds} />
