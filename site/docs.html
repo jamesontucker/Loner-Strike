@@ -247,7 +247,7 @@ footer a { color: var(--dim); }
   <p class="lead">Everything from 0.1, plus the whole loop: build something, play it with bots, host it and share it.</p>
   <h2 id="new-play">Play</h2>
   <ul>
-    <li>Two new modes with their own maps: <a href="#last-stand">Last Stand</a> and <a href="#battle-royale">Battle Royale</a>.</li>
+    <li>Two new modes with their own maps: <a href="#last-stand">Last Stand</a> (with <a href="#ls-upgrades">perks, upgrades and turrets</a>) and <a href="#battle-royale">Battle Royale</a> (with <a href="#br-squads">squads</a> and <a href="#br-loot">loot levels</a>).</li>
     <li>Bots that play like people, with team chat and <a href="#voice">voice commands</a>.</li>
   </ul>
   <h2 id="new-build">Build</h2>
@@ -263,12 +263,13 @@ footer a { color: var(--dim); }
   <ul>
     <li>Servers update themselves when nobody's playing, and Linux servers are <a href="#backups">backed up</a> daily.</li>
     <li>New server tabs: <b>Health</b>, <b>Who can join</b>, <b>Moderation</b> and <b>Stats</b>.</li>
-    <li>Safer <a href="#shared-control">shared control</a>, a <a href="#tick-rate">tick rate</a> setting, a mode rotation, and Discord alerts when a server goes down.</li>
+    <li>Safer <a href="#shared-control">shared control</a>, a <a href="#tick-rate">tick rate</a> setting, a mode rotation, <a href="#crashes">crash tracking</a>, and Discord alerts when a server goes down or crashes.</li>
   </ul>
   <h2 id="new-share">Share and connect</h2>
   <ul>
     <li><a href="#community">Community</a>: maps and modes made with Loner-Strike, hosted on GameBanana. To share yours, <a href="#publishing">package it in the app and upload it to GameBanana</a>, with the credits filled in for you, and it shows up in Community.</li>
     <li><a href="#community-updates">Updates</a> arrive by themselves, with <b>Go back</b>; <a href="#credits">credits</a> are tracked for you; modes show <a href="#community-badges">how well bots play them</a>.</li>
+    <li>On the website, <b>Open in Loner-Strike</b> opens a creation's page in the app.</li>
     <li><a href="#mcp">AI agents</a> like Claude Code, Codex, OpenCode or Cursor can use the tools.</li>
   </ul>
   <p>Every change is in the <a href="https://github.com/jamesontucker/Loner-Strike/blob/main/CHANGELOG.md">changelog</a>.</p>
@@ -327,6 +328,7 @@ footer a { color: var(--dim); }
   <p>The app's quick-action bar: <b>Pause</b>, <b>Round</b> (with <b>Start a mode vote</b>), <b>Map</b>, bots (<b>Difficulty</b>, <b>Bot style</b>), <b>You</b>, <b>Announce</b> and <b>Record demo</b>.</p>
   <h2 id="modes">Game modes</h2>
   <p><a href="#last-stand">Last Stand</a> and <a href="#battle-royale">Battle Royale</a> come with their own maps. Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf, Paintball and the rest install from <b>Mods</b>; each is patched for bots, with a note on how well they play it. Switch modes from Play or <span class="kbd">F3</span> (the map reloads). Mode chat commands are under <a href="#commands-modes">In-game commands</a>.</p>
+  <p id="mode-settings">A <a href="#game-mode-studio">Game Mode Studio</a> mode can have <b>settings</b> its maker lets hosts change (points to win, round time and the like). They show under the mode on Play and on a server's <b>Modes</b> tab; each server keeps its own, and they apply from the next map or round. A value outside the maker's range is kept, with a warning.</p>
   <h2 id="match-mode">5v5 matches</h2>
   <p>Match mode runs warmup, <code>/ready</code>, a knife round for sides, and pauses, with a match panel on Play. Commands: <a href="#commands-match">5v5 matches</a>.</p>
 </section>
@@ -424,9 +426,21 @@ footer a { color: var(--dim); }
   <h2 id="ls-tips">Holding the base</h2>
   <ul>
     <li><b>Barricades</b>: hold <span class="kbd">E</span> (use) on a gate's boards to repair them.</li>
-    <li><b>Reviving</b>: hold use on a downed teammate.</li>
+    <li><b>Reviving</b>: hold use on a <a href="#ls-down">downed</a> teammate. Getting someone up pays $150.</li>
     <li><b>Buying</b>: the buy menu works during waves, in buy zones. In the armory, <span class="kbd">B</span> for weapons, or <span class="kbd">E</span> at the counter (or <code>/shop</code>) for repair kits, armor, grenades, ammo and medkits, pricier each wave.</li>
   </ul>
+  <h2 id="ls-upgrades" data-keywords="perk bench mystery box turret trap power-up powerup">Upgrades</h2>
+  <ul>
+    <li><b>Perks</b> (up to 4): <b>Tough</b> (+50% max health), <b>Quick hands</b> (faster reloads and swaps), <b>Double tap</b> (+25% damage), <b>Quick revive</b> (revive others in 2 seconds; alone, get back up once) and <b>Light feet</b> (+10% speed). $1500 for the first, $1000 more for each one after. Look at a perk machine and press <span class="kbd">E</span>; on maps without machines, the armory sells them. Going down loses them.</li>
+    <li><b>Upgrade bench</b> (or the armory): the gun in your hands to <b>Mk II</b> ($3000, +40% damage), then <b>Mk III</b> ($6000, +90%, from wave 12).</li>
+    <li><b>Mystery box</b> ($950): a random weapon. On maps without one, it's at the armory.</li>
+    <li><b>Sentry turret</b> ($2500 at the armory): press <span class="kbd">E</span> where it should stand. It guards that spot for 150 seconds.</li>
+    <li><b>Traps</b>: on maps that have them, pay at the switch to turn a gate's trap on for a while.</li>
+    <li><b>Power-ups</b>: now and then a creature drops one, for the whole team. Walk over it within 25 seconds: <b>Full resupply</b>, <b>Double pay</b> (30 seconds), <b>One-hit kills</b> (30 seconds) or <b>Airstrike</b>.</li>
+  </ul>
+  <p>Bots buy perks, upgrades and turrets too, once they have a rifle.</p>
+  <h2 id="ls-down" data-keywords="downed knocked down revive bleed out">Knocked down</h2>
+  <p>In a wave, a hit that would kill you knocks you down instead (with <b>Revive time</b> on). You lie on the ground with your pistol, a red pulse and a bar that counts down. Creatures leave you alone. A teammate holding <span class="kbd">E</span> on you gets you up; when the bar runs out, you're out until the next break.</p>
   <h2 id="ls-outpost">ls_outpost</h2>
   <p>Best for 4 to 16 players, and playable up to 32. A walled desert outpost at night with three barricaded gates (west, east, south) you can shoot through, a firing step creatures can't reach, the keep in the north as a last stand, and the armory shop. Supply drops land outside the west wall: take the ladder. Creatures can't climb. Players download nothing.</p>
   <h2 id="ls-settings">Settings</h2>
@@ -469,6 +483,21 @@ footer a { color: var(--dim); }
     <li><b>No buying</b>: everything comes from crates, floor weapons and supply drops.</li>
     <li><b>The zone</b> closes in stages; the round clock counts down to each.</li>
     <li><b>Supply drops</b> bring the best loot.</li>
+  </ul>
+  <h2 id="br-loot" data-keywords="heal bandage medkit armor level rarity crate ammo hud">Loot and healing</h2>
+  <ul>
+    <li><b>Healing</b>: bandages, medkits and energy drinks. Press <span class="kbd">F</span> (or <code>say /heal</code>) to use one.</li>
+    <li><b>Armor</b> comes in levels 1 to 3, for vests and helmets.</li>
+    <li><b>Loot glows</b> by how good it is, white up to gold.</li>
+    <li><b>Ammo is scarce</b>: pick up ammo for the guns you carry.</li>
+    <li><b>Death crates</b>: a player who's out leaves a crate; press <span class="kbd">E</span> to take or swap what's in it.</li>
+    <li><b>The HUD</b> shows who's alive, your kills, the zone and the next one (also on the radar), your armor and heals, and a kill feed. When you're out, you can watch who got you.</li>
+  </ul>
+  <h2 id="br-squads" data-keywords="squad duo team party code invite revive knocked">Squads</h2>
+  <ul>
+    <li>Before the game, <code>say /squad</code> makes a squad, invites players, or shows its 4-letter code; friends join with <code>say /squad CODE</code>. Players on the same network are grouped. Everyone else is put in a squad when the game starts.</li>
+    <li>Duos and Squads are also their own modes in mode votes.</li>
+    <li>In Duos and Squads, a hit that would kill you knocks you down. Only your squad mates can get you up (hold <span class="kbd">E</span>); other squads can finish you off. A squad is out when all of it is down.</li>
   </ul>
   <h2 id="br-valley">br_valley</h2>
   <p>A river valley about 180 meters a side, with a town, factory, farms, a bunker (the best loot), radio hill (the best crate) and more, crossed by bridges, fords and tunnels. Best with 16 to 28 players; bots fill the rest.</p>
@@ -741,6 +770,7 @@ footer a { color: var(--dim); }
     <li>Panels: <b>Outline</b> and <b>Inspect</b> on the right; the <a href="#content-browser">Content Browser</a>, <b>Gameplay</b>, <b>Textures</b>, <b>Checks</b>, <b>Compile</b> and <b>Project</b> below. Drag tabs to move them. <b>View</b> has layouts and <b>Reset the panel layout</b>.</li>
     <li><b>Help › Change keys…</b> has Hammer's and TrenchBroom's keys.</li>
     <li>New to mapping? <b>Help › First map tour</b> walks you through a first room, light, spawns and playtest.</li>
+    <li><b>View › Show frame time</b> (<span class="kbd">Ctrl</span> <span class="kbd">Alt</span> <span class="kbd">Shift</span> <span class="kbd">F</span>) shows frames a second and slow frames, for judging big maps.</li>
   </ul>
   <figure class="shot">
     <picture><source srcset="img/1.0/editor-quad.webp" type="image/webp"><img src="img/1.0/editor-quad.png" alt="The Quad layout: 3D, top, front and side views" width="1440" height="900" loading="lazy"></picture>
@@ -769,8 +799,10 @@ footer a { color: var(--dim); }
   </ul>
   <h2 id="editor-textures">Textures</h2>
   <p>The <b>Textures</b> panel shows the map's WADs (add more in <b>Map properties</b>). Click to choose; double-click or <span class="kbd">Shift</span> <span class="kbd">T</span> paints what's picked. <b>Texture lock</b> keeps textures in place when brushes move.</p>
+  <p>With faces picked, <b>Inspect</b> shows the face sheet: shift, scale and turn, <b>Fit</b> and <b>Justify</b>, <b>Align</b> to the world or to the face (good for slopes), <b>Pick up</b> a face's texture and <b>Recent textures</b>. With the <b>Texture</b> tool in the 3D view, right-click a face to paint the current texture on it, <span class="kbd">Alt</span>-right-click to paint it and carry the picked face's alignment round the corner (like Hammer), and <span class="kbd">Alt</span>-click to pick a texture up.</p>
   <h2 id="editor-entities">Entities</h2>
   <p><b>Inspect</b> shows a form for the picked entity, with help on every key; pick several to change them together. <code>target</code> → <code>targetname</code> links are drawn in 3D. A model, sprite or sound key has <b>Choose…</b>, ↗ (show it in the <a href="#content-browser">Content Browser</a>) and <b>Use selected</b>. For a mod's own entities, add its FGD in <b>Map properties › Entity definitions</b>.</p>
+  <p>The <b>I/O</b> panel (<b>What triggers what</b>) lists every link (targets, <code>multi_manager</code>s, masters and kill targets) and draws them as arrows. Show <b>All</b>, only <b>Broken</b> ones (a target no entity is named), or the <b>Picked chain</b>; the search box finds a name or a class. Click a row to pick it, double-click to look at it.</p>
   <h2 id="content-browser" data-keywords="assets models sprites sounds props content drawer">Content Browser</h2>
   <p>The map editor panel with <b>Models</b>, <b>Sprites</b>, <b>Sounds</b>, <b>Textures</b>, <b>Prefabs</b> and <b>GameBanana</b>. Open it from <b>View › Content Browser</b> (tab: <b>Content</b>) or as a drawer.</p>
   <ul>
@@ -786,7 +818,8 @@ footer a { color: var(--dim); }
   <p>The <b>Prefabs</b> tab has starters (doorway, stairs, crates, bombsite kit, buy zone and more) and your own. Drag one in, or <b>Place</b> and click; <span class="kbd">R</span> turns it. <b>Save what's picked…</b> makes your own; <b>Community prefabs…</b> finds more.</p>
   <p>The <b>Gameplay</b> panel has <b>Components</b> (Loner-Strike's mode pieces, like wave spawners and loot crates) and <b>Mode kits</b>: set <b>Made for</b> to a mode, and it lists the markers and pieces that mode needs, with <b>Place</b> for each. The <a href="#editor-checks">checks</a> say what's missing.</p>
   <h2 id="editor-checks">Checks as you go</h2>
-  <p><b>Checks</b> finds broken brushes, limits, missing textures, spawns, files or targets, and what a mode still needs. Click a problem to go to it; most have a fix, like <b>Place a CT spawn</b> or <b>Add halflife.wad and cstrike.wad</b>. Leaks show at compile time.</p>
+  <p><b>Checks</b> finds broken brushes, limits, missing textures, spawns, files or targets, and what a mode still needs. Click a problem to go to it; most have a fix, like <b>Place a CT spawn</b> or <b>Add halflife.wad and cstrike.wad</b>.</p>
+  <p id="editor-leaks" data-keywords="leak pointfile hole void">Leaks show when you compile: a red line runs from an entity out to the hole, and a bar says which brush the gap is next to. <b>Go to leak</b> flies along the line and picks that brush; <b>Pick brushes at the hole</b>, <b>Hide line</b> and <b>Forget it</b> are there too. <b>Map › Load pointfile…</b> loads a line (<code>.lin</code> or <code>.pts</code>) from another compile.</p>
   <p>The game won't load a map with missing models or sprites. The <b>Project</b> panel lists every file the map uses, can <b>Copy into the game</b> or <b>Copy next to the project</b>, and <b>Find missing files…</b> searches a folder you pick.</p>
   <h2 id="editor-save">Saving and exporting</h2>
   <ul>
@@ -1352,7 +1385,7 @@ public on_spawn(id)
     <tbody>
       <tr><td><b>Overview</b></td><td>Status, main settings, console</td></tr>
       <tr><td><b>Who can join</b></td><td>Visibility, password, address, the server list</td></tr>
-      <tr><td><b>Health</b></td><td><a href="#maintenance">Updates, security, backups, daily restart, repair</a></td></tr>
+      <tr><td><b>Health</b></td><td><a href="#maintenance">Updates, security, backups, daily restart, repair, crashes</a></td></tr>
       <tr><td><b>Rotation &amp; extras</b></td><td><a href="#rotation">Rotation, adverts, kicks, votes</a></td></tr>
       <tr><td><b>Spectators &amp; demos</b></td><td><a href="#hltv">HLTV</a></td></tr>
       <tr><td><b>Website status</b></td><td><a href="#website-status">Site, Discord, fast downloads</a> (Linux)</td></tr>
@@ -1480,6 +1513,9 @@ lsctl logs        the last 100 console lines</code></pre>
   <p class="lead">Friends help run your server from their Loner-Strike, through <a href="#website-status">Website status</a> (Linux) or TCP 27030 on this computer while the app is open (<b>Open the port on my router</b> opens it).</p>
   <ol>
     <li>In the server's <b>Shared control</b> tab, make an invite and pick a role. Adding their SteamID is recommended (they see it with <code>status</code> in the console). An invite works once, for 24 hours.</li>
+  <h2 id="crashes" data-keywords="crash crashing ham sandwich hamsandwich module discord">Crashes</h2>
+  <p>A server that crashed shows a badge on its card and page (like <b>3 crashes in 24 h</b>). <b>Health › Crashes</b> lists each one, newest first: when, the map, what went wrong and the last log lines, with <b>Copy</b> to send it to a mod's maker. Turn on <b>Post crashes to Discord</b> to get new ones in the server's Discord status channel while Loner-Strike runs.</p>
+  <p>A <b>Crash-prone module</b> warning means the server runs a module known to crash servers. The usual one is the official Ham Sandwich, which crashes on map changes: Loner-Strike puts its fixed copy back before every Play and local server start (a Linux server does it before each start), keeping the replaced file beside it.</p>
     <li>They paste it in <b>Servers</b> › <b>Add a shared server</b>.</li>
   </ol>
   <h2 id="roles">What each role can do</h2>
@@ -1585,7 +1621,14 @@ lsctl logs        the last 100 console lines</code></pre>
   </ol>
   <p>Most things are <b>Listed</b> within a few minutes; some go to a moderator first. If it's turned down, the app says why.</p>
   <h2 id="publish-mode">Publish a game mode</h2>
-  <p>The same steps, with <b>A game mode</b>. Set <b>How well bots play it</b> (the Studio may suggest it); it shows as a badge and in the Bots filter. Others can play and remix it, with your name on it.</p>
+  <p>The same steps, with <b>A game mode</b>:</p>
+  <ul>
+    <li><b>Checks</b> first: the graph has to compile, and every file the mode uses has to be on your computer or linked to the GameBanana item that has it (<b>My mode › Details › Requirements</b> in the Studio).</li>
+    <li>Set <b>How well bots play it</b> (the Studio may suggest it); it shows as a badge and in the Bots filter.</li>
+    <li><b>Screenshots</b>: a <b>cover card</b> drawn from the name and line comes first (untick it to leave it out), then up to 5 of yours.</li>
+    <li>If the mode runs server commands, kicks players or calls other plugins, the listing says so with a <a href="#community-badges">badge</a>.</li>
+  </ul>
+  <p>Others can play and remix it, with your name on it.</p>
   <h2 id="credits" data-keywords="credit license permission terms author assets">Credits</h2>
   <p>Loner-Strike tracks where every file came from:</p>
   <ul>
@@ -1643,6 +1686,7 @@ args = ["--mcp-stdio"]</code></pre>
   <h3>OpenCode</h3>
   <p>In <code>opencode.json</code>:</p>
 <pre><code>"mcp": {"servers": {"loner-strike": {"type": "local", "command": ["&lt;app&gt;", "--mcp-stdio"]}}}</code></pre>
+  <p>On <a href="index.html#creations">lonerstrike.com</a>, <b>Open in Loner-Strike</b> opens a creation's page in the app. It only opens the page: installing still takes <b>Try it</b> and <b>Install it</b>.</p>
   <h3>Cursor</h3>
   <p>In <code>~/.cursor/mcp.json</code>:</p>
 <pre><code>"mcpServers": {"loner-strike": {"type": "stdio", "command": "&lt;app&gt;", "args": ["--mcp-stdio"]}}</code></pre>
@@ -1658,7 +1702,8 @@ args = ["--mcp-stdio"]</code></pre>
   <ul>
     <li>Read and check maps, build, compile and playtest in the map editor, fix navs, name places, make overviews.</li>
     <li>Work in Game Mode Studio and Plugin Studio, read replays and demos.</li>
-    <li>Run your servers and read their consoles, logs and bots' thinking.</li>
+    <li>On modes that do more than their own game: <b>Runs server commands</b>, <b>Runs AMX Mod X commands</b>, <b>Calls other plugins</b> or <b>Can kick players</b>. You're asked before one installs, and asked again if the mode does more than its listing said.</li>
+    <li>Run your servers and read their consoles, logs, crashes and bots' thinking.</li>
   </ul>
   <p>Try: "make a small aim arena, check it for bots and playtest it".</p>
   <h2 id="mcp-safety">What keeps you in charge</h2>
@@ -1704,6 +1749,7 @@ args = ["--mcp-stdio"]</code></pre>
   <p>You started a copy Loner-Strike isn't set up in. Close it and start from <b>Play</b>, or switch copies in Settings › <b>Game</b>.</p>
 
 </section>
+  <p><b>Unlist</b> takes one off Community (installed copies stay). If the app asks, put the short code it gives you on the GameBanana page, so it knows the page is yours; <b>List again</b> puts it back.</p>
 
 <section class="topic" id="setup-help" data-group="Help">
   <p class="crumb">Help</p>
@@ -1763,9 +1809,11 @@ args = ["--mcp-stdio"]</code></pre>
     <li><b>"Port … is in use by another program"</b>: something else on this computer has it (another game server, a server Loner-Strike isn't managing). Close it, or change this server's port on Overview.</li>
     <li><b>"keeps crashing, so it was left off"</b>: check the console on Overview. A newly added mod is the usual cause: remove it.</li>
     <li>On this computer, <b>Reinstall Loner-Strike and its mods</b> (Health tab) fixes lost files.</li>
+    <li>See what you've picked in the map editor, so "make this taller" works, and pick things for you to look at.</li>
     <li>Mac (CrossOver): CrossOver must be in Applications and the servers folder inside the game's bottle.</li>
     <li>Windows user name in another language than Windows? The old server can trip over it. Move servers to a plain folder like <code>C:\LonerStrike</code> in Settings › <b>Servers folder</b>.</li>
   </ul>
+  <p>More than 170 tools in all; <code>/mcp</code> in Claude Code (or your agent's tool list) shows them.</p>
 
   <h2 id="ssh-problems" data-short="Linux machine connection">Can't connect to a Linux machine <a class="anchor" href="#ssh-problems" aria-label="Link to this">#</a></h2>
   <ul>
