@@ -1138,7 +1138,8 @@ check_map_presets()
 	new target = preset_mode_for(map)
 	if (target >= 0)
 	{
-		if (target == g_Cur)
+		// (a variant of the preset's mode stays: Battle Royale Duos on a br_ map) W3
+		if (target == g_Cur || mode_family(g_ModeId[target], g_ModeId[g_Cur])) // W3
 			return
 		if (!premode[0])
 			write_data_line("premode.txt", g_ModeId[g_Cur])
@@ -5129,9 +5130,16 @@ bool:made_for(const id[], const map[], Array:pats, Array:ids)
 	new preset[32]
 	preset_id_of(pats, ids, map, preset, charsmax(preset))
 	if (preset[0])
-		return bool:equali(preset, id)
+		return mode_family(preset, id) // W3: br_ maps suit br_duo and br_squads too
 	return name_fits(id, map)
 }
+
+// W3: a mode and its variants ("br", "br_duo", "br_squads") are one family for map presets
+bool:mode_family(const base[], const id[]) // W3
+{ // W3
+	new n = strlen(base) // W3
+	return equali(base, id) || (equali(id, base, n) && id[n] == '_') // W3
+} // W3
 
 // Made for a mode that needs its own maps, or one with its own look
 bool:special_map(const map[], Array:pats, Array:ids)

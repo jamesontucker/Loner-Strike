@@ -24,6 +24,8 @@ const BUILT_IN: { id: string; name: string; kind: "mode" | "addon"; description:
   { id: "scoutz", name: "Scoutz & Knivez", kind: "mode", description: "Scouts, low gravity, air control" },
   { id: "surf", name: "Surf", kind: "mode", description: "Air control, free guns, long rounds" },
   { id: "br", name: "Battle Royale", kind: "mode", description: "Everyone for themselves (or squads): loot up, stay in the closing zone, be the last one standing" },
+  { id: "br_duo", name: "Battle Royale: Duos", kind: "mode", description: "Battle Royale in pairs: knocked down first, your partner gets you up" },
+  { id: "br_squads", name: "Battle Royale: Squads", kind: "mode", description: "Battle Royale in squads of four, teamed up in a lobby (say /squad)" },
   { id: "laststand", name: "Last Stand", kind: "mode", description: "Hold the base with your team and bots against waves of creatures" },
   { id: "match", name: "Match (5v5)", kind: "mode", description: "Scrims and pick-up games: ready up, knife for sides, MR15 with half-time" },
   { id: "quakesounds", name: "Quake sounds", kind: "addon", description: "Killing spree and headshot announcers" },

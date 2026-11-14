@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 /// Modes that need nothing beyond Loner-Strike's own plugins
-pub const CORE_MODES: &[&str] = &["classic", "csdm", "csdm_ffa", "knife", "pistols", "deagle", "awp", "scoutz", "surf", "match", "laststand", "br"];
+pub const CORE_MODES: &[&str] = &["classic", "csdm", "csdm_ffa", "knife", "pistols", "deagle", "awp", "scoutz", "surf", "match", "laststand", "br", "br_duo", "br_squads"];
 /// miscstats.amxx comes with AMX Mod X
 pub const CORE_ADDONS: &[&str] = &["quakesounds"];
 pub const OUR_PLUGINS: &[&str] = &["gamemodes", "gm_people", "gm_atmosphere", "gm_humanbots", "gm_botfun", "gm_pubserver", "gm_deathmatch", "gm_botnav", "gm_botsurf", "gm_vip", "gm_extras", "gm_community", "gm_scrim", "gm_botchat", "gm_botping", "gm_content", "gm_components", "gm_laststand", "gm_battleroyale"];
