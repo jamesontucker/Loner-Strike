@@ -3074,7 +3074,7 @@
    "type": "event.player_hurt",
    "title": "Player Hurt",
    "category": "Events",
-   "help": "Runs when a player takes damage, with the health it took (blocked damage doesn't count).",
+   "help": "Runs when a player takes damage, with the health it took (blocked damage doesn't count). Hit Position: where a bullet or the knife struck (else the middle of the victim); Direction: which way the hit was going (from the attacker). Use Get Transform on Victim/Attacker for where they were.",
    "inputs": [],
    "outputs": [
     {
@@ -3116,6 +3116,16 @@
      "id": "weapon",
      "type": "text",
      "label": "Weapon"
+    },
+    {
+     "id": "hit_pos",
+     "type": "vector",
+     "label": "Hit Position"
+    },
+    {
+     "id": "hit_dir",
+     "type": "vector",
+     "label": "Direction"
     }
    ],
    "params": [],
@@ -5190,7 +5200,7 @@
    "type": "up.on_creature_hurt",
    "title": "Creature Hurt",
    "category": "Creatures",
-   "help": "A creature took damage (Headshot when the hit was a head).",
+   "help": "A creature took damage (Headshot when the hit was a head). Hit Position: where a bullet or the knife struck (else its middle); Direction: which way the hit was going. Use Get Entity Transform on Creature, or Get Transform on Attacker, for where they were.",
    "inputs": [],
    "outputs": [
     {
@@ -5217,6 +5227,16 @@
      "id": "headshot",
      "type": "bool",
      "label": "Headshot"
+    },
+    {
+     "id": "hit_pos",
+     "type": "vector",
+     "label": "Hit Position"
+    },
+    {
+     "id": "hit_dir",
+     "type": "vector",
+     "label": "Direction"
     }
    ],
    "params": [],
@@ -15226,6 +15246,192 @@
     }
    ],
    "pure": true
+  },
+  {
+   "type": "ent.transform",
+   "title": "Get Entity Transform",
+   "category": "Entities",
+   "help": "Any entity's place and motion: a player, a creature, a prop, a map entity. Position (a brush entity's middle when it has no origin), Rotation (pitch, yaw, roll; a player's view), Velocity, its box (Mins, Maxs, Center) and whether it stands on the ground.",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position"
+    },
+    {
+     "id": "angles",
+     "type": "vector",
+     "label": "Rotation"
+    },
+    {
+     "id": "vel",
+     "type": "vector",
+     "label": "Velocity"
+    },
+    {
+     "id": "mins",
+     "type": "vector",
+     "label": "Mins"
+    },
+    {
+     "id": "maxs",
+     "type": "vector",
+     "label": "Maxs"
+    },
+    {
+     "id": "center",
+     "type": "vector",
+     "label": "Center"
+    },
+    {
+     "id": "ground",
+     "type": "bool",
+     "label": "On Ground"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "location origin where angles speed bounds box"
+  },
+  {
+   "type": "ent.position",
+   "title": "Get Entity Position",
+   "category": "Entities",
+   "help": "Where an entity is (a player, a creature, a prop; a brush entity's middle).",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Position"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "location origin where"
+  },
+  {
+   "type": "ent.rotation",
+   "title": "Get Entity Rotation",
+   "category": "Entities",
+   "help": "Which way an entity faces: pitch, yaw, roll (a player's view).",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Rotation"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "angles facing yaw"
+  },
+  {
+   "type": "ent.distance",
+   "title": "Distance Between",
+   "category": "Entities",
+   "help": "How far apart two things are: each an entity (a player, a creature...) or a point.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "entity",
+     "label": "A",
+     "optional": true
+    },
+    {
+     "id": "a_pos",
+     "type": "vector",
+     "label": "Or point A",
+     "optional": true
+    },
+    {
+     "id": "b",
+     "type": "entity",
+     "label": "B",
+     "optional": true
+    },
+    {
+     "id": "b_pos",
+     "type": "vector",
+     "label": "Or point B",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Distance"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "range how far close near"
+  },
+  {
+   "type": "ent.direction",
+   "title": "Direction To",
+   "category": "Entities",
+   "help": "The direction (length 1) from one thing to another: each an entity or a point.",
+   "inputs": [
+    {
+     "id": "a",
+     "type": "entity",
+     "label": "From",
+     "optional": true
+    },
+    {
+     "id": "a_pos",
+     "type": "vector",
+     "label": "Or from point",
+     "optional": true
+    },
+    {
+     "id": "b",
+     "type": "entity",
+     "label": "To",
+     "optional": true
+    },
+    {
+     "id": "b_pos",
+     "type": "vector",
+     "label": "Or to point",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "vector",
+     "label": "Direction"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "keywords": "aim towards heading"
   },
   {
    "type": "vec.entity",

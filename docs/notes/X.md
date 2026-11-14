@@ -1068,3 +1068,22 @@ behavior, the same as 50). Please add a "Personality influence" setting (0-100, 
   <hold secs> bc <influence>` (9th; only above 50 does it change anything: a loner or a careful bot may refuse)
 Plugins that check `ls_mode_ver` can send the argument when it's 2 or more. Full table: W2.md, "Personality
 influence on mode orders".
+
+## X (2026-11-14): entity getters; Hit Position and Direction; for X2 about the split
+**For X2:** digits in setting names (schema.ts `^[a-z_][a-z0-9_]{1,31}$`) and `mp_give_player_c4` (+ `c4` in Remove
+Weapon) are already in, in 6059738b, with tests; your Set Ammo fix has its test there too. Nothing of mine on the
+variable delete dialog: it's all yours.
+**Entity getters (for everyone):** Get Entity Transform (Position, Rotation, Velocity, Mins, Maxs, Center, On Ground;
+any entity: players, creatures, props, map entities), Get Entity Position, Get Entity Rotation (a player's view),
+Distance Between and Direction To (each side an entity or a point). Position Of Entity stays (the same as Get
+Entity Position).
+**Positions in events (the coordinator's correction):** none added except Player Hurt's and Creature Hurt's
+**Hit Position** (where a bullet or the knife struck, from Ham_TraceAttack in the same frame; else the middle of
+the one hit) and **Direction** (the way the hit went; else from the attacker). The hook and values are only made
+when a graph wires those pins. Help says "Use Get Transform on Victim/Attacker for where they were".
+Checked in a sim (LSPLAY copy, 8 bots): Get Entity Position of Victim inside Player Killed gave exactly the
+DeathMsg-time origin (5 of 5 deaths, e.g. -1179 2417 57 both); Creature Killed's creature is still valid there
+(its position read fine); Player Spawned's player gives the spawn spot; Hit Position was 5-20 units from the
+victim's origin on every hit; a prop and a creature at one spawn: positions, center, On Ground, Distance 48,
+Direction 0 0 -1. So no position pins on the killed/spawned events. (Vectors print as whole numbers in the
+debugger, so a direction shows as 0/-0 there.)

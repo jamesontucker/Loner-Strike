@@ -268,7 +268,7 @@ const EVENTS: &[EventKind] = &[
         // damage was blocked, less when it was scaled down or armour took some
         prelude: "new Float:g_lsgHurtHp[33]\n\npublic lsg_hurt_before(victim, inflictor, attacker, Float:damage, bits)\n{\n\t#pragma unused inflictor\n\t#pragma unused attacker\n\t#pragma unused damage\n\t#pragma unused bits\n\tif (victim >= 1 && victim <= MaxClients)\n\t\tpev(victim, pev_health, g_lsgHurtHp[victim])\n\treturn HAM_IGNORED\n}",
         guard: "\t#pragma unused inflictor\n\t#pragma unused bits\n\tif (victim < 1 || victim > MaxClients)\n\t\treturn HAM_IGNORED\n\tnew Float:hp\n\tpev(victim, pev_health, hp)\n\tdamage = g_lsgHurtHp[victim] - hp\n\tif (damage <= 0.0)\n\t\treturn HAM_IGNORED",
-        values: &[("victim", "victim"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:damage"), ("headshot", "bits & DMG_BULLET && get_ent_data(victim, \"CBaseMonster\", \"m_LastHitGroup\") == HIT_HEAD ? 1 : 0"), ("left", "_:hp"), ("hitgroup", "@fn:lsg_hitgroup(victim, bits)"), ("weapon", "@fn:lsg_wpn_of(attacker, inflictor)")],
+        values: &[("victim", "victim"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:damage"), ("headshot", "bits & DMG_BULLET && get_ent_data(victim, \"CBaseMonster\", \"m_LastHitGroup\") == HIT_HEAD ? 1 : 0"), ("left", "_:hp"), ("hitgroup", "@fn:lsg_hitgroup(victim, bits)"), ("weapon", "@fn:lsg_wpn_of(attacker, inflictor)"), ("hit_pos", "lsg_hit_pos(victim)"), ("hit_dir", "lsg_hit_dir(victim, attacker >= 1 && attacker <= MaxClients ? attacker : inflictor)")],
         tail: "\treturn HAM_IGNORED",
         named: None,
     },
@@ -312,7 +312,7 @@ const EVENTS: &[EventKind] = &[
     EventKind { kind: "up.on_upgraded", sig: "public ls_on_weapon_upgraded(id, weapon, level, price)", register: &[], prelude: "", guard: "\t#pragma unused weapon", values: &[("player", "id"), ("level", "_:float(level)"), ("price", "_:float(price)")], tail: "", named: None },
     EventKind { kind: "up.on_box", sig: "public ls_on_box(ent, id, const weapon[])", register: &[], prelude: "", guard: "\t#pragma unused ent", values: &[("player", "id"), ("weapon", "@str:weapon")], tail: "\treturn PLUGIN_CONTINUE", named: None },
     EventKind { kind: "up.on_pickup", sig: "public ls_on_pickup(ent, id, const kind[])", register: &[], prelude: "", guard: "", values: &[("pickup", "ent"), ("player", "id"), ("kind", "@str:kind")], tail: "\treturn PLUGIN_CONTINUE", named: None },
-    EventKind { kind: "up.on_creature_hurt", sig: "public ls_on_creature_hurt(ent, attacker, Float:dmg, headshot)", register: &[], prelude: "", guard: "", values: &[("creature", "ent"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:dmg"), ("headshot", "headshot ? 1 : 0")], tail: "", named: None },
+    EventKind { kind: "up.on_creature_hurt", sig: "public ls_on_creature_hurt(ent, attacker, Float:dmg, headshot)", register: &[], prelude: "", guard: "", values: &[("creature", "ent"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:dmg"), ("headshot", "headshot ? 1 : 0"), ("hit_pos", "lsg_hit_pos(ent)"), ("hit_dir", "lsg_hit_dir(ent, attacker)")], tail: "", named: None },
     EventKind { kind: "kd.on_down", sig: "public ls_on_down(id, attacker)", register: &[], prelude: "", guard: "", values: &[("player", "id"), ("attacker", "attacker")], tail: "\treturn PLUGIN_CONTINUE", named: None },
     EventKind { kind: "kd.on_up", sig: "public ls_on_revive(id, by)", register: &[], prelude: "", guard: "", values: &[("player", "id"), ("by", "by >= 1 && by <= MaxClients ? by : 0")], tail: "", named: None },
     EventKind { kind: "kd.on_bled_out", sig: "public ls_on_bled_out(id)", register: &[], prelude: "", guard: "", values: &[("player", "id")], tail: "", named: None },
@@ -892,7 +892,25 @@ impl<'a> Gen<'a> {
                 let what = ["origin", "eyes", "aim", "aim_point", "velocity"].iter().position(|w| *w == self.choice(n, def, "what")).unwrap_or(0);
                 format!("lsg_vplayer({}, {what})", i("player", "player"))
             }
-            "vec.entity" => format!("lsg_vent({})", i("in", "entity")),
+            "vec.entity" | "ent.position" => format!("lsg_vent({})", i("in", "entity")),
+            "ent.rotation" => format!("lsg_erot({})", i("in", "entity")),
+            "ent.transform" => {
+                let e = i("in", "entity");
+                match pin {
+                    "angles" => format!("lsg_erot({e})"),
+                    "vel" => format!("lsg_vpev({e}, pev_velocity)"),
+                    "mins" => format!("lsg_vpev({e}, pev_absmin)"),
+                    "maxs" => format!("lsg_vpev({e}, pev_absmax)"),
+                    "center" => format!("lsg_ecenter({e})"),
+                    "ground" => format!("({e} > 0 && pev_valid({e}) && (pev({e}, pev_flags) & FL_ONGROUND) ? 1 : 0)"),
+                    _ => format!("lsg_vent({e})"),
+                }
+            }
+            "ent.distance" | "ent.direction" => {
+                let side = |ent: &str, pos: &str| if self.v.data_source(node, pos).is_some() { i(pos, "vector") } else if self.v.data_source(node, ent).is_some() { format!("lsg_vent({})", i(ent, "entity")) } else { "lsg_vec(0.0, 0.0, 0.0)".into() };
+                let (a, b) = (side("a", "a_pos"), side("b", "b_pos"));
+                if def.kind == "ent.distance" { format!("lsg_vlen(lsg_vadd({b}, {a}, -1.0))") } else { format!("lsg_vdir({a}, {b})") }
+            }
             "struct.make" => match self.v.struct_of(node) {
                 Some(st) => format!("lsg_mks{}({})", self.struct_index(&st.id), st.fields.iter().map(|f| self.need(node, &f.id, &f.ty)).collect::<Vec<_>>().join(", ")),
                 None => "lsg_rnew()".into(),
@@ -1071,7 +1089,12 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     let uses_clock = any(&["clock.set", "clock.add", "clock.pause", "event.time_up"]) || pure_used(&gen, "clock.left");
     let new_round = !timers.is_empty() || !round_vars.is_empty() || uses_clock || uses_down || uses_save;
     // what graph version 3 brought: the values that need the bigger helpers
-    let uses_v3 = !g.functions.is_empty()
+    // Player Hurt's / Creature Hurt's Hit Position and Direction: only kept when something uses them
+    let hit_used = |kind: &str| g.nodes.iter().filter(|n| n.kind == kind).any(|n| g.edges.iter().any(|e| e.from.node == n.id && (e.from.pin == "hit_pos" || e.from.pin == "hit_dir")));
+    let (hit_players, hit_creatures) = (hit_used("event.player_hurt"), hit_used("up.on_creature_hurt"));
+    let uses_v3 = hit_players
+        || hit_creatures
+        || !g.functions.is_empty()
         || !g.structs.is_empty()
         || !g.enums.is_empty()
         || gen.vars.iter().any(|x| !matches!(x.ty.as_str(), "number" | "bool" | "text"))
@@ -1159,6 +1182,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     o.line(HELPERS);
     o.line(&safe_cmd_stock());
     o.blank();
+    if hit_players || hit_creatures {
+        o.line(HIT_BLOCK);
+    }
     if uses_v3 {
         o.line(V3_HELPERS);
         o.blank();
@@ -1347,6 +1373,12 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     if map_events {
         o.line("\tRegisterHam(Ham_Use, \"info_target\", \"lsg_ev_use\", 1)");
+    }
+    if hit_players {
+        o.line("\tRegisterHamPlayer(Ham_TraceAttack, \"lsg_hit_trace\", 0)");
+    }
+    if hit_creatures {
+        o.line("\tif (get_cvar_pointer(\"ls_creature_ver\"))\n\t\tRegisterHam(Ham_TraceAttack, \"ls_creature\", \"lsg_hit_trace\", 0)");
     }
     if cr_watch {
         o.line("\tset_task(1.0, \"lsg_cr_tick\", LSG_TASK + 60000, _, _, \"b\")");
@@ -1558,7 +1590,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         }
         o.line("\tnew ctx[LSG_CTX]");
         let def = registry_def(k.kind);
-        for (pin, read) in k.values {
+        for (pin, read) in k.values.iter().filter(|(pin, _)| !matches!(*pin, "hit_pos" | "hit_dir") || (k.kind == "event.player_hurt" && hit_players) || (k.kind == "up.on_creature_hurt" && hit_creatures)) {
             match event_slot(def, pin) {
                 Some((true, i)) => {
                     if *read == "@netname" {
@@ -3413,6 +3445,39 @@ fn at_origin(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef) -> String {
 }
 
 /// Creatures with the mode's own health, tier and pay for their killer (Spawn Creature).
+/// Where a hit struck and which way it was going (Player Hurt's and Creature Hurt's Hit Position
+/// and Direction): kept from the trace of the bullet or knife, the same frame; else the middle of
+/// the one hit, and the way from whoever did it.
+const HIT_BLOCK: &str = r##"// ---- where a hit struck ----
+stock Float:g_lsgHitPos[2048][3], Float:g_lsgHitDir[2048][3], Float:g_lsgHitAt[2048]
+
+public lsg_hit_trace(victim, attacker, Float:damage, Float:dir[3], tr, bits)
+{
+	if (victim < 1 || victim >= 2048)
+		return HAM_IGNORED
+	get_tr2(tr, TR_vecEndPos, g_lsgHitPos[victim])
+	g_lsgHitDir[victim] = dir
+	g_lsgHitAt[victim] = get_gametime()
+	return HAM_IGNORED
+}
+
+stock lsg_hit_pos(v)
+{
+	if (v >= 1 && v < 2048 && get_gametime() - g_lsgHitAt[v] < 0.05)
+		return lsg_vfrom(g_lsgHitPos[v])
+	return lsg_ecenter(v)
+}
+
+stock lsg_hit_dir(v, from)
+{
+	if (v >= 1 && v < 2048 && get_gametime() - g_lsgHitAt[v] < 0.05)
+		return lsg_vnorm(lsg_vfrom(g_lsgHitDir[v]))
+	if (from > 0 && pev_valid(from) && from != v)
+		return lsg_vdir(lsg_vent(from), lsg_vent(v))
+	return lsg_vec(0.0, 0.0, 0.0)
+}
+"##;
+
 /// Creature control (the bot brain's `ls_creature` commands; numbers only, so nothing else can
 /// ride along): finding, sending, attacking, holding, health, removing, and what the watch keeps.
 const CREATURE_CTL: &str = r##"// ---- creature control ----

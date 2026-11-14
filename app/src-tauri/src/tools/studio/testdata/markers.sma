@@ -2048,6 +2048,24 @@ stock Float:lsg_tl_ease(Float:x)
 	return x * x * (3.0 - 2.0 * x)
 }
 
+// an entity's rotation (a player's view angles)
+stock lsg_erot(e)
+	return lsg_vpev(e, e >= 1 && e <= MaxClients ? pev_v_angle : pev_angles)
+
+// the middle of an entity's box
+stock lsg_ecenter(e)
+{
+	new Float:mn[3], Float:mx[3], Float:c[3]
+	if (e > 0 && pev_valid(e))
+	{
+		pev(e, pev_absmin, mn)
+		pev(e, pev_absmax, mx)
+		for (new k = 0; k < 3; k++)
+			c[k] = (mn[k] + mx[k]) / 2.0
+	}
+	return lsg_vfrom(c)
+}
+
 
 // ---- map markers ----
 #define LSG_MK_MAX 128
