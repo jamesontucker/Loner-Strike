@@ -157,7 +157,7 @@ mod tests {
     fn publish_screenshot_bomb_refused_real_one_kept() {
         use crate::tools::community::{decode_shot, Shot};
         let e = decode_shot(&Shot { name: "a.png".into(), data: b64(&png(9000, 9000)) }).unwrap_err();
-        assert_eq!(e, "A screenshot is too big: 9000×9000 — the most is 8192×8192.");
+        assert_eq!(e, "The screenshot \"a.png\" is too big: 9000×9000 — the most is 8192×8192."); // (named: QA4-G F3)
         assert_eq!(decode_shot(&Shot { name: "b.png".into(), data: b64(&png(1920, 1080)) }).unwrap().1, "png");
     }
 
