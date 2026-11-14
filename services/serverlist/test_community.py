@@ -1181,9 +1181,6 @@ class Http(unittest.TestCase):
         self.assertEqual(hd.get("Access-Control-Allow-Origin"), "*")
         self.assertEqual(self.call("GET", "/community/submission/wip/1")[0], 404)
         self.assertEqual(self.call("GET", "/community/health")[0], 200)
-        code, out, _ = self.call("GET", "/community/namespace?member=1001&name=Ann%20Tucker")
-        self.assertEqual((code, json.loads(out)), (200, {"member": 1001, "namespace": "ann_tucker", "claimed": False}))
-        self.assertEqual(self.call("GET", "/community/namespace?member=x&name=a")[0], 400)
         # moderation
         self.assertEqual(self.call("GET", "/community/admin/queue")[0], 401)
         code, out, hd = self.call("GET", "/community/admin/queue", token=TOKEN)

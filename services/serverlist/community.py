@@ -7,9 +7,6 @@
 #   GET  /community/submission/<mod|spray>/<id> where a registration stands (listed, pending...)
 #   POST /community/report                      a player's report from the app's Report button
 #   GET  /community/health                      {"ok": true}
-#   GET  /community/namespace?member=<id>&name=<GameBanana name>
-#                                               {"member", "namespace", "claimed"}: the author part of the
-#                                               member's shared creature names
 #   /community/admin/...                        moderation, admin token only (lsmod.py)
 #
 # A registration is never taken on the app's word: the GameBanana page is fetched again here
@@ -145,7 +142,7 @@ _MODE_ID = re.compile(r"^[A-Za-z0-9_]{1,32}$")
 
 # custom creatures a map, mode, prefab or creature package carries: the rules live in formats.py
 # (the checker child reads the fragment itself)
-from formats import BUILTIN_CREATURES, CREATURES_FILE, CREATURES_TYPES, author_slug, creature_name_ok, creatures_ini_problem, creatures_ini_sections, creatures_ini_types, namespace_is  # noqa: E402,F401
+from formats import BUILTIN_CREATURES, CREATURES_FILE, CREATURES_TYPES, creature_name_ok, creatures_ini_problem, creatures_ini_sections, creatures_ini_types, namespace_is  # noqa: E402,F401
 
 
 def _creatures(raw, kind):
@@ -1335,20 +1332,6 @@ MIGRATIONS = [
         settled_by TEXT NOT NULL DEFAULT ''
     )
     """,
-    # 6: shared creature names: each author part ("ann" in ann.runner_x) belongs to one GameBanana
-    # member, the first to publish under it; another member whose name slugs the same gets a suffix
-    """
-    CREATE TABLE namespaces (
-        ns TEXT PRIMARY KEY,
-        member INTEGER NOT NULL UNIQUE,
-        at INTEGER NOT NULL
-    );
-    INSERT OR IGNORE INTO namespaces (ns, member, at)
-        SELECT substr(j.key, 1, instr(j.key, '.') - 1), e.submitter_id, e.added
-        FROM entries e, json_each(e.item, '$.checks.creatureSections') j
-        WHERE e.state IN ('listed', 'hidden') AND e.submitter_id > 0 AND instr(j.key, '.') > 1
-        ORDER BY e.added, e.key
-    """,
 ]
 
 # Every way an entry's state changes, and who may do it (a creator's registration never undoes a
@@ -1478,7 +1461,6 @@ class Store:
                         cols = list(row)
                 self.db.execute(f"INSERT OR REPLACE INTO entries ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
                                 tuple(row[c] for c in cols))
-                self._sync_namespace(row)
                 self.db.execute("INSERT INTO log (key, at, action, detail) VALUES (?,?,?,?)", (row["key"], now(), action, detail[:500]))
                 self.db.execute("COMMIT")
             except Exception:
@@ -1522,69 +1504,6 @@ class Store:
         return dict(r) if r else None
 
     # -- blocked creators --
-
-    # ---- creature namespaces ----
-
-    @staticmethod
-    def _ns_candidates(member, author):
-        """The author parts a member may get, best first: the name's slug, then the slug cut with
-        the end of the member id, then the whole id (all deterministic)."""
-        slug = author_slug(author)
-        m = int(member)
-        out = [slug, f"{slug[:15].rstrip('_')}_{m % 10000:04d}", f"{slug[:13].rstrip('_')}_{m % 1000000:06d}", f"m{m}"]
-        return list(dict.fromkeys(out))
-
-    def _ns_used_by_other(self, ns, member):
-        """Does a listed (or held) entry by another member define types in this namespace?"""
-        return self.db.execute(
-            "SELECT 1 FROM entries e, json_each(e.item, '$.checks.creatureSections') j "
-            "WHERE e.state IN ('listed', 'hidden') AND e.submitter_id != ? AND substr(j.key, 1, ?) = ? LIMIT 1",
-            (int(member), len(ns) + 1, ns + ".")).fetchone() is not None
-
-    def namespace_for(self, member, author):
-        """(namespace, claimed) for a GameBanana member: the one they hold, else the first candidate
-        nobody else holds or uses in a listed entry. Never takes it: that happens only when an entry
-        of theirs is written as listed (put)."""
-        with self.lock:
-            r = self.db.execute("SELECT ns FROM namespaces WHERE member=?", (int(member),)).fetchone()
-            if r:
-                return r[0], True
-            for ns in self._ns_candidates(member, author):
-                if not self.db.execute("SELECT 1 FROM namespaces WHERE ns=?", (ns,)).fetchone() and not self._ns_used_by_other(ns, member):
-                    return ns, False
-        raise Reject(409, "No creature name is free for this member. Ask in the Discord.")
-
-    def _sync_namespace(self, row):
-        """Inside put's transaction: an entry written as listed takes its namespace for its member
-        (refused when the member holds another, or another member holds or uses it); an entry that
-        leaves the list lets its member's namespace go when nothing else of theirs listed or held
-        uses it."""
-        member = int(row.get("submitter_id") or 0)
-        if not member:
-            return
-        item = _j(row.get("item")) or {}
-        ns = item.get("namespace") if isinstance(item.get("namespace"), str) else ""
-        held = self.db.execute("SELECT ns FROM namespaces WHERE member=?", (member,)).fetchone()
-        if row.get("state") == "listed" and ns:
-            if held and held[0] != ns:
-                raise Reject(409, f"Your creatures are named {held[0]}.…, not {ns}.…. Make the package again with Publish.")
-            if not held:
-                other = self.db.execute("SELECT member FROM namespaces WHERE ns=?", (ns,)).fetchone()
-                if other or self._ns_used_by_other(ns, member):
-                    raise Reject(409, f"Another creator has the name {ns}. Make the package again with Publish to get yours.")
-                self.db.execute("INSERT INTO namespaces (ns, member, at) VALUES (?, ?, ?)", (ns, member, now()))
-            return
-        if held and row.get("state") not in ("listed", "hidden"):
-            still = self.db.execute(
-                "SELECT 1 FROM entries WHERE submitter_id=? AND key != ? AND state IN ('listed', 'hidden') "
-                "AND json_extract(item, '$.namespace') = ? LIMIT 1", (member, row["key"], held[0])).fetchone()
-            if not still:
-                self.db.execute("DELETE FROM namespaces WHERE member=?", (member,))
-
-    def namespace_owner(self, ns):
-        with self.lock:
-            r = self.db.execute("SELECT member FROM namespaces WHERE ns=?", (ns,)).fetchone()
-        return r[0] if r else None
 
     def is_blocked(self, submitter_id):
         with self.lock:
@@ -1905,8 +1824,6 @@ def index_item(row):
         out["source"] = True
     if it.get("creatures"):
         out["creatures"] = it["creatures"]
-    if it.get("namespace"):
-        out["namespace"] = it["namespace"]
     out.update(screenshots=list(it.get("screenshots") or [])[:MAX_SHOTS], tags=list(it.get("tags") or []),
                featured=bool(row["featured"]), added=int(row["added"]), updated=int(row["updated"]), status=status)
     return out
@@ -2015,28 +1932,23 @@ class Community:
         return item
 
     def _creature_names_owned(self, item, facts):
-        """Every type a package defines is in its publisher's own namespace (bound to their
-        GameBanana member id: Store.namespace_for), or is an exact copy of a type the namespace's
-        owner has listed (a creation carrying someone else's creature it uses). A remix is published
-        in the remixer's namespace (remixOf keeps the credit). The publisher's namespace is taken
-        for them here and kept on the entry."""
+        """Every type a package defines is named after its uploader: gb<GameBanana member id>.<name>
+        (the verified submitter of the page), or is an exact copy (the same section) of a type that
+        member's own listed entry defines (a creation carrying someone else's creature it uses). A
+        remix is published under the remixer's id; remixOf keeps the credit."""
         secs = item.get("checks", {}).get("creatureSections", {})
-        if not secs:
-            return
-        member = facts["submitterId"]
-        mine, _ = self.store.namespace_for(member, facts.get("author", ""))
-        foreign = {n: h for n, h in secs.items() if not namespace_is(n, mine)}
-        for n, h in foreign.items():
-            owner = self.store.namespace_owner(n.partition(".")[0])
-            ok = owner is not None and owner != member and any(
-                (( _j(r["item"]) or {}).get("checks") or {}).get("creatureSections", {}).get(n) == h
+        member = int(facts["submitterId"])
+        for n, h in secs.items():
+            if namespace_is(n, member):
+                continue
+            part = n.partition(".")[0]
+            owner = int(part[2:]) if part.startswith("gb") and part[2:].isdigit() else 0
+            ok = owner and owner != member and any(
+                ((_j(r["item"]) or {}).get("checks") or {}).get("creatureSections", {}).get(n) == h
                 for r in self.store.rows(("listed",)) if r["submitter_id"] == owner)
             if not ok:
-                raise Reject(422, f"{n} isn't in your name ({mine}.…) and isn't a listed creature by its author, unchanged. "
-                                  "Publish your own creatures under your name, or use the listed one as it is.")
-        if len(foreign) < len(secs):
-            # (taken in the same transaction that writes the entry as listed: Store._sync_namespace)
-            item["namespace"] = mine
+                raise Reject(422, f"{n} isn't yours (yours are named gb{member}.…) and isn't the same as that creator's listed one. "
+                                  "Publish your own creatures under your id, or carry the listed one unchanged.")
 
     def check_files(self, model, gb, f, kind):
         """Downloads the page's file (range requests to GameBanana's file hosts, at most
@@ -2209,7 +2121,6 @@ class Community:
                 row.update(item=data, proposed=None, rejected_md5="", state="listed", hidden_by="", reason="", check_note="")
             action = "list"
         try:
-            # (a creature namespace is taken here, with the write: Store._sync_namespace)
             conflicts = self.store.put(row, action, f"md5 {item['md5']} file {item['file']} app {app}",
                                        claim=self._claim(uids, facts["submitterId"], facts["author"], file_at, may_take=not look))
         except Reject as e:
@@ -2433,9 +2344,23 @@ class Community:
         if pull:
             for row in self.store.rows(("listed", "hidden", "pending")):
                 if row["submitter_id"] == submitter_id:
-                    self.moderate(row["key"], "pull", {"reason": one_line(reason or "", MAX_REASON) or "Removed: the creator's listings were taken down."})
-                    pulled.append(row["key"])
+                    # (one row that can't be written never stops the others)
+                    try:
+                        self.moderate(row["key"], "pull", {"reason": one_line(reason or "", MAX_REASON) or "Removed: the creator's listings were taken down."})
+                        pulled.append(row["key"])
+                    except Exception as e:  # noqa: BLE001
+                        self._write_failed(row["key"], "pull", e)
         return pulled
+
+    def _write_failed(self, key, what, e):
+        """A moderation or re-check write that failed for one entry: logged and told to the
+        moderators; the caller carries on with the rest."""
+        msg = e.message if isinstance(e, Reject) else f"{type(e).__name__}: {e}"
+        log(f"couldn't {what} {key}: {msg}")
+        try:
+            self.notifier.say(f"**Couldn't {what} `{key}`:** {discord_text(msg)}. The rest went on; look at it by hand.")
+        except Exception:  # noqa: BLE001
+            pass
 
     def unblock(self, submitter_id, by):
         if isinstance(submitter_id, int) and submitter_id > 0:
@@ -2652,7 +2577,11 @@ class Community:
                     if row["hidden_by"] in ("team", "review"):
                         continue
                     row.update(state="listed", reason="", hidden_by="", updated=t)
-                self.store.put(row, f"recheck {verdict}", why)
+                try:
+                    self.store.put(row, f"recheck {verdict}", why)
+                except Exception as e:  # noqa: BLE001 (one bad row never stops the re-check)
+                    self._write_failed(row["key"], f"re-check ({verdict})", e)
+                    continue
                 changed.append((row["key"], verdict, why))
             summary = {"at": t, "checked": len(rows), "changed": len(changed), "heldBack": suspicious}
             if not keys:
@@ -2778,15 +2707,6 @@ class Community:
                 if not p:
                     return reply(h, 404, {"error": "not found"})
                 return reply(h, 200, self.status(*p))
-            if parts == ["namespace"] and method == "GET":
-                # GET /community/namespace?member=<GameBanana member id>&name=<their GameBanana name>
-                if not self.status_limit.allow(visitor_key(ip)):
-                    return reply(h, 429, {"error": "Too many questions from here. Try again in a minute."})
-                member, name = (query.get("member") or [""])[0], (query.get("name") or [""])[0]
-                if not member.isdigit() or not 0 < int(member) < 100_000_000 or len(name) > 80:
-                    return reply(h, 400, {"error": "Give member=<GameBanana member id> and name=<their name>."})
-                ns, claimed = self.store.namespace_for(int(member), name)
-                return reply(h, 200, {"member": int(member), "namespace": ns, "claimed": claimed})
             if parts[:1] == ["publish"] and method == "GET" and parts[1:] in (["index"], ["index.sha256"]):
                 return self.publish_export(h, visitor_key(ip), parts[1] == "index.sha256")
             if parts[:1] == ["admin"]:

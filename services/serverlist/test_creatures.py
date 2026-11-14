@@ -16,19 +16,19 @@ from test_community import MAP_MANIFEST, PREFAB, FakeFiles, FakeGB, body, make, 
 from test_formats import model  # noqa: E402
 
 GOOD_INI = b"""; >>> from mod:1234 (made in Loner-Strike)
-; types: ann.runner_x ann.boss_y
+; types: gb1001.runner_x gb1001.boss_y
 ; files: models/ann/runner_x.mdl sound/ann/hit.wav ../not/checked:here
-[ann.runner_x]
+[gb1001.runner_x]
 base = runner
 name = Fast One / v2
 hp = 80
 model = models/ann/runner_x.mdl models/zombie.mdl
 snd_attack = ann/hit.wav ann/hit2.wav | player/pl_pain2.wav
-[ann.boss_y]
-base = ann.runner_x
+[gb1001.boss_y]
+base = gb1001.runner_x
 ; <<< end
 """
-CREATURES = [{"name": "ann.runner_x", "model": True, "sounds": 2}, {"name": "ann.boss_y"}]
+CREATURES = [{"name": "gb1001.runner_x", "model": True, "sounds": 2}, {"name": "gb1001.boss_y"}]
 FILES = {"creatures/creatures.ini": GOOD_INI, "models/ann/runner_x.mdl": model()}
 # (the app keeps packed files under the author's own folders)
 FILES_NS = {"models/ann/qa/runner_x.mdl": model()}
@@ -64,25 +64,26 @@ def creature_item(**kw):
 
 class Rules(unittest.TestCase):
     def test_names(self):
-        for ok in ("ann.runner_x", "a.b", "team-7.zombie", "x" * 10 + "." + "y" * 20):
+        for ok in ("gb1001.runner_x", "gb1.b", "gb123456789." + "y" * 19):
             self.assertTrue(cm.creature_name_ok(ok), ok)
-        for bad in ("runner", "zombie", "Ann.runner", "ann.", ".x", "ann.123", "ann.a-b", "../x.y", "a.b.c", "x" * 12 + "." + "y" * 20, None, 5):
+        for bad in ("runner", "zombie", "ann.runner", "Gb1001.runner", "gb.x", "gb0.x", "gb01.x", "gb1234567890.x", "gb1001.", ".x",
+                    "gb1001.123", "gb1001.a-b", "../x.y", "gb1.b.c", "gb123456789." + "y" * 20, None, 5):
             self.assertFalse(cm.creature_name_ok(bad), bad)
 
     def test_ini(self):
         self.assertIsNone(cm.creatures_ini_problem(GOOD_INI))
         # a base defined later in the same file, and a built-in base in any case
-        self.assertIsNone(cm.creatures_ini_problem(b"[ann.a]\nbase = ann.b\n[ann.b]\nbase = Zombie\n"))
-        self.assertEqual(cm.creatures_ini_types(GOOD_INI), ["ann.runner_x", "ann.boss_y"])
-        for bad, words in ((b"[zombie]\nhp = 1\n", "built-in"), (b"[Runner]\n", "built-in"), (b"[runner_x]\n", "<author>.<name>"),
-                           (b"[ann.x]\nmodel = ../../evil.mdl\n", "outside"), (b"[ann.x]\nmodel = C:/x.mdl\n", "outside"),
-                           (b"[ann.x]\nmodel = models\\\\x.mdl\n", "outside"), (b"[ann.x]\nmodel = maps/x.bsp\n", "models/....mdl"),
-                           (b"[ann.x]\nmodel = models/a.mdl | sound/x.wav\n", "models/....mdl"),
-                           (b"[ann.x]\nsnd_die = x.exe\n", ".wav path"), (b"[ann.x]\nsnd_die = a/1.wav | /etc/x.wav\n", "outside"),
-                           (b"[ann.x]\nsnd_pain = a/../../x.wav\n", "outside"), (b"[ann.x]\nbase = ann.nope\n", "isn't a built-in"),
-                           (b"[ann.x]\nbase = bob.y\n[ann.y]\n", "isn't a built-in"), (b"; nothing\n", "no creature"),
-                           (b"[ann.x]\n" + b"a" * 600 + b"\n", "longer"), (b"[ann.x]\0", "text"), (b"[ann.x]\n" * 1 + b" " * (65 << 10), "too big"),
-                           (b"".join(b"[ann.t%d]\n" % i for i in range(33)), "33 types")):
+        self.assertIsNone(cm.creatures_ini_problem(b"[gb1001.a]\nbase = gb1001.b\n[gb1001.b]\nbase = Zombie\n"))
+        self.assertEqual(cm.creatures_ini_types(GOOD_INI), ["gb1001.runner_x", "gb1001.boss_y"])
+        for bad, words in ((b"[zombie]\nhp = 1\n", "built-in"), (b"[Runner]\n", "built-in"), (b"[runner_x]\n", "gb<member id>.<name>"),
+                           (b"[gb1001.x]\nmodel = ../../evil.mdl\n", "outside"), (b"[gb1001.x]\nmodel = C:/x.mdl\n", "outside"),
+                           (b"[gb1001.x]\nmodel = models\\\\x.mdl\n", "outside"), (b"[gb1001.x]\nmodel = maps/x.bsp\n", "models/....mdl"),
+                           (b"[gb1001.x]\nmodel = models/a.mdl | sound/x.wav\n", "models/....mdl"),
+                           (b"[gb1001.x]\nsnd_die = x.exe\n", ".wav path"), (b"[gb1001.x]\nsnd_die = a/1.wav | /etc/x.wav\n", "outside"),
+                           (b"[gb1001.x]\nsnd_pain = a/../../x.wav\n", "outside"), (b"[gb1001.x]\nbase = gb1001.nope\n", "isn't a built-in"),
+                           (b"[gb1001.x]\nbase = gb1002.y\n[gb1001.y]\n", "isn't a built-in"), (b"; nothing\n", "no creature"),
+                           (b"[gb1001.x]\n" + b"a" * 600 + b"\n", "longer"), (b"[gb1001.x]\0", "text"), (b"[gb1001.x]\n" * 1 + b" " * (65 << 10), "too big"),
+                           (b"".join(b"[gb1001.t%d]\n" % i for i in range(33)), "33 types")):
             self.assertIn(words, cm.creatures_ini_problem(bad) or "", bad[:40])
 
     def test_every_key_that_names_a_file(self):
@@ -101,29 +102,22 @@ class Rules(unittest.TestCase):
         }
         for line, words in hostile.items():
             with self.subTest(line=line):
-                why = cm.creatures_ini_problem(b"[ann.x]\n" + line + b"\n")
+                why = cm.creatures_ini_problem(b"[gb1001.x]\n" + line + b"\n")
                 if words is None:
                     self.assertIsNone(why)
                 else:
                     self.assertIn(words, why or "")
 
     def test_namespaces(self):
-        self.assertEqual((cm.author_slug("Jam Tucker!"), cm.author_slug("  "), cm.author_slug("1234"), cm.author_slug("Texture_Woman66")),
-                         ("jam_tucker", "a", "a1234", "texture_woman66"))
-        self.assertTrue(cm.namespace_is("jam_tucker.x", "jam_tucker"))
-        self.assertFalse(cm.namespace_is("jam.x", "jam_tucker"))
-        self.assertFalse(cm.namespace_is("bob.x", "bobby"), "someone else's shorter name")
-        self.assertFalse(cm.namespace_is("ab.x", "abc"), "a shorter author part never matches")
-        self.assertFalse(cm.namespace_is("abc.x", "ab"))
-        long_slug = "abcdefghijklmnopqrst"
-        self.assertTrue(cm.namespace_is(long_slug + ".y", long_slug))
-        self.assertFalse(cm.namespace_is("abcdefghij." + "y" * 20, long_slug), "the author part is never shortened")
+        self.assertTrue(cm.namespace_is("gb1001.x", 1001))
+        for name, member in (("gb1001.x", 100), ("gb100.x", 1001), ("gb10010.x", 1001), ("x.gb1001", 1001)):
+            self.assertFalse(cm.namespace_is(name, member), name)
         sec = cm.creatures_ini_sections(GOOD_INI)
-        self.assertEqual(sorted(sec), ["ann.boss_y", "ann.runner_x"])
+        self.assertEqual(sorted(sec), ["gb1001.boss_y", "gb1001.runner_x"])
         # comments and spacing don't change a section; a value does
         same = GOOD_INI.replace(b"hp = 80", b"hp = 80   ; tough").replace(b"; <<< end", b"")
         self.assertEqual(cm.creatures_ini_sections(same), sec)
-        self.assertNotEqual(cm.creatures_ini_sections(GOOD_INI.replace(b"hp = 80", b"hp = 81"))["ann.runner_x"], sec["ann.runner_x"])
+        self.assertNotEqual(cm.creatures_ini_sections(GOOD_INI.replace(b"hp = 80", b"hp = 81"))["gb1001.runner_x"], sec["gb1001.runner_x"])
 
     def test_the_format_check_reads_it(self):
         self.assertEqual(formats.check("creatures/creatures.ini", __import__("io").BytesIO(GOOD_INI), len(GOOD_INI)), "creatures")
@@ -146,9 +140,9 @@ class Rules(unittest.TestCase):
 
     def test_items(self):
         it = cm.clean_item(creature_item())
-        self.assertEqual(it["creatures"], [{"name": "ann.runner_x", "model": True, "sounds": 2}, {"name": "ann.boss_y", "model": False, "sounds": 0}])
+        self.assertEqual(it["creatures"], [{"name": "gb1001.runner_x", "model": True, "sounds": 2}, {"name": "gb1001.boss_y", "model": False, "sounds": 0}])
         m = cm.clean_item(map_item(creatures=CREATURES[:1]))
-        self.assertEqual(m["creatures"][0]["name"], "ann.runner_x")
+        self.assertEqual(m["creatures"][0]["name"], "gb1001.runner_x")
         self.assertNotIn("creatures", cm.clean_item(map_item()))
         u = "3f2b8c1e-9a4d-4e6f-8b2a-1c3d5e7f9a0b"
         r = cm.clean_item(creature_item(uid=u, remixOf={"model": "Mod", "gb": 5, "uid": u, "name": "Runner", "author": "bo"}))
@@ -180,7 +174,7 @@ class Registration(unittest.TestCase):
         code, ans = c.submit(body(creature_item()), "ann")
         self.assertEqual((code, ans.get("state")), (200, "listed"), ans)
         it = [x for x in json.loads(cm.build_index(c.store)[0])["items"] if x["gb"] == 706630][0]
-        self.assertEqual((it["kind"], [x["name"] for x in it["creatures"]]), ("creature", ["ann.runner_x", "ann.boss_y"]))
+        self.assertEqual((it["kind"], [x["name"] for x in it["creatures"]]), ("creature", ["gb1001.runner_x", "gb1001.boss_y"]))
 
     def refused(self, data, words):
         c = self.setup(data)
@@ -190,11 +184,11 @@ class Registration(unittest.TestCase):
 
     def test_refusals(self):
         self.refused(creature_zip(ini=b"[zombie]\nhp = 9999\n"), "built-in")
-        self.refused(creature_zip(ini=b"[runner_x]\nhp = 9\n"), "<author>.<name>")
-        self.refused(creature_zip(ini=b"[ann.runner_x]\nmodel = ../../../evil.mdl\n"), "outside")
-        self.refused(creature_zip(ini=b"[ann.runner_x]\nsnd_die = sound/x.wav sound/../../x.wav\n[ann.boss_y]\n"), "outside")
-        self.refused(creature_zip(ini=b"[ann.runner_x]\nbase = ann.gone\n[ann.boss_y]\n"), "ann.gone")
-        self.refused(creature_zip(ini=b"[ann.runner_x]\nhp = 1\n"), "ann.boss_y")  # listed but not defined
+        self.refused(creature_zip(ini=b"[runner_x]\nhp = 9\n"), "gb<member id>.<name>")
+        self.refused(creature_zip(ini=b"[gb1001.runner_x]\nmodel = ../../../evil.mdl\n"), "outside")
+        self.refused(creature_zip(ini=b"[gb1001.runner_x]\nsnd_die = sound/x.wav sound/../../x.wav\n[gb1001.boss_y]\n"), "outside")
+        self.refused(creature_zip(ini=b"[gb1001.runner_x]\nbase = gb1001.gone\n[gb1001.boss_y]\n"), "gb1001.gone")
+        self.refused(creature_zip(ini=b"[gb1001.runner_x]\nhp = 1\n"), "gb1001.boss_y")  # listed but not defined
         self.refused(creature_zip(extra=["addons/amxmodx/plugins/x.amxx"]), "Plugin")
         self.refused(creature_zip(extra=["dlls/mp.dll"]), "run code")
         self.refused(zip_of(ASSETS, dict(FILES, **{"loner-strike.json": manifest({"kind": "creature", "name": "x", "creatures": []})})), "creatures")
@@ -203,97 +197,56 @@ class Registration(unittest.TestCase):
         self.refused(zip_of(ASSETS, dict(FILES, **{"models/ann/runner_x.mdl": b"not a model",
                                                    "loner-strike.json": manifest({"kind": "creature", "name": "x", "creatures": CREATURES})})), "runner_x.mdl")
 
-    def test_a_namespace_belongs_to_one_member(self):
+    def test_ids_are_the_uploaders(self):
+        # Ann (1001) publishes gb1001.*; someone else (7771234) can't publish changed gb1001 types
         c = self.setup(creature_zip())
-        self.assertEqual(c.store.namespace_for(1001, "Ann"), ("ann", False), "free: not taken by asking")
         self.assertEqual(c.submit(body(creature_item()), "ann")[0], 200)
-        it = [x for x in json.loads(cm.build_index(c.store)[0])["items"] if x["gb"] == 706630][0]
-        self.assertEqual(it["namespace"], "ann")
-        self.assertEqual(c.store.namespace_for(1001, "Ann renamed"), ("ann", True), "kept when the name changes")
-        # "ann!" slugs to ann too: another member gets a suffix from their id, and can't use ann
-        self.assertEqual(c.store.namespace_for(7771234, "ann!"), ("ann_1234", False))
         c.get.pages[("Mod", 706631)] = creature_page(gb=706631, file_id=1789870, author="ann!")
         c.get_range.files[1789870] = creature_zip(ini=GOOD_INI.replace(b"hp = 80", b"hp = 5000"))
         code, ans = c.submit(body(creature_item(gb=706631, file=1789870)), "imposter")
         self.assertEqual(code, 422, ans)
-        self.assertIn("isn't in your name (ann_1234.", ans["error"])
-        mine = [dict(x, name=x["name"].replace("ann.", "ann_1234.")) for x in CREATURES]
-        c.get_range.files[1789870] = creature_zip(ini=GOOD_INI.replace(b"ann.", b"ann_1234."), man={"kind": "creature", "name": "x", "creatures": mine})
+        self.assertIn("yours are named gb7771234.", ans["error"])
+        mine = [dict(x, name=x["name"].replace("gb1001.", "gb7771234.")) for x in CREATURES]
+        c.get_range.files[1789870] = creature_zip(ini=GOOD_INI.replace(b"gb1001.", b"gb7771234."), man={"kind": "creature", "name": "x", "creatures": mine})
         code, ans = c.submit(body(creature_item(gb=706631, file=1789870, creatures=mine)), "ann!")
         self.assertEqual(code, 200, ans)
-        self.assertEqual(c.store.namespace_owner("ann_1234"), 7771234)
-        self.assertEqual(c.store.namespace_owner("ann"), 1001)
 
-    def test_namespaces_are_taken_only_when_listed(self):
+    def test_one_bad_row_never_stops_a_recheck(self):
         c = self.setup(creature_zip())
-        c.block(1001, "Ann", "test", "testing")
-        code, ans = c.submit(body(creature_item()), "ann")
-        self.assertEqual((code, ans["state"]), (200, "pending"))
-        self.assertIsNone(c.store.namespace_owner("ann"), "a blocked creator's waiting entry takes nothing")
-        # a moderator approves it: listed, and the name is taken then
-        self.assertEqual(self.approve(c)[0], 200)
-        self.assertEqual(c.store.namespace_owner("ann"), 1001)
-        # pulled: nothing else of Ann's is listed, so the name goes
-        self.pull(c)
-        self.assertIsNone(c.store.namespace_owner("ann"))
+        self.assertEqual(c.submit(body(creature_item()), "ann")[0], 200)
+        c.submit(body(map_item()), "a")
+        # both pages dropped the tag: the first write fails, the second still happens, the mods are told
+        for k in (("Mod", 706630), ("Mod", 739197)):
+            pg = copy.deepcopy(c.get.pages[k])
+            pg["_aTags"] = []
+            c.get.pages[k] = pg
+        put, said = c.store.put, []
+        c.notifier.say = lambda text, wait=False: said.append(text)
 
-    def approve(self, c):
-        return self.moderate(c, "approve")
+        def flaky(row, action, detail="", claim=None):
+            if row["key"] == "mod:706630":
+                raise cm.Reject(409, "boom")
+            return put(row, action, detail, claim)
+        c.store.put = flaky
+        out = c.recheck(keys=["mod:706630", "mod:739197"], pause=0)
+        self.assertEqual(c.store.get("mod:739197")["state"], "pulled")
+        self.assertEqual(c.store.get("mod:706630")["state"], "listed")
+        self.assertTrue(any("Couldn't re-check (pull) `mod:706630`" in t for t in said), said)
+        self.assertEqual([x["key"] for x in out["changes"]], ["mod:739197"])
 
-    def pull(self, c):
-        return self.moderate(c, "pull")
-
-    def moderate(self, c, action):
-        import threading
-        from http.server import ThreadingHTTPServer
-        import serverlist as sl
-        import tempfile as _t
-        import urllib.request
-        reg = sl.Registry(os.path.join(_t.mkdtemp(), "list.json"))
-        srv = ThreadingHTTPServer(("127.0.0.1", 0), sl.make_handler(reg, sl.RateLimit(3), lambda a: (None, None), community=c))
-        threading.Thread(target=srv.serve_forever, daemon=True).start()
-        try:
-            from test_community import TOKEN
-            req = urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}/community/admin/item/mod/706630", method="POST",
-                                         data=json.dumps({"action": action, "reason": "test"}).encode(), headers={"Authorization": f"Bearer {TOKEN}"})
-            with urllib.request.urlopen(req, timeout=5) as r:
-                return r.status, json.loads(r.read())
-        finally:
-            srv.shutdown()
-
-    def test_a_name_taken_meanwhile_or_used_by_another(self):
+    def test_one_bad_row_never_stops_a_block_with_pull(self):
         c = self.setup(creature_zip())
-        # another member took "ann" after the checks looked (the write refuses, in its transaction)
-        orig = c.store.namespace_for
-        c.store.namespace_for = lambda m, a: ("ann", False)
-        with c.store.lock:
-            c.store.db.execute("INSERT INTO namespaces (ns, member, at) VALUES ('ann', 99, 1)")
-        code, ans = c.submit(body(creature_item()), "ann")
-        self.assertEqual(code, 409, ans)
-        self.assertIn("Another creator has the name ann", ans["error"])
-        c.store.namespace_for = orig
-        # a listed entry by someone else already uses "ann" (no claim on record): Ann gets a suffix
-        with c.store.lock:
-            c.store.db.execute("DELETE FROM namespaces")
-        c.store.put(dict(cm.new_row("Mod", 5, 1), state="listed", submitter_id=99,
-                         item=json.dumps({"kind": "creature", "checks": {"creatureSections": {"ann.old": "x"}}})), "test")
-        self.assertEqual(c.store.namespace_for(1001, "Ann"), ("ann_1001", False))
-
-    def test_backfill(self):
-        import sqlite3
-        c = self.setup(creature_zip())
-        t = 1000
-        for key, member, added in (("mod:1", 50, 2000), ("mod:2", 60, 1500), ("mod:3", 70, 1700)):
-            row = dict(cm.new_row("Mod", int(key[4:]), t), state="listed", submitter_id=member, added=added,
-                       item=json.dumps({"kind": "creature", "checks": {"creatureSections": {"ann.x": "h", "bob.y": "h"} if member != 70 else {"cid.z": "h"}}}))
-            c.store.put(row, "test")
-        with c.store.lock:
-            c.store.db.execute("DROP TABLE namespaces")
-            c.store.db.execute("PRAGMA user_version=5")
-        c.store.migrate()
-        self.assertEqual((c.store.namespace_owner("ann"), c.store.namespace_owner("cid")), (60, 70), "the earliest listed entry wins")
-        self.assertEqual(c.store.namespace_owner("bob"), 50, "60 has ann already (one each): the next earliest gets bob")
-        self.assertIsInstance(sqlite3.sqlite_version, str)
+        self.assertEqual(c.submit(body(creature_item()), "ann")[0], 200)
+        c.get.pages[("Mod", 706631)] = creature_page(gb=706631, file_id=1789870)
+        c.get_range.files[1789870] = creature_zip()
+        self.assertEqual(c.submit(body(creature_item(gb=706631, file=1789870)), "ann")[0], 200)
+        put, said = c.store.put, []
+        c.notifier.say = lambda text, wait=False: said.append(text)
+        c.store.put = lambda row, action, detail="", claim=None: (_ for _ in ()).throw(RuntimeError("disk")) if row["key"] == "mod:706630" else put(row, action, detail, claim)
+        pulled = c.block(1001, "Ann", "mod", "spam", pull=True)
+        self.assertEqual(pulled, ["mod:706631"])
+        self.assertEqual(c.store.get("mod:706631")["state"], "pulled")
+        self.assertTrue(any("Couldn't pull `mod:706630`" in t for t in said), said)
 
     def test_duplicate_entries(self):
         import io as _io
@@ -307,7 +260,7 @@ class Registration(unittest.TestCase):
                     z.writestr(n, data)
                 for n in ASSETS:
                     z.writestr(n, b"RIFF")
-                z.writestr(twin, b"[ann.runner_x]\n[ann.boss_y]\n")
+                z.writestr(twin, b"[gb1001.runner_x]\n[gb1001.boss_y]\n")
             with self.subTest(twin=twin):
                 c = self.setup(b.getvalue())
                 code, ans = c.submit(body(creature_item()), "ann")
@@ -324,31 +277,31 @@ class Registration(unittest.TestCase):
         c = self.setup(creature_zip())
         code, ans = self.map_with(c, GOOD_INI)
         self.assertEqual(code, 422, ans)
-        self.assertIn("isn't in your name (thehouthi.", ans["error"])
+        self.assertIn("yours are named gb6096365.", ans["error"])
         self.assertEqual(c.submit(body(creature_item()), "ann")[0], 200)
         code, ans = self.map_with(c, GOOD_INI.replace(b"hp = 80", b"hp = 9999"))
         self.assertEqual(code, 422, "changed: not Ann's creature any more")
         code, ans = self.map_with(c, GOOD_INI.replace(b"; <<< end", b"; carried"))
         self.assertEqual(code, 200, ans)
         it = [x for x in json.loads(cm.build_index(c.store)[0])["items"] if x["gb"] == 739197][0]
-        self.assertEqual([x["name"] for x in it["creatures"]], ["ann.runner_x", "ann.boss_y"])
+        self.assertEqual([x["name"] for x in it["creatures"]], ["gb1001.runner_x", "gb1001.boss_y"])
         self.assertNotIn("checks", it, "the section hashes stay on the server")
 
     def test_own_namespace_and_remixes(self):
         # a remix of Ann's creature by Bob: in Bob's name, the credit in remixOf
-        bob_ini = GOOD_INI.replace(b"ann.", b"bob.")
-        bob = [dict(x, name=x["name"].replace("ann.", "bob.")) for x in CREATURES]
+        bob_ini = GOOD_INI.replace(b"gb1001.", b"gb1002.")
+        bob = [dict(x, name=x["name"].replace("gb1001.", "gb1002.")) for x in CREATURES]
         man = {"kind": "creature", "name": "Faster One", "creatures": bob, "remixOf": {"model": "Mod", "gb": 706630, "name": "Fast One", "author": "Ann"}}
         c = self.setup(creature_zip(ini=bob_ini, man=man), page=creature_page(author="Bob"))
         code, ans = c.submit(body(creature_item(creatures=bob)), "bob")
         self.assertEqual(code, 200, ans)
         it = [x for x in json.loads(cm.build_index(c.store)[0])["items"] if x["gb"] == 706630][0]
-        self.assertEqual((it["creatures"][0]["name"], it["remixOf"]["author"]), ("bob.runner_x", "Ann"))
+        self.assertEqual((it["creatures"][0]["name"], it["remixOf"]["author"]), ("gb1002.runner_x", "Ann"))
         # Bob can't publish in Ann's name
         c = self.setup(creature_zip(), page=creature_page(author="Bob"))
         code, ans = c.submit(body(creature_item()), "bob")
         self.assertEqual(code, 422, ans)
-        self.assertIn("isn't in your name (bob.", ans["error"])
+        self.assertIn("yours are named gb1002.", ans["error"])
         # files under the author's own folders pass
         c = self.setup(zip_of(ASSETS, dict(FILES_NS, **{"creatures/creatures.ini": GOOD_INI.replace(b"models/ann/runner_x.mdl", b"models/ann/qa/runner_x.mdl"),
                                                         "loner-strike.json": manifest({"kind": "creature", "name": "Fast One", "creatures": CREATURES})})))

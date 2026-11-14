@@ -556,8 +556,8 @@ CREATURES_TYPES = 32          # the bot brain holds 32 types of its own besides 
 # the bot brain's built-in types: a package may never define these (it would change everyone's)
 BUILTIN_CREATURES = ("zombie", "runner", "brute", "spitter", "hound", "turret", "boss", "headcrab", "vortigaunt",
                      "babygarg", "snark", "babycrab", "miniturret", "assassin", "soldier", "gonarch")
-# a shared type's name says who made it: "<author>.<name>", 31 characters at most (the brain's)
-_CREATURE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,23}\.[a-z0-9_]{1,29}$")
+# a shared type's name says who uploaded it: "gb<GameBanana member id>.<name>", 31 characters at most (the brain's)
+_CREATURE = re.compile(r"^gb[1-9][0-9]{0,8}\.[a-z0-9_]{1,29}$")
 # a model: models/....mdl; a sound: a .wav path relative to sound/ (as the game names sounds)
 _CREATURE_MODEL = re.compile(r"^models/[a-z0-9_./-]{1,150}\.mdl$")
 _CREATURE_SOUND = re.compile(r"^[a-z0-9_-][a-z0-9_./-]{0,150}\.wav$")
@@ -569,28 +569,13 @@ _ALIAS_KEYS = ("ls", "sounds", "models", "display", "health", "detect", "fov", "
 _SOUND_KEYS = ("snd_idle", "snd_alert", "snd_attack", "snd_hit", "snd_miss", "snd_pain", "snd_die")
 
 
-def author_slug(author):
-    """The author part of shared names, exactly as the app makes it (creaturepack.rs author_slug)."""
-    s = ""
-    for c in (author or "").strip().lower():
-        if c.isascii() and c.isalnum():
-            s += c
-        elif s and not s.endswith("_"):
-            s += "_"
-    s = s.strip("_")
-    if not s or s.isdigit():
-        return ("a" + s)[:20]
-    return s[:20].rstrip("_")
-
-
-def namespace_is(name, slug):
-    """Is a shared type's author part exactly this slug (the app never shortens it)?"""
-    part = name.partition(".")[0]
-    return bool(part) and part == slug
+def namespace_is(name, member):
+    """Is a shared type named after this GameBanana member (gb<id>.<name>)?"""
+    return isinstance(name, str) and name.startswith(f"gb{int(member)}.")
 
 
 def creature_name_ok(n):
-    """A shared creature type's name: namespaced "<author>.<name>", not all digits after the dot,
+    """A shared creature type's name: "gb<member id>.<name>", not all digits after the dot,
     never a built-in type's name."""
     if not isinstance(n, str) or len(n) > 31 or not _CREATURE.match(n):
         return False
@@ -626,7 +611,7 @@ def creatures_ini_problem(data):
             if name.lower() in BUILTIN_CREATURES:
                 return f"it changes the built-in type {name.lower()}"
             if not creature_name_ok(name):
-                return f"the type {name[:40]!r} isn't named <author>.<name>"
+                return f"the type {name[:40]!r} isn't named gb<member id>.<name>"
             if name not in names:
                 names.append(name)
             continue
