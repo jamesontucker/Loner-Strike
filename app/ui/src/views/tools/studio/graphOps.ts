@@ -666,3 +666,22 @@ export function removeEventGraph(g: Graph, id: string): Graph {
   };
   return { ...g, eventGraphs: left.length ? left : undefined, nodes: g.nodes.map(strip), comments: g.comments.map(strip) };
 }
+
+/** A Custom Event (the mode's own event: Custom Event nodes run when it's called). */
+export function addCustomEvent(g: Graph, name?: string): { graph: Graph; id: string } {
+  const id = freshPartId(g, "ce");
+  const taken = (g.customEvents ?? []).map((c) => c.name);
+  return { graph: { ...g, customEvents: [...(g.customEvents ?? []), { id, name: uniqueName(taken, name ?? "My Event"), inputs: [] }] }, id };
+}
+
+export function updateCustomEvent(g: Graph, id: string, patch: Partial<{ name: string; inputs: GMember[]; map: boolean }>): Graph {
+  return { ...g, customEvents: (g.customEvents ?? []).map((c) => (c.id === id ? { ...c, ...patch } : c)) };
+}
+
+export function removeCustomEvent(g: Graph, id: string): Graph {
+  const left = (g.customEvents ?? []).filter((c) => c.id !== id);
+  return { ...g, customEvents: left.length ? left : undefined };
+}
+
+/** The name a map uses for a Custom Event ("Open Gate" -> open_gate), as the plugin does. */
+export const mapName = (name: string) => [...name.trim().toLowerCase()].map((c) => (/[a-z0-9]/.test(c) ? c : "_")).join("").slice(0, 26);

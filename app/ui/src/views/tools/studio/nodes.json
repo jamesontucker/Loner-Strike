@@ -13281,6 +13281,113 @@
    ]
   },
   {
+   "type": "timer.by_event",
+   "title": "Set Timer by Event",
+   "category": "Timers",
+   "help": "Runs a Custom Event (with no inputs) after some seconds, again and again if Looping.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "handle",
+     "type": "timer",
+     "label": "Timer"
+    }
+   ],
+   "params": [
+    {
+     "id": "event",
+     "label": "Custom event",
+     "kind": "cevent",
+     "default": ""
+    },
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 5,
+     "min": 0.1,
+     "max": 3600
+    },
+    {
+     "id": "loop",
+     "label": "Looping",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "custom event delay schedule"
+  },
+  {
+   "type": "event.custom",
+   "title": "Custom Event",
+   "category": "Events",
+   "help": "Runs when something calls this Custom Event (Call Custom Event, Set Timer by Event, or the map: an ls_event entity, or an info_target named lsev_<its map name>, when triggered). Its inputs are its own (My mode, Custom events).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "event",
+     "label": "Custom event",
+     "kind": "cevent",
+     "default": ""
+    }
+   ],
+   "event": true,
+   "keywords": "dispatcher signal trigger map"
+  },
+  {
+   "type": "event.call",
+   "title": "Call Custom Event",
+   "category": "Flow",
+   "help": "Runs a Custom Event now, with these values (every Custom Event node for it, in the graphs' order).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "event",
+     "label": "Custom event",
+     "kind": "cevent",
+     "default": ""
+    }
+   ],
+   "keywords": "fire broadcast signal"
+  },
+  {
    "type": "timer.clear",
    "title": "Clear Timer",
    "category": "Timers",

@@ -53,6 +53,11 @@ function ownItems(g: Graph, tab: string): PaletteItem[] {
     if (m.id === tab) continue;
     add("macro.use", m.name, "Use this mode's Macro (copied in when the mode is made).", "Macros", { macro: m.id });
   }
+  for (const c of g.customEvents ?? []) {
+    add("event.custom", `Custom Event: ${c.name}`, `Runs when ${c.name} is called (or the map fires it).`, "Custom events", { event: c.id });
+    add("event.call", `Call ${c.name}`, `Runs ${c.name} now${c.inputs.length ? " with these values" : ""}.`, "Custom events", { event: c.id });
+    if (!c.inputs.length) add("timer.by_event", `Set Timer by ${c.name}`, `Runs ${c.name} after some seconds (again and again if Looping).`, "Custom events", { event: c.id });
+  }
   for (const s of g.structs ?? []) {
     add("struct.make", `Make ${s.name}`, `A ${s.name} from its fields.`, "Structs", { struct: s.id });
     add("struct.break", `Break ${s.name}`, `A ${s.name}'s fields.`, "Structs", { struct: s.id });

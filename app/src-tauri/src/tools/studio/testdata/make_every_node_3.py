@@ -17,7 +17,12 @@ def N(id, type, params=None, x=0, y=0):
 def W(a, ap, b, bp):
     edges.append({"id": f"w{len(edges)+1}", "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}})
 
+# the Custom Event nodes name one of these (Gate Opened: what the map fires, with inputs; Tick: a timer's)
+CUSTOM = [{"id": "ce1", "name": "Gate Opened", "map": True, "inputs": [{"id": "who", "name": "Who", "type": "player"}, {"id": "n", "name": "Count", "type": "number"}, {"id": "t", "name": "Label", "type": "text"}]},
+          {"id": "ce2", "name": "Tick", "inputs": []}]
+PARAMS = {"event.custom": {"event": "ce1"}, "event.call": {"event": "ce1"}, "timer.by_event": {"event": "ce2", "secs": 5, "loop": True}}
 N("ps", "event.player_spawned", {}, 0, 0)
+N("tick", "event.custom", {"event": "ce2"}, 0, 4)
 N("ent", "comp.find", {"name": "spot1"}, 0, 2)
 N("vec", "vec.make", {"x": 0, "y": 0, "z": 64}, 0, 3)
 last = ("ps", "then")
@@ -27,7 +32,7 @@ for i, d in enumerate(todo):
     col += 1
     if col > 12:
         col, row = 1, row + 1
-    N(nid, d["type"], {}, col, 5 + row)
+    N(nid, d["type"], PARAMS.get(d["type"], {}), col, 5 + row)
     ins = {p["id"]: p for p in d["inputs"]}
     if d.get("event"):
         continue
@@ -47,6 +52,6 @@ for i, d in enumerate(todo):
             last = (nid, "then" if "then" in outs else outs[0])
 
 g = {"schema": "loner-strike/graph", "version": 3, "mode": {"id": "every_node_3", "name": "Every Node 3", "description": "Game, world, players, effects, interop"},
-     "variables": [], "nodes": nodes, "edges": edges, "comments": []}
+     "variables": [], "nodes": nodes, "edges": edges, "comments": [], "customEvents": CUSTOM}
 json.dump(g, open("every_node_3.graph.json", "w"), indent=1)
 print(len(todo), "new kinds;", len(nodes), "nodes", len(edges), "wires")

@@ -177,6 +177,29 @@ pub struct Graph {
     /// event graph's (a node's `graph` names one); two of the same event run in tab order
     #[serde(default, rename = "eventGraphs", skip_serializing_if = "Vec::is_empty")]
     pub event_graphs: Vec<EventGraph>,
+    /// the mode's own events: a Custom Event node runs when they're called (Call Custom Event,
+    /// Set Timer by Event, a map entity)
+    #[serde(default, rename = "customEvents", skip_serializing_if = "Vec::is_empty")]
+    pub custom_events: Vec<CustomEvent>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct CustomEvent {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub inputs: Vec<Member>,
+    /// the map can fire it (an ls_event entity, or an info_target named lsev_<map name>)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub map: bool,
+}
+
+impl CustomEvent {
+    /// The name a map uses for it: small letters, digits and _ ("Open Gate" -> open_gate).
+    pub fn map_name(&self) -> String {
+        let t: String = self.name.trim().to_ascii_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+        t.chars().take(26).collect()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -890,6 +913,16 @@ impl<'a> View<'a> {
                     p.outputs.extend(f.inputs.iter().map(|m| member_pin(m, false)));
                 }
             }
+            "event.custom" | "event.call" => {
+                let ce = n.params.get("event").and_then(Value::as_str).and_then(|c| self.g.custom_events.iter().find(|x| x.id == c));
+                if let Some(c) = ce {
+                    if def.kind == "event.custom" {
+                        p.outputs.extend(c.inputs.iter().map(|m| member_pin(m, false)));
+                    } else {
+                        p.inputs.extend(c.inputs.iter().map(|m| member_pin(m, false)));
+                    }
+                }
+            }
             "fn.return" => {
                 if let Some(f) = self.funcs.get(home) {
                     p.inputs.extend(f.outputs.iter().map(|m| member_pin(m, false)));
@@ -1408,6 +1441,25 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
     // Functions and Macros: their graphs share one set of ids
     let mut gids = HashSet::new();
     let mut fnames = HashSet::new();
+    let mut cnames = HashSet::new();
+    for c in &g.custom_events {
+        if !valid_id(&c.id) || !gids.insert(c.id.as_str()) {
+            p.push(Problem::err(None, "A Custom Event has a bad or repeated id."));
+        }
+        if c.name.trim().is_empty() || !valid_label(&c.name, 26) || !cnames.insert(c.map_name()) {
+            p.push(Problem::err(None, format!("Give each Custom Event its own name (up to 26 letters, digits, spaces or plain punctuation): \u{201c}{}\u{201d}.", short(&c.name))));
+        }
+        check_members(g, "The Custom Event", &c.name, &c.inputs, false, &mut p);
+        if c.inputs.len() > 8 {
+            p.push(Problem::err(None, format!("The Custom Event \u{201c}{}\u{201d} has more than 8 inputs.", short(&c.name))));
+        }
+        if c.map && c.inputs.iter().any(|m| !["player", "number", "text", "bool"].contains(&m.ty.as_str())) {
+            p.push(Problem::err(None, format!("The map can fire \u{201c}{}\u{201d} only with Player, number, text and yes/no inputs.", short(&c.name))));
+        }
+    }
+    if g.custom_events.len() > 32 {
+        p.push(Problem::err(None, "A mode has at most 32 Custom Events."));
+    }
     for f in &g.functions {
         if !valid_id(&f.id) || !gids.insert(f.id.as_str()) {
             p.push(Problem::err(None, "A Function has a bad or repeated id."));
@@ -1524,6 +1576,11 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
                 },
                 "macro" => match sval.and_then(|id| v.macros.get(id)) {
                     None => Err("Pick which Macro to use.".into()),
+                    _ => Ok(()),
+                },
+                "cevent" => match sval.and_then(|id| g.custom_events.iter().find(|c| c.id == id)) {
+                    None => Err(format!("Pick a Custom Event for {} (add one under My mode, Custom events).", def.title)),
+                    Some(c) if def.kind == "timer.by_event" && !c.inputs.is_empty() => Err(format!("\u{201c}{}\u{201d} has inputs: a timer can only run a Custom Event without any (call it from a Delay instead).", short(&c.name))),
                     _ => Ok(()),
                 },
                 "marker" => match sval {
@@ -2194,7 +2251,7 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
             Some(s) if valid_keys(s, def.max.unwrap_or(120.0) as usize) => Ok(()),
             _ => Err(format!("{} are words like radius=160 (letters, digits, _ - . = : and spaces; no quotes).", def.label)),
         },
-        "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases" | "marker" => Ok(()),
+        "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases" | "marker" | "cevent" => Ok(()),
         _ => Err(format!("{} has a setting this app doesn't know.", def.label)),
     }
 }
@@ -2224,7 +2281,7 @@ mod tests {
     const TYPES: [&str; 18] = ["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>"];
     /// Nodes whose pins come from the graph (a Macro's, a Function's): the registry only has
     /// their fixed part.
-    const DYNAMIC: [&str; 3] = ["macro.use", "macro.exit", "macro.entry"];
+    const DYNAMIC: [&str; 4] = ["macro.use", "macro.exit", "macro.entry", "event.call"];
 
     #[test]
     fn registry_is_complete() {

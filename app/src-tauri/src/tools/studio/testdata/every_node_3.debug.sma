@@ -14,9 +14,9 @@
 #include <cellarray>
 
 #define LSG_MODE "every_node_3"
-#define LSG_CTX 8
+#define LSG_CTX 10
 #define LSG_TXT 2
-#define LSG_N 63
+#define LSG_N 67
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -35,9 +35,9 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_O 4
 #define LSG_OT 1
 
-#define LSD_N 63
-new const g_lsdIds[LSD_N][] = { "ps", "n12", "n13", "n14", "n15", "n17", "n19", "n21", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n67", "n68", "n69", "n70", "n71", "n72", "n73", "n74", "n75", "n76", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 67
+new const g_lsdIds[LSD_N][] = { "ps", "tick", "n12", "n13", "n14", "n15", "n17", "n19", "n21", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n67", "n68", "n69", "n70", "n71", "n72", "n73", "n74", "n75", "n76", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n114" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -941,12 +941,14 @@ stock lsg_call(const plugin[], const func[], nargs, a, b, &r)
 	return 1
 }
 
-stock lsg_hitgroup(v)
+stock lsg_hitgroup(v, bits)
 {
 	new t[12]
 	if (!lsg_ok(v))
 		return t
-	switch (get_ent_data(v, "CBaseMonster", "m_LastHitGroup"))
+	// (only a bullet or the knife hits a place; the game keeps the last one, so a grenade or a
+	// fall after a headshot would say head again)
+	switch (bits & DMG_BULLET ? get_ent_data(v, "CBaseMonster", "m_LastHitGroup") : 0)
 	{
 		case HIT_HEAD: copy(t, charsmax(t), "head")
 		case HIT_CHEST: copy(t, charsmax(t), "chest")
@@ -958,8 +960,31 @@ stock lsg_hitgroup(v)
 	return t
 }
 
-stock lsg_wpn_of(a)
-	return lsg_held(a)
+// the weapon that did the damage: a grenade by what hit (the attacker may hold a gun by then),
+// else what the attacker holds; empty when no player did it. (Its own body: a stock that returns
+// another stock's text fails at run time with "memory access".)
+stock lsg_wpn_of(a, inflictor)
+{
+	new w[24]
+	if (inflictor > MaxClients && pev_valid(inflictor))
+	{
+		pev(inflictor, pev_classname, w, charsmax(w))
+		if (equal(w, "grenade"))
+		{
+			copy(w, charsmax(w), "hegrenade")
+			return w
+		}
+		w[0] = 0
+	}
+	if (lsg_ok(a) && is_user_alive(a))
+	{
+		new clip, ammo, wid = get_user_weapon(a, clip, ammo)
+		if (wid > 0)
+			get_weaponname(wid, w, charsmax(w))
+		replace(w, charsmax(w), "weapon_", "")
+	}
+	return w
+}
 
 stock Float:lsg_dist(a, b)
 {
@@ -2545,6 +2570,131 @@ lsd_graph_vars()
 {
 }
 
+// Custom Event: Gate Opened
+stock lsg_ce0(a0, Float:a1, const a2[])
+{
+	{
+		new ctx[LSG_CTX]
+		ctx[8] = _:a0
+		ctx[9] = _:a1
+		copy(g_lsgOT[0], 127, a2)
+		lsg_n65(ctx)
+	}
+}
+
+// Custom Event: Tick
+stock lsg_ce1()
+{
+	{
+		new ctx[LSG_CTX]
+		lsg_n1(ctx)
+	}
+}
+
+// ---- custom events the map fires: ls_event entities and info_targets named lsev_<name> ----
+new const g_lsgEvNames[][] = { "gate_opened" }
+#define LSG_EV_MAX 64
+new g_lsgEvN, g_lsgEvEnt[LSG_EV_MAX], g_lsgEvK[LSG_EV_MAX], g_lsgEvA[LSG_EV_MAX][32], g_lsgEvB[LSG_EV_MAX][32]
+new g_lsgEvParse, bool:g_lsgEvPend, g_lsgEvName[32], g_lsgEvTn[40], g_lsgEvVa[32], g_lsgEvVb[32]
+
+public lsg_ev_kv(ent, kvd)
+{
+	if (ent <= 0)
+		return FMRES_IGNORED
+	new key[32], val[64]
+	get_kvd(kvd, KV_KeyName, key, charsmax(key))
+	get_kvd(kvd, KV_Value, val, charsmax(val))
+	if (equal(key, "classname"))
+	{
+		if (ent != g_lsgEvParse)
+		{
+			g_lsgEvParse = ent
+			g_lsgEvPend = equal(val, "ls_event") || equal(val, "info_target")
+			g_lsgEvName[0] = g_lsgEvTn[0] = g_lsgEvVa[0] = g_lsgEvVb[0] = 0
+		}
+		if (g_lsgEvPend && equal(val, "ls_event"))
+			set_kvd(kvd, KV_Value, "info_target")
+		return FMRES_IGNORED
+	}
+	if (!g_lsgEvPend || ent != g_lsgEvParse)
+		return FMRES_IGNORED
+	if (equal(key, "event"))
+		copy(g_lsgEvName, charsmax(g_lsgEvName), val)
+	else if (equal(key, "targetname"))
+		copy(g_lsgEvTn, charsmax(g_lsgEvTn), val)
+	else if (equal(key, "a"))
+		copy(g_lsgEvVa, charsmax(g_lsgEvVa), val)
+	else if (equal(key, "b"))
+		copy(g_lsgEvVb, charsmax(g_lsgEvVb), val)
+	return FMRES_IGNORED
+}
+
+public lsg_ev_spawn(ent)
+{
+	if (ent != g_lsgEvParse || !g_lsgEvPend)
+		return FMRES_IGNORED
+	g_lsgEvPend = false
+	g_lsgEvParse = 0
+	// the event's name: its event key, else the name after lsev_
+	new name[32]
+	if (g_lsgEvName[0])
+		copy(name, charsmax(name), g_lsgEvName)
+	else if (equal(g_lsgEvTn, "lsev_", 5))
+		copy(name, charsmax(name), g_lsgEvTn[5])
+	strtolower(name)
+	for (new k = 0; k < sizeof g_lsgEvNames; k++)
+	{
+		if (name[0] && equal(name, g_lsgEvNames[k]) && g_lsgEvN < LSG_EV_MAX && pev_valid(ent))
+		{
+			g_lsgEvEnt[g_lsgEvN] = ent
+			g_lsgEvK[g_lsgEvN] = k
+			copy(g_lsgEvA[g_lsgEvN], 31, g_lsgEvVa)
+			copy(g_lsgEvB[g_lsgEvN], 31, g_lsgEvVb)
+			g_lsgEvN++
+			break
+		}
+	}
+	return FMRES_IGNORED
+}
+
+public lsg_ev_use(ent, caller, activator)
+{
+	new k = -1, va[32], vb[32]
+	for (new i = 0; i < g_lsgEvN; i++)
+	{
+		if (g_lsgEvEnt[i] == ent)
+		{
+			k = g_lsgEvK[i]
+			copy(va, charsmax(va), g_lsgEvA[i])
+			copy(vb, charsmax(vb), g_lsgEvB[i])
+			break
+		}
+	}
+	// (one made while playing, by another plugin: by its name, lsev_<event>, without values)
+	if (k < 0 && pev_valid(ent))
+	{
+		new tn[40]
+		pev(ent, pev_targetname, tn, charsmax(tn))
+		if (equal(tn, "lsev_", 5))
+		{
+			strtolower(tn)
+			for (new j = 0; j < sizeof g_lsgEvNames; j++)
+				if (equal(tn[5], g_lsgEvNames[j]))
+					k = j
+		}
+	}
+	if (k < 0)
+		return HAM_IGNORED
+	new who = activator >= 1 && activator <= MaxClients && is_user_connected(activator) ? activator : 0
+	switch (k)
+	{
+		case 0: lsg_ce0(who, str_to_float(va), vb)
+	}
+	#pragma unused va, vb, who
+	return HAM_IGNORED
+}
+
+
 public lsg_count_round()
 	g_lsgRounds++
 
@@ -2593,12 +2743,19 @@ public plugin_precache()
 	g_lsgSprBeam = precache_model("sprites/laserbeam.spr")
 	precache_model("models/w_c4.mdl")
 	precache_sound("buttons/bell1.wav")
+	// the map's custom event entities, as they load
+	register_forward(FM_KeyValue, "lsg_ev_kv")
+	register_forward(FM_Spawn, "lsg_ev_spawn", 1)
 }
 
 public plugin_init()
 {
 	ls_register_mode(LSG_MODE, "Every Node 3", "1.0", "Game Mode Studio")
 	lsd_init()
+	register_event("HLTV", "lsg_count_round", "a", "1=0", "2=0")
+	register_event("TeamScore", "lsg_team_score", "a")
+	register_event("HLTV", "lsg_freeze_on", "a", "1=0", "2=0")
+	register_logevent("lsg_freeze_off", 2, "1=Round_Start")
 	RegisterHamPlayer(Ham_Spawn, "lsg_on_player_spawned", 1)
 	register_clcmd("say", "lsg_on_said")
 	register_clcmd("say_team", "lsg_on_said")
@@ -2608,10 +2765,7 @@ public plugin_init()
 	lsg_hook_weapons("lsg_on_reloaded", Ham_Weapon_Reload)
 	register_logevent("lsg_on_hostage_rescued", 3, "2=Rescued_A_Hostage")
 	register_logevent("lsg_on_vip_escaped", 3, "2=Escaped_As_VIP")
-	register_event("HLTV", "lsg_count_round", "a", "1=0", "2=0")
-	register_event("TeamScore", "lsg_team_score", "a")
-	register_event("HLTV", "lsg_freeze_on", "a", "1=0", "2=0")
-	register_logevent("lsg_freeze_off", 2, "1=Round_Start")
+	RegisterHam(Ham_Use, "info_target", "lsg_ev_use", 1)
 	register_clcmd("say", "lsg_gag_say")
 	register_clcmd("say_team", "lsg_gag_say")
 }
@@ -2649,20 +2803,20 @@ public lsg_on_said(id)
 	ctx[0] = id // player
 	copy(g_lsgTxt[0], 63, txt) // text
 	ctx[1] = equal(cmd, "say_team") ? 1 : 0 // team
-	lsg_n56(ctx)
+	lsg_n57(ctx)
 	return PLUGIN_CONTINUE
 }
 
 public lsg_on_freeze_ended()
 {
 	new ctx[LSG_CTX]
-	lsg_n57(ctx)
+	lsg_n58(ctx)
 }
 
 public lsg_on_map_ending()
 {
 	new ctx[LSG_CTX]
-	lsg_n58(ctx)
+	lsg_n59(ctx)
 }
 
 public lsg_on_fired(wpn)
@@ -2677,7 +2831,7 @@ public lsg_on_fired(wpn)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	copy(g_lsgTxt[0], 63, wn) // weapon
-	lsg_n59(ctx)
+	lsg_n60(ctx)
 	return HAM_IGNORED
 }
 
@@ -2691,7 +2845,7 @@ public lsg_on_reloaded(wpn)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	copy(g_lsgTxt[0], 63, wn) // weapon
-	lsg_n60(ctx)
+	lsg_n61(ctx)
 	return HAM_IGNORED
 }
 
@@ -2699,14 +2853,14 @@ public lsg_on_hostage_rescued()
 {
 	new ctx[LSG_CTX]
 	ctx[0] = lsg_log_player() // player
-	lsg_n61(ctx)
+	lsg_n62(ctx)
 }
 
 public lsg_on_vip_escaped()
 {
 	new ctx[LSG_CTX]
 	ctx[0] = lsg_log_player() // player
-	lsg_n62(ctx)
+	lsg_n63(ctx)
 }
 
 public ls_studio_event(const name[], a, b)
@@ -2715,7 +2869,7 @@ public ls_studio_event(const name[], a, b)
 	ctx[0] = _:float(a) // a
 	ctx[1] = _:float(b) // b
 	if (equal(name, "my_event"))
-		lsg_n55(ctx)
+		lsg_n56(ctx)
 }
 
 // Player Spawned (ps)
@@ -2725,352 +2879,348 @@ lsg_n0(ctx[])
 	if (lsd_enter(0, ctx))
 		return
 	lsd_exit(0, "ran")
-	lsg_n1(ctx)
+	lsg_n2(ctx)
 }
 
-// Change Map (n12)
+// Custom Event (tick)
 lsg_n1(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(1, ctx))
 		return
-	lsg_change_map("de_dust2")
-	lsd_exit(1, "done")
-	lsg_n2(ctx)
+	lsd_exit(1, "called")
 }
 
-// Restart Round (n13)
+// Change Map (n12)
 lsg_n2(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(2, ctx))
 		return
-	server_cmd("sv_restartround 1")
+	lsg_change_map("de_dust2")
 	lsd_exit(2, "done")
 	lsg_n3(ctx)
 }
 
-// Run Server Command (n14)
+// Restart Round (n13)
 lsg_n3(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(3, ctx))
+		return
+	server_cmd("sv_restartround 1")
+	lsd_exit(3, "done")
+	lsg_n4(ctx)
+}
+
+// Run Server Command (n14)
+lsg_n4(ctx[])
 {
 	new lsi0[128]
 	copy(lsi0, 127, "sv_gravity 800")
 	lsd_begin()
 	lsd_in_text("Command", lsi0)
-	if (lsd_enter(3, ctx))
-		return
-	g_lsgO[0] = lsg_safe_cmd(lsi0, 0) ? 1 : 0
-	if (!lsg_cmd_ok)
-		lsd_error(3, "Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap.")
-	lsg_n4(ctx)
-}
-
-// Run AMX Command (n15)
-lsg_n4(ctx[])
-{
-	new lsi0[128]
-	copy(lsi0, 127, "amx_slap @T 0")
-	lsd_begin()
-	lsd_in_text("Command", lsi0)
 	if (lsd_enter(4, ctx))
 		return
-	g_lsgO[1] = lsg_safe_cmd(lsi0, 1) ? 1 : 0
+	g_lsgO[0] = lsg_safe_cmd(lsi0, 0) ? 1 : 0
 	if (!lsg_cmd_ok)
 		lsd_error(4, "Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap.")
 	lsg_n5(ctx)
 }
 
-// Set Gravity (n17)
+// Run AMX Command (n15)
 lsg_n5(ctx[])
+{
+	new lsi0[128]
+	copy(lsi0, 127, "amx_slap @T 0")
+	lsd_begin()
+	lsd_in_text("Command", lsi0)
+	if (lsd_enter(5, ctx))
+		return
+	g_lsgO[1] = lsg_safe_cmd(lsi0, 1) ? 1 : 0
+	if (!lsg_cmd_ok)
+		lsd_error(5, "Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap.")
+	lsg_n6(ctx)
+}
+
+// Set Gravity (n17)
+lsg_n6(ctx[])
 {
 	new Float:lsi0 = 800.0
 	lsd_begin()
 	lsd_in_number("Gravity", lsi0)
-	if (lsd_enter(5, ctx))
-		return
-	set_cvar_float("sv_gravity", lsi0)
-	lsd_exit(5, "done")
-	lsg_n6(ctx)
-}
-
-// Set Friction (n19)
-lsg_n6(ctx[])
-{
-	new Float:lsi0 = 4.0
-	lsd_begin()
-	lsd_in_number("Friction", lsi0)
 	if (lsd_enter(6, ctx))
 		return
-	set_cvar_float("sv_friction", lsi0)
+	set_cvar_float("sv_gravity", lsi0)
 	lsd_exit(6, "done")
 	lsg_n7(ctx)
 }
 
-// Set Max Speed (n21)
+// Set Friction (n19)
 lsg_n7(ctx[])
 {
-	new Float:lsi0 = 320.0
+	new Float:lsi0 = 4.0
 	lsd_begin()
-	lsd_in_number("Max Speed", lsi0)
+	lsd_in_number("Friction", lsi0)
 	if (lsd_enter(7, ctx))
 		return
-	set_cvar_float("sv_maxspeed", lsi0)
+	set_cvar_float("sv_friction", lsi0)
 	lsd_exit(7, "done")
 	lsg_n8(ctx)
 }
 
-// Set Round Time (n23)
+// Set Max Speed (n21)
 lsg_n8(ctx[])
 {
-	new Float:lsi0 = 2.5
+	new Float:lsi0 = 320.0
 	lsd_begin()
-	lsd_in_number("Round Time", lsi0)
+	lsd_in_number("Max Speed", lsi0)
 	if (lsd_enter(8, ctx))
 		return
-	set_cvar_float("mp_roundtime", lsi0)
+	set_cvar_float("sv_maxspeed", lsi0)
 	lsd_exit(8, "done")
 	lsg_n9(ctx)
 }
 
-// Set Freeze Time (n25)
+// Set Round Time (n23)
 lsg_n9(ctx[])
 {
-	new Float:lsi0 = 6.0
+	new Float:lsi0 = 2.5
 	lsd_begin()
-	lsd_in_number("Freeze Time", lsi0)
+	lsd_in_number("Round Time", lsi0)
 	if (lsd_enter(9, ctx))
 		return
-	set_cvar_float("mp_freezetime", lsi0)
+	set_cvar_float("mp_roundtime", lsi0)
 	lsd_exit(9, "done")
 	lsg_n10(ctx)
 }
 
-// Set Buy Time (n27)
+// Set Freeze Time (n25)
 lsg_n10(ctx[])
 {
-	new Float:lsi0 = 0.25
+	new Float:lsi0 = 6.0
 	lsd_begin()
-	lsd_in_number("Buy Time", lsi0)
+	lsd_in_number("Freeze Time", lsi0)
 	if (lsd_enter(10, ctx))
 		return
-	set_cvar_float("mp_buytime", lsi0)
+	set_cvar_float("mp_freezetime", lsi0)
 	lsd_exit(10, "done")
 	lsg_n11(ctx)
 }
 
-// Set Friendly Fire (n29)
+// Set Buy Time (n27)
 lsg_n11(ctx[])
 {
-	new lsi0 = 0
+	new Float:lsi0 = 0.25
 	lsd_begin()
-	lsd_in_bool("Friendly Fire", lsi0)
+	lsd_in_number("Buy Time", lsi0)
 	if (lsd_enter(11, ctx))
 		return
-	set_cvar_num("mp_friendlyfire", (lsi0) ? 1 : 0)
+	set_cvar_float("mp_buytime", lsi0)
 	lsd_exit(11, "done")
 	lsg_n12(ctx)
 }
 
-// Set Team Balance (n31)
+// Set Friendly Fire (n29)
 lsg_n12(ctx[])
 {
-	new lsi0 = 1
+	new lsi0 = 0
 	lsd_begin()
-	lsd_in_bool("Team Balance", lsi0)
+	lsd_in_bool("Friendly Fire", lsi0)
 	if (lsd_enter(12, ctx))
 		return
-	set_cvar_num("mp_autoteambalance", (lsi0) ? 1 : 0)
+	set_cvar_num("mp_friendlyfire", (lsi0) ? 1 : 0)
 	lsd_exit(12, "done")
 	lsg_n13(ctx)
 }
 
-// Set Team Limit (n33)
+// Set Team Balance (n31)
 lsg_n13(ctx[])
 {
-	new Float:lsi0 = 2.0
+	new lsi0 = 1
 	lsd_begin()
-	lsd_in_number("Team Limit", lsi0)
+	lsd_in_bool("Team Balance", lsi0)
 	if (lsd_enter(13, ctx))
 		return
-	set_cvar_float("mp_limitteams", lsi0)
+	set_cvar_num("mp_autoteambalance", (lsi0) ? 1 : 0)
 	lsd_exit(13, "done")
 	lsg_n14(ctx)
 }
 
-// Set Start Money (n35)
+// Set Team Limit (n33)
 lsg_n14(ctx[])
 {
-	new Float:lsi0 = 800.0
+	new Float:lsi0 = 2.0
 	lsd_begin()
-	lsd_in_number("Start Money", lsi0)
+	lsd_in_number("Team Limit", lsi0)
 	if (lsd_enter(14, ctx))
 		return
-	set_cvar_float("mp_startmoney", lsi0)
+	set_cvar_float("mp_limitteams", lsi0)
 	lsd_exit(14, "done")
 	lsg_n15(ctx)
 }
 
-// Set C4 Timer (n37)
+// Set Start Money (n35)
 lsg_n15(ctx[])
 {
-	new Float:lsi0 = 35.0
+	new Float:lsi0 = 800.0
 	lsd_begin()
-	lsd_in_number("C4 Timer", lsi0)
+	lsd_in_number("Start Money", lsi0)
 	if (lsd_enter(15, ctx))
 		return
-	set_cvar_float("mp_c4timer", lsi0)
+	set_cvar_float("mp_startmoney", lsi0)
 	lsd_exit(15, "done")
 	lsg_n16(ctx)
 }
 
-// Set Fall Damage (n39)
+// Set C4 Timer (n37)
 lsg_n16(ctx[])
 {
-	new lsi0 = 1
+	new Float:lsi0 = 35.0
 	lsd_begin()
-	lsd_in_bool("Fall Damage", lsi0)
+	lsd_in_number("C4 Timer", lsi0)
 	if (lsd_enter(16, ctx))
 		return
-	set_cvar_num("mp_falldamage", (lsi0) ? 1 : 0)
+	set_cvar_float("mp_c4timer", lsi0)
 	lsd_exit(16, "done")
 	lsg_n17(ctx)
 }
 
-// Set Footsteps (n41)
+// Set Fall Damage (n39)
 lsg_n17(ctx[])
 {
 	new lsi0 = 1
 	lsd_begin()
-	lsd_in_bool("Footsteps", lsi0)
+	lsd_in_bool("Fall Damage", lsi0)
 	if (lsd_enter(17, ctx))
 		return
-	set_cvar_num("mp_footsteps", (lsi0) ? 1 : 0)
+	set_cvar_num("mp_falldamage", (lsi0) ? 1 : 0)
 	lsd_exit(17, "done")
 	lsg_n18(ctx)
 }
 
-// Set All Talk (n43)
+// Set Footsteps (n41)
 lsg_n18(ctx[])
 {
-	new lsi0 = 0
+	new lsi0 = 1
 	lsd_begin()
-	lsd_in_bool("All Talk", lsi0)
+	lsd_in_bool("Footsteps", lsi0)
 	if (lsd_enter(18, ctx))
 		return
-	set_cvar_num("sv_alltalk", (lsi0) ? 1 : 0)
+	set_cvar_num("mp_footsteps", (lsi0) ? 1 : 0)
 	lsd_exit(18, "done")
 	lsg_n19(ctx)
 }
 
-// Set Time Limit (n45)
+// Set All Talk (n43)
 lsg_n19(ctx[])
 {
-	new Float:lsi0 = 20.0
+	new lsi0 = 0
 	lsd_begin()
-	lsd_in_number("Time Limit", lsi0)
+	lsd_in_bool("All Talk", lsi0)
 	if (lsd_enter(19, ctx))
 		return
-	set_cvar_float("mp_timelimit", lsi0)
+	set_cvar_num("sv_alltalk", (lsi0) ? 1 : 0)
 	lsd_exit(19, "done")
 	lsg_n20(ctx)
 }
 
-// Set Win Limit (n47)
+// Set Time Limit (n45)
 lsg_n20(ctx[])
 {
-	new Float:lsi0 = 0.0
+	new Float:lsi0 = 20.0
 	lsd_begin()
-	lsd_in_number("Win Limit", lsi0)
+	lsd_in_number("Time Limit", lsi0)
 	if (lsd_enter(20, ctx))
 		return
-	set_cvar_float("mp_winlimit", lsi0)
+	set_cvar_float("mp_timelimit", lsi0)
 	lsd_exit(20, "done")
 	lsg_n21(ctx)
 }
 
-// Set Frag Limit (n49)
+// Set Win Limit (n47)
 lsg_n21(ctx[])
 {
 	new Float:lsi0 = 0.0
 	lsd_begin()
-	lsd_in_number("Frag Limit", lsi0)
+	lsd_in_number("Win Limit", lsi0)
 	if (lsd_enter(21, ctx))
 		return
-	set_cvar_float("mp_fraglimit", lsi0)
+	set_cvar_float("mp_winlimit", lsi0)
 	lsd_exit(21, "done")
 	lsg_n22(ctx)
 }
 
-// Set Transform (n67)
+// Set Frag Limit (n49)
 lsg_n22(ctx[])
 {
-	new lsi0 = ctx[0]
+	new Float:lsi0 = 0.0
 	lsd_begin()
-	lsd_in_player("Player", lsi0)
+	lsd_in_number("Frag Limit", lsi0)
 	if (lsd_enter(22, ctx))
 		return
-	lsg_set_transform(lsi0, -1, -1, -1)
+	set_cvar_float("mp_fraglimit", lsi0)
 	lsd_exit(22, "done")
 	lsg_n23(ctx)
 }
 
-// Set Rotation (n68)
+// Set Transform (n67)
 lsg_n23(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	if (lsd_enter(23, ctx))
+		return
+	lsg_set_transform(lsi0, -1, -1, -1)
+	lsd_exit(23, "done")
+	lsg_n24(ctx)
+}
+
+// Set Rotation (n68)
+lsg_n24(ctx[])
 {
 	new lsi0 = ctx[0]
 	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_text("Rotation", lsg_vtext(lsi1))
-	if (lsd_enter(23, ctx))
-		return
-	lsg_set_transform(lsi0, -1, lsi1, -1)
-	lsd_exit(23, "done")
-	lsg_n24(ctx)
-}
-
-// Look At (n69)
-lsg_n24(ctx[])
-{
-	new lsi0 = ctx[0]
-	lsd_begin()
-	lsd_in_player("Player", lsi0)
 	if (lsd_enter(24, ctx))
 		return
-	lsg_look_at(lsi0, 0, -1)
+	lsg_set_transform(lsi0, -1, lsi1, -1)
 	lsd_exit(24, "done")
 	lsg_n25(ctx)
 }
 
-// Slap (n70)
+// Look At (n69)
 lsg_n25(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	if (lsd_enter(25, ctx))
+		return
+	lsg_look_at(lsi0, 0, -1)
+	lsd_exit(25, "done")
+	lsg_n26(ctx)
+}
+
+// Slap (n70)
+lsg_n26(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 5.0
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Damage", lsi1)
-	if (lsd_enter(25, ctx))
-		return
-	lsg_slap(lsi0, floatround(lsi1))
-	lsd_exit(25, "done")
-	lsg_n26(ctx)
-}
-
-// Screen Fade (n71)
-lsg_n26(ctx[])
-{
-	new lsi0 = ctx[0]
-	lsd_begin()
-	lsd_in_player("Player", lsi0)
 	if (lsd_enter(26, ctx))
 		return
-	lsg_fade(lsi0, 2.0, 255, 255, 255, 255)
+	lsg_slap(lsi0, floatround(lsi1))
 	lsd_exit(26, "done")
 	lsg_n27(ctx)
 }
 
-// Screen Shake (n72)
+// Screen Fade (n71)
 lsg_n27(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -3078,12 +3228,12 @@ lsg_n27(ctx[])
 	lsd_in_player("Player", lsi0)
 	if (lsd_enter(27, ctx))
 		return
-	lsg_shake(lsi0, 8.0, 2.0)
+	lsg_fade(lsi0, 2.0, 255, 255, 255, 255)
 	lsd_exit(27, "done")
 	lsg_n28(ctx)
 }
 
-// God Mode (n73)
+// Screen Shake (n72)
 lsg_n28(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -3091,12 +3241,12 @@ lsg_n28(ctx[])
 	lsd_in_player("Player", lsi0)
 	if (lsd_enter(28, ctx))
 		return
-	lsg_godmode(lsi0, 1)
+	lsg_shake(lsi0, 8.0, 2.0)
 	lsd_exit(28, "done")
 	lsg_n29(ctx)
 }
 
-// No Clip (n74)
+// God Mode (n73)
 lsg_n29(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -3104,12 +3254,12 @@ lsg_n29(ctx[])
 	lsd_in_player("Player", lsi0)
 	if (lsd_enter(29, ctx))
 		return
-	lsg_noclip(lsi0, 1)
+	lsg_godmode(lsi0, 1)
 	lsd_exit(29, "done")
 	lsg_n30(ctx)
 }
 
-// Set Visibility (n75)
+// No Clip (n74)
 lsg_n30(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -3117,13 +3267,26 @@ lsg_n30(ctx[])
 	lsd_in_player("Player", lsi0)
 	if (lsd_enter(30, ctx))
 		return
-	lsg_render(lsi0, 2, 80)
+	lsg_noclip(lsi0, 1)
 	lsd_exit(30, "done")
 	lsg_n31(ctx)
 }
 
-// Set Ammo (n76)
+// Set Visibility (n75)
 lsg_n31(ctx[])
+{
+	new lsi0 = ctx[0]
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	if (lsd_enter(31, ctx))
+		return
+	lsg_render(lsi0, 2, 80)
+	lsd_exit(31, "done")
+	lsg_n32(ctx)
+}
+
+// Set Ammo (n76)
+lsg_n32(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 30.0
@@ -3132,42 +3295,29 @@ lsg_n31(ctx[])
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Magazine", lsi1)
 	lsd_in_number("Spare", lsi2)
-	if (lsd_enter(31, ctx))
+	if (lsd_enter(32, ctx))
 		return
 	lsg_set_ammo(lsi0, floatround(lsi1), floatround(lsi2))
-	lsd_exit(31, "done")
-	lsg_n32(ctx)
+	lsd_exit(32, "done")
+	lsg_n33(ctx)
 }
 
 // Give Ammo (n77)
-lsg_n32(ctx[])
+lsg_n33(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 30.0
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
 	lsd_in_number("Bullets", lsi1)
-	if (lsd_enter(32, ctx))
-		return
-	lsg_give_ammo(lsi0, floatround(lsi1))
-	lsd_exit(32, "done")
-	lsg_n33(ctx)
-}
-
-// Remove Weapon (n78)
-lsg_n33(ctx[])
-{
-	new lsi0 = ctx[0]
-	lsd_begin()
-	lsd_in_player("Player", lsi0)
 	if (lsd_enter(33, ctx))
 		return
-	lsg_take_weapon(lsi0, "weapon_ak47")
+	lsg_give_ammo(lsi0, floatround(lsi1))
 	lsd_exit(33, "done")
 	lsg_n34(ctx)
 }
 
-// Switch To Weapon (n79)
+// Remove Weapon (n78)
 lsg_n34(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -3175,55 +3325,55 @@ lsg_n34(ctx[])
 	lsd_in_player("Player", lsi0)
 	if (lsd_enter(34, ctx))
 		return
-	lsg_switch_weapon(lsi0, "weapon_knife")
+	lsg_take_weapon(lsi0, "weapon_ak47")
 	lsd_exit(34, "done")
 	lsg_n35(ctx)
 }
 
-// Set Kills (n80)
+// Switch To Weapon (n79)
 lsg_n35(ctx[])
 {
 	new lsi0 = ctx[0]
-	new Float:lsi1 = 0.0
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
-	lsd_in_number("Kills", lsi1)
 	if (lsd_enter(35, ctx))
 		return
-	lsg_set_frags(lsi0, floatround(lsi1))
+	lsg_switch_weapon(lsi0, "weapon_knife")
 	lsd_exit(35, "done")
 	lsg_n36(ctx)
 }
 
-// Set Deaths (n81)
+// Set Kills (n80)
 lsg_n36(ctx[])
 {
 	new lsi0 = ctx[0]
 	new Float:lsi1 = 0.0
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
-	lsd_in_number("Deaths", lsi1)
+	lsd_in_number("Kills", lsi1)
 	if (lsd_enter(36, ctx))
 		return
-	lsg_set_deaths(lsi0, floatround(lsi1))
+	lsg_set_frags(lsi0, floatround(lsi1))
 	lsd_exit(36, "done")
 	lsg_n37(ctx)
 }
 
-// Move To Spectators (n82)
+// Set Deaths (n81)
 lsg_n37(ctx[])
 {
 	new lsi0 = ctx[0]
+	new Float:lsi1 = 0.0
 	lsd_begin()
 	lsd_in_player("Player", lsi0)
+	lsd_in_number("Deaths", lsi1)
 	if (lsd_enter(37, ctx))
 		return
-	lsg_to_spec(lsi0)
+	lsg_set_deaths(lsi0, floatround(lsi1))
 	lsd_exit(37, "done")
 	lsg_n38(ctx)
 }
 
-// Kick (n83)
+// Move To Spectators (n82)
 lsg_n38(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -3231,12 +3381,12 @@ lsg_n38(ctx[])
 	lsd_in_player("Player", lsi0)
 	if (lsd_enter(38, ctx))
 		return
-	lsg_kick(lsi0, "Kicked by the mode")
+	lsg_to_spec(lsi0)
 	lsd_exit(38, "done")
 	lsg_n39(ctx)
 }
 
-// Mute Voice (n84)
+// Kick (n83)
 lsg_n39(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -3244,12 +3394,12 @@ lsg_n39(ctx[])
 	lsd_in_player("Player", lsi0)
 	if (lsd_enter(39, ctx))
 		return
-	lsg_mute(lsi0, 60.0)
+	lsg_kick(lsi0, "Kicked by the mode")
 	lsd_exit(39, "done")
 	lsg_n40(ctx)
 }
 
-// Gag Chat (n85)
+// Mute Voice (n84)
 lsg_n40(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -3257,212 +3407,217 @@ lsg_n40(ctx[])
 	lsd_in_player("Player", lsi0)
 	if (lsd_enter(40, ctx))
 		return
-	lsg_gag(lsi0, 60.0)
+	lsg_mute(lsi0, 60.0)
 	lsd_exit(40, "done")
 	lsg_n41(ctx)
 }
 
-// Chat To Team (n86)
+// Gag Chat (n85)
 lsg_n41(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(41, ctx))
 		return
-	lsg_team_chat(2, "%s", "Hold the line!")
+	lsg_gag(lsi0, 60.0)
 	lsd_exit(41, "done")
 	lsg_n42(ctx)
 }
 
-// Notify Admins (n87)
+// Chat To Team (n86)
 lsg_n42(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(42, ctx))
 		return
-	lsg_admins_chat("%s", "Please check player:")
+	lsg_team_chat(2, "%s", "Hold the line!")
 	lsd_exit(42, "done")
 	lsg_n43(ctx)
 }
 
-// Spawn Prop (n91)
+// Notify Admins (n87)
 lsg_n43(ctx[])
 {
-	new lsi0 = lsg_find("spot1")
 	lsd_begin()
-	lsd_in_entity("At", lsi0)
 	if (lsd_enter(43, ctx))
 		return
-	g_lsgOut[43] = lsg_prop(lsi0, "models/w_c4.mdl", 1)
-	if (!g_lsgOut[43])
-		lsd_error(43, "No prop: the model isn't loaded, or there's no such entity.")
+	lsg_admins_chat("%s", "Please check player:")
+	lsd_exit(43, "done")
 	lsg_n44(ctx)
 }
 
-// Remove Entity (n92)
+// Spawn Prop (n91)
 lsg_n44(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
 	lsd_begin()
-	lsd_in_entity("Entity", lsi0)
+	lsd_in_entity("At", lsi0)
 	if (lsd_enter(44, ctx))
 		return
-	lsg_remove(lsi0)
-	lsd_exit(44, "done")
+	g_lsgOut[44] = lsg_prop(lsi0, "models/w_c4.mdl", 1)
+	if (!g_lsgOut[44])
+		lsd_error(44, "No prop: the model isn't loaded, or there's no such entity.")
 	lsg_n45(ctx)
 }
 
-// Set Entity Position (n93)
+// Remove Entity (n92)
 lsg_n45(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
-	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
 	lsd_begin()
 	lsd_in_entity("Entity", lsi0)
-	lsd_in_text("Position", lsg_vtext(lsi1))
 	if (lsd_enter(45, ctx))
 		return
-	lsg_ent_pos(lsi0, lsi1)
+	lsg_remove(lsi0)
 	lsd_exit(45, "done")
 	lsg_n46(ctx)
 }
 
-// Set Entity Rotation (n94)
+// Set Entity Position (n93)
 lsg_n46(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
 	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
 	lsd_begin()
 	lsd_in_entity("Entity", lsi0)
-	lsd_in_text("Rotation", lsg_vtext(lsi1))
+	lsd_in_text("Position", lsg_vtext(lsi1))
 	if (lsd_enter(46, ctx))
 		return
-	lsg_ent_angles(lsi0, lsi1)
+	lsg_ent_pos(lsi0, lsi1)
 	lsd_exit(46, "done")
 	lsg_n47(ctx)
 }
 
-// Set Entity Visibility (n95)
+// Set Entity Rotation (n94)
 lsg_n47(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
+	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
 	lsd_begin()
 	lsd_in_entity("Entity", lsi0)
+	lsd_in_text("Rotation", lsg_vtext(lsi1))
 	if (lsd_enter(47, ctx))
 		return
-	lsg_ent_visible(lsi0, 1)
+	lsg_ent_angles(lsi0, lsi1)
 	lsd_exit(47, "done")
 	lsg_n48(ctx)
 }
 
-// Explosion (n96)
+// Set Entity Visibility (n95)
 lsg_n48(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	lsd_begin()
+	lsd_in_entity("Entity", lsi0)
+	if (lsd_enter(48, ctx))
+		return
+	lsg_ent_visible(lsi0, 1)
+	lsd_exit(48, "done")
+	lsg_n49(ctx)
+}
+
+// Explosion (n96)
+lsg_n49(ctx[])
 {
 	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
 	new Float:lsi1 = 0.0
 	lsd_begin()
 	lsd_in_text("Position", lsg_vtext(lsi0))
 	lsd_in_number("Damage", lsi1)
-	if (lsd_enter(48, ctx))
+	if (lsd_enter(49, ctx))
 		return
 	lsg_explode(lsi0, lsi1, 250.0)
-	lsd_exit(48, "done")
-	lsg_n49(ctx)
+	lsd_exit(49, "done")
+	lsg_n50(ctx)
 }
 
 // Beam (n97)
-lsg_n49(ctx[])
+lsg_n50(ctx[])
 {
 	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
 	new lsi1 = lsg_vec(0.0, 0.0, 64.0)
 	lsd_begin()
 	lsd_in_text("From", lsg_vtext(lsi0))
 	lsd_in_text("To", lsg_vtext(lsi1))
-	if (lsd_enter(49, ctx))
-		return
-	lsg_beam(lsi0, lsi1, 230, 30, 30, 1.0)
-	lsd_exit(49, "done")
-	lsg_n50(ctx)
-}
-
-// Play Sound At (n98)
-lsg_n50(ctx[])
-{
-	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
-	lsd_begin()
-	lsd_in_text("Position", lsg_vtext(lsi0))
 	if (lsd_enter(50, ctx))
 		return
-	lsg_sound_at(lsi0, "ambience/thunder_clap.wav")
+	lsg_beam(lsi0, lsi1, 230, 30, 30, 1.0)
 	lsd_exit(50, "done")
 	lsg_n51(ctx)
 }
 
-// Play Sound To Player (n99)
+// Play Sound At (n98)
 lsg_n51(ctx[])
 {
-	new lsi0 = ctx[0]
+	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
 	lsd_begin()
-	lsd_in_player("Player", lsi0)
+	lsd_in_text("Position", lsg_vtext(lsi0))
 	if (lsd_enter(51, ctx))
 		return
-	lsg_sound_to(lsi0, "buttons/bell1.wav")
+	lsg_sound_at(lsi0, "ambience/thunder_clap.wav")
 	lsd_exit(51, "done")
 	lsg_n52(ctx)
 }
 
-// Set Light Style (n100)
+// Play Sound To Player (n99)
 lsg_n52(ctx[])
 {
+	new lsi0 = ctx[0]
 	lsd_begin()
+	lsd_in_player("Player", lsi0)
 	if (lsd_enter(52, ctx))
 		return
-	set_lights("#OFF")
+	lsg_sound_to(lsi0, "buttons/bell1.wav")
 	lsd_exit(52, "done")
 	lsg_n53(ctx)
 }
 
-// Call Plugin Function (n101)
+// Set Light Style (n100)
 lsg_n53(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(53, ctx))
+		return
+	set_lights("#OFF")
+	lsd_exit(53, "done")
+	lsg_n54(ctx)
+}
+
+// Call Plugin Function (n101)
+lsg_n54(ctx[])
 {
 	new Float:lsi0 = 0.0
 	new Float:lsi1 = 0.0
 	lsd_begin()
 	lsd_in_number("Argument 1", lsi0)
 	lsd_in_number("Argument 2", lsi1)
-	if (lsd_enter(53, ctx))
+	if (lsd_enter(54, ctx))
 		return
 	new r, called = lsg_call("gm_components.amxx", "plugin_cfg", 0, floatround(lsi0), floatround(lsi1), r)
 	g_lsgO[2] = _:float(r)
 	g_lsgO[3] = called
 	if (!called)
-		lsd_error(53, "Not called: no such plugin running, or no such public function in it.")
-	lsg_n54(ctx)
+		lsd_error(54, "Not called: no such plugin running, or no such public function in it.")
+	lsg_n55(ctx)
 }
 
 // Fire Custom Event (n103)
-lsg_n54(ctx[])
+lsg_n55(ctx[])
 {
 	new Float:lsi0 = 0.0
 	new Float:lsi1 = 0.0
 	lsd_begin()
 	lsd_in_number("A", lsi0)
 	lsd_in_number("B", lsi1)
-	if (lsd_enter(54, ctx))
+	if (lsd_enter(55, ctx))
 		return
 	lsg_fire_event("my_event", floatround(lsi0), floatround(lsi1))
-	lsd_exit(54, "done")
+	lsd_exit(55, "done")
+	lsg_n64(ctx)
 }
 
 // On Custom Event (n104)
-lsg_n55(ctx[])
-{
-	lsd_begin()
-	if (lsd_enter(55, ctx))
-		return
-	lsd_exit(55, "ran")
-}
-
-// Player Said (n105)
 lsg_n56(ctx[])
 {
 	lsd_begin()
@@ -3471,7 +3626,7 @@ lsg_n56(ctx[])
 	lsd_exit(56, "ran")
 }
 
-// Freeze Time Ended (n106)
+// Player Said (n105)
 lsg_n57(ctx[])
 {
 	lsd_begin()
@@ -3480,7 +3635,7 @@ lsg_n57(ctx[])
 	lsd_exit(57, "ran")
 }
 
-// Map Ending (n107)
+// Freeze Time Ended (n106)
 lsg_n58(ctx[])
 {
 	lsd_begin()
@@ -3489,7 +3644,7 @@ lsg_n58(ctx[])
 	lsd_exit(58, "ran")
 }
 
-// Weapon Fired (n108)
+// Map Ending (n107)
 lsg_n59(ctx[])
 {
 	lsd_begin()
@@ -3498,7 +3653,7 @@ lsg_n59(ctx[])
 	lsd_exit(59, "ran")
 }
 
-// Reloaded (n109)
+// Weapon Fired (n108)
 lsg_n60(ctx[])
 {
 	lsd_begin()
@@ -3507,7 +3662,7 @@ lsg_n60(ctx[])
 	lsd_exit(60, "ran")
 }
 
-// Hostage Rescued (n110)
+// Reloaded (n109)
 lsg_n61(ctx[])
 {
 	lsd_begin()
@@ -3516,13 +3671,62 @@ lsg_n61(ctx[])
 	lsd_exit(61, "ran")
 }
 
-// VIP Escaped (n111)
+// Hostage Rescued (n110)
 lsg_n62(ctx[])
 {
 	lsd_begin()
 	if (lsd_enter(62, ctx))
 		return
 	lsd_exit(62, "ran")
+}
+
+// VIP Escaped (n111)
+lsg_n63(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(63, ctx))
+		return
+	lsd_exit(63, "ran")
+}
+
+// Set Timer by Event (n112)
+lsg_n64(ctx[])
+{
+	new Float:lsi0 = 5.0
+	lsd_begin()
+	lsd_in_number("Seconds", lsi0)
+	if (lsd_enter(64, ctx))
+		return
+	remove_task(LSG_TASK + 64)
+	set_task(floatmax(lsi0, 0.1), "lsg_te64", LSG_TASK + 64, _, _, "b")
+	lsd_exit(64, "started")
+	lsg_n66(ctx)
+}
+
+public lsg_te64()
+{
+	if (lsd_hold_timer())
+		return
+	lsg_ce1()
+}
+
+// Custom Event (n113)
+lsg_n65(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(65, ctx))
+		return
+	lsd_exit(65, "called")
+}
+
+// Call Custom Event (n114)
+lsg_n66(ctx[])
+{
+	lsd_begin()
+	if (lsd_enter(66, ctx))
+		return
+	lsg_ce0(0, 0.0, "")
+	lsd_exit(66, "called")
 }
 
 lsd_call(n, const data[])
@@ -3595,5 +3799,9 @@ lsd_call(n, const data[])
 		case 60: lsg_n60(ctx)
 		case 61: lsg_n61(ctx)
 		case 62: lsg_n62(ctx)
+		case 63: lsg_n63(ctx)
+		case 64: lsg_n64(ctx)
+		case 65: lsg_n65(ctx)
+		case 66: lsg_n66(ctx)
 	}
 }

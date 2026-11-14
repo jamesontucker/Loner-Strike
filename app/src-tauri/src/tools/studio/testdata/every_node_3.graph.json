@@ -18,6 +18,17 @@
    "params": {}
   },
   {
+   "id": "tick",
+   "type": "event.custom",
+   "pos": {
+    "x": 0,
+    "y": 880
+   },
+   "params": {
+    "event": "ce2"
+   }
+  },
+  {
    "id": "ent",
    "type": "comp.find",
    "pos": {
@@ -1048,6 +1059,41 @@
     "y": 3080
    },
    "params": {}
+  },
+  {
+   "id": "n112",
+   "type": "timer.by_event",
+   "pos": {
+    "x": 1560,
+    "y": 3080
+   },
+   "params": {
+    "event": "ce2",
+    "secs": 5,
+    "loop": true
+   }
+  },
+  {
+   "id": "n113",
+   "type": "event.custom",
+   "pos": {
+    "x": 1820,
+    "y": 3080
+   },
+   "params": {
+    "event": "ce1"
+   }
+  },
+  {
+   "id": "n114",
+   "type": "event.call",
+   "pos": {
+    "x": 2080,
+    "y": 3080
+   },
+   "params": {
+    "event": "ce1"
+   }
   }
  ],
  "edges": [
@@ -2183,7 +2229,58 @@
     "node": "n103",
     "pin": "exec"
    }
+  },
+  {
+   "id": "w104",
+   "from": {
+    "node": "n103",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n112",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w105",
+   "from": {
+    "node": "n112",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n114",
+    "pin": "exec"
+   }
   }
  ],
- "comments": []
+ "comments": [],
+ "customEvents": [
+  {
+   "id": "ce1",
+   "name": "Gate Opened",
+   "map": true,
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Who",
+     "type": "player"
+    },
+    {
+     "id": "n",
+     "name": "Count",
+     "type": "number"
+    },
+    {
+     "id": "t",
+     "name": "Label",
+     "type": "text"
+    }
+   ]
+  },
+  {
+   "id": "ce2",
+   "name": "Tick",
+   "inputs": []
+  }
+ ]
 }

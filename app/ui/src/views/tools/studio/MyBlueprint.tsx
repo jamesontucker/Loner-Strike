@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useStudio } from "./store";
 import { nodeDef, typeColor } from "./registry";
-import { addEnum, addEventGraph, addFunction, addLocal, addMacro, addMarker, addStruct, addVariable, makeSnippet, removeEventGraph, renameEventGraph, type Snippet } from "./graphOps";
+import { addCustomEvent, addEnum, addEventGraph, addFunction, addLocal, addMacro, addMarker, addStruct, addVariable, makeSnippet, removeEventGraph, renameEventGraph, type Snippet } from "./graphOps";
 import { addFromLibrary, DRAG_LIB, DRAG_PART, DRAG_SNIPPET, DRAG_VAR, type CanvasApi } from "./Canvas";
 import { extractItem, itemFile, itemId, LIBRARY_SET, readItem, type LibItem } from "./library";
 import { deleteItem, saveItem } from "./libraryApi";
@@ -467,6 +467,25 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
             title="Right-click to rename or delete"
           >
             <span className="st-mb-dot ev" /> {e.name}
+          </button>
+        ))}
+      </Section>
+      <Section
+        title="Custom events"
+        count={(graph.customEvents ?? []).length}
+        onAdd={() => {
+          const r = addCustomEvent(graph);
+          edit(() => r.graph);
+          selectPart(r.id);
+        }}
+        addTitle="Add a Custom Event (call it from anywhere, a timer or the map)"
+        open={(graph.customEvents ?? []).length > 0}
+      >
+        {(graph.customEvents ?? []).length === 0 && <p className="st-muted st-mb-empty">Your own events: call them from anywhere, from a timer, or from the map.</p>}
+        {(graph.customEvents ?? []).map((c) => (
+          <button key={c.id} type="button" className={`st-mb-item${part === c.id ? " on" : ""}`} onClick={() => selectPart(c.id)} title="Its inputs and whether the map can fire it">
+            <span className="st-mb-dot ev" /> {c.name}
+            {c.map && <span className="st-muted st-mb-note">map</span>}
           </button>
         ))}
       </Section>

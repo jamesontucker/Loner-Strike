@@ -13,9 +13,9 @@
 #include <cellarray>
 
 #define LSG_MODE "every_node_3"
-#define LSG_CTX 8
+#define LSG_CTX 10
 #define LSG_TXT 2
-#define LSG_N 63
+#define LSG_N 67
 #define LSG_TASK 7310000
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
@@ -414,12 +414,14 @@ stock lsg_call(const plugin[], const func[], nargs, a, b, &r)
 	return 1
 }
 
-stock lsg_hitgroup(v)
+stock lsg_hitgroup(v, bits)
 {
 	new t[12]
 	if (!lsg_ok(v))
 		return t
-	switch (get_ent_data(v, "CBaseMonster", "m_LastHitGroup"))
+	// (only a bullet or the knife hits a place; the game keeps the last one, so a grenade or a
+	// fall after a headshot would say head again)
+	switch (bits & DMG_BULLET ? get_ent_data(v, "CBaseMonster", "m_LastHitGroup") : 0)
 	{
 		case HIT_HEAD: copy(t, charsmax(t), "head")
 		case HIT_CHEST: copy(t, charsmax(t), "chest")
@@ -431,8 +433,31 @@ stock lsg_hitgroup(v)
 	return t
 }
 
-stock lsg_wpn_of(a)
-	return lsg_held(a)
+// the weapon that did the damage: a grenade by what hit (the attacker may hold a gun by then),
+// else what the attacker holds; empty when no player did it. (Its own body: a stock that returns
+// another stock's text fails at run time with "memory access".)
+stock lsg_wpn_of(a, inflictor)
+{
+	new w[24]
+	if (inflictor > MaxClients && pev_valid(inflictor))
+	{
+		pev(inflictor, pev_classname, w, charsmax(w))
+		if (equal(w, "grenade"))
+		{
+			copy(w, charsmax(w), "hegrenade")
+			return w
+		}
+		w[0] = 0
+	}
+	if (lsg_ok(a) && is_user_alive(a))
+	{
+		new clip, ammo, wid = get_user_weapon(a, clip, ammo)
+		if (wid > 0)
+			get_weaponname(wid, w, charsmax(w))
+		replace(w, charsmax(w), "weapon_", "")
+	}
+	return w
+}
 
 stock Float:lsg_dist(a, b)
 {
@@ -2014,6 +2039,131 @@ stock lsg_sound_at(v, const snd[])
 }
 
 
+// Custom Event: Gate Opened
+stock lsg_ce0(a0, Float:a1, const a2[])
+{
+	{
+		new ctx[LSG_CTX]
+		ctx[8] = _:a0
+		ctx[9] = _:a1
+		copy(g_lsgOT[0], 127, a2)
+		lsg_n65(ctx)
+	}
+}
+
+// Custom Event: Tick
+stock lsg_ce1()
+{
+	{
+		new ctx[LSG_CTX]
+		lsg_n1(ctx)
+	}
+}
+
+// ---- custom events the map fires: ls_event entities and info_targets named lsev_<name> ----
+new const g_lsgEvNames[][] = { "gate_opened" }
+#define LSG_EV_MAX 64
+new g_lsgEvN, g_lsgEvEnt[LSG_EV_MAX], g_lsgEvK[LSG_EV_MAX], g_lsgEvA[LSG_EV_MAX][32], g_lsgEvB[LSG_EV_MAX][32]
+new g_lsgEvParse, bool:g_lsgEvPend, g_lsgEvName[32], g_lsgEvTn[40], g_lsgEvVa[32], g_lsgEvVb[32]
+
+public lsg_ev_kv(ent, kvd)
+{
+	if (ent <= 0)
+		return FMRES_IGNORED
+	new key[32], val[64]
+	get_kvd(kvd, KV_KeyName, key, charsmax(key))
+	get_kvd(kvd, KV_Value, val, charsmax(val))
+	if (equal(key, "classname"))
+	{
+		if (ent != g_lsgEvParse)
+		{
+			g_lsgEvParse = ent
+			g_lsgEvPend = equal(val, "ls_event") || equal(val, "info_target")
+			g_lsgEvName[0] = g_lsgEvTn[0] = g_lsgEvVa[0] = g_lsgEvVb[0] = 0
+		}
+		if (g_lsgEvPend && equal(val, "ls_event"))
+			set_kvd(kvd, KV_Value, "info_target")
+		return FMRES_IGNORED
+	}
+	if (!g_lsgEvPend || ent != g_lsgEvParse)
+		return FMRES_IGNORED
+	if (equal(key, "event"))
+		copy(g_lsgEvName, charsmax(g_lsgEvName), val)
+	else if (equal(key, "targetname"))
+		copy(g_lsgEvTn, charsmax(g_lsgEvTn), val)
+	else if (equal(key, "a"))
+		copy(g_lsgEvVa, charsmax(g_lsgEvVa), val)
+	else if (equal(key, "b"))
+		copy(g_lsgEvVb, charsmax(g_lsgEvVb), val)
+	return FMRES_IGNORED
+}
+
+public lsg_ev_spawn(ent)
+{
+	if (ent != g_lsgEvParse || !g_lsgEvPend)
+		return FMRES_IGNORED
+	g_lsgEvPend = false
+	g_lsgEvParse = 0
+	// the event's name: its event key, else the name after lsev_
+	new name[32]
+	if (g_lsgEvName[0])
+		copy(name, charsmax(name), g_lsgEvName)
+	else if (equal(g_lsgEvTn, "lsev_", 5))
+		copy(name, charsmax(name), g_lsgEvTn[5])
+	strtolower(name)
+	for (new k = 0; k < sizeof g_lsgEvNames; k++)
+	{
+		if (name[0] && equal(name, g_lsgEvNames[k]) && g_lsgEvN < LSG_EV_MAX && pev_valid(ent))
+		{
+			g_lsgEvEnt[g_lsgEvN] = ent
+			g_lsgEvK[g_lsgEvN] = k
+			copy(g_lsgEvA[g_lsgEvN], 31, g_lsgEvVa)
+			copy(g_lsgEvB[g_lsgEvN], 31, g_lsgEvVb)
+			g_lsgEvN++
+			break
+		}
+	}
+	return FMRES_IGNORED
+}
+
+public lsg_ev_use(ent, caller, activator)
+{
+	new k = -1, va[32], vb[32]
+	for (new i = 0; i < g_lsgEvN; i++)
+	{
+		if (g_lsgEvEnt[i] == ent)
+		{
+			k = g_lsgEvK[i]
+			copy(va, charsmax(va), g_lsgEvA[i])
+			copy(vb, charsmax(vb), g_lsgEvB[i])
+			break
+		}
+	}
+	// (one made while playing, by another plugin: by its name, lsev_<event>, without values)
+	if (k < 0 && pev_valid(ent))
+	{
+		new tn[40]
+		pev(ent, pev_targetname, tn, charsmax(tn))
+		if (equal(tn, "lsev_", 5))
+		{
+			strtolower(tn)
+			for (new j = 0; j < sizeof g_lsgEvNames; j++)
+				if (equal(tn[5], g_lsgEvNames[j]))
+					k = j
+		}
+	}
+	if (k < 0)
+		return HAM_IGNORED
+	new who = activator >= 1 && activator <= MaxClients && is_user_connected(activator) ? activator : 0
+	switch (k)
+	{
+		case 0: lsg_ce0(who, str_to_float(va), vb)
+	}
+	#pragma unused va, vb, who
+	return HAM_IGNORED
+}
+
+
 public lsg_count_round()
 	g_lsgRounds++
 
@@ -2062,11 +2212,18 @@ public plugin_precache()
 	g_lsgSprBeam = precache_model("sprites/laserbeam.spr")
 	precache_model("models/w_c4.mdl")
 	precache_sound("buttons/bell1.wav")
+	// the map's custom event entities, as they load
+	register_forward(FM_KeyValue, "lsg_ev_kv")
+	register_forward(FM_Spawn, "lsg_ev_spawn", 1)
 }
 
 public plugin_init()
 {
 	ls_register_mode(LSG_MODE, "Every Node 3", "1.0", "Game Mode Studio")
+	register_event("HLTV", "lsg_count_round", "a", "1=0", "2=0")
+	register_event("TeamScore", "lsg_team_score", "a")
+	register_event("HLTV", "lsg_freeze_on", "a", "1=0", "2=0")
+	register_logevent("lsg_freeze_off", 2, "1=Round_Start")
 	RegisterHamPlayer(Ham_Spawn, "lsg_on_player_spawned", 1)
 	register_clcmd("say", "lsg_on_said")
 	register_clcmd("say_team", "lsg_on_said")
@@ -2076,10 +2233,7 @@ public plugin_init()
 	lsg_hook_weapons("lsg_on_reloaded", Ham_Weapon_Reload)
 	register_logevent("lsg_on_hostage_rescued", 3, "2=Rescued_A_Hostage")
 	register_logevent("lsg_on_vip_escaped", 3, "2=Escaped_As_VIP")
-	register_event("HLTV", "lsg_count_round", "a", "1=0", "2=0")
-	register_event("TeamScore", "lsg_team_score", "a")
-	register_event("HLTV", "lsg_freeze_on", "a", "1=0", "2=0")
-	register_logevent("lsg_freeze_off", 2, "1=Round_Start")
+	RegisterHam(Ham_Use, "info_target", "lsg_ev_use", 1)
 	register_clcmd("say", "lsg_gag_say")
 	register_clcmd("say_team", "lsg_gag_say")
 }
@@ -2112,20 +2266,20 @@ public lsg_on_said(id)
 	ctx[0] = id // player
 	copy(g_lsgTxt[0], 63, txt) // text
 	ctx[1] = equal(cmd, "say_team") ? 1 : 0 // team
-	lsg_n56(ctx)
+	lsg_n57(ctx)
 	return PLUGIN_CONTINUE
 }
 
 public lsg_on_freeze_ended()
 {
 	new ctx[LSG_CTX]
-	lsg_n57(ctx)
+	lsg_n58(ctx)
 }
 
 public lsg_on_map_ending()
 {
 	new ctx[LSG_CTX]
-	lsg_n58(ctx)
+	lsg_n59(ctx)
 }
 
 public lsg_on_fired(wpn)
@@ -2140,7 +2294,7 @@ public lsg_on_fired(wpn)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	copy(g_lsgTxt[0], 63, wn) // weapon
-	lsg_n59(ctx)
+	lsg_n60(ctx)
 	return HAM_IGNORED
 }
 
@@ -2154,7 +2308,7 @@ public lsg_on_reloaded(wpn)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	copy(g_lsgTxt[0], 63, wn) // weapon
-	lsg_n60(ctx)
+	lsg_n61(ctx)
 	return HAM_IGNORED
 }
 
@@ -2162,14 +2316,14 @@ public lsg_on_hostage_rescued()
 {
 	new ctx[LSG_CTX]
 	ctx[0] = lsg_log_player() // player
-	lsg_n61(ctx)
+	lsg_n62(ctx)
 }
 
 public lsg_on_vip_escaped()
 {
 	new ctx[LSG_CTX]
 	ctx[0] = lsg_log_player() // player
-	lsg_n62(ctx)
+	lsg_n63(ctx)
 }
 
 public ls_studio_event(const name[], a, b)
@@ -2178,440 +2332,472 @@ public ls_studio_event(const name[], a, b)
 	ctx[0] = _:float(a) // a
 	ctx[1] = _:float(b) // b
 	if (equal(name, "my_event"))
-		lsg_n55(ctx)
+		lsg_n56(ctx)
 }
 
 // Player Spawned (ps)
 lsg_n0(ctx[])
 {
-	lsg_n1(ctx)
-}
-
-// Change Map (n12)
-lsg_n1(ctx[])
-{
-	lsg_change_map("de_dust2")
 	lsg_n2(ctx)
 }
 
-// Restart Round (n13)
+// Custom Event (tick)
+lsg_n1(ctx[])
+{
+	#pragma unused ctx
+}
+
+// Change Map (n12)
 lsg_n2(ctx[])
 {
-	server_cmd("sv_restartround 1")
+	lsg_change_map("de_dust2")
 	lsg_n3(ctx)
 }
 
-// Run Server Command (n14)
+// Restart Round (n13)
 lsg_n3(ctx[])
 {
-	g_lsgO[0] = lsg_safe_cmd("sv_gravity 800", 0) ? 1 : 0
+	server_cmd("sv_restartround 1")
 	lsg_n4(ctx)
 }
 
-// Run AMX Command (n15)
+// Run Server Command (n14)
 lsg_n4(ctx[])
 {
-	g_lsgO[1] = lsg_safe_cmd("amx_slap @T 0", 1) ? 1 : 0
+	g_lsgO[0] = lsg_safe_cmd("sv_gravity 800", 0) ? 1 : 0
 	lsg_n5(ctx)
 }
 
-// Set Gravity (n17)
+// Run AMX Command (n15)
 lsg_n5(ctx[])
 {
-	set_cvar_float("sv_gravity", 800.0)
+	g_lsgO[1] = lsg_safe_cmd("amx_slap @T 0", 1) ? 1 : 0
 	lsg_n6(ctx)
 }
 
-// Set Friction (n19)
+// Set Gravity (n17)
 lsg_n6(ctx[])
 {
-	set_cvar_float("sv_friction", 4.0)
+	set_cvar_float("sv_gravity", 800.0)
 	lsg_n7(ctx)
 }
 
-// Set Max Speed (n21)
+// Set Friction (n19)
 lsg_n7(ctx[])
 {
-	set_cvar_float("sv_maxspeed", 320.0)
+	set_cvar_float("sv_friction", 4.0)
 	lsg_n8(ctx)
 }
 
-// Set Round Time (n23)
+// Set Max Speed (n21)
 lsg_n8(ctx[])
 {
-	set_cvar_float("mp_roundtime", 2.5)
+	set_cvar_float("sv_maxspeed", 320.0)
 	lsg_n9(ctx)
 }
 
-// Set Freeze Time (n25)
+// Set Round Time (n23)
 lsg_n9(ctx[])
 {
-	set_cvar_float("mp_freezetime", 6.0)
+	set_cvar_float("mp_roundtime", 2.5)
 	lsg_n10(ctx)
 }
 
-// Set Buy Time (n27)
+// Set Freeze Time (n25)
 lsg_n10(ctx[])
 {
-	set_cvar_float("mp_buytime", 0.25)
+	set_cvar_float("mp_freezetime", 6.0)
 	lsg_n11(ctx)
 }
 
-// Set Friendly Fire (n29)
+// Set Buy Time (n27)
 lsg_n11(ctx[])
 {
-	set_cvar_num("mp_friendlyfire", 0)
+	set_cvar_float("mp_buytime", 0.25)
 	lsg_n12(ctx)
 }
 
-// Set Team Balance (n31)
+// Set Friendly Fire (n29)
 lsg_n12(ctx[])
 {
-	set_cvar_num("mp_autoteambalance", 1)
+	set_cvar_num("mp_friendlyfire", 0)
 	lsg_n13(ctx)
 }
 
-// Set Team Limit (n33)
+// Set Team Balance (n31)
 lsg_n13(ctx[])
 {
-	set_cvar_float("mp_limitteams", 2.0)
+	set_cvar_num("mp_autoteambalance", 1)
 	lsg_n14(ctx)
 }
 
-// Set Start Money (n35)
+// Set Team Limit (n33)
 lsg_n14(ctx[])
 {
-	set_cvar_float("mp_startmoney", 800.0)
+	set_cvar_float("mp_limitteams", 2.0)
 	lsg_n15(ctx)
 }
 
-// Set C4 Timer (n37)
+// Set Start Money (n35)
 lsg_n15(ctx[])
 {
-	set_cvar_float("mp_c4timer", 35.0)
+	set_cvar_float("mp_startmoney", 800.0)
 	lsg_n16(ctx)
 }
 
-// Set Fall Damage (n39)
+// Set C4 Timer (n37)
 lsg_n16(ctx[])
 {
-	set_cvar_num("mp_falldamage", 1)
+	set_cvar_float("mp_c4timer", 35.0)
 	lsg_n17(ctx)
 }
 
-// Set Footsteps (n41)
+// Set Fall Damage (n39)
 lsg_n17(ctx[])
 {
-	set_cvar_num("mp_footsteps", 1)
+	set_cvar_num("mp_falldamage", 1)
 	lsg_n18(ctx)
 }
 
-// Set All Talk (n43)
+// Set Footsteps (n41)
 lsg_n18(ctx[])
 {
-	set_cvar_num("sv_alltalk", 0)
+	set_cvar_num("mp_footsteps", 1)
 	lsg_n19(ctx)
 }
 
-// Set Time Limit (n45)
+// Set All Talk (n43)
 lsg_n19(ctx[])
 {
-	set_cvar_float("mp_timelimit", 20.0)
+	set_cvar_num("sv_alltalk", 0)
 	lsg_n20(ctx)
 }
 
-// Set Win Limit (n47)
+// Set Time Limit (n45)
 lsg_n20(ctx[])
 {
-	set_cvar_float("mp_winlimit", 0.0)
+	set_cvar_float("mp_timelimit", 20.0)
 	lsg_n21(ctx)
 }
 
-// Set Frag Limit (n49)
+// Set Win Limit (n47)
 lsg_n21(ctx[])
 {
-	set_cvar_float("mp_fraglimit", 0.0)
+	set_cvar_float("mp_winlimit", 0.0)
 	lsg_n22(ctx)
 }
 
-// Set Transform (n67)
+// Set Frag Limit (n49)
 lsg_n22(ctx[])
 {
-	lsg_set_transform(ctx[0], -1, -1, -1)
+	set_cvar_float("mp_fraglimit", 0.0)
 	lsg_n23(ctx)
 }
 
-// Set Rotation (n68)
+// Set Transform (n67)
 lsg_n23(ctx[])
 {
-	lsg_set_transform(ctx[0], -1, lsg_vec(0.0, 0.0, 64.0), -1)
+	lsg_set_transform(ctx[0], -1, -1, -1)
 	lsg_n24(ctx)
 }
 
-// Look At (n69)
+// Set Rotation (n68)
 lsg_n24(ctx[])
 {
-	lsg_look_at(ctx[0], 0, -1)
+	lsg_set_transform(ctx[0], -1, lsg_vec(0.0, 0.0, 64.0), -1)
 	lsg_n25(ctx)
 }
 
-// Slap (n70)
+// Look At (n69)
 lsg_n25(ctx[])
 {
-	lsg_slap(ctx[0], floatround(5.0))
+	lsg_look_at(ctx[0], 0, -1)
 	lsg_n26(ctx)
 }
 
-// Screen Fade (n71)
+// Slap (n70)
 lsg_n26(ctx[])
 {
-	lsg_fade(ctx[0], 2.0, 255, 255, 255, 255)
+	lsg_slap(ctx[0], floatround(5.0))
 	lsg_n27(ctx)
 }
 
-// Screen Shake (n72)
+// Screen Fade (n71)
 lsg_n27(ctx[])
 {
-	lsg_shake(ctx[0], 8.0, 2.0)
+	lsg_fade(ctx[0], 2.0, 255, 255, 255, 255)
 	lsg_n28(ctx)
 }
 
-// God Mode (n73)
+// Screen Shake (n72)
 lsg_n28(ctx[])
 {
-	lsg_godmode(ctx[0], 1)
+	lsg_shake(ctx[0], 8.0, 2.0)
 	lsg_n29(ctx)
 }
 
-// No Clip (n74)
+// God Mode (n73)
 lsg_n29(ctx[])
 {
-	lsg_noclip(ctx[0], 1)
+	lsg_godmode(ctx[0], 1)
 	lsg_n30(ctx)
 }
 
-// Set Visibility (n75)
+// No Clip (n74)
 lsg_n30(ctx[])
 {
-	lsg_render(ctx[0], 2, 80)
+	lsg_noclip(ctx[0], 1)
 	lsg_n31(ctx)
 }
 
-// Set Ammo (n76)
+// Set Visibility (n75)
 lsg_n31(ctx[])
 {
-	lsg_set_ammo(ctx[0], floatround(30.0), floatround(90.0))
+	lsg_render(ctx[0], 2, 80)
 	lsg_n32(ctx)
 }
 
-// Give Ammo (n77)
+// Set Ammo (n76)
 lsg_n32(ctx[])
 {
-	lsg_give_ammo(ctx[0], floatround(30.0))
+	lsg_set_ammo(ctx[0], floatround(30.0), floatround(90.0))
 	lsg_n33(ctx)
 }
 
-// Remove Weapon (n78)
+// Give Ammo (n77)
 lsg_n33(ctx[])
 {
-	lsg_take_weapon(ctx[0], "weapon_ak47")
+	lsg_give_ammo(ctx[0], floatround(30.0))
 	lsg_n34(ctx)
 }
 
-// Switch To Weapon (n79)
+// Remove Weapon (n78)
 lsg_n34(ctx[])
 {
-	lsg_switch_weapon(ctx[0], "weapon_knife")
+	lsg_take_weapon(ctx[0], "weapon_ak47")
 	lsg_n35(ctx)
 }
 
-// Set Kills (n80)
+// Switch To Weapon (n79)
 lsg_n35(ctx[])
 {
-	lsg_set_frags(ctx[0], floatround(0.0))
+	lsg_switch_weapon(ctx[0], "weapon_knife")
 	lsg_n36(ctx)
 }
 
-// Set Deaths (n81)
+// Set Kills (n80)
 lsg_n36(ctx[])
 {
-	lsg_set_deaths(ctx[0], floatround(0.0))
+	lsg_set_frags(ctx[0], floatround(0.0))
 	lsg_n37(ctx)
 }
 
-// Move To Spectators (n82)
+// Set Deaths (n81)
 lsg_n37(ctx[])
 {
-	lsg_to_spec(ctx[0])
+	lsg_set_deaths(ctx[0], floatround(0.0))
 	lsg_n38(ctx)
 }
 
-// Kick (n83)
+// Move To Spectators (n82)
 lsg_n38(ctx[])
 {
-	lsg_kick(ctx[0], "Kicked by the mode")
+	lsg_to_spec(ctx[0])
 	lsg_n39(ctx)
 }
 
-// Mute Voice (n84)
+// Kick (n83)
 lsg_n39(ctx[])
 {
-	lsg_mute(ctx[0], 60.0)
+	lsg_kick(ctx[0], "Kicked by the mode")
 	lsg_n40(ctx)
 }
 
-// Gag Chat (n85)
+// Mute Voice (n84)
 lsg_n40(ctx[])
 {
-	lsg_gag(ctx[0], 60.0)
+	lsg_mute(ctx[0], 60.0)
 	lsg_n41(ctx)
 }
 
-// Chat To Team (n86)
+// Gag Chat (n85)
 lsg_n41(ctx[])
 {
-	lsg_team_chat(2, "%s", "Hold the line!")
+	lsg_gag(ctx[0], 60.0)
 	lsg_n42(ctx)
 }
 
-// Notify Admins (n87)
+// Chat To Team (n86)
 lsg_n42(ctx[])
 {
-	lsg_admins_chat("%s", "Please check player:")
+	lsg_team_chat(2, "%s", "Hold the line!")
 	lsg_n43(ctx)
 }
 
-// Spawn Prop (n91)
+// Notify Admins (n87)
 lsg_n43(ctx[])
 {
-	g_lsgOut[43] = lsg_prop(lsg_find("spot1"), "models/w_c4.mdl", 1)
+	lsg_admins_chat("%s", "Please check player:")
 	lsg_n44(ctx)
 }
 
-// Remove Entity (n92)
+// Spawn Prop (n91)
 lsg_n44(ctx[])
 {
-	lsg_remove(lsg_find("spot1"))
+	g_lsgOut[44] = lsg_prop(lsg_find("spot1"), "models/w_c4.mdl", 1)
 	lsg_n45(ctx)
 }
 
-// Set Entity Position (n93)
+// Remove Entity (n92)
 lsg_n45(ctx[])
 {
-	lsg_ent_pos(lsg_find("spot1"), lsg_vec(0.0, 0.0, 64.0))
+	lsg_remove(lsg_find("spot1"))
 	lsg_n46(ctx)
 }
 
-// Set Entity Rotation (n94)
+// Set Entity Position (n93)
 lsg_n46(ctx[])
 {
-	lsg_ent_angles(lsg_find("spot1"), lsg_vec(0.0, 0.0, 64.0))
+	lsg_ent_pos(lsg_find("spot1"), lsg_vec(0.0, 0.0, 64.0))
 	lsg_n47(ctx)
 }
 
-// Set Entity Visibility (n95)
+// Set Entity Rotation (n94)
 lsg_n47(ctx[])
 {
-	lsg_ent_visible(lsg_find("spot1"), 1)
+	lsg_ent_angles(lsg_find("spot1"), lsg_vec(0.0, 0.0, 64.0))
 	lsg_n48(ctx)
 }
 
-// Explosion (n96)
+// Set Entity Visibility (n95)
 lsg_n48(ctx[])
 {
-	lsg_explode(lsg_vec(0.0, 0.0, 64.0), 0.0, 250.0)
+	lsg_ent_visible(lsg_find("spot1"), 1)
 	lsg_n49(ctx)
 }
 
-// Beam (n97)
+// Explosion (n96)
 lsg_n49(ctx[])
 {
-	lsg_beam(lsg_vec(0.0, 0.0, 64.0), lsg_vec(0.0, 0.0, 64.0), 230, 30, 30, 1.0)
+	lsg_explode(lsg_vec(0.0, 0.0, 64.0), 0.0, 250.0)
 	lsg_n50(ctx)
 }
 
-// Play Sound At (n98)
+// Beam (n97)
 lsg_n50(ctx[])
 {
-	lsg_sound_at(lsg_vec(0.0, 0.0, 64.0), "ambience/thunder_clap.wav")
+	lsg_beam(lsg_vec(0.0, 0.0, 64.0), lsg_vec(0.0, 0.0, 64.0), 230, 30, 30, 1.0)
 	lsg_n51(ctx)
 }
 
-// Play Sound To Player (n99)
+// Play Sound At (n98)
 lsg_n51(ctx[])
 {
-	lsg_sound_to(ctx[0], "buttons/bell1.wav")
+	lsg_sound_at(lsg_vec(0.0, 0.0, 64.0), "ambience/thunder_clap.wav")
 	lsg_n52(ctx)
 }
 
-// Set Light Style (n100)
+// Play Sound To Player (n99)
 lsg_n52(ctx[])
 {
-	set_lights("#OFF")
+	lsg_sound_to(ctx[0], "buttons/bell1.wav")
 	lsg_n53(ctx)
 }
 
-// Call Plugin Function (n101)
+// Set Light Style (n100)
 lsg_n53(ctx[])
+{
+	set_lights("#OFF")
+	lsg_n54(ctx)
+}
+
+// Call Plugin Function (n101)
+lsg_n54(ctx[])
 {
 	new r, called = lsg_call("gm_components.amxx", "plugin_cfg", 0, floatround(0.0), floatround(0.0), r)
 	g_lsgO[2] = _:float(r)
 	g_lsgO[3] = called
-	lsg_n54(ctx)
+	lsg_n55(ctx)
 }
 
 // Fire Custom Event (n103)
-lsg_n54(ctx[])
+lsg_n55(ctx[])
 {
 	lsg_fire_event("my_event", floatround(0.0), floatround(0.0))
-	#pragma unused ctx
+	lsg_n64(ctx)
 }
 
 // On Custom Event (n104)
-lsg_n55(ctx[])
-{
-	#pragma unused ctx
-}
-
-// Player Said (n105)
 lsg_n56(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Freeze Time Ended (n106)
+// Player Said (n105)
 lsg_n57(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Map Ending (n107)
+// Freeze Time Ended (n106)
 lsg_n58(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Weapon Fired (n108)
+// Map Ending (n107)
 lsg_n59(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Reloaded (n109)
+// Weapon Fired (n108)
 lsg_n60(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Hostage Rescued (n110)
+// Reloaded (n109)
 lsg_n61(ctx[])
 {
 	#pragma unused ctx
 }
 
-// VIP Escaped (n111)
+// Hostage Rescued (n110)
 lsg_n62(ctx[])
 {
+	#pragma unused ctx
+}
+
+// VIP Escaped (n111)
+lsg_n63(ctx[])
+{
+	#pragma unused ctx
+}
+
+// Set Timer by Event (n112)
+lsg_n64(ctx[])
+{
+	remove_task(LSG_TASK + 64)
+	set_task(floatmax(5.0, 0.1), "lsg_te64", LSG_TASK + 64, _, _, "b")
+	lsg_n66(ctx)
+}
+
+public lsg_te64()
+{
+	lsg_ce1()
+}
+
+// Custom Event (n113)
+lsg_n65(ctx[])
+{
+	#pragma unused ctx
+}
+
+// Call Custom Event (n114)
+lsg_n66(ctx[])
+{
+	lsg_ce0(0, 0.0, "")
 	#pragma unused ctx
 }
 

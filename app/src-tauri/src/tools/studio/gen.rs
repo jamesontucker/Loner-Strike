@@ -268,7 +268,7 @@ const EVENTS: &[EventKind] = &[
         // damage was blocked, less when it was scaled down or armour took some
         prelude: "new Float:g_lsgHurtHp[33]\n\npublic lsg_hurt_before(victim, inflictor, attacker, Float:damage, bits)\n{\n\t#pragma unused inflictor\n\t#pragma unused attacker\n\t#pragma unused damage\n\t#pragma unused bits\n\tif (victim >= 1 && victim <= MaxClients)\n\t\tpev(victim, pev_health, g_lsgHurtHp[victim])\n\treturn HAM_IGNORED\n}",
         guard: "\t#pragma unused inflictor\n\t#pragma unused bits\n\tif (victim < 1 || victim > MaxClients)\n\t\treturn HAM_IGNORED\n\tnew Float:hp\n\tpev(victim, pev_health, hp)\n\tdamage = g_lsgHurtHp[victim] - hp\n\tif (damage <= 0.0)\n\t\treturn HAM_IGNORED",
-        values: &[("victim", "victim"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:damage"), ("headshot", "get_ent_data(victim, \"CBaseMonster\", \"m_LastHitGroup\") == HIT_HEAD ? 1 : 0"), ("left", "_:hp"), ("hitgroup", "@fn:lsg_hitgroup(victim)"), ("weapon", "@fn:lsg_wpn_of(attacker)")],
+        values: &[("victim", "victim"), ("attacker", "attacker >= 1 && attacker <= MaxClients ? attacker : 0"), ("damage", "_:damage"), ("headshot", "bits & DMG_BULLET && get_ent_data(victim, \"CBaseMonster\", \"m_LastHitGroup\") == HIT_HEAD ? 1 : 0"), ("left", "_:hp"), ("hitgroup", "@fn:lsg_hitgroup(victim, bits)"), ("weapon", "@fn:lsg_wpn_of(attacker, inflictor)")],
         tail: "\treturn HAM_IGNORED",
         named: None,
     },
@@ -398,7 +398,7 @@ fn kind_of(ty: &str) -> char {
 }
 
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
-const CTX_KINDS: [&str; 10] = ["marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array"];
+const CTX_KINDS: [&str; 11] = ["marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
 const STORE_KINDS: [&str; 9] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call"];
 /// Nodes with more than one flow input: one Pawn function each.
@@ -1220,6 +1220,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if uses_markers {
         o.line(markers_block(g));
     }
+    // custom events (and the map's ones)
+    custom_events_block(&gen, &mut o);
+    let map_events = g.custom_events.iter().any(|c| c.map);
     let uses_spawn = has("creature.spawn");
     if uses_spawn {
         o.line(CREATURES_X);
@@ -1255,7 +1258,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         .filter_map(|k| k.split_whitespace().find_map(|w| w.strip_prefix("keeper=")))
         .filter_map(|k| match k { "barney" => Some("models/barney.mdl"), "gman" => Some("models/gman.mdl"), _ => None })
         .collect::<BTreeSet<_>>().into_iter().collect();
-    if !need.creatures.is_empty() || uses_markers || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() {
+    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() {
         let mut pre = String::from("public plugin_precache()\n{");
         if uses_exp {
             pre.push_str("\n\tg_lsgSprExp = precache_model(\"sprites/zerogxplode.spr\")");
@@ -1271,6 +1274,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         }
         for m in &keepers {
             pre.push_str(&format!("\n\t// the shopkeeper of a shop the mode makes\n\tprecache_model({})", pawn_str(m)));
+        }
+        if map_events {
+            pre.push_str("\n\t// the map's custom event entities, as they load\n\tregister_forward(FM_KeyValue, \"lsg_ev_kv\")\n\tregister_forward(FM_Spawn, \"lsg_ev_spawn\", 1)");
         }
         if uses_markers {
             pre.push_str("\n\t// the map's ls_marker entities, as they load\n\tregister_forward(FM_KeyValue, \"lsg_mk_kv\")\n\tregister_forward(FM_Spawn, \"lsg_mk_spawn\", 1)");
@@ -1288,19 +1294,11 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if debug {
         o.line("\tlsd_init()");
     }
-    for k in &kinds {
-        for r in k.register {
-            o.line(format!("\t{r}"));
-        }
-    }
+    // (the mode's own bookkeeping first: AMX Mod X calls a plugin's hooks in the order they were
+    // made, so New Round's nodes start their timers after the old round's are stopped, and Round
+    // Started sees Is Freeze Time off and this round's number)
     if new_round {
         o.line("\tregister_event(\"HLTV\", \"lsg_new_round\", \"a\", \"1=0\", \"2=0\")");
-    }
-    if uses_pre {
-        o.line("\tRegisterHamPlayer(Ham_TakeDamage, \"lsg_pre_damage\", 0)");
-    }
-    if uses_spawn {
-        o.line("\tif (get_cvar_pointer(\"ls_creature_ver\"))\n\t\tRegisterHam(Ham_Killed, \"ls_creature\", \"lsg_pay_killer\", 1)");
     }
     if uses_rounds {
         o.line("\tregister_event(\"HLTV\", \"lsg_count_round\", \"a\", \"1=0\", \"2=0\")");
@@ -1310,6 +1308,20 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     if uses_freeze {
         o.line("\tregister_event(\"HLTV\", \"lsg_freeze_on\", \"a\", \"1=0\", \"2=0\")\n\tregister_logevent(\"lsg_freeze_off\", 2, \"1=Round_Start\")");
+    }
+    for k in &kinds {
+        for r in k.register {
+            o.line(format!("\t{r}"));
+        }
+    }
+    if map_events {
+        o.line("\tRegisterHam(Ham_Use, \"info_target\", \"lsg_ev_use\", 1)");
+    }
+    if uses_pre {
+        o.line("\tRegisterHamPlayer(Ham_TakeDamage, \"lsg_pre_damage\", 0)");
+    }
+    if uses_spawn {
+        o.line("\tif (get_cvar_pointer(\"ls_creature_ver\"))\n\t\tRegisterHam(Ham_Killed, \"ls_creature\", \"lsg_pay_killer\", 1)");
     }
     if uses_gag {
         o.line("\tregister_clcmd(\"say\", \"lsg_gag_say\")\n\tregister_clcmd(\"say_team\", \"lsg_gag_say\")");
@@ -1887,7 +1899,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 b.line("\t}");
             }
         }
-        "func.define" | "fn.entry" | "event.chat_command" | "event.player_about_hurt" | "event.player_revived" | "event.down_timeout" | "event.time_up" => {
+        "func.define" | "fn.entry" | "event.custom" | "event.chat_command" | "event.player_about_hurt" | "event.player_revived" | "event.down_timeout" | "event.time_up" => {
             let e = exit("called");
             if !e.is_empty() {
                 b.line(e);
@@ -2451,6 +2463,30 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 b.line(e);
             }
         }
+        "event.call" => {
+            if let Some((ci, c)) = custom_event_of(g_of(gen), n) {
+                let args: Vec<String> = c.inputs.iter().map(|m| gen.need(id, &m.id, &m.ty)).collect();
+                b.line(format!("\tlsg_ce{ci}({})", args.join(", ")));
+            }
+            let e = exit("called");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
+        "timer.by_event" => {
+            if let Some((ci, _)) = custom_event_of(g_of(gen), n) {
+                let looping = gen.boolean(n, def, "loop");
+                b.line(format!("\tremove_task(LSG_TASK + {i})\n\tset_task({}, \"lsg_te{i}\", LSG_TASK + {i}, _, _, {})", lsg_secs(&gen.input(id, "secs")), if looping { "\"b\"" } else { "\"\"" }));
+                let hold = if debug { "\tif (lsd_hold_timer())\n\t\treturn\n".to_string() } else { String::new() };
+                after.push(format!("public lsg_te{i}()\n{{\n{hold}\tlsg_ce{ci}()\n}}"));
+            }
+            let e = exit("started");
+            if !e.is_empty() {
+                b.line(e);
+            }
+            then_line(&mut b, "then");
+        }
         "fn.call" => {
             if let Some(f) = v.func_of(id) {
                 let fi = gen.fn_index(&f.id);
@@ -2949,6 +2985,188 @@ fn v3_stocks(gen: &Gen, o: &mut Out) {
         }
         o.blank();
     }
+}
+
+/// The graph a generator works on.
+fn g_of<'a>(gen: &Gen<'a>) -> &'a Graph {
+    gen.v.g
+}
+
+/// The Custom Event a node names, with its place in the list.
+fn custom_event_of<'a>(g: &'a Graph, n: &Node) -> Option<(usize, &'a super::graph::CustomEvent)> {
+    let id = n.params.get("event").and_then(Value::as_str)?;
+    g.custom_events.iter().enumerate().find(|(_, c)| c.id == id)
+}
+
+/// Each Custom Event: `lsg_ce<i>(inputs...)` runs every live Custom Event node for it, in the
+/// graph's order (the event graphs' order). Ones the map can fire: the map's ls_event entities
+/// (made info_target as they load) and info_targets named lsev_<map name>, when used.
+fn custom_events_block(gen: &Gen, o: &mut Out) {
+    let g = gen.v.g;
+    let typed = |ty: &str, name: &str| match kind_of(ty) {
+        's' => format!("const {name}[]"),
+        _ if ty == "number" => format!("Float:{name}"),
+        _ => name.to_string(),
+    };
+    for (ci, c) in g.custom_events.iter().enumerate() {
+        let params: Vec<String> = c.inputs.iter().enumerate().map(|(j, m)| typed(&m.ty, &format!("a{j}"))).collect();
+        o.line(format!("// Custom Event: {}\nstock lsg_ce{ci}({})\n{{", comment_text(&c.name), params.join(", ")));
+        let nodes: Vec<&str> = gen.live.iter().copied().filter(|id| gen.v.defs[id].kind == "event.custom" && gen.v.nodes[id].params.get("event").and_then(Value::as_str) == Some(c.id.as_str())).collect();
+        let mut used = vec![false; c.inputs.len()];
+        for id in &nodes {
+            o.line("\t{\n\t\tnew ctx[LSG_CTX]");
+            for (j, m) in c.inputs.iter().enumerate() {
+                if let Some(t) = gen.tout_index(id, &m.id) {
+                    o.line(format!("\t\tcopy(g_lsgOT[{t}], 127, a{j})"));
+                    used[j] = true;
+                } else if let Some(sl) = gen.slot(id, &m.id) {
+                    o.line(format!("\t\tctx[{sl}] = _:a{j}"));
+                    used[j] = true;
+                }
+            }
+            o.line(format!("\t\t{}(ctx)\n\t}}", gen.fname(id)));
+        }
+        for (j, u) in used.iter().enumerate() {
+            if !u {
+                o.line(format!("\t#pragma unused a{j}"));
+            }
+        }
+        o.line("}");
+        o.blank();
+    }
+    let mapped: Vec<(usize, &super::graph::CustomEvent)> = g.custom_events.iter().enumerate().filter(|(_, c)| c.map).collect();
+    if mapped.is_empty() {
+        return;
+    }
+    let names = mapped.iter().map(|(_, c)| pawn_str(&c.map_name())).collect::<Vec<_>>().join(", ");
+    let mut calls = String::new();
+    for (k, (ci, c)) in mapped.iter().enumerate() {
+        // the map's values: Player gets who set it off; numbers and texts take keys a, b in turn
+        let mut ab = 0;
+        let args: Vec<String> = c
+            .inputs
+            .iter()
+            .map(|m| match m.ty.as_str() {
+                "player" => "who".to_string(),
+                "number" | "text" | "bool" if ab < 2 => {
+                    let key = if ab == 0 { "va" } else { "vb" };
+                    ab += 1;
+                    match m.ty.as_str() {
+                        "number" => format!("str_to_float({key})"),
+                        "bool" => format!("(str_to_num({key}) != 0)"),
+                        _ => key.to_string(),
+                    }
+                }
+                t => Gen::zero(t),
+            })
+            .collect();
+        calls.push_str(&format!("\t\tcase {k}: lsg_ce{ci}({})\n", args.join(", ")));
+    }
+    o.line(format!(
+        r#"// ---- custom events the map fires: ls_event entities and info_targets named lsev_<name> ----
+new const g_lsgEvNames[][] = {{ {names} }}
+#define LSG_EV_MAX 64
+new g_lsgEvN, g_lsgEvEnt[LSG_EV_MAX], g_lsgEvK[LSG_EV_MAX], g_lsgEvA[LSG_EV_MAX][32], g_lsgEvB[LSG_EV_MAX][32]
+new g_lsgEvParse, bool:g_lsgEvPend, g_lsgEvName[32], g_lsgEvTn[40], g_lsgEvVa[32], g_lsgEvVb[32]
+
+public lsg_ev_kv(ent, kvd)
+{{
+	if (ent <= 0)
+		return FMRES_IGNORED
+	new key[32], val[64]
+	get_kvd(kvd, KV_KeyName, key, charsmax(key))
+	get_kvd(kvd, KV_Value, val, charsmax(val))
+	if (equal(key, "classname"))
+	{{
+		if (ent != g_lsgEvParse)
+		{{
+			g_lsgEvParse = ent
+			g_lsgEvPend = equal(val, "ls_event") || equal(val, "info_target")
+			g_lsgEvName[0] = g_lsgEvTn[0] = g_lsgEvVa[0] = g_lsgEvVb[0] = 0
+		}}
+		if (g_lsgEvPend && equal(val, "ls_event"))
+			set_kvd(kvd, KV_Value, "info_target")
+		return FMRES_IGNORED
+	}}
+	if (!g_lsgEvPend || ent != g_lsgEvParse)
+		return FMRES_IGNORED
+	if (equal(key, "event"))
+		copy(g_lsgEvName, charsmax(g_lsgEvName), val)
+	else if (equal(key, "targetname"))
+		copy(g_lsgEvTn, charsmax(g_lsgEvTn), val)
+	else if (equal(key, "a"))
+		copy(g_lsgEvVa, charsmax(g_lsgEvVa), val)
+	else if (equal(key, "b"))
+		copy(g_lsgEvVb, charsmax(g_lsgEvVb), val)
+	return FMRES_IGNORED
+}}
+
+public lsg_ev_spawn(ent)
+{{
+	if (ent != g_lsgEvParse || !g_lsgEvPend)
+		return FMRES_IGNORED
+	g_lsgEvPend = false
+	g_lsgEvParse = 0
+	// the event's name: its event key, else the name after lsev_
+	new name[32]
+	if (g_lsgEvName[0])
+		copy(name, charsmax(name), g_lsgEvName)
+	else if (equal(g_lsgEvTn, "lsev_", 5))
+		copy(name, charsmax(name), g_lsgEvTn[5])
+	strtolower(name)
+	for (new k = 0; k < sizeof g_lsgEvNames; k++)
+	{{
+		if (name[0] && equal(name, g_lsgEvNames[k]) && g_lsgEvN < LSG_EV_MAX && pev_valid(ent))
+		{{
+			g_lsgEvEnt[g_lsgEvN] = ent
+			g_lsgEvK[g_lsgEvN] = k
+			copy(g_lsgEvA[g_lsgEvN], 31, g_lsgEvVa)
+			copy(g_lsgEvB[g_lsgEvN], 31, g_lsgEvVb)
+			g_lsgEvN++
+			break
+		}}
+	}}
+	return FMRES_IGNORED
+}}
+
+public lsg_ev_use(ent, caller, activator)
+{{
+	new k = -1, va[32], vb[32]
+	for (new i = 0; i < g_lsgEvN; i++)
+	{{
+		if (g_lsgEvEnt[i] == ent)
+		{{
+			k = g_lsgEvK[i]
+			copy(va, charsmax(va), g_lsgEvA[i])
+			copy(vb, charsmax(vb), g_lsgEvB[i])
+			break
+		}}
+	}}
+	// (one made while playing, by another plugin: by its name, lsev_<event>, without values)
+	if (k < 0 && pev_valid(ent))
+	{{
+		new tn[40]
+		pev(ent, pev_targetname, tn, charsmax(tn))
+		if (equal(tn, "lsev_", 5))
+		{{
+			strtolower(tn)
+			for (new j = 0; j < sizeof g_lsgEvNames; j++)
+				if (equal(tn[5], g_lsgEvNames[j]))
+					k = j
+		}}
+	}}
+	if (k < 0)
+		return HAM_IGNORED
+	new who = activator >= 1 && activator <= MaxClients && is_user_connected(activator) ? activator : 0
+	switch (k)
+	{{
+{calls}	}}
+	#pragma unused va, vb, who
+	return HAM_IGNORED
+}}
+"#
+    ));
+    o.blank();
 }
 
 /// Is a pure node of this kind used by something that runs?
@@ -3699,12 +3917,14 @@ stock lsg_call(const plugin[], const func[], nargs, a, b, &r)
 	return 1
 }
 
-stock lsg_hitgroup(v)
+stock lsg_hitgroup(v, bits)
 {
 	new t[12]
 	if (!lsg_ok(v))
 		return t
-	switch (get_ent_data(v, "CBaseMonster", "m_LastHitGroup"))
+	// (only a bullet or the knife hits a place; the game keeps the last one, so a grenade or a
+	// fall after a headshot would say head again)
+	switch (bits & DMG_BULLET ? get_ent_data(v, "CBaseMonster", "m_LastHitGroup") : 0)
 	{
 		case HIT_HEAD: copy(t, charsmax(t), "head")
 		case HIT_CHEST: copy(t, charsmax(t), "chest")
@@ -3716,8 +3936,31 @@ stock lsg_hitgroup(v)
 	return t
 }
 
-stock lsg_wpn_of(a)
-	return lsg_held(a)
+// the weapon that did the damage: a grenade by what hit (the attacker may hold a gun by then),
+// else what the attacker holds; empty when no player did it. (Its own body: a stock that returns
+// another stock's text fails at run time with "memory access".)
+stock lsg_wpn_of(a, inflictor)
+{
+	new w[24]
+	if (inflictor > MaxClients && pev_valid(inflictor))
+	{
+		pev(inflictor, pev_classname, w, charsmax(w))
+		if (equal(w, "grenade"))
+		{
+			copy(w, charsmax(w), "hegrenade")
+			return w
+		}
+		w[0] = 0
+	}
+	if (lsg_ok(a) && is_user_alive(a))
+	{
+		new clip, ammo, wid = get_user_weapon(a, clip, ammo)
+		if (wid > 0)
+			get_weaponname(wid, w, charsmax(w))
+		replace(w, charsmax(w), "weapon_", "")
+	}
+	return w
+}
 
 stock Float:lsg_dist(a, b)
 {
@@ -4667,7 +4910,7 @@ mod tests {
             let texts = d.outputs.iter().filter(|o| o.ty == "text").count();
             assert!(cells <= CTX && texts <= TXT, "{}", k.kind);
         }
-        let special = ["func.define", "fn.entry", "macro.entry", "event.chat_command", "event.player_about_hurt", "event.player_revived", "event.down_timeout", "event.time_up"];
+        let special = ["func.define", "fn.entry", "macro.entry", "event.custom", "event.chat_command", "event.player_about_hurt", "event.player_revived", "event.down_timeout", "event.time_up"];
         for d in registry().nodes.iter().filter(|d| d.event && !special.contains(&d.kind.as_str())) {
             assert!(event_kind(&d.kind).is_some(), "{} has no handler", d.kind);
         }

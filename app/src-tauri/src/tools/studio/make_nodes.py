@@ -450,6 +450,12 @@ node("flow.if_valid", "Is Valid?", "Conditions", "Goes to Is Valid when the enti
 node("timer.retrigger", "Retriggerable Delay", "Timers", "Waits, then carries on; flow coming in again while waiting starts the wait again.", inputs=[X, P("secs","number","Seconds",param="secs")], outputs=[E(), P("handle","timer","Timer")], params=[prm("secs","Seconds","number",3,min=0.1,max=3600)])
 node("timer.by_function", "Set Timer by Function", "Timers", "Runs a Function (with its own graph) after some seconds, again and again if Looping. Its inputs get nothing (0, empty).",
      inputs=[X, P("secs","number","Seconds",param="secs")], outputs=[E(), P("handle","timer","Timer")], params=[prm("func","Function","fn",""), prm("secs","Seconds","number",5,min=0.1,max=3600), prm("loop","Looping","bool",True)])
+node("timer.by_event", "Set Timer by Event", "Timers", "Runs a Custom Event (with no inputs) after some seconds, again and again if Looping.",
+     inputs=[X, P("secs","number","Seconds",param="secs")], outputs=[E(), P("handle","timer","Timer")], params=[prm("event","Custom event","cevent",""), prm("secs","Seconds","number",5,min=0.1,max=3600), prm("loop","Looping","bool",True)], keywords="custom event delay schedule")
+node("event.custom", "Custom Event", "Events", "Runs when something calls this Custom Event (Call Custom Event, Set Timer by Event, or the map: an ls_event entity, or an info_target named lsev_<its map name>, when triggered). Its inputs are its own (My mode, Custom events).",
+     outputs=[E()], params=[prm("event","Custom event","cevent","")], event=True, keywords="dispatcher signal trigger map")
+node("event.call", "Call Custom Event", "Flow", "Runs a Custom Event now, with these values (every Custom Event node for it, in the graphs' order).",
+     inputs=[X], outputs=[E()], params=[prm("event","Custom event","cevent","")], keywords="fire broadcast signal")
 node("timer.clear", "Clear Timer", "Timers", "Stops a timer (a Delay, Repeat, Countdown or Set Timer's handle).", inputs=[X, P("handle","timer","Timer",required=True)], outputs=[E()])
 node("timer.is_active", "Is Timer Active", "Timers", "Is the timer waiting to run?", inputs=[P("handle","timer","Timer",required=True)], outputs=[P("out","bool","Active")], pure=True)
 node("debug.print", "Print String", "Messages", "Prints text (and a value wired in) to the server console and the Studio's output, and to chat if you like.", inputs=[X, P("value","any","Value",optional=True)], outputs=[E()],
@@ -569,3 +575,9 @@ data = {
 }
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)
 print(len(nodes), "nodes")
+# the node help (X2's node_help.py), remade with the registry
+try:
+    import node_help
+    node_help.write(data, sys.argv[1].replace("nodes.json", "nodehelp.json"))
+except ImportError:
+    pass

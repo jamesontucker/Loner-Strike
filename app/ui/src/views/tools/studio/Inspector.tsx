@@ -3,7 +3,7 @@
 
 import { useStudio } from "./store";
 import { ENT_NAME_CHARS, KEYS_CHARS, NAME_CHARS, PATH_CHARS, nodeDef, type ParamDef } from "./registry";
-import { freshMember, removeGraphPart, removeMarker, updateMarker, removeType, removeVariable, setParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
+import { freshMember, mapName, removeCustomEvent, removeGraphPart, updateCustomEvent, removeMarker, updateMarker, removeType, removeVariable, setParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
 import { LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { allVariables, itemTypeOk, nodeTitle, typeLabel } from "./pins";
 import { TypePicker } from "./TypePicker";
@@ -82,6 +82,7 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
     </select>
   );
   if (p.kind === "fn") return pick((graph.functions ?? []).filter((f) => !!f.pure === (node.type === "fn.call_pure") && f.id !== node.graph).map((f) => [f.id, f.name]), "Add a Function under My mode first");
+  if (p.kind === "cevent") return pick((graph.customEvents ?? []).filter((c) => node.type !== "timer.by_event" || c.inputs.length === 0).map((c) => [c.id, c.name]), node.type === "timer.by_event" ? "Add a Custom Event with no inputs under My mode first" : "Add a Custom Event under My mode first");
   if (p.kind === "macro") return pick((graph.macros ?? []).filter((m) => m.id !== node.graph).map((m) => [m.id, m.name]), "Add a Macro under My mode first");
   if (p.kind === "struct") return pick((graph.structs ?? []).map((x) => [x.id, x.name]), "Add a struct under My mode first");
   if (p.kind === "enum") return pick((graph.enums ?? []).map((x) => [x.id, x.name]), "Add an enum under My mode first");
@@ -623,6 +624,7 @@ export function Inspector() {
     if (!id) return <MapAdvice />;
     if ((graph.markers ?? []).some((m) => m.id === id)) return <MarkerDetails id={id} />;
   }
+  if (part && !selected.length && (graph.customEvents ?? []).some((c) => c.id === part)) return <CustomEventDetails id={part} />;
   if (part && !selected.length) {
     const d = <PartDetails id={part} />;
     if ([...(graph.functions ?? []), ...(graph.macros ?? []), ...(graph.structs ?? []), ...(graph.enums ?? [])].some((x) => x.id === part)) return d;
@@ -762,4 +764,44 @@ export function showValue(v: unknown): string {
     return JSON.stringify(v);
   }
   return String(v);
+}
+
+/** A Custom Event: its name, inputs, whether the map can fire it, and where it's used. */
+function CustomEventDetails({ id }: { id: string }) {
+  const graph = useStudio((s) => s.graph)!;
+  const edit = useStudio((s) => s.edit);
+  const { selectPart } = useStudio.getState();
+  const ask = useConfirm();
+  const c = graph.customEvents?.find((x) => x.id === id);
+  if (!c) return null;
+  const uses = graph.nodes.filter((n) => ["event.custom", "event.call", "timer.by_event"].includes(n.type) && n.params.event === id);
+  const drop = async () => {
+    if (uses.length && !(await ask(`Remove “${c.name}”? ${uses.length} node${uses.length === 1 ? "" : "s"} use it and show a problem until changed.`, { ok: "Remove", danger: true }))) return;
+    edit((g) => removeCustomEvent(g, id));
+    selectPart(null);
+  };
+  return (
+    <aside className="st-side" aria-label="Details">
+      <p className="st-side-kicker">Details · Custom Event</p>
+      <label className="st-side-label">
+        Name
+        <TextField value={c.name} max={26} allowed={LABEL_CHARS} onChange={(name) => edit((g) => updateCustomEvent(g, id, { name }))} />
+      </label>
+      <p className="st-side-help">Add a Custom Event node for it on any event graph (what runs), and Call {c.name} or Set Timer by {c.name} where it should run. Find them in the node search.</p>
+      <h4 className="st-side-sub">Inputs</h4>
+      <Members graph={graph} list={c.inputs} prefix="i" max={8} noun="Input" onChange={(inputs) => edit((g) => updateCustomEvent(g, id, { inputs }))} />
+      <label className="st-check-auto">
+        <input type="checkbox" checked={!!c.map} onChange={(e) => edit((g) => updateCustomEvent(g, id, { map: e.target.checked }))} /> The map can fire it
+      </label>
+      {c.map && (
+        <p className="st-side-help">
+          In the map: an <code>ls_event</code> entity with event <code>{mapName(c.name)}</code>, or an <code>info_target</code> named <code>lsev_{mapName(c.name)}</code>; trigger it (a trigger_multiple or button targeting it). Player is who set it off; numbers and texts come from the entity's keys a and b.
+        </p>
+      )}
+      <p className="st-muted">{uses.length ? `Used by ${uses.length} node${uses.length === 1 ? "" : "s"}.` : "Not used yet."}</p>
+      <button type="button" className="btn danger small" onClick={() => void drop()}>
+        Remove this Custom Event
+      </button>
+    </aside>
+  );
 }

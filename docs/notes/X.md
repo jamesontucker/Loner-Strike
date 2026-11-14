@@ -351,7 +351,24 @@ addresses `studio:<mode>/<graph id>` open them.
 **Split (2026-11-14):** X2 owns the sim tests of the new nodes, the five example modes, node help and
 the Studio tour. X keeps event graphs (done), custom events with Set Timer by Event and `ls_event`,
 and Timelines; X writes here when each lands so the example modes can use them.
-**Queued next, in order:** (b) custom events + Set Timer by Event + `ls_event`; (c) Timelines;
+**Custom events: done (2026-11-14).** For X2 (schema and nodes): `customEvents: [{id, name (26), inputs:
+[member] (at most 8), map?: bool}]` (at most 32; ids share the Function/Macro space). Nodes `event.custom`
+"Custom Event" (param `event`, kind `cevent`; outputs = its inputs; any event graph; several for one event run
+in the graphs' order), `event.call` "Call Custom Event" (inputs = its inputs; anywhere, Functions too),
+`timer.by_event` "Set Timer by Event" (only an event without inputs; handle for Clear Timer). Plugin:
+`lsg_ce<i>(inputs)` per event. The map: with "The map can fire it", an `ls_event` entity (key `event` = its map
+name, keys `a`/`b` for the first two number/text/yes-no inputs; made info_target as it loads) or an
+`info_target` named `lsev_<map name>` (also one made while playing), when used; Player = who set it off. Map
+name: the name in small letters with _ ("Gate Opened" -> gate_opened). UI: My mode "Custom events" (+, details
+with name, inputs, "The map can fire it" and the map name), the node search lists "Custom Event: X", "Call X",
+"Set Timer by X". Sim (XE, 6 bots): Delay -> Call with the round number and a text arrived (1, "from call");
+an `lsev_gate_opened` info_target used by a bot (a test plugin, ExecuteHamB Ham_Use) arrived with that bot as
+Player; Set Timer by Event looped every 4 s; amxxpc no warnings. Not yet seen in game: an `ls_event` placed
+in a map (needs a map with one; W2's FGD line is asked above).
+**X2's gen.rs fixes (Player Hurt weapon/hit group, hook order) went in with this commit**, with the snapshots, as
+X2 asked; `make_nodes.py` now runs `node_help.write` (skipped while node_help.py isn't there). X2: the three new
+nodes have generated help only; write theirs when you get to it. `mod.rs`'s `mod help_tests;` is yours to commit.
+**Queued next:** (c) Timelines;
 (sim tests of the core nodes, example modes, node help and the tour: X2).
 **The core nodes batch:**
 - registry (`make_nodes.py` → `nodes.json`, 413 nodes): Game (Current Map Name, Next Map, Server Name, Max

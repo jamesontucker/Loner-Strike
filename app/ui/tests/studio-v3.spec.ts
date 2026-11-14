@@ -593,6 +593,34 @@ test("several event graphs: add, copy and paste across them keeping inner wires,
   await expect(node(page, "give_m4")).toBeVisible();
 });
 
+test("custom events: add one with an input, its Custom Event and Call nodes get the pins, the timer only for one without inputs", async ({ page }) => {
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await expect(node(page, "give_m4")).toBeVisible({ timeout: 20_000 });
+  const side = page.getByRole("complementary", { name: "My mode" });
+  await side.getByRole("button", { name: "Add a Custom Event (call it from anywhere, a timer or the map)" }).click();
+  const details = page.getByRole("complementary", { name: "Details" });
+  await expect(details).toContainText("Custom Event");
+  await details.getByRole("textbox").first().fill("Gate Opened");
+  await details.getByRole("button", { name: "Add input" }).click();
+  await details.getByLabel("The map can fire it").check();
+  await expect(details).toContainText("lsev_gate_opened");
+  // the node search lists its nodes; no timer for one with inputs
+  const pb = (await page.locator(".react-flow__pane").boundingBox())!;
+  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 40, y: 30 } });
+  const pal = page.getByRole("dialog", { name: "Add a node" });
+  await pal.getByRole("textbox").fill("gate opened");
+  await expect(pal.getByRole("button", { name: /^Custom Event: Gate Opened/ })).toBeVisible();
+  await expect(pal.getByRole("button", { name: /^Call Gate Opened/ })).toBeVisible();
+  await expect(pal.getByRole("button", { name: /^Set Timer by Gate Opened/ })).toHaveCount(0);
+  await pal.getByRole("button", { name: /^Custom Event: Gate Opened/ }).click();
+  const ev = page.locator(".react-flow__node").filter({ hasText: "Custom Event: Gate Opened" });
+  await expect(ev).toBeVisible();
+  await expect(ev).toContainText("Input 1");
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect.poll(async () => (await saved(page)).customEvents?.[0]?.map).toBe(true);
+  expect((await saved(page)).customEvents[0].inputs).toHaveLength(1);
+});
+
 test.describe("leaving with unsaved edits", () => {
   // in the page, as a person gets there: Overview → Game Mode Studio → the mode → its Function
   const dirty = async (page: Page) => {

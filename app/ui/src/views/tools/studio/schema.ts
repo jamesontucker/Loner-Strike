@@ -138,6 +138,8 @@ export const graphSchema = z.object({
   macros: z.array(macroSchema).max(32).optional(),
   /** more event graphs after the first, to organize (a node's graph names one); compiled as one */
   eventGraphs: z.array(z.object({ id, name: label(30) })).max(16).optional(),
+  /** the mode's own events: Custom Event nodes run when called (Call, Set Timer by Event, the map) */
+  customEvents: z.array(z.object({ id, name: label(26), inputs: z.array(memberSchema).max(8).default([]), map: z.boolean().optional() })).max(32).optional(),
   markers: z.array(markerSchema).max(32).optional(),
   mapKit: mapKitSchema.optional(),
 });

@@ -417,12 +417,14 @@ stock lsg_call(const plugin[], const func[], nargs, a, b, &r)
 	return 1
 }
 
-stock lsg_hitgroup(v)
+stock lsg_hitgroup(v, bits)
 {
 	new t[12]
 	if (!lsg_ok(v))
 		return t
-	switch (get_ent_data(v, "CBaseMonster", "m_LastHitGroup"))
+	// (only a bullet or the knife hits a place; the game keeps the last one, so a grenade or a
+	// fall after a headshot would say head again)
+	switch (bits & DMG_BULLET ? get_ent_data(v, "CBaseMonster", "m_LastHitGroup") : 0)
 	{
 		case HIT_HEAD: copy(t, charsmax(t), "head")
 		case HIT_CHEST: copy(t, charsmax(t), "chest")
@@ -434,8 +436,31 @@ stock lsg_hitgroup(v)
 	return t
 }
 
-stock lsg_wpn_of(a)
-	return lsg_held(a)
+// the weapon that did the damage: a grenade by what hit (the attacker may hold a gun by then),
+// else what the attacker holds; empty when no player did it. (Its own body: a stock that returns
+// another stock's text fails at run time with "memory access".)
+stock lsg_wpn_of(a, inflictor)
+{
+	new w[24]
+	if (inflictor > MaxClients && pev_valid(inflictor))
+	{
+		pev(inflictor, pev_classname, w, charsmax(w))
+		if (equal(w, "grenade"))
+		{
+			copy(w, charsmax(w), "hegrenade")
+			return w
+		}
+		w[0] = 0
+	}
+	if (lsg_ok(a) && is_user_alive(a))
+	{
+		new clip, ammo, wid = get_user_weapon(a, clip, ammo)
+		if (wid > 0)
+			get_weaponname(wid, w, charsmax(w))
+		replace(w, charsmax(w), "weapon_", "")
+	}
+	return w
+}
 
 stock Float:lsg_dist(a, b)
 {
@@ -2100,12 +2125,12 @@ stock lsg_precache_types(const want[])
 public plugin_init()
 {
 	ls_register_mode(LSG_MODE, "Every Node 2", "1.0", "Game Mode Studio")
+	register_event("HLTV", "lsg_new_round", "a", "1=0", "2=0")
 	register_logevent("lsg_on_round_started", 2, "1=Round_Start")
 	RegisterHamPlayer(Ham_Spawn, "lsg_on_player_spawned", 1)
 	set_task(1.0, "lsg_on_map_started")
 	if (get_cvar_pointer("ls_creature_ver"))
 		RegisterHam(Ham_Killed, "ls_creature", "lsg_on_creature_killed", 1)
-	register_event("HLTV", "lsg_new_round", "a", "1=0", "2=0")
 	if (get_cvar_pointer("ls_creature_ver"))
 		RegisterHam(Ham_Killed, "ls_creature", "lsg_pay_killer", 1)
 }

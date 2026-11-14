@@ -107,6 +107,13 @@ export function pinsOf(g: Graph, n: GNode): Pins {
       if (f) inputs = [...inputs, ...f.outputs.map((x) => memberPin(x, false))];
       break;
     }
+    case "event.custom":
+    case "event.call": {
+      const c = (g.customEvents ?? []).find((x) => x.id === n.params.event);
+      if (c && def.type === "event.custom") outputs = [...outputs, ...c.inputs.map((x) => memberPin(x, false))];
+      if (c && def.type === "event.call") inputs = [...inputs, ...c.inputs.map((x) => memberPin(x, false))];
+      break;
+    }
     case "fn.call":
     case "fn.call_pure": {
       const f = fnOf(g, n.params.func);
@@ -218,6 +225,13 @@ export function nodeTitle(g: Graph, n: GNode): string {
       return fnOf(g, n.params.func)?.name ?? "Call (pick a Function)";
     case "fn.entry":
       return fnOf(g, n.graph)?.name ?? def.title;
+    case "event.custom":
+    case "event.call":
+    case "timer.by_event": {
+      const c = (g.customEvents ?? []).find((x) => x.id === n.params.event);
+      if (!c) return def.title;
+      return n.type === "event.custom" ? `Custom Event: ${c.name}` : n.type === "event.call" ? `Call ${c.name}` : `Set Timer by ${c.name}`;
+    }
     case "macro.use":
       return macroOf(g, n.params.macro)?.name ?? "Macro (pick one)";
     case "macro.entry":
