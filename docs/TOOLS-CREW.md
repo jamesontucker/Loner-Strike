@@ -126,3 +126,9 @@ Many agents share one staging area. Never run a bare `git commit`. Always commit
 - Testing your own unmerged brain branch is fine, but say so in the report, and re-run on ls-next3 after it merges.
 - Results from an older build don't count: say "old build" and re-run.
 - LSPLAY/BRPLAY and any file handed to the user get the newest ls-next3 build plus the current plugins.
+
+## Reminders after slips (2026-11-14)
+- Never plain `git commit` (it commits whatever anyone staged). Always `git commit -m "..." -- <your paths>`, then `git show --stat`.
+- Stop only processes you started, by the PIDs you recorded. Never `pkill`/`killall` by name: other agents run the same programs (dev servers, vite, hlds, hltv).
+- Never print secrets in tool output: mask rcon passwords and tokens in logs you read (e.g. `sed -E 's/rcon [0-9]+ "[^"]*"/rcon *** "***"/'`).
+- Hand-started game servers always use `-insecure` (a failed Steam start can take down every CrossOver sim).
