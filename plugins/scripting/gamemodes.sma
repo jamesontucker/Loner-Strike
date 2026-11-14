@@ -5115,6 +5115,32 @@ new const MODE_PREFIXES[][][] =
 	{ "shero",       "de_ cs_" }
 }
 
+// P5: everyday maps a mode is also made for, by exact name, besides its own (br_*, ls_*): its map
+// votes keep to these and its own, never the everyday filler (the app's Play page lists the same)
+new const MODE_ALSO[][][] =
+{
+	{ "br",        "de_aztec cs_italy de_dust2 de_inferno de_train" },
+	{ "laststand", "de_dust2 de_inferno de_nuke de_aztec cs_office" }
+}
+
+// The MODE_ALSO entry of this mode or its family (br_duo, br_squads: br), or -1
+also_of(const id[])
+{
+	for (new i = 0; i < sizeof MODE_ALSO; i++)
+		if (mode_family(MODE_ALSO[i][0], id))
+			return i
+	return -1
+}
+
+bool:also_fits(a, const map[])
+{
+	new tok[32], pos
+	while ((pos = argparse(MODE_ALSO[a][1], pos, tok, charsmax(tok))) != -1)
+		if (equali(map, tok))
+			return true
+	return false
+}
+
 // Modes that only work on maps made for them: never offered on an everyday map
 new const MAP_MODES[][] = { "kreedz", "surf", "soccerjam", "basebuilder", "deathrun" }
 // Modes with a look of their own: their maps aren't everyday maps for other modes
@@ -5278,15 +5304,16 @@ mode_maps(mode, Array:out)
 	}
 	if (!ArraySize(withNav) && !ArraySize(without))
 	{
+		new also = also_of(id) // P5
 		new Array:pats = ArrayCreate(64), Array:ids = ArrayCreate(32)
 		read_preset_list(pats, ids)
 		for (new i = 0; i < ArraySize(g_Maps); i++)
 		{
 			ArrayGetString(g_Maps, i, map, charsmax(map))
-			if (made_for(id, map, pats, ids))
+			if (made_for(id, map, pats, ids) || (also >= 0 && also_fits(also, map)))
 				add_suited(map, bool:ArrayGetCell(g_MapNav, i), withNav, without, seen, hidden)
 		}
-		if (!needs_maps(id) && ArraySize(withNav) < 3)
+		if (!needs_maps(id) && also < 0 && ArraySize(withNav) < 3)
 		{
 			for (new i = 0; i < ArraySize(g_Maps); i++)
 			{

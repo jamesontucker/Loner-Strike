@@ -117,6 +117,7 @@ new bool:g_McPaused          // mapchooser paused for this map
 new bool:g_Changing          // a vote's map change is on its way
 new bool:g_BothZombies       // "zombie" and "zp5" are both in the vote (zp5 keeps its full name)
 new g_StageMode = -1         // the map stage: maps for this mode
+new bool:g_StageHere         // P5: the map stage's first option is the map being played
 new Float:g_BotSince[33]     // when each bot joined
 new g_LeaverFor[33]          // a person who just connected: the bot that leaves for them (userid)
 new bool:g_Leaving[33]       // this bot is the one going for someone
@@ -1666,9 +1667,19 @@ public end_mode_vote(const data[])
 
 // ---- stage 2: the map ----------------------------------------------------------------
 
-// The mode stays: the usual map vote (at the end of a map: without "keep playing")
+// The mode stays: the usual map vote (at the end of a map: without "keep playing"). P5: a mode
+// with maps of its own (Battle Royale, Last Stand, Zombie...) keeps to them: its own map list,
+// never the everyday one (a non-BR map would end the mode)
 public task_keep_stage()
 {
+	new cur = gm_modes_current(), id[32], name[2]
+	if (cur >= 0)
+		gm_modes_info(cur, id, charsmax(id), name, charsmax(name))
+	if (cur >= 0 && id[0] && !equali(id, "classic"))
+	{
+		start_map_stage(cur, false)
+		return
+	}
 	if (g_EndVote)
 		start_map_stage(gm_modes_current(), true)
 	else
@@ -1716,6 +1727,7 @@ start_map_stage(mode, bool:usual)
 		curFits = !g_EndVote
 	}
 	g_VoteOptions = 0
+	g_StageHere = curFits
 	if (curFits)
 		copy(g_VoteMaps[g_VoteOptions++], charsmax(g_VoteMaps[]), cur)
 	// nominated maps that suit come next
@@ -1744,6 +1756,11 @@ start_map_stage(mode, bool:usual)
 	g_Phase = 2
 	new name[48]
 	vote_name(mode, name, charsmax(name))
+	// (the server log says what was offered: P5)
+	new offered[256], olen
+	for (new i = 0; i < g_VoteOptions; i++)
+		olen += formatex(offered[olen], charsmax(offered) - olen, "%s%s", i ? " " : "", g_VoteMaps[i])
+	log_amx("Map vote for %s%s: %s", name, usual ? " (the usual list)" : "", offered)
 	new menu = menu_create(usual ? fmt("\yVote for the next map \d(%d seconds)", VOTE_TIME) : fmt("\yPick a map for %s \d(%d seconds)", name, VOTE_TIME), "stage_handler")
 	for (new i = 0; i < g_VoteOptions; i++)
 		menu_additem(menu, (curFits && i == 0) ? fmt("%s \d(this map)", cur) : g_VoteMaps[i])
@@ -1821,6 +1838,14 @@ finish_stage(best)
 	new mode = g_StageMode, cur = gm_modes_current(), name[48]
 	vote_name(mode, name, charsmax(name))
 	g_Voting = false
+	// P5: the mode kept now, on this map (it won, or nobody voted): nothing changes
+	if (!g_EndVote && mode == cur && (best < 0 || (best == 0 && g_StageHere)))
+	{
+		vote_settled(false)
+		new here[32]
+		get_mapname(here, charsmax(here))
+		return client_print_color(0, print_team_default, "^4[Server]^1 Staying on ^4%s^1.", here)
+	}
 	if (best < 0 && g_VoteOptions && (!g_EndVote || mode != cur))
 		best = random(g_VoteOptions)     // the mode won: it needs a map
 	if (g_EndVote)
