@@ -1,4 +1,4 @@
-// The five example modes: small, commented graphs that teach the Studio and ship as the
+// The example modes: small, commented graphs that teach the Studio and ship as the
 // community's seed modes. Made by app/src-tauri/src/tools/studio/make_examples.py.
 
 import infectionRaw from "./templates/infection.graph.json?raw";

@@ -56,15 +56,17 @@ test("help examples drop into a graph and stay valid", async () => {
   assert.ok(n > NODE_DEFS.length * 0.8, `only ${n} examples`);
 });
 
-test("the five example modes parse, use known nodes and have notes", () => {
-  assert.deepEqual(EXAMPLES.map((e) => e.label), ["Infection", "Gun Game Lite", "King of the Hill", "One in the Chamber", "Juggernaut"]);
+test("the example modes parse, use known nodes and have notes", () => {
+  assert.deepEqual(EXAMPLES.map((e) => e.label), ["Infection", "Gun Game Lite", "King of the Hill", "One in the Chamber", "Juggernaut", "The Quest Giver"]);
   for (const e of EXAMPLES) {
     const r = parseGraph(JSON.parse(e.raw));
     assert.ok("graph" in r, `${e.label}: ${"error" in r ? r.error : ""}`);
     const g = r.graph;
     for (const n of g.nodes) assert.ok(nodeDef(n.type), `${e.label}: unknown node ${n.type}`);
     assert.ok(g.comments.length >= 3, `${e.label}: notes`);
-    assert.ok(g.nodes.length >= 25 && g.nodes.length <= 90, `${e.label}: ${g.nodes.length} nodes`);
+    // (The Quest Giver is kept tiny on purpose: one NPC, one note, one question)
+    const min = e.id === "quest" ? 10 : 25;
+    assert.ok(g.nodes.length >= min && g.nodes.length <= 90, `${e.label}: ${g.nodes.length} nodes`);
   }
 });
 
