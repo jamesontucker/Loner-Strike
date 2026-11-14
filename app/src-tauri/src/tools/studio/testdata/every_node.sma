@@ -2927,10 +2927,8 @@ public plugin_init()
 	g_v14 = _:TrieCreate()
 	g_v19 = _:ArrayCreate(LSG_AC)
 	g_lsgLeft[218] = 1
-	register_clcmd("say /shop", "lsg_chat92")
-	register_clcmd("say !shop", "lsg_chat92")
-	register_clcmd("say_team /shop", "lsg_chat92")
-	register_clcmd("say_team !shop", "lsg_chat92")
+	register_clcmd("say", "lsg_chat92")
+	register_clcmd("say_team", "lsg_chat92")
 }
 
 // a new round: timers stop, round variables start again
@@ -2948,10 +2946,15 @@ public lsg_new_round()
 
 public lsg_chat92(id)
 {
-	new ctx[LSG_CTX]
+	new ctx[LSG_CTX], s[64], w[40]
+	read_args(s, charsmax(s))
+	remove_quotes(s)
+	trim(s)
+	copyc(w, charsmax(w), s, ' ')
+	if ((w[0] != '/' && w[0] != '!') || !equali(w[1], "shop"))
+		return PLUGIN_CONTINUE
 	ctx[0] = id // player
-	read_args(g_lsgTxt[0], 63) // args
-	remove_quotes(g_lsgTxt[0])
+	copy(g_lsgTxt[0], 63, s) // args
 	lsg_after_word(g_lsgTxt[0])
 	lsg_n92(ctx)
 	return PLUGIN_CONTINUE
@@ -5035,7 +5038,10 @@ lsg_n195(ctx[])
 		}
 		case 2:
 		{
-			}
+		}
+		default:
+		{
+		}
 	}
 }
 
@@ -5444,13 +5450,16 @@ lsg_n233(ctx[])
 	{
 		case 0:
 		{
-			}
+		}
 		case 1:
 		{
-			}
+		}
 		case 2:
 		{
 			lsg_n234(ctx)
+		}
+		default:
+		{
 		}
 	}
 }

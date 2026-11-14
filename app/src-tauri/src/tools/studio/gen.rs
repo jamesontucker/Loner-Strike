@@ -1521,15 +1521,14 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
             o.line(format!("\tg_lsgLeft[{}] = 1", gen.index(id)));
         }
     }
-    // chat commands: one command each
+    // chat commands: on all of say (a "say /shop" registration only matches the bare word, so
+    // "/give 5" never came: node coverage run); the handler checks the first word
     for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.chat_command") {
         let cmd = name_text(gen.text(v.nodes[id], v.defs[id], "command"));
         let i = gen.index(id);
         if !cmd.is_empty() {
             for say in ["say", "say_team"] {
-                for mark in ["/", "!"] {
-                    o.line(format!("\tregister_clcmd({}, \"lsg_chat{i}\")", pawn_str(&format!("{say} {mark}{cmd}"))));
-                }
+                o.line(format!("\tregister_clcmd(\"{say}\", \"lsg_chat{i}\")"));
             }
         }
     }
@@ -1567,7 +1566,8 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     for id in gen.live.iter().filter(|id| v.defs[*id].kind == "event.chat_command") {
         let i = gen.index(id);
-        o.line(format!("public lsg_chat{i}(id)\n{{\n\tnew ctx[LSG_CTX]\n\tctx[0] = id // player\n\tread_args(g_lsgTxt[0], 63) // args\n\tremove_quotes(g_lsgTxt[0])\n\tlsg_after_word(g_lsgTxt[0])\n\t{}(ctx)\n\treturn PLUGIN_CONTINUE\n}}\n", gen.fname(id)));
+        let cmd = pawn_str(&name_text(gen.text(v.nodes[id], v.defs[id], "command")));
+        o.line(format!("public lsg_chat{i}(id)\n{{\n\tnew ctx[LSG_CTX], s[64], w[40]\n\tread_args(s, charsmax(s))\n\tremove_quotes(s)\n\ttrim(s)\n\tcopyc(w, charsmax(w), s, ' ')\n\tif ((w[0] != '/' && w[0] != '!') || !equali(w[1], {cmd}))\n\t\treturn PLUGIN_CONTINUE\n\tctx[0] = id // player\n\tcopy(g_lsgTxt[0], 63, s) // args\n\tlsg_after_word(g_lsgTxt[0])\n\t{}(ctx)\n\treturn PLUGIN_CONTINUE\n}}\n", gen.fname(id)));
     }
     if debug || uses_save || uses_clock {
         o.line("public plugin_end()\n{");
@@ -2593,14 +2593,14 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let store = k.map_or(String::new(), |k| format!("g_lsgO[{k}] = "));
             b.line(format!("\t{store}lsg_safe_cmd({}, {}) ? 1 : 0", inp("cmd", "text"), if amx { 1 } else { 0 }));
             if debug {
-                b.line(format!("\tif (!lsg_cmd_ok)\n\t\t{}", err("Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap.")));
+                b.line(format!("\tif (!lsg_cmd_ok)\n\t\t{}\n\telse\n\t{}", err("Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap."), exit("sent")));
             }
             then_line(&mut b, "then");
         }
         "ent.spawn_prop" => {
             b.line(format!("\tg_lsgOut[{i}] = lsg_prop({}, {}, {})", inp("at", "entity"), pawn_str(&model_text(gen.text(n, def, "model"))), if gen.boolean(n, def, "solid") { 1 } else { 0 }));
             if debug {
-                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}", err("No prop: the model isn't loaded, or there's no such entity.")));
+                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}\n\telse\n\t{}", err("No prop: the model isn't loaded, or there's no such entity."), exit("spawned")));
             }
             then_line(&mut b, "then");
         }
@@ -2616,7 +2616,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 b.line(format!("\tg_lsgO[{ok}] = called"));
             }
             if debug {
-                b.line(format!("\tif (!called)\n\t\t{}", err("Not called: no such plugin running, or no such public function in it.")));
+                b.line(format!("\tif (!called)\n\t\t{}\n\telse\n\t{}", err("Not called: no such plugin running, or no such public function in it."), exit("called")));
             } else if k.is_none() && ok.is_none() {
                 b.line("\t#pragma unused r\n\t#pragma unused called");
             }
@@ -2893,21 +2893,28 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         "flow.switch_num" | "flow.switch_text" | "flow.switch_enum" => {
             let outs: Vec<(String, String)> = v.outputs(id).iter().filter(|p| p.id != "default").map(|p| (p.id.clone(), p.label.clone())).collect();
-            let call = |pin: &str| next(pin).map(|c| format!("\t\t{c}\n")).unwrap_or_default();
-            if def.kind == "flow.switch_enum" {
+            // (the debugger is told which way it went)
+            let enumed = def.kind == "flow.switch_enum";
+            let call = |pin: &str, label: &str| {
+                let ind = if enumed { "\t" } else { "" };
+                // (the label shown, a carets-free copy: it's only for the debugger's eyes)
+                let e = exit(&label.replace('^', ""));
+                format!("{}{}", if e.is_empty() { String::new() } else { format!("{ind}\t{e}\n") }, next(pin).map(|c| format!("{ind}\t\t{c}\n")).unwrap_or_default())
+            };
+            if enumed {
                 b.line(format!("\tswitch ({})\n\t{{", inp("in", "any")));
-                for (k, (pin, _)) in outs.iter().enumerate() {
-                    b.line(format!("\t\tcase {k}:\n\t\t{{\n\t{}\t\t}}", call(pin)));
+                for (k, (pin, label)) in outs.iter().enumerate() {
+                    b.line(format!("\t\tcase {k}:\n\t\t{{\n{}\t\t}}", call(pin, label)));
                 }
-                b.line("\t}");
+                b.line(format!("\t\tdefault:\n\t\t{{\n{}\t\t}}\n\t}}", call("default", "default")));
             } else {
                 let num = def.kind == "flow.switch_num";
                 b.line(if num { format!("\tnew Float:x = {}", inp("in", "number")) } else { format!("\tnew x[128]\n\tcopy(x, 127, {})", inp("in", "text")) });
                 for (k, (pin, label)) in outs.iter().enumerate() {
                     let test = if num { format!("x == {}", float_lit(label.parse::<f64>().unwrap_or(0.0))) } else { format!("equali(x, {})", pawn_str(&safe_text(label, 60))) };
-                    b.line(format!("\t{}if ({test})\n\t{{\n{}\t}}", if k > 0 { "else " } else { "" }, call(pin)));
+                    b.line(format!("\t{}if ({test})\n\t{{\n{}\t}}", if k > 0 { "else " } else { "" }, call(pin, label)));
                 }
-                let d = call("default");
+                let d = call("default", "default");
                 if outs.is_empty() {
                     b.line(format!("\t#pragma unused x\n{d}"));
                 } else {
@@ -6369,6 +6376,56 @@ mod tests {
         }).to_string()).unwrap();
         let src = generate(&g, false).source;
         assert!(src.contains("lsg_ntext(") && src.contains("stock lsg_ntext(Float:n)") && !src.contains("floatround(0.5)"), "{src}");
+    }
+
+    /// In a Playtest build every flow node that reports its start reports how it went too (node
+    /// coverage run: Run Server/AMX Command, Spawn Prop and Call Plugin Function said nothing when
+    /// they worked, the Switches never said which way they went).
+    #[test]
+    fn every_flow_node_reports_a_result() {
+        let mut missing = vec![];
+        for (name, text) in [
+            ("every_node", include_str!("testdata/every_node.graph.json")),
+            ("every_node_2", include_str!("testdata/every_node_2.graph.json")),
+            ("every_node_3", include_str!("testdata/every_node_3.graph.json")),
+            ("all_nodes", include_str!("testdata/all_nodes.graph.json")),
+        ] {
+            let g = parse(text).unwrap();
+            let src = generate(&g, true).source;
+            for block in src.split("\n// ").skip(1) {
+                let body = &block[..block.find("\n}\n").unwrap_or(block.len())];
+                if body.contains("lsd_enter(") && !body.contains("lsd_exit(") && !body.contains("lsd_note(") {
+                    missing.push(format!("{name}: {}", block.lines().next().unwrap_or("")));
+                }
+            }
+        }
+        assert!(missing.is_empty(), "{missing:#?}");
+    }
+
+    /// Chat Command runs with arguments too: AMX Mod X matches a "say /give" registration only
+    /// against the bare word, so "/give 5" never came (node coverage run: "/shop" ran 6 times,
+    /// "/shop 5" none). It's on all of say, and the handler checks the first word.
+    #[test]
+    fn chat_commands_take_arguments() {
+        let g = parse(&serde_json::json!({
+            "schema": super::super::graph::SCHEMA, "version": super::super::graph::VERSION, "mode": {"id": "cc", "name": "Cc"}, "variables": [], "comments": [],
+            "nodes": [
+                {"id": "c", "type": "event.chat_command", "pos": {"x": 0, "y": 0}, "params": {"command": "give"}},
+                {"id": "p", "type": "debug.print", "pos": {"x": 300, "y": 0}, "params": {"text": "args", "chat": false}}
+            ],
+            "edges": [
+                {"id": "w1", "from": {"node": "c", "pin": "then"}, "to": {"node": "p", "pin": "exec"}},
+                {"id": "w2", "from": {"node": "c", "pin": "args"}, "to": {"node": "p", "pin": "value"}}
+            ]
+        }).to_string()).unwrap();
+        let src = generate(&g, false).source;
+        assert!(!src.contains("say /give") && !src.contains("say !give"), "no bare-word registrations");
+        assert!(src.contains("register_clcmd(\"say\", \"lsg_chat") && src.contains("register_clcmd(\"say_team\", \"lsg_chat"));
+        let h = &src[src.find("public lsg_chat").unwrap()..];
+        let h = &h[..h.find("\n}").unwrap()];
+        assert!(h.contains("!equali(w[1], \"give\")") && h.contains("return PLUGIN_CONTINUE\n\tctx[0] = id"), "{h}");
+        // (the shared text slot only once it's this command)
+        assert!(h.find("copy(g_lsgTxt[0]").unwrap() > h.find("equali").unwrap());
     }
 
     /// A vector as text: whole units for a place, two decimals for a short one (node coverage run:

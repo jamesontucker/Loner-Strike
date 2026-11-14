@@ -3985,6 +3985,8 @@ lsg_n8(ctx[])
 	g_lsgO[0] = lsg_safe_cmd(lsi0, 0) ? 1 : 0
 	if (!lsg_cmd_ok)
 		lsd_error(8, "Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap.")
+	else
+		lsd_exit(8, "sent")
 	lsg_n9(ctx)
 }
 
@@ -4003,6 +4005,8 @@ lsg_n9(ctx[])
 	g_lsgO[1] = lsg_safe_cmd(lsi0, 1) ? 1 : 0
 	if (!lsg_cmd_ok)
 		lsd_error(9, "Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap.")
+	else
+		lsd_exit(9, "sent")
 	lsg_n10(ctx)
 }
 
@@ -4638,6 +4642,8 @@ lsg_n48(ctx[])
 	g_lsgOut[48] = lsg_prop(lsi0, "models/w_c4.mdl", 1)
 	if (!g_lsgOut[48])
 		lsd_error(48, "No prop: the model isn't loaded, or there's no such entity.")
+	else
+		lsd_exit(48, "spawned")
 	lsg_n49(ctx)
 }
 
@@ -4809,6 +4815,8 @@ lsg_n58(ctx[])
 	g_lsgO[3] = called
 	if (!called)
 		lsd_error(58, "Not called: no such plugin running, or no such public function in it.")
+	else
+		lsd_exit(58, "called")
 	lsg_n59(ctx)
 }
 
