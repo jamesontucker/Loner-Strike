@@ -2188,6 +2188,20 @@ pub fn cost_warnings(g: &Graph, v: &View) -> Vec<Problem> {
             }
         }
     }
+    // Timelines: updates a second = copies (a player's own in a Function with a Player input: up
+    // to 32) x ticks a second; each runs Update's nodes and its tracks
+    for t in g.nodes.iter().filter(|n| kind(&n.id) == "timeline.play") {
+        let Some(tl) = t.params.get("timeline").and_then(Value::as_str).and_then(|id| g.timelines.iter().find(|x| x.id == id)) else { continue };
+        let per_player = t.graph.as_deref().and_then(|f| g.functions.iter().find(|x| x.id == f)).is_some_and(|f| f.inputs.iter().any(|m| m.ty == "player"));
+        let copies = if per_player { 32.0 } else { 1.0 };
+        let rate = 1.0 / tl.tick.max(0.01);
+        let work = 1 + flow_from(v, &t.id, &["update"]).len();
+        let ups = copies * rate;
+        if ups > 200.0 || ups * work as f64 > 1000.0 {
+            let who = if per_player { format!("once per player (up to 32 copies) x {} updates a second", rate.round()) } else { format!("{} updates a second", rate.round()) };
+            warn(&mut p, &t.id, "timeline", format!("This Timeline runs {who}: up to {} updates a second, each running {work} node{}. Raise its Tick (0.1 s still looks smooth), keep Update short, or play one Timeline for everyone.", ups.round(), if work == 1 { "" } else { "s" }));
+        }
+    }
     // fast timers: real work many times a second
     for t in g.nodes.iter().filter(|n| matches!(kind(&n.id), "timer.repeat" | "timer.retrigger")) {
         let every = t.params.get("every").or_else(|| t.params.get("secs")).and_then(Value::as_f64).unwrap_or(1.0);
@@ -2886,6 +2900,31 @@ mod tests {
         assert!(has("l2", "loop inside a loop"), "{w:#?}");
         // advice only: never an error
         assert!(cost_warnings(&g, &View::new(&g)).iter().all(|p| p.level == "warning"));
+    }
+
+    #[test]
+    fn timeline_cost_counts_copies_and_ticks() {
+        let tl = |tick: f64| json!([{"id": "t1", "name": "Pulse", "length": 2, "tick": tick, "tracks": []}]);
+        let mk = |tick: f64, per_player: bool| {
+            let mut g = v3(json!({
+                "nodes": [{"id": "r", "type": "event.round_started"}, {"id": "tp", "type": "timeline.play", "params": {"timeline": "t1"}}, {"id": "p", "type": "debug.print"}],
+                "edges": [{"id": "w1", "from": {"node": "r", "pin": "then"}, "to": {"node": "tp", "pin": "exec"}}, {"id": "w2", "from": {"node": "tp", "pin": "update"}, "to": {"node": "p", "pin": "exec"}}],
+            }));
+            g.timelines = serde_json::from_value(tl(tick)).unwrap();
+            if per_player {
+                g.functions = serde_json::from_value(json!([{"id": "f", "name": "Glow", "inputs": [{"id": "who", "name": "Who", "type": "player"}], "outputs": []}])).unwrap();
+                for n in g.nodes.iter_mut().filter(|n| n.id == "tp" || n.id == "p") {
+                    n.graph = Some("f".into());
+                }
+            }
+            cost_warnings(&g, &View::new(&g)).into_iter().filter(|p| p.node.as_deref() == Some("tp")).map(|p| p.message).collect::<Vec<_>>()
+        };
+        // one copy at 20 a second: fine; one per player: 640 a second
+        assert!(mk(0.05, false).is_empty(), "{:?}", mk(0.05, false));
+        let w = mk(0.05, true);
+        assert!(w.iter().any(|m| m.contains("per player") && m.contains("640")), "{w:?}");
+        // a slower tick per player is fine
+        assert!(mk(0.2, true).is_empty(), "{:?}", mk(0.2, true));
     }
 
     #[test]
