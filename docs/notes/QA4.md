@@ -335,6 +335,37 @@ Steam library on a second drive. Defender on. Note every prompt, window and mess
 | Pointer lock | Unreal preset right-drag; Hammer preset Z; Esc | Esc releases and the camera stops looking around |
 | OneDrive Documents | Save a project into Documents (OneDrive, files on demand) | Saves and reopens; no lock errors in the diagnostics |
 
+### H2. Update 0.1.2 → 1.0.0 on a real Windows PC (P5, 2026-11-14)
+Before the release is published, with the 1.0.0 build from a manual Release run (Actions artifacts, no release made).
+Use a Windows user account made for the test (a fresh profile), not someone's real one.
+1. **Install 0.1.2 from the NSIS setup** (`Loner-Strike_0.1.2_x64-setup.exe` from the v0.1.2 release, not the .msi).
+   Open it, let setup run on the PC's game, start a game once, make a local server ("Friday Test", a join password,
+   20 players), add an admin, turn Keep servers running on, and change two settings (Settings: updates off, phone off).
+   Note `%APPDATA%\Loner-Strike` (settings.json, servers.json, record.json, backups\), `%LOCALAPPDATA%\Loner-Strike\Servers`
+   and the game's `addons\amxmodx\modules\hamsandwich_amxx.dll` hash. Copy the whole `%APPDATA%\Loner-Strike` aside.
+2. **Point 0.1.2 at the test feed:** 0.1.2 only asks `github.com/.../releases/latest/download/latest.json`, so the real
+   path can only be tried once 1.0.0 is published. Before that, check the pieces: (a) the run's NSIS setup and
+   `.sig` verify against the app's pubkey (`scratchpad rel/verify_sig.py`-style check, or `tauri signer verify`);
+   (b) the run's latest.json (or the one tauri-action would write) has `windows-x86_64` and `windows-x86_64-nsis`
+   pointing at the `_x64-setup.exe`; 0.1.2 NSIS installs ask for `windows-x86_64-nsis` first.
+3. **The update itself** (once published, or run the 1.0.0 setup by hand with `/UPDATE`-like passive install over
+   0.1.2: `Loner-Strike_1.0.0_x64-setup.exe /P /UPDATE`): with a server running (Keep running on) and the game closed,
+   in 0.1.2 Settings › Check now › Install. Pass when: a passive installer window, no UAC prompt (per-user install),
+   the app comes back as 1.0.0 in the same install folder (one entry in Apps & features, version 1.0.0), ls-voice /
+   playitd stopped and replaced (no "file in use"), the kept server still running or picked up.
+4. **First start of 1.0.0:** pass when `%APPDATA%\Loner-Strike\settings.json` and `servers.json` still hold the step 1
+   values (diff against the copy: only added fields), the big folders (backups, cache, steamcmd, voice, tools\compile...)
+   moved to `%LOCALAPPDATA%\gg.lonerstrike.app\data` once (Roaming copies gone, nothing in `data\from-roaming` unless
+   a file differed), record.json read (Setup shows the game as set up, no reinstall asked), Ham Sandwich: after the
+   next Play the module hash is ours and any other copy sits beside it as `.replaced-<date>`, the server, its password,
+   admins and settings are as before, Settings › AI agents and the new pages open. Diagnostics: no new errors.
+5. **0.1.2 installed from the .msi** (2 downloads so far): its updater falls back to `windows-x86_64` (now the NSIS
+   setup), which installs per user beside the per-machine MSI copy. Check what happens; expected: two entries in Apps
+   & features. If so, the release notes' known issues say to uninstall the 0.1.2 MSI copy after updating.
+6. Mac (done on a throwaway profile, 2026-11-14): 0.1.2's universal app made a profile (settings, an imported server
+   with map/maxplayers, prefs), the 1.0.0 bundle replaced it in place and started on the same profile: version 1.0.0,
+   settings.json and servers.json unchanged byte for byte, prefs kept (updates off, keep servers on), server listed.
+
 ## Round 3 items to re-check
 From QA.md "Round 3": the brain drop crash (30 rounds of drop/drop_all/drop_dead), Last Stand bots buying guns, the
 BR start loadout and drop-in, and the Studio's gm_components loading for templates.
