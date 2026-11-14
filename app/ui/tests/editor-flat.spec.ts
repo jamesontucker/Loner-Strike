@@ -5,6 +5,8 @@
 // (npm run test:tools -- tests/editor-flat.spec.ts; WebKit: -c tests/webkit.config.ts after adding it there).
 import { expect, test, type Page } from "@playwright/test";
 
+test.use({ screenshot: "only-on-failure" });
+
 const api = (page: Page, path: string, body?: unknown) =>
   page.evaluate(
     async ([p, b]) => (await fetch(p as string, b === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json", "X-Panel": "1" }, body: JSON.stringify(b) })).json(),
@@ -17,7 +19,8 @@ const handles = (page: Page, view: string) =>
 
 async function openQuadWithBox(page: Page) {
   const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(String(e)));
+  // (WebKit reports fetches cut off by the reload below as "access control checks": not errors)
+  page.on("pageerror", (e) => !/access control checks/.test(String(e)) && errors.push(String(e)));
   await page.addInitScript(() => {
     localStorage.setItem("ls.editor.nav", JSON.stringify({ preset: "unreal", speed: 3 }));
     localStorage.setItem("ls.editor.navHint", "1");
@@ -103,11 +106,11 @@ test("Top view: handles stretch on the grid, a drag moves, a box picks, Box draw
   // a click in empty space drops the pick; a box round the brush picks it again
   await page.mouse.click(top.x + 12, top.y + top.height - 12);
   await expect(page.locator(".ed-selsize")).toHaveCount(0);
-  const hh = (await handles(page, "top")) ?? c;
-  void hh;
-  await page.mouse.move(top.x + 14, top.y + 30);
+  // (from the bottom right up to the top left: a box that picks what it touches, clear of the
+  // pane's own buttons and the axes triad in its corner)
+  await page.mouse.move(top.x + top.width - 100, top.y + top.height - 12);
   await page.mouse.down();
-  await page.mouse.move(top.x + top.width - 14, top.y + top.height - 14, { steps: 8 });
+  await page.mouse.move(top.x + 20, top.y + 50, { steps: 8 });
   await page.mouse.up();
   await expect(page.locator(".ed-selsize")).toContainText("1 picked");
 
@@ -125,9 +128,12 @@ test("Top view: handles stretch on the grid, a drag moves, a box picks, Box draw
   const n0 = (await api(page, "/api/tools/editor/doc")).brushes.length;
   await page.locator('.editor-tool[data-cmd="tool.box"]').click();
   const fr = (await pane(page, 2).boundingBox())!;
-  await page.mouse.move(fr.x + 20, fr.y + 30);
+  // (the bottom left: clear of the box, the pane's buttons and the axes triad)
+  await expect(page.locator('.editor-tool[data-cmd="tool.box"]')).toHaveAttribute("aria-pressed", "true");
+  await page.mouse.move(fr.x + 30, fr.y + fr.height - 30, { steps: 5 });
+  await page.waitForTimeout(100);
   await page.mouse.down();
-  await page.mouse.move(fr.x + 60, fr.y + 70, { steps: 6 });
+  await page.mouse.move(fr.x + 80, fr.y + fr.height - 80, { steps: 6 });
   await page.mouse.up();
   await expect.poll(async () => (await api(page, "/api/tools/editor/doc")).brushes.length).toBe(n0 + 1);
   const made = (await api(page, "/api/tools/editor/doc")).brushes.at(-1);
@@ -142,13 +148,15 @@ test("Front and Side views have handles on the right axes", async ({ page }) => 
   await page.mouse.click(top.x + top.width / 2, top.y + top.height / 2);
   await expect(page.locator(".ed-selsize")).toContainText("1 picked");
   // Front: the top-middle handle pulls the top (z) up
+  const side0 = JSON.stringify(await handles(page, "side"));
   const f = (await handles(page, "front"))!;
   await page.mouse.move(f[5].x, f[5].y);
   await page.mouse.down();
   await page.mouse.move(f[5].x, f[5].y - 40, { steps: 6 });
   await page.mouse.up();
   await expect.poll(async () => (await brush(page, id)).max[2]).toBeGreaterThan(128);
-  // Side: the right-middle handle pulls north (+y)
+  // Side: the right-middle handle pulls north (+y), once the side view shows the taller box
+  await expect.poll(async () => JSON.stringify(await handles(page, "side"))).not.toBe(side0);
   const s = (await handles(page, "side"))!;
   await page.mouse.move(s[3].x, s[3].y);
   await page.mouse.down();

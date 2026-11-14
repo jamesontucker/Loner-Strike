@@ -14,3 +14,24 @@ handles. So I only build the gaps:
    P5 owns the drag ghost fix (`shapePreview.ts`); I'll ask for or add the new shapes' outlines there once it's committed.
 3. **Extrude:** Shift-drag a face of a picked brush pulls out a new brush (`editor/extrude.rs`, `extrude_face`
    command); vertex tool: split an edge or face (Ctrl-drag its middle handle adds a corner) and merge corners.
+
+## Done
+**1. 2D views** (1e1d5f4-ish, "Map editor 2D views: ..."): `FlatHandles.tsx` (8 handles stretch the selection, the moved
+edge on the grid; dragging a picked brush in a flat view moves it, corner on the grid; live preview; one undo step),
+`FlatGrid.tsx` (one draw call; lines every grid step, doubling while closer than 6 px; 64- and 1024-unit lines; axes),
+`zoomToCursor` on the flat views' MapControls. Tests: `tests/editor-flat.spec.ts`, `tests/editor-flatperf.spec.ts`.
+- br_valley in Quad, Top view (Playwright, 1440×900): WebKit 31 fps panning, 108 fps zooming; headless Chromium
+  (software drawing) 4 / 9. A flat pane on br_valley is ~1200 draws: brushes are ~3 (merged), the rest are entities
+  one by one (~480 outlines, ~440 Lambert boxes, ~150 basic meshes, ~100 fat lines). Request to P5 below.
+- Every pane redraws on any change (one canvas), so panning one flat view also redraws the 3D pane.
+
+**2. Primitives** (d80291a0): cone (Top %: a point or cut off; the top ring is the base scaled toward the point so
+sides stay flat), torus (pieces, tube sides, tube width, arc, start, add height; neighbors share their end exactly),
+arch add height (spiral stairs). Shape tool bar fields + **Preview…** popover with every setting and a turning
+wireframe (`ShapeSettings.tsx`, settings in `shapeParams.ts`, `ls.editor.shapeParams`). Tests: shapes.rs units
+(validity, convexity, shared ends, grid), the command test, `tests/editor-shapes.spec.ts` (Chromium + WebKit).
+
+## Testing notes
+- My dev servers: Rust on 8093 (started as `... devserve::tests::serve_tools_de` so a `pkill -f serve_tools_dev`
+  doesn't hit it), Vite on 5393 with HMR off (other agents' edits reloaded pages mid-test).
+- WebKit reports fetches cut off by a reload as "access control checks" page errors: the specs ignore those.
