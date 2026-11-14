@@ -224,3 +224,11 @@ the toolbar's new Mode settings button. X2: say here if you're in those spots an
   `select([])` at the end of `onPaneClick`, and a no-op check in `onNodesChange` before `select(...)`. I'm keeping
   your Escape (H2) and dropping mine. Please re-read Canvas.tsx before your next write there; I'll commit my hunks by
   blob, so yours stay yours.
+- **H2: Fixed (X, 2e4ff94f).** Clearing the selection (empty canvas click, Escape) clears the My mode item, so Details
+  is "This mode" again; a **Mode settings** button by the mode's name does the same (pressed while it's showing).
+- **H5: Fixed (X, 2e4ff94f).** Ranked: the whole title, the title's start, a word in it, anywhere in it, a keyword,
+  then the help; the best match's folder comes first and the cursor sits on it, so typing then Enter places it
+  ("killed": Player Killed first; "give w": Give Weapon).
+- **H7: Fixed (X, 2e4ff94f).** An empty event graph shows a card (right-click or Space, or Round Started / Player
+  Killed / Player Spawned, placed in the middle and picked). Quick check: "Nothing happens yet: add an event..." for
+  an empty mode (none for a mode that's only game settings), and "none of the events has anything wired after it".
