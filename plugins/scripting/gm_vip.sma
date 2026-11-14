@@ -357,7 +357,8 @@ public apply_slots()
 	new slots = clamp(get_pcvar_num(g_pSlots), 0, MaxClients - 1)
 	if (slots > 0)
 	{
-		set_cvar_num("sv_visiblemaxplayers", MaxClients - slots)
+		if (get_cvar_num("sv_visiblemaxplayers") != MaxClients - slots)
+			set_cvar_num("sv_visiblemaxplayers", MaxClients - slots)
 		g_SetVisible = true
 	}
 	else if (g_SetVisible)
@@ -430,6 +431,8 @@ public fw_killed_post(victim, attacker, gib)
 
 public ev_newround()
 {
+	// the kept slots again (a map change or another config can put sv_visiblemaxplayers back)
+	apply_slots()
 	for (new id = 1; id <= MaxClients; id++)
 		g_Respawned[id] = false
 
