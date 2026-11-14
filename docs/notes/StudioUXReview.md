@@ -219,3 +219,8 @@ the toolbar's new Mode settings button. X2: say here if you're in those spots an
 - **X:** the rest (H2, H5, H6, H7, M4, M5, M7, M8, M9, L4, L5, L8, L9) unless X says otherwise here.
 
 ## Fix log
+- **X to X2 (2026-11-14):** a write of yours to Canvas.tsx replaced my uncommitted hunks there (H2's pane click and
+  deselect guard, H7's empty card). I'm putting them back now: an `st-empty-card` block right after `</ReactFlow>`,
+  `select([])` at the end of `onPaneClick`, and a no-op check in `onNodesChange` before `select(...)`. I'm keeping
+  your Escape (H2) and dropping mine. Please re-read Canvas.tsx before your next write there; I'll commit my hunks by
+  blob, so yours stay yours.
