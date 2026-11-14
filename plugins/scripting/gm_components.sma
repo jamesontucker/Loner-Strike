@@ -9648,12 +9648,12 @@ enum { WX_HOUND = 0, WX_SNARK, WX_HEAVY, WX_GARG, WX_GONARCH };
 #define WT_MAX_ROWS 32
 #define WT_MAX_MIX 16
 new bool:g_wtOn, bool:g_wtCreatures, g_wtTeam = 2, Float:g_wtCountScale = 1.0, Float:g_wtHpScale = 1.0, g_wtCap, bool:g_wtTiers = true;
-new g_wtRowFrom[WT_MAX_ROWS], g_wtRowTo[WT_MAX_ROWS], g_wtMixType[WT_MAX_ROWS][WT_MAX_MIX][16], g_wtMixW[WT_MAX_ROWS][WT_MAX_MIX], g_wtMixN[WT_MAX_ROWS], g_wtNrows;
-new g_wtFileBoss[16] = "boss", g_wtFileEvery = 5, Float:g_wtFileCount = 1.0, Float:g_wtFileHp = 1.0, bool:g_wtTypeHp;
+new g_wtRowFrom[WT_MAX_ROWS], g_wtRowTo[WT_MAX_ROWS], g_wtMixType[WT_MAX_ROWS][WT_MAX_MIX][32], g_wtMixW[WT_MAX_ROWS][WT_MAX_MIX], g_wtMixN[WT_MAX_ROWS], g_wtNrows;
+new g_wtFileBoss[32] = "boss", g_wtFileEvery = 5, Float:g_wtFileCount = 1.0, Float:g_wtFileHp = 1.0, bool:g_wtTypeHp;
 /* own_rounds = 1 in the section: the built-in boss waves, pack rounds and heavies stay; the rows give the everyday mix */
 new bool:g_wtFileRounds;
 new Float:g_wtCallAt;
-new g_wtBoss[16], bool:g_wtBossDone = true, g_wtSpecial = -1, g_wtHeavyLeft, g_wtPlanned, g_wtSpawned, g_wtFail;
+new g_wtBoss[32], bool:g_wtBossDone = true, g_wtSpecial = -1, g_wtHeavyLeft, g_wtPlanned, g_wtSpawned, g_wtFail;
 
 /* shop */
 #define SH_NEXT     0
@@ -12405,7 +12405,7 @@ stock wt_spawn(const Float:origin[3])
 {
 	if (!g_wtOn || !g_wtCreatures)
 		return 0;
-	new type[16];
+	new type[32];
 	new bool:boss = wt_pick_type(type, charsmax(type));
 	new Float:o[3];
 	vcopy(origin, o);
@@ -12418,14 +12418,14 @@ stock wt_spawn(const Float:origin[3])
 	if (!cr)
 	{
 		/* a type this server doesn't have: the one it stands in for (twice) */
-		new fb[16];
+		new fb[32];
 		wt_type_fallback(type, fb, charsmax(fb));
 		if (fb[0])
 		{
 			cr = wt_creature(fb, o, speed);
 			if (!cr)
 			{
-				new fb2[16];
+				new fb2[32];
 				wt_type_fallback(fb, fb2, charsmax(fb2));
 				if (fb2[0])
 					cr = wt_creature(fb2, o, speed);
@@ -12714,7 +12714,7 @@ stock wt_load(const section[])
 			if (g_wtRowFrom[r] < 1)
 				continue;
 			g_wtMixN[r] = 0;
-			new rest[480], t[16], w[12];
+			new rest[480], t[32], w[12];
 			copy(rest, charsmax(rest), val);
 			while (rest[0] && g_wtMixN[r] < WT_MAX_MIX)
 			{
@@ -12757,7 +12757,7 @@ stock wt_types(list[], len, upto)
 						if (g_wtFileRounds)
 						{
 							/* and the type standing in for it (a game without it yet) */
-							new fb[16];
+							new fb[32];
 							wt_type_fallback(g_wtMixType[r][m], fb, charsmax(fb));
 							if (fb[0])
 								wt_add_word(list, len, fb);
@@ -12799,7 +12799,7 @@ stock wt_types(list[], len, upto)
 
 stock wt_add_word(list[], len, const word[])
 {
-	new padded[40], have[520];
+	new padded[48], have[600];
 	formatex(padded, charsmax(padded), " %s ", word);
 	formatex(have, charsmax(have), " %s ", list);
 	if (contain(have, padded) >= 0)
@@ -13140,7 +13140,7 @@ public bool:n_wave_is_big(plugin, params)
 /* ls_wave_types(out[], len, upto): the types rounds 1..upto use, for ls_creature_precache */
 public n_wave_types(plugin, params)
 {
-	new list[512];
+	new list[600];
 	wt_types(list, charsmax(list), get_param(3));
 	set_string(1, list, get_param(2));
 	return strlen(list);

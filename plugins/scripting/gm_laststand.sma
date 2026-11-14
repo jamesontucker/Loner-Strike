@@ -2898,7 +2898,7 @@ stock add_word(list[], len, const word[])
 {
 	if (!word[0])
 		return;
-	new padded[280], w[20];
+	new padded[600], w[40];
 	formatex(padded, charsmax(padded), " %s ", list);
 	formatex(w, charsmax(w), " %s ", word);
 	if (containi(padded, w) >= 0)
