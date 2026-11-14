@@ -134,8 +134,8 @@ br_valley v6; squads on QA4B (16 bots), duos/solo on QA4B2.
 
 
 ### Area F self-check (MCP, 2026-11-14, before QA starts; Rust tests, the stdio bridge, the site in two engines)
-Run on `tools` at c0266b76. **No sim was started**: 15 hlds sims were already running on the Mac (limit 8), so every
-row that needs a running game is left for QA. Crash files read below come from existing sims, so they're **old build**
+Run on `tools` at c0266b76. **No sim was started** (a process count read 15 sims, but it counted helper processes: 5 were
+running), so every row that needs a running game is left for QA. Crash files read below come from existing sims, so they're **old build**
 results for the brain; they only show that the reader handles real files. Newest green ls-next3 at the start: run
 43571907279 (head 0af22051); QA runs on that build plus the current `tools` plugins and maps.
 | Item | Verified here | Evidence | Left for QA / the user |
