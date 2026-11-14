@@ -745,8 +745,8 @@ footer a { color: var(--dim); }
   <h1>Map editor</h1>
   <p class="lead">Build maps with brushes and entities, like Hammer, in a 3D view. The map is checked as you go.</p>
   <figure class="shot">
-    <picture><source srcset="img/1.0/editor.webp" type="image/webp"><img src="img/1.0/editor.png" alt="The map editor: tools down the left, ls_outpost in 3D, the outline and map settings on the right, textures below" width="1440" height="900" loading="lazy"></picture>
-    <figcaption>ls_outpost in the editor: tools on the left, panels on the right and below.</figcaption>
+    <picture><source srcset="img/1.0/editor.webp" type="image/webp"><img src="img/1.0/editor.png" alt="The map editor: tools down the left, br_valley in 3D, the outline and map settings on the right, the Content Browser below" width="1440" height="900" loading="lazy"></picture>
+    <figcaption>br_valley in the editor: tools on the left, panels on the right and below.</figcaption>
   </figure>
   <h2 id="editor-start">Start a map</h2>
   <p>In <b>Tools › Map editor</b>:</p>
@@ -777,7 +777,7 @@ footer a { color: var(--dim); }
     <li><b>View › Show frame time</b> (<span class="kbd">Ctrl</span> <span class="kbd">Alt</span> <span class="kbd">Shift</span> <span class="kbd">F</span>) shows frames a second and slow frames, for judging big maps.</li>
   </ul>
   <figure class="shot">
-    <picture><source srcset="img/1.0/editor-quad.webp" type="image/webp"><img src="img/1.0/editor-quad.png" alt="The Quad layout: 3D, top, front and side views" width="1440" height="900" loading="lazy"></picture>
+    <picture><source srcset="img/1.0/editor-quad.webp" type="image/webp"><img src="img/1.0/editor-quad.png" alt="The Quad layout on ls_outpost: 3D, top, front and side views, a picked brush with its handles in the flat views" width="1440" height="900" loading="lazy"></picture>
     <figcaption>Quad: four views, like Hammer.</figcaption>
   </figure>
   <h2 id="editor-tools">Building</h2>
@@ -837,6 +837,12 @@ footer a { color: var(--dim); }
     <figcaption>Go to leak flies to the hole and picks the brush beside it.</figcaption>
   </figure>
   <p>The game won't load a map with missing models or sprites. The <b>Project</b> panel lists every file the map uses, can <b>Copy into the game</b> or <b>Copy next to the project</b>, and <b>Find missing files…</b> searches a folder you pick.</p>
+  <h2 id="editor-budget" data-keywords="limits precache models sounds entities edicts clipnodes planes">Budget</h2>
+  <p><b>Budget</b> (in the panels, or <b>View › Budget</b>) shows how close the map is to the engine's limits: precached models and sounds (with the game's own share and a reserve for modes), brush entities, entities, edicts and textures as you build, and after a compile that map's own numbers (planes, clipnodes, faces, leaves, lighting). Green has room, yellow is over 75%, red over 90%. Click a bar for what uses the most, with the usual fix and <b>Pick</b>. <b>Playtest</b> and <b>Publish</b> ask first when a bar is red.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/editor-budget.webp" type="image/webp"><img src="img/1.0/editor-budget.png" alt="The Budget panel on br_valley: precached models at 90% in yellow, sounds at 64%, brush entities, entities, edicts and textures in green, and no compile yet" width="1440" height="900" loading="lazy"></picture>
+    <figcaption>br_valley's Budget: models are getting close.</figcaption>
+  </figure>
   <h2 id="editor-save">Saving and exporting</h2>
   <ul>
     <li><b>Save</b> (<span class="kbd">Ctrl</span> <span class="kbd">S</span>) keeps a project (<code>.lsmap</code>) with groups, hidden things and the rest.</li>
@@ -914,14 +920,14 @@ footer a { color: var(--dim); }
   <h1>Game Mode Studio</h1>
   <p class="lead">Make a game mode from nodes, like Unreal's Blueprints: when something happens, check things and do things. The Studio turns the graph into a plugin, tests it on a hidden server with bots, and installs it.</p>
   <figure class="shot">
-    <picture><source srcset="img/1.0/studio.webp" type="image/webp"><img src="img/1.0/studio.png" alt="Game Mode Studio: My mode on the left with events and variables, the graph in the middle, Details on the right" width="1440" height="900" loading="lazy"></picture>
-    <figcaption>The Last Stand template open in the Studio.</figcaption>
+    <picture><source srcset="img/1.0/studio.webp" type="image/webp"><img src="img/1.0/studio.png" alt="Game Mode Studio on King of the Hill: My mode on the left with its events and variables, the round start and scoring part of the graph in the middle, Details on the right" width="1440" height="900" loading="lazy"></picture>
+    <figcaption>King of the Hill, one of the example modes, open in the Studio.</figcaption>
   </figure>
   <h2 id="studio-start">Start a mode</h2>
   <p>In <b>Tools › Game Mode Studio</b>, start from a template (<b>Rifle Reward</b>, <b>Last Stand</b>, <b>Battle Royale</b>), one of the five <a href="#studio-examples">example modes</a>, or <b>Blank mode</b>. Name it and it's saved; <b>Your modes</b> lists them.</p>
   <p>New to the Studio? The first time you open it, it offers a one-minute <b>tour</b> on the Infection example: the canvas, adding nodes, My mode, Details, the three checks, Playtest and Install. <b>Not now</b> or <b>Don't show again</b> skip it, and the <b>?</b> menu next to <b>Find</b> has <b>Take the Studio tour</b> any time.</p>
   <figure class="shot">
-    <picture><source srcset="img/1.0/studio-start.webp" type="image/webp"><img src="img/1.0/studio-start.png" alt="Game Mode Studio's start: the templates and the five example modes" width="790" height="440" loading="lazy"></picture>
+    <picture><source srcset="img/1.0/studio-start.webp" type="image/webp"><img src="img/1.0/studio-start.png" alt="Game Mode Studio's start: the five example modes, the templates and Your modes" width="1440" height="900" loading="lazy"></picture>
     <figcaption>Start from a template or one of the example modes.</figcaption>
   </figure>
   <h2 id="studio-first-mode" data-keywords="tutorial first beginner how to make a mode">Make your first mode</h2>
@@ -971,6 +977,10 @@ footer a { color: var(--dim); }
   </table></div>
   <h2 id="studio-help" data-keywords="help f1 what does this node do">Node help</h2>
   <p>The <b>?</b> menu next to <b>Find</b> › <b>Node help</b>, or <span class="kbd">F1</span> with a node picked, opens a panel beside the graph that explains every node: what it does, each pin and setting, related nodes, and a note when it's costly or needs care. Most nodes have an example: <b>Add the example</b> drops it into your graph. Search it like the node list.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/studio-help.webp" type="image/webp"><img src="img/1.0/studio-help.png" alt="Node help for Find Marker beside the graph: what it does, each pin, its settings and Add this node" width="1440" height="900" loading="lazy"></picture>
+    <figcaption>F1 on Find Marker.</figcaption>
+  </figure>
   <h2 id="studio-variables">Variables, functions and macros</h2>
   <ul>
     <li><b>Variables</b>: number, yes/no, text, player, team, vector and more, per mode, player or team, kept for the map or reset each round. Lists and maps too.</li>
@@ -988,11 +998,15 @@ footer a { color: var(--dim); }
   </ul>
   <h2 id="studio-timelines" data-keywords="animation curve keyframe moving platform pulse">Timelines</h2>
   <p>A <b>Timeline</b> is values that change over time and events at set moments: a lifting platform, a pulsing glow, a 3-2-1 countdown. Add one under <b>Timelines</b>, add tracks (a number, a position, a color, or events), click to add keys and drag them. A <b>Timeline</b> node plays it: <b>Update</b> runs every tick with the tracks' values, <b>Finished</b> at the end, and each event track has its own pin. It can loop, reverse and jump to a time.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/studio-timeline.webp" type="image/webp"><img src="img/1.0/studio-timeline.png" alt="The Timeline editor: Hill Glow, 2 seconds and looping, with a color track from yellow to red and back, a Radius curve and two Beat keys" width="1440" height="900" loading="lazy"></picture>
+    <figcaption>A pulsing glow: a color track, a number curve and event keys.</figcaption>
+  </figure>
   <p>In a function with a Player input, each player gets their own copy. That's up to 32 copies, each ticking 20 times a second; the Quick check warns when that adds up. A Tick of 0.1 s still looks smooth.</p>
   <h2 id="studio-tables" data-keywords="data table spreadsheet csv lookup list">Data tables</h2>
   <p>A <b>data table</b> is a grid of values to look up: a gun list, prices, waves. Under <b>Data tables</b>, add one and fill it in: each column has a type (number, text, yes/no, an enum, a weapon or an entity name), and the <b>key column</b> names each row. <b>Paste or import CSV…</b> takes rows straight from a spreadsheet; <b>Copy as CSV</b> goes the other way.</p>
   <figure class="shot">
-    <picture><source srcset="img/1.0/studio-tables.webp" type="image/webp"><img src="img/1.0/studio-tables.png" alt="The data table editor: Gun Game Lite's gun list with Level, Gun and Spare bullets columns" width="1120" height="660" loading="lazy"></picture>
+    <picture><source srcset="img/1.0/studio-tables.webp" type="image/webp"><img src="img/1.0/studio-tables.png" alt="The data table editor: Gun Game Lite's gun list with Level, Gun and Spare bullets columns" width="1440" height="900" loading="lazy"></picture>
     <figcaption>Gun Game Lite's gun list is a data table.</figcaption>
   </figure>
   <ul>

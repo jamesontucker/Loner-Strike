@@ -175,6 +175,54 @@ Draft in-game shots stay out of the public page. `?drafts` shows them as dashed,
 - **Why this exists** is original (151 words before 1.0). Recommendation: keep it whole with its DreamHack photo, and cut only the added 1.0 paragraph to one sentence. That's better than cutting it to 2–3 sentences.
 - **Pick the lobby** (the skill meters) is original, inside "How the bots play". Recommendation: keep it as it was. Play's lead picture stays the Players page with live bot chat, as it was before 1.0. The `bots-site` in-game shot can replace that picture when it exists (marked as a placeholder).
 
+## Screenshots for 1.0, fresh (Parity A, 2026-11-14)
+The user's ask: fresh shots of the new things; the hero (`img/maps.jpg`, the map browser in a live game) stays.
+Captured with **`app/ui/scripts/site-shots.mjs`** (repeatable: `node scripts/site-shots.mjs --list`, then
+`node scripts/site-shots.mjs @editor @studio`, or shot names). It clones the game folder copy-on-write into the temp
+folder (the real one is never written), uses an empty app data folder and its own Vite cache and ports (8139/5279),
+loads repo content (maps-src, the Studio's examples, recordings of real runs) and saves at the site's sizes:
+`<name>.webp` 1440×900 (cwebp q80), `<name>.png` 1200 wide (256 colours when `pngquant` is installed; else full
+colour), `thumb/<name>.webp` 320 wide. Nothing is deployed by it.
+
+### Every 1.0 picture and what to do (11-13 captures predate the editor, Studio and Tools UX passes)
+| Image (page) | Shows | Status | New shot |
+|---|---|---|---|
+| `editor` (home make tour, docs) | ls_outpost in 3D, old bars | **outdated** | br_valley in 3D, outline, Inspect, Content browser (`editor`) |
+| `editor-quad` (tour, docs) | four views, old 2D panes | **outdated** | ls_outpost in Quad with a brush picked and its 2D handles (`editor-quad`) |
+| `editor-checks` (tour) | Checks | **outdated** | Checks on ls_outpost (`editor-checks`) |
+| — (docs, Budget section) | none | **new** | Budget on br_valley (`editor-budget`) |
+| `editor-compile` (tour, docs) | SDHLT download offer | outdated | after a compile: the result and Playtest (later, needs SDHLT in the clone) |
+| `editor-facesheet`, `editor-io`, `editor-leak` (docs, jpg) | face sheet, I/O arrows, leak line | outdated (old bars) | same subjects on ls_outpost (next pass) |
+| `studio` (tour, docs) | Outpost Defence zoomed out, unreadable | **outdated** | an example mode at a readable zoom (`studio`) |
+| `studio-start` (docs) | templates, examples | outdated | the start page (`studio-start`) |
+| `studio-tables` (docs, 11-14) | Gun Game Lite's table | ok | retaken with the rest (`studio-tables`) |
+| — (docs) | none | **new** | Timelines editor (`studio-timeline`), the debugger mid-Playtest with real recorded events (`studio-debugger`), node help (`studio-help`) |
+| `mode-settings`, `publish-mode` (docs, 11-14) | mode settings, publish checks | ok | keep |
+| `creatures` (tour, docs) | Creature Studio | outdated | after QA4-T polish: a creature with its model and waves |
+| `plugins` (tour, docs) | Plugin Studio | outdated | after polish: a plugin with Problems and docs |
+| `tools` (tour, docs) | Tools page | outdated | after polish |
+| `navfix`, `callouts`, `radar`, `viewer-nav`, `doctor` (tour, docs) | map tools | outdated | after polish (cs_rats2 / de_dust2 as now) |
+| — | Map simulator and Replay | **new** | after polish: a sim run's report; Replay mid-playback (also the `replay` draft) |
+| `spray`, `playercfg`, `people`, `models` (tour, docs) | personalize tools | outdated | after polish |
+| `community` (home share tour, docs) | the browser, empty | **outdated** | after polish: cards with realistic sample entries (the repo's own example modes and maps, credited to Loner-Strike, never made-up people) |
+| `crashes`, `roles-*` (docs, 11-14) | Health › Crashes, roles | ok for now | retake with servers after polish |
+| `render-*` (docs, tour) | map renders | ok | keep |
+| `app-*`, `img/play.jpg`, `friends.jpg`, `servers.jpg` (home) | 0.1 app shots | old sidebar | optional, the user's call (in-app) |
+| `img/maps.jpg` (hero) | live map browser | keep | **keep (user)** |
+
+Captured now (editor and Studio, their UX passes are done), in docs.html and the home tour: `editor` (br_valley),
+`editor-quad`, `editor-checks` (br_valley's checks), `editor-budget` (new; with a new **Budget** section in docs),
+`studio` (King of the Hill), `studio-start`, `studio-tables`, `studio-timeline` (new), `studio-help` (new). Still to do
+in this group: `studio-debugger` (needs a Playtest of an example on a sim, its events recorded), `editor-compile` after
+a real compile, and the face sheet / I/O / leak jpgs. The rest waits for QA4-T1/T2/CORE.
+Checked: docs.html and index.html at 1440 and 390 wide in Chromium and WebKit, no sideways scroll, every new picture
+loads. The PNG fallbacks are full colour (~0.2-0.75 MB) because pngquant isn't installed here; `brew install pngquant`
+and a re-run makes them 256 colours like the old ones.
+How the shots are set up: Tools pages in Focus with the hints already seen; the editor imports the map through its
+own Import (the dev server answers the file dialog with a copy of the maps-src file), hides triggers and flies in a
+little; King of the Hill is framed on its round start and scoring chain; the Timeline is a "Hill Glow" pulse added to
+a copy of King of the Hill. Run it while the working tree builds, or give a clean build with `LS_TEST_BIN`.
+
 ## In-game shots to take (user)
 
 Save each one as a JPEG at `site/img/1.0/ingame/<name>.jpg`, 16:10 if you can (for example 1680×1050 or 1280×800, or crop to it). Turn off net_graph and the console.
