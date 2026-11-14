@@ -31,7 +31,7 @@ arch add height (spiral stairs). Shape tool bar fields + **Preview…** popover 
 wireframe (`ShapeSettings.tsx`, settings in `shapeParams.ts`, `ls.editor.shapeParams`). Tests: shapes.rs units
 (validity, convexity, shared ends, grid), the command test, `tests/editor-shapes.spec.ts` (Chromium + WebKit).
 
-**3. Extrude and vertex editing** (e8f90dda): Shift-drag a face of a picked brush in 3D pulls out a new brush
+**3. Extrude and vertex editing** (a0c5f385): Shift-drag a face of a picked brush in 3D pulls out a new brush
 (`extrude_face`; `editor/extrude.rs`: a prism over the face, ends in the face's texture, sides continue the source's
 faces; the far side on the grid; a drag is one "Extrude" step and the new brush is picked; dragging back onto the
 face removes it). Vertex tool: ⌘/Ctrl-drag an edge's or face's middle splits it (`add_vertex`: a new corner, refused
