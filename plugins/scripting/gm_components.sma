@@ -5192,6 +5192,15 @@ new g_w3cDeathCrates, g_w3fwCrate, g_w3fwCrateTake;
 new g_w3DcTaken, g_w3DcMade;
 /* counts for the round's log line */
 new g_w3StatHeal[HEAL_KINDS], g_w3StatVest[4], g_w3StatHelm[4], g_w3DcLooted;
+/* match HUD */
+#define W3_TASK_SPEC 7737000
+#define W3_FEED 5
+new g_w3cMatchHud, g_w3SyncTop, g_w3SyncSide;
+new g_w3Kills[33];
+new g_w3Feed[W3_FEED][96];
+new Float:g_w3FeedAt[W3_FEED];
+new g_w3HudText[128];
+new g_w3Killer[33];
 /* rarity glow */
 new g_w3cRarity;
 /* scarce ammo */
@@ -5215,6 +5224,11 @@ stock w3_natives()
 	register_native("ls_crate_count", "n_w3_crate_count");
 	register_native("ls_crate_item", "n_w3_crate_item");
 	register_native("ls_crate_open", "n_w3_crate_open");
+	register_native("ls_match_hud", "n_w3_match_hud");
+	register_native("ls_match_hud_text", "n_w3_match_hud_text");
+	register_native("ls_feed", "n_w3_feed");
+	register_native("ls_kills", "n_w3_kills");
+	register_native("ls_spectate", "n_w3_spectate");
 }
 
 stock w3_init()
@@ -5254,6 +5268,10 @@ stock w3_init()
 	g_w3fwCrateTake = CreateMultiForward("ls_on_crate_take", ET_STOP, FP_CELL, FP_CELL, FP_STRING);
 	RegisterHamPlayer(Ham_Killed, "ham_w3_killed_pre");
 	register_forward(FM_PlayerPreThink, "fm_w3_prethink");
+	/* 1: the match HUD (players left, kills, zone timer, armor, heals, kill feed; the dead watch their killer) */
+	g_w3cMatchHud = register_cvar("ls_match_hud", "0");
+	g_w3SyncTop = CreateHudSyncObj();
+	g_w3SyncSide = CreateHudSyncObj();
 	RegisterHamPlayer(Ham_TraceAttack, "ham_w3_trace");
 	g_w3Hooked = true;
 }
@@ -5263,7 +5281,12 @@ public ev_w3_new_round()
 	for (new p = 1; p <= 32; p++)
 	{
 		w3_reset_player(p);
+		g_w3Kills[p] = 0;
+		g_w3Killer[p] = 0;
+		remove_task(W3_TASK_SPEC + p);
 	}
+	for (new i = 0; i < W3_FEED; i++)
+		g_w3Feed[i][0] = EOS;
 	for (new c = 0; c < W3_DC_MAX; c++)
 		w3_dc_remove(c);
 	w3_round_stats();
@@ -5294,6 +5317,7 @@ public ham_w3_killed(id, killer, gib)
 	if (get_pcvar_num(g_w3cDeathCrates) && g_w3SnapN[id])
 		w3_dc_from_death(id);
 	g_w3SnapN[id] = 0;
+	w3_match_death(id, killer);
 	for (new k = 0; k < HEAL_KINDS; k++)
 		g_w3Heals[id][k] = 0;
 	g_w3BoostEnd[id] = 0.0;
@@ -5730,6 +5754,8 @@ stock w3_tick(bool:sec)
 		if (g_w3Vest[p] && get_user_armor(p) <= 0)
 			w3_armor_set(p, 0, -1, true);
 	}
+	if (sec && get_pcvar_num(g_w3cMatchHud))
+		w3_match_hud();
 }
 
 /* a hurt bot heals when nobody has hurt it for 4 s and no enemy is in sight (W2 may take this over) */
@@ -6832,6 +6858,201 @@ public n_w3_crate_open(plugin, params)
 		return 0;
 	w3_dc_menu(id, c);
 	return 1;
+}
+
+/* ---- the match HUD: players left, kills, zone, armor, heals, kill feed; the dead watch their killer ---- */
+
+stock w3_alive_count()
+{
+	new n = 0;
+	for (new p = 1; p <= MaxClients; p++)
+		if (g_alive[p])
+			n++;
+	return n;
+}
+
+/* "Zone closes in 1:20", "ZONE CLOSING 0:12", "" (no zone or not started) */
+stock w3_zone_text(out[], len)
+{
+	out[0] = EOS;
+	new z = -1;
+	for (new k = 0; k < g_nslots && z < 0; k++)
+		if (g_ent[k] && g_kind[k] == K_ZONE && g_on[k])
+			z = k;
+	if (z < 0)
+		return;
+	if (g_pf[z][Z_T1] > g_pf[z][Z_T0] && g_now < g_pf[z][Z_T1])
+	{
+		new t = floatround(g_pf[z][Z_T1] - g_now);
+		formatex(out, len, "ZONE CLOSING %d:%02d", t / 60, t % 60);
+		return;
+	}
+	for (new k = 0; k < g_nslots; k++)
+		if (g_ent[k] && g_kind[k] == K_SHRINKER && g_aux[k] == z && g_state[k] == 1)
+		{
+			new t = floatround(floatmax(g_pf[k][S_NEXT] - g_now, 0.0));
+			formatex(out, len, "Zone closes in %d:%02d", t / 60, t % 60);
+			return;
+		}
+}
+
+stock w3_feed_add(const text[])
+{
+	for (new i = W3_FEED - 1; i > 0; i--)
+	{
+		copy(g_w3Feed[i], charsmax(g_w3Feed[]), g_w3Feed[i - 1]);
+		g_w3FeedAt[i] = g_w3FeedAt[i - 1];
+	}
+	copy(g_w3Feed[0], charsmax(g_w3Feed[]), text);
+	g_w3FeedAt[0] = get_gametime();
+}
+
+stock w3_match_death(id, killer)
+{
+	if (!get_pcvar_num(g_w3cMatchHud))
+		return;
+	new vn[32], kn[32], wn[24], line[96];
+	get_user_name(id, vn, charsmax(vn));
+	new left = 0;
+	for (new p = 1; p <= MaxClients; p++)
+		if (p != id && is_user_alive(p))
+			left++;
+	if (1 <= killer <= MaxClients && killer != id && is_user_connected(killer))
+	{
+		g_w3Kills[killer]++;
+		g_w3Killer[id] = killer;
+		get_user_name(killer, kn, charsmax(kn));
+		get_weaponname(get_user_weapon(killer), wn, charsmax(wn));
+		strtoupper(wn[7]);
+		formatex(line, charsmax(line), "%s  [%s]  %s   (%d left)", kn, wn[7], vn, left);
+	}
+	else
+	{
+		g_w3Killer[id] = 0;
+		formatex(line, charsmax(line), "%s is out   (%d left)", vn, left);
+	}
+	w3_feed_add(line);
+	/* the dead watch who got them (a mode can choose someone else with ls_spectate) */
+	if (!is_user_bot(id) && g_w3Killer[id])
+	{
+		remove_task(W3_TASK_SPEC + id);
+		set_task(3.5, "task_w3_spec", W3_TASK_SPEC + id);
+	}
+}
+
+public task_w3_spec(tid)
+{
+	new id = tid - W3_TASK_SPEC;
+	if (!is_user_connected(id) || is_user_alive(id))
+		return;
+	new t = g_w3Killer[id];
+	if (t && is_user_alive(t))
+		w3_spectate(id, t);
+}
+
+/* a dead player watches someone, first person */
+stock w3_spectate(id, target)
+{
+	if (!is_user_connected(id) || is_user_alive(id) || !is_user_alive(target))
+		return 0;
+	new name[32];
+	get_user_name(target, name, charsmax(name));
+	/* the game's own observer commands (they move its observer target), then the view itself */
+	engclient_cmd(id, "specmode", "4");
+	engclient_cmd(id, "follow", name);
+	set_pev(id, pev_iuser1, 4);
+	set_pev(id, pev_iuser2, target);
+	return 1;
+}
+
+stock w3_match_hud()
+{
+	new zone[48], top[192], side[512];
+	w3_zone_text(zone, charsmax(zone));
+	new alive = w3_alive_count(), Float:now = get_gametime();
+	/* the kill feed: lines from the last 8 s */
+	new feed[400], fl = 0;
+	for (new i = 0; i < W3_FEED; i++)
+		if (g_w3Feed[i][0] && now - g_w3FeedAt[i] < 8.0)
+			fl += formatex(feed[fl], charsmax(feed) - fl, "%s^n", g_w3Feed[i]);
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || g_bot[p])
+			continue;
+		new len = formatex(top, charsmax(top), "ALIVE %d   KILLS %d", alive, g_w3Kills[p]);
+		if (g_w3HudText[0])
+			len += formatex(top[len], charsmax(top) - len, "   %s", g_w3HudText);
+		else if (zone[0])
+			len += formatex(top[len], charsmax(top) - len, "   %s", zone);
+		if (g_alive[p])
+		{
+			new extra[96], el = 0;
+			if (get_pcvar_num(g_w3cArmorLevels) && (g_w3Vest[p] || g_w3Helm[p]))
+				el += formatex(extra[el], charsmax(extra) - el, "Vest %d  Helmet %d", g_w3Vest[p], g_w3Helm[p]);
+			if (get_pcvar_num(g_w3cHealCarry) && w3_heals_total(p))
+				el += formatex(extra[el], charsmax(extra) - el, "%sBandage %d  Medkit %d  Drink %d", el ? "    " : "",
+					g_w3Heals[p][HEAL_BANDAGE], g_w3Heals[p][HEAL_MEDKIT], g_w3Heals[p][HEAL_DRINK]);
+			if (el)
+				formatex(top[len], charsmax(top) - len, "^n%s", extra);
+		}
+		set_hudmessage(255, 220, 120, -1.0, 0.02, 0, 0.0, 1.1, 0.0, 0.1, -1);
+		ShowSyncHudMsg(p, g_w3SyncTop, "%s", top);
+		side[0] = EOS;
+		new sl = 0;
+		if (feed[0])
+			sl += formatex(side[sl], charsmax(side) - sl, "%s", feed);
+		sl += w3_side_extra(p, side[sl], charsmax(side) - sl);
+		if (side[0])
+		{
+			set_hudmessage(220, 220, 220, 0.70, 0.16, 0, 0.0, 1.1, 0.0, 0.1, -1);
+			ShowSyncHudMsg(p, g_w3SyncSide, "%s", side);
+		}
+	}
+}
+
+/* more for the right side (the squad list, when squads are on) */
+stock w3_side_extra(p, out[], len)
+{
+	#pragma unused p
+	out[0] = EOS;
+	#pragma unused len
+	return 0;
+}
+
+/* native ls_match_hud(bool:on) */
+public n_w3_match_hud(plugin, params)
+{
+	set_pcvar_num(g_w3cMatchHud, get_param(1) ? 1 : 0);
+	return 1;
+}
+
+/* native ls_match_hud_text(const text[]): the mode's words in place of the zone timer ("" = the zone) */
+public n_w3_match_hud_text(plugin, params)
+{
+	get_string(1, g_w3HudText, charsmax(g_w3HudText));
+	return 1;
+}
+
+/* native ls_feed(const text[]) */
+public n_w3_feed(plugin, params)
+{
+	new t[96];
+	get_string(1, t, charsmax(t));
+	w3_feed_add(t);
+	return 1;
+}
+
+/* native ls_kills(id): kills this round */
+public n_w3_kills(plugin, params)
+{
+	new id = get_param(1);
+	return 1 <= id <= MaxClients ? g_w3Kills[id] : 0;
+}
+
+/* native ls_spectate(id, target) */
+public n_w3_spectate(plugin, params)
+{
+	return w3_spectate(get_param(1), get_param(2));
 }
 
 /* ==== end W3 ==== */

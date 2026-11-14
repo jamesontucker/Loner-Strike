@@ -474,6 +474,21 @@ forward ls_on_death_crate(ent, victim);
 /** A player is taking an item from a crate. Handled: refused. */
 forward ls_on_crate_take(ent, id, const item[]);
 
+/* Match HUD (cvar ls_match_hud 1): for each person, at the top: players left, their kills, the zone's
+ * timer (or the mode's own words), their armor levels and healing items; on the right: the kill feed and
+ * their squad with health. A player who's killed watches their killer. */
+
+/** Switches the match HUD on or off (same as the cvar ls_match_hud). */
+native ls_match_hud(bool:on);
+/** The mode's words in place of the zone timer ("Loot up: fighting in 12 s"); "" shows the zone again. */
+native ls_match_hud_text(const text[]);
+/** A line in the kill feed. */
+native ls_feed(const text[]);
+/** A player's kills this round (counted while the match HUD is on). */
+native ls_kills(id);
+/** A dead player watches someone (first person). @return 1 if done */
+native ls_spectate(id, target);
+
 /* ==== end W3 ==== */
 
 /* ==== W1: Last Stand pieces ==== */

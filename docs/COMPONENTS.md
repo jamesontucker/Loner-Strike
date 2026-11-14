@@ -377,6 +377,16 @@ theirs, a pistol, healing items, better armor, grenades) and are drawn to it (`a
 - `ls_comp_players` (server console) lists each living player's guns, ammo, armor and healing items, and
   the crates on the ground. Each round logs one line: healing items used, armor found by level, death
   crates made / searched / items taken.
+
+### Match HUD
+`ls_match_hud 1` (or `ls_match_hud(true)`): for each person, at the top, ALIVE (players left), their
+KILLS and the zone's timer ("Zone closes in 1:20", "ZONE CLOSING 0:12"), or the mode's own words in its
+place (`ls_match_hud_text("Loot up: fighting in 12 s")`, "" for the zone again); under it their armor
+levels and healing items. On the right, the kill feed (who, with what, how many are left; 8 s a line) and,
+in squads, their squad mates with health. A player who's killed watches their killer from 3.5 s (the
+game's `specmode`/`follow`, unverified on a real client). Natives `ls_match_hud(on)`,
+`ls_match_hud_text(text[])`, `ls_feed(text[])`, `ls_kills(id)`, `ls_spectate(id, target)`.
+
 <!-- ==== end W3 ==== -->
 
 <!-- ==== W1: Last Stand pieces ==== -->
