@@ -56,7 +56,7 @@ def make():
     bot.roles["Server Moderator"] = "900099"
     mod = modbot.Mod(c, bot, PUB.hex(), GUILD, [MOD_ROLE], OWNER, background=False, apply_channel=APPS, apply_roles=[MOD_ROLE])
     fs = FakeServers()
-    r = roles.Roles(roles.Store(os.path.join(tempfile.mkdtemp(), "r.db")), clean=fs.clean, asker=fs.ask, players=fs.players, polar_secret=POLAR,
+    r = roles.Roles(roles.Store(os.path.join(tempfile.mkdtemp(), "r.db")), clean=fs.clean, asker=fs.ask, players=fs.players, polar_secret=POLAR, products=["prod_once", "prod_monthly"],
                     mod=mod, deciders=[MOD_ROLE])
     c.rolesvc = r
     return r, mod, bot, fs, c
@@ -100,6 +100,7 @@ def polar(r, payload, secret=POLAR, wid=None, ts=None):
 
 def grant(account, gid="g1", cust="cus_1", sub=None, kind="benefit_grant.created", revoked=False):
     return {"type": kind, "data": {"id": gid, "customer_id": cust, "subscription_id": sub, "is_granted": not revoked,
+                                   "subscription": {"id": sub, "product_id": "prod_monthly"} if sub else None,
                                    "is_revoked": revoked, "benefit": {"type": "discord"},
                                    "properties": {"account_id": account, "guild_id": GUILD}}}
 
@@ -388,7 +389,7 @@ class Refunds(unittest.TestCase):
     def order(self, r, oid, kind="order.paid", cust="cus_r", **extra):
         base = {"id": oid, "customer_id": cust, "subscription_id": None}
         if kind == "order.paid":
-            base.update(net_amount=500, currency="usd")
+            base.update(net_amount=500, currency="usd", product_id="prod_monthly" if extra.get("subscription_id") else "prod_once")
         return polar(r, {"type": kind, "data": dict(base, **extra)})
 
     def until(self, r, who=PLAYER):
@@ -431,7 +432,7 @@ class Refunds(unittest.TestCase):
 
     def test_subscription_payments_count_and_cancelling_keeps_them(self):
         # lifetime (POLAR_SUPPORTER_DAYS 0): subscribe, pay, cancel: still a supporter
-        r = roles.Roles(roles.Store(os.path.join(tempfile.mkdtemp(), "r.db")), polar_secret=POLAR, days=0)
+        r = roles.Roles(roles.Store(os.path.join(tempfile.mkdtemp(), "r.db")), polar_secret=POLAR, days=0, products=["prod_once", "prod_monthly"])
         polar(r, grant(PLAYER, gid="gm", cust="cus_m", sub="sub_1"))
         self.order(r, "m1", cust="cus_m", subscription_id="sub_1", net_amount=300)
         polar(r, grant(PLAYER, gid="gm", cust="cus_m", sub="sub_1", kind="benefit_grant.revoked", revoked=True))
@@ -477,7 +478,7 @@ class Refunds(unittest.TestCase):
         self.assertAlmostEqual(self.until(r), 90 * 86400, delta=120)
 
     def test_for_good_and_another_minimum(self):
-        r = roles.Roles(roles.Store(os.path.join(tempfile.mkdtemp(), "r.db")), polar_secret=POLAR, days=0, min_cents=100)
+        r = roles.Roles(roles.Store(os.path.join(tempfile.mkdtemp(), "r.db")), polar_secret=POLAR, days=0, min_cents=100, products=["prod_once"])
         polar(r, grant(PLAYER, gid="g", cust="cus_r"))
         self.order(r, "one", net_amount=100)
         self.assertEqual(r.s.one("SELECT until FROM supporters WHERE discord_id=?", (PLAYER,))["until"], roles.FOREVER)
@@ -501,6 +502,37 @@ class Refunds(unittest.TestCase):
         self.assertFalse(r.is_supporter(PLAYER))
         self.assertEqual(r.s.one("SELECT applied_to FROM polar_orders WHERE order_id='o2'")["applied_to"], OTHER)
         self.assertTrue(any("Discord account changed" in x["detail"] for x in r.s.all("SELECT detail FROM roles_log")))
+
+    def test_only_the_support_products(self):
+        r, *_ = make()
+        polar(r, grant(PLAYER, gid="g", cust="cus_r"))
+        # the allowed one-time (by product_id, or by its items)
+        self.order(r, "once", product_id="prod_once")
+        self.order(r, "items", product_id=None, items=[{"product_id": "prod_once", "amount": 500}])
+        self.assertAlmostEqual(self.until(r), 60 * 86400, delta=120)
+        # another product the organization sells: never
+        self.order(r, "ebook", product_id="prod_ebook")
+        self.order(r, "noproduct", product_id=None)
+        self.assertAlmostEqual(self.until(r), 60 * 86400, delta=120)
+        self.assertEqual(sum("other product: ignored" in x["detail"] for x in r.s.all("SELECT detail FROM roles_log")), 2)
+        # the allowed monthly: its grant and its payments
+        polar(r, grant(OTHER, gid="gm", cust="cus_m", sub="sub_1"))
+        self.assertTrue(r.is_supporter(OTHER))
+        self.order(r, "m1", cust="cus_m", subscription_id="sub_1", product_id=None, subscription={"product_id": "prod_monthly"})
+        self.assertEqual(r.s.one("SELECT applied FROM polar_orders WHERE order_id='m1'")["applied"], 1)
+        # a subscription to another product: its grant isn't a monthly supporter
+        third = "450000000000000005"
+        g = grant(third, gid="gx", cust="cus_x", sub="sub_x")
+        g["data"]["subscription"]["product_id"] = "prod_other_sub"
+        polar(r, g)
+        self.assertFalse(r.is_supporter(third))
+
+    def test_no_products_set_means_nothing_counts(self):
+        r = roles.Roles(roles.Store(os.path.join(tempfile.mkdtemp(), "r.db")), polar_secret=POLAR)
+        polar(r, grant(PLAYER, gid="g", cust="cus_r", sub="sub_1"))
+        self.order(r, "o", product_id="prod_once")
+        self.assertFalse(r.is_supporter(PLAYER))
+        self.assertEqual(r.s.one("SELECT ignored FROM polar_orders WHERE order_id='o'")["ignored"], 1)
 
     def test_older_databases_keep_their_days(self):
         path = os.path.join(tempfile.mkdtemp(), "r.db")
@@ -536,12 +568,12 @@ class Supporters(unittest.TestCase):
         polar(r, grant(PLAYER, gid="gm", cust="cus_m", sub="sub_1", kind="benefit_grant.revoked", revoked=True))
         self.assertFalse(r.is_supporter(PLAYER))
         # a donation that comes before Polar says whose Discord it is
-        polar(r, {"type": "order.paid", "data": {"id": "ord_1", "customer_id": "cus_o", "subscription_id": None, "net_amount": 500, "currency": "usd"}})
+        polar(r, {"type": "order.paid", "data": {"id": "ord_1", "customer_id": "cus_o", "subscription_id": None, "net_amount": 500, "currency": "usd", "product_id": "prod_once"}})
         self.assertFalse(r.is_supporter(OTHER))
         polar(r, grant(OTHER, gid="go", cust="cus_o"))
         self.assertTrue(r.is_supporter(OTHER))
-        polar(r, {"type": "order.paid", "data": {"id": "ord_2", "customer_id": "cus_o", "net_amount": 300, "currency": "usd"}})
-        polar(r, {"type": "order.paid", "data": {"id": "ord_2", "customer_id": "cus_o", "net_amount": 300, "currency": "usd"}})  # the same order again
+        polar(r, {"type": "order.paid", "data": {"id": "ord_2", "customer_id": "cus_o", "net_amount": 300, "currency": "usd", "product_id": "prod_once"}})
+        polar(r, {"type": "order.paid", "data": {"id": "ord_2", "customer_id": "cus_o", "net_amount": 300, "currency": "usd", "product_id": "prod_once"}})  # the same order again
         until = r.s.one("SELECT until FROM supporters WHERE discord_id=?", (OTHER,))["until"]
         self.assertAlmostEqual(until - cm.now(), 60 * 86400, delta=120)
         self.assertTrue(r.is_supporter(OTHER, at=cm.now() + 59 * 86400))

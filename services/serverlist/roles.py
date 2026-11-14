@@ -189,7 +189,7 @@ class Store:
 
 class Roles:
     def __init__(self, store, clean=None, asker=None, players=None, polar_secret="", mod=None, deciders=(), days=SUPPORTER_DAYS,
-                 min_cents=SUPPORTER_MIN_CENTS):
+                 min_cents=SUPPORTER_MIN_CENTS, products=()):
         self.s = store
         # serverlist.clean_address, serverlist.check and serverlist.players (A2S), passed in to keep
         # the imports one way
@@ -200,6 +200,12 @@ class Roles:
         # days per one-time donation (stacking); 0: a donation makes them a supporter for good
         self.days = max(0, int(days))
         self.min_cents = max(0, int(min_cents))
+        # the Polar products that make a Supporter (POLAR_SUPPORTER_PRODUCTS); anything else the
+        # organization sells never does. None set: nothing counts (fails closed)
+        self.products = {str(p).strip() for p in products if str(p).strip()}
+        if self.polar_key and not self.products:
+            cm.log("roles: POLAR_SUPPORTER_PRODUCTS isn't set, so no Polar payment or grant makes a Supporter. "
+                   "Set the support products' ids in the env file.")
         self.lock = threading.RLock()
         if mod is not None:
             mod.rolesvc = self
@@ -572,7 +578,11 @@ class Roles:
             if (benefit.get("type") not in (None, "discord")) or not SNOWFLAKE.match(account) or not gid or not cust:
                 return
             granted = 1 if d.get("is_granted", True) and not d.get("is_revoked") and not d.get("revoked_at") and kind != "benefit_grant.revoked" else 0
-            monthly = 1 if d.get("subscription_id") else 0
+            # a monthly grant counts while it's granted only when it's for one of the support products (the
+            # Discord account it names is kept either way: it's whose payments those are)
+            monthly = 1 if d.get("subscription_id") and self.is_support_product(grant_products(d)) else 0
+            if d.get("subscription_id") and not monthly:
+                self.log("supporter", "polar", 0, account, f"grant {gid}: other product: ignored for the monthly status")
             have = self.s.one("SELECT * FROM polar_grants WHERE grant_id=?", (gid,))
             if have and (when < have["event_at"] or (when == have["event_at"] and granted and not have["granted"])):
                 self.log("supporter", "polar", 0, account, f"{kind} older than what's kept: ignored")
@@ -601,6 +611,8 @@ class Roles:
             if not oid or not cust:
                 return
             cents, currency, why = self.order_counts(d)
+            if why is None and not self.is_support_product(order_products(d)):
+                why = "other product: ignored"
             try:
                 self.s.run("INSERT INTO polar_orders(order_id, customer_id, at, amount_cents, currency, ignored) VALUES (?,?,?,?,?,?)",
                            (oid, cust, at, cents, currency, 0 if why is None else 1))
@@ -642,6 +654,9 @@ class Roles:
                                                                  + (time.strftime('%Y-%m-%d', time.gmtime(until)) if until else "none"))
             else:
                 self.log("refund", "polar", 0, cust, f"order {oid}: refunded (it hadn't counted yet)")
+
+    def is_support_product(self, ids):
+        return bool(self.products) and any(i in self.products for i in ids)
 
     def order_counts(self, d):
         """(cents, currency, why not) for a payment (one-time, or a month of a subscription): it counts (why None) when what was paid,
@@ -1065,6 +1080,25 @@ class Roles:
             return {"steamids": self.supporter_steamids(),
                     "supporters": self.s.all("SELECT * FROM supporters ORDER BY until DESC LIMIT 500")}
         raise cm.Reject(404, "not found")
+
+
+def _ids(*vals):
+    return [str(v) for v in vals if isinstance(v, (str, int)) and not isinstance(v, bool) and str(v)]
+
+
+def order_products(d):
+    """The product ids an order is for: product_id, product.id, its items', its subscription's."""
+    sub = d.get("subscription") if isinstance(d.get("subscription"), dict) else {}
+    prod = d.get("product") if isinstance(d.get("product"), dict) else {}
+    items = [i for i in d.get("items") or [] if isinstance(i, dict)] if isinstance(d.get("items"), list) else []
+    return _ids(d.get("product_id"), prod.get("id"), sub.get("product_id"), *[i.get("product_id") for i in items])
+
+
+def grant_products(d):
+    """The product ids a benefit grant came from: through its subscription or its order."""
+    sub = d.get("subscription") if isinstance(d.get("subscription"), dict) else {}
+    order = d.get("order") if isinstance(d.get("order"), dict) else {}
+    return _ids(d.get("product_id"), sub.get("product_id"), order.get("product_id"))
 
 
 def event_time(v):

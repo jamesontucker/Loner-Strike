@@ -447,7 +447,9 @@ def main():
                                             deciders=os.environ.get("DISCORD_SERVERMOD_DECIDERS", "").split(","),
                                             # days per one-time donation, stacking (0: for good), and what it has to be
                                             days=int(os.environ.get("POLAR_SUPPORTER_DAYS", os.environ.get("SUPPORTER_DAYS", "30")) or 0),
-                                            min_cents=int(os.environ.get("POLAR_SUPPORTER_MIN_CENTS", "300") or 0))
+                                            min_cents=int(os.environ.get("POLAR_SUPPORTER_MIN_CENTS", "300") or 0),
+                                            # the support products' ids (one-time and monthly); none: nothing counts
+                                            products=os.environ.get("POLAR_SUPPORTER_PRODUCTS", "").split(","))
         if a.recheck_hours > 0:
             threading.Thread(target=community.recheck_loop, args=(a.recheck_hours,), daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(registry, RateLimit(MAX_REGISTER), community=community))

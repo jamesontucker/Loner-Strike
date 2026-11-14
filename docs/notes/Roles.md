@@ -113,6 +113,11 @@ may only talk to this machine; an Admin's calls reach it through a spool in the 
   a supporter for good, and cancelling (the grant's revoke) takes away nothing paid for; with days > 0 each paid month
   adds its days. While a monthly grant is active they're a supporter anyway. Only a full refund of every counting
   payment ends it.
+  **Products:** only `POLAR_SUPPORTER_PRODUCTS` (the one-time and monthly support products' ids) count: an order's
+  product is its `product_id`, `product.id`, its items' or its subscription's; a grant's, its subscription's or
+  order's. Anything else is logged "other product: ignored" and never counts later; a grant for another product still
+  says whose Discord a customer is, but never makes them a monthly supporter. None set: nothing counts (fails
+  closed, a warning at start).
 - **To servers:** a supporter's VIP follows their current link. Official servers: ls-control (a timer, every 5 min)
   `GET /roles/vip` → every supporter's SteamID. Other servers that turned on **Honor Loner-Strike supporters** (off by
   default): `POST /roles/vip/check {steamids}` with the players on the server now (at most 64), answered with the ones

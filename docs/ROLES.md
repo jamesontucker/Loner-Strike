@@ -51,7 +51,9 @@ Nothing here is live until these are done (each needs the user's OK):
    secret on the box (step 1); send a test event: Polar shows 202. A full refund of a one-time donation takes its 30
    days off again. A donation counts from `POLAR_SUPPORTER_MIN_CENTS` (default 300, net of discounts; a $0
    pay-what-you-want download never counts) and gives `POLAR_SUPPORTER_DAYS` days, stacking (default 30; 0: for
-   good).
+   good). Only the support products count: put the one-time and the monthly product ids in
+   `POLAR_SUPPORTER_PRODUCTS` (comma separated). Anything else the organization sells never makes a Supporter
+   (logged "other product: ignored"); with none set nothing counts and the service says so at start.
 4. **Official servers:** claim each one from the app, then `lsmod.py roles official <server> on`. Turn on
    Accept moderator applications. Set Supporters › Reserved slots to 1 in its Admins page.
 5. Moderation from a terminal: `lsmod.py roles servers | log | show <id> | supporters | unlink <steamid>`.
