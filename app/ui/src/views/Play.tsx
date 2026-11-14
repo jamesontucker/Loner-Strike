@@ -12,6 +12,9 @@ import { COLLATOR, MapCard } from "./Maps";
 import { CommunityLink, communityMode, originText, useCommunity, useOrigins } from "./tools/community/chip";
 import { MatchMode } from "./MatchMode";
 
+/** What starting the game answers; `note` is a quiet line to show (e.g. the fixed Ham Sandwich put back). */
+type LaunchReply = { ok?: boolean; error?: string; note?: string | null };
+
 /** A start that hasn't brought the game up after this long can be sent again (CrossOver
  *  can take a minute to open the game). */
 const LAUNCH_CEILING_MS = 90000;
@@ -89,9 +92,12 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
   });
   const opts = optsQ.data && Array.isArray(optsQ.data.modes) ? optsQ.data : null;
   const launchMenu = () => run(key("open"), async () => {
-    const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { menu: true }).catch(() => ({ error: "Couldn't reach the app." }));
+    const r = await postJson<LaunchReply>("/api/app/launch", { menu: true }).catch((): LaunchReply => ({ error: "Couldn't reach the app." }));
     if (r.error) toast(r.error, true);
-    else toast(`Opening ${game}…`);
+    else {
+      toast(`Opening ${game}…`);
+      if (r.note) toast(r.note);
+    }
   }, `Opening ${game}…`);
   // an open game ignores a new launch, so starting means closing it first (asked here; a
   // phone can't close it, and the app answers it with what to do)
@@ -104,12 +110,14 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
     const fresh = Object.fromEntries(Object.entries(DEFAULTS).filter(([k]) => !changed[k] && mode?.settings[k] == null));
     const start = mode ? { mode: mode.id, settings: { ...fresh, ...changed } } : {};
     return run(key("launch"), async () => {
-      const r = await postJson<{ ok?: boolean; error?: string }>("/api/app/launch", { ...(map ? { map } : {}), ...(bots !== undefined ? { bots } : {}), ...start, ...(restart ? { restart: true } : {}) }).catch(() => ({ error: "Couldn't reach the app." }));
+      const r = await postJson<LaunchReply>("/api/app/launch", { ...(map ? { map } : {}), ...(bots !== undefined ? { bots } : {}), ...start, ...(restart ? { restart: true } : {}) }).catch((): LaunchReply => ({ error: "Couldn't reach the app." }));
       if (r.error) {
         endLaunch(t);
         toast(r.error, true);
       } else {
         toast(`Starting ${game}…`);
+        // (quiet: the app put the fixed Ham Sandwich back before starting, hamguard.rs)
+        if (r.note) toast(r.note);
         startLaunch(t);
       }
     }, `${closeHere ? "Restarting" : "Starting"} ${game}${map ? ` on ${map}` : ""}…`);

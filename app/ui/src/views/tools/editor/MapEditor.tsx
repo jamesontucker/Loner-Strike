@@ -35,6 +35,7 @@ import { EMPTY_SEL, facesOf, useEditor, type ViewId } from "./store";
 const AUTOSAVE_MS = 3 * 60 * 1000;
 import "./editor.css";
 import { useSelectionSync } from "./selectionSync"; // MCP: agents see the selection
+import { FrameTimeReadout } from "./FrameTime"; // MCP: frame-time readout
 
 type Tab = "inspect" | "outline" | "textures" | "library" | "checks" | "compile" | "project" | "history" | "content"; // P5: project, history, content
 
@@ -215,6 +216,7 @@ function Editor({ replace }: { replace: (w: Pick) => Promise<void> }) {
   return (
     <div className="tools-page editor-page">
       <MenuBar /> {/* P5 */}
+      <FrameTimeReadout /> {/* MCP: View > Show frame time */}
       {/* (P5: the old button row (New, Open, Import .map, Save, Save as, Export .map, Recent, Map
           properties, Playtest, Publish, Undo, Redo, the views) is in the one bar now: MenuBar.tsx) */}
       <div className="editor-main" style={dockCols}>

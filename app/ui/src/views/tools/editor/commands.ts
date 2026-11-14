@@ -21,6 +21,7 @@ import { useNav } from "../../../store";
 import { mapNameOf } from "./ComponentPanel";
 import { startTour } from "./Tour";
 import { useBrowser } from "./contentApi";
+import { toggleFrameTime } from "./FrameTime"; // MCP: frame-time readout
 import { budgetWarnings } from "./BudgetPanel";
 
 export type Menu = "File" | "Edit" | "View" | "Select" | "Tools" | "Map" | "Help";
@@ -340,6 +341,7 @@ export function commands(): Command[] {
     { id: "view.gridShow", label: "Show / hide the grid", menu: "View", run: () => useP5.getState().set({ showGrid: !useP5.getState().showGrid }), fly: true },
     { id: "view.gridSettings", label: "Grid and snapping…", menu: "View", hint: "Grid size, turn steps, snap to corners and edges", run: () => useP5.getState().set({ dialog: "grid" }) },
     { id: "view.texLock", label: "Texture lock on / off", menu: "View", run: () => S().set({ textureLock: !S().textureLock }) },
+    { id: "view.frameTime", label: "Show frame time", menu: "View", sep: true, hint: "Frames a second and frame time (p50, p95) over the last 5 seconds; Ctrl+Alt+Shift+F", run: () => toggleFrameTime() }, // MCP
     { id: "view.snap", label: "Snap to grid on / off", menu: "View", hint: "Alt still flips it while held", run: () => S().set({ snapOff: !S().snapOff }), fly: true },
     { id: "view.geoSnap", label: "Snap to corners and edges on / off", menu: "View", run: () => useP5.getState().set({ geoSnap: !useP5.getState().geoSnap }) },
     ...NAV_PRESETS.map((n, i): Command => ({ id: `view.nav.${n.id}`, label: `Move like ${n.label}`, menu: "View", sep: i === 0, hint: n.tip, run: () => setNavPreset(n.id), fly: true })),
