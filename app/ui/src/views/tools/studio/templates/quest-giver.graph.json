@@ -1,559 +1,891 @@
 {
- "schema": "loner-strike/graph",
- "version": 3,
- "mode": {
-  "id": "quest_giver",
-  "uid": "3f6c1d2e-8a47-4b1e-9c55-6d2a7e9b0f13",
-  "name": "The Quest Giver",
-  "description": "Old Sam asks you to find his note; bring it and he pays"
- },
- "variables": [
-  {
-   "id": "quest",
-   "name": "On Sam's Quest",
-   "type": "bool",
-   "scope": "player",
-   "default": false,
-   "reset": "never"
-  }
- ],
- "nodes": [
-  {
-   "id": "ms",
-   "type": "event.map_started",
-   "pos": {
-    "x": 65,
-    "y": 68
-   },
-   "params": {}
+  "schema": "loner-strike/graph",
+  "version": 3,
+  "mode": {
+    "id": "quest_giver",
+    "uid": "3f6c1d2e-8a47-4b1e-9c55-6d2a7e9b0f13",
+    "name": "The Quest Giver",
+    "description": "Find Old Sam's note and bring it back to him for $1000"
   },
-  {
-   "id": "sam_at",
-   "type": "vec.make",
-   "pos": {
-    "x": 65,
-    "y": 189
-   },
-   "params": {
-    "x": 64,
-    "y": 2464,
-    "z": -88
-   }
-  },
-  {
-   "id": "sam",
-   "type": "npc.spawn",
-   "pos": {
-    "x": 565,
-    "y": 102
-   },
-   "params": {
-    "model": "models/barney.mdl",
-    "name": "Old Sam",
-    "yaw": 270,
-    "behavior": "stand",
-    "unkillable": true
-   },
-   "quiet": true
-  },
-  {
-   "id": "note_at",
-   "type": "vec.make",
-   "pos": {
-    "x": 565,
-    "y": 276
-   },
-   "params": {
-    "x": -640,
-    "y": -620,
-    "z": 140
-   }
-  },
-  {
-   "id": "note",
-   "type": "npc.spawn_use",
-   "pos": {
-    "x": 1065,
-    "y": 189
-   },
-   "params": {
-    "model": "models/w_weaponbox.mdl",
-    "prompt": "Press E to read the note",
-    "once": true,
-    "hide": false,
-    "bots": true
-   }
-  },
-  {
-   "id": "talk",
-   "type": "npc.on_talk",
-   "pos": {
-    "x": 65,
-    "y": 867
-   },
-   "params": {
-    "name": ""
-   }
-  },
-  {
-   "id": "ask",
-   "type": "npc.choose",
-   "pos": {
-    "x": 565,
-    "y": 490
-   },
-   "params": {
-    "speaker": "",
-    "text": "I lost my note near the Terrorist spawn. Will you find it?",
-    "o1": "Yes",
-    "o2": "No",
-    "o3": "",
-    "o4": "",
-    "o5": "",
-    "o6": "",
-    "count": 2,
-    "secs": 20
-   }
-  },
-  {
-   "id": "take",
-   "type": "var.set",
-   "pos": {
-    "x": 1065,
-    "y": 693
-   },
-   "params": {
-    "var": "quest",
-    "value": true
-   }
-  },
-  {
-   "id": "thanks",
-   "type": "npc.say",
-   "pos": {
-    "x": 1565,
-    "y": 845
-   },
-   "params": {
-    "speaker": "",
-    "text": "Thank you! Read it and come back rich."
-   }
-  },
-  {
-   "id": "later",
-   "type": "npc.say",
-   "pos": {
-    "x": 1065,
-    "y": 899
-   },
-   "params": {
-    "speaker": "",
-    "text": "Maybe another time, then."
-   }
-  },
-  {
-   "id": "used",
-   "type": "npc.on_use",
-   "pos": {
-    "x": 65,
-    "y": 1471
-   },
-   "params": {
-    "name": ""
-   }
-  },
-  {
-   "id": "has",
-   "type": "var.get",
-   "pos": {
-    "x": 565,
-    "y": 1298
-   },
-   "params": {
-    "var": "quest"
-   }
-  },
-  {
-   "id": "if",
-   "type": "flow.branch",
-   "pos": {
-    "x": 1065,
-    "y": 1253
-   },
-   "params": {}
-  },
-  {
-   "id": "pay",
-   "type": "player.add_money",
-   "pos": {
-    "x": 1565,
-    "y": 1285
-   },
-   "params": {
-    "amount": 1000
-   }
-  },
-  {
-   "id": "done",
-   "type": "var.set",
-   "pos": {
-    "x": 2065,
-    "y": 1431
-   },
-   "params": {
-    "var": "quest",
-    "value": false
-   }
-  },
-  {
-   "id": "yay",
-   "type": "npc.say",
-   "pos": {
-    "x": 2565,
-    "y": 1474
-   },
-   "params": {
-    "speaker": "",
-    "text": "You found Old Sam's note. He pays you $1000."
-   }
-  },
-  {
-   "id": "meh",
-   "type": "npc.say",
-   "pos": {
-    "x": 1565,
-    "y": 1459
-   },
-   "params": {
-    "speaker": "",
-    "text": "An old note. Someone might be looking for it."
-   }
-  }
- ],
- "edges": [
-  {
-   "id": "w1",
-   "from": {
-    "node": "ms",
-    "pin": "then"
-   },
-   "to": {
-    "node": "sam",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w2",
-   "from": {
-    "node": "sam_at",
-    "pin": "out"
-   },
-   "to": {
-    "node": "sam",
-    "pin": "pos"
-   }
-  },
-  {
-   "id": "w3",
-   "from": {
-    "node": "sam",
-    "pin": "then"
-   },
-   "to": {
-    "node": "note",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w4",
-   "from": {
-    "node": "note_at",
-    "pin": "out"
-   },
-   "to": {
-    "node": "note",
-    "pin": "pos"
-   }
-  },
-  {
-   "id": "w5",
-   "from": {
-    "node": "talk",
-    "pin": "then"
-   },
-   "to": {
-    "node": "ask",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w6",
-   "from": {
-    "node": "talk",
-    "pin": "player"
-   },
-   "to": {
-    "node": "ask",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w7",
-   "from": {
-    "node": "talk",
-    "pin": "npc"
-   },
-   "to": {
-    "node": "ask",
-    "pin": "npc"
-   }
-  },
-  {
-   "id": "w8",
-   "from": {
-    "node": "ask",
-    "pin": "r1"
-   },
-   "to": {
-    "node": "take",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w9",
-   "from": {
-    "node": "talk",
-    "pin": "player"
-   },
-   "to": {
-    "node": "take",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w10",
-   "from": {
-    "node": "take",
-    "pin": "then"
-   },
-   "to": {
-    "node": "thanks",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w11",
-   "from": {
-    "node": "talk",
-    "pin": "player"
-   },
-   "to": {
-    "node": "thanks",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w12",
-   "from": {
-    "node": "talk",
-    "pin": "npc"
-   },
-   "to": {
-    "node": "thanks",
-    "pin": "npc"
-   }
-  },
-  {
-   "id": "w13",
-   "from": {
-    "node": "ask",
-    "pin": "r2"
-   },
-   "to": {
-    "node": "later",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w14",
-   "from": {
-    "node": "talk",
-    "pin": "player"
-   },
-   "to": {
-    "node": "later",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w15",
-   "from": {
-    "node": "talk",
-    "pin": "npc"
-   },
-   "to": {
-    "node": "later",
-    "pin": "npc"
-   }
-  },
-  {
-   "id": "w16",
-   "from": {
-    "node": "used",
-    "pin": "then"
-   },
-   "to": {
-    "node": "if",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w17",
-   "from": {
-    "node": "used",
-    "pin": "player"
-   },
-   "to": {
-    "node": "has",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w18",
-   "from": {
-    "node": "has",
-    "pin": "out"
-   },
-   "to": {
-    "node": "if",
-    "pin": "cond"
-   }
-  },
-  {
-   "id": "w19",
-   "from": {
-    "node": "if",
-    "pin": "true"
-   },
-   "to": {
-    "node": "pay",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w20",
-   "from": {
-    "node": "used",
-    "pin": "player"
-   },
-   "to": {
-    "node": "pay",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w21",
-   "from": {
-    "node": "pay",
-    "pin": "then"
-   },
-   "to": {
-    "node": "done",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w22",
-   "from": {
-    "node": "used",
-    "pin": "player"
-   },
-   "to": {
-    "node": "done",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w23",
-   "from": {
-    "node": "done",
-    "pin": "then"
-   },
-   "to": {
-    "node": "yay",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w24",
-   "from": {
-    "node": "used",
-    "pin": "player"
-   },
-   "to": {
-    "node": "yay",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w25",
-   "from": {
-    "node": "if",
-    "pin": "false"
-   },
-   "to": {
-    "node": "meh",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w26",
-   "from": {
-    "node": "used",
-    "pin": "player"
-   },
-   "to": {
-    "node": "meh",
-    "pin": "player"
-   }
-  }
- ],
- "comments": [
-  {
-   "id": "c1",
-   "text": "As the map starts, Old Sam stands by the Counter-Terrorist spawn and his note lies by the Terrorist spawn (spots on de_dust2: change the points for another map).",
-   "pos": {
-    "x": 41,
-    "y": 22
-   },
-   "size": {
-    "w": 1278,
-    "h": 410
-   }
-  },
-  {
-   "id": "c2",
-   "text": "Press E on Sam: he asks, and Yes puts you on his quest (one flag per player).",
-   "pos": {
-    "x": 41,
-    "y": 444
-   },
-   "size": {
-    "w": 1778,
-    "h": 655
-   }
-  },
-  {
-   "id": "c3",
-   "text": "Press E on the note: on the quest, you get $1000 and the quest is done; otherwise it's just a note.",
-   "pos": {
-    "x": 41,
-    "y": 1207
-   },
-   "size": {
-    "w": 2778,
-    "h": 467
-   }
-  }
- ]
+  "variables": [
+    {
+      "id": "quest",
+      "name": "On Sam's Quest",
+      "type": "bool",
+      "scope": "player",
+      "default": false,
+      "reset": "never"
+    },
+    {
+      "id": "has_note",
+      "name": "Has the Note",
+      "type": "bool",
+      "scope": "player",
+      "default": false,
+      "reset": "never"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "ms",
+      "type": "event.map_started",
+      "pos": {
+        "x": 65,
+        "y": 68
+      },
+      "params": {}
+    },
+    {
+      "id": "sam_at",
+      "type": "vec.make",
+      "pos": {
+        "x": 65,
+        "y": 189
+      },
+      "params": {
+        "x": 64,
+        "y": 2464,
+        "z": -88
+      }
+    },
+    {
+      "id": "sam",
+      "type": "npc.spawn",
+      "pos": {
+        "x": 565,
+        "y": 102
+      },
+      "params": {
+        "model": "models/barney.mdl",
+        "name": "Old Sam",
+        "yaw": 270,
+        "behavior": "stand",
+        "unkillable": true
+      },
+      "quiet": true
+    },
+    {
+      "id": "note_at",
+      "type": "vec.make",
+      "pos": {
+        "x": 565,
+        "y": 276
+      },
+      "params": {
+        "x": -640,
+        "y": -620,
+        "z": 140
+      }
+    },
+    {
+      "id": "note",
+      "type": "npc.spawn_use",
+      "pos": {
+        "x": 1065,
+        "y": 189
+      },
+      "params": {
+        "model": "models/w_weaponbox.mdl",
+        "prompt": "Press E to read the note",
+        "once": false,
+        "hide": false,
+        "bots": true
+      }
+    },
+    {
+      "id": "talk",
+      "type": "npc.on_talk",
+      "pos": {
+        "x": 65,
+        "y": 860
+      },
+      "params": {}
+    },
+    {
+      "id": "t_has",
+      "type": "var.get",
+      "pos": {
+        "x": 565,
+        "y": 580
+      },
+      "params": {
+        "var": "has_note"
+      }
+    },
+    {
+      "id": "t_b1",
+      "type": "flow.branch",
+      "pos": {
+        "x": 1065,
+        "y": 560
+      },
+      "params": {}
+    },
+    {
+      "id": "reward",
+      "type": "npc.say",
+      "pos": {
+        "x": 1565,
+        "y": 520
+      },
+      "params": {
+        "speaker": "",
+        "text": "You found it! Here's your reward."
+      }
+    },
+    {
+      "id": "pay",
+      "type": "player.add_money",
+      "pos": {
+        "x": 2065,
+        "y": 520
+      },
+      "params": {
+        "amount": 1000
+      }
+    },
+    {
+      "id": "clr_q",
+      "type": "var.set",
+      "pos": {
+        "x": 2565,
+        "y": 520
+      },
+      "params": {
+        "var": "quest",
+        "value": false
+      }
+    },
+    {
+      "id": "clr_n",
+      "type": "var.set",
+      "pos": {
+        "x": 3065,
+        "y": 520
+      },
+      "params": {
+        "var": "has_note",
+        "value": false
+      }
+    },
+    {
+      "id": "t_q",
+      "type": "var.get",
+      "pos": {
+        "x": 1065,
+        "y": 820
+      },
+      "params": {
+        "var": "quest"
+      }
+    },
+    {
+      "id": "t_b2",
+      "type": "flow.branch",
+      "pos": {
+        "x": 1565,
+        "y": 800
+      },
+      "params": {}
+    },
+    {
+      "id": "still",
+      "type": "npc.say",
+      "pos": {
+        "x": 2065,
+        "y": 780
+      },
+      "params": {
+        "speaker": "",
+        "text": "Still looking? It's near the Terrorist spawn."
+      }
+    },
+    {
+      "id": "ask",
+      "type": "npc.choose",
+      "pos": {
+        "x": 2065,
+        "y": 1000
+      },
+      "params": {
+        "speaker": "",
+        "text": "I lost my note near the Terrorist spawn. Will you find it?",
+        "o1": "Yes",
+        "o2": "No",
+        "o3": "",
+        "o4": "",
+        "o5": "",
+        "o6": "",
+        "count": 2,
+        "secs": 20
+      }
+    },
+    {
+      "id": "take",
+      "type": "var.set",
+      "pos": {
+        "x": 2565,
+        "y": 980
+      },
+      "params": {
+        "var": "quest",
+        "value": true
+      }
+    },
+    {
+      "id": "thanks",
+      "type": "npc.say",
+      "pos": {
+        "x": 3065,
+        "y": 980
+      },
+      "params": {
+        "speaker": "",
+        "text": "Thank you! Find it and bring it back to me."
+      }
+    },
+    {
+      "id": "later",
+      "type": "npc.say",
+      "pos": {
+        "x": 2565,
+        "y": 1220
+      },
+      "params": {
+        "speaker": "",
+        "text": "Maybe another time, then."
+      }
+    },
+    {
+      "id": "used",
+      "type": "npc.on_use",
+      "pos": {
+        "x": 65,
+        "y": 1820
+      },
+      "params": {}
+    },
+    {
+      "id": "u_q",
+      "type": "var.get",
+      "pos": {
+        "x": 565,
+        "y": 1620
+      },
+      "params": {
+        "var": "quest"
+      }
+    },
+    {
+      "id": "u_b1",
+      "type": "flow.branch",
+      "pos": {
+        "x": 1065,
+        "y": 1620
+      },
+      "params": {}
+    },
+    {
+      "id": "u_has",
+      "type": "var.get",
+      "pos": {
+        "x": 1065,
+        "y": 1860
+      },
+      "params": {
+        "var": "has_note"
+      }
+    },
+    {
+      "id": "u_b2",
+      "type": "flow.branch",
+      "pos": {
+        "x": 1565,
+        "y": 1820
+      },
+      "params": {}
+    },
+    {
+      "id": "got",
+      "type": "var.set",
+      "pos": {
+        "x": 2065,
+        "y": 1780
+      },
+      "params": {
+        "var": "has_note",
+        "value": true
+      }
+    },
+    {
+      "id": "found",
+      "type": "npc.say",
+      "pos": {
+        "x": 2565,
+        "y": 1780
+      },
+      "params": {
+        "speaker": "",
+        "text": "You found Old Sam's note. Bring it back to him."
+      }
+    },
+    {
+      "id": "meh",
+      "type": "npc.say",
+      "pos": {
+        "x": 2065,
+        "y": 2080
+      },
+      "params": {
+        "speaker": "",
+        "text": "An old note. Someone might be looking for it."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "m0",
+      "from": {
+        "node": "ms",
+        "pin": "then"
+      },
+      "to": {
+        "node": "sam",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "m1",
+      "from": {
+        "node": "sam_at",
+        "pin": "out"
+      },
+      "to": {
+        "node": "sam",
+        "pin": "pos"
+      }
+    },
+    {
+      "id": "m2",
+      "from": {
+        "node": "sam",
+        "pin": "then"
+      },
+      "to": {
+        "node": "note",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "m3",
+      "from": {
+        "node": "note_at",
+        "pin": "out"
+      },
+      "to": {
+        "node": "note",
+        "pin": "pos"
+      }
+    },
+    {
+      "id": "w1",
+      "from": {
+        "node": "talk",
+        "pin": "then"
+      },
+      "to": {
+        "node": "t_b1",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w2",
+      "from": {
+        "node": "talk",
+        "pin": "player"
+      },
+      "to": {
+        "node": "t_has",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w3",
+      "from": {
+        "node": "t_has",
+        "pin": "out"
+      },
+      "to": {
+        "node": "t_b1",
+        "pin": "cond"
+      }
+    },
+    {
+      "id": "w4",
+      "from": {
+        "node": "t_b1",
+        "pin": "true"
+      },
+      "to": {
+        "node": "reward",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w5",
+      "from": {
+        "node": "talk",
+        "pin": "player"
+      },
+      "to": {
+        "node": "reward",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w6",
+      "from": {
+        "node": "talk",
+        "pin": "npc"
+      },
+      "to": {
+        "node": "reward",
+        "pin": "npc"
+      }
+    },
+    {
+      "id": "w7",
+      "from": {
+        "node": "reward",
+        "pin": "then"
+      },
+      "to": {
+        "node": "pay",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w8",
+      "from": {
+        "node": "talk",
+        "pin": "player"
+      },
+      "to": {
+        "node": "pay",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w9",
+      "from": {
+        "node": "pay",
+        "pin": "then"
+      },
+      "to": {
+        "node": "clr_q",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w10",
+      "from": {
+        "node": "talk",
+        "pin": "player"
+      },
+      "to": {
+        "node": "clr_q",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w11",
+      "from": {
+        "node": "clr_q",
+        "pin": "then"
+      },
+      "to": {
+        "node": "clr_n",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w12",
+      "from": {
+        "node": "talk",
+        "pin": "player"
+      },
+      "to": {
+        "node": "clr_n",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w13",
+      "from": {
+        "node": "t_b1",
+        "pin": "false"
+      },
+      "to": {
+        "node": "t_b2",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w14",
+      "from": {
+        "node": "talk",
+        "pin": "player"
+      },
+      "to": {
+        "node": "t_q",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w15",
+      "from": {
+        "node": "t_q",
+        "pin": "out"
+      },
+      "to": {
+        "node": "t_b2",
+        "pin": "cond"
+      }
+    },
+    {
+      "id": "w16",
+      "from": {
+        "node": "t_b2",
+        "pin": "true"
+      },
+      "to": {
+        "node": "still",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w17",
+      "from": {
+        "node": "talk",
+        "pin": "player"
+      },
+      "to": {
+        "node": "still",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w18",
+      "from": {
+        "node": "talk",
+        "pin": "npc"
+      },
+      "to": {
+        "node": "still",
+        "pin": "npc"
+      }
+    },
+    {
+      "id": "w19",
+      "from": {
+        "node": "t_b2",
+        "pin": "false"
+      },
+      "to": {
+        "node": "ask",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w20",
+      "from": {
+        "node": "talk",
+        "pin": "player"
+      },
+      "to": {
+        "node": "ask",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w21",
+      "from": {
+        "node": "talk",
+        "pin": "npc"
+      },
+      "to": {
+        "node": "ask",
+        "pin": "npc"
+      }
+    },
+    {
+      "id": "w22",
+      "from": {
+        "node": "ask",
+        "pin": "r1"
+      },
+      "to": {
+        "node": "take",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w23",
+      "from": {
+        "node": "talk",
+        "pin": "player"
+      },
+      "to": {
+        "node": "take",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w24",
+      "from": {
+        "node": "take",
+        "pin": "then"
+      },
+      "to": {
+        "node": "thanks",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w25",
+      "from": {
+        "node": "talk",
+        "pin": "player"
+      },
+      "to": {
+        "node": "thanks",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w26",
+      "from": {
+        "node": "talk",
+        "pin": "npc"
+      },
+      "to": {
+        "node": "thanks",
+        "pin": "npc"
+      }
+    },
+    {
+      "id": "w27",
+      "from": {
+        "node": "ask",
+        "pin": "r2"
+      },
+      "to": {
+        "node": "later",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w28",
+      "from": {
+        "node": "talk",
+        "pin": "player"
+      },
+      "to": {
+        "node": "later",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w29",
+      "from": {
+        "node": "talk",
+        "pin": "npc"
+      },
+      "to": {
+        "node": "later",
+        "pin": "npc"
+      }
+    },
+    {
+      "id": "w30",
+      "from": {
+        "node": "used",
+        "pin": "then"
+      },
+      "to": {
+        "node": "u_b1",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w31",
+      "from": {
+        "node": "used",
+        "pin": "player"
+      },
+      "to": {
+        "node": "u_q",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w32",
+      "from": {
+        "node": "u_q",
+        "pin": "out"
+      },
+      "to": {
+        "node": "u_b1",
+        "pin": "cond"
+      }
+    },
+    {
+      "id": "w33",
+      "from": {
+        "node": "u_b1",
+        "pin": "true"
+      },
+      "to": {
+        "node": "u_b2",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w34",
+      "from": {
+        "node": "used",
+        "pin": "player"
+      },
+      "to": {
+        "node": "u_has",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w35",
+      "from": {
+        "node": "u_has",
+        "pin": "out"
+      },
+      "to": {
+        "node": "u_b2",
+        "pin": "cond"
+      }
+    },
+    {
+      "id": "w36",
+      "from": {
+        "node": "u_b2",
+        "pin": "false"
+      },
+      "to": {
+        "node": "got",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w37",
+      "from": {
+        "node": "used",
+        "pin": "player"
+      },
+      "to": {
+        "node": "got",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w38",
+      "from": {
+        "node": "got",
+        "pin": "then"
+      },
+      "to": {
+        "node": "found",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w39",
+      "from": {
+        "node": "used",
+        "pin": "player"
+      },
+      "to": {
+        "node": "found",
+        "pin": "player"
+      }
+    },
+    {
+      "id": "w40",
+      "from": {
+        "node": "u_b1",
+        "pin": "false"
+      },
+      "to": {
+        "node": "meh",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w41",
+      "from": {
+        "node": "u_b2",
+        "pin": "true"
+      },
+      "to": {
+        "node": "meh",
+        "pin": "exec"
+      }
+    },
+    {
+      "id": "w42",
+      "from": {
+        "node": "used",
+        "pin": "player"
+      },
+      "to": {
+        "node": "meh",
+        "pin": "player"
+      }
+    }
+  ],
+  "comments": [
+    {
+      "id": "c1",
+      "text": "As the map starts, Old Sam stands by the Counter-Terrorist spawn and his note lies by the Terrorist spawn (spots on de_dust2: change the points for another map). The quest is two per-player flags: On Sam's Quest and Has the Note. They start false on every map, and a player who joins gets fresh ones.",
+      "pos": {
+        "x": 41,
+        "y": 22
+      },
+      "size": {
+        "w": 1500,
+        "h": 430
+      }
+    },
+    {
+      "id": "c2",
+      "text": "Press E on Sam. Has the note: he pays $1000 and both flags clear. On the quest without it: a hint. Otherwise he asks, and Yes puts you on the quest.",
+      "pos": {
+        "x": 41,
+        "y": 470
+      },
+      "size": {
+        "w": 3500,
+        "h": 900
+      }
+    },
+    {
+      "id": "c3",
+      "text": "Press E on the note: on the quest and not yet carrying it, you take it (Has the Note). Otherwise it's just an old note.",
+      "pos": {
+        "x": 41,
+        "y": 1580
+      },
+      "size": {
+        "w": 3000,
+        "h": 760
+      }
+    }
+  ]
 }

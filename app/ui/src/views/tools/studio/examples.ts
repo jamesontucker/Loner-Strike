@@ -16,5 +16,5 @@ export const EXAMPLES: Example[] = [
   { id: "hill", label: "King of the Hill", blurb: "Hold the hill to score. A capture point, a map marker, a timer and team scores.", raw: hillRaw },
   { id: "chamber", label: "One in the Chamber", blurb: "One bullet, a kill gives one more, three lives. Ammo, damage and lives.", raw: chamberRaw },
   { id: "juggernaut", label: "Juggernaut", blurb: "Kill the big one to become it. Player looks, a bonus, and bots told to hunt.", raw: juggernautRaw },
-  { id: "quest", label: "The Quest Giver", blurb: "An NPC asks you to find his note; bring it and he pays. NPCs, a conversation and an interactable.", raw: questRaw },
+  { id: "quest", label: "The Quest Giver", blurb: "An NPC asks you to find his note; bring it back and he pays. Per-player flags, a conversation and an interactable.", raw: questRaw },
 ];

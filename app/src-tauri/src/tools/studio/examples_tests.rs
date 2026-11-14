@@ -70,6 +70,16 @@ fn quest_giver_checks_clean_and_compiles() {
     for k in ["npc.spawn", "npc.spawn_use", "npc.on_talk", "npc.choose", "npc.say", "npc.on_use"] {
         assert!(g.nodes.iter().any(|n| n.kind == k), "{k}");
     }
+    // bring it back and he pays: two per-player flags, a note that can be picked up again,
+    // and still small enough to read
+    assert!(["quest", "has_note"].iter().all(|v| g.variables.iter().any(|x| x.id == *v && x.scope == "player")));
+    let note = g.nodes.iter().find(|n| n.kind == "npc.spawn_use").unwrap();
+    assert_eq!(note.params.get("once").and_then(|v| v.as_bool()), Some(false));
+    assert!((20..=28).contains(&g.nodes.len()), "{} nodes", g.nodes.len());
+    let says: Vec<&str> = g.nodes.iter().filter(|n| n.kind == "npc.say").filter_map(|n| n.params.get("text").and_then(|v| v.as_str())).collect();
+    for line in ["You found it! Here's your reward.", "Still looking? It's near the Terrorist spawn.", "You found Old Sam's note. Bring it back to him.", "An old note. Someone might be looking for it."] {
+        assert!(says.contains(&line), "{line}");
+    }
     let rel = gen::generate(&g, false).source;
     assert!(rel.contains("ls_npc_precache(\"models/barney.mdl\")") && rel.contains("public ls_on_npc_choice(id, npc, choice)") && rel.contains("public ls_on_interact(id, ent)"));
     let scripting = PathBuf::from(std::env::var("HOME").unwrap_or_default())
