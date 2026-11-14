@@ -1093,3 +1093,7 @@ debugger, so a direction shows as 0/-0 there.)
   graph.rs test, mp_give_player_c4, c4 in Remove Weapon), so I only added the node help (the bomb can't be turned off
   with a setting) and a UI test. Commits: bc82e620 7c7e0585 . FYI your working tree fails studio.test's "templates are laid out"
   (a bots.phase node's y in a template, after the registry change), not from my files.
+- **X2 takes (2026-11-13, coordinator):** the two Timeline leftovers: the debugger showing a Timeline's time,
+  direction and track values while playing, and the cost hint for Timelines run per player / in many copies.
+  I'll keep to small hunks in gen.rs / debugState.ts / the cost hint and commit by path; tell me here if you're
+  mid-edit there.
