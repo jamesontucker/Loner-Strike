@@ -227,10 +227,17 @@ fn compile_contributors(d: &MapDocument, name: &str) -> Value {
     }
 }
 
-pub(super) fn report(st: &Shared, s: &Session) -> Value {
+pub(super) fn report(s: &Session) -> Value {
     let d = &s.doc;
     let map = crate::tools::compile::map_name(&s.name);
-    let compile = work_dirs(st, &map).into_iter().map(|w| w.join(format!("{map}.log"))).filter(|p| p.is_file()).max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok()).and_then(|p| last_compile(&p));
+    // Parity A (QA4-A A-1): the compile this document ran last, under whatever name it was
+    // compiled as; never a log another map of the same name left in the work folder
+    let last = d.editor.uid.as_deref().and_then(crate::tools::compile::last_compile_of);
+    let compile = last.as_ref().and_then(|(log, name)| {
+        let mut c = last_compile(log)?;
+        c["map"] = json!(name);
+        Some(c)
+    });
     let compile = compile.map(|mut c| {
         if let Some(rows) = c["rows"].as_array_mut() {
             for r in rows {
@@ -241,15 +248,15 @@ pub(super) fn report(st: &Shared, s: &Session) -> Value {
         c
     });
     // (where the app's own compiles keep their log, for "where does this come from")
-    let log_at = crate::localdata::dir("tools/compile").join("work").join(&map).join(format!("{map}.log"));
+    let log_at = last.map(|(log, _)| log).unwrap_or_else(|| crate::localdata::dir("tools/compile").join("work").join(&map).join(format!("{map}.log")));
     json!({"map": map, "compile": compile, "live": live(d), "precache": precache(d), "revision": d.revision, "logAt": log_at.to_string_lossy()})
 }
 
-async fn api_budget(axum::extract::State(st): axum::extract::State<Shared>, Extension(ed): Extension<Ed>) -> Response {
+async fn api_budget(Extension(ed): Extension<Ed>) -> Response {
     blocking(move || {
         let g = ed.lock();
         let s = g.as_ref().ok_or(NO_DOC)?;
-        Ok(report(&st, s))
+        Ok(report(s))
     })
     .await
 }

@@ -78,6 +78,52 @@ fn compile_dir() -> PathBuf {
     crate::localdata::dir("tools/compile")
 }
 
+// ---- which compile each document ran last (Parity A, QA4-A A-1) ---------------------------
+// The Budget's "last compile" must be this document's, whatever name it was compiled under (the
+// Compile panel's name field), never an older log left by another map of the same name.
+
+const LAST_MAX: usize = 200;
+
+fn last_compiles_file() -> PathBuf {
+    compile_dir().join("last-compiles.json")
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// Notes that the document `uid` is being compiled as `name`, its log at `log`. A log path
+/// another document compiled to before is that document's no more (the new compile overwrites it).
+fn note_compile_in(file: &Path, uid: &str, name: &str, log: &Path, started: u64) {
+    let mut list: Vec<Value> = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default();
+    let log_s = log.to_string_lossy().to_string();
+    list.retain(|e| e["uid"] != uid && e["log"] != log_s.as_str());
+    list.push(json!({"uid": uid, "name": name, "log": log_s, "started": started}));
+    if list.len() > LAST_MAX {
+        list.drain(..list.len() - LAST_MAX);
+    }
+    if let Some(dir) = file.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = crate::sys::write_atomic(file, serde_json::to_string(&list).unwrap_or_default().as_bytes());
+}
+
+/// The log of the compile the document `uid` ran last, and the name it was compiled as: None
+/// when it has none, or the log is gone or older than that compile.
+fn last_compile_in(file: &Path, uid: &str) -> Option<(PathBuf, String)> {
+    let list: Vec<Value> = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str(&t).ok())?;
+    let e = list.iter().rev().find(|e| e["uid"] == uid)?;
+    let log = PathBuf::from(e["log"].as_str()?);
+    let modified = std::fs::metadata(&log).ok()?.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
+    // (a second's slack: file times are rounded on some file systems)
+    (modified + 1 >= e["started"].as_u64()?).then(|| (log, e["name"].as_str().unwrap_or_default().to_string()))
+}
+
+/// The compile the document `uid` ran last (its log and the name it was compiled as).
+pub(crate) fn last_compile_of(uid: &str) -> Option<(PathBuf, String)> {
+    last_compile_in(&last_compiles_file(), uid)
+}
+
 const MARKER: &str = "loner-strike-verified.json";
 
 /// The programs and files a compile needs, relative to the install folder.
@@ -1628,6 +1674,10 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
     };
     let dir = layout.work.join(&p.name);
     let _ = std::fs::remove_dir_all(&dir);
+    // Parity A (QA4-A A-1): this document's last compile, for the Budget
+    if let Some(uid) = p.doc.editor.uid.as_deref() {
+        note_compile_in(&last_compiles_file(), uid, &p.name, &dir.join(format!("{}.log", p.name)), now_secs());
+    }
     std::fs::create_dir_all(&dir).map_err(|e| format!("Couldn't make the compile folder ({e})."))?;
     let base = dir.join(&p.name);
 
@@ -1892,6 +1942,40 @@ mod tests {
             x64: true,
             threads: None,
         }
+    }
+
+    /// Parity A (QA4-A A-1): the Budget's last compile is the document's own, whatever name it
+    /// was compiled as; another document compiling to the same log takes it over; a log older
+    /// than the compile (one left from before) doesn't count.
+    #[test]
+    fn last_compile_is_the_documents_own() {
+        let dir = std::env::temp_dir().join(format!("ls-compile-last-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("work/qa_name")).unwrap();
+        std::fs::create_dir_all(dir.join("work/ls_outpost")).unwrap();
+        let file = dir.join("last-compiles.json");
+        let mine = dir.join("work/qa_name/qa_name.log");
+        let other = dir.join("work/ls_outpost/ls_outpost.log");
+        // an old compile of a map with the document's name is there; this document never compiled
+        std::fs::write(&other, "old").unwrap();
+        assert_eq!(last_compile_in(&file, "doc-a"), None);
+        // compiled under another name: that log, with the name it was compiled as
+        let t = now_secs();
+        note_compile_in(&file, "doc-a", "qa_name", &mine, t);
+        assert_eq!(last_compile_in(&file, "doc-a"), None, "no log yet (still compiling, or it stopped early)");
+        std::fs::write(&mine, "new").unwrap();
+        assert_eq!(last_compile_in(&file, "doc-a"), Some((mine.clone(), "qa_name".to_string())));
+        // a log left from before the compile started isn't this compile's
+        note_compile_in(&file, "doc-b", "ls_outpost", &other, t + 3600);
+        assert_eq!(last_compile_in(&file, "doc-b"), None);
+        // another document compiles to the same name: the log is its now
+        note_compile_in(&file, "doc-c", "qa_name", &mine, t);
+        assert_eq!(last_compile_in(&file, "doc-a"), None);
+        assert_eq!(last_compile_in(&file, "doc-c"), Some((mine.clone(), "qa_name".to_string())));
+        // compiling again under the document's own name moves it there
+        note_compile_in(&file, "doc-c", "ls_outpost", &other, t.saturating_sub(10));
+        assert_eq!(last_compile_in(&file, "doc-c"), Some((other.clone(), "ls_outpost".to_string())));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -153,6 +153,41 @@ test("Top view: handles stretch on the grid, a drag moves, a box picks, Box draw
   expect(errors).toEqual([]);
 });
 
+// QA4-A A-5: an edge dragged past the opposite side stops one grid step short of it, on the grid
+// (it used to leave a 1-unit sliver off the grid); a corner dragged past the far corner likewise
+test("Top view: an edge dragged past the other side stops one grid step short, on the grid", async ({ page }) => {
+  const { id, errors } = await openQuadWithBox(page);
+  const top = (await pane(page, 1).boundingBox())!;
+  await page.mouse.click(top.x + top.width / 2, top.y + top.height / 2);
+  await expect(page.locator(".ed-selsize")).toContainText("1 picked · 128 × 128 × 128");
+  const h = await ready(page, "top");
+  // the east middle handle, far past the west edge
+  await page.mouse.move(h[3].x, h[3].y);
+  await page.mouse.down();
+  await page.mouse.move(h[3].x - 150, h[3].y, { steps: 6 });
+  await page.mouse.move(h[3].x - 300, h[3].y, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => (await brush(page, id)).max[0]).toBeLessThan(64);
+  let b = await brush(page, id);
+  expect(b.min).toEqual([-64, -64, 0]);
+  expect(b.max).toEqual([-48, 64, 128]);
+  // then the south-west corner (handle 0) dragged far past the north-east one: 16 × 16, on the grid
+  await expect.poll(async () => JSON.stringify(await handles(page, "top"))).not.toBe(JSON.stringify(h));
+  const h2 = await ready(page, "top");
+  await page.mouse.move(h2[0].x, h2[0].y);
+  await page.mouse.down();
+  await page.mouse.move(h2[0].x + 200, h2[0].y - 200, { steps: 8 });
+  await page.mouse.move(h2[0].x + 400, h2[0].y - 400, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => JSON.stringify((await brush(page, id)).min)).not.toBe(JSON.stringify([-64, -64, 0]));
+  b = await brush(page, id);
+  const size = [b.max[0] - b.min[0], b.max[1] - b.min[1]];
+  expect(size, `box ${JSON.stringify(b)}`).toEqual([16, 16]);
+  expect([b.min[0], b.min[1], b.max[0], b.max[1]].map((x) => Math.abs(x % 16))).toEqual([0, 0, 0, 0]);
+  expect(b.max[2] - b.min[2]).toBe(128);
+  expect(errors).toEqual([]);
+});
+
 test("Front and Side views have handles on the right axes", async ({ page }) => {
   const { id, errors } = await openQuadWithBox(page);
   const top = (await pane(page, 1).boundingBox())!;

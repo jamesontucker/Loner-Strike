@@ -75,7 +75,7 @@ for (const [name, file] of [
   });
 }
 
-test("a Hammer import, a mode's roster, the last compile, and the warnings", async ({ page }) => {
+test("a Hammer import and a mode's roster", async ({ page }) => {
   test.setTimeout(150_000);
   await open(page);
   if (process.env.LS_TEST_RMF) {
@@ -110,24 +110,57 @@ test("a Hammer import, a mode's roster, the last compile, and the warnings", asy
   // the guard's reserve shows as a marked band on the precache bars
   await expect(b.locator(".p5-bud-reserve")).toHaveCount(2);
   await expect.poll(() => barNum(b, "Precached sounds")).toBeGreaterThan(before);
-  // the last compile (its log), with a red bar: Playtest and Publish ask first
-  const rep = await api(page, "/api/tools/editor/budget");
-  fs.mkdirSync(path.dirname(rep.logAt), { recursive: true });
-  fs.writeFileSync(rep.logAt, "Object names  Objects/Maxobjs  Memory / Maxmem  Fullness\nmodels            30/512          1920/32768     ( 5.9%)\nclipnodes      31000/32767      248000/262136    (94.6%)\nplanes         20000/32768      400000/655360    (61.0%)\n");
+  fs.rmSync(kitFile, { force: true });
+});
+
+// QA4-A A-1 (Parity A): the last compile is the one this document ran, under whatever name the
+// Compile panel was given; an older log of a map with the document's own name never stands in for
+// it. Then a red bar from that compile: Playtest and Publish ask first. A real (fast) compile of a
+// new map; nothing goes into the game.
+test("the last compile is this document's, whatever name it was compiled as; a red bar asks first", async ({ page }) => {
+  test.setTimeout(240_000);
+  await open(page);
+  const status = await api(page, "/api/tools/compile/status");
+  test.skip(!status.installed || !status.canRun, "needs the compiler (SDHLT) and a game to run it with");
+  const name = `pa_bud_${Date.now() % 100000}`;
+  const started = await api(page, "/api/tools/compile/start", { preset: "fast", name });
+  expect(started.error ?? null).toBeNull();
+  await expect.poll(async () => (await api(page, "/api/tools/compile/progress")).job?.running, { timeout: 200_000, intervals: [1000] }).toBe(false);
+  const job = (await api(page, "/api/tools/compile/progress")).job;
+  expect(job.error ?? null).toBeNull();
+  let rep = await api(page, "/api/tools/editor/budget");
+  expect(rep.compile?.map).toBe(name);
+  expect(path.basename(rep.logAt)).toBe(`${name}.log`);
+  expect(rep.compile.rows.length).toBeGreaterThan(5);
+  const work = path.dirname(path.dirname(rep.logAt));
+  // an older log of a map called what the document is called: not this document's compile
+  const stale = path.join(work, rep.map, `${rep.map}.log`);
+  const kept = fs.existsSync(stale) ? fs.readFileSync(stale) : null;
+  fs.mkdirSync(path.dirname(stale), { recursive: true });
+  fs.writeFileSync(stale, "Object names  Objects/Maxobjs  Memory / Maxmem  Fullness\nplanes         32000/32768      640000/655360    (97.6%)\n");
+  const b = await showBudget(page);
   try {
+    await b.getByRole("button", { name: "Refresh" }).click();
+    await expect(b).toContainText(`${name}, `);
+    await expect(b.locator(".p5-bud.red")).toHaveCount(0);
+    rep = await api(page, "/api/tools/editor/budget");
+    expect(rep.compile.map).toBe(name);
+    expect(rep.compile.rows.find((r: { name: string }) => r.name === "planes")?.pct ?? 0).toBeLessThan(50);
+    // the same compile's log, near a limit: a red bar, and Publish asks (never a silent block)
+    fs.writeFileSync(rep.logAt, "Object names  Objects/Maxobjs  Memory / Maxmem  Fullness\nmodels            30/512          1920/32768     ( 5.9%)\nclipnodes      31000/32767      248000/262136    (94.6%)\nplanes         20000/32768      400000/655360    (61.0%)\n");
     await b.getByRole("button", { name: "Refresh" }).click();
     await expect(b.locator(".p5-bud.red", { hasText: "clipnodes" })).toBeVisible();
     await expect(b).toContainText("over 90%");
     await b.locator(".p5-bud-head", { hasText: "clipnodes" }).click();
     await expect(b.locator(".p5-bud-more")).toContainText("CLIP brush");
-    // Publish asks (never a silent block); Cancel stays here
     await page.getByRole("menubar", { name: "Editor menu" }).getByRole("button", { name: "Publish…" }).click();
     const sheet = page.getByRole("alertdialog").filter({ hasText: "Near the engine's limits" });
     await expect(sheet).toContainText("clipnodes");
     await sheet.getByRole("button", { name: "Cancel" }).click();
     await expect(page.locator(".ed-pane").first()).toBeVisible();
   } finally {
-    fs.rmSync(rep.logAt, { force: true });
-    fs.rmSync(kitFile, { force: true });
+    if (kept) fs.writeFileSync(stale, kept);
+    else fs.rmSync(path.dirname(stale), { recursive: true, force: true });
+    fs.rmSync(path.dirname(rep.logAt), { recursive: true, force: true });
   }
 });

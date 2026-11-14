@@ -204,8 +204,13 @@ export function FlatHandles({ view }: { view: FlatView }) {
           if (!side) continue;
           const edge0 = side < 0 ? lo0[ax] : hi0[ax];
           const at = snap(edge0 + p[ax] - start[ax]);
-          if (side < 0) lo[ax] = Math.min(at, hi0[ax] - 1);
-          else hi[ax] = Math.max(at, lo0[ax] + 1);
+          // dragged past the other side: it stops one grid step short, on the grid (QA4-A A-5;
+          // was 1 unit, off the grid); with snapping off, 1 unit
+          const st = useEditor.getState();
+          const step = st.alt !== !!st.snapOff || st.grid <= 0 ? 0 : st.grid;
+          // (a box already thinner than a step keeps that edge where it was)
+          if (side < 0) lo[ax] = Math.min(at, step ? Math.max(lo0[ax], Math.floor((hi0[ax] - step) / step) * step) : hi0[ax] - 1);
+          else hi[ax] = Math.max(at, step ? Math.min(hi0[ax], Math.ceil((lo0[ax] + step) / step) * step) : lo0[ax] + 1);
         }
         f = [0, 1, 2].map((i) => (hi[i] - lo[i]) / Math.max(1e-6, hi0[i] - lo0[i])) as Vec3; // exact: the core tidies the result
         pivot = [0, 1, 2].map((i) => (i === u ? (g.su < 0 ? hi0[i] : lo0[i]) : i === v ? (g.sv < 0 ? hi0[i] : lo0[i]) : lo0[i])) as Vec3;

@@ -18,7 +18,8 @@ export type Contributor = { label: string; entities: number[]; brushes: number[]
 export type Bar = { id: string; name: string; used: number; max: number; pct: number; what: string; reserve?: number; contributors?: { fix: string; rows: Contributor[]; basis?: string } };
 type Report = {
   map: string;
-  compile: { rows: Bar[]; when: number; log: string } | null;
+  /** the compile this document ran last (`map`: the name it was compiled as) */
+  compile: { rows: Bar[]; when: number; log: string; map?: string } | null;
   live: Bar[];
   precache: { models: number; inlineModels: number; sounds: number; modelRows: Contributor[]; soundRows: Contributor[] };
   error?: string;
@@ -278,7 +279,7 @@ export function BudgetPanel() {
       {r.compile ? (
         <>
           <p className="small-note muted">
-            {r.map}, {new Date(r.compile.when * 1000).toLocaleString("en-US")}. Compile again to update it.
+            {r.compile.map ?? r.map}, {new Date(r.compile.when * 1000).toLocaleString("en-US")}. Compile again to update it.
           </p>
           <ul className="p5-bud-list">
             {r.compile.rows.map((b) => (
@@ -287,7 +288,7 @@ export function BudgetPanel() {
           </ul>
         </>
       ) : (
-        <p className="small-note muted">Not compiled yet: planes, clipnodes, faces, leaves and lighting show here after a compile (Compile panel, or F5 Playtest).</p>
+        <p className="small-note muted">This map hasn't been compiled yet: planes, clipnodes, faces, leaves and lighting show here after a compile (Compile panel, or F5 Playtest).</p>
       )}
     </section>
   );
