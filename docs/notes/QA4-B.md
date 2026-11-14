@@ -165,3 +165,21 @@ reason, "Row 4, Cmd of “Guns”: text of up to 48 letters...".)
 Clean-up: sims QA4S, QA4SB and the hidden test server QA4SRV deleted; my dev servers and Vite stopped; the include
 I changed for row 1 restored (byte-compared). crashcheck since my start: only the 08:23 pid 208 crash (the bottle
 stall above, not one of my servers as far as I can tell). The real game: 0 files changed.
+
+## Fixes (X2, 2026-11-14)
+- **F5 fixed (0183a72a):** bad CSV rows are refused with their line and why (`Line 3: Value “abc” isn't a number`), the
+  good rows go in, the refused ones stay in the box to fix; nothing is turned into 0. QA's repro: 3 rows added, lines
+  3 and 5 refused.
+- **F4 fixed (f700e50d):** studio-ux shows both side panels in the small project (and frames the graph before the
+  breakpoint-dot hover; the "key row doesn't move" check scrolls the lane into view first, as Playwright's own click
+  scrolled it 25 px); studio-v3's two small-window cases frame the graph / click a corner of the empty graph (the
+  starter card covers its middle). Library: a real bug, fixed in the app: Export all and Import read the library
+  from the app first, so an item deleted elsewhere (MCP, the API) doesn't make imports `<id>_2`; the spec is
+  unchanged in what it checks (it still deletes through the API).
+- **F6.1, F6.5, F6.6, F6.7, F6.8 fixed (f700e50d):** Mode settings shows the mode on a Timeline tab; Shift-click (and
+  Cmd/Ctrl-click) add a node to the selection, listed in "?"; node help takes plain questions ("move a player
+  somewhere" → Teleport..., "how do I end the round" → End Round first); a lane's range takes in the curve between
+  keys, so an overshoot isn't cut off; Publish's Name / Made by / About are the app's own fields.
+- Runs: studio-ux-x2, studio-ux, studio-v3, studio-help, studio-playtest in Chromium large and small and WebKit:
+  122/123, the one (a new case in the small window) fixed and then 27/27 (QA4-B cases, 3x each project); Studio
+  UI unit tests 46/46.
