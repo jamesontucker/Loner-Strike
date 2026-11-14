@@ -507,7 +507,13 @@ export function SprayMaker() {
         working={working}
         where={design.id ? `Design “${design.name}”` : "A new design"}
         info="Save keeps the design in Loner-Strike's folder, to open and change later (Designs & templates). Install makes the spray from it and puts it in the game (tempdecal.wad); the spray you had is kept first, to put back."
-        status={done && !dirty && !working ? <span className="tl-ab-state saved">✓ Installed</span> : undefined}
+        status={
+          done && !dirty && !working ? (
+            <span className="tl-ab-state saved">✓ Installed</span>
+          ) : !design.id && !dirty && !working ? (
+            <span className="tl-ab-state">Not saved yet</span>
+          ) : undefined
+        }
         actions={[{ label: "Save design", busyLabel: "Saving…", onClick: () => save(), disabled: !dirty && !!design.id }]}
         more={[
           { label: "Save as a new design", busyLabel: "Saving…", onClick: () => save(true), hidden: !design.id },

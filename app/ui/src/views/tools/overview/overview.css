@@ -10,8 +10,11 @@
 .ov-msg { margin: 0; padding: 16px; color: var(--bone-dim); text-align: center; }
 .ov-busy { position: absolute; top: 10px; left: 10px; width: 16px; height: 16px; margin: 0; }
 .ov-tag { position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 2px; background: rgba(15, 18, 13, .82); color: var(--bone); font-size: 12px; font-weight: 700; pointer-events: none; }
-.ov-zoom { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }
-.ov-zoom .btn { min-width: 30px; }
+/* on a dark backing: the bright green "around the map" made them vanish (QA4-T2 UX-M5) */
+.ov-zoom { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; padding: 4px; border-radius: 3px; background: rgba(8, 10, 8, .82); box-shadow: 0 2px 8px rgba(0, 0, 0, .45); }
+.ov-zoom .btn { min-width: 30px; background: #2b3127; color: #eef0e6; }
+.ov-zoom .btn:hover:not(:disabled) { background: #3a4234; }
+.ov-zoom .btn:disabled { background: #22261f; color: #8d9483; opacity: 1; }
 
 /* zoom and pan */
 .ov-pz { position: absolute; inset: 0; overflow: hidden; cursor: zoom-in; touch-action: none; user-select: none; }

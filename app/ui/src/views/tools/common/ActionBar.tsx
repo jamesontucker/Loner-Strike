@@ -89,6 +89,33 @@ export function ActionBar({ dirty, errors = 0, working, where, info, status, sav
     document.addEventListener("focusin", onFocus);
     return () => document.removeEventListener("focusin", onFocus);
   }, []);
+  // toasts sit above the bar, never over Save: --tl-ab-h is how far the bar's top is from the
+  // window's bottom (ux.css)
+  useEffect(() => {
+    const b = bar.current;
+    const root = document.documentElement;
+    if (!b) return;
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const up = Math.max(0, Math.min(window.innerHeight, window.innerHeight - b.getBoundingClientRect().top));
+        root.style.setProperty("--tl-ab-h", `${Math.ceil(up)}px`);
+      });
+    };
+    measure();
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    ro?.observe(b);
+    window.addEventListener("resize", measure);
+    document.addEventListener("scroll", measure, { capture: true, passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      ro?.disconnect();
+      window.removeEventListener("resize", measure);
+      document.removeEventListener("scroll", measure, { capture: true });
+      root.style.removeProperty("--tl-ab-h");
+    };
+  }, []);
   const saving = save?.busyLabel ?? "Saving…";
 
   const words = status ?? (

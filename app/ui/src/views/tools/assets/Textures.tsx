@@ -21,6 +21,8 @@ export function Textures() {
   const wads = useWads();
   const usage = useUsage();
   const [source, setSource] = useState<Source>("");
+  // the texture file was picked by hand (not the one the page started on)
+  const [chosen, setChosen] = useState(false);
   const [q, setQ] = useState("");
   const [shown, setShown] = useState(PAGE);
   const [picked, setPicked] = useState<Item | null>(null);
@@ -34,35 +36,39 @@ export function Textures() {
     setSource(main ? wadKey(main) : "maps");
   }, [list, source, wads.data?.game]);
 
-  const one = source !== "all" && source !== "maps" ? list.find((w) => wadKey(w) === source) ?? null : null;
+  const needle = q.trim().toLowerCase();
+  // a search covers every texture file, unless one was picked by hand (QA4-T2 UX-M3)
+  const scope: Source = needle && !chosen && source !== "maps" ? "all" : source;
+  const one = scope !== "all" && scope !== "maps" ? list.find((w) => wadKey(w) === scope) ?? null : null;
   const single = useWadTextures(one);
   // "every WAD": each listing on its own (cached by the app after the first time)
   const readable = list.filter((w) => !w.error);
   const all = useQueries({
-    queries: source === "all" ? readable.map((w) => ({
+    queries: scope === "all" ? readable.map((w) => ({
       queryKey: ["tools", "assets", "wad", w.folder, w.name, w.size],
       queryFn: () => getJson<{ textures: WadTexture[] }>(`/api/tools/assets/wad/${encodeURIComponent(w.folder)}/${encodeURIComponent(w.name)}`).then((r) => r.textures ?? []),
     })) : [],
   });
 
   const items: Item[] = useMemo(() => {
-    if (source === "maps") {
+    if (scope === "maps") {
       const u = usage.data;
       if (!u) return [];
       return u.embedded.map(([m, name, w, h]) => ({ name, width: w, height: h, url: mapTextureUrl(u.maps[m], name), where: `Inside ${u.maps[m]}`, source: { kind: "map", map: u.maps[m], tex: name } as ExportSource }));
     }
     const from = (w: WadInfo, ts: WadTexture[]) =>
       ts.map((t) => ({ name: t.name, width: t.width, height: t.height, url: wadTextureUrl(w.folder, w.name, t.name), where: `${w.folder}/${w.name}`, kind: t.kind, source: { kind: "wad", folder: w.folder, wad: w.name, tex: t.name } as ExportSource }));
-    if (source === "all") return readable.flatMap((w, i) => from(w, all[i]?.data ?? []));
+    if (scope === "all") return readable.flatMap((w, i) => from(w, all[i]?.data ?? []));
     return one && single.data ? from(one, single.data) : [];
-  }, [source, usage.data, single.data, one, all, readable]);
+  }, [scope, usage.data, single.data, one, all, readable]);
 
-  const needle = q.trim().toLowerCase();
   const found = needle ? items.filter((t) => matches(searchWords(needle), t.name)) : items;
   useEffect(() => setShown(PAGE), [source, needle]);
 
-  const loading = source === "maps" ? usage.isLoading : source === "all" ? all.some((x) => x.isLoading) : single.isLoading;
-  const error = (source === "maps" ? usage.error : single.error) as Error | null;
+  const loading = scope === "maps" ? usage.isLoading : scope === "all" ? all.some((x) => x.isLoading) : single.isLoading;
+  const error = (scope === "maps" ? usage.error : single.error) as Error | null;
+  const unreadable = list.filter((w) => w.error);
+  const inWords = scope === "all" ? "every texture file" : scope === "maps" ? "maps" : one?.name ?? "";
 
   if (wads.isLoading) return <Skeleton rows={6} />;
   if (wads.error) return <LoadError text={(wads.error as Error).message} onRetry={() => wads.refetch()} />;
@@ -72,11 +78,11 @@ export function Textures() {
       <div className="panel assets-browse">
         <div className="row assets-filters">
           <input className="search assets-search" type="search" placeholder="Search textures by name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search textures" />
-          <select value={source} onChange={(e) => setSource(e.target.value)} aria-label="Where from">
+          <select value={source} onChange={(e) => (setSource(e.target.value), setChosen(true))} aria-label="Where from">
             <option value="all">Every WAD ({readable.length})</option>
             <option value="maps">Inside maps</option>
             {list.map((w) => (
-              <option key={wadKey(w)} value={wadKey(w)} disabled={!!w.error}>
+              <option key={wadKey(w)} value={wadKey(w)} disabled={!!w.error} title={w.error || undefined}>
                 {w.name} ({w.folder}){w.custom ? " · yours" : ""}{w.error ? " · can't be read" : w.textures != null ? ` · ${w.textures}` : ""}
               </option>
             ))}
@@ -84,10 +90,38 @@ export function Textures() {
           <button className="btn" onClick={() => setMaking((v) => !v)} aria-expanded={making}>Make your own…</button>
         </div>
         {one?.error && <p className="muted">{one.error}</p>}
+        {unreadable.length > 0 && (
+          <details className="assets-unreadable">
+            <summary className="muted">
+              {unreadable.length} texture file{unreadable.length === 1 ? "" : "s"} can't be read
+            </summary>
+            <ul>
+              {unreadable.map((w) => (
+                <li key={wadKey(w)}>
+                  <strong>{w.name}</strong> <span className="muted">({w.folder}): {w.error}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         {making && <MakeTexture onDone={(wad) => { setMaking(false); if (wad) setSource(`cstrike/${wad}`); }} />}
         <p className="muted assets-count">
-          {loading ? "Reading textures…" : `${found.length} texture${found.length === 1 ? "" : "s"}${needle ? ` matching "${q.trim()}"` : ""}`}
-          {source === "maps" && " · textures that maps carry inside them"}
+          {loading ? (
+            <>
+              <span className="spinner" aria-hidden="true" /> Reading textures…
+            </>
+          ) : (
+            `${found.length} texture${found.length === 1 ? "" : "s"}${needle ? ` matching "${q.trim()}" in ${inWords}` : ""}`
+          )}
+          {scope === "maps" && " · textures that maps carry inside them"}
+          {needle && chosen && scope !== "all" && scope !== "maps" && (
+            <>
+              {" · "}
+              <button type="button" className="link" onClick={() => setChosen(false)}>
+                Search every texture file
+              </button>
+            </>
+          )}
         </p>
         {error ? <LoadError text={error.message} /> : loading && !items.length ? <Skeleton rows={4} /> : (
           <>
@@ -97,6 +131,7 @@ export function Textures() {
                   <button className="assets-tile" aria-pressed={picked?.url === t.url} onClick={() => setPicked(t)} title={`${t.name} · ${t.width}×${t.height} · ${t.where}`}>
                     <img src={t.url} alt="" loading="lazy" decoding="async" />
                     <span className="assets-tile-name">{t.name}</span>
+                    {scope === "all" && needle && <span className="assets-tile-where muted">{t.where.split("/").pop()}</span>}
                   </button>
                 </li>
               ))}

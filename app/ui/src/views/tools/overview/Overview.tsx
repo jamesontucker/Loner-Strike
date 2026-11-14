@@ -14,7 +14,8 @@ import { useToolArg } from "../../../stores/tools";
 import { useReportAddress } from "../common/address";
 import { Banner, Info, LoadError, Segmented, Switch, useConfirm, useToast } from "../../../ui";
 import { isAbort } from "../../../api";
-import { errorText } from "../common/api";
+import { deadEnd, errorText } from "../common/api";
+import { useNav } from "../../../store";
 import { Loading } from "../common";
 import { MapBrowser, rememberMap } from "../common/MapBrowser";
 import { ActionBar } from "../common/ActionBar";
@@ -188,7 +189,12 @@ function Maker({ map, onBack }: { map: string; onBack: () => void }) {
     return (
       <div className="tools-page">
         <div className="tools-bar">{title}</div>
-        <LoadError title={`Couldn't read ${map}`} text={errorText(info.error, "Couldn't read that map.")} onRetry={() => info.refetch()} />
+        <LoadError
+          title={`Couldn't read ${map}`}
+          text={errorText(info.error, "Couldn't read that map.")}
+          action={deadEnd(info.error) ? { label: "Check it in the Map doctor", run: () => useNav.getState().go("tools", `doctor:${map}`) } : undefined}
+          onRetry={deadEnd(info.error) ? undefined : () => info.refetch()}
+        />
       </div>
     );
 
@@ -243,7 +249,7 @@ function Maker({ map, onBack }: { map: string; onBack: () => void }) {
           </div>
           <div className="tools-status">
             <span className="mono">1024×768</span>
-            <span className="tools-hover">{mode === "installed" ? i.current?.file : `zoom ${i.frame.zoom.toFixed(2)} · ${i.frame.rotated ? "north up" : "sideways"}`}{view.s > 1 ? ` · ${Math.round(view.s * 100)}%` : ""}</span>
+            <span className="tools-hover">{mode === "installed" ? i.current?.file : writes(choice.orient, i.frame)}{view.s > 1 ? ` · ${Math.round(view.s * 100)}%` : ""}</span>
             <span className="tools-hint">Scroll to zoom · drag to move · double-click fits</span>
           </div>
         </div>
@@ -345,4 +351,13 @@ function zoomCentre(v: View, f: number): View {
   const el = document.querySelector(".ov-pz");
   const r = el?.getBoundingClientRect();
   return zoomBy(v, f, r ? r.width / 2 : 0, r ? r.height / 2 : 0);
+}
+
+/** The status line's words for the orientation (and zoom) Install will write: Auto says what it
+ *  picked; a zoom is only known for the way Auto would turn it. */
+function writes(orient: string, frame: { zoom: number; rotated: boolean }): string {
+  const auto = orient === "auto";
+  const rotated = auto ? frame.rotated : orient === "north";
+  const way = rotated ? "north up" : "sideways";
+  return `Writes ${auto ? `${way} (Auto)` : way}${rotated === frame.rotated ? ` · zoom ${frame.zoom.toFixed(2)}` : ""}`;
 }

@@ -33,6 +33,12 @@ export function errorText(e: unknown, fallback = WENT_WRONG): string {
   return fallback;
 }
 
+/** The app answered with its own words (a damaged map, a missing file): trying the same again
+ *  won't help, so the page offers a way on instead of "Try again". */
+export function deadEnd(e: unknown): boolean {
+  return e instanceof ToolsError && e.json;
+}
+
 /** JSON routes answer {error} with 200 (like the rest of the app): that's a failure too. */
 export function checked<T>(v: unknown): T {
   if (v && typeof v === "object" && !Array.isArray(v) && typeof (v as Err).error === "string") throw new ToolsError((v as { error: string }).error, 200, true);

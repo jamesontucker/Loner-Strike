@@ -437,6 +437,9 @@ select, .search {
 .toast-text { user-select: text; }
 .toast-x { background: none; border: 0; padding: 0 2px; font-size: 18px; line-height: 1; color: var(--bone-dim); }
 .toast-x:hover { color: var(--bone); }
+/* a page with a bottom action bar (tools' ActionBar, every Studio): toasts stack above it, never
+   over Save / Try it / More. --tl-ab-h is the bar's distance from the window's bottom (ActionBar.tsx). */
+body:has(.tl-actionbar) .toasts { bottom: max(20px, calc(var(--tl-ab-h, 56px) + 12px)); }
 /* text people copy: addresses, folders, errors, codes, the console */
 code, pre, .mono, .address, .err-text, .copyable, .load-error p, .console, input, textarea { user-select: text; -webkit-user-select: text; }
 .load-error { padding: 14px 16px; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid #d9826b; display: grid; gap: 8px; justify-items: start; }
@@ -661,6 +664,7 @@ input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
   .sheet-backdrop { align-items: end; padding: 0; }
   .sheet, .sheet.wide { width: 100%; max-height: 92vh; border-radius: 6px 6px 0 0; padding-bottom: env(safe-area-inset-bottom); }
   .toasts { left: var(--gutter); right: var(--gutter); width: auto; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; justify-items: stretch; }
+  body:has(.tl-actionbar) .toasts { bottom: max(calc(76px + env(safe-area-inset-bottom)), calc(var(--tl-ab-h, 56px) + 12px)); }
 }
 
 .section-tabs { margin: 0 0 12px; }

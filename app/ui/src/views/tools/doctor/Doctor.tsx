@@ -223,7 +223,9 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
     places: <button className="btn small" onClick={() => go(`callouts:${map}`)}>{r.nav.places ? "Edit place names" : "Name places"}</button>,
     radar: <button className="btn small" onClick={() => go(`radar:${map}`)}>{ov.data?.current?.imageFound ? "Open in Radar maker" : "Make one"}</button>,
   };
-  const shownChecks = checks.map((c) => ({ ...c, action: c.action ?? (c.id in ACTION_FOR ? ACTION_FOR[c.id](actions, c) : undefined) }));
+  // a map that can't be read: only that problem (the other checks can't run on it, QA4-T2 UX-M4)
+  const unreadable = !r.bsp.ok;
+  const shownChecks = checks.filter((c) => !unreadable || c.id === "bsp").map((c) => ({ ...c, action: c.action ?? (c.id in ACTION_FOR ? ACTION_FOR[c.id](actions, c) : undefined) }));
   const count = { ok: 0, warn: 0, bad: 0 } as Record<Tone, number>;
   for (const c of shownChecks) count[c.tone]++;
   const todo = count.warn + count.bad;
@@ -243,14 +245,16 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
           <div className="doc-summary">
             <div className={`doc-verdict ${count.bad ? "bad" : count.warn ? "warn" : "ok"}`}>
               <strong>{count.bad ? plural(count.bad, "problem") : count.warn ? plural(count.warn, "thing") + " worth a look" : "All good"}</strong>
-              <span className="muted small-note">{count.bad || count.warn ? `${count.ok} of ${shownChecks.length} checks passed` : `${shownChecks.length} checks passed: this map has everything it needs`}</span>
+              <span className="muted small-note">
+                {unreadable ? "Other checks need a readable map." : count.bad || count.warn ? `${count.ok} of ${shownChecks.length} checks passed` : `${shownChecks.length} checks passed: this map has everything it needs`}
+              </span>
             </div>
             <div className="doc-counts" aria-label="Checks">
               <span className="doc-count bad">{count.bad}<small>problems</small></span>
               <span className="doc-count warn">{count.warn}<small>warnings</small></span>
               <span className="doc-count ok">{count.ok}<small>passed</small></span>
             </div>
-            {todo > 0 && <Segmented label="Show" values="todo all" labels="Needs a look|All checks" current={view} onPick={(v) => setFilter(v as "all" | "todo")} />}
+            {todo > 0 && !unreadable && <Segmented label="Show" values="todo all" labels="Needs a look|All checks" current={view} onPick={(v) => setFilter(v as "all" | "todo")} />}
           </div>
           {learning && <div className="panel"><JobProgress title="Teaching bots the map…" onEnd={() => reload()} /></div>}
           {GROUPS.map(([g, label]) => {
@@ -293,13 +297,17 @@ function Checkup({ map, onBack }: { map: string; onBack: () => void }) {
           )}
           <section className="tools-panel">
             <h3>Other tools</h3>
-            <div className="doc-links">
-              <button className="btn small" onClick={() => go(`map:${map}`)}>Map viewer</button>
-              <button className="btn small" disabled={!r.nav.exists} onClick={() => go(`navfix:${map}`)}>Nav fixer</button>
-              <button className="btn small" disabled={!r.nav.exists} onClick={() => go(`callouts:${map}`)}>Callouts</button>
-              <button className="btn small" onClick={() => go(`radar:${map}`)}>Radar maker</button>
-              <button className="btn small" onClick={() => go(`health:${map}`)}>Simulate a match</button>
-            </div>
+            {unreadable ? (
+              <p className="small-note muted">The other tools need a readable map. Get the map again, then check it here.</p>
+            ) : (
+              <div className="doc-links">
+                <button className="btn small" onClick={() => go(`map:${map}`)}>Map viewer</button>
+                <button className="btn small" disabled={!r.nav.exists} title={r.nav.exists ? undefined : "Needs a bot nav first: Teach bots this map"} onClick={() => go(`navfix:${map}`)}>Nav fixer</button>
+                <button className="btn small" disabled={!r.nav.exists} title={r.nav.exists ? undefined : "Needs a bot nav first: Teach bots this map"} onClick={() => go(`callouts:${map}`)}>Callouts</button>
+                <button className="btn small" onClick={() => go(`radar:${map}`)}>Radar maker</button>
+                <button className="btn small" onClick={() => go(`health:${map}`)}>Simulate a match</button>
+              </div>
+            )}
           </section>
         </aside>
       </div>
@@ -340,7 +348,7 @@ function buildChecks(r: Report, ov: Awaited<ReturnType<typeof overviewInfo>> | u
   // ---- map and files
   add(r.bsp.ok
     ? { id: "bsp", group: "files", tone: "ok", title: "The map file reads fine", detail: r.size ? `${(r.size / 1048576).toFixed(1)} MB` : undefined }
-    : { id: "bsp", group: "files", tone: "bad", title: "The map file is damaged", detail: `${r.bsp.error}. The game may not load it; getting it again usually fixes this.` });
+    : { id: "bsp", group: "files", tone: "bad", title: "The map file is damaged", detail: `${String(r.bsp.error ?? "").replace(/\.+$/, "")}. The game may not load it; getting it again usually fixes this.` });
   const kinds: [FileRow["kind"], string][] = [["sky", "Sky"], ["model", "Models"], ["sprite", "Sprites"], ["sound", "Sounds"]];
   for (const [k, label] of kinds) {
     const rows = r.files.filter((f) => f.kind === k);

@@ -21,6 +21,10 @@
   background: repeating-conic-gradient(#3a4034 0 25%, #30352b 0 50%) 0 0 / 16px 16px;
 }
 .assets-tile-name { max-width: 100%; font-size: 12px; font-family: ui-monospace, Menlo, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assets-tile-where { max-width: 100%; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assets-unreadable { margin: 8px 0 0; font-size: 14px; }
+.assets-unreadable ul { margin: 6px 0 0; padding-left: 18px; }
+.assets-count .spinner { vertical-align: -2px; }
 .assets-more { justify-content: center; margin-top: 12px; }
 
 .assets-detail { position: sticky; top: 8px; display: grid; gap: 10px; align-content: start; min-width: 0; }

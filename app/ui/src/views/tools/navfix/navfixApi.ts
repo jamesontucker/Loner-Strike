@@ -1,7 +1,7 @@
 // The nav fixer's requests (app/src-tauri/src/tools/navfix.rs). The editing session lives in
 // the app: every edit, undo and save answers with the whole state, so the page just shows it.
 
-import { post as postJson } from "../common/api";
+import { post as postJson, ToolsError } from "../common/api";
 import { toNav, type Nav } from "../overlays";
 import type { Vec3 } from "../viewer/coords";
 
@@ -49,10 +49,15 @@ export type FixState = {
   knowledgeStale?: boolean;
 };
 
-class FixError extends Error {}
+/** `answered`: the app said what's wrong in its own words (common/api.ts deadEnd) */
+class FixError extends ToolsError {
+  constructor(message: string, answered = false) {
+    super(message, answered ? 200 : 0, answered);
+  }
+}
 
 function toState(raw: Record<string, unknown>): FixState {
-  if (typeof raw.error === "string") throw new FixError(raw.error);
+  if (typeof raw.error === "string") throw new FixError(raw.error, true);
   const nav = toNav((raw.nav ?? {}) as Record<string, unknown>);
   return { ...(raw as unknown as FixState), nav, reach: Array.isArray(raw.reach) ? (raw.reach as number[]) : [], problems: Array.isArray(raw.problems) ? (raw.problems as Problem[]) : [] };
 }

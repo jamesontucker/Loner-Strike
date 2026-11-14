@@ -157,12 +157,18 @@ export function Sheet({
 }
 
 /** A load that failed: what went wrong and a way to try again. */
-export function LoadError({ text, onRetry, title }: { text: string; onRetry?: () => void; title?: string }) {
+/** `action`: the way on when trying again can't help (shown first, as the main button). */
+export function LoadError({ text, onRetry, title, action }: { text: string; onRetry?: () => void; title?: string; action?: { label: string; run: () => void } }) {
   return (
     <div className="load-error" role="alert">
       {title && <h3>{title}</h3>}
       <p>{text}</p>
-      {onRetry && <button className="btn" onClick={onRetry}>Try again</button>}
+      {(action || onRetry) && (
+        <div className="row">
+          {action && <button className="btn primary" onClick={action.run}>{action.label}</button>}
+          {onRetry && <button className="btn" onClick={onRetry}>Try again</button>}
+        </div>
+      )}
     </div>
   );
 }
@@ -292,10 +298,12 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 
 // ---- toasts --------------------------------------------------------------
 type ToastAction = { label: string; run: () => void };
-type Toast = { id: number; text: string; error?: boolean; action?: ToastAction };
+/** `undoAt`: when an "Undo that save?" toast came (the save's own message joins it) */
+type Toast = { id: number; text: string; error?: boolean; action?: ToastAction; undoAt?: number };
 /** `ms`: how long a toast with a button stays (without: until dismissed) */
 type Push = (text: string, error?: boolean, action?: ToastAction, ms?: number) => void;
 const ToastCtx = createContext<Push>(() => {});
+const UNDO_SAVE = "Undo that save?";
 /** `toast("Saved")`, `toast("Couldn't save", true)`, or with a button:
  *  `toast("Couldn't load the maps.", true, { label: "Try again", run: reload })`. */
 export const useToast = () => useContext(ToastCtx);
@@ -308,8 +316,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       // nothing to say (an empty reply from the game): no empty toast
       if (!String(text ?? "").trim()) return;
       const id = Date.now() + Math.random();
-      // the same message twice in a row shows once
-      setToasts((t) => [...t.filter((x) => x.text !== text), { id, text, error, action }]);
+      setToasts((t) => {
+        // a save's message right after its "Undo that save?": one toast with the message and
+        // Undo (two stacked ones covered the tool's Save bar)
+        const undo = !error && !action ? t.find((x) => x.undoAt && Date.now() - x.undoAt < 3000) : undefined;
+        if (undo) return t.map((x) => (x === undo ? { ...x, text, undoAt: undefined } : x));
+        // the same message twice in a row shows once
+        return [...t.filter((x) => x.text !== text), { id, text, error, action, undoAt: action && text === UNDO_SAVE ? Date.now() : undefined }];
+      });
       // errors stay long enough to read (and until dismissed when there's something to do)
       if (!action || ms) setTimeout(() => dismiss(id), ms ?? (error ? 9000 : 2600));
     },

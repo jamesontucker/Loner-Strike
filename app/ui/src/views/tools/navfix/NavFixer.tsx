@@ -5,7 +5,8 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useDirty } from "../../../store";
+import { useDirty, useNav } from "../../../store";
+import { deadEnd } from "../common/api";
 import { useTools, useToolArg } from "../../../stores/tools";
 import { Banner, BusyButton, Info, LoadError, Segmented, Skeleton, useAskText, useConfirm, useToast } from "../../../ui";
 import { JobProgress } from "../../JobProgress";
@@ -305,6 +306,8 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
   };
 
   const failed = mesh.error instanceof Error ? mesh.error.message : q.error instanceof Error ? q.error.message : null;
+  // the app said what's wrong (a damaged map or nav): the Map doctor, not "Try again" (QA4-T2 UX-M6)
+  const stuck = deadEnd(mesh.error ?? q.error);
   const ready = mesh.data && st && !ents.isLoading;
 
   return (
@@ -318,7 +321,7 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
         <span className="push" />
         <div className="navfix-tools" role="group" aria-label="What clicks do">
           {(["select", "draw", "link"] as Mode[]).map((m) => (
-            <button key={m} type="button" aria-pressed={mode === m} title={`${HINTS[m]} (${MODE_KEY[m]})`} onClick={() => setMode(mode === m && m !== "select" ? "select" : m)}>
+            <button key={m} type="button" aria-pressed={mode === m} disabled={m !== "select" && !ready} title={`${HINTS[m]} (${MODE_KEY[m]})`} onClick={() => setMode(mode === m && m !== "select" ? "select" : m)}>
               {MODE_NAME[m]}<kbd>{MODE_KEY[m]}</kbd>
             </button>
           ))}
@@ -331,7 +334,12 @@ function Fixer({ map, onBack }: { map: string; onBack: () => void }) {
       {!webgl ? (
         <LoadError title="Your system can't show 3D" text="Loner-Strike couldn't start 3D drawing on this computer. Updating your system or graphics drivers usually fixes this." />
       ) : failed ? (
-        <LoadError title={`Couldn't open ${map}'s nav`} text={failed} onRetry={() => (mesh.error ? void mesh.refetch() : void q.refetch())} />
+        <LoadError
+          title={mesh.error ? `Couldn't open ${map}` : `Couldn't open ${map}'s nav`}
+          text={failed}
+          action={stuck ? { label: "Check it in the Map doctor", run: () => useNav.getState().go("tools", `doctor:${map}`) } : undefined}
+          onRetry={stuck ? undefined : () => (mesh.error ? void mesh.refetch() : void q.refetch())}
+        />
       ) : (
         <div className="tools-viewer">
           <div className="tools-stage">
