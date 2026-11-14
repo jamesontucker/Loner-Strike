@@ -2249,14 +2249,16 @@ args = ["--mcp-stdio"]</code></pre>
     });
   });
 
-  // the sidebar: groups that fold (remembered per viewer), topics, and each topic's headings
-  var closed = store.get("ls.docs.closed") || {};
+  // the sidebar: groups that fold, topics, and each topic's headings. A first visit opens only
+  // Basics (and the open topic's group); after that each viewer's own choices are remembered.
+  var chosen = store.get("ls.docs.groups") || {};
+  var isOpen = function (g) { return chosen[g] ? chosen[g] === "open" : g === "Basics"; };
   var html = "", group = "", gi = 0;
   topics.forEach(function (t) {
     if (t.dataset.group !== group) {
       group = t.dataset.group;
       gi++;
-      html += (gi > 1 ? "</ul></div>" : "") + '<div class="group" data-group="' + esc(group) + '"><button type="button" class="group-btn" aria-expanded="' + (closed[group] ? "false" : "true") +
+      html += (gi > 1 ? "</ul></div>" : "") + '<div class="group" data-group="' + esc(group) + '"><button type="button" class="group-btn" aria-expanded="' + (isOpen(group) ? "true" : "false") +
         '" aria-controls="g' + gi + '"><span>' + esc(group) + '</span><span class="chev" aria-hidden="true">&#9662;</span></button><ul id="g' + gi + '">';
     }
     html += '<li><a href="#' + t.id + '">' + esc(title(t)) + '</a><ul class="sub">';
@@ -2273,8 +2275,8 @@ args = ["--mcp-stdio"]</code></pre>
     var open = b.getAttribute("aria-expanded") !== "true";
     b.setAttribute("aria-expanded", open ? "true" : "false");
     var g = b.parentNode.dataset.group;
-    if (open) delete closed[g]; else closed[g] = 1;
-    store.set("ls.docs.closed", closed);
+    chosen[g] = open ? "open" : "closed";
+    store.set("ls.docs.groups", chosen);
   });
 
   // On this page: the topic's headings, the one being read marked
@@ -2321,10 +2323,12 @@ args = ["--mcp-stdio"]</code></pre>
       if (a.closest(".sub")) a.classList.toggle("on", !!el && el.id === id);
       else if (id === topic.id) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
-    // the current topic's group always open
+    // each group as the viewer left it (or as a first visit has it), the current topic's always open
     var cur = tree.querySelector('[aria-current="page"]');
-    var gb = cur && cur.closest(".group").querySelector(".group-btn");
-    if (gb) gb.setAttribute("aria-expanded", "true");
+    var here = cur && cur.closest(".group").dataset.group;
+    [].forEach.call(tree.querySelectorAll(".group"), function (g) {
+      g.querySelector(".group-btn").setAttribute("aria-expanded", isOpen(g.dataset.group) || g.dataset.group === here ? "true" : "false");
+    });
     var i = topics.indexOf(topic);
     [[prev, topics[i - 1], "Previous"], [next, topics[i + 1], "Next"]].forEach(function (p) {
       if (!p[1]) { p[0].hidden = true; return; }

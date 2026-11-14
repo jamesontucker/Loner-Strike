@@ -79,15 +79,21 @@ test("On this page is off on narrow screens; groups fold and remember; Something
   await page.goto("/docs.html#compile-leak");
   await expect(page.locator("#toc")).toBeHidden();
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/docs.html#getting-started");
+  // a first visit: only Basics and the open topic's group are open
+  await page.goto("/docs.html#demos");
+  const open = () => page.locator('.group-btn[aria-expanded="true"] > span:first-child').allTextContents();
+  expect((await open()).map((t) => t.trim())).toEqual(["Basics", "Watch & inspect"]);
+  await expect(page.locator("#tree a[href='#bot-styles']")).toBeHidden();
+  // a viewer's own choices win next time: The bots opened, Basics closed
+  await page.locator(".group-btn", { hasText: "The bots" }).click();
+  await page.locator(".group-btn", { hasText: "Basics" }).click();
+  await page.goto("/docs.html#map-editor");
+  await page.reload();
+  expect((await open()).map((t) => t.trim())).toEqual(["The bots", "Create"]);
   const watch = page.locator(".group-btn", { hasText: "Watch & inspect" });
-  await expect(watch).toHaveAttribute("aria-expanded", "true");
-  await watch.click();
   await expect(watch).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator("#tree a[href='#demos']")).toBeHidden();
-  await page.reload();
-  await expect(page.locator(".group-btn", { hasText: "Watch & inspect" })).toHaveAttribute("aria-expanded", "false");
-  // search still finds what's in a folded group
+  // search still finds what's in a closed group
   await page.locator("#q").fill("demos");
   await expect(page.locator("#results [role=option]").first()).toBeVisible();
   await page.locator("#q").fill("");
