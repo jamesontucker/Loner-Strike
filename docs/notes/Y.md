@@ -437,5 +437,5 @@ stddev from here); the firewall's query filter dropped the Mac's A2S to 27016, s
 - No freqlab processes run on this box (nothing to watch).
 - **Verdict: stable, with lots of room.** Two maxed servers use about 45 % of one core of three together; a third or
   fourth would fit by these numbers. Recommended for two (or more) servers: sys_ticrate 300 (the app's default),
-  fps_max 300 (leave it), ls_creature_max 128 per server with the adaptive cap on (floor 85 / back at 105, which
+  fps_max as it is (I didn't change or measure it), ls_creature_max 128 per server with the adaptive cap on (floor 85 / back at 105, which
   never triggers here). Only the map change frames (0.8 s) stand out, as on any server.
