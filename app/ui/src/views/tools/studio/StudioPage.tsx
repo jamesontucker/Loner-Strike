@@ -167,7 +167,8 @@ function Studio({ maps }: ToolProps) {
   const playing = useStudio((s) => s.playing);
   const problems = useStudio((s) => s.problems);
   const history = useStudio((s) => s.history);
-  const onMode = useStudio((s) => !s.selected.length && !s.part && !s.selectedVar);
+  // (a Timeline's tab shows the Timeline until Mode settings is pressed)
+  const onMode = useStudio((s) => !s.selected.length && !s.part && !s.selectedVar && (s.modeShown || !(s.graph?.timelines ?? []).some((t) => t.id === s.tab)));
   const st = useStudio.getState();
   const toast = useToast();
   const ask = useConfirm();
@@ -764,7 +765,7 @@ function Studio({ maps }: ToolProps) {
         <button
           type="button"
           className="btn"
-          onClick={() => st.select([])}
+          onClick={() => st.showMode()}
           aria-pressed={onMode}
           title="The mode's name, description, game settings, mode settings and requirements, in Details (or click empty canvas, or Escape)"
           data-testid="studio-mode-settings"

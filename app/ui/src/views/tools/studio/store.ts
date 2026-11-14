@@ -47,6 +47,9 @@ type Studio = {
   tabs: string[];
   /** a Function, Macro, struct or enum shown in Details (picked in the left panel) */
   part: string | null;
+  /** Mode settings pressed: Details shows the mode even with a Timeline's tab open (QA4-B F6.1) */
+  modeShown: boolean;
+  showMode: () => void;
   /** a thing just added under My mode: its name field takes the focus, ready to type (UX review M5) */
   renameNew: string | null;
   setRenameNew: (id: string | null) => void;
@@ -130,6 +133,8 @@ export const useStudio = create<Studio>((set, get) => ({
   tab: "",
   tabs: [],
   part: null,
+  modeShown: false,
+  showMode: () => set({ selected: [], part: null, selectedVar: null, modeShown: true }),
   renameNew: null,
   setRenameNew: (renameNew) => set({ renameNew }),
   openTab: (id) => {
@@ -138,7 +143,7 @@ export const useStudio = create<Studio>((set, get) => ({
     const eg = (graph?.eventGraphs ?? []).some((e) => e.id === id);
     // (a Timeline's tab: Details shows that Timeline, not what was picked before: UX review M8)
     const tl = (graph?.timelines ?? []).some((t) => t.id === id);
-    set({ tab: id, tabs: !id || eg || tabs.includes(id) ? tabs : [...tabs, id], selected: [], ...(tl ? { part: null, selectedVar: null } : {}) });
+    set({ tab: id, tabs: !id || eg || tabs.includes(id) ? tabs : [...tabs, id], selected: [], modeShown: false, ...(tl ? { part: null, selectedVar: null } : {}) });
   },
   closeTab: (id) => {
     const { tabs, tab } = get();
@@ -152,7 +157,7 @@ export const useStudio = create<Studio>((set, get) => ({
     rest.splice(at < 0 ? rest.length : at, 0, id);
     set({ tabs: rest });
   },
-  selectPart: (part) => set(part ? { part, selected: [], selectedVar: null } : { part }),
+  selectPart: (part) => set(part ? { part, selected: [], selectedVar: null, modeShown: false } : { part }),
   library: [],
   reloadLibrary: async () => {
     try {
@@ -161,7 +166,7 @@ export const useStudio = create<Studio>((set, get) => ({
       set({ library: [] });
     }
   },
-  selectVar: (selectedVar) => set(selectedVar ? { selectedVar, selected: [], part: null } : { selectedVar }),
+  selectVar: (selectedVar) => set(selectedVar ? { selectedVar, selected: [], part: null, modeShown: false } : { selectedVar }),
   setFuncFocus: (funcFocus) => set({ funcFocus }),
   setOutput: (output) => set({ output }),
   setFull: (full) => set({ full }),
@@ -196,7 +201,7 @@ export const useStudio = create<Studio>((set, get) => ({
   markSaved: () => set({ saved: get().graph }),
   setProblems: (problems) => set({ problems }),
   // (nothing picked: Details goes back to the mode itself, not the last My mode item)
-  select: (selected) => set(selected.length ? { selected, selectedVar: null, funcFocus: null } : { selected, part: null, selectedVar: null }),
+  select: (selected) => set(selected.length ? { selected, selectedVar: null, funcFocus: null, modeShown: false } : { selected, part: null, selectedVar: null }),
   startPlaying: (mode) => set({ playing: mode, playingSince: Date.now(), debug: emptyDebug() }),
   stopPlaying: () => set({ playing: null }),
   events: (ev) => set({ debug: applyEvents(get().debug, ev, isEventNode(get().graph)) }),

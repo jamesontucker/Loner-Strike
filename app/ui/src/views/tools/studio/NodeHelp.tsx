@@ -40,31 +40,43 @@ export function loadHelp(): Promise<Record<string, HelpEntry>> {
   return cache;
 }
 
-/** Help entries that match the words: title first, then category, pins and text. */
+/** Words a question has that say nothing about the node ("how do I end the round"). */
+const STOP = new Set("a an the do does did i me my you your we how what which when where who why can could should would will to of in on at for with from into by is are be it its this that and or so just somewhere someone something some any every want need make get".split(" "));
+/** A word's stem, so "moves", "moving" and "moved" meet "move" (a rough cut, for search only). */
+const stem = (w: string) => (w.length > 4 ? w.replace(/(ing|ed|es|s)$/, "") : w);
+
+/** Help entries that match the words: title first, then category, pins and text. A question in
+ *  plain words works too ("move a player somewhere"): the words that say nothing are left out and
+ *  words match by their stem (QA4-B F6.6). */
 export function searchHelp(help: Record<string, HelpEntry>, query: string): string[] {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const all = NODE_DEFS.map((d) => d.type).filter((t) => help[t]);
-  if (!words.length) return all;
-  const scored: [string, number][] = [];
+  const raw = query.toLowerCase().split(/[\s,.?!]+/).filter(Boolean);
+  if (!raw.length) return all;
+  const meaningful = raw.filter((w) => !STOP.has(w));
+  const words = (meaningful.length ? meaningful : raw).map(stem);
+  const scored: [string, number, number][] = [];
   for (const t of all) {
     const h = help[t];
     const d = nodeDef(t);
     const title = h.title.toLowerCase();
+    const titleWords = title.split(/\s+/);
     const body = `${h.category} ${h.what} ${h.more ?? ""} ${d?.keywords ?? ""} ${d?.cvar ?? ""} ${h.pins.map((p) => p.help).join(" ")} ${[...(d?.inputs ?? []), ...(d?.outputs ?? [])].map((p) => p.label).join(" ")} ${t}`.toLowerCase();
     let score = 0;
+    let matched = 0;
     for (const w of words) {
-      if (title.startsWith(w)) score += 4;
-      else if (title.split(/\s+/).some((x) => x.startsWith(w))) score += 3;
-      else if (title.includes(w)) score += 2;
-      else if (body.includes(w)) score += 1;
-      else {
-        score = -1;
-        break;
-      }
+      let s = 0;
+      if (title.startsWith(w)) s = 4;
+      else if (titleWords.some((x) => x.startsWith(w))) s = 3;
+      else if (title.includes(w)) s = 2;
+      else if (body.includes(w)) s = 1;
+      if (s) matched++;
+      score += s;
     }
-    if (score > 0) scored.push([t, score]);
+    // the title is the question's words in order ("end round"): first
+    if (words.length > 1 && titleWords.map(stem).join(" ") === words.join(" ")) score += 6;
+    if (matched === words.length) scored.push([t, matched, score]);
   }
-  return scored.sort((a, b) => b[1] - a[1]).map(([t]) => t);
+  return scored.sort((a, b) => b[1] - a[1] || b[2] - a[2]).map(([t]) => t);
 }
 
 /** An example as a snippet that drops into the graph. */

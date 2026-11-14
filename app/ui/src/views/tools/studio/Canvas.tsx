@@ -906,7 +906,8 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         onMoveEnd={(_, vp) => settleViewport(rf, wrap.current, vp)}
         deleteKeyCode={null}
         selectionKeyCode="Shift"
-        multiSelectionKeyCode={["Meta", "Control"]}
+        // (Shift-click adds to the selection too, as in Unreal; Shift-drag on empty space still draws a box: QA4-B F6.5)
+        multiSelectionKeyCode={["Shift", "Meta", "Control"]}
         connectionRadius={24}
         minZoom={0.2}
         maxZoom={2.5}

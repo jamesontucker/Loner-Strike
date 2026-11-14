@@ -76,6 +76,8 @@ export const SHORTCUTS: Record<string, Keys> = {
     ["Mod+D", "Duplicate the selection"],
     ["Delete / Backspace", "Delete the selection"],
     ["Mod+A", "Select everything on this graph"],
+    ["Shift+click / Mod+click", "Add a node to the selection (or take it out)"],
+    ["Shift+drag on empty space", "Select with a box"],
     ["F (tap)", "Frame the selection (or everything)"],
     ["Home", "Frame everything"],
     ["Mod+F", "Find in this mode"],

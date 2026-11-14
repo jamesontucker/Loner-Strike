@@ -25,10 +25,17 @@ const KIND_NAME: Record<GTrack["kind"], string> = { float: "Number", vector: "Po
 
 const comps = (tr: GTrack) => (tr.kind === "vector" ? [0, 1, 2] : tr.kind === "float" ? [undefined] : []);
 
-/** The values a lane shows, low to high (with some room). */
+/** The values a lane shows, low to high (with some room): the keys and the curve between them, so a
+ *  Custom tangent's overshoot isn't cut off at the lane's edge (QA4-B F6.7). */
 function range(tr: GTrack): [number, number] {
   const vals = tr.keys.flatMap((k) => comps(tr).map((c) => num(k.v, c)));
   if (!vals.length) return [0, 1];
+  if (tr.keys.length > 1) {
+    const ts = tr.keys.map((k) => k.t);
+    const t0 = Math.min(...ts),
+      t1 = Math.max(...ts);
+    for (const c of comps(tr)) for (let i = 1; i < 200; i++) vals.push(valueAt(tr.keys, t0 + ((t1 - t0) * i) / 200, c));
+  }
   let lo = Math.min(...vals),
     hi = Math.max(...vals);
   if (hi - lo < 1e-6) (lo -= 1), (hi += 1);

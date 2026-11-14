@@ -66,6 +66,9 @@
 .cm-field { display: grid; gap: 4px; min-width: 0; border: 0; padding: 0; margin: 0; }
 .cm-field > span, .cm-field > legend { font-weight: 600; font-size: 14px; padding: 0; }
 .cm-field input, .cm-field textarea { width: 100%; min-width: 0; }
+/* the app's own text fields (QA4-B F6.8: they were plain browser fields, About in a monospace font) */
+.cm-field .search { max-width: none; flex: none; }
+.cm-field textarea.search { font: inherit; line-height: 1.4; resize: vertical; min-height: 4.5em; }
 .cm-wide { grid-column: 1 / -1; }
 .cm-modes { display: flex; flex-wrap: wrap; gap: 6px 16px; }
 .cm-modes .check-row { white-space: nowrap; font-weight: 400; }

@@ -70,6 +70,8 @@ test("address opens the tab; Entry/Return details; shortcuts", async ({ page }) 
   await page.goto(`/tools-dev.html?open=studio:${ID}/fa`);
   // the address's tab is open straight away
   await expect(selectedTab(page)).toContainText("Reward", { timeout: 20_000 });
+  // (all of the Function's graph in view: a small window's canvas shows only its first part)
+  await fitAll(page);
   await expect(node(page, "fa_e")).toBeVisible();
 
   // Function Entry: its Inputs editor in Details
@@ -597,9 +599,11 @@ test("several event graphs: add, copy and paste across them keeping inner wires,
   await dlg.getByRole("button", { name: "Add graph" }).click();
   await expect(selectedTab(page)).toContainText("Shop");
   await expect(page.locator(".react-flow__node")).toHaveCount(0);
-  // paste: the two nodes and the wire between them, on Shop
-  await page.locator(".react-flow__pane").click({ position: { x: 200, y: 120 } });
+  // paste: the two nodes and the wire between them, on Shop (the click near a corner: in a small
+  // window the empty graph's starter card covers the middle)
+  await page.locator(".react-flow__pane").click({ position: { x: 12, y: 12 } });
   await page.keyboard.press("ControlOrMeta+v");
+  await page.locator(".react-flow__controls-fitview").click();
   await expect(page.locator(".react-flow__node")).toHaveCount(2);
   await expect(page.locator(".react-flow__edge")).toHaveCount(1);
   // an event can go on it too

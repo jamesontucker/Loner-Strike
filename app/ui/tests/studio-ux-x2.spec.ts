@@ -166,3 +166,61 @@ test("M10: an example opens without saving; Make it mine keeps a copy", async ({
   expect(mine).toBeTruthy();
   await page.request.post(`/api/tools/studio/graph/${mine!.id}/delete`, { headers: H });
 });
+
+// ---- QA4-B (docs/notes/QA4-B.md): F5 CSV refusals, F6.1 Mode settings on a Timeline tab, F6.5 Shift-click,
+// F6.7 an overshooting curve inside its lane
+
+test("QA4-B F5: a CSV import refuses bad rows with their line and why, the good ones go in", async ({ page }) => {
+  await seed(page);
+  await openIt(page);
+  await page.getByRole("button", { name: /^Add a data table/ }).click();
+  await page.getByRole("button", { name: "Paste or import CSV…" }).click();
+  await page.getByRole("textbox", { name: "CSV to import" }).fill('Key,Value\n1,10\n2,abc\n3,30\n4,"x""y"\n5,50');
+  await page.getByTestId("studio-table-editor").getByRole("button", { name: "Import", exact: true }).click();
+  const refused = page.getByTestId("studio-csv-refused");
+  await expect(refused).toContainText("2 rows weren't imported");
+  await expect(refused).toContainText("Line 3: Value “abc” isn't a number");
+  await expect(refused).toContainText('Line 5: Value “x"y” isn\'t a number');
+  // the refused rows are back in the box to fix
+  await expect(page.getByRole("textbox", { name: "CSV to import" })).toHaveValue('Key,Value\n2,abc\n4,"x""y"');
+  // the good ones are in the table (the first row there plus 3), nothing as 0
+  await expect(page.getByText(/4 of 256 rows/)).toBeVisible();
+  await page.getByRole("textbox", { name: "CSV to import" }).fill("Key,Value\n2,20\n4,40");
+  await page.getByTestId("studio-table-editor").getByRole("button", { name: "Import", exact: true }).click();
+  await expect(refused).toHaveCount(0);
+  await expect(page.getByText(/6 of 256 rows/)).toBeVisible();
+});
+
+test("QA4-B F6.1, F6.7: Mode settings shows the mode on a Timeline tab; an overshooting curve stays in its lane", async ({ page }) => {
+  const tpl = await (await page.request.get("/src/views/tools/studio/templates/team-dm.graph.json")).json();
+  tpl.mode.id = ID;
+  tpl.timelines = [{ id: "tl1", name: "Lift", length: 4, tick: 0.05, tracks: [{ id: "tr1", name: "Height", kind: "float", keys: [{ t: 0, v: 0, ease: "custom", tout: 400 }, { t: 4, v: 100 }] }] }];
+  expect((await (await page.request.post(`/api/tools/studio/graph/${ID}`, { data: { graph: tpl }, headers: H })).json()).ok).toBeTruthy();
+  await page.goto(`/tools-dev.html?open=studio:${ID}/tl1`);
+  await expect(page.getByRole("button", { name: "Mode settings" })).toBeVisible({ timeout: 20_000 });
+  // (a small window starts with Details folded)
+  if (await page.getByTestId("studio-rail-right").isVisible()) await page.getByTestId("studio-rail-right").click();
+  await expect(page.getByText("Details · Timeline")).toBeVisible();
+  const modeBtn = page.getByTestId("studio-mode-settings");
+  await expect(modeBtn).toHaveAttribute("aria-pressed", "false");
+  await modeBtn.click();
+  await expect(page.getByRole("heading", { name: "This mode" })).toBeVisible();
+  await expect(modeBtn).toHaveAttribute("aria-pressed", "true");
+  // the curve's highest point is inside the lane (it overshoots well past 100)
+  const ys = await page.locator(".st-tl-lane polyline").first().evaluate((el) => (el.getAttribute("points") ?? "").split(" ").map((p) => Number(p.split(",")[1])));
+  expect(Math.min(...ys)).toBeGreaterThanOrEqual(0);
+});
+
+test("QA4-B F6.5: Shift-click adds a node to the selection", async ({ page }) => {
+  await seed(page);
+  await openIt(page);
+  await page.locator(".react-flow__controls-fitview").click();
+  const a = page.locator('.react-flow__node[data-id="is_ct"] .st-node-title');
+  const b = page.locator('.react-flow__node[data-id="give_m4"] .st-node-title');
+  await a.click();
+  await b.click({ modifiers: ["Shift"] });
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(2);
+  // and again takes it out
+  await b.click({ modifiers: ["Shift"] });
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(1);
+});

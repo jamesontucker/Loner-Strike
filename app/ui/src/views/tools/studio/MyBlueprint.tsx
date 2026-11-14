@@ -152,8 +152,15 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
   };
   const exportItem = (it: LibItem) => download(itemFile(it), `${it.id}.lib.json`);
   // the whole library in one file (Import takes it back, item by item)
-  const exportAll = () => download({ schema: LIBRARY_SET, version: 1, items: library.map((it) => ({ id: it.id, item: itemFile(it) })) }, "my-studio-library.lib.json");
+  // (both read the library from the app first: it can change outside this page, from MCP, another
+  // window or a file, and a stale list made imports land as "<id>_2": QA4-B F4)
+  const exportAll = async () => {
+    await useStudio.getState().reloadLibrary();
+    const items = useStudio.getState().library;
+    download({ schema: LIBRARY_SET, version: 1, items: items.map((it) => ({ id: it.id, item: itemFile(it) })) }, "my-studio-library.lib.json");
+  };
   const importFiles = async (files: FileList | null) => {
+    await useStudio.getState().reloadLibrary();
     for (const fl of [...(files ?? [])]) {
       let v: unknown;
       try {
@@ -243,7 +250,7 @@ function LibrarySection({ api, toast }: { api: CanvasApi | null; toast: (text: s
         <button type="button" className="btn small" onClick={() => file.current?.click()}>
           Import
         </button>
-        <button type="button" className="btn small" disabled={!library.length} onClick={exportAll} title="Every item in one file">
+        <button type="button" className="btn small" disabled={!library.length} onClick={() => void exportAll()} title="Every item in one file">
           Export all
         </button>
       </div>

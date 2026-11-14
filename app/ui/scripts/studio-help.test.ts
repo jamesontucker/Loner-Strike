@@ -30,6 +30,11 @@ test("help search: titles first, then what nodes do", async () => {
   const kill = searchHelp(help, "headshot weapon");
   assert.ok(kill.includes("event.player_killed") && kill.includes("event.player_hurt"));
   assert.deepEqual(searchHelp(help, "zzzz nothing like it"), []);
+  // a question in plain words (QA4-B F6.6)
+  const t = (q: string) => searchHelp(help, q).slice(0, 5).map((x) => help[x].title);
+  assert.ok(t("move a player somewhere").some((x) => /teleport|position|move/i.test(x)), JSON.stringify(t("move a player somewhere")));
+  assert.equal(t("how do I end the round")[0], "End Round", JSON.stringify(t("how do I end the round")));
+  assert.ok(t("how do I end the round").includes("Round Ended"));
   assert.equal(searchHelp(help, "").length, NODE_DEFS.length);
 });
 
@@ -181,7 +186,7 @@ test("setting names may hold digits after the first letter (mp_give_player_c4)",
 });
 
 // ---- data tables (tables.ts)
-import { addColumn, addTable, importCsv, parseCsv, readCell, removeColumn, retypeColumn, tablePins, tableProblems, toCsv, updateTable } from "../src/views/tools/studio/tables";
+import { addColumn, addTable, importCsv, parseCsv, refusedCsv, readCell, removeColumn, retypeColumn, tablePins, tableProblems, toCsv, updateTable } from "../src/views/tools/studio/tables";
 import { pinsOf } from "../src/views/tools/studio/pins";
 
 test("data tables: CSV in (commas, tabs, quotes, a header row) and out", () => {
@@ -192,8 +197,27 @@ test("data tables: CSV in (commas, tabs, quotes, a header row) and out", () => {
   g = updateTable(r.graph, r.id, (t) => retypeColumn({ ...t, columns: [{ id: "c1", name: "Level", type: "number" }, { id: "c2", name: "Gun", type: "text" }], rows: [] }, "c2", "weapon"));
   const t = g.dataTables![0];
   const imp = importCsv(t, "Level,Gun\n0,glock18\n1,weapon_AK47\n2,raygun", false);
-  assert.match(imp.message, /Added 3 rows \(the first row was the column names\)/);
-  assert.deepEqual(imp.table.rows, [[0, "glock18"], [1, "ak47"], [2, "knife"]]);
+  assert.match(imp.message, /Added 2 rows \(the first row was the column names\); 1 refused: line 4, Gun “raygun” isn't a weapon name/);
+  assert.deepEqual(imp.table.rows, [[0, "glock18"], [1, "ak47"]]);
+  // QA4-B F5: a bad value is refused with its line and why, never turned into 0; the good rows go in
+  const kv = addTable(emptyGraph("kv", "Kv"), "KV");
+  const kt = kv.graph.dataTables![0];
+  const bad = importCsv({ ...kt, rows: [] }, 'Key,Value\n1,10\n2,abc\n3,30\n4,"x""y"\n5,50\n6\n7,2000000', false);
+  assert.deepEqual(bad.table.rows, [["1", 10], ["3", 30], ["5", 50]]);
+  assert.deepEqual(bad.refused.map((x) => [x.line, x.reason]), [
+    [3, "Value “abc” isn't a number"],
+    [5, 'Value “x"y” isn\'t a number'],
+    [7, "1 value, 2 needed (Key, Value)"],
+    [8, "Value 2000000 is out of range (-1,000,000 to 1,000,000)"],
+  ]);
+  assert.match(bad.message, /^Added 3 rows \(the first row was the column names\); 4 refused: line 3, Value “abc” isn't a number; .*; and 1 more\.$/);
+  assert.equal(refusedCsv(kt, bad.refused).split("\n")[1], "2,abc");
+  // a text cell with characters a table can't hold is refused too (typing in the editor still drops them)
+  assert.match(importCsv({ ...kt, rows: [] }, "a/b,1", false).refused[0].reason, /Key has “\/”/);
+  // enum columns take a value's name or its number
+  const en = importCsv({ ...kt, columns: [kt.columns[0], { id: "c2", name: "Team", type: "enum:e1" }], rows: [] }, "a,Red\nb,1\nc,Green", false, [{ id: "e1", values: ["Red", "Blue"] }]);
+  assert.deepEqual(en.table.rows, [["a", 0], ["b", 1]]);
+  assert.equal(en.refused[0].reason, "Team “Green” isn't one of Red, Blue");
   assert.equal(toCsv(imp.table).split("\n")[0], "Level,Gun");
   // a text cell keeps the label characters only
   assert.equal(readCell({ id: "x", name: "X", type: "text" }, 'Dust "II" /x'), "Dust II x");

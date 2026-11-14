@@ -119,15 +119,15 @@ function Details({ title, setTitle, author, setAuthor, summary, setSummary, abou
     <div className="cm-grid2">
       <label className="cm-field">
         <span>Name</span>
-        <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="What players will see" />
+        <input className="search" value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="What players will see" />
       </label>
       <label className="cm-field">
         <span>Made by</span>
-        <input value={author} maxLength={40} onChange={(e) => setAuthor(e.target.value)} placeholder="Your GameBanana name" />
+        <input className="search" value={author} maxLength={40} onChange={(e) => setAuthor(e.target.value)} placeholder="Your GameBanana name" />
       </label>
       <label className="cm-field cm-span2">
         <span>About it</span>
-        <textarea value={summary} maxLength={400} rows={3} onChange={(e) => setSummary(e.target.value)} placeholder={about} />
+        <textarea className="search" value={summary} maxLength={400} rows={3} onChange={(e) => setSummary(e.target.value)} placeholder={about} />
       </label>
     </div>
   );

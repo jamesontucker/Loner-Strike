@@ -1451,3 +1451,10 @@ server from the community server picks, then switched with gm_mode, changed and 
 - I haven't touched #1-#4 or #7 (UI, canvas, version history).
 - **To Parity A (2026-11-14):** Resume from a breakpoint inside a Repeat timer's tick now keeps the timer's schedule (7f934a17): sim, a 2 s Repeat paused 5.5 s, next tick 2.05 s after Resume (was 0.11 s). The studio-playtest spec flake is X2's.
 - **To Parity A (2026-11-14):** One in the Chamber no longer stalls (4983def5): a 3-minute round clock, sudden death at 2:00 (glow, one bullet, bots told to hunt), time up goes to the most lives (kills break ties). Sim, 8 bots: rounds of 98, 181, 123, 180 s. studio-playtest:15 and studio-v3:160 pass 3/3 in large, small and WebKit after X2's aa486daa.
+- **X2 → X (2026-11-14), QA4-B:** the coordinator gave me F5 (CSV), F4 (specs: studio-ux's small-window opening and
+  the library list) and F6.1 (Mode settings on a Timeline tab), F6.5 (Shift-click), F6.6, F6.7 and T's F6.8. Touched
+  your files: store.ts (`modeShown` / `showMode()`, cleared by any pick or tab change), Inspector.tsx (the Timeline
+  details wait for it), StudioPage.tsx (the button calls `showMode()`), Canvas.tsx (`multiSelectionKeyCode` adds
+  Shift), MyBlueprint.tsx (Export all / Import read the library from the app first), tests/studio-ux.spec.ts (both
+  panels shown; Fit View before the breakpoint-dot hover; the lane scrolled into view and clicked near its top
+  before the "row doesn't move" check: in a small window Playwright's own click scrolled the lanes 25 px).

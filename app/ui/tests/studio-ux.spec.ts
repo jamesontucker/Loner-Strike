@@ -28,6 +28,8 @@ async function seed(page: Page, blank = false) {
 }
 
 test.beforeEach(async ({ page }) => {
+  // both side panels shown: a small window starts with Details folded (by design, UX review H4)
+  await page.addInitScript(() => localStorage.setItem("ls.studio.panels", JSON.stringify({ left: true, right: true, minimap: false })));
   for (const r of ["compile", "check", "testrun", "playtest", "switch", "source", "uninstall/**", "debug/command"])
     await page.route(`**/api/tools/studio/${r}`, (route) => route.fulfill({ json: { ok: true, problems: [], output: "(a test)", installedAs: ID } }));
 });
@@ -160,6 +162,8 @@ test("M4, L4, L5, L8: a mode variable's Get is a pill without Player and Team; p
   await expect(page.locator('.react-flow__node[aria-label="Get Variable node"]')).toHaveCount(1);
   await expect(pill.locator(".react-flow__handle")).toHaveAttribute("aria-label", /output/);
   // the breakpoint dot shows on hover only (unless set)
+  // (the whole graph in view: in a small window the node can sit under the side panel)
+  await page.locator(".react-flow__controls-fitview").click();
   const n = page.locator(".react-flow__node").filter({ hasText: "Player Killed" }).first();
   const dot = n.locator(".st-bp");
   await page.mouse.move(5, 5);
@@ -209,8 +213,10 @@ test("M8, M9: the Timeline editor (name, fitted length, the key row's place, lab
   expect(Number(last!.replace("s", ""))).toBeGreaterThanOrEqual(Number(len) - 0.01);
   // a key added: the lanes don't move
   const lane = page.locator(".st-tl-lane").first();
+  // (in view first: in a small window the click would scroll the lanes to it, which isn't the row moving)
+  await lane.scrollIntoViewIfNeeded();
   const y0 = (await lane.boundingBox())!.y;
-  await lane.click({ position: { x: 80, y: 40 } });
+  await lane.click({ position: { x: 80, y: 12 } });
   await expect(page.getByTestId("timeline-key")).toBeVisible();
   expect(Math.abs((await lane.boundingBox())!.y - y0)).toBeLessThan(2);
   await expect(page.getByRole("button", { name: /^Remove track/ })).toHaveText("Remove");

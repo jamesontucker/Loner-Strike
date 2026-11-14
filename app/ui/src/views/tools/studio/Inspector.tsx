@@ -685,9 +685,10 @@ export function Inspector() {
   const runs = useStudio((s) => s.debug.runs);
   const edit = useStudio((s) => s.edit);
   const tab = useStudio((s) => s.tab);
+  const modeShown = useStudio((s) => s.modeShown);
   if (!graph) return null;
   const tlTab = (graph.timelines ?? []).find((t) => t.id === tab);
-  if (tlTab && !selected.length && !part && !selectedVar) return <TimelineDetails id={tlTab.id} />;
+  if (tlTab && !modeShown && !selected.length && !part && !selectedVar) return <TimelineDetails id={tlTab.id} />;
   if (selectedVar && allVariables(graph).some((x) => x.id === selectedVar)) return <VariableDetails id={selectedVar} />;
   if (part?.startsWith("mk:") && !selected.length) {
     const id = part.slice(3);
