@@ -220,7 +220,13 @@ test("Textures panel: find, one WAD, click chooses, double-click paints what's p
   await menu(page, "Map", "Textures");
   const tx = panel(page, ".editor-textures");
   await tx.getByRole("searchbox", { name: "Find a texture" }).fill("crate01");
-  await tx.getByRole("combobox", { name: "Which WAD" }).selectOption({ label: "halflife.wad" }).catch(() => tx.getByRole("combobox", { name: "Which WAD" }).selectOption({ index: 1 }));
+  // halflife.wad when the list names it so, whatever else the label says ("halflife.wad (3116)"
+  // on a full game), else the first WAD after "All"; never waiting on a label that isn't there
+  const which = tx.getByRole("combobox", { name: "Which WAD" });
+  await expect(which.locator("option").nth(1)).toBeAttached({ timeout: 20_000 });
+  const labels = await which.locator("option").allTextContents();
+  const hl = labels.findIndex((l) => /^halflife\.wad\b/i.test(l.trim()));
+  await which.selectOption({ index: hl > 0 ? hl : 1 }, { timeout: 5_000 });
   const t = tx.getByRole("button", { name: /^crate01$/i }).first();
   await t.click();
   await expect.poll(() => st(page, (s) => s.texture.toUpperCase())).toBe("CRATE01");

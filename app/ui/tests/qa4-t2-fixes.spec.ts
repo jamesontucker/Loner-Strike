@@ -199,7 +199,9 @@ test("F1 re-check: Condition Zero props in a 1.6 map aren't 'every player has it
   test.skip(!!r.error, "kz_urban isn't in this game");
   await open(page, "doctor:kz_urban");
   await page.getByRole("button", { name: "All checks" }).click({ timeout: 30_000 }).catch(() => {});
-  const row = page.locator(".doc-lines li", { hasText: "models/props/trash.mdl" });
+  // trash.mdl's own row in the file list (on a full game the check's whole list also names
+  // stock models, "every player has it" included)
+  const row = page.locator(".doc-files li").filter({ has: page.locator("code", { hasText: /^models\/props\/trash\.mdl$/ }) });
   await expect(row.first()).toBeVisible({ timeout: 30_000 });
   await expect(row.first()).not.toContainText("every player has it");
 });
