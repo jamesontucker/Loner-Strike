@@ -1,11 +1,23 @@
 //! Live map checks: what to flag before compiling (GoldSrc limits, broken brushes, missing
 //! textures, missing spawns, dangling targets). Cheap enough to run after every edit.
 //! Leak detection (open hulls) needs the compiler's view of the world and comes later.
+//!
+//! The deeper checks (agent Checks) live in the submodules and run from `run_with`:
+//! z-fighting, micro-gaps and off-grid brushes, hidden faces, texture seams and stretched
+//! textures (`surfaces`); things stuck in solid, ladders, the sun and CS gameplay by map
+//! prefix (`things`); faces against the void, dark rooms and heavy views (`views`); their
+//! one-click fixes (`fixes`).
 
 use super::doc::{BrushId, EntityId, MapDocument};
 use super::geom::{brush_bounds, validate};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
+
+pub mod fixes;
+pub mod scan;
+pub mod surfaces;
+pub mod things;
+pub mod views;
 
 /// Limits worth warning about. Sources: the HL SDK's bspfile.h values the classic ZHLT
 /// lineage still enforces, the engine's world size and default edict count, and WAD3's
@@ -69,11 +81,79 @@ pub struct Issue {
     /// places it on a click: tools/editor/kits.rs)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub place: Option<String>,
+    /// Where it is (GoldSrc units), for Look and the 3D markers.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub at: Option<[f64; 3]>,
+    /// The brush face it's about.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub face: Option<usize>,
+    /// The suggested fix in plain words.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
+    /// What the fix needs beyond the brush/entity (sent back as is).
+    #[serde(rename = "fixData", skip_serializing_if = "Option::is_none")]
+    pub fix_data: Option<FixData>,
+    /// Other one-click fixes.
+    #[serde(rename = "moreFixes", skip_serializing_if = "Vec::is_empty")]
+    pub more_fixes: Vec<MoreFix>,
+}
+
+/// The details a deeper check's fix needs (the page sends it back with the fix).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FixData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub other_brush: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub other_face: Option<usize>,
+    /// A new position.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to: Option<[f64; 3]>,
+    /// How far to move a face (out is positive).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dist: Option<f64>,
+}
+
+/// Another fix for the same issue, with what it's about.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct MoreFix {
+    pub fix: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub brush: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity: Option<u64>,
+    #[serde(rename = "fixData", skip_serializing_if = "Option::is_none")]
+    pub data: Option<FixData>,
 }
 
 pub(crate) fn issue(level: Level, code: &'static str, message: String) -> Issue {
-    Issue { level, code, message, brush: None, entity: None, texture: None, fix: fix_for(code), place: None }
+    Issue { level, code, message, brush: None, entity: None, texture: None, fix: fix_for(code), place: None, at: None, face: None, hint: None, fix_data: None, more_fixes: Vec::new() }
 }
+
+/// What the deeper checks need beyond the document.
+#[derive(Clone, Debug)]
+pub struct Options {
+    /// The map's name (its prefix decides the gameplay checks).
+    pub map: String,
+    /// Texture scales outside these are "stretched".
+    pub min_scale: f64,
+    pub max_scale: f64,
+    /// Faces each VIS leaf sees, from the last compile ([(leaf center, faces)]), and when it was.
+    pub vis: Option<(Vec<(super::math::Vec3, usize)>, String)>,
+}
+
+impl Default for Options {
+    fn default() -> Options {
+        Options { map: String::new(), min_scale: 0.1, max_scale: 4.0, vis: None }
+    }
+}
+
+/// Faces in a VIS leaf's view above which it's a heavy view (the potential view, all around).
+pub const HEAVY_PVS: usize = 2500;
+/// The same for the sampled estimate (line of sight all around, unsplit brush faces).
+pub const HEAVY_SAMPLED: usize = 1200;
 
 /// The fix offered for an issue code. `place:<class>` fixes are done by the page (it hands
 /// the mapper the entity tool); the rest are `history::cmd_fix`.
@@ -87,6 +167,15 @@ pub fn fix_for(code: &str) -> Option<&'static str> {
         "missing-texture" | "long-texture-name" => "replace-texture",
         "no-ct-spawns" | "no-spawns" => "place:info_player_start",
         "no-t-spawns" => "place:info_player_deathmatch",
+        "z-fighting" => "nudge-face",
+        "stuck-in-solid" | "light-in-solid" | "spawns-overlap" => "move-entity",
+        "micro-gap" => "close-gap",
+        "off-grid" => "snap-brush",
+        "hidden-faces" => "null-hidden",
+        "texture-seam" => "align-neighbor",
+        "stretched-texture" => "reset-scale",
+        "no-sun" => "place:light_environment",
+        "dark-room" => "place:light",
         _ => return None,
     })
 }
@@ -102,6 +191,18 @@ pub fn fix_label(fix: &str) -> &'static str {
         "replace-texture" => "Replace with the current texture",
         "place:info_player_start" => "Place a CT spawn",
         "place:info_player_deathmatch" => "Place a T spawn",
+        "nudge-face" => "Nudge 1 unit",
+        "null-face" => "NULL the hidden face",
+        "move-entity" => "Move it to free space",
+        "close-gap" => "Close the gap",
+        "snap-brush" => "Snap to whole units",
+        "null-hidden" => "NULL them all",
+        "align-neighbor" => "Align with neighbor",
+        "reset-scale" => "Reset the scale to 1",
+        "place:light_environment" => "Place a light_environment",
+        "place:light" => "Place a light",
+        "place:hostage_entity" => "Place a hostage",
+        "place:info_vip_start" => "Place the VIP start",
         _ => "Fix",
     }
 }
@@ -132,7 +233,68 @@ pub fn stats(doc: &MapDocument) -> Stats {
 
 /// Run every check. `known_textures` is the lower-case texture names in the map's WADs; when
 /// None, the document's materials are used (and texture checks are skipped if it has none).
+/// (The basic checks only; `run_with` adds the deeper ones.)
 pub fn run(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<Issue> {
+    let mut out = basic(doc, known_textures);
+    out.sort_by_key(|i| i.level);
+    out
+}
+
+/// Every check, the deeper ones included (see the module notes).
+pub fn run_with(doc: &MapDocument, known_textures: Option<&HashSet<String>>, opts: &Options) -> Vec<Issue> {
+    let mut out = basic(doc, known_textures);
+    out.extend(deeper(doc, opts));
+    out.sort_by_key(|i| i.level);
+    out
+}
+
+/// The deeper checks alone.
+pub fn deeper(doc: &MapDocument, opts: &Options) -> Vec<Issue> {
+    let mut out = Vec::new();
+    let timing = std::env::var("LS_CHECKS_TIMING").is_ok();
+    let t = std::time::Instant::now();
+    let lap = |what: &str| {
+        if timing {
+            eprintln!("  {what}: {} ms", t.elapsed().as_millis());
+        }
+    };
+    let sc = scan::Scan::new(doc);
+    lap("scan");
+    let field = views::Field::build(&sc);
+    lap("field");
+    let hidden = surfaces::hidden_faces(&sc, field.as_ref());
+    lap("hidden faces");
+    surfaces::pair_checks(&sc, &hidden, &mut out);
+    lap("pairs");
+    surfaces::off_grid(&sc, &mut out);
+    out.extend(surfaces::hidden_issue(&sc, &hidden));
+    surfaces::stretched(&sc, opts, &mut out);
+    things::stuck(&sc, &mut out);
+    things::ladders(&sc, &mut out);
+    things::sky_light(&sc, &mut out);
+    things::gameplay(&sc, &opts.map, &mut out);
+    lap("entities");
+    if let Some(f) = &field {
+        views::dark_rooms(&sc, f, &mut out);
+    }
+    lap("rooms");
+    match (&opts.vis, &field) {
+        (Some((points, when)), _) => views::heavy_views(points, HEAVY_PVS, &format!("from the compile of {when}"), &mut out),
+        (None, Some(f)) => views::heavy_views(&views::sampled_views(&sc, f, &hidden.set), HEAVY_SAMPLED, "estimated; compile for exact numbers", &mut out),
+        _ => {}
+    }
+    lap("views");
+    out
+}
+
+/// Faces nobody can see that aren't NULL yet: (brush, face).
+pub fn hidden_face_list(doc: &MapDocument) -> Vec<(BrushId, usize)> {
+    let sc = scan::Scan::new(doc);
+    let field = views::Field::build(&sc);
+    surfaces::hidden_faces(&sc, field.as_ref()).faces.into_iter().map(|(i, f)| (sc.brushes[i].id, f)).collect()
+}
+
+fn basic(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<Issue> {
     let mut out = Vec::new();
     let st = stats(doc);
 
@@ -298,8 +460,6 @@ pub fn run(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<I
     if doc.world.wads.is_empty() && !used.is_empty() {
         out.push(issue(Level::Warning, "no-wads", "The map lists no WAD files, so the compiler won't find any textures.".into()));
     }
-
-    out.sort_by_key(|i| i.level);
     out
 }
 
@@ -369,3 +529,6 @@ mod tests {
         assert!(codes(&run(&d, None)).contains(&"too-many-entities"));
     }
 }
+
+#[cfg(test)]
+mod deep_tests;

@@ -42,6 +42,7 @@ pub mod budget; // P5: how close the map is to the engine's limits
 pub mod browser; // P5: the Content Browser (models, sprites, sounds)
 pub mod kits; // P5: mode map kits (what each mode the map is made for needs)
 pub mod workspace; // P5: project files, undo history, find/replace, duplicate with new names
+pub mod heavy; // Checks: heavy views from the last compile's VIS data
 
 const INTERNAL: &str = "Loner-Strike hit an internal error in the map editor. Try again, and copy the diagnostics from Settings if it keeps happening.";
 const NO_DOC: &str = "No map is open in the editor. Start a new map or open one.";
@@ -416,7 +417,8 @@ fn meshes_bundle(s: &Session, doc_id: Option<u64>, since: Option<u64>) -> Vec<u8
     goldsrc::mesh::write_bundle(header, &[Section::f32("pos", 3, &pos), Section::f32("uv", 2, &uv)])
 }
 
-fn checks_json(s: &mut Session, dirs: &[PathBuf], places: Option<&assets::Places>) -> Value {
+/// Checks: `opts` for the deeper checks (map name, scale limits, VIS data).
+fn checks_json(s: &mut Session, dirs: &[PathBuf], places: Option<&assets::Places>, opts: &checks::Options) -> Value {
     let known: Option<HashSet<String>> = s.wads(dirs).map(|set| {
         let mut k = HashSet::new();
         for w in set.wads.iter().filter_map(|(_, w)| w.as_ref().ok()) {
@@ -424,7 +426,8 @@ fn checks_json(s: &mut Session, dirs: &[PathBuf], places: Option<&assets::Places
         }
         k
     });
-    let mut issues = checks::run(&s.doc, known.as_ref());
+    let opts = checks::Options { map: if opts.map.is_empty() { s.name.clone() } else { opts.map.clone() }, ..opts.clone() };
+    let mut issues = checks::run_with(&s.doc, known.as_ref(), &opts);
     // P5: models, sprites, sounds and the sky the entities name
     if let Some(p) = places {
         issues.extend(assets::issues(&assets::locate(assets::named_files(&s.doc), p), p.hl.is_some()));
@@ -609,6 +612,11 @@ struct FixReq {
     brush: Option<u64>,
     entity: Option<u64>,
     texture: Option<String>,
+    /// Checks: the face and details of the deeper checks' fixes
+    #[serde(default)]
+    face: Option<usize>,
+    #[serde(default, rename = "fixData")]
+    data: Option<checks::FixData>,
 }
 
 fn bids(v: &[u64]) -> Vec<BrushId> {
@@ -828,7 +836,7 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
                 Some(t) => Some(texture_name(&t)?),
                 None => None,
             };
-            let list: Vec<FixIt> = fixes.into_iter().map(|f| FixIt { fix: f.fix, brush: f.brush.map(BrushId), entity: f.entity.map(EntityId), texture: f.texture }).collect();
+            let list: Vec<FixIt> = fixes.into_iter().map(|f| FixIt { fix: f.fix, brush: f.brush.map(BrushId), entity: f.entity.map(EntityId), texture: f.texture, face: f.face, data: f.data }).collect();
             let n = history::cmd_fix(d, h, &list, with.as_deref())?;
             note = Some(if n == 1 { "Fixed.".into() } else { format!("Fixed {n} problems.") });
         }
@@ -1466,13 +1474,27 @@ async fn api_meshes(Extension(ed): Extension<Ed>, Query(q): Query<Since>) -> Res
     }
 }
 
-async fn api_checks(State(st): State<Shared>, Extension(ed): Extension<Ed>) -> Response {
+/// Checks: the stretched-texture limits the page lets the mapper change.
+#[derive(Deserialize, Default)]
+struct ChecksQ {
+    #[serde(rename = "minScale")]
+    min_scale: Option<f64>,
+    #[serde(rename = "maxScale")]
+    max_scale: Option<f64>,
+}
+
+async fn api_checks(State(st): State<Shared>, Extension(ed): Extension<Ed>, q: Option<Query<ChecksQ>>) -> Response {
     let dirs = wad_dirs(&st);
+    let q = q.map(|q| q.0).unwrap_or_default();
     blocking(move || {
         let mut g = ed.lock();
         let s = g.as_mut().ok_or(NO_DOC)?;
         let places = assets::Places::of(&st, s); // P5
-        Ok(checks_json(s, &dirs, Some(&places)))
+        // Checks: the map's name, the scale limits and the last compile's VIS data
+        let d = checks::Options::default();
+        let lim = |x: Option<f64>, def: f64| x.filter(|v| v.is_finite() && *v > 0.0 && *v <= 1024.0).unwrap_or(def);
+        let opts = checks::Options { map: s.name.clone(), min_scale: lim(q.min_scale, d.min_scale), max_scale: lim(q.max_scale, d.max_scale), vis: heavy::vis_for(&st, &s.name) };
+        Ok(checks_json(s, &dirs, Some(&places), &opts))
     })
     .await
 }

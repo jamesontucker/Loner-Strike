@@ -168,7 +168,7 @@ pub fn precache(d: &MapDocument) -> Value {
 }
 
 /// The compile work folders a map's log can be in (the bottle's, then the app's).
-fn work_dirs(st: &Shared, map: &str) -> Vec<PathBuf> {
+pub(super) fn work_dirs(st: &Shared, map: &str) -> Vec<PathBuf> {
     let mut v = Vec::new();
     if let Some(g) = st.local_game() {
         let hl = g.hl.to_string_lossy().to_string();

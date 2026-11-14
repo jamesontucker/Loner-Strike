@@ -878,12 +878,15 @@ fn replace_texture_in(tx: &mut Tx, from: &str, to: &str) -> usize {
 }
 
 /// One problem to fix (from `checks::run`): the fix code and what it's about.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct FixIt {
     pub fix: String,
     pub brush: Option<BrushId>,
     pub entity: Option<EntityId>,
     pub texture: Option<String>,
+    /// Checks: the face and the details the deeper checks' fixes need
+    pub face: Option<usize>,
+    pub data: Option<super::checks::FixData>,
 }
 
 /// Apply check fixes (one or many) as one undo step; `with` is the texture that replaces
@@ -943,6 +946,10 @@ pub fn cmd_fix(doc: &mut MapDocument, h: &mut History, fixes: &[FixIt], with: Op
             "replace-texture" => {
                 let (Some(from), Some(to)) = (f.texture.as_deref(), with) else { return Err("Pick the texture to use instead first.".into()) };
                 n += (replace_texture_in(&mut tx, from, to) > 0) as usize;
+            }
+            // Checks: the deeper checks' fixes
+            other if super::checks::fixes::handles(other) => {
+                n += super::checks::fixes::apply(&mut tx, other, f.brush, f.entity, f.face, f.data.as_ref())?;
             }
             _ => return Err("That problem can't be fixed here.".into()),
         }
@@ -1190,7 +1197,7 @@ mod tests {
         let issues = checks::run(&d, None);
         let fixes: Vec<FixIt> = issues
             .iter()
-            .filter_map(|i| i.fix.filter(|f| !f.starts_with("place:")).map(|f| FixIt { fix: f.into(), brush: i.brush.map(BrushId), entity: i.entity.map(EntityId), texture: i.texture.clone() }))
+            .filter_map(|i| i.fix.filter(|f| !f.starts_with("place:")).map(|f| FixIt { fix: f.into(), brush: i.brush.map(BrushId), entity: i.entity.map(EntityId), texture: i.texture.clone(), face: i.face, data: i.fix_data.clone() }))
             .collect();
         assert!(fixes.iter().any(|f| f.fix == "clear-target"));
         assert!(fixes.iter().any(|f| f.fix == "delete-entity" && f.entity == Some(empty)));
@@ -1210,7 +1217,7 @@ mod tests {
         let miss = checks::run(&d, Some(&known)).into_iter().find(|i| i.code == "missing-texture").unwrap();
         assert_eq!(miss.fix, Some("replace-texture"));
         assert_eq!(miss.texture.as_deref(), Some("crate"));
-        let f = FixIt { fix: "replace-texture".into(), brush: None, entity: None, texture: miss.texture };
+        let f = FixIt { fix: "replace-texture".into(), brush: None, entity: None, texture: miss.texture, ..Default::default() };
         assert!(cmd_fix(&mut d, &mut h, &[f.clone()], None).is_err());
         cmd_fix(&mut d, &mut h, &[f], Some("OTHER")).unwrap();
         assert!(d.brushes[&id].faces.iter().all(|f| f.texture == "OTHER"));
