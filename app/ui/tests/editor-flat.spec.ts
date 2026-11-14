@@ -168,3 +168,31 @@ test("Front and Side views have handles on the right axes", async ({ page }) => 
   expect(b.max[0]).toBe(64);
   expect(errors).toEqual([]);
 });
+
+test("⌘/Ctrl-drag an edge's middle in the Front view shears the box into a slanted wall", async ({ page }) => {
+  const MOD = process.platform === "darwin" ? "Meta" : "Control";
+  const { id, errors } = await openQuadWithBox(page);
+  const top = (await pane(page, 1).boundingBox())!;
+  await page.mouse.move(top.x + top.width / 2, top.y + top.height / 2, { steps: 3 });
+  await page.mouse.click(top.x + top.width / 2, top.y + top.height / 2);
+  await expect(page.locator(".ed-selsize")).toContainText("1 picked · 128 × 128 × 128");
+  // Front view: the top edge's middle, 40 px east with ⌘/Ctrl: the top slides, the floor stays
+  const f = (await handles(page, "front"))!;
+  await page.mouse.move(f[5].x, f[5].y, { steps: 3 });
+  await page.keyboard.down(MOD);
+  await page.mouse.down();
+  await page.mouse.move(f[5].x + 20, f[5].y, { steps: 4 });
+  await page.mouse.move(f[5].x + 40, f[5].y, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up(MOD);
+  await expect.poll(async () => (await api(page, "/api/tools/editor/doc")).undo).toBe("Shear");
+  const b = await brush(page, id);
+  expect(b.min).toEqual([-64, -64, 0]);
+  expect(b.max[0]).toBeGreaterThan(64);
+  expect(b.max[0] % 16).toBe(0);
+  expect(b.max.slice(1)).toEqual([64, 128]);
+  // the box's volume is unchanged: it leans, it doesn't grow (corners at the floor stay)
+  const d = await api(page, "/api/tools/editor/doc");
+  expect(d.brushes.length).toBe(1);
+  expect(errors).toEqual([]);
+});

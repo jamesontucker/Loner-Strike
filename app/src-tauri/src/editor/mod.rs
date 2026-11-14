@@ -16,5 +16,6 @@ pub mod ops;
 pub mod prefab;
 pub mod rmf; // P5: Hammer .rmf and J.A.C.K. .jmf import
 pub mod shapes;
+pub mod shear; // Parity A: skew the selection
 pub mod texture;
 pub mod vertex;

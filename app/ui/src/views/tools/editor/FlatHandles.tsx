@@ -3,7 +3,9 @@
 // moved edge landing on the grid (Alt or Snap off: free). Dragging a picked brush in a flat
 // view moves the selection in the view's plane, its corner landing on the grid
 // (`startFlatMove`, called from the select tool). Both show the change live (the editor's
-// `preview` matrix) and send one undoable transform at the end.
+// `preview` matrix) and send one undoable transform at the end. ⌘/Ctrl-drag an edge's middle
+// handle shears (Hammer's skew): that edge slides along itself on the grid, the opposite edge
+// stays (a box becomes a slanted wall; the core refuses shears steeper than 8:1).
 
 import { useFrame, useThree, type RootState } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -120,7 +122,9 @@ export function FlatHandles({ view }: { view: FlatView }) {
       const el = viewElement(live.current);
       const g = near(ev);
       if (g) {
-        el.style.cursor = cursorFor(g);
+        // ⌘/Ctrl on an edge's middle: shear (the edge slides along itself)
+        const shearing = (ev.ctrlKey || ev.metaKey) && !g.su !== !g.sv;
+        el.style.cursor = shearing ? (g.sv ? "ew-resize" : "ns-resize") : cursorFor(g);
         hoverCursor = true;
       } else if (hoverCursor) {
         el.style.cursor = "";
@@ -133,7 +137,52 @@ export function FlatHandles({ view }: { view: FlatView }) {
       if (!g) return;
       ev.stopPropagation();
       ev.preventDefault();
-      stretch(ev, g, box);
+      if ((ev.ctrlKey || ev.metaKey) && !g.su !== !g.sv) shear(ev, g, box);
+      else stretch(ev, g, box);
+    };
+    // Parity A (Hammer's skew): the dragged edge slides along itself by whole grid steps, the
+    // opposite edge stays; one "Shear" step
+    const shear = (ev0: PointerEvent, g: Grip, b0: [Vec3, Vec3]) => {
+      const s = live.current;
+      const el = viewElement(s);
+      const controls = s.controls as unknown as { enabled: boolean } | null;
+      if (controls) controls.enabled = false;
+      const [lo0, hi0] = b0;
+      const axis = g.sv ? v : u; // the edge's place across
+      const along = g.sv ? u : v; // the way it slides
+      const side = g.sv || g.su;
+      const edge = side < 0 ? lo0[axis] : hi0[axis];
+      const pivot: Vec3 = [0, 0, 0];
+      pivot[axis] = side < 0 ? hi0[axis] : lo0[axis];
+      const span = edge - pivot[axis];
+      const start = flatPoint(s, el, ev0.clientX, ev0.clientY);
+      let factor = 0;
+      const move = (m: PointerEvent) => {
+        const p = flatPoint(s, el, m.clientX, m.clientY);
+        const d = snap(p[along] - start[along]);
+        factor = Math.abs(span) > 1e-6 ? d / span : 0;
+        const sh = new THREE.Matrix4().identity();
+        sh.elements[axis * 4 + along] = factor; // column-major: row `along`, column `axis`
+        const t = new THREE.Matrix4().makeTranslation(pivot[0], pivot[1], pivot[2]);
+        const back = new THREE.Matrix4().makeTranslation(-pivot[0], -pivot[1], -pivot[2]);
+        useEditor.setState({ preview: t.multiply(sh).multiply(back) });
+        setDrag([lo0, hi0]);
+        useTools.getState().setHover(`Shear ${Math.round(d * 100) / 100} units`);
+        s.invalidate();
+      };
+      const up = async () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        if (controls) controls.enabled = true;
+        setDrag(null);
+        useTools.getState().setHover(null);
+        if (factor === 0) return useEditor.setState({ preview: null });
+        const e = useEditor.getState();
+        const r = await e.cmd({ op: "shear", ...ids(), axis, along, factor, pivot, lock: e.textureLock, keep_scale: !e.scaleLock });
+        if (r.error || !r.changed) useEditor.setState({ preview: null });
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
     };
     const stretch = (ev0: PointerEvent, g: Grip, b0: [Vec3, Vec3]) => {
       const s = live.current;
@@ -163,7 +212,7 @@ export function FlatHandles({ view }: { view: FlatView }) {
         useEditor.setState({ preview: scaleAbout(f, pivot) });
         setDrag([lo, hi]);
         const size = [u, v].map((i) => Math.round((hi[i] - lo[i]) * 100) / 100);
-        useTools.getState().setHover(`Size ${size[0]} × ${size[1]}`);
+        useTools.getState().setHover(`Size ${size[0]} × ${size[1]} (${/Mac/.test(navigator.platform) ? "⌘" : "Ctrl"}-drag an edge's middle to shear)`);
         s.invalidate();
       };
       const up = async () => {

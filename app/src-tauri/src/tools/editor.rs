@@ -11,6 +11,7 @@
 
 use crate::editor::checks;
 use crate::editor::extrude; // Parity A
+use crate::editor::shear; // Parity A
 use crate::editor::fgd;
 use crate::editor::shapes;
 use crate::editor::vertex;
@@ -533,6 +534,17 @@ enum Cmd {
     AddVertex { brush: u64, at: P3, delta: P3, drag: Option<String> },
     /// Parity A: these corners of one brush become one, at their middle
     MergeVertices { brush: u64, picks: Vec<P3> },
+    /// Parity A: slide coordinate `along` by `factor` × (coordinate `axis` − the pivot's)
+    Shear {
+        #[serde(default)] brushes: Vec<u64>,
+        #[serde(default)] entities: Vec<u64>,
+        axis: usize,
+        along: usize,
+        factor: f64,
+        pivot: P3,
+        #[serde(default = "yes")] lock: bool,
+        #[serde(default)] keep_scale: bool,
+    },
     /// paste special: copies, each moved, turned (degrees about x, y, z) and stretched from the last
     Array {
         #[serde(default)] brushes: Vec<u64>,
@@ -835,6 +847,17 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             }
             tx.set_brush(id, nb);
             tx.commit(h);
+        }
+        Cmd::Shear { brushes, entities, axis, along, factor, pivot, lock, keep_scale } => {
+            let (bs, es) = (bids(&brushes), eids(&entities));
+            if bs.is_empty() && es.is_empty() {
+                return Err("Pick something to shear first.".into());
+            }
+            if !bs.is_empty() {
+                need_brushes(d, &bs)?;
+            }
+            let t = shear::shear_affine(axis, along, factor, p3(pivot)?)?;
+            history::cmd_transform_with(d, h, &bs, &es, &t, lock, keep_scale, "Shear", None)?;
         }
         Cmd::MergeVertices { brush, picks } => {
             let id = BrushId(brush);
@@ -2798,6 +2821,20 @@ mod tests {
         assert!(r["error"].is_null(), "{r}");
         assert_eq!(t.get("/api/tools/editor/doc").await["undo"], "Merge corners");
         assert!(t.cmd(json!({"op": "merge_vertices", "brush": b, "picks": [[0, 0, 0]]})).await["error"].is_string());
+
+        // shear: a fresh box leans 64 east at the top (Front view), one "Shear" step
+        let r = t.cmd(json!({"op": "add_box", "min": [256, 0, 0], "max": [288, 128, 128], "texture": "CRATE01"})).await;
+        let w = r["created"]["brushes"][0].as_u64().unwrap();
+        let r = t.cmd(json!({"op": "shear", "brushes": [w], "axis": 2, "along": 0, "factor": 0.5, "pivot": [256, 0, 0]})).await;
+        assert!(r["error"].is_null(), "{r}");
+        let doc = t.get("/api/tools/editor/doc").await;
+        assert_eq!(doc["undo"], "Shear");
+        let nb = doc["brushes"].as_array().unwrap().iter().find(|x| x["id"] == w).unwrap().clone();
+        assert_eq!(nb["max"][0].as_f64(), Some(352.0));
+        assert_eq!(nb["min"][0].as_f64(), Some(256.0));
+        let e = t.cmd(json!({"op": "shear", "brushes": [w], "axis": 2, "along": 0, "factor": 20, "pivot": [256, 0, 0]})).await;
+        assert!(e["error"].as_str().unwrap_or("").contains("steep"), "{e}");
+        assert!(t.cmd(json!({"op": "shear", "brushes": [w], "axis": 1, "along": 1, "factor": 0.5, "pivot": [0, 0, 0]})).await["error"].is_string());
     }
 
     #[tokio::test]
