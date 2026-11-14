@@ -223,6 +223,12 @@ Cvars: `ls_creature_ver` (1, for detection), `ls_creature_file`, `ls_creature_pr
 `ls_creature_budget`, `ls_creature_debug` (1 beams for mode/target, 2 path debug, 3 console lines), `ls_creature_last`,
 `ls_creature_alive`, `ls_creature_frags` (0: kills don't add score).
 
+**Fleeing.** A type's `flee_hp` (and the spawn key `flee_hp=0.3`, per creature, which also works on a live one through
+DispatchKeyValue) is the share of health below which it runs; `flee_hp=0` on a creature means it never runs, not even
+a passive one. `flee_home` (type key, default 1) sends it back toward where it spawned and it comes back into the fight
+from there after the cooldown; 0 runs anywhere away (at most 800 units). `ls_creature_flee_last N` (0 = off): with N or
+fewer hostile creatures alive, none runs.
+
 **Friendly creatures (bought turrets).** Type key `friendly = 1`, or spawn keys `friendly=1` and `owner=<player
 index>`: on the players' side. It attacks creatures only, creatures see and attack it (it can be destroyed), players'
 and bots' shots don't hurt it and bots never aim at it, and its kills count as the owner's (money, log line). It has

@@ -228,7 +228,7 @@ export function TypeForm({ t, isNew, builtin, limits, problems, checked, look, o
         </>
       ))}
 
-      {sec("Behavior", BEHAVIOUR_WORDS[t.behaviour]?.label ?? t.behaviour, ["behaviour", "radius", "target", "hates", "friendly", "flee_hp", "respawn", "corpse_time"], (
+      {sec("Behavior", BEHAVIOUR_WORDS[t.behaviour]?.label ?? t.behaviour, ["behaviour", "radius", "target", "hates", "friendly", "flee_hp", "flee_home", "respawn", "corpse_time"], (
         <>
           <Field name="Does" note={BEHAVIOUR_WORDS[t.behaviour]?.help} problems={p("behaviour")}>
             <select value={t.behaviour} aria-label="Behavior" onChange={(e) => set("behaviour", e.target.value)}>
@@ -264,6 +264,11 @@ export function TypeForm({ t, isNew, builtin, limits, problems, checked, look, o
           <Field name="Runs when hurt" note={t.flee_hp > 0 ? `Below ${Math.round(t.flee_hp * 100)}% health, then comes back` : "Never runs"} problems={p("flee_hp")}>
             <Num value={Math.round(t.flee_hp * 100)} onChange={(v) => set("flee_hp", v / 100)} min={0} max={100} unit="%" label="Runs when hurt" />
           </Field>
+          {t.flee_hp > 0 && (
+            <Field name="Runs home" note={t.flee_home ? "Back toward where it came in, then into the fight again" : "Anywhere away from the threat (it may range far off)"} problems={p("flee_home")}>
+              <Switch on={t.flee_home} onChange={(v) => set("flee_home", v)} label="Runs home" />
+            </Field>
+          )}
           <Field name="Comes back" note={t.respawn > 0 ? "At its home, for creatures placed in the map" : "Never (map-placed ones come back next round)"} problems={p("respawn")}>
             {n("respawn", "Comes back", { sliderMax: 300, unit: "s" })}
           </Field>

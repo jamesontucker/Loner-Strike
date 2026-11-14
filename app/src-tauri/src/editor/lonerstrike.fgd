@@ -343,6 +343,7 @@
 	detect(float) : "Sight range" : : "Empty: the type's."
 	hates(choices) : "Attacks" : "" : "" = [ "" : "The type's own" "all" : "Everyone" "t" : "Terrorists" "ct" : "Counter-Terrorists" ]
 	persist(choices) : "Body stays" : 0 : "Hidden until it comes back instead of removed." = [ 0 : "No" 1 : "Yes" ]
+	flee_hp(string) : "Runs when hurt below" : : "A share of its health (0.3 = 30 %); 0 never runs; empty: the type's."
 	friendly(choices) : "Side" : "" : "On the players' side: shoots creatures only, and creatures attack it (a turret the players own)." = [ "" : "The type's own" "0" : "Enemy" "1" : "Players' side" ]
 	tier(choices) : "Tier" : 1 : "A tougher variant: tier 2 glows yellow, tier 3 red-orange and is a little bigger (the type may give it more health)." = [ 1 : "1 (normal)" 2 : "2" 3 : "3" ]
 	angles(string) : "Facing (pitch yaw roll)" : "0 0 0" : ""

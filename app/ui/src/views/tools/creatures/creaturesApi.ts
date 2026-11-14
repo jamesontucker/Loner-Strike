@@ -35,6 +35,8 @@ export type Creature = {
   moves: boolean;
   /** on the players' side (a bought turret): attacks creatures only */
   friendly: boolean;
+  /** a flee heads back toward where it spawned */
+  flee_home: boolean;
   frags: number;
   money: number;
   model: string;
