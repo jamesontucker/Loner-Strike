@@ -56,8 +56,9 @@ stock lsg_settings_init()
 	register_clcmd("lsmm_every_node_3", "lsg_settings_menu", ADMIN_CFG)
 }
 
+// the host's value as it is (hosts are trusted: outside the author's range is theirs to choose)
 stock Float:lsg_sv(k)
-	return floatclamp(get_pcvar_float(g_lsgSc[k]), g_lsgSlo[k], g_lsgShi[k])
+	return get_pcvar_float(g_lsgSc[k])
 
 stock lsg_settings_path(path[], len)
 {
@@ -66,10 +67,13 @@ stock lsg_settings_path(path[], len)
 	formatex(path, len, "%s/studio_settings/every_node_3.cfg", dir)
 }
 
-// the server's own values: only these names, numbers in range (never run as commands)
+// the server's own values: only these names, as numbers (never run as commands); a setting the
+// file leaves out is at the mode's default
 stock lsg_settings_load()
 {
 	new path[200], line[96], key[64], val[32]
+	for (new k = 0; k < LSG_SN; k++)
+		set_pcvar_float(g_lsgSc[k], str_to_float(g_lsgSd[k]))
 	lsg_settings_path(path, charsmax(path))
 	new f = fopen(path, "rt")
 	if (!f)
@@ -85,7 +89,7 @@ stock lsg_settings_load()
 		{
 			if (equali(key, g_lsgSn[k]))
 			{
-				set_pcvar_float(g_lsgSc[k], floatclamp(str_to_float(val), g_lsgSlo[k], g_lsgShi[k]))
+				set_pcvar_float(g_lsgSc[k], str_to_float(val))
 				break
 			}
 		}
@@ -156,10 +160,12 @@ public lsg_settings_menu(id, level, cid)
 	if (!(get_user_flags(id) & level))
 		return PLUGIN_HANDLED
 	new m = menu_create("\yMode settings^n\dSaved for this server", "lsg_settings_menu_h"), t[96], v[40], info[4]
+	menu_additem(m, "Reset all to the mode's defaults", "all")
 	for (new k = 0; k < LSG_SN; k++)
 	{
 		lsg_settings_text(k, lsg_sv(k), v, charsmax(v))
-		formatex(t, charsmax(t), "%s: \y%s", g_lsgSlab[k], v)
+		// (a * marks one that isn't the mode's default)
+		formatex(t, charsmax(t), "%s: \y%s%s", g_lsgSlab[k], v, lsg_sv(k) == str_to_float(g_lsgSd[k]) ? "" : " \r*")
 		num_to_str(k, info, charsmax(info))
 		menu_additem(m, t, info)
 	}
@@ -177,6 +183,17 @@ public lsg_settings_menu_h(id, menu, item)
 	new info[4], acc, cb
 	menu_item_getinfo(menu, item, acc, info, charsmax(info), _, _, cb)
 	menu_destroy(menu)
+	if (equal(info, "all"))
+	{
+		if (!(get_user_flags(id) & ADMIN_CFG))
+			return PLUGIN_HANDLED
+		for (new k = 0; k < LSG_SN; k++)
+			set_pcvar_float(g_lsgSc[k], str_to_float(g_lsgSd[k]))
+		lsg_settings_save()
+		lsg_settings_apply(false)
+		lsg_settings_menu(id, ADMIN_CFG, 0)
+		return PLUGIN_HANDLED
+	}
 	g_lsgSmenu[id] = str_to_num(info)
 	lsg_settings_one(id)
 	return PLUGIN_HANDLED
@@ -192,7 +209,7 @@ stock lsg_settings_one(id)
 	menu_additem(m, "More", "+")
 	menu_additem(m, "Smallest", "lo")
 	menu_additem(m, "Largest", "hi")
-	menu_additem(m, "Start value", "d")
+	menu_additem(m, "Reset to the mode's default", "d")
 	menu_display(id, m)
 }
 
@@ -220,7 +237,7 @@ public lsg_settings_one_h(id, menu, item)
 		v = g_lsgShi[k]
 	else
 		v = str_to_float(g_lsgSd[k])
-	set_pcvar_float(g_lsgSc[k], floatclamp(v, g_lsgSlo[k], g_lsgShi[k]))
+	set_pcvar_float(g_lsgSc[k], v)
 	lsg_settings_save()
 	lsg_settings_apply(false)
 	lsg_settings_one(id)

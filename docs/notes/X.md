@@ -1243,3 +1243,22 @@ delete question text: yours to update with the new dialog.
 - **Round table:** the automatic alive cap now goes up to 96 (16 + 2 per defender).
 - **Downed look:** lying pose, low view, red pulse, bleed bar, pistol only - nothing to set; `ls_down_list` (server console)
   for tests.
+
+## X (2026-11-14): Mode settings, the user's direction (remote servers, trusted hosts, reset)
+- **Remote servers:** the mode settings API now works on the game the request is about (the app's usual X-Target):
+  the player's game, a server here, or a server on its own machine, read and written through
+  `remote::game_file` / `put_game_file` (the same path users.ini, gags and the Game Mode Menu's per-mode files use).
+  The Play page's live view and a server's Modes tab use it as is. MCP `mode_settings_*` take `server`.
+- **Hosts are trusted:** a value outside the author's range is kept and comes back with a warning ("... outside what
+  the mode's author suggests (5-120); the mode may misbehave"), shown under the setting and in a toast; the plugin
+  uses the host's value as it is (no clamping). Still refused: the wrong type (text, a yes/no other than 0/1, half a
+  choice), unknown names; the file is only read (names and numbers), never run.
+- **Reset:** "Reset" by each setting that isn't the mode's default (marked with a dot) and "Reset all to the mode's
+  defaults (N changed)" on the Play page and a server's Modes tab; the admin menu has "Reset all to the mode's
+  defaults" and "Reset to the mode's default" per setting (a red * marks changed ones). A reset leaves the setting
+  out of the file; the plugin puts every setting to its default before reading the file, so it applies at the next
+  round. MCP `mode_settings_reset` (some or all; asks first).
+- Tests: Rust (out of range kept with a warning, wrong types refused, reset one and all); sim (LSPLAY copy): the
+  host's 500 (author's range 50-200) was used as is, and emptying the file mid-game put it back to the default 100
+  at the next round. **Remote: not tried yet** - asked Y in Y.md (5227adb6) before writing anything on Alone
+  Together; I'll test (change one setting, check the next round, reset) when Y says it's a good moment.

@@ -57,11 +57,14 @@ pub fn specs() -> Vec<Spec> {
             schema: || obj(json!({"id": graph_id(), "draft": draft_prop()}), &["id"]),
             description: "The real-world check: compiles the graph with the debugger into a hidden server of its own (never the person's game or an open game), plays it with bots for about a minute and a half (a baseline without the mode, the mode, a round restart, a map change) and reports pass/warn/fail: did the plugin load, run-time errors tied to nodes, a crash, the server's cost against the baseline, which nodes ran and which never did. Asks the person first; takes 2 to 5 minutes." },
         Spec { name: "mode_settings_get", title: "Mode settings: read", kind: Read,
-            schema: || obj(json!({"mode": graph_id(), "server": {"type": "string", "description": "One of this computer's servers (its id); none: the game"}}), &["mode"]),
+            schema: || obj(json!({"mode": graph_id(), "server": {"type": "string", "description": "One of the person's servers (its id; here or on its own machine); none: the game"}}), &["mode"]),
             description: "A Studio mode's settings hosts can change (label, help, group, number / yes-no / choice, range, start value) and this game's or server's value of each." },
         Spec { name: "mode_settings_set", title: "Mode settings: change", kind: Risky,
             schema: || obj(json!({"mode": graph_id(), "server": {"type": "string"}, "values": {"type": "object", "description": "cvar name -> value (numbers; 0/1 for yes-no; a choice's place)", "additionalProperties": {"type": "number"}}}), &["mode", "values"]),
-            description: "Changes some of a Studio mode's settings for the game or one of this computer's servers (each checked against the mode's range or choices). The mode uses them from the next map, or the next round in a running game. Asks the person first." },
+            description: "Changes some of a Studio mode's settings for the game or one of the person's servers (here or on its own machine). Each value must be the setting's type (a number; 0/1 for yes-no; a choice's place); outside the author's range is allowed and comes back in warnings. The mode uses them from the next map, or the next round in a running game. Asks the person first." },
+        Spec { name: "mode_settings_reset", title: "Mode settings: reset", kind: Risky,
+            schema: || obj(json!({"mode": graph_id(), "server": {"type": "string"}, "settings": {"type": "array", "items": {"type": "string"}, "description": "cvar names to reset; none: all"}}), &["mode"]),
+            description: "Puts some or all of a Studio mode's settings back to the mode's defaults, for the game or one of the person's servers. Asks the person first." },
         Spec { name: "studio_uninstall", title: "Mode Studio: take a mode out", kind: Risky, schema: || obj(json!({"id": graph_id()}), &["id"]),
             description: "Removes a Studio mode from the game (its plugin, plugins list and modes.ini line; the graph is kept). Asks the person first." },
         Spec { name: "studio_debug_events", title: "Mode Studio: debugger events", kind: Read,
@@ -256,20 +259,24 @@ pub async fn run(ctx: &Ctx, name: &str, a: &Value) -> Option<Done> {
         .await,
         "mode_settings_get" => async {
             let mode = id_arg(a, "mode")?;
-            let server = a["server"].as_str().filter(|s| s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')).map(|s| format!("&server={s}")).unwrap_or_default();
-            get(ctx, &format!("/api/tools/studio/mode-settings?mode={mode}{server}")).await
+            let server = a["server"].as_str().filter(|s| !s.is_empty());
+            super::catalog::call(ctx, axum::http::Method::GET, &format!("/api/tools/studio/mode-settings?mode={mode}"), server, None).await
         }
         .await,
-        "mode_settings_set" => async {
+        "mode_settings_set" | "mode_settings_reset" => async {
             let mode = id_arg(a, "mode")?;
-            let values = a.get("values").cloned().unwrap_or_else(|| json!({}));
-            let server = a["server"].as_str().unwrap_or_default().to_string();
-            ask(ctx, format!("An AI agent wants to change the \"{mode}\" mode's settings{}: {}. Allow it?", if server.is_empty() { String::new() } else { format!(" on the server {server}") }, values.to_string().chars().take(300).collect::<String>())).await?;
-            let mut b = json!({"mode": mode, "values": values});
-            if !server.is_empty() {
-                b["server"] = json!(server);
-            }
-            post(ctx, "/api/tools/studio/mode-settings", b).await
+            let server = a["server"].as_str().filter(|s| !s.is_empty()).map(str::to_string);
+            let on = server.as_deref().map(|s| format!(" on the server {s}")).unwrap_or_default();
+            let body = if name == "mode_settings_reset" {
+                let which: Vec<String> = a.get("settings").and_then(Value::as_array).map(|l| l.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
+                ask(ctx, format!("An AI agent wants to put the \"{mode}\" mode's settings{on} back to the mode's defaults: {}. Allow it?", if which.is_empty() { "all of them".to_string() } else { which.join(", ") })).await?;
+                if which.is_empty() { json!({"mode": mode, "reset_all": true}) } else { json!({"mode": mode, "reset": which}) }
+            } else {
+                let values = a.get("values").cloned().unwrap_or_else(|| json!({}));
+                ask(ctx, format!("An AI agent wants to change the \"{mode}\" mode's settings{on}: {}. Allow it?", values.to_string().chars().take(300).collect::<String>())).await?;
+                json!({"mode": mode, "values": values})
+            };
+            super::catalog::call(ctx, axum::http::Method::POST, "/api/tools/studio/mode-settings", server.as_deref(), Some(body)).await
         }
         .await,
         "studio_uninstall" => async {

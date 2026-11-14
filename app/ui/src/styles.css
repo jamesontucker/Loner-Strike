@@ -1925,3 +1925,8 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .mode-setting { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(90px, 160px); align-items: center; gap: 2px 10px; }
 .mode-setting .small-note { grid-column: 1 / -1; }
 .mode-setting input[type="number"], .mode-setting select { width: 100%; }
+.mode-setting-input { display: flex; align-items: center; gap: 6px; }
+.mode-setting-mark { color: var(--accent, #e8c35a); }
+.mode-setting-warn { color: var(--warn, #e0a03c); }
+.mode-setting input[aria-invalid="true"] { border-color: var(--warn, #e0a03c); }
+.mode-settings-reset { margin-left: auto; font-size: 0.85rem; font-weight: normal; }

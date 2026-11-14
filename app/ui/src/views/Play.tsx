@@ -4,7 +4,7 @@ import { getJson, getJsonAt, ON_THIS_COMPUTER, postJson, SETUP_ON_COMPUTER, targ
 import { BOT_NOTE, BOT_RATING, BOT_RATING_INFO, BOT_STYLE_NOTE, BOT_STYLES, gameTitle } from "../games";
 import { Icon } from "../icons";
 import { reloadAppInfo, reloadScan, useTarget } from "../queries";
-import { currentTarget, useNav } from "../store";
+import { useNav } from "../store";
 import { usePlayDraft, usePlayDrafts } from "../stores/playDraft";
 import type { AppInfo, MapInfo, Mode, Online } from "../types";
 import { Banner, BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, useCommand, useConfirm, useToast } from "../ui";
@@ -344,7 +344,7 @@ export function PlayLive({ data, maps, refresh, openMaps }: { data: Online; maps
   return (
     <div className="stack">
       {st.mode === "match" && <MatchMode target={targetKey()} />}
-      {st.mode && <ModeSettings mode={st.mode} server={currentTarget()} live />}
+      {st.mode && <ModeSettings mode={st.mode} live />}
       {switching && <SwitchMode mode={switching} current={st.mode} map={st.map} maps={maps} onClose={() => setSwitching(null)} onGo={(map) => { setSwitching(null); if (switching.id === st.mode) { if (map) changeMap(map); } else switchMode(switching, map); }} />}
       {data.presets.length > 0 && (
         <section>
