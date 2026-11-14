@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { realpathSync } from "node:fs";
 
 // three.js is only used by the Tools page (loaded on first open) and gets its own chunk,
 // cached apart from our code. Only the `three` package itself is named: a manual chunk also
@@ -12,9 +13,26 @@ const THREE = /[\\/]node_modules[\\/]three[\\/]/;
 // server `npm run tools:dev` starts (LS_API, docs/TOOLS-DEV.md)
 const API = process.env.LS_API || "http://127.0.0.1:8027";
 
+// What the dev server may serve: the repo, plus node_modules where it really lives (a test copy
+// of the repo can have it as a link to another folder: Monaco's font then answered 403) and the
+// dependency cache wherever a config puts it (each agent's own cacheDir)
+const real = (p: string) => {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+};
+const allowCache = {
+  name: "ls-allow-cache-dir",
+  configResolved(c: { cacheDir: string; server: { fs: { allow: string[] } } }) {
+    c.server.fs.allow.push(real(c.cacheDir));
+  },
+};
+
 export default defineConfig({
-  plugins: [react()],
-  server: { port: Number(process.env.LS_VITE_PORT) || 5173, fs: { allow: ["../.."] }, proxy: { "/api": API, "/thumb": API } },
+  plugins: [react(), allowCache],
+  server: { port: Number(process.env.LS_VITE_PORT) || 5173, fs: { allow: ["../..", real("node_modules")] }, proxy: { "/api": API, "/thumb": API } },
   build: {
     outDir: "dist",
     emptyOutDir: true,

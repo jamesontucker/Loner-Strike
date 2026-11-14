@@ -369,6 +369,9 @@ test("Plugin Studio: shipped plugins are read only, docs, go to definition and t
 
   // a plugin of my own: the "/" menu at the start of a line, and a snippet from it
   const stem = `ps_test_${Date.now() % 100000}`;
+  // (a small window keeps the file list in a drawer behind Files: QA4-T1 H1)
+  const files = page.getByRole("button", { name: "Files", exact: true });
+  if (await files.isVisible()) await files.click();
   await page.getByRole("button", { name: "New plugin" }).click();
   await page.getByLabel("Name").fill(stem);
   await page.getByLabel("Start from").selectOption("blank");

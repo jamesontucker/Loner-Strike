@@ -19,13 +19,15 @@
 .cs-main { min-width: 0; container-type: inline-size; }
 @media (max-width: 1180px) {
   .cs-grid { grid-template-columns: minmax(190px, 230px) minmax(0, 1fr); }
-  /* the list and the form first; the preview under them (QA4-T1 H1) */
-  .cs-side { grid-column: 1 / -1; position: static; max-height: none; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); align-items: start; }
+  /* the list and the form first; the preview under the form, in the form's column (the list
+     stays put beside both as the page scrolls, so it must not cover the preview: QA4-T1 H1,
+     P5 shakedown) */
+  .cs-side { grid-column: 2; position: static; max-height: none; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); align-items: start; }
 }
 @media (max-width: 760px) {
   .cs-grid { grid-template-columns: minmax(0, 1fr); }
   .cs-list { position: static; max-height: 260px; }
-  .cs-side { grid-template-columns: minmax(0, 1fr); }
+  .cs-side { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr); }
 }
 
 /* the list */
