@@ -576,10 +576,30 @@ pub fn read_log(text: &str, map: &str) -> LogSays {
     if lower.contains("start position invalid") {
         return LogSays::Failed("bots couldn't find a place to start on it.".into());
     }
+    // Parity A (QA4-F F8): a fatal error ("FATAL ERROR (shutting down): Unable to initialize
+    // Steam."): under CrossOver the server then sits there with its error and never ends
+    if let Some(l) = text.lines().find(|l| l.contains("FATAL ERROR")) {
+        return LogSays::Failed(format!("the hidden server stopped with an error ({}).", l.trim().chars().take(120).collect::<String>()));
+    }
     if let Some(l) = text.lines().find(|l| l.contains("Host_Error") || l.to_lowercase().contains("couldn't spawn server")) {
         return LogSays::Failed(format!("the server couldn't load it ({}).", l.trim().chars().take(120).collect::<String>()));
     }
     LogSays::Nothing
+}
+
+/// Parity A (QA4-F F8): how long the hidden server may go without answering RCON: before its
+/// first answer (starting, loading the map), and after one (a bot walking keeps it answering).
+const FIRST_ANSWER: Duration = Duration::from_secs(300);
+const QUIET_AT_MOST: Duration = Duration::from_secs(180);
+
+/// Why the hidden server counts as gone (it ran `since` start, last answered `answered` ago),
+/// or None while it's fine.
+pub fn stopped_answering(since: Duration, answered: Option<Duration>) -> Option<&'static str> {
+    match answered {
+        None if since > FIRST_ANSWER => Some("the hidden server never answered (it may have stopped with an error)."),
+        Some(a) if a > QUIET_AT_MOST => Some("the hidden server stopped answering."),
+        _ => None,
+    }
 }
 
 /// The models and sprites a map's entities name ("models/props/barrel.mdl"): the server
@@ -643,6 +663,17 @@ impl LocalLearner {
     pub fn new(client: Install) -> Result<LocalLearner, String> {
         let root = servers::root_for(&client)?;
         Ok(LocalLearner { client, base: root.join(".base"), dir: root.join(".nav-learner"), leftovers: Vec::new() })
+    }
+
+    /// Parity A (QA4-F F6): ends the hidden server's Windows-side process on a Mac (by its own
+    /// path, .nav-learner's hlds.exe), which ending wine's launcher leaves running.
+    fn end_wine_side(&self) {
+        #[cfg(target_os = "macos")]
+        if self.client.kind == "crossover" {
+            if let Some(win) = servers::windows_path(&self.dir.join("hlds.exe")) {
+                crate::procmatch::end_wine_side(&win, Duration::from_secs(3));
+            }
+        }
     }
 
     fn spawn(&self, args: &[String], log: std::fs::File) -> Result<Child, String> {
@@ -832,9 +863,14 @@ impl Learner for LocalLearner {
         let mut from: Vec<u64> = logs.iter().map(|p| std::fs::metadata(p).map(|x| x.len()).unwrap_or(0)).collect();
         let out = std::fs::File::create(&logs[2]).map_err(|e| fail(e.to_string()))?;
         from[2] = 0;
+        // (one left from an earlier run that never ended: it would hold the files and a port)
+        self.end_wine_side();
         let mut child = self.spawn(&learn_args(&m.game, port, &password, &m.name), out).map_err(fail)?;
         sys::tie_to_app(&child);
         let started = Instant::now();
+        let rcon = crate::rcon::Rcon::at(password.clone(), "127.0.0.1", port);
+        let mut answered: Option<Instant> = None;
+        let mut asked = Instant::now();
         let mut text = String::new();
         let mut last: Option<(u64, SystemTime)> = None;
         let result = loop {
@@ -868,11 +904,21 @@ impl Learner for LocalLearner {
             if started.elapsed() > LEARN_LIMIT {
                 break Err(fail("it took longer than 45 minutes.".into()));
             }
+            // still there? (a server that hit an error can sit with it, its process alive)
+            if asked.elapsed() >= Duration::from_secs(20) {
+                asked = Instant::now();
+                if rcon.send("status").is_ok() {
+                    answered = Some(Instant::now());
+                }
+                if let Some(why) = stopped_answering(started.elapsed(), answered.map(|a| a.elapsed())) {
+                    break Err(fail(why.into()));
+                }
+            }
             let mins = started.elapsed().as_secs() / 60;
             job.detail(&if mins == 0 { "A bot is walking the map".to_string() } else { format!("A bot is walking the map ({mins} min so far)") });
         };
         // asked to quit, then ended if it hasn't
-        let _ = crate::rcon::Rcon::at(password, "127.0.0.1", port).send("quit");
+        let _ = rcon.send("quit");
         for _ in 0..25 {
             if matches!(child.try_wait(), Ok(Some(_))) {
                 break;
@@ -880,6 +926,8 @@ impl Learner for LocalLearner {
             std::thread::sleep(Duration::from_millis(200));
         }
         sys::stop_child(child, Duration::from_secs(3));
+        // Parity A (QA4-F F6): under CrossOver the server itself outlives wine's launcher
+        self.end_wine_side();
         // a map that isn't Valve's goes again at the end (no second copy kept)
         if !stock {
             self.leftovers.extend([bsp, nav]);
@@ -1152,6 +1200,14 @@ mod tests {
         assert!(matches!(read_log("ERROR: Start position invalid\n", "de_x"), LogSays::Failed(_)));
         assert!(matches!(read_log("Host_Error: PF_precache_model_I: Model 'models/x.mdl' failed to load\n", "de_x"), LogSays::Failed(_)));
         assert_eq!(read_log("Adding bot\n", "de_x"), LogSays::Nothing);
+        // Parity A (QA4-F F8): a fatal error fails the job at once
+        assert!(matches!(read_log("FATAL ERROR (shutting down): Unable to initialize Steam.\n", "de_x"), LogSays::Failed(w) if w.contains("Unable to initialize Steam")));
+        // and a server that stops answering (or never does) is gone
+        let m = |s| Duration::from_secs(s);
+        assert_eq!(stopped_answering(m(60), None), None, "still starting");
+        assert!(stopped_answering(m(301), None).is_some());
+        assert_eq!(stopped_answering(m(1200), Some(m(30))), None, "a bot walking: it answers");
+        assert!(stopped_answering(m(1200), Some(m(181))).is_some());
     }
 
     #[test]

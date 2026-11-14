@@ -70,6 +70,64 @@ pub fn end_if_ours(pid: u32, noted_start: Option<u64>, exe: &Path, also: Option<
     }
 }
 
+/// Parity A (QA4-F F6): under CrossOver the program the app starts is wine's launcher
+/// (winewrapper.exe); the server itself is another process, named by its Windows path
+/// (`C:\Loner-Strike Servers\<id>\hlds.exe -console ...`). Ending the launcher leaves it running on
+/// its port. These are the pids in `ps -axo pid=,command=` output that are that program: the
+/// Windows-side process (its command line starts with the path) and any launcher running it.
+#[cfg_attr(not(unix), allow(dead_code))]
+pub fn wine_side_pids(ps: &str, win_exe: &str, me: u32) -> Vec<u32> {
+    let exe = win_exe.to_lowercase();
+    if exe.len() < 8 || !exe.ends_with(".exe") {
+        return Vec::new();
+    }
+    let named = |cmd: &str| cmd.starts_with(&exe) && cmd[exe.len()..].chars().next().is_none_or(char::is_whitespace);
+    ps.lines()
+        .filter_map(|l| {
+            let l = l.trim_start();
+            let (pid, cmd) = l.split_once(char::is_whitespace)?;
+            let pid = pid.parse::<u32>().ok().filter(|p| *p > 1 && *p != me)?;
+            let cmd = cmd.trim_start().to_lowercase();
+            let launcher = cmd.contains("winewrapper") && cmd.split(" -- ").skip(1).any(|rest| named(rest.trim_start()));
+            (named(&cmd) || launcher).then_some(pid)
+        })
+        .collect()
+}
+
+/// Ends a CrossOver program by its Windows path (see wine_side_pids): asked first (SIGTERM),
+/// then made to (SIGKILL) if it's still there after `grace`. True when none is left.
+#[cfg(unix)]
+pub fn end_wine_side(win_exe: &str, grace: std::time::Duration) -> bool {
+    let list = || {
+        let mut c = crate::sys::command("ps");
+        c.args(["-axo", "pid=,command="]);
+        crate::sys::run_output(c, std::time::Duration::from_secs(5)).map(|(_, out, _)| wine_side_pids(&out, win_exe, std::process::id()))
+    };
+    let Some(pids) = list() else { return false };
+    if pids.is_empty() {
+        return true;
+    }
+    for p in &pids {
+        // (SAFETY: kill only sends a signal; the pids are this very program, by its full path)
+        unsafe { libc::kill(*p as i32, libc::SIGTERM) };
+    }
+    let until = std::time::Instant::now() + grace;
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let left = list().unwrap_or_default();
+        if left.is_empty() {
+            return true;
+        }
+        if std::time::Instant::now() > until {
+            for p in &left {
+                unsafe { libc::kill(*p as i32, libc::SIGKILL) };
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            return list().is_some_and(|l| l.is_empty());
+        }
+    }
+}
+
 #[cfg(windows)]
 mod win {
     use std::path::Path;
@@ -107,6 +165,46 @@ mod win {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Parity A (QA4-F F6), by hand on a Mac: a CrossOver server whose launcher was ended is
+    /// still running (LS_WINE_EXE, its Windows path; LS_WINE_PORT, its port): end_wine_side ends
+    /// it and its port is free after.
+    #[test]
+    #[ignore]
+    #[cfg(unix)]
+    fn wine_side_ends_a_leftover_server() {
+        let exe = std::env::var("LS_WINE_EXE").unwrap();
+        let port: u16 = std::env::var("LS_WINE_PORT").unwrap().parse().unwrap();
+        let ps = |exe: &str| {
+            let mut c = crate::sys::command("ps");
+            c.args(["-axo", "pid=,command="]);
+            wine_side_pids(&crate::sys::run_output(c, std::time::Duration::from_secs(5)).unwrap().1, exe, std::process::id())
+        };
+        let before = ps(&exe);
+        assert!(!before.is_empty(), "the leftover server should be running");
+        assert!(!crate::sys::udp_port_free(None, port), "it holds its port");
+        let t = std::time::Instant::now();
+        assert!(end_wine_side(&exe, std::time::Duration::from_secs(3)));
+        assert!(ps(&exe).is_empty());
+        assert!(crate::sys::udp_port_free(None, port), "its port is free");
+        eprintln!("ended {before:?} in {:.1} s", t.elapsed().as_secs_f64());
+    }
+
+    #[test]
+    fn wine_side_is_found_by_its_windows_path() {
+        let ps = r#"  101 /Applications/CrossOver.app/Contents/SharedSupport/CrossOver/lib/wine/x86_64-windows/winewrapper.exe --workdir /Users/x/Library/Application Support/CrossOver/Bottles/Steam/drive_c/Loner-Strike Servers/abc --run -- C:\Loner-Strike Servers\abc\hlds.exe -console -game cstrike -port 27015
+  102 C:\Loner-Strike Servers\abc\hlds.exe -console -game cstrike -port 27015
+  103 C:\Loner-Strike Servers\abc2\hlds.exe -console -game cstrike -port 27016
+  104 C:\Loner-Strike Servers\abc\hlds.exe.bak
+  105 /bin/zsh -c pgrep -f C:\Loner-Strike Servers\abc\hlds.exe
+  106 c:\loner-strike servers\ABC\HLDS.EXE
+    7 C:\Loner-Strike Servers\abc\hlds.exe
+"#;
+        assert_eq!(wine_side_pids(ps, r"C:\Loner-Strike Servers\abc\hlds.exe", 7), vec![101, 102, 106]);
+        assert!(wine_side_pids(ps, "", 0).is_empty());
+        assert!(wine_side_pids(ps, r"C:\x", 0).is_empty());
+    }
+
 
     #[test]
     fn pid_files_old_and_new() {

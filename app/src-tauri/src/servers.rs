@@ -2523,6 +2523,27 @@ fn end_leftover(e: &Entry) {
         let win = windows_path(&e.hlds());
         crate::procmatch::end_if_ours(pid, started, &e.hlds(), win.as_deref());
     }
+    end_wine_side(e);
+}
+
+/// Parity A (QA4-F F6): on a Mac, ending wine's launcher leaves the server itself (the
+/// Windows-side hlds.exe) running on its port; it's ended by its Windows path, which is this
+/// server's alone. True when nothing of it is left (always on other systems).
+pub(crate) fn end_wine_side(e: &Entry) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        if e.remote.is_none() {
+            if let Some(win) = windows_path(&e.hlds()) {
+                return crate::procmatch::end_wine_side(&win, Duration::from_secs(3));
+            }
+        }
+        true
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = e;
+        true
+    }
 }
 
 /// One start at a time, so a double click (or the crash watcher racing a restart) can't
@@ -2642,7 +2663,12 @@ pub fn start(id: &str) -> Result<(), String> {
     }
     // another program on this computer (or a server the app doesn't know): Windows' hlds would
     // quietly take the next port, and the app couldn't reach it (procmatch.rs / sys.rs)
-    if !sys::udp_port_free(e.bind_ip().as_deref(), e.port) {
+    // (a server just ended can take a moment to let go of its port)
+    let free = || sys::udp_port_free(e.bind_ip().as_deref(), e.port);
+    if !free() && !(0..10).any(|_| {
+        std::thread::sleep(Duration::from_millis(300));
+        free()
+    }) {
         return Err(format!("Port {} is in use by another program on this computer. Close it, or change this server's port.", e.port));
     }
     let child = spawn(&e)?;
@@ -2699,14 +2725,22 @@ pub fn stop(id: &str) {
     if let Some(rcon) = e.as_ref().and_then(|e| e.rcon()) {
         let _ = rcon.send("quit");
     }
+    let mut ended = false;
     for _ in 0..50 {
         if matches!(child.try_wait(), Ok(Some(_))) {
             sys::untie(child.id());
-            return;
+            ended = true;
+            break;
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    sys::stop_child(child, Duration::from_secs(3));
+    if !ended {
+        sys::stop_child(child, Duration::from_secs(3));
+    }
+    // (a hung server: its launcher is gone, the server itself may not be)
+    if let Some(e) = &e {
+        end_wine_side(e);
+    }
 }
 
 /// Stops every server this session started, all at once (each can take seconds).
@@ -2826,6 +2860,7 @@ fn watch_frozen() {
         std::thread::sleep(Duration::from_secs(15));
         let due: Vec<String> = with_runs(|r| r.procs.iter().filter(|(_, p)| !p.stopping && p.started.elapsed() > FROZEN_GRACE).map(|(id, _)| id.clone()).collect());
         for id in due {
+            let mut ended = false;
             let Some(e) = get(&id) else { continue };
             // the server-info query, else RCON: a server started with -nomaster (not on the
             // public list) may never answer the query while it plays on fine
@@ -2839,8 +2874,13 @@ fn watch_frozen() {
                     let _ = p.child.kill();
                     // (the crash watcher sees it end and starts it again)
                     p.answered = Instant::now();
+                    ended = true;
                 }
             });
+            // Parity A (QA4-F F6): the server itself too, not only wine's launcher
+            if ended {
+                end_wine_side(&e);
+            }
         }
     });
 }
