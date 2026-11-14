@@ -145,7 +145,7 @@ class Deciding(unittest.TestCase):
         ans = self.click(self.ok)
         text = json.dumps(ans["data"])
         self.assertIn("ABOVE Map Maker", text)
-        self.assertIn("Loner-Strike Setup", text)
+        self.assertIn("Loner-Strike", text)
         self.assertEqual(self.c.store.application(1)["state"], "pending", "still waiting: fix the roles, press again")
         self.assertEqual(list(buttons(ans["data"])), ["Approve", "Deny"])
         self.bot.role_reply = (204, {})
@@ -287,7 +287,7 @@ class Setup(unittest.TestCase):
                 state["pinned"].append(path)
                 return {}
             if path.endswith("/roles"):
-                return [{"id": "r1", "name": "Map Maker", "position": 5}, {"id": "bot", "name": "Loner-Strike Setup", "position": 3},
+                return [{"id": "r1", "name": "Map Maker", "position": 5}, {"id": "bot", "name": "Loner-Strike", "position": 3},
                         {"id": "r2", "name": "Playtester", "position": 1}]
             if "/members/" in path:
                 return {"roles": ["bot"]}

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Moderation cards in the team's private Discord channel, with buttons (community.py).
 #
-# The bot application ("Loner-Strike Setup") posts a card for every new listing ([Pull]), every
+# The bot application ("Loner-Strike") posts a card for every new listing ([Pull]), every
 # report ([Pull] [Keep] [Block creator]) and every submission from a blocked creator ([Approve]
 # [Reject]). Discord sends button clicks to POST /discord/interactions on this service; each one
 # is checked (Discord's Ed25519 signature, a fresh timestamp, our guild, a moderator), done once,

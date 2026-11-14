@@ -16,6 +16,12 @@ import community as cm
 ROLES = (("playtester", "Playtester"), ("map_maker", "Map Maker"), ("mode_maker", "Mode Maker"),
          ("bug_hunter", "Bug Hunter"), ("moderator", "Moderator"))
 NAMES = dict(ROLES)
+
+
+def _sentence(t):
+    """A reason as a sentence: ends with . ! or ?"""
+    t = t.strip()
+    return t if not t or t[-1] in ".!?" else t + "."
 WHY_MIN, WHY_MAX, LINKS_MAX = 20, 1000, 400
 COOLDOWN = 14 * 86400        # after a no, before the same role can be asked for again
 PER_DAY = 5                  # applications a person may send a day (all roles)
@@ -197,7 +203,7 @@ class Applications:
                 self.mod.audit(f"Application #{app_id} ({name}) approved by <@{actor['id']}>")
             elif code == 403:
                 hint = (f"Discord refused to give the role: the bot's own role has to be ABOVE {name} in Server Settings > "
-                        f"Roles (drag \"Loner-Strike Setup\" above it) and have Manage Roles. Then press Approve again.")
+                        f"Roles (drag the bot's role (\"Loner-Strike\") above it) and have Manage Roles. Then press Approve again.")
                 self.c.store.update_application(app_id, note=hint if (ans or {}).get("code") in (MISSING_PERMISSIONS, None) else
                                                 f"Discord refused to give the role ({(ans or {}).get('message', 'forbidden')}).")
             elif code == 404:
@@ -218,9 +224,18 @@ class Applications:
                         reason = cm.one_line(comp["value"], cm.MAX_REASON)
             self.c.store.update_application(app_id, state="denied", decider=actor["id"], decider_name=actor["name"],
                                             decided_at=cm.now(), reason=reason, note="")
-            told = self.dm(a["user_id"], name, reason)
-            if not told:
+            # Discord wants an answer within 3 s: the DM goes out after it (two API calls), and the card
+            # is edited afterwards if they couldn't be told
+            app_id_ = d.get("application_id") or ""
+            token = d.get("token") or ""
+
+            def tell():
+                if self.dm(a["user_id"], name, reason):
+                    return
                 self.c.store.update_application(app_id, note="Couldn't tell them by DM (their DMs are closed).")
+                if app_id_ and token:
+                    self.bot.api("PATCH", f"/webhooks/{app_id_}/{token}/messages/@original", self.card(app_id))
+            self.mod._later(tell)
             self.mod.audit(f"Application #{app_id} ({name}) denied by <@{actor['id']}>")
             return {"type": 7, "data": self.card(app_id)}
         if action == "appundo":
@@ -243,6 +258,6 @@ class Applications:
         if code != 200 or not isinstance(ans, dict) or not ans.get("id"):
             return False
         text = (f"Hi! Thanks for applying for {name} in the Loner-Strike Discord. The team said no this time"
-                + (f": {cm.one_line(reason, cm.MAX_REASON)}" if reason else ".")
+                + (f": {_sentence(cm.one_line(reason, cm.MAX_REASON))}" if reason else ".")
                 + f" You're welcome to apply again from {time.strftime('%Y-%m-%d', time.gmtime(cm.now() + COOLDOWN))}.")
         return self.bot.post_to(str(ans["id"]), {"content": text[:1900]}) is not None

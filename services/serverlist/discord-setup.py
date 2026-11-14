@@ -134,7 +134,7 @@ def setup_apply(token, ask, apply, say=print):
         if not r:
             say(f"  ! There's no role called {name} yet: make it, or approving {name} applications will say so.")
         elif r.get("position", 0) >= top:
-            say(f"  ! The bot's role is below {r['name']}: drag \"Loner-Strike Setup\" above it in Server Settings > Roles.")
+            say(f"  ! The bot's role is below {r['name']}: drag the bot's role (\"Loner-Strike\") above it in Server Settings > Roles.")
     if APPLICATIONS_NAME in ids:
         say(f"For the service's env file:  DISCORD_APPLY_CHANNEL_ID={ids[APPLICATIONS_NAME]}  "
             f"DISCORD_APPLY_ROLES={','.join(TEAM_ROLES)}")
