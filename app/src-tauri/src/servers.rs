@@ -445,6 +445,32 @@ pub(crate) fn with_bots_line(text: &str, bots_empty: bool) -> String {
     format!("{}\n{line}\n", lines.join("\n"))
 }
 
+/// How many creatures may be alive at once on this host (the game DLL's ls_creature_max; Last
+/// Stand's own cap scales with the team up to 96 and never goes over it). Measured (docs/notes/Y.md):
+/// a native server (Linux, Windows) holds 220+ fps with 32 bots and 100+ creatures; a Mac's
+/// server runs under CrossOver about 100x slower per bot, so it gets a small cap. The adaptive
+/// cap (ls_creature_adaptive 1) lowers it further while the server's fps is under 85, everywhere.
+pub(crate) const CREATURES_NATIVE: u32 = 128;
+pub(crate) const CREATURES_CROSSOVER: u32 = 24;
+
+pub(crate) fn creature_cap(e: &Entry) -> u32 {
+    if e.remote.is_none() && e.kind == "crossover" {
+        CREATURES_CROSSOVER
+    } else {
+        CREATURES_NATIVE
+    }
+}
+
+/// friends.cfg with its creature lines set (ls_creature_max for the host, the adaptive cap on),
+/// the rest kept as it is.
+pub(crate) fn with_creature_lines(text: &str, max: u32) -> String {
+    let mut lines: Vec<&str> = text.lines().filter(|l| !l.trim_start().starts_with("ls_creature_max") && !l.trim_start().starts_with("ls_creature_adaptive")).collect();
+    if lines.is_empty() {
+        lines.push("// Written by Loner-Strike");
+    }
+    format!("{}\nls_creature_max {max}\nls_creature_adaptive 1\n", lines.join("\n"))
+}
+
 /// Brings friends.cfg's bots line in step with the server's setting (start options can't
 /// carry it: ReGameDLL's game.cfg sets it back to 1 on every map, and friends.cfg runs
 /// after it). Whether the file changed.
@@ -452,7 +478,7 @@ fn write_bots_line(e: &Entry) -> Result<bool, String> {
     let data = e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes");
     let path = data.join("friends.cfg");
     let old = std::fs::read_to_string(&path).unwrap_or_default();
-    let new = with_list_line(&with_bots_line(&old, bots_when_empty(e)), e.ls_listed);
+    let new = with_creature_lines(&with_list_line(&with_bots_line(&old, bots_when_empty(e)), e.ls_listed), creature_cap(e));
     if new == old {
         return Ok(false);
     }
@@ -4269,6 +4295,19 @@ mod tests {
         assert_eq!(off, "// Written by Loner-Strike's Friends tab\nhostname \"A\"\nsv_password \"\"\nbot_join_after_player 1\n");
         assert_eq!(with_bots_line(&off, false), off, "the same twice");
         assert_eq!(off.matches("bot_join_after_player").count(), 1);
+    }
+
+    #[test]
+    fn friends_cfg_creature_lines_by_host() {
+        let cfg = "// Written by Loner-Strike\nhostname \"A\"\n";
+        let on = with_creature_lines(cfg, 128);
+        assert_eq!(on, format!("{cfg}ls_creature_max 128\nls_creature_adaptive 1\n"));
+        assert_eq!(with_creature_lines(&on, 128), on, "the same twice");
+        assert_eq!(with_creature_lines(&on, 24).matches("ls_creature_max").count(), 1);
+        let mac: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"cstrike","port":27016,"dir":"/x","kind":"crossover","bottle":null}"#).unwrap();
+        let win: Entry = serde_json::from_str(r#"{"id":"x","name":"x","game":"cstrike","port":27016,"dir":"/x","kind":"windows","bottle":null}"#).unwrap();
+        assert_eq!(creature_cap(&mac), CREATURES_CROSSOVER);
+        assert_eq!(creature_cap(&win), CREATURES_NATIVE);
     }
 
     #[test]
