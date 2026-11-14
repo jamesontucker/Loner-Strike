@@ -221,6 +221,12 @@ fn prepare(st: &Shared) -> Result<(Hidden, std::sync::Arc<crate::game::Game>), S
         return Err("CrossOver isn't installed in Applications. The hidden server runs through it, like the game.".into());
     }
     let gf = super::super::health::game_folder(&game).to_string();
+    // (tests never use the player's real servers folder: LS_SERVERS_DIR points at a test one,
+    // QA4-B found a test run writing into the app's own Servers/.studio-test)
+    #[cfg(test)]
+    if std::env::var_os("LS_SERVERS_DIR").is_none() {
+        return Err("Under test, a test run needs LS_SERVERS_DIR (a servers folder of its own).".into());
+    }
     let root = crate::servers::root_for(&client)?;
     let dir = root.join(HIDDEN);
     // (testing: LS_TEST_RUN_SOURCE, a server folder to copy when the app lists none: a sim copy)
@@ -246,10 +252,25 @@ fn prepare(st: &Shared) -> Result<(Hidden, std::sync::Arc<crate::game::Game>), S
             if crate::setup::current().state == "running" {
                 return Err("Setup is busy right now (installing, or teaching bots a map). Try again when it's done.".into());
             }
-            // (a temporary server made from the game's own files needs servers::start_hidden_server,
-            // which isn't in yet: until then a test run copies one of the player's servers)
-            let _ = (&client, &gf, st);
-            return Err("A test run copies one of your servers on this computer, and you have none yet. Make one on the Servers page (it can stay stopped), then try again.".into());
+            // no server to copy: a hidden temporary one from the game's own files, as the Map
+            // simulator makes it (servers::start_hidden_server, run as the setup job)
+            step("Setting up a hidden temporary server from your game's files");
+            let res = crate::setup_api::resources_for(st).map_err(|_| "Loner-Strike's own files couldn't be found, so a hidden server can't be set up. Reinstall the app.".to_string())?;
+            let job = crate::servers::start_hidden_server(client.clone(), dir.clone(), gf.clone(), res)?;
+            loop {
+                std::thread::sleep(Duration::from_millis(500));
+                stopped()?;
+                let v = crate::setup::current();
+                if v.id != job {
+                    return Err("The hidden server's setup was replaced by another setup job. Try again.".into());
+                }
+                match v.state.as_str() {
+                    "running" => continue,
+                    "done" => break,
+                    _ => return Err(format!("The hidden server couldn't be set up: {}", v.error.unwrap_or_else(|| "setup stopped.".into()))),
+                }
+            }
+            let _ = std::fs::write(&mark, &id);
         }
         None => {}
     }
