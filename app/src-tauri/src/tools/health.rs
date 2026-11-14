@@ -661,6 +661,12 @@ fn minutes_text(secs: f32) -> String {
     plural(m, "minute", "minutes")
 }
 
+/// The share of the map (%) under which bots "only used" it: 20 % from 40 bot-minutes on,
+/// less for shorter runs.
+fn coverage_floor(bot_minutes: f32) -> f32 {
+    20.0 * (bot_minutes / 40.0).clamp(0.0, 1.0).sqrt()
+}
+
 /// The sentences at the top: what broke first, then what's worth a look, else that it's fine.
 pub fn findings(r: &Report) -> Vec<Finding> {
     let mode = r.mode.as_str();
@@ -710,8 +716,10 @@ pub fn findings(r: &Report) -> Vec<Finding> {
     } else if r.knowledge == "none" && fights && r.bot_minutes >= little {
         say(&mut warn, "warn", "The bots' map knowledge for this map never loaded, so they played it without knowing its cover and angles.".into(), None);
     }
-    if let Some(c) = r.coverage_pct.filter(|_| r.bot_minutes >= little && !STILL_OK.contains(&mode)) {
-        if c < 20.0 {
+    // how much of the map bots cover grows with play: judge it only on a run long enough (3+
+    // minutes, 20+ bot-minutes), and expect less from shorter ones (QA4 T1-5)
+    if let Some(c) = r.coverage_pct.filter(|_| r.bot_minutes >= little.max(20.0) && r.seconds >= 180.0 && !STILL_OK.contains(&mode)) {
+        if c < coverage_floor(r.bot_minutes) {
             say(&mut warn, "warn", format!("Bots only used {c:.0}% of the map. Parts of it may be hard to reach, or not in the nav."), None);
         }
     }
@@ -1991,6 +1999,24 @@ R,95.50,end,2\nR,100.00,start\nR,104.00,end\n";
         // hide and seek: standing about is the game
         r.mode = "hns".into();
         assert_eq!(findings(&r)[0].level, "good");
+    }
+
+    #[test]
+    fn coverage_judged_by_run_length() {
+        // QA4 T1-5: de_dust2, 6 bots, 2 min: 6.8 bot-minutes, 17% used, isn't worth a look
+        let short = Report { map: "de_dust2".into(), mode: "classic".into(), bots_wanted: 6, bots_seen: 6, minutes: 2, bot_minutes: 6.8, kills_per_bot_min: 0.9, coverage_pct: Some(17.0), knowledge: "loaded".into(), seconds: 113.0, unvisited_places: vec!["Catwalk".into()], ..Default::default() };
+        let f = findings(&short);
+        assert_eq!(f[0].level, "good", "{f:?}");
+        assert_eq!(verdict(&f), "good");
+        // 5 min, 6 bots (~28 bot-minutes): the floor is lower than 20%
+        let mid = Report { minutes: 5, bot_minutes: 28.0, seconds: 300.0, ..short.clone() };
+        assert!(findings(&mid).iter().all(|f| !f.text.contains("only used")));
+        let low = Report { coverage_pct: Some(12.0), ..mid.clone() };
+        assert!(findings(&low).iter().any(|f| f.text.contains("Bots only used 12%")));
+        // a long, full run: 20%
+        let long = Report { bots_wanted: 12, bots_seen: 12, minutes: 10, bot_minutes: 110.0, seconds: 600.0, coverage_pct: Some(18.0), ..short };
+        assert!(findings(&long).iter().any(|f| f.text.contains("Bots only used 18%")));
+        assert!((coverage_floor(40.0) - 20.0).abs() < 0.01 && coverage_floor(10.0) < 11.0);
     }
 
     #[test]

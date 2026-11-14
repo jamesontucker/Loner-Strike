@@ -6,6 +6,8 @@
 .health-wait { padding: 12px 0; }
 .health-blocked { margin: 12px 0 0; color: var(--warn); font-weight: 600; max-width: 70ch; }
 .health-actions { margin-top: 14px; }
+/* a primary button that can't be pressed yet (no map picked) looks it: no fill (QA4 L11) */
+.health-actions .btn.primary:disabled:not([aria-busy="true"]) { background: transparent; color: var(--bone-faint); border: 1px dashed var(--bone-faint); box-shadow: none; opacity: .75; cursor: not-allowed; }
 .health-ended { border-left: 3px solid var(--warn); }
 .health-ended.failed { border-left-color: var(--weak); }
 .health-ended p { margin: 6px 0 0; max-width: 80ch; }

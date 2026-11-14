@@ -404,13 +404,40 @@ fn scan(p: &std::path::Path) -> Result<replay::Scan, String> {
     Ok(v)
 }
 
+/// Where a recording came from, in a few words, so cards of the same map can be told apart:
+/// the map simulator's run (`health-<id>_…`, with its mode, bots and length from the saved
+/// report in `reports`), a demo's path (`demo-<name>_…`), else the file's name.
+pub fn source_of(stem: &str, reports: &std::path::Path) -> String {
+    if let Some(id) = stem.strip_prefix("health-").and_then(|r| r.split('_').next()).filter(|i| !i.is_empty() && i.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-')) {
+        let rep: Value = std::fs::read(reports.join(format!("{id}.json"))).ok().filter(|b| b.len() < 4 << 20).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+        let mode = rep["modeName"].as_str().filter(|m| !m.is_empty()).or(rep["mode"].as_str()).unwrap_or("");
+        let mut parts = vec!["Map simulator".to_string()];
+        if !mode.is_empty() {
+            parts.push(mode.to_string());
+        }
+        if let Some(b) = rep["botsWanted"].as_u64().filter(|b| *b > 0) {
+            parts.push(format!("{b} {}", if b == 1 { "bot" } else { "bots" }));
+        }
+        if let Some(m) = rep["minutes"].as_u64().filter(|m| *m > 0) {
+            parts.push(format!("{m} min"));
+        }
+        return parts.join(", ");
+    }
+    if let Some(rest) = stem.strip_prefix("demo-") {
+        let name = rest.split('_').next().unwrap_or("");
+        return if name.is_empty() { "A demo's path".into() } else { format!("Demo {name}") };
+    }
+    format!("File {stem}.csv")
+}
+
 fn recording_meta(p: &std::path::Path, game: Option<&crate::game::Game>) -> Value {
     let id = register(p.to_path_buf());
     let file = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let stem = p.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let map = map_of(&stem, |m| crate::maps::safe_arg(m) && game.map(|g| super::mapinfo::locate(g, m).is_some()).unwrap_or(false));
     let st = cache::Stamp::of(p).ok();
-    let mut v = json!({"id": id, "file": file, "map": map, "when": st.map(|s| s.mtime), "size": st.map(|s| s.size), "hasTrace": trace_for(p).is_some()});
+    let source = source_of(&stem, &crate::sys::app_dir().join("tools").join("health"));
+    let mut v = json!({"id": id, "file": file, "map": map, "when": st.map(|s| s.mtime), "size": st.map(|s| s.size), "hasTrace": trace_for(p).is_some(), "source": source});
     match scan(p) {
         Ok(s) => {
             v["seconds"] = json!(match (s.start, s.end) {
@@ -536,7 +563,9 @@ async fn api_recording(State(st): State<Shared>, Path(id): Path<String>) -> Resp
         let p = path_of(&id)?;
         let rec = parsed(&p)?;
         let meta = recording_meta(&p, game.as_deref());
-        Ok(recording_bundle(&rec, json!({"id": id, "file": meta["file"], "map": meta["map"], "hasTrace": meta["hasTrace"]})))
+        // (a map the game doesn't have: the page says so instead of failing to load it)
+        let installed = meta["map"].as_str().is_some_and(|m| !m.is_empty() && crate::maps::safe_arg(m) && game.as_deref().map(|g| super::mapinfo::locate(g, m).is_some()).unwrap_or(false));
+        Ok(recording_bundle(&rec, json!({"id": id, "file": meta["file"], "map": meta["map"], "hasTrace": meta["hasTrace"], "mapInstalled": installed})))
     })
     .await;
     bundle_answer(r)
@@ -584,6 +613,20 @@ mod tests {
         assert_eq!(map_of("W1-1_classic_cs_rats2_150726_cs_rats2_1794524249", has), "cs_rats2");
         assert_eq!(map_of("W1-1_classic_de_nuke_150726_de_nuke_1794524249", |_| false), "de_nuke");
         assert_eq!(map_of("fy_pool_day_123", |_| false), "fy_pool_day");
+    }
+
+    #[test]
+    fn sources_tell_recordings_apart() {
+        let dir = std::env::temp_dir().join(format!("ls-overlays-src-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("1794685498861.json"), r#"{"id":"1794685498861","mode":"classic","modeName":"Classic","botsWanted":12,"minutes":5}"#).unwrap();
+        assert_eq!(source_of("health-1794685498861_de_nuke_1794685514", &dir), "Map simulator, Classic, 12 bots, 5 min");
+        // the report is gone: still says where it came from
+        assert_eq!(source_of("health-1794685210075_de_dust2_1794685231", &dir), "Map simulator");
+        assert_eq!(source_of("health-../x_de_dust2_1", &dir), "File health-../x_de_dust2_1.csv");
+        assert_eq!(source_of("demo-TopFrag-DUST2only_de_dust2_1", &dir), "Demo TopFrag-DUST2only");
+        assert_eq!(source_of("de_dust2_1794524249", &dir), "File de_dust2_1794524249.csv");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

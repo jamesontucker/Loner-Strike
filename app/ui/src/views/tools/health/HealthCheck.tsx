@@ -131,16 +131,23 @@ function SummaryRow({ r, onOpen }: { r: ReportSummary; onOpen: () => void }) {
   );
 }
 
+/** The last picks, kept while the app is open: the form unmounts during a run, and comes back
+ * after Stop or when you leave and return with what you chose (QA4 M5). */
+const picks: { map: string; mode: string | null; minutes: string; bots: string; server: string | null } = { map: "", mode: null, minutes: "5", bots: "12", server: null };
+
 function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) {
   const toast = useToast();
-  const [map, setMap] = useState<string>(() => (useTools.getState().arg?.startsWith("report:") ? null : useTools.getState().arg) ?? useTools.getState().map ?? "");
+  const [map, setMap] = useState<string>(() => (useTools.getState().arg?.startsWith("report:") ? null : useTools.getState().arg) || picks.map || useTools.getState().map || "");
   useReportAddress("health", map ? `health:${map}` : null);
   const [filter, setFilter] = useState("");
-  const [mode, setMode] = useState<string | null>(null);
-  const [minutes, setMinutes] = useState("5");
-  const [bots, setBots] = useState("12");
-  const [server, setServer] = useState<string | null>(null);
+  const [mode, setMode] = useState<string | null>(() => (map === picks.map ? picks.mode : null));
+  const [minutes, setMinutes] = useState(picks.minutes);
+  const [bots, setBots] = useState(picks.bots);
+  const [server, setServer] = useState<string | null>(picks.server);
   const [starting, setStarting] = useState(false);
+  useEffect(() => {
+    Object.assign(picks, { map, mode, minutes, bots, server });
+  }, [map, mode, minutes, bots, server]);
 
   const list = useMemo(() => {
     const w = searchWords(filter);
@@ -152,14 +159,21 @@ function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) 
   const opts = useQuery({ queryKey: ["tools", "health", "options", map], queryFn: () => healthOptions(map), enabled: !!map });
   const o = opts.data && !opts.data.error ? opts.data : null;
   // the map's own mode (map presets) until one is picked
-  useEffect(() => setMode(null), [map]);
-  const pickedMode = mode ?? o?.mode ?? "classic";
+  const shownMap = useRef(map);
+  useEffect(() => {
+    if (shownMap.current === map) return;
+    shownMap.current = map;
+    setMode(null);
+  }, [map]);
+  const pickedMode = (mode && (!o || o.modes.length === 0 || o.modes.some((m) => m.id === mode)) ? mode : null) ?? o?.mode ?? "classic";
   const blocked = o?.why ?? o?.busy ?? null;
+  // a remembered server that's gone: the map's default
+  const pickedServer = server && o?.servers.some((s) => s.id === server) ? server : (o?.server ?? null);
 
   const go = async () => {
     if (!o) return;
     setStarting(true);
-    const r = await startHealth({ map: o.map, mode: pickedMode, minutes: Number(minutes), bots: Number(bots), server: server ?? o.server });
+    const r = await startHealth({ map: o.map, mode: pickedMode, minutes: Number(minutes), bots: Number(bots), server: pickedServer ?? o.server });
     setStarting(false);
     if (r.error || !r.ok) return toast(r.error || "Couldn't start the simulation.", true);
     onStarted();
@@ -209,7 +223,7 @@ function Setup({ maps, onStarted }: { maps: MapInfo[]; onStarted: () => void }) 
             </Row>
             {o.servers.length > 1 && (
               <Row name="Plugins and modes from" info="The simulation runs on a hidden copy of one of your servers on this computer, so the bots play with its plugins, modes and settings. Your server itself isn't touched.">
-                <select value={server ?? o.server ?? ""} onChange={(e) => setServer(e.target.value)} aria-label="Server to copy">
+                <select value={pickedServer ?? ""} onChange={(e) => setServer(e.target.value)} aria-label="Server to copy">
                   {o.servers.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -509,7 +523,7 @@ function FightList({ r }: { r: Report }) {
           </li>
         ))}
       </ul>
-      {(r.unvisitedPlaces ?? []).length > 0 && (
+      {(r.unvisitedPlaces ?? []).length > 0 && r.seconds >= 240 && (
         <p className="muted sim-never">
           Nobody went to: {r.unvisitedPlaces!.join(", ")}.
         </p>

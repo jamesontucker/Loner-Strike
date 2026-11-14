@@ -8,6 +8,7 @@ import { BusyButton, LoadError, Skeleton, useToast } from "../../ui";
 import { Empty, Loading } from "./common";
 import { Viewer } from "./MapViewer";
 import { openRecording, ToolsError, useRecordings, useReplay, useTrace } from "./toolsApi";
+import { BundleError } from "./viewer/bundle";
 
 export default function ReplayTool() {
   const id = useTools((s) => s.replay);
@@ -19,7 +20,16 @@ function when(v: number | string) {
   if (!Number.isFinite(n) || n <= 0) return "";
   return new Date(n * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
-const mins = (s: number) => (s >= 60 ? `${Math.round(s / 60)} min` : `${Math.round(s)} s`);
+/** A length: "45 s", "3 min 20 s" (under 10 minutes), "26 min". */
+const mins = (s: number) => {
+  const t = Math.max(0, Math.round(s));
+  if (t < 60) return `${t} s`;
+  if (t < 600 && t % 60) return `${Math.floor(t / 60)} min ${t % 60} s`;
+  return `${Math.round(t / 60)} min`;
+};
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+/** Who's in it: bots when it has any, else the players (a demo's path is one person). */
+const who = (r: { bots: number; players: number }) => (r.bots > 0 ? count(r.bots, "bot", "bots") : count(r.players, "player", "players"));
 
 function RecordingList() {
   const list = useRecordings(true);
@@ -68,12 +78,15 @@ function RecordingList() {
           {recs.map((r) => (
             <button key={r.id} className="tools-rec" disabled={!!r.error} title={r.error ?? `${r.file}: click to watch it`} onClick={() => openReplay(r.id, r.map)}>
               <span className="tools-rec-map">{r.map || "unknown map"}</span>
+              {r.source && <span className="small-note tools-rec-source">{r.source}</span>}
               <span className="muted small-note">{when(r.when)}</span>
               {r.error ? (
                 <span className="tools-warn small-note">{r.error}</span>
               ) : (
                 <span className="small-note">
-                  {mins(r.seconds)} · {r.bots} bots · {r.kills} kills{r.hasTrace ? " · with bot thoughts" : ""}
+                  {mins(r.seconds)} · {who(r)}
+                  {r.kills > 0 ? ` · ${count(r.kills, "kill", "kills")}` : ""}
+                  {r.hasTrace ? " · with bot thoughts" : ""}
                 </span>
               )}
             </button>
@@ -96,12 +109,25 @@ function ReplayOpen({ id }: { id: string }) {
   }, [rec.data, map]);
   const back = () => openReplay(null);
   if (rec.isLoading) return <Loading text="Reading the recording…" />;
-  if (rec.error || !rec.data)
-    return <LoadError title="Couldn't open this recording" text={rec.error instanceof Error ? rec.error.message : "Something went wrong."} onRetry={() => void rec.refetch()} />;
-  if (!rec.data.map)
+  if (rec.error || !rec.data) {
+    // only a failed connection or a server hiccup is worth trying again; a file that isn't a
+    // recording, is too big or damaged stays that way (QA4 L8)
+    const e = rec.error;
+    const retry = !(e instanceof BundleError) && !(e instanceof ToolsError && ((e.status >= 400 && e.status < 500) || (e.json && e.status < 500)));
     return (
-      <Empty title="Which map?" text="This recording's map isn't in your game, so it can't be shown. Install the map, then open the recording again.">
-        <button className="btn" onClick={back}>Back</button>
+      <LoadError
+        title="Couldn't open this recording"
+        text={e instanceof Error ? e.message : "Something went wrong."}
+        action={{ label: "Back to recordings", run: back }}
+        onRetry={retry ? () => void rec.refetch() : undefined}
+      />
+    );
+  }
+  if (!rec.data.map || !rec.data.mapInstalled)
+    return (
+      <Empty title="That map isn't on this computer" text={`This recording is of ${rec.data.map || "a map your game doesn't have"}. Get the map, then open the recording again.`}>
+        <button className="btn primary" onClick={() => useNav.getState().go("maps")}>Get the map</button>
+        <button className="btn" onClick={back}>Back to recordings</button>
       </Empty>
     );
   const file = rec.data.id;
@@ -112,7 +138,7 @@ function ReplayOpen({ id }: { id: string }) {
         data: rec.data,
         trace: trace.data ?? null,
         title: rec.data.map,
-        note: `${rec.data.players.length} players · ${mins(rec.data.end - rec.data.start)}${rec.data.hasTrace ? " · with bot thoughts" : ""}`,
+        note: `${count(rec.data.players.length, "player", "players")} · ${mins(rec.data.end - rec.data.start)}${rec.data.hasTrace ? " · with bot thoughts" : ""}`,
         onBack: back,
       }}
       key={`${file}:${rec.data.map}`}

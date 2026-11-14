@@ -208,13 +208,15 @@ export const sees = (k: Know, i: number, j: number) => {
 
 // ---- recordings -----------------------------------------------------------------------------
 
-export type RecordingInfo = { id: string; file: string; map: string; when: number | string; size: number; hasTrace: boolean; seconds: number; bots: number; players: number; kills: number; rounds: number; error?: string };
+export type RecordingInfo = { id: string; file: string; map: string; when: number | string; size: number; hasTrace: boolean; seconds: number; bots: number; players: number; kills: number; rounds: number; source?: string; error?: string };
 
 export type Player = { id: number; name: string; bot: boolean; team: number; start: number; count: number };
 export type Kill = { t: number; killer: number; victim: number; headshot: boolean; weapon: string; cause: string; teamKill: boolean; at: Vec3; fall: { from: Vec3; fromT: number; drop: number; speed: number } | null };
 export type Replay = {
   id: string;
   map: string;
+  /** false: the recording's map isn't in the game */
+  mapInstalled: boolean;
   hasTrace: boolean;
   start: number;
   end: number;
@@ -259,6 +261,7 @@ export function decodeReplay(buf: ArrayBuffer): Replay {
   return {
     id: String(h.id ?? ""),
     map: String(h.map ?? ""),
+    mapInstalled: h.mapInstalled !== false,
     hasTrace: !!h.hasTrace,
     start: num(h.start, t[0] ?? 0),
     end: num(h.end, t[t.length - 1] ?? 0),
