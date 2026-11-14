@@ -117,3 +117,12 @@ Many agents share one staging area. Never run a bare `git commit`. Always commit
 - Everyone shares one git index. Never leave files staged (`git add` then wander off), and never commit from the index:
   always `git commit -m "..." -- <your paths>` against the live tree, then check `git show --stat` touches only your
   files and lines. Two commits today swept in other agents' work (one reverted a perf commit, one took staged WIP).
+
+## Test on current builds (user, 2026-11-14)
+- Every sim, stand, demo or QA run uses current builds: the newest green **ls-next3** brain build (the run whose
+  head SHA matches `git ls-remote ... refs/heads/ls-next3`; check it the moment you start, not from memory) and the
+  plugins and maps from the current `tools` HEAD, compiled fresh. Verify the brain inside the sim (grep mp.dll for the
+  features you're testing) before trusting a result.
+- Testing your own unmerged brain branch is fine, but say so in the report, and re-run on ls-next3 after it merges.
+- Results from an older build don't count: say "old build" and re-run.
+- LSPLAY/BRPLAY and any file handed to the user get the newest ls-next3 build plus the current plugins.
