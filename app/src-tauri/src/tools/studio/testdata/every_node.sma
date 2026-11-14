@@ -17,6 +17,7 @@
 #define LSG_TXT 2
 #define LSG_N 250
 #define LSG_TASK 7310000
+#pragma dynamic 164096
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -912,6 +913,17 @@ stock lsg_team(id)
 stock lsg_is_bot(id)
 	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0
 
+// a number as text: whole numbers as they are, others with two decimals (0.5, not 1)
+stock lsg_ntext(Float:n)
+{
+	new t[24]
+	if (floatfract(n) == 0.0 && floatabs(n) < 1000000.0)
+		formatex(t, charsmax(t), "%d", floatround(n))
+	else
+		formatex(t, charsmax(t), "%.2f", n)
+	return t
+}
+
 stock lsg_name(id)
 {
 	new name[32]
@@ -1225,8 +1237,12 @@ stock bool:lsg_veq(a, b)
 
 stock lsg_vtext(v)
 {
-	new t[64]
-	formatex(t, charsmax(t), "%.0f %.0f %.0f", lsg_vc(v, 0), lsg_vc(v, 1), lsg_vc(v, 2))
+	new t[64], Float:x = lsg_vc(v, 0), Float:y = lsg_vc(v, 1), Float:z = lsg_vc(v, 2)
+	// (a short vector, a direction above all, gets two decimals: in whole units one is "0 0 0")
+	if (floatabs(x) < 10.0 && floatabs(y) < 10.0 && floatabs(z) < 10.0)
+		formatex(t, charsmax(t), "%.2f %.2f %.2f", x, y, z)
+	else
+		formatex(t, charsmax(t), "%.0f %.0f %.0f", x, y, z)
 	return t
 }
 
@@ -1949,16 +1965,6 @@ stock lsg_tsel(c, const a[], const b[])
 		copy(t, charsmax(t), a)
 	else
 		copy(t, charsmax(t), b)
-	return t
-}
-
-stock lsg_ntext(Float:n)
-{
-	new t[24]
-	if (floatfract(n) == 0.0 && floatabs(n) < 1000000.0)
-		formatex(t, charsmax(t), "%d", floatround(n))
-	else
-		formatex(t, charsmax(t), "%.2f", n)
 	return t
 }
 
@@ -3403,7 +3409,7 @@ public lsg_t4(const data[], task)
 // Show HUD Text (rs_hud)
 lsg_n5(ctx[])
 {
-	ls_hud(0, LsHud:2, 5.0, "%s %d", "Alive:", floatround(float(ls_count_alive(CsTeams:(0)))))
+	ls_hud(0, LsHud:2, 5.0, "%s %s", "Alive:", lsg_ntext(float(ls_count_alive(CsTeams:(0)))))
 	#pragma unused ctx
 }
 
@@ -3784,7 +3790,7 @@ lsg_n53(ctx[])
 // Show HUD Text (zt_hud)
 lsg_n54(ctx[])
 {
-	ls_hud(ctx[1], LsHud:3, 4.0, "%s %d", "Ouch", floatround(Float:ctx[2]))
+	ls_hud(ctx[1], LsHud:3, 4.0, "%s %s", "Ouch", lsg_ntext(Float:ctx[2]))
 }
 
 // Player Extracted (ex)
@@ -3808,7 +3814,7 @@ lsg_n57(ctx[])
 // Show HUD Text (ws_hud)
 lsg_n58(ctx[])
 {
-	ls_hud(0, LsHud:0, 4.0, "%s %d", "Wave", floatround(Float:ctx[0]))
+	ls_hud(0, LsHud:0, 4.0, "%s %s", "Wave", lsg_ntext(Float:ctx[0]))
 }
 
 // Wave Spawned One (wp)
@@ -4154,7 +4160,7 @@ lsg_n97(ctx[])
 // Chat Message (cmd_chat)
 lsg_n98(ctx[])
 {
-	ls_chat(ctx[0], "%s %d", "Money:", floatround(lsg_get_money(ctx[0])))
+	ls_chat(ctx[0], "%s %s", "Money:", lsg_ntext(lsg_get_money(ctx[0])))
 }
 
 // Function (fn)
@@ -4347,7 +4353,7 @@ lsg_n118(ctx[])
 // Show HUD Text (lo2_hud)
 lsg_n119(ctx[])
 {
-	ls_hud(0, LsHud:1, 4.0, "%s %d", "Heroes and creatures:", floatround(((float(ls_count_role("hero"))) + (float(lsg_creatures_alive())))))
+	ls_hud(0, LsHud:1, 4.0, "%s %s", "Heroes and creatures:", lsg_ntext(((float(ls_count_role("hero"))) + (float(lsg_creatures_alive())))))
 	lsg_n120(ctx)
 }
 
@@ -4549,7 +4555,7 @@ lsg_n142(ctx[])
 // Show HUD Text (to_hud)
 lsg_n143(ctx[])
 {
-	ls_hud(ctx[0], LsHud:1, 4.0, "%s %d", "Times out:", floatround(lsg_saved_get(ctx[0], "outs")))
+	ls_hud(ctx[0], LsHud:1, 4.0, "%s %s", "Times out:", lsg_ntext(lsg_saved_get(ctx[0], "outs")))
 	lsg_n144(ctx)
 }
 
@@ -4593,7 +4599,7 @@ lsg_n148(ctx[])
 // Show HUD Text (sq_hud)
 lsg_n149(ctx[])
 {
-	ls_hud(0, LsHud:1, 4.0, "%s %d", "Squad:", floatround(((float(g_lsgSquad[lsg_slot(ctx[0])])) + (float(lsg_squads_alive())))))
+	ls_hud(0, LsHud:1, 4.0, "%s %s", "Squad:", lsg_ntext(((float(g_lsgSquad[lsg_slot(ctx[0])])) + (float(lsg_squads_alive())))))
 	lsg_n150(ctx)
 }
 
@@ -4668,7 +4674,7 @@ lsg_n158(ctx[])
 // Show HUD Text (ck3_hud)
 lsg_n159(ctx[])
 {
-	ls_hud(0, LsHud:1, 4.0, "%s %d", "Time:", floatround(lsg_clock_left()))
+	ls_hud(0, LsHud:1, 4.0, "%s %s", "Time:", lsg_ntext(lsg_clock_left()))
 	#pragma unused ctx
 }
 
@@ -5046,7 +5052,7 @@ lsg_n196(ctx[])
 lsg_n197(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "Tank number", floatround(float(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5])))
+	formatex(t, charsmax(t), "%s %s", "Tank number", lsg_ntext(float(g_lsgRec[lsg_ri(lsg_agetr(g_v11, 0.0))][5])))
 	server_print("[%s] %s", LSG_MODE, t)
 	#pragma unused ctx
 }
@@ -5098,7 +5104,7 @@ lsg_n201(ctx[])
 lsg_n202(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "Total:", floatround(Float:g_lsgO[4]))
+	formatex(t, charsmax(t), "%s %s", "Total:", lsg_ntext(Float:g_lsgO[4]))
 	server_print("[%s] %s", LSG_MODE, t)
 	#pragma unused ctx
 }
@@ -5144,7 +5150,7 @@ lsg_n207(ctx[])
 lsg_n208(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "Double:", floatround(lsg_pf1_0(4.0)))
+	formatex(t, charsmax(t), "%s %s", "Double:", lsg_ntext(lsg_pf1_0(4.0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n209(ctx)
 }
@@ -5198,7 +5204,7 @@ lsg_n213(ctx[])
 lsg_n214(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "Macro gave:", floatround(((3.0) * (2.0))))
+	formatex(t, charsmax(t), "%s %s", "Macro gave:", lsg_ntext(((3.0) * (2.0))))
 	server_print("[%s] %s", LSG_MODE, t)
 	#pragma unused ctx
 }
@@ -5469,7 +5475,7 @@ lsg_n235(ctx[])
 lsg_n236(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "Alive:", floatround(float(lsg_alen(lsg_aplayers(1)))))
+	formatex(t, charsmax(t), "%s %s", "Alive:", lsg_ntext(float(lsg_alen(lsg_aplayers(1)))))
 	server_print("[%s] %s", LSG_MODE, t)
 	#pragma unused ctx
 }
@@ -5567,7 +5573,7 @@ stock lsg_n246(ctx[])
 stock lsg_n247(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "tick", floatround(float(lsg_mk_count(0))))
+	formatex(t, charsmax(t), "%s %s", "tick", lsg_ntext(float(lsg_mk_count(0))))
 	server_print("[%s] %s", LSG_MODE, t)
 	#pragma unused ctx
 }
@@ -5584,7 +5590,7 @@ stock lsg_n248(ctx[])
 lsg_n249(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "In the macro:", floatround(3.0))
+	formatex(t, charsmax(t), "%s %s", "In the macro:", lsg_ntext(3.0))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n214(ctx)
 }

@@ -15,6 +15,7 @@
 #define LSG_TXT 2
 #define LSG_N 43
 #define LSG_TASK 7310000
+#pragma dynamic 31616
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -879,6 +880,17 @@ stock lsg_team(id)
 stock lsg_is_bot(id)
 	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0
 
+// a number as text: whole numbers as they are, others with two decimals (0.5, not 1)
+stock lsg_ntext(Float:n)
+{
+	new t[24]
+	if (floatfract(n) == 0.0 && floatabs(n) < 1000000.0)
+		formatex(t, charsmax(t), "%d", floatround(n))
+	else
+		formatex(t, charsmax(t), "%.2f", n)
+	return t
+}
+
 stock lsg_name(id)
 {
 	new name[32]
@@ -1364,7 +1376,7 @@ lsg_n11(ctx[])
 // Show HUD Text (pk_hud)
 lsg_n12(ctx[])
 {
-	ls_hud(0, LsHud:2, 5.0, "%s %d", "Squads left:", floatround(float(ls_components_running() ? ls_squads_alive() : 0)))
+	ls_hud(0, LsHud:2, 5.0, "%s %s", "Squads left:", lsg_ntext(float(ls_components_running() ? ls_squads_alive() : 0)))
 	lsg_n13(ctx)
 }
 

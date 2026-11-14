@@ -17,6 +17,7 @@
 #define LSG_TXT 2
 #define LSG_N 62
 #define LSG_TASK 7310000
+#pragma dynamic 43776
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -892,6 +893,17 @@ stock lsg_team(id)
 stock lsg_is_bot(id)
 	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0
 
+// a number as text: whole numbers as they are, others with two decimals (0.5, not 1)
+stock lsg_ntext(Float:n)
+{
+	new t[24]
+	if (floatfract(n) == 0.0 && floatabs(n) < 1000000.0)
+		formatex(t, charsmax(t), "%d", floatround(n))
+	else
+		formatex(t, charsmax(t), "%.2f", n)
+	return t
+}
+
 stock lsg_name(id)
 {
 	new name[32]
@@ -1205,8 +1217,12 @@ stock bool:lsg_veq(a, b)
 
 stock lsg_vtext(v)
 {
-	new t[64]
-	formatex(t, charsmax(t), "%.0f %.0f %.0f", lsg_vc(v, 0), lsg_vc(v, 1), lsg_vc(v, 2))
+	new t[64], Float:x = lsg_vc(v, 0), Float:y = lsg_vc(v, 1), Float:z = lsg_vc(v, 2)
+	// (a short vector, a direction above all, gets two decimals: in whole units one is "0 0 0")
+	if (floatabs(x) < 10.0 && floatabs(y) < 10.0 && floatabs(z) < 10.0)
+		formatex(t, charsmax(t), "%.2f %.2f %.2f", x, y, z)
+	else
+		formatex(t, charsmax(t), "%.0f %.0f %.0f", x, y, z)
 	return t
 }
 
@@ -1932,16 +1948,6 @@ stock lsg_tsel(c, const a[], const b[])
 	return t
 }
 
-stock lsg_ntext(Float:n)
-{
-	new t[24]
-	if (floatfract(n) == 0.0 && floatabs(n) < 1000000.0)
-		formatex(t, charsmax(t), "%d", floatround(n))
-	else
-		formatex(t, charsmax(t), "%.2f", n)
-	return t
-}
-
 stock lsg_etext(e)
 {
 	new t[32]
@@ -2597,7 +2603,7 @@ lsg_n13(ctx[])
 // Show HUD Text (ws_hud)
 lsg_n14(ctx[])
 {
-	ls_hud(0, LsHud:0, 6.0, "%s %d", "Wave", floatround(Float:ctx[0]))
+	ls_hud(0, LsHud:0, 6.0, "%s %s", "Wave", lsg_ntext(Float:ctx[0]))
 	lsg_n15(ctx)
 }
 

@@ -178,6 +178,18 @@ pub fn start(game_dir: &Path, mode: &str, breakpoints: Vec<String>) -> std::io::
 mod tests {
     use super::*;
 
+    /// The plugin's event buffer goes to the file with one fputs, which takes at most 16383
+    /// characters (AMX Mod X's string buffer) and silently drops the rest: a busy half second in
+    /// the node coverage run lost 44 events that way.
+    #[test]
+    fn event_buffer_fits_one_fputs() {
+        let rt = include_str!("debug_runtime.pawn");
+        let buf: usize = rt.lines().find_map(|l| l.strip_prefix("#define LSD_BUF ")).expect("LSD_BUF").trim().parse().unwrap();
+        assert!(buf <= 16_384, "LSD_BUF {buf}");
+        // (and each event line, up to 1500 characters, still fits it)
+        assert!(buf > 1_500);
+    }
+
     #[test]
     fn reads_whole_lines_only() {
         let b = parse_lines(b"{\"e\":\"session\"}\nnot json\n{\"e\":\"node_enter\",\"node\":\"a\"}\n{\"e\":\"half", 10, false);

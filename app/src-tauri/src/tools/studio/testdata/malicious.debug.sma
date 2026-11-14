@@ -16,6 +16,7 @@
 #define LSG_TXT 2
 #define LSG_N 8
 #define LSG_TASK 7310000
+#pragma dynamic 16384
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -144,8 +145,9 @@ public lsd_round_end()
 
 // events wait in memory and go to the file every 0.25 s (lsd_poll), when the buffer is nearly
 // full, and at once for a pause (the page shows it); one open/write/close per flush, not per
-// event (PerfAudit #5: 181 us an event)
-#define LSD_BUF 24000
+// event (PerfAudit #5: 181 us an event). Under 16384: AMX Mod X's fputs takes at most 16383
+// characters of a string and drops the rest (node coverage run: 44 events lost, one cut in half)
+#define LSD_BUF 16000
 new g_lsdBuf[LSD_BUF], g_lsdBufLen
 // how big the events file is now (it starts empty at each map)
 new g_lsdBytes
@@ -1564,6 +1566,17 @@ stock lsg_team(id)
 
 stock lsg_is_bot(id)
 	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0
+
+// a number as text: whole numbers as they are, others with two decimals (0.5, not 1)
+stock lsg_ntext(Float:n)
+{
+	new t[24]
+	if (floatfract(n) == 0.0 && floatabs(n) < 1000000.0)
+		formatex(t, charsmax(t), "%d", floatround(n))
+	else
+		formatex(t, charsmax(t), "%.2f", n)
+	return t
+}
 
 stock lsg_name(id)
 {

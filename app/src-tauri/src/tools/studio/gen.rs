@@ -34,6 +34,12 @@ const TXT: usize = 2;
 /// Task ids for timers: LSG_TASK + the node's index.
 const TASK_BASE: u32 = 7_310_000;
 
+/// The plugin's stack and heap in cells: room for every node's frame at once (a flow runs as one
+/// call chain), 16384 at least (AMX Mod X's default is 4096), 1 MB at most.
+fn stack_cells(nodes: usize) -> usize {
+    (4096 + nodes * 640).clamp(16_384, 262_144)
+}
+
 /// The plugin's file name (no extension) for a mode.
 pub fn plugin_name(mode_id: &str) -> String {
     format!("studio_{mode_id}")
@@ -1154,6 +1160,10 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     o.blank();
     o.line(format!("#define LSG_MODE {}\n#define LSG_CTX {}\n#define LSG_TXT {TXT}\n#define LSG_N {}\n#define LSG_TASK {TASK_BASE}", pawn_str(&id_text(&g.mode.id)), CTX + gen.slots.len(), gen.live.len().max(1)));
+    // (each node calls the next, so a flow's nodes are all on the stack at once, a Print's two
+    // text buffers about 400 cells: AMX Mod X's default 4096 cells ran out after some ten of them
+    // in a row and the plugin died with "stack error" or, without debug, garbage)
+    o.line(format!("#pragma dynamic {}", stack_cells(gen.live.len())));
     o.line("stock g_lsgTxt[LSG_TXT][64]\nstock g_lsgOut[LSG_N]\nstock g_lsgLeft[LSG_N]\nstock const g_lsgYesNo[][] = { \"no\", \"yes\" }\nstock const g_lsgTeamName[][] = { \"no team\", \"Terrorists\", \"Counter-Terrorists\", \"Spectators\" }");
     if uses_v3 {
         o.line(format!(
@@ -3089,7 +3099,7 @@ fn text_args(gen: &Gen, text: &str, value: Option<Val>) -> String {
     match value {
         None => format!("\"%s\", {text}"),
         Some(val) => match val.ty.as_str() {
-            "number" => format!("\"%s %d\", {text}, floatround({})", val.expr),
+            "number" => format!("\"%s %s\", {text}, lsg_ntext({})", val.expr),
             "text" => format!("\"%s %s\", {text}, {}", val.expr),
             "player" => format!("\"%s %s\", {text}, lsg_name({})", val.expr),
             "bool" => format!("\"%s %s\", {text}, g_lsgYesNo[({}) ? 1 : 0]", val.expr),
@@ -5344,6 +5354,17 @@ stock lsg_team(id)
 stock lsg_is_bot(id)
 	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0
 
+// a number as text: whole numbers as they are, others with two decimals (0.5, not 1)
+stock lsg_ntext(Float:n)
+{
+	new t[24]
+	if (floatfract(n) == 0.0 && floatabs(n) < 1000000.0)
+		formatex(t, charsmax(t), "%d", floatround(n))
+	else
+		formatex(t, charsmax(t), "%.2f", n)
+	return t
+}
+
 stock lsg_name(id)
 {
 	new name[32]
@@ -6302,5 +6323,61 @@ mod tests {
         g.edges.retain(|e| e.id != "w8");
         let out = generate(&g, false);
         assert!(out.spans.iter().all(|s| s.node != "give_ak"));
+    }
+
+    /// A flow runs as one call chain, every node's frame on the stack at once: the plugin gets
+    /// room for all of them (node coverage run: 120 Prints in a row died with "stack error" on
+    /// AMX Mod X's default 4096 cells, and without debug as garbage in replace and set_task).
+    #[test]
+    fn stack_has_room_for_a_long_chain() {
+        let n = 120;
+        let mut nodes = vec![serde_json::json!({"id": "e", "type": "event.round_started", "pos": {"x": 0, "y": 0}, "params": {}})];
+        let mut edges = vec![];
+        for i in 0..n {
+            nodes.push(serde_json::json!({"id": format!("p{i}"), "type": "debug.print", "pos": {"x": 300 * (i + 1), "y": 0}, "params": {"text": "x", "chat": false}}));
+            let from = if i == 0 { "e".to_string() } else { format!("p{}", i - 1) };
+            edges.push(serde_json::json!({"id": format!("w{i}"), "from": {"node": from, "pin": "then"}, "to": {"node": format!("p{i}"), "pin": "exec"}}));
+        }
+        let g = parse(&serde_json::json!({
+            "schema": super::super::graph::SCHEMA, "version": super::super::graph::VERSION, "mode": {"id": "long", "name": "Long"}, "variables": [], "comments": [],
+            "nodes": nodes, "edges": edges
+        }).to_string()).unwrap();
+        assert!(!has_errors(&validate(&g)));
+        let src = generate(&g, true).source;
+        let cells: usize = src.lines().find_map(|l| l.strip_prefix("#pragma dynamic ")).expect("a stack size").trim().parse().unwrap();
+        // (a debug Print's frame: its value, two text buffers and the debugger's: under 450 cells)
+        assert!(cells >= n * 450, "{cells} cells for {n} Prints");
+        assert_eq!(stack_cells(0), 16_384);
+        assert_eq!(stack_cells(10_000), 262_144);
+    }
+
+    /// A number wired into Print String (and chat, HUD, notices) keeps its decimals (node coverage
+    /// run: a gravity of 0.5 printed as 1), in a plain graph too, without the version 3 helpers.
+    #[test]
+    fn printed_numbers_keep_decimals() {
+        let g = parse(&serde_json::json!({
+            "schema": super::super::graph::SCHEMA, "version": super::super::graph::VERSION, "mode": {"id": "num", "name": "Num"}, "variables": [], "comments": [],
+            "nodes": [
+                {"id": "e", "type": "event.round_started", "pos": {"x": 0, "y": 0}, "params": {}},
+                {"id": "n", "type": "math.number", "pos": {"x": 0, "y": 200}, "params": {"value": 0.5}},
+                {"id": "p", "type": "debug.print", "pos": {"x": 300, "y": 0}, "params": {"text": "g", "chat": false}}
+            ],
+            "edges": [
+                {"id": "w1", "from": {"node": "e", "pin": "then"}, "to": {"node": "p", "pin": "exec"}},
+                {"id": "w2", "from": {"node": "n", "pin": "out"}, "to": {"node": "p", "pin": "value"}}
+            ]
+        }).to_string()).unwrap();
+        let src = generate(&g, false).source;
+        assert!(src.contains("lsg_ntext(") && src.contains("stock lsg_ntext(Float:n)") && !src.contains("floatround(0.5)"), "{src}");
+    }
+
+    /// A vector as text: whole units for a place, two decimals for a short one (node coverage run:
+    /// Normalize printed "-0 -0 0" for a direction of length 1).
+    #[test]
+    fn short_vectors_as_text_keep_decimals() {
+        let h = include_str!("v3_helpers.pawn");
+        let f = &h[h.find("stock lsg_vtext(v)").unwrap()..];
+        let f = &f[..f.find("\n}").unwrap()];
+        assert!(f.contains("floatabs(x) < 10.0") && f.contains("\"%.2f %.2f %.2f\"") && f.contains("\"%.0f %.0f %.0f\""), "{f}");
     }
 }

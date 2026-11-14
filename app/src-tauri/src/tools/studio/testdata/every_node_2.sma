@@ -17,6 +17,7 @@
 #define LSG_TXT 2
 #define LSG_N 111
 #define LSG_TASK 7310000
+#pragma dynamic 75136
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -890,6 +891,17 @@ stock lsg_team(id)
 stock lsg_is_bot(id)
 	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0
 
+// a number as text: whole numbers as they are, others with two decimals (0.5, not 1)
+stock lsg_ntext(Float:n)
+{
+	new t[24]
+	if (floatfract(n) == 0.0 && floatabs(n) < 1000000.0)
+		formatex(t, charsmax(t), "%d", floatround(n))
+	else
+		formatex(t, charsmax(t), "%.2f", n)
+	return t
+}
+
 stock lsg_name(id)
 {
 	new name[32]
@@ -1203,8 +1215,12 @@ stock bool:lsg_veq(a, b)
 
 stock lsg_vtext(v)
 {
-	new t[64]
-	formatex(t, charsmax(t), "%.0f %.0f %.0f", lsg_vc(v, 0), lsg_vc(v, 1), lsg_vc(v, 2))
+	new t[64], Float:x = lsg_vc(v, 0), Float:y = lsg_vc(v, 1), Float:z = lsg_vc(v, 2)
+	// (a short vector, a direction above all, gets two decimals: in whole units one is "0 0 0")
+	if (floatabs(x) < 10.0 && floatabs(y) < 10.0 && floatabs(z) < 10.0)
+		formatex(t, charsmax(t), "%.2f %.2f %.2f", x, y, z)
+	else
+		formatex(t, charsmax(t), "%.0f %.0f %.0f", x, y, z)
 	return t
 }
 
@@ -1930,16 +1946,6 @@ stock lsg_tsel(c, const a[], const b[])
 	return t
 }
 
-stock lsg_ntext(Float:n)
-{
-	new t[24]
-	if (floatfract(n) == 0.0 && floatabs(n) < 1000000.0)
-		formatex(t, charsmax(t), "%d", floatround(n))
-	else
-		formatex(t, charsmax(t), "%.2f", n)
-	return t
-}
-
 stock lsg_etext(e)
 {
 	new t[32]
@@ -2571,7 +2577,7 @@ lsg_n12(ctx[])
 lsg_n13(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 barricade at:", floatround(float(ls_components_running() ? ls_barricade_hp(lsg_find("gate1")) : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 barricade at:", lsg_ntext(float(ls_components_running() ? ls_barricade_hp(lsg_find("gate1")) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n14(ctx)
 }
@@ -2590,7 +2596,7 @@ lsg_n14(ctx[])
 lsg_n15(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 barricade mended:", floatround(float(ls_components_running() ? ls_barricade_hp(lsg_find("gate1")) : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 barricade mended:", lsg_ntext(float(ls_components_running() ? ls_barricade_hp(lsg_find("gate1")) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n16(ctx)
 }
@@ -2638,7 +2644,7 @@ lsg_n19(ctx[])
 lsg_n20(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 zone stage:", floatround(float(ls_components_running() ? ls_zone_stage(lsg_find("shr")) : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 zone stage:", lsg_ntext(float(ls_components_running() ? ls_zone_stage(lsg_find("shr")) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n21(ctx)
 }
@@ -2672,7 +2678,7 @@ lsg_n23(ctx[])
 lsg_n24(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 creature health:", floatround(lsg_ehp(g_lsgOut[22])))
+	formatex(t, charsmax(t), "%s %s", "X2 creature health:", lsg_ntext(lsg_ehp(g_lsgOut[22])))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n27(ctx)
 }
@@ -2696,7 +2702,7 @@ public lsg_t25(const data[], task)
 lsg_n26(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 zone stage 2 s later:", floatround(float(ls_components_running() ? ls_zone_stage(lsg_find("shr")) : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 zone stage 2 s later:", lsg_ntext(float(ls_components_running() ? ls_zone_stage(lsg_find("shr")) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n73(ctx)
 }
@@ -2731,7 +2737,7 @@ lsg_n29(ctx[])
 lsg_n30(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 barricade damaged, left:", floatround(Float:ctx[2]))
+	formatex(t, charsmax(t), "%s %s", "X2 barricade damaged, left:", lsg_ntext(Float:ctx[2]))
 	server_print("[%s] %s", LSG_MODE, t)
 }
 
@@ -2745,7 +2751,7 @@ lsg_n31(ctx[])
 lsg_n32(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 barricade repaired to:", floatround(Float:ctx[2]))
+	formatex(t, charsmax(t), "%s %s", "X2 barricade repaired to:", lsg_ntext(Float:ctx[2]))
 	server_print("[%s] %s", LSG_MODE, t)
 }
 
@@ -2835,7 +2841,7 @@ lsg_n42(ctx[])
 lsg_n43(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 perks:", floatround(float(ls_components_running() ? ls_perk_count(ctx[0]) : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 perks:", lsg_ntext(float(ls_components_running() ? ls_perk_count(ctx[0]) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n44(ctx)
 }
@@ -2844,7 +2850,7 @@ lsg_n43(ctx[])
 lsg_n44(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 speed times:", floatround((ls_components_running() ? ls_player_mod_get(ctx[0], "speed") : 1.0)))
+	formatex(t, charsmax(t), "%s %s", "X2 speed times:", lsg_ntext((ls_components_running() ? ls_player_mod_get(ctx[0], "speed") : 1.0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n45(ctx)
 }
@@ -2853,7 +2859,7 @@ lsg_n44(ctx[])
 lsg_n45(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 gun level:", floatround(float(ls_components_running() && lsg_ok(ctx[0]) ? ls_weapon_level(ctx[0]) : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 gun level:", lsg_ntext(float(ls_components_running() && lsg_ok(ctx[0]) ? ls_weapon_level(ctx[0]) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n46(ctx)
 }
@@ -2901,7 +2907,7 @@ lsg_n49(ctx[])
 lsg_n50(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 bleed left:", floatround((ls_components_running() ? ls_down_left(ctx[0]) : 0.0)))
+	formatex(t, charsmax(t), "%s %s", "X2 bleed left:", lsg_ntext((ls_components_running() ? ls_down_left(ctx[0]) : 0.0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n51(ctx)
 }
@@ -2930,7 +2936,7 @@ lsg_n52(ctx[])
 lsg_n53(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 healing items:", floatround(float(ls_components_running() ? ls_heal_count(ctx[0]) : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 healing items:", lsg_ntext(float(ls_components_running() ? ls_heal_count(ctx[0]) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n54(ctx)
 }
@@ -2949,7 +2955,7 @@ lsg_n54(ctx[])
 lsg_n55(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 match kills:", floatround(float(ls_components_running() ? ls_kills(ctx[0]) : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 match kills:", lsg_ntext(float(ls_components_running() ? ls_kills(ctx[0]) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n56(ctx)
 }
@@ -3003,7 +3009,7 @@ lsg_n60(ctx[])
 lsg_n61(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 shop ammo price:", floatround(float(ls_components_running() ? ls_shop_price(g_lsgOut[59], "Ammo") : -1)))
+	formatex(t, charsmax(t), "%s %s", "X2 shop ammo price:", lsg_ntext(float(ls_components_running() ? ls_shop_price(g_lsgOut[59], "Ammo") : -1)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n62(ctx)
 }
@@ -3094,7 +3100,7 @@ lsg_n69(ctx[])
 lsg_n70(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 sides alive:", floatround(float(ls_components_running() ? ls_squads_alive() : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 sides alive:", lsg_ntext(float(ls_components_running() ? ls_squads_alive() : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n71(ctx)
 }
@@ -3216,7 +3222,7 @@ lsg_n82(ctx[])
 lsg_n83(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 turret kits:", floatround(float(ls_components_running() ? ls_turret_kits(ctx[0]) : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 turret kits:", lsg_ntext(float(ls_components_running() ? ls_turret_kits(ctx[0]) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 	lsg_n84(ctx)
 }
@@ -3244,7 +3250,7 @@ lsg_n85(ctx[])
 lsg_n86(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 turrets out:", floatround(float(ls_components_running() ? ls_turret_count(ctx[0]) : 0)))
+	formatex(t, charsmax(t), "%s %s", "X2 turrets out:", lsg_ntext(float(ls_components_running() ? ls_turret_count(ctx[0]) : 0)))
 	server_print("[%s] %s", LSG_MODE, t)
 }
 
@@ -3273,7 +3279,7 @@ lsg_n89(ctx[])
 lsg_n90(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 gun upgraded to:", floatround(Float:ctx[1]))
+	formatex(t, charsmax(t), "%s %s", "X2 gun upgraded to:", lsg_ntext(Float:ctx[1]))
 	server_print("[%s] %s", LSG_MODE, t)
 }
 
@@ -3317,7 +3323,7 @@ lsg_n95(ctx[])
 lsg_n96(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 creature hurt:", floatround(Float:ctx[2]))
+	formatex(t, charsmax(t), "%s %s", "X2 creature hurt:", lsg_ntext(Float:ctx[2]))
 	server_print("[%s] %s", LSG_MODE, t)
 }
 
@@ -3403,7 +3409,7 @@ lsg_n107(ctx[])
 lsg_n108(ctx[])
 {
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 lobby ended, squads:", floatround(Float:ctx[0]))
+	formatex(t, charsmax(t), "%s %s", "X2 lobby ended, squads:", lsg_ntext(Float:ctx[0]))
 	server_print("[%s] %s", LSG_MODE, t)
 }
 

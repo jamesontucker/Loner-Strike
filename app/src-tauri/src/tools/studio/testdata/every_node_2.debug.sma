@@ -18,6 +18,7 @@
 #define LSG_TXT 2
 #define LSG_N 111
 #define LSG_TASK 7310000
+#pragma dynamic 75136
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -157,8 +158,9 @@ public lsd_round_end()
 
 // events wait in memory and go to the file every 0.25 s (lsd_poll), when the buffer is nearly
 // full, and at once for a pause (the page shows it); one open/write/close per flush, not per
-// event (PerfAudit #5: 181 us an event)
-#define LSD_BUF 24000
+// event (PerfAudit #5: 181 us an event). Under 16384: AMX Mod X's fputs takes at most 16383
+// characters of a string and drops the rest (node coverage run: 44 events lost, one cut in half)
+#define LSD_BUF 16000
 new g_lsdBuf[LSD_BUF], g_lsdBufLen
 // how big the events file is now (it starts empty at each map)
 new g_lsdBytes
@@ -1578,6 +1580,17 @@ stock lsg_team(id)
 stock lsg_is_bot(id)
 	return id >= 1 && id <= MaxClients && is_user_connected(id) && is_user_bot(id) ? 1 : 0
 
+// a number as text: whole numbers as they are, others with two decimals (0.5, not 1)
+stock lsg_ntext(Float:n)
+{
+	new t[24]
+	if (floatfract(n) == 0.0 && floatabs(n) < 1000000.0)
+		formatex(t, charsmax(t), "%d", floatround(n))
+	else
+		formatex(t, charsmax(t), "%.2f", n)
+	return t
+}
+
 stock lsg_name(id)
 {
 	new name[32]
@@ -1891,8 +1904,12 @@ stock bool:lsg_veq(a, b)
 
 stock lsg_vtext(v)
 {
-	new t[64]
-	formatex(t, charsmax(t), "%.0f %.0f %.0f", lsg_vc(v, 0), lsg_vc(v, 1), lsg_vc(v, 2))
+	new t[64], Float:x = lsg_vc(v, 0), Float:y = lsg_vc(v, 1), Float:z = lsg_vc(v, 2)
+	// (a short vector, a direction above all, gets two decimals: in whole units one is "0 0 0")
+	if (floatabs(x) < 10.0 && floatabs(y) < 10.0 && floatabs(z) < 10.0)
+		formatex(t, charsmax(t), "%.2f %.2f %.2f", x, y, z)
+	else
+		formatex(t, charsmax(t), "%.0f %.0f %.0f", x, y, z)
 	return t
 }
 
@@ -2615,16 +2632,6 @@ stock lsg_tsel(c, const a[], const b[])
 		copy(t, charsmax(t), a)
 	else
 		copy(t, charsmax(t), b)
-	return t
-}
-
-stock lsg_ntext(Float:n)
-{
-	new t[24]
-	if (floatfract(n) == 0.0 && floatabs(n) < 1000000.0)
-		formatex(t, charsmax(t), "%d", floatround(n))
-	else
-		formatex(t, charsmax(t), "%.2f", n)
 	return t
 }
 
@@ -3441,7 +3448,7 @@ lsg_n13(ctx[])
 	if (lsd_enter(13, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 barricade at:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 barricade at:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -3482,7 +3489,7 @@ lsg_n15(ctx[])
 	if (lsd_enter(15, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 barricade mended:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 barricade mended:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -3587,7 +3594,7 @@ lsg_n20(ctx[])
 	if (lsd_enter(20, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 zone stage:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 zone stage:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -3670,7 +3677,7 @@ lsg_n24(ctx[])
 	if (lsd_enter(24, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 creature health:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 creature health:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -3717,7 +3724,7 @@ lsg_n26(ctx[])
 	if (lsd_enter(26, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 zone stage 2 s later:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 zone stage 2 s later:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -3795,7 +3802,7 @@ lsg_n30(ctx[])
 	if (lsd_enter(30, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 barricade damaged, left:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 barricade damaged, left:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -3827,7 +3834,7 @@ lsg_n32(ctx[])
 	if (lsd_enter(32, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 barricade repaired to:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 barricade repaired to:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4028,7 +4035,7 @@ lsg_n43(ctx[])
 	if (lsd_enter(43, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 perks:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 perks:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4048,7 +4055,7 @@ lsg_n44(ctx[])
 	if (lsd_enter(44, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 speed times:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 speed times:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4068,7 +4075,7 @@ lsg_n45(ctx[])
 	if (lsd_enter(45, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 gun level:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 gun level:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4171,7 +4178,7 @@ lsg_n50(ctx[])
 	if (lsd_enter(50, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 bleed left:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 bleed left:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4235,7 +4242,7 @@ lsg_n53(ctx[])
 	if (lsd_enter(53, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 healing items:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 healing items:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4276,7 +4283,7 @@ lsg_n55(ctx[])
 	if (lsd_enter(55, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 match kills:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 match kills:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4397,7 +4404,7 @@ lsg_n61(ctx[])
 	if (lsd_enter(61, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 shop ammo price:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 shop ammo price:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4589,7 +4596,7 @@ lsg_n70(ctx[])
 	if (lsd_enter(70, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 sides alive:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 sides alive:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4850,7 +4857,7 @@ lsg_n83(ctx[])
 	if (lsd_enter(83, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 turret kits:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 turret kits:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4911,7 +4918,7 @@ lsg_n86(ctx[])
 	if (lsd_enter(86, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 turrets out:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 turrets out:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -4976,7 +4983,7 @@ lsg_n90(ctx[])
 	if (lsd_enter(90, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 gun upgraded to:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 gun upgraded to:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5074,7 +5081,7 @@ lsg_n96(ctx[])
 	if (lsd_enter(96, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 creature hurt:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 creature hurt:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))
@@ -5268,7 +5275,7 @@ lsg_n108(ctx[])
 	if (lsd_enter(108, ctx))
 		return
 	new t[192]
-	formatex(t, charsmax(t), "%s %d", "X2 lobby ended, squads:", floatround(lsi0))
+	formatex(t, charsmax(t), "%s %s", "X2 lobby ended, squads:", lsg_ntext(lsi0))
 	server_print("[%s] %s", LSG_MODE, t)
 	new esc[200]
 	lsd_esc(t, esc, charsmax(esc))

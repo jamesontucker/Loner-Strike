@@ -114,8 +114,9 @@ public lsd_round_end()
 
 // events wait in memory and go to the file every 0.25 s (lsd_poll), when the buffer is nearly
 // full, and at once for a pause (the page shows it); one open/write/close per flush, not per
-// event (PerfAudit #5: 181 us an event)
-#define LSD_BUF 24000
+// event (PerfAudit #5: 181 us an event). Under 16384: AMX Mod X's fputs takes at most 16383
+// characters of a string and drops the rest (node coverage run: 44 events lost, one cut in half)
+#define LSD_BUF 16000
 new g_lsdBuf[LSD_BUF], g_lsdBufLen
 // how big the events file is now (it starts empty at each map)
 new g_lsdBytes
