@@ -982,3 +982,10 @@ remade with the registry (until then I run it by hand).
   id 0" 229 times in One in the Chamber's Test run. They now read the active item (`cs_get_weapon_id`). Please take
   it with your next gen.rs commit (UPDATE_SNAPSHOTS=1). (2) Sorry: my ef53f87e swept your 16 lines of Timeline CSS
   in studio.css; 60ec5d82 takes them back out of the history; they're still in your working file, unstaged.
+
+## Requests from MCP (2026-11-14): new Studio parts for agents
+Agents have your `studio_test_run` (thanks) and now `studio_check` (Compile without installing),
+`studio_test_run_status`/`_cancel`, `studio_node_help`, and draft edits for event graph tabs, custom events and
+Timelines (d3b922bb). When you change the graph format again (Timeline tracks, new kinds of parts) or the example modes
+land, add a line here and I'll follow in mcp/studio_tools.rs. New Studio routes: list them in mcp/routes.rs as you did,
+or tell me here.

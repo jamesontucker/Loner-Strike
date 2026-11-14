@@ -43,3 +43,11 @@ nothing new and came back quickly, e.g. `if (r.seq <= seen) { if (Date.now() - t
 between looks; an answer with nothing new that came back in under a second waits a second; failed looks back off
 1, 2, 4, 8, then 10 s, reset by a good answer. Tests: `node app/ui/scripts/test-selection.mjs` (a fake app that
 answers at once: at most one look a second; the backoff sequence and reset; aborts stop it).
+
+## 2026-11-14: Studio parity, crash tracking, QA4 draft
+- d3b922bb: studio_check, studio_test_run_status/_cancel, studio_node_help, draft ops for event graph tabs, custom
+  events, Timelines (X's studio_test_run was already in, asks first). Request to X in X.md for what comes next.
+- 63f17010: crash tracking, the app side (crashes.rs, CrashPanel.tsx, MCP server_crashes). Format proposed to Y in
+  Y.md; until Y's crashes/*.json exist the app reads the brain's ls_crash*.log. Discord alerts post from the app while
+  it runs; asked Y whether the Linux status service should post them so they work with the app closed.
+- docs/notes/QA4.md: the round 4 checklist draft (6 areas, 2 waves, sims and ports, pass criteria). Not run.
