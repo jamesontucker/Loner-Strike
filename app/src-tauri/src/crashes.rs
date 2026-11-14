@@ -615,4 +615,20 @@ mod tests {
         let m = message("My @everyone *server*", &json!({"map": "de_dust2", "when": "2026-11-14 06:12 UTC", "fault": "SIGSEGV", "module": "mp.dll"}));
         assert_eq!(m, "**My everyone server** crashed on de_dust2 at 2026-11-14 06:12 UTC: SIGSEGV in mp.dll. The details are in Loner-Strike (Servers, Health).");
     }
+
+    /// QA: what the app makes of a real game folder's crash files (read only).
+    /// `LS_CRASH_GAME=<.../cstrike> cargo test real_crash_files -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn real_crash_files() {
+        let Ok(dir) = std::env::var("LS_CRASH_GAME") else { return };
+        let raw = read_local(Path::new(&dir));
+        let crashes: Vec<Value> = raw.files.iter().filter_map(|f| if f.rel.ends_with(".json") { from_json(f) } else { from_log(f) }).collect();
+        let counted = crashes.iter().filter(|c| c["atStop"] != true).count();
+        println!("{dir}: {} files, {} crashes read, {} counted, ham {:?}, warnings {}", raw.files.len(), crashes.len(), counted, raw.ham.as_deref().map(|h| &h[..12]), warnings(&raw, false).len());
+        for c in crashes.iter().take(3) {
+            println!("  {} {} {} {} stack {}", c["when"], c["fault"], c["address"], c["module"], c["stack"].as_array().map(Vec::len).unwrap_or(0));
+        }
+        assert_eq!(crashes.len(), raw.files.len(), "every crash file read");
+    }
 }

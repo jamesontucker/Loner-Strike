@@ -132,6 +132,24 @@ br_valley v6; squads on QA4B (16 bots), duos/solo on QA4B2.
 | Legal (91a31d52, 9faeebc8, 302761ea, ee7222f1) | Terms and Privacy linked under Set it up and in About; Publish requires "I have the right to share this"; DMCA agent and legal email right; the warranty panel is bold and bordered |
 | Fresh setup and update | A clean bottle: setup end to end, then an update; the fixed Ham Sandwich is installed on Windows/CrossOver |
 
+
+### Area F self-check (MCP, 2026-11-14, before QA starts; Rust tests, the stdio bridge, the site in two engines)
+Run on `tools` at c0266b76. **No sim was started**: 15 hlds sims were already running on the Mac (limit 8), so every
+row that needs a running game is left for QA. Crash files read below come from existing sims, so they're **old build**
+results for the brain; they only show that the reader handles real files. Newest green ls-next3 at the start: run
+43571907279 (head 0af22051); QA runs on that build plus the current `tools` plugins and maps.
+| Item | Verified here | Evidence | Left for QA / the user |
+|---|---|---|---|
+| Crash tracking, local | partly | `crashes::tests` (5 pass); the ignored `real_crash_files` test over the 7 sims with crash logs (LSPLAY, QA4E, W2BN2, W2HUN, W2PLS, X2T, YF1): every file read, each one a debugger/stop fault (0xfff4fadc) so listed but not counted, 0 warnings (old build) | a forced crash on QA4C on the current build: Health › Crashes within 2 min, Copy, "1 crash in 24 h" |
+| Crash tracking, Ham Sandwich | partly | `hamguard::tests` (3 pass); the Ham Sandwich in all 16 sims and the real game hashes to the fixed one (d1ebbf716f3a…) | putting the official dll on QA4C: the warning, Update files, the warning goes |
+| Crash tracking, Linux | no | - | the user's Linux test machine |
+| Crash tracking, Discord | partly | the message test (no mentions, plain text) | **needs user**: a test channel's webhook |
+| Crash format with Y | no | Y's capture hasn't landed | when it lands |
+| MCP live | partly | the real stdio bridge (`--mcp-stdio`) against the harness on a scratch app dir: initialize (2025-11-25), 174 tools, 10 resources, 5 prompts; maps_list 60; an agent made a box room (hollow → 6 walls), placed a stuck spawn, Checks found it (1 error) and `editor_apply_fix` by id fixed it; Budget 20 bars; selection by agent; a Studio draft built, wired and checked with 0 errors and its code has plugin_init; `studio_compile` asked and "Don't allow" left it as it was; `editor_new` asked before dropping the unsaved map and refused left it; the activity log listed each call (17 done, 2 failed, 1 refused) | `claude mcp add` against the built app with the native dialog; `editor_save` (the harness has no window for the save dialog, so it failed there); the 170 in the row is now 174 |
+| Site | yes | 7 pages, 349 links (35 external): no broken local link (the only hits were `/` and anchors built by script); every page at 375 px in Chromium and WebKit without sideways scroll; titles as in Site.md; no version numbers in the copy (the release banner names 1.0.0 on purpose, see Site.md); us-english-check clean | the external links by hand |
+| Legal | yes | Terms and Privacy linked in Set it up (Setup.tsx) and About (AppSettings.tsx); Publish's "I have the right to share this" box is required and the button stays off without it; terms/privacy carry DMCA-1070465 and legal@nanoshrineinteractive.com; the warranty panel is bold with a border | - |
+| Fresh setup and update | partly | the setup tests (30 pass: foundation, fetch, patch, components, botprofile, waiting for the game per step) | a clean bottle end to end on the current build, then an update |
+
 ## G. Community: share and import (T's browser and library, the list service, the publish workflow)
 How it works today (docs/COMMUNITY.md, COMMUNITY-SERVER.md, notes/T.md, notes/community.md): files live on
 GameBanana (tagged pages); the Loner-Strike index (`dl.lonerstrike.com/community/index.json` + `.sha256`, published from
@@ -200,6 +218,22 @@ Expected messages are the app's own words; a row fails if a failure shows a raw 
 |---|---|---|
 | Box/R2 down | Block list.lonerstrike.com and dl.lonerstrike.com (hosts file) | The list shows "from earlier" with the kept index; with no kept copy, GameBanana's tag search alone (no badges, modes can't be installed, content can); registering waits and retries |
 | GameBanana down | Block gamebanana.com | A plain message, the Installed tab still works, nothing hangs the page |
+
+
+### Area G self-check (MCP, 2026-11-14, before QA starts; Rust and list service tests)
+Run on `tools` at c0266b76. Nothing touched the live list, GameBanana or Discord; those rows are **needs user**.
+| Item | Verified here | Evidence | Left for QA / the user |
+|---|---|---|---|
+| Sharing: maps, modes, prefabs, caps (local) | partly | `tools::community` and `tools::communitylib` (41 pass: builds_a_package_the_installer_reads, mode_packages_carry_one_good_graph, builds_a_mode_package_with_credit, nothing_that_runs_code_is_shared, package_refusals, map_names, uninstalling_a_prefab_removes_only_its_files…) | each row by hand in the app (a real map with custom content, the 1.1 GB case) |
+| Requirements (local) | partly | `tools::requirements` (3 pass), the MCP `studio_requirements` tools in the live MCP run's tool list | the panel once X mounts it in My mode › Details; Publish warnings by hand |
+| Playtest screenshots, cover card (local) | partly | `tools::playshots` (2 pass: snapshot names, recent snapshots become PNGs) | F5 in a playtest on the current build; the cover card by eye, offline |
+| Risky nodes | yes (tests) | a_mode_that_runs_server_commands_shows_it_and_asks_first, risk_words_follow_the_studio, the_install_is_bound_to_what_the_player_saw | the badges and the ask in the app; an older entry asked after the download |
+| Index formats, checksum, offline fallback | yes (tests) | index_must_match_its_checksum, index_parsing_refuses_junk_and_newer_formats, unknown_values_from_a_newer_index_keep_the_list, index_falls_back_to_the_kept_copy_then_to_nothing | blocking the box and GameBanana with the hosts file |
+| Malicious archives | yes (tests) | `archive::tests` (22 pass: traversal_rules, links_are_never_followed_or_kept, tar_with_link_is_refused, zip_budget_and_traversal, zip_with_too_many_files_is_refused, bomb_ratio_only_stops_bombs, watchdog_stops_runaway_unpacker, nested_failure_leaves_nothing) | the test zips through Get more's Add file |
+| Name clash, re-import, game open | partly | mode_clashes_and_remix_ids, previous_version_kept_and_put_back, busy_servers_and_maps_in_use, waiting_updates_and_stale_servers_in_the_library | by hand with a played map |
+| Unlisted / withdrawn | yes (tests) | unlisted_and_withdrawn_stay_out_of_lists_and_get_no_updates; list service `test_community.py` 118 pass (unlist code proof, recheck of unlisted entries, withheld fails closed, private auto-relist, deleted held for review) | **needs user**: every live row on a test GameBanana page |
+| List service | yes (tests) | test_community 118, test_caps 3, test_modbot 15 pass; test_publish_check OK | **needs user**: deploying e4b55d53 |
+| Registering, updating, reports, ownership | partly | trust_rules, uids, remembers_one_registration_per_page, reports_carry_only_the_page_and_the_reason, a_registration_says_only_which_page | **needs user**: live |
 
 ## H. Windows (real Windows 10 and 11; release build; docs/notes/Windows.md)
 Two PCs if possible: one with a Unicode user name (e.g. `Zoë`) and Documents redirected to OneDrive, one plain. A
