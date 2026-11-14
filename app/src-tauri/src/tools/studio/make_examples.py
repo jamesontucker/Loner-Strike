@@ -168,7 +168,7 @@ def infection():
 
 
 # ---- Gun Game Lite --------------------------------------------------------------------------
-GUNS = ["mp5navy", "p90", "m3", "famas", "ak47", "m4a1", "awp", "deagle"]
+GUNS = ["glock18", "usp", "deagle", "mac10", "mp5navy", "ump45", "p90", "m3", "xm1014", "galil", "famas", "ak47", "m4a1", "awp"]
 
 def gungame():
     m = Mode("gun_game_lite", "Gun Game Lite", "Each kill gives the next gun; a knife kill at the end wins",
@@ -177,7 +177,7 @@ def gungame():
     m.func("arm", "Give Level Gun", inputs=[("who", "Who", "player")])
     m.var("level", "Level", "number", "player", 0)
 
-    m.part("Free for all, no buying, and you come back 2 seconds after you die, with the gun of your level.")
+    m.part("Free for all, no buying, and you come back 2 seconds after you die, with the gun of your level and 2 seconds of God Mode so nobody is shot as they appear.")
     m.n("rs", "event.round_started")
     m.n("nobuy", "buy.where", {"where": "nowhere"})
     m.n("bots", "bots.no_buy", {"on": True})
@@ -185,8 +185,13 @@ def gungame():
     m.flow("rs", "nobuy", "bots", "hello")
     m.n("ps", "event.player_spawned")
     m.n("give", "fn.call", {"func": "arm"})
+    m.n("safe", "player.godmode", {"on": True})
+    m.n("safe_wait", "timer.delay", {"secs": 2})
+    m.n("unsafe", "player.godmode", {"on": False})
     m.w("ps.player", "give.who")
-    m.flow("ps", "give")
+    for t in ("safe", "unsafe"):
+        m.w("ps.player", f"{t}.player")
+    m.flow("ps", "give", "safe", "safe_wait", "unsafe")
     m.n("pk0", "event.player_killed")
     m.n("wait", "timer.delay", {"secs": 2})
     m.n("back", "player.respawn")
@@ -266,7 +271,7 @@ def gungame():
 def koth():
     m = Mode("king_of_the_hill", "King of the Hill", "Hold the hill to score; the first team to 120 wins",
              "9b3e5d27-7f1a-4c08-b6e2-4a9d8c1f5e73",
-             [("mp_round_infinite", 1)])
+             [("mp_round_infinite", 1), ("mp_give_player_c4", 0)])
     m.g["markers"] = [{"id": "hill", "label": "Hill", "description": "Where the hill is: a capture point is made here.", "type": "point", "min": 0, "max": 1, "colour": "#ffb347", "icon": "flag"}]
     m.func("hill", "Make Hill", inputs=[("at", "At", "entity")])
     m.var("point", "Hill", "entity", "mode")
@@ -274,7 +279,7 @@ def koth():
     m.var("held", "Is Held", "bool", "mode", False, "round")
     m.var("score", "Hill Score", "number", "team", 0, "round")
 
-    m.part("Each round a capture point is made on the hill: the map's Hill marker, else bomb site A, else where the hostages are. Bots go for it by themselves.")
+    m.part("Each round a capture point is made on the hill: the map's Hill marker, else bomb site A, else where the hostages are. Bots go for it by themselves. Nobody gets the bomb (a mode setting), so the hill is the only goal.")
     m.n("rs", "event.round_started")
     m.n("no", "var.set", {"var": "held", "value": False})
     m.n("mk", "marker.find", {"marker": "hill", "n": 1}, below=True)
