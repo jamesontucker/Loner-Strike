@@ -22,6 +22,7 @@ import urllib.request
 
 import applications
 import community as cm
+import roles as rolesmod
 
 API = "https://discord.com/api/v10"
 MAX_SKEW = 300            # seconds a signed request may be old (Discord's own advice: 5 min)
@@ -254,6 +255,8 @@ class Mod(cm.Notifier):
         self.secret = button_secret(bot.token if bot else "")
         self.lock = threading.RLock()
         self.background = background
+        # community roles (roles.Roles sets itself here when it's on)
+        self.rolesvc = None
         community.notifier = self
         # role applications (only when their private channel is set)
         self.apps = applications.Applications(self, apply_channel, apply_roles, apply_privileged) if apply_channel and bot else None
@@ -381,15 +384,35 @@ class Mod(cm.Notifier):
             return 400, {"error": "bad body"}
         if d.get("type") == PING:
             return 200, {"type": R_PONG}
+        data = d.get("data") if isinstance(d.get("data"), dict) else {}
+        parsed = self.parse_id(str(data.get("custom_id") or "")) if d.get("type") in (COMPONENT, MODAL) else None
+        rs = self.rolesvc
+        # a server moderator application's card in its owner's DMs (no guild there): the signed id,
+        # and roles.py checks this person decides for that server
+        if rs and parsed and parsed[0] in rolesmod.DECIDER_ACTIONS and not d.get("guild_id"):
+            user = d.get("user") if isinstance(d.get("user"), dict) else {}
+            return 200, self.roles_action(d, parsed, user, {}, set())
         if str(d.get("guild_id") or "") != self.guild:
             return 200, self.tell("This only works in the Loner-Strike server.")
         member = d.get("member") if isinstance(d.get("member"), dict) else {}
         user = member.get("user") if isinstance(member.get("user"), dict) else {}
         uid = str(user.get("id") or "")
         roles = {str(r) for r in member.get("roles") or [] if isinstance(r, (str, int))}
+        # community roles (roles.py): /link, /unlink, /server claim for anyone; server moderator
+        # applications (deciding is checked per server there)
+        if rs and d.get("type") == COMMAND and data.get("name") in ("link", "unlink", "server"):
+            if not uid:
+                return 200, self.tell("You can't do that.")
+            with self.lock:
+                if not self.c.store.first_time(str(d.get("id") or "")):
+                    return 200, self.tell("Already done.")
+                try:
+                    return 200, self.tell(rs.command(d, uid))
+                except cm.Reject as e:
+                    return 200, self.tell(e.message)
+        if rs and parsed and parsed[0] in rolesmod.PUBLIC_ACTIONS + rolesmod.DECIDER_ACTIONS:
+            return 200, self.roles_action(d, parsed, user, member, roles)
         # role applications: anyone may apply; deciding has its own roles (applications.py)
-        data = d.get("data") if isinstance(d.get("data"), dict) else {}
-        parsed = self.parse_id(str(data.get("custom_id") or "")) if d.get("type") in (COMPONENT, MODAL) else None
         if parsed and self.apps and parsed[0] in applications.PUBLIC_ACTIONS + applications.DECIDER_ACTIONS:
             if not uid:
                 return 200, self.tell("You can't do that.")
@@ -432,6 +455,27 @@ class Mod(cm.Notifier):
                 if action == "applyform":
                     return self.apps.submit(d, n, user, member)
                 return self.apps.decide(action, n, d, actor)
+            except cm.Reject as e:
+                return self.tell(e.message)
+            except (TypeError, AttributeError, KeyError, ValueError, IndexError):
+                return self.tell("That didn't make sense to the list service.")
+
+    def roles_action(self, d, parsed, user, member, member_roles):
+        action, n = parsed
+        uid = str(user.get("id") or "")
+        if not uid:
+            return self.tell("You can't do that.")
+        actor = {"id": uid, "name": cm.one_line(str(user.get("global_name") or user.get("username") or uid), 40),
+                 "roles": set(member_roles)}
+        with self.lock:
+            if not self.c.store.first_time(str(d.get("id") or "")):
+                return self.tell("Already done.")
+            try:
+                if action == "smpick":
+                    return self.rolesvc.pick(d, uid)
+                if action == "smform":
+                    return self.rolesvc.submit(d, n, user, member)
+                return self.rolesvc.decide(action, n, d, actor)
             except cm.Reject as e:
                 return self.tell(e.message)
             except (TypeError, AttributeError, KeyError, ValueError, IndexError):

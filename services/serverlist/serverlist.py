@@ -28,6 +28,7 @@ HEADER = b"\xff\xff\xff\xff"
 SPLIT = b"\xfe\xff\xff\xff"
 INFO = HEADER + b"TSource Engine Query\x00"
 RULES = HEADER + b"V"
+PLAYERS = HEADER + b"U"
 # how often every listed server is asked again
 POLL_SECS = 120
 # shown while it answered this recently
@@ -112,6 +113,31 @@ def parse_rules(data):
         return None
 
 
+def parse_players(data):
+    """An A2S_PLAYER reply ('D', after the header) as a list of player names, or None. (A2S says
+    names, scores and times only: never SteamIDs.)"""
+    if not data or data[0] != 0x44:
+        return None
+    try:
+        count, i, out = data[1], 2, []
+        for _ in range(count):
+            i += 1  # index
+            name, i = _cstr(data, i)
+            i += 8  # score, duration
+            out.append(name)
+        return out
+    except (IndexError, ValueError):
+        return None
+
+
+def players(listed):
+    """The names of the players on a server now, or None when it didn't say."""
+    found = clean_address(listed)
+    if not found:
+        return None
+    return ask(found[1], PLAYERS, parse_players)
+
+
 def _receive(s, deadline):
     """One reply, put back together when GoldSrc split it over several packets. The whole
     reply has to arrive by `deadline` (time.monotonic()), in MAX_PARTS packets at most."""
@@ -145,7 +171,7 @@ def ask(address, request, parse, timeout=2.0):
     s.settimeout(timeout)
     try:
         s.connect(address)
-        challenge = HEADER if request == RULES else b""
+        challenge = HEADER if request in (RULES, PLAYERS) else b""
         for _ in range(3):
             s.send(request + challenge)
             data = _receive(s, time.monotonic() + timeout)
@@ -316,6 +342,10 @@ def make_handler(registry, limit, asker=check, community=None):
             if community and self.path.startswith("/community/"):
                 community.handle(self, method, self._visitor())
                 return True
+            if community and getattr(community, "rolesvc", None) and self.path.startswith("/roles/"):
+                import community as cm
+                community.rolesvc.handle(self, method, self._visitor(), cm.read_body, cm.reply)
+                return True
             if community and self.path.split("?", 1)[0] == "/discord/interactions" and method == "POST":
                 community.interactions(self)
                 return True
@@ -359,6 +389,11 @@ def make_handler(registry, limit, asker=check, community=None):
                 return self._send(200, {"ok": False, "error": "The list is full right now."})
             self._send(200, {"ok": True, "address": listed})
 
+        def do_DELETE(self):
+            if self._community("DELETE"):
+                return
+            self._send(404, {"error": "not found"})
+
         def do_OPTIONS(self):
             self.send_response(204)
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -375,6 +410,7 @@ def main():
     p.add_argument("--listen", type=int, default=8100, help="port on 127.0.0.1")
     p.add_argument("--state", required=True, help="file that keeps the list between restarts")
     p.add_argument("--community-db", default="", help="turns on community creations: their SQLite database")
+    p.add_argument("--roles-db", default="", help="turns on community roles (links, supporters, server moderators): their SQLite database")
     p.add_argument("--recheck-hours", type=float, default=24, help="how often every community page is checked again")
     p.add_argument("--admin-remote", action="store_true",
                    help="also answer moderation through the tunnel (default: only on this machine, via ssh -L)")
@@ -402,6 +438,14 @@ def main():
                        apply_channel=os.environ.get("DISCORD_APPLY_CHANNEL_ID", "").strip(),
                        apply_roles=os.environ.get("DISCORD_APPLY_ROLES", "").split(","),
                        apply_privileged=os.environ.get("DISCORD_APPLY_PRIVILEGED", "moderator").split(","))
+        if a.roles_db:
+            import roles
+            # POLAR_WEBHOOK_SECRET from the env file; taken out of the environment once read
+            community.rolesvc = roles.Roles(roles.Store(a.roles_db), clean=clean_address, asker=check, players=players,
+                                            polar_secret=os.environ.pop("POLAR_WEBHOOK_SECRET", "").strip(),
+                                            mod=community.notifier if hasattr(community.notifier, "interaction") else None,
+                                            deciders=os.environ.get("DISCORD_SERVERMOD_DECIDERS", "").split(","),
+                                            days=int(os.environ.get("SUPPORTER_DAYS", "30") or 30))
         if a.recheck_hours > 0:
             threading.Thread(target=community.recheck_loop, args=(a.recheck_hours,), daemon=True).start()
     server = ThreadingHTTPServer(("127.0.0.1", a.listen), make_handler(registry, RateLimit(MAX_REGISTER), community=community))

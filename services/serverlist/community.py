@@ -2627,6 +2627,10 @@ class Community:
                 raise Reject(400, "The request couldn't be read.")
             if not isinstance(body, dict):
                 raise Reject(400, "The request couldn't be read.")
+        if parts[:1] == ["roles"]:
+            if not getattr(self, "rolesvc", None):
+                raise Reject(404, "Community roles are off (no --roles-db).")
+            return reply(h, 200, self.rolesvc.admin(method, parts[1:], body, query), cors=False)
         if parts == ["queue"] and method == "GET":
             return reply(h, 200, self.queue((query.get("state") or [""])[0]), cors=False)
         if parts == ["status"] and method == "GET":

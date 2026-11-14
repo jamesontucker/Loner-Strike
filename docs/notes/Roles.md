@@ -47,12 +47,20 @@ Status: design and API (2026-11-14). Nothing deployed: the box, the live Discord
   linked to another Discord account. They can /unlink first." Relinking replaces your link, except while you're a
   server moderator through it ("You moderate <server> with this SteamID. Ask its owner to remove you first.").
 - Not accepted: bots, `STEAM_ID_LAN`, `STEAM_ID_PENDING`, `VALVE_…`, `HLTV`.
-- **Trust:** a host controls their own server's log, so a host could make a code for any SteamID. Every link keeps
-  the server it came from and whether that's an official server. Cards show "Linked on an official server" or
-  "Linked on <server>"; applications to moderate an **official** server need a link made on an official server.
-  On servers that let non-Steam clients in, SteamIDs can be faked (the card says the link only proves what that
-  server saw).
-- Rate limits: codes 3 per SteamID and 60 per server per 10 min; `/link` 5 failed tries per Discord id per hour.
+- **Trust (link squatting, security review 2026-11-14):** a host controls their own server's log, so a host could make a
+  code for any SteamID and bind it to their own Discord. So:
+  - every link keeps the server it came from; a link made on an official server is **verified**, others **unverified**
+    (cards and the app's applications list say so: `link: "verified" | "unverified"`);
+  - **an official-server link wins:** it replaces an unverified link of the same SteamID (the old one is deleted,
+    logged as `evict`, and its Discord account gets a DM); two official links still need `/unlink`;
+  - **presence:** before making a code the service asks the server itself for its player list (A2S_PLAYER) and refuses
+    unless a player of that name is on it now ("You don't seem to be on this server right now…"). A2S gives names, never
+    SteamIDs, so this proves someone of that name is playing there, not the SteamID;
+  - at most **20 different SteamIDs per server per day** get codes;
+  - moderators take a squatted link away: `lsmod.py roles unlink <steamid> [--reason ..]` (logged, audit line);
+  - applications to moderate an **official** server need a verified link.
+  On servers that let non-Steam clients in, SteamIDs can be faked anyway.
+- Rate limits: codes 3 per SteamID and 60 per server per 10 min, 20 distinct SteamIDs per server a day; `/link` 5 failed tries per Discord id per hour.
 
 ## 3. Supporter VIP
 - **Polar (the user's setup):**
@@ -127,10 +135,10 @@ out, bodies at most 16 KB; errors are `{"error": "<plain sentence>"}` with 4xx.
 | POST /roles/server | token | `{settings: {applications, discord_mods_decide, honor_supporters}}` → same as GET |
 | POST /roles/server/owner-code | token | → `{owner_code, expires}` |
 | DELETE /roles/server | token | → `{ok}` |
-| POST /roles/link/code | token | `{steamid, name}` → `{code, expires}` |
+| POST /roles/link/code | token | `{steamid, name}` → `{code, expires}`; refused unless `name` is on the server now (A2S) |
 | GET /roles/vip | token (official) | → `{steamids, ttl}` |
 | POST /roles/vip/check | token (honor on) | `{steamids: [≤64]}` → `{steamids}` |
-| GET /roles/applications | token | → `{applications: [{id, state, discord_name, steamid, linked_on, official_link, availability, answers, decided_by, decided_at, invite: {state, expires}}]}` |
+| GET /roles/applications | token | → `{applications: [{id, state, discord_name, steamid, linked_on, official_link, link: verified|unverified, availability, answers, decided_by, decided_at, invite: {state, expires}}]}` |
 | POST /roles/applications/:id/invite | token | `{invite, expires}` → `{ok, dm}` (`dm: false`: DMs closed) |
 | POST /roles/applications/:id/redeemed | token | `{member}` → `{ok}` |
 | POST /roles/applications/:id/revoke | token | `{by}` → `{ok}` |

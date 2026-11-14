@@ -86,6 +86,9 @@ class Applications:
     def start(self):
         """The button in #apply: a private message with the roles to pick from."""
         options = [{"label": name, "value": key} for key, name in ROLES]
+        if getattr(self.mod, "rolesvc", None):
+            options.append({"label": "Server moderator", "value": "server_mod",
+                            "description": "Help run one Loner-Strike server (needs your SteamID linked)"})
         return {"type": 4, "data": {"flags": EPHEMERAL, "allowed_mentions": {"parse": []},
                                     "content": "Which role would you like to apply for?",
                                     "components": [{"type": 1, "components": [{
@@ -96,6 +99,8 @@ class Applications:
         """A role picked: the form (why, links)."""
         values = (d.get("data") or {}).get("values")
         key = values[0] if isinstance(values, list) and values and isinstance(values[0], str) else ""
+        if key == "server_mod" and getattr(self.mod, "rolesvc", None):
+            return self.mod.rolesvc.apply_start(uid)
         if key not in NAMES:
             raise cm.Reject(400, "Pick one of the roles in the list.")
         self.check_can_apply(uid, key, member_roles)

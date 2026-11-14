@@ -30,6 +30,14 @@ a terminal, and the way to publish the index.
         ~/.config/lonerstrike/r2.env). Normally the GitHub workflow "Community index" publishes
         every 10 minutes; this is for by hand.)
 
+Community roles (docs/ROLES.md; the service runs with --roles-db):
+  lsmod.py roles servers                     claimed servers
+  lsmod.py roles official <server> on|off    mark an official server (by id or address)
+  lsmod.py roles log [-n 100]                claims, links, decisions, invites, redemptions, revokes
+  lsmod.py roles show <application id>       one server moderator application
+  lsmod.py roles supporters                  who supports now (SteamIDs of linked supporters)
+  lsmod.py roles unlink <steamid> [--reason ..]   take away a squatted link (logged)
+
 <page> is mod:<id>, spray:<id> or the GameBanana link. The admin API answers only on the box:
 from a Mac, open a tunnel first (ssh -N -L 8100:127.0.0.1:8100 you@your-box) and use the default
 --server http://127.0.0.1:8100. Publishing again is needed after a pull for apps to see it (or the
@@ -193,6 +201,33 @@ def publish(server, tok, out, upload, if_changed=False, auto=False):
     print("Published: https://dl.lonerstrike.com/community/index.json (apps see it within 15 minutes).")
 
 
+def roles_cmd(srv, tok, a):
+    if a.rcmd == "servers":
+        r = call(srv, tok, "GET", "roles/servers")
+        if not r["servers"]:
+            print("No claimed servers.")
+        for x in r["servers"]:
+            print(f"{x['server']:>4}  {'official' if x['official'] else '        '}  {x['address']:<28} {x['name'][:32]:<32} "
+                  f"owner {'linked' if x['owner_linked'] else 'not linked'}  "
+                  + " ".join(k for k, v in x["settings"].items() if v))
+    elif a.rcmd == "official":
+        x = call(srv, tok, "POST", f"roles/servers/{urllib.parse.quote(a.server, safe='')}/official", {"on": a.onoff == "on"})
+        print(f"{x['name']} ({x['address']}): official {'on' if x['official'] else 'off'}.")
+    elif a.rcmd == "log":
+        for x in reversed(call(srv, tok, "GET", f"roles/log?n={a.n}")["log"]):
+            print(f"{when(x['at'])}  {x['action']:<10} server {x['server_id']:<4} {x['actor'][:20]:<20} {x['subject'][:24]:<24} {x['detail']}")
+    elif a.rcmd == "show":
+        print(json.dumps(call(srv, tok, "GET", f"roles/application/{a.id}"), indent=2, ensure_ascii=False))
+    elif a.rcmd == "unlink":
+        r = call(srv, tok, "POST", "roles/unlink", {"steamid": a.steamid, "reason": a.reason})
+        print(f"{a.steamid} is no longer linked (it was Discord {r['discord_id']}).")
+    elif a.rcmd == "supporters":
+        r = call(srv, tok, "GET", "roles/supporters")
+        print(f"{len(r['steamids'])} linked supporter(s) get VIP now.")
+        for x in r["steamids"]:
+            print(f"  {x}")
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="lsmod.py", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--server", default=os.environ.get("LS_COMMUNITY_SERVER", DEFAULT_SERVER))
@@ -234,6 +269,18 @@ def main(argv=None):
     s.add_argument("--upload", action="store_true", help="really put it on dl.lonerstrike.com")
     s.add_argument("--if-changed", action="store_true", help="do nothing when it's the same as last published")
     s.add_argument("--auto", action="store_true", help="--if-changed, and nothing after a held-back re-check")
+    s = sub.add_parser("roles")
+    rs = s.add_subparsers(dest="rcmd", required=True)
+    rs.add_parser("servers")
+    o = rs.add_parser("official")
+    o.add_argument("server")
+    o.add_argument("onoff", choices=("on", "off"))
+    rs.add_parser("log").add_argument("-n", type=int, default=100)
+    rs.add_parser("show").add_argument("id", type=int)
+    rs.add_parser("supporters")
+    u = rs.add_parser("unlink")
+    u.add_argument("steamid")
+    u.add_argument("--reason", default="")
     a = p.parse_args(argv)
     try:
         srv = a.server
@@ -315,6 +362,8 @@ def main(argv=None):
                       + (", HELD BACK: nothing is published until you look (then `lsmod.py release-hold`)" if lr.get("heldBack") else ""))
         elif a.cmd == "publish":
             publish(srv, tok, a.out, a.upload, a.if_changed, a.auto)
+        elif a.cmd == "roles":
+            roles_cmd(srv, tok, a)
     except Failed as e:
         print(e, file=sys.stderr)
         return 1

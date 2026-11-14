@@ -5,6 +5,7 @@
                                             public key, channels and roles; changes nothing)
   python3 discord-setup.py --apply          does it:
      1. registers the guild slash command /community pull|keep|block|status <page> [reason]
+        (with --roles also /link [code], /unlink and /server claim <code>, roles.py)
      2. sets the application's Interactions Endpoint URL to
         https://list.lonerstrike.com/discord/interactions
         (Discord sends a signed PING there at once, so the list service must already be running
@@ -50,6 +51,16 @@ COMMAND = {
         {"type": SUB, "name": "status", "description": "Where a page stands", "options": [PAGE]},
     ],
 }
+# community roles (roles.py; with --roles): anyone in the server may use these
+CODE = {"type": STRING, "name": "code", "description": "The code (like ABCD-EFGH)", "required": True, "min_length": 8, "max_length": 12}
+ROLE_COMMANDS = [
+    {"name": "link", "type": 1, "dm_permission": False,
+     "description": "Link your SteamID: type /link in game on a Loner-Strike server, then the code here",
+     "options": [dict(CODE, required=False, description="The code from the game (leave it out to see your link)")]},
+    {"name": "unlink", "type": 1, "dm_permission": False, "description": "Unlink your SteamID from this Discord account"},
+    {"name": "server", "type": 1, "dm_permission": False, "description": "Your Loner-Strike server",
+     "options": [{"type": SUB, "name": "claim", "description": "You run this server: its owner code from the app", "options": [CODE]}]},
+]
 # permissions (Discord's bit numbers)
 VIEW, SEND, EMBED, HISTORY, REACT, MANAGE_MESSAGES = 1 << 10, 1 << 11, 1 << 14, 1 << 16, 1 << 6, 1 << 13
 THREADS = (1 << 35) | (1 << 36) | (1 << 38)
@@ -147,6 +158,7 @@ def main():
     p.add_argument("--token-file", default=os.path.expanduser("~/.config/loner-discord-token"))
     p.add_argument("--endpoint", default=ENDPOINT)
     p.add_argument("--apply", action="store_true")
+    p.add_argument("--roles", action="store_true", help="also register /link, /unlink and /server claim (community roles)")
     a = p.parse_args()
     try:
         token = open(a.token_file).read().strip()
@@ -157,12 +169,12 @@ def main():
     print(f"For the service's env file:  DISCORD_APP_ID={app.get('id')}  DISCORD_PUBLIC_KEY={app.get('verify_key')}")
     print(f"Interactions endpoint now: {app.get('interactions_endpoint_url') or '(none)'}")
     if a.apply:
-        call(token, "PUT", f"/applications/{app['id']}/guilds/{GUILD}/commands", [COMMAND])
-        print("Registered /community (pull, keep, block, status).")
+        call(token, "PUT", f"/applications/{app['id']}/guilds/{GUILD}/commands", [COMMAND] + (ROLE_COMMANDS if a.roles else []))
+        print("Registered /community (pull, keep, block, status)" + (", /link, /unlink and /server claim." if a.roles else "."))
         call(token, "PATCH", "/applications/@me", {"interactions_endpoint_url": a.endpoint})
         print(f"Interactions endpoint set to {a.endpoint} (Discord's signed PING was answered).")
     else:
-        print(f"Would register /community in guild {GUILD} and set the endpoint to {a.endpoint}.")
+        print(f"Would register /community{' /link /unlink /server' if a.roles else ''} in guild {GUILD} and set the endpoint to {a.endpoint}.")
     setup_apply(token, lambda m, path, b=None: call(token, m, path, b), a.apply)
     if not a.apply:
         print("Nothing changed. Add --apply to do it.")
