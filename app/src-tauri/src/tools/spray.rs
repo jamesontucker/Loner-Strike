@@ -273,8 +273,13 @@ pub fn restore(hl: &Path, app: &Path, game: &str) -> Result<Value, String> {
         return Err(format!("There's no earlier spray kept for {label}."));
     };
     let bytes = std::fs::read(&newest).map_err(|e| format!("Couldn't read the copy of your old spray: {e}"))?;
-    let lock = is_read_only(&dir.join(FILE));
+    // the old file as it was, writable too (QA4-T2 F3: a read-only one left behind made picking
+    // a spray in the game's Options fail without a word); the copy keeps the old file's mode
+    let lock = is_read_only(&newest);
     put(app, g, &dir, &bytes, lock, false)?;
+    if lock {
+        let _ = set_read_only(&newest, false);
+    }
     let _ = std::fs::remove_file(&newest);
     Ok(json!({"ok": true, "message": format!("Your previous spray is back in {label}.")}))
 }
@@ -718,6 +723,23 @@ mod tests {
         for g in ["cstrike", "czero"] {
             let _ = set_read_only(&hl.join(g).join(FILE), false);
         }
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// QA4-T2 F3: Put back gives the old file back as it was: a writable spray stays writable
+    /// after a read-only install, so the game's Options can change it again.
+    #[test]
+    fn put_back_restores_a_writable_spray_writable() {
+        let (root, hl, app) = temp("putback");
+        let p = hl.join("cstrike").join(FILE);
+        std::fs::write(&p, b"old spray").unwrap();
+        assert!(!is_read_only(&p));
+        install(&hl, &app, &photo(), &Choice::default(), &["cstrike".into()], true).unwrap();
+        assert!(is_read_only(&p));
+        restore(&hl, &app, "cstrike").unwrap();
+        assert_eq!(std::fs::read(&p).unwrap(), b"old spray");
+        assert!(!is_read_only(&p), "the old spray must be writable again");
+        assert!(backups(&app, "cstrike").is_empty(), "the kept copy is used up");
         std::fs::remove_dir_all(&root).ok();
     }
 
