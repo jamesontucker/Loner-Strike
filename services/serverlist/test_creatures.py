@@ -138,6 +138,23 @@ class Rules(unittest.TestCase):
             with self.subTest(kind=kind, path=bad), self.assertRaises(cm.Reject):
                 cm.check_package(["README.txt", bad], kind)
 
+    def test_strict_entry_names(self):
+        cm.check_package(["maps/de_a-b 2.bsp", "README.txt", "creatures/creatures.ini", "models/gb1/a_b.mdl"], "map")
+        bad = ["maps/a.bsp.", "maps/a.bsp ", "maps/dir./a.bsp", "maps/dir /a.bsp", "models/progra~1/a.mdl", "maps/de_dust~2.bsp",
+               "maps/con.bsp", "maps/CON", "models/Nul.mdl", "sound/com1/x.wav", "sound/lpt9.wav", "models/aux .mdl", "maps/conout$.bsp",
+               "maps/a(1).bsp", "maps/a;b.bsp", "maps/caf\u00e9.bsp", "maps/\u0130.bsp", "models/a\u200b.mdl"]
+        for n in bad:
+            with self.subTest(n=n), self.assertRaises(cm.Reject):
+                cm.check_package(["README.txt", n], "map")
+        # (com0, lpt10, console and con_x are ordinary names)
+        cm.check_package(["maps/com0.bsp", "maps/lpt10.bsp", "maps/console.bsp", "maps/con_x.bsp"], "map")
+        # twins: case, and the same letters composed or not (non-ASCII never passes, so neither twin does)
+        for twins in (["maps/A.bsp", "maps/a.bsp"], ["MAPS/a.bsp", "maps/a.bsp"], ["maps/caf\u00e9.bsp", "maps/cafe\u0301.bsp"],
+                      ["maps/\u00c9.bsp", "maps/\u00e9.bsp"]):
+            with self.subTest(twins=twins), self.assertRaises(cm.Reject):
+                cm.check_package(twins, "map")
+        self.assertTrue(cm._outer_name_ok("de_dust2 (fixed).zip"), "the page's own file name keeps the wider set")
+
     def test_items(self):
         it = cm.clean_item(creature_item())
         self.assertEqual(it["creatures"], [{"name": "gb1001.runner_x", "model": True, "sounds": 2}, {"name": "gb1001.boss_y", "model": False, "sounds": 0}])

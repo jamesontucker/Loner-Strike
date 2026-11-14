@@ -807,18 +807,41 @@ def package_names(f, get=range_get):
     return list(read_package(f, get)[0])
 
 
-_PART = re.compile(r"^[A-Za-z0-9 _.\-()+!#&',]{1,64}$")
+# a path part the app's strict archive rule takes: plain ASCII letters, digits, _ . space and -
+_PART = re.compile(r"^[A-Za-z0-9 _.\-]{1,64}$")
+# an 8.3 short name ("progra~1"): Windows could resolve it to another file
+_SHORT_NAME = re.compile(r"~[0-9]")
+# names Windows keeps for devices, with or without an extension (setup/record.rs windows_unsafe)
+_DEVICE = re.compile(r"^(con|prn|aux|nul|conin\$|conout\$|com[1-9]|lpt[1-9])$")
+
+
+# the page's own file (the zip as GameBanana names it; never installed by that name) keeps the
+# installer's older, wider set
+_OUTER = re.compile(r"^[A-Za-z0-9 _.\-()+!#&',]{1,128}$")
+
+
+def _outer_name_ok(name):
+    return isinstance(name, str) and "/" not in name and "\\" not in name and not name.startswith(".") \
+        and not name.endswith((" ", ".")) and bool(_OUTER.match(name))
+
+
+def _part_ok(p):
+    stem = p.split(".", 1)[0].rstrip(" ").lower()
+    return not (p in ("", ".", "..") or p.startswith(".") or p.endswith((" ", ".")) or not _PART.match(p)
+                or _SHORT_NAME.search(p) or _DEVICE.match(stem))
 
 
 def norm_path(name):
     """A package path made plain (lower case, '/'), or None when it isn't one the app's
     installer would write: backslashes, '..', empty or dot parts, NUL, trailing dots or spaces,
-    or any character outside the installer's own set (content.rs safe_part)."""
+    any character outside plain ASCII letters, digits, _ . space and -, 8.3 short names (x~1)
+    and Windows device names (CON, NUL, COM1..., with or without an extension). Twins are
+    compared lower-cased (check_package)."""
     if not isinstance(name, str) or "\\" in name or "\x00" in name or name.startswith("/") or len(name) > 255:
         return None
     parts = name[:-1].split("/") if name.endswith("/") else name.split("/")
     for p in parts:
-        if p in ("", ".", "..") or p.startswith(".") or p.endswith((" ", ".")) or not _PART.match(p):
+        if not _part_ok(p):
             return None
     return "/".join(parts).lower() + ("/" if name.endswith("/") else "")
 
@@ -1906,7 +1929,7 @@ class Community:
     def _entry(self, model, gb, facts, f):
         """The entry for one of the page's files after the file and package checks."""
         file_ok(f)
-        if norm_path(f["name"]) is None:
+        if not _outer_name_ok(f["name"]):
             raise Reject(422, "The file's name isn't one the app would install. Upload the zip the app made, unchanged.")
         # only a couple of packages are looked into at once (memory on a small box)
         if not self.pkg_slots.acquire(timeout=0.5):
