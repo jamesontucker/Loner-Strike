@@ -5156,6 +5156,10 @@ new const Float:W3_VEST_F[4] = { 1.0, 1.0, 0.85, 0.7 };
 /* a helmet takes this much of head hits before it breaks; the share that gets through */
 new const Float:W3_HELM_HP[4] = { 0.0, 100.0, 150.0, 200.0 };
 new const Float:W3_HELM_F[4] = { 1.0, 0.7, 0.6, 0.45 };
+/* scarce ammo */
+new g_w3cAmmoScarce, g_w3cAmmoMags;
+/* every gun that takes ammo (primaries and pistols) */
+#define W3_GUN_IDS ((1 << CSW_SCOUT) | (1 << CSW_XM1014) | (1 << CSW_MAC10) | (1 << CSW_AUG) | (1 << CSW_UMP45) | (1 << CSW_SG550) | (1 << CSW_GALIL) | (1 << CSW_FAMAS) | (1 << CSW_AWP) | (1 << CSW_MP5NAVY) | (1 << CSW_M249) | (1 << CSW_M3) | (1 << CSW_M4A1) | (1 << CSW_TMP) | (1 << CSW_G3SG1) | (1 << CSW_SG552) | (1 << CSW_AK47) | (1 << CSW_P90) | (1 << CSW_P228) | (1 << CSW_ELITE) | (1 << CSW_FIVESEVEN) | (1 << CSW_USP) | (1 << CSW_GLOCK18) | (1 << CSW_DEAGLE))
 
 stock w3_natives()
 {
@@ -5192,6 +5196,9 @@ stock w3_init()
 	/* 1: vests and helmets come in levels 1-3 (vest1..3, helmet1..3 as loot) */
 	g_w3cArmorLevels = register_cvar("ls_armor_levels", "0");
 	g_w3fwArmor = CreateMultiForward("ls_on_armor", ET_IGNORE, FP_CELL, FP_CELL, FP_CELL);
+	/* 1: ammo is loot: a gun found comes with its magazine and ls_ammo_mags more, "ammo" gives 2 magazines */
+	g_w3cAmmoScarce = register_cvar("ls_ammo_scarce", "0");
+	g_w3cAmmoMags = register_cvar("ls_ammo_mags", "1");
 	RegisterHamPlayer(Ham_TraceAttack, "ham_w3_trace");
 	g_w3Hooked = true;
 }
@@ -5550,6 +5557,9 @@ stock w3_give(id, const item[])
 	new r = w3_give_armor(id, item);
 	if (r >= 0)
 		return r;
+	r = w3_give_ammo(id, item);
+	if (r >= 0)
+		return r;
 	return w3_give_heal(id, item);
 }
 
@@ -5581,6 +5591,9 @@ stock w3_can_take(id, const item[])
 	new r = w3_can_take_armor(id, item);
 	if (r >= 0)
 		return r;
+	r = w3_can_take_ammo(id, item);
+	if (r >= 0)
+		return r;
 	new kind = w3_heal_kind(item);
 	if (kind >= 0)
 		return !get_pcvar_num(g_w3cHealCarry) || g_w3Heals[id][kind] < w3_heal_limit(kind);
@@ -5598,6 +5611,11 @@ stock bool:w3_item_model(const item[], out[], len)
 	if (part >= 0)
 	{
 		copy(out, len, part == 0 ? "models/w_kevlar.mdl" : "models/w_assault.mdl");
+		return true;
+	}
+	if (equali(item, "ammo:", 5))
+	{
+		copy(out, len, "models/w_9mmarclip.mdl");
 		return true;
 	}
 	return false;
@@ -5894,6 +5912,102 @@ public n_w3_armor_get(plugin, params)
 	return is_user_alive(id) ? get_user_armor(id) : 0;
 }
 
+/* ---- scarce ammo: reserve ammo is loot ---- */
+
+/* the spare rounds a gun found on the floor or in a crate comes with */
+stock w3_found_reserve(csw)
+{
+	if (!get_pcvar_num(g_w3cAmmoScarce))
+		return ammo_full(csw) / 2;
+	new clip = cs_get_weapon_info(csw, CS_WEAPONINFO_GUN_CLIP_SIZE);
+	return min(floatround(float(clip) * floatmax(get_pcvar_float(g_w3cAmmoMags), 0.0)), ammo_full(csw));
+}
+
+/* "762", "556", "9mm", "45", "338", "57", "50", "357", "12g", "box" or a weapon name -> a gun that uses it */
+stock w3_caliber_csw(const cal[])
+{
+	static const NAMES[][] = { "9mm", "45", "45acp", "556", "762", "338", "57", "50", "50ae", "357", "12g", "buckshot", "box", "556box" };
+	static const CSWS[] = { CSW_GLOCK18, CSW_USP, CSW_USP, CSW_M4A1, CSW_AK47, CSW_AWP, CSW_P90, CSW_DEAGLE, CSW_DEAGLE, CSW_P228, CSW_M3, CSW_M3, CSW_M249, CSW_M249 };
+	for (new i = 0; i < sizeof NAMES; i++)
+		if (equali(cal, NAMES[i]))
+			return CSWS[i];
+	new w[32];
+	weapon_name(cal, w, charsmax(w));
+	new csw = get_weaponid(w);
+	return (1 << csw) & (W3_GUN_IDS) ? csw : 0;
+}
+
+/* "ammo:762" (two magazines' worth) or "ammo:762:60" -> the gun and the rounds */
+stock w3_ammo_typed(const item[], &rounds)
+{
+	new cal[16], n[12];
+	copyc(cal, charsmax(cal), item[5], ':');
+	new c = contain(item[5], ":");
+	n[0] = EOS;
+	if (c >= 0)
+		copy(n, charsmax(n), item[5 + c + 1]);
+	new csw = w3_caliber_csw(cal);
+	if (!csw)
+		return 0;
+	rounds = n[0] ? str_to_num(n) : 2 * cs_get_weapon_info(csw, CS_WEAPONINFO_GUN_CLIP_SIZE);
+	return csw;
+}
+
+stock w3_give_ammo(id, const item[])
+{
+	if (equali(item, "ammo:", 5))
+	{
+		new rounds, csw = w3_ammo_typed(item, rounds);
+		if (!csw)
+			return 0;
+		new have = cs_get_user_bpammo(id, csw);
+		if (have >= ammo_full(csw))
+			return 0;
+		cs_set_user_bpammo(id, csw, min(have + rounds, ammo_full(csw)));
+		emit_sound(id, CHAN_ITEM, "items/ammopickup1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+		return 1;
+	}
+	if (!equali(item, "ammo") || !get_pcvar_num(g_w3cAmmoScarce))
+		return -1;
+	/* scarce: two magazines for each gun carried */
+	new weapons[32], n, got = 0;
+	get_user_weapons(id, weapons, n);
+	for (new i = 0; i < n; i++)
+	{
+		new csw = weapons[i];
+		if (!((1 << csw) & (W3_GUN_IDS)))
+			continue;
+		new have = cs_get_user_bpammo(id, csw);
+		if (have >= ammo_full(csw))
+			continue;
+		cs_set_user_bpammo(id, csw, min(have + 2 * cs_get_weapon_info(csw, CS_WEAPONINFO_GUN_CLIP_SIZE), ammo_full(csw)));
+		got++;
+	}
+	if (got)
+		emit_sound(id, CHAN_ITEM, "items/ammopickup1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+	return got ? 1 : 0;
+}
+
+/* ammo is worth taking for a gun you carry that isn't full ("ammo:x" lies there for the gun's owner) */
+stock w3_can_take_ammo(id, const item[])
+{
+	new bool:typed = equali(item, "ammo:", 5) != 0;
+	if (!typed && (!equali(item, "ammo") || !get_pcvar_num(g_w3cAmmoScarce)))
+		return -1;
+	new rounds, want = typed ? w3_ammo_typed(item, rounds) : 0;
+	new weapons[32], n;
+	get_user_weapons(id, weapons, n);
+	for (new i = 0; i < n; i++)
+	{
+		new csw = weapons[i];
+		if (!((1 << csw) & (W3_GUN_IDS)) || cs_get_user_bpammo(id, csw) >= ammo_full(csw))
+			continue;
+		if (!typed || cs_get_weapon_info(csw, CS_WEAPONINFO_AMMO_TYPE) == cs_get_weapon_info(want, CS_WEAPONINFO_AMMO_TYPE))
+			return 1;
+	}
+	return 0;
+}
+
 /* ==== end W3 ==== */
 
 /* =========================================================================
@@ -6149,7 +6263,7 @@ stock give_thing(id, const item[])
 	if (!give_item(id, w))
 		return 0;
 	if ((1 << csw) & (PRIMARY_IDS | SECONDARY_IDS))
-		cs_set_user_bpammo(id, csw, max(cs_get_user_bpammo(id, csw), ammo_full(csw) / 2));
+		cs_set_user_bpammo(id, csw, max(cs_get_user_bpammo(id, csw), w3_found_reserve(csw))); /* W3 */
 	emit_sound(id, CHAN_ITEM, "items/gunpickup2.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
 	return 1;
 }

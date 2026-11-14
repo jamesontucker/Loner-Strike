@@ -347,4 +347,12 @@ A vest that runs out of armor points is gone (level 0); so is a helmet. A higher
 over a lower one, the same level only when yours is half gone. Levels off: `vestN`/`helmetN` are plain
 armor. Natives `ls_armor_set(id, vest, helmet)` (-1 keeps one), `ls_armor_get(id, &vest, &helmet)`
 (returns armor points); forward `ls_on_armor(id, vest, helmet)`. Bots see the armor points as usual.
+
+### Scarce ammo
+`ls_ammo_scarce 1`: a gun found on a spawner or in a crate comes with its magazine and `ls_ammo_mags` (1)
+more; the loot item `ammo` gives two magazines for each gun carried (taken only by someone with a gun that
+isn't full). Typed ammo, any time: `ammo:762`, `ammo:556`, `ammo:9mm`, `ammo:45`, `ammo:338`, `ammo:57`,
+`ammo:50`, `ammo:357`, `ammo:12g`, `ammo:box` (M249) or `ammo:<weapon>` (two magazines' worth),
+`ammo:762:60` for 60 rounds; reserve ammo is kept per type even without the gun, as in the game.
+No natives of its own: `ls_give_item(id, "ammo:762")`.
 <!-- ==== end W3 ==== -->

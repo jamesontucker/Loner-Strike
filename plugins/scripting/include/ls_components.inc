@@ -440,4 +440,9 @@ native ls_armor_set(id, vest, helmet);
 native ls_armor_get(id, &vest, &helmet);
 /** A player's armor levels changed (picked up, set, or one broke: level 0). */
 forward ls_on_armor(id, vest, helmet);
+
+/* Scarce ammo (cvar ls_ammo_scarce 1): a gun found (spawner, crate) comes with its magazine and ls_ammo_mags
+ * more (1); the loot item "ammo" gives two magazines for each gun carried. Typed ammo works either way:
+ * "ammo:762", "ammo:556", "ammo:9mm", "ammo:45", "ammo:338", "ammo:57", "ammo:50", "ammo:357", "ammo:12g",
+ * "ammo:box" (M249) or "ammo:<weapon>", two magazines' worth, or "ammo:762:60" for 60 rounds (ls_give_item). */
 /* ==== end W3 ==== */
