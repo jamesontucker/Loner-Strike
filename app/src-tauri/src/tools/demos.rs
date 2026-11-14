@@ -416,6 +416,35 @@ fn find(places: &[Place], at: &str, name: &str) -> Option<(Place, PathBuf)> {
     Some((p.clone(), path))
 }
 
+/// Whether HLTV recorded this demo (rather than a player): the slot the demo was recorded from (the
+/// player number in svc_serverinfo) is the one whose userinfo (svc_updateuserinfo: 13, u8 slot, i32
+/// user id, the string) has `\*hltv\`. Looked for in the first part of the file, where both are
+/// sent; a player's demo on a server with an HLTV has that HLTV in another slot.
+fn recorded_by_hltv(head: &[u8]) -> bool {
+    let Some(at) = head.windows(5).position(|w| w == [11, 48, 0, 0, 0]) else { return false };
+    let Some(&me) = head.get(at + 1 + 29) else { return false };
+    let key: &[u8] = b"\\*hltv\\";
+    let mut i = 0;
+    while let Some(k) = head[i..].windows(key.len()).position(|w| w == key).map(|k| i + k) {
+        let start = head[..k].iter().rposition(|&c| c == 0).map_or(0, |z| z + 1);
+        if start >= 6 && head[start - 6] == 13 && head[start - 5] == me {
+            return true;
+        }
+        i = k + 1;
+    }
+    false
+}
+
+/// The start of a demo file, for `recorded_by_hltv`.
+fn head_of(path: &Path) -> Vec<u8> {
+    let mut buf = Vec::new();
+    if let Ok(f) = std::fs::File::open(path) {
+        let _ = f.take(HEAD_BYTES).read_to_end(&mut buf);
+    }
+    buf
+}
+const HEAD_BYTES: u64 = 256 * 1024;
+
 fn header_of(path: &Path) -> Result<Header, String> {
     let mut f = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let len = f.metadata().map(|m| m.len()).unwrap_or(0);
@@ -442,6 +471,7 @@ fn list(places: &[Place]) -> Value {
                                    "name": name, "size": meta.len(), "modified": when, "playable": playable_name(&name), "safeName": safe_rename(&name)});
                 match header_of(&f.path()) {
                     Ok(h) => {
+                        v["byHltv"] = json!(recorded_by_hltv(&head_of(&f.path())));
                         v["map"] = json!(h.map);
                         v["seconds"] = json!(h.seconds());
                         v["protocol"] = json!(h.net_protocol);
@@ -474,6 +504,7 @@ fn detail(path: &Path) -> Result<Value, String> {
         Details { problem: Some("This demo is too big to look inside.".into()), ..Default::default() }
     };
     let pov = d.path.iter().filter(|s| !s.spectator).count();
+    let by_hltv = recorded_by_hltv(&head_of(path));
     Ok(json!({
         "map": h.map, "game": h.game, "protocol": h.net_protocol, "demoProtocol": h.demo_protocol,
         "seconds": h.seconds(),
@@ -481,7 +512,9 @@ fn detail(path: &Path) -> Result<Value, String> {
         "names": d.names, "server": d.server, "maxPlayers": d.max_players,
         "frames": d.frames, "problem": d.problem, "cutShort": h.cut_short(),
         // a path worth replaying: the recorder was playing, not spectating, for a while
-        "canReplay": pov >= 10,
+        // (HLTV's recording: the recorder watched, it didn't play)
+        "canReplay": pov >= 10 && !by_hltv,
+        "byHltv": by_hltv,
     }))
 }
 
@@ -649,7 +682,7 @@ fn to_replay(places: &[Place], at: &str, name: &str) -> Result<Value, String> {
     }
     let h = read_header(&mut f, len)?;
     let d = scan(&mut f, &h);
-    if d.path.iter().filter(|s| !s.spectator).count() < 10 {
+    if d.path.iter().filter(|s| !s.spectator).count() < 10 || recorded_by_hltv(&head_of(&path)) {
         return Err("This demo has no player walking around in it (an HLTV demo follows a camera, not a player).".into());
     }
     let who = d.names.first().cloned().unwrap_or_else(|| "You".into());
@@ -950,6 +983,21 @@ mod tests {
     #[test]
     fn names_are_checked() {
         assert!(safe_name("my demo.dem") && safe_name("hltv-2611061830-de_dust2.dem") && safe_name("A.DEM"));
+        // recorded by HLTV: the demo's own slot (player number 2 in serverinfo) is the *hltv one
+        let info = |me: u8| {
+            let mut b = vec![11u8];
+            b.extend(48i32.to_le_bytes());
+            b.extend([0u8; 4 + 4 + 16]);
+            b.extend([20u8, me, 0]);
+            b.extend(b"cstrike\0Test\0maps/de_dust2.bsp\0\0");
+            b.extend(b"\x0d\x01\x02\x00\x00\x00\\*bot\\1\\name\\Bob\0");
+            b.extend(b"\x0d\x02\x03\x00\x00\x00\\cl_lw\\1\\*hltv\\1\\name\\My TV\0");
+            b
+        };
+        assert!(recorded_by_hltv(&info(2)));
+        // a player's demo (slot 1) on a server with an HLTV (slot 2)
+        assert!(!recorded_by_hltv(&info(1)));
+        assert!(!recorded_by_hltv(b"HLDEMO"));
         assert!(!safe_name("../x.dem") && !safe_name("a/b.dem") && !safe_name(".dem") && !safe_name("x.txt") && !safe_name("a\u{7}.dem"));
         assert!(playable_name("my_demo-1.dem") && playable_name("TopFrag-DUST2only.dem") && playable_name("my demo.dem"));
         for bad in ["a\";quit.dem", "a;quit.dem", "../x.dem", "x\u{122}; quit.dem", "x\u{13B}.dem", "x\u{FF02}.dem", "a'b.dem", "a\nb.dem", "caf\u{e9}.dem"] {

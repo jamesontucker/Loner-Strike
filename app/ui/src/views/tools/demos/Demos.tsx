@@ -347,7 +347,7 @@ function Row({ d, map, on, gameOpen, acts, onPick, onKey }: { d: Demo; map?: Map
           <button type="button" className="dm-act" disabled={off || !!d.error || !!d.problem || !d.playable} aria-label={`Watch ${d.name}`} title={d.problem ? d.problem : !d.playable ? "Rename it to a plain name first" : gameOpen ? "How to watch it (the game is open)" : "Watch"} onClick={stop(() => acts.play(d))}>
             {mine === "play" ? <span className="spinner" /> : <Icon d={PLAY} />}
           </button>
-          {!d.hltv && !d.error && (
+          {!d.hltv && !d.byHltv && !d.error && (
             <button type="button" className="dm-act" disabled={off} aria-label={`Show my path in Replay from ${d.name}`} title="Show my path in Replay" onClick={stop(() => acts.replay(d))}>
               {mine === "replay" ? <span className="spinner" /> : <Icon d={PATH} />}
             </button>

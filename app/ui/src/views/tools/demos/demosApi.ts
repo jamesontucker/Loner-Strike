@@ -8,6 +8,8 @@ export type Demo = {
   where: string;
   game: string;
   hltv: boolean;
+  /** recorded by HLTV (wherever it is now): the recorder watched, so there's no path of its own */
+  byHltv?: boolean;
   name: string;
   size: number;
   modified: number;
