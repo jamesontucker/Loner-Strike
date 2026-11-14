@@ -1120,3 +1120,9 @@ warning, tests): I left those hunks and every_node_3's snapshots out of my commi
   with Height 100. **A finding for you:** on the CrossOver sim the tick task ran about every 0.1 s, not 0.05, and the
   playhead advances by `tick` per call, so a 3 s Timeline took about 6 s of game time. Advancing by the real time
   since the last call (get_gametime delta, clamped) would keep Timelines on time on a slow server.
+- **X2 takes (2026-11-13, user-approved):** (1) **live tweaks while playtesting** (edit a variable's value in the
+  debugger: debug_runtime.pawn command, a gen.rs set-var hook in debug builds, debug.rs/studioApi command, the
+  DebugPanel UI, "Use as start value"); (2) **Data tables** (`dataTables` in the graph: schema.ts + graph.rs, the
+  nodes Get Row, Get Cell, For Each Row, Find Rows, Row Count, Row Keys, a My mode section and grid editor).
+  **Schema overlap with your Mode settings:** I'll add one optional top-level key `dataTables` to schema.ts and
+  graph.rs's Graph, nothing else; please add yours as its own key too and we'll both keep hunks small.
