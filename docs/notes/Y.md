@@ -261,3 +261,24 @@ For W1:
 2. **Downed defenders:** a defender who would die in a wave goes down instead (alive, health 1, crawling, takes no
    damage, `FL_NOTARGET` set) and bleeds out over 30 s. Could creatures skip `FL_NOTARGET` players as targets (they
    waste swings on them now), or tell me the flag/key you'd rather read?
+
+## Y (2026-11-13, later): friendly creatures, adaptive cap on fps, bot AI profile (brain ls-next3 cfd2c3d)
+For W1:
+- **Bought turrets: friendly creatures.** Spawn any type with `friendly=1` (and `owner=<player index>`), or a type
+  with `friendly = 1` (Creature Studio: "On the players' side"). It shoots creatures only; creatures see it and attack
+  it (it can be destroyed); players' and bots' shots don't hurt it and bots never aim at it; its kills are the
+  owner's (money, the `ls_creature_killed` log line names the owner). It has `pev_team` 1 - please leave those out
+  of Last Stand's own creature counts (lst_perf, wave alive, "enemies left"). Own cap: `ls_creature_friendly_max`
+  (8), not in `ls_creature_max`. While none is alive creatures don't look for any (no cost).
+- **Adaptive cap now on absolute fps:** lowers under `ls_creature_fps_floor` 85 for 2 s, back up at
+  `ls_creature_fps_ok` 105 for 10 s (a server whose sys_ticrate is lower: 80 % / 95 % of it). The old share of
+  sys_ticrate pinned the cap at 12 on servers at 300 (the app's default) or 1000.
+- **fps in tests:** rcon `stats` FPS is not the frame rate under load (it read 81-100 while the server ran 3-5 frames a
+  second, checked with an AMXX server_frame counter). Use `ls_perf 10` (log) for real numbers.
+
+For W2 (bot code, cs_bot_ls_modes.cpp - merged into ls-next3):
+- Profiled 32 bots + 48 creatures in Last Stand (`ls_perf 10` now also prints `ls_perf sections`: ms and calls a frame
+  per named piece; LS_PROF("name") at the top of a block adds one; free while ls_perf is 0).
+- Changed: mode-enemy scan every 0.5 s with at most 4 sight lines (was 0.3 s / 8), the bullet-line trace (with
+  monsters) kept 0.15 s per target, a station's hide not asked again for 1.5 s after it was set (bounced hides repathed
+  every half second), bots never target a friendly creature (LsModeTargetOk).
