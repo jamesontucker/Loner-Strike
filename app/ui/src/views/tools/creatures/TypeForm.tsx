@@ -228,7 +228,7 @@ export function TypeForm({ t, isNew, builtin, limits, problems, checked, look, o
         </>
       ))}
 
-      {sec("Behavior", BEHAVIOUR_WORDS[t.behaviour]?.label ?? t.behaviour, ["behaviour", "radius", "target", "hates", "flee_hp", "respawn", "corpse_time"], (
+      {sec("Behavior", BEHAVIOUR_WORDS[t.behaviour]?.label ?? t.behaviour, ["behaviour", "radius", "target", "hates", "friendly", "flee_hp", "respawn", "corpse_time"], (
         <>
           <Field name="Does" note={BEHAVIOUR_WORDS[t.behaviour]?.help} problems={p("behaviour")}>
             <select value={t.behaviour} aria-label="Behavior" onChange={(e) => set("behaviour", e.target.value)}>
@@ -253,9 +253,14 @@ export function TypeForm({ t, isNew, builtin, limits, problems, checked, look, o
               ))}
             </select>
           </Field>
-          <Field name="Enemies" note="Modes can set this per creature" problems={p("hates")}>
-            <Segmented label="Enemies" values="all t ct" labels={Object.values(HATES_WORDS).join("|")} current={t.hates} onPick={(v) => set("hates", v)} />
+          <Field name="On the players' side" note={t.friendly ? "Shoots creatures only; creatures attack it, players and bots never do (a bought turret). Modes can also spawn any type with friendly=1" : "Off: an enemy, like the rest"} problems={p("friendly")}>
+            <Switch on={t.friendly} onChange={(v) => set("friendly", v)} label="Friendly" />
           </Field>
+          {!t.friendly && (
+            <Field name="Enemies" note="Modes can set this per creature" problems={p("hates")}>
+              <Segmented label="Enemies" values="all t ct" labels={Object.values(HATES_WORDS).join("|")} current={t.hates} onPick={(v) => set("hates", v)} />
+            </Field>
+          )}
           <Field name="Runs when hurt" note={t.flee_hp > 0 ? `Below ${Math.round(t.flee_hp * 100)}% health, then comes back` : "Never runs"} problems={p("flee_hp")}>
             <Num value={Math.round(t.flee_hp * 100)} onChange={(v) => set("flee_hp", v / 100)} min={0} max={100} unit="%" label="Runs when hurt" />
           </Field>

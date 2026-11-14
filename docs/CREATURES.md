@@ -223,9 +223,14 @@ Cvars: `ls_creature_ver` (1, for detection), `ls_creature_file`, `ls_creature_pr
 `ls_creature_budget`, `ls_creature_debug` (1 beams for mode/target, 2 path debug, 3 console lines), `ls_creature_last`,
 `ls_creature_alive`, `ls_creature_frags` (0: kills don't add score).
 
-**Adaptive live cap.** `ls_creature_adaptive 1` (default): every second the server's frame rate is measured against
-`sys_ticrate`. Under `ls_creature_fps_low` (0.6 of it, or an fps when > 1) for 2 seconds, the live cap drops to a little
-under what's alive (by at least 4, never under 12); at `ls_creature_fps_ok` (0.85) or better for 10 seconds it creeps
+**Friendly creatures (bought turrets).** Type key `friendly = 1`, or spawn keys `friendly=1` and `owner=<player
+index>`: on the players' side. It attacks creatures only, creatures see and attack it (it can be destroyed), players'
+and bots' shots don't hurt it and bots never aim at it, and its kills count as the owner's (money, log line). It has
+`pev_team` 1 for plugins, and its own cap: `ls_creature_friendly_max` (8), apart from `ls_creature_max`. While none is
+alive, creatures don't look for any (no extra cost).
+
+**Adaptive live cap.** `ls_creature_adaptive 1` (default): every second the server's frame rate is measured. Under `ls_creature_fps_floor` (85 fps; or 80 % of a lower tick rate) for 2 seconds, the live cap drops to a little
+under what's alive (by at least 4, never under 12); at `ls_creature_fps_ok` (105; or 95 % of a lower tick rate) or better for 10 seconds it creeps
 back up by 4, never past `ls_creature_max`. Spawns past it wait (wave spawners retry), nobody is removed, difficulty
 is untouched. `ls_creature_cap_now` shows it; changes are logged. `ls_perf N` writes a line every N seconds: fps (avg,
 worst second, worst frame), the cap now, creature and bot think time a frame, edicts, and how many entities each living

@@ -48,7 +48,7 @@ pub const KEYS: &[&str] = &[
     "attack_rate", "attack_delay", "spread", "flee_hp", "behaviour", "radius", "target", "hates", "respawn", "corpse_time", "moves", "frags", "money",
     "model", "skin", "body", "scale", "hull_min", "hull_max", "glow", "fallback_glow", "blood", "anim_idle", "anim_walk", "anim_run", "anim_attack",
     "anim_flinch", "anim_die", "snd_idle", "snd_alert", "snd_attack", "snd_hit", "snd_miss", "snd_pain", "snd_die",
-    "enrage_below", "enrage_speed", "enrage_damage", "enrage_anim", "tier2_skin", "tier2_body", "tier2_hp", "tier3_skin", "tier3_body", "tier3_hp",
+    "friendly", "enrage_below", "enrage_speed", "enrage_damage", "enrage_anim", "tier2_skin", "tier2_body", "tier2_hp", "tier3_skin", "tier3_body", "tier3_hp",
 ];
 
 /// Numbers and the range the fork keeps them in (LsSetTypeKey).
@@ -125,6 +125,9 @@ pub struct Creature {
     pub respawn: f32,
     pub corpse_time: f32,
     pub moves: bool,
+    /// on the players' side (a bought turret): attacks creatures only; creatures attack it,
+    /// players and bots don't
+    pub friendly: bool,
     pub frags: i32,
     pub money: i32,
     /// candidates, space separated: the first file that exists wins
@@ -190,6 +193,7 @@ pub fn defaults(name: &str) -> Creature {
         respawn: 0.0,
         corpse_time: 8.0,
         moves: true,
+        friendly: false,
         frags: 1,
         money: 0,
         model: "models/zombie.mdl models/hostage.mdl".into(),
@@ -649,6 +653,7 @@ fn set_key(t: &mut Creature, key: &str, value: &str) {
         "respawn" => t.respawn = n(t.respawn, "respawn"),
         "corpse_time" => t.corpse_time = n(t.corpse_time, "corpse_time"),
         "moves" => t.moves = atoi(value) != 0,
+        "friendly" => t.friendly = atoi(value) != 0,
         "frags" => t.frags = atoi(value).clamp(-100, 100),
         "money" => t.money = atoi(value).clamp(-16000, 16000),
         "model" | "models" => t.model = cut(value, MAX_MODELS),
@@ -772,6 +777,7 @@ impl Creature {
             "respawn" => fmt_num(self.respawn),
             "corpse_time" => fmt_num(self.corpse_time),
             "moves" => (if self.moves { "1" } else { "0" }).into(),
+            "friendly" => (if self.friendly { "1" } else { "0" }).into(),
             "frags" => self.frags.to_string(),
             "money" => self.money.to_string(),
             "model" => self.model.clone(),
@@ -1218,11 +1224,13 @@ pub fn summary(t: &Creature) -> String {
     let mut s = String::new();
     let tough = if t.hp >= 1500.0 { "a boss-tough" } else if t.hp >= 300.0 { "a tough" } else if t.hp <= 60.0 { "a fragile" } else { "an average" };
     let what = if !t.moves { "turret" } else { t.category.as_str() };
-    s.push_str(&format!("{tough} {what}"));
+    s.push_str(&format!("{tough} {}{what}", if t.friendly { "friendly " } else { "" }));
     if t.moves {
         s.push_str(&format!(", {} on its feet", speed(t.speed)));
     }
-    let mood = if t.aggression >= 0.8 {
+    let mood = if t.friendly {
+        "on the players' side: shoots the creatures it notices"
+    } else if t.aggression >= 0.8 {
         "attacks anyone it notices"
     } else if t.aggression > 0.0 {
         "attacks whoever comes close"

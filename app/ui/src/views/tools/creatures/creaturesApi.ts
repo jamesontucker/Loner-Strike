@@ -33,6 +33,8 @@ export type Creature = {
   respawn: number;
   corpse_time: number;
   moves: boolean;
+  /** on the players' side (a bought turret): attacks creatures only */
+  friendly: boolean;
   frags: number;
   money: number;
   model: string;
