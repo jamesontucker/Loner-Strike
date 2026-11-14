@@ -2370,7 +2370,7 @@ pub fn live(g: &crate::game::Game) -> Value {
                 .lines()
                 .filter_map(|l| {
                     let name = l.split_whitespace().next()?;
-                    (name_problem(name).is_none() || builtin(name).is_some()).then(|| json!({"name": name, "precached": !l.contains("(not precached)"), "standIn": l.contains("(stand-in)")}))
+                    (name_problem(name).is_none() || builtin(name).is_some() || super::creaturepack::is_shared_name(name)).then(|| json!({"name": name, "precached": !l.contains("(not precached)"), "standIn": l.contains("(stand-in)")}))
                 })
                 .collect();
             let list = g.rcon.send("ls_creature list").map(|x| reply_text(&x)).unwrap_or_default();
