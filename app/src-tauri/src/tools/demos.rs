@@ -186,7 +186,11 @@ fn names_in(msg: &[u8], out: &mut Vec<String>) {
             let e = msg[s..].iter().position(|&c| c == b'\\' || c == 0).map(|k| s + k).unwrap_or(msg.len());
             let name = String::from_utf8(msg[s..e].to_vec()).unwrap_or_else(|_| crate::rcon::latin1(&msg[s..e]));
             let name = name.trim().to_string();
-            if !name.is_empty() && name.len() <= 64 && !out.contains(&name) && out.len() < MAX_NAMES {
+            // (HLTV's own slot, `\*hltv\1` in its userinfo, is the recorder, not a player)
+            let from = msg[..i].iter().rposition(|&c| c == 0).map_or(0, |k| k + 1);
+            let to = msg[e..].iter().position(|&c| c == 0).map_or(msg.len(), |k| e + k);
+            let hltv = msg[from..to].windows(7).any(|w| w == b"\\*hltv\\");
+            if !hltv && !name.is_empty() && name.len() <= 64 && !out.contains(&name) && out.len() < MAX_NAMES {
                 out.push(name);
             }
             i = e;
@@ -806,6 +810,8 @@ pub mod fixture {
         info.extend(b"cstrike\0My \"Test\" Server\0maps/de_dust2.bsp\0\0");
         info.extend(b"\x0d\x00\x01\x00\x00\x00\\model\\gign\\name\\Alice\\topcolor\\0\0");
         info.extend(b"\x0d\x01\x02\x00\x00\x00\\*bot\\1\\name\\[LS] Bob\0");
+        // HLTV's own slot (it records; it isn't a player)
+        info.extend(b"\x0d\x02\x03\x00\x00\x00\\cl_lw\\1\\*hltv\\1\\hdelay\\0\\name\\My TV\\model\\urban\0");
         net(&mut b, 100.0, 1, [0.0; 3], &info);
         frame(&mut b, 5, 100.1, 2);
         let load_len = b.len() - load_at;
