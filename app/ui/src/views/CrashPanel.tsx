@@ -34,7 +34,7 @@ export type Crash = {
   build?: Record<string, string>;
 };
 type Warning = { id: string; module: string; file?: string | null; message: string; fix: string };
-type Report = { last24h: number; total: number; crashes: Crash[]; warnings: Warning[]; capture: string; alerts: { discord: boolean; discordLinked: boolean }; error?: string };
+type Report = { last24h: number; total: number; crashes: Crash[]; warnings: Warning[]; capture: string; alerts: { discord: boolean; discordLinked: boolean; local?: boolean }; error?: string };
 type Summary = Record<string, { last24h: number; warnings: number }>;
 
 /** The crash counts of every server, for the badges: one request for the whole list. */
@@ -148,6 +148,22 @@ export function CrashPanel({ server }: { server: ServerInfo }) {
       setSaving(false);
     }
   };
+  // a local server's Discord channel (a server on a Linux machine links it in Website and Discord)
+  const [hook, setHook] = useState("");
+  const [linking, setLinking] = useState(false);
+  const link = async (url: string | null) => {
+    setLinking(true);
+    try {
+      const v = await postJson<Report>(`/api/servers/${server.id}/crashes/discord`, { url }).catch((): Report => ({ error: "Couldn't reach the app." }) as Report);
+      if (v.error) return toast(v.error, true);
+      setR(v);
+      setHook("");
+      toast(url ? "Linked. Now turn on Post crashes to Discord." : "The Discord channel is unlinked.");
+    } finally {
+      setLinking(false);
+    }
+  };
+  const local = r?.alerts.local ?? !server.host;
   const shown = r ? (all ? r.crashes : r.crashes.slice(0, 10)) : [];
   return (
     <div className="panel">
@@ -195,7 +211,11 @@ export function CrashPanel({ server }: { server: ServerInfo }) {
             <div>
               <b>Post crashes to Discord</b>
               <p className="muted small-note">
-                {r.alerts.discordLinked ? "New crashes go to the server's Discord status channel while Loner-Strike is running." : "Link the server's Discord status channel first (Website and Discord)."}
+                {r.alerts.discordLinked
+                  ? `New crashes go to ${local ? "the linked Discord channel" : "the server's Discord status channel"} while Loner-Strike is running.`
+                  : local
+                    ? "Paste a Discord channel's webhook link below first."
+                    : "Link the server's Discord status channel first (Website and Discord)."}
               </p>
             </div>
             {saving ? (
@@ -207,6 +227,27 @@ export function CrashPanel({ server }: { server: ServerInfo }) {
               <Switch on={r.alerts.discord} label="Post crashes to Discord" disabled={!r.alerts.discordLinked && !r.alerts.discord} onChange={(v) => void alerts(v)} />
             )}
           </div>
+          {local &&
+            (r.alerts.discordLinked ? (
+              <div className="row">
+                <span className="muted small-note">A Discord channel is linked.</span>
+                <BusyButton className="btn small" busy={linking} label="Unlink" busyLabel="Saving…" onClick={() => void link(null)} />
+              </div>
+            ) : (
+              <div className="row">
+                <input
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="https://discord.com/api/webhooks/…"
+                  aria-label="Discord webhook link"
+                  title="In Discord: Edit Channel, Integrations, Webhooks, New Webhook, Copy Webhook URL"
+                  value={hook}
+                  onChange={(e) => setHook(e.target.value)}
+                />
+                <BusyButton className="btn small" busy={linking} disabled={!hook.trim()} label="Link" busyLabel="Saving…" onClick={() => void link(hook)} />
+              </div>
+            ))}
         </>
       )}
     </div>

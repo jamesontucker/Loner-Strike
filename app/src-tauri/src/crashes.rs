@@ -13,6 +13,8 @@
 //!   GET  /api/servers/:id/crashes            the list, the 24-hour count, warnings, alerts
 //!   POST /api/servers/:id/crashes/alerts     {discord: bool}: post new crashes to the server's
 //!                                            Discord status channel (its "live" webhook)
+//!   POST /api/servers/:id/crashes/discord    {url | null}: a local server's channel for those
+//!                                            (a Linux one links it in Website and Discord)
 //!   GET  /api/crashes/summary                {id: {last24h, warnings}} from what's known (for
 //!                                            badges; stale ones are read again in the background)
 //! A watcher posts new crashes to Discord for servers that asked for it, while the app runs.
@@ -221,40 +223,171 @@ fn from_json(f: &Found) -> Option<Value> {
     Some(c)
 }
 
-/// The bot brain's own crash log (`ls_crash*.log`): time, exception, stack, last marks.
-fn from_log(f: &Found) -> Option<Value> {
-    let text = String::from_utf8_lossy(&f.bytes);
-    let mut fault = None;
-    let mut address = None;
-    let mut stack = vec![];
-    let mut marks = vec![];
-    let mut part = "";
-    for l in text.lines().take(400) {
-        let t = l.trim();
-        if let Some(rest) = t.strip_prefix("exception ") {
-            let mut w = rest.split_whitespace();
-            fault = w.next().map(String::from);
-            address = rest.split(" at ").nth(1).and_then(|a| a.split_whitespace().next()).map(String::from);
-        } else if t.starts_with("return addresses") {
-            part = "stack";
-        } else if t.starts_with("last marks") {
-            part = "marks";
-        } else if part == "stack" && t.starts_with("0x") {
-            stack.push(t.split_whitespace().skip(1).collect::<Vec<_>>().join(" "));
-        } else if part == "marks" && !t.is_empty() && marks.len() < 50 {
-            marks.push(t.split_whitespace().collect::<Vec<_>>().join(" "));
-        }
+/// "Fri Nov 13 00:51:39 2026" (C's ctime, the server's local time) as seconds since 1970 as if
+/// it were UTC.
+fn ctime_secs(line: &str) -> Option<u64> {
+    let w: Vec<&str> = line.split_whitespace().collect();
+    let [_, mon, day, hms, year] = w.as_slice() else { return None };
+    let mo = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].iter().position(|m| m == mon)? + 1;
+    let d: u32 = day.parse().ok()?;
+    let y: u32 = year.parse().ok()?;
+    if hms.len() != 8 {
+        return None;
     }
-    let fault = fault?;
-    let at_stop = address.as_deref() == Some(NOT_A_CRASH);
-    let module = stack.first().and_then(|s| s.split('+').next()).map(String::from);
+    iso_secs(&format!("{y:04}-{mo:02}-{d:02}T{hms}Z"))
+}
+
+/// The file name of a module path ("/home/x/cstrike/dlls/cs.so" or "C:\\x\\mp.dll").
+fn base_name(p: &str) -> &str {
+    p.rsplit(['/', '\\']).next().unwrap_or(p)
+}
+
+/// "module+0xoffset" of a Linux backtrace line ("/path/cs.so(_ZN4Func+0x12)[0xf1d2]"), or of
+/// a Windows one ("0x0a1b2c3d  mp.dll+0x1b2c3d").
+fn frame_text(t: &str) -> Option<String> {
+    if t.starts_with("0x") {
+        let rest = t.split_whitespace().skip(1).collect::<Vec<_>>().join(" ");
+        return (!rest.is_empty()).then_some(rest);
+    }
+    let (path, rest) = t.split_once('(')?;
+    let sym = rest.split(')').next().unwrap_or("");
+    let addr = t.rsplit('[').next().and_then(|a| a.strip_suffix(']')).unwrap_or("");
+    let m = base_name(path.trim());
+    Some(match sym {
+        "" => format!("{m} {addr}").trim().to_string(),
+        s if s.starts_with('+') => format!("{m}{s}"),
+        s => format!("{m} {s}"),
+    })
+}
+
+/// The bot brain's own crash log (`ls_crash*.log`): one entry per crash (the brain appends
+/// each to the same file): time, exception or signal, where, stack, last marks, map.
+fn from_log(f: &Found) -> Vec<Value> {
+    let text = String::from_utf8_lossy(&f.bytes);
+    let lines: Vec<&str> = text.lines().take(20_000).collect();
+    // an entry starts at its ctime line, just before "exception ..." / "signal ..."
+    let starts: Vec<usize> = (0..lines.len().saturating_sub(1))
+        .filter(|&i| {
+            let next = lines[i + 1].trim_start();
+            (next.starts_with("exception ") || next.starts_with("signal ")) && ctime_secs(lines[i]).is_some()
+        })
+        .collect();
+    let mut entries: Vec<(u64, Option<u64>, Value)> = vec![];
+    for (k, &start) in starts.iter().enumerate() {
+        let end = starts.get(k + 1).copied().unwrap_or(lines.len());
+        let local = ctime_secs(lines[start]).unwrap_or(0);
+        let mut unix = None;
+        let mut fault = None;
+        let mut address = None;
+        let mut map = None;
+        let mut module = None;
+        let mut offset = None;
+        let mut stack = vec![];
+        let mut marks = vec![];
+        let mut part = "";
+        for l in lines[start + 1..end].iter().take(400) {
+            let t = l.trim();
+            if let Some(rest) = t.strip_prefix("exception ") {
+                fault = rest.split_whitespace().next().map(String::from);
+                address = rest.split(" at ").nth(1).and_then(|a| a.split_whitespace().next()).map(String::from);
+            } else if let Some(rest) = t.strip_prefix("signal ") {
+                let n = rest.split_whitespace().next().unwrap_or("");
+                let name = match n {
+                    "11" => " (SIGSEGV)",
+                    "6" => " (SIGABRT)",
+                    "8" => " (SIGFPE)",
+                    "4" => " (SIGILL)",
+                    "7" => " (SIGBUS)",
+                    _ => "",
+                };
+                fault = Some(format!("signal {n}{name}"));
+                address = rest.split(" at ").nth(1).and_then(|a| a.split_whitespace().next()).map(String::from);
+            } else if let Some(v) = t.strip_prefix("unix time:") {
+                unix = v.trim().parse::<u64>().ok();
+            } else if let Some(v) = t.strip_prefix("map:") {
+                map = word(&json!(v.trim()), 32).filter(|m| m != "?");
+            } else if let Some(rest) = t.strip_prefix("where:") {
+                // Linux: "where: /path/cs.so (func+0x12), module base 0x..."; Windows: the next line
+                let rest = rest.trim();
+                if !rest.is_empty() {
+                    let (path, sym) = rest.split_once(" (").unwrap_or((rest, ""));
+                    module = Some(base_name(path).to_string());
+                    offset = sym.split(')').next().filter(|x| !x.is_empty() && *x != "?").map(String::from);
+                    part = "";
+                } else {
+                    part = "where";
+                }
+            } else if t.starts_with("return addresses") || t.starts_with("stack (") {
+                part = "stack";
+            } else if t.starts_with("last marks") {
+                part = "marks";
+            } else if part == "where" && t.starts_with("0x") {
+                if let Some((m, off)) = frame_text(t).as_deref().and_then(|x| x.split_once('+')) {
+                    module = Some(m.to_string());
+                    offset = Some(off.to_string());
+                }
+                part = "";
+            } else if part == "stack" && !t.is_empty() && stack.len() < 64 {
+                if let Some(x) = frame_text(t) {
+                    stack.push(x.chars().take(200).collect::<String>());
+                }
+            } else if part == "marks" && !t.is_empty() && marks.len() < 50 {
+                marks.push(t.split_whitespace().collect::<Vec<_>>().join(" "));
+            }
+        }
+        let Some(fault) = fault else { continue };
+        // the same fault written twice at once (older brains, on Windows): one crash
+        if let Some((l0, _, prev)) = entries.last() {
+            if *l0 == local && prev["address"].as_str() == address.as_deref() {
+                continue;
+            }
+        }
+        let at_stop = address.as_deref() == Some(NOT_A_CRASH);
+        // where it faulted; when that isn't in a module, the newest return address's
+        let module = module.or_else(|| stack.first().and_then(|s| s.split(['+', ' ']).next()).map(String::from));
+        entries.push((local, unix, json!({
+            "source": "bot brain's crash log", "file": f.rel, "kind": "crash", "map": map, "fault": fault, "address": address, "module": module, "offset": offset,
+            "stack": stack, "marks": marks, "lastLines": [], "atStop": at_stop,
+            "note": if at_stop { Some("This fault happens when a debugger attaches or the server is being stopped: not counted as a crash.") } else { None },
+        })));
+    }
+    // times: the entry's own UTC seconds (current brains); for older ones, its local time less
+    // the server's offset from UTC, which the newest entry and the file's time give (written at once)
+    let zone = entries.last().map(|(l, _, _)| {
+        let d = *l as i64 - f.mtime as i64;
+        (d as f64 / 900.0).round() as i64 * 900
+    });
     let name = f.rel.rsplit('/').next().unwrap_or(&f.rel);
-    Some(json!({
-        "id": name.trim_end_matches(".log"), "time": f.mtime, "when": shown(f.mtime), "source": "bot brain's crash log", "file": f.rel,
-        "kind": "crash", "fault": fault, "address": address, "module": module, "stack": stack.into_iter().take(64).collect::<Vec<_>>(), "marks": marks,
-        "lastLines": [], "atStop": at_stop,
-        "note": if at_stop { Some("This fault happens when a debugger attaches or the server is being stopped: not counted as a crash.") } else { None },
-    }))
+    let stem = name.trim_end_matches(".log");
+    let mut ids: HashSet<String> = HashSet::new();
+    let mut out = vec![];
+    for (local, unix, mut c) in entries {
+        let time = unix.unwrap_or_else(|| match zone {
+            Some(z) if local > 0 => u64::try_from(local as i64 - z).unwrap_or(f.mtime),
+            _ => f.mtime,
+        });
+        let mut id = format!("{stem}@{time}");
+        let mut n = 2;
+        while ids.contains(&id) {
+            id = format!("{stem}@{time}-{n}");
+            n += 1;
+        }
+        ids.insert(id.clone());
+        c["id"] = json!(id);
+        c["group"] = json!(stem);
+        c["time"] = json!(time);
+        c["when"] = json!(shown(time));
+        out.push(c);
+    }
+    out
+}
+
+fn crashes_in(f: &Found) -> Vec<Value> {
+    if f.rel.ends_with(".json") {
+        from_json(f).into_iter().collect()
+    } else {
+        from_log(f)
+    }
 }
 
 /// The warnings: a Ham Sandwich that isn't the fixed one, and what the module check says is bad.
@@ -266,7 +399,7 @@ fn warnings(raw: &Raw, remote: bool) -> Vec<Value> {
             let fix = if remote {
                 "Restart the server: it puts Loner-Strike's fixed one back before every start. If this stays, update the server's Loner-Strike files (Health)."
             } else {
-                "Update the server's Loner-Strike files (Health, Updates): they put the fixed one back."
+                "Start the server: Loner-Strike puts its fixed one back before every start. Or put it back now with Repair, Reinstall (Health)."
             };
             w.push(json!({"id": "hamsandwich", "module": "Ham Sandwich", "file": ham_rel(raw.os),
                 "message": "This server runs a Ham Sandwich module that isn't Loner-Strike's fixed one. The official module uses freed memory when the map changes, and servers crash on it.", "fix": fix}));
@@ -285,14 +418,22 @@ fn warnings(raw: &Raw, remote: bool) -> Vec<Value> {
     w
 }
 
+/// Newest first, each crash once: on a Linux machine a crash has its crash file (with the
+/// brain's log entry in it) and its entry in ls_crash.log; the file's record stands for both.
+fn merged(mut crashes: Vec<Value>) -> Vec<Value> {
+    let filed: Vec<u64> = crashes.iter().filter(|c| c["source"] == "crash file").filter_map(|c| c["time"].as_u64()).collect();
+    crashes.retain(|c| c["source"] == "crash file" || !c["time"].as_u64().is_some_and(|t| filed.iter().any(|f| f.abs_diff(t) <= 120)));
+    crashes.sort_by(|a, b| b["time"].as_u64().cmp(&a["time"].as_u64()));
+    crashes
+}
+
 /// Everything about one server's crashes.
 fn report(e: &Entry) -> Result<Value, String> {
     let raw = match &e.remote {
         Some(r) => read_remote(r, &e.id, &e.game)?,
         None => read_local(&e.dir.join(&e.game)),
     };
-    let mut crashes: Vec<Value> = raw.files.iter().filter_map(|f| if f.rel.ends_with(".json") { from_json(f) } else { from_log(f) }).collect();
-    crashes.sort_by(|a, b| b["time"].as_u64().cmp(&a["time"].as_u64()));
+    let crashes = merged(raw.files.iter().flat_map(crashes_in).collect());
     let day = now().saturating_sub(86400);
     let counted = |c: &&Value| c["atStop"] != true;
     let last24h = crashes.iter().filter(counted).filter(|c| c["time"].as_u64().unwrap_or(0) >= day).count();
@@ -303,7 +444,7 @@ fn report(e: &Entry) -> Result<Value, String> {
         "last24h": last24h, "total": crashes.iter().filter(counted).count(),
         "crashes": crashes, "warnings": warnings,
         "hamsandwich": raw.ham.as_ref().map(|h| if *h == (if raw.os == "linux" { FIXED_HAM_LINUX } else { FIXED_HAM_WINDOWS }) { "fixed" } else { "not the fixed one" }),
-        "alerts": {"discord": alerts, "discordLinked": crate::webstatus::read_hook("live", &e.id).is_some()},
+        "alerts": {"discord": alerts, "discordLinked": crate::webstatus::read_hook("live", &e.id).is_some(), "local": e.remote.is_none()},
         "capture": if raw.files.iter().any(|f| f.rel.starts_with("crashes/")) { "crash files" } else { "bot brain's crash log" },
     }))
 }
@@ -394,7 +535,12 @@ fn alerts_for(id: &str) -> bool {
 
 fn set_alerts(e: &Entry, on: bool) -> Result<(), String> {
     if on && crate::webstatus::read_hook("live", &e.id).is_none() {
-        return Err("Link the server's Discord status channel first (Website and Discord), then turn this on.".into());
+        return Err(if e.remote.is_some() {
+            "Link the server's Discord status channel first (Website and Discord), then turn this on."
+        } else {
+            "Paste the Discord channel's webhook link first, then turn this on."
+        }
+        .into());
     }
     let _g = alerts_lock().lock().unwrap_or_else(|x| x.into_inner());
     let mut a = load_alerts();
@@ -435,6 +581,14 @@ fn post_new() -> usize {
         let mut a = load_alerts();
         let seen = a.seen.entry(id.clone()).or_default();
         let day = now().saturating_sub(86400);
+        // a file seen whole (earlier versions: one crash per file): its entries are known
+        for c in v["crashes"].as_array().into_iter().flatten() {
+            if let (Some(g), Some(cid)) = (c["group"].as_str(), c["id"].as_str()) {
+                if seen.iter().any(|s| s == g) && !seen.iter().any(|s| s == cid) {
+                    seen.push(cid.to_string());
+                }
+            }
+        }
         for c in v["crashes"].as_array().into_iter().flatten().rev() {
             let Some(cid) = c["id"].as_str() else { continue };
             if seen.iter().any(|s| s == cid) {
@@ -509,7 +663,50 @@ async fn api_alerts(UrlPath(id): UrlPath<String>, h: HeaderMap, Json(req): Json<
         tokio::task::spawn_blocking(move || {
             let e = own(&id)?;
             set_alerts(&e, req.discord)?;
-            current(&e, false)
+            with_alerts(&e, current(&e, false)?)
+        })
+        .await
+        .unwrap_or_else(|_| Err("That didn't finish.".into())),
+    )
+}
+
+/// The answer with the alerts as they are now (the kept answer may be up to FRESH old), kept too.
+fn with_alerts(e: &Entry, mut v: Value) -> Result<Value, String> {
+    v["alerts"] = json!({"discord": alerts_for(&e.id), "discordLinked": crate::webstatus::read_hook("live", &e.id).is_some(), "local": e.remote.is_none()});
+    if let Some(slot) = cache().lock().unwrap_or_else(|x| x.into_inner()).get_mut(&e.id) {
+        slot.1 = v.clone();
+    }
+    Ok(v)
+}
+
+#[derive(Deserialize)]
+struct HookReq {
+    url: Option<String>,
+}
+
+/// A local server's Discord channel for crash alerts (a server on a Linux machine links its
+/// channel in Website and Discord, where the status service uses it too). null: unlink, and
+/// alerts off.
+async fn api_hook(UrlPath(id): UrlPath<String>, h: HeaderMap, Json(req): Json<HookReq>) -> (StatusCode, Json<Value>) {
+    if !crate::panel_api::from_panel(&h) {
+        return (StatusCode::FORBIDDEN, Json(json!({"error": "forbidden"})));
+    }
+    answer(
+        tokio::task::spawn_blocking(move || {
+            let e = own(&id)?;
+            if e.remote.is_some() {
+                return Err("Link this server's Discord channel in Website and Discord.".into());
+            }
+            match req.url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
+                Some(u) => crate::webstatus::save_hook("live", &e.id, Some(&crate::webstatus::clean_hook(u)?))?,
+                None => {
+                    if alerts_for(&e.id) {
+                        set_alerts(&e, false)?;
+                    }
+                    crate::webstatus::save_hook("live", &e.id, None)?;
+                }
+            }
+            with_alerts(&e, current(&e, false)?)
         })
         .await
         .unwrap_or_else(|_| Err("That didn't finish.".into())),
@@ -524,6 +721,7 @@ pub fn routes() -> Router<crate::server::Shared> {
     Router::new()
         .route("/api/servers/:id/crashes", get(api_crashes))
         .route("/api/servers/:id/crashes/alerts", post(api_alerts))
+        .route("/api/servers/:id/crashes/discord", post(api_hook))
         .route("/api/crashes/summary", get(api_summary))
 }
 
@@ -575,15 +773,15 @@ mod tests {
         std::fs::write(g.join("crashes/modules.json"), json!({"schema": "loner-strike/modules", "version": 1, "modules": [{"name": "fun", "file": "addons/amxmodx/modules/fun_amxx.dll", "verdict": "bad", "why": "This fun build crashes on map changes."}, {"name": "cstrike", "verdict": "ok"}]}).to_string()).unwrap();
         let raw = read_local(&g);
         assert_eq!(raw.files.len(), 3, "modules.json isn't a crash");
-        let mut crashes: Vec<Value> = raw.files.iter().filter_map(|f| if f.rel.ends_with(".json") { from_json(f) } else { from_log(f) }).collect();
+        let mut crashes: Vec<Value> = raw.files.iter().flat_map(crashes_in).collect();
         crashes.sort_by(|a, b| b["time"].as_u64().cmp(&a["time"].as_u64()));
         let file = crashes.iter().find(|c| c["source"] == "crash file").unwrap();
         assert_eq!(file["map"], "de_dust2");
         assert_eq!(file["module"], "amxmodx_mm_i386.so");
         assert_eq!(file["time"].as_u64(), Some(t - t % 60));
-        let dbg = crashes.iter().find(|c| c["id"] == "ls_crash.20261113-0051").unwrap();
+        let dbg = crashes.iter().find(|c| c["group"] == "ls_crash.20261113-0051").unwrap();
         assert_eq!(dbg["atStop"], true, "the debugger fault isn't counted: {dbg}");
-        let real = crashes.iter().find(|c| c["id"] == "ls_crash").unwrap();
+        let real = crashes.iter().find(|c| c["group"] == "ls_crash").unwrap();
         assert_eq!(real["module"], "mp.dll");
         assert_eq!(real["stack"][0], "mp.dll+0x1b2c3d");
         let w = warnings(&raw, false);
@@ -596,6 +794,55 @@ mod tests {
         let _ = std::fs::remove_dir_all(&g);
     }
 
+    fn found(rel: &str, mtime: u64, text: &str) -> Found {
+        Found { rel: rel.into(), mtime, bytes: text.as_bytes().to_vec() }
+    }
+
+    /// QA4-F F1/F9: every crash appended to ls_crash.log is its own entry (an older brain's
+    /// double write of one fault is one), timed from the file in the server's zone, or by the
+    /// entry's own UTC seconds; the module is where it faulted, not the first return address.
+    #[test]
+    fn a_crash_log_holds_one_entry_per_crash() {
+        let one = |stamp: &str, at: &str| {
+            format!("{stamp}\nexception 0xc0000005 at {at} (first-chance; the game may still handle it)\n  reading 0x00000004\nwhere:\n  {at}  fakemeta_amxx.dll+0x9880\nreturn addresses on the stack (newest first):\n  0x6d0a1b2c  amxmodx_mm.dll+0x1b2c\n  0x0a000010  mp.dll+0x10\nlast marks:\n     21.82  frame                        0\n  (last text: say)\n\n")
+        };
+        // older brain: two crashes, the second written twice; the Mac 8 hours behind UTC
+        let text = one("Sat Nov 14 08:40:55 2026", "0x771a9880") + &one("Sat Nov 14 08:46:01 2026", "0x73ff9880") + &one("Sat Nov 14 08:46:01 2026", "0x73ff9880");
+        let mtime = iso_secs("2026-11-14T16:46:01Z").unwrap();
+        let c = from_log(&found("ls_crash.log", mtime, &text));
+        assert_eq!(c.len(), 2, "{c:?}");
+        assert_eq!(c[0]["when"], "2026-11-14 16:40 UTC");
+        assert_eq!(c[1]["time"].as_u64(), Some(mtime));
+        assert_eq!(c[1]["address"], "0x73ff9880");
+        assert_eq!(c[0]["module"], "fakemeta_amxx.dll");
+        assert_eq!(c[0]["offset"], "0x9880");
+        assert_eq!(c[0]["stack"][0], "amxmodx_mm.dll+0x1b2c");
+        assert_eq!(c[0]["marks"][0], "21.82 frame 0");
+        assert_ne!(c[0]["id"], c[1]["id"]);
+        assert_eq!(c[0]["group"], "ls_crash");
+        // a third one later: the first two keep their ids (the Discord alert's "seen")
+        let more = text.clone() + &one("Sat Nov 14 09:10:00 2026", "0x12345678");
+        let c2 = from_log(&found("ls_crash.log", iso_secs("2026-11-14T17:10:00Z").unwrap(), &more));
+        assert_eq!(c2.len(), 3);
+        assert_eq!((&c2[0]["id"], &c2[1]["id"]), (&c[0]["id"], &c[1]["id"]));
+        // current brain: its UTC seconds and the map; Linux's where and stack
+        let linux = "Sat Nov 14 06:12:03 2026\nsignal 11 at 0xf1d2e3f4 (address 0x4)\nunix time: 1794636723\nmap: de_dust2\nwhere: /home/cs/srv/cstrike/addons/amxmodx/modules/fakemeta_amxx_i386.so (_Z9set_pdataPv+0x40), module base 0xf1d00000\nstack (newest first):\n/home/cs/srv/cstrike/dlls/cs.so(_ZN4LsCrashSignal+0x30)[0xf7001234]\n/home/cs/srv/cstrike/addons/amxmodx/modules/fakemeta_amxx_i386.so(+0x2e3f4)[0xf1d2e3f4]\nlast marks:\n  1.00  frame 0\n  (last text: )\n\n";
+        let l = from_log(&found("ls_crash.log", 1, linux));
+        assert_eq!(l.len(), 1);
+        assert_eq!(l[0]["time"].as_u64(), Some(1_794_636_723));
+        assert_eq!(l[0]["map"], "de_dust2");
+        assert_eq!(l[0]["fault"], "signal 11 (SIGSEGV)");
+        assert_eq!(l[0]["module"], "fakemeta_amxx_i386.so");
+        assert_eq!(l[0]["offset"], "_Z9set_pdataPv+0x40");
+        assert_eq!(l[0]["stack"][1], "fakemeta_amxx_i386.so+0x2e3f4");
+        // on a Linux machine the crash file stands for the log's entry of the same crash
+        let filed = json!({"id": "20261114-061205-42", "source": "crash file", "time": 1_794_636_725u64});
+        let m = merged(vec![l[0].clone(), filed.clone(), c[0].clone()]);
+        assert_eq!(m.len(), 2);
+        assert!(m.contains(&filed) && !m.iter().any(|x| x["id"] == l[0]["id"]), "{m:?}");
+        assert!(message("S", &l[0]).contains("crashed on de_dust2 at 2026-11-14 06:12 UTC: signal 11 (SIGSEGV) in fakemeta_amxx_i386.so"));
+    }
+
     #[test]
     fn odd_files_are_skipped() {
         let g = game("odd");
@@ -604,7 +851,7 @@ mod tests {
         std::fs::write(g.join("crashes/broken.json"), "{not json").unwrap();
         std::fs::write(g.join("ls_crash.log"), "no exception in here").unwrap();
         let raw = read_local(&g);
-        let crashes: Vec<Value> = raw.files.iter().filter_map(|f| if f.rel.ends_with(".json") { from_json(f) } else { from_log(f) }).collect();
+        let crashes: Vec<Value> = raw.files.iter().flat_map(crashes_in).collect();
         assert!(crashes.is_empty(), "{crashes:?}");
         assert!(warnings(&raw, false).is_empty(), "no module there, nothing to warn about");
         let _ = std::fs::remove_dir_all(&g);
@@ -623,12 +870,12 @@ mod tests {
     fn real_crash_files() {
         let Ok(dir) = std::env::var("LS_CRASH_GAME") else { return };
         let raw = read_local(Path::new(&dir));
-        let crashes: Vec<Value> = raw.files.iter().filter_map(|f| if f.rel.ends_with(".json") { from_json(f) } else { from_log(f) }).collect();
+        let crashes: Vec<Value> = raw.files.iter().flat_map(crashes_in).collect();
         let counted = crashes.iter().filter(|c| c["atStop"] != true).count();
         println!("{dir}: {} files, {} crashes read, {} counted, ham {:?}, warnings {}", raw.files.len(), crashes.len(), counted, raw.ham.as_deref().map(|h| &h[..12]), warnings(&raw, false).len());
         for c in crashes.iter().take(3) {
-            println!("  {} {} {} {} stack {}", c["when"], c["fault"], c["address"], c["module"], c["stack"].as_array().map(Vec::len).unwrap_or(0));
+            println!("  {} {} {} {} {} stack {}", c["when"], c["map"], c["fault"], c["address"], c["module"], c["stack"].as_array().map(Vec::len).unwrap_or(0));
         }
-        assert_eq!(crashes.len(), raw.files.len(), "every crash file read");
+        assert!(crashes.len() >= raw.files.len(), "every crash file read (a crash log holds one or more)");
     }
 }
