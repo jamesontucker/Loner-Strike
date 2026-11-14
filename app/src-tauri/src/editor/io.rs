@@ -129,6 +129,12 @@ pub fn graph(doc: &MapDocument) -> Graph {
                 add(k, v, *kind, None);
             }
         }
+        // an NPC's patrol stops (NPC-editor): names it walks between
+        if e.classname() == "ls_npc" {
+            for w in e.get("targets").unwrap_or("").split_whitespace() {
+                add("targets", w, Kind::Names, None);
+            }
+        }
         if e.classname() == "multi_manager" {
             for (k, v) in &e.keys {
                 if MM_OWN.contains(&k.as_str()) || LINK_KEYS.iter().any(|(l, _)| l == k) {
@@ -181,5 +187,23 @@ mod tests {
         assert_eq!(mm_name("door#12"), "door");
         assert_eq!(mm_name("#3"), "#3");
         assert_eq!(mm_name("a#b"), "a#b");
+    }
+
+    /// NPC-editor: NPCs and interactables in plain map I/O.
+    #[test]
+    fn npcs_and_interactables_fire_their_targets() {
+        let mut d = MapDocument::default();
+        ent(&mut d, 1, &[("classname", "ls_interactable"), ("targetname", "lever"), ("target", "gate")]);
+        ent(&mut d, 2, &[("classname", "ls_npc"), ("name", "Joe"), ("target", "alarm"), ("targets", "p1 p2")]);
+        ent(&mut d, 3, &[("classname", "func_door"), ("targetname", "gate")]);
+        ent(&mut d, 4, &[("classname", "ambient_generic"), ("targetname", "alarm")]);
+        ent(&mut d, 5, &[("classname", "info_target"), ("targetname", "p1")]);
+        ent(&mut d, 6, &[("classname", "info_target"), ("targetname", "p2")]);
+        let g = graph(&d);
+        assert!(g.links.iter().any(|l| l.from == EntityId(1) && l.kind == Kind::Fires && l.to == vec![EntityId(3)]));
+        assert!(g.links.iter().any(|l| l.from == EntityId(2) && l.kind == Kind::Fires && l.to == vec![EntityId(4)]));
+        let patrol: Vec<_> = g.links.iter().filter(|l| l.from == EntityId(2) && l.key == "targets").map(|l| (l.kind, l.to.clone())).collect();
+        assert_eq!(patrol, vec![(Kind::Names, vec![EntityId(5)]), (Kind::Names, vec![EntityId(6)])]);
+        assert!(g.broken().next().is_none());
     }
 }

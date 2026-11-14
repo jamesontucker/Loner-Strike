@@ -48,6 +48,7 @@ pub mod browser; // P5: the Content Browser (models, sprites, sounds)
 pub mod kits; // P5: mode map kits (what each mode the map is made for needs)
 pub mod workspace; // P5: project files, undo history, find/replace, duplicate with new names
 pub mod heavy; // Checks: heavy views from the last compile's VIS data
+pub mod npcs; // NPC-editor: Checks for NPCs and interactables
 pub mod selection; // MCP: what's selected, for agents
 
 const INTERNAL: &str = "Loner-Strike hit an internal error in the map editor. Try again, and copy the diagnostics from Settings if it keeps happening.";
@@ -551,6 +552,8 @@ fn checks_json(c: &CheckSnap, places: Option<&assets::Places>, opts: &checks::Op
         // creature types this game doesn't have (shared creatures, CP-ui)
         issues.extend(super::creatures::editor_issues(&c.doc, super::creatures::game_ini(p.hl.as_deref(), &p.game).as_deref()));
     }
+    // NPCs and interactables: a name, something to see (NPC-editor)
+    issues.extend(npcs::issues(&c.doc));
     json!({"docId": c.id, "revision": c.revision, "issues": issues, "stats": checks::stats(&c.doc), "texturesChecked": known.is_some()})
 }
 

@@ -1959,17 +1959,19 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
     // entity lump is rewritten to match in the packaged copy only)
     let ents = crate::navs::entity_text(&m.bsp).unwrap_or_default();
     let names: Vec<String> = super::creaturepack::types_in_entity_text(&ents).into_iter().collect();
-    let custom = super::creaturepack::has_custom(&names);
+    // (and its NPCs' and interactables' own models and sounds: NPC-editor)
+    let npc = super::creaturepack::npc_files_in_entity_text(&ents);
+    let custom = super::creaturepack::has_custom(&names) || super::creaturepack::any_custom(&m.hl, &m.game, &npc);
     let ns = publish_namespace(req, &item.author, custom)?;
-    let pack = super::creaturepack::pack_types(&m.hl, &m.game, &names, &ns)?;
+    let pack = super::creaturepack::pack_types(&m.hl, &m.game, &names, &ns)?.with_npc(&m.hl, &m.game, &npc, &ns)?;
     item.creatures = pack.item_creatures();
     let _ = ns;
     let mut extra: Vec<(String, Vec<u8>)> = pack.entries(MAX_PACKAGE / 4)?;
     // (zip path, file on disk) for everything that ships; a fresh .res, the README and the manifest are written directly
     let mut files: Vec<(String, PathBuf)> = vec![(format!("maps/{}.bsp", m.name), m.bsp.clone())];
-    if !pack.renames.is_empty() {
+    if pack.rewrites() {
         let bsp = std::fs::read(&m.bsp).map_err(|e| format!("Couldn't read the map ({e})."))?;
-        let new = super::creaturepack::bsp_with_entities(&bsp, &super::creaturepack::rewrite_entity_text(&ents, &pack.renames))?;
+        let new = super::creaturepack::bsp_with_entities(&bsp, &pack.rewrite_entities(&ents))?;
         files.clear();
         extra.insert(0, (format!("maps/{}.bsp", m.name), new));
     }
@@ -2343,10 +2345,12 @@ pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq,
     // its custom creatures travel with it, named for who made it (with its wave tables' types)
     let game_dir = game.map(|(hl, gm)| hl.join(gm));
     let names: Vec<String> = super::creaturepack::types_for_mode(&g, game_dir.as_deref());
-    let custom = super::creaturepack::has_custom(&names);
+    // (and its NPC nodes' own models and sounds: NPC-editor)
+    let npc = super::creaturepack::npc_files_in_graph_json(&serde_json::to_value(&g).unwrap_or_default());
+    let custom = super::creaturepack::has_custom(&names) || game.is_some_and(|(hl, gm)| super::creaturepack::any_custom(hl, gm, &npc));
     let ns = publish_namespace(req, &author, custom && game.is_some())?;
     let pack = match game {
-        Some((hl, gm)) => super::creaturepack::pack_types(hl, gm, &names, &ns)?,
+        Some((hl, gm)) => super::creaturepack::pack_types(hl, gm, &names, &ns)?.with_npc(hl, gm, &npc, &ns)?,
         None => super::creaturepack::Pack::default(),
     };
     let item = Item {
@@ -2376,7 +2380,7 @@ pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq,
         ..Default::default()
     };
     let mut gv = serde_json::to_value(&g).map_err(|e| e.to_string())?;
-    super::creaturepack::rewrite_graph_json(&mut gv, &pack.renames);
+    pack.rewrite_graph(&mut gv);
     let graph_text = serde_json::to_string_pretty(&gv).map_err(|e| e.to_string())?;
     let mut readme = format!("{}\r\nby {}\r\n\r\n{}\r\n\r\nA Game Mode Studio mode made with Loner-Strike (lonerstrike.com).\r\nWith Loner-Strike: find it under Tools > Community and click Try it; the app builds it on your computer.\r\n", item.name, item.author, item.summary);
     if let Some(r) = &item.remix_of {
@@ -2483,10 +2487,12 @@ pub fn build_prefab_package(game: Option<&crate::game::Game>, id: &str, req: &Pu
     super::editor::prefabs::package(&dir, id, &zip_path, credits.clone())?;
     // its creatures (an ls_creature or a wave spawner in it) travel with it, named for who made it
     let names: Vec<String> = super::creaturepack::types_in_zip_maps(&zip_path)?.into_iter().collect();
-    let custom = super::creaturepack::has_custom(&names);
+    // (and its NPCs' and interactables' own models and sounds: NPC-editor)
+    let npc = super::creaturepack::npc_files_in_zip_maps(&zip_path)?;
+    let custom = super::creaturepack::has_custom(&names) || game.is_some_and(|g| super::creaturepack::any_custom(&g.hl, &g.name, &npc));
     let ns = publish_namespace(req, &author, custom && game.is_some())?;
     let pack = match game {
-        Some(g) => super::creaturepack::pack_types(&g.hl, &g.name, &names, &ns)?,
+        Some(g) => super::creaturepack::pack_types(&g.hl, &g.name, &names, &ns)?.with_npc(&g.hl, &g.name, &npc, &ns)?,
         None => super::creaturepack::Pack::default(),
     };
     super::creaturepack::repack_zip(&zip_path, &pack, 128 << 20)?;

@@ -552,11 +552,17 @@ pub struct Pack {
     pub files: Vec<(String, PathBuf)>,
     /// what the Publish step should say: a name cut to fit
     pub notes: Vec<String>,
+    /// NPC-editor: an NPC's or interactable's custom model and sounds (game path in the package,
+    /// file on disk), listed on the pack's `; npc:` line
+    pub npc: Vec<(String, PathBuf)>,
+    /// NPC-editor: their old paths -> new ones (under the namespace's folders), for the package's
+    /// map entities and graphs
+    pub npc_renames: BTreeMap<String, String>,
 }
 
 impl Pack {
     pub fn is_empty(&self) -> bool {
-        self.types.is_empty()
+        self.types.is_empty() && self.npc.is_empty()
     }
     /// The entry's `creatures` list.
     pub fn item_creatures(&self) -> Vec<ItemCreature> {
@@ -569,7 +575,7 @@ impl Pack {
         }
         let mut out = vec![(PACK_FILE.to_string(), self.text.clone().into_bytes())];
         let mut total = 0u64;
-        for (rel, p) in &self.files {
+        for (rel, p) in self.files.iter().chain(self.npc.iter().filter(|(r, _)| !self.files.iter().any(|(x, _)| x.eq_ignore_ascii_case(r)))) {
             let b = std::fs::read(p).map_err(|e| format!("Couldn't read {rel} ({e})."))?;
             total += b.len() as u64;
             if total > limit {
@@ -597,6 +603,7 @@ impl Pack {
                 };
                 format!("{}{with}", t.from)
             })
+            .chain((!self.npc.is_empty()).then(|| format!("NPC files: {}", self.npc.iter().map(|(r, _)| r.rsplit('/').next().unwrap_or(r)).collect::<Vec<_>>().join(", "))))
             .collect()
     }
 }
@@ -823,7 +830,7 @@ pub fn pack_types(hl: &Path, game: &str, names: &[String], namespace: &str) -> R
     text.push_str(&body);
     // the types the person named come first in the listing; bases after
     types.sort_by_key(|t| !wanted.contains(&t.from));
-    Ok(Pack { types, renames, text, files, notes })
+    Ok(Pack { types, renames, text, files, notes, ..Default::default() })
 }
 
 /// A type's keys in its first section only (an installed type two blocks bring is in both).
@@ -887,6 +894,8 @@ pub struct Parsed {
     pub sections: Vec<(String, String)>,
     /// the files each type's model and snd_ values name (game paths)
     pub refs: BTreeMap<String, Vec<String>>,
+    /// NPC-editor: NPC and interactable files (`; npc:`), named by the package's maps and graphs
+    pub npc: Vec<String>,
 }
 
 pub fn parse_pack(text: &str) -> Result<Parsed, String> {
@@ -904,6 +913,18 @@ pub fn parse_pack(text: &str) -> Result<Parsed, String> {
                 }
                 if !p.files.iter().any(|x| x.eq_ignore_ascii_case(w)) {
                     p.files.push(w.to_string());
+                }
+            }
+            continue;
+        }
+        // NPC-editor: an NPC's or interactable's files (in its uploader's folders: checked on install)
+        if let Some(f) = t.strip_prefix("; npc:") {
+            for w in f.split_whitespace() {
+                if !safe_rel(w) {
+                    return Err(format!("The download names an NPC file it can't use ({w})."));
+                }
+                if !p.npc.iter().any(|x| x.eq_ignore_ascii_case(w)) {
+                    p.npc.push(w.to_ascii_lowercase());
                 }
             }
             continue;
@@ -984,8 +1005,11 @@ pub fn parse_pack(text: &str) -> Result<Parsed, String> {
             return Err(format!("The download's file {f} isn't in its creature maker's own folder."));
         }
     }
-    if p.types.is_empty() {
+    if p.types.is_empty() && p.npc.is_empty() {
         return Err("The download's creature list is empty.".into());
+    }
+    if p.npc.len() > 64 {
+        return Err("The download brings more than 64 NPC files.".into());
     }
     if p.types.len() > 32 {
         return Err("The download brings more than 32 creature types.".into());
@@ -1037,6 +1061,8 @@ pub struct Block {
     pub body: String,
     /// the namespace of who uploaded it (gb<id>): only its own types are in the block
     pub owner: String,
+    /// NPC-editor: the NPC and interactable files it needs (`; npc:`)
+    pub npc: Vec<String>,
 }
 
 impl Block {
@@ -1048,6 +1074,9 @@ impl Block {
         s.push_str(&format!("; types: {}\n", self.types.join(" ")));
         if !self.files.is_empty() {
             s.push_str(&format!("; files: {}\n", self.files.join(" ")));
+        }
+        if !self.npc.is_empty() {
+            s.push_str(&format!("; npc: {}\n", self.npc.join(" ")));
         }
         if !self.wrote.is_empty() {
             s.push_str(&format!("; wrote: {}\n", self.wrote.join(" ")));
@@ -1075,6 +1104,8 @@ pub fn split_blocks(text: &str) -> (String, Vec<Block>) {
                 b.types = r.split_whitespace().map(String::from).collect();
             } else if let Some(r) = t.strip_prefix("; files:") {
                 b.files = r.split_whitespace().map(String::from).collect();
+            } else if let Some(r) = t.strip_prefix("; npc:") {
+                b.npc = r.split_whitespace().map(String::from).collect();
             } else if let Some(r) = t.strip_prefix("; wrote:") {
                 b.wrote = r.split_whitespace().map(String::from).collect();
             } else {
@@ -1164,7 +1195,7 @@ fn check_for(game_dir: &Path, text: &str, namespace: &str, replacing: &str) -> R
     }
     // never the game's own files
     let game = game_dir.file_name().map(|g| g.to_string_lossy().to_string()).unwrap_or_default();
-    if let Some(f) = p.files.iter().find(|f| super::doctor::is_stock(f, &game)) {
+    if let Some(f) = p.files.iter().chain(p.npc.iter()).find(|f| super::doctor::is_stock(f, &game)) {
         return Err(format!("The download brings {f}, one of the game's own files, so it wasn't installed."));
     }
     Ok(p)
@@ -1244,13 +1275,28 @@ fn install_inner(game_dir: &Path, id: &str, text: &str, src: Option<&Path>, publ
         return Err(format!("The download brings {f}, which isn't in its uploader's own folder, so it wasn't installed."));
     }
     let own_files: Vec<String> = p.files.iter().filter(|f| in_owner(f) && p.refs.iter().any(|(t, r)| is_own(t) && r.iter().any(|x| x.eq_ignore_ascii_case(f)))).cloned().collect();
+    // NPC-editor: NPC files, each in the uploader's own folders and named by the package's own
+    // maps or graphs (a downloaded package: its unpacked files say)
+    if owner.is_empty() && !p.npc.is_empty() {
+        return Err("Couldn't tell who uploaded this download, so its NPC files weren't added.".into());
+    }
+    if let Some(f) = p.npc.iter().find(|f| !in_owner(f)) {
+        return Err(format!("The download brings {f}, which isn't in its uploader's own folder, so it wasn't installed."));
+    }
+    if let (Some(s), Some(_)) = (src, publisher) {
+        let named = npc_refs_in(s);
+        if let Some(f) = p.npc.iter().find(|f| !named.contains(&f.to_ascii_lowercase())) {
+            return Err(format!("The download brings {f}, which none of its NPCs use, so it wasn't installed."));
+        }
+    }
+    let own_npc: Vec<String> = p.npc.iter().filter(|f| !own_files.iter().any(|x| x.eq_ignore_ascii_case(f))).cloned().collect();
     let old = read_ini(game_dir)?;
     let (user, mut blocks) = split_blocks(&old);
     let prev = blocks.iter().position(|b| b.id == id).map(|i| blocks.remove(i));
     let mut done = Done { types: p.types.clone(), ..Default::default() };
     let mut wrote: Vec<String> = Vec::new();
     // (a map's files came in with the map: the store keeps them; nothing to copy or hand over)
-    let copying: Vec<String> = if src.is_some() { own_files.clone() } else { vec![] };
+    let copying: Vec<String> = if src.is_some() { own_files.iter().chain(own_npc.iter()).cloned().collect() } else { vec![] };
     for rel in &copying {
         let dest = game_dir.join(rel);
         let from = src.map(|s| s.join(rel)).filter(|f| f.is_file());
@@ -1289,7 +1335,7 @@ fn install_inner(game_dir: &Path, id: &str, text: &str, src: Option<&Path>, publ
         }
     }
     if src.is_none() {
-        done.missing = own_files.iter().filter(|f| !game_dir.join(f).is_file()).cloned().collect();
+        done.missing = own_files.iter().chain(own_npc.iter()).filter(|f| !game_dir.join(f).is_file()).cloned().collect();
     }
     // (what it needs, so a file another block wrote passes to it before it'd go: only files in its
     // uploader's own folder, so no download can claim another maker's files)
@@ -1298,7 +1344,7 @@ fn install_inner(game_dir: &Path, id: &str, text: &str, src: Option<&Path>, publ
     // pass to another block that needs them, else go
     if let Some(b) = &prev {
         for w in &b.wrote {
-            if block_files.iter().any(|x| x.eq_ignore_ascii_case(w)) && !wrote.iter().any(|x| x.eq_ignore_ascii_case(w)) {
+            if block_files.iter().chain(own_npc.iter()).any(|x| x.eq_ignore_ascii_case(w)) && !wrote.iter().any(|x| x.eq_ignore_ascii_case(w)) {
                 wrote.push(w.clone());
             }
         }
@@ -1306,7 +1352,7 @@ fn install_inner(game_dir: &Path, id: &str, text: &str, src: Option<&Path>, publ
         drop_files(game_dir, &gone, &mut blocks);
     }
     done.wrote = wrote.clone();
-    blocks.push(Block { id: id.to_string(), types: own_types, files: block_files, wrote, joined: false, body, owner });
+    blocks.push(Block { id: id.to_string(), types: own_types, files: block_files, wrote, joined: false, body, owner, npc: own_npc });
     let new = join_blocks(&user, &blocks);
     if new != old {
         write_ini(game_dir, &new, &format!("Add shared creatures from {id}"))?;
@@ -1326,7 +1372,7 @@ pub fn install_trusted(game_dir: &Path, id: &str, block: &str, src: Option<&Path
 fn drop_files(game_dir: &Path, gone: &[String], others: &mut [Block]) -> Vec<String> {
     let mut removed = Vec::new();
     for f in gone {
-        if let Some(o) = others.iter_mut().find(|o| o.files.iter().any(|x| x.eq_ignore_ascii_case(f))) {
+        if let Some(o) = others.iter_mut().find(|o| o.files.iter().chain(o.npc.iter()).any(|x| x.eq_ignore_ascii_case(f))) {
             if !o.wrote.iter().any(|x| x.eq_ignore_ascii_case(f)) {
                 o.wrote.push(f.clone());
             }
@@ -1478,7 +1524,7 @@ pub fn repack_zip(zip_path: &Path, pack: &Pack, limit: u64) -> Result<(), String
             let mut b = Vec::new();
             e.read_to_end(&mut b).map_err(|e| e.to_string())?;
             if name.to_ascii_lowercase().ends_with(".map") {
-                b = rewrite_entity_text(&String::from_utf8_lossy(&b), &pack.renames).into_bytes();
+                b = pack.rewrite_entities(&String::from_utf8_lossy(&b)).into_bytes();
             }
             w.start_file(name.as_str(), opts).map_err(|e| e.to_string())?;
             w.write_all(&b).map_err(|e| e.to_string())?;
@@ -1490,6 +1536,231 @@ pub fn repack_zip(zip_path: &Path, pack: &Pack, limit: u64) -> Result<(), String
         w.finish().map_err(|e| e.to_string())?;
     }
     crate::sys::write_atomic(zip_path, &buf.into_inner()).map_err(|e| format!("Couldn't save the package ({e})."))
+}
+
+// ---- NPC-editor: NPCs' and interactables' own models and sounds --------------------------------
+// They travel like a creature's files: a custom (not the game's) model or sound an ls_npc or an
+// ls_interactable names, or a Game Mode Studio NPC node, goes in the package under the uploader's
+// own folders (models/gb<id>/..., sound/gb<id>/...), listed on the pack's `; npc:` line; the
+// package's maps and graphs are rewritten to match. On install each such file must be in its
+// uploader's folders and named by the package's own maps or graphs; it's copied, recorded as the
+// package's, and removed with it.
+
+/// The entity classes whose models and sounds travel with a map.
+pub const NPC_CLASSES: &[&str] = &["ls_npc", "ls_interactable", "ls_interactable_brush"];
+
+/// A value that names a model or a sound: (game path, it's a sound named under sound/).
+fn npc_file(v: &str) -> Option<(String, bool)> {
+    let w = v.trim().replace('\\', "/").to_ascii_lowercase();
+    if w.starts_with("models/") && w.ends_with(".mdl") {
+        return safe_rel(&w).then_some((w, false));
+    }
+    if w.ends_with(".wav") {
+        let rel = if w.starts_with("sound/") { w.clone() } else { format!("sound/{w}") };
+        return safe_rel(&rel).then_some((rel, !w.starts_with("sound/")));
+    }
+    None
+}
+
+/// The models and sounds the NPCs and interactables in an entity text name (game paths).
+pub fn npc_files_in_entity_text(text: &str) -> BTreeSet<String> {
+    let pairs = entity_pairs(text);
+    let mut classes: BTreeMap<usize, String> = BTreeMap::new();
+    for (e, k, v, _) in &pairs {
+        if k == "classname" {
+            classes.insert(*e, v.to_ascii_lowercase());
+        }
+    }
+    let mut out = BTreeSet::new();
+    for (e, k, v, _) in &pairs {
+        if k == "classname" || !classes.get(e).is_some_and(|c| NPC_CLASSES.contains(&c.as_str())) {
+            continue;
+        }
+        if let Some((rel, _)) = npc_file(v) {
+            out.insert(rel);
+        }
+    }
+    out
+}
+
+/// Graph nodes whose params can name an NPC's model or sound: NPC and interactable nodes, and a
+/// component made at run time as one (`comp.create` of ls_npc / ls_interactable: its keys).
+fn npc_node(n: &Value) -> bool {
+    let kind = n["type"].as_str().unwrap_or("");
+    kind.starts_with("npc.") || kind.starts_with("interact") || (kind == "comp.create" && NPC_CLASSES.contains(&n["params"]["kind"].as_str().unwrap_or("")))
+}
+
+/// Words of a param value that may be paths (a comp.create's `k=v;k=v` keys, or a plain value).
+fn value_words(v: &str) -> Vec<&str> {
+    v.split([';', ' ', '|', '=', '"', ',']).filter(|w| !w.is_empty()).collect()
+}
+
+/// The models and sounds a Studio graph's NPC nodes name (game paths).
+pub fn npc_files_in_graph_json(v: &Value) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for n in v["nodes"].as_array().into_iter().flatten().filter(|n| npc_node(n)) {
+        for (_, pv) in n["params"].as_object().into_iter().flatten() {
+            for w in pv.as_str().map(value_words).unwrap_or_default() {
+                if let Some((rel, _)) = npc_file(w) {
+                    out.insert(rel);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// A text value with each path of `renames` (old game path -> new) put in place. Sounds named
+/// without `sound/` stay so.
+fn rename_paths(v: &str, renames: &BTreeMap<String, String>) -> String {
+    let mut out = v.to_string();
+    for (old, new) in renames {
+        let (o, n) = if v.to_ascii_lowercase().contains(old.as_str()) {
+            (old.as_str(), new.as_str())
+        } else if let (Some(o), Some(n)) = (old.strip_prefix("sound/"), new.strip_prefix("sound/")) {
+            (o, n)
+        } else {
+            continue;
+        };
+        // (whole words only: a path is never part of a longer one)
+        let low = out.to_ascii_lowercase();
+        let mut at = 0;
+        let mut res = String::new();
+        while let Some(i) = low[at..].find(o).map(|i| i + at) {
+            let before = low[..i].chars().last();
+            let after = low[i + o.len()..].chars().next();
+            let edge = |c: Option<char>| c.is_none_or(|c| !(c.is_ascii_alphanumeric() || "_./-".contains(c)));
+            res.push_str(&out[at..i]);
+            res.push_str(if edge(before) && edge(after) { n } else { &out[i..i + o.len()] });
+            at = i + o.len();
+        }
+        res.push_str(&out[at..]);
+        out = res;
+    }
+    out
+}
+
+impl Pack {
+    /// Adds the custom (not the game's own, found in its folders) models and sounds of `rels` as
+    /// NPC files under the namespace's folders. A file a creature already brings goes once.
+    pub fn with_npc(mut self, hl: &Path, game: &str, rels: &BTreeSet<String>, namespace: &str) -> Result<Pack, String> {
+        let custom: Vec<(String, PathBuf)> = rels.iter().filter(|r| !super::doctor::is_stock(r, game)).filter_map(|r| find_file(hl, game, r).map(|p| (r.clone(), p))).collect();
+        if custom.is_empty() {
+            return Ok(self);
+        }
+        if !author_part(namespace) {
+            return Err("That isn't a name files can be shared under.".into());
+        }
+        for (r, p) in custom {
+            let to = relocate(&r, namespace);
+            if to != r {
+                self.npc_renames.insert(r.clone(), to.clone());
+            }
+            if !self.npc.iter().any(|(x, _)| x.eq_ignore_ascii_case(&to)) {
+                self.npc.push((to, p));
+            }
+        }
+        if self.text.is_empty() {
+            self.text = String::from("; Loner-Strike shared creatures: the app adds these to creatures.ini when this is installed.\n; types:\n");
+        }
+        self.text.push_str(&format!("; npc: {}\n", self.npc.iter().map(|(r, _)| r.as_str()).collect::<Vec<_>>().join(" ")));
+        Ok(self)
+    }
+    /// The package has something to rewrite in its maps or graphs.
+    pub fn rewrites(&self) -> bool {
+        !self.renames.is_empty() || !self.npc_renames.is_empty()
+    }
+    /// A map's entity text with creature types and NPC files renamed.
+    pub fn rewrite_entities(&self, text: &str) -> String {
+        let t = rewrite_entity_text(text, &self.renames);
+        if self.npc_renames.is_empty() {
+            return t;
+        }
+        let spans: Vec<(usize, usize)> = {
+            let pairs = entity_pairs(&t);
+            let mut classes: BTreeMap<usize, String> = BTreeMap::new();
+            for (e, k, v, _) in &pairs {
+                if k == "classname" {
+                    classes.insert(*e, v.to_ascii_lowercase());
+                }
+            }
+            pairs.into_iter().filter(|(e, k, _, _)| k != "classname" && classes.get(e).is_some_and(|c| NPC_CLASSES.contains(&c.as_str()))).map(|(_, _, _, sp)| sp).collect()
+        };
+        let mut out = t.clone();
+        for (a, b) in spans.into_iter().rev() {
+            let v = rename_paths(&t[a..b], &self.npc_renames);
+            out.replace_range(a..b, &v);
+        }
+        out
+    }
+    /// A graph's creature types and NPC files renamed.
+    pub fn rewrite_graph(&self, v: &mut Value) {
+        rewrite_graph_json(v, &self.renames);
+        if self.npc_renames.is_empty() {
+            return;
+        }
+        for n in v["nodes"].as_array_mut().into_iter().flatten() {
+            if !npc_node(n) {
+                continue;
+            }
+            if let Some(o) = n["params"].as_object_mut() {
+                for (_, pv) in o.iter_mut() {
+                    if let Some(sv) = pv.as_str() {
+                        *pv = Value::String(rename_paths(sv, &self.npc_renames));
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Whether any of `rels` is a custom file (not the game's own) in the game's folders.
+pub fn any_custom(hl: &Path, game: &str, rels: &BTreeSet<String>) -> bool {
+    rels.iter().any(|r| find_custom(hl, game, r))
+}
+
+/// The models and sounds an unpacked package's own maps (.bsp entity lumps, prefab .map files)
+/// and graphs name for NPCs: an NPC file it brings must be one of these.
+pub fn npc_refs_in(src: &Path) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for f in crate::archive::walk(src).into_iter().take(4000) {
+        let name = f.to_string_lossy().to_ascii_lowercase();
+        let Ok(meta) = std::fs::symlink_metadata(&f) else { continue };
+        if !meta.is_file() || meta.len() > 256 << 20 {
+            continue;
+        }
+        if name.ends_with(".bsp") {
+            if let Some(t) = std::fs::read(&f).ok().and_then(|b| bsp_entities(&b)) {
+                out.extend(npc_files_in_entity_text(&t));
+            }
+        } else if name.ends_with(".map") && meta.len() <= 64 << 20 {
+            if let Ok(b) = std::fs::read(&f) {
+                out.extend(npc_files_in_entity_text(&String::from_utf8_lossy(&b)));
+            }
+        } else if name.ends_with(".graph.json") && meta.len() <= 2 << 20 {
+            if let Some(v) = std::fs::read(&f).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) {
+                out.extend(npc_files_in_graph_json(&v));
+            }
+        }
+    }
+    out
+}
+
+/// The NPC models and sounds in a zip's .map files (a prefab package before it's repacked).
+pub fn npc_files_in_zip_maps(zip_path: &Path) -> Result<BTreeSet<String>, String> {
+    let f = std::fs::File::open(zip_path).map_err(|e| e.to_string())?;
+    let mut z = zip::ZipArchive::new(f).map_err(|e| e.to_string())?;
+    let mut out = BTreeSet::new();
+    for i in 0..z.len() {
+        let mut e = z.by_index(i).map_err(|e| e.to_string())?;
+        if !e.name().map(|n| n.to_ascii_lowercase()).unwrap_or_default().ends_with(".map") || e.size() > 64 << 20 {
+            continue;
+        }
+        let mut b = Vec::new();
+        std::io::Read::read_to_end(&mut e, &mut b).map_err(|e| e.to_string())?;
+        out.extend(npc_files_in_entity_text(&String::from_utf8_lossy(&b)));
+    }
+    Ok(out)
 }
 
 // ---- maps: the entity lump ----------------------------------------------------------------------
@@ -2108,5 +2379,86 @@ mod tests {
         let (u, b) = split_blocks(&with);
         assert_eq!(u, "[a]\nhp = 1");
         assert_eq!(join_blocks(&u, &b), with);
+    }
+
+    // ---- NPC-editor ------------------------------------------------------------------------
+
+    const NPC_MAP: &str = "{\n\"classname\" \"worldspawn\"\n}\n{\n\"classname\" \"ls_npc\"\n\"name\" \"Joe\"\n\"model\" \"models/qa/joe.mdl\"\n\"greet_snd\" \"qa/hello.wav\"\n}\n{\n\"classname\" \"ls_interactable\"\n\"model\" \"models/w_battery.mdl\"\n}\n{\n\"classname\" \"cycler\"\n\"model\" \"models/qa/other.mdl\"\n}\n";
+
+    #[test]
+    fn npc_files_are_found_packed_under_the_owner_and_renamed() {
+        // found: an NPC's and an interactable's files, never another class's
+        let found = npc_files_in_entity_text(NPC_MAP);
+        assert_eq!(found.iter().map(String::as_str).collect::<Vec<_>>(), vec!["models/qa/joe.mdl", "models/w_battery.mdl", "sound/qa/hello.wav"]);
+        let g = serde_json::json!({"nodes": [
+            {"type": "npc.spawn", "params": {"model": "models/qa/joe.mdl", "name": "Joe"}},
+            {"type": "comp.create", "params": {"kind": "ls_interactable", "keys": "model=models/qa/lever.mdl;prompt=Pull"}},
+            {"type": "prop.spawn", "params": {"model": "models/qa/not_npc.mdl"}}
+        ]});
+        assert_eq!(npc_files_in_graph_json(&g).into_iter().collect::<Vec<_>>(), vec!["models/qa/joe.mdl", "models/qa/lever.mdl"]);
+        // packed: the custom ones (not the game's own battery) under gb7's folders
+        let (hl, gd) = game("");
+        std::fs::create_dir_all(gd.join("models/qa")).unwrap();
+        std::fs::create_dir_all(gd.join("sound/qa")).unwrap();
+        std::fs::write(gd.join("models/qa/joe.mdl"), b"joe").unwrap();
+        std::fs::write(gd.join("sound/qa/hello.wav"), b"hi").unwrap();
+        assert!(any_custom(&hl, "cstrike", &found));
+        let pack = Pack::default().with_npc(&hl, "cstrike", &found, "gb7").unwrap();
+        let rels: Vec<&str> = pack.npc.iter().map(|(r, _)| r.as_str()).collect();
+        assert_eq!(rels, vec!["models/gb7/qa/joe.mdl", "sound/gb7/qa/hello.wav"]);
+        assert!(pack.text.contains("; npc: models/gb7/qa/joe.mdl sound/gb7/qa/hello.wav\n"), "{}", pack.text);
+        assert!(parse_pack(&pack.text).is_ok(), "a pack with only NPC files reads");
+        assert!(pack.summary().iter().any(|l| l == "NPC files: joe.mdl, hello.wav"), "{:?}", pack.summary());
+        let names: Vec<String> = pack.entries(1 << 20).unwrap().into_iter().map(|(n, _)| n).collect();
+        assert_eq!(names, vec![PACK_FILE, "models/gb7/qa/joe.mdl", "sound/gb7/qa/hello.wav"]);
+        // the packaged copy's entities and graphs follow; other classes and the game's files don't
+        let ents = pack.rewrite_entities(NPC_MAP);
+        assert!(ents.contains("\"model\" \"models/gb7/qa/joe.mdl\"") && ents.contains("\"greet_snd\" \"gb7/qa/hello.wav\""), "{ents}");
+        assert!(ents.contains("\"models/w_battery.mdl\"") && ents.contains("\"models/qa/other.mdl\""));
+        let mut gv = g.clone();
+        Pack::default().with_npc(&hl, "cstrike", &npc_files_in_graph_json(&g), "gb7").unwrap().rewrite_graph(&mut gv);
+        assert_eq!(gv["nodes"][0]["params"]["model"], "models/gb7/qa/joe.mdl");
+        assert_eq!(gv["nodes"][2]["params"]["model"], "models/qa/not_npc.mdl");
+        let _ = std::fs::remove_dir_all(&hl);
+    }
+
+    #[test]
+    fn npc_files_install_from_the_owners_folder_only_and_go_with_the_package() {
+        let (hl, gd) = game("; mine\n[qa_mine]\nbase = zombie\n");
+        let before = std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap();
+        // an unpacked package: its map names the NPC's model
+        let src = hl.join("pk");
+        std::fs::create_dir_all(src.join("models/gb7/qa")).unwrap();
+        std::fs::create_dir_all(src.join("maps")).unwrap();
+        std::fs::write(src.join("models/gb7/qa/joe.mdl"), b"joe").unwrap();
+        std::fs::write(src.join("models/gb7/qa/extra.mdl"), b"x").unwrap();
+        let ents = NPC_MAP.replace("models/qa/joe.mdl", "models/gb7/qa/joe.mdl");
+        let mut bsp = vec![0u8; 124];
+        bsp[0] = 30;
+        std::fs::write(src.join("maps/m.bsp"), bsp_with_entities(&bsp, &ents).unwrap()).unwrap();
+        // not named by the package's maps: refused
+        let stray = "; types:\n; npc: models/gb7/qa/extra.mdl\n";
+        assert!(install_pack(&gd, "map-5", stray, Some(&src), "gb7").unwrap_err().contains("none of its NPCs use"));
+        // another maker's folder: refused
+        let theirs = "; types:\n; npc: models/gb8/qa/joe.mdl\n";
+        assert!(install_pack(&gd, "map-5", theirs, Some(&src), "gb7").unwrap_err().contains("own folder"));
+        // the game's own: refused
+        assert!(parse_pack("; npc: models/../x.mdl\n").is_err());
+        // its own, named by its map: copied, recorded, the player's sections untouched
+        let ok = "; types:\n; npc: models/gb7/qa/joe.mdl\n";
+        let done = install_pack(&gd, "map-5", ok, Some(&src), "gb7").unwrap();
+        assert_eq!(done.wrote, vec!["models/gb7/qa/joe.mdl"]);
+        assert!(gd.join("models/gb7/qa/joe.mdl").is_file());
+        let (user, blocks) = split_blocks(&std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap());
+        assert_eq!(user, before);
+        assert_eq!(blocks[0].npc, vec!["models/gb7/qa/joe.mdl"]);
+        // a second package needing it keeps it when the first goes
+        install_pack(&gd, "map-6", ok, Some(&src), "gb7").unwrap();
+        assert_eq!(uninstall_pack(&gd, "map-5").unwrap(), Vec::<String>::new());
+        assert!(gd.join("models/gb7/qa/joe.mdl").is_file());
+        assert_eq!(uninstall_pack(&gd, "map-6").unwrap(), vec!["models/gb7/qa/joe.mdl"]);
+        assert!(!gd.join("models/gb7/qa/joe.mdl").exists());
+        assert_eq!(std::fs::read_to_string(gd.join(creatures::FILE_REL)).unwrap(), before);
+        let _ = std::fs::remove_dir_all(&hl);
     }
 }
