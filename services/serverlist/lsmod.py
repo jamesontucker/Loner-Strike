@@ -37,6 +37,9 @@ Community roles (docs/ROLES.md; the service runs with --roles-db):
   lsmod.py roles show <application id>       one server moderator application
   lsmod.py roles supporters                  who supports now (SteamIDs of linked supporters)
   lsmod.py roles unlink <steamid> [--reason ..]   take away a squatted link (logged)
+  lsmod.py roles supporter-remove <discord id> [--reason ..]   not a supporter any more, whatever they paid:
+                                             the Discord role goes now, servers drop the VIP at their next check
+  lsmod.py roles supporter-restore <discord id>   their payments count again
 
 <page> is mod:<id>, spray:<id> or the GameBanana link. The admin API answers only on the box:
 from a Mac, open a tunnel first (ssh -N -L 8100:127.0.0.1:8100 you@your-box) and use the default
@@ -218,6 +221,12 @@ def roles_cmd(srv, tok, a):
             print(f"{when(x['at'])}  {x['action']:<10} server {x['server_id']:<4} {x['actor'][:20]:<20} {x['subject'][:24]:<24} {x['detail']}")
     elif a.rcmd == "show":
         print(json.dumps(call(srv, tok, "GET", f"roles/application/{a.id}"), indent=2, ensure_ascii=False))
+    elif a.rcmd == "supporter-remove":
+        r = call(srv, tok, "POST", "roles/supporter-remove", {"discord_id": a.discord_id, "reason": a.reason})
+        print(f"{a.discord_id} isn't a supporter any more (Discord role: {r['discord_role']}). Servers drop the VIP at their next check (official: 5 minutes).")
+    elif a.rcmd == "supporter-restore":
+        r = call(srv, tok, "POST", "roles/supporter-restore", {"discord_id": a.discord_id})
+        print(f"{a.discord_id}: supporter {'again' if r['supporter'] else '(no payment counts)'} (Discord role: {r['discord_role']}).")
     elif a.rcmd == "unlink":
         r = call(srv, tok, "POST", "roles/unlink", {"steamid": a.steamid, "reason": a.reason})
         print(f"{a.steamid} is no longer linked (it was Discord {r['discord_id']}).")
@@ -278,6 +287,11 @@ def main(argv=None):
     rs.add_parser("log").add_argument("-n", type=int, default=100)
     rs.add_parser("show").add_argument("id", type=int)
     rs.add_parser("supporters")
+    for name in ("supporter-remove", "supporter-restore"):
+        sr = rs.add_parser(name)
+        sr.add_argument("discord_id")
+        if name == "supporter-remove":
+            sr.add_argument("--reason", default="")
     u = rs.add_parser("unlink")
     u.add_argument("steamid")
     u.add_argument("--reason", default="")

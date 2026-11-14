@@ -538,6 +538,39 @@ class SupporterRoleCoverage(unittest.TestCase):
         self.assertGreater(p2["next_at"], cm.now() + 200)
 
 
+class SupporterRemove(unittest.TestCase):
+    def test_removed_by_hand_and_back(self):
+        r, mod, bot, fs, c = make()
+        r.days = 0
+        bot.members[OWNER] = {"900077", "900001"}
+        polar(r, grant(OWNER, gid="g", cust="cus_u"))
+        polar(r, {"type": "order.paid", "data": {"id": "o", "customer_id": "cus_u", "net_amount": 300, "currency": "usd", "product_id": "prod_once"}})
+        linked(r, fs, mod, OWNER, STEAM, official=True)
+        _, off = claim(r, fs, "off.example.com:27015")
+        r.set_official(off["id"], True)
+        off = r.s.one("SELECT * FROM servers WHERE id=?", (off["id"],))
+        self.assertEqual(r.vip(off)["steamids"], [STEAM])
+        with self.assertRaises(cm.Reject):
+            r.admin("POST", ["supporter-remove"], {"discord_id": "nope"}, {})
+        out = r.admin("POST", ["supporter-remove"], {"discord_id": OWNER, "reason": "test over"}, {})
+        self.assertEqual(out["discord_role"], "removed")
+        self.assertEqual(bot.members[OWNER], {"900001"}, "only the Supporter role goes")
+        self.assertFalse(r.is_supporter(OWNER))
+        self.assertEqual(r.vip(off)["steamids"], [])
+        # the hourly check and new payments don't bring it back
+        r.sync_all(pause=0)
+        polar(r, {"type": "order.paid", "data": {"id": "o2", "customer_id": "cus_u", "net_amount": 500, "currency": "usd", "product_id": "prod_once"}})
+        self.assertNotIn("900077", bot.members[OWNER])
+        acts = [x["action"] for x in r.s.all("SELECT action FROM roles_log")]
+        self.assertIn("supporter-remove", acts)
+        # restored: their payments count again
+        out = r.admin("POST", ["supporter-restore"], {"discord_id": OWNER}, {})
+        self.assertTrue(out["supporter"])
+        self.assertIn("900077", bot.members[OWNER])
+        with self.assertRaises(cm.Reject):
+            r.admin("POST", ["supporter-restore"], {"discord_id": OWNER}, {})
+
+
 class Refunds(unittest.TestCase):
     def order(self, r, oid, kind="order.paid", cust="cus_r", **extra):
         base = {"id": oid, "customer_id": cust, "subscription_id": None}

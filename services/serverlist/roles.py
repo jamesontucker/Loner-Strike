@@ -117,6 +117,11 @@ MIGRATIONS = [
     CREATE TABLE roles_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
     INSERT OR IGNORE INTO role_granted(discord_id, source, at) SELECT DISTINCT discord_id, 'polar', at FROM polar_grants WHERE granted=1
     """,
+    # supporters a moderator took the status from by hand (lsmod.py roles supporter-remove): whatever
+    # their payments say, not a supporter until restored
+    """
+    CREATE TABLE supporter_removed (discord_id TEXT PRIMARY KEY, at INTEGER NOT NULL, reason TEXT NOT NULL DEFAULT '')
+    """,
 ]
 
 
@@ -497,6 +502,29 @@ class Roles:
         self.log("owner", discord_id, row["id"], row["address"])
         return f"You're the owner of {cm.discord_text(row['name'], 64)} here: moderator applications for it come to you by DM."
 
+    def remove_supporter(self, discord_id, reason=""):
+        """lsmod.py roles supporter-remove: not a supporter any more, whatever their payments say (logged).
+        The Discord role goes now (and the hourly check never gives it back); servers drop their VIP at
+        their next supporters check (official servers: within 5 minutes). Their payments are kept."""
+        discord_id = str(discord_id or "")
+        if not SNOWFLAKE.match(discord_id):
+            raise cm.Reject(400, "That isn't a Discord account id.")
+        self.s.run("INSERT OR REPLACE INTO supporter_removed(discord_id, at, reason) VALUES (?,?,?)", (discord_id, cm.now(), reason))
+        self.log("supporter-remove", "moderator", 0, discord_id, reason)
+        self.audit(f"Supporter status taken from <@{discord_id}> by a moderator" + (f": {cm.discord_text(reason, 200)}" if reason else ""))
+        out = self.sync_role(discord_id) if self.mod and self.mod.bot else "no bot"
+        return {"ok": True, "discord_id": discord_id, "discord_role": out}
+
+    def restore_supporter(self, discord_id):
+        """lsmod.py roles supporter-restore: their payments count again."""
+        discord_id = str(discord_id or "")
+        if not self.s.one("SELECT 1 AS x FROM supporter_removed WHERE discord_id=?", (discord_id,)):
+            raise cm.Reject(404, "Their supporter status wasn't taken away.")
+        self.s.run("DELETE FROM supporter_removed WHERE discord_id=?", (discord_id,))
+        self.log("supporter-restore", "moderator", 0, discord_id)
+        out = self.sync_role(discord_id) if self.mod and self.mod.bot else "no bot"
+        return {"ok": True, "discord_id": discord_id, "supporter": self.is_supporter(discord_id), "discord_role": out}
+
     def evict(self, steamid, reason=""):
         """lsmod.py roles unlink <steamid>: a moderator takes a squatted link away (logged)."""
         steamid = canon(steamid)
@@ -514,6 +542,8 @@ class Roles:
 
     def is_supporter(self, discord_id, at=None):
         at = cm.now() if at is None else at
+        if self.s.one("SELECT 1 AS x FROM supporter_removed WHERE discord_id=?", (discord_id,)):
+            return False
         if self.s.one("SELECT 1 AS x FROM polar_grants WHERE discord_id=? AND monthly=1 AND granted=1", (discord_id,)):
             return True
         r = self.s.one("SELECT until FROM supporters WHERE discord_id=?", (discord_id,))
@@ -796,6 +826,9 @@ class Roles:
         if self.is_supporter(discord_id):
             return True
         if self.s.one("SELECT 1 AS x FROM role_granted WHERE discord_id=?", (discord_id,)):
+            return False
+        # taken away by a moderator: the role goes too, whoever gave it
+        if self.s.one("SELECT 1 AS x FROM supporter_removed WHERE discord_id=?", (discord_id,)):
             return False
         refunded = self.s.one("SELECT 1 AS x FROM polar_orders WHERE applied_to=? AND refunded=1", (discord_id,))
         return False if refunded else None
@@ -1221,6 +1254,10 @@ class Roles:
             if not a:
                 raise cm.Reject(404, "No such application.")
             return self.app_view(a) | {"server": a["server_id"], "discord_id": a["discord_id"], "note": a["note"]}
+        if parts == ["supporter-remove"] and method == "POST":
+            return self.remove_supporter(body.get("discord_id"), cm.one_line(str(body.get("reason") or ""), 200))
+        if parts == ["supporter-restore"] and method == "POST":
+            return self.restore_supporter(body.get("discord_id"))
         if parts == ["unlink"] and method == "POST":
             return self.evict(body.get("steamid"), cm.one_line(str(body.get("reason") or ""), 200))
         if parts == ["supporters"] and method == "GET":

@@ -59,3 +59,6 @@ Nothing here is live until these are done (each needs the user's OK):
 4. **Official servers:** claim each one from the app, then `lsmod.py roles official <server> on`. Turn on
    Accept moderator applications. Set Supporters › Reserved slots to 1 in its Admins page.
 5. Moderation from a terminal: `lsmod.py roles servers | log | show <id> | supporters | unlink <steamid>`.
+   `lsmod.py roles supporter-remove <discord id> [--reason ..]` takes Supporter away whatever they paid (the Discord
+   role now, the in-game VIP at the servers' next check; an Admin or Owner role is separate and stays);
+   `supporter-restore` undoes it.
