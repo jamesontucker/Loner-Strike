@@ -24,6 +24,8 @@ async function seed(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  // both side panels shown, whatever the window's width (a small one starts with Details folded)
+  await page.addInitScript(() => localStorage.setItem("ls.studio.panels", JSON.stringify({ left: true, right: true, minimap: false })));
   for (const r of WRITES) await page.route(`**/api/tools/studio/${r}`, (route) => route.fulfill({ json: { ok: true, problems: [], output: "(a test)", installedAs: ID } }));
   await seed(page);
 });
@@ -120,6 +122,8 @@ test("deleting a variable in use: the choices, Find uses, one undo step", async 
   // Find uses closes it and picks them
   await dlg.getByRole("button", { name: "Find uses" }).click();
   await expect(dlg).toBeHidden();
+  // (both uses picked: Add and Get)
+  await expect(page.locator(".react-flow__node.selected")).toHaveCount(2);
   await expect(page.locator('.react-flow__node[data-id="addk"].selected')).toHaveCount(1);
   // again: remove it and its nodes
   await page.getByRole("complementary", { name: "My mode" }).getByText("Kills Made").click();

@@ -380,7 +380,9 @@ function Studio({ maps }: ToolProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [arg]);
 
-  const save = async (): Promise<boolean> => {
+  /** Saves; then Compile on save starts its background check, unless the caller compiles
+   *  right after anyway (Install, Playtest: two compiles of the same mode at once would race). */
+  const save = async (checkAfter = true): Promise<boolean> => {
     const g = useStudio.getState().graph;
     if (!g) return false;
     const r = await busy("studio-save", "Saving the graph…", () => api.saveGraph(g));
@@ -391,7 +393,7 @@ function Studio({ maps }: ToolProps) {
     useStudio.getState().markSaved();
     void refreshList();
     // Compile on save: in the background (never blocks typing), only when the quick check is clean
-    if (prefsRef.current.compileOnSave && !useStudio.getState().problems.some((p) => p.level === "error")) void compileNow(true);
+    if (checkAfter && prefsRef.current.compileOnSave && !useStudio.getState().problems.some((p) => p.level === "error")) void compileNow(true);
     return true;
   };
 
@@ -505,7 +507,7 @@ function Studio({ maps }: ToolProps) {
   const install = () =>
     run("Compiling and installing…", async () => {
       const g = useStudio.getState().graph;
-      if (!g || !(await save())) return;
+      if (!g || !(await save(false))) return;
       const r = await api.compile(g, false);
       if (r.output) st.setOutput(r.output);
       if (showCompile(r)) toast(`Installed “${g.mode.name}”: pick it on the Play page or in the game's mode menu.`);
@@ -521,7 +523,7 @@ function Studio({ maps }: ToolProps) {
       const g = useStudio.getState().graph;
       if (!g) return;
       setStep("Saving");
-      if (!(await save()) || cancelled.current) return;
+      if (!(await save(false)) || cancelled.current) return;
       setStep("Compiling (the first time takes longer)");
       const r = await api.playtest(g, activeBreakpoints(g, useStudio.getState().bpsOff));
       if (r.output) st.setOutput(r.output);
@@ -862,7 +864,7 @@ function Studio({ maps }: ToolProps) {
         </label>
         {step ? (
           <>
-            <span className="st-step" role="status" aria-live="polite">
+            <span className="st-step" role="status" aria-live="polite" data-testid="studio-step">
               <span className="spinner" /> {step.label}… {Math.floor((Date.now() - step.at) / 1000)} s
             </span>
             <button
@@ -937,9 +939,11 @@ function Studio({ maps }: ToolProps) {
           const g = useStudio.getState().graph;
           const first = g?.nodes.find((n) => n.id === ids[0]);
           if (!first) return;
+          // (its tab, the view on the first; then all the uses on that tab picked at once: a delayed
+          // pick could land after the user had already picked something else)
           focusRef.current(first.id);
           const home = first.graph ?? "";
-          setTimeout(() => useStudio.getState().select(ids.filter((id) => (g!.nodes.find((n) => n.id === id)?.graph ?? "") === home)), 120);
+          useStudio.getState().select(ids.filter((id) => (g!.nodes.find((n) => n.id === id)?.graph ?? "") === home));
         }}
       />
       {versions && <VersionHistory onClose={() => setVersions(false)} toast={toast} />}

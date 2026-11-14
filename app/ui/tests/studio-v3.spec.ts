@@ -41,6 +41,8 @@ const canvasKey = async (page: Page, key: string) => {
 // refuses to write into a real Half-Life install while under test (studio::guard_real_game).
 const WRITES = ["compile", "check", "testrun", "testrun/cancel", "playtest", "switch", "source", "uninstall/**", "debug/command"];
 test.beforeEach(async ({ page }) => {
+  // both side panels shown, whatever the window's width (a small one starts with Details folded)
+  await page.addInitScript(() => localStorage.setItem("ls.studio.panels", JSON.stringify({ left: true, right: true, minimap: false })));
   for (const r of WRITES) await page.route(`**/api/tools/studio/${r}`, (route) => route.fulfill({ json: { ok: true, problems: [], output: "(a test: not installed)", installedAs: ID } }));
   await page.route("**/api/app/launch", (r) => r.fulfill({ json: { ok: true } }));
   await seed(page);
@@ -142,7 +144,7 @@ test("address opens the tab; Entry/Return details; shortcuts", async ({ page }) 
 
   // F5: Playtest
   await canvasKey(page, "F5");
-  await expect(page.getByRole("status").filter({ hasText: "Compiling" })).toBeVisible();
+  await expect(page.getByTestId("studio-step").filter({ hasText: "Compiling" })).toBeVisible();
 });
 
 test("a snippet with events goes onto the Event Graph", async ({ page }) => {
@@ -158,40 +160,58 @@ test("a snippet with events goes onto the Event Graph", async ({ page }) => {
 });
 
 test("library: Export all, Import a whole library", async ({ page }, info) => {
-  const items = async () => (await (await page.request.get("/api/tools/studio/library")).json()).items as { id: string }[];
+  const items = async () => (await (await page.request.get("/api/tools/studio/library")).json()).items as { id: string; name?: string }[];
+  const del = (id: string) => page.request.post(`/api/tools/studio/library/${id}/delete`, { headers: H });
+  // our two items have this project's names; any left by an earlier run that stopped half way go first
+  // (a leftover "pw_one" made the new one "pw_one_2")
+  const tag = info.project.name.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const names = [`PW one ${tag}`, `PW two ${tag}`];
+  const mine = (x: { id: string }) => x.id.startsWith(`pw_one_${tag}`) || x.id.startsWith(`pw_two_${tag}`);
+  for (const x of (await items()).filter(mine)) await del(x.id);
   const had = new Set((await items()).map((x) => x.id));
-  await page.goto(`/tools-dev.html?open=studio:${ID}`);
-  await fitAll(page);
-  await expect(selectedTab(page)).toContainText("Event Graph", { timeout: 20_000 });
-  // keep the Function twice under two names (right-click → Save to my library)
-  // (a second Function for the second item: saving one twice is a new version, not an item)
-  await page.getByRole("button", { name: "Add a Function (its own graph)" }).click();
-  for (const [name, part] of [["PW one", "Reward"], ["PW two", "New Function"]]) {
-    await page.locator(".st-mb-item").filter({ hasText: part }).first().click({ button: "right" });
-    await page.getByRole("menuitem", { name: /Save to my library/ }).click();
-    const form = page.getByRole("dialog", { name: "Save to my library" });
-    await form.getByLabel("Name").fill(name);
-    await form.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(form).toHaveCount(0);
+  const made = new Set<string>();
+  try {
+    await page.goto(`/tools-dev.html?open=studio:${ID}`);
+    await fitAll(page);
+    await expect(selectedTab(page)).toContainText("Event Graph", { timeout: 20_000 });
+    // keep the Function twice under two names (right-click → Save to my library)
+    // (a second Function for the second item: saving one twice is a new version, not an item)
+    await page.getByRole("button", { name: "Add a Function (its own graph)" }).click();
+    for (const [name, part] of [[names[0], "Reward"], [names[1], "New Function"]]) {
+      await page.locator(".st-mb-item").filter({ hasText: part }).first().click({ button: "right" });
+      await page.getByRole("menuitem", { name: /Save to my library/ }).click();
+      const form = page.getByRole("dialog", { name: "Save to my library" });
+      await form.getByLabel("Name").fill(name);
+      await form.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(form).toHaveCount(0);
+    }
+    await expect.poll(async () => (await items()).filter(mine).length).toBe(2);
+    const ours = (await items()).filter(mine).map((x) => x.id);
+    ours.forEach((id) => made.add(id));
+    expect(ours.sort()).toEqual([`pw_one_${tag}`, `pw_two_${tag}`]);
+
+    const dl = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export all" }).click();
+    const path = info.outputPath("library.lib.json");
+    await (await dl).saveAs(path);
+    const data = JSON.parse(await (await import("node:fs/promises")).readFile(path, "utf8"));
+    const inFile = (data.items as { id: string }[]).map((x) => x.id);
+    for (const id of ours) expect(inFile).toContain(id);
+    for (const id of had) expect(inFile).toContain(id);
+
+    // remove ours, import the whole file: ours come back (the others as renamed copies)
+    for (const id of ours) await del(id);
+    const before = new Set((await items()).map((x) => x.id));
+    await page.locator('.st-mb input[type="file"]').setInputFiles(path);
+    await expect(page.getByText(`Imported ${data.items.length} item${data.items.length === 1 ? "" : "s"} into your library`)).toBeVisible();
+    const after = (await items()).map((x) => x.id);
+    const added = after.filter((id) => !before.has(id));
+    added.forEach((id) => made.add(id));
+    for (const id of ours) expect(added).toContain(id);
+    expect(added.length).toBe(data.items.length);
+  } finally {
+    for (const id of made) if (!had.has(id)) await del(id);
   }
-  await expect.poll(async () => (await items()).filter((x) => !had.has(x.id)).length).toBe(2);
-  const ours = (await items()).filter((x) => !had.has(x.id)).map((x) => x.id);
-
-  const dl = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export all" }).click();
-  const path = info.outputPath("library.lib.json");
-  await (await dl).saveAs(path);
-  const data = JSON.parse(await (await import("node:fs/promises")).readFile(path, "utf8"));
-  expect(data.items.length).toBe(had.size + 2);
-
-  // remove ours, import the whole file: ours come back (the others as renamed copies)
-  for (const id of ours) await page.request.post(`/api/tools/studio/library/${id}/delete`, { headers: H });
-  await page.locator('.st-mb input[type="file"]').setInputFiles(path);
-  await expect(page.getByText(`Imported ${data.items.length} item${data.items.length === 1 ? "" : "s"} into your library`)).toBeVisible();
-  const after = (await items()).map((x) => x.id);
-  for (const id of ours) expect(after).toContain(id);
-  expect(after.length).toBe(had.size + data.items.length);
-  for (const id of after) if (!had.has(id)) await page.request.post(`/api/tools/studio/library/${id}/delete`, { headers: H });
 });
 
 test("map markers make the mode's kit", async ({ page }) => {

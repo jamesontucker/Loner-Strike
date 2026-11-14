@@ -32,7 +32,7 @@ test("Playtest button: shown, enabled, steps with time", async ({ page }) => {
   await expect(button).toBeVisible({ timeout: 20_000 });
   await expect(button).toBeEnabled();
   await button.click();
-  await expect(page.getByRole("status").filter({ hasText: "Compiling" })).toBeVisible();
+  await expect(page.getByTestId("studio-step").filter({ hasText: "Compiling" })).toBeVisible();
   await expect(page.getByText(/Waiting for the game… \d+ s/)).toBeVisible({ timeout: 10_000 });
   await page.request.post("/api/tools/studio/graph/pw_playtest/delete", { headers: { "X-Panel": "1" } });
 });
