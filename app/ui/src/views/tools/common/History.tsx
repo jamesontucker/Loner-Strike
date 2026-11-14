@@ -103,6 +103,9 @@ export function whenText(secs: number): string {
 export function sizeText(n: number): string {
   if (n < 1024) return `${n} byte${n === 1 ? "" : "s"}`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`;
+  // a round limit like 2,000,000,000 bytes reads as "2 GB", not "1907.3 MB" (QA4-CORE)
+  if (n >= 1e9 && n % 1e8 === 0) return `${+(n / 1e9).toFixed(1)} GB`;
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
@@ -259,7 +262,7 @@ function useSafetyActions(refresh: () => void) {
       list.length === 1
         ? `${defaultWords(list[0])} ${KEPT_NOTE}`
         : `Put these ${list.length} files back to Loner-Strike's defaults? ${list.map((f) => f.rel).join(", ")}. ${KEPT_NOTE}`;
-    if (!(await ask(text, { ok: "Restore defaults", danger: true }))) return;
+    if (!(await ask(text, { ok: list.length === 1 ? "Restore default" : "Restore defaults", danger: true }))) return;
     await run("Restoring defaults…", async () => done(await post("/api/safety/defaults", { ids: list.map((f) => f.id) })));
   };
   return { working, restore, defaults };

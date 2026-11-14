@@ -200,6 +200,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/setup/running"),
     ("GET", "/api/setup/scan"),
     ("POST", "/api/setup/uninstall"),
+    ("POST", "/api/setup/use-our-brain"),
     ("GET", "/api/share"),
     ("POST", "/api/share"),
     ("GET", "/api/smartchat"),
@@ -564,6 +565,9 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
             return user_only("Setting up or repairing the game's whole setup is off limits to agents (installing named add-ons is fine).");
         }
         return Policy::Ask(format!("install {comps} add-on(s) into the game"));
+    }
+    if route == "/api/setup/use-our-brain" {
+        return Policy::Ask("replace the game's ReGameDLL with Loner-Strike's bot brain (the old one is backed up)".into());
     }
     if route == "/api/setup/uninstall" {
         let comps = b("components").and_then(Value::as_array).map(Vec::len).unwrap_or(0);

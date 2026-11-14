@@ -136,15 +136,17 @@ async fn api_mapflag(State(st): State<Shared>, headers: HeaderMap, body: Bytes) 
     }
 }
 
-async fn thumb(State(st): State<Shared>, Path(file): Path<String>) -> Response {
+async fn thumb(State(st): State<Shared>, Path(file): Path<String>, Query(q): Query<HashMap<String, String>>) -> Response {
     let name = file.strip_suffix(".png").unwrap_or("").to_string();
+    // ?now=1 (the top strip): the radar right away, even while a screenshot is looked up
+    let radar_now = q.get("now").is_some_and(|v| v == "1");
     if !crate::maps::safe_arg(&name) {
         return reply(StatusCode::NOT_FOUND, json!({"error": "not found"}));
     }
     // never waits on GameBanana: a picture still being looked up is answered with what's
     // here now (the radar, or nothing), and not kept by the browser so the next ask gets it
     let (pic, looking) = with_game(&st, move |g| {
-        let (found, looking) = g.thumbnail(&name);
+        let (found, looking) = g.thumbnail(&name, radar_now);
         (found.and_then(|(p, kind)| std::fs::read(&p).ok().map(|d| (d, kind, p))), looking)
     })
     .await
@@ -154,9 +156,14 @@ async fn thumb(State(st): State<Shared>, Path(file): Path<String>) -> Response {
             let ctype = if path.extension().is_some_and(|x| x == "jpg") { "image/jpeg" } else { "image/png" };
             // a screenshot rarely changes; a radar may give way to one found later
             let cache = if looking { "no-cache" } else if kind == "shot" { "max-age=604800" } else { "max-age=3600" };
-            ([(header::CONTENT_TYPE, ctype), (header::CACHE_CONTROL, cache), (header::HeaderName::from_static("x-thumb-kind"), kind)], data).into_response()
+            let more = if looking { "1" } else { "0" };
+            ([(header::CONTENT_TYPE, ctype), (header::CACHE_CONTROL, cache), (header::HeaderName::from_static("x-thumb-kind"), kind), (header::HeaderName::from_static("x-thumb-looking"), more)], data).into_response()
         }
-        None => (StatusCode::NOT_FOUND, [(header::CONTENT_TYPE, "text/plain"), (header::CACHE_CONTROL, "no-store")], "no picture").into_response(),
+        // (x-thumb-looking: ask again soon; 0: there's no picture, show the map's name)
+        None => {
+            let more = if looking { "1" } else { "0" };
+            (StatusCode::NOT_FOUND, [(header::CONTENT_TYPE, "text/plain"), (header::CACHE_CONTROL, "no-store"), (header::HeaderName::from_static("x-thumb-looking"), more)], "no picture").into_response()
+        }
     }
 }
 
@@ -489,6 +496,24 @@ mod tests {
         let radar = image::load_from_memory(&b).unwrap();
         assert_eq!((radar.width(), radar.height()), (512, 300));
         assert_eq!(call(&st, "GET", "/thumb/de_gamma.png", None, false).await.0, StatusCode::NOT_FOUND);
+        // QA4-CORE F1: while GameBanana is still asked about a map with a radar, the card gets
+        // nothing yet (it shows the map's name), the top strip (?now=1) gets the radar, not kept,
+        // and both are told to ask again
+        let hl = root.join("Half-Life");
+        std::fs::write(hl.join("cstrike/maps/de_radar.bsp"), b"").unwrap();
+        image::RgbImage::from_pixel(64, 64, image::Rgb([0, 0, 0])).save(hl.join("cstrike/overviews/de_radar.bmp")).unwrap();
+        st.game().unwrap().store.pretend_looking("de_radar");
+        let ask = |uri: &str| Request::builder().uri(uri).header("host", HOST).body(Body::empty()).unwrap();
+        let res = server::router(st.clone(), Listener::Local).oneshot(ask("/thumb/de_radar.png")).await.unwrap();
+        assert_eq!((res.status(), res.headers()["x-thumb-looking"].to_str().unwrap()), (StatusCode::NOT_FOUND, "1"));
+        let res = server::router(st.clone(), Listener::Local).oneshot(ask("/thumb/de_radar.png?now=1")).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!((res.headers()["x-thumb-kind"].to_str().unwrap(), res.headers()["x-thumb-looking"].to_str().unwrap(), res.headers()["cache-control"].to_str().unwrap()), ("radar", "1", "no-cache"));
+        // a map with no picture at all: told not to ask again (the strip shows its name)
+        let res = server::router(st.clone(), Listener::Local).oneshot(ask("/thumb/de_gamma.png?now=1")).await.unwrap();
+        assert_eq!((res.status(), res.headers()["x-thumb-looking"].to_str().unwrap()), (StatusCode::NOT_FOUND, "0"));
+        std::fs::remove_file(hl.join("cstrike/maps/de_radar.bsp")).unwrap();
+        std::fs::remove_file(hl.join("cstrike/overviews/de_radar.bmp")).unwrap();
         assert_eq!(call(&st, "GET", "/thumb/a%20b.png", None, false).await.0, StatusCode::NOT_FOUND);
 
         let (_, b, _) = call(&st, "GET", "/api/health", None, false).await;

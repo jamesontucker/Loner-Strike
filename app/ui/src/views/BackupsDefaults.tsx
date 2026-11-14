@@ -33,7 +33,7 @@ export default function BackupsDefaults() {
       list.length === 1
         ? `Put ${names[0]} back to Loner-Strike's default? ${list[0].default === "original" ? (list[0].defaultGone ? "It wasn't there before Loner-Strike's tools made it, so it's removed." : "That's how it was before Loner-Strike's tools first changed it.") : "That's how Loner-Strike ships it."} The file as it is now is kept in its history, so you can undo this.`
         : `Put these ${list.length} files back to Loner-Strike's defaults? ${names.join(", ")}. Each one as it is now is kept in its history, so you can undo this.`;
-    if (!(await ask(text, { ok: "Restore defaults", danger: true }))) return;
+    if (!(await ask(text, { ok: list.length === 1 ? "Restore default" : "Restore defaults", danger: true }))) return;
     await run(label, async () => done(await post("/api/safety/defaults", { ids: list.map((f) => f.id) })));
   };
   const restoreAll = async () => {

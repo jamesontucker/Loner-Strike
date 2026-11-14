@@ -25,14 +25,14 @@ export type Scan = { installs: SetupInstall[]; catalog: CatalogItem[]; native_ma
  *  `rate` is bytes a second, `left` seconds to go; both optional. */
 export type Transfer = { sent: number; total: number; rate?: number; left?: number };
 export type Step = { id: string; label: string; state: "pending" | "running" | "done" | "error"; detail?: string; game?: string; transfer?: Transfer; upload?: Transfer };
-export type Job = { id?: string; state: "idle" | "running" | "done" | "error"; kind?: string; steps: Step[]; progress: number; error?: string; failed_compiles?: string[]; notes?: string[] };
+export type Job = { id?: string; state: "idle" | "running" | "done" | "error"; kind?: string; steps: Step[]; progress: number; error?: string; failed_compiles?: string[]; notes?: string[]; other_brain?: string[] };
 
 const ratingOf = (c: CatalogItem) => {
   if (c.kind !== "mode") return null;
   const mode = c.id.replace(/^mode-/, "");
   return BOT_RATING[mode] ?? "great";
 };
-const BASICS = "Classic, Deathmatch, Free for all, knife/pistol/deagle/AWP/scout modes and Surf";
+const BASICS = "Classic, Deathmatch, Free for all, knife/pistol/deagle/AWP/scout modes, Surf, Match (5v5), Last Stand and Battle Royale";
 
 export const anySetUp = (scan: Scan | null) => !!scan?.installs.some((i) => i.games.some((g) => g.installed));
 
@@ -87,6 +87,8 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
   const gameOpen = stage === "review" && !!runningQ.data?.running;
 
   const chosen = preset === "all" ? usable : preset === "basics" ? [] : usable.filter((c) => picked.has(c.id));
+  // setup also brings the fun and popular maps the game doesn't have yet (up to 24, from GameBanana)
+  const mapsNote = ", plus the popular maps you don't have yet";
 
   const { run, busy } = useActions();
   const start = () => run("setup:install", async () => {
@@ -190,6 +192,8 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
                     onClick={() => setGames((cur) => (on ? cur.filter((x) => x !== id) : [...cur, id].sort((a) => (a === "cstrike" ? -1 : 1))))}
                   >
                     <span className="game-title">{gameTitle(id)}</span>
+                    {/* which folder: it matters once a chosen folder sits beside Steam's (QA4-CORE UX 9) */}
+                    {g && scan.installs.length > 1 && <span className="game-folder mono" title={`${install.hl}/${id}`}>{`${install.hl}/${id}`}</span>}
                     <span className="muted">
                       {!g ? "Not installed in this Steam" : g.installed ? "Set up already; picking it updates it" : g.foreign ? "Has other mods installed; Loner-Strike works alongside them" : "Ready to set up"}
                     </span>
@@ -258,11 +262,12 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
             </ul>
             <p className="muted">It downloads from the original projects (GameBanana for maps), compiles the plugins, and backs up every file it replaces.</p>
             <p className="estimate">
+              {/* (measured: everything took about 7 minutes on a busy Mac, a third of it the maps; they now come 4 at a time) */}
               {preset === "basics" || !chosen.length
-                ? "About 15 MB to download. Usually under a minute."
+                ? `About 15 MB${mapsNote}. Usually 2 to 4 minutes.`
                 : preset === "all"
-                  ? "About 100 MB to download. Usually 2 to 5 minutes."
-                  : `Between 15 and 100 MB, depending on what you picked. A few minutes at most.`}
+                  ? `About 100 MB${mapsNote}. Usually 4 to 8 minutes.`
+                  : `Between 15 and 100 MB${mapsNote}, depending on what you picked. Usually 2 to 8 minutes.`}
             </p>
             {gameOpen && (
               <div className="banner">
@@ -336,7 +341,8 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
               )}
             </ul>
             {!!job?.failed_compiles?.length && <p className="err-text">These didn't build, so they won't load: {job.failed_compiles.join(", ")}. Run full setup again from Settings to retry. If it keeps failing, use Copy diagnostics under Settings, Help.</p>}
-            {job?.notes?.map((n) => <p key={n} className="muted">{n}</p>)}
+            {install && job?.other_brain?.map((g) => <OtherBrain key={g} hl={install.hl} game={g} />)}
+            {job?.notes?.filter((n) => !(job.other_brain?.length && n.includes("Kept the ReGameDLL"))).map((n) => <p key={n} className="muted">{n}</p>)}
             <BusyButton className="btn primary big-btn" busy={busy("setup:finish")} label="Start playing" busyLabel="Opening…" onClick={finish} />
             <p className="muted done-links">
               Find people to play with on <a href="https://discord.gg/K9eBHVVwZE" target="_blank" rel="noreferrer">our Discord</a>, and what's new at <a href="https://lonerstrike.com" target="_blank" rel="noreferrer">lonerstrike.com</a>.
@@ -344,6 +350,31 @@ export function Setup({ scan, fromSettings, onClose, onDone, onRescan }: { scan:
           </section>
         )}
       </div>
+    </div>
+  );
+}
+
+/** QA4-CORE F4: the game kept a ReGameDLL that isn't Loner-Strike's, so its bots don't have
+ *  Loner-Strike's brain. Said plainly, with a way to switch (the old one is backed up). */
+export function OtherBrain({ hl, game }: { hl: string; game: string }) {
+  const { run, busy } = useActions();
+  const toast = useToast();
+  const [done, setDone] = useState("");
+  const use = () =>
+    run(`brain:${game}`, async () => {
+      type Reply = { ok?: boolean; message?: string; error?: string };
+      const r = await postJson<Reply>("/api/setup/use-our-brain", { hl, game }).catch((): Reply => ({ ok: false, error: "Couldn't reach the app." }));
+      if (!r.ok) return toast(r.error ?? "Couldn't replace it.", true);
+      setDone(r.message ?? "Done.");
+    }, "Replacing the server code…");
+  if (done) return <p className="other-brain ok" role="status">{done}</p>;
+  return (
+    <div className="other-brain" role="group" aria-label={`${gameTitle(game)}: server code`}>
+      <p>
+        <b>{gameTitle(game)}: the bots won't have Loner-Strike's brain.</b> This game already had another ReGameDLL (the server code), so setup kept it. Bots play the old
+        way until it's replaced with Loner-Strike's. The one there now is backed up first.
+      </p>
+      <BusyButton className="btn primary" busy={busy(`brain:${game}`)} label="Use Loner-Strike's" busyLabel="Replacing…" onClick={use} />
     </div>
   );
 }
@@ -398,11 +429,14 @@ function NoGame({ nativeMac, onRescan, onClose }: { nativeMac: boolean; onRescan
           )}
           <div className="row">
             <BusyButton className="btn primary" busy={looking} label="Look again" busyLabel="Looking…" onClick={() => { setLooking(true); onRescan(); setTimeout(() => setLooking(false), 1500); }} />
-            {!nativeMac && <BusyButton className="btn" busy={choosing} label="Choose the game folder" busyLabel="Choosing…" onClick={choose} />}
+            {/* (also with the Mac Half-Life: the CrossOver one may be in a bottle Loner-Strike didn't look in: QA4-CORE UX 13) */}
+            <BusyButton className="btn" busy={choosing} label="Choose the game folder" busyLabel="Choosing…" onClick={choose} />
             <button className="btn" onClick={onClose}>Continue anyway</button>
           </div>
           <p className="muted small-note">
-            Installed somewhere unusual, like another Steam library or drive? Choose the Half-Life folder: the one with cstrike or czero in it.
+            {nativeMac
+              ? "Already have it in CrossOver, in a bottle or folder Loner-Strike didn't find? Choose that Half-Life folder: the one with cstrike or czero in it."
+              : "Installed somewhere unusual, like another Steam library or drive? Choose the Half-Life folder: the one with cstrike or czero in it."}
           </p>
         </section>
       </div>

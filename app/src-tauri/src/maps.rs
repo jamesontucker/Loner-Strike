@@ -363,12 +363,14 @@ impl Game {
     /// The map's picture, converted once and then cached: screenshots as a small JPEG
     /// (shown at a fraction of GameBanana's 530 pixels), radars as PNG. Also its kind,
     /// and whether a better picture may still turn up (see thumb_source).
-    pub fn thumbnail(&self, name: &str) -> (Option<(PathBuf, &'static str)>, bool) {
+    /// `radar_now`: the radar even while a screenshot may still turn up (the top strip's
+    /// small picture, which has no layout of its own for a radar: QA4-CORE F1).
+    pub fn thumbnail(&self, name: &str, radar_now: bool) -> (Option<(PathBuf, &'static str)>, bool) {
         let (kind, src, looking) = self.thumb_source(name);
         let (Some(kind), Some(src)) = (kind, src) else { return (None, looking) };
         // while a screenshot may still turn up the card shows the map's name: the card
         // only lays a radar out as one once the map list says "radar"
-        if kind == "radar" && looking {
+        if kind == "radar" && looking && !radar_now {
             return (None, true);
         }
         let cache = crate::localdata::join(&self.app, "cache");

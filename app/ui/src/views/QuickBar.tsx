@@ -146,11 +146,27 @@ export function QuickBar({ data, maps, refresh, reloadMaps }: { data: Online; ma
           </div>
         )}
         {!mod && <Menu label="You" items={you} active={!!me?.god || !!me?.noclip} />}
-        <button ref={announceButton} className="qb" aria-pressed={announcing} onClick={() => setAnnouncing((a) => !a)}>Announce</button>
+        <button ref={announceButton} className="qb qb-full" aria-pressed={announcing} onClick={() => setAnnouncing((a) => !a)}>Announce</button>
         {/* records your own game: a server has none (its HLTV records it) */}
         {targetKey() === "local" && (
-          <button className="qb" aria-pressed={!!st.recording} title="Records what you see to a demo file in your game folder. To watch it, open the game's console and type viewdemo and the file's name." disabled={busy(`quick:${targetKey()}:demo`)} onClick={() => once(`quick:${targetKey()}:demo`, () => run("gm_do", ["demo"]), st.recording ? "Stopping the recording…" : "Starting a recording…")}>{st.recording ? "● Stop recording" : "Record demo"}</button>
+          <button className="qb qb-full" aria-pressed={!!st.recording} title="Records what you see to a demo file in your game folder. To watch it, open the game's console and type viewdemo and the file's name." disabled={busy(`quick:${targetKey()}:demo`)} onClick={() => once(`quick:${targetKey()}:demo`, () => run("gm_do", ["demo"]), st.recording ? "Stopping the recording…" : "Starting a recording…")}>{st.recording ? "● Stop recording" : "Record demo"}</button>
         )}
+        {/* a narrow window: the last ones in a More menu instead of off the edge (QA4-CORE UX 3) */}
+        <span className="qb-more">
+          <Menu
+            label="More"
+            items={[
+              { label: "Announce", on: () => setAnnouncing((x) => !x), pressed: announcing },
+              {
+                label: st.recording ? "Stop recording" : "Record demo",
+                on: () => once(`quick:${targetKey()}:demo`, () => run("gm_do", ["demo"]), st.recording ? "Stopping the recording…" : "Starting a recording…"),
+                show: targetKey() === "local",
+                pressed: !!st.recording,
+              },
+            ]}
+            active={announcing || !!st.recording}
+          />
+        </span>
       </div>
       {picking && (
         <form className="quick-announce" onSubmit={(e) => { e.preventDefault(); if (pick) { once(`maps:${targetKey()}:change`, () => run("gm_map", [pick]), `Changing the map to ${pick}…`); setPicking(false); } }} onKeyDown={(e) => e.key === "Escape" && closePicking()}>

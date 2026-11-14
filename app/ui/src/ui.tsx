@@ -36,6 +36,12 @@ export function afterSheetBack(): Promise<void> {
     t = window.setTimeout(end, 300);
   });
 }
+/** Whether a sheet (dialog) is open: keys meant for the page behind it are left alone (the map
+ *  editor's Esc, Delete and the rest; EditorCoverage F-1). */
+export function sheetOpen() {
+  return sheetStack.length > 0;
+}
+
 export function closeSheetsAbove(landed: number) {
   if (ownBacks > 0) {
     ownBacks--;
@@ -128,7 +134,19 @@ export function Sheet({
       }
     };
     el?.addEventListener("keydown", key);
+    // Esc closes the top sheet wherever focus is: a button that had it can grey out (Apply while it
+    // works) or go away (a removed row), and focus falls to the page. The page behind never sees
+    // that Esc (EditorCoverage F-1: it dropped the editor's selection and left the sheet open).
+    const anywhere = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || sheetStack[sheetStack.length - 1] !== entry) return;
+      if (el && e.target instanceof Node && el.contains(e.target)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      close.current?.();
+    };
+    window.addEventListener("keydown", anywhere, true);
     return () => {
+      window.removeEventListener("keydown", anywhere, true);
       el?.removeEventListener("keydown", key);
       if (!keepApp && --openSheets === 0) root?.removeAttribute("inert");
       if (back?.isConnected) back.focus();
@@ -558,9 +576,9 @@ export function Info({ text }: { text: ReactNode }) {
 }
 
 /** A button that shows a spinner and another label while its action runs. */
-export function BusyButton({ busy, label, busyLabel, className = "btn", disabled, onClick, type = "button" }: { busy: boolean; label: ReactNode; busyLabel: string; className?: string; disabled?: boolean; onClick?: () => void; type?: "button" | "submit" }) {
+export function BusyButton({ busy, label, busyLabel, className = "btn", disabled, onClick, type = "button", title }: { busy: boolean; label: ReactNode; busyLabel: string; className?: string; disabled?: boolean; onClick?: () => void; type?: "button" | "submit"; title?: string }) {
   return (
-    <button type={type} className={className} disabled={busy || disabled} aria-busy={busy} onClick={onClick}>
+    <button type={type} className={className} disabled={busy || disabled} aria-busy={busy} onClick={onClick} title={title}>
       {busy ? (
         <>
           <span className="spinner" aria-hidden="true" />

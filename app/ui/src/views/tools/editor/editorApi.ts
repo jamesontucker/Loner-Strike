@@ -157,7 +157,7 @@ type Err = { error?: string };
 /** JSON GET; a failure to arrive reads like any other error. */
 async function getJson<T>(path: string): Promise<T & Err> {
   try {
-    const r = await fetch(path, { credentials: "same-origin" });
+    const r = await fetch(path, { credentials: "same-origin", headers: { "X-Panel": "1" } });
     return (await r.json()) as T & Err;
   } catch {
     return { error: "Couldn't reach the app." } as T & Err;
@@ -179,7 +179,7 @@ export const getDoc = () => getJson<Doc>(`${E}/doc`);
 export const getDocSince = (doc: number, since: number) => getJson<Doc | (DocChanges & { changes: true })>(`${E}/doc?doc=${doc}&since=${since}`);
 /** P5 (perf): answers when the document moves past `revision` (or after 25 s). */
 export const waitState = (doc: number, revision: number, signal?: AbortSignal) =>
-  fetch(`${E}/state?wait=${revision}&doc=${doc}`, { signal }).then((r) => r.json() as Promise<DocState & Err>, () => ({ error: "not reached" }) as DocState & Err);
+  fetch(`${E}/state?wait=${revision}&doc=${doc}`, { signal, headers: { "X-Panel": "1" } }).then((r) => r.json() as Promise<DocState & Err>, () => ({ error: "not reached" }) as DocState & Err);
 /** Checks: the stretched-texture limits (the Checks panel's settings, kept per computer). */
 export const CHECK_LIMITS_KEY = "ls.editor.checkLimits";
 export function checkLimits(): { minScale: number; maxScale: number } {
@@ -242,7 +242,7 @@ export async function getMeshes(docId: number | null, since: number | null): Pro
   if (since != null) q.set("since", String(since));
   let r: Response;
   try {
-    r = await fetch(`${E}/meshes?${q}`, { credentials: "same-origin" });
+    r = await fetch(`${E}/meshes?${q}`, { credentials: "same-origin", headers: { "X-Panel": "1" } });
   } catch {
     throw new Error("Couldn't reach the app.");
   }

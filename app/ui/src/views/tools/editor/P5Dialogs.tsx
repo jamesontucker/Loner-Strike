@@ -462,7 +462,7 @@ function ReplaceWith({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (mode !== "prefab" || prefabs) return;
-    void fetch("/api/tools/editor/prefabs", { credentials: "same-origin" })
+    void fetch("/api/tools/editor/prefabs", { credentials: "same-origin", headers: { "X-Panel": "1" } })
       .then((r) => r.json())
       .then((j) => setPrefabs(Array.isArray(j.prefabs) ? j.prefabs : []))
       .catch(() => setPrefabs([]));

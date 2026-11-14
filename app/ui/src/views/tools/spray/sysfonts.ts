@@ -45,7 +45,7 @@ export function loadSystemFont(family: string): Promise<State> {
       // only families the computer has (no request for one that isn't there)
       const known = await installed();
       if (!known.has(family.toLowerCase())) return "missing";
-      const r = await fetch(`/api/tools/spray/font?${new URLSearchParams({ family })}`, { credentials: "same-origin" });
+      const r = await fetch(`/api/tools/spray/font?${new URLSearchParams({ family })}`, { credentials: "same-origin", headers: { "X-Panel": "1" } });
       if (!r.ok) throw new Error(String(r.status));
       const face = new FontFace(family, await r.arrayBuffer());
       await face.load();

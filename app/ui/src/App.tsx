@@ -16,7 +16,7 @@ import { Bots } from "./views/Bots";
 import { SMARTER_CHAT, SmarterChat } from "./views/SmarterChat";
 import { Radio, RadioButton } from "./views/Radio";
 import { Friends } from "./views/Friends";
-import { Maps } from "./views/Maps";
+import { Maps, NoPicture } from "./views/Maps";
 import { Mods } from "./views/Mods";
 import { PlayIdle, PlayLive } from "./views/Play";
 import { Players } from "./views/Players";
@@ -696,11 +696,12 @@ const TOOLS_FOLD = "ls.toolsOpen";
 function ToolsNav({ section, onOpen }: { section: Section; onOpen: (focus: string) => void }) {
   const tool = useToolPage((s) => s.tool);
   const here = section === "tools";
+  // folded until it's been opened once (a first run starts with the core sections: QA4-CORE UX 12)
   const [folded, setFolded] = useState(() => {
     try {
-      return localStorage.getItem(TOOLS_FOLD) === "0";
+      return localStorage.getItem(TOOLS_FOLD) !== "1";
     } catch {
-      return false;
+      return true;
     }
   });
   useEffect(() => {
@@ -780,6 +781,45 @@ function Working({ phone }: { phone?: boolean }) {
   );
 }
 
+/** The top strip's map picture (QA4-CORE F1): the map's name tile underneath, the picture
+ *  over it once it has loaded. The radar comes right away (?now=1); while GameBanana is still
+ *  asked for a screenshot the app says so (x-thumb-looking) and the strip asks again, with a
+ *  new ?v= so nothing old is reused. A map with no picture keeps its name tile. */
+export function StripThumb({ map }: { map: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    let gone = false;
+    let timer = 0;
+    void (async () => {
+      try {
+        const r = await fetch(withTarget(`/thumb/${encodeURIComponent(map)}.png?now=1&v=${v}`), { credentials: "same-origin", headers: { "X-Panel": "1" } });
+        const more = r.headers.get("x-thumb-looking") === "1";
+        if (r.ok) {
+          const pic = URL.createObjectURL(await r.blob());
+          if (gone) URL.revokeObjectURL(pic);
+          else setUrl(pic);
+        }
+        // every 4 s for a minute at most: lookups take a few seconds each
+        if (more && !gone && v < 15) timer = window.setTimeout(() => setV(v + 1), 4000);
+      } catch {
+        /* the name tile stays */
+      }
+    })();
+    return () => {
+      gone = true;
+      window.clearTimeout(timer);
+    };
+  }, [map, v]);
+  useEffect(() => () => void (url && URL.revokeObjectURL(url)), [url]);
+  return (
+    <div className="thumb strip-thumb" aria-hidden="true">
+      <NoPicture name={map} />
+      {url && <img src={url} alt="" />}
+    </div>
+  );
+}
+
 function Strip({ data, reconnecting, lost, reason, app, server, srv, gameOpen }: { data: Online | null; reconnecting: boolean; lost: boolean; reason: string; app: AppInfo | null; server?: string; srv?: ServerInfo | null; gameOpen: boolean }) {
   if (!data) {
     return (
@@ -810,7 +850,7 @@ function Strip({ data, reconnecting, lost, reason, app, server, srv, gameOpen }:
   return (
     <header className="strip" data-tauri-drag-region>
       <div className="strip-map">
-        <div className="thumb" style={{ backgroundImage: `url(${withTarget(`/thumb/${encodeURIComponent(st.map)}.png`)})` }} aria-hidden="true" />
+        <StripThumb key={st.map} map={st.map} />
         <div>
           <button type="button" className="map-name strip-link" title="Maps" onClick={() => openPage("maps")}>{st.map}</button>
           <div className="strip-meta">

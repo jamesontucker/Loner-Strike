@@ -36,6 +36,9 @@ mod tests {
         if std::env::var_os("LS_APP_DIR").is_none() {
             std::env::set_var("LS_APP_DIR", &app_dir);
         }
+        // refuses to start if any app path (settings.json, the cache, downloads...) would be
+        // outside it (QA4-CORE F6)
+        let app_dir = crate::sys::app_dir();
         let g = crate::game::Game::with_app_dir(std::path::Path::new(&hl), &game, &app_dir);
         // backups (safety.rs) of what the tools save, in the temp app folder
         crate::safety::use_game(&g);

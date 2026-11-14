@@ -22,9 +22,10 @@ pub fn cache_dir() -> PathBuf {
     crate::sys::cache_root().join("downloads")
 }
 
-/// The Python installer's cache (not used when LONER_STRIKE_DOWNLOADS picks a folder).
-fn legacy_cache() -> Option<PathBuf> {
-    if std::env::var_os("LONER_STRIKE_DOWNLOADS").is_some() {
+/// The Python installer's cache (not used when LONER_STRIKE_DOWNLOADS picks a folder, or in
+/// a test build).
+pub fn legacy_cache() -> Option<PathBuf> {
+    if cfg!(test) || std::env::var_os("LONER_STRIKE_DOWNLOADS").is_some() {
         return None;
     }
     dirs::home_dir().map(|h| h.join(".loner-strike").join("downloads"))

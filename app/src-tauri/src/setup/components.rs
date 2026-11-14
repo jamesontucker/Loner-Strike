@@ -181,42 +181,77 @@ pub(crate) fn maps(rec: &mut Record, ctx: &Ctx, comp: &Value, base: f64, span: f
     }
     rec.data.maps.insert(id.clone(), Value::from(ours.clone()));
     let maps_dir = store.maps_dir();
-    let total = list.len();
-    for (i, m) in list.iter().enumerate() {
-        let names = strs(&m["maps"]);
-        let (Some(mod_id), Some(file_id)) = (m["mod"].as_i64(), m["file"].as_i64()) else { continue };
-        let have = names.iter().all(|n| maps_dir.join(format!("{n}.bsp")).exists());
-        // (there already, or put in by us once and removed by the player since)
-        if have || (ours.contains(&mod_id) && !installed(mod_id)) {
-            continue;
+    // what's to fetch: not there already, and not put in by us once and removed by the player since
+    let todo: Vec<(Vec<String>, i64, i64)> = list
+        .iter()
+        .filter_map(|m| Some((strs(&m["maps"]), m["mod"].as_i64()?, m["file"].as_i64()?)))
+        .filter(|(names, mod_id, _)| !(names.iter().all(|n| maps_dir.join(format!("{n}.bsp")).exists()) || (ours.contains(mod_id) && !installed(*mod_id))))
+        .collect();
+    let total = todo.len();
+    if total == 0 {
+        return;
+    }
+    // a few at a time (QA4-CORE: 24 one by one took minutes), each counted as it finishes
+    let say = |finished: usize| {
+        ctx.progress.detail(&format!("Downloading maps ({} of {total})", (finished + 1).min(total)));
+        ctx.progress.fraction(base + span * finished as f64 / total as f64);
+    };
+    let mut waiting = todo.into_iter();
+    // (job id, names, mod id, the player's own copy of it already (never claimed), deadline)
+    let mut active: Vec<(String, Vec<String>, i64, bool, std::time::Instant)> = Vec::new();
+    let mut finished = 0;
+    say(0);
+    loop {
+        while active.len() < PARALLEL_MAPS {
+            let Some((names, mod_id, file_id)) = waiting.next() else { break };
+            let theirs = installed(mod_id);
+            let job = store.start_install(mod_id, file_id);
+            active.push((job, names, mod_id, theirs, std::time::Instant::now() + Duration::from_secs(1800)));
         }
-        ctx.progress.detail(&format!("Getting the map {} ({} of {total})", names.join(", "), i + 1));
-        ctx.progress.fraction(base + span * i as f64 / total as f64);
-        // (the player's own copy of the same download is never claimed)
-        let theirs = installed(mod_id);
-        let job = store.start_install(mod_id, file_id);
-        let deadline = std::time::Instant::now() + Duration::from_secs(1800);
-        let ok = loop {
-            let j = store.job_list().into_iter().find(|j| j.id == job);
-            match j {
-                Some(j) if j.state == "done" => break true,
+        if active.is_empty() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(400));
+        let jobs = store.job_list();
+        let mut i = 0;
+        while i < active.len() {
+            let (job, names, mod_id, theirs, deadline) = &active[i];
+            let ok = match jobs.iter().find(|j| &j.id == job) {
+                Some(j) if j.state == "done" => Some(true),
                 Some(j) if j.state == "error" => {
                     ctx.progress.note(&format!("Couldn't install the map {}: {}", names.join(", "), j.message));
-                    break false;
+                    Some(false)
                 }
-                None => break false,
-                _ if std::time::Instant::now() > deadline => {
+                None => Some(false),
+                _ if std::time::Instant::now() > *deadline => {
                     ctx.progress.note(&format!("Gave up waiting for the map {}.", names.join(", ")));
-                    break false;
+                    Some(false)
                 }
-                _ => std::thread::sleep(Duration::from_millis(500)),
+                _ => None,
+            };
+            let Some(ok) = ok else {
+                i += 1;
+                continue;
+            };
+            let (mod_id, theirs) = (*mod_id, *theirs);
+            active.remove(i);
+            finished += 1;
+            say(finished);
+            if ok && !theirs && installed(mod_id) && !ours.contains(&mod_id) {
+                ours.push(mod_id);
+                rec.data.maps.insert(id.clone(), Value::from(ours.clone()));
             }
-        };
-        if ok && !theirs && installed(mod_id) && !ours.contains(&mod_id) {
-            ours.push(mod_id);
-            rec.data.maps.insert(id.clone(), Value::from(ours.clone()));
         }
     }
+}
+
+/// How many maps setup downloads at once.
+const PARALLEL_MAPS: usize = 4;
+
+/// How many of a component's maps setup would still download for a game (not there yet):
+/// what the install step's share of the progress bar is sized by.
+pub fn maps_to_get(comp: &Value, maps_dir: &std::path::Path) -> usize {
+    comp["maps"].as_array().map(|l| l.iter().filter(|m| !strs(&m["maps"]).iter().all(|n| maps_dir.join(format!("{n}.bsp")).exists())).count()).unwrap_or(0)
 }
 
 /// Installs one component. Ok(false) if a plugin didn't compile (it won't load).

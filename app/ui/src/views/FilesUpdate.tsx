@@ -101,6 +101,8 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp, server, withOthers
     );
 
   const whose = and(games.map((g) => `${title(g)} (${count(g)})`));
+  // (QA4-CORE: a disabled button says why when pointed at)
+  const closeFirst = `Close ${and([...new Set(games.map((g) => gameTitle(g.id)))])} first`;
   const scope = server ? " Your game and other servers are updated separately." : " Your servers update on their own.";
   const dismiss = () => {
     try { localStorage.setItem(DISMISS(), sig); } catch { /* hidden for this session only */ }
@@ -119,7 +121,7 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp, server, withOthers
           {ON_THIS_COMPUTER ? (
             <>
               <button className="btn small" onClick={() => setOpen(true)}>Details</button>
-              <BusyButton className="btn small primary" busy={updating} disabled={blocked} label="Update all" busyLabel="Updating…" onClick={() => update(games.map((g) => ({ g, ids: all(g) })))} />
+              <BusyButton className="btn small primary" busy={updating} disabled={blocked} title={blocked ? closeFirst : undefined} label="Update all" busyLabel="Updating…" onClick={() => update(games.map((g) => ({ g, ids: all(g) })))} />
             </>
           ) : (
             <span className="muted">Update on the computer</span>
@@ -140,7 +142,7 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp, server, withOthers
               <section key={g.id} className="files-update-game">
                 <div className="files-update-row">
                   <h3>{title(g)}</h3>
-                  <button className="btn small" disabled={blocked || updating} onClick={() => { setOpen(false); update([{ g, ids: all(g) }]); }}>Update</button>
+                  <button className="btn small" disabled={blocked || updating} title={blocked ? closeFirst : undefined} onClick={() => { setOpen(false); update([{ g, ids: all(g) }]); }}>Update</button>
                 </div>
                 <ul className="files-update-list">
                   {g.outdated.map((id) => <li key={id}>{name(id)}</li>)}
@@ -151,7 +153,7 @@ export function FilesUpdate({ app, scan, gameOpen, reloadApp, server, withOthers
             ))}
             {blocked && <p className="muted small-note">Close the game first.</p>}
             <div className="row">
-              <BusyButton className="btn primary" busy={updating} disabled={blocked} label="Update all" busyLabel="Updating…" onClick={() => { setOpen(false); update(games.map((g) => ({ g, ids: all(g) }))); }} />
+              <BusyButton className="btn primary" busy={updating} disabled={blocked} title={blocked ? closeFirst : undefined} label="Update all" busyLabel="Updating…" onClick={() => { setOpen(false); update(games.map((g) => ({ g, ids: all(g) }))); }} />
               <button className="btn" onClick={() => setOpen(false)}>Close</button>
             </div>
           </div>

@@ -442,6 +442,12 @@ impl MapStore {
         true
     }
 
+    /// Tests: a map's lookup counts as under way (without asking GameBanana).
+    #[cfg(test)]
+    pub fn pretend_looking(&self, name: &str) {
+        self.later.lock().unwrap_or_else(|e| e.into_inner()).wanted.insert(name.to_lowercase());
+    }
+
     /// Queues the lookups for a whole map list behind the ones asked for on screen, so
     /// the pictures fill in without scrolling to every map first. `names` are the maps
     /// the list marked "lookup".

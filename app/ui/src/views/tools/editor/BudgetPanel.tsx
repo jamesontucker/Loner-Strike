@@ -53,7 +53,7 @@ const Y_TYPES: Record<string, { models: string[]; sounds: number }> = {
 
 export async function getBudget(): Promise<Report | null> {
   try {
-    const r = (await (await fetch("/api/tools/editor/budget")).json()) as Report;
+    const r = (await (await fetch("/api/tools/editor/budget", { headers: { "X-Panel": "1" } })).json()) as Report;
     return r.error ? null : r;
   } catch {
     return null;
@@ -62,7 +62,7 @@ export async function getBudget(): Promise<Report | null> {
 
 let creatureCache: Promise<Creature[]> | null = null;
 function creatures(): Promise<Creature[]> {
-  creatureCache ??= fetch("/api/tools/creatures")
+  creatureCache ??= fetch("/api/tools/creatures", { headers: { "X-Panel": "1" } })
     .then((r) => r.json())
     .then((r: { types?: Creature[]; templates?: Creature[] }) => {
       const m = new Map<string, Creature>();

@@ -395,7 +395,7 @@ const TIME_LIMITS: [string, string][] = [["0", "None"], ["10", "10 min"], ["20",
 /** A touch screen: the search box doesn't take focus by itself (that opens the keyboard over the list). */
 const TOUCH = window.matchMedia("(pointer: coarse)").matches;
 
-/** A map list you can type into: the mode's maps, recent and favourites first. */
+/** A map list you can type into: the mode's maps, recent and favorites first. */
 function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelledBy }: { value: string; maps: MapInfo[]; mode?: string; modeName?: string; recent: MapInfo[]; favs: MapInfo[]; onPick: (m: string) => void; labelledBy: string }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -473,7 +473,7 @@ function MapPicker({ value, maps, mode, modeName, recent, favs, onPick, labelled
                   return (
                     <button key={label + m.name} id={optId(i)} type="button" role="option" tabIndex={-1} aria-selected={m.name === value} className={i === active ? "active" : ""} onMouseEnter={() => setActive(i)} onClick={() => choose(m.name)}>
                       {m.name}
-                      {m.fav && <span className="muted" aria-label="favourite"> ★</span>}
+                      {m.fav && <span className="muted" aria-label="favorite"> ★</span>}
                     </button>
                   );
                 })}
@@ -519,7 +519,7 @@ function SwitchMode({ mode, current, map, maps, onClose, onGo }: { mode: Mode; c
     ? listed.map((n) => byName.get(n.toLowerCase())).filter((m): m is MapInfo => !!m)
     : have.filter((m) => prefixes.some((p) => m.name.toLowerCase().startsWith(p)));
   const query = q.trim().toLowerCase();
-  // which maps: the mode's own (when it has any), every map, favourites or recently played;
+  // which maps: the mode's own (when it has any), every map, favorites or recently played;
   // the search narrows whichever is picked
   const [show, setShow] = useState<"mode" | "all" | "fav" | "recent" | null>(null);
   const filters: ["mode" | "all" | "fav" | "recent", string][] = [

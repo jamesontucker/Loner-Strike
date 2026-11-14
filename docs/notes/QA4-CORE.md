@@ -301,3 +301,55 @@ Verified in one sim (`Sim/QA4FIX`, port 27461, `-insecure`, ls-next3 **6c2f748**
 - **Not verified:** a returning player's saved stats seen in game (bots get new names each map here; the load query
   runs without errors and every save needs a loaded row). One unexplained stall in the first run (bb_aztec → bb_street
   map change during nav learning, 0% CPU, no error line); not reproduced in the next three map changes on those maps.
+
+---
+
+## Fixed (P5, 2026-11-14)
+F3 (Base Builder) and F5 (Gun Game) went to another agent. The contrast items went to Parity A's app-wide pass.
+- **F1, the strip's map picture.** `/thumb/<map>.png?now=1` returns the radar right away, even while a GameBanana
+  screenshot is still being looked up (`no-cache`). Every answer, including a 404, now carries `x-thumb-looking`. The
+  strip (`StripThumb`, App.tsx) draws the Maps page's name tile (prefix and name), and the picture fades in over it once
+  it has loaded (an `<img>`, no inline background). While the app says it's still looking, the strip asks again every
+  4 s for up to a minute, with a new `?v=`. A custom map with no picture keeps its name tile and isn't asked about again.
+- **F2, the supporters' VIP settings.** Every read from the pages now sends `X-Panel`: getJson, getJsonAt, the tools'
+  get/tryGet/fetchOk, and the 14 direct fetches in the editor, navfix and viewer. `scripts/test-panel-gets.mjs`
+  (`npm run test:panel`) reads the Rust GET routes whose handlers check from_panel (4 today), and fails on any UI fetch
+  to the app without X-Panel, or on any panel-only GET used as an `src`, `href`, `url()` or EventSource. When the block
+  doesn't load, it now says what to try and offers a Retry.
+- **F4, an existing ReGameDLL.** `foundation::server_code`:
+  - Loner-Strike's brain of any version (its `bot_ls_` cvars) is replaced with the pinned one, as an update. The old
+    one is backed up and a note says so.
+  - Another ReGameDLL is kept. The done screen says "<game>: the bots won't have Loner-Strike's brain." and offers
+    **Use Loner-Strike's** (`POST /api/setup/use-our-brain`, which backs up the old one; MCP asks first).
+  - Valve's mp.dll, or one setup wrote itself, is replaced. That includes the stock 5.30.0.814 on CZ from QA4-A's trap.
+  - The same rule applies to both games.
+- **F6, test isolation.** In test builds every app path is under `LS_APP_DIR`, or a scratch folder in the temp folder
+  when it's unset. That covers app_dir, settings.json (now `app_dir()/settings.json`), the cache, setup's downloads,
+  the big folders, the window's data, the old panel's folder, the old installer's cache (none), and servers by default.
+  The first time a test build asks for an app path it checks `sys::app_paths()` and panics if any of them would be
+  outside. The Tools dev server checks at start.
+- **First-run time (UX 8).** The fun maps download 4 at a time ("Downloading maps (n of 24)"). The step's share of the
+  bar is sized by the maps still to download (1 per map), so the bar no longer sits at 99% while they come in. The
+  review's estimate now counts the maps: basics "2 to 4 minutes", everything "4 to 8 minutes".
+- **UX items:**
+  - 3: In a narrow window, Announce and Record demo fold into a More menu. Under 700 px of height the update bar is
+    one line.
+  - 4: A disabled main button looks switched off, and Update all's tooltip says "Close Counter-Strike 1.6 first".
+  - 5: Find servers drops Game and Bots in a narrow window (a container query), so Map and Latency stay in view.
+  - 6: The Admins Name field lines up with SteamID.
+  - 7: The backup cap reads "past 2 GB", and the confirm button for a single file says "Restore default".
+  - 9: The basics name Match, Last Stand and Battle Royale. When there's more than one install, Which game? shows
+    each game's folder.
+  - 10: A "Remove the N that aren't installed" button.
+  - 11: "favorite".
+  - 12: Tools (Beta) starts folded until it has been opened once.
+  - 13: With the Mac Half-Life, "Choose the game folder" stays, with a note that fits.
+  - 1 and 2: covered by F1 and F2 above.
+- **Not done:** the smaller items (the setup card's empty scrollbar track, the Bots page's "Personality 100 Normal").
+- **Tests:**
+  - Rust: `which_server_code_is_kept` and `a_kept_regamedll_reaches_the_done_screen` (foundation),
+    `test_builds_keep_every_app_path_in_the_test_folder` (sys), the radar-now and looking headers in
+    panel_api `endpoints`, and the funmaps share in `plan_checks_requests`.
+  - Node: `test-panel-gets.mjs`.
+  - Playwright: `tests/qa4-core.spec.ts`, 6 tests passing in Chromium and WebKit (strip picture, custom map tile,
+    X-Panel, done screen and Use Loner-Strike's, Tools fold, small window).

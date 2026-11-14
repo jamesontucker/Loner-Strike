@@ -170,14 +170,46 @@ pub fn amxmodx(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String>
     Ok(())
 }
 
-/// ReGameDLL replaces the game's own server code (mp.dll); the original is backed up.
+/// What server code (mp.dll) a game has, as setup sees it (QA4-CORE F4).
+#[derive(Debug, PartialEq, Eq)]
+pub enum ServerCode {
+    /// Loner-Strike's ReGameDLL, any version (its bot cvars, `bot_ls_...`): setup puts the
+    /// pinned one in, as an update
+    OurBrain,
+    /// another ReGameDLL (a mod pack's, the stock one) that Loner-Strike didn't put there: kept,
+    /// and the player is told the bots won't have Loner-Strike's brain until it's replaced
+    OtherReGameDll,
+    /// the game's own (Valve's), one setup wrote, or none: replaced, the original backed up
+    Replace,
+}
+
+pub fn server_code(rec: &Record) -> ServerCode {
+    const MP: &str = "dlls/mp.dll";
+    if mentions(rec, MP, b"bot_ls_") {
+        ServerCode::OurBrain
+    } else if theirs(rec, MP) && mentions(rec, MP, b"ReGameDLL") {
+        ServerCode::OtherReGameDll
+    } else {
+        ServerCode::Replace
+    }
+}
+
+/// ReGameDLL replaces the game's own server code (mp.dll); the original is backed up. Another
+/// ReGameDLL is kept (see ServerCode); Loner-Strike's own brain of any version is updated.
 pub fn regamedll(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String> {
     let rg = get(&REGAMEDLL, ctx, tmp, "rg")?;
-    // a server that already runs ReGameDLL (maybe a newer one) keeps its own
-    if theirs(rec, "dlls/mp.dll") && mentions(rec, "dlls/mp.dll", b"ReGameDLL") {
-        ctx.progress.note("Kept the ReGameDLL that was already there.");
-    } else {
-        rec.copy(&need(rg.join("bin/win32/cstrike/dlls/mp.dll"), "ReGameDLL")?, "dlls/mp.dll")?;
+    match server_code(rec) {
+        ServerCode::OtherReGameDll => {
+            ctx.progress.note(KEPT_OTHER_REGAMEDLL);
+            ctx.progress.kept_other_brain();
+        }
+        code => {
+            let was_ours_elsewhere = code == ServerCode::OurBrain && !rec.ours("dlls/mp.dll");
+            rec.copy(&need(rg.join("bin/win32/cstrike/dlls/mp.dll"), "ReGameDLL")?, "dlls/mp.dll")?;
+            if was_ours_elsewhere {
+                ctx.progress.note("Updated Loner-Strike's bot brain (its ReGameDLL) to the current one. The old one is backed up.");
+            }
+        }
     }
     for cfg in ["game.cfg", "game_init.cfg"] {
         if !rec.exists(cfg) {
@@ -185,6 +217,18 @@ pub fn regamedll(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), Strin
         }
     }
     Ok(())
+}
+
+pub const KEPT_OTHER_REGAMEDLL: &str =
+    "Kept the ReGameDLL that was already there. It isn't Loner-Strike's, so bots won't have Loner-Strike's brain until it's replaced.";
+
+/// Puts Loner-Strike's ReGameDLL in place of another one setup kept (the setup done screen's
+/// "Use Loner-Strike's"): the old one is backed up, like every file setup replaces.
+pub fn use_our_brain(rec: &mut Record, ctx: &Ctx, tmp: &TempDir) -> Result<(), String> {
+    let rg = get(&REGAMEDLL, ctx, tmp, "rg")?;
+    rec.begin("foundation");
+    rec.copy(&need(rg.join("bin/win32/cstrike/dlls/mp.dll"), "ReGameDLL")?, "dlls/mp.dll")?;
+    rec.save()
 }
 
 /// liblist.gam with gamedll pointing at Metamod, or None if it already does.
@@ -229,6 +273,48 @@ mod tests {
         );
         assert_eq!(point_at_metamod(&point_at_metamod(lib).unwrap()), None);
         assert_eq!(point_at_metamod("game \"x\"\n\n").unwrap(), "game \"x\"\r\ngamedll \"addons\\metamod\\dlls\\metamod.dll\"\r\n");
+    }
+
+    /// QA4-CORE F4 (and QA4-A's CZ trap): Loner-Strike's brain of any version is updated, another
+    /// ReGameDLL is kept (and said), Valve's or one setup wrote is replaced; the same in both games
+    #[test]
+    fn which_server_code_is_kept() {
+        let root = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "brain-").unwrap();
+        for game in ["cstrike", "czero"] {
+            let dir = root.join(game);
+            std::fs::create_dir_all(dir.join("dlls")).unwrap();
+            let put = |b: &[u8]| std::fs::write(dir.join("dlls/mp.dll"), b).unwrap();
+            let rec = Record::open(&dir);
+            put(b"MZ...ReGameDLL version: 5.30.0.841-dev...bot_ls_lines\0");
+            assert_eq!(server_code(&rec), ServerCode::OurBrain, "an older Loner-Strike brain left behind: updated");
+            put(b"MZ...ReGameDLL version: 5.21.0.556-dev...");
+            assert_eq!(server_code(&rec), ServerCode::OtherReGameDll, "another ReGameDLL: kept");
+            put(b"MZ...Counter-Strike...");
+            assert_eq!(server_code(&rec), ServerCode::Replace, "Valve's own: replaced");
+            // a stock ReGameDLL an earlier setup put there itself (CZ on this Mac, QA4-A): replaced
+            let mut rec = Record::open(&dir);
+            put(b"MZ...ReGameDLL version: 5.30.0.814-dev...");
+            rec.begin("foundation");
+            rec.copy(&dir.join("dlls/mp.dll"), "dlls/mp.dll").unwrap();
+            assert_eq!(server_code(&rec), ServerCode::Replace, "{game}: one setup wrote, without the brain");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The done screen hears which game kept another ReGameDLL (and only once)
+    #[test]
+    fn a_kept_regamedll_reaches_the_done_screen() {
+        let job = crate::setup::job_for_test("install", &[]);
+        job.set_game_for_test("czero");
+        let p: &dyn crate::setup::Progress = &*job;
+        p.note(KEPT_OTHER_REGAMEDLL);
+        p.kept_other_brain();
+        p.kept_other_brain();
+        let v = job.view();
+        assert_eq!(v.other_brain, ["czero"]);
+        assert!(v.notes[0].starts_with("Counter-Strike: Condition Zero: Kept the ReGameDLL") && v.notes[0].contains("won't have Loner-Strike's brain"), "{:?}", v.notes);
+        assert!(serde_json::to_value(&v).unwrap()["other_brain"] == serde_json::json!(["czero"]));
+        assert!(serde_json::to_value(crate::setup::JobView::idle()).unwrap().get("other_brain").is_none());
     }
 
     /// AMX Mod X's own configs a game already has (admins, the player's plugins) are kept on a

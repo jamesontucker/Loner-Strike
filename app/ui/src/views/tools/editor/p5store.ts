@@ -123,7 +123,7 @@ async function post<T>(path: string, body: unknown = {}): Promise<T & Err> {
 }
 async function get<T>(path: string): Promise<T & Err> {
   try {
-    const r = await fetch(path, { credentials: "same-origin" });
+    const r = await fetch(path, { credentials: "same-origin", headers: { "X-Panel": "1" } });
     return (await r.json()) as T & Err;
   } catch {
     return { error: "Couldn't reach the app." } as T & Err;

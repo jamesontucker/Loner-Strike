@@ -49,7 +49,8 @@ export function checked<T>(v: unknown): T {
 export async function fetchOk(path: string, init: RequestInit = {}, notFound = "That isn't there any more."): Promise<Response> {
   let r: Response;
   try {
-    r = await fetch(path, { credentials: "same-origin", ...init });
+    // X-Panel on every request: some GETs answer only our own pages (scripts/test-panel-gets.mjs)
+    r = await fetch(path, { credentials: "same-origin", ...init, headers: { "X-Panel": "1", ...(init.headers as Record<string, string> | undefined) } });
   } catch (e) {
     if (isAbort(e)) throw e;
     throw new ToolsError(NOT_REACHED);
@@ -87,7 +88,7 @@ export async function getBytes(path: string, signal?: AbortSignal, notFound?: st
 /** GET JSON that never throws: a failure comes back as {error}. Aborts still throw. */
 export async function tryGet<T>(path: string, signal?: AbortSignal): Promise<T & Err> {
   try {
-    const r = await fetch(path, { credentials: "same-origin", signal });
+    const r = await fetch(path, { credentials: "same-origin", headers: { "X-Panel": "1" }, signal });
     if (!r.ok && r.status !== 400) {
       const v = await r.json().catch(() => null);
       return { error: (v && typeof v.error === "string" && v.error) || (r.status === 404 ? "That isn't there any more." : WENT_WRONG) } as T & Err;

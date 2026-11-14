@@ -39,7 +39,7 @@ const PAGE = 150;
 export const COLLATOR = new Intl.Collator();
 
 /** What a map without a screenshot shows: its type and name, like a map-loading screen. */
-function NoPicture({ name }: { name: string }) {
+export function NoPicture({ name }: { name: string }) {
   const i = name.indexOf("_");
   const kind = i > 0 && i <= 5 ? name.slice(0, i) : "";
   return (

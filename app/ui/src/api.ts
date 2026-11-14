@@ -80,7 +80,8 @@ export const isSignedOut = (e: unknown) => e instanceof HttpError && e.status ==
 export async function getJson<T>(path: string): Promise<T> {
   const { signal, done } = targetSignal();
   try {
-    const r = await fetch(path, { credentials: "same-origin", headers: targetHeader(), signal });
+    // X-Panel on reads too: some GETs answer only our own pages (scripts/test-panel-gets.mjs)
+    const r = await fetch(path, { credentials: "same-origin", headers: { "X-Panel": "1", ...targetHeader() }, signal });
     if (!r.ok && r.status !== 400) throw new HttpError(path, r.status);
     return (await r.json()) as T;
   } finally {
@@ -91,7 +92,7 @@ export async function getJson<T>(path: string): Promise<T> {
 /** GET for a set target (the one an action started on), without the switch check: for
  *  following a job to its end, which must finish even if another server is opened. */
 export async function getJsonAt<T>(path: string, target: string | null, signal?: AbortSignal): Promise<T> {
-  const r = await fetch(path, { credentials: "same-origin", headers: target ? { "X-Target": target } : {}, signal });
+  const r = await fetch(path, { credentials: "same-origin", headers: { "X-Panel": "1", ...(target ? { "X-Target": target } : {}) }, signal });
   if (!r.ok && r.status !== 400) throw new HttpError(path, r.status);
   return (await r.json()) as T;
 }

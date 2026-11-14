@@ -382,7 +382,16 @@ function Rotation({ d, maps, send, saveSettings, onDirty }: { d: Data; maps: Map
                 )}
               </div>
             )}
-            {missing.length > 0 && <p className="err-text">Remove the maps that aren't installed before saving.</p>}
+            {missing.length > 0 && (
+              <div className="row rot-missing">
+                <p className="err-text">
+                  {missing.length === 1 ? "1 map in the list isn't installed" : `${missing.length} maps in the list aren't installed`}. Remove {missing.length === 1 ? "it" : "them"} before saving.
+                </p>
+                <button className="btn small" onClick={() => edit(list.filter((m) => installed.has(m.toLowerCase())))}>
+                  Remove the {missing.length === 1 ? "one that isn't" : `${missing.length} that aren't`} installed
+                </button>
+              </div>
+            )}
 
             <div className="row">
               <BusyButton className="btn primary" busy={busy(rotKey("save"))} disabled={rotBusy || !dirty || missing.length > 0 || (!scope && list.length === 0)} label="Save rotation" busyLabel="Saving…" onClick={save} />

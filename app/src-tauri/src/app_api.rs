@@ -80,8 +80,9 @@ pub fn new_token() -> String {
     (0..20).map(|_| C[r.gen_range(0..C.len())] as char).collect()
 }
 
-fn settings_path() -> PathBuf {
-    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Loner-Strike").join("settings.json")
+/// settings.json, in the app's folder (a test build's scratch folder under test: QA4-CORE F6).
+pub fn settings_path() -> PathBuf {
+    crate::sys::app_dir().join("settings.json")
 }
 
 // one change to settings.json at a time (read, change, write)
@@ -857,18 +858,10 @@ async fn api_remove_everything(State(st): State<Shared>, headers: HeaderMap) -> 
         }
         // the app's own data, and the window's saved size (a Tauri plugin's folder)
         let mut dirs_to_go = vec![crate::sys::app_dir()];
-        if let Some(d) = dirs::data_dir() {
-            dirs_to_go.push(d.join("gg.lonerstrike.app"));
-        }
-        if let Some(d) = dirs::config_dir() {
-            dirs_to_go.push(d.join("gg.lonerstrike.app"));
-        }
         // the cache (never the system cache folder's Loner-Strike on Windows: the app is
         // installed there), and the window's own data
         dirs_to_go.push(crate::sys::cache_root());
-        if let Some(d) = dirs::cache_dir() {
-            dirs_to_go.push(d.join("gg.lonerstrike.app"));
-        }
+        dirs_to_go.extend(crate::sys::window_data_dirs());
         for d in dirs_to_go {
             if d.is_dir() {
                 // (Windows: the open window's WebView2 data is in use until the app quits; the

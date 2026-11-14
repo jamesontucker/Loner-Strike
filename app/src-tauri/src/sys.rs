@@ -8,13 +8,87 @@ use std::time::{Duration, Instant};
 
 /// The app's own files (install records, caches, playit key): <config dir>/Loner-Strike.
 pub fn app_dir() -> PathBuf {
-    // test builds (the Tools dev server, agents' test servers) can point it at a scratch folder,
-    // so they never touch the real app's files
+    // test builds (the Tools dev server, agents' test servers, cargo test) never touch the
+    // real app's files: everything goes under LS_APP_DIR, or a scratch folder (QA4-CORE F6)
     #[cfg(test)]
-    if let Some(d) = std::env::var_os("LS_APP_DIR") {
-        return PathBuf::from(d);
+    {
+        let root = test_root();
+        check_isolated_once(&root);
+        return root;
     }
+    #[allow(unreachable_code)]
     dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Loner-Strike")
+}
+
+/// Test builds: where every app path goes (LS_APP_DIR, else a scratch folder in the temp folder).
+#[cfg(test)]
+pub fn test_root() -> PathBuf {
+    std::env::var_os("LS_APP_DIR").map(PathBuf::from).unwrap_or_else(|| std::env::temp_dir().join("loner-strike-test-app"))
+}
+
+/// Every folder and file the app keeps its own data in (settings, records, caches, downloads,
+/// the window's data, the old panel's folder it adopts). In a test build all of them must be
+/// under the test root, or the build refuses to go on.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn app_paths() -> Vec<(&'static str, PathBuf)> {
+    let mut v = vec![
+        ("the app folder", app_dir_unchecked()),
+        ("settings.json", crate::app_api::settings_path()),
+        ("the cache", cache_root()),
+        ("setup's downloads", crate::setup::fetch::cache_dir()),
+        ("the big folders", crate::localdata::local_root()),
+    ];
+    for rel in crate::localdata::BIG {
+        v.push(("a big folder", crate::localdata::dir(rel)));
+    }
+    v.extend(window_data_dirs().into_iter().map(|d| ("the window's data", d)));
+    if let Some(d) = old_panel_dir() {
+        v.push(("the old panel's folder", d));
+    }
+    if let Some(d) = crate::setup::fetch::legacy_cache() {
+        v.push(("the old installer's downloads", d));
+    }
+    v
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn app_dir_unchecked() -> PathBuf {
+    #[cfg(test)]
+    return test_root();
+    #[allow(unreachable_code)]
+    dirs::config_dir().unwrap_or_else(std::env::temp_dir).join("Loner-Strike")
+}
+
+/// The paths of `app_paths` that aren't under `root` (a test build's check).
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn outside(root: &Path, paths: &[(&'static str, PathBuf)]) -> Vec<String> {
+    paths.iter().filter(|(_, p)| !p.starts_with(root)).map(|(what, p)| format!("{what}: {}", p.display())).collect()
+}
+
+/// A test build refuses to go on (panics) the first time an app path is asked for, if any of
+/// them would be outside the test root: real app data is never written by a test.
+#[cfg(test)]
+fn check_isolated_once(root: &Path) {
+    static CHECKED: OnceLock<()> = OnceLock::new();
+    thread_local!(static CHECKING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) });
+    if CHECKED.get().is_some() || CHECKING.with(|c| c.get()) {
+        return;
+    }
+    CHECKING.with(|c| c.set(true));
+    let bad = outside(root, &app_paths());
+    CHECKING.with(|c| c.set(false));
+    if !bad.is_empty() {
+        panic!("Test build: these app paths aren't under the test folder {} (LS_APP_DIR), so nothing runs:\n{}", root.display(), bad.join("\n"));
+    }
+    let _ = CHECKED.set(());
+}
+
+/// The window's own data (a Tauri plugin's and the web view's folders).
+pub fn window_data_dirs() -> Vec<PathBuf> {
+    #[cfg(test)]
+    return vec![test_root().join("window-data")];
+    #[allow(unreachable_code)]
+    [dirs::data_dir(), dirs::config_dir(), dirs::cache_dir()].into_iter().flatten().map(|d| d.join("gg.lonerstrike.app")).collect()
 }
 
 /// The app's cache (setup's downloads and work folders). On Windows not the system cache
@@ -22,6 +96,9 @@ pub fn app_dir() -> PathBuf {
 /// app itself (installMode currentUser), so clearing the cache there deleted the app. It
 /// goes in the app's own %LOCALAPPDATA%\gg.lonerstrike.app (the window's data is there too).
 pub fn cache_root() -> PathBuf {
+    #[cfg(test)]
+    return test_root().join("system-cache");
+    #[allow(unreachable_code)]
     let base = dirs::cache_dir().unwrap_or_else(std::env::temp_dir);
     if cfg!(windows) {
         base.join("gg.lonerstrike.app").join("cache")
@@ -32,6 +109,9 @@ pub fn cache_root() -> PathBuf {
 
 /// The old Python panel's folder, to bring its records over the first time.
 pub fn old_panel_dir() -> Option<PathBuf> {
+    #[cfg(test)]
+    return Some(test_root().join("CZ Control Panel"));
+    #[allow(unreachable_code)]
     dirs::home_dir().map(|h| h.join("CZ Control Panel"))
 }
 
@@ -614,6 +694,26 @@ pub fn same_game_dir(running: &str, ours: &Path) -> bool {
 #[cfg(test)]
 mod windows_tests {
     use super::*;
+
+    /// QA4-CORE F6: under test every app path (settings.json, the cache, setup's downloads, the
+    /// big folders, the window's data, the old panel's folder, servers by default) is in the
+    /// test folder, and one outside it is caught
+    #[test]
+    fn test_builds_keep_every_app_path_in_the_test_folder() {
+        let root = super::test_root();
+        let paths = super::app_paths();
+        assert!(paths.len() >= 10, "{paths:?}");
+        assert!(super::outside(&root, &paths).is_empty(), "{:?}", super::outside(&root, &paths));
+        assert_eq!(crate::app_api::settings_path(), root.join("settings.json"));
+        assert!(super::cache_root().starts_with(&root) && crate::setup::fetch::cache_dir().starts_with(&root));
+        assert!(crate::setup::fetch::legacy_cache().is_none());
+        let client = crate::steam::Install { hl: "/x/Half-Life".into(), kind: "crossover".into(), bottle: Some("Steam".into()), games: vec!["cstrike".into()], dedicated: false };
+        assert!(crate::servers::default_root(&client).unwrap().starts_with(&root));
+        let mut bad = paths.clone();
+        bad.push(("settings.json", std::path::PathBuf::from("/Users/someone/Library/Application Support/Loner-Strike/settings.json")));
+        assert_eq!(super::outside(&root, &bad).len(), 1);
+    }
+
 
     #[test]
     fn windows_paths_compare_like_windows() {

@@ -574,6 +574,13 @@ pub(crate) fn root_for(client: &Install) -> Result<PathBuf, String> {
 /// Loner-Strike/Servers: in the game's CrossOver bottle on a Mac (the servers run
 /// there), in the app's data folder on Windows.
 pub fn default_root(client: &Install) -> Result<PathBuf, String> {
+    // a test build never makes servers in the player's bottle (LS_SERVERS_DIR picks a folder)
+    #[cfg(test)]
+    {
+        let _ = client;
+        return Ok(crate::sys::test_root().join("Servers"));
+    }
+    #[allow(unreachable_code)]
     if client.kind == "crossover" {
         Ok(drive_c(client)?.join("Loner-Strike").join("Servers"))
     } else {

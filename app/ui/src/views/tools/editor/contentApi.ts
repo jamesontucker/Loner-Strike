@@ -29,7 +29,7 @@ export function assetList(kind: AssetKind, fresh = false): Promise<AssetList> {
   if (fresh) lists.delete(kind);
   let p = lists.get(kind);
   if (!p) {
-    p = fetch(`${E}/list?kind=${kind}`)
+    p = fetch(`${E}/list?kind=${kind}`, { headers: { "X-Panel": "1" } })
       .then((r) => r.json() as Promise<AssetList>)
       .catch(() => ({ items: [], downloads: [], game: false, error: "The list couldn't be read." }) as AssetList);
     lists.set(kind, p);
@@ -40,9 +40,9 @@ export function assetList(kind: AssetKind, fresh = false): Promise<AssetList> {
 
 export const spriteUrl = (a: { folder: string; path: string }, frame = 0) => `${E}/sprite.png?${q(a)}&frame=${frame}`;
 export type SpriteInfo = { frames: number; width: number; height: number; format: string; orientation: string; size: number; error?: string };
-export const spriteInfo = (a: { folder: string; path: string }) => fetch(`${E}/sprite/info?${q(a)}`).then((r) => r.json() as Promise<SpriteInfo>);
+export const spriteInfo = (a: { folder: string; path: string }) => fetch(`${E}/sprite/info?${q(a)}`, { headers: { "X-Panel": "1" } }).then((r) => r.json() as Promise<SpriteInfo>);
 export type SoundInfo = { format: string; rate?: number; bits?: number; channels?: number; seconds?: number; loops?: boolean; warn?: string | null; note?: string; size?: number; error?: string };
-export const soundInfo = (a: { folder: string; path: string }) => fetch(`${E}/sound/info?${q(a)}`).then((r) => r.json() as Promise<SoundInfo>);
+export const soundInfo = (a: { folder: string; path: string }) => fetch(`${E}/sound/info?${q(a)}`, { headers: { "X-Panel": "1" } }).then((r) => r.json() as Promise<SoundInfo>);
 /** The editor's sound route plays the first one the game would find (the list's own). */
 export const soundPlayUrl = (path: string) => `/api/tools/editor/sound?path=${encodeURIComponent(path)}`;
 
@@ -65,7 +65,7 @@ export function assetCredits(a: { folder: string; path: string }): Promise<Credi
   const k = `${a.folder}/${a.path}`;
   let p = credits.get(k);
   if (!p) {
-    p = fetch(`/api/tools/credits/asset?${q(a)}`)
+    p = fetch(`/api/tools/credits/asset?${q(a)}`, { headers: { "X-Panel": "1" } })
       .then(async (r) => (r.ok ? ((await r.json()) as Credits & { error?: string }) : null))
       .then((c) => (c && !("error" in c && c.error) && c.verdict ? c : null))
       .catch(() => null);

@@ -69,7 +69,7 @@ const base = (map: string) => `/api/tools/navfix/${encodeURIComponent(map)}`;
 export async function openFix(map: string, signal?: AbortSignal): Promise<FixState> {
   let r: Response;
   try {
-    r = await fetch(base(map), { credentials: "same-origin", signal });
+    r = await fetch(base(map), { credentials: "same-origin", headers: { "X-Panel": "1" }, signal });
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new FixError("Couldn't reach the app. Try again.");

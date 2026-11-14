@@ -139,6 +139,34 @@ async fn install(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> Re
     started(r)
 }
 
+/// The setup done screen's "Use Loner-Strike's" (QA4-CORE F4): {hl, game}.
+async fn use_our_brain(State(st): State<Shared>, headers: HeaderMap, raw: Bytes) -> Response {
+    if !from_panel(&headers) {
+        return reply(StatusCode::FORBIDDEN, json!({"error": "forbidden"}));
+    }
+    let req = match body(&raw) {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    let r = tokio::task::spawn_blocking(move || -> Result<String, String> {
+        let res = resources(&st)?;
+        let install = find_install(req["hl"].as_str().unwrap_or(""))?;
+        if !install.dedicated && crate::sys::game_running() {
+            return Err(CLOSE_GAME.into());
+        }
+        if install.dedicated && crate::servers::running_at(&install.hl) {
+            return Err("Stop the server first, then try again.".into());
+        }
+        setup::use_our_brain(&install, &res, req["game"].as_str().unwrap_or(""))
+    })
+    .await;
+    match r {
+        Ok(Ok(msg)) => reply(StatusCode::OK, json!({"ok": true, "message": msg})),
+        Ok(Err(e)) => reply(StatusCode::OK, json!({"ok": false, "error": e})),
+        Err(_) => reply(StatusCode::OK, json!({"ok": false, "error": "Something went wrong. Try again."})),
+    }
+}
+
 /// A server's copy here getting a new bot brain from setup itself (the Files bar's update):
 /// its engine side (on a Linux machine, the machine) only follows with the server's own update
 /// (update_server), so it's marked as waiting for that (servers::hold_engine_update_for): the
@@ -203,6 +231,7 @@ pub fn routes() -> Router<Shared> {
 pub fn local_routes() -> Router<Shared> {
     Router::new()
         .route("/api/setup/install", post(install))
+        .route("/api/setup/use-our-brain", post(use_our_brain))
         .route("/api/setup/uninstall", post(uninstall))
 }
 

@@ -25,7 +25,7 @@ export function skyUrls(map: string, look: MapLook | null): string[] | null {
 }
 
 async function getLook(map: string, signal?: AbortSignal): Promise<MapLook | null> {
-  const r = await fetch(`${base(map)}/look`, { credentials: "same-origin", signal });
+  const r = await fetch(`${base(map)}/look`, { credentials: "same-origin", headers: { "X-Panel": "1" }, signal });
   if (!r.ok) return null; // an older app (or the dev mock): the game's defaults
   const v = await r.json().catch(() => null);
   if (!v || typeof v !== "object" || typeof v.error === "string") return null;

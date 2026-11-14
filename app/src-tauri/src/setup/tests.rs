@@ -263,6 +263,25 @@ fn plan_checks_requests() {
         ids,
         ["czero/metamod", "czero/amxmodx", "czero/regamedll", "czero/liblist", "czero/mode-paintball", "czero/core-plugins", "czero/core-configs", "czero/core-quake", "czero/core-bots", "czero/core-keys", "czero/core-funmaps"]
     );
+    // QA4-CORE: the fun maps' share of the bar is sized by the maps still to download (the bar
+    // sat at 99% for minutes with a share of 1), and shrinks to almost nothing once they're in
+    let funmaps: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(res.join("catalog/funmaps.json")).unwrap()).unwrap();
+    let all = funmaps["maps"].as_array().unwrap().len();
+    let share = |plan: &InstallPlan| {
+        let total: f64 = plan.steps().iter().map(|s| s.weight).sum();
+        plan.steps().iter().find(|s| s.id.ends_with("core-funmaps")).unwrap().weight / total
+    };
+    assert_eq!(super::components::maps_to_get(&funmaps, &hl.join("cstrike/maps")), all);
+    assert!(share(&plan) > 0.5, "the maps are most of a basics install: {}", share(&plan));
+    std::fs::create_dir_all(hl.join("cstrike/maps")).unwrap();
+    for m in funmaps["maps"].as_array().unwrap() {
+        for n in m["maps"].as_array().unwrap() {
+            std::fs::write(hl.join(format!("cstrike/maps/{}.bsp", n.as_str().unwrap())), b"").unwrap();
+        }
+    }
+    assert_eq!(super::components::maps_to_get(&funmaps, &hl.join("cstrike/maps")), 0);
+    let plan = plan_install(install.clone(), &["czero".into()], &["mode-paintball".into()], &res, false).unwrap();
+    assert!(share(&plan) < 0.02, "{}", share(&plan));
     // a dedicated server doesn't get the fun maps
     let mut dedicated = install.clone();
     dedicated.dedicated = true;

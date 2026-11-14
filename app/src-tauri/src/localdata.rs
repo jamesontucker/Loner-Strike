@@ -34,9 +34,8 @@ pub const BIG: &[&str] = &[
 /// test builds pointed at a scratch folder).
 pub fn local_root() -> PathBuf {
     #[cfg(test)]
-    if std::env::var_os("LS_APP_DIR").is_some() {
-        return crate::sys::app_dir();
-    }
+    return crate::sys::app_dir();
+    #[allow(unreachable_code)]
     if cfg!(windows) {
         if let Some(d) = dirs::data_local_dir() {
             return d.join("gg.lonerstrike.app").join("data");

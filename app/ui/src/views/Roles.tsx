@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { copyText, getJson, postJson, useActions } from "../api";
 import type { ServerInfo } from "../types";
-import { BusyButton, Info, Switch, useConfirm, useToast } from "../ui";
+import { BusyButton, Info, LoadError, Switch, useConfirm, useToast } from "../ui";
 import { InviteBox } from "./ShareControl";
 import { DocsLink } from "./DocsLink";
 import { actionsFor, answerPairs, codeShown, inTime, isState, sortApplications, STATE_TONE, STATE_WORD, type Application, type RolesServer, type RolesSettings } from "./communityRoles";
@@ -333,13 +333,14 @@ export function SupporterVip() {
   const toast = useToast();
   const { run, busy } = useActions();
   const [d, setD] = useState<Supporters | null>(null);
+  const [asked, setAsked] = useState(0);
   useEffect(() => {
     let gone = false;
     void get<Supporters>("/api/admins/supporters").then((r) => !gone && setD(r));
     return () => {
       gone = true;
     };
-  }, []);
+  }, [asked]);
   const set = (p: Partial<Supporters>) =>
     run(`supporters:${Object.keys(p)[0]}`, async () => {
       const r = await post<Supporters>("/api/admins/supporters", p);
@@ -354,7 +355,14 @@ export function SupporterVip() {
         Reading…
       </p>
     );
-  if (d.error && d.honor === undefined) return <p className="muted small-note">{d.error}</p>;
+  if (d.error && d.honor === undefined)
+    return (
+      <LoadError
+        title="The supporters' VIP settings didn't load"
+        text={d.error === "Couldn't reach the app." ? "Loner-Strike didn't answer. If it's still starting, wait a moment, then try again." : d.error}
+        onRetry={() => (setD(null), setAsked((n) => n + 1))}
+      />
+    );
   const on = !!(d.official || d.honor);
   return (
     <div className="roles-vip">

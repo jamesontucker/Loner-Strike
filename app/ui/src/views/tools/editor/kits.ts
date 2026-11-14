@@ -38,7 +38,7 @@ export const useKits = create<KitState>((set) => ({ kits: [], bad: [], folder: "
 /** Reads the installed kits (and what the map's modes still need). */
 export async function loadKits(): Promise<KitsReply | null> {
   try {
-    const r = (await (await fetch("/api/tools/editor/kits")).json()) as KitsReply;
+    const r = (await (await fetch("/api/tools/editor/kits", { headers: { "X-Panel": "1" } })).json()) as KitsReply;
     if (r.error) return null;
     useKits.getState().set({ kits: r.kits, bad: r.bad, folder: r.folder, loaded: true });
     return r;
@@ -188,7 +188,7 @@ export type Creature = { name: string; display: string; model: string; builtin: 
 let creaturesAsked: Promise<Creature[]> | null = null;
 /** Every creature type: the built-in ones and the user's creatures.ini (community ones are installed there). */
 export function loadCreatures(): Promise<Creature[]> {
-  creaturesAsked ??= fetch("/api/tools/creatures")
+  creaturesAsked ??= fetch("/api/tools/creatures", { headers: { "X-Panel": "1" } })
     .then((r) => r.json())
     .then((r: { types?: (Raw & { builtin?: boolean })[]; templates?: Raw[]; error?: string }) => {
       const out = new Map<string, Creature>();
