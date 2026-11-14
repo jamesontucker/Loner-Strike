@@ -92,3 +92,20 @@ Not a runner-brain benchmark (user: a puzzle map); read from its own entities, n
   `teledelprinsi` -> ct_go, chained telett0..7), 2 trigger_camera buttons, a secret (`m_secretjop`), timed lava walls
   (juego1_lava1 at 40 s).
 Learn result and a brain run on it: see ~/loner-strike-sim/DEATHRUN-NOTES.md.
+
+## Status for the user (frozen 2026-11-14 ~04:50)
+Checked on the newest ls-next3 (3b71d06, CI 43594358020) with plugins from tools 567e6f8d, 8 bots, 600 s per map.
+
+| Map | Bots | Runners who reach the end | Notes |
+|---|---|---|---|
+| deathrun_death | **works** | 27% (47 of 176) | was 1-2%: bots now jump the pit at its edge and land on the spinning stones |
+| deathrun_crash_egypt | **works** | 20% (8 of 40); 19-29% in earlier runs | teleports, lasers and traps handled |
+| deathrun_temple | partial | 0% here, 3% in QA4 | traps fire (11 presses); runners die on the strip the activator breaks under them |
+| deathrun_starwars | not working | none | bots open the start door some rounds, but the start sequence drops the start-room floor, and the activator's side is a teleport network the nav doesn't cover (he reaches no traps) |
+| deathrun_dojo, deathrun_jigsaw2 | removed by the user | - | not supported for bots in 1.0 |
+
+Recommendation (the user's decision):
+- **deathrun_starwars**: drop it from bot support for 1.0, like dojo. Making it work needs the bots to learn its start
+  sequence and the activator's teleport rooms, more than fits before QA.
+- **deathrun_temple**: keep it. Bots play a believable round (they run, the activator springs traps), they just rarely
+  finish. If 0-3% is too low for 1.0, drop it the same way.
