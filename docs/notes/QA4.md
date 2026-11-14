@@ -483,7 +483,7 @@ color) and the Content Browser's picked folder (`editor/p5.css`, lighter tint, i
 | primary buttons: ink on `--signal` | 7.51 | 9.88 |
 Measured with a script (every visible text node's color, opacity included, on its composited background; disabled
 controls skipped as AA allows) on 20 pages (Tools overview, every tool, the editor, the app's start page) at 1440 and
-800 wide in Chromium and WebKit, the old tokens injected for "before": **before 400+ low pairs, after 0** except one:
+800 wide in Chromium and WebKit, the old tokens injected for "before": **before 1524 low text pairs (over 80 page views), after 2** (the same one in both engines):
 - Plugin Studio's 🔒 read-only mark (`.ps-ro`, #a2aa9a in `plugins/plugins.css`, 3.6:1): the Plugin Studio fix agent's
   file, left to them (use `var(--bone-dim)`).
 QA4-CORE.md has no contrast items. The 820×600 window: these are color-only changes; no size, spacing or layout moved.
