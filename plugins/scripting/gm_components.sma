@@ -430,6 +430,7 @@ public plugin_natives()
 	register_native("ls_meeting_vote", "n_meeting_vote");
 	register_native("ls_respawn_pick", "n_respawn_pick");
 	register_native("ls_respawn_at", "n_respawn_at");
+	w3_natives(); /* W3 */
 	up_natives(); /* W1 */
 	w3_natives(); /* W3 */
 }
@@ -526,6 +527,7 @@ public plugin_init()
 	g_fwMeetStart = CreateMultiForward("ls_on_meeting_start", ET_IGNORE, FP_CELL, FP_CELL);
 	g_fwMeetVote = CreateMultiForward("ls_on_meeting_vote", ET_IGNORE, FP_CELL, FP_CELL, FP_CELL);
 	g_fwMeetEnd = CreateMultiForward("ls_on_meeting_end", ET_IGNORE, FP_CELL, FP_CELL);
+	w3_init(); /* W3 */
 	up_plugin_init(); /* W1 */
 	w3_init(); /* W3 */
 }
@@ -5175,6 +5177,21 @@ new const Float:W3_VEST_F[4] = { 1.0, 1.0, 0.85, 0.7 };
 /* a helmet takes this much of head hits before it breaks; the share that gets through */
 new const Float:W3_HELM_HP[4] = { 0.0, 100.0, 150.0, 200.0 };
 new const Float:W3_HELM_F[4] = { 1.0, 0.7, 0.6, 0.45 };
+/* death crates */
+#define W3_DC_MAX 48
+#define W3_DC_ITEMS 16
+new g_w3Dc[W3_DC_MAX];
+new g_w3DcItem[W3_DC_MAX][W3_DC_ITEMS][24];
+new g_w3DcN[W3_DC_MAX];
+new g_w3DcName[W3_DC_MAX][32];
+new Float:g_w3DcAt[W3_DC_MAX];
+new g_w3Snap[33][W3_DC_ITEMS][24];
+new g_w3SnapN[33];
+new g_w3MenuDc[33];
+new g_w3cDeathCrates, g_w3fwCrate, g_w3fwCrateTake;
+new g_w3DcTaken, g_w3DcMade;
+/* counts for the round's log line */
+new g_w3StatHeal[HEAL_KINDS], g_w3StatVest[4], g_w3StatHelm[4], g_w3DcLooted;
 /* rarity glow */
 new g_w3cRarity;
 /* scarce ammo */
@@ -5193,6 +5210,11 @@ stock w3_natives()
 	register_native("ls_armor_get", "n_w3_armor_get");
 	register_native("ls_item_tier", "n_w3_item_tier");
 	register_native("ls_glow", "n_w3_glow");
+	register_native("ls_crate_make", "n_w3_crate_make");
+	register_native("ls_crate_add", "n_w3_crate_add");
+	register_native("ls_crate_count", "n_w3_crate_count");
+	register_native("ls_crate_item", "n_w3_crate_item");
+	register_native("ls_crate_open", "n_w3_crate_open");
 }
 
 stock w3_init()
@@ -5209,6 +5231,7 @@ stock w3_init()
 	g_w3cHealBots = register_cvar("ls_heal_bots", "1");
 	g_w3fwHeal = CreateMultiForward("ls_on_heal", ET_STOP, FP_CELL, FP_STRING, FP_CELL);
 	register_clcmd("ls_heal", "cmd_w3_heal");
+	register_srvcmd("ls_comp_players", "cmd_w3_players");
 	register_clcmd("say /heal", "cmd_w3_heal_menu");
 	register_clcmd("say_team /heal", "cmd_w3_heal_menu");
 	register_forward(FM_CmdStart, "fm_w3_cmdstart");
@@ -5225,6 +5248,12 @@ stock w3_init()
 	/* 1: floor items glow by their own rarity (white, green, blue, purple, gold), guns players drop too */
 	g_w3cRarity = register_cvar("ls_rarity_glow", "0");
 	register_forward(FM_SetModel, "fm_w3_setmodel", 1);
+	/* 1: a killed player drops one crate with everything they had (open it with USE) */
+	g_w3cDeathCrates = register_cvar("ls_death_crates", "0");
+	g_w3fwCrate = CreateMultiForward("ls_on_death_crate", ET_IGNORE, FP_CELL, FP_CELL);
+	g_w3fwCrateTake = CreateMultiForward("ls_on_crate_take", ET_STOP, FP_CELL, FP_CELL, FP_STRING);
+	RegisterHamPlayer(Ham_Killed, "ham_w3_killed_pre");
+	register_forward(FM_PlayerPreThink, "fm_w3_prethink");
 	RegisterHamPlayer(Ham_TraceAttack, "ham_w3_trace");
 	g_w3Hooked = true;
 }
@@ -5232,7 +5261,12 @@ stock w3_init()
 public ev_w3_new_round()
 {
 	for (new p = 1; p <= 32; p++)
+	{
 		w3_reset_player(p);
+	}
+	for (new c = 0; c < W3_DC_MAX; c++)
+		w3_dc_remove(c);
+	w3_round_stats();
 }
 
 stock w3_reset_player(p)
@@ -5257,6 +5291,9 @@ public client_putinserver(id)
 public ham_w3_killed(id, killer, gib)
 {
 	w3_heal_stop(id, false);
+	if (get_pcvar_num(g_w3cDeathCrates) && g_w3SnapN[id])
+		w3_dc_from_death(id);
+	g_w3SnapN[id] = 0;
 	for (new k = 0; k < HEAL_KINDS; k++)
 		g_w3Heals[id][k] = 0;
 	g_w3BoostEnd[id] = 0.0;
@@ -5431,6 +5468,7 @@ stock w3_heal_finish(id)
 	bar_time(id, 0);
 	if (g_w3Heals[id][kind] > 0)
 		g_w3Heals[id][kind]--;
+	g_w3StatHeal[kind]++;
 	w3_heal_apply(id, kind);
 	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, id);
 	if (is_user_bot(id))
@@ -5684,6 +5722,10 @@ stock w3_tick(bool:sec)
 		}
 		if (sec && g_bot[p] && !g_w3Using[p] && get_pcvar_num(g_w3cHealBots) && get_pcvar_num(g_w3cHealCarry))
 			w3_bot_heal(p, now);
+		if (sec && g_bot[p])
+			w3_bot_crate(p);
+		else if (!g_bot[p] && !g_act[p])
+			w3_crate_hint(p);
 		/* a vest shot through */
 		if (g_w3Vest[p] && get_user_armor(p) <= 0)
 			w3_armor_set(p, 0, -1, true);
@@ -5791,6 +5833,54 @@ public n_w3_heal_using(plugin, params)
 	return 1 <= id <= MaxClients && g_w3Using[id] != 0;
 }
 
+/* server: each living player's healing items, armor levels, guns and ammo (for tests) */
+public cmd_w3_players()
+{
+	new Float:now = get_gametime();
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_alive(p))
+			continue;
+		new weapons[32], nw, list[160], len = 0, w[32];
+		get_user_weapons(p, weapons, nw);
+		for (new i = 0; i < nw; i++)
+		{
+			if (!((1 << weapons[i]) & W3_GUN_IDS))
+				continue;
+			get_weaponname(weapons[i], w, charsmax(w));
+			new e = w3_find_weapon(p, w);
+			len += formatex(list[len], charsmax(list) - len, " %s %d+%d", w[7], e ? cs_get_weapon_ammo(e) : 0, cs_get_user_bpammo(p, weapons[i]));
+		}
+		server_print("%2d hp %3d armor %3d vest %d helmet %d (%.0f) heals %d/%d/%d%s%s guns:%s", p, get_user_health(p), get_user_armor(p),
+			g_w3Vest[p], g_w3Helm[p], g_w3HelmHp[p], g_w3Heals[p][0], g_w3Heals[p][1], g_w3Heals[p][2],
+			g_w3Using[p] ? " HEALING" : "", "", list);
+	}
+	new n = 0;
+	for (new c = 0; c < W3_DC_MAX; c++)
+		if (g_w3Dc[c])
+			n++;
+	server_print("death crates on the ground: %d (game time %.0f)", n, now);
+	return PLUGIN_HANDLED;
+}
+
+/* one log line per round: what the BR pieces did (for tests and tuning) */
+stock w3_round_stats()
+{
+	new any = g_w3DcMade + g_w3StatHeal[0] + g_w3StatHeal[1] + g_w3StatHeal[2];
+	for (new l = 1; l <= 3; l++)
+		any += g_w3StatVest[l] + g_w3StatHelm[l];
+	if (any)
+		log_amx("BR pieces last round: heals used %d bandage %d medkit %d drink; armor found vest %d/%d/%d helmet %d/%d/%d (levels 1/2/3); death crates %d made, %d searched, %d items taken",
+			g_w3StatHeal[0], g_w3StatHeal[1], g_w3StatHeal[2], g_w3StatVest[1], g_w3StatVest[2], g_w3StatVest[3],
+			g_w3StatHelm[1], g_w3StatHelm[2], g_w3StatHelm[3], g_w3DcMade, g_w3DcLooted, g_w3DcTaken);
+	arrayset(g_w3StatHeal, 0, sizeof g_w3StatHeal);
+	arrayset(g_w3StatVest, 0, sizeof g_w3StatVest);
+	arrayset(g_w3StatHelm, 0, sizeof g_w3StatHelm);
+	g_w3DcMade = 0;
+	g_w3DcTaken = 0;
+	g_w3DcLooted = 0;
+}
+
 /* ---- armor levels: vests and helmets 1-3 ---- */
 
 
@@ -5862,9 +5952,15 @@ stock w3_give_armor(id, const item[])
 	if (w3_can_take_armor(id, item) == 0)
 		return 0;
 	if (part == 0 || part == 2)
+	{
 		w3_armor_set(id, part == 2 ? max(lv, g_w3Vest[id]) : lv, -1);
+		g_w3StatVest[lv]++;
+	}
 	if (part == 1 || part == 2)
+	{
 		w3_armor_set(id, -1, part == 2 ? max(lv, g_w3Helm[id]) : lv);
+		g_w3StatHelm[lv]++;
+	}
 	emit_sound(id, CHAN_ITEM, "items/ammopickup1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
 	if (!is_user_bot(id))
 		client_print(id, print_center, "Vest %d   Helmet %d", g_w3Vest[id], g_w3Helm[id]);
@@ -6117,6 +6213,624 @@ public n_w3_glow(plugin, params)
 		render(ent, kRenderFxNone, 0, 0, 0, kRenderNormal, 255);
 	else
 		tier_glow(ent, tier);
+	return 1;
+}
+
+/* ---- death crates: what a killed player had, in one crate (USE opens a menu) ---- */
+
+stock w3_find_weapon(id, const wname[])
+{
+	new e = -1;
+	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", wname)) > 0)
+		if (pev(e, pev_owner) == id)
+			return e;
+	return 0;
+}
+
+/* everything a player carries, as crate items: "ak47@30@60" (gun@clip@spare), "he", "bandage:3", "vest2@85", "helmet1@60" */
+stock w3_snapshot(id, list[W3_DC_ITEMS][24])
+{
+	new n = 0, weapons[32], nw, usedAmmo = 0, w[32];
+	get_user_weapons(id, weapons, nw);
+	/* primary first, then the pistol (a shared ammo pool goes with the first) */
+	for (new pass = 0; pass < 2; pass++)
+		for (new i = 0; i < nw && n < W3_DC_ITEMS; i++)
+		{
+			new csw = weapons[i];
+			if (!((1 << csw) & W3_GUN_IDS))
+				continue;
+			new bool:pistol = ((1 << csw) & ((1 << CSW_P228) | (1 << CSW_ELITE) | (1 << CSW_FIVESEVEN) | (1 << CSW_USP) | (1 << CSW_GLOCK18) | (1 << CSW_DEAGLE))) != 0;
+			if (pistol != (pass == 1))
+				continue;
+			get_weaponname(csw, w, charsmax(w));
+			new ent = w3_find_weapon(id, w), clip = ent ? cs_get_weapon_ammo(ent) : 0;
+			new type = cs_get_weapon_info(csw, CS_WEAPONINFO_AMMO_TYPE), bp = 0;
+			if (type > 0 && type < 32 && !(usedAmmo & (1 << type)))
+			{
+				bp = cs_get_user_bpammo(id, csw);
+				usedAmmo |= (1 << type);
+			}
+			formatex(list[n++], 23, "%s@%d@%d", w[7], clip, bp);
+		}
+	static const NADES[] = { CSW_HEGRENADE, CSW_FLASHBANG, CSW_SMOKEGRENADE };
+	static const NADE_NAME[][] = { "he", "flash", "smoke" };
+	for (new g = 0; g < 3; g++)
+	{
+		new have = 0;
+		for (new i = 0; i < nw; i++)
+			if (weapons[i] == NADES[g])
+				have = max(cs_get_user_bpammo(id, NADES[g]), 1);
+		for (new k = 0; k < have && n < W3_DC_ITEMS; k++)
+			copy(list[n++], 23, NADE_NAME[g]);
+	}
+	for (new k = 0; k < HEAL_KINDS && n < W3_DC_ITEMS; k++)
+		if (g_w3Heals[id][k] > 0)
+			formatex(list[n++], 23, "%s:%d", W3_HEAL_ID[k], g_w3Heals[id][k]);
+	new armor = get_user_armor(id);
+	if (n < W3_DC_ITEMS && armor > 0)
+	{
+		if (g_w3Vest[id])
+			formatex(list[n++], 23, "vest%d@%d", g_w3Vest[id], armor);
+		else
+			formatex(list[n++], 23, "vest@%d", armor);
+	}
+	if (n < W3_DC_ITEMS && g_w3Helm[id] && g_w3HelmHp[id] > 0.0)
+		formatex(list[n++], 23, "helmet%d@%d", g_w3Helm[id], floatround(g_w3HelmHp[id]));
+	return n;
+}
+
+public ham_w3_killed_pre(id, killer, gib)
+{
+	g_w3SnapN[id] = 0;
+	if (get_pcvar_num(g_w3cDeathCrates) && is_user_connected(id))
+		g_w3SnapN[id] = w3_snapshot(id, g_w3Snap[id]);
+	return HAM_IGNORED;
+}
+
+stock w3_dc_from_death(id)
+{
+	new Float:o[3];
+	pev(id, pev_origin, o);
+	/* the game's own dropped gun goes: it's in the crate */
+	new e = -1;
+	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "weaponbox")) > 0)
+	{
+		if (pev(e, pev_owner) != id)
+			continue;
+		new Float:wo[3];
+		pev(e, pev_origin, wo);
+		if (get_distance_f(wo, o) < 96.0)
+			set_pev(e, pev_flags, pev(e, pev_flags) | FL_KILLME);
+	}
+	new name[32];
+	get_user_name(id, name, charsmax(name));
+	new c = w3_dc_make(o, name);
+	if (c < 0)
+		return;
+	for (new i = 0; i < g_w3SnapN[id]; i++)
+		w3_dc_add(c, g_w3Snap[id][i]);
+	w3_dc_look(c);
+	new ret;
+	ExecuteForward(g_w3fwCrate, ret, g_w3Dc[c], id);
+}
+
+/* a new crate at a spot (the oldest goes when all are in use) */
+stock w3_dc_make(const Float:at[3], const name[])
+{
+	new c = -1, oldest = 0;
+	for (new i = 0; i < W3_DC_MAX; i++)
+	{
+		if (!g_w3Dc[i] || !pev_valid(g_w3Dc[i]))
+		{
+			c = i;
+			break;
+		}
+		if (g_w3DcAt[i] < g_w3DcAt[oldest])
+			oldest = i;
+	}
+	if (c < 0)
+	{
+		w3_dc_remove(oldest);
+		c = oldest;
+	}
+	new ent = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"));
+	if (!ent)
+		return -1;
+	set_pev(ent, pev_classname, "ls_death_crate");
+	engfunc(EngFunc_SetModel, ent, DEFAULT_BOX);
+	engfunc(EngFunc_SetSize, ent, Float:{-10.0, -10.0, 0.0}, Float:{10.0, 10.0, 12.0});
+	set_pev(ent, pev_solid, SOLID_NOT);
+	set_pev(ent, pev_movetype, MOVETYPE_TOSS);
+	new Float:o[3];
+	vcopy(at, o);
+	o[2] += 8.0;
+	engfunc(EngFunc_SetOrigin, ent, o);
+	set_pev(ent, pev_velocity, Float:{0.0, 0.0, -50.0});
+	g_w3Dc[c] = ent;
+	g_w3DcN[c] = 0;
+	g_w3DcAt[c] = get_gametime();
+	copy(g_w3DcName[c], charsmax(g_w3DcName[]), name);
+	g_w3DcMade++;
+	return c;
+}
+
+stock w3_dc_add(c, const item[])
+{
+	if (g_w3DcN[c] >= W3_DC_ITEMS || !item[0])
+		return 0;
+	copy(g_w3DcItem[c][g_w3DcN[c]++], 23, item);
+	return 1;
+}
+
+stock w3_dc_remove(c)
+{
+	new ent = g_w3Dc[c];
+	g_w3Dc[c] = 0;
+	g_w3DcN[c] = 0;
+	if (ent && pev_valid(ent))
+	{
+		hint("forget c%d", ent);
+		set_pev(ent, pev_flags, pev(ent, pev_flags) | FL_KILLME);
+	}
+}
+
+stock w3_dc_of(ent)
+{
+	for (new c = 0; c < W3_DC_MAX; c++)
+		if (g_w3Dc[c] == ent && ent)
+			return c;
+	return -1;
+}
+
+/* the item name without its @... ("ak47@30@60" -> "ak47") */
+stock w3_item_base(const item[], out[], len)
+{
+	copyc(out, len, item, '@');
+}
+
+/* glow by the best thing in it; bots are told it's there */
+stock w3_dc_look(c)
+{
+	new best = 1, base[24];
+	for (new i = 0; i < g_w3DcN[c]; i++)
+	{
+		w3_item_base(g_w3DcItem[c][i], base, charsmax(base));
+		best = max(best, w3_item_tier(base));
+	}
+	tier_glow(g_w3Dc[c], best);
+	new Float:o[3];
+	pev(g_w3Dc[c], pev_origin, o);
+	hint("attract c%d %.0f %.0f %.0f 400 %d 0 0", g_w3Dc[c], o[0], o[1], o[2], 30 + best * 20);
+}
+
+/* "AK47 (30+60)", "Bandage x3", "Vest 2 (85)" */
+stock w3_item_label(const item[], out[], len)
+{
+	new base[24], a[12], b[12];
+	w3_item_base(item, base, charsmax(base));
+	new at = contain(item, "@");
+	a[0] = EOS; b[0] = EOS;
+	if (at >= 0)
+	{
+		copyc(a, charsmax(a), item[at + 1], '@');
+		new at2 = contain(item[at + 1], "@");
+		if (at2 >= 0)
+			copy(b, charsmax(b), item[at + 1 + at2 + 1]);
+	}
+	new kind = w3_heal_kind(base), lv, part = w3_armor_item(base, lv);
+	if (kind >= 0)
+		formatex(out, len, "%s x%d", W3_HEAL_TITLE[kind], w3_item_count(base));
+	else if (equali(base, "vest", 4) && lv)
+		formatex(out, len, "Vest %d (%s)", lv, a);
+	else if (equali(base, "vest", 4))
+		formatex(out, len, "Vest (%s)", a);
+	else if (part == 1)
+		formatex(out, len, "Helmet %d", lv);
+	else if (equali(base, "he"))
+		copy(out, len, "HE grenade");
+	else if (equali(base, "flash"))
+		copy(out, len, "Flashbang");
+	else if (equali(base, "smoke"))
+		copy(out, len, "Smoke grenade");
+	else if (equali(base, "ammo", 4))
+		copy(out, len, "Ammo");
+	else
+	{
+		copy(out, len, base);
+		if (equali(out, "mp5navy"))
+			copy(out, len, "mp5");
+		strtoupper(out);
+		if (a[0])
+			format(out, len, "%s (%s+%s)", out, a, b[0] ? b : "0");
+	}
+}
+
+/* takes one item for a player: 1 taken, 0 not (no room, not better); swap: a gun in that slot goes into the crate */
+stock w3_dc_take(id, c, i, bool:swap)
+{
+	if (i < 0 || i >= g_w3DcN[c] || !is_user_alive(id))
+		return 0;
+	new item[24], base[24];
+	copy(item, charsmax(item), g_w3DcItem[c][i]);
+	w3_item_base(item, base, charsmax(base));
+	new ret;
+	ExecuteForward(g_w3fwCrateTake, ret, g_w3Dc[c], id, item);
+	if (ret >= PLUGIN_HANDLED)
+		return 0;
+	new at = contain(item, "@"), n1 = 0, n2 = 0;
+	if (at >= 0)
+	{
+		n1 = str_to_num(item[at + 1]);
+		new at2 = contain(item[at + 1], "@");
+		if (at2 >= 0)
+			n2 = str_to_num(item[at + 1 + at2 + 1]);
+	}
+	new w[32];
+	weapon_name(base, w, charsmax(w));
+	new csw = get_weaponid(w);
+	new bool:done = false, back[24];
+	back[0] = EOS;
+	if (csw && ((1 << csw) & W3_GUN_IDS))
+	{
+		/* the slot's gun now, if any */
+		new bool:prim = ((1 << csw) & ((1 << CSW_P228) | (1 << CSW_ELITE) | (1 << CSW_FIVESEVEN) | (1 << CSW_USP) | (1 << CSW_GLOCK18) | (1 << CSW_DEAGLE))) == 0;
+		new weapons[32], nw, old = 0;
+		get_user_weapons(id, weapons, nw);
+		for (new k = 0; k < nw; k++)
+		{
+			new o = weapons[k];
+			if (!((1 << o) & W3_GUN_IDS))
+				continue;
+			new bool:op = ((1 << o) & ((1 << CSW_P228) | (1 << CSW_ELITE) | (1 << CSW_FIVESEVEN) | (1 << CSW_USP) | (1 << CSW_GLOCK18) | (1 << CSW_DEAGLE))) == 0;
+			if (op == prim)
+				old = o;
+		}
+		if (old && !swap)
+			return 0;
+		if (old)
+		{
+			new on[32];
+			get_weaponname(old, on, charsmax(on));
+			new oe = w3_find_weapon(id, on);
+			formatex(back, charsmax(back), "%s@%d@0", on[7], oe ? cs_get_weapon_ammo(oe) : 0);
+			w3_strip_weapon(id, on);
+		}
+		new ent = give_item(id, w);
+		if (ent > 0)
+		{
+			cs_set_weapon_ammo(ent, n1);
+			cs_set_user_bpammo(id, csw, min(cs_get_user_bpammo(id, csw) + n2, ammo_full(csw)));
+			emit_sound(id, CHAN_ITEM, "items/gunpickup2.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+			done = true;
+		}
+	}
+	else if (w3_heal_kind(base) >= 0)
+	{
+		/* as many as fit; the rest stays */
+		new kind = w3_heal_kind(base), have = w3_item_count(base);
+		new got = get_pcvar_num(g_w3cHealCarry) ? w3_heal_give(id, kind, have) : (give_thing(id, base) ? have : 0);
+		if (got <= 0)
+			return 0;
+		if (got < have)
+		{
+			formatex(g_w3DcItem[c][i], 23, "%s:%d", W3_HEAL_ID[kind], have - got);
+			g_w3DcTaken++;
+			return 1;
+		}
+		done = true;
+	}
+	else if (equali(base, "vest", 4) || equali(base, "helmet", 6))
+	{
+		new lv, part = w3_armor_item(base, lv);
+		new bool:levels = part >= 0 && get_pcvar_num(g_w3cArmorLevels) != 0;
+		if (levels)
+		{
+			/* better than yours, or swap: yours goes into the crate */
+			new bool:better = part == 0 ? (lv > g_w3Vest[id] || (lv == g_w3Vest[id] && n1 > get_user_armor(id)))
+				: (lv > g_w3Helm[id] || (lv == g_w3Helm[id] && float(n1) > g_w3HelmHp[id]));
+			if (!better && !swap)
+				return 0;
+			if (part == 0)
+			{
+				if (g_w3Vest[id] && get_user_armor(id) > 0)
+					formatex(back, charsmax(back), "vest%d@%d", g_w3Vest[id], get_user_armor(id));
+				w3_armor_set(id, lv, -1);
+				if (n1 > 0)
+					cs_set_user_armor(id, n1, CS_ARMOR_KEVLAR);
+			}
+			else
+			{
+				if (g_w3Helm[id] && g_w3HelmHp[id] > 0.0)
+					formatex(back, charsmax(back), "helmet%d@%d", g_w3Helm[id], floatround(g_w3HelmHp[id]));
+				w3_armor_set(id, -1, lv);
+				if (n1 > 0)
+					g_w3HelmHp[id] = float(n1);
+			}
+		}
+		else
+		{
+			if (get_user_armor(id) >= max(n1, 1) && !swap)
+				return 0;
+			cs_set_user_armor(id, max(n1, 1), CS_ARMOR_KEVLAR);
+		}
+		emit_sound(id, CHAN_ITEM, "items/ammopickup1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+		done = true;
+	}
+	else
+	{
+		if (csw == CSW_HEGRENADE || csw == CSW_FLASHBANG || csw == CSW_SMOKEGRENADE)
+		{
+			/* (the game's carry limits: one HE, two flashes, one smoke) */
+			if (user_has_weapon(id, csw) && cs_get_user_bpammo(id, csw) >= (csw == CSW_FLASHBANG ? 2 : 1))
+				return 0;
+		}
+		else if (!can_take(id, base))
+			return 0;
+		done = give_thing(id, base) != 0;
+	}
+	if (!done)
+		return 0;
+	/* out of the crate (and what was swapped in) */
+	if (back[0])
+		copy(g_w3DcItem[c][i], 23, back);
+	else
+	{
+		for (new k = i + 1; k < g_w3DcN[c]; k++)
+			copy(g_w3DcItem[c][k - 1], 23, g_w3DcItem[c][k]);
+		g_w3DcN[c]--;
+	}
+	g_w3DcTaken++;
+	return 1;
+}
+
+stock w3_strip_weapon(id, const wname[])
+{
+	new csw = get_weaponid(wname), ent = w3_find_weapon(id, wname);
+	if (!ent)
+		return 0;
+	if (get_user_weapon(id) == csw)
+		ExecuteHamB(Ham_Weapon_RetireWeapon, ent);
+	if (!ExecuteHamB(Ham_RemovePlayerItem, id, ent))
+		return 0;
+	ExecuteHamB(Ham_Item_Kill, ent);
+	set_pev(id, pev_weapons, pev(id, pev_weapons) & ~(1 << csw));
+	return 1;
+}
+
+/* after a take: empty crates go, the rest glow by what's left */
+stock w3_dc_after(c)
+{
+	if (c >= 0 && c < W3_DC_MAX)
+		g_w3DcLooted++;
+	if (g_w3DcN[c] <= 0)
+		w3_dc_remove(c);
+	else
+		w3_dc_look(c);
+}
+
+/* the crate a player is looking at, within reach (-1 none) */
+stock w3_dc_aimed(id)
+{
+	new Float:eye[3], Float:fwd[3], Float:ang[3], Float:o[3];
+	pev(id, pev_origin, eye);
+	new Float:vo[3];
+	pev(id, pev_view_ofs, vo);
+	eye[2] += vo[2];
+	pev(id, pev_v_angle, ang);
+	engfunc(EngFunc_MakeVectors, ang);
+	global_get(glb_v_forward, fwd);
+	new best = -1, Float:bd = 90.0;
+	for (new c = 0; c < W3_DC_MAX; c++)
+	{
+		if (!g_w3Dc[c] || !pev_valid(g_w3Dc[c]))
+			continue;
+		pev(g_w3Dc[c], pev_origin, o);
+		o[2] += 6.0;
+		new Float:d = get_distance_f(eye, o);
+		if (d > bd)
+			continue;
+		if (d > 24.0)
+		{
+			new Float:dot = 0.0;
+			for (new k = 0; k < 3; k++)
+				dot += (o[k] - eye[k]) / d * fwd[k];
+			if (dot < 0.6)
+				continue;
+		}
+		bd = d;
+		best = c;
+	}
+	return best;
+}
+
+public fm_w3_prethink(id)
+{
+	if (!is_user_alive(id) || is_user_bot(id))
+		return FMRES_IGNORED;
+	new b = pev(id, pev_button), ob = pev(id, pev_oldbuttons);
+	if ((b & IN_USE) && !(ob & IN_USE))
+	{
+		new c = w3_dc_aimed(id);
+		if (c >= 0)
+			w3_dc_menu(id, c);
+	}
+	return FMRES_IGNORED;
+}
+
+stock w3_crate_hint(p)
+{
+	if (w3_dc_aimed(p) >= 0)
+		hud_add(p, false, "Press USE to search the crate");
+}
+
+stock w3_dc_menu(id, c)
+{
+	if (c < 0 || !g_w3Dc[c])
+		return;
+	new title[64], line[64], info[8];
+	formatex(title, charsmax(title), "%s's crate", g_w3DcName[c]);
+	new m = menu_create(title, "menu_w3_crate");
+	for (new i = 0; i < g_w3DcN[c]; i++)
+	{
+		w3_item_label(g_w3DcItem[c][i], line, charsmax(line));
+		num_to_str(i, info, charsmax(info));
+		menu_additem(m, line, info);
+	}
+	menu_additem(m, "Take everything that fits", "all");
+	g_w3MenuDc[id] = c + 1;
+	menu_display(id, m);
+}
+
+public menu_w3_crate(id, menu, item)
+{
+	new c = g_w3MenuDc[id] - 1;
+	if (item < 0 || c < 0 || !g_w3Dc[c] || !is_user_alive(id))
+	{
+		menu_destroy(menu);
+		return PLUGIN_HANDLED;
+	}
+	new info[8], acc, cb;
+	menu_item_getinfo(menu, item, acc, info, charsmax(info), _, _, cb);
+	menu_destroy(menu);
+	new Float:o[3], Float:po[3];
+	pev(g_w3Dc[c], pev_origin, o);
+	pev(id, pev_origin, po);
+	if (get_distance_f(o, po) > 120.0)
+		return PLUGIN_HANDLED;
+	if (equal(info, "all"))
+	{
+		/* (a taken item moves the rest up; a part-taken stack is tried again and then skipped) */
+		for (new i = 0; i < g_w3DcN[c]; )
+			if (!w3_dc_take(id, c, i, false))
+				i++;
+	}
+	else if (!w3_dc_take(id, c, str_to_num(info), true))
+		client_print(id, print_center, "You can't carry that");
+	w3_dc_after(c);
+	if (g_w3Dc[c])
+		w3_dc_menu(id, c);
+	return PLUGIN_HANDLED;
+}
+
+/* a bot by a crate takes what helps: a better main gun (swapping), a pistol, heals, better armor, grenades */
+stock w3_bot_crate(p)
+{
+	for (new c = 0; c < W3_DC_MAX; c++)
+	{
+		if (!g_w3Dc[c] || !pev_valid(g_w3Dc[c]))
+			continue;
+		new Float:o[3];
+		pev(g_w3Dc[c], pev_origin, o);
+		if (dist2d(g_porg[p], o) > 80.0 || floatabs(g_porg[p][2] - o[2]) > 90.0)
+			continue;
+		new took = 0;
+		for (new i = 0; i < g_w3DcN[c]; )
+		{
+			new base[24];
+			w3_item_base(g_w3DcItem[c][i], base, charsmax(base));
+			new bool:swap = w3_bot_wants_swap(p, base);
+			new before = g_w3DcN[c];
+			if (w3_dc_take(p, c, i, swap))
+			{
+				took++;
+				/* (a swap or a part-taken stack leaves something at i) */
+				if (g_w3DcN[c] == before)
+					i++;
+			}
+			else
+				i++;
+		}
+		if (took)
+		{
+			w3_dc_after(c);
+			comp_debug("bot %d took %d items from a death crate", p, took);
+		}
+		return;
+	}
+}
+
+/* a gun in the crate of a higher rarity than the bot's own in that slot */
+stock bool:w3_bot_wants_swap(p, const base[])
+{
+	new w[32];
+	weapon_name(base, w, charsmax(w));
+	new csw = get_weaponid(w);
+	if (!csw || !((1 << csw) & W3_GUN_IDS))
+		return false;
+	new bool:prim = ((1 << csw) & ((1 << CSW_P228) | (1 << CSW_ELITE) | (1 << CSW_FIVESEVEN) | (1 << CSW_USP) | (1 << CSW_GLOCK18) | (1 << CSW_DEAGLE))) == 0;
+	new weapons[32], nw, on[32];
+	get_user_weapons(p, weapons, nw);
+	for (new k = 0; k < nw; k++)
+	{
+		new o = weapons[k];
+		if (!((1 << o) & W3_GUN_IDS))
+			continue;
+		new bool:op = ((1 << o) & ((1 << CSW_P228) | (1 << CSW_ELITE) | (1 << CSW_FIVESEVEN) | (1 << CSW_USP) | (1 << CSW_GLOCK18) | (1 << CSW_DEAGLE))) == 0;
+		if (op != prim)
+			continue;
+		get_weaponname(o, on, charsmax(on));
+		return w3_item_tier(base) > w3_item_tier(on[7]);
+	}
+	return false;
+}
+
+/* native ls_crate_make(const Float:origin[3], const items[] = "", const name[] = "") -> crate entity */
+public n_w3_crate_make(plugin, params)
+{
+	new Float:o[3], items[256], name[32], tok[32];
+	get_array_f(1, o, 3);
+	get_string(2, items, charsmax(items));
+	get_string(3, name, charsmax(name));
+	new c = w3_dc_make(o, name[0] ? name : "A");
+	if (c < 0)
+		return 0;
+	while (items[0])
+	{
+		strtok2(items, tok, charsmax(tok), items, charsmax(items), ' ', TRIM_FULL);
+		if (!tok[0])
+			break;
+		w3_dc_add(c, tok);
+	}
+	w3_dc_look(c);
+	return g_w3Dc[c];
+}
+
+/* native ls_crate_add(ent, const item[]) */
+public n_w3_crate_add(plugin, params)
+{
+	new c = w3_dc_of(get_param(1)), item[24];
+	if (c < 0)
+		return 0;
+	get_string(2, item, charsmax(item));
+	new r = w3_dc_add(c, item);
+	w3_dc_look(c);
+	return r;
+}
+
+/* native ls_crate_count(ent) */
+public n_w3_crate_count(plugin, params)
+{
+	new c = w3_dc_of(get_param(1));
+	return c < 0 ? 0 : g_w3DcN[c];
+}
+
+/* native ls_crate_item(ent, i, out[], len) */
+public n_w3_crate_item(plugin, params)
+{
+	new c = w3_dc_of(get_param(1)), i = get_param(2);
+	if (c < 0 || i < 0 || i >= g_w3DcN[c])
+		return 0;
+	set_string(3, g_w3DcItem[c][i], get_param(4));
+	return 1;
+}
+
+/* native ls_crate_open(id, ent): the crate's menu */
+public n_w3_crate_open(plugin, params)
+{
+	new id = get_param(1), c = w3_dc_of(get_param(2));
+	if (c < 0 || !(1 <= id <= MaxClients) || !is_user_alive(id))
+		return 0;
+	w3_dc_menu(id, c);
 	return 1;
 }
 

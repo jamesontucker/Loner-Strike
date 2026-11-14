@@ -453,6 +453,27 @@ forward ls_on_armor(id, vest, helmet);
 native ls_item_tier(const item[]);
 /** Makes any entity glow in a rarity's colour (0 = no glow). */
 native ls_glow(ent, tier);
+
+/* Death crates (cvar ls_death_crates 1): a killed player drops one crate with everything they had: guns with
+ * their magazine and spare ammo ("ak47@30@60"), grenades, healing items ("bandage:3"), armor ("vest2@85",
+ * "helmet1@60"). It glows by the best thing in it; USE opens a menu (pick one: a gun in that slot goes into
+ * the crate in its place; or take everything that fits). Bots by a crate take what helps them. Empty crates go. */
+
+/** Makes a crate anywhere with items ("ak47@30@60 bandage:2 vest2"; any loot item works). @return its entity */
+native ls_crate_make(const Float:origin[3], const items[] = "", const name[] = "");
+/** Puts one more item in a crate. */
+native ls_crate_add(ent, const item[]);
+/** How many items are in a crate. */
+native ls_crate_count(ent);
+/** A crate's item i (0-based), as text. */
+native ls_crate_item(ent, i, out[], len);
+/** Opens a crate's menu for a player. */
+native ls_crate_open(id, ent);
+/** A death crate was made for a player who died (victim) or by ls_crate_make (victim 0... the maker's choice). */
+forward ls_on_death_crate(ent, victim);
+/** A player is taking an item from a crate. Handled: refused. */
+forward ls_on_crate_take(ent, id, const item[]);
+
 /* ==== end W3 ==== */
 
 /* ==== W1: Last Stand pieces ==== */

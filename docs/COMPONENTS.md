@@ -362,6 +362,21 @@ their tier as before; with `ls_rarity_glow 1` a weapon spawner glows by its item
 players drop (weaponboxes) glow too. An item's rarity is the highest tier the loot tables give it, else
 by what it is (AWP/M249/auto-snipers 5, AK/M4/SG552/AUG 4, FAMAS/Galil/P90/XM1014 3, SMGs/M3/Scout/Deagle
 2; medkit 3, drink 2, bandage 1; armor by level). Natives `ls_item_tier(item[])`, `ls_glow(ent, tier)`.
+
+### Death crates
+`ls_death_crates 1`: a killed player drops one crate (the game's own dropped gun is taken out) with
+everything they had: guns with their magazine and spare ammo, grenades, healing items, armor (level and
+what's left of it). It glows by the best thing in it. USE (looking at it) opens a menu: pick an item (a gun
+in that slot, or your armor, goes into the crate in its place), or "Take everything that fits". Empty
+crates go; all go at the next round. Bots standing by one take what helps (a gun of a higher rarity than
+theirs, a pistol, healing items, better armor, grenades) and are drawn to it (`attract`, weight by rarity).
+- Item text: `ak47@30@60` (gun@magazine@spare), `he`, `bandage:3`, `vest2@85` (armor points), `helmet1@60`.
+- Natives: `ls_crate_make(origin[3], items[] = "", name[] = "")`, `ls_crate_add(ent, item[])`,
+  `ls_crate_count(ent)`, `ls_crate_item(ent, i, out[], len)`, `ls_crate_open(id, ent)`. Forwards
+  `ls_on_death_crate(ent, victim)`, `ls_on_crate_take(ent, id, item[])` *(handled: refused)*.
+- `ls_comp_players` (server console) lists each living player's guns, ammo, armor and healing items, and
+  the crates on the ground. Each round logs one line: healing items used, armor found by level, death
+  crates made / searched / items taken.
 <!-- ==== end W3 ==== -->
 
 <!-- ==== W1: Last Stand pieces ==== -->
