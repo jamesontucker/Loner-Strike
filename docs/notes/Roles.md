@@ -82,7 +82,8 @@ may only talk to this machine; an Admin's calls reach it through a spool in the 
      **Supporter** (create it first; the Polar bot's role must be above it in Server Settings › Roles).
   2. Attach the benefit to the monthly product and to the one-time donation product.
   3. Polar › Settings › Webhooks › Add endpoint: `https://list.lonerstrike.com/roles/polar/webhook`, format Raw,
-     events `benefit_grant.created`, `benefit_grant.updated`, `benefit_grant.revoked`, `order.paid`. Copy the
+     events `benefit_grant.created`, `benefit_grant.updated`, `benefit_grant.cycled`, `benefit_grant.revoked`,
+     `order.paid`, `order.refunded`. Copy the
      signing secret.
   4. Put the secret in a file on your computer, then
      `ssh you@box 'sudo /opt/lonerstrike-list/set-env.sh POLAR_WEBHOOK_SECRET' < that-file` (read from stdin, never on
@@ -96,7 +97,11 @@ may only talk to this machine; an Admin's calls reach it through a spool in the 
   subscription): **30 days per donation, stacking** (`SUPPORTER_DAYS`, default 30), from the later of now and the end
   of what they had; an order that arrives before its grant is kept and counted when the grant comes. Grant events can
   arrive out of order: each grant keeps when it changed (`modified_at`, else the webhook's timestamp); an older event is
-  ignored, and a revoke is only undone by a newer grant.
+  ignored, and a revoke is only undone by a newer grant. Events: `benefit_grant.created`, `.updated`, `.cycled`,
+  `.revoked`, `order.paid`, `order.refunded`. A **full refund** of a one-time donation takes its days off (the time
+  is worked out again from the donations that still count); a partial refund keeps them (logged); a refund that
+  comes before its payment makes the payment count for nothing; the same refund twice changes nothing. Monthly
+  refunds are left to the grant's revoke.
 - **To servers:** a supporter's VIP follows their current link. Official servers: ls-control (a timer, every 5 min)
   `GET /roles/vip` → every supporter's SteamID. Other servers that turned on **Honor Loner-Strike supporters** (off by
   default): `POST /roles/vip/check {steamids}` with the players on the server now (at most 64), answered with the ones

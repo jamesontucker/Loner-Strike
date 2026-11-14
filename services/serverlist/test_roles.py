@@ -384,6 +384,65 @@ class Review3(unittest.TestCase):
         self.assertIsNone(roles.event_time("not a time"))
 
 
+class Refunds(unittest.TestCase):
+    def order(self, r, oid, kind="order.paid", cust="cus_r", **extra):
+        return polar(r, {"type": kind, "data": dict({"id": oid, "customer_id": cust, "subscription_id": None}, **extra)})
+
+    def until(self, r, who=PLAYER):
+        row = r.s.one("SELECT until FROM supporters WHERE discord_id=?", (who,))
+        return row["until"] - cm.now() if row else None
+
+    def test_a_full_refund_takes_its_days_off(self):
+        r, *_ = make()
+        polar(r, grant(PLAYER, gid="gr", cust="cus_r"))
+        for oid in ("o1", "o2", "o3"):
+            self.order(r, oid)
+        self.assertAlmostEqual(self.until(r), 90 * 86400, delta=120)
+        self.order(r, "o2", "order.refunded", status="refunded", total_amount=500, refunded_amount=500)
+        self.assertAlmostEqual(self.until(r), 60 * 86400, delta=120)
+        # again: nothing more comes off
+        self.order(r, "o2", "order.refunded", status="refunded")
+        self.assertAlmostEqual(self.until(r), 60 * 86400, delta=120)
+        # a partial refund keeps them, and says so in the log
+        self.order(r, "o3", "order.refunded", status="partially_refunded", total_amount=500, refunded_amount=100)
+        self.assertAlmostEqual(self.until(r), 60 * 86400, delta=120)
+        self.assertTrue(any("partly refunded" in x["detail"] for x in r.s.all("SELECT detail FROM roles_log")))
+        # by the amounts alone
+        self.order(r, "o1", "order.refunded", total_amount=500, refunded_amount=500)
+        self.order(r, "o3", "order.refunded", status="refunded")
+        self.assertEqual(self.until(r), -cm.now())
+        self.assertFalse(r.is_supporter(PLAYER))
+
+    def test_a_refund_before_its_payment_and_before_the_grant(self):
+        r, *_ = make()
+        self.order(r, "early", "order.refunded", status="refunded")
+        self.order(r, "early")  # the payment arrives after its refund
+        self.order(r, "kept")   # waits for the Discord benefit
+        polar(r, grant(PLAYER, gid="gr", cust="cus_r"))
+        self.assertAlmostEqual(self.until(r), 30 * 86400, delta=120)
+        # a refund of an order that's still waiting: it never counts
+        self.order(r, "w1", cust="cus_w")
+        self.order(r, "w1", "order.refunded", cust="cus_w", status="refunded")
+        polar(r, grant(OTHER, gid="gw", cust="cus_w"))
+        self.assertFalse(r.is_supporter(OTHER))
+
+    def test_monthly_refunds_are_left_to_the_revoke(self):
+        r, *_ = make()
+        polar(r, grant(PLAYER, gid="gm", cust="cus_m", sub="sub_1"))
+        polar(r, {"type": "order.refunded", "data": {"id": "om", "customer_id": "cus_m", "subscription_id": "sub_1", "status": "refunded"}})
+        self.assertTrue(r.is_supporter(PLAYER))
+        self.assertIsNone(r.s.one("SELECT * FROM polar_orders WHERE order_id='om'"))
+
+    def test_older_databases_keep_their_days(self):
+        path = os.path.join(tempfile.mkdtemp(), "r.db")
+        st = roles.Store(path)
+        st.run("INSERT INTO polar_customers VALUES ('c', ?)", (PLAYER,))
+        st.run("INSERT INTO polar_orders(order_id, customer_id, applied, at, applied_at) VALUES ('o', 'c', 1, ?, ?)", (cm.now(), cm.now()))
+        r = roles.Roles(st)
+        r._recompute(PLAYER)
+        self.assertTrue(r.is_supporter(PLAYER))
+
+
 class Supporters(unittest.TestCase):
     def test_signature_replay_and_staleness(self):
         r, *_ = make()

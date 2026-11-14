@@ -46,8 +46,9 @@ Nothing here is live until these are done (each needs the user's OK):
 3. **Polar:** Benefits › New benefit › Discord: connect the server, role Supporter (Polar's bot above it);
    attach it to the monthly and the one-time products. Settings › Webhooks › Add endpoint
    `https://list.lonerstrike.com/roles/polar/webhook`, format Raw, events `benefit_grant.created`,
-   `benefit_grant.updated`, `benefit_grant.revoked`, `order.paid`; put its secret on the box (step 1); send a test
-   event: Polar shows 202.
+   `benefit_grant.updated`, `benefit_grant.cycled`, `benefit_grant.revoked`, `order.paid`, `order.refunded`; put its
+   secret on the box (step 1); send a test event: Polar shows 202. A full refund of a one-time donation takes its 30
+   days off again.
 4. **Official servers:** claim each one from the app, then `lsmod.py roles official <server> on`. Turn on
    Accept moderator applications. Set Supporters › Reserved slots to 1 in its Admins page.
 5. Moderation from a terminal: `lsmod.py roles servers | log | show <id> | supporters | unlink <steamid>`.

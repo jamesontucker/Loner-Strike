@@ -85,6 +85,12 @@ MIGRATIONS = [
     """
     ALTER TABLE polar_grants ADD COLUMN event_at REAL NOT NULL DEFAULT 0
     """,
+    # refunds: a one-time donation's 30 days come off again (supporters.until is worked out from the orders)
+    """
+    ALTER TABLE polar_orders ADD COLUMN refunded INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE polar_orders ADD COLUMN applied_at REAL NOT NULL DEFAULT 0;
+    UPDATE polar_orders SET applied_at=at WHERE applied=1
+    """,
 ]
 
 
@@ -483,9 +489,19 @@ class Roles:
         rows = self.s.all("SELECT discord_id, steamid FROM links")
         return sorted(r["steamid"] for r in rows if self.is_supporter(r["discord_id"]))
 
-    def _extend(self, discord_id, at):
-        r = self.s.one("SELECT until FROM supporters WHERE discord_id=?", (discord_id,))
-        until = max(at, r["until"] if r else 0) + self.days * 86400
+    def _apply(self, order_id, discord_id, when):
+        """A one-time donation counts from `when`; the supporter's time is worked out again."""
+        self.s.run("UPDATE polar_orders SET applied=1, applied_at=? WHERE order_id=?", (when, order_id))
+        return self._recompute(discord_id)
+
+    def _recompute(self, discord_id):
+        """A supporter's time from their one-time donations that count (applied, not refunded): each
+        adds `days`, from the later of when it came and the end of what they had."""
+        orders = self.s.all("SELECT o.applied_at FROM polar_orders o JOIN polar_customers c ON c.customer_id=o.customer_id "
+                            "WHERE c.discord_id=? AND o.applied=1 AND o.refunded=0 ORDER BY o.applied_at", (discord_id,))
+        until = 0
+        for o in orders:
+            until = max(int(o["applied_at"]), until) + self.days * 86400
         self.s.run("INSERT OR REPLACE INTO supporters(discord_id, until) VALUES (?,?)", (discord_id, until))
         return until
 
@@ -546,9 +562,8 @@ class Roles:
             self.s.run("INSERT OR REPLACE INTO polar_grants(grant_id, customer_id, discord_id, monthly, granted, at, event_at) VALUES (?,?,?,?,?,?,?)",
                        (gid, cust, account, monthly, granted, at, when))
             # donations that came before Polar told us whose Discord this customer is
-            for o in self.s.all("SELECT * FROM polar_orders WHERE customer_id=? AND applied=0 ORDER BY at", (cust,)):
-                self._extend(account, o["at"] if o["at"] > at - 86400 else at)
-                self.s.run("UPDATE polar_orders SET applied=1 WHERE order_id=?", (o["order_id"],))
+            for o in self.s.all("SELECT * FROM polar_orders WHERE customer_id=? AND applied=0 AND refunded=0 ORDER BY at", (cust,)):
+                self._apply(o["order_id"], account, o["at"] if o["at"] > at - 86400 else at)
             self.log("supporter", "polar", 0, account, f"{kind} {'monthly' if monthly else 'one-time'} {'granted' if granted else 'revoked'}")
         elif kind == "order.paid":
             oid, cust = str(d.get("id") or ""), str(d.get("customer_id") or "")
@@ -560,11 +575,38 @@ class Roles:
                 return
             c = self.s.one("SELECT discord_id FROM polar_customers WHERE customer_id=?", (cust,))
             if c:
-                until = self._extend(c["discord_id"], at)
-                self.s.run("UPDATE polar_orders SET applied=1 WHERE order_id=?", (oid,))
-                self.log("donation", "polar", 0, c["discord_id"], f"supporter until {time.strftime('%Y-%m-%d', time.gmtime(until))}")
+                until = self._apply(oid, c["discord_id"], at)
+                self.log("donation", "polar", 0, c["discord_id"], f"order {oid}: supporter until {time.strftime('%Y-%m-%d', time.gmtime(until))}")
             else:
-                self.log("donation", "polar", 0, cust, "waiting for the Discord benefit")
+                self.log("donation", "polar", 0, cust, f"order {oid}: waiting for the Discord benefit")
+        elif kind == "order.refunded":
+            # monthly support ends with its grant's revoke; this is about one-time donations
+            oid, cust = str(d.get("id") or ""), str(d.get("customer_id") or "")
+            if not oid or not cust or d.get("subscription_id"):
+                return
+            total = d.get("total_amount", d.get("amount"))
+            refunded_amount = d.get("refunded_amount")
+            full = d.get("status") == "refunded" or (isinstance(total, (int, float)) and isinstance(refunded_amount, (int, float))
+                                                    and total > 0 and refunded_amount >= total)
+            if not full:
+                self.log("refund", "polar", 0, cust, f"order {oid}: partly refunded, its days stay")
+                return
+            row = self.s.one("SELECT * FROM polar_orders WHERE order_id=?", (oid,))
+            if not row:
+                # the refund came before the payment: the payment, when it comes, finds it and counts nothing
+                self.s.run("INSERT INTO polar_orders(order_id, customer_id, at, refunded) VALUES (?,?,?,1)", (oid, cust, at))
+                self.log("refund", "polar", 0, cust, f"order {oid}: refunded before its payment arrived")
+                return
+            if row["refunded"]:
+                return
+            self.s.run("UPDATE polar_orders SET refunded=1 WHERE order_id=?", (oid,))
+            c = self.s.one("SELECT discord_id FROM polar_customers WHERE customer_id=?", (cust,))
+            if c and row["applied"]:
+                until = self._recompute(c["discord_id"])
+                self.log("refund", "polar", 0, c["discord_id"], f"order {oid}: refunded, supporter until "
+                                                                 + (time.strftime('%Y-%m-%d', time.gmtime(until)) if until else "none"))
+            else:
+                self.log("refund", "polar", 0, cust, f"order {oid}: refunded (it hadn't counted yet)")
 
     def vip(self, srv):
         if not srv["official"]:
