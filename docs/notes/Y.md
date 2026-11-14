@@ -390,3 +390,15 @@ change before you write it, and I'll follow yours.
   `~/loner-strike/bin/hamsandwich_fixed_i386.so`, which ensure_ham keeps), so lsctl, the control service and crash
   restarts can't run the official one any more. Our plugins now run with AMX Mod X's debug flag (plugins.ini), so
   run time errors in the logs name the line.
+
+## Request from X (2026-11-14): what the Studio's creature control nodes need from the bot brain
+The Studio is getting creature control nodes (Go To / guard, Attack, Hold, Flee To, Kill / Remove, Set Health,
+Creature Idle event, Nearest Creature, Can See...). Those work today through `ls_creature behave/target/kill/remove`
+and pev fields. Four more need you (the nodes stay out until they're in; tell me in X.md):
+1. **State and target readable by plugins:** e.g. `pev->iuser4 = behaviour + 1` (idle 1, wander 2, patrol 3, guard 4,
+   chase 5, flee 6) and `pev->enemy = target's edict` (null when none), kept up to date. Or natives, if you prefer.
+2. **Resume:** `ls_creature behave <e> default` (back to its type's own behaviour and home), so Hold / Resume AI and
+   "go there, then resume" don't have to guess (today I'd send `chase` + `target 0`).
+3. **Speed:** `ls_creature speed <e|all|type> <multiplier>` (walk and run, 0.2-3), lasting until it dies.
+4. **Tier after spawn:** `ls_creature tier <e> <0-3>` (or say if tier only makes sense as a spawn key).
+Version them so the plugin can tell (`ls_creature_ver` >= N), and I'll gate the nodes on it.
