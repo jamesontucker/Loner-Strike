@@ -3557,9 +3557,9 @@ mod tests {
         let mut z = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
         let mut ini = String::new();
         z.by_name("creatures/creatures.ini").unwrap().read_to_string(&mut ini).unwrap();
-        assert!(ini.contains("[gb4242.runner_x]\nbase = runner\n") && ini.contains("hp = 77") && ini.contains("model = models/qa/runner_x.mdl"), "{ini}");
+        assert!(ini.contains("[gb4242.runner_x]\nbase = runner\n") && ini.contains("hp = 77") && ini.contains("model = models/gb4242/qa/runner_x.mdl"), "{ini}");
         assert!(super::super::creaturepack::parse_pack(&ini).is_ok());
-        assert!(z.by_name("models/qa/runner_x.mdl").is_ok());
+        assert!(z.by_name("models/gb4242/qa/runner_x.mdl").is_ok());
         let mut b = Vec::new();
         z.by_name("maps/cr_qa.bsp").unwrap().read_to_end(&mut b).unwrap();
         let ents = super::super::creaturepack::bsp_entities(&b).unwrap();
@@ -3579,7 +3579,7 @@ mod tests {
         std::fs::write(graphs.join("crq.graph.json"), g.to_string()).unwrap();
         let pkg = build_mode_package(&graphs, &root.join("lib"), "crq", &req, &root.join("p"), None, Some((hl.as_path(), "cstrike"))).unwrap();
         assert_eq!(pkg.item.creatures.len(), 1);
-        assert!(pkg.contents.iter().any(|c| c == "creatures/creatures.ini") && pkg.contents.iter().any(|c| c == "models/qa/runner_x.mdl"));
+        assert!(pkg.contents.iter().any(|c| c == "creatures/creatures.ini") && pkg.contents.iter().any(|c| c == "models/gb4242/qa/runner_x.mdl"));
         let bytes = std::fs::read(root.join("p").join(&pkg.file)).unwrap();
         let mut z = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
         let mut gj = String::new();
