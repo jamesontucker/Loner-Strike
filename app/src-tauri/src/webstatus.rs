@@ -1244,7 +1244,7 @@ mod tests {
         assert!(sh.contains("reload-or-restart caddy") && sh.contains("Is status.example.com already used"));
 
         let t = Settings { mode: "tunnel".into(), ..s };
-        let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ==";
+        let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ=="; // gitleaks:allow (made-up test token)
         let sh = install_sh("pub", &t, 8090, 27016, Some(token), [None, None], "", "cstrike");
         assert!(sh.contains("https://pkg.cloudflare.com/cloudflare-main.gpg") && sh.contains("https://pkg.cloudflare.com/cloudflared any main"));
         assert!(sh.contains(&format!("<<'LSTOKEN'\n{token}\nLSTOKEN\n")));
@@ -1269,7 +1269,7 @@ mod tests {
         }
         let s = Settings { enabled: true, domain: "status.example.com".into(), origins: vec!["https://example.com".into()], counter: true, mode: "caddy".into(), port: Some(8090), own_tunnel: false, fastdl: false };
         let t = Settings { mode: "tunnel".into(), own_tunnel: true, ..s.clone() };
-        let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ==";
+        let token = "eyJhIjoiMTIzNDU2Nzg5MCIsInQiOiJhYmNkZWYifQ=="; // gitleaks:allow (made-up test token)
         for sh in [install_sh("pub", &s, 8090, 27016, None, [None, None], "", "cstrike"), install_sh("pub", &t, 8090, 27016, Some(token), [None, None], "", "cstrike"), install_sh("pub", &t, 8090, 27016, None, [None, None], "", "cstrike"),
                    install_sh("pub", &Settings { fastdl: true, ..s.clone() }, 8090, 27016, None, [Some("https://discord.com/api/webhooks/1/abcdefghijklmnopqrstuvwxyz"), None], "play.example.com", "czero"), off_sh("pub"), remove_sh("pub")] {
             use std::io::Write;

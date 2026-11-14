@@ -32,8 +32,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SERVICE = os.path.dirname(HERE)
 API = "https://discord.com/api/v10"
 GUILD = "1568421500636233748"
-OWNER = "310619637727363072"
-BOX = os.environ.get("LS_BOX", "cs@178.156.241.180")
+OWNER = os.environ.get("LS_OWNER_ID", "")
+BOX = os.environ.get("LS_BOX", "")  # user@host of the list box (required)
 LIST = "https://list.lonerstrike.com"
 STATE = os.path.expanduser("~/.config/lonerstrike/qa-live.json")
 TOKEN_FILE = os.path.expanduser("~/.config/loner-discord-token")
@@ -222,6 +222,8 @@ def verify_clean(a):
 
 
 def main():
+    if not BOX:
+        sys.exit("Set LS_BOX to the list box (user@host); LS_OWNER_ID for discord-setup.")
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("discord-setup").add_argument("--owner", default=OWNER)
