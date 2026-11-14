@@ -54,8 +54,7 @@ COMMAND = {
 VIEW, SEND, EMBED, HISTORY, REACT, MANAGE_MESSAGES = 1 << 10, 1 << 11, 1 << 14, 1 << 16, 1 << 6, 1 << 13
 THREADS = (1 << 35) | (1 << 36) | (1 << 38)
 APPLY_TEXT = ("**Apply for a role**\n"
-              "Want to help test, make maps or modes, hunt bugs, show off your surf or deathrun skills, or "
-              "moderate? Press the button, pick a role and tell us a little about yourself. The team reads "
+              "Want to help test, make maps or modes, hunt bugs, or moderate? Press the button, pick a role and tell us a little about yourself. The team reads "
               "every application; you'll hear back here or by DM.")
 
 
