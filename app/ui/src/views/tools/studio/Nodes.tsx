@@ -1,11 +1,12 @@
 // How nodes look on the canvas: a logic node (header, pins, settings, last result), a reroute
 // dot and a comment box. They read the graph, problems and debug state from the store by id.
 
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Handle, NodeResizer, Position, type NodeProps } from "@xyflow/react";
 import { useStudio } from "./store";
-import { container, nodeDef, typeColor, type NodeDef, type PinDef } from "./registry";
-import { outType, resizeComment, setCommentText, toggleBreakpoint } from "./graphOps";
+import { container, nodeDef, typeColor, type NodeDef, type ParamDef, type PinDef } from "./registry";
+import { outType, resizeComment, setCommentText, setParam, toggleBreakpoint } from "./graphOps";
+import { LABEL_CHARS } from "./schema";
 import { allVariables, nodeTitle, typeLabel } from "./pins";
 import { showValue } from "./Inspector";
 import type { GNode, GVariable, Graph } from "./schema";
@@ -28,6 +29,8 @@ export function kindOf(def: NodeDef): "event" | "pure" | "func" | "flow" | "acti
 export function paramSummary(def: NodeDef, n: GNode, wired: (pin: string) => boolean, vars: GVariable[] = [], g: Graph | null = null): string {
   return def.params
     .filter((p) => !def.inputs.some((i) => i.param === p.id && wired(i.id)))
+    // (typed next to its pin: UX review H6)
+    .filter((p) => !(INLINE.includes(p.kind) && def.inputs.some((i) => i.param === p.id)))
     // (what the title already says)
     .filter((p) => !["fn", "macro", "struct", "enum", "enumvalue"].includes(p.kind) && !(p.kind === "var" && (n.type === "var.get" || n.type === "var.set")))
     .map((p) => {
@@ -54,7 +57,76 @@ export function paramSummary(def: NodeDef, n: GNode, wired: (pin: string) => boo
     .join(" · ");
 }
 
-function Pin({ pin, side, color, wired, problem, watch }: { pin: PinDef; side: "in" | "out"; color: string; wired: boolean; problem?: string; watch?: string }) {
+/** Settings that can be typed right next to their (unwired) input pin, as in Unreal. */
+const INLINE: ParamDef["kind"][] = ["number", "bool", "text", "choice"];
+
+/** A pin's value typed on the node (UX review H6): the node's own setting, so Details shows the
+ *  same. Numbers and text are kept on Enter or leaving the box (one undo step); Escape undoes. */
+function PinValue({ node, p, value }: { node: string; p: ParamDef; value: string | number | boolean }) {
+  const edit = useStudio((s) => s.edit);
+  const put = (v: string | number | boolean) => v !== value && edit((g) => setParam(g, node, p.id, v));
+  const [draft, setDraft] = useState(String(value));
+  const [typing, setTyping] = useState(false);
+  const cancelled = useRef(false);
+  useEffect(() => {
+    if (!typing) setDraft(String(value));
+  }, [value, typing]);
+  const stop = { onPointerDown: (e: { stopPropagation: () => void }) => e.stopPropagation(), onDoubleClick: (e: { stopPropagation: () => void }) => e.stopPropagation() };
+  if (p.kind === "bool") return <input type="checkbox" className="st-pin-value nodrag" checked={!!value} onChange={(e) => put(e.target.checked)} aria-label={p.label} {...stop} />;
+  if (p.kind === "choice")
+    return (
+      <select className="st-pin-value st-pin-choice nodrag nowheel" value={String(value)} onChange={(e) => put(e.target.value)} aria-label={p.label} title={p.choices?.find(([k]) => k === String(value))?.[1]} {...stop}>
+        {p.choices?.map(([k, l]) => (
+          <option key={k} value={k}>
+            {l}
+          </option>
+        ))}
+      </select>
+    );
+  const num = p.kind === "number";
+  const keep = () => {
+    setTyping(false);
+    if (cancelled.current) {
+      cancelled.current = false;
+      return setDraft(String(value));
+    }
+    if (num) {
+      const n = Number(draft);
+      if (draft.trim() === "" || !Number.isFinite(n)) return setDraft(String(value));
+      const v = Math.min(p.max ?? 100000, Math.max(p.min ?? -100000, n));
+      setDraft(String(v));
+      put(v);
+    } else {
+      const t = [...draft].filter((c) => LABEL_CHARS.test(c)).join("").slice(0, 100);
+      setDraft(t);
+      put(t);
+    }
+  };
+  return (
+    <input
+      className={`st-pin-value nodrag ${num ? "st-pin-num" : "st-pin-text"}`}
+      type={num ? "number" : "text"}
+      step="any"
+      value={draft}
+      aria-label={p.label}
+      title={num && (p.min !== undefined || p.max !== undefined) ? `${p.min ?? ""} to ${p.max ?? ""}` : undefined}
+      onFocus={() => setTyping(true)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={keep}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") e.currentTarget.blur();
+        else if (e.key === "Escape") {
+          cancelled.current = true;
+          e.currentTarget.blur();
+        }
+      }}
+      {...stop}
+    />
+  );
+}
+
+function Pin({ pin, side, color, wired, problem, watch, value }: { pin: PinDef; side: "in" | "out"; color: string; wired: boolean; problem?: string; watch?: string; value?: ReactNode }) {
   const exec = pin.type === "exec";
   const shape = container(pin.type)?.kind;
   return (
@@ -68,6 +140,7 @@ function Pin({ pin, side, color, wired, problem, watch }: { pin: PinDef; side: "
         style={exec ? undefined : { borderColor: color, background: wired ? color : undefined }}
       />
       {pin.label && <span className="st-pin-label">{pin.label}</span>}
+      {value}
     </div>
   );
 }
@@ -123,6 +196,12 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
     return `${p.label || "Value"}: ${showValue(watchOuts.get(p.id))}`;
   };
   const failed = run?.result === "false";
+  // an unwired input with its own setting: typed right there (UX review H6)
+  const inlineOf = (ip: PinDef) => {
+    if (!ip.param || wiredIn(ip.id)) return undefined;
+    const p = def.params.find((x) => x.id === ip.param && INLINE.includes(x.kind));
+    return p ? <PinValue node={id} p={p} value={n.params[p.id] ?? p.default} /> : undefined;
+  };
   const cls = [
     "st-node",
     mark ? `st-mark-${mark}` : "",
@@ -176,7 +255,7 @@ export const LogicNode = memo(function LogicNode({ id, selected }: NodeProps) {
           const op = pins.outputs[i];
           return (
             <div className="st-pin-row" key={i}>
-              {ip ? <Pin pin={ip} side="in" color={typeColor(ip.type)} wired={wiredIn(ip.id)} problem={pinProblem(ip.id)} watch={watchIn(ip)} /> : <span />}
+              {ip ? <Pin pin={ip} side="in" color={typeColor(ip.type)} wired={wiredIn(ip.id)} problem={pinProblem(ip.id)} watch={watchIn(ip)} value={inlineOf(ip)} /> : <span />}
               {op ? <Pin pin={op} side="out" color={typeColor(op.type)} wired={wiredOut(op.id)} watch={watchOut(op)} /> : <span />}
             </div>
           );

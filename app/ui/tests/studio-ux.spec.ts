@@ -216,3 +216,40 @@ test("M8, M9: the Timeline editor (name, fitted length, the key row's place, lab
   await expect(page.getByRole("button", { name: /^Remove track/ })).toHaveText("Remove");
   await shot(page, "m8-timeline");
 });
+
+test("H6: a pin's value is typed on the node, the same as in Details", async ({ page }) => {
+  await seed(page);
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await expect(page.getByRole("heading", { name: "This mode" })).toBeVisible({ timeout: 20_000 });
+  const pb = (await page.locator(".react-flow__pane").boundingBox())!;
+  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 260, y: pb.height - 200 } });
+  const pal = page.getByRole("dialog", { name: "Add a node" });
+  await pal.getByRole("textbox").fill("give money");
+  await page.keyboard.press("Enter");
+  const money = page.locator(".react-flow__node.selected");
+  await expect(money).toContainText("Give Money");
+  const amount = money.locator("input.st-pin-value").first();
+  await expect(amount).toBeVisible();
+  // typed on the node: Details has it too (and the line under the pins doesn't repeat it)
+  await amount.fill("750");
+  await amount.press("Enter");
+  const details = page.getByRole("complementary", { name: "Details" });
+  await expect(details.locator('input[type="number"]').first()).toHaveValue("750");
+  await expect(money.locator(".st-node-params")).toHaveCount(0);
+  // changed in Details: the node shows it
+  await details.locator('input[type="number"]').first().fill("300");
+  await expect(amount).toHaveValue("300");
+  // Escape leaves it as it was
+  await amount.fill("999");
+  await amount.press("Escape");
+  await expect(amount).toHaveValue("300");
+  // a yes/no and a choice on a Give Weapon: right there too
+  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 260, y: 60 } });
+  await pal.getByRole("textbox").fill("give weapon");
+  await page.keyboard.press("Enter");
+  const gw = page.locator(".react-flow__node.selected");
+  await expect(gw.locator("select.st-pin-value")).toHaveValue("ak47");
+  await gw.locator("select.st-pin-value").selectOption("awp");
+  await expect(details.locator("select").filter({ has: page.locator('option[value="awp"]') }).first()).toHaveValue("awp");
+  await shot(page, "h6-inline");
+});

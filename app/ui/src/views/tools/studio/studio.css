@@ -392,6 +392,13 @@
 .st-node.st-node-pill { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 4px 4px 10px; border-radius: 14px; }
 .st-node-pill .st-node-title { font-size: 12px; font-weight: 600; white-space: nowrap; }
 .st-node-pill .st-pin { margin-left: auto; }
+/* a pin's value typed on the node (UX review H6) */
+.st-pin-value { margin-left: 4px; font: inherit; font-size: 11.5px; color: #e9ecef; background: rgba(0, 0, 0, .35); border: 1px solid #4a515b; border-radius: 3px; padding: 0 3px; height: 18px; box-sizing: border-box; min-width: 0; }
+.st-pin-value:focus { outline: 1px solid var(--signal, #e8c35a); border-color: transparent; }
+.st-pin-num { width: 58px; }
+.st-pin-text { width: 92px; }
+.st-pin-choice { max-width: 120px; padding: 0 1px; }
+input[type="checkbox"].st-pin-value { width: 13px; height: 13px; padding: 0; accent-color: var(--signal, #e8c35a); }
 .st-tl-head { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 4px 8px; position: relative; font-size: 12px; box-sizing: border-box; }
 .st-tl-head .st-field { width: 100%; padding: 2px 4px; font-size: 12px; }
 .st-tl-x { align-self: flex-start; padding: 0; background: none; border: 0; color: var(--bone-dim, #9aa); cursor: pointer; font-size: 11px; text-decoration: underline; }
