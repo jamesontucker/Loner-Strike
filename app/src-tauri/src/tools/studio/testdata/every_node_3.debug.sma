@@ -5239,7 +5239,7 @@ stock lsg_tl84_go(inst, Float:from, dir)
 	{
 		g_lsgTlOn84[inst] = true
 		g_lsgTlAt84[inst] = get_gametime()
-		set_task(0.05, "lsg_tl84_tick", LSG_TASK + 50000 + 84 * 33 + inst, _, _, "b")
+		set_task(0.1, "lsg_tl84_tick", LSG_TASK + 50000 + 84 * 33 + inst, _, _, "b")
 	}
 }
 stock lsg_tl84_stop(inst)

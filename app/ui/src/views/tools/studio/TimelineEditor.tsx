@@ -321,12 +321,13 @@ export function TimelineEditor({ id }: { id: string }) {
         <label title="It ends at its last key, not at the length">
           <input type="checkbox" checked={!!tl.useLastKey} onChange={(e) => set((t) => ({ ...t, useLastKey: e.target.checked }))} /> Use Last Keyframe
         </label>
-        <label title="How often the server works the values out: smaller is smoother and costs the server more">
+        <label title="How often the server works the values out: smaller is smoother and costs the server more. 0.1 s is the fastest AMX Mod X runs">
           Tick{" "}
-          <select className="st-field" value={tl.tick} onChange={(e) => set((t) => ({ ...t, tick: Number(e.target.value) }))} aria-label="Tick">
-            {[0.02, 0.03, 0.05, 0.1, 0.2, 0.5].map((x) => (
+          {/* (a graph saved with less than 0.1 s runs at 0.1 s, and shows it: QA4-B) */}
+          <select className="st-field" value={Math.max(tl.tick, 0.1)} onChange={(e) => set((t) => ({ ...t, tick: Number(e.target.value) }))} aria-label="Tick">
+            {[0.1, 0.2, 0.5].map((x) => (
               <option key={x} value={x}>
-                {x} s{x === 0.05 ? " (default)" : x < 0.05 ? " (costly)" : ""}
+                {x} s{x === 0.1 ? " (default, the fastest)" : ""}
               </option>
             ))}
           </select>

@@ -210,8 +210,13 @@ pub struct Timeline {
     pub tracks: Vec<Track>,
 }
 
+/// (0.1 s: the shortest repeat AMX Mod X's set_task runs; a graph asking for less gets 0.1)
+/// The shortest Timeline tick that really happens: AMX Mod X runs a repeating task at most every
+/// 0.1 s, so a tick set lower (older graphs: 0.05) runs at 0.1 (QA4-B).
+pub const MIN_TICK: f64 = 0.1;
+
 fn tick_default() -> f64 {
-    0.05
+    0.1
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -2374,12 +2379,12 @@ pub fn cost_warnings(g: &Graph, v: &View) -> Vec<Problem> {
         let Some(tl) = t.params.get("timeline").and_then(Value::as_str).and_then(|id| g.timelines.iter().find(|x| x.id == id)) else { continue };
         let per_player = t.graph.as_deref().and_then(|f| g.functions.iter().find(|x| x.id == f)).is_some_and(|f| f.inputs.iter().any(|m| m.ty == "player"));
         let copies = if per_player { 32.0 } else { 1.0 };
-        let rate = 1.0 / tl.tick.max(0.01);
+        let rate = 1.0 / tl.tick.max(MIN_TICK);
         let work = 1 + flow_from(v, &t.id, &["update"]).len();
         let ups = copies * rate;
         if ups > 200.0 || ups * work as f64 > 1000.0 {
             let who = if per_player { format!("once per player (up to 32 copies) x {} updates a second", rate.round()) } else { format!("{} updates a second", rate.round()) };
-            warn(&mut p, &t.id, "timeline", format!("This Timeline runs {who}: up to {} updates a second, each running {work} node{}. Raise its Tick (0.1 s still looks smooth), keep Update short, or play one Timeline for everyone.", ups.round(), if work == 1 { "" } else { "s" }));
+            warn(&mut p, &t.id, "timeline", format!("This Timeline runs {who}: up to {} updates a second, each running {work} node{}. Raise its Tick (0.2 s still looks smooth), keep Update short, or play one Timeline for everyone.", ups.round(), if work == 1 { "" } else { "s" }));
         }
     }
     // fast timers: real work many times a second
@@ -3116,10 +3121,12 @@ mod tests {
             }
             cost_warnings(&g, &View::new(&g)).into_iter().filter(|p| p.node.as_deref() == Some("tp")).map(|p| p.message).collect::<Vec<_>>()
         };
-        // one copy at 20 a second: fine; one per player: 640 a second
-        assert!(mk(0.05, false).is_empty(), "{:?}", mk(0.05, false));
-        let w = mk(0.05, true);
-        assert!(w.iter().any(|m| m.contains("per player") && m.contains("640")), "{w:?}");
+        // one copy at 10 a second: fine; one per player: 320 a second (a tick under 0.1 s runs at
+        // 0.1 s, AMX Mod X's shortest repeat, so 0.05 counts the same)
+        assert!(mk(0.1, false).is_empty(), "{:?}", mk(0.1, false));
+        let w = mk(0.1, true);
+        assert!(w.iter().any(|m| m.contains("per player") && m.contains("320")), "{w:?}");
+        assert_eq!(mk(0.05, true), w);
         // a slower tick per player is fine
         assert!(mk(0.2, true).is_empty(), "{:?}", mk(0.2, true));
     }

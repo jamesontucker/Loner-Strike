@@ -694,7 +694,7 @@ export type GKey = GTrack["keys"][number];
 export function addTimeline(g: Graph, name?: string): { graph: Graph; id: string } {
   const id = freshPartId(g, "tl");
   const taken = (g.timelines ?? []).map((t) => t.name);
-  return { graph: { ...g, timelines: [...(g.timelines ?? []), { id, name: uniqueName(taken, name ?? "Timeline"), length: 3, tick: 0.05, tracks: [] }] }, id };
+  return { graph: { ...g, timelines: [...(g.timelines ?? []), { id, name: uniqueName(taken, name ?? "Timeline"), length: 3, tick: 0.1, tracks: [] }] }, id };
 }
 
 export function updateTimeline(g: Graph, id: string, f: (t: GTimeline) => GTimeline): Graph {

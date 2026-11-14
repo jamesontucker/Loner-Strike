@@ -3340,7 +3340,8 @@ fn track_eval(name: &str, keys: &[&super::graph::Key], comp: Option<usize>) -> S
 fn timeline_code(gen: &Gen, id: &str, tl: &super::graph::Timeline, next: &dyn Fn(&str) -> Option<String>) -> String {
     let i = gen.index(id);
     let len = float_lit(tl.play_length());
-    let tick = float_lit(tl.tick);
+    // (never under AMX Mod X's shortest repeat: what's asked is what runs)
+    let tick = float_lit(tl.tick.max(super::graph::MIN_TICK));
     let mut o = format!(
         "// Timeline: {name}\nstock Float:g_lsgTlT{i}[33], g_lsgTlDir{i}[33], bool:g_lsgTlOn{i}[33], g_lsgTlC{i}[33][LSG_CTX], Float:g_lsgTlAt{i}[33], bool:g_lsgTlNew{i}[33]\n\
 stock lsg_tl{i}_save(inst, ctx[])\n{{\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tg_lsgTlC{i}[inst][k] = ctx[k]\n}}\n\
