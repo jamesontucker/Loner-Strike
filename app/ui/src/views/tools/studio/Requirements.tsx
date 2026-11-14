@@ -9,7 +9,7 @@ import { get, post } from "../common/api";
 import { BusyButton } from "../../../ui";
 
 type Link = { model: "Mod" | "Spray"; id: number; name: string };
-type MapReq = { name: string; source: "base" | "community" | "local"; key?: string; have: boolean; warning?: string };
+type MapReq = { name: string; source: "base" | "loner" | "community" | "local"; key?: string; have: boolean; warning?: string };
 type ContentReq = { path: string; kind: "model" | "sound" | "sprite"; have: boolean; link: Link | null; suggest: Link | null };
 export type Report = {
   id: string;
@@ -23,7 +23,8 @@ export type Report = {
   error?: string;
 };
 
-const SOURCE: Record<MapReq["source"], string> = { base: "Base game", community: "Community", local: "Only on this computer" };
+// ("loner": a map Loner-Strike ships, as every player has it: QA4-B)
+const SOURCE: Record<MapReq["source"], string> = { base: "Base game", loner: "Comes with Loner-Strike", community: "Community", local: "Only on this computer" };
 
 /** "https://gamebanana.com/mods/12345" or "12345" as a page link. */
 export function parseLink(text: string): Link | null {
@@ -34,8 +35,9 @@ export function parseLink(text: string): Link | null {
   return id > 0 && id < 1e8 ? { model: m[1].toLowerCase() === "sprays" ? "Spray" : "Mod", id, name: "" } : null;
 }
 
-/** Base-game maps first, then community ones, then the rest; by name inside each. */
-const sortMaps = (l: MapReq[]) => [...l].sort((a, b) => ["base", "community", "local"].indexOf(a.source) - ["base", "community", "local"].indexOf(b.source) || a.name.localeCompare(b.name));
+/** Base-game maps first, then Loner-Strike's own, community ones, then the rest; by name inside each. */
+const ORDER: MapReq["source"][] = ["base", "loner", "community", "local"];
+const sortMaps = (l: MapReq[]) => [...l].sort((a, b) => ORDER.indexOf(a.source) - ORDER.indexOf(b.source) || a.name.localeCompare(b.name));
 
 /** Recommended maps: the picked ones as chips, and a search to add more (UX review H3). */
 export function MapPicker({ maps, picked, disabled, onChange }: { maps: MapReq[]; picked: MapReq[]; disabled: boolean; onChange: (names: string[]) => void }) {

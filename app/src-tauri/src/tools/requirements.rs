@@ -107,10 +107,14 @@ pub fn content_of(g: &Graph) -> BTreeSet<String> {
     out
 }
 
-/// Where a map comes from: the game's own, a community item (its key), or only here.
+/// Where a map comes from: the game's own, one Loner-Strike ships (every player has it, QA4-B),
+/// a community item (its key), or only here.
 pub fn map_source(name: &str, community: &HashMap<String, Value>) -> (&'static str, Option<String>) {
     if crate::maps::is_stock_file(&format!("maps/{name}.bsp")) {
         return ("base", None);
+    }
+    if crate::maps::ships_with_app(name) {
+        return ("loner", None);
     }
     match community.get(&format!("maps/{}.bsp", name.to_ascii_lowercase())) {
         Some(who) => ("community", who["key"].as_str().map(String::from)),
@@ -316,6 +320,10 @@ mod tests {
         let here = ["de_dust2".to_string(), "de_lonely".to_string(), "my_test".to_string()];
         let v = answer(&gr, &saved, &Here { game_dir: None, stock: &stock, community: &community, maps_here: &here });
         assert_eq!(v["defaultMap"]["source"], "base");
+        // a map Loner-Strike ships is every player's: no "share it first" (QA4-B)
+        assert_eq!(map_source("ls_outpost", &HashMap::new()), ("loner", None));
+        assert_eq!(map_source("br_valley", &HashMap::new()), ("loner", None));
+        assert_eq!(map_source("my_own_map", &HashMap::new()), ("local", None));
         assert_eq!(v["maps"][1]["source"], "community");
         assert_eq!(v["maps"][1]["key"], "mod:101");
         assert_eq!(v["maps"][2]["source"], "local");

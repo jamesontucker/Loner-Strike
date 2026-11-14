@@ -1132,7 +1132,8 @@ async fn api_item(State(st): State<Shared>, UrlPath((model, id)): UrlPath<(Strin
 /// that provides it (a community map by its name; content by its link).
 pub fn needs_json(r: &ModeRequirements, idx: &Index, maps_have: &HashSet<String>, file_here: &dyn Fn(&str) -> bool) -> Value {
     let map = |name: &str| {
-        let base = crate::maps::is_stock_file(&format!("maps/{name}.bsp"));
+        // (the game's own, or one Loner-Strike ships: every player has those)
+        let base = crate::maps::is_stock_file(&format!("maps/{name}.bsp")) || crate::maps::ships_with_app(name);
         let item = idx.items.iter().find(|i| i.map.as_ref().is_some_and(|m| m.name.eq_ignore_ascii_case(name)));
         json!({"name": name, "have": base || maps_have.contains(&name.to_ascii_lowercase()), "base": base,
                "item": item.map(|i| json!({"model": i.model, "id": i.gb, "name": i.name}))})

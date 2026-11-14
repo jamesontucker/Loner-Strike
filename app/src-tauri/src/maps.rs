@@ -25,6 +25,16 @@ pub const STOCK_CS: &[&str] = &[
     "de_vertigo",
 ];
 
+/// The maps Loner-Strike itself ships (plugins/game/maps, copied into every player's game by
+/// setup): every player has them, as they have the stock ones (a test keeps this list in step
+/// with the folder).
+pub const LONER_MAPS: &[&str] = &["br_valley", "ls_outpost"];
+
+/// Is this one of the maps Loner-Strike ships?
+pub fn ships_with_app(name: &str) -> bool {
+    LONER_MAPS.iter().any(|m| m.eq_ignore_ascii_case(name))
+}
+
 /// maps/<stock map>.* (never removed by an uninstall).
 pub fn is_stock_file(rel: &str) -> bool {
     let r = rel.replace('\\', "/").to_lowercase();
@@ -521,6 +531,16 @@ pub fn convert(src: &Path, out: &Path, shrink: Shrink) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// LONER_MAPS is the maps in plugins/game/maps (what setup copies into every game).
+    #[test]
+    fn loner_maps_are_the_shipped_ones() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins/game/maps");
+        let mut shipped: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().filter_map(|e| e.file_name().to_str().and_then(|n| n.strip_suffix(".bsp")).map(String::from)).collect();
+        shipped.sort();
+        assert_eq!(shipped, LONER_MAPS.iter().map(|s| s.to_string()).collect::<Vec<_>>(), "update LONER_MAPS");
+        assert!(ships_with_app("LS_OUTPOST") && !ships_with_app("de_dust2"));
+    }
 
     #[test]
     fn categories() {
