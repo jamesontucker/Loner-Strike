@@ -282,3 +282,28 @@ For W2 (bot code, cs_bot_ls_modes.cpp - merged into ls-next3):
 - Changed: mode-enemy scan every 0.5 s with at most 4 sight lines (was 0.3 s / 8), the bullet-line trace (with
   monsters) kept 0.15 s per target, a station's hide not asked again for 1.5 s after it was set (bounced hides repathed
   every half second), bots never target a friendly creature (LsModeTargetOk).
+
+## Y (2026-11-14): Linux numbers (Hetzner 3 vCPU, ls-next3 6598847, sys_ticrate 300, 127.0.0.1 only)
+Real fps from ls_perf (not rcon stats), Last Stand on ls_outpost, waves x10 to keep the cap busy:
+
+| bots | cap | alive avg/max | fps avg | worst 10 s | worst second | worst frame | entities sent per player avg/max | CPU of one core |
+|---|---|---|---|---|---|---|---|---|
+| 32 | 48 | 36/48 | 263 | 253 | 230 | 27 ms | 95/119 | 23 % |
+| 16 | 48 | 21/48 | 274 | 265 | 256 | 16 ms | 80/124 | 14 % |
+| 32 | 64 | 36/64 | 258 | 247 | 222 | 32 ms | 99/126 | 24 % |
+| 32 | 96 | 49/96 | 260 | 251 | 234 | 25 ms | 95/142 | 25 % |
+| 32 | 128 | 40/105 | 262 | 250 | 232 | 27 ms | 98/135 | 21 % |
+| 32 | 128, adaptive on | 43/108 | 258 | 241 | 218 | 37 ms | 102/147 | 24 % |
+
+- A native server has ~2.5x the 90 fps floor with 32 bots and 100+ creatures; bot AI is ~0.5 ms a frame. The
+  adaptive cap never stepped in (it would under 85 fps). Edicts at most 385 of 2265, RAM 139 MB, box 1 GB used.
+- Caps over ~100 are rarely reached: the bots kill faster than the wave spawners add (alive max 105-108 at cap 128).
+- Entities a player is sent stayed at or under 147 of the engine's 256 a frame, so the packet-entity limit isn't the
+  ceiling yet at these caps.
+- The Linux "crashes" were the test harness (a SIGTERM'd server still holding the port when the next run started,
+  then AMX Mod X's double free on exit): 6 full-length runs with the crash log on had no crash while running. Every
+  stop by SIGTERM ends in AMX Mod X freeing its language table twice (glibc abort): harmless at exit, worth knowing
+  when reading cores. The brain now writes ls_crash.log on Linux too.
+
+For W1 (defaults): native servers (Linux / Windows): lst cap 96, ls_creature_max 128; CrossOver (Mac local): cap 24
+and at most ~8 bots (the adaptive cap holds 85 fps there by lowering the cap).
