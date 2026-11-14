@@ -1,7 +1,7 @@
 /* The editor's Compile panel (CompilePanel.tsx). */
 .compile-panel { display: grid; gap: 10px; align-content: start; }
 .compile-panel p { margin: 0; }
-.compile-panel .editor-field input:not([type]) { width: 100%; font: 13px ui-monospace, Menlo, Consolas, monospace; padding: 3px 6px; }
+.compile-panel .editor-field input:not([type]) { width: 100%; font-size: 13px; padding: 3px 6px; }
 .compile-presets { width: 100%; }
 .compile-presets button { flex: 1 1 0; padding: 5px 6px; font-size: 13px; }
 .compile-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--bone-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
