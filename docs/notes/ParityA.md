@@ -101,6 +101,35 @@ Chromium (software GL): JS heap 79 -> 77 MB over 10 cycles (after GC), geometrie
   programs released/recompiled; not from brush/entity drawing) - worth a look after that.
 - Always: Playwright under `nice -n 15 --workers=1`, only while load < 20 (coordinator).
 
+**7. Where a slow nudge / drag-move frame goes (2026-11-13 22:30, before further fixes)**
+`tests/editor-framesplit.spec.ts` instruments the page from outside (production build): render loop (R3F + three.js,
+with the time inside WebGL calls: draw / upload / texture / shader), React (its scheduler tasks), store (the app's
+promise continuations after a response: meshes, the document patch, listeners), input handlers, timers; fetch is
+elapsed time (waiting, not CPU). "Unattributed" = the rest of the frame: GC, style/layout/paint, compositing, the
+GPU process, idle. GPU: WebKit has no EXT_disjoint_timer_query, so a second pass calls gl.finish() after each render
+callback (the GPU's time to finish the frame's draws); WebKit clamps timers to 1 ms. br_valley, Quad, 1440x900.
+
+| run (load) | case | frame p95 / worst | render loop (WebGL in it) | React | store | input | unattributed | gl.finish |
+|---|---|---|---|---|---|---|---|---|
+| WebKit, Apple GPU (19) | nudge+undo | 29 / 40 ms | 6 / 2 (<1) | 0 / 9 | <1 | 0 | 23 / 29 | - |
+| WebKit (17) | nudge+undo, finish pass | 28 / 34 ms | 2 / 2 (<1) | 10 / 8 | <1 | 0 | 16 / 24 | <1 ms |
+| WebKit (19) | drag-move | 25 / 33 ms | 1 / 2 | 0 / 1 | 0 | 4 / 4 | 20 / 26 | - |
+| WebKit (17) | drag-move, finish pass | 25 / 32 ms | 0 / 1 | 0 / 1 | 0 | 2 / 2 | 23 / 28 | <1 ms |
+| Chromium, ANGLE Metal M3 Max (16) | nudge+undo | 16.8 / 16.8 ms | - | - | - | - | - | timer query available |
+| Chromium, same GPU (16) | drag-move | 16.7 / 16.8 ms | - | - | - | - | - | |
+| Chromium, SwiftShader (17) | nudge+undo | 250 / 350 ms | 4 | 0-3 | - | 0 | 245 / 343 | software GL: not representative |
+
+Averages over WebKit's slow frames (>17.5 ms, about 100 of 360 in a nudge run): render loop 1.6 ms, React 3.3 ms,
+store 0.6 ms, input 0.1 ms: **our JS is about 5-6 ms of a 22-23 ms frame**; the GPU finishes each frame's draws in
+under 1 ms. Chromium on the same Mac's GPU (the WebView2 proxy) holds 60 fps through the same edits: br_valley perf
+spec there = nudge+undo p95 17 / max 17 ms, click 22 ms, 3215-brush box select 56 ms, deselect 17 ms.
+**Reading:** neither our bookkeeping nor GPU draw time is the limit; the extra 6-12 ms per slow frame happens in
+WebKit outside page script (compositing / presenting the WebGL canvas, GC, layout). Next to test (not done yet):
+preserveDrawingBuffer (WebKit copies the drawing buffer each frame to keep it), the 4 per-frame
+getBoundingClientRect calls in PaneView (forced layout after DOM changes), and GC from per-edit allocations; and the
+real app's WKWebView rather than Playwright's headless WebKit. WebGPU would not help a CPU/compositor-side cost.
+Load: these ran at 15-19 (sims); a load-under-5 run is queued.
+
 ## Left / ideas
 - Extrude in the flat views (Shift is box-pick there), edge-move mode for slanted edges.
 - Entities drawn one by one dominate the flat panes on big maps (request to P5).
