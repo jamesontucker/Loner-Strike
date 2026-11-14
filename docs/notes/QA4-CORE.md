@@ -271,3 +271,33 @@ Smaller: the setup card shows an empty scrollbar track on its right (`ftue-1-aft
 - Backup to a file / restore from a file (native dialogs).
 - Kreedz climbing and Zombie Plague Advanced's rounds, by hand in the client.
 - "Teach bots maps" and making a dedicated server: each starts another server, and this pass kept to one sim.
+
+---
+
+## Fixed (QA4-FIX, 2026-11-14)
+Verified in one sim (`Sim/QA4FIX`, port 27461, `-insecure`, ls-next3 **6c2f748** = run 43638373487, mp.dll
+5.30.0.1308-dev; plugins compiled fresh from the working tree on tools 564fc781 + these changes).
+- **F3 Base Builder SQL.** The "backtick" error was not the backticks (SQLite takes them): Pawn joins a `\`-continued
+  string without the next line's leading spaces, so the play-time save became `... CURRENT_TIMESTAMPWHERE \`name\` ...`
+  and failed for every player on every map change. Fixed in `sqlFile.inl`; also `NOW()` (no such function in SQLite) in
+  the clan-create query in `clans.inl` (and its buffer, 128 → 256). Sim: no `[SQL-LOG]` line on bb_aztec, bb_street,
+  bb_inferno_iplay, bb_castle_final; `basebuilder.sq3` gets a row per player with `timePlay` and `lastlogin` written at
+  each map change (e.g. `~Dice~ 26 s`). New check: `python3 scripts/mod-files-check.py` prepares every Base Builder
+  query on SQLite and lints the AMXX language files (it flags all three old bugs on the previous HEAD).
+- **F3 bb_dust_iplay hang.** Base Builder with Loner-Strike's plugins uses **260** model slots before a map's brush
+  pieces (measured; Loner-Strike's own plugins add ~2, the rest is the game and Base Builder's ~95 models, all used by
+  its classes, so nothing worth cutting). bb_dust_iplay has 263 pieces: 523 > 511. The shipped maps fit: bb_aztec 188,
+  bb_street 226, bb_castle_final 234, bb_inferno_iplay 238 (13 spare); all four loaded in the sim. gamemodes.amxx now
+  reads each map's piece count from its .bsp and learns each mode's own count every time it plays
+  (`data/gamemodes/modelslots.ini`, Base Builder defaults to 264 before that), and:
+  the bb_* preset skips a map that doesn't fit ("Map preset: bb_dust_iplay has too many models for Base Builder (526
+  of 511 slots) - staying in Classic"); `gm_mode`/menu/`gm_map` refuse it with a plain message; mode-vote/rotation
+  map lists leave it out; and as a last net (the app starting a game on it, a raw `changelevel`) the mode's plugins are
+  paused while the map loads and the server falls back to the pre-preset mode or Classic. All three seen in the sim
+  (the raw `changelevel bb_dust_iplay` from Base Builder ended on bb_dust_iplay in Classic with a bot, no Host_Error).
+  `gm_mapfit <mode> <map>` prints the numbers. Side note for gm_content's owner: content_status.json's "models"
+  doesn't include the map's brush pieces (it said 260 on bb_aztec), though its comment says it does.
+- **F5 Gun Game lang.** The `//` first line of `gungame.txt` removed. Sim: no "Invalid multi-lingual line" on Gun Game.
+- **Not verified:** a returning player's saved stats seen in game (bots get new names each map here; the load query
+  runs without errors and every save needs a loaded row). One unexplained stall in the first run (bb_aztec → bb_street
+  map change during nav learning, 0% CPU, no error line); not reproduced in the next three map changes on those maps.

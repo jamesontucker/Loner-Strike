@@ -364,6 +364,14 @@ new bool:g_NextByRotation         // ... picked by the mode rotation, not a vote
 new Float:g_MapsAt = -100.0       // when g_Maps was last read from the maps folders
 new g_pBotPlay                    // gm_botplay: how bots play together on this map (botplay.ini)
 new g_ReloadNote[96]
+#define MODEL_SLOTS 511
+#define MODEL_SLACK 4                // a map's own studio models (env_model, cyclers) and rounding
+// Base Builder's count before it has been measured on this server (Loner-Strike's plugins,
+// the game and Base Builder's ~95 models: 260-263 measured on the four shipped bb_ maps, 2026-11-14)
+#define BASEBUILDER_SLOTS 264
+new g_ModelMax                    // the highest model slot handed out on this map (see "Model slots")
+new bool:g_NoFit                  // this map has too many models for the mode: its plugins were paused
+new g_NoFitMode[32]               // ... that mode
 new g_NavPolls
 
 new g_CfgDir[128], g_DataDir[128]
@@ -392,7 +400,9 @@ new g_EvSeq
 
 public plugin_precache()
 {
+	register_forward(FM_PrecacheModel, "fw_precache_model_post", 1)
 	g_BeamSpr = precache_model("sprites/laserbeam.spr")
+	precache_guard()
 }
 
 public plugin_natives()
@@ -519,6 +529,7 @@ public plugin_init()
 	register_srvcmd("gm_player", "srv_player")
 	register_srvcmd("gm_nav", "srv_nav")
 	register_srvcmd("gm_preset", "srv_preset")
+	register_srvcmd("gm_mapfit", "srv_mapfit")
 	register_srvcmd("gm_presetsave", "srv_presetsave")
 	register_srvcmd("gm_presetdel", "srv_presetdel")
 	register_clcmd("gm_presetname", "cmd_presetname")
@@ -564,7 +575,13 @@ public plugin_init()
 	check_roster_file()
 	load_addons()
 	load_presets()
-	check_map_presets()
+	if (g_NoFit)
+		fall_back_from_nofit()
+	else
+	{
+		remember_model_slots()
+		check_map_presets()
+	}
 }
 
 public plugin_cfg()
@@ -1200,6 +1217,13 @@ check_map_presets()
 		// (a variant of the preset's mode stays: Battle Royale Duos on a br_ map) W3
 		if (target == g_Cur || mode_family(g_ModeId[target], g_ModeId[g_Cur])) // W3
 			return
+		// a map with more models than the engine can load with the mode's own (the server
+		// would stop while loading it): stay in this mode
+		if (!mode_fits_map(target, map))
+		{
+			log_amx("Map preset: %s has too many models for %s (%d of %d slots) - staying in %s", map, g_ModeName[target], map_models_needed(target, map), MODEL_SLOTS, g_ModeName[g_Cur])
+			return
+		}
 		if (!premode[0])
 			write_data_line("premode.txt", g_ModeId[g_Cur])
 		formatex(g_ReloadNote, charsmax(g_ReloadNote), "Map preset: %s", g_ModeName[target])
@@ -1220,6 +1244,239 @@ check_map_presets()
 	g_Reloading = true
 	write_data_line("reloadnote.txt", g_ReloadNote)
 	log_amx("%s - reloading %s", g_ReloadNote, map)
+}
+
+// ---------------------------------------------------------------------------
+// Model slots: the engine loads at most 512 models a map (slot 0 is never used). The
+// game, every plugin and the map's own brush pieces (doors, breakables, Base Builder's
+// blocks: "*1", "*2"...) share them, and one too many stops the server while the map
+// loads ("Model '*252' failed to precache because the item count is over the 512
+// limit"). A map's brush pieces load after everything else, so a mode fits a map when
+// the mode's own count (the game, the plugins and the mode's models, measured each time
+// the mode plays) plus the map's pieces stay under the limit.
+// ---------------------------------------------------------------------------
+
+new Trie:g_MapPieces = Invalid_Trie
+
+public fw_precache_model_post(const model[])
+{
+	new n = get_orig_retval()
+	if (n > g_ModelMax)
+		g_ModelMax = n
+}
+
+// the map's brush pieces (models lump size / 64, minus the world itself); 0 when unknown
+map_pieces(const map[])
+{
+	if (!map[0])
+		return 0
+	new key[32], n
+	copy(key, charsmax(key), map)
+	strtolower(key)
+	if (g_MapPieces == Invalid_Trie)
+		g_MapPieces = TrieCreate()
+	else if (TrieGetCell(g_MapPieces, key, n))
+		return n
+	n = 0
+	new f = fopen(fmt("maps/%s.bsp", map), "rb", true)
+	if (f)
+	{
+		// header: version, then 15 lumps of (offset, length); the models lump is number 14
+		new version, len
+		fread(f, version, BLOCK_INT)
+		if (version == 30 && fseek(f, 4 + 14 * 8 + 4, SEEK_SET) == 0 && fread(f, len, BLOCK_INT) > 0 && len > 0)
+			n = max(len / 64 - 1, 0)
+		fclose(f)
+	}
+	TrieSetCell(g_MapPieces, key, n)
+	return n
+}
+
+// the mode's own count: measured the last time it played here, else a known one
+mode_slots_for(const id[])
+{
+	new path[192], line[64], m[32], v[12], n
+	new datadir[128]
+	get_datadir(datadir, charsmax(datadir))
+	formatex(path, charsmax(path), "%s/gamemodes/modelslots.ini", datadir)
+	new f = fopen(path, "rt")
+	if (f)
+	{
+		while (fgets(f, line, charsmax(line)))
+		{
+			trim(line)
+			parse(line, m, charsmax(m), v, charsmax(v))
+			if (equali(m, id))
+			{
+				n = str_to_num(v)
+				break
+			}
+		}
+		fclose(f)
+	}
+	if (n <= 0 && equali(id, "basebuilder"))
+		n = BASEBUILDER_SLOTS
+	return n
+}
+
+map_models_needed(mode, const map[])
+{
+	if (mode < 0 || mode >= g_ModeCount)
+		return 0
+	return mode_slots_for(g_ModeId[mode]) + map_pieces(map)
+}
+
+bool:slots_fit(slots, pieces)
+{
+	return slots <= 0 || pieces <= 0 || slots + pieces + MODEL_SLACK <= MODEL_SLOTS
+}
+
+bool:mode_fits_map(mode, const map[])
+{
+	if (mode < 0 || mode >= g_ModeCount)
+		return true
+	return slots_fit(mode_slots_for(g_ModeId[mode]), map_pieces(map))
+}
+
+// gm_mapfit <mode> <map>: whether the mode can play the map (its model slots)
+public srv_mapfit()
+{
+	new id[32], map[32]
+	read_argv(1, id, charsmax(id))
+	read_argv(2, map, charsmax(map))
+	new mode = find_mode(id)
+	if (mode < 0 || !is_map_valid(map))
+	{
+		server_print("[Game Mode] Usage: gm_mapfit <mode id> <installed map>")
+		return PLUGIN_HANDLED
+	}
+	new slots = mode_slots_for(g_ModeId[mode]), pieces = map_pieces(map)
+	server_print("[Game Mode] %s on %s: %d model slots for the mode + %d map pieces of %d - %s", g_ModeName[mode], map, slots, pieces, MODEL_SLOTS, slots_fit(slots, pieces) ? "fits" : "too many")
+	return PLUGIN_HANDLED
+}
+
+// While this map loads, before the mode's plugins load their models: when the mode can't fit
+// the map (a map change the checks above didn't see: the app starting a game, a rotation, the
+// console), pause the mode's plugins so the map still loads; plugin_init then picks a mode
+// that fits and loads the map again.
+precache_guard()
+{
+	new datadir[128], path[192], mode[32], map[32]
+	get_datadir(datadir, charsmax(datadir))
+	formatex(path, charsmax(path), "%s/gamemodes/current.txt", datadir)
+	new f = fopen(path, "rt")
+	if (!f)
+		return
+	fgets(f, mode, charsmax(mode))
+	fclose(f)
+	trim(mode)
+	get_mapname(map, charsmax(map))
+	new slots = mode_slots_for(mode), pieces = map_pieces(map)
+	if (!mode[0] || slots_fit(slots, pieces))
+		return
+
+	new cfg[128], line[128], plugin[64], paused
+	get_configsdir(cfg, charsmax(cfg))
+	formatex(path, charsmax(path), "%s/plugins-gamemode.ini", cfg)
+	f = fopen(path, "rt")
+	if (f)
+	{
+		while (fgets(f, line, charsmax(line)))
+		{
+			trim(line)
+			if (!line[0] || line[0] == ';')
+				continue
+			parse(line, plugin, charsmax(plugin))
+			if (containi(plugin, ".amxx") != -1 && pause("ac", plugin))
+				paused++
+		}
+		fclose(f)
+	}
+	g_NoFit = true
+	copy(g_NoFitMode, charsmax(g_NoFitMode), mode)
+	log_amx("%s has too many models for %s (%d + %d of %d slots): its %d plugins are paused on this load", map, mode, slots, pieces, MODEL_SLOTS, paused)
+}
+
+// after precache_guard: back to the mode from before a map preset, else Classic, and reload
+fall_back_from_nofit()
+{
+	new map[32], premode[32]
+	get_mapname(map, charsmax(map))
+	// the reload must not apply this map's preset again
+	write_data_line("lastmap.txt", map)
+	read_data_line("premode.txt", premode, charsmax(premode))
+	write_data_line("premode.txt", "")
+	new target = find_mode(premode)
+	if (target < 0 || equali(g_ModeId[target], g_NoFitMode) || !mode_fits_map(target, map))
+		target = find_mode("classic")
+	if (target < 0 || equali(g_ModeId[target], g_NoFitMode))
+		return
+	new was = find_mode(g_NoFitMode), wasname[48]
+	copy(wasname, charsmax(wasname), was >= 0 ? g_ModeName[was] : "that mode")
+	formatex(g_ReloadNote, charsmax(g_ReloadNote), "%s has too many models for %s: %s", map, wasname, g_ModeName[target])
+	write_mode_plugins(target)
+	g_Cur = target
+	g_Reloading = true
+	write_data_line("reloadnote.txt", g_ReloadNote)
+	log_amx("%s - reloading %s", g_ReloadNote, map)
+}
+
+// Measures the mode's own count on this map (every slot handed out, less the map's brush
+// pieces) for mode_slots_for. The world and any studio models the map places count as the
+// mode's, so it errs on the safe side.
+remember_model_slots()
+{
+	new total = g_ModelMax, most = global_get(glb_maxEntities), model[8], pieces
+	new bool:seen[MODEL_SLOTS + 1]
+	for (new e = 1; e < most; e++)
+	{
+		if (!pev_valid(e))
+			continue
+		new idx = pev(e, pev_modelindex)
+		if (idx <= 0 || idx > MODEL_SLOTS)
+			continue
+		if (idx > total)
+			total = idx
+		pev(e, pev_model, model, charsmax(model))
+		if (model[0] == '*' && !seen[idx])
+		{
+			seen[idx] = true
+			pieces++
+		}
+	}
+	new slots = total - pieces
+	if (slots <= 0 || g_Cur < 0 || g_Cur >= g_ModeCount)
+		return
+
+	// rewrite modelslots.ini with this mode's line replaced
+	new path[192], line[64], m[32]
+	formatex(path, charsmax(path), "%s/modelslots.ini", g_DataDir)
+	new Array:keep = ArrayCreate(64)
+	new f = fopen(path, "rt")
+	if (f)
+	{
+		while (fgets(f, line, charsmax(line)))
+		{
+			trim(line)
+			parse(line, m, charsmax(m))
+			if (line[0] && line[0] != ';' && !equali(m, g_ModeId[g_Cur]))
+				ArrayPushString(keep, line)
+		}
+		fclose(f)
+	}
+	f = fopen(path, "wt")
+	if (f)
+	{
+		fprintf(f, "; Model slots each mode uses before a map's own pieces (gamemodes.amxx measures them)^n")
+		for (new i = 0; i < ArraySize(keep); i++)
+		{
+			ArrayGetString(keep, i, line, charsmax(line))
+			fprintf(f, "%s^n", line)
+		}
+		fprintf(f, "%s %d^n", g_ModeId[g_Cur], slots)
+		fclose(f)
+	}
+	ArrayDestroy(keep)
 }
 
 // ---------------------------------------------------------------------------
@@ -2817,6 +3074,13 @@ go_map(id, const map[])
 // mode -1 keeps the current mode (map presets may still apply on load)
 do_go(mode, const map[])
 {
+	if (!mode_fits_map(mode >= 0 ? mode : g_Cur, map))
+	{
+		new m = mode >= 0 ? mode : g_Cur
+		gm_print(0, "%s has too many models to play %s on it (it needs %d of the engine's %d). Pick another map.", map, g_ModeName[m], map_models_needed(m, map), MODEL_SLOTS)
+		log_amx("Not switching: %s has too many models for %s (%d of %d slots)", map, g_ModeName[m], map_models_needed(m, map), MODEL_SLOTS)
+		return
+	}
 	g_GoMode = mode
 	if (mode >= 0)
 	{
@@ -5329,13 +5593,15 @@ mode_maps(mode, Array:out)
 	for (new i = 0; i < ArraySize(withNav); i++)
 	{
 		ArrayGetString(withNav, i, map, charsmax(map))
-		ArrayPushString(out, map)
+		if (mode_fits_map(mode, map))
+			ArrayPushString(out, map)
 	}
 	if (ArraySize(withNav) < 2)
 		for (new i = 0; i < ArraySize(without); i++)
 		{
 			ArrayGetString(without, i, map, charsmax(map))
-			ArrayPushString(out, map)
+			if (mode_fits_map(mode, map))
+				ArrayPushString(out, map)
 		}
 	TrieDestroy(hidden)
 	TrieDestroy(seen)
