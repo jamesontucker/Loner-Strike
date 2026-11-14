@@ -4056,7 +4056,7 @@ lsg_n90(ctx[])
 lsg_n91(ctx[])
 {
 	new lsgL[192], lsgR[256], lsgN = 0
-	if (!(!ls_components_running() || !lsg_ok(ctx[0]) || is_user_bot(ctx[0])))
+	if (!(!ls_components_running() || !lsg_ok(ctx[0])))
 	{
 		new lsgC = clamp(floatround(3.0), 1, 6)
 		lsg_npc_line(lsgL, charsmax(lsgL), "", "Help me?")

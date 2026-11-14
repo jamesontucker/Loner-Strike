@@ -5680,8 +5680,8 @@ lsg_n91(ctx[])
 	if (lsd_enter(91, ctx))
 		return
 	new lsgL[192], lsgR[256], lsgN = 0
-	if (!ls_components_running() || !lsg_ok(lsi0) || is_user_bot(lsi0))
-		lsd_error(91, "Not asked: nobody there, a bot, or gm_components isn't running.")
+	if (!ls_components_running() || !lsg_ok(lsi0))
+		lsd_error(91, "Not asked: nobody there, or gm_components isn't running.")
 	else
 	{
 		new lsgC = clamp(floatround(lsi10), 1, 6)

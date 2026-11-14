@@ -2330,7 +2330,8 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             // (an old question is answered -2 by the native before this one is noted)
             body.push(format!("\tif (lsgN && ls_npc_choose({npc}, {p}, lsgL, lsgR, floatclamp({}, 0.0, 300.0)))\n\t\t\tg_lsgAsk[{p}] = {}", inp("secs", "number"), i + 1));
             body.push(exit("asked"));
-            check(&mut b, &format!("{comps} || !lsg_ok({p}) || is_user_bot({p})"), "Not asked: nobody there, a bot, or gm_components isn't running.", &body);
+            // (a bot is asked too: gm_components picks one of the replies for it after a moment)
+            check(&mut b, &format!("{comps} || !lsg_ok({p})"), "Not asked: nobody there, or gm_components isn't running.", &body);
             // the reply comes back later (ls_on_npc_choice): Picked is 1-6 (0 none)
             let picked = gen.out_index(id, "picked").map_or(String::new(), |k| format!("\n\tg_lsgO[{k}] = _:float(r)"));
             let mut cb = format!("\n// {} ({}): the reply\nstock lsg_ask{i}(id, choice)\n{{\n\tnew ctx[LSG_CTX]\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tctx[k] = g_lsgM{i}[id][k]\n\tnew r = choice >= 0 && choice < 6 ? g_lsgAskK[id][choice] : 0{picked}\n\tswitch (choice < 0 ? choice : r)\n\t{{\n", comment_text(&def.title), id_text(id));

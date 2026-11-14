@@ -14163,9 +14163,30 @@ stock bool:npc_choose(npc, id, const text[], const replies[], Float:timeout)
 		pev(id, pev_origin, g_porg[id]);
 		npc_face(npc, g_porg[id]);
 	}
+	/* a bot can't see a menu: it picks one of the replies after a moment (a mode's quest works
+	   with bots too; ls_npc_pick answers first when a test drives it) */
+	if (is_user_bot(id))
+	{
+		menu_destroy(m);
+		new data[3];
+		data[0] = id;
+		data[1] = g_cvSerial[id];
+		data[2] = n;
+		set_task(random_float(1.0, 2.5), "npc_bot_pick", 0, data, sizeof data);
+		return true;
+	}
 	new secs = timeout > 0.0 ? max(floatround(timeout), 1) : -1;
 	menu_display(id, m, 0, secs);
 	return true;
+}
+
+public npc_bot_pick(const data[])
+{
+	new id = data[0];
+	if (!(1 <= id <= MaxClients) || !g_cvOpen[id] || g_cvSerial[id] != data[1])
+		return;
+	g_now = get_gametime();
+	npc_close(id, random_num(0, max(data[2] - 1, 0)));
 }
 
 public menu_npc_reply(id, menu, item)
@@ -14402,6 +14423,19 @@ public cmd_npc_use()
 		return PLUGIN_HANDLED;
 	}
 	g_now = get_gametime();
+	/* (a test drives it from the console: the player is put beside it first, so the talk
+	   isn't closed at once as "walked away"; "ls_npc_use <player> <ent> stay" doesn't move them) */
+	new c[8];
+	read_argv(3, c, charsmax(c));
+	if (!equali(c, "stay"))
+	{
+		new Float:o[3];
+		pev(g_ent[s], pev_origin, o);
+		o[0] += 40.0;
+		o[2] += 36.0;
+		engfunc(EngFunc_SetOrigin, id, o);
+		set_pev(id, pev_velocity, Float:{0.0, 0.0, 0.0});
+	}
 	pev(id, pev_origin, g_porg[id]);
 	g_pteam[id] = get_user_team(id);
 	npc_use(s, id);
