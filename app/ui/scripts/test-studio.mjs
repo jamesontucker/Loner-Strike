@@ -10,7 +10,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const tests = [join(root, "scripts/studio.test.ts")];
+const tests = [join(root, "scripts/studio.test.ts"), join(root, "scripts/studio-help.test.ts")];
 const out = mkdtempSync(join(tmpdir(), "studio-tests-"));
 // Vite's "?raw" imports: the file's text
 const raw = {

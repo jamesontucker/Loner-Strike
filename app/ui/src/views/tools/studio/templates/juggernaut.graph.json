@@ -1,0 +1,1184 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "juggernaut",
+  "uid": "c5d2a8e4-1f6b-4d3a-9e70-8b4f2c6a1d59",
+  "name": "Juggernaut",
+  "description": "One big, slow, tough player; whoever kills them becomes it",
+  "settings": [
+   {
+    "cvar": "mp_freeforall",
+    "value": 1
+   },
+   {
+    "cvar": "mp_round_infinite",
+    "value": 1
+   }
+  ]
+ },
+ "variables": [
+  {
+   "id": "jugg",
+   "name": "Juggernaut",
+   "type": "player",
+   "scope": "mode"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 85
+   },
+   "params": {}
+  },
+  {
+   "id": "hello",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 565,
+    "y": 61
+   },
+   "params": {
+    "text": "Juggernaut: kill the big one to become it. 20 points win.",
+    "seconds": 6
+   }
+  },
+  {
+   "id": "wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 1065,
+    "y": 61
+   },
+   "params": {
+    "secs": 5
+   }
+  },
+  {
+   "id": "pick",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 1565,
+    "y": 50
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "first",
+   "type": "fn.call",
+   "pos": {
+    "x": 2065,
+    "y": 72
+   },
+   "params": {
+    "func": "crown"
+   }
+  },
+  {
+   "id": "ps",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 1565,
+    "y": 224
+   },
+   "params": {}
+  },
+  {
+   "id": "plain",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 2065,
+    "y": 211
+   },
+   "params": {
+    "color": "off"
+   }
+  },
+  {
+   "id": "pk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 65,
+    "y": 1113
+   },
+   "params": {}
+  },
+  {
+   "id": "cur",
+   "type": "var.get",
+   "pos": {
+    "x": 65,
+    "y": 833
+   },
+   "params": {
+    "var": "jugg"
+   }
+  },
+  {
+   "id": "same",
+   "type": "logic.equal",
+   "pos": {
+    "x": 565,
+    "y": 945
+   },
+   "params": {
+    "of": "player"
+   }
+  },
+  {
+   "id": "wasit",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1065,
+    "y": 988
+   },
+   "params": {}
+  },
+  {
+   "id": "ok",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1565,
+    "y": 1053
+   },
+   "params": {}
+  },
+  {
+   "id": "fair",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 565,
+    "y": 1178
+   },
+   "params": {
+    "op": "or"
+   }
+  },
+  {
+   "id": "notfair",
+   "type": "logic.not",
+   "pos": {
+    "x": 1065,
+    "y": 1202
+   },
+   "params": {}
+  },
+  {
+   "id": "bonus",
+   "type": "player.add_frags",
+   "pos": {
+    "x": 2065,
+    "y": 828
+   },
+   "params": {
+    "amount": 2
+   }
+  },
+  {
+   "id": "next",
+   "type": "fn.call",
+   "pos": {
+    "x": 2565,
+    "y": 1054
+   },
+   "params": {
+    "func": "crown"
+   }
+  },
+  {
+   "id": "rand",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 2065,
+    "y": 1377
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "next2",
+   "type": "fn.call",
+   "pos": {
+    "x": 2565,
+    "y": 1399
+   },
+   "params": {
+    "func": "crown"
+   }
+  },
+  {
+   "id": "wait3",
+   "type": "timer.delay",
+   "pos": {
+    "x": 3065,
+    "y": 1059
+   },
+   "params": {
+    "secs": 3
+   }
+  },
+  {
+   "id": "back",
+   "type": "player.respawn",
+   "pos": {
+    "x": 3565,
+    "y": 1164
+   },
+   "params": {}
+  },
+  {
+   "id": "pk2",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 65,
+    "y": 1691
+   },
+   "params": {}
+  },
+  {
+   "id": "sc",
+   "type": "player.get_frags",
+   "pos": {
+    "x": 565,
+    "y": 1693
+   },
+   "params": {}
+  },
+  {
+   "id": "enough",
+   "type": "math.compare",
+   "pos": {
+    "x": 1065,
+    "y": 1669
+   },
+   "params": {
+    "op": "ge",
+    "b": 20
+   }
+  },
+  {
+   "id": "won",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1565,
+    "y": 1712
+   },
+   "params": {}
+  },
+  {
+   "id": "cheer",
+   "type": "msg.chat",
+   "pos": {
+    "x": 2065,
+    "y": 1744
+   },
+   "params": {
+    "text": "Juggernaut won by"
+   }
+  },
+  {
+   "id": "end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 2565,
+    "y": 1755
+   },
+   "params": {
+    "winner": "draw"
+   }
+  },
+  {
+   "id": "nr",
+   "type": "event.new_round",
+   "pos": {
+    "x": 1565,
+    "y": 1953
+   },
+   "params": {}
+  },
+  {
+   "id": "all",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 2065,
+    "y": 1918
+   },
+   "params": {
+    "which": "all"
+   }
+  },
+  {
+   "id": "zero",
+   "type": "player.set_frags",
+   "pos": {
+    "x": 2565,
+    "y": 1918
+   },
+   "params": {
+    "n": 0
+   }
+  },
+  {
+   "id": "rs2",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 438
+   },
+   "params": {}
+  },
+  {
+   "id": "hunt",
+   "type": "timer.repeat",
+   "pos": {
+    "x": 565,
+    "y": 403
+   },
+   "params": {
+    "every": 10,
+    "times": 0
+   }
+  },
+  {
+   "id": "bots",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 1065,
+    "y": 403
+   },
+   "params": {
+    "which": "bots"
+   }
+  },
+  {
+   "id": "j",
+   "type": "var.get",
+   "pos": {
+    "x": 1065,
+    "y": 577
+   },
+   "params": {
+    "var": "jugg"
+   }
+  },
+  {
+   "id": "follow",
+   "type": "bot.follow",
+   "pos": {
+    "x": 1565,
+    "y": 485
+   },
+   "params": {
+    "secs": 9
+   }
+  },
+  {
+   "id": "fe",
+   "type": "fn.entry",
+   "pos": {
+    "x": 65,
+    "y": 2458
+   },
+   "params": {},
+   "graph": "crown"
+  },
+  {
+   "id": "set",
+   "type": "var.set",
+   "pos": {
+    "x": 565,
+    "y": 2132
+   },
+   "params": {
+    "var": "jugg"
+   },
+   "graph": "crown"
+  },
+  {
+   "id": "hp",
+   "type": "player.set_health",
+   "pos": {
+    "x": 1065,
+    "y": 2197
+   },
+   "params": {
+    "amount": 1000
+   },
+   "graph": "crown"
+  },
+  {
+   "id": "armor",
+   "type": "player.give_item",
+   "pos": {
+    "x": 1565,
+    "y": 2257
+   },
+   "params": {
+    "item": "vesthelm"
+   },
+   "graph": "crown"
+  },
+  {
+   "id": "gun",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 2065,
+    "y": 2300
+   },
+   "params": {
+    "weapon": "m249",
+    "ammo": 200
+   },
+   "graph": "crown"
+  },
+  {
+   "id": "slow",
+   "type": "player.set_speed",
+   "pos": {
+    "x": 2565,
+    "y": 2332
+   },
+   "params": {
+    "speed": 200
+   },
+   "graph": "crown"
+  },
+  {
+   "id": "glow",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 3065,
+    "y": 2400
+   },
+   "params": {
+    "color": "red"
+   },
+   "graph": "crown"
+  },
+  {
+   "id": "tell",
+   "type": "msg.chat",
+   "pos": {
+    "x": 3565,
+    "y": 2432
+   },
+   "params": {
+    "text": "The Juggernaut is"
+   },
+   "graph": "crown"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hello",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "hello",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pick",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "pick",
+    "pin": "then"
+   },
+   "to": {
+    "node": "first",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "pick",
+    "pin": "player"
+   },
+   "to": {
+    "node": "first",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "plain",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "ps",
+    "pin": "then"
+   },
+   "to": {
+    "node": "plain",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "same",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "cur",
+    "pin": "out"
+   },
+   "to": {
+    "node": "same",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "same",
+    "pin": "out"
+   },
+   "to": {
+    "node": "wasit",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "pk",
+    "pin": "suicide"
+   },
+   "to": {
+    "node": "fair",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "pk",
+    "pin": "world"
+   },
+   "to": {
+    "node": "fair",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "fair",
+    "pin": "out"
+   },
+   "to": {
+    "node": "notfair",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "notfair",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ok",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wasit",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "wasit",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ok",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "ok",
+    "pin": "true"
+   },
+   "to": {
+    "node": "bonus",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "bonus",
+    "pin": "then"
+   },
+   "to": {
+    "node": "next",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "bonus",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "next",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "ok",
+    "pin": "false"
+   },
+   "to": {
+    "node": "rand",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "rand",
+    "pin": "then"
+   },
+   "to": {
+    "node": "next2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "rand",
+    "pin": "player"
+   },
+   "to": {
+    "node": "next2",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "wasit",
+    "pin": "false"
+   },
+   "to": {
+    "node": "wait3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "next",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wait3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "next2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wait3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "wait3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "back",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "back",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "pk2",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "sc",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "sc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "enough",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "enough",
+    "pin": "out"
+   },
+   "to": {
+    "node": "won",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "pk2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "won",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "won",
+    "pin": "true"
+   },
+   "to": {
+    "node": "cheer",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "cheer",
+    "pin": "then"
+   },
+   "to": {
+    "node": "end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "pk2",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "cheer",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "nr",
+    "pin": "then"
+   },
+   "to": {
+    "node": "all",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "all",
+    "pin": "each"
+   },
+   "to": {
+    "node": "zero",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "all",
+    "pin": "player"
+   },
+   "to": {
+    "node": "zero",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "rs2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hunt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "hunt",
+    "pin": "tick"
+   },
+   "to": {
+    "node": "bots",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "bots",
+    "pin": "each"
+   },
+   "to": {
+    "node": "follow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "bots",
+    "pin": "player"
+   },
+   "to": {
+    "node": "follow",
+    "pin": "bot"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "j",
+    "pin": "out"
+   },
+   "to": {
+    "node": "follow",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "fe",
+    "pin": "then"
+   },
+   "to": {
+    "node": "set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "hp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "armor",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "armor",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gun",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "gun",
+    "pin": "then"
+   },
+   "to": {
+    "node": "slow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "slow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "glow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "glow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tell",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "armor",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "gun",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "slow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "glow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "tell",
+    "pin": "value"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "c1",
+   "text": "Free for all with respawns. 5 seconds into each round a random player becomes the Juggernaut.",
+   "pos": {
+    "x": 41,
+    "y": 4
+   },
+   "size": {
+    "w": 2278,
+    "h": 341
+   }
+  },
+  {
+   "id": "c2",
+   "text": "Whoever kills the Juggernaut becomes it and scores 2 more. If the Juggernaut died some other way, a random player gets it. Everyone comes back after 3 seconds.",
+   "pos": {
+    "x": 41,
+    "y": 782
+   },
+   "size": {
+    "w": 3778,
+    "h": 751
+   }
+  },
+  {
+   "id": "c3",
+   "text": "20 points (kills, and 2 more for killing the Juggernaut) win the round. Scores start again next round.",
+   "pos": {
+    "x": 41,
+    "y": 1623
+   },
+   "size": {
+    "w": 2778,
+    "h": 451
+   }
+  },
+  {
+   "id": "c4",
+   "text": "Bots hunt the Juggernaut: every 10 seconds each bot is sent after them (it still fights whoever it meets).",
+   "pos": {
+    "x": 41,
+    "y": 357
+   },
+   "size": {
+    "w": 1778,
+    "h": 354
+   }
+  },
+  {
+   "id": "c5",
+   "text": "Make Juggernaut: lots of health, slower, a machine gun and a red glow, and everyone is told.",
+   "pos": {
+    "x": 41,
+    "y": 2086
+   },
+   "size": {
+    "w": 3778,
+    "h": 502
+   },
+   "graph": "crown"
+  }
+ ],
+ "functions": [
+  {
+   "id": "crown",
+   "name": "Make Juggernaut",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Who",
+     "type": "player"
+    }
+   ],
+   "outputs": []
+  }
+ ]
+}

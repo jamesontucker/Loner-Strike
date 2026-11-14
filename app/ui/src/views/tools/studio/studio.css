@@ -330,3 +330,41 @@
 .st-palette-star { background: none; border: 0; color: var(--bone-dim, #9aa); cursor: pointer; font-size: 14px; padding: 2px 8px; visibility: hidden; }
 .st-palette-row:hover .st-palette-star, .st-palette-row.cur .st-palette-star, .st-palette-star.on { visibility: visible; }
 .st-palette-star.on { color: var(--signal); }
+
+/* Node help (NodeHelp.tsx): a panel over the right side of the canvas */
+.st-help { position: fixed; top: 164px; right: 16px; bottom: 64px; z-index: 30; width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; background: var(--panel, #22262b); color: var(--text); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.55); overflow: hidden; }
+.st-help-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.st-help-pad { padding: 12px; }
+.st-help-list { overflow-y: auto; padding-bottom: 8px; }
+.st-help-body { overflow-y: auto; padding: 4px 14px 14px; line-height: 1.45; }
+.st-help-body h3 { margin: 8px 0 0; }
+.st-help-body h4 { margin: 14px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--bone-dim, #9aa); }
+.st-help-body p { margin: 6px 0; }
+.st-help-pins { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.st-help-pins li { padding: 4px 8px; background: rgba(255,255,255,.03); border-radius: 5px; }
+.st-help-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.st-help-note { padding: 6px 8px; border-left: 3px solid var(--signal, #5ab0ff); background: rgba(255,255,255,.03); }
+.st-help-note.cost { border-left-color: var(--st-warn, #ffb347); }
+.st-help-note.risk { border-left-color: var(--st-bad, #ff5b4f); }
+.st-help-actions { gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.st-help-related { display: flex; flex-wrap: wrap; gap: 4px; }
+.st-help-menu { position: relative; }
+.st-help-menu-list { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; min-width: 220px; display: flex; flex-direction: column; padding: 4px; background: var(--panel, #22262b); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.55); }
+.st-help-menu-list button { text-align: left; padding: 6px 10px; background: none; border: 0; border-radius: 5px; color: var(--text); font: inherit; cursor: pointer; display: flex; justify-content: space-between; gap: 12px; }
+.st-help-menu-list button:hover, .st-help-menu-list button:focus-visible { background: color-mix(in srgb, var(--signal) 25%, transparent); }
+.st-help-menu-list kbd { color: var(--bone-dim, #9aa); font: inherit; font-size: 12px; }
+.st-examples { list-style: none; margin: 0 0 8px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.st-examples .st-graph-open { width: 100%; height: 100%; }
+.st-examples .st-graph-open span { white-space: normal; }
+
+/* The Studio tour (Tour.tsx): a ring round the control and a card beside it */
+.st-tour { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+.st-tour-ring { position: fixed; border: 2px solid var(--signal, #5ab0ff); border-radius: 8px; box-shadow: 0 0 0 9999px rgba(0,0,0,.45); transition: left .2s, top .2s, width .2s, height .2s; }
+.st-tour-dim { position: fixed; inset: 0; background: rgba(0,0,0,.45); }
+.st-tour-card { position: fixed; pointer-events: auto; padding: 12px 14px; background: var(--panel, #22262b); color: var(--text); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.6); line-height: 1.45; }
+.st-tour-card h3 { margin: 2px 0 6px; font-size: 15px; }
+.st-tour-card p { margin: 0 0 10px; }
+.st-tour-count { font-size: 12px; margin: 0; }
+.st-tour-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.st-tour-offer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 0; }
+@media (prefers-reduced-motion: reduce) { .st-tour-ring { transition: none; } }

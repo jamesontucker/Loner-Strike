@@ -1,6 +1,7 @@
 // Lays out every Game Mode Studio template and snippet the way Tidy up does (dagre, comment boxes fitted
 // round their nodes), with node sizes estimated as drawn. Run after changing a template:
-//   npm run tidy:studio
+//   npm run tidy:studio            (all of them)
+//   npm run tidy:studio -- a.graph.json b.graph.json   (only these)
 
 import { build } from "esbuild";
 import { readdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
@@ -23,7 +24,8 @@ try {
   const { tidyEstimated } = await import(pathToFileURL(join(out, "layout.mjs")).href);
   const snippets = join(root, "src/views/tools/studio/snippets");
   for (const [d, ext] of [[dir, ".graph.json"], [snippets, ".snippet.json"]]) {
-    for (const f of readdirSync(d).filter((f) => f.endsWith(ext))) {
+    const only = process.argv.slice(2).map((a) => a.replace(/^.*\//, ""));
+    for (const f of readdirSync(d).filter((f) => f.endsWith(ext) && (!only.length || only.includes(f)))) {
       const g = JSON.parse(readFileSync(join(d, f), "utf8"));
       writeFileSync(join(d, f), JSON.stringify(tidyEstimated(g), null, 1) + "\n");
       console.log("tidied", f);

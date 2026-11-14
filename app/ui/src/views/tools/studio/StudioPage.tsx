@@ -24,12 +24,16 @@ import { TabBar } from "./TabBar";
 import { tabView } from "./graphOps";
 import { Results, fullText, testText } from "./Results";
 import { DebugPanel } from "./DebugPanel";
+import { NodeHelp } from "./NodeHelp";
+import { HelpMenu } from "./HelpMenu";
+import { StudioTour, TourOffer, startStudioTour } from "./Tour";
 import { applyLayout, autoLayout } from "./layout";
 import { nativeMenuOk } from "./ContextMenu";
 import { emptyGraph, newUid, parseGraph, type Graph } from "./schema";
 import rifleRaw from "./templates/team-dm.graph.json?raw";
 import lastStandRaw from "./templates/last-stand.graph.json?raw";
 import royaleRaw from "./templates/battle-royale.graph.json?raw";
+import { EXAMPLES } from "./examples";
 import * as api from "./studioApi";
 import { nodeDef } from "./registry";
 import "./studio.css";
@@ -171,6 +175,8 @@ function Studio({ maps }: ToolProps) {
   const fullStale = useMemo(() => !!graph && full.state !== "running" && full.state !== "none" && full.key !== checkKey(graph), [graph, full]);
   const focusRef = useRef<(id: string) => void>(() => {});
   const [canvas, setCanvas] = useState<CanvasApi | null>(null);
+  /** node help: null closed, "" the list, else a node's type */
+  const [helpFor, setHelpFor] = useState<string | null>(null);
   const onApi = useCallback((a: CanvasApi) => {
     focusRef.current = a.focus;
     setCanvas(a);
@@ -287,9 +293,10 @@ function Studio({ maps }: ToolProps) {
     }
   };
 
-  const newGraph = async (template?: (typeof TEMPLATES)[number]) => {
+  /** A new mode, from a template or example if given (`named`: no question, e.g. the tour's). */
+  const newGraph = async (template?: { label: string; raw: string }, named?: string) => {
     if (dirty && !(await ask("This graph has changes that aren't saved. Start a new one anyway?", { ok: "Start a new one", danger: true }))) return;
-    const name = await askText("What's the mode called?", { label: "Name", placeholder: template?.label ?? "My mode", max: 40 }, { ok: "Create" });
+    const name = named ?? (await askText("What's the mode called?", { label: "Name", placeholder: template?.label ?? "My mode", max: 40 }, { ok: "Create" }));
     if (name == null) return;
     const clean = [...name.trim()].filter((c) => /[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$]/u.test(c)).join("").slice(0, 40) || template?.label || "My mode";
     const id = idFrom(clean, new Set((list ?? []).map((g) => g.id)));
@@ -304,6 +311,17 @@ function Studio({ maps }: ToolProps) {
     if (r.error) return toast(r.error, true);
     st.open(g, true);
     void refreshList();
+  };
+
+  /** The tour, on the Infection example: opened as a new mode that isn't saved until you save it. */
+  const tour = async () => {
+    if (dirty && !(await ask("This graph has changes that aren't saved. Start the tour anyway?", { ok: "Start the tour", danger: true }))) return;
+    const ex = EXAMPLES[0];
+    const p = parseGraph(JSON.parse(ex.raw));
+    if ("error" in p) return toast(p.error, true);
+    const id = idFrom(`${ex.label} tour`, new Set((list ?? []).map((g) => g.id)));
+    st.open({ ...p.graph, mode: { ...p.graph.mode, id, uid: newUid(), name: `${ex.label} (tour)` } }, true);
+    setTimeout(startStudioTour, 300);
   };
 
   // the address says which graph is open: open it (Back, a crumb, a link), or the list
@@ -583,7 +601,13 @@ function Studio({ maps }: ToolProps) {
       const mod = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
       const st2 = useStudio.getState();
-      if (mod && k === "s") {
+      if (e.key === "F1") {
+        // help on the picked node (the list when none is picked)
+        e.preventDefault();
+        const g2 = st2.graph;
+        const n = g2?.nodes.find((x) => x.id === st2.selected[0]);
+        setHelpFor(n && nodeDef(n.type) ? n.type : "");
+      } else if (mod && k === "s") {
         e.preventDefault();
         void keyActions.current.save();
       } else if ((mod && k === "b") || e.key === "F7") {
@@ -622,6 +646,19 @@ function Studio({ maps }: ToolProps) {
             Blank mode
           </button>
         </Empty>
+        <TourOffer onStart={() => void tour()} />
+        <h3 className="st-start-head">Example modes</h3>
+        <p className="st-muted">Small, finished modes with notes on every part: open one to see how it's made, play it, or make it your own.</p>
+        <ul className="st-examples" data-testid="studio-examples">
+          {EXAMPLES.map((t) => (
+            <li key={t.id}>
+              <button type="button" className="st-graph-open" onClick={() => void newGraph(t)}>
+                <strong>{t.label}</strong>
+                <span className="st-muted">{t.blurb}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
         <h3 className="st-start-head">Your modes</h3>
         {listError ? (
           <p className="st-bad-text">{listError}</p>
@@ -685,9 +722,7 @@ function Studio({ maps }: ToolProps) {
           Tidy up
         </button>
         <FindBox graph={graph} onPick={(id) => focusRef.current(id)} />
-        <button type="button" className="btn" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "?" }))} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
-          ?
-        </button>
+        <HelpMenu onNodeHelp={() => setHelpFor("")} onTour={() => void tour()} />
         <span className="st-grow" />
         <span className="st-check">
           {full.state === "running" ? (
@@ -793,6 +828,8 @@ function Studio({ maps }: ToolProps) {
         <Inspector />
       </div>
       <Results focus={(id) => focusRef.current(id)} />
+      <StudioTour />
+      {helpFor !== null && <NodeHelp open={helpFor} onClose={() => setHelpFor(null)} canvas={canvas} toast={toast} />}
       <ActionBar
         dirty={dirty}
         errors={errors}

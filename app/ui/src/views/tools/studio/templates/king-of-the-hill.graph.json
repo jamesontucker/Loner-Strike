@@ -1,0 +1,925 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "king_of_the_hill",
+  "uid": "9b3e5d27-7f1a-4c08-b6e2-4a9d8c1f5e73",
+  "name": "King of the Hill",
+  "description": "Hold the hill to score; the first team to 120 wins",
+  "settings": [
+   {
+    "cvar": "mp_round_infinite",
+    "value": 1
+   }
+  ]
+ },
+ "variables": [
+  {
+   "id": "point",
+   "name": "Hill",
+   "type": "entity",
+   "scope": "mode"
+  },
+  {
+   "id": "holder",
+   "name": "Held By",
+   "type": "team",
+   "scope": "mode"
+  },
+  {
+   "id": "held",
+   "name": "Is Held",
+   "type": "bool",
+   "scope": "mode",
+   "default": false,
+   "reset": "round"
+  },
+  {
+   "id": "score",
+   "name": "Hill Score",
+   "type": "number",
+   "scope": "team",
+   "default": 0,
+   "reset": "round"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 96
+   },
+   "params": {}
+  },
+  {
+   "id": "no",
+   "type": "var.set",
+   "pos": {
+    "x": 565,
+    "y": 50
+   },
+   "params": {
+    "var": "held",
+    "value": false
+   }
+  },
+  {
+   "id": "mk",
+   "type": "marker.find",
+   "pos": {
+    "x": 565,
+    "y": 295
+   },
+   "params": {
+    "marker": "hill",
+    "n": 1
+   }
+  },
+  {
+   "id": "has",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1065,
+    "y": 122
+   },
+   "params": {}
+  },
+  {
+   "id": "onmk",
+   "type": "fn.call",
+   "pos": {
+    "x": 1565,
+    "y": 135
+   },
+   "params": {
+    "func": "hill"
+   }
+  },
+  {
+   "id": "site",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 1565,
+    "y": 265
+   },
+   "params": {
+    "by": "class",
+    "name": "func_bomb_target"
+   }
+  },
+  {
+   "id": "onsite",
+   "type": "fn.call",
+   "pos": {
+    "x": 2065,
+    "y": 143
+   },
+   "params": {
+    "func": "hill"
+   }
+  },
+  {
+   "id": "hostage",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 2065,
+    "y": 382
+   },
+   "params": {
+    "by": "class",
+    "name": "hostage_entity"
+   }
+  },
+  {
+   "id": "onhost",
+   "type": "fn.call",
+   "pos": {
+    "x": 2565,
+    "y": 219
+   },
+   "params": {
+    "func": "hill"
+   }
+  },
+  {
+   "id": "nohill",
+   "type": "msg.chat",
+   "pos": {
+    "x": 2565,
+    "y": 458
+   },
+   "params": {
+    "text": "This map has no hill. Add a Hill marker in the map editor."
+   }
+  },
+  {
+   "id": "rs3",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 504
+   },
+   "params": {}
+  },
+  {
+   "id": "tick",
+   "type": "timer.repeat",
+   "pos": {
+    "x": 565,
+    "y": 469
+   },
+   "params": {
+    "every": 1,
+    "times": 0
+   }
+  },
+  {
+   "id": "cap",
+   "type": "comp.on_capture",
+   "pos": {
+    "x": 65,
+    "y": 1630
+   },
+   "params": {}
+  },
+  {
+   "id": "set",
+   "type": "var.set",
+   "pos": {
+    "x": 565,
+    "y": 1617
+   },
+   "params": {
+    "var": "holder"
+   }
+  },
+  {
+   "id": "yes",
+   "type": "var.set",
+   "pos": {
+    "x": 1065,
+    "y": 1617
+   },
+   "params": {
+    "var": "held",
+    "value": true
+   }
+  },
+  {
+   "id": "news",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 1565,
+    "y": 1639
+   },
+   "params": {
+    "text": "The hill has a new king!",
+    "seconds": 3
+   }
+  },
+  {
+   "id": "lost",
+   "type": "comp.on_capture_lost",
+   "pos": {
+    "x": 1065,
+    "y": 1815
+   },
+   "params": {}
+  },
+  {
+   "id": "clear",
+   "type": "var.set",
+   "pos": {
+    "x": 1565,
+    "y": 1791
+   },
+   "params": {
+    "var": "held",
+    "value": false
+   }
+  },
+  {
+   "id": "t_r",
+   "type": "flow.reroute",
+   "pos": {
+    "x": 1172,
+    "y": 718
+   },
+   "params": {}
+  },
+  {
+   "id": "isheld",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1565,
+    "y": 722
+   },
+   "params": {}
+  },
+  {
+   "id": "h",
+   "type": "var.get",
+   "pos": {
+    "x": 1065,
+    "y": 774
+   },
+   "params": {
+    "var": "held"
+   }
+  },
+  {
+   "id": "add",
+   "type": "var.add",
+   "pos": {
+    "x": 2065,
+    "y": 743
+   },
+   "params": {
+    "var": "score",
+    "amount": 1
+   }
+  },
+  {
+   "id": "who",
+   "type": "var.get",
+   "pos": {
+    "x": 1065,
+    "y": 1115
+   },
+   "params": {
+    "var": "holder"
+   }
+  },
+  {
+   "id": "show",
+   "type": "msg.hud",
+   "pos": {
+    "x": 2565,
+    "y": 852
+   },
+   "params": {
+    "text": "",
+    "slot": "top",
+    "seconds": 1.2
+   }
+  },
+  {
+   "id": "now",
+   "type": "var.get",
+   "pos": {
+    "x": 1565,
+    "y": 1083
+   },
+   "params": {
+    "var": "score"
+   }
+  },
+  {
+   "id": "line",
+   "type": "text.format",
+   "pos": {
+    "x": 2065,
+    "y": 969
+   },
+   "params": {
+    "text": "The hill is held by [0]: [1] of 120"
+   }
+  },
+  {
+   "id": "win",
+   "type": "flow.branch",
+   "pos": {
+    "x": 3065,
+    "y": 944
+   },
+   "params": {}
+  },
+  {
+   "id": "done",
+   "type": "math.compare",
+   "pos": {
+    "x": 2565,
+    "y": 1126
+   },
+   "params": {
+    "op": "ge",
+    "b": 120
+   }
+  },
+  {
+   "id": "stop",
+   "type": "timer.stop_all",
+   "pos": {
+    "x": 3565,
+    "y": 968
+   },
+   "params": {}
+  },
+  {
+   "id": "crown",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 4065,
+    "y": 944
+   },
+   "params": {
+    "text": "King of the Hill! The round is won.",
+    "seconds": 5
+   }
+  },
+  {
+   "id": "end",
+   "type": "score.end_round",
+   "pos": {
+    "x": 4565,
+    "y": 997
+   },
+   "params": {}
+  },
+  {
+   "id": "fe",
+   "type": "fn.entry",
+   "pos": {
+    "x": 65,
+    "y": 1427
+   },
+   "params": {},
+   "graph": "hill"
+  },
+  {
+   "id": "make",
+   "type": "comp.create",
+   "pos": {
+    "x": 565,
+    "y": 1403
+   },
+   "params": {
+    "kind": "ls_capture_point",
+    "keys": "radius=220 capture_secs=6"
+   },
+   "graph": "hill"
+  },
+  {
+   "id": "keep",
+   "type": "var.set",
+   "pos": {
+    "x": 1065,
+    "y": 1381
+   },
+   "params": {
+    "var": "point"
+   },
+   "graph": "hill"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "no",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "no",
+    "pin": "then"
+   },
+   "to": {
+    "node": "has",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "has",
+    "pin": "true"
+   },
+   "to": {
+    "node": "onmk",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "mk",
+    "pin": "found"
+   },
+   "to": {
+    "node": "has",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "mk",
+    "pin": "out"
+   },
+   "to": {
+    "node": "onmk",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "has",
+    "pin": "false"
+   },
+   "to": {
+    "node": "site",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "site",
+    "pin": "then"
+   },
+   "to": {
+    "node": "onsite",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "site",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "onsite",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "site",
+    "pin": "none"
+   },
+   "to": {
+    "node": "hostage",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "hostage",
+    "pin": "then"
+   },
+   "to": {
+    "node": "onhost",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "hostage",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "onhost",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "hostage",
+    "pin": "none"
+   },
+   "to": {
+    "node": "nohill",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "rs3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tick",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "cap",
+    "pin": "team"
+   },
+   "to": {
+    "node": "set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "cap",
+    "pin": "then"
+   },
+   "to": {
+    "node": "set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "yes",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "yes",
+    "pin": "then"
+   },
+   "to": {
+    "node": "news",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "lost",
+    "pin": "then"
+   },
+   "to": {
+    "node": "clear",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "tick",
+    "pin": "tick"
+   },
+   "to": {
+    "node": "t_r",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "t_r",
+    "pin": "out"
+   },
+   "to": {
+    "node": "isheld",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "h",
+    "pin": "out"
+   },
+   "to": {
+    "node": "isheld",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "who",
+    "pin": "out"
+   },
+   "to": {
+    "node": "add",
+    "pin": "team"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "who",
+    "pin": "out"
+   },
+   "to": {
+    "node": "now",
+    "pin": "team"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "isheld",
+    "pin": "true"
+   },
+   "to": {
+    "node": "add",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "add",
+    "pin": "then"
+   },
+   "to": {
+    "node": "show",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "show",
+    "pin": "then"
+   },
+   "to": {
+    "node": "win",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "who",
+    "pin": "out"
+   },
+   "to": {
+    "node": "line",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "now",
+    "pin": "out"
+   },
+   "to": {
+    "node": "line",
+    "pin": "a1"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "line",
+    "pin": "out"
+   },
+   "to": {
+    "node": "show",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "now",
+    "pin": "out"
+   },
+   "to": {
+    "node": "done",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "done",
+    "pin": "out"
+   },
+   "to": {
+    "node": "win",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "win",
+    "pin": "true"
+   },
+   "to": {
+    "node": "stop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "stop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "crown",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "crown",
+    "pin": "then"
+   },
+   "to": {
+    "node": "end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "who",
+    "pin": "out"
+   },
+   "to": {
+    "node": "end",
+    "pin": "winner"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "fe",
+    "pin": "at"
+   },
+   "to": {
+    "node": "make",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "make",
+    "pin": "out"
+   },
+   "to": {
+    "node": "keep",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "fe",
+    "pin": "then"
+   },
+   "to": {
+    "node": "make",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "make",
+    "pin": "then"
+   },
+   "to": {
+    "node": "keep",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "c1",
+   "text": "Each round a capture point is made on the hill: the map's Hill marker, else bomb site A, else where the hostages are. Bots go for it by themselves.",
+   "pos": {
+    "x": 41,
+    "y": 4
+   },
+   "size": {
+    "w": 2778,
+    "h": 621
+   }
+  },
+  {
+   "id": "c2",
+   "text": "Who holds the hill: Point Captured says which team took it, Point Lost that nobody has it now.",
+   "pos": {
+    "x": 41,
+    "y": 1571
+   },
+   "size": {
+    "w": 1778,
+    "h": 398
+   }
+  },
+  {
+   "id": "c3",
+   "text": "Every second the team on the hill scores a point (Hill Score is kept per team) and everyone sees it. 120 wins the round.",
+   "pos": {
+    "x": 1041,
+    "y": 672
+   },
+   "size": {
+    "w": 3778,
+    "h": 588
+   }
+  },
+  {
+   "id": "c4",
+   "text": "Make Hill: a capture point at the place given, kept in the Hill variable. Taking it alone takes 6 seconds, faster with friends.",
+   "pos": {
+    "x": 41,
+    "y": 1335
+   },
+   "size": {
+    "w": 1278,
+    "h": 224
+   },
+   "graph": "hill"
+  }
+ ],
+ "markers": [
+  {
+   "id": "hill",
+   "label": "Hill",
+   "description": "Where the hill is: a capture point is made here.",
+   "type": "point",
+   "min": 0,
+   "max": 1,
+   "colour": "#ffb347",
+   "icon": "flag"
+  }
+ ],
+ "functions": [
+  {
+   "id": "hill",
+   "name": "Make Hill",
+   "inputs": [
+    {
+     "id": "at",
+     "name": "At",
+     "type": "entity"
+    }
+   ],
+   "outputs": []
+  }
+ ]
+}

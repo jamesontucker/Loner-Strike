@@ -1,0 +1,1254 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "gun_game_lite",
+  "uid": "2a8c4f61-0d3e-4b9a-8f27-5c1e7d3b9a42",
+  "name": "Gun Game Lite",
+  "description": "Each kill gives the next gun; a knife kill at the end wins",
+  "settings": [
+   {
+    "cvar": "mp_freeforall",
+    "value": 1
+   },
+   {
+    "cvar": "mp_round_infinite",
+    "value": 1
+   }
+  ]
+ },
+ "variables": [
+  {
+   "id": "level",
+   "name": "Level",
+   "type": "number",
+   "scope": "player",
+   "default": 0
+  }
+ ],
+ "nodes": [
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 65,
+    "y": 74
+   },
+   "params": {}
+  },
+  {
+   "id": "nobuy",
+   "type": "buy.where",
+   "pos": {
+    "x": 565,
+    "y": 61
+   },
+   "params": {
+    "where": "nowhere"
+   }
+  },
+  {
+   "id": "bots",
+   "type": "bots.no_buy",
+   "pos": {
+    "x": 1065,
+    "y": 50
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "hello",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 1565,
+    "y": 50
+   },
+   "params": {
+    "text": "Gun Game: every kill gives you the next gun. A knife kill at the end wins.",
+    "seconds": 6
+   }
+  },
+  {
+   "id": "ps",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 1065,
+    "y": 204
+   },
+   "params": {}
+  },
+  {
+   "id": "give",
+   "type": "fn.call",
+   "pos": {
+    "x": 1565,
+    "y": 202
+   },
+   "params": {
+    "func": "arm"
+   }
+  },
+  {
+   "id": "pk0",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 565,
+    "y": 271
+   },
+   "params": {}
+  },
+  {
+   "id": "wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 1065,
+    "y": 378
+   },
+   "params": {
+    "secs": 2
+   }
+  },
+  {
+   "id": "back",
+   "type": "player.respawn",
+   "pos": {
+    "x": 1565,
+    "y": 348
+   },
+   "params": {}
+  },
+  {
+   "id": "pk",
+   "type": "event.player_killed",
+   "pos": {
+    "x": 65,
+    "y": 1057
+   },
+   "params": {}
+  },
+  {
+   "id": "self",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1065,
+    "y": 971
+   },
+   "params": {}
+  },
+  {
+   "id": "bad",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 565,
+    "y": 928
+   },
+   "params": {
+    "op": "or"
+   }
+  },
+  {
+   "id": "down",
+   "type": "var.add",
+   "pos": {
+    "x": 1565,
+    "y": 602
+   },
+   "params": {
+    "var": "level",
+    "amount": -1
+   }
+  },
+  {
+   "id": "floor",
+   "type": "math.clamp",
+   "pos": {
+    "x": 1565,
+    "y": 798
+   },
+   "params": {
+    "min": 0,
+    "max": 8
+   }
+  },
+  {
+   "id": "lvl0",
+   "type": "var.get",
+   "pos": {
+    "x": 1065,
+    "y": 809
+   },
+   "params": {
+    "var": "level"
+   }
+  },
+  {
+   "id": "fix",
+   "type": "var.set",
+   "pos": {
+    "x": 2065,
+    "y": 823
+   },
+   "params": {
+    "var": "level"
+   }
+  },
+  {
+   "id": "up",
+   "type": "var.add",
+   "pos": {
+    "x": 1565,
+    "y": 1264
+   },
+   "params": {
+    "var": "level",
+    "amount": 1
+   }
+  },
+  {
+   "id": "lvl",
+   "type": "var.get",
+   "pos": {
+    "x": 1065,
+    "y": 1503
+   },
+   "params": {
+    "var": "level"
+   }
+  },
+  {
+   "id": "won",
+   "type": "math.compare",
+   "pos": {
+    "x": 1565,
+    "y": 1460
+   },
+   "params": {
+    "op": "gt",
+    "b": 8
+   }
+  },
+  {
+   "id": "end",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2065,
+    "y": 1352
+   },
+   "params": {}
+  },
+  {
+   "id": "next",
+   "type": "fn.call",
+   "pos": {
+    "x": 2565,
+    "y": 1114
+   },
+   "params": {
+    "func": "arm"
+   }
+  },
+  {
+   "id": "hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 3065,
+    "y": 1196
+   },
+   "params": {
+    "text": "Level",
+    "slot": "left",
+    "seconds": 3
+   }
+  },
+  {
+   "id": "win_r",
+   "type": "flow.reroute",
+   "pos": {
+    "x": 2672,
+    "y": 2494
+   },
+   "params": {}
+  },
+  {
+   "id": "cheer",
+   "type": "msg.chat",
+   "pos": {
+    "x": 3065,
+    "y": 2435
+   },
+   "params": {
+    "text": "Gun Game won by"
+   }
+  },
+  {
+   "id": "big",
+   "type": "msg.broadcast",
+   "pos": {
+    "x": 3565,
+    "y": 2446
+   },
+   "params": {
+    "text": "We have a winner! New game in 5 seconds.",
+    "seconds": 5
+   }
+  },
+  {
+   "id": "reset",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 4065,
+    "y": 2435
+   },
+   "params": {
+    "which": "all"
+   }
+  },
+  {
+   "id": "zero",
+   "type": "var.set",
+   "pos": {
+    "x": 4565,
+    "y": 2337
+   },
+   "params": {
+    "var": "level",
+    "value": 0
+   }
+  },
+  {
+   "id": "pause",
+   "type": "timer.delay",
+   "pos": {
+    "x": 4565,
+    "y": 2533
+   },
+   "params": {
+    "secs": 5
+   }
+  },
+  {
+   "id": "again",
+   "type": "game.restart_round",
+   "pos": {
+    "x": 5065,
+    "y": 2557
+   },
+   "params": {}
+  },
+  {
+   "id": "fe",
+   "type": "fn.entry",
+   "pos": {
+    "x": 65,
+    "y": 2496
+   },
+   "params": {},
+   "graph": "arm"
+  },
+  {
+   "id": "strip",
+   "type": "player.strip",
+   "pos": {
+    "x": 565,
+    "y": 2472
+   },
+   "params": {
+    "knife": true
+   },
+   "graph": "arm"
+  },
+  {
+   "id": "lv",
+   "type": "var.get",
+   "pos": {
+    "x": 565,
+    "y": 2320
+   },
+   "params": {
+    "var": "level"
+   },
+   "graph": "arm"
+  },
+  {
+   "id": "sw",
+   "type": "flow.switch_num",
+   "pos": {
+    "x": 1065,
+    "y": 2396
+   },
+   "params": {
+    "cases": "0,1,2,3,4,5,6,7"
+   },
+   "graph": "arm"
+  },
+  {
+   "id": "g0",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1565,
+    "y": 1745
+   },
+   "params": {
+    "weapon": "mp5navy",
+    "ammo": 200
+   },
+   "graph": "arm"
+  },
+  {
+   "id": "g1",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1565,
+    "y": 1897
+   },
+   "params": {
+    "weapon": "p90",
+    "ammo": 200
+   },
+   "graph": "arm"
+  },
+  {
+   "id": "g2",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1565,
+    "y": 2049
+   },
+   "params": {
+    "weapon": "m3",
+    "ammo": 200
+   },
+   "graph": "arm"
+  },
+  {
+   "id": "g3",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1565,
+    "y": 2201
+   },
+   "params": {
+    "weapon": "famas",
+    "ammo": 200
+   },
+   "graph": "arm"
+  },
+  {
+   "id": "g4",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1565,
+    "y": 2439
+   },
+   "params": {
+    "weapon": "ak47",
+    "ammo": 200
+   },
+   "graph": "arm"
+  },
+  {
+   "id": "g5",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1565,
+    "y": 2644
+   },
+   "params": {
+    "weapon": "m4a1",
+    "ammo": 200
+   },
+   "graph": "arm"
+  },
+  {
+   "id": "g6",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1565,
+    "y": 2796
+   },
+   "params": {
+    "weapon": "awp",
+    "ammo": 200
+   },
+   "graph": "arm"
+  },
+  {
+   "id": "g7",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1565,
+    "y": 2948
+   },
+   "params": {
+    "weapon": "deagle",
+    "ammo": 200
+   },
+   "graph": "arm"
+  },
+  {
+   "id": "kn",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1565,
+    "y": 3100
+   },
+   "params": {
+    "text": "Knife round! One knife kill wins.",
+    "slot": "center",
+    "seconds": 4
+   },
+   "graph": "arm"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "nobuy",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "nobuy",
+    "pin": "then"
+   },
+   "to": {
+    "node": "bots",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "bots",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hello",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "give",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "ps",
+    "pin": "then"
+   },
+   "to": {
+    "node": "give",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "pk0",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "back",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "pk0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "back",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "pk",
+    "pin": "suicide"
+   },
+   "to": {
+    "node": "bad",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "pk",
+    "pin": "world"
+   },
+   "to": {
+    "node": "bad",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "bad",
+    "pin": "out"
+   },
+   "to": {
+    "node": "self",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "pk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "self",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "self",
+    "pin": "true"
+   },
+   "to": {
+    "node": "down",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "down",
+    "pin": "then"
+   },
+   "to": {
+    "node": "fix",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "down",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "lvl0",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "lvl0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "floor",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "floor",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fix",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "pk",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "fix",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "self",
+    "pin": "false"
+   },
+   "to": {
+    "node": "up",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "up",
+    "pin": "then"
+   },
+   "to": {
+    "node": "end",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "up",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "lvl",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "lvl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "won",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "won",
+    "pin": "out"
+   },
+   "to": {
+    "node": "end",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "end",
+    "pin": "false"
+   },
+   "to": {
+    "node": "next",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "next",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "next",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "lvl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "end",
+    "pin": "true"
+   },
+   "to": {
+    "node": "win_r",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "win_r",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cheer",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "pk",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "cheer",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "cheer",
+    "pin": "then"
+   },
+   "to": {
+    "node": "big",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "big",
+    "pin": "then"
+   },
+   "to": {
+    "node": "reset",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "reset",
+    "pin": "each"
+   },
+   "to": {
+    "node": "zero",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "reset",
+    "pin": "player"
+   },
+   "to": {
+    "node": "zero",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "reset",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pause",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "pause",
+    "pin": "then"
+   },
+   "to": {
+    "node": "again",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "strip",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "lv",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "lv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "sw",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "fe",
+    "pin": "then"
+   },
+   "to": {
+    "node": "strip",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "strip",
+    "pin": "then"
+   },
+   "to": {
+    "node": "sw",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "sw",
+    "pin": "c0"
+   },
+   "to": {
+    "node": "g0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g0",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "sw",
+    "pin": "c1"
+   },
+   "to": {
+    "node": "g1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g1",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "sw",
+    "pin": "c2"
+   },
+   "to": {
+    "node": "g2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "sw",
+    "pin": "c3"
+   },
+   "to": {
+    "node": "g3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g3",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "sw",
+    "pin": "c4"
+   },
+   "to": {
+    "node": "g4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g4",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "sw",
+    "pin": "c5"
+   },
+   "to": {
+    "node": "g5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g5",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "sw",
+    "pin": "c6"
+   },
+   "to": {
+    "node": "g6",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g6",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "sw",
+    "pin": "c7"
+   },
+   "to": {
+    "node": "g7",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g7",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "sw",
+    "pin": "default"
+   },
+   "to": {
+    "node": "kn",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "fe",
+    "pin": "who"
+   },
+   "to": {
+    "node": "kn",
+    "pin": "player"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "c1",
+   "text": "Free for all, no buying, and you come back 2 seconds after you die, with the gun of your level.",
+   "pos": {
+    "x": 41,
+    "y": 4
+   },
+   "size": {
+    "w": 1778,
+    "h": 529
+   }
+  },
+  {
+   "id": "c2",
+   "text": "A kill by another player moves the killer up a level and hands over the next gun at once. Level 8 is the knife, and a kill with it wins. A suicide costs a level.",
+   "pos": {
+    "x": 41,
+    "y": 556
+   },
+   "size": {
+    "w": 3278,
+    "h": 1081
+   }
+  },
+  {
+   "id": "c3",
+   "text": "Someone made it through every gun: everyone hears who, levels go back to 0 and a new round starts.",
+   "pos": {
+    "x": 2648,
+    "y": 2291
+   },
+   "size": {
+    "w": 2671,
+    "h": 376
+   }
+  },
+  {
+   "id": "c4",
+   "text": "Give Level Gun: takes everything but the knife and gives the gun for the player's level (mp5navy, p90, m3, famas, ak47, m4a1, awp, deagle, then the knife).",
+   "pos": {
+    "x": 41,
+    "y": 1699
+   },
+   "size": {
+    "w": 1778,
+    "h": 1557
+   },
+   "graph": "arm"
+  }
+ ],
+ "functions": [
+  {
+   "id": "arm",
+   "name": "Give Level Gun",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Who",
+     "type": "player"
+    }
+   ],
+   "outputs": []
+  }
+ ]
+}

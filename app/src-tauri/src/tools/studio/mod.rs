@@ -24,6 +24,10 @@ pub mod expand;
 pub mod graph;
 pub mod kit;
 pub mod testrun;
+#[cfg(test)]
+mod help_tests;
+#[cfg(test)]
+mod examples_tests;
 
 use crate::server::Shared;
 use axum::extract::{Path as UrlPath, Query, State};
