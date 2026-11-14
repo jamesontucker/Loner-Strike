@@ -297,3 +297,15 @@ Screenshots are in `/private/tmp/claude-501/-Users-jameson/a1c85d27-df33-445d-9b
 - Not done here: H2 (toasts) and M1 (contrast) belong to the app-wide pass.
 - Left behind: `Sim/T1FIX` (1.4 GB, an APFS clone, stopped). The safety hook blocks deleting it from here, so delete it
   by hand.
+
+## Shared creatures (1.0, 2026-11-14): QA rows
+| Check | Result | Evidence |
+|---|---|---|
+| Publish a Studio mode that spawns your own type | PASS | `creature_round_trip` (ignored test, `tools/creature_roundtrip.rs`): package `qa_rt-mode-loner-strike.zip` has `creatures/creatures.ini` with `[gb1234567.qa_crawler]` (base runner, hp 77); the packaged graph's spawn names `gb1234567.qa_crawler`; index field `creatures: [{name: gb1234567.qa_crawler, model: false, sounds: 0}]` |
+| Install it on a clean game | PASS | Unpacked with `archive::extract_strict`, block `; >>> from mod-9990001` written to Sim/T1CPT's creatures.ini (there was no file before); the graph installed through the Studio's compile route (amxxpc "Done.") |
+| The creature spawns in a sim | PASS | Sim/T1CPT (brain ls-next3 run 43638373487, 1308-dev; plugins fresh from 7f3fe82e), `-insecure`, de_dust2, `gm_mode qa_rt`: `ls_creature list` shows 5 × `gb1234567.qa_crawler alive hp 77 chase`; `ls_creature types` lists it (houndeye model, from runner) |
+| Uninstall removes only that block | PASS | With the player's own `[qa_mine]` above and `[qa_mine2]` below the block, `uninstall_pack` left both and their notes as they were and took out only the marked block (no files to remove) |
+| Update, Go back, failed update, ref counts, server carry-over, refusals | PASS (Rust) | creaturepack, creaturekind, creaturesrv, archive and community tests (see the agents' commits 9f5c69c1…4d583fd2, 54e534ff, ac8e1c3a) |
+| Picker, Publish listing, Used by, creature card | PASS (Playwright) | creature-picker, community-creatures, community-creature-kind specs in Chromium and WebKit |
+| A real GameBanana publish, Get, update and Go back | NEEDS USER | Needs a real upload and the list service deployed |
+| A real Linux server getting a block | NEEDS USER | Unit-level only (the upload filter passes creatures.ini, models/, sound/) |
