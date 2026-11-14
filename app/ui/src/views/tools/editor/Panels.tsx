@@ -2,14 +2,13 @@
 // real controls, brush actions, texture alignment, map settings), the outline of the map,
 // the texture browser and the live checks.
 
-import { placeKit } from "./KitPanel"; // P5
 import { setVisSets } from "./extras"; // P4
 import { MarqueeOptions } from "./Marquee"; // P4
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { BusyButton, Info } from "../../../ui";
 import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
-import { getGameWads, getTextures, texUrl, type DocEntity, type Issue, type WadTextures } from "./editorApi";
+import { getGameWads, getTextures, texUrl, type DocEntity, type WadTextures } from "./editorApi";
 import { selectionIds } from "./EditorScene";
 import { ShapeExtraFields } from "./ShapeSettings"; // Parity A
 import { VertexActions } from "./VertexActions"; // Parity A
@@ -837,107 +836,6 @@ export function TextureBrowser() {
     </section>
   );
 }
-
-// ---- checks ---------------------------------------------------------------------------
-
-const LEVEL_LABEL: Record<Issue["level"], string> = { error: "Problem", warning: "Warning", info: "Note" };
-
-export function ChecksPanel() {
-  const checks = useEditor((s) => s.checks);
-  const texture = useEditor((s) => s.texture);
-  const [busy, setBusy] = useState<string | null>(null);
-  const s = useEditor.getState();
-  if (!checks) {
-    return (
-      <section className="tools-panel">
-        <p className="small-note muted">
-          <span className="spinner" aria-hidden="true" />
-          Checking the map…
-        </p>
-      </section>
-    );
-  }
-  const go = (i: Issue) => {
-    if (i.brush != null) {
-      const b = s.brushes.get(i.brush);
-      s.select({ brushes: [i.brush], entities: [], face: null });
-      if (b) useTools.getState().look(b.min.map((x, k) => (x + b.max[k]) / 2) as Vec3, Math.max(64, ...b.max.map((x, k) => x - b.min[k])));
-    } else if (i.entity != null) {
-      s.select({ brushes: [], entities: [i.entity], face: null });
-      const e = s.doc?.entities.find((x) => x.id === i.entity);
-      const o = e && originOf(e.keys);
-      if (o) useTools.getState().look(o, 64);
-    }
-  };
-  const fix = async (list: Issue[], key: string) => {
-    const first = list[0]?.fix;
-    if (!first) return;
-    if (first.startsWith("place:")) {
-      s.set({ tool: "entity", entityClass: first.slice(6) });
-      s.notify("Click a floor in the view to place it.");
-      return;
-    }
-    setBusy(key);
-    try {
-      await s.cmd({ op: "fix", fixes: list.map((i) => ({ fix: i.fix, brush: i.brush, entity: i.entity, texture: i.texture })), with: first === "replace-texture" ? texture : undefined });
-    } finally {
-      setBusy(null);
-    }
-  };
-  // fixes that can be done all at once, by kind
-  const kinds = new Map<string, Issue[]>();
-  for (const i of checks.issues) if (i.fix && !i.fix.startsWith("place:")) kinds.set(i.code, [...(kinds.get(i.code) ?? []), i]);
-  const many = [...kinds.entries()].filter(([, l]) => l.length > 1);
-  return (
-    <section className="tools-panel editor-checks">
-      {checks.issues.length === 0 ? (
-        <p className="small-note">No problems found. (Leaks are found when the map is compiled.)</p>
-      ) : (
-        <>
-          {many.map(([code, l]) => (
-            <BusyButton key={code} busy={busy === `all-${code}`} className="btn small" label={`Fix all ${l.length}: ${FIX_LABEL[l[0].fix!] ?? "Fix"}`} busyLabel="Fixing…" onClick={() => void fix(l, `all-${code}`)} />
-          ))}
-          <ul>
-            {checks.issues.map((i, n) => (
-              <li key={n} className={`editor-issue ${i.level}`}>
-                <button type="button" className="linklike" disabled={i.brush == null && i.entity == null} onClick={() => go(i)}>
-                  <strong>{LEVEL_LABEL[i.level]}:</strong> {i.message}
-                </button>
-                {/* P5: a mode kit's marker or component to place */}
-                {i.place && (
-                  <button type="button" className="btn small editor-fix" onClick={() => placeKit(i.place!)}>
-                    Place
-                  </button>
-                )}
-                {i.fix && (
-                  <BusyButton
-                    busy={busy === `one-${n}`}
-                    className="btn small editor-fix"
-                    label={i.fix === "replace-texture" ? `Replace with ${texture}` : FIX_LABEL[i.fix] ?? "Fix"}
-                    busyLabel="Fixing…"
-                    onClick={() => void fix([i], `one-${n}`)}
-                  />
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      {!checks.texturesChecked && <p className="small-note muted">Textures aren't checked until the game is set up on this computer.</p>}
-    </section>
-  );
-}
-
-const FIX_LABEL: Record<string, string> = {
-  "delete-brush": "Delete the brush",
-  "to-world": "Make its brushes world brushes",
-  "delete-entity": "Delete it",
-  "clear-target": "Clear the target",
-  "add-wads": "Add halflife.wad and cstrike.wad",
-  "replace-texture": "Replace with the current texture",
-  "place:info_player_start": "Place a CT spawn",
-  "place:info_player_deathmatch": "Place a T spawn",
-};
 
 export function BusyLabel({ busy, label }: { busy: boolean; label: string }) {
   return busy ? (
