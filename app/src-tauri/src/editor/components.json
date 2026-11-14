@@ -7,6 +7,7 @@
     "Doors & traps",
     "Objectives",
     "Defense",
+    "Upgrades",
     "Social",
     "Creatures"
   ],
@@ -238,6 +239,42 @@
         40
       ],
       "needs_nav": true
+    },
+    {
+      "class": "ls_perk_machine",
+      "group": "Upgrades",
+      "title": "Perk machine",
+      "blurb": "Sells one perk (Tough, Quick hands, Double tap, Quick revive, Light feet).",
+      "visual": "point",
+      "colour": [
+        220,
+        60,
+        60
+      ]
+    },
+    {
+      "class": "ls_upgrade_bench",
+      "group": "Upgrades",
+      "title": "Upgrade bench",
+      "blurb": "Upgrades the gun in hand to Mk II, then Mk III.",
+      "visual": "point",
+      "colour": [
+        255,
+        140,
+        0
+      ]
+    },
+    {
+      "class": "ls_mystery_box",
+      "group": "Upgrades",
+      "title": "Mystery box",
+      "blurb": "A random gun for a price; moves to another box of its group after a few uses.",
+      "visual": "point",
+      "colour": [
+        80,
+        200,
+        255
+      ]
     },
     {
       "class": "ls_meeting_point",

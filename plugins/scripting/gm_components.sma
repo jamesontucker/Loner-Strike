@@ -53,6 +53,7 @@ enum
 	K_RESPAWN, K_WEAPON, K_DAMAGE, K_DOOR, K_TRAP, K_CAPTURE, K_ZONE, K_SHRINKER,
 	K_LOOT, K_DROP, K_BARRICADE, K_WAVE, K_EXTRACT, K_CHECKPOINT, K_PLATFORM,
 	K_CLASS, K_MEETING, K_CRATE,
+	K_PERK, K_BENCH, K_BOX, K_PICKUP, /* W1 */
 	K_COUNT
 };
 
@@ -62,7 +63,8 @@ new const KIND_NAME[K_COUNT][] =
 	"ls_respawn_point", "ls_weapon_spawner", "ls_damage_zone", "ls_timed_door", "ls_trigger_trap",
 	"ls_capture_point", "ls_safe_zone", "ls_zone_shrinker", "ls_loot_container", "ls_supply_drop",
 	"ls_barricade", "ls_wave_spawner", "ls_extraction_zone", "ls_checkpoint", "ls_moving_platform",
-	"ls_player_class", "ls_meeting_point", "ls_supply_crate"
+	"ls_player_class", "ls_meeting_point", "ls_supply_crate",
+	"ls_perk_machine", "ls_upgrade_bench", "ls_mystery_box", "ls_pickup" /* W1 */
 };
 
 /* where a component came from */
@@ -153,7 +155,7 @@ enum { ACT_NONE = 0, ACT_LOOT, ACT_REPAIR, ACT_LOCK, ACT_MEET };
 #define DP_DONE     1
 
 /* trap states */
-enum { TRAP_ARMED = 0, TRAP_PENDING, TRAP_COOLDOWN, TRAP_OFF };
+enum { TRAP_ARMED = 0, TRAP_PENDING, TRAP_COOLDOWN, TRAP_OFF, TRAP_ACTIVE /* W1 */ };
 /* crate states */
 enum { CRATE_FALLING = 0, CRATE_FULL, CRATE_EMPTY };
 
@@ -321,6 +323,7 @@ public plugin_precache()
 	g_sprBeam = precache_model("sprites/laserbeam.spr");
 	g_sprSmoke = precache_model("sprites/smokepuff.spr");
 	g_mdlGibs = precache_model("models/woodgibs.mdl");
+	up_precache(); /* W1 */
 	precache_model_once(DEFAULT_CRATE);
 	precache_model_once(DEFAULT_BOX);
 	precache_model_once("models/w_kevlar.mdl");
@@ -427,6 +430,7 @@ public plugin_natives()
 	register_native("ls_meeting_vote", "n_meeting_vote");
 	register_native("ls_respawn_pick", "n_respawn_pick");
 	register_native("ls_respawn_at", "n_respawn_at");
+	up_natives(); /* W1 */
 	w3_natives(); /* W3 */
 }
 
@@ -522,6 +526,7 @@ public plugin_init()
 	g_fwMeetStart = CreateMultiForward("ls_on_meeting_start", ET_IGNORE, FP_CELL, FP_CELL);
 	g_fwMeetVote = CreateMultiForward("ls_on_meeting_vote", ET_IGNORE, FP_CELL, FP_CELL, FP_CELL);
 	g_fwMeetEnd = CreateMultiForward("ls_on_meeting_end", ET_IGNORE, FP_CELL, FP_CELL);
+	up_plugin_init(); /* W1 */
 	w3_init(); /* W3 */
 }
 
@@ -1090,6 +1095,7 @@ stock comp_init(s)
 			}
 		}
 	}
+	up_comp_init(s); /* W1 */
 	comp_reset(s);
 }
 
@@ -1554,6 +1560,7 @@ stock comp_reset(s)
 			g_team[s] = kteam(s, "team", 0);
 		}
 	}
+	up_comp_reset(s); /* W1 */
 	if (ent && g_ready)
 		hint_comp(s);
 }
@@ -1697,6 +1704,9 @@ stock marker_kind(Trie:keys)
 			TrieSetString(keys, "name", "Base");
 		return K_DAMAGE;
 	}
+	new up = up_marker_kind(k, keys); /* W1 */
+	if (up)
+		return up;
 	new kind = kind_of(k);
 	return kind == K_CRATE ? K_NONE : kind;
 }
@@ -1893,6 +1903,7 @@ public tick()
 	tick_waves();
 	tick_acts();
 	use_hints();
+	up_tick(sec); /* W1 */
 	if (sec)
 	{
 		visuals();
@@ -2493,6 +2504,12 @@ stock tick_trap(s)
 				}
 			}
 			fwd3(g_fwTrap, g_ent[s], act, victims);
+			/* W1: a paid timed trap stays on a while */
+			if (up_trap_fired(s))
+			{
+				hint_comp(s);
+				return;
+			}
 			comp_debug("trap %d fired by %d, %d hurt", g_ent[s], act, victims);
 			if (g_pf[s][T_REARM] > 0.0)
 			{
@@ -2503,6 +2520,7 @@ stock tick_trap(s)
 				g_state[s] = TRAP_OFF;
 			hint_comp(s);
 		}
+		case TRAP_ACTIVE: up_trap_tick(s); /* W1 */
 		case TRAP_COOLDOWN:
 		{
 			if (g_now >= g_pf[s][T_ARMAT])
@@ -4249,6 +4267,7 @@ public menu_class(id, menu, item)
 
 public client_disconnected(id)
 {
+	up_disconnected(id); /* W1 */
 	g_tqN[id] = 0;
 	g_tqShown[id][0] = EOS;
 	g_tqUntil[id] = 0.0;
@@ -7536,3 +7555,1681 @@ public n_comp_state(plugin, params)
 	new s = arg_slot(1);
 	return s >= 0 ? g_state[s] : -1;
 }
+
+/* ==== W1: Last Stand pieces ==== */
+/* =========================================================================
+ * Player modifiers, perks, the downed state, weapon levels; the perk machine, the upgrade
+ * bench, the mystery box, power-up pickups, and the paid timed trap (an ls_trigger_trap with
+ * fire_on=use and a cost). Built for Last Stand, usable by any mode (natives in
+ * ls_components.inc, "W1: Last Stand pieces"). Bots get these as W2's ls_mode offers.
+ * ========================================================================= */
+
+enum { MOD_HEALTH = 0, MOD_SPEED, MOD_RELOAD, MOD_DEPLOY, MOD_DAMAGE, MOD_REVIVE, MOD_FIRE, MOD_COUNT };
+new const MOD_ID[MOD_COUNT][] = { "health_max", "speed", "reload", "deploy", "damage", "revive_time", "fire_rate" };
+new Float:g_modSet[33][MOD_COUNT];
+
+enum { PK_TOUGH = 0, PK_HANDS, PK_DOUBLE, PK_REVIVE, PK_FEET, PK_COUNT };
+new const PK_ID[PK_COUNT][] = { "tough", "hands", "doubletap", "revive", "feet" };
+new const PK_NAME[PK_COUNT][] = { "Tough", "Quick hands", "Double tap", "Quick revive", "Light feet" };
+new const PK_WHAT[PK_COUNT][] = { "+50% max health", "faster reloads and weapon swaps", "+25% damage", "revive in 2 s; alone, get back up once", "+10% speed" };
+new const PK_TAG[PK_COUNT][] = { "TGH", "QH", "DT", "QR", "LF" };
+new const PK_RGB[PK_COUNT][3] = { {220, 60, 60}, {60, 200, 80}, {240, 200, 40}, {60, 140, 255}, {200, 120, 255} };
+/* the order bots buy them in (W2's offer order, lowest first) */
+new const PK_ORDER[PK_COUNT] = { 0, 4, 3, 2, 1 };
+new g_perks[33];
+new g_nperks[33];
+new bool:g_selfRev[33];
+
+/* the downed state */
+new bool:g_dnOn;
+new Float:g_dnBleed = 30.0;
+new g_dnTeam;
+new bool:g_dnLosePerks = true;
+new bool:g_down[33];
+new bool:g_bledOut[33];
+new Float:g_downAt[33];
+new Float:g_downOrg[33][3];
+new g_revBy[33];
+new Float:g_revProg[33];
+new Float:g_selfRevAt[33];
+
+/* the last hit on a creature was a head */
+new bool:g_headLast[MAX_ENTS];
+new Float:g_upUseNext[33];
+new Float:g_offerAt;
+new bool:g_upCreatures;
+#define OFS_NEXT_ATTACK 83
+#define OFS_WPN_IDLE    48
+#define OFS_NEXT_PRIM   46
+/* a weapon's level (the bench): kept on the weapon entity, so it goes with the gun */
+#define WPN_LEVEL       pev_iuser3
+
+/* perk machine */
+#define PM_PRICE    0
+#define PM_STEP     1
+#define PM_MAX      2
+/* bench */
+#define BN_PRICE2   0
+#define BN_PRICE3   1
+#define BN_L3FROM   2
+#define BN_DMG2     3
+#define BN_DMG3     4
+/* box: g_state 1 = here now; g_aux = uses since it came */
+#define BX_PRICE    0
+#define BX_MOVEAT   1
+/* pickup */
+#define PU_UNTIL    0
+#define PU_RADIUS   1
+/* the paid timed trap (slots after the trap's own T_*) */
+#define T_UNTIL     5
+#define T_NEXTHIT   6
+
+new g_fwPerk, g_fwDown, g_fwRevive, g_fwBledOut, g_fwUpgraded, g_fwBox, g_fwPickup, g_fwCreatureHurt;
+
+stock up_precache()
+{
+	precache_model_once("models/w_battery.mdl");
+	precache_sound("buttons/spark5.wav");
+	precache_sound("items/suitchargeok1.wav");
+	for (new p = 0; p <= 32; p++)
+		for (new m = 0; m < MOD_COUNT; m++)
+			g_modSet[p][m] = 1.0;
+}
+
+stock up_natives()
+{
+	register_native("ls_player_mod", "n_player_mod");
+	register_native("ls_player_mod_get", "n_player_mod_get");
+	register_native("ls_player_mod_clear", "n_player_mod_clear");
+	register_native("ls_perk_give", "n_perk_give");
+	register_native("ls_perk_has", "n_perk_has");
+	register_native("ls_perk_count", "n_perk_count");
+	register_native("ls_perk_clear", "n_perk_clear");
+	register_native("ls_perk_buy", "n_perk_buy");
+	register_native("ls_perk_price", "n_perk_price");
+	register_native("ls_perk_tags", "n_perk_tags");
+	register_native("ls_down_enable", "n_down_enable");
+	register_native("ls_is_down", "n_is_down");
+	register_native("ls_down", "n_down");
+	register_native("ls_revive", "n_revive");
+	register_native("ls_down_left", "n_down_left");
+	register_native("ls_weapon_level", "n_weapon_level");
+	register_native("ls_weapon_set_level", "n_weapon_set_level");
+	register_native("ls_bench_use", "n_bench_use");
+	register_native("ls_box_use", "n_box_use");
+	register_native("ls_pickup_spawn", "n_pickup_spawn");
+}
+
+stock up_plugin_init()
+{
+	g_fwPerk = CreateMultiForward("ls_on_perk", ET_STOP, FP_CELL, FP_STRING, FP_CELL);
+	g_fwDown = CreateMultiForward("ls_on_down", ET_STOP, FP_CELL, FP_CELL);
+	g_fwRevive = CreateMultiForward("ls_on_revive", ET_IGNORE, FP_CELL, FP_CELL);
+	g_fwBledOut = CreateMultiForward("ls_on_bled_out", ET_IGNORE, FP_CELL);
+	g_fwUpgraded = CreateMultiForward("ls_on_weapon_upgraded", ET_IGNORE, FP_CELL, FP_CELL, FP_CELL, FP_CELL);
+	g_fwBox = CreateMultiForward("ls_on_box", ET_STOP, FP_CELL, FP_CELL, FP_STRING);
+	g_fwPickup = CreateMultiForward("ls_on_pickup", ET_STOP, FP_CELL, FP_CELL, FP_STRING);
+	g_fwCreatureHurt = CreateMultiForward("ls_on_creature_hurt", ET_IGNORE, FP_CELL, FP_CELL, FP_FLOAT, FP_CELL);
+
+	register_forward(FM_PlayerPreThink, "up_prethink");
+	RegisterHamPlayer(Ham_TakeDamage, "up_player_hurt");
+	RegisterHamPlayer(Ham_Killed, "up_player_killed", 1);
+	RegisterHamPlayer(Ham_CS_Player_ResetMaxSpeed, "up_maxspeed", 1);
+	g_upCreatures = get_cvar_pointer("ls_creature_ver") != 0;
+	if (g_upCreatures)
+	{
+		RegisterHam(Ham_TakeDamage, "ls_creature", "up_creature_hurt");
+		RegisterHam(Ham_TakeDamage, "ls_creature", "up_creature_hurt_post", 1);
+		RegisterHam(Ham_TraceAttack, "ls_creature", "up_creature_trace");
+	}
+	new const WEAPONS[][] = { "weapon_p228", "weapon_scout", "weapon_xm1014", "weapon_mac10", "weapon_aug", "weapon_elite", "weapon_fiveseven", "weapon_ump45",
+		"weapon_sg550", "weapon_galil", "weapon_famas", "weapon_usp", "weapon_glock18", "weapon_awp", "weapon_mp5navy", "weapon_m249", "weapon_m3", "weapon_m4a1",
+		"weapon_tmp", "weapon_g3sg1", "weapon_deagle", "weapon_sg552", "weapon_ak47", "weapon_p90", "weapon_knife" };
+	for (new i = 0; i < sizeof WEAPONS; i++)
+	{
+		if (!equal(WEAPONS[i], "weapon_knife"))
+		{
+			RegisterHam(Ham_Weapon_Reload, WEAPONS[i], "up_reload_post", 1);
+			RegisterHam(Ham_Weapon_PrimaryAttack, WEAPONS[i], "up_attack_post", 1);
+		}
+		RegisterHam(Ham_Item_Deploy, WEAPONS[i], "up_deploy_post", 1);
+	}
+}
+
+/* ---- player modifiers: what a mode sets times what the perks give ---- */
+
+stock mod_index(const what[])
+{
+	for (new m = 0; m < MOD_COUNT; m++)
+		if (equali(what, MOD_ID[m]))
+			return m;
+	return -1;
+}
+
+stock Float:mod_get(id, m)
+{
+	if (!(1 <= id <= 32))
+		return 1.0;
+	new Float:v = g_modSet[id][m];
+	switch (m)
+	{
+		case MOD_HEALTH: if (perk_has(id, PK_TOUGH)) v *= 1.5;
+		case MOD_SPEED: if (perk_has(id, PK_FEET)) v *= 1.1;
+		case MOD_RELOAD, MOD_DEPLOY: if (perk_has(id, PK_HANDS)) v *= 0.6;
+		case MOD_DAMAGE: if (perk_has(id, PK_DOUBLE)) v *= 1.25;
+		case MOD_REVIVE: if (perk_has(id, PK_REVIVE)) v *= 0.5;
+	}
+	return v;
+}
+
+/* max health and speed follow the modifiers at once */
+stock mods_apply(id, Float:oldMax = 0.0)
+{
+	if (!is_user_alive(id))
+		return;
+	new Float:mx = 100.0 * mod_get(id, MOD_HEALTH);
+	if (oldMax <= 0.0)
+	{
+		pev(id, pev_max_health, oldMax);
+		if (oldMax <= 0.0)
+			oldMax = 100.0;
+	}
+	set_pev(id, pev_max_health, mx);
+	new hp = get_user_health(id);
+	if (mx > oldMax)
+		set_user_health(id, min(hp + floatround(mx - oldMax), floatround(mx)));
+	else if (float(hp) > mx)
+		set_user_health(id, floatround(mx));
+	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, id);
+}
+
+public up_maxspeed(id)
+{
+	if (!is_user_alive(id))
+		return HAM_IGNORED;
+	new Float:s;
+	pev(id, pev_maxspeed, s);
+	if (g_down[id])
+		set_pev(id, pev_maxspeed, 50.0);
+	else
+	{
+		new Float:m = mod_get(id, MOD_SPEED);
+		if (m != 1.0 && s > 1.0)
+			set_pev(id, pev_maxspeed, s * m);
+	}
+	return HAM_IGNORED;
+}
+
+public up_reload_post(weapon)
+{
+	new id = pev(weapon, pev_owner);
+	if (!(1 <= id <= 32) || !is_user_alive(id))
+		return HAM_IGNORED;
+	new Float:m = mod_get(id, MOD_RELOAD);
+	if (m == 1.0)
+		return HAM_IGNORED;
+	new Float:now = get_gametime();
+	new Float:na = get_pdata_float(id, OFS_NEXT_ATTACK, 5);
+	if (na > 0.0)
+		set_pdata_float(id, OFS_NEXT_ATTACK, na * m, 5);
+	new Float:idle = get_pdata_float(weapon, OFS_WPN_IDLE, 4);
+	if (idle > now)
+		set_pdata_float(weapon, OFS_WPN_IDLE, now + (idle - now) * m, 4);
+	return HAM_IGNORED;
+}
+
+public up_deploy_post(weapon)
+{
+	new id = pev(weapon, pev_owner);
+	if (!(1 <= id <= 32) || !is_user_alive(id))
+		return HAM_IGNORED;
+	new Float:m = mod_get(id, MOD_DEPLOY);
+	if (m == 1.0)
+		return HAM_IGNORED;
+	new Float:na = get_pdata_float(id, OFS_NEXT_ATTACK, 5);
+	if (na > 0.0)
+		set_pdata_float(id, OFS_NEXT_ATTACK, na * m, 5);
+	return HAM_IGNORED;
+}
+
+public up_attack_post(weapon)
+{
+	new id = pev(weapon, pev_owner);
+	if (!(1 <= id <= 32) || !is_user_alive(id))
+		return HAM_IGNORED;
+	new Float:m = mod_get(id, MOD_FIRE);
+	if (m == 1.0 || m <= 0.0)
+		return HAM_IGNORED;
+	/* fire_rate 1.25 = 25 % faster: the wait to the next shot divided by it */
+	new Float:na = get_pdata_float(weapon, OFS_NEXT_PRIM, 4);
+	if (na > 0.0)
+		set_pdata_float(weapon, OFS_NEXT_PRIM, na / m, 4);
+	return HAM_IGNORED;
+}
+
+/* ---- perks ---- */
+
+stock perk_index(const name[])
+{
+	for (new k = 0; k < PK_COUNT; k++)
+		if (equali(name, PK_ID[k]))
+			return k;
+	/* longer names the Studio may use */
+	if (equali(name, "quickhands")) return PK_HANDS;
+	if (equali(name, "quickrevive")) return PK_REVIVE;
+	if (equali(name, "lightfeet")) return PK_FEET;
+	if (equali(name, "double_tap")) return PK_DOUBLE;
+	return -1;
+}
+
+stock bool:perk_has(id, k)
+{
+	return 1 <= id <= 32 && k >= 0 && (g_perks[id] & (1 << k)) != 0;
+}
+
+stock perk_give(id, k)
+{
+	if (!is_user_alive(id) || k < 0 || perk_has(id, k))
+		return 0;
+	new Float:oldMax;
+	pev(id, pev_max_health, oldMax);
+	g_perks[id] |= (1 << k);
+	g_nperks[id]++;
+	if (k == PK_REVIVE)
+		g_selfRev[id] = true;
+	mods_apply(id, oldMax);
+	return 1;
+}
+
+stock perk_clear(id)
+{
+	g_perks[id] = 0;
+	g_nperks[id] = 0;
+	g_selfRev[id] = false;
+	if (is_user_alive(id))
+		mods_apply(id);
+}
+
+/* the price at a machine (or with its keys: price, price_step): dearer for each one owned */
+stock perk_price_at(s, id)
+{
+	new base = 1500, step = 1000;
+	if (s >= 0)
+	{
+		base = floatround(g_pf[s][PM_PRICE]);
+		step = floatround(g_pf[s][PM_STEP]);
+	}
+	return base + step * g_nperks[id];
+}
+
+stock perk_why_not(s, id, k, out[], len)
+{
+	out[0] = EOS;
+	new mx = s >= 0 ? floatround(g_pf[s][PM_MAX]) : 4;
+	if (perk_has(id, k))
+		copy(out, len, "you have it");
+	else if (mx > 0 && g_nperks[id] >= mx)
+		formatex(out, len, "%d perks at most", mx);
+	else if (cs_get_user_money(id) < perk_price_at(s, id))
+		copy(out, len, "not enough money");
+}
+
+/* buying: at machine s (or -1: the default prices) */
+stock bool:perk_buy(s, id, k, bool:tell)
+{
+	if (k < 0 || !is_user_alive(id) || g_down[id])
+		return false;
+	new why[48];
+	perk_why_not(s, id, k, why, charsmax(why));
+	if (why[0])
+	{
+		if (tell)
+			client_print(id, print_center, "%s: %s", PK_NAME[k], why);
+		return false;
+	}
+	new price = perk_price_at(s, id);
+	new ret;
+	ExecuteForward(g_fwPerk, ret, id, PK_ID[k], price);
+	if (ret == PLUGIN_HANDLED)
+		return false;
+	cs_set_user_money(id, cs_get_user_money(id) - price);
+	perk_give(id, k);
+	if (!g_bot[id])
+		client_print(id, print_center, "Perk: %s (%s)", PK_NAME[k], PK_WHAT[k]);
+	emit_sound(id, CHAN_ITEM, "items/suitchargeok1.wav", 0.6, ATTN_NORM, 0, PITCH_NORM);
+	log_amx("Upgrades: %d bought the %s perk for $%d in wave %d", id, PK_NAME[k], price, g_wave);
+	return true;
+}
+
+stock perk_tags(id, out[], len)
+{
+	out[0] = EOS;
+	for (new k = 0; k < PK_COUNT; k++)
+		if (perk_has(id, k))
+			format(out, len, "%s%s%s", out, out[0] ? " " : "Perks: ", PK_TAG[k]);
+}
+
+/* ---- weapon levels (the bench) ---- */
+
+stock active_weapon(id)
+{
+	new w = get_pdata_cbase(id, 373, 5);	/* m_pActiveItem */
+	if (w <= 0 || !pev_valid(w))
+		return 0;
+	new csw = get_user_weapon(id);
+	if (csw == CSW_KNIFE || csw == CSW_HEGRENADE || csw == CSW_FLASHBANG || csw == CSW_SMOKEGRENADE || csw == CSW_C4)
+		return 0;
+	return w;
+}
+
+stock wpn_level(w)
+{
+	return (w > 0 && pev_valid(w)) ? max(pev(w, WPN_LEVEL), 1) : 1;
+}
+
+stock Float:level_mult(s, level)
+{
+	if (level >= 3)
+		return s >= 0 ? g_pf[s][BN_DMG3] : 1.9;
+	if (level == 2)
+		return s >= 0 ? g_pf[s][BN_DMG2] : 1.4;
+	return 1.0;
+}
+
+/* the damage a level adds: the first bench's keys (or the defaults) */
+stock Float:wpn_mult(w)
+{
+	new lv = wpn_level(w);
+	if (lv <= 1)
+		return 1.0;
+	for (new s = 0; s < g_nslots; s++)
+		if (g_ent[s] && g_kind[s] == K_BENCH)
+			return level_mult(s, lv);
+	return level_mult(-1, lv);
+}
+
+stock bench_price(s, level)
+{
+	if (level >= 2)
+		return s >= 0 ? floatround(g_pf[s][BN_PRICE3]) : 9000;
+	return s >= 0 ? floatround(g_pf[s][BN_PRICE2]) : 5000;
+}
+
+stock bench_why_not(s, id, out[], len)
+{
+	out[0] = EOS;
+	new w = active_weapon(id);
+	if (!w)
+	{
+		copy(out, len, "hold a gun");
+		return 0;
+	}
+	new lv = wpn_level(w);
+	new from = s >= 0 ? floatround(g_pf[s][BN_L3FROM]) : 12;
+	if (lv >= 3)
+		copy(out, len, "it's Mk III already");
+	else if (lv == 2 && g_wave < from)
+		formatex(out, len, "Mk III from wave %d", from);
+	else if (cs_get_user_money(id) < bench_price(s, lv))
+		copy(out, len, "not enough money");
+	return w;
+}
+
+stock bool:bench_use(s, id, bool:tell)
+{
+	if (!is_user_alive(id) || g_down[id])
+		return false;
+	new why[48];
+	new w = bench_why_not(s, id, why, charsmax(why));
+	if (why[0])
+	{
+		if (tell)
+			client_print(id, print_center, "Upgrade: %s", why);
+		return false;
+	}
+	new lv = wpn_level(w);
+	new price = bench_price(s, lv);
+	cs_set_user_money(id, cs_get_user_money(id) - price);
+	lv = lv >= 2 ? 3 : 2;
+	set_pev(w, WPN_LEVEL, lv);
+	/* a magazine and a half, and the reserve filled */
+	new clip = cs_get_weapon_ammo(w);
+	cs_set_weapon_ammo(w, max(clip, 1) * 3 / 2 + 5);
+	give_thing(id, "ammo");
+	new wname[32];
+	get_weaponname(get_user_weapon(id), wname, charsmax(wname));
+	replace(wname, charsmax(wname), "weapon_", "");
+	strtoupper(wname);
+	if (!g_bot[id])
+		client_print(id, print_center, "%s Mk %s!", wname, lv == 3 ? "III" : "II");
+	emit_sound(id, CHAN_ITEM, "items/gunpickup2.wav", 0.8, ATTN_NORM, 0, PITCH_NORM);
+	log_amx("Upgrades: %d upgraded a %s to Mk %d for $%d in wave %d", id, wname, lv, price, g_wave);
+	new ret;
+	ExecuteForward(g_fwUpgraded, ret, id, w, lv, price);
+	return true;
+}
+
+/* ---- the mystery box ---- */
+
+new const BOX_DEFAULT[] = "mp5navy:10 ump45:10 famas:8 galil:8 m3:8 xm1014:6 deagle:8 scout:5 p90:8 m4a1:5 ak47:5 aug:4 sg552:4 awp:3 m249:2";
+
+stock box_pick(s, out[], len)
+{
+	new list[320], tok[32];
+	ks(s, "guns", list, charsmax(list), BOX_DEFAULT);
+	/* two passes: the total weight, then the roll */
+	new total = 0, at = 0;
+	for (;;)
+	{
+		new n = next_token(list[at], tok, charsmax(tok));
+		if (!tok[0])
+			break;
+		at += n;
+		new c = contain(tok, ":");
+		total += c >= 0 ? max(str_to_num(tok[c + 1]), 0) : 1;
+	}
+	new r = random(max(total, 1));
+	out[0] = EOS;
+	at = 0;
+	for (;;)
+	{
+		new n = next_token(list[at], tok, charsmax(tok));
+		if (!tok[0])
+			break;
+		at += n;
+		new c = contain(tok, ":");
+		new wgt = c >= 0 ? max(str_to_num(tok[c + 1]), 0) : 1;
+		if (c >= 0)
+			tok[c] = EOS;
+		copy(out, len, tok);
+		r -= wgt;
+		if (r < 0)
+			break;
+	}
+}
+
+stock box_ammo(csw, out[], len)
+{
+	switch (csw)
+	{
+		case CSW_MP5NAVY, CSW_TMP, CSW_GLOCK18, CSW_ELITE: copy(out, len, "9mm");
+		case CSW_UMP45, CSW_MAC10, CSW_USP: copy(out, len, "45ACP");
+		case CSW_FAMAS, CSW_GALIL, CSW_M4A1, CSW_AUG, CSW_SG552, CSW_SG550: copy(out, len, "556Nato");
+		case CSW_M3, CSW_XM1014: copy(out, len, "buckshot");
+		case CSW_DEAGLE: copy(out, len, "50AE");
+		case CSW_SCOUT, CSW_AK47, CSW_G3SG1: copy(out, len, "762Nato");
+		case CSW_P90, CSW_FIVESEVEN: copy(out, len, "57mm");
+		case CSW_AWP: copy(out, len, "338Magnum");
+		case CSW_M249: copy(out, len, "556NatoBox");
+		case CSW_P228: copy(out, len, "357SIG");
+		default: out[0] = EOS;
+	}
+}
+
+#define SECONDARY_BITS ((1<<CSW_USP)|(1<<CSW_GLOCK18)|(1<<CSW_DEAGLE)|(1<<CSW_P228)|(1<<CSW_ELITE)|(1<<CSW_FIVESEVEN))
+#define NOT_PRIMARY_BITS (SECONDARY_BITS|(1<<CSW_KNIFE)|(1<<CSW_HEGRENADE)|(1<<CSW_FLASHBANG)|(1<<CSW_SMOKEGRENADE)|(1<<CSW_C4))
+
+stock bool:box_use(s, id, bool:tell)
+{
+	if (!is_user_alive(id) || g_down[id] || g_state[s] != 1)
+		return false;
+	new price = floatround(g_pf[s][BX_PRICE]);
+	if (cs_get_user_money(id) < price)
+	{
+		if (tell)
+			client_print(id, print_center, "The box: not enough money");
+		return false;
+	}
+	new gun[32], wname[40];
+	box_pick(s, gun, charsmax(gun));
+	formatex(wname, charsmax(wname), "weapon_%s", gun);
+	new csw = get_weaponid(wname);
+	if (!csw)
+	{
+		log_amx("The mystery box %d has no gun called %s.", g_ent[s], gun);
+		return false;
+	}
+	new ret;
+	ExecuteForward(g_fwBox, ret, g_ent[s], id, wname);
+	if (ret == PLUGIN_HANDLED)
+		return false;
+	cs_set_user_money(id, cs_get_user_money(id) - price);
+	new bool:secondary = ((1 << csw) & SECONDARY_BITS) != 0;
+	/* drop what it replaces */
+	new weapons[32], n;
+	get_user_weapons(id, weapons, n);
+	for (new i = 0; i < n; i++)
+	{
+		new bool:isSec = ((1 << weapons[i]) & SECONDARY_BITS) != 0;
+		new bool:isPrim = !((1 << weapons[i]) & NOT_PRIMARY_BITS);
+		if ((secondary && isSec) || (!secondary && isPrim))
+		{
+			new wn[32];
+			get_weaponname(weapons[i], wn, charsmax(wn));
+			engclient_cmd(id, "drop", wn);
+		}
+	}
+	new w = give_item(id, wname);
+	new ammo[16];
+	box_ammo(csw, ammo, charsmax(ammo));
+	if (ammo[0])
+		ExecuteHamB(Ham_GiveAmmo, id, 200, ammo, 200);
+	/* the rare one (super=m249): comes as a Mk II with a long belt */
+	new sup[32];
+	ks(s, "super", sup, charsmax(sup), "m249");
+	new bool:super = equali(sup, gun) != 0;
+	if (super && w > 0 && pev_valid(w))
+	{
+		set_pev(w, WPN_LEVEL, 2);
+		cs_set_weapon_ammo(w, ki(s, "super_clip", 150));
+	}
+	new up[32];
+	copy(up, charsmax(up), gun);
+	strtoupper(up);
+	if (!g_bot[id])
+	{
+		new sname[48];
+		ks(s, "super_name", sname, charsmax(sname), "the Grinder");
+		if (super)
+			client_print(id, print_center, "%s - %s (Mk II, %d rounds)!", up, sname, ki(s, "super_clip", 150));
+		else
+			client_print(id, print_center, "%s!", up);
+	}
+	emit_sound(g_ent[s], CHAN_ITEM, "items/gunpickup2.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+	log_amx("Upgrades: %d got a %s from the box for $%d in wave %d", id, up, price, g_wave);
+	/* after a few uses it moves to another box of its group (if there is one) */
+	if (++g_aux[s] >= floatround(g_pf[s][BX_MOVEAT]))
+		box_move(s);
+	return true;
+}
+
+stock box_group_of(s, out[], len)
+{
+	ks(s, "group", out, len, "box");
+}
+
+stock box_show(s, bool:here)
+{
+	g_state[s] = here ? 1 : 0;
+	g_aux[s] = 0;
+	g_pf[s][BX_MOVEAT] = float(box_moves(s));
+	new e = g_ent[s];
+	if (here)
+	{
+		set_pev(e, pev_effects, pev(e, pev_effects) & ~EF_NODRAW);
+		render(e, kRenderFxGlowShell, 80, 200, 255, kRenderNormal, 18);
+	}
+	else
+		set_pev(e, pev_effects, pev(e, pev_effects) | EF_NODRAW);
+}
+
+/* moves_after: "4-8" (a random count in that range) or one number; 0 = never moves */
+stock box_moves(s)
+{
+	new v[16];
+	ks(s, "moves_after", v, charsmax(v), "4-8");
+	new d = contain(v, "-");
+	if (d > 0)
+	{
+		v[d] = EOS;
+		return random_num(str_to_num(v), str_to_num(v[d + 1]));
+	}
+	return str_to_num(v);
+}
+
+stock box_move(s)
+{
+	new grp[32], g2[32];
+	box_group_of(s, grp, charsmax(grp));
+	new others[32], n = 0;
+	for (new o = 0; o < g_nslots && n < sizeof others; o++)
+	{
+		if (o == s || !g_ent[o] || g_kind[o] != K_BOX || !g_on[o])
+			continue;
+		box_group_of(o, g2, charsmax(g2));
+		if (equal(grp, g2))
+			others[n++] = o;
+	}
+	if (!n || g_pf[s][BX_MOVEAT] <= 0.0)
+	{
+		g_aux[s] = 0;
+		return;
+	}
+	box_show(s, false);
+	box_show(others[random(n)], true);
+	toast_add(0, 80, 200, 255, 3.0, "The mystery box moved!", false);
+	up_offers_all();
+}
+
+/* each group has one box out at a time */
+stock box_check_groups()
+{
+	new grp[32], g2[32];
+	for (new s = 0; s < g_nslots; s++)
+	{
+		if (!g_ent[s] || g_kind[s] != K_BOX || !g_on[s])
+			continue;
+		box_group_of(s, grp, charsmax(grp));
+		new any = 0, list[32], n = 0;
+		for (new o = 0; o < g_nslots; o++)
+		{
+			if (!g_ent[o] || g_kind[o] != K_BOX || !g_on[o])
+				continue;
+			box_group_of(o, g2, charsmax(g2));
+			if (!equal(grp, g2))
+				continue;
+			if (g_state[o] == 1)
+				any++;
+			if (n < sizeof list)
+				list[n++] = o;
+		}
+		if (!any && n)
+			box_show(list[random(n)], true);
+	}
+}
+
+/* ---- components: perk machine, bench, box, pickup ---- */
+
+stock up_comp_init(s)
+{
+	new ent = g_ent[s];
+	new k = g_kind[s];
+	new m[64];
+	new bool:trapUse = false;
+	if (k == K_TRAP)
+	{
+		new on[16];
+		ks(s, "fire_on", on, charsmax(on));
+		trapUse = equali(on, "use") && kf(s, "cost", 0.0) > 0.0;
+		if (!trapUse)
+			return;
+	}
+	else if (k != K_PERK && k != K_BENCH && k != K_BOX && k != K_PICKUP)
+		return;
+	new def[40];
+	switch (k)
+	{
+		case K_PERK: copy(def, charsmax(def), "models/w_medkit.mdl");
+		case K_BENCH: copy(def, charsmax(def), "models/w_assault.mdl");
+		case K_TRAP: copy(def, charsmax(def), "models/w_battery.mdl");
+		case K_BOX: copy(def, charsmax(def), DEFAULT_BOX);
+		case K_PICKUP: copy(def, charsmax(def), "models/w_9mmarclip.mdl");
+	}
+	/* (a trap's model key is its brush area; its switch is the default prop) */
+	if (k == K_TRAP || !ks(s, "model", m, charsmax(m)) || m[0] == '*' || !usable_model(m))
+		copy(m, charsmax(m), def);
+	if (k == K_TRAP && g_box[s])
+	{
+		/* the area stays the trap's box; the switch shows at its spot */
+		new mdl[4];
+		pev(ent, pev_model, mdl, charsmax(mdl));
+		if (mdl[0] == '*')
+			return;
+	}
+	set_model(ent, m, def);
+	engfunc(EngFunc_SetSize, ent, Float:{-8.0, -8.0, 0.0}, Float:{8.0, 8.0, 16.0});
+	set_pev(ent, pev_solid, SOLID_NOT);
+	new Float:o[3];
+	vcopy(g_org[s], o);
+	if (!g_box[s])
+	{
+		/* on the floor under it (from a little above: a spot given at floor height) */
+		new Float:a[3], Float:b[3], Float:frac;
+		vcopy(o, a);
+		vcopy(o, b);
+		a[2] += 40.0;
+		b[2] -= 256.0;
+		engfunc(EngFunc_TraceLine, a, b, IGNORE_MONSTERS, ent, 0);
+		get_tr2(0, TR_flFraction, frac);
+		if (!get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid) && frac < 1.0)
+		{
+			get_tr2(0, TR_vecEndPos, b);
+			o[2] = b[2] + 2.0;
+		}
+		engfunc(EngFunc_SetOrigin, ent, o);
+		if (k != K_TRAP)
+			vcopy(o, g_org[s]);
+	}
+	if (k == K_PICKUP)
+	{
+		set_pev(ent, pev_movetype, MOVETYPE_NOCLIP);
+		set_pev(ent, pev_avelocity, Float:{0.0, 90.0, 0.0});
+	}
+	else
+		set_pev(ent, pev_movetype, MOVETYPE_NONE);
+}
+
+stock up_comp_reset(s)
+{
+	switch (g_kind[s])
+	{
+		case K_PERK:
+		{
+			new p[24];
+			ks(s, "perk", p, charsmax(p), "tough");
+			g_aux[s] = perk_index(p);
+			if (g_aux[s] < 0)
+			{
+				log_amx("A perk machine has an unknown perk (%s); it sells Tough.", p);
+				g_aux[s] = PK_TOUGH;
+			}
+			g_pf[s][PM_PRICE] = kf(s, "price", 1500.0);
+			g_pf[s][PM_STEP] = kf(s, "price_step", 1000.0);
+			g_pf[s][PM_MAX] = float(ki(s, "max_perks", 4));
+			new k = g_aux[s];
+			render(g_ent[s], kRenderFxGlowShell, PK_RGB[k][0], PK_RGB[k][1], PK_RGB[k][2], kRenderNormal, 14);
+		}
+		case K_BENCH:
+		{
+			g_pf[s][BN_PRICE2] = kf(s, "price2", 5000.0);
+			g_pf[s][BN_PRICE3] = kf(s, "price3", 9000.0);
+			g_pf[s][BN_L3FROM] = float(ki(s, "level3_from", 12));
+			g_pf[s][BN_DMG2] = kf(s, "dmg2", 1.4);
+			g_pf[s][BN_DMG3] = kf(s, "dmg3", 1.9);
+			render(g_ent[s], kRenderFxGlowShell, 255, 140, 0, kRenderNormal, 14);
+		}
+		case K_BOX:
+		{
+			g_pf[s][BX_PRICE] = kf(s, "price", 950.0);
+			box_show(s, false);
+		}
+		case K_PICKUP:
+		{
+			g_pf[s][PU_UNTIL] = g_now + kf(s, "life", 25.0);
+			g_pf[s][PU_RADIUS] = kf(s, "radius", 56.0);
+			new Float:c[3];
+			if (kvec(s, "glow", c))
+				render(g_ent[s], kRenderFxGlowShell, floatround(c[0]), floatround(c[1]), floatround(c[2]), kRenderNormal, 16);
+		}
+		case K_TRAP:
+		{
+			if (up_trap_paid(s))
+				render(g_ent[s], kRenderFxGlowShell, 80, 160, 255, kRenderNormal, 14);
+		}
+	}
+}
+
+stock bool:up_trap_paid(s)
+{
+	if (g_kind[s] != K_TRAP)
+		return false;
+	new on[16];
+	ks(s, "fire_on", on, charsmax(on));
+	return equali(on, "use") && kf(s, "cost", 0.0) > 0.0;
+}
+
+/* the paid trap: switched on, it stays on active_secs, hurting creatures inside hard (and
+   players a little), then recharges rearm_secs */
+stock bool:up_trap_fired(s)
+{
+	new Float:act = kf(s, "active_secs", 0.0);
+	if (act <= 0.0)
+		return false;
+	g_state[s] = TRAP_ACTIVE;
+	g_pf[s][T_UNTIL] = g_now + act;
+	g_pf[s][T_NEXTHIT] = g_now;
+	emit_sound(g_ent[s], CHAN_STATIC, "buttons/spark5.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+	return true;
+}
+
+stock up_trap_tick(s)
+{
+	if (g_now >= g_pf[s][T_UNTIL])
+	{
+		g_state[s] = TRAP_COOLDOWN;
+		g_pf[s][T_ARMAT] = g_now + g_pf[s][T_REARM];
+		hint_comp(s);
+		return;
+	}
+	if (g_now < g_pf[s][T_NEXTHIT])
+		return;
+	g_pf[s][T_NEXTHIT] = g_now + 0.5;
+	new Float:cd = kf(s, "creature_dps", 80.0) * 0.5, Float:cp = kf(s, "creature_dps_pct", 0.16) * 0.5;
+	new Float:pd = kf(s, "player_dps", 4.0) * 0.5;
+	new act = g_aux[s];
+	new by = (1 <= act <= 32 && is_user_connected(act)) ? act : 0;
+	new e = -1, Float:o[3];
+	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
+	{
+		if (pev(e, pev_deadflag) != DEAD_NO)
+			continue;
+		pev(e, pev_origin, o);
+		if (!inside(s, o))
+			continue;
+		new Float:mh;
+		pev(e, pev_max_health, mh);
+		ExecuteHamB(Ham_TakeDamage, e, by, by, cd + cp * mh, DMG_SHOCK);
+	}
+	if (pd > 0.0)
+		for (new p = 1; p <= MaxClients; p++)
+		{
+			if (!g_alive[p] || g_down[p] || !inside(s, g_porg[p]))
+				continue;
+			new hp = get_user_health(p);
+			if (hp > 5)
+				set_user_health(p, max(hp - floatround(pd, floatround_ceil), 5));
+		}
+	/* an arc across the area */
+	new Float:mn[3], Float:mx[3];
+	if (g_box[s])
+	{
+		vcopy(g_mins[s], mn);
+		vcopy(g_maxs[s], mx);
+	}
+	else
+	{
+		for (new i = 0; i < 2; i++)
+		{
+			mn[i] = g_org[s][i] - g_r[s] * 0.7;
+			mx[i] = g_org[s][i] + g_r[s] * 0.7;
+		}
+		mn[2] = g_floor[s];
+	}
+	new Float:a[3], Float:b[3];
+	a[0] = random_float(mn[0], mx[0]);
+	a[1] = random_float(mn[1], mx[1]);
+	a[2] = mn[2] + 8.0;
+	b[0] = random_float(mn[0], mx[0]);
+	b[1] = random_float(mn[1], mx[1]);
+	b[2] = mn[2] + 40.0;
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY);
+	write_byte(TE_BEAMPOINTS);
+	engfunc(EngFunc_WriteCoord, a[0]); engfunc(EngFunc_WriteCoord, a[1]); engfunc(EngFunc_WriteCoord, a[2]);
+	engfunc(EngFunc_WriteCoord, b[0]); engfunc(EngFunc_WriteCoord, b[1]); engfunc(EngFunc_WriteCoord, b[2]);
+	write_short(g_sprBeam);
+	write_byte(0); write_byte(10); write_byte(5); write_byte(30); write_byte(60);
+	write_byte(120); write_byte(180); write_byte(255); write_byte(220); write_byte(30);
+	message_end();
+}
+
+stock bool:trap_buy(s, id, bool:tell)
+{
+	if (!is_user_alive(id) || g_down[id])
+		return false;
+	new cost = floatround(kf(s, "cost", 0.0));
+	if (g_state[s] != TRAP_ARMED)
+	{
+		if (tell)
+		{
+			if (g_state[s] == TRAP_COOLDOWN)
+				client_print(id, print_center, "The trap is recharging (%d s)", floatround(g_pf[s][T_ARMAT] - g_now));
+			else if (g_state[s] == TRAP_ACTIVE)
+				client_print(id, print_center, "The trap is on");
+		}
+		return false;
+	}
+	if (cs_get_user_money(id) < cost)
+	{
+		if (tell)
+			client_print(id, print_center, "The trap: not enough money");
+		return false;
+	}
+	cs_set_user_money(id, cs_get_user_money(id) - cost);
+	trap_fire(s, id);
+	log_amx("Upgrades: %d switched a trap on for $%d in wave %d", id, cost, g_wave);
+	return true;
+}
+
+/* the usable thing (perk machine, bench, box out, paid trap) within reach, or -1 */
+stock up_near(id)
+{
+	new best = -1, Float:bd = 80.0;
+	new team = g_pteam[id];
+	for (new s = 0; s < g_nslots; s++)
+	{
+		if (!g_ent[s] || !g_on[s])
+			continue;
+		new k = g_kind[s];
+		if (k == K_BOX)
+		{
+			if (g_state[s] != 1)
+				continue;
+		}
+		else if (k == K_TRAP)
+		{
+			if (!up_trap_paid(s))
+				continue;
+		}
+		else if (k != K_PERK && k != K_BENCH)
+			continue;
+		if (g_team[s] && team != g_team[s])
+			continue;
+		new Float:o[3];
+		pev(g_ent[s], pev_origin, o);
+		new Float:d = get_distance_f(g_porg[id], o);
+		if (d < bd)
+		{
+			bd = d;
+			best = s;
+		}
+	}
+	return best;
+}
+
+stock up_use(s, id, bool:tell)
+{
+	switch (g_kind[s])
+	{
+		case K_PERK: return perk_buy(s, id, g_aux[s], tell);
+		case K_BENCH: return bench_use(s, id, tell);
+		case K_BOX: return box_use(s, id, tell);
+		case K_TRAP: return trap_buy(s, id, tell);
+	}
+	return false;
+}
+
+stock up_hint(s, id)
+{
+	new why[48];
+	switch (g_kind[s])
+	{
+		case K_PERK:
+		{
+			new k = g_aux[s];
+			perk_why_not(s, id, k, why, charsmax(why));
+			hud_add(id, false, "%s perk: %s - $%d  %s", PK_NAME[k], PK_WHAT[k], perk_price_at(s, id), why[0] ? why : "(USE to buy)");
+		}
+		case K_BENCH:
+		{
+			new w = bench_why_not(s, id, why, charsmax(why));
+			new lv = w ? wpn_level(w) : 1;
+			hud_add(id, false, "Upgrade bench: Mk %s - $%d  %s", lv >= 2 ? "III" : "II", bench_price(s, lv), why[0] ? why : "(USE to upgrade the gun in hand)");
+		}
+		case K_BOX:
+			hud_add(id, false, "Mystery box - $%d for a random gun  (USE)", floatround(g_pf[s][BX_PRICE]));
+		case K_TRAP:
+		{
+			new name[32];
+			ks(s, "name", name, charsmax(name), "Electric trap");
+			if (g_state[s] == TRAP_ACTIVE)
+				hud_add(id, false, "%s - on", name);
+			else if (g_state[s] == TRAP_COOLDOWN)
+				hud_add(id, false, "%s - recharging (%d s)", name, floatround(floatmax(g_pf[s][T_ARMAT] - g_now, 0.0)));
+			else
+				hud_add(id, false, "%s - $%d for %d s  (USE to switch on)", name, floatround(kf(s, "cost", 0.0)), floatround(kf(s, "active_secs", 0.0)));
+		}
+	}
+}
+
+/* USE on a machine, the bench, the box or a paid trap: people press it, bots hold it */
+public up_prethink(id)
+{
+	if (!is_user_alive(id) || g_down[id])
+		return FMRES_IGNORED;
+	new b = pev(id, pev_button);
+	if (!(b & IN_USE))
+		return FMRES_IGNORED;
+	new bool:bot = is_user_bot(id) != 0;
+	if (!bot && (pev(id, pev_oldbuttons) & IN_USE))
+		return FMRES_IGNORED;
+	new Float:now = get_gametime();
+	if (now < g_upUseNext[id])
+		return FMRES_IGNORED;
+	g_now = now;
+	pev(id, pev_origin, g_porg[id]);
+	g_pteam[id] = get_user_team(id);
+	new s = up_near(id);
+	if (s < 0)
+		return FMRES_IGNORED;
+	g_upUseNext[id] = now + 1.0;
+	up_use(s, id, !bot);
+	if (bot)
+		up_offers(id);
+	return FMRES_IGNORED;
+}
+
+/* ---- pickups: a mode drops one (ls_pickup_spawn); a player walking over takes it ---- */
+
+stock up_pickup_tick(s)
+{
+	new e = g_ent[s];
+	new Float:left = g_pf[s][PU_UNTIL] - g_now;
+	if (left <= 0.0)
+	{
+		comp_remove(s);
+		return;
+	}
+	/* blinks its last 5 s */
+	if (left < 5.0)
+		set_pev(e, pev_effects, (floatround(g_now * 4.0) % 2) ? (pev(e, pev_effects) | EF_NODRAW) : (pev(e, pev_effects) & ~EF_NODRAW));
+	new Float:o[3];
+	pev(e, pev_origin, o);
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!g_alive[p] || g_down[p] || (g_team[s] && g_pteam[p] != g_team[s]))
+			continue;
+		if (get_distance_f(o, g_porg[p]) > g_pf[s][PU_RADIUS])
+			continue;
+		new kind[32], ret;
+		ks(s, "kind", kind, charsmax(kind));
+		ExecuteForward(g_fwPickup, ret, e, p, kind);
+		if (ret == PLUGIN_HANDLED)
+			continue;
+		emit_sound(p, CHAN_ITEM, "items/ammopickup1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+		comp_remove(s);
+		return;
+	}
+}
+
+/* ---- the downed state ---- */
+
+stock bool:down_team_ok(id)
+{
+	return !g_dnTeam || get_user_team(id) == g_dnTeam;
+}
+
+public up_player_hurt(victim, inflictor, attacker, Float:dmg, bits)
+{
+	if (!is_user_alive(victim) || GetHamReturnStatus() >= HAM_SUPERCEDE)
+		return HAM_IGNORED;
+	/* (downed: nothing more hurts them; they bleed out on the clock) */
+	if (g_down[victim])
+		return HAM_SUPERCEDE;
+	/* the attacker's damage modifier and gun level, against players too */
+	if (1 <= attacker <= 32 && attacker != victim && is_user_alive(attacker))
+	{
+		new Float:m = mod_get(attacker, MOD_DAMAGE) * wpn_mult(active_weapon(attacker));
+		if (m != 1.0 && inflictor == attacker)
+		{
+			dmg *= m;
+			SetHamParamFloat(4, dmg);
+		}
+	}
+	if (!g_dnOn || !down_team_ok(victim) || dmg < float(get_user_health(victim)))
+		return HAM_IGNORED;
+	new ret;
+	ExecuteForward(g_fwDown, ret, victim, attacker);
+	if (ret == PLUGIN_HANDLED)
+		return HAM_IGNORED;
+	go_down(victim);
+	return HAM_SUPERCEDE;
+}
+
+stock go_down(victim)
+{
+	new bool:selfrev = g_selfRev[victim];
+	if (g_dnLosePerks)
+		perk_clear(victim);
+	set_user_health(victim, 1);
+	g_down[victim] = true;
+	g_bledOut[victim] = false;
+	g_downAt[victim] = get_gametime();
+	pev(victim, pev_origin, g_downOrg[victim]);
+	g_revBy[victim] = 0;
+	g_revProg[victim] = 0.0;
+	g_selfRevAt[victim] = 0.0;
+	/* alone (no teammate up) with Quick revive: back up in 4 s, once */
+	if (selfrev && !other_up(victim))
+	{
+		g_selfRevAt[victim] = get_gametime() + 4.0;
+		g_selfRev[victim] = false;
+	}
+	set_pev(victim, pev_flags, pev(victim, pev_flags) | FL_NOTARGET);
+	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, victim);
+	if (!is_user_bot(victim))
+		client_cmd(victim, "+duck");
+	render(victim, kRenderFxGlowShell, 255, 40, 40, kRenderNormal, 12);
+	act_cancel(victim);
+	send_revive(victim);
+}
+
+stock bool:other_up(id)
+{
+	new t = get_user_team(id);
+	for (new p = 1; p <= MaxClients; p++)
+		if (p != id && is_user_alive(p) && get_user_team(p) == t && !g_down[p])
+			return true;
+	return false;
+}
+
+/* the two nearest bots of the team go and hold USE on them (W2: kind use, prio 75) */
+stock send_revive(victim)
+{
+	new t = get_user_team(victim);
+	new near[2], Float:nd[2] = { 99999.0, 99999.0 };
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (p == victim || !is_user_alive(p) || !is_user_bot(p) || g_down[p] || get_user_team(p) != t)
+			continue;
+		new Float:o[3];
+		pev(p, pev_origin, o);
+		new Float:d = get_distance_f(o, g_downOrg[victim]);
+		if (d < nd[0])
+		{
+			nd[1] = nd[0]; near[1] = near[0];
+			nd[0] = d; near[0] = p;
+		}
+		else if (d < nd[1])
+		{
+			nd[1] = d; near[1] = p;
+		}
+	}
+	for (new i = 0; i < 2; i++)
+	{
+		if (!near[i])
+			continue;
+		new left = max(floatround(g_dnBleed - (get_gametime() - g_downAt[victim])), 1);
+		hint("goal %d use %.0f %.0f %.0f %d 75 %d 64", near[i], g_downOrg[victim][0], g_downOrg[victim][1], g_downOrg[victim][2], victim, left);
+	}
+}
+
+stock down_clear(p)
+{
+	if (g_down[p])
+		hint("goal_clear all %d", p);
+	if (g_revBy[p] && is_user_connected(g_revBy[p]))
+		bar_time(g_revBy[p], 0);
+	g_down[p] = false;
+	g_revBy[p] = 0;
+	g_revProg[p] = 0.0;
+	g_selfRevAt[p] = 0.0;
+}
+
+stock get_up(d, by)
+{
+	down_clear(d);
+	if (!is_user_alive(d))
+		return;
+	set_pev(d, pev_flags, pev(d, pev_flags) & ~FL_NOTARGET);
+	render(d, kRenderFxNone, 0, 0, 0, kRenderNormal, 255);
+	set_user_health(d, 50);
+	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, d);
+	if (!is_user_bot(d))
+		client_cmd(d, "-duck");
+	new ret;
+	ExecuteForward(g_fwRevive, ret, d, by);
+	if (by && by != d)
+		log_amx("Upgrades: %d revived %d in wave %d", by, d, g_wave);
+}
+
+stock down_tick()
+{
+	new Float:now = get_gametime();
+	for (new d = 1; d <= MaxClients; d++)
+	{
+		if (!g_down[d])
+			continue;
+		if (!is_user_connected(d) || !is_user_alive(d))
+		{
+			down_clear(d);
+			continue;
+		}
+		if (g_selfRevAt[d] > 0.0 && now >= g_selfRevAt[d])
+		{
+			get_up(d, d);
+			continue;
+		}
+		if (now - g_downAt[d] > g_dnBleed)
+		{
+			g_bledOut[d] = true;
+			down_clear(d);
+			new ret;
+			ExecuteForward(g_fwBledOut, ret, d);
+			set_pev(d, pev_flags, pev(d, pev_flags) & ~FL_NOTARGET);
+			render(d, kRenderFxNone, 0, 0, 0, kRenderNormal, 255);
+			user_kill(d, 1);
+			continue;
+		}
+		/* a teammate close: people hold USE, bots just stay */
+		new who = 0, Float:dO[3], t = get_user_team(d);
+		pev(d, pev_origin, dO);
+		for (new p = 1; p <= MaxClients; p++)
+		{
+			if (p == d || !is_user_alive(p) || g_down[p] || get_user_team(p) != t)
+				continue;
+			new Float:o[3];
+			pev(p, pev_origin, o);
+			if (get_distance_f(o, dO) > 80.0)
+				continue;
+			if (!(pev(p, pev_button) & IN_USE) && !is_user_bot(p))
+				continue;
+			who = p;
+			break;
+		}
+		new Float:need = 4.0 * (who ? mod_get(who, MOD_REVIVE) : 1.0);
+		if (who != g_revBy[d])
+		{
+			if (g_revBy[d] && is_user_connected(g_revBy[d]))
+				bar_time(g_revBy[d], 0);
+			g_revBy[d] = who;
+			g_revProg[d] = 0.0;
+			if (who)
+				bar_time(who, floatround(need, floatround_ceil));
+		}
+		if (!who)
+			continue;
+		g_revProg[d] += TICK;
+		if (g_revProg[d] >= need)
+			get_up(d, who);
+	}
+}
+
+public up_player_killed(id, killer, gib)
+{
+	if (g_down[id])
+		down_clear(id);
+	set_pev(id, pev_flags, pev(id, pev_flags) & ~FL_NOTARGET);
+	g_perks[id] = 0;
+	g_nperks[id] = 0;
+	g_selfRev[id] = false;
+	for (new m = 0; m < MOD_COUNT; m++)
+		g_modSet[id][m] = 1.0;
+	return HAM_IGNORED;
+}
+
+stock up_disconnected(id)
+{
+	g_down[id] = false;
+	g_bledOut[id] = false;
+	g_perks[id] = 0;
+	g_nperks[id] = 0;
+	g_selfRev[id] = false;
+	for (new m = 0; m < MOD_COUNT; m++)
+		g_modSet[id][m] = 1.0;
+}
+
+/* ---- creatures: the damage modifier and gun level, the last hit's place, the forward ---- */
+
+public up_creature_hurt(ent, inflictor, attacker, Float:dmg, bits)
+{
+	if (!(1 <= attacker <= 32) || !is_user_alive(attacker) || inflictor != attacker)
+		return HAM_IGNORED;
+	new Float:m = mod_get(attacker, MOD_DAMAGE) * wpn_mult(active_weapon(attacker));
+	if (m != 1.0)
+		SetHamParamFloat(4, dmg * m);
+	return HAM_IGNORED;
+}
+
+public up_creature_hurt_post(ent, inflictor, attacker, Float:dmg, bits)
+{
+	if (dmg <= 0.0)
+		return HAM_IGNORED;
+	new ret;
+	ExecuteForward(g_fwCreatureHurt, ret, ent, attacker, dmg, (ent < MAX_ENTS && g_headLast[ent]) ? 1 : 0);
+	return HAM_IGNORED;
+}
+
+public up_creature_trace(ent, attacker, Float:dmg, Float:dir[3], tr, bits)
+{
+	if (ent < MAX_ENTS)
+		g_headLast[ent] = get_tr2(tr, TR_iHitgroup) == HIT_HEAD;
+	return HAM_IGNORED;
+}
+
+/* ---- bots: W2's offers (ls_mode offer <bot> <kind> x y z ent cost [order]) ---- */
+
+stock up_offers_all()
+{
+	g_offerAt = 0.0;
+}
+
+stock up_offers(p)
+{
+	if (!g_brain || !is_user_bot(p))
+		return;
+	hint("offer_clear %d", p);
+	if (!is_user_alive(p) || g_down[p])
+		return;
+	new team = get_user_team(p);
+	for (new s = 0; s < g_nslots; s++)
+	{
+		if (!g_ent[s] || !g_on[s] || !ki(s, "bots", 1) || (g_team[s] && team != g_team[s]))
+			continue;
+		new Float:o[3];
+		pev(g_ent[s], pev_origin, o);
+		switch (g_kind[s])
+		{
+			case K_PERK:
+			{
+				new k = g_aux[s];
+				new mx = floatround(g_pf[s][PM_MAX]);
+				if (perk_has(p, k) || (mx > 0 && g_nperks[p] >= mx))
+					continue;
+				hint("offer %d perk %.0f %.0f %.0f %d %d %d", p, o[0], o[1], o[2], g_ent[s], perk_price_at(s, p), PK_ORDER[k]);
+			}
+			case K_BENCH:
+			{
+				new why[48];
+				new w = bench_why_not(s, p, why, charsmax(why));
+				if (!w || (why[0] && !equal(why, "not enough money")))
+					continue;
+				hint("offer %d bench %.0f %.0f %.0f %d %d", p, o[0], o[1], o[2], g_ent[s], bench_price(s, wpn_level(w)));
+			}
+			case K_BOX:
+			{
+				if (g_state[s] != 1)
+					continue;
+				hint("offer %d box %.0f %.0f %.0f %d %d", p, o[0], o[1], o[2], g_ent[s], floatround(g_pf[s][BX_PRICE]));
+			}
+			case K_TRAP:
+			{
+				if (!up_trap_paid(s))
+					continue;
+				/* x y z = the gate it covers (the nearest barricade) */
+				new Float:gc[3], Float:bd = 99999.0;
+				vcopy(g_org[s], gc);
+				for (new b = 0; b < g_nslots; b++)
+				{
+					if (!g_ent[b] || g_kind[b] != K_BARRICADE)
+						continue;
+					new Float:c[3];
+					for (new i = 0; i < 3; i++)
+						c[i] = (g_mins[b][i] + g_maxs[b][i]) * 0.5;
+					new Float:d = get_distance_f(c, g_org[s]);
+					if (d < bd)
+					{
+						bd = d;
+						vcopy(c, gc);
+					}
+				}
+				hint("offer %d trap %.0f %.0f %.0f %d %d", p, gc[0], gc[1], gc[2], g_ent[s], floatround(kf(s, "cost", 0.0)));
+			}
+		}
+	}
+}
+
+/* bots switch a paid trap on when 4+ creatures are near it (bots_auto=0: only by the brain's offers) */
+stock up_bots_traps()
+{
+	for (new s = 0; s < g_nslots; s++)
+	{
+		if (!g_ent[s] || !g_on[s] || g_kind[s] != K_TRAP || g_state[s] != TRAP_ARMED || !up_trap_paid(s) || !ki(s, "bots_auto", 1))
+			continue;
+		new n = 0, e = -1, Float:o[3];
+		while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
+		{
+			if (pev(e, pev_deadflag) != DEAD_NO)
+				continue;
+			pev(e, pev_origin, o);
+			if (get_distance_f(o, g_org[s]) < 300.0)
+				n++;
+		}
+		if (n < 4)
+			continue;
+		new cost = floatround(kf(s, "cost", 0.0));
+		for (new p = 1; p <= MaxClients; p++)
+		{
+			if (!g_alive[p] || !g_bot[p] || g_down[p] || (g_team[s] && g_pteam[p] != g_team[s]) || cs_get_user_money(p) < cost + 500)
+				continue;
+			if (get_distance_f(g_porg[p], g_org[s]) > 700.0)
+				continue;
+			trap_buy(s, p, false);
+			break;
+		}
+	}
+}
+
+/* every tick (0.25 s) */
+stock up_tick(bool:sec)
+{
+	down_tick();
+	new bool:any = false;
+	for (new s = 0; s < g_nslots; s++)
+	{
+		if (!g_ent[s] || !g_on[s])
+			continue;
+		switch (g_kind[s])
+		{
+			case K_PICKUP: up_pickup_tick(s);
+			case K_PERK, K_BENCH, K_BOX: any = true;
+			case K_TRAP: if (up_trap_paid(s)) any = true;
+		}
+	}
+	if (!any)
+		return;
+	if (sec)
+	{
+		box_check_groups();
+		up_bots_traps();
+	}
+	/* hints for people close to one */
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!g_alive[p] || g_bot[p] || g_down[p])
+			continue;
+		new s = up_near(p);
+		if (s >= 0)
+			up_hint(s, p);
+	}
+	if (g_now >= g_offerAt && g_brain)
+	{
+		g_offerAt = g_now + 8.0;
+		for (new p = 1; p <= MaxClients; p++)
+			if (g_alive[p] && g_bot[p])
+				up_offers(p);
+	}
+}
+
+/* lst_perk / lst_bench / lst_box / lst_trap markers (Last Stand's kit) are these components */
+stock up_marker_kind(const k[], Trie:keys)
+{
+	/* Last Stand's spots are the defenders' */
+	if ((equal(k, "lst_perk") || equal(k, "lst_bench") || equal(k, "lst_box") || equal(k, "lst_trap")) && !TrieKeyExists(keys, "team"))
+		TrieSetString(keys, "team", "ct");
+	if (equal(k, "lst_perk"))
+		return K_PERK;
+	if (equal(k, "lst_bench"))
+		return K_BENCH;
+	if (equal(k, "lst_box"))
+		return K_BOX;
+	if (equal(k, "lst_trap"))
+	{
+		if (!TrieKeyExists(keys, "fire_on"))
+			TrieSetString(keys, "fire_on", "use");
+		if (!TrieKeyExists(keys, "cost"))
+			TrieSetString(keys, "cost", "1000");
+		if (!TrieKeyExists(keys, "active_secs"))
+			TrieSetString(keys, "active_secs", "30");
+		if (!TrieKeyExists(keys, "rearm_secs"))
+			TrieSetString(keys, "rearm_secs", "45");
+		if (!TrieKeyExists(keys, "size") && !TrieKeyExists(keys, "radius"))
+			TrieSetString(keys, "size", "192 192 64");
+		return K_TRAP;
+	}
+	return K_NONE;
+}
+
+/* ---- natives ---- */
+
+public n_player_mod(plugin, params)
+{
+	new id = get_param(1);
+	new what[24];
+	get_string(2, what, charsmax(what));
+	new m = mod_index(what);
+	if (!(1 <= id <= 32) || m < 0)
+	{
+		log_error(AMX_ERR_NATIVE, "ls_player_mod: player %d, modifier %s (one of health_max speed reload deploy damage revive_time fire_rate)", id, what);
+		return 0;
+	}
+	new Float:oldMax;
+	if (is_user_alive(id))
+		pev(id, pev_max_health, oldMax);
+	g_modSet[id][m] = floatmax(get_param_f(3), 0.01);
+	if (m == MOD_HEALTH || m == MOD_SPEED)
+		mods_apply(id, oldMax);
+	return 1;
+}
+
+public Float:n_player_mod_get(plugin, params)
+{
+	new id = get_param(1);
+	new what[24];
+	get_string(2, what, charsmax(what));
+	new m = mod_index(what);
+	return m < 0 ? 1.0 : mod_get(id, m);
+}
+
+public n_player_mod_clear(plugin, params)
+{
+	new id = get_param(1);
+	if (!(1 <= id <= 32))
+		return 0;
+	for (new m = 0; m < MOD_COUNT; m++)
+		g_modSet[id][m] = 1.0;
+	mods_apply(id);
+	return 1;
+}
+
+public n_perk_give(plugin, params)
+{
+	new name[24];
+	get_string(2, name, charsmax(name));
+	return perk_give(get_param(1), perk_index(name));
+}
+
+public bool:n_perk_has(plugin, params)
+{
+	new name[24];
+	get_string(2, name, charsmax(name));
+	return perk_has(get_param(1), perk_index(name));
+}
+
+public n_perk_count(plugin, params)
+{
+	new id = get_param(1);
+	return (1 <= id <= 32) ? g_nperks[id] : 0;
+}
+
+public n_perk_clear(plugin, params)
+{
+	new id = get_param(1);
+	if (1 <= id <= 32)
+		perk_clear(id);
+	return 1;
+}
+
+/* ls_perk_buy(id, perk[], bool:tell): at the default prices (a menu with no machine) */
+public bool:n_perk_buy(plugin, params)
+{
+	new name[24];
+	get_string(2, name, charsmax(name));
+	new id = get_param(1);
+	if (!(1 <= id <= 32))
+		return false;
+	g_bot[id] = is_user_bot(id) != 0;
+	return perk_buy(-1, id, perk_index(name), get_param(3) != 0);
+}
+
+public n_perk_price(plugin, params)
+{
+	new id = get_param(1);
+	return (1 <= id <= 32) ? perk_price_at(-1, id) : 0;
+}
+
+public n_perk_tags(plugin, params)
+{
+	new out[64];
+	new id = get_param(1);
+	if (1 <= id <= 32)
+		perk_tags(id, out, charsmax(out));
+	set_string(2, out, get_param(3));
+	return strlen(out);
+}
+
+/* ls_down_enable(bool:on, Float:bleed_secs = 30.0, team = 0, bool:lose_perks = true) */
+public n_down_enable(plugin, params)
+{
+	g_dnOn = get_param(1) != 0;
+	g_dnBleed = floatmax(get_param_f(2), 1.0);
+	g_dnTeam = clamp(get_param(3), 0, 2);
+	g_dnLosePerks = get_param(4) != 0;
+	return 1;
+}
+
+public bool:n_is_down(plugin, params)
+{
+	new id = get_param(1);
+	return (1 <= id <= 32) && g_down[id];
+}
+
+public n_down(plugin, params)
+{
+	new id = get_param(1);
+	if (!(1 <= id <= 32) || !is_user_alive(id) || g_down[id])
+		return 0;
+	go_down(id);
+	return 1;
+}
+
+public n_revive(plugin, params)
+{
+	new id = get_param(1);
+	if (!(1 <= id <= 32) || !g_down[id])
+		return 0;
+	get_up(id, get_param(2));
+	return 1;
+}
+
+public Float:n_down_left(plugin, params)
+{
+	new id = get_param(1);
+	if (!(1 <= id <= 32) || !g_down[id])
+		return 0.0;
+	return floatmax(g_dnBleed - (get_gametime() - g_downAt[id]), 0.0);
+}
+
+public n_weapon_level(plugin, params)
+{
+	new id = get_param(1);
+	new w = get_param(2);
+	if (!w && 1 <= id <= 32 && is_user_alive(id))
+		w = active_weapon(id);
+	return w ? wpn_level(w) : 0;
+}
+
+public n_weapon_set_level(plugin, params)
+{
+	new w = get_param(1);
+	if (w <= 0 || !pev_valid(w))
+		return 0;
+	set_pev(w, WPN_LEVEL, clamp(get_param(2), 1, 3));
+	return 1;
+}
+
+/* ls_bench_use(id, bool:tell): an upgrade at the first bench's prices (or the defaults) */
+public bool:n_bench_use(plugin, params)
+{
+	new id = get_param(1);
+	if (!(1 <= id <= 32))
+		return false;
+	g_bot[id] = is_user_bot(id) != 0;
+	new b = -1;
+	for (new s = 0; s < g_nslots && b < 0; s++)
+		if (g_ent[s] && g_kind[s] == K_BENCH)
+			b = s;
+	return bench_use(b, id, get_param(2) != 0);
+}
+
+/* ls_box_use(ent, id, bool:tell): ent 0 = the box that's out */
+public bool:n_box_use(plugin, params)
+{
+	new ent = get_param(1), id = get_param(2);
+	if (!(1 <= id <= 32))
+		return false;
+	g_bot[id] = is_user_bot(id) != 0;
+	new s = -1;
+	if (ent)
+		s = arg_slot(1, K_BOX);
+	else
+		for (new o = 0; o < g_nslots && s < 0; o++)
+			if (g_ent[o] && g_kind[o] == K_BOX && g_on[o] && g_state[o] == 1)
+				s = o;
+	return s >= 0 && box_use(s, id, get_param(3) != 0);
+}
+
+/* ls_pickup_spawn(const kind[], const Float:origin[3], Float:life = 25.0, const model[] = "", r, g, b, team = 0) */
+public n_pickup_spawn(plugin, params)
+{
+	new kind[32], model[64], keys[192];
+	get_string(1, kind, charsmax(kind));
+	new Float:o[3];
+	get_array_f(2, o, 3);
+	get_string(4, model, charsmax(model));
+	formatex(keys, charsmax(keys), "kind=%s life=%.1f glow=^"%d %d %d^" team=%d", kind, get_param_f(3), get_param(5), get_param(6), get_param(7), get_param(8));
+	if (model[0])
+		format(keys, charsmax(keys), "%s model=%s", keys, model);
+	g_now = get_gametime();
+	return comp_make(K_PICKUP, o, keys, SRC_RUNTIME);
+}
+/* ==== end W1 ==== */

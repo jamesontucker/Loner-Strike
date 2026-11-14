@@ -454,3 +454,79 @@ native ls_item_tier(const item[]);
 /** Makes any entity glow in a rarity's colour (0 = no glow). */
 native ls_glow(ent, tier);
 /* ==== end W3 ==== */
+
+/* ==== W1: Last Stand pieces ==== */
+/* ---------------------------------------------------------------------------
+ * Player modifiers, perks, the downed state, weapon levels; the perk machine
+ * (ls_perk_machine), the upgrade bench (ls_upgrade_bench), the mystery box
+ * (ls_mystery_box), pickups (ls_pickup), and the paid timed trap (an
+ * ls_trigger_trap with fire_on=use cost=... active_secs=...). Bots are offered
+ * each buyable one (W2's ls_mode offer) unless it has bots=0.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * A player modifier, times what their perks give. what: health_max, speed,
+ * reload, deploy (time: 0.6 = 40 % faster), damage, revive_time (time),
+ * fire_rate (1.25 = 25 % faster). Cleared when they die.
+ */
+native ls_player_mod(id, const what[], Float:mult);
+/** The modifier now (the mode's times the perks'). */
+native Float:ls_player_mod_get(id, const what[]);
+native ls_player_mod_clear(id);
+
+/** Perks: tough (+50 % max health), hands (faster reloads and swaps), doubletap
+ *  (+25 % damage), revive (revive in half the time; alone, get back up once),
+ *  feet (+10 % speed). Lost when downed (see ls_down_enable) or dead. */
+native ls_perk_give(id, const perk[]);
+native bool:ls_perk_has(id, const perk[]);
+native ls_perk_count(id);
+native ls_perk_clear(id);
+/** Buys one with no machine (a menu): 1500 + 1000 per perk owned, 4 at most. */
+native bool:ls_perk_buy(id, const perk[], bool:tell = true);
+/** That default price for this player now. */
+native ls_perk_price(id);
+/** "Perks: TGH QH ..." for a HUD; "" with none. */
+native ls_perk_tags(id, out[], len);
+
+/**
+ * The downed state: on, a hit that would kill a player of `team` (0 any) puts
+ * them down instead: 1 HP, nothing hurts them, creatures ignore them, they crawl
+ * and bleed out over bleed_secs; a teammate within 80 u holding USE for 4 s
+ * (bots: standing there) gets them back up with 50 HP. Off: nobody new goes down.
+ */
+native ls_down_enable(bool:on, Float:bleed_secs = 30.0, team = 0, bool:lose_perks = true);
+native bool:ls_is_down(id);
+/** Puts a player down now. */
+native ls_down(id);
+/** Gets a downed player up (by = who did it, 0 nobody). */
+native ls_revive(id, by = 0);
+/** Seconds of bleeding left (0 when not down). */
+native Float:ls_down_left(id);
+
+/** The level of a weapon (1, 2 Mk II, 3 Mk III); weapon 0 = the one in hand. */
+native ls_weapon_level(id, weapon = 0);
+native ls_weapon_set_level(weapon, level);
+/** An upgrade of the gun in hand at the first bench's prices (or 5000 / 9000). */
+native bool:ls_bench_use(id, bool:tell = true);
+/** A roll of the box that's out (ent 0) or of that box. */
+native bool:ls_box_use(ent, id, bool:tell = true);
+
+/** Drops a pickup; whoever walks over it takes it (ls_on_pickup). Returns its entity. */
+native ls_pickup_spawn(const kind[], const Float:origin[3], Float:life = 25.0, const model[] = "", r = 255, g = 255, b = 255, team = 0);
+
+/** A perk is being bought (machine or ls_perk_buy). Handled: refused. */
+forward ls_on_perk(id, const perk[], price);
+/** A player is going down. Handled: they die as usual. */
+forward ls_on_down(id, attacker);
+/** A downed player is back up (by = who, the player themselves for Quick revive, 0 a mode). */
+forward ls_on_revive(id, by);
+/** A downed player bled out (they're killed right after). */
+forward ls_on_bled_out(id);
+forward ls_on_weapon_upgraded(id, weapon, level, price);
+/** The box is giving a gun (weapon_...). Handled: nothing given, nothing paid. */
+forward ls_on_box(ent, id, const weapon[]);
+/** A player is taking a pickup. Handled: it stays. */
+forward ls_on_pickup(ent, id, const kind[]);
+/** A creature took damage (after it was dealt); headshot 1 when the hit was a head. */
+forward ls_on_creature_hurt(ent, attacker, Float:dmg, headshot);
+/* ==== end W1 ==== */

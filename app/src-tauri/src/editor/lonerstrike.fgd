@@ -207,6 +207,46 @@
 	armed(choices) : "Armed at start" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
 	danger(choices) : "Bots avoid it" : 0 : "Bots keep away even without damage set." = [ 0 : "No" 1 : "Yes" ]
 	trap_kind(string) : "Kind" : : "A word for the mode (laser, crusher, alarm)."
+	cost(integer) : "Price" : 0 : "With Goes off = use: a player holding USE at it pays this to set it off (a paid trap, like Last Stand's electric trap)."
+	active_secs(float) : "Stays on" : 0 : "Seconds it stays on once set off, hurting creatures inside (0: goes off once)."
+	creature_dps(float) : "Creature damage a second" : 80 : "While on."
+	creature_dps_pct(float) : "Creature damage a second (share of health)" : 0.16 : "While on, on top: 0.16 = 16 % of a creature's full health."
+	player_dps(float) : "Player damage a second" : 4 : "While on, to players inside (never below 5 health)."
+	bots_auto(choices) : "Bots switch it on" : 1 : "A bot close by pays for it when 4+ creatures are near." = [ 1 : "Yes" 0 : "No (only by the bots' brain)" ]
+]
+
+@PointClass base(LsName, LsTeam) size(-8 -8 0, 8 8 16) color(220 60 60) studio("models/w_medkit.mdl") = ls_perk_machine : "Sells one perk for as long as the player lives (lost when downed). Hold USE at it to buy."
+[
+	perk(choices) : "Perk" : "tough" : "" = [ "tough" : "Tough (+50% max health)" "hands" : "Quick hands (faster reloads and swaps)" "doubletap" : "Double tap (+25% damage)" "revive" : "Quick revive (revive in 2 s; alone, get back up once)" "feet" : "Light feet (+10% speed)" ]
+	price(integer) : "Price" : 1500 : "For a player's first perk."
+	price_step(integer) : "Dearer by" : 1000 : "For each perk the player already has."
+	max_perks(integer) : "Perks at most" : 4 : "0 = no limit."
+	model(studio) : "Model" : : "Empty: a medkit."
+	bots(choices) : "Bots buy here" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
+]
+
+@PointClass base(LsName, LsTeam) size(-8 -8 0, 8 8 16) color(255 140 0) studio("models/w_assault.mdl") = ls_upgrade_bench : "Upgrades the gun in hand: Mk II (+40% damage, a magazine and a half), then Mk III (+90%). The level stays with the gun."
+[
+	price2(integer) : "Mk II price" : 5000 : ""
+	price3(integer) : "Mk III price" : 9000 : ""
+	level3_from(integer) : "Mk III from wave" : 12 : "0 = any time."
+	dmg2(float) : "Mk II damage" : 1.4 : "Times the gun's own."
+	dmg3(float) : "Mk III damage" : 1.9 : ""
+	model(studio) : "Model" : : "Empty: a rifle."
+	bots(choices) : "Bots buy here" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
+]
+
+@PointClass base(LsName, LsTeam) size(-16 -16 0, 16 16 24) color(80 200 255) studio("models/w_weaponbox.mdl") = ls_mystery_box : "A random gun for a price. Of the boxes in one group, one is out at a time; after a few uses it moves to another."
+[
+	price(integer) : "Price" : 950 : ""
+	guns(string) : "Guns and weights" : "mp5navy:10 ump45:10 famas:8 galil:8 m3:8 xm1014:6 deagle:8 scout:5 p90:8 m4a1:5 ak47:5 aug:4 sg552:4 awp:3 m249:2" : "gun:weight, the weapon names without weapon_."
+	super(string) : "The rare one" : "m249" : "This gun comes as a Mk II with a long magazine."
+	super_clip(integer) : "Its magazine" : 150 : ""
+	super_name(string) : "Its name" : "the Grinder" : ""
+	moves_after(string) : "Moves after" : "4-8" : "Uses before it moves (a range or one number; 0 = never)."
+	group(string) : "Group" : "box" : "Boxes in the same group take turns."
+	model(studio) : "Model" : : "Empty: a weapon box."
+	bots(choices) : "Bots use it" : 1 : "" = [ 1 : "Yes" 0 : "No" ]
 ]
 
 @SolidClass base(LsName, LsTarget, LsTeam) color(180 120 60) = ls_barricade : "A wall that can be shot or hit down and repaired (hold USE). Bots defend behind it and go round it while it stands."

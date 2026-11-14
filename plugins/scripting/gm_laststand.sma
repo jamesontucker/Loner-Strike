@@ -83,42 +83,24 @@ enum { PU_RESUPPLY = 0, PU_DOUBLE, PU_ONEHIT, PU_AIRSTRIKE, PU_COUNT };
 new const PU_NAME[PU_COUNT][] = { "Full resupply", "Double pay", "One-hit kills", "Airstrike" };
 new const PU_MODEL[PU_COUNT][] = { "models/w_9mmarclip.mdl", "models/w_kevlar.mdl", "models/w_backpack.mdl", "models/w_medkit.mdl" };
 new const PU_RGB[PU_COUNT][3] = { {80, 160, 255}, {255, 210, 40}, {255, 60, 60}, {255, 140, 0} };
-new g_puEnt[8], g_puKind[8], Float:g_puUntil[8];
+new const PU_KEY[PU_COUNT][] = { "resupply", "double", "onehit", "airstrike" };
 new g_puThisWave;
+/* the upgrades are gm_components' (perk machines, the bench, the box, paid traps, the downed
+   state); the armory menu sells them where the map has no machine */
 enum { PK_TOUGH = 0, PK_HANDS, PK_DOUBLE, PK_REVIVE, PK_FEET, PK_COUNT };
-enum { SP_PERK = 1, SP_BENCH, SP_TRAP, SP_BOX };
 new const PK_ID[PK_COUNT][] = { "tough", "hands", "doubletap", "revive", "feet" };
 new const PK_NAME[PK_COUNT][] = { "Tough", "Quick hands", "Double tap", "Quick revive", "Light feet" };
 new const PK_WHAT[PK_COUNT][] = { "+50% max health", "faster reloads and weapon swaps", "+25% damage", "revive in 2 s; alone, get back up once", "+10% speed" };
-new const PK_TAG[PK_COUNT][] = { "TGH", "QH", "DT", "QR", "LF" };
-new const PK_RGB[PK_COUNT][3] = { {220, 60, 60}, {60, 200, 80}, {240, 200, 40}, {60, 140, 255}, {200, 120, 255} };
 #define PERK_MAX 4
-new g_perk[33][PK_COUNT];
-new g_nperks[33];
-new bool:g_selfRevive[33];
-#define OFS_NEXT_ATTACK 83
-#define OFS_WPN_IDLE 48
-new g_mk[2048];
 #define MK2_PRICE 5000
 #define MK3_PRICE 9000
-#define MK3_FROM 12
-#define MAX_SPOTS 32
-new g_spEnt[MAX_SPOTS], g_spKind[MAX_SPOTS], g_spArg[MAX_SPOTS], g_spShow[MAX_SPOTS];
-new Float:g_spOrg[MAX_SPOTS][3], Float:g_spMin[MAX_SPOTS][3], Float:g_spMax[MAX_SPOTS][3];
-new g_nsp;
-new Float:g_trapUntil[MAX_SPOTS], Float:g_trapReady[MAX_SPOTS];
-new g_boxAt = -1, g_boxUses, g_boxMoveAfter;
-new g_upgradeLog[4];
-new g_spNear[33];
-#define TRAP_PRICE 1000
 #define BOX_PRICE 950
-new const BOX_GUN[][] = { "weapon_mp5navy", "weapon_ump45", "weapon_famas", "weapon_galil", "weapon_m3", "weapon_xm1014", "weapon_deagle", "weapon_scout", "weapon_p90", "weapon_m4a1", "weapon_ak47", "weapon_aug", "weapon_sg552", "weapon_awp", "weapon_m249" };
-new const BOX_WEIGHT[] = { 10, 10, 8, 8, 8, 6, 8, 5, 8, 5, 5, 4, 4, 3, 2 };
-new const BOX_AMMO[][] = { "9mm", "45ACP", "556Nato", "556Nato", "buckshot", "buckshot", "50AE", "762Nato", "57mm", "556Nato", "762Nato", "556Nato", "556Nato", "338Magnum", "556NatoBox" };
 #define RIFLE_LAST 2
-new Float:g_selfRevAt[33];
 new bool:g_bledOut[33];
 new Float:g_upNext[33];
+new bool:g_hasPerkM, bool:g_hasBench;
+new Float:g_shop[3];
+new bool:g_downOn;
 new bool:g_bossDone;
 new bool:g_traderWarned;
 new bool:g_headLast[2048];
@@ -269,19 +251,6 @@ public plugin_init()
 		RegisterHam(Ham_TraceAttack, "ls_creature", "ham_creature_trace");
 	}
 	set_task(0.2, "tick_powerups", TASK_REV + 400, _, _, "b");
-	set_task(0.5, "tick_traps", TASK_REV + 401, _, _, "b");
-	RegisterHamPlayer(Ham_TakeDamage, "ham_player_hurt_ls");
-	RegisterHamPlayer(Ham_CS_Player_ResetMaxSpeed, "ham_maxspeed_post", 1);
-	new const WEAPONS[][] = { "weapon_p228", "weapon_scout", "weapon_xm1014", "weapon_mac10", "weapon_aug", "weapon_elite", "weapon_fiveseven", "weapon_ump45",
-		"weapon_sg550", "weapon_galil", "weapon_famas", "weapon_usp", "weapon_glock18", "weapon_awp", "weapon_mp5navy", "weapon_m249", "weapon_m3", "weapon_m4a1",
-		"weapon_tmp", "weapon_g3sg1", "weapon_deagle", "weapon_sg552", "weapon_ak47", "weapon_p90", "weapon_knife" };
-	for (new i = 0; i < sizeof WEAPONS; i++)
-	{
-		if (!equal(WEAPONS[i], "weapon_knife"))
-			RegisterHam(Ham_Weapon_Reload, WEAPONS[i], "ham_reload_post", 1);
-		RegisterHam(Ham_Item_Deploy, WEAPONS[i], "ham_deploy_post", 1);
-	}
-
 	register_clcmd("say /ls", "cmd_help");
 	register_clcmd("say /laststand", "cmd_help");
 
@@ -431,9 +400,7 @@ public round_setup()
 	g_botRifles = 0;
 	clear_powerups();
 	for (new p = 1; p <= MaxClients; p++)
-		clear_perks(p);
-	arrayset(g_upgradeLog, 0, sizeof g_upgradeLog);
-	build_upgrade_spots();
+		ls_perk_clear(p);
 	ls_comp_bots_hint("offer_clear all");
 	/* repairs are paid for (points per board), not charged */
 	for (new b = ls_comp_find("ls_barricade"); b; b = ls_comp_find("ls_barricade", b))
@@ -453,6 +420,7 @@ public round_setup()
 	g_phaseEnd = get_gametime() + get_pcvar_float(g_cPrepare);
 	set_cvar_num("mp_buy_anywhere", get_pcvar_num(g_cBuyAnywhere) ? 1 : 0);
 	find_shop();
+	find_upgrades();
 	keeper_spawn();
 	round_clock(floatround(get_pcvar_float(g_cPrepare)));
 	toast(0, 5.0, false, "Last Stand: hold the base! First wave in %d seconds", get_pcvar_num(g_cPrepare));
@@ -953,7 +921,7 @@ stock lose_checks(why[], len)
 				if (is_user_alive(p) && cs_get_user_team(p) == CS_TEAM_T && in_base(p))
 					enemies++;
 		for (new p = 1; p <= MaxClients && !inside; p++)
-			if (is_user_alive(p) && !g_down[p] && cs_get_user_team(p) == CS_TEAM_CT && in_base(p, 350.0))
+			if (is_user_alive(p) && !is_down(p) && cs_get_user_team(p) == CS_TEAM_CT && in_base(p, 350.0))
 				inside++;
 		if (enemies >= 2 && !inside)
 		{
@@ -975,7 +943,7 @@ stock lose_checks(why[], len)
 		if (!is_user_connected(p) || is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT)
 			continue;
 		humans++;
-		if (is_user_alive(p) && !g_down[p])
+		if (is_user_alive(p) && !is_down(p))
 			up++;
 	}
 	new chance = floatround(get_pcvar_float(g_cLastChance) * time_scale());
@@ -1581,7 +1549,7 @@ public tick()
 		if (!is_user_connected(p) || cs_get_user_team(p) != CS_TEAM_CT)
 			continue;
 		team++;
-		if (is_user_alive(p) && !g_down[p])
+		if (is_user_alive(p) && !is_down(p))
 			alive++;
 	}
 	new why[64];
@@ -1634,15 +1602,9 @@ public tick()
 	hud();
 	beacons();
 	bots_shop_tick();
-	/* with the map's own spots the brain decides (offers); else the armory fallback */
-	if (g_nsp)
-	{
-		offers_tick();
-		/* (traps: a bot near one switches it on when its gate is pressed, until the brain does) */
-		bots_traps();
-	}
-	else
-		bots_upgrades();
+	/* with the map's own machines the brain decides (gm_components' offers); else the armory */
+	down_sync();
+	bots_upgrades();
 	shop_hint();
 }
 
@@ -1904,8 +1866,10 @@ stock hud()
 			continue;
 		lines++;
 		get_user_name(p, name, charsmax(name));
-		if (is_user_alive(p) && !g_down[p])
+		if (is_user_alive(p) && !is_down(p))
 			len += formatex(team[len], charsmax(team) - len, "%s  %d^n", name, get_user_health(p));
+		else if (ls_is_down(p))
+			len += formatex(team[len], charsmax(team) - len, "%s  DOWN %ds^n", name, floatround(ls_down_left(p)));
 		else if (g_down[p])
 			len += formatex(team[len], charsmax(team) - len, "%s  DOWN %ds^n", name, max(floatround(get_pcvar_float(g_cRevive) - (now - g_downAt[p])), 0));
 		else
@@ -1920,8 +1884,10 @@ stock hud()
 		/* in the armory, how to buy, under the wave line (the centre is the game's own
 		   centre text and the toasts': nothing of ours sits there for long) */
 		new tags[48];
-		perk_tags(p, tags, charsmax(tags));
-		if (g_down[p])
+		ls_perk_tags(p, tags, charsmax(tags));
+		if (ls_is_down(p))
+			ls_hud(p, LS_HUD_TOP, 1.1, "%s^nDOWN - %d s to be revived", top, floatround(ls_down_left(p)));
+		else if (g_down[p])
 			ls_hud(p, LS_HUD_TOP, 1.1, "%s^nDOWN - %d s to be revived", top, max(floatround(get_pcvar_float(g_cRevive) - (now - g_downAt[p])), 0));
 		else if (g_inShop[p])
 			ls_hud(p, LS_HUD_TOP, 1.1, "%s^nArmory  -  B: weapons   USE at the counter: supplies%s%s", top, tags[0] ? "^n" : "", tags);
@@ -2133,9 +2099,8 @@ public ls_on_barricade_broken(ent, attacker)
 public ham_player_killed(victim, killer, gib)
 {
 	g_hePack[victim] = 0;
-	clear_perks(victim);
 	/* bled out (the downed state ran out): out until the next wave */
-	if (g_down[victim] && g_bledOut[victim])
+	if (g_bledOut[victim])
 	{
 		g_bledOut[victim] = false;
 		clear_down(victim);
@@ -2231,62 +2196,6 @@ public tick_revive()
 	{
 		if (!g_down[d])
 			continue;
-		/* the downed state (alive, crawling) */
-		if (is_user_connected(d) && is_user_alive(d))
-		{
-			if (g_selfRevAt[d] > 0.0 && now >= g_selfRevAt[d])
-			{
-				get_up(d);
-				new name[32];
-				get_user_name(d, name, charsmax(name));
-				ls_chat(0, "%s got back up (Quick revive).", name);
-				continue;
-			}
-			if (now - g_downAt[d] > limit)
-			{
-				g_bledOut[d] = true;
-				user_kill(d, 1);
-				continue;
-			}
-			new who = 0;
-			for (new p = 1; p <= MaxClients; p++)
-			{
-				if (p == d || !is_user_alive(p) || g_down[p] || cs_get_user_team(p) != CS_TEAM_CT)
-					continue;
-				new Float:o[3], Float:dO[3];
-				pev(p, pev_origin, o);
-				pev(d, pev_origin, dO);
-				if (get_distance_f(o, dO) > 80.0)
-					continue;
-				if (!(pev(p, pev_button) & IN_USE) && !is_user_bot(p))
-					continue;
-				who = p;
-				break;
-			}
-			new Float:need = has_perk(who, PK_REVIVE) ? 2.0 : 4.0;
-			if (who != g_revBy[d])
-			{
-				if (g_revBy[d] && is_user_connected(g_revBy[d]))
-					bar(g_revBy[d], 0);
-				g_revBy[d] = who;
-				g_revProg[d] = 0.0;
-				if (who)
-					bar(who, floatround(need));
-			}
-			if (!who)
-				continue;
-			g_revProg[d] += 0.25;
-			if (g_revProg[d] >= need)
-			{
-				new a[32], b[32];
-				get_user_name(d, a, charsmax(a));
-				get_user_name(who, b, charsmax(b));
-				get_up(d);
-				ls_chat(0, "%s revived %s.", b, a);
-				log_amx("Last Stand: %d revived %d in wave %d", who, d, g_wave);
-			}
-			continue;
-		}
 		if (!is_user_connected(d) || is_user_alive(d) || now - g_downAt[d] > limit)
 		{
 			if (is_user_connected(d) && !is_user_alive(d))
@@ -2416,221 +2325,33 @@ public ham_creature_killed(ent, killer, gib)
 }
 
 /* =========================================================================
- * Upgrades (zombie-survival style, our own names): perks, the downed state, the upgrade
- * bench, electric traps, the mystery box. Map spots are ls_markers: lst_perk (perk=tough|
- * hands|doubletap|revive|feet), lst_bench, lst_trap (size or radius: the hurt area), lst_box.
- * Without them: perks and weapon upgrades from the armory menu, the box at the armory.
+ * Upgrades (zombie-survival style, our own names): gm_components has them (perks, the downed
+ * state, the upgrade bench, paid electric traps, the mystery box). Map spots: lst_perk (perk=
+ * tough|hands|doubletap|revive|feet), lst_bench, lst_trap (size or radius), lst_box markers
+ * become those components. Without them: perks and weapon upgrades from the armory menu, a box
+ * at the armory.
  * ========================================================================= */
 
-
-stock perk_price(id)
+/* down in a wave (alive, crawling) or dead and waiting for a revive */
+stock bool:is_down(p)
 {
-	return 1500 + 1000 * g_nperks[id];
+	return g_down[p] || ls_is_down(p);
 }
 
-stock bool:has_perk(id, k)
+/* the downed state is on in waves only */
+stock down_sync()
 {
-	return 1 <= id <= MaxClients && g_perk[id][k] != 0;
-}
-
-stock perk_why_not(id, k, out[], len)
-{
-	out[0] = EOS;
-	if (has_perk(id, k))
-		copy(out, len, "you have it");
-	else if (g_nperks[id] >= PERK_MAX)
-		formatex(out, len, "%d perks at most", PERK_MAX);
-	else if (cs_get_user_money(id) < perk_price(id))
-		copy(out, len, "not enough money");
-}
-
-stock bool:buy_perk(id, k, bool:tell)
-{
-	new why[48];
-	perk_why_not(id, k, why, charsmax(why));
-	if (why[0])
-	{
-		if (tell)
-			client_print(id, print_center, "%s: %s", PK_NAME[k], why);
-		return false;
-	}
-	cs_set_user_money(id, cs_get_user_money(id) - perk_price(id));
-	g_perk[id][k] = 1;
-	g_nperks[id]++;
-	apply_perks(id);
-	if (k == PK_REVIVE)
-		g_selfRevive[id] = true;
-	if (!is_user_bot(id))
-		client_print(id, print_center, "Perk: %s (%s)", PK_NAME[k], PK_WHAT[k]);
-	g_upgradeLog[0]++;
-	log_amx("Last Stand: %d bought the %s perk in wave %d", id, PK_NAME[k], g_wave);
-	return true;
-}
-
-stock clear_perks(id)
-{
-	for (new k = 0; k < PK_COUNT; k++)
-		g_perk[id][k] = 0;
-	g_nperks[id] = 0;
-	g_selfRevive[id] = false;
-	if (is_user_alive(id))
-	{
-		set_pev(id, pev_max_health, 100.0);
-		if (get_user_health(id) > 100)
-			set_user_health(id, 100);
-		ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, id);
-	}
-}
-
-stock apply_perks(id)
-{
-	if (!is_user_alive(id))
+	new bool:on = g_phase == PH_WAVE && get_pcvar_num(g_cRevive) > 0;
+	if (on == g_downOn)
 		return;
-	if (has_perk(id, PK_TOUGH))
-	{
-		set_pev(id, pev_max_health, 150.0);
-		set_user_health(id, min(get_user_health(id) + 50, 150));
-	}
-	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, id);
+	g_downOn = on;
+	ls_down_enable(on, floatmax(get_pcvar_float(g_cRevive), 1.0), 2, true);
 }
 
-stock perk_tags(id, out[], len)
+public ls_on_down(id, attacker)
 {
-	out[0] = EOS;
-	for (new k = 0; k < PK_COUNT; k++)
-		if (has_perk(id, k))
-			format(out, len, "%s%s%s", out, out[0] ? " " : "Perks: ", PK_TAG[k]);
-}
-
-/* light feet: +10 % speed (and the slowdown from a hit wears off faster); downed: a crawl */
-public ham_maxspeed_post(id)
-{
-	if (!is_user_alive(id) || cs_get_user_team(id) != CS_TEAM_CT)
-		return HAM_IGNORED;
-	new Float:s = entity_get_float(id, EV_FL_maxspeed);
-	if (g_down[id])
-		set_pev(id, pev_maxspeed, 50.0);
-	else if (has_perk(id, PK_FEET))
-		set_pev(id, pev_maxspeed, s * 1.1);
-	return HAM_IGNORED;
-}
-
-/* quick hands: reloads and weapon swaps 40 % faster */
-public ham_reload_post(weapon)
-{
-	new id = pev(weapon, pev_owner);
-	if (!has_perk(id, PK_HANDS) || !is_user_alive(id))
-		return HAM_IGNORED;
-	new Float:now = get_gametime();
-	new Float:na = get_pdata_float(id, OFS_NEXT_ATTACK, 5);
-	if (na > 0.0)
-		set_pdata_float(id, OFS_NEXT_ATTACK, na * 0.6, 5);
-	new Float:idle = get_pdata_float(weapon, OFS_WPN_IDLE, 4);
-	if (idle > now)
-		set_pdata_float(weapon, OFS_WPN_IDLE, now + (idle - now) * 0.6, 4);
-	return HAM_IGNORED;
-}
-
-public ham_deploy_post(weapon)
-{
-	new id = pev(weapon, pev_owner);
-	if (!has_perk(id, PK_HANDS) || !is_user_alive(id))
-		return HAM_IGNORED;
-	new Float:na = get_pdata_float(id, OFS_NEXT_ATTACK, 5);
-	if (na > 0.0)
-		set_pdata_float(id, OFS_NEXT_ATTACK, na * 0.6, 5);
-	return HAM_IGNORED;
-}
-
-/* ---- weapon upgrades (the bench): Mk II +40 % damage and a full magazine and a half, Mk III
-   +90 %; kept per weapon (dropped and picked up, it stays upgraded) ---- */
-
-stock mk_why_not(id, out[], len)
-{
-	out[0] = EOS;
-	new w = get_pdata_cbase(id, 373, 5);	/* m_pActiveItem */
-	if (w <= 0 || !pev_valid(w) || w >= sizeof g_mk)
-	{
-		copy(out, len, "hold a gun");
-		return 0;
-	}
-	new csw = get_user_weapon(id);
-	if (csw == CSW_KNIFE || csw == CSW_HEGRENADE || csw == CSW_FLASHBANG || csw == CSW_SMOKEGRENADE || csw == CSW_C4)
-	{
-		copy(out, len, "hold a gun");
-		return 0;
-	}
-	if (g_mk[w] >= 3)
-		copy(out, len, "it's Mk III already");
-	else if (g_mk[w] == 2 && g_wave < MK3_FROM)
-		formatex(out, len, "Mk III from wave %d", MK3_FROM);
-	else if (cs_get_user_money(id) < (g_mk[w] >= 2 ? MK3_PRICE : MK2_PRICE))
-		copy(out, len, "not enough money");
-	return w;
-}
-
-stock bool:bench_upgrade(id, bool:tell)
-{
-	new why[48];
-	new w = mk_why_not(id, why, charsmax(why));
-	if (why[0])
-	{
-		if (tell)
-			client_print(id, print_center, "Upgrade: %s", why);
-		return false;
-	}
-	new price = g_mk[w] >= 2 ? MK3_PRICE : MK2_PRICE;
-	cs_set_user_money(id, cs_get_user_money(id) - price);
-	g_mk[w] = g_mk[w] >= 2 ? 3 : 2;
-	/* a magazine and a half, and the reserve filled */
-	new csw = get_user_weapon(id);
-	new clip = cs_get_weapon_ammo(w);
-	cs_set_weapon_ammo(w, max(clip, 1) * 3 / 2 + 5);
-	ls_give_item(id, "ammo");
-	new wname[32];
-	get_weaponname(csw, wname, charsmax(wname));
-	replace(wname, charsmax(wname), "weapon_", "");
-	strtoupper(wname);
-	if (!is_user_bot(id))
-		client_print(id, print_center, "%s Mk %s!", wname, g_mk[w] == 3 ? "III" : "II");
-	log_amx("Last Stand: %d upgraded a %s to Mk %d in wave %d", id, wname, g_mk[w], g_wave);
-	g_upgradeLog[1]++;
-	return true;
-}
-
-/* damage: double tap and the weapon's Mk */
-stock Float:player_damage_mult(id)
-{
-	new Float:m = 1.0;
-	if (has_perk(id, PK_DOUBLE))
-		m *= 1.25;
-	new w = get_pdata_cbase(id, 373, 5);
-	if (w > 0 && w < sizeof g_mk && g_mk[w] >= 2)
-		m *= g_mk[w] == 3 ? 1.9 : 1.4;
-	return m;
-}
-
-/* ---- the downed state: a hit that would kill a defender in a wave puts them down instead; they
-   crawl and bleed out over lst_revive seconds; a teammate holding USE for 4 s (2 with Quick revive)
-   brings them back; alone with Quick revive they get up once by themselves. Going down loses the
-   perks. Bled out: out until the next wave ---- */
-public ham_player_hurt_ls(victim, inflictor, attacker, Float:dmg, bits)
-{
-	if (!is_user_alive(victim) || cs_get_user_team(victim) != CS_TEAM_CT)
-		return HAM_IGNORED;
-	/* (downed: nothing more hurts them; they bleed out on the clock) */
-	if (g_down[victim])
-		return HAM_SUPERCEDE;
-	if (g_phase != PH_WAVE || get_pcvar_num(g_cRevive) <= 0)
-		return HAM_IGNORED;
-	if (dmg < float(get_user_health(victim)))
-		return HAM_IGNORED;
-	go_down(victim, attacker);
-	return HAM_SUPERCEDE;
-}
-
-stock go_down(victim, attacker)
-{
+	if (cs_get_user_team(id) != CS_TEAM_CT)
+		return PLUGIN_HANDLED;
 	new what[32] = "?", Float:o[3];
 	if (attacker > 0 && pev_valid(attacker))
 	{
@@ -2638,475 +2359,51 @@ stock go_down(victim, attacker)
 		if (equal(what, "ls_creature"))
 			pev(attacker, pev_netname, what, charsmax(what));
 	}
-	pev(victim, pev_origin, o);
-	log_amx("Last Stand: defender %d down in wave %d by %s at %.0f %.0f %.0f (%s the base)", victim, g_wave, what, o[0], o[1], o[2], in_base(victim) ? "in" : "outside");
-	new bool:selfrev = g_selfRevive[victim];
-	clear_perks(victim);
-	set_user_health(victim, 1);
-	g_down[victim] = true;
-	g_downAt[victim] = get_gametime();
-	g_downOrg[victim] = o;
-	g_revBy[victim] = 0;
-	g_revProg[victim] = 0.0;
-	g_selfRevAt[victim] = 0.0;
-	/* alone (no teammate up) with Quick revive: back up in 4 s, once */
-	if (selfrev && !other_defender_up(victim))
-		g_selfRevAt[victim] = get_gametime() + 4.0;
-	set_pev(victim, pev_flags, pev(victim, pev_flags) | FL_NOTARGET);
-	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, victim);
-	if (!is_user_bot(victim))
-		client_cmd(victim, "+duck");
-	set_rendering(victim, kRenderFxGlowShell, 255, 40, 40, kRenderNormal, 12);
-	new name[32];
-	get_user_name(victim, name, charsmax(name));
-	ls_chat(0, "%s is down! Hold USE on them to revive (%d s left).", name, get_pcvar_num(g_cRevive));
-	send_revive(victim);
-}
-
-stock bool:other_defender_up(id)
-{
-	for (new p = 1; p <= MaxClients; p++)
-		if (p != id && is_user_alive(p) && cs_get_user_team(p) == CS_TEAM_CT && !g_down[p])
-			return true;
-	return false;
-}
-
-stock get_up(d)
-{
-	clear_down(d);
-	set_pev(d, pev_flags, pev(d, pev_flags) & ~FL_NOTARGET);
-	set_rendering(d);
-	set_user_health(d, 50);
-	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, d);
-	if (!is_user_bot(d))
-		client_cmd(d, "-duck");
-}
-
-/* ---- interactive spots: perk stations, benches, traps, boxes ---- */
-
-stock build_upgrade_spots()
-{
-	for (new i = 0; i < g_nsp; i++)
-		if (g_spShow[i] && pev_valid(g_spShow[i]))
-			remove_entity(g_spShow[i]);
-	g_nsp = 0;
-	static const KINDS[][] = { "", "lst_perk", "lst_bench", "lst_trap", "lst_box" };
-	for (new k = SP_PERK; k <= SP_BOX; k++)
-		for (new m = ls_marker_find(KINDS[k]); m && g_nsp < MAX_SPOTS; m = ls_marker_find(KINDS[k], m))
-		{
-			new i = g_nsp++;
-			g_spEnt[i] = m;
-			g_spKind[i] = k;
-			g_spArg[i] = 0;
-			pev(m, pev_origin, g_spOrg[i]);
-			if (k == SP_PERK)
-			{
-				new v[16];
-				ls_marker_get(m, "perk", v, charsmax(v));
-				g_spArg[i] = PK_TOUGH;
-				for (new p = 0; p < PK_COUNT; p++)
-					if (equali(v, PK_ID[p]))
-						g_spArg[i] = p;
-			}
-			if (k == SP_TRAP)
-			{
-				new v[48];
-				new Float:h[3] = { 96.0, 96.0, 64.0 };
-				if (ls_marker_get(m, "size", v, charsmax(v)))
-				{
-					new a[3][12];
-					parse(v, a[0], 11, a[1], 11, a[2], 11);
-					for (new j = 0; j < 3; j++)
-						h[j] = floatmax(str_to_float(a[j]) * 0.5, 16.0);
-				}
-				else if (ls_marker_get(m, "radius", v, charsmax(v)))
-				{
-					h[0] = str_to_float(v);
-					h[1] = h[0];
-				}
-				for (new j = 0; j < 3; j++)
-				{
-					g_spMin[i][j] = g_spOrg[i][j] - h[j];
-					g_spMax[i][j] = g_spOrg[i][j] + h[j];
-				}
-				g_spMin[i][2] = g_spOrg[i][2] - 8.0;
-				g_spMax[i][2] = g_spOrg[i][2] + h[2] * 2.0;
-				g_trapUntil[i] = 0.0;
-				g_trapReady[i] = 0.0;
-			}
-			g_spShow[i] = spot_prop(i);
-		}
-	/* the box starts at a random spot of its own */
-	g_boxAt = -1;
-	new boxes[MAX_SPOTS], nb = 0;
-	for (new i = 0; i < g_nsp; i++)
-		if (g_spKind[i] == SP_BOX)
-			boxes[nb++] = i;
-	if (nb)
-		box_move(boxes[random(nb)]);
-	g_boxUses = 0;
-	g_boxMoveAfter = random_num(4, 8);
-	if (g_nsp)
-		log_amx("Last Stand: %d upgrade spots on %s", g_nsp, g_mapname);
-}
-
-/* what the spot looks like: a glowing prop on the floor */
-stock spot_prop(i)
-{
-	new e = create_entity("info_target");
-	if (!e)
-		return 0;
-	entity_set_string(e, EV_SZ_classname, "lst_spot");
-	switch (g_spKind[i])
-	{
-		case SP_PERK: entity_set_model(e, "models/w_medkit.mdl");
-		case SP_BENCH: entity_set_model(e, "models/w_assault.mdl");
-		case SP_TRAP: entity_set_model(e, "models/w_battery.mdl");
-		case SP_BOX: entity_set_model(e, "models/w_weaponbox.mdl");
-	}
-	new Float:o[3];
-	o = g_spOrg[i];
-	o[2] = floor_under(o) + 2.0;
-	entity_set_origin(e, o);
-	set_pev(e, pev_movetype, MOVETYPE_NONE);
-	new r = 200, g = 200, b = 200;
-	switch (g_spKind[i])
-	{
-		case SP_PERK: { r = PK_RGB[g_spArg[i]][0]; g = PK_RGB[g_spArg[i]][1]; b = PK_RGB[g_spArg[i]][2]; }
-		case SP_BENCH: { r = 255; g = 140; b = 0; }
-		case SP_TRAP: { r = 80; g = 160; b = 255; }
-		case SP_BOX: { r = 120; g = 120; b = 120; }
-	}
-	set_rendering(e, kRenderFxGlowShell, r, g, b, kRenderNormal, 14);
-	if (g_spKind[i] == SP_BOX)
-		set_pev(e, pev_effects, pev(e, pev_effects) | EF_NODRAW);
-	return e;
-}
-
-stock box_move(to)
-{
-	if (g_boxAt >= 0 && g_spShow[g_boxAt] && pev_valid(g_spShow[g_boxAt]))
-		set_pev(g_spShow[g_boxAt], pev_effects, pev(g_spShow[g_boxAt], pev_effects) | EF_NODRAW);
-	g_boxAt = to;
-	if (to >= 0 && g_spShow[to] && pev_valid(g_spShow[to]))
-	{
-		set_pev(g_spShow[to], pev_effects, pev(g_spShow[to], pev_effects) & ~EF_NODRAW);
-		set_rendering(g_spShow[to], kRenderFxGlowShell, 80, 200, 255, kRenderNormal, 18);
-	}
-}
-
-stock spot_near(id)
-{
-	new Float:o[3], best = -1, Float:bd = 80.0;
 	pev(id, pev_origin, o);
-	for (new i = 0; i < g_nsp; i++)
-	{
-		if (g_spKind[i] == SP_BOX && i != g_boxAt)
-			continue;
-		new Float:d = get_distance_f(o, g_spOrg[i]);
-		if (d < bd)
-		{
-			bd = d;
-			best = i;
-		}
-	}
-	return best;
+	log_amx("Last Stand: defender %d down in wave %d by %s at %.0f %.0f %.0f (%s the base)", id, g_wave, what, o[0], o[1], o[2], in_base(id) ? "in" : "outside");
+	new name[32];
+	get_user_name(id, name, charsmax(name));
+	ls_chat(0, "%s is down! Hold USE on them to revive (%d s left).", name, get_pcvar_num(g_cRevive));
+	return PLUGIN_CONTINUE;
 }
 
-stock spot_hint(id, i)
+public ls_on_bled_out(id)
 {
-	switch (g_spKind[i])
+	g_bledOut[id] = true;
+}
+
+public ls_on_revive(id, by)
+{
+	new a[32], b[32];
+	get_user_name(id, a, charsmax(a));
+	if (by == id)
+		ls_chat(0, "%s got back up (Quick revive).", a);
+	else if (1 <= by <= MaxClients && is_user_connected(by))
 	{
-		case SP_PERK:
-		{
-			new k = g_spArg[i], why[48];
-			perk_why_not(id, k, why, charsmax(why));
-			client_print(id, print_center, "%s perk: %s - $%d  %s", PK_NAME[k], PK_WHAT[k], perk_price(id), why[0] ? why : "(USE to buy)");
-		}
-		case SP_BENCH:
-		{
-			new why[48];
-			new w = mk_why_not(id, why, charsmax(why));
-			client_print(id, print_center, "Upgrade bench: Mk %s - $%d  %s", (w && g_mk[w] >= 2) ? "III" : "II", (w && g_mk[w] >= 2) ? MK3_PRICE : MK2_PRICE, why[0] ? why : "(USE to upgrade the gun in hand)");
-		}
-		case SP_TRAP:
-			client_print(id, print_center, "Electric trap - $%d for 30 s  %s", TRAP_PRICE, get_gametime() < g_trapReady[i] ? "(recharging)" : "(USE to switch on)");
-		case SP_BOX:
-			client_print(id, print_center, "Mystery box - $%d for a random gun  (USE)", BOX_PRICE);
+		get_user_name(by, b, charsmax(b));
+		ls_chat(0, "%s revived %s.", b, a);
+		log_amx("Last Stand: %d revived %d in wave %d", by, id, g_wave);
 	}
 }
 
-stock spot_use(id, i)
+/* what the map has: machines, a bench, a box (else the armory sells them; a box goes there) */
+stock find_upgrades()
 {
-	switch (g_spKind[i])
+	g_hasPerkM = ls_comp_count("ls_perk_machine") > 0;
+	g_hasBench = ls_comp_count("ls_upgrade_bench") > 0;
+	if (!ls_comp_count("ls_mystery_box"))
 	{
-		case SP_PERK: buy_perk(id, g_spArg[i], true);
-		case SP_BENCH: bench_upgrade(id, true);
-		case SP_TRAP: trap_on(i, id, true);
-		case SP_BOX: box_use(id, true);
-	}
-}
-
-/* ---- electric traps ---- */
-stock bool:trap_on(i, id, bool:tell)
-{
-	new Float:now = get_gametime();
-	if (now < g_trapReady[i])
-	{
-		if (tell)
-			client_print(id, print_center, "The trap is recharging (%d s)", floatround(g_trapReady[i] - now));
-		return false;
-	}
-	if (cs_get_user_money(id) < TRAP_PRICE)
-	{
-		if (tell)
-			client_print(id, print_center, "The trap: not enough money");
-		return false;
-	}
-	cs_set_user_money(id, cs_get_user_money(id) - TRAP_PRICE);
-	g_trapUntil[i] = now + 30.0;
-	g_trapReady[i] = now + 30.0 + 45.0;
-	emit_sound(g_spShow[i] ? g_spShow[i] : id, CHAN_STATIC, "buttons/spark5.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
-	log_amx("Last Stand: %d switched a trap on in wave %d", id, g_wave);
-	g_upgradeLog[2]++;
-	return true;
-}
-
-public tick_traps()
-{
-	if (!g_nsp)
-		return;
-	new Float:now = get_gametime();
-	for (new i = 0; i < g_nsp; i++)
-	{
-		if (g_spKind[i] != SP_TRAP || now >= g_trapUntil[i])
-			continue;
-		/* hurts creatures in the area hard, players a little */
-		new e = -1, Float:o[3];
-		while ((e = find_ent_by_class(e, "ls_creature")))
-		{
-			if (pev(e, pev_deadflag) != DEAD_NO)
-				continue;
-			pev(e, pev_origin, o);
-			if (o[0] < g_spMin[i][0] || o[0] > g_spMax[i][0] || o[1] < g_spMin[i][1] || o[1] > g_spMax[i][1] || o[2] < g_spMin[i][2] || o[2] > g_spMax[i][2])
-				continue;
-			new Float:dmg = 40.0 + 0.08 * entity_get_float(e, EV_FL_max_health);
-			ExecuteHamB(Ham_TakeDamage, e, 0, 0, dmg, DMG_SHOCK);
-		}
-		for (new p = 1; p <= MaxClients; p++)
-		{
-			if (!is_user_alive(p) || g_down[p])
-				continue;
-			pev(p, pev_origin, o);
-			if (o[0] < g_spMin[i][0] || o[0] > g_spMax[i][0] || o[1] < g_spMin[i][1] || o[1] > g_spMax[i][1] || o[2] < g_spMin[i][2] || o[2] > g_spMax[i][2])
-				continue;
-			if (get_user_health(p) > 5)
-				set_user_health(p, get_user_health(p) - 2);
-		}
-		/* the look: an arc across the area */
-		new Float:a[3], Float:b[3];
-		a[0] = random_float(g_spMin[i][0], g_spMax[i][0]);
-		a[1] = random_float(g_spMin[i][1], g_spMax[i][1]);
-		a[2] = g_spMin[i][2] + 8.0;
-		b[0] = random_float(g_spMin[i][0], g_spMax[i][0]);
-		b[1] = random_float(g_spMin[i][1], g_spMax[i][1]);
-		b[2] = g_spMin[i][2] + 40.0;
-		message_begin(MSG_BROADCAST, SVC_TEMPENTITY);
-		write_byte(TE_BEAMPOINTS);
-		engfunc(EngFunc_WriteCoord, a[0]); engfunc(EngFunc_WriteCoord, a[1]); engfunc(EngFunc_WriteCoord, a[2]);
-		engfunc(EngFunc_WriteCoord, b[0]); engfunc(EngFunc_WriteCoord, b[1]); engfunc(EngFunc_WriteCoord, b[2]);
-		write_short(g_sprBeam);
-		write_byte(0); write_byte(10); write_byte(5); write_byte(30); write_byte(60);
-		write_byte(120); write_byte(180); write_byte(255); write_byte(220); write_byte(30);
-		message_end();
-	}
-}
-
-/* bots switch a trap on when its gate is under pressure (one of them, paying like a person) */
-stock bots_traps()
-{
-	if (g_phase != PH_WAVE)
-		return;
-	new Float:now = get_gametime();
-	for (new i = 0; i < g_nsp; i++)
-	{
-		if (g_spKind[i] != SP_TRAP || now < g_trapReady[i])
-			continue;
-		/* pressure: 4+ creatures within 300 u of the trap */
-		new n = 0, e = -1, Float:o[3];
-		while ((e = find_ent_by_class(e, "ls_creature")))
-		{
-			if (pev(e, pev_deadflag) != DEAD_NO)
-				continue;
-			pev(e, pev_origin, o);
-			if (get_distance_f(o, g_spOrg[i]) < 300.0)
-				n++;
-		}
-		if (n < 4)
-			continue;
-		for (new p = 1; p <= MaxClients; p++)
-		{
-			if (!is_user_alive(p) || !is_user_bot(p) || g_down[p] || cs_get_user_team(p) != CS_TEAM_CT || cs_get_user_money(p) < TRAP_PRICE + 500)
-				continue;
-			pev(p, pev_origin, o);
-			if (get_distance_f(o, g_spOrg[i]) > 700.0)
-				continue;
-			trap_on(i, p, false);
-			break;
-		}
-	}
-}
-
-/* ---- the mystery box: a random gun, weighted; moves after a few uses ---- */
-
-stock bool:box_use(id, bool:tell)
-{
-	if (cs_get_user_money(id) < BOX_PRICE)
-	{
-		if (tell)
-			client_print(id, print_center, "The box: not enough money");
-		return false;
-	}
-	cs_set_user_money(id, cs_get_user_money(id) - BOX_PRICE);
-	new total = 0;
-	for (new i = 0; i < sizeof BOX_WEIGHT; i++)
-		total += BOX_WEIGHT[i];
-	new r = random(total), pick = 0;
-	for (new i = 0; i < sizeof BOX_WEIGHT; i++)
-	{
-		r -= BOX_WEIGHT[i];
-		if (r < 0)
-		{
-			pick = i;
-			break;
-		}
-	}
-	new csw = get_weaponid(BOX_GUN[pick]);
-	new bool:primary = !(csw == CSW_DEAGLE);
-	/* drop what it replaces */
-	new weapons[32], n;
-	get_user_weapons(id, weapons, n);
-	for (new i = 0; i < n; i++)
-	{
-		new wn[32];
-		get_weaponname(weapons[i], wn, charsmax(wn));
-		new bool:isprim = ((1 << weapons[i]) & PRIMARY_BITS) != 0;
-		new bool:issec = weapons[i] == CSW_USP || weapons[i] == CSW_GLOCK18 || weapons[i] == CSW_DEAGLE || weapons[i] == CSW_P228 || weapons[i] == CSW_ELITE || weapons[i] == CSW_FIVESEVEN;
-		if ((primary && isprim) || (!primary && issec))
-			engclient_cmd(id, "drop", wn);
-	}
-	new w = give_item(id, BOX_GUN[pick]);
-	ExecuteHamB(Ham_GiveAmmo, id, 200, BOX_AMMO[pick], 200);
-	/* the rare super-weapon: the machine gun comes as a Mk II with a 150-round belt */
-	new bool:super = csw == CSW_M249;
-	if (super && w > 0 && w < sizeof g_mk)
-	{
-		g_mk[w] = 2;
-		cs_set_weapon_ammo(w, 150);
-	}
-	new wname[32];
-	copy(wname, charsmax(wname), BOX_GUN[pick][7]);
-	strtoupper(wname);
-	if (!is_user_bot(id))
-		client_print(id, print_center, "%s%s!", wname, super ? " - the Grinder (Mk II, 150 rounds)" : "");
-	log_amx("Last Stand: %d got a %s from the box in wave %d", id, wname, g_wave);
-	g_upgradeLog[3]++;
-	/* after a few uses it moves to another spot (if the map has more) */
-	if (++g_boxUses >= g_boxMoveAfter)
-	{
-		new boxes[MAX_SPOTS], nb = 0;
-		for (new i = 0; i < g_nsp; i++)
-			if (g_spKind[i] == SP_BOX && i != g_boxAt)
-				boxes[nb++] = i;
-		if (nb)
-		{
-			box_move(boxes[random(nb)]);
-			toast(0, 3.0, false, "The mystery box moved!");
-		}
-		g_boxUses = 0;
-		g_boxMoveAfter = random_num(4, 8);
-	}
-	return true;
-}
-
-/* W2's brain decides when a bot takes something: every few seconds each bot is told what it
-   may use (ls_mode offer <bot> <kind> <x y z> <ent> <cost> [order]); the plugin does the buying
-   when the bot holds USE there, like a person */
-new Float:g_offerAt;
-
-stock offers_tick()
-{
-	new Float:now = get_gametime();
-	if (now < g_offerAt)
-		return;
-	g_offerAt = now + 8.0;
-	for (new p = 1; p <= MaxClients; p++)
-		if (is_user_alive(p) && is_user_bot(p) && cs_get_user_team(p) == CS_TEAM_CT && !g_down[p])
-			offers_refresh(p);
-}
-
-stock offers_refresh(p)
-{
-	if (!is_user_bot(p) || !g_nsp)
-		return;
-	new line[128];
-	formatex(line, charsmax(line), "offer_clear %d", p);
-	ls_comp_bots_hint(line);
-	static const ORDER[PK_COUNT] = { 0, 4, 3, 2, 1 };
-	for (new i = 0; i < g_nsp; i++)
-	{
-		new ent = g_spShow[i] ? g_spShow[i] : g_spEnt[i];
-		switch (g_spKind[i])
-		{
-			case SP_PERK:
-			{
-				new k = g_spArg[i];
-				if (has_perk(p, k) || g_nperks[p] >= PERK_MAX)
-					continue;
-				formatex(line, charsmax(line), "offer %d perk %.0f %.0f %.0f %d %d %d", p, g_spOrg[i][0], g_spOrg[i][1], g_spOrg[i][2], ent, perk_price(p), ORDER[k]);
-			}
-			case SP_BENCH:
-			{
-				new why[48];
-				new w = mk_why_not(p, why, charsmax(why));
-				if (!w || (why[0] && !equal(why, "not enough money")))
-					continue;
-				formatex(line, charsmax(line), "offer %d bench %.0f %.0f %.0f %d %d", p, g_spOrg[i][0], g_spOrg[i][1], g_spOrg[i][2], ent, g_mk[w] >= 2 ? MK3_PRICE : MK2_PRICE);
-			}
-			case SP_BOX:
-			{
-				if (i != g_boxAt)
-					continue;
-				formatex(line, charsmax(line), "offer %d box %.0f %.0f %.0f %d %d", p, g_spOrg[i][0], g_spOrg[i][1], g_spOrg[i][2], ent, BOX_PRICE);
-			}
-			case SP_TRAP:
-			{
-				/* x y z = the gate it covers (the nearest barricade) */
-				new Float:gc[3], best = 0, Float:bd = 99999.0;
-				for (new b = ls_comp_find("ls_barricade"); b; b = ls_comp_find("ls_barricade", b))
-				{
-					new Float:c[3];
-					gate_centre(b, c);
-					new Float:d = get_distance_f(c, g_spOrg[i]);
-					if (d < bd)
-					{
-						bd = d;
-						best = b;
-						gc = c;
-					}
-				}
-				if (!best)
-					gc = g_spOrg[i];
-				formatex(line, charsmax(line), "offer %d trap %.0f %.0f %.0f %d %d", p, gc[0], gc[1], gc[2], ent, TRAP_PRICE);
-			}
-			default: continue;
-		}
-		ls_comp_bots_hint(line);
+		new Float:o[3];
+		o = g_shop;
+		if (o[0] == 0.0 && o[1] == 0.0 && o[2] == 0.0)
+			o = g_base;
+		o[2] += 16.0;
+		ls_comp_create("ls_mystery_box", o, "team=ct moves_after=0 name=^"Mystery box^"");
 	}
 }
 
 /* bots: perks (Tough first), the bench, the box now and then - in breaks, once their rifle is
-   bought and money is left over (at the armory, or at a spot they pass) */
+   bought and money is left over (at the armory or in the base) */
 stock bots_upgrades()
 {
 	if (g_phase != PH_BREAK && g_phase != PH_PREPARE)
@@ -3114,7 +2411,7 @@ stock bots_upgrades()
 	static const ORDER[] = { PK_TOUGH, PK_FEET, PK_REVIVE, PK_DOUBLE, PK_HANDS };
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		if (!is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT || g_down[p])
+		if (!is_user_alive(p) || !is_user_bot(p) || cs_get_user_team(p) != CS_TEAM_CT || is_down(p))
 			continue;
 		if (get_gametime() < g_upNext[p] || bot_gun_rank(p) > RIFLE_LAST)
 			continue;
@@ -3122,38 +2419,28 @@ stock bots_upgrades()
 			continue;
 		g_upNext[p] = get_gametime() + 4.0;
 		new money = cs_get_user_money(p);
-		if (g_nperks[p] < PERK_MAX && money >= perk_price(p) + 400)
+		new n = ls_perk_count(p);
+		if (!g_hasPerkM && n < PERK_MAX && money >= ls_perk_price(p) + 400)
 		{
 			for (new k = 0; k < sizeof ORDER; k++)
-				if (!has_perk(p, ORDER[k]))
+				if (!ls_perk_has(p, PK_ID[ORDER[k]]))
 				{
-					buy_perk(p, ORDER[k], false);
+					ls_perk_buy(p, PK_ID[ORDER[k]], false);
 					break;
 				}
 			continue;
 		}
-		if (g_nperks[p] >= 2 && money >= MK2_PRICE + 600)
+		if (!g_hasBench)
 		{
-			new why[48];
-			new w = mk_why_not(p, why, charsmax(why));
-			if (!why[0] && w && g_mk[w] < 2)
+			new lv = ls_weapon_level(p);
+			if ((lv == 1 && n >= 2 && money >= MK2_PRICE + 600) || (lv == 2 && n >= 3 && money >= MK3_PRICE + 600))
 			{
-				bench_upgrade(p, false);
-				continue;
-			}
-		}
-		if (g_nperks[p] >= 3 && money >= MK3_PRICE + 600)
-		{
-			new why[48];
-			mk_why_not(p, why, charsmax(why));
-			if (!why[0])
-			{
-				bench_upgrade(p, false);
+				ls_bench_use(p, false);
 				continue;
 			}
 		}
 		if (money >= BOX_PRICE + 2500 && random_num(1, 8) == 1)
-			box_use(p, false);
+			ls_box_use(0, p, false);
 	}
 }
 
@@ -3171,14 +2458,7 @@ public ham_creature_hurt(ent, inflictor, attacker, Float:dmg, bits)
 {
 	if (!(1 <= attacker <= MaxClients) || !is_user_connected(attacker) || cs_get_user_team(attacker) != CS_TEAM_CT)
 		return HAM_IGNORED;
-	/* double tap and the gun's Mk */
-	new Float:mult = player_damage_mult(attacker);
-	if (mult != 1.0)
-	{
-		dmg *= mult;
-		SetHamParamFloat(4, dmg);
-	}
-	/* one-hit kills: anything but a boss or a heavy goes down to the next hit */
+	/* (double tap and the gun's Mk: gm_components) one-hit kills: anything but a boss or a heavy goes down to the next hit */
 	if (get_gametime() < g_instaUntil)
 	{
 		new type[16];
@@ -3262,65 +2542,31 @@ stock maybe_powerup(ent)
 	spawn_powerup(random(PU_COUNT), o);
 }
 
+/* a gm_components pickup: whoever on the team walks over it takes it (ls_on_pickup) */
 stock spawn_powerup(kind, const Float:o[3])
 {
-	new slot = -1;
-	for (new i = 0; i < sizeof g_puEnt; i++)
-		if (!g_puEnt[i] || !pev_valid(g_puEnt[i]))
-		{
-			slot = i;
-			break;
-		}
-	if (slot < 0)
+	if (ls_comp_count("ls_pickup") >= 8)
 		return;
-	new e = create_entity("info_target");
-	if (!e)
+	if (!ls_pickup_spawn(PU_KEY[kind], o, 25.0, PU_MODEL[kind], PU_RGB[kind][0], PU_RGB[kind][1], PU_RGB[kind][2], 2))
 		return;
-	entity_set_string(e, EV_SZ_classname, "lst_powerup");
-	entity_set_model(e, PU_MODEL[kind]);
-	entity_set_origin(e, o);
-	set_rendering(e, kRenderFxGlowShell, PU_RGB[kind][0], PU_RGB[kind][1], PU_RGB[kind][2], kRenderNormal, 16);
-	set_pev(e, pev_movetype, MOVETYPE_NOCLIP);
-	set_pev(e, pev_avelocity, Float:{0.0, 90.0, 0.0});
-	g_puEnt[slot] = e;
-	g_puKind[slot] = kind;
-	g_puUntil[slot] = get_gametime() + 25.0;
 	g_puThisWave++;
 	toast(0, 2.0, false, "%s dropped!", PU_NAME[kind]);
 }
 
+public ls_on_pickup(ent, id, const kind[])
+{
+	for (new k = 0; k < PU_COUNT; k++)
+		if (equal(kind, PU_KEY[k]))
+		{
+			take_powerup(k, id);
+			return PLUGIN_CONTINUE;
+		}
+	return PLUGIN_CONTINUE;
+}
+
 public tick_powerups()
 {
-	new Float:now = get_gametime(), Float:o[3], Float:po[3];
-	for (new i = 0; i < sizeof g_puEnt; i++)
-	{
-		new e = g_puEnt[i];
-		if (!e)
-			continue;
-		if (!pev_valid(e) || now >= g_puUntil[i])
-		{
-			if (pev_valid(e))
-				remove_entity(e);
-			g_puEnt[i] = 0;
-			continue;
-		}
-		/* blinks its last 5 s */
-		if (g_puUntil[i] - now < 5.0)
-			set_pev(e, pev_effects, (floatround(now * 4.0) % 2) ? (pev(e, pev_effects) | EF_NODRAW) : (pev(e, pev_effects) & ~EF_NODRAW));
-		pev(e, pev_origin, o);
-		for (new p = 1; p <= MaxClients; p++)
-		{
-			if (!is_user_alive(p) || cs_get_user_team(p) != CS_TEAM_CT)
-				continue;
-			pev(p, pev_origin, po);
-			if (get_distance_f(o, po) > 56.0)
-				continue;
-			take_powerup(g_puKind[i], p);
-			remove_entity(e);
-			g_puEnt[i] = 0;
-			break;
-		}
-	}
+	new Float:now = get_gametime();
 	/* the timed ones running out */
 	if (g_doubleUntil > 0.0 && now >= g_doubleUntil)
 	{
@@ -3383,11 +2629,12 @@ stock take_powerup(kind, by)
 
 stock clear_powerups()
 {
-	for (new i = 0; i < sizeof g_puEnt; i++)
+	new e = ls_comp_find("ls_pickup");
+	while (e)
 	{
-		if (g_puEnt[i] && pev_valid(g_puEnt[i]))
-			remove_entity(g_puEnt[i]);
-		g_puEnt[i] = 0;
+		new next = ls_comp_find("ls_pickup", e);
+		ls_comp_remove(e);
+		e = next;
 	}
 	g_doubleUntil = 0.0;
 	g_instaUntil = 0.0;
@@ -3397,7 +2644,6 @@ stock clear_powerups()
  * The armory: Last Stand's own shop (CS buying stays the map's buy zone)
  * ========================================================================= */
 
-new Float:g_shop[3];
 new Float:g_useNext[33];
 new Float:g_menuUntil[33];
 
@@ -3570,32 +2816,38 @@ stock shop_menu(id)
 		num_to_str(i, info, charsmax(info));
 		menu_additem(m, text, info, 0, g_shopCb);
 	}
-	/* the map has no perk stations / bench / box: they're here */
-	new bool:hasPerk = false, bool:hasBench = false, bool:hasBox = false;
-	for (new i = 0; i < g_nsp; i++)
+	/* the map has no perk machines / bench: they're here (the box is at the armory) */
+	new money = cs_get_user_money(id);
+	if (!g_hasPerkM)
 	{
-		if (g_spKind[i] == SP_PERK) hasPerk = true;
-		if (g_spKind[i] == SP_BENCH) hasBench = true;
-		if (g_spKind[i] == SP_BOX) hasBox = true;
-	}
-	if (!hasPerk)
+		new price = ls_perk_price(id), n = ls_perk_count(id);
 		for (new k = 0; k < PK_COUNT; k++)
 		{
-			perk_why_not(id, k, why, charsmax(why));
-			formatex(text, charsmax(text), "%sPerk: %s \d- %s \y($%d)%s%s", why[0] ? "\d" : "", PK_NAME[k], PK_WHAT[k], perk_price(id), why[0] ? "  \r" : "", why);
+			why[0] = EOS;
+			if (ls_perk_has(id, PK_ID[k]))
+				copy(why, charsmax(why), "you have it");
+			else if (n >= PERK_MAX)
+				formatex(why, charsmax(why), "%d perks at most", PERK_MAX);
+			else if (money < price)
+				copy(why, charsmax(why), "not enough money");
+			formatex(text, charsmax(text), "%sPerk: %s \d- %s \y($%d)%s%s", why[0] ? "\d" : "", PK_NAME[k], PK_WHAT[k], price, why[0] ? "  \r" : "", why);
 			num_to_str(100 + k, info, charsmax(info));
 			menu_additem(m, text, info);
 		}
-	if (!hasBench)
-	{
-		new w = mk_why_not(id, why, charsmax(why));
-		formatex(text, charsmax(text), "%sUpgrade the gun in hand to Mk %s \y($%d)%s%s", why[0] ? "\d" : "", (w && g_mk[w] >= 2) ? "III" : "II", (w && g_mk[w] >= 2) ? MK3_PRICE : MK2_PRICE, why[0] ? "  \r" : "", why);
-		menu_additem(m, text, "200");
 	}
-	if (!hasBox)
+	if (!g_hasBench)
 	{
-		formatex(text, charsmax(text), "Mystery box: a random gun \y($%d)", BOX_PRICE);
-		menu_additem(m, text, "300");
+		new lv = ls_weapon_level(id);
+		new price = lv >= 2 ? MK3_PRICE : MK2_PRICE;
+		why[0] = EOS;
+		if (!lv)
+			copy(why, charsmax(why), "hold a gun");
+		else if (lv >= 3)
+			copy(why, charsmax(why), "it's Mk III already");
+		else if (money < price)
+			copy(why, charsmax(why), "not enough money");
+		formatex(text, charsmax(text), "%sUpgrade the gun in hand to Mk %s \y($%d)%s%s", why[0] ? "\d" : "", lv >= 2 ? "III" : "II", price, why[0] ? "  \r" : "", why);
+		menu_additem(m, text, "200");
 	}
 	menu_additem(m, "Open the gun menu \d(B)", "99");
 	g_menuUntil[id] = get_gametime() + 30.0;
@@ -3624,11 +2876,9 @@ public menu_shop(id, menu, item)
 	if (is_user_alive(id) && at_shop(id))
 	{
 		if (code >= 100 && code < 100 + PK_COUNT)
-			buy_perk(id, code - 100, true);
+			ls_perk_buy(id, PK_ID[code - 100], true);
 		else if (code == 200)
-			bench_upgrade(id, true);
-		else if (code == 300)
-			box_use(id, true);
+			ls_bench_use(id, true);
 		else
 			shop_buy(id, code, true);
 	}
@@ -3712,24 +2962,6 @@ public fm_prethink(id)
 	if (g_phase == PH_IDLE || g_phase == PH_OVER || !is_user_alive(id))
 		return FMRES_IGNORED;
 	new b = pev(id, pev_button), ob = pev(id, pev_oldbuttons);
-	/* a perk station, bench, trap or box within reach: its line on walking up, USE to buy */
-	if (g_nsp && !g_down[id] && cs_get_user_team(id) == CS_TEAM_CT)
-	{
-		new i = spot_near(id);
-		if (i != g_spNear[id] - 1)
-		{
-			g_spNear[id] = i + 1;
-			if (i >= 0 && !is_user_bot(id))
-				spot_hint(id, i);
-		}
-		if (i >= 0 && (b & IN_USE) && (!(ob & IN_USE) || is_user_bot(id)) && get_gametime() >= g_useNext[id])
-		{
-			g_useNext[id] = get_gametime() + 1.0;
-			spot_use(id, i);
-			offers_refresh(id);
-			return FMRES_IGNORED;
-		}
-	}
 	if (is_user_bot(id))
 		return FMRES_IGNORED;
 	if ((b & IN_USE) && !(ob & IN_USE) && get_gametime() >= g_useNext[id] && at_shop(id))

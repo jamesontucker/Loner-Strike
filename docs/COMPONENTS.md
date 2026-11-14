@@ -363,3 +363,70 @@ players drop (weaponboxes) glow too. An item's rarity is the highest tier the lo
 by what it is (AWP/M249/auto-snipers 5, AK/M4/SG552/AUG 4, FAMAS/Galil/P90/XM1014 3, SMGs/M3/Scout/Deagle
 2; medkit 3, drink 2, bandage 1; armor by level). Natives `ls_item_tier(item[])`, `ls_glow(ent, tier)`.
 <!-- ==== end W3 ==== -->
+
+<!-- ==== W1: Last Stand pieces ==== -->
+## Last Stand pieces
+
+Zombie-survival upgrades any mode can use (Last Stand does), with natives and forwards in
+`ls_components.inc` ("W1: Last Stand pieces"). Each buyable one is offered to bots through W2's
+`ls_mode offer <bot> <perk|bench|box|trap> x y z ent cost [order]` every 8 s (`bots=0` on a component
+turns that off); the bot walks there and holds USE, and the component does the buying.
+
+### Player modifiers
+`ls_player_mod(id, what[], mult)`: `health_max`, `speed`, `reload` and `deploy` (times: 0.6 = 40 %
+faster), `damage`, `revive_time` (times), `fire_rate` (1.25 = 25 % faster). The mode's value times the
+perks'; cleared when the player dies. `ls_player_mod_get`, `ls_player_mod_clear`.
+
+### Perks and ls_perk_machine
+Tough (+50 % max health), Quick hands (reloads and swaps 40 % faster), Double tap (+25 % damage), Quick
+revive (revives in 2 s instead of 4; alone, gets back up once by themselves), Light feet (+10 % speed).
+Kept until the player dies or goes down.
+- **ls_perk_machine:** sells one perk; hold USE at it. Keys `perk` (tough, hands, doubletap, revive,
+  feet), `price` (1500), `price_step` (1000 more per perk owned), `max_perks` (4), `model`, `team`, `bots`.
+- Natives: `ls_perk_give`, `ls_perk_has`, `ls_perk_count`, `ls_perk_clear`, `ls_perk_buy(id, perk[], tell)`
+  (the default prices, for a menu), `ls_perk_price`, `ls_perk_tags` (for a HUD). Forward
+  `ls_on_perk(id, perk[], price)` *(handled: refused)*.
+
+### The downed state
+`ls_down_enable(on, bleed_secs = 30, team = 0, lose_perks = true)`: a hit that would kill a player of
+`team` puts them down instead (1 HP, red glow, crawling, creatures ignore them, nothing hurts them). A
+teammate within 80 u holding USE for 4 s (bots: standing there) gets them up with 50 HP; they bleed out
+after `bleed_secs`. The two nearest bots are sent to revive (`goal use`, priority 75).
+- Natives: `ls_is_down`, `ls_down(id)`, `ls_revive(id, by)`, `ls_down_left(id)`. Forwards
+  `ls_on_down(id, attacker)` *(handled: they die as usual)*, `ls_on_revive(id, by)`, `ls_on_bled_out(id)`.
+
+### Weapon levels and ls_upgrade_bench
+A gun's level (1, Mk II, Mk III) stays with the gun entity (`pev_iuser3`), dropped or picked up.
+- **ls_upgrade_bench:** hold USE with a gun in hand. Keys `price2` (5000), `price3` (9000),
+  `level3_from` (wave 12), `dmg2` (1.4), `dmg3` (1.9), `model`, `team`, `bots`. An upgrade also gives a
+  magazine and a half and fills the reserve.
+- Natives: `ls_weapon_level(id, weapon = 0)`, `ls_weapon_set_level(weapon, level)`, `ls_bench_use(id, tell)`.
+  Forward `ls_on_weapon_upgraded(id, weapon, level, price)`.
+
+### ls_mystery_box
+A random gun for `price` (950) from `guns` (`gun:weight ...`); the old gun of that slot is dropped. The
+`super` gun (m249) comes as a Mk II with `super_clip` (150) rounds. Of the boxes in one `group`, one is
+out at a time; after `moves_after` uses ("4-8") it moves to another. `ls_box_use(ent, id, tell)`;
+forward `ls_on_box(ent, id, weapon[])` *(handled: nothing given, nothing paid)*.
+
+### Paid timed trap (ls_trigger_trap)
+With `fire_on=use` and a `cost`, a player holding USE at the trap's spot pays and sets it off; with
+`active_secs` it then stays on that long, hurting creatures inside by `creature_dps` (80) plus
+`creature_dps_pct` (0.16) of their health a second and players by `player_dps` (4, never below 5 HP),
+then recharges `rearm_secs`. `bots_auto=1`: a bot within 700 u with the money switches it on when 4+
+creatures are within 300 u.
+
+### ls_pickup
+`ls_pickup_spawn(kind[], origin, life = 25, model[], r, g, b, team)` drops one (spinning, glowing,
+blinking its last 5 s); a player of `team` walking within `radius` (56 u) takes it. Forward
+`ls_on_pickup(ent, id, kind[])` *(handled: it stays)*. Last Stand's power-ups are these.
+
+### Creatures
+Forward `ls_on_creature_hurt(ent, attacker, dmg, headshot)` after each hit (the damage modifier and gun
+level are applied to players' hits on creatures and on players).
+
+### Last Stand's kit markers
+`lst_perk` (`perk=`), `lst_bench`, `lst_box` and `lst_trap` (`size` or `radius`: the area; fire_on=use,
+cost 1000, active_secs 30, rearm_secs 45 unless given) ls_markers are these components, for the
+Counter-Terrorists unless `team` says otherwise.
+<!-- ==== end W1 ==== -->
