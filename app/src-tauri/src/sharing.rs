@@ -806,6 +806,7 @@ mod name_tests {
     fn keeps_server_name_punctuation() {
         assert_eq!(super::clean_name("Loner-Strike | Alone Together"), "Loner-Strike | Alone Together");
         assert_eq!(super::clean_name("[LS] =Pub= ~24/7~"), "[LS] =Pub= ~24/7~");
-        assert_eq!(super::clean_name("bad\";quit\\é"), "badquit");
+        // ", ; and \\ go; letters of any language stay (server names are UTF-8, up to 63 bytes)
+        assert_eq!(super::clean_name("bad\";quit\\é"), "badquité");
     }
 }
