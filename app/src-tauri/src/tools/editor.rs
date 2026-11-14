@@ -2429,6 +2429,26 @@ pub fn open_document() -> Option<(MapDocument, String)> {
     global().lock().as_ref().map(|s| (s.doc.clone(), s.name.clone()))
 }
 
+/// P5 (share and remix): opens a project file in the editor as Open does, and puts it in Recent.
+pub fn open_project_path(st: &Shared, path: &Path) -> Result<Value, String> {
+    let ed = global();
+    let dirs = wad_dirs(st);
+    let (doc, project) = load_file(path)?;
+    remember(&ed.dir, path, project);
+    Ok(ed.install_from(doc, stem(path), project.then_some(path.to_path_buf()), Some(path), &dirs))
+}
+
+/// P5 (share and remix): where remixed community maps are kept (the editor's own folder).
+pub fn remix_dir() -> PathBuf {
+    global().dir.join("remixes")
+}
+
+/// P5 (share and remix): the projects in the recent list that are on this computer, newest
+/// first (Publish offers them as the map's editable source).
+pub fn recent_projects() -> Vec<PathBuf> {
+    recent_list(&global().dir).into_iter().filter(|r| r.project && r.path.is_file()).map(|r| r.path).collect()
+}
+
 /// The folder the open map came from (its project's, or the imported file's), for finding
 /// texture files kept beside it (P4, QA-1).
 pub fn open_document_folder() -> Option<PathBuf> {

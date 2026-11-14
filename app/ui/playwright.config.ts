@@ -17,7 +17,7 @@ export default defineConfig({
     { name: "small", use: { viewport: { width: 1024, height: 680 } } },
     // WebKit (the Mac app's engine) for the specs listed here (`--project webkit`;
     // `npx playwright install webkit` once)
-    { name: "webkit", testMatch: ["callouts.spec.ts", "studio-help.spec.ts", "studio-ux.spec.ts", "editor-filequeue.spec.ts"], use: { browserName: "webkit", viewport: { width: 1440, height: 900 } } },
+    { name: "webkit", testMatch: ["callouts.spec.ts", "studio-help.spec.ts", "studio-ux.spec.ts", "editor-filequeue.spec.ts", "community-remix.spec.ts"], use: { browserName: "webkit", viewport: { width: 1440, height: 900 } } },
   ],
   webServer: {
     command: "node scripts/tools-dev.mjs",

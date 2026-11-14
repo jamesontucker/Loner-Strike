@@ -265,6 +265,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/tools/community/report"),
     ("POST", "/api/tools/community/reveal"),
     ("POST", "/api/tools/community/try"),
+    ("POST", "/api/tools/community/remix-map"), // P5
     ("POST", "/api/tools/compile/cancel"),
     ("GET", "/api/tools/compile/progress"),
     ("POST", "/api/tools/compile/setup"),
@@ -627,6 +628,7 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
         ("/api/tools/community/unlist", "unlist one of your creations from the public community list (or list it again)"),
         ("/api/tools/community/publish/:map", "build a package of this map for publishing"),
         ("/api/tools/community/try", "download and install something from GameBanana"),
+        ("/api/tools/community/remix-map", "download a community map's editable source and open it in the map editor as your remix"),
         ("/api/tools/community/update", "download and install a newer version of a community creation"),
         ("/api/tools/community/update-all", "download and install every newer community version"),
         ("/api/tools/community/go-back", "put back the earlier version of a community creation"),

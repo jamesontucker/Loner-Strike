@@ -548,8 +548,13 @@ pub struct Item {
     pub added: u64,
     pub updated: u64,
     pub status: Status,
-    /// a remix: the creation it was made from (Game Mode Studio modes)
+    /// a remix: the creation it was made from (Game Mode Studio modes, and P5: maps remixed
+    /// from a map's editable source)
     pub remix_of: Option<super::communitylib::Credit>,
+    /// P5: a map package with its editable source (source/: the editor project, a .map and
+    /// its own textures), so others can remix it
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub source: bool,
     /// the creation's permanent id (a Studio mode's uid), "" for older entries: installs,
     /// updates and remixes match by it
     pub uid: String,
@@ -1705,6 +1710,10 @@ pub struct PublishReq {
     pub maps: Vec<String>,
     /// a game mode: how well bots play it (great / ok / weak / none)
     pub bots: String,
+    /// P5: a map: its editor project (the editable source, and a remix's credit), "" for none
+    pub project: String,
+    /// P5: a map: ship the editable source (source/: the project, a .map, its own textures)
+    pub source: bool,
 }
 
 /// The finished package.
@@ -1775,6 +1784,13 @@ fn readme(item: &Item, r: &Readiness) -> String {
     if !m.modes.is_empty() {
         t.push_str(&format!("Game modes: {}\r\n", m.modes.join(", ")));
     }
+    // P5: a remix says what it came from; the editable source is in source/
+    if let Some(rm) = &item.remix_of {
+        t.push_str(&format!("A remix of {} by {} (https://gamebanana.com/mods/{}).\r\n", rm.name, rm.author, rm.gb));
+    }
+    if item.source {
+        t.push_str("Editable source: source/ has the Loner-Strike project, a Valve 220 .map (Hammer, J.A.C.K., TrenchBroom) and the map's own textures. In Loner-Strike: Community > this map > Remix this map.\r\n");
+    }
     t.push_str(&super::credits::readme_section(&item.credits));
     t
 }
@@ -1813,6 +1829,18 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
             name: names.iter().find(|(n, _)| n == id).map(|(_, n)| one_line(n, 40)).unwrap_or_default(),
         })
         .collect();
+    // P5: the map's editor project: its editable source (when asked) and a remix's credit
+    let project = (!req.project.trim().is_empty()).then(|| PathBuf::from(req.project.trim()));
+    let source = match (&project, req.source) {
+        (Some(p), true) => Some(super::mapsource::build(p, &m.hl, m.game == "czero", &m.name)?),
+        (None, true) => return Err("Pick the map's project for its editable source (or turn that off).".into()),
+        _ => None,
+    };
+    let remix = match (&source, &project) {
+        (Some(s), _) => s.remix_of.clone(),
+        (None, Some(p)) => super::editor::load_file(p).ok().and_then(|(d, _)| d.editor.remix_of),
+        _ => None,
+    };
     let item = Item {
         kind: Kind::Map,
         name: title,
@@ -1824,6 +1852,8 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
         credits: r.credits.clone(),
         added: now(),
         updated: now(),
+        remix_of: remix.map(|c| super::communitylib::Credit { uid: c.uid, model: Model::Mod, gb: c.gb, name: one_line(&c.name, 80), author: one_line(&c.author, 40) }),
+        source: source.is_some(),
         ..Default::default()
     };
 
@@ -1850,7 +1880,8 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
             files.push((rel.replace('\\', "/"), p));
         }
     }
-    let names: Vec<String> = files.iter().map(|(n, _)| n.clone()).collect();
+    let mut names: Vec<String> = files.iter().map(|(n, _)| n.clone()).collect();
+    names.extend(source.iter().flat_map(|s| s.files.iter().map(|(n, _)| n.clone())));
     if let Some(why) = package_refusal(&item, &names) {
         return Err(why);
     }
@@ -1888,6 +1919,16 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
             z.start_file(name.as_str(), opts).map_err(|e| e.to_string())?;
             z.write_all(&body).map_err(|e| e.to_string())?;
             contents.push(name);
+        }
+        // P5: the editable source, counted in the package's size like everything else
+        for (name, body) in source.iter().flat_map(|s| s.files.iter()) {
+            total += body.len() as u64;
+            if total > MAX_PACKAGE {
+                return Err("The package would be over 1 GB.".into());
+            }
+            z.start_file(name.as_str(), opts).map_err(|e| e.to_string())?;
+            z.write_all(body).map_err(|e| e.to_string())?;
+            contents.push(name.clone());
         }
         z.finish().map_err(|e| format!("Couldn't finish the package ({e})."))?.flush().map_err(|e| e.to_string())?;
         Ok(())
@@ -1989,6 +2030,13 @@ pub fn gamebanana_form(p: &Package) -> Value {
     }
     if let Some(h) = &it.health {
         text.push_str(&format!("\n- Loner-Strike map simulation: {} ({} bots, {} min)", h.verdict, h.bots, h.minutes));
+    }
+    // P5: a remix's credit, and the editable source
+    if let Some(r) = &it.remix_of {
+        text.push_str(&format!("\n- A remix of {} by {} (https://gamebanana.com/mods/{})", r.name, r.author, r.gb));
+    }
+    if it.source {
+        text.push_str("\n- Editable source included (source/): the Loner-Strike project, a .map for Hammer, J.A.C.K. and TrenchBroom, and the map's own textures");
     }
     text.push_str("\n\nInstall by hand: copy the folders into cstrike (or czero).");
     let category = match m.modes.first().map(|x| x.as_str()) {
@@ -2512,12 +2560,76 @@ async fn api_ready(State(st): State<Shared>, UrlPath(name): UrlPath<String>) -> 
                     }
                 }
                 let choices = mode_choices(&game.dir, &super::studio::graphs_dir(), &super::communitylib::load_all(&super::communitylib::lib_dir()));
-                Ok(json!({"ready": r, "suggestedModes": suggested, "modeChoices": choices, "tag": format!("{TAG_TITLE}: {TAG_VALUE}")}))
+                Ok(json!({"ready": r, "suggestedModes": suggested, "modeChoices": choices, "tag": format!("{TAG_TITLE}: {TAG_VALUE}"), "projects": source_projects(&m.name)}))
             })
             .await
         }
     };
     json_answer(r)
+}
+
+/// P5: the editor's recent projects, for a map's editable source (the one named like the map
+/// first), each with the community map it was remixed from.
+fn source_projects(map: &str) -> Vec<Value> {
+    let mut list: Vec<Value> = super::editor::recent_projects()
+        .into_iter()
+        .take(20)
+        .map(|p| {
+            let name = p.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let remix = super::editor::load_file(&p).ok().and_then(|(d, _)| d.editor.remix_of);
+            json!({"path": p.to_string_lossy(), "name": name, "match": name.eq_ignore_ascii_case(map), "remixOf": remix})
+        })
+        .collect();
+    list.sort_by_key(|v| v["match"] != json!(true));
+    list
+}
+
+/// P5: "Remix this map": the map's editable source from its community package, saved as a new
+/// project (`<map>_remix`, with the credit) and opened in the editor.
+pub fn remix(st: &Shared, model: Model, id: i64) -> Result<Value, String> {
+    let (idx, _) = index(false);
+    let it = idx.items.iter().find(|i| i.model == model && i.gb == id).cloned().ok_or("This map isn't in the Loner-Strike list, so it has no source to remix.")?;
+    if let Some(why) = try_refusal(it.status) {
+        return Err(why.into());
+    }
+    if it.kind != Kind::Map || !it.source {
+        return Err("This map was shared without its editable source, so it can't be remixed.".into());
+    }
+    let page = profile(model, id)?;
+    let files = files_of(&page);
+    let file = pick_file(&files, None, it.file)?;
+    let f = files.iter().find(|f| f["id"].as_i64() == Some(file)).cloned().unwrap_or_default();
+    let (tmp, src) = fetch_unpacked(file, &s(&f["file"]), &s(&f["md5"]), 512 << 20, false)?;
+    let r = (|| {
+        let names: Vec<String> = crate::archive::walk(&src).iter().filter_map(|p| p.strip_prefix(&src).ok().map(|r| r.to_string_lossy().replace('\\', "/"))).collect();
+        if let Some(why) = package_refusal(&it, &names) {
+            return Err(why);
+        }
+        let (doc, wad) = super::mapsource::read_package(&src)?;
+        let map = it.map.as_ref().map(|m| m.name.clone()).unwrap_or_else(|| "map".into());
+        let credit = crate::editor::doc::RemixCredit { model: "Mod".into(), gb: id, uid: it.uid.clone(), name: it.name.clone(), author: it.author.clone() };
+        super::mapsource::save_remix(&super::editor::remix_dir(), &map, doc, wad, credit)
+    })();
+    let _ = std::fs::remove_dir_all(&tmp);
+    let path = r?;
+    let state = super::editor::open_project_path(st, &path)?;
+    Ok(json!({"ok": true, "path": path.to_string_lossy(), "name": path.file_stem().map(|n| n.to_string_lossy().to_string()), "state": state}))
+}
+
+#[derive(Deserialize)]
+struct RemixReq {
+    model: String,
+    id: i64,
+}
+
+async fn api_remix(State(st): State<Shared>, h: HeaderMap, Json(req): Json<RemixReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let Some(model) = Model::parse(&req.model).filter(|_| req.id > 0) else {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "That isn't a GameBanana page."}))).into_response();
+    };
+    json_answer(blocking(move || remix(&st, model, req.id).map_err(|e| Fail::new(StatusCode::OK, e))).await)
 }
 
 async fn api_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(name): UrlPath<String>, Json(req): Json<PublishReq>) -> Response {
@@ -2529,6 +2641,11 @@ async fn api_publish(State(st): State<Shared>, h: HeaderMap, UrlPath(name): UrlP
         Ok((game, name)) => {
             blocking(move || {
                 let m = locate(&game, &name)?;
+                // P5: the project has to be one of the editor's own recent ones (never any file a
+                // request names: nothing else on the computer goes into a package)
+                if !req.project.trim().is_empty() && !super::editor::recent_projects().iter().any(|p| p.to_string_lossy() == req.project.trim()) {
+                    return Err(Fail::new(StatusCode::OK, "Pick the map's project from the list (open it in the map editor once if it isn't there)."));
+                }
                 let r = readiness(&m, &crate::sys::app_dir().join("tools").join("health"));
                 let pkg = build_package(&m, &r, &req, &packages_dir()).map_err(|e| Fail::new(StatusCode::OK, e))?;
                 Ok(json!({"package": pkg, "form": gamebanana_form(&pkg)}))
@@ -2722,6 +2839,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/community/browse", get(api_browse))
         .route("/api/tools/community/item/:model/:id", get(api_item))
         .route("/api/tools/community/try", post(api_try))
+        .route("/api/tools/community/remix-map", post(api_remix)) // P5
         // [Caps] up to MAX_SHOTS screenshots of MAX_SHOT each, as base64 (axum's 2 MB default refused real ones)
         .route("/api/tools/community/publish/:map", get(api_ready).post(api_publish).layer(axum::extract::DefaultBodyLimit::max(PUBLISH_BODY)))
         .route("/api/tools/community/publish-mode/:id", get(api_mode_ready).post(api_mode_publish))
@@ -3122,6 +3240,48 @@ mod tests {
             assert!(r.files.iter().all(|f| !f.starts_with("gfx/env/des") && f != "models/hostage.mdl"), "both={both}: {:?}", r.files);
             assert!(r.warnings.iter().all(|w| !w.contains("credit")), "both={both}: {:?}", r.warnings);
         }
+    }
+
+    /// P5 (share and remix): a map package with its editable source: source/ holds the project,
+    /// the .map and only the map's own textures; the manifest says so; the installer leaves
+    /// source/ out of the game; a remix's project gives the package its credit.
+    #[test]
+    fn a_package_with_its_editable_source_and_a_remix_credit() {
+        let (root, m) = game("src", "aim_qa");
+        let (other_hl, project) = super::super::mapsource::fixture_project(&root.join("p"));
+        // (the mapper's own WAD beside the project, as the editor finds it)
+        std::fs::copy(other_hl.join("cstrike/mine.wad"), project.parent().unwrap().join("mine.wad")).unwrap();
+        let r = readiness(&m, &root.join("reports"));
+        let out = root.join("packages");
+        let req = PublishReq { title: "Aim QA".into(), author: "jam".into(), project: project.to_string_lossy().to_string(), source: true, ..Default::default() };
+        let pkg = build_package(&m, &r, &req, &out).unwrap();
+        assert!(pkg.item.source);
+        for want in ["source/aim_qa.lsmap", "source/aim_qa.map", "source/aim_qa_custom.wad", "source/README-source.txt"] {
+            assert!(pkg.contents.iter().any(|c| c == want), "{want}: {:?}", pkg.contents);
+        }
+        let mut z = zip::ZipArchive::new(std::fs::File::open(out.join(&pkg.file)).unwrap()).unwrap();
+        let mut man = String::new();
+        std::io::Read::read_to_string(&mut z.by_name("loner-strike.json").unwrap(), &mut man).unwrap();
+        assert!(man.contains("\"source\": true"), "{man}");
+        let mut readme = String::new();
+        std::io::Read::read_to_string(&mut z.by_name("README.txt").unwrap(), &mut readme).unwrap();
+        assert!(readme.contains("Editable source"));
+        // the installer leaves the source out of the game
+        let rels: Vec<Vec<String>> = pkg.contents.iter().map(|c| c.split('/').map(String::from).collect()).collect();
+        let (plan, _) = crate::archive::plan_rels(&rels);
+        assert!(plan.iter().all(|(_, d)| !d.to_lowercase().contains("custom.wad") && !d.ends_with(".lsmap")), "{plan:?}");
+        // no project named: refused with a reason; without source: no source/
+        assert!(build_package(&m, &r, &PublishReq { source: true, project: String::new(), ..req.clone() }, &out).unwrap_err().contains("project"));
+        let plain = build_package(&m, &r, &PublishReq { source: false, ..req.clone() }, &out).unwrap();
+        assert!(!plain.item.source && plain.contents.iter().all(|c| !c.starts_with("source/")));
+        // a remix's project: the package says what it came from (README, GameBanana text, manifest)
+        let (mut doc, _) = super::super::editor::load_file(&project).unwrap();
+        doc.editor.remix_of = Some(crate::editor::doc::RemixCredit { model: "Mod".into(), gb: 4242, uid: String::new(), name: "Original".into(), author: "someone".into() });
+        std::fs::write(&project, doc.to_json()).unwrap();
+        let remix = build_package(&m, &r, &PublishReq { source: false, ..req }, &out).unwrap();
+        assert_eq!(remix.item.remix_of.as_ref().map(|c| (c.gb, c.author.as_str())), Some((4242, "someone")));
+        assert!(gamebanana_form(&remix)["text"].as_str().unwrap().contains("A remix of Original by someone"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// P5 (QA4-G F2): the files not where the game looks are named, singular and plural.

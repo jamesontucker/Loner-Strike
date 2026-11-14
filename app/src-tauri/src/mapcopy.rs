@@ -173,6 +173,11 @@ pub fn entity_files(entities: &str) -> Vec<String> {
 }
 
 /// A texture file every server has (Half-Life's and CS 1.6's own).
+/// The game's own WADs, by name (P5: a map's source ships none of their textures).
+pub fn stock_wads() -> &'static [&'static str] {
+    STOCK_WADS
+}
+
 pub fn stock_wad(rel: &str) -> bool {
     !rel.contains('/') && STOCK_WADS.contains(&rel.to_lowercase().as_str())
 }

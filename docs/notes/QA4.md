@@ -449,6 +449,17 @@ Approve/Deny on a card; accepting an invite in the app; anything said in voice. 
 service's answers, the supporter list, users.ini on Alone Together, cleanup) runs unassisted. Alone Together must be
 left running and healthy (check `systemctl is-active lonerstrike-loner-strike-alone-together*` at the end).
 
+### Share and remix maps (P5, 2026-11-14)
+| Item | Steps | Pass when |
+|---|---|---|
+| Publish with source | Open a map's project in the editor once, compile it, then Community › Publish › A map; tick "Include the editable source"; make the package | The project named like the map is picked; the zip has `source/<map>.lsmap`, `.map`, `<map>_custom.wad` (only the map's own textures: open it in Wally or the editor's Textures, no halflife.wad/cstrike.wad ones) and `README-source.txt`; README and the GameBanana text mention the source |
+| Off by default | Same, without ticking | No `source/` in the zip |
+| Other editors | Open `source/<map>.map` in TrenchBroom (Half-Life game config) or J.A.C.K. with the game's WADs and `<map>_custom.wad` | It opens with every texture; compiles there |
+| Try it ignores source | After registering, Try it on the map | The map plays; nothing from `source/` lands in cstrike (no `<map>_custom.wad` in cstrike) |
+| Remix | On that map's Community page: Remix this map | "Remixing…", then the editor opens `<map>_remix` with the same brushes; a second remix makes `<map>_remix2`; the textures show |
+| Remix credit | Compile the remix as `<map>_remix`, publish it (its project is picked) | The page says "A remix of <map> by <maker>" in the README, the GameBanana text and the Community listing |
+| Malformed source | Hand-edit a package's `source/x.lsmap` to junk (or add `source/x.exe`), upload as a test | The list refuses the .exe; Remix of a junk project says "This map's editable source can't be used: …" and nothing is saved |
+
 ## Round 3 items to re-check
 From QA.md "Round 3": the brain drop crash (30 rounds of drop/drop_all/drop_dead), Last Stand bots buying guns, the
 BR start loadout and drop-in, and the Studio's gm_components loading for templates.

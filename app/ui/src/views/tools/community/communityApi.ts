@@ -67,6 +67,8 @@ export type Item = {
   kind: Kind; model: Model; gb: number; file: number; md5: string; name: string; author: string; summary: string; games: string[];
   map: MapMeta | null; mode: ModeMeta | null; health: HealthMeta | null; screenshots: string[]; tags: string[]; featured: boolean;
   added: number; updated: number; status: "listed" | "hidden" | "revoked";
+  /** P5: a map shipped with its editable source (it can be remixed) */
+  source?: boolean;
 };
 
 export type GbFile = { id: number; file: string; size: number; added: number; md5: string; clean: boolean; supported: boolean };
@@ -139,11 +141,17 @@ export const tryIt = (model: Model, id: number, confirmed: boolean, file?: numbe
   post<{ ok: boolean; job: string; section: string; map: string | null; kind?: "prefab" | "mode"; prefabs?: string[]; wads?: string[]; mode?: string; name?: string; needsConfirm?: string; risks?: string[]; riskCodes?: string[]; differs?: boolean }>(`${base}/try`, { model, id, confirmed, ...(file ? { file } : {}), ...(risks ? { risks } : {}) });
 
 export const readiness = (map: string, signal?: AbortSignal) =>
-  get<{ ready: Readiness; suggestedModes: string[]; modeChoices?: { id: string; name: string; uid: string; studio: boolean }[]; tag: string }>(`${base}/publish/${encodeURIComponent(map)}`, signal);
+  get<{ ready: Readiness; suggestedModes: string[]; modeChoices?: { id: string; name: string; uid: string; studio: boolean }[]; tag: string; projects?: SourceProject[] }>(`${base}/publish/${encodeURIComponent(map)}`, signal);
+
+/** P5: an editor project that can be a map's editable source (`match`: named like the map). */
+export type SourceProject = { path: string; name: string; match: boolean; remixOf?: { gb: number; name: string; author: string } | null };
 
 export type Shot = { name: string; data: string };
-export const publish = (map: string, body: { title: string; summary: string; author: string; modes: string[]; screenshots: Shot[] }) =>
+export const publish = (map: string, body: { title: string; summary: string; author: string; modes: string[]; screenshots: Shot[]; project?: string; source?: boolean }) =>
   post<{ package: Package; form: Form }>(`${base}/publish/${encodeURIComponent(map)}`, body);
+
+/** P5: "Remix this map": the map's editable source as a new project, opened in the editor. */
+export const remixMap = (model: Model, id: number) => post<{ ok: boolean; path: string; name: string; error?: string }>(`${base}/remix-map`, { model, id });
 
 export const register = (url: string, file: string) =>
   post<{ ok: boolean; state: MineState; error?: string | null; item: Item; copy: string; studio?: boolean }>(`${base}/register`, { url, file });

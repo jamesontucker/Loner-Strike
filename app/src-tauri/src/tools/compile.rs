@@ -2611,6 +2611,65 @@ mod tests {
         assert!(v.get("job").is_some());
     }
 
+    /// P5 (share and remix), opt-in: the round trip. The starter room as a project, its editable
+    /// source built as a package would carry it, read back by Remix, saved as the remix, opened
+    /// (the same brushes and entities) and compiled for real. Needs the game and an installed
+    /// SDHLT folder: `LS_TEST_GAME=<Half-Life folder> LS_TEST_SDHLT_DIR=<.../tools/sdhlt/v1.3.1>
+    /// cargo test real_compile_of_a_remix -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn real_compile_of_a_remix() {
+        let (Ok(hl), Ok(install)) = (std::env::var("LS_TEST_GAME"), std::env::var("LS_TEST_SDHLT_DIR")) else {
+            println!("set LS_TEST_GAME and LS_TEST_SDHLT_DIR to run this");
+            return;
+        };
+        let (hl, install) = (PathBuf::from(hl), PathBuf::from(install));
+        assert!(is_installed(&install));
+        let root = std::env::temp_dir().join(format!("ls-remix-real-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("proj")).unwrap();
+        // publish with source: the project's source folder, as the package carries it
+        let doc = super::super::editor::starter_map();
+        let project = root.join("proj/ls_remix_src.lsmap");
+        std::fs::write(&project, doc.to_json()).unwrap();
+        let src = super::super::mapsource::build(&project, &hl, false, "ls_remix_src").unwrap();
+        for (n, b) in &src.files {
+            let p = root.join("pkg").join(n);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, b).unwrap();
+        }
+        // remix: read back, saved with the credit, opened the same
+        let (back, wad) = super::super::mapsource::read_package(&root.join("pkg")).unwrap();
+        let credit = crate::editor::doc::RemixCredit { model: "Mod".into(), gb: 1, uid: String::new(), name: "Source".into(), author: "qa".into() };
+        let path = super::super::mapsource::save_remix(&root.join("remixes"), "ls_remix_src", back, wad, credit).unwrap();
+        let (opened, _) = super::super::editor::load_file(&path).unwrap();
+        assert_eq!((opened.brushes.len(), opened.entities.len()), (doc.brushes.len(), doc.entities.len()));
+        assert_eq!(opened.brushes.values().map(|b| b.faces.len()).sum::<usize>(), doc.brushes.values().map(|b| b.faces.len()).sum::<usize>());
+        // and it compiles
+        let crossover = hl.to_string_lossy().contains("/Bottles/");
+        let bottle = crossover.then(|| {
+            let s = hl.to_string_lossy().to_string();
+            let i = s.find("/Bottles/").unwrap() + 9;
+            s[i..].split('/').next().unwrap().to_string()
+        });
+        let client = crate::steam::Install { hl: hl.clone(), kind: if crossover { "crossover".into() } else { "windows".into() }, bottle, games: vec!["cstrike".into()], dedicated: false };
+        let mut layout = layout_for(&client, &install, true).unwrap();
+        layout.work = layout.work.join(format!("test-remix-{}", std::process::id()));
+        layout.threads = Some(compile_threads(cores(), false));
+        let dirs = crate::goldsrc::wad::search_dirs(&hl, false);
+        let p = Plan { layout: layout.clone(), install_from: install.clone(), name: "ls_remix_test".into(), preset: Preset::Fast, doc: opened, wad_dirs: dirs, maps: None, warnings: vec![], folder: path.parent().map(Path::to_path_buf), assets: None };
+        begin("compile", "test").unwrap();
+        let r = run_compile(p);
+        let problems = with_job(|j| j.problems.clone()).unwrap();
+        finish(r.clone());
+        let v = r.unwrap_or_else(|e| panic!("{e}\n{problems:#?}")).unwrap();
+        let bsp = PathBuf::from(v["bsp"].as_str().unwrap());
+        assert!(crate::goldsrc::bsp::Bsp::open(&bsp, false).is_ok());
+        assert!(problems.iter().all(|p| p.level != "error"), "{problems:#?}");
+        let _ = std::fs::remove_dir_all(&layout.work);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// Opt-in: a real compile of the editor's starter room. Needs the game and SDHLT:
     /// `LS_TEST_GAME=<Half-Life folder> LS_TEST_SDHLT=<sdhlt-v1.3.1.zip> cargo test real_compile -- --ignored --nocapture`.
     /// On a Mac the game must be in a CrossOver bottle (the compile runs there).

@@ -22,7 +22,7 @@ import { drawCover } from "./coverCard"; // MCP: the automatic cover card
 import { BOT_NOTE, BOT_RATING_INFO } from "../../../games";
 import {
   modeReadiness, publish, publishMode, readiness, register, reveal, sizeText, studioGraphs,
-  type AssetCredit, type Form, type MineState, type Package, type Readiness, type Shot,
+  type AssetCredit, type Form, type MineState, type Package, type Readiness, type Shot, type SourceProject,
 } from "./communityApi";
 
 const MAX_SHOTS = 6;
@@ -268,6 +268,36 @@ function mapChecks(map: string, r: Readiness): Check[] {
   return rows;
 }
 
+/** P5: which editor project is the map's, and whether its editable source goes in the package. */
+function SourceStep({ projects, project, setProject, on, setOn }: { projects: SourceProject[]; project: string; setProject: (p: string) => void; on: boolean; setOn: (v: boolean) => void }) {
+  const picked = projects.find((p) => p.path === project);
+  return (
+    <div className="stack-tight" data-testid="cm-source">
+      <label className="cm-wide-check">
+        <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} /> Include the editable source (others can remix it)
+      </label>
+      <label className="small-note">
+        The map's project{" "}
+        <select value={project} onChange={(e) => setProject(e.target.value)} aria-label="The map's project">
+          <option value="">None</option>
+          {projects.map((p) => (
+            <option key={p.path} value={p.path}>
+              {p.name}.lsmap{p.match ? " (named like the map)" : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      {!projects.length && <p className="muted small-note">No map projects in the editor's recent list. Open the map's project in the map editor once, then Check again.</p>}
+      {on && <p className="muted small-note">Adds source/ to the package: the project, a Valve 220 .map, and a texture file with only the map's own textures (never the game's).</p>}
+      {picked?.remixOf && (
+        <p className="small-note">
+          A remix of <b>{picked.remixOf.name}</b> by {picked.remixOf.author}: the package, its README and the GameBanana text credit it.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; onDone: () => void }) {
   const toast = useToast();
   const q = useQuery({ queryKey: ["tools", "community", "ready", map], queryFn: ({ signal }) => readiness(map, signal), retry: false });
@@ -278,11 +308,15 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
   const [shots, setShots] = useState<Shot[]>([]);
   const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
   const { working, run } = useBusy();
+  // P5: the map's editor project (its editable source when asked, and a remix's credit)
+  const [project, setProject] = useState<string | null>(null);
+  const [withSource, setWithSource] = useState(false);
 
   useEffect(() => {
     if (!q.data) return;
     setTitle((t) => t || q.data.ready.title);
     setPicked((p) => (p.length ? p : q.data.suggestedModes));
+    setProject((p) => p ?? (q.data.projects ?? []).find((x) => x.match)?.path ?? "");
   }, [q.data]);
 
   const head = <Head title={map} kind="Map" onBack={onBack} busy={q.isFetching} onRecheck={() => q.refetch()} />;
@@ -319,7 +353,7 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
   const build = () =>
     run("Packing…", async () => {
       remember();
-      const res = await publish(map, { title, summary, author, modes: picked, screenshots: shots });
+      const res = await publish(map, { title, summary, author, modes: picked, screenshots: shots, project: project ?? "", source: withSource && !!project });
       if (res.error) return toast(res.error, true);
       setDone({ pkg: res.package, form: res.form });
     });
@@ -365,8 +399,11 @@ function PublishMap({ map, onBack, onDone }: { map: string; onBack: () => void; 
           <p className="muted small-note">The map only uses the game's own files and yours: nobody else to credit.</p>
         )}
       </Step>
+      <Step n={6} title="Editable source" note="Optional. Others can open the map in Loner-Strike's editor (Remix this map), or the .map in Hammer, J.A.C.K. or TrenchBroom, and make their own version that credits yours.">
+        <SourceStep projects={q.data.projects ?? []} project={project ?? ""} setProject={setProject} on={withSource} setOn={setWithSource} />
+      </Step>
       <Action note={blocked ? "Fix the checks marked Must fix first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana and register the page."}>
-        <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || !title.trim() || !author.trim()} onClick={build} />
+        <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || !title.trim() || !author.trim() || (withSource && !project)} onClick={build} />
       </Action>
     </div>
   );

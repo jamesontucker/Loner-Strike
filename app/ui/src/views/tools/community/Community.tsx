@@ -23,7 +23,7 @@ import { useToolCrumbs, type Crumb } from "../common/shell";
 import { Empty, Loading } from "../common";
 import type { ToolProps } from "../registry";
 import {
-  BADGE_LABEL, KIND_LABEL, NOTE_MAX, REPORT_REASONS, ago, browse, details, launch, report, sizeText, startModes, tryIt,
+  BADGE_LABEL, KIND_LABEL, NOTE_MAX, REPORT_REASONS, ago, browse, details, launch, remixMap, report, sizeText, startModes, tryIt,
   type Details, type Entry, type Model, type ReportReason, type Trust,
 } from "./communityApi";
 import Publish from "./Publish";
@@ -528,6 +528,7 @@ function Creation({ d }: { d: Details }) {
           ) : (
             <>
               <button className="btn primary" disabled={!d.canTry || getting !== null} onClick={() => go(false)}>{missingNeeds.length ? "Just the mode" : "Try it"}</button>
+              {d.kind === "map" && d.item?.source && <RemixButton model={d.model} id={d.id} name={d.name} />}
               {missingNeeds.length > 0 && (
                 <button className="btn" disabled={!d.canTry || getting !== null} onClick={() => void getEverything()} title="The mode plus the maps and content it needs, each through its own installer and checks">
                   {getting !== null ? (
@@ -664,5 +665,27 @@ function BotFacts({ d }: { d: Details }) {
         </li>
       )}
     </ul>
+  );
+}
+
+/** P5: "Remix this map": its editable source as a new project of yours (credited), opened in the editor. */
+function RemixButton({ model, id, name }: { model: Model; id: number; name: string }) {
+  const toast = useToast();
+  const { working, run } = useBusy();
+  const go = () =>
+    run("Remixing…", async () => {
+      const r = await remixMap(model, id);
+      if (r.error) return toast(r.error, true);
+      toast(`${r.name} is yours to change: a remix of ${name}. Publishing it credits the original.`);
+      useNav.getState().go("tools", "editor");
+    });
+  return (
+    <BusyButton
+      className="btn"
+      busy={working !== null}
+      busyLabel={working ?? "Remixing…"}
+      label="Remix this map"
+      onClick={go}
+    />
   );
 }

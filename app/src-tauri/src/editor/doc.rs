@@ -221,6 +221,24 @@ pub struct EditorSettings {
     /// list follow the project by it when it's renamed or moved
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uid: Option<String>,
+    /// P5: the community map this project was remixed from (Remix this map), credited when the
+    /// remix is published
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remix_of: Option<RemixCredit>,
+}
+
+/// P5: where a remixed map came from: the community creation's GameBanana page, its name and
+/// who made it ("A remix of X by Y").
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(default)]
+pub struct RemixCredit {
+    /// "Mod" (a GameBanana mod page)
+    pub model: String,
+    pub gb: i64,
+    /// the original's permanent id (its project uid), "" when it had none
+    pub uid: String,
+    pub name: String,
+    pub author: String,
 }
 
 /// P5: a new random UUID (version 4), as text.

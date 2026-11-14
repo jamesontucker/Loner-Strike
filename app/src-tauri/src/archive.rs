@@ -390,7 +390,6 @@ fn lsar_entries(lsar: &Path, archive: &Path) -> Option<Vec<serde_json::Value>> {
     v.get("lsarContents")?.as_array().cloned()
 }
 
-/// Zip files are read here directly. Ok(false): not a zip we can read, let tar try.
 thread_local! {
     /// Entries the last unpack on this thread left out for safety (links, paths outside the
     /// download): plan() lists them with what it skipped, so they aren't dropped silently.
@@ -411,6 +410,7 @@ pub fn take_dropped() -> Vec<String> {
     DROPPED.with(|d| std::mem::take(&mut *d.borrow_mut()))
 }
 
+/// Zip files are read here directly. Ok(false): not a zip we can read, let tar try.
 fn extract_zip(archive: &Path, dest: &Path, budget: u64) -> Result<bool, String> {
     let _ = take_dropped(); // (a fresh list for this archive)
     use std::io::{Read, Write};
@@ -665,8 +665,11 @@ pub fn plan_rels(rels: &[Vec<String>]) -> (Vec<(usize, String)>, Vec<String>) {
         .filter(|n| n.ends_with(".bsp"))
         .map(|n| n[..n.len() - 4].to_string())
         .collect();
+    // P5: a Loner-Strike package's source/ (the editable source: its project, .map and texture
+    // file) is for Remix, never installed into the game
+    let ls_package = rels.iter().any(|p| p.len() == 1 && p[0].eq_ignore_ascii_case("loner-strike.json"));
     for (index, parts) in rels.iter().enumerate() {
-        if parts.is_empty() {
+        if parts.is_empty() || (ls_package && parts.len() > 1 && parts[0].eq_ignore_ascii_case("source")) {
             continue;
         }
         let rel = parts.join("/");

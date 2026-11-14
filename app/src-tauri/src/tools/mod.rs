@@ -22,9 +22,10 @@ mod devserve;
 pub mod shot;
 pub mod overview;
 pub mod demos;
-pub mod compile;
 pub mod plugins;
+pub mod compile;
 pub mod community;
+pub mod mapsource; // P5: a map's editable source in its package, and Remix
 pub mod communitylib;
 pub mod credits;
 pub mod playercfg;
@@ -313,8 +314,8 @@ pub fn local_routes() -> Router<Shared> {
         .merge(shot::routes())
         .merge(overview::routes())
         .merge(demos::routes())
-        .merge(compile::routes())
         .merge(plugins::routes())
+        .merge(compile::routes())
         .merge(community::routes())
         .merge(communitylib::routes())
         .merge(credits::routes())
