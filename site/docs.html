@@ -1237,8 +1237,8 @@ public on_spawn(id)
     <li>The example <b>The Quest Giver</b>: an NPC asks you to find a note; using the note pays a reward.</li>
   </ul>
   <h2 id="npc-dialogue-table">Dialogue from a table</h2>
-  <p>A whole dialogue tree can be a data table (one row per line: the text, the replies, and which row each reply goes to) plus one function that reads a row, runs Say and Choose, and goes to the row the chosen reply names.</p>
-  <!-- X: Dialogue table template + Run Dialogue library item -->
+  <p>A whole dialogue tree can be a data table (one row per line: the text, the replies, and which row each reply goes to) plus a macro that reads a row, runs Say and Choose, and goes to the row the chosen reply names.</p>
+  <p>It comes with the app: in Game Mode Studio's <b>My library</b>, add the built-in <b>Run Dialog</b>. It brings the <b>Dialog</b> table (columns id, speaker, line, Reply 1-6 and Next 1-6, with a 5-row sample conversation to change) and the macro: wire Talked To NPC's player and NPC into it with the id of the first row. Each reply goes to its Next row; <code>end</code> (or empty) ends the talk. A Next that no row has ends it too, and Problems names it; a talk stops after 64 lines in case the table goes round in a circle. Ended runs once, with the row it stopped at.</p>
   <h2 id="npc-share">Sharing</h2>
   <p>An NPC's own model and sounds go with the map or mode you publish, in your own folder, the same way <a href="#creatures-how">shared creatures</a> do.</p>
 </section>
