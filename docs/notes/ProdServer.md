@@ -80,3 +80,28 @@ deployed. The box was only read (no restarts, no file changes).
    misfires). Not done yet.
 
 Sim copy used: Sim/PCX (port 27400), stopped. Scratch compile dir: drive_c/Loner-Strike/PCfix.
+
+## Y (2026-11-14): cause found and fixed - the official Ham Sandwich
+- **Cause:** prod ran AMX Mod X's **official** hamsandwich_amxx_i386.so (sha256 d6197ed0..., dated Oct 11, from the
+  first setup), not the app's fixed build (dd398607...). Its special-bot queue keeps a freed forward across a map
+  change (resources/linux/hamsandwich/README.md); `RegisterHamPlayer` in gm_humanbots (and gm_vip) queues one at
+  every start, and gamemodes reloads the first map before a bot joins, so the first bot after the reload does
+  AddRef on freed memory. AMX Mod X's own data gets overwritten; it shows at the next map change in
+  `CLangMngr::CLang::Clear` / the lang key THash (and the precache / nVault forward floods).
+- **How it got there:** `ensure_ham` only ran when the app's Start button started the server. Prod is started by
+  systemd (Restart=always), lsctl, the control service and the watchdog, so the fixed module never went in.
+- **Evidence (copy of prod in ~/perftest, 127.0.0.1, 31 bots, a changelevel every 35 s):**
+  - exact prod copy: crashes at the first map change (3 of 3), same site as prod (amxmodx +0x3eeb4 / +0x412e7);
+  - ls19 game DLL instead of ls20: still crashes (2/2); without relocalizebugfix: still crashes (2/2); engine ls6:
+    still crashes (2/2); only stock AMXX plugins: no crash (2/2); bisected to gamemodes + gm_humanbots (style 3);
+  - **the fixed Ham Sandwich, everything else prod's: 18 map changes, no crash (3 runs of 6); the official one in
+    the same copy: crash at change 1 (3 of 3).**
+- **Prod now:** fixed module in place (backup `hamsandwich_amxx_i386.so.official-20261114` beside it), service
+  restarted 06:59; 6 forced map changes on the same PID, NRestarts 0, no segfault since.
+  Rollback: `cd ~/loner-strike/servers/loner-strike-alone-together/cstrike/addons/amxmodx/modules && cp
+  hamsandwich_amxx_i386.so.official-20261114 h.new && mv -f h.new hamsandwich_amxx_i386.so && sudo systemctl restart
+  lonerstrike-loner-strike-alone-together` (don't: the official one crashes).
+- **Closed in the app:** the unit (unit 8) puts the fixed module back before every start (ExecStartPre, from
+  `~/loner-strike/bin/hamsandwich_fixed_i386.so`, which ensure_ham keeps); crash records in `crashes/` flag an official
+  or unknown Ham Sandwich (modules.json). Prod gets unit 8 at the app's next start of it.
+- The "double free on stop" I noted earlier is a different, harmless AMX Mod X exit path (SIGTERM).
