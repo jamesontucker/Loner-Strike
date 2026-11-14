@@ -90,13 +90,20 @@ engines); the player's real CZ install was not touched.
 | All Actions palette (5c7cb5be) | Folders and sub-folders, search opens matches, Favorites, Recently used, Context Sensitive from a dropped wire |
 | Several event graphs (44dd882a) | Events on a second tab run; copy/paste across tabs keeps inner wires; two of the same event run in tab order |
 | Custom events (69a594c2) | Call Custom Event with typed inputs; Set Timer by Event; an `ls_event` entity on the map fires it |
-| Timelines **(when it lands)** | A looping number track drives a node every tick; Finished fires; reverse works |
+| Timelines (115d83ea, af17cd85, 462b4872) | A looping number track drives a node every tick; Finished fires; reverse works; each key type (Linear, Constant, Ease In/Out/In-Out, Custom tangents) shapes the curve as drawn; a 4 s Timeline lasts 4 s of game time on a sim (Finished's game time minus Play's, ±0.3 s) and each event key fires once |
 | Node help (f90f5238) | F1 on any node shows its help; search finds by words; the example drops in |
 | New nodes (cd541ea8, 71ca7012, 4d7cf6b1) | Each W1/W3 component node and the round-table/turret nodes does what its help says in a playtest (debug events as evidence) |
 | Security (2536e0b9, b2865b91, c0c650c5) | Run Server Command refuses `exec`, `rcon_password`, `quit`, quoted first words, `amx_` lines; Run AMX Command allows only its list; Kick reasons and map names can't inject |
 | Example modes (60d61837 Infection; X2's five) **(when they land)** | Each compiles, test-runs to pass and plays 3 rounds with bots on QA4S without run-time errors |
 | Debugger | Breakpoints, Resume, live variables (round 3's For Each freeze stays fixed) |
 | MCP Studio (d3b922bb) | An agent builds a 3-node mode with `studio_edit`, `studio_check` passes, `studio_test_run` asks first and returns pass/warn/fail |
+| Mode settings (361dca58, 77c560a8, 76a4d024) | A mode with a number setting: change it on the Play page (local) and on a remote server's page; set an out-of-range value; Reset one, then Reset all | The new value shows in the game at the next round; out of range warns and is still used; reset puts the default back; the first save on a fresh Linux server works (no SFTP error) |
+| Data tables (eaef8b97) | Make a table in the grid; paste CSV; Get Row / Get Cell / For Each Row / Find Rows in a graph; play Gun Game Lite | Values in game match the grid; a bad CSV row is refused with a reason; Gun Game Lite gives the table's guns in order |
+| Editing helpers (5fb7762c, 86b8f755, 2e4ff94f, 5a4bbe95, aa1c1970) | Live tweaks during a Playtest; Versions (compare, Restore); Promote to Variable on a pin; bookmarks (Ctrl+Shift+1, Ctrl+1); hold B/S/D and click; drag a variable with Ctrl / Alt / no key; type a value on an unwired pin | A tweak changes the running game at once; Restore is one undo step; Promote names the variable after the pin; bookmarks jump back; quick-add places the node; Ctrl = Get, Alt = Set, no key = a choice; the pin value and Details always match |
+| Creature control (6059738b, 462b4872) | On a sim with the current brain: a graph using Creature State, Target, Set Speed, Set Tier, Resume AI, Go To and Creature Idle | State/Target print what the creature does (5 chase, its target); Speed visibly faster; Tier 3 gets the red-orange shell; Resume gives it back its own behavior; Go To walks it there; Creature Idle fires for a stuck one; an older brain logs "need a newer Loner-Strike bot brain" once |
+| Bot nature and orders (660e1a72, f3a3ba80) | Bot Skill / Bot Trait print values; Bots: Goal "Hunt it" on a target; the same order with personality influence 0, then 100 | Values match the bot's profile; hunters close on the target (sim: average distance well under the old goal's); at 0 every bot obeys, at 100 some careful ones decline |
+| Requirements, screenshots, cover (G's rows) | See G: Requirements in the Studio, Playtest screenshots, Cover card | As in G (not repeated here) |
+| Mode list on a running server (6d5eeac4, e7127141) | Add a Studio mode to a running local server, then a Linux one (Community content › tick it › Apply); switch to it at once; remove it; then 60 modes in modes.ini on a sim | `gm_mode <new>` works without a map change; removed: "Unknown mode" at once; an older menu shows "Available after the next map change"; 60 modes list and switch, the vote works; over 128 the log says how many were left out |
 
 ## C. Last Stand and creatures (W1, Y)
 ls_outpost (32 spawns), 6 Normal bots + the user on the client for the visual rows.
@@ -109,6 +116,8 @@ ls_outpost (32 spawns), 6 Normal bots + the user on the client for the visual ro
 | Tiers and enrage (a7a7e7dd, 49534c0a) | Tier 2 from round 15, tier 3 from 20 (`lst_jump`), enraged speed/damage under the threshold |
 | Fleeing (aeee90ca, Y's flee_hp/flee_home/flee_last) | A hurt spitter runs home and comes back; with 3 or fewer left none flees; no wave hangs over 3 minutes on one creature |
 | Wave pace | 6 Normal bots reach wave 7-9; no crash in 30 waves (`crashcheck.sh`) |
+| Bench and spending (W1, W2) | 16 bots, Normal, to wave 12; watch money and buys (`lst_debug` or the round table log) | The first bench Mk II around waves 8-10; bots save between waves instead of spending it all; bots repair boards between waves; careful/greedy personalities spend differently (log shows who bought what) |
+| Downed bots (W1, W2) | Down a bot near creatures | It crawls, and shoots back with its pistol while downed; it can be revived |
 
 ## D. Battle Royale (W3, W1, W2)
 br_valley v6; squads on QA4B (16 bots), duos/solo on QA4B2.
@@ -116,8 +125,9 @@ br_valley v6; squads on QA4B (16 bots), duos/solo on QA4B2.
 |---|---|
 | Squads and duos (5bc0e2df, 14fb4c12, fe158c49) | br_duo and br_squads in the vote and modes.ini; the 30 s lobby (say /squad); squad mates can't hurt each other; markers and radar dots |
 | Knocked down in squads (c5ef3a88) | Downed until bled out or revived; out when the whole squad is down |
-| Bots reviving **(as tuned by W2/W3)** | In 4 squad games, bots revive a knocked squad mate at least half the time it's safe (W3.md had 1 in 4 games) |
-| Finishing a downed player **(when it lands: W1's `ls_down_finish`)** | An enemy's shots finish a downed player; the kill counts |
+| Bots reviving (W2/W3) | 4 squad games with bots | Several revives per game (the log counts them); bots revive a knocked squad mate at least half the time it's safe; the reviver gets the $150 revive bonus in modes that pay it (Last Stand; BR sets it to 0, so none there) |
+| Bleed-out | A knocked squad member nobody revives | Out after 45 s (the bar runs out), counted as a death |
+| Finishing a downed player (fe2c3b71) | In BR an enemy squad finds a knocked player | Their shots finish them (`ls_down_finish` 1); the kill counts for the shooter |
 | Loot (5ca3ad76, 060d9a90, 6b4aecdf, 25140068, bed0141b) | Death crates hold the dead player's guns and ammo; armor levels reduce damage; healing items work with the bar; rarity glow colors |
 | HUD and drop-in (1d543873, 2c89e395, 83f5f83d) | Players left, kills, zone timer, next-zone distance and radar dot; the drop-in steers and lands without damage |
 | Bot layers (decb83fb) | About 3 in 10 bots go below ground, 1 in 4 high; no drop-in deaths in 10 games |
@@ -159,7 +169,17 @@ Dojo: no dojo rows here; dojo is removed from 1.0 by the user (it isn't in the c
 | MCP live (Claude Code against the built app) | `claude mcp add` with the stdio bridge connects; 170 tools listed; read-only with Allow changes off; every ask-first action shows the native dialog and "Don't allow" leaves things as they were; the activity log lists each call; an agent builds a room, fixes a Checks finding by id, reads the Budget and makes a Studio mode end to end |
 | Site (8553153e, 183fc15e, ac912386, e6cd1d71) | Homepage sections, titles and meta as in Site.md; no version numbers; every link works; Windows-first docs; phone width without sideways scroll |
 | Legal (91a31d52, 9faeebc8, 302761ea, ee7222f1) | Terms and Privacy linked under Set it up and in About; Publish requires "I have the right to share this"; DMCA agent and legal email right; the warranty panel is bold and bordered |
+| Site downloads (R2) | On lonerstrike.com press Download for Windows and for Mac | Both files come from the R2 address with versioned names and open (the DMG mounts, the setup.exe starts) |
+| Support Pack and thanks (d073ed9b, f40f709f, b782545b) | The Support Pack section; both checkout buttons (one-time, monthly); finish a test purchase | Each opens the right Polar product; after paying, the thanks page (connect Discord, /link steps, downloads); Terms has "The Support Pack" paragraph dated Nov 14 |
+| Made by players page | Open it with an empty list, then with entries; press Open in Loner-Strike | The empty state reads well; Open in Loner-Strike opens the app on that item; the support cards are centered |
 | Fresh setup and update | A clean bottle: setup end to end, then an update; the fixed Ham Sandwich is installed on Windows/CrossOver |
+| **Update from 0.1.2, Mac (critical)** | Install 0.1.2 (DMG) in a test user account; set it up, make a local server, change some settings, play a match (records), keep a backup; then update to 1.0 through the app's banner (coordinate with P5's dry run in P5.md) | Nothing lost: settings, servers (and their settings), records, backups, recent maps; the AppData folders moved on first start with the old ones gone or explained; the Ham Sandwich check (hamguard) puts ours in on first start; the server starts |
+| **Update from 0.1.2, Windows (critical, needs user)** | The same on a real Windows PC with the 0.1.2 NSIS installer, then 1.0's (see also H › Update) | The same as on the Mac; no console windows; the big folders leave Roaming |
+| Condition Zero (W2, Y) | Switch the game to Condition Zero; Play with bots; then the CZ update path from 0.1.2 | The hidden server runs our brain (the console's version line); CZ bots use our behavior; updating keeps CZ's settings |
+| Update banner | With an update available and a brain update too | One banner for both, one button; nothing asked twice |
+| Voice on its file channel (voice-agent) | Voice on; say a bot command in game; open the feed and "Who's here" | Bots answer aloud; the feed shows the lines; who's here lists players; no RCON command or password in any voice log |
+| Editor frame time | Open the map editor's performance readout on br_valley | The frame-time number updates while moving and matches the perf spec's range |
+| Nav pack | Fresh setup; Maps page | 72 maps with navs from the live pack; no dojo or jigsaw2 |
 
 
 ### Area F self-check (MCP, 2026-11-14, before QA starts; Rust tests, the stdio bridge, the site in two engines)
@@ -251,11 +271,13 @@ current builds (gm_extras and gm_vip 1.2 from `tools` HEAD, ls-control unit 4 on
 | Claimed again | Claim the same address from another app; then `lsmod.py roles servers` | The first app's card says the claim ended; the old server isn't official, its moderators are gone (Discord role too), the team channel got the alert |
 | /link | Say /link in game; type the code in Discord; a wrong code; one 11 minutes old; /link again for another SteamID; /unlink | The code shows in chat, console and on screen; "Linked…"; "isn't right"; "ran out"; relinking replaces; unlink works; on a server whose app is closed: "This server can't make link codes…" after 10 s |
 | Link squatting | Link a SteamID from a community server with account A; then link it on an official server with account B; `lsmod.py roles unlink <steamid>` | B's verified link replaces A's and A gets a DM; a code for a player not on the server is refused; the unlink is in `lsmod.py roles log` |
+| Supporters, live (**needs user**: a real test purchase) | Buy the Support Pack, connect Discord, `/link` in game (the code also shows in the console), then `/link <code>` in Discord; then refund it and unlink | Discord gives the Supporter role; the linked SteamID gets VIP in users.ini on the official server; refund or unlink takes the role and the VIP away |
 | Supporters (Polar test events) | Monthly grant, revoke; one-time order twice; a full refund of one, a partial refund of the other; a bad signature; the same event again; an older grant after a revoke | Supporter while monthly is granted; 60 days for two one-time orders, 30 after the full refund (the partial one keeps its days, logged in `lsmod.py roles log`); 401; replay ignored; the older event ignored |
 | VIP in game | A linked supporter joins the official server; the Admins page's Supporters switches; reserved slot 1 with bots filling the server | [VIP] tag and scoreboard mark, the join message; no gear or money; a non-supporter in the kept slot is kicked unless a bot makes room; a host server with Honor off shows nothing, with it on the supporter within 5 minutes |
 | Application, owner | Apply › Server moderator for a claimed server (not linked first; then linked); the owner approves by DM; Create moderator invite; accept it | "Link your SteamID first"; the card reaches the owner's DMs (unverified link marked); approve DMs the applicant; the invite comes by DM; accepting gives app access as Moderator, the in-game Moderator role and the Discord role Server Moderator |
 | Application, Discord moderators | With Let Discord moderators decide on, a moderator denies with a reason from the team channel; without it, they try | Denied with the reason DMed and the owner's copy edited; without the switch: "You can't decide…"; nobody decides on their own |
 | Admin invites | A shared-control Admin (local and Linux server) makes the invite and revokes | Works on their server only; they never see the claim or the switches; on the Linux server it works with the owner's computer off |
+| Delegation | Turn on "Let Discord moderators decide"; add a shared-control Admin; each handles one application end to end (invite, redeem, revoke) | Admins act only for their server; Discord moderators decide from the team channel; the log names who did it |
 | DMs closed, revoke, unclaim | An applicant with DMs closed; Revoke an active moderator; Unclaim | The invite shows to copy; revoke takes app access, the in-game role and the Discord role; unclaim does the same for every moderator and the claim leaves the Linux server |
 | Log | `lsmod.py roles log` | Every claim, link, decision, invite, redemption, revoke and eviction is there |
 
