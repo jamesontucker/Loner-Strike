@@ -3,7 +3,6 @@
 .ps-note { margin: 0; padding: 8px 12px; border-radius: 3px; background: var(--side); color: var(--bone-dim); box-shadow: var(--sunken); }
 .ps-note.warn { color: var(--warn); }
 .ps-main { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 12px; height: max(560px, calc(100vh - 220px)); }
-@media (max-width: 820px) { .ps-main { grid-template-columns: minmax(0, 1fr); height: auto; } .ps-files { max-height: 260px; } .ps-editor-col { height: 680px; } }
 
 /* files */
 .ps-files { display: flex; flex-direction: column; gap: 6px; padding: 10px; overflow: auto; min-height: 0; }
@@ -14,7 +13,7 @@
 .ps-folder-head:focus-visible, .ps-file:focus-visible, .ps-file-del:focus-visible, .ps-problem:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
 .ps-caret { width: 12px; color: var(--bone-faint); }
 .ps-folder-empty { margin: 2px 0 6px 16px; font-size: 13px; }
-.ps-filter { margin: 2px 0 4px 16px; padding: 3px 6px; font: inherit; font-size: 13px; width: calc(100% - 16px); }
+.ps-filter { flex: none; max-width: none; margin: 2px 0 4px 16px; padding: 3px 6px; font: inherit; font-size: 13px; width: calc(100% - 16px); }
 .ps-file-list { list-style: none; margin: 0; padding: 0 0 0 12px; }
 .ps-file-list li { display: flex; align-items: center; border-radius: 2px; }
 .ps-file-list li.on { background: var(--panel-2); }
@@ -121,3 +120,16 @@
 
 /* the action bar sits under the studio */
 .ps > .tl-actionbar { margin-top: 0; }
+
+.ps-files-toggle { display: none; }
+/* (last, so it wins over the rules above) narrow windows (down to 800x600): the editor first, the file list a drawer over it (Files),
+   and the tool's blurb hidden (QA4-T1 H1) */
+@media (max-width: 1000px), (max-height: 700px) {
+  .tools-head:has(~ .ps) > p { display: none; }
+  .ps-main { position: relative; grid-template-columns: minmax(0, 1fr); height: max(400px, calc(100vh - 150px)); }
+  .ps-files { display: none; }
+  .ps-files.open { display: flex; position: absolute; z-index: 5; top: 0; left: 0; bottom: 0; width: min(300px, 90%); box-shadow: 0 8px 28px rgba(0, 0, 0, .5); }
+  .ps-files-toggle { display: inline-flex; }
+  .ps-bottom { flex-basis: 30%; min-height: 120px; }
+}
+.ps-new-error { color: #f0b9a6; }

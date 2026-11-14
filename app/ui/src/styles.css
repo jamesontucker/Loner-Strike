@@ -1712,6 +1712,7 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .qmenu-list button.danger { color: #f0b9a6; }
 .qmenu-list .tick .spinner { width: 10px; height: 10px; margin: 0; }
 .ask-field { margin: -4px 0 16px; }
+.ask-field .ask-error { color: #f0b9a6; font-size: 13px; line-height: 1.4; }
 @media (max-width: 760px), (pointer: coarse) {
   .prow-act .btn.small { min-height: 40px; padding: 4px 12px; }
 }

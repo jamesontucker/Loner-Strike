@@ -9,6 +9,7 @@ import type { MapInfo } from "../../../types";
 import { Banner, BusyButton, Info, LoadError, Segmented, useAskText, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading } from "../common";
 import { errorText, get } from "../common/api";
+import { RESERVED_NAME, windowsReserved } from "../common/fileNames";
 import { Thumb } from "../common/MapBrowser";
 import { matches, searchWords } from "../common/search";
 import type { ToolProps } from "../registry";
@@ -41,7 +42,15 @@ function ago(t: number) {
   return d.toLocaleDateString(undefined, d.getFullYear() === new Date().getFullYear() ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
 }
 
-const mb = (n: number) => (n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(n >= 100 << 20 ? 0 : 1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+const mb = (n: number) => (n <= 0 ? "Empty" : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(n >= 100 << 20 ? 0 : 1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+/** Why a new name can't be used, before asking the server (it checks again). */
+const nameProblem = (to: string) => {
+  const name = /\.dem$/i.test(to) ? to : `${to}.dem`;
+  if (!to) return "Type a name.";
+  if (windowsReserved(name)) return RESERVED_NAME;
+  if (!/^[A-Za-z0-9_\-()[\]][A-Za-z0-9 _\-.()[\]]*$/.test(name) || name.length > 128) return "That name can't be used. Use letters, numbers, spaces and - _ . ( ) [ ].";
+  return null;
+};
 
 type Sort = "name" | "map" | "seconds" | "modified" | "size";
 type Busy = "play" | "rename" | "delete" | "replay" | "reveal";
@@ -71,18 +80,27 @@ function useActions(onRenamed: (d: Demo, to: string) => void, onGone: (d: Demo) 
       toast(r.message || "Starting the game…");
       if (r.copied) reload();
     });
+  /** The error in words, or null when renamed. */
+  const renameNow = async (d: Demo, to: string): Promise<string | null> => {
+    const r = await renameDemo(d, to);
+    if (r.error) return r.error;
+    toast(r.message || "Renamed.");
+    onRenamed(d, r.name ?? (/\.dem$/i.test(to) ? to : `${to}.dem`));
+    reload();
+    return null;
+  };
   const renameTo = (d: Demo, to: string) =>
     doing(d, "rename", async () => {
-      const r = await renameDemo(d, to);
-      if (r.error) return toast(r.error, true);
-      toast(r.message || "Renamed.");
-      onRenamed(d, r.name ?? (/\.dem$/i.test(to) ? to : `${to}.dem`));
-      reload();
+      const why = await renameNow(d, to);
+      if (why) toast(why, true);
     });
-  const rename = async (d: Demo) => {
-    const to = await askText(`A new name for ${d.name}`, { label: "Name", placeholder: stem(d.name), max: 60 }, { ok: "Rename" });
-    if (to) await renameTo(d, to);
-  };
+  // the dialog stays open on an error, with it under the name and what was typed kept
+  const rename = (d: Demo) =>
+    askText(
+      `A new name for ${d.name}`,
+      { label: "Name", placeholder: stem(d.name), max: 60, value: stem(d.name) },
+      { ok: "Rename", busy: "Renaming…", check: (to) => nameProblem(to) ?? (to === stem(d.name) ? null : doing(d, "rename", () => renameNow(d, to))) },
+    );
   const remove = async (d: Demo) => {
     if (!(await confirm(`Delete ${d.name}? It can't be brought back.`, { ok: "Delete", danger: true }))) return;
     await doing(d, "delete", async () => {
@@ -211,16 +229,26 @@ export default function Demos({ maps }: ToolProps) {
       <div className="toolbar dm-bar">
         <input className="search" type="search" aria-label="Search demos" placeholder="Search by name, map or place" value={q} onChange={(e) => setQ(e.target.value)} />
         <Segmented label="Which demos" values="all mine hltv" labels="All|Recorded in game|HLTV" current={kind} onPick={(v) => setKind(v as typeof kind)} />
-        <span className="muted small-note tl-count" aria-live="polite">
-          {shown.length} demo{shown.length === 1 ? "" : "s"}
+        <span className="dm-count">
+          <span className="muted small-note tl-count" aria-live="polite">
+            {shown.length} demo{shown.length === 1 ? "" : "s"}
+          </span>
+          <Info text={lookedIn} />
         </span>
-        <Info text={lookedIn} />
         <BusyButton className="btn dm-refresh" busy={list.isFetching} label="Refresh" busyLabel="Looking…" onClick={() => list.refetch()} />
       </div>
 
       <div className={`dm-layout${picked ? " with-panel" : ""}`}>
         {shown.length === 0 ? (
-          <Empty plain text="No demos match." />
+          kind === "hltv" && !q.trim() ? (
+            <Empty plain text="No HLTV demos yet. HLTV on one of your servers records whole matches: Servers, then the server's HLTV.">
+              <button type="button" className="btn small" onClick={() => useNav.getState().go("servers")}>
+                Go to Servers
+              </button>
+            </Empty>
+          ) : (
+            <Empty plain text="No demos match." />
+          )
         ) : (
           <div className="dm-table-wrap panel">
             <table className="dm-table">
@@ -299,6 +327,11 @@ function Row({ d, map, on, gameOpen, acts, onPick, onKey }: { d: Demo; map?: Map
             <span className="dm-sub">
               <Badge d={d} />
               {d.error ? <span className="dm-bad">Can't be read</span> : <span className="dm-map">{d.map}</span>}
+              {d.problem && !d.error && (
+                <span className="dm-bad" title={d.problem}>
+                  Cut short
+                </span>
+              )}
               <span className="muted">· {d.where.replace(/^Your game \((.*)\)$/, "$1")}</span>
             </span>
           </span>
@@ -311,7 +344,7 @@ function Row({ d, map, on, gameOpen, acts, onPick, onKey }: { d: Demo; map?: Map
       <td className="dm-c-size">{mb(d.size)}</td>
       <td className="dm-c-act">
         <span className="dm-row-acts">
-          <button type="button" className="dm-act" disabled={off || !!d.error || !d.playable} aria-label={`Watch ${d.name}`} title={!d.playable ? "Rename it to a plain name first" : gameOpen ? "How to watch it (the game is open)" : "Watch"} onClick={stop(() => acts.play(d))}>
+          <button type="button" className="dm-act" disabled={off || !!d.error || !!d.problem || !d.playable} aria-label={`Watch ${d.name}`} title={d.problem ? d.problem : !d.playable ? "Rename it to a plain name first" : gameOpen ? "How to watch it (the game is open)" : "Watch"} onClick={stop(() => acts.play(d))}>
             {mine === "play" ? <span className="spinner" /> : <Icon d={PLAY} />}
           </button>
           {!d.hltv && !d.error && (
@@ -371,7 +404,7 @@ function Details({ demo, map, gameOpen, acts, command, onClose }: { demo: Demo; 
         <BusyButton
           className="btn primary"
           busy={mine === "play"}
-          disabled={off || !!demo.error || !demo.playable}
+          disabled={off || !!demo.error || !!demo.problem || !!d?.cutShort || !demo.playable}
           label={gameOpen ? "How to watch it" : demo.at.startsWith("server:") ? "Copy to my game and watch" : "Watch"}
           busyLabel={demo.at.startsWith("server:") ? "Copying…" : "Starting…"}
           onClick={() => acts.play(demo)}
@@ -415,10 +448,10 @@ function Details({ demo, map, gameOpen, acts, command, onClose }: { demo: Demo; 
             <dd>{d.maxPlayers}</dd>
           </>
         ) : null}
-        {demo.error && (
+        {(demo.error || demo.problem) && (
           <>
             <dt>Problem</dt>
-            <dd className="dm-bad">{demo.error}</dd>
+            <dd className="dm-bad">{demo.error || demo.problem}</dd>
           </>
         )}
       </dl>
@@ -437,7 +470,7 @@ function Details({ demo, map, gameOpen, acts, command, onClose }: { demo: Demo; 
           </ul>
         </div>
       )}
-      {d?.problem && <p className="muted small-note">{d.problem}</p>}
+      {d?.problem && d.problem !== demo.problem && <p className="muted small-note">{d.problem}</p>}
 
       <div className="dm-panel-more">
         <BusyButton className="btn small" busy={mine === "rename"} disabled={off} label="Rename" busyLabel="Renaming…" onClick={() => acts.rename(demo)} />

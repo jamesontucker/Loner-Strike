@@ -19,6 +19,8 @@ export type Demo = {
   seconds?: number;
   protocol?: number;
   error?: string;
+  /** readable but can't be played (cut short: still being recorded, or damaged) */
+  problem?: string;
 };
 
 export type DemoList = { demos: Demo[]; places: { at: string; label: string; folder: string | null }[]; gameOpen: boolean };
@@ -34,6 +36,7 @@ export type DemoDetail = {
   maxPlayers: number | null;
   frames: number;
   problem: string | null;
+  cutShort?: boolean;
   canReplay: boolean;
 };
 

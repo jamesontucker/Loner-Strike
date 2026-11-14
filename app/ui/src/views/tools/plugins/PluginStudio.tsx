@@ -16,6 +16,7 @@ import { HistoryPanel } from "../common/History";
 import type { ToolProps } from "../registry";
 import { HelpPanel } from "./Help";
 import type { EditorHandle } from "./monaco";
+import { RESERVED_NAME, windowsReserved } from "../common/fileNames";
 import { compile, deleteFile, overview, pluginLog, readFile, renameFile, resetFile, saveFile, stopTrying, tryIt, words, type CompileResult, type Diag, type FolderId, type LogLine, type OpenedFile, type SourceFile } from "./pluginsApi";
 import { TEMPLATES } from "./templates";
 import "./plugins.css";
@@ -29,6 +30,8 @@ const WORKING: Record<Exclude<Busy, null>, string> = { open: "Opening…", save:
 const keyOf = (folder: FolderId, name: string) => `${folder}/${name}`;
 const stemOf = (name: string) => name.replace(/\.[^.]+$/, "");
 const SAFE_STEM = /^[A-Za-z0-9_][A-Za-z0-9_-]{0,59}$/;
+/** Why a plugin name (without .sma) can't be used, or null. */
+const stemProblem = (stem: string) => (!stem ? "Type a name." : !SAFE_STEM.test(stem) ? "Use only letters, numbers, - and _ in the name (no spaces)." : windowsReserved(stem) ? RESERVED_NAME : null);
 
 // what was last saved, per file (kept while the app runs, like the editor's models)
 const savedText = new Map<string, string>();
@@ -59,6 +62,8 @@ export default function PluginStudio(_: ToolProps) {
   const [result, setResult] = useState<CompileResult | null>(null);
   const [tab, setTab] = useState<Tab>("problems");
   const [creating, setCreating] = useState(false);
+  // narrow windows: the file list is a drawer over the editor, so the editor comes first
+  const [filesOpen, setFilesOpen] = useState(false);
   const [helpQuery, setHelpQuery] = useState("");
   const [history, setHistory] = useState<string | null>(null);
   const openRef = useRef<Open | null>(null);
@@ -209,13 +214,26 @@ export default function PluginStudio(_: ToolProps) {
   const saveCopy = async () => {
     const o = openRef.current;
     if (!o || !ed.current) return;
-    const name = await askText("Save a copy in My plugins as:", { label: "File name", placeholder: stemOf(o.name) + "_copy", max: 60 }, { ok: "Save copy" });
-    if (name === null) return;
-    const stem = stemOf(name.trim());
-    if (!SAFE_STEM.test(stem)) return toast("Use only letters, numbers, - and _ in the name.", true);
-    const file = `${stem}.${o.name.split(".").pop()?.toLowerCase() ?? "sma"}`;
-    const r = await saveFile("mine", file, ed.current.value(), "utf8", true);
-    if (r.error) return toast(r.error, true);
+    const ext = o.name.split(".").pop()?.toLowerCase() ?? "sma";
+    const text = ed.current.value();
+    let file = "";
+    const name = await askText(
+      "Save a copy in My plugins as:",
+      { label: "File name", placeholder: stemOf(o.name) + "_copy", max: 60 },
+      {
+        ok: "Save copy",
+        busy: "Saving…",
+        check: async (typed) => {
+          const stem = stemOf(typed);
+          const why = stemProblem(stem);
+          if (why) return why;
+          file = `${stem}.${ext}`;
+          const r = await saveFile("mine", file, text, "utf8", true);
+          return r.error ?? null;
+        },
+      },
+    );
+    if (name === null || !file) return;
     toast(`Saved as ${file} in My plugins`);
     await refresh();
     openFile("mine", file);
@@ -279,14 +297,31 @@ export default function PluginStudio(_: ToolProps) {
     if (!o || o.folder !== "mine") return;
     if (!(await saveNow(true))) return;
     const ext = o.name.split(".").pop()?.toLowerCase() ?? "sma";
-    const to = await askText(`Rename ${o.name} to:`, { label: "New name", placeholder: stemOf(o.name), max: 60 }, { ok: "Rename" });
-    if (to === null) return;
-    const stem = stemOf(to.trim());
-    if (!SAFE_STEM.test(stem)) return toast("Use only letters, numbers, - and _ in the name.", true);
-    setBusy("rename");
-    const r = await renameFile("mine", o.name, `${stem}.${ext}`);
-    setBusy(null);
-    if (r.error) return toast(r.error, true);
+    let stem = "";
+    const to = await askText(
+      `Rename ${o.name} to:`,
+      { label: "New name", placeholder: stemOf(o.name), max: 60, value: stemOf(o.name) },
+      {
+        ok: "Rename",
+        busy: "Renaming…",
+        check: async (typed) => {
+          const s = stemOf(typed);
+          const why = stemProblem(s);
+          if (why) return why;
+          if (`${s}.${ext}` === o.name) return null;
+          setBusy("rename");
+          try {
+            const r = await renameFile("mine", o.name, `${s}.${ext}`);
+            if (r.error) return r.error;
+          } finally {
+            setBusy(null);
+          }
+          stem = s;
+          return null;
+        },
+      },
+    );
+    if (to === null || !stem) return;
     mod.current?.dropModel(keyOf("mine", o.name));
     savedText.delete(keyOf("mine", o.name));
     await refresh();
@@ -296,22 +331,26 @@ export default function PluginStudio(_: ToolProps) {
   const stop = async () => {
     if (!open) return;
     setBusy("stop");
-    const r = await stopTrying(stemOf(open.name), !!ov.data?.running);
+    const r = await stopTrying(stemOf(open.name), true);
     setBusy(null);
     if (r.error) return toast(r.error, true);
     toast(r.message ?? "Taken out.");
     refresh();
   };
 
-  const create = async (stem: string, template: string) => {
-    if (!SAFE_STEM.test(stem)) return toast("Use only letters, numbers, - and _ in the name (no spaces).", true);
+  /** null when made; else why not (shown under the name) */
+  const create = async (stem: string, template: string): Promise<string | null> => {
+    const why = stemProblem(stem);
+    if (why) return why;
     const t = TEMPLATES.find((x) => x.id === template) ?? TEMPLATES[0];
     const file = `${stem}.sma`;
     const r = await saveFile("mine", file, t.text(stem), "utf8", true);
-    if (r.error) return toast(r.error, true);
+    if (r.error) return r.error;
     setCreating(false);
+    setFilesOpen(false);
     await refresh();
     openFile("mine", file);
+    return null;
   };
 
   const remove = async (name: string) => {
@@ -336,7 +375,7 @@ export default function PluginStudio(_: ToolProps) {
     <div className="ps">
       {!data.compiler && data.compilerProblem && <p className="ps-note warn">{data.compilerProblem} You can still write and save plugins.</p>}
       <div className="ps-main">
-        <aside className="ps-files panel" aria-label="Plugin files">
+        <aside id="ps-files" className={`ps-files panel${filesOpen ? " open" : ""}`} aria-label="Plugin files">
           <div className="ps-files-head">
             <button className="btn small primary" onClick={() => setCreating((c) => !c)} aria-expanded={creating}>
               New plugin
@@ -353,10 +392,14 @@ export default function PluginStudio(_: ToolProps) {
               path={f.path}
               start={f.id !== "include"}
               files={f.files}
+              hidden={f.hidden ?? 0}
               current={open?.folder === f.id ? open.name : null}
               dirty={(n) => dirty.has(keyOf(f.id, n))}
               tried={(n) => trying.includes(stemOf(n)) && f.id !== "include"}
-              onOpen={(n) => openFile(f.id, n)}
+              onOpen={(n) => {
+                setFilesOpen(false);
+                void openFile(f.id, n);
+              }}
               onDelete={f.id === "mine" ? remove : undefined}
               empty={f.id === "mine" ? "Nothing here yet. Make one with New plugin." : "No files."}
             />
@@ -365,6 +408,9 @@ export default function PluginStudio(_: ToolProps) {
 
         <section className="ps-editor-col">
           <div className="ps-bar">
+            <button type="button" className="btn small ps-files-toggle" aria-controls="ps-files" aria-expanded={filesOpen} onClick={() => setFilesOpen((o) => !o)}>
+              Files
+            </button>
             <span className="ps-title" title={open ? `${open.folder === "mine" ? "My plugins" : open.folder === "game" ? "Game's plugins" : "Include files"} / ${open.name}` : undefined}>
               {open ? open.name : "No file open"}
               {key && dirty.has(key) && <span className="ps-dirty" role="img" aria-label="Not saved" title="Not saved" />}
@@ -402,7 +448,7 @@ export default function PluginStudio(_: ToolProps) {
             <div ref={host} className="ps-editor" />
             {!open && editorReady && (
               <div className="ps-empty">
-                <p>Open a file on the left, or make a new plugin from a template.</p>
+                <p>Open a file from the list, or make a new plugin from a template.</p>
                 <p className="muted">Ctrl/⌘+S saves, Ctrl/⌘+Enter compiles. Hover a function to see what it does; type to get suggestions.</p>
               </div>
             )}
@@ -520,6 +566,7 @@ function FolderList(p: {
   path: string;
   start: boolean;
   files: SourceFile[];
+  hidden: number;
   current: string | null;
   dirty: (n: string) => boolean;
   tried: (n: string) => boolean;
@@ -541,8 +588,13 @@ function FolderList(p: {
       </button>
       {shown && (
         <>
-          {p.files.length > 12 && <input className="ps-filter" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label={`Filter ${p.label}`} />}
+          {p.files.length > 12 && <input className="search ps-filter" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label={`Filter ${p.label}`} />}
           {p.files.length === 0 && <p className="muted ps-folder-empty">{p.empty}</p>}
+          {p.hidden > 0 && (
+            <p className="muted ps-folder-empty" title={p.path}>
+              {p.hidden === 1 ? "1 file hidden" : `${p.hidden} files hidden`}: rename {p.hidden === 1 ? "it" : "them"} to use letters, numbers, - and _.
+            </p>
+          )}
           <ul className="ps-file-list">
             {list.map(({ name: n, readOnly, changed }) => (
               <li key={n} className={n === p.current ? "on" : undefined}>
@@ -567,25 +619,44 @@ function FolderList(p: {
   );
 }
 
-function NewPlugin({ onCreate, onCancel }: { onCreate: (stem: string, template: string) => Promise<void>; onCancel: () => void }) {
+function NewPlugin({ onCreate, onCancel }: { onCreate: (stem: string, template: string) => Promise<string | null>; onCancel: () => void }) {
   const [name, setName] = useState("my_plugin");
   const [template, setTemplate] = useState("mode");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const t = TEMPLATES.find((x) => x.id === template);
   return (
     <form
       className="ps-new"
       onSubmit={async (e) => {
         e.preventDefault();
+        if (busy) return;
         setBusy(true);
-        await onCreate(name.trim(), template);
+        setError(await onCreate(name.trim(), template));
         setBusy(false);
       }}
     >
       <label className="field">
         <span>Name</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} spellCheck={false} autoFocus />
-        <small>Letters, numbers, - and _. It becomes {name.trim() || "name"}.sma.</small>
+        <input
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            setError(null);
+          }}
+          maxLength={60}
+          spellCheck={false}
+          autoFocus
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? "ps-new-error" : undefined}
+        />
+        {error ? (
+          <small id="ps-new-error" className="ps-new-error" role="alert">
+            {error}
+          </small>
+        ) : (
+          <small>Letters, numbers, - and _. It becomes {name.trim() || "name"}.sma.</small>
+        )}
       </label>
       <label className="field">
         <span>Start from</span>
@@ -658,6 +729,8 @@ function GameLog({ name, trying, running }: { name: string | null; trying: boole
     if (b) b.scrollTop = b.scrollHeight;
   }, [lines]);
   if (!name) return <p className="muted">Open a plugin to see what it writes to the game's log.</p>;
+  const slow = lines.filter((l) => l.slow).length;
+  const shown = lines.filter((l) => !l.slow);
   return (
     <div className="ps-log-wrap">
       <p className="muted ps-log-note">
@@ -669,10 +742,15 @@ function GameLog({ name, trying, running }: { name: string | null; trying: boole
         )}
       </p>
       <div className="ps-log" ref={box} role="log" aria-live="polite">
-        {lines.length === 0 ? (
+        {slow > 0 && (
+          <p className="muted ps-log-slow">
+            {slow === 1 ? "1 note" : `${slow} notes`} that a function took over 1 ms {slow === 1 ? "is" : "are"} hidden. Try it runs plugins in debug mode, so errors name their line, and debug mode writes these. They're harmless.
+          </p>
+        )}
+        {shown.length === 0 ? (
           <p className="muted">Nothing yet.</p>
         ) : (
-          lines.map((l, i) => (
+          shown.map((l, i) => (
             <div key={i} className={l.error ? "bad" : undefined}>
               <span className="ps-log-at">{l.at}</span> {l.text}
             </div>

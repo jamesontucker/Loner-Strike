@@ -217,10 +217,13 @@ export class PageBoundary extends Component<{ children: ReactNode }, { failed: b
 }
 
 // ---- asking before something can't be undone --------------------------------------
-type AskOpts = { ok?: string; danger?: boolean };
+/** `check` (with a text box): runs on OK with what was typed; a sentence back keeps the dialog
+ *  open with that error under the field and the text kept (`busy` is the button's label meanwhile,
+ *  e.g. "Renaming…"). */
+type AskOpts = { ok?: string; danger?: boolean; check?: (answer: string) => Promise<string | null | undefined> | string | null | undefined; busy?: string };
 /** A text box under the question (optional unless `required`). */
-type AskInput = { label: string; placeholder?: string; max?: number };
-type Ask = { text: string; ok: string; danger: boolean; input?: AskInput; done: (answer: string | null) => void };
+type AskInput = { label: string; placeholder?: string; max?: number; value?: string };
+type Ask = { text: string; ok: string; danger: boolean; input?: AskInput; check?: AskOpts["check"]; busy?: string; done: (answer: string | null) => void };
 type AskFns = {
   ask: (text: string, opts?: AskOpts) => Promise<boolean>;
   askText: (text: string, input: AskInput, opts?: AskOpts) => Promise<string | null>;
@@ -234,13 +237,17 @@ export const useAskText = () => useContext(AskCtx).askText;
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [q, setQ] = useState<Ask | null>(null);
   const [typed, setTyped] = useState("");
+  const [askError, setAskError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
   const open = useCallback(
     (text: string, opts: AskOpts | undefined, input?: AskInput) =>
       new Promise<string | null>((resolve) => {
-        setTyped("");
+        setTyped(input?.value ?? "");
+        setAskError(null);
+        setChecking(false);
         setQ((old) => {
           old?.done(null);
-          return { text, ok: opts?.ok ?? "OK", danger: !!opts?.danger, input, done: resolve };
+          return { text, ok: opts?.ok ?? "OK", danger: !!opts?.danger, input, check: opts?.check, busy: opts?.busy, done: resolve };
         });
       }),
     [],
@@ -273,8 +280,20 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       {q && (
         <Sheet className="sheet ask" role="alertdialog" label={q.ok} describedBy="ask-text" onClose={() => close(false)}>
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
+              if (checking) return;
+              if (q.check && q.input) {
+                setChecking(true);
+                let why: string | null | undefined;
+                try {
+                  why = await q.check(typed.trim());
+                } catch {
+                  why = "Something went wrong. Try again.";
+                }
+                setChecking(false);
+                if (why) return setAskError(why);
+              }
               close(true);
             }}
           >
@@ -282,12 +301,37 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             {q.input && (
               <label className="field ask-field">
                 <span>{q.input.label}</span>
-                <input className="search" autoFocus placeholder={q.input.placeholder} maxLength={q.input.max ?? 64} value={typed} onChange={(e) => setTyped(e.target.value)} />
+                <input
+                  className="search"
+                  autoFocus
+                  placeholder={q.input.placeholder}
+                  maxLength={q.input.max ?? 64}
+                  value={typed}
+                  aria-invalid={askError ? true : undefined}
+                  aria-describedby={askError ? "ask-error" : undefined}
+                  onChange={(e) => {
+                    setTyped(e.target.value);
+                    setAskError(null);
+                  }}
+                />
+                {askError && (
+                  <small id="ask-error" className="ask-error" role="alert">
+                    {askError}
+                  </small>
+                )}
               </label>
             )}
             <div className="row ask-buttons">
               <button type="button" className="btn" autoFocus={q.danger && !q.input} onClick={() => close(false)}>Cancel</button>
-              <button type="submit" className={`btn ${q.danger ? "danger strong" : "primary"}`} autoFocus={!q.danger && !q.input}>{q.ok}</button>
+              <button type="submit" className={`btn ${q.danger ? "danger strong" : "primary"}`} autoFocus={!q.danger && !q.input} disabled={checking} aria-busy={checking || undefined}>
+                {checking ? (
+                  <>
+                    <span className="spinner" aria-hidden="true" /> {q.busy ?? "Working…"}
+                  </>
+                ) : (
+                  q.ok
+                )}
+              </button>
             </div>
           </form>
         </Sheet>

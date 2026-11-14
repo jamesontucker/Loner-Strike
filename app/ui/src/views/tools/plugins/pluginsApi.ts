@@ -4,7 +4,8 @@ import { post as postSafe, tryGet } from "../common/api";
 
 export type FolderId = "mine" | "game" | "include";
 export type SourceFile = { name: string; size: number; modified: number; readOnly: boolean; changed?: boolean };
-export type Folder = { id: FolderId; label: string; path: string; files: SourceFile[] };
+/** hidden: source files left out for their names (spaces, accents, CON...) */
+export type Folder = { id: FolderId; label: string; path: string; files: SourceFile[]; hidden?: number };
 export type Overview = { game: string; compiler: boolean; compilerProblem: string | null; running: boolean; trying: string[]; folders: Folder[] };
 
 export type Param = { label: string; name: string; doc: string };
@@ -40,7 +41,8 @@ export type CompileResult = {
   reloaded?: boolean;
   trying?: string[];
 };
-export type LogLine = { at: string; text: string; error: boolean };
+/** slow: debug mode's "performance issue" note (folded on the page) */
+export type LogLine = { at: string; text: string; error: boolean; slow?: boolean };
 
 type Err = { error?: string };
 // (the tools' shared client: a save that kept backups offers Undo)
