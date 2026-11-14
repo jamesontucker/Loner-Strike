@@ -112,10 +112,19 @@ fn main() {
     loop {
         // (the server is told where to send, and again now and then: after a restart it has forgotten)
         if told.elapsed() > Duration::from_secs(30) {
-            // (the plugin's status.txt, fresh, says the server is up)
-            if console.send(&format!("feed {}", a.feed)) && console.status().is_some() {
+            // (the plugin's status.txt, fresh, says the server is up and how the feed is set)
+            let sent = console.send(&format!("feed {}", a.feed));
+            if sent && console.status().is_some() {
+                if unanswered > 0 || console.feed() != Some(a.feed as i64) {
+                    println!("ls-voice: the server answers; voice feed {}", console.feed().map(|f| f.to_string()).unwrap_or_else(|| "not set yet".into()));
+                }
                 unanswered = 0;
             } else {
+                if unanswered == 0 && sent {
+                    println!("ls-voice: the game isn't answering through its files: the server is starting or stopped, or its \
+                              Loner-Strike plugins are older than this (gm_extras with the lsvoice channel). Update the server's files.");
+                }
+                console.sweep();
                 unanswered += 1;
                 if unanswered >= 6 {
                     println!("ls-voice: the server hasn't answered for 3 minutes; stopping");

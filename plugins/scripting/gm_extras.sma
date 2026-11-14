@@ -168,7 +168,7 @@ public plugin_init()
 	// community roles: who's here and "reload admins", through files (no RCON echoed into the console log)
 	set_task(10.0, "task_lslink_files", TASK_LINK_POLL + 1, _, _, "b")
 	// the bots' voice helper (ls-voice): its requests come as files too (no RCON echoed into the console log)
-	set_task(0.5, "task_lsvoice", TASK_LINK_POLL + 2, _, _, "b")
+	set_task(0.2, "task_lsvoice", TASK_LINK_POLL + 2, _, _, "b")
 	register_event("30", "ev_intermission", "a")
 	register_forward(FM_CmdStart, "fw_cmdstart")
 	// the game's own disconnect: not called on a map change (AMX Mod X's client_disconnected is)
@@ -791,6 +791,7 @@ public task_lslink_files()
 }
 
 // ---- ls-voice's requests, through data/gamemodes/lsvoice ----------------------------------
+// (looked at five times a second, so a heard line reaches the bots within 0.2 s)
 // ls-voice (the bots' voice helper) writes one file per request, "<number>.cmd": "feed <port>"
 // (where the engine sends players' voice) or "ask <userid> <words>" (a line the bots answer). Only
 // these two, checked here; every 10 s this plugin writes status.txt (the map, then the bots' names)
@@ -859,6 +860,9 @@ voice_status(const dir[])
 		return
 	get_mapname(map, charsmax(map))
 	fprintf(f, "map %s^n", map)
+	// what the engine's voice feed is set to now (0 or none: not sending), and this plugin's channel version
+	new feed = get_cvar_pointer("sv_ls_voice_feed")
+	fprintf(f, "feed %d^nchannel 1^n", feed ? get_pcvar_num(feed) : -1)
 	for (new id = 1; id <= MaxClients; id++)
 	{
 		if (is_user_connected(id) && is_user_bot(id))
