@@ -13,6 +13,11 @@
 //! The list service is reached with curl (no TLS code in here): its settings, the server token
 //! among them, go in on stdin (`curl -K -`), never on the command line. The token is the file
 //! roles-token in this service's folder (0600, written by the owner's app).
+//!
+//! This runs as its own unit (`ls-control roles`, lonerstrike-<id>-control-roles.service): the
+//! shared control service itself may only talk to this machine (IPAddressAllow=localhost), so
+//! what an Admin asks for through it goes here through a spool folder in the service's own
+//! folder (roles-spool/<id>.req, answered in <id>.resp), and only these calls are passed on.
 
 use crate::game;
 use crate::{Config, Paths};
@@ -20,7 +25,88 @@ use serde_json::{json, Value};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+
+/// Set in the shared control service (no internet there): calls go through the spool.
+static SPOOLED: AtomicBool = AtomicBool::new(false);
+
+pub fn use_spool() {
+    SPOOLED.store(true, Ordering::SeqCst);
+}
+
+fn spool_dir(paths: &Paths) -> PathBuf {
+    paths.control_dir().join("roles-spool")
+}
+
+/// Only these go through the spool: an Admin's applications, invites and revokes.
+fn spool_allows(method: &str, path: &str) -> bool {
+    let seg: Vec<&str> = path.split('/').collect();
+    match (method, seg.as_slice()) {
+        ("GET", ["applications"]) => true,
+        ("POST", ["applications", n, "invite" | "revoke" | "redeemed"]) => !n.is_empty() && n.len() <= 12 && n.chars().all(|c| c.is_ascii_digit()),
+        _ => false,
+    }
+}
+
+/// A call from the shared control service, answered by the roles unit (within 25 s).
+fn via_spool(paths: &Paths, method: &str, path: &str, body: Option<&Value>) -> Result<Value, String> {
+    if !spool_allows(method, path) {
+        return Err("That can't be asked from here.".into());
+    }
+    let dir = spool_dir(paths);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let id = crate::store::random_hex(8);
+    let req = dir.join(format!("{id}.req"));
+    let tmp = dir.join(format!("{id}.tmp"));
+    std::fs::write(&tmp, json!({"method": method, "path": path, "body": body}).to_string()).and_then(|_| std::fs::rename(&tmp, &req)).map_err(|e| e.to_string())?;
+    let resp = dir.join(format!("{id}.resp"));
+    let started = Instant::now();
+    while started.elapsed() < Duration::from_secs(25) {
+        std::thread::sleep(Duration::from_millis(250));
+        if let Ok(text) = std::fs::read_to_string(&resp) {
+            let _ = std::fs::remove_file(&resp);
+            let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+            return match v["error"].as_str() {
+                Some(e) => Err(e.to_string()),
+                None => Ok(v["ok"].clone()),
+            };
+        }
+    }
+    let _ = std::fs::remove_file(&req);
+    Err("The server's community roles helper didn't answer. The owner can update the server's files (Shared control) to start it again.".into())
+}
+
+/// The roles unit answering what the shared control service spooled.
+fn answer_spool(paths: &Paths) {
+    let dir = spool_dir(paths);
+    let Ok(rd) = std::fs::read_dir(&dir) else { return };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p.extension().and_then(|x| x.to_str()) != Some("req") {
+            // answers nobody picked up, and unfinished requests, go after a minute
+            if e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > Duration::from_secs(60)) {
+                let _ = std::fs::remove_file(&p);
+            }
+            continue;
+        }
+        let text = std::fs::read_to_string(&p).unwrap_or_default();
+        let _ = std::fs::remove_file(&p);
+        let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+        let (method, path) = (v["method"].as_str().unwrap_or(""), v["path"].as_str().unwrap_or(""));
+        let out = if spool_allows(method, path) {
+            match call(paths, method, path, v.get("body").filter(|b| !b.is_null())) {
+                Ok(ok) => json!({"ok": ok}),
+                Err(e) => json!({"error": e}),
+            }
+        } else {
+            json!({"error": "That can't be asked from here."})
+        };
+        let resp = p.with_extension("resp");
+        let tmp = p.with_extension("rtmp");
+        let _ = std::fs::write(&tmp, out.to_string()).and_then(|_| std::fs::rename(&tmp, &resp));
+    }
+}
 
 const LIST: &str = "https://list.lonerstrike.com";
 const UNCLAIMED: &str = "This server's claim ended. Claim it again in the owner's Loner-Strike.";
@@ -50,6 +136,9 @@ pub fn curl_config(url: &str, method: &str, token: &str, body: Option<&Value>) -
 /// One call to the list service's /roles/…: its JSON, or its words when it says no.
 pub fn call(paths: &Paths, method: &str, path: &str, body: Option<&Value>) -> Result<Value, String> {
     let tok = token(paths).ok_or(UNCLAIMED)?;
+    if SPOOLED.load(Ordering::SeqCst) {
+        return via_spool(paths, method, path, body);
+    }
     let mut child = Command::new("curl")
         .args(["-K", "-"])
         .stdin(Stdio::piped())
@@ -196,20 +285,24 @@ fn supporters(paths: &Paths, game_dir: &Path, port: u16) -> Result<(), String> {
     let new = with_supporters(&old, &ids);
     if new != old {
         let bytes: Vec<u8> = new.chars().map(|c| if (c as u32) < 256 { c as u8 } else { b'?' }).collect();
-        let tmp = users.with_extension("ini.new");
-        std::fs::write(&tmp, bytes).and_then(|_| std::fs::rename(&tmp, &users)).map_err(|e| format!("users.ini: {e}"))?;
+        // in place: the roles unit may write this one file, not the folder (a link is never followed)
+        if std::fs::symlink_metadata(&users).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err("users.ini is a link; left alone".into());
+        }
+        std::fs::write(&users, bytes).map_err(|e| format!("users.ini: {e}"))?;
         let _ = rcon(game_dir, port, "amx_reloadadmins");
     }
     Ok(())
 }
 
-/// The relay and the supporters check, for as long as the service runs.
-pub fn start(paths: Paths) {
-    std::thread::spawn(move || {
+/// The roles unit: the relay, the supporters check and the spool, for as long as it runs.
+pub fn run(paths: Paths) {
+    {
         let mut log: Option<(PathBuf, u64)> = None;
         let mut vip_at: Option<Instant> = None;
         loop {
-            std::thread::sleep(Duration::from_secs(2));
+            std::thread::sleep(Duration::from_secs(1));
+            answer_spool(&paths);
             if token(&paths).is_none() {
                 log = None;
                 continue;
@@ -244,7 +337,7 @@ pub fn start(paths: Paths) {
                 }
             }
         }
-    });
+    }
 }
 
 /// Someone redeemed an application's invite: the Discord role follows.
@@ -303,6 +396,25 @@ mod tests {
         assert_eq!(with_supporters(&t, &[]), "\"STEAM_0:0:9\" \"\" \"abc\" \"ce\"\n");
         assert_eq!(status_steamids("# 2 \"a\" 1 STEAM_0:1:5 0 0 active\n# 3 \"b\" 2 BOT"), vec!["STEAM_0:1:5".to_string()]);
         assert_eq!(fail_word("You don't seem to be on this server"), "away");
+    }
+
+    #[test]
+    fn the_spool_passes_on_only_an_admins_calls() {
+        assert!(spool_allows("GET", "applications"));
+        assert!(spool_allows("POST", "applications/12/invite") && spool_allows("POST", "applications/12/revoke"));
+        for (m, p) in [("GET", "vip"), ("POST", "server"), ("DELETE", "server"), ("POST", "link/code"), ("POST", "applications/x/invite"), ("POST", "applications/1/../server")] {
+            assert!(!spool_allows(m, p), "{m} {p}");
+        }
+        let home = std::env::temp_dir().join(format!("ls-agent-spool-{}", std::process::id()));
+        let p = Paths::new(home.clone(), "srv1").unwrap();
+        std::fs::create_dir_all(spool_dir(&p)).unwrap();
+        // a request that isn't allowed is answered with a refusal (nothing reaches curl)
+        std::fs::write(spool_dir(&p).join("abc.req"), json!({"method": "POST", "path": "server", "body": {}}).to_string()).unwrap();
+        answer_spool(&p);
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(spool_dir(&p).join("abc.resp")).unwrap()).unwrap();
+        assert_eq!(v["error"], "That can't be asked from here.");
+        assert!(!spool_dir(&p).join("abc.req").exists());
+        std::fs::remove_dir_all(home).unwrap();
     }
 
     #[test]

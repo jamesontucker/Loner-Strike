@@ -164,6 +164,7 @@ pub fn valid_url(u: &str) -> bool {
 const USAGE: &str = "ls-control: Loner-Strike's shared control for a server on this machine.
   ls-control version
   ls-control serve  --server <id> --port <port>          (the service; systemd runs it)
+  ls-control roles  --server <id>                         (community roles: /link, supporters; systemd runs it)
   ls-control invite --server <id> --role admin|moderator [--steam STEAM_0:1:2] [--app <application>]
   ls-control list   --server <id> [--log <entries>]
   ls-control role   --server <id> --member <member id> --role admin|moderator
@@ -206,8 +207,14 @@ fn run(args: &[String]) -> Result<Value, String> {
     match cmd {
         "serve" => {
             let port: u16 = f.get("port").and_then(|p| p.parse().ok()).filter(|p| *p >= 1024).ok_or("Say which port to listen on (--port, 1024 or above).")?;
-            roles::start(Paths { home: paths.home.clone(), id: paths.id.clone() });
+            // no internet here: community roles calls go through the roles unit
+            roles::use_spool();
             api::serve(paths, port)?;
+            Ok(json!({"ok": true}))
+        }
+        "roles" => {
+            // the community roles unit: the /link relay, supporters, the spool (roles.rs)
+            roles::run(paths);
             Ok(json!({"ok": true}))
         }
         "invite" => {

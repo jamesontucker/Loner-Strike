@@ -94,7 +94,7 @@ fn config(e: &Entry) -> Value {
 
 /// A line in the service's unit naming how it's written: a unit without this one is set up
 /// again (raise it whenever the unit's text changes)
-const UNIT_REV: &str = "loner-strike unit 3";
+const UNIT_REV: &str = "loner-strike unit 4";
 
 /// The service's unit, and turning it on (or restarting it with a new program or port).
 pub fn install_sh(id: &str, game: &str, port: u16) -> String {
@@ -148,9 +148,50 @@ MemoryMax=128M
 [Install]
 WantedBy=multi-user.target
 EOF
+# MCP: community roles (ls-control roles): the /link relay and supporters. It needs the internet
+# (Loner-Strike's list service, through curl), which the service above doesn't get; it may write
+# only its own folder and users.ini (in place)
+sudo tee /etc/systemd/system/{u}-roles.service >/dev/null <<EOF
+[Unit]
+# {rev}
+Description=Loner-Strike community roles {id}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=$(whoami)
+ExecStart=$HOME/{bin} roles --server {id}
+Restart=always
+RestartSec=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=$HOME/{data} -$HOME/{dir}/{game}/addons/amxmodx/configs/users.ini
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+UMask=077
+TasksMax=32
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target
+EOF
 sudo systemctl daemon-reload
-sudo systemctl enable {u} >/dev/null 2>&1
-sudo systemctl restart {u}
+sudo systemctl enable {u} {u}-roles >/dev/null 2>&1
+sudo systemctl restart {u} {u}-roles
 sleep 1
 systemctl is-active --quiet {u} || fail "Shared control didn't start ($(sudo journalctl -u {u} -n 1 --no-pager -o cat 2>/dev/null))."
 echo "@@STEP ready"
@@ -165,7 +206,7 @@ echo "@@STEP ready"
 /// people and log only when the server goes for good (a rebuild keeps who helps run it).
 pub fn remove_sh(id: &str, for_good: bool) -> String {
     let u = unit(id);
-    let mut sh = format!("sudo systemctl disable --now {u} >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service; ");
+    let mut sh = format!("sudo systemctl disable --now {u} {u}-roles >/dev/null 2>&1; sudo rm -f /etc/systemd/system/{u}.service /etc/systemd/system/{u}-roles.service; ");
     if for_good {
         sh.push_str(&format!("rm -rf \"$HOME/{}\"; ", data_dir(id)));
     }
