@@ -562,6 +562,63 @@ public lsd_poll()
 		lsd_resume()
 }
 
+stock Float:lsg_ehp(e)
+	return e > MaxClients && pev_valid(e) ? entity_get_float(e, EV_FL_health) : 0.0
+
+// ---- bot hints (ls_mode, through gm_components) ----
+stock bool:lsg_hint(const line[])
+	return ls_components_running() && ls_comp_bots_hint(line) != 0
+
+// who a hint is for: 0 all, 1 ct, 2 t, 3 a player, 4 @tag
+stock lsg_who(code, p, const tag[])
+{
+	new w[40]
+	switch (code)
+	{
+		case 1: copy(w, charsmax(w), "ct")
+		case 2: copy(w, charsmax(w), "t")
+		case 3: formatex(w, charsmax(w), "%d", lsg_ok(p) ? p : 0)
+		case 4: formatex(w, charsmax(w), "@%s", tag)
+		default: copy(w, charsmax(w), "all")
+	}
+	return w
+}
+
+// an entity's place as "x y z" (a brush entity: its middle)
+stock lsg_ptext(ent)
+{
+	new t[48], Float:o[3]
+	if (ent > 0 && pev_valid(ent))
+	{
+		pev(ent, pev_origin, o)
+		if (o[0] == 0.0 && o[1] == 0.0 && o[2] == 0.0)
+		{
+			new Float:mins[3], Float:maxs[3]
+			pev(ent, pev_absmin, mins)
+			pev(ent, pev_absmax, maxs)
+			for (new k = 0; k < 3; k++)
+				o[k] = (mins[k] + maxs[k]) / 2.0
+		}
+	}
+	formatex(t, charsmax(t), "%.0f %.0f %.0f", o[0], o[1], o[2])
+	return t
+}
+
+// the zone's next move: 0 seconds (-1 none), 1 the next radius, 2 closing now
+stock Float:lsg_zone_next(ent, what)
+{
+	if (!ls_components_running() || ent <= 0)
+		return what == 0 ? -1.0 : 0.0
+	new Float:c[3], Float:r, closing
+	new Float:secs = ls_zone_next(ent, c, r, closing)
+	switch (what)
+	{
+		case 1: return r
+		case 2: return closing ? 1.0 : 0.0
+	}
+	return secs
+}
+
 // the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
 stock lsg_zone_of(ent)
 {
@@ -2406,6 +2463,48 @@ stock lsg_mk_default(k, const key[], t[64])
 	#pragma unused t
 }
 
+// a creature with the mode's own health, tier and pay for its killer
+new g_lsgPay[2048]
+stock lsg_creature_x(const kind[], const at[], tier, Float:hp, pay)
+{
+	new Float:o[3]
+	if (!get_cvar_pointer("ls_creature_ver") || !lsg_origin_of(at, o))
+		return 0
+	new ent = create_entity("ls_creature")
+	if (ent <= 0)
+		return 0
+	DispatchKeyValue(ent, "type", kind)
+	if (tier > 0)
+	{
+		new v[4]
+		num_to_str(tier, v, charsmax(v))
+		DispatchKeyValue(ent, "tier", v)
+	}
+	entity_set_origin(ent, o)
+	DispatchSpawn(ent)
+	if (!is_valid_ent(ent) || (entity_get_int(ent, EV_INT_flags) & FL_KILLME))
+		return 0
+	if (hp > 0.0)
+	{
+		entity_set_float(ent, EV_FL_health, hp)
+		entity_set_float(ent, EV_FL_max_health, hp)
+	}
+	if (ent < sizeof g_lsgPay)
+		g_lsgPay[ent] = clamp(pay, 0, 16000)
+	return ent
+}
+
+public lsg_pay_killer(ent, killer)
+{
+	if (ent > 0 && ent < sizeof g_lsgPay && g_lsgPay[ent])
+	{
+		if (lsg_ok(killer))
+			cs_set_user_money(killer, min(cs_get_user_money(killer) + g_lsgPay[ent], 16000))
+		g_lsgPay[ent] = 0
+	}
+	return HAM_IGNORED
+}
+
 public plugin_precache()
 {
 	// the map's ls_marker entities, as they load
@@ -2467,6 +2566,8 @@ public plugin_init()
 		RegisterHam(Ham_Killed, "ls_creature", "lsg_on_creature_killed", 1)
 	register_event("HLTV", "lsg_new_round", "a", "1=0", "2=0")
 	RegisterHamPlayer(Ham_TakeDamage, "lsg_pre_damage", 0)
+	if (get_cvar_pointer("ls_creature_ver"))
+		RegisterHam(Ham_Killed, "ls_creature", "lsg_pay_killer", 1)
 	set_task(0.25, "lsg_revive_tick", LSG_TASK - 1, _, _, "b")
 	set_task(1.0, "lsg_clock_tick", LSG_TASK - 2, _, _, "b")
 	lsg_saved_load()
@@ -3940,12 +4041,16 @@ lsg_n73(ctx[])
 // Spawn Creature (ck2_spawn)
 lsg_n74(ctx[])
 {
+	new Float:lsi1 = 0.0
+	new Float:lsi2 = 0.0
 	lsd_begin()
+	lsd_in_number("Health", lsi1)
+	lsd_in_number("Pay", lsi2)
 	if (lsd_enter(74, ctx))
 		return
 	if (!get_cvar_pointer("ls_creature_ver"))
 		lsd_error(74, "This server's bot brain has no creatures (ls_creature).")
-	else if (!(g_lsgOut[74] = lsg_creature("zombie", "spot1")))
+	else if (!(g_lsgOut[74] = lsg_creature_x("zombie", "spot1", 0, lsi1, floatround(lsi2))))
 		lsd_error(74, "Not spawned: no entity has that name, or that type isn't loaded on this map.")
 	else
 		lsd_exit(74, fmt("entity %d", g_lsgOut[74]))

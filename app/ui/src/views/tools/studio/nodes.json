@@ -615,6 +615,92 @@
    "needs": "components"
   },
   {
+   "type": "comp.on_barricade_damaged",
+   "title": "Barricade Damaged",
+   "category": "Components",
+   "help": "A barricade was hit (Health is what it has left).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "barricade",
+     "type": "entity",
+     "label": "Barricade"
+    },
+    {
+     "id": "attacker",
+     "type": "entity",
+     "label": "Attacker"
+    },
+    {
+     "id": "hp",
+     "type": "number",
+     "label": "Health"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_barricade_repaired",
+   "title": "Barricade Repaired",
+   "category": "Components",
+   "help": "A barricade was mended a step (by Player; nobody when the mode did it).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "barricade",
+     "type": "entity",
+     "label": "Barricade"
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "hp",
+     "type": "number",
+     "label": "Health"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.on_drop_landed",
+   "title": "Supply Drop Landed",
+   "category": "Components",
+   "help": "A supply drop came down (it can be opened now).",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "drop",
+     "type": "entity",
+     "label": "Drop"
+    }
+   ],
+   "params": [],
+   "event": true,
+   "needs": "components"
+  },
+  {
    "type": "comp.on_barricade_broken",
    "title": "Barricade Broken",
    "category": "Components",
@@ -2557,6 +2643,164 @@
    "needs": "components"
   },
   {
+   "type": "comp.barricade_set_hp",
+   "title": "Set Barricade Health",
+   "category": "Components",
+   "help": "Sets a barricade's health (0 breaks it; above 0 stands it back up).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "barricade",
+     "type": "entity",
+     "label": "Barricade",
+     "required": true
+    },
+    {
+     "id": "hp",
+     "type": "number",
+     "label": "Health",
+     "param": "hp"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "hp",
+     "label": "Health",
+     "kind": "number",
+     "default": 100,
+     "min": 0,
+     "max": 100000
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "comp.barricade_repair",
+   "title": "Repair Barricade",
+   "category": "Components",
+   "help": "Mends a barricade fully, or one step as if the wired Player held USE on it.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "barricade",
+     "type": "entity",
+     "label": "Barricade",
+     "required": true
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "comp.loot_roll",
+   "title": "Roll Loot",
+   "category": "Components",
+   "help": "Rolls one item from a loot table (configs/gamemodes/loot.ini), only items of this tier or lower (0: any).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "tier",
+     "type": "number",
+     "label": "Tier",
+     "param": "tier"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "item",
+     "type": "text",
+     "label": "Item"
+    },
+    {
+     "id": "rolled",
+     "type": "bool",
+     "label": "Rolled"
+    }
+   ],
+   "params": [
+    {
+     "id": "table",
+     "label": "Table",
+     "kind": "name",
+     "default": "default"
+    },
+    {
+     "id": "tier",
+     "label": "Tier (0: any)",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 10
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "comp.zone_skip",
+   "title": "Next Zone Stage Now",
+   "category": "Components",
+   "help": "A Shrinking zone goes to its next stage now.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "zone",
+     "type": "entity",
+     "label": "Zone",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "needs": "components"
+  },
+  {
    "type": "comp.trap_fire",
    "title": "Fire Trap",
    "category": "Components",
@@ -2650,6 +2894,29 @@
    "needs": "components"
   },
   {
+   "type": "creature.health",
+   "title": "Creature Health",
+   "category": "Creatures",
+   "help": "A creature's health now (0 when it's gone).",
+   "inputs": [
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Creature",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Health"
+    }
+   ],
+   "params": [],
+   "pure": true
+  },
+  {
    "type": "creature.spawn",
    "title": "Spawn Creature",
    "category": "Creatures",
@@ -2665,6 +2932,18 @@
      "type": "entity",
      "label": "At",
      "optional": true
+    },
+    {
+     "id": "health",
+     "type": "number",
+     "label": "Health",
+     "param": "health"
+    },
+    {
+     "id": "pay",
+     "type": "number",
+     "label": "Pay",
+     "param": "pay"
     }
    ],
    "outputs": [
@@ -2691,6 +2970,46 @@
      "label": "At the entity named",
      "kind": "name",
      "default": "spot1"
+    },
+    {
+     "id": "health",
+     "label": "Health (0: the type's own)",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 100000
+    },
+    {
+     "id": "tier",
+     "label": "Tier (looks and enrage; 0 none)",
+     "kind": "choice",
+     "default": "0",
+     "choices": [
+      [
+       "0",
+       "None"
+      ],
+      [
+       "1",
+       "1"
+      ],
+      [
+       "2",
+       "2"
+      ],
+      [
+       "3",
+       "3"
+      ]
+     ]
+    },
+    {
+     "id": "pay",
+     "label": "Pay its killer ($)",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 16000
     }
    ],
    "needs": "creatures"
@@ -4158,6 +4477,772 @@
    ]
   },
   {
+   "type": "bots.phase",
+   "title": "Bots: Phase",
+   "category": "Bots",
+   "help": "Tells the bots what part of the game it is: Loot (nobody is an enemy: they gear up and keep apart), Fight, or back to normal.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "phase",
+     "label": "Phase",
+     "kind": "choice",
+     "default": "loot",
+     "choices": [
+      [
+       "loot",
+       "Loot (no enemies)"
+      ],
+      [
+       "fight",
+       "Fight"
+      ],
+      [
+       "off",
+       "Normal"
+      ]
+     ]
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "bots.no_buy",
+   "title": "Bots: Don't Buy",
+   "category": "Bots",
+   "help": "Bots skip buying (they leave the buy time at once and get on with the mode), or buy again.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "on",
+     "type": "bool",
+     "label": "Don't buy",
+     "param": "on"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "Don't buy",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "bots.friends",
+   "title": "Bots: Friends",
+   "category": "Bots",
+   "help": "Makes two groups friends for the bots (they won't attack each other and may stick together), or not. A tag is set with Bots: Tag.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "a_player",
+     "type": "player",
+     "label": "Player A",
+     "optional": true
+    },
+    {
+     "id": "b_player",
+     "type": "player",
+     "label": "Player B",
+     "optional": true
+    },
+    {
+     "id": "on",
+     "type": "bool",
+     "label": "Friends",
+     "param": "on"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "a",
+     "label": "Group A",
+     "kind": "choice",
+     "default": "tag",
+     "choices": [
+      [
+       "all",
+       "Everyone"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "player",
+       "Player A (wired)"
+      ],
+      [
+       "tag",
+       "Tagged"
+      ]
+     ]
+    },
+    {
+     "id": "a_tag",
+     "label": "A's tag",
+     "kind": "name",
+     "default": "squad1"
+    },
+    {
+     "id": "b",
+     "label": "Group B",
+     "kind": "choice",
+     "default": "tag",
+     "choices": [
+      [
+       "all",
+       "Everyone"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "player",
+       "Player B (wired)"
+      ],
+      [
+       "tag",
+       "Tagged"
+      ]
+     ]
+    },
+    {
+     "id": "b_tag",
+     "label": "B's tag",
+     "kind": "name",
+     "default": "squad1"
+    },
+    {
+     "id": "on",
+     "label": "Friends",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "bots.tag",
+   "title": "Bots: Tag",
+   "category": "Bots",
+   "help": "Gives a player a tag (a squad, a job) so other Bots nodes can name them all at once.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "tag",
+     "label": "Tag",
+     "kind": "name",
+     "default": "squad1"
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "bots.layer",
+   "title": "Bots: Prefer Layer",
+   "category": "Bots",
+   "help": "Bots look for loot and hold on this layer of the map: below (tunnels, basements), the surface, or high (roofs, ridges); or their own choice again.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Bot",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "who",
+     "label": "Which bots",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "All bots"
+      ],
+      [
+       "ct",
+       "Counter-Terrorist bots"
+      ],
+      [
+       "t",
+       "Terrorist bots"
+      ],
+      [
+       "player",
+       "The wired bot"
+      ],
+      [
+       "tag",
+       "Bots with this tag"
+      ]
+     ]
+    },
+    {
+     "id": "tag",
+     "label": "Tag",
+     "kind": "name",
+     "default": ""
+    },
+    {
+     "id": "layer",
+     "label": "Layer",
+     "kind": "choice",
+     "default": "surface",
+     "choices": [
+      [
+       "below",
+       "Below"
+      ],
+      [
+       "surface",
+       "Surface"
+      ],
+      [
+       "high",
+       "High"
+      ],
+      [
+       "-",
+       "Their own choice"
+      ]
+     ]
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "bots.creature_enemies",
+   "title": "Bots: Fight Creatures",
+   "category": "Bots",
+   "help": "Bots treat the mode's creatures as enemies (on by default where creatures attack), or not.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "on",
+     "type": "bool",
+     "label": "Fight them",
+     "param": "on"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "Fight them",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "bots.goal",
+   "title": "Bots: Goal",
+   "category": "Bots",
+   "help": "Gives bots something to do at an entity: defend or capture it, use it (hold USE), loot it, or go and hold there, with a priority (0-100), for some seconds, within a radius.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Bot",
+     "optional": true
+    },
+    {
+     "id": "at",
+     "type": "entity",
+     "label": "At",
+     "required": true
+    },
+    {
+     "id": "prio",
+     "type": "number",
+     "label": "Priority",
+     "param": "prio"
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "For (seconds)",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "who",
+     "label": "Which bots",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "All bots"
+      ],
+      [
+       "ct",
+       "Counter-Terrorist bots"
+      ],
+      [
+       "t",
+       "Terrorist bots"
+      ],
+      [
+       "player",
+       "The wired bot"
+      ],
+      [
+       "tag",
+       "Bots with this tag"
+      ]
+     ]
+    },
+    {
+     "id": "tag",
+     "label": "Tag",
+     "kind": "name",
+     "default": ""
+    },
+    {
+     "id": "kind",
+     "label": "Goal",
+     "kind": "choice",
+     "default": "defend",
+     "choices": [
+      [
+       "defend",
+       "Defend it"
+      ],
+      [
+       "capture",
+       "Capture it"
+      ],
+      [
+       "use",
+       "Use it"
+      ],
+      [
+       "loot",
+       "Loot it"
+      ],
+      [
+       "go_hold",
+       "Go and hold there"
+      ]
+     ]
+    },
+    {
+     "id": "prio",
+     "label": "Priority",
+     "kind": "number",
+     "default": 50,
+     "min": 0,
+     "max": 100
+    },
+    {
+     "id": "secs",
+     "label": "For (seconds)",
+     "kind": "number",
+     "default": 60,
+     "min": 1,
+     "max": 3600
+    },
+    {
+     "id": "radius",
+     "label": "Within (units)",
+     "kind": "number",
+     "default": 64,
+     "min": 8,
+     "max": 4000
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "bots.goal_clear",
+   "title": "Bots: Clear Goals",
+   "category": "Bots",
+   "help": "Takes back goals given with Bots: Goal (all of them, or one kind).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Bot",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "who",
+     "label": "Which bots",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "All bots"
+      ],
+      [
+       "ct",
+       "Counter-Terrorist bots"
+      ],
+      [
+       "t",
+       "Terrorist bots"
+      ],
+      [
+       "player",
+       "The wired bot"
+      ],
+      [
+       "tag",
+       "Bots with this tag"
+      ]
+     ]
+    },
+    {
+     "id": "tag",
+     "label": "Tag",
+     "kind": "name",
+     "default": ""
+    },
+    {
+     "id": "kind",
+     "label": "Goals",
+     "kind": "choice",
+     "default": "0",
+     "choices": [
+      [
+       "0",
+       "All"
+      ],
+      [
+       "defend",
+       "Defend"
+      ],
+      [
+       "capture",
+       "Capture"
+      ],
+      [
+       "use",
+       "Use"
+      ],
+      [
+       "loot",
+       "Loot"
+      ],
+      [
+       "go_hold",
+       "Go and hold"
+      ]
+     ]
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "bots.offer",
+   "title": "Bots: Offer",
+   "category": "Bots",
+   "help": "Tells bots something here can be bought or used for a price (a perk, an upgrade bench, a mystery box, a trap, a turret spot); they take it like a person would, when they can afford it and it's calm.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Bot",
+     "optional": true
+    },
+    {
+     "id": "at",
+     "type": "entity",
+     "label": "At",
+     "required": true
+    },
+    {
+     "id": "cost",
+     "type": "number",
+     "label": "Price",
+     "param": "cost"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "who",
+     "label": "Which bots",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "All bots"
+      ],
+      [
+       "ct",
+       "Counter-Terrorist bots"
+      ],
+      [
+       "t",
+       "Terrorist bots"
+      ],
+      [
+       "player",
+       "The wired bot"
+      ],
+      [
+       "tag",
+       "Bots with this tag"
+      ]
+     ]
+    },
+    {
+     "id": "tag",
+     "label": "Tag",
+     "kind": "name",
+     "default": ""
+    },
+    {
+     "id": "kind",
+     "label": "What",
+     "kind": "choice",
+     "default": "perk",
+     "choices": [
+      [
+       "perk",
+       "A perk"
+      ],
+      [
+       "bench",
+       "An upgrade bench"
+      ],
+      [
+       "box",
+       "A mystery box"
+      ],
+      [
+       "trap",
+       "A trap's switch"
+      ],
+      [
+       "turret",
+       "A turret spot"
+      ]
+     ]
+    },
+    {
+     "id": "cost",
+     "label": "Price",
+     "kind": "number",
+     "default": 1000,
+     "min": 0,
+     "max": 100000
+    },
+    {
+     "id": "order",
+     "label": "Order (perks: lowest first)",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 20
+    }
+   ],
+   "needs": "components"
+  },
+  {
+   "type": "bots.offer_clear",
+   "title": "Bots: Clear Offer",
+   "category": "Bots",
+   "help": "Takes back an offer (it's bought or used up), or all of them.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Bot",
+     "optional": true
+    },
+    {
+     "id": "at",
+     "type": "entity",
+     "label": "At",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "who",
+     "label": "Which bots",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "All bots"
+      ],
+      [
+       "ct",
+       "Counter-Terrorist bots"
+      ],
+      [
+       "t",
+       "Terrorist bots"
+      ],
+      [
+       "player",
+       "The wired bot"
+      ],
+      [
+       "tag",
+       "Bots with this tag"
+      ]
+     ]
+    },
+    {
+     "id": "tag",
+     "label": "Tag",
+     "kind": "name",
+     "default": ""
+    }
+   ],
+   "needs": "components"
+  },
+  {
    "type": "bot.goto",
    "title": "Bot Go To",
    "category": "Bots",
@@ -4393,6 +5478,88 @@
     }
    ],
    "params": [],
+   "needs": "components"
+  },
+  {
+   "type": "comp.barricade_hp",
+   "title": "Barricade Health",
+   "category": "Components",
+   "help": "A barricade's health now.",
+   "inputs": [
+    {
+     "id": "barricade",
+     "type": "entity",
+     "label": "Barricade",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Health"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.zone_stage",
+   "title": "Zone Stage",
+   "category": "Components",
+   "help": "The Shrinking zone's stage (the zone or its shrinker); 0 before the first.",
+   "inputs": [
+    {
+     "id": "zone",
+     "type": "entity",
+     "label": "Zone",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Stage"
+    }
+   ],
+   "params": [],
+   "pure": true,
+   "needs": "components"
+  },
+  {
+   "type": "comp.zone_next",
+   "title": "Zone Next",
+   "category": "Components",
+   "help": "When the zone next moves: seconds until it starts (or, while it's closing, until it stops), its next radius, whether it's closing now. Seconds is -1 when nothing is planned.",
+   "inputs": [
+    {
+     "id": "zone",
+     "type": "entity",
+     "label": "Zone",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Seconds"
+    },
+    {
+     "id": "radius",
+     "type": "number",
+     "label": "Next radius"
+    },
+    {
+     "id": "closing",
+     "type": "bool",
+     "label": "Closing"
+    }
+   ],
+   "params": [],
+   "pure": true,
    "needs": "components"
   },
   {

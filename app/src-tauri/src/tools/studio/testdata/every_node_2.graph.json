@@ -1,0 +1,1200 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "every_node_2",
+  "name": "Every Node 2",
+  "description": "Mode-building nodes"
+ },
+ "variables": [],
+ "nodes": [
+  {
+   "id": "ps",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "tag",
+   "type": "bots.tag",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {
+    "tag": "sq1"
+   }
+  },
+  {
+   "id": "fr",
+   "type": "bots.friends",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "a": "tag",
+    "a_tag": "sq1",
+    "b": "tag",
+    "b_tag": "sq1",
+    "on": true
+   }
+  },
+  {
+   "id": "ly",
+   "type": "bots.layer",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "who": "player",
+    "tag": "",
+    "layer": "high"
+   }
+  },
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 0,
+    "y": 220
+   },
+   "params": {}
+  },
+  {
+   "id": "ph",
+   "type": "bots.phase",
+   "pos": {
+    "x": 260,
+    "y": 220
+   },
+   "params": {
+    "phase": "loot"
+   }
+  },
+  {
+   "id": "nb",
+   "type": "bots.no_buy",
+   "pos": {
+    "x": 520,
+    "y": 220
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "ce",
+   "type": "bots.creature_enemies",
+   "pos": {
+    "x": 780,
+    "y": 220
+   },
+   "params": {
+    "on": true
+   }
+  },
+  {
+   "id": "gate",
+   "type": "comp.find",
+   "pos": {
+    "x": 780,
+    "y": 220
+   },
+   "params": {
+    "name": "gate1"
+   }
+  },
+  {
+   "id": "goal",
+   "type": "bots.goal",
+   "pos": {
+    "x": 1040,
+    "y": 220
+   },
+   "params": {
+    "who": "ct",
+    "tag": "",
+    "kind": "defend",
+    "prio": 40,
+    "secs": 30,
+    "radius": 128
+   }
+  },
+  {
+   "id": "off",
+   "type": "bots.offer",
+   "pos": {
+    "x": 1300,
+    "y": 220
+   },
+   "params": {
+    "who": "all",
+    "tag": "",
+    "kind": "trap",
+    "cost": 500,
+    "order": 0
+   }
+  },
+  {
+   "id": "gc",
+   "type": "bots.goal_clear",
+   "pos": {
+    "x": 1560,
+    "y": 220
+   },
+   "params": {
+    "who": "ct",
+    "tag": "",
+    "kind": "defend"
+   }
+  },
+  {
+   "id": "oc",
+   "type": "bots.offer_clear",
+   "pos": {
+    "x": 1820,
+    "y": 220
+   },
+   "params": {
+    "who": "all",
+    "tag": ""
+   }
+  },
+  {
+   "id": "bset",
+   "type": "comp.barricade_set_hp",
+   "pos": {
+    "x": 0,
+    "y": 440
+   },
+   "params": {
+    "hp": 50
+   }
+  },
+  {
+   "id": "bhp",
+   "type": "comp.barricade_hp",
+   "pos": {
+    "x": 260,
+    "y": 440
+   },
+   "params": {}
+  },
+  {
+   "id": "p_bhp",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 440
+   },
+   "params": {
+    "text": "X2 barricade at:",
+    "chat": false
+   }
+  },
+  {
+   "id": "brep",
+   "type": "comp.barricade_repair",
+   "pos": {
+    "x": 520,
+    "y": 440
+   },
+   "params": {}
+  },
+  {
+   "id": "bhp2",
+   "type": "comp.barricade_hp",
+   "pos": {
+    "x": 780,
+    "y": 440
+   },
+   "params": {}
+  },
+  {
+   "id": "p_bhp2",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 440
+   },
+   "params": {
+    "text": "X2 barricade mended:",
+    "chat": false
+   }
+  },
+  {
+   "id": "loot",
+   "type": "comp.loot_roll",
+   "pos": {
+    "x": 1040,
+    "y": 440
+   },
+   "params": {
+    "table": "default",
+    "tier": 1
+   }
+  },
+  {
+   "id": "p_loot",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 440
+   },
+   "params": {
+    "text": "X2 loot:",
+    "chat": false
+   }
+  },
+  {
+   "id": "p_rolled",
+   "type": "debug.print",
+   "pos": {
+    "x": 1560,
+    "y": 440
+   },
+   "params": {
+    "text": "X2 rolled:",
+    "chat": false
+   }
+  },
+  {
+   "id": "shr",
+   "type": "comp.find",
+   "pos": {
+    "x": 0,
+    "y": 660
+   },
+   "params": {
+    "name": "shr"
+   }
+  },
+  {
+   "id": "skip",
+   "type": "comp.zone_skip",
+   "pos": {
+    "x": 260,
+    "y": 660
+   },
+   "params": {}
+  },
+  {
+   "id": "zst",
+   "type": "comp.zone_stage",
+   "pos": {
+    "x": 260,
+    "y": 660
+   },
+   "params": {}
+  },
+  {
+   "id": "p_zst",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 660
+   },
+   "params": {
+    "text": "X2 zone stage:",
+    "chat": false
+   }
+  },
+  {
+   "id": "zn",
+   "type": "comp.zone_next",
+   "pos": {
+    "x": 520,
+    "y": 660
+   },
+   "params": {}
+  },
+  {
+   "id": "fmt",
+   "type": "text.format",
+   "pos": {
+    "x": 780,
+    "y": 660
+   },
+   "params": {
+    "text": "X2 zone next: [0] s, radius [1], closing [2]"
+   }
+  },
+  {
+   "id": "p_zn",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 660
+   },
+   "params": {
+    "text": "",
+    "chat": false
+   }
+  },
+  {
+   "id": "cs",
+   "type": "creature.spawn",
+   "pos": {
+    "x": 0,
+    "y": 880
+   },
+   "params": {
+    "kind": "zombie",
+    "at": "spot1",
+    "health": 300,
+    "tier": "2",
+    "pay": 150
+   }
+  },
+  {
+   "id": "p_cs",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 880
+   },
+   "params": {
+    "text": "X2 creature:",
+    "chat": false
+   }
+  },
+  {
+   "id": "chp",
+   "type": "creature.health",
+   "pos": {
+    "x": 260,
+    "y": 880
+   },
+   "params": {}
+  },
+  {
+   "id": "p_chp",
+   "type": "debug.print",
+   "pos": {
+    "x": 520,
+    "y": 880
+   },
+   "params": {
+    "text": "X2 creature health:",
+    "chat": false
+   }
+  },
+  {
+   "id": "dz",
+   "type": "timer.delay",
+   "pos": {
+    "x": 780,
+    "y": 880
+   },
+   "params": {
+    "secs": 2
+   }
+  },
+  {
+   "id": "zst2",
+   "type": "comp.zone_stage",
+   "pos": {
+    "x": 780,
+    "y": 880
+   },
+   "params": {}
+  },
+  {
+   "id": "p_zst2",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 880
+   },
+   "params": {
+    "text": "X2 zone stage 2 s later:",
+    "chat": false
+   }
+  },
+  {
+   "id": "drop",
+   "type": "comp.drop_call",
+   "pos": {
+    "x": 520,
+    "y": 880
+   },
+   "params": {
+    "at": "spot1"
+   }
+  },
+  {
+   "id": "ph2",
+   "type": "bots.phase",
+   "pos": {
+    "x": 780,
+    "y": 880
+   },
+   "params": {
+    "phase": "fight"
+   }
+  },
+  {
+   "id": "bd",
+   "type": "comp.on_barricade_damaged",
+   "pos": {
+    "x": 0,
+    "y": 1100
+   },
+   "params": {}
+  },
+  {
+   "id": "p_bd",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 1100
+   },
+   "params": {
+    "text": "X2 barricade damaged, left:",
+    "chat": false
+   }
+  },
+  {
+   "id": "br",
+   "type": "comp.on_barricade_repaired",
+   "pos": {
+    "x": 520,
+    "y": 1100
+   },
+   "params": {}
+  },
+  {
+   "id": "p_br",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 1100
+   },
+   "params": {
+    "text": "X2 barricade repaired to:",
+    "chat": false
+   }
+  },
+  {
+   "id": "dl",
+   "type": "comp.on_drop_landed",
+   "pos": {
+    "x": 1040,
+    "y": 1100
+   },
+   "params": {}
+  },
+  {
+   "id": "p_dl",
+   "type": "debug.print",
+   "pos": {
+    "x": 1300,
+    "y": 1100
+   },
+   "params": {
+    "text": "X2 drop landed:",
+    "chat": false
+   }
+  },
+  {
+   "id": "ck",
+   "type": "creature.on_killed",
+   "pos": {
+    "x": 0,
+    "y": 1320
+   },
+   "params": {}
+  },
+  {
+   "id": "p_ck",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 1320
+   },
+   "params": {
+    "text": "X2 creature killed by:",
+    "chat": false
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "tag",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ly",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "ps",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tag",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "tag",
+    "pin": "then"
+   },
+   "to": {
+    "node": "fr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "fr",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ly",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "gate",
+    "pin": "out"
+   },
+   "to": {
+    "node": "goal",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "gate",
+    "pin": "out"
+   },
+   "to": {
+    "node": "off",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "gate",
+    "pin": "out"
+   },
+   "to": {
+    "node": "oc",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ph",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "ph",
+    "pin": "then"
+   },
+   "to": {
+    "node": "nb",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "nb",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ce",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "ce",
+    "pin": "then"
+   },
+   "to": {
+    "node": "goal",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "goal",
+    "pin": "then"
+   },
+   "to": {
+    "node": "off",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "off",
+    "pin": "then"
+   },
+   "to": {
+    "node": "gc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "gc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "oc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "gate",
+    "pin": "out"
+   },
+   "to": {
+    "node": "bset",
+    "pin": "barricade"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "gate",
+    "pin": "out"
+   },
+   "to": {
+    "node": "bhp",
+    "pin": "barricade"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "bhp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_bhp",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "gate",
+    "pin": "out"
+   },
+   "to": {
+    "node": "brep",
+    "pin": "barricade"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "gate",
+    "pin": "out"
+   },
+   "to": {
+    "node": "bhp2",
+    "pin": "barricade"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "bhp2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_bhp2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "loot",
+    "pin": "item"
+   },
+   "to": {
+    "node": "p_loot",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "loot",
+    "pin": "rolled"
+   },
+   "to": {
+    "node": "p_rolled",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "oc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "bset",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "bset",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_bhp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "p_bhp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "brep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "brep",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_bhp2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "p_bhp2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "loot",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "loot",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_loot",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "p_loot",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_rolled",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "shr",
+    "pin": "out"
+   },
+   "to": {
+    "node": "skip",
+    "pin": "zone"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "shr",
+    "pin": "out"
+   },
+   "to": {
+    "node": "zst",
+    "pin": "zone"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "zst",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_zst",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "shr",
+    "pin": "out"
+   },
+   "to": {
+    "node": "zn",
+    "pin": "zone"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "zn",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "fmt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "zn",
+    "pin": "radius"
+   },
+   "to": {
+    "node": "fmt",
+    "pin": "a1"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "zn",
+    "pin": "closing"
+   },
+   "to": {
+    "node": "fmt",
+    "pin": "a2"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "fmt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_zn",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "p_rolled",
+    "pin": "then"
+   },
+   "to": {
+    "node": "skip",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "skip",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_zst",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "p_zst",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_zn",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "cs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_cs",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "cs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "chp",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "chp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_chp",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "shr",
+    "pin": "out"
+   },
+   "to": {
+    "node": "zst2",
+    "pin": "zone"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "zst2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p_zst2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "p_zn",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cs",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "cs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_cs",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "p_cs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_chp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "p_chp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "drop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "drop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ph2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "ph2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dz",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "dz",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_zst2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "bd",
+    "pin": "hp"
+   },
+   "to": {
+    "node": "p_bd",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "bd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_bd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "br",
+    "pin": "hp"
+   },
+   "to": {
+    "node": "p_br",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "br",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "dl",
+    "pin": "drop"
+   },
+   "to": {
+    "node": "p_dl",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "dl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_dl",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "ck",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "p_ck",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "ck",
+    "pin": "then"
+   },
+   "to": {
+    "node": "p_ck",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": []
+}

@@ -20,12 +20,12 @@ pub fn kits_dir() -> PathBuf {
 fn component_of(kind: &str) -> Option<&'static str> {
     Some(match kind {
         "comp.on_capture" | "comp.on_capture_lost" | "comp.capture_lock" => "ls_capture_point",
-        "comp.on_zone_stage" | "comp.on_zone_tick" => "ls_zone_shrinker",
+        "comp.on_zone_stage" | "comp.on_zone_tick" | "comp.zone_stage" | "comp.zone_next" | "comp.zone_skip" => "ls_zone_shrinker",
         "comp.on_extract" | "comp.extract_open" => "ls_extraction_zone",
         "comp.on_wave_start" | "comp.on_wave_spawn" | "comp.on_wave_cleared" | "comp.wave_start" | "comp.wave_stop" => "ls_wave_spawner",
         "comp.on_loot" | "comp.crate_open" => "ls_loot_container",
         "comp.on_checkpoint" => "ls_checkpoint",
-        "comp.on_barricade_broken" => "ls_barricade",
+        "comp.on_barricade_broken" | "comp.on_barricade_damaged" | "comp.on_barricade_repaired" | "comp.barricade_hp" | "comp.barricade_set_hp" | "comp.barricade_repair" => "ls_barricade",
         "comp.on_meeting_end" => "ls_meeting_point",
         "comp.trap_fire" => "ls_trigger_trap",
         "comp.door" => "ls_timed_door",

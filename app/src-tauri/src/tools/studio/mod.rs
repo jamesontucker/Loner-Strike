@@ -1288,7 +1288,8 @@ mod tests {
         let ls = include_str!("../../../../ui/src/views/tools/studio/templates/last-stand.graph.json");
         let br = include_str!("../../../../ui/src/views/tools/studio/templates/battle-royale.graph.json");
         let mk = include_str!("testdata/markers.graph.json");
-        let mut graphs: Vec<(String, String)> = [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br), ("markers", mk)].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+        let every2 = include_str!("testdata/every_node_2.graph.json");
+        let mut graphs: Vec<(String, String)> = [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br), ("markers", mk), ("every_node_2", every2)].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
         for (id, v) in builtin_snippets() {
             graphs.push((format!("sn_{id}"), serde_json::to_string(&snippet_as_graph(&id, &v)).unwrap()));
         }

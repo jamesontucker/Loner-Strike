@@ -293,6 +293,9 @@ const EVENTS: &[EventKind] = &[
     EventKind { kind: "comp.on_wave_cleared", sig: "public ls_on_wave_cleared(wave)", register: &[], prelude: "", guard: "", values: &[("wave", "_:float(wave)")], tail: "", named: None },
     EventKind { kind: "comp.on_loot", sig: "public ls_on_loot(ent, id)", register: &[], prelude: "", guard: "", values: &[("container", "ent"), ("player", "id")], tail: "", named: None },
     EventKind { kind: "comp.on_checkpoint", sig: "public ls_on_checkpoint(ent, id, order)", register: &[], prelude: "", guard: "", values: &[("point", "ent"), ("player", "id"), ("order", "_:float(order)")], tail: "", named: None },
+    EventKind { kind: "comp.on_barricade_damaged", sig: "public ls_on_barricade_damaged(ent, attacker, hp)", register: &[], prelude: "", guard: "", values: &[("barricade", "ent"), ("attacker", "attacker"), ("hp", "_:float(hp)")], tail: "", named: None },
+    EventKind { kind: "comp.on_barricade_repaired", sig: "public ls_on_barricade_repaired(ent, id, hp)", register: &[], prelude: "", guard: "", values: &[("barricade", "ent"), ("player", "id >= 1 && id <= MaxClients ? id : 0"), ("hp", "_:float(hp)")], tail: "", named: None },
+    EventKind { kind: "comp.on_drop_landed", sig: "public ls_on_drop(ent, stage, const Float:origin[3])", register: &[], prelude: "", guard: "\t#pragma unused origin\n\tif (stage != 1)\n\t\treturn", values: &[("drop", "ent")], tail: "", named: None },
     EventKind { kind: "comp.on_barricade_broken", sig: "public ls_on_barricade_broken(ent, attacker)", register: &[], prelude: "", guard: "", values: &[("barricade", "ent"), ("attacker", "attacker")], tail: "", named: None },
     EventKind { kind: "comp.on_meeting_end", sig: "public ls_on_meeting_end(ent, ejected)", register: &[], prelude: "", guard: "", values: &[("meeting", "ent"), ("ejected", "ejected")], tail: "", named: None },
     EventKind {
@@ -365,7 +368,7 @@ fn kind_of(ty: &str) -> char {
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
 const CTX_KINDS: [&str; 10] = ["marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
-const STORE_KINDS: [&str; 5] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call"];
+const STORE_KINDS: [&str; 6] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll"];
 /// Nodes with more than one flow input: one Pawn function each.
 const MULTI_IN: [&str; 5] = ["flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array"];
 /// The vector and struct rings: values that aren't in variables live here for a while.
@@ -687,7 +690,11 @@ impl<'a> Gen<'a> {
             "player.get_deaths" => format!("lsg_get_deaths({})", i("player", "player")),
             "player.is_role" => format!("(ls_is_role({}, {}) ? 1 : 0)", i("player", "player"), pawn_str(&name_text(self.text(n, def, "role")))),
             "game.count_role" => format!("float(ls_count_role({}))", pawn_str(&name_text(self.text(n, def, "role")))),
+            "comp.barricade_hp" => format!("float(ls_components_running() ? ls_barricade_hp({}) : 0)", i("barricade", "entity")),
+            "comp.zone_stage" => format!("float(ls_components_running() ? ls_zone_stage({}) : 0)", i("zone", "entity")),
+            "comp.zone_next" => format!("{}lsg_zone_next({}, {})", if pin == "closing" { "_:" } else { "" }, i("zone", "entity"), match pin { "radius" => 1, "closing" => 2, _ => 0 }),
             "comp.in_zone" => format!("(ls_components_running() && ls_zone_inside({}, {}) ? 1 : 0)", i("zone", "entity"), i("player", "player")),
+            "creature.health" => format!("lsg_ehp({})", i("in", "entity")),
             "creature.count" => "float(lsg_creatures_alive())".into(),
             "player.is_downed" => format!("(g_lsgDown[lsg_slot({})] ? 1 : 0)", i("player", "player")),
             "squad.get" => format!("float(g_lsgSquad[lsg_slot({})])", i("player", "player")),
@@ -1103,6 +1110,10 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if uses_markers {
         o.line(markers_block(g));
     }
+    let uses_spawn = has("creature.spawn");
+    if uses_spawn {
+        o.line(CREATURES_X);
+    }
     if !need.creatures.is_empty() || uses_markers {
         let mut pre = String::from("public plugin_precache()\n{");
         if uses_markers {
@@ -1131,6 +1142,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     if uses_pre {
         o.line("\tRegisterHamPlayer(Ham_TakeDamage, \"lsg_pre_damage\", 0)");
+    }
+    if uses_spawn {
+        o.line("\tif (get_cvar_pointer(\"ls_creature_ver\"))\n\t\tRegisterHam(Ham_Killed, \"ls_creature\", \"lsg_pay_killer\", 1)");
     }
     if uses_down {
         o.line("\tset_task(0.25, \"lsg_revive_tick\", LSG_TASK - 1, _, _, \"b\")");
@@ -1981,8 +1995,11 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\tnew map[32]\n\t\tget_mapname(map, charsmax(map))\n\t\tif (!ls_comp_load_pack(fmt(\"gamemodes/components/%s.%s.ini\", map, {pack})))"), if debug { format!("\t\tlsd_error({i}, \"This map has no such pack.\")\n\t\telse\n\t\t\tlsd_exit({i}, \"loaded\")") } else { "\t\t{}".into() }]);
             then_line(&mut b, "then");
         }
-        "comp.crate_open" | "comp.wave_start" | "comp.wave_stop" | "comp.extract_open" | "comp.door" | "comp.trap_fire" | "comp.capture_lock" | "comp.reset" | "comp.start" | "comp.stop" => {
+        "comp.crate_open" | "comp.wave_start" | "comp.wave_stop" | "comp.extract_open" | "comp.door" | "comp.trap_fire" | "comp.capture_lock" | "comp.reset" | "comp.start" | "comp.stop" | "comp.barricade_set_hp" | "comp.barricade_repair" | "comp.zone_skip" => {
             let call = match def.kind.as_str() {
+                "comp.barricade_set_hp" => format!("ls_barricade_set_hp({}, max(floatround({}), 0))", inp("barricade", "entity"), inp("hp", "number")),
+                "comp.barricade_repair" => format!("ls_barricade_repair({}, {})", inp("barricade", "entity"), if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() }),
+                "comp.zone_skip" => format!("ls_zone_skip({})", inp("zone", "entity")),
                 "comp.crate_open" => format!("ls_loot_open({}, {})", inp("container", "entity"), inp("player", "player")),
                 "comp.wave_start" => format!("ls_wave_start(max(floatround({}), 0))", inp("wave", "number")),
                 "comp.wave_stop" => "ls_wave_stop()".into(),
@@ -1999,17 +2016,81 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\t{call}"), exit("done")]);
             then_line(&mut b, "then");
         }
+        "comp.loot_roll" => {
+            let table = pawn_str(&name_text(gen.text(n, def, "table")));
+            let t = gen.tout_index(id, "item");
+            let k = gen.out_index(id, "rolled");
+            let item = t.map_or("x".to_string(), |t| format!("g_lsgOT[{t}]"));
+            b.line(format!("\tnew x[64], ok\n\tif (!{comps})\n\t\tok = ls_loot_roll({table}, x, charsmax(x), max(floatround({}), 0))", inp("tier", "number")));
+            if let Some(t) = t {
+                b.line(format!("\tcopy(g_lsgOT[{t}], 127, ok ? x : \"\")"));
+            }
+            if let Some(k) = k {
+                b.line(format!("\tg_lsgO[{k}] = ok ? 1 : 0"));
+            }
+            if debug {
+                b.line(format!("\tif ({comps})\n\t\t{}\n\telse\n\t\tlsd_exit({i}, ok ? {item} : \"nothing\")", err("gm_components isn't running on this server.")));
+            } else if t.is_none() {
+                b.line("\t#pragma unused x");
+            }
+            then_line(&mut b, "then");
+        }
+        "bots.phase" | "bots.no_buy" | "bots.friends" | "bots.tag" | "bots.layer" | "bots.creature_enemies" | "bots.goal" | "bots.goal_clear" | "bots.offer" | "bots.offer_clear" => {
+            // who: all / ct / t / the wired bot / @tag (a tag is a name: letters, digits, _ - .)
+            let who = |choice_id: &str, tag_id: &str, player_pin: &str| -> String {
+                let tag = name_text(gen.text(n, def, tag_id));
+                let (code, player) = match gen.choice(n, def, choice_id) {
+                    "ct" => (1, "0".to_string()),
+                    "t" => (2, "0".to_string()),
+                    "player" if v.data_source(id, player_pin).is_some() => (3, inp(player_pin, "player")),
+                    "tag" if !tag.is_empty() => (4, "0".to_string()),
+                    _ => (0, "0".to_string()),
+                };
+                format!("lsg_who({code}, {player}, {})", pawn_str(&tag))
+            };
+            let num = |p: &str| inp(p, "number");
+            let line = match def.kind.as_str() {
+                "bots.phase" => format!("\"phase %s\", {}", pawn_str(match gen.choice(n, def, "phase") { "fight" => "fight", "off" => "off", _ => "loot" })),
+                "bots.no_buy" => format!("\"nobuy %d\", {}", bool01(&inp("on", "bool"))),
+                "bots.creature_enemies" => format!("\"enemyclass ls_creature %d\", {}", bool01(&inp("on", "bool"))),
+                "bots.tag" => format!("\"role %d %s\", {}, {}", inp("player", "player"), pawn_str(&name_text(gen.text(n, def, "tag")))),
+                "bots.friends" => format!("\"friend %s %s %d\", {}, {}, {}", who("a", "a_tag", "a_player"), who("b", "b_tag", "b_player"), bool01(&inp("on", "bool"))),
+                "bots.layer" => format!("\"layer %s %s\", {}, {}", who("who", "tag", "player"), pawn_str(match gen.choice(n, def, "layer") { "below" => "below", "high" => "high", "-" => "-", _ => "surface" })),
+                "bots.goal" => {
+                    let kind = match gen.choice(n, def, "kind") { "capture" => "capture", "use" => "use", "loot" => "loot", "go_hold" => "go_hold", _ => "defend" };
+                    let at = inp("at", "entity");
+                    format!("\"goal %s {kind} %s %d %d %d %d\", {}, lsg_ptext({at}), {at}, clamp(floatround({}), 0, 100), max(floatround({}), 1), {}", who("who", "tag", "player"), num("prio"), num("secs"), gen.num(n, def, "radius").round().clamp(8.0, 4000.0) as i64)
+                }
+                "bots.goal_clear" => format!("\"goal_clear %s %s\", {}, {}", who("who", "tag", "player"), pawn_str(match gen.choice(n, def, "kind") { "defend" => "defend", "capture" => "capture", "use" => "use", "loot" => "loot", "go_hold" => "go_hold", _ => "0" })),
+                "bots.offer" => {
+                    let kind = match gen.choice(n, def, "kind") { "bench" => "bench", "box" => "box", "trap" => "trap", "turret" => "turret", _ => "perk" };
+                    let at = inp("at", "entity");
+                    format!("\"offer %s {kind} %s %d %d %d\", {}, lsg_ptext({at}), {at}, max(floatround({}), 0), {}", who("who", "tag", "player"), num("cost"), gen.num(n, def, "order").round().clamp(0.0, 20.0) as i64)
+                }
+                _ => {
+                    if v.data_source(id, "at").is_some() {
+                        format!("\"offer_clear %s %d\", {}, {}", who("who", "tag", "player"), inp("at", "entity"))
+                    } else {
+                        format!("\"offer_clear %s\", {}", who("who", "tag", "player"))
+                    }
+                }
+            };
+            check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\tif (!lsg_hint(fmt({line})))"), if debug { format!("\t\tlsd_error({i}, \"This server's bot brain doesn't take hints (ls_mode).\")\n\t\telse\n\t\t\tlsd_exit({i}, \"told\")") } else { "\t\t{}".into() }]);
+            then_line(&mut b, "then");
+        }
         "creature.spawn" => {
             let kind = pawn_str(&name_text(gen.text(n, def, "kind")));
+            let tier = gen.choice(n, def, "tier").parse::<i64>().unwrap_or(0).clamp(0, 3);
+            let (hp, pay) = (inp("health", "number"), inp("pay", "number"));
             // (at a wired entity, or the one with the name)
             let at = match v.data_source(id, "at_ent") {
                 Some(_) => format!("lsg_ent_find_origin({})", inp("at_ent", "entity")),
                 None => pawn_str(&name_text(gen.text(n, def, "at"))),
             };
             if debug {
-                b.line(format!("\tif (!get_cvar_pointer(\"ls_creature_ver\"))\n\t\t{}\n\telse if (!(g_lsgOut[{i}] = lsg_creature({kind}, {at})))\n\t\t{}\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))", err("This server's bot brain has no creatures (ls_creature)."), err("Not spawned: no entity has that name, or that type isn't loaded on this map.")));
+                b.line(format!("\tif (!get_cvar_pointer(\"ls_creature_ver\"))\n\t\t{}\n\telse if (!(g_lsgOut[{i}] = lsg_creature_x({kind}, {at}, {tier}, {hp}, floatround({pay}))))\n\t\t{}\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))", err("This server's bot brain has no creatures (ls_creature)."), err("Not spawned: no entity has that name, or that type isn't loaded on this map.")));
             } else {
-                b.line(format!("\tg_lsgOut[{i}] = lsg_creature({kind}, {at})"));
+                b.line(format!("\tg_lsgOut[{i}] = lsg_creature_x({kind}, {at}, {tier}, {hp}, floatround({pay}))"));
             }
             then_line(&mut b, "then");
         }
@@ -2544,6 +2625,50 @@ fn at_origin(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef) -> String {
     }
 }
 
+/// Creatures with the mode's own health, tier and pay for their killer (Spawn Creature).
+const CREATURES_X: &str = r##"// a creature with the mode's own health, tier and pay for its killer
+new g_lsgPay[2048]
+stock lsg_creature_x(const kind[], const at[], tier, Float:hp, pay)
+{
+	new Float:o[3]
+	if (!get_cvar_pointer("ls_creature_ver") || !lsg_origin_of(at, o))
+		return 0
+	new ent = create_entity("ls_creature")
+	if (ent <= 0)
+		return 0
+	DispatchKeyValue(ent, "type", kind)
+	if (tier > 0)
+	{
+		new v[4]
+		num_to_str(tier, v, charsmax(v))
+		DispatchKeyValue(ent, "tier", v)
+	}
+	entity_set_origin(ent, o)
+	DispatchSpawn(ent)
+	if (!is_valid_ent(ent) || (entity_get_int(ent, EV_INT_flags) & FL_KILLME))
+		return 0
+	if (hp > 0.0)
+	{
+		entity_set_float(ent, EV_FL_health, hp)
+		entity_set_float(ent, EV_FL_max_health, hp)
+	}
+	if (ent < sizeof g_lsgPay)
+		g_lsgPay[ent] = clamp(pay, 0, 16000)
+	return ent
+}
+
+public lsg_pay_killer(ent, killer)
+{
+	if (ent > 0 && ent < sizeof g_lsgPay && g_lsgPay[ent])
+	{
+		if (lsg_ok(killer))
+			cs_set_user_money(killer, min(cs_get_user_money(killer) + g_lsgPay[ent], 16000))
+		g_lsgPay[ent] = 0
+	}
+	return HAM_IGNORED
+}
+"##;
+
 /// A marker id's place in the graph's markers (what the plugin's tables use).
 fn marker_index(g: &Graph, id: &str) -> usize {
     g.markers.iter().position(|m| m.id == id).unwrap_or(0)
@@ -2746,7 +2871,64 @@ fn lsg_secs(v: &Option<Val>) -> String {
 const V3_HELPERS: &str = include_str!("v3_helpers.pawn");
 
 /// Helpers every plugin gets (stocks: the ones a graph doesn't use cost nothing).
-const HELPERS: &str = r##"// the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
+const HELPERS: &str = r##"stock Float:lsg_ehp(e)
+	return e > MaxClients && pev_valid(e) ? entity_get_float(e, EV_FL_health) : 0.0
+
+// ---- bot hints (ls_mode, through gm_components) ----
+stock bool:lsg_hint(const line[])
+	return ls_components_running() && ls_comp_bots_hint(line) != 0
+
+// who a hint is for: 0 all, 1 ct, 2 t, 3 a player, 4 @tag
+stock lsg_who(code, p, const tag[])
+{
+	new w[40]
+	switch (code)
+	{
+		case 1: copy(w, charsmax(w), "ct")
+		case 2: copy(w, charsmax(w), "t")
+		case 3: formatex(w, charsmax(w), "%d", lsg_ok(p) ? p : 0)
+		case 4: formatex(w, charsmax(w), "@%s", tag)
+		default: copy(w, charsmax(w), "all")
+	}
+	return w
+}
+
+// an entity's place as "x y z" (a brush entity: its middle)
+stock lsg_ptext(ent)
+{
+	new t[48], Float:o[3]
+	if (ent > 0 && pev_valid(ent))
+	{
+		pev(ent, pev_origin, o)
+		if (o[0] == 0.0 && o[1] == 0.0 && o[2] == 0.0)
+		{
+			new Float:mins[3], Float:maxs[3]
+			pev(ent, pev_absmin, mins)
+			pev(ent, pev_absmax, maxs)
+			for (new k = 0; k < 3; k++)
+				o[k] = (mins[k] + maxs[k]) / 2.0
+		}
+	}
+	formatex(t, charsmax(t), "%.0f %.0f %.0f", o[0], o[1], o[2])
+	return t
+}
+
+// the zone's next move: 0 seconds (-1 none), 1 the next radius, 2 closing now
+stock Float:lsg_zone_next(ent, what)
+{
+	if (!ls_components_running() || ent <= 0)
+		return what == 0 ? -1.0 : 0.0
+	new Float:c[3], Float:r, closing
+	new Float:secs = ls_zone_next(ent, c, r, closing)
+	switch (what)
+	{
+		case 1: return r
+		case 2: return closing ? 1.0 : 0.0
+	}
+	return secs
+}
+
+// the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
 stock lsg_zone_of(ent)
 {
 	new k[24], name[32], tn[32], z
@@ -3493,6 +3675,8 @@ mod tests {
     const TEMPLATE: &str = include_str!("../../../../ui/src/views/tools/studio/templates/team-dm.graph.json");
     pub const ALL_NODES: &str = include_str!("testdata/all_nodes.graph.json");
     pub const EVERY_NODE: &str = include_str!("testdata/every_node.graph.json");
+    /// the nodes every_node has no room for (a graph holds 400): the mode-building pieces
+    pub const EVERY_NODE_2: &str = include_str!("testdata/every_node_2.graph.json");
     pub const MALICIOUS: &str = include_str!("testdata/malicious.graph.json");
 
     fn snapshot(name: &str, got: &str) {
@@ -3657,9 +3841,20 @@ mod tests {
         let g = parse(EVERY_NODE).unwrap();
         let p = validate(&g);
         assert!(p.is_empty(), "{:#?}", p);
-        let used: BTreeSet<&str> = g.nodes.iter().map(|n| n.kind.as_str()).collect();
+        let g2 = parse(EVERY_NODE_2).unwrap();
+        let p2 = validate(&g2);
+        assert!(p2.is_empty(), "every_node_2: {:#?}", p2);
+        let used: BTreeSet<&str> = g.nodes.iter().chain(g2.nodes.iter()).map(|n| n.kind.as_str()).collect();
         for d in &registry().nodes {
-            assert!(used.contains(d.kind.as_str()), "every_node.graph.json lacks {}", d.kind);
+            assert!(used.contains(d.kind.as_str()), "every_node(_2).graph.json lacks {}", d.kind);
+        }
+        for (name, gg) in [("every_node_2", &g2)] {
+            let r = generate(gg, false);
+            for n in gg.nodes.iter().filter(|n| { let d = registry().get(&n.kind).unwrap(); !d.pure && !d.reroute }) {
+                assert!(r.spans.iter().any(|s| s.node == n.id), "{name}: {} isn't in the plugin", n.id);
+            }
+            snapshot(&format!("{name}.sma"), &r.source);
+            snapshot(&format!("{name}.debug.sma"), &generate(gg, true).source);
         }
         let rel = generate(&g, false);
         let dbg = generate(&g, true);

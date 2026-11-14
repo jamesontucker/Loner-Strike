@@ -271,6 +271,33 @@ FM_Spawn in its plugin's plugin_precache, the same rules: `kind`, `mode` incl. c
 **Checks** (the editor's map check, the Studio's Playtest): each marker's count within `required`, each
 component's count, path markers with 2+ points and no repeated `order`, keys of the right type.
 
+## 2026-11-13: the mode-building pieces that exist today, as nodes
+From the audit's step 1 (natives that already exist):
+- **Bots** (all through `ls_comp_bots_hint`, so gm_components loads with them): **Bots: Phase**
+  (loot / fight / normal), **Don't Buy**, **Friends** (two groups: all, CT, T, a wired player, or a tag),
+  **Tag** (`role`), **Prefer Layer** (below / surface / high / own choice), **Fight Creatures**
+  (`enemyclass ls_creature`), **Goal** (defend / capture / use / loot / go and hold, at an entity, priority,
+  seconds, radius) and **Clear Goals**, **Offer** (perk / bench / box / trap / turret spot, price, order)
+  and **Clear Offer**. "Who" is all, CT, T, the wired bot, or `@tag`.
+- **Barricades:** Barricade Health, Set Barricade Health, Repair Barricade (fully, or one step as a
+  player), events Barricade Damaged and Barricade Repaired.
+- **Loot:** Roll Loot (a loot.ini table, a tier) → Item, Rolled.
+- **Zone:** Zone Stage, Zone Next (seconds, next radius, closing), Next Zone Stage Now.
+- **Supply Drop Landed** event.
+- **Spawn Creature** has Health (0: the type's own), Tier (0-3) and Pay (money to its killer, paid when it
+  dies); a **Creature Health** readout.
+- Tests: the nodes `every_node.graph.json` has no room for (400 is the most a graph holds) are in
+  `every_node_2.graph.json` (`make_every_node_2.py`); the coverage test reads both; both builds snapshotted
+  and compiled with amxxpc, no warnings.
+- **Sim (a copy of LSPLAY on ls_outpost with a safe zone, a shrinker and spot1 added):** barricade set to
+  50, repaired to 800 (Barricade Repaired 800); Roll Loot "he"/"vest"/"hp:50"; Zone Stage 0, then 1
+  two seconds after Next Zone Stage Now; Spawn Creature with health 300 (Creature Health 300), its
+  killer's money 800 → 950 a second after the kill (pay 150); Supply Drop Landed. Bot hints: on the newest
+  brain build (r43537330251) every hint was taken (no "ls_mode:" usage line); LSPLAY's older brain lacks
+  `offer`. Not seen live: Barricade Damaged (no creature reached the gate in 2 minutes), the tier's look.
+- **Templates:** these alone don't make Last Stand Lite or Royale Lite play like ours; they move onto
+  the new pieces with W1's (round table, shop, pickups...), and then the side-by-side check on a sim.
+
 ## Audit (2026-11-13): can a Studio user rebuild Last Stand and Battle Royale?
 Short answer today: **the skeleton yes, the game no.** A Studio mode can run waves of creatures from map
 spawners, a shrinking zone, supply drops, squads, revives, buying rules, a HUD and menus, but most of

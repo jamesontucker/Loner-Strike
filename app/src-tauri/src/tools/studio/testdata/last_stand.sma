@@ -25,6 +25,63 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 stock Float:g_v0 = 0.0 // Wave (number)
 
 stock g_lsgM45[33][LSG_CTX]
+stock Float:lsg_ehp(e)
+	return e > MaxClients && pev_valid(e) ? entity_get_float(e, EV_FL_health) : 0.0
+
+// ---- bot hints (ls_mode, through gm_components) ----
+stock bool:lsg_hint(const line[])
+	return ls_components_running() && ls_comp_bots_hint(line) != 0
+
+// who a hint is for: 0 all, 1 ct, 2 t, 3 a player, 4 @tag
+stock lsg_who(code, p, const tag[])
+{
+	new w[40]
+	switch (code)
+	{
+		case 1: copy(w, charsmax(w), "ct")
+		case 2: copy(w, charsmax(w), "t")
+		case 3: formatex(w, charsmax(w), "%d", lsg_ok(p) ? p : 0)
+		case 4: formatex(w, charsmax(w), "@%s", tag)
+		default: copy(w, charsmax(w), "all")
+	}
+	return w
+}
+
+// an entity's place as "x y z" (a brush entity: its middle)
+stock lsg_ptext(ent)
+{
+	new t[48], Float:o[3]
+	if (ent > 0 && pev_valid(ent))
+	{
+		pev(ent, pev_origin, o)
+		if (o[0] == 0.0 && o[1] == 0.0 && o[2] == 0.0)
+		{
+			new Float:mins[3], Float:maxs[3]
+			pev(ent, pev_absmin, mins)
+			pev(ent, pev_absmax, maxs)
+			for (new k = 0; k < 3; k++)
+				o[k] = (mins[k] + maxs[k]) / 2.0
+		}
+	}
+	formatex(t, charsmax(t), "%.0f %.0f %.0f", o[0], o[1], o[2])
+	return t
+}
+
+// the zone's next move: 0 seconds (-1 none), 1 the next radius, 2 closing now
+stock Float:lsg_zone_next(ent, what)
+{
+	if (!ls_components_running() || ent <= 0)
+		return what == 0 ? -1.0 : 0.0
+	new Float:c[3], Float:r, closing
+	new Float:secs = ls_zone_next(ent, c, r, closing)
+	switch (what)
+	{
+		case 1: return r
+		case 2: return closing ? 1.0 : 0.0
+	}
+	return secs
+}
+
 // the safe zone a Zone pin means: a Safe zone itself, or the one a Shrinking zone drives (0: neither)
 stock lsg_zone_of(ent)
 {
