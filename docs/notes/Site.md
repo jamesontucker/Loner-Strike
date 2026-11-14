@@ -192,6 +192,7 @@ To turn one on, add its name to `const INGAME = new Set([...])` in `index.html`,
 | `deathrun` | Game modes | A deathrun map with bot runners on a trap section (spikes, a moving floor). Ideally the activator bot is at its buttons too (a spectator angle works). |
 | `surf` | Game modes | surf_ski_2 or similar: spectate a bot mid-ramp in chase cam, with the ramp running across the frame. |
 | `community-browse` | Community | App, not game: Tools › Community › Browse once the first creations are listed, with a creation picked showing "Try it" and its badges. |
+| `replay` (**must-have**, QA round 4) | Make your own | App, not game: Tools › Replay mid-playback of a Map simulator run on de_dust2 (or ls_outpost), 3D or top-down. Bots moving with their trails, a fight in view (kill markers on the timeline bar), playback around 2-4x. 16:10, saved as `img/1.0/ingame/replay.jpg`; then add `replay` to `INGAME` in index.html. |
 
 **Optional:** the two mode cards on the home page use map renders. To use in-game shots there instead, swap the `<picture>` sources marked `IN-GAME SHOT WANTED` in `index.html`.
 
