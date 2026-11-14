@@ -34,6 +34,9 @@ export function modelOf(e: DocEntity, creatures: Creature[] = []): string | null
   switch (e.classname) {
     case "ls_barnacle":
       return "models/barnacle.mdl";
+    // NPC-editor: an NPC with no model of its own is Barney (the FGD's default)
+    case "ls_npc":
+      return "models/barney.mdl";
     case "ls_creature": {
       const type = keyOf(e.keys, "type")?.trim() || "zombie";
       return creatures.find((c) => c.name === type)?.model?.trim() || CREATURE_MODELS[type] || null;

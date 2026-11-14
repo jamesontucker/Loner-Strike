@@ -52,6 +52,9 @@ const P: Record<string, string> = {
   eye: "M8 3.5c3.4 0 6 3 7 4.5-1 1.5-3.6 4.5-7 4.5S2 9.5 1 8c1-1.5 3.6-4.5 7-4.5zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z",
   eyeOff: "M2.3 1.3l12.4 12.4-1 1-2.3-2.3A7.6 7.6 0 0 1 8 12.5C4.6 12.5 2 9.5 1 8a12 12 0 0 1 3-3.2L1.3 2.3zM8 3.5c3.4 0 6 3 7 4.5a12 12 0 0 1-2.2 2.5L10.4 8.1A2.5 2.5 0 0 0 7.9 5.6L6.4 4.1A7 7 0 0 1 8 3.5z",
   lock: "M5 7V5a3 3 0 0 1 6 0v2h1v7H4V7zm1.5 0h3V5a1.5 1.5 0 0 0-3 0z",
+  // NPC-editor: a person with a speech bubble (ls_npc), a pointing hand (ls_interactable)
+  npc: "M5.5 4a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM2 13.5c0-2.2 1.6-4 3.5-4s3.5 1.8 3.5 4zM9 1.5h5.5v4H12l-1.5 1.5V5.5H9z",
+  use: "M6 1.5a1 1 0 0 1 1 1V7l.5-.2V5.5a1 1 0 0 1 2 0v1.6l.5-.1a1 1 0 0 1 1.5.9v.4l.3-.1a1 1 0 0 1 1.2 1V12c0 1.7-1.3 3-3 3H8.3a3 3 0 0 1-2.4-1.2L3 10a1 1 0 0 1 1.5-1.3L5 9.2V2.5a1 1 0 0 1 1-1z",
   unlock: "M5 7V5a3 3 0 0 1 5.8-1l-1.4.6A1.5 1.5 0 0 0 6.5 5v2H12v7H4V7z",
 };
 function Icon({ d, title, className }: { d: string; title?: string; className?: string }) {
@@ -64,8 +67,11 @@ function Icon({ d, title, className }: { d: string; title?: string; className?: 
 }
 function iconOf(e: DocEntity): string {
   const c = e.classname;
+  if (c === "ls_interactable_brush") return "use";
   if (e.brushes.length) return /^trigger_|^func_(buyzone|bomb_target|hostage_rescue|vip_safetyzone|escapezone)/.test(c) ? "trigger" : "solid";
   if (c.startsWith("light")) return "light";
+  if (c === "ls_npc") return "npc";
+  if (c === "ls_interactable" || c === "ls_interactable_brush") return "use";
   if (/^info_player_|^info_vip_start|^hostage_entity|^monster_/.test(c)) return "spawn";
   if (/^ambient_|^env_sound/.test(c)) return "sound";
   return "point";
