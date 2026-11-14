@@ -26,7 +26,7 @@
   --raised: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
   --sunken: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
   --stencil: "Counter-Strike", "Big Shoulders Stencil Display", Impact, sans-serif;
-  --text: "Barlow Semi Condensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;
+  --text: "Barlow Semi Condensed", "Bahnschrift SemiCondensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;
   --side-w: 224px;
   --strip-h: 64px;
   /* the page's side margin: the top bar, the quick bar and the page line up on it */
@@ -371,7 +371,7 @@ h2 { margin: 0; font: 400 22px/1.1 var(--stencil); letter-spacing: .02em; white-
 /* ---- shared controls (classic Steam) ------------------------------------ */
 .muted { color: var(--bone-faint); }
 .big { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
-.mono { font-family: ui-monospace, Menlo, monospace; font-size: 13px; word-break: break-all; }
+.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; word-break: break-all; }
 .narrow { max-width: 820px; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .start-mode { display: inline-flex; align-items: center; gap: 8px; }

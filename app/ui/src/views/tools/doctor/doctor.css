@@ -42,7 +42,7 @@
 .doc-report { container-type: inline-size; }
 .doc-more { margin-top: 2px; }
 .doc-more summary { cursor: pointer; color: var(--bone-faint); font-size: 13px; width: max-content; }
-.doc-tex { font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--bone-dim); margin: 4px 0 0; }
+.doc-tex { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; color: var(--bone-dim); margin: 4px 0 0; }
 .doc-files { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; }
 .doc-files li { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; font-size: 14px; }
 .doc-files code { font-size: 13px; overflow-wrap: anywhere; }

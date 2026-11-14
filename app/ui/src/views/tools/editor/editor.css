@@ -11,7 +11,7 @@
 .editor-tool { position: relative; display: grid; justify-items: center; gap: 2px; width: 60px; padding: 6px 2px 4px; border: 0; background: transparent; color: var(--bone-dim); font-size: 11px; font-weight: 600; border-radius: 2px; }
 .editor-tool:hover { color: var(--bone); }
 .editor-tool[aria-pressed="true"] { background: var(--panel-2); color: var(--signal); box-shadow: var(--raised); }
-.editor-tool kbd { position: absolute; top: 2px; right: 4px; font: 600 9px/1 ui-monospace, Menlo, monospace; color: var(--bone-faint); }
+.editor-tool kbd { position: absolute; top: 2px; right: 4px; font: 600 9px/1 ui-monospace, Menlo, Consolas, monospace; color: var(--bone-faint); }
 
 .editor-options { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 5px 10px; font-size: 13px; color: var(--bone-dim); background: var(--side); border-bottom: 1px solid var(--bevel-lo); min-height: 34px; }
 .editor-options label { display: inline-flex; align-items: center; gap: 6px; }
@@ -20,7 +20,7 @@
 .editor-snap { font-weight: 600; color: var(--signal); }
 .editor-snap.off { color: #e0a070; }
 .editor-check input { margin: 0; }
-.editor-current-tex { display: inline-flex; align-items: center; gap: 6px; font-family: ui-monospace, Menlo, monospace; }
+.editor-current-tex { display: inline-flex; align-items: center; gap: 6px; font-family: ui-monospace, Menlo, Consolas, monospace; }
 .editor-current-tex img { width: 22px; height: 22px; object-fit: cover; image-rendering: pixelated; box-shadow: var(--sunken); }
 
 .editor-side { align-content: start; }
@@ -38,7 +38,7 @@
 .editor-keys { display: grid; gap: 4px; }
 .editor-key { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 6px; align-items: center; }
 .editor-key.add { margin-top: 4px; }
-.editor-key-name { font: 13px ui-monospace, Menlo, monospace; color: var(--bone-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
+.editor-key-name { font: 13px ui-monospace, Menlo, Consolas, monospace; color: var(--bone-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: help; }
 .editor-key-value { display: flex; gap: 4px; align-items: center; min-width: 0; }
 .editor-key-value > input:not([type]), .editor-key-value > input[list] { flex: 1 1 auto; min-width: 0; font-size: 13px; padding: 2px 5px; }
 .editor-key input[type="color"] { width: 28px; height: 24px; padding: 0; border: 0; background: none; flex: none; }
@@ -71,7 +71,7 @@
 .editor-tree-row .linklike { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .editor-tex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
-.editor-tex { display: grid; gap: 2px; padding: 3px; border: 0; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; color: var(--bone-dim); font: 10px ui-monospace, Menlo, monospace; text-align: center; min-width: 0; }
+.editor-tex { display: grid; gap: 2px; padding: 3px; border: 0; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; color: var(--bone-dim); font: 10px ui-monospace, Menlo, Consolas, monospace; text-align: center; min-width: 0; }
 .editor-tex img { width: 100%; aspect-ratio: 1; object-fit: cover; image-rendering: pixelated; background: #222; }
 .editor-tex span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editor-tex[aria-pressed="true"] { outline: 2px solid var(--signal); color: var(--signal); }
@@ -149,8 +149,8 @@
 .editor-report tr:hover td { background: var(--panel-2); cursor: default; }
 .editor-dialog .editor-row input[type="search"] { flex: 1 1 auto; min-width: 0; }
 
-.editor-handle-tip { font: 600 10px/1 ui-monospace, Menlo, monospace; color: #fff; background: rgba(0,0,0,.55); padding: 2px 4px; border-radius: 2px; transform: translateY(-14px); display: inline-block; white-space: nowrap; }
-.editor-measure { font: 600 12px/1 ui-monospace, Menlo, monospace; color: #10140c; background: #7dffb0; padding: 3px 6px; border-radius: 2px; white-space: nowrap; }
+.editor-handle-tip { font: 600 10px/1 ui-monospace, Menlo, Consolas, monospace; color: #fff; background: rgba(0,0,0,.55); padding: 2px 4px; border-radius: 2px; transform: translateY(-14px); display: inline-block; white-space: nowrap; }
+.editor-measure { font: 600 12px/1 ui-monospace, Menlo, Consolas, monospace; color: #10140c; background: #7dffb0; padding: 3px 6px; border-radius: 2px; white-space: nowrap; }
 
 .editor-recover { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .editor-recover-actions { display: flex; gap: 6px; flex: none; }

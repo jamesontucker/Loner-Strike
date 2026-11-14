@@ -48,8 +48,9 @@ Medium:
 - **Alt key** in the editor (snap off while held, Alt+right-click wrap, Alt-drag): Windows may enter menu mode or
   ding; if so, swallow SC_KEYMENU in a window subclass.
 - **Ctrl+1-9** in the editor are camera bookmarks, so on Windows they can't switch app sections (⌘1-9 on the Mac).
-- **Fonts**: Barlow comes from Google Fonts; offline Windows falls back to Arial (wide labels). Ship Barlow locally
-  and add Bahnschrift SemiCondensed; add Consolas to the monospace stacks (`ui-monospace` isn't on Windows Chromium).
+- **Fonts** (fixed): Barlow Semi Condensed and Big Shoulders Stencil ship in `app/ui/public/fonts` (OFL, `fonts.css`),
+  so the app never asks Google Fonts and looks the same offline; Bahnschrift SemiCondensed is in the text stack and
+  Consolas in every monospace stack (`ui-monospace` isn't on Windows Chromium).
 - **Roaming AppData**: `app_dir()` is `%APPDATA%` (Roaming) and holds steamcmd, voice and chat models (GBs). Move big
   data to `%LOCALAPPDATA%`.
 Low: `game_running` fails open when tasklist is slow; HLTV has no pid file; the uninstaller's `taskkill /IM

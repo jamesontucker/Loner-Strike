@@ -118,7 +118,7 @@ The radio, in the app and on the website, plays the stations' own streams; nothi
 | [Barlow Semi Condensed](https://github.com/jpt/barlow) | Jeremy Tribby | SIL Open Font License 1.1 |
 | [Big Shoulders Stencil Display](https://github.com/xotypeco/big_shoulders) (fallback for titles in the app) | Patric King (XO Type) | SIL Open Font License 1.1 |
 
-The website serves its own copies of the fonts; the app loads Barlow Semi Condensed and Big Shoulders from Google Fonts.
+The website and the app each carry their own copies of the fonts (the app's are in `app/ui/public/fonts`, with the OFL text beside them), so neither contacts Google Fonts and the app looks the same offline.
 
 ## Libraries
 The app is built with these, among many smaller ones. Every Rust crate and npm package, with its version, is in `app/src-tauri/Cargo.lock` and `app/ui/package-lock.json`, and each one's license is in its package.

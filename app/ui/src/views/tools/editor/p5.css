@@ -31,7 +31,7 @@
 .ed-menu-list button { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 16px; border: 0; background: none; color: var(--bone); padding: 4px 8px; font-size: 13px; text-align: left; border-radius: 2px; }
 .ed-menu-list button:hover:not(:disabled), .ed-menu-list button:focus-visible { background: var(--panel-2); color: var(--signal); }
 .ed-menu-list button:disabled { color: var(--bone-faint); }
-.ed-menubar kbd, .ed-palette kbd, .ed-cheats kbd, .ed-keyedit kbd { font: 600 11px/1.4 ui-monospace, Menlo, monospace; color: var(--bone-dim); background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
+.ed-menubar kbd, .ed-palette kbd, .ed-cheats kbd, .ed-keyedit kbd { font: 600 11px/1.4 ui-monospace, Menlo, Consolas, monospace; color: var(--bone-dim); background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; white-space: nowrap; }
 .ed-menu-find { margin-left: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--bone-dim); border-radius: 3px; padding: 2px 8px; font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
 .ed-menu-find:hover { color: var(--bone); }
 .ed-layouts button { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; font-size: 12px; }
@@ -442,9 +442,9 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .p5-xf-label { font-size: 12px; color: var(--bone-dim); white-space: nowrap; }
 .p5-xf-field { display: flex; align-items: stretch; min-width: 0; border: 1px solid var(--line); border-radius: 3px; background: var(--panel-2); overflow: hidden; }
 .p5-xf-field:focus-within { border-color: #ffd84a; }
-.p5-xf-axis { flex: none; width: 15px; display: grid; place-items: center; font: 700 10px/1 ui-monospace, Menlo, monospace; color: #10130d; cursor: ew-resize; user-select: none; touch-action: none; }
+.p5-xf-axis { flex: none; width: 15px; display: grid; place-items: center; font: 700 10px/1 ui-monospace, Menlo, Consolas, monospace; color: #10130d; cursor: ew-resize; user-select: none; touch-action: none; }
 .p5-xf-field.scrubbing .p5-xf-axis { filter: brightness(1.25); }
-.p5-xf-field input { flex: 1 1 auto; min-width: 0; width: 100%; border: 0; background: none; color: var(--bone); font: 12px ui-monospace, Menlo, monospace; padding: 2px 4px; font-variant-numeric: tabular-nums; }
+.p5-xf-field input { flex: 1 1 auto; min-width: 0; width: 100%; border: 0; background: none; color: var(--bone); font: 12px ui-monospace, Menlo, Consolas, monospace; padding: 2px 4px; font-variant-numeric: tabular-nums; }
 .p5-xf-field input:focus { outline: none; }
 .p5-xf-unit { flex: none; align-self: center; padding-right: 4px; font-size: 11px; color: var(--bone-faint); }
 .p5-xf-locks { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; }
