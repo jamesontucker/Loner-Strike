@@ -1129,13 +1129,18 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
         <p class="fine">It updates itself from the app. Something not working? <a href="docs#no-bots-help">The docs</a> cover the usual problems.</p>
       </div>
       <div class="box get-support">
-        <h3>Support Loner-Strike</h3>
-        <p>Loner-Strike is a free <a href="terms.html#side-project">side project</a>, and it always will be free. If you'd like to chip in, this makes you a <b>Supporter</b>, for good: a gold role in our Discord and a [VIP] tag with a reserved slot on our official servers.</p>
-        <a class="btn primary polar" id="polar" href="#" data-polar-checkout data-polar-checkout-theme="dark" data-event="Support Loner-Strike">Support Loner-Strike</a>
+        <h3>Loner-Strike Support Pack</h3>
+        <ul class="steps pack">
+          <li><b>The Supporter role</b> in our Discord, in gold.</li>
+          <li><b>A [VIP] tag, a reserved slot and a join message</b> on our official servers.</li>
+          <li><b>The apps</b> for Windows and Mac, from your Polar receipt.</li>
+        </ul>
+        <p>Your Supporter perks are yours for good. Loner-Strike itself stays free for everyone.</p>
+        <a class="btn primary polar" id="polar" href="#" data-polar-checkout data-polar-checkout-theme="dark" data-event="Get the Support Pack">Get the Support Pack</a>
         <p class="fine">From <span class="support-min">$3</span>.</p>
-        <p class="fine" id="support-monthly" hidden>Prefer to chip in every month, from <span class="support-min">$3</span>? <a class="polar-monthly" href="#" data-event="Support monthly">You can do that too</a>. Same thanks, and stopping never takes anything away.</p>
+        <p class="fine" id="support-monthly" hidden>Prefer it monthly, from <span class="support-min">$3</span>? <a class="polar-monthly" href="#" data-event="Get the Support Pack monthly">That's here</a>. Same perks, and stopping never takes them away.</p>
         <p class="fine">After paying, connect your Discord on the receipt page to get the role. For the in-game perks, type <code>/link</code> in game on a Loner-Strike server, then type <code>/link</code> with your code in our Discord (any channel; only you see the reply; <a href="docs#link-steam">how</a>).</p>
-        <p class="fine">Since it's a side project, there are no promises about updates or how long the servers run. Thank you for the love &lt;3</p>
+        <p class="fine">Loner-Strike is a <a href="terms.html#side-project">side project</a>, so there are no promises about updates or how long the servers run. Thank you for the love &lt;3</p>
       </div>
     </div>
   </section>
@@ -1563,7 +1568,7 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
   }
 
-  // Support Loner-Strike: Polar's checkout opens over the page. Without a link yet, it goes to the download.
+  // The Support Pack: Polar's checkout opens over the page. Without a link yet, it goes to the download.
   for (const a of document.querySelectorAll("a.polar")) {
     if (POLAR_CHECKOUT) {
       a.href = POLAR_CHECKOUT;
