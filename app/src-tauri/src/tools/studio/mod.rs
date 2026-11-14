@@ -23,6 +23,7 @@ pub mod gen;
 pub mod expand;
 pub mod graph;
 pub mod kit;
+pub mod testrun;
 
 use crate::server::Shared;
 use axum::extract::{Path as UrlPath, Query, State};
@@ -792,6 +793,24 @@ async fn api_generate(h: HeaderMap, Json(req): Json<BuildReq>) -> Response {
     .await
 }
 
+async fn api_testrun(State(st): State<Shared>, h: HeaderMap, Json(req): Json<BuildReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    blocking(move || testrun::start(&st, graph_of(req.graph)?)).await
+}
+
+async fn api_testrun_progress() -> Response {
+    Json(testrun::progress()).into_response()
+}
+
+async fn api_testrun_cancel(h: HeaderMap) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    Json(testrun::cancel()).into_response()
+}
+
 async fn api_check(State(st): State<Shared>, h: HeaderMap, Json(req): Json<BuildReq>) -> Response {
     if !crate::panel_api::from_panel(&h) {
         return forbidden();
@@ -1104,6 +1123,8 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/studio/generate", post(api_generate))
         .route("/api/tools/studio/compile", post(api_compile))
         .route("/api/tools/studio/check", post(api_check))
+        .route("/api/tools/studio/testrun", get(api_testrun_progress).post(api_testrun))
+        .route("/api/tools/studio/testrun/cancel", post(api_testrun_cancel))
         .route("/api/tools/studio/source", post(api_source))
         .route("/api/tools/studio/snippets", get(api_snippets))
         .route("/api/tools/studio/snippet/:id", post(api_snippet_save))

@@ -32,7 +32,7 @@ const canvasKey = async (page: Page, key: string) => {
 // Nothing here installs, compiles or plays in a game: those routes are answered in the page
 // (a test that wants a Playtest answer routes it itself, later routes win). The dev server also
 // refuses to write into a real Half-Life install while under test (studio::guard_real_game).
-const WRITES = ["compile", "check", "playtest", "switch", "source", "uninstall/**", "debug/command"];
+const WRITES = ["compile", "check", "testrun", "testrun/cancel", "playtest", "switch", "source", "uninstall/**", "debug/command"];
 test.beforeEach(async ({ page }) => {
   for (const r of WRITES) await page.route(`**/api/tools/studio/${r}`, (route) => route.fulfill({ json: { ok: true, problems: [], output: "(a test: not installed)", installedAs: ID } }));
   await page.route("**/api/app/launch", (r) => r.fulfill({ json: { ok: true } }));
@@ -443,6 +443,52 @@ test("Compile: the full check's status, its problems tied to nodes, Compile on s
   expect(calls).toBe(before + 1);
   await expect(icon).toHaveAttribute("data-state", "none");
   await page.getByLabel("Compile on save").check();
+});
+
+test("Test run: steps with seconds, cancel, the summary, problems tied to nodes, the log, the status", async ({ page }) => {
+  const t0 = Date.now();
+  let phase: "running" | "done" | "stopped" = "running";
+  let cancelled = false;
+  let started = false;
+  const result = {
+    verdict: "warn",
+    summary: ["Heavy for a server: 2100 node runs a second.", "2 of 7 nodes never ran during the test (that can be fine)."],
+    problems: [{ level: "warning", node: "give_m4", message: "Refused: that command isn't allowed" }],
+    neverRan: ["is_t", "give_ak"],
+    cost: { baseline: { cpu: 10, fps: 500 }, mode: { cpu: 20, fps: 480 }, nodeRunsPerSec: 2100, busiest: [] },
+    log: "== amxx plugins\nstudio_pw_v3.amxx running",
+  };
+  await page.route("**/api/tools/studio/testrun", async (r) => {
+    if (r.request().method() === "POST") return (started = true), r.fulfill({ json: { ok: true } });
+    if (!started) return r.fulfill({ json: { run: null } });
+    const steps = [
+      { label: "Getting ready", at: t0, secs: 0.1 },
+      { label: "Starting a hidden server on de_dust2", at: t0 + 100, secs: phase === "running" ? null : 3 },
+    ];
+    await r.fulfill({ json: { run: { mode: ID, phase, steps, started: t0, result: phase === "done" ? result : null } } });
+  });
+  await page.route("**/api/tools/studio/testrun/cancel", (r) => ((cancelled = true), r.fulfill({ json: { ok: true } })));
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await page.getByTestId("studio-test").click();
+  const tab = page.getByTestId("studio-testrun");
+  await expect(tab).toContainText("Starting a hidden server on de_dust2… ");
+  await expect(page.getByTestId("studio-testing")).toContainText("Test run…");
+  await tab.getByRole("button", { name: "Cancel" }).click();
+  expect(cancelled).toBe(true);
+  phase = "done";
+  await expect(page.getByTestId("studio-test-verdict")).toHaveAttribute("data-verdict", "warn");
+  await expect(tab).toContainText("Heavy for a server");
+  await expect(tab).toContainText("480 frames a second and 20% CPU with the mode, 500 and 10% without");
+  await tab.getByRole("button", { name: "Give Weapon" }).first().click();
+  await expect(node(page, "give_m4")).toHaveClass(/selected/);
+  await tab.getByRole("button", { name: "Show them" }).click();
+  await expect(tab.getByRole("button", { name: "Is Team" })).toBeVisible();
+  await expect(page.getByTestId("studio-test-status")).toContainText("Tested with warnings just now");
+  // an edit: the status says so
+  await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+  await node(page, "give_m4").click();
+  await page.keyboard.press("Delete");
+  await expect(page.getByTestId("studio-test-status")).toContainText("(edited since)");
 });
 
 test.describe("leaving with unsaved edits", () => {

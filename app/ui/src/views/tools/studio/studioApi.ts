@@ -20,6 +20,22 @@ export const openAsCode = (g: Graph) => post<{ ok?: boolean; folder?: string; na
 export const compile = (g: Graph, debug = false) => post<CompileResult>(`${S}/compile`, { graph: g, debug });
 /** Compile (the full check): the real compiler, nothing installed or started. */
 export const checkCompile = (g: Graph) => post<{ ok?: boolean; problems?: Problem[]; compiler?: Problem[]; output?: string; stopped?: boolean; cached?: boolean; secs?: number; error?: string }>(`${S}/check`, { graph: g });
+/** Test run (the real-world check): a hidden server plays the mode with bots. */
+export type TestStep = { label: string; at: number; secs?: number | null };
+export type TestResult = {
+  verdict: "pass" | "warn" | "fail";
+  summary: string[];
+  problems: Problem[];
+  ran?: string[];
+  neverRan?: string[];
+  cost?: { baseline?: { cpu: number; fps: number } | null; mode?: { cpu: number; fps: number } | null; nodeRunsPerSec?: number; busiest?: { node: string; runs: number }[] };
+  maps?: string[];
+  log: string;
+};
+export type TestRunState = { mode: string; phase: "running" | "done" | "failed" | "stopped"; steps: TestStep[]; started: number; result?: TestResult | null; error?: string | null };
+export const startTestRun = (g: Graph) => post<{ ok?: boolean; error?: string }>(`${S}/testrun`, { graph: g });
+export const testRunProgress = () => tryGet<{ run?: TestRunState | null; now?: number }>(`${S}/testrun`);
+export const cancelTestRun = () => post<{ ok?: boolean }>(`${S}/testrun/cancel`);
 export const playtest = (g: Graph, breakpoints: string[]) => post<CompileResult>(`${S}/playtest`, { graph: g, breakpoints });
 export const switchOpenGame = (mode: string, map: string) => post<{ ok?: boolean }>(`${S}/switch`, { mode, map });
 export const uninstall = (id: string) => post<{ ok?: boolean }>(`${S}/uninstall/${encodeURIComponent(id)}`);

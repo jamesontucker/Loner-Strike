@@ -53,6 +53,9 @@ pub fn specs() -> Vec<Spec> {
         Spec { name: "studio_playtest", title: "Mode Studio: playtest", kind: Risky,
             schema: || obj(json!({"id": graph_id(), "draft": draft_prop(), "map": map_prop(), "bots": {"type": "integer", "minimum": 0, "maximum": 31}, "breakpoints": {"type": "array", "items": {"type": "string"}, "description": "Node ids to stop at"}}), &["id", "map"]),
             description: "Compiles the graph with the debugger, then starts the game on a map in that mode with bots (asks the person first). Then read studio_debug_events and use studio_debug." },
+        Spec { name: "studio_test_run", title: "Mode Studio: test run", kind: Risky,
+            schema: || obj(json!({"id": graph_id(), "draft": draft_prop()}), &["id"]),
+            description: "The real-world check: compiles the graph with the debugger into a hidden server of its own (never the person's game or an open game), plays it with bots for about a minute and a half (a baseline without the mode, the mode, a round restart, a map change) and reports pass/warn/fail: did the plugin load, run-time errors tied to nodes, a crash, the server's cost against the baseline, which nodes ran and which never did. Asks the person first; takes 2 to 5 minutes." },
         Spec { name: "studio_uninstall", title: "Mode Studio: take a mode out", kind: Risky, schema: || obj(json!({"id": graph_id()}), &["id"]),
             description: "Removes a Studio mode from the game (its plugin, plugins list and modes.ini line; the graph is kept). Asks the person first." },
         Spec { name: "studio_debug_events", title: "Mode Studio: debugger events", kind: Read,
@@ -222,6 +225,27 @@ pub async fn run(ctx: &Ctx, name: &str, a: &Value) -> Option<Done> {
             }
             let launched = post(ctx, "/api/app/launch", b).await?;
             Ok(json!({"built": built, "launched": launched, "next": "Read studio_debug_events with mode and from: 0."}))
+        }
+        .await,
+        "studio_test_run" => async {
+            let (id, g) = graph_to_install(ctx, a).await?;
+            ask(ctx, format!("An AI agent wants to test-run the game mode \"{id}\": a hidden server of its own plays it with bots for about a minute and a half (your game and an open game aren't touched). Allow it?")).await?;
+            let started = post(ctx, "/api/tools/studio/testrun", json!({"graph": g})).await?;
+            if started["ok"] != true {
+                return Ok(started);
+            }
+            // (until it's done: at most 10 minutes)
+            for _ in 0..600 {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                let v = get(ctx, "/api/tools/studio/testrun").await?;
+                let run = &v["run"];
+                match run["phase"].as_str() {
+                    Some("running") => continue,
+                    Some("done") => return Ok(json!({"result": run["result"], "steps": run["steps"]})),
+                    _ => return Ok(json!({"phase": run["phase"], "error": run["error"], "steps": run["steps"]})),
+                }
+            }
+            Ok(json!({"error": "The test run is still going after 10 minutes; read it later with the Studio's Test run tab."}))
         }
         .await,
         "studio_uninstall" => async {

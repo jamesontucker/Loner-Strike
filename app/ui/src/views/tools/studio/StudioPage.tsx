@@ -22,7 +22,7 @@ import { Inspector } from "./Inspector";
 import { MyBlueprint } from "./MyBlueprint";
 import { TabBar } from "./TabBar";
 import { tabView } from "./graphOps";
-import { Results, fullText } from "./Results";
+import { Results, fullText, testText } from "./Results";
 import { DebugPanel } from "./DebugPanel";
 import { applyLayout, autoLayout } from "./layout";
 import { nativeMenuOk } from "./ContextMenu";
@@ -337,6 +337,54 @@ function Studio({ maps }: ToolProps) {
     // Compile on save: in the background (never blocks typing), only when the quick check is clean
     if (prefsRef.current.compileOnSave && !useStudio.getState().problems.some((p) => p.level === "error")) void compileNow(true);
     return true;
+  };
+
+  // Test run (the real-world check): a hidden server plays the mode; progress read every second
+  const testRun = useStudio((s) => s.testRun);
+  const testKey = useStudio((s) => s.testKey);
+  const [testNow, setTestNow] = useState(Date.now());
+  const pollTest = useCallback(async () => {
+    const v = await api.testRunProgress();
+    const s0 = useStudio.getState();
+    const run = v?.run;
+    if (!run || run.mode !== s0.graph?.mode.id) return;
+    const was = s0.testRun?.phase;
+    s0.setTestRun(run);
+    if (run.phase !== "running" && was === "running") {
+      s0.showResults("testrun");
+      const verdict = run.result?.verdict;
+      if (run.phase === "done") toast(verdict === "pass" ? "Test run passed." : verdict === "warn" ? "Test run passed with warnings (Results, below)." : "Test run failed (Results, below).", verdict === "fail");
+    }
+  }, [toast]);
+  useEffect(() => {
+    if (!graph) return;
+    // (a run going on for this mode from before: picked up)
+    void pollTest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph?.mode.id]);
+  useEffect(() => {
+    if (testRun?.phase !== "running") return;
+    const t = setInterval(() => void pollTest(), 1000);
+    return () => clearInterval(t);
+  }, [testRun?.phase, pollTest]);
+  useEffect(() => {
+    const t = setInterval(() => setTestNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const testStale = !!graph && !!testKey && testRun?.phase === "done" && testKey !== checkKey(graph);
+  const startTest = async () => {
+    const g = useStudio.getState().graph;
+    if (!g) return;
+    if (useStudio.getState().problems.some((p) => p.level === "error")) {
+      toast("Fix the quick check's errors first (Problems, below).", true);
+      useStudio.getState().showResults("problems");
+      return;
+    }
+    const key = checkKey(g);
+    const r = await busy("studio-test", "Starting the test run…", () => api.startTestRun(g));
+    if (r.error) return toast(r.error, true);
+    useStudio.getState().setTestRun({ mode: g.mode.id, phase: "running", steps: [{ label: "Getting ready", at: Date.now() }], started: Date.now() }, key);
+    useStudio.getState().showResults("testrun");
   };
 
   // Compile (the full check): the real compiler, nothing installed or started. `quiet`: from a
@@ -661,6 +709,26 @@ function Studio({ maps }: ToolProps) {
               </button>
             );
           })()}
+          {testRun?.phase === "running" ? (
+            <span className="st-step" role="status" aria-live="polite" data-testid="studio-testing">
+              <span className="spinner" /> Test run…
+            </span>
+          ) : (
+            <button type="button" className="btn" data-testid="studio-test" onClick={() => void startTest()} disabled={!!working} title="Play the mode on a hidden server with bots for about a minute and a half and report what happened (your game isn't touched)">
+              Test run
+            </button>
+          )}
+          {testRun && testRun.phase !== "running" && (
+            <button
+              type="button"
+              className={`st-test-status ${testRun.phase === "done" && !testStale ? (testRun.result?.verdict ?? "") : ""}`}
+              data-testid="studio-test-status"
+              onClick={() => st.showResults("testrun")}
+              title="Open the test run's results"
+            >
+              {testText(testRun, testStale, testNow)}
+            </button>
+          )}
           <label className="st-check-auto" title="Compile in the background each time you save">
             <input
               type="checkbox"

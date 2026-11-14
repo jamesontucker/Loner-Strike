@@ -405,6 +405,9 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/api/tools/studio/check"),
     ("POST", "/api/tools/studio/debug/command"),
     ("GET", "/api/tools/studio/debug/events"),
+    ("GET", "/api/tools/studio/testrun"),
+    ("POST", "/api/tools/studio/testrun"),
+    ("POST", "/api/tools/studio/testrun/cancel"),
     ("POST", "/api/tools/studio/generate"),
     ("POST", "/api/tools/studio/source"),
     ("GET", "/api/tools/studio/kits"),
@@ -618,6 +621,7 @@ pub fn policy(method: &str, path: &str, body: &Value) -> Policy {
         ("/api/tools/studio/compile", "compile a Studio mode and install it into your game"),
         ("/api/tools/studio/switch", "switch the running game to a Studio mode (changes the map for everyone on it)"),
         ("/api/tools/editor/new", "start a new map in the editor (unsaved changes are lost)"),
+        ("/api/tools/studio/testrun", "test-run a Studio mode on a hidden server of its own"),
         ("/api/tools/editor/open", "open another map in the editor (unsaved changes are lost)"),
         ("/api/tools/editor/import-map", "import a map into the editor (unsaved changes are lost)"),
         ("/api/tools/editor/import-other", "import into the editor (unsaved changes are lost)"),
@@ -835,6 +839,7 @@ pub const CHANGES: &[&str] = &[
     "/api/tools/studio/debug/command",
     "/api/tools/studio/generate",
     "/api/tools/studio/validate",
+    "/api/tools/studio/testrun/cancel",
     "/api/welcome",
 ];
 

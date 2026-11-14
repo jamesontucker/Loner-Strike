@@ -306,7 +306,32 @@ UI unit tests and studio-v3/studio-playtest specs green; not yet run on a sim); 
   the reason `x;sv_gravity 123;exec lscanary.cfg` kicked the bot and nothing else ran; Change Map to
   `de_nothere` stayed on de_dust2; allowed `sv_gravity 300` and `amx_cvar sv_gravity 500` ran
   (gravity 500); the canary cfg (gravity 111) never ran, rcon_password unchanged, de_dust2.nav untouched.
-**Queued next, in order:** (a) the **Test run** button (below); (b) the Blueprint parity batch 2 plan;
+**Test run: done (2026-11-14).** `studio/testrun.rs`; routes `POST/GET /api/tools/studio/testrun`,
+`POST .../testrun/cancel`; MCP `studio_test_run` (Risky: asks, then waits for the result).
+- A hidden server of its own (`<servers root>/.studio-test`, beside the simulator's `.health-check`):
+  a copy of one of the player's servers (`health::sources` + `sync_copy`), else one set up from the
+  game (`servers::start_hidden_server`), as the Map simulator does; no check for an open game (it
+  doesn't touch it); two stock maps with navs copied in; our hlds stopped by its folder's name.
+- The run (about 2 min): debug build without breakpoints (`debug` flag on the plugin line), 20 s
+  baseline in Classic sampling `stats`, the mode by a changelevel, 45 s, `sv_restartround`, 15 s,
+  `changelevel` to the second map, 20 s; then `amxx plugins`, the AMXX logs, the console, `ls_crash*`
+  and the debugger's events (kept across the map change: the log starts again per map).
+- Verdict: fail on a plugin that didn't load, run-time errors (AMXX debug trace line -> node via the
+  spans), a crash or a failed compile; warn on the nodes' own errors (a refused command, "Not given"),
+  heavy cost (CPU +25 points or frames under 70% of the baseline, or over 1500 node runs a second), or
+  bots that didn't join; "N of M nodes never ran" as information.
+- UI: Test run button and a status ("Tested ✓ 2 min ago", "(edited since)"), a Results tab with the
+  steps and seconds counting, Cancel, the verdict and summary, problems that focus their node, the
+  nodes that never ran, cost, Copy the log, the steps folded away after.
+- Checked for real: Rifle Reward under the dev server with the real game read-only
+  (`LS_SERVERS_DIR` = a sim folder, `LS_TEST_RUN_SOURCE` = sim copy B): passed, kills and the
+  rifle given seen, 82 -> 92 fps / 30 -> 22% CPU, 2 of 7 nodes never ran (the T side's), about 2 min;
+  from the page too. Test seam: `LS_TEST_RUN_SOURCE` (a server folder to copy when the app lists none).
+- Asked of others: health.rs (`sources`, `game_folder`, `nav_files`, `sync_copy`, `spawn`,
+  `free_port`, `tail` made `pub(crate)` for this; nothing else changed there); MCP: the new tool and
+  its routes are listed (`routes.rs`, `more.rs`). On this Mac a test run is one more hidden server:
+  count it toward the crew's sim limit.
+**Queued next, in order:** (b) the Blueprint parity batch 2 plan;
 (c) sim tests for the core nodes; (d) example modes, node help, tour.
 **The core nodes batch:**
 - registry (`make_nodes.py` → `nodes.json`, 413 nodes): Game (Current Map Name, Next Map, Server Name, Max

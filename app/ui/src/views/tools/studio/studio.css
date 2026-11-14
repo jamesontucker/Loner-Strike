@@ -299,3 +299,20 @@
 .st-check-auto { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
 /* a short window: the canvas is too small for the minimap to help, and it would hide nodes */
 @media (max-height: 760px), (max-width: 1100px) { .st-minimap { display: none; } }
+/* Test run (Results tab) */
+.st-test { padding: 6px 8px; overflow-y: auto; font-size: 13px; display: grid; gap: 6px; align-content: start; }
+.st-test-empty { padding: 6px 8px; margin: 0; font-size: 13px; }
+.st-test-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.st-test-steps li { display: flex; align-items: center; gap: 6px; color: var(--st-muted, #999); }
+.st-test-steps li.on { color: var(--text); }
+.st-test-done { color: var(--st-ok, #5cb85c); width: 14px; text-align: center; }
+.st-test-verdict { margin: 0; font-weight: 600; }
+.st-test-verdict.pass { color: var(--st-ok, #5cb85c); }
+.st-test-verdict.warn { color: var(--st-warn); }
+.st-test-verdict.fail { color: var(--st-bad); }
+.st-test-summary { margin: 0; padding-left: 18px; }
+.st-test-never { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: 6px; }
+.st-test-status { font-size: 12px; white-space: nowrap; color: var(--st-muted, #999); cursor: pointer; background: none; border: 0; padding: 0; }
+.st-test-status.pass { color: var(--st-ok, #5cb85c); }
+.st-test-status.warn { color: var(--st-warn); }
+.st-test-status.fail { color: var(--st-bad); }

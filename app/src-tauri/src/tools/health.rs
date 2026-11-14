@@ -862,11 +862,11 @@ fn setup_busy() -> Option<String> {
 }
 
 /// The player's servers on this computer a hidden copy can be made of, for a game.
-fn sources(game: &str) -> Vec<crate::servers::Entry> {
+pub(crate) fn sources(game: &str) -> Vec<crate::servers::Entry> {
     crate::servers::load().into_iter().filter(|e| e.remote.is_none() && e.ready && e.game == game && e.dir.join("hlds.exe").is_file()).collect()
 }
 
-fn game_folder(g: &crate::game::Game) -> &'static str {
+pub(crate) fn game_folder(g: &crate::game::Game) -> &'static str {
     if g.is_czero() {
         "czero"
     } else {
@@ -876,7 +876,7 @@ fn game_folder(g: &crate::game::Game) -> &'static str {
 
 /// The map's nav and knowledge in the player's game: next to the map, else in the other
 /// game's maps folder.
-fn nav_files(hl: &Path, m: &super::mapinfo::MapFile) -> (Option<PathBuf>, Option<PathBuf>) {
+pub(crate) fn nav_files(hl: &Path, m: &super::mapinfo::MapFile) -> (Option<PathBuf>, Option<PathBuf>) {
     let f = crate::mapcopy::Finder::default();
     let find = |ext: &str| {
         m.sibling(ext).or_else(|| ["czero", "cstrike"].iter().find_map(|g| f.find(&hl.join(g).join("maps"), &format!("{}.{ext}", m.name))))
@@ -922,7 +922,7 @@ fn copy_filter(rel: &Path) -> bool {
 }
 
 /// Copies what changed (by size and time) from `from` into `to`. Never deletes.
-fn sync_copy(from: &Path, to: &Path, stop: &AtomicBool) -> Result<usize, String> {
+pub(crate) fn sync_copy(from: &Path, to: &Path, stop: &AtomicBool) -> Result<usize, String> {
     let mut n = 0;
     for (k, f) in crate::archive::walk(from).into_iter().enumerate() {
         if k % 256 == 0 && stop.load(Ordering::SeqCst) {
@@ -1084,7 +1084,7 @@ fn low_priority(cmd: &mut std::process::Command) {
     cmd.creation_flags(0x0800_0000 | 0x0000_4000);
 }
 
-fn spawn(client: &crate::steam::Install, dir: &Path, args: &[String], log: std::fs::File) -> Result<std::process::Child, String> {
+pub(crate) fn spawn(client: &crate::steam::Install, dir: &Path, args: &[String], log: std::fs::File) -> Result<std::process::Child, String> {
     let hlds = dir.join("hlds.exe");
     let mut cmd = if client.kind == "crossover" {
         let mut c = crate::sys::command(crate::servers::CROSSOVER_WINE);
@@ -1101,7 +1101,7 @@ fn spawn(client: &crate::steam::Install, dir: &Path, args: &[String], log: std::
 }
 
 /// A UDP port nothing on this computer is using (the servers' own ports aside).
-fn free_port() -> Result<u16, String> {
+pub(crate) fn free_port() -> Result<u16, String> {
     let taken: HashSet<u16> = crate::servers::load().iter().filter(|e| e.remote.is_none()).map(|e| e.port).collect();
     (27150..27200)
         .find(|p| !taken.contains(p) && std::net::UdpSocket::bind(("0.0.0.0", *p)).is_ok())
@@ -1109,7 +1109,7 @@ fn free_port() -> Result<u16, String> {
 }
 
 /// The end of a text file (at most `max` bytes), as text.
-fn tail(path: &Path, max: u64) -> String {
+pub(crate) fn tail(path: &Path, max: u64) -> String {
     use std::io::{Read, Seek, SeekFrom};
     let Ok(mut f) = std::fs::File::open(path) else { return String::new() };
     let len = f.metadata().map(|m| m.len()).unwrap_or(0);
