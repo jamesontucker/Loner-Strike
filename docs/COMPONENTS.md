@@ -491,6 +491,18 @@ he stands by the counter, turns to whoever is near, fidgets, nods and says a lin
 - Forwards: `ls_on_shop_item(ent, id, item[])` *(handled: greyed, with ls_shop_why's reason)*,
   `ls_on_shop_buy(ent, id, item[], price)` *(handled: refused)*. Last Stand's armory is one of these.
 
+### Turrets
+Friendly creatures (the game DLL's `friendly=1 owner=`, brain ls-next3 cfd2c3d or later): they shoot creatures,
+creatures go for them, players' shots don't hurt them and their kills are the owner's.
+`ls_turret_setup(price, life, per_player, type[], health, bots)` turns them on (price 0 = off). A player
+gets a kit from a shop line with `give=turret` (or `ls_turret_give`) and presses USE where it should
+stand; it goes 64 u in front of them on the floor, if there's room and no other turret within 80 u. Bots
+are offered one at a gate (`offer <bot> turret x y z 0 cost`) and pay and place it where they hold USE
+within 450 u of that point. It goes after `life` seconds (150; 0 = until destroyed). Natives
+`ls_turret_give`, `ls_turret_kits`, `ls_turret_place(id, pay)`, `ls_turret_spawn(owner, origin, yaw)`,
+`ls_turret_count`; forward `ls_on_turret(ent, owner)`. The type must be precached (`ls_creature_precache`).
+Plugins should skip friendly creatures (`pev_team` 1) when they count or hurt enemies; the paid trap does.
+
 ### Creatures
 Forward `ls_on_creature_hurt(ent, attacker, dmg, headshot)` after each hit (the damage modifier and gun
 level are applied to players' hits on creatures and on players).

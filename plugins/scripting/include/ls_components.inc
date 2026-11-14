@@ -637,4 +637,22 @@ native ls_shop_why(const reason[]);
 forward ls_on_shop_item(ent, id, const item[]);
 /** An item is being bought. Handled: refused. An @item is the mode's to give here. */
 forward ls_on_shop_buy(ent, id, const item[], price);
+
+/**
+ * Turrets: friendly creatures (the game DLL's friendly=1, owner=; brain ls-next3 cfd2c3d or
+ * later) that shoot creatures and that creatures attack. A player places one from a kit (a
+ * shop item with give=turret, or ls_turret_give) by pressing USE where they look; a bot is
+ * offered one (W2's "offer <bot> turret x y z 0 cost") and pays and places it where it holds
+ * USE within 450 u of that point. price 0 = off (no bot offers). life 0 = until destroyed.
+ * The type has to be precached (ls_creature_precache).
+ */
+native ls_turret_setup(price = 2500, Float:life = 150.0, per_player = 1, const type[] = "turret", health = 0, bool:bots = true);
+native ls_turret_give(id, n = 1);
+native ls_turret_kits(id);
+/** Places one where the player looks: pay = at the set price, else from a kit. Returns the entity. */
+native ls_turret_place(id, bool:pay = false);
+native ls_turret_spawn(owner, const Float:origin[3], Float:yaw = 0.0);
+/** Turrets this player has out. */
+native ls_turret_count(id);
+forward ls_on_turret(ent, owner);
 /* ==== end W1 ==== */

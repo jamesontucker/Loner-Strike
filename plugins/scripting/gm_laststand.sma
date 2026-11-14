@@ -93,6 +93,7 @@ new const PK_ID[PK_COUNT][] = { "tough", "hands", "doubletap", "revive", "feet" 
 #define MK2_PRICE 5000
 #define MK3_PRICE 9000
 #define BOX_PRICE 950
+#define TURRET_PRICE 2500
 #define RIFLE_LAST 2
 new bool:g_bledOut[33];
 new Float:g_upNext[33];
@@ -291,7 +292,7 @@ public cmd_perf()
 		}
 	new shell = 0, red = 0;
 	while ((e = find_ent_by_class(e, "ls_creature")))
-		if (pev(e, pev_deadflag) == DEAD_NO)
+		if (pev(e, pev_deadflag) == DEAD_NO && pev(e, pev_team) != 1)
 		{
 			cr++;
 			/* tier / enrage looks: a glow shell, red-ish for tier 3 and enraged ones */
@@ -416,6 +417,8 @@ public round_setup()
 	set_cvar_num("mp_buy_anywhere", get_pcvar_num(g_cBuyAnywhere) ? 1 : 0);
 	find_shop();
 	find_upgrades();
+	/* turrets: from the armory (a kit), bots by the brain's offer */
+	ls_turret_setup(turrets_ok() ? TURRET_PRICE : 0, 150.0, 1, "turret", 0, true);
 	round_clock(floatround(get_pcvar_float(g_cPrepare)));
 	toast(0, 5.0, false, "Last Stand: hold the base! First wave in %d seconds", get_pcvar_num(g_cPrepare));
 	bots_to_shop(get_pcvar_num(g_cPrepare));
@@ -663,7 +666,7 @@ stock Float:gate_threat(g)
 	new e = -1;
 	while ((e = find_ent_by_class(e, "ls_creature")))
 	{
-		if (pev(e, pev_deadflag) != DEAD_NO)
+		if (pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
 			continue;
 		pev(e, pev_origin, o);
 		new Float:d = get_distance_f(o, g_gateC[g]);
@@ -701,7 +704,7 @@ stock creatures_inside()
 	new n = 0, e = -1, Float:o[3];
 	while ((e = find_ent_by_class(e, "ls_creature")))
 	{
-		if (pev(e, pev_deadflag) != DEAD_NO)
+		if (pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
 			continue;
 		pev(e, pev_origin, o);
 		if (in_base_pt(o))
@@ -904,7 +907,7 @@ stock lose_checks(why[], len)
 		{
 			new e = -1, type[16];
 			while ((e = find_ent_by_class(e, "ls_creature")) > 0 && enemies < 2)
-				if (pev(e, pev_deadflag) == DEAD_NO && in_base(e))
+				if (pev(e, pev_deadflag) == DEAD_NO && pev(e, pev_team) != 1 && in_base(e))
 				{
 					pev(e, pev_netname, type, charsmax(type));
 					enemies += equal(type, g_wBoss) ? 2 : 1;
@@ -1612,7 +1615,7 @@ stock unstick_creatures()
 	new e = -1, Float:o[3], Float:po[3];
 	while ((e = find_ent_by_class(e, "ls_creature")) > 0)
 	{
-		if (e >= sizeof g_crPos || pev(e, pev_deadflag) != DEAD_NO)
+		if (e >= sizeof g_crPos || pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
 			continue;
 		pev(e, pev_origin, o);
 		if (get_distance_f(o, g_crPos[e]) > 32.0)
@@ -1748,7 +1751,7 @@ stock bool:enemy_near(const Float:c[3], Float:r)
 		new e = -1;
 		while ((e = find_ent_by_class(e, "ls_creature")) > 0)
 		{
-			if (pev(e, pev_deadflag) != DEAD_NO)
+			if (pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
 				continue;
 			pev(e, pev_origin, o);
 			if (get_distance_f(o, c) < r)
@@ -1783,7 +1786,7 @@ stock attack_barricades()
 		if (g_creatures)
 		{
 			while ((e = find_ent_by_class(e, "ls_creature")) > 0 && hits < 6)
-				if (pev(e, pev_deadflag) == DEAD_NO && near_box(e, mn, mx, 56.0) && outside(e, mn, mx))
+				if (pev(e, pev_deadflag) == DEAD_NO && pev(e, pev_team) != 1 && near_box(e, mn, mx, 56.0) && outside(e, mn, mx))
 				{
 					ExecuteHamB(Ham_TakeDamage, b, e, e, dmg, DMG_SLASH);
 					hits++;
@@ -2297,6 +2300,9 @@ public ham_touch_weapon(weapon, toucher)
 
 public ham_creature_killed(ent, killer, gib)
 {
+	/* (a defenders' turret going down) */
+	if (pev(ent, pev_team) == 1)
+		return HAM_IGNORED;
 	g_kills++;
 	if (!(1 <= killer <= MaxClients) || !is_user_connected(killer))
 		return HAM_IGNORED;
@@ -2603,7 +2609,7 @@ stock take_powerup(kind, by)
 			new n = 0, e = -1;
 			while ((e = find_ent_by_class(e, "ls_creature")))
 			{
-				if (pev(e, pev_deadflag) != DEAD_NO)
+				if (pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
 					continue;
 				new type[16];
 				pev(e, pev_netname, type, charsmax(type));
@@ -2641,6 +2647,9 @@ stock clear_powerups()
 
 new Float:g_useNext[33];
 new const SHOP_ITEMS[] = "Barricade repair kit|600|@repair|rebuild the most broken barricade fully; Armor|650|vesthelm|kevlar + helmet; 3 HE grenades|900|@he3|three HE grenades; Ammo|300|ammo|refill all your guns; Medkit|500|hp:50|+50 HP";
+/* with friendly creatures in the game DLL (ls-next3 cfd2c3d+): a sentry turret, placed from a kit */
+new const SHOP_TURRET[] = "; Sentry turret|2500|turret|guards where you put it for 150 s";
+
 
 /* an entity or component named lst_shop (the map's armory), else the base */
 stock find_shop()
@@ -2680,11 +2689,25 @@ stock shop_component()
 	o = g_shop;
 	formatex(keys, charsmax(keys), "name=Armory radius=160 height=200 team=ct price_rise=0.05 upgrades=1 buy_menu=1 keeper=%s hint=^"Armory: B for weapons - USE at the counter for supplies^" greet=^"%s^" items=^"%s^"",
 		keeper, equali(keeper, "gman") ? "Weapons... on the B menu. Supplies... from me." : "Guns are on the B menu, supplies from me.", SHOP_ITEMS);
+	if (turrets_ok())
+	{
+		new l = strlen(keys);
+		if (l > 0 && keys[l - 1] == '"')
+		{
+			keys[l - 1] = EOS;
+			format(keys, charsmax(keys), "%s%s^"", keys, SHOP_TURRET);
+		}
+	}
 	g_shopEnt = ls_comp_create("ls_shop", o, keys);
 	if (!g_shopEnt)
 		log_amx("Last Stand: couldn't make the armory");
 	else
 		shop_scale();
+}
+
+stock bool:turrets_ok()
+{
+	return g_creatures && get_cvar_pointer("ls_creature_friendly_max") != 0;
 }
 
 stock shop_scale()
@@ -3135,6 +3158,8 @@ stock precache_types(list[], len)
 		add_word(list, len, g_wBoss);
 	if (!list[0])
 		copy(list, len, "zombie");
+	/* the defenders' sentry turrets */
+	add_word(list, len, "turret");
 }
 
 stock add_word(list[], len, const word[])

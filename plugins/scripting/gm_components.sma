@@ -3125,7 +3125,8 @@ stock wave_alive()
 			if (is_user_connected(e) && is_user_alive(e))
 				n++;
 		}
-		else if (e > 0 && pev_valid(e) && pev(e, pev_deadflag) == DEAD_NO && pev(e, pev_health) > 0.0)
+		else if (e > 0 && pev_valid(e) && pev(e, pev_deadflag) == DEAD_NO && pev(e, pev_health) > 0.0
+			&& pev(e, pev_team) != 1) /* W1: (a friendly turret on a dead enemy's entity index) */
 			n++;
 	}
 	return n;
@@ -9599,6 +9600,15 @@ new bool:g_upCreatures;
 
 new g_fwPerk, g_fwDown, g_fwRevive, g_fwBledOut, g_fwUpgraded, g_fwBox, g_fwPickup, g_fwCreatureHurt;
 
+/* turrets: friendly creatures (the fork's friendly=1) a player places from a kit; bots by W2's offer */
+#define MAX_TUR 16
+new g_turPrice, Float:g_turLife = 150.0, g_turPer = 1, g_turType[24] = "turret", g_turHealth, bool:g_turBots = true;
+new g_turKits[33];
+new g_turEnt[MAX_TUR], g_turOwner[MAX_TUR], Float:g_turUntil[MAX_TUR];
+new Float:g_turOfferOrg[33][3];
+new bool:g_turOffered[33];
+new g_fwTurret;
+
 /* shop */
 #define SH_NEXT     0
 #define SH_BACK     1
@@ -9656,6 +9666,12 @@ stock up_natives()
 	register_native("ls_bench_use", "n_bench_use");
 	register_native("ls_box_use", "n_box_use");
 	register_native("ls_pickup_spawn", "n_pickup_spawn");
+	register_native("ls_turret_setup", "n_turret_setup");
+	register_native("ls_turret_give", "n_turret_give");
+	register_native("ls_turret_kits", "n_turret_kits");
+	register_native("ls_turret_place", "n_turret_place");
+	register_native("ls_turret_spawn", "n_turret_spawn");
+	register_native("ls_turret_count", "n_turret_count");
 	register_native("ls_shop_buy", "n_shop_buy");
 	register_native("ls_shop_price", "n_shop_price");
 	register_native("ls_shop_menu", "n_shop_menu");
@@ -9675,6 +9691,7 @@ stock up_plugin_init()
 	g_fwBox = CreateMultiForward("ls_on_box", ET_STOP, FP_CELL, FP_CELL, FP_STRING);
 	g_fwPickup = CreateMultiForward("ls_on_pickup", ET_STOP, FP_CELL, FP_CELL, FP_STRING);
 	g_fwCreatureHurt = CreateMultiForward("ls_on_creature_hurt", ET_IGNORE, FP_CELL, FP_CELL, FP_FLOAT, FP_CELL);
+	g_fwTurret = CreateMultiForward("ls_on_turret", ET_IGNORE, FP_CELL, FP_CELL);
 	g_fwShopItem = CreateMultiForward("ls_on_shop_item", ET_STOP, FP_CELL, FP_CELL, FP_STRING);
 	g_fwShopBuy = CreateMultiForward("ls_on_shop_buy", ET_STOP, FP_CELL, FP_CELL, FP_STRING, FP_CELL);
 
@@ -10406,7 +10423,7 @@ stock up_trap_tick(s)
 	new e = -1, Float:o[3];
 	while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
 	{
-		if (pev(e, pev_deadflag) != DEAD_NO)
+		if (pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
 			continue;
 		pev(e, pev_origin, o);
 		if (!inside(s, o))
@@ -10601,6 +10618,21 @@ public up_prethink(id)
 	new s = up_near(id);
 	if (s < 0)
 	{
+		/* a turret kit: placed where they look; a bot with a turret offer: bought and placed */
+		if (!bot && g_turKits[id] > 0 && !g_shopIn[id])
+		{
+			g_upUseNext[id] = now + 1.0;
+			turret_place(id, false);
+			return FMRES_IGNORED;
+		}
+		if (bot && g_turOffered[id] && g_turPrice > 0 && cs_get_user_money(id) >= g_turPrice
+			&& get_distance_f(g_porg[id], g_turOfferOrg[id]) < 450.0 && turret_count(id) < g_turPer)
+		{
+			g_upUseNext[id] = now + 1.0;
+			if (turret_place(id, true))
+				up_offers(id);
+			return FMRES_IGNORED;
+		}
 		/* in a shop: its menu */
 		if (!bot && shop_use(id))
 			g_upUseNext[id] = now + 1.0;
@@ -10671,6 +10703,9 @@ public up_player_hurt(victim, inflictor, attacker, Float:dmg, bits)
 		}
 	}
 	if (!g_dnOn || !down_team_ok(victim) || dmg < float(get_user_health(victim)))
+		return HAM_IGNORED;
+	/* a teammate's hit with friendly fire off does nothing (the game drops it after us) */
+	if (1 <= attacker <= 32 && attacker != victim && is_user_connected(attacker) && get_user_team(attacker) == get_user_team(victim) && !get_cvar_num("mp_friendlyfire"))
 		return HAM_IGNORED;
 	new ret;
 	ExecuteForward(g_fwDown, ret, victim, attacker);
@@ -10854,6 +10889,8 @@ public up_player_killed(id, killer, gib)
 
 stock up_disconnected(id)
 {
+	g_turKits[id] = 0;
+	g_turOffered[id] = false;
 	g_shopIn[id] = 0;
 	g_shopVisits[id] = 0;
 	g_shopMenuUntil[id] = 0.0;
@@ -10910,6 +10947,23 @@ stock up_offers(p)
 	if (!is_user_alive(p) || g_down[p])
 		return;
 	new team = get_user_team(p);
+	g_turOffered[p] = false;
+	if (g_turPrice > 0 && g_turBots && turret_count(p) < g_turPer)
+	{
+		/* where: a gate (barricade), a different one per bot */
+		new gates[16], ng = 0;
+		for (new b = 0; b < g_nslots && ng < sizeof gates; b++)
+			if (g_ent[b] && g_kind[b] == K_BARRICADE && (!g_team[b] || g_team[b] == team))
+				gates[ng++] = b;
+		if (ng)
+		{
+			new b = gates[p % ng];
+			for (new i = 0; i < 3; i++)
+				g_turOfferOrg[p][i] = (g_mins[b][i] + g_maxs[b][i]) * 0.5;
+			g_turOffered[p] = true;
+			hint("offer %d turret %.0f %.0f %.0f 0 %d", p, g_turOfferOrg[p][0], g_turOfferOrg[p][1], g_turOfferOrg[p][2], g_turPrice);
+		}
+	}
 	for (new s = 0; s < g_nslots; s++)
 	{
 		if (!g_ent[s] || !g_on[s] || !ki(s, "bots", 1) || (g_team[s] && team != g_team[s]))
@@ -10977,7 +11031,7 @@ stock up_bots_traps()
 		new n = 0, e = -1, Float:o[3];
 		while ((e = engfunc(EngFunc_FindEntityByString, e, "classname", "ls_creature")) > 0)
 		{
-			if (pev(e, pev_deadflag) != DEAD_NO)
+			if (pev(e, pev_deadflag) != DEAD_NO || pev(e, pev_team) == 1)
 				continue;
 			pev(e, pev_origin, o);
 			if (get_distance_f(o, g_org[s]) < 300.0)
@@ -11021,8 +11075,24 @@ stock up_tick(bool:sec)
 	}
 	if (shops)
 		shop_people();
-	if (!any)
+	if (sec)
+		turret_tick();
+	for (new p = 1; p <= MaxClients; p++)
+		if (g_turKits[p] > 0 && g_alive[p] && !g_bot[p])
+			hud_add(p, false, "Turret kit: press USE where you want it");
+	if (!any && g_turPrice <= 0)
 		return;
+	if (!any)
+	{
+		if (g_now >= g_offerAt && g_brain)
+		{
+			g_offerAt = g_now + 8.0;
+			for (new p = 1; p <= MaxClients; p++)
+				if (g_alive[p] && g_bot[p])
+					up_offers(p);
+		}
+		return;
+	}
 	if (sec)
 	{
 		box_check_groups();
@@ -11193,11 +11263,26 @@ stock bool:shop_buy_item(s, id, i, bool:tell)
 	ExecuteForward(g_fwShopBuy, ret, g_ent[s], id, give, price);
 	if (ret == PLUGIN_HANDLED)
 		return false;
-	if (give[0] != '@' && !give_thing(id, give))
+	if (equali(give, "turret"))
+	{
+		if (turret_count(id) + g_turKits[id] >= g_turPer)
+		{
+			if (tell)
+				client_print(id, print_center, "%s: you have %d already", name, g_turPer);
+			return false;
+		}
+	}
+	else if (give[0] != '@' && !give_thing(id, give))
 	{
 		if (tell)
 			client_print(id, print_center, "%s: you can't carry it", name);
 		return false;
+	}
+	if (equali(give, "turret"))
+	{
+		g_turKits[id]++;
+		if (!g_bot[id])
+			client_print(id, print_center, "Turret kit: press USE where you want it");
 	}
 	cs_set_user_money(id, cs_get_user_money(id) - price);
 	log_amx("Shop: %d bought %s for $%d in wave %d", id, name, price, g_wave);
@@ -11573,6 +11658,138 @@ stock bool:shop_use(id)
 	return true;
 }
 
+/* ---- turrets ---- */
+
+stock turret_count(id)
+{
+	new n = 0;
+	for (new i = 0; i < MAX_TUR; i++)
+		if (g_turEnt[i] && g_turOwner[i] == id)
+			n++;
+	return n;
+}
+
+/* a friendly creature (the fork's friendly=1, owner=): shoots creatures, creatures go for it */
+stock turret_spawn(owner, const Float:o[3], Float:yaw)
+{
+	new slot = -1;
+	for (new i = 0; i < MAX_TUR && slot < 0; i++)
+		if (!g_turEnt[i])
+			slot = i;
+	if (slot < 0 || !g_upCreatures)
+		return 0;
+	new extra[48];
+	if (g_turHealth > 0)
+		formatex(extra, charsmax(extra), " health=%d", g_turHealth);
+	set_cvar_num("ls_creature_last", 0);
+	server_cmd("ls_creature spawn %s %.0f %.0f %.0f %.0f friendly=1 owner=%d%s", g_turType, o[0], o[1], o[2], yaw, owner, extra);
+	server_exec();
+	new e = get_cvar_num("ls_creature_last");
+	if (e <= 0 || !pev_valid(e))
+	{
+		log_amx("Turret: the game DLL didn't make a %s (friendly creatures need brain ls-next3 cfd2c3d or later, and the type precached)", g_turType);
+		return 0;
+	}
+	g_turEnt[slot] = e;
+	g_turOwner[slot] = owner;
+	g_turUntil[slot] = g_turLife > 0.0 ? get_gametime() + g_turLife : 0.0;
+	new ret;
+	ExecuteForward(g_fwTurret, ret, e, owner);
+	log_amx("Turret: %d placed a %s (%d) at %.0f %.0f %.0f in wave %d", owner, g_turType, e, o[0], o[1], o[2], g_wave);
+	return e;
+}
+
+/* in front of the player, on the floor, with room, not on top of another turret */
+stock turret_place(id, bool:pay)
+{
+	if (!is_user_alive(id) || g_down[id])
+		return 0;
+	if (turret_count(id) >= g_turPer)
+	{
+		if (!g_bot[id])
+			client_print(id, print_center, "You have %d turret%s out already", g_turPer, g_turPer == 1 ? "" : "s");
+		return 0;
+	}
+	new Float:ang[3], Float:o[3], Float:p[3];
+	pev(id, pev_v_angle, ang);
+	pev(id, pev_origin, o);
+	new Float:yaw = ang[1];
+	for (new tries = 0; tries < 3; tries++)
+	{
+		new Float:d = 64.0 - 16.0 * float(tries);
+		p[0] = o[0] + d * floatcos(yaw, degrees);
+		p[1] = o[1] + d * floatsin(yaw, degrees);
+		p[2] = o[2];
+		new Float:f = quiet_floor(p, id);
+		if (o[2] - f > 120.0)
+			continue;
+		new Float:c[3];
+		vcopy(p, c);
+		c[2] = f + 37.0;
+		engfunc(EngFunc_TraceHull, c, c, DONT_IGNORE_MONSTERS, HULL_HUMAN, id, 0);
+		if (get_tr2(0, TR_StartSolid) || get_tr2(0, TR_AllSolid))
+			continue;
+		new bool:crowded = false;
+		for (new i = 0; i < MAX_TUR && !crowded; i++)
+		{
+			if (!g_turEnt[i])
+				continue;
+			new Float:t[3];
+			pev(g_turEnt[i], pev_origin, t);
+			crowded = get_distance_f(t, c) < 80.0;
+		}
+		if (crowded)
+			continue;
+		if (pay)
+		{
+			if (cs_get_user_money(id) < g_turPrice)
+				return 0;
+		}
+		else if (g_turKits[id] <= 0)
+			return 0;
+		p[2] = f + 1.0;
+		new e = turret_spawn(id, p, yaw);
+		if (!e)
+			return 0;
+		if (pay)
+			cs_set_user_money(id, cs_get_user_money(id) - g_turPrice);
+		else
+			g_turKits[id]--;
+		return e;
+	}
+	if (!g_bot[id])
+		client_print(id, print_center, "No room for the turret there");
+	return 0;
+}
+
+/* once a second: gone, dead or out of time */
+stock turret_tick()
+{
+	new Float:now = get_gametime();
+	for (new i = 0; i < MAX_TUR; i++)
+	{
+		new e = g_turEnt[i];
+		if (!e)
+			continue;
+		new cls[16];
+		if (pev_valid(e))
+			pev(e, pev_classname, cls, charsmax(cls));
+		if (!pev_valid(e) || !equal(cls, "ls_creature") || pev(e, pev_deadflag) != DEAD_NO)
+		{
+			g_turEnt[i] = 0;
+			continue;
+		}
+		if (g_turUntil[i] > 0.0 && now >= g_turUntil[i])
+		{
+			server_cmd("ls_creature kill %d", e);
+			g_turEnt[i] = 0;
+			new o = g_turOwner[i];
+			if (1 <= o <= MaxClients && is_user_connected(o) && !is_user_bot(o))
+				client_print(o, print_center, "Your turret ran out");
+		}
+	}
+}
+
 /* lst_perk / lst_bench / lst_box / lst_trap markers (Last Stand's kit) are these components */
 stock up_marker_kind(const k[], Trie:keys)
 {
@@ -11804,6 +12021,58 @@ public n_pickup_spawn(plugin, params)
 		format(keys, charsmax(keys), "%s model=%s", keys, model);
 	g_now = get_gametime();
 	return comp_make(K_PICKUP, o, keys, SRC_RUNTIME);
+}
+
+/* ls_turret_setup(price, Float:life, per_player, const type[], health, bool:bots) */
+public n_turret_setup(plugin, params)
+{
+	g_turPrice = max(get_param(1), 0);
+	g_turLife = get_param_f(2);
+	g_turPer = max(get_param(3), 1);
+	get_string(4, g_turType, charsmax(g_turType));
+	if (!g_turType[0])
+		copy(g_turType, charsmax(g_turType), "turret");
+	g_turHealth = get_param(5);
+	g_turBots = get_param(6) != 0;
+	return 1;
+}
+
+public n_turret_give(plugin, params)
+{
+	new id = get_param(1);
+	if (!(1 <= id <= 32))
+		return 0;
+	g_turKits[id] = max(g_turKits[id] + get_param(2), 0);
+	return g_turKits[id];
+}
+
+public n_turret_kits(plugin, params)
+{
+	new id = get_param(1);
+	return (1 <= id <= 32) ? g_turKits[id] : 0;
+}
+
+/* ls_turret_place(id, bool:pay = false): where they look; pay = at the set price, else a kit */
+public n_turret_place(plugin, params)
+{
+	new id = get_param(1);
+	if (!(1 <= id <= 32))
+		return 0;
+	g_bot[id] = is_user_bot(id) != 0;
+	return turret_place(id, get_param(2) != 0);
+}
+
+public n_turret_spawn(plugin, params)
+{
+	new Float:o[3];
+	get_array_f(2, o, 3);
+	return turret_spawn(get_param(1), o, get_param_f(3));
+}
+
+public n_turret_count(plugin, params)
+{
+	new id = get_param(1);
+	return (1 <= id <= 32) ? turret_count(id) : 0;
 }
 
 /* ls_shop_buy(ent, id, const item[], bool:tell = true): by its name or what it gives */
