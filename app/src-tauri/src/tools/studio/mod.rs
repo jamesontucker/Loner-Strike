@@ -53,7 +53,7 @@ const NOT_HERE: &str = "The Game Mode Studio installs modes into the game on thi
 const BAD_ID: &str = "That isn't a mode id (2 to 24 small letters, digits or _, starting with a letter).";
 const INTERNAL: &str = "Loner-Strike hit an internal error in the Game Mode Studio. Try again, and copy the diagnostics from Settings if it keeps happening.";
 /// The Game Mode Menu reads at most this many modes (MAX_MODES in gamemodes.sma).
-const MAX_MODES: usize = 32;
+const MAX_MODES: usize = 128;
 /// Graph files bigger than this aren't graphs anyone drew.
 const MAX_GRAPH_BYTES: u64 = 2 << 20;
 
@@ -1456,6 +1456,14 @@ mod tests {
 
     /// The generated plugins compile with the real amxxpc (the game's, through CrossOver on a
     /// Mac), with no warnings. Skipped when this computer has no game with AMX Mod X.
+    /// The app's limit is the menu's own.
+    #[test]
+    fn max_modes_matches_the_menu() {
+        let sma = include_str!("../../../../../plugins/scripting/gamemodes.sma");
+        let n: usize = sma.lines().find_map(|l| l.strip_prefix("#define MAX_MODES")).and_then(|r| r.split_whitespace().next()).and_then(|v| v.parse().ok()).unwrap();
+        assert_eq!(n, MAX_MODES);
+    }
+
     #[test]
     fn generated_plugins_compile_with_amxxpc() {
         let scripting = PathBuf::from(std::env::var("HOME").unwrap_or_default())

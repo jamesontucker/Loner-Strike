@@ -37,7 +37,7 @@ native gm_chat_blocked(id, const text[])
 #define AUTHOR  "local"
 
 #define ACCESS        ADMIN_CFG
-#define MAX_MODES     32
+#define MAX_MODES     128   // modes.ini lines read (the app refuses a mode past this)
 #define MAX_ADDONS    32
 #define TASK_LOADOUT  4100
 #define TASK_HINT     4200
@@ -291,11 +291,12 @@ new const MAPCAT_NAMES[MC_COUNT][] = { "Bomb defusal (de_)", "Hostage rescue (cs
 
 new bool:g_BotHams
 new bool:g_Paused
-new g_ModeId[MAX_MODES][32]
-new g_ModeName[MAX_MODES][48]
-new g_ModeDesc[MAX_MODES][64]
-new g_ModeCmd[MAX_MODES][32]
-new g_ModeFlags[MAX_MODES][8]
+// (one more than modes.ini may fill: gm_modes_reload keeps a mode taken off while it plays)
+new g_ModeId[MAX_MODES + 1][32]
+new g_ModeName[MAX_MODES + 1][48]
+new g_ModeDesc[MAX_MODES + 1][64]
+new g_ModeCmd[MAX_MODES + 1][32]
+new g_ModeFlags[MAX_MODES + 1][8]
 new g_ModeCount
 new g_Cur
 
@@ -813,7 +814,8 @@ load_modes()
 		return
 	}
 
-	while (!feof(f) && g_ModeCount < MAX_MODES)
+	new over
+	while (!feof(f))
 	{
 		fgets(f, line, charsmax(line))
 		trim(line)
@@ -824,6 +826,11 @@ load_modes()
 		parse(line, id, charsmax(id), name, charsmax(name), desc, charsmax(desc), cmd, charsmax(cmd), flags, charsmax(flags))
 		if (!id[0])
 			continue
+		if (g_ModeCount >= MAX_MODES)
+		{
+			over++
+			continue
+		}
 
 		copy(g_ModeId[g_ModeCount], charsmax(g_ModeId[]), id)
 		copy(g_ModeName[g_ModeCount], charsmax(g_ModeName[]), name[0] ? name : id)
@@ -833,6 +840,11 @@ load_modes()
 		g_ModeCount++
 	}
 	fclose(f)
+	if (over)
+	{
+		log_amx("modes.ini lists %d modes; the Game Mode Menu holds %d, so the last %d are left out. Remove some modes.", MAX_MODES + over, MAX_MODES, over)
+		server_print("[Game Mode] modes.ini lists more than %d modes: the last %d are left out.", MAX_MODES, over)
+	}
 }
 
 // gm_modes_reload: reads modes.ini again now (the app sends it after adding or taking off a
@@ -864,7 +876,7 @@ public srv_modes_reload()
 	g_CurGone = g_Cur < 0
 	if (g_CurGone)
 	{
-		g_Cur = g_ModeCount < MAX_MODES ? g_ModeCount++ : 0
+		g_Cur = g_ModeCount++
 		copy(g_ModeId[g_Cur], charsmax(g_ModeId[]), cur)
 		copy(g_ModeName[g_Cur], charsmax(g_ModeName[]), name)
 		copy(g_ModeDesc[g_Cur], charsmax(g_ModeDesc[]), desc)

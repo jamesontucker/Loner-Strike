@@ -1372,3 +1372,11 @@ server from the community server picks, then switched with gm_mode, changed and 
   19, 255 70 10) from then on; before it they stayed 450-650 units behind player 4 for 12 s, after it closed to
   50-70 in 12 s. Resume AI at +32 s (`behave default`): they kept on their own targets (player 3 after 4 died). No
   "newer bot brain" line (brain is v2), no errors, amxxpc clean.
+- **Game Mode Menu holds 128 modes (was 32).** gamemodes.sma MAX_MODES 128 (and one spare slot for a mode taken
+  off while it plays, which before could overwrite mode 0 when the list was full); past 128 the rest of modes.ini is
+  left out with a log line and a console line saying how many. The app's Studio install refuses the 129th with
+  "The Game Mode Menu holds 128 modes ... Remove one first" (a test keeps the two numbers the same). Nothing else
+  capped it: gm_pubserver's vote and nominate lists are dynamic Arrays and AMXX menus page by themselves; the app's
+  lists scroll. Sim (B copy, 60 modes: 22 stock + 38 knife copies, votemodes.ini with 39): status listed all 60,
+  gm_mode to the 60th switched, gm_votemode ran with bots voting and switched to Knife 30 (de_rats); then 140 lines:
+  "lists 140 modes ... the last 12 are left out", the 128th switched, the 129th "Unknown mode".
