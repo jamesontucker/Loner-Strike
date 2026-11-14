@@ -10817,7 +10817,9 @@ stock go_down(victim)
 		g_selfRevAt[victim] = get_gametime() + 4.0;
 		g_selfRev[victim] = false;
 	}
-	set_pev(victim, pev_flags, pev(victim, pev_flags) | FL_NOTARGET);
+	/* (creatures and bots leave a downed player alone; with ls_down_finish enemies may finish them) */
+	if (!get_pcvar_num(g_cDownFinish))
+		set_pev(victim, pev_flags, pev(victim, pev_flags) | FL_NOTARGET);
 	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, victim);
 	down_look_on(victim);
 	render(victim, kRenderFxGlowShell, 255, 40, 40, kRenderNormal, 12);

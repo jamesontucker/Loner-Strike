@@ -2121,6 +2121,8 @@ stock down_sync()
 	ls_down_enable(on, floatmax(get_pcvar_float(g_cRevive), 1.0), 2, true);
 	/* getting a teammate up pays */
 	ls_down_revive_pay(150);
+	/* (Battle Royale's knock-down finishing off: creatures leave downed defenders alone) */
+	set_cvar_num("ls_down_finish", 0);
 }
 
 public ls_on_down(id, attacker)
