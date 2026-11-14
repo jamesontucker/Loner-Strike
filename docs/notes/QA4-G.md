@@ -189,3 +189,13 @@ test_publish_check OK.
   ActiveEnterTimestamp is 18:56:43 UTC. That restart wasn't mine (I only read from the box).
 - Stopped my own PIDs: dev servers 9679 and 54069, Vite 55935 and 63703, ssh tunnel 59980. Deleted `Sim/QA4G`. No
   sim ran, so there's no crashcheck window.
+
+## F6 fixed (X2, 56aba2a0; the UI parts went in with P5's c1f298ac)
+A mode package now says what it needs beyond the game: `loner-strike.json` keeps `item.mode.requirements.needs`
+(components plugin and which map components, creature types, the bot-brain features used with the lowest
+`ls_mode_ver` / `ls_creature_ver` that has them), the README has a "Needs:" block, the GameBanana text a "Needs:"
+line each, and Publish's checks list "What players need". The community page lists each need with "You have it" or
+"Update Loner-Strike" against this computer's brain (read from `dlls/mp.dll`'s strings: BRPLAY's newest ls-next3
+reads bots 2 / creatures 2; the user's own CS 1.6 and CZ mp.dll have map knowledge but no ls_mode/ls_creature, so 0/0).
+The list service keeps and cleans `needs` (services/serverlist/community.py): **it needs a deploy of the list
+service** before list entries carry it (not done: production is off limits for me).
