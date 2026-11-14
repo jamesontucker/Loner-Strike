@@ -275,6 +275,79 @@ pub struct ModeRequirements {
     pub default_map: String,
     pub maps: Vec<String>,
     pub content: Vec<ContentNeed>,
+    /// what it needs beyond the game: components, creatures, the bot brain (QA4-G F6)
+    pub needs: ModeNeeds,
+}
+
+/// A mode's needs beyond the game (requirements::mode_needs), as the package and the list keep them.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ModeNeeds {
+    /// Loner-Strike's components plugin (it comes with the app)
+    pub components_plugin: bool,
+    /// the map components it uses (ls_capture_point...)
+    pub components: Vec<String>,
+    /// creature types ("all": the wave spawner's)
+    pub creatures: Vec<String>,
+    /// the lowest bot brain that has what it uses: ls_mode_ver and ls_creature_ver (0: none needed)
+    pub mode_ver: u8,
+    pub creature_ver: u8,
+    pub features: Vec<NeedFeature>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(default)]
+pub struct NeedFeature {
+    pub id: String,
+    pub name: String,
+    /// "mode" (bots) or "creature"
+    pub brain: String,
+    pub ver: u8,
+}
+
+impl ModeNeeds {
+    /// Plain names, known kinds, small numbers; capped.
+    pub fn clean(&mut self) {
+        let word = |s: &String| !s.is_empty() && s.len() <= 32 && s.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-');
+        self.components.retain(word);
+        self.components.truncate(32);
+        self.creatures.retain(word);
+        self.creatures.truncate(32);
+        self.mode_ver = self.mode_ver.min(9);
+        self.creature_ver = self.creature_ver.min(9);
+        self.features.retain_mut(|f| {
+            f.name = one_line(&f.name, 80);
+            f.ver = f.ver.min(9);
+            word(&f.id) && matches!(f.brain.as_str(), "mode" | "creature")
+        });
+        self.features.truncate(12);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        !self.components_plugin && self.components.is_empty() && self.creatures.is_empty() && self.features.is_empty()
+    }
+
+    /// The lines a README and the GameBanana description say (none when it needs nothing).
+    pub fn lines(&self) -> Vec<String> {
+        let mut out = vec![];
+        if self.components_plugin || !self.components.is_empty() {
+            out.push(if self.components.is_empty() { "Loner-Strike's components (they come with the app)".to_string() } else { format!("Loner-Strike's components (they come with the app): {}", self.components.join(", ")) });
+        }
+        if !self.creatures.is_empty() {
+            out.push(if self.creatures.iter().any(|c| c == "all") { "Creatures: the wave spawner's types".to_string() } else { format!("Creatures: {}", self.creatures.join(", ")) });
+        }
+        if !self.features.is_empty() {
+            let mut v = vec![];
+            if self.mode_ver > 0 {
+                v.push(format!("bots version {} or newer", self.mode_ver));
+            }
+            if self.creature_ver > 0 {
+                v.push(format!("creatures version {} or newer", self.creature_ver));
+            }
+            out.push(format!("The Loner-Strike bot brain ({}): {}", v.join(", "), self.features.iter().map(|f| f.name.as_str()).collect::<Vec<_>>().join("; ")));
+        }
+        out
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -294,6 +367,7 @@ impl ModeRequirements {
             default_map: if r["defaultMap"].is_null() { String::new() } else { name(&r["defaultMap"]) },
             maps: r["maps"].as_array().into_iter().flatten().map(name).collect(),
             content: r["content"].as_array().into_iter().flatten().map(|c| ContentNeed { path: c["path"].as_str().unwrap_or("").into(), kind: c["kind"].as_str().unwrap_or("").into(), link: serde_json::from_value(c["link"].clone()).ok() }).collect(),
+            needs: serde_json::from_value(r["needs"].clone()).unwrap_or_default(),
         }
     }
 
@@ -319,6 +393,7 @@ impl ModeRequirements {
             true
         });
         self.content.truncate(64);
+        self.needs.clean();
     }
 }
 
@@ -1164,7 +1239,7 @@ async fn api_item(State(st): State<Shared>, UrlPath((model, id)): UrlPath<(Strin
                 "have": it.as_ref().and_then(|i| i.map.as_ref()).is_some_and(|m| have.contains(&m.name.to_ascii_lowercase())),
                 "installed": installed_json(model, id, &idx, &page),
                 // a mode's "Plays on" and "Needs", each with whether you have it and where to get it
-                "needs": it.as_ref().and_then(|i| i.mode.as_ref()).and_then(|m| m.requirements.as_ref()).map(|r| needs_json(r, &idx, &have, &|p: &str| game.as_deref().is_some_and(|g| g.dir.join(p).is_file() || crate::tools::doctor::is_stock(&crate::mapcopy::Finder::default(), &g.hl, p)))),
+                "needs": it.as_ref().and_then(|i| i.mode.as_ref()).and_then(|m| m.requirements.as_ref()).map(|r| needs_json(r, &idx, &have, &|p: &str| game.as_deref().is_some_and(|g| g.dir.join(p).is_file() || crate::tools::doctor::is_stock(&crate::mapcopy::Finder::default(), &g.hl, p)), game.as_deref().map(|g| super::requirements::brain_here(&g.dir)).as_ref())),
             }))
         })
         .await,
@@ -1173,7 +1248,7 @@ async fn api_item(State(st): State<Shared>, UrlPath((model, id)): UrlPath<(Strin
 
 /// A mode's requirements for its page: each map and file, whether it's here, and the item
 /// that provides it (a community map by its name; content by its link).
-pub fn needs_json(r: &ModeRequirements, idx: &Index, maps_have: &HashSet<String>, file_here: &dyn Fn(&str) -> bool) -> Value {
+pub fn needs_json(r: &ModeRequirements, idx: &Index, maps_have: &HashSet<String>, file_here: &dyn Fn(&str) -> bool, brain: Option<&Value>) -> Value {
     let map = |name: &str| {
         // (the game's own, or one Loner-Strike ships: every player has those)
         let base = crate::maps::is_stock_file(&format!("maps/{name}.bsp")) || crate::maps::ships_with_app(name);
@@ -1191,6 +1266,25 @@ pub fn needs_json(r: &ModeRequirements, idx: &Index, maps_have: &HashSet<String>
         "defaultMap": if r.default_map.is_empty() { Value::Null } else { json!(r.default_map) },
         "maps": maps.iter().map(|m| map(m)).collect::<Vec<_>>(),
         "content": r.content.iter().map(|c| json!({"path": c.path, "kind": c.kind, "have": file_here(&c.path), "link": c.link})).collect::<Vec<_>>(),
+        "brain": brain_needs_json(&r.needs, brain),
+    })
+}
+
+/// A mode's components, creatures and bot-brain features, each with whether this computer's game
+/// has it (`brain`: requirements::brain_here; none: no game set up). The components come with the
+/// app; creatures and the features need the bot brain at the version the mode needs (QA4-G F6).
+pub fn brain_needs_json(n: &ModeNeeds, brain: Option<&Value>) -> Value {
+    let ver = |k: &str| brain.and_then(|b| b[k].as_u64()).unwrap_or(0) as u8;
+    let have = |kind: &str, v: u8| brain.is_some() && ver(if kind == "creature" { "creatureVer" } else { "modeVer" }) >= v;
+    json!({
+        "componentsPlugin": n.components_plugin,
+        "components": n.components,
+        "creatures": n.creatures,
+        "creaturesHave": n.creatures.is_empty() || have("creature", 1),
+        "modeVer": n.mode_ver,
+        "creatureVer": n.creature_ver,
+        "features": n.features.iter().map(|f| json!({"id": f.id, "name": f.name, "brain": f.brain, "ver": f.ver, "have": have(&f.brain, f.ver)})).collect::<Vec<_>>(),
+        "here": brain,
     })
 }
 
@@ -1874,6 +1968,9 @@ pub fn gamebanana_form(p: &Package) -> Value {
         if let Some(m) = it.mode.as_ref().filter(|m| !m.maps.is_empty()) {
             text.push_str(&format!("\n- Made for: {}", m.maps.join(", ")));
         }
+        for l in it.mode.as_ref().and_then(|m| m.requirements.as_ref()).map(|r| r.needs.lines()).unwrap_or_default() {
+            text.push_str(&format!("\n- Needs: {l}"));
+        }
         return json!({
             "submitUrl": "https://gamebanana.com/mods/add", "game": "Counter-Strike 1.6", "category": "Resources > AMXX Plugins & Mods",
             "title": it.name, "text": text, "tag": {"title": TAG_TITLE, "value": TAG_VALUE}, "file": p.file, "md5": p.md5,
@@ -2026,6 +2123,14 @@ pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq,
     let mut readme = format!("{}\r\nby {}\r\n\r\n{}\r\n\r\nA Game Mode Studio mode made with Loner-Strike (lonerstrike.com).\r\nWith Loner-Strike: find it under Tools > Community and click Try it; the app builds it on your computer.\r\n", item.name, item.author, item.summary);
     if let Some(r) = &item.remix_of {
         readme.push_str(&format!("A remix of {} by {}.\r\n", r.name, r.author));
+    }
+    // what it needs beyond the game (QA4-G F6): Loner-Strike's Try it gets it, or says to update
+    let need_lines = item.mode.as_ref().and_then(|m| m.requirements.as_ref()).map(|r| r.needs.lines()).unwrap_or_default();
+    if !need_lines.is_empty() {
+        readme.push_str("\r\nNeeds:\r\n");
+        for l in &need_lines {
+            readme.push_str(&format!("- {l}\r\n"));
+        }
     }
     let manifest = json!({"schema": SCHEMA, "app": env!("CARGO_PKG_VERSION"), "item": item});
     let mut entries: Vec<(String, Vec<u8>)> = vec![
@@ -3151,6 +3256,50 @@ mod tests {
     }
 
     #[test]
+    fn a_mode_package_says_what_it_needs() {
+        use std::io::Read;
+        let root = tmp("modeneeds");
+        let graphs = root.join("graphs");
+        std::fs::create_dir_all(&graphs).unwrap();
+        let Ok(good) = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tools/studio/testdata/every_node.graph.json")) else { return };
+        let mut g: Value = serde_json::from_str(&good).unwrap();
+        g["mode"]["id"] = json!("needy");
+        std::fs::write(graphs.join("needy.graph.json"), g.to_string()).unwrap();
+        // what Publish passes in: the requirements report's needs (requirements::mode_needs)
+        let parsed = super::super::studio::graph::parse(&g.to_string()).unwrap();
+        let report = json!({"maps": [], "content": [], "needs": super::super::requirements::mode_needs(&parsed)});
+        assert!(report["needs"]["creatureVer"].as_u64().unwrap() >= 1 && report["needs"]["modeVer"].as_u64().unwrap() >= 1, "{}", report["needs"]);
+        let req = PublishReq { title: "Needy".into(), author: "me".into(), ..Default::default() };
+        let out = root.join("p");
+        let pkg = build_mode_package(&graphs, &root.join("lib"), "needy", &req, &out, Some(&report)).unwrap();
+        let needs = &pkg.item.mode.as_ref().unwrap().requirements.as_ref().unwrap().needs;
+        assert!(needs.components_plugin && !needs.creatures.is_empty() && !needs.features.is_empty());
+        // the README and the GameBanana text say so, and loner-strike.json keeps it
+        let bytes = std::fs::read(out.join(&pkg.file)).unwrap();
+        let mut z = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut readme = String::new();
+        z.by_name("README.txt").unwrap().read_to_string(&mut readme).unwrap();
+        assert!(readme.contains("Needs:\r\n- Loner-Strike's components"), "{readme}");
+        assert!(readme.contains(&format!("The Loner-Strike bot brain (bots version {} or newer, creatures version {} or newer)", needs.mode_ver, needs.creature_ver)), "{readme}");
+        let mut man = String::new();
+        z.by_name("loner-strike.json").unwrap().read_to_string(&mut man).unwrap();
+        let man: Value = serde_json::from_str(&man).unwrap();
+        assert_eq!(man["item"]["mode"]["requirements"]["needs"]["creatureVer"], json!(needs.creature_ver));
+        assert!(gamebanana_form(&pkg)["text"].as_str().unwrap().contains("- Needs: The Loner-Strike bot brain"));
+        // the community page: "You have it" against this computer's brain, else update
+        let old = brain_needs_json(needs, Some(&json!({"modeVer": 1, "creatureVer": 1})));
+        let newest = brain_needs_json(needs, Some(&json!({"modeVer": 2, "creatureVer": 2})));
+        assert!(newest["features"].as_array().unwrap().iter().all(|f| f["have"] == true));
+        assert!(old["features"].as_array().unwrap().iter().any(|f| f["have"] == false) || needs.creature_ver < 2 && needs.mode_ver < 2);
+        assert!(brain_needs_json(needs, None)["features"].as_array().unwrap().iter().all(|f| f["have"] == false));
+        // junk from a package is cleaned
+        let mut bad = ModeNeeds { components: vec!["ok_one".into(), "../x".into()], features: vec![NeedFeature { id: "x y".into(), name: "n".into(), brain: "mode".into(), ver: 1 }, NeedFeature { id: "f".into(), name: "n".into(), brain: "other".into(), ver: 200 }], mode_ver: 250, ..Default::default() };
+        bad.clean();
+        assert_eq!((bad.components, bad.features.len(), bad.mode_ver), (vec!["ok_one".to_string()], 0, 9));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn reads_the_modes_a_map_is_made_for() {
         let root = tmp("lsmodes");
         let ents = fixture::ENTITIES.replacen("\"classname\" \"worldspawn\"", "\"classname\" \"worldspawn\"\n\"ls_modes\" \"3F2B8C1E-9A4D-4E6F-8B2A-1C3D5E7F9A0B:laststand, br;br  Bad-Id surf\"", 1);
@@ -3362,7 +3511,7 @@ mod requirement_tests {
         assert_eq!(r.content[0].kind, "model");
         assert!(r.content[1].link.is_none(), "not a real page link");
         let have: HashSet<String> = ["de_lonely".to_string()].into();
-        let v = needs_json(&r, &idx, &have, &|p| p == "sound/beep.wav");
+        let v = needs_json(&r, &idx, &have, &|p| p == "sound/beep.wav", None);
         assert_eq!(v["defaultMap"], "de_lonely");
         assert_eq!(v["maps"][0]["name"], "de_lonely");
         assert_eq!(v["maps"][0]["item"]["id"], 101, "the community map that provides it");

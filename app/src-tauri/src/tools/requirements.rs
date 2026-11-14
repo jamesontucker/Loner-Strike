@@ -176,11 +176,76 @@ pub fn answer(g: &Graph, saved: &Saved, h: &Here) -> Value {
         "maps": maps,
         "content": content,
         "known": {"components": kit["components"], "creatures": needs.creatures, "brain": !needs.creatures.is_empty(), "componentsPlugin": needs.components},
+        // what it needs beyond the game, for the package and the community page (QA4-G F6)
+        "needs": mode_needs(g),
+        "brainHere": h.game_dir.map(brain_here),
         "warnings": warnings,
         // can't be found anywhere: not here, not the game's own, not linked (Publish stops on these)
         "missing": lost,
         "installedMaps": h.maps_here.iter().map(|m| map(m)).collect::<Vec<_>>(),
     })
+}
+
+/// The bot-brain features a mode can use, the brain version each needs (`ls_mode_ver` for bots,
+/// `ls_creature_ver` for creatures) and how players see it.
+const FEATURES: [(&str, &str, &str, u8); 5] = [
+    ("creatures", "Creatures (zombies, the wave spawner's types)", "creature", 1),
+    ("creature_control_2", "Creature State, Target, Speed and Tier", "creature", 2),
+    ("bot_orders", "Orders to bots (Go To, Hold, Follow, a bot's nature)", "mode", 1),
+    ("bots_in_modes", "Bots that play the mode (the Bots nodes: goals, offers, phases)", "mode", 1),
+    ("influence", "Personality influence on bot orders", "mode", 2),
+];
+
+/// What a mode needs beyond the game (QA4-G F6): Loner-Strike's components plugin and which map
+/// components, the creature types, and the bot-brain features with the lowest brain versions that
+/// have them. From the graph (Macros and Functions expanded) and its map kit.
+pub fn mode_needs(g: &Graph) -> Value {
+    let ex = crate::tools::studio::expand::expand(g);
+    let nodes = &ex.graph.nodes;
+    let n = crate::tools::studio::gen::needs(g);
+    let kit = crate::tools::studio::kit::kit_of(g);
+    let components: Vec<Value> = kit["components"].as_array().into_iter().flatten().filter_map(|c| c["classname"].as_str()).map(|c| json!(c)).collect();
+    let has = |f: &dyn Fn(&str) -> bool| nodes.iter().any(|x| f(&x.kind));
+    // an influence other than 50 ("as usual"), or wired in
+    let influence = nodes.iter().any(|x| {
+        x.kind.starts_with("bot") && (x.params.get("influence").and_then(Value::as_f64).is_some_and(|v| (v - 50.0).abs() > 0.01) || ex.graph.edges.iter().any(|e| e.to.node == x.id && e.to.pin == "influence"))
+    });
+    let mut used: Vec<&str> = vec![];
+    if !n.creatures.is_empty() || has(&|k| k.starts_with("creature.")) {
+        used.push("creatures");
+    }
+    if has(&|k| ["creature.state", "creature.target", "creature.set_speed", "creature.set_tier"].contains(&k)) {
+        used.push("creature_control_2");
+    }
+    if has(&|k| k.starts_with("bot.")) {
+        used.push("bot_orders");
+    }
+    if has(&|k| k.starts_with("bots.")) {
+        used.push("bots_in_modes");
+    }
+    if influence {
+        used.push("influence");
+    }
+    let need = |brain: &str| FEATURES.iter().filter(|f| f.2 == brain && used.contains(&f.0)).map(|f| f.3).max().unwrap_or(0);
+    json!({
+        "componentsPlugin": n.components,
+        "components": components,
+        "creatures": n.creatures,
+        "modeVer": need("mode"),
+        "creatureVer": need("creature"),
+        "features": FEATURES.iter().filter(|f| used.contains(&f.0)).map(|f| json!({"id": f.0, "name": f.1, "brain": f.2, "ver": f.3})).collect::<Vec<_>>(),
+    })
+}
+
+/// The bot brain in a game folder, as the versions its `dlls/mp.dll` has (0: none): read from the
+/// strings each version adds (no running game needed). `ls_mode_ver` 1 and 2 ("[influence 0-100]" in
+/// ls_mode's help), `ls_creature_ver` 1 and 2 (the speed/tier help's "0.2..3").
+pub fn brain_here(game_dir: &Path) -> Value {
+    let b = std::fs::read(game_dir.join("dlls/mp.dll")).or_else(|_| std::fs::read(game_dir.join("dlls/cs.so"))).unwrap_or_default();
+    let has = |s: &str| b.windows(s.len()).any(|w| w == s.as_bytes());
+    let mode = if has("[influence 0-100]") { 2 } else if has("ls_mode_ver") { 1 } else { 0 };
+    let creature = if has("ls_creature_ver") { if has("0.2..3") { 2 } else { 1 } } else { 0 };
+    json!({"modeVer": mode, "creatureVer": creature})
 }
 
 /// A request to save: checked and cleaned.
@@ -294,6 +359,40 @@ pub fn routes() -> Router<Shared> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn needs_list_components_creatures_and_the_brain_versions() {
+        // nothing beyond the game
+        let plain = mode_needs(&g(&[("msg.chat", "text", "hi")]));
+        assert_eq!((plain["modeVer"].as_u64(), plain["creatureVer"].as_u64(), plain["features"].as_array().map(Vec::len)), (Some(0), Some(0), Some(0)));
+        // a creature, creature control 2 and a bot order: the highest version each brain needs
+        let gr = g(&[("creature.spawn", "kind", "zombie"), ("creature.set_tier", "tier", "3"), ("bot.hold", "secs", "5")]);
+        let n = mode_needs(&gr);
+        assert_eq!(n["creatures"], json!(["zombie"]));
+        assert_eq!((n["creatureVer"].as_u64(), n["modeVer"].as_u64()), (Some(2), Some(1)));
+        let ids: Vec<&str> = n["features"].as_array().unwrap().iter().filter_map(|f| f["id"].as_str()).collect();
+        assert_eq!(ids, vec!["creatures", "creature_control_2", "bot_orders"]);
+        // a personality influence other than 50: bots version 2
+        let inf = g(&[("bot.follow", "influence", "x")]);
+        let mut infg = inf.clone();
+        infg.nodes[0].params.insert("influence".into(), json!(20));
+        assert_eq!(mode_needs(&infg)["modeVer"], 2);
+        let mut same = inf;
+        same.nodes[0].params.insert("influence".into(), json!(50));
+        assert_eq!(mode_needs(&same)["modeVer"], 1);
+    }
+
+    #[test]
+    fn the_brain_here_from_its_mp_dll() {
+        let dir = std::env::temp_dir().join(format!("ls-brain-here-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(dir.join("dlls"));
+        assert_eq!(brain_here(&dir), json!({"modeVer": 0, "creatureVer": 0}));
+        std::fs::write(dir.join("dlls/mp.dll"), b"..ls_mode_ver..ls_creature_ver..").unwrap();
+        assert_eq!(brain_here(&dir), json!({"modeVer": 1, "creatureVer": 1}));
+        std::fs::write(dir.join("dlls/mp.dll"), b"..ls_mode_ver..ls_mode goal <who> [influence 0-100]..ls_creature_ver..<0.2..3>").unwrap();
+        assert_eq!(brain_here(&dir), json!({"modeVer": 2, "creatureVer": 2}));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn g(params: &[(&str, &str, &str)]) -> Graph {
         let nodes: Vec<Value> = params.iter().enumerate().map(|(i, (kind, k, v))| json!({"id": format!("n{i}"), "type": kind, "pos": {"x": 0, "y": 0}, "params": {*k: v}})).collect();

@@ -225,7 +225,43 @@ def _requirements(r):
             name = link.get("name", "")
             e["link"] = {"model": link["model"], "id": link["id"], "name": name[:80] if isinstance(name, str) else ""}
         content.append(e)
-    return {"defaultMap": dm if safe_arg(dm) else "", "maps": maps, "content": content}
+    out = {"defaultMap": dm if safe_arg(dm) else "", "maps": maps, "content": content}
+    needs = _needs(r.get("needs"))
+    if needs:
+        out["needs"] = needs
+    return out
+
+
+_WORD = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+
+
+def _needs(n):
+    """What a mode needs beyond the game (the app's community::ModeNeeds, QA4-G F6): Loner-Strike's
+    components, creature types and bot-brain features with the brain versions they need. Junk is
+    dropped; a wrong shape is refused."""
+    if n is None:
+        return None
+    if not isinstance(n, dict):
+        _bad("requirements needs")
+
+    def ver(k):
+        v = n.get(k, 0)
+        if isinstance(v, bool) or not isinstance(v, int) or v < 0:
+            _bad("requirements needs")
+        return min(v, 9)
+
+    words = lambda k: [w for w in dict.fromkeys(_list(n, k, 32)) if isinstance(w, str) and _WORD.match(w)]
+    feats = []
+    for f in _list(n, "features", 12):
+        if not isinstance(f, dict):
+            _bad("requirements needs")
+        fid, name, brain, v = f.get("id"), f.get("name", ""), f.get("brain"), f.get("ver", 0)
+        if not (isinstance(fid, str) and _WORD.match(fid) and brain in ("mode", "creature") and isinstance(v, int) and not isinstance(v, bool) and v >= 0):
+            continue
+        feats.append({"id": fid, "name": " ".join(name.split())[:80] if isinstance(name, str) else "", "brain": brain, "ver": min(v, 9)})
+    out = {"componentsPlugin": _bool(n, "componentsPlugin"), "components": words("components"), "creatures": words("creatures"),
+           "modeVer": ver("modeVer"), "creatureVer": ver("creatureVer"), "features": feats}
+    return out if out["componentsPlugin"] or out["components"] or out["creatures"] or feats else None
 
 
 # what a Game Mode Studio mode can do beyond its own game (keep in step with community.rs RISKS)

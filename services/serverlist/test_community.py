@@ -292,6 +292,23 @@ class Validation(unittest.TestCase):
         with self.assertRaises(cm.Reject):
             cm.clean_item(mode_item(mode={"id": "cage", "requirements": {"content": "nope"}}))
 
+    def test_mode_needs_are_kept_and_cleaned(self):
+        # what a mode needs beyond the game (QA4-G F6): components, creatures, the bot brain's versions
+        it = cm.clean_item(mode_item(mode={"id": "cage", "maps": [], "requirements": {"maps": [], "content": [], "needs": {
+            "componentsPlugin": True, "components": ["ls_wave_spawner", "../x", "ls_wave_spawner"], "creatures": ["zombie", "a b"],
+            "modeVer": 2, "creatureVer": 99,
+            "features": [{"id": "influence", "name": "Personality  influence", "brain": "mode", "ver": 2},
+                         {"id": "x y", "name": "n", "brain": "mode", "ver": 1}, {"id": "f", "name": "n", "brain": "kernel", "ver": 1}]}}}))
+        n = it["mode"]["requirements"]["needs"]
+        self.assertEqual(n, {"componentsPlugin": True, "components": ["ls_wave_spawner"], "creatures": ["zombie"], "modeVer": 2, "creatureVer": 9,
+                             "features": [{"id": "influence", "name": "Personality influence", "brain": "mode", "ver": 2}]})
+        # needing nothing: not kept
+        it = cm.clean_item(mode_item(mode={"id": "cage", "maps": [], "requirements": {"needs": {"components": [], "features": []}}}))
+        self.assertNotIn("needs", it["mode"]["requirements"])
+        for bad in ("nope", {"modeVer": "2"}, {"modeVer": -1}, {"features": ["x"]}):
+            with self.assertRaises(cm.Reject):
+                cm.clean_item(mode_item(mode={"id": "cage", "requirements": {"needs": bad}}))
+
     def test_mode_capabilities_are_kept_and_cleaned(self):
         it = cm.clean_item(mode_item(mode={"id": "cage", "maps": [], "capabilities": ["kicks_players", "server_commands", "format_disk", "kicks_players"]}))
         self.assertEqual(it["mode"]["capabilities"], ["kicks_players", "server_commands"])

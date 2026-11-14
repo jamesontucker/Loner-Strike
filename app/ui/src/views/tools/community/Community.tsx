@@ -202,14 +202,14 @@ function SourceNote({ data }: { data: { index: string; gamebanana: string } }) {
   return null;
 }
 
-export const needsSomething = (b: BrainNeeds) => b.componentsPlugin || b.components.length > 0 || b.creatures.length > 0 || b.features.length > 0;
+const needsSomething = (b: BrainNeeds) => b.componentsPlugin || b.components.length > 0 || b.creatures.length > 0 || b.features.length > 0;
 
 /** What a mode needs beyond the game: Loner-Strike's components, creatures and bot-brain features,
  *  each marked "You have it" or "Update Loner-Strike" (the app's setup brings the newer brain; QA4-G F6). */
-export function BrainNeedsList({ b }: { b: BrainNeeds }) {
+function BrainNeedsList({ b }: { b: BrainNeeds }) {
   if (!needsSomething(b)) return null;
   const mark = (have: boolean | undefined) =>
-    have ? <span className="tag cm-badge-bots">You have it</span> : <span className="tag cm-trust-unreviewed" title="Settings › Updates brings the newest bot brain">{b.here ? "Update Loner-Strike" : "Needs the game set up"}</span>;
+    have ? <span className="tag cm-badge-bots">You have it</span> : <span className="tag cm-trust-unreviewed" title="A newer Loner-Strike brings it: update the app, then the game files it offers">{b.here ? "Update Loner-Strike" : "Needs the game set up"}</span>;
   return (
     <>
       <h4>Needs</h4>
