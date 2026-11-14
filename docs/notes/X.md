@@ -290,8 +290,22 @@ UI unit tests and studio-v3/studio-playtest specs green; not yet run on a sim); 
 - Search finds nodes by `keywords`/`cvar`; ties keep the registry's order (Give Weapon before Give
   Ammo). New param kind `path` (models/sounds: letters, digits, `_ - . /`, up to 64, no `..`).
 - Event values per flow raised 4 -> 8 (`CTX`): Player Killed now carries 7.
-**Not yet:** a sim run of `check_compile` itself (only its route is stubbed in the specs; amxxpc is
-exercised by `generated_plugins_compile_with_amxxpc`).
+**Checked for real (2026-11-14):**
+- Compile's real path on a sim copy through the dev server (`LS_TEST_GAME=<sim copy>`; Compile now
+  finds the compiler for a folder that isn't the player's install, `studio::compiler_install`): Rifle
+  Reward and Last Stand compiled in 1.8 s / 1.4 s, nothing installed (plugins and modes.ini the same
+  as the base), the icon green with "Full check: compiled, no problems"; a graph with a quick-check
+  error: "Fix the quick check's errors first", the icon stays gray, clicking the problem focuses the
+  node. Compiler errors with the real amxxpc map to their node or say "not tied to a node" (test in
+  `generated_plugins_compile_with_amxxpc`). The real app runs the same code with the player's install.
+- In game (sim copy XS, 6 bots, two runs): commands read at run time from cvars set by a test plugin,
+  so they reach the plugin's own check: `"exec" lscanary.cfg`, `"rcon_password" hacked`,
+  `amx_cvar sv_gravity 222` on the server path, `mp_logfile 1`, `sv_gravity 1;exec lscanary.cfg`,
+  `exec:lscanary.cfg`, `bot_nav_save`; AMX: `amx_cvar rcon_password hacked`, `"amx_rcon" exec ...`,
+  `amx_restrict save`, a 63-letter second word: every one refused with the node's error. Kick with
+  the reason `x;sv_gravity 123;exec lscanary.cfg` kicked the bot and nothing else ran; Change Map to
+  `de_nothere` stayed on de_dust2; allowed `sv_gravity 300` and `amx_cvar sv_gravity 500` ran
+  (gravity 500); the canary cfg (gravity 111) never ran, rcon_password unchanged, de_dust2.nav untouched.
 **Queued next, in order:** (a) the **Test run** button (below); (b) the Blueprint parity batch 2 plan;
 (c) sim tests for the core nodes; (d) example modes, node help, tour.
 **The core nodes batch:**
