@@ -119,6 +119,21 @@ ls_outpost (32 spawns), 6 Normal bots + the user on the client for the visual ro
 | Bench and spending (W1, W2) | 16 bots, Normal, to wave 12; watch money and buys (`lst_debug` or the round table log) | The first bench Mk II around waves 8-10; bots save between waves instead of spending it all; bots repair boards between waves; careful/greedy personalities spend differently (log shows who bought what) |
 | Downed bots (W1, W2) | Down a bot near creatures | It crawls, and shoots back with its pistol while downed; it can be revived |
 
+### Area C self-check (W1, 2026-11-14, before QA starts; HLDS sims, no client)
+Current builds: brain ls-next3 run 43580692204 (`72cfb7f`) for the first runs and run 43590130925 (`707a12a`) for the
+re-runs, each checked inside the copy (`mode revive`/`mode down` in mp.dll); every plugin compiled from tools HEAD
+(1e454fbc, c5082d4d) and the repo's configs and maps (scratchpad `fresh.sh`). ls_outpost, 6 Normal bots, adaptive cap on
+(as shipped) unless noted. Logs: scratchpad `qa_W1QC_015936.log`, `ls_v5_W1LA_035959.log` (with the map's upgrade spots).
+| Item | Result | Evidence | Left for the user |
+|---|---|---|---|
+| Economy and shop | pass | bots avg $1690 after wave 1, $2585 after 2; 5 of 6 rifles by wave 3; 19 armory buys, armor $650 -> $800 (wave 5) -> $900 (wave 9); perks 14-15 by wave 10; a Mk II at wave 9 (spots run); the box once a round per bot | buying as a person (menu, USE at a machine) |
+| Knocked down | pass (server side) | 8-30 downs a run, every one followed by `ls_mode down <id> 1` and later `0`; revives by bots (6-8 a run; the $150 revive pay is set but not logged); `ls_down_list` earlier: sequence 101 held at frame 255, view 14, pistol in hand; perks lost on going down (perk_clear) | **the visuals on the real client** (pose, red pulse, bleed bar, pistol) |
+| Round table | pass | counts 28/29/29/30/31 by round, hound pack 6, boss 7 and 10, heavies 11, snark swarm 12; "creature cap now 12 -> 16 -> 20" followed by "N alive at most" in the next wave's line | - |
+| Turrets | partly | bots bought and placed 2 from the brain's offer (`Turret: ... placed`); on an older brain the turret went to attack on its own and players' shots didn't hurt it | placing one as a person (kit from the armory, USE where you look) |
+| Tiers and enrage | partly | jump to wave 20: `lst_perf` 26 of 26 creatures with a glow shell, all red-orange (tier 3) | tier 2 at wave 15 (the jump run fell before the perf line) and enrage on screen |
+| Fleeing and round endings | pass | no wave held by one creature: 0 three-minute cleanups; ranged creatures out of sight sent to a gate (70 in the long run); longest waves 155-265 s | a spitter running home and back, by eye |
+| Wave pace | pass (information) | 6 Normal bots fell on wave 11-12 (user: leave difficulty; target 20-30 for human teams); no crash since the mark (`crashcheck.sh since 9260`: empty) | the 30-wave crash run (bots don't get that far; `lst_jump` to 20 ran clean) |
+
 ## D. Battle Royale (W3, W1, W2)
 br_valley v6; squads on QA4B (16 bots), duos/solo on QA4B2.
 | Item | Pass when |
@@ -131,6 +146,20 @@ br_valley v6; squads on QA4B (16 bots), duos/solo on QA4B2.
 | Loot (5ca3ad76, 060d9a90, 6b4aecdf, 25140068, bed0141b) | Death crates hold the dead player's guns and ammo; armor levels reduce damage; healing items work with the bar; rarity glow colors |
 | HUD and drop-in (1d543873, 2c89e395, 83f5f83d) | Players left, kills, zone timer, next-zone distance and radar dot; the drop-in steers and lands without damage |
 | Bot layers (decb83fb) | About 3 in 10 bots go below ground, 1 in 4 high; no drop-in deaths in 10 games |
+
+### Area D self-check (W1, 2026-11-14, before QA starts; HLDS sims, no client)
+br_valley as in plugins/game, newest ls-next3 brain run 43590130925 (`707a12a`, W2's braver revives) and tools plugins
+(c5082d4d, with W1's `ls_mode down` hint), 16 bots in squads of 4, 4 games; an older-brain run of 8 games for the rest
+(marked). Logs: scratchpad `qa_W1QB_new.log`, `qa_W1QB.log` (older brain).
+| Item | Result | Evidence | Left for the user |
+|---|---|---|---|
+| Squads and duos | partly | br_duo/br_squads in modes.ini (the vote's list); "squad lobby, 30 s" then "lobby over, 4 squads" (duos: 8 squads) | /squad and party codes, markers and radar dots, no damage between squad mates (not in the log) |
+| Knocked down in squads | pass | 34 knock-downs in 4 games: 22 bled out or out with their squad, 7 finished, 3 revived; 0 left hanging | - |
+| Bots reviving | **fail** (W2) | 3 of 34 knock-downs revived (9 %; the older brain 8 of 79); W2.md has the numbers | - |
+| Finishing a downed player | pass | 7 knocked players finished by an enemy, the kill credited ("out ... by <killer> (weapon_knife, 32 u)"); `ls_down_finish` on with squads | - |
+| Loot | partly | per round: death crates 12-15 made, 8-11 searched, 11-25 items taken; armor found at levels 1-3; heals used (bandage, drink) | rarity glow colors and the heal bar on screen |
+| HUD and drop-in | partly | 0 drop-in deaths in 12 games (bra.py) | the HUD lines and the drop-in steering on the client |
+| Bot layers | pass | 4-8 of 16 went below ground a game (25-50 %; 5-23 % of the time there), 0 drop-in deaths in 12 games | the 1-in-4 high-ground share isn't logged |
 
 ## E. Deathrun maps and the mode vote
 | Item | Pass when |
