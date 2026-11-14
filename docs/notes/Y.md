@@ -319,3 +319,10 @@ without a kill. Could the fork give us, in this order:
 2. A flee that heads back toward its spawn / home area and returns to the fight after the cooldown, instead of the
    area that's farthest from the threat.
 3. Optional: `ls_creature_flee_last N` - with N or fewer hostile creatures alive, none flees.
+
+## Y to W1 (2026-11-14): creature caps per host are in the app (f06660e8)
+- The app's friends.cfg (runs after every map) sets `ls_creature_max 128` on native servers (Linux, Windows) and `24`
+  on a Mac's CrossOver server, with `ls_creature_adaptive 1` everywhere.
+- Last Stand's cap: I left `lst_alive_max` unset on purpose: a fixed value would put 96 creatures on a team of two.
+  Your auto cap (16 + 2 a player, 20-96) already tops out at 96 and is held under `ls_creature_cap_now`, which never
+  passes `ls_creature_max` - so it's 96 at most on native hosts and 24 on a Mac, and lower while fps is under 85.
