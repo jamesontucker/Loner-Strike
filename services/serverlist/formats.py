@@ -564,7 +564,9 @@ _CREATURE_SOUND = re.compile(r"^[a-z0-9_-][a-z0-9_./-]{0,150}\.wav$")
 # a sentence group (say_* keys: the game's sentences.txt names, like HG_IDLE)
 _CREATURE_SENTENCE = re.compile(r"^!?[a-z0-9_]{1,31}$")
 # the bot brain's keys that name files (creature.cpp LsSetTypeKey): models, and sounds relative to sound/
-_SOUND_KEYS = ("sounds", "snd_idle", "snd_alert", "snd_attack", "snd_hit", "snd_miss", "snd_pain", "snd_die")
+# packs use the app's canonical keys only: these older spellings and short forms are refused
+_ALIAS_KEYS = ("ls", "sounds", "models", "display", "health", "detect", "fov", "behavior", "guard_radius")
+_SOUND_KEYS = ("snd_idle", "snd_alert", "snd_attack", "snd_hit", "snd_miss", "snd_pain", "snd_die")
 
 
 def author_slug(author):
@@ -638,6 +640,8 @@ def creatures_ini_problem(data):
             return f"[{names[-1]}] names a file outside the game's folders"
         if value.startswith("/") or value.startswith("\\\\"):
             return f"[{names[-1]}] names a file outside the game's folders"
+        if key in _ALIAS_KEYS:
+            return f"[{names[-1]}] uses {key}, which shared creatures don't take (make it again with Publish)"
         toks = value.replace("|", " ").lower().split()
         if key not in ("name", "display") and any(t.startswith("/") or t.startswith("model=/") for t in toks):
             return f"[{names[-1]}] names a file outside the game's folders"

@@ -83,15 +83,17 @@ class Rules(unittest.TestCase):
 
     def test_every_key_that_names_a_file(self):
         hostile = {
-            b"models = models/ok.mdl /etc/passwd": "outside", b"model = models/a.mdl models/../../x.mdl": "outside",
+            b"model = models/ok.mdl /etc/passwd": "outside", b"model = models/a.mdl models/../../x.mdl": "outside",
             b"model = \\\\server\\share\\x.mdl": "outside", b"model = C:/x.mdl": "outside", b"model = /models/x.mdl": "outside",
-            b"sounds = a/1.wav maps/x.bsp": ".wav path", b"sounds = /abs/x.wav": "outside", b"snd_idle = ok.wav x.exe": ".wav path",
+            b"snd_pain = a/1.wav maps/x.bsp": ".wav path", b"snd_pain = /abs/x.wav": "outside", b"snd_idle = ok.wav x.exe": ".wav path",
             b"snd_alert = ../x.wav": "outside", b"snd_hit = d:x.wav": "outside", b"snd_miss = a.wav|/x.wav": "outside",
             b"snd_die = a.wav | \\\\h\\x.wav": "outside",
-            b"ls = model=maps/x.bsp anims=walk run attack die": "ls model", b"ls = model=models/a.mdl anims=walk sound/x.wav": "ls names a file",
-            b"ls = model=../x.mdl": "outside", b"say_idle = sound/x.wav": "sentence", b"say_pain = HG_PAIN": None,
+            b"ls = model=models/a.mdl anims=walk run attack die": "shared creatures don't take", b"ls = model=../x.mdl": "outside",
+            b"models = models/a.mdl": "shared creatures don't take", b"sounds = a/1.wav": "shared creatures don't take", b"say_idle = sound/x.wav": "sentence", b"say_pain = HG_PAIN": None,
             b"walk = models/x.mdl": "names a file where", b"glow = /x": "outside", b"whatever = a/b": "names a file where",
-            b"name = Fast / One": None, b"sounds = ann/a.wav ann/b.wav": None, b"ls = model=models/ann/x.mdl anims=walk run attack die": None,
+            b"name = Fast / One": None, b"snd_idle = ann/a.wav ann/b.wav": None, b"display = X": "shared creatures don't take",
+            b"health = 5": "shared creatures don't take", b"detect = 5": "shared creatures don't take", b"fov = 5": "shared creatures don't take",
+            b"behavior = chase": "shared creatures don't take", b"guard_radius = 5": "shared creatures don't take", b"behaviour = chase": None,
         }
         for line, words in hostile.items():
             with self.subTest(line=line):
