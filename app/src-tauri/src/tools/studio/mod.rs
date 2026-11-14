@@ -24,6 +24,7 @@ pub mod expand;
 pub mod graph;
 pub mod kit;
 pub mod testrun;
+pub mod settings;
 #[cfg(test)]
 mod help_tests;
 #[cfg(test)]
@@ -385,7 +386,9 @@ pub fn register_mode(cfg: &Path, g: &Graph, plugin: &str) -> Result<(), String> 
         return Err(format!("The Game Mode Menu holds {MAX_MODES} modes and this game has that many. Remove one first."));
     }
     let nl = if ini.contains("\r\n") { "\r\n" } else { "\n" };
-    let line = format!("{id}  \"{}\"  \"{}\"  \"\"  \"\"", g.mode.name, g.mode.description);
+    // (mode settings: the Game Mode Menu's "options" opens their admin menu)
+    let options = if graph::mode_settings(g).is_empty() { String::new() } else { graph::settings_menu_cmd(id) };
+    let line = format!("{id}  \"{}\"  \"{}\"  \"{options}\"  \"\"", g.mode.name, g.mode.description);
     let mut lines: Vec<String> = ini.lines().map(|l| l.trim_end_matches('\r').to_string()).collect();
     match lines.iter().position(|l| l.split_whitespace().next() == Some(id.as_str())) {
         Some(i) => lines[i] = line,
@@ -400,6 +403,15 @@ pub fn register_mode(cfg: &Path, g: &Graph, plugin: &str) -> Result<(), String> 
     let comps = if gen::needs(g).components { format!("gm_components.amxx{nl}") } else { String::new() };
     let uid = if g.mode.uid.is_empty() { String::new() } else { format!(" (uid {})", g.mode.uid) };
     write(gm.join(format!("{id}.plugins.ini")), &format!("; Made with the Game Mode Studio{uid}: compile the graph again instead of editing this.{nl}{comps}{plugin}.amxx{nl}"))?;
+    // the mode settings hosts can change: what they are (the app reads it for the Play and server
+    // pages and MCP); the values are the server's own (data/studio_settings/<mode>.cfg)
+    let manifest = settings::manifest(g);
+    let mpath = gm.join(format!("{id}.settings.json"));
+    if manifest["settings"].as_array().is_some_and(|a| !a.is_empty()) {
+        write(mpath, &serde_json::to_string_pretty(&manifest).unwrap_or_default())?;
+    } else {
+        let _ = std::fs::remove_file(&mpath);
+    }
     // the mode's settings (the graph's own; written every compile, after base.cfg each map)
     let mut cfg_text = format!("// {} (Game Mode Studio): its settings, written from the graph each compile. Runs after base.cfg.{nl}", gen::comment_text(&g.mode.name));
     let allowed = graph::allowed_settings();
@@ -1127,6 +1139,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/studio/generate", post(api_generate))
         .route("/api/tools/studio/compile", post(api_compile))
         .route("/api/tools/studio/check", post(api_check))
+        .route("/api/tools/studio/mode-settings", get(settings::api_get).post(settings::api_set))
         .route("/api/tools/studio/testrun", get(api_testrun_progress).post(api_testrun))
         .route("/api/tools/studio/testrun/cancel", post(api_testrun_cancel))
         .route("/api/tools/studio/source", post(api_source))

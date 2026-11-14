@@ -648,6 +648,61 @@ pub struct Variable {
     /// never (kept for the map) | round (back to its start value at each new round)
     #[serde(default = "never", skip_serializing_if = "is_never")]
     pub reset: String,
+    /// a mode setting: hosts can change its start value (a cvar of the mode, kept per server)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub setting: Option<SettingDef>,
+}
+
+/// A variable a host can set (Blueprint's Instance Editable): its label, help, range or choices.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct SettingDef {
+    pub label: String,
+    #[serde(default)]
+    pub help: String,
+    #[serde(default)]
+    pub min: f64,
+    #[serde(default = "setting_max")]
+    pub max: f64,
+    /// a number's step in menus (0: a tenth of the range, at least 1)
+    #[serde(default)]
+    pub step: f64,
+    /// a number picked from named choices (its value is the choice's place, 0, 1, 2...)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<String>,
+    #[serde(default)]
+    pub group: String,
+}
+
+fn setting_max() -> f64 {
+    100.0
+}
+
+impl SettingDef {
+    /// The range a value is clamped to: 0/1 for yes-no, 0..choices-1 for choices.
+    pub fn range(&self, ty: &str) -> (f64, f64) {
+        if ty == "bool" {
+            (0.0, 1.0)
+        } else if !self.choices.is_empty() {
+            (0.0, (self.choices.len() - 1) as f64)
+        } else {
+            (self.min, self.max)
+        }
+    }
+}
+
+/// The admin menu's command for a mode's settings (the Game Mode Menu's "options", 31 letters at most).
+pub fn settings_menu_cmd(mode: &str) -> String {
+    format!("lsmm_{}", mode).to_ascii_lowercase()
+}
+
+/// The mode settings a graph has: whole-mode numbers and yes/no's marked as settings.
+pub fn mode_settings(g: &Graph) -> Vec<&Variable> {
+    g.variables.iter().filter(|x| x.setting.is_some() && x.scope == "mode" && matches!(x.ty.as_str(), "number" | "bool")).collect()
+}
+
+/// A mode setting's cvar: `lsm_<mode>_<variable id>` (small letters).
+pub fn setting_cvar(mode: &str, var: &str) -> String {
+    format!("lsm_{}_{}", mode, var).to_ascii_lowercase()
 }
 
 fn never() -> String {
@@ -1522,6 +1577,42 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
         if !allowed.contains(&st.cvar.as_str()) || !st.value.is_finite() || !(0.0..=NUMBER_LIMIT).contains(&st.value) {
             p.push(Problem::err(None, format!("The mode's setting \u{201c}{}\u{201d} isn't one the Studio can set (or its value is out of range).", short(&st.cvar))));
         }
+    }
+    let mut n_settings = 0;
+    for x in g.variables.iter().filter(|x| x.setting.is_some()) {
+        let st = x.setting.as_ref().unwrap();
+        n_settings += 1;
+        let name = short(&x.name);
+        if x.scope != "mode" || !matches!(x.ty.as_str(), "number" | "bool") {
+            p.push(Problem::err(None, format!("\u{201c}{name}\u{201d} can't be a mode setting: only a whole-mode number or yes/no can.")));
+            continue;
+        }
+        if st.label.trim().is_empty() || !valid_label(&st.label, 30) || !valid_label(&st.help, 120) || !valid_label(&st.group, 20) {
+            p.push(Problem::err(None, format!("The setting \u{201c}{name}\u{201d} needs a label (30), and its help (120) and group (20) plain text.")));
+        }
+        if st.choices.len() > 12 || st.choices.iter().any(|c| c.trim().is_empty() || !valid_label(c, 30)) || (!st.choices.is_empty() && x.ty != "number") {
+            p.push(Problem::err(None, format!("The setting \u{201c}{name}\u{201d} has up to 12 named choices (30 letters each), for a number.")));
+        }
+        let (lo, hi) = st.range(&x.ty);
+        let in_range = |v: f64| v.is_finite() && v.abs() <= NUMBER_LIMIT;
+        if !in_range(st.min) || !in_range(st.max) || lo >= hi || !in_range(st.step) || st.step < 0.0 {
+            p.push(Problem::err(None, format!("The setting \u{201c}{name}\u{201d} needs its smallest below its largest (and a step of 0 or more).")));
+        }
+        let d = match &x.default {
+            Value::Bool(b) => Some(if *b { 1.0 } else { 0.0 }),
+            Value::Number(n) => n.as_f64(),
+            Value::Null => Some(0.0),
+            _ => None,
+        };
+        if d.is_none_or(|d| d < lo || d > hi) {
+            p.push(Problem::err(None, format!("The setting \u{201c}{name}\u{201d} starts at a value outside its range.")));
+        }
+        if setting_cvar(&g.mode.id, &x.id).len() > 60 {
+            p.push(Problem::err(None, format!("The setting \u{201c}{name}\u{201d}'s name is too long: give the variable a shorter id.")));
+        }
+    }
+    if n_settings > 32 {
+        p.push(Problem::err(None, "A mode has at most 32 settings hosts can change."));
     }
     if g.mode.settings.len() > 32 {
         p.push(Problem::err(None, "A mode can have at most 32 settings."));
@@ -2649,9 +2740,9 @@ mod tests {
             json!([e("e1","r","then","s","exec"), e("e2","s","then","a","exec")]),
         );
         g.variables = vec![
-            Variable { id: "kills".into(), name: "Kills".into(), ty: "number".into(), scope: "player".into(), default: json!(0), reset: "never".into() },
-            Variable { id: "name".into(), name: "Last name".into(), ty: "text".into(), scope: "mode".into(), default: json!(""), reset: "never".into() },
-            Variable { id: "bad".into(), name: "Bad /*".into(), ty: "number".into(), scope: "mode".into(), default: json!("x"), reset: "never".into() },
+            Variable { id: "kills".into(), name: "Kills".into(), ty: "number".into(), scope: "player".into(), default: json!(0), reset: "never".into(), setting: None },
+            Variable { id: "name".into(), name: "Last name".into(), ty: "text".into(), scope: "mode".into(), default: json!(""), reset: "never".into(), setting: None },
+            Variable { id: "bad".into(), name: "Bad /*".into(), ty: "number".into(), scope: "mode".into(), default: json!("x"), reset: "never".into(), setting: None },
         ];
         let m = msgs(&validate(&g));
         assert!(m.iter().any(|m| m.starts_with("error:s:") && m.contains("doesn't fit")), "{m:?}");

@@ -35,6 +35,199 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_O 4
 #define LSG_OT 1
 
+// The mode's variables
+stock Float:g_v0 = 30.0 // Hold time (number)
+stock g_v1 = 0 // Friendly (bool, each round)
+stock Float:g_v2 = 1.0 // Size (number)
+
+// ---- mode settings (hosts change them: the app's mode settings, the admin menu) ----
+#define LSG_SN 3
+stock const g_lsgSn[LSG_SN][] = { "lsm_every_node_3_hold", "lsm_every_node_3_ff", "lsm_every_node_3_size" }
+stock const g_lsgSd[LSG_SN][] = { "30", "0", "1" }
+stock const g_lsgSlab[LSG_SN][] = { "Seconds to win", "Friendly fire", "Hill" }
+stock const Float:g_lsgSlo[LSG_SN] = { 5.0, 0.0, 0.0 }
+stock const Float:g_lsgShi[LSG_SN] = { 120.0, 1.0, 2.0 }
+stock const Float:g_lsgSst[LSG_SN] = { 12.0, 1.0, 1.0 }
+stock g_lsgSc[LSG_SN], Float:g_lsgSl[LSG_SN], g_lsgSmenu[33]
+
+stock lsg_settings_init()
+{
+	for (new k = 0; k < LSG_SN; k++)
+		g_lsgSc[k] = register_cvar(g_lsgSn[k], g_lsgSd[k])
+	register_clcmd("lsmm_every_node_3", "lsg_settings_menu", ADMIN_CFG)
+}
+
+stock Float:lsg_sv(k)
+	return floatclamp(get_pcvar_float(g_lsgSc[k]), g_lsgSlo[k], g_lsgShi[k])
+
+stock lsg_settings_path(path[], len)
+{
+	new dir[160]
+	get_localinfo("amxx_datadir", dir, charsmax(dir))
+	formatex(path, len, "%s/studio_settings/every_node_3.cfg", dir)
+}
+
+// the server's own values: only these names, numbers in range (never run as commands)
+stock lsg_settings_load()
+{
+	new path[200], line[96], key[64], val[32]
+	lsg_settings_path(path, charsmax(path))
+	new f = fopen(path, "rt")
+	if (!f)
+		return
+	while (!feof(f))
+	{
+		fgets(f, line, charsmax(line))
+		trim(line)
+		if (!line[0] || line[0] == '/' || line[0] == ';')
+			continue
+		parse(line, key, charsmax(key), val, charsmax(val))
+		for (new k = 0; k < LSG_SN; k++)
+		{
+			if (equali(key, g_lsgSn[k]))
+			{
+				set_pcvar_float(g_lsgSc[k], floatclamp(str_to_float(val), g_lsgSlo[k], g_lsgShi[k]))
+				break
+			}
+		}
+	}
+	fclose(f)
+}
+
+stock lsg_settings_save()
+{
+	new path[200], dir[160]
+	get_localinfo("amxx_datadir", dir, charsmax(dir))
+	add(dir, charsmax(dir), "/studio_settings")
+	if (!dir_exists(dir))
+		mkdir(dir)
+	lsg_settings_path(path, charsmax(path))
+	new f = fopen(path, "wt")
+	if (!f)
+		return
+	fputs(f, "// this server's values for the mode's settings (the app and the admin menu write it)^n")
+	for (new k = 0; k < LSG_SN; k++)
+		fprintf(f, "%s ^"%.3f^"^n", g_lsgSn[k], lsg_sv(k))
+	fclose(f)
+}
+
+// the variables take the values (all, or the ones changed since)
+stock lsg_settings_apply(bool:all)
+{
+	for (new k = 0; k < LSG_SN; k++)
+	{
+		new Float:v = lsg_sv(k)
+		if (!all && v == g_lsgSl[k])
+			continue
+		g_lsgSl[k] = v
+		switch (k)
+		{
+		case 0: g_v0 = v
+		case 1: g_v1 = floatround(v) != 0
+		case 2: g_v2 = v
+		}
+	}
+}
+
+stock lsg_settings_text(k, Float:v, out[], len)
+{
+	switch (k)
+	{
+		case 1:
+		{
+			copy(out, len, floatround(v) ? "Yes" : "No")
+			return
+		}
+		case 2:
+		{
+			static const C[][] = { "Small", "Medium", "Large" }
+			new c = clamp(floatround(v), 0, sizeof C - 1)
+			copy(out, len, C[c])
+			return
+		}
+	}
+	if (v == float(floatround(v)))
+		formatex(out, len, "%d", floatround(v))
+	else
+		formatex(out, len, "%.2f", v)
+}
+
+public lsg_settings_menu(id, level, cid)
+{
+	if (!(get_user_flags(id) & level))
+		return PLUGIN_HANDLED
+	new m = menu_create("\yMode settings^n\dSaved for this server", "lsg_settings_menu_h"), t[96], v[40], info[4]
+	for (new k = 0; k < LSG_SN; k++)
+	{
+		lsg_settings_text(k, lsg_sv(k), v, charsmax(v))
+		formatex(t, charsmax(t), "%s: \y%s", g_lsgSlab[k], v)
+		num_to_str(k, info, charsmax(info))
+		menu_additem(m, t, info)
+	}
+	menu_display(id, m)
+	return PLUGIN_HANDLED
+}
+
+public lsg_settings_menu_h(id, menu, item)
+{
+	if (item < 0)
+	{
+		menu_destroy(menu)
+		return PLUGIN_HANDLED
+	}
+	new info[4], acc, cb
+	menu_item_getinfo(menu, item, acc, info, charsmax(info), _, _, cb)
+	menu_destroy(menu)
+	g_lsgSmenu[id] = str_to_num(info)
+	lsg_settings_one(id)
+	return PLUGIN_HANDLED
+}
+
+stock lsg_settings_one(id)
+{
+	new k = g_lsgSmenu[id], v[40], t[96]
+	lsg_settings_text(k, lsg_sv(k), v, charsmax(v))
+	formatex(t, charsmax(t), "\y%s: %s", g_lsgSlab[k], v)
+	new m = menu_create(t, "lsg_settings_one_h")
+	menu_additem(m, "Less", "-")
+	menu_additem(m, "More", "+")
+	menu_additem(m, "Smallest", "lo")
+	menu_additem(m, "Largest", "hi")
+	menu_additem(m, "Start value", "d")
+	menu_display(id, m)
+}
+
+public lsg_settings_one_h(id, menu, item)
+{
+	if (item < 0)
+	{
+		menu_destroy(menu)
+		lsg_settings_menu(id, ADMIN_CFG, 0)
+		return PLUGIN_HANDLED
+	}
+	new info[4], acc, cb, k = g_lsgSmenu[id]
+	menu_item_getinfo(menu, item, acc, info, charsmax(info), _, _, cb)
+	menu_destroy(menu)
+	if (!(get_user_flags(id) & ADMIN_CFG) || k < 0 || k >= LSG_SN)
+		return PLUGIN_HANDLED
+	new Float:v = lsg_sv(k)
+	if (equal(info, "-"))
+		v -= g_lsgSst[k]
+	else if (equal(info, "+"))
+		v += g_lsgSst[k]
+	else if (equal(info, "lo"))
+		v = g_lsgSlo[k]
+	else if (equal(info, "hi"))
+		v = g_lsgShi[k]
+	else
+		v = str_to_float(g_lsgSd[k])
+	set_pcvar_float(g_lsgSc[k], floatclamp(v, g_lsgSlo[k], g_lsgShi[k]))
+	lsg_settings_save()
+	lsg_settings_apply(false)
+	lsg_settings_one(id)
+	return PLUGIN_HANDLED
+}
+
 #define LSD_N 81
 new const g_lsdIds[LSD_N][] = { "ps", "tick", "ph", "phx", "ch", "chp", "n12", "n13", "n14", "n15", "n17", "n19", "n21", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n67", "n68", "n69", "n70", "n71", "n72", "n73", "n74", "n75", "n76", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n114", "n115", "n121", "n122", "n123", "n124", "n125", "n126", "n127", "n128", "n129" }
 new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
@@ -1236,6 +1429,13 @@ stock lsg_freeze(id, on)
 {
 	new flags = pev(id, pev_flags)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
+}
+
+// a follow with a personality influence (0-100: 50 as usual; W2's ls_mode_ver 2)
+stock lsg_bot_follow(bot, who, secs, influence)
+{
+	if (ls_is_bot(bot) && is_user_connected(who))
+		server_cmd("ls_bot %d follow %d %d %d", bot, who, secs, influence)
 }
 
 stock lsg_bot_goto(bot, const name[], secs)
@@ -2625,6 +2825,9 @@ stock lsg_ecenter(e)
 
 lsd_graph_vars()
 {
+	lsd_var_number("hold", 0, g_v0)
+	lsd_var_bool("ff", 0, g_v1)
+	lsd_var_number("size", 0, g_v2)
 }
 
 // Custom Event: Gate Opened
@@ -3017,6 +3220,7 @@ public plugin_init()
 {
 	ls_register_mode(LSG_MODE, "Every Node 3", "1.0", "Game Mode Studio")
 	lsd_init()
+	register_event("HLTV", "lsg_new_round", "a", "1=0", "2=0")
 	register_event("HLTV", "lsg_count_round", "a", "1=0", "2=0")
 	register_event("TeamScore", "lsg_team_score", "a")
 	register_event("HLTV", "lsg_freeze_on", "a", "1=0", "2=0")
@@ -3033,6 +3237,7 @@ public plugin_init()
 	register_logevent("lsg_on_hostage_rescued", 3, "2=Rescued_A_Hostage")
 	register_logevent("lsg_on_vip_escaped", 3, "2=Escaped_As_VIP")
 	RegisterHam(Ham_Use, "info_target", "lsg_ev_use", 1)
+	lsg_settings_init()
 	RegisterHamPlayer(Ham_TraceAttack, "lsg_hit_trace", 0)
 	if (get_cvar_pointer("ls_creature_ver"))
 		RegisterHam(Ham_TraceAttack, "ls_creature", "lsg_hit_trace", 0)
@@ -3048,6 +3253,22 @@ public lsg_tl_auto()
 	new c[LSG_CTX]
 	lsg_tl80_save(0, c)
 	lsg_tl80_go(0, 0.0, 1)
+}
+
+// the host's values for the mode settings, as the map starts
+public plugin_cfg()
+{
+	lsg_settings_load()
+	lsg_settings_apply(true)
+}
+
+// a new round: timers stop, round variables start again
+public lsg_new_round()
+{
+	lsg_stop_timers()
+	lsg_settings_load()
+	lsg_settings_apply(false)
+	g_v1 = floatround(lsg_sv(1)) != 0
 }
 
 public plugin_end()
@@ -4366,6 +4587,12 @@ public lsg_tl80_tick(task)
 	c[13] = _:lsg_tl80_v0(t)
 	c[14] = lsg_vec(lsg_tl80_v1_0(t), lsg_tl80_v1_1(t), lsg_tl80_v1_2(t))
 	c[15] = lsg_vec(lsg_tl80_v2_0(t), lsg_tl80_v2_1(t), lsg_tl80_v2_2(t))
+	static Float:dbg[33]
+	if (done || get_gametime() - dbg[inst] >= 0.25)
+	{
+		dbg[inst] = get_gametime()
+		lsd_exit(80, fmt("%.2f of 4.00 s, %s; Lift: %.2f; Position: %.0f %.0f %.0f; Glow: %.0f %.0f %.0f", t, dir > 0 ? "forward" : "backward", lsg_tl80_v0(t), lsg_tl80_v1_0(t), lsg_tl80_v1_1(t), lsg_tl80_v1_2(t), lsg_tl80_v2_0(t), lsg_tl80_v2_1(t), lsg_tl80_v2_2(t)))
+	}
 	if (done)
 	{
 		lsg_tl80_stop(inst)

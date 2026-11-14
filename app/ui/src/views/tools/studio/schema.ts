@@ -55,6 +55,18 @@ export const variableSchema = z
     type: typeString,
     scope: z.enum(["mode", "player", "team"]),
     reset: z.enum(["never", "round"]).optional(),
+    /** a mode setting: hosts change its start value (Play page, server page, admin menu, MCP) */
+    setting: z
+      .object({
+        label: label(30),
+        help: label(120).default(""),
+        min: z.number().finite().min(-100000).max(100000).default(0),
+        max: z.number().finite().min(-100000).max(100000).default(100),
+        step: z.number().finite().min(0).max(100000).default(0),
+        choices: z.array(label(30)).max(12).optional(),
+        group: label(20).default(""),
+      })
+      .optional(),
     // (null: no start value, as an older app wrote it)
     default: z
       .union([z.number().finite().min(-100000).max(100000), z.boolean(), label(60), z.null()])

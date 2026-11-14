@@ -524,6 +524,12 @@ impl<'a> Gen<'a> {
     /// index for per-player and per-team ones.
     fn reset_line(&self, x: &Variable, at: &str) -> String {
         let i = self.var_index(&x.id);
+        // (a mode setting: back to the host's value)
+        if x.setting.is_some() && x.scope == "mode" {
+            if let Some(k) = self.v.g.variables.iter().filter(|y| y.setting.is_some() && y.scope == "mode" && matches!(y.ty.as_str(), "number" | "bool")).position(|y| y.id == x.id) {
+                return if x.ty == "bool" { format!("g_v{i} = floatround(lsg_sv({k})) != 0") } else { format!("g_v{i} = lsg_sv({k})") };
+            }
+        }
         let init = Self::var_lit(&x.ty, Some(&x.default).filter(|d| !d.is_null()));
         let r = match x.scope.as_str() {
             "player" => format!("g_pv{i}[{at}]"),
@@ -1087,7 +1093,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     let uses_buy = any(&["buy.where", "buy.allow"]);
     let uses_save = any(&["save.set", "save.add"]) || pure_used(&gen, "save.get");
     let uses_clock = any(&["clock.set", "clock.add", "clock.pause", "event.time_up"]) || pure_used(&gen, "clock.left");
-    let new_round = !timers.is_empty() || !round_vars.is_empty() || uses_clock || uses_down || uses_save;
+    // mode settings: variables hosts can change (cvars, kept per server)
+    let settings: Vec<&Variable> = g.variables.iter().filter(|x| x.setting.is_some() && x.scope == "mode" && matches!(x.ty.as_str(), "number" | "bool")).collect();
+    let new_round = !timers.is_empty() || !round_vars.is_empty() || uses_clock || uses_down || uses_save || !settings.is_empty();
     // what graph version 3 brought: the values that need the bigger helpers
     // Player Hurt's / Creature Hurt's Hit Position and Direction: only kept when something uses them
     let hit_used = |kind: &str| g.nodes.iter().filter(|n| n.kind == kind).any(|n| g.edges.iter().any(|e| e.from.node == n.id && (e.from.pin == "hit_pos" || e.from.pin == "hit_dir")));
@@ -1156,6 +1164,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
             o.line(format!("{decl} {note}"));
         }
         o.blank();
+    }
+    if !settings.is_empty() {
+        o.line(settings_block(&gen, &g.mode.id, &settings));
     }
 
     if has("event.player_about_hurt") || graph_uses(g, &["dmg.block", "dmg.scale", "dmg.set"]) {
@@ -1374,6 +1385,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if map_events {
         o.line("\tRegisterHam(Ham_Use, \"info_target\", \"lsg_ev_use\", 1)");
     }
+    if !settings.is_empty() {
+        o.line("\tlsg_settings_init()");
+    }
     if hit_players {
         o.line("\tRegisterHamPlayer(Ham_TraceAttack, \"lsg_hit_trace\", 0)");
     }
@@ -1453,8 +1467,15 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         }
         o.line(format!("{f}\n}}\n"));
     }
+    if !settings.is_empty() {
+        o.line("// the host's values for the mode settings, as the map starts\npublic plugin_cfg()\n{\n\tlsg_settings_load()\n\tlsg_settings_apply(true)\n}\n");
+    }
     if new_round {
         o.line("// a new round: timers stop, round variables start again\npublic lsg_new_round()\n{\n\tlsg_stop_timers()");
+        if !settings.is_empty() {
+            // (a host's change since: the app writes the file, an admin uses the menu)
+            o.line("\tlsg_settings_load()\n\tlsg_settings_apply(false)");
+        }
         if uses_clock {
             o.line("\tlsg_clock_off()");
         }
@@ -3232,6 +3253,28 @@ stock lsg_tl{i}_stop(inst)\n{{\n\tg_lsgTlOn{i}[inst] = false\n\tremove_task(LSG_
         uses_c = true;
         o.push_str(&format!("\t{}\n", call.replace("(ctx)", "(c)")));
     }
+    if gen.debug {
+        // the debugger: where it is, which way, and each track's value, at most 4 times a second
+        // (and at the end) so the log isn't flooded
+        let mut fmt = String::from("%.2f of {len_s} s, %s");
+        let mut args = format!("t, dir > 0 ? \"forward\" : \"backward\"");
+        for (k, tr) in tl.tracks.iter().enumerate().take(6) {
+            let name = safe_text(&tr.name, 24).replace('%', "%%");
+            match tr.kind.as_str() {
+                "float" => {
+                    fmt.push_str(&format!("; {name}: %.2f"));
+                    args.push_str(&format!(", lsg_tl{i}_v{k}(t)"));
+                }
+                "vector" | "color" => {
+                    fmt.push_str(&format!("; {name}: %.0f %.0f %.0f"));
+                    args.push_str(&format!(", lsg_tl{i}_v{k}_0(t), lsg_tl{i}_v{k}_1(t), lsg_tl{i}_v{k}_2(t)"));
+                }
+                _ => {}
+            }
+        }
+        let fmt = fmt.replace("{len_s}", &format!("{:.2}", tl.play_length()));
+        o.push_str(&format!("\tstatic Float:dbg[33]\n\tif (done || get_gametime() - dbg[inst] >= 0.25)\n\t{{\n\t\tdbg[inst] = get_gametime()\n\t\tlsd_exit({i}, fmt({}, {args}))\n\t}}\n", pawn_str(&fmt)));
+    }
     o.push_str(&format!("\tif (done)\n\t{{\n\t\tlsg_tl{i}_stop(inst)\n"));
     if let Some(call) = next("finished") {
         uses_c = true;
@@ -3446,6 +3489,226 @@ fn at_origin(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef) -> String {
 }
 
 /// Creatures with the mode's own health, tier and pay for their killer (Spawn Creature).
+/// Mode settings (Blueprint's Instance Editable): each a cvar `lsm_<mode>_<variable id>`, kept in
+/// the server's data/studio_settings/<mode>.cfg (read here, never exec'd: only these names and
+/// numbers in range are taken), applied as the map starts and at each new round when changed,
+/// and an admin menu (the Game Mode Menu's "options" for this mode).
+fn settings_block(gen: &Gen, mode: &str, settings: &[&Variable]) -> String {
+    let names: Vec<String> = settings.iter().map(|x| pawn_str(&super::graph::setting_cvar(mode, &x.id))).collect();
+    let mut lo = Vec::new();
+    let mut hi = Vec::new();
+    let mut step = Vec::new();
+    let mut defs = Vec::new();
+    let mut labels = Vec::new();
+    let mut apply = String::new();
+    let mut choices = String::new();
+    for (k, x) in settings.iter().enumerate() {
+        let st = x.setting.as_ref().unwrap();
+        let (a, b) = st.range(&x.ty);
+        lo.push(float_lit(a));
+        hi.push(float_lit(b));
+        let sp = if x.ty == "bool" || !st.choices.is_empty() { 1.0 } else if st.step > 0.0 { st.step } else { ((b - a) / 10.0).max(1.0).round() };
+        step.push(float_lit(sp));
+        let d = match &x.default { Value::Bool(t) => if *t { 1.0 } else { 0.0 }, Value::Number(n) => n.as_f64().unwrap_or(0.0), _ => 0.0 };
+        defs.push(format!("\"{}\"", if d.fract() == 0.0 { format!("{}", d as i64) } else { format!("{d}") }));
+        labels.push(pawn_str(&safe_text(&st.label, 30)));
+        let i = gen.var_index(&x.id);
+        let set = if x.ty == "bool" { format!("g_v{i} = floatround(v) != 0") } else { format!("g_v{i} = v") };
+        apply.push_str(&format!("\t\tcase {k}: {set}\n"));
+        if !st.choices.is_empty() {
+            let cs: Vec<String> = st.choices.iter().map(|c| pawn_str(&safe_text(c, 30))).collect();
+            choices.push_str(&format!("\t\tcase {k}:\n\t\t{{\n\t\t\tstatic const C[][] = {{ {} }}\n\t\t\tnew c = clamp(floatround(v), 0, sizeof C - 1)\n\t\t\tcopy(out, len, C[c])\n\t\t\treturn\n\t\t}}\n", cs.join(", ")));
+        }
+        if x.ty == "bool" {
+            choices.push_str(&format!("\t\tcase {k}:\n\t\t{{\n\t\t\tcopy(out, len, floatround(v) ? \"Yes\" : \"No\")\n\t\t\treturn\n\t\t}}\n"));
+        }
+    }
+    let n = settings.len();
+    let menu = pawn_str(&super::graph::settings_menu_cmd(mode));
+    let file = pawn_str(&format!("{}/studio_settings/{}.cfg", "%s", mode));
+    format!(
+        r#"// ---- mode settings (hosts change them: the app's mode settings, the admin menu) ----
+#define LSG_SN {n}
+stock const g_lsgSn[LSG_SN][] = {{ {names} }}
+stock const g_lsgSd[LSG_SN][] = {{ {defs} }}
+stock const g_lsgSlab[LSG_SN][] = {{ {labels} }}
+stock const Float:g_lsgSlo[LSG_SN] = {{ {lo} }}
+stock const Float:g_lsgShi[LSG_SN] = {{ {hi} }}
+stock const Float:g_lsgSst[LSG_SN] = {{ {step} }}
+stock g_lsgSc[LSG_SN], Float:g_lsgSl[LSG_SN], g_lsgSmenu[33]
+
+stock lsg_settings_init()
+{{
+	for (new k = 0; k < LSG_SN; k++)
+		g_lsgSc[k] = register_cvar(g_lsgSn[k], g_lsgSd[k])
+	register_clcmd({menu}, "lsg_settings_menu", ADMIN_CFG)
+}}
+
+stock Float:lsg_sv(k)
+	return floatclamp(get_pcvar_float(g_lsgSc[k]), g_lsgSlo[k], g_lsgShi[k])
+
+stock lsg_settings_path(path[], len)
+{{
+	new dir[160]
+	get_localinfo("amxx_datadir", dir, charsmax(dir))
+	formatex(path, len, {file}, dir)
+}}
+
+// the server's own values: only these names, numbers in range (never run as commands)
+stock lsg_settings_load()
+{{
+	new path[200], line[96], key[64], val[32]
+	lsg_settings_path(path, charsmax(path))
+	new f = fopen(path, "rt")
+	if (!f)
+		return
+	while (!feof(f))
+	{{
+		fgets(f, line, charsmax(line))
+		trim(line)
+		if (!line[0] || line[0] == '/' || line[0] == ';')
+			continue
+		parse(line, key, charsmax(key), val, charsmax(val))
+		for (new k = 0; k < LSG_SN; k++)
+		{{
+			if (equali(key, g_lsgSn[k]))
+			{{
+				set_pcvar_float(g_lsgSc[k], floatclamp(str_to_float(val), g_lsgSlo[k], g_lsgShi[k]))
+				break
+			}}
+		}}
+	}}
+	fclose(f)
+}}
+
+stock lsg_settings_save()
+{{
+	new path[200], dir[160]
+	get_localinfo("amxx_datadir", dir, charsmax(dir))
+	add(dir, charsmax(dir), "/studio_settings")
+	if (!dir_exists(dir))
+		mkdir(dir)
+	lsg_settings_path(path, charsmax(path))
+	new f = fopen(path, "wt")
+	if (!f)
+		return
+	fputs(f, "// this server's values for the mode's settings (the app and the admin menu write it)^n")
+	for (new k = 0; k < LSG_SN; k++)
+		fprintf(f, "%s ^"%.3f^"^n", g_lsgSn[k], lsg_sv(k))
+	fclose(f)
+}}
+
+// the variables take the values (all, or the ones changed since)
+stock lsg_settings_apply(bool:all)
+{{
+	for (new k = 0; k < LSG_SN; k++)
+	{{
+		new Float:v = lsg_sv(k)
+		if (!all && v == g_lsgSl[k])
+			continue
+		g_lsgSl[k] = v
+		switch (k)
+		{{
+{apply}		}}
+	}}
+}}
+
+stock lsg_settings_text(k, Float:v, out[], len)
+{{
+	switch (k)
+	{{
+{choices}	}}
+	if (v == float(floatround(v)))
+		formatex(out, len, "%d", floatround(v))
+	else
+		formatex(out, len, "%.2f", v)
+}}
+
+public lsg_settings_menu(id, level, cid)
+{{
+	if (!(get_user_flags(id) & level))
+		return PLUGIN_HANDLED
+	new m = menu_create("\yMode settings^n\dSaved for this server", "lsg_settings_menu_h"), t[96], v[40], info[4]
+	for (new k = 0; k < LSG_SN; k++)
+	{{
+		lsg_settings_text(k, lsg_sv(k), v, charsmax(v))
+		formatex(t, charsmax(t), "%s: \y%s", g_lsgSlab[k], v)
+		num_to_str(k, info, charsmax(info))
+		menu_additem(m, t, info)
+	}}
+	menu_display(id, m)
+	return PLUGIN_HANDLED
+}}
+
+public lsg_settings_menu_h(id, menu, item)
+{{
+	if (item < 0)
+	{{
+		menu_destroy(menu)
+		return PLUGIN_HANDLED
+	}}
+	new info[4], acc, cb
+	menu_item_getinfo(menu, item, acc, info, charsmax(info), _, _, cb)
+	menu_destroy(menu)
+	g_lsgSmenu[id] = str_to_num(info)
+	lsg_settings_one(id)
+	return PLUGIN_HANDLED
+}}
+
+stock lsg_settings_one(id)
+{{
+	new k = g_lsgSmenu[id], v[40], t[96]
+	lsg_settings_text(k, lsg_sv(k), v, charsmax(v))
+	formatex(t, charsmax(t), "\y%s: %s", g_lsgSlab[k], v)
+	new m = menu_create(t, "lsg_settings_one_h")
+	menu_additem(m, "Less", "-")
+	menu_additem(m, "More", "+")
+	menu_additem(m, "Smallest", "lo")
+	menu_additem(m, "Largest", "hi")
+	menu_additem(m, "Start value", "d")
+	menu_display(id, m)
+}}
+
+public lsg_settings_one_h(id, menu, item)
+{{
+	if (item < 0)
+	{{
+		menu_destroy(menu)
+		lsg_settings_menu(id, ADMIN_CFG, 0)
+		return PLUGIN_HANDLED
+	}}
+	new info[4], acc, cb, k = g_lsgSmenu[id]
+	menu_item_getinfo(menu, item, acc, info, charsmax(info), _, _, cb)
+	menu_destroy(menu)
+	if (!(get_user_flags(id) & ADMIN_CFG) || k < 0 || k >= LSG_SN)
+		return PLUGIN_HANDLED
+	new Float:v = lsg_sv(k)
+	if (equal(info, "-"))
+		v -= g_lsgSst[k]
+	else if (equal(info, "+"))
+		v += g_lsgSst[k]
+	else if (equal(info, "lo"))
+		v = g_lsgSlo[k]
+	else if (equal(info, "hi"))
+		v = g_lsgShi[k]
+	else
+		v = str_to_float(g_lsgSd[k])
+	set_pcvar_float(g_lsgSc[k], floatclamp(v, g_lsgSlo[k], g_lsgShi[k]))
+	lsg_settings_save()
+	lsg_settings_apply(false)
+	lsg_settings_one(id)
+	return PLUGIN_HANDLED
+}}
+"#,
+        names = names.join(", "),
+        defs = defs.join(", "),
+        labels = labels.join(", "),
+        lo = lo.join(", "),
+        hi = hi.join(", "),
+        step = step.join(", "),
+    )
+}
+
 /// Where a hit struck and which way it was going (Player Hurt's and Creature Hurt's Hit Position
 /// and Direction): kept from the trace of the bullet or knife, the same frame; else the middle of
 /// the one hit, and the way from whoever did it.
@@ -4684,6 +4947,13 @@ stock lsg_freeze(id, on)
 	set_pev(id, pev_flags, on ? (flags | FL_FROZEN) : (flags & ~FL_FROZEN))
 }
 
+// a follow with a personality influence (0-100: 50 as usual; W2's ls_mode_ver 2)
+stock lsg_bot_follow(bot, who, secs, influence)
+{
+	if (ls_is_bot(bot) && is_user_connected(who))
+		server_cmd("ls_bot %d follow %d %d %d", bot, who, secs, influence)
+}
+
 stock lsg_bot_goto(bot, const name[], secs)
 {
 	new Float:o[3]
@@ -4706,13 +4976,6 @@ stock lsg_drop(id)
 	{
 		engclient_cmd(id, "drop")
 		return
-// a follow with a personality influence (0-100: 50 as usual; W2's ls_mode_ver 2)
-stock lsg_bot_follow(bot, who, secs, influence)
-{
-	if (ls_is_bot(bot) && is_user_connected(who))
-		server_cmd("ls_bot %d follow %d %d %d", bot, who, secs, influence)
-}
-
 	}
 	new wid = get_user_weapon(id)
 	if (!wid || wid == CSW_KNIFE)

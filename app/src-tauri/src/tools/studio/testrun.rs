@@ -245,22 +245,10 @@ fn prepare(st: &Shared) -> Result<(Hidden, std::sync::Arc<crate::game::Game>), S
             if crate::setup::current().state == "running" {
                 return Err("Setup is busy right now (installing, or teaching bots a map). Try again when it's done.".into());
             }
-            step("Setting up a hidden temporary server from your game's files");
-            let res = crate::setup_api::resources_for(st).map_err(|_| "Loner-Strike's own files couldn't be found, so a hidden server can't be set up. Reinstall the app.".to_string())?;
-            let job = crate::servers::start_hidden_server(client.clone(), dir.clone(), gf.clone(), res)?;
-            loop {
-                std::thread::sleep(Duration::from_millis(500));
-                let v = crate::setup::current();
-                if v.id != job {
-                    return Err("The hidden server's setup was replaced by another setup job. Try again.".into());
-                }
-                match v.state.as_str() {
-                    "running" => continue,
-                    "done" => break,
-                    _ => return Err(format!("The hidden server couldn't be set up: {}", v.error.unwrap_or_else(|| "setup stopped.".into()))),
-                }
-            }
-            let _ = std::fs::write(&mark, &id);
+            // (a temporary server made from the game's own files needs servers::start_hidden_server,
+            // which isn't in yet: until then a test run copies one of the player's servers)
+            let _ = (&client, &gf, st);
+            return Err("A test run copies one of your servers on this computer, and you have none yet. Make one on the Servers page (it can stay stopped), then try again.".into());
         }
         None => {}
     }

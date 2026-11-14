@@ -84,6 +84,17 @@ test("reroutes carry the type that comes in", () => {
   assert.equal(g.edges.filter((e) => e.to.node === "give_ak" && e.to.pin === "player").length, 1);
 });
 
+test("a mode setting on a variable is kept with the graph (label, range, choices, group)", () => {
+  const g = emptyGraph("koth", "King");
+  const withSetting = { ...g, variables: [{ id: "hold", name: "Hold", type: "number", scope: "mode", default: 30, setting: { label: "Seconds to win", min: 5, max: 120, group: "Rules" } }] };
+  const r = parseGraph(withSetting);
+  if ("error" in r) assert.fail(r.error);
+  assert.equal(r.graph.variables[0].setting?.label, "Seconds to win");
+  assert.equal(r.graph.variables[0].setting?.max, 120);
+  const bad = parseGraph({ ...withSetting, variables: [{ ...withSetting.variables[0], setting: { label: "x", choices: Array(13).fill("a") } }] });
+  assert.ok("error" in bad, "13 choices");
+});
+
 test("mode settings may have digits after the first letter (mp_give_player_c4), not first", () => {
   const g = emptyGraph("koth", "King");
   const ok = parseGraph({ ...g, mode: { ...g.mode, settings: [{ cvar: "mp_give_player_c4", value: 0 }] } });

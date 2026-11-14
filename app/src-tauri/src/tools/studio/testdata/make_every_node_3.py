@@ -67,5 +67,10 @@ for i, d in enumerate(todo):
 
 g = {"schema": "loner-strike/graph", "version": 3, "mode": {"id": "every_node_3", "name": "Every Node 3", "description": "Game, world, players, effects, interop"},
      "variables": [], "nodes": nodes, "edges": edges, "comments": [], "customEvents": CUSTOM, "timelines": TIMELINES}
+# mode settings (hosts change them): a number, a yes/no, a choice; one resets each round
+g["variables"] = [
+    {"id": "hold", "name": "Hold time", "type": "number", "scope": "mode", "default": 30, "setting": {"label": "Seconds to win", "help": "How long a team holds the hill", "min": 5, "max": 120, "group": "Rules"}},
+    {"id": "ff", "name": "Friendly", "type": "bool", "scope": "mode", "default": False, "reset": "round", "setting": {"label": "Friendly fire"}},
+    {"id": "size", "name": "Size", "type": "number", "scope": "mode", "default": 1, "setting": {"label": "Hill", "choices": ["Small", "Medium", "Large"]}}]
 json.dump(g, open("every_node_3.graph.json", "w"), indent=1)
 print(len(todo), "new kinds;", len(nodes), "nodes", len(edges), "wires")

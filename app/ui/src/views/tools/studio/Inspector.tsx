@@ -243,6 +243,7 @@ function VariableDetails({ id }: { id: string }) {
           <ValueField type={v.type} value={v.default} graph={graph} onChange={(d) => edit((g) => updateVariable(g, v.id, { default: d }))} />
         </label>
       </div>
+      {!owner && v.scope === "mode" && (v.type === "number" || v.type === "bool") && <SettingFields v={v} />}
       <p className="st-side-help">
         Used by {used} node{used === 1 ? "" : "s"}. Drag it from the left onto the canvas for Get or Set.
       </p>
@@ -803,5 +804,68 @@ function CustomEventDetails({ id }: { id: string }) {
         Remove this Custom Event
       </button>
     </aside>
+  );
+}
+
+/** "Setting (hosts can change it)": a whole-mode number or yes/no a host sets on the Play page,
+ *  the server page, the admin menu or through MCP, without editing the graph. */
+function SettingFields({ v }: { v: GVariable }) {
+  const edit = useStudio((s) => s.edit);
+  const graph = useStudio((s) => s.graph)!;
+  const st = v.setting;
+  const set = (patch: Partial<NonNullable<GVariable["setting"]>> | null) =>
+    edit((g) => updateVariable(g, v.id, { setting: patch === null ? undefined : { label: v.name, help: "", min: 0, max: 100, step: 0, group: "", ...st, ...patch } }));
+  const num = (label: string, key: "min" | "max" | "step", help?: string) => (
+    <label className="st-side-field" title={help}>
+      <span>{label}</span>
+      <input className="st-field" type="number" value={st?.[key] ?? 0} onChange={(e) => set({ [key]: Number(e.target.value) || 0 })} aria-label={`Setting ${label}`} />
+    </label>
+  );
+  return (
+    <div className="st-side-fields">
+      <label className="st-check-auto" title="Hosts set its start value on the Play page, the server page and the in-game admin menu, without editing or compiling the mode">
+        <input type="checkbox" checked={!!st} onChange={(e) => set(e.target.checked ? {} : null)} /> Setting (hosts can change it)
+      </label>
+      {st && (
+        <>
+          <label className="st-side-field">
+            <span>Label</span>
+            <TextField value={st.label} max={30} allowed={LABEL_CHARS} onChange={(label) => set({ label })} />
+          </label>
+          <label className="st-side-field">
+            <span>Help</span>
+            <TextField value={st.help ?? ""} max={120} allowed={LABEL_CHARS} onChange={(help) => set({ help })} />
+          </label>
+          <label className="st-side-field">
+            <span>Group</span>
+            <TextField value={st.group ?? ""} max={20} allowed={LABEL_CHARS} onChange={(group) => set({ group })} />
+          </label>
+          {v.type === "number" && !st.choices?.length && (
+            <>
+              {num("Smallest", "min")}
+              {num("Largest", "max")}
+              {num("Step", "step", "How much the admin menu's Less/More changes it (0: a tenth of the range)")}
+            </>
+          )}
+          {v.type === "number" && (
+            <label className="st-side-field" title="Named choices instead of a number: the value is the choice's place (0, 1, 2...)">
+              <span>Choices</span>
+              <TextField
+                value={(st.choices ?? []).join(", ")}
+                max={300}
+                allowed={LABEL_CHARS}
+                onChange={(t) => {
+                  const choices = t.split(",").map((c) => c.trim()).filter(Boolean).slice(0, 12);
+                  set({ choices: choices.length ? choices : undefined });
+                }}
+              />
+            </label>
+          )}
+          <p className="st-side-help">
+            Its name on servers: <code>{`lsm_${graph.mode.id}_${v.id}`.toLowerCase()}</code>. Each server keeps its own value; the mode reads it as a map starts and at each new round.
+          </p>
+        </>
+      )}
+    </div>
   );
 }

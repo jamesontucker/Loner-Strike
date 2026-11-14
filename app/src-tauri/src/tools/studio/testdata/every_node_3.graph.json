@@ -6,7 +6,48 @@
   "name": "Every Node 3",
   "description": "Game, world, players, effects, interop"
  },
- "variables": [],
+ "variables": [
+  {
+   "id": "hold",
+   "name": "Hold time",
+   "type": "number",
+   "scope": "mode",
+   "default": 30,
+   "setting": {
+    "label": "Seconds to win",
+    "help": "How long a team holds the hill",
+    "min": 5,
+    "max": 120,
+    "group": "Rules"
+   }
+  },
+  {
+   "id": "ff",
+   "name": "Friendly",
+   "type": "bool",
+   "scope": "mode",
+   "default": false,
+   "reset": "round",
+   "setting": {
+    "label": "Friendly fire"
+   }
+  },
+  {
+   "id": "size",
+   "name": "Size",
+   "type": "number",
+   "scope": "mode",
+   "default": 1,
+   "setting": {
+    "label": "Hill",
+    "choices": [
+     "Small",
+     "Medium",
+     "Large"
+    ]
+   }
+  }
+ ],
  "nodes": [
   {
    "id": "ps",

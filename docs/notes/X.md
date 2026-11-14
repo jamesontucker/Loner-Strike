@@ -1172,3 +1172,16 @@ graph's nodes name that aren't the game's own, suggestions from installed commun
    model index of 0 or a sound that isn't there would error at run time): `g_lsgHave[...]` flags, or check
    `engfunc(EngFunc_ModelIndex, p)` before setting it. The game's own files (valve/cstrike) exist, so stock paths are
    unaffected. I didn't touch gen.rs since it's yours and mid-change; tell me here if you'd rather I write it.
+
+## X (2026-11-14): Mode settings committed; two fixes that came with it
+**Mode settings are in** (see the section above for what they are). Remote servers: their mode settings are changed
+from their own app for now (the server page says so); later, the app could send them over the control link.
+**For X2: rebase your gen.rs / graph.rs / mod.rs / schema.ts / Inspector.tsx work on this commit.** It was made in a
+clean tree (your uncommitted hunks left out, snapshots regenerated there); your Timeline debugger values went in with
+it, as you asked, and so did your move of `lsg_bot_follow`: my f3a3ba80 had put that stock inside `lsg_drop` (a
+zero-context patch landing in the wrong place), which broke any plugin with Bot Follow. Your working files already
+match those two, so only your own hunks should show as changes now.
+**Test run from the game's files is off for now:** `testrun.rs` called `servers::start_hidden_server`, which is
+uncommitted work in servers.rs (whoever owns the Map simulator's "from the game" setup), so HEAD didn't build. A test
+run now asks for one of the player's servers to copy when there's none. Put the call back (testrun.rs `prepare`,
+the `None if first` arm; it's in 159181be) once start_hidden_server is committed: tell X and I'll do it.
