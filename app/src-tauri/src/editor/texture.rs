@@ -2,7 +2,7 @@
 //! and "texture lock" (keep the texture stuck to the brush when it moves).
 
 use super::doc::{nonzero, TexAlign};
-use super::math::{Affine, Mat3, Plane, Vec3};
+use super::math::{v3, Affine, Mat3, Plane, Vec3};
 
 /// Hammer's default scale.
 pub const DEFAULT_SCALE: f64 = 1.0;
@@ -38,6 +38,51 @@ pub fn face_axes(normal: Vec3) -> (Vec3, Vec3) {
 pub fn align_to_face(a: &TexAlign, normal: Vec3) -> TexAlign {
     let (u, v) = face_axes(normal);
     TexAlign { u_axis: u, v_axis: v, u_offset: 0.0, v_offset: 0.0, rotation: 0.0, ..a.clone() }
+}
+
+/// Lay the texture square to the camera ("align to view", J.A.C.K./Hammer 4): across follows the
+/// view's right, down follows the view's down, both laid onto the face; scale and shift kept.
+/// A face seen edge-on (no sensible projection) falls back to lying flat on the face.
+pub fn align_to_view(a: &TexAlign, normal: Vec3, right: Vec3, up: Vec3) -> TexAlign {
+    let n = normal.normalized();
+    let onto = |x: Vec3| x - n * x.dot(n);
+    let (u, v) = (onto(right), onto(up * -1.0));
+    if u.len() < 0.05 || v.len() < 0.05 {
+        return TexAlign { rotation: 0.0, ..align_to_face(a, normal) };
+    }
+    let u = u.normalized();
+    // square to across, on the face, pointing down the screen
+    let mut v = n.cross(u).normalized();
+    if v.dot(onto(up * -1.0)) < 0.0 {
+        v = v * -1.0;
+    }
+    TexAlign { u_axis: u, v_axis: v, rotation: 0.0, ..a.clone() }
+}
+
+/// Hammer's Alt+right-click: `src` (a face with normal `from`) carried onto a face with normal
+/// `to`, folded round the edge between them, so the texture runs on across it without a jump at
+/// `anchor` (a point both faces share, or the nearest). Same plane: the same alignment.
+pub fn wrapped(src: &TexAlign, from: Vec3, to: Vec3, anchor: Vec3) -> TexAlign {
+    let (n1, n2) = (from.normalized(), to.normalized());
+    let c = n1.cross(n2);
+    let (u, v) = if c.len() < 1e-9 {
+        (src.u_axis, src.v_axis)
+    } else {
+        let deg = c.len().atan2(n1.dot(n2)).to_degrees();
+        let m = Mat3::rotation(c.normalized(), deg);
+        (m.mul_vec(src.u_axis), m.mul_vec(src.v_axis))
+    };
+    let (u0, v0) = src.uv(anchor);
+    let mut out = TexAlign { u_axis: snap_axis(u), v_axis: snap_axis(v), ..src.clone() };
+    out.u_offset = u0 - anchor.dot(out.u_axis) / nonzero(out.scale_u);
+    out.v_offset = v0 - anchor.dot(out.v_axis) / nonzero(out.scale_v);
+    out
+}
+
+/// An axis a rounding error away from a clean one (0, ±1) made clean.
+fn snap_axis(a: Vec3) -> Vec3 {
+    let t = |x: f64| if (x - x.round()).abs() < 1e-9 { x.round() + 0.0 } else { x };
+    v3(t(a.x), t(a.y), t(a.z))
 }
 
 /// Point the axes at the world ("align to world"), keeping scale.
@@ -328,6 +373,31 @@ mod tests {
             let b = locked(&a, &t);
             assert!(close(b.uv(t.apply(p)), a.uv(p)), "{t:?}");
         }
+    }
+
+    #[test]
+    fn wrap_runs_on_round_a_corner_and_view_squares_up() {
+        // a floor (up) and a wall (+X) meeting at x = 64: the floor's texture carried onto the wall
+        let floor = TexAlign { u_offset: 5.0, v_offset: 9.0, scale_u: 0.5, scale_v: 0.5, ..world_aligned(Vec3::Z) };
+        let edge = v3(64.0, 32.0, 0.0);
+        let wall = wrapped(&floor, Vec3::Z, Vec3::X, edge);
+        // same texture spot on the shared edge, and the axes lie on the wall
+        assert!(close(wall.uv(edge), floor.uv(edge)));
+        assert!(close(wall.uv(v3(64.0, 96.0, 0.0)), floor.uv(v3(64.0, 96.0, 0.0))));
+        assert!(wall.u_axis.dot(Vec3::X).abs() < 1e-9 && wall.v_axis.dot(Vec3::X).abs() < 1e-9);
+        // moving up the wall is like moving away from it across the floor (folded, not smeared)
+        let up = wall.uv(v3(64.0, 32.0, 16.0));
+        let back = floor.uv(v3(48.0, 32.0, 0.0));
+        assert!(close(up, back), "{up:?} {back:?}");
+        // same plane: unchanged
+        assert_eq!(wrapped(&floor, Vec3::Z, Vec3::Z, edge), floor);
+        // looking straight down at a floor with north up the screen: across is east, down is south
+        let view = align_to_view(&floor, Vec3::Z, Vec3::X, Vec3::Y);
+        assert!(view.u_axis.approx_eq(Vec3::X, 1e-9) && view.v_axis.approx_eq(v3(0.0, -1.0, 0.0), 1e-9));
+        assert_eq!((view.scale_u, view.u_offset), (0.5, 5.0));
+        // edge-on: lies flat on the face instead
+        let edge_on = align_to_view(&floor, Vec3::Z, Vec3::X, Vec3::Z * -1.0);
+        assert!(edge_on.u_axis.dot(Vec3::Z).abs() < 1e-9);
     }
 
     #[test]

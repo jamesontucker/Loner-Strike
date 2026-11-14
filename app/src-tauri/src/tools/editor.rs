@@ -547,7 +547,12 @@ enum Cmd {
         mode: Option<String>,
         /// treat the faces as one surface (justify, fit, centre, scale and turn round their middle)
         #[serde(default)] one: bool,
+        /// P5 "view": the camera's right and up (GoldSrc)
+        right: Option<P3>,
+        up: Option<P3>,
     },
+    /// P5: Hammer's Alt+right-click: the texture and the alignment of `from` onto `faces`
+    WrapTexture { from: (u64, usize), faces: Vec<(u64, usize)>, texture: Option<String> },
     SetKey { entity: u64, key: String, value: String },
     AddEntity { classname: String, origin: P3, #[serde(default)] keys: Vec<(String, String)> },
     Tie { brushes: Vec<u64>, classname: String },
@@ -947,7 +952,7 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             let f: Vec<(BrushId, Option<usize>)> = faces.iter().map(|(b, f)| (BrushId(*b), *f)).collect();
             history::cmd_set_texture(d, h, &f, &texture_name(&texture)?)?;
         }
-        Cmd::Align { faces, action, u, v, degrees, drag, ou, ov, su, sv, rot, mode, one } => {
+        Cmd::Align { faces, action, u, v, degrees, drag, ou, ov, su, sv, rot, mode, one, right, up } => {
             if faces.is_empty() {
                 return Err("Pick a face first.".into());
             }
@@ -998,8 +1003,26 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
                 "set" => history::cmd_align(d, h, &f, drag, |a, _, _, n| texture::set_values(a, n, ou, ov, su, sv, rot))?,
                 "world" => history::cmd_align(d, h, &f, drag, |a, _, _, n| texture::align_to_world(a, n))?,
                 "face" => history::cmd_align(d, h, &f, drag, |a, _, _, n| texture::align_to_face(a, n))?,
+                "view" => {
+                    let (r, u) = (p3(right.ok_or(NOT_UNDERSTOOD)?)?, p3(up.ok_or(NOT_UNDERSTOOD)?)?);
+                    if r.len() < 1e-6 || u.len() < 1e-6 {
+                        return Err(NOT_UNDERSTOOD.into());
+                    }
+                    history::cmd_align(d, h, &f, drag, |a, _, _, n| texture::align_to_view(a, n, r, u))?
+                }
                 _ => return Err(NOT_UNDERSTOOD.into()),
             }
+        }
+        Cmd::WrapTexture { from, faces, texture } => {
+            if faces.is_empty() {
+                return Err("Pick a face first.".into());
+            }
+            if faces.len() > 20_000 {
+                return Err("That's too many faces at once.".into());
+            }
+            let tex = texture.as_deref().map(texture_name).transpose()?;
+            let f: Vec<(BrushId, usize)> = faces.iter().map(|(b, i)| (BrushId(*b), *i)).collect();
+            history::cmd_wrap(d, h, (BrushId(from.0), from.1), &f, tex.as_deref())?;
         }
         Cmd::SetKey { entity, key, value } => {
             if key.len() > 64 || value.len() > 2048 {

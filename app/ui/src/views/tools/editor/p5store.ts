@@ -33,6 +33,8 @@ type P5State = {
   playtestDone: number;
   /** a texture being dragged over this face (null face: the whole brush), outlined in the views */
   dropFace: { brush: number; face: number | null } | null;
+  /** the face sheet's eyedropper: the next face clicked gives its texture */
+  eyedrop: boolean;
   set: (p: Partial<Omit<P5State, "set">>) => void;
 };
 
@@ -66,6 +68,7 @@ export const useP5 = create<P5State>((set) => ({
   playtestAsked: 0,
   playtestDone: 0,
   dropFace: null,
+  eyedrop: false,
   set: (p) => {
     if (p.gridMajor != null) keep("ls.editor.gridMajor", p.gridMajor ? "1" : "0");
     if (p.showModels != null) keep("ls.editor.showModels", p.showModels ? "1" : "0");

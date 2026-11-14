@@ -5,7 +5,7 @@
 
 import { AssetPreview } from "./AssetPreview";
 import { BrushFacts, TransformSection } from "./InspectParts"; // P5
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Info } from "../../../ui";
 import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
@@ -291,6 +291,13 @@ export function EntityForm({ e }: { e: DocEntity }) {
   const [nk, setNk] = useState("");
   const [nv, setNv] = useState("");
   const [showRaw, setShowRaw] = useState(false);
+  // P5: the wave spawner's types as last set here, until the map catches up (two quick clicks
+  // each read the old key and the second undid the first)
+  const typesSent = useRef<{ id: number; value: string } | null>(null);
+  const typesNow = typesSent.current?.id === e.id ? typesSent.current.value : keyOf(e.keys, "types") ?? "";
+  useEffect(() => {
+    if (typesSent.current && (typesSent.current.id !== e.id || keyOf(e.keys, "types") === typesSent.current.value)) typesSent.current = null;
+  }, [e]);
   const all = useMemo(() => names(doc?.entities ?? []), [doc]);
   const s = useEditor.getState();
   // P5: an ls_marker's form comes from its mode's kit; ls_creature's Type lists every creature type
@@ -352,10 +359,21 @@ export function EntityForm({ e }: { e: DocEntity }) {
           <div className="editor-key-value">
             <span className="seg p5-chips" role="group" aria-label="Creature types">
               {creatures.map((c) => {
-                const list = (keyOf(e.keys, "types") ?? "").split(/[\s,]+/).filter(Boolean);
+                const list = typesNow.split(/[\s,]+/).filter(Boolean);
                 const on = list.includes(c.name);
                 return (
-                  <button key={c.name} type="button" aria-pressed={on} title={c.model} onClick={() => setKey(e, "types", (on ? list.filter((x) => x !== c.name) : [...list, c.name]).join(" "))}>
+                  <button
+                    key={c.name}
+                    type="button"
+                    aria-pressed={on}
+                    title={c.model}
+                    onClick={() => {
+                      const now = (typesSent.current?.id === e.id ? typesSent.current.value : keyOf(e.keys, "types") ?? "").split(/[\s,]+/).filter(Boolean);
+                      const value = (now.includes(c.name) ? now.filter((x) => x !== c.name) : [...now, c.name]).join(" ");
+                      typesSent.current = { id: e.id, value };
+                      setKey(e, "types", value);
+                    }}
+                  >
                     {c.display}
                   </button>
                 );

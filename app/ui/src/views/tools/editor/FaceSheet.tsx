@@ -3,6 +3,9 @@
 // the picked face can be dragged to slide its texture, with handles to turn and stretch it.
 
 import { FaceFacts } from "./InspectParts"; // P5
+import { viewBasis } from "./AxisTriad"; // P5
+import { useP5 } from "./p5store"; // P5
+import { usePanes } from "./panes"; // P5
 import { useEffect, useState } from "react";
 import { Info } from "../../../ui";
 import { alignOf, texUrl } from "./editorApi";
@@ -71,6 +74,7 @@ export function FaceSheet() {
   const one = useEditor((s) => s.treatAsOne);
   const lock = useEditor((s) => s.textureLock);
   const [fit, setFit] = useState<[number, number]>([1, 1]);
+  const eyedrop = useP5((p) => p.eyedrop);
   const s = useEditor.getState();
   const refs = facesOf(sel);
   const faces = refs.map((r) => brushes.get(r.brush)?.faces.find((x) => x.face === r.face)).filter((f) => !!f);
@@ -103,6 +107,18 @@ export function FaceSheet() {
                 Use this one
               </button>
             )}
+            <button
+              type="button"
+              className="btn small"
+              aria-pressed={eyedrop}
+              title="Pick up a texture: click any face in a view to make its texture the current one (Alt+click does it any time)"
+              onClick={() => {
+                useP5.getState().set({ eyedrop: !eyedrop });
+                if (!eyedrop && s.tool !== "texture") s.set({ tool: "texture" });
+              }}
+            >
+              {eyedrop ? "Click a face…" : "Pick up"}
+            </button>
           </div>
         </div>
       </div>
@@ -163,8 +179,8 @@ export function FaceSheet() {
         <input type="number" min={0.1} step={1} value={fit[0]} onChange={(e) => setFit([Number(e.target.value), fit[1]])} aria-label="Repeats across" title="Repeats across" />
         <span className="muted">×</span>
         <input type="number" min={0.1} step={1} value={fit[1]} onChange={(e) => setFit([fit[0], Number(e.target.value)])} aria-label="Repeats down" title="Repeats down" />
-        <button type="button" className="btn small" onClick={() => align("fit", { u: fit[0], v: fit[1] })}>
-          Fit
+        <button type="button" className="btn small" title="Fit the texture this many times across and down" onClick={() => align("fit", { u: fit[0], v: fit[1] })}>
+          Fit repeats
         </button>
       </div>
       <h4>Align</h4>
@@ -175,7 +191,23 @@ export function FaceSheet() {
         <button type="button" className="btn small" title="Lie flat along this face (good for slopes)" onClick={() => align("face")}>
           To the face
         </button>
+        <button
+          type="button"
+          className="btn small"
+          title="Square to the view you're looking through: across runs to the right of the screen, down runs down it"
+          onClick={() => {
+            const b = viewBasis(usePanes.getState().active ?? 0);
+            if (!b) return s.notify("Look at the face in a view first.", true);
+            align("view", { right: b.right, up: b.up });
+          }}
+        >
+          To the view
+        </button>
       </div>
+      <p className="small-note muted p5-face-mouse">
+        In the 3D view with the Texture tool: <b>right-click</b> a face to paint it with “{texture}”; <b>Alt+right-click</b> to paint it and carry
+        this face's alignment onto it (the texture runs on round the corner, like Hammer); <b>Alt+click</b> picks up a face's texture.
+      </p>
       <label className="editor-check" title="Textures stay put on the surface when you move, turn or stretch a brush">
         <input type="checkbox" checked={lock} onChange={(e) => s.set({ textureLock: e.target.checked })} /> Texture lock when moving brushes
       </label>

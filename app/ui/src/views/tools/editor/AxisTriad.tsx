@@ -35,6 +35,16 @@ export function TriadFeed() {
   return null;
 }
 
+/** A pane's camera right and up, in GoldSrc axes (Align to view), once it has been drawn. */
+export function viewBasis(slot: number): { right: [number, number, number]; up: [number, number, number] } | null {
+  const q = seen.get(slot) ?? seen.values().next().value;
+  if (!q) return null;
+  const r = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+  const u = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+  // three's (x, y, z) is GoldSrc's (x, -z, y)
+  return { right: [r.x, -r.z, r.y], up: [u.x, -u.z, u.y] };
+}
+
 const R = 22;
 const v = new THREE.Vector3();
 const inv = new THREE.Quaternion();

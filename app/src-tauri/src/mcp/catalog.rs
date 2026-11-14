@@ -63,7 +63,7 @@ const DEFAULT_TEXTURE: &str = "OUT_WALL5";
 
 const EDITOR_OPS: &[&str] = &[
     "add_box", "add_cylinder", "add_shape", "delete", "duplicate", "transform", "move_face", "clip", "hollow", "carve", "merge", "snap",
-    "set_texture", "align", "set_key", "add_entity", "tie", "to_world", "set_world", "group", "ungroup", "group_flags",
+    "set_texture", "align", "wrap_texture", "set_key", "add_entity", "tie", "to_world", "set_world", "group", "ungroup", "group_flags",
 ];
 
 pub fn specs() -> Vec<Spec> {

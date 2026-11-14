@@ -573,6 +573,35 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
   };
 
   const onDown = (e: ThreeEvent<PointerEvent>) => {
+    // P5: Hammer's face painting with the Texture tool: right-click paints the face with the
+    // current texture, Alt+right-click also carries the picked face's alignment onto it. Only a
+    // click (no drag), so right-drag still looks around.
+    if (e.button === 2 && tool === "texture") {
+      const hit = hitOf(e);
+      if (!hit || hit.kind !== "brush" || hit.face == null) return;
+      e.stopPropagation(); // (once, not for every object under the pointer)
+      const ev = e.nativeEvent;
+      // (the Unreal key set locks the pointer on a right press, so clientX stands still: the
+      // movement is summed instead, and a click is short)
+      const start = { t: performance.now(), alt: ev.altKey, moved: 0 };
+      const target: [number, number] = [hit.id, hit.face];
+      const move = (m: PointerEvent) => (start.moved += Math.abs(m.movementX) + Math.abs(m.movementY));
+      const up = (u: PointerEvent) => {
+        window.removeEventListener("pointerup", up, true);
+        window.removeEventListener("pointermove", move, true);
+        if (u.button !== 2 || start.moved > 4 || performance.now() - start.t > 450) return;
+        const s = useEditor.getState();
+        const src = s.sel.face;
+        if ((start.alt || u.altKey) && src && !(src.brush === target[0] && src.face === target[1])) {
+          void s.cmd({ op: "wrap_texture", from: [src.brush, src.face], faces: [target], texture: s.texture });
+        } else {
+          void s.cmd({ op: "set_texture", faces: [target], texture: s.texture });
+        }
+      };
+      window.addEventListener("pointermove", move, true);
+      window.addEventListener("pointerup", up, true);
+      return;
+    }
     if (e.button !== 0 || (useTools.getState().camera === "fly" && view === "3d")) return;
     e.stopPropagation();
     const hit = hitOf(e);
@@ -808,8 +837,9 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
       }
       const b = s.brushes.get(hit.id);
       const ref: FaceRef = { brush: hit.id, face: hit.face };
-      if (ev.altKey) {
-        // the eyedropper: take this face's texture
+      if (ev.altKey || useP5.getState().eyedrop) {
+        // the eyedropper: take this face's texture (Alt+click, or the face sheet's Pick up)
+        useP5.getState().set({ eyedrop: false });
         const t = b?.faces.find((f) => f.face === hit.face)?.texture;
         if (t) s.set({ texture: t });
         s.select({ brushes: [], entities: [], face: ref, faces: [ref] });

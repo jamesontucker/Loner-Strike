@@ -538,6 +538,39 @@ pub fn cmd_set_texture(doc: &mut MapDocument, h: &mut History, faces: &[(BrushId
     Ok(())
 }
 
+/// Hammer's Alt+right-click: put `from`'s texture (or `texture`) on the faces and carry its
+/// alignment onto each, folded round the edge between them so the texture runs on across it.
+pub fn cmd_wrap(doc: &mut MapDocument, h: &mut History, from: (BrushId, usize), faces: &[(BrushId, usize)], texture: Option<&str>) -> OpResult<()> {
+    let src_brush = get_brush(doc, from.0)?;
+    let src = src_brush.faces.get(from.1).ok_or("That face doesn't exist.")?.clone();
+    let src_n = src.plane().map(|p| p.normal).ok_or("That face is broken.")?;
+    let src_poly = brush_polygons(&src_brush).get(from.1).cloned().unwrap_or_default();
+    let tex = texture.map(str::to_string).unwrap_or_else(|| src.texture.clone());
+    let mut tx = Tx::new(doc, "Apply texture and alignment");
+    for (id, i) in faces {
+        if (*id, *i) == from {
+            continue;
+        }
+        let mut b = get_brush(tx.doc(), *id)?;
+        let poly = brush_polygons(&b).get(*i).cloned().unwrap_or_default();
+        let face = b.faces.get_mut(*i).ok_or("That face doesn't exist.")?;
+        let n = face.plane().map(|p| p.normal).unwrap_or(Vec3::Z);
+        // where the texture must not jump: a corner both faces share, else the target's corner
+        // nearest the source
+        let anchor = poly
+            .iter()
+            .flat_map(|p| src_poly.iter().map(move |q| (*p, (*p - *q).len())))
+            .fold(None::<(Vec3, f64)>, |m, x| if m.is_none_or(|m| x.1 < m.1) { Some(x) } else { m })
+            .map(|x| x.0)
+            .unwrap_or(Vec3::ZERO);
+        face.texture = tex.clone();
+        face.align = super::texture::wrapped(&src.align, src_n, n, anchor);
+        tx.set_brush(*id, b);
+    }
+    tx.commit(h);
+    Ok(())
+}
+
 /// Change face alignment with a helper (fit, shift, rotate...). `f` gets the current
 /// alignment, the face polygon and the texture size. Pass a drag id to fold a drag into one
 /// undo step.
