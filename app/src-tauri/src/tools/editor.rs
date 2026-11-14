@@ -10,6 +10,7 @@
 //! internal-error message, and the session lock survives it).
 
 use crate::editor::checks;
+use crate::editor::extrude; // Parity A
 use crate::editor::fgd;
 use crate::editor::shapes;
 use crate::editor::vertex;
@@ -59,6 +60,8 @@ const PROJECT_EXT: &str = "lsmap";
 struct Drag {
     key: String,
     brushes: BTreeMap<BrushId, Brush>,
+    /// Parity A: the brush an extrude drag has made so far (the next step reshapes it)
+    made: Option<BrushId>,
 }
 
 struct Session {
@@ -504,6 +507,12 @@ enum Cmd {
         #[serde(default = "eight")] tube_sides: usize,
     },
     MoveVertices { picks: Vec<(u64, P3)>, delta: P3, drag: Option<String> },
+    /// Parity A: pull a new brush out of a face (Shift-drag); steps of one drag reshape it
+    ExtrudeFace { brush: u64, face: usize, distance: f64, drag: Option<String> },
+    /// Parity A: a new corner at `at` + `delta` (split an edge or a face); steps of one drag move it
+    AddVertex { brush: u64, at: P3, delta: P3, drag: Option<String> },
+    /// Parity A: these corners of one brush become one, at their middle
+    MergeVertices { brush: u64, picks: Vec<P3> },
     /// paste special: copies, each moved, turned (degrees about x, y, z) and stretched from the last
     Array {
         #[serde(default)] brushes: Vec<u64>,
@@ -673,7 +682,7 @@ fn centre_of(d: &MapDocument, brushes: &[BrushId], entities: &[EntityId]) -> Vec
 fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
     // a drag continues only while the same drag sends steps
     let drag_key = match &cmd {
-        Cmd::MoveFace { drag: Some(k), .. } | Cmd::MoveVertices { drag: Some(k), .. } => Some(k.clone()),
+        Cmd::MoveFace { drag: Some(k), .. } | Cmd::MoveVertices { drag: Some(k), .. } | Cmd::ExtrudeFace { drag: Some(k), .. } | Cmd::AddVertex { drag: Some(k), .. } => Some(k.clone()),
         _ => None,
     };
     if s.drag.as_ref().map(|d| Some(&d.key) != drag_key.as_ref()).unwrap_or(false) {
@@ -754,6 +763,71 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             }
             tx.commit(h);
         }
+        Cmd::ExtrudeFace { brush, face, distance, drag } => {
+            let id = BrushId(brush);
+            let dist = num(distance, -BIG, BIG, "distance")?;
+            // a drag pulls from the source as it was when it started
+            if !matches!((&s.drag, &drag), (Some(dr), Some(k)) if &dr.key == k) {
+                let b = d.brushes.get(&id).cloned().ok_or("That brush no longer exists.")?;
+                s.drag = drag.as_ref().map(|k| Drag { key: k.clone(), brushes: [(id, b)].into_iter().collect(), made: None });
+            }
+            let base = s.drag.as_ref().and_then(|dr| dr.brushes.get(&id).cloned()).or_else(|| d.brushes.get(&id).cloned()).ok_or("That brush no longer exists.")?;
+            let made = s.drag.as_ref().and_then(|dr| dr.made).filter(|m| d.brushes.contains_key(m));
+            let mut tx = Tx::new(d, "Extrude");
+            if let Some(k) = &drag {
+                tx = tx.merge_key(k);
+            }
+            if dist < extrude::MIN_EXTRUDE {
+                // back onto the face: no new brush (yet)
+                let Some(m) = made else { return Err("Drag outwards from the face to pull out a new brush.".into()) };
+                tx.remove_brush(m);
+                if let Some(dr) = &mut s.drag {
+                    dr.made = None;
+                }
+            } else {
+                let nb = extrude::extrude_face(&base, face, dist)?;
+                let nid = match made {
+                    Some(m) => {
+                        tx.set_brush(m, nb);
+                        m
+                    }
+                    None => tx.add_brush(nb),
+                };
+                if let Some(dr) = &mut s.drag {
+                    dr.made = Some(nid);
+                }
+                created.0.push(nid.0);
+            }
+            tx.commit(h);
+        }
+        Cmd::AddVertex { brush, at, delta, drag } => {
+            let id = BrushId(brush);
+            let (at, delta) = (p3(at)?, p3(delta)?);
+            if !matches!((&s.drag, &drag), (Some(dr), Some(k)) if &dr.key == k) {
+                let b = d.brushes.get(&id).cloned().ok_or("That brush no longer exists.")?;
+                s.drag = drag.as_ref().map(|k| Drag { key: k.clone(), brushes: [(id, b)].into_iter().collect(), made: None });
+            }
+            let base = s.drag.as_ref().and_then(|dr| dr.brushes.get(&id).cloned()).or_else(|| d.brushes.get(&id).cloned()).ok_or("That brush no longer exists.")?;
+            let nb = vertex::add_vertex(&base, at, delta)?;
+            let mut tx = Tx::new(d, "Split");
+            if let Some(k) = &drag {
+                tx = tx.merge_key(k);
+            }
+            tx.set_brush(id, nb);
+            tx.commit(h);
+        }
+        Cmd::MergeVertices { brush, picks } => {
+            let id = BrushId(brush);
+            if picks.len() > 4096 {
+                return Err("That's too many corners at once.".into());
+            }
+            let pts = picks.into_iter().map(p3).collect::<Result<Vec<_>, _>>()?;
+            let b = d.brushes.get(&id).cloned().ok_or("That brush no longer exists.")?;
+            let nb = vertex::merge_vertices(&b, &pts)?;
+            let mut tx = Tx::new(d, "Merge corners");
+            tx.set_brush(id, nb);
+            tx.commit(h);
+        }
         Cmd::MoveVertices { picks, delta, drag } => {
             if picks.is_empty() {
                 return Err("Pick some corners first.".into());
@@ -769,7 +843,7 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
             // a drag moves from where it started, so corners are found on the brush as it was
             let same_drag = matches!((&s.drag, &drag), (Some(dr), Some(k)) if &dr.key == k);
             if !same_drag {
-                s.drag = drag.as_ref().map(|k| Drag { key: k.clone(), brushes: BTreeMap::new() });
+                s.drag = drag.as_ref().map(|k| Drag { key: k.clone(), brushes: BTreeMap::new(), made: None });
             }
             let mut base: BTreeMap<BrushId, Brush> = s.drag.as_ref().map(|dr| dr.brushes.clone()).unwrap_or_default();
             for id in by_brush.keys() {
@@ -915,7 +989,7 @@ fn run_cmd(s: &mut Session, cmd: Cmd) -> Result<Value, String> {
                 None => {
                     let b = d.brushes.get(&id).cloned().ok_or("That brush no longer exists.")?;
                     if let Some(k) = &drag {
-                        s.drag = Some(Drag { key: k.clone(), brushes: [(id, b.clone())].into_iter().collect() });
+                        s.drag = Some(Drag { key: k.clone(), brushes: [(id, b.clone())].into_iter().collect(), made: None });
                     }
                     b
                 }
@@ -2585,6 +2659,51 @@ mod tests {
         assert!(missing.iter().any(|m| m.to_ascii_lowercase().contains("out_wall5")), "{missing:?}");
         assert!(!missing.iter().any(|m| m.to_ascii_lowercase().contains("crete3_flr04")), "{missing:?}");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn extrude_split_and_merge() {
+        // Parity A: Shift-drag a face pulls out a new brush; a drag's steps are one undo step
+        let t = T::new();
+        t.post("/api/tools/editor/new", json!({})).await;
+        let n0 = t.get("/api/tools/editor/doc").await["brushes"].as_array().unwrap().len();
+        let r = t.cmd(json!({"op": "add_box", "min": [0, 0, 0], "max": [64, 64, 64], "texture": "CRATE01"})).await;
+        let b = r["created"]["brushes"][0].as_u64().unwrap();
+        let mut made = 0;
+        for (i, dist) in [16.0, 40.0, 0.0, 32.0].iter().enumerate() {
+            let r = t.cmd(json!({"op": "extrude_face", "brush": b, "face": 0, "distance": dist, "drag": "x1"})).await;
+            assert!(r["error"].is_null(), "step {i}: {r}");
+            if let Some(id) = r["created"]["brushes"][0].as_u64() {
+                made = id;
+            }
+        }
+        let doc = t.get("/api/tools/editor/doc").await;
+        assert_eq!(doc["undo"], "Extrude");
+        assert_eq!(doc["brushes"].as_array().unwrap().len(), n0 + 2);
+        let nb = doc["brushes"].as_array().unwrap().iter().find(|x| x["id"] == made).unwrap().clone();
+        let size: Vec<f64> = (0..3).map(|i| nb["max"][i].as_f64().unwrap() - nb["min"][i].as_f64().unwrap()).collect();
+        assert!(size.contains(&32.0) && size.iter().filter(|x| **x == 64.0).count() == 2, "{size:?}");
+        // one undo takes the new brush away, the source stays
+        t.post("/api/tools/editor/undo", json!({})).await;
+        assert_eq!(t.get("/api/tools/editor/doc").await["brushes"].as_array().unwrap().len(), n0 + 1);
+        // inwards is refused, nothing changes
+        assert!(t.cmd(json!({"op": "extrude_face", "brush": b, "face": 0, "distance": -8})).await["error"].is_string());
+
+        // split the top face's middle upwards, in two drag steps: one "Split"
+        for z in [8.0, 24.0] {
+            let r = t.cmd(json!({"op": "add_vertex", "brush": b, "at": [32, 32, 64], "delta": [0, 0, z], "drag": "s1"})).await;
+            assert!(r["error"].is_null(), "{r}");
+        }
+        let doc = t.get("/api/tools/editor/doc").await;
+        assert_eq!(doc["undo"], "Split");
+        let top = doc["brushes"].as_array().unwrap().iter().find(|x| x["id"] == b).unwrap()["max"][2].as_f64().unwrap();
+        assert_eq!(top, 88.0);
+        assert!(t.cmd(json!({"op": "add_vertex", "brush": b, "at": [32, 32, 0], "delta": [0, 0, 8]})).await["error"].is_string());
+        // merge two bottom corners
+        let r = t.cmd(json!({"op": "merge_vertices", "brush": b, "picks": [[0, 0, 0], [64, 0, 0]]})).await;
+        assert!(r["error"].is_null(), "{r}");
+        assert_eq!(t.get("/api/tools/editor/doc").await["undo"], "Merge corners");
+        assert!(t.cmd(json!({"op": "merge_vertices", "brush": b, "picks": [[0, 0, 0]]})).await["error"].is_string());
     }
 
     #[tokio::test]

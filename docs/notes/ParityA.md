@@ -16,7 +16,7 @@ handles. So I only build the gaps:
    command); vertex tool: split an edge or face (Ctrl-drag its middle handle adds a corner) and merge corners.
 
 ## Done
-**1. 2D views** (1e1d5f4-ish, "Map editor 2D views: ..."): `FlatHandles.tsx` (8 handles stretch the selection, the moved
+**1. 2D views** (e8f90dda, tests 6a156c8b): `FlatHandles.tsx` (8 handles stretch the selection, the moved
 edge on the grid; dragging a picked brush in a flat view moves it, corner on the grid; live preview; one undo step),
 `FlatGrid.tsx` (one draw call; lines every grid step, doubling while closer than 6 px; 64- and 1024-unit lines; axes),
 `zoomToCursor` on the flat views' MapControls. Tests: `tests/editor-flat.spec.ts`, `tests/editor-flatperf.spec.ts`.
@@ -30,6 +30,19 @@ sides stay flat), torus (pieces, tube sides, tube width, arc, start, add height;
 arch add height (spiral stairs). Shape tool bar fields + **Preview…** popover with every setting and a turning
 wireframe (`ShapeSettings.tsx`, settings in `shapeParams.ts`, `ls.editor.shapeParams`). Tests: shapes.rs units
 (validity, convexity, shared ends, grid), the command test, `tests/editor-shapes.spec.ts` (Chromium + WebKit).
+
+**3. Extrude and vertex editing**: Shift-drag a face of a picked brush in 3D pulls out a new brush (;
+: a prism over the face, ends in the face's texture, sides continue the source's faces; the far
+side on the grid; a drag is one "Extrude" step and the new brush is picked; dragging back onto the face removes it).
+Vertex tool: ⌘/Ctrl-drag an edge's or face's middle splits it (: a new corner, refused when it would
+dent the brush, lie flat or swallow a corner), **Merge corners** joins the picked corners of a brush at their middle
+(); dropping a corner on its neighbor already merged (tested). , .
+Tests: extrude.rs and vertex.rs units (convexity, volumes, textures, refusals),  (commands,
+one undo step per drag),  (Chromium + WebKit).
+
+## Left / ideas
+- Extrude in the flat views (Shift is box-pick there), shear in 2D, edge-move mode for slanted edges.
+- Entities drawn one by one dominate the flat panes on big maps (request to P5).
 
 ## Testing notes
 - My dev servers: Rust on 8093 (started as `... devserve::tests::serve_tools_de` so a `pkill -f serve_tools_dev`

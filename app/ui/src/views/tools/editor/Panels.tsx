@@ -12,6 +12,7 @@ import type { Vec3 } from "../viewer/coords";
 import { getGameWads, getTextures, texUrl, type DocEntity, type Issue, type WadTextures } from "./editorApi";
 import { selectionIds } from "./EditorScene";
 import { ShapeExtraFields } from "./ShapeSettings"; // Parity A
+import { VertexActions } from "./VertexActions"; // Parity A
 import { EMPTY_SEL, facesOf, keyOf, originOf, selectionBounds, useEditor, type ShapeKind, type ToolId } from "./store";
 import { useFgd } from "./fgd";
 import { FaceSheet, RecentTextures } from "./FaceSheet";
@@ -160,6 +161,7 @@ export function ToolOptions() {
         </div>
       )}
       {(picking || s.tool === "texture") && <MarqueeOptions texture={s.tool === "texture"} />}
+      {s.tool === "vertex" && <VertexActions /> /* Parity A: merge corners, how to split */}
       {s.tool === "vertex" && <span className="muted">{s.verts.length ? `${s.verts.length} corner${s.verts.length === 1 ? "" : "s"} picked. Arrows nudge, Page Up/Down move up and down.` : "Pick a brush, then click or drag its corners, edges (blue) or faces (purple)."}</span>}
       {s.tool === "shape" && (
         <div className="seg" role="group" aria-label="Shape">

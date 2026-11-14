@@ -7,6 +7,7 @@ pub mod bulk; // P5
 pub mod checks;
 pub mod fgd;
 pub mod doc;
+pub mod extrude; // Parity A: pull a new brush out of a face
 pub mod geom;
 pub mod history;
 pub mod mapfile;

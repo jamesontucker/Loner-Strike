@@ -36,6 +36,7 @@ import { brushRaycast } from "./pickRay";
 import { KitOverlay } from "./KitOverlay"; // P5: mode kit areas and paths
 import { FlatHandles, startFlatMove } from "./FlatHandles"; // Parity A: 2D handles and moves
 import { FlatGrid } from "./FlatGrid"; // Parity A
+import { startExtrude, startSplit } from "./extrude"; // Parity A: Shift-drag extrude, Ctrl-drag split
 import { DropTarget } from "./DropTarget"; // P5: a dragged texture's face
 import { TriadFeed } from "./AxisTriad"; // P5: the axes in each view's corner
 import { markerColour, useKits } from "./kits";
@@ -614,6 +615,10 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
 
     const handle = handleOf(e);
 
+    // Parity A: Ctrl/⌘-drag an edge's or face's middle splits it (a new corner)
+    if (tool === "vertex" && handle?.kind === "vert" && handle.p && (handle.ps?.length ?? 0) > 1 && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+      return startSplit(ev, live.current, handle.id, handle.p, view === "3d" ? null : axis, controlsOff);
+    }
     if (tool === "vertex" && handle?.kind === "vert" && handle.p) {
       // click picks a corner (Shift adds); dragging moves the picked corners with snapping.
       // P4: edge and face handles pick all their corners at once
@@ -915,6 +920,10 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
     // select / move / rotate / scale: click picks; on a picked brush in Select, drag pushes/pulls its face
     const b = hit?.kind === "brush" ? s.brushes.get(hit.id) : null;
     const canPush = tool === "select" && b && hit && hit.face != null && isPicked(b, s.sel) && !additive;
+    // Parity A: Shift-drag a face of a picked brush pulls out a new brush (TrenchBroom's extrude)
+    if (tool === "select" && view === "3d" && b && hit && hit.face != null && isPicked(b, s.sel) && e.shiftKey && !e.ctrlKey && !e.metaKey && useTools.getState().camera !== "fly") {
+      return startExtrude(ev, live.current, { id: hit.id, face: hit.face, point: hit.point, normal: hit.normal }, controlsOff, () => pickBrush(hit.id, true));
+    }
     // P4: dragging from empty space draws a box (every view; see Marquee.tsx). In flat views and
     // in 3D with "Box anywhere", from anywhere but a picked brush (that's push/pull).
     const flyNow = view === "3d" && useTools.getState().camera === "fly";
