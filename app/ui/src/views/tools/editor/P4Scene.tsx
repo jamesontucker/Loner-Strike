@@ -5,7 +5,7 @@
 // place a prefab.
 // Everything drawn here sits inside the root group, in GoldSrc units.
 
-import { Line } from "@react-three/drei";
+import { Line } from "./StableLine"; // Parity A: drei's Line without the per-edit shader recompiles
 import { useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";

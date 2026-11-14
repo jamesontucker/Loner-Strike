@@ -6,7 +6,7 @@
 // → the prefab); right-click for Find uses. Also the content drawer (Ctrl+Space; ⌘⇧Space on a Mac), which shows
 // the same browser over the bottom panels and closes on a click away.
 
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { memo, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Skeleton } from "../../../ui";
 import {
   assetCredits,
@@ -122,7 +122,7 @@ const play = (path: string) => toggleSound(path);
 
 // ---- the browser -------------------------------------------------------------------------------
 
-export function ContentBrowser({ drawer }: { drawer?: boolean }) {
+function ContentBrowserView({ drawer }: { drawer?: boolean }) {
   const [section, setSection] = useState<Section>(() => pref("ls.editor.content.section", "model") as Section);
   const [source, setSource] = useState("all");
   const [q, setQ] = useState("");
@@ -567,6 +567,10 @@ function Details({ a, onUses }: { a: AssetItem | null; onUses: (a: AssetItem) =>
 }
 
 // ---- the content drawer ------------------------------------------------------------------------
+
+/** Parity A (PerfAudit #1): the dock re-renders its panels on every edit; the browser (and its
+ *  grid of thumbnails) only needs to when its own props or state change. */
+export const ContentBrowser = memo(ContentBrowserView);
 
 /** Ctrl+Space (⌘⇧Space on a Mac): the browser slides up over the bottom panels; a click away closes it. */
 export function ContentDrawer() {

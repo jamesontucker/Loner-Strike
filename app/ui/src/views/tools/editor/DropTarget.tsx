@@ -1,7 +1,7 @@
 // P5: while a texture is dragged over the views, the face it would go on (or, with Alt, the
 // whole brush) is outlined.
 
-import { Line } from "@react-three/drei";
+import { Line } from "./StableLine"; // Parity A: drei's Line without the per-edit shader recompiles
 import { useP5 } from "./p5store";
 import { useEditor } from "./store";
 

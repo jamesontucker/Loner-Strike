@@ -2,7 +2,8 @@
 // line, the box-select rectangle and camera bookmarks.
 // Everything except Bookmarks sits inside the root group, in GoldSrc units.
 
-import { Html, Line } from "@react-three/drei";
+import { Html } from "@react-three/drei";
+import { Line } from "./StableLine"; // Parity A: drei's Line without the per-edit shader recompiles
 import { useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";

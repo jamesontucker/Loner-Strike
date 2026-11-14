@@ -7,7 +7,7 @@
 // you can see" leaves out what's hidden behind walls.
 
 import type { RootState } from "@react-three/fiber";
-import { Line } from "@react-three/drei";
+import { Line } from "./StableLine"; // Parity A: drei's Line without the per-edit shader recompiles
 import { useMemo } from "react";
 import * as THREE from "three";
 import { create } from "zustand";

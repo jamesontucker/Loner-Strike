@@ -3,7 +3,8 @@
 // one 3D view first (B's Orbit/Fly cameras), flat top/front/side views a key away.
 // Everything inside the root group is in GoldSrc units (plan 3.2).
 
-import { Line, MapControls, OrthographicCamera, PerspectiveCamera, TransformControls } from "@react-three/drei";
+import { MapControls, OrthographicCamera, PerspectiveCamera, TransformControls } from "@react-three/drei";
+import { Line } from "./StableLine"; // Parity A: drei's Line without the per-edit shader recompiles
 import { PaneView } from "./PaneView"; // P5: drei View with the off-screen test fixed
 import { Canvas, useThree, type RootState, type ThreeEvent } from "@react-three/fiber";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";

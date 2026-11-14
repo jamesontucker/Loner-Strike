@@ -4,7 +4,7 @@
 // flagged with a one-click remove. Picking an entity shows its chain here and as colored arrows
 // in the views (IOArrows): yellow fires, red kills, purple waits on (master), cyan points at.
 
-import { Line } from "@react-three/drei";
+import { Line } from "./StableLine"; // Parity A: drei's Line without the per-edit shader recompiles
 import { useMemo, useState } from "react";
 import * as THREE from "three";
 import { useTools } from "../../../stores/tools";

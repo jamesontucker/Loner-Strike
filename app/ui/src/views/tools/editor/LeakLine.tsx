@@ -2,7 +2,7 @@
 // editor's 3D view. Mount it inside the scene's GoldSrc root group (next to <Links />):
 // the points are GoldSrc units, like everything else there.
 
-import { Line } from "@react-three/drei";
+import { Line } from "./StableLine"; // Parity A: drei's Line without the per-edit shader recompiles
 import { useLeak } from "./compileApi";
 
 export function LeakLine() {

@@ -74,6 +74,15 @@ const isLight = (e: DocEntity) => e.classname.startsWith("light");
 const isSpawn = (e: DocEntity) => /^info_player_|^info_vip_start$|^hostage_entity$/.test(e.classname);
 const isTrigger = (e: DocEntity) => /^trigger_|^func_(buyzone|bomb_target|hostage_rescue|vip_safetyzone|escapezone|ladder|water)$/.test(e.classname);
 
+/** A stable number per object (Parity A: a row's data is "the same" while its object is). */
+const objIds = new WeakMap<object, number>();
+let nextObjId = 1;
+function objId(o: object): number {
+  let i = objIds.get(o);
+  if (!i) objIds.set(o, (i = nextObjId++));
+  return i;
+}
+
 const dims = (b: DocBrush) => b.max.map((x, i) => Math.round(x - b.min[i])).join("×");
 
 export function OutlinePanel({ extra }: { extra?: ReactNode }) {
@@ -93,6 +102,11 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
   const [menu, setMenu] = useState<{ x: number; y: number; row: Row } | null>(null);
   const anchor = useRef<string | null>(null);
   const tree = useRef<HTMLDivElement>(null);
+  // Parity A (PerfAudit #1): each row's element is kept while nothing it shows has changed, so an
+  // edit re-renders only the rows it touched (the document's unchanged entities and brushes keep
+  // their objects). Handlers read the latest functions through `live`, never a stale render's.
+  const rowCache = useRef(new Map<string, { sig: string; el: JSX.Element }>());
+  const live = useRef<{ rowDown: (ev: React.PointerEvent, r: Row) => void; pick: (r: Row, ev: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void; look: (r: Row) => void; rename: (r: Row, v: string) => Promise<void>; toggleHide: (r: Row) => void; toggleLock: (r: Row) => void } | null>(null);
 
   const query = q.trim().toLowerCase();
   const texOf = (bid: number) => meshes.get(bid)?.textures ?? [];
@@ -336,18 +350,22 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
     const icon = r.kind === "group" ? (open[r.key] ? "folderOpen" : "folder") : r.kind === "entity" ? iconOf(r.e) : "brush";
     const canOpen = r.kind === "group" || (r.kind === "entity" && r.e.brushes.length > 0);
     const isOpen = !!open[r.key];
-    return (
+    const data = r.kind === "group" ? r.g : r.kind === "entity" ? r.e : r.b;
+    const sig = [objId(data), r.depth, on, hid, lck, dragOver === r.key, isOpen, renaming === r.key, name, type, tex, icon, r.kind === "brush" ? r.inEntity : "", r.kind === "group" ? `${r.count}:${objId(r.ids)}` : ""].join("|");
+    const hit = rowCache.current.get(r.key);
+    if (hit && hit.sig === sig) return hit.el;
+    const el = (
       <div
         key={r.key}
         className={`ed-ol-row ed-ol-${r.kind}${on ? " on" : ""}${hid ? " dim" : ""}${lck ? " locked" : ""}${dragOver === r.key ? " drop" : ""}`}
         style={{ paddingLeft: 2 + r.depth * 14 }}
-        onPointerDown={(ev) => rowDown(ev, r)}
+        onPointerDown={(ev) => live.current!.rowDown(ev, r)}
         {...(r.kind === "group" ? dropOn(r.key, r.g.id) : {})}
-        onClick={(ev) => !suppressClick.current && pick(r, ev)}
-        onDoubleClick={() => look(r)}
+        onClick={(ev) => !suppressClick.current && live.current!.pick(r, ev)}
+        onDoubleClick={() => live.current!.look(r)}
         onContextMenu={(ev: RMouseEvent) => {
           ev.preventDefault();
-          if (!on) pick(r, { shiftKey: false, ctrlKey: false, metaKey: false });
+          if (!on) live.current!.pick(r, { shiftKey: false, ctrlKey: false, metaKey: false });
           setMenu({ x: ev.clientX, y: ev.clientY, row: r });
         }}
         role="treeitem"
@@ -374,10 +392,10 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
                 e.stopPropagation();
-                if (e.key === "Enter") void rename(r, (e.target as HTMLInputElement).value);
+                if (e.key === "Enter") void live.current!.rename(r, (e.target as HTMLInputElement).value);
                 if (e.key === "Escape") setRenaming(null);
               }}
-              onBlur={(e) => void rename(r, e.target.value)}
+              onBlur={(e) => void live.current!.rename(r, e.target.value)}
             />
           ) : (
             name
@@ -387,10 +405,10 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
         <span className="ed-ol-tex muted">{tex}</span>
         {r.kind !== "brush" || !r.inEntity ? (
           <span className="ed-ol-toggles">
-            <button type="button" className={`ed-ol-eye${hid ? " off" : ""}`} title={hid ? "Hidden: show it" : "Hide it in the views"} aria-label={hid ? "Show" : "Hide"} aria-pressed={hid} onClick={(ev) => (ev.stopPropagation(), toggleHide(r))} onDoubleClick={(ev) => ev.stopPropagation()}>
+            <button type="button" className={`ed-ol-eye${hid ? " off" : ""}`} title={hid ? "Hidden: show it" : "Hide it in the views"} aria-label={hid ? "Show" : "Hide"} aria-pressed={hid} onClick={(ev) => (ev.stopPropagation(), live.current!.toggleHide(r))} onDoubleClick={(ev) => ev.stopPropagation()}>
               <Icon d={hid ? "eyeOff" : "eye"} />
             </button>
-            <button type="button" className={`ed-ol-lock${lck ? " on" : ""}`} title={lck ? "Locked (can't be picked in the views): unlock" : "Lock (can't be picked in the views)"} aria-label={lck ? "Unlock" : "Lock"} aria-pressed={lck} onClick={(ev) => (ev.stopPropagation(), toggleLock(r))} onDoubleClick={(ev) => ev.stopPropagation()}>
+            <button type="button" className={`ed-ol-lock${lck ? " on" : ""}`} title={lck ? "Locked (can't be picked in the views): unlock" : "Lock (can't be picked in the views)"} aria-label={lck ? "Unlock" : "Lock"} aria-pressed={lck} onClick={(ev) => (ev.stopPropagation(), live.current!.toggleLock(r))} onDoubleClick={(ev) => ev.stopPropagation()}>
               <Icon d={lck ? "lock" : "unlock"} />
             </button>
           </span>
@@ -399,7 +417,10 @@ export function OutlinePanel({ extra }: { extra?: ReactNode }) {
         )}
       </div>
     );
+    rowCache.current.set(r.key, { sig, el });
+    return el;
   };
+  live.current = { rowDown, pick, look, rename, toggleHide, toggleLock };
 
   const menuItems = (r: Row): ([string, () => void] | null | undefined)[] => {
     const ids = idsOf(r);

@@ -130,6 +130,37 @@ getBoundingClientRect calls in PaneView (forced layout after DOM changes), and G
 real app's WKWebView rather than Playwright's headless WebKit. WebGPU would not help a CPU/compositor-side cost.
 Load: these ran at 15-19 (sims); a load-under-5 run is queued.
 
+**8. Per-edit work removed, and what was tried (2026-11-13 23:00)**
+Kept (measured, suites green):
+- Outliner rows: each row's element cached by what it shows (row object identity with P5's deltas, picked,
+  hidden, locked, open, name, type, texture); handlers through a ref, so a cached row never calls stale code.
+- Content Browser memoized: the dock re-rendered it and its thumbnail grid on every edit.
+- `StableLine.tsx`: drei's Line (9.117.3) disposes a line's material whenever `points` is a new array; the
+  component markers and links got new arrays every edit, so ~150 line materials were disposed per edit and three
+  dropped and recompiled their shader programs. Same component, material disposed only on unmount; the editor's
+  `Line` imports point at it. Per edit: 0 disposed (was ~190).
+- `editor-flat.spec.ts`: waits for the handles' dev hook (registered in an effect after the commit that shows the
+  selection) instead of reading it at once; that race was P5's "Front and Side" WebKit failure.
+Tried and reverted (no measurable effect, so not kept): a per-frame drawing budget (focused pane first, others a
+frame later); preserveDrawingBuffer off with every pane drawn each frame; pane/canvas rects cached with
+ResizeObserver instead of read per frame.
+
+Results, br_valley Quad, production build:
+
+| engine | nudge+undo p95 / max | drag-move p95 | click | box select 3214 |
+|---|---|---|---|---|
+| Chromium on the GPU (WebView2 proxy), before this round | 17 / 17 ms | 16.7 ms | 22 ms | 56 ms |
+| Chromium on the GPU, after | 17 / 17 ms | 16.7 ms | 23 ms | 67 ms (load 19) |
+| WebKit (Playwright, Apple GPU), start of the round | 33 ms | - | 52 ms | 102 ms |
+| WebKit, after | 25-29 / 35-37 ms | 24-25 ms | 40-48 ms | 121-145 ms |
+
+Mac: stops here per the user's priority (Windows first). WebKit's slow frames hold 5-6 ms of our JS and <1 ms of GPU
+draws; React commits force 2-11 ms of style/layout (3-5 commits per edit frame); a one-box map still shows nudge
+p95 20 / worst 27 ms, so part of it is per-edit DOM work, not map size. Next if Mac matters: fewer React commits
+per edit (batch the cmd -> meshes -> doc -> checks updates into one), the per-undo toast's layout, and measuring in
+the app's own WKWebView (not done: running the release app would start its background jobs on the user's data).
+Suites: Chromium 52 passed / 1 skipped (+ editor-flat fixed, 3/3 twice); WebKit 53 passed / 1 skipped.
+
 ## Left / ideas
 - Extrude in the flat views (Shift is box-pick there), edge-move mode for slanted edges.
 - Entities drawn one by one dominate the flat panes on big maps (request to P5).

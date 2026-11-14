@@ -16,6 +16,12 @@ const api = (page: Page, path: string, body?: unknown) =>
 type Pt = { x: number; y: number };
 const handles = (page: Page, view: string) =>
   page.evaluate((v) => (window as unknown as { __lsFlatHandles?: Record<string, () => Pt[]> }).__lsFlatHandles?.[v]?.() ?? null, view);
+/** The handles once the view has put them up (the view registers them in an effect, which runs
+ *  just after the commit that shows the selection: reading at once can come too early). */
+async function ready(page: Page, view: string): Promise<Pt[]> {
+  await expect.poll(() => handles(page, view), { timeout: 10_000 }).not.toBeNull();
+  return (await handles(page, view))!;
+}
 
 async function openQuadWithBox(page: Page) {
   const errors: string[] = [];
@@ -60,7 +66,7 @@ test("Top view: handles stretch on the grid, a drag moves, a box picks, Box draw
   await page.mouse.click(mid.x, mid.y);
   await expect(page.locator(".ed-selsize")).toContainText("1 picked · 128 × 128 × 128");
   await expect.poll(() => handles(page, "top")).not.toBeNull();
-  const h = (await handles(page, "top"))!;
+  const h = await ready(page, "top");
   expect(h.length).toBe(8);
 
   // the right-middle handle, 40 px to the right: the east side lands on the grid, the west side stays
@@ -77,7 +83,9 @@ test("Top view: handles stretch on the grid, a drag moves, a box picks, Box draw
   expect((await api(page, "/api/tools/editor/doc")).undo).toBe("Scale");
 
   // a corner: both sides at once
-  const h2 = (await handles(page, "top"))!;
+  // (the view shows the stretched box a moment after the document has it)
+  await expect.poll(async () => JSON.stringify(await handles(page, "top"))).not.toBe(JSON.stringify(h));
+  const h2 = await ready(page, "top");
   await page.mouse.move(h2[0].x, h2[0].y);
   await page.mouse.down();
   await page.mouse.move(h2[0].x - 30, h2[0].y + 30, { steps: 6 });
@@ -89,7 +97,8 @@ test("Top view: handles stretch on the grid, a drag moves, a box picks, Box draw
 
   // dragging the picked brush moves it in the view's plane, on the grid; height untouched
   const before = await brush(page, id);
-  const c = (await handles(page, "top"))!;
+  await expect.poll(async () => JSON.stringify(await handles(page, "top"))).not.toBe(JSON.stringify(h2));
+  const c = await ready(page, "top");
   const inside = { x: (c[0].x + c[4].x) / 2, y: (c[0].y + c[4].y) / 2 };
   await page.mouse.move(inside.x, inside.y);
   await page.mouse.down();
@@ -115,11 +124,11 @@ test("Top view: handles stretch on the grid, a drag moves, a box picks, Box draw
   await expect(page.locator(".ed-selsize")).toContainText("1 picked");
 
   // the wheel zooms to the cursor: the handle under the mouse stays put
-  const z0 = (await handles(page, "top"))!;
+  const z0 = await ready(page, "top");
   await page.mouse.move(z0[4].x, z0[4].y);
   await page.mouse.wheel(0, -300);
   await page.waitForTimeout(300);
-  const z1 = (await handles(page, "top"))!;
+  const z1 = await ready(page, "top");
   expect(Math.abs(z1[4].x - z0[4].x)).toBeLessThan(3);
   expect(Math.abs(z1[4].y - z0[4].y)).toBeLessThan(3);
   expect(Math.abs(z1[0].x - z1[4].x)).toBeGreaterThan(Math.abs(z0[0].x - z0[4].x)); // and it did zoom in
@@ -148,8 +157,8 @@ test("Front and Side views have handles on the right axes", async ({ page }) => 
   await page.mouse.click(top.x + top.width / 2, top.y + top.height / 2);
   await expect(page.locator(".ed-selsize")).toContainText("1 picked");
   // Front: the top-middle handle pulls the top (z) up
-  const side0 = JSON.stringify(await handles(page, "side"));
-  const f = (await handles(page, "front"))!;
+  const side0 = JSON.stringify(await ready(page, "side"));
+  const f = await ready(page, "front");
   await page.mouse.move(f[5].x, f[5].y);
   await page.mouse.down();
   await page.mouse.move(f[5].x, f[5].y - 40, { steps: 6 });
@@ -157,7 +166,7 @@ test("Front and Side views have handles on the right axes", async ({ page }) => 
   await expect.poll(async () => (await brush(page, id)).max[2]).toBeGreaterThan(128);
   // Side: the right-middle handle pulls north (+y), once the side view shows the taller box
   await expect.poll(async () => JSON.stringify(await handles(page, "side"))).not.toBe(side0);
-  const s = (await handles(page, "side"))!;
+  const s = await ready(page, "side");
   await page.mouse.move(s[3].x, s[3].y);
   await page.mouse.down();
   await page.mouse.move(s[3].x + 40, s[3].y, { steps: 6 });
@@ -177,7 +186,7 @@ test("⌘/Ctrl-drag an edge's middle in the Front view shears the box into a sla
   await page.mouse.click(top.x + top.width / 2, top.y + top.height / 2);
   await expect(page.locator(".ed-selsize")).toContainText("1 picked · 128 × 128 × 128");
   // Front view: the top edge's middle, 40 px east with ⌘/Ctrl: the top slides, the floor stays
-  const f = (await handles(page, "front"))!;
+  const f = await ready(page, "front");
   await page.mouse.move(f[5].x, f[5].y, { steps: 3 });
   await page.keyboard.down(MOD);
   await page.mouse.down();

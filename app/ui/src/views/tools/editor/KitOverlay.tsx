@@ -2,7 +2,7 @@
 // its marker, a path's spots joined in order, each in its kit's colour. (The markers themselves
 // are entity boxes in the kit's colour: EditorScene's entityLook.)
 
-import { Line } from "@react-three/drei";
+import { Line } from "./StableLine"; // Parity A: drei's Line without the per-edit shader recompiles
 import { useEffect, useMemo } from "react";
 import type { Vec3 } from "../viewer/coords";
 import { loadKits, markerOf, useKits } from "./kits";
