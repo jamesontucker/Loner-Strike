@@ -311,3 +311,25 @@ waves respawning dead T bots and clearing, round resets; on cs_assault: a timed 
 model opening and closing on time, a trap fired with victims, checkpoints and a lap, a meeting called,
 voted on and a bot voted out. Not yet: platforms, the beams' and HUD's look on a real client, the radar
 trick, and `ls_mode` with W2's brain.
+
+<!-- ==== W3: Battle Royale pieces ==== -->
+## Battle Royale pieces
+
+Player systems any mode can switch on (Battle Royale does), each with natives and forwards in
+`ls_components.inc` ("W3: Battle Royale pieces") so Game Mode Studio can use them too.
+
+### Healing items
+Bandage (+15 up to 75, 3 s), medkit (full health, 7 s), energy drink (4 s, then +40 over 10 s and 8 %
+more speed). Loot items `bandage`, `medkit`, `drink` (`bandage:3` gives three).
+- `ls_heal_carry 1`: carried, up to `ls_heal_limits` ("6 2 3": bandages, medkits, drinks), and used with
+  F (the flashlight key, `ls_heal_key 1`: the one that helps, or a menu when there's a choice), `say /heal`
+  (menu) or the console command `ls_heal [bandage|medkit|drink]`. A progress bar runs for `ls_heal_secs`
+  ("3 7 4"); no shooting meanwhile, moving stops it. `ls_heal_carry 0` (default): they heal at once when
+  picked up (a medkit +50, as before).
+- Natives: `ls_heal_give(id, kind[], n = 1)`, `ls_heal_count(id, kind[] = "")`, `ls_heal_use(id, kind[] = "")`,
+  `ls_heal_cancel(id)`, `ls_heal_using(id)`. Forward `ls_on_heal(id, kind[], stage)` (0 starting *(handled:
+  refused)*, 1 used, 2 stopped).
+- Bots (`ls_heal_bots 1`): a hurt bot not hit for 4 s with no enemy in sight within 1500 u uses the best one,
+  standing still; hit while healing, it stops and fights. The brain hears `ls_mode heal <bot> <kind> <secs>`
+  when one starts and `ls_mode heal <bot> -` when it ends.
+<!-- ==== end W3 ==== -->

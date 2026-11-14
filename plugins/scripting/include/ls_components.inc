@@ -404,3 +404,27 @@ forward ls_on_meeting_start(ent, caller);
 forward ls_on_meeting_vote(ent, voter, target);
 /** A meeting ended; ejected = the player voted out (0 nobody). */
 forward ls_on_meeting_end(ent, ejected);
+/* ==== W3: Battle Royale pieces ==== */
+/* ---------------------------------------------------------------------------
+ * Battle Royale pieces (any mode can use them)
+ * ------------------------------------------------------------------------- */
+
+/* Healing items: "bandage" (+15, up to 75, 3 s), "medkit" (full health, 7 s), "drink" (+40 over 10 s and
+ * a little speed, 4 s). As loot items too ("bandage", "bandage:3", "medkit", "drink"). With the cvar
+ * ls_heal_carry 1 they're carried (limits: ls_heal_limits "6 2 3") and used with F (ls_heal_key), say /heal
+ * or the console command "ls_heal [kind]", with a progress bar: no shooting meanwhile, moving stops it.
+ * With ls_heal_carry 0 (the default) they heal at once when picked up. */
+
+/** Gives a player n of a kind, up to the carry limit. @return how many they took */
+native ls_heal_give(id, const kind[], n = 1);
+/** How many of a kind a player carries ("" = all kinds). */
+native ls_heal_count(id, const kind[] = "");
+/** Starts using one ("" = the best for their health now). @return 1 if started */
+native ls_heal_use(id, const kind[] = "");
+/** Stops using one (nothing used up). */
+native ls_heal_cancel(id);
+/** Is the player using a healing item now? */
+native bool:ls_heal_using(id);
+/** A healing item: stage 0 starting (handled: refused), 1 used, 2 stopped before the end. */
+forward ls_on_heal(id, const kind[], stage);
+/* ==== end W3 ==== */

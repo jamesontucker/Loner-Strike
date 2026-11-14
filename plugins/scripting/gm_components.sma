@@ -427,6 +427,7 @@ public plugin_natives()
 	register_native("ls_meeting_vote", "n_meeting_vote");
 	register_native("ls_respawn_pick", "n_respawn_pick");
 	register_native("ls_respawn_at", "n_respawn_at");
+	w3_natives(); /* W3 */
 }
 
 public plugin_init()
@@ -521,6 +522,7 @@ public plugin_init()
 	g_fwMeetStart = CreateMultiForward("ls_on_meeting_start", ET_IGNORE, FP_CELL, FP_CELL);
 	g_fwMeetVote = CreateMultiForward("ls_on_meeting_vote", ET_IGNORE, FP_CELL, FP_CELL, FP_CELL);
 	g_fwMeetEnd = CreateMultiForward("ls_on_meeting_end", ET_IGNORE, FP_CELL, FP_CELL);
+	w3_init(); /* W3 */
 }
 
 public plugin_cfg()
@@ -1896,6 +1898,7 @@ public tick()
 		visuals();
 		lap_hud();
 	}
+	w3_tick(sec); /* W3 */
 	hud_flush();
 	for (new p = 1; p <= MaxClients; p++)
 		if (g_tqN[p])
@@ -5117,6 +5120,591 @@ stock dir_word(id, const Float:to[3], out[], len)
 		copy(out, len, "to your right");
 }
 
+/* ==== W3: Battle Royale pieces ==== */
+/* =========================================================================
+ * Battle Royale pieces (W3), each usable by any mode and by Game Mode Studio:
+ * healing items. Natives and forwards: ls_components.inc ("W3: Battle Royale
+ * pieces"); docs/COMPONENTS.md.
+ * ========================================================================= */
+
+#define W3_TASK_HEALMENU 7736900
+
+/* ---- healing items: carried, used by key or menu with a progress bar ---- */
+
+enum { HEAL_BANDAGE = 0, HEAL_MEDKIT, HEAL_DRINK, HEAL_KINDS };
+new const W3_HEAL_ID[HEAL_KINDS][] = { "bandage", "medkit", "drink" };
+new const W3_HEAL_TITLE[HEAL_KINDS][] = { "Bandage", "Medkit", "Energy drink" };
+new g_w3Heals[33][HEAL_KINDS];
+new g_w3Using[33];
+new Float:g_w3UseEnd[33];
+new Float:g_w3BoostEnd[33];
+new Float:g_w3BoostHp[33];
+new Float:g_w3Hurt[33];
+new Float:g_w3BotTry[33];
+new g_w3cHealCarry, g_w3cHealLimits, g_w3cHealSecs, g_w3cHealKey, g_w3cHealBots;
+new g_w3fwHeal;
+new bool:g_w3Hooked;
+
+stock w3_natives()
+{
+	register_native("ls_heal_give", "n_w3_heal_give");
+	register_native("ls_heal_count", "n_w3_heal_count");
+	register_native("ls_heal_use", "n_w3_heal_use");
+	register_native("ls_heal_cancel", "n_w3_heal_cancel");
+	register_native("ls_heal_using", "n_w3_heal_using");
+}
+
+stock w3_init()
+{
+	/* 1: bandages, medkits and energy drinks are carried and used (key or menu); 0: they heal at once */
+	g_w3cHealCarry = register_cvar("ls_heal_carry", "0");
+	/* how many of each a player can carry: bandage medkit drink */
+	g_w3cHealLimits = register_cvar("ls_heal_limits", "6 2 3");
+	/* seconds to use each */
+	g_w3cHealSecs = register_cvar("ls_heal_secs", "3 7 4");
+	/* 1: the flashlight key (F) uses a healing item (the menu when there's a choice) */
+	g_w3cHealKey = register_cvar("ls_heal_key", "1");
+	/* 1: bots heal by themselves when hurt and nobody's in sight */
+	g_w3cHealBots = register_cvar("ls_heal_bots", "1");
+	g_w3fwHeal = CreateMultiForward("ls_on_heal", ET_STOP, FP_CELL, FP_STRING, FP_CELL);
+	register_clcmd("ls_heal", "cmd_w3_heal");
+	register_clcmd("say /heal", "cmd_w3_heal_menu");
+	register_clcmd("say_team /heal", "cmd_w3_heal_menu");
+	register_forward(FM_CmdStart, "fm_w3_cmdstart");
+	RegisterHamPlayer(Ham_Killed, "ham_w3_killed", 1);
+	RegisterHamPlayer(Ham_TakeDamage, "ham_w3_hurt_post", 1);
+	RegisterHamPlayer(Ham_CS_Player_ResetMaxSpeed, "ham_w3_maxspeed", 1);
+	register_event("HLTV", "ev_w3_new_round", "a", "1=0", "2=0");
+	g_w3Hooked = true;
+}
+
+public ev_w3_new_round()
+{
+	for (new p = 1; p <= 32; p++)
+		w3_reset_player(p);
+}
+
+stock w3_reset_player(p)
+{
+	w3_heal_stop(p, false);
+	for (new k = 0; k < HEAL_KINDS; k++)
+		g_w3Heals[p][k] = 0;
+	g_w3BoostEnd[p] = 0.0;
+	g_w3BoostHp[p] = 0.0;
+	g_w3Hurt[p] = 0.0;
+}
+
+public client_putinserver(id)
+{
+	if (g_w3Hooked)
+		w3_reset_player(id);
+}
+
+public ham_w3_killed(id, killer, gib)
+{
+	w3_heal_stop(id, false);
+	for (new k = 0; k < HEAL_KINDS; k++)
+		g_w3Heals[id][k] = 0;
+	g_w3BoostEnd[id] = 0.0;
+	return HAM_IGNORED;
+}
+
+public ham_w3_hurt_post(victim, inflictor, attacker, Float:dmg, bits)
+{
+	if (!(1 <= victim <= 32) || dmg <= 0.0)
+		return HAM_IGNORED;
+	g_w3Hurt[victim] = get_gametime();
+	/* a bot shot while healing fights back */
+	if (g_w3Using[victim] && is_user_bot(victim) && 1 <= attacker <= 32 && attacker != victim)
+		w3_heal_stop(victim, true);
+	return HAM_IGNORED;
+}
+
+/* "6 2 3" -> the kind's number */
+stock w3_kind_num(pcvar, kind, def)
+{
+	new v[64], a[3][12];
+	get_pcvar_string(pcvar, v, charsmax(v));
+	parse(v, a[0], 11, a[1], 11, a[2], 11);
+	return a[kind][0] ? str_to_num(a[kind]) : def;
+}
+
+stock Float:w3_kind_secs(kind)
+{
+	new v[64], a[3][12];
+	get_pcvar_string(g_w3cHealSecs, v, charsmax(v));
+	parse(v, a[0], 11, a[1], 11, a[2], 11);
+	static const Float:DEF[HEAL_KINDS] = { 3.0, 7.0, 4.0 };
+	return a[kind][0] ? floatmax(str_to_float(a[kind]), 0.1) : DEF[kind];
+}
+
+stock w3_heal_limit(kind)
+{
+	static const DEF[HEAL_KINDS] = { 6, 2, 3 };
+	return max(w3_kind_num(g_w3cHealLimits, kind, DEF[kind]), 0);
+}
+
+/* "bandage", "bandage:3", "medkit", "firstaid", "drink", "energy" -> the kind (-1 not a healing item) */
+stock w3_heal_kind(const item[])
+{
+	if (equali(item, "bandage", 7))
+		return HEAL_BANDAGE;
+	if (equali(item, "medkit", 6) || equali(item, "firstaid", 8))
+		return HEAL_MEDKIT;
+	if (equali(item, "drink", 5) || equali(item, "energy", 6))
+		return HEAL_DRINK;
+	return -1;
+}
+
+stock w3_item_count(const item[])
+{
+	new c = contain(item, ":");
+	return c > 0 ? max(str_to_num(item[c + 1]), 1) : 1;
+}
+
+stock Float:w3_max_hp(id)
+{
+	new Float:mx;
+	pev(id, pev_max_health, mx);
+	return floatmax(mx, 100.0);
+}
+
+/* gives n of a kind (up to the carry limit); returns how many were taken */
+stock w3_heal_give(id, kind, n)
+{
+	new room = w3_heal_limit(kind) - g_w3Heals[id][kind];
+	n = min(n, room);
+	if (n <= 0)
+		return 0;
+	g_w3Heals[id][kind] += n;
+	emit_sound(id, CHAN_ITEM, "items/smallmedkit1.wav", 0.7, ATTN_NORM, 0, PITCH_NORM);
+	if (!is_user_bot(id) && get_pcvar_num(g_w3cHealKey))
+		client_print(id, print_center, "%s x%d  (F or say /heal to use)", W3_HEAL_TITLE[kind], g_w3Heals[id][kind]);
+	return n;
+}
+
+/* can a heal of this kind do anything now (bandages only up to 75) */
+stock bool:w3_heal_useful(id, kind)
+{
+	new Float:hp;
+	pev(id, pev_health, hp);
+	switch (kind)
+	{
+		case HEAL_BANDAGE: return hp < 75.0;
+		case HEAL_MEDKIT: return hp < w3_max_hp(id);
+		case HEAL_DRINK: return hp < w3_max_hp(id) || g_w3BoostEnd[id] < get_gametime();
+	}
+	return false;
+}
+
+/* starts using one; kind -1 = the best one for now */
+stock w3_heal_start(id, kind)
+{
+	if (!is_user_alive(id) || g_w3Using[id])
+		return 0;
+	if (kind < 0)
+		kind = w3_heal_best(id);
+	if (kind < 0 || g_w3Heals[id][kind] <= 0)
+		return 0;
+	if (!w3_heal_useful(id, kind))
+	{
+		if (!is_user_bot(id))
+			client_print(id, print_center, kind == HEAL_BANDAGE ? "Bandages heal up to 75" : "You're at full health");
+		return 0;
+	}
+	new ret;
+	ExecuteForward(g_w3fwHeal, ret, id, W3_HEAL_ID[kind], 0);
+	if (ret >= PLUGIN_HANDLED)
+		return 0;
+	act_cancel(id);
+	new Float:secs = w3_kind_secs(kind);
+	g_w3Using[id] = kind + 1;
+	g_w3UseEnd[id] = get_gametime() + secs;
+	bar_time(id, floatround(secs, floatround_ceil));
+	/* bots stand still while healing (people: moving cancels) */
+	if (is_user_bot(id))
+	{
+		set_user_maxspeed(id, 1.0);
+		hint("heal %d %s %.0f", id, W3_HEAL_ID[kind], secs);
+	}
+	return 1;
+}
+
+/* the kind to use now: a medkit when low, else bandages up to 75, else a drink */
+stock w3_heal_best(id)
+{
+	new Float:hp;
+	pev(id, pev_health, hp);
+	if (hp < 45.0 && g_w3Heals[id][HEAL_MEDKIT] > 0)
+		return HEAL_MEDKIT;
+	if (hp < 75.0 && g_w3Heals[id][HEAL_BANDAGE] > 0)
+		return HEAL_BANDAGE;
+	if (g_w3Heals[id][HEAL_DRINK] > 0 && w3_heal_useful(id, HEAL_DRINK))
+		return HEAL_DRINK;
+	if (hp < w3_max_hp(id) && g_w3Heals[id][HEAL_MEDKIT] > 0)
+		return HEAL_MEDKIT;
+	return -1;
+}
+
+stock w3_heal_stop(id, bool:cancelled)
+{
+	if (!g_w3Using[id])
+		return;
+	new kind = g_w3Using[id] - 1;
+	g_w3Using[id] = 0;
+	if (is_user_connected(id))
+	{
+		bar_time(id, 0);
+		if (is_user_alive(id))
+			ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, id);
+		if (is_user_bot(id))
+			hint("heal %d -", id);
+	}
+	if (cancelled)
+	{
+		new ret;
+		ExecuteForward(g_w3fwHeal, ret, id, W3_HEAL_ID[kind], 2);
+	}
+}
+
+stock w3_heal_finish(id)
+{
+	new kind = g_w3Using[id] - 1;
+	g_w3Using[id] = 0;
+	bar_time(id, 0);
+	if (g_w3Heals[id][kind] > 0)
+		g_w3Heals[id][kind]--;
+	w3_heal_apply(id, kind);
+	ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, id);
+	if (is_user_bot(id))
+		hint("heal %d -", id);
+	new ret;
+	ExecuteForward(g_w3fwHeal, ret, id, W3_HEAL_ID[kind], 1);
+}
+
+stock w3_heal_apply(id, kind)
+{
+	new Float:hp, Float:mx = w3_max_hp(id);
+	pev(id, pev_health, hp);
+	switch (kind)
+	{
+		case HEAL_BANDAGE: hp = floatmax(hp, floatmin(hp + 15.0, 75.0));
+		case HEAL_MEDKIT: hp = mx;
+		case HEAL_DRINK:
+		{
+			/* 40 over 10 s, and a little speed meanwhile */
+			g_w3BoostEnd[id] = get_gametime() + 10.0;
+			g_w3BoostHp[id] = 40.0;
+			if (is_user_alive(id))
+				ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, id);
+		}
+	}
+	set_pev(id, pev_health, floatmin(hp, mx));
+	emit_sound(id, CHAN_ITEM, "items/smallmedkit1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+}
+
+public ham_w3_maxspeed(id)
+{
+	if (!is_user_alive(id) || (pev(id, pev_flags) & FL_FROZEN))
+		return HAM_IGNORED;
+	if (g_w3Using[id] && is_user_bot(id))
+		set_user_maxspeed(id, 1.0);
+	else if (g_w3BoostEnd[id] > get_gametime())
+		set_user_maxspeed(id, get_user_maxspeed(id) * 1.08);
+	return HAM_IGNORED;
+}
+
+/* using: no shooting; a person who moves stops; F opens the healing items */
+public fm_w3_cmdstart(id, uc, seed)
+{
+	if (!is_user_alive(id))
+		return FMRES_IGNORED;
+	if (g_w3Using[id])
+	{
+		new b = get_uc(uc, UC_Buttons);
+		if (!is_user_bot(id) && (b & (IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT | IN_JUMP)))
+		{
+			w3_heal_stop(id, true);
+			client_print(id, print_center, "Healing stopped");
+			return FMRES_IGNORED;
+		}
+		set_uc(uc, UC_Buttons, b & ~(IN_ATTACK | IN_ATTACK2));
+		return FMRES_HANDLED;
+	}
+	if (get_uc(uc, UC_Impulse) == 100 && get_pcvar_num(g_w3cHealKey) && get_pcvar_num(g_w3cHealCarry) && w3_heals_total(id))
+	{
+		set_uc(uc, UC_Impulse, 0);
+		remove_task(W3_TASK_HEALMENU + id);
+		set_task(0.01, "task_w3_heal_key", W3_TASK_HEALMENU + id);
+		return FMRES_HANDLED;
+	}
+	return FMRES_IGNORED;
+}
+
+public task_w3_heal_key(tid)
+{
+	new id = tid - W3_TASK_HEALMENU;
+	if (!is_user_alive(id))
+		return;
+	/* one kind that helps now: use it; more: the menu */
+	new kinds = 0, last = -1;
+	for (new k = 0; k < HEAL_KINDS; k++)
+		if (g_w3Heals[id][k] > 0 && w3_heal_useful(id, k))
+		{
+			kinds++;
+			last = k;
+		}
+	if (kinds == 1)
+		w3_heal_start(id, last);
+	else
+		w3_heal_menu(id);
+}
+
+stock w3_heals_total(id)
+{
+	new n = 0;
+	for (new k = 0; k < HEAL_KINDS; k++)
+		n += g_w3Heals[id][k];
+	return n;
+}
+
+public cmd_w3_heal(id)
+{
+	new a[16];
+	read_argv(1, a, charsmax(a));
+	if (!a[0])
+		w3_heal_menu(id);
+	else
+		w3_heal_start(id, w3_heal_kind(a));
+	return PLUGIN_HANDLED;
+}
+
+public cmd_w3_heal_menu(id)
+{
+	w3_heal_menu(id);
+	return PLUGIN_HANDLED;
+}
+
+stock w3_heal_menu(id)
+{
+	if (!is_user_alive(id))
+		return;
+	if (!w3_heals_total(id))
+	{
+		client_print(id, print_center, "No healing items");
+		return;
+	}
+	static const DESC[HEAL_KINDS][] = { "+15 up to 75", "full health", "+40 over 10 s, a little faster" };
+	new m = menu_create("Healing items", "menu_w3_heal");
+	new line[96], info[4];
+	for (new k = 0; k < HEAL_KINDS; k++)
+	{
+		if (!g_w3Heals[id][k])
+			continue;
+		formatex(line, charsmax(line), "%s x%d \d(%s, %.0f s)", W3_HEAL_TITLE[k], g_w3Heals[id][k], DESC[k], w3_kind_secs(k));
+		num_to_str(k, info, charsmax(info));
+		menu_additem(m, line, info);
+	}
+	menu_display(id, m);
+}
+
+public menu_w3_heal(id, menu, item)
+{
+	if (item >= 0)
+	{
+		new info[4], acc, cb;
+		menu_item_getinfo(menu, item, acc, info, charsmax(info), _, _, cb);
+		w3_heal_start(id, str_to_num(info));
+	}
+	menu_destroy(menu);
+	return PLUGIN_HANDLED;
+}
+
+/* gm_components' give_thing: -1 = not one of these, else 0/1 */
+stock w3_give(id, const item[])
+{
+	new kind = w3_heal_kind(item);
+	if (kind >= 0)
+	{
+		new n = w3_item_count(item);
+		if (get_pcvar_num(g_w3cHealCarry))
+			return w3_heal_give(id, kind, n) > 0 ? 1 : 0;
+		/* not carried: used at once (a medkit as before: +50) */
+		new Float:hp, Float:mx = w3_max_hp(id);
+		pev(id, pev_health, hp);
+		if (kind == HEAL_BANDAGE)
+			hp = floatmax(hp, floatmin(hp + 15.0 * float(n), 75.0));
+		else
+			hp = floatmin(hp + (kind == HEAL_MEDKIT ? 50.0 : 25.0) * float(n), mx);
+		set_pev(id, pev_health, hp);
+		emit_sound(id, CHAN_ITEM, "items/smallmedkit1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM);
+		return 1;
+	}
+	return -1;
+}
+
+/* gm_components' can_take: -1 = not one of these */
+stock w3_can_take(id, const item[])
+{
+	new kind = w3_heal_kind(item);
+	if (kind >= 0)
+		return !get_pcvar_num(g_w3cHealCarry) || g_w3Heals[id][kind] < w3_heal_limit(kind);
+	return -1;
+}
+
+stock bool:w3_item_model(const item[], out[], len)
+{
+	if (w3_heal_kind(item) >= 0)
+	{
+		copy(out, len, "models/w_medkit.mdl");
+		return true;
+	}
+	return false;
+}
+
+/* each 0.25 s (from tick) */
+stock w3_tick(bool:sec)
+{
+	new Float:now = get_gametime();
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!g_alive[p])
+		{
+			if (g_w3Using[p])
+				w3_heal_stop(p, false);
+			continue;
+		}
+		if (g_w3Using[p])
+		{
+			if (now >= g_w3UseEnd[p])
+				w3_heal_finish(p);
+			else if (!g_bot[p])
+				hud_add(p, false, "Using %s... (moving stops it)", W3_HEAL_TITLE[g_w3Using[p] - 1]);
+		}
+		/* the drink's heal over time */
+		if (g_w3BoostEnd[p] > 0.0)
+		{
+			if (now >= g_w3BoostEnd[p] || g_w3BoostHp[p] <= 0.0)
+			{
+				g_w3BoostEnd[p] = 0.0;
+				ExecuteHamB(Ham_CS_Player_ResetMaxSpeed, p);
+			}
+			else
+			{
+				new Float:hp, Float:give = floatmin(1.0, g_w3BoostHp[p]);
+				pev(p, pev_health, hp);
+				g_w3BoostHp[p] -= give;
+				set_pev(p, pev_health, floatmin(hp + give, w3_max_hp(p)));
+			}
+		}
+		if (sec && g_bot[p] && !g_w3Using[p] && get_pcvar_num(g_w3cHealBots) && get_pcvar_num(g_w3cHealCarry))
+			w3_bot_heal(p, now);
+	}
+}
+
+/* a hurt bot heals when nobody has hurt it for 4 s and no enemy is in sight (W2 may take this over) */
+stock w3_bot_heal(p, Float:now)
+{
+	if (now - g_w3Hurt[p] < 4.0 || now < g_w3BotTry[p] || !w3_heals_total(p))
+		return;
+	new kind = w3_heal_best(p);
+	if (kind < 0)
+		return;
+	new Float:hp;
+	pev(p, pev_health, hp);
+	/* (a drink only tops up when a bit hurt) */
+	if (kind == HEAL_DRINK && hp > 85.0)
+		return;
+	g_w3BotTry[p] = now + 2.0;
+	if (w3_enemy_in_sight(p, 1500.0))
+		return;
+	w3_heal_start(p, kind);
+}
+
+/* is someone who could shoot this player in sight (not a friend: team when not free for all) */
+stock bool:w3_enemy_in_sight(p, Float:range)
+{
+	new Float:a[3], Float:b[3];
+	pev(p, pev_origin, a);
+	a[2] += 16.0;
+	for (new q = 1; q <= MaxClients; q++)
+	{
+		if (q == p || !g_alive[q] || !w3_enemies(p, q))
+			continue;
+		pev(q, pev_origin, b);
+		b[2] += 16.0;
+		if (get_distance_f(a, b) > range)
+			continue;
+		engfunc(EngFunc_TraceLine, a, b, IGNORE_MONSTERS, p, 0);
+		new Float:f;
+		get_tr2(0, TR_flFraction, f);
+		if (f >= 0.99 || get_tr2(0, TR_pHit) == q)
+			return true;
+	}
+	return false;
+}
+
+stock bool:w3_enemies(a, b)
+{
+	if (get_cvar_num("mp_freeforall"))
+		return true;
+	return get_user_team(a) != get_user_team(b);
+}
+
+/* ---- natives ---- */
+
+/* native ls_heal_give(id, const kind[], n = 1) */
+public n_w3_heal_give(plugin, params)
+{
+	new id = get_param(1), k[16];
+	get_string(2, k, charsmax(k));
+	new kind = w3_heal_kind(k);
+	if (!(1 <= id <= MaxClients) || kind < 0 || !is_user_alive(id))
+		return 0;
+	return w3_heal_give(id, kind, max(get_param(3), 1));
+}
+
+/* native ls_heal_count(id, const kind[]) ("" = all) */
+public n_w3_heal_count(plugin, params)
+{
+	new id = get_param(1), k[16];
+	get_string(2, k, charsmax(k));
+	if (!(1 <= id <= MaxClients))
+		return 0;
+	if (!k[0])
+		return w3_heals_total(id);
+	new kind = w3_heal_kind(k);
+	return kind >= 0 ? g_w3Heals[id][kind] : 0;
+}
+
+/* native ls_heal_use(id, const kind[] = "") */
+public n_w3_heal_use(plugin, params)
+{
+	new id = get_param(1), k[16];
+	get_string(2, k, charsmax(k));
+	if (!(1 <= id <= MaxClients))
+		return 0;
+	return w3_heal_start(id, k[0] ? w3_heal_kind(k) : -1);
+}
+
+/* native ls_heal_cancel(id) */
+public n_w3_heal_cancel(plugin, params)
+{
+	new id = get_param(1);
+	if (1 <= id <= MaxClients)
+		w3_heal_stop(id, true);
+	return 1;
+}
+
+/* native bool:ls_heal_using(id) */
+public n_w3_heal_using(plugin, params)
+{
+	new id = get_param(1);
+	return 1 <= id <= MaxClients && g_w3Using[id] != 0;
+}
+
+/* ==== end W3 ==== */
+
 /* =========================================================================
  * Areas, damage, targets, forwards
  * ========================================================================= */
@@ -5248,6 +5836,8 @@ stock weapon_name(const item[], out[], len)
 
 stock item_model(const item[], out[], len)
 {
+	if (w3_item_model(item, out, len)) /* W3 */
+		return; /* W3 */
 	if (equali(item, "vest") || equali(item, "kevlar") || equali(item, "armor", 5) || equali(item, "nvg"))
 		copy(out, len, "models/w_kevlar.mdl");
 	else if (equali(item, "vesthelm") || equali(item, "assault"))
@@ -5276,6 +5866,9 @@ stock item_model(const item[], out[], len)
 /* would giving this do anything (no second primary, no full grenade slot) */
 stock bool:can_take(id, const item[])
 {
+	new w3 = w3_can_take(id, item); /* W3 */
+	if (w3 >= 0) /* W3 */
+		return w3 != 0; /* W3 */
 	new w[32];
 	weapon_name(item, w, charsmax(w));
 	new csw = get_weaponid(w);
@@ -5300,6 +5893,9 @@ stock give_thing(id, const item[])
 	new colon = contain(item, ":");
 	if (colon > 0)
 		num = str_to_num(item[colon + 1]);
+	new w3 = w3_give(id, item); /* W3 */
+	if (w3 >= 0) /* W3 */
+		return w3; /* W3 */
 	if (equali(item, "hp", 2) || equali(item, "medkit"))
 	{
 		new mx = floatround(entity_max_health(id));
