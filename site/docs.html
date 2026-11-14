@@ -329,6 +329,10 @@ footer a { color: var(--dim); }
   <h2 id="modes">Game modes</h2>
   <p><a href="#last-stand">Last Stand</a> and <a href="#battle-royale">Battle Royale</a> come with their own maps. Zombie Plague, Warcraft 3, SuperHero, Gun Game, Deathrun, Surf, Paintball and the rest install from <b>Mods</b>; each is patched for bots, with a note on how well they play it. Switch modes from Play or <span class="kbd">F3</span> (the map reloads). Mode chat commands are under <a href="#commands-modes">In-game commands</a>.</p>
   <p id="mode-settings">A <a href="#game-mode-studio">Game Mode Studio</a> mode can have <b>settings</b> its maker lets hosts change (points to win, round time and the like). They show under the mode on Play and on a server's <b>Modes</b> tab; each server keeps its own, and they apply from the next map or round. A value outside the maker's range is kept, with a warning.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/mode-settings.webp" type="image/webp"><img src="img/1.0/mode-settings.png" alt="A Studio mode's settings: points to win, seconds per point, whether the hill moves, and what happens when both teams are on it, two of them changed with Reset" width="852" height="345" loading="lazy"></picture>
+    <figcaption>A Studio mode's settings, as a host sees them (an example).</figcaption>
+  </figure>
   <h2 id="match-mode">5v5 matches</h2>
   <p>Match mode runs warmup, <code>/ready</code>, a knife round for sides, and pauses, with a match panel on Play. Commands: <a href="#commands-match">5v5 matches</a>.</p>
 </section>
@@ -800,9 +804,17 @@ footer a { color: var(--dim); }
   <h2 id="editor-textures">Textures</h2>
   <p>The <b>Textures</b> panel shows the map's WADs (add more in <b>Map properties</b>). Click to choose; double-click or <span class="kbd">Shift</span> <span class="kbd">T</span> paints what's picked. <b>Texture lock</b> keeps textures in place when brushes move.</p>
   <p>With faces picked, <b>Inspect</b> shows the face sheet: shift, scale and turn, <b>Fit</b> and <b>Justify</b>, <b>Align</b> to the world or to the face (good for slopes), <b>Pick up</b> a face's texture and <b>Recent textures</b>. With the <b>Texture</b> tool in the 3D view, right-click a face to paint the current texture on it, <span class="kbd">Alt</span>-right-click to paint it and carry the picked face's alignment round the corner (like Hammer), and <span class="kbd">Alt</span>-click to pick a texture up.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/editor-facesheet.webp" type="image/webp"><img src="img/1.0/editor-facesheet.jpg" alt="The map editor with a wall face picked: the face sheet in Inspect shows its texture, size, alignment, shift, scale and turn" width="1200" height="750" loading="lazy"></picture>
+    <figcaption>The face sheet: a picked face's texture and how it lies.</figcaption>
+  </figure>
   <h2 id="editor-entities">Entities</h2>
   <p><b>Inspect</b> shows a form for the picked entity, with help on every key; pick several to change them together. <code>target</code> → <code>targetname</code> links are drawn in 3D. A model, sprite or sound key has <b>Choose…</b>, ↗ (show it in the <a href="#content-browser">Content Browser</a>) and <b>Use selected</b>. For a mod's own entities, add its FGD in <b>Map properties › Entity definitions</b>.</p>
   <p>The <b>I/O</b> panel (<b>What triggers what</b>) lists every link (targets, <code>multi_manager</code>s, masters and kill targets) and draws them as arrows. Show <b>All</b>, only <b>Broken</b> ones (a target no entity is named), or the <b>Picked chain</b>; the search box finds a name or a class. Click a row to pick it, double-click to look at it.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/editor-io.webp" type="image/webp"><img src="img/1.0/editor-io.jpg" alt="The map editor showing a multi_manager's chain as arrows in 3D, with the I/O panel listing its links below" width="1200" height="750" loading="lazy"></picture>
+    <figcaption>A multi_manager's chain: arrows in 3D, links in the I/O panel.</figcaption>
+  </figure>
   <h2 id="content-browser" data-keywords="assets models sprites sounds props content drawer">Content Browser</h2>
   <p>The map editor panel with <b>Models</b>, <b>Sprites</b>, <b>Sounds</b>, <b>Textures</b>, <b>Prefabs</b> and <b>GameBanana</b>. Open it from <b>View › Content Browser</b> (tab: <b>Content</b>) or as a drawer.</p>
   <ul>
@@ -820,6 +832,10 @@ footer a { color: var(--dim); }
   <h2 id="editor-checks">Checks as you go</h2>
   <p><b>Checks</b> finds broken brushes, limits, missing textures, spawns, files or targets, and what a mode still needs. Click a problem to go to it; most have a fix, like <b>Place a CT spawn</b> or <b>Add halflife.wad and cstrike.wad</b>.</p>
   <p id="editor-leaks" data-keywords="leak pointfile hole void">Leaks show when you compile: a red line runs from an entity out to the hole, and a bar says which brush the gap is next to. <b>Go to leak</b> flies along the line and picks that brush; <b>Pick brushes at the hole</b>, <b>Hide line</b> and <b>Forget it</b> are there too. <b>Map › Load pointfile…</b> loads a line (<code>.lin</code> or <code>.pts</code>) from another compile.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/editor-leak.webp" type="image/webp"><img src="img/1.0/editor-leak.jpg" alt="The map editor after Go to leak: a red line through a gap in ls_outpost's wall, the brush beside it picked, and the leak bar above" width="1200" height="750" loading="lazy"></picture>
+    <figcaption>Go to leak flies to the hole and picks the brush beside it.</figcaption>
+  </figure>
   <p>The game won't load a map with missing models or sprites. The <b>Project</b> panel lists every file the map uses, can <b>Copy into the game</b> or <b>Copy next to the project</b>, and <b>Find missing files…</b> searches a folder you pick.</p>
   <h2 id="editor-save">Saving and exporting</h2>
   <ul>
@@ -904,6 +920,10 @@ footer a { color: var(--dim); }
   <h2 id="studio-start">Start a mode</h2>
   <p>In <b>Tools › Game Mode Studio</b>, start from a template (<b>Rifle Reward</b>, <b>Last Stand</b>, <b>Battle Royale</b>), one of the five <a href="#studio-examples">example modes</a>, or <b>Blank mode</b>. Name it and it's saved; <b>Your modes</b> lists them.</p>
   <p>New to the Studio? The first time you open it, it offers a one-minute <b>tour</b> on the Infection example: the canvas, adding nodes, My mode, Details, the three checks, Playtest and Install. <b>Not now</b> or <b>Don't show again</b> skip it, and the <b>?</b> menu next to <b>Find</b> has <b>Take the Studio tour</b> any time.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/studio-start.webp" type="image/webp"><img src="img/1.0/studio-start.png" alt="Game Mode Studio's start: the templates and the five example modes" width="790" height="440" loading="lazy"></picture>
+    <figcaption>Start from a template or one of the example modes.</figcaption>
+  </figure>
   <h2 id="studio-first-mode" data-keywords="tutorial first beginner how to make a mode">Make your first mode</h2>
   <p>Five minutes, start to finish: every kill gives the killer 300 money and a chat line.</p>
   <ol>
@@ -971,6 +991,10 @@ footer a { color: var(--dim); }
   <p>In a function with a Player input, each player gets their own copy. That's up to 32 copies, each ticking 20 times a second; the Quick check warns when that adds up. A Tick of 0.1 s still looks smooth.</p>
   <h2 id="studio-tables" data-keywords="data table spreadsheet csv lookup list">Data tables</h2>
   <p>A <b>data table</b> is a grid of values to look up: a gun list, prices, waves. Under <b>Data tables</b>, add one and fill it in: each column has a type (number, text, yes/no, an enum, a weapon or an entity name), and the <b>key column</b> names each row. <b>Paste or import CSV…</b> takes rows straight from a spreadsheet; <b>Copy as CSV</b> goes the other way.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/studio-tables.webp" type="image/webp"><img src="img/1.0/studio-tables.png" alt="The data table editor: Gun Game Lite's gun list with Level, Gun and Spare bullets columns" width="1120" height="660" loading="lazy"></picture>
+    <figcaption>Gun Game Lite's gun list is a data table.</figcaption>
+  </figure>
   <ul>
     <li><b>Get Row</b>: the row with this key, every cell as a pin. <b>Get Cell</b>: one cell by row number (from 0).</li>
     <li><b>For Each Row</b>, <b>Find Rows</b> (where a column has a value), <b>Row Count</b>, <b>Row Keys</b>.</li>
@@ -1516,6 +1540,10 @@ public on_spawn(id)
   <h2 id="crashes" data-keywords="crash crashing ham sandwich hamsandwich module discord">Crashes</h2>
   <p>A server that crashed shows a badge on its card and page (like <b>3 crashes in 24 h</b>). <b>Health › Crashes</b> lists each one, newest first: when, the map, what went wrong and the last log lines, with <b>Copy</b> to send it to a mod's maker. Turn on <b>Post crashes to Discord</b> to get new ones in the server's Discord status channel while Loner-Strike runs.</p>
   <p>A <b>Crash-prone module</b> warning means the server runs a module known to crash servers. The usual one is the official Ham Sandwich, which crashes on map changes: Loner-Strike puts its fixed copy back before every Play and local server start (a Linux server does it before each start), keeping the replaced file beside it.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/crashes.webp" type="image/webp"><img src="img/1.0/crashes.png" alt="Health › Crashes: a Ham Sandwich warning, two crashes in the last 24 hours with Details and Copy, and Post crashes to Discord switched on" width="1152" height="380" loading="lazy"></picture>
+    <figcaption>Health › Crashes on a server (an example).</figcaption>
+  </figure>
 </section>
 
 <section class="topic" id="vps" data-group="Servers">
@@ -1737,6 +1765,10 @@ lsctl logs        the last 100 console lines</code></pre>
     <li>If the mode runs server commands, kicks players or calls other plugins, the listing says so with a <a href="#community-badges">badge</a>.</li>
   </ul>
   <p>Others can play and remix it, with your name on it.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/publish-mode.webp" type="image/webp"><img src="img/1.0/publish-mode.png" alt="Publishing King of the Hill: the checks (the graph passes, a requirements warning with Open in the Studio), details, the bot rating and maps" width="1000" height="860" loading="lazy"></picture>
+    <figcaption>Publishing a mode: the checks come first.</figcaption>
+  </figure>
   <h2 id="credits" data-keywords="credit license permission terms author assets">Credits</h2>
   <p>Loner-Strike tracks where every file came from:</p>
   <ul>
@@ -1786,7 +1818,19 @@ lsctl logs        the last 100 console lines</code></pre>
     <li>In the Discord, apply with <b>Apply › Server moderator</b> and pick the server.</li>
     <li>When the owner approves, the bot sends you an invite. In Loner-Strike, press <b>Join as moderator</b> on <b>Servers</b> and paste it: you see what you'll be able to do before you accept.</li>
   </ol>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/roles-join.webp" type="image/webp"><img src="img/1.0/roles-join.png" alt="Join as moderator: a pasted invite shows it's for Friday Frags as a Moderator, what that lets you do, and what stays with the owner" width="1200" height="750" loading="lazy"></picture>
+    <figcaption>Join as moderator shows what the invite gives before you accept.</figcaption>
+  </figure>
   <p>Owners: claim the server under its <b>Shared control</b> tab (<b>Loner-Strike roles</b>), then approve applicants and press <b>Create moderator invite</b>. Shared-control Admins can invite Moderators too. <b>Revoke</b> takes access away in the app, the game and Discord.</p>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/roles-claim.webp" type="image/webp"><img src="img/1.0/roles-claim.png" alt="The Loner-Strike roles card: claimed, the Discord owner code to type, and switches for applications, Discord moderators and supporters" width="1152" height="492" loading="lazy"></picture>
+    <figcaption>Loner-Strike roles on a server's Shared control tab.</figcaption>
+  </figure>
+  <figure class="shot">
+    <picture><source srcset="img/1.0/roles-applications.webp" type="image/webp"><img src="img/1.0/roles-applications.png" alt="Moderator applications: an approved applicant with Create moderator invite, an invite waiting, one waiting for a decision and an active Moderator with Revoke" width="1152" height="405" loading="lazy"></picture>
+    <figcaption>Applications, invites and Moderators (an example).</figcaption>
+  </figure>
 </section>
 
 <!-- ============ AI agents ============ -->

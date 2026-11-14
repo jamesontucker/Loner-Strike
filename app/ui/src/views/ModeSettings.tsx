@@ -108,7 +108,7 @@ export function ModeSettings({ mode, live }: { mode: string; live?: boolean }) {
                     <NumberBox id={`ms-${s.cvar}`} s={s} disabled={!!saving} onSave={(v) => void save(s, v)} />
                   )}
                   {s.changed && (
-                    <button type="button" className="link small" disabled={!!saving} onClick={() => void send(s.cvar, { reset: [s.cvar] })} title={`Back to ${defaultText(s)}`}>
+                    <button type="button" className="link small" style={{ whiteSpace: "nowrap" }} disabled={!!saving} onClick={() => void send(s.cvar, { reset: [s.cvar] })} title={`Back to ${defaultText(s)}`}>
                       Reset
                     </button>
                   )}
