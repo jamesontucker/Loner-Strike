@@ -638,6 +638,12 @@ fn copy_one(f: &Finder, hl: &Path, map: &str, t: &Target, store: &MapStore, loca
         return false;
     }
     out.copied.push((p.map.clone(), t.name.clone()));
+    // the custom creatures it uses go with it (its block in the server's creatures.ini)
+    if let Some(m) = find_local(f, hl, &p.map, &t.game) {
+        if let Some(local_game) = m.bsp.parent().and_then(Path::parent) {
+            crate::tools::creaturesrv::after_map_copy(local_game, &t.game, &t.dir.join(&t.game), &p.map, &m.bsp);
+        }
+    }
     out.kept.extend(p.kept.iter().map(|k| (k.clone(), t.name.clone())));
     if p.cz_only {
         out.cz.push(p.map.clone());

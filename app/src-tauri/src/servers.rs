@@ -2594,6 +2594,8 @@ pub fn start(id: &str) -> Result<(), String> {
     }
     // whether bots play on an empty server and whether it's listed (friends.cfg runs after every map)
     let bots_changed = write_bots_line(&e).unwrap_or(false);
+    // the creatures of maps that aren't on it any more go (tools/creaturesrv.rs)
+    let bots_changed = crate::tools::creaturesrv::prune(&e.dir.join(&e.game)).unwrap_or(false) || bots_changed;
     if e.ls_listed {
         // the list checks the server itself, so once it's had time to load a map
         let address = e.connect();
@@ -4297,6 +4299,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+
+    /// Shared creatures reach a Linux server with the next upload: creatures.ini and the models
+    /// and sounds the app copies into its folder here go up, and come off when they're gone.
+    #[test]
+    fn shared_creatures_go_up_with_the_server_folder() {
+        for key in ["addons/amxmodx/configs/gamemodes/creatures.ini", "models/qa/runner_x.mdl", "sound/qa/x.wav"] {
+            assert!(upload_filter(Path::new(key)) && !server_owned(key), "{key}");
+        }
+    }
 
     #[test]
     fn console_lines_by_who_sends_them() {

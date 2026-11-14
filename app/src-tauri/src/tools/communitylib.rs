@@ -541,6 +541,8 @@ fn mode_to_server(st: &Shared, it: &Installed, server_game: &Path) -> Result<(),
     let dest = am.join("plugins").join(format!("{plugin}.amxx"));
     crate::safety::before(TOOL, "put a community mode on a server", &dest);
     std::fs::copy(local.dir.join("addons/amxmodx/plugins").join(format!("{plugin}.amxx")), &dest).map_err(|e| format!("Couldn't copy {} to the server ({e}).", it.name))?;
+    // its shared creatures go with it (the block this computer's game has for it)
+    super::creaturesrv::carry_block(&local.dir, server_game, &it.key())?;
     super::studio::register_mode(&am.join("configs"), &g, &plugin)
 }
 
@@ -578,12 +580,20 @@ pub fn apply_picks(st: &Shared, server: &crate::servers::Entry, new: ServerPick)
             Err(e) => problems.push(format!("{}: {e}", it.name)),
         }
     }
+    // the creatures of maps that went (each map's block: tools/creaturesrv.rs)
+    if !drop_maps.is_empty() && super::creaturesrv::prune(&game_dir).unwrap_or(false) {
+        changed = true;
+    }
     for it in &drop_modes {
         if super::studio::installed(&game_dir, &it.mode) {
             match super::studio::uninstall(&game_dir, &it.mode) {
                 Ok(()) => (changed, modes_changed) = (true, true),
                 Err(e) => problems.push(format!("{}: {e}", it.name)),
             }
+        }
+        // its shared creatures (types another item there brings stay)
+        if let Err(e) = super::creaturesrv::drop_block(&game_dir, &it.key()) {
+            problems.push(format!("{}: {e}", it.name));
         }
     }
     let mut kept = new.clone();
