@@ -136,10 +136,44 @@ class Claims(unittest.TestCase):
         with self.assertRaises(cm.Reject):
             r.claim_finish({"claim": st["claim"]}, "1.2.3.4")
         done2, srv2 = claim(r, fs)
-        self.assertEqual(srv2["id"], srv["id"])
+        self.assertNotEqual(srv2["id"], srv["id"])
         self.assertIsNone(r.server_by_token(done["token"]))
         self.assertIsNone(r.server_by_token("lsr1_" + "x" * 43))
         self.assertIsNone(r.server_by_token(None))
+
+    def test_a_reclaimed_official_server_starts_from_nothing(self):
+        r, mod, bot, fs, _ = make()
+        done, srv = claim(r, fs, "official.example.com:27015")
+        command(mod, "server", HOST_DISCORD, done["owner_code"], sub="claim")
+        r.set_settings(srv, {"settings": {"applications": True, "honor_supporters": True}})
+        r.set_official(srv["id"], True)
+        srv = r.server_by_token(done["token"])
+        # one active moderator, one approved, one pending
+        ids = []
+        for i, (uid, steam) in enumerate(((PLAYER, STEAM), (OTHER, "STEAM_0:0:2"), ("460000000000000004", "STEAM_0:0:3"))):
+            r.s.run("INSERT INTO links(discord_id, steamid, server_id, official, linked_at) VALUES (?,?,?,?,?)", (uid, steam, srv["id"], 1, cm.now()))
+            cur = r.s.run("INSERT INTO sm_apps(server_id, discord_id, discord_name, steamid, availability, why, state, created) VALUES (?,?,?,?,?,?,?,?)",
+                          (srv["id"], uid, "n", steam, "always", "because", ("active", "approved", "pending")[i], cm.now()))
+            ids.append(cur.lastrowid)
+        before = len(bot.posts)
+        done2, srv2 = claim(r, fs, "official.example.com:27015")
+        self.assertNotEqual(srv2["id"], srv["id"])
+        self.assertEqual((srv2["official"], srv2["owner_discord"]), (0, ""))
+        self.assertEqual(r.settings_of(srv2), {"applications": False, "discord_mods_decide": False, "honor_supporters": False})
+        self.assertIsNone(r.server_by_token(done["token"]))
+        states = [r.s.one("SELECT state FROM sm_apps WHERE id=?", (i,))["state"] for i in ids]
+        self.assertEqual(states, ["revoked", "closed", "closed"])
+        self.assertTrue(any(m == "DELETE" and PLAYER in p for m, p, *_ in bot.calls))
+        self.assertEqual(r.applications(srv2), {"applications": []})
+        with self.assertRaises(cm.Reject):
+            r.vip(srv2)
+        alert = [p["content"] for p in bot.posts[before:] if "content" in p]
+        self.assertTrue(any("Official server" in a and "official status removed" in a and "1 moderator(s) removed" in a for a in alert), alert)
+        old = r.s.one("SELECT * FROM servers WHERE id=?", (srv["id"],))
+        self.assertEqual((old["official"], old["token_hash"]), (0, ""))
+        self.assertIn("retire", [x["action"] for x in r.s.all("SELECT action FROM roles_log")])
+        # only lsmod.py makes it official again
+        self.assertTrue(r.set_official(srv2["id"], True)["official"])
 
     def test_owner_code_in_discord(self):
         r, mod, bot, fs, _ = make()

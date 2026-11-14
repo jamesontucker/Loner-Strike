@@ -25,6 +25,12 @@ Status: design and API (2026-11-14). Nothing deployed: the box, the live Discord
 - **Owner on Discord:** the owner types `/server claim code:<owner_code>` in the Loner-Strike Discord (code 10 min,
   one use) so the service knows their Discord id: application cards go to them by DM. A new owner code:
   `POST /roles/server/owner-code`.
+- **Claimed again** (a new host on the same address, or the same host starting over; security review 2026-11-14): the
+  new claim is a new server. The old one keeps its id and history but stops working: not official any more (only
+  `lsmod.py roles official` gives it back, to the new one), default settings, its pending, approved and invited
+  applications closed, its active moderators revoked (Discord role taken away; their app access and in-game role live
+  in the old host's app and game files, which the service can't reach, and that app finds its claim gone). Logged
+  (`retire`) with an audit line: "Official server X was re-claimed; official status removed".
 - Where the token lives: a local server: `<app dir>/secrets/roles-<server id>` (0600 on the Mac/Linux, user-only
   ACL on Windows). A Linux server: `~/loner-strike/control/<id>/roles-token` (0600, the game user), written by the
   owner's app over SSH; ls-control uses it. The token never goes to helpers' apps.

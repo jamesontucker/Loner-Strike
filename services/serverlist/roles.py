@@ -232,17 +232,39 @@ class Roles:
         with self.lock:
             self.s.run("DELETE FROM claims WHERE id=?", (cid,))
             old = self.s.one("SELECT * FROM servers WHERE address=?", (c["address"],))
-            if old:
-                # whoever runs the server now: the old token stops working and the owner has to say who they are again
-                self.s.run("UPDATE servers SET token_hash=?, name=?, owner_discord='', owner_code_hash=?, owner_code_expires=?, claimed_at=? WHERE id=?",
-                           (sha(token), name, sha(owner), cm.now() + CODE_SECS, cm.now(), old["id"]))
-                sid = old["id"]
-            else:
-                cur = self.s.run("INSERT INTO servers(address, name, token_hash, owner_code_hash, owner_code_expires, claimed_at) VALUES (?,?,?,?,?,?)",
-                                 (c["address"], name, sha(token), sha(owner), cm.now() + CODE_SECS, cm.now()))
-                sid = cur.lastrowid
-        self.log("claim", "host", sid, c["address"], "claimed again" if old else "")
+            removed = self.retire(old) if old else []
+            # whoever runs the server now starts from nothing: not official, default settings, no
+            # applications or moderators (those belonged to the old server, which keeps its own id)
+            cur = self.s.run("INSERT INTO servers(address, name, token_hash, owner_code_hash, owner_code_expires, claimed_at) VALUES (?,?,?,?,?,?)",
+                             (c["address"], name, sha(token), sha(owner), cm.now() + CODE_SECS, cm.now()))
+            sid = cur.lastrowid
+        self.log("claim", "host", sid, c["address"], f"claimed again (was server {old['id']})" if old else "")
+        if old:
+            what = (f"Official server {cm.discord_text(old['name'], 60)} ({old['address']}) was re-claimed; official status removed"
+                    if old["official"] else f"Server {cm.discord_text(old['name'], 60)} ({old['address']}) was re-claimed by whoever runs it now")
+            self.audit(what + (f"; {len(removed)} moderator(s) removed" if removed else "") + ". `lsmod.py roles servers`.")
         return {"server": sid, "token": token, "owner_code": show_code(owner), "expires": cm.now() + CODE_SECS}
+
+    def retire(self, old):
+        """A server claimed again (by a new host, or the same one starting over): the old row stops
+        working and keeps its history under its own id; its open applications close and its
+        moderators lose the Discord role. Their app access and in-game role are kept by the old
+        host's app and game files, which the service can't reach: the old host's app finds its
+        claim gone. Returns the removed moderators' Discord ids."""
+        removed = []
+        self.s.run("UPDATE servers SET address=?, token_hash='', official=0, owner_code_hash='', owner_code_expires=0 WHERE id=?",
+                   (f"{old['address']}#retired-{old['id']}", old["id"]))
+        self.s.run("UPDATE sm_apps SET state='closed' WHERE server_id=? AND state IN ('pending','approved','invited')", (old["id"],))
+        for a in self.s.all("SELECT * FROM sm_apps WHERE server_id=? AND state='active'", (old["id"],)):
+            self.s.run("UPDATE sm_apps SET state='revoked', note='The server was claimed again.' WHERE id=?", (a["id"],))
+            rid = self.mod_role()
+            if rid and not self.moderating(a["discord_id"]):
+                self.mod.bot.api("DELETE", f"/guilds/{self.mod.guild}/members/{a['discord_id']}/roles/{rid}",
+                                 reason=f"The server of application #{a['id']} was claimed again")
+            self.log("revoke", "reclaim", old["id"], a["discord_id"], f"application #{a['id']}: the server was claimed again")
+            removed.append(a["discord_id"])
+        self.log("retire", "reclaim", old["id"], old["address"], ("official, " if old["official"] else "") + f"{len(removed)} moderator(s) removed")
+        return removed
 
     def owner_code(self, srv):
         code = new_code()
