@@ -209,6 +209,11 @@ function Badges({ list, trust }: { list: Entry["badges"]; trust?: Trust }) {
       {trust && (trust.level === "reviewed" || trust.level === "verified" || trust.level === "unreviewed") && (
         <span className={`tag cm-trust cm-trust-${trust.level}`} title={trust.note}>{trust.label}</span>
       )}
+      {trust?.risks?.map((r) => (
+        <span key={r} className="tag cm-risk" title="This mode does more than its own game. You're asked before it installs.">
+          {r}
+        </span>
+      ))}
     </span>
   );
 }
@@ -265,6 +270,8 @@ function Creation({ d }: { d: Details }) {
   const toast = useToast();
   const qc = useQueryClient();
   const [stage, setStage] = useState<Stage>({ state: "idle" });
+  // (the question the app asked after reading the mode itself; the list's own is d.trust.confirm)
+  const [ask, setAsk] = useState<string | null>(null);
   const [pic, setPic] = useState(0);
   const modes = useQuery({ queryKey: ["tools", "community", "modes"], queryFn: () => startModes(), staleTime: 60_000 });
   const map = d.item?.map?.name ?? null;
@@ -299,6 +306,11 @@ function Creation({ d }: { d: Details }) {
     if (d.trust.confirm && !confirmed) return setStage({ state: "asking" });
     setStage({ state: "installing", job: "" });
     const r = await tryIt(d.model, d.id, confirmed);
+    // the mode's own graph does more than the list said: asked before anything is installed
+    if (!r.error && r.needsConfirm) {
+      setAsk(r.needsConfirm);
+      return setStage({ state: "asking" });
+    }
     if (!r.error && r.kind === "prefab") {
       // prefabs go straight into the map editor's library (no install job)
       setStage({ state: "done", map: null, prefabs: r.prefabs ?? [] });
@@ -358,9 +370,9 @@ function Creation({ d }: { d: Details }) {
         {d.item?.map && <BotFacts d={d} />}
 
         <div className="cm-try">
-          {stage.state === "asking" && d.trust.confirm ? (
+          {stage.state === "asking" && (ask || d.trust.confirm) ? (
             <div className="cm-confirm" role="alertdialog" aria-label="Before installing">
-              <p>{d.trust.confirm}</p>
+              <p>{ask || d.trust.confirm}</p>
               <div className="row">
                 <button className="btn primary" onClick={() => go(true)}>Install it</button>
                 <button className="btn" onClick={() => setStage({ state: "idle" })}>Cancel</button>

@@ -196,6 +196,10 @@ def _bool(d, k):
     return v
 
 
+# what a Game Mode Studio mode can do beyond its own game (keep in step with community.rs RISKS)
+MODE_CAPABILITIES = ("server_commands", "amx_commands", "plugin_calls", "kicks_players")
+
+
 def _list(d, k, n):
     v = d.get(k, [])
     if v is None:
@@ -369,8 +373,13 @@ def clean_item(raw):
         maps = _list(mo, "maps", 32)
         if any(not safe_arg(x) for x in maps):
             _bad("mode maps")
+        # what a Studio mode does beyond its own game (the app's community::RISKS; it asks before
+        # installing and shows a badge each); unknown words are dropped, the app re-checks the graph
+        caps = [c for c in dict.fromkeys(_list(mo, "capabilities", 8)) if c in MODE_CAPABILITIES]
         # plugins and their review stay in the format for later; for now never any
         it["mode"] = {"id": mid, "uid": _uid(mo), "plugins": [], "review": "none", "maps": list(dict.fromkeys(maps))}
+        if caps:
+            it["mode"]["capabilities"] = caps
 
     h = _obj(raw, "health")
     if h is not None:

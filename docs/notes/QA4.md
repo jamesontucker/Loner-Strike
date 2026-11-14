@@ -120,7 +120,8 @@ the list service on the box by the GitHub workflow to R2) adds what GameBanana c
 (`<app dir>/tools/community/packages/`), the person uploads it on GameBanana and pastes the link; Try it installs
 through the existing installers and notes it in `<app dir>/community/<key>/meta.json`; uids belong to the first
 GameBanana member who registered them. Kinds: map, mode (Game Mode Studio graph + its map kit), prefab, spray,
-texture. **Creature presets have no community kind yet.**
+texture. Creature presets aren't shared: the user decided the community shares content and Game Mode
+Studio modes only (2026-11-14), so there are no creature-preset rows here.
 
 **Needs the user's OK first:** every row that registers, updates or reports on the live list, or uploads to GameBanana.
 Use a test GameBanana page (a private/WIP submission) and test entries only, and clean them up afterwards with the
@@ -135,7 +136,6 @@ Expected messages are the app's own words; a row fails if a failure shows a raw 
 | A Studio mode using components/creatures + a kit (local) | A mode with ls_* component nodes, a creature node and two map markers; Publish › A game mode | The package has `modes/<id>/<id>.graph.json` and its kit; no plugin, no .amxx/.sma; the description says what it needs (components, creatures, the bot brain) |
 | A mode needing a newer brain (local) | A graph using a node that needs the brain (creatures) | Publish says which brain it needs; the package records it |
 | Prefabs (local) | Content › Prefabs › Share on a prefab using a downloaded model | Zip has `.map`, `.json` (with credits), `.png`; the credits name the model's page and author |
-| Creature presets | Look for a share path | **Not shareable yet**: note it as a gap for T/Y (no community kind), not a failure of this round |
 | Names with spaces or Unicode (local) | A map named `de_my map`, a mode named "Zoë's Rush", a prefab "Café sign" | A map name with a space is refused with "Map names can only use letters, numbers, _ and -"; the mode and prefab names keep their text in README/json, ids stay plain |
 | Huge files and caps (local) | A map with 1.1 GB of custom files; a screenshot over 8 MB; a package zip over 256 MB | "The package would be over 1 GB."; the big screenshot refused by name; nothing half-written left in packages/ |
 | Registering (live: user's OK) | Upload the package to the test GameBanana page, paste the link | Listed (or "pending" for a blocked creator); Yours shows it; the moderators' channel gets the card |
@@ -146,7 +146,8 @@ Expected messages are the app's own words; a row fails if a failure shows a raw 
 | Item | Steps | Pass when |
 |---|---|---|
 | Happy path (map) | Community › a listed map › Try it, then Play with bots | Installed through the Get more job; the Maps page shows it with the Community chip; Play starts with bots |
-| Happy path (mode with kit) | Try it on a Studio mode | Built with the Studio's compiler on this computer, its kit in the kits folder, Play buttons per mode; **(check)** a risky-node badge and an ask before installing — the community page has no risky badge today: if missing, file for T/X |
+| Happy path (mode with kit) | Try it on a Studio mode | Built with the Studio's compiler on this computer, its kit in the kits folder, Play buttons per mode |
+| A mode with risky nodes | Publish a test mode with Run Server Command and Kick nodes; open it in the browser; Try it. Also a mode whose list entry doesn't say (an older entry) | The card and the details show "Runs server commands" and "Can kick players" badges; Try it asks first, naming them, and Cancel installs nothing; the older entry is asked about after the download, before anything installs |
 | Missing content | Install a map whose WAD/model/sound isn't in the pack; a mode needing a component/brain this game lacks | The map installs and the Map doctor names what's missing; the mode says what it needs and links to Mods; nothing crashes the game |
 | CS 1.6 item into CZ and back | Switch the game to Condition Zero, Try it on a cstrike-only item | Refused or warned in plain words ("made for Counter-Strike 1.6"); a both-games item installs into czero/ |
 | Name clash | Install a map with the same name as a map you made; a mode whose id clashes with yours | The installer never writes over existing files (it says which); the mode is refused: the id clashes with a mode you have |

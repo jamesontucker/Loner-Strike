@@ -242,6 +242,32 @@ pub struct ModeMeta {
     pub review: Review,
     /// maps it's made for
     pub maps: Vec<String>,
+    /// what it does beyond its own game (studio::graph::capabilities): server_commands,
+    /// amx_commands, plugin_calls, kicks_players
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
+}
+
+/// What a mode can do beyond its own game, in plain words (badges and the question before
+/// installing). Unknown codes are dropped when the index is read.
+pub const RISKS: &[(&str, &str)] = &[
+    ("server_commands", "Runs server commands"),
+    ("amx_commands", "Runs AMX Mod X commands"),
+    ("plugin_calls", "Calls other plugins"),
+    ("kicks_players", "Can kick players"),
+];
+
+/// The plain words for these capability codes (known ones only, in RISKS order).
+pub fn risk_words<S: AsRef<str>>(codes: &[S]) -> Vec<&'static str> {
+    RISKS.iter().filter(|(c, _)| codes.iter().any(|x| x.as_ref() == *c)).map(|(_, w)| *w).collect()
+}
+
+/// The question before installing a mode that does these things.
+pub fn risk_question(words: &[&str]) -> String {
+    format!(
+        "This mode does more than its own game: {}. A Game Mode Studio mode can only run the commands its checks allow, but it acts on your server while it runs. Install it?",
+        words.iter().map(|w| w.to_lowercase()).collect::<Vec<_>>().join("; ")
+    )
 }
 
 /// A mode a map is made for: its permanent id, its short game id and its name.
@@ -448,6 +474,8 @@ pub fn parse_index(bytes: &[u8]) -> Result<Index, String> {
                 return false;
             }
             m.maps.retain(|x| crate::maps::safe_arg(x));
+            let known: Vec<String> = RISKS.iter().filter(|(c, _)| m.capabilities.iter().any(|x| x == c)).map(|(c, _)| c.to_string()).collect();
+            m.capabilities = known;
         }
         it.name = one_line(&it.name, 80);
         if let Some(r) = &mut it.remix_of {
@@ -700,8 +728,12 @@ pub struct Trust {
     pub label: &'static str,
     /// the trust rules allow installing it from the app
     pub allowed: bool,
-    /// a question to answer before installing (plugins that will run on your server)
+    /// a question to answer before installing (plugins that will run on your server, a mode
+    /// that runs server commands...)
     pub confirm: Option<String>,
+    /// what a mode does beyond its own game, in plain words (a badge each)
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub risks: Vec<&'static str>,
     /// one plain sentence about why
     pub note: String,
 }
@@ -716,7 +748,7 @@ pub struct Trust {
 ///   verified author (verified: installs after a stronger warning). Anything else, including
 ///   a tagged mode the index doesn't know, isn't installed from the app.
 pub fn trust(kind: Kind, item: Option<&Item>, revoked: bool) -> Trust {
-    let t = |level, label, allowed, confirm: Option<String>, note: &str| Trust { level, label, allowed, confirm, note: note.into() };
+    let t = |level, label, allowed, confirm: Option<String>, note: &str| Trust { level, label, allowed, confirm, note: note.into(), risks: vec![] };
     if revoked || item.is_some_and(|i| i.status == Status::Revoked) {
         return t("blocked", "Pulled", false, None, "The Loner-Strike team pulled this one, so the app won't install it.");
     }
@@ -727,7 +759,13 @@ pub fn trust(kind: Kind, item: Option<&Item>, revoked: bool) -> Trust {
         return t("unreviewed", "Not checked", false, None, "This mode isn't in Loner-Strike's list yet, so nobody has said what's inside it.");
     };
     if mode.plugins.is_empty() {
-        return t("data", "Settings only", true, None, "Settings and rules only: no plugins, nothing that runs code.");
+        let risks = risk_words(&mode.capabilities);
+        if risks.is_empty() {
+            return t("data", "Settings only", true, None, "Settings and rules only: no plugins, nothing that runs code.");
+        }
+        let mut tr = t("data", "Settings only", true, Some(risk_question(&risks)), "A Game Mode Studio mode: no plugins of its own, but it does more than its own game (see the badges).");
+        tr.risks = risks;
+        return tr;
     }
     // plugin modes aren't shared or installed from the community for now (whatever an index
     // says about their review); Game Mode Studio modes are settings only and install like content
@@ -1068,6 +1106,12 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
                 let names: Vec<String> = crate::archive::walk(&src).iter().filter_map(|p| p.strip_prefix(&src).ok().map(|r| r.to_string_lossy().replace('\\', "/"))).collect();
                 if let Some(why) = package_refusal(&Item { kind, ..Default::default() }, &names) {
                     return Err(why);
+                }
+                // what the mode really does (its graph, whatever the list said): asked first
+                let caps = super::communitylib::mode_graph(&src).map(|g| super::studio::graph::capabilities(&g)).unwrap_or_default();
+                let words = risk_words(&caps);
+                if !words.is_empty() && !confirmed {
+                    return Ok(json!({"ok": false, "needsConfirm": risk_question(&words), "risks": words}));
                 }
                 return super::communitylib::install_mode(st, &src, note.clone());
             }
@@ -1730,7 +1774,7 @@ pub fn build_mode_package(graphs: &Path, lib: &Path, id: &str, req: &PublishReq,
         name: title,
         author,
         summary: one_line(&req.summary, 400),
-        mode: Some(ModeMeta { id: g.mode.id.clone(), uid, plugins: vec![], review: Review::None, maps }),
+        mode: Some(ModeMeta { id: g.mode.id.clone(), uid, plugins: vec![], review: Review::None, maps, capabilities: super::studio::graph::capabilities(&g).iter().map(|c| c.to_string()).collect() }),
         remix_of: super::communitylib::credits(lib).get(id).cloned(),
         bots: clean_bots(&req.bots),
         added: now(),
@@ -2869,5 +2913,40 @@ mod tests {
         remember(&mut list, Mine { item: it(1), state: "sent".into(), ..Default::default() });
         assert_eq!(list.len(), 2);
         assert_eq!((list[0].item.gb, list[0].state.as_str()), (1, "sent"));
+    }
+}
+
+#[cfg(test)]
+mod risk_tests {
+    use super::*;
+
+    #[test]
+    fn a_mode_that_runs_server_commands_shows_it_and_asks_first() {
+        let idx = parse_index(br#"{"schema": 1, "items": [
+            {"kind": "mode", "gb": 1, "name": "Calm", "mode": {"id": "calm"}},
+            {"kind": "mode", "gb": 2, "name": "Loud", "mode": {"id": "loud", "capabilities": ["kicks_players", "server_commands", "wipe_disk"]}}]}"#).unwrap();
+        let calm = idx.items.iter().find(|i| i.gb == 1).unwrap();
+        let loud = idx.items.iter().find(|i| i.gb == 2).unwrap();
+        assert_eq!(loud.mode.as_ref().unwrap().capabilities, vec!["server_commands", "kicks_players"], "known ones only, in order");
+        let t = trust(Kind::Mode, Some(calm), false);
+        assert!(t.allowed && t.confirm.is_none() && t.risks.is_empty());
+        let t = trust(Kind::Mode, Some(loud), false);
+        assert!(t.allowed);
+        assert_eq!(t.risks, vec!["Runs server commands", "Can kick players"]);
+        let q = t.confirm.unwrap();
+        assert!(q.contains("runs server commands; can kick players") && q.ends_with("Install it?"), "{q}");
+        // shown on the card and the details as badges
+        assert_eq!(serde_json::to_value(trust(Kind::Mode, Some(loud), false)).unwrap()["risks"], json!(["Runs server commands", "Can kick players"]));
+        assert!(serde_json::to_value(trust(Kind::Mode, Some(calm), false)).unwrap().get("risks").is_none());
+    }
+
+    #[test]
+    fn risk_words_follow_the_studio() {
+        assert_eq!(risk_words(&["amx_commands", "plugin_calls"]), vec!["Runs AMX Mod X commands", "Calls other plugins"]);
+        assert!(risk_words::<&str>(&[]).is_empty());
+        // every code the Studio reports has words here
+        for c in ["server_commands", "amx_commands", "plugin_calls", "kicks_players"] {
+            assert_eq!(risk_words(&[c]).len(), 1, "{c}");
+        }
     }
 }

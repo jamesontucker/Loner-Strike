@@ -20,6 +20,7 @@
 .cm-badge-featured { background: var(--signal); color: var(--signal-ink); }
 .cm-trust-verified { background: var(--warn); color: var(--signal-ink); }
 .cm-trust-unreviewed { background: var(--weak); color: var(--signal-ink); }
+.cm-risk { font-size: 11px; padding: 0 6px; white-space: nowrap; background: var(--warn); color: var(--signal-ink); } /* MCP: what a mode does beyond its own game */
 
 .cm-detail { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; margin-top: 10px; }
 @media (max-width: 900px) { .cm-detail { grid-template-columns: minmax(0, 1fr); } }
