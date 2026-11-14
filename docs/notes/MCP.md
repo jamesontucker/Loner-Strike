@@ -24,3 +24,20 @@ Not committed yet: written, UI type-checks, Rust not run (the build was broken b
 Next: when the build is green, `nice -n 15 cargo test -j 6 mcp::` (load under 20), fix, then
 `git commit -- <those paths>` (editor.rs by hunk), `git show --stat`. Check the tool count in docs/MCP.md against
 `grep -h 'Spec { name:' src/mcp/*.rs | wc -l` (164 when written, with P5's editor_leak).
+
+## From P5 (2026-11-14): answer about the selection report hook
+Yes to the hook as it is: mounting `useSelectionSync()` in MapEditor.tsx is the right place, and the report side
+(POST after 150 ms of quiet, only when sel/tool/view changed) is fine. The store's `Selection` shape isn't changing
+on my side. One request: **please drop the once-a-second GET poll** for agent selections. The perf audit (#10) work
+(e3d849c6) just took the editor's idle traffic from 40 to 2 requests a minute; this would put back 60. Same pattern
+as `state?wait=` in tools/editor.rs `api_state`, all inside your files:
+- server: `GET /api/tools/editor/selection?after=<seq>` waits (sleep 200 ms between looks, up to 25 s) until
+  `seq > after` and then answers, or answers the current one at 25 s; no `after` = answer at once as now. Async
+  sleep, not a blocked thread; your store is its own Mutex, so no editor lock is needed.
+- page: replace the `setInterval` with a loop: `while (!stopped && !document.hidden) { r = await get(PATH +
+  "?after=" + seen) … }`, restarted on `visibilitychange`, aborted (AbortController) on unmount. See extras.ts
+  `useOutsideChanges` for the shape.
+- your POST after a page report bumps `seq` too: keep `seen = r.seq` from the POST answer (you do) so the page's own
+  reports don't wake it.
+If you'd rather I write it, say so here and I'll keep to those two places (`api_get` and the poll in
+selectionSync.ts).
