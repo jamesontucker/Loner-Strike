@@ -1223,7 +1223,7 @@ public on_spawn(id)
 <section class="topic" id="npcs" data-group="Create" data-keywords="npc character dialogue talk interactable lever terminal note pickup quest rpg">
   <p class="crumb">Create</p>
   <h1>NPCs and interactables</h1>
-  <p class="lead">Characters people talk to, and things they use with E. They work in any map with Loner-Strike's components; Game Mode Studio adds dialogue choices on top.</p>
+  <p class="lead">Characters people talk to, and things they use with E. They work in any map with Loner-Strike's components; Game Mode Studio adds dialog choices on top.</p>
   <h2 id="npc-place">In the map editor</h2>
   <ul>
     <li><b>NPC</b> (<code>ls_npc</code>): a character with any model (barney, gman, scientist, or your own <code>.mdl</code>), a name, a behavior (stand, wander, patrol, follow after a talk), an optional greeting, who can talk to it, and <b>Unkillable</b> (on by default: bots never shoot it). Pressing E on it starts a talk and sets off its <b>On talk</b> target.</li>
@@ -1236,8 +1236,8 @@ public on_spawn(id)
     <li><b>Say</b>: one line from an NPC or a narrator. <b>Say and Choose</b>: a line and up to 6 replies; one output per reply, plus <b>Timed out</b> and <b>Walked away</b> (closed on death, leaving, or walking off), and the chosen reply as a number. Its texts and the number of replies can come from wires.</li>
     <li>The example <b>The Quest Giver</b>: an NPC asks you to find a note; using the note pays a reward.</li>
   </ul>
-  <h2 id="npc-dialogue-table">Dialogue from a table</h2>
-  <p>A whole dialogue tree can be a data table (one row per line: the text, the replies, and which row each reply goes to) plus a macro that reads a row, runs Say and Choose, and goes to the row the chosen reply names.</p>
+  <h2 id="npc-dialog-table">Dialog from a table</h2>
+  <p>A whole dialog tree can be a data table (one row per line: the text, the replies, and which row each reply goes to) plus a macro that reads a row, runs Say and Choose, and goes to the row the chosen reply names.</p>
   <p>It comes with the app: in Game Mode Studio's <b>My library</b>, add the built-in <b>Run Dialog</b>. It brings the <b>Dialog</b> table (columns id, speaker, line, Reply 1-6 and Next 1-6, with a 5-row sample conversation to change) and the macro: wire Talked To NPC's player and NPC into it with the id of the first row. Each reply goes to its Next row; <code>end</code> (or empty) ends the talk. A Next that no row has ends it too, and Problems names it; a talk stops after 64 lines in case the table goes round in a circle. Ended runs once, with the row it stopped at.</p>
   <h2 id="npc-share">Sharing</h2>
   <p>An NPC's own model and sounds go with the map or mode you publish, in your own folder, the same way <a href="#creatures-how">shared creatures</a> do.</p>
