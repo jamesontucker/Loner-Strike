@@ -127,6 +127,8 @@ pub enum Kind {
     Prefab,
     Spray,
     Texture,
+    /// CP-kind: one shared creature type (`author.type`), installed as a block in creatures.ini
+    Creature,
     #[default]
     #[serde(other)]
     Other,
@@ -140,6 +142,7 @@ impl Kind {
             "prefab" => Kind::Prefab,
             "spray" => Kind::Spray,
             "texture" => Kind::Texture,
+            "creature" => Kind::Creature,
             _ => return None,
         })
     }
@@ -157,7 +160,7 @@ impl Kind {
     /// Try it works for this kind (prefabs go to the map editor's library, not an installer section).
     pub fn can_install(self) -> bool {
         // (modes: Game Mode Studio graphs, built on this computer by the Studio's compiler)
-        self.installer().is_some() || self == Kind::Prefab || self == Kind::Mode
+        self.installer().is_some() || self == Kind::Prefab || self == Kind::Mode || self == Kind::Creature
     }
 
     /// Why there's no one-click install for this kind yet.
@@ -845,6 +848,9 @@ pub fn kind_of(model: &str, root: &str, sub: &str) -> Kind {
         Kind::Prefab
     } else if r == "textures" {
         Kind::Texture
+    } else if r == "skins" || r == "models" {
+        // CP-kind: a tagged skin or model page is a shared creature (the list service's rule)
+        Kind::Creature
     } else if sb.contains("amxx") {
         Kind::Mode
     } else {
@@ -1393,6 +1399,18 @@ pub fn start_try(st: &Shared, model: Model, id: i64, asked: Option<i64>, confirm
         let d = super::communitylib::lib_dir().join(super::communitylib::dir_name(model, id));
         let _ = std::fs::create_dir_all(&d);
         let _ = std::fs::write(d.join("credits.json"), serde_json::to_vec_pretty(c).unwrap_or_default());
+    }
+    if kind == Kind::Creature {
+        // CP-kind: a creature is a block in creatures.ini (plus its models and sounds), no job
+        let file = pick_file(&files, asked, listed)?;
+        let f = files.iter().find(|f| f["id"].as_i64() == Some(file)).cloned().unwrap_or_default();
+        note.file = file;
+        note.md5 = s(&f["md5"]);
+        let (tmp, src) = fetch_unpacked(file, &s(&f["file"]), &note.md5, super::creaturekind::MAX_ZIP, false)?;
+        // (named for the uploader the community list verified: never what the package says)
+        let r = install_namespace(it.as_ref()).and_then(|ns| super::creaturekind::install(&game.dir, &src, &ns, note.clone()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        return r;
     }
     if kind == Kind::Prefab || kind == Kind::Mode {
         // small downloads installed here, no job: prefabs into the editor's library, modes built
@@ -2077,6 +2095,9 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
 /// What to type into GameBanana's submit form.
 pub fn gamebanana_form(p: &Package) -> Value {
     let it = &p.item;
+    if it.kind == Kind::Creature {
+        return super::creaturekind::gamebanana_form(p);
+    }
     if it.kind == Kind::Prefab {
         let mut text = format!("{}\n\nA map editor prefab made with Loner-Strike (lonerstrike.com): open Tools > Community in the app and click Try it to add it to your prefab library. prefabs/*.map is a plain Valve 220 .map for any GoldSrc editor.\n", it.summary);
         if !it.credits.is_empty() {

@@ -42,7 +42,8 @@ export function ModelView(p: Props) {
       dpr={[1, 1.5]}
       linear
       flat
-      gl={{ antialias: true }}
+      // (the drawing stays readable, so Share can take a picture of a creature: CP-kind)
+      gl={{ antialias: true, preserveDrawingBuffer: true }}
       camera={{ fov: 45, near: 0.5, far: 20000, position: [80, 40, 80] }}
     >
       <color attach="background" args={["#2a2f27"]} />

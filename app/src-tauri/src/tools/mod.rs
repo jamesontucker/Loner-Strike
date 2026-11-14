@@ -36,6 +36,7 @@ pub mod playshots; // MCP: playtest screenshots for publishing a mode
 pub mod creatures;
 pub mod creaturepack;
 pub mod creaturesrv;
+pub mod creaturekind; // CP-kind: Community's creature kind
 
 use crate::goldsrc::{self, bsp::Bsp, entities, mesh, wad};
 use crate::server::Shared;
@@ -320,6 +321,7 @@ pub fn local_routes() -> Router<Shared> {
         .merge(compile::routes())
         .merge(community::routes())
         .merge(communitylib::routes())
+        .merge(creaturekind::routes())
         .merge(credits::routes())
         .merge(playercfg::routes())
         .merge(people::routes())

@@ -23,7 +23,7 @@ import { useToolCrumbs, type Crumb } from "../common/shell";
 import { Empty, Loading } from "../common";
 import type { ToolProps } from "../registry";
 import {
-  BADGE_LABEL, KIND_LABEL, NOTE_MAX, REPORT_REASONS, ago, browse, details, launch, remixMap, report, sizeText, startModes, tryIt,
+  BADGE_LABEL, KIND_LABEL, NOTE_MAX, REPORT_REASONS, ago, browse, details, launch, remixCreature, remixMap, report, sizeText, startModes, tryIt,
   type Details, type Entry, type Model, type ReportReason, type Trust,
 } from "./communityApi";
 import Publish from "./Publish";
@@ -47,7 +47,7 @@ function fromArg(arg: string | null): { tab: Tab; map?: string; open?: { model: 
   if (first && (arg === "installed" || arg === "yours" || arg === "publish")) return { tab: "browse" };
   const [a, b] = [arg.split(":")[0], arg.split(":").slice(1).join(":")];
   if (a === "publish") return { tab: "publish", map: b || undefined };
-  if (a === "browse") return { tab: "browse", kind: ["map", "mode", "prefab", "spray", "texture"].includes(b) ? b : "all" };
+  if (a === "browse") return { tab: "browse", kind: ["map", "mode", "prefab", "spray", "texture", "creature"].includes(b) ? b : "all" };
   if (a === "yours") return { tab: "yours" };
   if (a === "installed") return { tab: "installed" };
   if ((a === "mod" || a === "spray") && /^\d+$/.test(b)) return { tab: "browse", open: { model: a === "mod" ? "Mod" : "Spray", id: Number(b) } };
@@ -142,7 +142,7 @@ function BrowseList({ onOpen, kind, setKind }: { onOpen: (e: Entry) => void; kin
       </p>
       <div className="toolbar cm-toolbar">
         <input className="search" type="search" aria-label="Search creations" placeholder="Search names, authors, modes" value={text} onChange={(e) => setText(e.target.value)} />
-        <Segmented label="Kind" values="all map mode prefab spray texture" labels="All Maps Modes Prefabs Sprays Textures" current={kind} onPick={setKind} />
+        <Segmented label="Kind" values="all map mode prefab spray texture creature" labels="All Maps Modes Prefabs Sprays Textures Creatures" current={kind} onPick={setKind} />
         <label className="cm-sort">
           <span className="muted small-note">Sort</span>
           <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
@@ -315,7 +315,7 @@ function Card({ e, onOpen }: { e: Entry; onOpen: () => void }) {
 
 // ---- one creation ----------------------------------------------------------------------------
 
-type Stage = { state: "idle" } | { state: "asking" } | { state: "installing"; job: string; got?: number; size?: number; message?: string } | { state: "done"; map: string | null; prefabs?: string[]; mode?: string } | { state: "failed"; message: string };
+type Stage = { state: "idle" } | { state: "asking" } | { state: "installing"; job: string; got?: number; size?: number; message?: string } | { state: "done"; map: string | null; prefabs?: string[]; mode?: string; creatures?: string[]; message?: string } | { state: "failed"; message: string };
 
 function CreationPage({ model, id, onBack }: { model: Model; id: number; onBack: () => void }) {
   const q = useQuery({ queryKey: ["tools", "community", "item", model, id], queryFn: ({ signal }) => details(model, id, signal), retry: false });
@@ -433,6 +433,13 @@ function Creation({ d }: { d: Details }) {
       qc.invalidateQueries({ queryKey: ["tools", "community", "library"] });
       return;
     }
+    if (!r.error && r.kind === "creature") {
+      // CP-kind: a creature goes into creatures.ini as its own block (no install job)
+      setStage({ state: "done", map: null, creatures: r.types ?? [], message: r.message });
+      qc.invalidateQueries({ queryKey: ["tools", "community", "library"] });
+      qc.invalidateQueries({ queryKey: ["tools", "creatures"] });
+      return;
+    }
     if (!r.error && r.kind === "mode") {
       // a Game Mode Studio mode, built on this computer (no install job)
       setStage({ state: "done", map: null, mode: r.mode });
@@ -486,13 +493,6 @@ function Creation({ d }: { d: Details }) {
         <TrustNote trust={d.trust} listed={!!d.item} />
         {d.item?.map && <BotFacts d={d} />}
         {d.needs && <ModeNeeds needs={d.needs} />}
-
-        <div className="cm-try">
-          {stage.state === "asking" && (ask || d.trust.confirm) ? (
-            <div className="cm-confirm" role="alertdialog" aria-label="Before installing">
-              <p>{ask || d.trust.confirm}</p>
-              <div className="row">
-                <button className="btn primary" onClick={() => go(true)}>Install it</button>
         {(d.item?.creatures?.length ?? 0) > 0 && (
           <div className="cm-needs" data-testid="cm-includes-creatures">
             <h4>Includes</h4>
@@ -507,6 +507,13 @@ function Creation({ d }: { d: Details }) {
             <p className="muted small-note">These creatures go in your game with it, kept apart from your own types.</p>
           </div>
         )}
+
+        <div className="cm-try">
+          {stage.state === "asking" && (ask || d.trust.confirm) ? (
+            <div className="cm-confirm" role="alertdialog" aria-label="Before installing">
+              <p>{ask || d.trust.confirm}</p>
+              <div className="row">
+                <button className="btn primary" onClick={() => go(true)}>Install it</button>
                 <button className="btn" onClick={() => setStage({ state: "idle" })}>Cancel</button>
               </div>
             </div>
@@ -535,6 +542,14 @@ function Creation({ d }: { d: Details }) {
                 <button className="btn primary" onClick={() => play(stage.state === "done" ? stage.mode : d.installed!.mode)}>Play with bots</button>
               </div>
             </div>
+          ) : (stage.state === "done" && stage.creatures) || (d.kind === "creature" && d.installed && stage.state !== "done") ? (
+            <div className="stack-tight" data-testid="cm-creature-done">
+              <p className="cm-ok">{stage.state === "done" ? stage.message || "Added to your creatures." : "In your creatures."}</p>
+              <div className="row">
+                <button className="btn primary" onClick={() => useNav.getState().go("tools", "creatures")}>Open Creature Studio</button>
+                <RemixCreatureButton name={(stage.state === "done" ? stage.creatures?.[stage.creatures.length - 1] : undefined) ?? d.item?.creatures?.[d.item.creatures.length - 1]?.name ?? ""} title={d.name} />
+              </div>
+            </div>
           ) : stage.state === "done" && stage.prefabs ? (
             <div className="stack-tight">
               <p className="cm-ok">Added to your prefab library: {stage.prefabs.join(", ")}.</p>
@@ -546,7 +561,7 @@ function Creation({ d }: { d: Details }) {
             <p className="cm-ok">Installed.{d.kind === "spray" ? " Pick it in Get more > Sprays to use it." : ""}</p>
           ) : (
             <>
-              <button className="btn primary" disabled={!d.canTry || getting !== null} onClick={() => go(false)}>{missingNeeds.length ? "Just the mode" : "Try it"}</button>
+              <button className="btn primary" disabled={!d.canTry || getting !== null} onClick={() => go(false)}>{missingNeeds.length ? "Just the mode" : d.kind === "creature" ? "Get" : "Try it"}</button>
               {d.kind === "map" && d.item?.source && <RemixButton model={d.model} id={d.id} name={d.name} />}
               {missingNeeds.length > 0 && (
                 <button className="btn" disabled={!d.canTry || getting !== null} onClick={() => void getEverything()} title="The mode plus the maps and content it needs, each through its own installer and checks">
@@ -685,6 +700,21 @@ function BotFacts({ d }: { d: Details }) {
       )}
     </ul>
   );
+}
+
+/** CP-kind: "Remix": an installed creature copied into your own types (credited), for Creature Studio. */
+function RemixCreatureButton({ name, title }: { name: string; title: string }) {
+  const toast = useToast();
+  const { working, run } = useBusy();
+  const go = () =>
+    run("Remixing…", async () => {
+      const r = await remixCreature(name);
+      if (r.error) return toast(r.error, true);
+      toast(r.message || `${r.name} is yours to change: a remix of ${title}.`);
+      useNav.getState().go("tools", "creatures");
+    });
+  if (!name) return null;
+  return <BusyButton className="btn" busy={working !== null} busyLabel={working ?? "Remixing…"} label="Remix" onClick={go} />;
 }
 
 /** P5: "Remix this map": its editable source as a new project of yours (credited), opened in the editor. */

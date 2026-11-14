@@ -5,6 +5,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useDirty, useNav } from "../../../store";
+import { remixCreature } from "../community/communityApi"; // CP-kind
 import { DOCS_URL } from "../../DocsLink";
 import { BusyButton, Info, LoadError, Segmented, useAskText, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading } from "../common";
@@ -153,6 +154,18 @@ export default function Creatures() {
     setTypes([...types, c]);
     setSel(types.length);
   };
+  // CP-kind: an installed type copied into your own (credited), then opened
+  const remixInstalled = (name: string) =>
+    run("Remixing…", async () => {
+      const r = await remixCreature(name);
+      if (r.error) return toast(r.error, true);
+      toast(r.message || "Remixed.");
+      const fresh = await qc.fetchQuery({ queryKey: ["tools", "creatures"], queryFn: ({ signal }) => creatureStatus(signal) });
+      reset(fresh);
+      setInstName(null);
+      const i = fresh.types.filter((x) => !x.skipped).findIndex((x) => x.name === r.name);
+      if (i >= 0) setSel(i);
+    });
   const remove = async () => {
     if (!t) return;
     if (isBuiltin(t.name)) {
@@ -351,7 +364,7 @@ export default function Creatures() {
 
           <section className="panel cs-main" aria-label={inst ? "From Community" : placed ? "Placed by mappers" : "Edit the type"}>
             {inst ? (
-              <InstalledView t={inst} />
+              <InstalledView t={inst} onRemix={remixInstalled} />
             ) : placed ? (
               <PlacedView p={placed} onEditType={placedType ? () => pick(types.indexOf(placedType)) : undefined} />
             ) : t ? (

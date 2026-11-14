@@ -3,7 +3,7 @@
 
 import { get, post, tryGet } from "../common/api";
 
-export type Kind = "map" | "mode" | "prefab" | "spray" | "texture" | "other";
+export type Kind = "map" | "mode" | "prefab" | "spray" | "texture" | "creature" | "other";
 export type Model = "Mod" | "Spray";
 
 export type Trust = {
@@ -146,7 +146,7 @@ export const browse = (kind: string, q: string, sort: string, refresh = false, s
 export const details = (model: Model, id: number, signal?: AbortSignal) => get<Details>(`${base}/item/${model.toLowerCase()}/${id}`, signal);
 
 export const tryIt = (model: Model, id: number, confirmed: boolean, file?: number, risks?: string[]) =>
-  post<{ ok: boolean; job: string; section: string; map: string | null; kind?: "prefab" | "mode"; prefabs?: string[]; wads?: string[]; mode?: string; name?: string; needsConfirm?: string; risks?: string[]; riskCodes?: string[]; differs?: boolean }>(`${base}/try`, { model, id, confirmed, ...(file ? { file } : {}), ...(risks ? { risks } : {}) });
+  post<{ ok: boolean; job: string; section: string; map: string | null; kind?: "prefab" | "mode" | "creature"; types?: string[]; message?: string; prefabs?: string[]; wads?: string[]; mode?: string; name?: string; needsConfirm?: string; risks?: string[]; riskCodes?: string[]; differs?: boolean }>(`${base}/try`, { model, id, confirmed, ...(file ? { file } : {}), ...(risks ? { risks } : {}) });
 
 export const readiness = (map: string, signal?: AbortSignal) =>
   get<{ ready: Readiness; suggestedModes: string[]; modeChoices?: { id: string; name: string; uid: string; studio: boolean }[]; tag: string; projects?: SourceProject[] }>(`${base}/publish/${encodeURIComponent(map)}`, signal);
@@ -239,7 +239,9 @@ export const setServerContent = (id: string, picks: { maps: string[]; modes: str
     modesNote?: string | null;
   }>(`${base}/server/${encodeURIComponent(id)}`, picks);
 
-export const KIND_LABEL: Record<Kind, string> = { map: "Map", mode: "Game mode", prefab: "Prefab", spray: "Spray", texture: "Textures", other: "Other" };
+export const KIND_LABEL: Record<Kind, string> = { map: "Map", mode: "Game mode", prefab: "Prefab", spray: "Spray", texture: "Textures", creature: "Creature", other: "Other" };
+/** CP-kind: an installed shared creature as your own type (credited); `to` "" picks a free name. */
+export const remixCreature = (name: string, to = "") => post<{ ok?: boolean; name?: string; message?: string; error?: string }>("/api/tools/community/remix-creature", { name, to });
 
 export const BADGE_LABEL: Record<Badge, { label: string; help: string }> = {
   featured: { label: "Featured", help: "Picked by the Loner-Strike team." },

@@ -10,7 +10,7 @@
 // mode with "community:publish:mode:<id>", the prefab library a prefab with "community:publish:prefab:<id>".
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { copyText, getJson } from "../../../api";
 import { useNav } from "../../../store";
 import type { MapInfo } from "../../../types";
@@ -18,6 +18,7 @@ import { BusyButton, LoadError, Segmented, useToast } from "../../../ui";
 import { errorText, post, useBusy } from "../common/api";
 import { Empty, Loading, MapList } from "../common";
 import { CreditsPanel } from "./Credits";
+import { creatureStatus, lookModel } from "../creatures/creaturesApi";
 import { drawCover } from "./coverCard"; // MCP: the automatic cover card
 import { BOT_NOTE, BOT_RATING_INFO } from "../../../games";
 import {
@@ -33,6 +34,8 @@ export default function Publish({ maps, map, onMap, onDone }: { maps: MapInfo[];
   const [what, setWhat] = useState<What>(map?.startsWith("mode:") ? "mode" : map?.startsWith("prefab:") ? "prefab" : "map");
   if (map?.startsWith("mode:")) return <PublishMode id={map.slice(5)} onBack={() => onMap(undefined)} onDone={onDone} />;
   if (map?.startsWith("prefab:")) return <PublishPrefab id={map.slice(7)} onBack={() => onMap(undefined)} onDone={onDone} />;
+  // CP-kind: a creature, handed over by Creature Studio's Share… ("community:publish:creature:<type>")
+  if (map?.startsWith("creature:")) return <PublishCreature name={map.slice(9)} onBack={() => useNav.getState().go("tools", "creatures")} onDone={onDone} />;
   if (map) return <PublishMap map={map} onBack={() => onMap(undefined)} onDone={onDone} />;
   return (
     <div className="cm-pub">
@@ -232,9 +235,6 @@ function PrefabList({ onPick }: { onPick: (id: string) => void }) {
   );
 }
 
-// ---- a map ----------------------------------------------------------------------------------------
-
-/** The map's checks as a status list (from the server's readiness), each with its fix. */
 /** A GameBanana member id from a profile link (gamebanana.com/members/123456) or the bare number. */
 export function memberFrom(text: string): number {
   const t = text.trim().replace(/\/+$/, "");
@@ -263,6 +263,9 @@ function creatureCheck(list?: string[]): Check | null {
   return { state: "ok", title: "Custom creatures", why: `Includes: ${list.join(", ")}. Named for you, so they never clash with players' own types.` };
 }
 
+// ---- a map ----------------------------------------------------------------------------------------
+
+/** The map's checks as a status list (from the server's readiness), each with its fix. */
 function mapChecks(map: string, r: Readiness): Check[] {
   const rows: Check[] = r.blockers.map((b) => ({ state: "bad" as const, title: "Can't publish yet", why: b }));
   const credit = (r.assets ?? []).filter((a) => (a.verdict === "ask" || a.verdict === "no") && !a.permission?.granted);
@@ -293,12 +296,12 @@ function mapChecks(map: string, r: Readiness): Check[] {
       ? { state: creditNo ? "bad" : "warn", title: "Credits and permissions", why: `${credit.length} file${credit.length === 1 ? "" : "s"} ${creditNo ? "may not be shared without permission" : "ask for permission first"}.`, fix: { label: "See credits", to: "#cm-credits" } }
       : { state: "ok", title: "Credits and permissions", why: "Everyone whose files it uses is credited." },
   );
-  return rows;
-}
-
   const cr = creatureCheck(r.creatures);
   if (cr) rows.push(cr);
   for (const w of r.warnings.filter((x) => /can be listed once|the full name is too long/.test(x))) rows.push({ state: "warn", title: "Creature names", why: w });
+  return rows;
+}
+
 /** P5: which editor project is the map's, and whether its editable source goes in the package. */
 function SourceStep({ projects, project, setProject, on, setOn }: { projects: SourceProject[]; project: string; setProject: (p: string) => void; on: boolean; setOn: (v: boolean) => void }) {
   const picked = projects.find((p) => p.path === project);
@@ -520,11 +523,11 @@ function PublishMode({ id, onBack, onDone }: { id: string; onBack: () => void; o
     const parts = [nd.componentsPlugin ? "Loner-Strike's components" : "", nd.creatures.length ? `creatures (${nd.creatures.includes("all") ? "the wave spawner's types" : nd.creatures.join(", ")})` : "", brain ? `the bot brain, ${brain} or newer (${nd.features.map((f) => f.name).join("; ")})` : ""].filter(Boolean);
     checks.push({ state: "ok", title: "What players need", why: `Needs ${parts.join(", ")}. The package, its README and the page say so; players with an older Loner-Strike are told to update.` });
   }
+  const cr = creatureCheck(r.creatures);
+  if (cr) checks.push(cr);
   if (r.remixOf) checks.push({ state: "ok", title: "Remix credit", why: `A remix of ${r.remixOf.name}${r.remixOf.author ? ` by ${r.remixOf.author}` : ""}: the package and its page credit them.` });
   const build = () =>
     run("Packing…", async () => {
-  const cr = creatureCheck(r.creatures);
-  if (cr) checks.push(cr);
       remember();
       const res = await publishMode(id, { title, summary, author, maps: maps.split(/[\s,]+/).filter(Boolean), screenshots: shotsToSend(), bots, member: r.member || memberFrom(memberText) });
       if (res.error) return toast(res.error, true);
@@ -641,12 +644,12 @@ function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void;
           r.credits.length
             ? { state: "ok", title: "Credits", why: `Credits ${r.credits.length} source${r.credits.length === 1 ? "" : "s"} of models and textures it uses.` }
             : { state: "ok", title: "Credits", why: "Uses only the game's own files and yours." },
-        ]} />
-      </Step>
-      <Step n={2} title="Details">
           ...(r.blockers ?? []).map((b) => ({ state: "bad" as const, title: "Can't publish yet", why: b })),
           ...[creatureCheck(r.creatures)].filter((c): c is Check => !!c),
           ...(r.warnings ?? []).map((w) => ({ state: "warn" as const, title: "Creature names", why: w })),
+        ]} />
+      </Step>
+      <Step n={2} title="Details">
         <Details title={title} setTitle={setTitle} author={author} setAuthor={setAuthor} summary={summary} setSummary={setSummary} about="What it is, in a sentence" />
         {(r.creatures?.length ?? 0) > 0 && <MemberField known={r.member ?? 0} value={memberText} setValue={setMemberText} />}
       </Step>
@@ -661,6 +664,95 @@ function PublishPrefab({ id, onBack, onDone }: { id: string; onBack: () => void;
       )}
       <Action note={!title.trim() || !author.trim() ? "Give it a name and say who made it." : "Next: upload it to GameBanana's Prefabs and register the page."}>
         <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={!title.trim() || !author.trim()} onClick={build} />
+      </Action>
+    </div>
+  );
+}
+
+// ---- a creature (CP-kind) --------------------------------------------------------------------------
+
+const CreaturePreview = lazy(() => import("../creatures/CreaturePreview"));
+type CreatureReady = { name: string; includes: string[]; blockers: string[]; remixOf?: { name: string; author: string; gb: number } | null; member?: number; error?: string };
+
+/** One of your creature types, packed under your name with its models and sounds and a picture of it. */
+function PublishCreature({ name, onBack, onDone }: { name: string; onBack: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const q = useQuery({ queryKey: ["tools", "community", "ready-creature", name], queryFn: () => getJson<CreatureReady>(`/api/tools/community/publish-creature/${encodeURIComponent(name)}`), retry: false });
+  const types = useQuery({ queryKey: ["tools", "creatures"], queryFn: ({ signal }) => creatureStatus(signal), retry: false });
+  const t = types.data?.types.find((x) => x.name === name);
+  const look = useQuery({ queryKey: ["tools", "creatures", "look", t?.model, t?.anim.join(","), t?.attack === "ranged"], queryFn: ({ signal }) => lookModel(t!.model, t!.anim, t!.attack === "ranged", signal), enabled: !!t?.model.trim(), retry: false });
+  const [title, setTitle] = useState("");
+  const [summary, setSummary] = useState("");
+  const [author, setAuthor, remember] = useAuthor();
+  const [picture, setPicture] = useState<string | null>(null);
+  const [memberText, setMemberText] = useState("");
+  const [done, setDone] = useState<{ pkg: Package; form: Form } | null>(null);
+  const view = useRef<HTMLDivElement>(null);
+  const { working, run } = useBusy();
+  useEffect(() => {
+    if (t) {
+      setTitle((v) => v || t.display || t.name);
+      setSummary((v) => v || types.data?.types.find((x) => x.name === name)?.summary || "");
+    }
+  }, [t?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+  const head = <Head title={t?.display || name} kind="Creature" onBack={onBack} busy={q.isFetching} onRecheck={() => q.refetch()} />;
+  if (q.isPending) return <div className="cm-pub">{head}<Loading text="Reading the creature…" /></div>;
+  if (q.isError || q.data.error) return <div className="cm-pub">{head}<LoadError text={q.data?.error ?? errorText(q.error, "Couldn't read that creature.")} onRetry={() => q.refetch()} /></div>;
+  if (done) return <div className="cm-pub">{head}<Upload pkg={done.pkg} form={done.form} onDone={onDone} /></div>;
+  const r = q.data;
+  const snap = () => {
+    const c = view.current?.querySelector("canvas");
+    try {
+      const url = c?.toDataURL("image/png");
+      if (!url || url.length < 200) return toast("Couldn't take the picture. Wait for the model, then try again.", true);
+      setPicture(url);
+    } catch {
+      toast("Couldn't take the picture.", true);
+    }
+  };
+  const build = () =>
+    run("Packing…", async () => {
+      remember();
+      const res = await post<{ package: Package; form: Form }>(`/api/tools/community/publish-creature/${encodeURIComponent(name)}`, { title, summary, author, modes: [], screenshots: [], member: r.member || memberFrom(memberText), preview: { name: "preview.png", data: picture ?? "" } });
+      if (res.error) return toast(res.error, true);
+      setDone({ pkg: res.package, form: res.form });
+    });
+  const blocked = r.blockers.length > 0;
+  return (
+    <div className="cm-pub" data-testid="cm-pub-creature">
+      {head}
+      <Step n={1} title="Checks">
+        <Checks rows={[
+          { state: "ok", title: "The creature", why: `${r.includes.join(", ") || name}. Shared under your GameBanana account, so it never clashes with players' own types.` },
+          ...r.blockers.map((b) => ({ state: "bad" as const, title: "Can't publish yet", why: b })),
+          ...(r.remixOf ? [{ state: "ok" as const, title: "Remix credit", why: `A remix of ${r.remixOf.name}${r.remixOf.author ? ` by ${r.remixOf.author}` : ""}: the package and its page credit them.` }] : []),
+        ]} />
+      </Step>
+      <Step n={2} title="Details">
+        <Details title={title} setTitle={setTitle} author={author} setAuthor={setAuthor} summary={summary} setSummary={setSummary} about="What it does, in a sentence" />
+        <MemberField known={r.member ?? 0} value={memberText} setValue={setMemberText} />
+      </Step>
+      <Step n={3} title="Picture" note="Turn it to a good angle, then take the picture. It's the card's picture in Community.">
+        <div className="cm-creature-shot">
+          <div ref={view} className="cm-creature-view">
+            {look.data?.model ? (
+              <Suspense fallback={<p className="muted"><span className="spinner" aria-hidden="true" /> Loading the 3D view…</p>}>
+                <CreaturePreview look={look.data} skin={t?.skin ?? 0} glow={t?.glow ?? [0, 0, 0]} fallbackGlow={t?.fallback_glow ?? [0, 0, 0]} scale={t?.scale ?? 1} />
+              </Suspense>
+            ) : look.isFetching ? (
+              <p className="muted"><span className="spinner" aria-hidden="true" /> Looking for the model…</p>
+            ) : (
+              <p className="muted">{look.data?.modelError ?? "None of its models are in your game, so there's nothing to show."}</p>
+            )}
+          </div>
+          <div className="cm-creature-pic">
+            {picture ? <img src={picture} alt={`Picture of ${name}`} /> : <p className="muted small-note">No picture yet.</p>}
+            <button type="button" className="btn small" disabled={!look.data?.model} onClick={snap}>{picture ? "Take it again" : "Take the picture"}</button>
+          </div>
+        </div>
+      </Step>
+      <Action note={blocked ? "Fix what's above first." : !title.trim() || !author.trim() ? "Give it a name and say who made it." : !(r.member || memberFrom(memberText)) ? "Add your GameBanana profile." : !picture ? "Take its picture." : "Next: upload it to GameBanana's Skins and register the page."}>
+        <BusyButton className="btn primary" busy={working !== null} busyLabel={working ?? "Packing…"} label="Make the package" disabled={blocked || !title.trim() || !author.trim() || !picture || !(r.member || memberFrom(memberText))} onClick={build} />
       </Action>
     </div>
   );

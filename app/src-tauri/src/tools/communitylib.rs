@@ -290,7 +290,8 @@ fn remove_files(game: Option<&crate::game::Game>, it: &Installed) -> Result<Vec<
                 }
             }
         }
-        Kind::Other => {}
+        // (CP-kind: a creature is only its block, taken out below)
+        Kind::Creature | Kind::Other => {}
     }
     // its shared creatures' block in creatures.ini (types another installed item brings stay)
     if let Some(g) = game {
