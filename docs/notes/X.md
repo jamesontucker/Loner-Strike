@@ -1365,3 +1365,10 @@ server from the community server picks, then switched with gm_mode, changed and 
   AI now sends `behave <e> default` on ls_creature_ver 2 (the chase fallback stays for older brains). On an older
   brain the four read 0 / nobody and do nothing, and the mode logs once at start that they need a newer bot brain.
   In every_node_3; sim with the newest green ls-next3 next.
+- **Creature control 2 sim** (LSPLAY copy with ls-next3 6cd3ce9's mp.dll, CI 43582254892; de_dust2, 4 bots; three
+  zombies, 5000 hp): Creature State / Target printed every 2 s matched pev_iuser3 / pev_enemy read by a separate
+  plugin each time (5 chase -> 7 attack -> 8 search with target 0 when their player died -> 5 chase the next).
+  Attack at +10 s: all three on player 4. Set Speed 2.5 + Set Tier 3 at +20 s: the red-orange tier-3 shell (renderfx
+  19, 255 70 10) from then on; before it they stayed 450-650 units behind player 4 for 12 s, after it closed to
+  50-70 in 12 s. Resume AI at +32 s (`behave default`): they kept on their own targets (player 3 after 4 died). No
+  "newer bot brain" line (brain is v2), no errors, amxxpc clean.
