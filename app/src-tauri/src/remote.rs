@@ -1486,7 +1486,15 @@ pub fn game_file(g: &crate::game::Game, rel: &str) -> Result<Option<Vec<u8>>, St
 /// server there), and keeps this computer's copy the same.
 pub fn put_game_file(g: &crate::game::Game, rel: &str, data: &[u8]) -> Result<(), String> {
     if let Some((r, dir)) = &g.remote {
-        write_file(r, &format!("{dir}/{rel}"), data)?;
+        let path = format!("{dir}/{rel}");
+        // (its folder may not be there yet: data/studio_settings before a mode's first save)
+        if let Some((parent, _)) = path.rsplit_once('/') {
+            let (code, out) = exec_quick(r, &format!("mkdir -p {}", shell_quote(parent)))?;
+            if code != 0 {
+                return Err(format!("Couldn't make the server's folder for {rel} ({}).", out.trim()));
+            }
+        }
+        write_file(r, &path, data)?;
     }
     let p = g.dir.join(rel);
     if let Some(d) = p.parent() {

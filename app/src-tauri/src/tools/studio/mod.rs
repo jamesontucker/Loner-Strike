@@ -520,7 +520,8 @@ pub fn uninstall(game_dir: &Path, id: &str) -> Result<(), String> {
     crate::safety::before("Game Mode Studio", "remove a mode", &gm.join("modes.ini"));
     crate::sys::write_atomic(&gm.join("modes.ini"), (kept.join(nl) + nl).as_bytes()).map_err(|e| format!("Couldn't remove the mode ({e})."))?;
     let plugin = gen::plugin_name(id);
-    for p in [gm.join(format!("{id}.plugins.ini")), gm.join(format!("{id}.cfg")), am.join("plugins").join(format!("{plugin}.amxx"))] {
+    // (with its Mode settings: what they are and this server's values for them)
+    for p in [gm.join(format!("{id}.plugins.ini")), gm.join(format!("{id}.cfg")), am.join("plugins").join(format!("{plugin}.amxx")), game_dir.join(settings::manifest_rel(id)), game_dir.join(settings::values_rel(id))] {
         if p.is_file() {
             crate::safety::before("Game Mode Studio", "remove a mode", &p);
         }
@@ -1390,6 +1391,8 @@ mod tests {
             game.join("addons/amxmodx/scripting/studio/studio_rifle_reward.hash"),
             debug::bp_file(&game, "rifle_reward"),
             debug::cmd_file(&game, "rifle_reward"),
+            game.join(settings::manifest_rel("rifle_reward")),
+            game.join(settings::values_rel("rifle_reward")),
         ];
         for p in &left {
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();

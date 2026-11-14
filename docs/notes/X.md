@@ -1311,3 +1311,21 @@ stock modes, so there was nothing to change; I installed nothing and wrote nothi
 by the same `remote::game_file` / `put_game_file` the server page uses for users.ini and the per-mode files. Next
 time a Studio mode with settings is on a remote server, change one and reset it from its Modes tab.
 Creature State / Target / Resume / Speed / Tier: waiting on Y's notes.
+
+## X (2026-11-14): mode settings on Alone Together - done, two fixes
+User's go-ahead (Alone Together is unused). Through the app's own remote path: a throwaway library entry
+(mod-99999901, "ggset": Gun Game Lite + number setting `shout` 50-200, default 100, printed each round) put on the
+server from the community server picks, then switched with gm_mode, changed and reset over X-Target.
+- Install: plugin, cfg, plugins.ini, `ggset.settings.json` and the modes.ini line all uploaded.
+- A mode added to a running server is "Unknown mode" until the next map load (the menu reads modes.ini in
+  plugin_init); a gm_map to the same map, then gm_mode, worked. The community server page could say so (or the app
+  could reload the map when the server is empty) - not changed.
+- Values: 100 (default) -> 150 -> 500 (warning shown, used unclamped) -> reset all -> 100, each seen in the
+  server's qconsole.log at the next round.
+- **Fixed**: the first save on a remote server failed ("Couldn't connect ... [SFTP(2)] no such file") because
+  `data/studio_settings` wasn't there; `remote::put_game_file` now makes the folder first (mkdir -p over SSH).
+- **Fixed**: removing a Studio mode (`studio::uninstall`, so also taking it off a server) left `<mode>.settings.json`
+  and the server's values file; both go now (test extended). Checked on the server: nothing of ggset left but an
+  empty data/studio_settings folder and AMXX's own cmdaccess.ini line (AMXX writes it; harmless).
+- Back on gungame (de_dust2 at the end, 19 bots), service active. The local game copy the compile step installed was
+  uninstalled; the library entry and its picks file are deleted.

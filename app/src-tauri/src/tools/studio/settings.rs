@@ -45,11 +45,11 @@ pub fn manifest(g: &Graph) -> Value {
     json!({"mode": g.mode.id, "name": g.mode.name, "menu": graph::settings_menu_cmd(&g.mode.id), "settings": list})
 }
 
-fn manifest_rel(mode: &str) -> String {
+pub(super) fn manifest_rel(mode: &str) -> String {
     format!("addons/amxmodx/configs/gamemodes/{mode}.settings.json")
 }
 
-fn values_rel(mode: &str) -> String {
+pub(super) fn values_rel(mode: &str) -> String {
     format!("addons/amxmodx/data/studio_settings/{mode}.cfg")
 }
 
