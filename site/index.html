@@ -686,6 +686,36 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
   .tour-count { font-size: 13px; }
 }
 
+/* Made by players: a view-only peek at Community (the app's community index) */
+.creations { padding: 56px 0 24px; }
+.creations [hidden] { display: none !important; }
+.cr-bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; margin-top: 18px; }
+.cr-seg { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.cr-seg button { min-height: 36px; padding: 6px 12px; border: 0; border-radius: 2px; background: var(--panel); color: var(--dim); box-shadow: var(--raised); font: 600 16px/1 var(--text); cursor: pointer; }
+.cr-seg button:hover { color: var(--bone); }
+.cr-seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--signal); box-shadow: var(--sunken); }
+.cr-grid { list-style: none; margin: 18px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.cr-card { display: flex; flex-direction: column; background: var(--side); box-shadow: var(--raised), 0 14px 40px rgba(0,0,0,.35); border-radius: 3px; padding: 4px; min-width: 0; }
+.cr-pic { aspect-ratio: 16 / 9; background: var(--bg); box-shadow: var(--sunken); border-radius: 2px; overflow: hidden; display: grid; place-items: center; color: var(--faint); font: 400 22px/1 var(--stencil); }
+.cr-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cr-body { display: flex; flex-direction: column; gap: 8px; flex: 1; padding: 12px 12px 10px; background: var(--panel); border-radius: 2px; margin-top: 4px; }
+.cr-kind { font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--signal); }
+.cr-kind span { color: var(--faint); font-weight: 600; letter-spacing: 0; text-transform: none; }
+.cr-body h3 { margin: 0; font: 400 21px/1.15 var(--stencil); overflow-wrap: anywhere; }
+.cr-by { margin: -4px 0 0; color: var(--dim); font-size: 15px; overflow-wrap: anywhere; }
+.cr-sum { margin: 0; color: var(--dim); font-size: 15px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cr-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.cr-tags li { font-size: 13px; font-weight: 600; line-height: 1.2; padding: 3px 8px; border-radius: 2px; background: var(--bg); color: var(--dim); box-shadow: var(--sunken); }
+.cr-tags li.good { color: var(--bone); }
+.cr-tags li.good::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; background: var(--signal); vertical-align: 1px; }
+.cr-tags li.risk { background: #5a3f2c; color: #f0d9c4; box-shadow: none; }
+.cr-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 6px; }
+.cr-acts .btn { min-height: 38px; padding: 8px 12px; font-size: 15px; flex: 1 1 auto; }
+.cr-msg { margin: 18px 0 0; padding: 18px; background: var(--panel); box-shadow: var(--raised); border-left: 3px solid var(--signal); border-radius: 2px; color: var(--dim); }
+.cr-msg a { color: var(--signal); }
+.cr-more { margin-top: 16px; }
+@media (max-width: 960px) { .cr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .cr-grid { grid-template-columns: 1fr; } .cr-bar { justify-content: flex-start; } }
 </style>
 </head>
 <body>
@@ -955,6 +985,30 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
           <figcaption class="tour-caption" aria-live="polite"><span class="tour-cap">Community: maps, modes, prefabs, sprays and textures made with Loner-Strike</span> <span class="tour-count"></span></figcaption>
         </figure>
       </div>
+    </div>
+  </section>
+
+  <!-- Made by players: a view-only peek at Community. The list is the app's community index
+       (dl.lonerstrike.com/community/index.json), read in the browser; installing happens in the app -->
+  <section class="creations" id="creations" aria-labelledby="creations-title">
+    <div class="wrap">
+      <h2 id="creations-title">Made by players</h2>
+      <p class="lead">Maps, Studio modes and prefabs people shared on GameBanana through Community. Open them in Loner-Strike to play them with bots, or look them up on GameBanana.</p>
+      <div class="cr-bar" hidden>
+        <div class="cr-seg" role="group" aria-label="What to show">
+          <button type="button" aria-pressed="true" data-kind="">All</button>
+          <button type="button" aria-pressed="false" data-kind="map">Maps</button>
+          <button type="button" aria-pressed="false" data-kind="mode">Modes</button>
+          <button type="button" aria-pressed="false" data-kind="prefab">Prefabs</button>
+        </div>
+        <div class="cr-seg" role="group" aria-label="Order">
+          <button type="button" aria-pressed="true" data-sort="picks">Popular</button>
+          <button type="button" aria-pressed="false" data-sort="new">Newest</button>
+        </div>
+      </div>
+      <ul class="cr-grid" id="creations-grid" aria-live="polite"></ul>
+      <p class="cr-msg" id="creations-msg">Loading what players shared…</p>
+      <p class="cr-more"><button type="button" class="btn" id="creations-more" hidden>Show more</button></p>
     </div>
   </section>
 
@@ -1244,6 +1298,144 @@ footer { padding-bottom: calc(48px + var(--radio-clear, 0px)); }
     };
     show();
     setInterval(show, 30000);
+  }
+
+  // Made by players: Community's index (what the app lists), read-only. Asked once, when the
+  // section comes near the screen. Only listed maps, Studio modes and prefabs; every text goes
+  // in as text, pictures only from https, links built from GameBanana's numbers.
+  {
+    let INDEX_URL = "https://dl.lonerstrike.com/community/index.json";
+    // (a local preview can point it at a sample file: ?community=/sample.json, never on the real site)
+    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+      const q = new URLSearchParams(location.search).get("community");
+      if (q) INDEX_URL = q;
+    }
+    const KINDS = { map: "Map", mode: "Studio mode", prefab: "Prefab" };
+    const GAMES = { cstrike: "CS 1.6", czero: "Condition Zero" };
+    const BOTS = { great: "Bots play it well", ok: "Bots play it", weak: "Bots struggle" };
+    const RISK = { server_commands: "Runs server commands", amx_commands: "Runs AMX Mod X commands", plugin_calls: "Calls other plugins", kicks_players: "Can kick players" };
+    const PAGE = 9;
+    const section = document.getElementById("creations");
+    const grid = document.getElementById("creations-grid");
+    const msg = document.getElementById("creations-msg");
+    const more = document.getElementById("creations-more");
+    const bar = section.querySelector(".cr-bar");
+    let items = [], kind = "", sort = "picks", shown = PAGE;
+    const words = (id) => String(id).replace(/_/g, " ");
+    const say = (text, withLink) => {
+      msg.textContent = text;
+      if (withLink) {
+        msg.append(" ");
+        const a = document.createElement("a");
+        a.href = "docs#community";
+        a.textContent = "How Community works";
+        msg.append(a);
+      }
+      msg.hidden = false;
+    };
+    const el = (tag, cls, text) => {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      return e;
+    };
+    const card = (it) => {
+      const li = el("li", "cr-card");
+      const pic = el("div", "cr-pic");
+      const shot = (it.screenshots || []).find((u) => typeof u === "string" && /^https:\/\//.test(u));
+      if (shot) {
+        const img = document.createElement("img");
+        img.src = shot;
+        img.alt = `${it.name}: a screenshot`;
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.referrerPolicy = "no-referrer";
+        img.addEventListener("error", () => { img.remove(); pic.textContent = KINDS[it.kind] || ""; });
+        pic.append(img);
+      } else {
+        pic.textContent = KINDS[it.kind] || "";
+      }
+      const body = el("div", "cr-body");
+      const k = el("p", "cr-kind", KINDS[it.kind] || "");
+      const games = (it.games || []).map((g) => GAMES[g]).filter(Boolean).join(", ");
+      if (games) k.append(" ", el("span", "", `· ${games}`));
+      k.style.margin = "0";
+      body.append(k, el("h3", "", it.name || "Untitled"));
+      if (it.author) body.append(el("p", "cr-by", `by ${it.author}`));
+      if (it.summary) body.append(el("p", "cr-sum", it.summary));
+      const tags = el("ul", "cr-tags");
+      const tag = (text, cls) => tags.append(el("li", cls || "", text));
+      if (it.featured) tag("Popular pick", "good");
+      if (it.kind === "map" && it.map) {
+        if (it.map.nav) tag(it.map.lsv ? "Bots know it" : "Has a nav", "good");
+        const named = (it.map.modeRefs || []).map((r) => r && r.name).filter(Boolean);
+        for (const m of (named.length ? named : it.map.modes || []).slice(0, 3)) tag(words(m));
+      }
+      if (it.kind === "mode" && it.mode) {
+        for (const c of it.mode.capabilities || []) if (RISK[c]) tag(RISK[c], "risk");
+        for (const m of (it.mode.maps || []).slice(0, 3)) tag(m);
+      }
+      if (BOTS[it.bots]) tag(BOTS[it.bots], "good");
+      if (tags.childElementCount) body.append(tags);
+      const acts = el("div", "cr-acts");
+      const gb = Number(it.gb);
+      if (Number.isInteger(gb) && gb > 0) {
+        const a = el("a", "btn", "View on GameBanana");
+        a.href = `https://gamebanana.com/${it.model === "spray" ? "sprays" : "mods"}/${gb}`;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.dataset.event = "Community: GameBanana";
+        acts.append(a);
+      }
+      // (the app has no link it answers yet: the download, where Community opens it)
+      const get = el("a", "btn primary", "Get Loner-Strike");
+      get.href = "#get";
+      get.dataset.event = "Community: Get Loner-Strike";
+      acts.append(get);
+      body.append(acts);
+      li.append(pic, body);
+      return li;
+    };
+    const draw = () => {
+      let list = items.filter((it) => !kind || it.kind === kind);
+      list = list.slice().sort(sort === "new" ? (a, b) => (b.added || 0) - (a.added || 0) : (a, b) => (b.featured - a.featured) || (b.updated || 0) - (a.updated || 0));
+      grid.replaceChildren(...list.slice(0, shown).map(card));
+      more.hidden = list.length <= shown;
+      if (!list.length) say(items.length ? `No ${KINDS[kind].toLowerCase()}s yet.` : "Community creations show up here once people share them.", !items.length);
+      else msg.hidden = true;
+    };
+    const load = async () => {
+      try {
+        const r = await fetch(INDEX_URL, { cache: "no-cache" });
+        if (!r.ok) throw new Error(String(r.status));
+        const doc = await r.json();
+        items = (Array.isArray(doc.items) ? doc.items : []).filter((it) => it && it.status === "listed" && KINDS[it.kind] && typeof it.name === "string");
+      } catch {
+        items = [];
+      }
+      bar.hidden = !items.length;
+      draw();
+    };
+    for (const b of section.querySelectorAll("[data-kind]")) b.addEventListener("click", () => {
+      kind = b.dataset.kind;
+      shown = PAGE;
+      for (const o of section.querySelectorAll("[data-kind]")) o.setAttribute("aria-pressed", String(o === b));
+      draw();
+    });
+    for (const b of section.querySelectorAll("[data-sort]")) b.addEventListener("click", () => {
+      sort = b.dataset.sort;
+      for (const o of section.querySelectorAll("[data-sort]")) o.setAttribute("aria-pressed", String(o === b));
+      draw();
+    });
+    more.addEventListener("click", () => { shown += PAGE; draw(); });
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver((es) => {
+        if (es.some((e) => e.isIntersecting)) { io.disconnect(); load(); }
+      }, { rootMargin: "600px 0px" });
+      io.observe(section);
+    } else {
+      load();
+    }
   }
 
   // The server list: every server Loner-Strike players share (services/serverlist), in a window

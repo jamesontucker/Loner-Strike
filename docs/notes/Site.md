@@ -242,3 +242,29 @@ play/pause sounds; Inspect shows Transform (Location/Rotation/Scale with scrubbi
 visgroups, and per-face facts; scale lock beside texture lock; X/Y/Z axes in every view and Help > Coordinates
 (Z up, X east, Y north); the Shape tool previews the shape you picked; the clip cut follows the cursor; bots now
 learn CS 1.6 maps before an editor Playtest.
+
+## From P5 (2026-11-14): "Made by players" on the homepage (view-only community peek), not deployed
+- **Where:** index.html, a section after "Share it" (`#creations`): maps, Studio modes and prefabs from the community
+  index, Popular (featured first, then recently updated) or Newest, filter by kind, 9 at a time with Show more.
+  Each card: GameBanana's first picture (lazy, https only, a label if it fails), kind and games, name, author,
+  summary, badges (Popular pick, Bots know it / Has a nav, the map's modes, a mode's maps, how bots play it, a
+  mode's risky node words in red: Runs server commands / AMX Mod X commands / Calls other plugins / Can kick
+  players), "View on GameBanana" and "Get Loner-Strike" (#get; the app has no link scheme for "Open in" yet).
+  Read-only: only `listed` items; every text set as text. Asked once, when the section comes near the screen.
+  Empty or unreachable: "Community creations show up here once people share them. How Community works".
+- **privacy.html:** a line for it (dl.lonerstrike.com, images.gamebanana.com), dated November 14.
+- **CORS (not done, needs a decision):** `https://dl.lonerstrike.com/community/index.json` answers without
+  `Access-Control-Allow-Origin`, so on lonerstrike.com the browser can't read it and the section shows the empty
+  message until one of these is done:
+  1. (simplest, no code) an R2 CORS rule on the bucket behind dl.lonerstrike.com: AllowedOrigins
+     `https://lonerstrike.com` (and `https://www.lonerstrike.com`), AllowedMethods GET, path `community/index.json`
+     (or the bucket), MaxAgeSeconds 300. Nothing else on the site changes.
+  2. the publisher Worker (services/community-publisher) adding `Access-Control-Allow-Origin` to that one path, if it
+     fronts dl.lonerstrike.com.
+  3. the list service (services/serverlist) serving the published index read-only at
+     `list.lonerstrike.com/community/index.json` with CORS; it already builds it (`build_index`) but only behind the
+     publish token, and an open copy must be the *published* one, not the live database (held-back items).
+  Not changed: R2, the Worker, the list service.
+- **Preview:** a local-only override, `?community=<url>` on localhost/127.0.0.1 (ignored on the real site); checked on
+  the site server (8088) with a sample of 7 entries (a hidden one and a spray left out, a broken picture falling back,
+  risky words on a mode) on desktop (1440) and phone (390), the empty index, and the real URL (blocked: the message).
