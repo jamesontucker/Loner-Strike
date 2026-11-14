@@ -79,7 +79,7 @@ new g_lsdCtx[LSG_CTX]
 // breakpoint inside a loop pauses that round and the loop carries on from there
 #define LSD_Q 128
 new g_lsdQ[LSD_Q][LSG_CTX + 1], g_lsdQn, g_lsdQins
-new Float:g_lsdPausedAt
+new Float:g_lsdPausedAt, Float:g_lsdResumedAt
 new g_lsdBotStop
 // the round clock: Pawn can't stop the game's own clock safely (ReGameDLL's rules object isn't
 // laid out like AMX Mod X's gamedata says), so while paused no round may end (mp_round_infinite)
@@ -526,6 +526,7 @@ stock lsd_freeze()
 
 stock lsd_release()
 {
+	g_lsdResumedAt = get_gametime()
 	new Float:paused = get_gametime() - g_lsdPausedAt
 	set_cvar_num("bot_stop", g_lsdBotStop)
 	for (new id = 1; id <= MaxClients; id++)
@@ -626,6 +627,33 @@ stock lsd_set_cmd(const s[])
 stock bool:lsd_hold_timer()
 {
 	return g_lsdPaused >= 0
+}
+
+// A node's timer (Delay, Repeat, Countdown) that came due while the world was paused: after
+// Resume it waits what it still had to wait when the pause began, from the Resume, so a Repeat
+// keeps its rhythm instead of firing at once (it's checked four times a second while paused).
+// True: not now (it has been put off). `fn`: the timer's own callback; its task id is LSG_TASK + n.
+new bool:g_lsdTWait[LSD_N], Float:g_lsdTOwe[LSD_N]
+stock bool:lsd_timer_wait(n, const fn[], const data[])
+{
+	if (g_lsdPaused >= 0)
+	{
+		if (!g_lsdTWait[n])
+		{
+			g_lsdTWait[n] = true
+			g_lsdTOwe[n] = get_gametime() - g_lsdPausedAt
+		}
+		set_task(0.25, fn, LSG_TASK + n, data, LSG_CTX)
+		return true
+	}
+	if (!g_lsdTWait[n])
+		return false
+	g_lsdTWait[n] = false
+	new Float:left = g_lsdTOwe[n] - (get_gametime() - g_lsdResumedAt)
+	if (left < 0.05)
+		return false
+	set_task(left, fn, LSG_TASK + n, data, LSG_CTX)
+	return true
 }
 
 stock lsd_set_bps(const list[])
@@ -4119,11 +4147,8 @@ lsg_c2_show()
 
 public lsg_t2(const data[], task)
 {
-	if (lsd_hold_timer())
-	{
-		set_task(0.25, "lsg_t2", LSG_TASK + 2, data, LSG_CTX)
+	if (lsd_timer_wait(2, "lsg_t2", data))
 		return
-	}
 	#pragma unused task
 	new ctx[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
@@ -4171,11 +4196,8 @@ lsg_n4(ctx[])
 
 public lsg_t4(const data[], task)
 {
-	if (lsd_hold_timer())
-	{
-		set_task(0.25, "lsg_t4", LSG_TASK + 4, data, LSG_CTX)
+	if (lsd_timer_wait(4, "lsg_t4", data))
 		return
-	}
 	#pragma unused task
 	new ctx[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
@@ -4220,11 +4242,8 @@ lsg_n6(ctx[])
 
 public lsg_t6(const data[], task)
 {
-	if (lsd_hold_timer())
-	{
-		set_task(0.25, "lsg_t6", LSG_TASK + 6, data, LSG_CTX)
+	if (lsd_timer_wait(6, "lsg_t6", data))
 		return
-	}
 	#pragma unused task
 	new ctx[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)
@@ -8223,11 +8242,8 @@ lsg_n221(ctx[])
 
 public lsg_t221(const data[], task)
 {
-	if (lsd_hold_timer())
-	{
-		set_task(0.25, "lsg_t221", LSG_TASK + 221, data, LSG_CTX)
+	if (lsd_timer_wait(221, "lsg_t221", data))
 		return
-	}
 	#pragma unused task
 	new ctx[LSG_CTX]
 	for (new k = 0; k < LSG_CTX; k++)

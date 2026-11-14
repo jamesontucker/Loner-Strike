@@ -264,7 +264,7 @@ new g_lsdCtx[LSG_CTX]
 // breakpoint inside a loop pauses that round and the loop carries on from there
 #define LSD_Q 128
 new g_lsdQ[LSD_Q][LSG_CTX + 1], g_lsdQn, g_lsdQins
-new Float:g_lsdPausedAt
+new Float:g_lsdPausedAt, Float:g_lsdResumedAt
 new g_lsdBotStop
 // the round clock: Pawn can't stop the game's own clock safely (ReGameDLL's rules object isn't
 // laid out like AMX Mod X's gamedata says), so while paused no round may end (mp_round_infinite)
@@ -711,6 +711,7 @@ stock lsd_freeze()
 
 stock lsd_release()
 {
+	g_lsdResumedAt = get_gametime()
 	new Float:paused = get_gametime() - g_lsdPausedAt
 	set_cvar_num("bot_stop", g_lsdBotStop)
 	for (new id = 1; id <= MaxClients; id++)
@@ -811,6 +812,33 @@ stock lsd_set_cmd(const s[])
 stock bool:lsd_hold_timer()
 {
 	return g_lsdPaused >= 0
+}
+
+// A node's timer (Delay, Repeat, Countdown) that came due while the world was paused: after
+// Resume it waits what it still had to wait when the pause began, from the Resume, so a Repeat
+// keeps its rhythm instead of firing at once (it's checked four times a second while paused).
+// True: not now (it has been put off). `fn`: the timer's own callback; its task id is LSG_TASK + n.
+new bool:g_lsdTWait[LSD_N], Float:g_lsdTOwe[LSD_N]
+stock bool:lsd_timer_wait(n, const fn[], const data[])
+{
+	if (g_lsdPaused >= 0)
+	{
+		if (!g_lsdTWait[n])
+		{
+			g_lsdTWait[n] = true
+			g_lsdTOwe[n] = get_gametime() - g_lsdPausedAt
+		}
+		set_task(0.25, fn, LSG_TASK + n, data, LSG_CTX)
+		return true
+	}
+	if (!g_lsdTWait[n])
+		return false
+	g_lsdTWait[n] = false
+	new Float:left = g_lsdTOwe[n] - (get_gametime() - g_lsdResumedAt)
+	if (left < 0.05)
+		return false
+	set_task(left, fn, LSG_TASK + n, data, LSG_CTX)
+	return true
 }
 
 stock lsd_set_bps(const list[])

@@ -3033,7 +3033,8 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
     }
 
     // timer callbacks (they belong to the node, for compiler messages)
-    let hold = if debug { format!("\tif (lsd_hold_timer())\n\t{{\n\t\tset_task(0.25, \"lsg_t{i}\", LSG_TASK + {i}, data, LSG_CTX)\n\t\treturn\n\t}}\n") } else { String::new() };
+    // (paused: it waits, and after Resume keeps its schedule: what it still had to wait)
+    let hold = if debug { format!("\tif (lsd_timer_wait({i}, \"lsg_t{i}\", data))\n\t\treturn\n") } else { String::new() };
     let cb = format!("public lsg_t{i}(const data[], task)\n{{\n{hold}\t#pragma unused task\n\tnew ctx[LSG_CTX]\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tctx[k] = data[k]");
     match def.kind.as_str() {
         "timer.delay" | "timer.retrigger" => {
@@ -6146,6 +6147,27 @@ mod tests {
             assert!(src.contains(&format!("\"{w}\"")), "{w}");
         }
         assert!(src.contains("if (!isalnum(map[i]) && map[i] != '_' && map[i] != '-' && map[i] != '.')"));
+    }
+
+    /// A timer that comes due while a breakpoint has the world paused keeps its schedule after
+    /// Resume (what it still had to wait), instead of firing at the next quarter-second check.
+    #[test]
+    fn timers_keep_their_schedule_across_a_pause() {
+        let g = parse(EVERY_NODE).unwrap();
+        let dbg = generate(&g, true).source;
+        let rel = generate(&g, false).source;
+        let repeat = g.nodes.iter().find(|n| n.kind == "timer.repeat").map(|n| n.id.clone()).unwrap();
+        let live: Vec<&str> = dbg.lines().filter(|l| l.starts_with("public lsg_t") && l.contains("(const data[], task)")).collect();
+        assert!(!live.is_empty(), "timer callbacks");
+        for cb in live {
+            let name = cb.trim_start_matches("public ").split('(').next().unwrap();
+            let i: usize = name.trim_start_matches("lsg_t").parse().unwrap();
+            let body = &dbg[dbg.find(cb).unwrap()..];
+            let first = body.lines().nth(2).unwrap_or("");
+            assert_eq!(first.trim(), format!("if (lsd_timer_wait({i}, \"{name}\", data))"), "{repeat}: {cb}");
+        }
+        assert!(dbg.contains("g_lsdTOwe[n] = get_gametime() - g_lsdPausedAt") && dbg.contains("g_lsdResumedAt = get_gametime()"));
+        assert!(!rel.contains("lsd_timer_wait"));
     }
 
     /// One graph with every node in the registry: it checks clean, every flow node becomes a
