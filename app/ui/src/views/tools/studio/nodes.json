@@ -90,6 +90,7 @@
   "Advanced",
   "Downed",
   "Shop",
+  "NPCs",
   "Battle Royale",
   "Creatures",
   "Data tables"
@@ -2395,6 +2396,14 @@
       [
        "ls_mystery_box",
        "Mystery box"
+      ],
+      [
+       "ls_npc",
+       "NPC (model=barney name=... behavior=stand)"
+      ],
+      [
+       "ls_interactable",
+       "Interactable (prompt=... once=1)"
       ]
      ]
     },
@@ -5655,6 +5664,609 @@
    ],
    "params": [],
    "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "npc.on_talk",
+   "title": "Talked To NPC",
+   "category": "NPCs",
+   "help": "Runs when a player presses USE on an NPC (after its greeting). Leave the name empty for any NPC.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "npc",
+     "type": "entity",
+     "label": "NPC"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "NPC name",
+     "kind": "name",
+     "default": ""
+    }
+   ],
+   "keywords": "talk speak conversation dialogue npc character quest",
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "npc.on_use",
+   "title": "Used Interactable",
+   "category": "NPCs",
+   "help": "Runs when a player uses an interactable (a lever, a note, a terminal); its map targets fire too. Leave the name empty for any.",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "entity",
+     "type": "entity",
+     "label": "Interactable"
+    }
+   ],
+   "params": [
+    {
+     "id": "name",
+     "label": "Interactable name",
+     "kind": "name",
+     "default": ""
+    }
+   ],
+   "keywords": "use press lever note terminal pickup interact",
+   "event": true,
+   "needs": "components"
+  },
+  {
+   "type": "npc.choose",
+   "title": "Say and Choose",
+   "category": "NPCs",
+   "help": "The NPC (or a narrator, with none wired) says a line and the player picks a reply; each reply runs its output (later, when they pick), and Picked says which (1-6; 0 for none). Timed out: no pick in time. Walked away: they went off, died, left or closed it. Every text can be wired (a variable, a table cell), so one node can run a whole conversation from a data table; Replies sets how many are offered (empty ones are left out). One conversation per player: a new one ends the old (as Walked away).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "npc",
+     "type": "entity",
+     "label": "NPC",
+     "optional": true
+    },
+    {
+     "id": "speaker",
+     "type": "text",
+     "label": "Speaker",
+     "param": "speaker"
+    },
+    {
+     "id": "text",
+     "type": "text",
+     "label": "Line",
+     "param": "text"
+    },
+    {
+     "id": "o1",
+     "type": "text",
+     "label": "Reply 1",
+     "param": "o1"
+    },
+    {
+     "id": "o2",
+     "type": "text",
+     "label": "Reply 2",
+     "param": "o2"
+    },
+    {
+     "id": "o3",
+     "type": "text",
+     "label": "Reply 3",
+     "param": "o3"
+    },
+    {
+     "id": "o4",
+     "type": "text",
+     "label": "Reply 4",
+     "param": "o4"
+    },
+    {
+     "id": "o5",
+     "type": "text",
+     "label": "Reply 5",
+     "param": "o5"
+    },
+    {
+     "id": "o6",
+     "type": "text",
+     "label": "Reply 6",
+     "param": "o6"
+    },
+    {
+     "id": "count",
+     "type": "number",
+     "label": "Replies",
+     "param": "count"
+    },
+    {
+     "id": "secs",
+     "type": "number",
+     "label": "Time to answer",
+     "param": "secs"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "r1",
+     "type": "exec",
+     "label": "Reply 1"
+    },
+    {
+     "id": "r2",
+     "type": "exec",
+     "label": "Reply 2"
+    },
+    {
+     "id": "r3",
+     "type": "exec",
+     "label": "Reply 3"
+    },
+    {
+     "id": "r4",
+     "type": "exec",
+     "label": "Reply 4"
+    },
+    {
+     "id": "r5",
+     "type": "exec",
+     "label": "Reply 5"
+    },
+    {
+     "id": "r6",
+     "type": "exec",
+     "label": "Reply 6"
+    },
+    {
+     "id": "timeout",
+     "type": "exec",
+     "label": "Timed out"
+    },
+    {
+     "id": "away",
+     "type": "exec",
+     "label": "Walked away"
+    },
+    {
+     "id": "picked",
+     "type": "number",
+     "label": "Picked"
+    }
+   ],
+   "params": [
+    {
+     "id": "speaker",
+     "label": "Speaker (empty: the NPC)",
+     "kind": "text",
+     "default": "",
+     "max": 31
+    },
+    {
+     "id": "text",
+     "label": "Line",
+     "kind": "text",
+     "default": "Can you help me?",
+     "max": 120
+    },
+    {
+     "id": "o1",
+     "label": "Reply 1",
+     "kind": "text",
+     "default": "Yes",
+     "max": 40
+    },
+    {
+     "id": "o2",
+     "label": "Reply 2",
+     "kind": "text",
+     "default": "No",
+     "max": 40
+    },
+    {
+     "id": "o3",
+     "label": "Reply 3",
+     "kind": "text",
+     "default": "",
+     "max": 40
+    },
+    {
+     "id": "o4",
+     "label": "Reply 4",
+     "kind": "text",
+     "default": "",
+     "max": 40
+    },
+    {
+     "id": "o5",
+     "label": "Reply 5",
+     "kind": "text",
+     "default": "",
+     "max": 40
+    },
+    {
+     "id": "o6",
+     "label": "Reply 6",
+     "kind": "text",
+     "default": "",
+     "max": 40
+    },
+    {
+     "id": "count",
+     "label": "Replies",
+     "kind": "number",
+     "default": 6,
+     "min": 1,
+     "max": 6
+    },
+    {
+     "id": "secs",
+     "label": "Time to answer (0: no limit)",
+     "kind": "number",
+     "default": 30,
+     "min": 0,
+     "max": 300
+    }
+   ],
+   "keywords": "dialogue talk conversation reply answer menu quest table",
+   "needs": "components"
+  },
+  {
+   "type": "npc.say",
+   "title": "Say",
+   "category": "NPCs",
+   "help": "The NPC (or a narrator, with none wired) says a line to a player, or to everyone with no Player.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "optional": true
+    },
+    {
+     "id": "npc",
+     "type": "entity",
+     "label": "NPC",
+     "optional": true
+    },
+    {
+     "id": "speaker",
+     "type": "text",
+     "label": "Speaker",
+     "param": "speaker"
+    },
+    {
+     "id": "text",
+     "type": "text",
+     "label": "Line",
+     "param": "text"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "speaker",
+     "label": "Speaker (empty: the NPC)",
+     "kind": "text",
+     "default": "",
+     "max": 31
+    },
+    {
+     "id": "text",
+     "label": "Line",
+     "kind": "text",
+     "default": "Hello there.",
+     "max": 120
+    }
+   ],
+   "keywords": "talk speak line dialogue narrator",
+   "needs": "components"
+  },
+  {
+   "type": "npc.behave",
+   "title": "Set NPC Behavior",
+   "category": "NPCs",
+   "help": "What an NPC does by itself: stands, wanders near its spot, patrols its targets, or follows a player (wired into Follow) for a while.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "npc",
+     "type": "entity",
+     "label": "NPC",
+     "required": true
+    },
+    {
+     "id": "follow",
+     "type": "player",
+     "label": "Follow",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "do",
+     "label": "Behavior",
+     "kind": "choice",
+     "default": "stand",
+     "choices": [
+      [
+       "stand",
+       "Stand"
+      ],
+      [
+       "wander",
+       "Wander"
+      ],
+      [
+       "patrol",
+       "Patrol"
+      ],
+      [
+       "follow",
+       "Follow"
+      ]
+     ]
+    }
+   ],
+   "keywords": "ai wander patrol follow stand idle",
+   "needs": "components"
+  },
+  {
+   "type": "npc.look_at",
+   "title": "NPC Look At",
+   "category": "NPCs",
+   "help": "Turns an NPC to face a player or an entity.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "npc",
+     "type": "entity",
+     "label": "NPC",
+     "required": true
+    },
+    {
+     "id": "target",
+     "type": "entity",
+     "label": "Target",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "face turn look",
+   "needs": "components"
+  },
+  {
+   "type": "npc.spawn",
+   "title": "Spawn NPC",
+   "category": "NPCs",
+   "help": "Makes an NPC at an entity (wired into At), a point, or the entity with this name. Its model is loaded with the map (models/...mdl).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "at_ent",
+     "type": "entity",
+     "label": "At",
+     "optional": true
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Or point",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "NPC"
+    }
+   ],
+   "params": [
+    {
+     "id": "at",
+     "label": "Or the entity named",
+     "kind": "name",
+     "default": ""
+    },
+    {
+     "id": "model",
+     "label": "Model",
+     "kind": "path",
+     "default": "models/barney.mdl"
+    },
+    {
+     "id": "name",
+     "label": "Name",
+     "kind": "text",
+     "default": "Guide",
+     "max": 31
+    },
+    {
+     "id": "yaw",
+     "label": "Facing (degrees)",
+     "kind": "number",
+     "default": 0,
+     "min": -360,
+     "max": 360
+    },
+    {
+     "id": "behavior",
+     "label": "Behavior",
+     "kind": "choice",
+     "default": "stand",
+     "choices": [
+      [
+       "stand",
+       "Stand"
+      ],
+      [
+       "wander",
+       "Wander"
+      ]
+     ]
+    },
+    {
+     "id": "unkillable",
+     "label": "Unkillable",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "npc character create make quest giver",
+   "needs": "components"
+  },
+  {
+   "type": "npc.spawn_use",
+   "title": "Spawn Interactable",
+   "category": "NPCs",
+   "help": "Makes an interactable at an entity (wired into At), a point, or the entity with this name: a model players use (E), with a prompt when they look at it. Once: usable once a round.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "at_ent",
+     "type": "entity",
+     "label": "At",
+     "optional": true
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Or point",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "out",
+     "type": "entity",
+     "label": "Interactable"
+    }
+   ],
+   "params": [
+    {
+     "id": "at",
+     "label": "Or the entity named",
+     "kind": "name",
+     "default": ""
+    },
+    {
+     "id": "model",
+     "label": "Model",
+     "kind": "path",
+     "default": "models/w_weaponbox.mdl"
+    },
+    {
+     "id": "prompt",
+     "label": "Prompt",
+     "kind": "text",
+     "default": "Press E to use",
+     "max": 60
+    },
+    {
+     "id": "once",
+     "label": "Once a round",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "hide",
+     "label": "Gone once used",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "bots",
+     "label": "Bots may use",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "interactable lever note terminal pickup usable create",
    "needs": "components"
   },
   {
@@ -11294,6 +11906,10 @@
       [
        "turret",
        "A turret spot"
+      ],
+      [
+       "use",
+       "An interactable (they press E on it)"
       ]
      ]
     },

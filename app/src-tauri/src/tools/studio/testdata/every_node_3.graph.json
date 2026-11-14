@@ -1501,6 +1501,126 @@
    "params": {
     "value": 1
    }
+  },
+  {
+   "id": "npc_t",
+   "type": "npc.on_talk",
+   "pos": {
+    "x": 0,
+    "y": 8000
+   },
+   "params": {
+    "name": ""
+   }
+  },
+  {
+   "id": "npc_s",
+   "type": "npc.say",
+   "pos": {
+    "x": 260,
+    "y": 8000
+   },
+   "params": {
+    "text": "Hello there, friend",
+    "speaker": "Sam"
+   }
+  },
+  {
+   "id": "npc_b",
+   "type": "npc.behave",
+   "pos": {
+    "x": 520,
+    "y": 8000
+   },
+   "params": {
+    "do": "follow"
+   }
+  },
+  {
+   "id": "npc_l",
+   "type": "npc.look_at",
+   "pos": {
+    "x": 780,
+    "y": 8000
+   },
+   "params": {}
+  },
+  {
+   "id": "npc_v",
+   "type": "vec.make",
+   "pos": {
+    "x": 780,
+    "y": 8220
+   },
+   "params": {
+    "x": 1,
+    "y": 2,
+    "z": 3
+   }
+  },
+  {
+   "id": "npc_n",
+   "type": "npc.spawn",
+   "pos": {
+    "x": 1040,
+    "y": 8000
+   },
+   "params": {
+    "model": "models/barney.mdl",
+    "name": "Sam",
+    "yaw": 90
+   }
+  },
+  {
+   "id": "npc_i",
+   "type": "npc.spawn_use",
+   "pos": {
+    "x": 1300,
+    "y": 8000
+   },
+   "params": {
+    "model": "models/w_weaponbox.mdl",
+    "prompt": "Press E to read",
+    "bots": true
+   }
+  },
+  {
+   "id": "npc_c",
+   "type": "npc.choose",
+   "pos": {
+    "x": 1560,
+    "y": 8000
+   },
+   "params": {
+    "text": "Help me?",
+    "o1": "Yes",
+    "o2": "No",
+    "o3": "Tell me more",
+    "count": 3,
+    "secs": 20
+   }
+  },
+  {
+   "id": "npc_u",
+   "type": "npc.on_use",
+   "pos": {
+    "x": 0,
+    "y": 8440
+   },
+   "params": {
+    "name": ""
+   }
+  },
+  {
+   "id": "npc_s2",
+   "type": "npc.say",
+   "pos": {
+    "x": 260,
+    "y": 8440
+   },
+   "params": {
+    "text": "Used."
+   }
   }
  ],
  "edges": [
@@ -3108,6 +3228,215 @@
    "to": {
     "node": "cs4",
     "pin": "tier"
+   }
+  },
+  {
+   "id": "wnpc146",
+   "from": {
+    "node": "npc_t",
+    "pin": "then"
+   },
+   "to": {
+    "node": "npc_s",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "wnpc147",
+   "from": {
+    "node": "npc_t",
+    "pin": "player"
+   },
+   "to": {
+    "node": "npc_s",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "wnpc148",
+   "from": {
+    "node": "npc_t",
+    "pin": "npc"
+   },
+   "to": {
+    "node": "npc_s",
+    "pin": "npc"
+   }
+  },
+  {
+   "id": "wnpc149",
+   "from": {
+    "node": "npc_s",
+    "pin": "then"
+   },
+   "to": {
+    "node": "npc_b",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "wnpc150",
+   "from": {
+    "node": "npc_t",
+    "pin": "npc"
+   },
+   "to": {
+    "node": "npc_b",
+    "pin": "npc"
+   }
+  },
+  {
+   "id": "wnpc151",
+   "from": {
+    "node": "npc_t",
+    "pin": "player"
+   },
+   "to": {
+    "node": "npc_b",
+    "pin": "follow"
+   }
+  },
+  {
+   "id": "wnpc152",
+   "from": {
+    "node": "npc_b",
+    "pin": "then"
+   },
+   "to": {
+    "node": "npc_l",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "wnpc153",
+   "from": {
+    "node": "npc_t",
+    "pin": "npc"
+   },
+   "to": {
+    "node": "npc_l",
+    "pin": "npc"
+   }
+  },
+  {
+   "id": "wnpc154",
+   "from": {
+    "node": "npc_t",
+    "pin": "player"
+   },
+   "to": {
+    "node": "npc_l",
+    "pin": "target"
+   }
+  },
+  {
+   "id": "wnpc155",
+   "from": {
+    "node": "npc_l",
+    "pin": "then"
+   },
+   "to": {
+    "node": "npc_n",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "wnpc156",
+   "from": {
+    "node": "npc_t",
+    "pin": "player"
+   },
+   "to": {
+    "node": "npc_n",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "wnpc157",
+   "from": {
+    "node": "npc_n",
+    "pin": "then"
+   },
+   "to": {
+    "node": "npc_i",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "wnpc158",
+   "from": {
+    "node": "npc_v",
+    "pin": "out"
+   },
+   "to": {
+    "node": "npc_i",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "wnpc159",
+   "from": {
+    "node": "npc_i",
+    "pin": "then"
+   },
+   "to": {
+    "node": "npc_c",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "wnpc160",
+   "from": {
+    "node": "npc_t",
+    "pin": "player"
+   },
+   "to": {
+    "node": "npc_c",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "wnpc161",
+   "from": {
+    "node": "npc_n",
+    "pin": "out"
+   },
+   "to": {
+    "node": "npc_c",
+    "pin": "npc"
+   }
+  },
+  {
+   "id": "wnpc162",
+   "from": {
+    "node": "npc_c",
+    "pin": "r1"
+   },
+   "to": {
+    "node": "npc_s",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "wnpc163",
+   "from": {
+    "node": "npc_u",
+    "pin": "then"
+   },
+   "to": {
+    "node": "npc_s2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "wnpc164",
+   "from": {
+    "node": "npc_u",
+    "pin": "player"
+   },
+   "to": {
+    "node": "npc_s2",
+    "pin": "player"
    }
   }
  ],

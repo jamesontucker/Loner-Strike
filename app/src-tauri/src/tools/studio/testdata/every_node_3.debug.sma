@@ -16,9 +16,9 @@
 #define LSG_MODE "every_node_3"
 #define LSG_CTX 21
 #define LSG_TXT 2
-#define LSG_N 85
+#define LSG_N 94
 #define LSG_TASK 7310000
-#pragma dynamic 58496
+#pragma dynamic 64256
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -33,7 +33,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 4
+#define LSG_O 5
 #define LSG_OT 2
 
 // The mode's variables
@@ -246,9 +246,54 @@ public lsg_settings_one_h(id, menu, item)
 	return PLUGIN_HANDLED
 }
 
-#define LSD_N 85
-new const g_lsdIds[LSD_N][] = { "ps", "tick", "ph", "phx", "ch", "chp", "n12", "n13", "n14", "n15", "n17", "n19", "n21", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n67", "n68", "n69", "n70", "n71", "n72", "n73", "n74", "n75", "n76", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111", "n114", "n115", "n116", "n117", "n118", "n124", "n125", "n126", "n127", "n128", "n129", "n130", "n131", "cs3", "cs4", "n134", "n138" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+stock g_lsgM91[33][LSG_CTX]
+stock g_lsgAsk[33], g_lsgAskK[33][6]
+
+stock lsg_npc_line(out[], len, const speaker[], const text[])
+{
+	if (speaker[0])
+		formatex(out, len, "%s: %s", speaker, text)
+	else
+		copy(out, len, text)
+}
+
+stock lsg_npc_rep(out[], len, id, &n, cap, k, const r[])
+{
+	if (n >= cap || !r[0] || id < 1 || id > MaxClients)
+		return
+	new t[48]
+	copy(t, charsmax(t), r)
+	replace_all(t, charsmax(t), "|", "/")
+	if (n)
+		add(out, len, "|")
+	add(out, len, t)
+	g_lsgAskK[id][n++] = k
+}
+
+public ls_on_npc_choice(id, npc, choice)
+{
+	#pragma unused npc
+	if (id < 1 || id > MaxClients)
+		return PLUGIN_CONTINUE
+	new k = g_lsgAsk[id]
+	g_lsgAsk[id] = 0
+	switch (k)
+	{
+		case 92:
+			lsg_ask91(id, choice)
+	}
+	return PLUGIN_CONTINUE
+}
+
+stock bool:lsg_npc_at(v, Float:o[3])
+{
+	for (new k = 0; k < 3; k++)
+		o[k] = lsg_vc(v, k)
+	return true
+}
+#define LSD_N 94
+new const g_lsdIds[LSD_N][] = { "ps", "tick", "ph", "phx", "ch", "chp", "n12", "n13", "n14", "n15", "n17", "n19", "n21", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n67", "n68", "n69", "n70", "n71", "n72", "n73", "n74", "n75", "n76", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111", "n114", "n115", "n116", "n117", "n118", "n124", "n125", "n126", "n127", "n128", "n129", "n130", "n131", "cs3", "cs4", "n134", "n138", "npc_t", "npc_s", "npc_b", "npc_l", "npc_n", "npc_i", "npc_c", "npc_u", "npc_s2" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -3646,9 +3691,12 @@ public lsg_gag_say(id)
 
 public plugin_precache()
 {
+	// an NPC the mode makes: its model is loaded with the map
+	ls_npc_precache("models/barney.mdl")
 	g_lsgSprExp = precache_model("sprites/zerogxplode.spr")
 	g_lsgSprBeam = precache_model("sprites/laserbeam.spr")
 	lsg_pre_model("models/w_c4.mdl")
+	lsg_pre_model("models/w_weaponbox.mdl")
 	lsg_pre_sound("buttons/bell1.wav")
 	// the map's custom event entities, as they load
 	register_forward(FM_KeyValue, "lsg_ev_kv")
@@ -3781,6 +3829,28 @@ public ls_on_creature_hurt(ent, attacker, Float:dmg, headshot)
 	ctx[4] = lsg_hit_pos(ent) // hit_pos
 	ctx[5] = lsg_hit_dir(ent, attacker) // hit_dir
 	lsg_n4(ctx)
+}
+
+public ls_on_npc_talk(id, npc)
+{
+	if (id < 1 || id > MaxClients)
+		return PLUGIN_CONTINUE
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	ctx[1] = npc // npc
+	lsg_n85(ctx)
+	return PLUGIN_CONTINUE
+}
+
+public ls_on_interact(id, ent)
+{
+	if (id < 1 || id > MaxClients)
+		return PLUGIN_CONTINUE
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	ctx[1] = ent // entity
+	lsg_n92(ctx)
+	return PLUGIN_CONTINUE
 }
 
 public lsg_on_said(id)
@@ -5424,6 +5494,306 @@ stock lsg_n84_set_time(ctx[])
 	g_lsgTlT84[inst] = floatclamp(0.0, 0.0, 4.0)
 }
 
+// Talked To NPC (npc_t)
+lsg_n85(ctx[])
+{
+	if (lsd_want(85))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(85, ctx))
+		return
+	lsd_exit(85, "ran")
+	lsg_n86(ctx)
+}
+
+// Say (npc_s)
+lsg_n86(ctx[])
+{
+	new lsi0 = ctx[0]
+	new lsi1 = ctx[1]
+	new lsi2[128]
+	copy(lsi2, 127, "Sam")
+	new lsi3[128]
+	copy(lsi3, 127, "Hello there, friend")
+	if (lsd_want(86))
+	{
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	lsd_in_entity("NPC", lsi1)
+	lsd_in_text("Speaker", lsi2)
+	lsd_in_text("Line", lsi3)
+	}
+	if (lsd_enter(86, ctx))
+		return
+	new lsgL[192]
+	if (!ls_components_running())
+		lsd_error(86, "gm_components isn't running on this server.")
+	else
+	{
+		lsg_npc_line(lsgL, charsmax(lsgL), lsi2, lsi3)
+		ls_npc_say(lsi1, lsi0, lsgL)
+		lsd_exit(86, "said")
+	}
+	lsg_n87(ctx)
+}
+
+// Set NPC Behavior (npc_b)
+lsg_n87(ctx[])
+{
+	new lsi0 = ctx[1]
+	new lsi1 = ctx[0]
+	if (lsd_want(87))
+	{
+	lsd_begin()
+	lsd_in_entity("NPC", lsi0)
+	lsd_in_player("Follow", lsi1)
+	}
+	if (lsd_enter(87, ctx))
+		return
+	if (!ls_components_running() || lsi0 <= 0)
+		lsd_error(87, "Not done: no NPC wired in (or gm_components isn't running).")
+	else
+	{
+		ls_npc_behave(lsi0, "follow", lsi1)
+		lsd_exit(87, "done")
+	}
+	lsg_n88(ctx)
+}
+
+// NPC Look At (npc_l)
+lsg_n88(ctx[])
+{
+	new lsi0 = ctx[1]
+	new lsi1 = ctx[0]
+	if (lsd_want(88))
+	{
+	lsd_begin()
+	lsd_in_entity("NPC", lsi0)
+	lsd_in_entity("Target", lsi1)
+	}
+	if (lsd_enter(88, ctx))
+		return
+	if (!ls_components_running() || lsi0 <= 0)
+		lsd_error(88, "Not done: no NPC wired in (or gm_components isn't running).")
+	else
+	{
+		ls_npc_look_at(lsi0, lsi1)
+		lsd_exit(88, "done")
+	}
+	lsg_n89(ctx)
+}
+
+// Spawn NPC (npc_n)
+lsg_n89(ctx[])
+{
+	new lsi0 = ctx[0]
+	if (lsd_want(89))
+	{
+	lsd_begin()
+	lsd_in_entity("At", lsi0)
+	}
+	if (lsd_enter(89, ctx))
+		return
+	new Float:o[3]
+	if (!ls_components_running())
+		lsd_error(89, "gm_components isn't running on this server.")
+	else if (!lsg_ent_origin(lsi0, o))
+		lsd_error(89, "No entity has that name on this map.")
+	else
+	{
+		g_lsgOut[89] = ls_npc_spawn("models/barney.mdl", o, 90.0, "Sam", "behavior=stand unkillable=1")
+		if (g_lsgOut[89])
+			lsd_exit(89, fmt("entity %d", g_lsgOut[89]))
+		else
+			lsd_error(89, "Not made: its model isn't loaded with this map, or there's no room.")
+	}
+	lsg_n90(ctx)
+}
+
+// Spawn Interactable (npc_i)
+lsg_n90(ctx[])
+{
+	new lsi1 = lsg_vec(1.0, 2.0, 3.0)
+	if (lsd_want(90))
+	{
+	lsd_begin()
+	lsd_in_text("Or point", lsg_vtext(lsi1))
+	}
+	if (lsd_enter(90, ctx))
+		return
+	new Float:o[3]
+	if (!ls_components_running())
+		lsd_error(90, "gm_components isn't running on this server.")
+	else if (!lsg_npc_at(lsi1, o))
+		lsd_error(90, "No entity has that name on this map.")
+	else
+	{
+		g_lsgOut[90] = ls_interactable_spawn("models/w_weaponbox.mdl", o, "Press E to read", "once=1 hide=0 bots=1")
+		if (g_lsgOut[90])
+			lsd_exit(90, fmt("entity %d", g_lsgOut[90]))
+		else
+			lsd_error(90, "Not made: its model isn't loaded with this map, or there's no room.")
+	}
+	lsg_n91(ctx)
+}
+
+// Say and Choose (npc_c)
+lsg_n91(ctx[])
+{
+	new lsi0 = ctx[0]
+	new lsi1 = g_lsgOut[89]
+	new lsi2[128]
+	copy(lsi2, 127, "")
+	new lsi3[128]
+	copy(lsi3, 127, "Help me?")
+	new lsi4[128]
+	copy(lsi4, 127, "Yes")
+	new lsi5[128]
+	copy(lsi5, 127, "No")
+	new lsi6[128]
+	copy(lsi6, 127, "Tell me more")
+	new lsi7[128]
+	copy(lsi7, 127, "")
+	new lsi8[128]
+	copy(lsi8, 127, "")
+	new lsi9[128]
+	copy(lsi9, 127, "")
+	new Float:lsi10 = 3.0
+	new Float:lsi11 = 20.0
+	if (lsd_want(91))
+	{
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	lsd_in_entity("NPC", lsi1)
+	lsd_in_text("Speaker", lsi2)
+	lsd_in_text("Line", lsi3)
+	lsd_in_text("Reply 1", lsi4)
+	lsd_in_text("Reply 2", lsi5)
+	lsd_in_text("Reply 3", lsi6)
+	lsd_in_text("Reply 4", lsi7)
+	lsd_in_text("Reply 5", lsi8)
+	lsd_in_text("Reply 6", lsi9)
+	lsd_in_number("Replies", lsi10)
+	lsd_in_number("Time to answer", lsi11)
+	}
+	if (lsd_enter(91, ctx))
+		return
+	new lsgL[192], lsgR[256], lsgN = 0
+	if (!ls_components_running() || !lsg_ok(lsi0) || is_user_bot(lsi0))
+		lsd_error(91, "Not asked: nobody there, a bot, or gm_components isn't running.")
+	else
+	{
+		new lsgC = clamp(floatround(lsi10), 1, 6)
+		lsg_npc_line(lsgL, charsmax(lsgL), lsi2, lsi3)
+		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 1, lsi4)
+		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 2, lsi5)
+		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 3, lsi6)
+		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 4, lsi7)
+		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 5, lsi8)
+		lsg_npc_rep(lsgR, charsmax(lsgR), lsi0, lsgN, lsgC, 6, lsi9)
+		for (new k = 0; k < LSG_CTX; k++)
+			g_lsgM91[lsi0][k] = ctx[k]
+		if (lsgN && ls_npc_choose(lsi1, lsi0, lsgL, lsgR, floatclamp(lsi11, 0.0, 300.0)))
+			g_lsgAsk[lsi0] = 92
+		lsd_exit(91, "asked")
+	}
+}
+
+// Say and Choose (npc_c): the reply
+stock lsg_ask91(id, choice)
+{
+	new ctx[LSG_CTX]
+	for (new k = 0; k < LSG_CTX; k++)
+		ctx[k] = g_lsgM91[id][k]
+	new r = choice >= 0 && choice < 6 ? g_lsgAskK[id][choice] : 0
+	g_lsgO[4] = _:float(r)
+	switch (choice < 0 ? choice : r)
+	{
+		case 1:
+		{
+			lsd_exit(91, "reply 1")
+			lsg_n86(ctx)
+		}
+		case 2:
+		{
+			lsd_exit(91, "reply 2")
+			#pragma unused ctx
+		}
+		case 3:
+		{
+			lsd_exit(91, "reply 3")
+			#pragma unused ctx
+		}
+		case 4:
+		{
+			lsd_exit(91, "reply 4")
+			#pragma unused ctx
+		}
+		case 5:
+		{
+			lsd_exit(91, "reply 5")
+			#pragma unused ctx
+		}
+		case 6:
+		{
+			lsd_exit(91, "reply 6")
+			#pragma unused ctx
+		}
+		case -1:
+		{
+			lsd_exit(91, "timed out")
+			#pragma unused ctx
+		}
+		case -2, 0:
+		{
+			lsd_exit(91, "walked away")
+			#pragma unused ctx
+		}
+	}
+}
+
+// Used Interactable (npc_u)
+lsg_n92(ctx[])
+{
+	if (lsd_want(92))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(92, ctx))
+		return
+	lsd_exit(92, "ran")
+	lsg_n93(ctx)
+}
+
+// Say (npc_s2)
+lsg_n93(ctx[])
+{
+	new lsi0 = ctx[0]
+	new lsi2[128]
+	copy(lsi2, 127, "")
+	new lsi3[128]
+	copy(lsi3, 127, "Used.")
+	if (lsd_want(93))
+	{
+	lsd_begin()
+	lsd_in_player("Player", lsi0)
+	lsd_in_text("Speaker", lsi2)
+	lsd_in_text("Line", lsi3)
+	}
+	if (lsd_enter(93, ctx))
+		return
+	new lsgL[192]
+	if (!ls_components_running())
+		lsd_error(93, "gm_components isn't running on this server.")
+	else
+	{
+		lsg_npc_line(lsgL, charsmax(lsgL), lsi2, lsi3)
+		ls_npc_say(0, lsi0, lsgL)
+		lsd_exit(93, "said")
+	}
+}
+
 lsd_call(n, const data[])
 {
 	new ctx[LSG_CTX]
@@ -5516,5 +5886,14 @@ lsd_call(n, const data[])
 		case 82: lsg_n82(ctx)
 		case 83: lsg_n83(ctx)
 		case 84: lsg_n84(ctx)
+		case 85: lsg_n85(ctx)
+		case 86: lsg_n86(ctx)
+		case 87: lsg_n87(ctx)
+		case 88: lsg_n88(ctx)
+		case 89: lsg_n89(ctx)
+		case 90: lsg_n90(ctx)
+		case 91: lsg_n91(ctx)
+		case 92: lsg_n92(ctx)
+		case 93: lsg_n93(ctx)
 	}
 }

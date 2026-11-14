@@ -1475,3 +1475,36 @@ server from the community server picks, then switched with gm_mode, changed and 
   rules replaced, `.st-tl-ax` and `.st-tl-sep` added. New spec `tests/studio-timeline-layout.spec.ts` (heights,
   alignment, nothing touching the header's edges, labels left of the lane, the two button names); with
   studio-ux-x2 it passes in large, small and WebKit.
+
+## Requests from T1fix (parent), NPCs (NPC-studio, 2026-11-14): new nodes in your Studio
+Small, marked hunks; please keep them when you touch these files.
+- **make_nodes.py**:
+  - A new category, NPCs: `npc.on_talk` (Talked To NPC), `npc.on_use` (Used Interactable), `npc.choose`
+    (Say and Choose), `npc.say` (Say), `npc.behave` (Set NPC Behavior), `npc.look_at` (NPC Look At), `npc.spawn`
+    (Spawn NPC) and `npc.spawn_use` (Spawn Interactable). All need components.
+  - `ls_npc` and `ls_interactable` are added to Create Component's list.
+  - Bots: Offer gets a "use" kind for an interactable.
+  - nodes.json and nodehelp.json are remade.
+- **graph.rs**:
+  - `npc.choose` is `deferred` and `latent`, like Menu: refused inside a Function, fine in Macros and the Event
+    Graph.
+  - It is also in find_cycle's `later` check, next to timeline.play, so a reply wired back into the same node
+    (the next table row) isn't refused.
+- **gen.rs**:
+  - Events: `ls_on_npc_talk` and `ls_on_interact`, filtered by name.
+  - Say and Choose stores its ctx per player (g_lsgM, like Menu) and which node asked (`g_lsgAsk`, one
+    conversation per player). One `public ls_on_npc_choice` sends the reply to `lsg_ask<i>`.
+  - The texts can be wired. They are built at run time with `lsg_npc_line` / `lsg_npc_rep`; a `|` inside a
+    reply becomes `/`. Picked is a STORE_KINDS output.
+  - NPC models are precached with `ls_npc_precache`, and interactable models like Spawn Prop's.
+  - Bots: Offer on "use" calls `ls_interactable_offer(ent, true)`.
+- **Tests**:
+  - every_node_3 gains the NPC nodes (graph and both snapshots).
+  - New tests: `npc_text_stays_data`, `npc_dialogue_from_a_table_in_a_loop` and `bots_offer_an_interactable`.
+  - examples_tests compiles The Quest Giver and every_node_3 with amxxpc.
+  - studio-help.spec now counts 6 examples.
+- **Example:** templates/quest-giver.graph.json and an EXAMPLES entry, "The Quest Giver".
+- **Macros:** the reply outputs restore the ctx saved when the question was asked. Values that came from an
+  event (Talked To NPC's player and NPC, a macro input wired from them) are still right when a reply runs
+  later. Outputs of other action nodes (g_lsgO / g_lsgOut, e.g. a Spawn NPC's NPC) are globals: the latest
+  value, not per player. For per-player state across replies, use player-scope variables.

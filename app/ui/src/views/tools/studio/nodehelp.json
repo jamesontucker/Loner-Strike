@@ -11778,6 +11778,1031 @@
 ]
 }
 },
+"npc.on_talk":{
+"title":"Talked To NPC",
+"category":"NPCs",
+"what":"Runs when a player presses USE on an NPC (after its greeting). Leave the name empty for any NPC.",
+"pins":[
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+},
+{
+"id":"player",
+"dir":"out",
+"help":"The player."
+},
+{
+"id":"npc",
+"dir":"out",
+"help":"NPC: an entity (a thing in the map)."
+}
+],
+"settings":[
+{
+"id":"name",
+"help":"A name, as the map or the game knows it (letters, digits, _ . -)."
+}
+],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"npc.on_use",
+"npc.choose",
+"npc.say"
+],
+"example":{
+"caption":"Talked To NPC prints what it gives to the server console.",
+"nodes":[
+{
+"id":"it",
+"type":"npc.on_talk",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"text":"Player:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"it",
+"pin":"player"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"npc.on_use":{
+"title":"Used Interactable",
+"category":"NPCs",
+"what":"Runs when a player uses an interactable (a lever, a note, a terminal); its map targets fire too. Leave the name empty for any.",
+"pins":[
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+},
+{
+"id":"player",
+"dir":"out",
+"help":"The player."
+},
+{
+"id":"entity",
+"dir":"out",
+"help":"Interactable: an entity (a thing in the map)."
+}
+],
+"settings":[
+{
+"id":"name",
+"help":"A name, as the map or the game knows it (letters, digits, _ . -)."
+}
+],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"npc.on_talk",
+"npc.choose",
+"npc.say"
+],
+"example":{
+"caption":"Used Interactable prints what it gives to the server console.",
+"nodes":[
+{
+"id":"it",
+"type":"npc.on_use",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"text":"Player:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"it",
+"pin":"player"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"npc.choose":{
+"title":"Say and Choose",
+"category":"NPCs",
+"what":"The NPC (or a narrator, with none wired) says a line and the player picks a reply; each reply runs its output (later, when they pick), and Picked says which (1-6; 0 for none). Timed out: no pick in time. Walked away: they went off, died, left or closed it. Every text can be wired (a variable, a table cell), so one node can run a whole conversation from a data table; Replies sets how many are offered (empty ones are left out). One conversation per player: a new one ends the old (as Walked away).",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Needs a wire."
+},
+{
+"id":"npc",
+"dir":"in",
+"help":"NPC: an entity (a thing in the map). Optional."
+},
+{
+"id":"speaker",
+"dir":"in",
+"help":"Speaker: text. Leave it empty to use the setting."
+},
+{
+"id":"text",
+"dir":"in",
+"help":"Line: text. Leave it empty to use the setting."
+},
+{
+"id":"o1",
+"dir":"in",
+"help":"Reply 1: text. Leave it empty to use the setting."
+},
+{
+"id":"o2",
+"dir":"in",
+"help":"Reply 2: text. Leave it empty to use the setting."
+},
+{
+"id":"o3",
+"dir":"in",
+"help":"Reply 3: text. Leave it empty to use the setting."
+},
+{
+"id":"o4",
+"dir":"in",
+"help":"Reply 4: text. Leave it empty to use the setting."
+},
+{
+"id":"o5",
+"dir":"in",
+"help":"Reply 5: text. Leave it empty to use the setting."
+},
+{
+"id":"o6",
+"dir":"in",
+"help":"Reply 6: text. Leave it empty to use the setting."
+},
+{
+"id":"count",
+"dir":"in",
+"help":"Replies: a number. Leave it empty to use the setting."
+},
+{
+"id":"secs",
+"dir":"in",
+"help":"Time to answer: a number. Leave it empty to use the setting."
+},
+{
+"id":"r1",
+"dir":"out",
+"help":"Runs on Reply 1."
+},
+{
+"id":"r2",
+"dir":"out",
+"help":"Runs on Reply 2."
+},
+{
+"id":"r3",
+"dir":"out",
+"help":"Runs on Reply 3."
+},
+{
+"id":"r4",
+"dir":"out",
+"help":"Runs on Reply 4."
+},
+{
+"id":"r5",
+"dir":"out",
+"help":"Runs on Reply 5."
+},
+{
+"id":"r6",
+"dir":"out",
+"help":"Runs on Reply 6."
+},
+{
+"id":"timeout",
+"dir":"out",
+"help":"Runs on Timed out."
+},
+{
+"id":"away",
+"dir":"out",
+"help":"Runs on Walked away."
+},
+{
+"id":"picked",
+"dir":"out",
+"help":"Picked: a number."
+}
+],
+"settings":[
+{
+"id":"speaker",
+"help":"Text: letters, digits, spaces and plain punctuation. A wire into the pin of the same name is used instead."
+},
+{
+"id":"text",
+"help":"Text: letters, digits, spaces and plain punctuation. A wire into the pin of the same name is used instead."
+},
+{
+"id":"o1",
+"help":"Text: letters, digits, spaces and plain punctuation. A wire into the pin of the same name is used instead."
+},
+{
+"id":"o2",
+"help":"Text: letters, digits, spaces and plain punctuation. A wire into the pin of the same name is used instead."
+},
+{
+"id":"o3",
+"help":"Text: letters, digits, spaces and plain punctuation. A wire into the pin of the same name is used instead."
+},
+{
+"id":"o4",
+"help":"Text: letters, digits, spaces and plain punctuation. A wire into the pin of the same name is used instead."
+},
+{
+"id":"o5",
+"help":"Text: letters, digits, spaces and plain punctuation. A wire into the pin of the same name is used instead."
+},
+{
+"id":"o6",
+"help":"Text: letters, digits, spaces and plain punctuation. A wire into the pin of the same name is used instead."
+},
+{
+"id":"count",
+"help":"A number from 1 to 6. A wire into the pin of the same name is used instead."
+},
+{
+"id":"secs",
+"help":"A number from 0 to 300. A wire into the pin of the same name is used instead."
+}
+],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"npc.on_use",
+"npc.say",
+"npc.on_talk"
+],
+"example":{
+"caption":"When a player spawns, Say and Choose runs and its result is printed.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"npc.choose",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"speaker":"",
+"text":"Can you help me?",
+"o1":"Yes",
+"o2":"No",
+"o3":"",
+"o4":"",
+"o5":"",
+"o6":"",
+"count":6,
+"secs":30
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Picked:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"player"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"it",
+"pin":"picked"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w4",
+"from":{
+"node":"it",
+"pin":"r1"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"npc.say":{
+"title":"Say",
+"category":"NPCs",
+"what":"The NPC (or a narrator, with none wired) says a line to a player, or to everyone with no Player.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Optional."
+},
+{
+"id":"npc",
+"dir":"in",
+"help":"NPC: an entity (a thing in the map). Optional."
+},
+{
+"id":"speaker",
+"dir":"in",
+"help":"Speaker: text. Leave it empty to use the setting."
+},
+{
+"id":"text",
+"dir":"in",
+"help":"Line: text. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"speaker",
+"help":"Text: letters, digits, spaces and plain punctuation. A wire into the pin of the same name is used instead."
+},
+{
+"id":"text",
+"help":"Text: letters, digits, spaces and plain punctuation. A wire into the pin of the same name is used instead."
+}
+],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"npc.choose",
+"npc.behave",
+"npc.on_use"
+],
+"example":{
+"caption":"When a round starts, Say runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"npc.say",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"speaker":"",
+"text":"Hello there."
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"npc.behave":{
+"title":"Set NPC Behavior",
+"category":"NPCs",
+"what":"What an NPC does by itself: stands, wanders near its spot, patrols its targets, or follows a player (wired into Follow) for a while.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"npc",
+"dir":"in",
+"help":"NPC: an entity (a thing in the map). Needs a wire."
+},
+{
+"id":"follow",
+"dir":"in",
+"help":"Follow: a player. Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"do",
+"help":"Pick one: Stand, Wander, Patrol, Follow."
+}
+],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"npc.say",
+"npc.look_at",
+"npc.choose"
+],
+"example":{
+"caption":"When a round starts, Set NPC Behavior runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"npc.behave",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"do":"stand"
+}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"npc"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"npc.look_at":{
+"title":"NPC Look At",
+"category":"NPCs",
+"what":"Turns an NPC to face a player or an entity.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"npc",
+"dir":"in",
+"help":"NPC: an entity (a thing in the map). Needs a wire."
+},
+{
+"id":"target",
+"dir":"in",
+"help":"Target: an entity (a thing in the map). Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"npc.behave",
+"npc.spawn",
+"npc.say"
+],
+"example":{
+"caption":"When a round starts, NPC Look At runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"npc.look_at",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"npc"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"target"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w4",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"npc.spawn":{
+"title":"Spawn NPC",
+"category":"NPCs",
+"what":"Makes an NPC at an entity (wired into At), a point, or the entity with this name. Its model is loaded with the map (models/...mdl).",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"at_ent",
+"dir":"in",
+"help":"At: an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"Or point: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"NPC: an entity (a thing in the map)."
+}
+],
+"settings":[
+{
+"id":"at",
+"help":"A name, as the map or the game knows it (letters, digits, _ . -)."
+},
+{
+"id":"model",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"name",
+"help":"Text: letters, digits, spaces and plain punctuation."
+},
+{
+"id":"yaw",
+"help":"A number from -360 to 360."
+},
+{
+"id":"behavior",
+"help":"Pick one: Stand, Wander."
+},
+{
+"id":"unkillable",
+"help":"On or off."
+}
+],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"npc.look_at",
+"npc.spawn_use",
+"npc.behave"
+],
+"example":{
+"caption":"When a round starts, Spawn NPC runs and its result is printed.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"npc.spawn",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"at":"",
+"model":"models/barney.mdl",
+"name":"Guide",
+"yaw":0,
+"behavior":"stand",
+"unkillable":true
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"NPC:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"out"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"it",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"npc.spawn_use":{
+"title":"Spawn Interactable",
+"category":"NPCs",
+"what":"Makes an interactable at an entity (wired into At), a point, or the entity with this name: a model players use (E), with a prompt when they look at it. Once: usable once a round.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"at_ent",
+"dir":"in",
+"help":"At: an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"Or point: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Interactable: an entity (a thing in the map)."
+}
+],
+"settings":[
+{
+"id":"at",
+"help":"A name, as the map or the game knows it (letters, digits, _ . -)."
+},
+{
+"id":"model",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"prompt",
+"help":"Text: letters, digits, spaces and plain punctuation."
+},
+{
+"id":"once",
+"help":"On or off."
+},
+{
+"id":"hide",
+"help":"On or off."
+},
+{
+"id":"bots",
+"help":"On or off."
+}
+],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"npc.spawn",
+"npc.look_at",
+"npc.behave"
+],
+"example":{
+"caption":"When a round starts, Spawn Interactable runs and its result is printed.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"npc.spawn_use",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"at":"",
+"model":"models/w_weaponbox.mdl",
+"prompt":"Press E to use",
+"once":true,
+"hide":false,
+"bots":false
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Interactable:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"out"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"it",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
 "br.heal_give":{
 "title":"Give Healing Item",
 "category":"Battle Royale",
@@ -24412,7 +25437,7 @@
 },
 {
 "id":"kind",
-"help":"Pick one: A perk, An upgrade bench, A mystery box, A trap's switch, A turret spot."
+"help":"Pick one: A perk, An upgrade bench, A mystery box, A trap's switch, A turret spot, An interactable (they press E on it)."
 },
 {
 "id":"cost",

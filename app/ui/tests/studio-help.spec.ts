@@ -70,7 +70,7 @@ test("example modes and the tour: offered once, every step, skip, again from the
     }
   });
   await page.goto("/tools-dev.html?open=studio");
-  await expect(page.getByTestId("studio-examples").getByRole("button")).toHaveCount(5);
+  await expect(page.getByTestId("studio-examples").getByRole("button")).toHaveCount(6);
   const offer = page.getByTestId("studio-tour-offer");
   await expect(offer).toBeVisible();
   await offer.getByRole("button", { name: "Take the tour" }).click();

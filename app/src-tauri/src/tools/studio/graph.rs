@@ -1484,13 +1484,15 @@ pub fn deferred(kind: &str, pin: &str) -> bool {
         "timer.repeat" => pin == "tick",
         "timer.countdown" => pin == "done",
         "msg.menu" => pin != "then",
+        // (the replies come later; it has no Then)
+        "npc.choose" => true,
         _ => false,
     }
 }
 
 /// Nodes that wait (or run their flow later): not inside a Function.
 pub fn latent(kind: &str) -> bool {
-    matches!(kind, "timer.delay" | "timer.retrigger" | "timer.repeat" | "timer.countdown" | "msg.menu")
+    matches!(kind, "timer.delay" | "timer.retrigger" | "timer.repeat" | "timer.countdown" | "msg.menu" | "npc.choose")
 }
 
 /// Pin ids a Function's or Macro's own pins can't have (the flow pins' ids).
@@ -2414,7 +2416,9 @@ fn find_cycle<'a>(v: &View<'a>) -> Option<&'a str> {
         }
         state.insert(n, 1);
         // (a Timeline's outputs run later, on its own ticks: flow round to it isn't a loop)
-        let later = v.defs.get(n).is_some_and(|d| d.kind == "timeline.play");
+        // (Say and Choose's replies come later, from the player's pick: a reply wired back is a
+        // conversation going on, not a loop)
+        let later = v.defs.get(n).is_some_and(|d| d.kind == "timeline.play" || d.kind == "npc.choose");
         for (t, on) in if later { Vec::new() } else { v.next_nodes(n) } {
             if on {
                 if let Some(hit) = visit(v, t, state) {

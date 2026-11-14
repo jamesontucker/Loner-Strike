@@ -323,6 +323,9 @@ const EVENTS: &[EventKind] = &[
     EventKind { kind: "kd.on_up", sig: "public ls_on_revive(id, by)", register: &[], prelude: "", guard: "", values: &[("player", "id"), ("by", "by >= 1 && by <= MaxClients ? by : 0")], tail: "", named: None },
     EventKind { kind: "kd.on_bled_out", sig: "public ls_on_bled_out(id)", register: &[], prelude: "", guard: "", values: &[("player", "id")], tail: "", named: None },
     EventKind { kind: "shop.on_buy", sig: "public ls_on_shop_buy(ent, id, const item[], price)", register: &[], prelude: "", guard: "", values: &[("shop", "ent"), ("player", "id"), ("item", "@str:item"), ("price", "_:float(price)")], tail: "\treturn PLUGIN_CONTINUE", named: None },
+    // NPCs and interactables (gm_components ls_npc / ls_interactable)
+    EventKind { kind: "npc.on_talk", sig: "public ls_on_npc_talk(id, npc)", register: &[], prelude: "", guard: "\tif (id < 1 || id > MaxClients)\n\t\treturn PLUGIN_CONTINUE", values: &[("player", "id"), ("npc", "npc")], tail: "\treturn PLUGIN_CONTINUE", named: Some("npc") },
+    EventKind { kind: "npc.on_use", sig: "public ls_on_interact(id, ent)", register: &[], prelude: "", guard: "\tif (id < 1 || id > MaxClients)\n\t\treturn PLUGIN_CONTINUE", values: &[("player", "id"), ("entity", "ent")], tail: "\treturn PLUGIN_CONTINUE", named: Some("ent") },
     EventKind { kind: "br.on_landed", sig: "public ls_on_landed(id)", register: &[], prelude: "", guard: "", values: &[("player", "id")], tail: "", named: None },
     EventKind { kind: "br.on_lobby_end", sig: "public ls_on_lobby_end(squads)", register: &[], prelude: "", guard: "", values: &[("squads", "_:float(squads)")], tail: "", named: None },
     EventKind { kind: "turret.on_placed", sig: "public ls_on_turret(ent, owner)", register: &[], prelude: "", guard: "", values: &[("turret", "ent"), ("owner", "owner >= 1 && owner <= MaxClients ? owner : 0")], tail: "", named: None },
@@ -406,7 +409,7 @@ fn kind_of(ty: &str) -> char {
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
 const CTX_KINDS: [&str; 14] = ["table.for_each", "creature.for_each", "timeline.play", "marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
-const STORE_KINDS: [&str; 10] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call", "up.perk_buy"];
+const STORE_KINDS: [&str; 11] = ["array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call", "up.perk_buy", "npc.choose"];
 /// Nodes with more than one flow input: one Pawn function each.
 const MULTI_IN: [&str; 6] = ["timeline.play", "flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array"];
 /// The vector and struct rings: values that aren't in variables live here for a while.
@@ -1213,8 +1216,32 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         o.line("stock g_lsgNoFall[33]");
     }
     // menus remember who was shown what
-    for id in gen.live.iter().filter(|id| v.defs[*id].kind == "msg.menu") {
+    for id in gen.live.iter().filter(|id| v.defs[*id].kind == "msg.menu" || v.defs[*id].kind == "npc.choose") {
         o.line(format!("stock g_lsgM{}[33][LSG_CTX]", gen.index(id)));
+    }
+    // Say and Choose: which node's question each player has open (its index + 1; 0 none)
+    if gen.live.iter().any(|id| v.defs[*id].kind == "npc.choose") {
+        o.line("stock g_lsgAsk[33], g_lsgAskK[33][6]");
+    }
+    if gen.live.iter().any(|id| matches!(v.defs[*id].kind.as_str(), "npc.say" | "npc.choose")) {
+        // a line with its speaker ("Old Sam: ..."); a reply added to the |-list, its number noted
+        o.line("\nstock lsg_npc_line(out[], len, const speaker[], const text[])\n{\n\tif (speaker[0])\n\t\tformatex(out, len, \"%s: %s\", speaker, text)\n\telse\n\t\tcopy(out, len, text)\n}");
+    }
+    if gen.live.iter().any(|id| v.defs[*id].kind == "npc.choose") {
+        o.line("\nstock lsg_npc_rep(out[], len, id, &n, cap, k, const r[])\n{\n\tif (n >= cap || !r[0] || id < 1 || id > MaxClients)\n\t\treturn\n\tnew t[48]\n\tcopy(t, charsmax(t), r)\n\treplace_all(t, charsmax(t), \"|\", \"/\")\n\tif (n)\n\t\tadd(out, len, \"|\")\n\tadd(out, len, t)\n\tg_lsgAskK[id][n++] = k\n}");
+    }
+    // Say and Choose: a reply (0-5), -1 timed out, -2 walked away: to the node that asked
+    let asks: Vec<usize> = gen.live.iter().filter(|id| v.defs[*id].kind == "npc.choose").map(|id| gen.index(id)).collect();
+    if !asks.is_empty() {
+        let mut d = String::from("\npublic ls_on_npc_choice(id, npc, choice)\n{\n\t#pragma unused npc\n\tif (id < 1 || id > MaxClients)\n\t\treturn PLUGIN_CONTINUE\n\tnew k = g_lsgAsk[id]\n\tg_lsgAsk[id] = 0\n\tswitch (k)\n\t{\n");
+        for i in &asks {
+            d.push_str(&format!("\t\tcase {}:\n\t\t\tlsg_ask{i}(id, choice)\n", i + 1));
+        }
+        d.push_str("\t}\n\treturn PLUGIN_CONTINUE\n}");
+        o.line(d);
+    }
+    if gen.live.iter().any(|id| matches!(v.defs[*id].kind.as_str(), "npc.spawn" | "npc.spawn_use") && v.data_source(id, "pos").is_some()) {
+        o.line("\nstock bool:lsg_npc_at(v, Float:o[3])\n{\n\tfor (new k = 0; k < 3; k++)\n\t\to[k] = lsg_vc(v, k)\n\treturn true\n}");
     }
 
     if debug {
@@ -1373,7 +1400,8 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     let uses_gag = has("player.gag");
     let uses_exp = has("fx.explosion");
     let uses_beam = has("fx.beam");
-    let props: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "ent.spawn_prop").map(|n| model_text(n.params.get("model").and_then(Value::as_str).unwrap_or(""))).collect();
+    let npc_models: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "npc.spawn").map(|n| model_text(n.params.get("model").and_then(Value::as_str).unwrap_or("models/barney.mdl"))).collect();
+    let props: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "ent.spawn_prop" || n.kind == "npc.spawn_use").map(|n| model_text(n.params.get("model").and_then(Value::as_str).unwrap_or(""))).collect();
     let sounds: BTreeSet<String> = g.nodes.iter().filter(|n| n.kind == "fx.sound_at").map(|n| sound_text(n.params.get("sound").and_then(Value::as_str).unwrap_or(""))).collect();
     if uses_rounds {
         o.line("public lsg_count_round()\n\tg_lsgRounds++\n");
@@ -1396,8 +1424,11 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         .filter_map(|k| k.split_whitespace().find_map(|w| w.strip_prefix("keeper=")))
         .filter_map(|k| match k { "barney" => Some("models/barney.mdl"), "gman" => Some("models/gman.mdl"), _ => None })
         .collect::<BTreeSet<_>>().into_iter().collect();
-    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() {
+    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() || !npc_models.is_empty() {
         let mut pre = String::from("public plugin_precache()\n{");
+        for m in &npc_models {
+            pre.push_str(&format!("\n\t// an NPC the mode makes: its model is loaded with the map\n\tls_npc_precache({})", pawn_str(m)));
+        }
         if uses_exp {
             pre.push_str("\n\tg_lsgSprExp = precache_model(\"sprites/zerogxplode.spr\")");
         }
@@ -2241,6 +2272,81 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             then_line(&mut b, "then");
         }
+        // NPCs and interactables (gm_components): text goes only to players (chat, menus)
+        "npc.say" => {
+            let who = if v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
+            let npc = if v.data_source(id, "npc").is_some() { inp("npc", "entity") } else { "0".into() };
+            b.line("\tnew lsgL[192]");
+            check(&mut b, comps, "gm_components isn't running on this server.", &[format!("\tlsg_npc_line(lsgL, charsmax(lsgL), {}, {})\n\t\tls_npc_say({npc}, {who}, lsgL)", inp("speaker", "text"), inp("text", "text")), exit("said")]);
+            then_line(&mut b, "then");
+        }
+        "npc.behave" => {
+            let npc = inp("npc", "entity");
+            let follow = if v.data_source(id, "follow").is_some() { inp("follow", "player") } else { "0".into() };
+            let what = match gen.choice(n, def, "do") { "wander" => "wander", "patrol" => "patrol", "follow" => "follow", _ => "stand" };
+            check(&mut b, &format!("{comps} || {npc} <= 0"), "Not done: no NPC wired in (or gm_components isn't running).", &[format!("\tls_npc_behave({npc}, {}, {follow})", pawn_str(what)), exit("done")]);
+            then_line(&mut b, "then");
+        }
+        "npc.look_at" => {
+            let npc = inp("npc", "entity");
+            check(&mut b, &format!("{comps} || {npc} <= 0"), "Not done: no NPC wired in (or gm_components isn't running).", &[format!("\tls_npc_look_at({npc}, {})", inp("target", "entity")), exit("done")]);
+            then_line(&mut b, "then");
+        }
+        "npc.spawn" | "npc.spawn_use" => {
+            // where: a point wired in, else an entity wired in, else the one with that name
+            let at = if v.data_source(id, "pos").is_some() {
+                let pv = inp("pos", "vector");
+                format!("lsg_npc_at({pv}, o)")
+            } else {
+                at_origin(gen, id, n, def)
+            };
+            let model = pawn_str(&model_text(gen.text(n, def, "model")));
+            let call = if def.kind == "npc.spawn" {
+                let keys = format!("behavior={} unkillable={}", if gen.choice(n, def, "behavior") == "wander" { "wander" } else { "stand" }, if gen.boolean(n, def, "unkillable") { 1 } else { 0 });
+                format!("ls_npc_spawn({model}, o, {}, {}, {})", float_lit(gen.num(n, def, "yaw")), pawn_str(&safe_text(gen.text(n, def, "name"), 31)), pawn_str(&keys))
+            } else {
+                let keys = format!("once={} hide={} bots={}", if gen.boolean(n, def, "once") { 1 } else { 0 }, if gen.boolean(n, def, "hide") { 1 } else { 0 }, if gen.boolean(n, def, "bots") { 1 } else { 0 });
+                format!("ls_interactable_spawn({model}, o, {}, {})", pawn_str(&safe_text(gen.text(n, def, "prompt"), 60)), pawn_str(&keys))
+            };
+            b.line("\tnew Float:o[3]");
+            if debug {
+                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\tg_lsgOut[{i}] = {call}\n\t\tif (g_lsgOut[{i}])\n\t\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))\n\t\telse\n\t\t\t{}\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map."), err("Not made: its model isn't loaded with this map, or there's no room.")));
+            } else {
+                b.line(format!("\tif (!{comps} && {at})\n\t\tg_lsgOut[{i}] = {call}"));
+            }
+            then_line(&mut b, "then");
+        }
+        "npc.choose" => {
+            let p = inp("player", "player");
+            let npc = if v.data_source(id, "npc").is_some() { inp("npc", "entity") } else { "0".into() };
+            // every text may come from a wire (a variable, a table cell): built here, at run time;
+            // the replies are joined with | (one inside a reply becomes /), empty ones left out
+            b.line("\tnew lsgL[192], lsgR[256], lsgN = 0");
+            let mut body = vec![format!("\tnew lsgC = clamp(floatround({}), 1, 6)\n\t\tlsg_npc_line(lsgL, charsmax(lsgL), {}, {})", inp("count", "number"), inp("speaker", "text"), inp("text", "text"))];
+            for k in 1..=6 {
+                body.push(format!("\tlsg_npc_rep(lsgR, charsmax(lsgR), {p}, lsgN, lsgC, {k}, {})", inp(&format!("o{k}"), "text")));
+            }
+            body.push(format!("\tfor (new k = 0; k < LSG_CTX; k++)\n\t\t\tg_lsgM{i}[{p}][k] = ctx[k]"));
+            // (an old question is answered -2 by the native before this one is noted)
+            body.push(format!("\tif (lsgN && ls_npc_choose({npc}, {p}, lsgL, lsgR, floatclamp({}, 0.0, 300.0)))\n\t\t\tg_lsgAsk[{p}] = {}", inp("secs", "number"), i + 1));
+            body.push(exit("asked"));
+            check(&mut b, &format!("{comps} || !lsg_ok({p}) || is_user_bot({p})"), "Not asked: nobody there, a bot, or gm_components isn't running.", &body);
+            // the reply comes back later (ls_on_npc_choice): Picked is 1-6 (0 none)
+            let picked = gen.out_index(id, "picked").map_or(String::new(), |k| format!("\n\tg_lsgO[{k}] = _:float(r)"));
+            let mut cb = format!("\n// {} ({}): the reply\nstock lsg_ask{i}(id, choice)\n{{\n\tnew ctx[LSG_CTX]\n\tfor (new k = 0; k < LSG_CTX; k++)\n\t\tctx[k] = g_lsgM{i}[id][k]\n\tnew r = choice >= 0 && choice < 6 ? g_lsgAskK[id][choice] : 0{picked}\n\tswitch (choice < 0 ? choice : r)\n\t{{\n", comment_text(&def.title), id_text(id));
+            let mut arm = |label: &str, pin: &str, result: &str| {
+                let call = next(pin).unwrap_or_else(|| "#pragma unused ctx".into());
+                let dbg = if debug { format!("\n\t\t\tlsd_exit({i}, {})", pawn_str(result)) } else { String::new() };
+                cb.push_str(&format!("\t\tcase {label}:\n\t\t{{{dbg}\n\t\t\t{call}\n\t\t}}\n"));
+            };
+            for k in 1..=6 {
+                arm(&k.to_string(), &format!("r{k}"), &format!("reply {k}"));
+            }
+            arm("-1", "timeout", "timed out");
+            arm("-2, 0", "away", "walked away");
+            cb.push_str("\t}\n}");
+            menus_after.push((i, cb));
+        }
         "msg.menu" => {
             let p = inp("player", "player");
             let title = pawn_str(&safe_text(gen.text(n, def, "title"), 40));
@@ -2676,6 +2782,11 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             then_line(&mut b, "then");
         }
+        // an interactable offered to bots: gm_components keeps the offer (as the map key bots=1)
+        "bots.offer" if gen.choice(n, def, "kind") == "use" => {
+            check(&mut b, &format!("{comps} || !lsg_kind_ok({}, \"ls_interactable\")", inp("at", "entity")), "Not done: that isn't an interactable (or gm_components isn't running).", &[format!("\tls_interactable_offer({}, true)", inp("at", "entity")), exit("offered")]);
+            then_line(&mut b, "then");
+        }
         "bots.phase" | "bots.no_buy" | "bots.friends" | "bots.tag" | "bots.layer" | "bots.creature_enemies" | "bots.goal" | "bots.goal_clear" | "bots.offer" | "bots.offer_clear" => {
             // who: all / ct / t / the wired bot / @tag (a tag is a name: letters, digits, _ - .)
             let who = |choice_id: &str, tag_id: &str, player_pin: &str| -> String {
@@ -3061,6 +3172,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
     for (_, cb) in &menus_after {
         o.line(cb);
     }
+
     for f in &after {
         o.blank();
         o.line(f);
@@ -6138,6 +6250,126 @@ mod tests {
             }
             assert!(src.contains("lsg_fr0(") && src.contains("lsg_mks0("), "our own names");
         }
+    }
+
+    /// NPCs (T1fix): a line, a speaker and replies from the graph (typed, or wired from a
+    /// variable) reach players only as text (ls_npc_say / ls_npc_choose), never a server command.
+    #[test]
+    fn npc_text_stays_data() {
+        let evil = "x\"); server_cmd(\"quit\"); /* ^\"|";
+        let g = serde_json::json!({
+            "schema": "loner-strike/graph", "version": 3, "mode": {"id": "npc_evil", "name": "Evil"},
+            "variables": [{"id": "v1", "name": "Line", "type": "text", "scope": "mode", "default": evil}],
+            "nodes": [
+                {"id": "t", "type": "npc.on_talk", "params": {"name": evil}},
+                {"id": "s", "type": "npc.say", "params": {"speaker": evil, "text": evil}},
+                {"id": "c", "type": "npc.choose", "params": {"speaker": evil, "text": evil, "o1": evil, "o2": evil, "count": 2, "secs": 5}},
+                {"id": "gv", "type": "var.get", "params": {"var": "v1"}},
+                {"id": "n", "type": "npc.spawn", "params": {"model": "../../evil\".mdl", "name": evil}},
+                {"id": "i", "type": "npc.spawn_use", "params": {"model": evil, "prompt": evil}}
+            ],
+            "edges": [
+                {"id": "w1", "from": {"node": "t", "pin": "then"}, "to": {"node": "s", "pin": "exec"}},
+                {"id": "w2", "from": {"node": "t", "pin": "player"}, "to": {"node": "s", "pin": "player"}},
+                {"id": "w3", "from": {"node": "s", "pin": "then"}, "to": {"node": "c", "pin": "exec"}},
+                {"id": "w4", "from": {"node": "t", "pin": "player"}, "to": {"node": "c", "pin": "player"}},
+                {"id": "w5", "from": {"node": "gv", "pin": "out"}, "to": {"node": "c", "pin": "o3"}},
+                {"id": "w6", "from": {"node": "c", "pin": "r1"}, "to": {"node": "n", "pin": "exec"}},
+                {"id": "w7", "from": {"node": "n", "pin": "then"}, "to": {"node": "i", "pin": "exec"}},
+                {"id": "w8", "from": {"node": "t", "pin": "player"}, "to": {"node": "n", "pin": "at_ent"}},
+                {"id": "w9", "from": {"node": "t", "pin": "player"}, "to": {"node": "i", "pin": "at_ent"}}
+            ]
+        });
+        let g = super::super::graph::from_value(g).unwrap();
+        for debug in [false, true] {
+            let src = generate(&g, debug).source;
+            assert!(!src.contains("server_cmd(\"quit"), "{src}");
+            assert_eq!(src.matches("*/").count(), 1, "only the header comment closes");
+            for l in src.lines().filter(|l| !l.trim_start().starts_with("//")) {
+                assert_eq!(l.replace("^\"", "").replace("'\"'", "").matches('"').count() % 2, 0, "{l}");
+            }
+            // a model outside models/ never loads; the replies' | can't split one into two
+            assert!(!src.contains("evil") || !src.contains("../"), "no path out of models/");
+            assert!(src.contains("ls_npc_precache(\"models/w_c4.mdl\")"));
+            assert!(!src.lines().any(|l| l.contains("lsg_npc_rep(") && l.contains('|')), "no | inside a reply literal");
+            assert!(src.contains("public ls_on_npc_choice(id, npc, choice)") && src.contains("public ls_on_npc_talk(id, npc)"));
+        }
+    }
+
+    /// A conversation driven from a data table: the line and replies are Get Cell wires, a reply
+    /// wired back into the same Say and Choose (the next row) isn't a loop the check refuses, and
+    /// Picked (1-6) comes back with the reply.
+    #[test]
+    fn npc_dialogue_from_a_table_in_a_loop() {
+        let g = serde_json::json!({
+            "schema": "loner-strike/graph", "version": 3, "mode": {"id": "npc_table", "name": "Table talk"},
+            "dataTables": [{"id": "dt1", "name": "Lines", "key": "id", "columns": [{"id": "id", "name": "Id", "type": "number"}, {"id": "line", "name": "Line", "type": "text"}, {"id": "yes", "name": "Yes", "type": "text"}],
+                        "rows": [[0, "Hello there.", "Go on"], [1, "Still here?", "Bye"]]}],
+            "variables": [{"id": "row", "name": "Row", "type": "number", "scope": "player", "default": 0}, {"id": "last", "name": "Last pick", "type": "number", "scope": "player", "default": 0}],
+            "nodes": [
+                {"id": "t", "type": "npc.on_talk"},
+                {"id": "c", "type": "npc.choose", "params": {"count": 2, "o2": "Stop", "secs": 30}},
+                {"id": "gr", "type": "var.get", "params": {"var": "row"}},
+                {"id": "line", "type": "table.get_cell", "params": {"table": "dt1", "column": "line"}},
+                {"id": "yes", "type": "table.get_cell", "params": {"table": "dt1", "column": "yes"}},
+                {"id": "add", "type": "math.op", "params": {"op": "add", "b": 1}},
+                {"id": "next", "type": "var.set", "params": {"var": "row"}},
+                {"id": "keep", "type": "var.set", "params": {"var": "last"}}
+            ],
+            "edges": [
+                {"id": "w1", "from": {"node": "t", "pin": "then"}, "to": {"node": "c", "pin": "exec"}},
+                {"id": "w2", "from": {"node": "t", "pin": "player"}, "to": {"node": "c", "pin": "player"}},
+                {"id": "w3", "from": {"node": "t", "pin": "npc"}, "to": {"node": "c", "pin": "npc"}},
+                {"id": "w4", "from": {"node": "t", "pin": "player"}, "to": {"node": "gr", "pin": "player"}},
+                {"id": "w5", "from": {"node": "gr", "pin": "out"}, "to": {"node": "line", "pin": "row"}},
+                {"id": "w6", "from": {"node": "gr", "pin": "out"}, "to": {"node": "yes", "pin": "row"}},
+                {"id": "w7", "from": {"node": "line", "pin": "out"}, "to": {"node": "c", "pin": "text"}},
+                {"id": "w8", "from": {"node": "yes", "pin": "out"}, "to": {"node": "c", "pin": "o1"}},
+                {"id": "w9", "from": {"node": "c", "pin": "r1"}, "to": {"node": "keep", "pin": "exec"}},
+                {"id": "w10", "from": {"node": "c", "pin": "picked"}, "to": {"node": "keep", "pin": "value"}},
+                {"id": "w11", "from": {"node": "t", "pin": "player"}, "to": {"node": "keep", "pin": "player"}},
+                {"id": "w12", "from": {"node": "keep", "pin": "then"}, "to": {"node": "next", "pin": "exec"}},
+                {"id": "w13", "from": {"node": "gr", "pin": "out"}, "to": {"node": "add", "pin": "a"}},
+                {"id": "w14", "from": {"node": "add", "pin": "out"}, "to": {"node": "next", "pin": "value"}},
+                {"id": "w15", "from": {"node": "t", "pin": "player"}, "to": {"node": "next", "pin": "player"}},
+                {"id": "w16", "from": {"node": "next", "pin": "then"}, "to": {"node": "c", "pin": "exec"}}
+            ]
+        });
+        let g = super::super::graph::from_value(g).unwrap();
+        let p = validate(&g);
+        assert!(!has_errors(&p), "{p:#?}");
+        let src = generate(&g, false).source;
+        assert!(src.contains("ls_npc_choose(") && src.contains("stock lsg_ask"), "{src}");
+        assert!(src.contains("g_lsgAskK[id][choice]") && src.contains("= _:float(r)"), "Picked is the reply's number");
+        // the replies come from the table at run time
+        assert!(src.contains("lsg_npc_rep(lsgR, charsmax(lsgR), ctx[0], lsgN, lsgC, 1, lsg_dt0_"), "{src}");
+        assert!(src.contains("lsg_npc_line(lsgL, charsmax(lsgL), \"\", lsg_dt0_"), "{src}");
+        // and inside a Function, a wait is refused as for Menu
+        let mut inf = g.clone();
+        inf.functions.push(serde_json::from_value(serde_json::json!({"id": "f1", "name": "Ask", "inputs": [], "outputs": []})).unwrap());
+        inf.nodes.push(serde_json::from_value(serde_json::json!({"id": "fe", "type": "fn.entry", "graph": "f1"})).unwrap());
+        inf.nodes.push(serde_json::from_value(serde_json::json!({"id": "c2", "type": "npc.choose", "graph": "f1"})).unwrap());
+        assert!(validate(&inf).iter().any(|p| p.node.as_deref() == Some("c2") && p.message.contains("a Function runs straight through")));
+    }
+
+    /// Bots: Offer on an interactable turns its bot use on (gm_components keeps the offer).
+    #[test]
+    fn bots_offer_an_interactable() {
+        let g = serde_json::json!({
+            "schema": "loner-strike/graph", "version": 3, "mode": {"id": "npc_bots", "name": "Bots use"},
+            "variables": [],
+            "nodes": [{"id": "m", "type": "event.map_started"}, {"id": "i", "type": "npc.spawn_use", "params": {"at": "spot1", "bots": true}}, {"id": "o", "type": "bots.offer", "params": {"kind": "use", "cost": 0}}],
+            "edges": [
+                {"id": "w1", "from": {"node": "m", "pin": "then"}, "to": {"node": "i", "pin": "exec"}},
+                {"id": "w2", "from": {"node": "i", "pin": "then"}, "to": {"node": "o", "pin": "exec"}},
+                {"id": "w3", "from": {"node": "i", "pin": "out"}, "to": {"node": "o", "pin": "at"}}
+            ]
+        });
+        let g = super::super::graph::from_value(g).unwrap();
+        assert!(!has_errors(&validate(&g)), "{:#?}", validate(&g));
+        let src = generate(&g, false).source;
+        assert!(src.contains("ls_interactable_offer(g_lsgOut[") && src.contains("bots=1"), "{src}");
+        assert!(!src.contains("offer %s trap"), "not the brain's price offer");
     }
 
     /// A mode with component nodes loads gm_components (mod.rs writes it into its plugins list);

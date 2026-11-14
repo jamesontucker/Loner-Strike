@@ -15,9 +15,9 @@
 #define LSG_MODE "every_node_3"
 #define LSG_CTX 21
 #define LSG_TXT 2
-#define LSG_N 85
+#define LSG_N 94
 #define LSG_TASK 7310000
-#pragma dynamic 58496
+#pragma dynamic 64256
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -32,7 +32,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 4
+#define LSG_O 5
 #define LSG_OT 2
 
 // The mode's variables
@@ -245,6 +245,51 @@ public lsg_settings_one_h(id, menu, item)
 	return PLUGIN_HANDLED
 }
 
+stock g_lsgM91[33][LSG_CTX]
+stock g_lsgAsk[33], g_lsgAskK[33][6]
+
+stock lsg_npc_line(out[], len, const speaker[], const text[])
+{
+	if (speaker[0])
+		formatex(out, len, "%s: %s", speaker, text)
+	else
+		copy(out, len, text)
+}
+
+stock lsg_npc_rep(out[], len, id, &n, cap, k, const r[])
+{
+	if (n >= cap || !r[0] || id < 1 || id > MaxClients)
+		return
+	new t[48]
+	copy(t, charsmax(t), r)
+	replace_all(t, charsmax(t), "|", "/")
+	if (n)
+		add(out, len, "|")
+	add(out, len, t)
+	g_lsgAskK[id][n++] = k
+}
+
+public ls_on_npc_choice(id, npc, choice)
+{
+	#pragma unused npc
+	if (id < 1 || id > MaxClients)
+		return PLUGIN_CONTINUE
+	new k = g_lsgAsk[id]
+	g_lsgAsk[id] = 0
+	switch (k)
+	{
+		case 92:
+			lsg_ask91(id, choice)
+	}
+	return PLUGIN_CONTINUE
+}
+
+stock bool:lsg_npc_at(v, Float:o[3])
+{
+	for (new k = 0; k < 3; k++)
+		o[k] = lsg_vc(v, k)
+	return true
+}
 // ---- the game and the server (Game, World, Players, Entities, Effects, Advanced nodes) ----
 stock g_lsgRounds, g_lsgScore[3], bool:g_lsgFreeze, Float:g_lsgGagTill[33], g_lsgFw = -1, bool:lsg_cmd_ok, g_lsgSprExp, g_lsgSprBeam, Trie:g_lsgHave = Invalid_Trie
 
@@ -2929,9 +2974,12 @@ public lsg_gag_say(id)
 
 public plugin_precache()
 {
+	// an NPC the mode makes: its model is loaded with the map
+	ls_npc_precache("models/barney.mdl")
 	g_lsgSprExp = precache_model("sprites/zerogxplode.spr")
 	g_lsgSprBeam = precache_model("sprites/laserbeam.spr")
 	lsg_pre_model("models/w_c4.mdl")
+	lsg_pre_model("models/w_weaponbox.mdl")
 	lsg_pre_sound("buttons/bell1.wav")
 	// the map's custom event entities, as they load
 	register_forward(FM_KeyValue, "lsg_ev_kv")
@@ -3058,6 +3106,28 @@ public ls_on_creature_hurt(ent, attacker, Float:dmg, headshot)
 	ctx[4] = lsg_hit_pos(ent) // hit_pos
 	ctx[5] = lsg_hit_dir(ent, attacker) // hit_dir
 	lsg_n4(ctx)
+}
+
+public ls_on_npc_talk(id, npc)
+{
+	if (id < 1 || id > MaxClients)
+		return PLUGIN_CONTINUE
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	ctx[1] = npc // npc
+	lsg_n85(ctx)
+	return PLUGIN_CONTINUE
+}
+
+public ls_on_interact(id, ent)
+{
+	if (id < 1 || id > MaxClients)
+		return PLUGIN_CONTINUE
+	new ctx[LSG_CTX]
+	ctx[0] = id // player
+	ctx[1] = ent // entity
+	lsg_n92(ctx)
+	return PLUGIN_CONTINUE
 }
 
 public lsg_on_said(id)
@@ -3924,5 +3994,144 @@ stock lsg_n84_set_time(ctx[])
 	new inst = 0
 	lsg_tl84_save(inst, ctx)
 	g_lsgTlT84[inst] = floatclamp(0.0, 0.0, 4.0)
+}
+
+// Talked To NPC (npc_t)
+lsg_n85(ctx[])
+{
+	lsg_n86(ctx)
+}
+
+// Say (npc_s)
+lsg_n86(ctx[])
+{
+	new lsgL[192]
+	if (!(!ls_components_running()))
+	{
+		lsg_npc_line(lsgL, charsmax(lsgL), "Sam", "Hello there, friend")
+		ls_npc_say(ctx[1], ctx[0], lsgL)
+	}
+	lsg_n87(ctx)
+}
+
+// Set NPC Behavior (npc_b)
+lsg_n87(ctx[])
+{
+	if (!(!ls_components_running() || ctx[1] <= 0))
+	{
+		ls_npc_behave(ctx[1], "follow", ctx[0])
+	}
+	lsg_n88(ctx)
+}
+
+// NPC Look At (npc_l)
+lsg_n88(ctx[])
+{
+	if (!(!ls_components_running() || ctx[1] <= 0))
+	{
+		ls_npc_look_at(ctx[1], ctx[0])
+	}
+	lsg_n89(ctx)
+}
+
+// Spawn NPC (npc_n)
+lsg_n89(ctx[])
+{
+	new Float:o[3]
+	if (!!ls_components_running() && lsg_ent_origin(ctx[0], o))
+		g_lsgOut[89] = ls_npc_spawn("models/barney.mdl", o, 90.0, "Sam", "behavior=stand unkillable=1")
+	lsg_n90(ctx)
+}
+
+// Spawn Interactable (npc_i)
+lsg_n90(ctx[])
+{
+	new Float:o[3]
+	if (!!ls_components_running() && lsg_npc_at(lsg_vec(1.0, 2.0, 3.0), o))
+		g_lsgOut[90] = ls_interactable_spawn("models/w_weaponbox.mdl", o, "Press E to read", "once=1 hide=0 bots=1")
+	lsg_n91(ctx)
+}
+
+// Say and Choose (npc_c)
+lsg_n91(ctx[])
+{
+	new lsgL[192], lsgR[256], lsgN = 0
+	if (!(!ls_components_running() || !lsg_ok(ctx[0]) || is_user_bot(ctx[0])))
+	{
+		new lsgC = clamp(floatround(3.0), 1, 6)
+		lsg_npc_line(lsgL, charsmax(lsgL), "", "Help me?")
+		lsg_npc_rep(lsgR, charsmax(lsgR), ctx[0], lsgN, lsgC, 1, "Yes")
+		lsg_npc_rep(lsgR, charsmax(lsgR), ctx[0], lsgN, lsgC, 2, "No")
+		lsg_npc_rep(lsgR, charsmax(lsgR), ctx[0], lsgN, lsgC, 3, "Tell me more")
+		lsg_npc_rep(lsgR, charsmax(lsgR), ctx[0], lsgN, lsgC, 4, "")
+		lsg_npc_rep(lsgR, charsmax(lsgR), ctx[0], lsgN, lsgC, 5, "")
+		lsg_npc_rep(lsgR, charsmax(lsgR), ctx[0], lsgN, lsgC, 6, "")
+		for (new k = 0; k < LSG_CTX; k++)
+			g_lsgM91[ctx[0]][k] = ctx[k]
+		if (lsgN && ls_npc_choose(g_lsgOut[89], ctx[0], lsgL, lsgR, floatclamp(20.0, 0.0, 300.0)))
+			g_lsgAsk[ctx[0]] = 92
+	}
+}
+
+// Say and Choose (npc_c): the reply
+stock lsg_ask91(id, choice)
+{
+	new ctx[LSG_CTX]
+	for (new k = 0; k < LSG_CTX; k++)
+		ctx[k] = g_lsgM91[id][k]
+	new r = choice >= 0 && choice < 6 ? g_lsgAskK[id][choice] : 0
+	g_lsgO[4] = _:float(r)
+	switch (choice < 0 ? choice : r)
+	{
+		case 1:
+		{
+			lsg_n86(ctx)
+		}
+		case 2:
+		{
+			#pragma unused ctx
+		}
+		case 3:
+		{
+			#pragma unused ctx
+		}
+		case 4:
+		{
+			#pragma unused ctx
+		}
+		case 5:
+		{
+			#pragma unused ctx
+		}
+		case 6:
+		{
+			#pragma unused ctx
+		}
+		case -1:
+		{
+			#pragma unused ctx
+		}
+		case -2, 0:
+		{
+			#pragma unused ctx
+		}
+	}
+}
+
+// Used Interactable (npc_u)
+lsg_n92(ctx[])
+{
+	lsg_n93(ctx)
+}
+
+// Say (npc_s2)
+lsg_n93(ctx[])
+{
+	new lsgL[192]
+	if (!(!ls_components_running()))
+	{
+		lsg_npc_line(lsgL, charsmax(lsgL), "", "Used.")
+		ls_npc_say(0, ctx[0], lsgL)
+	}
 }
 
