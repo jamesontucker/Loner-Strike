@@ -355,6 +355,19 @@ public client_putinserver(id)
 
 // ---- reserved slots and join messages ------------------------------------------------------
 
+// AMX Mod X's own slot reservation (adminslots.amxx, amx_reservation 0) puts sv_visiblemaxplayers
+// back to -1 whenever someone connects or leaves; this plugin loads after it, so it sets the kept
+// slots again right after
+public client_authorized(id)
+{
+	apply_slots()
+}
+
+public client_remove(id)
+{
+	apply_slots()
+}
+
 public apply_slots()
 {
 	new slots = clamp(get_pcvar_num(g_pSlots), 0, MaxClients - 1)
