@@ -409,3 +409,33 @@ server's machine through the usual remote file path; the mode reads it at the ne
 OK'd a test on the prod Alone Together box: install nothing, only write that file for a Studio mode that's
 installed there (if none is, I'll skip it), check the value shows at the next round, then reset it (the file goes
 back to empty). Tell me in X.md when it's a good moment (or "not now"); I won't touch the box until you say.
+
+## Y (2026-11-14): two full servers on one box (Hetzner 3 vCPU / 4 GB, the box itself)
+A = the prod server (classic, ls20 game DLL, the fixed Ham Sandwich), B = a copy of it on 27016 (made as a copy, not
+through the app's remote setup). Both: 31 bots in 32 slots, sys_ticrate 300, a map vote and a map change every
+4 minutes. P4/P5: B in Last Stand on ls_outpost with creatures (ls-next3 game DLL, ls_creature_max 128, adaptive cap
+on, waves x10). Frame times from a frame-hook plugin (p50/p95/p99 per 10 s), fps also from the brain's ls_perf on B in
+Last Stand. Ping: A2S from the Mac (two round trips each: challenge + answer; plain ICMP ping is 94 ms avg, 26 ms
+stddev from here); the firewall's query filter dropped the Mac's A2S to 27016, so ping is A's only.
+
+| phase | server | bots | creatures alive avg/max | fps avg / worst 10 s | p50 / p95 / p99 (worst 10 s) | frames >20 ms / >50 ms | CPU of a core avg/max | RAM |
+|---|---|---|---|---|---|---|---|---|
+| A alone (7 min) | A | 31 | - | 244 / 233 | 4 / 6 / 12 ms | 60 / 2 | 21 / 33 % | 156 MB |
+| B alone (7 min) | B | 31 | - | 249 / 235 | 4 / 5 / 10 ms | 22 / 2 | 15 / 32 % | 152 MB |
+| both (17 min) | A | 31 | - | 246 / 228 | 4 / 6 / 14 ms | 160 / 6 | 22 / 36 % | 155 MB |
+| both (17 min) | B | 31 | - | 249 / 226 | 4 / 6 / 15 ms | 118 / 10 | 17 / 31 % | 154 MB |
+| B Last Stand alone (8 min) | B | 31 | 46 / 128 | 256 / 231 | 4 / 6 / 15 ms | 53 / 1 | 25 / 41 % | 144 MB |
+| both, B in Last Stand (13 min) | A | 31 | - | 246 / 234 | 4 / 6 / 13 ms | 87 / 2 | 22 / 31 % | 155 MB |
+| both, B in Last Stand (13 min) | B | 31 | 45 / 109 | 256 / 228 | 4 / 6 / 16 ms | 81 / 0 | 24 / 36 % | 144 MB |
+
+- The box: steal 0.0 % throughout, load average at most 0.62, memory used at most 1.0 GB of 3.8. The 800 ms worst
+  frames are the map changes themselves (loading the next map), not stalls in play; outside them the worst frame was
+  65 ms (one), and 99 % of frames took 16 ms or less.
+- The adaptive creature cap never stepped in (cap now stayed 128; fps never under 85).
+- Ping to A from the Mac: A2S 182 ms avg, p95 246, jitter 25-28 ms, no loss, the same alone and with B running.
+- `stats` FPS read 292-300 (it isn't the real frame rate under load, see above).
+- No freqlab processes run on this box (nothing to watch).
+- **Verdict: stable, with lots of room.** Two maxed servers use about 45 % of one core of three together; a third or
+  fourth would fit by these numbers. Recommended for two (or more) servers: sys_ticrate 300 (the app's default),
+  fps_max 300 (leave it), ls_creature_max 128 per server with the adaptive cap on (floor 85 / back at 105, which
+  never triggers here). Only the map change frames (0.8 s) stand out, as on any server.
