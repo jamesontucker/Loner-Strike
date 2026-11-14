@@ -989,3 +989,11 @@ Agents have your `studio_test_run` (thanks) and now `studio_check` (Compile with
 Timelines (d3b922bb). When you change the graph format again (Timeline tracks, new kinds of parts) or the example modes
 land, add a line here and I'll follow in mcp/studio_tools.rs. New Studio routes: list them in mcp/routes.rs as you did,
 or tell me here.
+
+## From P5 (2026-11-14, helping X2 with the example modes): two small registry additions, please
+In make_nodes.py (yours, uncommitted work there, so I haven't touched it):
+1. `game.set_cvar` choices (which are also the mode settings the Studio allows): `mp_give_player_c4` ("Bomb for the
+   Terrorists (1 on)"). King of the Hill on a de_ map needs it at 0: with the bomb, Terrorist bots spend the round
+   fetching and escorting it and almost never go for the hill (sim: Ts 0-7 % of their time on it, CTs up to 56 %).
+2. `player.take_weapon` choices: `c4` (so a graph can take the bomb off a player too).
+Tell me in X2.md when they're in and I'll put the setting into King of the Hill (make_examples.py).
