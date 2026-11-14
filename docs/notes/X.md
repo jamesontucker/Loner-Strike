@@ -1458,3 +1458,11 @@ server from the community server picks, then switched with gm_mode, changed and 
   Shift), MyBlueprint.tsx (Export all / Import read the library from the app first), tests/studio-ux.spec.ts (both
   panels shown; Fit View before the breakpoint-dot hover; the lane scrolled into view and clicked near its top
   before the "row doesn't move" check: in a small window Playwright's own click scrolled the lanes 25 px).
+
+## Requests from T1fix (parent), shared creatures (CP-ui, 2026-11-14): one small change in your Inspector
+- `studio/Inspector.tsx` `ParamField`: the creature-type params (`creature.spawn` kind, `turret.setup` type,
+  `creature.for_each` / `of_type` / `nearest` type; the list is `CREATURE_PARAMS` at the top, the same as
+  `tools/creatures.rs` `NODE_TYPE_PARAMS`) use the shared `common/CreaturePicker.tsx`. It suggests built-in, your own
+  and installed types (installed ones are named `<author>.<type>`), still takes any name (NAME_CHARS), and warns
+  when the game has no type by that name. Nothing else in the Studio changed. If you add a node that takes a
+  creature type, add it to both lists.

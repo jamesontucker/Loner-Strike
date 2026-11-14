@@ -13,6 +13,7 @@ import type { DocEntity, FgdClass, FgdKey } from "./editorApi";
 import { useFgd } from "./fgd";
 import { AssetButtons, useAssetDrop } from "./AssetPicker"; // P5
 import { kindOfKey, type AssetKind } from "./contentApi"; // P5
+import { CreaturePicker } from "../common/CreaturePicker"; // shared creatures
 
 /** P5: the kind of file a key names: by its FGD type or its value's file type, else by the key's
  *  name (model, sprite, noise…; never a brush model like *12). */
@@ -195,7 +196,11 @@ function DefField({ e, def, value, all }: { e: DocEntity; def: FgdKey; value: st
     </button>
   );
   let control;
-  if (def.type === "choices" && def.choices?.length) {
+  // shared creatures (CP-ui): a creature type field picks from built-in, your own and installed types
+  const creatureKey = (e.classname === "ls_creature" && def.name === "type") || (e.classname === "ls_wave_spawner" && def.name === "types");
+  if (creatureKey) {
+    control = <CreaturePicker id={id} value={text} list={def.name === "types"} label={def.label} placeholder={def.default} onChange={setText} onCommit={(nv) => commit(nv)} />;
+  } else if (def.type === "choices" && def.choices?.length) {
     const known = def.choices.some((c) => c.value === v);
     control = (
       <select id={id} value={v} onChange={(ev) => commit(ev.target.value)}>

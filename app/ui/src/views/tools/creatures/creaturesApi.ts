@@ -80,7 +80,9 @@ export type Limits = { ranges: { key: string; min: number; max: number }[]; cate
 export type PlacedKey = { name: string; type: string; label: string; default?: string; help?: string; choices?: { value: string; label: string }[] };
 /** A creature a mapper places in the map editor (ls_barnacle; turrets as ls_creature) instead of a mode's waves. */
 export type Placed = { id: string; entity: string; type: string; title: string; model: string; about: string; how: string; keys: PlacedKey[] };
-export type Status = { game: string; server?: boolean; file: string; exists: boolean; types: TypeRow[]; templates: Creature[]; problems: Problem[]; limits: Limits; placed?: Placed[] };
+/** A type a community item installed (its block in creatures.ini): read only in the Studio. */
+export type InstalledType = { name: string; display: string; base: string; model: string; category: string; from: string[]; summary: string };
+export type Status = { game: string; server?: boolean; installed?: InstalledType[]; file: string; exists: boolean; types: TypeRow[]; templates: Creature[]; problems: Problem[]; limits: Limits; placed?: Placed[] };
 
 export type Candidate = { path: string; found: boolean; folder?: string; kind: "game" | "hl" | "custom" | "missing" | "bad"; note: string };
 export type ModelReport = { candidates: Candidate[]; picked: number | null; standIn: boolean };
@@ -117,3 +119,7 @@ export const saveWaves = (w: WaveSet) => post<Done<WavesStatus>>("/api/tools/cre
 export const resetWaves = (mode: string) => post<Done<WavesStatus>>("/api/tools/creatures/waves/reset", { mode });
 /** a sound under sound/ (the map editor's player route: game folders only) */
 export const soundUrl = (file: string) => `/api/tools/editor/sound?path=${encodeURIComponent(file)}`;
+
+/** Shared creatures: which of your maps, modes and waves use each type (base chains included). */
+export type TypeUser = { kind: "map" | "mode" | "waves"; name: string; id: string };
+export const usedBy = (signal?: AbortSignal) => get<{ usedBy: Record<string, TypeUser[]> }>("/api/tools/creatures/used-by", signal);

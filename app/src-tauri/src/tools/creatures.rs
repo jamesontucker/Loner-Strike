@@ -21,6 +21,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -1074,12 +1075,28 @@ pub fn safe_sound(p: &str) -> bool {
 
 /// What's wrong with these types, before anything is written. Errors stop a save; notes don't.
 pub fn check(types: &[Creature]) -> Vec<Problem> {
+    check_with(types, 0)
+}
+
+/// `check` with `installed` types from community items in the file too (they count toward the
+/// game's 48).
+pub fn check_with(types: &[Creature], installed: usize) -> Vec<Problem> {
     let mut out = Vec::new();
     let mut seen: Vec<String> = Vec::new();
     let builtin_names: Vec<String> = builtins().into_iter().map(|t| t.name).collect();
     let extra = types.iter().filter(|t| !builtin_names.contains(&t.name)).count();
-    if builtin_names.len() + extra > MAX_TYPES {
-        out.push(problem("", "", format!("The game holds {MAX_TYPES} types at most ({} built in + {} of yours): remove {}.", builtin_names.len(), MAX_TYPES - builtin_names.len(), builtin_names.len() + extra - MAX_TYPES), true));
+    if builtin_names.len() + extra + installed > MAX_TYPES {
+        let over = builtin_names.len() + extra + installed - MAX_TYPES;
+        out.push(problem(
+            "",
+            "",
+            if installed > 0 {
+                format!("The game holds {MAX_TYPES} types at most ({} built in, {installed} installed, {extra} of yours): remove {over}.", builtin_names.len())
+            } else {
+                format!("The game holds {MAX_TYPES} types at most ({} built in + {} of yours): remove {over}.", builtin_names.len(), MAX_TYPES - builtin_names.len())
+            },
+            true,
+        ));
     }
     for (i, t) in types.iter().enumerate() {
         let at = t.name.as_str();
@@ -2008,10 +2025,13 @@ fn limits() -> Value {
 
 pub fn status(f: &Files) -> Result<Value, String> {
     let text = read_text(&f.ini())?;
-    let doc = Doc::parse(text.as_deref().unwrap_or(""));
+    // the player's own sections; community items' blocks are listed apart, read only
+    let (user, _) = super::creaturepack::split_blocks(text.as_deref().unwrap_or(""));
+    let installed = installed_list(text.as_deref().unwrap_or(""));
+    let doc = Doc::parse(&user);
     let types = resolve(&doc);
     let plain: Vec<Creature> = types.iter().filter(|r| !r.skipped).map(|r| r.t.clone()).collect();
-    let mut problems = check(&plain);
+    let mut problems = check_with(&plain, installed.len());
     for r in types.iter().filter(|r| r.skipped) {
         problems.push(problem(&r.t.name, "", format!("{} is past the game's {MAX_TYPES} types: the game skips it.", r.t.name), false));
     }
@@ -2027,10 +2047,36 @@ pub fn status(f: &Files) -> Result<Value, String> {
             v
         }).collect::<Vec<_>>(),
         "templates": builtins(),
+        // installed with community items: read only here (remix one to change it)
+        "installed": installed.iter().map(|(t, from)| json!({"name": t.name, "display": t.display, "base": t.base, "model": t.model, "category": t.category, "from": from, "summary": summary(t)})).collect::<Vec<_>>(),
         "problems": problems,
         "limits": limits(),
         "placed": placed(),
     }))
+}
+
+/// The types community items installed (their marked blocks in creatures.ini), each as the game
+/// reads it (its base filled in), with the packages that bring it. A type two items share is
+/// listed once.
+pub fn installed_list(text: &str) -> Vec<(Creature, Vec<String>)> {
+    let (_, blocks) = super::creaturepack::split_blocks(text);
+    let mut out: Vec<(Creature, Vec<String>)> = Vec::new();
+    for b in &blocks {
+        let read = resolve(&Doc::parse(&b.body));
+        for name in &b.types {
+            let n = name.to_ascii_lowercase();
+            if let Some(e) = out.iter_mut().find(|(t, _)| t.name == n) {
+                if !e.1.contains(&b.id) {
+                    e.1.push(b.id.clone());
+                }
+                continue;
+            }
+            if let Some(r) = read.iter().find(|r| r.t.name.eq_ignore_ascii_case(&n)) {
+                out.push((r.t.clone(), vec![b.id.clone()]));
+            }
+        }
+    }
+    out
 }
 
 /// Creatures a mapper places in the map editor instead of a mode spawning them in waves: the
@@ -2084,10 +2130,17 @@ pub fn save(f: &Files, req: &SaveReq) -> Result<bool, String> {
         return Err(if errors.len() == 1 { format!("Not saved: {who}{}", first.text) } else { format!("Not saved: {who}{} (and {} more to fix)", first.text, errors.len() - 1) });
     }
     let old = read_text(&f.ini())?.unwrap_or_default();
-    let mut new = write(&old, &req.types)?;
+    // (community items' blocks aren't the player's: set aside, written back as they were)
+    let (user, blocks) = super::creaturepack::split_blocks(&old);
+    let installed = installed_list(&old).len();
+    if let Some(p) = check_with(&req.types, installed).into_iter().find(|p| p.error && p.at.is_empty()) {
+        return Err(format!("Not saved: {}", p.text));
+    }
+    let mut new = write(&user, &req.types)?;
     if old.is_empty() && !new.is_empty() {
         new = format!("; creatures.ini: creature types for the game (docs/CREATURES.md). Made in Tools > Creature Studio; edit freely.\n; A [type] adds a type or changes a built-in one (zombie runner brute spitter hound turret boss) by name.\n\n{new}");
     }
+    let new = super::creaturepack::join_blocks(&new, &blocks);
     if new == old {
         return Ok(false);
     }
@@ -2106,7 +2159,14 @@ pub fn waves_status(f: &Files) -> Result<Value, String> {
 /// The types a wave can name: the game's and creatures.ini's, and the round table's types the
 /// game may not have yet (controller, stukabat: a spitter or a runner stands in).
 fn wave_type_names(f: &Files) -> Result<Vec<String>, String> {
-    let mut types: Vec<String> = resolve(&Doc::parse(&read_text(&f.ini())?.unwrap_or_default())).into_iter().filter(|r| !r.skipped).map(|r| r.t.name).collect();
+    let text = read_text(&f.ini())?.unwrap_or_default();
+    let mut types: Vec<String> = resolve(&Doc::parse(&text)).into_iter().filter(|r| !r.skipped).map(|r| r.t.name).collect();
+    // (community items' types too: installed ones a mode's waves may use)
+    for (t, _) in installed_list(&text) {
+        if !types.contains(&t.name) {
+            types.push(t.name);
+        }
+    }
     for t in planned_types() {
         if !types.iter().any(|x| x.eq_ignore_ascii_case(t)) {
             types.push(t.to_string());
@@ -2320,6 +2380,219 @@ pub fn live(g: &crate::game::Game) -> Value {
     }
 }
 
+// ---- names and "Used by" (shared creatures: the pickers, the editor's Checks) ----------------
+
+/// Every section in creatures.ini with the community packages that brought it (empty: the
+/// player's own). Installed types live in app-managed blocks (`; >>> from <package>` …
+/// `; <<< end <package>`, tools/creaturepack.rs).
+pub fn sections_with_source(text: &str) -> Vec<(String, Vec<String>)> {
+    let (user, _) = super::creaturepack::split_blocks(text);
+    let mut out: Vec<(String, Vec<String>)> = Vec::new();
+    for raw in user.lines() {
+        if let Line::Section(n) = classify(raw) {
+            let n = n.trim().to_ascii_lowercase();
+            if !n.is_empty() && !out.iter().any(|(x, _)| *x == n) {
+                out.push((n, vec![]));
+            }
+        }
+    }
+    for (t, from) in installed_list(text) {
+        if !out.iter().any(|(x, _)| *x == t.name) {
+            out.push((t.name, from));
+        }
+    }
+    out
+}
+
+/// What a creature type field can name: the built-in types, the user's own and the installed
+/// ones (each with its package).
+pub fn type_names(ini: &str) -> Value {
+    let built: Vec<String> = builtins().into_iter().map(|t| t.name).collect();
+    let mut own: Vec<String> = Vec::new();
+    let mut installed: Vec<Value> = Vec::new();
+    for (n, from) in sections_with_source(ini) {
+        if built.contains(&n) {
+            continue;
+        }
+        if from.is_empty() {
+            own.push(n);
+        } else {
+            installed.push(json!({"name": n, "from": from}));
+        }
+    }
+    json!({"builtin": built, "planned": planned_types().filter(|t| builtin(t).is_none()).collect::<Vec<_>>(), "own": own, "installed": installed})
+}
+
+/// Every name a creature type field may hold in this game (built-in, the round table's planned
+/// types, and every section of creatures.ini), lower case.
+pub fn known_names(ini: &str) -> BTreeSet<String> {
+    let mut k: BTreeSet<String> = builtins().into_iter().map(|t| t.name).collect();
+    k.extend(planned_types().map(String::from));
+    k.extend(sections_with_source(ini).into_iter().map(|(n, _)| n));
+    k
+}
+
+/// Entity keys that name creature types: (class, key, a list of names).
+pub const ENTITY_TYPE_KEYS: &[(&str, &str, bool)] = &[("ls_creature", "type", false), ("ls_wave_spawner", "types", true)];
+/// Game Mode Studio params that name a creature type: (node type, param).
+pub const NODE_TYPE_PARAMS: &[(&str, &str)] = &[("creature.spawn", "kind"), ("turret.setup", "type"), ("creature.for_each", "type"), ("creature.of_type", "type"), ("creature.nearest", "type")];
+
+/// The creature types an entity names (lower case).
+pub fn entity_types(class: &str, get: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
+    let mut out = Vec::new();
+    for (c, k, list) in ENTITY_TYPE_KEYS {
+        if !class.eq_ignore_ascii_case(c) {
+            continue;
+        }
+        // (ls_creature's type defaults to zombie: an empty key names nothing new)
+        let v = get(k).unwrap_or_default();
+        if *list {
+            out.extend(v.split([' ', ',']).map(str::trim).filter(|w| !w.is_empty()).map(str::to_ascii_lowercase));
+        } else if !v.trim().is_empty() {
+            out.push(v.trim().to_ascii_lowercase());
+        }
+    }
+    out
+}
+
+/// The creature types a Studio graph names.
+pub fn graph_types(g: &super::studio::graph::Graph) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for n in &g.nodes {
+        for (kind, param) in NODE_TYPE_PARAMS {
+            if n.kind == *kind {
+                if let Some(v) = n.params.get(*param).and_then(|v| v.as_str()) {
+                    if !v.trim().is_empty() {
+                        out.insert(v.trim().to_ascii_lowercase());
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Editor Checks: a creature type no one has on this computer (not built in, not in
+/// creatures.ini). `ini`: None when the game isn't set up (nothing to compare with).
+pub fn editor_issues(doc: &crate::editor::doc::MapDocument, ini: Option<&str>) -> Vec<crate::editor::checks::Issue> {
+    use crate::editor::checks::{issue, Issue, Level};
+    let Some(ini) = ini else { return vec![] };
+    let known = known_names(ini);
+    let mut out = Vec::new();
+    for (id, e) in &doc.entities {
+        let get = |k: &str| e.get(k).map(String::from);
+        for t in entity_types(e.classname(), &get) {
+            if !known.contains(&t) {
+                out.push(Issue { entity: Some(id.0), ..issue(Level::Warning, "unknown-creature", format!("{} names the creature type \"{t}\", which this game doesn't have. Make it in the Creature Studio, or pick another.", e.classname())) });
+            }
+        }
+    }
+    out
+}
+
+/// The game's creatures.ini for the editor's Checks (None: the game isn't set up).
+pub fn game_ini(hl: Option<&Path>, game: &str) -> Option<String> {
+    let dir = hl?.join(game);
+    if !dir.is_dir() {
+        return None;
+    }
+    Some(std::fs::read(dir.join(FILE_REL)).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default())
+}
+
+/// Something that uses a type: a map, a mode or a waves.ini section.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct User {
+    pub kind: &'static str,
+    pub name: String,
+    pub id: String,
+}
+
+/// Which of the user's things use each type: maps (editor projects in the recent list and maps
+/// the compiler made, by their entities), Studio modes (their graphs) and waves.ini sections. A
+/// type used through another's `base =` counts too (a runner_x made from my_runner uses it).
+pub fn used_by(ini: &str, waves: &str, maps: &[(String, Vec<String>)], modes: &[(String, String, BTreeSet<String>)]) -> BTreeMap<String, Vec<User>> {
+    // base chains from the file (custom types only; built-ins have none worth listing)
+    let doc = Doc::parse(ini);
+    let bases: HashMap<String, String> = resolve(&doc).into_iter().map(|r| (r.t.name.to_ascii_lowercase(), r.t.base.to_ascii_lowercase())).collect();
+    let chain = |t: &str| {
+        let mut v = vec![t.to_string()];
+        let mut cur = t.to_string();
+        while let Some(b) = bases.get(&cur).filter(|b| !b.is_empty() && !v.contains(b)) {
+            v.push(b.clone());
+            cur = b.clone();
+        }
+        v
+    };
+    let mut out: BTreeMap<String, Vec<User>> = BTreeMap::new();
+    let mut add = |t: &str, u: User| {
+        for x in chain(t) {
+            let list = out.entry(x).or_default();
+            if !list.contains(&u) {
+                list.push(u.clone());
+            }
+        }
+    };
+    for (name, types) in maps {
+        for t in types {
+            add(t, User { kind: "map", name: name.clone(), id: name.clone() });
+        }
+    }
+    for (id, name, types) in modes {
+        for t in types {
+            add(t, User { kind: "mode", name: name.clone(), id: id.clone() });
+        }
+    }
+    for w in parse_waves(waves) {
+        let mut types: BTreeSet<String> = w.rows.iter().flat_map(|r| r.mix.iter().filter(|(_, n)| *n > 0).map(|(t, _)| t.clone())).collect();
+        if !w.own_rounds && !w.boss.is_empty() && w.boss_every > 0 {
+            types.insert(w.boss.to_ascii_lowercase());
+        }
+        let name = if w.mode == "laststand" { "Last Stand's waves".to_string() } else { format!("{}'s waves", w.mode) };
+        for t in types {
+            add(&t, User { kind: "waves", name: name.clone(), id: w.mode.clone() });
+        }
+    }
+    out
+}
+
+/// The user's maps and modes, read for `used_by` (editor projects in the recent list, maps the
+/// compiler made that are in the game, Studio graphs). Bounded: 200 of each, 8 MB a file.
+fn users_here(game_dir: &Path) -> (Vec<(String, Vec<String>)>, Vec<(String, String, BTreeSet<String>)>) {
+    let mut maps: Vec<(String, Vec<String>)> = Vec::new();
+    for p in super::editor::recent_projects().into_iter().take(200) {
+        let Ok(text) = crate::caps::read_text(&p, "map project", 64 << 20) else { continue };
+        let Ok(doc) = crate::editor::doc::MapDocument::from_json(&text) else { continue };
+        let name = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        let types: Vec<String> = doc.entities.values().flat_map(|e| entity_types(e.classname(), &|k| e.get(k).map(String::from))).collect();
+        maps.push((name, types));
+    }
+    // maps the compiler made (made.json) that are in the game's maps folder
+    let made: Value = std::fs::read(crate::localdata::dir("tools/compile").join("made.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(json!({}));
+    for m in made["maps"].as_array().into_iter().flatten().filter_map(|v| v.as_str()).filter(|m| crate::maps::safe_arg(m)).take(200) {
+        if maps.iter().any(|(n, _)| n.eq_ignore_ascii_case(m)) {
+            continue;
+        }
+        let bsp = game_dir.join("maps").join(format!("{m}.bsp"));
+        let Ok(lite) = crate::tools::mapinfo::read_lite(&bsp, false) else { continue };
+        let types: Vec<String> = lite.entities.iter().flat_map(|e| entity_types(e.classname(), &|k| e.get(k).map(String::from))).collect();
+        maps.push((m.to_string(), types));
+    }
+    let mut modes = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(super::studio::graphs_dir()) {
+        for e in rd.flatten().take(200) {
+            let p = e.path();
+            if !p.to_string_lossy().ends_with(".json") {
+                continue;
+            }
+            let Ok(text) = crate::caps::read_text(&p, "mode's graph", 2 << 20) else { continue };
+            let Ok(g) = super::studio::graph::parse(&text) else { continue };
+            let name = if g.mode.name.is_empty() { g.mode.id.clone() } else { g.mode.name.clone() };
+            modes.push((g.mode.id.clone(), name, graph_types(&g)));
+        }
+    }
+    (maps, modes)
+}
+
 // ---- routes ---------------------------------------------------------------------------------
 
 fn answer(r: Result<Value, String>) -> Response {
@@ -2369,7 +2642,8 @@ async fn api_check(State(st): State<Shared>, h: HeaderMap, Json(r): Json<CheckRe
     let f = target(&st).ok().map(|(_, f)| f);
     blocking(move || {
         let types: Vec<Creature> = r.types.into_iter().take(MAX_TYPES * 2).collect();
-        let mut out = json!({"problems": check(&types), "summaries": types.iter().map(|t| json!({"name": t.name, "summary": summary(t)})).collect::<Vec<_>>()});
+        let installed = f.as_ref().and_then(|f| read_text(&f.ini()).ok().flatten()).map(|t| installed_list(&t).len()).unwrap_or(0);
+        let mut out = json!({"problems": check_with(&types, installed), "summaries": types.iter().map(|t| json!({"name": t.name, "summary": summary(t)})).collect::<Vec<_>>()});
         if let (Some(f), Some(t)) = (f, r.look.and_then(|n| types.iter().find(|t| t.name == n).cloned())) {
             out["models"] = model_report(&f.hl, &f.game, &f.app, &t.model);
             out["sounds"] = json!(t.snd.iter().map(|s| sound_report(&f.hl, &f.game, s)).collect::<Vec<_>>());
@@ -2504,6 +2778,28 @@ async fn api_waves_save(State(st): State<Shared>, h: HeaderMap, Json(w): Json<Wa
     .await
 }
 
+async fn api_names(State(st): State<Shared>) -> Response {
+    match target(&st) {
+        Ok((_, f)) => blocking(move || Ok(type_names(&read_text(&f.ini())?.unwrap_or_default()))).await,
+        Err(e) => answer(Err(e)),
+    }
+}
+
+async fn api_used_by(State(st): State<Shared>) -> Response {
+    match target(&st) {
+        Ok((_, f)) => {
+            blocking(move || {
+                let (maps, modes) = users_here(&f.dir);
+                let ini = read_text(&f.ini())?.unwrap_or_default();
+                let waves = read_text(&f.waves())?.unwrap_or_default();
+                Ok(json!({"usedBy": used_by(&ini, &waves, &maps, &modes)}))
+            })
+            .await
+        }
+        Err(e) => answer(Err(e)),
+    }
+}
+
 #[derive(Deserialize)]
 struct ResetReq {
     mode: String,
@@ -2539,6 +2835,8 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/creatures/waves", get(api_waves))
         .route("/api/tools/creatures/waves/save", post(api_waves_save))
         .route("/api/tools/creatures/waves/reset", post(api_waves_reset))
+        .route("/api/tools/creatures/names", get(api_names))
+        .route("/api/tools/creatures/used-by", get(api_used_by))
 }
 
 #[cfg(test)]
@@ -2869,6 +3167,91 @@ mod tests {
         assert!(t.contains("waves") && !t.contains("ls_creature_precache"), "{t}");
         // another mode: the cvar
         assert!(not_loaded_text("qa_runner_", false).contains("ls_creature_precache"));
+    }
+
+    /// Community items' blocks in creatures.ini: Save edits the player's sections only and writes
+    /// every block back byte for byte; status lists installed types apart (read only), they count
+    /// toward the 48 and waves may name them.
+    #[test]
+    fn save_keeps_installed_blocks_byte_identical() {
+        let dir = std::env::temp_dir().join(format!("ls-creatures-blocks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let f = Files { hl: dir.clone(), game: "cstrike".into(), dir: dir.join("cstrike"), app: dir.join("app"), label: "test".into() };
+        let block = "; >>> from mode-77\n; types: jo.ghoul\n[jo.ghoul]\nbase = zombie\nname = Ghoul\nhp = 333\n; <<< end mode-77\n";
+        let mine = "; mine\n[my_runner]\nbase = runner\nhp = 70\n";
+        std::fs::create_dir_all(f.ini().parent().unwrap()).unwrap();
+        // (as the app writes a block: its own note on the first line)
+        let first = super::super::creaturepack::join_blocks(mine, &super::super::creaturepack::split_blocks(&format!("{mine}{block}")).1);
+        let block = first[mine.len()..].to_string();
+        let block = block.as_str();
+        std::fs::write(f.ini(), &first).unwrap();
+        let st = status(&f).unwrap();
+        assert!(st["types"].as_array().unwrap().iter().all(|t| t["name"] != "jo.ghoul"), "installed types aren't the player's");
+        assert_eq!(st["installed"][0]["name"], "jo.ghoul");
+        assert_eq!(st["installed"][0]["from"], json!(["mode-77"]));
+        assert!(st["installed"][0]["summary"].as_str().unwrap().len() > 5);
+        // edit my_runner, save: the block is written back as it was
+        let mut types: Vec<Creature> = st["types"].as_array().unwrap().iter().filter(|t| t["skipped"] != true).map(|t| serde_json::from_value(t.clone()).unwrap()).collect();
+        types.iter_mut().find(|t| t.name == "my_runner").unwrap().hp = 71.0;
+        assert!(save(&f, &SaveReq { types: types.clone() }).unwrap());
+        let text = std::fs::read_to_string(f.ini()).unwrap();
+        assert!(text.contains("hp = 71"), "{text}");
+        assert!(text.ends_with(block), "the block, byte for byte, at the end: {text}");
+        assert_eq!(text.matches("[jo.ghoul]").count(), 1);
+        // removing every type of mine keeps the block too
+        let only_builtins: Vec<Creature> = types.into_iter().filter(|t| t.name != "my_runner").collect();
+        assert!(save(&f, &SaveReq { types: only_builtins }).unwrap());
+        let text = std::fs::read_to_string(f.ini()).unwrap();
+        assert!(text.contains(block) && !text.contains("[my_runner]"), "{text}");
+        // the 48 count installed ones
+        let many: Vec<Creature> = (0..(MAX_TYPES - builtins().len())).map(|i| Creature { name: format!("t{i}"), ..defaults("zombie") }).collect();
+        assert!(check_with(&many, 0).iter().all(|p| !(p.error && p.at.is_empty())));
+        let p = check_with(&many, 1).into_iter().find(|p| p.error && p.at.is_empty()).unwrap();
+        assert!(p.text.contains("1 installed") && p.text.contains("remove 1"), "{}", p.text);
+        assert!(save(&f, &SaveReq { types: many }).unwrap_err().contains("installed"));
+        // waves may name an installed type
+        assert!(wave_type_names(&f).unwrap().contains(&"jo.ghoul".to_string()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Shared creatures (CP-ui): the picker's names, "Used by" through base chains, and the
+    /// editor's check for a type the game doesn't have.
+    #[test]
+    fn names_used_by_and_unknown_types() {
+        let ini = "[my_runner]\nbase = runner\nhp = 70\n\n[runner_x]\nbase = my_runner\n\n[zombie]\nhp = 120\n; >>> from mode-123\n; types: jo.ghoul\n[jo.ghoul]\nbase = zombie\n; <<< end mode-123\n";
+        let n = type_names(ini);
+        assert_eq!(n["own"], json!(["my_runner", "runner_x"]));
+        assert_eq!(n["installed"], json!([{"name": "jo.ghoul", "from": ["mode-123"]}]));
+        assert!(n["builtin"].as_array().unwrap().iter().any(|x| x == "zombie"));
+        assert_eq!(n["planned"], json!(["controller", "stukabat"]));
+        // a map with runner_x, a mode with jo.ghoul, waves with my_runner
+        let maps = vec![("ls_test".to_string(), vec!["runner_x".to_string()])];
+        let modes = vec![("horde".to_string(), "Horde".to_string(), ["jo.ghoul".to_string()].into_iter().collect::<BTreeSet<_>>())];
+        let waves = "[laststand]\nboss =\nboss_every = 0\nwave 1 = my_runner 10\n";
+        let u = used_by(ini, waves, &maps, &modes);
+        let names = |t: &str| u.get(t).map(|v| v.iter().map(|x| format!("{}:{}", x.kind, x.name)).collect::<Vec<_>>()).unwrap_or_default();
+        assert_eq!(names("runner_x"), vec!["map:ls_test"]);
+        // my_runner: its own waves, and the map through runner_x's base
+        assert_eq!(names("my_runner"), vec!["map:ls_test", "waves:Last Stand's waves"]);
+        assert_eq!(names("runner"), vec!["map:ls_test", "waves:Last Stand's waves"], "the chain reaches the built-in");
+        assert_eq!(names("jo.ghoul"), vec!["mode:Horde"]);
+        // the editor: ls_creature and ls_wave_spawner names, unknown ones flagged
+        let mut doc = crate::editor::doc::MapDocument::default();
+        let mut e = crate::editor::doc::Entity::new("ls_creature");
+        e.set("type", "jo.ghoul");
+        doc.entities.insert(crate::editor::doc::EntityId(1), e);
+        let mut e = crate::editor::doc::Entity::new("ls_wave_spawner");
+        e.set("types", "runner_x nobody_here");
+        doc.entities.insert(crate::editor::doc::EntityId(2), e);
+        let found = editor_issues(&doc, Some(ini));
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].code, "unknown-creature");
+        assert_eq!(found[0].entity, Some(2));
+        assert!(found[0].message.contains("nobody_here"));
+        assert!(editor_issues(&doc, None).is_empty(), "no game: nothing to compare with");
+        // a Studio graph's creature params
+        let g = crate::tools::studio::graph::parse(r#"{"schema":"loner-strike/graph","version":3,"mode":{"id":"m","name":"M"},"nodes":[{"id":"a","type":"creature.spawn","params":{"kind":"Jo.Ghoul"}},{"id":"b","type":"creature.for_each","params":{"type":""}}]}"#).unwrap();
+        assert_eq!(graph_types(&g).into_iter().collect::<Vec<_>>(), vec!["jo.ghoul"]);
     }
 
     #[test]

@@ -12,6 +12,10 @@ import { insertItem, newerInLibrary } from "./library";
 import { useConfirm } from "../../../ui";
 import { askDelete } from "./DeleteDialog";
 import { useFreshFocus } from "./freshFocus";
+import { CreaturePicker } from "../common/CreaturePicker"; // shared creatures (CP-ui)
+
+/** Node params that name a creature type (tools/creatures.rs NODE_TYPE_PARAMS). */
+const CREATURE_PARAMS = ["creature.spawn:kind", "turret.setup:type", "creature.for_each:type", "creature.of_type:type", "creature.nearest:type"];
 
 type PV = string | number | boolean;
 
@@ -150,6 +154,9 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
       </select>
     );
   if (p.kind === "path") return <TextField value={String(value)} max={64} allowed={PATH_CHARS} onChange={onChange} />;
+  // shared creatures (CP-ui, for X): a creature type param picks from built-in, your own and installed types
+  if (p.kind === "name" && CREATURE_PARAMS.includes(`${node.type}:${p.id}`))
+    return <CreaturePicker className="st-field" value={String(value)} label={p.label} onChange={(v) => NAME_CHARS.test(v) && onChange(v)} />;
   if (p.kind === "name" || p.kind === "entname") return <TextField value={String(value)} max={32} allowed={p.kind === "name" ? NAME_CHARS : ENT_NAME_CHARS} onChange={onChange} />;
   if (p.kind === "keys") return <TextField value={String(value)} max={p.max ?? 120} allowed={KEYS_CHARS} onChange={onChange} />;
   if (p.kind === "var") {

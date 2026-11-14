@@ -4,7 +4,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useMemo, useState, type KeyboardEvent } from "react";
-import { useDirty } from "../../../store";
+import { useDirty, useNav } from "../../../store";
 import { DOCS_URL } from "../../DocsLink";
 import { BusyButton, Info, LoadError, Segmented, useAskText, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading } from "../common";
@@ -12,7 +12,7 @@ import { ActionBar } from "../common/ActionBar";
 import { errorText, useBusy } from "../common/api";
 import { matches, searchWords } from "../common/search";
 import { useToolCrumbs } from "../common/shell";
-import { applyLive, checkTypes, creatureStatus, LOOKS, liveStatus, lookModel, saveTypes, spawnOne, type Checked, type Creature, type Placed, type Problem, type Status, type TypeRow } from "./creaturesApi";
+import { applyLive, checkTypes, creatureStatus, LOOKS, liveStatus, lookModel, saveTypes, spawnOne, usedBy, type TypeUser, type Checked, type Creature, type Placed, type Problem, type Status, type TypeRow } from "./creaturesApi";
 import { TypeForm } from "./TypeForm";
 import { WavesTab } from "./WavesTab";
 import { CATEGORY_WORDS, KIND_WORDS, TEMPLATE_WORDS } from "./words";
@@ -52,6 +52,8 @@ export default function Creatures() {
   const [calm, setCalm] = useState(true);
   /** a "Placed by mappers" entry shown instead of a type (its id) */
   const [placedId, setPlacedId] = useState<string | null>(null);
+  /** an installed (community) type shown instead, read only (its name) */
+  const [instName, setInstName] = useState<string | null>(null);
   /** the preview as tier 1, 2, 3 or enraged */
   const [as, setAs] = useState<"1" | "2" | "3" | "rage">("1");
 
@@ -66,9 +68,10 @@ export default function Creatures() {
 
   const t = types?.[Math.min(sel, (types?.length ?? 1) - 1)] ?? null;
   const placed = status.data?.placed?.find((x) => x.id === placedId) ?? null;
+  const inst = status.data?.installed?.find((x) => x.name === instName) ?? null;
   // a placed turret plays as its type (the user's edits included)
   const placedType = placed?.type ? (types?.find((x) => x.name === placed.type) ?? null) : null;
-  const shown = placed ? { model: placedType?.model ?? placed.model, anim: placedType?.anim ?? [], ranged: placedType?.attack === "ranged" } : t ? { model: t.model, anim: t.anim, ranged: t.attack === "ranged" } : null;
+  const shown = inst ? { model: inst.model, anim: [] as string[], ranged: false } : placed ? { model: placedType?.model ?? placed.model, anim: placedType?.anim ?? [], ranged: placedType?.attack === "ranged" } : t ? { model: t.model, anim: t.anim, ranged: t.attack === "ranged" } : null;
   const look = useQuery({
     queryKey: ["tools", "creatures", "look", shown?.model, shown?.anim.join(","), shown?.ranged],
     queryFn: ({ signal }) => lookModel(shown!.model, shown!.anim, shown!.ranged, signal),
@@ -91,7 +94,7 @@ export default function Creatures() {
 
   const dirty = !!types && !!saved && JSON.stringify(types) !== JSON.stringify(saved);
   useDirty("creatures", dirty);
-  useToolCrumbs("creatures", tab === "waves" ? [{ label: "Waves" }] : placed ? [{ label: placed.title }] : t ? [{ label: t.display || t.name }] : null);
+  useToolCrumbs("creatures", tab === "waves" ? [{ label: "Waves" }] : inst ? [{ label: inst.display || inst.name }] : placed ? [{ label: placed.title }] : t ? [{ label: t.display || t.name }] : null);
 
   const filtered = useMemo(() => {
     const w = searchWords(q);
@@ -207,9 +210,10 @@ export default function Creatures() {
   const canSpawn = !!t && !!live.data?.creatures && !dirty && savedNames.includes(t.name);
   const spawnWhy = !live.data?.creatures ? liveText : dirty ? "Save and apply first." : !t || !savedNames.includes(t.name) ? "Save it first." : liveType && !liveType.precached ? "This map didn't load this type. In Last Stand, add it to the waves, then change map." : "";
 
-  const report = placed ? look.data?.report : (checked?.models ?? look.data?.report);
+  const report = placed || inst ? look.data?.report : (checked?.models ?? look.data?.report);
   const pick = (i: number) => {
     setPlacedId(null);
+    setInstName(null);
     setSel(i);
   };
   const first = report?.candidates[report.picked ?? 0];
@@ -288,10 +292,41 @@ export default function Creatures() {
               <button type="button" className={`btn small${t && !isBuiltin(t.name) ? " danger" : ""}`} disabled={!t || (isBuiltin(t.name) && !changedFromShipped(t) && !rowOf(t.name)?.inFile)} onClick={remove}>
                 {t && isBuiltin(t.name) ? "Put back" : "Remove"}
               </button>
+              {t && !isBuiltin(t.name) && !st.server && (
+                <button
+                  type="button"
+                  className="btn small"
+                  disabled={dirty || !savedNames.includes(t.name)}
+                  title={dirty || !savedNames.includes(t.name) ? "Save it first" : "Share it in Community: packed under your name with its model and sounds"}
+                  onClick={() => useNav.getState().go("tools", `community:publish:creature:${t.name}`)}
+                >
+                  Share…
+                </button>
+              )}
             </div>
             <p className="cs-note">
               {types.length} of {st.limits.maxTypes} types <Info text={`The game always has the ${builtinNames.length} built-in types; change them or make your own from them, ${st.limits.maxTypes} in all. A mode spawns a type by its name.`} />
             </p>
+            {(st.installed?.length ?? 0) > 0 && (
+              <div className="cs-placed cs-installed" role="group" aria-label="From Community">
+                <h4>
+                  From Community <Info text="Types that came with maps, modes or creatures you installed. They're read only here: remix one to make your own copy." />
+                </h4>
+                <ul role="listbox" aria-label="From Community">
+                  {st.installed!.map((x) => (
+                    <li key={x.name}>
+                      <button type="button" role="option" aria-selected={instName === x.name} className={`cs-item${instName === x.name ? " on" : ""}`} onClick={() => (setPlacedId(null), setInstName(x.name))}>
+                        <span className="cs-item-name">
+                          <strong>{x.display || x.name}</strong>
+                          <span className="muted">{x.name}</span>
+                        </span>
+                        <span className="cs-tag">from Community</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {(st.placed?.length ?? 0) > 0 && (
               <div className="cs-placed" role="group" aria-label="Placed by mappers">
                 <h4>
@@ -300,7 +335,7 @@ export default function Creatures() {
                 <ul role="listbox" aria-label="Placed by mappers">
                   {st.placed!.map((x) => (
                     <li key={x.id}>
-                      <button type="button" role="option" aria-selected={placedId === x.id} className={`cs-item${placedId === x.id ? " on" : ""}`} onClick={() => setPlacedId(x.id)}>
+                      <button type="button" role="option" aria-selected={placedId === x.id} className={`cs-item${placedId === x.id ? " on" : ""}`} onClick={() => (setInstName(null), setPlacedId(x.id))}>
                         <span className="cs-item-name">
                           <strong>{x.title}</strong>
                           <span className="muted">{x.type ? `${x.entity} · ${x.type}` : x.entity}</span>
@@ -314,13 +349,16 @@ export default function Creatures() {
             )}
           </aside>
 
-          <section className="panel cs-main" aria-label={placed ? "Placed by mappers" : "Edit the type"}>
-            {placed ? (
+          <section className="panel cs-main" aria-label={inst ? "From Community" : placed ? "Placed by mappers" : "Edit the type"}>
+            {inst ? (
+              <InstalledView t={inst} />
+            ) : placed ? (
               <PlacedView p={placed} onEditType={placedType ? () => pick(types.indexOf(placedType)) : undefined} />
             ) : t ? (
               <>
                 <h3>{t.display || t.name}</h3>
                 <p className="cs-summary">{summary(t.name)}</p>
+                <UsedBy name={t.name} />
                 <TypeForm
                   key={t.name + sel}
                   t={t}
@@ -339,9 +377,11 @@ export default function Creatures() {
           </section>
 
           <aside className="panel cs-side" aria-label="Preview">
-            {(placed || t) && look.data?.model ? (
+            {(placed || inst || t) && look.data?.model ? (
               <Suspense fallback={<p className="muted"><span className="spinner" aria-hidden="true" /> Loading the 3D view…</p>}>
-                {placed ? (
+                {inst ? (
+                  <CreaturePreview key={`inst:${inst.name}`} look={look.data} skin={0} glow={[0, 0, 0]} fallbackGlow={[0, 0, 0]} scale={1} />
+                ) : placed ? (
                   <CreaturePreview key={placed.id} look={look.data} skin={placedType?.skin ?? 0} glow={placedType?.glow ?? [0, 0, 0]} fallbackGlow={placedType?.fallback_glow ?? [0, 0, 0]} scale={placedType?.scale ?? 1} />
                 ) : (
                   <>
@@ -368,7 +408,7 @@ export default function Creatures() {
                 <span className={`cs-kind ${first.kind}`}>{KIND_WORDS[first.kind]}</span> {first.path.replace(/^models\//, "")}
               </p>
             )}
-            {!placed && <div className="cs-try">
+            {!placed && !inst && <div className="cs-try">
               <h4>Try it in your game</h4>
               <p className="cs-note">{liveText}</p>
               <BusyButton className="btn" busy={working === "Spawning…"} disabled={!!working || !canSpawn} label="Spawn one in front of me" busyLabel="Spawning…" onClick={spawn} />
@@ -446,6 +486,56 @@ function PlacedView({ p, onEditType }: { p: Placed; onEditType?: () => void }) {
           );
         })}
       </div>
+    </>
+  );
+}
+
+const USER_KIND: Record<TypeUser["kind"], string> = { map: "Map", mode: "Mode", waves: "Waves" };
+
+/** Which of your maps, modes and waves use this type (also through another type's base). */
+function UsedBy({ name }: { name: string }) {
+  const q = useQuery({ queryKey: ["tools", "creatures", "used-by"], queryFn: ({ signal }) => usedBy(signal), staleTime: 30_000 });
+  const list = q.data?.usedBy?.[name] ?? [];
+  return (
+    <p className="cs-note cs-usedby" aria-label="Used by">
+      <strong>Used by:</strong>{" "}
+      {q.isPending ? (
+        <span className="muted">
+          <span className="spinner" aria-hidden="true" /> Looking…
+        </span>
+      ) : q.isError ? (
+        <span className="muted">Couldn't look.</span>
+      ) : list.length === 0 ? (
+        <span className="muted">none of your maps, modes or waves yet.</span>
+      ) : (
+        list.map((u, i) => (
+          <span key={`${u.kind}:${u.id}`} className="cs-usedby-item">
+            {i > 0 && " · "}
+            <span className="muted">{USER_KIND[u.kind]}</span> {u.name}
+          </span>
+        ))
+      )}
+    </p>
+  );
+}
+
+/** A type a community item installed: what it is and where from. Read only; "Remix…" (a copy
+ *  under your name) goes here once the creature remix lands (CP fork, `onRemix`). */
+export function InstalledView({ t, onRemix }: { t: { name: string; display: string; base: string; summary: string; from: string[] }; onRemix?: (name: string) => void }) {
+  return (
+    <>
+      <h3>{t.display || t.name}</h3>
+      <p className="cs-summary">{t.summary}</p>
+      <p className="banner cs-placed-how">
+        <strong>From Community, read only.</strong> It came with {t.from.length === 1 ? "an item" : `${t.from.length} items`} you installed ({t.from.join(", ")}) and goes when {t.from.length === 1 ? "it's" : "they're all"} removed.
+        {t.base ? ` It starts from ${t.base}.` : ""}
+      </p>
+      <UsedBy name={t.name} />
+      {onRemix && (
+        <button type="button" className="btn" onClick={() => onRemix(t.name)}>
+          Remix…
+        </button>
+      )}
     </>
   );
 }

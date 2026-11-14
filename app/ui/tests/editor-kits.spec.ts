@@ -123,7 +123,9 @@ test("ls_creature's Type lists every creature type; a wave spawner picks them", 
   await page.locator(".ed-ol-row", { hasText: "ls_creature" }).first().click();
   const type = page.locator(`#editor-f-${c.created.entities[0]}-type`);
   await expect(type).toBeVisible();
-  for (const n of names) await expect(type.locator(`option[value="${n}"]`)).toHaveCount(1);
+  // (the shared creature picker: a text box with a list beside it)
+  const pick = page.locator(".editor-def", { has: type }).locator(".creature-picker-add");
+  for (const n of names) await expect(pick.locator(`option[value="${n}"]`)).toHaveCount(1);
   await expect(page.getByText("Its model")).toBeVisible();
   // the wave spawner: creature types as toggles, written to its types key
   await page.getByLabel(/Find in the map|Find by name/).first().fill("ls_wave_spawner");

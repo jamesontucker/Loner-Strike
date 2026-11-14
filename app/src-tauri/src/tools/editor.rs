@@ -548,6 +548,8 @@ fn checks_json(c: &CheckSnap, places: Option<&assets::Places>, opts: &checks::Op
         issues.extend(assets::issues(&assets::locate(assets::named_files(&c.doc), p), p.hl.is_some()));
         // and what each mode the map is made for still needs (mode map kits)
         issues.extend(kits::issues(&c.doc, &kits::cached()));
+        // creature types this game doesn't have (shared creatures, CP-ui)
+        issues.extend(super::creatures::editor_issues(&c.doc, super::creatures::game_ini(p.hl.as_deref(), &p.game).as_deref()));
     }
     json!({"docId": c.id, "revision": c.revision, "issues": issues, "stats": checks::stats(&c.doc), "texturesChecked": known.is_some()})
 }
