@@ -379,7 +379,9 @@ h2 { margin: 0; font: 400 22px/1.1 var(--stencil); letter-spacing: .02em; white-
 .row.between { justify-content: space-between; flex-wrap: nowrap; gap: 20px; }
 .row.center { justify-content: center; }
 .spacer { flex: 1; }
-.section-actions { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; min-width: 0; max-width: 100%; }
+.section-actions { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+/* "Docs ↗" (a link) lines up with the buttons beside it (QA4-T1 L6) */
+.section-actions .docs-link { margin-left: 0 !important; display: inline-flex; align-items: center; vertical-align: baseline !important; }
 .server-more { margin: 4px 0 28px; gap: 8px; }
 p { margin: 0 0 8px; }
 a { color: var(--signal); }

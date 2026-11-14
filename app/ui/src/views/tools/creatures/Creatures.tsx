@@ -3,15 +3,16 @@
 // the wave mixes modes use; and "apply to game" / "spawn one" on the player's running map.
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useDirty } from "../../../store";
+import { DOCS_URL } from "../../DocsLink";
 import { BusyButton, Info, LoadError, Segmented, useAskText, useConfirm, useToast } from "../../../ui";
 import { Empty, Loading } from "../common";
 import { ActionBar } from "../common/ActionBar";
 import { errorText, useBusy } from "../common/api";
 import { matches, searchWords } from "../common/search";
 import { useToolCrumbs } from "../common/shell";
-import { applyLive, checkTypes, creatureStatus, LOOKS, liveStatus, lookModel, saveTypes, spawnOne, type Checked, type Creature, type Placed, type Status, type TypeRow } from "./creaturesApi";
+import { applyLive, checkTypes, creatureStatus, LOOKS, liveStatus, lookModel, saveTypes, spawnOne, type Checked, type Creature, type Placed, type Problem, type Status, type TypeRow } from "./creaturesApi";
 import { TypeForm } from "./TypeForm";
 import { WavesTab } from "./WavesTab";
 import { CATEGORY_WORDS, KIND_WORDS, TEMPLATE_WORDS } from "./words";
@@ -21,6 +22,13 @@ const CreaturePreview = lazy(() => import("./CreaturePreview"));
 
 type Tab = "types" | "waves";
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
+/** Number fields left empty or not a number (they'd be sent as null): "Type a number." under each. */
+export function numberProblems(list: Creature[]): Problem[] {
+  const out: Problem[] = [];
+  for (const c of list)
+    for (const [k, v] of Object.entries(c)) if (typeof v === "number" && !Number.isFinite(v)) out.push({ at: c.name, field: k, text: "Type a number.", error: true });
+  return out;
+}
 /** the fields a Creature has (what's saved), from a row that also has builtin/inFile/... */
 const plain = (r: TypeRow | Creature): Creature => {
   const { builtin: _b, inFile: _i, set: _s, skipped: _k, summary: _m, ...c } = r as TypeRow;
@@ -69,7 +77,7 @@ export default function Creatures() {
   });
   // problems, a summary and the model/sound report, from the server (its rules are the game's)
   useEffect(() => {
-    if (!types) return;
+    if (!types || numberProblems(types).length) return;
     let live = true;
     const id = setTimeout(async () => {
       const r = await checkTypes(types, t?.name);
@@ -96,7 +104,8 @@ export default function Creatures() {
   if (!types) return null;
   const builtinNames = st.templates.map((x) => x.name);
   const savedNames = (saved ?? []).map((x) => x.name);
-  const problems = checked?.problems ?? st.problems;
+  const blanks = numberProblems(types);
+  const problems = [...blanks, ...(checked?.problems ?? st.problems).filter((p) => !blanks.some((b) => b.at === p.at && b.field === p.field))];
   const errors = problems.filter((p) => p.error);
   const rowOf = (name: string) => st.types.find((x) => x.name === name);
   const summary = (name: string) => checked?.summaries.find((s) => s.name === name)?.summary ?? rowOf(name)?.summary ?? "";
@@ -116,12 +125,28 @@ export default function Creatures() {
     const from = types.find((x) => x.name === template) ?? st.templates.find((x) => x.name === template);
     if (!from) return;
     const suggested = uniqueName(`my_${template}`);
-    const typed = await askText(`A name for the new type: small letters, digits and _ (it starts as a copy of ${from.display || from.name}). Leave it empty for ${suggested}.`, { label: "Type name", placeholder: suggested, max: 31 }, { ok: "Make it" });
+    const cleanName = (typed: string) =>
+      (typed.trim() || suggested)
+        .toLowerCase()
+        .replace(/[^a-z0-9_]+/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(0, 31);
+    // (the dialog stays open, with what was typed, while the name can't be used)
+    const typed = await askText(
+      `A name for the new type: small letters, digits and _ (it starts as a copy of ${from.display || from.name}). Leave it empty for ${suggested}.`,
+      { label: "Type name", placeholder: suggested, max: 31 },
+      { ok: "Make it", check: (v) => (!cleanName(v) ? "Use at least one letter or digit." : types.some((x) => x.name === cleanName(v)) ? `There's already a type called ${cleanName(v)}.` : null) },
+    );
     if (typed === null) return;
-    const name = typed.trim() || suggested;
-    const clean = name.toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 31);
-    if (types.some((x) => x.name === clean)) return toast(`There's already a type called ${clean}.`, true);
-    const c: Creature = { ...clone(plain(from)), name: clean, display: (from.display || from.name) + " (copy)", base: isBuiltin(from.name) ? from.name : from.base };
+    const clean = cleanName(typed);
+    if (!clean || types.some((x) => x.name === clean)) return;
+    if (typed.trim() && clean !== typed.trim()) toast(`Named it ${clean}: small letters, digits and _ only.`);
+    // copies are numbered, so the list doesn't hold look-alikes
+    const shownBase = (from.display || from.name).replace(/ \(copy( \d+)?\)$/, "");
+    let display = `${shownBase} (copy)`;
+    for (let n = 2; types.some((x) => x.display === display); n++) display = `${shownBase} (copy ${n})`;
+    const c: Creature = { ...clone(plain(from)), name: clean, display, base: isBuiltin(from.name) ? from.name : from.base };
     setTypes([...types, c]);
     setSel(types.length);
   };
@@ -180,7 +205,7 @@ export default function Creatures() {
     : "Checking your game…";
   const liveType = t && live.data?.types?.find((x) => x.name === t.name);
   const canSpawn = !!t && !!live.data?.creatures && !dirty && savedNames.includes(t.name);
-  const spawnWhy = !live.data?.creatures ? liveText : dirty ? "Save and apply first." : !t || !savedNames.includes(t.name) ? "Save it first." : liveType && !liveType.precached ? "This map didn't load this type: it may refuse." : "";
+  const spawnWhy = !live.data?.creatures ? liveText : dirty ? "Save and apply first." : !t || !savedNames.includes(t.name) ? "Save it first." : liveType && !liveType.precached ? "This map didn't load this type. In Last Stand, add it to the waves, then change map." : "";
 
   const report = placed ? look.data?.report : (checked?.models ?? look.data?.report);
   const pick = (i: number) => {
@@ -188,13 +213,39 @@ export default function Creatures() {
     setSel(i);
   };
   const first = report?.candidates[report.picked ?? 0];
+  // the list is one Tab stop; Up/Down/Home/End move through it (like the Demos table)
+  const current = filtered.some(({ i }) => i === sel) ? sel : (filtered[0]?.i ?? -1);
+  const listKeys = (e: KeyboardEvent<HTMLUListElement>) => {
+    const at = filtered.findIndex(({ i }) => i === current);
+    const to = e.key === "ArrowDown" ? at + 1 : e.key === "ArrowUp" ? at - 1 : e.key === "Home" ? 0 : e.key === "End" ? filtered.length - 1 : null;
+    if (to === null || !filtered.length) return;
+    e.preventDefault();
+    const next = filtered[Math.max(0, Math.min(filtered.length - 1, to))].i;
+    pick(next);
+    const ul = e.currentTarget;
+    requestAnimationFrame(() => ul.querySelector<HTMLButtonElement>(`[data-i="${next}"]`)?.focus());
+  };
 
   return (
     <div className="cs tl-page">
       <div className="tl-head">
         <Segmented label="Part" values="types waves" labels="Creature types|Waves & spawn groups" current={tab} onPick={(v) => setTab(v as Tab)} />
-        <span className="muted">For {st.game}</span>
       </div>
+      <p className="cs-target" role="note">
+        {st.server ? (
+          <>
+            Editing creatures for <strong>{st.game}</strong> on this computer. Only that server uses them.
+          </>
+        ) : (
+          <>
+            Editing creatures for <strong>{st.game}</strong> on this computer. Only games you host from here use them.
+          </>
+        )}{" "}
+        Changes count after Apply to game or a map change. Nothing is sent to other people's games or servers.{" "}
+        <a href={`${DOCS_URL}#creatures-how`} target="_blank" rel="noreferrer">
+          How it works ↗
+        </a>
+      </p>
 
       {tab === "waves" && <WavesTab />}
 
@@ -202,13 +253,13 @@ export default function Creatures() {
         <div className="cs-grid">
           <aside className="panel cs-list" aria-label="Creature types">
             <input className="search" type="search" placeholder="Search types" aria-label="Search creature types" value={q} onChange={(e) => setQ(e.target.value)} />
-            <ul role="listbox" aria-label="Creature types">
+            <ul role="listbox" aria-label="Creature types" onKeyDown={listKeys}>
               {filtered.map(({ x, i }) => {
                 const err = problems.some((p) => p.error && p.at === x.name);
                 const row = rowOf(x.name);
                 return (
                   <li key={x.name + i}>
-                    <button type="button" role="option" aria-selected={!placed && i === sel} className={`cs-item${!placed && i === sel ? " on" : ""}`} onClick={() => pick(i)}>
+                    <button type="button" role="option" data-i={i} tabIndex={i === current ? 0 : -1} aria-selected={!placed && i === sel} className={`cs-item${!placed && i === sel ? " on" : ""}`} onClick={() => pick(i)}>
                       <span className="cs-item-name">
                         <strong>{x.display || x.name}</strong>
                         <span className="muted">

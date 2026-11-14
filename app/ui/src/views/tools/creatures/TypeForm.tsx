@@ -18,7 +18,7 @@ function Num({ value, onChange, min, max, step = 1, unit, label, sliderMax }: { 
   const top = sliderMax ?? max;
   return (
     <span className="cs-num">
-      <input type="range" min={min} max={top} step={step} value={Math.min(Math.max(value, min), top)} aria-label={label} onChange={(e) => onChange(Number(e.target.value))} />
+      <input type="range" min={min} max={top} step={step} value={Number.isFinite(value) ? Math.min(Math.max(value, min), top) : min} aria-label={label} onChange={(e) => onChange(Number(e.target.value))} />
       <input className="search cs-numbox" type="number" min={min} max={max} step={step} value={Number.isFinite(value) ? value : ""} aria-label={`${label} (number)`} onChange={(e) => onChange(e.target.value === "" ? NaN : Number(e.target.value))} />
       {unit && <span className="muted cs-unit">{unit}</span>}
     </span>

@@ -9646,10 +9646,12 @@ new const WT_EXTRA_FB[][] = { "runner", "headcrab", "boss", "", "boss" };
 enum { WX_HOUND = 0, WX_SNARK, WX_HEAVY, WX_GARG, WX_GONARCH };
 #define WT_HEAVY_FROM 11
 #define WT_MAX_ROWS 32
-#define WT_MAX_MIX 8
+#define WT_MAX_MIX 16
 new bool:g_wtOn, bool:g_wtCreatures, g_wtTeam = 2, Float:g_wtCountScale = 1.0, Float:g_wtHpScale = 1.0, g_wtCap, bool:g_wtTiers = true;
 new g_wtRowFrom[WT_MAX_ROWS], g_wtRowTo[WT_MAX_ROWS], g_wtMixType[WT_MAX_ROWS][WT_MAX_MIX][16], g_wtMixW[WT_MAX_ROWS][WT_MAX_MIX], g_wtMixN[WT_MAX_ROWS], g_wtNrows;
 new g_wtFileBoss[16] = "boss", g_wtFileEvery = 5, Float:g_wtFileCount = 1.0, Float:g_wtFileHp = 1.0, bool:g_wtTypeHp;
+/* own_rounds = 1 in the section: the built-in boss waves, pack rounds and heavies stay; the rows give the everyday mix */
+new bool:g_wtFileRounds;
 new Float:g_wtCallAt;
 new g_wtBoss[16], bool:g_wtBossDone = true, g_wtSpecial = -1, g_wtHeavyLeft, g_wtPlanned, g_wtSpawned, g_wtFail;
 
@@ -12285,7 +12287,7 @@ stock wt_plan()
 	g_wtHeavyLeft = 0;
 	g_wtSpawned = 0;
 	g_wtFail = 0;
-	if (g_wtNrows)
+	if (g_wtNrows && !g_wtFileRounds)
 	{
 		g_wtBossDone = g_wtFileEvery <= 0 || !g_wtFileBoss[0] || (n % g_wtFileEvery) != 0;
 		copy(g_wtBoss, charsmax(g_wtBoss), g_wtFileBoss);
@@ -12469,6 +12471,21 @@ stock bool:wt_pick_type(out[], len)
 		copy(out, len, g_wtBoss);
 		return true;
 	}
+	/* a section with own_rounds keeps the built-in pack rounds and heavies */
+	if (g_wtNrows && g_wtFileRounds)
+	{
+		if (g_wtSpecial >= 0)
+		{
+			copy(out, len, WT_EXTRA[g_wtSpecial]);
+			return false;
+		}
+		if (g_wtHeavyLeft > 0 && g_wtSpawned >= g_wtPlanned / 4)
+		{
+			g_wtHeavyLeft--;
+			copy(out, len, WT_EXTRA[WX_HEAVY]);
+			return false;
+		}
+	}
 	if (g_wtNrows)
 	{
 		new r = wt_row(g_wave);
@@ -12620,6 +12637,7 @@ stock wt_load(const section[])
 	g_wtFileCount = 1.0;
 	g_wtFileHp = 1.0;
 	g_wtTypeHp = false;
+	g_wtFileRounds = false;
 	if (!section[0])
 		return;
 	new path[192];
@@ -12666,6 +12684,8 @@ stock wt_load(const section[])
 			g_wtFileHp = floatclamp(str_to_float(val), 0.1, 10.0);
 		else if (equal(key, "type_hp"))
 			g_wtTypeHp = str_to_num(val) != 0;
+		else if (equal(key, "own_rounds"))
+			g_wtFileRounds = str_to_num(val) != 0;
 		else if (equal(key, "wave", 4) && g_wtNrows < WT_MAX_ROWS)
 		{
 			new r = g_wtNrows;
@@ -12713,7 +12733,12 @@ stock wt_load(const section[])
 	}
 	fclose(f);
 	if (found)
-		log_amx("Waves: [%s] from waves.ini (%d rows, boss %s every %d).", section, g_wtNrows, g_wtFileBoss, g_wtFileEvery);
+	{
+		if (g_wtFileRounds)
+			log_amx("Waves: [%s] from waves.ini (%d rows, the built-in boss, pack and heavy rounds).", section, g_wtNrows);
+		else
+			log_amx("Waves: [%s] from waves.ini (%d rows, boss %s every %d).", section, g_wtNrows, g_wtFileBoss, g_wtFileEvery);
+	}
 }
 
 /* every type rounds 1..upto use (and their stand-ins), for ls_creature_precache */
@@ -12727,8 +12752,28 @@ stock wt_types(list[], len, upto)
 			if (g_wtRowFrom[r] <= n)
 				for (new m = 0; m < g_wtMixN[r]; m++)
 					if (g_wtMixW[r][m] > 0)
+					{
 						wt_add_word(list, len, g_wtMixType[r][m]);
-		if (g_wtFileBoss[0] && g_wtFileEvery > 0 && g_wtFileEvery <= n)
+						if (g_wtFileRounds)
+						{
+							/* and the type standing in for it (a game without it yet) */
+							new fb[16];
+							wt_type_fallback(g_wtMixType[r][m], fb, charsmax(fb));
+							if (fb[0])
+								wt_add_word(list, len, fb);
+						}
+					}
+		if (g_wtFileRounds)
+		{
+			if (n >= 6)
+				for (new i = 0; i < sizeof WT_EXTRA; i++)
+				{
+					wt_add_word(list, len, WT_EXTRA[i]);
+					if (WT_EXTRA_FB[i][0])
+						wt_add_word(list, len, WT_EXTRA_FB[i]);
+				}
+		}
+		else if (g_wtFileBoss[0] && g_wtFileEvery > 0 && g_wtFileEvery <= n)
 			wt_add_word(list, len, g_wtFileBoss);
 	}
 	else

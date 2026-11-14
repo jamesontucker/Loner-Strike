@@ -1472,33 +1472,107 @@ pub struct WaveSet {
     pub hp_scale: f32,
     /// true: each enemy keeps its type's health (creatures.ini) instead of the mode's table
     pub type_hp: bool,
+    /// true: the mode keeps its own boss waves, pack rounds and heavies (boss and boss_every
+    /// aren't used); the rows only give the everyday mix
+    pub own_rounds: bool,
     pub rows: Vec<WaveRow>,
 }
 
 impl Default for WaveSet {
     fn default() -> Self {
-        WaveSet { mode: String::new(), boss: String::new(), boss_every: 0, count_scale: 1.0, hp_scale: 1.0, type_hp: false, rows: vec![] }
+        WaveSet { mode: String::new(), boss: String::new(), boss_every: 0, count_scale: 1.0, hp_scale: 1.0, type_hp: false, own_rounds: false, rows: vec![] }
     }
 }
 
-/// Last Stand's built-in mix (gm_laststand.sma pick_type): zombies, runners from wave 2,
-/// brutes from 3, spitters from 4, a boss every 5th wave. Waves 10 and after as wave 10.
-pub fn laststand_default() -> WaveSet {
-    let mut rows = Vec::new();
-    for n in 1..=10u32 {
-        let mut mix = vec![("zombie".to_string(), 10)];
-        if n >= 2 {
-            mix.push(("runner".into(), 4 + n));
-        }
-        if n >= 3 {
-            mix.push(("brute".into(), 1 + n / 3));
-        }
-        if n >= 4 {
-            mix.push(("spitter".into(), 2));
-        }
-        rows.push(WaveRow { from: n, to: if n == 10 { None } else { Some(n) }, mix });
+/// Last Stand's round table (gm_components.sma `WT_ROSTER*`, W1): each type's role, the round
+/// it starts in, its weight within its role, and the type that stands in for it on a game
+/// that doesn't have it yet.
+const ROSTER: &[(&str, u8, u32, u32, &str)] = &[
+    // (type, role 0 fodder 1 flanker 2 ranged 3 tank, from round, weight, stand-in)
+    ("zombie", 0, 1, 4, ""),
+    ("babycrab", 0, 4, 1, "headcrab"),
+    ("runner", 1, 2, 3, ""),
+    ("spitter", 2, 4, 3, ""),
+    ("brute", 3, 5, 3, ""),
+    ("vortigaunt", 2, 8, 2, "spitter"),
+    ("assassin", 1, 9, 2, "runner"),
+    ("soldier", 3, 10, 2, "brute"),
+    ("controller", 2, 12, 2, "spitter"),
+    ("stukabat", 1, 14, 1, "runner"),
+];
+/// The round table's own rounds: hound packs and snark swarms, the heavy, the bosses.
+const ROUND_EXTRAS: &[(&str, &str)] = &[("hound", "runner"), ("snark", "headcrab"), ("babygarg", "boss"), ("boss", ""), ("gonarch", "boss")];
+
+/// Types the round table names that the game may not have yet (a stand-in comes instead).
+pub fn planned_types() -> impl Iterator<Item = &'static str> {
+    ROSTER.iter().map(|r| r.0).chain(ROUND_EXTRAS.iter().map(|r| r.0))
+}
+
+/// The round table's everyday mix for round n (wt_builtin_type): fodder 20, flankers 4 + n,
+/// ranged 2 + n/2, tanks 2 + 2n/5 once a role has a type, shared out by the types' weights;
+/// times 5, so wave 1 is "zombie 100".
+fn round_mix(n: u32) -> Vec<(String, u32)> {
+    let role_w = |r: u8| match r {
+        0 => 20.0,
+        1 => 4.0 + n as f32,
+        2 => 2.0 + (n / 2) as f32,
+        _ => 2.0 + (2 * n / 5) as f32,
+    };
+    let mut out = Vec::new();
+    for t in ROSTER.iter().filter(|t| t.2 <= n) {
+        let sum: u32 = ROSTER.iter().filter(|x| x.1 == t.1 && x.2 <= n).map(|x| x.3).sum();
+        let w = (5.0 * role_w(t.1) * t.3 as f32 / sum as f32).round() as u32;
+        out.push((t.0.to_string(), w.max(1)));
     }
-    WaveSet { mode: "laststand".into(), boss: "boss".into(), boss_every: 5, count_scale: 1.0, hp_scale: 1.0, type_hp: false, rows }
+    out
+}
+
+/// Last Stand's built-in round table as a wave set: its everyday mix by round (the table
+/// changes every round to 14, then slowly: 15-19, 20-29 and 30 on), with `own_rounds` on, so
+/// the mode keeps its own boss waves (a baby garg at 7, then a boss or a gonarch every 5th
+/// from 10), hound and snark rounds every 6th and heavies from 11. Saving it with one type
+/// added keeps every type the mode had.
+pub fn laststand_default() -> WaveSet {
+    let mut rows: Vec<WaveRow> = (1..=14u32).map(|n| WaveRow { from: n, to: Some(n), mix: round_mix(n) }).collect();
+    for (from, to, at) in [(15, Some(19), 17), (20, Some(29), 24), (30, None, 30)] {
+        rows.push(WaveRow { from, to, mix: round_mix(at) });
+    }
+    WaveSet { mode: "laststand".into(), boss: "boss".into(), boss_every: 5, count_scale: 1.0, hp_scale: 1.0, type_hp: false, own_rounds: true, rows }
+}
+
+/// The creature types a map loads for this set from wave 1 to `upto` (gm_components wt_types):
+/// the rows' types, the boss, and with `own_rounds` the mode's specials, heavies and bosses,
+/// each with the type that stands in for it.
+pub fn wave_types(w: &WaveSet, upto: u32) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut add = |t: &str| {
+        if !t.is_empty() && !out.iter().any(|x| x.eq_ignore_ascii_case(t)) {
+            out.push(t.to_ascii_lowercase());
+        }
+    };
+    let stand_in = |t: &str| ROSTER.iter().map(|r| (r.0, r.4)).chain(ROUND_EXTRAS.iter().copied()).find(|r| r.0.eq_ignore_ascii_case(t)).map(|r| r.1).unwrap_or("");
+    for r in w.rows.iter().filter(|r| r.from <= upto) {
+        for (t, _) in r.mix.iter().filter(|(_, n)| *n > 0) {
+            add(t);
+            if w.own_rounds {
+                add(stand_in(t));
+            }
+        }
+    }
+    if w.own_rounds {
+        if upto >= 6 {
+            for (t, s) in ROUND_EXTRAS {
+                add(t);
+                add(s);
+            }
+        }
+    } else if !w.boss.is_empty() && w.boss_every > 0 && w.boss_every <= upto {
+        add(&w.boss);
+    }
+    if out.is_empty() {
+        out.push("zombie".into());
+    }
+    out
 }
 
 /// A mode id: what modes.ini and the file's sections use.
@@ -1533,6 +1607,7 @@ pub fn parse_waves(text: &str) -> Vec<WaveSet> {
                     "count_scale" => w.count_scale = num(&value, 0.1, 10.0, 1.0),
                     "hp_scale" => w.hp_scale = num(&value, 0.1, 10.0, 1.0),
                     "type_hp" => w.type_hp = atoi(&value) != 0,
+                    "own_rounds" => w.own_rounds = atoi(&value) != 0,
                     _ => {
                         if let Some((from, to)) = wave_key(&k) {
                             let toks: Vec<&str> = value.split_whitespace().collect();
@@ -1555,6 +1630,9 @@ fn waves_section(w: &WaveSet) -> Vec<String> {
     v.push(format!("count_scale = {}", fmt_num(w.count_scale)));
     v.push(format!("hp_scale = {}", fmt_num(w.hp_scale)));
     v.push(format!("type_hp = {}", if w.type_hp { 1 } else { 0 }));
+    if w.own_rounds {
+        v.push("own_rounds = 1".into());
+    }
     let mut rows = w.rows.clone();
     rows.sort_by_key(|r| r.from);
     for r in rows {
@@ -1576,6 +1654,7 @@ const WAVES_HEAD: &str = "; waves.ini: which enemies each wave brings, per game 
 ; count_scale = 1           times the mode's own number of enemies a wave
 ; hp_scale = 1              times the mode's own health for each enemy
 ; type_hp = 0               1 = each enemy has its type's health from creatures.ini (times hp_scale)
+; own_rounds = 1            the mode keeps its own boss waves, pack rounds and heavies (boss lines unused)
 ; wave 3 = zombie 10 runner 7     a wave's mix: type and weight (how likely), as many as you like
 ; wave 4-6 = ...            waves 4 to 6;  wave 10+ = ...  wave 10 and every one after
 ; A wave with no line of its own uses the closest line before it.";
@@ -1938,6 +2017,8 @@ pub fn status(f: &Files) -> Result<Value, String> {
     }
     Ok(json!({
         "game": f.label,
+        // a server on this computer (its own folder) rather than the player's own game
+        "server": f.label.starts_with("the server"),
         "file": FILE_REL,
         "exists": text.is_some(),
         "types": types.iter().map(|r| {
@@ -2017,13 +2098,25 @@ pub fn save(f: &Files, req: &SaveReq) -> Result<bool, String> {
 pub fn waves_status(f: &Files) -> Result<Value, String> {
     let text = read_text(&f.waves())?;
     let sets = parse_waves(text.as_deref().unwrap_or(""));
-    let types: Vec<String> = resolve(&Doc::parse(&read_text(&f.ini())?.unwrap_or_default())).into_iter().filter(|r| !r.skipped).map(|r| r.t.name).collect();
+    let types = wave_type_names(f)?;
     Ok(json!({"file": WAVES_REL, "exists": text.is_some(), "sets": sets, "defaults": {"laststand": laststand_default()}, "types": types,
               "modes": [{"id": "laststand", "name": "Last Stand", "reads": true, "note": "Last Stand reads [laststand] at map start (types it names are loaded for that map)."}]}))
 }
 
+/// The types a wave can name: the game's and creatures.ini's, and the round table's types the
+/// game may not have yet (controller, stukabat: a spitter or a runner stands in).
+fn wave_type_names(f: &Files) -> Result<Vec<String>, String> {
+    let mut types: Vec<String> = resolve(&Doc::parse(&read_text(&f.ini())?.unwrap_or_default())).into_iter().filter(|r| !r.skipped).map(|r| r.t.name).collect();
+    for t in planned_types() {
+        if !types.iter().any(|x| x.eq_ignore_ascii_case(t)) {
+            types.push(t.to_string());
+        }
+    }
+    Ok(types)
+}
+
 pub fn save_waves(f: &Files, w: &WaveSet) -> Result<bool, String> {
-    let types: Vec<String> = resolve(&Doc::parse(&read_text(&f.ini())?.unwrap_or_default())).into_iter().filter(|r| !r.skipped).map(|r| r.t.name).collect();
+    let types = wave_type_names(f)?;
     let errors: Vec<Problem> = check_waves(w, &types).into_iter().filter(|p| p.error).collect();
     if let Some(first) = errors.first() {
         return Err(format!("Not saved: {}", first.text));
@@ -2033,7 +2126,44 @@ pub fn save_waves(f: &Files, w: &WaveSet) -> Result<bool, String> {
     if new == old {
         return Ok(false);
     }
-    put(&f.waves(), &new, &format!("Saved the waves for {}", w.mode))?;
+    put(&f.waves(), &new, &format!("Saved {} waves", mode_name(&w.mode)))?;
+    Ok(true)
+}
+
+/// A mode's name for people ("Last Stand"), else its id.
+pub fn mode_name(id: &str) -> String {
+    match id {
+        "laststand" => "Last Stand's".into(),
+        _ => format!("{id}'s"),
+    }
+}
+
+/// A waves.ini without the mode's section(s): everything else as it was.
+pub fn drop_waves(old: &str, mode: &str) -> String {
+    let mut doc = Doc::parse(old);
+    let secs: Vec<(usize, usize)> = doc.sections().into_iter().filter(|(n, _, _)| n.eq_ignore_ascii_case(mode)).map(|(_, a, b)| (a, b)).collect();
+    for (a, b) in secs.iter().rev() {
+        // (notes and blank lines at the end of the section lead into what follows: they stay)
+        let mut end = *b;
+        while end > a + 1 && !matches!(classify(&doc.lines[end - 1]), Line::Key { .. }) {
+            end -= 1;
+        }
+        doc.lines.drain(*a..end);
+    }
+    doc.text()
+}
+
+/// "Reset to the mode's own": its section goes, so the mode plays its built-in round table.
+pub fn reset_waves(f: &Files, mode: &str) -> Result<bool, String> {
+    if !mode_ok(mode) {
+        return Err("That isn't a mode id.".into());
+    }
+    let Some(old) = read_text(&f.waves())? else { return Ok(false) };
+    let new = drop_waves(&old, mode);
+    if new == old {
+        return Ok(false);
+    }
+    put(&f.waves(), &new, &format!("Reset {} waves", mode_name(mode)))?;
     Ok(true)
 }
 
@@ -2136,8 +2266,10 @@ pub fn spawn(g: &crate::game::Game, req: &SpawnReq) -> Result<Value, String> {
     if no_creatures(&r) {
         return Err(NO_FORK.into());
     }
-    if r.contains("isn't precached") || r.contains("not precached") {
-        return Err(format!("{} wasn't loaded with this map, so it can't come in now. Types a map can use are loaded as it starts: set ls_creature_precache to all (or name the type) and change map.", req.kind));
+    if not_loaded(&r) {
+        // Last Stand is running when its cvar answers
+        let lst = g.rcon.send("lst_waves").map(|x| reply_text(&x)).unwrap_or_default();
+        return Err(not_loaded_text(&req.kind, lst.contains("\"lst_waves\" is")));
     }
     if r.contains("unknown type") {
         return Err(format!("The game doesn't know {} yet: save, then Apply to game first.", req.kind));
@@ -2146,6 +2278,23 @@ pub fn spawn(g: &crate::game::Game, req: &SpawnReq) -> Result<Value, String> {
         return Err(if r.is_empty() { "The game didn't say whether it worked.".into() } else { format!("The game said: {r}") });
     }
     Ok(json!({"ok": true, "reply": r, "at": at, "message": format!("A {} is in the game {where_}.", req.kind)}))
+}
+
+/// The brain's answer for a type the map didn't load ("type 'x' wasn't precached when the map
+/// loaded - add it to ls_creature_precache ...").
+fn not_loaded(reply: &str) -> bool {
+    ["wasn't precached", "isn't precached", "not precached"].iter().any(|w| reply.contains(w))
+}
+
+/// What to do about a type the map didn't load. Last Stand sets `ls_creature_precache` itself
+/// as each map loads (the types its waves use), so there the type has to go in its waves;
+/// elsewhere the cvar is the way.
+fn not_loaded_text(kind: &str, last_stand: bool) -> String {
+    if last_stand {
+        format!("{kind} wasn't loaded with this map, so it can't come in now. Last Stand loads the types its waves use: add {kind} to its waves (Waves tab), save, then change map.")
+    } else {
+        format!("{kind} wasn't loaded with this map, so it can't come in now. Set ls_creature_precache to all (or add {kind} to it), then change map.")
+    }
 }
 
 /// What the running game has: its types (and stand-ins) and the creatures alive.
@@ -2350,7 +2499,28 @@ async fn api_waves_save(State(st): State<Shared>, h: HeaderMap, Json(w): Json<Wa
     };
     blocking(move || {
         let changed = save_waves(&f, &w)?;
-        Ok(json!({"ok": true, "changed": changed, "message": if changed { format!("Saved the waves for {}.", w.mode) } else { "Nothing changed.".into() }, "status": waves_status(&f)?}))
+        Ok(json!({"ok": true, "changed": changed, "message": if changed { format!("Saved {} waves.", mode_name(&w.mode)) } else { "Nothing changed.".into() }, "status": waves_status(&f)?}))
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct ResetReq {
+    mode: String,
+}
+
+async fn api_waves_reset(State(st): State<Shared>, h: HeaderMap, Json(r): Json<ResetReq>) -> Response {
+    if !crate::panel_api::from_panel(&h) {
+        return forbidden();
+    }
+    let (_, f) = match target(&st) {
+        Ok(x) => x,
+        Err(e) => return answer(Err(e)),
+    };
+    blocking(move || {
+        let changed = reset_waves(&f, &r.mode)?;
+        let own = mode_name(&r.mode);
+        Ok(json!({"ok": true, "changed": changed, "message": if changed { format!("Back to {} own waves.", own) } else { format!("{} waves were already the mode's own.", own) }, "status": waves_status(&f)?}))
     })
     .await
 }
@@ -2368,6 +2538,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/tools/creatures/spawn", post(api_spawn))
         .route("/api/tools/creatures/waves", get(api_waves))
         .route("/api/tools/creatures/waves/save", post(api_waves_save))
+        .route("/api/tools/creatures/waves/reset", post(api_waves_reset))
 }
 
 #[cfg(test)]
@@ -2616,13 +2787,15 @@ mod tests {
     #[test]
     fn waves_round_trip_and_match_last_stand() {
         let w = laststand_default();
-        // the plugin's pick_type: wave 2 has runner 6, wave 9 brute 4, wave 10+ the same as 10
-        assert_eq!(w.rows[1].mix, vec![("zombie".to_string(), 10), ("runner".into(), 6)]);
-        assert_eq!(w.rows[8].mix[2], ("brute".to_string(), 4));
-        assert_eq!(w.rows[9].to, None);
+        // the round table (gm_components wt_builtin_type), times 5: wave 1 zombies only; wave 4
+        // fodder 20 (zombie 4 : babycrab 1), flankers 8, ranged 4
+        assert_eq!(w.rows[0].mix, vec![("zombie".to_string(), 100)]);
+        assert_eq!(w.rows[3].mix, vec![("zombie".to_string(), 80), ("babycrab".into(), 20), ("runner".into(), 40), ("spitter".into(), 20)]);
+        assert_eq!(w.rows.last().unwrap().to, None);
+        assert!(w.own_rounds && w.rows.len() <= 32 && w.rows.iter().all(|r| r.mix.len() <= 16));
         let text = write_waves("", &w);
         assert!(text.starts_with("; waves.ini"));
-        assert!(text.contains("wave 10+ = zombie 10 runner 14 brute 4 spitter 2"));
+        assert!(text.contains("own_rounds = 1\n") && text.contains("wave 1 = zombie 100\n") && text.contains("wave 30+ = "), "{text}");
         assert_eq!(parse_waves(&text), vec![w.clone()]);
         // another mode's section and notes stay; this one is replaced
         let other = format!("{text}\n; mine\n[othermode]\nboss =\nwave 1 = zombie 1\n");
@@ -2631,12 +2804,71 @@ mod tests {
         let out = write_waves(&other, &w2);
         assert!(out.contains("; mine\n[othermode]\nboss =\nwave 1 = zombie 1\n"));
         assert_eq!(parse_waves(&out)[0].boss_every, 0);
+        assert!(!parse_waves(&out)[1].own_rounds);
         assert_eq!(write_waves(&out, &w2), out);
-        let types: Vec<String> = builtins().into_iter().map(|t| t.name).collect();
+        let mut types: Vec<String> = builtins().into_iter().map(|t| t.name).collect();
+        types.extend(planned_types().map(String::from));
         assert!(check_waves(&w, &types).iter().all(|p| !p.error));
         let mut bad = w.clone();
         bad.rows[3].to = Some(7);
         assert!(check_waves(&bad, &types).iter().any(|p| p.error && p.text.contains("overlaps")));
+    }
+
+    /// QA4-T1 T1-1: saving the waves with one type added keeps every type Last Stand's round
+    /// table had (the map loaded 17 with the turret: 16 from the table), so 18 in all.
+    #[test]
+    fn saving_waves_keeps_every_last_stand_type() {
+        let before: Vec<&str> = "zombie babycrab headcrab runner spitter brute vortigaunt assassin soldier controller stukabat hound snark babygarg boss gonarch".split(' ').collect();
+        let mut have = wave_types(&laststand_default(), 1000);
+        have.sort();
+        let mut want: Vec<String> = before.iter().map(|s| s.to_string()).collect();
+        want.sort();
+        assert_eq!(have, want, "the default loads what the round table loads");
+
+        let dir = std::env::temp_dir().join(format!("ls-creatures-waves18-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let f = Files { hl: dir.clone(), game: "cstrike".into(), dir: dir.join("cstrike"), app: dir.join("app"), label: "test".into() };
+        let mut types = builtins();
+        let mut mine = types[1].clone();
+        mine.name = "qa_runner_".into();
+        mine.base = "runner".into();
+        mine.hp = 77.0;
+        types.push(mine);
+        assert!(save(&f, &SaveReq { types }).unwrap());
+        // the Waves tab: start from the mode's own, add one type at weight 50 on wave 1, save
+        let mut w = laststand_default();
+        w.rows[0].mix.push(("qa_runner_".into(), 50));
+        assert!(save_waves(&f, &w).unwrap(), "controller and stukabat may be named before the game has them");
+        let back = parse_waves(&std::fs::read_to_string(f.waves()).unwrap()).into_iter().find(|s| s.mode == "laststand").unwrap();
+        assert!(back.own_rounds, "boss waves, packs and heavies stay the mode's own");
+        let mut loads = wave_types(&back, 1000);
+        loads.push("turret".into()); // gm_laststand adds the defenders' turret
+        assert_eq!(loads.len(), 18, "{loads:?}");
+        for t in before.iter().chain(["turret", "qa_runner_"].iter()) {
+            assert!(loads.iter().any(|x| x == t), "{t} kept: {loads:?}");
+        }
+        // Reset to Last Stand's own: the section goes, another mode's stays
+        let text = std::fs::read_to_string(f.waves()).unwrap();
+        std::fs::write(f.waves(), format!("{text}\n[othermode]\nwave 1 = zombie 1\n")).unwrap();
+        assert!(reset_waves(&f, "laststand").unwrap());
+        let left = parse_waves(&std::fs::read_to_string(f.waves()).unwrap());
+        assert_eq!(left.iter().map(|s| s.mode.as_str()).collect::<Vec<_>>(), vec!["othermode"]);
+        assert!(!reset_waves(&f, "laststand").unwrap());
+        assert!(reset_waves(&f, "../x").is_err());
+        assert_eq!(mode_name("laststand"), "Last Stand's");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn spawn_of_a_type_the_map_did_not_load() {
+        // the brain's own words (ls-next3)
+        assert!(not_loaded("ls_creature: type 'qa_runner_' wasn't precached when the map loaded - add it to ls_creature_precache (or set it to all) and change map"));
+        assert!(!not_loaded("ls_creature: spawned #196 zombie"));
+        // Last Stand sets the list itself (and the cvar reads "" afterwards): the way is its waves
+        let t = not_loaded_text("qa_runner_", true);
+        assert!(t.contains("waves") && !t.contains("ls_creature_precache"), "{t}");
+        // another mode: the cvar
+        assert!(not_loaded_text("qa_runner_", false).contains("ls_creature_precache"));
     }
 
     #[test]

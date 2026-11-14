@@ -11,16 +11,19 @@
 .cs-none { padding: 6px 8px; }
 
 /* the three columns */
+/* what the Studio edits, and who it reaches */
+.cs-target { margin: 0 0 12px; font-size: 13px; line-height: 1.45; max-width: 90ch; }
 .cs-grid { display: grid; gap: 14px; grid-template-columns: minmax(200px, 250px) minmax(0, 1fr) minmax(260px, 330px); align-items: start; }
 .cs-list, .cs-side { position: sticky; top: 8px; max-height: calc(100vh - 140px); overflow: auto; display: grid; gap: 10px; align-content: start; min-width: 0; }
 .cs-main { min-width: 0; container-type: inline-size; }
 @media (max-width: 1180px) {
   .cs-grid { grid-template-columns: minmax(190px, 230px) minmax(0, 1fr); }
-  .cs-side { grid-column: 1 / -1; grid-row: 1; position: static; max-height: none; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); align-items: start; }
+  /* the list and the form first; the preview under them (QA4-T1 H1) */
+  .cs-side { grid-column: 1 / -1; position: static; max-height: none; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); align-items: start; }
 }
 @media (max-width: 760px) {
   .cs-grid { grid-template-columns: minmax(0, 1fr); }
-  .cs-list { position: static; max-height: none; }
+  .cs-list { position: static; max-height: 260px; }
   .cs-side { grid-template-columns: minmax(0, 1fr); }
 }
 

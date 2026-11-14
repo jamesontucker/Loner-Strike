@@ -80,7 +80,7 @@ export type Limits = { ranges: { key: string; min: number; max: number }[]; cate
 export type PlacedKey = { name: string; type: string; label: string; default?: string; help?: string; choices?: { value: string; label: string }[] };
 /** A creature a mapper places in the map editor (ls_barnacle; turrets as ls_creature) instead of a mode's waves. */
 export type Placed = { id: string; entity: string; type: string; title: string; model: string; about: string; how: string; keys: PlacedKey[] };
-export type Status = { game: string; file: string; exists: boolean; types: TypeRow[]; templates: Creature[]; problems: Problem[]; limits: Limits; placed?: Placed[] };
+export type Status = { game: string; server?: boolean; file: string; exists: boolean; types: TypeRow[]; templates: Creature[]; problems: Problem[]; limits: Limits; placed?: Placed[] };
 
 export type Candidate = { path: string; found: boolean; folder?: string; kind: "game" | "hl" | "custom" | "missing" | "bad"; note: string };
 export type ModelReport = { candidates: Candidate[]; picked: number | null; standIn: boolean };
@@ -97,7 +97,7 @@ export type SoundItem = { file: string; folder: string };
 export type Live = { running: boolean; creatures?: boolean; message?: string; types?: { name: string; precached: boolean; standIn: boolean }[]; alive?: number };
 
 export type WaveRow = { from: number; to: number | null; mix: [string, number][] };
-export type WaveSet = { mode: string; boss: string; boss_every: number; count_scale: number; hp_scale: number; type_hp: boolean; rows: WaveRow[] };
+export type WaveSet = { mode: string; boss: string; boss_every: number; count_scale: number; hp_scale: number; type_hp: boolean; own_rounds?: boolean; rows: WaveRow[] };
 export type WavesStatus = { file: string; exists: boolean; sets: WaveSet[]; defaults: Record<string, WaveSet>; types: string[]; modes: { id: string; name: string; reads: boolean; note: string }[] };
 
 type Done<S> = { ok?: boolean; changed?: boolean; message?: string; status?: S };
@@ -114,5 +114,6 @@ export const applyLive = () => post<{ ok?: boolean; message?: string; reply?: st
 export const spawnOne = (type: string, calm: boolean) => post<{ ok?: boolean; message?: string; reply?: string }>("/api/tools/creatures/spawn", { type, calm });
 export const wavesStatus = (signal?: AbortSignal) => get<WavesStatus>("/api/tools/creatures/waves", signal);
 export const saveWaves = (w: WaveSet) => post<Done<WavesStatus>>("/api/tools/creatures/waves/save", w);
+export const resetWaves = (mode: string) => post<Done<WavesStatus>>("/api/tools/creatures/waves/reset", { mode });
 /** a sound under sound/ (the map editor's player route: game folders only) */
 export const soundUrl = (file: string) => `/api/tools/editor/sound?path=${encodeURIComponent(file)}`;

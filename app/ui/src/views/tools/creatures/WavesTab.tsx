@@ -4,13 +4,13 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useNav, useDirty } from "../../../store";
-import { Banner, Info, LoadError, useToast } from "../../../ui";
+import { Banner, Info, LoadError, useConfirm, useToast } from "../../../ui";
 import { Loading, Row, Rows } from "../common";
 import { ActionBar } from "../common/ActionBar";
 import { errorText, useBusy } from "../common/api";
-import { saveWaves, wavesStatus, type WaveRow, type WaveSet } from "./creaturesApi";
+import { resetWaves, saveWaves, wavesStatus, type WaveRow, type WaveSet } from "./creaturesApi";
 
-const COLOURS = ["#c9b458", "#8c9a6a", "#d9774b", "#7aa6c2", "#b07cc6", "#6fbf8e", "#e0a85a", "#a0a0a0"];
+const COLOURS = ["#c9b458", "#8c9a6a", "#d9774b", "#7aa6c2", "#b07cc6", "#6fbf8e", "#e0a85a", "#a0a0a0", "#c46a6a", "#5f8fd6", "#9fbf4a", "#d68fb8", "#4fb3b3", "#b89a6a", "#8a7ad6", "#d6c24f"];
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
 function rowLabel(r: WaveRow) {
@@ -35,6 +35,7 @@ function localProblems(w: WaveSet, types: string[]): string[] {
 
 export function WavesTab() {
   const toast = useToast();
+  const ask = useConfirm();
   const qc = useQueryClient();
   const go = useNav((s) => s.go);
   const { working, run } = useBusy();
@@ -84,6 +85,16 @@ export function WavesTab() {
     const rows = w.rows.map((r) => (r === last && r.to == null ? { ...r, to: r.from } : r));
     setW({ ...w, rows: [...rows, { from, to: null, mix: clone(last?.mix ?? [["zombie", 10]]) }] });
   };
+  const own = st.data.defaults[w.mode];
+  const modeName = info?.name ?? w.mode;
+  const reset = () =>
+    run("Resetting…", async () => {
+      if (!(await ask(`Go back to ${modeName}'s own waves? Your list for it is removed from waves.ini.`, { ok: "Reset" }))) return;
+      const r = await resetWaves(w.mode);
+      if (r.error) return toast(r.error, true);
+      toast(r.message || "Reset.");
+      if (r.status) qc.setQueryData(["tools", "creatures", "waves"], r.status);
+    });
   const save = () =>
     run("Saving…", async () => {
       const r = await saveWaves(w);
@@ -95,6 +106,13 @@ export function WavesTab() {
   return (
     <div className="cs-waves">
       {info && !info.reads && <Banner>{info.note} Saving now means it's ready the moment it does.</Banner>}
+      {info?.reads && (
+        <p className="cs-hint muted" role="note">
+          {saved
+            ? `This game's ${modeName} uses your list below (from the next map).`
+            : `Below is ${modeName}'s own lineup. Saving makes this game's ${modeName} use your list instead (from the next map).`}
+        </p>
+      )}
       <div className="panel">
         <Rows bare>
           <Row name="Mode" note={info ? info.name : "A mode that reads waves.ini by its id"}>
@@ -115,9 +133,19 @@ export function WavesTab() {
               {mode === "\u0000other" && <input className="search" placeholder="mode id, e.g. my_mode" value={other} aria-label="Mode id" onChange={(e) => setOther(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} />}
             </span>
           </Row>
-          <Row name="Boss" note={w.boss ? `A ${w.boss} leads every ${w.boss_every || "—"}th wave` : "No boss waves"}>
+          <Row
+            name="Boss"
+            note={
+              w.own_rounds
+                ? `${modeName}'s own: a baby garg at wave 7, then a boss or gonarch every 5th from 10; hound and snark packs every 6th; heavies from 11`
+                : w.boss
+                  ? `A ${w.boss} leads every ${w.boss_every || "—"}th wave`
+                  : "No boss waves"
+            }
+          >
             <span className="row">
-              <select value={w.boss} aria-label="Boss type" onChange={(e) => setW({ ...w, boss: e.target.value })}>
+              <select value={w.own_rounds ? "\u0000own" : w.boss} aria-label="Boss type" onChange={(e) => (e.target.value === "\u0000own" ? setW({ ...w, own_rounds: true }) : setW({ ...w, own_rounds: false, boss: e.target.value }))}>
+                {(w.own_rounds || own?.own_rounds) && <option value={"\u0000own"}>{modeName}'s own boss and pack rounds</option>}
                 <option value="">None</option>
                 {types.map((t) => (
                   <option key={t} value={t}>
@@ -125,7 +153,7 @@ export function WavesTab() {
                   </option>
                 ))}
               </select>
-              {w.boss && (
+              {w.boss && !w.own_rounds && (
                 <label className="cs-inline">
                   every <input className="search cs-numbox" type="number" min={0} max={100} value={w.boss_every} aria-label="Boss every so many waves" onChange={(e) => setW({ ...w, boss_every: Math.max(0, Math.round(Number(e.target.value) || 0)) })} /> waves
                 </label>
@@ -206,9 +234,20 @@ export function WavesTab() {
               </option>
             ))}
           </select>
-          {st.data.defaults[w.mode] && (
-            <button type="button" className="btn small" onClick={() => setW(clone(st.data.defaults[w.mode]))}>
+          {own && (
+            <button type="button" className="btn small" onClick={() => setW(clone(own))}>
               Start from the mode's own mix
+            </button>
+          )}
+          {own && saved && (
+            <button type="button" className="btn small" disabled={!!working} onClick={reset}>
+              {working === "Resetting…" ? (
+                <>
+                  <span className="spinner" aria-hidden="true" /> Resetting…
+                </>
+              ) : (
+                `Reset to ${modeName}'s own`
+              )}
             </button>
           )}
         </div>
@@ -238,7 +277,7 @@ export function WavesTab() {
         dirty={dirty || (!saved && !!w.mode)}
         errors={problems.length}
         working={working}
-        status={!dirty && !saved ? <span className="tl-ab-state">Not saved yet: the mode uses its own mix</span> : undefined}
+        status={!dirty && !saved ? <span className="tl-ab-state">Not saved: {modeName} uses its own lineup</span> : undefined}
         where={problems.length ? problems[0] : st.data.file}
         save={{ label: "Save waves", onClick: save, disabled: problems.length > 0 || (!dirty && !!saved) || !w.mode }}
         undo={dirty ? () => setW(clone(saved ?? st.data.defaults[w.mode] ?? w)) : null}

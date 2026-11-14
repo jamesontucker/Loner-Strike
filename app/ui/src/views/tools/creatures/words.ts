@@ -65,4 +65,13 @@ export const TEMPLATE_WORDS: Record<string, string> = {
   hound: "Hound: guards its patch",
   turret: "Turret: doesn't move, shoots",
   boss: "Boss: huge health, hits very hard",
+  headcrab: "Headcrab: small, leaps at you",
+  vortigaunt: "Vortigaunt: zaps from range",
+  babygarg: "Baby garg: a heavy, burns up close",
+  snark: "Snark: tiny, fast, comes in swarms",
+  babycrab: "Baby crab: tiny, weak, in numbers",
+  miniturret: "Mini turret: small, fast-firing guard",
+  assassin: "Assassin: quick, shoots and flanks",
+  soldier: "Soldier: bursts of fire, takes cover",
+  gonarch: "Gonarch: a boss, tough and huge",
 };
