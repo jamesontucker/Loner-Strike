@@ -280,7 +280,7 @@ function Studio({ maps }: ToolProps) {
       else {
         st.open(p.graph, true);
         // an address with a tab ("studio:<id>/<tab>") opens that Function's or Macro's graph too
-        if (tabId && [...(p.graph.functions ?? []), ...(p.graph.macros ?? [])].some((x) => x.id === tabId)) useStudio.getState().openTab(tabId);
+        if (tabId && [...(p.graph.functions ?? []), ...(p.graph.macros ?? []), ...(p.graph.eventGraphs ?? [])].some((x) => x.id === tabId)) useStudio.getState().openTab(tabId);
       }
     } catch (e) {
       toast(errorText(e), true);
@@ -316,7 +316,7 @@ function Studio({ maps }: ToolProps) {
     const [gid, tabId = ""] = arg.split("/");
     if (cur?.mode.id === gid) {
       const st = useStudio.getState();
-      if (st.tab !== tabId && (!tabId || [...(cur.functions ?? []), ...(cur.macros ?? [])].some((x) => x.id === tabId))) st.openTab(tabId);
+      if (st.tab !== tabId && (!tabId || [...(cur.functions ?? []), ...(cur.macros ?? []), ...(cur.eventGraphs ?? [])].some((x) => x.id === tabId))) st.openTab(tabId);
       if (!tabId) st.setFuncFocus(null);
       return;
     }

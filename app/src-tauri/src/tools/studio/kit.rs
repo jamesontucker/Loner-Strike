@@ -181,6 +181,7 @@ pub fn check_kit(v: &Value) -> Result<(), String> {
         functions: vec![],
         macros: vec![],
         markers,
+        event_graphs: vec![],
         map_kit: Some(graph::MapKitInfo {
             size: map.get("size").and_then(Value::as_str).unwrap_or("").into(),
             players_min: players.get("min").and_then(Value::as_u64).map(|x| x.min(1000) as u32),

@@ -549,6 +549,50 @@ test("All Actions palette: folders, search opens them, keys, favorites, recents,
   await page.keyboard.press("Escape");
 });
 
+test("several event graphs: add, copy and paste across them keeping inner wires, events on any, saved and checked", async ({ page, browserName }) => {
+  if (browserName === "chromium") await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto(`/tools-dev.html?open=studio:${ID}`);
+  await expect(node(page, "give_m4")).toBeVisible({ timeout: 20_000 });
+  // copy two wired nodes from the Event Graph
+  await node(page, "is_ct").click();
+  await node(page, "give_m4").click({ modifiers: ["ControlOrMeta"] });
+  await page.keyboard.press("ControlOrMeta+c");
+  // a new graph from My mode's Graphs
+  const side = page.getByRole("complementary", { name: "My mode" });
+  await side.getByRole("button", { name: "Add an event graph (to organize: Rounds, Shop, Bots...)" }).click();
+  const dlg = page.getByRole("alertdialog");
+  await dlg.getByRole("textbox").fill("Shop");
+  await dlg.getByRole("button", { name: "Add graph" }).click();
+  await expect(selectedTab(page)).toContainText("Shop");
+  await expect(page.locator(".react-flow__node")).toHaveCount(0);
+  // paste: the two nodes and the wire between them, on Shop
+  await page.locator(".react-flow__pane").click({ position: { x: 200, y: 120 } });
+  await page.keyboard.press("ControlOrMeta+v");
+  await expect(page.locator(".react-flow__node")).toHaveCount(2);
+  await expect(page.locator(".react-flow__edge")).toHaveCount(1);
+  // an event can go on it too
+  const pb = (await page.locator(".react-flow__pane").boundingBox())!;
+  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 40, y: 30 } });
+  const pal = page.getByRole("dialog", { name: "Add a node" });
+  await pal.getByRole("textbox").fill("round started");
+  await pal.getByRole("button", { name: /^Round Started/ }).click();
+  await expect(page.locator(".react-flow__node")).toHaveCount(3);
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect.poll(async () => (await saved(page)).eventGraphs?.[0]?.name).toBe("Shop");
+  const g = await saved(page);
+  const eg = g.eventGraphs[0].id;
+  expect(g.nodes.filter((n: { graph?: string }) => n.graph === eg)).toHaveLength(3);
+  // the checks: two Round Started (Event Graph and Shop) both run, said as a warning; no errors
+  await expect(page.getByTestId("studio-check-status")).toContainText("Quick check:");
+  const list = page.locator(".st-results-list");
+  await expect(list).toContainText("Round Started is on Event Graph, Shop: they all run, in that order");
+  // (the only errors: the pasted nodes have no Player wired, as they came without their event)
+  for (const t of await list.locator("li.error").allTextContents()) expect(t).toContain("needs something wired into Player");
+  // the Event Graph tab still has its own nodes
+  await tabs(page).getByRole("tab", { name: "Event Graph" }).click();
+  await expect(node(page, "give_m4")).toBeVisible();
+});
+
 test.describe("leaving with unsaved edits", () => {
   // in the page, as a person gets there: Overview → Game Mode Studio → the mode → its Function
   const dirty = async (page: Page) => {

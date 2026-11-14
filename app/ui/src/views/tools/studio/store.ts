@@ -78,8 +78,10 @@ type Studio = {
 /** The tabs still there after a change (a removed Function's tab closes). */
 function keepTabs(g: Graph, tab: string, tabs: string[]) {
   const there = new Set([...(g.functions ?? []).map((f) => f.id), ...(g.macros ?? []).map((m) => m.id)]);
+  const egs = new Set((g.eventGraphs ?? []).map((e) => e.id));
   const next = tabs.filter((t) => there.has(t));
-  return next.length === tabs.length && (!tab || there.has(tab)) ? {} : { tabs: next, tab: tab && there.has(tab) ? tab : "" };
+  const ok = (t: string) => !t || there.has(t) || egs.has(t);
+  return next.length === tabs.length && ok(tab) ? {} : { tabs: next, tab: ok(tab) ? tab : "" };
 }
 
 const isEventNode = (g: Graph | null) => (id: string) => {
@@ -126,8 +128,10 @@ export const useStudio = create<Studio>((set, get) => ({
   tabs: [],
   part: null,
   openTab: (id) => {
-    const { tabs } = get();
-    set({ tab: id, tabs: !id || tabs.includes(id) ? tabs : [...tabs, id], selected: [] });
+    const { tabs, graph } = get();
+    // (the extra event graphs always have their tabs: they aren't opened or closed)
+    const eg = (graph?.eventGraphs ?? []).some((e) => e.id === id);
+    set({ tab: id, tabs: !id || eg || tabs.includes(id) ? tabs : [...tabs, id], selected: [] });
   },
   closeTab: (id) => {
     const { tabs, tab } = get();

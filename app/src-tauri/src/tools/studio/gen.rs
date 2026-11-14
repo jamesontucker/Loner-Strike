@@ -961,8 +961,10 @@ pub fn needs(checked: &Graph) -> Needs {
 /// Turns a checked graph into the plugin's source. The graph must have passed
 /// `graph::validate` without errors; nodes nothing runs are left out.
 pub fn generate(checked: &Graph, debug: bool) -> Generated {
+    // the extra event graphs fold into the first (events in tab order)
+    let flat = super::graph::flatten(checked);
     // Macros are copied in first (their nodes report as the Macro node)
-    let ex = super::expand::expand(checked);
+    let ex = super::expand::expand(flat.as_ref());
     let g = &ex.graph;
     let v = View::new(g);
     let reached = v.reached_from();

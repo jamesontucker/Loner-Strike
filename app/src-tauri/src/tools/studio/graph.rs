@@ -173,6 +173,60 @@ pub struct Graph {
     /// the kit's advice for map makers (size, players, notes)
     #[serde(default, rename = "mapKit", skip_serializing_if = "Option::is_none")]
     pub map_kit: Option<MapKitInfo>,
+    /// more event graphs after the first ("Event Graph"), only to organize: their nodes are the
+    /// event graph's (a node's `graph` names one); two of the same event run in tab order
+    #[serde(default, rename = "eventGraphs", skip_serializing_if = "Vec::is_empty")]
+    pub event_graphs: Vec<EventGraph>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct EventGraph {
+    pub id: String,
+    pub name: String,
+}
+
+/// The graph with its extra event graphs folded into the first: their nodes and comments on the
+/// Event Graph, the events in tab order and top to bottom (the order the plugin runs two of the
+/// same event in). The same graph when there are none.
+pub fn flatten(g: &Graph) -> std::borrow::Cow<'_, Graph> {
+    if g.event_graphs.is_empty() {
+        return std::borrow::Cow::Borrowed(g);
+    }
+    let rank = |h: &Option<String>| match h.as_deref() {
+        None | Some("") => Some(0),
+        Some(h) => g.event_graphs.iter().position(|e| e.id == h).map(|i| i + 1),
+    };
+    let mut out = g.clone();
+    out.event_graphs.clear();
+    let mut nodes: Vec<(usize, f64, usize, Node)> = g
+        .nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| {
+            let r = rank(&n.graph);
+            let mut n = n.clone();
+            if r.is_some() {
+                n.graph = None;
+            }
+            let ev = registry().get(&n.kind).is_some_and(|d| d.event);
+            (r.unwrap_or(0), if ev { n.pos.y } else { 0.0 }, i, n)
+        })
+        .collect();
+    // (events only, in the places events were: the rest keep their order)
+    let is_ev = |n: &Node| registry().get(&n.kind).is_some_and(|d| d.event);
+    let slots: Vec<usize> = nodes.iter().enumerate().filter(|(_, x)| is_ev(&x.3)).map(|(i, _)| i).collect();
+    let mut evs: Vec<(usize, f64, usize, Node)> = slots.iter().map(|&i| nodes[i].clone()).collect();
+    evs.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)).then(a.2.cmp(&b.2)));
+    for (slot, ev) in slots.into_iter().zip(evs) {
+        nodes[slot] = ev;
+    }
+    out.nodes = nodes.into_iter().map(|x| x.3).collect();
+    for c in out.comments.iter_mut() {
+        if rank(&c.graph).is_some() {
+            c.graph = None;
+        }
+    }
+    std::borrow::Cow::Owned(out)
 }
 
 /// A marker a map places for this mode (docs/notes/X.md, "Mode map kit format").
@@ -1204,10 +1258,69 @@ pub fn default_fits(g: &Graph, ty: &str, v: &Value) -> bool {
 
 /// Every problem with a graph: errors stop a compile, warnings are shown on the nodes.
 pub fn validate(g: &Graph) -> Vec<Problem> {
-    let mut p = validate_core(g);
+    let mut p = event_graph_problems(g);
+    let flat = flatten(g);
+    let g = flat.as_ref();
+    p.extend(validate_core(g));
     advanced_problems(g, &View::new(g), &mut p);
     if !has_errors(&p) {
         p.extend(cost_warnings(g, &View::new(g)));
+    }
+    p
+}
+
+/// The extra event graphs: good ids and names, no wire from one graph to another, and a note
+/// when the same event is on more than one (they all run, in tab order).
+fn event_graph_problems(g: &Graph) -> Vec<Problem> {
+    let mut p = Vec::new();
+    if g.event_graphs.is_empty() {
+        return p;
+    }
+    if g.event_graphs.len() > 16 {
+        p.push(Problem::err(None, "A mode has at most 16 event graphs."));
+    }
+    let mut seen = HashSet::new();
+    let parts: HashSet<&str> = g.functions.iter().map(|f| f.id.as_str()).chain(g.macros.iter().map(|m| m.id.as_str())).collect();
+    for e in &g.event_graphs {
+        if !valid_id(&e.id) || !seen.insert(e.id.as_str()) || parts.contains(e.id.as_str()) {
+            p.push(Problem::err(None, "An event graph has a bad or repeated id."));
+        }
+        if e.name.trim().is_empty() || !valid_label(&e.name, 30) {
+            p.push(Problem::err(None, "Give each event graph a name (up to 30 letters, digits, spaces or plain punctuation)."));
+        }
+    }
+    let home: HashMap<&str, &str> = g.nodes.iter().map(|n| (n.id.as_str(), n.graph.as_deref().unwrap_or(""))).collect();
+    for e in &g.edges {
+        if let (Some(a), Some(b)) = (home.get(e.from.node.as_str()), home.get(e.to.node.as_str())) {
+            if a != b {
+                p.push(Problem { level: "error", node: None, pin: None, edge: Some(e.id.clone()), message: "A wire can't go from one graph to another.".into() });
+            }
+        }
+    }
+    let name = |h: &str| if h.is_empty() { "Event Graph".to_string() } else { g.event_graphs.iter().find(|e| e.id == h).map(|e| e.name.clone()).unwrap_or_default() };
+    let reg = registry();
+    let mut by_kind: Vec<(&str, Vec<&str>)> = Vec::new();
+    for n in &g.nodes {
+        let h = n.graph.as_deref().unwrap_or("");
+        let in_event_graph = h.is_empty() || g.event_graphs.iter().any(|e| e.id == h);
+        // (named events, custom events and chat commands differ by their settings: not doubles)
+        if !in_event_graph || !reg.get(&n.kind).is_some_and(|d| d.event && d.params.is_empty()) {
+            continue;
+        }
+        match by_kind.iter_mut().find(|(k, _)| *k == n.kind) {
+            Some((_, hs)) => {
+                if !hs.contains(&h) {
+                    hs.push(h)
+                }
+            }
+            None => by_kind.push((n.kind.as_str(), vec![h])),
+        }
+    }
+    for (k, mut hs) in by_kind.into_iter().filter(|(_, hs)| hs.len() > 1) {
+        hs.sort_by_key(|h| if h.is_empty() { 0 } else { g.event_graphs.iter().position(|e| e.id == *h).map(|i| i + 1).unwrap_or(99) });
+        let title = reg.get(k).map(|d| d.title.clone()).unwrap_or_default();
+        let names: Vec<String> = hs.iter().map(|h| name(h)).collect();
+        p.push(Problem { level: "warning", node: g.nodes.iter().find(|n| n.kind == k && n.graph.as_deref().unwrap_or("") == hs[1]).map(|n| n.id.clone()), pin: None, edge: None, message: format!("{title} is on {}: they all run, in that order (the tabs' order, then top to bottom).", names.join(", ")) });
     }
     p
 }
@@ -2490,6 +2603,40 @@ mod tests {
             json!([{"id":"w","from":{"node":"e","pin":"then"},"to":{"node":"c","pin":"exec"}}]),
         );
         assert!(validate(&g).iter().any(|p| p.level == "error" && p.node.as_deref() == Some("c")), "{:?}", validate(&g));
+    }
+
+    #[test]
+    fn event_graphs_fold_into_one_in_tab_order() {
+        let mut g = graph(
+            json!([
+                {"id":"r1","type":"event.round_started","params":{},"graph":"shop","pos":{"x":0,"y":0}},
+                {"id":"m1","type":"msg.broadcast","params":{"text":"Shop"},"graph":"shop"},
+                {"id":"r2","type":"event.round_started","params":{},"graph":"rounds","pos":{"x":0,"y":300}},
+                {"id":"m2","type":"msg.broadcast","params":{"text":"Rounds"},"graph":"rounds"},
+                {"id":"r0","type":"event.round_started","params":{},"pos":{"x":0,"y":900}},
+                {"id":"m0","type":"msg.broadcast","params":{"text":"First"}}
+            ]),
+            json!([e("w1","r1","then","m1","exec"), e("w2","r2","then","m2","exec"), e("w0","r0","then","m0","exec")]),
+        );
+        g.event_graphs = vec![EventGraph { id: "rounds".into(), name: "Rounds".into() }, EventGraph { id: "shop".into(), name: "Shop".into() }];
+        let p = validate(&g);
+        assert!(!has_errors(&p), "{:?}", msgs(&p));
+        assert!(p.iter().any(|x| x.level == "warning" && x.message.starts_with("Round Started is on Event Graph, Rounds, Shop")), "{:?}", msgs(&p));
+        // the first graph's, then Rounds', then Shop's
+        let flat = flatten(&g);
+        let order: Vec<&str> = flat.nodes.iter().filter(|n| n.kind == "event.round_started").map(|n| n.id.as_str()).collect();
+        assert_eq!(order, ["r0", "r2", "r1"]);
+        assert!(flat.nodes.iter().all(|n| n.graph.is_none()));
+        let src = super::super::gen::generate(&g, false).source;
+        // (the round start calls them in this order; each event's function follows in that order)
+        let (a, b, c) = (src.find("// Round Started (r0)").unwrap(), src.find("// Round Started (r2)").unwrap(), src.find("// Round Started (r1)").unwrap());
+        assert!(a < b && b < c, "the plugin runs them in tab order");
+        // a wire from one graph to another; a graph that isn't there
+        g.edges.push(serde_json::from_value(e("wx", "r1", "then", "m2", "exec")).unwrap());
+        assert!(validate(&g).iter().any(|x| x.level == "error" && x.edge.as_deref() == Some("wx")));
+        g.edges.pop();
+        g.nodes[1].graph = Some("gone".into());
+        assert!(has_errors(&validate(&g)));
     }
 
     #[test]

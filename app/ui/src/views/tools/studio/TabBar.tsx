@@ -20,6 +20,11 @@ export function TabBar() {
       <button type="button" role="tab" aria-selected={tab === ""} className={`st-tab${tab === "" ? " on" : ""}`} onClick={() => openTab("")}>
         <span className="st-mb-dot ev" /> Event Graph
       </button>
+      {(graph.eventGraphs ?? []).map((e) => (
+        <button key={e.id} type="button" role="tab" aria-selected={tab === e.id} className={`st-tab${tab === e.id ? " on" : ""}`} onClick={() => openTab(e.id)} title="An event graph (compiled with the others as one)">
+          <span className="st-mb-dot ev" /> {e.name}
+        </button>
+      ))}
       {tabs.map((id) => (
         <div
           key={id}

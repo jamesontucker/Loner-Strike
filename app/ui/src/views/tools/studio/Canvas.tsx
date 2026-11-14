@@ -140,7 +140,8 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       const tab = useStudio.getState().tab;
       // a snippet with events (or, in a Function, a wait) can only go on the Event Graph
       const inFn = (g.functions ?? []).some((f) => f.id === tab);
-      const eventOnly = !!tab && sn.part.nodes.some((n) => nodeDef(n.type)?.event || (inFn && ["timer.delay", "timer.retrigger", "timer.repeat", "timer.countdown", "msg.menu"].includes(n.type)));
+      const onEventGraph = (g.eventGraphs ?? []).some((e) => e.id === tab);
+      const eventOnly = !!tab && !onEventGraph && sn.part.nodes.some((n) => nodeDef(n.type)?.event || (inFn && ["timer.delay", "timer.retrigger", "timer.repeat", "timer.countdown", "msg.menu"].includes(n.type)));
       let where = at;
       if (eventOnly) {
         // under what's on the Event Graph already

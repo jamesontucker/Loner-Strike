@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useStudio } from "./store";
 import { nodeDef, typeColor } from "./registry";
-import { addEnum, addFunction, addLocal, addMacro, addMarker, addStruct, addVariable, makeSnippet, type Snippet } from "./graphOps";
+import { addEnum, addEventGraph, addFunction, addLocal, addMacro, addMarker, addStruct, addVariable, makeSnippet, removeEventGraph, renameEventGraph, type Snippet } from "./graphOps";
 import { addFromLibrary, DRAG_LIB, DRAG_PART, DRAG_SNIPPET, DRAG_VAR, type CanvasApi } from "./Canvas";
 import { extractItem, itemFile, itemId, LIBRARY_SET, readItem, type LibItem } from "./library";
 import { deleteItem, saveItem } from "./libraryApi";
@@ -419,6 +419,57 @@ export function MyBlueprint({ api, snippets, reloadSnippets, toast }: { api: Can
     <aside className="st-mb" aria-label="My mode">
       {cm.menu}
       {saving && <SaveToLibrary partId={saving} onDone={() => setSaving(null)} toast={toast} />}
+      <Section
+        title="Graphs"
+        count={1 + (graph.eventGraphs ?? []).length}
+        onAdd={async () => {
+          const name = await askText("What's the new event graph called?", { label: "Name", placeholder: "Rounds", max: 30 }, { ok: "Add graph" });
+          if (name === null || name === undefined) return;
+          const clean = [...name.trim()].filter((c) => /[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$]/u.test(c)).join("").slice(0, 30);
+          const r = addEventGraph(useStudio.getState().graph ?? graph, clean || undefined);
+          edit(() => r.graph);
+          // (after the question's dialog has closed and handed focus back)
+          setTimeout(() => openTab(r.id), 0);
+        }}
+        addTitle="Add an event graph (to organize: Rounds, Shop, Bots...)"
+      >
+        <button type="button" className={`st-mb-item${tab === "" ? " open" : ""}`} onClick={() => openTab("")} title="The first event graph">
+          <span className="st-mb-dot ev" /> Event Graph
+        </button>
+        {(graph.eventGraphs ?? []).map((e) => (
+          <button
+            key={e.id}
+            type="button"
+            className={`st-mb-item${tab === e.id ? " open" : ""}`}
+            onClick={() => openTab(e.id)}
+            onContextMenu={(ev) =>
+              cm.open(ev, e.name, [
+                {
+                  label: "Rename…",
+                  run: async () => {
+                    const name = await askText("Rename the event graph", { label: "Name", placeholder: e.name, max: 30 }, { ok: "Rename" });
+                    const clean = [...(name ?? "").trim()].filter((c) => /[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$]/u.test(c)).join("").slice(0, 30);
+                    if (clean) edit((g) => renameEventGraph(g, e.id, clean));
+                  },
+                },
+                {
+                  label: "Delete…",
+                  danger: true,
+                  run: async () => {
+                    const n = graph.nodes.filter((x) => x.graph === e.id).length;
+                    if (n && !(await ask(`Delete the “${e.name}” graph? Its ${n} node${n === 1 ? "" : "s"} move onto the Event Graph.`, { ok: "Delete graph", danger: true }))) return;
+                    if (tab === e.id) openTab("");
+                    edit((g) => removeEventGraph(g, e.id));
+                  },
+                },
+              ])
+            }
+            title="Right-click to rename or delete"
+          >
+            <span className="st-mb-dot ev" /> {e.name}
+          </button>
+        ))}
+      </Section>
       <Section title="Events" count={events.length} onAdd={() => api?.search("Events")} addTitle="Add an event">
         {events.length === 0 && <p className="st-muted st-mb-empty">Nothing starts this mode yet.</p>}
         {events.map((n) => (

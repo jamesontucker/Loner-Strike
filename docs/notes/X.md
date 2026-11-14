@@ -338,8 +338,21 @@ hover; kept in this browser) and Recently used (last 10) at the top, Context Sen
 wire (on by default; off lists everything), keys: Up/Down, Right/Left open/close a folder, Enter places
 or toggles, Escape closes. Found on the way: a wire dropped on empty space opened the palette and the
 same release's pane click closed it again (Chromium); fixed in `Canvas.tsx`.
-**Queued next, in order:** (b) the rest of the Blueprint parity batch 2 plan (graphs, custom events, timelines);
-(c) sim tests for the core nodes; (d) example modes, node help, tour.
+**Several event graphs: done (2026-11-14).** For X2 (schema change): a graph may have
+`eventGraphs: [{id, name}]` (at most 16; ids share the space of Function/Macro ids); a node's or
+comment's `graph` may name one. Rust: `graph::EventGraph`, `graph::flatten` folds them into the first
+before checking and generating (events in tab order, then top to bottom); `validate` refuses wires
+between graphs and warns "Round Started is on Event Graph, Rounds: they all run, in that order" when a
+built-in event (one without settings) is on more than one. UI: `isEventGraph`, `addEventGraph`,
+`renameEventGraph`, `removeEventGraph` (nodes move to the Event Graph) in `graphOps.ts`; tabs after
+"Event Graph" (always shown, not closable); My mode "Graphs" section (+, right-click Rename/Delete);
+the palette offers events on any event graph; snippets with events go onto the open event graph;
+addresses `studio:<mode>/<graph id>` open them.
+**Split (2026-11-14):** X2 owns the sim tests of the new nodes, the five example modes, node help and
+the Studio tour. X keeps event graphs (done), custom events with Set Timer by Event and `ls_event`,
+and Timelines; X writes here when each lands so the example modes can use them.
+**Queued next, in order:** (b) custom events + Set Timer by Event + `ls_event`; (c) Timelines;
+(sim tests of the core nodes, example modes, node help and the tour: X2).
 **The core nodes batch:**
 - registry (`make_nodes.py` → `nodes.json`, 413 nodes): Game (Current Map Name, Next Map, Server Name, Max
   Players, Player Count, Game Time, Real Date and Time, Current Mode, Round Number, Team Score, Is Freeze

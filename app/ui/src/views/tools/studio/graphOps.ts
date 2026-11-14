@@ -222,7 +222,7 @@ export function removeVariable(g: Graph, id: string): Graph {
 
 /** A fresh id for a variable, local, Function, Macro, struct or enum. */
 export function freshPartId(g: Graph, prefix: string): string {
-  const used = new Set([...allVariables(g).map((x) => x.id), ...(g.functions ?? []).map((x) => x.id), ...(g.macros ?? []).map((x) => x.id), ...(g.structs ?? []).map((x) => x.id), ...(g.enums ?? []).map((x) => x.id)]);
+  const used = new Set([...allVariables(g).map((x) => x.id), ...(g.functions ?? []).map((x) => x.id), ...(g.macros ?? []).map((x) => x.id), ...(g.structs ?? []).map((x) => x.id), ...(g.enums ?? []).map((x) => x.id), ...(g.eventGraphs ?? []).map((x) => x.id)]);
   for (let i = 1; ; i++) if (!used.has(`${prefix}${i}`)) return `${prefix}${i}`;
 }
 
@@ -638,4 +638,31 @@ export function updateMarker(g: Graph, id: string, patch: Partial<GMarker>): Gra
 /** Removes a marker (nodes using it show a problem until changed). */
 export function removeMarker(g: Graph, id: string): Graph {
   return { ...g, markers: (g.markers ?? []).filter((m) => m.id !== id) };
+}
+
+/** Is this tab an event graph (the first, "", or one of the extra ones)? */
+export function isEventGraph(g: Graph, tab: string): boolean {
+  return !tab || (g.eventGraphs ?? []).some((e) => e.id === tab);
+}
+
+/** Another event graph (a tab of its own; events can go on it). */
+export function addEventGraph(g: Graph, name?: string): { graph: Graph; id: string } {
+  const id = freshPartId(g, "eg");
+  const taken = ["Event Graph", ...(g.eventGraphs ?? []).map((e) => e.name)];
+  return { graph: { ...g, eventGraphs: [...(g.eventGraphs ?? []), { id, name: uniqueName(taken, name ?? "Graph") }] }, id };
+}
+
+export function renameEventGraph(g: Graph, id: string, name: string): Graph {
+  return { ...g, eventGraphs: (g.eventGraphs ?? []).map((e) => (e.id === id ? { ...e, name } : e)) };
+}
+
+/** Removes an event graph; its nodes and comments move onto the first Event Graph. */
+export function removeEventGraph(g: Graph, id: string): Graph {
+  const left = (g.eventGraphs ?? []).filter((e) => e.id !== id);
+  const strip = <T extends { graph?: string }>(x: T): T => {
+    if (x.graph !== id) return x;
+    const { graph: _g, ...rest } = x;
+    return rest as T;
+  };
+  return { ...g, eventGraphs: left.length ? left : undefined, nodes: g.nodes.map(strip), comments: g.comments.map(strip) };
 }

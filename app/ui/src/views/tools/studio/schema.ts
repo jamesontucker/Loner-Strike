@@ -136,6 +136,8 @@ export const graphSchema = z.object({
   structs: z.array(structSchema).max(32).optional(),
   functions: z.array(functionSchema).max(64).optional(),
   macros: z.array(macroSchema).max(32).optional(),
+  /** more event graphs after the first, to organize (a node's graph names one); compiled as one */
+  eventGraphs: z.array(z.object({ id, name: label(30) })).max(16).optional(),
   markers: z.array(markerSchema).max(32).optional(),
   mapKit: mapKitSchema.optional(),
 });

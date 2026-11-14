@@ -84,10 +84,11 @@ export function usesOf(g: Graph, p: PartRef): { nodes: GNode[]; others: string[]
 export function whereText(g: Graph, u: { nodes: GNode[]; others: string[] }): string {
   const by = new Map<string, number>();
   for (const n of u.nodes) {
-    const home = n.graph ? [...(g.functions ?? []), ...(g.macros ?? [])].find((x) => x.id === n.graph)?.name ?? "a Function" : "the Event Graph";
+    const eg = (g.eventGraphs ?? []).find((e) => e.id === n.graph);
+    const home = !n.graph ? "the Event Graph" : eg ? `the ${eg.name} graph` : [...(g.functions ?? []), ...(g.macros ?? [])].find((x) => x.id === n.graph)?.name ?? "a Function";
     by.set(home, (by.get(home) ?? 0) + 1);
   }
-  const parts = [...by].map(([home, c], i) => `${c}${i === 0 ? ` node${c === 1 ? "" : "s"}` : ""} ${home === "the Event Graph" ? "on" : "in"} ${home}`);
+  const parts = [...by].map(([home, c], i) => `${c}${i === 0 ? ` node${c === 1 ? "" : "s"}` : ""} ${home.startsWith("the ") ? "on" : "in"} ${home}`);
   return [...parts, ...u.others].join(", ");
 }
 

@@ -33,7 +33,7 @@ function fitsTab(g: Graph, tab: string, d: NodeDef): boolean {
   const inMacro = (g.macros ?? []).some((m) => m.id === tab);
   if (d.type === "fn.return") return inFn;
   if (d.type === "macro.exit") return inMacro;
-  if (d.event) return !tab;
+  if (d.event) return !tab || (g.eventGraphs ?? []).some((e) => e.id === tab);
   if (inFn && LATENT.includes(d.type)) return false;
   return true;
 }
