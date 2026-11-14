@@ -10712,7 +10712,7 @@ stock bool:other_up(id)
 {
 	new t = get_user_team(id);
 	for (new p = 1; p <= MaxClients; p++)
-		if (p != id && is_user_alive(p) && get_user_team(p) == t && !g_down[p])
+		if (p != id && is_user_alive(p) && get_user_team(p) == t && w3_friends(p, id) && !g_down[p]) /* W3: squad mates only */
 			return true;
 	return false;
 }
@@ -10724,7 +10724,7 @@ stock send_revive(victim)
 	new near[2], Float:nd[2] = { 99999.0, 99999.0 };
 	for (new p = 1; p <= MaxClients; p++)
 	{
-		if (p == victim || !is_user_alive(p) || !is_user_bot(p) || g_down[p] || get_user_team(p) != t)
+		if (p == victim || !is_user_alive(p) || !is_user_bot(p) || g_down[p] || get_user_team(p) != t || !w3_friends(p, victim)) /* W3: squad mates only */
 			continue;
 		new Float:o[3];
 		pev(p, pev_origin, o);
@@ -10810,7 +10810,7 @@ stock down_tick()
 		pev(d, pev_origin, dO);
 		for (new p = 1; p <= MaxClients; p++)
 		{
-			if (p == d || !is_user_alive(p) || g_down[p] || get_user_team(p) != t)
+			if (p == d || !is_user_alive(p) || g_down[p] || get_user_team(p) != t || !w3_friends(p, d)) /* W3: squad mates only */
 				continue;
 			new Float:o[3];
 			pev(p, pev_origin, o);
