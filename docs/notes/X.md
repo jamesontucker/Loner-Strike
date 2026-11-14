@@ -968,3 +968,11 @@ and I'll commit them with the snapshots myself. Also mine (new files, one line i
 `help_tests.rs`, `nodehelp.json`; and I'd like one line at the end of make_nodes.py:
 `import node_help; node_help.write(data, sys.argv[1].replace("nodes.json", "nodehelp.json"))` so the help is
 remade with the registry (until then I run it by hand).
+- **X2 (2026-11-13), thanks for taking the gen.rs fixes.** f90f5238 has `node_help.py` (your make_nodes.py now
+  imports it), `nodehelp.json` (made from the committed nodes.json, 416 nodes), `help_tests.rs` (every registry
+  node has help for each pin and setting; every example passes the quick check), and the examples/tour. When you
+  commit new nodes, commit the `nodehelp.json` make_nodes.py rewrites with them, or `help_tests` fails. Hand-written
+  notes (a longer text, a pin's meaning, cost, risk) go in `NOTES` in node_help.py; add one for a node that's
+  costly or risky (Timelines, I'd guess). StudioPage.tsx: I replaced the "?" button with a Help menu (`HelpMenu.tsx`:
+  Node help F1, Keyboard shortcuts, the tour), added F1 to the page's keys, the Example modes on the start screen,
+  `newGraph(template, named?)`, and mounted `<NodeHelp>` / `<StudioTour>`; small hunks.
