@@ -198,6 +198,31 @@ builds aren't for judging performance. Players on real servers aren't affected.
 - Rotate or cap the `.events` file (for example at 20 MB, starting again; the page already handles `reset`). S.
 - Optional: stop per-player Timeline copies when that player dies. S.
 
+**Fixed (X, 0ad5fff2 and ec184f06).**
+- Sampling: each node writes at most 4 runs a second. The rest are counted, and the next run written carries the count
+  (`"skipped"`), so the page's run counts and Test run's stay right. A node's inputs are only turned into JSON for a run
+  that's written. A Timeline's 4 Hz progress note shares its node's budget; Finished is always written.
+- Nobody watching: the page's event reads keep `<mode>.seen` fresh (how far it has read). If it hasn't changed for
+  15 s, nothing but breakpoints is written. With no `.seen` (Test run, or before the page's first read), runs are
+  written, sampled. A Playtest start removes an old one.
+- Rotation: the file starts over once the page has read all of it past 8 MB, or at 32 MB regardless. The page sees it
+  shrink and reads from the top (its usual reset).
+- Measured with this audit's bench (`pa_bench`, the same sim graph, 20 bots, 12 creatures alive; before = tools at
+  92a639ec, after = ec184f06; same server, one plugin swapped at a map change):
+
+| Hot pattern, debug build | Before | After | Release (for scale) |
+|---|---|---|---|
+| Timeline, one tick of 32 copies | 933 µs | **87–97 µs** | 77–80 µs |
+| For Each Creature (12 alive) | 387 µs | **140 µs** | 137 µs |
+| Player Hurt's chain (Get Row + Set + Set vector) | 90 µs | **0.8–1.0 µs** | 0.2 µs (was 11.8) |
+| Player Hurt hook, whole | 93 µs | **4.5 µs** | 4.0 µs (was 15.5) |
+| Events file growth, normal play | 50 KB/s | **2.6 KB/s** | – |
+| Events file growth, nobody watching (stale `.seen`) | 50 KB/s | **0 B/s** | – |
+
+  Rotation, checked with a build whose cap was 200 KB and a "reader" keeping `.seen` at the end: the file grew to
+  198 KB, started over (14 KB), and climbed again. Not done: stopping a dead player's Timeline copy (it's now
+  sampled like the rest).
+
 ## 6. Data tables: Get Row searches the whole table, once per pin read
 
 **What's slow** (release build, 256-row number-key table; per call):
@@ -223,6 +248,18 @@ fine: about 1–3 ms of CPU a second at hundreds of hits a second. Inside For Ea
 - Number keys that are 0..N-1, as the editor makes them: index directly. S.
 - Text keys: a Trie built in `plugin_init`. S.
 - Or add a cost warning for Get Row inside loops on hot events. S.
+
+**Fixed (X, 0ad5fff2).** `lsg_dt{t}_find` keeps the last key's row: the tables never change, so it's always right,
+and a Get Row with two pins wired searches once. Number keys in strict order (as the editor makes them; 8+ rows)
+are found by halving. Text keys in a table of 16+ rows go through a Trie made at the first search. Smaller or
+unordered tables are searched row by row, and the first row with the key still wins. Rust tests cover each search,
+and the real amxxpc builds them. Bench, release build, 256 rows:
+
+| Get Row | Before | After |
+|---|---|---|
+| Key in the last row, or missing | 11.6 µs | 0.05 µs (the same key again) |
+| A different key every call | 6.0 µs | **0.7–0.8 µs** (halving) |
+| Two pins on one key | 12.0 µs | **0.8–0.9 µs** |
 
 ## 7. Version history: every save replays the whole history
 
