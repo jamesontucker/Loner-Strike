@@ -1951,10 +1951,12 @@ pub fn update_files(e: Entry, res: Option<PathBuf>) -> Result<String, String> {
 
 /// Loner-Strike's server engine on a dedicated server on this computer: our ReHLDS (Valve's
 /// engine with ReHLDS's fixes, and it tells the bots who is talking on voice), ReAPI for
-/// plugins, and relocalizebugfix (blocks names and chat that crash other players' games).
-/// The Valve files it replaces are kept in .valve-engine the first time, to go back to.
+/// plugins. The Valve files it replaces are kept in .valve-engine the first time, to go back to.
+/// relocalizebugfix, which earlier versions put in, is taken out of Metamod's list: it was
+/// built for ReHLDS API 2 and never loads on ours (API 3; `meta list` shows it as "fail"). The
+/// bot brain does its job now ('#' in chat drawn as a fullwidth sign; '%' and '#' in names).
 fn install_engine(job: &dyn setup::Progress, dir: &Path, game: &str) -> Result<(), String> {
-    use setup::foundation::{REAPI, REHLDS, RELOCALIZEBUGFIX};
+    use setup::foundation::{REAPI, REHLDS};
     let tmp = setup::TempDir::new()?;
     let get = |p: &setup::foundation::Pinned, sub: &str| -> Result<PathBuf, String> {
         let file = setup::fetch::download(p.url, Some(p.sha256), p.what, job)?;
@@ -1988,25 +1990,30 @@ fn install_engine(job: &dyn setup::Progress, dir: &Path, game: &str) -> Result<(
     let ra = get(&REAPI, "reapi")?;
     copy(&ra.join("addons/amxmodx/modules/reapi_amxx.dll"), &gdir.join("addons/amxmodx/modules/reapi_amxx.dll"))?;
 
-    let rl = get(&RELOCALIZEBUGFIX, "rlb")?;
-    copy(&rl.join("addons/relocalizebugfix/relocalizebugfix_mm.dll"), &gdir.join("addons/relocalizebugfix/relocalizebugfix_mm.dll"))?;
     let ini = gdir.join("addons/metamod/plugins.ini");
     // as bytes: the file may not be UTF-8, and its other lines must stay as they are
-    let text = std::fs::read(&ini).unwrap_or_default();
-    if !text.windows(16).any(|w| w.eq_ignore_ascii_case(b"relocalizebugfix")) {
-        let line = br"win32 addons\relocalizebugfix\relocalizebugfix_mm.dll";
-        let mut out = text.clone();
-        while matches!(out.last(), Some(b'\r' | b'\n')) {
-            out.pop();
+    if let Ok(text) = std::fs::read(&ini) {
+        if let Some(out) = without_relocalizebugfix(&text) {
+            sys::write_atomic(&ini, &out).map_err(|e| e.to_string())?;
         }
-        if !out.is_empty() {
-            out.extend_from_slice(b"\r\n");
-        }
-        out.extend_from_slice(line);
-        out.extend_from_slice(b"\r\n");
-        sys::write_atomic(&ini, &out).map_err(|e| e.to_string())?;
     }
+    let _ = std::fs::remove_dir_all(gdir.join("addons/relocalizebugfix"));
     Ok(())
+}
+
+/// Metamod's plugins.ini without its relocalizebugfix lines (None when it has none)
+fn without_relocalizebugfix(text: &[u8]) -> Option<Vec<u8>> {
+    let has = |l: &[u8]| l.windows(16).any(|w| w.eq_ignore_ascii_case(b"relocalizebugfix"));
+    if !has(text) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(text.len());
+    for line in text.split_inclusive(|&b| b == b'\n') {
+        if !has(line) {
+            out.extend_from_slice(line);
+        }
+    }
+    Some(out)
 }
 
 // ---- bringing in a server the player already runs ------------------------------------
@@ -4380,7 +4387,14 @@ mod tests {
             None => assert_eq!(kept, engine_before, "the replaced engine is kept"),
         }
         assert!(dir.join("cstrike/addons/amxmodx/modules/reapi_amxx.dll").is_file());
-        assert!(std::fs::read_to_string(dir.join("cstrike/addons/metamod/plugins.ini")).unwrap_or_default().contains("relocalizebugfix"));
+        assert!(!std::fs::read_to_string(dir.join("cstrike/addons/metamod/plugins.ini")).unwrap_or_default().contains("relocalizebugfix"));
+    }
+
+    #[test]
+    fn relocalizebugfix_taken_out() {
+        let ini = b"win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\nwin32 addons\\relocalizebugfix\\relocalizebugfix_mm.dll\r\n; mine\xff\r\n";
+        assert_eq!(without_relocalizebugfix(ini).unwrap(), b"win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\n; mine\xff\r\n".to_vec());
+        assert!(without_relocalizebugfix(b"win32 addons\\amxmodx\\dlls\\amxmodx_mm.dll\r\n").is_none());
     }
 
     #[test]

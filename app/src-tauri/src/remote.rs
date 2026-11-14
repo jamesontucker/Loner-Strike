@@ -872,15 +872,15 @@ fetch "$RH_URL" rh.zip "$RH_SHA"; unzip -o -q "$TMP/rh.zip" "bin/linux32/*" -d "
 done
 cp -rf "$TMP/rh/bin/linux32/." "$SRV/"
 chmod +x "$SRV/hlds_linux" "$SRV/hltv" 2>/dev/null || true
-# ReAPI for plugins, relocalizebugfix (names and chat that crash other players' games)
+# ReAPI for plugins
 fetch "$REAPI_URL" reapi.zip "$REAPI_SHA"; unzip -o -q "$TMP/reapi.zip" "addons/amxmodx/modules/reapi_amxx_i386.so" -d .
-fetch "$RLB_URL" rlb.zip "$RLB_SHA"; unzip -o -q "$TMP/rlb.zip" "addons/relocalizebugfix/relocalizebugfix_mm_i386.so" -d .
 mkdir -p addons/metamod
-# (lines added if missing: other Metamod plugins the owner put in stay)
+# (the line added if missing: other Metamod plugins the owner put in stay)
 touch addons/metamod/plugins.ini
-for p in addons/amxmodx/dlls/amxmodx_mm_i386.so addons/relocalizebugfix/relocalizebugfix_mm_i386.so; do
-  grep -qF "$p" addons/metamod/plugins.ini || printf 'linux %s\n' "$p" >> addons/metamod/plugins.ini
-done
+grep -qF addons/amxmodx/dlls/amxmodx_mm_i386.so addons/metamod/plugins.ini || printf 'linux %s\n' addons/amxmodx/dlls/amxmodx_mm_i386.so >> addons/metamod/plugins.ini
+# relocalizebugfix, which earlier versions put in, never loads on ReHLDS API 3 ("fail" in meta
+# list): out. The bot brain does its job ('#' in chat, '%' and '#' in names)
+sed -i '/relocalizebugfix/Id' addons/metamod/plugins.ini; rm -rf addons/relocalizebugfix
 if grep -q '^gamedll_linux' liblist.gam; then sed -i 's|^gamedll_linux.*|gamedll_linux "addons/metamod/dlls/metamod.so"|' liblist.gam
 else echo 'gamedll_linux "addons/metamod/dlls/metamod.so"' >> liblist.gam; fi
 rm -rf "$TMP"
@@ -901,8 +901,6 @@ pub const FOUNDATION_ENV: &[(&str, &str)] = &[
     ("RH_SHA", crate::setup::foundation::REHLDS.sha256),
     ("REAPI_URL", crate::setup::foundation::REAPI.url),
     ("REAPI_SHA", crate::setup::foundation::REAPI.sha256),
-    ("RLB_URL", crate::setup::foundation::RELOCALIZEBUGFIX.url),
-    ("RLB_SHA", crate::setup::foundation::RELOCALIZEBUGFIX.sha256),
     ("MIRROR", crate::setup::fetch::MIRROR),
 ];
 

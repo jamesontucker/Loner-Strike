@@ -1,6 +1,6 @@
 //! The foundation: Metamod-P, AMX Mod X (base + Counter-Strike addon) and ReGameDLL
 //! (Loner-Strike's fork: the bots' changes). Dedicated servers also get REHLDS (Loner-Strike's
-//! fork of the engine: voice awareness for the bots), ReAPI and relocalizebugfix.
+//! fork of the engine: voice awareness for the bots) and ReAPI.
 //! Every version is the one Loner-Strike
 //! is tested with, pinned by checksum.
 
@@ -48,11 +48,6 @@ pub const REAPI: Pinned = Pinned {
     url: "https://github.com/rehlds/ReAPI/releases/download/5.29.0.358/reapi-bin-5.29.0.358.zip",
     sha256: "f33a7435540bea8706db3fa948e51a85b511f5b18c383b97402a204dc5419195",
     what: "ReAPI",
-};
-pub const RELOCALIZEBUGFIX: Pinned = Pinned {
-    url: "https://github.com/rehlds/relocalizebugfix/releases/download/v2.8/relocalizebugfix-v2.8.zip",
-    sha256: "262c4f021e4863fd772fcdbe48689f171426d33321ff0f2c9787eb083cacb1b0",
-    what: "relocalizebugfix",
 };
 pub const METAMOD_DLL: &str = r"addons\metamod\dlls\metamod.dll";
 
