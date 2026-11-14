@@ -439,3 +439,20 @@ stddev from here); the firewall's query filter dropped the Mac's A2S to 27016, s
   fourth would fit by these numbers. Recommended for two (or more) servers: sys_ticrate 300 (the app's default),
   fps_max as it is (I didn't change or measure it), ls_creature_max 128 per server with the adaptive cap on (floor 85 / back at 105, which
   never triggers here). Only the map change frames (0.8 s) stand out, as on any server.
+
+## Y (2026-11-14): Last Stand at the full cap on Linux, beside prod (brain ls-next3 707a12a)
+A copy of prod on 127.0.0.1:27016, Last Stand on ls_outpost with today's gm_laststand / gm_components, 31 bots,
+`lst_alive_max 96`, ls_creature_max 128, adaptive cap on, waves x10; prod (19 bots, classic) ran beside it. 10 min:
+
+| fps avg / worst 10 s / worst second | frame p50 / p95 / p99 / worst | creatures alive avg / max | CPU of a core (test / prod) | load |
+|---|---|---|---|---|
+| 247 / 232 / 214 | 4 / 7 / 13 / 35 ms | 97 / 128 | 37 % (max 47) / 17 % | 0.55 (max 0.71) |
+
+- The adaptive cap never stepped in (cap now 128 throughout; fps never near 85).
+- Found and fixed (ls-next3 707a12a): the creature list held 128 entries, bodies included, so in a fast fight
+  new creatures went unlisted and uncounted - 257 alive at cap 96 on the first run. The list holds 512 now and a
+  creature that can't be listed isn't made; the rerun stayed at most 128 (the brain's ls_creature_max). Last Stand's
+  own count still goes past its 96 (to 128) - W1: its wave counter misses some spawns (specials?); the brain caps it.
+- Also fixed (8d190d8): speed changes didn't reach the movement (`ls_creature speed` and enrage did nothing).
+  Checked after: a zombie told to attack a bot shows `pev_enemy` = that bot and state 5 (chase), 7 (attack), 9 (dead);
+  its ground speed went from 202-230 to 395 after `ls_creature speed <e> 2`.
