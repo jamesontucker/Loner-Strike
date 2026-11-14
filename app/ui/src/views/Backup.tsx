@@ -5,6 +5,7 @@ import type { ServerInfo } from "../types";
 import { BusyButton, Info, Sheet, useConfirm, useToast } from "../ui";
 import { JobProgress } from "./JobProgress";
 import type { Job } from "./Setup";
+import { capName, NameLeft } from "../serverName";
 
 /** Backing up servers and this computer's own game to a .lsbackup file, and restoring
  *  one: onto a new server here or on a Linux machine, over a server, or onto the game. */
@@ -460,7 +461,8 @@ export function RestoreSheet({ to, scope = "all", servers, onClose, onChanged }:
                 {where.startsWith("new") && (
                   <label className="field">
                     <span>Name</span>
-                    <input className="search" maxLength={48} placeholder="Like Friday night frags" value={name} onChange={(e) => setName(e.target.value)} />
+                    <input className="search" placeholder="Like Friday night frags" value={name} onChange={(e) => setName(capName(e.target.value))} />
+                    <NameLeft name={name} />
                   </label>
                 )}
                 {where === "new-remote" && (

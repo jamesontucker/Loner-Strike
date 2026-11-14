@@ -37,12 +37,26 @@ fn error_words(code: &str) -> Option<&'static str> {
     })
 }
 
-/// Server names: printable ASCII the game's config files and console take inside quotes: everything but
-/// `"` (ends the name), `;` (starts another command) and `\\`. `|`, `[ ]`, `=` and `~` stay
-/// for names like "Loner-Strike | Alone Together" or "[LS] Pub".
+/// The most a server name can be: Steam's server browser and master list take 64 bytes with the
+/// NUL (k_cbMaxGameServerName), so 63 bytes of UTF-8. The engine itself has no cap.
+pub const MAX_NAME_BYTES: usize = 63;
+
+/// Server names, as every place that stores or shows one takes them (server.cfg's and
+/// friends.cfg's quoted hostname, the server list, Discord, the web panel, claims): no control
+/// characters, nothing the game's config files and console treat specially inside quotes (`"`
+/// ends the name, `;` starts another command, `\\`), trimmed, and at most 63 bytes of UTF-8, cut
+/// between characters, never inside one. `|`, `[ ]`, `=`, `~` and letters of any language stay
+/// ("Loner-Strike | Alone Together", "[LS] Pub", "Café Ünter").
 pub fn clean_name(name: &str) -> String {
-    let kept: String = name.chars().filter(|c| (' '..='~').contains(c) && !"\";\\".contains(*c)).take(48).collect();
-    kept.trim().to_string()
+    let kept: String = name.chars().filter(|c| !c.is_control() && !"\";\\".contains(*c)).collect();
+    let mut out = String::new();
+    for c in kept.trim().chars() {
+        if out.len() + c.len_utf8() > MAX_NAME_BYTES {
+            break;
+        }
+        out.push(c);
+    }
+    out.trim().to_string()
 }
 
 pub fn password_ok(p: &str) -> bool {
@@ -749,7 +763,18 @@ mod tests {
     #[test]
     fn names_and_passwords() {
         assert_eq!(clean_name("  My \"server\"; quit  "), "My server quit");
-        assert_eq!(clean_name(&"x".repeat(80)).len(), 48);
+        // Steam's 64-byte server name with its NUL: 63 bytes of UTF-8, cut between characters
+        assert_eq!(clean_name(&"x".repeat(80)).len(), MAX_NAME_BYTES);
+        assert_eq!(clean_name(&"x".repeat(63)), "x".repeat(63));
+        let accents = "é".repeat(40); // 2 bytes each: 31 fit (62 bytes), never half of the 32nd
+        assert_eq!(clean_name(&accents), "é".repeat(31));
+        let mixed = format!("{}€", "a".repeat(61)); // € is 3 bytes: 61 + 3 > 63, so it goes
+        assert_eq!(clean_name(&mixed), "a".repeat(61));
+        assert_eq!(clean_name(&format!("{}🙂", "a".repeat(59))), format!("{}🙂", "a".repeat(59)), "4 bytes, exactly 63");
+        assert_eq!(clean_name("Café Ünter | [LS]"), "Café Ünter | [LS]");
+        assert_eq!(clean_name("a\\b\tc\u{7}"), "abc");
+        // what's left after the cut is trimmed (no trailing space from a cut)
+        assert_eq!(clean_name(&format!("{} b", "a".repeat(62))), "a".repeat(62));
         assert!(password_ok(""));
         assert!(password_ok("abc-DEF_123"));
         assert!(!password_ok("has space"));

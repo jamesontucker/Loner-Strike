@@ -1015,7 +1015,7 @@ pub(crate) fn content_filter(rel: &Path) -> bool {
 }
 
 pub fn create(req: NewServer, client: Install, res: PathBuf) -> Result<(String, String), String> {
-    let name = req.name.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect::<String>();
+    let name = crate::sharing::clean_name(&req.name);
     if name.is_empty() {
         return Err("Give the server a name.".into());
     }
@@ -1637,7 +1637,7 @@ fn sync_files(e: &Entry, mode: Send, progress: &dyn Fn(u64, u64)) -> Result<(usi
 /// Renames the server whose data folder is `data` (Play with friends sets the name players
 /// see; the server list keeps the same one). Nothing for the player's own game.
 pub fn rename_by_data(data: &Path, name: &str) {
-    let name: String = name.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect();
+    let name: String = crate::sharing::clean_name(name);
     let of = |e: &Entry| e.dir.join(&e.game).join("addons/amxmodx/data/gamemodes");
     if name.is_empty() || !load().iter().any(|e| of(e) == data && e.name != name) {
         return;
@@ -1811,7 +1811,7 @@ pub fn upload(e: &Entry) -> Result<u64, String> {
 /// (remote::SETUP_SH), then Loner-Strike built here like any server, uploaded, and run
 /// as a service. Returns (id, job).
 pub fn create_remote(req: NewRemote, client: Install, res: PathBuf) -> Result<(String, String), String> {
-    let name = req.name.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect::<String>();
+    let name = crate::sharing::clean_name(&req.name);
     if name.is_empty() {
         return Err("Give the server a name.".into());
     }
@@ -2231,7 +2231,7 @@ pub fn import(dir: &Path) -> Result<Value, String> {
     }
     let cfg = sys::read_latin1(&dir.join(game).join("server.cfg")).unwrap_or_default();
     let name = cfg_value(&cfg, "hostname").filter(|n| !n.is_empty()).unwrap_or_else(|| "Imported server".into());
-    let name: String = name.chars().filter(|c| !c.is_control() && *c != '"').take(48).collect();
+    let name: String = crate::sharing::clean_name(&name);
     let password = cfg_value(&cfg, "sv_password").unwrap_or_default();
     let id = slug(&name, &list);
     let entry = Entry {
@@ -3325,7 +3325,7 @@ async fn api_change(UrlPath(id): UrlPath<String>, headers: HeaderMap, on: Option
             return Err("Passwords can use letters, numbers, - and _ (up to 24).".into());
         }
         let restart_needed = |old: &Entry, new: &Entry| old.port != new.port || old.visibility != new.visibility || old.maxplayers != new.maxplayers || old.listen_ip != new.listen_ip || old.extra_args != new.extra_args || old.tick_rate.unwrap_or(300) != new.tick_rate.unwrap_or(300);
-        let name = req.name.as_ref().map(|n| n.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect::<String>());
+        let name = req.name.as_ref().map(|n| crate::sharing::clean_name(n));
         if name.as_ref().is_some_and(|n| n.is_empty()) {
             return Err("Give the server a name.".into());
         }
@@ -4616,6 +4616,23 @@ mod tests {
         // no record yet: nothing is noted
         let (mut changed, mut gone) = (now.keys().cloned().collect(), vec![]);
         assert!(held_back(None, &now, &mut changed, &mut gone).is_none() && changed.len() == 1);
+    }
+
+    /// A server name of 63 bytes of UTF-8 (Steam's limit) reaches friends.cfg's quoted hostname
+    /// and friends.json whole; a longer one is cut between characters
+    #[test]
+    fn server_names_up_to_63_bytes() {
+        let dir = crate::sys::make_temp_dir(&std::env::temp_dir().join("loner-strike-tests"), "names-").unwrap();
+        let name = format!("Café {}", "x".repeat(57)); // 6 + 57 = 63 bytes
+        assert_eq!(name.len(), 63);
+        write_join(&dir, &name, "", false, false).unwrap();
+        let cfg = std::fs::read_to_string(dir.join("friends.cfg")).unwrap();
+        assert!(cfg.contains(&format!("hostname \"{name}\"\n")), "{cfg}");
+        let saved: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("friends.json")).unwrap()).unwrap();
+        assert_eq!(saved["name"], name.as_str());
+        write_join(&dir, &format!("{name}é\"; quit"), "", false, false).unwrap();
+        assert!(std::fs::read_to_string(dir.join("friends.cfg")).unwrap().contains(&format!("hostname \"{name}\"\n")), "cut whole, nothing after the quote");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

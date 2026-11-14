@@ -2463,7 +2463,7 @@ welcome_note(out[], len)
 
 show_welcome(id)
 {
-	static html[1536], host[64], hostesc[96], pname[32], pesc[64], mode[48], desc[96], map[32], opts[48], note[400]
+	static html[1536], host[64], hostesc[384], pname[32], pesc[64], mode[48], desc[96], map[32], opts[48], note[400]
 	get_cvar_string("hostname", host, charsmax(host))
 	html_escape(host, hostesc, charsmax(hostesc))
 	get_user_name(id, pname, charsmax(pname))

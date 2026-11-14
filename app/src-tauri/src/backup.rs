@@ -280,7 +280,7 @@ impl Saved {
 }
 
 fn clean_server_name(name: &str) -> String {
-    name.trim().chars().filter(|c| !c.is_control() && *c != '"').take(48).collect()
+    crate::sharing::clean_name(name)
 }
 
 // ---- passwords and webhooks --------------------------------------------------------------

@@ -1999,3 +1999,4 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .setup-pane::-webkit-scrollbar { width: 8px; background: transparent; }
 .setup-pane::-webkit-scrollbar-track { background: transparent; box-shadow: none; }
 .setup-pane::-webkit-scrollbar-thumb { background: var(--panel-2); box-shadow: var(--raised); min-height: 24px; }
+.name-left { color: var(--bone-faint); font-variant-numeric: tabular-nums; }

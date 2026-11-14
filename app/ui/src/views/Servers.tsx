@@ -28,6 +28,7 @@ import { TabLink } from "./goto";
 import { Sounds } from "./Sounds";
 import { Welcome } from "./Welcome";
 import { CrashBadge, CrashPanel } from "./CrashPanel"; // MCP: crash tracking
+import { capName, NameLeft } from "../serverName";
 
 // only servers that use it open this tab
 const Hltv = lazyPage(() => import("./Hltv").then((m) => ({ default: m.Hltv })));
@@ -1045,10 +1046,11 @@ function ServerDetails({ server, maps, onChanged }: { server: ServerInfo; maps: 
         <label className="field">
           <span>Name</span>
           <input
-            className="search" disabled={ro} maxLength={48} value={name}
-            onChange={(e) => { setName(e.target.value); setProblem((p) => ({ ...p, name: "" })); }}
+            className="search" disabled={ro} value={name}
+            onChange={(e) => { setName(capName(e.target.value)); setProblem((p) => ({ ...p, name: "" })); }}
             aria-invalid={!!problem.name} aria-describedby={problem.name ? "serverNameProblem" : undefined}
           />
+          <NameLeft name={name} />
           {problem.name && <small className="err-text" id="serverNameProblem">{problem.name}</small>}
         </label>
         {!sharedRole && (
@@ -1793,7 +1795,8 @@ function NewServer({ servers, games, onClose, onGuide, onCreated }: { servers: S
         )}
         <label className="field">
           <span>Name</span>
-          <input ref={nameBox} className="search" autoFocus maxLength={48} placeholder="Like Friday night frags" value={name} onChange={(e) => setName(e.target.value)} />
+          <input ref={nameBox} className="search" autoFocus placeholder="Like Friday night frags" value={name} onChange={(e) => setName(capName(e.target.value))} />
+          <NameLeft name={name} />
           <small>Shown in the server browser and on the welcome page.</small>
         </label>
         <div className="field">

@@ -5,6 +5,7 @@ import { useNav } from "../store";
 import { serverAddress, serverHost, type Online } from "../types";
 import { BusyButton, Info, LoadError, SectionHead, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 import { TabLink } from "./goto";
+import { capName, NameLeft } from "../serverName";
 
 type Share = {
   installed: boolean;
@@ -359,7 +360,8 @@ export function Friends({ data, refresh, server, settings }: { data: Online | nu
       <h3>Your server</h3>
       <label className="field">
         <span>Server name<Info text="Shown in the server browser and on the scoreboard." /></span>
-        <input className="search" maxLength={48} placeholder="Like Friday night frags" value={serverName} onChange={(e) => setName(e.target.value)} />
+        <input className="search" placeholder="Like Friday night frags" value={serverName} onChange={(e) => setName(capName(e.target.value))} />
+        <NameLeft name={serverName} />
       </label>
       <label className="field">
         <span>Join password<Info text="Everyone who joins needs this, however they connect. The invite message includes it." /></span>
