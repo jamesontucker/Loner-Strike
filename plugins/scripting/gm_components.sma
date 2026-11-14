@@ -6914,7 +6914,7 @@ stock w3_alive_count()
 	return n;
 }
 
-/* "Zone closes in 1:20", "ZONE CLOSING 0:12", "" (no zone or not started) */
+/* "Zone closes in 1:20", "ZONE CLOSING 0:12", "" (no zone or not started); returns the zone's slot (-1 none) */
 stock w3_zone_text(out[], len)
 {
 	out[0] = EOS;
@@ -6923,20 +6923,53 @@ stock w3_zone_text(out[], len)
 		if (g_ent[k] && g_kind[k] == K_ZONE && g_on[k])
 			z = k;
 	if (z < 0)
-		return;
+		return -1;
 	if (g_pf[z][Z_T1] > g_pf[z][Z_T0] && g_now < g_pf[z][Z_T1])
 	{
 		new t = floatround(g_pf[z][Z_T1] - g_now);
 		formatex(out, len, "ZONE CLOSING %d:%02d", t / 60, t % 60);
-		return;
+		return z;
 	}
 	for (new k = 0; k < g_nslots; k++)
 		if (g_ent[k] && g_kind[k] == K_SHRINKER && g_aux[k] == z && g_state[k] == 1)
 		{
 			new t = floatround(floatmax(g_pf[k][S_NEXT] - g_now, 0.0));
 			formatex(out, len, "Zone closes in %d:%02d", t / 60, t % 60);
-			return;
+			return z;
 		}
+	return z;
+}
+
+/* the next circle: how far outside it a player is ("Next zone: 120 m to your left"), and its middle on their
+   radar (a spare player slot's dot: unverified on the stock client) */
+stock w3_next_zone(p, z, out[], len)
+{
+	out[0] = EOS;
+	if (z < 0 || g_pf[z][Z_TOR] >= g_val[z] - 1.0)
+		return;
+	new Float:d = dist2d(g_porg[p], g_vb[z]);
+	if (d > g_pf[z][Z_TOR])
+	{
+		new dir[24];
+		dir_word(p, g_vb[z], dir, charsmax(dir));
+		formatex(out, len, "Next zone: %d m %s", floatround((d - g_pf[z][Z_TOR]) * 0.0254), dir);
+	}
+	else
+		copy(out, len, "Inside the next zone");
+	if (!g_msgRadar)
+		return;
+	new spare = 0;
+	for (new i = MaxClients; i >= 1 && !spare; i--)
+		if (!is_user_connected(i))
+			spare = i;
+	if (!spare)
+		return;
+	message_begin(MSG_ONE_UNRELIABLE, g_msgRadar, _, p);
+	write_byte(spare);
+	write_coord(floatround(g_vb[z][0]));
+	write_coord(floatround(g_vb[z][1]));
+	write_coord(floatround(g_porg[p][2]));
+	message_end();
 }
 
 stock w3_feed_add(const text[])
@@ -7010,8 +7043,8 @@ stock w3_spectate(id, target)
 
 stock w3_match_hud()
 {
-	new zone[48], top[192], side[512];
-	w3_zone_text(zone, charsmax(zone));
+	new zone[48], top[256], side[512];
+	new z = w3_zone_text(zone, charsmax(zone));
 	new alive = w3_alive_count(), Float:now = get_gametime();
 	/* the kill feed: lines from the last 8 s */
 	new feed[400], fl = 0;
@@ -7029,9 +7062,12 @@ stock w3_match_hud()
 			len += formatex(top[len], charsmax(top) - len, "   %s", zone);
 		if (g_alive[p])
 		{
-			new extra[96], el = 0;
+			new extra[160], el = 0, nz[64];
+			w3_next_zone(p, z, nz, charsmax(nz));
+			if (nz[0])
+				el += formatex(extra[el], charsmax(extra) - el, "%s", nz);
 			if (get_pcvar_num(g_w3cArmorLevels) && (g_w3Vest[p] || g_w3Helm[p]))
-				el += formatex(extra[el], charsmax(extra) - el, "Vest %d  Helmet %d", g_w3Vest[p], g_w3Helm[p]);
+				el += formatex(extra[el], charsmax(extra) - el, "%sVest %d  Helmet %d", el ? "    " : "", g_w3Vest[p], g_w3Helm[p]);
 			if (get_pcvar_num(g_w3cHealCarry) && w3_heals_total(p))
 				el += formatex(extra[el], charsmax(extra) - el, "%sBandage %d  Medkit %d  Drink %d", el ? "    " : "",
 					g_w3Heals[p][HEAL_BANDAGE], g_w3Heals[p][HEAL_MEDKIT], g_w3Heals[p][HEAL_DRINK]);

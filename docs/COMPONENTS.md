@@ -383,8 +383,9 @@ theirs, a pistol, healing items, better armor, grenades) and are drawn to it (`a
 ### Match HUD
 `ls_match_hud 1` (or `ls_match_hud(true)`): for each person, at the top, ALIVE (players left), their
 KILLS and the zone's timer ("Zone closes in 1:20", "ZONE CLOSING 0:12"), or the mode's own words in its
-place (`ls_match_hud_text("Loot up: fighting in 12 s")`, "" for the zone again); under it their armor
-levels and healing items. On the right, the kill feed (who, with what, how many are left; 8 s a line) and,
+place (`ls_match_hud_text("Loot up: fighting in 12 s")`, "" for the zone again); under it, once the next
+circle is shown, how far outside it they are ("Next zone: 120 m to your left") with a dot at its middle on
+the radar (a spare player slot's dot, unverified on the stock client), their armor levels and healing items. On the right, the kill feed (who, with what, how many are left; 8 s a line) and,
 in squads, their squad mates with health. A player who's killed watches their killer from 3.5 s (the
 game's `specmode`/`follow`, unverified on a real client). Natives `ls_match_hud(on)`,
 `ls_match_hud_text(text[])`, `ls_feed(text[])`, `ls_kills(id)`, `ls_spectate(id, target)`.
