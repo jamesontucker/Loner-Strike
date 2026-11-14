@@ -138,3 +138,23 @@ Many agents share one staging area. Never run a bare `git commit`. Always commit
 - Stop only processes you started, by the PIDs you recorded. Never `pkill`/`killall` by name: other agents run the same programs (dev servers, vite, hlds, hltv).
 - Never print secrets in tool output: mask rcon passwords and tokens in logs you read (e.g. `sed -E 's/rcon [0-9]+ "[^"]*"/rcon *** "***"/'`).
 - Hand-started game servers always use `-insecure` (a failed Steam start can take down every CrossOver sim).
+
+## CrossOver wineserver (2026-11-14)
+- The Steam bottle's wineserver exits about 3 s after its last Wine process. Most "wineserver died" reports
+  (13:45, 13:47, 13:55, 14:05 today) were just that: the last sim was stopped and the next run started a new
+  server. It is not a crash. Only treat it as one when a client log says `wineserver crashed` while other sims
+  were still running.
+- A sim that sits at 0% CPU while the wineserver is alive is usually a crashed hlds held by the debugger: an
+  AeDebug hook with `Auto=1` (removed 14:15) or the default crash dialog. A hung `winedbg --auto` freezes the
+  crashed process forever, and later crashes queue behind it. Never add an AeDebug hook to the Steam bottle.
+  If you need crash backtraces, use a throwaway bottle.
+- Start sims with the launch block in `~/loner-strike-sim/run-wine.sh`. It pre-starts the wineserver
+  with `-p600` at normal priority, detached from the run log, before the `nice -n 15` hlds. Without it, the server
+  inherits nice 15 from the first sim and every Wine process waits on it under load. Copy the block
+  into any sim script of your own.
+- The open-file limit is not the cause: Wine raises the GUI's soft 256 to the hard limit (20 processes ran fine
+  with soft 256). Only a hard limit of 256 (`ulimit -n 256` in bash) breaks a bottle (c000011f after 4 processes).
+- Never run `wineserver -k`, `-p`, or registry edits against the Steam bottle to test something. Use a throwaway
+  bottle (`cxbottle --bottle <you>Test --create --template win10_64`), set
+  `HKCU\Software\Wine\WineDbg ShowCrashDialog=0` in it first so no window appears on the user's screen, and
+  delete it when you're done (`cxbottle --bottle <you>Test --delete --force`).
