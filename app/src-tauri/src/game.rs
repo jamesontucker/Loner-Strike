@@ -165,7 +165,10 @@ impl Game {
     /// it the plugin sets no password while the panel knocks with a made-up one (Bad Rcon).
     /// A server on another machine gets it from its setup there instead.
     fn ensure_password_file(&self) {
-        if self.remote.is_some() {
+        // (a dedicated server on this computer gets it before it starts: servers.rs
+        // ensure_panel_rcon; written here under a running one, the server never reads it and the
+        // panel's new password locks the app out of it: QA4-F F5)
+        if self.remote.is_some() || self.dedicated {
             return;
         }
         let pw_file = self.data.join("panel_rcon.txt");

@@ -132,6 +132,8 @@ fn main() {
             // dedicated servers' daily restarts (Server extras, Schedule)
             servers::schedule_restarts();
             servers::sync_loop();
+            // P5 (QA4-F F5): servers made before 1.0 get the panel's RCON password file
+            servers::migrate_panel_rcon();
             // voice for servers kept running while the app was closed
             servers::resume_voice();
             // MCP: community roles: the /link relay and supporters for claimed servers here

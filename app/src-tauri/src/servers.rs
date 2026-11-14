@@ -748,6 +748,111 @@ fn parse_progress(line: &str) -> Option<(f64, String)> {
 /// Downloads (or updates) HLDS for `game` into `dir`. SteamCMD often needs more
 /// than one go for app 90, so it retries until the game folder is there.
 pub(crate) fn download_hlds(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
+    update_base(dir, game, &|d: &Path| steamcmd_app_90(job, d, game), &|msg: &str| setup::Progress::detail(job, msg))
+}
+
+/// What's missing from a dedicated server download for `game` (None: it's whole). Not only
+/// hlds.exe and liblist.gam: on one Mac, SteamCMD's validate removed Half-Life (app 70) and
+/// Counter-Strike (app 10) from an existing download and still said "Success!" (QA4-F F7),
+/// and a server made from that hangs at "Console initialized." forever.
+pub(crate) fn base_problem(dir: &Path, game: &str) -> Option<String> {
+    let need = ["hlds.exe", "valve/gfx.wad", "valve/delta.lst", "valve/dlls/hl.dll", "valve/liblist.gam"];
+    for f in need.iter().map(|f| f.to_string()).chain([format!("{game}/liblist.gam"), format!("{game}/dlls/mp.dll")]) {
+        if !dir.join(&f).is_file() {
+            return Some(format!("{f} is missing"));
+        }
+    }
+    let count = |d: &Path, limit: usize| crate::archive::walk(d).into_iter().take(limit).count();
+    // (a whole download has about 4200 files in valve and over 1000 in cstrike or czero)
+    if count(&dir.join("valve"), 1000) < 1000 {
+        return Some("valve/ is nearly empty".into());
+    }
+    let maps = std::fs::read_dir(dir.join(game).join("maps")).map(|r| r.flatten().filter(|f| f.path().extension().is_some_and(|x| x.eq_ignore_ascii_case("bsp"))).count()).unwrap_or(0);
+    if maps < 3 {
+        return Some(format!("{game}/maps has no maps"));
+    }
+    None
+}
+
+/// Updates (or makes) a server download in `dir` with `run` (SteamCMD), and only says it worked
+/// when the result is whole (base_problem). A whole download is kept aside first (an APFS clone
+/// on a Mac: instant, no space), so a run that strips it puts the old one back instead of
+/// leaving every new server broken. When that isn't possible, a fresh download into an empty
+/// folder replaces it, checked the same way; the stripped one is only removed once the fresh
+/// one is whole. P5 (QA4-F F7).
+pub(crate) fn update_base(dir: &Path, game: &str, run: &dyn Fn(&Path) -> Result<(), String>, say: &dyn Fn(&str)) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let was_whole = base_problem(dir, game).is_none();
+    let kept = if was_whole { keep_aside(dir) } else { None };
+    let r = run(dir);
+    let problem = base_problem(dir, game);
+    if r.is_ok() && problem.is_none() {
+        if let Some(k) = kept {
+            let _ = std::fs::remove_dir_all(k);
+        }
+        return Ok(());
+    }
+    let why = problem.clone().unwrap_or_else(|| r.clone().err().unwrap_or_default());
+    eprintln!("server download in {} isn't whole after SteamCMD ({why})", dir.display());
+    // the kept copy back: the servers made from it work as before (just not updated this time)
+    if let Some(k) = kept {
+        let broken = sibling(dir, "stripped");
+        if std::fs::rename(dir, &broken).is_ok() && std::fs::rename(&k, dir).is_ok() {
+            let _ = std::fs::remove_dir_all(&broken);
+            if base_problem(dir, game).is_none() {
+                say("SteamCMD left the server download incomplete, so the one from before was kept.");
+                return Ok(());
+            }
+        }
+    }
+    // a fresh download into an empty folder, then swapped in
+    say("The server download was incomplete. Downloading it again into a fresh folder…");
+    let fresh = sibling(dir, "fresh");
+    let _ = std::fs::remove_dir_all(&fresh);
+    std::fs::create_dir_all(&fresh).map_err(|e| e.to_string())?;
+    let r2 = run(&fresh);
+    if let Some(p) = base_problem(&fresh, game) {
+        let _ = std::fs::remove_dir_all(&fresh);
+        return Err(r2.err().unwrap_or_else(|| format!("The server download from Steam came out incomplete ({p}). Try again later; nothing was changed.")));
+    }
+    let old = sibling(dir, "old");
+    let _ = std::fs::remove_dir_all(&old);
+    std::fs::rename(dir, &old).map_err(|e| format!("Couldn't swap in the fresh server download ({e})."))?;
+    if let Err(e) = std::fs::rename(&fresh, dir) {
+        let _ = std::fs::rename(&old, dir);
+        return Err(format!("Couldn't swap in the fresh server download ({e})."));
+    }
+    let _ = std::fs::remove_dir_all(&old);
+    Ok(())
+}
+
+/// `dir.<what>` next to it (".base" -> ".base.fresh").
+fn sibling(dir: &Path, what: &str) -> PathBuf {
+    let name = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "base".into());
+    dir.with_file_name(format!("{name}.{what}"))
+}
+
+/// A copy of a whole download kept while SteamCMD works on it: an APFS clone on a Mac (instant,
+/// no extra space); elsewhere none (a full copy is a gigabyte), and the fresh download covers it.
+fn keep_aside(dir: &Path) -> Option<PathBuf> {
+    if !cfg!(target_os = "macos") {
+        return None;
+    }
+    let k = sibling(dir, "kept");
+    let _ = std::fs::remove_dir_all(&k);
+    let mut c = sys::command("cp");
+    c.arg("-c").arg("-R").arg(dir).arg(&k);
+    match sys::run_output(c, Duration::from_secs(300)) {
+        Some((true, _, _)) if k.join("hlds.exe").is_file() => Some(k),
+        _ => {
+            let _ = std::fs::remove_dir_all(&k);
+            None
+        }
+    }
+}
+
+/// One SteamCMD run (up to 4 tries) of app 90 for `game` into `dir`.
+fn steamcmd_app_90(job: &Job, dir: &Path, game: &str) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let mut last = String::new();
     for attempt in 1..=4 {
@@ -2019,6 +2124,44 @@ fn without_relocalizebugfix(text: &[u8]) -> Option<Vec<u8>> {
 // ---- bringing in a server the player already runs ------------------------------------
 
 /// `key "value"` or `key value` from a .cfg
+/// P5 (QA4-F F5): the panel's RCON password file (the plugin sets rcon_password from it as a map
+/// loads, and the app knocks with it). Servers made before 1.0 may not have it: it's written from
+/// the server's own rcon_password (server.cfg), so tools that know that one keep working, else a
+/// new one. Only on this computer, only with Loner-Strike's plugins there, never over a file
+/// that's there. True when it wrote one.
+pub(crate) fn ensure_panel_rcon(e: &Entry) -> bool {
+    if e.remote.is_some() {
+        return false;
+    }
+    let g = e.dir.join(&e.game);
+    let data = g.join("addons/amxmodx/data/gamemodes");
+    let file = data.join("panel_rcon.txt");
+    if std::fs::read_to_string(&file).is_ok_and(|t| !t.trim().is_empty()) || !g.join("addons/amxmodx/plugins/gamemodes.amxx").is_file() {
+        return false;
+    }
+    let cfg = std::fs::read_to_string(g.join("server.cfg")).unwrap_or_default();
+    let pw = cfg_value(&cfg, "rcon_password").filter(|p| p.len() >= 6 && p.chars().all(|c| c.is_ascii_graphic() && c != '"')).unwrap_or_else(|| {
+        use rand::Rng;
+        const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        let mut rng = rand::thread_rng();
+        (0..24).map(|_| CHARS[rng.gen_range(0..CHARS.len())] as char).collect()
+    });
+    let _ = std::fs::create_dir_all(&data);
+    sys::write_atomic(&file, format!("{pw}\n").as_bytes()).is_ok()
+}
+
+/// At the first start of 1.0 (and every start after: it's quick), the file for every server on
+/// this computer that isn't running (a running one keeps what it has until it restarts).
+pub fn migrate_panel_rcon() {
+    std::thread::spawn(|| {
+        for e in load().iter().filter(|e| e.remote.is_none() && e.ready) {
+            if !with_runs(|r| r.procs.contains_key(&e.id)) && !left_running(e) && ensure_panel_rcon(e) {
+                eprintln!("server {}: wrote the panel's RCON password file (made before 1.0)", e.id);
+            }
+        }
+    });
+}
+
 fn cfg_value(text: &str, key: &str) -> Option<String> {
     text.lines().rev().find_map(|l| {
         let l = l.split("//").next().unwrap_or("").trim();
@@ -2491,6 +2634,9 @@ pub fn start(id: &str) -> Result<(), String> {
     crate::hlmodels::copy_to_server(&e);
     // the fixed Ham Sandwich, if something put another one in since setup (hamguard.rs)
     crate::hamguard::before_start(&e.dir.join(&e.game), &format!("starting {}", e.name));
+    // a server made before 1.0 has no panel_rcon.txt: the plugin reads it as the map loads,
+    // so it's there before the start, never written later under a running server (QA4-F F5)
+    ensure_panel_rcon(&e);
     if let Some(other) = load().iter().find(|o| o.id != e.id && o.port == e.port && with_runs(|r| r.procs.contains_key(&o.id))) {
         return Err(format!("\"{}\" is using port {} already. Stop it first, or change this server's port.", other.name, e.port));
     }
@@ -4027,6 +4173,90 @@ mod restart_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// P5 (QA4-F F7): a whole fake server download (the files base_problem checks, 1000 in valve, 3 maps).
+    fn fake_base(dir: &Path, game: &str) {
+        for f in ["hlds.exe", "valve/gfx.wad", "valve/delta.lst", "valve/dlls/hl.dll", "valve/liblist.gam"].iter().map(|f| f.to_string()).chain([format!("{game}/liblist.gam"), format!("{game}/dlls/mp.dll")]) {
+            let p = dir.join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, b"x").unwrap();
+        }
+        std::fs::create_dir_all(dir.join("valve/sound")).unwrap();
+        for i in 0..1000 {
+            std::fs::write(dir.join(format!("valve/sound/s{i}.wav")), b"x").unwrap();
+        }
+        std::fs::create_dir_all(dir.join(game).join("maps")).unwrap();
+        for m in ["de_a", "de_b", "cs_c"] {
+            std::fs::write(dir.join(game).join(format!("maps/{m}.bsp")), b"x").unwrap();
+        }
+    }
+
+    /// What SteamCMD did to the Mac's download: apps 70 and 10 gone, "Success!" anyway.
+    fn strip(dir: &Path) {
+        let _ = std::fs::remove_dir_all(dir.join("valve"));
+        let _ = std::fs::remove_dir_all(dir.join("cstrike/maps"));
+    }
+
+    #[test]
+    fn a_stripped_server_download_is_never_taken_for_whole() {
+        let root = std::env::temp_dir().join(format!("ls-base-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let base = root.join(".base");
+        let said = std::sync::Mutex::new(Vec::<String>::new());
+        let say = |m: &str| said.lock().unwrap().push(m.to_string());
+        // a fresh download that comes out whole
+        update_base(&base, "cstrike", &|d: &Path| { fake_base(d, "cstrike"); Ok(()) }, &say).unwrap();
+        assert!(base_problem(&base, "cstrike").is_none());
+        assert!(base_problem(&base, "czero").is_some(), "another game isn't there");
+        // an update that strips it and says it worked: put right (the kept copy on a Mac, a
+        // fresh download elsewhere), and never left stripped
+        let runs = std::sync::atomic::AtomicUsize::new(0);
+        update_base(&base, "cstrike", &|d: &Path| {
+            if runs.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 { strip(d) } else { fake_base(d, "cstrike") }
+            Ok(())
+        }, &say).unwrap();
+        assert!(base_problem(&base, "cstrike").is_none(), "{:?}", base_problem(&base, "cstrike"));
+        assert!(!said.lock().unwrap().is_empty());
+        // SteamCMD stripping it every time: on a Mac the kept copy comes back; elsewhere the
+        // fresh one fails, it says so, and nothing is swapped
+        let r = update_base(&base, "cstrike", &|d: &Path| { strip(d); Ok(()) }, &say);
+        if cfg!(target_os = "macos") {
+            assert!(r.is_ok() && base_problem(&base, "cstrike").is_none());
+        } else {
+            assert!(r.unwrap_err().contains("incomplete"));
+        }
+        // no leftovers next to it
+        for what in ["kept", "fresh", "old", "stripped"] {
+            assert!(!sibling(&base, what).exists(), "{what}");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// P5 (QA4-F F5): a server made before 1.0 gets panel_rcon.txt from its own rcon_password
+    /// (else a new one), only with Loner-Strike's plugins there, and never over one that's there.
+    #[test]
+    fn panel_rcon_for_servers_made_before_1_0() {
+        let root = std::env::temp_dir().join(format!("ls-panelrcon-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let mut e: Entry = serde_json::from_str(r#"{"id":"old-one","name":"x","game":"cstrike","port":27016,"dir":"/x","kind":"crossover","bottle":null}"#).unwrap();
+        e.dir = root.clone();
+        let g = root.join("cstrike");
+        let file = g.join("addons/amxmodx/data/gamemodes/panel_rcon.txt");
+        std::fs::create_dir_all(&g).unwrap();
+        std::fs::write(g.join("server.cfg"), "hostname \"Old\"\nrcon_password \"oldsecret1\"\n").unwrap();
+        assert!(!ensure_panel_rcon(&e), "no Loner-Strike plugins: nothing written");
+        std::fs::create_dir_all(g.join("addons/amxmodx/plugins")).unwrap();
+        std::fs::write(g.join("addons/amxmodx/plugins/gamemodes.amxx"), b"x").unwrap();
+        assert!(ensure_panel_rcon(&e));
+        assert_eq!(std::fs::read_to_string(&file).unwrap().trim(), "oldsecret1");
+        assert!(!ensure_panel_rcon(&e), "there already");
+        std::fs::remove_file(&file).unwrap();
+        std::fs::write(g.join("server.cfg"), "hostname \"Old\"\n").unwrap();
+        assert!(ensure_panel_rcon(&e));
+        assert_eq!(std::fs::read_to_string(&file).unwrap().trim().len(), 24);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
 
     #[test]
     fn console_lines_by_who_sends_them() {
