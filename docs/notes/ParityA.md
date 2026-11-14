@@ -31,14 +31,14 @@ arch add height (spiral stairs). Shape tool bar fields + **Preview…** popover 
 wireframe (`ShapeSettings.tsx`, settings in `shapeParams.ts`, `ls.editor.shapeParams`). Tests: shapes.rs units
 (validity, convexity, shared ends, grid), the command test, `tests/editor-shapes.spec.ts` (Chromium + WebKit).
 
-**3. Extrude and vertex editing**: Shift-drag a face of a picked brush in 3D pulls out a new brush (;
-: a prism over the face, ends in the face's texture, sides continue the source's faces; the far
-side on the grid; a drag is one "Extrude" step and the new brush is picked; dragging back onto the face removes it).
-Vertex tool: ⌘/Ctrl-drag an edge's or face's middle splits it (: a new corner, refused when it would
-dent the brush, lie flat or swallow a corner), **Merge corners** joins the picked corners of a brush at their middle
-(); dropping a corner on its neighbor already merged (tested). , .
-Tests: extrude.rs and vertex.rs units (convexity, volumes, textures, refusals),  (commands,
-one undo step per drag),  (Chromium + WebKit).
+**3. Extrude and vertex editing** (e8f90dda): Shift-drag a face of a picked brush in 3D pulls out a new brush
+(`extrude_face`; `editor/extrude.rs`: a prism over the face, ends in the face's texture, sides continue the source's
+faces; the far side on the grid; a drag is one "Extrude" step and the new brush is picked; dragging back onto the
+face removes it). Vertex tool: ⌘/Ctrl-drag an edge's or face's middle splits it (`add_vertex`: a new corner, refused
+when it would dent the brush, lie flat or swallow a corner); **Merge corners** joins the picked corners of a brush
+at their middle (`merge_vertices`); dropping a corner on its neighbor already merged (tested). UI in `extrude.ts`
+and `VertexActions.tsx`. Tests: extrude.rs and vertex.rs units (convexity, volumes, textures, refusals),
+`extrude_split_and_merge` (the commands, one undo step per drag), `tests/editor-extrude.spec.ts` (Chromium + WebKit).
 
 ## Left / ideas
 - Extrude in the flat views (Shift is box-pick there), shear in 2D, edge-move mode for slanted edges.
