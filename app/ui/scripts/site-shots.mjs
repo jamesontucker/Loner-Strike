@@ -20,7 +20,7 @@
 // installed, else full colour) and thumb/<name>.webp (320 wide). Needs cwebp (brew install webp).
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { connect } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -161,7 +161,58 @@ async function tool(page, addr, wait = 4000) {
 }
 const plain = (group, addr, about, then) => ({ group, about, async take(page) { await tool(page, addr); if (then) await then(page); } });
 
+/** Community's browser with sample cards: the repo's own maps and example modes, credited to
+ *  Loner-Strike (the shipped examples, not anyone's upload; nothing made up about people). The
+ *  list comes from the page's request, answered here; the pictures are the site's map renders. */
+function sampleCommunity() {
+  const day = 86400, now = Math.floor(Date.now() / 1000);
+  const tpl = (f) => JSON.parse(readFileSync(join(ui, "src/views/tools/studio/templates", f), "utf8")).mode;
+  const content = { level: "content", label: "Content", allowed: true, confirm: null, note: "Only map content is installed (maps, textures, models, sounds); nothing that runs code." };
+  const data = { level: "data", label: "Settings only", allowed: true, confirm: null, note: "Settings and rules only: no plugins, nothing that runs code." };
+  const base = { model: "Mod", category: "", likes: 0, listed: true, have: false, canTry: true, url: "https://lonerstrike.com", games: ["cstrike"] };
+  let id = 1;
+  const map = (name, summary, modes, img, ago) => ({ ...base, id: id++, key: `mod-${id}`, kind: "map", name, author: "Loner-Strike", summary, image: `https://site-shots.invalid/${img}`, added: now - ago * day, updated: now - ago * day, map: name, modes, badges: ["featured", "bots", "nav", "checked"], bots: "", trust: content });
+  const mode = (file, bots, ago) => {
+    const m = tpl(file);
+    return { ...base, id: id++, key: `mod-${id}`, kind: "mode", name: m.name, author: "Loner-Strike", summary: m.description, image: null, added: now - ago * day, updated: now - ago * day, map: null, modes: [], badges: ["checked"], bots, trust: data };
+  };
+  return {
+    items: [
+      map("ls_outpost", "A walled courtyard with a keep and an armory, made for Last Stand", ["Last Stand", "Classic"], "render-outpost.webp", 2),
+      map("br_valley", "A river valley with a town, a factory, farms and bridges, made for Battle Royale", ["Battle Royale"], "render-valley.webp", 3),
+      mode("king-of-the-hill.graph.json", "ok", 1),
+      mode("infection.graph.json", "great", 1),
+      mode("gun-game-lite.graph.json", "great", 4),
+    ],
+    index: "live", gamebanana: "live", indexUpdated: now - 3600, tag: "Software Used: LonerStrike",
+  };
+}
+
+/** Textures & models on the AK-47 view model; `own`: the list shows only the game's own models. */
+async function ak47(page, own) {
+  await tool(page, "assets");
+  await page.getByRole("button", { name: "Models", exact: true }).first().click();
+  await settle(page, 1500);
+  await page.getByPlaceholder(/Search models/i).first().fill("v_ak47");
+  await settle(page, 1500);
+  // the game's own (not a downloaded skin): the one listed under "cstrike"
+  const mine = page.locator("button, li").filter({ hasText: /^v_ak47\s*cstrike$/ }).first();
+  if (await mine.count()) await mine.click();
+  else await page.getByText(/^v_ak47$/).last().click();
+  await settle(page, 4000);
+}
+
 const SHOTS = {
+  creatures: plain("held", "creatures", "Creature Studio: creature types, one's settings, its model playing"),
+  community: {
+    group: "held",
+    about: "Community: sample cards from Loner-Strike's own maps and example modes",
+    async take(page) {
+      await page.route(/\/api\/tools\/community\/browse/, (r) => r.fulfill({ json: sampleCommunity() }));
+      await page.route(/^https:\/\/site-shots\.invalid\//, (r) => r.fulfill({ path: join(repo, "site/img/1.0", r.request().url().split("/").pop()), contentType: "image/webp" }));
+      await tool(page, "community", 5000);
+    },
+  },
   tools: plain("tools", "overview", "The Tools page: every tool, grouped"),
   plugins: plain("tools", "plugins", "Plugin Studio: a game plugin's code (read only), compiled, with Problems below", async (page) => {
     await page.getByText("antiflood.sma", { exact: true }).first().click();
@@ -184,17 +235,23 @@ const SHOTS = {
   spray: plain("tools", "spray", "Spray maker"),
   playercfg: plain("tools", "playercfg", "Crosshair & config with the crosshair live"),
   people: plain("tools", "people", "Bot people: who the bots are"),
-  models: plain("tools", "assets", "Textures and models: the AK-47's view model in 3D, with its animations", async (page) => {
-    await page.getByRole("button", { name: "Models", exact: true }).first().click();
-    await settle(page, 1500);
-    await page.getByPlaceholder(/Search models/i).first().fill("v_ak47");
-    await settle(page, 1500);
-    // the game's own (not a downloaded skin): the one listed under "cstrike"
-    const own = page.locator("button, li").filter({ hasText: /^v_ak47\s*cstrike$/ }).first();
-    if (await own.count()) await own.click();
-    else await page.getByText(/^v_ak47$/).last().click();
-    await settle(page, 4000);
-  }),
+  models: { group: "tools", about: "Textures and models: the AK-47's view model in 3D (the list shows the downloaded skins too)", take: (page) => ak47(page, false) },
+  "models-game": {
+    group: "tools",
+    about: "The same, with only the game's own models (the clone's downloaded models set aside for it)",
+    async take(page) {
+      // (only in the throwaway clone, and put back after: the real game is never touched)
+      const dl = join(started.game, "cstrike_downloads", "models");
+      const away = `${dl}.site-shots-aside`;
+      const moved = existsSync(dl) && !existsSync(away);
+      if (moved) renameSync(dl, away);
+      try {
+        await ak47(page, true);
+      } finally {
+        if (moved) renameSync(away, dl);
+      }
+    },
+  },
 
   editor: {
     group: "editor",

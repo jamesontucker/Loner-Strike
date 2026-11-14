@@ -262,6 +262,6 @@ export const ago = (ts: number) => {
   const d = Math.max(0, Date.now() / 1000 - ts);
   if (d < 3600) return "just now";
   if (d < 86400) return `${Math.round(d / 3600)} h ago`;
-  if (d < 86400 * 60) return `${Math.round(d / 86400)} days ago`;
+  if (d < 86400 * 60) return Math.round(d / 86400) === 1 ? "yesterday" : `${Math.round(d / 86400)} days ago`;
   return new Date(ts * 1000).toLocaleDateString();
 };

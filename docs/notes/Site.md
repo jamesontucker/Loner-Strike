@@ -226,6 +226,12 @@ throwaway settings, so the compilers run; Tools pages without Focus are shot wit
 Still to take: `creatures` and `community` (held: creature sharing is changing them), the map simulator report
 and Replay, `studio-debugger` and `editor-compile` (each needs one sim; none started while the load was 45+).
 `demos` isn't retaken: the clone lists the user's own demo files.
+**Third pass:** `creatures` (Creature Studio, the zombie) and `community` (sample cards: Loner-Strike's own ls_outpost and
+br_valley and three of its example modes, credited to Loner-Strike, served to the page by the script; no made-up
+people; no "Includes N creatures" card, since no Loner-Strike example ships custom creatures to stage it honestly).
+`models-game` is a second version of `models` with only the game's own models in the list (the clone's downloaded
+models set aside for that shot): **the user picks** which goes on the site (`models` is the one wired now). The
+Community card's "1 days ago" now says "yesterday".
 How the shots are set up: Tools pages in Focus with the hints already seen; the editor imports the map through its
 own Import (the dev server answers the file dialog with a copy of the maps-src file), hides triggers and flies in a
 little; King of the Hill is framed on its round start and scoring chain; the Timeline is a "Hill Glow" pulse added to
