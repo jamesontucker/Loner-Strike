@@ -218,3 +218,38 @@ Measured on ls_outpost, Last Stand, full roster (waves_full.ini), with bots and 
   keep them when you merge your drag-and-drop work; to add another hanging class, add it to `HANGS`.
 - The game does the same at spawn (brain 86cce29): an `ls_barnacle` left floating or on the floor moves up to the
   ceiling above it (not under open sky).
+
+## Y (2026-11-13): creature cap test, adaptive cap, enrage, tiers (brain ls-next3 362b8ee, CI 43533630718)
+Cap test: ls_outpost, Last Stand, waves x10 so the cap stays full, defenders kept alive (qa_god) so they keep
+fighting; brain r43530121008 with `ls_perf 10`. This Mac under CrossOver was busy (load about 20, 5 other servers),
+so absolute fps are low; compare rows, not with a Linux box.
+
+| cap | bots | alive | fps avg / worst s | creature ms/frame | bot ms/frame | edicts | view ents avg / max | kills/bot/min |
+|---|---|---|---|---|---|---|---|---|
+| 48 | 6 | 48 | 75 / 25 | 2.3 | 3.8 | 293 | 73 / 86 | 9.1 |
+| 64 | 6 | 73 | 54 / 16 | 6.4 | 4.7 | 339 | 106 / 117 | 14.8 |
+| 80 | 6 | 75 | 24 / 9 | 13.6 | 14.6 | 331 | 104 / 111 | 14.6 |
+| 48 | 32 | 66 | 4 / 3 | 13.2 | 227 | 398 | 110 / 143 | 2.2 |
+| 64 | 32 | 144* | 2 / 2 | 34 | 405 | 573 | 158 / 312 | 2.7 |
+| 96 | 32 | 248* | 2 / 1 | 63 | 514 | 659 | 244 / 397 | 0.8 |
+(* the cap didn't hold: Last Stand's own spawns went past it; the brain now refuses them, e417852.)
+
+- 32 defender bots are the bottleneck, not creatures: 227 ms a frame of bot AI already at cap 48.
+- The engine sends at most 256 entities to a player a frame (ReHLDS keeps Valve's MAX_PACKET_ENTITIES 256 and
+  stops adding with "Too many entities in visible packet list": the newest edicts, i.e. new creatures, don't draw
+  or pop). Players saw up to 397 at 250 alive; at 48-73 alive, 86-143. Edicts are no problem (659 of 2265).
+- Recommendation: default cap 48 (keep), at most 64; with more than about 16 bots keep 48. The adaptive cap
+  (now in the brain) protects a server either way.
+
+For W1:
+- **Cap holds now.** The brain refuses a creature past the live cap however it's made (your `spawn_creature`
+  already treats FL_KILLME as "try again"). In the test Last Stand went to 54 alive at cap 48 with 6 bots and up to
+  351 with 32 (specials and the wave counter missed some).
+- **Adaptive cap** (`ls_creature_adaptive 1`, default): the live cap drops while server fps is under 0.6 of
+  sys_ticrate and creeps back at 0.85+, never past `ls_creature_max`. Please add `ls_creature_cap_now` to the
+  lst_perf line, and make `alive_cap()` use min(your cap, ls_creature_cap_now) so waves don't keep trying.
+- **Tiers:** the `tier` key is 1 normal, 2 (yellow shell), 3 (red-orange shell, 8% bigger). Your round_tier()
+  0/1/2/3 should send 2 and 3 only (e.g. 2 from round 15, 3 from round 20); 0 or 1 is plain. Setting it after
+  DispatchSpawn works too. Health stays yours (type key tierN_hp defaults to 1).
+- **Enrage:** brute, babygarg, boss, gonarch enrage below 40% (x1.35 speed, x1.3 damage, x1.25 attack rate and
+  animation, a low roar, a pulsing red shell). Type keys enrage_below/speed/damage/anim; the Studio edits them.
