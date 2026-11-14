@@ -389,7 +389,7 @@ mod tests {
         let name = &p.item.creatures[0].name;
         assert!(cp::is_shared_name(name) && name.ends_with(".qa_runner"), "{name}");
         assert!(p.item.creatures[0].model);
-        for f in ["README.txt", "loner-strike.json", "creatures/preview.png", "creatures/creatures.ini", "models/qa/runner_x.mdl"] {
+        for f in ["README.txt", "loner-strike.json", "creatures/preview.png", "creatures/creatures.ini", "models/gb31337/qa/runner_x.mdl"] {
             assert!(p.contents.iter().any(|c| c == f), "{f}: {:?}", p.contents);
         }
         let z = zip::ZipArchive::new(std::fs::File::open(root.join("out").join(&p.file)).unwrap()).unwrap();
@@ -431,7 +431,7 @@ mod tests {
         let after = std::fs::read_to_string(&ini).unwrap();
         assert!(after.starts_with(theirs), "{after}");
         assert!(cp::installed_types(&other).contains_key(&shared));
-        assert!(other.join("models/qa/runner_x.mdl").is_file());
+        assert!(other.join("models/gb4242/qa/runner_x.mdl").is_file());
         // an update replaces the block; the kept block (Go back / a failed update) restores it
         let kept = cp::block_text(&other, key).unwrap();
         let v2 = text.replace("hp = 77", "hp = 88");
