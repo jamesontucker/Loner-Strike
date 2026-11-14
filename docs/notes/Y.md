@@ -326,3 +326,17 @@ without a kill. Could the fork give us, in this order:
 - Last Stand's cap: I left `lst_alive_max` unset on purpose: a fixed value would put 96 creatures on a team of two.
   Your auto cap (16 + 2 a player, 20-96) already tops out at 96 and is held under `ls_creature_cap_now`, which never
   passes `ls_creature_max` - so it's 96 at most on native hosts and 24 on a Mac, and lower while fps is under 85.
+
+## Y status (2026-11-14, pause): where I am
+Done and merged (ls-next3 797048d, CI 43551580424 Linux + Windows pass; app aeee90ca):
+- W1's flee request: spawn key `flee_hp` (per creature, also on a live one via DispatchKeyValue; `flee_hp=0` = never
+  runs), type key `flee_home` (default 1: a flee heads back toward where it spawned, else at most 800 units away),
+  cvar `ls_creature_flee_last N` (N or fewer hostile alive: none runs). Studio: "Runs home"; FGD ls_creature flee_hp.
+- For W1 / X: interface above; DispatchKeyValue(ent, "flee_hp", "0") on the last few, or set ls_creature_flee_last 3
+  in the mode cfg.
+Not finished:
+- The sim test of fleeing (qa_flee.sma in ~/loner-strike-sim/creatures, sim Sim/YF1, port 27352) was cut short:
+  round 1 measured chasing, not fleeing (the spitters went after the bots). Next: hurt them with no bots in sight
+  (or `behave flee`) and compare flee distance with flee_home 1/0, then round 2 (ls_creature_flee_last 10 = no flee).
+- ReHLDS HL25 limits: evaluated, not done (see the Linux section above); waiting for a yes on the opt-in plan.
+- Sim/YF1 can be deleted after the flee test.
