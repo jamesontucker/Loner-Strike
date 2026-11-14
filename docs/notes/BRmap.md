@@ -522,3 +522,6 @@ over non-clipping steps, CLIP boxes round non-clipping foliage, nav under 6000 a
   2943 -1824 -464). Lift the strips 1 unit or NULL the covered face.
 - Notes only: 48 OUT_RK3 seams (neighbors with different scales), 101 brushes off whole units (stairs in thirds), and
   9594 faces nobody sees (3183 the compiler keeps, ~1.4 MB of lighting; mostly rocks pushed into the terrain).
+- (later the same day) The current br_valley.map has 6 spawns stuck in solid: T at -2560 -2432 36 inside the tank
+  prop (func_detail -2688..-2432, -2496..-2400, 0..112), CT at 256 1792 122 with its feet in the terrain (top 128), and
+  T 2048 1664 190, T -2560 0 565, CT 3072 2176 164, T 2816 -2432 100. The Checks panel's "Move it to free space" fixes each.
