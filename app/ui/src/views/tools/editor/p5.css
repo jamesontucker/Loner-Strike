@@ -347,7 +347,9 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .p5-cb-tree { display: flex; flex-direction: column; gap: 1px; overflow: auto; min-height: 0; }
 .p5-cb-tree button { all: unset; cursor: pointer; display: flex; justify-content: space-between; gap: 6px; padding: 3px 6px; border-radius: 3px; font-size: 12.5px; }
 .p5-cb-tree button:hover { background: rgba(255, 255, 255, .05); }
-.p5-cb-tree button[aria-pressed="true"] { background: rgba(255, 216, 74, .14); color: #ffd84a; }
+.p5-cb-tree button[aria-pressed="true"] { background: rgba(255, 216, 74, .08); color: #ffd84a; }
+/* (the count beside a picked folder: the label's color, AA on the tint; QA4 contrast pass) */
+.p5-cb-tree button[aria-pressed="true"] .muted { color: inherit; }
 .p5-cb-tree button:focus-visible { outline: 2px solid #ffd84a; }
 .p5-cb-tree .p5-cb-page { padding-left: 16px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p5-cb-tree hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }

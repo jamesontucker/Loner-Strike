@@ -44,7 +44,7 @@ html[data-tools-focus] .ps-main { height: max(480px, calc(100vh - 100px)); }
   background: inherit; border-right: 1px solid var(--khaki, #c8b56a); border-top: 1px solid var(--khaki, #c8b56a);
 }
 .tools-focus-hint-text b { color: var(--khaki, #c8b56a); }
-.tools-focus-hint-key { opacity: .75; white-space: nowrap; }
+.tools-focus-hint-key { color: var(--bone-dim); white-space: nowrap; } /* (was opacity .75: 4.2:1) */
 .tools-focus-hint-x { flex: none; }
 @media (prefers-reduced-motion: no-preference) {
   .tools-focus-hint { animation: tools-focus-hint-in .18s ease-out; }

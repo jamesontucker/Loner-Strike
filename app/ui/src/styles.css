@@ -7,22 +7,29 @@
   /* Steam's original (2003-2007) skin: olive panels, mustard highlight, raised bevels */
   --bg: #3e4637;
   --side: #353c2f;
-  --panel: #4c5844;
-  --panel-2: #5a6a50;
+  /* Parity A (QA4 contrast pass, WCAG AA): panels a shade darker so text on them reaches 4.5:1 (was #4c5844, #5a6a50) */
+  --panel: #475240;
+  --panel-2: #4e5b45;
   --line: #292c21;
   --bevel-hi: rgba(136, 145, 128, .55);
   --bevel-lo: #292c21;
   --bone: #d8ded3;
-  /* readable on every panel: dim ~4.4:1, faint ~3.7:1 on --panel, more on --bg */
-  --bone-dim: #c2c9b7;
-  --bone-faint: #aeb7a2;
-  --signal: #c4b550;
+  /* AA (4.5:1) on --panel and --panel-2 (selected tabs and segments): dim 5.6 / 4.9, faint 5.2 / 4.5, signal 5.2 / 4.6;
+     were dim #c2c9b7 4.4 / 3.4, faint #aeb7a2 3.6 / 2.8, signal #c4b550 3.6 / 2.8 */
+  --bone-dim: #d0d6c8;
+  --bone-faint: #c9cfc1;
+  --signal: #d9cf8d;
   --signal-ink: #26240f;
-  --t: #d9a441;
-  --ct: #8fb4d6;
-  --ok: #b3c77f;
-  --warn: #d9b25a;
-  --weak: #d99a7a;
+  /* 4.5:1 on --panel-2 too (were 3.2-4.1 on --panel, 2.5-3.2 on --panel-2) */
+  --t: #e9c98e;
+  --ct: #b8d0e5;
+  --ok: #c3d49b;
+  --warn: #e5ca8d;
+  --weak: #e9c6b3;
+  /* errors and danger buttons (was #f0b9a6, 4.2 on --panel-2) */
+  --danger: #f2c3b2;
+  /* the tools' accent (the Focus hint, tour ticks); was a fallback #c8b56a, 4.0:1 */
+  --khaki: var(--signal);
   --raised: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
   --sunken: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
   --stencil: "Counter-Strike", "Big Shoulders Stencil Display", Impact, sans-serif;
@@ -387,7 +394,7 @@ p { margin: 0 0 8px; }
 a { color: var(--signal); }
 .btn.primary { background: var(--signal); color: var(--signal-ink); box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
 .btn.primary:hover { color: var(--signal-ink); filter: brightness(1.06); }
-.btn.danger { color: #f0b9a6; }
+.btn.danger { color: var(--danger); }
 .btn.small { padding: 2px 8px; font-size: 13px; }
 p > .btn.small { margin-left: 6px; }
 .btn:disabled { opacity: .55; cursor: default; }
@@ -425,7 +432,7 @@ select, .search {
 /* a panel that's one line (a title and note, a button at the side): no paragraph gap at its foot */
 .panel.row > p:last-child, .panel.row > div > p:last-child { margin-bottom: 0; }
 .panel h3 { margin: 0 0 10px; font-size: 17px; }
-.err-text { color: #f0b9a6; }
+.err-text { color: var(--danger); }
 
 .toasts { position: fixed; right: 20px; bottom: 20px; display: grid; justify-items: end; gap: 8px; z-index: 60; width: max-content; max-width: min(420px, calc(100vw - 32px)); pointer-events: none; contain: layout style; /* a toast coming or going lays out only the stack, not the page */ }
 /* a short rise into place, nothing more */
@@ -736,7 +743,7 @@ fieldset.plain { display: contents; border: 0; margin: 0; padding: 0; min-width:
 .job-steps li { display: flex; gap: 10px; align-items: baseline; color: var(--bone-faint); }
 .job-steps li.running { color: var(--bone); }
 .job-steps li.done { color: var(--bone-dim); }
-.job-steps li.error { color: #f0b9a6; }
+.job-steps li.error { color: var(--danger); }
 .dot-state { width: 16px; text-align: center; font-weight: 800; color: var(--ok); }
 .job-steps li.running .dot-state { color: var(--signal); }
 .tips { text-align: left; max-width: 560px; display: grid; gap: 6px; margin: 10px 0 18px; }
@@ -1350,7 +1357,7 @@ button.cm-stat[aria-expanded="true"] { background: var(--panel); }
 .cm-report-buttons { flex: none; justify-content: flex-end; }
 .cm-words .chip { display: inline-flex; align-items: center; gap: 6px; }
 .cm-words .chip svg { opacity: .7; }
-.cm-words .chip:hover svg { opacity: 1; color: #f0b9a6; }
+.cm-words .chip:hover svg { opacity: 1; color: var(--danger); }
 @media (max-width: 760px), (pointer: coarse) and (max-height: 500px) {
   .cm-stat.head { display: none; }
   .cm-stat { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 10px; padding: 10px 4px; min-height: 44px; text-align: left; }
@@ -1711,7 +1718,7 @@ h2.server-title, h2.map-title { white-space: normal; overflow-wrap: anywhere; }
 .qmenu-group + .qmenu-group { border-top: 1px solid var(--bevel-lo); margin-top: 4px; padding-top: 4px; }
 .qmenu-head { padding: 6px 10px 2px; color: var(--bone-faint); font-size: 12px; font-weight: 700; }
 .qmenu-note { padding: 4px 10px 6px 32px; max-width: 280px; color: var(--bone-faint); font-size: 13px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
-.qmenu-list button.danger { color: #f0b9a6; }
+.qmenu-list button.danger { color: var(--danger); }
 .qmenu-list .tick .spinner { width: 10px; height: 10px; margin: 0; }
 .ask-field { margin: -4px 0 16px; }
 .ask-field .ask-error { color: #f0b9a6; font-size: 13px; line-height: 1.4; }

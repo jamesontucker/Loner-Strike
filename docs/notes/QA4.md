@@ -463,3 +463,27 @@ left running and healthy (check `systemctl is-active lonerstrike-loner-strike-al
 ## Round 3 items to re-check
 From QA.md "Round 3": the brain drop crash (30 rounds of drop/drop_all/drop_dead), Last Stand bots buying guns, the
 BR start loadout and drop-in, and the Studio's gm_components loading for templates.
+
+## Contrast (Parity A, 2026-11-14; QA4-T1 M1, QA4-T2 UX-H1)
+Fixed at the token level in `app/ui/src/styles.css` (the app has one theme; the tools use the same tokens), same hues,
+lightness only: `--panel` #4c5844 → #475240 and `--panel-2` #5a6a50 → #4e5b45 (a shade darker), text tokens lighter.
+New `--danger` (errors and danger buttons, was a hard-coded #f0b9a6) and `--khaki` (the tools' accent, was an undefined
+fallback #c8b56a). Two spots that hard-coded their own colors: the Focus hint's key (`common/shell.css`, opacity → dim
+color) and the Content Browser's picked folder (`editor/p5.css`, lighter tint, its count in the label color).
+| Pair | Before | After |
+|---|---|---|
+| selected tab / segment: `--signal` on `--panel-2` | 2.79 | 4.56 |
+| `--signal` (links, active labels) on `--panel` | 3.61 | 5.20 |
+| muted `--bone-faint` on `--panel` / `--panel-2` | 3.62 / 2.79 | 5.17 / 4.53 |
+| `--bone-dim` on `--panel` / `--panel-2` (secondary buttons, help) | 4.43 / 3.41 | 5.55 / 4.86 |
+| `--bone` on `--panel-2` (History, Docs, Other map) | 4.24 | 5.27 |
+| `--ok`, `--warn`, `--weak`, `--t`, `--ct` on `--panel` | 3.18-4.09 | 5.16-5.18 |
+| the same on `--panel-2` | 2.45-3.15 | 4.53-4.55 |
+| danger and errors on `--panel-2` | 4.20 | 4.55 |
+| primary buttons: ink on `--signal` | 7.51 | 9.88 |
+Measured with a script (every visible text node's color, opacity included, on its composited background; disabled
+controls skipped as AA allows) on 20 pages (Tools overview, every tool, the editor, the app's start page) at 1440 and
+800 wide in Chromium and WebKit, the old tokens injected for "before": **before 400+ low pairs, after 0** except one:
+- Plugin Studio's 🔒 read-only mark (`.ps-ro`, #a2aa9a in `plugins/plugins.css`, 3.6:1): the Plugin Studio fix agent's
+  file, left to them (use `var(--bone-dim)`).
+QA4-CORE.md has no contrast items. The 820×600 window: these are color-only changes; no size, spacing or layout moved.
