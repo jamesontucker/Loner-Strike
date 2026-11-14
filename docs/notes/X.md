@@ -580,5 +580,12 @@ Cvars are the mode's switches (a Studio mode can set them with its cvar node).
   `bool:ls_drop_spot(const Float:near[3], Float:out[3], const layer[] = "")`; `ls_drop_reset()`. Forward
   `ls_on_landed(id)`. Uses `br_drop` markers (and their `layer` key), else respawn points.
 - **Heals for the brain** (31c6ac7f): `ls_mode heals <bot> b m d` is sent by the component; nothing for a node.
-Next: squads + the squad lobby, knocked-down squads (on W1's `ls_down_*`), Battle Royale moved onto all of it.
+- **Squads and the squad lobby** (fe158c49; revive by squad mates c5ef3a88): cvars `ls_squad_ff 0`, `ls_squad_markers
+  1`, `ls_squad_teams 1`. `ls_squad_set(id, squad)`; `ls_squad_get(id)`; `ls_squad_max(size = -1)` (returns the old
+  size); `ls_squad_count(squad, bool:alive = false)`; `ls_squads_alive(&last = 0)` (sides left); `ls_squad_fill()`;
+  `ls_squad_lobby(Float:secs)`; `ls_squad_menu(id)`; `ls_squad_short()`; `ls_squad_code(squad, out[], len)`. Forwards
+  `ls_on_squad(id, squad)`, `ls_on_lobby_end(squads)`. These could replace the Studio's own Set Squad / Squad Of /
+  Squads Left / Squad Friendly Fire helpers, so a Studio mode and Battle Royale share one squad system (your call).
+- **Knocked down in squads:** W1's `ls_down_*` (your nodes) plus `ls_squad_*`: Battle Royale turns it on with team 0
+  and returns PLUGIN_HANDLED from `ls_on_down` when no squad mate is up (the squad is out).
 ## ==== end W3 ====
