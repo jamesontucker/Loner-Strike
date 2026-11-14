@@ -150,8 +150,11 @@ public plugin_cfg()
 	g_Perks = g_Career ? PERKS_NONE : mode_perks(mode)
 
 	load_settings(false)
-	// after vip.cfg ran (it's in the queue at map start)
+	// after vip.cfg ran (it's in the queue at map start), and again later: something at map start
+	// puts sv_visiblemaxplayers back to -1 after the first seconds (seen on prod)
 	set_task(1.0, "apply_slots")
+	set_task(5.0, "apply_slots")
+	set_task(15.0, "apply_slots")
 	if (file_exists("banned.cfg"))
 		server_cmd("exec banned.cfg")
 	if (file_exists("listip.cfg"))
@@ -373,6 +376,7 @@ public task_joined(taskid)
 	new id = taskid - TASK_JOIN
 	if (!is_user_connected(id))
 		return
+	apply_slots()
 	new role = role_bit(id)
 	new slots = clamp(get_pcvar_num(g_pSlots), 0, MaxClients - 1)
 	if (slots > 0 && get_playersnum(1) > MaxClients - slots)
