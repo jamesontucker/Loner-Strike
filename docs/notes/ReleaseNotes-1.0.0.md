@@ -170,5 +170,5 @@ All of these are in the new Tools section, marked Beta.
 
 - Game Mode Studio data tables and live tweaks while playtesting. The site docs mention them, but the notes say they're waiting to be committed.
 - Bots learning a Counter-Strike 1.6 map before an editor Playtest. The fix is committed, but the notes say it hasn't been run against a live server.
-- Open in Loner-Strike (`loner-strike://` links). Tested on a Mac debug build; Windows registers the link at install and first start, untested until QA round 4 (QA4.md area H). The website's Made by players section also needs the community list to allow lonerstrike.com (CORS, Site.md) and a listed item.
+- Open in Loner-Strike (`loner-strike://` links). Tested on a Mac debug build; Windows registers the link at install and first start, untested until QA round 4 (QA4.md area H). The website's Made by players section reads the community list (CORS is set up and checked); it shows the empty state until an item is listed.
 - Windows installer as a single setup.exe (no MSI), with 0.1.2 updating in place. It's committed in the build config, but no release build has run it yet.

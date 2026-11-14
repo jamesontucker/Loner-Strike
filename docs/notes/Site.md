@@ -253,7 +253,10 @@ learn CS 1.6 maps before an editor Playtest.
   Read-only: only `listed` items; every text set as text. Asked once, when the section comes near the screen.
   Empty or unreachable: "Community creations show up here once people share them. How Community works".
 - **privacy.html:** a line for it (dl.lonerstrike.com, images.gamebanana.com), dated November 14.
-- **CORS (not done, needs a decision):** `https://dl.lonerstrike.com/community/index.json` answers without
+- **CORS: done (2026-11-14).** The user added the R2 CORS rule (option 1 below). The coordinator checked that
+  lonerstrike.com, www.lonerstrike.com and 127.0.0.1:8088 get `Access-Control-Allow-Origin` and other origins don't, and
+  that the section fetches the index with a 200 in a real browser (it shows the empty state: no items yet).
+  What it was: `https://dl.lonerstrike.com/community/index.json` answers without
   `Access-Control-Allow-Origin`, so on lonerstrike.com the browser can't read it and the section shows the empty
   message until one of these is done:
   1. (simplest, no code) an R2 CORS rule on the bucket behind dl.lonerstrike.com: AllowedOrigins
