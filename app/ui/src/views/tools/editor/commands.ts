@@ -3,6 +3,8 @@
 // in Shortcuts.ts; the old key handler in MapEditor.tsx still does the keys that aren't here
 // (arrows nudge, Esc, 1-9 camera marks, Alt to ignore the grid).
 
+import { goToLeak, loadLeakFile } from "./LeakTools"; // P5
+import { useLeak } from "./compileApi"; // P5
 import { useTools } from "../../../stores/tools";
 import type { Vec3 } from "../viewer/coords";
 import { selectionIds } from "./EditorScene";
@@ -364,6 +366,9 @@ export function commands(): Command[] {
     { id: "view.budget", label: "Budget", menu: "View", hint: "How close the map is to the engine's limits", run: () => showPanel("budget") },
     { id: "map.publish", label: "Publish…", menu: "Map", hint: "A package to share this map in Tools > Community (compile it into the game first)", run: publishMap },
     { id: "map.playtest", label: "Playtest", menu: "Map", hint: "Compile, put it in the game and start it with bots, as the Compile panel is set", run: playtestNow },
+    { id: "map.goToLeak", label: "Go to leak", menu: "Map", hint: "Fly along the leak line to the hole and pick the brush beside it", when: () => !!useLeak.getState().points, run: () => goToLeak() },
+    { id: "map.loadPointfile", label: "Load pointfile…", menu: "Map", hint: "A leak line (.lin or .pts) from another compile", run: () => void loadLeakFile() },
+    { id: "map.leakLine", label: "Show or hide the leak line", menu: "Map", when: () => !!useLeak.getState().points, run: () => useLeak.getState().toggle() },
     { id: "map.compile", label: "Compile and play…", menu: "Map", hint: "Compile with SDHLT, show the leak line, playtest with bots", run: () => openTab("compile") },
     { id: "map.outline", label: "Outline", menu: "Map", sep: true, hint: "Everything in the map as a list", run: () => openTab("outline") },
     { id: "map.textures", label: "Textures", menu: "Map", run: () => openTab("textures") },

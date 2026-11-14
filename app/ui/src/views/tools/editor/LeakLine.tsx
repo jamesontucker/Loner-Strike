@@ -8,6 +8,7 @@ import { useLeak } from "./compileApi";
 export function LeakLine() {
   const points = useLeak((s) => s.points);
   const visible = useLeak((s) => s.visible);
+  const hole = useLeak((s) => s.info?.hole?.at ?? null);
   if (!points || points.length < 2 || !visible) return null;
   return (
     <>
@@ -18,6 +19,19 @@ export function LeakLine() {
         <sphereGeometry args={[6, 12, 8]} />
         <meshBasicMaterial color="#ffd84a" depthTest={false} />
       </mesh>
+      {/* P5: the hole, where the line leaves the world (tools/editor/leak.rs) */}
+      {hole && (
+        <group position={hole}>
+          <mesh renderOrder={8}>
+            <sphereGeometry args={[10, 16, 10]} />
+            <meshBasicMaterial color="#ff3b30" depthTest={false} transparent opacity={0.85} />
+          </mesh>
+          <mesh renderOrder={8}>
+            <sphereGeometry args={[28, 16, 10]} />
+            <meshBasicMaterial color="#ff3b30" depthTest={false} transparent opacity={0.18} wireframe />
+          </mesh>
+        </group>
+      )}
     </>
   );
 }

@@ -4,6 +4,7 @@
 // its .res, optionally teach bots the map, and start the game on it with bots.
 // Mounted by the editor as a side tab (`<CompilePanel />`); the leak line is drawn by LeakLine.tsx.
 
+import { goToLeak } from "./LeakTools"; // P5
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BusyButton, SteamProgress, useConfirm, useToast } from "../../../ui";
 import { waitForSetupJob } from "../../../queries";
@@ -117,7 +118,10 @@ export function CompilePanel() {
           next = p.next ?? next;
           setPartial(p.partial ?? "");
           setJob(p.job);
-          if (p.job.leak) api.useLeak.getState().set(p.job.leak.points);
+          if (p.job.leak) {
+            api.useLeak.getState().set(p.job.leak.points);
+            void api.useLeak.getState().refresh(); // P5: the hole and the brushes round it
+          }
           if (!p.job.running) return p.job;
         }
         await new Promise((r) => setTimeout(r, 500));
@@ -475,6 +479,9 @@ export function CompilePanel() {
                 {p.help && <div className="small-note muted">{p.help}</div>}
                 {p.kind === "leak" && leak.points && (
                   <div className="editor-row wrap compile-leak">
+                    <button type="button" className="btn small primary" title="Fly along the line to the hole and pick the brush beside it" onClick={() => goToLeak()}>
+                      Go to leak
+                    </button>
                     <button type="button" className="btn small" onClick={() => leak.toggle()}>
                       {leak.visible ? "Hide the leak line" : "Show the leak line"}
                     </button>

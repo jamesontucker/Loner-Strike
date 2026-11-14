@@ -47,6 +47,9 @@ pub fn specs() -> Vec<Spec> {
         Spec { name: "editor_faces", title: "Editor: faces of brushes", kind: Read,
             schema: || obj(json!({"brushes": ids("Brush ids (from editor_state); at most 200")}), &["brushes"]),
             description: "Each face of the given brushes: its index (for set_texture, align, move_face, extrude), texture, outward normal and which way it faces (up, down, north +Y, south, east +X, west), and its texture alignment (u/v axes, shift, scale, rotation)." },
+        Spec { name: "editor_leak", title: "Editor: the leak", kind: Read,
+            schema: || obj(json!({"points": {"type": "integer", "minimum": 0, "maximum": 4000, "description": "Most points of the line returned (default 200, thinned evenly; 0 for none)"}}), &[]),
+            description: "Leak tracing: the leak line of the last compile that leaked (or a pointfile the person loaded), where the hole is and what's round it. leaked false when the last compile got past BSP without one. Else: pointfile, from (compile or file), pointCount, points [[x,y,z]…] from the entity that sees the void out to it, hole {at, index} (where the line leaves the world's brushes for good), nearest [{brush, distance}] (world brushes round the hole: close the gap there), brushEntitiesNear [{brush, entity, classname}] (they don't seal), start {entity, classname} (where the line begins), length and advice." },
         Spec { name: "editor_history", title: "Editor: undo history", kind: Read, schema: none,
             description: "The undo and redo steps by name, newest first. editor_history_jump goes back or forward several at once." },
         Spec { name: "editor_find", title: "Editor: find things", kind: Read,
@@ -610,6 +613,28 @@ pub async fn run(ctx: &Ctx, name: &str, a: &Value) -> Option<Done> {
             let total = shown.len();
             Ok(json!({"docId": v["docId"], "revision": v["revision"], "counts": counts, "byKind": by_kind, "matched": total, "findings": shown.into_iter().take(n).collect::<Vec<_>>(),
                 "texturesChecked": v["texturesChecked"], "stats": v["stats"], "next": "Apply a fix with editor_apply_fix {fixId}."}))
+        }
+        .await,
+        "editor_leak" => async {
+            let mut v = get(ctx, "/api/tools/editor/leak").await?;
+            if v["leaked"] == true {
+                let all: Vec<Value> = v["points"].as_array().cloned().unwrap_or_default();
+                let n = a["points"].as_u64().unwrap_or(200).min(4000) as usize;
+                // thinned evenly, the first and last (and the hole) always kept
+                let hole = v["hole"]["index"].as_u64().map(|i| i as usize);
+                let shown: Vec<Value> = if n == 0 {
+                    vec![]
+                } else if all.len() <= n {
+                    all.clone()
+                } else {
+                    let step = all.len().div_ceil(n.max(2) - 1);
+                    all.iter().enumerate().filter(|(i, _)| i % step == 0 || *i == all.len() - 1 || Some(*i) == hole).map(|(_, p)| p.clone()).collect()
+                };
+                v["pointCount"] = json!(all.len());
+                v["points"] = json!(shown);
+                v["next"] = json!("Look at the brushes in nearest (editor_faces, editor_find touching) and close the gap with a world brush; compile_start checks it again.");
+            }
+            Ok(v)
         }
         .await,
         "editor_apply_fix" => async {

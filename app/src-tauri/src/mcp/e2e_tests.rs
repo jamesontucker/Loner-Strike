@@ -250,3 +250,40 @@ async fn an_agent_builds_checks_compiles_a_map_and_makes_a_mode() {
     assert!(asked[0].contains("install"), "{asked:?}");
     assert!(ag.calls.lock().unwrap().iter().any(|c| c.starts_with("studio compile agent_e2e")));
 }
+
+/// P5: leak tracing as an agent: the line of a leaking compile, its hole and the brushes there.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_agent_finds_the_leak() {
+    let _turn = crate::tools::editor::leak::TEST_LOCK.lock().await;
+    let ag = Agent::new();
+    ag.call("editor_new", json!({})).await;
+    let doc = ag.call("editor_state", json!({"limit": 500})).await;
+    let brushes: Vec<u64> = doc["brushes"].as_array().unwrap().iter().filter_map(|b| b["id"].as_u64()).collect();
+    let entities: Vec<u64> = doc["entities"].as_array().unwrap().iter().filter_map(|e| e["id"].as_u64()).collect();
+    ag.call("editor_delete", json!({"brushes": brushes, "entities": entities})).await;
+    // a room 0..512 whose east wall stops short of the ceiling: the gap
+    let mut made = vec![];
+    for (min, max) in [([0, 0, 0], [512, 512, 16]), ([0, 0, 240], [512, 512, 256]), ([0, 0, 16], [16, 512, 240]), ([496, 0, 16], [512, 512, 200]), ([16, 0, 16], [496, 16, 240]), ([16, 496, 16], [496, 512, 240])] {
+        let r = ag.call("editor_add_box", json!({"min": min, "max": max, "texture": "BRICK01"})).await;
+        made.push(ids(&r["created"]["brushes"])[0]);
+    }
+    ag.call("editor_add_entity", json!({"classname": "info_player_start", "origin": [256, 256, 64]})).await;
+    // nothing leaked yet
+    crate::tools::editor::leak::set(None);
+    assert_eq!(ag.call("editor_leak", json!({})).await["leaked"], false);
+    // the compile's line: from the spawn, up to the gap, out
+    let line: Vec<[f64; 3]> = vec![[256.0, 256.0, 64.0], [400.0, 256.0, 210.0], [504.0, 256.0, 220.0], [600.0, 256.0, 220.0]];
+    crate::tools::editor::leak::set(Some(crate::tools::editor::leak::Leak { points: line, pointfile: "ls_agent_room.lin".into(), from: "compile" }));
+    let l = ag.call("editor_leak", json!({})).await;
+    assert_eq!(l["leaked"], true, "{l}");
+    assert_eq!(l["pointCount"], 4);
+    assert_eq!(l["hole"]["at"], json!([504.0, 256.0, 220.0]), "{l}");
+    let near: Vec<u64> = l["nearest"].as_array().unwrap().iter().filter_map(|n| n["brush"].as_u64()).collect();
+    // the ceiling and the short east wall
+    assert!(near[..2].contains(&made[1]) && near[..2].contains(&made[3]), "{l}");
+    assert_eq!(l["start"]["classname"], "info_player_start");
+    assert!(l["advice"].as_str().unwrap().contains("world brush"));
+    // fewer points on request; the hole stays in
+    assert_eq!(ag.call("editor_leak", json!({"points": 0})).await["points"], json!([]));
+    crate::tools::editor::leak::set(None);
+}

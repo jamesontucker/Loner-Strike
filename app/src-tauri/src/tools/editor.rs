@@ -41,6 +41,7 @@ pub mod components;
 pub mod prefabs;
 pub mod assets; // P5: the models, sprites, sounds and sky the map names
 pub mod budget; // P5: how close the map is to the engine's limits
+pub mod leak; // P5: the leak line, its hole and the brushes round it
 pub mod browser; // P5: the Content Browser (models, sprites, sounds)
 pub mod kits; // P5: mode map kits (what each mode the map is made for needs)
 pub mod workspace; // P5: project files, undo history, find/replace, duplicate with new names
@@ -1378,6 +1379,8 @@ enum Pick {
     ExportPrefab,
     ImportPrefab,
     Fgd,
+    /// P5: a leak line from another compile
+    Pointfile,
 }
 
 /// The system file dialog; None when cancelled.
@@ -1402,6 +1405,7 @@ fn dialog(st: &Shared, kind: Pick, name: &str) -> Result<Option<PathBuf>, String
         Pick::ExportPrefab => d.set_title("Save the prefab package").set_file_name(format!("{name}.zip")).add_filter("Prefab package", &["zip"]).blocking_save_file(),
         Pick::ImportPrefab => d.set_title("Add a prefab").add_filter("Prefab package or .map", &["zip", "rar", "7z", "map"]).blocking_pick_file(),
         Pick::Fgd => d.set_title("Choose an entity definition file").add_filter("Entity definitions (FGD)", &["fgd"]).blocking_pick_file(),
+        Pick::Pointfile => d.set_title("Load a leak line").add_filter("Leak line (pointfile)", &["lin", "pts"]).blocking_pick_file(),
     };
     match picked {
         None => Ok(None),
@@ -2244,6 +2248,7 @@ fn routes_with(ed: Ed) -> Router<Shared> {
         .merge(kits::routes()) // P5
         .merge(browser::routes()) // P5
         .merge(budget::routes()) // P5
+        .merge(leak::routes()) // P5
         .layer(Extension(ed))
 }
 

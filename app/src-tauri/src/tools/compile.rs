@@ -1680,6 +1680,9 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
         if leaked {
             if let Some((pts, file)) = read_leak(&base) {
                 let shown = file.to_string_lossy().to_string();
+                // P5: the editor's leak tracing (Go to leak, the hole, MCP editor_leak)
+                let name = file.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| shown.clone());
+                super::editor::leak::set(Some(super::editor::leak::Leak { points: pts.clone(), pointfile: name, from: "compile" }));
                 with_job(|j| {
                     j.leak = Some(json!({"points": pts, "pointfile": shown}));
                     if let Some(l) = j.problems.iter_mut().find(|x| x.kind == "leak") {
@@ -1695,6 +1698,10 @@ fn run_compile(p: Plan) -> Result<Option<Value>, String> {
         }
         if stage == Stage::Bsp && !base.with_extension("bsp").is_file() {
             return Err("The compiler didn't make a .bsp. The log says what it found.".into());
+        }
+        // P5: past BSP without a leak: the old leak line is gone
+        if stage == Stage::Bsp {
+            super::editor::leak::set(None);
         }
         done += stage.weight();
     }

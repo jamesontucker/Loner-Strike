@@ -463,3 +463,7 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
    the axes bottom-right; the hint and the speed keep clear of the axes in every pane size */
 .ed-nav-hint { max-width: calc(100% - 20px - 84px); }
 .ed-nav-hud { max-width: calc(100% - 2 * 92px); overflow: hidden; text-overflow: ellipsis; }
+/* P5: leak tracing: the bar over the views */
+.p5-leakbar { position: absolute; top: 36px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; max-width: min(860px, calc(100% - 24px)); padding: 6px 10px; font-size: 12.5px; color: var(--bone); background: rgba(48, 16, 12, 0.92); border: 1px solid #ff3b30; border-radius: 4px; box-shadow: 0 6px 18px rgba(0, 0, 0, .4); }
+.p5-leakbar strong { color: #ff9a8f; }
+.p5-leakbar-text { flex: 1 1 260px; min-width: 0; }

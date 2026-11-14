@@ -40,6 +40,7 @@ import { EntityBatch, LinkBatch } from "./EntityBatch"; // Parity A: entities in
 import { QuietWhileDragging, wrapRootInvalidate } from "./paneRedraw"; // Parity A: redraw only the panes that changed
 import { startExtrude, startSplit } from "./extrude"; // Parity A: Shift-drag extrude, Ctrl-drag split
 import { DropTarget } from "./DropTarget"; // P5: a dragged texture's face
+import { LeakFlight } from "./LeakTools"; // P5
 import { TriadFeed } from "./AxisTriad"; // P5: the axes in each view's corner
 import { markerColour, useKits } from "./kits";
 import { useNav } from "./navigation";
@@ -1447,6 +1448,7 @@ function PaneScene({ view, bounds }: { view: ViewId; bounds: [Vec3, Vec3] }) {
       {view === "3d" ? (
         <>
           <Persp bounds={bounds} />
+          <LeakFlight /> {/* P5: Go to leak */}
           <Bookmarks />
         </>
       ) : (

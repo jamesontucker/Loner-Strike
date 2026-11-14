@@ -84,11 +84,50 @@ export const launchGame = (b: { map: string; bots: number; mode?: string; restar
 
 // ---- the leak line, for the 3D view (LeakLine.tsx draws it) -------------------------------
 
-type LeakState = { points: Vec3[] | null; visible: boolean; set: (points: Vec3[] | null) => void; toggle: (on?: boolean) => void };
+/** P5: what the app works out about the leak (GET /api/tools/editor/leak). */
+export type LeakInfo = {
+  leaked: boolean;
+  pointfile?: string;
+  from?: "compile" | "file";
+  points?: Vec3[];
+  hole?: { at: Vec3; index: number } | null;
+  nearest?: { brush: number; distance: number }[];
+  brushEntitiesNear?: { brush: number; entity: number; classname: string; distance: number }[];
+  start?: { entity: number; classname: string } | null;
+  length?: number;
+  advice?: string;
+  error?: string;
+};
+
+type LeakState = {
+  points: Vec3[] | null;
+  visible: boolean;
+  /** P5: the hole and the brushes round it */
+  info: LeakInfo | null;
+  /** P5: bumped to fly the 3D camera along the line */
+  fly: number;
+  set: (points: Vec3[] | null) => void;
+  toggle: (on?: boolean) => void;
+  /** P5: ask the app again (after a compile, a pointfile loaded, the map changed) */
+  refresh: () => Promise<LeakInfo | null>;
+};
 
 export const useLeak = create<LeakState>((set) => ({
   points: null,
   visible: true,
-  set: (points) => set({ points, visible: true }),
+  info: null,
+  fly: 0,
+  set: (points) => set({ points, visible: true, ...(points ? {} : { info: null }) }),
   toggle: (on) => set((s) => ({ visible: on ?? !s.visible })),
+  refresh: async () => {
+    const r = await get<LeakInfo>("/api/tools/editor/leak");
+    if (r.error) return null;
+    if (!r.leaked) set({ points: null, info: null });
+    else set((s) => ({ points: r.points ?? null, info: r, visible: s.points ? s.visible : true }));
+    return r;
+  },
 }));
+
+/** P5: a pointfile (.lin or .pts) from another compile, picked in the file dialog. */
+export const loadPointfile = () => post<LeakInfo & { cancelled?: boolean }>("/api/tools/editor/leak/load");
+export const clearLeak = () => post<LeakInfo>("/api/tools/editor/leak/clear");

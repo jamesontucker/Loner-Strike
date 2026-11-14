@@ -8,6 +8,7 @@ import { modeFor, RENDER_MODES, setPaneMode, type RenderMode } from "./renderMod
 import { useEffect, useState } from "react";
 import { SPEEDS, useNav } from "./navigation";
 import { AxisTriad } from "./AxisTriad";
+import { LeakBar } from "./LeakTools"; // P5
 
 /** How to move, in the corner of the 3D view until you've flown once (? brings it back). */
 function NavHint() {
@@ -123,6 +124,7 @@ export function PaneBoxes({ tracks }: { tracks: MutableRefObject<HTMLDivElement 
 
   return (
     <div ref={wrap} className="ed-panes-boxes">
+      <LeakBar /> {/* P5 */}
       {Array.from({ length: 4 }, (_, i) => {
         const shown = i < n && (max == null || max === i);
         const r: Rect = max === i ? [0, 0, 1, 1] : rects[i] ?? [0, 0, 0, 0];
