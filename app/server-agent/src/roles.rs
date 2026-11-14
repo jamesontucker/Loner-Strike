@@ -243,6 +243,17 @@ fn rcon(game_dir: &Path, port: u16, line: &str) -> Option<String> {
     game::rcon_udp(port, &pw, line).ok()
 }
 
+/// Where the game's log lines land: qconsole.log (the servers run with -condebug, and the "L ..."
+/// lines are there whether or not logging to files is on), else the newest file in logs/.
+fn log_file(game_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    for p in [game_dir.join("qconsole.log"), game_dir.parent().map(|d| d.join("qconsole.log")).unwrap_or_default()] {
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    newest_log(&game_dir.join("logs"))
+}
+
 fn newest_log(dir: &Path) -> Option<PathBuf> {
     std::fs::read_dir(dir).ok()?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("log"))).max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok())
 }
@@ -309,7 +320,7 @@ pub fn run(paths: Paths) {
             }
             let Ok(config) = Config::read(&paths) else { continue };
             let game_dir = paths.server_dir().join(&config.game);
-            if let Some(path) = newest_log(&game_dir.join("logs")) {
+            if let Some(path) = log_file(&game_dir) {
                 let state = log.get_or_insert_with(|| (path.clone(), path.metadata().map(|m| m.len()).unwrap_or(0)));
                 if state.0 != path {
                     *state = (path.clone(), 0);

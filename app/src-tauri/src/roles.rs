@@ -540,6 +540,17 @@ fn fail_word(err: &str) -> &'static str {
     }
 }
 
+/// Where the game's log lines land: qconsole.log (the servers run with -condebug, and the "L ..."
+/// lines are there whether or not logging to files is on), else the newest file in logs/.
+fn log_file(game_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    for p in [game_dir.join("qconsole.log"), game_dir.parent().map(|d| d.join("qconsole.log")).unwrap_or_default()] {
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    newest_log(&game_dir.join("logs"))
+}
+
 fn newest_log(dir: &std::path::Path) -> Option<PathBuf> {
     std::fs::read_dir(dir).ok()?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("log"))).max_by_key(|p| p.metadata().and_then(|m| m.modified()).ok())
 }
@@ -621,7 +632,7 @@ pub fn start() {
                     logs.remove(&e.id);
                     continue;
                 }
-                let Some(path) = newest_log(&e.dir.join(&e.game).join("logs")) else { continue };
+                let Some(path) = log_file(&e.dir.join(&e.game)) else { continue };
                 let state = logs.entry(e.id.clone()).or_insert_with(|| {
                     // from now on: a line written before the app looked isn't answered
                     let len = path.metadata().map(|m| m.len()).unwrap_or(0);
