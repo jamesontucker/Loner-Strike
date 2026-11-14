@@ -2049,7 +2049,7 @@ pub fn status(f: &Files) -> Result<Value, String> {
         }).collect::<Vec<_>>(),
         "templates": builtins(),
         // installed with community items: read only here (remix one to change it)
-        "installed": installed.iter().map(|(t, from)| json!({"name": t.name, "label": shown_name(&t.name, from, &authors), "display": t.display, "base": t.base, "model": t.model, "category": t.category, "from": from, "summary": summary(t)})).collect::<Vec<_>>(),
+        "installed": installed.iter().map(|(t, from)| json!({"name": t.name, "label": shown_name(&t.name, from, &authors, &index_maker), "display": t.display, "base": t.base, "model": t.model, "category": t.category, "from": from, "summary": summary(t)})).collect::<Vec<_>>(),
         "problems": problems,
         "limits": limits(),
         "placed": placed(),
@@ -2405,32 +2405,41 @@ pub fn sections_with_source(text: &str) -> Vec<(String, Vec<String>)> {
     out
 }
 
-/// A shared type's name for people: "<type> by <author>" (the author from the community
-/// library entry of a package that brought it; else "by member <id>" from its gb<id>
-/// namespace). The stored name stays the full one.
-pub fn shown_name(name: &str, from: &[String], authors: &HashMap<String, String>) -> String {
+/// A shared type's name for people: "<type> by <author>". The type's maker is the member in
+/// its gb<id> namespace: a package that brought it names the author only when its verified
+/// uploader is that member (a package may carry someone else's type unchanged); else the
+/// community index's name for that member (`maker`), else "by member <id>". The stored name
+/// stays the full one.
+pub fn shown_name(name: &str, from: &[String], library: &HashMap<String, (String, i64)>, maker: &dyn Fn(i64) -> Option<String>) -> String {
     let Some((ns, t)) = name.split_once('.') else { return name.to_string() };
-    if let Some(a) = from.iter().find_map(|k| authors.get(k)).filter(|a| !a.trim().is_empty()) {
-        return format!("{t} by {}", a.trim());
-    }
-    match ns.strip_prefix("gb").filter(|d| !d.is_empty() && d.bytes().all(|c| c.is_ascii_digit())) {
-        Some(id) => format!("{t} by member {id}"),
-        None => format!("{t} by {ns}"),
+    let Some(member) = ns.strip_prefix("gb").filter(|d| !d.is_empty() && d.bytes().all(|c| c.is_ascii_digit())).and_then(|d| d.parse::<i64>().ok()) else {
+        return format!("{t} by {ns}");
+    };
+    let own = from.iter().filter_map(|k| library.get(k)).find(|(a, owner)| *owner == member && !a.trim().is_empty()).map(|(a, _)| a.trim().to_string());
+    match own.or_else(|| maker(member).filter(|a| !a.trim().is_empty())) {
+        Some(a) => format!("{t} by {a}"),
+        None => format!("{t} by member {member}"),
     }
 }
 
-/// The community library's authors by package key (what a block in creatures.ini is named by).
-fn library_authors() -> HashMap<String, String> {
-    super::communitylib::load_all(&super::communitylib::lib_dir()).into_iter().map(|i| (i.key(), i.author)).collect()
+/// The community library by package key (what a block in creatures.ini is named by): its
+/// author and verified uploader's member id.
+fn library_authors() -> HashMap<String, (String, i64)> {
+    super::communitylib::load_all(&super::communitylib::lib_dir()).into_iter().map(|i| (i.key(), (i.author, i.owner_id))).collect()
+}
+
+/// The community index's name for a member (who uploaded something listed).
+fn index_maker(member: i64) -> Option<String> {
+    super::community::index_cached().items.into_iter().find(|i| i.owner_id == member && !i.author.trim().is_empty()).map(|i| i.author)
 }
 
 /// What a creature type field can name: the built-in types, the user's own and the installed
 /// ones (each with its package).
 pub fn type_names(ini: &str) -> Value {
-    type_names_with(ini, &library_authors())
+    type_names_with(ini, &library_authors(), &index_maker)
 }
 
-pub fn type_names_with(ini: &str, authors: &HashMap<String, String>) -> Value {
+pub fn type_names_with(ini: &str, authors: &HashMap<String, (String, i64)>, maker: &dyn Fn(i64) -> Option<String>) -> Value {
     let built: Vec<String> = builtins().into_iter().map(|t| t.name).collect();
     let mut own: Vec<String> = Vec::new();
     let mut installed: Vec<Value> = Vec::new();
@@ -2441,7 +2450,7 @@ pub fn type_names_with(ini: &str, authors: &HashMap<String, String>) -> Value {
         if from.is_empty() {
             own.push(n);
         } else {
-            installed.push(json!({"name": n, "label": shown_name(&n, &from, authors), "from": from}));
+            installed.push(json!({"name": n, "label": shown_name(&n, &from, authors, maker), "from": from}));
         }
     }
     json!({"builtin": built, "planned": planned_types().filter(|t| builtin(t).is_none()).collect::<Vec<_>>(), "own": own, "installed": installed})
@@ -3243,14 +3252,22 @@ mod tests {
     #[test]
     fn names_used_by_and_unknown_types() {
         let ini = "[my_runner]\nbase = runner\nhp = 70\n\n[runner_x]\nbase = my_runner\n\n[zombie]\nhp = 120\n; >>> from mode-123\n; types: jo.ghoul\n[jo.ghoul]\nbase = zombie\n; <<< end mode-123\n";
-        let n = type_names_with(ini, &HashMap::new());
+        let n = type_names_with(ini, &HashMap::new(), &|_| None);
         assert_eq!(n["own"], json!(["my_runner", "runner_x"]));
         assert_eq!(n["installed"], json!([{"name": "jo.ghoul", "label": "ghoul by jo", "from": ["mode-123"]}]));
         // "<type> by <author>": the library's author, else the member id of a gb<id> namespace
-        let authors: HashMap<String, String> = [("mod-5".to_string(), "Jo Smith".to_string())].into_iter().collect();
-        assert_eq!(shown_name("gb123.runner_x", &["mod-5".into()], &authors), "runner_x by Jo Smith");
-        assert_eq!(shown_name("gb123.runner_x", &["mod-9".into()], &authors), "runner_x by member 123");
-        assert_eq!(shown_name("my_runner", &[], &authors), "my_runner");
+        let lib: HashMap<String, (String, i64)> = [("mod-5".to_string(), ("Jo Smith".to_string(), 123)), ("mod-6".to_string(), ("Carrier".to_string(), 999))].into_iter().collect();
+        let nobody = |_: i64| None;
+        assert_eq!(shown_name("gb123.runner_x", &["mod-5".into()], &lib, &nobody), "runner_x by Jo Smith");
+        // a package carrying another member's type (an unchanged copy) doesn't lend its uploader's name
+        assert_eq!(shown_name("gb123.runner_x", &["mod-6".into()], &lib, &nobody), "runner_x by member 123");
+        assert_eq!(shown_name("gb123.runner_x", &["mod-6".into()], &lib, &|m| (m == 123).then(|| "Jo Smith".to_string())), "runner_x by Jo Smith");
+        // both bring it: the maker's own package names it
+        assert_eq!(shown_name("gb123.runner_x", &["mod-6".into(), "mod-5".into()], &lib, &nobody), "runner_x by Jo Smith");
+        // an unverified install (owner 0) never names anyone
+        let old: HashMap<String, (String, i64)> = [("mod-7".to_string(), ("Someone".to_string(), 0))].into_iter().collect();
+        assert_eq!(shown_name("gb123.runner_x", &["mod-7".into()], &old, &nobody), "runner_x by member 123");
+        assert_eq!(shown_name("my_runner", &[], &lib, &nobody), "my_runner");
         assert!(n["builtin"].as_array().unwrap().iter().any(|x| x == "zombie"));
         assert_eq!(n["planned"], json!(["controller", "stukabat"]));
         // a map with runner_x, a mode with jo.ghoul, waves with my_runner
