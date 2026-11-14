@@ -979,6 +979,9 @@ class Roles:
             if parts == ["polar", "webhook"] and method == "POST":
                 code, ans = self.webhook(h.headers, read_body(h), ip)
                 return reply(h, code, ans, cors=False)
+            # (anything else there, like a browser's GET, gets a plain answer, not "isn't claimed")
+            if parts == ["polar", "webhook"]:
+                return reply(h, 405, {"error": "This endpoint takes Polar's webhook POSTs."}, cors=False)
             body = {}
             if method in ("POST", "DELETE"):
                 raw = read_body(h)

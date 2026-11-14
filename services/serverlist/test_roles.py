@@ -958,6 +958,8 @@ class Http(unittest.TestCase):
                                                                                 "webhook-signature": f"v1,{sig}"})[0], 202)
             self.assertEqual(call("POST", "/roles/polar/webhook", body, headers={"webhook-id": "m2", "webhook-timestamp": ts,
                                                                                 "webhook-signature": f"v1,{sig}"})[0], 401)
+            # (a browser's GET on the webhook gets a plain answer, not "isn't claimed": QA4-G)
+            self.assertEqual(call("GET", "/roles/polar/webhook"), (405, {"error": "This endpoint takes Polar's webhook POSTs."}))
             self.assertEqual(call("DELETE", "/roles/server", {}, token=tok), (200, {"ok": True, "revoked": []}))
             self.assertEqual(call("GET", "/roles/server", token=tok)[0], 401)
             self.assertEqual(call("GET", "/roles/nothing")[0], 401)
