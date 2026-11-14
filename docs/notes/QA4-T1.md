@@ -309,3 +309,16 @@ Screenshots are in `/private/tmp/claude-501/-Users-jameson/a1c85d27-df33-445d-9b
 | Picker, Publish listing, Used by, creature card | PASS (Playwright) | creature-picker, community-creatures, community-creature-kind specs in Chromium and WebKit |
 | A real GameBanana publish, Get, update and Go back | NEEDS USER | Needs a real upload and the list service deployed |
 | A real Linux server getting a block | NEEDS USER | Unit-level only (the upload filter passes creatures.ini, models/, sound/) |
+
+## NPCs and interactables (1.0, 2026-11-14): QA rows
+| Check | Result | Evidence |
+|---|---|---|
+| The Quest Giver installs and runs | PASS | Sim/T1NPC (brain ls-next3 run 43648864150, 1310-dev; plugins fresh from b5bb94c7 plus 5f1e3c2a's gm_components), `-insecure`, de_dust2, 5 bots, debug build of the example: Old Sam spawned (entity 236), the note (237) |
+| Talked To NPC fires from a use | PASS | `ls_npc_use 1 236` → events `talk ran`, `ask asked` |
+| A choice flows | PASS | `ls_npc_pick 1 0` → `ask reply 1` → `take true` → `thanks said`; a second bot answered by itself → `ask reply 2` → `later said` |
+| The interactable fires Used Interactable and the reward | PASS | `ls_npc_use 1 237` → `used ran` → `if true` → `pay done` → `yay said` |
+| Bots don't shoot NPCs or get stuck on them | PASS (Y) | Y's brain check: 16 bots, 16 NPCs, 0 hits, nobody stuck; unkillable NPCs take no damage, killable ones only when the mode allows |
+| Plain-map I/O (greeting, targets) | PASS (Rust/FGD) | `target` is a target_destination, shown in the I/O panel (npc-editor spec) |
+| Editor icons, preview, Checks; Studio nodes and the example | PASS (Playwright) | npc-editor and studio-npc specs, Chromium and WebKit |
+| Talking through the menu, timeouts and walking away with a real player | NEEDS USER | Menus are drawn only for people; bots answer by themselves |
+| Bots using an interactable on their own ("Bots may use") | NEEDS USER / W2 | W2 owns the bot side; not watched in this sim |
