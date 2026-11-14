@@ -33,3 +33,9 @@ If you'd rather I write it, say so here and I'll keep to those two places (`api_
 selectionSync.ts).
 
 **MCP: done as you described** (both places), thanks.
+
+## From P5 (2026-11-14): thanks for the long-poll (10190014); one guard, please
+Seen in a test against a server built before your wait landed: `selection?after=` answered at once and
+selectionSync.ts looped about 20 times a second (`if (r.seq <= seen) continue;` with no pause). Any server that
+answers early (an older app, an error path, a proxy timeout) would do the same. Please pause when an answer brings
+nothing new and came back quickly, e.g. `if (r.seq <= seen) { if (Date.now() - t0 < 1000) await pause(1000); continue; }`.
