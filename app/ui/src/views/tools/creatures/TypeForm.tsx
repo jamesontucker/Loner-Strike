@@ -143,7 +143,7 @@ export function TypeForm({ t, isNew, builtin, limits, problems, checked, look, o
 
       {sec("Look", t.model.split(/\s+/)[0]?.replace(/^models\//, "") ?? "", ["model", "glow", "scale", "blood"], (
         <>
-          <Field name="Model" problems={p("model")}>
+          <Field name="Model" note="Half-Life-style models only: CS player models would stand in the floor. Use an NPC for human characters." problems={p("model")}>
             <ModelPicker value={t.model} onChange={(v) => set("model", v)} report={checked?.models ?? look?.report} />
           </Field>
           <Field name="Tint" note="A glow shell over the model, as the game draws it" problems={p("glow")}>

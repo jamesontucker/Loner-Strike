@@ -163,7 +163,7 @@ tier2_hp = 1                ; health times for the tier (1 = the mode scales hea
 tier3_skin = -1
 tier3_body = -1
 tier3_hp = 1
-ls = model=models/player/zombie_source/zombie_source.mdl anims=walk run attack1 die   ; the plan's backend form also works
+ls = model=models/zombie.mdl anims=walk run attack1 die   ; the plan's backend form also works
 mm = monster_zombie         ; ignored by the fork (the kit's MonsterMod mapping)
 bot = zombie_classic        ; ignored by the fork (the kit's bot-zombie fallback)
 ```
@@ -186,6 +186,12 @@ installs have; the engine finds `valve/` files from `cstrike`). If that file is 
 `fallback_glow` tint, so a mode always plays. The choice is made per map at precache (`ls_creature types` shows "stand-in").
 Clients that lack the HL model see an error model; we never put Valve's `.mdl`s on FastDL. Own models for 1.0.0 (§6.4) go
 in as the first candidate.
+
+**No CS player models.** CS player models (gign, terror…) aren't supported for creatures yet: they'd stand in the floor
+(a player model's origin is the person's middle, a creature's is its feet). The brain skips any `models/player/` candidate
+(it says so in the console) and uses the next one, or `models/hostage.mdl`; Creature Studio warns on the Model field. Use
+an NPC for human characters (gm_components lifts a player-model NPC to stand on the floor), or a Half-Life-style model
+(like `hgrunt`).
 
 ## 3. Spawning and commands
 

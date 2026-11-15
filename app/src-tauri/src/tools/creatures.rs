@@ -1032,6 +1032,9 @@ pub struct Problem {
     pub error: bool,
 }
 
+/// Shown on a type whose model list has a CS player model (the brain skips it for the hostage).
+pub const PLAYER_MODEL_WARNING: &str = "CS player models (gign, terror…) aren't supported for creatures yet: they'd stand in the floor. Use an NPC for human characters, or a Half-Life-style model (like hgrunt).";
+
 fn problem(at: &str, field: &str, text: impl Into<String>, error: bool) -> Problem {
     Problem { at: at.into(), field: field.into(), text: text.into(), error }
 }
@@ -1188,6 +1191,10 @@ pub fn check_with(types: &[Creature], installed: usize) -> Vec<Problem> {
             if !safe_model(m) {
                 out.push(problem(at, "model", format!("\"{m}\" isn't a model path like models/zombie.mdl."), true));
             }
+        }
+        // (the brain skips them: a player model's origin is the person's middle, a creature's its feet)
+        if models.iter().any(|m| m.to_ascii_lowercase().starts_with("models/player/")) {
+            out.push(problem(at, "model", PLAYER_MODEL_WARNING, false));
         }
         for (i, a) in t.anim.iter().enumerate() {
             if a.contains(char::is_whitespace) {
@@ -2921,7 +2928,7 @@ mod tests {
         // base = zombie, then the keys; `ls =` comes after model = and wins
         assert_eq!(runner.hp, 60.0);
         assert_eq!(runner.speed, 300.0);
-        assert_eq!(runner.model, "models/player/zombie_source/zombie_source.mdl");
+        assert_eq!(runner.model, "models/zombie.mdl");
         assert_eq!(runner.anim, ["".to_string(), "walk".into(), "run".into(), "attack1".into(), "".into(), "die".into()]);
         assert_eq!(runner.snd[0], "zombie/zo_idle1.wav zombie/zo_idle2.wav | player/pl_pain2.wav");
         assert_eq!(runner.fallback_glow, [160.0, 160.0, 20.0]);
@@ -2988,6 +2995,16 @@ mod tests {
         let new = write(&crlf, &types).unwrap();
         assert!(!new.replace("\r\n", "").contains('\n'));
         assert!(new.contains("damage = 45\r\n"));
+    }
+
+    #[test]
+    fn a_player_model_is_warned_about() {
+        let mut t = builtin("zombie").unwrap();
+        t.name = "my_zombie".into();
+        assert!(!check(std::slice::from_ref(&t)).iter().any(|p| p.text == PLAYER_MODEL_WARNING));
+        t.model = "models/hgrunt.mdl models/player/gign/gign.mdl".into();
+        let p = check(std::slice::from_ref(&t));
+        assert!(p.iter().any(|p| p.text == PLAYER_MODEL_WARNING && p.field == "model" && !p.error), "{p:?}");
     }
 
     #[test]
