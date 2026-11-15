@@ -29,6 +29,10 @@ pub const LIMITS: &[Limit] = &[
     Limit { id: "free_spot_tries", label: "Tries finding a free spot", default: 64, lag_above: 256, max: 1024, kinds: &["spatial.free_spot"] }, // W1
     Limit { id: "aim_trace", label: "Aim Point's longest trace", default: 8192, lag_above: 8192, max: 32768, kinds: &["aim.point"] }, // W1
     Limit { id: "tick_rate", label: "On Tick runs a second at most", default: 100, lag_above: 100, max: 1000, kinds: &["event.on_tick"] }, // W1
+    // (loops: a frame's turns of every loop, then the rest goes on next frame; a Function's loops
+    // can't wait, so they stop at their ceiling: P5's fc_st_loops froze a server)
+    Limit { id: "loop_steps", label: "Loop steps a frame", default: 20000, lag_above: 200000, max: 2000000, kinds: &["flow.for_loop", "flow.for_loop_break", "flow.while", "flow.for_each_array", "flow.for_each_player", "flow.for_each_entity", "creature.for_each", "table.for_each", "marker.for_each"] },
+    Limit { id: "fn_loop_steps", label: "Loop steps in a Function", default: 1000000, lag_above: 2000000, max: 10000000, kinds: &["flow.for_loop", "flow.for_loop_break", "flow.while", "flow.for_each_array", "flow.for_each_player", "flow.for_each_entity", "creature.for_each", "table.for_each", "marker.for_each"] },
     Limit { id: "markers", label: "Objective markers at once", default: 32, lag_above: 64, max: 256, kinds: &["fx.marker"] },
     Limit { id: "trails", label: "Trails at once", default: 32, lag_above: 64, max: 256, kinds: &["fun.trail"] },
     // the effects agent (gen/fx.rs)

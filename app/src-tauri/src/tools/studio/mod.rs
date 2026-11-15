@@ -1904,6 +1904,71 @@ mod tests {
         // (it compiles: generated_plugins_compile_with_amxxpc has spawn_burst)
     }
 
+    /// Loops never freeze the server (P5's fc_st_loops) and still finish. An event graph's nested
+    /// 10,000 x 10,000 loop counts its turns against the frame's Loop steps, stops where it is at
+    /// the limit and goes on next frame (the inner loop first, then the outer one from its next
+    /// turn), with Completed only at the end; a Sequence after it waits for it. In a Function the
+    /// same loop stops at the Function's ceiling, says so, and the Function returns.
+    pub fn loops_mode() -> Graph {
+        let n = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let fnn = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p, "graph": "fl"});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        let nodes = vec![
+            n("rs", "event.round_started", json!({})),
+            n("seq", "flow.sequence", json!({"count": 2})),
+            n("outer", "flow.for_loop", json!({})),
+            n("first", "math.number", json!({"value": 1})),
+            n("last", "math.number", json!({"value": 10000})),
+            n("inner", "flow.for_loop", json!({})),
+            n("add", "var.add", json!({"var": "turns", "amount": 1})),
+            n("done", "debug.print", json!({"text": "LOOPS done", "chat": false})),
+            n("gv", "var.get", json!({"var": "turns"})),
+            n("after", "debug.print", json!({"text": "LOOPS after", "chat": false})),
+            n("call", "fn.call", json!({"func": "fl"})),
+            fnn("fe", "fn.entry", json!({})),
+            fnn("fo", "flow.for_loop", json!({})),
+            fnn("fi", "flow.for_loop", json!({})),
+            fnn("fr", "fn.return", json!({})),
+        ];
+        let edges = vec![
+            e(1, "rs", "then", "seq", "exec"), e(2, "seq", "then0", "outer", "exec"), e(3, "first", "out", "outer", "first"), e(4, "last", "out", "outer", "last"),
+            e(5, "outer", "body", "inner", "exec"), e(6, "first", "out", "inner", "first"), e(7, "last", "out", "inner", "last"), e(8, "inner", "body", "add", "exec"),
+            e(9, "outer", "then", "done", "exec"), e(10, "gv", "out", "done", "value"), e(11, "seq", "then1", "after", "exec"), e(12, "after", "then", "call", "exec"),
+            e(13, "fe", "then", "fo", "exec"), e(14, "fo", "body", "fi", "exec"), e(15, "fo", "then", "fr", "exec"),
+        ];
+        graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "loops", "name": "Loops"}, "nodes": nodes, "edges": edges,
+            "variables": [{"id": "turns", "name": "Turns", "type": "number", "scope": "mode", "default": 0}],
+            "functions": [{"id": "fl", "name": "Count Up", "inputs": [], "outputs": []}]})).unwrap()
+    }
+
+    #[test]
+    fn loops_spread_over_frames_or_stop_at_a_ceiling_never_freezing() {
+        let mut g = loops_mode();
+        // (the Function's loops: 10,000 x 10,000 too)
+        for id in ["fo", "fi"] {
+            let nd = g.nodes.iter_mut().find(|x| x.id == id).unwrap();
+            nd.params.insert("first".into(), json!(1));
+            nd.params.insert("last".into(), json!(10000));
+        }
+        let p: Vec<_> = graph::validate(&g).into_iter().filter(|p| p.level == "error").collect();
+        assert!(p.is_empty(), "{p:#?}");
+        let src = gen::generate(&g, false).source;
+        for want in ["stock bool:lsg_loop_full()", "stock lsg_loop_save(node, const ctx[], k, a, b, n)", "public lsg_loop_resume()", "stock bool:lsg_loop_ceil(const what[])",
+            "stock lsg_loop_go(node, ctx[], k, a, b, n)", "g_lsgStepLim = 20000", "g_lsgFnLim = 1000000", "if (lsg_loop_ceil(\"For Loop\"))"] {
+            assert!(src.contains(want), "{want}");
+        }
+        // both event loops and the Sequence can go on next frame; the Function's can't
+        let runs = src.matches("(ctx, k, a, b, n, 1)").count();
+        assert_eq!(runs, 3, "outer, inner and the Sequence");
+        // Completed (Then) is called from the outer loop's run, after its while: never from its entry
+        let run = src.split("\nstock ").find(|f| f.starts_with("lsg_n") && f.contains("_r(ctx[], k, a, b, n, own)") && f.contains("lsg_loop_save(2,")).expect("the outer loop's run");
+        let tail = &run[run.rfind("\t}\n").unwrap()..];
+        assert!(tail.contains("(ctx)"), "Completed after the loop: {tail}");
+        // a graph without loops: none of it
+        let plain = gen::generate(&graph::parse(TEMPLATE).unwrap(), false).source;
+        assert!(!plain.contains("lsg_loop_full"));
+    }
+
     /// Effects are budgeted in bytes per client, not only messages a frame (P5's fc_st_fx: 160
     /// effects a frame to everyone overflowed a player's datagram 813 times in 80 s). The bucket
     /// as the plugin runs it, step for step: a flood at the most the setting allows never puts more
@@ -2224,6 +2289,7 @@ mod tests {
         graphs.push(("colors".into(), serde_json::to_string(&color_mode()).unwrap()));
         graphs.push(("transforms".into(), serde_json::to_string(&transform_mode()).unwrap()));
         graphs.push(("handles".into(), serde_json::to_string(&handles_mode()).unwrap()));
+        graphs.push(("loops".into(), serde_json::to_string(&loops_mode()).unwrap()));
         graphs.push(("steam_nodes".into(), serde_json::to_string(&steam_mode()).unwrap()));
         graphs.push(("every_node_p5".into(), include_str!("testdata/every_node_p5.graph.json").into())); // P5
         graphs.push(("fun_nodes".into(), serde_json::to_string(&fun_mode(false)).unwrap()));

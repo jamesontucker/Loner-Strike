@@ -12,6 +12,8 @@ export const LIMITS: Limit[] = [
   { id: "free_spot_tries", label: "Tries finding a free spot", default: 64, lagAbove: 256, max: 1024, kinds: ["spatial.free_spot"] },
   { id: "aim_trace", label: "Aim Point's longest trace", default: 8192, lagAbove: 8192, max: 32768, kinds: ["aim.point"] },
   { id: "tick_rate", label: "On Tick runs a second at most", default: 100, lagAbove: 100, max: 1000, kinds: ["event.on_tick"] },
+  { id: "loop_steps", label: "Loop steps a frame", default: 20000, lagAbove: 200000, max: 2000000, kinds: ["flow.for_loop", "flow.for_loop_break", "flow.while", "flow.for_each_array", "flow.for_each_player", "flow.for_each_entity", "creature.for_each", "table.for_each", "marker.for_each"] },
+  { id: "fn_loop_steps", label: "Loop steps in a Function", default: 1000000, lagAbove: 2000000, max: 10000000, kinds: ["flow.for_loop", "flow.for_loop_break", "flow.while", "flow.for_each_array", "flow.for_each_player", "flow.for_each_entity", "creature.for_each", "table.for_each", "marker.for_each"] },
   { id: "markers", label: "Objective markers at once", default: 32, lagAbove: 64, max: 256, kinds: ["fx.marker"] },
   { id: "trails", label: "Trails at once", default: 32, lagAbove: 64, max: 256, kinds: ["fun.trail"] },
   // the effects agent (gen/fx.rs)

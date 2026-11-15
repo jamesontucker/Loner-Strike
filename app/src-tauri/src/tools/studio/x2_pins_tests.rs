@@ -99,13 +99,13 @@ fn for_each_and_pick_take_wired_filters() {
         // Who from the variable (the enum's number is lsg_match's code), Team instead, Only these
         // (a wired input is used as it is, or read into a local first in a debug build: lsi<n>)
         let either = |a: &str, b: &str| src.contains(a) || src.contains(b);
-        assert!(either("if (!(lsg_match(p, g_v", "if (!(lsg_match(p, lsi"), "a wired Who: {src}");
+        assert!(src.contains("if (!(lsg_match(p, a)))") && either("lsgA = g_v", "lsgA = lsi"), "a wired Who (read once, at the start): {src}");
         assert!(src.contains("is_user_connected(p) && lsg_team(p) == "), "a wired Team");
         assert!(either("lsg_acopy(snap, lsg_aplayers(7))", "lsg_acopy(snap, lsi"), "Only these");
         assert!(!src.contains("lsg_match(p, 1)") && !src.contains("lsg_match(p, 0)"), "the Who settings aren't used when wired");
         // the kind or name from a wire, Index and Break
         assert!(either("find_ent_by_class(p, \"info_player_start\")", "find_ent_by_class(p, lsi"), "a wired name");
-        assert!(src.contains("_:float(count - 1)"), "Index");
+        assert!(src.contains("_:float(n)"), "Index");
         assert!(src.contains("_break(") || src.contains("break(c"), "Break's own function");
     }
 }
@@ -121,7 +121,7 @@ fn old_graphs_keep_their_settings() {
     );
     clean(&gr);
     let src = gen::generate(&gr, false).source;
-    assert!(src.contains("lsg_match(p, 4)") && src.contains("find_ent_by_tname(p, \"door1\")") && src.contains("lsg_match(p, 7)"), "{src}");
+    assert!(src.contains("lsg_match(p, 4)") && src.contains("find_ent_by_tname(k, \"door1\")") && src.contains("lsg_match(p, 7)"), "{src}");
 }
 
 #[test]

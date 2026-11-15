@@ -431,6 +431,8 @@ struct Gen<'a> {
     /// (debug builds) the node being written: its inputs worked out once into locals, so the
     /// debugger shows the very values the node uses
     pinned: std::cell::RefCell<Vec<(String, String, String)>>,
+    /// the event graphs' loops that can stop and go on next frame: (node index, its run function)
+    loops: std::cell::RefCell<Vec<(usize, String)>>,
     debug: bool,
 }
 
@@ -1232,7 +1234,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         .collect();
     let rec_cells = g.structs.iter().map(|st| st.fields.iter().map(|f| if f.ty == "vector" { 3 } else if f.ty == "text" { 0 } else { 1 }).sum::<usize>()).max().unwrap_or(0).max(1);
     let rec_texts = g.structs.iter().map(|st| st.fields.iter().filter(|f| f.ty == "text").count()).max().unwrap_or(0).max(1);
-    let gen = Gen { v, slots, outs, touts, live, vars, reserved, layouts, origin: &ex.origin, pinned: Default::default(), debug };
+    let gen = Gen { v, slots, outs, touts, live, vars, reserved, layouts, origin: &ex.origin, pinned: Default::default(), loops: Default::default(), debug };
     let v = &gen.v;
     let kinds_live: BTreeSet<&str> = gen.live.iter().map(|id| v.defs[id].kind.as_str()).collect();
     let has = |k: &str| kinds_live.contains(k);
@@ -1398,6 +1400,10 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
 
     o.line(HELPERS);
+    // (loops: the step budget and the waiting loops)
+    if g.nodes.iter().any(|n| LOOP_KINDS.contains(&n.kind.as_str())) {
+        o.line(LOOP_HELPERS);
+    }
     // (Show HUD Text: its texts kept per player and slot, sent as state messages)
     if has("msg.hud") {
         o.line(HUD_HELPERS);
@@ -2085,6 +2091,16 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         spans.push(Span { node: gen.origin.get(*id).cloned().unwrap_or_else(|| id.to_string()), from, to: o.lines });
         o.blank();
     }
+    // (the event graphs' loops waiting for the next frame go on through here)
+    if g.nodes.iter().any(|n| LOOP_KINDS.contains(&n.kind.as_str())) {
+        let loops = gen.loops.borrow();
+        if loops.is_empty() {
+            o.line("stock lsg_loop_go(node, ctx[], k, a, b, n)\n{\n\t#pragma unused node\n\t#pragma unused ctx\n\t#pragma unused k\n\t#pragma unused a\n\t#pragma unused b\n\t#pragma unused n\n}\n");
+        } else {
+            let cases: Vec<String> = loops.iter().map(|(i, run)| format!("\t\tcase {i}: {run}(ctx, k, a, b, n, 1)")).collect();
+            o.line(format!("stock lsg_loop_go(node, ctx[], k, a, b, n)\n{{\n\tswitch (node)\n\t{{\n{}\n\t}}\n}}\n", cases.join("\n")));
+        }
+    }
 
     if debug {
         // a paused node runs again from here when the app says resume
@@ -2474,53 +2490,23 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let player = def.kind == "flow.for_each_player";
             let out = if player { "player" } else { "entity" };
             let k = gen.slot(id, out).unwrap_or(0);
-            let body = next("each").map(|c| c.replace("(ctx)", "(c)"));
-            b.line("\tnew c[LSG_CTX], count");
             let breaks = each_breaks(gen, id);
             if breaks {
                 b.line(format!("\tg_lsgLeft[{i}] = 0"));
                 after.push(multi_fn(gen, id, "break", &format!("\tg_lsgLeft[{i}] = 1")));
             }
-            b.line(each_head(gen, id, n, def, player, 512));
-            b.line(format!("\t\tcount++\n\t\tfor (new k = 0; k < LSG_CTX; k++)\n\t\t\tc[k] = ctx[k]\n\t\tc[{k}] = p"));
+            let mut spec = each_spec(gen, id, n, def, player, 512);
+            spec.item.push_str(&format!("\n\t\tc[{k}] = p"));
             if let Some(s) = gen.slot(id, "index") {
-                b.line(format!("\t\tc[{s}] = _:float(count - 1)"));
+                spec.item.push_str(&format!("\n\t\tc[{s}] = _:float(n)"));
             }
-            match body {
-                Some(c) => b.line(format!("\t\t{c}")),
-                None => b.line("\t\t#pragma unused c"),
-            }
-            if breaks {
-                b.line(format!("\t\tif (g_lsgLeft[{i}])\n\t\t\tbreak"));
-                if let Some(stop) = &fn_done {
-                    b.line(format!("\t\tif ({stop})\n\t\t\treturn"));
-                }
-            }
-            b.line("\t}");
-            if debug {
-                b.line(format!("\tlsd_exit({i}, lsd_times(count))"));
-            } else {
-                b.line("\t#pragma unused count");
-            }
-            then_line(&mut b, "then");
+            emit_loop(gen, id, &mut b, &mut after, spec, next("each"), breaks.then_some(i), &fn_done, next("then"));
         }
         "creature.for_each" => {
             let k = gen.slot(id, "creature").unwrap_or(0);
-            let body = next("each").map(|c| c.replace("(ctx)", "(c)"));
             let ty = pawn_str(&name_text(gen.text(n, def, "type")));
-            b.line(format!("\tnew c[LSG_CTX], count, p = -1\n\twhile (count < 512 && (p = find_ent_by_class(p, \"ls_creature\")) > 0)\n\t{{\n\t\tif (!lsg_cr_match(p, {ty}))\n\t\t\tcontinue"));
-            b.line(format!("\t\tcount++\n\t\tfor (new k = 0; k < LSG_CTX; k++)\n\t\t\tc[k] = ctx[k]\n\t\tc[{k}] = p"));
-            match body {
-                Some(c) => b.line(format!("\t\t{c}")),
-                None => b.line("\t\t#pragma unused c"),
-            }
-            b.line("\t}");
-            if debug {
-                b.line(format!("\tlsd_exit({i}, lsd_times(count))"));
-            } else {
-                b.line("\t#pragma unused count");
-            }
-            then_line(&mut b, "then");
+            let spec = LoopSpec { setup: "\tnew lsgK = -1, lsgA = 0, lsgB = 0".into(), cond: "n < 512".into(), item: format!("\t\tnew p = find_ent_by_class(k, \"ls_creature\")\n\t\tif (p <= 0)\n\t\t\tbreak\n\t\tk = p\n\t\tif (!lsg_cr_match(p, {ty}))\n\t\t\tcontinue\n\t\tc[{k}] = p"), array: false };
+            emit_loop(gen, id, &mut b, &mut after, spec, next("each"), None, &fn_done, next("then"));
         }
         "creature.on_idle" => {
             let e = exit("ran");
@@ -2531,17 +2517,16 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         "table.for_each" => {
             // each row: its number, its key and its cells in the flow's values (text ones kept aside)
-            let body = next("each").map(|c| c.replace("(ctx)", "(c)"));
             let tb = super::tables::table_of(&v.g.data_tables, n);
             let t = tb.map(|x| x.0).unwrap_or(0);
             let rows = if tb.is_some() { format!("LSG_DT{t}_N") } else { "0".into() };
-            b.line(format!("\tnew c[LSG_CTX], count\n\tfor (new r = 0; r < {rows}; r++)\n\t{{\n\t\tcount++\n\t\tfor (new j = 0; j < LSG_CTX; j++)\n\t\t\tc[j] = ctx[j]"));
+            let mut it = String::from("\t\tnew r = k++");
             if let Some((t, tb)) = tb {
                 let mut put = |pin: &str, k: usize, text: bool| {
                     if let Some(s) = gen.slot(id, pin) {
-                        b.line(format!("\t\tc[{s}] = {}", if text { "0".into() } else { format!("_:lsg_dt{t}_{k}(float(r))") }));
+                        it.push_str(&format!("\n\t\tc[{s}] = {}", if text { "0".into() } else { format!("_:lsg_dt{t}_{k}(float(r))") }));
                     } else if let Some(o) = gen.tout_index(id, pin) {
-                        b.line(format!("\t\tcopy(g_lsgOT[{o}], 127, lsg_dt{t}_{k}(float(r)))"));
+                        it.push_str(&format!("\n\t\tcopy(g_lsgOT[{o}], 127, lsg_dt{t}_{k}(float(r)))"));
                     }
                 };
                 if let Some((k, kc)) = tb.key_col() {
@@ -2551,48 +2536,26 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                     put(&c.id, k, c.pin_type() == "text");
                 }
                 if let Some(s) = gen.slot(id, "row") {
-                    b.line(format!("\t\tc[{s}] = _:float(r)"));
+                    it.push_str(&format!("\n\t\tc[{s}] = _:float(r)"));
                 }
             }
-            match body {
-                Some(c) => b.line(format!("\t\t{c}")),
-                None => b.line("\t\t#pragma unused c"),
+            if !it.contains("(float(r))") && !it.contains("_:float(r)") {
+                it.push_str("\n\t\t#pragma unused r");
             }
-            if let Some(stop) = &fn_done {
-                b.line(format!("\t\tif ({stop})\n\t\t\treturn"));
-            }
-            b.line("\t}");
-            if debug {
-                b.line(format!("\tlsd_exit({i}, lsd_times(count))"));
-            } else {
-                b.line("\t#pragma unused count");
-            }
-            then_line(&mut b, "then");
+            let spec = LoopSpec { setup: format!("\tnew lsgK = 0, lsgA = {rows}, lsgB = 0"), cond: "k < a".into(), item: it, array: false };
+            emit_loop(gen, id, &mut b, &mut after, spec, next("each"), None, &fn_done, next("then"));
         }
         "marker.for_each" => {
             let k = marker_index(v.g, gen.text(n, def, "marker"));
-            let body = next("each").map(|c| c.replace("(ctx)", "(c)"));
-            b.line(format!("\tnew c[LSG_CTX], count\n\tfor (new m = 0; m < g_lsgMkN; m++)\n\t{{\n\t\tif (g_lsgMkKind[m] != {k})\n\t\t\tcontinue\n\t\tcount++\n\t\tfor (new j = 0; j < LSG_CTX; j++)\n\t\t\tc[j] = ctx[j]"));
+            let mut it = format!("\t\tnew m = k++\n\t\tif (g_lsgMkKind[m] != {k})\n\t\t\tcontinue");
             if let Some(s) = gen.slot(id, "entity") {
-                b.line(format!("\t\tc[{s}] = g_lsgMkEnt[m]"));
+                it.push_str(&format!("\n\t\tc[{s}] = g_lsgMkEnt[m]"));
             }
             if let Some(s) = gen.slot(id, "index") {
-                b.line(format!("\t\tc[{s}] = _:float(count)"));
+                it.push_str(&format!("\n\t\tc[{s}] = _:float(n + 1)"));
             }
-            match body {
-                Some(c) => b.line(format!("\t\t{c}")),
-                None => b.line("\t\t#pragma unused c"),
-            }
-            if let Some(stop) = &fn_done {
-                b.line(format!("\t\tif ({stop})\n\t\t\treturn"));
-            }
-            b.line("\t}");
-            if debug {
-                b.line(format!("\tlsd_exit({i}, lsd_times(count))"));
-            } else {
-                b.line("\t#pragma unused count");
-            }
-            then_line(&mut b, "then");
+            let spec = LoopSpec { setup: "\tnew lsgK = 0, lsgA = 0, lsgB = 0".into(), cond: "k < g_lsgMkN".into(), item: it, array: false };
+            emit_loop(gen, id, &mut b, &mut after, spec, next("each"), None, &fn_done, next("then"));
         }
         "flow.pick_player" | "flow.pick_entity" => {
             let out = if def.kind == "flow.pick_player" { "player" } else { "entity" };
@@ -3646,13 +3609,24 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
         }
         "event.call" => {
+            let wait = fn_done.is_none() && gen.home_fn(id).is_none() && event_loops(gen);
             if let Some((ci, c)) = custom_event_of(g_of(gen), n) {
                 let args: Vec<String> = c.inputs.iter().map(|m| gen.need(id, &m.id, &m.ty)).collect();
+                if wait {
+                    b.line("\tg_lsgYield = false");
+                }
                 b.line(format!("\tlsg_ce{ci}({})", args.join(", ")));
             }
             let e = exit("called");
             if !e.is_empty() {
                 b.line(e);
+            }
+            if wait {
+                // (a loop in the custom event may go on next frame: what follows waits for it)
+                let run = format!("{}_r", gen.fname(id));
+                b.line(format!("\tif (g_lsgYield)\n\t{{\n\t\tlsg_loop_save({i}, ctx, 1, 0, 0, 0)\n\t\treturn\n\t}}"));
+                after.push(format!("stock {run}(ctx[], k, a, b, n, own)\n{{\n\t#pragma unused k\n\t#pragma unused a\n\t#pragma unused b\n\t#pragma unused n\n\t#pragma unused own\n{}\n}}", next("then").map(|c| format!("\t{c}")).unwrap_or_else(|| "\t#pragma unused ctx".into())));
+                gen.loops.borrow_mut().push((i, run));
             }
             then_line(&mut b, "then");
         }
@@ -3692,11 +3666,20 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             if !e.is_empty() {
                 b.line(e);
             }
-            for (k, p) in v.exec_outs(id).iter().enumerate() {
-                if let (Some(stop), true) = (&fn_done, k > 0) {
-                    b.line(format!("\tif ({stop})\n\t\treturn"));
+            if fn_done.is_none() && may_wait(gen, id) {
+                // (a loop after one of its outputs may go on next frame: the next output waits for it)
+                let run = format!("{}_r", gen.fname(id));
+                let cases: Vec<String> = v.exec_outs(id).iter().enumerate().filter_map(|(k, p)| next(p).map(|c| format!("\t\t\tcase {k}: {c}"))).collect();
+                b.line(format!("\t{run}(ctx, 0, 0, 0, 0, 0)"));
+                after.push(format!("stock {run}(ctx[], k, a, b, n, own)\n{{\n\t#pragma unused a\n\t#pragma unused b\n\t#pragma unused n\n\t#pragma unused own\n\tfor (; k < {}; k++)\n\t{{\n\t\tg_lsgYield = false\n\t\tswitch (k)\n\t\t{{\n{}\n\t\t}}\n\t\tif (g_lsgYield)\n\t\t{{\n\t\t\tlsg_loop_save({i}, ctx, k + 1, 0, 0, 0)\n\t\t\treturn\n\t\t}}\n\t}}\n}}", v.exec_outs(id).len(), if cases.is_empty() { "\t\t\tdefault: {}".into() } else { cases.join("\n") }));
+                gen.loops.borrow_mut().push((i, run));
+            } else {
+                for (k, p) in v.exec_outs(id).iter().enumerate() {
+                    if let (Some(stop), true) = (&fn_done, k > 0) {
+                        b.line(format!("\tif ({stop})\n\t\treturn"));
+                    }
+                    then_line(&mut b, p);
                 }
-                then_line(&mut b, p);
             }
         }
         "flow.do_once" | "flow.do_n" | "flow.gate" => {
@@ -3823,58 +3806,40 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             b.line(format!("\tif (g_lsgLeft[{i}])\n\t{{{dbg_a}\n\t\t{}\n\t}}\n\telse\n\t{{{dbg_b}\n\t\t{}\n\t}}", a.unwrap_or_default(), bb.unwrap_or_default()));
         }
         "flow.for_loop" | "flow.for_loop_break" | "flow.while" | "flow.for_each_array" => {
-            let body = next("body").map(|c| c.replace("(ctx)", "(c)"));
             let brk = def.kind != "flow.for_loop" && def.kind != "flow.while";
-            b.line("\tnew c[LSG_CTX], n");
             if brk {
                 b.line(format!("\tg_lsgLeft[{i}] = 0"));
                 after.push(multi_fn(gen, id, "break", &format!("\tg_lsgLeft[{i}] = 1")));
             }
-            let copy = "\t\tfor (new j = 0; j < LSG_CTX; j++)\n\t\t\tc[j] = ctx[j]";
-            match def.kind.as_str() {
+            let spec = match def.kind.as_str() {
                 "flow.while" => {
                     let limit = gen.num(n, def, "limit").round().clamp(1.0, LOOP_LIMIT as f64) as i64;
-                    b.line(format!("\twhile (n < {limit} && {})\n\t{{\n\t\tn++\n{copy}", bool01(&inp("cond", "bool"))));
+                    LoopSpec { setup: format!("\tnew lsgK = 0, lsgA = {limit}, lsgB = 0"), cond: format!("n < a && {}", bool01(&inp("cond", "bool"))), item: String::new(), array: false }
                 }
                 "flow.for_each_array" => {
                     let item = v.out_type(id, "item").unwrap_or_default();
-                    b.line(format!("\tstatic snap\n\tif (!snap)\n\t\tsnap = _:ArrayCreate(LSG_AC)\n\tlsg_acopy(snap, {})\n\tnew size = lsg_alen(snap)", inp("array", "any")));
-                    b.line(format!("\tfor (new k = 0; k < size && k < LSG_AMAX; k++)\n\t{{\n\t\tn++\n{copy}"));
+                    let mut it = String::new();
                     if let Some(s) = gen.slot(id, "index") {
-                        b.line(format!("\t\tc[{s}] = _:float(k)"));
+                        it.push_str(&format!("\t\tc[{s}] = _:float(k)\n"));
                     }
                     if let Some(t) = gen.tout_index(id, "item") {
-                        b.line(format!("\t\tArrayGetString(Array:snap, k, g_lsgOT[{t}], 127)"));
+                        it.push_str(&format!("\t\tArrayGetString(Array:a, k, g_lsgOT[{t}], 127)\n"));
                     } else if let Some(s) = gen.slot(id, "item") {
-                        b.line(format!("\t\tc[{s}] = {}", match kind_of(&item) {
-                            'v' => "lsg_agetv(snap, float(k))".to_string(),
-                            'r' => "lsg_agetr(snap, float(k))".to_string(),
-                            _ => "ArrayGetCell(Array:snap, k)".to_string(),
+                        it.push_str(&format!("\t\tc[{s}] = {}\n", match kind_of(&item) {
+                            'v' => "lsg_agetv(a, float(k))".to_string(),
+                            'r' => "lsg_agetr(a, float(k))".to_string(),
+                            _ => "ArrayGetCell(Array:a, k)".to_string(),
                         }));
                     }
+                    it.push_str("\t\tk++");
+                    LoopSpec { setup: format!("\tstatic snap\n\tif (!snap)\n\t\tsnap = _:ArrayCreate(LSG_AC)\n\tlsg_acopy(snap, {})\n\tnew lsgK = 0, lsgA = snap, lsgB = lsg_alen(snap)", inp("array", "any")), cond: "k < b && k < LSG_AMAX".into(), item: it, array: true }
                 }
                 _ => {
                     let s = gen.slot(id, "index").unwrap_or(0);
-                    b.line(format!("\tnew last = floatround({})\n\tfor (new k = floatround({}); k <= last && n < LSG_AMAX; k++)\n\t{{\n\t\tn++\n{copy}\n\t\tc[{s}] = _:float(k)", inp("last", "number"), inp("first", "number")));
+                    LoopSpec { setup: format!("\tnew lsgK = floatround({}), lsgA = floatround({}), lsgB = 0", inp("first", "number"), inp("last", "number")), cond: "k <= a && n < LSG_AMAX".into(), item: format!("\t\tc[{s}] = _:float(k)\n\t\tk++"), array: false }
                 }
-            }
-            match body {
-                Some(c) => b.line(format!("\t\t{c}")),
-                None => b.line("\t\t#pragma unused c"),
-            }
-            if brk {
-                b.line(format!("\t\tif (g_lsgLeft[{i}])\n\t\t\tbreak"));
-            }
-            if let Some(stop) = &fn_done {
-                b.line(format!("\t\tif ({stop})\n\t\t\treturn"));
-            }
-            b.line("\t}");
-            if debug {
-                b.line(format!("\tlsd_exit({i}, lsd_times(n))"));
-            } else {
-                b.line("\t#pragma unused n");
-            }
-            then_line(&mut b, "then");
+            };
+            emit_loop(gen, id, &mut b, &mut after, spec, next("body"), brk.then_some(i), &fn_done, next("then"));
         }
         "flow.switch_num" | "flow.switch_text" | "flow.switch_enum" => {
             let outs: Vec<(String, String)> = v.outputs(id).iter().filter(|p| p.id != "default").map(|p| (p.id.clone(), p.label.clone())).collect();
@@ -4286,6 +4251,203 @@ fn map_kind(item: &str) -> u8 {
 fn multi_fn(gen: &Gen, id: &str, pin: &str, body: &str) -> String {
     format!("stock {}(ctx[])\n{{\n\t#pragma unused ctx\n{body}\n}}", gen.pin_fname(id, pin))
 }
+
+/// A loop that never freezes the server (P5's fc_st_loops) and still finishes:
+/// - in an event graph each turn counts against the frame's Loop steps a frame; at the limit it
+///   stops where it is, saved (lsg_loop_save), and goes on next frame from the same place;
+///   Completed runs only at the real end, and a loop around it waits for it (g_lsgYield)
+/// - in a Function (it must finish at once) it stops at the Loop steps in a Function limit
+///   instead, says so in the log, and the Function returns what it has
+/// The spec: `setup` lines set lsgK, lsgA, lsgB (where it starts, and two values it keeps: an end,
+/// an array, a count); `cond` goes on while true (k, a, b, n); `item` fills c for this turn and
+/// moves k on (it may `continue` past one that doesn't count, or `break` at the end); `array`:
+/// a is an Array handle (copied when saved, freed after).
+struct LoopSpec {
+    setup: String,
+    cond: String,
+    item: String,
+    array: bool,
+}
+
+fn emit_loop(gen: &Gen, id: &str, b: &mut Out, after: &mut Vec<String>, spec: LoopSpec, body: Option<String>, brk: Option<usize>, fn_done: &Option<String>, then: Option<String>) {
+    let i = gen.index(id);
+    let (_, def) = gen.node(id);
+    let debug = gen.debug;
+    let copy = "\t\tfor (new j = 0; j < LSG_CTX; j++)\n\t\t\tc[j] = ctx[j]";
+    let body = body.map(|c| c.replace("(ctx)", "(c)"));
+    let brk_line = brk.map(|i| format!("\t\tif (g_lsgLeft[{i}])\n\t\t\tbreak")).unwrap_or_default();
+    let done_line = fn_done.as_ref().map(|s| format!("\t\tif ({s})\n\t\t\treturn")).unwrap_or_default();
+    let end = |ind: &str| {
+        let mut e = String::new();
+        if spec.array {
+            e.push_str(&format!("{ind}if (own)\n{ind}\tArrayDestroy(Array:a)\n"));
+        }
+        e.push_str(&if debug { format!("{ind}lsd_exit({i}, lsd_times(n))") } else { format!("{ind}#pragma unused n") });
+        if let Some(t) = &then {
+            e.push_str(&format!("\n{ind}{t}"));
+        }
+        e
+    };
+    let body_line = body.clone().map(|c| format!("\t\t{c}")).unwrap_or_else(|| "\t\t#pragma unused c".into());
+    b.line(spec.setup.trim_end_matches('\n'));
+    if fn_done.is_some() || gen.home_fn(id).is_some() {
+        // (a Function's: at once, up to its ceiling)
+        let what = pawn_str(&safe_text(&def.title, 40));
+        b.line(format!("\tg_lsgFnLim = {}\n\tnew c[LSG_CTX], n, k = lsgK, a = lsgA, b = lsgB, own = 0", gen.limit_expr("fn_loop_steps")));
+        b.line(format!("\twhile ({})\n\t{{\n\t\tif (lsg_loop_ceil({what}))\n\t\t\tbreak\n{copy}\n{}\n\t\tn++\n{body_line}", spec.cond, spec.item.trim_end_matches('\n')));
+        if !brk_line.is_empty() {
+            b.line(brk_line.clone());
+        }
+        if !done_line.is_empty() {
+            b.line(done_line.clone());
+        }
+        b.line("\t}\n\t#pragma unused a\n\t#pragma unused b\n\t#pragma unused own");
+        b.line(end("\t"));
+        return;
+    }
+    // (an event graph's: spread over frames when it's long)
+    let run = format!("{}_r", gen.fname(id));
+    let save = |k: &str| format!("\t\t\tlsg_loop_save({i}, ctx, {k}, {}, b, n)\n\t\t\treturn", if spec.array { "own ? a : _:ArrayClone(Array:a)" } else { "a" });
+    b.line(format!("\tg_lsgStepLim = {}\n\t{run}(ctx, lsgK, lsgA, lsgB, 0, 0)", gen.limit_expr("loop_steps")));
+    if debug {
+        b.line(format!("\tlsd_note({i}, \"running\")"));
+    }
+    let mut r = format!("stock {run}(ctx[], k, a, b, n, own)\n{{\n\tnew c[LSG_CTX]\n\twhile ({})\n\t{{\n\t\tif (lsg_loop_full())\n\t\t{{\n{}\n\t\t}}\n{copy}\n{}\n\t\tn++\n\t\tg_lsgYield = false\n{body_line}\n\t\tif (g_lsgYield)\n\t\t{{\n{}\n\t\t}}\n",
+        spec.cond, save("k"), spec.item.trim_end_matches('\n'), save("k"));
+    if !brk_line.is_empty() {
+        r.push_str(&format!("{brk_line}\n"));
+    }
+    r.push_str(&format!("\t}}\n\t#pragma unused a\n\t#pragma unused b\n\t#pragma unused own\n{}\n}}", end("\t")));
+    after.push(r);
+    gen.loops.borrow_mut().push((i, run));
+}
+
+/// The loop nodes (emit_loop): their helpers and limits.
+pub const LOOP_KINDS: [&str; 9] = ["flow.for_loop", "flow.for_loop_break", "flow.while", "flow.for_each_array", "flow.for_each_player", "flow.for_each_entity", "creature.for_each", "table.for_each", "marker.for_each"];
+
+/// Loops' helpers: the frame's step budget, stopping and going on next frame, a Function's ceiling.
+pub const LOOP_HELPERS: &str = r##"// ---- loops never freeze the server ----
+// every turn of a loop counts against the frame's Loop steps a frame; at the limit an event
+// graph's loop is saved where it is and goes on next frame (in order: the innermost first, then
+// the loops around it), and a loop in a Function stops at its own ceiling
+#define LSG_LF 64
+stock Float:g_lsgStepAt, g_lsgSteps, g_lsgStepLim = 20000, Float:g_lsgFnAt, g_lsgFnSteps, g_lsgFnLim = 1000000
+stock bool:g_lsgYield, g_lsgLFn, g_lsgLFins = -1, g_lsgLFnode[LSG_LF], g_lsgLFk[LSG_LF], g_lsgLFa[LSG_LF], g_lsgLFb[LSG_LF], g_lsgLFcnt[LSG_LF], g_lsgLFctx[LSG_LF][LSG_CTX], bool:g_lsgLFasked, Float:g_lsgLFsaid, g_lsgLFspread
+stock bool:lsg_loop_full()
+{
+	new Float:now = get_gametime()
+	if (now != g_lsgStepAt)
+	{
+		g_lsgStepAt = now
+		g_lsgSteps = 0
+	}
+	if (g_lsgSteps < g_lsgStepLim)
+	{
+		g_lsgSteps++
+		return false
+	}
+	return true
+}
+
+// a loop stopped where it is: kept, to go on next frame
+stock lsg_loop_save(node, const ctx[], k, a, b, n)
+{
+	g_lsgYield = true
+	if (g_lsgLFn >= LSG_LF)
+	{
+		// (more loops waiting than it keeps: this one ends here, said in the log; never a freeze)
+		log_amx("[%s] a loop ended early: %d loops are already waiting for the next frame", LSG_MODE, LSG_LF)
+		return
+	}
+	new at = g_lsgLFins >= 0 ? g_lsgLFins++ : g_lsgLFn
+	for (new i = g_lsgLFn; i > at; i--)
+	{
+		g_lsgLFnode[i] = g_lsgLFnode[i - 1]
+		g_lsgLFk[i] = g_lsgLFk[i - 1]
+		g_lsgLFa[i] = g_lsgLFa[i - 1]
+		g_lsgLFb[i] = g_lsgLFb[i - 1]
+		g_lsgLFcnt[i] = g_lsgLFcnt[i - 1]
+		for (new j = 0; j < LSG_CTX; j++)
+			g_lsgLFctx[i][j] = g_lsgLFctx[i - 1][j]
+	}
+	g_lsgLFnode[at] = node
+	g_lsgLFk[at] = k
+	g_lsgLFa[at] = a
+	g_lsgLFb[at] = b
+	g_lsgLFcnt[at] = n
+	for (new j = 0; j < LSG_CTX; j++)
+		g_lsgLFctx[at][j] = ctx[j]
+	g_lsgLFn++
+	g_lsgLFspread++
+	if (!g_lsgLFasked)
+	{
+		g_lsgLFasked = true
+		RequestFrame("lsg_loop_resume")
+	}
+}
+
+// next frame: the waiting loops go on, the first first, as far as the frame's steps go
+public lsg_loop_resume()
+{
+	g_lsgLFasked = false
+	new Float:now = get_gametime()
+	if (now - g_lsgLFsaid >= 1.0)
+	{
+		g_lsgLFsaid = now
+		log_amx("[%s] long loops were spread over frames (%d times in the last second) so the server keeps running (Loop steps a frame, Limits)", LSG_MODE, g_lsgLFspread)
+		g_lsgLFspread = 0
+	}
+	new ctx[LSG_CTX]
+	while (g_lsgLFn > 0)
+	{
+		new node = g_lsgLFnode[0], k = g_lsgLFk[0], a = g_lsgLFa[0], b = g_lsgLFb[0], n = g_lsgLFcnt[0]
+		for (new j = 0; j < LSG_CTX; j++)
+			ctx[j] = g_lsgLFctx[0][j]
+		for (new i = 1; i < g_lsgLFn; i++)
+		{
+			g_lsgLFnode[i - 1] = g_lsgLFnode[i]
+			g_lsgLFk[i - 1] = g_lsgLFk[i]
+			g_lsgLFa[i - 1] = g_lsgLFa[i]
+			g_lsgLFb[i - 1] = g_lsgLFb[i]
+			g_lsgLFcnt[i - 1] = g_lsgLFcnt[i]
+			for (new j = 0; j < LSG_CTX; j++)
+				g_lsgLFctx[i - 1][j] = g_lsgLFctx[i][j]
+		}
+		g_lsgLFn--
+		// (what it stops at goes first again, before the loops around it)
+		g_lsgLFins = 0
+		g_lsgYield = false
+		lsg_loop_go(node, ctx, k, a, b, n)
+		g_lsgLFins = -1
+		if (g_lsgYield)
+			break
+	}
+	if (g_lsgLFn && !g_lsgLFasked)
+	{
+		g_lsgLFasked = true
+		RequestFrame("lsg_loop_resume")
+	}
+}
+
+// a Function's loop: past its ceiling it stops (said once a second); the Function returns what it has
+stock bool:lsg_loop_ceil(const what[])
+{
+	new Float:now = get_gametime()
+	if (now != g_lsgFnAt)
+	{
+		g_lsgFnAt = now
+		g_lsgFnSteps = 0
+	}
+	if (++g_lsgFnSteps <= g_lsgFnLim)
+		return false
+	if (now - g_lsgLFsaid >= 1.0)
+	{
+		g_lsgLFsaid = now
+		log_amx("[%s] %s stopped: loops in a Function ran %d times in one go (Loop steps in a Function, Limits); the Function returns what it has", LSG_MODE, what, g_lsgFnLim)
+	}
+	return true
+}
+"##;
 
 /// Node kinds that need the version 3 helpers (by prefix).
 const V3_KINDS: &[&str] = &[
@@ -5550,6 +5712,66 @@ fn each_head(gen: &Gen<'_>, id: &str, n: &Node, def: &'static NodeDef, player: b
     let name = if wired("name") { gen.input(id, "name").map(|x| x.expr).unwrap_or_else(|| "\"\"".into()) } else { pawn_str(&name_text(gen.text(n, def, "name"))) };
     let find = if gen.choice(n, def, "by") == "name" { "find_ent_by_tname" } else { "find_ent_by_class" };
     format!("\tnew p = -1\n\twhile (count < {cap} && (p = {find}(p, {name})) > 0)\n\t{{")
+}
+
+/// Does the graph have a loop on an event graph (one that may go on next frame)?
+fn event_loops(gen: &Gen) -> bool {
+    gen.live.iter().any(|id| LOOP_KINDS.contains(&gen.v.defs[*id].kind.as_str()) && gen.home_fn(id).is_none())
+}
+
+/// Can what follows this node's outputs wait for the next frame (a loop on the way, or a call to a
+/// custom event while the graph has such loops)?
+fn may_wait(gen: &Gen, id: &str) -> bool {
+    if !event_loops(gen) {
+        return false;
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut todo: Vec<String> = vec![id.to_string()];
+    while let Some(x) = todo.pop() {
+        if !seen.insert(x.clone()) {
+            continue;
+        }
+        for p in gen.v.exec_outs(&x) {
+            if let Some((t, _)) = gen.v.exec_target(&x, &p) {
+                let k = gen.v.defs.get(t).map(|d| d.kind.as_str()).unwrap_or("");
+                if LOOP_KINDS.contains(&k) || k == "event.call" {
+                    return true;
+                }
+                todo.push(t.to_string());
+            }
+        }
+    }
+    false
+}
+
+/// For Each Player / Entity's search, as a loop that can stop and go on from where it was (the
+/// same tests as each_head: a cursor instead of a for statement).
+fn each_spec(gen: &Gen<'_>, id: &str, n: &Node, def: &'static NodeDef, player: bool, cap: usize) -> LoopSpec {
+    let wired = |pin: &str| gen.v.data_source(id, pin).is_some();
+    if wired("only") {
+        let list = gen.input(id, "only").map(|x| x.expr).unwrap_or_else(|| "Array:0".into());
+        let ok = if player { "is_user_connected(p)" } else { "pev_valid(p)" };
+        return LoopSpec { setup: format!("\tstatic snap\n\tif (!snap)\n\t\tsnap = _:ArrayCreate(LSG_AC)\n\tlsg_acopy(snap, {list})\n\tnew lsgK = 0, lsgA = snap, lsgB = lsg_alen(snap)"), cond: format!("k < b && n < {cap}"), item: format!("\t\tnew p = ArrayGetCell(Array:a, k++)\n\t\tif (!{ok})\n\t\t\tcontinue"), array: true };
+    }
+    if player {
+        // (a wired Team or Who is read once, at the start, into a: the run can't see the flow's values)
+        let (test, a) = if wired("team") {
+            ("is_user_connected(p) && lsg_team(p) == a".to_string(), gen.input(id, "team").map(|x| x.expr).unwrap_or_else(|| "0".into()))
+        } else if wired("who") {
+            ("lsg_match(p, a)".to_string(), gen.input(id, "who").map(|x| x.expr).unwrap_or_else(|| "1".into()))
+        } else {
+            (format!("lsg_match(p, {})", which_code(gen.choice(n, def, "which"))), "0".to_string())
+        };
+        return LoopSpec { setup: format!("\tnew lsgK = 1, lsgA = {a}, lsgB = 0"), cond: format!("k <= MaxClients && n < {cap}"), item: format!("\t\tnew p = k++\n\t\tif (!({test}))\n\t\t\tcontinue"), array: false };
+    }
+    let find = if gen.choice(n, def, "by") == "name" { "find_ent_by_tname" } else { "find_ent_by_class" };
+    if wired("name") {
+        // (a wired name: the matches found at the start, as Only these)
+        let name = gen.input(id, "name").map(|x| x.expr).unwrap_or_else(|| "\"\"".into());
+        return LoopSpec { setup: format!("\tstatic snap\n\tif (!snap)\n\t\tsnap = _:ArrayCreate(LSG_AC)\n\tArrayClear(Array:snap)\n\tnew p = -1\n\twhile (ArraySize(Array:snap) < {cap} && (p = {find}(p, {name})) > 0)\n\t\tArrayPushCell(Array:snap, p)\n\tnew lsgK = 0, lsgA = snap, lsgB = ArraySize(Array:snap)"), cond: "k < b".into(), item: "\t\tnew p = ArrayGetCell(Array:a, k++)\n\t\tif (!pev_valid(p))\n\t\t\tcontinue".into(), array: true };
+    }
+    let name = pawn_str(&name_text(gen.text(n, def, "name")));
+    LoopSpec { setup: "\tnew lsgK = -1, lsgA = 0, lsgB = 0".into(), cond: format!("n < {cap}"), item: format!("\t\tnew p = {find}(k, {name})\n\t\tif (p <= 0)\n\t\t\tbreak\n\t\tk = p"), array: false }
 }
 
 /// Is anything wired into For Each / Pick Random's Who, Team, kind or name or Only these? (X2)

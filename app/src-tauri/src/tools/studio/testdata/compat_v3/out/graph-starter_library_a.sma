@@ -1551,6 +1551,128 @@ stock lsg_round_time(secs)
 	write_short(max(secs, 0))
 	message_end()
 }
+// ---- loops never freeze the server ----
+// every turn of a loop counts against the frame's Loop steps a frame; at the limit an event
+// graph's loop is saved where it is and goes on next frame (in order: the innermost first, then
+// the loops around it), and a loop in a Function stops at its own ceiling
+#define LSG_LF 64
+stock Float:g_lsgStepAt, g_lsgSteps, g_lsgStepLim = 20000, Float:g_lsgFnAt, g_lsgFnSteps, g_lsgFnLim = 1000000
+stock bool:g_lsgYield, g_lsgLFn, g_lsgLFins = -1, g_lsgLFnode[LSG_LF], g_lsgLFk[LSG_LF], g_lsgLFa[LSG_LF], g_lsgLFb[LSG_LF], g_lsgLFcnt[LSG_LF], g_lsgLFctx[LSG_LF][LSG_CTX], bool:g_lsgLFasked, Float:g_lsgLFsaid, g_lsgLFspread
+stock bool:lsg_loop_full()
+{
+	new Float:now = get_gametime()
+	if (now != g_lsgStepAt)
+	{
+		g_lsgStepAt = now
+		g_lsgSteps = 0
+	}
+	if (g_lsgSteps < g_lsgStepLim)
+	{
+		g_lsgSteps++
+		return false
+	}
+	return true
+}
+
+// a loop stopped where it is: kept, to go on next frame
+stock lsg_loop_save(node, const ctx[], k, a, b, n)
+{
+	g_lsgYield = true
+	if (g_lsgLFn >= LSG_LF)
+	{
+		// (more loops waiting than it keeps: this one ends here, said in the log; never a freeze)
+		log_amx("[%s] a loop ended early: %d loops are already waiting for the next frame", LSG_MODE, LSG_LF)
+		return
+	}
+	new at = g_lsgLFins >= 0 ? g_lsgLFins++ : g_lsgLFn
+	for (new i = g_lsgLFn; i > at; i--)
+	{
+		g_lsgLFnode[i] = g_lsgLFnode[i - 1]
+		g_lsgLFk[i] = g_lsgLFk[i - 1]
+		g_lsgLFa[i] = g_lsgLFa[i - 1]
+		g_lsgLFb[i] = g_lsgLFb[i - 1]
+		g_lsgLFcnt[i] = g_lsgLFcnt[i - 1]
+		for (new j = 0; j < LSG_CTX; j++)
+			g_lsgLFctx[i][j] = g_lsgLFctx[i - 1][j]
+	}
+	g_lsgLFnode[at] = node
+	g_lsgLFk[at] = k
+	g_lsgLFa[at] = a
+	g_lsgLFb[at] = b
+	g_lsgLFcnt[at] = n
+	for (new j = 0; j < LSG_CTX; j++)
+		g_lsgLFctx[at][j] = ctx[j]
+	g_lsgLFn++
+	g_lsgLFspread++
+	if (!g_lsgLFasked)
+	{
+		g_lsgLFasked = true
+		RequestFrame("lsg_loop_resume")
+	}
+}
+
+// next frame: the waiting loops go on, the first first, as far as the frame's steps go
+public lsg_loop_resume()
+{
+	g_lsgLFasked = false
+	new Float:now = get_gametime()
+	if (now - g_lsgLFsaid >= 1.0)
+	{
+		g_lsgLFsaid = now
+		log_amx("[%s] long loops were spread over frames (%d times in the last second) so the server keeps running (Loop steps a frame, Limits)", LSG_MODE, g_lsgLFspread)
+		g_lsgLFspread = 0
+	}
+	new ctx[LSG_CTX]
+	while (g_lsgLFn > 0)
+	{
+		new node = g_lsgLFnode[0], k = g_lsgLFk[0], a = g_lsgLFa[0], b = g_lsgLFb[0], n = g_lsgLFcnt[0]
+		for (new j = 0; j < LSG_CTX; j++)
+			ctx[j] = g_lsgLFctx[0][j]
+		for (new i = 1; i < g_lsgLFn; i++)
+		{
+			g_lsgLFnode[i - 1] = g_lsgLFnode[i]
+			g_lsgLFk[i - 1] = g_lsgLFk[i]
+			g_lsgLFa[i - 1] = g_lsgLFa[i]
+			g_lsgLFb[i - 1] = g_lsgLFb[i]
+			g_lsgLFcnt[i - 1] = g_lsgLFcnt[i]
+			for (new j = 0; j < LSG_CTX; j++)
+				g_lsgLFctx[i - 1][j] = g_lsgLFctx[i][j]
+		}
+		g_lsgLFn--
+		// (what it stops at goes first again, before the loops around it)
+		g_lsgLFins = 0
+		g_lsgYield = false
+		lsg_loop_go(node, ctx, k, a, b, n)
+		g_lsgLFins = -1
+		if (g_lsgYield)
+			break
+	}
+	if (g_lsgLFn && !g_lsgLFasked)
+	{
+		g_lsgLFasked = true
+		RequestFrame("lsg_loop_resume")
+	}
+}
+
+// a Function's loop: past its ceiling it stops (said once a second); the Function returns what it has
+stock bool:lsg_loop_ceil(const what[])
+{
+	new Float:now = get_gametime()
+	if (now != g_lsgFnAt)
+	{
+		g_lsgFnAt = now
+		g_lsgFnSteps = 0
+	}
+	if (++g_lsgFnSteps <= g_lsgFnLim)
+		return false
+	if (now - g_lsgLFsaid >= 1.0)
+	{
+		g_lsgLFsaid = now
+		log_amx("[%s] %s stopped: loops in a Function ran %d times in one go (Loop steps in a Function, Limits); the Function returns what it has", LSG_MODE, what, g_lsgFnLim)
+	}
+	return true
+}
+
 // ---- Show HUD Text: the latest text per player and slot ----
 stock g_lsgHudTxt[33][4][128], Float:g_lsgHudSecs[33][4]
 stock lsg_hud(who, slot, Float:secs, const text[])
@@ -4393,18 +4515,28 @@ stock lsg_n18(ctx[])
 // For Each Player (ab_bot_each)
 stock lsg_n19(ctx[])
 {
-	new c[LSG_CTX], count
-	for (new p = 1; p <= MaxClients; p++)
+	new lsgK = 1, lsgA = 0, lsgB = 0
+	g_lsgFnLim = 1000000
+	new c[LSG_CTX], n, k = lsgK, a = lsgA, b = lsgB, own = 0
+	while (k <= MaxClients && n < 512)
 	{
-		if (!lsg_match(p, 1))
+		if (lsg_loop_ceil("For Each Player"))
+			break
+		for (new j = 0; j < LSG_CTX; j++)
+			c[j] = ctx[j]
+		new p = k++
+		if (!(lsg_match(p, 1)))
 			continue
-		count++
-		for (new k = 0; k < LSG_CTX; k++)
-			c[k] = ctx[k]
 		c[17] = p
+		n++
 		lsg_n20(c)
+		if (g_lsgFD3)
+			return
 	}
-	#pragma unused count
+	#pragma unused a
+	#pragma unused b
+	#pragma unused own
+	#pragma unused n
 	lsg_n22(ctx)
 }
 
@@ -4887,8 +5019,29 @@ lsg_n76(ctx[])
 // Sequence (ev2)
 lsg_n77(ctx[])
 {
-	lsg_n78(ctx)
-	lsg_n88(ctx)
+	lsg_n77_r(ctx, 0, 0, 0, 0, 0)
+}
+
+stock lsg_n77_r(ctx[], k, a, b, n, own)
+{
+	#pragma unused a
+	#pragma unused b
+	#pragma unused n
+	#pragma unused own
+	for (; k < 2; k++)
+	{
+		g_lsgYield = false
+		switch (k)
+		{
+			case 0: lsg_n78(ctx)
+			case 1: lsg_n88(ctx)
+		}
+		if (g_lsgYield)
+		{
+			lsg_loop_save(77, ctx, k + 1, 0, 0, 0)
+			return
+		}
+	}
 }
 
 // Pick Random Entity (ev3)
@@ -5032,8 +5185,29 @@ public lsg_t88(const data[], task)
 // Sequence (ev20)
 lsg_n89(ctx[])
 {
-	lsg_n90(ctx)
-	lsg_n91(ctx)
+	lsg_n89_r(ctx, 0, 0, 0, 0, 0)
+}
+
+stock lsg_n89_r(ctx[], k, a, b, n, own)
+{
+	#pragma unused a
+	#pragma unused b
+	#pragma unused n
+	#pragma unused own
+	for (; k < 2; k++)
+	{
+		g_lsgYield = false
+		switch (k)
+		{
+			case 0: lsg_n90(ctx)
+			case 1: lsg_n91(ctx)
+		}
+		if (g_lsgYield)
+		{
+			lsg_loop_save(89, ctx, k + 1, 0, 0, 0)
+			return
+		}
+	}
 }
 
 // Call (ev21)
@@ -5047,18 +5221,40 @@ lsg_n90(ctx[])
 // For Each Player (ev22)
 lsg_n91(ctx[])
 {
-	new c[LSG_CTX], count
-	for (new p = 1; p <= MaxClients; p++)
+	new lsgK = 1, lsgA = 0, lsgB = 0
+	g_lsgStepLim = 20000
+	lsg_n91_r(ctx, lsgK, lsgA, lsgB, 0, 0)
+}
+
+stock lsg_n91_r(ctx[], k, a, b, n, own)
+{
+	new c[LSG_CTX]
+	while (k <= MaxClients && n < 512)
 	{
-		if (!lsg_match(p, 7))
+		if (lsg_loop_full())
+		{
+			lsg_loop_save(91, ctx, k, a, b, n)
+			return
+		}
+		for (new j = 0; j < LSG_CTX; j++)
+			c[j] = ctx[j]
+		new p = k++
+		if (!(lsg_match(p, 7)))
 			continue
-		count++
-		for (new k = 0; k < LSG_CTX; k++)
-			c[k] = ctx[k]
 		c[35] = p
+		n++
+		g_lsgYield = false
 		lsg_n92(c)
+		if (g_lsgYield)
+		{
+			lsg_loop_save(91, ctx, k, a, b, n)
+			return
+		}
 	}
-	#pragma unused count
+	#pragma unused a
+	#pragma unused b
+	#pragma unused own
+	#pragma unused n
 }
 
 // Call (ev25)
@@ -5844,5 +6040,15 @@ lsg_n180(ctx[])
 			{}
 	}
 	#pragma unused ctx
+}
+
+stock lsg_loop_go(node, ctx[], k, a, b, n)
+{
+	switch (node)
+	{
+		case 77: lsg_n77_r(ctx, k, a, b, n, 1)
+		case 89: lsg_n89_r(ctx, k, a, b, n, 1)
+		case 91: lsg_n91_r(ctx, k, a, b, n, 1)
+	}
 }
 

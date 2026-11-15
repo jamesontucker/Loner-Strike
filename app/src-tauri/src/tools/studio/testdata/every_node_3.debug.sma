@@ -2475,6 +2475,128 @@ stock lsg_round_time(secs)
 	write_short(max(secs, 0))
 	message_end()
 }
+// ---- loops never freeze the server ----
+// every turn of a loop counts against the frame's Loop steps a frame; at the limit an event
+// graph's loop is saved where it is and goes on next frame (in order: the innermost first, then
+// the loops around it), and a loop in a Function stops at its own ceiling
+#define LSG_LF 64
+stock Float:g_lsgStepAt, g_lsgSteps, g_lsgStepLim = 20000, Float:g_lsgFnAt, g_lsgFnSteps, g_lsgFnLim = 1000000
+stock bool:g_lsgYield, g_lsgLFn, g_lsgLFins = -1, g_lsgLFnode[LSG_LF], g_lsgLFk[LSG_LF], g_lsgLFa[LSG_LF], g_lsgLFb[LSG_LF], g_lsgLFcnt[LSG_LF], g_lsgLFctx[LSG_LF][LSG_CTX], bool:g_lsgLFasked, Float:g_lsgLFsaid, g_lsgLFspread
+stock bool:lsg_loop_full()
+{
+	new Float:now = get_gametime()
+	if (now != g_lsgStepAt)
+	{
+		g_lsgStepAt = now
+		g_lsgSteps = 0
+	}
+	if (g_lsgSteps < g_lsgStepLim)
+	{
+		g_lsgSteps++
+		return false
+	}
+	return true
+}
+
+// a loop stopped where it is: kept, to go on next frame
+stock lsg_loop_save(node, const ctx[], k, a, b, n)
+{
+	g_lsgYield = true
+	if (g_lsgLFn >= LSG_LF)
+	{
+		// (more loops waiting than it keeps: this one ends here, said in the log; never a freeze)
+		log_amx("[%s] a loop ended early: %d loops are already waiting for the next frame", LSG_MODE, LSG_LF)
+		return
+	}
+	new at = g_lsgLFins >= 0 ? g_lsgLFins++ : g_lsgLFn
+	for (new i = g_lsgLFn; i > at; i--)
+	{
+		g_lsgLFnode[i] = g_lsgLFnode[i - 1]
+		g_lsgLFk[i] = g_lsgLFk[i - 1]
+		g_lsgLFa[i] = g_lsgLFa[i - 1]
+		g_lsgLFb[i] = g_lsgLFb[i - 1]
+		g_lsgLFcnt[i] = g_lsgLFcnt[i - 1]
+		for (new j = 0; j < LSG_CTX; j++)
+			g_lsgLFctx[i][j] = g_lsgLFctx[i - 1][j]
+	}
+	g_lsgLFnode[at] = node
+	g_lsgLFk[at] = k
+	g_lsgLFa[at] = a
+	g_lsgLFb[at] = b
+	g_lsgLFcnt[at] = n
+	for (new j = 0; j < LSG_CTX; j++)
+		g_lsgLFctx[at][j] = ctx[j]
+	g_lsgLFn++
+	g_lsgLFspread++
+	if (!g_lsgLFasked)
+	{
+		g_lsgLFasked = true
+		RequestFrame("lsg_loop_resume")
+	}
+}
+
+// next frame: the waiting loops go on, the first first, as far as the frame's steps go
+public lsg_loop_resume()
+{
+	g_lsgLFasked = false
+	new Float:now = get_gametime()
+	if (now - g_lsgLFsaid >= 1.0)
+	{
+		g_lsgLFsaid = now
+		log_amx("[%s] long loops were spread over frames (%d times in the last second) so the server keeps running (Loop steps a frame, Limits)", LSG_MODE, g_lsgLFspread)
+		g_lsgLFspread = 0
+	}
+	new ctx[LSG_CTX]
+	while (g_lsgLFn > 0)
+	{
+		new node = g_lsgLFnode[0], k = g_lsgLFk[0], a = g_lsgLFa[0], b = g_lsgLFb[0], n = g_lsgLFcnt[0]
+		for (new j = 0; j < LSG_CTX; j++)
+			ctx[j] = g_lsgLFctx[0][j]
+		for (new i = 1; i < g_lsgLFn; i++)
+		{
+			g_lsgLFnode[i - 1] = g_lsgLFnode[i]
+			g_lsgLFk[i - 1] = g_lsgLFk[i]
+			g_lsgLFa[i - 1] = g_lsgLFa[i]
+			g_lsgLFb[i - 1] = g_lsgLFb[i]
+			g_lsgLFcnt[i - 1] = g_lsgLFcnt[i]
+			for (new j = 0; j < LSG_CTX; j++)
+				g_lsgLFctx[i - 1][j] = g_lsgLFctx[i][j]
+		}
+		g_lsgLFn--
+		// (what it stops at goes first again, before the loops around it)
+		g_lsgLFins = 0
+		g_lsgYield = false
+		lsg_loop_go(node, ctx, k, a, b, n)
+		g_lsgLFins = -1
+		if (g_lsgYield)
+			break
+	}
+	if (g_lsgLFn && !g_lsgLFasked)
+	{
+		g_lsgLFasked = true
+		RequestFrame("lsg_loop_resume")
+	}
+}
+
+// a Function's loop: past its ceiling it stops (said once a second); the Function returns what it has
+stock bool:lsg_loop_ceil(const what[])
+{
+	new Float:now = get_gametime()
+	if (now != g_lsgFnAt)
+	{
+		g_lsgFnAt = now
+		g_lsgFnSteps = 0
+	}
+	if (++g_lsgFnSteps <= g_lsgFnLim)
+		return false
+	if (now - g_lsgLFsaid >= 1.0)
+	{
+		g_lsgLFsaid = now
+		log_amx("[%s] %s stopped: loops in a Function ran %d times in one go (Loop steps in a Function, Limits); the Function returns what it has", LSG_MODE, what, g_lsgFnLim)
+	}
+	return true
+}
+
 // ---- Color: one cell, 0xAARRGGBB ----
 stock lsg_col(Float:r, Float:g, Float:b, Float:a)
 	return (clamp(floatround(a), 0, 255) << 24) | (clamp(floatround(r), 0, 255) << 16) | (clamp(floatround(g), 0, 255) << 8) | clamp(floatround(b), 0, 255)
@@ -8785,8 +8907,24 @@ lsg_n100(ctx[])
 	}
 	if (lsd_enter(100, ctx))
 		return
+	g_lsgYield = false
 	lsg_ce0(0, 0.0, "")
 	lsd_exit(100, "called")
+	if (g_lsgYield)
+	{
+		lsg_loop_save(100, ctx, 1, 0, 0, 0)
+		return
+	}
+	lsg_n101(ctx)
+}
+
+stock lsg_n100_r(ctx[], k, a, b, n, own)
+{
+	#pragma unused k
+	#pragma unused a
+	#pragma unused b
+	#pragma unused n
+	#pragma unused own
 	lsg_n101(ctx)
 }
 
@@ -8799,18 +8937,44 @@ lsg_n101(ctx[])
 	}
 	if (lsd_enter(101, ctx))
 		return
-	new c[LSG_CTX], count, p = -1
-	while (count < 512 && (p = find_ent_by_class(p, "ls_creature")) > 0)
+	new lsgK = -1, lsgA = 0, lsgB = 0
+	g_lsgStepLim = 20000
+	lsg_n101_r(ctx, lsgK, lsgA, lsgB, 0, 0)
+	lsd_note(101, "running")
+}
+
+stock lsg_n101_r(ctx[], k, a, b, n, own)
+{
+	new c[LSG_CTX]
+	while (n < 512)
 	{
+		if (lsg_loop_full())
+		{
+			lsg_loop_save(101, ctx, k, a, b, n)
+			return
+		}
+		for (new j = 0; j < LSG_CTX; j++)
+			c[j] = ctx[j]
+		new p = find_ent_by_class(k, "ls_creature")
+		if (p <= 0)
+			break
+		k = p
 		if (!lsg_cr_match(p, ""))
 			continue
-		count++
-		for (new k = 0; k < LSG_CTX; k++)
-			c[k] = ctx[k]
 		c[10] = p
+		n++
+		g_lsgYield = false
 		#pragma unused c
+		if (g_lsgYield)
+		{
+			lsg_loop_save(101, ctx, k, a, b, n)
+			return
+		}
 	}
-	lsd_exit(101, lsd_times(count))
+	#pragma unused a
+	#pragma unused b
+	#pragma unused own
+	lsd_exit(101, lsd_times(n))
 	lsg_n102(ctx)
 }
 
@@ -8987,21 +9151,44 @@ lsg_n112(ctx[])
 	}
 	if (lsd_enter(112, ctx))
 		return
-	new c[LSG_CTX], count
-	for (new r = 0; r < LSG_DT0_N; r++)
+	new lsgK = 0, lsgA = LSG_DT0_N, lsgB = 0
+	g_lsgStepLim = 20000
+	lsg_n112_r(ctx, lsgK, lsgA, lsgB, 0, 0)
+	lsd_note(112, "running")
+}
+
+stock lsg_n112_r(ctx[], k, a, b, n, own)
+{
+	new c[LSG_CTX]
+	while (k < a)
 	{
-		count++
+		if (lsg_loop_full())
+		{
+			lsg_loop_save(112, ctx, k, a, b, n)
+			return
+		}
 		for (new j = 0; j < LSG_CTX; j++)
 			c[j] = ctx[j]
+		new r = k++
 		c[12] = _:lsg_dt0_0(float(r))
 		c[13] = _:lsg_dt0_0(float(r))
 		copy(g_lsgOT[2], 127, lsg_dt0_1(float(r)))
 		c[14] = _:lsg_dt0_2(float(r))
 		c[15] = _:lsg_dt0_3(float(r))
 		c[11] = _:float(r)
+		n++
+		g_lsgYield = false
 		#pragma unused c
+		if (g_lsgYield)
+		{
+			lsg_loop_save(112, ctx, k, a, b, n)
+			return
+		}
 	}
-	lsd_exit(112, lsd_times(count))
+	#pragma unused a
+	#pragma unused b
+	#pragma unused own
+	lsd_exit(112, lsd_times(n))
 	lsg_n113(ctx)
 }
 
@@ -9543,6 +9730,16 @@ lsg_n131(ctx[])
 	{
 		g_lsgO[35] = 0
 		lsd_exit(131, "failed")
+	}
+}
+
+stock lsg_loop_go(node, ctx[], k, a, b, n)
+{
+	switch (node)
+	{
+		case 100: lsg_n100_r(ctx, k, a, b, n, 1)
+		case 101: lsg_n101_r(ctx, k, a, b, n, 1)
+		case 112: lsg_n112_r(ctx, k, a, b, n, 1)
 	}
 }
 
