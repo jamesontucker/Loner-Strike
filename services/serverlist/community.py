@@ -1065,7 +1065,7 @@ def page_facts(page, model):
     if page.get("_bIsFlagged"):
         raise Reject(422, "GameBanana flagged that page. Sort it out on GameBanana, then try again.")
     if not has_tag(page.get("_aTags")):
-        raise Reject(422, f'Add the tag "{TAG_TITLE}: {TAG_VALUE}" to the page (Edit > Attributes), then try again.')
+        raise Reject(422, f"The page needs the {TAG_VALUE} tag. On GameBanana's Technical tab, under Tags, add a Custom Tag with the value {TAG_VALUE} (the title can stay empty), then press + and save, and try again.")
     kind = page_kind(page, model)
     if not kind:
         raise Reject(422, "The page isn't in a category the list takes: Maps, Prefabs, Textures, Resources > AMXX Plugins & Mods "
