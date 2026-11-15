@@ -1375,11 +1375,43 @@ stock bool:lsg_ent_origin(ent, Float:o[3])
 	return true
 }
 
+// a player put at a spot: a spot on the ground (a marker, Find Free Spot, a nav point) is where
+// the feet go, but a player's origin is the middle of the hull, so it's lifted until the hull fits
+// (never left half in the floor). A spot they already fit at (a spawn point, mid-air) stays.
+stock lsg_player_spot(id, const Float:at[3], Float:o[3])
+{
+	new Float:base[3]
+	base[0] = at[0]
+	base[1] = at[1]
+	base[2] = at[2]
+	o[0] = base[0]
+	o[1] = base[1]
+	o[2] = base[2]
+	new hull = (pev(id, pev_flags) & FL_DUCKING) ? HULL_HEAD : HULL_HUMAN
+	if (lsg_hull_free(o, hull, id))
+		return
+	new Float:half = hull == HULL_HEAD ? 18.0 : 36.0
+	for (new Float:up = half + 1.0; up <= half + 41.0; up += 8.0)
+	{
+		o[2] = base[2] + up
+		if (lsg_hull_free(o, hull, id))
+			return
+	}
+	o[2] = base[2] + half + 1.0
+}
+
+stock bool:lsg_hull_free(const Float:o[3], hull, skip)
+{
+	engfunc(EngFunc_TraceHull, o, o, IGNORE_MONSTERS, hull, skip, 0)
+	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid)
+}
+
 stock bool:lsg_teleport_to(id, ent)
 {
 	new Float:o[3]
 	if (!ls_alive(id) || !lsg_ent_origin(ent, o))
 		return false
+	lsg_player_spot(id, o, o)
 	ls_teleport(id, o)
 	return true
 }
@@ -1389,6 +1421,7 @@ stock bool:lsg_teleport(id, const name[])
 	new Float:o[3]
 	if (!ls_alive(id) || !lsg_origin_of(name, o))
 		return false
+	lsg_player_spot(id, o, o)
 	ls_teleport(id, o)
 	return true
 }
@@ -1841,6 +1874,7 @@ stock lsg_vsetpos(id, v)
 {
 	new Float:o[3], Float:still[3]
 	lsg_vto(v, o)
+	lsg_player_spot(id, o, o)
 	engfunc(EngFunc_SetOrigin, id, o)
 	set_pev(id, pev_velocity, still)
 }
@@ -2563,6 +2597,7 @@ stock lsg_set_transform(id, pos, ang, vel)
 	if (pos >= 0)
 	{
 		lsg_vto(pos, o)
+		lsg_player_spot(id, o, o)
 		engfunc(EngFunc_SetOrigin, id, o)
 	}
 	if (ang >= 0)

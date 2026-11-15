@@ -11965,8 +11965,10 @@ stock keeper_spawn(s)
 	set_pev(e, pev_solid, SOLID_NOT);
 	new Float:o[3];
 	keeper_spot(s, e, o);
+	new Float:lift = model_lift(m);
+	o[2] += lift;
 	engfunc(EngFunc_SetOrigin, e, o);
-	engfunc(EngFunc_SetSize, e, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 72.0});
+	person_size(e, lift);
 	set_pev(e, pev_movetype, MOVETYPE_NONE);
 	set_pev(e, pev_takedamage, DAMAGE_NO);
 	set_pev(e, pev_controller_0, 127);
@@ -13573,10 +13575,11 @@ stock npc_comp_init(s)
 			set_model(ent, m, NPC_FALLBACK);
 		new Float:o[3];
 		vcopy(g_org[s], o);
-		o[2] = g_floor[s] + 1.0;
+		new Float:lift = ent_lift(ent);
+		o[2] = g_floor[s] + 1.0 + lift;
 		engfunc(EngFunc_SetOrigin, ent, o);
 		vcopy(o, g_org[s]);
-		engfunc(EngFunc_SetSize, ent, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 72.0});
+		person_size(ent, lift);
 		set_pev(ent, pev_movetype, MOVETYPE_FLY);
 		set_pev(ent, pev_solid, SOLID_NOT);
 		set_pev(ent, pev_controller_0, 127);
@@ -13690,6 +13693,28 @@ stock npc_face(e, const Float:to[3], Float:most = 180.0)
 	set_pev(e, pev_angles, ang);
 }
 
+/* how high a person's origin is above their feet: Half-Life's people (barney, gman, scientist)
+   stand on their origin, a CS player model's origin is the middle of the player (the floor is
+   36 below it). Set at the feet, a player model shows sunk to the waist. */
+stock Float:model_lift(const m[])
+	return equali(m, "models/player/", 14) ? 36.0 : 0.0;
+
+stock Float:ent_lift(e)
+{
+	new m[96];
+	pev(e, pev_model, m, charsmax(m));
+	return model_lift(m);
+}
+
+/* a person's box: 32 wide and 72 tall, from the feet (lift under the origin) */
+stock person_size(e, Float:lift)
+{
+	new Float:mn[3] = {-16.0, -16.0, 0.0}, Float:mx[3] = {16.0, 16.0, 72.0};
+	mn[2] -= lift;
+	mx[2] -= lift;
+	engfunc(EngFunc_SetSize, e, mn, mx);
+}
+
 /* a spot it can walk to from where it is (room for a person, nothing in the way) */
 stock bool:npc_can_walk(e, const Float:from[3], const Float:to[3])
 {
@@ -13725,6 +13750,9 @@ stock npc_step(s, const Float:goal[3], Float:near, Float:speed, bool:run = false
 	new e = g_ent[s];
 	new Float:o[3];
 	pev(e, pev_origin, o);
+	/* (o: its feet; a CS player model's origin is the middle of the person) */
+	new Float:lift = ent_lift(e);
+	o[2] -= lift;
 	new Float:d = dist2d(o, goal);
 	if (d <= near)
 	{
@@ -14130,7 +14158,7 @@ stock npc_aimed(id, bool:bot)
 			if (!pev_valid(e) || pev(e, pev_deadflag) != DEAD_NO)
 				continue;
 			pev(e, pev_origin, c);
-			c[2] += 48.0;
+			c[2] += 48.0 - ent_lift(e);
 			range = NPC_TALK_RANGE;
 		}
 		else
@@ -14298,6 +14326,7 @@ stock npc_tick(bool:sec)
 		{
 			new Float:o[3];
 			pev(g_ent[s], pev_origin, o);
+			o[2] -= ent_lift(g_ent[s]);
 			hint("avoid npc%d %.0f %.0f %.0f 40 4 2", g_ent[s], o[0], o[1], o[2]);
 			hinted++;
 		}
@@ -14858,14 +14887,16 @@ public cmd_npc_use()
 	return PLUGIN_HANDLED;
 }
 
-/* ls_npc_spawn_test <player> [npc|use] [blocked]: an NPC (or an interactable) where the player
-   stands; prints its entity and how far it moved (blocked: "fail", "near:N", "here") */
+/* ls_npc_spawn_test <player> [npc|use] [blocked] [model]: an NPC (or an interactable) where the
+   player stands; prints its entity, how far it moved (blocked: "fail", "near:N", "here"), and
+   for an NPC its origin and box bottom against the floor under it */
 public cmd_npc_spawn_test()
 {
-	new a[8], k[8], b[24];
+	new a[8], k[8], b[24], mdl[64];
 	read_argv(1, a, charsmax(a));
 	read_argv(2, k, charsmax(k));
 	read_argv(3, b, charsmax(b));
+	read_argv(4, mdl, charsmax(mdl));
 	new id = str_to_num(a);
 	if (!(1 <= id <= MaxClients) || !is_user_alive(id))
 	{
@@ -14878,15 +14909,23 @@ public cmd_npc_spawn_test()
 	new extra[40];
 	if (b[0])
 		formatex(extra, charsmax(extra), "blocked=%s", b);
-	new e = equali(k, "use") ? n_spawn_use_test(o, extra) : n_spawn_npc_test(o, extra);
+	new e = equali(k, "use") ? n_spawn_use_test(o, extra) : n_spawn_npc_test(o, extra, mdl);
 	server_print("ls_npc_spawn_test: %s %d at player %d, moved %.0f", equali(k, "use") ? "interactable" : "npc", e, id, g_spawnMoved);
+	if (e > 0 && pev_valid(e) && !equali(k, "use"))
+	{
+		new Float:at[3], Float:mn[3], m[96];
+		pev(e, pev_origin, at);
+		pev(e, pev_mins, mn);
+		pev(e, pev_model, m, charsmax(m));
+		server_print("ls_npc_spawn_test: %s origin z %.1f, box bottom %.1f, floor %.1f", m, at[2], at[2] + mn[2], quiet_floor(at, e));
+	}
 	return PLUGIN_HANDLED;
 }
 
-stock n_spawn_npc_test(const Float:o[3], const extra[])
+stock n_spawn_npc_test(const Float:o[3], const extra[], const mdl[] = "")
 {
 	new keys[256];
-	formatex(keys, charsmax(keys), "model=^"models/barney.mdl^" name=^"Test^" %s", extra);
+	formatex(keys, charsmax(keys), "model=^"%s^" name=^"Test^" %s", mdl[0] ? mdl : "models/barney.mdl", extra);
 	new Float:p[3];
 	if (!spawn_place(o, extra, true, p))
 		return 0;

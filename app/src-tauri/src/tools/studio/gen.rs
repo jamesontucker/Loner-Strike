@@ -4498,7 +4498,7 @@ fn v3_stocks(gen: &Gen, o: &mut Out) {
         o.line("// the damage bits as a Damage Kind (other, shot, slash, blast, burn, fall, shock, drown, poison)\nstock lsg_dmg_k(bits)\n{\n\tif (bits & DMG_FALL)\n\t\treturn 5\n\tif (bits & DMG_BLAST)\n\t\treturn 3\n\tif (bits & DMG_BURN)\n\t\treturn 4\n\tif (bits & DMG_BULLET)\n\t\treturn 1\n\tif (bits & DMG_SLASH)\n\t\treturn 2\n\tif (bits & DMG_SHOCK)\n\t\treturn 6\n\tif (bits & DMG_DROWN)\n\t\treturn 7\n\tif (bits & (DMG_POISON | DMG_NERVEGAS))\n\t\treturn 8\n\treturn 0\n}");
     }
     if g.structs.iter().any(|s| s.builtin && s.id == super::graph::TRANSFORM) {
-        o.line("// Transform's helpers: an entity's scale; an entity put where a Transform says\nstock Float:lsg_escale(e)\n{\n\tif (e <= 0 || !pev_valid(e))\n\t\treturn 1.0\n\tnew Float:s\n\tpev(e, pev_scale, s)\n\treturn s > 0.0 ? s : 1.0\n}\n\nstock lsg_ent_transform(e, pos, rot, Float:scale, vel)\n{\n\tif (e <= 0 || !pev_valid(e))\n\t\treturn\n\tnew Float:v[3]\n\tlsg_vto(pos, v)\n\tengfunc(EngFunc_SetOrigin, e, v)\n\tlsg_vto(rot, v)\n\tset_pev(e, e <= MaxClients ? pev_v_angle : pev_angles, v)\n\tif (e <= MaxClients)\n\t{\n\t\tset_pev(e, pev_angles, v)\n\t\tset_pev(e, pev_fixangle, 1)\n\t}\n\telse if (scale > 0.0)\n\t\tset_pev(e, pev_scale, scale)\n\tlsg_vto(vel, v)\n\tset_pev(e, pev_velocity, v)\n}");
+        o.line("// Transform's helpers: an entity's scale; an entity put where a Transform says\nstock Float:lsg_escale(e)\n{\n\tif (e <= 0 || !pev_valid(e))\n\t\treturn 1.0\n\tnew Float:s\n\tpev(e, pev_scale, s)\n\treturn s > 0.0 ? s : 1.0\n}\n\nstock lsg_ent_transform(e, pos, rot, Float:scale, vel)\n{\n\tif (e <= 0 || !pev_valid(e))\n\t\treturn\n\tnew Float:v[3]\n\tlsg_vto(pos, v)\n\tif (e <= MaxClients)\n\t\tlsg_player_spot(e, v, v)\n\tengfunc(EngFunc_SetOrigin, e, v)\n\tlsg_vto(rot, v)\n\tset_pev(e, e <= MaxClients ? pev_v_angle : pev_angles, v)\n\tif (e <= MaxClients)\n\t{\n\t\tset_pev(e, pev_angles, v)\n\t\tset_pev(e, pev_fixangle, 1)\n\t}\n\telse if (scale > 0.0)\n\t\tset_pev(e, pev_scale, scale)\n\tlsg_vto(vel, v)\n\tset_pev(e, pev_velocity, v)\n}");
     }
     for (k, st) in g.structs.iter().enumerate() {
         let params: Vec<String> = st.fields.iter().enumerate().map(|(j, f)| typed(&f.ty, &format!("f{j}"))).collect();
@@ -7220,11 +7220,43 @@ stock bool:lsg_ent_origin(ent, Float:o[3])
 	return true
 }
 
+// a player put at a spot: a spot on the ground (a marker, Find Free Spot, a nav point) is where
+// the feet go, but a player's origin is the middle of the hull, so it's lifted until the hull fits
+// (never left half in the floor). A spot they already fit at (a spawn point, mid-air) stays.
+stock lsg_player_spot(id, const Float:at[3], Float:o[3])
+{
+	new Float:base[3]
+	base[0] = at[0]
+	base[1] = at[1]
+	base[2] = at[2]
+	o[0] = base[0]
+	o[1] = base[1]
+	o[2] = base[2]
+	new hull = (pev(id, pev_flags) & FL_DUCKING) ? HULL_HEAD : HULL_HUMAN
+	if (lsg_hull_free(o, hull, id))
+		return
+	new Float:half = hull == HULL_HEAD ? 18.0 : 36.0
+	for (new Float:up = half + 1.0; up <= half + 41.0; up += 8.0)
+	{
+		o[2] = base[2] + up
+		if (lsg_hull_free(o, hull, id))
+			return
+	}
+	o[2] = base[2] + half + 1.0
+}
+
+stock bool:lsg_hull_free(const Float:o[3], hull, skip)
+{
+	engfunc(EngFunc_TraceHull, o, o, IGNORE_MONSTERS, hull, skip, 0)
+	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid)
+}
+
 stock bool:lsg_teleport_to(id, ent)
 {
 	new Float:o[3]
 	if (!ls_alive(id) || !lsg_ent_origin(ent, o))
 		return false
+	lsg_player_spot(id, o, o)
 	ls_teleport(id, o)
 	return true
 }
@@ -7234,6 +7266,7 @@ stock bool:lsg_teleport(id, const name[])
 	new Float:o[3]
 	if (!ls_alive(id) || !lsg_origin_of(name, o))
 		return false
+	lsg_player_spot(id, o, o)
 	ls_teleport(id, o)
 	return true
 }

@@ -153,6 +153,7 @@ stock lsg_vsetpos(id, v)
 {
 	new Float:o[3], Float:still[3]
 	lsg_vto(v, o)
+	lsg_player_spot(id, o, o)
 	engfunc(EngFunc_SetOrigin, id, o)
 	set_pev(id, pev_velocity, still)
 }
@@ -875,6 +876,7 @@ stock lsg_set_transform(id, pos, ang, vel)
 	if (pos >= 0)
 	{
 		lsg_vto(pos, o)
+		lsg_player_spot(id, o, o)
 		engfunc(EngFunc_SetOrigin, id, o)
 	}
 	if (ang >= 0)

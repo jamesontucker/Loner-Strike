@@ -266,3 +266,35 @@ fn every_model_a_mode_sets_is_loaded_first() {
     }
     assert!(checked >= 10, "{checked}");
 }
+
+/// The live run's sunk character: a player's origin is the middle of the hull (+36 over the
+/// feet), so a ground spot (a marker, Find Free Spot, a nav point) given to Teleport, Set
+/// Position or a Transform is lifted until the hull fits; an NPC or shop keeper showing a CS
+/// player model stands 36 higher than one of Half-Life's people.
+#[test]
+fn ground_spots_never_leave_a_person_in_the_floor() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tools/studio/testdata");
+    let mut seen = 0;
+    for e in std::fs::read_dir(&dir).unwrap().flatten() {
+        let p = e.path();
+        if !p.to_string_lossy().ends_with(".graph.json") {
+            continue;
+        }
+        let Ok(g) = graph::parse(&std::fs::read_to_string(&p).unwrap()) else { continue };
+        let src = gen::generate(&g, false).source;
+        for stock in ["stock bool:lsg_teleport_to(id, ent)", "stock bool:lsg_teleport(id, const name[])", "stock lsg_vsetpos(id, v)", "stock lsg_set_transform(id, pos, ang, vel)", "stock lsg_ent_transform(e, pos, rot, Float:scale, vel)"] {
+            let Some(at) = src.find(stock) else { continue };
+            let body = &src[at..at + src[at..].find("\n}\n").unwrap()];
+            let put = body.find("lsg_player_spot(").unwrap_or_else(|| panic!("{stock}: a player moved without the lift:\n{body}"));
+            assert!(put < body.find("EngFunc_SetOrigin").unwrap_or(usize::MAX), "{stock}: lifted after it's set:\n{body}");
+            seen += 1;
+        }
+    }
+    assert!(seen >= 5, "{seen}");
+    let comp = include_str!("../../../../../plugins/scripting/gm_components.sma");
+    assert!(comp.contains("equali(m, \"models/player/\", 14) ? 36.0 : 0.0"));
+    for want in ["o[2] = g_floor[s] + 1.0 + lift;", "person_size(ent, lift);", "person_size(e, lift);", "o[2] -= lift;"] {
+        assert!(comp.contains(want), "gm_components: {want}");
+    }
+    assert!(!comp.contains("SetSize, e, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 72.0}") && !comp.contains("SetSize, ent, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 72.0}"));
+}
