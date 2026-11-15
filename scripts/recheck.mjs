@@ -483,12 +483,20 @@ async function sims() {
     if (s.vote) await rcon("gm_votemode");
     else {
       await rcon(`gm_mode ${s.mode} ${s.map}`);
-      // the mode's saved bot count, as the app's Bots page sets it (a plain bot_quota is held)
-      await sleep(5000);
+      // the mode's saved bot count, as the app's Bots page sets it (a plain bot_quota is held),
+      // once the new map is up (sent during the map change, it's lost)
+      for (let w = 0; w < 30; w++) {
+        await sleep(2000);
+        const sofar = existsSync(qlog) ? readFileSync(qlog).subarray(from).toString("latin1") : "";
+        if (sofar.includes(`Started map "${s.map}"`)) break;
+      }
+      await sleep(3000);
       await rcon(`gm_bots count ${s.bots ?? 5}`);
       for (let i = 0; i < 4; i++) {
         await sleep(10_000);
-        await rcon(`bot_join_after_player 0;bot_quota ${s.bots ?? 5}`);
+        // (one cvar per rcon: "a 0;b 5" in one goes to the server as a's value)
+        await rcon("bot_join_after_player 0");
+        await rcon(`bot_quota ${s.bots ?? 5}`);
       }
     }
     // (until: stop early once everything it looks for is in the log)
