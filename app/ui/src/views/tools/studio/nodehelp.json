@@ -57169,6 +57169,98 @@
 }
 ]
 }
+},
+"asset.model":{
+"title":"Model",
+"category":"Files",
+"what":"A model file (models/....mdl), loaded with the map. Files are picked, never made from text: the game loads every file a mode can use before the map starts. Keep it in a variable, an array or a Function's input like any value.",
+"pins":[
+{
+"id":"out",
+"dir":"out",
+"help":"The model."
+}
+],
+"settings":[
+{
+"id":"file",
+"help":"Picked from this mode's own pieces."
+}
+],
+"related":[
+"asset.sprite",
+"asset.sound",
+"asset.file_name"
+]
+},
+"asset.sprite":{
+"title":"Sprite",
+"category":"Files",
+"what":"A sprite file (sprites/....spr), loaded with the map. Files are picked, never made from text: the game loads every file a mode can use before the map starts. Keep it in a variable, an array or a Function's input like any value.",
+"pins":[
+{
+"id":"out",
+"dir":"out",
+"help":"The sprite."
+}
+],
+"settings":[
+{
+"id":"file",
+"help":"Picked from this mode's own pieces."
+}
+],
+"related":[
+"asset.model",
+"asset.sound",
+"asset.file_name"
+]
+},
+"asset.sound":{
+"title":"Sound",
+"category":"Files",
+"what":"A sound file (a .wav from inside sound/), loaded with the map. Files are picked, never made from text: the game loads every file a mode can use before the map starts. Keep it in a variable, an array or a Function's input like any value.",
+"pins":[
+{
+"id":"out",
+"dir":"out",
+"help":"The sound."
+}
+],
+"settings":[
+{
+"id":"file",
+"help":"Picked from this mode's own pieces."
+}
+],
+"related":[
+"asset.sprite",
+"asset.file_name",
+"asset.model"
+]
+},
+"asset.file_name":{
+"title":"File Name Of",
+"category":"Files",
+"what":"A Model's, Sprite's or Sound's file name as text (models/....mdl; a sound from inside sound/), to show or log it. Empty when it's none.",
+"pins":[
+{
+"id":"file",
+"dir":"in",
+"help":"File: any value. Needs a wire."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Name: text."
+}
+],
+"settings":[],
+"related":[
+"asset.sound",
+"asset.sprite",
+"asset.model"
+]
 }
 }
 }

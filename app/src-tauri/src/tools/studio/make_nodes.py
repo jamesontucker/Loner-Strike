@@ -1290,6 +1290,17 @@ _add_out("event.player_hurt", P("zone","enum:ls_hitzone","Hit zone"))
 _add_out("event.player_about_hurt", P("zone","enum:ls_hitzone","Hit zone"), P("dmg_kind","enum:ls_dmgkind","Damage kind"))
 _add_out("proj.on_hit", P("zone","enum:ls_hitzone","Hit zone"))
 
+# ==== assets (X-fx) ====
+# files as values (gen/assets.rs): a Model, Sprite or Sound is picked (never built from text), so
+# every file a mode can use is loaded with the map
+if "Files" not in data["categories"]:
+    data["categories"].insert(data["categories"].index("Text") + 1, "Files")
+FILE_HELP = " Files are picked, never made from text: the game loads every file a mode can use before the map starts. Keep it in a variable, an array or a Function's input like any value."
+node("asset.model", "Model", "Files", "A model file (models/....mdl), loaded with the map." + FILE_HELP, outputs=[P("out","model","Model")], params=[prm("file","Model","model","models/w_weaponbox.mdl")], keywords="model file mdl asset constant pick", pure=True)
+node("asset.sprite", "Sprite", "Files", "A sprite file (sprites/....spr), loaded with the map." + FILE_HELP, outputs=[P("out","sprite","Sprite")], params=[prm("file","Sprite","sprite","sprites/arrow1.spr")], keywords="sprite file spr asset constant pick", pure=True)
+node("asset.sound", "Sound", "Files", "A sound file (a .wav from inside sound/), loaded with the map." + FILE_HELP, outputs=[P("out","sound","Sound")], params=[prm("file","Sound","sound","items/gunpickup2.wav")], keywords="sound file wav asset constant pick audio", pure=True)
+node("asset.file_name", "File Name Of", "Files", "A Model's, Sprite's or Sound's file name as text (models/....mdl; a sound from inside sound/), to show or log it. Empty when it's none.", inputs=[P("file","any","File",required=True)], outputs=[P("out","text","Name")], keywords="file name path text model sound sprite to text", pure=True)
+# ==== end assets (X-fx) ====
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)
 print(len(nodes), "nodes")
 # the node help (X2's node_help.py), remade with the registry

@@ -1994,7 +1994,8 @@ mod tests {
         let every3 = include_str!("testdata/every_node_3.graph.json");
         let every4 = include_str!("testdata/every_node_4.graph.json");
         let everyfx = include_str!("testdata/every_node_fx.graph.json");
-        let mut graphs: Vec<(String, String)> = [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br), ("markers", mk), ("every_node_2", every2), ("every_node_3", every3), ("every_node_4", every4), ("every_node_fx", everyfx)].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+        let everyassets = include_str!("testdata/every_node_assets.graph.json"); // X-fx: files as values
+        let mut graphs: Vec<(String, String)> = [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br), ("markers", mk), ("every_node_2", every2), ("every_node_3", every3), ("every_node_4", every4), ("every_node_fx", everyfx), ("every_node_assets", everyassets)].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
         for (id, v) in builtin_snippets() {
             graphs.push((format!("sn_{id}"), serde_json::to_string(&snippet_as_graph(&id, &v)).unwrap()));
         }

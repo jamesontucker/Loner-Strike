@@ -551,3 +551,10 @@ input[type="checkbox"].st-pin-value { width: 13px; height: 13px; padding: 0; acc
 .st-pin-badge { color: #4dd0c8; border-color: #4dd0c8; font-weight: 700; }
 /* a setting the node doesn't have any more, greyed until cleared */
 .st-orphan-value { opacity: .65; border: 1px dashed var(--st-bad, #ff5b4f); border-radius: 5px; padding: 4px 6px; font-size: 12px; display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+
+/* assets (X-fx): file pins (Model, Sprite, Sound, Decal, Model or Sprite) are hollow squares, so they
+   read without color; wired, the square fills with a ring inside */
+.st-handle-file.react-flow__handle { border-radius: 2px; }
+.st-handle-file.react-flow__handle.wired { box-shadow: inset 0 0 0 2px var(--panel, #1d211b); }
+.st-asset-default { display: flex; flex-direction: column; gap: 4px; }
+.st-asset-thumb { max-width: 96px; max-height: 96px; image-rendering: pixelated; background: #2a2f27; border-radius: 4px; }

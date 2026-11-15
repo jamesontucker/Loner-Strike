@@ -4,7 +4,7 @@
 import { useStudio } from "./store";
 import { ENT_NAME_CHARS, KEYS_CHARS, KVPATH_CHARS, NAME_CHARS, PATH_CHARS, nodeDef, type ParamDef } from "./registry";
 import { freshMember, mapName, removeGraphPart, updateCustomEvent, removeMarker, updateMarker, removeType, setParam, clearParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
-import { allEnums, LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
+import { allEnums, isAssetType, LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { allVariables, itemTypeOk, nodeTitle, orphanValues, typeLabel } from "./pins";
 import { TypePicker } from "./TypePicker";
 import { Requirements } from "./Requirements";
@@ -14,6 +14,7 @@ import { askDelete } from "./DeleteDialog";
 import { useFreshFocus } from "./freshFocus";
 import { CreaturePicker } from "../common/CreaturePicker"; // shared creatures (CP-ui)
 import { AssetField, assetKindOf } from "../common/AssetField"; // T1fix: asset pickers
+import { AssetDefaultField } from "./AssetDefaultField"; // assets (X-fx)
 import { ModelPointPicker } from "./ModelPointPicker"; // Y: Get Bone / Attachment Position
 
 /** Node params that name a creature type (tools/creatures.rs NODE_TYPE_PARAMS). */
@@ -71,6 +72,8 @@ function ValueField({ type, value, onChange, graph }: { type: GVariable["type"];
       </select>
     );
   }
+  // assets (X-fx): a file variable starts as the file picked (or none)
+  if (isAssetType(type)) return <AssetDefaultField kind={type} value={typeof value === "string" ? value : ""} onChange={onChange} />;
   if (type !== "bool" && type !== "text") return <em className="st-muted">{/^(array|map)</.test(type) ? "Starts empty" : type === "vector" ? "Starts at 0 0 0" : type.startsWith("struct:") ? "Starts with every field empty" : "Starts as nothing"}</em>;
   if (type === "bool")
     return (
@@ -156,6 +159,8 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
         <option value="0">No</option>
       </select>
     );
+  // assets (X-fx): the typed file settings (Model / Sprite / Sound / Model or sprite)
+  if (p.kind === "model" || p.kind === "sprite" || p.kind === "sound" || p.kind === "visual") return <AssetDefaultField kind={p.kind} value={String(value ?? "")} label={p.label} onChange={onChange} />;
   // T1fix (asset pickers): a model, sprite or sound path gets Choose… / Import… / your map projects
   if (p.kind === "path" && assetKindOf(String(p.default ?? value)))
     return <AssetField kind={assetKindOf(String(p.default ?? value))!} value={String(value)} max={64} allowed={PATH_CHARS} label={p.label} onChange={onChange} />;

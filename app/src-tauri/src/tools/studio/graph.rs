@@ -1029,6 +1029,8 @@ pub fn value_fits(ty: &str, v: &Value) -> bool {
         "number" => v.as_f64().is_some_and(|n| n.is_finite() && n.abs() <= NUMBER_LIMIT),
         "bool" => v.is_boolean(),
         "text" => v.as_str().is_some_and(|s| valid_label(s, 60)),
+        // assets (X-fx): a file of that kind, or "" (none)
+        "model" | "sprite" | "sound" => v.as_str().is_some_and(|s| super::gen::assets::valid_asset(ty, s)),
         _ => false,
     }
 }
@@ -2260,7 +2262,8 @@ pub fn validate_core(g: &Graph) -> Vec<Problem> {
         // Set Variable of a type without a written value: the value has to be wired
         if def.kind == "var.set" {
             if let Some(var) = v.var_of(&n.id) {
-                let literal = matches!(var.ty.as_str(), "number" | "bool" | "text") || var.ty.starts_with("enum:");
+                // (assets (X-fx): a file variable takes a picked file too)
+                let literal = matches!(var.ty.as_str(), "number" | "bool" | "text") || var.ty.starts_with("enum:") || super::gen::assets::is_type(&var.ty);
                 if !literal && v.ins(&n.id, "value").is_empty() {
                     p.push(Problem::err(Some(&n.id), format!("Wire in the value to put in \u{201c}{}\u{201d}.", short(&var.name))).pin("value"));
                 }
@@ -2454,6 +2457,7 @@ pub fn capabilities(g: &Graph) -> Vec<&'static str> {
 fn advanced_problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
     super::gen::engine::problems(g, v, p);
     super::gen::fx::problems(g, v, p);
+    super::gen::assets::problems(g, v, p); // assets (X-fx)
     super::gen::p5::problems(g, v, p); // P5
     super::gen::coverage::problems(g, v, p); // EC
     for n in &g.nodes {
@@ -2855,6 +2859,8 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
             Some(s) if valid_name(s) => Ok(()),
             _ => Err(format!("{} is a name of up to 32 letters, digits, _ - or .", def.label)),
         },
+        // assets (X-fx): Model, Sprite, Sound and Model-or-sprite settings
+        k @ ("model" | "sprite" | "sound" | "visual") => super::gen::assets::check_param(k, &def.label, v).unwrap_or(Ok(())),
         "path" => match v.as_str() {
             Some(s) if valid_path(s) => Ok(()),
             _ => Err(format!("{} is a file path of up to 64 letters, digits, _ - . or /.", def.label)),
@@ -3049,7 +3055,8 @@ mod tests {
             }
             for pin in n.inputs.iter().chain(&n.outputs) {
                 // (fixed arrays: of any plain item type, as type_ok allows)
-                assert!(TYPES.contains(&pin.ty.as_str()) || pin.ty == "array<$K>" || pin.ty.strip_prefix("array<").and_then(|t| t.strip_suffix('>')).is_some_and(|t| ["player", "entity", "number", "text", "vector", "bool", "team"].contains(&t)), "{} {} {}", n.kind, pin.id, pin.ty);
+                // (assets (X-fx): the file types)
+                assert!(TYPES.contains(&pin.ty.as_str()) || crate::tools::studio::gen::assets::TYPES.contains(&pin.ty.as_str()) || pin.ty == "array<$K>" || pin.ty.strip_prefix("array<").and_then(|t| t.strip_suffix('>')).is_some_and(|t| ["player", "entity", "number", "text", "vector", "bool", "team"].contains(&t)), "{} {} {}", n.kind, pin.id, pin.ty);
                 if let Some(pp) = &pin.param {
                     assert!(n.param(pp).is_some(), "{} {}", n.kind, pin.id);
                 }

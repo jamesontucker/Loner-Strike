@@ -16,6 +16,22 @@ export const modeId = z.string().regex(/^[a-z][a-z0-9_]{1,23}$/, "2 to 24 small 
  *  turn into code in the plugin made from it. */
 export const LABEL_CHARS = /^[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$]*$/u;
 const NOTE_CHARS = /^[\p{L}\p{N} .,!?'()\-:;+&%#@=<>[\]_~$\n]*$/u;
+// assets (X-fx): a Model, Sprite or Sound value is a file of that kind ("" is none); the app checks
+// the same (gen/assets.rs valid_asset)
+export const ASSET_TYPES = ["model", "sprite", "sound"] as const;
+export type AssetType = (typeof ASSET_TYPES)[number];
+export const isAssetType = (t: string): t is AssetType => (ASSET_TYPES as readonly string[]).includes(t);
+const PATH_RE = /^[A-Za-z0-9_\-./]*$/;
+export function validAsset(kind: string, s: string): boolean {
+  if (s === "") return true;
+  if (s.length > 64 || s.includes("..") || s.startsWith("/") || !PATH_RE.test(s)) return false;
+  const l = s.toLowerCase();
+  if (kind === "model") return l.startsWith("models/") && l.endsWith(".mdl") && l.length > 11;
+  if (kind === "sprite") return l.startsWith("sprites/") && l.endsWith(".spr") && l.length > 12;
+  if (kind === "sound") return !l.startsWith("sound/") && l.endsWith(".wav") && l.length > 4;
+  if (kind === "visual") return validAsset("model", s) || validAsset("sprite", s);
+  return false;
+}
 export const label = (max: number) => z.string().max(max).regex(LABEL_CHARS, "letters, digits, spaces and plain punctuation only (no * / \\ \" ^)");
 const pos = z.object({ x: z.number().finite(), y: z.number().finite() });
 const pinRef = z.object({ node: id, pin: z.string().min(1).max(32) });
@@ -71,14 +87,22 @@ export const variableSchema = z
       .optional(),
     // (null: no start value, as an older app wrote it)
     default: z
-      .union([z.number().finite().min(-100000).max(100000), z.boolean(), label(60), z.null()])
+      .union([z.number().finite().min(-100000).max(100000), z.boolean(), label(60), z.string().max(64).regex(PATH_RE), z.null()])
       .optional()
       .transform((d) => d ?? undefined),
   })
   .refine(
     (v) =>
       v.default === undefined ||
-      (v.type === "number" || v.type.startsWith("enum:") ? typeof v.default === "number" : v.type === "bool" ? typeof v.default === "boolean" : v.type === "text" ? typeof v.default === "string" : true),
+      (v.type === "number" || v.type.startsWith("enum:")
+        ? typeof v.default === "number"
+        : v.type === "bool"
+          ? typeof v.default === "boolean"
+          : v.type === "text"
+            ? typeof v.default === "string" && LABEL_CHARS.test(v.default) && v.default.length <= 60
+            : isAssetType(v.type)
+              ? typeof v.default === "string" && validAsset(v.type, v.default)
+              : true),
     "the start value doesn't fit the type",
   );
 

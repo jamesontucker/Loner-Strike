@@ -47,7 +47,7 @@ export function paramSummary(def: NodeDef, n: GNode, wired: (pin: string) => boo
       if (p.kind === "number") return `${p.label}: ${v}`;
       if (p.kind === "bool") return `${p.label}: ${v ? "yes" : "no"}`;
       if (p.kind === "var") return vars.find((x) => x.id === v)?.name ?? "(pick a variable)";
-      if (p.kind === "path") return v ? String(v).replace(/^.*\//, "") : "";
+      if (p.kind === "path" || p.kind === "model" || p.kind === "sprite" || p.kind === "sound" || p.kind === "visual") return v ? String(v).replace(/^.*\//, "") : "";
       if (p.kind === "name" || p.kind === "entname") return v ? `${p.label.replace(/^.*named$/i, "at")} ${String(v)}` : "";
       if (p.kind === "keys" || p.kind === "kvpath") return v ? String(v) : "";
       if (p.kind === "marker") return g?.markers?.find((m) => m.id === v)?.label ?? "(pick a marker)";
@@ -137,7 +137,7 @@ function Pin({ pin, side, color, wired, problem, watch, value }: { pin: PinDef; 
         position={side === "in" ? Position.Left : Position.Right}
         id={pin.id}
         aria-label={`${pin.label || (pin.type === "exec" ? "Flow" : "Value")} ${side === "in" ? "input" : "output"}`}
-        className={`st-handle ${exec ? "st-handle-exec" : "st-handle-data"}${shape ? ` st-handle-${shape}` : ""}${wired ? " wired" : ""}`}
+        className={`st-handle ${exec ? "st-handle-exec" : "st-handle-data"}${shape ? ` st-handle-${shape}` : !exec && pinMeta(pin.type)?.mark === "file" ? " st-handle-file" : ""}${wired ? " wired" : ""}`}
         style={exec ? undefined : { borderColor: color, background: wired ? color : undefined }}
       />
       {pin.label && <span className="st-pin-label">{pin.label}</span>}

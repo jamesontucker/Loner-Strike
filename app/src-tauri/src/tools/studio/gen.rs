@@ -36,6 +36,7 @@ pub(crate) mod p5; // P5: input, cooldowns, pickups, weapon tuning, saving (gen/
 pub(crate) mod engine;
 // Effects, sounds and spawning (the effects agent), their own file
 pub(crate) mod fx;
+pub(crate) mod assets; // X-fx: files as values
 // engine coverage nodes (EC), their own file
 pub(crate) mod coverage;
 
@@ -551,6 +552,7 @@ impl<'a> Gen<'a> {
             "bool" => if v.and_then(Value::as_bool).unwrap_or(false) { "1".into() } else { "0".into() },
             "text" => pawn_str(&safe_text(v.and_then(Value::as_str).unwrap_or(""), 60)),
             t if t.starts_with("enum:") => (v.and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 31.0) as i64).to_string(),
+            t if assets::is_type(t) => assets::lit(v), // X-fx
             _ => "0".into(),
         }
     }
@@ -755,6 +757,7 @@ impl<'a> Gen<'a> {
         let expr = match def.kind.as_str() {
             k if coverage::is_pure(k) => coverage::pure(self, node, pin), // EC
             k if w1::PURE.contains(&k) => w1::pure(self, node, pin), // W1
+            k if assets::is_pure(k) => assets::pure(self, node, pin), // X-fx
             "math.compare" => {
                 let op = match self.choice(n, def, "op") {
                     "ge" => ">=",
@@ -1118,6 +1121,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     // Macros are copied in first (their nodes report as the Macro node)
     let ex = super::expand::expand(flat.as_ref());
     let g = &ex.graph;
+    let _assets = assets::Scope::new(g); // X-fx: the file table, for start values
     let v = View::new(g);
     let reached = v.reached_from();
     // the nodes that become functions: every event, and whatever their flow reaches
@@ -1482,6 +1486,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     engine::blocks(g, &mut o);
     fx::blocks(g, &mut o);
+    assets::blocks(g, &mut o); // X-fx
     p5::helpers(g, &mut o); // P5 (after the saved values it builds on)
     coverage::blocks(g, &mut o); // EC
     if uses_clock {
@@ -1608,7 +1613,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         .filter_map(|k| k.split_whitespace().find_map(|w| w.strip_prefix("keeper=")))
         .filter_map(|k| match k { "barney" => Some("models/barney.mdl"), "gman" => Some("models/gman.mdl"), _ => None })
         .collect::<BTreeSet<_>>().into_iter().collect();
-    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() || !npc_models.is_empty() || !proj_models.is_empty() || engine::needs_precache(g) || fx::needs_precache(g) || uses_fire || uses_smoke || uses_blood {
+    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() || !npc_models.is_empty() || !proj_models.is_empty() || engine::needs_precache(g) || fx::needs_precache(g) || !assets::precache(g).is_empty() || uses_fire || uses_smoke || uses_blood {
         let mut pre = String::from("public plugin_precache()\n{");
         for m in &proj_models {
             // (through the mode's precache budget: a model that doesn't fit isn't loaded, and flies as the grenade)
@@ -1646,6 +1651,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         }
         for l in fx::precache(g) {
             pre.push_str(&format!("\n{l}"));
+        }
+        for l in assets::precache(g) {
+            pre.push_str(&format!("\n{l}")); // X-fx
         }
         for m in &keepers {
             pre.push_str(&format!("\n\t// the shopkeeper of a shop the mode makes\n\tlsg_pre_model({})", pawn_str(m)));
@@ -8478,6 +8486,10 @@ mod tests {
             used.insert(k);
         }
         for k in p5::kinds() {
+            used.insert(k);
+        }
+        // X-fx: the file nodes are in every_node_assets.graph.json (gen/assets.rs tests it)
+        for k in assets::PURE {
             used.insert(k);
         }
         // EC: the engine coverage nodes are in every_node_ec.graph.json (gen/coverage/tests.rs tests it)

@@ -2,6 +2,8 @@
 // events mean. Run with `npm run test:studio` (esbuild + node:test, no extra packages).
 
 import { test } from "node:test";
+import assetValuesRaw from "../../src-tauri/src/tools/studio/testdata/asset_values.json?raw";
+import { validAsset } from "../src/views/tools/studio/schema";
 import { readFileSync, writeFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import templateRaw from "../src/views/tools/studio/templates/team-dm.graph.json?raw";
@@ -58,7 +60,7 @@ test("schema refuses other files, newer versions and unsafe text", () => {
 test("every node in the registry is well formed", () => {
   for (const d of NODE_DEFS) {
     assert.ok(d.title && d.category && d.help, d.type);
-    for (const p of [...d.inputs, ...d.outputs]) assert.ok(["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "array<$K>", "array<player>", "array<entity>", "array<vector>", "enum:ls_kind", "enum:ls_comp_kind", "enum:ls_weapon", "enum:ls_hitzone", "enum:ls_dmgkind", "enum:ls_spawn_fail", "enum:ls_who"].includes(p.type) || /^array<(number|bool|text|player|entity|team|vector)>$/.test(p.type), `${d.type}.${p.id}`);
+    for (const p of [...d.inputs, ...d.outputs]) assert.ok(["exec", "player", "entity", "team", "number", "bool", "text", "any", "var", "vector", "timer", "$T", "$K", "$E", "$S", "$F", "array<$T>", "map<$K,$T>", "array<$K>", "array<player>", "array<entity>", "array<vector>", "enum:ls_kind", "enum:ls_comp_kind", "enum:ls_weapon", "enum:ls_hitzone", "enum:ls_dmgkind", "enum:ls_spawn_fail", "enum:ls_who", "model", "sprite", "sound"].includes(p.type) || /^array<(number|bool|text|player|entity|team|vector)>$/.test(p.type), `${d.type}.${p.id}`);
   }
   for (const t of ["event.round_started", "event.player_killed", "cond.is_team", "player.give_weapon", "score.end_round"]) assert.ok(nodeDef(t), t);
 });
@@ -652,6 +654,8 @@ test("+ Add pin and − change a node's count or cases (Details stays in step), 
   assert.equal(ok(removePin(g0, "n")).nodes.find((x) => x.id === "n")!.params.cases, "1,2");
   assert.match((removePin(g0, "t") as { error: string }).error, /at least 1/);
   assert.equal(countOf(g0, "p"), null, "a node with fixed pins");
+});
+
 test("types: handles and players go into Entity pins, files into Model-or-Sprite pins, arrays don't widen (graph.rs upcast)", () => {
   for (const h of ["player", "npc", "creature", "projectile", "volume", "objmarker", "component"]) assert.ok(wireOk(h, "entity"), h);
   assert.ok(!wireOk("entity", "creature"), "an Entity might not be a Creature");
@@ -680,4 +684,20 @@ test("orphans: a wire to a removed pin and a removed setting's value stay, shown
   assert.equal(r.filter((x) => x.what === "setting").length, 1);
   assert.match(refreshSummary(r), /2 orphaned wires, 1 orphaned setting/);
   assert.match(refreshSummary([]), /up to date/);
+});
+
+// assets (X-fx): file values are checked the same as the app does (one shared list)
+test("file values: the same verdicts as the app", () => {
+  const cases = (JSON.parse(assetValuesRaw) as { cases: [string, string, boolean][] }).cases;
+  for (const [k, v, fits] of cases) assert.equal(validAsset(k, v), fits, `${k} ${v}`);
+});
+test("file variables: a start value of the right kind loads, others are refused", () => {
+  const g = template();
+  const withVar = (type: string, d: string) => parseGraph({ ...JSON.parse(JSON.stringify(g)), variables: [{ id: "a1", name: "Taunt", type, scope: "mode", default: d }] });
+  assert.ok("graph" in withVar("sound", "items/gunpickup2.wav"));
+  assert.ok("graph" in withVar("model", "models/w_c4.mdl"));
+  assert.ok("error" in withVar("sound", "models/w_c4.mdl"));
+  assert.ok("error" in withVar("model", "../x.mdl"));
+  // a text variable still can't hold a path (no /)
+  assert.ok("error" in withVar("text", "models/w_c4.mdl"));
 });
