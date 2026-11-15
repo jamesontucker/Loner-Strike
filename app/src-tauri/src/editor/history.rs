@@ -15,6 +15,26 @@ enum Item {
     Entity { id: EntityId, before: Option<Entity>, after: Option<Entity> },
     Group { id: GroupId, before: Option<Group>, after: Option<Group> },
     World { before: WorldSettings, after: WorldSettings },
+    /// Parity A: files beside the project moved (a rename, a move into a folder, a delete into the
+    /// editor's deleted files folder): undo moves them back, in the same step as the references
+    Files { pairs: Vec<(std::path::PathBuf, std::path::PathBuf)> },
+}
+
+/// Moves files (from → to), making folders; never over a file. Backward: to → from, in reverse.
+fn move_files(pairs: &[(std::path::PathBuf, std::path::PathBuf)], forward: bool) {
+    let go = |from: &std::path::Path, to: &std::path::Path| {
+        if from.exists() && !to.exists() {
+            if let Some(d) = to.parent() {
+                let _ = std::fs::create_dir_all(d);
+            }
+            let _ = std::fs::rename(from, to);
+        }
+    };
+    if forward {
+        pairs.iter().for_each(|(a, b)| go(a, b));
+    } else {
+        pairs.iter().rev().for_each(|(a, b)| go(b, a));
+    }
 }
 
 /// One undoable step.
@@ -57,6 +77,7 @@ impl Change {
             }
             Item::Group { id, before, after } => put(&mut doc.groups, *id, if forward { after } else { before }),
             Item::World { before, after } => doc.world = if forward { after.clone() } else { before.clone() },
+            Item::Files { pairs } => move_files(pairs, forward),
         };
         if forward {
             items.iter().for_each(&mut apply);
@@ -92,6 +113,7 @@ fn unchanged(it: &Item) -> bool {
         Item::Entity { before, after, .. } => before == after,
         Item::Group { before, after, .. } => before == after,
         Item::World { before, after } => before == after,
+        Item::Files { pairs } => pairs.is_empty(),
     }
 }
 
@@ -188,6 +210,32 @@ impl<'a> Tx<'a> {
         record(&mut self.change.items, Item::Group { id, before: Some(before.clone()), after: None });
         Some(before)
     }
+    /// Parity A: moves files now (each `from` → `to`, never over a file), undone with the rest of the
+    /// step. Err (nothing moved) when one can't be.
+    pub fn move_files(&mut self, pairs: Vec<(std::path::PathBuf, std::path::PathBuf)>) -> Result<(), String> {
+        for (a, b) in &pairs {
+            if !a.exists() {
+                return Err(format!("{} isn't there any more.", a.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()));
+            }
+            if b.exists() {
+                return Err(format!("There's a file called {} there already.", b.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()));
+            }
+        }
+        let mut done: Vec<(std::path::PathBuf, std::path::PathBuf)> = Vec::new();
+        for (a, b) in &pairs {
+            if let Some(d) = b.parent() {
+                let _ = std::fs::create_dir_all(d);
+            }
+            if let Err(e) = std::fs::rename(a, b) {
+                move_files(&done, false);
+                return Err(format!("{} couldn't be moved ({e}).", a.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()));
+            }
+            done.push((a.clone(), b.clone()));
+        }
+        self.change.items.push(Item::Files { pairs });
+        Ok(())
+    }
+
     pub fn set_world(&mut self, w: WorldSettings) {
         let before = std::mem::replace(&mut self.doc.world, w.clone());
         record(&mut self.change.items, Item::World { before, after: w });

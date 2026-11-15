@@ -51,6 +51,7 @@ pub mod heavy; // Checks: heavy views from the last compile's VIS data
 pub mod npcs; // NPC-editor: Checks for NPCs and interactables
 pub mod selection; // MCP: what's selected, for agents
 pub mod importexport; // Parity A: the Content Browser's Import and Export
+pub mod filemgr; // Parity A: your own files: folders, move, rename, delete, Copy to Mine
 
 const INTERNAL: &str = "Loner-Strike hit an internal error in the map editor. Try again, and copy the diagnostics from Settings if it keeps happening.";
 const NO_DOC: &str = "No map is open in the editor. Start a new map or open one.";
@@ -2446,6 +2447,7 @@ fn routes_with(ed: Ed) -> Router<Shared> {
         .merge(kits::routes()) // P5
         .merge(browser::routes()) // P5
         .merge(importexport::routes()) // Parity A
+        .merge(filemgr::routes()) // Parity A
         .merge(budget::routes()) // P5
         .merge(selection::routes()) // MCP
         .merge(leak::routes()) // P5

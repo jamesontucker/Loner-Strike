@@ -184,6 +184,32 @@ export function used(a: { kind: string; path: string }) {
   s.set({ recent });
 }
 
+/** Parity A: after a move or rename, favorites and recent follow the file; after a delete, it leaves them. */
+export function movedAsset(kind: string, from: string, to: string | null) {
+  const s = useBrowser.getState();
+  const old = assetKey({ kind, path: from });
+  const next = to ? assetKey({ kind, path: to }) : null;
+  const swap = (list: string[]) => list.flatMap((k) => (k === old ? (next ? [next] : []) : [k]));
+  const favorites = swap(s.favorites);
+  const recent = swap(s.recent);
+  write(FAV, favorites);
+  write(REC, recent);
+  s.set({ favorites, recent, selected: s.selected && assetKey(s.selected) === old ? null : s.selected });
+}
+
+// ---- your own files (Parity A): folders, move, rename, delete, Copy to Mine --------------------
+
+export type Folders = { model?: string[]; sprite?: string[]; sound?: string[] };
+export const getFolders = () =>
+  fetch(`${E}/folders`, { headers: { "X-Panel": "1" } })
+    .then((r) => r.json() as Promise<{ folders: Folders; project: boolean }>)
+    .catch(() => ({ folders: {}, project: false }));
+export const newFolder = (kind: string, path: string) => postJson<{ ok?: boolean; path?: string; folders?: Folders; error?: string }>(`${E}/folder`, { kind, path });
+export const moveFile = (from: string, to: string) => postJson<{ ok?: boolean; path?: string; references?: number; others?: string; moved?: { from: string; to: string }[]; error?: string }>(`${E}/move`, { from, to });
+export const deleteFile = (path: string, confirm = false) => postJson<{ ok?: boolean; uses?: number; ask?: string; deleted?: string[]; error?: string }>(`${E}/delete`, { path, confirm });
+export const copyToMine = (a: { folder: string; path: string }) => postJson<ImportSummary & { source?: string }>(`${E}/copy-to-mine`, { folder: a.folder, path: a.path });
+export const MINE_MIME = "application/x-ls-mine-file";
+
 /** The kind an entity key's value names (by its FGD type, or its file type). */
 export function kindOfKey(value: string, fgdType?: string): AssetKind | null {
   const v = value.trim().toLowerCase();

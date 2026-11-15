@@ -496,3 +496,12 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .p5-cb-import ul { margin: 4px 0 0; padding-left: 18px; }
 .p5-cb-export { display: grid; gap: 6px; }
 .p5-cb-export .p5-cb-badge { margin-left: 4px; }
+/* Parity A: Mine's folders (drop a file on one to move it) */
+.p5-cb-tree-item { display: contents; }
+.p5-cb-folders { display: contents; }
+.p5-cb-tree .p5-cb-folder { font-size: 12px; text-align: left; }
+.p5-cb-tree .drop-over { outline: 2px dashed var(--signal); outline-offset: -2px; }
+/* Parity A: Find uses, Export and the delete question float over the browser's corner instead of
+   taking rows from the file grid (a short dock panel otherwise had no room left for the files) */
+.p5-cb { position: relative; }
+.p5-cb > .p5-cb-uses { position: absolute; right: 8px; bottom: 8px; z-index: 30; width: min(360px, calc(100% - 16px)); max-height: 60%; overflow: auto; background: var(--panel-2, #3a4232); box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }

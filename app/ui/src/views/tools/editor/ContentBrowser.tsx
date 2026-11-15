@@ -7,13 +7,20 @@
 // the same browser over the bottom panels and closes on a click away.
 
 import { SoundOptions } from "../common/SoundOptions";
-import { memo, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Skeleton, useConfirm } from "../../../ui";
+import { memo, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Skeleton, useAskText, useConfirm } from "../../../ui";
 import {
   assetCredits,
   assetKey,
   assetList,
+  copyToMine,
+  deleteFile,
   exportAsset,
+  getFolders,
+  MINE_MIME,
+  moveFile,
+  movedAsset,
+  newFolder,
   fileData,
   importFiles,
   IMPORT_TYPES,
@@ -30,6 +37,7 @@ import {
   type AssetKind,
   type AssetList,
   type Credits,
+  type Folders,
   type ImportSummary,
   type SoundInfo,
   type SpriteInfo,
@@ -149,6 +157,25 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
   const [exporting, setExporting] = useState<AssetItem | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const ask = useConfirm();
+  const askText = useAskText();
+  // Parity A: your own files: the project's subfolders (Mine), the one shown, a delete that asks
+  const [folders, setFolders] = useState<Folders>({});
+  const [mineDir, setMineDir] = useState<string | null>(null);
+  const [dropDir, setDropDir] = useState<string | null>(null);
+  const [delAsk, setDelAsk] = useState<{ a: AssetItem; text: string } | null>(null);
+  // (the right-click menu kept on screen: near the bottom or right edge it opens up or left)
+  const menuEl = useRef<HTMLUListElement>(null);
+  useLayoutEffect(() => {
+    const el = menuEl.current;
+    if (!el || !menu) return;
+    const r = el.getBoundingClientRect();
+    const dx = Math.min(0, window.innerWidth - 8 - r.right);
+    const dy = Math.min(0, window.innerHeight - 8 - r.bottom);
+    if (dx || dy) {
+      el.style.left = `${Math.max(8 - (r.left - menu.x), menu.x + dx)}px`;
+      el.style.top = `${Math.max(8 - (r.top - menu.y), menu.y + dy)}px`;
+    }
+  }, [menu]);
   const favorites = useBrowser((s) => s.favorites);
   const recent = useBrowser((s) => s.recent);
   const reveal = useBrowser((s) => s.reveal);
@@ -160,6 +187,13 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
   const kind = section === "model" || section === "sprite" || section === "sound" ? section : null;
 
   useEffect(() => keep("ls.editor.content.section", section), [section]);
+  useEffect(() => {
+    let live = true;
+    void getFolders().then((r) => live && setFolders(r.folders ?? {}));
+    return () => {
+      live = false;
+    };
+  }, [rev]);
   useEffect(() => {
     if (!kind) return;
     let live = true;
@@ -202,12 +236,13 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
       if (source === "recent" && !recent.includes(assetKey(a))) return false;
       if (source.startsWith("page:") && a.page?.key !== source.slice(5)) return false;
       if (["game", "downloaded", "community", "mine", "other"].includes(source) && a.source !== source) return false;
+      if (source === "mine" && mineDir && !a.path.toLowerCase().startsWith(`${mineDir.toLowerCase()}/`)) return false;
       const hay = `${a.path} ${a.page?.name ?? ""}`.toLowerCase();
       return words.every((w) => hay.includes(w));
     });
     if (source === "recent") out.sort((x, y) => recent.indexOf(assetKey(x)) - recent.indexOf(assetKey(y)));
     return out.slice(0, 600);
-  }, [list, q, source, favorites, recent]);
+  }, [list, q, source, favorites, recent, mineDir]);
   // thumbnails no longer shown aren't drawn
   useEffect(() => {
     const want = new Set(shown.filter((a) => a.kind === "model").map((a) => `${a.folder}/${a.path}`));
@@ -245,6 +280,82 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
     }
   };
   const askRename = (text: string) => ask(text, { ok: "Import under new names" });
+
+  // Parity A: move, rename, delete your own files; the map's references follow in one undo step
+  const fileName = (p: string) => p.slice(p.lastIndexOf("/") + 1);
+  const dirOf = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
+  const afterFileOp = (msg: string, extra?: string) => {
+    setSummary({ message: extra ? `${msg} ${extra}` : msg });
+    setRev((n) => n + 1);
+    void useEditor.getState().load();
+  };
+  const doMove = async (a: AssetItem, to: string) => {
+    if (to.toLowerCase() === a.path.toLowerCase()) return;
+    const r = await moveFile(a.path, to);
+    if (r.error) return setSummary({ error: r.error });
+    movedAsset(a.kind, a.path, r.path ?? to);
+    const refs = r.references ? ` ${r.references} place${r.references === 1 ? "" : "s"} in the map updated (Undo puts it all back).` : "";
+    afterFileOp(`Moved to ${r.path}.${refs}`, r.others);
+  };
+  const rename = async (a: AssetItem) => {
+    const ext = a.path.slice(a.path.lastIndexOf("."));
+    const v = await askText(`Rename ${fileName(a.path)} to:`, { label: "New name", placeholder: fileName(a.path).slice(0, -ext.length), max: 60 }, { ok: "Rename" });
+    if (!v?.trim()) return;
+    const name = v.trim().toLowerCase().endsWith(ext.toLowerCase()) ? v.trim() : `${v.trim()}${ext}`;
+    await doMove(a, dirOf(a.path) ? `${dirOf(a.path)}/${name}` : name);
+  };
+  const moveTo = async (a: AssetItem) => {
+    const root = a.path.split("/")[0];
+    const opts = [root, ...((folders[a.kind] as string[] | undefined) ?? [])];
+    const v = await askText(`Move ${fileName(a.path)} to which folder? (${opts.join(", ")})`, { label: "Folder", placeholder: root, max: 120 }, { ok: "Move" });
+    if (!v?.trim()) return;
+    const dir = v.trim().replace(/\/+$/, "");
+    await doMove(a, `${dir.toLowerCase().startsWith(`${root}/`) || dir === root ? dir : `${root}/${dir}`}/${fileName(a.path)}`);
+  };
+  const remove = async (a: AssetItem, confirm = false) => {
+    const r = await deleteFile(a.path, confirm);
+    if (r.error) return setSummary({ error: r.error });
+    // (one floating box at a time: the question replaces Find uses)
+    if (r.ask) return (setUses(null), setExporting(null), setDelAsk({ a, text: r.ask }));
+    setDelAsk(null);
+    movedAsset(a.kind, a.path, null);
+    afterFileOp(`Deleted ${r.deleted?.join(", ")}. Undo brings ${r.deleted && r.deleted.length > 1 ? "them" : "it"} back.`);
+  };
+  const addFolder = async () => {
+    if (!kind) return;
+    const root = kind === "model" ? "models" : kind === "sprite" ? "sprites" : "sound";
+    const v = await askText(`New folder in ${mineDir ?? root}:`, { label: "Folder name", placeholder: "props", max: 40 }, { ok: "Make it" });
+    if (!v?.trim()) return;
+    const r = await newFolder(kind, `${mineDir ?? root}/${v.trim()}`);
+    if (r.error) return setSummary({ error: r.error });
+    setFolders(r.folders ?? {});
+    setMineDir(r.path ?? null);
+  };
+  const copyMine = async (a: AssetItem) => {
+    setImporting(true);
+    const r = await copyToMine(a);
+    setImporting(false);
+    setSummary(r);
+    if (r.imported?.length) setRev((n) => n + 1);
+  };
+  const dropOn = (dir: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes(MINE_MIME)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setDropDir(dir);
+    },
+    onDragLeave: () => setDropDir((d) => (d === dir ? null : d)),
+    onDrop: (e: React.DragEvent) => {
+      const from = e.dataTransfer.getData(MINE_MIME);
+      if (!from) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setDropDir(null);
+      const a = (list?.items ?? []).find((x) => x.source === "mine" && x.path === from);
+      if (a) void doMove(a, `${dir}/${fileName(a.path)}`);
+    },
+  });
 
   return (
     <section
@@ -360,9 +471,39 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
               ["mine", "Mine", counts("mine")],
               ["other", "Other", counts("other")],
             ].map(([id, label, n]) => (
-              <button key={id as string} type="button" aria-pressed={source === id} onClick={() => setSource(id as string)} title={SOURCE_LABEL[id as string] ?? ""}>
-                {label} {n != null && <span className="muted">{n as number}</span>}
-              </button>
+              <span key={id as string} className="p5-cb-tree-item">
+                <button
+                  type="button"
+                  aria-pressed={source === id && (id !== "mine" || !mineDir)}
+                  onClick={() => (setSource(id as string), setMineDir(null))}
+                  title={SOURCE_LABEL[id as string] ?? ""}
+                  className={id === "mine" && dropDir === (kind === "model" ? "models" : kind === "sprite" ? "sprites" : "sound") ? "drop-over" : undefined}
+                  {...(id === "mine" && kind ? dropOn(kind === "model" ? "models" : kind === "sprite" ? "sprites" : "sound") : {})}
+                >
+                  {label} {n != null && <span className="muted">{n as number}</span>}
+                </button>
+                {id === "mine" && source === "mine" && kind && (
+                  <span className="p5-cb-folders" role="group" aria-label="Folders">
+                    {((folders[kind] as string[] | undefined) ?? []).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        className={`p5-cb-folder${dropDir === f ? " drop-over" : ""}`}
+                        style={{ paddingLeft: 10 + 10 * (f.split("/").length - 1) }}
+                        aria-pressed={mineDir === f}
+                        title={`${f}: drop a file here to move it`}
+                        onClick={() => setMineDir(f)}
+                        {...dropOn(f)}
+                      >
+                        {f.slice(f.lastIndexOf("/") + 1)}/
+                      </button>
+                    ))}
+                    <button type="button" className="p5-cb-folder linklike" onClick={() => void addFolder()}>
+                      + New folder
+                    </button>
+                  </span>
+                )}
+              </span>
             ))}
             {(list?.downloads ?? []).map((d) => (
               <button key={d.key} type="button" className="p5-cb-page" aria-pressed={source === `page:${d.key}`} title={d.url} onClick={() => setSource(`page:${d.key}`)}>
@@ -410,6 +551,7 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
                     onDragStart={(e) => {
                       e.dataTransfer.setData(COMPONENT_MIME, assetDragId(a));
                       e.dataTransfer.setData("text/plain", keyValue(a));
+                      if (a.source === "mine") e.dataTransfer.setData(MINE_MIME, a.path);
                       e.dataTransfer.effectAllowed = "copy";
                       dragging.current = { id: assetDragId(a), size: [32, 32, 32], component: true };
                     }}
@@ -435,7 +577,7 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
         </div>
       )}
       {menu && (
-        <ul className="p5-cb-menu" role="menu" style={{ left: menu.x, top: menu.y }} onPointerDown={(e) => e.stopPropagation()}>
+        <ul ref={menuEl} className="p5-cb-menu" role="menu" style={{ left: menu.x, top: menu.y }} onPointerDown={(e) => e.stopPropagation()}>
           <li role="none">
             <button type="button" role="menuitem" onClick={() => (setUses(menu.a), setMenu(null))}>
               Find uses in the map
@@ -458,19 +600,54 @@ function ContentBrowserView({ drawer }: { drawer?: boolean }) {
               </button>
             </li>
           )}
+          {menu.a.source === "mine" ? (
+            <>
+              <li role="none">
+                <button type="button" role="menuitem" onClick={() => { const a = menu.a; setMenu(null); void rename(a); }}>
+                  Rename…
+                </button>
+              </li>
+              <li role="none">
+                <button type="button" role="menuitem" onClick={() => { const a = menu.a; setMenu(null); void moveTo(a); }}>
+                  Move to…
+                </button>
+              </li>
+              <li role="none">
+                <button type="button" role="menuitem" onClick={() => { const a = menu.a; setMenu(null); void remove(a); }}>
+                  Delete…
+                </button>
+              </li>
+            </>
+          ) : (
+            <li role="none">
+              <button type="button" role="menuitem" title="A copy of yours in the project's folder, to change (its credits stay with it)" onClick={() => { const a = menu.a; setMenu(null); void copyMine(a); }}>
+                Copy to Mine
+              </button>
+            </li>
+          )}
           <li role="none">
             <button type="button" role="menuitem" onClick={() => { const a = menu.a; setMenu(null); void showInFolder(a).then((r) => r.error && setSummary({ error: r.error })); }}>
               {/Win/i.test(navigator.platform) ? "Show in Explorer" : "Show in Finder"}
             </button>
           </li>
           <li role="none">
-            <button type="button" role="menuitem" onClick={() => (setExporting(menu.a), setMenu(null))}>
+            <button type="button" role="menuitem" onClick={() => (setUses(null), setDelAsk(null), setExporting(menu.a), setMenu(null))}>
               Export…
             </button>
           </li>
         </ul>
       )}
       {exporting && <ExportBox a={exporting} onClose={() => setExporting(null)} onDone={(m) => setSummary({ message: m })} />}
+      {delAsk && (
+        <div className="p5-cb-uses" role="alertdialog" aria-label={`Delete ${delAsk.a.name}`}>
+          <p className="small-note">{delAsk.text}</p>
+          <div className="row">
+            <button type="button" className="btn small danger" onClick={() => void remove(delAsk.a, true)}>Delete anyway</button>
+            <button type="button" className="btn small" onClick={() => (setUses(delAsk.a), setDelAsk(null))}>Show uses</button>
+            <button type="button" className="btn small" onClick={() => setDelAsk(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
       {uses && <Uses a={uses} onClose={() => setUses(null)} />}
     </section>
   );
