@@ -33,8 +33,12 @@ PLAYERS = HEADER + b"U"
 POLL_SECS = 120
 # shown while it answered this recently
 FRESH_SECS = 600
-# taken off the list after not answering this long
-GONE_SECS = 6 * 3600
+# taken off the list after not answering this long (a week: a server down for a day or two,
+# or a machine restarted, comes back on its own; it's only shown while it answers, FRESH_SECS)
+GONE_SECS = 7 * 24 * 3600
+# polls in a row that see the server's ls_list off before it leaves the list (a server just
+# started says 0 until its friends.cfg has run, a few seconds into the first map)
+OFF_POLLS = 2
 MAX_SERVERS = 500
 # sign-ups per visitor per hour
 MAX_REGISTER = 20
@@ -251,9 +255,12 @@ class Registry:
         with self.lock:
             entry = self.servers.get(listed)
             if info and rules is not None and rules.get("ls_list") != "1":
-                # the host turned the list off (or never turned it on)
+                # the host turned the list off (or never turned it on); a listed server only
+                # leaves after OFF_POLLS polls in a row say so (not the moment after a start)
                 if entry:
-                    del self.servers[listed]
+                    entry["off"] = entry.get("off", 0) + 1
+                    if entry["off"] >= OFF_POLLS:
+                        del self.servers[listed]
                     self._save()
                 return False
             if info and rules is not None:
@@ -262,7 +269,7 @@ class Registry:
                         return False
                     entry = {"since": now}
                     self.servers[listed] = entry
-                entry.update(info=info, seen=now)
+                entry.update(info=info, seen=now, off=0)
                 self._save()
                 return True
             if entry and now - entry.get("seen", 0) > GONE_SECS:

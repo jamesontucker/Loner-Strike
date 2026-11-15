@@ -119,11 +119,31 @@ class Tests(unittest.TestCase):
         self.assertEqual(len(r.public(1200)), 2, "a missed answer isn't the end")
         self.assertEqual([s["address"] for s in r.public(1000 + sl.FRESH_SECS + 1)], [], "quiet too long: hidden")
         self.assertFalse(r.update("b:1", info, {"ls_list": "0"}, 1300))
-        self.assertEqual(r.addresses(), ["a:1"], "the host turned it off")
-        r.update("a:1", None, None, 1000 + sl.GONE_SECS + 1)
-        self.assertEqual(r.addresses(), [], "gone for hours: off the list")
+        self.assertEqual(sorted(r.addresses()), ["a:1", "b:1"], "one poll saying off isn't enough (a server just started says 0)")
+        self.assertFalse(r.update("b:1", info, {"ls_list": "0"}, 1400))
+        self.assertEqual(r.addresses(), ["a:1"], "the host turned it off: two polls in a row")
+        r.update("a:1", None, None, 1000 + 2 * 24 * 3600)
+        self.assertEqual(r.addresses(), ["a:1"], "down for two days (a machine restarted): still known")
+        self.assertEqual(r.public(1000 + 2 * 24 * 3600), [], "but not shown while it doesn't answer")
+        self.assertTrue(r.update("a:1", info, {"ls_list": "1"}, 1000 + 2 * 24 * 3600 + 5))
+        self.assertEqual([s["address"] for s in r.public(1000 + 2 * 24 * 3600 + 5)], ["a:1"], "back on its own when it answers")
+        r.update("a:1", None, None, 1000 + 2 * 24 * 3600 + 5 + sl.GONE_SECS + 1)
+        self.assertEqual(r.addresses(), [], "gone for a week: off the list")
         again = sl.Registry(r.path)
         self.assertEqual(again.addresses(), [], "kept on disk")
+
+    def test_a_restart_doesnt_drop_a_listed_server(self):
+        r = sl.Registry(os.path.join(tempfile.mkdtemp(), "list.json"))
+        info = sl.parse_info(INFO_BODY)
+        self.assertTrue(r.update("a:1", info, {"ls_list": "1"}, 1000))
+        # it restarts: one poll lands before friends.cfg has set ls_list 1 again
+        self.assertFalse(r.update("a:1", info, {"ls_list": "0"}, 1120))
+        self.assertTrue(r.update("a:1", info, {"ls_list": "1"}, 1240))
+        # the count starts again after a poll that says on
+        self.assertFalse(r.update("a:1", info, {"ls_list": "0"}, 1360))
+        self.assertEqual(r.addresses(), ["a:1"])
+        again = sl.Registry(r.path)
+        self.assertEqual(again.servers["a:1"]["off"], 1, "the count is kept over a restart of the list")
 
     def test_rate_limit(self):
         lim = sl.RateLimit(2)
