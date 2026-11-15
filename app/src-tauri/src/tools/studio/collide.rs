@@ -205,8 +205,17 @@ stock lsg_vol_place(v)
 	}
 }
 
-stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[3], shape, Float:sx, Float:sy, Float:sz, filter, const name[], cap, incap)
+// why the last Spawn Trigger Volume failed ("" when it made one): the spawn outcome's Failure Reason
+stock g_lsgVolWhy[24]
+
+stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[3], shape, Float:sx, Float:sy, Float:sz, filter, const name[], cap, incap, need_at)
 {
+	g_lsgVolWhy[0] = 0
+	if (need_at && !(at > 0 && pev_valid(at)))
+	{
+		copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), "Bad input")
+		return 0
+	}
 	new v = -1
 	for (new i = 0; i < min(cap, LSG_VOLS) && v < 0; i++)
 		if (!g_lsgVol[i] || !pev_valid(g_lsgVol[i]))
@@ -214,10 +223,14 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 	if (v < 0)
 	{
 		log_amx("[%s] Spawn Trigger Volume skipped: as many are out as Trigger volumes at once allows (%d, Limits)", LSG_MODE, cap)
+		copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), "Limit reached")
 		return 0
 	}
 	if (!lsg_ent_room("Spawn Trigger Volume"))
+	{
+		copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), "Out of entity slots")
 		return 0
+	}
 	if (!(at > 0 && pev_valid(at)))
 		at = 0
 	g_lsgVolAt[v] = at
@@ -229,7 +242,10 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 	o = g_lsgVolPos[v]
 	new e = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
 	if (!e)
+	{
+		copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), "Out of entity slots")
 		return 0
+	}
 	set_pev(e, pev_classname, "lsg_volume")
 	if (name[0])
 		set_pev(e, pev_targetname, name)
@@ -639,7 +655,7 @@ mod tests {
                 "lsg_on_player_touched(vol, who)", "lsg_fall_damage(speed)", "lsg_col_hitgroup(hit, tr", "lsg_hitgroup(victim, bits)) // hitgroup",
                 "if (lsg_named(vol, \"zone\"))", "g_lsgTouch", "g_lsgBullet",
                 "ls_bots_avoid_ent(\"carrier\", ", ", 200.0, 7.0, 0.0, 1)", "ls_bots_avoid(\"spot\", lsgAv, 128.0, 3.0, 30.0, 0)", "ls_bots_avoid_stop(\"spot\")",
-                "lsg_avoid_room(\"carrier\", 16)", "lsg_avoid_gone(\"spot\")", "lsg_ent_room(\"Spawn Trigger Volume\")", ", 32, 32)",
+                "lsg_avoid_room(\"carrier\", 16)", "lsg_avoid_gone(\"spot\")", "lsg_ent_room(\"Spawn Trigger Volume\")", ", 32, 32, ", "copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), \"Limit reached\")",
             ] {
                 assert!(src.contains(want), "{want} (debug {debug})");
             }
@@ -663,6 +679,33 @@ mod tests {
         let src = gen::generate(&g, false).source;
         for want in ["lsg_vol_begin_hook(vol, who)\n{", "lsg_vol_end_hook(vol, who)\n{", "public lsg_col_trace(Float:v1[3], Float:v2[3], nomonsters, skip, tr)", "public lsg_col_post(id)", "public lsg_col_pre(id)", "lsg_fall_damage(speed)"] {
             assert!(src.contains(want), "missing {want}: is collide::handlers called from gen.rs?");
+        }
+    }
+
+    /// The spawn outcome: Spawned or Failed runs, Entity / Success / Failure Reason are kept, and
+    /// At entity alone (no Position) must be there (Bad input). A saved graph's "then" wire is
+    /// Spawned.
+    #[test]
+    fn vol_spawn_outcome() {
+        let n = |id: &str, t: &str, p: serde_json::Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        let g = graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "vo", "name": "Outcome"},
+            "nodes": [n("ps", "event.player_spawned", json!({})), n("vs", "vol.spawn", json!({"name": "zone"})),
+                      n("ok", "debug.print", json!({"text": "made", "chat": false})), n("no", "debug.print", json!({"text": "failed", "chat": false})), n("br", "flow.branch", json!({}))],
+            "edges": [e(1, "ps", "then", "vs", "exec"), e(2, "ps", "player", "vs", "at_ent"), e(3, "vs", "then", "ok", "exec"), e(4, "vs", "volume", "ok", "value"),
+                      e(5, "vs", "failed", "no", "exec"), e(6, "vs", "reason", "no", "value"), e(7, "no", "then", "br", "exec"), e(8, "vs", "success", "br", "cond")]})).unwrap();
+        assert!(graph::validate(&g).is_empty(), "{:#?}", graph::validate(&g));
+        for debug in [false, true] {
+            let src = gen::generate(&g, debug).source;
+            let call = src.lines().find(|l| l.contains("= lsg_vol_spawn(")).expect("the spawn");
+            assert!(call.trim_end().ends_with(", 1)"), "At entity alone must be there: {call}");
+            assert!(src.contains("copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), \"Bad input\")"));
+            assert!(src.contains("copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), \"Out of entity slots\")"));
+            assert!(src.contains(", 127, g_lsgVolWhy)"), "Failure Reason kept");
+            assert!(src.contains("] ? 1 : 0"), "Success kept");
+            let i = src.find("= lsg_vol_spawn(").unwrap();
+            let body = &src[i..i + src[i..].find("\n}").unwrap()];
+            assert!(body.contains("\telse\n\t\t"), "Spawned and Failed both go somewhere: {body}");
         }
     }
 

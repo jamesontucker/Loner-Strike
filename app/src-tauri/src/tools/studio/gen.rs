@@ -443,7 +443,7 @@ fn kind_of(ty: &str) -> char {
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
 const CTX_KINDS: [&str; 14] = ["table.for_each", "creature.for_each", "timeline.play", "marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
-const STORE_KINDS: [&str; 15] = ["save.top", "array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call", "up.perk_buy", "npc.choose", "fun.swap", "cast.player", "cast.creature"];
+const STORE_KINDS: [&str; 16] = ["vol.spawn", "save.top", "array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call", "up.perk_buy", "npc.choose", "fun.swap", "cast.player", "cast.creature"];
 /// Nodes with more than one flow input: one Pawn function each.
 const MULTI_IN: [&str; 6] = ["timeline.play", "flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array"];
 /// The vector and struct rings: values that aren't in variables live here for a while.
@@ -2176,11 +2176,28 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let size = if sphere { format!("{}, 0.0, 0.0", f("radius", 4096.0)) } else { format!("{}, {}, {}", f("sx", 8192.0), f("sy", 8192.0), f("sz", 8192.0)) };
             let filter = match gen.choice(n, def, "filter") { "creatures" => 1, "any" => 2, _ => 0 };
             let name = name_text(gen.text(n, def, "name"));
-            b.line(format!("\tg_lsgOut[{i}] = lsg_vol_spawn({at}, lsgVp, lsgVa, lsgVo, {}, {size}, {filter}, {}, {}, {})", if sphere { 1 } else { 0 }, pawn_str(&name), gen.limit_expr("trigger_volumes"), gen.limit_expr("volume_members")));
-            if debug {
-                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))", err("No volume: as many are out as Trigger volumes at once allows (Limits), or the server is out of entity slots.")));
+            // At entity alone (no Position): it has to be there
+            let need_at = v.data_source(id, "at_ent").is_some() && v.data_source(id, "pos").is_none();
+            b.line(format!("\tg_lsgOut[{i}] = lsg_vol_spawn({at}, lsgVp, lsgVa, lsgVo, {}, {size}, {filter}, {}, {}, {}, {})", if sphere { 1 } else { 0 }, pawn_str(&name), gen.limit_expr("trigger_volumes"), gen.limit_expr("volume_members"), if need_at { 1 } else { 0 }));
+            // the spawn outcome (Entity, Success, Failure Reason)
+            if let Some(k) = gen.out_index(id, "volume") {
+                b.line(format!("\tg_lsgO[{k}] = g_lsgOut[{i}]"));
             }
-            then_line(&mut b, "then");
+            if let Some(k) = gen.out_index(id, "success") {
+                b.line(format!("\tg_lsgO[{k}] = g_lsgOut[{i}] ? 1 : 0"));
+            }
+            if let Some(t) = gen.tout_index(id, "reason") {
+                b.line(format!("\tcopy(g_lsgOT[{t}], 127, g_lsgVolWhy)"));
+            }
+            if debug {
+                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\tlsd_error({i}, g_lsgVolWhy)\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))"));
+            }
+            match (next("then"), next("failed")) {
+                (Some(t), Some(f)) => b.line(format!("\tif (g_lsgOut[{i}])\n\t\t{t}\n\telse\n\t\t{f}")),
+                (Some(t), None) => b.line(format!("\tif (g_lsgOut[{i}])\n\t\t{t}")),
+                (None, Some(f)) => b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{f}")),
+                (None, None) => {}
+            }
         }
         "vol.remove" => {
             let call = format!("lsg_vol_remove({})", inp("volume", "entity"));
