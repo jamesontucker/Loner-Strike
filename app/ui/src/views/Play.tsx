@@ -10,6 +10,7 @@ import type { AppInfo, MapInfo, Mode, Online } from "../types";
 import { Banner, BusyButton, Info, LoadError, SectionHead, Sheet, Skeleton, useCommand, useConfirm, useToast } from "../ui";
 import { COLLATOR, MapCard } from "./Maps";
 import { CommunityLink, communityMode, originText, useCommunity, useOrigins } from "./tools/community/chip";
+import { DocsLink } from "./DocsLink";
 import { MatchMode } from "./MatchMode";
 import { ModeSettings } from "./ModeSettings";
 
@@ -199,6 +200,7 @@ export function PlayIdle({ app, reason, gameOpen, maps, openSetup }: { app: AppI
   return (
     <div className="idle">
       <div className="idle-hero">
+        <span className="idle-docs"><DocsLink to="playing" what="playing" /></span>
         <h1>Start a game</h1>
         <p>
           {gameOpen && !ON_THIS_COMPUTER

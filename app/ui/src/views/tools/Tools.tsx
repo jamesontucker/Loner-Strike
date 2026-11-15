@@ -12,7 +12,7 @@ import type { MapInfo } from "../../types";
 import { Icon } from "../../icons";
 import { lazyPage, SectionHead, Skeleton } from "../../ui";
 import { TOOL_GROUPS, TOOL_GROUP_BLURBS, TOOLS } from "./registry";
-import { lastTool, rememberWhereYouAre } from "./common/address";
+import { lastTool, rememberWhereYouAre, useReportedAddress } from "./common/address";
 import { Breadcrumbs, FocusButton, FocusPill, openAddress, useShell, useToolsShell } from "./common/shell";
 import { ToolKeys } from "./common/Shortcuts";
 import { ToolHistory } from "./common/History";
@@ -28,6 +28,9 @@ export default function Tools({ maps }: { maps: MapInfo[] }) {
   const Page = entry && PAGES.get(entry.id);
   // bumped to start the page over (a crumb, Back)
   const n = useShell((s) => s.n);
+  // the docs section for the header's Docs button (Community's Publish has its own)
+  const where = useReportedAddress(entry?.id ?? "");
+  const docs = entry && (entry.id === "community" && where?.startsWith("community:publish") ? "publishing" : TOOL_DOCS[entry.id]);
 
   // Back landing in Tools opens where it was; with nothing asked for, where you were last time
   useToolsShell(() => {
@@ -69,7 +72,7 @@ export default function Tools({ maps }: { maps: MapInfo[] }) {
           <h2>{entry.label}</h2>
           <div className="section-actions">
             <ToolHistory tool={entry.id} />
-            {TOOL_DOCS[entry.id] && <DocsLink to={TOOL_DOCS[entry.id]} what={entry.label} />}
+            {docs && <DocsLink to={docs} what={docs === "publishing" ? "publishing" : entry.label} />}
             <FocusButton />
           </div>
         </div>
