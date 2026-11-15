@@ -323,3 +323,12 @@ Screenshots are in `/private/tmp/claude-501/-Users-jameson/a1c85d27-df33-445d-9b
 | Talking through the menu, timeouts and walking away with a real player | NEEDS USER | Menus are drawn only for people; bots answer by themselves |
 | Bots using an interactable on their own ("Bots may use") | NEEDS USER / W2 | W2 owns the bot side; not watched in this sim |
 | The Quest Giver, bring it back (after 35360b25's fix) | PASS | Sim/T1QG (brain run 43648864150, 1310-dev: the newest green; the ls-next3 head run was still building; plugins fresh from 35360b25), rcon-driven with a bot: talk → Yes (`take true`, `thanks`); talk → hint (`still`); use note → `got true`, `found`; use again → `meh`; talk → `reward`, `pay done` ($1000), both flags cleared; another player's use → `meh` |
+
+## Projectiles (1.0, 2026-11-14): QA rows
+| Check | Result | Evidence |
+|---|---|---|
+| Two Spawn Projectile nodes, each with its own On Hit | PASS | Sim/T1PJ (brain run 43651450817, 1314-dev; plugins fresh from 95595e10), `-insecure`, de_dust2, 5 bots, debug build of a two-projectile graph: every rocket hit ran `boom` and every orb hit ran `bonk` (9 each over the spawns), never crossed |
+| Hits: world, entity, player with hit zone | PASS | `ls_proj_test`: world hits with their normals, a `func_breakable` (entity 17), players with hit groups 1, 3, 6, 7 |
+| Kill credit to the owner | PASS | log: `"[LtD] Tilted<10><BOT><CT>" killed "chameleon_cs<8>..." with "ls_projectile"` (and pesto_sux); same-team hits did no damage with friendly fire off |
+| A hit on the spot it was spawned at | NOTE | One test projectile fired from a hand-typed point reported a world hit at its own start (probably inside a brush there); not seen from players' eyes |
+| Bots treating projectiles as dangerous | NEEDS BRAIN | Not built; bots ignore projectiles |
