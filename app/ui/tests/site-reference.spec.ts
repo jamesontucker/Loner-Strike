@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 // @ts-expect-error (a plain .mjs script, no types)
-import { entities, missingHelp, nodes, typeProblems } from "../../../scripts/gen-reference.mjs";
+import { editorProblems, editorRef, entities, missingHelp, nodes, typeProblems } from "../../../scripts/gen-reference.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const HELP = JSON.parse(readFileSync(join(here, "../src/views/tools/studio/nodehelp.json"), "utf8")).help;
@@ -214,11 +214,13 @@ test("a sidebar group's triangle opens its items (mouse and keyboard); rows with
   const b2 = (await ev.locator("summary").boundingBox())!;
   await page.mouse.click(b2.x + 16, b2.y + b2.height / 2);
   await expect(ev.locator("ul li a").first()).toBeVisible();
-  // the editor's rows have no items: no triangle
+  // the editor's groups: the triangle shows their cards
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/reference/editor.html");
-  await expect(page.locator(".ref-side details.leaf").first()).toBeVisible();
-  expect(await page.locator(".ref-side details.leaf > summary").first().evaluate((s) => getComputedStyle(s, "::before").visibility)).toBe("hidden");
+  const eg = page.locator(".ref-side details").filter({ has: page.locator("summary a", { hasText: /^Checking and leaks$/ }) });
+  const b3 = (await eg.locator("summary").boundingBox())!;
+  await page.mouse.click(b3.x + 16, b3.y + b3.height / 2);
+  await expect(eg.locator("ul li a", { hasText: "Leaks" })).toBeVisible();
   // the docs sidebar: a group's button opens its topics
   await page.goto("/docs.html");
   const g = page.locator('.group[data-group="Create"]');
@@ -233,4 +235,38 @@ test("search: nothing found says so, without an empty box", async ({ page }) => 
   await expect(page.locator("#ref-count")).toHaveText(/No results\. Try fewer/);
   await expect(page.locator("#ref-results-box")).toBeHidden();
   await expect(page.locator("#ref-q")).toHaveAttribute("aria-expanded", "false");
+});
+
+test("the map editor reference: every card says what it does and where it is; menu paths and keys come from the editor", async ({ page }) => {
+  expect(editorProblems(), "editor cards without a description or a place, unknown commands, menu commands on no card").toEqual([]);
+  const ref = editorRef();
+  await page.goto("/reference/editor.html");
+  await expect(page.locator(".ed-card")).toHaveCount(ref.cards.length);
+  for (const g of ref.groups) await expect(page.locator(`#g-${g.id}`)).toHaveText(g.name);
+  // no coverage-list leftovers: no dash placeholders, no "PASS", no spec names
+  const text = await page.locator(".ref-main").innerText();
+  expect(text).not.toMatch(/\bPASS\b|\bFAIL\b|\bNA:|^\s*–\s*$/m);
+  // a card: its name, where (a menu path), its keys for Windows and for a Mac
+  const mp = page.locator("#ed-map-properties");
+  await expect(mp.locator("h3")).toHaveText("Map properties");
+  await expect(mp.locator(".crumbs").first()).toHaveText(/Map›Map properties…/);
+  const leaks = page.locator("#ed-leaks");
+  await expect(leaks.locator(".ed-actions li")).toHaveCount(3);
+  await expect(leaks.locator(".ed-actions li").first()).toContainText("Go to leak");
+  await page.locator('.ed-os button[data-os="win"]').click();
+  const save = page.locator("#ed-save .ed-actions li").first();
+  await expect(save.locator(".k-win")).toBeVisible();
+  await expect(save.locator(".k-win")).toHaveText("Ctrl+S");
+  await expect(save.locator(".k-mac")).toBeHidden();
+  await page.locator('.ed-os button[data-os="mac"]').click();
+  await expect(save.locator(".k-mac")).toHaveText("⌘S");
+  await expect(save.locator(".k-win")).toBeHidden();
+  await expect(page.locator("#ed-playtest .keys").first()).toHaveText("F5");
+  await expect(page.locator("#ed-compile-panel .alt-keys")).toContainText("F9");
+  // the choice is kept
+  await page.reload();
+  await expect(page.locator('.ed-os button[data-os="mac"]')).toHaveAttribute("aria-pressed", "true");
+  // search finds a card
+  await page.locator("#ref-q").fill("pointfile");
+  await expect(page.locator("#ref-results li").first()).toContainText("Leaks");
 });

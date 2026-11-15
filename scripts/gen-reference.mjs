@@ -6,13 +6,16 @@
 //
 //   node scripts/gen-reference.mjs           write everything
 //   node scripts/gen-reference.mjs --check   only check: exit 1 if a node or entity has no help, or a
-//                                            pin type has no look (color, mark) or no Types entry
+//                                            pin type has no look (color, mark) or no Types entry, or an
+//                                            editor card (docs/reference/editor.json) has no description or
+//                                            no place, names an unknown command, or a menu command has no card
 //
 // Sources: app/ui/src/views/tools/studio/nodes.json and nodehelp.json (the same help the Studio's
 // node help panel and the AI connection's studio_node_help read), limits.ts, schema.ts's built-in
 // enums and structs, graph.rs's upcast() (what a type goes into), the starter library items
 // (library/*.lib.json); app/src-tauri/src/editor/cstrike.fgd,
-// lonerstrike.fgd and components.json; docs/notes/EditorCoverage.md's inventory.
+// lonerstrike.fgd and components.json; docs/reference/editor.json with the editor's commands.ts and
+// Shortcuts.ts (menus and keys).
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -169,24 +172,98 @@ export function entities() {
   return out.sort((a, b) => a.source.localeCompare(b.source) || a.group.localeCompare(b.group) || a.name.localeCompare(b.name));
 }
 
-/** EditorCoverage.md's inventory: what the editor does and where to find it (no test status). */
-export function editorInventory() {
-  const text = read(join(root, "docs/notes/EditorCoverage.md"));
-  const inv = text.slice(text.indexOf("## Inventory"));
-  const sections = [];
-  let cur = null;
-  for (const line of inv.split("\n")) {
-    const h = /^### (.+)/.exec(line);
-    if (h) {
-      cur = { name: h[1].trim(), rows: [] };
-      if (!/^WebKit|TrenchBroom/.test(cur.name)) sections.push(cur);
-      continue;
-    }
-    if (!cur || !line.startsWith("|") || /^\|\s*-/.test(line) || /^\|\s*(Item|Key|Panel)\s*\|/i.test(line)) continue;
-    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
-    if (cells.length >= 2 && cells[0]) cur.rows.push({ item: cells[0].replace(/`/g, ""), where: cells[1].replace(/`/g, "") });
+/** The editor's own commands (app/ui/src/views/tools/editor): commands.ts's ids, labels, menus
+ *  and hidden flags, the ones it makes in loops (tools, layouts, views, camera presets, panels,
+ *  panel layouts, flips and turns, line up), and Shortcuts.ts's three key sets. */
+export function editorCommands() {
+  const dir = join(root, "app/ui/src/views/tools/editor");
+  const src = read(join(dir, "commands.ts"));
+  const cmds = {};
+  // the written-out ones: { id: "…", label: "…", menu: "…", … } (over one or more lines)
+  const ids = [...src.matchAll(/\bid: "([a-z]+\.[A-Za-z0-9.]+)"/g)];
+  ids.forEach((m, i) => {
+    const body = src.slice(m.index, ids[i + 1]?.index ?? m.index + 600);
+    const label = /label: "([^"]+)"/.exec(body)?.[1];
+    const menu = /menu: "([A-Za-z]+)"/.exec(body)?.[1];
+    if (label && menu) cmds[m[1]] = { label, menu, hidden: /hidden: true/.test(body.split("run:")[0]) };
+  });
+  const list = (file, name) => {
+    const t = read(join(dir, file));
+    const block = t.slice(t.indexOf(name), t.indexOf("];", t.indexOf(name)));
+    return [...block.matchAll(/\{ id: "([^"]+)", (?:label|title): "([^"]+)"/g)].map((m) => ({ id: m[1], label: m[2] }));
+  };
+  for (const t of list("Panels.tsx", "export const TOOLS")) cmds[`tool.${t.id}`] = { label: `${t.label} tool`, menu: "Tools" };
+  for (const l of list("panes.ts", "export const LAYOUTS")) cmds[`view.layout.${l.id}`] = { label: `Layout: ${l.label}`, menu: "View" };
+  for (const v of ["3d", "top", "front", "side"]) cmds[`view.${v}`] = { label: `${v === "3d" ? "3D" : v[0].toUpperCase() + v.slice(1)} view`, menu: "View" };
+  for (const n of list("navigation.ts", "export const NAV_PRESETS")) cmds[`view.nav.${n.id}`] = { label: `Move like ${n.label}`, menu: "View" };
+  for (const p of list("dockPanels.tsx", "DOCK_PANELS")) cmds[`panel.${p.id}`] = { label: `Panel: ${p.label}`, menu: "View" };
+  const ds = read(join(dir, "dockState.ts"));
+  const presets = ds.slice(ds.indexOf("export const DOCK_PRESETS"));
+  for (const m of presets.matchAll(/^\s{2}(\w+): \{\s*label: "([^"]+)"/gm)) cmds[`dock.${m[1]}`] = { label: `Panel layout: ${m[2]}`, menu: "View" };
+  const AX = ["X", "Y", "Z"];
+  for (const a of AX) {
+    cmds[`edit.mirror${a}`] = { label: `Flip along ${a}`, menu: "Edit" };
+    cmds[`edit.turn${a}`] = { label: `Turn 90° around ${a}`, menu: "Edit" };
+    for (const e of ["min", "centre", "max"]) cmds[`edit.align${a}${e}`] = { label: `Line up on ${a}`, menu: "Edit", hidden: true };
+    cmds[`edit.distribute${a}`] = { label: `Spread out evenly along ${a}`, menu: "Edit", hidden: true };
   }
-  return sections.filter((s) => s.rows.length);
+  // keys: Loner-Strike's own set, and what the Hammer and TrenchBroom sets change
+  const sh = read(join(dir, "Shortcuts.ts"));
+  const keySet = (name) => {
+    const b = sh.slice(sh.indexOf(`const ${name}: Keys`), sh.indexOf("};", sh.indexOf(`const ${name}: Keys`)));
+    const out = {};
+    // (a key list is quoted strings, and "]" can be one of them)
+    for (const m of b.matchAll(/"([a-z]+\.[A-Za-z0-9.]+)": \[((?:\s*"[^"]*"\s*,?)*)\]/g)) out[m[1]] = [...m[2].matchAll(/"([^"]+)"/g)].map((k) => k[1]);
+    // ("view.contentDrawer": [MAC ? "Mod+Shift+Space" : "Mod+Space"]: the Mac key and the others')
+    for (const m of b.matchAll(/"([a-z]+\.[A-Za-z0-9.]+)": \[MAC \? "([^"]+)" : "([^"]+)"\]/g)) out[m[1]] = [{ mac: m[2], win: m[3] }];
+    return out;
+  };
+  return { cmds, keys: { loner: keySet("LONER"), hammer: keySet("HAMMER"), trenchbroom: keySet("TRENCHBROOM") } };
+}
+
+/** docs/reference/editor.json with each card's menu paths and keys filled in from the editor. */
+export function editorRef() {
+  const ref = json(join(root, "docs/reference/editor.json"));
+  const { cmds, keys } = editorCommands();
+  const fill = (x) => {
+    const ids = [...(x.commands ?? []), ...(x.command ? [x.command] : [])];
+    const menus = ids.filter((id) => cmds[id] && !cmds[id].hidden).map((id) => `${cmds[id].menu} › ${cmds[id].label}`);
+    const k = [...new Set(ids.flatMap((id) => keys.loner[id] ?? []).map((v) => JSON.stringify(v)))].map((v) => JSON.parse(v));
+    // (a key set's keys for these commands, when they differ from ours)
+    const same = (a, b) => JSON.stringify([...a].map(String).sort()) === JSON.stringify([...b].map(String).sort());
+    const alt = (set) => [...new Set(ids.flatMap((id) => (!same(keys[set][id] ?? [], keys.loner[id] ?? []) ? keys[set][id] ?? [] : [])).map((v) => JSON.stringify(v)))].map((v) => JSON.parse(v));
+    return { ids, where: [...new Set([...menus, ...(x.where ?? [])])], keys: [...k, ...(x.keys ?? [])], hammer: alt("hammer"), trenchbroom: alt("trenchbroom") };
+  };
+  const groups = ref.groups.map((g) => ({
+    ...g,
+    cards: g.cards.map((c) => {
+      const own = fill(c);
+      const actions = (c.actions ?? []).map((a) => ({ ...a, ...fill(a) }));
+      return { ...c, group: g, ...own, actions, allIds: [...own.ids, ...actions.flatMap((a) => a.ids)] };
+    }),
+  }));
+  return { groups, cards: groups.flatMap((g) => g.cards), cmds };
+}
+
+/** Editor cards with no description or no place to find them, unknown command ids, and menu
+ *  commands no card covers. */
+export function editorProblems() {
+  const { cards, cmds } = editorRef();
+  const out = [];
+  const seen = new Set();
+  for (const c of cards) {
+    if (!String(c.what ?? "").trim()) out.push(`editor card ${c.id}: no description`);
+    if (!c.where.length && !c.actions.some((a) => a.where.length)) out.push(`editor card ${c.id}: no location (a command or a where)`);
+    for (const a of c.actions) if (!a.where.length && !c.where.length) out.push(`editor card ${c.id}: action ${a.name} has no location`);
+    for (const id of c.allIds) {
+      if (!cmds[id]) out.push(`editor card ${c.id}: no command ${id} in the editor`);
+      seen.add(id);
+    }
+    if (seen.has(`card:${c.id}`)) out.push(`editor card ${c.id}: the id is used twice`);
+    seen.add(`card:${c.id}`);
+  }
+  for (const [id, c] of Object.entries(cmds)) if (!seen.has(id)) out.push(`editor command ${id} (${c.menu} › ${c.label}) is on no card`);
+  return out;
 }
 
 // ---- checks ------------------------------------------------------------------------------
@@ -652,19 +729,64 @@ ${keys.length ? `<details><summary>Keys <span class="n">(${keys.length})</span><
   return { index, pages };
 }
 
-/** The editor's tools and keys: a card per menu, panel or dialog group. */
-function editorPage(inv) {
-  const side = inv.map((s) => `<details class="leaf"><summary><a href="#t-${slug(s.name)}">${esc(s.name)}</a><span class="n">${s.rows.length}</span></summary></details>`).join("");
-  const main = inv.map((s) => `<article class="card" id="t-${slug(s.name)}"><header><h3><a href="#t-${slug(s.name)}">${esc(s.name)}</a></h3><span class="badge">${s.rows.length}</span><button class="copy-link" type="button" data-id="t-${slug(s.name)}" aria-label="Copy a link to ${esc(s.name)}">Copy link</button></header><dl>${s.rows.map((r) => `<dt>${esc(r.item)}</dt><dd>${esc(r.where)}</dd>`).join("")}</dl></article>`).join("\n");
-  return page({ section: "editor", title: "Map editor tools and keys", lead: "Everything in the map editor's menus, panels and dialogs, where to find it, and its keys.", side, main, toc: inv.map((s) => `<li><a href="#t-${slug(s.name)}">${esc(s.name)}</a></li>`).join(""), file: "the editor's coverage inventory", kinds: false });
+/** A key as chips, for Windows and Linux (Ctrl+Shift+S) and for a Mac (⇧⌘S); a key that reads
+ *  the same on both is shown once. `k` is Shortcuts.ts's form ("Mod+Shift+S") or { mac, win }. */
+function keyHtml(k) {
+  const WIN = { Mod: "Ctrl" };
+  const MAC = { Mod: "⌘", Alt: "⌥", Shift: "⇧", "Alt (held)": "⌥ (held)" };
+  const chips = (s, mac) => {
+    const t = s.split("+");
+    if (!mac) return t.map((x) => `<kbd>${esc(WIN[x] ?? x)}</kbd>`).join("+");
+    // (a Mac writes its modifiers in Apple's order, with no plus signs)
+    const order = ["Alt", "Shift", "Mod"];
+    const mods = t.slice(0, -1).sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    return [...mods, t[t.length - 1]].map((x) => `<kbd>${esc(MAC[x] ?? x)}</kbd>`).join("");
+  };
+  const win = chips(typeof k === "string" ? k : k.win, false), mac = chips(typeof k === "string" ? k : k.mac, true);
+  return win.replace(/\+/g, "") === mac ? `<span class="keys">${win}</span>` : `<span class="keys"><span class="k-win">${win}</span><span class="k-mac">${mac}</span></span>`;
+}
+
+/** "Map › Map properties…" as a breadcrumb. */
+const crumb = (w) => `<span class="crumbs">${w.split(" › ").map((p) => `<span>${esc(p)}</span>`).join('<span class="sep" aria-hidden="true">›</span>')}</span>`;
+
+/** The map editor reference: a card per tool or command, grouped by task. */
+function editorPage(ref, ents) {
+  const byName = Object.fromEntries(ents.map((e) => [e.name, e]));
+  const keysOf = (x) => {
+    if (!x.keys.length && !x.hammer.length && !x.trenchbroom.length) return "";
+    const others = [["Hammer-style", x.hammer], ["TrenchBroom-style", x.trenchbroom]].filter(([, v]) => v.length).map(([n, v]) => `<span class="alt-keys">${n}: ${v.map(keyHtml).join(" ")}</span>`).join("");
+    return `${x.keys.length ? x.keys.map(keyHtml).join(' <span class="or">or</span> ') : '<span class="none">None in our key set</span>'}${others}`;
+  };
+  const card = (c) => {
+    const id = `ed-${c.id}`;
+    const facts = [c.where.length ? `<dt>Where</dt><dd>${c.where.map(crumb).join("")}</dd>` : "", keysOf(c) ? `<dt>Keys</dt><dd>${keysOf(c)}</dd>` : ""].join("");
+    const actions = c.actions.length
+      ? `<ul class="ed-actions">${c.actions.map((a) => `<li><div class="ed-act"><b>${esc(a.name)}</b>${a.what ? `<span>${esc(a.what)}</span>` : ""}</div><div class="ed-act-meta">${a.where.map(crumb).join("")}${keysOf(a)}</div></li>`).join("")}</ul>`
+      : "";
+    const links = [
+      // (the group's intro links its docs section; a card links its own when it has one)
+      ...(c.docs && c.docs !== c.group.docs ? [`<a class="chip" href="../docs.html${esc(c.docs)}">In the docs</a>`] : []),
+      ...(c.entities ?? []).filter((n) => byName[n]).map((n) => `<a class="chip code" href="${entHref(byName[n])}">${esc(n)}</a>`),
+    ].join("");
+    return `<article class="card ed-card" id="${id}" aria-labelledby="${id}-h">
+<header><h3 id="${id}-h"><a href="#${id}">${esc(c.name)}</a></h3><button class="copy-link" type="button" data-id="${id}" aria-label="Copy a link to ${esc(c.name)}">Copy link</button></header>
+<p class="what">${esc(c.what)}</p>
+${facts ? `<dl class="ed-facts">${facts}</dl>` : ""}${actions}${c.good ? `<p class="good"><b>Good to know:</b> ${esc(c.good)}</p>` : ""}
+${links ? `<div class="chips">${links}</div>` : ""}
+</article>`;
+  };
+  const side = ref.groups.map((g) => `<details><summary><a href="#g-${g.id}">${esc(g.name)}</a><span class="n">${g.cards.length}</span></summary><ul>${g.cards.map((c) => `<li><a href="#ed-${c.id}">${esc(c.name)}</a></li>`).join("")}</ul></details>`).join("");
+  const os = `<div class="ed-os" role="group" aria-label="Show the keys for"><span>Keys for</span><button type="button" data-os="win" aria-pressed="true">Windows</button><button type="button" data-os="mac" aria-pressed="false">Mac</button></div>`;
+  const main = `${os}\n${ref.groups.map((g) => `<section class="ed-group" aria-labelledby="g-${g.id}"><h2 id="g-${g.id}">${esc(g.name)}</h2><p class="ed-intro">${esc(g.intro)} <a href="../docs.html${esc(g.docs)}">More in the docs</a></p>\n${g.cards.map(card).join("\n")}</section>`).join("\n")}`;
+  return page({ section: "editor", title: "Map editor", lead: `The map editor's ${ref.cards.length} tools and commands, by task: what each does, where to find it and its keys.`, side, main, toc: ref.groups.map((g) => `<li><a href="#g-${g.id}">${esc(g.name)}</a></li>`).join(""), file: "docs/reference/editor.json, with the editor's own menus and keys", kinds: false });
 }
 
 /** The reference's front page: the three references and the guides. */
 function landingPage(data, ents, inv) {
   const card = (href, title, n, about) => `<a class="mini" href="${href}"><span class="badge">${n}</span><b>${esc(title)}</b><span class="s">${esc(about)}</span></a>`;
-  const main = `<div class="grid">${card("nodes.html", "Game Mode Studio nodes", data.nodes.length, "Every node: its pins, settings, limits and what bots do with it.")}${card("nodes/types.html", "Pin types", typeEntries(data).length, "What each pin type is, what it plugs into, and the casts.")}${card("entities.html", "Map editor entities", ents.length, "Every entity: what it does in the game, its keys and flags.")}${card("editor.html", "Map editor tools and keys", inv.length, "The editor's menus, panels and dialogs, and their keys.")}</div>
+  const main = `<div class="grid">${card("nodes.html", "Game Mode Studio nodes", data.nodes.length, "Every node: its pins, settings, limits and what bots do with it.")}${card("nodes/types.html", "Pin types", typeEntries(data).length, "What each pin type is, what it plugs into, and the casts.")}${card("entities.html", "Map editor entities", ents.length, "Every entity: what it does in the game, its keys and flags.")}${card("editor.html", "Map editor", inv.cards.length, "Every tool and command: what it does, where to find it and its keys.")}</div>
 <h2 id="guides">Guides</h2><div class="grid">${GUIDES.map(([id, title, about, file]) => (guideBody(file) ? card(`guides/${file}.html`, title, "guide", about) : card(`../docs.html#${id}`, title, "soon", about))).join("")}</div>`;
-  return page({ title: "Reference", lead: "Made from the app's own catalogs, so it always matches the app. Search everything from the box above.", side: `<details open class="here"><summary><a href="./" aria-current="page">Reference</a></summary><ul><li><a href="nodes.html">Studio nodes</a></li><li><a href="entities.html">Map entities</a></li><li><a href="editor.html">Editor tools and keys</a></li></ul></details>`, main, file: "nodes.json, the FGDs, the editor's inventory" });
+  return page({ title: "Reference", lead: "Made from the app's own catalogs, so it always matches the app. Search everything from the box above.", side: `<details open class="here"><summary><a href="./" aria-current="page">Reference</a></summary><ul><li><a href="nodes.html">Studio nodes</a></li><li><a href="entities.html">Map entities</a></li><li><a href="editor.html">Map editor</a></li></ul></details>`, main, file: "nodes.json, the FGDs, the editor's inventory" });
 }
 
 /** The search entries (the reference pages' search, and the docs search): one per node, entity
@@ -675,7 +797,7 @@ function searchIndex(data, ents, inv) {
     ...data.nodes.map((n) => ({ u: `reference/${nodeHref(n)}`, n: n.title, t: `Studio node · ${n.category}`, k: `${n.type} ${[...n.inputs, ...n.outputs].map((p) => p.label || "").join(" ")}`.trim(), x: firstSentence(n.what), cat: n.category, c: kindOf(n), b: hasBots(n) ? 1 : 0, l: n.limits.length ? 1 : 0, ty: [...new Set([...n.inputs, ...n.outputs].filter((p) => p.type !== "exec").map((p) => typeLabel(data, p.type)))] })),
     ...typeEntries(data).map((e) => ({ u: `reference/nodes/types.html#t-${slug(e.key)}`, n: e.label, t: "Pin type", k: `${e.key} type ${e.values ? e.values.join(" ") : ""} ${e.casts.map((n) => n.title).join(" ")}`.trim(), x: e.what, cat: "Pin types", c: "type", b: 0, l: 0, ty: [e.label] })),
     ...ents.map((e) => ({ u: `reference/${entHref(e)}`, n: e.name, t: `Entity · ${entGroup(e)}`, k: `${e.title} ${e.keys.map((k) => k.name).join(" ")}`, x: firstSentence(e.help), cat: entGroup(e), c: e.kind === "SolidClass" ? "brush" : "point", b: /\bbots?\b/i.test(e.help) ? 1 : 0, l: 0, ty: [] })),
-    ...inv.map((s) => ({ u: `reference/editor.html#t-${slug(s.name)}`, n: `Editor: ${s.name}`, t: "Map editor tools and keys", k: s.rows.map((r) => r.where).join(" ").slice(0, 300), x: s.rows.map((r) => r.item).slice(0, 8).join(", "), cat: "Map editor", c: "", b: 0, l: 0, ty: [] })),
+    ...inv.cards.map((c) => ({ u: `reference/editor.html#ed-${c.id}`, n: c.name, t: `Map editor · ${c.group.name}`, k: [...c.where, ...c.actions.map((a) => `${a.name} ${a.where.join(" ")}`), ...c.keys.map((k) => (typeof k === "string" ? k : k.win).replace(/Mod/g, "Ctrl"))].join(" ").slice(0, 400), x: firstSentence(c.what), cat: "Map editor", c: "", b: 0, l: 0, ty: [] })),
     ...guideIndex(),
   ];
 }
@@ -827,7 +949,7 @@ function docsBlock(data, ents, inv) {
     <li><a href="reference/nodes.html"><b>Game Mode Studio nodes</b></a>: all ${data.nodes.length}, by category (${cats.length}), each with its pins, settings and limits.</li>
     <li><a href="reference/nodes/types.html"><b>Pin types</b></a>: what each type is, what it plugs into, and the casts.</li>
     <li><a href="reference/entities.html"><b>Map editor entities</b></a>: all ${ents.length}, with their keys and flags.</li>
-    <li><a href="reference/editor.html"><b>Map editor tools and keys</b></a>: the menus, panels and dialogs, and their keys.</li>
+    <li><a href="reference/editor.html"><b>Map editor</b></a>: every tool and command, where to find it and its keys.</li>
   </ul>
   <p><a href="reference/">Open the reference</a>: it has its own search with filters.</p>
 </section>`;
@@ -883,17 +1005,17 @@ function replaceBlock(text, block, before) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const missing = missingHelp();
-  const typeBad = typeProblems();
+  const typeBad = [...typeProblems(), ...editorProblems()];
   if (process.argv.includes("--check")) {
     if (missing.length) console.error(`${missing.length} without help:\n${missing.slice(0, 50).join("\n")}`);
-    if (typeBad.length) console.error(`${typeBad.length} pin type problems:\n${typeBad.slice(0, 50).join("\n")}`);
+    if (typeBad.length) console.error(`${typeBad.length} pin type or editor reference problems:\n${typeBad.slice(0, 80).join("\n")}`);
     if (missing.length || typeBad.length) process.exit(1);
-    console.log("Every node and entity has help; every pin type has a look and a Types entry.");
+    console.log("Every node and entity has help; every pin type has a look and a Types entry; every editor card has a description and a place, and every menu command a card.");
     process.exit(0);
   }
   const data = nodes();
   const ents = entities();
-  const inv = editorInventory();
+  const inv = editorRef();
   const out = join(site, "reference");
   mkdirSync(out, { recursive: true });
   const indexJs = `// Made by scripts/gen-reference.mjs: the docs search's reference entries (u url, n name, t where, k keywords, x text)\nwindow.LS_REFERENCE = ${JSON.stringify(searchIndex(data, ents, inv))};\n`;
@@ -903,7 +1025,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   writeFileSync(join(out, "nodes.html"), np.index);
   const ep = entityPages(ents);
   writeFileSync(join(out, "entities.html"), ep.index);
-  writeFileSync(join(out, "editor.html"), editorPage(inv));
+  writeFileSync(join(out, "editor.html"), editorPage(inv, ents));
   writeFileSync(join(out, "index.html"), landingPage(data, ents, inv));
   const badLinks = writeGuides(data);
   if (badLinks.length) console.warn(`Guides link to nodes the catalog doesn't have: ${[...new Set(badLinks)].join(", ")}`);
@@ -917,5 +1039,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   writeFileSync(docs, replaceBlock(read(docs), docsBlock(data, ents, inv), '<section class="topic" id="something-wrong"').replace(/src="reference\/index\.js(\?v=\w+)?"/, `src="reference/index.js?v=${indexVer}"`));
   const llms = join(site, "llms-full.txt");
   if (existsSync(llms)) writeFileSync(llms, replaceBlock(read(llms), llmsBlock(data, ents), null));
-  console.log(`Wrote ${data.nodes.length} nodes, ${ents.length} entities, ${inv.length} editor sections${missing.length ? `; ${missing.length} without help (see --check)` : ""}. Keys without a description: ${keysWithoutHelp().length}.${typeBad.length ? ` Pin type problems: ${typeBad.length} (see --check).` : ""}`);
+  console.log(`Wrote ${data.nodes.length} nodes, ${ents.length} entities, ${inv.cards.length} editor cards${missing.length ? `; ${missing.length} without help (see --check)` : ""}. Keys without a description: ${keysWithoutHelp().length}.${typeBad.length ? ` Pin type problems: ${typeBad.length} (see --check).` : ""}`);
 }

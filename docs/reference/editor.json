@@ -1,0 +1,820 @@
+{
+  "about": "The map editor reference (site/reference/editor.html), read by scripts/gen-reference.mjs. One card per tool or command, grouped by task. Menu paths and keys come from the editor itself (commands.ts labels and menus, Shortcuts.ts key sets): list a card's command ids in `commands` (or an action's `command`) and they're filled in. `where` adds places that aren't menus (a panel, the start screen); `keys` adds keys the old key handler does (arrows, 1-9). --check fails on a card with no description or no location, on an unknown command id, and on a menu command no card covers.",
+  "groups": [
+    {
+      "id": "files",
+      "name": "Files and projects",
+      "intro": "Start a map, open one, save it, and bring maps in from other editors.",
+      "docs": "#editor-start",
+      "cards": [
+        {
+          "id": "new-map",
+          "name": "New map",
+          "what": "Starts a new map: an open-sky room with two spawns per team, ready to build in. If the open map has unsaved changes, it asks first.",
+          "commands": ["file.new"],
+          "where": ["Start screen › New map"]
+        },
+        {
+          "id": "open-project",
+          "name": "Open a project",
+          "what": "Opens a map you saved as a project (.lsmap), with its groups, hidden things and settings as you left them.",
+          "commands": ["file.open"],
+          "where": ["Start screen › Open a project"],
+          "good": "Your recent maps are listed at the bottom of the File menu and on the start screen."
+        },
+        {
+          "id": "save",
+          "name": "Save and Save as",
+          "what": "Keeps the map as a project (.lsmap) with everything in it: brushes, entities, groups, hidden and locked things.",
+          "actions": [
+            { "name": "Save", "what": "Saves over the project.", "command": "file.save", "where": ["Editor bar › Save"] },
+            { "name": "Save as…", "what": "Saves under a new name or in a new place.", "command": "file.saveAs" }
+          ],
+          "docs": "#editor-save"
+        },
+        {
+          "id": "autosave",
+          "name": "Autosave and recovery",
+          "what": "The editor saves your work on its own every 3 minutes, and each save keeps the one before. After a crash, the start screen offers the work it kept.",
+          "where": ["Start screen › Recover it", "Start screen › Throw it away"],
+          "good": "Went to the start screen by mistake? Back to (your map's name) takes you straight back."
+        },
+        {
+          "id": "import-map",
+          "name": "Import a .map",
+          "what": "Opens a .map from TrenchBroom, Hammer, J.A.C.K. or any GoldSrc editor. TrenchBroom's groups and layers come in as groups.",
+          "commands": ["file.import"],
+          "where": ["Start screen › Import a .map…"],
+          "docs": "#map-import"
+        },
+        {
+          "id": "import-rmf",
+          "name": "Import from Hammer or J.A.C.K.",
+          "what": "Opens a Hammer .rmf or a J.A.C.K. .jmf file, with its brushes, entities, groups and visgroups.",
+          "commands": ["file.importOther"],
+          "where": ["Start screen › Import from Hammer / J.A.C.K."],
+          "docs": "#map-import"
+        },
+        {
+          "id": "export-map",
+          "name": "Export a .map",
+          "what": "Writes the map as a Valve 220 .map with its texture list, for any GoldSrc compiler or to keep working in TrenchBroom.",
+          "commands": ["file.export"],
+          "docs": "#editor-save"
+        },
+        {
+          "id": "project-files",
+          "name": "Project files",
+          "what": "Lists every file the map uses (models, sprites, sounds and texture files) and where each one is. Copy them into the game or next to the project, or let Find missing files… search a folder you pick.",
+          "commands": ["file.project", "panel.project"],
+          "good": "The game won't load a map whose models or sprites are missing, so check here before you share it.",
+          "docs": "#editor-checks"
+        }
+      ]
+    },
+    {
+      "id": "map",
+      "name": "Map and settings",
+      "intro": "Settings that belong to the whole map, and lists of what's in it.",
+      "docs": "#editor-start",
+      "cards": [
+        {
+          "id": "map-properties",
+          "name": "Map properties",
+          "what": "Sets what the whole map is like: its title, the sky and how far players can see, the base light and the sun, the buying and bomb rules, and which texture files (WADs) it uses.",
+          "commands": ["map.props", "file.props"],
+          "where": ["Inspect panel, with nothing picked › Map properties…"],
+          "good": "With nothing picked, Inspect shows the sky and the texture files too.",
+          "entities": ["worldspawn"]
+        },
+        {
+          "id": "entity-definitions",
+          "name": "Entity definitions",
+          "what": "Adds a mod's own entity file (FGD) so its entities show up in the entity list with their keys, or goes back to Loner-Strike's own list.",
+          "where": ["Map › Map properties… › Entity definitions"],
+          "actions": [
+            { "name": "Add your own FGD…", "what": "Adds a mod's FGD next to ours." },
+            { "name": "Use ours only", "what": "Removes the added ones." }
+          ],
+          "docs": "#editor-entities"
+        },
+        {
+          "id": "map-info",
+          "name": "Map information",
+          "what": "Counts what's in the map (brushes, faces and entities) and lists the textures and texture files in use.",
+          "commands": ["map.info"]
+        },
+        {
+          "id": "entity-report",
+          "name": "Entity report",
+          "what": "Lists every entity in the map. Filter by name or type, tick several to pick or delete them together, or double-click one to fly to it.",
+          "commands": ["map.report"],
+          "where": ["Inspect panel, with nothing picked › Entity report…"]
+        }
+      ]
+    },
+    {
+      "id": "building",
+      "name": "Building",
+      "intro": "The tools on the left of the views, and the commands that change the shape of brushes.",
+      "docs": "#editor-tools",
+      "cards": [
+        {
+          "id": "select-tool",
+          "name": "Select",
+          "what": "Click to pick a brush or entity. Drag a face of something picked to push or pull it, or drag across empty space to pick everything in a box.",
+          "commands": ["tool.select"],
+          "where": ["Tool rail"],
+          "good": "Esc lets go of what's picked. The tool options set whether a box picks what it touches or only what's fully inside."
+        },
+        {
+          "id": "move-rotate-scale",
+          "name": "Move, Rotate and Scale",
+          "what": "Drag the handles in the views to move, turn or stretch what's picked. Hold Shift as you start a move to drag a copy instead.",
+          "actions": [
+            { "name": "Move", "what": "Drag the arrows.", "command": "tool.move" },
+            { "name": "Rotate", "what": "Drag the rings; it turns in 15° steps.", "command": "tool.rotate" },
+            { "name": "Scale", "what": "Drag the handles to stretch.", "command": "tool.scale" }
+          ],
+          "where": ["Tool rail"]
+        },
+        {
+          "id": "vertex",
+          "name": "Vertex",
+          "what": "Drag a corner (yellow), an edge (blue) or a face (purple) of a picked brush to reshape it. The brush always stays convex.",
+          "commands": ["tool.vertex"],
+          "where": ["Tool rail"],
+          "good": "Shift-click picks several corners, the arrow keys nudge them, and Merge corners joins them into one."
+        },
+        {
+          "id": "box",
+          "name": "Box",
+          "what": "Drag on the floor, or on top of a brush, to draw a box brush. Its height is in the tool options above the view.",
+          "commands": ["tool.box"],
+          "where": ["Tool rail"]
+        },
+        {
+          "id": "shape",
+          "name": "Shape",
+          "what": "Draws a cylinder, wedge, spike, cone, sphere, arch or torus. Pick the kind and how many sides above the view, then drag.",
+          "commands": ["tool.shape"],
+          "where": ["Tool rail"],
+          "good": "Preview… shows the shape before you draw it."
+        },
+        {
+          "id": "clip",
+          "name": "Clip",
+          "what": "Cuts what's picked along a line: click two points to place the cut, Tab chooses which side stays (or both), and Enter cuts.",
+          "commands": ["tool.clip"],
+          "where": ["Tool rail"]
+        },
+        {
+          "id": "measure",
+          "name": "Measure",
+          "what": "Drag between two points to see the distance between them, in game units.",
+          "commands": ["tool.measure"],
+          "where": ["Tool rail"]
+        },
+        {
+          "id": "hollow",
+          "name": "Hollow",
+          "what": "Turns a solid brush into a room: walls of the thickness set in Inspect, with the inside empty.",
+          "commands": ["edit.hollow"],
+          "where": ["Inspect panel › Hollow"]
+        },
+        {
+          "id": "carve",
+          "name": "Carve",
+          "what": "Cuts the picked brush out of every brush it overlaps, like cutting a doorway through a wall. The brush you carve with stays.",
+          "commands": ["edit.carve"],
+          "where": ["Inspect panel › Carve"]
+        },
+        {
+          "id": "merge",
+          "name": "Merge",
+          "what": "Joins the picked brushes into one convex brush. If they don't make a convex shape together, the new brush fills the gaps between them.",
+          "commands": ["edit.merge"],
+          "where": ["Inspect panel › Merge"]
+        },
+        {
+          "id": "snap-to-grid",
+          "name": "Snap to grid",
+          "what": "Rounds every corner of the picked brushes to the grid and rebuilds them, to fix small gaps and corners just off the grid.",
+          "commands": ["edit.snap"],
+          "where": ["Inspect panel › Snap"]
+        },
+        {
+          "id": "flip",
+          "name": "Flip",
+          "what": "Mirrors what's picked along the X, Y or Z axis, around its middle.",
+          "actions": [
+            { "name": "Flip along X", "what": "", "command": "edit.mirrorX" },
+            { "name": "Flip along Y", "what": "", "command": "edit.mirrorY" },
+            { "name": "Flip along Z", "what": "", "command": "edit.mirrorZ" }
+          ],
+          "where": ["Inspect panel › Flip"]
+        },
+        {
+          "id": "turn-90",
+          "name": "Turn 90°",
+          "what": "Turns what's picked a quarter turn around the X, Y or Z axis, around its middle.",
+          "actions": [
+            { "name": "Turn 90° around X", "what": "", "command": "edit.turnX" },
+            { "name": "Turn 90° around Y", "what": "", "command": "edit.turnY" },
+            { "name": "Turn 90° around Z", "what": "", "command": "edit.turnZ" }
+          ],
+          "where": ["Inspect panel › Turn"]
+        },
+        {
+          "id": "transform",
+          "name": "Transform",
+          "what": "Moves, turns or stretches what's picked by exact numbers instead of by dragging.",
+          "commands": ["edit.transform"]
+        },
+        {
+          "id": "line-up",
+          "name": "Line up and spread out",
+          "what": "Lines up two or more picked things on their low, middle or high side along an axis, or spreads three or more out evenly.",
+          "commands": ["edit.alignXmin", "edit.alignXcentre", "edit.alignXmax", "edit.alignYmin", "edit.alignYcentre", "edit.alignYmax", "edit.alignZmin", "edit.alignZcentre", "edit.alignZmax", "edit.distributeX", "edit.distributeY", "edit.distributeZ"],
+          "where": ["Edit › Transform… › Line up", "Help › Find a command…"]
+        },
+        {
+          "id": "nudge",
+          "name": "Nudge",
+          "what": "Moves what's picked one grid step at a time: the arrow keys across, Page Up and Page Down up and down. Each nudge can be undone.",
+          "where": ["Any view, with something picked"],
+          "keys": ["Arrow keys", "Page Up", "Page Down"]
+        }
+      ]
+    },
+    {
+      "id": "editing",
+      "name": "Editing",
+      "intro": "Undo, copy, duplicate and group: the Edit menu's everyday commands.",
+      "docs": "#editor-tools",
+      "cards": [
+        {
+          "id": "undo",
+          "name": "Undo and Redo",
+          "what": "Steps back through your changes, and forward again.",
+          "actions": [
+            { "name": "Undo", "what": "Takes back the last change.", "command": "edit.undo" },
+            { "name": "Redo", "what": "Puts it back.", "command": "edit.redo" }
+          ]
+        },
+        {
+          "id": "history",
+          "name": "Undo history",
+          "what": "Lists every change you've made. Click a step to go back to it, or click a later one to redo up to there.",
+          "commands": ["edit.history", "panel.history"]
+        },
+        {
+          "id": "clipboard",
+          "name": "Cut, Copy and Paste",
+          "what": "Moves or copies what's picked through the clipboard.",
+          "actions": [
+            { "name": "Cut", "what": "Copies it and takes it out of the map.", "command": "edit.cut" },
+            { "name": "Copy", "what": "Copies it.", "command": "edit.copy" },
+            { "name": "Paste", "what": "Puts the copy in the map.", "command": "edit.paste" }
+          ],
+          "good": "The clipboard holds .map text, so you can copy between maps and to or from other editors."
+        },
+        {
+          "id": "duplicate",
+          "name": "Duplicate",
+          "what": "Makes a copy of what's picked and picks the copy. Targets get new names so the copy works on its own.",
+          "actions": [
+            { "name": "Duplicate", "what": "A copy one grid step over.", "command": "edit.duplicate", "where": ["Inspect panel › Duplicate", "Outline panel › right-click › Duplicate"] },
+            { "name": "Duplicate in place", "what": "A copy right on top, to move next.", "command": "edit.duplicateHere" },
+            { "name": "Duplicate (keep names)", "what": "A copy with the same target names.", "command": "edit.duplicateSame", "where": ["Help › Find a command…"] }
+          ]
+        },
+        {
+          "id": "paste-special",
+          "name": "Paste special",
+          "what": "Makes several copies at once: in a row, as stairs, in a ring or in a spiral, each a set distance and turn from the last.",
+          "commands": ["edit.pasteSpecial"],
+          "where": ["Inspect panel › Paste special…"]
+        },
+        {
+          "id": "delete",
+          "name": "Delete",
+          "what": "Takes what's picked out of the map.",
+          "commands": ["edit.delete"],
+          "where": ["Inspect panel › Delete"]
+        },
+        {
+          "id": "group",
+          "name": "Group and Ungroup",
+          "what": "Keeps brushes and entities together, so a click picks them all.",
+          "actions": [
+            { "name": "Group", "what": "Makes what's picked one group.", "command": "edit.group" },
+            { "name": "Ungroup", "what": "Splits it again.", "command": "edit.ungroup" }
+          ],
+          "where": ["Inspect panel › Group", "Outline panel › right-click"],
+          "good": "Select › Clicks pick single objects lets you pick inside a group without ungrouping it."
+        },
+        {
+          "id": "tie",
+          "name": "Tie to entity",
+          "what": "Makes the picked brushes one brush entity: a func_wall at first, then pick what it should be (a door, a breakable, a trigger…) in Inspect.",
+          "commands": ["edit.tie"],
+          "where": ["Inspect panel › Tie"],
+          "entities": ["func_wall", "func_door", "func_breakable"]
+        },
+        {
+          "id": "move-to-world",
+          "name": "Move to world",
+          "what": "Turns brush entities back into plain world brushes.",
+          "commands": ["edit.toWorld"],
+          "where": ["Inspect panel › Move to world"]
+        },
+        {
+          "id": "replace-with",
+          "name": "Replace with entity or prefab",
+          "what": "Swaps each picked thing for another entity or for a prefab, in the same place.",
+          "commands": ["edit.replaceWith"]
+        }
+      ]
+    },
+    {
+      "id": "selecting",
+      "name": "Selecting and hiding",
+      "intro": "Pick things by what they are, find them by name or number, and hide or lock what's in the way.",
+      "docs": "#editor-tools",
+      "cards": [
+        {
+          "id": "select-all",
+          "name": "Select all, none or the rest",
+          "what": "Picks everything you can see, nothing, or everything that isn't picked now.",
+          "actions": [
+            { "name": "Select all", "what": "", "command": "sel.all" },
+            { "name": "Select none", "what": "", "command": "sel.none" },
+            { "name": "Invert selection", "what": "", "command": "sel.invert" }
+          ],
+          "good": "Hidden and locked things are left out."
+        },
+        {
+          "id": "select-same",
+          "name": "Select the same or what's nearby",
+          "what": "Grows the selection from what's picked now.",
+          "actions": [
+            { "name": "Select same texture", "what": "Every face with the picked texture.", "command": "sel.texture" },
+            { "name": "Select same type", "what": "Every entity of the picked kind (or every world brush).", "command": "sel.class" },
+            { "name": "Select same name", "what": "Every entity with the picked one's name (targetname).", "command": "sel.value" },
+            { "name": "Select touching", "what": "Everything touching what's picked.", "command": "sel.touching" },
+            { "name": "Select inside", "what": "Everything wholly inside the selection's box.", "command": "sel.inside" }
+          ]
+        },
+        {
+          "id": "goto",
+          "name": "Go to brush or entity number",
+          "what": "Picks a brush or entity by its number, the way the compiler names them in its messages (Entity 3, Brush 12), and flies to it.",
+          "commands": ["sel.goto"],
+          "docs": "#compile-problems"
+        },
+        {
+          "id": "find-replace",
+          "name": "Find and replace",
+          "what": "Finds textures, entity types, key names or values across the map and replaces them, in the whole map or only in what's picked. Pick them selects everything it found.",
+          "commands": ["edit.find"]
+        },
+        {
+          "id": "outline",
+          "name": "Outline",
+          "what": "Lists everything in the map by name and type. Search it, sort it, hide or lock a row, and double-click one to fly to it.",
+          "commands": ["map.outline", "panel.outline"]
+        },
+        {
+          "id": "hide",
+          "name": "Hide and show",
+          "what": "Hides things to work on what's behind them; hidden things stay in the map and still compile.",
+          "actions": [
+            { "name": "Hide", "what": "Hides what's picked.", "command": "sel.hide" },
+            { "name": "Hide everything else", "what": "Leaves only what's picked.", "command": "sel.isolate" },
+            { "name": "Show everything", "what": "Brings it all back.", "command": "sel.showAll" },
+            { "name": "Hide all point entities", "what": "Spawns, lights, sounds and the like.", "command": "sel.hideEntities" },
+            { "name": "Hide triggers and zones", "what": "Triggers, buy zones, bomb sites and rescue zones.", "command": "sel.hideTriggers" },
+            { "name": "Hide world brushes", "what": "", "command": "sel.hideWorld" }
+          ],
+          "where": ["Inspect panel › Hide", "Outline panel (per row)"]
+        },
+        {
+          "id": "lock",
+          "name": "Lock",
+          "what": "Locked things can't be picked by a click, so you can't move them by mistake.",
+          "actions": [
+            { "name": "Lock", "what": "Locks what's picked.", "command": "sel.lock" },
+            { "name": "Unlock everything", "what": "", "command": "sel.unlockAll" }
+          ],
+          "where": ["Outline panel (per row)"]
+        },
+        {
+          "id": "visgroups",
+          "name": "Visgroups",
+          "what": "Named sets of brushes and entities you can show and hide together, at the top of the Outline.",
+          "where": ["Outline panel › New visgroup"]
+        },
+        {
+          "id": "pick-groups",
+          "name": "What a click picks",
+          "what": "Sets whether a click on a grouped brush picks the whole group or just the one object.",
+          "actions": [
+            { "name": "Clicks pick whole groups", "what": "", "command": "sel.groups" },
+            { "name": "Clicks pick single objects", "what": "", "command": "sel.objects" }
+          ],
+          "where": ["Tool options (above the views) › Pick groups / Pick objects / Pick brushes"],
+          "good": "Pick brushes (in the tool options) picks single brushes even inside a brush entity, like Hammer's Solids."
+        }
+      ]
+    },
+    {
+      "id": "texturing",
+      "name": "Texturing",
+      "intro": "Choose textures, paint them on and line them up.",
+      "docs": "#editor-textures",
+      "cards": [
+        {
+          "id": "textures-panel",
+          "name": "Textures",
+          "what": "Shows the textures in the map's texture files. Click one to make it the current texture, or double-click to paint it on what's picked.",
+          "commands": ["map.textures", "panel.textures"],
+          "good": "Add texture files (WADs) in Map properties."
+        },
+        {
+          "id": "apply-texture",
+          "name": "Apply the current texture",
+          "what": "Paints the current texture on the picked faces, or on every face of the picked brushes.",
+          "commands": ["edit.applyTexture"]
+        },
+        {
+          "id": "texture-tool",
+          "name": "Texture tool",
+          "what": "Click a face to pick it (Shift adds more), drag it to slide the texture, and drag the handles to turn or stretch it. Alt-click picks up a face's texture.",
+          "commands": ["tool.texture"],
+          "where": ["Tool rail"],
+          "good": "In the 3D view, right-click paints the current texture on a face, and Alt-right-click paints it and carries the alignment round the corner, like Hammer."
+        },
+        {
+          "id": "face-sheet",
+          "name": "Face sheet",
+          "what": "With faces picked, Inspect shows how their texture lies: shift, scale and turn it, Fit or Justify it, align it to the world or to the face (good for slopes), or pick up a face's texture to reuse.",
+          "where": ["Inspect panel, with faces picked"]
+        },
+        {
+          "id": "texture-lock",
+          "name": "Texture lock",
+          "what": "Keeps textures in place on the brushes as you move or turn them. Scale lock, beside it, decides what stretching a brush does: on, the textures stretch with it; off, they keep their size and repeat.",
+          "commands": ["view.texLock"],
+          "where": ["Tool options (above the views) › Texture lock, Scale lock"]
+        }
+      ]
+    },
+    {
+      "id": "entities",
+      "name": "Entities",
+      "intro": "Place entities, set their keys and see how they trigger each other.",
+      "docs": "#editor-entities",
+      "cards": [
+        {
+          "id": "entity-tool",
+          "name": "Entity tool",
+          "what": "Click a surface to place an entity there: a spawn, a light, a weapon or anything in the list. Choose the kind in the tool options first.",
+          "commands": ["tool.entity"],
+          "where": ["Tool rail"],
+          "entities": ["info_player_start", "info_player_deathmatch", "light"]
+        },
+        {
+          "id": "inspect",
+          "name": "Inspect",
+          "what": "A form for what's picked, with help on every key: an entity's name, color, brightness, flags and other keys, or a brush's size, turn and textures. Pick several entities to change them together.",
+          "commands": ["map.inspect", "panel.inspect"],
+          "good": "A model, sprite or sound key has Choose…, ↗ to show it in the Content Browser, and Use selected."
+        },
+        {
+          "id": "io",
+          "name": "I/O: what triggers what",
+          "what": "Lists every link between entities (targets, multi_managers, masters and kill targets) and draws them as arrows in the views. Show all of them, only broken ones, or the chain of what's picked.",
+          "commands": ["view.io", "panel.io"],
+          "entities": ["multi_manager", "trigger_multiple"]
+        },
+        {
+          "id": "gameplay",
+          "name": "Gameplay",
+          "what": "Loner-Strike's mode pieces (wave spawners, loot crates, capture points and more), and Mode kits: set Made for to a mode and it lists the markers and pieces that mode needs, with Place for each.",
+          "commands": ["panel.library"],
+          "docs": "#editor-library"
+        },
+        {
+          "id": "models",
+          "name": "Models in place of entity boxes",
+          "what": "Draws hostages, spawns, weapons and model entities as their models instead of colored boxes.",
+          "commands": ["view.models"]
+        }
+      ]
+    },
+    {
+      "id": "content",
+      "name": "Content and prefabs",
+      "intro": "Models, sprites, sounds, textures and ready-made pieces to drop into the map.",
+      "docs": "#content-browser",
+      "cards": [
+        {
+          "id": "content-browser",
+          "name": "Content Browser",
+          "what": "Every model, sprite, sound, texture and prefab you can use, from the game, your downloads, Community and your own folder. Drag a tile onto the map to place it.",
+          "commands": ["view.content", "panel.content"],
+          "good": "A dropped model becomes a cycler_sprite, a sprite an env_sprite and a sound an ambient_generic.",
+          "entities": ["cycler_sprite", "env_sprite", "ambient_generic"]
+        },
+        {
+          "id": "content-drawer",
+          "name": "Content drawer",
+          "what": "Slides the Content Browser up over the bottom panels; Esc or a click elsewhere puts it away.",
+          "commands": ["view.contentDrawer"]
+        },
+        {
+          "id": "import-files",
+          "name": "Import your own files",
+          "what": "Copies your own models, sprites, sounds and texture files into the project's folder, so they go with Playtest, Publish and remixes. Sounds in .mp3, .ogg or .flac become a WAV the game plays well.",
+          "where": ["Content Browser › Import…", "Drop files from Finder or Explorer on the Content Browser"],
+          "good": "Save the project first: the files go next to it."
+        },
+        {
+          "id": "prefabs",
+          "name": "Prefabs",
+          "what": "Ready-made pieces (a doorway, stairs, crates, a bombsite kit, a buy zone and more) and your own. Drag one in, or press Place and click; R turns it before you place it.",
+          "where": ["Content Browser › Prefabs"],
+          "actions": [
+            { "name": "Save what's picked…", "what": "Makes your own prefab." },
+            { "name": "Share as a package…", "what": "Saves a prefab as a file to give to someone." },
+            { "name": "Community prefabs…", "what": "Finds more that others shared." }
+          ],
+          "docs": "#editor-library"
+        },
+        {
+          "id": "gamebanana",
+          "name": "GameBanana",
+          "what": "Finds models, sprites and sounds to download from GameBanana, with their terms first. Downloads land under Downloaded.",
+          "where": ["Content Browser › GameBanana"]
+        }
+      ]
+    },
+    {
+      "id": "checking",
+      "name": "Checking and leaks",
+      "intro": "Find what would stop the map compiling or loading, before it does.",
+      "docs": "#editor-checks",
+      "cards": [
+        {
+          "id": "checks",
+          "name": "Checks",
+          "what": "Finds broken brushes, missing textures, spawns and files, broken targets, limits, and what a mode still needs, as you build. Click a problem to go to it; most have a one-click fix.",
+          "commands": ["map.checks", "panel.checks"]
+        },
+        {
+          "id": "leaks",
+          "name": "Leaks",
+          "what": "When a compile finds a leak (a gap to the void), a red line runs from an entity out through the hole, and a bar names the brush beside the gap.",
+          "actions": [
+            { "name": "Go to leak", "what": "Flies along the line to the hole and picks the brush beside it.", "command": "map.goToLeak", "where": ["Leak bar › Go to leak"] },
+            { "name": "Show or hide the leak line", "what": "", "command": "map.leakLine", "where": ["Leak bar › Hide line"] },
+            { "name": "Load pointfile…", "what": "Loads a leak line (.lin or .pts) from another compile.", "command": "map.loadPointfile" }
+          ],
+          "good": "Close the gap with a brush and compile again. The leak bar also has Pick brushes at the hole and Forget it.",
+          "docs": "#compile-leak"
+        },
+        {
+          "id": "budget",
+          "name": "Budget",
+          "what": "Shows how close the map is to the engine's limits (models, sounds, entities, textures and, after a compile, the map's own numbers). Click a bar for what uses the most.",
+          "commands": ["view.budget", "panel.budget"],
+          "good": "Green has room, yellow is over 75%, red over 90%. Playtest and Publish ask first when a bar is red.",
+          "docs": "#editor-budget"
+        }
+      ]
+    },
+    {
+      "id": "compile",
+      "name": "Compile and playtest",
+      "intro": "Turn the map into a .bsp and play it with bots.",
+      "docs": "#compile-playtest",
+      "cards": [
+        {
+          "id": "compile-panel",
+          "name": "Compile",
+          "what": "Compiles the map with SDHLT into a .bsp: give it a name, pick Fast, Normal or Final, and press Compile to watch the steps.",
+          "commands": ["map.compile", "panel.compile"],
+          "good": "The first time, the panel offers Download SDHLT (about 3 MB). On a Mac it runs through CrossOver.",
+          "docs": "#compile"
+        },
+        {
+          "id": "playtest",
+          "name": "Playtest",
+          "what": "Compiles the map, puts it in your game and starts it with bots, using the mode and bots set in the Compile panel.",
+          "commands": ["map.playtest"],
+          "where": ["Editor bar › Playtest", "Compile panel › Playtest"],
+          "good": "Leave Teach bots the map first ticked so bots know their way round.",
+          "docs": "#playtest"
+        },
+        {
+          "id": "cordon",
+          "name": "Cordon",
+          "what": "Compiles only what's inside the boxes you draw, sealed with sky or black walls, so you can try one part of a big map quickly.",
+          "where": ["Compile panel › Cordon"],
+          "actions": [
+            { "name": "Box round picked", "what": "A box round what's picked." },
+            { "name": "From view", "what": "A box round what the view shows." },
+            { "name": "Remove all", "what": "Back to the whole map." }
+          ],
+          "docs": "#cordon"
+        }
+      ]
+    },
+    {
+      "id": "sharing",
+      "name": "Sharing",
+      "intro": "Package a finished map for others.",
+      "docs": "#publish-steps",
+      "cards": [
+        {
+          "id": "publish",
+          "name": "Publish",
+          "what": "Packages a compiled map for you to upload to GameBanana, with its files and credits. Compile it into the game first.",
+          "commands": ["map.publish"],
+          "where": ["Editor bar › Publish…"],
+          "good": "If a Budget bar is red, it asks first: players may not be able to load the map."
+        }
+      ]
+    },
+    {
+      "id": "view",
+      "name": "View and navigation",
+      "intro": "Move around the map, arrange the views and the panels, and set up the grid.",
+      "docs": "#editor-camera",
+      "cards": [
+        {
+          "id": "layouts",
+          "name": "View layouts",
+          "what": "How many views you see at once.",
+          "actions": [
+            { "name": "Single", "what": "One view.", "command": "view.layout.single" },
+            { "name": "Quad", "what": "3D, Top, Front and Side at once, like Hammer.", "command": "view.layout.quad" },
+            { "name": "1+3", "what": "One big view and three small ones.", "command": "view.layout.one3" },
+            { "name": "Two", "what": "Two views side by side.", "command": "view.layout.two" }
+          ],
+          "where": ["Editor bar"],
+          "docs": "#editor-views"
+        },
+        {
+          "id": "view-kind",
+          "name": "3D, Top, Front and Side",
+          "what": "Sets what the active view shows.",
+          "actions": [
+            { "name": "3D view", "what": "", "command": "view.3d" },
+            { "name": "Top view", "what": "", "command": "view.top" },
+            { "name": "Front view", "what": "", "command": "view.front" },
+            { "name": "Side view", "what": "", "command": "view.side" }
+          ],
+          "docs": "#editor-views"
+        },
+        {
+          "id": "maximize",
+          "name": "Maximize a view",
+          "what": "Makes the view under the mouse fill the window, and puts it back.",
+          "commands": ["view.maximise"],
+          "docs": "#editor-views"
+        },
+        {
+          "id": "zoom",
+          "name": "Zoom to selection or the whole map",
+          "what": "Brings what's picked, or the whole map, into every view.",
+          "actions": [
+            { "name": "Zoom to selection", "what": "", "command": "view.frame" },
+            { "name": "Zoom to the whole map", "what": "", "command": "view.frameAll" }
+          ]
+        },
+        {
+          "id": "fly",
+          "name": "Fly or orbit",
+          "what": "Switches the 3D camera between flying with W A S D and orbiting round what you look at.",
+          "commands": ["view.fly"]
+        },
+        {
+          "id": "nav-presets",
+          "name": "Camera controls",
+          "what": "Makes the 3D view move like the editor you know. The editor asks the first time you open it.",
+          "actions": [
+            { "name": "Move like Unreal", "what": "Hold right mouse to look and W A S D to fly, scroll for speed; Alt-drag orbits.", "command": "view.nav.unreal" },
+            { "name": "Move like Blender", "what": "Drag to orbit, right-drag to pan, scroll to zoom; F to fly.", "command": "view.nav.blender" },
+            { "name": "Move like Hammer", "what": "Z for mouse-look with W A S D; drag to look, right-drag to move.", "command": "view.nav.hammer" }
+          ]
+        },
+        {
+          "id": "camera-speed",
+          "name": "Camera speed",
+          "what": "How fast the camera flies. Hold the right mouse button in the 3D view and scroll to change it.",
+          "commands": ["view.speedUp", "view.speedDown"],
+          "where": ["3D view › right mouse button + scroll", "Help › Find a command… › Camera faster / Camera slower"]
+        },
+        {
+          "id": "camera-marks",
+          "name": "Camera spots",
+          "what": "Keep up to nine camera spots and jump back to them: Ctrl (⌘ on a Mac) with a number keeps one, the number alone goes back.",
+          "where": ["3D view"],
+          "keys": ["Mod+1…9", "1…9"]
+        },
+        {
+          "id": "grid",
+          "name": "Grid",
+          "what": "The grid things snap to as you draw and move them.",
+          "actions": [
+            { "name": "Smaller grid", "what": "Halves the grid size.", "command": "view.gridDown" },
+            { "name": "Bigger grid", "what": "Doubles it.", "command": "view.gridUp" },
+            { "name": "Show / hide the grid", "what": "", "command": "view.gridShow" },
+            { "name": "Grid and snapping…", "what": "Grid size, turn steps and snapping in one place.", "command": "view.gridSettings" }
+          ],
+          "where": ["Tool options (above the views) › Grid"]
+        },
+        {
+          "id": "snapping",
+          "name": "Snapping",
+          "what": "Whether new points land on the grid, and on the corners and edges of brushes when you're close to one.",
+          "actions": [
+            { "name": "Snap to grid on / off", "what": "Holding Alt flips it while you drag.", "command": "view.snap" },
+            { "name": "Snap to corners and edges on / off", "what": "", "command": "view.geoSnap" }
+          ],
+          "keys": ["Alt (held)"]
+        },
+        {
+          "id": "drawing-style",
+          "name": "Drawing style",
+          "what": "Draws the active view textured, flat, as a wireframe, or textured with the wireframe on top.",
+          "commands": ["view.paneMode"],
+          "where": ["The style picker in the view's corner"]
+        },
+        {
+          "id": "frame-time",
+          "name": "Frame time",
+          "what": "Shows frames a second and slow frames, for judging how a big map runs in the editor.",
+          "commands": ["view.frameTime"],
+          "keys": ["Mod+Alt+Shift+F"]
+        },
+        {
+          "id": "panels",
+          "name": "Panels and layouts",
+          "what": "Drag a panel's tab to another side, float it, or open it in its own window. A panel layout puts them all back in a set arrangement.",
+          "actions": [
+            { "name": "Default (Unreal-like)", "what": "", "command": "dock.default" },
+            { "name": "Hammer", "what": "", "command": "dock.hammer" },
+            { "name": "Unreal-like", "what": "", "command": "dock.unreal" },
+            { "name": "All on the right", "what": "", "command": "dock.tabs" },
+            { "name": "Reset the panel layout", "what": "", "command": "dock.reset" }
+          ],
+          "docs": "#editor-views"
+        }
+      ]
+    },
+    {
+      "id": "help",
+      "name": "Help and keys",
+      "intro": "Find any command, see every key, and use the keys you're used to.",
+      "docs": "#editor-views",
+      "cards": [
+        {
+          "id": "palette",
+          "name": "Find a command",
+          "what": "Type a few letters to find any command, with its key; arrows and Enter run it. Greyed-out ones need something picked first.",
+          "commands": ["help.palette"],
+          "where": ["Editor bar › Find a command"]
+        },
+        {
+          "id": "cheat-sheet",
+          "name": "Keys cheat sheet",
+          "what": "Every key in the key set you use, on one page you can print.",
+          "commands": ["help.cheats"]
+        },
+        {
+          "id": "change-keys",
+          "name": "Change keys",
+          "what": "Switch to Hammer's or TrenchBroom's keys, or set your own. It warns when a key is already taken, and Put back undoes your changes.",
+          "commands": ["help.keys"],
+          "good": "Picking the Hammer-style keys also switches the views to Quad."
+        },
+        {
+          "id": "coords",
+          "name": "Coordinates and axes",
+          "what": "Explains the map's numbers: Z is up, X east and Y north, the engine's own coordinates.",
+          "commands": ["help.coords"],
+          "where": ["The axes in the corner of a view"]
+        },
+        {
+          "id": "tour",
+          "name": "First map tour",
+          "what": "Walks you through a first map: draw a room, hollow it, add a light and spawns, then play it. Each step ticks off as you go.",
+          "commands": ["help.tour"]
+        }
+      ]
+    }
+  ]
+}

@@ -149,6 +149,23 @@
       s.tabIndex = -1;
     });
   }
+  // the map editor page: keys for Windows or a Mac (a Mac is picked on a Mac; the choice is kept)
+  var osBox = document.querySelector(".ed-os");
+  if (osBox) {
+    var setOs = function (os) {
+      document.documentElement.setAttribute("data-os", os);
+      [].forEach.call(osBox.querySelectorAll("button"), function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-os") === os ? "true" : "false"); });
+    };
+    var saved = null;
+    try { saved = localStorage.getItem("ls.ref.os"); } catch (e) { /* (no storage: the default) */ }
+    setOs(saved === "mac" || saved === "win" ? saved : /Mac|iPhone|iPad/.test(navigator.platform) ? "mac" : "win");
+    osBox.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-os]");
+      if (!b) return;
+      setOs(b.getAttribute("data-os"));
+      try { localStorage.setItem("ls.ref.os", b.getAttribute("data-os")); } catch (e2) { /* (not kept) */ }
+    });
+  }
   var all = document.querySelector(".ref-all");
   if (all && side) all.addEventListener("click", function () {
     var on = side.classList.toggle("all");
