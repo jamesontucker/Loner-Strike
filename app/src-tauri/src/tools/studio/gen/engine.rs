@@ -256,7 +256,7 @@ pub(super) fn init(g: &Graph, o: &mut Out) {
     if uses(g, "eng.hide_hud") || uses(g, "eng.fov") {
         o.line("\tregister_event(\"ResetHUD\", \"lsg_eng_reset\", \"be\")");
     }
-    if uses(g, "eng.fov") || uses(g, "eng.spectate") {
+    if uses(g, "eng.hide_hud") || uses(g, "eng.fov") || uses(g, "eng.spectate") {
         o.line("\tset_task(0.25, \"lsg_eng_tick\", LSG_TASK - 520, _, _, \"b\")");
     }
     if uses(g, "eng.view_model") {
@@ -438,6 +438,9 @@ const RUNTIME: &str = r##"// ---- HUD & View (engine nodes): the game's own swit
 stock g_lsgHud[33], g_lsgHudSet[33], bool:g_lsgHudKeep[33], g_lsgFov[33], bool:g_lsgFovKeep[33]
 stock g_lsgVm[33][33], g_lsgPm[33][33], bool:g_lsgNoLight[33], bool:g_lsgQuiet[33]
 stock g_lsgTag[33], bool:g_lsgTagKeep[33], g_lsgShowTeam[33], g_lsgSpec[33]
+// when a node last set something for the player: a Player Spawned that sets it isn't undone by
+// the same spawn's "back to normal"
+stock Float:g_lsgEngAt[33]
 stock const g_lsgTeamWord[][] = { "UNASSIGNED", "TERRORIST", "CT", "SPECTATOR" }
 
 // Hide HUD Parts: our bits in the game's m_iHideHUD (it sends HideWeapon and the crosshair itself)
@@ -445,6 +448,7 @@ stock lsg_eng_hud(id, mask, bool:keep)
 {
 	g_lsgHud[id] = mask
 	g_lsgHudKeep[id] = keep
+	g_lsgEngAt[id] = get_gametime()
 	lsg_eng_hud_put(id)
 }
 
@@ -463,6 +467,7 @@ stock lsg_eng_fov(id, fov, bool:keep)
 {
 	g_lsgFov[id] = fov == 90 ? 0 : fov
 	g_lsgFovKeep[id] = keep
+	g_lsgEngAt[id] = get_gametime()
 	lsg_eng_fov_put(id, true)
 }
 
@@ -600,6 +605,7 @@ stock lsg_eng_tag(id, tag, bool:keep)
 {
 	g_lsgTag[id] = tag
 	g_lsgTagKeep[id] = keep
+	g_lsgEngAt[id] = get_gametime()
 	message_begin(MSG_ALL, get_user_msgid("ScoreAttrib"))
 	write_byte(id)
 	write_byte(lsg_eng_real_attr(id) | tag)
@@ -680,13 +686,16 @@ stock lsg_eng_cd(id, track, bool:loop)
 		client_cmd(id, "cd %s %d", loop ? "loop" : "play", track)
 }
 
-// a quarter second: the field of view after a scope; the spectated stay on their target
+// a quarter second: the HUD parts the game shows again (it clears some itself: the timer, the
+// weapon panel on a pickup), the field of view after a scope; the spectated stay on their target
 public lsg_eng_tick()
 {
 	for (new p = 1; p <= MaxClients; p++)
 	{
 		if (!is_user_connected(p))
 			continue
+		if (g_lsgHud[p])
+			lsg_eng_hud_put(p)
 		if (g_lsgFov[p] && is_user_alive(p))
 			lsg_eng_fov_put(p, false)
 		if (g_lsgSpec[p])
@@ -711,7 +720,9 @@ public lsg_eng_spawn(id)
 {
 	if (!is_user_alive(id))
 		return
-	lsg_eng_ends(id)
+	// (set by this same spawn's Player Spawned: kept)
+	if (id >= 1 && id <= 32 && get_gametime() - g_lsgEngAt[id] > 0.1)
+		lsg_eng_ends(id)
 	if (g_lsgHud[id])
 		lsg_eng_hud_put(id)
 	if (g_lsgFov[id])
