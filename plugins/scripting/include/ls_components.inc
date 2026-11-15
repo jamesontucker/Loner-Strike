@@ -801,7 +801,8 @@ native bool:ls_proj_precache(const model[]);
  * dir needn't be normalized; gravity 0 flies straight, 1 falls like a grenade; life in seconds.
  * keys: trail=1 spin=1 bounce=N (bounces off the world) damage=N radius=N (0: only what it hits)
  * falloff=0|1 explode=1 dangerous=1 (noted for bots; they don't dodge yet) scale=N (a sprite's or a model's size).
- * Kills go to owner. At most 64 fly at once (the oldest goes); all go at a new round.
+ * Kills go to owner. At most ls_proj_max fly at once (64 by default; a mode may raise it; the oldest
+ * goes); all go at a new round. With the server nearly out of entity slots it is skipped (returns 0).
  */
 native ls_proj_spawn(owner, const model[], const Float:origin[3], const Float:dir[3], Float:speed = 1000.0, Float:gravity = 0.0, Float:life = 5.0, const keys[] = "");
 /** A player's eyes (a little in front) and the way they aim; false when they aren't alive. */

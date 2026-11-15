@@ -14691,21 +14691,27 @@ public cmd_npc_pick()
    (straight, falling, or bouncing), with a touch for the hit and one think for its lifetime.
    On a hit: ls_on_proj_hit (where, the surface's normal, what it hit, a player's hitgroup),
    then its damage (straight on the thing hit, or in a radius, with or without falloff) and an
-   explosion if asked; the kill goes to its owner. At most PJ_MAX at once (the oldest goes),
-   all gone at a new round. Models must be loaded with the map: ls_proj_precache from a
+   explosion if asked; the kill goes to its owner. At most ls_proj_max at once (64 by default, a
+   comfort limit a mode may raise up to PJ_MAX; the oldest goes), all gone at a new round. The
+   one hard stop is the engine's: with fewer than PJ_RESERVE entity slots left, a projectile is
+   skipped (logged), never the server. Models must be loaded with the map: ls_proj_precache from a
    plugin's plugin_precache, or the ls_proj_models cvar; anything else flies as the fallback. */
-#define PJ_MAX 64
+#define PJ_MAX 512
+#define PJ_RESERVE 128
 #define PJ_CLASS "ls_projectile"
 #define PJ_FALLBACK "models/w_hegrenade.mdl"
 
 new g_pjEnt[PJ_MAX], g_pjOwner[PJ_MAX], g_pjBounce[PJ_MAX], Float:g_pjDmg[PJ_MAX], Float:g_pjRad[PJ_MAX];
 new bool:g_pjFall[PJ_MAX], bool:g_pjBoom[PJ_MAX], bool:g_pjTest[PJ_MAX], bool:g_pjDanger[PJ_MAX], Float:g_pjBorn[PJ_MAX];
-new g_fwProjHit, g_fwProjHitNode, g_fwProjExpire, g_sprPjExplode, g_pjTrailSpr;
+new g_fwProjHit, g_fwProjHitNode, g_fwProjExpire, g_sprPjExplode, g_pjTrailSpr, g_cPjMax;
+new g_pjOf[4097];
+new Float:g_pjSkipLog;
 
 stock proj_precache()
 {
 	register_cvar("ls_proj_models", "");
 	register_cvar("ls_proj_debug", "0"); /* 1: every hit printed (tests) */
+	g_cPjMax = register_cvar("ls_proj_max", "64"); /* how many fly at once (a mode's Limits) */
 	precache_model_once(PJ_FALLBACK);
 	g_sprPjExplode = precache_model("sprites/zerogxplode.spr");
 	g_pjTrailSpr = g_sprBeam;
@@ -14760,18 +14766,18 @@ stock bool:proj_path_ok(const p[])
 
 stock proj_slot(ent)
 {
-	if (ent <= 0)
+	if (ent <= 0 || ent >= sizeof g_pjOf)
 		return -1;
-	for (new s = 0; s < PJ_MAX; s++)
-		if (g_pjEnt[s] == ent)
-			return s;
-	return -1;
+	new s = g_pjOf[ent] - 1;
+	return s >= 0 && g_pjEnt[s] == ent ? s : -1;
 }
 
 stock proj_free(s)
 {
 	new e = g_pjEnt[s];
 	g_pjEnt[s] = 0;
+	if (0 < e < sizeof g_pjOf)
+		g_pjOf[e] = 0;
 	if (e > 0 && pev_valid(e))
 	{
 		set_pev(e, pev_flags, pev(e, pev_flags) | FL_KILLME);
@@ -14800,9 +14806,20 @@ stock Float:proj_key(const keys[], const key[], Float:def)
 
 stock proj_spawn(owner, const model[], const Float:o[3], const Float:dir[3], Float:speed, Float:gravity, Float:life, const keys[], bool:test)
 {
+	/* the engine's hard stop: keep a reserve of entity slots (skip this one, keep the server) */
+	if (global_get(glb_maxEntities) - engfunc(EngFunc_NumberOfEntities) < PJ_RESERVE)
+	{
+		if (get_gametime() >= g_pjSkipLog)
+		{
+			g_pjSkipLog = get_gametime() + 5.0;
+			log_amx("Spawn Projectile skipped: the server is out of entity slots.");
+		}
+		return 0;
+	}
 	/* a slot: a free one, else the oldest goes */
+	new cap = clamp(get_pcvar_num(g_cPjMax), 1, PJ_MAX);
 	new s = -1, old = 0;
-	for (new k = 0; k < PJ_MAX; k++)
+	for (new k = 0; k < cap; k++)
 	{
 		if (g_pjEnt[k] && !pev_valid(g_pjEnt[k]))
 			g_pjEnt[k] = 0;
@@ -14866,6 +14883,8 @@ stock proj_spawn(owner, const model[], const Float:o[3], const Float:dir[3], Flo
 		set_pev(e, pev_avelocity, Float:{0.0, 0.0, 720.0});
 	set_pev(e, pev_nextthink, get_gametime() + floatclamp(life, 0.1, 60.0));
 	g_pjEnt[s] = e;
+	if (e < sizeof g_pjOf)
+		g_pjOf[e] = s + 1;
 	g_pjOwner[s] = owner;
 	g_pjBounce[s] = bounce;
 	g_pjDmg[s] = floatclamp(proj_key(keys, "damage", 0.0), 0.0, 5000.0);
