@@ -354,6 +354,35 @@ stock lsg_steam_id(id)
 	return s
 }
 
+// the connected player with this Steam ID: case and the universe digit (STEAM_0 / STEAM_1) aside,
+// as the app's roles compare them (only the X:Y after STEAM_n: counts)
+stock lsg_by_steam(const id[])
+{
+	if (!equali(id, "STEAM_", 6) || !id[6] || id[7] != ':')
+		return 0
+	new s[44]
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		get_user_authid(p, s, charsmax(s))
+		if (equali(s, "STEAM_", 6) && s[6] && s[7] == ':' && equali(s[8], id[8]))
+			return p
+	}
+	return 0
+}
+
+// a Loner-Strike supporter: access flag "s" (gm_vip's SUPPORTER_FLAG; the app writes it from the
+// roles sync). Not bots or HLTV, and not the listen-server host, who has every flag
+stock bool:lsg_supporter(id)
+{
+	if (!lsg_ok(id) || is_user_bot(id) || is_user_hltv(id))
+		return false
+	if (id == 1 && !is_dedicated_server())
+		return false
+	return (get_user_flags(id) & ADMIN_LEVEL_G) != 0
+}
+
 stock lsg_by_name(const name[])
 	return name[0] ? max(find_player("bl", name), 0) : 0
 

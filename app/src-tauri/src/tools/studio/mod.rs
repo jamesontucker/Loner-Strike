@@ -1376,6 +1376,32 @@ mod tests {
         assert!(p.iter().any(|m| m.contains("wire the player into Player")), "{p:?}");
     }
 
+    /// Player By Steam ID (its player and Found) and Is Supporter, printed when a player spawns.
+    pub fn steam_mode() -> Graph {
+        let n = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "steam_nodes", "name": "Steam nodes"},
+            "nodes": [n("ps", "event.player_spawned", json!({})), n("sid", "player.steam_id", json!({})), n("by", "player.by_steam", json!({})), n("found", "debug.print", json!({"text": "found", "chat": false})),
+                      n("who", "debug.print", json!({"text": "who", "chat": false})), n("sup", "player.is_supporter", json!({})), n("ps2", "debug.print", json!({"text": "supporter", "chat": false})), n("lit", "player.by_steam", json!({"id": "steam_1:0:42"}))],
+            "edges": [e(1, "ps", "then", "found", "exec"), e(2, "ps", "player", "sid", "player"), e(3, "sid", "out", "by", "id"), e(4, "by", "found", "found", "value"),
+                      e(5, "found", "then", "who", "exec"), e(6, "lit", "out", "who", "value"), e(7, "who", "then", "ps2", "exec"), e(8, "ps", "player", "sup", "player"), e(9, "sup", "out", "ps2", "value")]})).unwrap()
+    }
+
+    /// Player By Steam ID matches on the X:Y after STEAM_n: (case and the universe digit aside),
+    /// Found is whether there's one; Is Supporter reads access flag s (gm_vip's supporter), never
+    /// for bots, HLTV or the listen-server host.
+    #[test]
+    fn steam_and_supporter_nodes_generate() {
+        let g = steam_mode();
+        let p = graph::validate(&g);
+        assert!(p.is_empty(), "{p:#?}");
+        let src = gen::generate(&g, false).source;
+        assert!(src.contains("lsg_by_steam(\"steam_1:0:42\")"), "the typed id as text");
+        assert!(src.contains("(lsg_by_steam(lsg_steam_id(") && src.contains(") > 0 ? 1 : 0)"), "Found");
+        assert!(src.contains("equali(s[8], id[8])"), "X:Y compared, any case, either universe");
+        assert!(src.contains("(get_user_flags(id) & ADMIN_LEVEL_G) != 0") && src.contains("id == 1 && !is_dedicated_server()"));
+    }
+
     pub fn snippet_as_graph(id: &str, v: &Value) -> Graph {
         let mut g = v.clone();
         let o = g.as_object_mut().unwrap();
@@ -1611,6 +1637,7 @@ mod tests {
         }
         graphs.push(("dialogue".into(), serde_json::to_string(&dialogue_mode()).unwrap()));
         graphs.push(("ui_nodes".into(), serde_json::to_string(&ui_nodes_mode()).unwrap()));
+        graphs.push(("steam_nodes".into(), serde_json::to_string(&steam_mode()).unwrap()));
         // the round clock read with no Round Time Up in the graph (its empty hook didn't compile:
         // the node coverage sweep found it)
         graphs.push(("clock_no_time_up".into(), serde_json::json!({"schema": "loner-strike/graph", "version": 3, "mode": {"id": "clock_no_time_up", "name": "Clock"},

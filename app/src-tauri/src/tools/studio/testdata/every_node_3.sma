@@ -610,6 +610,35 @@ stock lsg_steam_id(id)
 	return s
 }
 
+// the connected player with this Steam ID: case and the universe digit (STEAM_0 / STEAM_1) aside,
+// as the app's roles compare them (only the X:Y after STEAM_n: counts)
+stock lsg_by_steam(const id[])
+{
+	if (!equali(id, "STEAM_", 6) || !id[6] || id[7] != ':')
+		return 0
+	new s[44]
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		get_user_authid(p, s, charsmax(s))
+		if (equali(s, "STEAM_", 6) && s[6] && s[7] == ':' && equali(s[8], id[8]))
+			return p
+	}
+	return 0
+}
+
+// a Loner-Strike supporter: access flag "s" (gm_vip's SUPPORTER_FLAG; the app writes it from the
+// roles sync). Not bots or HLTV, and not the listen-server host, who has every flag
+stock bool:lsg_supporter(id)
+{
+	if (!lsg_ok(id) || is_user_bot(id) || is_user_hltv(id))
+		return false
+	if (id == 1 && !is_dedicated_server())
+		return false
+	return (get_user_flags(id) & ADMIN_LEVEL_G) != 0
+}
+
 stock lsg_by_name(const name[])
 	return name[0] ? max(find_player("bl", name), 0) : 0
 
@@ -3713,231 +3742,231 @@ lsg_n34(ctx[])
 	lsg_n35(ctx)
 }
 
-// Set Transform (n75)
+// Set Transform (n77)
 lsg_n35(ctx[])
 {
 	lsg_set_transform(ctx[0], -1, -1, -1)
 	lsg_n36(ctx)
 }
 
-// Set Rotation (n76)
+// Set Rotation (n78)
 lsg_n36(ctx[])
 {
 	lsg_set_transform(ctx[0], -1, lsg_vec(0.0, 0.0, 64.0), -1)
 	lsg_n37(ctx)
 }
 
-// Look At (n77)
+// Look At (n79)
 lsg_n37(ctx[])
 {
 	lsg_look_at(ctx[0], 0, -1)
 	lsg_n38(ctx)
 }
 
-// Slap (n78)
+// Slap (n80)
 lsg_n38(ctx[])
 {
 	lsg_slap(ctx[0], floatround(5.0))
 	lsg_n39(ctx)
 }
 
-// Screen Fade (n79)
+// Screen Fade (n81)
 lsg_n39(ctx[])
 {
 	lsg_fade(ctx[0], 2.0, 255, 255, 255, 255)
 	lsg_n40(ctx)
 }
 
-// Screen Shake (n80)
+// Screen Shake (n82)
 lsg_n40(ctx[])
 {
 	lsg_shake(ctx[0], 8.0, 2.0)
 	lsg_n41(ctx)
 }
 
-// God Mode (n81)
+// God Mode (n83)
 lsg_n41(ctx[])
 {
 	lsg_godmode(ctx[0], 1)
 	lsg_n42(ctx)
 }
 
-// No Clip (n82)
+// No Clip (n84)
 lsg_n42(ctx[])
 {
 	lsg_noclip(ctx[0], 1)
 	lsg_n43(ctx)
 }
 
-// Set Visibility (n83)
+// Set Visibility (n85)
 lsg_n43(ctx[])
 {
 	lsg_render(ctx[0], 2, 80)
 	lsg_n44(ctx)
 }
 
-// Set Ammo (n84)
+// Set Ammo (n86)
 lsg_n44(ctx[])
 {
 	lsg_set_ammo(ctx[0], floatround(30.0), floatround(90.0))
 	lsg_n45(ctx)
 }
 
-// Give Ammo (n85)
+// Give Ammo (n87)
 lsg_n45(ctx[])
 {
 	lsg_give_ammo(ctx[0], floatround(30.0))
 	lsg_n46(ctx)
 }
 
-// Remove Weapon (n86)
+// Remove Weapon (n88)
 lsg_n46(ctx[])
 {
 	lsg_take_weapon(ctx[0], "weapon_ak47")
 	lsg_n47(ctx)
 }
 
-// Switch To Weapon (n87)
+// Switch To Weapon (n89)
 lsg_n47(ctx[])
 {
 	lsg_switch_weapon(ctx[0], "weapon_knife")
 	lsg_n48(ctx)
 }
 
-// Set Kills (n88)
+// Set Kills (n90)
 lsg_n48(ctx[])
 {
 	lsg_set_frags(ctx[0], floatround(0.0))
 	lsg_n49(ctx)
 }
 
-// Set Deaths (n89)
+// Set Deaths (n91)
 lsg_n49(ctx[])
 {
 	lsg_set_deaths(ctx[0], floatround(0.0))
 	lsg_n50(ctx)
 }
 
-// Move To Spectators (n90)
+// Move To Spectators (n92)
 lsg_n50(ctx[])
 {
 	lsg_to_spec(ctx[0])
 	lsg_n51(ctx)
 }
 
-// Kick (n91)
+// Kick (n93)
 lsg_n51(ctx[])
 {
 	lsg_kick(ctx[0], "Kicked by the mode")
 	lsg_n52(ctx)
 }
 
-// Mute Voice (n92)
+// Mute Voice (n94)
 lsg_n52(ctx[])
 {
 	lsg_mute(ctx[0], 60.0)
 	lsg_n53(ctx)
 }
 
-// Gag Chat (n93)
+// Gag Chat (n95)
 lsg_n53(ctx[])
 {
 	lsg_gag(ctx[0], 60.0)
 	lsg_n54(ctx)
 }
 
-// Chat To Team (n94)
+// Chat To Team (n96)
 lsg_n54(ctx[])
 {
 	lsg_team_chat(2, "%s", "Hold the line!")
 	lsg_n55(ctx)
 }
 
-// Notify Admins (n95)
+// Notify Admins (n97)
 lsg_n55(ctx[])
 {
 	lsg_admins_chat("%s", "Please check player:")
 	lsg_n56(ctx)
 }
 
-// Spawn Prop (n99)
+// Spawn Prop (n101)
 lsg_n56(ctx[])
 {
 	g_lsgOut[56] = lsg_prop(lsg_find("spot1"), "models/w_c4.mdl", 1)
 	lsg_n57(ctx)
 }
 
-// Remove Entity (n100)
+// Remove Entity (n102)
 lsg_n57(ctx[])
 {
 	lsg_remove(lsg_find("spot1"))
 	lsg_n58(ctx)
 }
 
-// Set Entity Position (n101)
+// Set Entity Position (n103)
 lsg_n58(ctx[])
 {
 	lsg_ent_pos(lsg_find("spot1"), lsg_vec(0.0, 0.0, 64.0))
 	lsg_n59(ctx)
 }
 
-// Set Entity Rotation (n102)
+// Set Entity Rotation (n104)
 lsg_n59(ctx[])
 {
 	lsg_ent_angles(lsg_find("spot1"), lsg_vec(0.0, 0.0, 64.0))
 	lsg_n60(ctx)
 }
 
-// Set Entity Visibility (n103)
+// Set Entity Visibility (n105)
 lsg_n60(ctx[])
 {
 	lsg_ent_visible(lsg_find("spot1"), 1)
 	lsg_n61(ctx)
 }
 
-// Explosion (n104)
+// Explosion (n106)
 lsg_n61(ctx[])
 {
 	lsg_explode(lsg_vec(0.0, 0.0, 64.0), 0.0, 250.0)
 	lsg_n62(ctx)
 }
 
-// Beam (n105)
+// Beam (n107)
 lsg_n62(ctx[])
 {
 	lsg_beam(lsg_vec(0.0, 0.0, 64.0), lsg_vec(0.0, 0.0, 64.0), 230, 30, 30, 1.0)
 	lsg_n63(ctx)
 }
 
-// Play Sound At (n106)
+// Play Sound At (n108)
 lsg_n63(ctx[])
 {
 	lsg_sound_at(lsg_vec(0.0, 0.0, 64.0), "ambience/thunder_clap.wav")
 	lsg_n64(ctx)
 }
 
-// Play Sound To Player (n107)
+// Play Sound To Player (n109)
 lsg_n64(ctx[])
 {
 	lsg_sound_to(ctx[0], "buttons/bell1.wav")
 	lsg_n65(ctx)
 }
 
-// Set Light Style (n108)
+// Set Light Style (n110)
 lsg_n65(ctx[])
 {
 	set_lights("#OFF")
 	lsg_n66(ctx)
 }
 
-// Status Icon (n109)
+// Status Icon (n111)
 lsg_n66(ctx[])
 {
 	lsg_icon(0, 1, "buyzone", 0, 160, 0, 1)
 	lsg_n67(ctx)
 }
 
-// Objective Marker (n110)
+// Objective Marker (n112)
 lsg_n67(ctx[])
 {
 	new Float:lsgAt[3]
@@ -3945,21 +3974,21 @@ lsg_n67(ctx[])
 	lsg_n68(ctx)
 }
 
-// Remove Marker (n111)
+// Remove Marker (n113)
 lsg_n68(ctx[])
 {
 	lsg_marker_remove(0)
 	lsg_n69(ctx)
 }
 
-// Kill Feed Line (n112)
+// Kill Feed Line (n114)
 lsg_n69(ctx[])
 {
 	lsg_killfeed(0, ctx[0], 0, "knife")
 	lsg_n70(ctx)
 }
 
-// Call Plugin Function (n113)
+// Call Plugin Function (n115)
 lsg_n70(ctx[])
 {
 	new r, called = lsg_call("gm_components.amxx", "plugin_cfg", 0, floatround(0.0), floatround(0.0), r)
@@ -3968,62 +3997,62 @@ lsg_n70(ctx[])
 	lsg_n71(ctx)
 }
 
-// Fire Custom Event (n115)
+// Fire Custom Event (n117)
 lsg_n71(ctx[])
 {
 	lsg_fire_event("my_event", floatround(0.0), floatround(0.0))
 	lsg_n80(ctx)
 }
 
-// On Custom Event (n116)
+// On Custom Event (n118)
 lsg_n72(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Player Said (n117)
+// Player Said (n119)
 lsg_n73(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Freeze Time Ended (n118)
+// Freeze Time Ended (n120)
 lsg_n74(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Map Ending (n119)
+// Map Ending (n121)
 lsg_n75(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Weapon Fired (n120)
+// Weapon Fired (n122)
 lsg_n76(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Reloaded (n121)
+// Reloaded (n123)
 lsg_n77(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Hostage Rescued (n122)
+// Hostage Rescued (n124)
 lsg_n78(ctx[])
 {
 	#pragma unused ctx
 }
 
-// VIP Escaped (n123)
+// VIP Escaped (n125)
 lsg_n79(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Revive Pay (n126)
+// Revive Pay (n128)
 lsg_n80(ctx[])
 {
 	if (!(!ls_components_running()))
@@ -4033,7 +4062,7 @@ lsg_n80(ctx[])
 	lsg_n81(ctx)
 }
 
-// Set Timer by Event (n127)
+// Set Timer by Event (n129)
 lsg_n81(ctx[])
 {
 	remove_task(LSG_TASK + 81)
@@ -4046,20 +4075,20 @@ public lsg_te81()
 	lsg_ce1()
 }
 
-// Custom Event (n128)
+// Custom Event (n130)
 lsg_n82(ctx[])
 {
 	#pragma unused ctx
 }
 
-// Call Custom Event (n129)
+// Call Custom Event (n131)
 lsg_n83(ctx[])
 {
 	lsg_ce0(0, 0.0, "")
 	lsg_n84(ctx)
 }
 
-// For Each Creature (n130)
+// For Each Creature (n132)
 lsg_n84(ctx[])
 {
 	new c[LSG_CTX], count, p = -1
@@ -4077,76 +4106,76 @@ lsg_n84(ctx[])
 	lsg_n85(ctx)
 }
 
-// Creature Go To (n136)
+// Creature Go To (n138)
 lsg_n85(ctx[])
 {
 	lsg_cr_goto(lsg_find("spot1"), 0, -1, "gate1", 0)
 	lsg_n86(ctx)
 }
 
-// Creature Attack (n137)
+// Creature Attack (n139)
 lsg_n86(ctx[])
 {
 	lsg_cr_attack(lsg_find("spot1"), lsg_find("spot1"))
 	lsg_n87(ctx)
 }
 
-// Creature Hold (n138)
+// Creature Hold (n140)
 lsg_n87(ctx[])
 {
 	lsg_cr_hold(lsg_find("spot1"))
 	lsg_n88(ctx)
 }
 
-// Creature Resume AI (n139)
+// Creature Resume AI (n141)
 lsg_n88(ctx[])
 {
 	lsg_cr_resume(lsg_find("spot1"))
 	lsg_n89(ctx)
 }
 
-// Set Creature Speed (n142)
+// Set Creature Speed (n144)
 lsg_n89(ctx[])
 {
 	lsg_cr_speed(lsg_find("spot1"), 1.5)
 	lsg_n90(ctx)
 }
 
-// Set Creature Tier (n143)
+// Set Creature Tier (n145)
 lsg_n90(ctx[])
 {
 	lsg_cr_tier(lsg_find("spot1"), floatround(2.0))
 	lsg_n91(ctx)
 }
 
-// Creature Flee To (n144)
+// Creature Flee To (n146)
 lsg_n91(ctx[])
 {
 	lsg_cr_goto(lsg_find("spot1"), 0, -1, "", 2)
 	lsg_n92(ctx)
 }
 
-// Set Creature Health (n145)
+// Set Creature Health (n147)
 lsg_n92(ctx[])
 {
 	lsg_cr_health(lsg_find("spot1"), 100.0)
 	lsg_n93(ctx)
 }
 
-// Remove Creature (n146)
+// Remove Creature (n148)
 lsg_n93(ctx[])
 {
 	lsg_cr_cmd(lsg_find("spot1"), "kill %d")
 	lsg_n95(ctx)
 }
 
-// Creature Idle (n147)
+// Creature Idle (n149)
 lsg_n94(ctx[])
 {
 	#pragma unused ctx
 }
 
-// For Each Row (n150)
+// For Each Row (n152)
 lsg_n95(ctx[])
 {
 	new c[LSG_CTX], count
@@ -4167,7 +4196,7 @@ lsg_n95(ctx[])
 	lsg_n96(ctx)
 }
 
-// Timeline (n154)
+// Timeline (n156)
 stock lsg_n96(ctx[])
 {
 	new inst = 0

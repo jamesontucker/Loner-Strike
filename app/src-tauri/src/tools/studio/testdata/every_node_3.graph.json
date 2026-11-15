@@ -754,7 +754,7 @@
   },
   {
    "id": "n69",
-   "type": "player.by_name",
+   "type": "player.by_steam",
    "pos": {
     "x": 2860,
     "y": 2200
@@ -763,7 +763,7 @@
   },
   {
    "id": "n70",
-   "type": "player.by_index",
+   "type": "player.is_supporter",
    "pos": {
     "x": 3120,
     "y": 2200
@@ -772,7 +772,7 @@
   },
   {
    "id": "n71",
-   "type": "player.gravity",
+   "type": "player.by_name",
    "pos": {
     "x": 260,
     "y": 2420
@@ -781,7 +781,7 @@
   },
   {
    "id": "n72",
-   "type": "player.speed",
+   "type": "player.by_index",
    "pos": {
     "x": 520,
     "y": 2420
@@ -790,7 +790,7 @@
   },
   {
    "id": "n73",
-   "type": "player.model",
+   "type": "player.gravity",
    "pos": {
     "x": 780,
     "y": 2420
@@ -799,7 +799,7 @@
   },
   {
    "id": "n74",
-   "type": "player.transform",
+   "type": "player.speed",
    "pos": {
     "x": 1040,
     "y": 2420
@@ -808,7 +808,7 @@
   },
   {
    "id": "n75",
-   "type": "player.set_transform",
+   "type": "player.model",
    "pos": {
     "x": 1300,
     "y": 2420
@@ -817,7 +817,7 @@
   },
   {
    "id": "n76",
-   "type": "player.set_rotation",
+   "type": "player.transform",
    "pos": {
     "x": 1560,
     "y": 2420
@@ -826,7 +826,7 @@
   },
   {
    "id": "n77",
-   "type": "player.look_at",
+   "type": "player.set_transform",
    "pos": {
     "x": 1820,
     "y": 2420
@@ -835,7 +835,7 @@
   },
   {
    "id": "n78",
-   "type": "player.slap",
+   "type": "player.set_rotation",
    "pos": {
     "x": 2080,
     "y": 2420
@@ -844,7 +844,7 @@
   },
   {
    "id": "n79",
-   "type": "player.fade",
+   "type": "player.look_at",
    "pos": {
     "x": 2340,
     "y": 2420
@@ -853,7 +853,7 @@
   },
   {
    "id": "n80",
-   "type": "player.shake",
+   "type": "player.slap",
    "pos": {
     "x": 2600,
     "y": 2420
@@ -862,7 +862,7 @@
   },
   {
    "id": "n81",
-   "type": "player.godmode",
+   "type": "player.fade",
    "pos": {
     "x": 2860,
     "y": 2420
@@ -871,7 +871,7 @@
   },
   {
    "id": "n82",
-   "type": "player.noclip",
+   "type": "player.shake",
    "pos": {
     "x": 3120,
     "y": 2420
@@ -880,7 +880,7 @@
   },
   {
    "id": "n83",
-   "type": "player.render",
+   "type": "player.godmode",
    "pos": {
     "x": 260,
     "y": 2640
@@ -889,7 +889,7 @@
   },
   {
    "id": "n84",
-   "type": "player.set_ammo",
+   "type": "player.noclip",
    "pos": {
     "x": 520,
     "y": 2640
@@ -898,7 +898,7 @@
   },
   {
    "id": "n85",
-   "type": "player.give_ammo",
+   "type": "player.render",
    "pos": {
     "x": 780,
     "y": 2640
@@ -907,7 +907,7 @@
   },
   {
    "id": "n86",
-   "type": "player.take_weapon",
+   "type": "player.set_ammo",
    "pos": {
     "x": 1040,
     "y": 2640
@@ -916,7 +916,7 @@
   },
   {
    "id": "n87",
-   "type": "player.switch_weapon",
+   "type": "player.give_ammo",
    "pos": {
     "x": 1300,
     "y": 2640
@@ -925,7 +925,7 @@
   },
   {
    "id": "n88",
-   "type": "player.set_frags",
+   "type": "player.take_weapon",
    "pos": {
     "x": 1560,
     "y": 2640
@@ -934,7 +934,7 @@
   },
   {
    "id": "n89",
-   "type": "player.set_deaths",
+   "type": "player.switch_weapon",
    "pos": {
     "x": 1820,
     "y": 2640
@@ -943,7 +943,7 @@
   },
   {
    "id": "n90",
-   "type": "player.to_spectators",
+   "type": "player.set_frags",
    "pos": {
     "x": 2080,
     "y": 2640
@@ -952,7 +952,7 @@
   },
   {
    "id": "n91",
-   "type": "player.kick",
+   "type": "player.set_deaths",
    "pos": {
     "x": 2340,
     "y": 2640
@@ -961,7 +961,7 @@
   },
   {
    "id": "n92",
-   "type": "player.mute",
+   "type": "player.to_spectators",
    "pos": {
     "x": 2600,
     "y": 2640
@@ -970,7 +970,7 @@
   },
   {
    "id": "n93",
-   "type": "player.gag",
+   "type": "player.kick",
    "pos": {
     "x": 2860,
     "y": 2640
@@ -979,7 +979,7 @@
   },
   {
    "id": "n94",
-   "type": "msg.team_chat",
+   "type": "player.mute",
    "pos": {
     "x": 3120,
     "y": 2640
@@ -988,7 +988,7 @@
   },
   {
    "id": "n95",
-   "type": "msg.notify_admins",
+   "type": "player.gag",
    "pos": {
     "x": 260,
     "y": 2860
@@ -997,7 +997,7 @@
   },
   {
    "id": "n96",
-   "type": "ent.class",
+   "type": "msg.team_chat",
    "pos": {
     "x": 520,
     "y": 2860
@@ -1006,7 +1006,7 @@
   },
   {
    "id": "n97",
-   "type": "ent.name",
+   "type": "msg.notify_admins",
    "pos": {
     "x": 780,
     "y": 2860
@@ -1015,7 +1015,7 @@
   },
   {
    "id": "n98",
-   "type": "ent.find_all",
+   "type": "ent.class",
    "pos": {
     "x": 1040,
     "y": 2860
@@ -1024,7 +1024,7 @@
   },
   {
    "id": "n99",
-   "type": "ent.spawn_prop",
+   "type": "ent.name",
    "pos": {
     "x": 1300,
     "y": 2860
@@ -1033,7 +1033,7 @@
   },
   {
    "id": "n100",
-   "type": "ent.remove",
+   "type": "ent.find_all",
    "pos": {
     "x": 1560,
     "y": 2860
@@ -1042,7 +1042,7 @@
   },
   {
    "id": "n101",
-   "type": "ent.set_position",
+   "type": "ent.spawn_prop",
    "pos": {
     "x": 1820,
     "y": 2860
@@ -1051,7 +1051,7 @@
   },
   {
    "id": "n102",
-   "type": "ent.set_angles",
+   "type": "ent.remove",
    "pos": {
     "x": 2080,
     "y": 2860
@@ -1060,7 +1060,7 @@
   },
   {
    "id": "n103",
-   "type": "ent.set_visible",
+   "type": "ent.set_position",
    "pos": {
     "x": 2340,
     "y": 2860
@@ -1069,7 +1069,7 @@
   },
   {
    "id": "n104",
-   "type": "fx.explosion",
+   "type": "ent.set_angles",
    "pos": {
     "x": 2600,
     "y": 2860
@@ -1078,7 +1078,7 @@
   },
   {
    "id": "n105",
-   "type": "fx.beam",
+   "type": "ent.set_visible",
    "pos": {
     "x": 2860,
     "y": 2860
@@ -1087,7 +1087,7 @@
   },
   {
    "id": "n106",
-   "type": "fx.sound_at",
+   "type": "fx.explosion",
    "pos": {
     "x": 3120,
     "y": 2860
@@ -1096,7 +1096,7 @@
   },
   {
    "id": "n107",
-   "type": "fx.sound_to",
+   "type": "fx.beam",
    "pos": {
     "x": 260,
     "y": 3080
@@ -1105,7 +1105,7 @@
   },
   {
    "id": "n108",
-   "type": "fx.lights",
+   "type": "fx.sound_at",
    "pos": {
     "x": 520,
     "y": 3080
@@ -1114,7 +1114,7 @@
   },
   {
    "id": "n109",
-   "type": "msg.status_icon",
+   "type": "fx.sound_to",
    "pos": {
     "x": 780,
     "y": 3080
@@ -1123,7 +1123,7 @@
   },
   {
    "id": "n110",
-   "type": "fx.marker",
+   "type": "fx.lights",
    "pos": {
     "x": 1040,
     "y": 3080
@@ -1132,7 +1132,7 @@
   },
   {
    "id": "n111",
-   "type": "fx.marker_remove",
+   "type": "msg.status_icon",
    "pos": {
     "x": 1300,
     "y": 3080
@@ -1141,7 +1141,7 @@
   },
   {
    "id": "n112",
-   "type": "msg.killfeed",
+   "type": "fx.marker",
    "pos": {
     "x": 1560,
     "y": 3080
@@ -1150,7 +1150,7 @@
   },
   {
    "id": "n113",
-   "type": "amx.call",
+   "type": "fx.marker_remove",
    "pos": {
     "x": 1820,
     "y": 3080
@@ -1159,7 +1159,7 @@
   },
   {
    "id": "n114",
-   "type": "amx.plugin_running",
+   "type": "msg.killfeed",
    "pos": {
     "x": 2080,
     "y": 3080
@@ -1168,7 +1168,7 @@
   },
   {
    "id": "n115",
-   "type": "amx.fire",
+   "type": "amx.call",
    "pos": {
     "x": 2340,
     "y": 3080
@@ -1177,7 +1177,7 @@
   },
   {
    "id": "n116",
-   "type": "amx.on_event",
+   "type": "amx.plugin_running",
    "pos": {
     "x": 2600,
     "y": 3080
@@ -1186,7 +1186,7 @@
   },
   {
    "id": "n117",
-   "type": "event.player_said",
+   "type": "amx.fire",
    "pos": {
     "x": 2860,
     "y": 3080
@@ -1195,7 +1195,7 @@
   },
   {
    "id": "n118",
-   "type": "event.freeze_ended",
+   "type": "amx.on_event",
    "pos": {
     "x": 3120,
     "y": 3080
@@ -1204,7 +1204,7 @@
   },
   {
    "id": "n119",
-   "type": "event.map_ending",
+   "type": "event.player_said",
    "pos": {
     "x": 260,
     "y": 3300
@@ -1213,7 +1213,7 @@
   },
   {
    "id": "n120",
-   "type": "event.weapon_fired",
+   "type": "event.freeze_ended",
    "pos": {
     "x": 520,
     "y": 3300
@@ -1222,7 +1222,7 @@
   },
   {
    "id": "n121",
-   "type": "event.reloaded",
+   "type": "event.map_ending",
    "pos": {
     "x": 780,
     "y": 3300
@@ -1231,7 +1231,7 @@
   },
   {
    "id": "n122",
-   "type": "event.hostage_rescued",
+   "type": "event.weapon_fired",
    "pos": {
     "x": 1040,
     "y": 3300
@@ -1240,7 +1240,7 @@
   },
   {
    "id": "n123",
-   "type": "event.vip_escaped",
+   "type": "event.reloaded",
    "pos": {
     "x": 1300,
     "y": 3300
@@ -1249,7 +1249,7 @@
   },
   {
    "id": "n124",
-   "type": "bot.skill",
+   "type": "event.hostage_rescued",
    "pos": {
     "x": 1560,
     "y": 3300
@@ -1258,7 +1258,7 @@
   },
   {
    "id": "n125",
-   "type": "bot.trait",
+   "type": "event.vip_escaped",
    "pos": {
     "x": 1820,
     "y": 3300
@@ -1267,7 +1267,7 @@
   },
   {
    "id": "n126",
-   "type": "comp.revive_pay",
+   "type": "bot.skill",
    "pos": {
     "x": 2080,
     "y": 3300
@@ -1276,9 +1276,27 @@
   },
   {
    "id": "n127",
-   "type": "timer.by_event",
+   "type": "bot.trait",
    "pos": {
     "x": 2340,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n128",
+   "type": "comp.revive_pay",
+   "pos": {
+    "x": 2600,
+    "y": 3300
+   },
+   "params": {}
+  },
+  {
+   "id": "n129",
+   "type": "timer.by_event",
+   "pos": {
+    "x": 2860,
     "y": 3300
    },
    "params": {
@@ -1288,48 +1306,30 @@
    }
   },
   {
-   "id": "n128",
-   "type": "event.custom",
-   "pos": {
-    "x": 2600,
-    "y": 3300
-   },
-   "params": {
-    "event": "ce1"
-   }
-  },
-  {
-   "id": "n129",
-   "type": "event.call",
-   "pos": {
-    "x": 2860,
-    "y": 3300
-   },
-   "params": {
-    "event": "ce1"
-   }
-  },
-  {
    "id": "n130",
-   "type": "creature.for_each",
+   "type": "event.custom",
    "pos": {
     "x": 3120,
     "y": 3300
    },
-   "params": {}
+   "params": {
+    "event": "ce1"
+   }
   },
   {
    "id": "n131",
-   "type": "creature.of_type",
+   "type": "event.call",
    "pos": {
     "x": 260,
     "y": 3520
    },
-   "params": {}
+   "params": {
+    "event": "ce1"
+   }
   },
   {
    "id": "n132",
-   "type": "creature.nearest",
+   "type": "creature.for_each",
    "pos": {
     "x": 520,
     "y": 3520
@@ -1338,7 +1338,7 @@
   },
   {
    "id": "n133",
-   "type": "creature.type",
+   "type": "creature.of_type",
    "pos": {
     "x": 780,
     "y": 3520
@@ -1347,7 +1347,7 @@
   },
   {
    "id": "n134",
-   "type": "creature.idle_for",
+   "type": "creature.nearest",
    "pos": {
     "x": 1040,
     "y": 3520
@@ -1356,7 +1356,7 @@
   },
   {
    "id": "n135",
-   "type": "creature.can_see",
+   "type": "creature.type",
    "pos": {
     "x": 1300,
     "y": 3520
@@ -1365,7 +1365,7 @@
   },
   {
    "id": "n136",
-   "type": "creature.go_to",
+   "type": "creature.idle_for",
    "pos": {
     "x": 1560,
     "y": 3520
@@ -1374,7 +1374,7 @@
   },
   {
    "id": "n137",
-   "type": "creature.attack",
+   "type": "creature.can_see",
    "pos": {
     "x": 1820,
     "y": 3520
@@ -1383,7 +1383,7 @@
   },
   {
    "id": "n138",
-   "type": "creature.hold",
+   "type": "creature.go_to",
    "pos": {
     "x": 2080,
     "y": 3520
@@ -1392,7 +1392,7 @@
   },
   {
    "id": "n139",
-   "type": "creature.resume",
+   "type": "creature.attack",
    "pos": {
     "x": 2340,
     "y": 3520
@@ -1401,7 +1401,7 @@
   },
   {
    "id": "n140",
-   "type": "creature.state",
+   "type": "creature.hold",
    "pos": {
     "x": 2600,
     "y": 3520
@@ -1410,7 +1410,7 @@
   },
   {
    "id": "n141",
-   "type": "creature.target",
+   "type": "creature.resume",
    "pos": {
     "x": 2860,
     "y": 3520
@@ -1419,7 +1419,7 @@
   },
   {
    "id": "n142",
-   "type": "creature.set_speed",
+   "type": "creature.state",
    "pos": {
     "x": 3120,
     "y": 3520
@@ -1428,7 +1428,7 @@
   },
   {
    "id": "n143",
-   "type": "creature.set_tier",
+   "type": "creature.target",
    "pos": {
     "x": 260,
     "y": 3740
@@ -1437,7 +1437,7 @@
   },
   {
    "id": "n144",
-   "type": "creature.flee_to",
+   "type": "creature.set_speed",
    "pos": {
     "x": 520,
     "y": 3740
@@ -1446,7 +1446,7 @@
   },
   {
    "id": "n145",
-   "type": "creature.set_health",
+   "type": "creature.set_tier",
    "pos": {
     "x": 780,
     "y": 3740
@@ -1455,7 +1455,7 @@
   },
   {
    "id": "n146",
-   "type": "creature.remove",
+   "type": "creature.flee_to",
    "pos": {
     "x": 1040,
     "y": 3740
@@ -1464,7 +1464,7 @@
   },
   {
    "id": "n147",
-   "type": "creature.on_idle",
+   "type": "creature.set_health",
    "pos": {
     "x": 1300,
     "y": 3740
@@ -1473,30 +1473,25 @@
   },
   {
    "id": "n148",
-   "type": "table.get_row",
+   "type": "creature.remove",
    "pos": {
     "x": 1560,
     "y": 3740
    },
-   "params": {
-    "table": "dt1"
-   }
+   "params": {}
   },
   {
    "id": "n149",
-   "type": "table.get_cell",
+   "type": "creature.on_idle",
    "pos": {
     "x": 1820,
     "y": 3740
    },
-   "params": {
-    "table": "dt1",
-    "column": "gun"
-   }
+   "params": {}
   },
   {
    "id": "n150",
-   "type": "table.for_each",
+   "type": "table.get_row",
    "pos": {
     "x": 2080,
     "y": 3740
@@ -1507,19 +1502,19 @@
   },
   {
    "id": "n151",
-   "type": "table.find",
+   "type": "table.get_cell",
    "pos": {
     "x": 2340,
     "y": 3740
    },
    "params": {
     "table": "dt1",
-    "column": "lvl"
+    "column": "gun"
    }
   },
   {
    "id": "n152",
-   "type": "table.count",
+   "type": "table.for_each",
    "pos": {
     "x": 2600,
     "y": 3740
@@ -1530,9 +1525,21 @@
   },
   {
    "id": "n153",
-   "type": "table.keys",
+   "type": "table.find",
    "pos": {
     "x": 2860,
+    "y": 3740
+   },
+   "params": {
+    "table": "dt1",
+    "column": "lvl"
+   }
+  },
+  {
+   "id": "n154",
+   "type": "table.count",
+   "pos": {
+    "x": 3120,
     "y": 3740
    },
    "params": {
@@ -1540,37 +1547,30 @@
    }
   },
   {
-   "id": "n154",
+   "id": "n155",
+   "type": "table.keys",
+   "pos": {
+    "x": 260,
+    "y": 3960
+   },
+   "params": {
+    "table": "dt1"
+   }
+  },
+  {
+   "id": "n156",
    "type": "timeline.play",
    "pos": {
-    "x": 3120,
-    "y": 3740
+    "x": 520,
+    "y": 3960
    },
    "params": {
     "timeline": "tl1"
    }
   },
   {
-   "id": "n155",
-   "type": "ent.transform",
-   "pos": {
-    "x": 260,
-    "y": 3960
-   },
-   "params": {}
-  },
-  {
-   "id": "n156",
-   "type": "ent.position",
-   "pos": {
-    "x": 520,
-    "y": 3960
-   },
-   "params": {}
-  },
-  {
    "id": "n157",
-   "type": "ent.rotation",
+   "type": "ent.transform",
    "pos": {
     "x": 780,
     "y": 3960
@@ -1579,7 +1579,7 @@
   },
   {
    "id": "n158",
-   "type": "ent.distance",
+   "type": "ent.position",
    "pos": {
     "x": 1040,
     "y": 3960
@@ -1588,9 +1588,27 @@
   },
   {
    "id": "n159",
-   "type": "ent.direction",
+   "type": "ent.rotation",
    "pos": {
     "x": 1300,
+    "y": 3960
+   },
+   "params": {}
+  },
+  {
+   "id": "n160",
+   "type": "ent.distance",
+   "pos": {
+    "x": 1560,
+    "y": 3960
+   },
+   "params": {}
+  },
+  {
+   "id": "n161",
+   "type": "ent.direction",
+   "pos": {
+    "x": 1820,
     "y": 3960
    },
    "params": {}
@@ -2121,7 +2139,7 @@
     "pin": "player"
    },
    "to": {
-    "node": "n71",
+    "node": "n70",
     "pin": "player"
    }
   },
@@ -2132,7 +2150,7 @@
     "pin": "player"
    },
    "to": {
-    "node": "n72",
+    "node": "n73",
     "pin": "player"
    }
   },
@@ -2143,7 +2161,7 @@
     "pin": "player"
    },
    "to": {
-    "node": "n73",
+    "node": "n74",
     "pin": "player"
    }
   },
@@ -2154,7 +2172,7 @@
     "pin": "player"
    },
    "to": {
-    "node": "n74",
+    "node": "n75",
     "pin": "player"
    }
   },
@@ -2165,430 +2183,408 @@
     "pin": "player"
    },
    "to": {
-    "node": "n75",
+    "node": "n76",
     "pin": "player"
    }
   },
   {
    "id": "w52",
    "from": {
-    "node": "n57",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n75",
-    "pin": "exec"
+    "node": "n77",
+    "pin": "player"
    }
   },
   {
    "id": "w53",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n57",
+    "pin": "then"
    },
    "to": {
-    "node": "n76",
-    "pin": "player"
+    "node": "n77",
+    "pin": "exec"
    }
   },
   {
    "id": "w54",
    "from": {
-    "node": "vec",
-    "pin": "out"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n76",
-    "pin": "angles"
+    "node": "n78",
+    "pin": "player"
    }
   },
   {
    "id": "w55",
    "from": {
-    "node": "n75",
-    "pin": "then"
+    "node": "vec",
+    "pin": "out"
    },
    "to": {
-    "node": "n76",
-    "pin": "exec"
+    "node": "n78",
+    "pin": "angles"
    }
   },
   {
    "id": "w56",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n77",
+    "pin": "then"
    },
    "to": {
-    "node": "n77",
-    "pin": "player"
+    "node": "n78",
+    "pin": "exec"
    }
   },
   {
    "id": "w57",
    "from": {
-    "node": "n76",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n77",
-    "pin": "exec"
+    "node": "n79",
+    "pin": "player"
    }
   },
   {
    "id": "w58",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n78",
+    "pin": "then"
    },
    "to": {
-    "node": "n78",
-    "pin": "player"
+    "node": "n79",
+    "pin": "exec"
    }
   },
   {
    "id": "w59",
    "from": {
-    "node": "n77",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n78",
-    "pin": "exec"
+    "node": "n80",
+    "pin": "player"
    }
   },
   {
    "id": "w60",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n79",
+    "pin": "then"
    },
    "to": {
-    "node": "n79",
-    "pin": "player"
+    "node": "n80",
+    "pin": "exec"
    }
   },
   {
    "id": "w61",
    "from": {
-    "node": "n78",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n79",
-    "pin": "exec"
+    "node": "n81",
+    "pin": "player"
    }
   },
   {
    "id": "w62",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n80",
+    "pin": "then"
    },
    "to": {
-    "node": "n80",
-    "pin": "player"
+    "node": "n81",
+    "pin": "exec"
    }
   },
   {
    "id": "w63",
    "from": {
-    "node": "n79",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n80",
-    "pin": "exec"
+    "node": "n82",
+    "pin": "player"
    }
   },
   {
    "id": "w64",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n81",
+    "pin": "then"
    },
    "to": {
-    "node": "n81",
-    "pin": "player"
+    "node": "n82",
+    "pin": "exec"
    }
   },
   {
    "id": "w65",
    "from": {
-    "node": "n80",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n81",
-    "pin": "exec"
+    "node": "n83",
+    "pin": "player"
    }
   },
   {
    "id": "w66",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n82",
+    "pin": "then"
    },
    "to": {
-    "node": "n82",
-    "pin": "player"
+    "node": "n83",
+    "pin": "exec"
    }
   },
   {
    "id": "w67",
    "from": {
-    "node": "n81",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n82",
-    "pin": "exec"
+    "node": "n84",
+    "pin": "player"
    }
   },
   {
    "id": "w68",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n83",
+    "pin": "then"
    },
    "to": {
-    "node": "n83",
-    "pin": "player"
+    "node": "n84",
+    "pin": "exec"
    }
   },
   {
    "id": "w69",
    "from": {
-    "node": "n82",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n83",
-    "pin": "exec"
+    "node": "n85",
+    "pin": "player"
    }
   },
   {
    "id": "w70",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n84",
+    "pin": "then"
    },
    "to": {
-    "node": "n84",
-    "pin": "player"
+    "node": "n85",
+    "pin": "exec"
    }
   },
   {
    "id": "w71",
    "from": {
-    "node": "n83",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n84",
-    "pin": "exec"
+    "node": "n86",
+    "pin": "player"
    }
   },
   {
    "id": "w72",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n85",
+    "pin": "then"
    },
    "to": {
-    "node": "n85",
-    "pin": "player"
+    "node": "n86",
+    "pin": "exec"
    }
   },
   {
    "id": "w73",
    "from": {
-    "node": "n84",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n85",
-    "pin": "exec"
+    "node": "n87",
+    "pin": "player"
    }
   },
   {
    "id": "w74",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n86",
+    "pin": "then"
    },
    "to": {
-    "node": "n86",
-    "pin": "player"
+    "node": "n87",
+    "pin": "exec"
    }
   },
   {
    "id": "w75",
    "from": {
-    "node": "n85",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n86",
-    "pin": "exec"
+    "node": "n88",
+    "pin": "player"
    }
   },
   {
    "id": "w76",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n87",
+    "pin": "then"
    },
    "to": {
-    "node": "n87",
-    "pin": "player"
+    "node": "n88",
+    "pin": "exec"
    }
   },
   {
    "id": "w77",
    "from": {
-    "node": "n86",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n87",
-    "pin": "exec"
+    "node": "n89",
+    "pin": "player"
    }
   },
   {
    "id": "w78",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n88",
+    "pin": "then"
    },
    "to": {
-    "node": "n88",
-    "pin": "player"
+    "node": "n89",
+    "pin": "exec"
    }
   },
   {
    "id": "w79",
    "from": {
-    "node": "n87",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n88",
-    "pin": "exec"
+    "node": "n90",
+    "pin": "player"
    }
   },
   {
    "id": "w80",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n89",
+    "pin": "then"
    },
    "to": {
-    "node": "n89",
-    "pin": "player"
+    "node": "n90",
+    "pin": "exec"
    }
   },
   {
    "id": "w81",
    "from": {
-    "node": "n88",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n89",
-    "pin": "exec"
+    "node": "n91",
+    "pin": "player"
    }
   },
   {
    "id": "w82",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n90",
+    "pin": "then"
    },
    "to": {
-    "node": "n90",
-    "pin": "player"
+    "node": "n91",
+    "pin": "exec"
    }
   },
   {
    "id": "w83",
    "from": {
-    "node": "n89",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n90",
-    "pin": "exec"
+    "node": "n92",
+    "pin": "player"
    }
   },
   {
    "id": "w84",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n91",
+    "pin": "then"
    },
    "to": {
-    "node": "n91",
-    "pin": "player"
+    "node": "n92",
+    "pin": "exec"
    }
   },
   {
    "id": "w85",
    "from": {
-    "node": "n90",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n91",
-    "pin": "exec"
+    "node": "n93",
+    "pin": "player"
    }
   },
   {
    "id": "w86",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n92",
+    "pin": "then"
    },
    "to": {
-    "node": "n92",
-    "pin": "player"
+    "node": "n93",
+    "pin": "exec"
    }
   },
   {
    "id": "w87",
    "from": {
-    "node": "n91",
-    "pin": "then"
-   },
-   "to": {
-    "node": "n92",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w88",
-   "from": {
     "node": "ps",
     "pin": "player"
    },
    "to": {
-    "node": "n93",
+    "node": "n94",
     "pin": "player"
    }
   },
   {
-   "id": "w89",
-   "from": {
-    "node": "n92",
-    "pin": "then"
-   },
-   "to": {
-    "node": "n93",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w90",
+   "id": "w88",
    "from": {
     "node": "n93",
     "pin": "then"
@@ -2599,7 +2595,18 @@
    }
   },
   {
-   "id": "w91",
+   "id": "w89",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "n95",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w90",
    "from": {
     "node": "n94",
     "pin": "then"
@@ -2610,14 +2617,25 @@
    }
   },
   {
-   "id": "w92",
+   "id": "w91",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n95",
+    "pin": "then"
    },
    "to": {
     "node": "n96",
-    "pin": "in"
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w92",
+   "from": {
+    "node": "n96",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n97",
+    "pin": "exec"
    }
   },
   {
@@ -2627,7 +2645,7 @@
     "pin": "out"
    },
    "to": {
-    "node": "n97",
+    "node": "n98",
     "pin": "in"
    }
   },
@@ -2639,161 +2657,161 @@
    },
    "to": {
     "node": "n99",
-    "pin": "at"
+    "pin": "in"
    }
   },
   {
    "id": "w95",
    "from": {
-    "node": "n95",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n99",
-    "pin": "exec"
+    "node": "n101",
+    "pin": "at"
    }
   },
   {
    "id": "w96",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n97",
+    "pin": "then"
    },
    "to": {
-    "node": "n100",
-    "pin": "in"
+    "node": "n101",
+    "pin": "exec"
    }
   },
   {
    "id": "w97",
    "from": {
-    "node": "n99",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n100",
-    "pin": "exec"
+    "node": "n102",
+    "pin": "in"
    }
   },
   {
    "id": "w98",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n101",
+    "pin": "then"
    },
    "to": {
-    "node": "n101",
-    "pin": "in"
+    "node": "n102",
+    "pin": "exec"
    }
   },
   {
    "id": "w99",
    "from": {
-    "node": "vec",
+    "node": "ent",
     "pin": "out"
    },
    "to": {
-    "node": "n101",
-    "pin": "pos"
+    "node": "n103",
+    "pin": "in"
    }
   },
   {
    "id": "w100",
    "from": {
-    "node": "n100",
-    "pin": "then"
+    "node": "vec",
+    "pin": "out"
    },
    "to": {
-    "node": "n101",
-    "pin": "exec"
+    "node": "n103",
+    "pin": "pos"
    }
   },
   {
    "id": "w101",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n102",
+    "pin": "then"
    },
    "to": {
-    "node": "n102",
-    "pin": "in"
+    "node": "n103",
+    "pin": "exec"
    }
   },
   {
    "id": "w102",
    "from": {
-    "node": "vec",
+    "node": "ent",
     "pin": "out"
    },
    "to": {
-    "node": "n102",
-    "pin": "angles"
+    "node": "n104",
+    "pin": "in"
    }
   },
   {
    "id": "w103",
    "from": {
-    "node": "n101",
-    "pin": "then"
+    "node": "vec",
+    "pin": "out"
    },
    "to": {
-    "node": "n102",
-    "pin": "exec"
+    "node": "n104",
+    "pin": "angles"
    }
   },
   {
    "id": "w104",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n103",
+    "pin": "then"
    },
    "to": {
-    "node": "n103",
-    "pin": "in"
+    "node": "n104",
+    "pin": "exec"
    }
   },
   {
    "id": "w105",
    "from": {
-    "node": "n102",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n103",
-    "pin": "exec"
+    "node": "n105",
+    "pin": "in"
    }
   },
   {
    "id": "w106",
    "from": {
-    "node": "vec",
-    "pin": "out"
+    "node": "n104",
+    "pin": "then"
    },
    "to": {
-    "node": "n104",
-    "pin": "pos"
+    "node": "n105",
+    "pin": "exec"
    }
   },
   {
    "id": "w107",
    "from": {
-    "node": "n103",
-    "pin": "then"
+    "node": "vec",
+    "pin": "out"
    },
    "to": {
-    "node": "n104",
-    "pin": "exec"
+    "node": "n106",
+    "pin": "pos"
    }
   },
   {
    "id": "w108",
    "from": {
-    "node": "vec",
-    "pin": "out"
+    "node": "n105",
+    "pin": "then"
    },
    "to": {
-    "node": "n105",
-    "pin": "a"
+    "node": "n106",
+    "pin": "exec"
    }
   },
   {
@@ -2803,146 +2821,146 @@
     "pin": "out"
    },
    "to": {
-    "node": "n105",
-    "pin": "b"
+    "node": "n107",
+    "pin": "a"
    }
   },
   {
    "id": "w110",
    "from": {
-    "node": "n104",
-    "pin": "then"
+    "node": "vec",
+    "pin": "out"
    },
    "to": {
-    "node": "n105",
-    "pin": "exec"
+    "node": "n107",
+    "pin": "b"
    }
   },
   {
    "id": "w111",
    "from": {
-    "node": "vec",
-    "pin": "out"
+    "node": "n106",
+    "pin": "then"
    },
    "to": {
-    "node": "n106",
-    "pin": "pos"
+    "node": "n107",
+    "pin": "exec"
    }
   },
   {
    "id": "w112",
    "from": {
-    "node": "n105",
-    "pin": "then"
+    "node": "vec",
+    "pin": "out"
    },
    "to": {
-    "node": "n106",
-    "pin": "exec"
+    "node": "n108",
+    "pin": "pos"
    }
   },
   {
    "id": "w113",
-   "from": {
-    "node": "ps",
-    "pin": "player"
-   },
-   "to": {
-    "node": "n107",
-    "pin": "player"
-   }
-  },
-  {
-   "id": "w114",
-   "from": {
-    "node": "n106",
-    "pin": "then"
-   },
-   "to": {
-    "node": "n107",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w115",
    "from": {
     "node": "n107",
     "pin": "then"
    },
    "to": {
     "node": "n108",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w114",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "n109",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w115",
+   "from": {
+    "node": "n108",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n109",
     "pin": "exec"
    }
   },
   {
    "id": "w116",
    "from": {
-    "node": "n108",
+    "node": "n109",
     "pin": "then"
    },
    "to": {
-    "node": "n109",
+    "node": "n110",
     "pin": "exec"
    }
   },
   {
    "id": "w117",
    "from": {
-    "node": "n109",
+    "node": "n110",
     "pin": "then"
    },
    "to": {
-    "node": "n110",
+    "node": "n111",
     "pin": "exec"
    }
   },
   {
    "id": "w118",
    "from": {
-    "node": "n110",
+    "node": "n111",
     "pin": "then"
    },
    "to": {
-    "node": "n111",
+    "node": "n112",
     "pin": "exec"
    }
   },
   {
    "id": "w119",
    "from": {
-    "node": "ps",
-    "pin": "player"
-   },
-   "to": {
-    "node": "n112",
-    "pin": "victim"
-   }
-  },
-  {
-   "id": "w120",
-   "from": {
-    "node": "n111",
-    "pin": "then"
-   },
-   "to": {
-    "node": "n112",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w121",
-   "from": {
     "node": "n112",
     "pin": "then"
    },
    "to": {
     "node": "n113",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w120",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "n114",
+    "pin": "victim"
+   }
+  },
+  {
+   "id": "w121",
+   "from": {
+    "node": "n113",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n114",
     "pin": "exec"
    }
   },
   {
    "id": "w122",
    "from": {
-    "node": "n113",
+    "node": "n114",
     "pin": "then"
    },
    "to": {
@@ -2953,12 +2971,12 @@
   {
    "id": "w123",
    "from": {
-    "node": "ps",
-    "pin": "player"
+    "node": "n115",
+    "pin": "then"
    },
    "to": {
-    "node": "n124",
-    "pin": "bot"
+    "node": "n117",
+    "pin": "exec"
    }
   },
   {
@@ -2968,36 +2986,36 @@
     "pin": "player"
    },
    "to": {
-    "node": "n125",
+    "node": "n126",
     "pin": "bot"
    }
   },
   {
    "id": "w125",
    "from": {
-    "node": "n115",
-    "pin": "then"
+    "node": "ps",
+    "pin": "player"
    },
    "to": {
-    "node": "n126",
-    "pin": "exec"
+    "node": "n127",
+    "pin": "bot"
    }
   },
   {
    "id": "w126",
    "from": {
-    "node": "n126",
+    "node": "n117",
     "pin": "then"
    },
    "to": {
-    "node": "n127",
+    "node": "n128",
     "pin": "exec"
    }
   },
   {
    "id": "w127",
    "from": {
-    "node": "n127",
+    "node": "n128",
     "pin": "then"
    },
    "to": {
@@ -3012,19 +3030,19 @@
     "pin": "then"
    },
    "to": {
-    "node": "n130",
+    "node": "n131",
     "pin": "exec"
    }
   },
   {
    "id": "w129",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n131",
+    "pin": "then"
    },
    "to": {
-    "node": "n133",
-    "pin": "creature"
+    "node": "n132",
+    "pin": "exec"
    }
   },
   {
@@ -3034,7 +3052,7 @@
     "pin": "out"
    },
    "to": {
-    "node": "n134",
+    "node": "n135",
     "pin": "creature"
    }
   },
@@ -3045,7 +3063,7 @@
     "pin": "out"
    },
    "to": {
-    "node": "n135",
+    "node": "n136",
     "pin": "creature"
    }
   },
@@ -3056,8 +3074,8 @@
     "pin": "out"
    },
    "to": {
-    "node": "n135",
-    "pin": "what"
+    "node": "n137",
+    "pin": "creature"
    }
   },
   {
@@ -3067,30 +3085,30 @@
     "pin": "out"
    },
    "to": {
-    "node": "n136",
-    "pin": "creature"
+    "node": "n137",
+    "pin": "what"
    }
   },
   {
    "id": "w134",
    "from": {
-    "node": "n130",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n136",
-    "pin": "exec"
+    "node": "n138",
+    "pin": "creature"
    }
   },
   {
    "id": "w135",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n132",
+    "pin": "then"
    },
    "to": {
-    "node": "n137",
-    "pin": "creature"
+    "node": "n138",
+    "pin": "exec"
    }
   },
   {
@@ -3100,67 +3118,34 @@
     "pin": "out"
    },
    "to": {
-    "node": "n137",
-    "pin": "target"
+    "node": "n139",
+    "pin": "creature"
    }
   },
   {
    "id": "w137",
    "from": {
-    "node": "n136",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n137",
-    "pin": "exec"
+    "node": "n139",
+    "pin": "target"
    }
   },
   {
    "id": "w138",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n138",
+    "pin": "then"
    },
    "to": {
-    "node": "n138",
-    "pin": "creature"
+    "node": "n139",
+    "pin": "exec"
    }
   },
   {
    "id": "w139",
-   "from": {
-    "node": "n137",
-    "pin": "then"
-   },
-   "to": {
-    "node": "n138",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w140",
-   "from": {
-    "node": "ent",
-    "pin": "out"
-   },
-   "to": {
-    "node": "n139",
-    "pin": "creature"
-   }
-  },
-  {
-   "id": "w141",
-   "from": {
-    "node": "n138",
-    "pin": "then"
-   },
-   "to": {
-    "node": "n139",
-    "pin": "exec"
-   }
-  },
-  {
-   "id": "w142",
    "from": {
     "node": "ent",
     "pin": "out"
@@ -3171,7 +3156,18 @@
    }
   },
   {
-   "id": "w143",
+   "id": "w140",
+   "from": {
+    "node": "n139",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n140",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w141",
    "from": {
     "node": "ent",
     "pin": "out"
@@ -3182,161 +3178,172 @@
    }
   },
   {
+   "id": "w142",
+   "from": {
+    "node": "n140",
+    "pin": "then"
+   },
+   "to": {
+    "node": "n141",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w143",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n142",
+    "pin": "creature"
+   }
+  },
+  {
    "id": "w144",
    "from": {
     "node": "ent",
     "pin": "out"
    },
    "to": {
-    "node": "n142",
+    "node": "n143",
     "pin": "creature"
    }
   },
   {
    "id": "w145",
    "from": {
-    "node": "n139",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n142",
-    "pin": "exec"
+    "node": "n144",
+    "pin": "creature"
    }
   },
   {
    "id": "w146",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n141",
+    "pin": "then"
    },
    "to": {
-    "node": "n143",
-    "pin": "creature"
+    "node": "n144",
+    "pin": "exec"
    }
   },
   {
    "id": "w147",
    "from": {
-    "node": "n142",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n143",
-    "pin": "exec"
+    "node": "n145",
+    "pin": "creature"
    }
   },
   {
    "id": "w148",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n144",
+    "pin": "then"
    },
    "to": {
-    "node": "n144",
-    "pin": "creature"
+    "node": "n145",
+    "pin": "exec"
    }
   },
   {
    "id": "w149",
    "from": {
-    "node": "n143",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n144",
-    "pin": "exec"
+    "node": "n146",
+    "pin": "creature"
    }
   },
   {
    "id": "w150",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n145",
+    "pin": "then"
    },
    "to": {
-    "node": "n145",
-    "pin": "creature"
+    "node": "n146",
+    "pin": "exec"
    }
   },
   {
    "id": "w151",
    "from": {
-    "node": "n144",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n145",
-    "pin": "exec"
+    "node": "n147",
+    "pin": "creature"
    }
   },
   {
    "id": "w152",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n146",
+    "pin": "then"
    },
    "to": {
-    "node": "n146",
-    "pin": "creature"
+    "node": "n147",
+    "pin": "exec"
    }
   },
   {
    "id": "w153",
    "from": {
-    "node": "n145",
-    "pin": "then"
+    "node": "ent",
+    "pin": "out"
    },
    "to": {
-    "node": "n146",
-    "pin": "exec"
+    "node": "n148",
+    "pin": "creature"
    }
   },
   {
    "id": "w154",
    "from": {
-    "node": "n146",
+    "node": "n147",
     "pin": "then"
    },
    "to": {
-    "node": "n150",
+    "node": "n148",
     "pin": "exec"
    }
   },
   {
    "id": "w155",
    "from": {
-    "node": "n150",
+    "node": "n148",
     "pin": "then"
    },
    "to": {
-    "node": "n154",
+    "node": "n152",
     "pin": "exec"
    }
   },
   {
    "id": "w156",
    "from": {
-    "node": "ent",
-    "pin": "out"
+    "node": "n152",
+    "pin": "then"
    },
    "to": {
-    "node": "n155",
-    "pin": "in"
+    "node": "n156",
+    "pin": "exec"
    }
   },
   {
    "id": "w157",
-   "from": {
-    "node": "ent",
-    "pin": "out"
-   },
-   "to": {
-    "node": "n156",
-    "pin": "in"
-   }
-  },
-  {
-   "id": "w158",
    "from": {
     "node": "ent",
     "pin": "out"
@@ -3347,14 +3354,25 @@
    }
   },
   {
-   "id": "w159",
+   "id": "w158",
    "from": {
-    "node": "num",
+    "node": "ent",
     "pin": "out"
    },
    "to": {
-    "node": "n148",
-    "pin": "key"
+    "node": "n158",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w159",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n159",
+    "pin": "in"
    }
   },
   {
@@ -3364,7 +3382,18 @@
     "pin": "out"
    },
    "to": {
-    "node": "n151",
+    "node": "n150",
+    "pin": "key"
+   }
+  },
+  {
+   "id": "w161",
+   "from": {
+    "node": "num",
+    "pin": "out"
+   },
+   "to": {
+    "node": "n153",
     "pin": "value"
    }
   }

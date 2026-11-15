@@ -285,7 +285,7 @@ public ls_on_npc_choice(id, npc, choice)
 	return PLUGIN_CONTINUE
 }
 #define LSD_N 97
-new const g_lsdIds[LSD_N][] = { "ps", "tick", "ph", "phx", "ch", "chp", "n0", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n20", "n21", "n22", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n51", "n53", "n55", "n57", "n75", "n76", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n88", "n89", "n90", "n91", "n92", "n93", "n94", "n95", "n99", "n100", "n101", "n102", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n115", "n116", "n117", "n118", "n119", "n120", "n121", "n122", "n123", "n126", "n127", "n128", "n129", "n130", "n136", "n137", "n138", "n139", "n142", "n143", "n144", "n145", "n146", "n147", "n150", "n154" }
+new const g_lsdIds[LSD_N][] = { "ps", "tick", "ph", "phx", "ch", "chp", "n0", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n20", "n21", "n22", "n23", "n25", "n27", "n29", "n31", "n33", "n35", "n37", "n39", "n41", "n43", "n45", "n47", "n49", "n51", "n53", "n55", "n57", "n77", "n78", "n79", "n80", "n81", "n82", "n83", "n84", "n85", "n86", "n87", "n88", "n89", "n90", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n101", "n102", "n103", "n104", "n105", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n114", "n115", "n117", "n118", "n119", "n120", "n121", "n122", "n123", "n124", "n125", "n128", "n129", "n130", "n131", "n132", "n138", "n139", "n140", "n141", "n144", "n145", "n146", "n147", "n148", "n149", "n152", "n156" }
 new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
@@ -1297,6 +1297,35 @@ stock lsg_steam_id(id)
 			s[0] = 0
 	}
 	return s
+}
+
+// the connected player with this Steam ID: case and the universe digit (STEAM_0 / STEAM_1) aside,
+// as the app's roles compare them (only the X:Y after STEAM_n: counts)
+stock lsg_by_steam(const id[])
+{
+	if (!equali(id, "STEAM_", 6) || !id[6] || id[7] != ':')
+		return 0
+	new s[44]
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		get_user_authid(p, s, charsmax(s))
+		if (equali(s, "STEAM_", 6) && s[6] && s[7] == ':' && equali(s[8], id[8]))
+			return p
+	}
+	return 0
+}
+
+// a Loner-Strike supporter: access flag "s" (gm_vip's SUPPORTER_FLAG; the app writes it from the
+// roles sync). Not bots or HLTV, and not the listen-server host, who has every flag
+stock bool:lsg_supporter(id)
+{
+	if (!lsg_ok(id) || is_user_bot(id) || is_user_hltv(id))
+		return false
+	if (id == 1 && !is_dedicated_server())
+		return false
+	return (get_user_flags(id) & ADMIN_LEVEL_G) != 0
 }
 
 stock lsg_by_name(const name[])
@@ -4808,7 +4837,7 @@ lsg_n34(ctx[])
 	lsg_n35(ctx)
 }
 
-// Set Transform (n75)
+// Set Transform (n77)
 lsg_n35(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4824,7 +4853,7 @@ lsg_n35(ctx[])
 	lsg_n36(ctx)
 }
 
-// Set Rotation (n76)
+// Set Rotation (n78)
 lsg_n36(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4842,7 +4871,7 @@ lsg_n36(ctx[])
 	lsg_n37(ctx)
 }
 
-// Look At (n77)
+// Look At (n79)
 lsg_n37(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4858,7 +4887,7 @@ lsg_n37(ctx[])
 	lsg_n38(ctx)
 }
 
-// Slap (n78)
+// Slap (n80)
 lsg_n38(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4876,7 +4905,7 @@ lsg_n38(ctx[])
 	lsg_n39(ctx)
 }
 
-// Screen Fade (n79)
+// Screen Fade (n81)
 lsg_n39(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4892,7 +4921,7 @@ lsg_n39(ctx[])
 	lsg_n40(ctx)
 }
 
-// Screen Shake (n80)
+// Screen Shake (n82)
 lsg_n40(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4908,7 +4937,7 @@ lsg_n40(ctx[])
 	lsg_n41(ctx)
 }
 
-// God Mode (n81)
+// God Mode (n83)
 lsg_n41(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4924,7 +4953,7 @@ lsg_n41(ctx[])
 	lsg_n42(ctx)
 }
 
-// No Clip (n82)
+// No Clip (n84)
 lsg_n42(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4940,7 +4969,7 @@ lsg_n42(ctx[])
 	lsg_n43(ctx)
 }
 
-// Set Visibility (n83)
+// Set Visibility (n85)
 lsg_n43(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4956,7 +4985,7 @@ lsg_n43(ctx[])
 	lsg_n44(ctx)
 }
 
-// Set Ammo (n84)
+// Set Ammo (n86)
 lsg_n44(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4976,7 +5005,7 @@ lsg_n44(ctx[])
 	lsg_n45(ctx)
 }
 
-// Give Ammo (n85)
+// Give Ammo (n87)
 lsg_n45(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -4994,7 +5023,7 @@ lsg_n45(ctx[])
 	lsg_n46(ctx)
 }
 
-// Remove Weapon (n86)
+// Remove Weapon (n88)
 lsg_n46(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -5010,7 +5039,7 @@ lsg_n46(ctx[])
 	lsg_n47(ctx)
 }
 
-// Switch To Weapon (n87)
+// Switch To Weapon (n89)
 lsg_n47(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -5026,7 +5055,7 @@ lsg_n47(ctx[])
 	lsg_n48(ctx)
 }
 
-// Set Kills (n88)
+// Set Kills (n90)
 lsg_n48(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -5044,7 +5073,7 @@ lsg_n48(ctx[])
 	lsg_n49(ctx)
 }
 
-// Set Deaths (n89)
+// Set Deaths (n91)
 lsg_n49(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -5062,7 +5091,7 @@ lsg_n49(ctx[])
 	lsg_n50(ctx)
 }
 
-// Move To Spectators (n90)
+// Move To Spectators (n92)
 lsg_n50(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -5078,7 +5107,7 @@ lsg_n50(ctx[])
 	lsg_n51(ctx)
 }
 
-// Kick (n91)
+// Kick (n93)
 lsg_n51(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -5094,7 +5123,7 @@ lsg_n51(ctx[])
 	lsg_n52(ctx)
 }
 
-// Mute Voice (n92)
+// Mute Voice (n94)
 lsg_n52(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -5110,7 +5139,7 @@ lsg_n52(ctx[])
 	lsg_n53(ctx)
 }
 
-// Gag Chat (n93)
+// Gag Chat (n95)
 lsg_n53(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -5126,7 +5155,7 @@ lsg_n53(ctx[])
 	lsg_n54(ctx)
 }
 
-// Chat To Team (n94)
+// Chat To Team (n96)
 lsg_n54(ctx[])
 {
 	if (lsd_want(54))
@@ -5140,7 +5169,7 @@ lsg_n54(ctx[])
 	lsg_n55(ctx)
 }
 
-// Notify Admins (n95)
+// Notify Admins (n97)
 lsg_n55(ctx[])
 {
 	if (lsd_want(55))
@@ -5154,7 +5183,7 @@ lsg_n55(ctx[])
 	lsg_n56(ctx)
 }
 
-// Spawn Prop (n99)
+// Spawn Prop (n101)
 lsg_n56(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5173,7 +5202,7 @@ lsg_n56(ctx[])
 	lsg_n57(ctx)
 }
 
-// Remove Entity (n100)
+// Remove Entity (n102)
 lsg_n57(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5189,7 +5218,7 @@ lsg_n57(ctx[])
 	lsg_n58(ctx)
 }
 
-// Set Entity Position (n101)
+// Set Entity Position (n103)
 lsg_n58(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5207,7 +5236,7 @@ lsg_n58(ctx[])
 	lsg_n59(ctx)
 }
 
-// Set Entity Rotation (n102)
+// Set Entity Rotation (n104)
 lsg_n59(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5225,7 +5254,7 @@ lsg_n59(ctx[])
 	lsg_n60(ctx)
 }
 
-// Set Entity Visibility (n103)
+// Set Entity Visibility (n105)
 lsg_n60(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5241,7 +5270,7 @@ lsg_n60(ctx[])
 	lsg_n61(ctx)
 }
 
-// Explosion (n104)
+// Explosion (n106)
 lsg_n61(ctx[])
 {
 	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
@@ -5259,7 +5288,7 @@ lsg_n61(ctx[])
 	lsg_n62(ctx)
 }
 
-// Beam (n105)
+// Beam (n107)
 lsg_n62(ctx[])
 {
 	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
@@ -5277,7 +5306,7 @@ lsg_n62(ctx[])
 	lsg_n63(ctx)
 }
 
-// Play Sound At (n106)
+// Play Sound At (n108)
 lsg_n63(ctx[])
 {
 	new lsi0 = lsg_vec(0.0, 0.0, 64.0)
@@ -5293,7 +5322,7 @@ lsg_n63(ctx[])
 	lsg_n64(ctx)
 }
 
-// Play Sound To Player (n107)
+// Play Sound To Player (n109)
 lsg_n64(ctx[])
 {
 	new lsi0 = ctx[0]
@@ -5309,7 +5338,7 @@ lsg_n64(ctx[])
 	lsg_n65(ctx)
 }
 
-// Set Light Style (n108)
+// Set Light Style (n110)
 lsg_n65(ctx[])
 {
 	if (lsd_want(65))
@@ -5323,7 +5352,7 @@ lsg_n65(ctx[])
 	lsg_n66(ctx)
 }
 
-// Status Icon (n109)
+// Status Icon (n111)
 lsg_n66(ctx[])
 {
 	if (lsd_want(66))
@@ -5337,7 +5366,7 @@ lsg_n66(ctx[])
 	lsg_n67(ctx)
 }
 
-// Objective Marker (n110)
+// Objective Marker (n112)
 lsg_n67(ctx[])
 {
 	if (lsd_want(67))
@@ -5355,7 +5384,7 @@ lsg_n67(ctx[])
 	lsg_n68(ctx)
 }
 
-// Remove Marker (n111)
+// Remove Marker (n113)
 lsg_n68(ctx[])
 {
 	if (lsd_want(68))
@@ -5369,7 +5398,7 @@ lsg_n68(ctx[])
 	lsg_n69(ctx)
 }
 
-// Kill Feed Line (n112)
+// Kill Feed Line (n114)
 lsg_n69(ctx[])
 {
 	new lsi1 = ctx[0]
@@ -5389,7 +5418,7 @@ lsg_n69(ctx[])
 	lsg_n70(ctx)
 }
 
-// Call Plugin Function (n113)
+// Call Plugin Function (n115)
 lsg_n70(ctx[])
 {
 	new Float:lsi0 = 0.0
@@ -5412,7 +5441,7 @@ lsg_n70(ctx[])
 	lsg_n71(ctx)
 }
 
-// Fire Custom Event (n115)
+// Fire Custom Event (n117)
 lsg_n71(ctx[])
 {
 	new Float:lsi0 = 0.0
@@ -5430,7 +5459,7 @@ lsg_n71(ctx[])
 	lsg_n80(ctx)
 }
 
-// On Custom Event (n116)
+// On Custom Event (n118)
 lsg_n72(ctx[])
 {
 	if (lsd_want(72))
@@ -5442,7 +5471,7 @@ lsg_n72(ctx[])
 	lsd_exit(72, "ran")
 }
 
-// Player Said (n117)
+// Player Said (n119)
 lsg_n73(ctx[])
 {
 	if (lsd_want(73))
@@ -5454,7 +5483,7 @@ lsg_n73(ctx[])
 	lsd_exit(73, "ran")
 }
 
-// Freeze Time Ended (n118)
+// Freeze Time Ended (n120)
 lsg_n74(ctx[])
 {
 	if (lsd_want(74))
@@ -5466,7 +5495,7 @@ lsg_n74(ctx[])
 	lsd_exit(74, "ran")
 }
 
-// Map Ending (n119)
+// Map Ending (n121)
 lsg_n75(ctx[])
 {
 	if (lsd_want(75))
@@ -5478,7 +5507,7 @@ lsg_n75(ctx[])
 	lsd_exit(75, "ran")
 }
 
-// Weapon Fired (n120)
+// Weapon Fired (n122)
 lsg_n76(ctx[])
 {
 	if (lsd_want(76))
@@ -5490,7 +5519,7 @@ lsg_n76(ctx[])
 	lsd_exit(76, "ran")
 }
 
-// Reloaded (n121)
+// Reloaded (n123)
 lsg_n77(ctx[])
 {
 	if (lsd_want(77))
@@ -5502,7 +5531,7 @@ lsg_n77(ctx[])
 	lsd_exit(77, "ran")
 }
 
-// Hostage Rescued (n122)
+// Hostage Rescued (n124)
 lsg_n78(ctx[])
 {
 	if (lsd_want(78))
@@ -5514,7 +5543,7 @@ lsg_n78(ctx[])
 	lsd_exit(78, "ran")
 }
 
-// VIP Escaped (n123)
+// VIP Escaped (n125)
 lsg_n79(ctx[])
 {
 	if (lsd_want(79))
@@ -5526,7 +5555,7 @@ lsg_n79(ctx[])
 	lsd_exit(79, "ran")
 }
 
-// Revive Pay (n126)
+// Revive Pay (n128)
 lsg_n80(ctx[])
 {
 	new Float:lsi0 = 150.0
@@ -5547,7 +5576,7 @@ lsg_n80(ctx[])
 	lsg_n81(ctx)
 }
 
-// Set Timer by Event (n127)
+// Set Timer by Event (n129)
 lsg_n81(ctx[])
 {
 	new Float:lsi0 = 5.0
@@ -5571,7 +5600,7 @@ public lsg_te81()
 	lsg_ce1()
 }
 
-// Custom Event (n128)
+// Custom Event (n130)
 lsg_n82(ctx[])
 {
 	if (lsd_want(82))
@@ -5583,7 +5612,7 @@ lsg_n82(ctx[])
 	lsd_exit(82, "called")
 }
 
-// Call Custom Event (n129)
+// Call Custom Event (n131)
 lsg_n83(ctx[])
 {
 	if (lsd_want(83))
@@ -5597,7 +5626,7 @@ lsg_n83(ctx[])
 	lsg_n84(ctx)
 }
 
-// For Each Creature (n130)
+// For Each Creature (n132)
 lsg_n84(ctx[])
 {
 	if (lsd_want(84))
@@ -5621,7 +5650,7 @@ lsg_n84(ctx[])
 	lsg_n85(ctx)
 }
 
-// Creature Go To (n136)
+// Creature Go To (n138)
 lsg_n85(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5637,7 +5666,7 @@ lsg_n85(ctx[])
 	lsg_n86(ctx)
 }
 
-// Creature Attack (n137)
+// Creature Attack (n139)
 lsg_n86(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5655,7 +5684,7 @@ lsg_n86(ctx[])
 	lsg_n87(ctx)
 }
 
-// Creature Hold (n138)
+// Creature Hold (n140)
 lsg_n87(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5671,7 +5700,7 @@ lsg_n87(ctx[])
 	lsg_n88(ctx)
 }
 
-// Creature Resume AI (n139)
+// Creature Resume AI (n141)
 lsg_n88(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5687,7 +5716,7 @@ lsg_n88(ctx[])
 	lsg_n89(ctx)
 }
 
-// Set Creature Speed (n142)
+// Set Creature Speed (n144)
 lsg_n89(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5705,7 +5734,7 @@ lsg_n89(ctx[])
 	lsg_n90(ctx)
 }
 
-// Set Creature Tier (n143)
+// Set Creature Tier (n145)
 lsg_n90(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5723,7 +5752,7 @@ lsg_n90(ctx[])
 	lsg_n91(ctx)
 }
 
-// Creature Flee To (n144)
+// Creature Flee To (n146)
 lsg_n91(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5739,7 +5768,7 @@ lsg_n91(ctx[])
 	lsg_n92(ctx)
 }
 
-// Set Creature Health (n145)
+// Set Creature Health (n147)
 lsg_n92(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5757,7 +5786,7 @@ lsg_n92(ctx[])
 	lsg_n93(ctx)
 }
 
-// Remove Creature (n146)
+// Remove Creature (n148)
 lsg_n93(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
@@ -5773,7 +5802,7 @@ lsg_n93(ctx[])
 	lsg_n95(ctx)
 }
 
-// Creature Idle (n147)
+// Creature Idle (n149)
 lsg_n94(ctx[])
 {
 	if (lsd_want(94))
@@ -5785,7 +5814,7 @@ lsg_n94(ctx[])
 	lsd_exit(94, "ran")
 }
 
-// For Each Row (n150)
+// For Each Row (n152)
 lsg_n95(ctx[])
 {
 	if (lsd_want(95))
@@ -5812,7 +5841,7 @@ lsg_n95(ctx[])
 	lsg_n96(ctx)
 }
 
-// Timeline (n154)
+// Timeline (n156)
 stock lsg_n96(ctx[])
 {
 	if (lsd_want(96))

@@ -9052,6 +9052,67 @@
    "pure": true
   },
   {
+   "type": "player.by_steam",
+   "title": "Player By Steam ID",
+   "category": "Players",
+   "help": "The connected player with this Steam ID (STEAM_0:1:2345, as Steam ID gives it), or none; Found says which. Case and the STEAM_0 / STEAM_1 digit don't matter (the same player either way). Bots and LAN players have no Steam ID.",
+   "inputs": [
+    {
+     "id": "id",
+     "type": "text",
+     "label": "Steam ID",
+     "param": "id"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "player",
+     "label": "Player"
+    },
+    {
+     "id": "found",
+     "type": "bool",
+     "label": "Found"
+    }
+   ],
+   "params": [
+    {
+     "id": "id",
+     "label": "Steam ID",
+     "kind": "text",
+     "default": "STEAM_0:1:2345",
+     "max": 40
+    }
+   ],
+   "keywords": "authid id steamid find lookup",
+   "pure": true
+  },
+  {
+   "type": "player.is_supporter",
+   "title": "Is Supporter",
+   "category": "Players",
+   "help": "Has the player the Loner-Strike supporter role (from the Loner-Strike Discord, kept in sync by the app: access flag s)? Not the same as Is VIP (a reserved slot on this server). Bots: no.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Supporter"
+    }
+   ],
+   "params": [],
+   "keywords": "supporter role patron donor discord",
+   "pure": true
+  },
+  {
    "type": "player.by_name",
    "title": "Player By Name",
    "category": "Players",
