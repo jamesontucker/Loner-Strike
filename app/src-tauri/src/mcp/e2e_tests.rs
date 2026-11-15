@@ -362,6 +362,10 @@ async fn an_agent_builds_a_mode_with_the_new_nodes_and_types() {
     ]})).await;
     let bad: Vec<&Value> = r["results"].as_array().unwrap().iter().filter(|x| x["ok"] == false).collect();
     assert!(bad.is_empty(), "{bad:#?}");
+    // (Spawn Projectile has a comfort limit: the agent's add_node brought its Limits setting, once)
+    let d = ag.call("studio_draft", json!({"id": "agent_types"})).await;
+    let lims = d.to_string().matches("lim_projectiles").count();
+    assert!(lims >= 1, "the Limits setting came with Spawn Projectile: {d}");
     let errors: Vec<&Value> = r["problems"].as_array().unwrap().iter().filter(|p| p["level"] == "error").collect();
     assert!(errors.is_empty(), "{errors:#?}");
     let code = ag.call("studio_code", json!({"id": "agent_types", "draft": true})).await;

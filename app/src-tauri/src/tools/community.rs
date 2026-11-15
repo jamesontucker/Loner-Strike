@@ -326,10 +326,6 @@ impl ModeNeeds {
         self.features.truncate(12);
     }
 
-    pub fn is_empty(&self) -> bool {
-        !self.components_plugin && self.components.is_empty() && self.creatures.is_empty() && self.features.is_empty()
-    }
-
     /// The lines a README and the GameBanana description say (none when it needs nothing).
     pub fn lines(&self) -> Vec<String> {
         let mut out = vec![];
@@ -2104,7 +2100,14 @@ pub fn build_package(m: &MapFile, r: &Readiness, req: &PublishReq, out_dir: &Pat
         contents,
         screenshots: shot_names,
         item,
-        warnings: r.warnings.clone(),
+        warnings: {
+            let mut w = r.warnings.clone();
+            // (the editable source: textures it uses that no texture file here has)
+            if let Some(s) = source.as_ref().filter(|s| !s.missing.is_empty()) {
+                w.push(format!("The editable source uses {} texture{} that aren't in any texture file here ({}): a remix shows {} as a checkerboard.", s.missing.len(), if s.missing.len() == 1 { "" } else { "s" }, s.missing.iter().take(5).cloned().collect::<Vec<_>>().join(", "), if s.missing.len() == 1 { "it" } else { "them" }));
+            }
+            w
+        },
     };
     // kept for registering later
     let _ = std::fs::write(out_dir.join(format!("{stem}.json")), serde_json::to_vec_pretty(&pkg).unwrap_or_default());

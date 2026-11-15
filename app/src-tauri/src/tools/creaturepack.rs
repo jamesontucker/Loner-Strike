@@ -96,16 +96,6 @@ pub fn display_name(shared: &str) -> (String, Option<i64>) {
     }
 }
 
-/// A GameBanana member id from what someone typed: the id, or their profile link
-/// (gamebanana.com/members/123456).
-pub fn member_from_link(s: &str) -> Option<i64> {
-    let t = s.trim().trim_end_matches('/');
-    let last = t.rsplit('/').next().unwrap_or(t);
-    let id: i64 = last.parse().ok()?;
-    let ok = t == last || t.contains("gamebanana.com/members/");
-    (ok && namespace_of(id).is_some()).then_some(id)
-}
-
 /// `<author>.<type>`. The author part is always the whole namespace (installs check it against
 /// who uploaded the package); a type name too long to fit is cut instead.
 pub fn shared_name(slug: &str, name: &str) -> Result<String, String> {
@@ -196,16 +186,6 @@ pub fn types_in_graph(g: &super::studio::graph::Graph) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for n in &g.nodes {
         node_types(&n.kind, &n.params, &mut out);
-    }
-    out
-}
-
-/// The same on a graph's JSON (a package's graph file).
-pub fn types_in_graph_json(v: &Value) -> BTreeSet<String> {
-    let mut out = BTreeSet::new();
-    for n in v["nodes"].as_array().into_iter().flatten() {
-        let params: BTreeMap<String, Value> = n["params"].as_object().map(|m| m.iter().map(|(k, v)| (k.clone(), v.clone())).collect()).unwrap_or_default();
-        node_types(n["type"].as_str().unwrap_or(""), &params, &mut out);
     }
     out
 }
@@ -358,26 +338,6 @@ pub fn types_in_entity_text(text: &str) -> BTreeSet<String> {
     out
 }
 
-/// The same on parsed entities.
-pub fn types_in_entities<'a>(ents: impl IntoIterator<Item = &'a crate::goldsrc::entities::Entity>) -> BTreeSet<String> {
-    let keys = fgd_type_keys();
-    let mut out = BTreeSet::new();
-    for e in ents {
-        let class = e.classname();
-        for (c, k, list) in keys.iter().filter(|(c, _, _)| c == class) {
-            let _ = c;
-            if let Some(v) = e.get(k) {
-                for (n, w) in v.split_whitespace().enumerate() {
-                    if *list || n == 0 {
-                        add(&mut out, w);
-                    }
-                }
-            }
-        }
-    }
-    out
-}
-
 /// Renames creature types in an entity text (only the type-bearing keys).
 pub fn rewrite_entity_text(text: &str, renames: &BTreeMap<String, String>) -> String {
     let mut s = text.to_string();
@@ -428,22 +388,6 @@ pub fn types_for_mode(g: &super::studio::graph::Graph, game_dir: Option<&Path>) 
         t.extend(types_in_wave_sections(&text, &secs));
     }
     t.into_iter().collect()
-}
-
-/// Every type a waves.ini's rows and bosses name.
-pub fn types_in_waves(text: &str) -> BTreeSet<String> {
-    let mut out = BTreeSet::new();
-    for w in creatures::parse_waves(text) {
-        add(&mut out, &w.boss);
-        for r in &w.rows {
-            for (t, n) in &r.mix {
-                if *n > 0 {
-                    add(&mut out, t);
-                }
-            }
-        }
-    }
-    out
 }
 
 /// The `base =` chain behind a type in a creatures.ini: its base, that one's base, ... (the last
@@ -1896,7 +1840,6 @@ mod tests {
             {"id": "g", "type": "msg.hud", "params": {"text": "runner_x"}}
         ]});
         let want: BTreeSet<String> = ["runner_x", "zombie", "my_turret", "brute", "loner"].iter().map(|s| s.to_string()).collect();
-        assert_eq!(types_in_graph_json(&g), want);
         let graph: super::super::studio::graph::Graph = serde_json::from_value(serde_json::json!({"schema": "x", "version": 1, "mode": {"id": "m", "name": "M"}, "nodes": g["nodes"]})).unwrap();
         assert_eq!(types_in_graph(&graph), want);
 
@@ -1904,13 +1847,11 @@ mod tests {
         let ents = "{\n\"classname\" \"worldspawn\"\n}\n{\n\"type\" \"runner_x\"\n\"classname\" \"ls_creature\"\n}\n{\n\"classname\" \"ls_wave_spawner\"\n\"types\" \"loner brute\"\n}\n{\n\"classname\" \"info_target\"\n\"type\" \"not_a_creature\"\n}\n";
         let set: Vec<String> = types_in_entity_text(ents).into_iter().collect();
         assert_eq!(set, vec!["brute", "loner", "runner_x"]);
-        let parsed = crate::goldsrc::entities::parse(ents);
-        assert_eq!(types_in_entities(&parsed).into_iter().collect::<Vec<_>>(), set);
         let map = "// prefab\n{\n\"classname\" \"ls_creature\"\n\"type\" \"loner\"\n{\n( 0 0 0 ) ( 1 0 0 ) ( 0 1 0 ) AAATRIGGER [ 1 0 0 0 ] [ 0 1 0 0 ] 0 1 1\n}\n}\n";
         assert_eq!(types_in_entity_text(map).into_iter().collect::<Vec<_>>(), vec!["loner"]);
 
         let waves = "[laststand]\nboss = big_one\nwave 1 = zombie 10 runner_x 5 off 0\n";
-        assert_eq!(types_in_waves(waves).into_iter().collect::<Vec<_>>(), vec!["big_one", "runner_x", "zombie"]);
+        assert_eq!(types_in_wave_sections(waves, &["laststand".to_string()]).into_iter().collect::<Vec<_>>(), vec!["big_one", "runner_x", "zombie"]);
 
         assert_eq!(base_chain(INI, "runner_x"), vec!["tough_base", "brute"]);
         assert_eq!(base_chain(INI, "loner"), vec!["zombie"]);
@@ -1928,10 +1869,6 @@ mod tests {
         }
         assert_eq!(display_name("gb123456.runner_x"), ("runner_x".to_string(), Some(123456)));
         assert_eq!(display_name("runner_x"), ("runner_x".to_string(), None));
-        assert_eq!(member_from_link("https://gamebanana.com/members/123456/"), Some(123456));
-        assert_eq!(member_from_link(" 98765 "), Some(98765));
-        assert_eq!(member_from_link("https://evil.example/members/1"), None);
-        assert_eq!(member_from_link("abc"), None);
         assert!(is_shared_name("gb123456.runner_x"));
         assert_eq!(shared_name("gb11", "runner_x").unwrap(), "gb11.runner_x");
         assert_eq!(shared_name("gb123456789", "a_rather_long_name_with_more").unwrap(), "gb123456789.a_rather_long_name", "the type is cut, never the id");

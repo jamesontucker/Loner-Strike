@@ -3236,7 +3236,6 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         "cast.player" | "cast.creature" | "cast.npc" | "cast.projectile" | "cast.volume" | "cast.objmarker" | "cast.component" => {
             let e = inp("in", "entity");
             let k = gen.out_index(id, "out");
-            let player = def.kind == "cast.player";
             let cls = |c: &str| format!("lsgE > MaxClients && pev_valid(lsgE) && lsg_cls_is(lsgE, \"{c}\")");
             let test = match def.kind.as_str() {
                 "cast.player" => "lsgE >= 1 && lsgE <= MaxClients && is_user_connected(lsgE)".to_string(),

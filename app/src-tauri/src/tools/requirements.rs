@@ -341,12 +341,6 @@ fn maps_in(game_dir: &Path) -> Vec<String> {
     v
 }
 
-/// The custom creature types (not built in) among a mode's names. They travel in its package
-/// (creaturepack), named for who made it.
-pub fn custom_creatures(names: &[String]) -> Vec<String> {
-    names.iter().filter(|n| *n != "all" && !["controller", "stukabat"].contains(&n.as_str()) && crate::tools::creatures::builtin(n).is_none()).cloned().collect()
-}
-
 /// Everything about a mode's requirements on this computer.
 pub fn report(st: &Shared, id: &str) -> Result<Value, String> {
     let dir = crate::tools::studio::graphs_dir();
@@ -420,9 +414,9 @@ mod tests {
 
     #[test]
     fn custom_creatures_are_packed_not_warned_about() {
+        // (which ones travel is creaturepack's: has_custom / is_builtin, tested there)
         let names = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert!(custom_creatures(&names(&["zombie", "all", "gonarch", "controller"])).is_empty());
-        assert_eq!(custom_creatures(&names(&["zombie", "qa_runner_"])), vec!["qa_runner_"]);
+        assert!(!crate::tools::creaturepack::has_custom(&names(&["zombie", "gonarch"])) && crate::tools::creaturepack::has_custom(&names(&["zombie", "qa_runner_"])));
         let gr = g(&[("creature.spawn", "kind", "qa_runner_")]);
         let v = answer(&gr, &Default::default(), &Here { game_dir: None, stock: &|_: &str| false, community: &Default::default(), maps_here: &[] });
         assert!(!v["warnings"].as_array().unwrap().iter().any(|x| x.as_str().is_some_and(|s| s.contains("aren't included"))), "{v}");

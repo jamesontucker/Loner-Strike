@@ -84,6 +84,10 @@ pub fn prepare(name: &str, bytes: Vec<u8>, opts: SoundOpts) -> Result<Prepared, 
     }
     // (a WAV that already is what was asked for stays exactly as it is)
     if let Some(w) = &wav {
+        // (the engine loads a sound whole: a WAV that's already right is still held to the length)
+        if w.rate > 0 && w.frames as f64 > MAX_SECONDS * w.rate as f64 {
+            return Err(format!("{file} is longer than {} seconds", MAX_SECONDS as u32));
+        }
         if w.format == 1 && w.bits == opts.bits as u16 && w.rate == opts.rate && (w.channels == 1 || (w.channels == 2 && opts.stereo)) && !opts.trim {
             return Ok(Prepared { name: out_name, bytes, summary: None });
         }
@@ -626,6 +630,35 @@ mod tests {
         b.extend_from_slice(&claimed_bytes.to_le_bytes());
         b.extend(std::iter::repeat_n(0u8, 4096));
         b
+    }
+
+    /// A WAV that's already what was asked for passes as it is, but still no longer than the
+    /// engine takes (it loads a sound whole): the length is its frames at its rate.
+    #[test]
+    fn a_ready_wav_is_still_held_to_the_length() {
+        let wav = |secs: u32| {
+            let (rate, n) = (11025u32, 11025 * secs);
+            let mut b = Vec::new();
+            b.extend_from_slice(b"RIFF");
+            b.extend_from_slice(&(36 + n).to_le_bytes());
+            b.extend_from_slice(b"WAVEfmt ");
+            b.extend_from_slice(&16u32.to_le_bytes());
+            b.extend_from_slice(&1u16.to_le_bytes());
+            b.extend_from_slice(&1u16.to_le_bytes());
+            b.extend_from_slice(&rate.to_le_bytes());
+            b.extend_from_slice(&rate.to_le_bytes());
+            b.extend_from_slice(&1u16.to_le_bytes());
+            b.extend_from_slice(&8u16.to_le_bytes());
+            b.extend_from_slice(b"data");
+            b.extend_from_slice(&n.to_le_bytes());
+            b.extend(std::iter::repeat_n(128u8, n as usize));
+            b
+        };
+        let opts = SoundOpts { rate: 11025, bits: 8, stereo: false, trim: false };
+        let ok = prepare("short.wav", wav(2), opts).unwrap();
+        assert!(ok.summary.is_none(), "already right: kept as it is");
+        let e = prepare("long.wav", wav(301), opts).unwrap_err();
+        assert!(e.contains("longer than 300 seconds"), "{e}");
     }
 
     /// Decoding stops at the limits, before a small file can grow: an hour claimed at a low

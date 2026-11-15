@@ -215,6 +215,14 @@ fn add_node(g: &mut Value, kind: &str, x: f64, y: f64, params: Option<&Value>, h
         n["graph"] = json!(h);
     }
     arr(g, "nodes").push(n);
+    // (a node with a comfort limit brings its Limits setting once, as the Studio's Add node does:
+    // limits.rs, graphOps.ts withLimitVars)
+    for l in crate::tools::studio::limits::LIMITS.iter().filter(|l| l.kinds.contains(&kind)) {
+        let want = crate::tools::studio::limits::var_id(l.id);
+        if !g["variables"].as_array().is_some_and(|vs| vs.iter().any(|v| v["id"] == want.as_str())) {
+            arr(g, "variables").push(crate::tools::studio::limits::var_json(l));
+        }
+    }
     Ok(id)
 }
 

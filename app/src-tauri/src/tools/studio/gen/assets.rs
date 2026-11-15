@@ -48,7 +48,7 @@ fn decals_used(g: &Graph) -> bool {
         || g.nodes.iter().filter(|n| n.kind == "fx.decal").any(|n| g.edges.iter().any(|e| e.to.node == n.id && e.to.pin == "decal"))
 }
 /// Place Decal with a Decal value wired in: a name of that kind, picked at random, into `out`.
-pub(crate) fn decal_wired(gen: &Gen, node: &str) -> Option<String> {
+pub(super) fn decal_wired(gen: &Gen, node: &str) -> Option<String> {
     gen.v.data_source(node, "decal")?;
     Some(format!("lsg_decal_pick({}, lsgDn, charsmax(lsgDn))", gen.need(node, "decal", "decal")))
 }
@@ -85,7 +85,7 @@ pub(crate) const TYPED: [(&str, &str, &str, bool); 16] = [
 
 /// A typed file setting's value in the plugin: the wired file's path (the table's row), or
 /// `lit` (the setting's literal, as before) when nothing is wired in.
-pub(crate) fn path_or(gen: &Gen, node: &str, prm: &str, lit: String) -> String {
+pub(super) fn path_or(gen: &Gen, node: &str, prm: &str, lit: String) -> String {
     if gen.v.data_source(node, prm).is_none() {
         return lit;
     }

@@ -1872,7 +1872,7 @@ mod tests {
             if to >= 1 { per[to] += cost; }
             true
         };
-        let mut state = |q: &mut Vec<(&'static str, i32, i32, usize)>, n: &mut i32, per: &mut [i32; 33], sent: &mut Vec<(&'static str, i32)>, f: &'static str, key: i32, cost: i32, to: usize| {
+        let state = |q: &mut Vec<(&'static str, i32, i32, usize)>, n: &mut i32, per: &mut [i32; 33], sent: &mut Vec<(&'static str, i32)>, f: &'static str, key: i32, cost: i32, to: usize| {
             if q.is_empty() && fits(n, per, cost, to) { sent.push((f, key)); return; }
             if !q.iter().any(|e| e.0 == f && e.1 == key) { q.push((f, key, cost, to)); }
         };
