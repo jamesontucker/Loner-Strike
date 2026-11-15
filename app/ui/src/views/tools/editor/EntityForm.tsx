@@ -28,6 +28,8 @@ function keyAssetKind(key: string, value: string, fgdType?: string): AssetKind |
 import { creatureDef, loadCreatures, loadKits, markerDef, useKits } from "./kits"; // P5: kit markers, creature types
 import { deleteSelection, duplicate } from "./Panels";
 import { keyOf, originOf, selectionBounds, useEditor } from "./store";
+import { openInspectMenu } from "./InspectMenu"; // right-click Copy / Paste
+import { keyItems, propItems } from "./inspectMenus";
 
 const KEY_HELP: Record<string, string> = {
   targetname: "This entity's name, so others can set it off.",
@@ -96,7 +98,7 @@ function KeyField({ e, k, v, all }: { e: DocEntity; k: string; v: string; all: s
   // P5: a file dragged from the Content Browser onto the field
   const drop = useAssetDrop(keyAssetKind(k, text), (nv) => (setText(nv), commit(nv)));
   return (
-    <div className={`editor-key${drop.hot ? " p5-drop-hot" : ""}`} {...drop.props}>
+    <div className={`editor-key${drop.hot ? " p5-drop-hot" : ""}`} {...drop.props} onContextMenu={(ev) => openInspectMenu(ev, keyItems(k, v))}>
       <span className="editor-key-name" title={KEY_HELP[k] ?? k}>
         {k}
       </span>
@@ -281,7 +283,7 @@ function DefField({ e, def, value, all }: { e: DocEntity; def: FgdKey; value: st
     );
   }
   return (
-    <div className={`editor-key editor-def${drop.hot ? " p5-drop-hot" : ""}`} {...drop.props}>
+    <div className={`editor-key editor-def${drop.hot ? " p5-drop-hot" : ""}`} {...drop.props} onContextMenu={(ev) => openInspectMenu(ev, keyItems(def.name, value ?? ""))}>
       {label}
       <div className="editor-key-value">
         {control}
@@ -346,7 +348,9 @@ export function EntityForm({ e }: { e: DocEntity }) {
   };
   return (
     <section className="tools-panel">
-      <h3>{e.classname}</h3>
+      <h3 onContextMenu={(ev) => openInspectMenu(ev, propItems())} title="Right-click: Copy / Paste properties">
+        {e.classname}
+      </h3>
       <p className="small-note muted">
         {def?.description ? `${def.description} ` : ""}
         {e.brushes.length ? `${e.brushes.length} brush${e.brushes.length === 1 ? "" : "es"}.` : o ? `At ${fmt(o)}.` : "No origin."}

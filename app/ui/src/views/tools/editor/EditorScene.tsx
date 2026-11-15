@@ -28,6 +28,7 @@ import { PaneBoxes } from "./Layout";
 import { paneCount, PaneCtx, usePaneActive, usePanes, usePaneView } from "./panes";
 import { useP5 } from "./p5store";
 import { duplicateWith } from "./commands";
+import { useKeySet } from "./Shortcuts"; // (Alt-drag copies with the Loner-Strike keys)
 import { shiftHeld, snapToGeometry } from "./snapGeo";
 import { edgeLook, flatMaterial, usePaneMode } from "./renderModes";
 import { PickedOverlay, SharedBrushes } from "./SharedBrushes"; // Parity A: shared brush buffers
@@ -449,6 +450,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
   const tool = useEditor((s) => s.tool);
   const view = usePaneView(); // P5: this pane's view
   const active = usePaneActive(); // P5: only the active pane answers clip keys
+  const gameView = useP5((s) => s.gameView); // G: the helpers hidden
   const axis = viewAxis(view);
   const [box, setBox] = useState<{ a: Vec3; b: Vec3 } | null>(null);
   const [rect, setRect] = useState<{ a: Vec3; b: Vec3 } | null>(null);
@@ -957,9 +959,9 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
     <group onPointerDown={onDown} onPointerMove={onMove}>
       <BrushesWithMats />
       <Entities />
-      <Links />
-      <EffectPreviews />
-      <StockPreviews />
+      {!gameView && <Links />}
+      {!gameView && <EffectPreviews />}
+      {!gameView && <StockPreviews />}
       <mesh rotation={planeRot} userData={{ kind: "plane" }} renderOrder={-1}>
         <planeGeometry args={[span, span]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
@@ -1129,7 +1131,9 @@ function Gizmo({ pivot }: { pivot: React.MutableRefObject<THREE.Group | null> })
   const sel = useEditor((s) => s.sel);
   const brushes = useEditor((s) => s.brushes);
   const doc = useEditor((s) => s.doc);
-  const alt = useEditor((s) => s.alt);
+  const altNow = useEditor((s) => s.alt);
+  const altCopy = useEditor((s) => s.altCopy);
+  const alt = altNow && !altCopy; // (an Alt-drag copy keeps the snapping)
   const grid = useEditor((s) => s.grid);
   const [ready, setReady] = useState<THREE.Group | null>(null);
   const start = useRef<{ pos: THREE.Vector3; q: THREE.Quaternion; s: THREE.Vector3; centre: Vec3 } | null>(null);
@@ -1164,8 +1168,11 @@ function Gizmo({ pivot }: { pivot: React.MutableRefObject<THREE.Group | null> })
           onMouseDown={() => {
             const p = pivot.current!;
             dragging.current = true;
-            // P5: Shift-drag copies: the copies move, the originals stay
-            copyKey.current = shiftHeld() ? `copy-${Date.now()}` : null;
+            // P5: Shift-drag copies: the copies move, the originals stay. With the Loner-Strike
+            // keys Alt-drag does too, as in Unreal (Hammer and TrenchBroom keep Alt for "no snap")
+            const viaAlt = !shiftHeld() && useEditor.getState().alt && useKeySet.getState().preset === "loner";
+            if (viaAlt) useEditor.setState({ altCopy: true });
+            copyKey.current = shiftHeld() || viaAlt ? `copy-${Date.now()}` : null;
             copying.current = copyKey.current ? duplicateWith([0, 0, 0], copyKey.current) : null;
             start.current = { pos: p.position.clone(), q: p.quaternion.clone(), s: p.scale.clone(), centre };
           }}
@@ -1186,6 +1193,7 @@ function Gizmo({ pivot }: { pivot: React.MutableRefObject<THREE.Group | null> })
             const p = pivot.current;
             const st = start.current;
             dragging.current = false;
+            if (useEditor.getState().altCopy) useEditor.setState({ altCopy: false });
             if (copying.current) await copying.current; // P5
             copying.current = null;
             const merge = copyKey.current ? { merge: copyKey.current } : {}; // P5: one "Copy" step with the copy
@@ -1375,7 +1383,8 @@ export function EditorScene({ bounds, docId, onLost }: { bounds: [Vec3, Vec3]; d
 /** P5: one pane's scene: its own lights, grid, camera, tools and gizmo. */
 function PaneScene({ view, bounds }: { view: ViewId; bounds: [Vec3, Vec3] }) {
   const grid = useEditor((s) => s.grid);
-  const showGrid = useP5((s) => s.showGrid);
+  const gameView = useP5((s) => s.gameView);
+  const showGrid = useP5((s) => s.showGrid) && !gameView;
   const gridMajor = useP5((s) => s.gridMajor);
   const pivot = useRef<THREE.Group | null>(null);
   return (
@@ -1384,8 +1393,8 @@ function PaneScene({ view, bounds }: { view: ViewId; bounds: [Vec3, Vec3] }) {
       <hemisphereLight args={["#ffffff", "#5a5f50", 0.95]} />
       <directionalLight position={[0.4, 1, 0.25]} intensity={1.5} />
       {showGrid && (view === "3d" ? <GridFor view={view} grid={grid} bounds={bounds} /> : <FlatGrid view={view} grid={grid} major={gridMajor} bounds={bounds} />) /* Parity A: the flat views' grid follows the zoom */}
-      {view !== "3d" && <Crosshair view={view} />}
-      {view !== "3d" && <FlatHandles view={view} /> /* Parity A: Hammer's 8 handles */}
+      {view !== "3d" && !gameView && <Crosshair view={view} />}
+      {view !== "3d" && !gameView && <FlatHandles view={view} /> /* Parity A: Hammer's 8 handles */}
       <group rotation={ROOT_ROTATION}>
         <ToolLayer bounds={bounds} />
         {/* what the gizmo moves: in GoldSrc units like everything in here */}

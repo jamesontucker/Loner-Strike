@@ -18,6 +18,8 @@ import { FaceSheet, RecentTextures } from "./FaceSheet";
 import { EntityForm } from "./EntityForm";
 import { MultiEntityKeys } from "./MultiEntityKeys"; // P5
 import { BrushFacts, TransformSection } from "./InspectParts"; // P5
+import { InspectMenu, openInspectMenu } from "./InspectMenu"; // right-click Copy / Paste
+import { propItems } from "./inspectMenus";
 import { ArchStart } from "./P5Dialogs"; // P5
 import { TEXTURE_MIME } from "./P4Scene"; // P5: textures drag onto faces
 import { useP5 } from "./p5store"; // P5
@@ -273,10 +275,13 @@ const fmt = (v: Vec3) => v.map((x) => Math.round(x)).join(" ");
 export function Inspector() {
   const sel = useEditor((s) => s.sel);
   const ent = useSelectedEntity();
-  if (sel.face && !sel.brushes.length && !sel.entities.length) return <FaceSheet />;
-  if (ent) return <EntityForm e={ent} />;
-  if (sel.brushes.length || sel.entities.length) return <SelectionPanel />;
-  return <MapPanel />;
+  const body = sel.face && !sel.brushes.length && !sel.entities.length ? <FaceSheet /> : ent ? <EntityForm e={ent} /> : sel.brushes.length || sel.entities.length ? <SelectionPanel /> : <MapPanel />;
+  return (
+    <>
+      {body}
+      <InspectMenu />
+    </>
+  );
 }
 
 function SelectionPanel() {
@@ -303,7 +308,7 @@ function SelectionPanel() {
   };
   return (
     <section className="tools-panel">
-      <h3>
+      <h3 onContextMenu={(ev) => (sel.entities.length ? openInspectMenu(ev, propItems()) : undefined)}>
         {n ? `${n} brush${n === 1 ? "" : "es"}` : ""}
         {n && sel.entities.length ? " and " : ""}
         {sel.entities.length ? `${sel.entities.length} entit${sel.entities.length === 1 ? "y" : "ies"}` : ""}

@@ -714,6 +714,57 @@ pub fn cmd_set_key_many(doc: &mut MapDocument, h: &mut History, entities: &[Enti
     Ok(n)
 }
 
+/// Several keys on several entities as one undo step (the Inspector's Paste): each (entity, key,
+/// value); an empty value removes the key. `merge`: a key that joins it to the step before
+/// (a paste that also moves). Returns how many entities changed.
+pub fn cmd_set_keys(doc: &mut MapDocument, h: &mut History, sets: &[(EntityId, String, String)], label: &str, merge: Option<&str>) -> OpResult<usize> {
+    if sets.is_empty() {
+        return Err("Nothing to paste.".into());
+    }
+    if sets.len() > 4096 {
+        return Err("That's too many keys at once.".into());
+    }
+    let mut work: std::collections::BTreeMap<EntityId, Entity> = std::collections::BTreeMap::new();
+    for (id, key, value) in sets {
+        let key = key.trim();
+        if key.is_empty() || key.len() > 63 || key.contains(['"', '\n', '\r']) || key.contains(char::is_whitespace) {
+            return Err("A key is 1 to 63 characters, without spaces or quotes.".into());
+        }
+        if value.len() > 1023 || value.contains(['"', '\n', '\r']) {
+            return Err("A value is at most 1023 characters, without quotes or line breaks.".into());
+        }
+        if key == "classname" {
+            return Err("Paste doesn't change what an entity is (its classname).".into());
+        }
+        let e = match work.get_mut(id) {
+            Some(e) => e,
+            None => {
+                let e = doc.entities.get(id).cloned().ok_or("That entity no longer exists.")?;
+                work.entry(*id).or_insert(e)
+            }
+        };
+        if value.is_empty() {
+            e.remove(key);
+        } else {
+            e.set(key, value);
+        }
+    }
+    let changed: Vec<(EntityId, Entity)> = work.into_iter().filter(|(id, e)| doc.entities.get(id) != Some(e)).collect();
+    if changed.is_empty() {
+        return Ok(0);
+    }
+    let n = changed.len();
+    let mut tx = Tx::new(doc, label);
+    if let Some(k) = merge.filter(|k| !k.is_empty() && k.len() <= 64) {
+        tx = tx.merge_key(k);
+    }
+    for (id, e) in changed {
+        tx.set_entity(id, e);
+    }
+    tx.commit(h);
+    Ok(n)
+}
+
 // ---- groups (outliner) ----------------------------------------------------------------
 
 pub fn cmd_rename_group(doc: &mut MapDocument, h: &mut History, id: GroupId, name: &str) -> OpResult<()> {
@@ -1027,6 +1078,27 @@ mod tests {
         assert_eq!(d.brushes[&bs[2]].group, None);
         h.undo(&mut d);
         assert_eq!(d.brushes[&bs[2]].group, Some(g));
+    }
+
+    /// The Inspector's Paste: several keys on several entities, one undo step; a merge key joins
+    /// it to the step before; a classname is never pasted.
+    #[test]
+    fn paste_keys_is_one_step() {
+        let (mut d, _, es) = sample();
+        let mut h = History::default();
+        let sets = vec![(es[0], "rendermode".to_string(), "5".to_string()), (es[0], "renderamt".to_string(), "255".to_string()), (es[1], "rendermode".to_string(), "5".to_string())];
+        assert_eq!(cmd_set_keys(&mut d, &mut h, &sets, "Paste properties", None).unwrap(), 2);
+        assert_eq!(d.entities[&es[0]].get("renderamt"), Some("255"));
+        h.undo(&mut d);
+        assert!(d.entities[&es[0]].get("rendermode").is_none() && d.entities[&es[1]].get("rendermode").is_none(), "one undo puts both back");
+        // two pastes with one merge key: one step
+        cmd_set_keys(&mut d, &mut h, &[(es[0], "angles".into(), "0 90 0".into())], "Paste Transform", Some("px1")).unwrap();
+        cmd_set_keys(&mut d, &mut h, &[(es[1], "angles".into(), "0 90 0".into())], "Paste Transform", Some("px1")).unwrap();
+        h.undo(&mut d);
+        assert!(d.entities[&es[0]].get("angles").is_none() && d.entities[&es[1]].get("angles").is_none());
+        assert!(cmd_set_keys(&mut d, &mut h, &[(es[0], "classname".into(), "light".into())], "Paste", None).is_err());
+        assert!(cmd_set_keys(&mut d, &mut h, &[(es[0], "a b".into(), "1".into())], "Paste", None).is_err());
+        assert!(cmd_set_keys(&mut d, &mut h, &[], "Paste", None).is_err());
     }
 
     #[test]

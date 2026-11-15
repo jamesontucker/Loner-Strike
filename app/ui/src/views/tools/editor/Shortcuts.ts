@@ -92,6 +92,11 @@ const LONER: Keys = {
   "view.contentDrawer": [MAC ? "Mod+Shift+Space" : "Mod+Space"],
   "view.snap": ["Shift+W"],
   "edit.applyTexture": ["Shift+T"],
+  // Unreal habits that clash with nothing here (Hammer and TrenchBroom keep them too)
+  "edit.copyProps": ["Mod+Alt+Shift+C"], // (⌘⌥C opens the web inspector in a dev build)
+  "edit.pasteProps": ["Mod+Alt+Shift+V"],
+  "edit.dropToFloor": ["End"],
+  "view.gameView": ["G"],
 };
 
 /** Hammer 3.5-style (changes from ours). */

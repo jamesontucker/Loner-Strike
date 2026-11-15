@@ -505,3 +505,7 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
    taking rows from the file grid (a short dock panel otherwise had no room left for the files) */
 .p5-cb { position: relative; }
 .p5-cb > .p5-cb-uses { position: absolute; right: 8px; bottom: 8px; z-index: 30; width: min(360px, calc(100% - 16px)); max-height: 60%; overflow: auto; background: var(--panel-2, #3a4232); box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
+/* the Inspector's right-click menu: a command's keys on the right, and items it can't do now */
+.ed-ctx button .ed-ctx-keys { float: right; margin-left: 16px; font: inherit; font-size: 11px; color: var(--bone-dim, #9aa); background: none; border: 0; }
+.ed-ctx button:disabled { opacity: 0.45; cursor: default; }
+.ed-ctx button:disabled:hover { background: none; color: var(--bone); }

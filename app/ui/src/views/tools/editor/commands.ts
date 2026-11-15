@@ -23,6 +23,8 @@ import { startTour } from "./Tour";
 import { useBrowser } from "./contentApi";
 import { toggleFrameTime } from "./FrameTime"; // MCP: frame-time readout
 import { budgetWarnings } from "./BudgetPanel";
+import { canPasteTransform, clipNow, copyProps, copyTransform, pasteProps, pasteTransform } from "./inspectClip"; // Inspector Copy / Paste
+import { dropToFloor } from "./dropToFloor";
 
 export type Menu = "File" | "Edit" | "View" | "Select" | "Tools" | "Map" | "Help";
 export type Command = {
@@ -254,6 +256,12 @@ export function commands(): Command[] {
     { id: "edit.duplicateHere", label: "Duplicate in place", menu: "Edit", hint: "A copy right on top (move it next)", when: hasSel, run: () => void duplicateWith([0, 0, 0]) },
     { id: "edit.duplicateSame", label: "Duplicate (keep names)", menu: "Edit", hidden: true, hint: "A copy with the same target names", when: hasSel, run: () => void duplicate() },
     { id: "edit.delete", label: "Delete", menu: "Edit", when: hasSel, run: () => deleteSelection() },
+    // Unreal habits (the Inspector's Copy / Paste, End drops to the floor)
+    { id: "edit.copyProps", label: "Copy properties", menu: "Edit", sep: true, hint: "The picked entity's keys (not its class, place, brush model or name), to paste onto others", when: () => S().sel.entities.length > 0, run: () => copyProps() },
+    { id: "edit.pasteProps", label: "Paste properties", menu: "Edit", hint: "Onto every picked entity; keys a class doesn't have are skipped", when: () => S().sel.entities.length > 0 && clipNow()?.kind === "props", run: () => void pasteProps() },
+    { id: "edit.copyTransform", label: "Copy Transform", menu: "Edit", hint: "Location, rotation, size and scale of what's picked", when: hasSel, run: () => copyTransform() },
+    { id: "edit.pasteTransform", label: "Paste Transform", menu: "Edit", hint: "Onto what's picked: its middle goes to the copied location", when: () => canPasteTransform(), run: () => void pasteTransform() },
+    { id: "edit.dropToFloor", label: "Drop to the floor", menu: "Edit", hint: "Down onto the brush below (like Unreal's End)", when: hasSel, run: () => void dropToFloor() },
     { id: "edit.find", label: "Find and replace…", menu: "Edit", sep: true, hint: "Textures, classnames, keys and values", run: () => useP5.getState().set({ dialog: "find" }) },
     { id: "edit.transform", label: "Transform…", menu: "Edit", hint: "Move, turn or stretch by exact numbers", when: hasSel, run: () => useP5.getState().set({ dialog: "transform" }) },
     { id: "edit.replaceWith", label: "Replace with entity or prefab…", menu: "Edit", hint: "Swap what's picked for another entity or a prefab", when: hasSel, run: () => useP5.getState().set({ dialog: "replaceWith" }) },
@@ -339,6 +347,7 @@ export function commands(): Command[] {
     { id: "view.gridDown", label: "Smaller grid", menu: "View", sep: true, run: () => stepGrid(-1), fly: true },
     { id: "view.gridUp", label: "Bigger grid", menu: "View", run: () => stepGrid(1), fly: true },
     { id: "view.gridShow", label: "Show / hide the grid", menu: "View", run: () => useP5.getState().set({ showGrid: !useP5.getState().showGrid }), fly: true },
+    { id: "view.gameView", label: "Game view on / off", menu: "View", hint: "Hide the editor's helpers (grid, target links, previews) to see the map as it plays, like Unreal's G", run: () => useP5.getState().set({ gameView: !useP5.getState().gameView }), fly: true },
     { id: "view.gridSettings", label: "Grid and snapping…", menu: "View", hint: "Grid size, turn steps, snap to corners and edges", run: () => useP5.getState().set({ dialog: "grid" }) },
     { id: "view.texLock", label: "Texture lock on / off", menu: "View", run: () => S().set({ textureLock: !S().textureLock }) },
     { id: "view.frameTime", label: "Show frame time", menu: "View", sep: true, hint: "Frames a second and frame time (p50, p95) over the last 5 seconds; Ctrl+Alt+Shift+F", run: () => toggleFrameTime() }, // MCP

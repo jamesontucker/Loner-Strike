@@ -130,7 +130,7 @@
         {
           "id": "move-rotate-scale",
           "name": "Move, Rotate and Scale",
-          "what": "Drag the handles in the views to move, turn or stretch what's picked. Hold Shift as you start a move to drag a copy instead.",
+          "what": "Drag the handles in the views to move, turn or stretch what's picked. Hold Shift as you start a move to drag a copy instead (with the Loner-Strike keys Alt does too, as in Unreal; Hammer and TrenchBroom keys keep Alt for snapping).",
           "actions": [
             { "name": "Move", "what": "Drag the arrows.", "command": "tool.move" },
             { "name": "Rotate", "what": "Drag the rings; it turns in 15° steps.", "command": "tool.rotate" },
@@ -295,6 +295,25 @@
           "what": "Makes several copies at once: in a row, as stairs, in a ring or in a spiral, each a set distance and turn from the last.",
           "commands": ["edit.pasteSpecial"],
           "where": ["Inspect panel › Paste special…"]
+        },
+        {
+          "id": "inspector-copy",
+          "name": "Copy and paste in the Inspector",
+          "what": "Like Unreal's right-click Copy / Paste on a property: right-click a Transform row (Location, Rotation or Turn by, Size, Scale) or the Transform heading to copy it and paste it onto what's picked; right-click a key's field to copy its value and paste it into the same key of every picked entity; right-click an entity's title to copy its properties and paste them onto other entities. Each paste is one undo step.",
+          "actions": [
+            { "name": "Copy properties", "what": "The picked entity's keys, but not its class, place, brush model or name.", "command": "edit.copyProps" },
+            { "name": "Paste properties", "what": "Onto every picked entity; keys a class doesn't have are skipped, and a note says which.", "command": "edit.pasteProps" },
+            { "name": "Copy Transform", "what": "Location, rotation, size and scale of what's picked.", "command": "edit.copyTransform" },
+            { "name": "Paste Transform", "what": "Moves what's picked so its middle is at the copied location, stretches brushes to the copied size, and gives point entities the copied rotation and scale.", "command": "edit.pasteTransform" }
+          ],
+          "where": ["Inspect panel › right-click a Transform row or heading", "Inspect panel › right-click a key", "Inspect panel › right-click the entity's title"],
+          "good": "The copy goes to the system clipboard as text too, so you can paste a location or a key's value elsewhere."
+        },
+        {
+          "id": "drop-to-floor",
+          "name": "Drop to the floor",
+          "what": "Moves what's picked straight down until it rests on the top of the brush under it, like Unreal's End. Triggers and other see-through brush entities aren't a floor.",
+          "commands": ["edit.dropToFloor"]
         },
         {
           "id": "delete",
@@ -725,6 +744,12 @@
           "keys": ["Mod+1…9", "1…9"]
         },
         {
+          "id": "game-view",
+          "name": "Game view",
+          "what": "Hides the editor's helpers (the grid, target links, effect and track previews, the flat views' crosshair and handles) to see the map as it plays, like Unreal's G. Press it again to bring them back.",
+          "commands": ["view.gameView"]
+        },
+        {
           "id": "grid",
           "name": "Grid",
           "what": "The grid things snap to as you draw and move them.",
@@ -741,7 +766,7 @@
           "name": "Snapping",
           "what": "Whether new points land on the grid, and on the corners and edges of brushes when you're close to one.",
           "actions": [
-            { "name": "Snap to grid on / off", "what": "Holding Alt flips it while you drag.", "command": "view.snap" },
+            { "name": "Snap to grid on / off", "what": "Holding Alt flips it while you drag (with the Loner-Strike keys, Alt held as a move starts makes a copy instead, and the copy snaps).", "command": "view.snap" },
             { "name": "Snap to corners and edges on / off", "what": "", "command": "view.geoSnap" }
           ],
           "keys": ["Alt (held)"]
