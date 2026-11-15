@@ -223,7 +223,11 @@ function baseCss() {
 }
 
 /** A reference page: the docs' top bar, the search with filters, the sidebar, the main column, On this page. */
-function page({ title, lead, side, main, toc = "", file, up = "../", kinds = true }) {
+function page({ title, lead, side, main, toc = "", file, up = "../", kinds = true, section = "" }) {
+  // (the three references and the guides are always one click away)
+  const sw = [["nodes", "reference/nodes.html", "Studio nodes"], ["entities", "reference/entities.html", "Map entities"], ["editor", "reference/editor.html", "Editor"], ["guides", "reference/#guides", "Guides"]]
+    .map(([id, href, label]) => `<a href="${up}${href}"${id === section ? ' aria-current="true"' : ""}>${label}</a>`).join("");
+  side = `<div class="ref-switch" role="navigation" aria-label="Reference sections">${sw}</div>${side}`;
   const filters = kinds
     ? `<label>Category <select id="ref-f-cat"><option value="">Any</option></select></label>
       <label>Kind <select id="ref-f-kind"><option value="">Any</option><option value="event">Event</option><option value="action">Action</option><option value="value">Value</option><option value="flow">Flow</option><option value="point">Point entity</option><option value="brush">Brush entity</option></select></label>
@@ -334,7 +338,7 @@ function nodePages(data, enums, lib) {
   for (const c of cats) {
     const list = data.nodes.filter((n) => n.category === c);
     const grid = `<div class="grid" aria-label="${esc(c)} nodes">${list.map((n) => `<a class="mini" href="#${nodeId(n.type)}"><span class="badge k-${kindOf(n)}">${kindOf(n)}</span><b>${esc(n.title)}</b><span class="s">${esc(firstSentence(n.what))}</span></a>`).join("")}</div>`;
-    pages[`${slug(c)}.html`] = page({
+    pages[`${slug(c)}.html`] = page({ section: "nodes",
       title: c,
       lead: `${list.length} Game Mode Studio node${list.length === 1 ? "" : "s"}. Pick one for its pins, settings and limits.`,
       side: nodeSide(data, c, "../../"),
@@ -350,7 +354,7 @@ function nodePages(data, enums, lib) {
   }).join("")}</div>`;
   const enumsHtml = `<h2 id="enums">Built-in lists</h2><p>Lists every mode has (What Kind Of and Component Kind Of give them; Switch on Enum fills its cases from them).</p>${enums.map((e) => `<article class="card" id="enum-${slug(e.id)}"><header><h3>${esc(e.name)}</h3></header><p class="what">${esc(e.values.join(", "))}</p></article>`).join("")}`;
   const libHtml = `<h2 id="library">Starter library</h2><p>Ready-made pieces to add from Game Mode Studio's My library.</p>${lib.map((l) => `<article class="card" id="lib-${slug(l.name)}"><header><h3>${esc(l.name)}</h3><span class="badge">${esc(l.kind || "item")}</span><span class="id">${esc(l.category)}</span></header><p class="what">${esc(l.description)}</p>${l.inputs.length ? `<details><summary>Inputs and outputs</summary><p>In: ${esc(l.inputs.map((p) => p.name).join(", "))}. Out: ${esc(l.outputs.map((p) => p.name).join(", "))}.</p></details>` : ""}${l.tables.length ? `<p class="ty">Brings the table${l.tables.length > 1 ? "s" : ""} ${esc(l.tables.join(", "))}.</p>` : ""}</article>`).join("")}`;
-  const index = page({
+  const index = page({ section: "nodes",
     title: "Game Mode Studio nodes",
     lead: `All ${data.nodes.length} nodes, by category. Search above, or open a category.`,
     side: nodeSide(data, null, "../"),
@@ -382,7 +386,7 @@ ${keys.length ? `<details><summary>Keys <span class="n">(${keys.length})</span><
   const pages = {};
   for (const g of groups) {
     const list = ents.filter((e) => entGroup(e) === g);
-    pages[`${slug(g)}.html`] = page({
+    pages[`${slug(g)}.html`] = page({ section: "entities",
       title: g,
       lead: `${list.length} entit${list.length === 1 ? "y" : "ies"} the map editor places. Pick one for its keys and flags.`,
       side: side(g, "../../"),
@@ -392,7 +396,7 @@ ${keys.length ? `<details><summary>Keys <span class="n">(${keys.length})</span><
       up: "../../",
     });
   }
-  const index = page({
+  const index = page({ section: "entities",
     title: "Map editor entities",
     lead: `All ${ents.length} entities the map editor places, by group. Search above, or open a group.`,
     side: side(null, "../"),
@@ -409,14 +413,14 @@ ${keys.length ? `<details><summary>Keys <span class="n">(${keys.length})</span><
 function editorPage(inv) {
   const side = inv.map((s) => `<details><summary><a href="#t-${slug(s.name)}">${esc(s.name)}</a><span class="n">${s.rows.length}</span></summary></details>`).join("");
   const main = inv.map((s) => `<article class="card" id="t-${slug(s.name)}"><header><h3><a href="#t-${slug(s.name)}">${esc(s.name)}</a></h3><span class="badge">${s.rows.length}</span><button class="copy-link" type="button" data-id="t-${slug(s.name)}" aria-label="Copy a link to ${esc(s.name)}">Copy link</button></header><dl>${s.rows.map((r) => `<dt>${esc(r.item)}</dt><dd>${esc(r.where)}</dd>`).join("")}</dl></article>`).join("\n");
-  return page({ title: "Map editor tools and keys", lead: "Everything in the map editor's menus, panels and dialogs, where to find it, and its keys.", side, main, toc: inv.map((s) => `<li><a href="#t-${slug(s.name)}">${esc(s.name)}</a></li>`).join(""), file: "the editor's coverage inventory", kinds: false });
+  return page({ section: "editor", title: "Map editor tools and keys", lead: "Everything in the map editor's menus, panels and dialogs, where to find it, and its keys.", side, main, toc: inv.map((s) => `<li><a href="#t-${slug(s.name)}">${esc(s.name)}</a></li>`).join(""), file: "the editor's coverage inventory", kinds: false });
 }
 
 /** The reference's front page: the three references and the guides. */
 function landingPage(data, ents, inv) {
   const card = (href, title, n, about) => `<a class="mini" href="${href}"><span class="badge">${n}</span><b>${esc(title)}</b><span class="s">${esc(about)}</span></a>`;
   const main = `<div class="grid">${card("nodes.html", "Game Mode Studio nodes", data.nodes.length, "Every node: its pins, settings, limits and what bots do with it.")}${card("entities.html", "Map editor entities", ents.length, "Every entity: what it does in the game, its keys and flags.")}${card("editor.html", "Map editor tools and keys", inv.length, "The editor's menus, panels and dialogs, and their keys.")}</div>
-<h2>Guides</h2><div class="grid">${GUIDES.map(([id, title, about]) => card(`../docs.html#${id}`, title, "soon", about)).join("")}</div>`;
+<h2 id="guides">Guides</h2><div class="grid">${GUIDES.map(([id, title, about]) => card(`../docs.html#${id}`, title, "soon", about)).join("")}</div>`;
   return page({ title: "Reference", lead: "Made from the app's own catalogs, so it always matches the app. Search everything from the box above.", side: `<details open class="here"><summary><a href="./" aria-current="page">Reference</a></summary><ul><li><a href="nodes.html">Studio nodes</a></li><li><a href="entities.html">Map entities</a></li><li><a href="editor.html">Editor tools and keys</a></li></ul></details>`, main, file: "nodes.json, the FGDs, the editor's inventory" });
 }
 
