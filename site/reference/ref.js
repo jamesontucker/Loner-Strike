@@ -10,19 +10,27 @@
   var filters = document.getElementById("ref-filters");
   var data = null, loading = false, hits = [], at = -1;
 
-  // the index loads the first time the search is used (or once the page is idle)
+  // the index loads the first time the search is used (or once the page is idle); whatever asks
+  // while it's loading waits for it (a search typed then runs as soon as it arrives, on the box's
+  // latest text)
+  var waiting = [];
   function load(then) {
     if (data) return then && then();
-    if (window.LS_REFERENCE) {
-      data = window.LS_REFERENCE;
-      return then && then();
-    }
+    if (then && waiting.indexOf(then) < 0) waiting.push(then);
+    if (window.LS_REFERENCE) return loaded();
     if (loading) return;
     loading = true;
     var s = document.createElement("script");
     s.src = root + "reference/index.js";
-    s.onload = function () { data = window.LS_REFERENCE || []; fillFilters(); if (then) then(); };
+    s.onload = loaded;
+    s.onerror = function () { loading = false; waiting = []; count.textContent = "The index didn't load. Try again in a moment."; };
     document.head.appendChild(s);
+  }
+  function loaded() {
+    data = window.LS_REFERENCE || [];
+    fillFilters();
+    var run = waiting; waiting = [];
+    run.forEach(function (f) { f(); });
   }
   if ("requestIdleCallback" in window) requestIdleCallback(function () { load(); }, { timeout: 4000 });
   else setTimeout(function () { load(); }, 1500);

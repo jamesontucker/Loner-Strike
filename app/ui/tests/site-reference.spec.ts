@@ -130,3 +130,23 @@ test("the switcher stays one line at 1024; the phone menu keeps only the current
   const gap = await page.$eval(".ref-side details.here > summary", (s) => s.querySelector("a")!.getBoundingClientRect().left - s.getBoundingClientRect().left);
   expect(gap).toBeLessThan(40);
 });
+
+test("a search typed while the index is still loading runs as soon as it arrives", async ({ page }) => {
+  // (the index answers late, so the typing surely lands while it loads)
+  await page.route("**/reference/index.js", async (route) => {
+    await new Promise((r) => setTimeout(r, 2500));
+    await route.continue();
+  });
+  // (not waiting for the load event: that waits for the index too)
+  await page.goto("/reference/nodes/messages.html", { waitUntil: "domcontentloaded" });
+  await page.locator("#ref-q").click();
+  await page.locator("#ref-q").fill("double jump");
+  await expect(page.locator("#ref-count")).toHaveText(/Loading the index/);
+  await expect(page.locator("#ref-results li").first()).toBeVisible({ timeout: 8000 });
+  await expect(page.locator("#ref-count")).not.toHaveText(/Loading/);
+  // (and the latest text wins: typed again while loading, only the last query runs)
+  await page.goto("/reference/entities.html", { waitUntil: "domcontentloaded" });
+  await page.locator("#ref-q").fill("door");
+  await page.locator("#ref-q").fill("ladder");
+  await expect(page.locator("#ref-results li").first()).toContainText(/ladder/i, { timeout: 8000 });
+});

@@ -248,6 +248,9 @@ Monaco's codicon font because the sweep's node_modules was a symlink outside Vit
   index…" until the next keystroke. WebKit shows it every time (no requestIdleCallback there): `fill("double jump")`
   right after the page opens never gets results. Keeping a list of callbacks and running them in `onload` fixes it.
   site-guides.spec.ts waits for `window.LS_REFERENCE` before typing until then.
+  **Done (Parity A, 2026-11-14):** load() keeps every waiting callback and runs them when the index arrives; a
+  search typed while it loads runs then on the box's latest text. site-reference.spec.ts types during a slowed load in
+  both engines. site-guides.spec.ts no longer needs to wait for `window.LS_REFERENCE`.
 - The guides hook in gen-reference.mjs (my part, between "the guides" markers in the script): written guides live in
   `site/reference/guides/<file>.html` between `<!-- GUIDE:BEGIN … -->` and `<!-- GUIDE:END -->`; the script keeps
   that text, re-frames the page and resets node links' hrefs from the catalog. `guideProblems()` lists links to
