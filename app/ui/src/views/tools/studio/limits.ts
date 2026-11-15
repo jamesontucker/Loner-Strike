@@ -16,6 +16,10 @@ export const LIMITS: Limit[] = [
   { id: "ec_map_hooks", label: "Map entity kinds heard", default: 96, lagAbove: 160, max: 256, kinds: ["event.map_fired"] },
   { id: "command_rate", label: "Player Command uses a second", default: 5, lagAbove: 20, max: 1000, kinds: ["in.command"] },
   { id: "top_players", label: "Top Players places", default: 10, lagAbove: 50, max: 100, kinds: ["save.top"] },
+  // W2 (collide.rs)
+  { id: "trigger_volumes", label: "Trigger volumes at once", default: 32, lagAbove: 64, max: 256, kinds: ["vol.spawn"] },
+  { id: "volume_members", label: "Things inside one trigger volume", default: 32, lagAbove: 48, max: 64, kinds: ["vol.spawn"] },
+  { id: "avoid_areas", label: "Areas bots avoid at once", default: 16, lagAbove: 24, max: 32, kinds: ["bots.avoid"] },
   { id: "projectiles", label: "Projectiles at once", default: 64, lagAbove: 128, max: 512, kinds: ["proj.spawn"] },
   { id: "messages", label: "Effect messages a frame", default: 48, lagAbove: 96, max: 160, kinds: ["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio"] },
 ];

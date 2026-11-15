@@ -18,9 +18,9 @@ pub(super) fn is_event(kind: &str) -> bool {
     EVENT_KINDS.contains(&kind)
 }
 
-/// Any node of this block in the graph.
+/// Any node of this block in the graph (Bots Avoid Area too: its count check is a stock here).
 pub(super) fn used(g: &Graph) -> bool {
-    g.nodes.iter().any(|n| n.kind.starts_with("col.") || n.kind.starts_with("vol."))
+    g.nodes.iter().any(|n| n.kind.starts_with("col.") || n.kind.starts_with("vol.") || n.kind.starts_with("bots.avoid"))
 }
 
 struct Uses {
@@ -45,11 +45,14 @@ fn uses(gen: &Gen) -> Uses {
 /// The shared stocks (only stocks: unused ones aren't compiled).
 pub(super) const PAWN: &str = r##"// ---- collision, overlap and hits (W2) ----
 stock g_lsgSemi, bool:g_lsgSemiOn[33], g_lsgSemiOff[33][33], g_lsgSemiN[33]
-#define LSG_VOLS 32
-#define LSG_VOLIN 32
+// (sized by the Limits' most: Trigger volumes at once 256, Things inside one 64; the mode's own
+// settings - lim_trigger_volumes, lim_volume_members - say how many it really keeps)
+#define LSG_VOLS 256
+#define LSG_VOLIN 64
 stock g_lsgVol[LSG_VOLS], g_lsgVolShape[LSG_VOLS], g_lsgVolFilter[LSG_VOLS], g_lsgVolAt[LSG_VOLS], Float:g_lsgVolPos[LSG_VOLS][3], Float:g_lsgVolSize[LSG_VOLS][3]
 stock Float:g_lsgVolAng[LSG_VOLS][3], Float:g_lsgVolOff[LSG_VOLS][3], Float:g_lsgVolTurn[LSG_VOLS][3]
-stock g_lsgVolIn[LSG_VOLS][LSG_VOLIN], g_lsgVolInN[LSG_VOLS]
+stock g_lsgVolIn[LSG_VOLS][LSG_VOLIN], g_lsgVolInN[LSG_VOLS], g_lsgVolInCap[LSG_VOLS]
+stock g_lsgAvoidTag[32][24], g_lsgAvoidN
 stock g_lsgFiring, Float:g_lsgAirVel[33], bool:g_lsgAirborne[33]
 
 stock bool:lsg_col_thing(e)
@@ -202,13 +205,18 @@ stock lsg_vol_place(v)
 	}
 }
 
-stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[3], shape, Float:sx, Float:sy, Float:sz, filter, const name[])
+stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[3], shape, Float:sx, Float:sy, Float:sz, filter, const name[], cap, incap)
 {
 	new v = -1
-	for (new i = 0; i < LSG_VOLS && v < 0; i++)
+	for (new i = 0; i < min(cap, LSG_VOLS) && v < 0; i++)
 		if (!g_lsgVol[i] || !pev_valid(g_lsgVol[i]))
 			v = i
 	if (v < 0)
+	{
+		log_amx("[%s] Spawn Trigger Volume skipped: as many are out as Trigger volumes at once allows (%d, Limits)", LSG_MODE, cap)
+		return 0
+	}
+	if (!lsg_ent_room("Spawn Trigger Volume"))
 		return 0
 	if (!(at > 0 && pev_valid(at)))
 		at = 0
@@ -232,6 +240,7 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 	g_lsgVol[v] = e
 	g_lsgVolShape[v] = shape
 	g_lsgVolFilter[v] = filter
+	g_lsgVolInCap[v] = clamp(incap, 1, LSG_VOLIN)
 	g_lsgVolSize[v][0] = sx
 	g_lsgVolSize[v][1] = sy
 	g_lsgVolSize[v][2] = sz
@@ -331,7 +340,7 @@ public lsg_vol_tick()
 		}
 		new Float:reach = g_lsgVolShape[v] == 1 ? g_lsgVolSize[v][0] : floatsqroot(g_lsgVolSize[v][0] * g_lsgVolSize[v][0] + g_lsgVolSize[v][1] * g_lsgVolSize[v][1] + g_lsgVolSize[v][2] * g_lsgVolSize[v][2]) * 0.5
 		new now[LSG_VOLIN], nn = 0, e = -1
-		while ((e = engfunc(EngFunc_FindEntityInSphere, e, g_lsgVolPos[v], reach)) > 0 && nn < LSG_VOLIN)
+		while ((e = engfunc(EngFunc_FindEntityInSphere, e, g_lsgVolPos[v], reach)) > 0 && nn < g_lsgVolInCap[v])
 			if (lsg_vol_counts(v, e) && lsg_vol_inside(v, e))
 				now[nn++] = e
 		// who left, then who came in
@@ -360,6 +369,31 @@ public lsg_vol_tick()
 				lsg_vol_begin_hook(vol, now[j])
 		}
 	}
+}
+
+// ---- Bots Avoid Area: the tags out now, at most Areas bots avoid at once (Limits; the brain keeps 32)
+stock bool:lsg_avoid_room(const tag[], cap)
+{
+	for (new i = 0; i < g_lsgAvoidN; i++)
+		if (equal(g_lsgAvoidTag[i], tag))
+			return true
+	if (g_lsgAvoidN >= min(cap, sizeof g_lsgAvoidTag))
+	{
+		log_amx("[%s] Bots Avoid Area %s skipped: as many are out as Areas bots avoid at once allows (%d, Limits)", LSG_MODE, tag, cap)
+		return false
+	}
+	copy(g_lsgAvoidTag[g_lsgAvoidN++], 23, tag)
+	return true
+}
+
+stock lsg_avoid_gone(const tag[])
+{
+	for (new i = 0; i < g_lsgAvoidN; i++)
+		if (equal(g_lsgAvoidTag[i], tag))
+		{
+			copy(g_lsgAvoidTag[i], 23, g_lsgAvoidTag[--g_lsgAvoidN])
+			return
+		}
 }
 
 // ---- Bullet Hit: the shooter's own traces while their weapon's primary attack runs
@@ -605,9 +639,30 @@ mod tests {
                 "lsg_on_player_touched(vol, who)", "lsg_fall_damage(speed)", "lsg_col_hitgroup(hit, tr", "lsg_hitgroup(victim, bits)) // hitgroup",
                 "if (lsg_named(vol, \"zone\"))", "g_lsgTouch", "g_lsgBullet",
                 "ls_bots_avoid_ent(\"carrier\", ", ", 200.0, 7.0, 0.0, 1)", "ls_bots_avoid(\"spot\", lsgAv, 128.0, 3.0, 30.0, 0)", "ls_bots_avoid_stop(\"spot\")",
+                "lsg_avoid_room(\"carrier\", 16)", "lsg_avoid_gone(\"spot\")", "lsg_ent_room(\"Spawn Trigger Volume\")", ", 32, 32)",
             ] {
                 assert!(src.contains(want), "{want} (debug {debug})");
             }
+        }
+    }
+
+    /// The events' handlers themselves (written by handlers(), which gen.rs must call): a Begin
+    /// Overlap, a Bullet Hit and a Player Landed graph gets their public forwards and hooks, not only
+    /// the registrations. Fails if gen.rs stops calling collide::handlers.
+    #[test]
+    fn collide_handlers_are_written() {
+        let n = |id: &str, t: &str, p: serde_json::Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        let g = graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "ev", "name": "Events"},
+            "nodes": [n("rs", "event.round_started", json!({})), n("vm", "vec.make", json!({"x": 0, "y": 0, "z": 36})), n("vs", "vol.spawn", json!({"name": "zone"})),
+                      n("ob", "vol.on_begin", json!({"name": "zone"})), n("p1", "debug.print", json!({"text": "in", "chat": false})),
+                      n("bh", "col.on_bullet", json!({"secs": 0.2})), n("p2", "debug.print", json!({"text": "hit", "chat": false})),
+                      n("ld", "col.on_landed", json!({"min": 250})), n("p3", "debug.print", json!({"text": "landed", "chat": false}))],
+            "edges": [e(1, "rs", "then", "vs", "exec"), e(2, "vm", "out", "vs", "pos"), e(3, "ob", "then", "p1", "exec"), e(4, "bh", "then", "p2", "exec"), e(5, "ld", "then", "p3", "exec")]})).unwrap();
+        assert!(graph::validate(&g).is_empty(), "{:#?}", graph::validate(&g));
+        let src = gen::generate(&g, false).source;
+        for want in ["lsg_vol_begin_hook(vol, who)\n{", "lsg_vol_end_hook(vol, who)\n{", "public lsg_col_trace(Float:v1[3], Float:v2[3], nomonsters, skip, tr)", "public lsg_col_post(id)", "public lsg_col_pre(id)", "lsg_fall_damage(speed)"] {
+            assert!(src.contains(want), "missing {want}: is collide::handlers called from gen.rs?");
         }
     }
 

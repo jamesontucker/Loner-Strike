@@ -1227,11 +1227,14 @@ stock bool:lsg_safe_cmd(const cmd[], amx)
 
 // ---- collision, overlap and hits (W2) ----
 stock g_lsgSemi, bool:g_lsgSemiOn[33], g_lsgSemiOff[33][33], g_lsgSemiN[33]
-#define LSG_VOLS 32
-#define LSG_VOLIN 32
+// (sized by the Limits' most: Trigger volumes at once 256, Things inside one 64; the mode's own
+// settings - lim_trigger_volumes, lim_volume_members - say how many it really keeps)
+#define LSG_VOLS 256
+#define LSG_VOLIN 64
 stock g_lsgVol[LSG_VOLS], g_lsgVolShape[LSG_VOLS], g_lsgVolFilter[LSG_VOLS], g_lsgVolAt[LSG_VOLS], Float:g_lsgVolPos[LSG_VOLS][3], Float:g_lsgVolSize[LSG_VOLS][3]
 stock Float:g_lsgVolAng[LSG_VOLS][3], Float:g_lsgVolOff[LSG_VOLS][3], Float:g_lsgVolTurn[LSG_VOLS][3]
-stock g_lsgVolIn[LSG_VOLS][LSG_VOLIN], g_lsgVolInN[LSG_VOLS]
+stock g_lsgVolIn[LSG_VOLS][LSG_VOLIN], g_lsgVolInN[LSG_VOLS], g_lsgVolInCap[LSG_VOLS]
+stock g_lsgAvoidTag[32][24], g_lsgAvoidN
 stock g_lsgFiring, Float:g_lsgAirVel[33], bool:g_lsgAirborne[33]
 
 stock bool:lsg_col_thing(e)
@@ -1384,13 +1387,18 @@ stock lsg_vol_place(v)
 	}
 }
 
-stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[3], shape, Float:sx, Float:sy, Float:sz, filter, const name[])
+stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[3], shape, Float:sx, Float:sy, Float:sz, filter, const name[], cap, incap)
 {
 	new v = -1
-	for (new i = 0; i < LSG_VOLS && v < 0; i++)
+	for (new i = 0; i < min(cap, LSG_VOLS) && v < 0; i++)
 		if (!g_lsgVol[i] || !pev_valid(g_lsgVol[i]))
 			v = i
 	if (v < 0)
+	{
+		log_amx("[%s] Spawn Trigger Volume skipped: as many are out as Trigger volumes at once allows (%d, Limits)", LSG_MODE, cap)
+		return 0
+	}
+	if (!lsg_ent_room("Spawn Trigger Volume"))
 		return 0
 	if (!(at > 0 && pev_valid(at)))
 		at = 0
@@ -1414,6 +1422,7 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 	g_lsgVol[v] = e
 	g_lsgVolShape[v] = shape
 	g_lsgVolFilter[v] = filter
+	g_lsgVolInCap[v] = clamp(incap, 1, LSG_VOLIN)
 	g_lsgVolSize[v][0] = sx
 	g_lsgVolSize[v][1] = sy
 	g_lsgVolSize[v][2] = sz
@@ -1513,7 +1522,7 @@ public lsg_vol_tick()
 		}
 		new Float:reach = g_lsgVolShape[v] == 1 ? g_lsgVolSize[v][0] : floatsqroot(g_lsgVolSize[v][0] * g_lsgVolSize[v][0] + g_lsgVolSize[v][1] * g_lsgVolSize[v][1] + g_lsgVolSize[v][2] * g_lsgVolSize[v][2]) * 0.5
 		new now[LSG_VOLIN], nn = 0, e = -1
-		while ((e = engfunc(EngFunc_FindEntityInSphere, e, g_lsgVolPos[v], reach)) > 0 && nn < LSG_VOLIN)
+		while ((e = engfunc(EngFunc_FindEntityInSphere, e, g_lsgVolPos[v], reach)) > 0 && nn < g_lsgVolInCap[v])
 			if (lsg_vol_counts(v, e) && lsg_vol_inside(v, e))
 				now[nn++] = e
 		// who left, then who came in
@@ -1542,6 +1551,31 @@ public lsg_vol_tick()
 				lsg_vol_begin_hook(vol, now[j])
 		}
 	}
+}
+
+// ---- Bots Avoid Area: the tags out now, at most Areas bots avoid at once (Limits; the brain keeps 32)
+stock bool:lsg_avoid_room(const tag[], cap)
+{
+	for (new i = 0; i < g_lsgAvoidN; i++)
+		if (equal(g_lsgAvoidTag[i], tag))
+			return true
+	if (g_lsgAvoidN >= min(cap, sizeof g_lsgAvoidTag))
+	{
+		log_amx("[%s] Bots Avoid Area %s skipped: as many are out as Areas bots avoid at once allows (%d, Limits)", LSG_MODE, tag, cap)
+		return false
+	}
+	copy(g_lsgAvoidTag[g_lsgAvoidN++], 23, tag)
+	return true
+}
+
+stock lsg_avoid_gone(const tag[])
+{
+	for (new i = 0; i < g_lsgAvoidN; i++)
+		if (equal(g_lsgAvoidTag[i], tag))
+		{
+			copy(g_lsgAvoidTag[i], 23, g_lsgAvoidTag[--g_lsgAvoidN])
+			return
+		}
 }
 
 // ---- Bullet Hit: the shooter's own traces while their weapon's primary attack runs
@@ -2883,7 +2917,7 @@ lsg_n4(ctx[])
 	new Float:lsgVp[3], Float:lsgVa[3], Float:lsgVo[3]
 	lsg_vto(lsg_vec(0.0, 0.0, 36.0), lsgVp)
 	lsg_vto(lsg_vec(0.0, 45.0, 0.0), lsgVa)
-	g_lsgOut[4] = lsg_vol_spawn(0, lsgVp, lsgVa, lsgVo, 0, 256.0, 256.0, 128.0, 0, "zone")
+	g_lsgOut[4] = lsg_vol_spawn(0, lsgVp, lsgVa, lsgVo, 0, 256.0, 256.0, 128.0, 0, "zone", 32, 32)
 	lsg_n5(ctx)
 }
 
@@ -2892,7 +2926,7 @@ lsg_n5(ctx[])
 {
 	new Float:lsgVp[3], Float:lsgVa[3], Float:lsgVo[3]
 	lsg_vto(lsg_vec(64.0, 0.0, 0.0), lsgVo)
-	g_lsgOut[5] = lsg_vol_spawn(ctx[8], lsgVp, lsgVa, lsgVo, 1, 128.0, 0.0, 0.0, 2, "near")
+	g_lsgOut[5] = lsg_vol_spawn(ctx[8], lsgVp, lsgVa, lsgVo, 1, 128.0, 0.0, 0.0, 2, "near", 32, 32)
 	lsg_n6(ctx)
 }
 
@@ -2959,7 +2993,7 @@ lsg_n13(ctx[])
 // Bots Avoid Area (av)
 lsg_n14(ctx[])
 {
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_avoid_room("carrier", 16)))
 	{
 		ls_bots_avoid_ent("carrier", ctx[8], 200.0, 7.0, 0.0, 1)
 	}
@@ -2971,7 +3005,7 @@ lsg_n15(ctx[])
 {
 	new Float:lsgAv[3]
 	lsg_vto(lsg_vec(0.0, 0.0, 36.0), lsgAv)
-	if (!(!ls_components_running()))
+	if (!(!ls_components_running() || !lsg_avoid_room("spot", 16)))
 	{
 		ls_bots_avoid("spot", lsgAv, 128.0, 3.0, 30.0, 0)
 	}
@@ -2983,6 +3017,7 @@ lsg_n16(ctx[])
 {
 	if (!(!ls_components_running()))
 	{
+		lsg_avoid_gone("spot")
 		ls_bots_avoid_stop("spot")
 	}
 	#pragma unused ctx

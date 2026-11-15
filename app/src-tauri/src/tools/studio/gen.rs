@@ -2166,9 +2166,9 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let size = if sphere { format!("{}, 0.0, 0.0", f("radius", 4096.0)) } else { format!("{}, {}, {}", f("sx", 8192.0), f("sy", 8192.0), f("sz", 8192.0)) };
             let filter = match gen.choice(n, def, "filter") { "creatures" => 1, "any" => 2, _ => 0 };
             let name = name_text(gen.text(n, def, "name"));
-            b.line(format!("\tg_lsgOut[{i}] = lsg_vol_spawn({at}, lsgVp, lsgVa, lsgVo, {}, {size}, {filter}, {})", if sphere { 1 } else { 0 }, pawn_str(&name)));
+            b.line(format!("\tg_lsgOut[{i}] = lsg_vol_spawn({at}, lsgVp, lsgVa, lsgVo, {}, {size}, {filter}, {}, {}, {})", if sphere { 1 } else { 0 }, pawn_str(&name), gen.limit_expr("trigger_volumes"), gen.limit_expr("volume_members")));
             if debug {
-                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))", err("No volume: 32 are out already.")));
+                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))", err("No volume: as many are out as Trigger volumes at once allows (Limits), or the server is out of entity slots.")));
             }
             then_line(&mut b, "then");
         }
@@ -2184,7 +2184,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         "bots.avoid" | "bots.avoid_stop" => {
             let tag = pawn_str(&name_text(gen.text(n, def, "tag")));
             let call = if def.kind == "bots.avoid_stop" {
-                format!("ls_bots_avoid_stop({tag})")
+                format!("lsg_avoid_gone({tag})\n\t\tls_bots_avoid_stop({tag})")
             } else {
                 let num = |k: &str, lo: f64, hi: f64| float_lit(gen.num(n, def, k).clamp(lo, hi));
                 let team = match gen.choice(n, def, "team") { "t" => 1, "ct" => 2, _ => 0 };
@@ -2197,7 +2197,8 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                     format!("ls_bots_avoid({tag}, lsgAv, {r}, {st}, {secs}, {team})")
                 }
             };
-            check(&mut b, comps, "Not done: gm_components isn't running on this server.", &[format!("\t{call}"), exit("done")]);
+            let cond = if def.kind == "bots.avoid_stop" { comps.to_string() } else { format!("{comps} || !lsg_avoid_room({tag}, {})", gen.limit_expr("avoid_areas")) };
+            check(&mut b, &cond, "Not done: gm_components isn't running on this server, or as many areas are avoided as Areas bots avoid at once allows (Limits).", &[format!("\t{call}"), exit("done")]);
             then_line(&mut b, "then");
         }
         // ---- end collision, overlap and hits ----
