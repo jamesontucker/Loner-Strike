@@ -175,7 +175,7 @@ def safe_arg(s):
 
 
 def _bad(field):
-    raise Reject(400, f"The registration's {field} isn't right.")
+    raise Reject(400, f"The registration's {field} isn't right. Update Loner-Strike and try again.")
 
 
 def _str(d, k, n, required=False):
@@ -729,7 +729,7 @@ def zip_directory(rf):
     if total > MAX_ENTRIES:
         raise Reject(422, f"The package has too many files ({total}; at most {MAX_ENTRIES}).")
     if cd_size > MAX_LISTING or cd_off + cd_size > rf.size:
-        raise Reject(422, "The package's file list is too big or damaged.")
+        raise Reject(422, "The package's file list is too big or damaged. Upload the zip the app made, unchanged.")
     return total, cd_off
 
 
@@ -752,12 +752,12 @@ def check_layout(rf, infos, cd_off):
     for i in picks:
         head = rf.peek(i.header_offset, 30 + name_len(i))
         if len(head) < 30 or head[:4] != _LOCAL:
-            raise Reject(422, "The zip's entries don't match its file list.")
+            raise Reject(422, "The zip's entries don't match its file list. Upload the zip the app made, unchanged.")
         flags, method, _, _, _, csize, _, nlen, xlen = struct.unpack("<HHHHIIIHH", head[6:30])
         same_size = flags & 0x08 or csize == i.compress_size
         if method != i.compress_type or nlen != name_len(i) or head[30:] != i.orig_filename.encode("utf-8" if i.flag_bits & 0x800 else "cp437") \
                 or not same_size or xlen > LOCAL_SLACK:
-            raise Reject(422, "The zip's entries don't match its file list.")
+            raise Reject(422, "The zip's entries don't match its file list. Upload the zip the app made, unchanged.")
 
 
 def read_package(f, get=range_get):
@@ -776,7 +776,7 @@ def read_package(f, get=range_get):
         with zipfile.ZipFile(rf) as z:
             infos = z.infolist()
             if len(infos) != total:
-                raise Reject(422, "The zip's file list is damaged.")
+                raise Reject(422, "The zip's file list is damaged. Upload the zip the app made, unchanged.")
             check_layout(rf, infos, cd_off)
             # the same name twice (one would hide the other; check_package catches case and slash variants)
             if len({i.filename for i in infos}) != len(infos):
@@ -999,8 +999,10 @@ def has_tag(tags):
             a, sep, b = t.partition(":")
             if (want(a, b) if sep else ours(t)):
                 return True
-        elif isinstance(t, dict) and isinstance(t.get("_sTitle"), str) and isinstance(t.get("_sValue"), str):
-            if want(t["_sTitle"], t["_sValue"]):
+        elif isinstance(t, dict) and isinstance(t.get("_sValue"), str):
+            title = t.get("_sTitle") if isinstance(t.get("_sTitle"), str) else ""
+            # a Custom Tag's title is optional on GameBanana's form: "LonerStrike" alone counts too
+            if want(title, t["_sValue"]) if title.strip() else any(ours(x) for x in t["_sValue"].split(",")):
                 return True
     return False
 
@@ -1062,9 +1064,9 @@ def page_facts(page, model):
     """Checks a profile page (game, flags, tag, category, name, submitter). Returns its facts;
     Reject(422) with what to fix."""
     if _d(page.get("_aGame")).get("_idRow") != CS16_GAME:
-        raise Reject(422, "That page isn't in GameBanana's Counter-Strike 1.6 section.")
+        raise Reject(422, "That page isn't in GameBanana's Counter-Strike 1.6 section. Move it there, then try again.")
     if page.get("_bIsFlagged"):
-        raise Reject(422, "GameBanana flagged that page.")
+        raise Reject(422, "GameBanana flagged that page. Sort it out on GameBanana, then try again.")
     if not has_tag(page.get("_aTags")):
         raise Reject(422, f'Add the tag "{TAG_TITLE}: {TAG_VALUE}" to the page (Edit > Attributes), then try again.')
     kind = page_kind(page, model)

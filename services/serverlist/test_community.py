@@ -374,6 +374,10 @@ class Pages(unittest.TestCase):
         self.assertFalse(cm.has_tag(["Software Used: Hammer"]))
         self.assertFalse(cm.has_tag([{"_sTitle": "Genre", "_sValue": "LonerStrike"}]))
         self.assertFalse(cm.has_tag("Software Used: LonerStrike"))
+        # a GameBanana Custom Tag with its optional title left empty
+        self.assertTrue(cm.has_tag([{"_sTitle": "", "_sValue": "LonerStrike"}]))
+        self.assertTrue(cm.has_tag([{"_sValue": "Loner-Strike"}]))
+        self.assertFalse(cm.has_tag([{"_sTitle": "", "_sValue": "Hammer"}]))
 
     def test_kinds_from_categories(self):
         self.assertEqual(cm.page_kind(MAP, "Mod"), "map")
