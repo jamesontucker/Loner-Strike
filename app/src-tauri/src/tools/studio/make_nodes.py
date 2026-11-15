@@ -1039,13 +1039,14 @@ BLOCKED_HELP = (" If the spot is blocked (Unreal's Spawn Collision Handling): Al
     " Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason"
     " (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot.")
 for d in nodes:
-    if d["type"] in ("ent.spawn_prop", "creature.spawn", "comp.create", "ent.spawn_entity", "ent.spawn_weapon"):
+    if d["type"] in ("ent.spawn_prop", "creature.spawn", "comp.create", "ent.spawn_entity", "ent.spawn_weapon", "npc.spawn", "npc.spawn_use", "proj.spawn"):
         for o in d["outputs"]:
             if o["id"] == "out":
                 o["label"] = "Entity"
         if not any(o["id"] == "spawned" for o in d["outputs"]):
             d["outputs"] += [E("spawned","Spawned"), E("failed","Failed"), P("ok","bool","Success"), P("moved","bool","Moved"), P("reason","enum:ls_spawn_fail","Failure reason")]
-        d["params"] += [prm("blocked","If the spot is blocked","choice","nearby",choices=BLOCKED_CHOICES), prm("max_dist","Max distance for a nearby spot","number",128,min=16,max=1024), prm("retry_every","Retry every (seconds)","number",1,min=0.1,max=60), prm("retry_tries","Retry tries (0: until clear)","number",10,min=0,max=1000)]
+        # (T1fix: an interactable stays exactly where it's put; a projectile isn't solid: Always spawn)
+        d["params"] += [prm("blocked","If the spot is blocked","choice",{"npc.spawn_use": "exact", "proj.spawn": "force"}.get(d["type"], "nearby"),choices=BLOCKED_CHOICES), prm("max_dist","Max distance for a nearby spot","number",128,min=16,max=1024), prm("retry_every","Retry every (seconds)","number",1,min=0.1,max=60), prm("retry_tries","Retry tries (0: until clear)","number",10,min=0,max=1000)]
         d["help"] += BLOCKED_HELP
         d["keywords"] = (d.get("keywords", "") + " collision handling force spawn always spawn blocked free spot fallback").strip()
 

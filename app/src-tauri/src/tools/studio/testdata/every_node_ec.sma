@@ -32,7 +32,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 4
+#define LSG_O 8
 #define LSG_OT 1
 
 
@@ -4547,17 +4547,36 @@ lsg_n30(ctx[])
 // Spawn NPC (npc)
 lsg_n31(ctx[])
 {
-	new Float:o[3]
-	if (!!ls_components_running() && lsg_xf_at(0, lsg_vec(0.0, 0.0, 0.0), -1, o))
-		g_lsgOut[31] = ls_npc_spawn("models/barney.mdl", o, 0.0, "Walker", "behavior=stand unkillable=1")
-	lsg_n32(ctx)
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 31
+	if (!lsgRe)
+		g_lsgXrN[31] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn NPC")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(0, lsg_vec(0.0, 0.0, 0.0), -1, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 2, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_npc_spawn("models/barney.mdl", o, 0.0, "Walker", "behavior=stand unkillable=1 blocked=here")))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[31] = e
+	g_lsgO[0] = e
+	g_lsgO[1] = e ? 1 : 0
+	g_lsgO[2] = e ? lsgMv : 0
+	g_lsgO[3] = e ? 0 : lsgWhy
+	if (!lsgRe)
+		lsg_n32(ctx)
+	#pragma unused lsgWait
 }
 
 // NPC Move To (mv)
 lsg_n32(ctx[])
 {
-	new lsgNpc = g_lsgOut[31]
-	if (lsg_ec_npc_to(g_lsgOut[31], 0, lsg_vec(128.0, 0.0, 0.0), 220.0, 6))
+	new lsgNpc = g_lsgO[0]
+	if (lsg_ec_npc_to(g_lsgO[0], 0, lsg_vec(128.0, 0.0, 0.0), 220.0, 6))
 		lsg_ec_npc_keep(lsgNpc, 0, ctx, 32)
 	else
 		lsg_n34(ctx)
@@ -4587,8 +4606,8 @@ lsg_n34(ctx[])
 // NPC Follow Path (fp)
 lsg_n35(ctx[])
 {
-	new lsgNpc = g_lsgOut[31]
-	if (lsg_ec_npc_path(g_lsgOut[31], lsg_mka44(lsg_vec(128.0, 0.0, 0.0), lsg_vec(128.0, 128.0, 0.0)), "path1", 90.0, 0))
+	new lsgNpc = g_lsgO[0]
+	if (lsg_ec_npc_path(g_lsgO[0], lsg_mka44(lsg_vec(128.0, 0.0, 0.0), lsg_vec(128.0, 128.0, 0.0)), "path1", 90.0, 0))
 		lsg_ec_npc_keep(lsgNpc, 1, ctx, 32)
 }
 
@@ -4614,8 +4633,8 @@ lsg_n37(ctx[])
 // NPC Follow Path (fp2)
 lsg_n38(ctx[])
 {
-	new lsgNpc = g_lsgOut[31]
-	if (lsg_ec_npc_path(g_lsgOut[31], -1, "path1", 90.0, 1))
+	new lsgNpc = g_lsgO[0]
+	if (lsg_ec_npc_path(g_lsgO[0], -1, "path1", 90.0, 1))
 		lsg_ec_npc_keep(lsgNpc, 2, ctx, 32)
 	else
 		lsg_n39(ctx)
@@ -4624,7 +4643,7 @@ lsg_n38(ctx[])
 // NPC Stop (stop)
 lsg_n39(ctx[])
 {
-	lsg_ec_npc_stop(g_lsgOut[31], true)
+	lsg_ec_npc_stop(g_lsgO[0], true)
 	#pragma unused ctx
 }
 
@@ -4639,7 +4658,7 @@ lsg_n40(ctx[])
 		lsgWhy = 4
 	else if (!(lsg_ent_room("Spawn Prop")))
 		lsgWhy = 2
-	else if (!(lsg_ent_origin(g_lsgOut[31], o)))
+	else if (!(lsg_ent_origin(g_lsgO[0], o)))
 		lsgWhy = 6
 	else if (!lsg_xf_free(o, -1, 2, 128.0, lsgMv))
 		lsgWhy = 1
@@ -4647,10 +4666,10 @@ lsg_n40(ctx[])
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[40] = e
-	g_lsgO[0] = e
-	g_lsgO[1] = e ? 1 : 0
-	g_lsgO[2] = e ? lsgMv : 0
-	g_lsgO[3] = e ? 0 : lsgWhy
+	g_lsgO[4] = e
+	g_lsgO[5] = e ? 1 : 0
+	g_lsgO[6] = e ? lsgMv : 0
+	g_lsgO[7] = e ? 0 : lsgWhy
 	if (!lsgRe)
 		lsg_n41(ctx)
 	#pragma unused lsgWait
@@ -4659,35 +4678,35 @@ lsg_n40(ctx[])
 // Play Animation (anim)
 lsg_n41(ctx[])
 {
-	lsg_ec_anim(g_lsgO[0], "idle", -1, 1.0, true, true, 1.5, 64)
+	lsg_ec_anim(g_lsgO[4], "idle", -1, 1.0, true, true, 1.5, 64)
 	lsg_n42(ctx)
 }
 
 // Attach To (att)
 lsg_n42(ctx[])
 {
-	lsg_ec_attach(g_lsgO[0], g_lsgOut[31], lsg_vec(128.0, 0.0, 0.0), -1, true, 64)
+	lsg_ec_attach(g_lsgO[4], g_lsgO[0], lsg_vec(128.0, 0.0, 0.0), -1, true, 64)
 	lsg_n43(ctx)
 }
 
 // Attach To (att2)
 lsg_n43(ctx[])
 {
-	lsg_ec_attach(g_lsgO[0], g_lsgOut[31], -1, 0, false, 64)
+	lsg_ec_attach(g_lsgO[4], g_lsgO[0], -1, 0, false, 64)
 	lsg_n44(ctx)
 }
 
 // Detach (det)
 lsg_n44(ctx[])
 {
-	lsg_ec_detach(g_lsgO[0], true)
+	lsg_ec_detach(g_lsgO[4], true)
 	lsg_n45(ctx)
 }
 
 // Set Entity Property (pset2)
 lsg_n45(ctx[])
 {
-	lsg_ec_set(g_lsgO[0], 6, 2.0, -1, lsg_vec(255.0, 255.0, 255.0))
+	lsg_ec_set(g_lsgO[4], 6, 2.0, -1, lsg_vec(255.0, 255.0, 255.0))
 	#pragma unused ctx
 }
 

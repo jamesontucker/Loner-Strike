@@ -32,7 +32,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 12
+#define LSG_O 31
 #define LSG_OT 3
 
 // The mode's variables
@@ -314,6 +314,26 @@ stock bool:lsg_proj_from(e, Float:f, Float:r, Float:u, rot, copy, Float:o[3], Fl
 			a[k] += lsg_vc(rot, k)
 	angle_vector(a, ANGLEVECTOR_FORWARD, d)
 	return true
+}
+
+// Spawn Projectile's spot and way: At position and Direction / Rotation win over the entity's
+stock bool:lsg_proj_at(e, Float:f, Float:r, Float:u, rot, copy, pos, dir, ang, Float:o[3], Float:d[3])
+{
+	new bool:ok = lsg_proj_from(e, f, r, u, rot, copy, o, d)
+	if (pos >= 0)
+	{
+		lsg_vto(pos, o)
+		ok = true
+	}
+	if (dir >= 0)
+		lsg_vto(dir, d)
+	else if (ang >= 0)
+	{
+		new Float:pa[3]
+		lsg_vto(ang, pa)
+		angle_vector(pa, ANGLEVECTOR_FORWARD, d)
+	}
+	return ok
 }
 
 #define LSG_PJ 64
@@ -5955,37 +5975,97 @@ lsg_n11(ctx[])
 // Spawn NPC (n6)
 lsg_n12(ctx[])
 {
-	new Float:o[3]
-	if (!!ls_components_running() && lsg_origin_of("", o))
-		g_lsgOut[12] = ls_npc_spawn("models/barney.mdl", o, 0.0, "Guide", "behavior=stand unkillable=1")
-	lsg_n13(ctx)
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 12
+	if (!lsgRe)
+		g_lsgXrN[12] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn NPC")))
+		lsgWhy = 2
+	else if (!(lsg_origin_of("", o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 2, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_npc_spawn("models/barney.mdl", o, 0.0, "Guide", "behavior=stand unkillable=1 blocked=here")))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[12] = e
+	g_lsgO[1] = e
+	g_lsgO[2] = e ? 1 : 0
+	g_lsgO[3] = e ? lsgMv : 0
+	g_lsgO[4] = e ? 0 : lsgWhy
+	if (!lsgRe)
+		lsg_n13(ctx)
+	#pragma unused lsgWait
 }
 
 // Spawn Interactable (n7)
 lsg_n13(ctx[])
 {
-	new Float:o[3]
-	if (!!ls_components_running() && lsg_origin_of("", o))
-		g_lsgOut[13] = ls_interactable_spawn("models/w_weaponbox.mdl", o, "Press E to use", "once=1 hide=0 bots=0")
-	lsg_n14(ctx)
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 13
+	if (!lsgRe)
+		g_lsgXrN[13] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn Interactable")))
+		lsgWhy = 2
+	else if (!(lsg_origin_of("", o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 0, 3, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_interactable_spawn("models/w_weaponbox.mdl", o, "Press E to use", "once=1 hide=0 bots=0 blocked=here")))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[13] = e
+	g_lsgO[5] = e
+	g_lsgO[6] = e ? 1 : 0
+	g_lsgO[7] = e ? lsgMv : 0
+	g_lsgO[8] = e ? 0 : lsgWhy
+	if (!lsgRe)
+		lsg_n14(ctx)
+	#pragma unused lsgWait
 }
 
 // Spawn Projectile (n8)
 lsg_n14(ctx[])
 {
-	new Float:o[3], Float:d[3], lsgK[160], bool:lsgA = true
-	lsgA = lsg_proj_from(0, 16.0, 0.0, 0.0, -1, 1, o, d)
+	new Float:d[3], lsgK[160]
 	formatex(lsgK, charsmax(lsgK), "trail=0 spin=0 bounce=0 radius=0 falloff=1 explode=0 dangerous=0 damage=%.0f scale=%.2f", floatclamp(0.0, 0.0, 5000.0), floatclamp(1.0, 0.05, 4.0))
 	if (get_cvar_num("ls_proj_max") != 64)
 		set_cvar_num("ls_proj_max", 64)
-	g_lsgOut[14] = 0
-	if (!!ls_components_running() && lsgA)
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 14
+	if (!lsgRe)
+		g_lsgXrN[14] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn Projectile")))
+		lsgWhy = 2
+	else if (!(ls_proj_count() < 64))
+		lsgWhy = 3
+	else if (!(lsg_have("models/w_hegrenade.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_proj_at(0, 16.0, 0.0, 0.0, -1, 1, -1, -1, -1, o, d)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, -1, 0, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_proj_spawn(0, "models/w_hegrenade.mdl", o, d, floatclamp(1000.0, 1.0, 5000.0), 0.0, 5.0, lsgK)))
+		lsgWhy = 6
+	if (e)
 	{
-		g_lsgOut[14] = (lsg_ent_room("Spawn Projectile") ? ls_proj_spawn(0, "models/w_hegrenade.mdl", o, d, floatclamp(1000.0, 1.0, 5000.0), 0.0, 5.0, lsgK) : 0)
-		if (g_lsgOut[14])
-			lsg_pj_note(g_lsgOut[14], 15, ctx)
+		lsg_pj_note(e, 15, ctx)
 	}
-	lsg_n16(ctx)
+	new bool:lsgWait = false
+	g_lsgOut[14] = e
+	g_lsgO[9] = e
+	g_lsgO[17] = e ? 1 : 0
+	g_lsgO[18] = e ? lsgMv : 0
+	g_lsgO[19] = e ? 0 : lsgWhy
+	if (!lsgRe)
+		lsg_n16(ctx)
+	#pragma unused lsgWait
 }
 
 // Spawn Projectile (n8): its hits and its end
@@ -5996,6 +6076,13 @@ stock lsg_pjhit14(ctx[], owner, const Float:pos[3], const Float:normal[3], hit, 
 	#pragma unused normal
 	#pragma unused hit
 	#pragma unused hitgroup
+	g_lsgO[10] = lsg_vfrom(pos)
+	g_lsgO[11] = lsg_vfrom(normal)
+	g_lsgO[12] = (hit >= 1 && hit <= MaxClients) ? hit : 0
+	g_lsgO[13] = (hit > MaxClients) ? hit : 0
+	g_lsgO[14] = hit == 0 ? 1 : 0
+	g_lsgO[15] = _:float(hitgroup)
+	g_lsgO[16] = owner
 	#pragma unused ctx
 }
 
@@ -6049,14 +6136,14 @@ lsg_n19(ctx[])
 // Run Server Command (n27)
 lsg_n20(ctx[])
 {
-	g_lsgO[1] = lsg_safe_cmd("sv_gravity 800", 0) ? 1 : 0
+	g_lsgO[20] = lsg_safe_cmd("sv_gravity 800", 0) ? 1 : 0
 	lsg_n21(ctx)
 }
 
 // Run AMX Command (n28)
 lsg_n21(ctx[])
 {
-	g_lsgO[2] = lsg_safe_cmd("amx_slap @T 0", 1) ? 1 : 0
+	g_lsgO[21] = lsg_safe_cmd("amx_slap @T 0", 1) ? 1 : 0
 	lsg_n22(ctx)
 }
 
@@ -6345,10 +6432,10 @@ lsg_n60(ctx[])
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[60] = e
-	g_lsgO[3] = e
-	g_lsgO[4] = e ? 1 : 0
-	g_lsgO[5] = e ? lsgMv : 0
-	g_lsgO[6] = e ? 0 : lsgWhy
+	g_lsgO[22] = e
+	g_lsgO[23] = e ? 1 : 0
+	g_lsgO[24] = e ? lsgMv : 0
+	g_lsgO[25] = e ? 0 : lsgWhy
 	if (!lsgRe)
 		lsg_n61(ctx)
 	#pragma unused lsgWait
@@ -6484,7 +6571,7 @@ lsg_n77(ctx[])
 // Swap Places (n124)
 lsg_n78(ctx[])
 {
-	g_lsgO[7] = lsg_swap(ctx[0], ctx[0])
+	g_lsgO[26] = lsg_swap(ctx[0], ctx[0])
 	lsg_n79(ctx)
 }
 
@@ -6538,12 +6625,12 @@ lsg_n85(ctx[])
 	new lsgE = lsg_find("spot1")
 	if (lsgE >= 1 && lsgE <= MaxClients && is_user_connected(lsgE))
 	{
-		g_lsgO[8] = lsgE
+		g_lsgO[27] = lsgE
 		lsg_n86(ctx)
 	}
 	else
 	{
-		g_lsgO[8] = 0
+		g_lsgO[27] = 0
 	}
 }
 
@@ -6553,13 +6640,13 @@ lsg_n86(ctx[])
 	new lsgE = lsg_find("spot1")
 	if (lsg_is_creature(lsgE))
 	{
-		g_lsgO[9] = lsgE
+		g_lsgO[28] = lsgE
 		copy(g_lsgOT[0], 127, lsg_cr_type(lsgE))
 		lsg_n87(ctx)
 	}
 	else
 	{
-		g_lsgO[9] = 0
+		g_lsgO[28] = 0
 	}
 }
 
@@ -6567,8 +6654,8 @@ lsg_n86(ctx[])
 lsg_n87(ctx[])
 {
 	new r, called = lsg_call("gm_components.amxx", "plugin_cfg", 0, floatround(0.0), floatround(0.0), r)
-	g_lsgO[10] = _:float(r)
-	g_lsgO[11] = called
+	g_lsgO[29] = _:float(r)
+	g_lsgO[30] = called
 	lsg_n88(ctx)
 }
 

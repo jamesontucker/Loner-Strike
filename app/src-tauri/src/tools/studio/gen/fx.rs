@@ -299,7 +299,7 @@ pub(super) fn apply(gen: &Gen, n: &Node, def: &'static NodeDef, id: &str, e: &st
 }
 
 /// The solid spawn nodes with "If the spot is blocked" (their Moved output needs its own slot).
-pub(crate) const STORE: [&str; 5] = ["ent.spawn_prop", "creature.spawn", "comp.create", "ent.spawn_entity", "ent.spawn_weapon"];
+pub(crate) const STORE: [&str; 8] = ["ent.spawn_prop", "creature.spawn", "comp.create", "ent.spawn_entity", "ent.spawn_weapon", "npc.spawn", "npc.spawn_use", "proj.spawn"];
 
 /// How big a solid spawn is for the free-spot check: 0 small (a weapon, an item), 1 medium (a
 /// prop, a component), 2 tall (a creature); -1 no check (it isn't solid).
@@ -308,6 +308,10 @@ pub(super) fn hull_size(n: &Node, def: &NodeDef) -> i64 {
         "ent.spawn_prop" if !n.params.get("solid").and_then(Value::as_bool).unwrap_or(true) => -1,
         "ent.spawn_prop" | "comp.create" => 1,
         "creature.spawn" => 2,
+        // T1fix: an NPC stands like a person; an interactable is small; a projectile isn't solid
+        "npc.spawn" => 2,
+        "npc.spawn_use" => 0,
+        "proj.spawn" => -1,
         "ent.spawn_weapon" => 0,
         "ent.spawn_entity" => match n.params.get("class").and_then(Value::as_str).unwrap_or("env_sprite") {
             "armoury_entity" | "item_healthkit" | "item_battery" | "env_beverage" => 0,
@@ -321,6 +325,7 @@ pub(super) fn hull_size(n: &Node, def: &NodeDef) -> i64 {
 /// Spawn Failure (graph.rs BUILTIN_ENUMS "ls_spawn_fail"): why a spawn node didn't make its thing.
 pub(crate) const WHY_BLOCKED: i64 = 1;
 pub(crate) const WHY_SLOTS: i64 = 2;
+pub(crate) const WHY_LIMIT: i64 = 3;
 pub(crate) const WHY_MISSING: i64 = 4;
 pub(crate) const WHY_RETRIES: i64 = 5;
 pub(crate) const WHY_BAD: i64 = 6;

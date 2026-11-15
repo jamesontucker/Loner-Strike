@@ -6410,7 +6410,7 @@
    "type": "npc.spawn",
    "title": "Spawn NPC",
    "category": "NPCs",
-   "help": "Makes an NPC at an entity (wired into At), a point, or the entity with this name. Its model is loaded with the map (models/...mdl). Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites.",
+   "help": "Makes an NPC at an entity (wired into At), a point, or the entity with this name. Its model is loaded with the map (models/...mdl). If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites.",
    "inputs": [
     {
      "id": "exec",
@@ -6469,7 +6469,32 @@
     {
      "id": "out",
      "type": "entity",
-     "label": "NPC"
+     "label": "Entity"
+    },
+    {
+     "id": "spawned",
+     "type": "exec",
+     "label": "Spawned"
+    },
+    {
+     "id": "failed",
+     "type": "exec",
+     "label": "Failed"
+    },
+    {
+     "id": "ok",
+     "type": "bool",
+     "label": "Success"
+    },
+    {
+     "id": "moved",
+     "type": "bool",
+     "label": "Moved"
+    },
+    {
+     "id": "reason",
+     "type": "enum:ls_spawn_fail",
+     "label": "Failure reason"
     }
    ],
    "params": [
@@ -6523,6 +6548,58 @@
      "default": true
     },
     {
+     "id": "blocked",
+     "label": "If the spot is blocked",
+     "kind": "choice",
+     "default": "nearby",
+     "choices": [
+      [
+       "force",
+       "Always spawn, ignore collisions"
+      ],
+      [
+       "nearby_always",
+       "Try a nearby spot, but always spawn"
+      ],
+      [
+       "nearby",
+       "Try a nearby spot, don't spawn if still blocked"
+      ],
+      [
+       "exact",
+       "Don't spawn if blocked"
+      ],
+      [
+       "retry",
+       "Retry every N seconds up to M tries"
+      ]
+     ]
+    },
+    {
+     "id": "max_dist",
+     "label": "Max distance for a nearby spot",
+     "kind": "number",
+     "default": 128,
+     "min": 16,
+     "max": 1024
+    },
+    {
+     "id": "retry_every",
+     "label": "Retry every (seconds)",
+     "kind": "number",
+     "default": 1,
+     "min": 0.1,
+     "max": 60
+    },
+    {
+     "id": "retry_tries",
+     "label": "Retry tries (0: until clear)",
+     "kind": "number",
+     "default": 10,
+     "min": 0,
+     "max": 1000
+    },
+    {
      "id": "copy_rot",
      "label": "Face the way At entity faces",
      "kind": "bool",
@@ -6537,14 +6614,14 @@
      "max": 10
     }
    ],
-   "keywords": "npc character create make quest giver",
+   "keywords": "npc character create make quest giver collision handling force spawn always spawn blocked free spot fallback",
    "needs": "components"
   },
   {
    "type": "npc.spawn_use",
    "title": "Spawn Interactable",
    "category": "NPCs",
-   "help": "Makes an interactable at an entity (wired into At), a point, or the entity with this name: a model players use (E), with a prompt when they look at it. Once: usable once a round. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites.",
+   "help": "Makes an interactable at an entity (wired into At), a point, or the entity with this name: a model players use (E), with a prompt when they look at it. Once: usable once a round. If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites.",
    "inputs": [
     {
      "id": "exec",
@@ -6603,7 +6680,32 @@
     {
      "id": "out",
      "type": "entity",
-     "label": "Interactable"
+     "label": "Entity"
+    },
+    {
+     "id": "spawned",
+     "type": "exec",
+     "label": "Spawned"
+    },
+    {
+     "id": "failed",
+     "type": "exec",
+     "label": "Failed"
+    },
+    {
+     "id": "ok",
+     "type": "bool",
+     "label": "Success"
+    },
+    {
+     "id": "moved",
+     "type": "bool",
+     "label": "Moved"
+    },
+    {
+     "id": "reason",
+     "type": "enum:ls_spawn_fail",
+     "label": "Failure reason"
     }
    ],
    "params": [
@@ -6645,6 +6747,58 @@
      "default": false
     },
     {
+     "id": "blocked",
+     "label": "If the spot is blocked",
+     "kind": "choice",
+     "default": "exact",
+     "choices": [
+      [
+       "force",
+       "Always spawn, ignore collisions"
+      ],
+      [
+       "nearby_always",
+       "Try a nearby spot, but always spawn"
+      ],
+      [
+       "nearby",
+       "Try a nearby spot, don't spawn if still blocked"
+      ],
+      [
+       "exact",
+       "Don't spawn if blocked"
+      ],
+      [
+       "retry",
+       "Retry every N seconds up to M tries"
+      ]
+     ]
+    },
+    {
+     "id": "max_dist",
+     "label": "Max distance for a nearby spot",
+     "kind": "number",
+     "default": 128,
+     "min": 16,
+     "max": 1024
+    },
+    {
+     "id": "retry_every",
+     "label": "Retry every (seconds)",
+     "kind": "number",
+     "default": 1,
+     "min": 0.1,
+     "max": 60
+    },
+    {
+     "id": "retry_tries",
+     "label": "Retry tries (0: until clear)",
+     "kind": "number",
+     "default": 10,
+     "min": 0,
+     "max": 1000
+    },
+    {
      "id": "copy_rot",
      "label": "Face the way At entity faces",
      "kind": "bool",
@@ -6659,14 +6813,14 @@
      "max": 10
     }
    ],
-   "keywords": "interactable lever note terminal pickup usable create",
+   "keywords": "interactable lever note terminal pickup usable create collision handling force spawn always spawn blocked free spot fallback",
    "needs": "components"
   },
   {
    "type": "proj.spawn",
    "title": "Spawn Projectile",
    "category": "Projectiles",
-   "help": "Fires a model or sprite (loaded with the map). Where from: At position, else At entity (a player's eyes) moved by Local offset along its own forward, right and up (16 forward when nothing is wired there), else the owner's eyes. Which way: Direction, else Rotation, else the way At entity (or the owner) faces when Face the way At entity faces is on, turned by Rotation offset; Velocity, when wired, sets the motion outright. Gravity 0 flies straight; 1 falls like a grenade. Bounces: off walls before it stops. Damage: to what it hits, or everything within Radius (less further out with Falloff). Kills count for the owner. On Hit runs later for this projectile only, with what it hit (each bounce too); On Expired when its time runs out. 64 fly at most; a new round clears them.",
+   "help": "Fires a model or sprite (loaded with the map). Where from: At position, else At entity (a player's eyes) moved by Local offset along its own forward, right and up (16 forward when nothing is wired there), else the owner's eyes. Which way: Direction, else Rotation, else the way At entity (or the owner) faces when Face the way At entity faces is on, turned by Rotation offset; Velocity, when wired, sets the motion outright. Gravity 0 flies straight; 1 falls like a grenade. Bounces: off walls before it stops. Damage: to what it hits, or everything within Radius (less further out with Falloff). Kills count for the owner. On Hit runs later for this projectile only, with what it hit (each bounce too); On Expired when its time runs out. 64 fly at most; a new round clears them. If the spot is blocked (Unreal's Spawn Collision Handling): Always spawn, ignore collisions (Unreal's Always Spawn: it may get stuck); Try a nearby spot, but always spawn (Adjust If Possible But Always Spawn); Try a nearby spot, don't spawn if still blocked (Adjust If Possible But Don't Spawn If Colliding); Don't spawn if blocked (Do Not Spawn); or Retry every N seconds up to M tries (0: until it's clear). Nearby means within Max distance; Moved says it was moved. Outputs: Then goes on right away; Spawned once it exists, Failed once it gives up (Retry can make these come later); Entity, Success, Moved and Failure Reason (Blocked, Out of entity slots, Limit reached, Missing file, Retries used up, Bad input) let you try a fallback, like another spot.",
    "inputs": [
     {
      "id": "exec",
@@ -6749,7 +6903,7 @@
     {
      "id": "out",
      "type": "entity",
-     "label": "Projectile"
+     "label": "Entity"
     },
     {
      "id": "on_hit",
@@ -6795,6 +6949,31 @@
      "id": "hit_owner",
      "type": "player",
      "label": "Owner"
+    },
+    {
+     "id": "spawned",
+     "type": "exec",
+     "label": "Spawned"
+    },
+    {
+     "id": "failed",
+     "type": "exec",
+     "label": "Failed"
+    },
+    {
+     "id": "ok",
+     "type": "bool",
+     "label": "Success"
+    },
+    {
+     "id": "moved",
+     "type": "bool",
+     "label": "Moved"
+    },
+    {
+     "id": "reason",
+     "type": "enum:ls_spawn_fail",
+     "label": "Failure reason"
     }
    ],
    "params": [
@@ -6895,9 +7074,61 @@
      "label": "Dangerous to bots",
      "kind": "bool",
      "default": false
+    },
+    {
+     "id": "blocked",
+     "label": "If the spot is blocked",
+     "kind": "choice",
+     "default": "force",
+     "choices": [
+      [
+       "force",
+       "Always spawn, ignore collisions"
+      ],
+      [
+       "nearby_always",
+       "Try a nearby spot, but always spawn"
+      ],
+      [
+       "nearby",
+       "Try a nearby spot, don't spawn if still blocked"
+      ],
+      [
+       "exact",
+       "Don't spawn if blocked"
+      ],
+      [
+       "retry",
+       "Retry every N seconds up to M tries"
+      ]
+     ]
+    },
+    {
+     "id": "max_dist",
+     "label": "Max distance for a nearby spot",
+     "kind": "number",
+     "default": 128,
+     "min": 16,
+     "max": 1024
+    },
+    {
+     "id": "retry_every",
+     "label": "Retry every (seconds)",
+     "kind": "number",
+     "default": 1,
+     "min": 0.1,
+     "max": 60
+    },
+    {
+     "id": "retry_tries",
+     "label": "Retry tries (0: until clear)",
+     "kind": "number",
+     "default": 10,
+     "min": 0,
+     "max": 1000
     }
    ],
-   "keywords": "projectile rocket arrow fireball bullet throw shoot missile grenade",
+   "keywords": "projectile rocket arrow fireball bullet throw shoot missile grenade collision handling force spawn always spawn blocked free spot fallback",
    "needs": "components"
   },
   {

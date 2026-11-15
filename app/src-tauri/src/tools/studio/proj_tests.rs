@@ -80,9 +80,70 @@ fn projectiles_generate_with_their_own_callbacks() {
         assert_eq!(bodies.len(), 2, "one hit flow per Spawn Projectile");
         assert_ne!(bodies[0], bodies[1], "the two Spawn Projectile nodes run different hit flows");
         // the projectile is noted with its node and context; the From point and offsets are used
-        assert!(src.contains("lsg_pj_note(g_lsgOut[") && src.contains("lsg_proj_from(") && src.contains("ls_proj_set_velocity("));
+        assert!(src.contains("lsg_pj_note(e, ") && src.contains("lsg_proj_at(") && src.contains("ls_proj_set_velocity("), "{src}");
         assert!(src.contains("ls_proj_remove(") && src.contains("lsg_proj_vel("));
         assert!(!src.contains("server_cmd(") || !src.contains("ls_proj_test"));
+    }
+}
+
+/// The spawn outcome standard (docs/notes/FX.md) on Spawn Projectile, Spawn NPC and Spawn
+/// Interactable: each Failure Reason it can give comes from its own check (gm_components missing:
+/// Bad input; Out of entity slots; Limit reached; Missing file; Blocked; Retries used up), the
+/// defaults are Always spawn (projectile, not solid), nearby (NPC, tall), exact (interactable,
+/// small), and gm_components takes the spot as given (blocked=here: one check).
+#[test]
+fn spawn_nodes_say_why_they_failed() {
+    let e = |id: &str, a: &str, ap: &str, b: &str, bp: &str| json!({"id": id, "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+    let g = graph::parse(
+        &json!({
+            "schema": graph::SCHEMA, "version": graph::VERSION,
+            "mode": {"id": "spawn_why", "uid": "2e7b9d1c-4a3f-4b6e-8d20-5c1f7a9e3b42", "name": "Spawn outcomes", "description": "Why it failed"},
+            "variables": [], "comments": [],
+            "nodes": [
+                {"id": "k", "type": "event.player_spawned"},
+                {"id": "pj", "type": "proj.spawn", "params": {"model": "models/rpgrocket.mdl"}},
+                {"id": "npc", "type": "npc.spawn", "params": {"model": "models/barney.mdl", "name": "Sam"}},
+                {"id": "use", "type": "npc.spawn_use", "params": {"model": "models/w_weaponbox.mdl"}},
+                {"id": "wait", "type": "npc.spawn", "params": {"model": "models/gman.mdl", "blocked": "retry", "retry_every": 2, "retry_tries": 3}},
+                {"id": "why", "type": "msg.broadcast", "params": {"text": "failed"}}
+            ],
+            "edges": [
+                e("w1", "k", "then", "pj", "exec"), e("w2", "k", "player", "pj", "owner"),
+                e("w3", "pj", "then", "npc", "exec"), e("w4", "k", "player", "npc", "at_ent"),
+                e("w5", "npc", "failed", "use", "exec"), e("w6", "k", "player", "use", "at_ent"),
+                e("w7", "use", "then", "wait", "exec"), e("w8", "k", "player", "wait", "at_ent"),
+                e("w9", "wait", "failed", "why", "exec")
+            ]
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let problems = graph::validate(&g);
+    assert!(problems.iter().all(|p| p.level != "error"), "{problems:?}");
+    let reg = graph::registry();
+    let dflt = |kind: &str| reg.get(kind).unwrap().params.iter().find(|p| p.id == "blocked").map(|p| p.default.clone()).unwrap();
+    assert_eq!((dflt("proj.spawn"), dflt("npc.spawn"), dflt("npc.spawn_use")), (json!("force"), json!("nearby"), json!("exact")));
+    for out in ["then", "spawned", "failed", "out", "ok", "moved", "reason"] {
+        for k in ["proj.spawn", "npc.spawn", "npc.spawn_use"] {
+            assert!(reg.get(k).unwrap().outputs.iter().any(|o| o.id == out), "{k} {out}");
+        }
+    }
+    for debug in [false, true] {
+        let src = gen::generate(&g, debug).source;
+        // each reason from its own check (fx::WHY_*: 2 slots, 3 limit, 4 missing, 6 bad input, 1 blocked, 5 retries)
+        assert!(src.contains("if (!(ls_components_running()))\n\t\tlsgWhy = 6"), "{src}");
+        assert!(src.contains("if (!(lsg_ent_room(\"Spawn Projectile\")))\n\t\tlsgWhy = 2"));
+        assert!(src.contains("if (!(lsg_ent_room(\"Spawn NPC\")))\n\t\tlsgWhy = 2") && src.contains("if (!(lsg_ent_room(\"Spawn Interactable\")))\n\t\tlsgWhy = 2"));
+        assert!(src.contains("if (!(ls_proj_count() < 64))\n\t\tlsgWhy = 3"));
+        assert!(src.contains("if (!(lsg_have(\"models/rpgrocket.mdl\")))\n\t\tlsgWhy = 4"));
+        // the spot: the projectile isn't checked (-1, Always spawn), the NPC tall and nearby, the
+        // interactable small and exact
+        assert!(src.contains("lsg_xf_free(o, -1, 0, ") && src.contains("lsg_xf_free(o, 2, 2, ") && src.contains("lsg_xf_free(o, 0, 3, "), "{src}");
+        assert!(src.contains("lsgWhy = 1"));
+        // Retry: a timer runs the node again, and gives up with Retries used up
+        assert!(src.contains("lsgWhy = 5") && src.contains(", \"lsg_xr") && src.contains(", 2.0, ctx, o)"), "{src}");
+        // gm_components takes the spot it's given
+        assert!(src.matches("blocked=here").count() >= 3);
     }
 }
 
@@ -118,7 +179,7 @@ fn old_spawn_projectile_graphs_load_with_the_standard_pins() {
     assert!(problems.iter().all(|p| p.level != "error"), "{problems:?}");
     // the same spot: the offset from the vector, the default 16 forward, the facing kept
     let src = gen::generate(&g, false).source;
-    assert!(src.contains("lsg_proj_from(") && src.contains(", 16.0, 0.0, 0.0, -1, 1, o, d)"), "{src}");
+    assert!(src.contains("lsg_proj_at(") && src.contains(", 16.0, 0.0, 0.0, -1, 1, -1, -1, -1, o, d)"), "{src}");
     assert!(src.matches("lsg_vc(").count() >= 3, "{src}");
     // loading again changes nothing
     let again = graph::parse(&serde_json::to_string(&g).unwrap()).unwrap();

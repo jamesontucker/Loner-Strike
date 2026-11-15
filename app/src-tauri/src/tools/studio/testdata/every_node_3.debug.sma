@@ -33,7 +33,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 12
+#define LSG_O 31
 #define LSG_OT 3
 
 // The mode's variables
@@ -315,6 +315,26 @@ stock bool:lsg_proj_from(e, Float:f, Float:r, Float:u, rot, copy, Float:o[3], Fl
 			a[k] += lsg_vc(rot, k)
 	angle_vector(a, ANGLEVECTOR_FORWARD, d)
 	return true
+}
+
+// Spawn Projectile's spot and way: At position and Direction / Rotation win over the entity's
+stock bool:lsg_proj_at(e, Float:f, Float:r, Float:u, rot, copy, pos, dir, ang, Float:o[3], Float:d[3])
+{
+	new bool:ok = lsg_proj_from(e, f, r, u, rot, copy, o, d)
+	if (pos >= 0)
+	{
+		lsg_vto(pos, o)
+		ok = true
+	}
+	if (dir >= 0)
+		lsg_vto(dir, d)
+	else if (ang >= 0)
+	{
+		new Float:pa[3]
+		lsg_vto(ang, pa)
+		angle_vector(pa, ANGLEVECTOR_FORWARD, d)
+	}
+	return ok
 }
 
 #define LSG_PJ 64
@@ -6833,20 +6853,47 @@ lsg_n12(ctx[])
 	}
 	if (lsd_enter(12, ctx))
 		return
-	new Float:o[3]
-	if (!ls_components_running())
-		lsd_error(12, "gm_components isn't running on this server.")
-	else if (!lsg_origin_of("", o))
-		lsd_error(12, "No entity has that name on this map.")
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 12
+	if (!lsgRe)
+		g_lsgXrN[12] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn NPC")))
+		lsgWhy = 2
+	else if (!(lsg_origin_of("", o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 2, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_npc_spawn("models/barney.mdl", o, 0.0, "Guide", "behavior=stand unkillable=1 blocked=here")))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[12] = e
+	g_lsgO[1] = e
+	g_lsgO[2] = e ? 1 : 0
+	g_lsgO[3] = e ? lsgMv : 0
+	g_lsgO[4] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(12, "moved to a nearby free spot")
+		else
+		lsd_exit(12, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(12, "blocked: trying again")
 	else
 	{
-		g_lsgOut[12] = ls_npc_spawn("models/barney.mdl", o, 0.0, "Guide", "behavior=stand unkillable=1")
-		if (g_lsgOut[12])
-			lsd_exit(12, fmt("entity %d", g_lsgOut[12]))
-		else
-			lsd_error(12, "Not made: its model isn't loaded with this map, or there's no room.")
+		switch (lsgWhy)
+		{
+			case 6: lsd_error(12, "gm_components isn't running on this server.")
+			case 2: lsd_error(12, "Not made: the server is out of entity slots.")
+			case 1: lsd_error(12, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(12, "The spot stayed blocked: every retry was used up.")
+		}
 	}
-	lsg_n13(ctx)
+	if (!lsgRe)
+		lsg_n13(ctx)
 }
 
 // Spawn Interactable (n7)
@@ -6860,20 +6907,47 @@ lsg_n13(ctx[])
 	}
 	if (lsd_enter(13, ctx))
 		return
-	new Float:o[3]
-	if (!ls_components_running())
-		lsd_error(13, "gm_components isn't running on this server.")
-	else if (!lsg_origin_of("", o))
-		lsd_error(13, "No entity has that name on this map.")
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 13
+	if (!lsgRe)
+		g_lsgXrN[13] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn Interactable")))
+		lsgWhy = 2
+	else if (!(lsg_origin_of("", o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 0, 3, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_interactable_spawn("models/w_weaponbox.mdl", o, "Press E to use", "once=1 hide=0 bots=0 blocked=here")))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[13] = e
+	g_lsgO[5] = e
+	g_lsgO[6] = e ? 1 : 0
+	g_lsgO[7] = e ? lsgMv : 0
+	g_lsgO[8] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(13, "moved to a nearby free spot")
+		else
+		lsd_exit(13, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(13, "blocked: trying again")
 	else
 	{
-		g_lsgOut[13] = ls_interactable_spawn("models/w_weaponbox.mdl", o, "Press E to use", "once=1 hide=0 bots=0")
-		if (g_lsgOut[13])
-			lsd_exit(13, fmt("entity %d", g_lsgOut[13]))
-		else
-			lsd_error(13, "Not made: its model isn't loaded with this map, or there's no room.")
+		switch (lsgWhy)
+		{
+			case 6: lsd_error(13, "gm_components isn't running on this server.")
+			case 2: lsd_error(13, "Not made: the server is out of entity slots.")
+			case 1: lsd_error(13, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(13, "The spot stayed blocked: every retry was used up.")
+		}
 	}
-	lsg_n14(ctx)
+	if (!lsgRe)
+		lsg_n14(ctx)
 }
 
 // Spawn Projectile (n8)
@@ -6891,26 +6965,61 @@ lsg_n14(ctx[])
 	}
 	if (lsd_enter(14, ctx))
 		return
-	new Float:o[3], Float:d[3], lsgK[160], bool:lsgA = true
-	lsgA = lsg_proj_from(0, 16.0, 0.0, 0.0, -1, 1, o, d)
+	new Float:d[3], lsgK[160]
 	formatex(lsgK, charsmax(lsgK), "trail=0 spin=0 bounce=0 radius=0 falloff=1 explode=0 dangerous=0 damage=%.0f scale=%.2f", floatclamp(lsi9, 0.0, 5000.0), floatclamp(lsi10, 0.05, 4.0))
 	if (get_cvar_num("ls_proj_max") != 64)
 		set_cvar_num("ls_proj_max", 64)
-	if (!ls_components_running())
-		lsd_error(14, "gm_components isn't running on this server.")
-	else if (!lsgA)
-		lsd_error(14, "Not fired: no Position, and no At entity or living owner to fire from.")
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 14
+	if (!lsgRe)
+		g_lsgXrN[14] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn Projectile")))
+		lsgWhy = 2
+	else if (!(ls_proj_count() < 64))
+		lsgWhy = 3
+	else if (!(lsg_have("models/w_hegrenade.mdl")))
+		lsgWhy = 4
+	else if (!(lsg_proj_at(0, 16.0, 0.0, 0.0, -1, 1, -1, -1, -1, o, d)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, -1, 0, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_proj_spawn(0, "models/w_hegrenade.mdl", o, d, floatclamp(lsi8, 1.0, 5000.0), 0.0, 5.0, lsgK)))
+		lsgWhy = 6
+	if (e)
+	{
+		lsg_pj_note(e, 15, ctx)
+	}
+	new bool:lsgWait = false
+	g_lsgOut[14] = e
+	g_lsgO[9] = e
+	g_lsgO[17] = e ? 1 : 0
+	g_lsgO[18] = e ? lsgMv : 0
+	g_lsgO[19] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(14, "moved to a nearby free spot")
+		else
+		lsd_exit(14, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(14, "blocked: trying again")
 	else
 	{
-		g_lsgOut[14] = (lsg_ent_room("Spawn Projectile") ? ls_proj_spawn(0, "models/w_hegrenade.mdl", o, d, floatclamp(lsi8, 1.0, 5000.0), 0.0, 5.0, lsgK) : 0)
-		if (g_lsgOut[14])
-			lsg_pj_note(g_lsgOut[14], 15, ctx)
-		if (g_lsgOut[14])
-			lsd_exit(14, fmt("entity %d", g_lsgOut[14]))
-		else
-			lsd_error(14, "Spawn Projectile skipped: the server is out of entity slots.")
+		switch (lsgWhy)
+		{
+			case 6: lsd_error(14, "gm_components isn't running on this server.")
+			case 2: lsd_error(14, "Spawn Projectile skipped: the server is out of entity slots.")
+			case 3: lsd_error(14, "Not fired: as many projectiles fly as Projectiles at once allows (Limits).")
+			case 4: lsd_error(14, "Not fired: its model or sprite isn't loaded with this map.")
+			case 1: lsd_error(14, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(14, "The spot stayed blocked: every retry was used up.")
+		}
 	}
-	lsg_n16(ctx)
+	if (!lsgRe)
+		lsg_n16(ctx)
 }
 
 // Spawn Projectile (n8): its hits and its end
@@ -6921,6 +7030,13 @@ stock lsg_pjhit14(ctx[], owner, const Float:pos[3], const Float:normal[3], hit, 
 	#pragma unused normal
 	#pragma unused hit
 	#pragma unused hitgroup
+	g_lsgO[10] = lsg_vfrom(pos)
+	g_lsgO[11] = lsg_vfrom(normal)
+	g_lsgO[12] = (hit >= 1 && hit <= MaxClients) ? hit : 0
+	g_lsgO[13] = (hit > MaxClients) ? hit : 0
+	g_lsgO[14] = hit == 0 ? 1 : 0
+	g_lsgO[15] = _:float(hitgroup)
+	g_lsgO[16] = owner
 	lsd_exit(14, "hit")
 	#pragma unused ctx
 }
@@ -7029,7 +7145,7 @@ lsg_n20(ctx[])
 	}
 	if (lsd_enter(20, ctx))
 		return
-	g_lsgO[1] = lsg_safe_cmd(lsi0, 0) ? 1 : 0
+	g_lsgO[20] = lsg_safe_cmd(lsi0, 0) ? 1 : 0
 	if (!lsg_cmd_ok)
 		lsd_error(20, "Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap.")
 	else
@@ -7049,7 +7165,7 @@ lsg_n21(ctx[])
 	}
 	if (lsd_enter(21, ctx))
 		return
-	g_lsgO[2] = lsg_safe_cmd(lsi0, 1) ? 1 : 0
+	g_lsgO[21] = lsg_safe_cmd(lsi0, 1) ? 1 : 0
 	if (!lsg_cmd_ok)
 		lsd_error(21, "Refused: a mode may only send game rules (mp_), gameplay sv_ settings, bot settings and commands, our plugins' gameplay commands, say and humans_join_team; AMX commands: slap, slay, kick, the say commands, amx_cvar on those settings, amx_map and amx_nextmap.")
 	else
@@ -7704,10 +7820,10 @@ lsg_n60(ctx[])
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[60] = e
-	g_lsgO[3] = e
-	g_lsgO[4] = e ? 1 : 0
-	g_lsgO[5] = e ? lsgMv : 0
-	g_lsgO[6] = e ? 0 : lsgWhy
+	g_lsgO[22] = e
+	g_lsgO[23] = e ? 1 : 0
+	g_lsgO[24] = e ? lsgMv : 0
+	g_lsgO[25] = e ? 0 : lsgWhy
 	if (e)
 	{
 		if (lsgMv)
@@ -8037,8 +8153,8 @@ lsg_n78(ctx[])
 	}
 	if (lsd_enter(78, ctx))
 		return
-	g_lsgO[7] = lsg_swap(lsi0, lsi1)
-	if (!g_lsgO[7])
+	g_lsgO[26] = lsg_swap(lsi0, lsi1)
+	if (!g_lsgO[26])
 		lsd_error(78, "Not swapped: one isn't alive, it's the same player, or one would be stuck in a wall.")
 	else
 		lsd_exit(78, "swapped")
@@ -8161,13 +8277,13 @@ lsg_n85(ctx[])
 	new lsgE = lsi0
 	if (lsgE >= 1 && lsgE <= MaxClients && is_user_connected(lsgE))
 	{
-		g_lsgO[8] = lsgE
+		g_lsgO[27] = lsgE
 		lsd_exit(85, "success")
 		lsg_n86(ctx)
 	}
 	else
 	{
-		g_lsgO[8] = 0
+		g_lsgO[27] = 0
 		lsd_exit(85, "failed")
 	}
 }
@@ -8186,14 +8302,14 @@ lsg_n86(ctx[])
 	new lsgE = lsi0
 	if (lsg_is_creature(lsgE))
 	{
-		g_lsgO[9] = lsgE
+		g_lsgO[28] = lsgE
 		copy(g_lsgOT[0], 127, lsg_cr_type(lsgE))
 		lsd_exit(86, "success")
 		lsg_n87(ctx)
 	}
 	else
 	{
-		g_lsgO[9] = 0
+		g_lsgO[28] = 0
 		lsd_exit(86, "failed")
 	}
 }
@@ -8212,8 +8328,8 @@ lsg_n87(ctx[])
 	if (lsd_enter(87, ctx))
 		return
 	new r, called = lsg_call("gm_components.amxx", "plugin_cfg", 0, floatround(lsi0), floatround(lsi1), r)
-	g_lsgO[10] = _:float(r)
-	g_lsgO[11] = called
+	g_lsgO[29] = _:float(r)
+	g_lsgO[30] = called
 	if (!called)
 		lsd_error(87, "Not called: no such plugin running, or no such public function in it.")
 	else
