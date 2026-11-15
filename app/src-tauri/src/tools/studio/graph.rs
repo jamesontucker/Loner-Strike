@@ -2343,6 +2343,16 @@ fn advanced_problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
                     p.push(Problem::err(Some(&n.id), "Objective Marker is for one player: wire the player into Player."));
                 }
             }
+            "fun.burst" => {
+                if v.data_source(&n.id, "at").is_none() && v.data_source(&n.id, "pos").is_none() {
+                    p.push(Problem::err(Some(&n.id), "Effect Burst needs an entity wired into At or a Position."));
+                }
+            }
+            "fun.swap" => {
+                if v.data_source(&n.id, "a").is_some() && v.data_source(&n.id, "a") == v.data_source(&n.id, "b") {
+                    p.push(Problem::warn(Some(&n.id), "Swap Places has the same player in A and B: nothing happens."));
+                }
+            }
             "msg.status_icon" | "msg.killfeed" => {
                 let (k, list): (&str, &[&str]) = if def.kind == "msg.status_icon" { ("icon", &super::gen::STATUS_ICONS) } else { ("weapon", &super::gen::KILL_ICONS) };
                 if n.params.get(k).and_then(Value::as_str).is_some_and(|x| !list.contains(&x)) {

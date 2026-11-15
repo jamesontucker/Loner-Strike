@@ -932,6 +932,422 @@ stock lsg_killfeed(killer, victim, hs, const w[])
 	return 1
 }
 
+// ---- fun: fire, trails, bursts, swaps, burying, the camera, a drunk view ----
+stock g_lsgSprFire, g_lsgSprSmoke, g_lsgSprBlood, g_lsgSprSpray
+stock Float:g_lsgBurnTill[33], Float:g_lsgBurnDps[33], Float:g_lsgBurnNext[33], g_lsgBurnBy[33], g_lsgBurnFx[33]
+stock bool:g_lsgBuried[33], g_lsgCam[33], g_lsgCamKeep[33], Float:g_lsgDrunkTill[33], Float:g_lsgDrunk[33], g_lsgFunN
+stock g_lsgTrail[32], g_lsgTrailC[32][5], bool:g_lsgTrailStill[32]
+
+stock lsg_burn(id, by, Float:secs, Float:dps)
+{
+	if (!ls_alive(id))
+		return 0
+	new Float:now = get_gametime()
+	g_lsgBurnTill[id] = now + secs
+	g_lsgBurnDps[id] = dps
+	g_lsgBurnBy[id] = lsg_ok(by) ? by : 0
+	if (g_lsgBurnNext[id] < now)
+		g_lsgBurnNext[id] = now + 1.0
+	// flames on them: a sprite that rides along (the engine moves it: MOVETYPE_FOLLOW)
+	if (g_lsgSprFire && !(g_lsgBurnFx[id] && pev_valid(g_lsgBurnFx[id])))
+	{
+		new e = create_entity("info_target")
+		if (e > 0)
+		{
+			set_pev(e, pev_classname, "ls_studio_fire")
+			engfunc(EngFunc_SetModel, e, "sprites/fire.spr")
+			set_pev(e, pev_movetype, MOVETYPE_FOLLOW)
+			set_pev(e, pev_aiment, id)
+			set_pev(e, pev_solid, SOLID_NOT)
+			set_pev(e, pev_rendermode, kRenderTransAdd)
+			set_pev(e, pev_renderamt, 255.0)
+			g_lsgBurnFx[id] = e
+		}
+	}
+	return 1
+}
+
+stock lsg_burn_off(id)
+{
+	if (id < 1 || id > 32)
+		return
+	g_lsgBurnTill[id] = 0.0
+	if (g_lsgBurnFx[id] && pev_valid(g_lsgBurnFx[id]))
+		remove_entity(g_lsgBurnFx[id])
+	g_lsgBurnFx[id] = 0
+}
+
+stock lsg_drunk(id, Float:secs, Float:strength)
+{
+	if (!ls_alive(id))
+		return 0
+	g_lsgDrunkTill[id] = get_gametime() + secs
+	g_lsgDrunk[id] = strength
+	return 1
+}
+
+stock lsg_drunk_off(id)
+{
+	if (g_lsgDrunkTill[id] > 0.0 && is_user_connected(id))
+		set_pev(id, pev_punchangle, Float:{0.0, 0.0, 0.0})
+	g_lsgDrunkTill[id] = 0.0
+}
+
+stock lsg_trail_send(k)
+{
+	new e = g_lsgTrail[k]
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_KILLBEAM)
+	write_short(e)
+	message_end()
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	write_byte(TE_BEAMFOLLOW)
+	write_short(e)
+	write_short(g_lsgSprBeam)
+	write_byte(g_lsgTrailC[k][4])
+	write_byte(g_lsgTrailC[k][3])
+	write_byte(g_lsgTrailC[k][0])
+	write_byte(g_lsgTrailC[k][1])
+	write_byte(g_lsgTrailC[k][2])
+	write_byte(200)
+	message_end()
+}
+
+stock lsg_trail(e, on, r, g, b, width, life)
+{
+	if (e <= 0 || !pev_valid(e))
+		return 0
+	new k = -1
+	for (new i = 0; i < 32; i++)
+		if (g_lsgTrail[i] == e)
+			k = i
+	if (!on)
+	{
+		if (k >= 0)
+		{
+			message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+			write_byte(TE_KILLBEAM)
+			write_short(e)
+			message_end()
+			g_lsgTrail[k] = 0
+		}
+		return 1
+	}
+	for (new i = 0; i < 32 && k < 0; i++)
+		if (!g_lsgTrail[i] || !pev_valid(g_lsgTrail[i]))
+			k = i
+	if (k < 0)
+		return 0
+	g_lsgTrail[k] = e
+	g_lsgTrailC[k][0] = r
+	g_lsgTrailC[k][1] = g
+	g_lsgTrailC[k][2] = b
+	g_lsgTrailC[k][3] = width
+	g_lsgTrailC[k][4] = life
+	g_lsgTrailStill[k] = false
+	lsg_trail_send(k)
+	return 1
+}
+
+// a trail dies with a teleport, a respawn or a long stop: sent again when they move once more
+stock lsg_trail_check()
+{
+	for (new k = 0; k < 32; k++)
+	{
+		new e = g_lsgTrail[k]
+		if (!e)
+			continue
+		if (!pev_valid(e) || (e <= MaxClients && !is_user_connected(e)))
+		{
+			g_lsgTrail[k] = 0
+			continue
+		}
+		new Float:vel[3]
+		pev(e, pev_velocity, vel)
+		if (vector_length(vel) < 1.0)
+			g_lsgTrailStill[k] = true
+		else if (g_lsgTrailStill[k])
+		{
+			g_lsgTrailStill[k] = false
+			lsg_trail_send(k)
+		}
+	}
+}
+
+stock lsg_fun_ticks()
+{
+	new Float:now = get_gametime()
+	for (new id = 1; id <= MaxClients; id++)
+	{
+		if (g_lsgBurnTill[id] > 0.0)
+		{
+			if (!is_user_alive(id) || now >= g_lsgBurnTill[id] || pev(id, pev_waterlevel) >= 2)
+				lsg_burn_off(id)
+			else if (now >= g_lsgBurnNext[id])
+			{
+				g_lsgBurnNext[id] = now + 1.0
+				new by = g_lsgBurnBy[id]
+				if (by && !is_user_connected(by))
+					by = 0
+				if (g_lsgBurnDps[id] > 0.0)
+					ExecuteHamB(Ham_TakeDamage, id, by ? by : 0, by ? by : 0, g_lsgBurnDps[id], DMG_BURN)
+			}
+		}
+		if (g_lsgDrunkTill[id] > 0.0)
+		{
+			if (!is_user_alive(id) || now >= g_lsgDrunkTill[id])
+				lsg_drunk_off(id)
+			else
+			{
+				new Float:s = g_lsgDrunk[id], Float:pa[3]
+				pa[0] = floatsin(now * 2.3, radian) * s * 2.0
+				pa[1] = floatcos(now * 1.7, radian) * s * 2.0
+				pa[2] = floatsin(now * 1.1, radian) * s
+				set_pev(id, pev_punchangle, pa)
+			}
+		}
+	}
+	if (++g_lsgFunN >= 10)
+	{
+		g_lsgFunN = 0
+		lsg_trail_check()
+	}
+}
+
+// the hull a player has now fits at o (nothing solid there)
+stock bool:lsg_fits(id, const Float:o[3])
+{
+	engfunc(EngFunc_TraceHull, o, o, IGNORE_MONSTERS, (pev(id, pev_flags) & FL_DUCKING) ? HULL_HEAD : HULL_HUMAN, id, 0)
+	return !get_tr2(0, TR_StartSolid) && !get_tr2(0, TR_AllSolid)
+}
+
+stock lsg_swap(a, b)
+{
+	if (!ls_alive(a) || !ls_alive(b) || a == b || g_lsgBuried[a] || g_lsgBuried[b])
+		return 0
+	new Float:oa[3], Float:ob[3], Float:aa[3], Float:ab[3], Float:va[3], Float:vb[3]
+	pev(a, pev_origin, oa)
+	pev(b, pev_origin, ob)
+	if (!lsg_fits(a, ob) || !lsg_fits(b, oa))
+		return 0
+	pev(a, pev_v_angle, aa)
+	pev(b, pev_v_angle, ab)
+	pev(a, pev_velocity, va)
+	pev(b, pev_velocity, vb)
+	engfunc(EngFunc_SetOrigin, a, ob)
+	engfunc(EngFunc_SetOrigin, b, oa)
+	set_pev(a, pev_angles, ab)
+	set_pev(a, pev_v_angle, ab)
+	set_pev(a, pev_fixangle, 1)
+	set_pev(b, pev_angles, aa)
+	set_pev(b, pev_v_angle, aa)
+	set_pev(b, pev_fixangle, 1)
+	set_pev(a, pev_velocity, vb)
+	set_pev(b, pev_velocity, va)
+	return 1
+}
+
+// chest deep: 30 units down, and no walking (they can still turn and shoot)
+stock lsg_bury(id)
+{
+	if (!ls_alive(id) || g_lsgBuried[id])
+		return 0
+	new Float:o[3]
+	pev(id, pev_origin, o)
+	o[2] -= 30.0
+	engfunc(EngFunc_SetOrigin, id, o)
+	set_pev(id, pev_velocity, Float:{0.0, 0.0, 0.0})
+	set_pev(id, pev_movetype, MOVETYPE_NONE)
+	g_lsgBuried[id] = true
+	return 1
+}
+
+stock lsg_unbury(id)
+{
+	if (!lsg_ok(id) || !g_lsgBuried[id])
+		return 0
+	g_lsgBuried[id] = false
+	if (!is_user_alive(id))
+		return 1
+	set_pev(id, pev_movetype, MOVETYPE_WALK)
+	new Float:o[3]
+	pev(id, pev_origin, o)
+	o[2] += 30.0
+	// (onto the floor, never into a wall: a little higher until they fit)
+	for (new i = 0; i < 8 && !lsg_fits(id, o); i++)
+		o[2] += 8.0
+	engfunc(EngFunc_SetOrigin, id, o)
+	return 1
+}
+
+// view: 0 first person, 1 third person, 2 the other one; reset: back to first person at death/respawn
+stock lsg_camera(id, view, reset)
+{
+	if (!lsg_ok(id))
+		return 0
+	new third = view == 2 ? (g_lsgCam[id] ? 0 : 1) : view
+	set_view(id, third ? CAMERA_3RDPERSON : CAMERA_NONE)
+	g_lsgCam[id] = third
+	g_lsgCamKeep[id] = reset ? 0 : 1
+	return 1
+}
+
+stock lsg_cam_reapply(id)
+{
+	if (lsg_ok(id) && g_lsgCam[id])
+		set_view(id, CAMERA_3RDPERSON)
+}
+
+stock lsg_fun_died(id)
+{
+	if (id < 1 || id > MaxClients)
+		return
+	lsg_burn_off(id)
+	lsg_drunk_off(id)
+	g_lsgBuried[id] = false
+	if (g_lsgCam[id] && !g_lsgCamKeep[id])
+	{
+		set_view(id, CAMERA_NONE)
+		g_lsgCam[id] = 0
+	}
+}
+
+stock lsg_fun_spawned(id)
+{
+	if (id < 1 || id > MaxClients || !is_user_alive(id))
+		return
+	g_lsgBuried[id] = false
+	for (new k = 0; k < 32; k++)
+		if (g_lsgTrail[k] == id)
+			lsg_trail_send(k)
+	if (g_lsgCam[id])
+	{
+		// (kept: the game may put the view back as they spawn, so it's set again a moment later)
+		if (g_lsgCamKeep[id])
+			set_task(0.2, "lsg_cam_again", LSG_TASK - 480 + id)
+		else
+		{
+			set_view(id, CAMERA_NONE)
+			g_lsgCam[id] = 0
+		}
+	}
+}
+
+stock lsg_fun_left(id)
+{
+	if (id < 1 || id > MaxClients)
+		return
+	lsg_burn_off(id)
+	g_lsgDrunkTill[id] = 0.0
+	g_lsgBuried[id] = false
+	g_lsgCam[id] = 0
+	g_lsgCamKeep[id] = 0
+	remove_task(LSG_TASK - 480 + id)
+	for (new k = 0; k < 32; k++)
+		if (g_lsgTrail[k] == id)
+			g_lsgTrail[k] = 0
+}
+
+// effect: 0 sparks, 1 smoke, 2 blood, 3 firework, 4 implosion, 5 tar, 6 teleport, 7 lava, 8 a colored flash
+stock lsg_burst(kind, const Float:o[3], count, r, g, b)
+{
+	// (smoke and blood need their sprites: not there when the map loaded, no burst)
+	if ((kind == 1 && !g_lsgSprSmoke) || (kind == 2 && (!g_lsgSprBlood || !g_lsgSprSpray)))
+		return
+	for (new n = 0; n < count; n++)
+	{
+		message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+		switch (kind)
+		{
+			case 1:
+			{
+				write_byte(TE_SMOKE)
+				lsg_coords(o)
+				write_short(g_lsgSprSmoke)
+				write_byte(20)
+				write_byte(12)
+			}
+			case 2:
+			{
+				write_byte(TE_BLOODSPRITE)
+				lsg_coords(o)
+				write_short(g_lsgSprSpray)
+				write_short(g_lsgSprBlood)
+				write_byte(247)
+				write_byte(12)
+			}
+			case 3:
+			{
+				write_byte(TE_EXPLOSION2)
+				lsg_coords(o)
+				write_byte(random_num(0, 200))
+				write_byte(16)
+			}
+			case 4:
+			{
+				write_byte(TE_IMPLOSION)
+				lsg_coords(o)
+				write_byte(128)
+				write_byte(20)
+				write_byte(5)
+			}
+			case 5:
+			{
+				write_byte(TE_TAREXPLOSION)
+				lsg_coords(o)
+			}
+			case 6:
+			{
+				write_byte(TE_TELEPORT)
+				lsg_coords(o)
+			}
+			case 7:
+			{
+				write_byte(TE_LAVASPLASH)
+				lsg_coords(o)
+			}
+			case 8:
+			{
+				write_byte(TE_DLIGHT)
+				lsg_coords(o)
+				write_byte(30)
+				write_byte(r)
+				write_byte(g)
+				write_byte(b)
+				write_byte(8)
+				write_byte(30)
+			}
+			default:
+			{
+				write_byte(TE_SPARKS)
+				lsg_coords(o)
+			}
+		}
+		message_end()
+		// (a firework's light, in its color)
+		if (kind == 3)
+		{
+			message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+			write_byte(TE_DLIGHT)
+			lsg_coords(o)
+			write_byte(25)
+			write_byte(r)
+			write_byte(g)
+			write_byte(b)
+			write_byte(6)
+			write_byte(20)
+			message_end()
+		}
+	}
+}
+
+stock lsg_coords(const Float:o[3])
+{
+	engfunc(EngFunc_WriteCoord, o[0])
+	engfunc(EngFunc_WriteCoord, o[1])
+	engfunc(EngFunc_WriteCoord, o[2])
+}
+
 // was it loaded (lsg_pre_model / lsg_pre_sound)?
 stock bool:lsg_have(const p[])
 	return g_lsgHave != Invalid_Trie && TrieKeyExists(g_lsgHave, p)

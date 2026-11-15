@@ -1402,6 +1402,73 @@ mod tests {
         assert!(src.contains("(get_user_flags(id) & ADMIN_LEVEL_G) != 0") && src.contains("id == 1 && !is_dedicated_server()"));
     }
 
+    /// Every fun node, on a spawned player (and a second bot for Swap Places), Set Camera both ways.
+    pub fn fun_mode(reset: bool) -> Graph {
+        let n = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let mut nodes = vec![
+            n("ps", "event.player_spawned", json!({})), n("pk", "flow.pick_player", json!({"which": "bots"})),
+            n("burn", "fun.burn", json!({"secs": 3, "dps": 2})), n("out", "fun.extinguish", json!({})), n("trail", "fun.trail", json!({"on": true, "width": 8, "life": 2})),
+            n("b1", "fun.burst", json!({"kind": "smoke", "count": 2})), n("b2", "fun.burst", json!({"kind": "firework"})), n("b3", "fun.burst", json!({"kind": "blood"})), n("vp", "vec.player", json!({})),
+            n("swap", "fun.swap", json!({})), n("pr", "debug.print", json!({"text": "swapped", "chat": false})), n("bury", "fun.bury", json!({})), n("up", "fun.unbury", json!({})),
+            n("cam", "fun.camera", json!({"view": "third", "reset": reset})), n("third", "fun.is_third", json!({})), n("pr2", "debug.print", json!({"text": "third", "chat": false})),
+            n("cam1", "fun.camera", json!({"view": "toggle", "reset": reset})), n("drunk", "fun.drunk", json!({"secs": 4, "strength": 5})),
+        ];
+        nodes.push(n("cam0", "fun.camera", json!({"view": "first"})));
+        let chain = ["ps", "pk", "burn", "out", "trail", "b1", "b2", "b3", "swap", "pr", "bury", "up", "cam", "pr2", "cam1", "drunk", "cam0"];
+        let mut edges: Vec<Value> = chain.windows(2).enumerate().map(|(i, w)| json!({"id": format!("c{i}"), "from": {"node": w[0], "pin": "then"}, "to": {"node": w[1], "pin": "exec"}})).collect();
+        let mut wire = |a: &str, ap: &str, b: &str, bp: &str| {
+            let id = format!("d{}", edges.len());
+            edges.push(json!({"id": id, "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}}));
+        };
+        for t in ["burn", "out", "bury", "up", "cam", "third", "cam1", "drunk", "cam0"] {
+            wire("ps", "player", t, "player");
+        }
+        wire("pk", "player", "burn", "by");
+        wire("ps", "player", "trail", "ent");
+        wire("ps", "player", "b1", "at");
+        wire("ps", "player", "vp", "player");
+        wire("vp", "out", "b2", "pos");
+        wire("ps", "player", "b3", "at");
+        wire("ps", "player", "swap", "a");
+        wire("pk", "player", "swap", "b");
+        wire("swap", "ok", "pr", "value");
+        wire("third", "out", "pr2", "value");
+        graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "fun_nodes", "name": "Fun nodes"}, "nodes": nodes, "edges": edges})).unwrap()
+    }
+
+    /// The fun nodes check clean and make what they say, sprites loaded only when used, one task
+    /// for all of them, the death/spawn/leaving hooks; Set Camera's "back to first person on
+    /// death/respawn" both ways (kept: set again after a respawn; leaving always ends it).
+    #[test]
+    fn fun_nodes_generate() {
+        for reset in [true, false] {
+            let g = fun_mode(reset);
+            let p = graph::validate(&g);
+            assert!(p.is_empty(), "{p:#?}");
+            let src = gen::generate(&g, false).source;
+            for want in [
+                "lsg_pre_model(\"sprites/fire.spr\")", "lsg_pre_model(\"sprites/steam1.spr\")", "lsg_pre_model(\"sprites/blood.spr\")", "g_lsgSprBeam = precache_model(\"sprites/laserbeam.spr\")",
+                "set_task(0.1, \"lsg_fun_tick\"", "RegisterHamPlayer(Ham_Killed, \"lsg_fun_dead\", 1)", "RegisterHamPlayer(Ham_Spawn, \"lsg_fun_spawn\", 1)", "lsg_fun_left(id)",
+                "lsg_swap(", "lsg_bury(", "lsg_unbury(", "lsg_drunk(", "lsg_burst(1, lsgAt, 2", "lsg_burst(3, lsgAt, 1",
+            ] {
+                assert!(src.contains(want), "{want}");
+            }
+            assert!(src.contains(&format!(", 1, {})", if reset { 1 } else { 0 })), "third person, reset {reset}");
+            assert!(src.contains(&format!(", 2, {})", if reset { 1 } else { 0 })), "switch, reset {reset}");
+            assert!(src.contains("if (g_lsgCam[id] && !g_lsgCamKeep[id])") && src.contains("set_task(0.2, \"lsg_cam_again\""));
+        }
+        // nothing fun: none of it
+        let g = graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "plain", "name": "Plain"}, "nodes": [{"id": "rs", "type": "event.round_started"}, {"id": "p", "type": "debug.print", "params": {"text": "x"}}], "edges": [{"id": "w", "from": {"node": "rs", "pin": "then"}, "to": {"node": "p", "pin": "exec"}}]})).unwrap();
+        let src = gen::generate(&g, false).source;
+        assert!(!src.contains("lsg_fun_tick\"") && !src.contains("lsg_pre_model(\"sprites/fire.spr\")") && !src.contains("lsg_fun_dead\""));
+        // an Effect Burst with nowhere to go
+        let mut bad = fun_mode(true);
+        bad.edges.retain(|e| e.to.node != "b2");
+        bad.edges.retain(|e| !(e.from.node == "b1" || e.to.node == "b2"));
+        let p: Vec<String> = graph::validate(&bad).into_iter().map(|p| p.message).collect();
+        assert!(p.iter().any(|m| m.contains("Effect Burst needs")), "{p:?}");
+    }
+
     pub fn snippet_as_graph(id: &str, v: &Value) -> Graph {
         let mut g = v.clone();
         let o = g.as_object_mut().unwrap();
@@ -1638,6 +1705,7 @@ mod tests {
         graphs.push(("dialogue".into(), serde_json::to_string(&dialogue_mode()).unwrap()));
         graphs.push(("ui_nodes".into(), serde_json::to_string(&ui_nodes_mode()).unwrap()));
         graphs.push(("steam_nodes".into(), serde_json::to_string(&steam_mode()).unwrap()));
+        graphs.push(("fun_nodes".into(), serde_json::to_string(&fun_mode(false)).unwrap()));
         // the round clock read with no Round Time Up in the graph (its empty hook didn't compile:
         // the node coverage sweep found it)
         graphs.push(("clock_no_time_up".into(), serde_json::json!({"schema": "loner-strike/graph", "version": 3, "mode": {"id": "clock_no_time_up", "name": "Clock"},

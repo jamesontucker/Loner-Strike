@@ -11377,6 +11377,489 @@
    "keywords": "kill feed death notice frag"
   },
   {
+   "type": "fun.burn",
+   "title": "Set On Fire",
+   "category": "Players",
+   "help": "Sets a living player on fire for some seconds: damage each second (Lit by gets the kill), flames on them. Water or the time running out puts it out; so does Put Out Fire, death or a new round.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    },
+    {
+     "id": "by",
+     "type": "player",
+     "label": "Lit by",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 5,
+     "min": 1,
+     "max": 60
+    },
+    {
+     "id": "dps",
+     "label": "Damage a second",
+     "kind": "number",
+     "default": 5,
+     "min": 0,
+     "max": 100
+    }
+   ],
+   "keywords": "fire burn flame ignite"
+  },
+  {
+   "type": "fun.extinguish",
+   "title": "Put Out Fire",
+   "category": "Players",
+   "help": "Puts out a player Set On Fire.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "fire burn water"
+  },
+  {
+   "type": "fun.trail",
+   "title": "Trail",
+   "category": "Effects",
+   "help": "A colored trail behind a player or an entity as it moves (on), or none (off). It comes back after a respawn and when they start moving again.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ent",
+     "type": "entity",
+     "label": "On",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "On",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "r",
+     "label": "Red",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "g",
+     "label": "Green",
+     "kind": "number",
+     "default": 160,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "b",
+     "label": "Blue",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "width",
+     "label": "Width",
+     "kind": "number",
+     "default": 6,
+     "min": 1,
+     "max": 50
+    },
+    {
+     "id": "life",
+     "label": "Length (seconds)",
+     "kind": "number",
+     "default": 2,
+     "min": 0.1,
+     "max": 25
+    }
+   ],
+   "keywords": "trail beam follow streak"
+  },
+  {
+   "type": "fun.burst",
+   "title": "Effect Burst",
+   "category": "Effects",
+   "help": "A burst at a position or an entity: sparks, smoke, blood, a firework, an implosion, a tar explosion, a teleport flash, a lava splash or a colored flash. Count repeats it (up to 10); Color is for the firework and the flash.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "at",
+     "type": "entity",
+     "label": "At"
+    },
+    {
+     "id": "pos",
+     "type": "vector",
+     "label": "Position",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "kind",
+     "label": "Effect",
+     "kind": "choice",
+     "default": "sparks",
+     "choices": [
+      [
+       "sparks",
+       "Sparks"
+      ],
+      [
+       "smoke",
+       "Smoke"
+      ],
+      [
+       "blood",
+       "Blood"
+      ],
+      [
+       "firework",
+       "Firework"
+      ],
+      [
+       "implosion",
+       "Implosion"
+      ],
+      [
+       "tar",
+       "Tar explosion"
+      ],
+      [
+       "teleport",
+       "Teleport flash"
+      ],
+      [
+       "lava",
+       "Lava splash"
+      ],
+      [
+       "flash",
+       "Colored flash (light)"
+      ]
+     ]
+    },
+    {
+     "id": "count",
+     "label": "Count",
+     "kind": "number",
+     "default": 1,
+     "min": 1,
+     "max": 10
+    },
+    {
+     "id": "r",
+     "label": "Red",
+     "kind": "number",
+     "default": 255,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "g",
+     "label": "Green",
+     "kind": "number",
+     "default": 120,
+     "min": 0,
+     "max": 255
+    },
+    {
+     "id": "b",
+     "label": "Blue",
+     "kind": "number",
+     "default": 0,
+     "min": 0,
+     "max": 255
+    }
+   ],
+   "keywords": "effect particles sparks smoke blood firework explosion"
+  },
+  {
+   "type": "fun.swap",
+   "title": "Swap Places",
+   "category": "Players",
+   "help": "Two living players trade places, the way they face and their speed. Not when either would end up stuck in a wall (Swapped is No then).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "a",
+     "type": "player",
+     "label": "Player A",
+     "required": true
+    },
+    {
+     "id": "b",
+     "type": "player",
+     "label": "Player B",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "ok",
+     "type": "bool",
+     "label": "Swapped"
+    }
+   ],
+   "params": [],
+   "keywords": "swap trade teleport switch"
+  },
+  {
+   "type": "fun.bury",
+   "title": "Bury",
+   "category": "Players",
+   "help": "Sinks a living player into the floor up to the chest; they can't walk, but can look round and shoot. Unbury gets them out (also death and a new round).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "bury sink ground stuck"
+  },
+  {
+   "type": "fun.unbury",
+   "title": "Unbury",
+   "category": "Players",
+   "help": "Gets a buried player out of the floor, onto it (never into a wall).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "bury dig out"
+  },
+  {
+   "type": "fun.camera",
+   "title": "Set Camera",
+   "category": "Players",
+   "help": "A player's view: third person (from behind), back to first person, or the other of the two. Back to first person on death/respawn: on, death ends it; off, they stay in third person through deaths and respawns. Leaving always ends it.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "view",
+     "label": "View",
+     "kind": "choice",
+     "default": "third",
+     "choices": [
+      [
+       "third",
+       "Third person"
+      ],
+      [
+       "first",
+       "First person"
+      ],
+      [
+       "toggle",
+       "Switch"
+      ]
+     ]
+    },
+    {
+     "id": "reset",
+     "label": "Back to first person on death/respawn",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "camera third person view thirdperson"
+  },
+  {
+   "type": "fun.is_third",
+   "title": "Is Third Person",
+   "category": "Players",
+   "help": "Is the player's view third person (Set Camera)?",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Third person"
+    }
+   ],
+   "params": [],
+   "keywords": "camera view",
+   "pure": true
+  },
+  {
+   "type": "fun.drunk",
+   "title": "Drunk View",
+   "category": "Players",
+   "help": "Wobbles a player's view for some seconds, gently (1) to wildly (10); it stops cleanly (also on death).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 8,
+     "min": 1,
+     "max": 60
+    },
+    {
+     "id": "strength",
+     "label": "Strength",
+     "kind": "number",
+     "default": 4,
+     "min": 1,
+     "max": 10
+    }
+   ],
+   "keywords": "drunk dizzy wobble view shake"
+  },
+  {
    "type": "amx.call",
    "title": "Call Plugin Function",
    "category": "Advanced",
