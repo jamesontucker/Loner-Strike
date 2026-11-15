@@ -43176,8 +43176,8 @@
 "needs":"Needs Loner-Strike's components plugin, which comes with the app.",
 "related":[
 "bots.avoid_stop",
-"bot.release",
-"bot.trait"
+"botctl.add",
+"botctl.remove"
 ],
 "example":{
 "caption":"When a round starts, Bots Avoid Area runs.",
@@ -43271,8 +43271,8 @@
 "needs":"Needs Loner-Strike's components plugin, which comes with the app.",
 "related":[
 "bots.avoid",
-"bot.release",
-"bot.trait"
+"botctl.add",
+"botctl.remove"
 ],
 "example":{
 "caption":"When a round starts, Bots Stop Avoiding runs.",
@@ -45148,7 +45148,7 @@
 "related":[
 "game.map_type",
 "game.voice_rules",
-"game.restart_round"
+"game.round_end_rules"
 ],
 "example":{
 "caption":"When a round starts, Remove Map Objectives runs.",
@@ -45229,7 +45229,7 @@
 "related":[
 "game.remove_objectives",
 "game.voice_rules",
-"game.restart_round"
+"game.round_end_rules"
 ],
 "example":{
 "caption":"When a round starts, Map Type is read and printed to the server console.",
@@ -45408,7 +45408,7 @@
 "related":[
 "game.map_type",
 "game.remove_objectives",
-"game.restart_round"
+"game.round_end_rules"
 ],
 "example":{
 "caption":"When a round starts, Voice Rules runs.",
@@ -45479,8 +45479,8 @@
 ],
 "related":[
 "player.in_zone",
-"player.jump_rules",
-"player.push"
+"player.has_flag",
+"player.jump_rules"
 ],
 "example":{
 "caption":"When a player spawns, Voice Override runs.",
@@ -45642,8 +45642,8 @@
 ],
 "related":[
 "player.voice_override",
-"player.jump_rules",
-"player.push"
+"player.has_flag",
+"player.jump_rules"
 ],
 "example":{
 "caption":"When a player spawns, In Map Zone is read and printed to the server console.",
@@ -46021,7 +46021,7 @@
 "related":[
 "npc.follow_path",
 "npc.stop",
-"npc.spawn_use"
+"hostage.follow"
 ],
 "example":{
 "caption":"When a round starts, NPC Move To runs.",
@@ -46160,7 +46160,7 @@
 "related":[
 "npc.move_to",
 "npc.stop",
-"npc.spawn_use"
+"hostage.follow"
 ],
 "example":{
 "caption":"When a round starts, NPC Follow Path runs.",
@@ -46269,7 +46269,7 @@
 "related":[
 "npc.follow_path",
 "npc.move_to",
-"npc.spawn_use"
+"hostage.follow"
 ],
 "example":{
 "caption":"When a round starts, NPC Stop runs.",
@@ -46334,6 +46334,915 @@
 "id":"w3",
 "from":{
 "node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"game.round_end_rules":{
+"title":"Round End Rules",
+"category":"Game",
+"what":"Stops rounds ending by themselves: when a team is wiped out, when the time runs out, or either (End Round is then the only way a round ends). Ending as usual undoes it; a new mode starts as usual.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"rule",
+"help":"Pick one: (Ending as usual), A team is wiped out, Time runs out, Either (only End Round ends them)."
+}
+],
+"related":[
+"game.start_vote",
+"game.vote_count",
+"game.voice_rules"
+],
+"example":{
+"caption":"When a round starts, Round End Rules runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"game.round_end_rules",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"rule":"elim"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"player.has_flag":{
+"title":"Has Admin Flag",
+"category":"Players",
+"what":"Does a player have this admin flag (from the server's admin list): kick, ban, change map, a custom level and so on.",
+"pins":[
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Needs a wire."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Has it: yes or no."
+}
+],
+"settings":[
+{
+"id":"flag",
+"help":"Pick one: Immunity (a), Reserved slot (b), Kick (c), Ban (d), Slay and slap (e), Change map (f), Change settings (g), Server config (h), Admin chat (i), Start votes (j), Server password (k), RCON (l)…."
+}
+],
+"related":[
+"player.in_zone",
+"player.voice_override",
+"player.jump_rules"
+],
+"example":{
+"caption":"When a player spawns, Has Admin Flag is read and printed to the server console.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"player.has_flag",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"flag":"c"
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Has it:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"player"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"out"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"game.start_vote":{
+"title":"Start Vote",
+"category":"Game",
+"what":"Asks everyone (or a team, or the living) a question with 2 to 8 answers for some seconds; then runs the winning answer's output, Tie, or No votes. Bots vote at random if Bots vote is on. Only one vote at a time, and never over the server's map or mode vote (then No votes runs). Vote Count reads the result.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+},
+{
+"id":"w1",
+"dir":"out",
+"help":"Runs on 1."
+},
+{
+"id":"w2",
+"dir":"out",
+"help":"Runs on 2."
+},
+{
+"id":"w3",
+"dir":"out",
+"help":"Runs on 3."
+},
+{
+"id":"w4",
+"dir":"out",
+"help":"Runs on 4."
+},
+{
+"id":"w5",
+"dir":"out",
+"help":"Runs on 5."
+},
+{
+"id":"w6",
+"dir":"out",
+"help":"Runs on 6."
+},
+{
+"id":"w7",
+"dir":"out",
+"help":"Runs on 7."
+},
+{
+"id":"w8",
+"dir":"out",
+"help":"Runs on 8."
+},
+{
+"id":"tie",
+"dir":"out",
+"help":"Runs on Tie."
+},
+{
+"id":"none",
+"dir":"out",
+"help":"Runs when nothing was found."
+}
+],
+"settings":[
+{
+"id":"question",
+"help":"Text: letters, digits, spaces and plain punctuation."
+},
+{
+"id":"count",
+"help":"A number from 2 to 8."
+},
+{
+"id":"o1",
+"help":"Text: letters, digits, spaces and plain punctuation."
+},
+{
+"id":"o2",
+"help":"Text: letters, digits, spaces and plain punctuation."
+},
+{
+"id":"o3",
+"help":"Text: letters, digits, spaces and plain punctuation."
+},
+{
+"id":"o4",
+"help":"Text: letters, digits, spaces and plain punctuation."
+},
+{
+"id":"o5",
+"help":"Text: letters, digits, spaces and plain punctuation."
+},
+{
+"id":"o6",
+"help":"Text: letters, digits, spaces and plain punctuation."
+},
+{
+"id":"o7",
+"help":"Text: letters, digits, spaces and plain punctuation."
+},
+{
+"id":"o8",
+"help":"Text: letters, digits, spaces and plain punctuation."
+},
+{
+"id":"secs",
+"help":"A number from 5 to 60."
+},
+{
+"id":"who",
+"help":"Pick one: Everyone, Terrorists, Counter-Terrorists, The living."
+},
+{
+"id":"bots",
+"help":"On or off."
+}
+],
+"related":[
+"game.vote_count",
+"game.round_end_rules",
+"game.voice_rules"
+],
+"example":{
+"caption":"When a round starts, Start Vote runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"game.start_vote",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"question":"Next round?",
+"count":2,
+"o1":"Knives",
+"o2":"Pistols",
+"o3":"Rifles",
+"o4":"Snipers",
+"o5":"Shotguns",
+"o6":"Grenades",
+"o7":"Random",
+"o8":"Normal",
+"secs":15,
+"who":"all",
+"bots":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"game.vote_count":{
+"title":"Vote Count",
+"category":"Game",
+"what":"How many votes an answer got in the last Start Vote (0: all the votes).",
+"pins":[
+{
+"id":"option",
+"dir":"in",
+"help":"Answer: a number. Leave it empty to use the setting."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Votes: a number."
+}
+],
+"settings":[
+{
+"id":"option",
+"help":"A number from 0 to 8. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"game.start_vote",
+"game.round_end_rules",
+"game.voice_rules"
+],
+"example":{
+"caption":"When a round starts, Vote Count is read and printed to the server console.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"game.vote_count",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"option":1
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Votes:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"it",
+"pin":"out"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"hostage.follow":{
+"title":"Hostage Follow",
+"category":"NPCs",
+"what":"Makes a hostage follow a player (as if they pressed USE on it), any team.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"hostage",
+"dir":"in",
+"help":"Hostage: an entity (a thing in the map). Needs a wire."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"Leader: a player. Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[],
+"related":[
+"hostage.stop",
+"hostage.is_following",
+"npc.stop"
+],
+"example":{
+"caption":"When a player spawns, Hostage Follow runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"hostage.follow",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"hostage"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"player"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w4",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"hostage.stop":{
+"title":"Hostage Stop",
+"category":"NPCs",
+"what":"Makes a hostage stop following and wait where it is.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"hostage",
+"dir":"in",
+"help":"Hostage: an entity (a thing in the map). Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[],
+"related":[
+"hostage.follow",
+"hostage.is_following",
+"npc.stop"
+],
+"example":{
+"caption":"When a round starts, Hostage Stop runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"hostage.stop",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"hostage"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"hostage.is_following":{
+"title":"Is Following",
+"category":"NPCs",
+"what":"Is a hostage following someone, and whom.",
+"pins":[
+{
+"id":"hostage",
+"dir":"in",
+"help":"Hostage: an entity (a thing in the map). Needs a wire."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Following: yes or no."
+},
+{
+"id":"leader",
+"dir":"out",
+"help":"Leader: a player."
+}
+],
+"settings":[],
+"related":[
+"hostage.stop",
+"hostage.follow",
+"npc.stop"
+],
+"example":{
+"caption":"When a round starts, Is Following is read and printed to the server console.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"hostage.is_following",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"ent",
+"type":"comp.find",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"name":"spot1"
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Following:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"out"
+},
+"to":{
+"node":"it",
+"pin":"hostage"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"out"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"botctl.add":{
+"title":"Add Bots",
+"category":"Bots",
+"what":"Adds bots through the bot brain's own commands: how many, to which team, how good (new bots only). Never more than the free slots (one is kept open for a person). The host's bot count comes back at the next map.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"count",
+"dir":"in",
+"help":"How many: a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"count",
+"help":"A number from 1 to 31. A wire into the pin of the same name is used instead."
+},
+{
+"id":"team",
+"help":"Pick one: Either (the game balances), Terrorists, Counter-Terrorists."
+},
+{
+"id":"skill",
+"help":"Pick one: The host's setting, Easy, Normal, Hard, Expert."
+}
+],
+"related":[
+"botctl.remove",
+"bots.avoid_stop",
+"bots.avoid"
+],
+"example":{
+"caption":"When a round starts, Add Bots runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"botctl.add",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"count":2,
+"team":"any",
+"skill":"host"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"botctl.remove":{
+"title":"Remove Bots",
+"category":"Bots",
+"what":"Takes bots off the server (of a team, or any), lowering the bot count so they don't come back this map. The host's bot count comes back at the next map.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"count",
+"dir":"in",
+"help":"How many: a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"count",
+"help":"A number from 1 to 31. A wire into the pin of the same name is used instead."
+},
+{
+"id":"team",
+"help":"Pick one: Any team, Terrorists, Counter-Terrorists."
+}
+],
+"related":[
+"botctl.add",
+"bots.avoid_stop",
+"bots.avoid"
+],
+"example":{
+"caption":"When a round starts, Remove Bots runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"botctl.remove",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"count":1,
+"team":"any"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
 "pin":"then"
 },
 "to":{
@@ -50485,7 +51394,7 @@
 "related":[
 "aim.dir",
 "aim.point",
-"player.in_zone"
+"player.has_flag"
 ],
 "example":{
 "caption":"When a player spawns, Eye Position is read and printed to the server console.",
@@ -50578,7 +51487,7 @@
 "related":[
 "aim.eye_pos",
 "aim.point",
-"player.in_zone"
+"player.has_flag"
 ],
 "example":{
 "caption":"When a player spawns, Aim Direction is read and printed to the server console.",
@@ -50691,7 +51600,7 @@
 "related":[
 "aim.dir",
 "aim.eye_pos",
-"player.in_zone"
+"player.has_flag"
 ],
 "example":{
 "caption":"When a player spawns, Aim Point is read and printed to the server console.",

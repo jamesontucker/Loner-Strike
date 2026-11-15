@@ -965,6 +965,233 @@
     "y": 0.8,
     "effect": "flicker"
    }
+  },
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 0,
+    "y": 3740
+   },
+   "params": {}
+  },
+  {
+   "id": "rer",
+   "type": "game.round_end_rules",
+   "pos": {
+    "x": 260,
+    "y": 3740
+   },
+   "params": {
+    "rule": "both"
+   }
+  },
+  {
+   "id": "vote",
+   "type": "game.start_vote",
+   "pos": {
+    "x": 520,
+    "y": 3740
+   },
+   "params": {
+    "question": "Weapons?",
+    "count": 3,
+    "o1": "Knives",
+    "o2": "Pistols",
+    "o3": "Rifles",
+    "secs": 10,
+    "bots": true
+   }
+  },
+  {
+   "id": "v_w1",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 3520
+   },
+   "params": {
+    "text": "knives won",
+    "chat": true
+   }
+  },
+  {
+   "id": "v_w3",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 3740
+   },
+   "params": {
+    "text": "rifles won",
+    "chat": true
+   }
+  },
+  {
+   "id": "v_tie",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 3960
+   },
+   "params": {
+    "text": "tie",
+    "chat": true
+   }
+  },
+  {
+   "id": "v_none",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 4180
+   },
+   "params": {
+    "text": "no votes",
+    "chat": true
+   }
+  },
+  {
+   "id": "vc",
+   "type": "game.vote_count",
+   "pos": {
+    "x": 1040,
+    "y": 3520
+   },
+   "params": {
+    "option": 0
+   }
+  },
+  {
+   "id": "bota",
+   "type": "botctl.add",
+   "pos": {
+    "x": 1040,
+    "y": 3740
+   },
+   "params": {
+    "count": 2,
+    "team": "ct",
+    "skill": "2"
+   }
+  },
+  {
+   "id": "botr",
+   "type": "botctl.remove",
+   "pos": {
+    "x": 1300,
+    "y": 3740
+   },
+   "params": {
+    "count": 1,
+    "team": "t"
+   }
+  },
+  {
+   "id": "ps2",
+   "type": "event.player_spawned",
+   "pos": {
+    "x": 0,
+    "y": 4400
+   },
+   "params": {}
+  },
+  {
+   "id": "hf",
+   "type": "player.has_flag",
+   "pos": {
+    "x": 260,
+    "y": 4620
+   },
+   "params": {
+    "flag": "f"
+   }
+  },
+  {
+   "id": "hfp",
+   "type": "debug.print",
+   "pos": {
+    "x": 260,
+    "y": 4400
+   },
+   "params": {
+    "text": "can change map",
+    "chat": false
+   }
+  },
+  {
+   "id": "ht",
+   "type": "ent.find_all",
+   "pos": {
+    "x": 520,
+    "y": 4620
+   },
+   "params": {
+    "by": "class",
+    "name": "hostage_entity"
+   }
+  },
+  {
+   "id": "hfirst",
+   "type": "array.get",
+   "pos": {
+    "x": 780,
+    "y": 4620
+   },
+   "params": {
+    "of": "entity"
+   }
+  },
+  {
+   "id": "hfol",
+   "type": "hostage.follow",
+   "pos": {
+    "x": 520,
+    "y": 4400
+   },
+   "params": {}
+  },
+  {
+   "id": "hif",
+   "type": "hostage.is_following",
+   "pos": {
+    "x": 780,
+    "y": 4840
+   },
+   "params": {}
+  },
+  {
+   "id": "hifp",
+   "type": "debug.print",
+   "pos": {
+    "x": 780,
+    "y": 4400
+   },
+   "params": {
+    "text": "following",
+    "chat": false
+   }
+  },
+  {
+   "id": "hifp2",
+   "type": "debug.print",
+   "pos": {
+    "x": 1040,
+    "y": 4400
+   },
+   "params": {
+    "text": "leader",
+    "chat": false
+   }
+  },
+  {
+   "id": "hstop",
+   "type": "hostage.stop",
+   "pos": {
+    "x": 1300,
+    "y": 4400
+   },
+   "params": {}
   }
  ],
  "edges": [
@@ -2429,6 +2656,259 @@
    "to": {
     "node": "zlp",
     "pin": "player"
+   }
+  },
+  {
+   "id": "w134",
+   "from": {
+    "node": "vote",
+    "pin": "w1"
+   },
+   "to": {
+    "node": "v_w1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w135",
+   "from": {
+    "node": "vote",
+    "pin": "w3"
+   },
+   "to": {
+    "node": "v_w3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w136",
+   "from": {
+    "node": "vote",
+    "pin": "tie"
+   },
+   "to": {
+    "node": "v_tie",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w137",
+   "from": {
+    "node": "vote",
+    "pin": "none"
+   },
+   "to": {
+    "node": "v_none",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w138",
+   "from": {
+    "node": "vc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "v_w1",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w139",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "rer",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w140",
+   "from": {
+    "node": "rer",
+    "pin": "then"
+   },
+   "to": {
+    "node": "vote",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w141",
+   "from": {
+    "node": "vote",
+    "pin": "then"
+   },
+   "to": {
+    "node": "bota",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w142",
+   "from": {
+    "node": "bota",
+    "pin": "then"
+   },
+   "to": {
+    "node": "botr",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w143",
+   "from": {
+    "node": "ps2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hfp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w144",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hf",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w145",
+   "from": {
+    "node": "hf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hfp",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w146",
+   "from": {
+    "node": "hfp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hfol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w147",
+   "from": {
+    "node": "hfol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hifp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w148",
+   "from": {
+    "node": "hifp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hifp2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w149",
+   "from": {
+    "node": "hifp2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hstop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w150",
+   "from": {
+    "node": "ht",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hfirst",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w151",
+   "from": {
+    "node": "hfirst",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hfol",
+    "pin": "hostage"
+   }
+  },
+  {
+   "id": "w152",
+   "from": {
+    "node": "ps2",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hfol",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w153",
+   "from": {
+    "node": "hfirst",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hif",
+    "pin": "hostage"
+   }
+  },
+  {
+   "id": "w154",
+   "from": {
+    "node": "hif",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hifp",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w155",
+   "from": {
+    "node": "hif",
+    "pin": "leader"
+   },
+   "to": {
+    "node": "hifp2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w156",
+   "from": {
+    "node": "hfirst",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hstop",
+    "pin": "hostage"
    }
   }
  ]

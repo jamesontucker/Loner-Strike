@@ -100,6 +100,10 @@ new bool:g_Rocked[33]
 new g_NomBy[MAX_NOMS], g_Noms[MAX_NOMS][32], g_NomCount
 new g_WelcomeFor
 new bool:g_Voting, bool:g_VoteDone
+
+// a map or mode vote running now (for Game Mode Studio's Start Vote, by callfunc: never over it)
+public gm_pubserver_voting()
+	return g_Voting
 new g_VoteMaps[VOTE_MAPS + 1][32], g_VoteCount[VOTE_MAPS + 1], g_VoteOptions
 new Float:g_MapStart
 new Array:g_MapPool

@@ -23751,6 +23751,618 @@
    "needs": "components"
   },
   {
+   "type": "game.round_end_rules",
+   "title": "Round End Rules",
+   "category": "Game",
+   "help": "Stops rounds ending by themselves: when a team is wiped out, when the time runs out, or either (End Round is then the only way a round ends). Ending as usual undoes it; a new mode starts as usual.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "rule",
+     "label": "Rounds don't end when",
+     "kind": "choice",
+     "default": "elim",
+     "choices": [
+      [
+       "normal",
+       "(Ending as usual)"
+      ],
+      [
+       "elim",
+       "A team is wiped out"
+      ],
+      [
+       "time",
+       "Time runs out"
+      ],
+      [
+       "both",
+       "Either (only End Round ends them)"
+      ]
+     ]
+    }
+   ],
+   "keywords": "round end infinite elimination time limit never end mp_round_infinite deathmatch"
+  },
+  {
+   "type": "player.has_flag",
+   "title": "Has Admin Flag",
+   "category": "Players",
+   "help": "Does a player have this admin flag (from the server's admin list): kick, ban, change map, a custom level and so on.",
+   "inputs": [
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Has it"
+    }
+   ],
+   "params": [
+    {
+     "id": "flag",
+     "label": "Flag",
+     "kind": "choice",
+     "default": "c",
+     "choices": [
+      [
+       "a",
+       "Immunity (a)"
+      ],
+      [
+       "b",
+       "Reserved slot (b)"
+      ],
+      [
+       "c",
+       "Kick (c)"
+      ],
+      [
+       "d",
+       "Ban (d)"
+      ],
+      [
+       "e",
+       "Slay and slap (e)"
+      ],
+      [
+       "f",
+       "Change map (f)"
+      ],
+      [
+       "g",
+       "Change settings (g)"
+      ],
+      [
+       "h",
+       "Server config (h)"
+      ],
+      [
+       "i",
+       "Admin chat (i)"
+      ],
+      [
+       "j",
+       "Start votes (j)"
+      ],
+      [
+       "k",
+       "Server password (k)"
+      ],
+      [
+       "l",
+       "RCON (l)"
+      ],
+      [
+       "m",
+       "Custom level A (m)"
+      ],
+      [
+       "n",
+       "Custom level B (n)"
+      ],
+      [
+       "o",
+       "Custom level C (o)"
+      ],
+      [
+       "p",
+       "Custom level D (p)"
+      ],
+      [
+       "q",
+       "Custom level E (q)"
+      ],
+      [
+       "r",
+       "Custom level F (r)"
+      ],
+      [
+       "s",
+       "Custom level G (s)"
+      ],
+      [
+       "t",
+       "Custom level H (t)"
+      ],
+      [
+       "u",
+       "Menus (u)"
+      ]
+     ]
+    }
+   ],
+   "keywords": "admin flag access rights permission level",
+   "pure": true
+  },
+  {
+   "type": "game.start_vote",
+   "title": "Start Vote",
+   "category": "Game",
+   "help": "Asks everyone (or a team, or the living) a question with 2 to 8 answers for some seconds; then runs the winning answer's output, Tie, or No votes. Bots vote at random if Bots vote is on. Only one vote at a time, and never over the server's map or mode vote (then No votes runs). Vote Count reads the result.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "w1",
+     "type": "exec",
+     "label": "1"
+    },
+    {
+     "id": "w2",
+     "type": "exec",
+     "label": "2"
+    },
+    {
+     "id": "w3",
+     "type": "exec",
+     "label": "3"
+    },
+    {
+     "id": "w4",
+     "type": "exec",
+     "label": "4"
+    },
+    {
+     "id": "w5",
+     "type": "exec",
+     "label": "5"
+    },
+    {
+     "id": "w6",
+     "type": "exec",
+     "label": "6"
+    },
+    {
+     "id": "w7",
+     "type": "exec",
+     "label": "7"
+    },
+    {
+     "id": "w8",
+     "type": "exec",
+     "label": "8"
+    },
+    {
+     "id": "tie",
+     "type": "exec",
+     "label": "Tie"
+    },
+    {
+     "id": "none",
+     "type": "exec",
+     "label": "No votes"
+    }
+   ],
+   "params": [
+    {
+     "id": "question",
+     "label": "Question",
+     "kind": "text",
+     "default": "Next round?",
+     "max": 60
+    },
+    {
+     "id": "count",
+     "label": "Answers",
+     "kind": "number",
+     "default": 2,
+     "min": 2,
+     "max": 8
+    },
+    {
+     "id": "o1",
+     "label": "Answer 1",
+     "kind": "text",
+     "default": "Knives",
+     "max": 30
+    },
+    {
+     "id": "o2",
+     "label": "Answer 2",
+     "kind": "text",
+     "default": "Pistols",
+     "max": 30
+    },
+    {
+     "id": "o3",
+     "label": "Answer 3",
+     "kind": "text",
+     "default": "Rifles",
+     "max": 30
+    },
+    {
+     "id": "o4",
+     "label": "Answer 4",
+     "kind": "text",
+     "default": "Snipers",
+     "max": 30
+    },
+    {
+     "id": "o5",
+     "label": "Answer 5",
+     "kind": "text",
+     "default": "Shotguns",
+     "max": 30
+    },
+    {
+     "id": "o6",
+     "label": "Answer 6",
+     "kind": "text",
+     "default": "Grenades",
+     "max": 30
+    },
+    {
+     "id": "o7",
+     "label": "Answer 7",
+     "kind": "text",
+     "default": "Random",
+     "max": 30
+    },
+    {
+     "id": "o8",
+     "label": "Answer 8",
+     "kind": "text",
+     "default": "Normal",
+     "max": 30
+    },
+    {
+     "id": "secs",
+     "label": "Seconds",
+     "kind": "number",
+     "default": 15,
+     "min": 5,
+     "max": 60
+    },
+    {
+     "id": "who",
+     "label": "Who votes",
+     "kind": "choice",
+     "default": "all",
+     "choices": [
+      [
+       "all",
+       "Everyone"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ],
+      [
+       "alive",
+       "The living"
+      ]
+     ]
+    },
+    {
+     "id": "bots",
+     "label": "Bots vote",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "vote poll ballot choose menu majority"
+  },
+  {
+   "type": "game.vote_count",
+   "title": "Vote Count",
+   "category": "Game",
+   "help": "How many votes an answer got in the last Start Vote (0: all the votes).",
+   "inputs": [
+    {
+     "id": "option",
+     "type": "number",
+     "label": "Answer",
+     "param": "option"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "number",
+     "label": "Votes"
+    }
+   ],
+   "params": [
+    {
+     "id": "option",
+     "label": "Answer (0: all)",
+     "kind": "number",
+     "default": 1,
+     "min": 0,
+     "max": 8
+    }
+   ],
+   "keywords": "vote count result poll",
+   "pure": true
+  },
+  {
+   "type": "hostage.follow",
+   "title": "Hostage Follow",
+   "category": "NPCs",
+   "help": "Makes a hostage follow a player (as if they pressed USE on it), any team.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "hostage",
+     "type": "entity",
+     "label": "Hostage",
+     "required": true
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Leader",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "hostage follow escort lead rescue"
+  },
+  {
+   "type": "hostage.stop",
+   "title": "Hostage Stop",
+   "category": "NPCs",
+   "help": "Makes a hostage stop following and wait where it is.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "hostage",
+     "type": "entity",
+     "label": "Hostage",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [],
+   "keywords": "hostage stop wait escort"
+  },
+  {
+   "type": "hostage.is_following",
+   "title": "Is Following",
+   "category": "NPCs",
+   "help": "Is a hostage following someone, and whom.",
+   "inputs": [
+    {
+     "id": "hostage",
+     "type": "entity",
+     "label": "Hostage",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "out",
+     "type": "bool",
+     "label": "Following"
+    },
+    {
+     "id": "leader",
+     "type": "player",
+     "label": "Leader"
+    }
+   ],
+   "params": [],
+   "keywords": "hostage following escort leader",
+   "pure": true
+  },
+  {
+   "type": "botctl.add",
+   "title": "Add Bots",
+   "category": "Bots",
+   "help": "Adds bots through the bot brain's own commands: how many, to which team, how good (new bots only). Never more than the free slots (one is kept open for a person). The host's bot count comes back at the next map.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "count",
+     "type": "number",
+     "label": "How many",
+     "param": "count"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "count",
+     "label": "How many",
+     "kind": "number",
+     "default": 2,
+     "min": 1,
+     "max": 31
+    },
+    {
+     "id": "team",
+     "label": "Team",
+     "kind": "choice",
+     "default": "any",
+     "choices": [
+      [
+       "any",
+       "Either (the game balances)"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ]
+     ]
+    },
+    {
+     "id": "skill",
+     "label": "Difficulty",
+     "kind": "choice",
+     "default": "host",
+     "choices": [
+      [
+       "host",
+       "The host's setting"
+      ],
+      [
+       "0",
+       "Easy"
+      ],
+      [
+       "1",
+       "Normal"
+      ],
+      [
+       "2",
+       "Hard"
+      ],
+      [
+       "3",
+       "Expert"
+      ]
+     ]
+    }
+   ],
+   "keywords": "bot add spawn quota fill difficulty"
+  },
+  {
+   "type": "botctl.remove",
+   "title": "Remove Bots",
+   "category": "Bots",
+   "help": "Takes bots off the server (of a team, or any), lowering the bot count so they don't come back this map. The host's bot count comes back at the next map.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "count",
+     "type": "number",
+     "label": "How many",
+     "param": "count"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "count",
+     "label": "How many",
+     "kind": "number",
+     "default": 1,
+     "min": 1,
+     "max": 31
+    },
+    {
+     "id": "team",
+     "label": "Team",
+     "kind": "choice",
+     "default": "any",
+     "choices": [
+      [
+       "any",
+       "Any team"
+      ],
+      [
+       "t",
+       "Terrorists"
+      ],
+      [
+       "ct",
+       "Counter-Terrorists"
+      ]
+     ]
+    }
+   ],
+   "keywords": "bot kick remove quota"
+  },
+  {
    "type": "spatial.players_in_radius",
    "title": "Players In Radius",
    "category": "Spatial",

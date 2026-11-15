@@ -885,6 +885,34 @@ node("npc.follow_path", "NPC Follow Path", "NPCs", "Sends an NPC along points in
      keywords="npc path patrol route waypoints path_track follow walk", needs="components")
 node("npc.stop", "NPC Stop", "NPCs", "Stops an NPC's Move To or Follow Path where it is (neither Arrived nor Failed runs); it goes back to what it did, or stays.",
      inputs=[X, P("npc","entity","NPC",required=True)], outputs=[E()], params=[prm("stay","Stay there","bool",True)], keywords="npc stop halt wait", needs="components")
+# 16. round end rules
+node("game.round_end_rules", "Round End Rules", "Game", "Stops rounds ending by themselves: when a team is wiped out, when the time runs out, or either (End Round is then the only way a round ends). Ending as usual undoes it; a new mode starts as usual.",
+     inputs=[X], outputs=[E()], params=[prm("rule","Rounds don't end when","choice","elim",choices=[["normal","(Ending as usual)"],["elim","A team is wiped out"],["time","Time runs out"],["both","Either (only End Round ends them)"]])],
+     keywords="round end infinite elimination time limit never end mp_round_infinite deathmatch")
+# 19. admin flag, votes
+EC_FLAGS = [["a","Immunity (a)"],["b","Reserved slot (b)"],["c","Kick (c)"],["d","Ban (d)"],["e","Slay and slap (e)"],["f","Change map (f)"],["g","Change settings (g)"],["h","Server config (h)"],["i","Admin chat (i)"],["j","Start votes (j)"],["k","Server password (k)"],["l","RCON (l)"],["m","Custom level A (m)"],["n","Custom level B (n)"],["o","Custom level C (o)"],["p","Custom level D (p)"],["q","Custom level E (q)"],["r","Custom level F (r)"],["s","Custom level G (s)"],["t","Custom level H (t)"],["u","Menus (u)"]]
+node("player.has_flag", "Has Admin Flag", "Players", "Does a player have this admin flag (from the server's admin list): kick, ban, change map, a custom level and so on.",
+     inputs=[EC_PL], outputs=[P("out","bool","Has it")], params=[prm("flag","Flag","choice","c",choices=EC_FLAGS)], keywords="admin flag access rights permission level", **ECT)
+node("game.start_vote", "Start Vote", "Game", "Asks everyone (or a team, or the living) a question with 2 to 8 answers for some seconds; then runs the winning answer's output, Tie, or No votes. Bots vote at random if Bots vote is on. Only one vote at a time, and never over the server's map or mode vote (then No votes runs). Vote Count reads the result.",
+     inputs=[X], outputs=[E(), E("w1","1"), E("w2","2"), E("w3","3"), E("w4","4"), E("w5","5"), E("w6","6"), E("w7","7"), E("w8","8"), E("tie","Tie"), E("none","No votes")],
+     params=[prm("question","Question","text","Next round?",max=60), prm("count","Answers","number",2,min=2,max=8)] + [prm(f"o{k}",f"Answer {k}","text",["Knives","Pistols","Rifles","Snipers","Shotguns","Grenades","Random","Normal"][k-1],max=30) for k in range(1,9)] + [prm("secs","Seconds","number",15,min=5,max=60), prm("who","Who votes","choice","all",choices=[["all","Everyone"],["t","Terrorists"],["ct","Counter-Terrorists"],["alive","The living"]]), prm("bots","Bots vote","bool",False)],
+     keywords="vote poll ballot choose menu majority")
+node("game.vote_count", "Vote Count", "Game", "How many votes an answer got in the last Start Vote (0: all the votes).",
+     inputs=[P("option","number","Answer",param="option")], outputs=[P("out","number","Votes")], params=[prm("option","Answer (0: all)","number",1,min=0,max=8)], keywords="vote count result poll", **ECT)
+# 22. hostages
+node("hostage.follow", "Hostage Follow", "NPCs", "Makes a hostage follow a player (as if they pressed USE on it), any team.",
+     inputs=[X, P("hostage","entity","Hostage",required=True), P("player","player","Leader",required=True)], outputs=[E()], keywords="hostage follow escort lead rescue")
+node("hostage.stop", "Hostage Stop", "NPCs", "Makes a hostage stop following and wait where it is.",
+     inputs=[X, P("hostage","entity","Hostage",required=True)], outputs=[E()], keywords="hostage stop wait escort")
+node("hostage.is_following", "Is Following", "NPCs", "Is a hostage following someone, and whom.",
+     inputs=[P("hostage","entity","Hostage",required=True)], outputs=[P("out","bool","Following"), P("leader","player","Leader")], keywords="hostage following escort leader", **ECT)
+# 24. bots
+node("botctl.add", "Add Bots", "Bots", "Adds bots through the bot brain's own commands: how many, to which team, how good (new bots only). Never more than the free slots (one is kept open for a person). The host's bot count comes back at the next map.",
+     inputs=[X, P("count","number","How many",param="count")], outputs=[E()], params=[prm("count","How many","number",2,min=1,max=31), prm("team","Team","choice","any",choices=[["any","Either (the game balances)"],["t","Terrorists"],["ct","Counter-Terrorists"]]), prm("skill","Difficulty","choice","host",choices=[["host","The host's setting"],["0","Easy"],["1","Normal"],["2","Hard"],["3","Expert"]])],
+     keywords="bot add spawn quota fill difficulty")
+node("botctl.remove", "Remove Bots", "Bots", "Takes bots off the server (of a team, or any), lowering the bot count so they don't come back this map. The host's bot count comes back at the next map.",
+     inputs=[X, P("count","number","How many",param="count")], outputs=[E()], params=[prm("count","How many","number",1,min=1,max=31), prm("team","Team","choice","any",choices=[["any","Any team"],["t","Terrorists"],["ct","Counter-Terrorists"]])],
+     keywords="bot kick remove quota")
 
 
 data = {

@@ -19,9 +19,10 @@
 use super::*;
 use crate::tools::studio::graph::Problem;
 
-pub(crate) const PURE: [&str; 4] = ["ent.prop_get", "player.move_state", "game.map_type", "player.in_zone"];
+pub(crate) const PURE: [&str; 7] = ["ent.prop_get", "player.move_state", "game.map_type", "player.in_zone", "player.has_flag", "game.vote_count", "hostage.is_following"];
 pub(crate) const EVENTS: [&str; 6] = ["event.grenade_thrown", "event.grenade_exploded", "event.map_fired", "event.weapon_switched", "event.zone_enter", "event.zone_leave"];
-pub(crate) const ACTIONS: [&str; 18] = [
+pub(crate) const ACTIONS: [&str; 24] = [
+    "game.round_end_rules", "game.start_vote", "hostage.follow", "hostage.stop", "botctl.add", "botctl.remove",
     "damage.deal", "ent.prop_set", "msg.big_hud", "msg.color_chat", "player.push", "player.jump_rules", "ent.grenade_fuse", "ent.play_anim", "ent.attach", "ent.detach",
     "game.remove_objectives", "game.voice_rules", "player.voice_override", "msg.radio", "msg.info_window", "npc.move_to", "npc.follow_path", "npc.stop",
 ];
@@ -196,6 +197,15 @@ pub(super) fn pure(gen: &Gen, node: &str, pin: &str) -> String {
             "vip" => "(lsg_ec_mhas(3) ? 1 : 0)".into(),
             _ => "(lsg_ec_mhas(4) ? 1 : 0)".into(),
         },
+        "player.has_flag" => {
+            let f = gen.choice(n, def, "flag").bytes().next().unwrap_or(b'c');
+            format!("(lsg_ok({p}) && (get_user_flags({p}) & {}) ? 1 : 0)", 1i64 << (f.clamp(b'a', b'z') - b'a'), p = i("player", "player"))
+        }
+        "game.vote_count" => format!("float(g_lsgEcVoteN[clamp(floatround({}), 0, 8)])", i("option", "number")),
+        "hostage.is_following" => {
+            let h = i("hostage", "entity");
+            if pin == "leader" { format!("lsg_ec_hleader({h})") } else { format!("(lsg_ec_hleader({h}) > 0 ? 1 : 0)") }
+        }
         "player.in_zone" => format!("lsg_ec_inzone({}, {})", i("player", "player"), zone_bit(gen.choice(n, def, "zone"))),
         _ => "0".into(),
     }
@@ -204,6 +214,10 @@ pub(super) fn pure(gen: &Gen, node: &str, pin: &str) -> String {
 /// The NPC move nodes in the graph, in order (their number in the dispatch).
 fn npc_nodes<'g>(gen: &'g Gen) -> Vec<&'g str> {
     gen.live.iter().copied().filter(|id| matches!(gen.v.defs[*id].kind.as_str(), "npc.move_to" | "npc.follow_path")).collect()
+}
+
+fn vote_nodes<'g>(gen: &'g Gen) -> Vec<&'g str> {
+    gen.live.iter().copied().filter(|id| gen.v.defs[*id].kind == "game.start_vote").collect()
 }
 
 /// The node's code (inside its function, before it goes on).
@@ -388,6 +402,57 @@ pub(super) fn action(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &m
                 b.line(format!("\telse\n\t\t{f}"));
             }
         }
+        "game.round_end_rules" => {
+            let f = match gen.choice(n, def, "rule") {
+                "elim" => "f",
+                "time" => "ahijk",
+                "both" => "afhijk",
+                _ => "0",
+            };
+            b.line(format!("\tset_cvar_string(\"mp_round_infinite\", {})", pawn_str(f)));
+            ex(b, "set");
+        }
+        "game.start_vote" => {
+            let k = vote_nodes(gen).iter().position(|x| *x == id).unwrap_or(0);
+            let count = gen.num(n, def, "count").round().clamp(2.0, 8.0) as usize;
+            let who = ["all", "t", "ct", "alive"].iter().position(|x| *x == gen.choice(n, def, "who")).unwrap_or(0);
+            let mut body = format!("\tif (lsg_ec_vote_begin({k}, ctx))\n\t{{\n\t\tnew m = menu_create({}, \"lsg_ec_vote_pick\")", pawn_str(&safe_text(gen.text(n, def, "question"), 60)));
+            for o in 1..=count {
+                body.push_str(&format!("\n\t\tmenu_additem(m, {})", pawn_str(&safe_text(gen.text(n, def, &format!("o{o}")), 30))));
+            }
+            body.push_str(&format!("\n\t\tlsg_ec_vote_show(m, {count}, {who}, {}, {})\n\t}}", if gen.boolean(n, def, "bots") { "true" } else { "false" }, num("secs")));
+            b.line(body);
+            let none = gen.v.exec_target(id, "none").map(|(t, tp)| format!("{}(ctx)", gen.pin_fname(t, tp)));
+            b.line(format!("\telse\n\t{{\n\t\t{}\n\t}}", [if debug { err("Not started: another vote is on (this mode's or the server's map vote).") } else { String::new() }, none.unwrap_or_default()].iter().filter(|x| !x.is_empty()).cloned().collect::<Vec<_>>().join("\n\t\t")));
+            ex(b, "voting");
+        }
+        "hostage.follow" => {
+            let call = format!("lsg_ec_hfollow({}, {})", inp("hostage", "entity"), inp("player", "player"));
+            checked(b, call, "Not following: not a hostage (or a rescued or dead one), or the leader isn't alive.", "following");
+        }
+        "hostage.stop" => {
+            let call = format!("lsg_ec_hfollow({}, 0)", inp("hostage", "entity"));
+            checked(b, call, "Not a hostage (or a rescued or dead one).", "stopped");
+        }
+        "botctl.add" => {
+            let team = match gen.choice(n, def, "team") {
+                "t" => 1,
+                "ct" => 2,
+                _ => 0,
+            };
+            let skill: i64 = gen.choice(n, def, "skill").parse().unwrap_or(-1);
+            let call = format!("lsg_ec_bots_add(clamp(floatround({}), 1, 31), {team}, {skill})", inp("count", "number"));
+            checked(b, call, "No bots added: no free slot (one is kept for a person).", "added");
+        }
+        "botctl.remove" => {
+            let team = match gen.choice(n, def, "team") {
+                "t" => 1,
+                "ct" => 2,
+                _ => 0,
+            };
+            let call = format!("lsg_ec_bots_remove(clamp(floatround({}), 1, 31), {team})", inp("count", "number"));
+            checked(b, call, "No bots removed: none on that team.", "removed");
+        }
         "npc.stop" => {
             b.line(format!("\tlsg_ec_npc_stop({}, {})", inp("npc", "entity"), on("stay")));
             ex(b, "stopped");
@@ -404,6 +469,9 @@ pub(super) fn blocks(g: &Graph, o: &mut Out) {
     o.line(RUNTIME);
     if needs_botnav(g) || has(g, "npc.stop") {
         o.line(NPC_RUNTIME);
+    }
+    if has(g, "game.start_vote") || has(g, "game.vote_count") {
+        o.line(VOTE_RUNTIME);
     }
 }
 
@@ -541,6 +609,31 @@ pub(super) fn handlers(gen: &Gen, o: &mut Out) {
         t.push_str("\n}\n");
         o.line(t);
     }
+    // Start Vote: the result runs the winner's output (or Tie, No votes) with the flow's own values
+    let votes = vote_nodes(gen);
+    if !votes.is_empty() {
+        let target = |id: &str, pin: &str| v.exec_target(id, pin).map(|(t, tp)| format!("{}(ctx)", gen.pin_fname(t, tp)));
+        let mut t = String::from("public lsg_ec_vote_end()\n{\n\tnew k = g_lsgEcVoteNode, w = lsg_ec_vote_close()\n\tnew ctx[LSG_CTX]\n\tfor (new i = 0; i < LSG_CTX; i++)\n\t\tctx[i] = g_lsgEcVoteCtx[i]\n\tswitch (k)\n\t{");
+        for (k, id) in votes.iter().enumerate() {
+            let mut cases = Vec::new();
+            for o in 1..=8 {
+                if let Some(c) = target(id, &format!("w{o}")) {
+                    cases.push(format!("case {o}: {c}"));
+                }
+            }
+            if let Some(c) = target(id, "tie") {
+                cases.push(format!("case -1: {c}"));
+            }
+            if let Some(c) = target(id, "none") {
+                cases.push(format!("case 0: {c}"));
+            }
+            if !cases.is_empty() {
+                t.push_str(&format!("\n\t\tcase {k}:\n\t\t{{\n\t\t\tswitch (w)\n\t\t\t{{\n\t\t\t\t{}\n\t\t\t}}\n\t\t}}", cases.join("\n\t\t\t\t")));
+            }
+        }
+        t.push_str("\n\t}\n\t#pragma unused ctx\n\t#pragma unused w\n}\n");
+        o.line(t);
+    }
     // NPC moves: Arrived / At point / Finished / Failed with the flow's own values
     let npcs = npc_nodes(gen);
     if !npcs.is_empty() {
@@ -650,6 +743,25 @@ pub(crate) fn problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
                     p.push(warn(&n.id, "With the buy zones gone nobody can buy (a far away stand-in keeps the game from buying at spawn). Use Buying to choose where instead."));
                 }
             }
+            "game.start_vote" => {
+                let c = prm(n, def, "count").as_f64().unwrap_or(2.0).round().clamp(2.0, 8.0) as usize;
+                for k in 1..=c {
+                    if prm(n, def, &format!("o{k}")).as_str().unwrap_or("").trim().is_empty() {
+                        p.push(err(&n.id, &format!("Answer {k} is empty (Answers is {c}).")));
+                    }
+                }
+                for k in (c + 1)..=8 {
+                    if v.exec_target(&n.id, &format!("w{k}")).is_some() {
+                        p.push(warn(&n.id, &format!("Output {k} is wired but there are only {c} answers: it never runs.")));
+                    }
+                }
+            }
+            "botctl.add" => {
+                let c = prm(n, def, "count").as_f64().unwrap_or(1.0);
+                if !wired(n, "count") && c > 10.0 {
+                    p.push(warn(&n.id, "That's a lot of bots at once: the host's server may not have the slots (only free ones are used)."));
+                }
+            }
             "msg.info_window" => {
                 let t = prm(n, def, "text");
                 let low = t.as_str().unwrap_or("").to_ascii_lowercase();
@@ -664,6 +776,7 @@ pub(crate) fn problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
 
 const RUNTIME: &str = include_str!("coverage.pawn");
 const NPC_RUNTIME: &str = include_str!("coverage_npc.pawn");
+const VOTE_RUNTIME: &str = include_str!("coverage_vote.pawn");
 
 #[cfg(test)]
 mod tests;

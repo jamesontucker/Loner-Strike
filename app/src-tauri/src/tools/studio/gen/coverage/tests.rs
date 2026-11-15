@@ -71,6 +71,12 @@ fn coverage_nodes_generate() {
     assert!(src.contains("lsg_ec_npc_to(") && src.contains(", 220.0, 6)") && src.contains("lsg_ec_npc_path(") && src.contains("\"path1\", 90.0, 1)"));
     assert!(src.contains("public ls_on_npc_arrived(npc, point, last)") && src.contains("public ls_on_npc_move_failed(npc, point)") && src.contains("lsg_ec_npc_keep(lsgNpc, "));
     assert!(src.contains("lsg_ec_npc_stop("));
+    // round end rules (both: elimination and every time-out), votes, admin flag (f = 32), hostages, bots
+    assert!(src.contains("set_cvar_string(\"mp_round_infinite\", \"afhijk\")"), "round end");
+    assert!(src.contains("lsg_ec_vote_begin(") && src.contains("menu_additem(m, \"Rifles\")") && src.contains("lsg_ec_vote_show(m, 3, 0, true, 10.0)") && src.contains("public lsg_ec_vote_end()") && src.contains("case -1: "), "vote");
+    assert!(src.contains("callfunc_begin(\"gm_pubserver_voting\", \"gm_pubserver.amxx\")") && src.contains("float(g_lsgEcVoteN[clamp(floatround(0.0), 0, 8)])"));
+    assert!(src.contains("& 32) ? 1 : 0)") && src.contains("lsg_ec_hfollow(") && src.contains("lsg_ec_hleader("));
+    assert!(src.contains("lsg_ec_bots_add(clamp(floatround(2.0), 1, 31), 2, 2)") && src.contains("lsg_ec_bots_remove(clamp(floatround(1.0), 1, 31), 1)") && !src.contains("server_cmd(\"bot_add %"));
     snapshot("every_node_ec.sma", src);
     snapshot("every_node_ec.debug.sma", &generate(&g, true).source);
     // a mode without them has none of it

@@ -804,6 +804,77 @@ stock lsg_ec_motd(id, const title[], const body[], const more[])
 	return 1
 }
 
+// Hostage Follow / Stop / Is Following (the game's own follow, classic and Condition Zero hostages)
+stock bool:lsg_ec_hostage(h)
+{
+	if (h <= MaxClients || h >= 2048 || !pev_valid(h))
+		return false
+	new c[16]
+	pev(h, pev_classname, c, charsmax(c))
+	return equal(c, "hostage_entity") && pev(h, pev_deadflag) == DEAD_NO && !(pev(h, pev_effects) & EF_NODRAW)
+}
+
+stock lsg_ec_hleader(h)
+{
+	if (!lsg_ec_hostage(h))
+		return 0
+	new f = cs_get_hostage_foll(h)
+	return lsg_ok(f) ? f : 0
+}
+
+stock lsg_ec_hfollow(h, p)
+{
+	if (!lsg_ec_hostage(h) || (p && (!lsg_ok(p) || !is_user_alive(p))))
+		return 0
+	cs_set_hostage_foll(h, p)
+	return 1
+}
+
+// Add / Remove Bots: the bot brain's own commands (fixed words; never text from the graph);
+// one slot kept for a person; the host's count comes back with the next map's settings
+stock g_lsgEcBotSkill = -1
+
+stock lsg_ec_bots_add(n, team, skill)
+{
+	new free = MaxClients - get_playersnum(1) - 1
+	n = min(n, free)
+	if (n <= 0)
+		return 0
+	if (skill >= 0)
+	{
+		if (g_lsgEcBotSkill < 0)
+			g_lsgEcBotSkill = get_cvar_num("bot_difficulty")
+		set_cvar_num("bot_difficulty", skill)
+		remove_task(LSG_TASK - 612)
+		set_task(2.0, "lsg_ec_bots_skill_back", LSG_TASK - 612)
+	}
+	for (new i = 0; i < n; i++)
+		server_cmd(team == 1 ? "bot_add_t" : (team == 2 ? "bot_add_ct" : "bot_add"))
+	return n
+}
+
+public lsg_ec_bots_skill_back()
+{
+	if (g_lsgEcBotSkill >= 0)
+		set_cvar_num("bot_difficulty", g_lsgEcBotSkill)
+	g_lsgEcBotSkill = -1
+}
+
+stock lsg_ec_bots_remove(n, team)
+{
+	new gone = 0
+	for (new p = MaxClients; p >= 1 && gone < n; p--)
+	{
+		if (!is_user_connected(p) || !is_user_bot(p) || (team && get_user_team(p) != team))
+			continue
+		server_cmd("kick #%d", get_user_userid(p))
+		gone++
+	}
+	if (gone)
+		set_cvar_num("bot_quota", max(0, get_cvar_num("bot_quota") - gone))
+	return gone
+}
+
 // leaving: nothing carries over to whoever gets the slot next
 public lsg_ec_left(id)
 {

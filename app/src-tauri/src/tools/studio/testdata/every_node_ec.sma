@@ -15,9 +15,9 @@
 #define LSG_MODE "every_node_ec"
 #define LSG_CTX 8
 #define LSG_TXT 2
-#define LSG_N 71
+#define LSG_N 86
 #define LSG_TASK 7310000
-#pragma dynamic 49536
+#pragma dynamic 59136
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -3029,6 +3029,77 @@ stock lsg_ec_motd(id, const title[], const body[], const more[])
 	return 1
 }
 
+// Hostage Follow / Stop / Is Following (the game's own follow, classic and Condition Zero hostages)
+stock bool:lsg_ec_hostage(h)
+{
+	if (h <= MaxClients || h >= 2048 || !pev_valid(h))
+		return false
+	new c[16]
+	pev(h, pev_classname, c, charsmax(c))
+	return equal(c, "hostage_entity") && pev(h, pev_deadflag) == DEAD_NO && !(pev(h, pev_effects) & EF_NODRAW)
+}
+
+stock lsg_ec_hleader(h)
+{
+	if (!lsg_ec_hostage(h))
+		return 0
+	new f = cs_get_hostage_foll(h)
+	return lsg_ok(f) ? f : 0
+}
+
+stock lsg_ec_hfollow(h, p)
+{
+	if (!lsg_ec_hostage(h) || (p && (!lsg_ok(p) || !is_user_alive(p))))
+		return 0
+	cs_set_hostage_foll(h, p)
+	return 1
+}
+
+// Add / Remove Bots: the bot brain's own commands (fixed words; never text from the graph);
+// one slot kept for a person; the host's count comes back with the next map's settings
+stock g_lsgEcBotSkill = -1
+
+stock lsg_ec_bots_add(n, team, skill)
+{
+	new free = MaxClients - get_playersnum(1) - 1
+	n = min(n, free)
+	if (n <= 0)
+		return 0
+	if (skill >= 0)
+	{
+		if (g_lsgEcBotSkill < 0)
+			g_lsgEcBotSkill = get_cvar_num("bot_difficulty")
+		set_cvar_num("bot_difficulty", skill)
+		remove_task(LSG_TASK - 612)
+		set_task(2.0, "lsg_ec_bots_skill_back", LSG_TASK - 612)
+	}
+	for (new i = 0; i < n; i++)
+		server_cmd(team == 1 ? "bot_add_t" : (team == 2 ? "bot_add_ct" : "bot_add"))
+	return n
+}
+
+public lsg_ec_bots_skill_back()
+{
+	if (g_lsgEcBotSkill >= 0)
+		set_cvar_num("bot_difficulty", g_lsgEcBotSkill)
+	g_lsgEcBotSkill = -1
+}
+
+stock lsg_ec_bots_remove(n, team)
+{
+	new gone = 0
+	for (new p = MaxClients; p >= 1 && gone < n; p--)
+	{
+		if (!is_user_connected(p) || !is_user_bot(p) || (team && get_user_team(p) != team))
+			continue
+		server_cmd("kick #%d", get_user_userid(p))
+		gone++
+	}
+	if (gone)
+		set_cvar_num("bot_quota", max(0, get_cvar_num("bot_quota") - gone))
+	return gone
+}
+
 // leaving: nothing carries over to whoever gets the slot next
 public lsg_ec_left(id)
 {
@@ -3129,6 +3200,95 @@ stock lsg_ec_npc_stop(npc, bool:stay)
 		ls_npc_move_stop(npc, stay)
 }
 
+// ---- Start Vote (EC): one vote at a time, never over the server's map or mode vote ----
+stock g_lsgEcVoteN[9], g_lsgEcVoteNode = -1, g_lsgEcVoteCtx[LSG_CTX], g_lsgEcVoteMenu = -1, g_lsgEcVoteOpts, bool:g_lsgEcVoted[33]
+
+// gm_pubserver's map/mode vote running now (0 when it isn't loaded)
+stock bool:lsg_ec_mapvote()
+{
+	if (callfunc_begin("gm_pubserver_voting", "gm_pubserver.amxx") != 1)
+		return false
+	return callfunc_end() != 0
+}
+
+stock bool:lsg_ec_vote_begin(k, const ctx[])
+{
+	if (g_lsgEcVoteMenu >= 0 || lsg_ec_mapvote())
+		return false
+	g_lsgEcVoteNode = k
+	for (new i = 0; i < LSG_CTX; i++)
+		g_lsgEcVoteCtx[i] = ctx[i]
+	arrayset(g_lsgEcVoteN, 0, sizeof g_lsgEcVoteN)
+	arrayset(g_lsgEcVoted, false, sizeof g_lsgEcVoted)
+	return true
+}
+
+// who: 0 everyone, 1 Terrorists, 2 Counter-Terrorists, 3 the living
+stock lsg_ec_vote_show(m, n, who, bool:bots, Float:secs)
+{
+	g_lsgEcVoteMenu = m
+	g_lsgEcVoteOpts = n
+	menu_setprop(m, MPROP_EXIT, MEXIT_NEVER)
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || (who == 1 && get_user_team(p) != 1) || (who == 2 && get_user_team(p) != 2) || (who == 3 && !is_user_alive(p)))
+			continue
+		if (is_user_bot(p))
+		{
+			if (bots)
+			{
+				g_lsgEcVoted[p] = true
+				g_lsgEcVoteN[random_num(1, n)]++
+				g_lsgEcVoteN[0]++
+			}
+			continue
+		}
+		// a menu already open (the server's own, a shop) isn't taken over
+		new old, nm
+		player_menu_info(p, old, nm)
+		if (old > 0 || nm >= 0)
+			continue
+		menu_display(p, m, 0, floatround(secs))
+	}
+	remove_task(LSG_TASK - 611)
+	set_task(secs, "lsg_ec_vote_end", LSG_TASK - 611)
+}
+
+public lsg_ec_vote_pick(id, menu, item)
+{
+	if (menu != g_lsgEcVoteMenu || item < 0 || item >= g_lsgEcVoteOpts || id < 1 || id > 32 || g_lsgEcVoted[id])
+		return PLUGIN_HANDLED
+	g_lsgEcVoted[id] = true
+	g_lsgEcVoteN[item + 1]++
+	g_lsgEcVoteN[0]++
+	return PLUGIN_HANDLED
+}
+
+// the result: the winner (1-8), -1 a tie, 0 no votes
+stock lsg_ec_vote_close()
+{
+	new m = g_lsgEcVoteMenu
+	g_lsgEcVoteMenu = -1
+	g_lsgEcVoteNode = -1
+	if (m >= 0)
+		menu_destroy(m)
+	new best = 0, w = 0, ties = 0
+	for (new i = 1; i <= g_lsgEcVoteOpts; i++)
+	{
+		if (g_lsgEcVoteN[i] > best)
+		{
+			best = g_lsgEcVoteN[i]
+			w = i
+			ties = 0
+		}
+		else if (best > 0 && g_lsgEcVoteN[i] == best)
+			ties++
+	}
+	if (!best)
+		return 0
+	return ties ? -1 : w
+}
+
 public plugin_precache()
 {
 	// an NPC the mode makes: its model is loaded with the map
@@ -3139,6 +3299,7 @@ public plugin_precache()
 public plugin_init()
 {
 	ls_register_mode(LSG_MODE, "Every Node EC", "1.0", "Game Mode Studio")
+	register_logevent("lsg_on_round_started", 2, "1=Round_Start")
 	RegisterHamPlayer(Ham_Spawn, "lsg_on_player_spawned", 1)
 	set_task(1.0, "lsg_on_map_started")
 	register_forward(FM_CmdStart, "lsg_ec_cmd", 0)
@@ -3189,6 +3350,12 @@ stock lsg_stop_timers()
 		remove_task(LSG_TASK + i)
 }
 
+public lsg_on_round_started()
+{
+	new ctx[LSG_CTX]
+	lsg_n71(ctx)
+}
+
 public lsg_on_player_spawned(id)
 {
 	if (!is_user_alive(id))
@@ -3196,6 +3363,7 @@ public lsg_on_player_spawned(id)
 	new ctx[LSG_CTX]
 	ctx[0] = id // player
 	lsg_n0(ctx)
+	lsg_n80(ctx)
 	return HAM_IGNORED
 }
 
@@ -3302,6 +3470,29 @@ public lsg_ec_tick()
 			lsg_n69(ctx)
 		}
 	}
+}
+
+public lsg_ec_vote_end()
+{
+	new k = g_lsgEcVoteNode, w = lsg_ec_vote_close()
+	new ctx[LSG_CTX]
+	for (new i = 0; i < LSG_CTX; i++)
+		ctx[i] = g_lsgEcVoteCtx[i]
+	switch (k)
+	{
+		case 0:
+		{
+			switch (w)
+			{
+				case 1: lsg_n74(ctx)
+				case 3: lsg_n75(ctx)
+				case -1: lsg_n76(ctx)
+				case 0: lsg_n77(ctx)
+			}
+		}
+	}
+	#pragma unused ctx
+	#pragma unused w
 }
 
 public ls_on_npc_arrived(npc, point, last)
@@ -3933,5 +4124,137 @@ lsg_n70(ctx[])
 		set_dhudmessage(255, 255, 255, 0.1, 0.8, 1, 1.0, 3.0, 0.1, 0.5)
 		show_dhudmessage(ctx[0], "%s", "Left the site")
 	}
+}
+
+// Round Started (rs)
+lsg_n71(ctx[])
+{
+	lsg_n72(ctx)
+}
+
+// Round End Rules (rer)
+lsg_n72(ctx[])
+{
+	set_cvar_string("mp_round_infinite", "afhijk")
+	lsg_n73(ctx)
+}
+
+// Start Vote (vote)
+lsg_n73(ctx[])
+{
+	if (lsg_ec_vote_begin(0, ctx))
+	{
+		new m = menu_create("Weapons?", "lsg_ec_vote_pick")
+		menu_additem(m, "Knives")
+		menu_additem(m, "Pistols")
+		menu_additem(m, "Rifles")
+		lsg_ec_vote_show(m, 3, 0, true, 10.0)
+	}
+	else
+	{
+		lsg_n77(ctx)
+	}
+	lsg_n78(ctx)
+}
+
+// Print String (v_w1)
+lsg_n74(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "knives won", lsg_ntext(float(g_lsgEcVoteN[clamp(floatround(0.0), 0, 8)])))
+	server_print("[%s] %s", LSG_MODE, t)
+	client_print(0, print_chat, "%s", t)
+	#pragma unused ctx
+}
+
+// Print String (v_w3)
+lsg_n75(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s", "rifles won")
+	server_print("[%s] %s", LSG_MODE, t)
+	client_print(0, print_chat, "%s", t)
+	#pragma unused ctx
+}
+
+// Print String (v_tie)
+lsg_n76(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s", "tie")
+	server_print("[%s] %s", LSG_MODE, t)
+	client_print(0, print_chat, "%s", t)
+	#pragma unused ctx
+}
+
+// Print String (v_none)
+lsg_n77(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s", "no votes")
+	server_print("[%s] %s", LSG_MODE, t)
+	client_print(0, print_chat, "%s", t)
+	#pragma unused ctx
+}
+
+// Add Bots (bota)
+lsg_n78(ctx[])
+{
+	lsg_ec_bots_add(clamp(floatround(2.0), 1, 31), 2, 2)
+	lsg_n79(ctx)
+}
+
+// Remove Bots (botr)
+lsg_n79(ctx[])
+{
+	lsg_ec_bots_remove(clamp(floatround(1.0), 1, 31), 1)
+	#pragma unused ctx
+}
+
+// Player Spawned (ps2)
+lsg_n80(ctx[])
+{
+	lsg_n81(ctx)
+}
+
+// Print String (hfp)
+lsg_n81(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "can change map", g_lsgYesNo[((lsg_ok(ctx[0]) && (get_user_flags(ctx[0]) & 32) ? 1 : 0)) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	lsg_n82(ctx)
+}
+
+// Hostage Follow (hfol)
+lsg_n82(ctx[])
+{
+	lsg_ec_hfollow(lsg_agetc(lsg_find_all(0, "hostage_entity"), 0.0), ctx[0])
+	lsg_n83(ctx)
+}
+
+// Print String (hifp)
+lsg_n83(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "following", g_lsgYesNo[((lsg_ec_hleader(lsg_agetc(lsg_find_all(0, "hostage_entity"), 0.0)) > 0 ? 1 : 0)) ? 1 : 0])
+	server_print("[%s] %s", LSG_MODE, t)
+	lsg_n84(ctx)
+}
+
+// Print String (hifp2)
+lsg_n84(ctx[])
+{
+	new t[192]
+	formatex(t, charsmax(t), "%s %s", "leader", lsg_name(lsg_ec_hleader(lsg_agetc(lsg_find_all(0, "hostage_entity"), 0.0))))
+	server_print("[%s] %s", LSG_MODE, t)
+	lsg_n85(ctx)
+}
+
+// Hostage Stop (hstop)
+lsg_n85(ctx[])
+{
+	lsg_ec_hfollow(lsg_agetc(lsg_find_all(0, "hostage_entity"), 0.0), 0)
+	#pragma unused ctx
 }
 
