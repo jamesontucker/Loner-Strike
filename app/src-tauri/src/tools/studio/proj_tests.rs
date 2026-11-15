@@ -53,6 +53,11 @@ fn proj_graph() -> graph::Graph {
 #[test]
 fn projectiles_generate_with_their_own_callbacks() {
     let g = proj_graph();
+    // with the Limits setting the Studio adds, hosts' value is used (clamped to what the plugin holds)
+    let mut lim = g.clone();
+    lim.variables.push(serde_json::from_value(super::limits::var_json(super::limits::get("projectiles").unwrap())).unwrap());
+    let src = gen::generate(&lim, false).source;
+    assert!(src.contains("set_cvar_num(\"ls_proj_max\", clamp(floatround("), "{src}");
     // (the hostile path is refused by the check; the plugin is generated from it anyway, to show
     // nothing of it gets through)
     let problems = graph::validate(&g);
@@ -62,6 +67,9 @@ fn projectiles_generate_with_their_own_callbacks() {
         // loaded with the map; a bad path flies as a grenade, nothing of it in the source
         assert!(src.contains("ls_proj_precache(\"models/rpgrocket.mdl\")") && src.contains("ls_proj_precache(\"models/w_hegrenade.mdl\")"), "{src}");
         assert!(!src.contains("evil") && !src.contains(";quit;"), "the path never reaches the plugin");
+        // how many fly at once is the mode's Limits setting (the default without one); the engine's
+        // entity slots are checked before each spawn
+        assert!(src.contains("set_cvar_num(\"ls_proj_max\", 64)") && src.contains("lsg_ent_room(\"Spawn Projectile\")"), "{src}");
         // each Spawn Projectile keeps its own hit flow: the dispatch goes by the node that made it
         assert!(src.contains("public ls_on_proj_hit_node(") && src.contains("public ls_on_proj_expire(") && src.contains("public ls_on_proj_hit(proj, owner"));
         // (each node's hit stock: from its heading to the next stock or node; Show Message's code

@@ -27,6 +27,7 @@ pub struct Limit {
 pub const LIMITS: &[Limit] = &[
     Limit { id: "markers", label: "Objective markers at once", default: 32, lag_above: 64, max: 256, kinds: &["fx.marker"] },
     Limit { id: "trails", label: "Trails at once", default: 32, lag_above: 64, max: 256, kinds: &["fun.trail"] },
+    Limit { id: "projectiles", label: "Projectiles at once", default: 64, lag_above: 128, max: 512, kinds: &["proj.spawn"] },
 ];
 
 pub fn get(id: &str) -> Option<&'static Limit> {

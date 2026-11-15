@@ -2663,7 +2663,10 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 b.line(format!("\tnew Float:pa[3]\n\tlsg_vto({}, pa)\n\tangle_vector(pa, ANGLEVECTOR_FORWARD, d)", inp("angles", "vector")));
             }
             b.line(format!("\tformatex(lsgK, charsmax(lsgK), \"{keys} damage=%.0f scale=%.2f\", floatclamp({}, 0.0, 5000.0), floatclamp({}, 0.05, 4.0))", inp("damage", "number"), inp("scale", "number")));
-            let call = format!("ls_proj_spawn({owner}, {model}, o, d, floatclamp({}, 1.0, 5000.0), {}, {}, lsgK)", inp("speed", "number"), float_lit(gen.num(n, def, "gravity").clamp(0.0, 4.0)), float_lit(gen.num(n, def, "life").clamp(0.1, 60.0)));
+            // how many fly at once is the mode's Limits setting (gm_components' ls_proj_max); the engine's
+            // own ceiling, free entity slots, is checked first (the larger reserve wins: the plugin keeps 128)
+            b.line(format!("\tif (get_cvar_num(\"ls_proj_max\") != {lim})\n\t\tset_cvar_num(\"ls_proj_max\", {lim})", lim = gen.limit_expr("projectiles")));
+            let call = format!("(lsg_ent_room(\"Spawn Projectile\") ? ls_proj_spawn({owner}, {model}, o, d, floatclamp({}, 1.0, 5000.0), {}, {}, lsgK) : 0)", inp("speed", "number"), float_lit(gen.num(n, def, "gravity").clamp(0.0, 4.0)), float_lit(gen.num(n, def, "life").clamp(0.1, 60.0)));
             // Velocity, when wired, sets the motion outright
             // (On Hit / On Expired come later, for this projectile only: its node and the flow's
             // context are kept by the projectile's entity, cleared when it's gone or reused)

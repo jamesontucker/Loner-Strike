@@ -9,6 +9,7 @@ export type Limit = { id: string; label: string; default: number; lagAbove: numb
 export const LIMITS: Limit[] = [
   { id: "markers", label: "Objective markers at once", default: 32, lagAbove: 64, max: 256, kinds: ["fx.marker"] },
   { id: "trails", label: "Trails at once", default: 32, lagAbove: 64, max: 256, kinds: ["fun.trail"] },
+  { id: "projectiles", label: "Projectiles at once", default: 64, lagAbove: 128, max: 512, kinds: ["proj.spawn"] },
 ];
 
 export const limitVar = (l: Limit): GVariable =>
