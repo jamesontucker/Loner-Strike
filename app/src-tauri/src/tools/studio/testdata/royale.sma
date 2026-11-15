@@ -83,7 +83,10 @@ stock lsg_pre_sound(const p[])
 //    player too, at half the budget)
 //  - bytes each client can take: every client has a bucket of unreliable bytes that fills at 40%
 //    of its rate (bytes a second, capped by sv_maxrate; the rest is the game's own entities and
-//    sounds) and holds at most LSG_MSG_BURST, under one datagram after the engine's own traffic.
+//    sounds). A share is min(LSG_MSG_BURST, that / cl_updaterate): what one of the client's
+//    datagrams can take after the engine's own traffic. The datagram goes out cl_updaterate times
+//    a second however fast the server runs, so the bucket holds half a share and fills at half
+//    the share's rate: between two sends at most one share gets in (Alone Together at 265 fps).
 //    A message to everyone needs room in every client's bucket (bots don't count). So no setting
 //    can overflow a client's datagram: an effects flood stutters nobody (P5's fc_st_fx)
 // Two kinds of message use it:
@@ -96,7 +99,7 @@ stock lsg_pre_sound(const p[])
 stock Float:g_lsgMsgAt, g_lsgMsgN, g_lsgMsgP[33], Float:g_lsgMsgSaid, g_lsgMsgLim = 48
 #define LSG_MSG_BURST 1000.0
 #define LSG_MSG_BYTES 32
-stock Float:g_lsgMsgTok[33], Float:g_lsgMsgTokAt[33], Float:g_lsgMsgFill[33], Float:g_lsgMsgFillAt[33]
+stock Float:g_lsgMsgTok[33], Float:g_lsgMsgTokAt[33], Float:g_lsgMsgFill[33], Float:g_lsgMsgFillAt[33], Float:g_lsgMsgCap[33]
 // a client's bytes of room now (its bucket filled since it was last used)
 stock Float:lsg_msg_tokens(p, Float:now)
 {
@@ -113,10 +116,29 @@ stock Float:lsg_msg_tokens(p, Float:now)
 		if (maxr > 0 && rate > maxr)
 			rate = maxr
 		g_lsgMsgFill[p] = float(clamp(rate, 2500, 100000)) * 0.4
+		// (the client's datagram goes out cl_updaterate times a second, whatever the server's fps:
+		// what's let in between two of its sends is one share, so the bucket holds half of it and
+		// fills the other half in the gap: sv_minupdaterate / sv_maxupdaterate bound it)
+		new u[8], ur, mn, mx
+		get_user_info(p, "cl_updaterate", u, charsmax(u))
+		ur = str_to_num(u)
+		if (ur <= 0)
+			ur = 30
+		mn = get_cvar_num("sv_minupdaterate")
+		mx = get_cvar_num("sv_maxupdaterate")
+		if (mn > 0 && ur < mn)
+			ur = mn
+		if (mx > 0 && ur > mx)
+			ur = mx
+		ur = clamp(ur, 10, 1000)
+		// (any stretch between two sends gets at most what the bucket holds plus what fills in that
+		// time: half a share each, so the fill is half the share's rate)
+		g_lsgMsgFill[p] = floatmin(g_lsgMsgFill[p], LSG_MSG_BURST * float(ur)) * 0.5
+		g_lsgMsgCap[p] = g_lsgMsgFill[p] / float(ur)
 	}
-	new Float:t = now < g_lsgMsgTokAt[p] ? LSG_MSG_BURST : g_lsgMsgTok[p] + (now - g_lsgMsgTokAt[p]) * g_lsgMsgFill[p]
+	new Float:t = now < g_lsgMsgTokAt[p] ? g_lsgMsgCap[p] : g_lsgMsgTok[p] + (now - g_lsgMsgTokAt[p]) * g_lsgMsgFill[p]
 	g_lsgMsgTokAt[p] = now
-	g_lsgMsgTok[p] = t > LSG_MSG_BURST ? LSG_MSG_BURST : t
+	g_lsgMsgTok[p] = t > g_lsgMsgCap[p] ? g_lsgMsgCap[p] : t
 	return g_lsgMsgTok[p]
 }
 
@@ -133,10 +155,10 @@ stock bool:lsg_msg_fits(cost, to, lim, bytes = 0)
 	}
 	if (g_lsgMsgN + cost > lim || (to >= 1 && to <= 32 && g_lsgMsgP[to] + cost > lim / 2))
 		return false
-	new Float:b = floatmin(float(bytes > 0 ? bytes : cost * LSG_MSG_BYTES), LSG_MSG_BURST)
+	new Float:b = float(bytes > 0 ? bytes : cost * LSG_MSG_BYTES)
 	new one = to >= 1 && to <= 32
 	for (new p = one ? to : 1; p <= (one ? to : MaxClients); p++)
-		if (is_user_connected(p) && !is_user_bot(p) && lsg_msg_tokens(p, now) < b)
+		if (is_user_connected(p) && !is_user_bot(p) && lsg_msg_tokens(p, now) < floatmin(b, g_lsgMsgCap[p]))
 			return false
 	for (new p = one ? to : 1; p <= (one ? to : MaxClients); p++)
 		if (is_user_connected(p) && !is_user_bot(p))
@@ -1080,7 +1102,7 @@ stock bool:lsg_use(const name[])
 
 stock lsg_bar(id, secs)
 {
-	if (id && !lsg_ok(id))
+	if (id && (!lsg_ok(id) || is_user_bot(id)))
 		return
 	message_begin(id ? MSG_ONE : MSG_ALL, get_user_msgid("BarTime"), _, id)
 	write_short(secs)

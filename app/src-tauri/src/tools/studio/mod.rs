@@ -1982,27 +1982,42 @@ mod tests {
         }
         let lim = super::limits::get("messages").unwrap();
         assert!(lim.max <= 64 && lim.default <= lim.max && lim.lag_above < lim.max, "the setting can't go past what a client takes");
-        // the model: one person at rate 25000 (and a bot that doesn't count), 100 frames a second
-        let (burst, msg) = (1000.0_f64, 32.0_f64);
-        for rate in [25000.0_f64, 100000.0, 2500.0] {
-            let fill = rate.clamp(2500.0, 100000.0) * 0.4;
-            let (mut tok, mut at, mut total, mut worst_frame) = (burst, 0.0_f64, 0.0_f64, 0.0_f64);
-            for f in 0..1000 {
-                let now = f as f64 / 100.0;
-                let mut frame = 0.0;
-                for _ in 0..lim.max {
-                    tok = (tok + (now - at) * fill).min(burst);
-                    at = now;
-                    if tok >= msg {
-                        tok -= msg;
-                        frame += msg;
+        // the model, as the plugin runs it: the server at 100, 265 or 1000 fps, a flood at the most the
+        // setting allows to everyone every frame; the client's datagram is filled by what gets in and
+        // sent cl_updaterate times a second. No datagram may get more than one share (and never
+        // more than 1,000 bytes), at rates 2,500 to 100,000
+        assert!(src.contains("get_user_info(p, \"cl_updaterate\", u, charsmax(u))") && src.contains("get_cvar_num(\"sv_maxupdaterate\")"));
+        let msg = 32.0_f64;
+        for fps in [100.0_f64, 265.0, 1000.0] {
+            for ur in [20.0_f64, 30.0, 60.0, 101.0] {
+                for rate in [2500.0_f64, 25000.0, 100000.0] {
+                    let full = rate.clamp(2500.0, 100000.0) * 0.4;
+                    let share = f64::min(1000.0, full / ur);
+                    let fill = f64::min(full, 1000.0 * ur) * 0.5;
+                    let cap = fill / ur;
+                    let (mut tok, mut at) = (cap, 0.0_f64);
+                    let (mut datagram, mut next_send, mut worst) = (0.0_f64, 1.0 / ur, 0.0_f64);
+                    let frames = (fps * 5.0) as usize;
+                    for f in 0..frames {
+                        let now = f as f64 / fps;
+                        while now >= next_send {
+                            worst = f64::max(worst, datagram);
+                            datagram = 0.0;
+                            next_send += 1.0 / ur;
+                        }
+                        for _ in 0..lim.max {
+                            tok = f64::min(tok + (now - at) * fill, cap);
+                            at = now;
+                            let need = f64::min(msg, cap);
+                            if tok >= need {
+                                tok -= msg;
+                                datagram += msg;
+                            }
+                        }
                     }
+                    assert!(worst <= share + msg && worst <= 1000.0 + msg, "fps {fps}, updaterate {ur}, rate {rate}: {worst} bytes in one datagram (share {share})");
                 }
-                total += frame;
-                worst_frame = f64::max(worst_frame, frame);
             }
-            assert!(worst_frame <= burst, "rate {rate}: {worst_frame} bytes in one frame");
-            assert!(total <= burst + fill * 10.0 + 1.0, "rate {rate}: {total} bytes in 10 s");
         }
         // Show HUD Text is a state message per player and slot: the latest text, never dropped
         let hud = gen::generate(&graph::parse(include_str!("testdata/every_node.graph.json")).unwrap(), false).source;
