@@ -139,6 +139,9 @@ Many agents share one staging area. Never run a bare `git commit`. Always commit
 - Never print secrets in tool output: mask rcon passwords and tokens in logs you read (e.g. `sed -E 's/rcon [0-9]+ "[^"]*"/rcon *** "***"/'`).
 - Hand-started game servers always use `-insecure` (a failed Steam start can take down every CrossOver sim).
 
+## How many sims at once (2026-11-14, evening)
+Up to 3 test servers (hlds.exe sims) may run at once across the crew, while the 1-minute load is under 20 and free disk is over 8 GB. Before starting one, count running `hlds.exe` (ps) and check load; if 3 are running or load is 20+, wait. One sim per agent still. The earlier "only when no other server is running" rule is lifted: the wineserver "deaths" were mostly normal exits and debugger freezes (see below), not overload.
+
 ## CrossOver wineserver (2026-11-14)
 - The Steam bottle's wineserver exits about 3 s after its last Wine process. Most "wineserver died" reports
   (13:45, 13:47, 13:55, 14:05 today) were just that: the last sim was stopped and the next run started a new
