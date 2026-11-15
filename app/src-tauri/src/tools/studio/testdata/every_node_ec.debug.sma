@@ -2981,6 +2981,458 @@ lsd_graph_set(const vid[], who, const val[])
 	return false
 }
 
+// ---- effects, sounds and spawning (fx.rs) ----
+// the engine's crash points are gen.rs's shared guards: lsg_msg_room (effect messages a frame,
+// the mode's "messages" limit) and lsg_ent_room (entity slots with a reserve)
+stock g_lsgXfSrc
+
+stock bool:lsg_xf_from(src, bool:found)
+{
+	g_lsgXfSrc = src
+	return found
+}
+
+// a prop at a place (Spawn Prop with the shared transform)
+stock lsg_prop_o(const Float:o[3], const model[], solid)
+{
+	if (!lsg_have(model))
+		return 0
+	new e = create_entity("info_target")
+	if (e <= 0)
+		return 0
+	set_pev(e, pev_classname, "ls_studio_prop")
+	engfunc(EngFunc_SetModel, e, model)
+	engfunc(EngFunc_SetOrigin, e, o)
+	set_pev(e, pev_solid, solid ? SOLID_BBOX : SOLID_NOT)
+	set_pev(e, pev_movetype, MOVETYPE_NONE)
+	if (solid)
+		engfunc(EngFunc_SetSize, e, Float:{-16.0, -16.0, 0.0}, Float:{16.0, 16.0, 32.0})
+	return e
+}
+
+stock bool:lsg_have_snd(const p[])
+{
+	new full[128]
+	formatex(full, charsmax(full), "sound/%s", p)
+	return lsg_have(full) || lsg_have(p)
+}
+
+stock lsg_wcoord(const Float:o[3])
+{
+	engfunc(EngFunc_WriteCoord, o[0])
+	engfunc(EngFunc_WriteCoord, o[1])
+	engfunc(EngFunc_WriteCoord, o[2])
+}
+
+// where a spawn goes: an entity's spot (plus an offset along its own forward, right and up),
+// or a position; remembers the entity for its rotation
+stock bool:lsg_xf_at(src, pos, ofs, Float:o[3])
+{
+	g_lsgXfSrc = 0
+	if (pos >= 0)
+	{
+		lsg_vto(pos, o)
+		return true
+	}
+	if (!lsg_ent_origin(src, o))
+		return false
+	g_lsgXfSrc = src
+	if (ofs >= 0)
+	{
+		new Float:a[3], Float:f[3], Float:r[3], Float:u[3]
+		pev(src, is_user_alive(src) ? pev_v_angle : pev_angles, a)
+		engfunc(EngFunc_MakeVectors, a)
+		global_get(glb_v_forward, f)
+		global_get(glb_v_right, r)
+		global_get(glb_v_up, u)
+		for (new k = 0; k < 3; k++)
+			o[k] += f[k] * lsg_vc(ofs, 0) + r[k] * lsg_vc(ofs, 1) + u[k] * lsg_vc(ofs, 2)
+	}
+	return true
+}
+
+// turn, push and size a new entity: Rotation, else the At entity's facing (if copied) plus the
+// rotation offset; Velocity (a still thing falls and slides from there); Scale (models, sprites)
+stock lsg_xf_set(e, copy, rot, rot_ofs, vel, Float:scale)
+{
+	if (e <= 0 || !pev_valid(e))
+		return
+	new Float:a[3], bool:turn = false
+	if (rot >= 0)
+	{
+		lsg_vto(rot, a)
+		turn = true
+	}
+	else if (copy && g_lsgXfSrc > 0 && pev_valid(g_lsgXfSrc))
+	{
+		pev(g_lsgXfSrc, pev_angles, a)
+		// (a player's model pitch isn't where they look: keep their heading)
+		if (is_user_alive(g_lsgXfSrc))
+			a[0] = 0.0
+		turn = true
+	}
+	else
+		pev(e, pev_angles, a)
+	if (rot_ofs >= 0)
+	{
+		for (new k = 0; k < 3; k++)
+			a[k] += lsg_vc(rot_ofs, k)
+		turn = true
+	}
+	if (turn)
+	{
+		set_pev(e, pev_angles, a)
+		if (pev(e, pev_flags) & FL_MONSTER)
+			set_pev(e, pev_ideal_yaw, a[1])
+	}
+	if (vel >= 0)
+	{
+		new Float:v[3]
+		lsg_vto(vel, v)
+		if (pev(e, pev_movetype) == MOVETYPE_NONE)
+			set_pev(e, pev_movetype, MOVETYPE_TOSS)
+		set_pev(e, pev_velocity, v)
+	}
+	if (scale > 0.0 && scale != 1.0)
+		set_pev(e, pev_scale, floatclamp(scale, 0.05, 10.0))
+}
+
+// ---- effects
+stock g_lsgDlFollow[33], Float:g_lsgDlEnd[33], g_lsgDl[33][5], g_lsgDlN, g_lsgDlLim[33]
+
+public lsg_fx_dl_tick(t)
+{
+	// (the task's id: its slot plus the base)
+	new k = clamp(t - (LSG_TASK - 200000), 0, 31)
+	new e = g_lsgDlFollow[k]
+	if (e <= 0 || !pev_valid(e) || get_gametime() >= g_lsgDlEnd[k])
+	{
+		remove_task(k + LSG_TASK - 200000)
+		g_lsgDlFollow[k] = 0
+		return
+	}
+	new Float:o[3]
+	if (!lsg_ent_origin(e, o) || !lsg_msg_room("Dynamic Light", 1, 0, g_lsgDlLim[k]))
+		return
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, o, 0)
+	write_byte(TE_DLIGHT)
+	lsg_wcoord(o)
+	write_byte(g_lsgDl[k][0])
+	write_byte(g_lsgDl[k][1])
+	write_byte(g_lsgDl[k][2])
+	write_byte(g_lsgDl[k][3])
+	write_byte(2)
+	write_byte(g_lsgDl[k][4])
+	message_end()
+}
+
+stock lsg_fx_dlight(follow, pos, r, g, b, Float:radius, Float:life, Float:decay, lim)
+{
+	new rad = clamp(floatround(radius / 10.0), 1, 255), dec = clamp(floatround(decay / 10.0), 0, 255)
+	if (follow > 0 && pev_valid(follow))
+	{
+		// following: a short light each tenth of a second where it is (32 at once at most)
+		new k = g_lsgDlN++ % 32
+		remove_task(k + LSG_TASK - 200000)
+		g_lsgDlFollow[k] = follow
+		g_lsgDlEnd[k] = get_gametime() + floatclamp(life, 0.1, 60.0)
+		// (as the message wants them: radius, r, g, b, then the decay after the life)
+		g_lsgDl[k][0] = rad
+		g_lsgDl[k][1] = r
+		g_lsgDl[k][2] = g
+		g_lsgDl[k][3] = b
+		g_lsgDl[k][4] = dec
+		g_lsgDlLim[k] = lim
+		lsg_fx_dl_tick(k + LSG_TASK - 200000)
+		set_task(0.1, "lsg_fx_dl_tick", k + LSG_TASK - 200000, _, _, "b")
+		return 1
+	}
+	if (pos < 0 || !lsg_msg_room("Dynamic Light", 1, 0, lim))
+		return 0
+	new Float:o[3]
+	lsg_vto(pos, o)
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, o, 0)
+	write_byte(TE_DLIGHT)
+	lsg_wcoord(o)
+	write_byte(rad)
+	write_byte(r)
+	write_byte(g)
+	write_byte(b)
+	write_byte(clamp(floatround(life * 10.0), 1, 255))
+	write_byte(dec)
+	message_end()
+	return 1
+}
+
+// a decal on the nearest surface within reach (traced six ways from the point)
+stock lsg_fx_decal(pos, const name[], Float:reach, lim)
+{
+	if (pos < 0)
+		return 0
+	new d = engfunc(EngFunc_DecalIndex, name)
+	if (d < 0)
+		return 0
+	new Float:o[3], Float:end[3], Float:hit[3], Float:best = 2.0, Float:at[3], who = 0
+	static const Float:DIRS[6][3] = { {0.0, 0.0, -1.0}, {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}, {-1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, -1.0, 0.0} }
+	lsg_vto(pos, o)
+	reach = floatclamp(reach, 8.0, 512.0)
+	for (new k = 0; k < 6; k++)
+	{
+		for (new j = 0; j < 3; j++)
+			end[j] = o[j] + DIRS[k][j] * reach
+		engfunc(EngFunc_TraceLine, o, end, IGNORE_MONSTERS, 0, 0)
+		new Float:f
+		get_tr2(0, TR_flFraction, f)
+		if (f < best)
+		{
+			best = f
+			get_tr2(0, TR_vecEndPos, hit)
+			at = hit
+			who = max(get_tr2(0, TR_pHit), 0)
+		}
+	}
+	if (best >= 1.0 || !lsg_msg_room("Decal", 1, 0, lim))
+		return 0
+	message_begin(MSG_BROADCAST, SVC_TEMPENTITY)
+	if (who > 0)
+	{
+		write_byte(d > 255 ? TE_DECALHIGH : TE_DECAL)
+		lsg_wcoord(at)
+		write_byte(d & 255)
+		write_short(who)
+	}
+	else
+	{
+		write_byte(d > 255 ? TE_WORLDDECALHIGH : TE_WORLDDECAL)
+		lsg_wcoord(at)
+		write_byte(d & 255)
+	}
+	message_end()
+	return 1
+}
+
+// pieces of a model flying out from a point (or an entity's middle), with the material's sound
+stock lsg_fx_gibs(at, pos, const model[], flags, const snd[], count, Float:speed, Float:life, Float:size, lim)
+{
+	new Float:o[3]
+	if (pos >= 0)
+		lsg_vto(pos, o)
+	else if (!lsg_ent_origin(at, o))
+		return 0
+	if (!lsg_have(model) || !lsg_msg_room("Break Into Gibs", 2, 0, lim))
+		return 0
+	new Float:sz = floatclamp(size, 1.0, 512.0)
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, o, 0)
+	write_byte(TE_BREAKMODEL)
+	lsg_wcoord(o)
+	engfunc(EngFunc_WriteCoord, sz)
+	engfunc(EngFunc_WriteCoord, sz)
+	engfunc(EngFunc_WriteCoord, sz)
+	engfunc(EngFunc_WriteCoord, 0.0)
+	engfunc(EngFunc_WriteCoord, 0.0)
+	engfunc(EngFunc_WriteCoord, floatclamp(speed, 0.0, 2000.0) * 0.5)
+	write_byte(clamp(floatround(speed / 10.0), 0, 255))
+	write_short(engfunc(EngFunc_ModelIndex, model))
+	write_byte(count)
+	write_byte(clamp(floatround(life * 10.0), 1, 255))
+	write_byte(flags)
+	message_end()
+	if (snd[0] && lsg_have_snd(snd))
+		engfunc(EngFunc_EmitAmbientSound, 0, o, snd, 1.0, ATTN_NORM, 0, PITCH_NORM)
+	return 1
+}
+
+// a shockwave ring growing from a point (or an entity's spot)
+stock lsg_fx_ring(at, pos, Float:radius, r, g, b, Float:life, width, lim)
+{
+	new Float:o[3]
+	if (pos >= 0)
+		lsg_vto(pos, o)
+	else if (!lsg_ent_origin(at, o))
+		return 0
+	new spr = lsg_have("sprites/shockwave.spr") ? engfunc(EngFunc_ModelIndex, "sprites/shockwave.spr") : (lsg_have("sprites/laserbeam.spr") ? engfunc(EngFunc_ModelIndex, "sprites/laserbeam.spr") : 0)
+	if (!spr || !lsg_msg_room("Beam Ring", 1, 0, lim))
+		return 0
+	engfunc(EngFunc_MessageBegin, MSG_PVS, SVC_TEMPENTITY, o, 0)
+	write_byte(TE_BEAMCYLINDER)
+	lsg_wcoord(o)
+	engfunc(EngFunc_WriteCoord, o[0])
+	engfunc(EngFunc_WriteCoord, o[1])
+	engfunc(EngFunc_WriteCoord, o[2] + floatclamp(radius, 8.0, 4096.0))
+	write_short(spr)
+	write_byte(0)
+	write_byte(0)
+	write_byte(clamp(floatround(life * 10.0), 1, 255))
+	write_byte(width)
+	write_byte(0)
+	write_byte(r)
+	write_byte(g)
+	write_byte(b)
+	write_byte(200)
+	write_byte(0)
+	message_end()
+	return 1
+}
+
+// ---- sounds (map sounds are best mono: a stereo .wav is heard in the middle, not where it is)
+// heard as is, not from a place: a player, a team (1 T, 2 CT) or everyone; volume and pitch go
+// through the game's speaker command (v = volume %, p = pitch %)
+stock lsg_snd_2d(who, arg, const snd[], Float:vol, pitch, lim)
+{
+	if (!snd[0] || !lsg_have_snd(snd))
+		return 0
+	new name[72], n = 0
+	copy(name, charsmax(name), snd)
+	new len = strlen(name)
+	if (len > 4 && equali(name[len - 4], ".wav"))
+		name[len - 4] = 0
+	new v = clamp(floatround(vol * 100.0), 0, 100)
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		if ((who == 1 && p != arg) || (who == 2 && get_user_team(p) != arg))
+			continue
+		if (!lsg_msg_room("Play Sound 2D", 1, p, lim))
+			continue
+		client_cmd(p, "spk ^"(v%d p%d) %s^"", v, pitch, name)
+		n++
+	}
+	return n > 0 || who == 0
+}
+
+// at a place (a position, else an entity's spot, staying there)
+stock lsg_snd_at(at, pos, const snd[], Float:vol, Float:attn, pitch)
+{
+	new Float:o[3]
+	if (pos >= 0)
+		lsg_vto(pos, o)
+	else if (!lsg_ent_origin(at, o))
+		return 0
+	if (!snd[0] || !lsg_have_snd(snd))
+		return 0
+	engfunc(EngFunc_EmitAmbientSound, 0, o, snd, floatclamp(vol, 0.0, 1.0), attn, 0, pitch)
+	return 1
+}
+
+// on an entity's channel: it follows the entity
+stock lsg_snd_on(e, chan, const snd[], Float:vol, Float:attn, pitch)
+{
+	if (e <= 0 || !pev_valid(e) || !snd[0] || !lsg_have_snd(snd))
+		return 0
+	emit_sound(e, chan, snd, floatclamp(vol, 0.0, 1.0), attn, 0, pitch)
+	return 1
+}
+
+// a looping sound: an emitter at a spot, or riding on an entity; the file loops by itself if it
+// has loop points, else it's played again every Every seconds
+stock g_lsgLoops
+public lsg_snd_again(t)
+{
+	new e = t - (LSG_TASK - 300000)
+	if (e <= MaxClients || !pev_valid(e))
+	{
+		remove_task(t)
+		return
+	}
+	new snd[72]
+	pev(e, pev_noise, snd, charsmax(snd))
+	emit_sound(e, CHAN_STATIC, snd, entity_get_float(e, EV_FL_fuser1), entity_get_float(e, EV_FL_fuser2), 0, pev(e, pev_iuser1))
+}
+
+stock lsg_snd_loop(on, pos, const snd[], Float:vol, Float:attn, pitch, Float:every, most)
+{
+	if (!snd[0] || !lsg_have_snd(snd))
+		return 0
+	if (g_lsgLoops >= most)
+	{
+		log_amx("[%s] Loop Sound skipped: %d are playing (the mode's Loop sounds at once limit)", LSG_MODE, most)
+		return 0
+	}
+	new Float:o[3]
+	if (pos >= 0)
+		lsg_vto(pos, o)
+	else if (!lsg_ent_origin(on, o))
+		return 0
+	if (!lsg_ent_room("Loop Sound"))
+		return 0
+	new e = create_entity("info_target")
+	if (e <= 0)
+		return 0
+	set_pev(e, pev_classname, "ls_studio_loop")
+	engfunc(EngFunc_SetOrigin, e, o)
+	set_pev(e, pev_solid, SOLID_NOT)
+	set_pev(e, pev_effects, EF_NODRAW)
+	if (pos < 0 && on > 0)
+	{
+		set_pev(e, pev_movetype, MOVETYPE_FOLLOW)
+		set_pev(e, pev_aiment, on)
+	}
+	else
+		set_pev(e, pev_movetype, MOVETYPE_NONE)
+	set_pev(e, pev_noise, snd)
+	set_pev(e, pev_fuser1, floatclamp(vol, 0.0, 1.0))
+	set_pev(e, pev_fuser2, attn)
+	set_pev(e, pev_iuser1, pitch)
+	emit_sound(e, CHAN_STATIC, snd, floatclamp(vol, 0.0, 1.0), attn, 0, pitch)
+	if (every > 0.0)
+		set_task(floatclamp(every, 0.5, 600.0), "lsg_snd_again", e + LSG_TASK - 300000, _, _, "b")
+	g_lsgLoops++
+	return e
+}
+
+stock lsg_snd_stop_loop(e)
+{
+	if (e <= MaxClients || !pev_valid(e))
+		return 0
+	new cls[24]
+	pev(e, pev_classname, cls, charsmax(cls))
+	if (!equal(cls, "ls_studio_loop"))
+		return 0
+	new snd[72]
+	pev(e, pev_noise, snd, charsmax(snd))
+	emit_sound(e, CHAN_STATIC, snd, 0.0, ATTN_NORM, SND_STOP, PITCH_NORM)
+	remove_task(e + LSG_TASK - 300000)
+	engfunc(EngFunc_RemoveEntity, e)
+	if (g_lsgLoops > 0)
+		g_lsgLoops--
+	return 1
+}
+
+stock lsg_snd_stop_on(e, chan)
+{
+	if (e <= 0 || !pev_valid(e) || !lsg_have_snd("common/null.wav"))
+		return 0
+	emit_sound(e, chan, "common/null.wav", 0.0, ATTN_NORM, SND_STOP, PITCH_NORM)
+	return 1
+}
+
+stock lsg_snd_stop_player(p)
+{
+	if (!lsg_ok(p))
+		return 0
+	client_cmd(p, "stopsound")
+	return 1
+}
+
+// ---- spawning: a class from Spawn Entity's list, its keys, then spawned
+stock lsg_spawn_begin(const cls[], const Float:o[3])
+{
+	new e = create_entity(cls)
+	if (e <= 0)
+		return 0
+	engfunc(EngFunc_SetOrigin, e, o)
+	return e
+}
+
+stock lsg_spawn_end(e)
+{
+	if (e <= 0)
+		return 0
+	DispatchSpawn(e)
+	return pev_valid(e) && !(pev(e, pev_flags) & FL_KILLME) ? e : 0
+}
+
 // ---- engine coverage nodes (EC): only stocks here; the hooks are written for the nodes used ----
 // comfort limits are mode settings (limits.rs: ec_attach, ec_anim_loops, ec_map_hooks), passed in as
 // lim; these are what the arrays hold (a call past the limit is skipped; the debugger says so)
@@ -4905,17 +5357,19 @@ lsg_n30(ctx[])
 lsg_n31(ctx[])
 {
 	new lsi1 = lsg_vec(0.0, 0.0, 0.0)
+	new Float:lsi6 = 1.0
 	if (lsd_want(31))
 	{
 	lsd_begin()
-	lsd_in_text("Or point", lsg_vtext(lsi1))
+	lsd_in_text("At position", lsg_vtext(lsi1))
+	lsd_in_number("Scale", lsi6)
 	}
 	if (lsd_enter(31, ctx))
 		return
 	new Float:o[3]
 	if (!ls_components_running())
 		lsd_error(31, "gm_components isn't running on this server.")
-	else if (!lsg_npc_at(lsi1, o))
+	else if (!lsg_xf_at(0, lsi1, -1, o))
 		lsd_error(31, "No entity has that name on this map.")
 	else
 	{
@@ -5090,10 +5544,12 @@ lsg_n39(ctx[])
 lsg_n40(ctx[])
 {
 	new lsi0 = g_lsgOut[31]
+	new Float:lsi6 = 1.0
 	if (lsd_want(40))
 	{
 	lsd_begin()
-	lsd_in_entity("At", lsi0)
+	lsd_in_entity("At entity", lsi0)
+	lsd_in_number("Scale", lsi6)
 	}
 	if (lsd_enter(40, ctx))
 		return

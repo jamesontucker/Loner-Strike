@@ -27,6 +27,8 @@ pub struct Limit {
 pub const LIMITS: &[Limit] = &[
     Limit { id: "markers", label: "Objective markers at once", default: 32, lag_above: 64, max: 256, kinds: &["fx.marker"] },
     Limit { id: "trails", label: "Trails at once", default: 32, lag_above: 64, max: 256, kinds: &["fun.trail"] },
+    // the effects agent (gen/fx.rs)
+    Limit { id: "loop_sounds", label: "Loop sounds at once", default: 16, lag_above: 64, max: 256, kinds: &["snd.loop"] },
     // EC (gen/coverage.rs)
     Limit { id: "ec_attach", label: "Attached things at once", default: 64, lag_above: 128, max: 256, kinds: &["ent.attach"] },
     Limit { id: "ec_anim_loops", label: "Looping animations at once", default: 64, lag_above: 128, max: 256, kinds: &["ent.play_anim"] },
@@ -42,7 +44,7 @@ pub const LIMITS: &[Limit] = &[
     Limit { id: "projectiles", label: "Projectiles at once", default: 64, lag_above: 128, max: 512, kinds: &["proj.spawn"] },
     // (effects, HUD and chat sent in one server frame: past ~160 the reliable channel can overflow
     // and kick players; gen.rs lsg_msg_room)
-    Limit { id: "messages", label: "Effect messages a frame", default: 48, lag_above: 96, max: 160, kinds: &["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio"] },
+    Limit { id: "messages", label: "Effect messages a frame", default: 48, lag_above: 96, max: 160, kinds: &["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio", "fx.dlight", "fx.decal", "fx.gibs", "fx.ring", "snd.play_2d"] },
 ];
 
 /// A mode's own files (models, sounds, sprites) loaded with the map: the game holds 512 models and

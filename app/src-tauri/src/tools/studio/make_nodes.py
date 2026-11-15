@@ -956,6 +956,82 @@ node("botctl.remove", "Remove Bots", "Bots", "Takes bots off the server (of a te
      keywords="bot kick remove quota")
 
 
+# ---- Effects, sounds and spawning (the effects agent; gen/fx.rs). Kept together, after the
+# others: the transform every spawn node takes is added here, so their own lines stay as they are.
+RGB = lambda r, g, b: [prm("r","Red","number",r,min=0,max=255), prm("g","Green","number",g,min=0,max=255), prm("b","Blue","number",b,min=0,max=255)]
+FALLOFF = prm("falloff","Heard","choice","normal",choices=[["everywhere","Everywhere"],["large","Far (large)"],["normal","Normal"],["small","Close by (small)"]])
+CHANNELS = [["auto","Any free channel"],["weapon","Weapon"],["voice","Voice"],["item","Item"],["body","Body"],["stream","Stream"],["static","Static"]]
+MONO = " Map sounds are best mono: a stereo .wav is heard in the middle of your head, not from where it plays. Your own sounds (sound/custom/...wav) are loaded with the map and go with the mode when you publish it."
+XF_HELP = " Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites."
+def XF(at="at_ent", scale=True):
+    ins = [] if at is None else [P(at,"entity","At entity",optional=True)]
+    ins += [P("pos","vector","At position",optional=True), P("offset","vector","Local offset (forward, right, up)",optional=True), P("angles","vector","Rotation (pitch, yaw, roll)",optional=True), P("angles_offset","vector","Rotation offset",optional=True)]
+    if scale:
+        ins += [P("vel","vector","Velocity",optional=True), P("scale","number","Scale",param="scale")]
+    prms = [prm("copy_rot","Face the way At entity faces","bool",True)] + ([prm("scale","Scale","number",1,min=0.05,max=10)] if scale else [])
+    return ins, prms
+
+node("fx.dlight", "Dynamic Light", "Effects", "A light that brightens what's around it for a moment: at a position, or following an entity (a player, a projectile) for the seconds given. Fade dims it over time (units a second; 0 stays bright until the end). Players see it in their own game.",
+     inputs=[X, P("follow","entity","Follow (optional)",optional=True), P("pos","vector","At position",optional=True), P("radius","number","Radius",param="radius"), P("life","number","Seconds",param="life"), P("decay","number","Fade (units a second)",param="decay")], outputs=[E()],
+     params=RGB(255, 200, 120) + [prm("radius","Radius","number",200,min=10,max=2550), prm("life","Seconds","number",1,min=0.1,max=25), prm("decay","Fade (units a second)","number",0,min=0,max=2550)], keywords="light dlight elight glow flash muzzle lamp te_dlight")
+node("fx.decal", "Decal", "Effects", "Puts a decal (a scorch, blood, a bullet hole...) on the surface nearest a position: it looks six ways from the point within Reach and paints the closest wall, floor or ceiling, or a door it hits. The game's own decals; they fade like any decal.",
+     inputs=[X, P("pos","vector","Near position",required=True), P("reach","number","Reach",param="reach")], outputs=[E()],
+     params=[prm("decal","Decal","choice","scorch",choices=[[d[0], d[1]] for d in [["shot","Bullet hole"],["bigshot","Big bullet hole"],["scorch","Scorch mark"],["smscorch","Small scorch"],["blood","Blood"],["yblood","Yellow blood"],["break","Broken glass"],["lambda","Lambda"]]]), prm("reach","Reach","number",64,min=8,max=512)], keywords="decal scorch blood bullet hole mark spray paint te_worlddecal")
+node("fx.gibs", "Break Into Gibs", "Effects", "Pieces fly out from a position or an entity's middle, as when something breaks: wood, glass, metal, rocks, flesh, or your own model's parts (Custom model). Material is the sound they make. Size is how big the space they fly from is.",
+     inputs=[X, P("at","entity","At entity",optional=True), P("pos","vector","At position",optional=True), P("count","number","Pieces",param="count"), P("speed","number","Speed",param="speed"), P("life","number","Seconds",param="life"), P("size","number","Size",param="size")], outputs=[E()],
+     params=[prm("model","Model","choice","wood",choices=[["wood","Wood planks"],["glass","Glass shards"],["metal","Metal plates"],["cinder","Concrete chunks"],["ceiling","Ceiling tiles"],["computer","Computer parts"],["rock","Rocks"],["flesh","Flesh"]]), prm("custom","Custom model (empty: the one above)","path",""), prm("material","Material sound","choice","wood",choices=[["none","None"],["glass","Glass"],["metal","Metal"],["flesh","Flesh"],["wood","Wood"],["concrete","Concrete"]]), prm("count","Pieces","number",8,min=1,max=255), prm("speed","Speed","number",200,min=0,max=2000), prm("life","Seconds","number",2.5,min=0.1,max=25), prm("size","Size","number",16,min=1,max=512)],
+     keywords="gibs break debris shatter breakmodel pieces chunks te_breakmodel")
+node("fx.ring", "Beam Ring", "Effects", "A ring that grows out from a point, like a shockwave: radius, color, how long and how thick.",
+     inputs=[X, P("at","entity","At entity",optional=True), P("pos","vector","At position",optional=True), P("radius","number","Radius",param="radius"), P("life","number","Seconds",param="life"), P("width","number","Width",param="width")], outputs=[E()],
+     params=RGB(255, 255, 255) + [prm("radius","Radius","number",300,min=8,max=4096), prm("life","Seconds","number",0.5,min=0.1,max=25), prm("width","Width","number",16,min=1,max=255)], keywords="ring shockwave wave beam cylinder blast te_beamcylinder")
+node("snd.play_2d", "Play Sound 2D", "Effects", "A sound heard as is, not from a place: by one player, a team or everyone. Any sound: the game's own or yours. Volume 0 to 1, pitch 50 to 255 (100 normal)." + MONO,
+     inputs=[X, P("player","player","Player",optional=True), P("volume","number","Volume",param="volume"), P("pitch","number","Pitch",param="pitch")], outputs=[E()],
+     params=[prm("who","Who hears it","choice","all",choices=[["all","Everyone"],["player","The player"],["t","Terrorists"],["ct","Counter-Terrorists"]]), prm("sound","Sound","path","buttons/bell1.wav"), prm("volume","Volume","number",1,min=0,max=1), prm("pitch","Pitch","number",100,min=50,max=255)], keywords="sound play 2d hear music sting announce spk")
+node("snd.play_at", "Play Sound at Location", "Effects", "A sound from a place (a position, or where an entity is now), heard louder close by. Heard is how far it carries. Volume 0 to 1, pitch 50 to 255 (100 normal)." + MONO,
+     inputs=[X, P("at","entity","At entity",optional=True), P("pos","vector","At position",optional=True), P("volume","number","Volume",param="volume"), P("pitch","number","Pitch",param="pitch")], outputs=[E()],
+     params=[prm("sound","Sound","path","ambience/thunder_clap.wav"), prm("volume","Volume","number",1,min=0,max=1), prm("pitch","Pitch","number",100,min=50,max=255), FALLOFF], keywords="sound play 3d position location ambient world")
+node("snd.play_on", "Play Sound on Entity", "Effects", "A sound that comes from an entity or a player and moves with it, on a channel (a new sound on the same channel replaces the last one). Volume 0 to 1, pitch 50 to 255 (100 normal)." + MONO,
+     inputs=[X, P("ent","entity","Entity or player",required=True), P("volume","number","Volume",param="volume"), P("pitch","number","Pitch",param="pitch")], outputs=[E()],
+     params=[prm("sound","Sound","path","items/gunpickup2.wav"), prm("channel","Channel","choice","auto",choices=CHANNELS), prm("volume","Volume","number",1,min=0,max=1), prm("pitch","Pitch","number",100,min=50,max=255), FALLOFF], keywords="sound play attach follow entity player channel emit")
+node("snd.loop", "Loop Sound", "Effects", "A sound that keeps playing at a spot, or riding on an entity, until Stop Sound gets its Handle (or the round ends with the entity). A .wav with loop points loops by itself; for one without, set Play again every (seconds). How many play at once is a mode setting (Limits: Loop sounds at once, 16 to start)." + MONO,
+     inputs=[X, P("on","entity","On entity",optional=True), P("pos","vector","At position",optional=True), P("volume","number","Volume",param="volume"), P("pitch","number","Pitch",param="pitch"), P("every","number","Play again every (seconds)",param="every")], outputs=[E(), P("out","entity","Handle")],
+     params=[prm("sound","Sound","path","ambience/wind1.wav"), prm("volume","Volume","number",1,min=0,max=1), prm("pitch","Pitch","number",100,min=50,max=255), FALLOFF, prm("every","Play again every (seconds; 0: it loops by itself)","number",0,min=0,max=600)], keywords="loop sound ambient hum alarm siren music emitter")
+node("snd.stop", "Stop Sound", "Effects", "Stops a Loop Sound (its Handle), whatever plays on an entity's channel, or every sound a player hears now.",
+     inputs=[X, P("loop","entity","Loop handle",optional=True), P("ent","entity","Entity",optional=True), P("player","player","Player",optional=True)], outputs=[E()],
+     params=[prm("what","Stop","choice","loop",choices=[["loop","A Loop Sound (Handle)"],["entity","An entity's channel"],["player","Everything a player hears"]]), prm("channel","Channel","choice","auto",choices=CHANNELS)], keywords="stop sound silence mute loop")
+SPAWN_CLASS_CHOICES = [["env_sprite","Sprite (env_sprite: model=sprites/...spr)"],["env_glow","Glow (env_glow: model=sprites/...spr)"],["cycler_sprite","Animated sprite or model (cycler_sprite: model=...)"],["env_spark","Sparks (env_spark)"],["env_explosion","Explosion (env_explosion: iMagnitude=100)"],["env_shake","Screen shake (env_shake)"],["env_fade","Screen fade (env_fade)"],["env_render","Render changer (env_render)"],["env_blood","Blood spray (env_blood)"],["env_funnel","Particle funnel (env_funnel)"],["env_beverage","Soda can chute (env_beverage)"],["env_shooter","Model shooter (env_shooter: shootmodel=models/...mdl)"],["gibshooter","Gib shooter (gibshooter)"],["env_beam","Beam (env_beam: texture=sprites/laserbeam.spr)"],["env_laser","Laser (env_laser: texture=sprites/laserbeam.spr)"],["ambient_generic","Sound (ambient_generic: message=ambience/x.wav)"],["info_target","Target point (info_target)"],["path_corner","Path stop (path_corner)"],["trigger_relay","Relay (trigger_relay)"],["multi_manager","Multi manager (multi_manager)"],["armoury_entity","Weapon on the ground (armoury_entity: item=0..29)"],["item_healthkit","Health kit (item_healthkit)"],["item_battery","Battery (item_battery)"]]
+_i, _p = XF()
+node("ent.spawn_entity", "Spawn Entity", "Entities", "Makes one of the game's entities with your keys (key=value pairs as in a map, | between them: model=sprites/glow01.spr|rendercolor=255 0 0|targetname=door_fx). Only classes that are safe to make while the game runs are listed: effects, sounds, markers, relays, pickups. Never players, worldspawn, game_* server controls or anything that runs commands. Files its keys name are loaded with the map; if one isn't on the server it's skipped, never a crash." + XF_HELP,
+     inputs=[X] + _i, outputs=[E(), P("out","entity","Entity")], params=[prm("class","Class","choice","env_sprite",choices=SPAWN_CLASS_CHOICES), prm("keys","Keys (key=value, | between)","kvpath","model=sprites/glow01.spr|rendermode=5|renderamt=255",max=400)] + _p,
+     keywords="spawn create entity class keyvalue env_ make", advanced=False)
+_i, _p = XF()
+node("ent.spawn_weapon", "Spawn Weapon On Ground", "Entities", "A weapon or item lying on the ground, picked up like a map's own: any Counter-Strike gun, grenade, armor or the shield (the shield and the guns after the M249 in the list need Loner-Strike's game DLL). Reserve ammo is given with it on pickup (-1: the game's usual). Back after brings it back that many seconds after it's taken (0: at the next round, as the game does)." + XF_HELP,
+     inputs=[X] + _i + [P("ammo","number","Reserve ammo",param="ammo"), P("respawn","number","Back after (seconds)",param="respawn")], outputs=[E(), P("out","entity","Weapon")],
+     params=[prm("item","Weapon or item","choice","ak47",choices=[["mp5navy","MP5"],["tmp","TMP"],["p90","P90"],["mac10","MAC-10"],["ak47","AK-47"],["sg552","SG 552"],["m4a1","M4A1"],["aug","AUG"],["scout","Scout"],["g3sg1","G3SG1"],["awp","AWP"],["m3","M3 shotgun"],["xm1014","XM1014 shotgun"],["m249","M249"],["flashbang","Flashbang"],["hegrenade","HE grenade"],["kevlar","Kevlar"],["assault","Kevlar and helmet"],["smokegrenade","Smoke grenade"],["shield","Tactical shield"],["famas","FAMAS"],["sg550","SG 550"],["galil","Galil"],["ump45","UMP 45"],["glock18","Glock"],["usp","USP"],["elite","Dual Elites"],["fiveseven","Five-SeveN"],["p228","P228"],["deagle","Desert Eagle"]]), prm("ammo","Reserve ammo (-1: the game's usual)","number",-1,min=-1,max=1000), prm("respawn","Back after (seconds; 0: next round)","number",0,min=0,max=600)] + _p,
+     keywords="weapon gun item spawn ground drop armoury pickup ammo respawn")
+
+# the older sound nodes: still working, left out of the node list (Problems says what replaced them)
+SUPERSEDED = {"game.play_sound": "snd.play_2d", "fx.sound_at": "snd.play_at", "fx.sound_to": "snd.play_2d"}
+# every spawn node takes the same transform (their saved pins and settings keep working)
+for d in nodes:
+    if d["type"] in SUPERSEDED:
+        d["superseded"] = SUPERSEDED[d["type"]]
+        d["help"] += " Superseded by " + {"snd.play_2d": "Play Sound 2D", "snd.play_at": "Play Sound at Location"}[SUPERSEDED[d["type"]]] + " (volume, pitch, falloff); this one still works."
+    if d["type"] in ("ent.spawn_prop", "creature.spawn", "npc.spawn", "npc.spawn_use", "comp.create"):
+        at = "at" if d["type"] == "ent.spawn_prop" else "at_ent"
+        have = {p["id"] for p in d["inputs"]}
+        ins, prms = XF(at=None if at in have else at, scale=d["type"] != "comp.create")
+        for p in d["inputs"]:
+            if p["id"] == at:
+                p["label"] = "At entity"
+                p.pop("required", None)
+                p["optional"] = True
+            if p["id"] == "pos":
+                p["label"] = "At position"
+        d["inputs"] += [p for p in ins if p["id"] not in have]
+        d["params"] += [p for p in prms if p["id"] not in {q["id"] for q in d["params"]}]
+        d["help"] += XF_HELP if d["type"] != "comp.create" else XF_HELP.split(" Rotation (pitch")[0] + " Rotation (pitch, yaw, roll) sets the facing outright (no Velocity or Scale: a component is a zone)."
+
 data = {
   "version": 4,
   "pinTypes": {

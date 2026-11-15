@@ -5144,7 +5144,8 @@ public lsg_gag_say(id)
 public plugin_precache()
 {
 	// a projectile the mode fires: loaded with the map
-	ls_proj_precache("models/w_hegrenade.mdl")
+	if (lsg_pre_model("models/w_hegrenade.mdl"))
+		ls_proj_precache("models/w_hegrenade.mdl")
 	// an NPC the mode makes: its model is loaded with the map
 	ls_npc_precache("models/barney.mdl")
 	g_lsgSprExp = precache_model("sprites/zerogxplode.spr")
@@ -5753,9 +5754,11 @@ lsg_n11(ctx[])
 // Spawn NPC (n6)
 lsg_n12(ctx[])
 {
+	new Float:lsi6 = 1.0
 	if (lsd_want(12))
 	{
 	lsd_begin()
+	lsd_in_number("Scale", lsi6)
 	}
 	if (lsd_enter(12, ctx))
 		return
@@ -5778,9 +5781,11 @@ lsg_n12(ctx[])
 // Spawn Interactable (n7)
 lsg_n13(ctx[])
 {
+	new Float:lsi6 = 1.0
 	if (lsd_want(13))
 	{
 	lsd_begin()
+	lsd_in_number("Scale", lsi6)
 	}
 	if (lsd_enter(13, ctx))
 		return
@@ -5818,13 +5823,15 @@ lsg_n14(ctx[])
 	new Float:o[3], Float:d[3], lsgK[160], bool:lsgA = true
 	lsgA = lsg_proj_from(0, 16.0, 0.0, 0.0, -1, o, d)
 	formatex(lsgK, charsmax(lsgK), "trail=0 spin=0 bounce=0 radius=0 falloff=1 explode=0 dangerous=0 damage=%.0f scale=%.2f", floatclamp(lsi8, 0.0, 5000.0), floatclamp(lsi9, 0.05, 4.0))
+	if (get_cvar_num("ls_proj_max") != 64)
+		set_cvar_num("ls_proj_max", 64)
 	if (!ls_components_running())
 		lsd_error(14, "gm_components isn't running on this server.")
 	else if (!lsgA)
 		lsd_error(14, "Not fired: no Position, and no At entity or living owner to fire from.")
 	else
 	{
-		g_lsgOut[14] = ls_proj_spawn(0, "models/w_hegrenade.mdl", o, d, floatclamp(lsi7, 1.0, 5000.0), 0.0, 5.0, lsgK)
+		g_lsgOut[14] = (lsg_ent_room("Spawn Projectile") ? ls_proj_spawn(0, "models/w_hegrenade.mdl", o, d, floatclamp(lsi7, 1.0, 5000.0), 0.0, 5.0, lsgK) : 0)
 		if (g_lsgOut[14])
 			lsg_pj_note(g_lsgOut[14], 15, ctx)
 		if (g_lsgOut[14])
@@ -6601,10 +6608,12 @@ lsg_n59(ctx[])
 lsg_n60(ctx[])
 {
 	new lsi0 = lsg_find("spot1")
+	new Float:lsi6 = 1.0
 	if (lsd_want(60))
 	{
 	lsd_begin()
-	lsd_in_entity("At", lsi0)
+	lsd_in_entity("At entity", lsi0)
+	lsd_in_number("Scale", lsi6)
 	}
 	if (lsd_enter(60, ctx))
 		return

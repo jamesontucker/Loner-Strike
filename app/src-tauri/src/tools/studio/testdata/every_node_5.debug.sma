@@ -3701,10 +3701,12 @@ lsg_n5(ctx[])
 lsg_n6(ctx[])
 {
 	new lsi0 = ctx[8]
+	new Float:lsi6 = 1.0
 	if (lsd_want(6))
 	{
 	lsd_begin()
-	lsd_in_entity("At", lsi0)
+	lsd_in_entity("At entity", lsi0)
+	lsd_in_number("Scale", lsi6)
 	}
 	if (lsd_enter(6, ctx))
 		return

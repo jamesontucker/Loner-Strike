@@ -4427,7 +4427,8 @@ public lsg_gag_say(id)
 public plugin_precache()
 {
 	// a projectile the mode fires: loaded with the map
-	ls_proj_precache("models/w_hegrenade.mdl")
+	if (lsg_pre_model("models/w_hegrenade.mdl"))
+		ls_proj_precache("models/w_hegrenade.mdl")
 	// an NPC the mode makes: its model is loaded with the map
 	ls_npc_precache("models/barney.mdl")
 	g_lsgSprExp = precache_model("sprites/zerogxplode.spr")
@@ -4904,10 +4905,12 @@ lsg_n14(ctx[])
 	new Float:o[3], Float:d[3], lsgK[160], bool:lsgA = true
 	lsgA = lsg_proj_from(0, 16.0, 0.0, 0.0, -1, o, d)
 	formatex(lsgK, charsmax(lsgK), "trail=0 spin=0 bounce=0 radius=0 falloff=1 explode=0 dangerous=0 damage=%.0f scale=%.2f", floatclamp(0.0, 0.0, 5000.0), floatclamp(1.0, 0.05, 4.0))
+	if (get_cvar_num("ls_proj_max") != 64)
+		set_cvar_num("ls_proj_max", 64)
 	g_lsgOut[14] = 0
 	if (!!ls_components_running() && lsgA)
 	{
-		g_lsgOut[14] = ls_proj_spawn(0, "models/w_hegrenade.mdl", o, d, floatclamp(1000.0, 1.0, 5000.0), 0.0, 5.0, lsgK)
+		g_lsgOut[14] = (lsg_ent_room("Spawn Projectile") ? ls_proj_spawn(0, "models/w_hegrenade.mdl", o, d, floatclamp(1000.0, 1.0, 5000.0), 0.0, 5.0, lsgK) : 0)
 		if (g_lsgOut[14])
 			lsg_pj_note(g_lsgOut[14], 15, ctx)
 	}

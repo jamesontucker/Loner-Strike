@@ -5504,11 +5504,13 @@ lsg_n74(ctx[])
 {
 	new Float:lsi1 = 0.0
 	new Float:lsi2 = 0.0
+	new Float:lsi8 = 1.0
 	if (lsd_want(74))
 	{
 	lsd_begin()
 	lsd_in_number("Health", lsi1)
 	lsd_in_number("Pay", lsi2)
+	lsd_in_number("Scale", lsi8)
 	}
 	if (lsd_enter(74, ctx))
 		return
@@ -6547,7 +6549,7 @@ lsg_n127(ctx[])
 	if (lsd_want(127))
 	{
 	lsd_begin()
-	lsd_in_entity("At", lsi0)
+	lsd_in_entity("At entity", lsi0)
 	}
 	if (lsd_enter(127, ctx))
 		return

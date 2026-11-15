@@ -2358,6 +2358,7 @@ pub fn capabilities(g: &Graph) -> Vec<&'static str> {
 /// Checks for the advanced nodes: what they can't do (an error) and what they are (a note).
 fn advanced_problems(g: &Graph, v: &View, p: &mut Vec<Problem>) {
     super::gen::engine::problems(g, v, p);
+    super::gen::fx::problems(g, v, p);
     super::gen::p5::problems(g, v, p); // P5
     super::gen::coverage::problems(g, v, p); // EC
     for n in &g.nodes {
@@ -2762,6 +2763,11 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
         "entname" => match v.as_str() {
             Some(s) if valid_ent_name(s) => Ok(()),
             _ => Err(format!("{} is a name of up to 32 letters, digits, spaces, _ - or .", def.label)),
+        },
+        // Spawn Entity's key=value pairs (gen/fx.rs): keys with file paths (/), never ".."
+        "kvpath" => match v.as_str() {
+            Some(s) if s.len() <= def.max.unwrap_or(400.0) as usize && !s.contains("..") && s.chars().all(|c| c.is_ascii_alphanumeric() || " _-.=:,|;@/".contains(c)) => Ok(()),
+            _ => Err(format!("{} are pairs like model=sprites/glow01.spr|rendermode=5 (letters, digits, _ - . = : , ; @ / and spaces; | between pairs; no quotes or ..).", def.label)),
         },
         "keys" => match v.as_str() {
             Some(s) if valid_keys(s, def.max.unwrap_or(120.0) as usize) => Ok(()),

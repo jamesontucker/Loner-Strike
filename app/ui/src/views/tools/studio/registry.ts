@@ -13,7 +13,7 @@ export type ParamDef = {
   label: string;
   /** name: an entity's name; keys: component keys; var: one of the graph's variables;
    *  varvalue: a value of that variable's type */
-  kind: "choice" | "number" | "text" | "bool" | "name" | "entname" | "path" | "cevent" | "tline" | "table" | "column" | "marker" | "keys" | "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases" | "bone" | "attachment";
+  kind: "choice" | "number" | "text" | "bool" | "name" | "entname" | "path" | "cevent" | "tline" | "table" | "column" | "marker" | "keys" | "kvpath" | "var" | "varvalue" | "func" | "timer" | "fn" | "macro" | "struct" | "enum" | "type" | "field" | "enumvalue" | "cases" | "bone" | "attachment";
   default: string | number | boolean;
   choices?: [string, string][];
   min?: number;
@@ -39,6 +39,8 @@ export type NodeDef = {
   cvar?: string;
   /** a power tool (server/AMX commands, plugin calls): flagged on community modes */
   advanced?: boolean;
+  /** an older node a newer one replaces: it still works in saved graphs, but isn't offered */
+  superseded?: string;
   inputs: PinDef[];
   outputs: PinDef[];
   params: ParamDef[];
@@ -87,6 +89,8 @@ export const ENT_NAME_CHARS = /^[A-Za-z0-9_. -]{0,32}$/;
 /** a model or sound file (models/x.mdl, ambience/x.wav) */
 export const PATH_CHARS = /^[A-Za-z0-9_./-]{0,64}$/;
 export const KEYS_CHARS = /^[A-Za-z0-9 _.=:,|;@-]*$/;
+/** Spawn Entity's key=value pairs: as keys, plus / for file paths */
+export const KVPATH_CHARS = /^[A-Za-z0-9 _.=:,|;@/-]*$/;
 
 export function defaultParams(def: NodeDef): Record<string, string | number | boolean> {
   return Object.fromEntries(def.params.map((p) => [p.id, p.default]));
@@ -114,6 +118,7 @@ export function matchRank(title: string, query: string, keywords = ""): number {
 export function searchNodes(query: string, wire?: { type: PinType; dir: "in" | "out" }): NodeDef[] {
   const q = query.trim().toLowerCase();
   return NODE_DEFS.filter((d) => {
+    if (d.superseded) return false;
     if (wire) {
       const pins = wire.dir === "out" ? d.inputs : d.outputs;
       if (!pins.some((p) => fits(wire, p.type))) return false;

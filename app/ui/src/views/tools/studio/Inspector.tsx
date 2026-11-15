@@ -2,7 +2,7 @@
 // list when nothing is selected).
 
 import { useStudio } from "./store";
-import { ENT_NAME_CHARS, KEYS_CHARS, NAME_CHARS, PATH_CHARS, nodeDef, type ParamDef } from "./registry";
+import { ENT_NAME_CHARS, KEYS_CHARS, KVPATH_CHARS, NAME_CHARS, PATH_CHARS, nodeDef, type ParamDef } from "./registry";
 import { freshMember, mapName, removeGraphPart, updateCustomEvent, removeMarker, updateMarker, removeType, setParam, toggleBreakpoint, updateEnum, updateFunction, updateMacro, updateStruct, updateVariable } from "./graphOps";
 import { allEnums, LABEL_CHARS, type GMarker, type GMarkerKey, type GMember, type GNode, type GVariable, type Graph } from "./schema";
 import { allVariables, itemTypeOk, nodeTitle, typeLabel } from "./pins";
@@ -165,6 +165,7 @@ function ParamField({ p, value, vars, nodeVar, nodes, onChange, graph, node }: {
     return <CreaturePicker className="st-field" value={String(value)} label={p.label} onChange={(v) => NAME_CHARS.test(v) && onChange(v)} />;
   if (p.kind === "name" || p.kind === "entname") return <TextField value={String(value)} max={32} allowed={p.kind === "name" ? NAME_CHARS : ENT_NAME_CHARS} onChange={onChange} />;
   if (p.kind === "keys") return <TextField value={String(value)} max={p.max ?? 120} allowed={KEYS_CHARS} onChange={onChange} />;
+  if (p.kind === "kvpath") return <TextField value={String(value)} max={p.max ?? 400} allowed={KVPATH_CHARS} onChange={onChange} />;
   if (p.kind === "var") {
     const list = vars.filter((v) => !p.varType || v.type === p.varType || (p.varType === "struct" && v.type.startsWith("struct:")) || (p.varType === "array" && v.type.startsWith("array<")));
     return (

@@ -4650,7 +4650,7 @@
 "comp.create":{
 "title":"Create Component",
 "category":"Components",
-"what":"Makes a component at an entity (wired into At, or the one with this name), with keys like radius=160 capture_secs=8.",
+"what":"Makes a component at an entity (wired into At, or the one with this name), with keys like radius=160 capture_secs=8. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright (no Velocity or Scale: a component is a zone).",
 "pins":[
 {
 "id":"exec",
@@ -4660,7 +4660,27 @@
 {
 "id":"at_ent",
 "dir":"in",
-"help":"At: an entity (a thing in the map). Optional."
+"help":"At entity: an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"offset",
+"dir":"in",
+"help":"Local offset (forward, right, up): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles",
+"dir":"in",
+"help":"Rotation (pitch, yaw, roll): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles_offset",
+"dir":"in",
+"help":"Rotation offset: a position or direction (X, Y, Z). Optional."
 },
 {
 "id":"then",
@@ -4685,6 +4705,10 @@
 {
 "id":"keys",
 "help":"Settings for the component, as key=value pairs."
+},
+{
+"id":"copy_rot",
+"help":"On or off."
 }
 ],
 "needs":"Needs Loner-Strike's components plugin, which comes with the app.",
@@ -4716,7 +4740,8 @@
 "params":{
 "kind":"ls_capture_point",
 "at":"spot1",
-"keys":""
+"keys":"",
+"copy_rot":true
 }
 },
 {
@@ -6292,7 +6317,7 @@
 "creature.spawn":{
 "title":"Spawn Creature",
 "category":"Creatures",
-"what":"Makes a creature of this type at an entity (wired into At, or the one with this name). Needs the Loner-Strike bot brain with creatures (the debugger says so if not).",
+"what":"Makes a creature of this type at an entity (wired into At, or the one with this name). Needs the Loner-Strike bot brain with creatures (the debugger says so if not). Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites.",
 "pins":[
 {
 "id":"exec",
@@ -6302,7 +6327,7 @@
 {
 "id":"at_ent",
 "dir":"in",
-"help":"At: an entity (a thing in the map). Optional."
+"help":"At entity: an entity (a thing in the map). Optional."
 },
 {
 "id":"health",
@@ -6313,6 +6338,36 @@
 "id":"pay",
 "dir":"in",
 "help":"Pay: a number. Leave it empty to use the setting."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"offset",
+"dir":"in",
+"help":"Local offset (forward, right, up): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles",
+"dir":"in",
+"help":"Rotation (pitch, yaw, roll): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles_offset",
+"dir":"in",
+"help":"Rotation offset: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"vel",
+"dir":"in",
+"help":"Velocity: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"scale",
+"dir":"in",
+"help":"Scale: a number. Leave it empty to use the setting."
 },
 {
 "id":"then",
@@ -6345,6 +6400,14 @@
 {
 "id":"pay",
 "help":"A number from 0 to 16000. A wire into the pin of the same name is used instead."
+},
+{
+"id":"copy_rot",
+"help":"On or off."
+},
+{
+"id":"scale",
+"help":"A number from 0.05 to 10. A wire into the pin of the same name is used instead."
 }
 ],
 "needs":"Needs the Loner-Strike bot brain with creatures.",
@@ -6377,7 +6440,9 @@
 "at":"spot1",
 "health":0,
 "tier":"0",
-"pay":0
+"pay":0,
+"copy_rot":true,
+"scale":1
 }
 },
 {
@@ -9053,7 +9118,7 @@
 "game.play_sound":{
 "title":"Play Sound",
 "category":"Messages",
-"what":"Plays one of the game's sounds to one player or everyone.",
+"what":"Plays one of the game's sounds to one player or everyone. Superseded by Play Sound 2D (volume, pitch, falloff); this one still works.",
 "pins":[
 {
 "id":"exec",
@@ -12527,7 +12592,7 @@
 "npc.spawn":{
 "title":"Spawn NPC",
 "category":"NPCs",
-"what":"Makes an NPC at an entity (wired into At), a point, or the entity with this name. Its model is loaded with the map (models/...mdl).",
+"what":"Makes an NPC at an entity (wired into At), a point, or the entity with this name. Its model is loaded with the map (models/...mdl). Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites.",
 "pins":[
 {
 "id":"exec",
@@ -12537,12 +12602,37 @@
 {
 "id":"at_ent",
 "dir":"in",
-"help":"At: an entity (a thing in the map). Optional."
+"help":"At entity: an entity (a thing in the map). Optional."
 },
 {
 "id":"pos",
 "dir":"in",
-"help":"Or point: a position or direction (X, Y, Z). Optional."
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"offset",
+"dir":"in",
+"help":"Local offset (forward, right, up): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles",
+"dir":"in",
+"help":"Rotation (pitch, yaw, roll): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles_offset",
+"dir":"in",
+"help":"Rotation offset: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"vel",
+"dir":"in",
+"help":"Velocity: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"scale",
+"dir":"in",
+"help":"Scale: a number. Leave it empty to use the setting."
 },
 {
 "id":"then",
@@ -12579,6 +12669,14 @@
 {
 "id":"unkillable",
 "help":"On or off."
+},
+{
+"id":"copy_rot",
+"help":"On or off."
+},
+{
+"id":"scale",
+"help":"A number from 0.05 to 10. A wire into the pin of the same name is used instead."
 }
 ],
 "needs":"Needs Loner-Strike's components plugin, which comes with the app.",
@@ -12612,7 +12710,9 @@
 "name":"Guide",
 "yaw":0,
 "behavior":"stand",
-"unkillable":true
+"unkillable":true,
+"copy_rot":true,
+"scale":1
 }
 },
 {
@@ -12668,7 +12768,7 @@
 "npc.spawn_use":{
 "title":"Spawn Interactable",
 "category":"NPCs",
-"what":"Makes an interactable at an entity (wired into At), a point, or the entity with this name: a model players use (E), with a prompt when they look at it. Once: usable once a round.",
+"what":"Makes an interactable at an entity (wired into At), a point, or the entity with this name: a model players use (E), with a prompt when they look at it. Once: usable once a round. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites.",
 "pins":[
 {
 "id":"exec",
@@ -12678,12 +12778,37 @@
 {
 "id":"at_ent",
 "dir":"in",
-"help":"At: an entity (a thing in the map). Optional."
+"help":"At entity: an entity (a thing in the map). Optional."
 },
 {
 "id":"pos",
 "dir":"in",
-"help":"Or point: a position or direction (X, Y, Z). Optional."
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"offset",
+"dir":"in",
+"help":"Local offset (forward, right, up): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles",
+"dir":"in",
+"help":"Rotation (pitch, yaw, roll): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles_offset",
+"dir":"in",
+"help":"Rotation offset: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"vel",
+"dir":"in",
+"help":"Velocity: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"scale",
+"dir":"in",
+"help":"Scale: a number. Leave it empty to use the setting."
 },
 {
 "id":"then",
@@ -12720,6 +12845,14 @@
 {
 "id":"bots",
 "help":"On or off."
+},
+{
+"id":"copy_rot",
+"help":"On or off."
+},
+{
+"id":"scale",
+"help":"A number from 0.05 to 10. A wire into the pin of the same name is used instead."
 }
 ],
 "needs":"Needs Loner-Strike's components plugin, which comes with the app.",
@@ -12753,7 +12886,9 @@
 "prompt":"Press E to use",
 "once":true,
 "hide":false,
-"bots":false
+"bots":false,
+"copy_rot":true,
+"scale":1
 }
 },
 {
@@ -23667,7 +23802,7 @@
 "ent.spawn_prop":{
 "title":"Spawn Prop",
 "category":"Entities",
-"what":"A model (models/...mdl, loaded with the map) at an entity's place; solid or not.",
+"what":"A model (models/...mdl, loaded with the map) at an entity's place; solid or not. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites.",
 "pins":[
 {
 "id":"exec",
@@ -23677,7 +23812,37 @@
 {
 "id":"at",
 "dir":"in",
-"help":"At: an entity (a thing in the map). Needs a wire."
+"help":"At entity: an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"offset",
+"dir":"in",
+"help":"Local offset (forward, right, up): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles",
+"dir":"in",
+"help":"Rotation (pitch, yaw, roll): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles_offset",
+"dir":"in",
+"help":"Rotation offset: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"vel",
+"dir":"in",
+"help":"Velocity: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"scale",
+"dir":"in",
+"help":"Scale: a number. Leave it empty to use the setting."
 },
 {
 "id":"then",
@@ -23698,6 +23863,14 @@
 {
 "id":"solid",
 "help":"On or off."
+},
+{
+"id":"copy_rot",
+"help":"On or off."
+},
+{
+"id":"scale",
+"help":"A number from 0.05 to 10. A wire into the pin of the same name is used instead."
 }
 ],
 "more":"Puts a model in the world at an entity's place. The model is loaded when the map loads, so it must be a file the server and players have.",
@@ -23728,19 +23901,9 @@
 },
 "params":{
 "model":"models/w_c4.mdl",
-"solid":true
-}
-},
-{
-"id":"ent",
-"type":"flow.pick_entity",
-"pos":{
-"x":0,
-"y":160
-},
-"params":{
-"by":"class",
-"name":"info_player_deathmatch"
+"solid":true,
+"copy_rot":true,
+"scale":1
 }
 },
 {
@@ -23760,38 +23923,16 @@
 {
 "id":"w1",
 "from":{
-"node":"ent",
-"pin":"entity"
-},
-"to":{
-"node":"it",
-"pin":"at"
-}
-},
-{
-"id":"w2",
-"from":{
 "node":"ev",
 "pin":"then"
 },
 "to":{
-"node":"ent",
-"pin":"exec"
-}
-},
-{
-"id":"w3",
-"from":{
-"node":"ent",
-"pin":"then"
-},
-"to":{
 "node":"it",
 "pin":"exec"
 }
 },
 {
-"id":"w4",
+"id":"w2",
 "from":{
 "node":"it",
 "pin":"out"
@@ -23802,7 +23943,7 @@
 }
 },
 {
-"id":"w5",
+"id":"w3",
 "from":{
 "node":"it",
 "pin":"then"
@@ -24498,7 +24639,7 @@
 "fx.sound_at":{
 "title":"Play Sound At",
 "category":"Effects",
-"what":"A sound (sound/...wav, loaded with the map) heard around a position.",
+"what":"A sound (sound/...wav, loaded with the map) heard around a position. Superseded by Play Sound at Location (volume, pitch, falloff); this one still works.",
 "pins":[
 {
 "id":"exec",
@@ -24593,7 +24734,7 @@
 "fx.sound_to":{
 "title":"Play Sound To Player",
 "category":"Effects",
-"what":"A sound only one player hears (from the game's own sounds).",
+"what":"A sound only one player hears (from the game's own sounds). Superseded by Play Sound 2D (volume, pitch, falloff); this one still works.",
 "pins":[
 {
 "id":"exec",
@@ -48941,6 +49082,1362 @@
 },
 "to":{
 "node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"fx.dlight":{
+"title":"Dynamic Light",
+"category":"Effects",
+"what":"A light that brightens what's around it for a moment: at a position, or following an entity (a player, a projectile) for the seconds given. Fade dims it over time (units a second; 0 stays bright until the end). Players see it in their own game.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"follow",
+"dir":"in",
+"help":"Follow (optional): an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"radius",
+"dir":"in",
+"help":"Radius: a number. Leave it empty to use the setting."
+},
+{
+"id":"life",
+"dir":"in",
+"help":"Seconds: a number. Leave it empty to use the setting."
+},
+{
+"id":"decay",
+"dir":"in",
+"help":"Fade (units a second): a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"r",
+"help":"A number from 0 to 255."
+},
+{
+"id":"g",
+"help":"A number from 0 to 255."
+},
+{
+"id":"b",
+"help":"A number from 0 to 255."
+},
+{
+"id":"radius",
+"help":"A number from 10 to 2550. A wire into the pin of the same name is used instead."
+},
+{
+"id":"life",
+"help":"A number from 0.1 to 25. A wire into the pin of the same name is used instead."
+},
+{
+"id":"decay",
+"help":"A number from 0 to 2550. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"fx.decal",
+"fx.gibs",
+"fx.ring"
+],
+"example":{
+"caption":"When a round starts, Dynamic Light runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"fx.dlight",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"r":255,
+"g":200,
+"b":120,
+"radius":200,
+"life":1,
+"decay":0
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"fx.decal":{
+"title":"Decal",
+"category":"Effects",
+"what":"Puts a decal (a scorch, blood, a bullet hole...) on the surface nearest a position: it looks six ways from the point within Reach and paints the closest wall, floor or ceiling, or a door it hits. The game's own decals; they fade like any decal.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"Near position: a position or direction (X, Y, Z). Needs a wire."
+},
+{
+"id":"reach",
+"dir":"in",
+"help":"Reach: a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"decal",
+"help":"Pick one: Bullet hole, Big bullet hole, Scorch mark, Small scorch, Blood, Yellow blood, Broken glass, Lambda."
+},
+{
+"id":"reach",
+"help":"A number from 8 to 512. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"fx.dlight",
+"fx.gibs",
+"fx.ring"
+],
+"example":{
+"caption":"When a round starts, Decal runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"fx.decal",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"decal":"scorch",
+"reach":64
+}
+},
+{
+"id":"vec",
+"type":"vec.make",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"x":0,
+"y":0,
+"z":64
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"vec",
+"pin":"out"
+},
+"to":{
+"node":"it",
+"pin":"pos"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"fx.gibs":{
+"title":"Break Into Gibs",
+"category":"Effects",
+"what":"Pieces fly out from a position or an entity's middle, as when something breaks: wood, glass, metal, rocks, flesh, or your own model's parts (Custom model). Material is the sound they make. Size is how big the space they fly from is.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"at",
+"dir":"in",
+"help":"At entity: an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"count",
+"dir":"in",
+"help":"Pieces: a number. Leave it empty to use the setting."
+},
+{
+"id":"speed",
+"dir":"in",
+"help":"Speed: a number. Leave it empty to use the setting."
+},
+{
+"id":"life",
+"dir":"in",
+"help":"Seconds: a number. Leave it empty to use the setting."
+},
+{
+"id":"size",
+"dir":"in",
+"help":"Size: a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"model",
+"help":"Pick one: Wood planks, Glass shards, Metal plates, Concrete chunks, Ceiling tiles, Computer parts, Rocks, Flesh."
+},
+{
+"id":"custom",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"material",
+"help":"Pick one: None, Glass, Metal, Flesh, Wood, Concrete."
+},
+{
+"id":"count",
+"help":"A number from 1 to 255. A wire into the pin of the same name is used instead."
+},
+{
+"id":"speed",
+"help":"A number from 0 to 2000. A wire into the pin of the same name is used instead."
+},
+{
+"id":"life",
+"help":"A number from 0.1 to 25. A wire into the pin of the same name is used instead."
+},
+{
+"id":"size",
+"help":"A number from 1 to 512. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"fx.decal",
+"fx.ring",
+"fx.dlight"
+],
+"example":{
+"caption":"When a round starts, Break Into Gibs runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"fx.gibs",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"model":"wood",
+"custom":"",
+"material":"wood",
+"count":8,
+"speed":200,
+"life":2.5,
+"size":16
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"fx.ring":{
+"title":"Beam Ring",
+"category":"Effects",
+"what":"A ring that grows out from a point, like a shockwave: radius, color, how long and how thick.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"at",
+"dir":"in",
+"help":"At entity: an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"radius",
+"dir":"in",
+"help":"Radius: a number. Leave it empty to use the setting."
+},
+{
+"id":"life",
+"dir":"in",
+"help":"Seconds: a number. Leave it empty to use the setting."
+},
+{
+"id":"width",
+"dir":"in",
+"help":"Width: a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"r",
+"help":"A number from 0 to 255."
+},
+{
+"id":"g",
+"help":"A number from 0 to 255."
+},
+{
+"id":"b",
+"help":"A number from 0 to 255."
+},
+{
+"id":"radius",
+"help":"A number from 8 to 4096. A wire into the pin of the same name is used instead."
+},
+{
+"id":"life",
+"help":"A number from 0.1 to 25. A wire into the pin of the same name is used instead."
+},
+{
+"id":"width",
+"help":"A number from 1 to 255. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"fx.gibs",
+"snd.play_2d",
+"fx.decal"
+],
+"example":{
+"caption":"When a round starts, Beam Ring runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"fx.ring",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"r":255,
+"g":255,
+"b":255,
+"radius":300,
+"life":0.5,
+"width":16
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"snd.play_2d":{
+"title":"Play Sound 2D",
+"category":"Effects",
+"what":"A sound heard as is, not from a place: by one player, a team or everyone. Any sound: the game's own or yours. Volume 0 to 1, pitch 50 to 255 (100 normal). Map sounds are best mono: a stereo .wav is heard in the middle of your head, not from where it plays. Your own sounds (sound/custom/...wav) are loaded with the map and go with the mode when you publish it.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Optional."
+},
+{
+"id":"volume",
+"dir":"in",
+"help":"Volume: a number. Leave it empty to use the setting."
+},
+{
+"id":"pitch",
+"dir":"in",
+"help":"Pitch: a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"who",
+"help":"Pick one: Everyone, The player, Terrorists, Counter-Terrorists."
+},
+{
+"id":"sound",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"volume",
+"help":"A number from 0 to 1. A wire into the pin of the same name is used instead."
+},
+{
+"id":"pitch",
+"help":"A number from 50 to 255. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"fx.ring",
+"snd.play_at",
+"fx.gibs"
+],
+"example":{
+"caption":"When a round starts, Play Sound 2D runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"snd.play_2d",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"who":"all",
+"sound":"buttons/bell1.wav",
+"volume":1,
+"pitch":100
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"snd.play_at":{
+"title":"Play Sound at Location",
+"category":"Effects",
+"what":"A sound from a place (a position, or where an entity is now), heard louder close by. Heard is how far it carries. Volume 0 to 1, pitch 50 to 255 (100 normal). Map sounds are best mono: a stereo .wav is heard in the middle of your head, not from where it plays. Your own sounds (sound/custom/...wav) are loaded with the map and go with the mode when you publish it.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"at",
+"dir":"in",
+"help":"At entity: an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"volume",
+"dir":"in",
+"help":"Volume: a number. Leave it empty to use the setting."
+},
+{
+"id":"pitch",
+"dir":"in",
+"help":"Pitch: a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"sound",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"volume",
+"help":"A number from 0 to 1. A wire into the pin of the same name is used instead."
+},
+{
+"id":"pitch",
+"help":"A number from 50 to 255. A wire into the pin of the same name is used instead."
+},
+{
+"id":"falloff",
+"help":"Pick one: Everywhere, Far (large), Normal, Close by (small)."
+}
+],
+"related":[
+"snd.play_2d",
+"snd.play_on",
+"fx.ring"
+],
+"example":{
+"caption":"When a round starts, Play Sound at Location runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"snd.play_at",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"sound":"ambience/thunder_clap.wav",
+"volume":1,
+"pitch":100,
+"falloff":"normal"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"snd.play_on":{
+"title":"Play Sound on Entity",
+"category":"Effects",
+"what":"A sound that comes from an entity or a player and moves with it, on a channel (a new sound on the same channel replaces the last one). Volume 0 to 1, pitch 50 to 255 (100 normal). Map sounds are best mono: a stereo .wav is heard in the middle of your head, not from where it plays. Your own sounds (sound/custom/...wav) are loaded with the map and go with the mode when you publish it.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"ent",
+"dir":"in",
+"help":"Entity or player: an entity (a thing in the map). Needs a wire."
+},
+{
+"id":"volume",
+"dir":"in",
+"help":"Volume: a number. Leave it empty to use the setting."
+},
+{
+"id":"pitch",
+"dir":"in",
+"help":"Pitch: a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"sound",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"channel",
+"help":"Pick one: Any free channel, Weapon, Voice, Item, Body, Stream, Static."
+},
+{
+"id":"volume",
+"help":"A number from 0 to 1. A wire into the pin of the same name is used instead."
+},
+{
+"id":"pitch",
+"help":"A number from 50 to 255. A wire into the pin of the same name is used instead."
+},
+{
+"id":"falloff",
+"help":"Pick one: Everywhere, Far (large), Normal, Close by (small)."
+}
+],
+"related":[
+"snd.play_at",
+"snd.loop",
+"snd.play_2d"
+],
+"example":{
+"caption":"When a round starts, Play Sound on Entity runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"snd.play_on",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"sound":"items/gunpickup2.wav",
+"channel":"auto",
+"volume":1,
+"pitch":100,
+"falloff":"normal"
+}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"ent"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"snd.loop":{
+"title":"Loop Sound",
+"category":"Effects",
+"what":"A sound that keeps playing at a spot, or riding on an entity, until Stop Sound gets its Handle (or the round ends with the entity). A .wav with loop points loops by itself; for one without, set Play again every (seconds). How many play at once is a mode setting (Limits: Loop sounds at once, 16 to start). Map sounds are best mono: a stereo .wav is heard in the middle of your head, not from where it plays. Your own sounds (sound/custom/...wav) are loaded with the map and go with the mode when you publish it.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"on",
+"dir":"in",
+"help":"On entity: an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"volume",
+"dir":"in",
+"help":"Volume: a number. Leave it empty to use the setting."
+},
+{
+"id":"pitch",
+"dir":"in",
+"help":"Pitch: a number. Leave it empty to use the setting."
+},
+{
+"id":"every",
+"dir":"in",
+"help":"Play again every (seconds): a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Handle: an entity (a thing in the map)."
+}
+],
+"settings":[
+{
+"id":"sound",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"volume",
+"help":"A number from 0 to 1. A wire into the pin of the same name is used instead."
+},
+{
+"id":"pitch",
+"help":"A number from 50 to 255. A wire into the pin of the same name is used instead."
+},
+{
+"id":"falloff",
+"help":"Pick one: Everywhere, Far (large), Normal, Close by (small)."
+},
+{
+"id":"every",
+"help":"A number from 0 to 600. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"snd.play_on",
+"snd.stop",
+"snd.play_at"
+],
+"example":{
+"caption":"When a round starts, Loop Sound runs and its result is printed.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"snd.loop",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"sound":"ambience/wind1.wav",
+"volume":1,
+"pitch":100,
+"falloff":"normal",
+"every":0
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Handle:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"out"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"it",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"snd.stop":{
+"title":"Stop Sound",
+"category":"Effects",
+"what":"Stops a Loop Sound (its Handle), whatever plays on an entity's channel, or every sound a player hears now.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"loop",
+"dir":"in",
+"help":"Loop handle: an entity (a thing in the map). Optional."
+},
+{
+"id":"ent",
+"dir":"in",
+"help":"The entity. Optional."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"what",
+"help":"Pick one: A Loop Sound (Handle), An entity's channel, Everything a player hears."
+},
+{
+"id":"channel",
+"help":"Pick one: Any free channel, Weapon, Voice, Item, Body, Stream, Static."
+}
+],
+"related":[
+"snd.loop",
+"snd.play_on",
+"snd.play_at"
+],
+"example":{
+"caption":"When a round starts, Stop Sound runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"snd.stop",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"what":"loop",
+"channel":"auto"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"ent.spawn_entity":{
+"title":"Spawn Entity",
+"category":"Entities",
+"what":"Makes one of the game's entities with your keys (key=value pairs as in a map, | between them: model=sprites/glow01.spr|rendercolor=255 0 0|targetname=door_fx). Only classes that are safe to make while the game runs are listed: effects, sounds, markers, relays, pickups. Never players, worldspawn, game_* server controls or anything that runs commands. Files its keys name are loaded with the map; if one isn't on the server it's skipped, never a crash. Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"at_ent",
+"dir":"in",
+"help":"At entity: an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"offset",
+"dir":"in",
+"help":"Local offset (forward, right, up): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles",
+"dir":"in",
+"help":"Rotation (pitch, yaw, roll): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles_offset",
+"dir":"in",
+"help":"Rotation offset: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"vel",
+"dir":"in",
+"help":"Velocity: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"scale",
+"dir":"in",
+"help":"Scale: a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"The entity."
+}
+],
+"settings":[
+{
+"id":"class",
+"help":"Pick one: Sprite (env_sprite: model=sprites/...spr), Glow (env_glow: model=sprites/...spr), Animated sprite or model (cycler_sprite: model=...), Sparks (env_spark), Explosion (env_explosion: iMagnitude=100), Screen shake (env_shake), Screen fade (env_fade), Render changer (env_render), Blood spray (env_blood), Particle funnel (env_funnel), Soda can chute (env_beverage), Model shooter (env_shooter: shootmodel=models/...mdl)…."
+},
+{
+"id":"keys",
+"help":"Picked from this mode's own pieces."
+},
+{
+"id":"copy_rot",
+"help":"On or off."
+},
+{
+"id":"scale",
+"help":"A number from 0.05 to 10. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"ent.spawn_weapon",
+"ent.detach",
+"ent.attach"
+],
+"example":{
+"caption":"When a round starts, Spawn Entity runs and its result is printed.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"ent.spawn_entity",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"class":"env_sprite",
+"keys":"model=sprites/glow01.spr|rendermode=5|renderamt=255",
+"copy_rot":true,
+"scale":1
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Entity:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"out"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"it",
+"pin":"then"
+},
+"to":{
+"node":"show",
+"pin":"exec"
+}
+}
+]
+}
+},
+"ent.spawn_weapon":{
+"title":"Spawn Weapon On Ground",
+"category":"Entities",
+"what":"A weapon or item lying on the ground, picked up like a map's own: any Counter-Strike gun, grenade, armor or the shield (the shield and the guns after the M249 in the list need Loner-Strike's game DLL). Reserve ammo is given with it on pickup (-1: the game's usual). Back after brings it back that many seconds after it's taken (0: at the next round, as the game does). Where: At entity (its spot, moved by Local offset along its own forward, right and up; it faces the way the entity does if Face the way At entity faces is on, turned by Rotation offset) or At position. Rotation (pitch, yaw, roll) sets the facing outright; Velocity starts it moving (a still thing then falls and slides); Scale sizes models and sprites.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"at_ent",
+"dir":"in",
+"help":"At entity: an entity (a thing in the map). Optional."
+},
+{
+"id":"pos",
+"dir":"in",
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"offset",
+"dir":"in",
+"help":"Local offset (forward, right, up): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles",
+"dir":"in",
+"help":"Rotation (pitch, yaw, roll): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles_offset",
+"dir":"in",
+"help":"Rotation offset: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"vel",
+"dir":"in",
+"help":"Velocity: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"scale",
+"dir":"in",
+"help":"Scale: a number. Leave it empty to use the setting."
+},
+{
+"id":"ammo",
+"dir":"in",
+"help":"Reserve ammo: a number. Leave it empty to use the setting."
+},
+{
+"id":"respawn",
+"dir":"in",
+"help":"Back after (seconds): a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Weapon: an entity (a thing in the map)."
+}
+],
+"settings":[
+{
+"id":"item",
+"help":"Pick one: MP5, TMP, P90, MAC-10, AK-47, SG 552, M4A1, AUG, Scout, G3SG1, AWP, M3 shotgun…."
+},
+{
+"id":"ammo",
+"help":"A number from -1 to 1000. A wire into the pin of the same name is used instead."
+},
+{
+"id":"respawn",
+"help":"A number from 0 to 600. A wire into the pin of the same name is used instead."
+},
+{
+"id":"copy_rot",
+"help":"On or off."
+},
+{
+"id":"scale",
+"help":"A number from 0.05 to 10. A wire into the pin of the same name is used instead."
+}
+],
+"related":[
+"ent.spawn_entity",
+"ent.detach",
+"ent.attach"
+],
+"example":{
+"caption":"When a round starts, Spawn Weapon On Ground runs and its result is printed.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"ent.spawn_weapon",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"item":"ak47",
+"ammo":-1,
+"respawn":0,
+"copy_rot":true,
+"scale":1
+}
+},
+{
+"id":"show",
+"type":"debug.print",
+"pos":{
+"x":680,
+"y":0
+},
+"params":{
+"text":"Weapon:",
+"chat":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"it",
+"pin":"out"
+},
+"to":{
+"node":"show",
+"pin":"value"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"it",
+"pin":"then"
+},
+"to":{
+"node":"show",
 "pin":"exec"
 }
 }

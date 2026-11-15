@@ -3730,11 +3730,13 @@ lsg_n22(ctx[])
 {
 	new Float:lsi1 = 300.0
 	new Float:lsi2 = 150.0
+	new Float:lsi8 = 1.0
 	if (lsd_want(22))
 	{
 	lsd_begin()
 	lsd_in_number("Health", lsi1)
 	lsd_in_number("Pay", lsi2)
+	lsd_in_number("Scale", lsi8)
 	}
 	if (lsd_enter(22, ctx))
 		return

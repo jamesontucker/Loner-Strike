@@ -9,6 +9,8 @@ export type Limit = { id: string; label: string; default: number; lagAbove: numb
 export const LIMITS: Limit[] = [
   { id: "markers", label: "Objective markers at once", default: 32, lagAbove: 64, max: 256, kinds: ["fx.marker"] },
   { id: "trails", label: "Trails at once", default: 32, lagAbove: 64, max: 256, kinds: ["fun.trail"] },
+  // the effects agent (gen/fx.rs)
+  { id: "loop_sounds", label: "Loop sounds at once", default: 16, lagAbove: 64, max: 256, kinds: ["snd.loop"] },
   // EC (gen/coverage.rs)
   { id: "ec_attach", label: "Attached things at once", default: 64, lagAbove: 128, max: 256, kinds: ["ent.attach"] },
   { id: "ec_anim_loops", label: "Looping animations at once", default: 64, lagAbove: 128, max: 256, kinds: ["ent.play_anim"] },
@@ -21,7 +23,7 @@ export const LIMITS: Limit[] = [
   { id: "volume_members", label: "Things inside one trigger volume", default: 32, lagAbove: 48, max: 64, kinds: ["vol.spawn"] },
   { id: "avoid_areas", label: "Areas bots avoid at once", default: 16, lagAbove: 24, max: 32, kinds: ["bots.avoid"] },
   { id: "projectiles", label: "Projectiles at once", default: 64, lagAbove: 128, max: 512, kinds: ["proj.spawn"] },
-  { id: "messages", label: "Effect messages a frame", default: 48, lagAbove: 96, max: 160, kinds: ["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio"] },
+  { id: "messages", label: "Effect messages a frame", default: 48, lagAbove: 96, max: 160, kinds: ["fun.burst", "fun.trail", "msg.killfeed", "msg.status_icon", "proj.spawn", "msg.big_hud", "msg.color_chat", "msg.radio", "fx.dlight", "fx.decal", "fx.gibs", "fx.ring", "snd.play_2d"] },
 ];
 
 export const limitVar = (l: Limit): GVariable =>

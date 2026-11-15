@@ -34,6 +34,8 @@ pub(crate) mod p5; // P5: input, cooldowns, pickups, weapon tuning, saving (gen/
 
 // HUD & View: the engine nodes (Y), their own file
 pub(crate) mod engine;
+// Effects, sounds and spawning (the effects agent), their own file
+pub(crate) mod fx;
 // engine coverage nodes (EC), their own file
 pub(crate) mod coverage;
 
@@ -1215,7 +1217,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         || gen.vars.iter().any(|x| !matches!(x.ty.as_str(), "number" | "bool" | "text"))
         || w1::used(g) // W1
         || coverage::used(g) // EC
-        || g.nodes.iter().any(|n| v.defs.get(n.id.as_str()).is_some_and(|d| V3_KINDS.iter().any(|k| d.kind.starts_with(k))));
+        || g.nodes.iter().any(|n| v.defs.get(n.id.as_str()).is_some_and(|d| V3_KINDS.iter().any(|k| d.kind.starts_with(k))))
+        || g.nodes.iter().any(|n| fx::is_action(&n.kind))
+        || fx::xf_used(g);
 
     let mut o = Out { text: String::new(), lines: 0 };
     let mut spans = Vec::new();
@@ -1460,6 +1464,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         o.blank();
     }
     engine::blocks(g, &mut o);
+    fx::blocks(g, &mut o);
     p5::helpers(g, &mut o); // P5 (after the saved values it builds on)
     coverage::blocks(g, &mut o); // EC
     if uses_clock {
@@ -1502,6 +1507,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     }
     if uses_spawn {
         o.line(CREATURES_X);
+        fx::creature_block(g, &mut o);
     }
     // the game and server nodes' own hooks
     let uses_rounds = has("event.round_ended") || pure_used(&gen, "game.round_number");
@@ -1585,7 +1591,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         .filter_map(|k| k.split_whitespace().find_map(|w| w.strip_prefix("keeper=")))
         .filter_map(|k| match k { "barney" => Some("models/barney.mdl"), "gman" => Some("models/gman.mdl"), _ => None })
         .collect::<BTreeSet<_>>().into_iter().collect();
-    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() || !npc_models.is_empty() || !proj_models.is_empty() || engine::needs_precache(g) || uses_fire || uses_smoke || uses_blood {
+    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() || !npc_models.is_empty() || !proj_models.is_empty() || engine::needs_precache(g) || fx::needs_precache(g) || uses_fire || uses_smoke || uses_blood {
         let mut pre = String::from("public plugin_precache()\n{");
         for m in &proj_models {
             // (through the mode's precache budget: a model that doesn't fit isn't loaded, and flies as the grenade)
@@ -1619,6 +1625,9 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         }
         // (the view models a Set Weapon View Model names)
         for l in engine::precache(g) {
+            pre.push_str(&format!("\n{l}"));
+        }
+        for l in fx::precache(g) {
             pre.push_str(&format!("\n{l}"));
         }
         for m in &keepers {
@@ -1734,6 +1743,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         o.line("\tset_task(0.25, \"lsg_revive_tick\", LSG_TASK - 1, _, _, \"b\")");
     }
     engine::init(g, &mut o);
+    fx::init(g, &mut o);
     coverage::init(&gen, &mut o); // EC
     if uses_clock {
         o.line("\tset_task(1.0, \"lsg_clock_tick\", LSG_TASK - 2, _, _, \"b\")");
@@ -2621,12 +2631,8 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         "npc.spawn" | "npc.spawn_use" => {
             // where: a point wired in, else an entity wired in, else the one with that name
-            let at = if v.data_source(id, "pos").is_some() {
-                let pv = inp("pos", "vector");
-                format!("lsg_npc_at({pv}, o)")
-            } else {
-                at_origin(gen, id, n, def)
-            };
+            // (the shared transform: At position, or At entity with a Local offset; else the named one)
+            let at = fx::place(gen, id, "at_ent", &at_origin(gen, id, n, def));
             let model = pawn_str(&model_text(gen.text(n, def, "model")));
             let call = if def.kind == "npc.spawn" {
                 let keys = format!("behavior={} unkillable={}", if gen.choice(n, def, "behavior") == "wander" { "wander" } else { "stand" }, if gen.boolean(n, def, "unkillable") { 1 } else { 0 });
@@ -2640,6 +2646,10 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\tg_lsgOut[{i}] = {call}\n\t\tif (g_lsgOut[{i}])\n\t\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))\n\t\telse\n\t\t\t{}\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map."), err("Not made: its model isn't loaded with this map, or there's no room.")));
             } else {
                 b.line(format!("\tif (!{comps} && {at})\n\t\tg_lsgOut[{i}] = {call}"));
+            }
+            // (an NPC's Facing setting is a yaw offset on top, so saved graphs face the same way)
+            if let Some(l) = fx::apply(gen, n, def, id, &format!("g_lsgOut[{i}]"), "at_ent", true, if def.kind == "npc.spawn" { Some("yaw") } else { None }) {
+                b.line(l);
             }
             then_line(&mut b, "then");
         }
@@ -2901,13 +2911,17 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 "ls_extraction" => "ls_extraction_zone",
                 k => k,
             });
-            let at = at_origin(gen, id, n, def);
+            let at = fx::place(gen, id, "at_ent", &at_origin(gen, id, n, def));
             let keys = pawn_str(&keys_text(gen.text(n, def, "keys")));
             b.line("\tnew Float:o[3]");
             if debug {
                 b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\tg_lsgOut[{i}] = ls_comp_create({kind}, o, {keys})\n\t\tif (g_lsgOut[{i}])\n\t\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))\n\t\telse\n\t\t\t{}\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map."), err("gm_components couldn't make that component (it has no room, or the keys are wrong).")));
             } else {
                 b.line(format!("\tif (!{comps} && {at})\n\t\tg_lsgOut[{i}] = ls_comp_create({kind}, o, {keys})"));
+            }
+            // (a component turns, but isn't pushed or sized: it's a zone)
+            if let Some(l) = fx::apply(gen, n, def, id, &format!("g_lsgOut[{i}]"), "at_ent", false, None) {
+                b.line(l);
             }
             then_line(&mut b, "then");
         }
@@ -3331,7 +3345,16 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "ent.spawn_prop" => {
-            b.line(format!("\tg_lsgOut[{i}] = lsg_prop({}, {}, {})", inp("at", "entity"), pawn_str(&model_text(gen.text(n, def, "model"))), if gen.boolean(n, def, "solid") { 1 } else { 0 }));
+            if fx::place_wired(gen, id, "at") || v.data_source(id, "at").is_none() || fx::copies(n, def) {
+                // (the shared transform: At position, or At entity with a Local offset)
+                let fallback = if v.data_source(id, "at").is_some() { format!("lsg_ent_origin({}, o)", inp("at", "entity")) } else { "false".into() };
+                b.line(format!("\tnew Float:o[3]\n\tg_lsgOut[{i}] = {} ? lsg_prop_o(o, {}, {}) : 0", fx::place(gen, id, "at", &fallback), pawn_str(&model_text(gen.text(n, def, "model"))), if gen.boolean(n, def, "solid") { 1 } else { 0 }));
+            } else {
+                b.line(format!("\tg_lsgOut[{i}] = lsg_prop({}, {}, {})", inp("at", "entity"), pawn_str(&model_text(gen.text(n, def, "model"))), if gen.boolean(n, def, "solid") { 1 } else { 0 }));
+            }
+            if let Some(l) = fx::apply(gen, n, def, id, &format!("g_lsgOut[{i}]"), "at", true, None) {
+                b.line(l);
+            }
             if debug {
                 b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{}\n\telse\n\t{}", err("No prop: the model isn't loaded, or there's no such entity."), exit("spawned")));
             }
@@ -3448,10 +3471,19 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 Some(_) => format!("lsg_ent_find_origin({})", inp("at_ent", "entity")),
                 None => pawn_str(&name_text(gen.text(n, def, "at"))),
             };
+            // (the shared transform: At position, or At entity with a Local offset)
+            let xf = fx::place_wired(gen, id, "at_ent") || (v.data_source(id, "at_ent").is_some() && fx::copies(n, def));
+            if xf {
+                b.line("\tnew Float:o[3]");
+            }
+            let at_call = |hp: &str, pay: &str| if xf { format!("({} ? lsg_creature_o2({kind}, o, {tier}, {hp}, floatround({pay})) : 0)", fx::place(gen, id, "at_ent", &format!("lsg_ent_origin({}, o)", inp("at_ent", "entity")))) } else { format!("lsg_creature_x({kind}, {at}, {tier}, {hp}, floatround({pay}))") };
             if debug {
-                b.line(format!("\tif (!get_cvar_pointer(\"ls_creature_ver\"))\n\t\t{}\n\telse if (!(g_lsgOut[{i}] = lsg_creature_x({kind}, {at}, {tier}, {hp}, floatround({pay}))))\n\t\t{}\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))", err("This server's bot brain has no creatures (ls_creature)."), err("Not spawned: no entity has that name, or that type isn't loaded on this map.")));
+                b.line(format!("\tif (!get_cvar_pointer(\"ls_creature_ver\"))\n\t\t{}\n\telse if (!(g_lsgOut[{i}] = {}))\n\t\t{}\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))", err("This server's bot brain has no creatures (ls_creature)."), at_call(&hp, &pay), err("Not spawned: no entity has that name, or that type isn't loaded on this map.")));
             } else {
-                b.line(format!("\tg_lsgOut[{i}] = lsg_creature_x({kind}, {at}, {tier}, {hp}, floatround({pay}))"));
+                b.line(format!("\tg_lsgOut[{i}] = {}", at_call(&hp, &pay)));
+            }
+            if let Some(l) = fx::apply(gen, n, def, id, &format!("g_lsgOut[{i}]"), "at_ent", true, None) {
+                b.line(l);
             }
             then_line(&mut b, "then");
         }
@@ -3851,6 +3883,10 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         }
         k if p5::is_action(k) => {
             p5::action(gen, id, n, def, &mut b, &inp, &exit, &next);
+            then_line(&mut b, "then");
+        }
+        k if fx::is_action(k) => {
+            fx::action(gen, id, n, def, &mut b, &inp, &exit, &err);
             then_line(&mut b, "then");
         }
         _ => {}
@@ -7645,6 +7681,7 @@ mod tests {
     pub const EVERY_NODE_3: &str = include_str!("testdata/every_node_3.graph.json");
     /// the HUD & View engine nodes (Y): their own graph, so others' every_node_3 edits don't meet them
     pub const EVERY_NODE_4: &str = include_str!("testdata/every_node_4.graph.json");
+    pub const EVERY_NODE_FX: &str = include_str!("testdata/every_node_fx.graph.json");
     /// collision, overlap and hits (W2): their own graph too
     pub const EVERY_NODE_5: &str = include_str!("testdata/every_node_5.graph.json");
     pub const MALICIOUS: &str = include_str!("testdata/malicious.graph.json");
@@ -8067,10 +8104,13 @@ mod tests {
         let g4 = parse(EVERY_NODE_4).unwrap();
         let p4 = super::super::graph::validate_core(&g4);
         assert!(p4.is_empty(), "every_node_4: {:#?}", p4);
+        let gfx = parse(EVERY_NODE_FX).unwrap();
+        let pfx = super::super::graph::validate_core(&gfx);
+        assert!(pfx.is_empty(), "every_node_fx: {:#?}", pfx);
         let g5 = parse(EVERY_NODE_5).unwrap();
         let p5 = super::super::graph::validate_core(&g5);
         assert!(p5.is_empty(), "every_node_5: {:#?}", p5);
-        let used: BTreeSet<&str> = g.nodes.iter().chain(g2.nodes.iter()).chain(g3.nodes.iter()).chain(g4.nodes.iter()).chain(g5.nodes.iter()).map(|n| n.kind.as_str()).collect();
+        let used: BTreeSet<&str> = g.nodes.iter().chain(g2.nodes.iter()).chain(g3.nodes.iter()).chain(g4.nodes.iter()).chain(g5.nodes.iter()).chain(gfx.nodes.iter()).map(|n| n.kind.as_str()).collect();
         // W1: the utility nodes are in every_node_w1.graph.json (w1_nodes.rs tests it)
         let mut used = used;
         // T1fix: the projectile nodes are in proj_tests.rs (their own graph, generated and compiled there)
@@ -8088,7 +8128,7 @@ mod tests {
         for d in &registry().nodes {
             assert!(used.contains(d.kind.as_str()), "every_node(_2/_3/_4).graph.json lacks {}", d.kind);
         }
-        for (name, gg) in [("every_node_2", &g2), ("every_node_3", &g3), ("every_node_4", &g4), ("every_node_5", &g5)] {
+        for (name, gg) in [("every_node_2", &g2), ("every_node_3", &g3), ("every_node_4", &g4), ("every_node_5", &g5), ("every_node_fx", &gfx)] {
             let r = generate(gg, false);
             for n in gg.nodes.iter().filter(|n| { let d = registry().get(&n.kind).unwrap(); !d.pure && !d.reroute }) {
                 assert!(r.spans.iter().any(|s| s.node == n.id), "{name}: {} isn't in the plugin", n.id);
