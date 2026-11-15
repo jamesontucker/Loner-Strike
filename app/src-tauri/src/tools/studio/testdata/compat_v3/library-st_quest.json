@@ -1,0 +1,616 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Quest Step Tracker",
+ "description": "Each player's quest step (a word you choose, e.g. find_fuse) with a HUD line; pairs with Run Dialog's Last row.",
+ "category": "Starter: story",
+ "kind": "function",
+ "root": "qs_set",
+ "enums": [],
+ "structs": [],
+ "functions": [
+  {
+   "id": "qs_set",
+   "name": "Set Quest Step",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "step",
+     "name": "Step",
+     "type": "text"
+    },
+    {
+     "id": "say",
+     "name": "Objective",
+     "type": "text"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "qs_of",
+   "name": "Quest Step Of",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "step",
+     "name": "Step",
+     "type": "text"
+    },
+    {
+     "id": "started",
+     "name": "Started",
+     "type": "bool"
+    }
+   ],
+   "pure": true
+  },
+  {
+   "id": "qs_done",
+   "name": "Quest Done",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "reward",
+     "name": "Reward",
+     "type": "number"
+    }
+   ],
+   "outputs": []
+  }
+ ],
+ "macros": [],
+ "variables": [
+  {
+   "id": "qs_step",
+   "name": "Quest step",
+   "type": "text",
+   "scope": "player",
+   "default": ""
+  }
+ ],
+ "nodes": [
+  {
+   "id": "qs_set_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_set",
+   "type": "var.set",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "qs_step"
+   },
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_empty",
+   "type": "text.equals",
+   "pos": {
+    "x": 780,
+    "y": 540
+   },
+   "params": {
+    "b": ""
+   },
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_txt",
+   "type": "text.format",
+   "pos": {
+    "x": 1300,
+    "y": 720
+   },
+   "params": {
+    "text": "Objective: [0]"
+   },
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "slot": "left",
+    "seconds": 6,
+    "text": ""
+   },
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_snd",
+   "type": "fx.sound_to",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "sound": "buttons/blip1.wav"
+   },
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_set_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_set"
+  },
+  {
+   "id": "qs_of_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_of"
+  },
+  {
+   "id": "qs_of_g",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "var": "qs_step"
+   },
+   "graph": "qs_of"
+  },
+  {
+   "id": "qs_of_empty",
+   "type": "text.equals",
+   "pos": {
+    "x": 780,
+    "y": 540
+   },
+   "params": {
+    "b": ""
+   },
+   "graph": "qs_of"
+  },
+  {
+   "id": "qs_of_not",
+   "type": "logic.not",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {},
+   "graph": "qs_of"
+  },
+  {
+   "id": "qs_of_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_of"
+  },
+  {
+   "id": "qs_done_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_done"
+  },
+  {
+   "id": "qs_done_set",
+   "type": "var.set",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "qs_step",
+    "value": "done"
+   },
+   "graph": "qs_done"
+  },
+  {
+   "id": "qs_done_money",
+   "type": "player.add_money",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_done"
+  },
+  {
+   "id": "qs_done_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "slot": "center",
+    "seconds": 4,
+    "text": "Quest complete!"
+   },
+   "graph": "qs_done"
+  },
+  {
+   "id": "qs_done_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "qs_done"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_set_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_set_set",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "step"
+   },
+   "to": {
+    "node": "qs_set_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "say"
+   },
+   "to": {
+    "node": "qs_set_empty",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "qs_set_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_set_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "qs_set_empty",
+    "pin": "out"
+   },
+   "to": {
+    "node": "qs_set_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "say"
+   },
+   "to": {
+    "node": "qs_set_txt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "qs_set_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "qs_set_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_set_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "qs_set_txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "qs_set_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "qs_set_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_set_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "qs_set_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_set_snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "qs_set_snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_set_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "qs_set_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "qs_set_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "qs_of_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_of_g",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "qs_of_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "qs_of_empty",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "qs_of_empty",
+    "pin": "out"
+   },
+   "to": {
+    "node": "qs_of_not",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "qs_of_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_of_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "qs_of_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "qs_of_ret",
+    "pin": "step"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "qs_of_not",
+    "pin": "out"
+   },
+   "to": {
+    "node": "qs_of_ret",
+    "pin": "started"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "qs_done_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_done_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "qs_done_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_done_set",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "qs_done_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_done_money",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "qs_done_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_done_money",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "qs_done_entry",
+    "pin": "reward"
+   },
+   "to": {
+    "node": "qs_done_money",
+    "pin": "amount"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "qs_done_money",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_done_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "qs_done_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "qs_done_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "qs_done_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "qs_done_ret",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "qs_set",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Quest Step Tracker: Set Quest Step when a talk ends (Run Dialog's Last row) or a task is done; Quest Step Of tells where a player is (empty: not started). Quest Done marks the end. Bots never start quests."
+  }
+ ]
+}

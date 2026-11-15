@@ -1,0 +1,444 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Lives Counter",
+ "description": "Each player's lives: Lose a Life on a death (with a HUD line), Out when none are left; Reset Lives at the start (0: 3).",
+ "category": "Starter: player state",
+ "kind": "function",
+ "root": "lv_lose",
+ "enums": [],
+ "structs": [],
+ "functions": [
+  {
+   "id": "lv_reset",
+   "name": "Reset Lives",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "n",
+     "name": "Lives",
+     "type": "number"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "lv_lose",
+   "name": "Lose a Life",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "left",
+     "name": "Lives left",
+     "type": "number"
+    },
+    {
+     "id": "gone",
+     "name": "Out",
+     "type": "bool"
+    }
+   ]
+  }
+ ],
+ "macros": [],
+ "variables": [
+  {
+   "id": "lv_n",
+   "name": "Lives",
+   "type": "number",
+   "scope": "player",
+   "default": 3
+  }
+ ],
+ "nodes": [
+  {
+   "id": "lv_reset_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lv_reset"
+  },
+  {
+   "id": "lv_reset_n_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "lv_reset"
+  },
+  {
+   "id": "lv_reset_n_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 3
+   },
+   "graph": "lv_reset"
+  },
+  {
+   "id": "lv_reset_n",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "lv_reset"
+  },
+  {
+   "id": "lv_reset_set",
+   "type": "var.set",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "var": "lv_n"
+   },
+   "graph": "lv_reset"
+  },
+  {
+   "id": "lv_reset_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lv_reset"
+  },
+  {
+   "id": "lv_lose_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lv_lose"
+  },
+  {
+   "id": "lv_lose_sub",
+   "type": "var.add",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "lv_n",
+    "amount": -1
+   },
+   "graph": "lv_lose"
+  },
+  {
+   "id": "lv_lose_g",
+   "type": "var.get",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "var": "lv_n"
+   },
+   "graph": "lv_lose"
+  },
+  {
+   "id": "lv_lose_txt",
+   "type": "text.format",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "text": "Lives left: [0]"
+   },
+   "graph": "lv_lose"
+  },
+  {
+   "id": "lv_lose_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "slot": "center",
+    "seconds": 3,
+    "text": ""
+   },
+   "graph": "lv_lose"
+  },
+  {
+   "id": "lv_lose_out",
+   "type": "math.compare",
+   "pos": {
+    "x": 1560,
+    "y": 540
+   },
+   "params": {
+    "op": "le",
+    "b": 0
+   },
+   "graph": "lv_lose"
+  },
+  {
+   "id": "lv_lose_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {},
+   "graph": "lv_lose"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "lv_reset_entry",
+    "pin": "n"
+   },
+   "to": {
+    "node": "lv_reset_n_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "lv_reset_n_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_reset_n",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "lv_reset_entry",
+    "pin": "n"
+   },
+   "to": {
+    "node": "lv_reset_n",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "lv_reset_n_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_reset_n",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "lv_reset_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lv_reset_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "lv_reset_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "lv_reset_set",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "lv_reset_n",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_reset_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "lv_reset_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lv_reset_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "lv_lose_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lv_lose_sub",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "lv_lose_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "lv_lose_sub",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "lv_lose_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "lv_lose_g",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "lv_lose_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_lose_txt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "lv_lose_sub",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lv_lose_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "lv_lose_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "lv_lose_hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "lv_lose_txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_lose_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "lv_lose_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_lose_out",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "lv_lose_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "lv_lose_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "lv_lose_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_lose_ret",
+    "pin": "left"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "lv_lose_out",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lv_lose_ret",
+    "pin": "gone"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "lv_lose",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Lives Counter: Wire Round Started into Reset Lives (For Each Player), and Player Killed's victim into Lose a Life; on Out, keep them dead or move them to spectators. Bots count lives like anyone."
+  }
+ ]
+}

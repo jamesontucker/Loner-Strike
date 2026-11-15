@@ -1,0 +1,119 @@
+{
+ "schema": "loner-strike/graph-snippet",
+ "version": 1,
+ "name": "Zone that shrinks",
+ "description": "Starts the map pack's zone shrinkers each round and tells players outside the zone.",
+ "nodes": [
+  {
+   "id": "rs",
+   "type": "event.round_started",
+   "pos": {
+    "x": 20,
+    "y": 55
+   },
+   "params": {}
+  },
+  {
+   "id": "each",
+   "type": "flow.for_each_entity",
+   "pos": {
+    "x": 340,
+    "y": 20
+   },
+   "params": {
+    "by": "class",
+    "name": "ls_zone_shrinker"
+   }
+  },
+  {
+   "id": "go",
+   "type": "comp.start",
+   "pos": {
+    "x": 660,
+    "y": 44
+   },
+   "params": {}
+  },
+  {
+   "id": "zt",
+   "type": "comp.on_zone_tick",
+   "pos": {
+    "x": 20,
+    "y": 196
+   },
+   "params": {}
+  },
+  {
+   "id": "hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 340,
+    "y": 194
+   },
+   "params": {
+    "text": "Get back in the zone!",
+    "slot": "center",
+    "seconds": 1
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "rs",
+    "pin": "then"
+   },
+   "to": {
+    "node": "each",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "each",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "go",
+    "pin": "comp"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "each",
+    "pin": "each"
+   },
+   "to": {
+    "node": "go",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "zt",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hud",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "zt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hud",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [],
+ "variables": []
+}

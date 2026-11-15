@@ -40,6 +40,8 @@ mod help_tests;
 #[cfg(test)]
 mod examples_tests;
 #[cfg(test)]
+mod compat_tests; // the 1.0 compatibility suite (docs/notes/StudioCompat.md)
+#[cfg(test)]
 mod timeline_tests;
 #[cfg(test)]
 mod proj_tests; // T1fix: projectiles

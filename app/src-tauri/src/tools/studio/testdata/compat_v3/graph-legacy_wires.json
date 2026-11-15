@@ -1,0 +1,560 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "legacy_wires",
+  "name": "Legacy wires"
+ },
+ "nodes": [
+  {
+   "id": "hurt",
+   "type": "event.player_hurt",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "pw",
+   "type": "debug.print",
+   "pos": {
+    "x": 280,
+    "y": 0
+   },
+   "params": {
+    "text": "hit in",
+    "chat": false
+   }
+  },
+  {
+   "id": "pw2",
+   "type": "debug.print",
+   "pos": {
+    "x": 560,
+    "y": 0
+   },
+   "params": {
+    "text": "with",
+    "chat": false
+   }
+  },
+  {
+   "id": "wtx",
+   "type": "text.literal",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {
+    "value": "m4a1"
+   }
+  },
+  {
+   "id": "give",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 840,
+    "y": 0
+   },
+   "params": {
+    "weapon": "ak47",
+    "ammo": 30
+   }
+  },
+  {
+   "id": "held",
+   "type": "player.weapon_held",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "ph",
+   "type": "debug.print",
+   "pos": {
+    "x": 1120,
+    "y": 0
+   },
+   "params": {
+    "text": "holding",
+    "chat": false
+   }
+  },
+  {
+   "id": "burst",
+   "type": "fun.burst",
+   "pos": {
+    "x": 1400,
+    "y": 0
+   },
+   "params": {
+    "kind": "sparks",
+    "count": 2,
+    "r": 10,
+    "g": 200,
+    "b": 30
+   }
+  },
+  {
+   "id": "prop",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 1680,
+    "y": 0
+   },
+   "params": {
+    "model": "models/custom/crate1.mdl"
+   }
+  },
+  {
+   "id": "snd",
+   "type": "fx.sound_at",
+   "pos": {
+    "x": 1960,
+    "y": 0
+   },
+   "params": {
+    "sound": "custom/boo.wav"
+   }
+  },
+  {
+   "id": "mk",
+   "type": "fx.marker",
+   "pos": {
+    "x": 2240,
+    "y": 0
+   },
+   "params": {
+    "sprite": "sprites/custom/arrow.spr",
+    "who": "all"
+   }
+  },
+  {
+   "id": "glow",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 2520,
+    "y": 0
+   },
+   "params": {
+    "color": "blue"
+   }
+  },
+  {
+   "id": "as",
+   "type": "cast.creature",
+   "pos": {
+    "x": 2800,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "go",
+   "type": "creature.go_to",
+   "pos": {
+    "x": 3080,
+    "y": 0
+   },
+   "params": {
+    "name": "gate1"
+   }
+  },
+  {
+   "id": "tf",
+   "type": "player.transform",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "stf",
+   "type": "player.set_transform",
+   "pos": {
+    "x": 3360,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "hitp",
+   "type": "proj.on_hit",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "pz",
+   "type": "debug.print",
+   "pos": {
+    "x": 280,
+    "y": 0
+   },
+   "params": {
+    "text": "zone",
+    "chat": false
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "w0",
+   "from": {
+    "node": "hurt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pw",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w1",
+   "from": {
+    "node": "hurt",
+    "pin": "hitgroup"
+   },
+   "to": {
+    "node": "pw",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "pw",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pw2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "hurt",
+    "pin": "weapon"
+   },
+   "to": {
+    "node": "pw2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "pw2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "give",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "hurt",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "give",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "wtx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "give",
+    "pin": "weapon"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "give",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ph",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "hurt",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "held",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "held",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ph",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "ph",
+    "pin": "then"
+   },
+   "to": {
+    "node": "burst",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "hurt",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "burst",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "burst",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "hurt",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "prop",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "prop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "hurt",
+    "pin": "hit_pos"
+   },
+   "to": {
+    "node": "snd",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mk",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mk",
+    "pin": "follow"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "mk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "glow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "hurt",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "glow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "glow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "as",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "as",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "as",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "go",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "as",
+    "pin": "out"
+   },
+   "to": {
+    "node": "go",
+    "pin": "creature"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "prop",
+    "pin": "out"
+   },
+   "to": {
+    "node": "go",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "go",
+    "pin": "then"
+   },
+   "to": {
+    "node": "stf",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "hurt",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "stf",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "hurt",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "tf",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "tf",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "stf",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "tf",
+    "pin": "angles"
+   },
+   "to": {
+    "node": "stf",
+    "pin": "angles"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "hitp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "pz",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "hitp",
+    "pin": "hitgroup"
+   },
+   "to": {
+    "node": "pz",
+    "pin": "value"
+   }
+  }
+ ]
+}

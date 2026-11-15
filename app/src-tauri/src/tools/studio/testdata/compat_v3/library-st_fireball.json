@@ -1,0 +1,403 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Fireball",
+ "description": "Throws a fireball where the player aims; it explodes where it hits (Damage 0: 60, Speed 0: 1100).",
+ "category": "Starter: abilities",
+ "kind": "macro",
+ "root": "fb_throw",
+ "enums": [],
+ "structs": [],
+ "functions": [],
+ "macros": [
+  {
+   "id": "fb_throw",
+   "name": "Fireball",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "dmg",
+     "name": "Damage",
+     "type": "number"
+    },
+    {
+     "id": "speed",
+     "name": "Speed",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Thrown",
+     "type": "exec"
+    }
+   ]
+  }
+ ],
+ "variables": [],
+ "nodes": [
+  {
+   "id": "fb_throw_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_dmg_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_dmg_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 60
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_dmg",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_speed_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 1300,
+    "y": 900
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_speed_d",
+   "type": "math.number",
+   "pos": {
+    "x": 1560,
+    "y": 1080
+   },
+   "params": {
+    "value": 1100
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_speed",
+   "type": "logic.select",
+   "pos": {
+    "x": 1820,
+    "y": 900
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_eyes",
+   "type": "vec.player",
+   "pos": {
+    "x": 2080,
+    "y": 360
+   },
+   "params": {
+    "what": "eyes"
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_aim",
+   "type": "vec.player",
+   "pos": {
+    "x": 2340,
+    "y": 360
+   },
+   "params": {
+    "what": "aim"
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_proj",
+   "type": "proj.spawn",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "model": "sprites/fexplo.spr",
+    "scale": 0.6,
+    "life": 4,
+    "radius": 150,
+    "explode": true,
+    "trail": true,
+    "dangerous": true
+   },
+   "graph": "fb_throw"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "dmg"
+   },
+   "to": {
+    "node": "fb_throw_dmg_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "fb_throw_dmg_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_dmg",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "dmg"
+   },
+   "to": {
+    "node": "fb_throw_dmg",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "fb_throw_dmg_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_dmg",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "fb_throw_speed_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "fb_throw_speed_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_speed",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "fb_throw_speed",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "fb_throw_speed_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_speed",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "fb_throw_eyes",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "fb_throw_aim",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "fb_throw_proj",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "fb_throw_proj",
+    "pin": "owner"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "fb_throw_eyes",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_proj",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "fb_throw_aim",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_proj",
+    "pin": "dir"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "fb_throw_dmg",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_proj",
+    "pin": "damage"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "fb_throw_speed",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_proj",
+    "pin": "speed"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "fb_throw_proj",
+    "pin": "then"
+   },
+   "to": {
+    "node": "fb_throw_out",
+    "pin": "next"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "fb_throw",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Fireball: Wire it after Ability with Cooldown's Use. The explosion hurts in a radius and the kills go to the thrower. Bots can throw it through Bot Wants Ability."
+  },
+  {
+   "id": "c1",
+   "graph": "fb_throw",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Fireball: the projectile carries the damage (Radius 150, an explosion where it hits); the kills go to the thrower."
+  }
+ ]
+}

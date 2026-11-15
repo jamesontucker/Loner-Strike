@@ -1,0 +1,684 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Kill Streak Announcer",
+ "description": "Counts kills in a row per player and announces 3, 5, 7 and 10 to everyone; a death resets it.",
+ "category": "Starter: rounds and scoring",
+ "kind": "function",
+ "root": "ks_kill",
+ "enums": [],
+ "structs": [],
+ "functions": [
+  {
+   "id": "ks_kill",
+   "name": "Count Kill Streak",
+   "inputs": [
+    {
+     "id": "killer",
+     "name": "Killer",
+     "type": "player"
+    },
+    {
+     "id": "victim",
+     "name": "Victim",
+     "type": "player"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "n",
+     "name": "Streak",
+     "type": "number"
+    }
+   ]
+  }
+ ],
+ "macros": [],
+ "variables": [
+  {
+   "id": "ks_n",
+   "name": "Kill streak",
+   "type": "number",
+   "scope": "player",
+   "default": 0
+  }
+ ],
+ "nodes": [
+  {
+   "id": "ks_kill_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_reset",
+   "type": "var.set",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "ks_n",
+    "value": 0
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_self",
+   "type": "logic.equal",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "of": "player",
+    "op": "ne"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_add",
+   "type": "var.add",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "var": "ks_n",
+    "amount": 1
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_g",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 360
+   },
+   "params": {
+    "var": "ks_n"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_sw",
+   "type": "flow.switch_num",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "cases": "3,5,7,10"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_t3",
+   "type": "text.format",
+   "pos": {
+    "x": 2340,
+    "y": 900
+   },
+   "params": {
+    "text": "[0] is on a killing spree!"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_h3",
+   "type": "msg.hud",
+   "pos": {
+    "x": 2600,
+    "y": 900
+   },
+   "params": {
+    "slot": "top",
+    "seconds": 4,
+    "text": ""
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_s3",
+   "type": "game.play_sound",
+   "pos": {
+    "x": 2860,
+    "y": 900
+   },
+   "params": {
+    "sound": "buttons/bell1"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_t5",
+   "type": "text.format",
+   "pos": {
+    "x": 3120,
+    "y": 1080
+   },
+   "params": {
+    "text": "[0] is unstoppable!"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_h5",
+   "type": "msg.hud",
+   "pos": {
+    "x": 3380,
+    "y": 1080
+   },
+   "params": {
+    "slot": "top",
+    "seconds": 4,
+    "text": ""
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_s5",
+   "type": "game.play_sound",
+   "pos": {
+    "x": 3640,
+    "y": 1080
+   },
+   "params": {
+    "sound": "buttons/bell1"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_t7",
+   "type": "text.format",
+   "pos": {
+    "x": 3900,
+    "y": 1260
+   },
+   "params": {
+    "text": "[0] is godlike!"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_h7",
+   "type": "msg.hud",
+   "pos": {
+    "x": 4160,
+    "y": 1260
+   },
+   "params": {
+    "slot": "top",
+    "seconds": 4,
+    "text": ""
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_s7",
+   "type": "game.play_sound",
+   "pos": {
+    "x": 4420,
+    "y": 1260
+   },
+   "params": {
+    "sound": "buttons/bell1"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_t10",
+   "type": "text.format",
+   "pos": {
+    "x": 4680,
+    "y": 1440
+   },
+   "params": {
+    "text": "[0] is LEGENDARY!"
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_h10",
+   "type": "msg.hud",
+   "pos": {
+    "x": 4940,
+    "y": 1440
+   },
+   "params": {
+    "slot": "top",
+    "seconds": 4,
+    "text": ""
+   },
+   "graph": "ks_kill"
+  },
+  {
+   "id": "ks_kill_s10",
+   "type": "game.play_sound",
+   "pos": {
+    "x": 5200,
+    "y": 1440
+   },
+   "params": {
+    "sound": "buttons/bell1"
+   },
+   "graph": "ks_kill"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_reset",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ks_kill_reset",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_self",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ks_kill_self",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "ks_kill_reset",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "ks_kill_self",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "ks_kill_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ks_kill_add",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_add",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_g",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "ks_kill_add",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_sw",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "ks_kill_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_sw",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "ks_kill_sw",
+    "pin": "default"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "ks_kill_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "ks_kill_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "n"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_t3",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "ks_kill_sw",
+    "pin": "c0"
+   },
+   "to": {
+    "node": "ks_kill_h3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "ks_kill_t3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_h3",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "ks_kill_h3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_s3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "ks_kill_s3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_t5",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "ks_kill_sw",
+    "pin": "c1"
+   },
+   "to": {
+    "node": "ks_kill_h5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "ks_kill_t5",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_h5",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "ks_kill_h5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_s5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "ks_kill_s5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_t7",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "ks_kill_sw",
+    "pin": "c2"
+   },
+   "to": {
+    "node": "ks_kill_h7",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "ks_kill_t7",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_h7",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "ks_kill_h7",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_s7",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "ks_kill_s7",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "ks_kill_entry",
+    "pin": "killer"
+   },
+   "to": {
+    "node": "ks_kill_t10",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "ks_kill_sw",
+    "pin": "c3"
+   },
+   "to": {
+    "node": "ks_kill_h10",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "ks_kill_t10",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ks_kill_h10",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "ks_kill_h10",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_s10",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "ks_kill_s10",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ks_kill_ret",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "ks_kill",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Kill Streak Announcer: Wire Player Killed in (Killer = attacker, Victim = victim). Streak is the killer's count after this kill. Bots' streaks are announced too."
+  }
+ ]
+}

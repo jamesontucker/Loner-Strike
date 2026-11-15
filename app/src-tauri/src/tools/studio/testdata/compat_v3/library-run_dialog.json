@@ -1,0 +1,1388 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Run Dialog",
+ "description": "A conversation from the Dialog table: line after line, each reply going to its Next row, until end. Fill the table's rows; wire Talked To NPC in.",
+ "category": "NPCs",
+ "kind": "macro",
+ "root": "rundlg",
+ "enums": [],
+ "structs": [],
+ "functions": [],
+ "macros": [
+  {
+   "id": "rundlg",
+   "name": "Run Dialog",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "npc",
+     "name": "NPC",
+     "type": "entity"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "start",
+     "name": "Start row",
+     "type": "text"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "end",
+     "name": "Ended",
+     "type": "exec"
+    },
+    {
+     "id": "last",
+     "name": "Last row",
+     "type": "text"
+    }
+   ]
+  }
+ ],
+ "variables": [
+  {
+   "id": "dlg_at",
+   "name": "Dialog row",
+   "type": "text",
+   "scope": "player",
+   "default": ""
+  },
+  {
+   "id": "dlg_lines",
+   "name": "Dialog lines",
+   "type": "number",
+   "scope": "player",
+   "default": 0
+  },
+  {
+   "id": "dlg_npc",
+   "name": "Dialog NPC",
+   "type": "entity",
+   "scope": "player"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {},
+   "graph": "rundlg"
+  },
+  {
+   "id": "s_at",
+   "type": "var.set",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {
+    "var": "dlg_at"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "s_n",
+   "type": "var.set",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "dlg_lines",
+    "value": 0
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "s_npc",
+   "type": "var.set",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "var": "dlg_npc"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "g_at",
+   "type": "var.get",
+   "pos": {
+    "x": 1040,
+    "y": 200
+   },
+   "params": {
+    "var": "dlg_at"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "row",
+   "type": "table.get_row",
+   "pos": {
+    "x": 1300,
+    "y": 200
+   },
+   "params": {
+    "table": "dialog"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "has",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "rundlg"
+  },
+  {
+   "id": "lost",
+   "type": "debug.print",
+   "pos": {
+    "x": 1560,
+    "y": -200
+   },
+   "params": {
+    "text": "Run Dialog: no row of Dialog has the id",
+    "chat": false
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "g_n",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 260
+   },
+   "params": {
+    "var": "dlg_lines"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "few",
+   "type": "math.compare",
+   "pos": {
+    "x": 1820,
+    "y": 260
+   },
+   "params": {
+    "op": "lt",
+    "b": 64
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "ok",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {},
+   "graph": "rundlg"
+  },
+  {
+   "id": "long",
+   "type": "debug.print",
+   "pos": {
+    "x": 2080,
+    "y": -200
+   },
+   "params": {
+    "text": "Run Dialog: stopped after 64 lines (does the table go round?) at",
+    "chat": false
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "count",
+   "type": "var.add",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {
+    "var": "dlg_lines",
+    "amount": 1
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "g_npc",
+   "type": "var.get",
+   "pos": {
+    "x": 2080,
+    "y": 300
+   },
+   "params": {
+    "var": "dlg_npc"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "say",
+   "type": "npc.choose",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "count": 6,
+    "secs": 30
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "done",
+   "type": "macro.exit",
+   "pos": {
+    "x": 3380,
+    "y": -300
+   },
+   "params": {},
+   "graph": "rundlg"
+  },
+  {
+   "id": "g_at2",
+   "type": "var.get",
+   "pos": {
+    "x": 3120,
+    "y": 300
+   },
+   "params": {
+    "var": "dlg_at"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "is_end",
+   "type": "text.equals",
+   "pos": {
+    "x": 3120,
+    "y": 420
+   },
+   "params": {
+    "b": "end"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "is_none",
+   "type": "text.equals",
+   "pos": {
+    "x": 3120,
+    "y": 540
+   },
+   "params": {
+    "b": ""
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "over",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 3380,
+    "y": 420
+   },
+   "params": {
+    "op": "or"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "again",
+   "type": "flow.branch",
+   "pos": {
+    "x": 3380,
+    "y": 0
+   },
+   "params": {},
+   "graph": "rundlg"
+  },
+  {
+   "id": "to1",
+   "type": "var.set",
+   "pos": {
+    "x": 2860,
+    "y": -50
+   },
+   "params": {
+    "var": "dlg_at"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "to2",
+   "type": "var.set",
+   "pos": {
+    "x": 2860,
+    "y": 50
+   },
+   "params": {
+    "var": "dlg_at"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "to3",
+   "type": "var.set",
+   "pos": {
+    "x": 2860,
+    "y": 150
+   },
+   "params": {
+    "var": "dlg_at"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "to4",
+   "type": "var.set",
+   "pos": {
+    "x": 2860,
+    "y": 250
+   },
+   "params": {
+    "var": "dlg_at"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "to5",
+   "type": "var.set",
+   "pos": {
+    "x": 2860,
+    "y": 350
+   },
+   "params": {
+    "var": "dlg_at"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "to6",
+   "type": "var.set",
+   "pos": {
+    "x": 2860,
+    "y": 450
+   },
+   "params": {
+    "var": "dlg_at"
+   },
+   "graph": "rundlg"
+  },
+  {
+   "id": "g_last",
+   "type": "var.get",
+   "pos": {
+    "x": 3120,
+    "y": -300
+   },
+   "params": {
+    "var": "dlg_at"
+   },
+   "graph": "rundlg"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "s_at",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "s_at",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "in",
+    "pin": "start"
+   },
+   "to": {
+    "node": "s_at",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "s_at",
+    "pin": "then"
+   },
+   "to": {
+    "node": "s_n",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "s_n",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "s_n",
+    "pin": "then"
+   },
+   "to": {
+    "node": "s_npc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "s_npc",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "in",
+    "pin": "npc"
+   },
+   "to": {
+    "node": "s_npc",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g_at",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "g_at",
+    "pin": "out"
+   },
+   "to": {
+    "node": "row",
+    "pin": "key"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "s_npc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "has",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "row",
+    "pin": "found"
+   },
+   "to": {
+    "node": "has",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "has",
+    "pin": "false"
+   },
+   "to": {
+    "node": "lost",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "g_at",
+    "pin": "out"
+   },
+   "to": {
+    "node": "lost",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g_n",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "g_n",
+    "pin": "out"
+   },
+   "to": {
+    "node": "few",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "has",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ok",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "few",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ok",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "ok",
+    "pin": "false"
+   },
+   "to": {
+    "node": "long",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "g_at",
+    "pin": "out"
+   },
+   "to": {
+    "node": "long",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "ok",
+    "pin": "true"
+   },
+   "to": {
+    "node": "count",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "count",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g_npc",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "count",
+    "pin": "then"
+   },
+   "to": {
+    "node": "say",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "say",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "g_npc",
+    "pin": "out"
+   },
+   "to": {
+    "node": "say",
+    "pin": "npc"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "row",
+    "pin": "speaker"
+   },
+   "to": {
+    "node": "say",
+    "pin": "speaker"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "row",
+    "pin": "text"
+   },
+   "to": {
+    "node": "say",
+    "pin": "text"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "row",
+    "pin": "reply1"
+   },
+   "to": {
+    "node": "say",
+    "pin": "o1"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "row",
+    "pin": "reply2"
+   },
+   "to": {
+    "node": "say",
+    "pin": "o2"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "row",
+    "pin": "reply3"
+   },
+   "to": {
+    "node": "say",
+    "pin": "o3"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "row",
+    "pin": "reply4"
+   },
+   "to": {
+    "node": "say",
+    "pin": "o4"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "row",
+    "pin": "reply5"
+   },
+   "to": {
+    "node": "say",
+    "pin": "o5"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "row",
+    "pin": "reply6"
+   },
+   "to": {
+    "node": "say",
+    "pin": "o6"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g_at2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "g_at2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "is_end",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "g_at2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "is_none",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "is_end",
+    "pin": "out"
+   },
+   "to": {
+    "node": "over",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "is_none",
+    "pin": "out"
+   },
+   "to": {
+    "node": "over",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "over",
+    "pin": "out"
+   },
+   "to": {
+    "node": "again",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "say",
+    "pin": "r1"
+   },
+   "to": {
+    "node": "to1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "to1",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "row",
+    "pin": "next1"
+   },
+   "to": {
+    "node": "to1",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "to1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "again",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "say",
+    "pin": "r2"
+   },
+   "to": {
+    "node": "to2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "to2",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "row",
+    "pin": "next2"
+   },
+   "to": {
+    "node": "to2",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "to2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "again",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "say",
+    "pin": "r3"
+   },
+   "to": {
+    "node": "to3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "to3",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "row",
+    "pin": "next3"
+   },
+   "to": {
+    "node": "to3",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "to3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "again",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "say",
+    "pin": "r4"
+   },
+   "to": {
+    "node": "to4",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "to4",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "row",
+    "pin": "next4"
+   },
+   "to": {
+    "node": "to4",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "to4",
+    "pin": "then"
+   },
+   "to": {
+    "node": "again",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "say",
+    "pin": "r5"
+   },
+   "to": {
+    "node": "to5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "to5",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "row",
+    "pin": "next5"
+   },
+   "to": {
+    "node": "to5",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "to5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "again",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "say",
+    "pin": "r6"
+   },
+   "to": {
+    "node": "to6",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "to6",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "row",
+    "pin": "next6"
+   },
+   "to": {
+    "node": "to6",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "to6",
+    "pin": "then"
+   },
+   "to": {
+    "node": "again",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "again",
+    "pin": "false"
+   },
+   "to": {
+    "node": "has",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "again",
+    "pin": "true"
+   },
+   "to": {
+    "node": "done",
+    "pin": "end"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "say",
+    "pin": "timeout"
+   },
+   "to": {
+    "node": "done",
+    "pin": "end"
+   }
+  },
+  {
+   "id": "w68",
+   "from": {
+    "node": "say",
+    "pin": "away"
+   },
+   "to": {
+    "node": "done",
+    "pin": "end"
+   }
+  },
+  {
+   "id": "w69",
+   "from": {
+    "node": "lost",
+    "pin": "then"
+   },
+   "to": {
+    "node": "done",
+    "pin": "end"
+   }
+  },
+  {
+   "id": "w70",
+   "from": {
+    "node": "long",
+    "pin": "then"
+   },
+   "to": {
+    "node": "done",
+    "pin": "end"
+   }
+  },
+  {
+   "id": "w71",
+   "from": {
+    "node": "in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "g_last",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w72",
+   "from": {
+    "node": "g_last",
+    "pin": "out"
+   },
+   "to": {
+    "node": "done",
+    "pin": "last"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "c1",
+   "graph": "rundlg",
+   "pos": {
+    "x": -40,
+    "y": -380
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Run Dialog: Start row is a row's id in Dialog (start). Each reply goes to its Next row; end (or empty) stops. A missing id or 64 lines stop it too (the server log says which). Ended runs once, with the row it stopped at."
+  }
+ ],
+ "dataTables": [
+  {
+   "id": "dialog",
+   "name": "Dialog",
+   "key": "id",
+   "columns": [
+    {
+     "id": "id",
+     "name": "Id",
+     "type": "text"
+    },
+    {
+     "id": "speaker",
+     "name": "Speaker",
+     "type": "text"
+    },
+    {
+     "id": "text",
+     "name": "Line",
+     "type": "text"
+    },
+    {
+     "id": "reply1",
+     "name": "Reply 1",
+     "type": "text"
+    },
+    {
+     "id": "reply2",
+     "name": "Reply 2",
+     "type": "text"
+    },
+    {
+     "id": "reply3",
+     "name": "Reply 3",
+     "type": "text"
+    },
+    {
+     "id": "reply4",
+     "name": "Reply 4",
+     "type": "text"
+    },
+    {
+     "id": "reply5",
+     "name": "Reply 5",
+     "type": "text"
+    },
+    {
+     "id": "reply6",
+     "name": "Reply 6",
+     "type": "text"
+    },
+    {
+     "id": "next1",
+     "name": "Next 1",
+     "type": "text"
+    },
+    {
+     "id": "next2",
+     "name": "Next 2",
+     "type": "text"
+    },
+    {
+     "id": "next3",
+     "name": "Next 3",
+     "type": "text"
+    },
+    {
+     "id": "next4",
+     "name": "Next 4",
+     "type": "text"
+    },
+    {
+     "id": "next5",
+     "name": "Next 5",
+     "type": "text"
+    },
+    {
+     "id": "next6",
+     "name": "Next 6",
+     "type": "text"
+    }
+   ],
+   "rows": [
+    [
+     "start",
+     "Mara",
+     "Took you long enough. The gate's jammed again.",
+     "I'll fix it.",
+     "What happened?",
+     "Not my problem.",
+     "",
+     "",
+     "",
+     "fix",
+     "story",
+     "end",
+     "",
+     "",
+     ""
+    ],
+    [
+     "story",
+     "Mara",
+     "Raiders hit us at dawn and took the fuse.",
+     "Where did they go?",
+     "I'll get it back.",
+     "",
+     "",
+     "",
+     "",
+     "where",
+     "fix",
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "where",
+     "Mara",
+     "East, past the old silo. Watch for traps.",
+     "Got it.",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "fix",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "fix",
+     "Mara",
+     "Bring the fuse to the box by the tower.",
+     "On my way.",
+     "Anything else?",
+     "",
+     "",
+     "",
+     "",
+     "end",
+     "bye",
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "bye",
+     "Mara",
+     "Stay sharp out there. Come back alive.",
+     "Will do.",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "end",
+     "",
+     "",
+     "",
+     "",
+     ""
+    ]
+   ]
+  }
+ ]
+}
