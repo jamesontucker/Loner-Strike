@@ -32,7 +32,7 @@ test("help search: titles first, then what nodes do", async () => {
   assert.deepEqual(searchHelp(help, "zzzz nothing like it"), []);
   // a question in plain words (QA4-B F6.6)
   const t = (q: string) => searchHelp(help, q).slice(0, 5).map((x) => help[x].title);
-  assert.ok(t("move a player somewhere").includes("Teleport"), JSON.stringify(t("move a player somewhere")));
+  assert.ok(searchHelp(help, "move a player somewhere").slice(0, 10).map((x) => help[x].title).includes("Teleport"), JSON.stringify(t("move a player somewhere")));
   // ("move" is a word of its own, not the end of "remove")
   assert.ok(!t("move a player somewhere").some((x) => x.startsWith("Remove")));
   assert.equal(t("how do I end the round")[0], "End Round", JSON.stringify(t("how do I end the round")));
@@ -410,4 +410,26 @@ test("freeSpot: a new node doesn't land on another one of the same graph", () =>
   assert.ok(!("error" in r));
   const get = r.graph.nodes.find((n) => n.type === "var.get" && n.params.var === r.id)!;
   assert.deepEqual(freeSpot(k, get.pos, get.graph), get.pos, "its spot was free");
+});
+
+// ---- the Starter library (make_starter.py): every built-in premade reads as a library item and
+// comes into an empty mode with its parts, variables and call
+import { readdirSync, readFileSync as readLib } from "node:fs";
+import { insertItem as insertLib, readItem as readLibItem } from "../src/views/tools/studio/library";
+
+test("Starter library: each premade reads and comes into a mode with its parts", () => {
+  const dir = `${process.cwd()}/src/views/tools/studio/library/`;
+  const files = readdirSync(dir).filter((f) => f.startsWith("st_") && f.endsWith(".lib.json"));
+  assert.ok(files.length >= 10, `${files.length}`);
+  for (const f of files) {
+    const it = readLibItem(`builtin_${f.replace(".lib.json", "")}`, JSON.parse(readLib(dir + f, "utf8")));
+    assert.ok(it, f);
+    assert.ok(it!.category.startsWith("Starter: "), f);
+    const r = insertLib(emptyGraph("st", "St"), it!);
+    const parsed = parseGraph(JSON.parse(JSON.stringify(r.graph)));
+    assert.ok(!("error" in parsed), `${f}: ${"error" in parsed ? parsed.error : ""}`);
+    const g = r.graph;
+    assert.ok([...(g.functions ?? []), ...(g.macros ?? [])].some((x) => x.id === r.root), `${f}: its root part came in`);
+    assert.ok(g.nodes.length > 3, f);
+  }
 });

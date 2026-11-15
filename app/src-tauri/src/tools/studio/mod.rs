@@ -30,6 +30,10 @@ pub mod settings;
 pub mod modes_reload;
 // the bones and attachments of a model, for the Studio's picker (Y)
 pub mod modelpoints;
+// the library items that ship with the app (make_starter.py writes the list; X2)
+mod builtin_library;
+#[cfg(test)]
+mod starter_tests; // X2: the Starter library
 #[cfg(test)]
 mod help_tests;
 #[cfg(test)]
@@ -1145,6 +1149,13 @@ async fn api_library() -> Response {
                     .collect()
             })
             .unwrap_or_default();
+        // the app's own items (built in: read-only), after the player's, ids builtin_<name>
+        let mut list = list;
+        for (name, text) in builtin_library::BUILTIN {
+            if let Ok(v) = serde_json::from_str::<Value>(text) {
+                list.push(json!({"id": format!("builtin_{name}"), "builtIn": true, "item": v}));
+            }
+        }
         Ok(json!({"items": list}))
     })
     .await

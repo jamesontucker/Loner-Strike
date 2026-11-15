@@ -1,0 +1,1447 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Weapon Pickup",
+ "description": "A weapon lying on a trigger volume: gives it (Weapon, e.g. awp) and comes back after Respawn seconds (0: 20).",
+ "category": "Starter: pickups",
+ "kind": "macro",
+ "root": "weap_take",
+ "enums": [],
+ "structs": [],
+ "functions": [],
+ "macros": [
+  {
+   "id": "weap_at",
+   "name": "Spawn Weapon Pickup Here",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "pos",
+     "name": "Position",
+     "type": "vector"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "pick",
+     "name": "Pickup",
+     "type": "entity"
+    }
+   ]
+  },
+  {
+   "id": "weap_spawn",
+   "name": "Spawn Weapon Pickup",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "at",
+     "name": "At",
+     "type": "entity"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "pick",
+     "name": "Pickup",
+     "type": "entity"
+    }
+   ]
+  },
+  {
+   "id": "weap_take",
+   "name": "Take Weapon Pickup",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "vol",
+     "name": "Volume",
+     "type": "entity"
+    },
+    {
+     "id": "who",
+     "name": "Who",
+     "type": "entity"
+    },
+    {
+     "id": "weapon",
+     "name": "Weapon",
+     "type": "text"
+    },
+    {
+     "id": "respawn",
+     "name": "Respawn after",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "taken",
+     "name": "Taken",
+     "type": "exec"
+    },
+    {
+     "id": "no",
+     "name": "Not taken",
+     "type": "exec"
+    }
+   ]
+  }
+ ],
+ "variables": [
+  {
+   "id": "weap_vols",
+   "name": "Weapon Pickup volumes",
+   "type": "array<entity>",
+   "scope": "mode"
+  },
+  {
+   "id": "weap_pos",
+   "name": "Weapon Pickup spots",
+   "type": "array<vector>",
+   "scope": "mode"
+  },
+  {
+   "id": "weap_mk",
+   "name": "Weapon Pickup markers",
+   "type": "array<entity>",
+   "scope": "mode"
+  },
+  {
+   "id": "weap_spot",
+   "name": "Weapon Pickup respawn spot",
+   "type": "vector",
+   "scope": "mode"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "weap_at_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_vol",
+   "type": "vol.spawn",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "shape": "sphere",
+    "radius": 48,
+    "name": "weap"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_pickpos",
+   "type": "flow.reroute",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {},
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_mark",
+   "type": "fx.marker",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "sprite": "sprites/arrow1.spr",
+    "height": 24,
+    "scale": 0.4,
+    "r": 255,
+    "g": 200,
+    "b": 0,
+    "pulse": true
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_add0",
+   "type": "array.add",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_g0",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 720
+   },
+   "params": {
+    "var": "weap_vols"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_add1",
+   "type": "array.add",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "of": "vector"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_g1",
+   "type": "var.get",
+   "pos": {
+    "x": 2080,
+    "y": 900
+   },
+   "params": {
+    "var": "weap_pos"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_add2",
+   "type": "array.add",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_g2",
+   "type": "var.get",
+   "pos": {
+    "x": 2600,
+    "y": 1080
+   },
+   "params": {
+    "var": "weap_mk"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_bots",
+   "type": "bots.goal",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "kind": "loot",
+    "prio": 40,
+    "secs": 3600,
+    "radius": 48
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_spawn_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_spawn"
+  },
+  {
+   "id": "weap_spawn_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_spawn"
+  },
+  {
+   "id": "weap_spawn_epos",
+   "type": "vec.entity",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {},
+   "graph": "weap_spawn"
+  },
+  {
+   "id": "weap_spawn_spawn",
+   "type": "macro.use",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "macro": "weap_at"
+   },
+   "graph": "weap_spawn"
+  },
+  {
+   "id": "weap_take_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_gv",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "var": "weap_vols"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_idx",
+   "type": "array.find",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_known",
+   "type": "math.compare",
+   "pos": {
+    "x": 1040,
+    "y": 360
+   },
+   "params": {
+    "op": "ge",
+    "b": 0
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_br0",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_asp",
+   "type": "cast.player",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_give",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "ammo": 90
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_snd",
+   "type": "fx.sound_to",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {
+    "sound": "items/gunpickup2.wav"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_g_posf",
+   "type": "var.get",
+   "pos": {
+    "x": 2340,
+    "y": 900
+   },
+   "params": {
+    "var": "weap_pos"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_posf",
+   "type": "array.get",
+   "pos": {
+    "x": 2600,
+    "y": 900
+   },
+   "params": {
+    "of": "vector"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_g_mkf",
+   "type": "var.get",
+   "pos": {
+    "x": 2860,
+    "y": 1080
+   },
+   "params": {
+    "var": "weap_mk"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_mkf",
+   "type": "array.get",
+   "pos": {
+    "x": 3120,
+    "y": 1080
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_botsoff",
+   "type": "bots.goal_clear",
+   "pos": {
+    "x": 3380,
+    "y": 0
+   },
+   "params": {
+    "kind": "loot"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rmmk",
+   "type": "fx.marker_remove",
+   "pos": {
+    "x": 3640,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rmvol",
+   "type": "vol.remove",
+   "pos": {
+    "x": 3900,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_keep",
+   "type": "var.set",
+   "pos": {
+    "x": 4160,
+    "y": 0
+   },
+   "params": {
+    "var": "weap_spot"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rm0",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 4420,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_gr0",
+   "type": "var.get",
+   "pos": {
+    "x": 4680,
+    "y": 1440
+   },
+   "params": {
+    "var": "weap_vols"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rm1",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 4940,
+    "y": 0
+   },
+   "params": {
+    "of": "vector"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_gr1",
+   "type": "var.get",
+   "pos": {
+    "x": 5200,
+    "y": 1620
+   },
+   "params": {
+    "var": "weap_pos"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rm2",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 5460,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_gr2",
+   "type": "var.get",
+   "pos": {
+    "x": 5720,
+    "y": 1800
+   },
+   "params": {
+    "var": "weap_mk"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_seq",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 5980,
+    "y": 0
+   },
+   "params": {
+    "count": 2
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 6240,
+    "y": 1980
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 6500,
+    "y": 2160
+   },
+   "params": {
+    "value": 20
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rs",
+   "type": "logic.select",
+   "pos": {
+    "x": 6760,
+    "y": 1980
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_spot",
+   "type": "var.get",
+   "pos": {
+    "x": 7020,
+    "y": 2160
+   },
+   "params": {
+    "var": "weap_spot"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 7280,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_again",
+   "type": "macro.use",
+   "pos": {
+    "x": 7540,
+    "y": 0
+   },
+   "params": {
+    "macro": "weap_at"
+   },
+   "graph": "weap_take"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "weap_at_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "weap_at_vol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "weap_at_in",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "weap_at_pickpos",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "weap_at_pickpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_vol",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "weap_at_vol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_at_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "weap_at_pickpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_mark",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "weap_at_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_at_add0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "weap_at_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "weap_at_add0",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "weap_at_g0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_add0",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "weap_at_add0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_at_add1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "weap_at_pickpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_add1",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "weap_at_g1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_add1",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "weap_at_add1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_at_add2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "weap_at_mark",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_add2",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "weap_at_g2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_add2",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "weap_at_add2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_at_bots",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "weap_at_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "weap_at_bots",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "weap_at_bots",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_at_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "weap_at_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "weap_at_out",
+    "pin": "pick"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "weap_spawn_in",
+    "pin": "at"
+   },
+   "to": {
+    "node": "weap_spawn_epos",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "weap_spawn_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "weap_spawn_spawn",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "weap_spawn_epos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_spawn_spawn",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "weap_spawn_spawn",
+    "pin": "next"
+   },
+   "to": {
+    "node": "weap_spawn_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "weap_spawn_spawn",
+    "pin": "pick"
+   },
+   "to": {
+    "node": "weap_spawn_out",
+    "pin": "pick"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "weap_take_gv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_idx",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "weap_take_idx",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "weap_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_known",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "weap_take_br0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "weap_take_known",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_br0",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "weap_take_br0",
+    "pin": "false"
+   },
+   "to": {
+    "node": "weap_take_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "weap_take_br0",
+    "pin": "true"
+   },
+   "to": {
+    "node": "weap_take_asp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "weap_take_asp",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "weap_take_asp",
+    "pin": "fail"
+   },
+   "to": {
+    "node": "weap_take_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "weap_take_asp",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "weap_take_give",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "weap_take_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_give",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "weapon"
+   },
+   "to": {
+    "node": "weap_take_give",
+    "pin": "weapon"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "weap_take_give",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "weap_take_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "weap_take_g_posf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_posf",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "weap_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_posf",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "weap_take_g_mkf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_mkf",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "weap_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_mkf",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "weap_take_snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_botsoff",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "weap_take_botsoff",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_rmmk",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "weap_take_mkf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rmmk",
+    "pin": "marker"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "weap_take_rmmk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_rmvol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "weap_take_rmvol",
+    "pin": "volume"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "weap_take_rmvol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_keep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "weap_take_posf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_keep",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "weap_take_keep",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_rm0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "weap_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rm0",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "weap_take_gr0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rm0",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "weap_take_rm0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_rm1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "weap_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rm1",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "weap_take_gr1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rm1",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "weap_take_rm1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_rm2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "weap_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rm2",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "weap_take_gr2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rm2",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "weap_take_rm2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_seq",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "weap_take_seq",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "weap_take_out",
+    "pin": "taken"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "respawn"
+   },
+   "to": {
+    "node": "weap_take_rs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "weap_take_rs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "respawn"
+   },
+   "to": {
+    "node": "weap_take_rs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "weap_take_rs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "weap_take_seq",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "weap_take_wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "weap_take_rs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_wait",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "weap_take_wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_again",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "weap_take_spot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_again",
+    "pin": "pos"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "weap_take",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Weapon Pickup: Spawn Weapon Pickup at an entity (Spawn Weapon Pickup Here takes a position); wire Begin Overlap (name weap) into Take Weapon Pickup with the Weapon name (ak47, awp, m4a1...). Bots: each spawner is a loot goal, so bots go and grab it."
+  },
+  {
+   "id": "c1",
+   "graph": "weap_take",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Take Weapon Pickup: Volume and Who are Begin Overlap's (name weap). Respawn after 0 is 20 seconds. How many pickups a map has is up to you."
+  }
+ ]
+}

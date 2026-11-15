@@ -442,6 +442,17 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       const at = palette;
       setPalette(null);
       if (!at) return;
+      // a library item: into the mode with what it needs, its call placed here
+      if (item.lib) {
+        let message = "";
+        edit((g) => {
+          const r = addFromLibrary(g, item.lib!, at.flow, home);
+          message = r.message;
+          return r.graph;
+        });
+        if (message) toast(message);
+        return;
+      }
       let placed = "";
       edit((g) => {
         const { graph: g2, id } = addNode(g, item.def.type, at.wire?.dir === "in" ? { x: at.flow.x - 220, y: at.flow.y - 20 } : { x: at.flow.x, y: at.flow.y - 20 }, home, item.params);
@@ -460,7 +471,7 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
       // (picked, so Details shows its help and settings: UX review M5)
       if (placed) select([placed]);
     },
-    [palette, edit, home, select],
+    [palette, edit, home, select, toast],
   );
 
   const collapseSelected = useCallback(

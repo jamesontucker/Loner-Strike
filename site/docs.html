@@ -1068,6 +1068,18 @@ footer a { color: var(--dim); }
   <p><b>Snippets</b> has 14 ready-made pieces, like a wave system, shop menu, revive and shrinking zone. Click or drag one in; its variables join yours. <b>Save the selection as a snippet</b> makes your own.</p>
   <h2 id="studio-library">My library</h2>
   <p><b>Save to my library…</b> on a function, macro, struct or enum makes it usable in any mode; drag it in from <b>My library</b>. Modes using an older version offer <b>Update from library</b> in Details. Items and the whole library export and import as files. Library items can't go to Community yet.</p>
+  <h3 id="studio-starter-library">Starter library</h3>
+  <p>The Studio comes with ready-made functions and macros, listed in <b>My library</b> as built in and in the node search under <b>Starter library</b>. Adding one copies it into your mode, so change it however you like. Each one has a note over its graph saying what to wire into it, its settings (0 or empty uses the default it names) and what bots do with it. They use only the game's own sprites and sounds.</p>
+  <ul>
+    <li><b>Movement:</b> Jump Pad (a trigger volume that launches players), Teleporter Pair (with a cooldown so nobody bounces straight back).</li>
+    <li><b>Abilities:</b> Ability with Cooldown (a template for any ability, with Bot Wants Ability so bots use it in fights), Fireball (explodes where it hits), Proximity Mine (its owner can't set it off).</li>
+    <li><b>Pickups:</b> Health Pack and Weapon Pickup on trigger volumes, coming back after a delay. Bots go and grab them.</li>
+    <li><b>Player state:</b> Spawn Protection (god mode and a glow, ended early by shooting), Lives Counter, and Burn, Slow and Freeze with timers.</li>
+    <li><b>Rounds and scoring:</b> Kill Streak Announcer, Countdown HUD (minutes:seconds), Capture Zone (bots are sent to take it).</li>
+    <li><b>Spectacle:</b> Kill Cam (the victim sees the killer), Victory Camera, Hot Potato (bots chase the holder, and a bot holder runs).</li>
+    <li><b>Story:</b> Quest Step Tracker, which pairs with <a href="#npc-dialog-table">Run Dialog</a>.</li>
+  </ul>
+  <p>Events stay in your mode: wire Begin Overlap (with the volume's name), Player Killed, Player Hurt or Round Started into the premade, as its note says.</p>
   <h2 id="studio-markers">Map markers</h2>
   <p>Under <b>Map markers</b>, list the spots, areas or paths a map needs for your mode, how many, and their keys; the marker nodes read them. Installing the mode makes a <b>mode kit</b> from them for the map editor's <b>Gameplay › Mode kits</b> and checks (<a href="#editor-library">more</a>). <b>Map advice</b> tells mappers the size and player count that suit it.</p>
   <h2 id="studio-bots" data-keywords="bot ai creatures zombies goals friends">Bots and creatures</h2>

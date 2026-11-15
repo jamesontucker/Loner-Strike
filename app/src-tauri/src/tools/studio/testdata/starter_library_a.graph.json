@@ -1,0 +1,11491 @@
+{
+ "schema": "loner-strike/graph",
+ "version": 3,
+ "mode": {
+  "id": "starter_test_a",
+  "name": "Starter library test A",
+  "description": "Starter library premades at once"
+ },
+ "variables": [
+  {
+   "id": "dj_used",
+   "name": "Double jumped",
+   "type": "bool",
+   "scope": "player",
+   "default": false
+  },
+  {
+   "id": "dash_at",
+   "name": "Dash ready at",
+   "type": "number",
+   "scope": "player",
+   "default": 0
+  },
+  {
+   "id": "tp_last",
+   "name": "Last teleport",
+   "type": "number",
+   "scope": "player",
+   "default": 0
+  },
+  {
+   "id": "ab_ready",
+   "name": "Ability ready at",
+   "type": "number",
+   "scope": "player",
+   "default": 0
+  },
+  {
+   "id": "ab_seen",
+   "name": "Enemy near",
+   "type": "bool",
+   "scope": "mode",
+   "default": false
+  },
+  {
+   "id": "mine_vols",
+   "name": "Mines",
+   "type": "array<entity>",
+   "scope": "mode"
+  },
+  {
+   "id": "mine_marks",
+   "name": "Mine markers",
+   "type": "array<entity>",
+   "scope": "mode"
+  },
+  {
+   "id": "mine_owner",
+   "name": "Mine owners",
+   "type": "array<player>",
+   "scope": "mode"
+  },
+  {
+   "id": "mine_dmg",
+   "name": "Mine damage",
+   "type": "array<number>",
+   "scope": "mode"
+  },
+  {
+   "id": "heal_vols",
+   "name": "Health Pack volumes",
+   "type": "array<entity>",
+   "scope": "mode"
+  },
+  {
+   "id": "heal_pos",
+   "name": "Health Pack spots",
+   "type": "array<vector>",
+   "scope": "mode"
+  },
+  {
+   "id": "heal_mk",
+   "name": "Health Pack markers",
+   "type": "array<entity>",
+   "scope": "mode"
+  },
+  {
+   "id": "heal_spot",
+   "name": "Health Pack respawn spot",
+   "type": "vector",
+   "scope": "mode"
+  },
+  {
+   "id": "weap_vols",
+   "name": "Weapon Pickup volumes",
+   "type": "array<entity>",
+   "scope": "mode"
+  },
+  {
+   "id": "weap_pos",
+   "name": "Weapon Pickup spots",
+   "type": "array<vector>",
+   "scope": "mode"
+  },
+  {
+   "id": "weap_mk",
+   "name": "Weapon Pickup markers",
+   "type": "array<entity>",
+   "scope": "mode"
+  },
+  {
+   "id": "weap_spot",
+   "name": "Weapon Pickup respawn spot",
+   "type": "vector",
+   "scope": "mode"
+  },
+  {
+   "id": "cd_left",
+   "name": "Countdown left",
+   "type": "number",
+   "scope": "mode",
+   "default": 0
+  },
+  {
+   "id": "cd_label",
+   "name": "Countdown label",
+   "type": "text",
+   "scope": "mode",
+   "default": ""
+  },
+  {
+   "id": "hp_holder",
+   "name": "Potato holder",
+   "type": "player",
+   "scope": "mode"
+  },
+  {
+   "id": "hp_left",
+   "name": "Potato left",
+   "type": "number",
+   "scope": "mode",
+   "default": 0
+  }
+ ],
+ "functions": [
+  {
+   "id": "jp_make",
+   "name": "Make Jump Pad",
+   "inputs": [
+    {
+     "id": "at",
+     "name": "At",
+     "type": "entity"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "jp_launch",
+   "name": "Launch From Jump Pad",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Who",
+     "type": "entity"
+    },
+    {
+     "id": "speed",
+     "name": "Speed",
+     "type": "number"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "tp_go",
+   "name": "Teleport Through",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Who",
+     "type": "entity"
+    },
+    {
+     "id": "to",
+     "name": "To",
+     "type": "entity"
+    },
+    {
+     "id": "cd",
+     "name": "Cooldown",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "went",
+     "name": "Went",
+     "type": "bool"
+    }
+   ]
+  },
+  {
+   "id": "ab_bot",
+   "name": "Bot Wants Ability",
+   "inputs": [
+    {
+     "id": "bot",
+     "name": "Bot",
+     "type": "player"
+    },
+    {
+     "id": "chance",
+     "name": "Chance a second",
+     "type": "number"
+    },
+    {
+     "id": "range",
+     "name": "Range",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "yes",
+     "name": "Use it",
+     "type": "bool"
+    }
+   ]
+  },
+  {
+   "id": "mine_place",
+   "name": "Place Mine",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "radius",
+     "name": "Radius",
+     "type": "number"
+    },
+    {
+     "id": "dmg",
+     "name": "Damage",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "mine",
+     "name": "Mine",
+     "type": "entity"
+    }
+   ]
+  },
+  {
+   "id": "mine_step",
+   "name": "Mine Stepped On",
+   "inputs": [
+    {
+     "id": "mine",
+     "name": "Volume",
+     "type": "entity"
+    },
+    {
+     "id": "who",
+     "name": "Who",
+     "type": "entity"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "hp_give",
+   "name": "Give Potato",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "hp_mark",
+   "name": "Mark Potato Holder",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    }
+   ],
+   "outputs": []
+  },
+  {
+   "id": "hp_pass",
+   "name": "Pass Potato",
+   "inputs": [
+    {
+     "id": "from",
+     "name": "Attacker",
+     "type": "player"
+    },
+    {
+     "id": "to",
+     "name": "Victim",
+     "type": "player"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "passed",
+     "name": "Passed",
+     "type": "bool"
+    }
+   ]
+  },
+  {
+   "id": "hp_tick",
+   "name": "Potato Tick",
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "boom",
+     "name": "Blew up",
+     "type": "bool"
+    }
+   ]
+  }
+ ],
+ "macros": [
+  {
+   "id": "dj_jump",
+   "name": "Double Jump",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "boost",
+     "name": "Boost",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Jumped",
+     "type": "exec"
+    },
+    {
+     "id": "no",
+     "name": "Not now",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "dash_go",
+   "name": "Dash",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "speed",
+     "name": "Speed",
+     "type": "number"
+    },
+    {
+     "id": "cd",
+     "name": "Cooldown",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Dashed",
+     "type": "exec"
+    },
+    {
+     "id": "wait",
+     "name": "Not ready",
+     "type": "exec"
+    },
+    {
+     "id": "left",
+     "name": "Seconds left",
+     "type": "number"
+    }
+   ]
+  },
+  {
+   "id": "ab_use",
+   "name": "Ability with Cooldown",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "cd",
+     "name": "Cooldown",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "use",
+     "name": "Use",
+     "type": "exec"
+    },
+    {
+     "id": "wait",
+     "name": "Not ready",
+     "type": "exec"
+    },
+    {
+     "id": "left",
+     "name": "Seconds left",
+     "type": "number"
+    }
+   ]
+  },
+  {
+   "id": "fb_throw",
+   "name": "Fireball",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "dmg",
+     "name": "Damage",
+     "type": "number"
+    },
+    {
+     "id": "speed",
+     "name": "Speed",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Thrown",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "heal_at",
+   "name": "Spawn Health Pack Here",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "pos",
+     "name": "Position",
+     "type": "vector"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "pick",
+     "name": "Pickup",
+     "type": "entity"
+    }
+   ]
+  },
+  {
+   "id": "heal_spawn",
+   "name": "Spawn Health Pack",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "at",
+     "name": "At",
+     "type": "entity"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "pick",
+     "name": "Pickup",
+     "type": "entity"
+    }
+   ]
+  },
+  {
+   "id": "heal_take",
+   "name": "Take Health Pack",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "vol",
+     "name": "Volume",
+     "type": "entity"
+    },
+    {
+     "id": "who",
+     "name": "Who",
+     "type": "entity"
+    },
+    {
+     "id": "heal",
+     "name": "Heal",
+     "type": "number"
+    },
+    {
+     "id": "respawn",
+     "name": "Respawn after",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "taken",
+     "name": "Taken",
+     "type": "exec"
+    },
+    {
+     "id": "no",
+     "name": "Not taken",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "weap_at",
+   "name": "Spawn Weapon Pickup Here",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "pos",
+     "name": "Position",
+     "type": "vector"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "pick",
+     "name": "Pickup",
+     "type": "entity"
+    }
+   ]
+  },
+  {
+   "id": "weap_spawn",
+   "name": "Spawn Weapon Pickup",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "at",
+     "name": "At",
+     "type": "entity"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    },
+    {
+     "id": "pick",
+     "name": "Pickup",
+     "type": "entity"
+    }
+   ]
+  },
+  {
+   "id": "weap_take",
+   "name": "Take Weapon Pickup",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "vol",
+     "name": "Volume",
+     "type": "entity"
+    },
+    {
+     "id": "who",
+     "name": "Who",
+     "type": "entity"
+    },
+    {
+     "id": "weapon",
+     "name": "Weapon",
+     "type": "text"
+    },
+    {
+     "id": "respawn",
+     "name": "Respawn after",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "taken",
+     "name": "Taken",
+     "type": "exec"
+    },
+    {
+     "id": "no",
+     "name": "Not taken",
+     "type": "exec"
+    }
+   ]
+  },
+  {
+   "id": "cd_run",
+   "name": "Countdown HUD",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    },
+    {
+     "id": "label",
+     "name": "Label",
+     "type": "text"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "started",
+     "name": "Started",
+     "type": "exec"
+    },
+    {
+     "id": "done",
+     "name": "Done",
+     "type": "exec"
+    }
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "id": "jp_make_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "jp_make"
+  },
+  {
+   "id": "jp_make_vol",
+   "type": "vol.spawn",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "shape": "sphere",
+    "radius": 96,
+    "name": "jumppad"
+   },
+   "graph": "jp_make"
+  },
+  {
+   "id": "jp_make_pos",
+   "type": "vec.entity",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {},
+   "graph": "jp_make"
+  },
+  {
+   "id": "jp_make_mark",
+   "type": "fx.marker",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "sprite": "sprites/arrow1.spr",
+    "height": 8,
+    "scale": 0.4,
+    "r": 80,
+    "g": 200,
+    "b": 255,
+    "pulse": true
+   },
+   "graph": "jp_make"
+  },
+  {
+   "id": "jp_make_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "jp_make"
+  },
+  {
+   "id": "jp_launch_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "jp_launch"
+  },
+  {
+   "id": "jp_launch_asp",
+   "type": "cast.player",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {},
+   "graph": "jp_launch"
+  },
+  {
+   "id": "jp_launch_speed_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 780,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "jp_launch"
+  },
+  {
+   "id": "jp_launch_speed_d",
+   "type": "math.number",
+   "pos": {
+    "x": 1040,
+    "y": 720
+   },
+   "params": {
+    "value": 800
+   },
+   "graph": "jp_launch"
+  },
+  {
+   "id": "jp_launch_speed",
+   "type": "logic.select",
+   "pos": {
+    "x": 1300,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "jp_launch"
+  },
+  {
+   "id": "jp_launch_up",
+   "type": "player.launch",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {},
+   "graph": "jp_launch"
+  },
+  {
+   "id": "jp_launch_snd",
+   "type": "fx.sound_to",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "sound": "items/gunpickup2.wav"
+   },
+   "graph": "jp_launch"
+  },
+  {
+   "id": "jp_launch_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "jp_launch"
+  },
+  {
+   "id": "dj_jump_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_tr",
+   "type": "player.transform",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_ground",
+   "type": "flow.branch",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_reset",
+   "type": "var.set",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "var": "dj_used",
+    "value": false
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_used",
+   "type": "var.get",
+   "pos": {
+    "x": 1300,
+    "y": 540
+   },
+   "params": {
+    "var": "dj_used"
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_once",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_boost_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 1820,
+    "y": 720
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_boost_d",
+   "type": "math.number",
+   "pos": {
+    "x": 2080,
+    "y": 900
+   },
+   "params": {
+    "value": 320
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_boost",
+   "type": "logic.select",
+   "pos": {
+    "x": 2340,
+    "y": 720
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_vb",
+   "type": "vec.break",
+   "pos": {
+    "x": 2600,
+    "y": 540
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_nv",
+   "type": "vec.make",
+   "pos": {
+    "x": 2860,
+    "y": 540
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_boostv",
+   "type": "player.set_velocity",
+   "pos": {
+    "x": 3120,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_mark",
+   "type": "var.set",
+   "pos": {
+    "x": 3380,
+    "y": 0
+   },
+   "params": {
+    "var": "dj_used",
+    "value": true
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dj_jump_snd",
+   "type": "fx.sound_to",
+   "pos": {
+    "x": 3640,
+    "y": 0
+   },
+   "params": {
+    "sound": "player/pl_jump2.wav"
+   },
+   "graph": "dj_jump"
+  },
+  {
+   "id": "dash_go_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_cd_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_cd_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 3
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_cd",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_speed_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 1300,
+    "y": 900
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_speed_d",
+   "type": "math.number",
+   "pos": {
+    "x": 1560,
+    "y": 1080
+   },
+   "params": {
+    "value": 700
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_speed",
+   "type": "logic.select",
+   "pos": {
+    "x": 1820,
+    "y": 900
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_now",
+   "type": "game.time",
+   "pos": {
+    "x": 2080,
+    "y": 360
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_at",
+   "type": "var.get",
+   "pos": {
+    "x": 2340,
+    "y": 360
+   },
+   "params": {
+    "var": "dash_at"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_left",
+   "type": "math.op",
+   "pos": {
+    "x": 2600,
+    "y": 360
+   },
+   "params": {
+    "op": "sub"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_ok",
+   "type": "math.compare",
+   "pos": {
+    "x": 2860,
+    "y": 360
+   },
+   "params": {
+    "op": "le",
+    "b": 0
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 3120,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_ceil",
+   "type": "math.fn",
+   "pos": {
+    "x": 3380,
+    "y": 540
+   },
+   "params": {
+    "op": "ceil"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_aim",
+   "type": "vec.player",
+   "pos": {
+    "x": 3640,
+    "y": 1260
+   },
+   "params": {
+    "what": "aim"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_ab",
+   "type": "vec.break",
+   "pos": {
+    "x": 3900,
+    "y": 1260
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_flat",
+   "type": "vec.make",
+   "pos": {
+    "x": 4160,
+    "y": 1260
+   },
+   "params": {
+    "z": 0
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_dir",
+   "type": "vec.normalize",
+   "pos": {
+    "x": 4420,
+    "y": 1260
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_fast",
+   "type": "vec.scale",
+   "pos": {
+    "x": 4680,
+    "y": 1440
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_lift",
+   "type": "vec.make",
+   "pos": {
+    "x": 0,
+    "y": 1440
+   },
+   "params": {
+    "y": 0,
+    "z": 120
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_v",
+   "type": "vec.op",
+   "pos": {
+    "x": 4940,
+    "y": 1440
+   },
+   "params": {
+    "op": "add"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_push",
+   "type": "player.set_velocity",
+   "pos": {
+    "x": 5200,
+    "y": 0
+   },
+   "params": {},
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_nxt",
+   "type": "math.op",
+   "pos": {
+    "x": 5460,
+    "y": 540
+   },
+   "params": {
+    "op": "add"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_st",
+   "type": "var.set",
+   "pos": {
+    "x": 5720,
+    "y": 0
+   },
+   "params": {
+    "var": "dash_at"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "dash_go_snd",
+   "type": "fx.sound_to",
+   "pos": {
+    "x": 5980,
+    "y": 0
+   },
+   "params": {
+    "sound": "weapons/knife_slash1.wav"
+   },
+   "graph": "dash_go"
+  },
+  {
+   "id": "tp_go_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_asp",
+   "type": "cast.player",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {},
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_cd_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 780,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_cd_d",
+   "type": "math.number",
+   "pos": {
+    "x": 1040,
+    "y": 720
+   },
+   "params": {
+    "value": 2
+   },
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_cd",
+   "type": "logic.select",
+   "pos": {
+    "x": 1300,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_now",
+   "type": "game.time",
+   "pos": {
+    "x": 1560,
+    "y": 360
+   },
+   "params": {},
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_last",
+   "type": "var.get",
+   "pos": {
+    "x": 1820,
+    "y": 360
+   },
+   "params": {
+    "var": "tp_last"
+   },
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_since",
+   "type": "math.op",
+   "pos": {
+    "x": 2080,
+    "y": 360
+   },
+   "params": {
+    "op": "sub"
+   },
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_ok",
+   "type": "math.compare",
+   "pos": {
+    "x": 2340,
+    "y": 360
+   },
+   "params": {
+    "op": "ge"
+   },
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {},
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_tp",
+   "type": "player.teleport",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {},
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_st",
+   "type": "var.set",
+   "pos": {
+    "x": 3120,
+    "y": 0
+   },
+   "params": {
+    "var": "tp_last"
+   },
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_snd",
+   "type": "fx.sound_to",
+   "pos": {
+    "x": 3380,
+    "y": 0
+   },
+   "params": {
+    "sound": "debris/beamstart2.wav"
+   },
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 3640,
+    "y": 0
+   },
+   "params": {},
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_went_t",
+   "type": "math.compare",
+   "pos": {
+    "x": 3900,
+    "y": 720
+   },
+   "params": {
+    "op": "eq",
+    "a": 1,
+    "b": 1
+   },
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_ret2",
+   "type": "fn.return",
+   "pos": {
+    "x": 4160,
+    "y": 180
+   },
+   "params": {},
+   "graph": "tp_go"
+  },
+  {
+   "id": "tp_go_went_f",
+   "type": "math.compare",
+   "pos": {
+    "x": 4420,
+    "y": 900
+   },
+   "params": {
+    "op": "eq",
+    "a": 0,
+    "b": 1
+   },
+   "graph": "tp_go"
+  },
+  {
+   "id": "ab_use_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_cd_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_cd_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 10
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_cd",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_now",
+   "type": "game.time",
+   "pos": {
+    "x": 1300,
+    "y": 360
+   },
+   "params": {},
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_at",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 360
+   },
+   "params": {
+    "var": "ab_ready"
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_left",
+   "type": "math.op",
+   "pos": {
+    "x": 1820,
+    "y": 360
+   },
+   "params": {
+    "op": "sub"
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_ready",
+   "type": "math.compare",
+   "pos": {
+    "x": 2080,
+    "y": 360
+   },
+   "params": {
+    "op": "le",
+    "b": 0
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_next",
+   "type": "math.op",
+   "pos": {
+    "x": 2600,
+    "y": 540
+   },
+   "params": {
+    "op": "add"
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_st",
+   "type": "var.set",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "var": "ab_ready"
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_use_ceil",
+   "type": "math.fn",
+   "pos": {
+    "x": 3120,
+    "y": 720
+   },
+   "params": {
+    "op": "ceil"
+   },
+   "graph": "ab_use"
+  },
+  {
+   "id": "ab_bot_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_chance_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_chance_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 25
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_chance",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_range_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 1300,
+    "y": 1080
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_range_d",
+   "type": "math.number",
+   "pos": {
+    "x": 1560,
+    "y": 1260
+   },
+   "params": {
+    "value": 1500
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_range",
+   "type": "logic.select",
+   "pos": {
+    "x": 1820,
+    "y": 1080
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_s0",
+   "type": "var.set",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {
+    "var": "ab_seen",
+    "value": false
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_each",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "which": "alive"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_myt",
+   "type": "player.get_team",
+   "pos": {
+    "x": 2600,
+    "y": 360
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_hist",
+   "type": "player.get_team",
+   "pos": {
+    "x": 2860,
+    "y": 360
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_other",
+   "type": "logic.equal",
+   "pos": {
+    "x": 3120,
+    "y": 360
+   },
+   "params": {
+    "of": "team",
+    "op": "ne"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_pa",
+   "type": "vec.player",
+   "pos": {
+    "x": 3380,
+    "y": 540
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_pb",
+   "type": "vec.player",
+   "pos": {
+    "x": 3640,
+    "y": 540
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_dist",
+   "type": "vec.distance",
+   "pos": {
+    "x": 3900,
+    "y": 540
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_near",
+   "type": "math.compare",
+   "pos": {
+    "x": 4160,
+    "y": 540
+   },
+   "params": {
+    "op": "lt"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_both",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 4420,
+    "y": 360
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_br2",
+   "type": "flow.branch",
+   "pos": {
+    "x": 4680,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_s1",
+   "type": "var.set",
+   "pos": {
+    "x": 4940,
+    "y": 0
+   },
+   "params": {
+    "var": "ab_seen",
+    "value": true
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_isbot",
+   "type": "player.is_bot",
+   "pos": {
+    "x": 5200,
+    "y": 720
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_roll",
+   "type": "math.random",
+   "pos": {
+    "x": 5460,
+    "y": 900
+   },
+   "params": {
+    "min": 0,
+    "max": 100
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_lucky",
+   "type": "math.compare",
+   "pos": {
+    "x": 5720,
+    "y": 900
+   },
+   "params": {
+    "op": "lt"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_seen",
+   "type": "var.get",
+   "pos": {
+    "x": 5980,
+    "y": 720
+   },
+   "params": {
+    "var": "ab_seen"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_a1",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 6240,
+    "y": 720
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_a2",
+   "type": "logic.and_or",
+   "pos": {
+    "x": 6500,
+    "y": 720
+   },
+   "params": {
+    "op": "and"
+   },
+   "graph": "ab_bot"
+  },
+  {
+   "id": "ab_bot_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 6760,
+    "y": 0
+   },
+   "params": {},
+   "graph": "ab_bot"
+  },
+  {
+   "id": "fb_throw_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_dmg_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_dmg_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 60
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_dmg",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_speed_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 1300,
+    "y": 900
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_speed_d",
+   "type": "math.number",
+   "pos": {
+    "x": 1560,
+    "y": 1080
+   },
+   "params": {
+    "value": 1100
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_speed",
+   "type": "logic.select",
+   "pos": {
+    "x": 1820,
+    "y": 900
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_eyes",
+   "type": "vec.player",
+   "pos": {
+    "x": 2080,
+    "y": 360
+   },
+   "params": {
+    "what": "eyes"
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_aim",
+   "type": "vec.player",
+   "pos": {
+    "x": 2340,
+    "y": 360
+   },
+   "params": {
+    "what": "aim"
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "fb_throw_proj",
+   "type": "proj.spawn",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "model": "sprites/fexplo.spr",
+    "scale": 0.6,
+    "life": 4,
+    "radius": 150,
+    "explode": true,
+    "trail": true,
+    "dangerous": true
+   },
+   "graph": "fb_throw"
+  },
+  {
+   "id": "mine_place_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_rad_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_rad_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 96
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_rad",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_dmg_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 1300,
+    "y": 900
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_dmg_d",
+   "type": "math.number",
+   "pos": {
+    "x": 1560,
+    "y": 1080
+   },
+   "params": {
+    "value": 120
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_dmg",
+   "type": "logic.select",
+   "pos": {
+    "x": 1820,
+    "y": 900
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_pos",
+   "type": "vec.player",
+   "pos": {
+    "x": 2080,
+    "y": 360
+   },
+   "params": {
+    "what": "origin"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_vol",
+   "type": "vol.spawn",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "shape": "sphere",
+    "radius": 96,
+    "name": "mine"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_mark",
+   "type": "fx.marker",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "sprite": "sprites/ledglow.spr",
+    "height": 4,
+    "scale": 0.3,
+    "r": 255,
+    "g": 40,
+    "b": 0,
+    "pulse": true
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_add0",
+   "type": "array.add",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_g0",
+   "type": "var.get",
+   "pos": {
+    "x": 3120,
+    "y": 540
+   },
+   "params": {
+    "var": "mine_vols"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_add1",
+   "type": "array.add",
+   "pos": {
+    "x": 3380,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_g1",
+   "type": "var.get",
+   "pos": {
+    "x": 3640,
+    "y": 720
+   },
+   "params": {
+    "var": "mine_marks"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_add2",
+   "type": "array.add",
+   "pos": {
+    "x": 3900,
+    "y": 0
+   },
+   "params": {
+    "of": "player"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_g2",
+   "type": "var.get",
+   "pos": {
+    "x": 4160,
+    "y": 900
+   },
+   "params": {
+    "var": "mine_owner"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_add3",
+   "type": "array.add",
+   "pos": {
+    "x": 4420,
+    "y": 0
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_g3",
+   "type": "var.get",
+   "pos": {
+    "x": 4680,
+    "y": 1080
+   },
+   "params": {
+    "var": "mine_dmg"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 4940,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_step_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_gv",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "var": "mine_vols"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_idx",
+   "type": "array.find",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_known",
+   "type": "math.compare",
+   "pos": {
+    "x": 1040,
+    "y": 360
+   },
+   "params": {
+    "op": "ge",
+    "b": 0
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_br0",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_g_own",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 540
+   },
+   "params": {
+    "var": "mine_owner"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_own",
+   "type": "array.get",
+   "pos": {
+    "x": 1820,
+    "y": 540
+   },
+   "params": {
+    "of": "player"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_asp",
+   "type": "cast.player",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_isown",
+   "type": "logic.equal",
+   "pos": {
+    "x": 2340,
+    "y": 720
+   },
+   "params": {
+    "of": "player",
+    "op": "eq"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_bpos",
+   "type": "vec.entity",
+   "pos": {
+    "x": 2860,
+    "y": 360
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_g_dmv",
+   "type": "var.get",
+   "pos": {
+    "x": 3120,
+    "y": 900
+   },
+   "params": {
+    "var": "mine_dmg"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_dmv",
+   "type": "array.get",
+   "pos": {
+    "x": 3380,
+    "y": 900
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_boom",
+   "type": "fx.explosion",
+   "pos": {
+    "x": 3640,
+    "y": 0
+   },
+   "params": {
+    "radius": 200
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_g_mkf",
+   "type": "var.get",
+   "pos": {
+    "x": 3900,
+    "y": 1080
+   },
+   "params": {
+    "var": "mine_marks"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_mkf",
+   "type": "array.get",
+   "pos": {
+    "x": 4160,
+    "y": 1080
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_rmmark",
+   "type": "fx.marker_remove",
+   "pos": {
+    "x": 4420,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_rmvol",
+   "type": "vol.remove",
+   "pos": {
+    "x": 4680,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_rm0",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 4940,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_gr0",
+   "type": "var.get",
+   "pos": {
+    "x": 5200,
+    "y": 1260
+   },
+   "params": {
+    "var": "mine_vols"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_rm1",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 5460,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_gr1",
+   "type": "var.get",
+   "pos": {
+    "x": 5720,
+    "y": 1440
+   },
+   "params": {
+    "var": "mine_marks"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_rm2",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 5980,
+    "y": 0
+   },
+   "params": {
+    "of": "player"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_gr2",
+   "type": "var.get",
+   "pos": {
+    "x": 6240,
+    "y": 1620
+   },
+   "params": {
+    "var": "mine_owner"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_rm3",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 6500,
+    "y": 0
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_gr3",
+   "type": "var.get",
+   "pos": {
+    "x": 6760,
+    "y": 1800
+   },
+   "params": {
+    "var": "mine_dmg"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 7020,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "heal_at_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_vol",
+   "type": "vol.spawn",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "shape": "sphere",
+    "radius": 48,
+    "name": "heal"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_pickpos",
+   "type": "flow.reroute",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {},
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_mark",
+   "type": "fx.marker",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "sprite": "sprites/glow01.spr",
+    "height": 16,
+    "scale": 0.5,
+    "r": 40,
+    "g": 255,
+    "b": 60,
+    "pulse": true
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_add0",
+   "type": "array.add",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_g0",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 720
+   },
+   "params": {
+    "var": "heal_vols"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_add1",
+   "type": "array.add",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "of": "vector"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_g1",
+   "type": "var.get",
+   "pos": {
+    "x": 2080,
+    "y": 900
+   },
+   "params": {
+    "var": "heal_pos"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_add2",
+   "type": "array.add",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_g2",
+   "type": "var.get",
+   "pos": {
+    "x": 2600,
+    "y": 1080
+   },
+   "params": {
+    "var": "heal_mk"
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_at_bots",
+   "type": "bots.goal",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "kind": "loot",
+    "prio": 40,
+    "secs": 3600,
+    "radius": 48
+   },
+   "graph": "heal_at"
+  },
+  {
+   "id": "heal_spawn_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_spawn"
+  },
+  {
+   "id": "heal_spawn_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_spawn"
+  },
+  {
+   "id": "heal_spawn_epos",
+   "type": "vec.entity",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {},
+   "graph": "heal_spawn"
+  },
+  {
+   "id": "heal_spawn_spawn",
+   "type": "macro.use",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "macro": "heal_at"
+   },
+   "graph": "heal_spawn"
+  },
+  {
+   "id": "heal_take_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_gv",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "var": "heal_vols"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_idx",
+   "type": "array.find",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_known",
+   "type": "math.compare",
+   "pos": {
+    "x": 1040,
+    "y": 360
+   },
+   "params": {
+    "op": "ge",
+    "b": 0
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_br0",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_asp",
+   "type": "cast.player",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_hp",
+   "type": "player.get_health",
+   "pos": {
+    "x": 1820,
+    "y": 360
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_full",
+   "type": "math.compare",
+   "pos": {
+    "x": 2080,
+    "y": 360
+   },
+   "params": {
+    "op": "lt",
+    "b": 100
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_heal_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 2600,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_heal_d",
+   "type": "math.number",
+   "pos": {
+    "x": 2860,
+    "y": 720
+   },
+   "params": {
+    "value": 50
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_heal",
+   "type": "logic.select",
+   "pos": {
+    "x": 3120,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_add",
+   "type": "math.op",
+   "pos": {
+    "x": 3380,
+    "y": 540
+   },
+   "params": {
+    "op": "add"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_cap",
+   "type": "math.op",
+   "pos": {
+    "x": 3640,
+    "y": 540
+   },
+   "params": {
+    "op": "min",
+    "b": 100
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_sethp",
+   "type": "player.set_health",
+   "pos": {
+    "x": 3900,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_snd",
+   "type": "fx.sound_to",
+   "pos": {
+    "x": 4160,
+    "y": 0
+   },
+   "params": {
+    "sound": "items/smallmedkit1.wav"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_g_posf",
+   "type": "var.get",
+   "pos": {
+    "x": 4420,
+    "y": 900
+   },
+   "params": {
+    "var": "heal_pos"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_posf",
+   "type": "array.get",
+   "pos": {
+    "x": 4680,
+    "y": 900
+   },
+   "params": {
+    "of": "vector"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_g_mkf",
+   "type": "var.get",
+   "pos": {
+    "x": 4940,
+    "y": 1080
+   },
+   "params": {
+    "var": "heal_mk"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_mkf",
+   "type": "array.get",
+   "pos": {
+    "x": 5200,
+    "y": 1080
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_botsoff",
+   "type": "bots.goal_clear",
+   "pos": {
+    "x": 5460,
+    "y": 0
+   },
+   "params": {
+    "kind": "loot"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rmmk",
+   "type": "fx.marker_remove",
+   "pos": {
+    "x": 5720,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rmvol",
+   "type": "vol.remove",
+   "pos": {
+    "x": 5980,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_keep",
+   "type": "var.set",
+   "pos": {
+    "x": 6240,
+    "y": 0
+   },
+   "params": {
+    "var": "heal_spot"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rm0",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 6500,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_gr0",
+   "type": "var.get",
+   "pos": {
+    "x": 6760,
+    "y": 1440
+   },
+   "params": {
+    "var": "heal_vols"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rm1",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 7020,
+    "y": 0
+   },
+   "params": {
+    "of": "vector"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_gr1",
+   "type": "var.get",
+   "pos": {
+    "x": 7280,
+    "y": 1620
+   },
+   "params": {
+    "var": "heal_pos"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rm2",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 7540,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_gr2",
+   "type": "var.get",
+   "pos": {
+    "x": 7800,
+    "y": 1800
+   },
+   "params": {
+    "var": "heal_mk"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_seq",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 8060,
+    "y": 0
+   },
+   "params": {
+    "count": 2
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 8320,
+    "y": 1980
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 8580,
+    "y": 2160
+   },
+   "params": {
+    "value": 20
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_rs",
+   "type": "logic.select",
+   "pos": {
+    "x": 8840,
+    "y": 1980
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_spot",
+   "type": "var.get",
+   "pos": {
+    "x": 9100,
+    "y": 2160
+   },
+   "params": {
+    "var": "heal_spot"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 9360,
+    "y": 0
+   },
+   "params": {},
+   "graph": "heal_take"
+  },
+  {
+   "id": "heal_take_again",
+   "type": "macro.use",
+   "pos": {
+    "x": 9620,
+    "y": 0
+   },
+   "params": {
+    "macro": "heal_at"
+   },
+   "graph": "heal_take"
+  },
+  {
+   "id": "weap_at_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_vol",
+   "type": "vol.spawn",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "shape": "sphere",
+    "radius": 48,
+    "name": "weap"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_pickpos",
+   "type": "flow.reroute",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {},
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_mark",
+   "type": "fx.marker",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "sprite": "sprites/arrow1.spr",
+    "height": 24,
+    "scale": 0.4,
+    "r": 255,
+    "g": 200,
+    "b": 0,
+    "pulse": true
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_add0",
+   "type": "array.add",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_g0",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 720
+   },
+   "params": {
+    "var": "weap_vols"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_add1",
+   "type": "array.add",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "of": "vector"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_g1",
+   "type": "var.get",
+   "pos": {
+    "x": 2080,
+    "y": 900
+   },
+   "params": {
+    "var": "weap_pos"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_add2",
+   "type": "array.add",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_g2",
+   "type": "var.get",
+   "pos": {
+    "x": 2600,
+    "y": 1080
+   },
+   "params": {
+    "var": "weap_mk"
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_at_bots",
+   "type": "bots.goal",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "kind": "loot",
+    "prio": 40,
+    "secs": 3600,
+    "radius": 48
+   },
+   "graph": "weap_at"
+  },
+  {
+   "id": "weap_spawn_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_spawn"
+  },
+  {
+   "id": "weap_spawn_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_spawn"
+  },
+  {
+   "id": "weap_spawn_epos",
+   "type": "vec.entity",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {},
+   "graph": "weap_spawn"
+  },
+  {
+   "id": "weap_spawn_spawn",
+   "type": "macro.use",
+   "pos": {
+    "x": 780,
+    "y": 0
+   },
+   "params": {
+    "macro": "weap_at"
+   },
+   "graph": "weap_spawn"
+  },
+  {
+   "id": "weap_take_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_gv",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "var": "weap_vols"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_idx",
+   "type": "array.find",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_known",
+   "type": "math.compare",
+   "pos": {
+    "x": 1040,
+    "y": 360
+   },
+   "params": {
+    "op": "ge",
+    "b": 0
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_br0",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_asp",
+   "type": "cast.player",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_give",
+   "type": "player.give_weapon",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "ammo": 90
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_snd",
+   "type": "fx.sound_to",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {
+    "sound": "items/gunpickup2.wav"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_g_posf",
+   "type": "var.get",
+   "pos": {
+    "x": 2340,
+    "y": 900
+   },
+   "params": {
+    "var": "weap_pos"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_posf",
+   "type": "array.get",
+   "pos": {
+    "x": 2600,
+    "y": 900
+   },
+   "params": {
+    "of": "vector"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_g_mkf",
+   "type": "var.get",
+   "pos": {
+    "x": 2860,
+    "y": 1080
+   },
+   "params": {
+    "var": "weap_mk"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_mkf",
+   "type": "array.get",
+   "pos": {
+    "x": 3120,
+    "y": 1080
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_botsoff",
+   "type": "bots.goal_clear",
+   "pos": {
+    "x": 3380,
+    "y": 0
+   },
+   "params": {
+    "kind": "loot"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rmmk",
+   "type": "fx.marker_remove",
+   "pos": {
+    "x": 3640,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rmvol",
+   "type": "vol.remove",
+   "pos": {
+    "x": 3900,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_keep",
+   "type": "var.set",
+   "pos": {
+    "x": 4160,
+    "y": 0
+   },
+   "params": {
+    "var": "weap_spot"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rm0",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 4420,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_gr0",
+   "type": "var.get",
+   "pos": {
+    "x": 4680,
+    "y": 1440
+   },
+   "params": {
+    "var": "weap_vols"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rm1",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 4940,
+    "y": 0
+   },
+   "params": {
+    "of": "vector"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_gr1",
+   "type": "var.get",
+   "pos": {
+    "x": 5200,
+    "y": 1620
+   },
+   "params": {
+    "var": "weap_pos"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rm2",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 5460,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_gr2",
+   "type": "var.get",
+   "pos": {
+    "x": 5720,
+    "y": 1800
+   },
+   "params": {
+    "var": "weap_mk"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_seq",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 5980,
+    "y": 0
+   },
+   "params": {
+    "count": 2
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 6240,
+    "y": 1980
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 6500,
+    "y": 2160
+   },
+   "params": {
+    "value": 20
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_rs",
+   "type": "logic.select",
+   "pos": {
+    "x": 6760,
+    "y": 1980
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_spot",
+   "type": "var.get",
+   "pos": {
+    "x": 7020,
+    "y": 2160
+   },
+   "params": {
+    "var": "weap_spot"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_wait",
+   "type": "timer.delay",
+   "pos": {
+    "x": 7280,
+    "y": 0
+   },
+   "params": {},
+   "graph": "weap_take"
+  },
+  {
+   "id": "weap_take_again",
+   "type": "macro.use",
+   "pos": {
+    "x": 7540,
+    "y": 0
+   },
+   "params": {
+    "macro": "weap_at"
+   },
+   "graph": "weap_take"
+  },
+  {
+   "id": "cd_run_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_secs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_secs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 60
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_secs",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_setl",
+   "type": "var.set",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "var": "cd_label"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_set",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "var": "cd_left"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_rep",
+   "type": "timer.repeat",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "every": 1
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_g",
+   "type": "var.get",
+   "pos": {
+    "x": 2080,
+    "y": 540
+   },
+   "params": {
+    "var": "cd_left"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_ft",
+   "type": "text.format_time",
+   "pos": {
+    "x": 2340,
+    "y": 540
+   },
+   "params": {
+    "style": "ms"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_gl",
+   "type": "var.get",
+   "pos": {
+    "x": 2600,
+    "y": 720
+   },
+   "params": {
+    "var": "cd_label"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_empty",
+   "type": "text.equals",
+   "pos": {
+    "x": 2860,
+    "y": 720
+   },
+   "params": {
+    "b": ""
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_dlabel",
+   "type": "text.literal",
+   "pos": {
+    "x": 3120,
+    "y": 900
+   },
+   "params": {
+    "value": "Time left"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_lab",
+   "type": "logic.select",
+   "pos": {
+    "x": 3380,
+    "y": 720
+   },
+   "params": {
+    "of": "text"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_txt",
+   "type": "text.format",
+   "pos": {
+    "x": 3640,
+    "y": 540
+   },
+   "params": {
+    "text": "[0]: [1]"
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 3900,
+    "y": 0
+   },
+   "params": {
+    "slot": "top",
+    "seconds": 1.1,
+    "text": ""
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_dec",
+   "type": "var.add",
+   "pos": {
+    "x": 4160,
+    "y": 0
+   },
+   "params": {
+    "var": "cd_left",
+    "amount": -1
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_over",
+   "type": "math.compare",
+   "pos": {
+    "x": 4420,
+    "y": 720
+   },
+   "params": {
+    "op": "lt",
+    "b": 0
+   },
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 4680,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "cd_run_stop",
+   "type": "timer.clear",
+   "pos": {
+    "x": 4940,
+    "y": 0
+   },
+   "params": {},
+   "graph": "cd_run"
+  },
+  {
+   "id": "hp_give_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_secs_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_secs_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 20
+   },
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_secs",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_hold",
+   "type": "var.set",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "var": "hp_holder"
+   },
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_left",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "var": "hp_left"
+   },
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_mark",
+   "type": "fn.call",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "func": "hp_mark"
+   },
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_give_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_give"
+  },
+  {
+   "id": "hp_mark_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_glow",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "color": "red"
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_txt",
+   "type": "text.format",
+   "pos": {
+    "x": 780,
+    "y": 540
+   },
+   "params": {
+    "text": "[0] has the hot potato!"
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "slot": "top",
+    "seconds": 3,
+    "text": ""
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_clear",
+   "type": "bots.goal_clear",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "kind": "0",
+    "who": "all"
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_hunt",
+   "type": "bots.goal",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "kind": "hunt",
+    "prio": 70,
+    "secs": 3600,
+    "radius": 64
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_isb",
+   "type": "player.is_bot",
+   "pos": {
+    "x": 1820,
+    "y": 720
+   },
+   "params": {},
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_brb",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_far",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "which": "alive"
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_follow",
+   "type": "bot.follow",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "secs": 6,
+    "influence": 20
+   },
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_mark_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_mark"
+  },
+  {
+   "id": "hp_pass_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_h0",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "var": "hp_holder"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_ish",
+   "type": "logic.equal",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "of": "player",
+    "op": "eq"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_off",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {
+    "color": "off"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_hold",
+   "type": "var.set",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "var": "hp_holder"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_mark",
+   "type": "fn.call",
+   "pos": {
+    "x": 1820,
+    "y": 0
+   },
+   "params": {
+    "func": "hp_mark"
+   },
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_pass_ret2",
+   "type": "fn.return",
+   "pos": {
+    "x": 2340,
+    "y": 180
+   },
+   "params": {},
+   "graph": "hp_pass"
+  },
+  {
+   "id": "hp_tick_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_dec",
+   "type": "var.add",
+   "pos": {
+    "x": 520,
+    "y": 0
+   },
+   "params": {
+    "var": "hp_left",
+    "amount": -1
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_lv",
+   "type": "var.get",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "var": "hp_left"
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_zero",
+   "type": "math.compare",
+   "pos": {
+    "x": 1040,
+    "y": 360
+   },
+   "params": {
+    "op": "le",
+    "b": 0
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_h1",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 540
+   },
+   "params": {
+    "var": "hp_holder"
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_alive",
+   "type": "player.is_alive",
+   "pos": {
+    "x": 1820,
+    "y": 540
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_br2",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_pos",
+   "type": "vec.player",
+   "pos": {
+    "x": 2340,
+    "y": 720
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_boom",
+   "type": "fx.explosion",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "dmg": 500,
+    "radius": 180
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_off",
+   "type": "player.set_glow",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "color": "off"
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_clear",
+   "type": "bots.goal_clear",
+   "pos": {
+    "x": 3120,
+    "y": 0
+   },
+   "params": {
+    "kind": "0",
+    "who": "all"
+   },
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 3380,
+    "y": 0
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "hp_tick_ret2",
+   "type": "fn.return",
+   "pos": {
+    "x": 3640,
+    "y": 180
+   },
+   "params": {},
+   "graph": "hp_tick"
+  },
+  {
+   "id": "ev1",
+   "type": "event.round_started",
+   "pos": {
+    "x": 300,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "ev2",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 600,
+    "y": 0
+   },
+   "params": {
+    "count": 2
+   }
+  },
+  {
+   "id": "ev3",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 900,
+    "y": 0
+   },
+   "params": {
+    "by": "class",
+    "name": "info_player_deathmatch"
+   }
+  },
+  {
+   "id": "ev4",
+   "type": "macro.use",
+   "pos": {
+    "x": 1200,
+    "y": 0
+   },
+   "params": {
+    "macro": "heal_spawn"
+   }
+  },
+  {
+   "id": "ev5",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 1500,
+    "y": 0
+   },
+   "params": {
+    "by": "class",
+    "name": "info_player_deathmatch"
+   }
+  },
+  {
+   "id": "ev6",
+   "type": "macro.use",
+   "pos": {
+    "x": 1800,
+    "y": 0
+   },
+   "params": {
+    "macro": "weap_spawn"
+   }
+  },
+  {
+   "id": "ev7",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 2100,
+    "y": 0
+   },
+   "params": {
+    "by": "class",
+    "name": "info_player_deathmatch"
+   }
+  },
+  {
+   "id": "ev8",
+   "type": "fn.call",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {
+    "func": "jp_make"
+   }
+  },
+  {
+   "id": "ev9",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 300,
+    "y": 0
+   },
+   "params": {
+    "by": "class",
+    "name": "info_player_start"
+   }
+  },
+  {
+   "id": "ev10",
+   "type": "vol.spawn",
+   "pos": {
+    "x": 600,
+    "y": 0
+   },
+   "params": {
+    "shape": "sphere",
+    "radius": 64,
+    "name": "tp"
+   }
+  },
+  {
+   "id": "ev11",
+   "type": "vec.entity",
+   "pos": {
+    "x": 900,
+    "y": 0
+   },
+   "params": {}
+  },
+  {
+   "id": "ev12",
+   "type": "math.number",
+   "pos": {
+    "x": 1200,
+    "y": 0
+   },
+   "params": {
+    "value": 120
+   }
+  },
+  {
+   "id": "ev13",
+   "type": "text.literal",
+   "pos": {
+    "x": 1500,
+    "y": 0
+   },
+   "params": {
+    "value": "Round"
+   }
+  },
+  {
+   "id": "ev14",
+   "type": "macro.use",
+   "pos": {
+    "x": 1800,
+    "y": 0
+   },
+   "params": {
+    "macro": "cd_run"
+   }
+  },
+  {
+   "id": "ev15",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 2100,
+    "y": 0
+   },
+   "params": {
+    "which": "alive"
+   }
+  },
+  {
+   "id": "ev16",
+   "type": "math.number",
+   "pos": {
+    "x": 0,
+    "y": 0
+   },
+   "params": {
+    "value": 25
+   }
+  },
+  {
+   "id": "ev17",
+   "type": "fn.call",
+   "pos": {
+    "x": 300,
+    "y": 0
+   },
+   "params": {
+    "func": "hp_give"
+   }
+  },
+  {
+   "id": "ev18",
+   "type": "flow.pick_player",
+   "pos": {
+    "x": 600,
+    "y": 0
+   },
+   "params": {
+    "which": "bots"
+   }
+  },
+  {
+   "id": "ev19",
+   "type": "math.number",
+   "pos": {
+    "x": 900,
+    "y": 0
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev20",
+   "type": "math.number",
+   "pos": {
+    "x": 1200,
+    "y": 0
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev21",
+   "type": "fn.call",
+   "pos": {
+    "x": 1500,
+    "y": 0
+   },
+   "params": {
+    "func": "mine_place"
+   }
+  },
+  {
+   "id": "ev22",
+   "type": "timer.repeat",
+   "pos": {
+    "x": 1800,
+    "y": 360
+   },
+   "params": {
+    "every": 1
+   }
+  },
+  {
+   "id": "ev23",
+   "type": "flow.sequence",
+   "pos": {
+    "x": 2100,
+    "y": 360
+   },
+   "params": {
+    "count": 2
+   }
+  },
+  {
+   "id": "ev24",
+   "type": "fn.call",
+   "pos": {
+    "x": 0,
+    "y": 360
+   },
+   "params": {
+    "func": "hp_tick"
+   }
+  },
+  {
+   "id": "ev25",
+   "type": "flow.for_each_player",
+   "pos": {
+    "x": 300,
+    "y": 360
+   },
+   "params": {
+    "which": "bots"
+   }
+  },
+  {
+   "id": "ev26",
+   "type": "math.number",
+   "pos": {
+    "x": 600,
+    "y": 360
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev27",
+   "type": "math.number",
+   "pos": {
+    "x": 900,
+    "y": 360
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev28",
+   "type": "fn.call",
+   "pos": {
+    "x": 1200,
+    "y": 360
+   },
+   "params": {
+    "func": "ab_bot"
+   }
+  },
+  {
+   "id": "ev29",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1500,
+    "y": 360
+   },
+   "params": {}
+  },
+  {
+   "id": "ev30",
+   "type": "math.number",
+   "pos": {
+    "x": 1800,
+    "y": 360
+   },
+   "params": {
+    "value": 6
+   }
+  },
+  {
+   "id": "ev31",
+   "type": "macro.use",
+   "pos": {
+    "x": 2100,
+    "y": 360
+   },
+   "params": {
+    "macro": "ab_use"
+   }
+  },
+  {
+   "id": "ev32",
+   "type": "math.number",
+   "pos": {
+    "x": 0,
+    "y": 360
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev33",
+   "type": "math.number",
+   "pos": {
+    "x": 300,
+    "y": 360
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev34",
+   "type": "macro.use",
+   "pos": {
+    "x": 600,
+    "y": 360
+   },
+   "params": {
+    "macro": "fb_throw"
+   }
+  },
+  {
+   "id": "ev35",
+   "type": "math.number",
+   "pos": {
+    "x": 900,
+    "y": 360
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev36",
+   "type": "math.number",
+   "pos": {
+    "x": 1200,
+    "y": 360
+   },
+   "params": {
+    "value": 4
+   }
+  },
+  {
+   "id": "ev37",
+   "type": "macro.use",
+   "pos": {
+    "x": 1500,
+    "y": 360
+   },
+   "params": {
+    "macro": "dash_go"
+   }
+  },
+  {
+   "id": "ev38",
+   "type": "math.number",
+   "pos": {
+    "x": 1800,
+    "y": 360
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev39",
+   "type": "macro.use",
+   "pos": {
+    "x": 2100,
+    "y": 360
+   },
+   "params": {
+    "macro": "dj_jump"
+   }
+  },
+  {
+   "id": "ev40",
+   "type": "math.number",
+   "pos": {
+    "x": 0,
+    "y": 720
+   },
+   "params": {
+    "value": 50
+   }
+  },
+  {
+   "id": "ev41",
+   "type": "math.number",
+   "pos": {
+    "x": 300,
+    "y": 720
+   },
+   "params": {
+    "value": 10
+   }
+  },
+  {
+   "id": "ev42",
+   "type": "text.literal",
+   "pos": {
+    "x": 600,
+    "y": 720
+   },
+   "params": {
+    "value": "awp"
+   }
+  },
+  {
+   "id": "ev43",
+   "type": "math.number",
+   "pos": {
+    "x": 900,
+    "y": 720
+   },
+   "params": {
+    "value": 15
+   }
+  },
+  {
+   "id": "ev44",
+   "type": "math.number",
+   "pos": {
+    "x": 1200,
+    "y": 720
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev45",
+   "type": "vol.on_begin",
+   "pos": {
+    "x": 1500,
+    "y": 720
+   },
+   "params": {
+    "name": "heal"
+   }
+  },
+  {
+   "id": "ev46",
+   "type": "macro.use",
+   "pos": {
+    "x": 1800,
+    "y": 720
+   },
+   "params": {
+    "macro": "heal_take"
+   }
+  },
+  {
+   "id": "ev47",
+   "type": "vol.on_begin",
+   "pos": {
+    "x": 2100,
+    "y": 1080
+   },
+   "params": {
+    "name": "weap"
+   }
+  },
+  {
+   "id": "ev48",
+   "type": "macro.use",
+   "pos": {
+    "x": 0,
+    "y": 1080
+   },
+   "params": {
+    "macro": "weap_take"
+   }
+  },
+  {
+   "id": "ev49",
+   "type": "vol.on_begin",
+   "pos": {
+    "x": 300,
+    "y": 1440
+   },
+   "params": {
+    "name": "jumppad"
+   }
+  },
+  {
+   "id": "ev50",
+   "type": "fn.call",
+   "pos": {
+    "x": 600,
+    "y": 1440
+   },
+   "params": {
+    "func": "jp_launch"
+   }
+  },
+  {
+   "id": "ev51",
+   "type": "vol.on_begin",
+   "pos": {
+    "x": 900,
+    "y": 1800
+   },
+   "params": {
+    "name": "mine"
+   }
+  },
+  {
+   "id": "ev52",
+   "type": "fn.call",
+   "pos": {
+    "x": 1200,
+    "y": 1800
+   },
+   "params": {
+    "func": "mine_step"
+   }
+  },
+  {
+   "id": "ev53",
+   "type": "event.player_hurt",
+   "pos": {
+    "x": 1500,
+    "y": 2160
+   },
+   "params": {}
+  },
+  {
+   "id": "ev54",
+   "type": "fn.call",
+   "pos": {
+    "x": 1800,
+    "y": 2160
+   },
+   "params": {
+    "func": "hp_pass"
+   }
+  },
+  {
+   "id": "ev55",
+   "type": "vol.on_begin",
+   "pos": {
+    "x": 2100,
+    "y": 2160
+   },
+   "params": {
+    "name": "tp"
+   }
+  },
+  {
+   "id": "ev56",
+   "type": "flow.pick_entity",
+   "pos": {
+    "x": 0,
+    "y": 2160
+   },
+   "params": {
+    "by": "class",
+    "name": "info_player_deathmatch"
+   }
+  },
+  {
+   "id": "ev57",
+   "type": "math.number",
+   "pos": {
+    "x": 300,
+    "y": 2160
+   },
+   "params": {
+    "value": 0
+   }
+  },
+  {
+   "id": "ev58",
+   "type": "fn.call",
+   "pos": {
+    "x": 600,
+    "y": 2160
+   },
+   "params": {
+    "func": "tp_go"
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "jump_pad_w1",
+   "from": {
+    "node": "jp_make_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "jp_make_vol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "jump_pad_w2",
+   "from": {
+    "node": "jp_make_entry",
+    "pin": "at"
+   },
+   "to": {
+    "node": "jp_make_pos",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "jump_pad_w3",
+   "from": {
+    "node": "jp_make_pos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "jp_make_vol",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "jump_pad_w4",
+   "from": {
+    "node": "jp_make_vol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "jp_make_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "jump_pad_w5",
+   "from": {
+    "node": "jp_make_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "jp_make_mark",
+    "pin": "follow"
+   }
+  },
+  {
+   "id": "jump_pad_w6",
+   "from": {
+    "node": "jp_make_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "jp_make_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "jump_pad_w7",
+   "from": {
+    "node": "jp_launch_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "jp_launch_asp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "jump_pad_w8",
+   "from": {
+    "node": "jp_launch_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "jp_launch_asp",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "jump_pad_w9",
+   "from": {
+    "node": "jp_launch_entry",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "jp_launch_speed_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "jump_pad_w10",
+   "from": {
+    "node": "jp_launch_speed_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "jp_launch_speed",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "jump_pad_w11",
+   "from": {
+    "node": "jp_launch_entry",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "jp_launch_speed",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "jump_pad_w12",
+   "from": {
+    "node": "jp_launch_speed_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "jp_launch_speed",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "jump_pad_w13",
+   "from": {
+    "node": "jp_launch_asp",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "jp_launch_up",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "jump_pad_w14",
+   "from": {
+    "node": "jp_launch_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "jp_launch_up",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "jump_pad_w15",
+   "from": {
+    "node": "jp_launch_speed",
+    "pin": "out"
+   },
+   "to": {
+    "node": "jp_launch_up",
+    "pin": "speed"
+   }
+  },
+  {
+   "id": "jump_pad_w16",
+   "from": {
+    "node": "jp_launch_up",
+    "pin": "then"
+   },
+   "to": {
+    "node": "jp_launch_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "jump_pad_w17",
+   "from": {
+    "node": "jp_launch_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "jp_launch_snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "jump_pad_w18",
+   "from": {
+    "node": "jp_launch_snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "jp_launch_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "jump_pad_w19",
+   "from": {
+    "node": "jp_launch_asp",
+    "pin": "fail"
+   },
+   "to": {
+    "node": "jp_launch_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "double_jump_w1",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dj_jump_tr",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "double_jump_w2",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "dj_jump_ground",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "double_jump_w3",
+   "from": {
+    "node": "dj_jump_tr",
+    "pin": "ground"
+   },
+   "to": {
+    "node": "dj_jump_ground",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "double_jump_w4",
+   "from": {
+    "node": "dj_jump_ground",
+    "pin": "true"
+   },
+   "to": {
+    "node": "dj_jump_reset",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "double_jump_w5",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dj_jump_reset",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "double_jump_w6",
+   "from": {
+    "node": "dj_jump_reset",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dj_jump_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "double_jump_w7",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dj_jump_used",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "double_jump_w8",
+   "from": {
+    "node": "dj_jump_ground",
+    "pin": "false"
+   },
+   "to": {
+    "node": "dj_jump_once",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "double_jump_w9",
+   "from": {
+    "node": "dj_jump_used",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dj_jump_once",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "double_jump_w10",
+   "from": {
+    "node": "dj_jump_once",
+    "pin": "true"
+   },
+   "to": {
+    "node": "dj_jump_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "double_jump_w11",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "boost"
+   },
+   "to": {
+    "node": "dj_jump_boost_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "double_jump_w12",
+   "from": {
+    "node": "dj_jump_boost_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dj_jump_boost",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "double_jump_w13",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "boost"
+   },
+   "to": {
+    "node": "dj_jump_boost",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "double_jump_w14",
+   "from": {
+    "node": "dj_jump_boost_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dj_jump_boost",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "double_jump_w15",
+   "from": {
+    "node": "dj_jump_tr",
+    "pin": "vel"
+   },
+   "to": {
+    "node": "dj_jump_vb",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "double_jump_w16",
+   "from": {
+    "node": "dj_jump_vb",
+    "pin": "x"
+   },
+   "to": {
+    "node": "dj_jump_nv",
+    "pin": "x"
+   }
+  },
+  {
+   "id": "double_jump_w17",
+   "from": {
+    "node": "dj_jump_vb",
+    "pin": "y"
+   },
+   "to": {
+    "node": "dj_jump_nv",
+    "pin": "y"
+   }
+  },
+  {
+   "id": "double_jump_w18",
+   "from": {
+    "node": "dj_jump_boost",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dj_jump_nv",
+    "pin": "z"
+   }
+  },
+  {
+   "id": "double_jump_w19",
+   "from": {
+    "node": "dj_jump_once",
+    "pin": "false"
+   },
+   "to": {
+    "node": "dj_jump_boostv",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "double_jump_w20",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dj_jump_boostv",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "double_jump_w21",
+   "from": {
+    "node": "dj_jump_nv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dj_jump_boostv",
+    "pin": "v"
+   }
+  },
+  {
+   "id": "double_jump_w22",
+   "from": {
+    "node": "dj_jump_boostv",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dj_jump_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "double_jump_w23",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dj_jump_mark",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "double_jump_w24",
+   "from": {
+    "node": "dj_jump_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dj_jump_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "double_jump_w25",
+   "from": {
+    "node": "dj_jump_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dj_jump_snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "double_jump_w26",
+   "from": {
+    "node": "dj_jump_snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dj_jump_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "dash_w1",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "cd"
+   },
+   "to": {
+    "node": "dash_go_cd_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "dash_w2",
+   "from": {
+    "node": "dash_go_cd_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_cd",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "dash_w3",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "cd"
+   },
+   "to": {
+    "node": "dash_go_cd",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "dash_w4",
+   "from": {
+    "node": "dash_go_cd_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_cd",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "dash_w5",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "dash_go_speed_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "dash_w6",
+   "from": {
+    "node": "dash_go_speed_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_speed",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "dash_w7",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "dash_go_speed",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "dash_w8",
+   "from": {
+    "node": "dash_go_speed_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_speed",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "dash_w9",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dash_go_at",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "dash_w10",
+   "from": {
+    "node": "dash_go_at",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_left",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "dash_w11",
+   "from": {
+    "node": "dash_go_now",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_left",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "dash_w12",
+   "from": {
+    "node": "dash_go_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_ok",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "dash_w13",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "dash_go_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "dash_w14",
+   "from": {
+    "node": "dash_go_ok",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "dash_w15",
+   "from": {
+    "node": "dash_go_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_ceil",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "dash_w16",
+   "from": {
+    "node": "dash_go_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "dash_go_out",
+    "pin": "wait"
+   }
+  },
+  {
+   "id": "dash_w17",
+   "from": {
+    "node": "dash_go_ceil",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_out",
+    "pin": "left"
+   }
+  },
+  {
+   "id": "dash_w18",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dash_go_aim",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "dash_w19",
+   "from": {
+    "node": "dash_go_aim",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_ab",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "dash_w20",
+   "from": {
+    "node": "dash_go_ab",
+    "pin": "x"
+   },
+   "to": {
+    "node": "dash_go_flat",
+    "pin": "x"
+   }
+  },
+  {
+   "id": "dash_w21",
+   "from": {
+    "node": "dash_go_ab",
+    "pin": "y"
+   },
+   "to": {
+    "node": "dash_go_flat",
+    "pin": "y"
+   }
+  },
+  {
+   "id": "dash_w22",
+   "from": {
+    "node": "dash_go_flat",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_dir",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "dash_w23",
+   "from": {
+    "node": "dash_go_dir",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_fast",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "dash_w24",
+   "from": {
+    "node": "dash_go_speed",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_fast",
+    "pin": "n"
+   }
+  },
+  {
+   "id": "dash_w25",
+   "from": {
+    "node": "dash_go_fast",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_v",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "dash_w26",
+   "from": {
+    "node": "dash_go_lift",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_v",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "dash_w27",
+   "from": {
+    "node": "dash_go_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "dash_go_push",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "dash_w28",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dash_go_push",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "dash_w29",
+   "from": {
+    "node": "dash_go_v",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_push",
+    "pin": "v"
+   }
+  },
+  {
+   "id": "dash_w30",
+   "from": {
+    "node": "dash_go_now",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_nxt",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "dash_w31",
+   "from": {
+    "node": "dash_go_cd",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_nxt",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "dash_w32",
+   "from": {
+    "node": "dash_go_push",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dash_go_st",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "dash_w33",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dash_go_st",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "dash_w34",
+   "from": {
+    "node": "dash_go_nxt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "dash_go_st",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "dash_w35",
+   "from": {
+    "node": "dash_go_st",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dash_go_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "dash_w36",
+   "from": {
+    "node": "dash_go_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "dash_go_snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "dash_w37",
+   "from": {
+    "node": "dash_go_snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "dash_go_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "teleporter_w1",
+   "from": {
+    "node": "tp_go_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tp_go_asp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "teleporter_w2",
+   "from": {
+    "node": "tp_go_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "tp_go_asp",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "teleporter_w3",
+   "from": {
+    "node": "tp_go_entry",
+    "pin": "cd"
+   },
+   "to": {
+    "node": "tp_go_cd_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "teleporter_w4",
+   "from": {
+    "node": "tp_go_cd_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_cd",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "teleporter_w5",
+   "from": {
+    "node": "tp_go_entry",
+    "pin": "cd"
+   },
+   "to": {
+    "node": "tp_go_cd",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "teleporter_w6",
+   "from": {
+    "node": "tp_go_cd_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_cd",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "teleporter_w7",
+   "from": {
+    "node": "tp_go_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_last",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "teleporter_w8",
+   "from": {
+    "node": "tp_go_now",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_since",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "teleporter_w9",
+   "from": {
+    "node": "tp_go_last",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_since",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "teleporter_w10",
+   "from": {
+    "node": "tp_go_since",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_ok",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "teleporter_w11",
+   "from": {
+    "node": "tp_go_cd",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_ok",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "teleporter_w12",
+   "from": {
+    "node": "tp_go_asp",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "tp_go_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "teleporter_w13",
+   "from": {
+    "node": "tp_go_ok",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "teleporter_w14",
+   "from": {
+    "node": "tp_go_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "tp_go_tp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "teleporter_w15",
+   "from": {
+    "node": "tp_go_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_tp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "teleporter_w16",
+   "from": {
+    "node": "tp_go_entry",
+    "pin": "to"
+   },
+   "to": {
+    "node": "tp_go_tp",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "teleporter_w17",
+   "from": {
+    "node": "tp_go_tp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tp_go_st",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "teleporter_w18",
+   "from": {
+    "node": "tp_go_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_st",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "teleporter_w19",
+   "from": {
+    "node": "tp_go_now",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_st",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "teleporter_w20",
+   "from": {
+    "node": "tp_go_st",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tp_go_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "teleporter_w21",
+   "from": {
+    "node": "tp_go_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "teleporter_w22",
+   "from": {
+    "node": "tp_go_snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "tp_go_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "teleporter_w23",
+   "from": {
+    "node": "tp_go_went_t",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_ret",
+    "pin": "went"
+   }
+  },
+  {
+   "id": "teleporter_w24",
+   "from": {
+    "node": "tp_go_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "tp_go_ret2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "teleporter_w25",
+   "from": {
+    "node": "tp_go_asp",
+    "pin": "fail"
+   },
+   "to": {
+    "node": "tp_go_ret2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "teleporter_w26",
+   "from": {
+    "node": "tp_go_went_f",
+    "pin": "out"
+   },
+   "to": {
+    "node": "tp_go_ret2",
+    "pin": "went"
+   }
+  },
+  {
+   "id": "ability_w1",
+   "from": {
+    "node": "ab_use_in",
+    "pin": "cd"
+   },
+   "to": {
+    "node": "ab_use_cd_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w2",
+   "from": {
+    "node": "ab_use_cd_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_cd",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "ability_w3",
+   "from": {
+    "node": "ab_use_in",
+    "pin": "cd"
+   },
+   "to": {
+    "node": "ab_use_cd",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w4",
+   "from": {
+    "node": "ab_use_cd_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_cd",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "ability_w5",
+   "from": {
+    "node": "ab_use_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "ab_use_at",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "ability_w6",
+   "from": {
+    "node": "ab_use_at",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_left",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w7",
+   "from": {
+    "node": "ab_use_now",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_left",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "ability_w8",
+   "from": {
+    "node": "ab_use_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_ready",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w9",
+   "from": {
+    "node": "ab_use_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "ab_use_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ability_w10",
+   "from": {
+    "node": "ab_use_ready",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "ability_w11",
+   "from": {
+    "node": "ab_use_now",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_next",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w12",
+   "from": {
+    "node": "ab_use_cd",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_next",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "ability_w13",
+   "from": {
+    "node": "ab_use_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ab_use_st",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ability_w14",
+   "from": {
+    "node": "ab_use_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "ab_use_st",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "ability_w15",
+   "from": {
+    "node": "ab_use_next",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_st",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "ability_w16",
+   "from": {
+    "node": "ab_use_st",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ab_use_out",
+    "pin": "use"
+   }
+  },
+  {
+   "id": "ability_w17",
+   "from": {
+    "node": "ab_use_left",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_ceil",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w18",
+   "from": {
+    "node": "ab_use_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "ab_use_out",
+    "pin": "wait"
+   }
+  },
+  {
+   "id": "ability_w19",
+   "from": {
+    "node": "ab_use_ceil",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_use_out",
+    "pin": "left"
+   }
+  },
+  {
+   "id": "ability_w20",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "chance"
+   },
+   "to": {
+    "node": "ab_bot_chance_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w21",
+   "from": {
+    "node": "ab_bot_chance_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_chance",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "ability_w22",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "chance"
+   },
+   "to": {
+    "node": "ab_bot_chance",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w23",
+   "from": {
+    "node": "ab_bot_chance_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_chance",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "ability_w24",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "range"
+   },
+   "to": {
+    "node": "ab_bot_range_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w25",
+   "from": {
+    "node": "ab_bot_range_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_range",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "ability_w26",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "range"
+   },
+   "to": {
+    "node": "ab_bot_range",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w27",
+   "from": {
+    "node": "ab_bot_range_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_range",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "ability_w28",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ab_bot_s0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ability_w29",
+   "from": {
+    "node": "ab_bot_s0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ab_bot_each",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ability_w30",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "bot"
+   },
+   "to": {
+    "node": "ab_bot_myt",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "ability_w31",
+   "from": {
+    "node": "ab_bot_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ab_bot_hist",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "ability_w32",
+   "from": {
+    "node": "ab_bot_myt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_other",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w33",
+   "from": {
+    "node": "ab_bot_hist",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_other",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "ability_w34",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "bot"
+   },
+   "to": {
+    "node": "ab_bot_pa",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "ability_w35",
+   "from": {
+    "node": "ab_bot_each",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ab_bot_pb",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "ability_w36",
+   "from": {
+    "node": "ab_bot_pa",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_dist",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w37",
+   "from": {
+    "node": "ab_bot_pb",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_dist",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "ability_w38",
+   "from": {
+    "node": "ab_bot_dist",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_near",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w39",
+   "from": {
+    "node": "ab_bot_range",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_near",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "ability_w40",
+   "from": {
+    "node": "ab_bot_other",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_both",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w41",
+   "from": {
+    "node": "ab_bot_near",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_both",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "ability_w42",
+   "from": {
+    "node": "ab_bot_each",
+    "pin": "each"
+   },
+   "to": {
+    "node": "ab_bot_br2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ability_w43",
+   "from": {
+    "node": "ab_bot_both",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_br2",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "ability_w44",
+   "from": {
+    "node": "ab_bot_br2",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ab_bot_s1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ability_w45",
+   "from": {
+    "node": "ab_bot_entry",
+    "pin": "bot"
+   },
+   "to": {
+    "node": "ab_bot_isbot",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "ability_w46",
+   "from": {
+    "node": "ab_bot_roll",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_lucky",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w47",
+   "from": {
+    "node": "ab_bot_chance",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_lucky",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "ability_w48",
+   "from": {
+    "node": "ab_bot_isbot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_a1",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w49",
+   "from": {
+    "node": "ab_bot_seen",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_a1",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "ability_w50",
+   "from": {
+    "node": "ab_bot_a1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_a2",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "ability_w51",
+   "from": {
+    "node": "ab_bot_lucky",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_a2",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "ability_w52",
+   "from": {
+    "node": "ab_bot_each",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ab_bot_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ability_w53",
+   "from": {
+    "node": "ab_bot_a2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ab_bot_ret",
+    "pin": "yes"
+   }
+  },
+  {
+   "id": "fireball_w1",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "dmg"
+   },
+   "to": {
+    "node": "fb_throw_dmg_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "fireball_w2",
+   "from": {
+    "node": "fb_throw_dmg_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_dmg",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "fireball_w3",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "dmg"
+   },
+   "to": {
+    "node": "fb_throw_dmg",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "fireball_w4",
+   "from": {
+    "node": "fb_throw_dmg_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_dmg",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "fireball_w5",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "fb_throw_speed_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "fireball_w6",
+   "from": {
+    "node": "fb_throw_speed_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_speed",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "fireball_w7",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "speed"
+   },
+   "to": {
+    "node": "fb_throw_speed",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "fireball_w8",
+   "from": {
+    "node": "fb_throw_speed_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_speed",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "fireball_w9",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "fb_throw_eyes",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "fireball_w10",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "fb_throw_aim",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "fireball_w11",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "fb_throw_proj",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "fireball_w12",
+   "from": {
+    "node": "fb_throw_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "fb_throw_proj",
+    "pin": "owner"
+   }
+  },
+  {
+   "id": "fireball_w13",
+   "from": {
+    "node": "fb_throw_eyes",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_proj",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "fireball_w14",
+   "from": {
+    "node": "fb_throw_aim",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_proj",
+    "pin": "dir"
+   }
+  },
+  {
+   "id": "fireball_w15",
+   "from": {
+    "node": "fb_throw_dmg",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_proj",
+    "pin": "damage"
+   }
+  },
+  {
+   "id": "fireball_w16",
+   "from": {
+    "node": "fb_throw_speed",
+    "pin": "out"
+   },
+   "to": {
+    "node": "fb_throw_proj",
+    "pin": "speed"
+   }
+  },
+  {
+   "id": "fireball_w17",
+   "from": {
+    "node": "fb_throw_proj",
+    "pin": "then"
+   },
+   "to": {
+    "node": "fb_throw_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "mine_w1",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "radius"
+   },
+   "to": {
+    "node": "mine_place_rad_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "mine_w2",
+   "from": {
+    "node": "mine_place_rad_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_rad",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "mine_w3",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "radius"
+   },
+   "to": {
+    "node": "mine_place_rad",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "mine_w4",
+   "from": {
+    "node": "mine_place_rad_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_rad",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "mine_w5",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "dmg"
+   },
+   "to": {
+    "node": "mine_place_dmg_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "mine_w6",
+   "from": {
+    "node": "mine_place_dmg_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_dmg",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "mine_w7",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "dmg"
+   },
+   "to": {
+    "node": "mine_place_dmg",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "mine_w8",
+   "from": {
+    "node": "mine_place_dmg_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_dmg",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "mine_w9",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "mine_place_pos",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "mine_w10",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_vol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w11",
+   "from": {
+    "node": "mine_place_pos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_vol",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "mine_w12",
+   "from": {
+    "node": "mine_place_vol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w13",
+   "from": {
+    "node": "mine_place_pos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_mark",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "mine_w14",
+   "from": {
+    "node": "mine_place_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_add0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w15",
+   "from": {
+    "node": "mine_place_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "mine_place_add0",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "mine_w16",
+   "from": {
+    "node": "mine_place_g0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_add0",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "mine_w17",
+   "from": {
+    "node": "mine_place_add0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_add1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w18",
+   "from": {
+    "node": "mine_place_mark",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_add1",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "mine_w19",
+   "from": {
+    "node": "mine_place_g1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_add1",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "mine_w20",
+   "from": {
+    "node": "mine_place_add1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_add2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w21",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "mine_place_add2",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "mine_w22",
+   "from": {
+    "node": "mine_place_g2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_add2",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "mine_w23",
+   "from": {
+    "node": "mine_place_add2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_add3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w24",
+   "from": {
+    "node": "mine_place_dmg",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_add3",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "mine_w25",
+   "from": {
+    "node": "mine_place_g3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_add3",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "mine_w26",
+   "from": {
+    "node": "mine_place_add3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w27",
+   "from": {
+    "node": "mine_place_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "mine_place_ret",
+    "pin": "mine"
+   }
+  },
+  {
+   "id": "mine_w28",
+   "from": {
+    "node": "mine_step_gv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_idx",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "mine_w29",
+   "from": {
+    "node": "mine_step_entry",
+    "pin": "mine"
+   },
+   "to": {
+    "node": "mine_step_idx",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "mine_w30",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_known",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "mine_w31",
+   "from": {
+    "node": "mine_step_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_br0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w32",
+   "from": {
+    "node": "mine_step_known",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_br0",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "mine_w33",
+   "from": {
+    "node": "mine_step_g_own",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_own",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "mine_w34",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_own",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "mine_w35",
+   "from": {
+    "node": "mine_step_br0",
+    "pin": "true"
+   },
+   "to": {
+    "node": "mine_step_asp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w36",
+   "from": {
+    "node": "mine_step_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "mine_step_asp",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "mine_w37",
+   "from": {
+    "node": "mine_step_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_isown",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "mine_w38",
+   "from": {
+    "node": "mine_step_own",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_isown",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "mine_w39",
+   "from": {
+    "node": "mine_step_asp",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "mine_step_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w40",
+   "from": {
+    "node": "mine_step_isown",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "mine_w41",
+   "from": {
+    "node": "mine_step_entry",
+    "pin": "mine"
+   },
+   "to": {
+    "node": "mine_step_bpos",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "mine_w42",
+   "from": {
+    "node": "mine_step_g_dmv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_dmv",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "mine_w43",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_dmv",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "mine_w44",
+   "from": {
+    "node": "mine_step_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "mine_step_boom",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w45",
+   "from": {
+    "node": "mine_step_asp",
+    "pin": "fail"
+   },
+   "to": {
+    "node": "mine_step_boom",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w46",
+   "from": {
+    "node": "mine_step_bpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_boom",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "mine_w47",
+   "from": {
+    "node": "mine_step_dmv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_boom",
+    "pin": "dmg"
+   }
+  },
+  {
+   "id": "mine_w48",
+   "from": {
+    "node": "mine_step_g_mkf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_mkf",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "mine_w49",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_mkf",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "mine_w50",
+   "from": {
+    "node": "mine_step_boom",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_rmmark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w51",
+   "from": {
+    "node": "mine_step_mkf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rmmark",
+    "pin": "marker"
+   }
+  },
+  {
+   "id": "mine_w52",
+   "from": {
+    "node": "mine_step_rmmark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_rmvol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w53",
+   "from": {
+    "node": "mine_step_entry",
+    "pin": "mine"
+   },
+   "to": {
+    "node": "mine_step_rmvol",
+    "pin": "volume"
+   }
+  },
+  {
+   "id": "mine_w54",
+   "from": {
+    "node": "mine_step_rmvol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_rm0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w55",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm0",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "mine_w56",
+   "from": {
+    "node": "mine_step_gr0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm0",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "mine_w57",
+   "from": {
+    "node": "mine_step_rm0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_rm1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w58",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm1",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "mine_w59",
+   "from": {
+    "node": "mine_step_gr1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm1",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "mine_w60",
+   "from": {
+    "node": "mine_step_rm1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_rm2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w61",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm2",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "mine_w62",
+   "from": {
+    "node": "mine_step_gr2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm2",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "mine_w63",
+   "from": {
+    "node": "mine_step_rm2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_rm3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w64",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm3",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "mine_w65",
+   "from": {
+    "node": "mine_step_gr3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm3",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "mine_w66",
+   "from": {
+    "node": "mine_step_rm3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w67",
+   "from": {
+    "node": "mine_step_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "mine_step_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "mine_w68",
+   "from": {
+    "node": "mine_step_br0",
+    "pin": "false"
+   },
+   "to": {
+    "node": "mine_step_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w1",
+   "from": {
+    "node": "heal_at_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "heal_at_vol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w2",
+   "from": {
+    "node": "heal_at_in",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "heal_at_pickpos",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "health_pack_w3",
+   "from": {
+    "node": "heal_at_pickpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_vol",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "health_pack_w4",
+   "from": {
+    "node": "heal_at_vol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_at_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w5",
+   "from": {
+    "node": "heal_at_pickpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_mark",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "health_pack_w6",
+   "from": {
+    "node": "heal_at_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_at_add0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w7",
+   "from": {
+    "node": "heal_at_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "heal_at_add0",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "health_pack_w8",
+   "from": {
+    "node": "heal_at_g0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_add0",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "health_pack_w9",
+   "from": {
+    "node": "heal_at_add0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_at_add1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w10",
+   "from": {
+    "node": "heal_at_pickpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_add1",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "health_pack_w11",
+   "from": {
+    "node": "heal_at_g1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_add1",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "health_pack_w12",
+   "from": {
+    "node": "heal_at_add1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_at_add2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w13",
+   "from": {
+    "node": "heal_at_mark",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_add2",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "health_pack_w14",
+   "from": {
+    "node": "heal_at_g2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_at_add2",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "health_pack_w15",
+   "from": {
+    "node": "heal_at_add2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_at_bots",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w16",
+   "from": {
+    "node": "heal_at_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "heal_at_bots",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "health_pack_w17",
+   "from": {
+    "node": "heal_at_bots",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_at_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "health_pack_w18",
+   "from": {
+    "node": "heal_at_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "heal_at_out",
+    "pin": "pick"
+   }
+  },
+  {
+   "id": "health_pack_w19",
+   "from": {
+    "node": "heal_spawn_in",
+    "pin": "at"
+   },
+   "to": {
+    "node": "heal_spawn_epos",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "health_pack_w20",
+   "from": {
+    "node": "heal_spawn_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "heal_spawn_spawn",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "health_pack_w21",
+   "from": {
+    "node": "heal_spawn_epos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_spawn_spawn",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "health_pack_w22",
+   "from": {
+    "node": "heal_spawn_spawn",
+    "pin": "next"
+   },
+   "to": {
+    "node": "heal_spawn_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "health_pack_w23",
+   "from": {
+    "node": "heal_spawn_spawn",
+    "pin": "pick"
+   },
+   "to": {
+    "node": "heal_spawn_out",
+    "pin": "pick"
+   }
+  },
+  {
+   "id": "health_pack_w24",
+   "from": {
+    "node": "heal_take_gv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_idx",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "health_pack_w25",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "heal_take_idx",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "health_pack_w26",
+   "from": {
+    "node": "heal_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_known",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "health_pack_w27",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "heal_take_br0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w28",
+   "from": {
+    "node": "heal_take_known",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_br0",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "health_pack_w29",
+   "from": {
+    "node": "heal_take_br0",
+    "pin": "false"
+   },
+   "to": {
+    "node": "heal_take_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "health_pack_w30",
+   "from": {
+    "node": "heal_take_br0",
+    "pin": "true"
+   },
+   "to": {
+    "node": "heal_take_asp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w31",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "heal_take_asp",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "health_pack_w32",
+   "from": {
+    "node": "heal_take_asp",
+    "pin": "fail"
+   },
+   "to": {
+    "node": "heal_take_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "health_pack_w33",
+   "from": {
+    "node": "heal_take_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_hp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "health_pack_w34",
+   "from": {
+    "node": "heal_take_hp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_full",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "health_pack_w35",
+   "from": {
+    "node": "heal_take_asp",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "heal_take_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w36",
+   "from": {
+    "node": "heal_take_full",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "health_pack_w37",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "heal"
+   },
+   "to": {
+    "node": "heal_take_heal_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "health_pack_w38",
+   "from": {
+    "node": "heal_take_heal_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_heal",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "health_pack_w39",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "heal"
+   },
+   "to": {
+    "node": "heal_take_heal",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "health_pack_w40",
+   "from": {
+    "node": "heal_take_heal_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_heal",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "health_pack_w41",
+   "from": {
+    "node": "heal_take_hp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_add",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "health_pack_w42",
+   "from": {
+    "node": "heal_take_heal",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_add",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "health_pack_w43",
+   "from": {
+    "node": "heal_take_add",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_cap",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "health_pack_w44",
+   "from": {
+    "node": "heal_take_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "heal_take_sethp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w45",
+   "from": {
+    "node": "heal_take_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_sethp",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "health_pack_w46",
+   "from": {
+    "node": "heal_take_cap",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_sethp",
+    "pin": "amount"
+   }
+  },
+  {
+   "id": "health_pack_w47",
+   "from": {
+    "node": "heal_take_sethp",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w48",
+   "from": {
+    "node": "heal_take_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "health_pack_w49",
+   "from": {
+    "node": "heal_take_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "heal_take_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "health_pack_w50",
+   "from": {
+    "node": "heal_take_g_posf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_posf",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "health_pack_w51",
+   "from": {
+    "node": "heal_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_posf",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "health_pack_w52",
+   "from": {
+    "node": "heal_take_g_mkf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_mkf",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "health_pack_w53",
+   "from": {
+    "node": "heal_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_mkf",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "health_pack_w54",
+   "from": {
+    "node": "heal_take_snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_botsoff",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w55",
+   "from": {
+    "node": "heal_take_botsoff",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_rmmk",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w56",
+   "from": {
+    "node": "heal_take_mkf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rmmk",
+    "pin": "marker"
+   }
+  },
+  {
+   "id": "health_pack_w57",
+   "from": {
+    "node": "heal_take_rmmk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_rmvol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w58",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "heal_take_rmvol",
+    "pin": "volume"
+   }
+  },
+  {
+   "id": "health_pack_w59",
+   "from": {
+    "node": "heal_take_rmvol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_keep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w60",
+   "from": {
+    "node": "heal_take_posf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_keep",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "health_pack_w61",
+   "from": {
+    "node": "heal_take_keep",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_rm0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w62",
+   "from": {
+    "node": "heal_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rm0",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "health_pack_w63",
+   "from": {
+    "node": "heal_take_gr0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rm0",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "health_pack_w64",
+   "from": {
+    "node": "heal_take_rm0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_rm1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w65",
+   "from": {
+    "node": "heal_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rm1",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "health_pack_w66",
+   "from": {
+    "node": "heal_take_gr1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rm1",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "health_pack_w67",
+   "from": {
+    "node": "heal_take_rm1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_rm2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w68",
+   "from": {
+    "node": "heal_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rm2",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "health_pack_w69",
+   "from": {
+    "node": "heal_take_gr2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rm2",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "health_pack_w70",
+   "from": {
+    "node": "heal_take_rm2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_seq",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w71",
+   "from": {
+    "node": "heal_take_seq",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "heal_take_out",
+    "pin": "taken"
+   }
+  },
+  {
+   "id": "health_pack_w72",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "respawn"
+   },
+   "to": {
+    "node": "heal_take_rs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "health_pack_w73",
+   "from": {
+    "node": "heal_take_rs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "health_pack_w74",
+   "from": {
+    "node": "heal_take_in",
+    "pin": "respawn"
+   },
+   "to": {
+    "node": "heal_take_rs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "health_pack_w75",
+   "from": {
+    "node": "heal_take_rs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_rs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "health_pack_w76",
+   "from": {
+    "node": "heal_take_seq",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "heal_take_wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "health_pack_w77",
+   "from": {
+    "node": "heal_take_rs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_wait",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "health_pack_w78",
+   "from": {
+    "node": "heal_take_wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "heal_take_again",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "health_pack_w79",
+   "from": {
+    "node": "heal_take_spot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "heal_take_again",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "weapon_pick_w1",
+   "from": {
+    "node": "weap_at_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "weap_at_vol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w2",
+   "from": {
+    "node": "weap_at_in",
+    "pin": "pos"
+   },
+   "to": {
+    "node": "weap_at_pickpos",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "weapon_pick_w3",
+   "from": {
+    "node": "weap_at_pickpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_vol",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "weapon_pick_w4",
+   "from": {
+    "node": "weap_at_vol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_at_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w5",
+   "from": {
+    "node": "weap_at_pickpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_mark",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "weapon_pick_w6",
+   "from": {
+    "node": "weap_at_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_at_add0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w7",
+   "from": {
+    "node": "weap_at_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "weap_at_add0",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "weapon_pick_w8",
+   "from": {
+    "node": "weap_at_g0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_add0",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "weapon_pick_w9",
+   "from": {
+    "node": "weap_at_add0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_at_add1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w10",
+   "from": {
+    "node": "weap_at_pickpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_add1",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "weapon_pick_w11",
+   "from": {
+    "node": "weap_at_g1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_add1",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "weapon_pick_w12",
+   "from": {
+    "node": "weap_at_add1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_at_add2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w13",
+   "from": {
+    "node": "weap_at_mark",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_add2",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "weapon_pick_w14",
+   "from": {
+    "node": "weap_at_g2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_at_add2",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "weapon_pick_w15",
+   "from": {
+    "node": "weap_at_add2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_at_bots",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w16",
+   "from": {
+    "node": "weap_at_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "weap_at_bots",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "weapon_pick_w17",
+   "from": {
+    "node": "weap_at_bots",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_at_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "weapon_pick_w18",
+   "from": {
+    "node": "weap_at_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "weap_at_out",
+    "pin": "pick"
+   }
+  },
+  {
+   "id": "weapon_pick_w19",
+   "from": {
+    "node": "weap_spawn_in",
+    "pin": "at"
+   },
+   "to": {
+    "node": "weap_spawn_epos",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "weapon_pick_w20",
+   "from": {
+    "node": "weap_spawn_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "weap_spawn_spawn",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "weapon_pick_w21",
+   "from": {
+    "node": "weap_spawn_epos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_spawn_spawn",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "weapon_pick_w22",
+   "from": {
+    "node": "weap_spawn_spawn",
+    "pin": "next"
+   },
+   "to": {
+    "node": "weap_spawn_out",
+    "pin": "next"
+   }
+  },
+  {
+   "id": "weapon_pick_w23",
+   "from": {
+    "node": "weap_spawn_spawn",
+    "pin": "pick"
+   },
+   "to": {
+    "node": "weap_spawn_out",
+    "pin": "pick"
+   }
+  },
+  {
+   "id": "weapon_pick_w24",
+   "from": {
+    "node": "weap_take_gv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_idx",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "weapon_pick_w25",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "weap_take_idx",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "weapon_pick_w26",
+   "from": {
+    "node": "weap_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_known",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "weapon_pick_w27",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "weap_take_br0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w28",
+   "from": {
+    "node": "weap_take_known",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_br0",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "weapon_pick_w29",
+   "from": {
+    "node": "weap_take_br0",
+    "pin": "false"
+   },
+   "to": {
+    "node": "weap_take_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "weapon_pick_w30",
+   "from": {
+    "node": "weap_take_br0",
+    "pin": "true"
+   },
+   "to": {
+    "node": "weap_take_asp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w31",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "who"
+   },
+   "to": {
+    "node": "weap_take_asp",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "weapon_pick_w32",
+   "from": {
+    "node": "weap_take_asp",
+    "pin": "fail"
+   },
+   "to": {
+    "node": "weap_take_out",
+    "pin": "no"
+   }
+  },
+  {
+   "id": "weapon_pick_w33",
+   "from": {
+    "node": "weap_take_asp",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "weap_take_give",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w34",
+   "from": {
+    "node": "weap_take_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_give",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "weapon_pick_w35",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "weapon"
+   },
+   "to": {
+    "node": "weap_take_give",
+    "pin": "weapon"
+   }
+  },
+  {
+   "id": "weapon_pick_w36",
+   "from": {
+    "node": "weap_take_give",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_snd",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w37",
+   "from": {
+    "node": "weap_take_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_snd",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "weapon_pick_w38",
+   "from": {
+    "node": "weap_take_g_posf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_posf",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "weapon_pick_w39",
+   "from": {
+    "node": "weap_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_posf",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "weapon_pick_w40",
+   "from": {
+    "node": "weap_take_g_mkf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_mkf",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "weapon_pick_w41",
+   "from": {
+    "node": "weap_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_mkf",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "weapon_pick_w42",
+   "from": {
+    "node": "weap_take_snd",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_botsoff",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w43",
+   "from": {
+    "node": "weap_take_botsoff",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_rmmk",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w44",
+   "from": {
+    "node": "weap_take_mkf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rmmk",
+    "pin": "marker"
+   }
+  },
+  {
+   "id": "weapon_pick_w45",
+   "from": {
+    "node": "weap_take_rmmk",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_rmvol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w46",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "vol"
+   },
+   "to": {
+    "node": "weap_take_rmvol",
+    "pin": "volume"
+   }
+  },
+  {
+   "id": "weapon_pick_w47",
+   "from": {
+    "node": "weap_take_rmvol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_keep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w48",
+   "from": {
+    "node": "weap_take_posf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_keep",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "weapon_pick_w49",
+   "from": {
+    "node": "weap_take_keep",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_rm0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w50",
+   "from": {
+    "node": "weap_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rm0",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "weapon_pick_w51",
+   "from": {
+    "node": "weap_take_gr0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rm0",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "weapon_pick_w52",
+   "from": {
+    "node": "weap_take_rm0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_rm1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w53",
+   "from": {
+    "node": "weap_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rm1",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "weapon_pick_w54",
+   "from": {
+    "node": "weap_take_gr1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rm1",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "weapon_pick_w55",
+   "from": {
+    "node": "weap_take_rm1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_rm2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w56",
+   "from": {
+    "node": "weap_take_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rm2",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "weapon_pick_w57",
+   "from": {
+    "node": "weap_take_gr2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rm2",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "weapon_pick_w58",
+   "from": {
+    "node": "weap_take_rm2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_seq",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w59",
+   "from": {
+    "node": "weap_take_seq",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "weap_take_out",
+    "pin": "taken"
+   }
+  },
+  {
+   "id": "weapon_pick_w60",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "respawn"
+   },
+   "to": {
+    "node": "weap_take_rs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "weapon_pick_w61",
+   "from": {
+    "node": "weap_take_rs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "weapon_pick_w62",
+   "from": {
+    "node": "weap_take_in",
+    "pin": "respawn"
+   },
+   "to": {
+    "node": "weap_take_rs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "weapon_pick_w63",
+   "from": {
+    "node": "weap_take_rs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_rs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "weapon_pick_w64",
+   "from": {
+    "node": "weap_take_seq",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "weap_take_wait",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "weapon_pick_w65",
+   "from": {
+    "node": "weap_take_rs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_wait",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "weapon_pick_w66",
+   "from": {
+    "node": "weap_take_wait",
+    "pin": "then"
+   },
+   "to": {
+    "node": "weap_take_again",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "weapon_pick_w67",
+   "from": {
+    "node": "weap_take_spot",
+    "pin": "out"
+   },
+   "to": {
+    "node": "weap_take_again",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "countdown_w1",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "cd_run_secs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w2",
+   "from": {
+    "node": "cd_run_secs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_secs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "countdown_w3",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "cd_run_secs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w4",
+   "from": {
+    "node": "cd_run_secs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_secs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "countdown_w5",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "cd_run_setl",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w6",
+   "from": {
+    "node": "cd_run_in",
+    "pin": "label"
+   },
+   "to": {
+    "node": "cd_run_setl",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "countdown_w7",
+   "from": {
+    "node": "cd_run_setl",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_set",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w8",
+   "from": {
+    "node": "cd_run_secs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_set",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "countdown_w9",
+   "from": {
+    "node": "cd_run_set",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_rep",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w10",
+   "from": {
+    "node": "cd_run_rep",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_out",
+    "pin": "started"
+   }
+  },
+  {
+   "id": "countdown_w11",
+   "from": {
+    "node": "cd_run_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_ft",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "countdown_w12",
+   "from": {
+    "node": "cd_run_gl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_empty",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w13",
+   "from": {
+    "node": "cd_run_empty",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_lab",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "countdown_w14",
+   "from": {
+    "node": "cd_run_dlabel",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_lab",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w15",
+   "from": {
+    "node": "cd_run_gl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_lab",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "countdown_w16",
+   "from": {
+    "node": "cd_run_lab",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_txt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "countdown_w17",
+   "from": {
+    "node": "cd_run_ft",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_txt",
+    "pin": "a1"
+   }
+  },
+  {
+   "id": "countdown_w18",
+   "from": {
+    "node": "cd_run_rep",
+    "pin": "tick"
+   },
+   "to": {
+    "node": "cd_run_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w19",
+   "from": {
+    "node": "cd_run_txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "countdown_w20",
+   "from": {
+    "node": "cd_run_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_dec",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w21",
+   "from": {
+    "node": "cd_run_g",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_over",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "countdown_w22",
+   "from": {
+    "node": "cd_run_dec",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w23",
+   "from": {
+    "node": "cd_run_over",
+    "pin": "out"
+   },
+   "to": {
+    "node": "cd_run_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "countdown_w24",
+   "from": {
+    "node": "cd_run_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "cd_run_stop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "countdown_w25",
+   "from": {
+    "node": "cd_run_rep",
+    "pin": "handle"
+   },
+   "to": {
+    "node": "cd_run_stop",
+    "pin": "handle"
+   }
+  },
+  {
+   "id": "countdown_w26",
+   "from": {
+    "node": "cd_run_stop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "cd_run_out",
+    "pin": "done"
+   }
+  },
+  {
+   "id": "hot_potato_w1",
+   "from": {
+    "node": "hp_give_entry",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "hp_give_secs_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "hot_potato_w2",
+   "from": {
+    "node": "hp_give_secs_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_give_secs",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "hot_potato_w3",
+   "from": {
+    "node": "hp_give_entry",
+    "pin": "secs"
+   },
+   "to": {
+    "node": "hp_give_secs",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "hot_potato_w4",
+   "from": {
+    "node": "hp_give_secs_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_give_secs",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "hot_potato_w5",
+   "from": {
+    "node": "hp_give_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_give_hold",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w6",
+   "from": {
+    "node": "hp_give_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_give_hold",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "hot_potato_w7",
+   "from": {
+    "node": "hp_give_hold",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_give_left",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w8",
+   "from": {
+    "node": "hp_give_secs",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_give_left",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "hot_potato_w9",
+   "from": {
+    "node": "hp_give_left",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_give_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w10",
+   "from": {
+    "node": "hp_give_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_give_mark",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "hot_potato_w11",
+   "from": {
+    "node": "hp_give_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_give_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w12",
+   "from": {
+    "node": "hp_mark_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_glow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w13",
+   "from": {
+    "node": "hp_mark_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_mark_glow",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "hot_potato_w14",
+   "from": {
+    "node": "hp_mark_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_mark_txt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "hot_potato_w15",
+   "from": {
+    "node": "hp_mark_glow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w16",
+   "from": {
+    "node": "hp_mark_txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_mark_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "hot_potato_w17",
+   "from": {
+    "node": "hp_mark_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_clear",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w18",
+   "from": {
+    "node": "hp_mark_clear",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_hunt",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w19",
+   "from": {
+    "node": "hp_mark_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_mark_hunt",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "hot_potato_w20",
+   "from": {
+    "node": "hp_mark_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_mark_isb",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "hot_potato_w21",
+   "from": {
+    "node": "hp_mark_hunt",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_brb",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w22",
+   "from": {
+    "node": "hp_mark_isb",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_mark_brb",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "hot_potato_w23",
+   "from": {
+    "node": "hp_mark_brb",
+    "pin": "true"
+   },
+   "to": {
+    "node": "hp_mark_far",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w24",
+   "from": {
+    "node": "hp_mark_far",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_follow",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w25",
+   "from": {
+    "node": "hp_mark_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "hp_mark_follow",
+    "pin": "bot"
+   }
+  },
+  {
+   "id": "hot_potato_w26",
+   "from": {
+    "node": "hp_mark_far",
+    "pin": "player"
+   },
+   "to": {
+    "node": "hp_mark_follow",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "hot_potato_w27",
+   "from": {
+    "node": "hp_mark_follow",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_mark_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w28",
+   "from": {
+    "node": "hp_mark_brb",
+    "pin": "false"
+   },
+   "to": {
+    "node": "hp_mark_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w29",
+   "from": {
+    "node": "hp_mark_far",
+    "pin": "none"
+   },
+   "to": {
+    "node": "hp_mark_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w30",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "from"
+   },
+   "to": {
+    "node": "hp_pass_ish",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "hot_potato_w31",
+   "from": {
+    "node": "hp_pass_h0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_ish",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "hot_potato_w32",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_pass_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w33",
+   "from": {
+    "node": "hp_pass_ish",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "hot_potato_w34",
+   "from": {
+    "node": "hp_pass_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "hp_pass_off",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w35",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "from"
+   },
+   "to": {
+    "node": "hp_pass_off",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "hot_potato_w36",
+   "from": {
+    "node": "hp_pass_off",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_pass_hold",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w37",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "to"
+   },
+   "to": {
+    "node": "hp_pass_hold",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "hot_potato_w38",
+   "from": {
+    "node": "hp_pass_hold",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_pass_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w39",
+   "from": {
+    "node": "hp_pass_entry",
+    "pin": "to"
+   },
+   "to": {
+    "node": "hp_pass_mark",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "hot_potato_w40",
+   "from": {
+    "node": "hp_pass_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_pass_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w41",
+   "from": {
+    "node": "hp_pass_ish",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_ret",
+    "pin": "passed"
+   }
+  },
+  {
+   "id": "hot_potato_w42",
+   "from": {
+    "node": "hp_pass_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "hp_pass_ret2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w43",
+   "from": {
+    "node": "hp_pass_ish",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_pass_ret2",
+    "pin": "passed"
+   }
+  },
+  {
+   "id": "hot_potato_w44",
+   "from": {
+    "node": "hp_tick_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_tick_dec",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w45",
+   "from": {
+    "node": "hp_tick_lv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_zero",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "hot_potato_w46",
+   "from": {
+    "node": "hp_tick_dec",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_tick_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w47",
+   "from": {
+    "node": "hp_tick_zero",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "hot_potato_w48",
+   "from": {
+    "node": "hp_tick_h1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_alive",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "hot_potato_w49",
+   "from": {
+    "node": "hp_tick_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "hp_tick_br2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w50",
+   "from": {
+    "node": "hp_tick_alive",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_br2",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "hot_potato_w51",
+   "from": {
+    "node": "hp_tick_h1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_pos",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "hot_potato_w52",
+   "from": {
+    "node": "hp_tick_br2",
+    "pin": "true"
+   },
+   "to": {
+    "node": "hp_tick_boom",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w53",
+   "from": {
+    "node": "hp_tick_pos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_boom",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "hot_potato_w54",
+   "from": {
+    "node": "hp_tick_boom",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_tick_off",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w55",
+   "from": {
+    "node": "hp_tick_h1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_off",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "hot_potato_w56",
+   "from": {
+    "node": "hp_tick_off",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_tick_clear",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w57",
+   "from": {
+    "node": "hp_tick_clear",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hp_tick_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w58",
+   "from": {
+    "node": "hp_tick_zero",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_ret",
+    "pin": "boom"
+   }
+  },
+  {
+   "id": "hot_potato_w59",
+   "from": {
+    "node": "hp_tick_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "hp_tick_ret2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w60",
+   "from": {
+    "node": "hp_tick_br2",
+    "pin": "false"
+   },
+   "to": {
+    "node": "hp_tick_ret2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hot_potato_w61",
+   "from": {
+    "node": "hp_tick_zero",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hp_tick_ret2",
+    "pin": "boom"
+   }
+  },
+  {
+   "id": "ev_w479",
+   "from": {
+    "node": "ev1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w480",
+   "from": {
+    "node": "ev2",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "ev3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w481",
+   "from": {
+    "node": "ev3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev4",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w482",
+   "from": {
+    "node": "ev3",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ev4",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "ev_w483",
+   "from": {
+    "node": "ev4",
+    "pin": "next"
+   },
+   "to": {
+    "node": "ev5",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w484",
+   "from": {
+    "node": "ev5",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev6",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w485",
+   "from": {
+    "node": "ev5",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ev6",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "ev_w486",
+   "from": {
+    "node": "ev6",
+    "pin": "next"
+   },
+   "to": {
+    "node": "ev7",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w487",
+   "from": {
+    "node": "ev7",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev8",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w488",
+   "from": {
+    "node": "ev7",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ev8",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "ev_w489",
+   "from": {
+    "node": "ev8",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev9",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w490",
+   "from": {
+    "node": "ev9",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev10",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w491",
+   "from": {
+    "node": "ev9",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ev11",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "ev_w492",
+   "from": {
+    "node": "ev11",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev10",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "ev_w493",
+   "from": {
+    "node": "ev10",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev14",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w494",
+   "from": {
+    "node": "ev12",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev14",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "ev_w495",
+   "from": {
+    "node": "ev13",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev14",
+    "pin": "label"
+   }
+  },
+  {
+   "id": "ev_w496",
+   "from": {
+    "node": "ev14",
+    "pin": "started"
+   },
+   "to": {
+    "node": "ev15",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w497",
+   "from": {
+    "node": "ev15",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev17",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w498",
+   "from": {
+    "node": "ev15",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev17",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w499",
+   "from": {
+    "node": "ev16",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev17",
+    "pin": "secs"
+   }
+  },
+  {
+   "id": "ev_w500",
+   "from": {
+    "node": "ev17",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev18",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w501",
+   "from": {
+    "node": "ev18",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev21",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w502",
+   "from": {
+    "node": "ev18",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev21",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w503",
+   "from": {
+    "node": "ev19",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev21",
+    "pin": "radius"
+   }
+  },
+  {
+   "id": "ev_w504",
+   "from": {
+    "node": "ev20",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev21",
+    "pin": "dmg"
+   }
+  },
+  {
+   "id": "ev_w505",
+   "from": {
+    "node": "ev2",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "ev22",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w506",
+   "from": {
+    "node": "ev22",
+    "pin": "tick"
+   },
+   "to": {
+    "node": "ev23",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w507",
+   "from": {
+    "node": "ev23",
+    "pin": "then0"
+   },
+   "to": {
+    "node": "ev24",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w508",
+   "from": {
+    "node": "ev23",
+    "pin": "then1"
+   },
+   "to": {
+    "node": "ev25",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w509",
+   "from": {
+    "node": "ev25",
+    "pin": "each"
+   },
+   "to": {
+    "node": "ev28",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w510",
+   "from": {
+    "node": "ev25",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev28",
+    "pin": "bot"
+   }
+  },
+  {
+   "id": "ev_w511",
+   "from": {
+    "node": "ev26",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev28",
+    "pin": "chance"
+   }
+  },
+  {
+   "id": "ev_w512",
+   "from": {
+    "node": "ev27",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev28",
+    "pin": "range"
+   }
+  },
+  {
+   "id": "ev_w513",
+   "from": {
+    "node": "ev28",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev29",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w514",
+   "from": {
+    "node": "ev28",
+    "pin": "yes"
+   },
+   "to": {
+    "node": "ev29",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "ev_w515",
+   "from": {
+    "node": "ev29",
+    "pin": "true"
+   },
+   "to": {
+    "node": "ev31",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w516",
+   "from": {
+    "node": "ev25",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev31",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w517",
+   "from": {
+    "node": "ev30",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev31",
+    "pin": "cd"
+   }
+  },
+  {
+   "id": "ev_w518",
+   "from": {
+    "node": "ev31",
+    "pin": "use"
+   },
+   "to": {
+    "node": "ev34",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w519",
+   "from": {
+    "node": "ev25",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev34",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w520",
+   "from": {
+    "node": "ev32",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev34",
+    "pin": "dmg"
+   }
+  },
+  {
+   "id": "ev_w521",
+   "from": {
+    "node": "ev33",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev34",
+    "pin": "speed"
+   }
+  },
+  {
+   "id": "ev_w522",
+   "from": {
+    "node": "ev31",
+    "pin": "wait"
+   },
+   "to": {
+    "node": "ev37",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w523",
+   "from": {
+    "node": "ev25",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev37",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w524",
+   "from": {
+    "node": "ev35",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev37",
+    "pin": "speed"
+   }
+  },
+  {
+   "id": "ev_w525",
+   "from": {
+    "node": "ev36",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev37",
+    "pin": "cd"
+   }
+  },
+  {
+   "id": "ev_w526",
+   "from": {
+    "node": "ev29",
+    "pin": "false"
+   },
+   "to": {
+    "node": "ev39",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w527",
+   "from": {
+    "node": "ev25",
+    "pin": "player"
+   },
+   "to": {
+    "node": "ev39",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w528",
+   "from": {
+    "node": "ev38",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev39",
+    "pin": "boost"
+   }
+  },
+  {
+   "id": "ev_w529",
+   "from": {
+    "node": "ev45",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev46",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w530",
+   "from": {
+    "node": "ev40",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev46",
+    "pin": "heal"
+   }
+  },
+  {
+   "id": "ev_w531",
+   "from": {
+    "node": "ev41",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev46",
+    "pin": "respawn"
+   }
+  },
+  {
+   "id": "ev_w532",
+   "from": {
+    "node": "ev45",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "ev46",
+    "pin": "vol"
+   }
+  },
+  {
+   "id": "ev_w533",
+   "from": {
+    "node": "ev45",
+    "pin": "who"
+   },
+   "to": {
+    "node": "ev46",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w534",
+   "from": {
+    "node": "ev47",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev48",
+    "pin": "go"
+   }
+  },
+  {
+   "id": "ev_w535",
+   "from": {
+    "node": "ev42",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev48",
+    "pin": "weapon"
+   }
+  },
+  {
+   "id": "ev_w536",
+   "from": {
+    "node": "ev43",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev48",
+    "pin": "respawn"
+   }
+  },
+  {
+   "id": "ev_w537",
+   "from": {
+    "node": "ev47",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "ev48",
+    "pin": "vol"
+   }
+  },
+  {
+   "id": "ev_w538",
+   "from": {
+    "node": "ev47",
+    "pin": "who"
+   },
+   "to": {
+    "node": "ev48",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w539",
+   "from": {
+    "node": "ev49",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev50",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w540",
+   "from": {
+    "node": "ev44",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev50",
+    "pin": "speed"
+   }
+  },
+  {
+   "id": "ev_w541",
+   "from": {
+    "node": "ev49",
+    "pin": "who"
+   },
+   "to": {
+    "node": "ev50",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w542",
+   "from": {
+    "node": "ev51",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev52",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w543",
+   "from": {
+    "node": "ev51",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "ev52",
+    "pin": "mine"
+   }
+  },
+  {
+   "id": "ev_w544",
+   "from": {
+    "node": "ev51",
+    "pin": "who"
+   },
+   "to": {
+    "node": "ev52",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w545",
+   "from": {
+    "node": "ev53",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev54",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w546",
+   "from": {
+    "node": "ev53",
+    "pin": "attacker"
+   },
+   "to": {
+    "node": "ev54",
+    "pin": "from"
+   }
+  },
+  {
+   "id": "ev_w547",
+   "from": {
+    "node": "ev53",
+    "pin": "victim"
+   },
+   "to": {
+    "node": "ev54",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "ev_w548",
+   "from": {
+    "node": "ev55",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev56",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w549",
+   "from": {
+    "node": "ev56",
+    "pin": "then"
+   },
+   "to": {
+    "node": "ev58",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "ev_w550",
+   "from": {
+    "node": "ev55",
+    "pin": "who"
+   },
+   "to": {
+    "node": "ev58",
+    "pin": "who"
+   }
+  },
+  {
+   "id": "ev_w551",
+   "from": {
+    "node": "ev56",
+    "pin": "entity"
+   },
+   "to": {
+    "node": "ev58",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "ev_w552",
+   "from": {
+    "node": "ev57",
+    "pin": "out"
+   },
+   "to": {
+    "node": "ev58",
+    "pin": "cd"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "jump_pad_help",
+   "graph": "jp_launch",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Jump Pad: Make Jump Pad puts a trigger volume (named jumppad) at an entity; wire Begin Overlap (name jumppad) into Launch From Jump Pad. Bots that walk on it fly too."
+  },
+  {
+   "id": "jump_pad_c1",
+   "graph": "jp_launch",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Launch From Jump Pad: Who is Begin Overlap's who (only players fly); Speed 0 is 800 units a second straight up."
+  },
+  {
+   "id": "double_jump_help",
+   "graph": "dj_jump",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Double Jump: Wire Player Pressed Button (Jump) in with the player. On the ground it only notes the jump; in the air it boosts once. Bots: Bot Wants Ability can fire it now and then while they chase or flee (call it from a Repeat for bots in the air)."
+  },
+  {
+   "id": "dash_help",
+   "graph": "dash_go",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Dash: Wire Player Pressed Button (Reload, or any key you like) in with the player. Not ready says the seconds left. Bots: from a Repeat, Bot Wants Ability (Ability with Cooldown) lets them dash now and then while chasing or fleeing; the cooldown holds for them too."
+  },
+  {
+   "id": "teleporter_help",
+   "graph": "tp_go",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Teleporter Pair: Wire a pad's Begin Overlap (or Player Touched) in with the other pad's entity as To. The cooldown stops a player bouncing straight back. Bots use teleporters they walk into."
+  },
+  {
+   "id": "ability_help",
+   "graph": "ab_use",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Ability with Cooldown: Wire your key or event into In with the Player; build the ability on Use. Cooldown 0 is 10 seconds. Bots: Bot Wants Ability (Chance a second, 0: 25%) says yes when a living enemy is within Range (0: 1500) so a Repeat every second can fire it in fights."
+  },
+  {
+   "id": "ability_c1",
+   "graph": "ab_use",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Ability with Cooldown: each player has their own cooldown. Seconds left is whole seconds (for a HUD line)."
+  },
+  {
+   "id": "fireball_help",
+   "graph": "fb_throw",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Fireball: Wire it after Ability with Cooldown's Use. The explosion hurts in a radius and the kills go to the thrower. Bots can throw it through Bot Wants Ability."
+  },
+  {
+   "id": "fireball_c1",
+   "graph": "fb_throw",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Fireball: the projectile carries the damage (Radius 150, an explosion where it hits); the kills go to the thrower."
+  },
+  {
+   "id": "mine_help",
+   "graph": "mine_place",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Proximity Mine: Place Mine makes a trigger volume named mine and a marker. Wire Begin Overlap (name mine) into Mine Stepped On. Its owner can't set it off. How many a player may lay is up to your mode. Bots: the mine is marked for bots to avoid once Bots Avoid Area exists (until then they may walk into it)."
+  },
+  {
+   "id": "health_pack_help",
+   "graph": "heal_take",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Health Pack: Spawn Health Pack at an entity (Spawn Health Pack Here takes a position); wire Begin Overlap (name heal) into Take Health Pack. A full-health player leaves it. Bots: each pack is a loot goal, so hurt or not, bots go and grab it."
+  },
+  {
+   "id": "health_pack_c1",
+   "graph": "heal_take",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Take Health Pack: Volume and Who are Begin Overlap's (name heal). Respawn after 0 is 20 seconds. How many pickups a map has is up to you."
+  },
+  {
+   "id": "weapon_pick_help",
+   "graph": "weap_take",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Weapon Pickup: Spawn Weapon Pickup at an entity (Spawn Weapon Pickup Here takes a position); wire Begin Overlap (name weap) into Take Weapon Pickup with the Weapon name (ak47, awp, m4a1...). Bots: each spawner is a loot goal, so bots go and grab it."
+  },
+  {
+   "id": "weapon_pick_c1",
+   "graph": "weap_take",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Take Weapon Pickup: Volume and Who are Begin Overlap's (name weap). Respawn after 0 is 20 seconds. How many pickups a map has is up to you."
+  },
+  {
+   "id": "countdown_help",
+   "graph": "cd_run",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Countdown HUD: Wire Round Started (or Freeze Time Ended) in. Label goes before the time (empty: Time left); it stops at 0 and runs Done. Bots don't read it."
+  },
+  {
+   "id": "hot_potato_help",
+   "graph": "hp_give",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Hot Potato: Give Potato to start (a random player); wire Player Hurt into Pass Potato (Attacker, Victim). Bots: everyone else hunts the holder, and the holder runs (a bot holder follows the farthest player away for a few seconds)."
+  },
+  {
+   "id": "hot_potato_c1",
+   "graph": "hp_tick",
+   "pos": {
+    "x": -40,
+    "y": -260
+   },
+   "size": {
+    "w": 1200,
+    "h": 120
+   },
+   "text": "Potato Tick: call it every second (a Repeat from Round Started). Blew up is Yes on the tick it went off; give a new potato then."
+  }
+ ]
+}

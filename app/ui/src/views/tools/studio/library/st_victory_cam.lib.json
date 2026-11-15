@@ -1,0 +1,271 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Victory Camera",
+ "description": "Everyone looks at the winner for Seconds (0: 5) at the end of a round.",
+ "category": "Starter: spectacle",
+ "kind": "macro",
+ "root": "vc_show",
+ "enums": [],
+ "structs": [],
+ "functions": [],
+ "macros": [
+  {
+   "id": "vc_show",
+   "name": "Victory Camera",
+   "inputs": [
+    {
+     "id": "go",
+     "name": "In",
+     "type": "exec"
+    },
+    {
+     "id": "winner",
+     "name": "Winner",
+     "type": "player"
+    },
+    {
+     "id": "secs",
+     "name": "Seconds",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "next",
+     "name": "Then",
+     "type": "exec"
+    }
+   ]
+  }
+ ],
+ "variables": [],
+ "nodes": [
+  {
+   "id": "vc_show_in",
+   "type": "macro.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_out",
+   "type": "macro.exit",
+   "pos": {
+    "x": 4000,
+    "y": 0
+   },
+   "params": {},
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_wpos",
+   "type": "vec.player",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "what": "eyes"
+   },
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_above",
+   "type": "vec.make",
+   "pos": {
+    "x": 0,
+    "y": 540
+   },
+   "params": {
+    "y": 0,
+    "z": 64
+   },
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_cam",
+   "type": "vec.op",
+   "pos": {
+    "x": 780,
+    "y": 540
+   },
+   "params": {
+    "op": "add"
+   },
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_view",
+   "type": "fun.view_from",
+   "pos": {
+    "x": 1040,
+    "y": 0
+   },
+   "params": {
+    "who": "all",
+    "secs": 5,
+    "offset": 128,
+    "move": 3,
+    "freeze": true
+   },
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_txt",
+   "type": "text.format",
+   "pos": {
+    "x": 1300,
+    "y": 720
+   },
+   "params": {
+    "text": "[0] wins!"
+   },
+   "graph": "vc_show"
+  },
+  {
+   "id": "vc_show_hud",
+   "type": "msg.hud",
+   "pos": {
+    "x": 1560,
+    "y": 0
+   },
+   "params": {
+    "slot": "center",
+    "seconds": 5,
+    "text": ""
+   },
+   "graph": "vc_show"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "vc_show_in",
+    "pin": "winner"
+   },
+   "to": {
+    "node": "vc_show_wpos",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "vc_show_wpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vc_show_cam",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "vc_show_above",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vc_show_cam",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "vc_show_in",
+    "pin": "go"
+   },
+   "to": {
+    "node": "vc_show_view",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "vc_show_cam",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vc_show_view",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "vc_show_wpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vc_show_view",
+    "pin": "to"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "vc_show_in",
+    "pin": "winner"
+   },
+   "to": {
+    "node": "vc_show_txt",
+    "pin": "a0"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "vc_show_view",
+    "pin": "then"
+   },
+   "to": {
+    "node": "vc_show_hud",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "vc_show_txt",
+    "pin": "out"
+   },
+   "to": {
+    "node": "vc_show_hud",
+    "pin": "value"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "vc_show_hud",
+    "pin": "then"
+   },
+   "to": {
+    "node": "vc_show_out",
+    "pin": "next"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "vc_show",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Victory Camera: Wire it where your mode picks a winner (before End Round). Winner is the player to show. Bots' views move too."
+  }
+ ]
+}

@@ -1,0 +1,1396 @@
+{
+ "schema": "loner-strike/graph-library",
+ "version": 1,
+ "name": "Proximity Mine",
+ "description": "Places a mine at the player's feet that blows up when someone steps near (Radius 0: 96, Damage 0: 120).",
+ "category": "Starter: abilities",
+ "kind": "function",
+ "root": "mine_place",
+ "enums": [],
+ "structs": [],
+ "functions": [
+  {
+   "id": "mine_place",
+   "name": "Place Mine",
+   "inputs": [
+    {
+     "id": "who",
+     "name": "Player",
+     "type": "player"
+    },
+    {
+     "id": "radius",
+     "name": "Radius",
+     "type": "number"
+    },
+    {
+     "id": "dmg",
+     "name": "Damage",
+     "type": "number"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "mine",
+     "name": "Mine",
+     "type": "entity"
+    }
+   ]
+  },
+  {
+   "id": "mine_step",
+   "name": "Mine Stepped On",
+   "inputs": [
+    {
+     "id": "mine",
+     "name": "Volume",
+     "type": "entity"
+    },
+    {
+     "id": "who",
+     "name": "Who",
+     "type": "entity"
+    }
+   ],
+   "outputs": []
+  }
+ ],
+ "macros": [],
+ "variables": [
+  {
+   "id": "mine_vols",
+   "name": "Mines",
+   "type": "array<entity>",
+   "scope": "mode"
+  },
+  {
+   "id": "mine_marks",
+   "name": "Mine markers",
+   "type": "array<entity>",
+   "scope": "mode"
+  },
+  {
+   "id": "mine_owner",
+   "name": "Mine owners",
+   "type": "array<player>",
+   "scope": "mode"
+  },
+  {
+   "id": "mine_dmg",
+   "name": "Mine damage",
+   "type": "array<number>",
+   "scope": "mode"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "mine_place_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_rad_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 520,
+    "y": 540
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_rad_d",
+   "type": "math.number",
+   "pos": {
+    "x": 780,
+    "y": 720
+   },
+   "params": {
+    "value": 96
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_rad",
+   "type": "logic.select",
+   "pos": {
+    "x": 1040,
+    "y": 540
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_dmg_set",
+   "type": "math.compare",
+   "pos": {
+    "x": 1300,
+    "y": 900
+   },
+   "params": {
+    "op": "gt",
+    "b": 0
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_dmg_d",
+   "type": "math.number",
+   "pos": {
+    "x": 1560,
+    "y": 1080
+   },
+   "params": {
+    "value": 120
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_dmg",
+   "type": "logic.select",
+   "pos": {
+    "x": 1820,
+    "y": 900
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_pos",
+   "type": "vec.player",
+   "pos": {
+    "x": 2080,
+    "y": 360
+   },
+   "params": {
+    "what": "origin"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_vol",
+   "type": "vol.spawn",
+   "pos": {
+    "x": 2340,
+    "y": 0
+   },
+   "params": {
+    "shape": "sphere",
+    "radius": 96,
+    "name": "mine"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_mark",
+   "type": "fx.marker",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {
+    "sprite": "sprites/ledglow.spr",
+    "height": 4,
+    "scale": 0.3,
+    "r": 255,
+    "g": 40,
+    "b": 0,
+    "pulse": true
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_add0",
+   "type": "array.add",
+   "pos": {
+    "x": 2860,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_g0",
+   "type": "var.get",
+   "pos": {
+    "x": 3120,
+    "y": 540
+   },
+   "params": {
+    "var": "mine_vols"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_add1",
+   "type": "array.add",
+   "pos": {
+    "x": 3380,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_g1",
+   "type": "var.get",
+   "pos": {
+    "x": 3640,
+    "y": 720
+   },
+   "params": {
+    "var": "mine_marks"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_add2",
+   "type": "array.add",
+   "pos": {
+    "x": 3900,
+    "y": 0
+   },
+   "params": {
+    "of": "player"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_g2",
+   "type": "var.get",
+   "pos": {
+    "x": 4160,
+    "y": 900
+   },
+   "params": {
+    "var": "mine_owner"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_add3",
+   "type": "array.add",
+   "pos": {
+    "x": 4420,
+    "y": 0
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_g3",
+   "type": "var.get",
+   "pos": {
+    "x": 4680,
+    "y": 1080
+   },
+   "params": {
+    "var": "mine_dmg"
+   },
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_place_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 4940,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_place"
+  },
+  {
+   "id": "mine_step_entry",
+   "type": "fn.entry",
+   "pos": {
+    "x": 260,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_gv",
+   "type": "var.get",
+   "pos": {
+    "x": 520,
+    "y": 360
+   },
+   "params": {
+    "var": "mine_vols"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_idx",
+   "type": "array.find",
+   "pos": {
+    "x": 780,
+    "y": 360
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_known",
+   "type": "math.compare",
+   "pos": {
+    "x": 1040,
+    "y": 360
+   },
+   "params": {
+    "op": "ge",
+    "b": 0
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_br0",
+   "type": "flow.branch",
+   "pos": {
+    "x": 1300,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_g_own",
+   "type": "var.get",
+   "pos": {
+    "x": 1560,
+    "y": 540
+   },
+   "params": {
+    "var": "mine_owner"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_own",
+   "type": "array.get",
+   "pos": {
+    "x": 1820,
+    "y": 540
+   },
+   "params": {
+    "of": "player"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_asp",
+   "type": "cast.player",
+   "pos": {
+    "x": 2080,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_isown",
+   "type": "logic.equal",
+   "pos": {
+    "x": 2340,
+    "y": 720
+   },
+   "params": {
+    "of": "player",
+    "op": "eq"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_br",
+   "type": "flow.branch",
+   "pos": {
+    "x": 2600,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_bpos",
+   "type": "vec.entity",
+   "pos": {
+    "x": 2860,
+    "y": 360
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_g_dmv",
+   "type": "var.get",
+   "pos": {
+    "x": 3120,
+    "y": 900
+   },
+   "params": {
+    "var": "mine_dmg"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_dmv",
+   "type": "array.get",
+   "pos": {
+    "x": 3380,
+    "y": 900
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_boom",
+   "type": "fx.explosion",
+   "pos": {
+    "x": 3640,
+    "y": 0
+   },
+   "params": {
+    "radius": 200
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_g_mkf",
+   "type": "var.get",
+   "pos": {
+    "x": 3900,
+    "y": 1080
+   },
+   "params": {
+    "var": "mine_marks"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_mkf",
+   "type": "array.get",
+   "pos": {
+    "x": 4160,
+    "y": 1080
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_rmmark",
+   "type": "fx.marker_remove",
+   "pos": {
+    "x": 4420,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_rmvol",
+   "type": "vol.remove",
+   "pos": {
+    "x": 4680,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_rm0",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 4940,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_gr0",
+   "type": "var.get",
+   "pos": {
+    "x": 5200,
+    "y": 1260
+   },
+   "params": {
+    "var": "mine_vols"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_rm1",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 5460,
+    "y": 0
+   },
+   "params": {
+    "of": "entity"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_gr1",
+   "type": "var.get",
+   "pos": {
+    "x": 5720,
+    "y": 1440
+   },
+   "params": {
+    "var": "mine_marks"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_rm2",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 5980,
+    "y": 0
+   },
+   "params": {
+    "of": "player"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_gr2",
+   "type": "var.get",
+   "pos": {
+    "x": 6240,
+    "y": 1620
+   },
+   "params": {
+    "var": "mine_owner"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_rm3",
+   "type": "array.remove_index",
+   "pos": {
+    "x": 6500,
+    "y": 0
+   },
+   "params": {
+    "of": "number"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_gr3",
+   "type": "var.get",
+   "pos": {
+    "x": 6760,
+    "y": 1800
+   },
+   "params": {
+    "var": "mine_dmg"
+   },
+   "graph": "mine_step"
+  },
+  {
+   "id": "mine_step_ret",
+   "type": "fn.return",
+   "pos": {
+    "x": 7020,
+    "y": 0
+   },
+   "params": {},
+   "graph": "mine_step"
+  }
+ ],
+ "edges": [
+  {
+   "id": "w1",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "radius"
+   },
+   "to": {
+    "node": "mine_place_rad_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w2",
+   "from": {
+    "node": "mine_place_rad_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_rad",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w3",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "radius"
+   },
+   "to": {
+    "node": "mine_place_rad",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w4",
+   "from": {
+    "node": "mine_place_rad_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_rad",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w5",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "dmg"
+   },
+   "to": {
+    "node": "mine_place_dmg_set",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w6",
+   "from": {
+    "node": "mine_place_dmg_set",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_dmg",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w7",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "dmg"
+   },
+   "to": {
+    "node": "mine_place_dmg",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w8",
+   "from": {
+    "node": "mine_place_dmg_d",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_dmg",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w9",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "mine_place_pos",
+    "pin": "player"
+   }
+  },
+  {
+   "id": "w10",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_vol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w11",
+   "from": {
+    "node": "mine_place_pos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_vol",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w12",
+   "from": {
+    "node": "mine_place_vol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_mark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w13",
+   "from": {
+    "node": "mine_place_pos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_mark",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w14",
+   "from": {
+    "node": "mine_place_mark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_add0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w15",
+   "from": {
+    "node": "mine_place_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "mine_place_add0",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "mine_place_g0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_add0",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "mine_place_add0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_add1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "mine_place_mark",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_add1",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "mine_place_g1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_add1",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "mine_place_add1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_add2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "mine_place_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "mine_place_add2",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "mine_place_g2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_add2",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w23",
+   "from": {
+    "node": "mine_place_add2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_add3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w24",
+   "from": {
+    "node": "mine_place_dmg",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_add3",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w25",
+   "from": {
+    "node": "mine_place_g3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_place_add3",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w26",
+   "from": {
+    "node": "mine_place_add3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_place_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w27",
+   "from": {
+    "node": "mine_place_vol",
+    "pin": "volume"
+   },
+   "to": {
+    "node": "mine_place_ret",
+    "pin": "mine"
+   }
+  },
+  {
+   "id": "w28",
+   "from": {
+    "node": "mine_step_gv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_idx",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w29",
+   "from": {
+    "node": "mine_step_entry",
+    "pin": "mine"
+   },
+   "to": {
+    "node": "mine_step_idx",
+    "pin": "item"
+   }
+  },
+  {
+   "id": "w30",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_known",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w31",
+   "from": {
+    "node": "mine_step_entry",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_br0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w32",
+   "from": {
+    "node": "mine_step_known",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_br0",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w33",
+   "from": {
+    "node": "mine_step_g_own",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_own",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w34",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_own",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w35",
+   "from": {
+    "node": "mine_step_br0",
+    "pin": "true"
+   },
+   "to": {
+    "node": "mine_step_asp",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w36",
+   "from": {
+    "node": "mine_step_entry",
+    "pin": "who"
+   },
+   "to": {
+    "node": "mine_step_asp",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w37",
+   "from": {
+    "node": "mine_step_asp",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_isown",
+    "pin": "a"
+   }
+  },
+  {
+   "id": "w38",
+   "from": {
+    "node": "mine_step_own",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_isown",
+    "pin": "b"
+   }
+  },
+  {
+   "id": "w39",
+   "from": {
+    "node": "mine_step_asp",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "mine_step_br",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w40",
+   "from": {
+    "node": "mine_step_isown",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_br",
+    "pin": "cond"
+   }
+  },
+  {
+   "id": "w41",
+   "from": {
+    "node": "mine_step_entry",
+    "pin": "mine"
+   },
+   "to": {
+    "node": "mine_step_bpos",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "w42",
+   "from": {
+    "node": "mine_step_g_dmv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_dmv",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w43",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_dmv",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w44",
+   "from": {
+    "node": "mine_step_br",
+    "pin": "false"
+   },
+   "to": {
+    "node": "mine_step_boom",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w45",
+   "from": {
+    "node": "mine_step_asp",
+    "pin": "fail"
+   },
+   "to": {
+    "node": "mine_step_boom",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w46",
+   "from": {
+    "node": "mine_step_bpos",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_boom",
+    "pin": "pos"
+   }
+  },
+  {
+   "id": "w47",
+   "from": {
+    "node": "mine_step_dmv",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_boom",
+    "pin": "dmg"
+   }
+  },
+  {
+   "id": "w48",
+   "from": {
+    "node": "mine_step_g_mkf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_mkf",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w49",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_mkf",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w50",
+   "from": {
+    "node": "mine_step_boom",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_rmmark",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w51",
+   "from": {
+    "node": "mine_step_mkf",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rmmark",
+    "pin": "marker"
+   }
+  },
+  {
+   "id": "w52",
+   "from": {
+    "node": "mine_step_rmmark",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_rmvol",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w53",
+   "from": {
+    "node": "mine_step_entry",
+    "pin": "mine"
+   },
+   "to": {
+    "node": "mine_step_rmvol",
+    "pin": "volume"
+   }
+  },
+  {
+   "id": "w54",
+   "from": {
+    "node": "mine_step_rmvol",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_rm0",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w55",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm0",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w56",
+   "from": {
+    "node": "mine_step_gr0",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm0",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w57",
+   "from": {
+    "node": "mine_step_rm0",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_rm1",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w58",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm1",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w59",
+   "from": {
+    "node": "mine_step_gr1",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm1",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w60",
+   "from": {
+    "node": "mine_step_rm1",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_rm2",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w61",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm2",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w62",
+   "from": {
+    "node": "mine_step_gr2",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm2",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w63",
+   "from": {
+    "node": "mine_step_rm2",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_rm3",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w64",
+   "from": {
+    "node": "mine_step_idx",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm3",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w65",
+   "from": {
+    "node": "mine_step_gr3",
+    "pin": "out"
+   },
+   "to": {
+    "node": "mine_step_rm3",
+    "pin": "array"
+   }
+  },
+  {
+   "id": "w66",
+   "from": {
+    "node": "mine_step_rm3",
+    "pin": "then"
+   },
+   "to": {
+    "node": "mine_step_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w67",
+   "from": {
+    "node": "mine_step_br",
+    "pin": "true"
+   },
+   "to": {
+    "node": "mine_step_ret",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w68",
+   "from": {
+    "node": "mine_step_br0",
+    "pin": "false"
+   },
+   "to": {
+    "node": "mine_step_ret",
+    "pin": "exec"
+   }
+  }
+ ],
+ "comments": [
+  {
+   "id": "help",
+   "graph": "mine_place",
+   "pos": {
+    "x": -40,
+    "y": -420
+   },
+   "size": {
+    "w": 1400,
+    "h": 120
+   },
+   "text": "Proximity Mine: Place Mine makes a trigger volume named mine and a marker. Wire Begin Overlap (name mine) into Mine Stepped On. Its owner can't set it off. How many a player may lay is up to your mode. Bots: the mine is marked for bots to avoid once Bots Avoid Area exists (until then they may walk into it)."
+  }
+ ]
+}

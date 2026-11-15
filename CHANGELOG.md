@@ -54,6 +54,7 @@ The first full release:
 - NPCs and interactables: characters people talk to and things they use with E (levers, terminals, notes, pickups), placed in the map editor. In Game Mode Studio, Say and Say and Choose give them lines and replies, Run Dialog plays a whole conversation from a table, and the example The Quest Giver shows a small quest.
 - Bots use interactables marked Bots may use, and Game Mode Studio warns when bots won't know about something your mode wants them to use.
 - New Game Mode Studio nodes: Status Icon, Objective Marker and Remove Marker, and Kill Feed Line.
+- Game Mode Studio's Starter library: ready-made functions and macros to drag in and change (jump pads, teleporters, abilities with cooldowns, a fireball, mines, health and weapon pickups, spawn protection, lives, burn, slow and freeze, kill streaks, a countdown, capture zones, a kill cam, a victory camera, hot potato and quest steps). Bots know how to use them.
 - Shared creatures: the custom creatures a map, mode or prefab uses go with it, and Creature Studio shares a creature on its own as a creature kind. Remix one like anything else.
 - Share and remix maps: publish a map with its editable source, ready for the map editor, TrenchBroom, Hammer or J.A.C.K.
 - TrenchBroom: its groups and layers come in on import and go back out on export.

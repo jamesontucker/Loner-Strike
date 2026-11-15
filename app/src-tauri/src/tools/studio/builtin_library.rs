@@ -1,0 +1,23 @@
+// Written by make_starter.py: the library items that ship with the app (ui/.../studio/library).
+pub const BUILTIN: &[(&str, &str)] = &[
+    ("run_dialog", include_str!("../../../../ui/src/views/tools/studio/library/run_dialog.lib.json")),
+    ("st_ability", include_str!("../../../../ui/src/views/tools/studio/library/st_ability.lib.json")),
+    ("st_capture", include_str!("../../../../ui/src/views/tools/studio/library/st_capture.lib.json")),
+    ("st_countdown", include_str!("../../../../ui/src/views/tools/studio/library/st_countdown.lib.json")),
+    ("st_dash", include_str!("../../../../ui/src/views/tools/studio/library/st_dash.lib.json")),
+    ("st_double_jump", include_str!("../../../../ui/src/views/tools/studio/library/st_double_jump.lib.json")),
+    ("st_fireball", include_str!("../../../../ui/src/views/tools/studio/library/st_fireball.lib.json")),
+    ("st_health_pack", include_str!("../../../../ui/src/views/tools/studio/library/st_health_pack.lib.json")),
+    ("st_hot_potato", include_str!("../../../../ui/src/views/tools/studio/library/st_hot_potato.lib.json")),
+    ("st_jump_pad", include_str!("../../../../ui/src/views/tools/studio/library/st_jump_pad.lib.json")),
+    ("st_kill_cam", include_str!("../../../../ui/src/views/tools/studio/library/st_kill_cam.lib.json")),
+    ("st_kill_streak", include_str!("../../../../ui/src/views/tools/studio/library/st_kill_streak.lib.json")),
+    ("st_lives", include_str!("../../../../ui/src/views/tools/studio/library/st_lives.lib.json")),
+    ("st_mine", include_str!("../../../../ui/src/views/tools/studio/library/st_mine.lib.json")),
+    ("st_quest", include_str!("../../../../ui/src/views/tools/studio/library/st_quest.lib.json")),
+    ("st_spawn_prot", include_str!("../../../../ui/src/views/tools/studio/library/st_spawn_prot.lib.json")),
+    ("st_status", include_str!("../../../../ui/src/views/tools/studio/library/st_status.lib.json")),
+    ("st_teleporter", include_str!("../../../../ui/src/views/tools/studio/library/st_teleporter.lib.json")),
+    ("st_victory_cam", include_str!("../../../../ui/src/views/tools/studio/library/st_victory_cam.lib.json")),
+    ("st_weapon_pick", include_str!("../../../../ui/src/views/tools/studio/library/st_weapon_pick.lib.json")),
+];

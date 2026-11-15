@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORIES, compatible, defaultParams, matchRank, nodeDef, searchNodes, type NodeDef, type PinType } from "./registry";
 import { pinsOf, typeLabel } from "./pins";
 import type { Graph } from "./schema";
+import type { LibItem } from "./library";
+import { useStudio } from "./store";
 
 export type PaletteAt = {
   /** screen position, relative to the canvas box */
@@ -19,8 +21,14 @@ export type PaletteAt = {
   only?: string;
 };
 
+/** The node search's folders for library items (after the nodes' own) */
+const LIB_BUILTIN = "Starter library";
+const LIB_MINE = "My library";
+/** a folder's place: the registry's order, the library folders last */
+const catRank = (c: string) => (c === LIB_BUILTIN || c === LIB_MINE ? 999 : CATEGORIES.indexOf(c));
+
 /** One line of the palette: a node with maybe some settings already made. */
-export type PaletteItem = { def: NodeDef; title: string; help: string; category: string; params?: Record<string, string | number | boolean> };
+export type PaletteItem = { def: NodeDef; title: string; help: string; category: string; params?: Record<string, string | number | boolean>; lib?: LibItem };
 
 const LATENT = ["timer.delay", "timer.retrigger", "timer.repeat", "timer.countdown", "msg.menu"];
 /** made with their Function or Macro, or listed per Function (Call X) */
@@ -98,7 +106,7 @@ function saveList(key: string, v: string[]) {
   }
 }
 /** An item's identity (its node type and the settings it comes with). */
-export const itemKey = (it: PaletteItem) => `${it.def.type}:${JSON.stringify(it.params ?? {})}`;
+export const itemKey = (it: PaletteItem) => (it.lib ? `lib:${it.lib.id}` : `${it.def.type}:${JSON.stringify(it.params ?? {})}`);
 
 /** A big category splits into sub-folders: Events, Values (no flow), Actions. */
 function subOf(it: PaletteItem, big: boolean): string {
@@ -136,6 +144,7 @@ export function Palette({
   const recent = useMemo(() => loadList(RECENT), []);
   const [opened, setOpened] = useState<Record<string, boolean>>({});
   const wire = context ? at.wire : undefined;
+  const library = useStudio((s) => s.library);
   const list = useMemo(() => {
     const words = q.trim().toLowerCase();
     const reg: PaletteItem[] = searchNodes(q, wire && { type: wire.type, dir: wire.dir })
@@ -147,15 +156,25 @@ export function Palette({
         for (const p of d.presets ?? [])
           if (fitsTab(graph, tab, d) && matchRank(p.title, words, p.keywords) < 5) reg.push({ def: d, title: p.title, help: d.help, category: d.category, params: p.params });
     const own = ownItems(graph, tab).filter((it, k) => (!words || `${it.title} ${it.category}`.toLowerCase().includes(words)) && (!wire || itemFits(graph, it, wire, k)));
-    const all = [...own, ...reg].filter((it) => !at.only || it.category === at.only);
+    // My library's Functions and Macros (the Starter library's too): picking one brings it into the
+    // mode with what it needs and places its call (not offered for a dropped wire)
+    const libs: PaletteItem[] = wire
+      ? []
+      : library
+          .filter((it) => (it.kind === "function" || it.kind === "macro") && (!words || `${it.name} ${it.category} ${it.description}`.toLowerCase().includes(words)))
+          .flatMap((it) => {
+            const def = nodeDef(it.kind === "macro" ? "macro.use" : "fn.call");
+            return def ? [{ def, title: it.name, help: it.description, category: it.builtIn ? LIB_BUILTIN : LIB_MINE, lib: it }] : [];
+          });
+    const all = [...own, ...reg, ...libs].filter((it) => !at.only || it.category === at.only);
     // searching: the best matches first (their folder goes first too, so Enter places the top
     // one); otherwise by category. (stable: the search's own order otherwise)
     const rank = (it: PaletteItem) => (words ? matchRank(it.title, words, it.def.keywords) : 0);
     return all
       .map((it, k) => ({ it, k, r: rank(it) }))
-      .sort((a, b) => a.r - b.r || CATEGORIES.indexOf(a.it.category) - CATEGORIES.indexOf(b.it.category) || a.k - b.k)
+      .sort((a, b) => a.r - b.r || catRank(a.it.category) - catRank(b.it.category) || a.k - b.k)
       .map((x) => x.it);
-  }, [q, wire, at.only, graph, tab]);
+  }, [q, wire, at.only, graph, tab, library]);
   const searching = q.trim() !== "";
   // folders: open while searching (those with matches), when the list is short, or when opened
   const rows = useMemo(() => {
@@ -177,7 +196,7 @@ export function Palette({
     // (searching: folders in the order of their best match; else the usual order)
     const cats: string[] = [];
     for (const it of list) if (!cats.includes(it.category)) cats.push(it.category);
-    if (!searching) cats.sort((a, b) => CATEGORIES.indexOf(a) - CATEGORIES.indexOf(b));
+    if (!searching) cats.sort((a, b) => catRank(a) - catRank(b));
     for (const c of cats) {
       const items = list.filter((it) => it.category === c);
       const id = `cat:${c}`;
