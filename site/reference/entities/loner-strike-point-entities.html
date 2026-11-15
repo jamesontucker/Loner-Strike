@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loner-Strike: Point entities · Loner-Strike reference</title>
+<meta name="description" content="1 entity the map editor places. Pick one for its keys and flags.">
+<link rel="icon" href="../../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../reference/base.css">
+<link rel="stylesheet" href="../../reference/ref.css">
+</head>
+<body data-root="../../">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="/">Home</a><a href="../../docs.html#whats-new">What's new</a><a href="../../docs.html#tools">Tools</a><a href="../../docs.html#vps">Run a server</a><a href="../../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  <details class="ref-filter-box"><summary>Filters</summary><div class="ref-filters" id="ref-filters"><label>Category <select id="ref-f-cat"><option value="">Any</option></select></label>
+      <label>Kind <select id="ref-f-kind"><option value="">Any</option><option value="event">Event</option><option value="action">Action</option><option value="value">Value</option><option value="flow">Flow</option><option value="point">Point entity</option><option value="brush">Brush entity</option></select></label>
+      <label>Type <select id="ref-f-type"><option value="">Any</option></select></label>
+      <label><input type="checkbox" id="ref-f-bots"> Works with bots</label>
+      <label><input type="checkbox" id="ref-f-limits"> Has limits</label></div></details>
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Loner-Strike: Point entities <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><details class=""><summary><a href="../../reference/entities/brush-entities.html">Brush entities</a><span class="n">53</span></summary></details><details class=""><summary><a href="../../reference/entities/point-entities.html">Point entities</a><span class="n">78</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-creatures.html">Loner-Strike: Creatures</a><span class="n">2</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-defense.html">Loner-Strike: Defense</a><span class="n">2</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-doors-traps.html">Loner-Strike: Doors &amp; traps</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-loot.html">Loner-Strike: Loot</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-objectives.html">Loner-Strike: Objectives</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-people.html">Loner-Strike: People</a><span class="n">3</span></summary></details><details open class="here"><summary><a href="../../reference/entities/loner-strike-point-entities.html" aria-current="page">Loner-Strike: Point entities</a><span class="n">1</span></summary><ul><li><a href="#e-ls-event">ls_event</a></li></ul></details><details class=""><summary><a href="../../reference/entities/loner-strike-social.html">Loner-Strike: Social</a><span class="n">1</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-spawns-players.html">Loner-Strike: Spawns &amp; players</a><span class="n">2</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-upgrades.html">Loner-Strike: Upgrades</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-zones.html">Loner-Strike: Zones</a><span class="n">3</span></summary></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a></p>
+    <h1>Loner-Strike: Point entities</h1>
+    <p class="lead">1 entity the map editor places. Pick one for its keys and flags.</p>
+<div class="grid"><a class="mini" href="#e-ls-event"><span class="badge k-component">component</span><b>ls_event</b><span class="s">Loner-Strike: fires a Studio custom event when triggered</span></a></div>
+<article class="card" id="e-ls-event"><header><h3><a href="#e-ls-event">ls_event</a></h3><span class="badge k-component">component</span><button class="copy-link" type="button" data-id="e-ls-event" aria-label="Copy a link to ls_event">Copy link</button></header>
+<p class="what">Loner-Strike: fires a Studio custom event when triggered</p><p class="ty">A point entity. Needs Loner-Strike's components plugin, which comes with the app.</p>
+<details><summary>Keys <span class="n">(2)</span></summary><dl><dt>Name (trigger this) <span class="ty">targetname</span></dt><dd></dd><dt>Value A (optional) <span class="ty">a</span></dt><dd>A value sent along with the event (optional).</dd></dl></details>
+</article>
+    <p class="meta ty">Made from the app's own catalog (cstrike.fgd, lonerstrike.fgd, components.json), so it matches the app.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#e-ls-event">ls_event</a></li></ul></nav>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../../reference/ref.js" defer></script>
+</body>
+</html>

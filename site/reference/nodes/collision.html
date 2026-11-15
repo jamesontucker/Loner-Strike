@@ -3,230 +3,105 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Collision · Loner-Strike docs</title>
-<meta name="description" content="Game Mode Studio's Collision nodes (9): what each does, its inputs and outputs, settings, limits and related nodes.">
+<title>Collision · Loner-Strike reference</title>
+<meta name="description" content="9 Game Mode Studio nodes. Pick one for its pins, settings and limits.">
 <link rel="icon" href="../../favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<style>
-@font-face { font-family: "Counter-Strike"; src: url("../../fonts/counter-strike.ttf") format("truetype"); font-display: swap; }
-:root {
-  --bg: #3e4637; --side: #353c2f; --panel: #4c5844; --panel-2: #5a6a50;
-  --bevel-hi: rgba(136,145,128,.55); --bevel-lo: #292c21;
-  --bone: #d8ded3; --dim: #c2c9b7; --faint: #aeb7a2;
-  --signal: #c4b550; --ink: #26240f;
-  --raised: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
-  --sunken: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
-  --stencil: "Counter-Strike", Impact, sans-serif;
-  --text: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
-  --top: 58px;
-}
-* { box-sizing: border-box; }
-html { scroll-padding-top: calc(var(--top) + 16px); }
-body { margin: 0; background: var(--bg); color: var(--bone); font: 500 18px/1.6 var(--text); -webkit-font-smoothing: antialiased; }
-a { color: var(--signal); }
-:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.skip:focus { position: fixed; left: 16px; top: 12px; z-index: 9; width: auto; height: auto; clip: auto; background: var(--signal); color: var(--ink); padding: 6px 12px; }
-
-/* top bar, as on the home page */
-.top { position: sticky; top: 0; z-index: 6; background: rgba(53,60,47,.96); backdrop-filter: blur(6px); box-shadow: 0 1px 0 var(--bevel-lo); }
-.top .wrap { width: min(1200px, 100% - 32px); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: var(--top); gap: 16px; }
-.brand { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
-.wordmark { font: 400 22px/1 var(--stencil); color: var(--bone); text-decoration: none; }
-.brand .here { color: var(--faint); font-weight: 600; }
-.top nav { display: flex; gap: 22px; align-items: center; }
-.top nav a { color: var(--dim); text-decoration: none; font-weight: 600; }
-.top nav a:hover { color: var(--bone); }
-.top nav a.btn { color: var(--ink); background: var(--signal); padding: 7px 14px; border-radius: 2px; font-weight: 700; font-size: 16px;
-  box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
-.top nav a.btn:hover { background: #d4c55d; }
-
-/* the topic list on the left (sticky), one topic at a time on the right */
-.docs { width: min(1200px, 100% - 32px); margin: 0 auto; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 48px; align-items: start; }
-.rail { align-self: stretch; }
-.side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); max-height: calc(100dvh - var(--top) - 40px); overflow-y: auto; overscroll-behavior: contain;
-  margin: 20px 0 40px; background: var(--side); box-shadow: var(--raised); border-radius: 3px; padding: 12px 0 14px; scrollbar-width: thin; scrollbar-color: var(--panel-2) transparent; }
-.search { margin: 0 12px 6px; }
-.search input { width: 100%; font: 500 16px/1.2 var(--text); color: var(--bone); background: #2b3125; box-shadow: var(--sunken); border: 0; border-radius: 2px; padding: 9px 10px; }
-.search input::placeholder { color: var(--faint); opacity: .85; }
-.group { margin-top: 8px; }
-.group > b { display: block; padding: 2px 16px 3px; color: var(--faint); font-size: 14px; font-weight: 700; }
-.side ul { list-style: none; margin: 0; padding: 0; }
-.side li + li { margin-top: 0; }
-.side a { display: block; padding: 3px 16px; color: var(--dim); text-decoration: none; font-weight: 600; line-height: 1.3; border-left: 3px solid transparent; }
-.side a:hover { color: var(--bone); background: rgba(255,255,255,.04); }
-.side a[aria-current="page"] { color: var(--bone); background: var(--panel); border-left-color: var(--signal); }
-.side .sub { display: none; padding: 2px 0 6px; }
-.side a[aria-current="page"] + .sub { display: block; }
-.side .sub a { padding: 2px 16px 2px 30px; font-size: 16px; font-weight: 500; color: var(--faint); }
-.side .sub a:hover, .side .sub a.on { color: var(--bone); }
-/* search results: one per heading, the topic above it, a snippet with the match marked */
-.results ul { list-style: none; margin: 0; padding: 0; }
-.results [role="option"] { display: block; padding: 6px 16px; color: var(--dim); cursor: pointer; border-left: 3px solid transparent; line-height: 1.3; }
-.results [role="option"] b { display: block; color: var(--bone); font-weight: 700; }
-.results [role="option"] small { display: block; color: var(--faint); font-weight: 600; font-size: 13px; }
-.results [role="option"] span { display: block; color: var(--dim); font-size: 15px; font-weight: 500; margin-top: 2px; }
-.results [role="option"]:hover, .results [role="option"][aria-selected="true"] { background: var(--panel); border-left-color: var(--signal); }
-.results mark, mark.hit { background: var(--signal); color: var(--ink); border-radius: 2px; padding: 0 1px; }
-.results .none { margin: 6px 16px; color: var(--faint); font-size: 16px; }
-.results .none a { display: inline; padding: 0; border: 0; color: var(--signal); }
-.flash { animation: flash 2.2s ease-out; }
-@keyframes flash { 0%, 35% { background: rgba(196,181,80,.28); box-shadow: 0 0 0 6px rgba(196,181,80,.28); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
-.wrong-link { margin: 0 12px 4px; }
-.side a.wrong-link { padding: 4px 4px; border: 0; color: var(--signal); font-weight: 700; }
-/* collapsible groups */
-.group-btn { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; background: none; border: 0; cursor: pointer; padding: 3px 16px; color: var(--faint); font: 700 14px/1.3 var(--text); text-align: left; }
-.group-btn:hover { color: var(--bone); }
-.group-btn .chev { transition: transform .15s; font-size: 12px; }
-.group-btn[aria-expanded="false"] .chev { transform: rotate(-90deg); }
-.group-btn[aria-expanded="false"] + ul { display: none; }
-/* on this page (wide screens) */
-.toc { display: none; }
-@media (min-width: 1200px) {
-  .docs { width: min(1400px, 100% - 32px); grid-template-columns: 250px minmax(0, 1fr) 210px; gap: 40px; }
-  .toc:not([hidden]) { display: block; position: sticky; top: calc(var(--top) + 20px); margin: 26px 0 40px; max-height: calc(100vh - var(--top) - 40px); overflow-y: auto; scrollbar-width: thin; }
-  .toc-title { margin: 0 0 6px; color: var(--faint); font-size: 14px; font-weight: 700; }
-  .toc ul { list-style: none; margin: 0; padding: 0; box-shadow: inset 1px 0 0 var(--bevel-lo); }
-  .toc a { display: block; padding: 3px 10px; color: var(--faint); text-decoration: none; font-size: 15px; font-weight: 600; line-height: 1.3; border-left: 2px solid transparent; }
-  .toc a.h3 { padding-left: 22px; font-weight: 500; font-size: 14px; }
-  .toc a:hover { color: var(--bone); }
-  .toc a.on { color: var(--bone); border-left-color: var(--signal); }
-}
-@media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--signal); } .group-btn .chev { transition: none; } }
-html:not(.js) .search { display: none; }
-html:not(.js) .side .sub { display: block; }
-
-.menu-btn { display: none; }
-
-article { padding: 26px 0 64px; min-width: 0; max-width: 780px; }
-.topic + .topic { margin-top: 56px; }
-.js .topic { display: none; }
-.js .topic + .topic { margin-top: 0; }
-.js .topic.on { display: block; }
-.crumb { color: var(--faint); font-size: 15px; font-weight: 600; margin: 0; }
-h1 { font: 400 38px/1.1 var(--stencil); margin: 4px 0 6px; }
-h2 { font-size: 23px; line-height: 1.3; margin: 32px 0 4px; }
-h2 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
-h2:hover .anchor, h2 .anchor:focus { opacity: .8; }
-h3 { font-size: 19px; margin: 22px 0 4px; }
-p, li, td { color: var(--dim); text-wrap: pretty; }
-ul, ol { padding-left: 22px; }
-li + li { margin-top: 4px; }
-b, strong { color: var(--bone); }
-.lead { font-size: 20px; margin: 6px 0 0; }
-code { font: 15px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--side); padding: 1px 5px; border-radius: 2px; color: var(--bone); overflow-wrap: anywhere; }
-pre { background: #23271c; box-shadow: var(--sunken); padding: 12px 14px; border-radius: 2px; overflow-x: auto; margin: 10px 0 14px; }
-pre code { background: none; padding: 0; font-size: 14px; white-space: pre; overflow-wrap: normal; }
-.table { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 17px; }
-th, td { text-align: left; padding: 7px 14px 7px 0; border-bottom: 1px solid rgba(0,0,0,.2); vertical-align: top; }
-th { color: var(--faint); font-weight: 600; font-size: 15px; }
-td:first-child { white-space: nowrap; }
-.kbd { font: 600 14px/1 ui-monospace, Menlo, Consolas, monospace; background: var(--panel-2); box-shadow: var(--raised); padding: 3px 7px; border-radius: 2px; color: var(--bone); white-space: nowrap; }
-.note { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; margin: 16px 0; }
-.note p { margin: 4px 0; }
-.msg { border-left: 3px solid var(--panel-2); padding: 2px 0 2px 12px; margin: 8px 0; color: var(--bone); font-style: italic; }
-article ul { list-style: none; padding-left: 22px; }
-article ul > li { position: relative; }
-article ul > li::before { content: ""; position: absolute; left: -18px; top: .66em; width: 7px; height: 7px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
-article ol { list-style: none; padding-left: 34px; counter-reset: step; }
-article ol > li { position: relative; counter-increment: step; }
-article ol > li::before { content: counter(step); position: absolute; left: -34px; top: .15em; width: 22px; height: 22px; display: grid; place-items: center; background: var(--signal); color: var(--ink); font-weight: 700; font-size: 14px; line-height: 1; box-shadow: inset -2px -2px 0 #8c7f33, inset 2px 2px 0 #e3d683; }
-.side .sub a { position: relative; }
-.side .sub a::before { content: ""; position: absolute; left: 17px; top: .72em; width: 5px; height: 5px; background: var(--faint); opacity: .6; }
-.side .sub a.on::before, .side .sub a:hover::before { background: var(--signal); opacity: 1; }
-.menu-label { color: var(--faint); font-size: 14px; font-weight: 600; margin-right: 8px; }
-details.prov { background: var(--panel); box-shadow: var(--raised); border-radius: 2px; margin: 8px 0; }
-details.prov summary { cursor: pointer; padding: 9px 14px; font-weight: 700; color: var(--bone); }
-details.prov p { margin: 0; padding: 0 14px 12px; }
-@media (hover: none) { h2 .anchor { display: none; } }
-@media (max-width: 520px) {
-  .table tr { display: block; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.2); }
-  .table td, .table th { display: block; border: 0; padding: 0; }
-  .table td:first-child { margin-bottom: 2px; }
-  .table thead { display: none; }
-}
-figure.shot { margin: 16px 0 20px; }
-figure.shot img { display: block; width: 100%; height: auto; border-radius: 3px; background: #23271c; box-shadow: var(--raised), 0 14px 40px rgba(0,0,0,.3); }
-figure.shot figcaption { margin-top: 8px; color: var(--faint); font-size: 15px; }
-h3 { font-weight: 700; }
-.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; padding-top: 16px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
-.pager a { display: block; text-decoration: none; background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; min-width: 0; color: var(--bone); font-weight: 700; }
-.pager a small { display: block; color: var(--faint); font-weight: 500; font-size: 14px; }
-.pager a:hover { background: var(--panel-2); }
-.pager .next { margin-left: auto; text-align: right; }
-.pager a[hidden] { display: none; }
-html:not(.js) .pager { display: none; }
-
-footer { width: min(1200px, 100% - 32px); margin: 0 auto; padding: 24px 0 48px; color: var(--faint); font-size: 15px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
-footer a { color: var(--dim); }
-
-@media (max-width: 900px) {
-  .top nav a:not(.btn) { display: none; }
-  .brand .here { display: none; }
-  html { scroll-padding-top: calc(var(--top) + 64px); }
-  .docs { grid-template-columns: 1fr; gap: 0; }
-  .rail { display: contents; }
-  .js .menu-btn { position: sticky; top: var(--top); z-index: 5; display: flex; align-items: center; justify-content: space-between; width: calc(100% + 32px); margin: 0 -16px; padding: 12px 16px;
-    font: 700 17px/1.2 var(--text); color: var(--bone); background: var(--panel); box-shadow: 0 1px 0 var(--bevel-lo); border: 0; cursor: pointer; text-align: left; }
-  .menu-btn .chev { transition: transform .15s; }
-  .menu-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
-  .side { position: static; max-height: none; margin: 0; border-radius: 0 0 3px 3px; }
-  .js .side { display: none; position: sticky; top: calc(var(--top) + 46px); z-index: 4; max-height: calc(100dvh - var(--top) - 60px); overflow-y: auto; }
-  .js .side.open { display: block; }
-  h1 { font-size: 32px; }
-  td:first-child { white-space: normal; }
-}
-@media (prefers-reduced-motion: reduce) { .menu-btn .chev { transition: none; } }
-</style>
-<style>
-.ref .topic { display: block; }
-.ref .pins { display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr); gap: 2px 14px; margin: 6px 0 10px; font-size: 16px; }
-.ref .pins dt { color: var(--bone); font-weight: 600; }
-.ref .pins dd { margin: 0; color: var(--dim); }
-.ref .ty { color: var(--faint); font-weight: 500; font-size: 14px; }
-.ref .node { padding: 14px 0; box-shadow: inset 0 -1px 0 rgba(0,0,0,.2); }
-.ref .node h3 { margin: 0 0 4px; }
-.ref h3 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
-.ref h3:hover .anchor, .ref h3 .anchor:focus { opacity: .8; }
-.ref .meta { color: var(--faint); font-size: 15px; }
-.ref .side { position: static; max-height: none; }
-@media (min-width: 901px) { .ref .side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); } }
-@media (max-width: 520px) { .ref .pins { grid-template-columns: 1fr; } .ref .pins dd { margin-bottom: 6px; } }
-</style>
+<link rel="stylesheet" href="../../reference/base.css">
+<link rel="stylesheet" href="../../reference/ref.css">
 </head>
-<body class="ref">
+<body data-root="../../">
 <a class="sr-only skip" href="#content">Skip to the reference</a>
 <header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
-<nav aria-label="Site"><a href="../../docs.html">Docs</a><a href="../../docs.html#reference">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
-<div class="docs">
-  <div class="rail"><nav class="side" aria-label="Collision"><div class="group"><b>Categories</b><ul><li><a href="../nodes.html">All categories</a></li><li><a href="events.html">Events</a></li><li><a href="conditions.html">Conditions</a></li><li><a href="numbers.html">Numbers</a></li><li><a href="text.html">Text</a></li><li><a href="variables.html">Variables</a></li><li><a href="flow.html">Flow</a></li><li><a href="functions.html">Functions</a></li><li><a href="macros.html">Macros</a></li><li><a href="arrays.html">Arrays</a></li><li><a href="maps.html">Maps</a></li><li><a href="structs.html">Structs</a></li><li><a href="enums.html">Enums</a></li><li><a href="vectors.html">Vectors</a></li><li><a href="spatial.html">Spatial</a></li><li><a href="timers.html">Timers</a></li><li><a href="round-clock.html">Round clock</a></li><li><a href="players.html">Players</a></li><li><a href="input.html">Input</a></li><li><a href="cooldowns.html">Cooldowns</a></li><li><a href="weapons.html">Weapons</a></li><li><a href="damage.html">Damage</a></li><li><a href="squads.html">Squads</a></li><li><a href="buying.html">Buying</a></li><li><a href="saved.html">Saved</a></li><li><a href="messages.html">Messages</a></li><li><a href="game.html">Game</a></li><li><a href="scoring.html">Scoring</a></li><li><a href="bots.html">Bots</a></li><li><a href="components.html">Components</a></li><li><a href="map-markers.html">Map markers</a></li><li><a href="waves.html">Waves</a></li><li><a href="upgrades.html">Upgrades</a></li><li><a href="world.html">World</a></li><li><a href="entities.html">Entities</a></li><li><a href="effects.html">Effects</a></li><li><a href="advanced.html">Advanced</a></li><li><a href="downed.html">Downed</a></li><li><a href="shop.html">Shop</a></li><li><a href="npcs.html">NPCs</a></li><li><a href="battle-royale.html">Battle Royale</a></li><li><a href="creatures.html">Creatures</a></li><li><a href="data-tables.html">Data tables</a></li><li><a href="projectiles.html">Projectiles</a></li><li><a href="hud-view.html">HUD &amp; View</a></li><li><a href="collision.html" aria-current="page">Collision</a></li></ul></div></nav></div>
-  <article id="content" tabindex="-1">
-    <p class="crumb"><a href="../../docs.html#reference">Reference</a> › <a href="../nodes.html">Game Mode Studio nodes</a></p>
+<nav aria-label="Site"><a href="/">Home</a><a href="../../docs.html#whats-new">What's new</a><a href="../../docs.html#tools">Tools</a><a href="../../docs.html#vps">Run a server</a><a href="../../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  <details class="ref-filter-box"><summary>Filters</summary><div class="ref-filters" id="ref-filters"><label>Category <select id="ref-f-cat"><option value="">Any</option></select></label>
+      <label>Kind <select id="ref-f-kind"><option value="">Any</option><option value="event">Event</option><option value="action">Action</option><option value="value">Value</option><option value="flow">Flow</option><option value="point">Point entity</option><option value="brush">Brush entity</option></select></label>
+      <label>Type <select id="ref-f-type"><option value="">Any</option></select></label>
+      <label><input type="checkbox" id="ref-f-bots"> Works with bots</label>
+      <label><input type="checkbox" id="ref-f-limits"> Has limits</label></div></details>
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Collision <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><details class=""><summary><a href="../../reference/nodes/events.html">Events</a><span class="n">44</span></summary></details><details class=""><summary><a href="../../reference/nodes/conditions.html">Conditions</a><span class="n">11</span></summary></details><details class=""><summary><a href="../../reference/nodes/numbers.html">Numbers</a><span class="n">15</span></summary></details><details class=""><summary><a href="../../reference/nodes/text.html">Text</a><span class="n">18</span></summary></details><details class=""><summary><a href="../../reference/nodes/variables.html">Variables</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/flow.html">Flow</a><span class="n">18</span></summary></details><details class=""><summary><a href="../../reference/nodes/functions.html">Functions</a><span class="n">6</span></summary></details><details class=""><summary><a href="../../reference/nodes/macros.html">Macros</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/nodes/arrays.html">Arrays</a><span class="n">22</span></summary></details><details class=""><summary><a href="../../reference/nodes/maps.html">Maps</a><span class="n">8</span></summary></details><details class=""><summary><a href="../../reference/nodes/structs.html">Structs</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/nodes/enums.html">Enums</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/nodes/vectors.html">Vectors</a><span class="n">23</span></summary></details><details class=""><summary><a href="../../reference/nodes/spatial.html">Spatial</a><span class="n">6</span></summary></details><details class=""><summary><a href="../../reference/nodes/timers.html">Timers</a><span class="n">11</span></summary></details><details class=""><summary><a href="../../reference/nodes/round-clock.html">Round clock</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/players.html">Players</a><span class="n">95</span></summary></details><details class=""><summary><a href="../../reference/nodes/input.html">Input</a><span class="n">2</span></summary></details><details class=""><summary><a href="../../reference/nodes/cooldowns.html">Cooldowns</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/weapons.html">Weapons</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/nodes/damage.html">Damage</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/squads.html">Squads</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/buying.html">Buying</a><span class="n">2</span></summary></details><details class=""><summary><a href="../../reference/nodes/saved.html">Saved</a><span class="n">8</span></summary></details><details class=""><summary><a href="../../reference/nodes/messages.html">Messages</a><span class="n">15</span></summary></details><details class=""><summary><a href="../../reference/nodes/game.html">Game</a><span class="n">22</span></summary></details><details class=""><summary><a href="../../reference/nodes/scoring.html">Scoring</a><span class="n">1</span></summary></details><details class=""><summary><a href="../../reference/nodes/bots.html">Bots</a><span class="n">20</span></summary></details><details class=""><summary><a href="../../reference/nodes/components.html">Components</a><span class="n">40</span></summary></details><details class=""><summary><a href="../../reference/nodes/map-markers.html">Map markers</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/waves.html">Waves</a><span class="n">8</span></summary></details><details class=""><summary><a href="../../reference/nodes/upgrades.html">Upgrades</a><span class="n">21</span></summary></details><details class=""><summary><a href="../../reference/nodes/world.html">World</a><span class="n">36</span></summary></details><details class=""><summary><a href="../../reference/nodes/entities.html">Entities</a><span class="n">28</span></summary></details><details class=""><summary><a href="../../reference/nodes/effects.html">Effects</a><span class="n">20</span></summary></details><details class=""><summary><a href="../../reference/nodes/advanced.html">Advanced</a><span class="n">9</span></summary></details><details class=""><summary><a href="../../reference/nodes/downed.html">Downed</a><span class="n">8</span></summary></details><details class=""><summary><a href="../../reference/nodes/shop.html">Shop</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/npcs.html">NPCs</a><span class="n">14</span></summary></details><details class=""><summary><a href="../../reference/nodes/battle-royale.html">Battle Royale</a><span class="n">15</span></summary></details><details class=""><summary><a href="../../reference/nodes/creatures.html">Creatures</a><span class="n">25</span></summary></details><details class=""><summary><a href="../../reference/nodes/data-tables.html">Data tables</a><span class="n">6</span></summary></details><details class=""><summary><a href="../../reference/nodes/projectiles.html">Projectiles</a><span class="n">5</span></summary></details><details class=""><summary><a href="../../reference/nodes/hud-view.html">HUD &amp; View</a><span class="n">12</span></summary></details><details open class="here"><summary><a href="../../reference/nodes/collision.html" aria-current="page">Collision</a><span class="n">9</span></summary><ul><li><a href="#n-col-semiclip">Players Pass Through Each Other</a></li><li><a href="#n-col-set-solid">Set Entity Collision</a></li><li><a href="#n-col-set-size">Set Entity Size</a></li><li><a href="#n-col-takes-damage">Entity Takes Damage</a></li><li><a href="#n-col-health">Entity Health</a></li><li><a href="#n-col-set-health">Set Entity Health</a></li><li><a href="#n-vol-spawn">Spawn Trigger Volume</a></li><li><a href="#n-vol-remove">Remove Trigger Volume</a></li><li><a href="#n-vol-is-overlapping">Is Overlapping</a></li></ul></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a></p>
     <h1>Collision</h1>
-    <p class="lead">Game Mode Studio's Collision nodes (9): what each does, its inputs and outputs, settings, limits and related nodes.</p>
-    <p class="meta">Made from the app's own catalog (nodes.json, nodehelp.json, limits.ts), so it always matches the app.</p>
-<section class="topic" id="c-collision"><div class="node" id="n-col-semiclip"><h3>Players Pass Through Each Other <a class="anchor" href="#n-col-semiclip" aria-label="Link to Players Pass Through Each Other">#</a></h3>
-<p>Lets players walk through each other (semiclip): nobody, everyone, teammates only, or chosen players (each wired player set on or off; a chosen player passes through everyone). Bullets still hit. Turning it off nudges anyone left inside someone else free. Bots path as usual.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Player (chosen players) <span class="ty">Player</span></dt><dd>Player (chosen players): a player. Optional.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Who</dt><dd>Pick one: Nobody (off), Everyone, Teammates only, Chosen players. Default: all. Choices: Nobody (off), Everyone, Teammates only, Chosen players.</dd><dt>This player passes through (chosen players)</dt><dd>On or off. Default: true.</dd></dl><p class="meta">Related: <a href="#n-col-set-solid">Set Entity Collision</a>, <a href="#n-col-set-size">Set Entity Size</a>, <a href="#n-col-takes-damage">Entity Takes Damage</a></p></div>
-<div class="node" id="n-col-set-solid"><h3>Set Entity Collision <a class="anchor" href="#n-col-set-solid" aria-label="Link to Set Entity Collision">#</a></h3>
-<p>How a prop, an NPC or a spawned thing collides: solid (blocks and gets hit), trigger (things pass through, it still feels touches) or pass-through (nothing). Not for players (Players Pass Through Each Other is for them).</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Entity <span class="ty">Entity</span></dt><dd>The entity. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Done <span class="ty">Yes/No</span></dt><dd>Done: yes or no.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Collision</dt><dd>Pick one: Solid, Trigger, Pass-through. Default: solid. Choices: Solid, Trigger, Pass-through.</dd></dl><p class="meta">Related: <a href="#n-col-semiclip">Players Pass Through Each Other</a>, <a href="#n-col-set-size">Set Entity Size</a>, <a href="#n-col-takes-damage">Entity Takes Damage</a></p></div>
-<div class="node" id="n-col-set-size"><h3>Set Entity Size <a class="anchor" href="#n-col-set-size" aria-label="Link to Set Entity Size">#</a></h3>
-<p>The box an entity takes up, as mins and maxs from its origin (each min below its max). Not for players: their box is the game's.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Entity <span class="ty">Entity</span></dt><dd>The entity. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Done <span class="ty">Yes/No</span></dt><dd>Done: yes or no.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Min X</dt><dd>A number from -4096 to 4096. Default: -16. From -4096 up to 4096.</dd><dt>Min Y</dt><dd>A number from -4096 to 4096. Default: -16. From -4096 up to 4096.</dd><dt>Min Z</dt><dd>A number from -4096 to 4096. Default: 0. From -4096 up to 4096.</dd><dt>Max X</dt><dd>A number from -4096 to 4096. Default: 16. From -4096 up to 4096.</dd><dt>Max Y</dt><dd>A number from -4096 to 4096. Default: 16. From -4096 up to 4096.</dd><dt>Max Z</dt><dd>A number from -4096 to 4096. Default: 32. From -4096 up to 4096.</dd></dl><p class="meta">Related: <a href="#n-col-set-solid">Set Entity Collision</a>, <a href="#n-col-takes-damage">Entity Takes Damage</a>, <a href="#n-col-semiclip">Players Pass Through Each Other</a></p></div>
-<div class="node" id="n-col-takes-damage"><h3>Entity Takes Damage <a class="anchor" href="#n-col-takes-damage" aria-label="Link to Entity Takes Damage">#</a></h3>
-<p>Whether a prop or an NPC can be hurt (on) or not (off). Not for players (Set God Mode is theirs).</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Entity <span class="ty">Entity</span></dt><dd>The entity. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Done <span class="ty">Yes/No</span></dt><dd>Done: yes or no.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Takes damage</dt><dd>On or off. Default: true.</dd></dl><p class="meta">Related: <a href="#n-col-set-size">Set Entity Size</a>, <a href="#n-col-health">Entity Health</a>, <a href="#n-col-set-solid">Set Entity Collision</a></p></div>
-<div class="node" id="n-col-health"><h3>Entity Health <a class="anchor" href="#n-col-health" aria-label="Link to Entity Health">#</a></h3>
-<p>An entity's health (a prop, an NPC, a creature, a player).</p><p class="meta">Inputs</p><dl class="pins"><dt>Entity <span class="ty">Entity</span></dt><dd>The entity. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Health <span class="ty">Number</span></dt><dd>Health: a number.</dd></dl><p class="meta">Related: <a href="#n-col-set-health">Set Entity Health</a>, <a href="#n-col-takes-damage">Entity Takes Damage</a>, <a href="#n-col-set-size">Set Entity Size</a></p></div>
-<div class="node" id="n-col-set-health"><h3>Set Entity Health <a class="anchor" href="#n-col-set-health" aria-label="Link to Set Entity Health">#</a></h3>
-<p>Sets a prop's or an NPC's health (at least 1; to destroy it use its own damage or removal). Not for players (Set Health is theirs).</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Entity <span class="ty">Entity</span></dt><dd>The entity. Needs a wire.</dd><dt>Health <span class="ty">Number</span></dt><dd>Health: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Done <span class="ty">Yes/No</span></dt><dd>Done: yes or no.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Health</dt><dd>A number from 1 to 1e+06. A wire into the pin of the same name is used instead. Default: 100. From 1 up to 1000000.</dd></dl><p class="meta">Related: <a href="#n-col-health">Entity Health</a>, <a href="#n-vol-spawn">Spawn Trigger Volume</a>, <a href="#n-col-takes-damage">Entity Takes Damage</a></p></div>
-<div class="node" id="n-vol-spawn"><h3>Spawn Trigger Volume <a class="anchor" href="#n-vol-spawn" aria-label="Link to Spawn Trigger Volume">#</a></h3>
-<p>An invisible box or sphere that tells you who goes in and out (Begin Overlap, End Overlap). Where: a Position, or At entity plus a Local offset (X forward, Y right, Z up by its facing) - attached, it follows the entity and turns with it. Rotation (pitch, yaw, roll) turns a box; a sphere ignores it. Size is its own setting; Velocity and Scale don't apply (a volume doesn't move by itself). Who counts: players, creatures or anything. Checked ten times a second (one search round each volume). A name lets Player Touched and the overlap events pick it out. At most 32 at once.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Position <span class="ty">Vector</span></dt><dd>The position.</dd><dt>Rotation <span class="ty">Vector</span></dt><dd>Rotation: a position or direction (X, Y, Z). Optional.</dd><dt>At entity <span class="ty">Entity</span></dt><dd>At entity: an entity (a thing in the map). Optional.</dd><dt>Local offset <span class="ty">Vector</span></dt><dd>Local offset: a position or direction (X, Y, Z). Optional.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Volume <span class="ty">Entity</span></dt><dd>Volume: an entity (a thing in the map).</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Shape</dt><dd>Pick one: Box, Sphere. Default: box. Choices: Box, Sphere.</dd><dt>Width (box)</dt><dd>A number from 8 to 8192. Default: 128. From 8 up to 8192.</dd><dt>Depth (box)</dt><dd>A number from 8 to 8192. Default: 128. From 8 up to 8192.</dd><dt>Height (box)</dt><dd>A number from 8 to 8192. Default: 96. From 8 up to 8192.</dd><dt>Radius (sphere)</dt><dd>A number from 8 to 4096. Default: 96. From 8 up to 4096.</dd><dt>Who counts</dt><dd>Pick one: Players, Creatures, Anything. Default: players. Choices: Players, Creatures, Anything.</dd><dt>Name</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -).</dd></dl><p class="meta">Limits: Trigger volumes at once (32 by default, hosts can raise it to 256; slow above 64); Things inside one trigger volume (32 by default, hosts can raise it to 64; slow above 48).</p><p class="meta">Related: <a href="#n-col-set-health">Set Entity Health</a>, <a href="#n-vol-remove">Remove Trigger Volume</a>, <a href="#n-col-health">Entity Health</a></p></div>
-<div class="node" id="n-vol-remove"><h3>Remove Trigger Volume <a class="anchor" href="#n-vol-remove" aria-label="Link to Remove Trigger Volume">#</a></h3>
-<p>Removes a trigger volume (whoever was inside gets End Overlap).</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Volume <span class="ty">Entity</span></dt><dd>Volume: an entity (a thing in the map). Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Related: <a href="#n-vol-spawn">Spawn Trigger Volume</a>, <a href="#n-vol-is-overlapping">Is Overlapping</a>, <a href="#n-col-set-health">Set Entity Health</a></p></div>
-<div class="node" id="n-vol-is-overlapping"><h3>Is Overlapping <a class="anchor" href="#n-vol-is-overlapping" aria-label="Link to Is Overlapping">#</a></h3>
-<p>Is this entity (a player, a creature...) inside the trigger volume right now (and one its filter counts)?</p><p class="meta">Inputs</p><dl class="pins"><dt>Volume <span class="ty">Entity</span></dt><dd>Volume: an entity (a thing in the map). Needs a wire.</dd><dt>Entity <span class="ty">Entity</span></dt><dd>The entity. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Overlapping <span class="ty">Yes/No</span></dt><dd>Overlapping: yes or no.</dd></dl><p class="meta">Related: <a href="#n-vol-remove">Remove Trigger Volume</a>, <a href="#n-vol-spawn">Spawn Trigger Volume</a>, <a href="#n-col-set-health">Set Entity Health</a></p></div></section>
-  </article>
+    <p class="lead">9 Game Mode Studio nodes. Pick one for its pins, settings and limits.</p>
+<div class="grid" aria-label="Collision nodes"><a class="mini" href="#n-col-semiclip"><span class="badge k-action">action</span><b>Players Pass Through Each Other</b><span class="s">Lets players walk through each other (semiclip): nobody, everyone, teammates only, or chosen players (each wired player set on or off; a chosen player passes through everyone).</span></a><a class="mini" href="#n-col-set-solid"><span class="badge k-action">action</span><b>Set Entity Collision</b><span class="s">How a prop, an NPC or a spawned thing collides: solid (blocks and gets hit), trigger (things pass through, it still feels touches) or pass-through (nothing).</span></a><a class="mini" href="#n-col-set-size"><span class="badge k-action">action</span><b>Set Entity Size</b><span class="s">The box an entity takes up, as mins and maxs from its origin (each min below its max).</span></a><a class="mini" href="#n-col-takes-damage"><span class="badge k-action">action</span><b>Entity Takes Damage</b><span class="s">Whether a prop or an NPC can be hurt (on) or not (off).</span></a><a class="mini" href="#n-col-health"><span class="badge k-value">value</span><b>Entity Health</b><span class="s">An entity's health (a prop, an NPC, a creature, a player).</span></a><a class="mini" href="#n-col-set-health"><span class="badge k-action">action</span><b>Set Entity Health</b><span class="s">Sets a prop's or an NPC's health (at least 1; to destroy it use its own damage or removal).</span></a><a class="mini" href="#n-vol-spawn"><span class="badge k-action">action</span><b>Spawn Trigger Volume</b><span class="s">An invisible box or sphere that tells you who goes in and out (Begin Overlap, End Overlap).</span></a><a class="mini" href="#n-vol-remove"><span class="badge k-action">action</span><b>Remove Trigger Volume</b><span class="s">Removes a trigger volume (whoever was inside gets End Overlap).</span></a><a class="mini" href="#n-vol-is-overlapping"><span class="badge k-value">value</span><b>Is Overlapping</b><span class="s">Is this entity (a player, a creature...) inside the trigger volume right now (and one its filter counts)?</span></a></div>
+<article class="card" id="n-col-semiclip" aria-labelledby="n-col-semiclip-h">
+<header><h3 id="n-col-semiclip-h"><a href="#n-col-semiclip">Players Pass Through Each Other</a></h3><span class="badge k-action">action</span><span class="id">col.semiclip</span><button class="copy-link" type="button" data-id="n-col-semiclip" aria-label="Copy a link to Players Pass Through Each Other">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Players Pass Through Each Other</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#5ab0ff"></span>Player (chosen players)</li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Lets players walk through each other (semiclip): nobody, everyone, teammates only, or chosen players (each wired player set on or off; a chosen player passes through everyone). Bullets still hit. Turning it off nudges anyone left inside someone else free. Bots path as usual.</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Player (chosen players) <span class="ty">Player</span></dt><dd>Player (chosen players): a player. Optional.</dd></dl></details><details><summary>Settings <span class="n">(2)</span></summary><dl><dt>Who</dt><dd>Pick one: Nobody (off), Everyone, Teammates only, Chosen players. Default: all.</dd><dt>This player passes through (chosen players)</dt><dd>On or off. Default: true.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-col-set-solid">Set Entity Collision</a><a class="chip" href="#n-col-set-size">Set Entity Size</a><a class="chip" href="#n-col-takes-damage">Entity Takes Damage</a></div>
+</article>
+<article class="card" id="n-col-set-solid" aria-labelledby="n-col-set-solid-h">
+<header><h3 id="n-col-set-solid-h"><a href="#n-col-set-solid">Set Entity Collision</a></h3><span class="badge k-action">action</span><span class="id">col.set_solid</span><button class="copy-link" type="button" data-id="n-col-set-solid" aria-label="Copy a link to Set Entity Collision">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Set Entity Collision</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#4dd0c8"></span>Entity</li></ul><ul class="out"><li><span class="pin exec"></span></li><li>Done<span class="pin" style="--c:#ff6b8a"></span></li></ul></div></div>
+<p class="what">How a prop, an NPC or a spawned thing collides: solid (blocks and gets hit), trigger (things pass through, it still feels touches) or pass-through (nothing). Not for players (Players Pass Through Each Other is for them).</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Entity <span class="ty">Entity</span></dt><dd>The entity. Needs a wire.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Done <span class="ty">Yes/No</span></dt><dd>Done: yes or no.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Collision</dt><dd>Pick one: Solid, Trigger, Pass-through. Default: solid.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-col-semiclip">Players Pass Through Each Other</a><a class="chip" href="#n-col-set-size">Set Entity Size</a><a class="chip" href="#n-col-takes-damage">Entity Takes Damage</a></div>
+</article>
+<article class="card" id="n-col-set-size" aria-labelledby="n-col-set-size-h">
+<header><h3 id="n-col-set-size-h"><a href="#n-col-set-size">Set Entity Size</a></h3><span class="badge k-action">action</span><span class="id">col.set_size</span><button class="copy-link" type="button" data-id="n-col-set-size" aria-label="Copy a link to Set Entity Size">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Set Entity Size</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#4dd0c8"></span>Entity</li></ul><ul class="out"><li><span class="pin exec"></span></li><li>Done<span class="pin" style="--c:#ff6b8a"></span></li></ul></div></div>
+<p class="what">The box an entity takes up, as mins and maxs from its origin (each min below its max). Not for players: their box is the game's.</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Entity <span class="ty">Entity</span></dt><dd>The entity. Needs a wire.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Done <span class="ty">Yes/No</span></dt><dd>Done: yes or no.</dd></dl></details><details><summary>Settings <span class="n">(6)</span></summary><dl><dt>Min X</dt><dd>A number from -4096 to 4096. Default: -16.</dd><dt>Min Y</dt><dd>A number from -4096 to 4096. Default: -16.</dd><dt>Min Z</dt><dd>A number from -4096 to 4096. Default: 0.</dd><dt>Max X</dt><dd>A number from -4096 to 4096. Default: 16.</dd><dt>Max Y</dt><dd>A number from -4096 to 4096. Default: 16.</dd><dt>Max Z</dt><dd>A number from -4096 to 4096. Default: 32.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-col-set-solid">Set Entity Collision</a><a class="chip" href="#n-col-takes-damage">Entity Takes Damage</a><a class="chip" href="#n-col-semiclip">Players Pass Through Each Other</a></div>
+</article>
+<article class="card" id="n-col-takes-damage" aria-labelledby="n-col-takes-damage-h">
+<header><h3 id="n-col-takes-damage-h"><a href="#n-col-takes-damage">Entity Takes Damage</a></h3><span class="badge k-action">action</span><span class="id">col.takes_damage</span><button class="copy-link" type="button" data-id="n-col-takes-damage" aria-label="Copy a link to Entity Takes Damage">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Entity Takes Damage</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#4dd0c8"></span>Entity</li></ul><ul class="out"><li><span class="pin exec"></span></li><li>Done<span class="pin" style="--c:#ff6b8a"></span></li></ul></div></div>
+<p class="what">Whether a prop or an NPC can be hurt (on) or not (off). Not for players (Set God Mode is theirs).</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Entity <span class="ty">Entity</span></dt><dd>The entity. Needs a wire.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Done <span class="ty">Yes/No</span></dt><dd>Done: yes or no.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Takes damage</dt><dd>On or off. Default: true.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-col-set-size">Set Entity Size</a><a class="chip" href="#n-col-health">Entity Health</a><a class="chip" href="#n-col-set-solid">Set Entity Collision</a></div>
+</article>
+<article class="card" id="n-col-health" aria-labelledby="n-col-health-h">
+<header><h3 id="n-col-health-h"><a href="#n-col-health">Entity Health</a></h3><span class="badge k-value">value</span><span class="id">col.health</span><button class="copy-link" type="button" data-id="n-col-health" aria-label="Copy a link to Entity Health">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Entity Health</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#4dd0c8"></span>Entity</li></ul><ul class="out"><li>Health<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">An entity's health (a prop, an NPC, a creature, a player).</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Entity <span class="ty">Entity</span></dt><dd>The entity. Needs a wire.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Health <span class="ty">Number</span></dt><dd>Health: a number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-col-set-health">Set Entity Health</a><a class="chip" href="#n-col-takes-damage">Entity Takes Damage</a><a class="chip" href="#n-col-set-size">Set Entity Size</a></div>
+</article>
+<article class="card" id="n-col-set-health" aria-labelledby="n-col-set-health-h">
+<header><h3 id="n-col-set-health-h"><a href="#n-col-set-health">Set Entity Health</a></h3><span class="badge k-action">action</span><span class="id">col.set_health</span><button class="copy-link" type="button" data-id="n-col-set-health" aria-label="Copy a link to Set Entity Health">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Set Entity Health</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#4dd0c8"></span>Entity</li><li><span class="pin" style="--c:#9be36a"></span>Health</li></ul><ul class="out"><li><span class="pin exec"></span></li><li>Done<span class="pin" style="--c:#ff6b8a"></span></li></ul></div></div>
+<p class="what">Sets a prop's or an NPC's health (at least 1; to destroy it use its own damage or removal). Not for players (Set Health is theirs).</p>
+<details><summary>Inputs <span class="n">(2)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Entity <span class="ty">Entity</span></dt><dd>The entity. Needs a wire.</dd><dt>Health <span class="ty">Number</span></dt><dd>Health: a number. Leave it empty to use the setting.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Done <span class="ty">Yes/No</span></dt><dd>Done: yes or no.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Health</dt><dd>A number from 1 to 1e+06. A wire into the pin of the same name is used instead. Default: 100. From 1 up to 1000000.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-col-health">Entity Health</a><a class="chip" href="#n-vol-spawn">Spawn Trigger Volume</a><a class="chip" href="#n-col-takes-damage">Entity Takes Damage</a></div>
+</article>
+<article class="card" id="n-vol-spawn" aria-labelledby="n-vol-spawn-h">
+<header><h3 id="n-vol-spawn-h"><a href="#n-vol-spawn">Spawn Trigger Volume</a></h3><span class="badge k-action">action</span><span class="id">vol.spawn</span><button class="copy-link" type="button" data-id="n-vol-spawn" aria-label="Copy a link to Spawn Trigger Volume">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Spawn Trigger Volume</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#ffd23f"></span>Position</li><li><span class="pin" style="--c:#ffd23f"></span>Rotation</li><li><span class="pin" style="--c:#4dd0c8"></span>At entity</li><li><span class="pin" style="--c:#ffd23f"></span>Local offset</li></ul><ul class="out"><li><span class="pin exec"></span></li><li>Volume<span class="pin" style="--c:#4dd0c8"></span></li></ul></div></div>
+<p class="what">An invisible box or sphere that tells you who goes in and out (Begin Overlap, End Overlap). Where: a Position, or At entity plus a Local offset (X forward, Y right, Z up by its facing) - attached, it follows the entity and turns with it. Rotation (pitch, yaw, roll) turns a box; a sphere ignores it. Size is its own setting; Velocity and Scale don't apply (a volume doesn't move by itself). Who counts: players, creatures or anything. Checked ten times a second (one search round each volume). A name lets Player Touched and the overlap events pick it out. At most 32 at once.</p>
+<details><summary>Inputs <span class="n">(4)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Position <span class="ty">Vector</span></dt><dd>The position.</dd><dt>Rotation <span class="ty">Vector</span></dt><dd>Rotation: a position or direction (X, Y, Z). Optional.</dd><dt>At entity <span class="ty">Entity</span></dt><dd>At entity: an entity (a thing in the map). Optional.</dd><dt>Local offset <span class="ty">Vector</span></dt><dd>Local offset: a position or direction (X, Y, Z). Optional.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Volume <span class="ty">Entity</span></dt><dd>Volume: an entity (a thing in the map).</dd></dl></details><details><summary>Settings <span class="n">(7)</span></summary><dl><dt>Shape</dt><dd>Pick one: Box, Sphere. Default: box.</dd><dt>Width (box)</dt><dd>A number from 8 to 8192. Default: 128.</dd><dt>Depth (box)</dt><dd>A number from 8 to 8192. Default: 128.</dd><dt>Height (box)</dt><dd>A number from 8 to 8192. Default: 96.</dd><dt>Radius (sphere)</dt><dd>A number from 8 to 4096. Default: 96.</dd><dt>Who counts</dt><dd>Pick one: Players, Creatures, Anything. Default: players.</dd><dt>Name</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -).</dd></dl></details><details><summary>Limits <span class="n">(2)</span></summary><dl><dt>Trigger volumes at once</dt><dd>32 by default; hosts can raise it to 256. Above 64 the server may slow down.</dd><dt>Things inside one trigger volume</dt><dd>32 by default; hosts can raise it to 64. Above 48 the server may slow down.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-col-set-health">Set Entity Health</a><a class="chip" href="#n-vol-remove">Remove Trigger Volume</a><a class="chip" href="#n-col-health">Entity Health</a></div>
+</article>
+<article class="card" id="n-vol-remove" aria-labelledby="n-vol-remove-h">
+<header><h3 id="n-vol-remove-h"><a href="#n-vol-remove">Remove Trigger Volume</a></h3><span class="badge k-action">action</span><span class="id">vol.remove</span><button class="copy-link" type="button" data-id="n-vol-remove" aria-label="Copy a link to Remove Trigger Volume">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Remove Trigger Volume</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#4dd0c8"></span>Volume</li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Removes a trigger volume (whoever was inside gets End Overlap).</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Volume <span class="ty">Entity</span></dt><dd>Volume: an entity (a thing in the map). Needs a wire.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-vol-spawn">Spawn Trigger Volume</a><a class="chip" href="#n-vol-is-overlapping">Is Overlapping</a><a class="chip" href="#n-col-set-health">Set Entity Health</a></div>
+</article>
+<article class="card" id="n-vol-is-overlapping" aria-labelledby="n-vol-is-overlapping-h">
+<header><h3 id="n-vol-is-overlapping-h"><a href="#n-vol-is-overlapping">Is Overlapping</a></h3><span class="badge k-value">value</span><span class="id">vol.is_overlapping</span><button class="copy-link" type="button" data-id="n-vol-is-overlapping" aria-label="Copy a link to Is Overlapping">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Is Overlapping</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#4dd0c8"></span>Volume</li><li><span class="pin" style="--c:#4dd0c8"></span>Entity</li></ul><ul class="out"><li>Overlapping<span class="pin" style="--c:#ff6b8a"></span></li></ul></div></div>
+<p class="what">Is this entity (a player, a creature...) inside the trigger volume right now (and one its filter counts)?</p>
+<details><summary>Inputs <span class="n">(2)</span></summary><dl><dt>Volume <span class="ty">Entity</span></dt><dd>Volume: an entity (a thing in the map). Needs a wire.</dd><dt>Entity <span class="ty">Entity</span></dt><dd>The entity. Needs a wire.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Overlapping <span class="ty">Yes/No</span></dt><dd>Overlapping: yes or no.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-vol-remove">Remove Trigger Volume</a><a class="chip" href="#n-vol-spawn">Spawn Trigger Volume</a><a class="chip" href="#n-col-set-health">Set Entity Health</a></div>
+</article>
+    <p class="meta ty">Made from the app's own catalog (nodes.json, nodehelp.json, limits.ts), so it matches the app.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#n-col-semiclip">Players Pass Through Each Other</a></li><li><a href="#n-col-set-solid">Set Entity Collision</a></li><li><a href="#n-col-set-size">Set Entity Size</a></li><li><a href="#n-col-takes-damage">Entity Takes Damage</a></li><li><a href="#n-col-health">Entity Health</a></li><li><a href="#n-col-set-health">Set Entity Health</a></li><li><a href="#n-vol-spawn">Spawn Trigger Volume</a></li><li><a href="#n-vol-remove">Remove Trigger Volume</a></li><li><a href="#n-vol-is-overlapping">Is Overlapping</a></li></ul></nav>
 </div>
 <footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../../reference/ref.js" defer></script>
 </body>
 </html>

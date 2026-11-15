@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loner-Strike: Spawns &amp; players · Loner-Strike reference</title>
+<meta name="description" content="2 entities the map editor places. Pick one for its keys and flags.">
+<link rel="icon" href="../../favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../reference/base.css">
+<link rel="stylesheet" href="../../reference/ref.css">
+</head>
+<body data-root="../../">
+<a class="sr-only skip" href="#content">Skip to the reference</a>
+<header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
+<nav aria-label="Site"><a href="/">Home</a><a href="../../docs.html#whats-new">What's new</a><a href="../../docs.html#tools">Tools</a><a href="../../docs.html#vps">Run a server</a><a href="../../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  <details class="ref-filter-box"><summary>Filters</summary><div class="ref-filters" id="ref-filters"><label>Category <select id="ref-f-cat"><option value="">Any</option></select></label>
+      <label>Kind <select id="ref-f-kind"><option value="">Any</option><option value="event">Event</option><option value="action">Action</option><option value="value">Value</option><option value="flow">Flow</option><option value="point">Point entity</option><option value="brush">Brush entity</option></select></label>
+      <label>Type <select id="ref-f-type"><option value="">Any</option></select></label>
+      <label><input type="checkbox" id="ref-f-bots"> Works with bots</label>
+      <label><input type="checkbox" id="ref-f-limits"> Has limits</label></div></details>
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Loner-Strike: Spawns &amp; players <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><details class=""><summary><a href="../../reference/entities/brush-entities.html">Brush entities</a><span class="n">53</span></summary></details><details class=""><summary><a href="../../reference/entities/point-entities.html">Point entities</a><span class="n">78</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-creatures.html">Loner-Strike: Creatures</a><span class="n">2</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-defense.html">Loner-Strike: Defense</a><span class="n">2</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-doors-traps.html">Loner-Strike: Doors &amp; traps</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-loot.html">Loner-Strike: Loot</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-objectives.html">Loner-Strike: Objectives</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-people.html">Loner-Strike: People</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-point-entities.html">Loner-Strike: Point entities</a><span class="n">1</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-social.html">Loner-Strike: Social</a><span class="n">1</span></summary></details><details open class="here"><summary><a href="../../reference/entities/loner-strike-spawns-players.html" aria-current="page">Loner-Strike: Spawns &amp; players</a><span class="n">2</span></summary><ul><li><a href="#e-ls-player-class">ls_player_class</a></li><li><a href="#e-ls-respawn-point">ls_respawn_point</a></li></ul></details><details class=""><summary><a href="../../reference/entities/loner-strike-upgrades.html">Loner-Strike: Upgrades</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/entities/loner-strike-zones.html">Loner-Strike: Zones</a><span class="n">3</span></summary></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a></p>
+    <h1>Loner-Strike: Spawns &amp; players</h1>
+    <p class="lead">2 entities the map editor places. Pick one for its keys and flags.</p>
+<div class="grid"><a class="mini" href="#e-ls-player-class"><span class="badge k-component">component</span><b>ls_player_class</b><span class="s">A player class: health, speed, weapons, model.</span></a><a class="mini" href="#e-ls-respawn-point"><span class="badge k-component">component</span><b>ls_respawn_point</b><span class="s">Where players of a team (re)spawn in a mode.</span></a></div>
+<article class="card" id="e-ls-player-class"><header><h3><a href="#e-ls-player-class">ls_player_class</a></h3><span class="badge k-component">component</span><span class="id">Player class</span><button class="copy-link" type="button" data-id="e-ls-player-class" aria-label="Copy a link to ls_player_class">Copy link</button></header>
+<p class="what">A player class: health, speed, weapons, model. Players pick one with say /class, or a mode gives it.</p><p class="ty">A point entity. Needs Loner-Strike's components plugin, which comes with the app.</p>
+<details><summary>Keys <span class="n">(10)</span></summary><dl><dt>Team <span class="ty">team</span></dt><dd>Which team this is for. Default: 0. Choices: 0 Anyone, 1 Terrorists, 2 Counter-Terrorists.</dd><dt>Class name <span class="ty">name</span></dt><dd>What the class is called in menus and in mode code. Default: Soldier.</dd><dt>Health <span class="ty">hp</span></dt><dd>Health at spawn. Default: 100.</dd><dt>Helmet <span class="ty">helmet</span></dt><dd>With a helmet when armor is given. Default: 1. Choices: 1 Yes.</dd><dt>Speed <span class="ty">speed</span></dt><dd>Running speed (250 is normal with a knife). 0 keeps the weapon's own speed. Default: 0.</dd><dt>Weapons <span class="ty">weapons</span></dt><dd>Given at spawn, separated by spaces: knife deagle ak47 vesthelm he hp:50 ... Default: knife.</dd><dt>Player model <span class="ty">model</span></dt><dd>A model folder under models/player (terror, vip). Empty keeps the team's.</dd><dt>In the class menu <span class="ty">menu</span></dt><dd>Players can pick it from say /class. Default: 1. Choices: 1 Yes.</dd><dt>Given to everyone <span class="ty">default</span></dt><dd>Players of the team without a class get this one. Default: 0. Choices: 0 No.</dd><dt>Bot behavior <span class="ty">bot_profile</span></dt><dd>A behavior profile for bots with this class (botprofiles.ini: hunter, defender ...).</dd></dl></details>
+</article>
+<article class="card" id="e-ls-respawn-point"><header><h3><a href="#e-ls-respawn-point">ls_respawn_point</a></h3><span class="badge k-component">component</span><span class="id">Respawn point</span><button class="copy-link" type="button" data-id="e-ls-respawn-point" aria-label="Copy a link to ls_respawn_point">Copy link</button></header>
+<p class="what">Where players of a team (re)spawn in a mode. When a map has any for a team, that team spawns only at these, at a free one.</p><p class="ty">A point entity. Needs Loner-Strike's components plugin, which comes with the app.</p>
+<details><summary>Keys <span class="n">(5)</span></summary><dl><dt>Name <span class="ty">targetname</span></dt><dd>What map logic and modes call this component. A button whose target is this name sets it off.</dd><dt>On at round start <span class="ty">enabled</span></dt><dd>Off: it does nothing until a mode or map logic switches it on. Default: 1. Choices: 1 Yes, 0 No.</dd><dt>Team <span class="ty">team</span></dt><dd>Which team this is for. Default: 0. Choices: 0 Anyone, 1 Terrorists, 2 Counter-Terrorists.</dd><dt>Facing <span class="ty">angle</span></dt><dd>Which way the player faces, seen from above. Default: 0.</dd><dt>Role <span class="ty">role</span></dt><dd>For the Mode Kit: only players with this role spawn here.</dd></dl></details>
+</article>
+    <p class="meta ty">Made from the app's own catalog (cstrike.fgd, lonerstrike.fgd, components.json), so it matches the app.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#e-ls-player-class">ls_player_class</a></li><li><a href="#e-ls-respawn-point">ls_respawn_point</a></li></ul></nav>
+</div>
+<footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../../reference/ref.js" defer></script>
+</body>
+</html>

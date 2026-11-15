@@ -3,256 +3,196 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Game · Loner-Strike docs</title>
-<meta name="description" content="Game Mode Studio's Game nodes (22): what each does, its inputs and outputs, settings, limits and related nodes.">
+<title>Game · Loner-Strike reference</title>
+<meta name="description" content="22 Game Mode Studio nodes. Pick one for its pins, settings and limits.">
 <link rel="icon" href="../../favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<style>
-@font-face { font-family: "Counter-Strike"; src: url("../../fonts/counter-strike.ttf") format("truetype"); font-display: swap; }
-:root {
-  --bg: #3e4637; --side: #353c2f; --panel: #4c5844; --panel-2: #5a6a50;
-  --bevel-hi: rgba(136,145,128,.55); --bevel-lo: #292c21;
-  --bone: #d8ded3; --dim: #c2c9b7; --faint: #aeb7a2;
-  --signal: #c4b550; --ink: #26240f;
-  --raised: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
-  --sunken: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
-  --stencil: "Counter-Strike", Impact, sans-serif;
-  --text: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
-  --top: 58px;
-}
-* { box-sizing: border-box; }
-html { scroll-padding-top: calc(var(--top) + 16px); }
-body { margin: 0; background: var(--bg); color: var(--bone); font: 500 18px/1.6 var(--text); -webkit-font-smoothing: antialiased; }
-a { color: var(--signal); }
-:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.skip:focus { position: fixed; left: 16px; top: 12px; z-index: 9; width: auto; height: auto; clip: auto; background: var(--signal); color: var(--ink); padding: 6px 12px; }
-
-/* top bar, as on the home page */
-.top { position: sticky; top: 0; z-index: 6; background: rgba(53,60,47,.96); backdrop-filter: blur(6px); box-shadow: 0 1px 0 var(--bevel-lo); }
-.top .wrap { width: min(1200px, 100% - 32px); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: var(--top); gap: 16px; }
-.brand { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
-.wordmark { font: 400 22px/1 var(--stencil); color: var(--bone); text-decoration: none; }
-.brand .here { color: var(--faint); font-weight: 600; }
-.top nav { display: flex; gap: 22px; align-items: center; }
-.top nav a { color: var(--dim); text-decoration: none; font-weight: 600; }
-.top nav a:hover { color: var(--bone); }
-.top nav a.btn { color: var(--ink); background: var(--signal); padding: 7px 14px; border-radius: 2px; font-weight: 700; font-size: 16px;
-  box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
-.top nav a.btn:hover { background: #d4c55d; }
-
-/* the topic list on the left (sticky), one topic at a time on the right */
-.docs { width: min(1200px, 100% - 32px); margin: 0 auto; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 48px; align-items: start; }
-.rail { align-self: stretch; }
-.side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); max-height: calc(100dvh - var(--top) - 40px); overflow-y: auto; overscroll-behavior: contain;
-  margin: 20px 0 40px; background: var(--side); box-shadow: var(--raised); border-radius: 3px; padding: 12px 0 14px; scrollbar-width: thin; scrollbar-color: var(--panel-2) transparent; }
-.search { margin: 0 12px 6px; }
-.search input { width: 100%; font: 500 16px/1.2 var(--text); color: var(--bone); background: #2b3125; box-shadow: var(--sunken); border: 0; border-radius: 2px; padding: 9px 10px; }
-.search input::placeholder { color: var(--faint); opacity: .85; }
-.group { margin-top: 8px; }
-.group > b { display: block; padding: 2px 16px 3px; color: var(--faint); font-size: 14px; font-weight: 700; }
-.side ul { list-style: none; margin: 0; padding: 0; }
-.side li + li { margin-top: 0; }
-.side a { display: block; padding: 3px 16px; color: var(--dim); text-decoration: none; font-weight: 600; line-height: 1.3; border-left: 3px solid transparent; }
-.side a:hover { color: var(--bone); background: rgba(255,255,255,.04); }
-.side a[aria-current="page"] { color: var(--bone); background: var(--panel); border-left-color: var(--signal); }
-.side .sub { display: none; padding: 2px 0 6px; }
-.side a[aria-current="page"] + .sub { display: block; }
-.side .sub a { padding: 2px 16px 2px 30px; font-size: 16px; font-weight: 500; color: var(--faint); }
-.side .sub a:hover, .side .sub a.on { color: var(--bone); }
-/* search results: one per heading, the topic above it, a snippet with the match marked */
-.results ul { list-style: none; margin: 0; padding: 0; }
-.results [role="option"] { display: block; padding: 6px 16px; color: var(--dim); cursor: pointer; border-left: 3px solid transparent; line-height: 1.3; }
-.results [role="option"] b { display: block; color: var(--bone); font-weight: 700; }
-.results [role="option"] small { display: block; color: var(--faint); font-weight: 600; font-size: 13px; }
-.results [role="option"] span { display: block; color: var(--dim); font-size: 15px; font-weight: 500; margin-top: 2px; }
-.results [role="option"]:hover, .results [role="option"][aria-selected="true"] { background: var(--panel); border-left-color: var(--signal); }
-.results mark, mark.hit { background: var(--signal); color: var(--ink); border-radius: 2px; padding: 0 1px; }
-.results .none { margin: 6px 16px; color: var(--faint); font-size: 16px; }
-.results .none a { display: inline; padding: 0; border: 0; color: var(--signal); }
-.flash { animation: flash 2.2s ease-out; }
-@keyframes flash { 0%, 35% { background: rgba(196,181,80,.28); box-shadow: 0 0 0 6px rgba(196,181,80,.28); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
-.wrong-link { margin: 0 12px 4px; }
-.side a.wrong-link { padding: 4px 4px; border: 0; color: var(--signal); font-weight: 700; }
-/* collapsible groups */
-.group-btn { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; background: none; border: 0; cursor: pointer; padding: 3px 16px; color: var(--faint); font: 700 14px/1.3 var(--text); text-align: left; }
-.group-btn:hover { color: var(--bone); }
-.group-btn .chev { transition: transform .15s; font-size: 12px; }
-.group-btn[aria-expanded="false"] .chev { transform: rotate(-90deg); }
-.group-btn[aria-expanded="false"] + ul { display: none; }
-/* on this page (wide screens) */
-.toc { display: none; }
-@media (min-width: 1200px) {
-  .docs { width: min(1400px, 100% - 32px); grid-template-columns: 250px minmax(0, 1fr) 210px; gap: 40px; }
-  .toc:not([hidden]) { display: block; position: sticky; top: calc(var(--top) + 20px); margin: 26px 0 40px; max-height: calc(100vh - var(--top) - 40px); overflow-y: auto; scrollbar-width: thin; }
-  .toc-title { margin: 0 0 6px; color: var(--faint); font-size: 14px; font-weight: 700; }
-  .toc ul { list-style: none; margin: 0; padding: 0; box-shadow: inset 1px 0 0 var(--bevel-lo); }
-  .toc a { display: block; padding: 3px 10px; color: var(--faint); text-decoration: none; font-size: 15px; font-weight: 600; line-height: 1.3; border-left: 2px solid transparent; }
-  .toc a.h3 { padding-left: 22px; font-weight: 500; font-size: 14px; }
-  .toc a:hover { color: var(--bone); }
-  .toc a.on { color: var(--bone); border-left-color: var(--signal); }
-}
-@media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--signal); } .group-btn .chev { transition: none; } }
-html:not(.js) .search { display: none; }
-html:not(.js) .side .sub { display: block; }
-
-.menu-btn { display: none; }
-
-article { padding: 26px 0 64px; min-width: 0; max-width: 780px; }
-.topic + .topic { margin-top: 56px; }
-.js .topic { display: none; }
-.js .topic + .topic { margin-top: 0; }
-.js .topic.on { display: block; }
-.crumb { color: var(--faint); font-size: 15px; font-weight: 600; margin: 0; }
-h1 { font: 400 38px/1.1 var(--stencil); margin: 4px 0 6px; }
-h2 { font-size: 23px; line-height: 1.3; margin: 32px 0 4px; }
-h2 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
-h2:hover .anchor, h2 .anchor:focus { opacity: .8; }
-h3 { font-size: 19px; margin: 22px 0 4px; }
-p, li, td { color: var(--dim); text-wrap: pretty; }
-ul, ol { padding-left: 22px; }
-li + li { margin-top: 4px; }
-b, strong { color: var(--bone); }
-.lead { font-size: 20px; margin: 6px 0 0; }
-code { font: 15px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--side); padding: 1px 5px; border-radius: 2px; color: var(--bone); overflow-wrap: anywhere; }
-pre { background: #23271c; box-shadow: var(--sunken); padding: 12px 14px; border-radius: 2px; overflow-x: auto; margin: 10px 0 14px; }
-pre code { background: none; padding: 0; font-size: 14px; white-space: pre; overflow-wrap: normal; }
-.table { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 17px; }
-th, td { text-align: left; padding: 7px 14px 7px 0; border-bottom: 1px solid rgba(0,0,0,.2); vertical-align: top; }
-th { color: var(--faint); font-weight: 600; font-size: 15px; }
-td:first-child { white-space: nowrap; }
-.kbd { font: 600 14px/1 ui-monospace, Menlo, Consolas, monospace; background: var(--panel-2); box-shadow: var(--raised); padding: 3px 7px; border-radius: 2px; color: var(--bone); white-space: nowrap; }
-.note { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; margin: 16px 0; }
-.note p { margin: 4px 0; }
-.msg { border-left: 3px solid var(--panel-2); padding: 2px 0 2px 12px; margin: 8px 0; color: var(--bone); font-style: italic; }
-article ul { list-style: none; padding-left: 22px; }
-article ul > li { position: relative; }
-article ul > li::before { content: ""; position: absolute; left: -18px; top: .66em; width: 7px; height: 7px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
-article ol { list-style: none; padding-left: 34px; counter-reset: step; }
-article ol > li { position: relative; counter-increment: step; }
-article ol > li::before { content: counter(step); position: absolute; left: -34px; top: .15em; width: 22px; height: 22px; display: grid; place-items: center; background: var(--signal); color: var(--ink); font-weight: 700; font-size: 14px; line-height: 1; box-shadow: inset -2px -2px 0 #8c7f33, inset 2px 2px 0 #e3d683; }
-.side .sub a { position: relative; }
-.side .sub a::before { content: ""; position: absolute; left: 17px; top: .72em; width: 5px; height: 5px; background: var(--faint); opacity: .6; }
-.side .sub a.on::before, .side .sub a:hover::before { background: var(--signal); opacity: 1; }
-.menu-label { color: var(--faint); font-size: 14px; font-weight: 600; margin-right: 8px; }
-details.prov { background: var(--panel); box-shadow: var(--raised); border-radius: 2px; margin: 8px 0; }
-details.prov summary { cursor: pointer; padding: 9px 14px; font-weight: 700; color: var(--bone); }
-details.prov p { margin: 0; padding: 0 14px 12px; }
-@media (hover: none) { h2 .anchor { display: none; } }
-@media (max-width: 520px) {
-  .table tr { display: block; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.2); }
-  .table td, .table th { display: block; border: 0; padding: 0; }
-  .table td:first-child { margin-bottom: 2px; }
-  .table thead { display: none; }
-}
-figure.shot { margin: 16px 0 20px; }
-figure.shot img { display: block; width: 100%; height: auto; border-radius: 3px; background: #23271c; box-shadow: var(--raised), 0 14px 40px rgba(0,0,0,.3); }
-figure.shot figcaption { margin-top: 8px; color: var(--faint); font-size: 15px; }
-h3 { font-weight: 700; }
-.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; padding-top: 16px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
-.pager a { display: block; text-decoration: none; background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; min-width: 0; color: var(--bone); font-weight: 700; }
-.pager a small { display: block; color: var(--faint); font-weight: 500; font-size: 14px; }
-.pager a:hover { background: var(--panel-2); }
-.pager .next { margin-left: auto; text-align: right; }
-.pager a[hidden] { display: none; }
-html:not(.js) .pager { display: none; }
-
-footer { width: min(1200px, 100% - 32px); margin: 0 auto; padding: 24px 0 48px; color: var(--faint); font-size: 15px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
-footer a { color: var(--dim); }
-
-@media (max-width: 900px) {
-  .top nav a:not(.btn) { display: none; }
-  .brand .here { display: none; }
-  html { scroll-padding-top: calc(var(--top) + 64px); }
-  .docs { grid-template-columns: 1fr; gap: 0; }
-  .rail { display: contents; }
-  .js .menu-btn { position: sticky; top: var(--top); z-index: 5; display: flex; align-items: center; justify-content: space-between; width: calc(100% + 32px); margin: 0 -16px; padding: 12px 16px;
-    font: 700 17px/1.2 var(--text); color: var(--bone); background: var(--panel); box-shadow: 0 1px 0 var(--bevel-lo); border: 0; cursor: pointer; text-align: left; }
-  .menu-btn .chev { transition: transform .15s; }
-  .menu-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
-  .side { position: static; max-height: none; margin: 0; border-radius: 0 0 3px 3px; }
-  .js .side { display: none; position: sticky; top: calc(var(--top) + 46px); z-index: 4; max-height: calc(100dvh - var(--top) - 60px); overflow-y: auto; }
-  .js .side.open { display: block; }
-  h1 { font-size: 32px; }
-  td:first-child { white-space: normal; }
-}
-@media (prefers-reduced-motion: reduce) { .menu-btn .chev { transition: none; } }
-</style>
-<style>
-.ref .topic { display: block; }
-.ref .pins { display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr); gap: 2px 14px; margin: 6px 0 10px; font-size: 16px; }
-.ref .pins dt { color: var(--bone); font-weight: 600; }
-.ref .pins dd { margin: 0; color: var(--dim); }
-.ref .ty { color: var(--faint); font-weight: 500; font-size: 14px; }
-.ref .node { padding: 14px 0; box-shadow: inset 0 -1px 0 rgba(0,0,0,.2); }
-.ref .node h3 { margin: 0 0 4px; }
-.ref h3 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
-.ref h3:hover .anchor, .ref h3 .anchor:focus { opacity: .8; }
-.ref .meta { color: var(--faint); font-size: 15px; }
-.ref .side { position: static; max-height: none; }
-@media (min-width: 901px) { .ref .side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); } }
-@media (max-width: 520px) { .ref .pins { grid-template-columns: 1fr; } .ref .pins dd { margin-bottom: 6px; } }
-</style>
+<link rel="stylesheet" href="../../reference/base.css">
+<link rel="stylesheet" href="../../reference/ref.css">
 </head>
-<body class="ref">
+<body data-root="../../">
 <a class="sr-only skip" href="#content">Skip to the reference</a>
 <header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
-<nav aria-label="Site"><a href="../../docs.html">Docs</a><a href="../../docs.html#reference">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
-<div class="docs">
-  <div class="rail"><nav class="side" aria-label="Game"><div class="group"><b>Categories</b><ul><li><a href="../nodes.html">All categories</a></li><li><a href="events.html">Events</a></li><li><a href="conditions.html">Conditions</a></li><li><a href="numbers.html">Numbers</a></li><li><a href="text.html">Text</a></li><li><a href="variables.html">Variables</a></li><li><a href="flow.html">Flow</a></li><li><a href="functions.html">Functions</a></li><li><a href="macros.html">Macros</a></li><li><a href="arrays.html">Arrays</a></li><li><a href="maps.html">Maps</a></li><li><a href="structs.html">Structs</a></li><li><a href="enums.html">Enums</a></li><li><a href="vectors.html">Vectors</a></li><li><a href="spatial.html">Spatial</a></li><li><a href="timers.html">Timers</a></li><li><a href="round-clock.html">Round clock</a></li><li><a href="players.html">Players</a></li><li><a href="input.html">Input</a></li><li><a href="cooldowns.html">Cooldowns</a></li><li><a href="weapons.html">Weapons</a></li><li><a href="damage.html">Damage</a></li><li><a href="squads.html">Squads</a></li><li><a href="buying.html">Buying</a></li><li><a href="saved.html">Saved</a></li><li><a href="messages.html">Messages</a></li><li><a href="game.html" aria-current="page">Game</a></li><li><a href="scoring.html">Scoring</a></li><li><a href="bots.html">Bots</a></li><li><a href="components.html">Components</a></li><li><a href="map-markers.html">Map markers</a></li><li><a href="waves.html">Waves</a></li><li><a href="upgrades.html">Upgrades</a></li><li><a href="world.html">World</a></li><li><a href="entities.html">Entities</a></li><li><a href="effects.html">Effects</a></li><li><a href="advanced.html">Advanced</a></li><li><a href="downed.html">Downed</a></li><li><a href="shop.html">Shop</a></li><li><a href="npcs.html">NPCs</a></li><li><a href="battle-royale.html">Battle Royale</a></li><li><a href="creatures.html">Creatures</a></li><li><a href="data-tables.html">Data tables</a></li><li><a href="projectiles.html">Projectiles</a></li><li><a href="hud-view.html">HUD &amp; View</a></li><li><a href="collision.html">Collision</a></li></ul></div></nav></div>
-  <article id="content" tabindex="-1">
-    <p class="crumb"><a href="../../docs.html#reference">Reference</a> › <a href="../nodes.html">Game Mode Studio nodes</a></p>
+<nav aria-label="Site"><a href="/">Home</a><a href="../../docs.html#whats-new">What's new</a><a href="../../docs.html#tools">Tools</a><a href="../../docs.html#vps">Run a server</a><a href="../../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  <details class="ref-filter-box"><summary>Filters</summary><div class="ref-filters" id="ref-filters"><label>Category <select id="ref-f-cat"><option value="">Any</option></select></label>
+      <label>Kind <select id="ref-f-kind"><option value="">Any</option><option value="event">Event</option><option value="action">Action</option><option value="value">Value</option><option value="flow">Flow</option><option value="point">Point entity</option><option value="brush">Brush entity</option></select></label>
+      <label>Type <select id="ref-f-type"><option value="">Any</option></select></label>
+      <label><input type="checkbox" id="ref-f-bots"> Works with bots</label>
+      <label><input type="checkbox" id="ref-f-limits"> Has limits</label></div></details>
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Game <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><details class=""><summary><a href="../../reference/nodes/events.html">Events</a><span class="n">44</span></summary></details><details class=""><summary><a href="../../reference/nodes/conditions.html">Conditions</a><span class="n">11</span></summary></details><details class=""><summary><a href="../../reference/nodes/numbers.html">Numbers</a><span class="n">15</span></summary></details><details class=""><summary><a href="../../reference/nodes/text.html">Text</a><span class="n">18</span></summary></details><details class=""><summary><a href="../../reference/nodes/variables.html">Variables</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/flow.html">Flow</a><span class="n">18</span></summary></details><details class=""><summary><a href="../../reference/nodes/functions.html">Functions</a><span class="n">6</span></summary></details><details class=""><summary><a href="../../reference/nodes/macros.html">Macros</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/nodes/arrays.html">Arrays</a><span class="n">22</span></summary></details><details class=""><summary><a href="../../reference/nodes/maps.html">Maps</a><span class="n">8</span></summary></details><details class=""><summary><a href="../../reference/nodes/structs.html">Structs</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/nodes/enums.html">Enums</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/nodes/vectors.html">Vectors</a><span class="n">23</span></summary></details><details class=""><summary><a href="../../reference/nodes/spatial.html">Spatial</a><span class="n">6</span></summary></details><details class=""><summary><a href="../../reference/nodes/timers.html">Timers</a><span class="n">11</span></summary></details><details class=""><summary><a href="../../reference/nodes/round-clock.html">Round clock</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/players.html">Players</a><span class="n">95</span></summary></details><details class=""><summary><a href="../../reference/nodes/input.html">Input</a><span class="n">2</span></summary></details><details class=""><summary><a href="../../reference/nodes/cooldowns.html">Cooldowns</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/weapons.html">Weapons</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/nodes/damage.html">Damage</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/squads.html">Squads</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/buying.html">Buying</a><span class="n">2</span></summary></details><details class=""><summary><a href="../../reference/nodes/saved.html">Saved</a><span class="n">8</span></summary></details><details class=""><summary><a href="../../reference/nodes/messages.html">Messages</a><span class="n">15</span></summary></details><details open class="here"><summary><a href="../../reference/nodes/game.html" aria-current="page">Game</a><span class="n">22</span></summary><ul><li><a href="#n-game-set-cvar">Set Setting</a></li><li><a href="#n-entity-use">Use Entity</a></li><li><a href="#n-game-map-name">Current Map Name</a></li><li><a href="#n-game-next-map">Next Map</a></li><li><a href="#n-game-server-name">Server Name</a></li><li><a href="#n-game-max-players">Max Players</a></li><li><a href="#n-game-player-count">Player Count</a></li><li><a href="#n-game-time">Game Time</a></li><li><a href="#n-game-clock">Real Date and Time</a></li><li><a href="#n-game-mode-id">Current Mode</a></li><li><a href="#n-game-round-number">Round Number</a></li><li><a href="#n-game-team-score">Team Score</a></li><li><a href="#n-game-freeze-time">Is Freeze Time</a></li><li><a href="#n-game-get-setting">Get Setting</a></li><li><a href="#n-game-change-map">Change Map</a></li><li><a href="#n-game-restart-round">Restart Round</a></li><li><a href="#n-game-remove-objectives">Remove Map Objectives</a></li><li><a href="#n-game-map-type">Map Type</a></li><li><a href="#n-game-voice-rules">Voice Rules</a></li><li><a href="#n-game-round-end-rules">Round End Rules</a></li><li><a href="#n-game-start-vote">Start Vote</a></li><li><a href="#n-game-vote-count">Vote Count</a></li></ul></details><details class=""><summary><a href="../../reference/nodes/scoring.html">Scoring</a><span class="n">1</span></summary></details><details class=""><summary><a href="../../reference/nodes/bots.html">Bots</a><span class="n">20</span></summary></details><details class=""><summary><a href="../../reference/nodes/components.html">Components</a><span class="n">40</span></summary></details><details class=""><summary><a href="../../reference/nodes/map-markers.html">Map markers</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/waves.html">Waves</a><span class="n">8</span></summary></details><details class=""><summary><a href="../../reference/nodes/upgrades.html">Upgrades</a><span class="n">21</span></summary></details><details class=""><summary><a href="../../reference/nodes/world.html">World</a><span class="n">36</span></summary></details><details class=""><summary><a href="../../reference/nodes/entities.html">Entities</a><span class="n">28</span></summary></details><details class=""><summary><a href="../../reference/nodes/effects.html">Effects</a><span class="n">20</span></summary></details><details class=""><summary><a href="../../reference/nodes/advanced.html">Advanced</a><span class="n">9</span></summary></details><details class=""><summary><a href="../../reference/nodes/downed.html">Downed</a><span class="n">8</span></summary></details><details class=""><summary><a href="../../reference/nodes/shop.html">Shop</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/npcs.html">NPCs</a><span class="n">14</span></summary></details><details class=""><summary><a href="../../reference/nodes/battle-royale.html">Battle Royale</a><span class="n">15</span></summary></details><details class=""><summary><a href="../../reference/nodes/creatures.html">Creatures</a><span class="n">25</span></summary></details><details class=""><summary><a href="../../reference/nodes/data-tables.html">Data tables</a><span class="n">6</span></summary></details><details class=""><summary><a href="../../reference/nodes/projectiles.html">Projectiles</a><span class="n">5</span></summary></details><details class=""><summary><a href="../../reference/nodes/hud-view.html">HUD &amp; View</a><span class="n">12</span></summary></details><details class=""><summary><a href="../../reference/nodes/collision.html">Collision</a><span class="n">9</span></summary></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a></p>
     <h1>Game</h1>
-    <p class="lead">Game Mode Studio's Game nodes (22): what each does, its inputs and outputs, settings, limits and related nodes.</p>
-    <p class="meta">Made from the app's own catalog (nodes.json, nodehelp.json, limits.ts), so it always matches the app.</p>
-<section class="topic" id="c-game"><div class="node" id="n-game-set-cvar"><h3>Set Setting <a class="anchor" href="#n-game-set-cvar" aria-label="Link to Set Setting">#</a></h3>
-<p>Changes one of the game's settings now.</p><p>A setting changed for the rest of the map. For settings the mode always wants, add them under This mode's Game settings instead (set every map).</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Value <span class="ty">Number</span></dt><dd>Value: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Setting</dt><dd>Pick one: Free for all (1 on), Friendly fire (1 on), Gravity (800 normal), Buy time (minutes), Start money, Air control (10 normal), Round time (minutes, next round), Freeze time (seconds, next round), Rounds only end when the mode says (1 on), Team balance (1 on), Most players more than the other team (0 any), Bomb for the Terrorists (1 on)…. Default: mp_freeforall. Choices: Free for all (1 on), Friendly fire (1 on), Gravity (800 normal), Buy time (minutes), Start money, Air control (10 normal), Round time (minutes, next round), Freeze time (seconds, next round), Rounds only end when the mode says (1 on), Team balance (1 on), Most players more than the other team (0 any), Bomb for the Terrorists (1 on), Downed players can be finished by enemies (1 on; components), A downed player's health when they can be finished (components).</dd><dt>Value</dt><dd>A number from 0 to 100000. A wire into the pin of the same name is used instead. Default: 1. From 0 up to 100000.</dd></dl><p class="meta">Careful: A few settings are set again by the game's own game.cfg after the mode's, so they don't stick: the bomb for the Terrorists (mp_give_player_c4) is one. Take the bomb with Remove Weapon (c4) at Round Started instead.</p><p class="meta">Related: <a href="#n-entity-use">Use Entity</a>, <a href="#n-game-map-name">Current Map Name</a>, <a href="#n-game-next-map">Next Map</a></p></div>
-<div class="node" id="n-entity-use"><h3>Use Entity <a class="anchor" href="#n-entity-use" aria-label="Link to Use Entity">#</a></h3>
-<p>Presses (uses) every entity with this name: a door, a button, a trigger.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Name</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -). Default: door1.</dd></dl><p class="meta">Related: <a href="#n-game-set-cvar">Set Setting</a>, <a href="#n-game-map-name">Current Map Name</a>, <a href="#n-game-next-map">Next Map</a></p></div>
-<div class="node" id="n-game-map-name"><h3>Current Map Name <a class="anchor" href="#n-game-map-name" aria-label="Link to Current Map Name">#</a></h3>
-<p>The map being played (de_dust2).</p><p class="meta">Outputs</p><dl class="pins"><dt>Map <span class="ty">Text</span></dt><dd>Map: text.</dd></dl><p class="meta">Related: <a href="#n-game-next-map">Next Map</a>, <a href="#n-game-server-name">Server Name</a>, <a href="#n-game-max-players">Max Players</a></p></div>
-<div class="node" id="n-game-next-map"><h3>Next Map <a class="anchor" href="#n-game-next-map" aria-label="Link to Next Map">#</a></h3>
-<p>The map the server goes to next (from the map cycle or vote); empty if it doesn't know.</p><p class="meta">Outputs</p><dl class="pins"><dt>Map <span class="ty">Text</span></dt><dd>Map: text.</dd></dl><p class="meta">Related: <a href="#n-game-map-name">Current Map Name</a>, <a href="#n-game-server-name">Server Name</a>, <a href="#n-game-max-players">Max Players</a></p></div>
-<div class="node" id="n-game-server-name"><h3>Server Name <a class="anchor" href="#n-game-server-name" aria-label="Link to Server Name">#</a></h3>
-<p>The server's name (hostname).</p><p class="meta">Outputs</p><dl class="pins"><dt>Name <span class="ty">Text</span></dt><dd>Name: text.</dd></dl><p class="meta">Related: <a href="#n-game-next-map">Next Map</a>, <a href="#n-game-max-players">Max Players</a>, <a href="#n-game-map-name">Current Map Name</a></p></div>
-<div class="node" id="n-game-max-players"><h3>Max Players <a class="anchor" href="#n-game-max-players" aria-label="Link to Max Players">#</a></h3>
-<p>How many players the server takes.</p><p class="meta">Outputs</p><dl class="pins"><dt>Max <span class="ty">Number</span></dt><dd>Max: a number.</dd></dl><p class="meta">Related: <a href="#n-game-server-name">Server Name</a>, <a href="#n-game-player-count">Player Count</a>, <a href="#n-game-next-map">Next Map</a></p></div>
-<div class="node" id="n-game-player-count"><h3>Player Count <a class="anchor" href="#n-game-player-count" aria-label="Link to Player Count">#</a></h3>
-<p>How many players there are: everyone, people, bots, a team, or spectators.</p><p class="meta">Outputs</p><dl class="pins"><dt>Players <span class="ty">Number</span></dt><dd>Players: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Who</dt><dd>Pick one: Everyone, People, Bots, Terrorists, Counter-Terrorists, Spectators, Alive. Default: all. Choices: Everyone, People, Bots, Terrorists, Counter-Terrorists, Spectators, Alive.</dd></dl><p class="meta">Related: <a href="#n-game-max-players">Max Players</a>, <a href="#n-game-time">Game Time</a>, <a href="#n-game-server-name">Server Name</a></p></div>
-<div class="node" id="n-game-time"><h3>Game Time <a class="anchor" href="#n-game-time" aria-label="Link to Game Time">#</a></h3>
-<p>Seconds since the map started (for timing things: keep it in a variable, compare later).</p><p class="meta">Outputs</p><dl class="pins"><dt>Seconds <span class="ty">Number</span></dt><dd>Seconds: a number.</dd></dl><p class="meta">Related: <a href="#n-game-player-count">Player Count</a>, <a href="#n-game-clock">Real Date and Time</a>, <a href="#n-game-max-players">Max Players</a></p></div>
-<div class="node" id="n-game-clock"><h3>Real Date and Time <a class="anchor" href="#n-game-clock" aria-label="Link to Real Date and Time">#</a></h3>
-<p>The server computer's date and time, as text (2026-11-13, 21:30, Friday) and as seconds since 1970.</p><p class="meta">Outputs</p><dl class="pins"><dt>Text <span class="ty">Text</span></dt><dd>The text.</dd><dt>Seconds since 1970 <span class="ty">Number</span></dt><dd>Seconds since 1970: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>As</dt><dd>Pick one: Date and time, Date, Time, Day of the week, Hour (0-23). Default: datetime. Choices: Date and time, Date, Time, Day of the week, Hour (0-23).</dd></dl><p class="meta">Related: <a href="#n-game-time">Game Time</a>, <a href="#n-game-mode-id">Current Mode</a>, <a href="#n-game-player-count">Player Count</a></p></div>
-<div class="node" id="n-game-mode-id"><h3>Current Mode <a class="anchor" href="#n-game-mode-id" aria-label="Link to Current Mode">#</a></h3>
-<p>This mode's id (as the Game Mode Menu and modes.ini know it).</p><p class="meta">Outputs</p><dl class="pins"><dt>Mode id <span class="ty">Text</span></dt><dd>Mode id: text.</dd></dl><p class="meta">Related: <a href="#n-game-clock">Real Date and Time</a>, <a href="#n-game-round-number">Round Number</a>, <a href="#n-game-time">Game Time</a></p></div>
-<div class="node" id="n-game-round-number"><h3>Round Number <a class="anchor" href="#n-game-round-number" aria-label="Link to Round Number">#</a></h3>
-<p>Which round this is on this map (1 for the first).</p><p class="meta">Outputs</p><dl class="pins"><dt>Round <span class="ty">Number</span></dt><dd>Round: a number.</dd></dl><p class="meta">Related: <a href="#n-game-mode-id">Current Mode</a>, <a href="#n-game-team-score">Team Score</a>, <a href="#n-game-clock">Real Date and Time</a></p></div>
-<div class="node" id="n-game-team-score"><h3>Team Score <a class="anchor" href="#n-game-team-score" aria-label="Link to Team Score">#</a></h3>
-<p>A team's rounds won on this map (as the scoreboard shows).</p><p class="meta">Outputs</p><dl class="pins"><dt>Score <span class="ty">Number</span></dt><dd>Score: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Team</dt><dd>Pick one: Terrorists, Counter-Terrorists. Default: ct. Choices: Terrorists, Counter-Terrorists.</dd></dl><p class="meta">Related: <a href="#n-game-round-number">Round Number</a>, <a href="#n-game-freeze-time">Is Freeze Time</a>, <a href="#n-game-mode-id">Current Mode</a></p></div>
-<div class="node" id="n-game-freeze-time"><h3>Is Freeze Time <a class="anchor" href="#n-game-freeze-time" aria-label="Link to Is Freeze Time">#</a></h3>
-<p>Is it the freeze time at a round's start (nobody can move)?</p><p class="meta">Outputs</p><dl class="pins"><dt>Freeze time <span class="ty">Yes/No</span></dt><dd>Freeze time: yes or no.</dd></dl><p class="meta">Related: <a href="#n-game-team-score">Team Score</a>, <a href="#n-game-get-setting">Get Setting</a>, <a href="#n-game-round-number">Round Number</a></p></div>
-<div class="node" id="n-game-get-setting"><h3>Get Setting <a class="anchor" href="#n-game-get-setting" aria-label="Link to Get Setting">#</a></h3>
-<p>Reads a server setting (a cvar), as a number and as text: the counterpart of Set Setting. Passwords and the like can't be read.</p><p class="meta">Outputs</p><dl class="pins"><dt>Number <span class="ty">Number</span></dt><dd>The number.</dd><dt>Text <span class="ty">Text</span></dt><dd>The text.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Setting (cvar)</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -). Default: mp_roundtime.</dd></dl><p class="meta">Related: <a href="#n-game-freeze-time">Is Freeze Time</a>, <a href="#n-game-change-map">Change Map</a>, <a href="#n-game-team-score">Team Score</a></p></div>
-<div class="node" id="n-game-change-map"><h3>Change Map <a class="anchor" href="#n-game-change-map" aria-label="Link to Change Map">#</a></h3>
-<p>Changes the map (if the server has it). The mode changes too only if the next map's preset says so. Asks first when an agent does it.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Map</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -). Default: de_dust2.</dd></dl><p class="meta">Careful: Ends the game on this map for everyone. Only maps the server has are allowed.</p><p class="meta">Related: <a href="#n-game-get-setting">Get Setting</a>, <a href="#n-game-restart-round">Restart Round</a>, <a href="#n-game-freeze-time">Is Freeze Time</a></p></div>
-<div class="node" id="n-game-restart-round"><h3>Restart Round <a class="anchor" href="#n-game-restart-round" aria-label="Link to Restart Round">#</a></h3>
-<p>Restarts the round now (scores stay).</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Careful: Restarts the round for everyone, like sv_restartround.</p><p class="meta">Related: <a href="#n-game-change-map">Change Map</a>, <a href="#n-game-get-setting">Get Setting</a>, <a href="#n-game-freeze-time">Is Freeze Time</a></p></div>
-<div class="node" id="n-game-remove-objectives"><h3>Remove Map Objectives <a class="anchor" href="#n-game-remove-objectives" aria-label="Link to Remove Map Objectives">#</a></h3>
-<p>Takes the map's objectives away (tick which): buy zones, bomb sites, hostages, hostage rescue zones, VIP safety zones, escape zones. The game notices at the next round (the bomb isn't given, no hostages to save); removed buy zones don't fall back to buying at spawn. Best at Map Started.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Buy zones</dt><dd>On or off. Default: false.</dd><dt>Bomb sites</dt><dd>On or off. Default: true.</dd><dt>Hostages</dt><dd>On or off. Default: true.</dd><dt>Rescue zones</dt><dd>On or off. Default: true.</dd><dt>VIP safety zones</dt><dd>On or off. Default: true.</dd><dt>Escape zones</dt><dd>On or off. Default: true.</dd></dl><p class="meta">Related: <a href="#n-game-map-type">Map Type</a>, <a href="#n-game-voice-rules">Voice Rules</a>, <a href="#n-game-round-end-rules">Round End Rules</a></p></div>
-<div class="node" id="n-game-map-type"><h3>Map Type <a class="anchor" href="#n-game-map-type" aria-label="Link to Map Type">#</a></h3>
-<p>What kind of map this is now: bomb (de_), hostage (cs_), VIP (as_), escape (es_) or other, from what it has in it; and each one as yes or no.</p><p class="meta">Outputs</p><dl class="pins"><dt>Type <span class="ty">Text</span></dt><dd>Type: text.</dd><dt>Has bomb sites <span class="ty">Yes/No</span></dt><dd>Has bomb sites: yes or no.</dd><dt>Has hostages <span class="ty">Yes/No</span></dt><dd>Has hostages: yes or no.</dd><dt>Has VIP zone <span class="ty">Yes/No</span></dt><dd>Has VIP zone: yes or no.</dd><dt>Has escape zone <span class="ty">Yes/No</span></dt><dd>Has escape zone: yes or no.</dd></dl><p class="meta">Related: <a href="#n-game-remove-objectives">Remove Map Objectives</a>, <a href="#n-game-voice-rules">Voice Rules</a>, <a href="#n-game-round-end-rules">Round End Rules</a></p></div>
-<div class="node" id="n-game-voice-rules"><h3>Voice Rules <a class="anchor" href="#n-game-voice-rules" aria-label="Link to Voice Rules">#</a></h3>
-<p>Who hears whom on voice chat: everyone, only teammates, the dead only the dead and the living only the living, or only those within a distance (0: any distance, with the other rules). Spectators hear spectators. Voice Override changes it for one player; Mute Voice still mutes.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Who hears</dt><dd>Pick one: Everyone hears everyone, Teammates only, Dead with dead, alive with alive, Teammates, and dead with dead, Only within the distance. Default: team. Choices: Everyone hears everyone, Teammates only, Dead with dead, alive with alive, Teammates, and dead with dead, Only within the distance.</dd><dt>Within (units, 0: any)</dt><dd>A number from 0 to 8192. Default: 0. From 0 up to 8192.</dd></dl><p class="meta">Related: <a href="#n-game-map-type">Map Type</a>, <a href="#n-game-remove-objectives">Remove Map Objectives</a>, <a href="#n-game-round-end-rules">Round End Rules</a></p></div>
-<div class="node" id="n-game-round-end-rules"><h3>Round End Rules <a class="anchor" href="#n-game-round-end-rules" aria-label="Link to Round End Rules">#</a></h3>
-<p>Stops rounds ending by themselves: when a team is wiped out, when the time runs out, or either (End Round is then the only way a round ends). Ending as usual undoes it; a new mode starts as usual.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Rounds don't end when</dt><dd>Pick one: (Ending as usual), A team is wiped out, Time runs out, Either (only End Round ends them). Default: elim. Choices: (Ending as usual), A team is wiped out, Time runs out, Either (only End Round ends them).</dd></dl><p class="meta">Related: <a href="#n-game-start-vote">Start Vote</a>, <a href="#n-game-vote-count">Vote Count</a>, <a href="#n-game-voice-rules">Voice Rules</a></p></div>
-<div class="node" id="n-game-start-vote"><h3>Start Vote <a class="anchor" href="#n-game-start-vote" aria-label="Link to Start Vote">#</a></h3>
-<p>Asks everyone (or a team, or the living) a question with 2 to 8 answers for some seconds; then runs the winning answer's output, Tie, or No votes. Bots vote at random if Bots vote is on. Only one vote at a time, and never over the server's map or mode vote (then No votes runs). Vote Count reads the result.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>1 <span class="ty">Flow</span></dt><dd>Runs on 1.</dd><dt>2 <span class="ty">Flow</span></dt><dd>Runs on 2.</dd><dt>3 <span class="ty">Flow</span></dt><dd>Runs on 3.</dd><dt>4 <span class="ty">Flow</span></dt><dd>Runs on 4.</dd><dt>5 <span class="ty">Flow</span></dt><dd>Runs on 5.</dd><dt>6 <span class="ty">Flow</span></dt><dd>Runs on 6.</dd><dt>7 <span class="ty">Flow</span></dt><dd>Runs on 7.</dd><dt>8 <span class="ty">Flow</span></dt><dd>Runs on 8.</dd><dt>Tie <span class="ty">Flow</span></dt><dd>Runs on Tie.</dd><dt>No votes <span class="ty">Flow</span></dt><dd>Runs when nothing was found.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Question</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Next round?. Up to 60.</dd><dt>Answers</dt><dd>A number from 2 to 8. Default: 2. From 2 up to 8.</dd><dt>Answer 1</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Knives. Up to 30.</dd><dt>Answer 2</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Pistols. Up to 30.</dd><dt>Answer 3</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Rifles. Up to 30.</dd><dt>Answer 4</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Snipers. Up to 30.</dd><dt>Answer 5</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Shotguns. Up to 30.</dd><dt>Answer 6</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Grenades. Up to 30.</dd><dt>Answer 7</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Random. Up to 30.</dd><dt>Answer 8</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Normal. Up to 30.</dd><dt>Seconds</dt><dd>A number from 5 to 60. Default: 15. From 5 up to 60.</dd><dt>Who votes</dt><dd>Pick one: Everyone, Terrorists, Counter-Terrorists, The living. Default: all. Choices: Everyone, Terrorists, Counter-Terrorists, The living.</dd><dt>Bots vote</dt><dd>On or off. Default: false.</dd></dl><p class="meta">Related: <a href="#n-game-vote-count">Vote Count</a>, <a href="#n-game-round-end-rules">Round End Rules</a>, <a href="#n-game-voice-rules">Voice Rules</a></p></div>
-<div class="node" id="n-game-vote-count"><h3>Vote Count <a class="anchor" href="#n-game-vote-count" aria-label="Link to Vote Count">#</a></h3>
-<p>How many votes an answer got in the last Start Vote (0: all the votes).</p><p class="meta">Inputs</p><dl class="pins"><dt>Answer <span class="ty">Number</span></dt><dd>Answer: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Votes <span class="ty">Number</span></dt><dd>Votes: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Answer (0: all)</dt><dd>A number from 0 to 8. A wire into the pin of the same name is used instead. Default: 1. From 0 up to 8.</dd></dl><p class="meta">Related: <a href="#n-game-start-vote">Start Vote</a>, <a href="#n-game-round-end-rules">Round End Rules</a>, <a href="#n-game-voice-rules">Voice Rules</a></p></div></section>
-  </article>
+    <p class="lead">22 Game Mode Studio nodes. Pick one for its pins, settings and limits.</p>
+<div class="grid" aria-label="Game nodes"><a class="mini" href="#n-game-set-cvar"><span class="badge k-action">action</span><b>Set Setting</b><span class="s">Changes one of the game's settings now.</span></a><a class="mini" href="#n-entity-use"><span class="badge k-action">action</span><b>Use Entity</b><span class="s">Presses (uses) every entity with this name: a door, a button, a trigger.</span></a><a class="mini" href="#n-game-map-name"><span class="badge k-value">value</span><b>Current Map Name</b><span class="s">The map being played (de_dust2).</span></a><a class="mini" href="#n-game-next-map"><span class="badge k-value">value</span><b>Next Map</b><span class="s">The map the server goes to next (from the map cycle or vote); empty if it doesn't know.</span></a><a class="mini" href="#n-game-server-name"><span class="badge k-value">value</span><b>Server Name</b><span class="s">The server's name (hostname).</span></a><a class="mini" href="#n-game-max-players"><span class="badge k-value">value</span><b>Max Players</b><span class="s">How many players the server takes.</span></a><a class="mini" href="#n-game-player-count"><span class="badge k-value">value</span><b>Player Count</b><span class="s">How many players there are: everyone, people, bots, a team, or spectators.</span></a><a class="mini" href="#n-game-time"><span class="badge k-value">value</span><b>Game Time</b><span class="s">Seconds since the map started (for timing things: keep it in a variable, compare later).</span></a><a class="mini" href="#n-game-clock"><span class="badge k-value">value</span><b>Real Date and Time</b><span class="s">The server computer's date and time, as text (2026-11-13, 21:30, Friday) and as seconds since 1970.</span></a><a class="mini" href="#n-game-mode-id"><span class="badge k-value">value</span><b>Current Mode</b><span class="s">This mode's id (as the Game Mode Menu and modes.ini know it).</span></a><a class="mini" href="#n-game-round-number"><span class="badge k-value">value</span><b>Round Number</b><span class="s">Which round this is on this map (1 for the first).</span></a><a class="mini" href="#n-game-team-score"><span class="badge k-value">value</span><b>Team Score</b><span class="s">A team's rounds won on this map (as the scoreboard shows).</span></a><a class="mini" href="#n-game-freeze-time"><span class="badge k-value">value</span><b>Is Freeze Time</b><span class="s">Is it the freeze time at a round's start (nobody can move)?</span></a><a class="mini" href="#n-game-get-setting"><span class="badge k-value">value</span><b>Get Setting</b><span class="s">Reads a server setting (a cvar), as a number and as text: the counterpart of Set Setting.</span></a><a class="mini" href="#n-game-change-map"><span class="badge k-action">action</span><b>Change Map</b><span class="s">Changes the map (if the server has it).</span></a><a class="mini" href="#n-game-restart-round"><span class="badge k-action">action</span><b>Restart Round</b><span class="s">Restarts the round now (scores stay).</span></a><a class="mini" href="#n-game-remove-objectives"><span class="badge k-action">action</span><b>Remove Map Objectives</b><span class="s">Takes the map's objectives away (tick which): buy zones, bomb sites, hostages, hostage rescue zones, VIP safety zones, escape zones.</span></a><a class="mini" href="#n-game-map-type"><span class="badge k-value">value</span><b>Map Type</b><span class="s">What kind of map this is now: bomb (de_), hostage (cs_), VIP (as_), escape (es_) or other, from what it has in it; and each one as yes or no.</span></a><a class="mini" href="#n-game-voice-rules"><span class="badge k-action">action</span><b>Voice Rules</b><span class="s">Who hears whom on voice chat: everyone, only teammates, the dead only the dead and the living only the living, or only those within a distance (0: any distance, with the other rules).</span></a><a class="mini" href="#n-game-round-end-rules"><span class="badge k-action">action</span><b>Round End Rules</b><span class="s">Stops rounds ending by themselves: when a team is wiped out, when the time runs out, or either (End Round is then the only way a round ends).</span></a><a class="mini" href="#n-game-start-vote"><span class="badge k-action">action</span><b>Start Vote</b><span class="s">Asks everyone (or a team, or the living) a question with 2 to 8 answers for some seconds; then runs the winning answer's output, Tie, or No votes.</span></a><a class="mini" href="#n-game-vote-count"><span class="badge k-value">value</span><b>Vote Count</b><span class="s">How many votes an answer got in the last Start Vote (0: all the votes).</span></a></div>
+<article class="card" id="n-game-set-cvar" aria-labelledby="n-game-set-cvar-h">
+<header><h3 id="n-game-set-cvar-h"><a href="#n-game-set-cvar">Set Setting</a></h3><span class="badge k-action">action</span><span class="id">game.set_cvar</span><button class="copy-link" type="button" data-id="n-game-set-cvar" aria-label="Copy a link to Set Setting">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Set Setting</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#9be36a"></span>Value</li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Changes one of the game's settings now.</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Value <span class="ty">Number</span></dt><dd>Value: a number. Leave it empty to use the setting.</dd></dl></details><details><summary>Settings <span class="n">(2)</span></summary><dl><dt>Setting</dt><dd>Pick one: Free for all (1 on), Friendly fire (1 on), Gravity (800 normal), Buy time (minutes), Start money, Air control (10 normal), Round time (minutes, next round), Freeze time (seconds, next round), Rounds only end when the mode says (1 on), Team balance (1 on), Most players more than the other team (0 any), Bomb for the Terrorists (1 on)…. Default: mp_freeforall.</dd><dt>Value</dt><dd>A number from 0 to 100000. A wire into the pin of the same name is used instead. Default: 1.</dd></dl></details><details><summary>Notes <span class="n">(2)</span></summary><p>A setting changed for the rest of the map. For settings the mode always wants, add them under This mode's Game settings instead (set every map).</p><p>Careful: A few settings are set again by the game's own game.cfg after the mode's, so they don't stick: the bomb for the Terrorists (mp_give_player_c4) is one. Take the bomb with Remove Weapon (c4) at Round Started instead.</p></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-entity-use">Use Entity</a><a class="chip" href="#n-game-map-name">Current Map Name</a><a class="chip" href="#n-game-next-map">Next Map</a></div>
+</article>
+<article class="card" id="n-entity-use" aria-labelledby="n-entity-use-h">
+<header><h3 id="n-entity-use-h"><a href="#n-entity-use">Use Entity</a></h3><span class="badge k-action">action</span><span class="id">entity.use</span><button class="copy-link" type="button" data-id="n-entity-use" aria-label="Copy a link to Use Entity">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Use Entity</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Presses (uses) every entity with this name: a door, a button, a trigger.</p>
+<details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Name</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -). Default: door1.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-set-cvar">Set Setting</a><a class="chip" href="#n-game-map-name">Current Map Name</a><a class="chip" href="#n-game-next-map">Next Map</a></div>
+</article>
+<article class="card" id="n-game-map-name" aria-labelledby="n-game-map-name-h">
+<header><h3 id="n-game-map-name-h"><a href="#n-game-map-name">Current Map Name</a></h3><span class="badge k-value">value</span><span class="id">game.map_name</span><button class="copy-link" type="button" data-id="n-game-map-name" aria-label="Copy a link to Current Map Name">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Current Map Name</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Map<span class="pin" style="--c:#e0a3ff"></span></li></ul></div></div>
+<p class="what">The map being played (de_dust2).</p>
+<details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Map <span class="ty">Text</span></dt><dd>Map: text.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-next-map">Next Map</a><a class="chip" href="#n-game-server-name">Server Name</a><a class="chip" href="#n-game-max-players">Max Players</a></div>
+</article>
+<article class="card" id="n-game-next-map" aria-labelledby="n-game-next-map-h">
+<header><h3 id="n-game-next-map-h"><a href="#n-game-next-map">Next Map</a></h3><span class="badge k-value">value</span><span class="id">game.next_map</span><button class="copy-link" type="button" data-id="n-game-next-map" aria-label="Copy a link to Next Map">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Next Map</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Map<span class="pin" style="--c:#e0a3ff"></span></li></ul></div></div>
+<p class="what">The map the server goes to next (from the map cycle or vote); empty if it doesn't know.</p>
+<details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Map <span class="ty">Text</span></dt><dd>Map: text.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-map-name">Current Map Name</a><a class="chip" href="#n-game-server-name">Server Name</a><a class="chip" href="#n-game-max-players">Max Players</a></div>
+</article>
+<article class="card" id="n-game-server-name" aria-labelledby="n-game-server-name-h">
+<header><h3 id="n-game-server-name-h"><a href="#n-game-server-name">Server Name</a></h3><span class="badge k-value">value</span><span class="id">game.server_name</span><button class="copy-link" type="button" data-id="n-game-server-name" aria-label="Copy a link to Server Name">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Server Name</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Name<span class="pin" style="--c:#e0a3ff"></span></li></ul></div></div>
+<p class="what">The server's name (hostname).</p>
+<details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Name <span class="ty">Text</span></dt><dd>Name: text.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-next-map">Next Map</a><a class="chip" href="#n-game-max-players">Max Players</a><a class="chip" href="#n-game-map-name">Current Map Name</a></div>
+</article>
+<article class="card" id="n-game-max-players" aria-labelledby="n-game-max-players-h">
+<header><h3 id="n-game-max-players-h"><a href="#n-game-max-players">Max Players</a></h3><span class="badge k-value">value</span><span class="id">game.max_players</span><button class="copy-link" type="button" data-id="n-game-max-players" aria-label="Copy a link to Max Players">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Max Players</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Max<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">How many players the server takes.</p>
+<details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Max <span class="ty">Number</span></dt><dd>Max: a number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-server-name">Server Name</a><a class="chip" href="#n-game-player-count">Player Count</a><a class="chip" href="#n-game-next-map">Next Map</a></div>
+</article>
+<article class="card" id="n-game-player-count" aria-labelledby="n-game-player-count-h">
+<header><h3 id="n-game-player-count-h"><a href="#n-game-player-count">Player Count</a></h3><span class="badge k-value">value</span><span class="id">game.player_count</span><button class="copy-link" type="button" data-id="n-game-player-count" aria-label="Copy a link to Player Count">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Player Count</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Players<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">How many players there are: everyone, people, bots, a team, or spectators.</p>
+<details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Players <span class="ty">Number</span></dt><dd>Players: a number.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Who</dt><dd>Pick one: Everyone, People, Bots, Terrorists, Counter-Terrorists, Spectators, Alive. Default: all.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-max-players">Max Players</a><a class="chip" href="#n-game-time">Game Time</a><a class="chip" href="#n-game-server-name">Server Name</a></div>
+</article>
+<article class="card" id="n-game-time" aria-labelledby="n-game-time-h">
+<header><h3 id="n-game-time-h"><a href="#n-game-time">Game Time</a></h3><span class="badge k-value">value</span><span class="id">game.time</span><button class="copy-link" type="button" data-id="n-game-time" aria-label="Copy a link to Game Time">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Game Time</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Seconds<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">Seconds since the map started (for timing things: keep it in a variable, compare later).</p>
+<details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Seconds <span class="ty">Number</span></dt><dd>Seconds: a number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-player-count">Player Count</a><a class="chip" href="#n-game-clock">Real Date and Time</a><a class="chip" href="#n-game-max-players">Max Players</a></div>
+</article>
+<article class="card" id="n-game-clock" aria-labelledby="n-game-clock-h">
+<header><h3 id="n-game-clock-h"><a href="#n-game-clock">Real Date and Time</a></h3><span class="badge k-value">value</span><span class="id">game.clock</span><button class="copy-link" type="button" data-id="n-game-clock" aria-label="Copy a link to Real Date and Time">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Real Date and Time</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Text<span class="pin" style="--c:#e0a3ff"></span></li><li>Seconds since 1970<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">The server computer's date and time, as text (2026-11-13, 21:30, Friday) and as seconds since 1970.</p>
+<details><summary>Outputs <span class="n">(2)</span></summary><dl><dt>Text <span class="ty">Text</span></dt><dd>The text.</dd><dt>Seconds since 1970 <span class="ty">Number</span></dt><dd>Seconds since 1970: a number.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>As</dt><dd>Pick one: Date and time, Date, Time, Day of the week, Hour (0-23). Default: datetime.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-time">Game Time</a><a class="chip" href="#n-game-mode-id">Current Mode</a><a class="chip" href="#n-game-player-count">Player Count</a></div>
+</article>
+<article class="card" id="n-game-mode-id" aria-labelledby="n-game-mode-id-h">
+<header><h3 id="n-game-mode-id-h"><a href="#n-game-mode-id">Current Mode</a></h3><span class="badge k-value">value</span><span class="id">game.mode_id</span><button class="copy-link" type="button" data-id="n-game-mode-id" aria-label="Copy a link to Current Mode">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Current Mode</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Mode id<span class="pin" style="--c:#e0a3ff"></span></li></ul></div></div>
+<p class="what">This mode's id (as the Game Mode Menu and modes.ini know it).</p>
+<details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Mode id <span class="ty">Text</span></dt><dd>Mode id: text.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-clock">Real Date and Time</a><a class="chip" href="#n-game-round-number">Round Number</a><a class="chip" href="#n-game-time">Game Time</a></div>
+</article>
+<article class="card" id="n-game-round-number" aria-labelledby="n-game-round-number-h">
+<header><h3 id="n-game-round-number-h"><a href="#n-game-round-number">Round Number</a></h3><span class="badge k-value">value</span><span class="id">game.round_number</span><button class="copy-link" type="button" data-id="n-game-round-number" aria-label="Copy a link to Round Number">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Round Number</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Round<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">Which round this is on this map (1 for the first).</p>
+<details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Round <span class="ty">Number</span></dt><dd>Round: a number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-mode-id">Current Mode</a><a class="chip" href="#n-game-team-score">Team Score</a><a class="chip" href="#n-game-clock">Real Date and Time</a></div>
+</article>
+<article class="card" id="n-game-team-score" aria-labelledby="n-game-team-score-h">
+<header><h3 id="n-game-team-score-h"><a href="#n-game-team-score">Team Score</a></h3><span class="badge k-value">value</span><span class="id">game.team_score</span><button class="copy-link" type="button" data-id="n-game-team-score" aria-label="Copy a link to Team Score">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Team Score</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Score<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">A team's rounds won on this map (as the scoreboard shows).</p>
+<details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Score <span class="ty">Number</span></dt><dd>Score: a number.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Team</dt><dd>Pick one: Terrorists, Counter-Terrorists. Default: ct.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-round-number">Round Number</a><a class="chip" href="#n-game-freeze-time">Is Freeze Time</a><a class="chip" href="#n-game-mode-id">Current Mode</a></div>
+</article>
+<article class="card" id="n-game-freeze-time" aria-labelledby="n-game-freeze-time-h">
+<header><h3 id="n-game-freeze-time-h"><a href="#n-game-freeze-time">Is Freeze Time</a></h3><span class="badge k-value">value</span><span class="id">game.freeze_time</span><button class="copy-link" type="button" data-id="n-game-freeze-time" aria-label="Copy a link to Is Freeze Time">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Is Freeze Time</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Freeze time<span class="pin" style="--c:#ff6b8a"></span></li></ul></div></div>
+<p class="what">Is it the freeze time at a round's start (nobody can move)?</p>
+<details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Freeze time <span class="ty">Yes/No</span></dt><dd>Freeze time: yes or no.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-team-score">Team Score</a><a class="chip" href="#n-game-get-setting">Get Setting</a><a class="chip" href="#n-game-round-number">Round Number</a></div>
+</article>
+<article class="card" id="n-game-get-setting" aria-labelledby="n-game-get-setting-h">
+<header><h3 id="n-game-get-setting-h"><a href="#n-game-get-setting">Get Setting</a></h3><span class="badge k-value">value</span><span class="id">game.get_setting</span><button class="copy-link" type="button" data-id="n-game-get-setting" aria-label="Copy a link to Get Setting">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Get Setting</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Number<span class="pin" style="--c:#9be36a"></span></li><li>Text<span class="pin" style="--c:#e0a3ff"></span></li></ul></div></div>
+<p class="what">Reads a server setting (a cvar), as a number and as text: the counterpart of Set Setting. Passwords and the like can't be read.</p>
+<details><summary>Outputs <span class="n">(2)</span></summary><dl><dt>Number <span class="ty">Number</span></dt><dd>The number.</dd><dt>Text <span class="ty">Text</span></dt><dd>The text.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Setting (cvar)</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -). Default: mp_roundtime.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-freeze-time">Is Freeze Time</a><a class="chip" href="#n-game-change-map">Change Map</a><a class="chip" href="#n-game-team-score">Team Score</a></div>
+</article>
+<article class="card" id="n-game-change-map" aria-labelledby="n-game-change-map-h">
+<header><h3 id="n-game-change-map-h"><a href="#n-game-change-map">Change Map</a></h3><span class="badge k-action">action</span><span class="id">game.change_map</span><button class="copy-link" type="button" data-id="n-game-change-map" aria-label="Copy a link to Change Map">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Change Map</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Changes the map (if the server has it). The mode changes too only if the next map's preset says so. Asks first when an agent does it.</p>
+<details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Map</dt><dd>A name, as the map or the game knows it (letters, digits, _ . -). Default: de_dust2.</dd></dl></details><details><summary>Notes <span class="n">(1)</span></summary><p>Careful: Ends the game on this map for everyone. Only maps the server has are allowed.</p></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-get-setting">Get Setting</a><a class="chip" href="#n-game-restart-round">Restart Round</a><a class="chip" href="#n-game-freeze-time">Is Freeze Time</a></div>
+</article>
+<article class="card" id="n-game-restart-round" aria-labelledby="n-game-restart-round-h">
+<header><h3 id="n-game-restart-round-h"><a href="#n-game-restart-round">Restart Round</a></h3><span class="badge k-action">action</span><span class="id">game.restart_round</span><button class="copy-link" type="button" data-id="n-game-restart-round" aria-label="Copy a link to Restart Round">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Restart Round</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Restarts the round now (scores stay).</p>
+<details><summary>Notes <span class="n">(1)</span></summary><p>Careful: Restarts the round for everyone, like sv_restartround.</p></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-change-map">Change Map</a><a class="chip" href="#n-game-get-setting">Get Setting</a><a class="chip" href="#n-game-freeze-time">Is Freeze Time</a></div>
+</article>
+<article class="card" id="n-game-remove-objectives" aria-labelledby="n-game-remove-objectives-h">
+<header><h3 id="n-game-remove-objectives-h"><a href="#n-game-remove-objectives">Remove Map Objectives</a></h3><span class="badge k-action">action</span><span class="id">game.remove_objectives</span><button class="copy-link" type="button" data-id="n-game-remove-objectives" aria-label="Copy a link to Remove Map Objectives">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Remove Map Objectives</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Takes the map's objectives away (tick which): buy zones, bomb sites, hostages, hostage rescue zones, VIP safety zones, escape zones. The game notices at the next round (the bomb isn't given, no hostages to save); removed buy zones don't fall back to buying at spawn. Best at Map Started.</p>
+<details><summary>Settings <span class="n">(6)</span></summary><dl><dt>Buy zones</dt><dd>On or off. Default: false.</dd><dt>Bomb sites</dt><dd>On or off. Default: true.</dd><dt>Hostages</dt><dd>On or off. Default: true.</dd><dt>Rescue zones</dt><dd>On or off. Default: true.</dd><dt>VIP safety zones</dt><dd>On or off. Default: true.</dd><dt>Escape zones</dt><dd>On or off. Default: true.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-map-type">Map Type</a><a class="chip" href="#n-game-voice-rules">Voice Rules</a><a class="chip" href="#n-game-round-end-rules">Round End Rules</a></div>
+</article>
+<article class="card" id="n-game-map-type" aria-labelledby="n-game-map-type-h">
+<header><h3 id="n-game-map-type-h"><a href="#n-game-map-type">Map Type</a></h3><span class="badge k-value">value</span><span class="id">game.map_type</span><button class="copy-link" type="button" data-id="n-game-map-type" aria-label="Copy a link to Map Type">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Map Type</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Type<span class="pin" style="--c:#e0a3ff"></span></li><li>Has bomb sites<span class="pin" style="--c:#ff6b8a"></span></li><li>Has hostages<span class="pin" style="--c:#ff6b8a"></span></li><li>Has VIP zone<span class="pin" style="--c:#ff6b8a"></span></li><li>Has escape zone<span class="pin" style="--c:#ff6b8a"></span></li></ul></div></div>
+<p class="what">What kind of map this is now: bomb (de_), hostage (cs_), VIP (as_), escape (es_) or other, from what it has in it; and each one as yes or no.</p>
+<details><summary>Outputs <span class="n">(5)</span></summary><dl><dt>Type <span class="ty">Text</span></dt><dd>Type: text.</dd><dt>Has bomb sites <span class="ty">Yes/No</span></dt><dd>Has bomb sites: yes or no.</dd><dt>Has hostages <span class="ty">Yes/No</span></dt><dd>Has hostages: yes or no.</dd><dt>Has VIP zone <span class="ty">Yes/No</span></dt><dd>Has VIP zone: yes or no.</dd><dt>Has escape zone <span class="ty">Yes/No</span></dt><dd>Has escape zone: yes or no.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-remove-objectives">Remove Map Objectives</a><a class="chip" href="#n-game-voice-rules">Voice Rules</a><a class="chip" href="#n-game-round-end-rules">Round End Rules</a></div>
+</article>
+<article class="card" id="n-game-voice-rules" aria-labelledby="n-game-voice-rules-h">
+<header><h3 id="n-game-voice-rules-h"><a href="#n-game-voice-rules">Voice Rules</a></h3><span class="badge k-action">action</span><span class="id">game.voice_rules</span><button class="copy-link" type="button" data-id="n-game-voice-rules" aria-label="Copy a link to Voice Rules">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Voice Rules</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Who hears whom on voice chat: everyone, only teammates, the dead only the dead and the living only the living, or only those within a distance (0: any distance, with the other rules). Spectators hear spectators. Voice Override changes it for one player; Mute Voice still mutes.</p>
+<details><summary>Settings <span class="n">(2)</span></summary><dl><dt>Who hears</dt><dd>Pick one: Everyone hears everyone, Teammates only, Dead with dead, alive with alive, Teammates, and dead with dead, Only within the distance. Default: team.</dd><dt>Within (units, 0: any)</dt><dd>A number from 0 to 8192. Default: 0.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-map-type">Map Type</a><a class="chip" href="#n-game-remove-objectives">Remove Map Objectives</a><a class="chip" href="#n-game-round-end-rules">Round End Rules</a></div>
+</article>
+<article class="card" id="n-game-round-end-rules" aria-labelledby="n-game-round-end-rules-h">
+<header><h3 id="n-game-round-end-rules-h"><a href="#n-game-round-end-rules">Round End Rules</a></h3><span class="badge k-action">action</span><span class="id">game.round_end_rules</span><button class="copy-link" type="button" data-id="n-game-round-end-rules" aria-label="Copy a link to Round End Rules">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Round End Rules</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Stops rounds ending by themselves: when a team is wiped out, when the time runs out, or either (End Round is then the only way a round ends). Ending as usual undoes it; a new mode starts as usual.</p>
+<details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Rounds don't end when</dt><dd>Pick one: (Ending as usual), A team is wiped out, Time runs out, Either (only End Round ends them). Default: elim.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-start-vote">Start Vote</a><a class="chip" href="#n-game-vote-count">Vote Count</a><a class="chip" href="#n-game-voice-rules">Voice Rules</a></div>
+</article>
+<article class="card" id="n-game-start-vote" aria-labelledby="n-game-start-vote-h">
+<header><h3 id="n-game-start-vote-h"><a href="#n-game-start-vote">Start Vote</a></h3><span class="badge k-action">action</span><span class="id">game.start_vote</span><button class="copy-link" type="button" data-id="n-game-start-vote" aria-label="Copy a link to Start Vote">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Start Vote</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li></ul><ul class="out"><li><span class="pin exec"></span></li><li>1<span class="pin exec"></span></li><li>2<span class="pin exec"></span></li><li>3<span class="pin exec"></span></li><li>4<span class="pin exec"></span></li><li>5<span class="pin exec"></span></li><li>6<span class="pin exec"></span></li><li>7<span class="pin exec"></span></li><li>8<span class="pin exec"></span></li><li>Tie<span class="pin exec"></span></li><li>No votes<span class="pin exec"></span></li></ul></div></div>
+<p class="what">Asks everyone (or a team, or the living) a question with 2 to 8 answers for some seconds; then runs the winning answer's output, Tie, or No votes. Bots vote at random if Bots vote is on. Only one vote at a time, and never over the server's map or mode vote (then No votes runs). Vote Count reads the result.</p>
+<details><summary>Settings <span class="n">(13)</span></summary><dl><dt>Question</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Next round?. Up to 60.</dd><dt>Answers</dt><dd>A number from 2 to 8. Default: 2.</dd><dt>Answer 1</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Knives. Up to 30.</dd><dt>Answer 2</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Pistols. Up to 30.</dd><dt>Answer 3</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Rifles. Up to 30.</dd><dt>Answer 4</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Snipers. Up to 30.</dd><dt>Answer 5</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Shotguns. Up to 30.</dd><dt>Answer 6</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Grenades. Up to 30.</dd><dt>Answer 7</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Random. Up to 30.</dd><dt>Answer 8</dt><dd>Text: letters, digits, spaces and plain punctuation. Default: Normal. Up to 30.</dd><dt>Seconds</dt><dd>A number from 5 to 60. Default: 15.</dd><dt>Who votes</dt><dd>Pick one: Everyone, Terrorists, Counter-Terrorists, The living. Default: all.</dd><dt>Bots vote</dt><dd>On or off. Default: false.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-vote-count">Vote Count</a><a class="chip" href="#n-game-round-end-rules">Round End Rules</a><a class="chip" href="#n-game-voice-rules">Voice Rules</a></div>
+</article>
+<article class="card" id="n-game-vote-count" aria-labelledby="n-game-vote-count-h">
+<header><h3 id="n-game-vote-count-h"><a href="#n-game-vote-count">Vote Count</a></h3><span class="badge k-value">value</span><span class="id">game.vote_count</span><button class="copy-link" type="button" data-id="n-game-vote-count" aria-label="Copy a link to Vote Count">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Vote Count</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#9be36a"></span>Answer</li></ul><ul class="out"><li>Votes<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">How many votes an answer got in the last Start Vote (0: all the votes).</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Answer <span class="ty">Number</span></dt><dd>Answer: a number. Leave it empty to use the setting.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Votes <span class="ty">Number</span></dt><dd>Votes: a number.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Answer (0: all)</dt><dd>A number from 0 to 8. A wire into the pin of the same name is used instead. Default: 1.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-game-start-vote">Start Vote</a><a class="chip" href="#n-game-round-end-rules">Round End Rules</a><a class="chip" href="#n-game-voice-rules">Voice Rules</a></div>
+</article>
+    <p class="meta ty">Made from the app's own catalog (nodes.json, nodehelp.json, limits.ts), so it matches the app.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#n-game-set-cvar">Set Setting</a></li><li><a href="#n-entity-use">Use Entity</a></li><li><a href="#n-game-map-name">Current Map Name</a></li><li><a href="#n-game-next-map">Next Map</a></li><li><a href="#n-game-server-name">Server Name</a></li><li><a href="#n-game-max-players">Max Players</a></li><li><a href="#n-game-player-count">Player Count</a></li><li><a href="#n-game-time">Game Time</a></li><li><a href="#n-game-clock">Real Date and Time</a></li><li><a href="#n-game-mode-id">Current Mode</a></li><li><a href="#n-game-round-number">Round Number</a></li><li><a href="#n-game-team-score">Team Score</a></li><li><a href="#n-game-freeze-time">Is Freeze Time</a></li><li><a href="#n-game-get-setting">Get Setting</a></li><li><a href="#n-game-change-map">Change Map</a></li><li><a href="#n-game-restart-round">Restart Round</a></li><li><a href="#n-game-remove-objectives">Remove Map Objectives</a></li><li><a href="#n-game-map-type">Map Type</a></li><li><a href="#n-game-voice-rules">Voice Rules</a></li><li><a href="#n-game-round-end-rules">Round End Rules</a></li><li><a href="#n-game-start-vote">Start Vote</a></li><li><a href="#n-game-vote-count">Vote Count</a></li></ul></nav>
 </div>
 <footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../../reference/ref.js" defer></script>
 </body>
 </html>

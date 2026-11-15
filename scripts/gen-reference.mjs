@@ -192,133 +192,242 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const nodeId = (t) => `n-${slug(t)}`;
 const entId = (n) => `e-${slug(n)}`;
+const typeLabel = (types, t) => types[t]?.label ?? t.replace(/^(struct|enum|array):/, "");
+const catsOf = (data) => [...new Set([...data.categories, ...data.nodes.map((n) => n.category)])].filter((c) => data.nodes.some((n) => n.category === c));
+/** A node's page and anchor, from reference/ (`nodes/events.html#n-…`). */
+const nodeHref = (n) => `nodes/${slug(n.category)}.html#${nodeId(n.type)}`;
+const entGroup = (e) => `${e.source === "Counter-Strike" ? "" : "Loner-Strike: "}${e.group}`;
+const entHref = (e) => `entities/${slug(entGroup(e))}.html#${entId(e.name)}`;
+/** The first sentence (for one-line summaries). */
+const firstSentence = (t) => {
+  const m = /^(.+?[.!?])(\s|$)/.exec(String(t).trim());
+  return m ? m[1] : String(t).trim();
+};
+const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+/** Whether `b` mostly says what `a` says already (most of its words are in it). */
+const saysSame = (a, b) => {
+  const have = new Set(norm(a).split(" "));
+  const words = norm(b).split(" ").filter((w) => w.length > 2);
+  return !words.length || words.filter((w) => have.has(w)).length / words.length >= 0.6;
+};
+/** The node's kind: an event, a value (pure), flow, or an action. */
+const kindOf = (n) => (n.event ? "event" : n.pure ? "value" : n.category === "Flow" ? "flow" : "action");
+/** What the help says about bots, sentence by sentence. */
+const botLines = (n) => [n.what, n.more, n.needs].join(" ").split(/(?<=[.!?])\s+/).filter((x) => /\bbots?\b/i.test(x));
+const hasBots = (n) => n.category === "Bots" || botLines(n).length > 0;
 
-/** docs.html's own look: its <style> block, so the reference pages match. */
-function docsStyle() {
+/** docs.html's look: its <style> block as a stylesheet the reference pages share. */
+function baseCss() {
   const d = read(join(site, "docs.html"));
-  return d.slice(d.indexOf("<style>"), d.indexOf("</style>") + 8);
+  return `/* Made by scripts/gen-reference.mjs from docs.html's own styles: the reference looks like the docs. */\n${d.slice(d.indexOf("<style>") + 7, d.indexOf("</style>")).replace(/url\("fonts\//g, 'url("../fonts/')}`;
 }
 
-function page({ title, lead, nav, body, file, up = "../" }) {
+/** A reference page: the docs' top bar, the search with filters, the sidebar, the main column, On this page. */
+function page({ title, lead, side, main, toc = "", file, up = "../", kinds = true }) {
+  const filters = kinds
+    ? `<label>Category <select id="ref-f-cat"><option value="">Any</option></select></label>
+      <label>Kind <select id="ref-f-kind"><option value="">Any</option><option value="event">Event</option><option value="action">Action</option><option value="value">Value</option><option value="flow">Flow</option><option value="point">Point entity</option><option value="brush">Brush entity</option></select></label>
+      <label>Type <select id="ref-f-type"><option value="">Any</option></select></label>
+      <label><input type="checkbox" id="ref-f-bots"> Works with bots</label>
+      <label><input type="checkbox" id="ref-f-limits"> Has limits</label>`
+    : "";
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)} · Loner-Strike docs</title>
+<title>${esc(title)} · Loner-Strike reference</title>
 <meta name="description" content="${esc(lead)}">
 <link rel="icon" href="${up}favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-${docsStyle().replace(/url\("fonts\//g, `url("${up}fonts/`)}
-<style>
-.ref .topic { display: block; }
-.ref .pins { display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr); gap: 2px 14px; margin: 6px 0 10px; font-size: 16px; }
-.ref .pins dt { color: var(--bone); font-weight: 600; }
-.ref .pins dd { margin: 0; color: var(--dim); }
-.ref .ty { color: var(--faint); font-weight: 500; font-size: 14px; }
-.ref .node { padding: 14px 0; box-shadow: inset 0 -1px 0 rgba(0,0,0,.2); }
-.ref .node h3 { margin: 0 0 4px; }
-.ref h3 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
-.ref h3:hover .anchor, .ref h3 .anchor:focus { opacity: .8; }
-.ref .meta { color: var(--faint); font-size: 15px; }
-.ref .side { position: static; max-height: none; }
-@media (min-width: 901px) { .ref .side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); } }
-@media (max-width: 520px) { .ref .pins { grid-template-columns: 1fr; } .ref .pins dd { margin-bottom: 6px; } }
-</style>
+<link rel="stylesheet" href="${up}reference/base.css">
+<link rel="stylesheet" href="${up}reference/ref.css">
 </head>
-<body class="ref">
+<body data-root="${up}">
 <a class="sr-only skip" href="#content">Skip to the reference</a>
 <header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
-<nav aria-label="Site"><a href="${up}docs.html">Docs</a><a href="${up}docs.html#reference">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
-<div class="docs">
-  <div class="rail"><nav class="side" aria-label="${esc(title)}">${nav}</nav></div>
-  <article id="content" tabindex="-1">
-    <p class="crumb"><a href="${up}docs.html#reference">Reference</a>${up === "../../" ? ` › <a href="../nodes.html">Game Mode Studio nodes</a>` : ""}</p>
+<nav aria-label="Site"><a href="/">Home</a><a href="${up}docs.html#whats-new">What's new</a><a href="${up}docs.html#tools">Tools</a><a href="${up}docs.html#vps">Run a server</a><a href="${up}reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  ${kinds ? `<details class="ref-filter-box"><summary>Filters</summary><div class="ref-filters" id="ref-filters">${filters}</div></details>` : ""}
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">${esc(title)} <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference">${side}</nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="${up}docs.html#reference">Reference</a></p>
     <h1>${esc(title)}</h1>
     <p class="lead">${esc(lead)}</p>
-    <p class="meta">Made from the app's own catalog (${esc(file)}), so it always matches the app.</p>
-${body}
-  </article>
+${main}
+    <p class="meta ty">Made from the app's own catalog (${esc(file)}), so it matches the app.</p>
+  </main>
+  ${toc ? `<nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul>${toc}</ul></nav>` : "<div></div>"}
 </div>
 <footer><a href="/">lonerstrike.com</a> · <a href="${up}docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="${up}reference/ref.js" defer></script>
 </body>
 </html>
 `;
 }
 
-const typeLabel = (types, t) => types[t]?.label ?? t.replace(/^(struct|enum|array):/, "");
+/** The sidebar for nodes: categories (folding, with counts), the open one's nodes listed. */
+function nodeSide(data, here, up) {
+  return catsOf(data)
+    .map((c) => {
+      const list = data.nodes.filter((n) => n.category === c);
+      const open = c === here;
+      return `<details${open ? " open" : ""} class="${open ? "here" : ""}"><summary><a href="${up}reference/nodes/${slug(c)}.html"${open ? ' aria-current="page"' : ""}>${esc(c)}</a><span class="n">${list.length}</span></summary>${open ? `<ul>${list.map((n) => `<li><a href="#${nodeId(n.type)}">${esc(n.title)}</a></li>`).join("")}</ul>` : ""}</details>`;
+    })
+    .join("");
+}
 
-const catsOf = (data) => [...new Set([...data.categories, ...data.nodes.map((n) => n.category)])].filter((c) => data.nodes.some((n) => n.category === c));
-/** A node's page and anchor, from reference/ (`nodes/events.html#n-…`). */
-const nodeHref = (n) => `nodes/${slug(n.category)}.html#${nodeId(n.type)}`;
+const pinColor = (types, t) => types[t]?.color ?? (t.startsWith("enum:") ? "#ff9ad5" : t.startsWith("struct:") ? "#7fb2ff" : t.startsWith("array:") ? "#b0b0b0" : "#cccccc");
+const CAT_COLORS = { Events: "#8b2e2e", Flow: "#4b4b4b", Conditions: "#3e6a3e", Numbers: "#3e6a3e", Text: "#5a3e6a", Variables: "#3e5a6a" };
 
-/** One page per category (phones load only what they open), and an index page linking them. */
+/** The node drawn like the Studio's: its title bar, inputs on the left, outputs on the right. */
+function nodeGfx(data, n) {
+  const pin = (p, side) => {
+    const label = esc(p.label || (p.type === "exec" ? "" : p.id));
+    const dot = p.type === "exec" ? `<span class="pin exec"></span>` : `<span class="pin" style="--c:${pinColor(data.pinTypes, p.type)}"></span>`;
+    return `<li>${side === "in" ? `${dot}${label}` : `${label}${dot}`}</li>`;
+  };
+  return `<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:${CAT_COLORS[n.category] ?? (n.event ? "#8b2e2e" : "#3f4f63")}">${esc(n.title)}</div><div class="gfx-pins"><ul class="in">${n.inputs.map((p) => pin(p, "in")).join("")}</ul><ul class="out">${n.outputs.map((p) => pin(p, "out")).join("")}</ul></div></div>`;
+}
+
+/** One node's card: the graphic, what it does, then details on demand. */
+function nodeCard(data, n, byType) {
+  const k = kindOf(n);
+  const pinDl = (list, dir) => list.map((p) => `<dt>${esc(p.label || (p.type === "exec" ? (dir === "in" ? "Run" : "Then") : p.id))} <span class="ty">${esc(typeLabel(data.pinTypes, p.type))}</span></dt><dd>${esc(p.help || (p.type === "exec" ? (dir === "in" ? "Runs it." : "Goes on when it's done.") : ""))}</dd>`).join("");
+  const setting = (s) => {
+    const range = [s.min != null ? `from ${s.min}` : "", s.max != null ? `up to ${s.max}` : ""].filter(Boolean).join(" ");
+    // (the help often lists the choices or the range already: not twice)
+    const said = norm(s.help);
+    const choices = Array.isArray(s.choices) && !/pick one|choices|one of/.test(said) ? ` Choices: ${s.choices.map((c) => (Array.isArray(c) ? c[1] ?? c[0] : typeof c === "object" ? c.label ?? c.value : c)).join(", ")}.` : "";
+    const def = s.default === "" || s.default == null ? "" : ` Default: ${typeof s.default === "object" ? JSON.stringify(s.default) : s.default}.`;
+    const showRange = range && !(s.min != null && said.includes(norm(String(s.min))) && s.max != null && said.includes(norm(String(s.max))));
+    return `<dt>${esc(s.label)}</dt><dd>${esc(s.help)}${esc(def)}${showRange ? esc(` ${range[0].toUpperCase()}${range.slice(1)}.`) : ""}${esc(choices)}</dd>`;
+  };
+  // (the longer text only when it says more than the summary)
+  const more = n.more && !saysSame(n.what, n.more) ? n.more : "";
+  const bots = botLines(n).filter((x) => !norm(n.what).includes(norm(x)));
+  const notes = [more, n.needs, n.risk ? `Careful: ${n.risk}` : "", n.cost ? `Cost: ${n.cost}` : ""].filter(Boolean);
+  const sec = (label, count, body) => (count ? `<details><summary>${label} <span class="n">(${count})</span></summary>${body}</details>` : "");
+  const ins = n.inputs.filter((p) => p.type !== "exec"), outs = n.outputs.filter((p) => p.type !== "exec");
+  return `<article class="card" id="${nodeId(n.type)}" aria-labelledby="${nodeId(n.type)}-h">
+<header><h3 id="${nodeId(n.type)}-h"><a href="#${nodeId(n.type)}">${esc(n.title)}</a></h3><span class="badge k-${k}">${k}</span><span class="id">${esc(n.type)}</span><button class="copy-link" type="button" data-id="${nodeId(n.type)}" aria-label="Copy a link to ${esc(n.title)}">Copy link</button></header>
+${nodeGfx(data, n)}
+<p class="what">${esc(n.what)}</p>
+${sec("Inputs", ins.length, `<dl>${pinDl(n.inputs, "in")}</dl>`)}${sec("Outputs", outs.length, `<dl>${pinDl(n.outputs, "out")}</dl>`)}${sec("Settings", n.settings.length, `<dl>${n.settings.map(setting).join("")}</dl>`)}${sec("Limits", n.limits.length, `<dl>${n.limits.map((l) => `<dt>${esc(l.label)}</dt><dd>${esc(`${l.default} by default; hosts can raise it to ${l.max}. Above ${l.lagAbove} the server may slow down.`)}</dd>`).join("")}</dl>`)}${sec("Bots", bots.length, `<p>${esc(bots.join(" "))}</p>`)}${sec("Notes", notes.length, notes.map((t) => `<p>${esc(t)}</p>`).join(""))}
+${n.related.filter((r) => byType[r]).length ? `<div class="chips"><span class="lbl">Related:</span>${n.related.filter((r) => byType[r]).map((r) => `<a class="chip" href="${byType[r].category === n.category ? "" : `${slug(byType[r].category)}.html`}#${nodeId(r)}">${esc(byType[r].title)}</a>`).join("")}</div>` : ""}
+</article>`;
+}
+
+/** The node pages: an index (a card per category), and per category an overview grid, then the cards. */
 function nodePages(data, enums, lib) {
   const cats = catsOf(data);
   const byType = Object.fromEntries(data.nodes.map((n) => [n.type, n]));
-  const pins = (list, dir) =>
-    list.length
-      ? `<p class="meta">${dir}</p><dl class="pins">${list.map((p) => `<dt>${esc(p.label || (p.type === "exec" ? (dir === "Inputs" ? "Run" : "Then") : p.id))} <span class="ty">${esc(typeLabel(data.pinTypes, p.type))}</span></dt><dd>${esc(p.help || (p.type === "exec" ? (dir === "Inputs" ? "Runs it." : "Goes on when it's done.") : ""))}</dd>`).join("")}</dl>`
-      : "";
-  const setting = (s) => {
-    const range = [s.min != null ? `from ${s.min}` : "", s.max != null ? `up to ${s.max}` : ""].filter(Boolean).join(" ");
-    const choices = Array.isArray(s.choices) ? ` Choices: ${s.choices.map((c) => (Array.isArray(c) ? c[1] ?? c[0] : typeof c === "object" ? c.label ?? c.value : c)).join(", ")}.` : "";
-    const def = s.default === "" || s.default == null ? "" : ` Default: ${typeof s.default === "object" ? JSON.stringify(s.default) : s.default}.`;
-    return `<dt>${esc(s.label)}</dt><dd>${esc(s.help)}${esc(def)}${range ? esc(` ${range[0].toUpperCase()}${range.slice(1)}.`) : ""}${esc(choices)}</dd>`;
-  };
-  const nav = (here) => `<div class="group"><b>Categories</b><ul><li><a href="../nodes.html">All categories</a></li>${cats.map((c) => `<li><a href="${slug(c)}.html"${c === here ? ' aria-current="page"' : ""}>${esc(c)}</a></li>`).join("")}</ul></div>`;
-  const node = (n) => `<div class="node" id="${nodeId(n.type)}"><h3>${esc(n.title)} <a class="anchor" href="#${nodeId(n.type)}" aria-label="Link to ${esc(n.title)}">#</a></h3>
-<p>${esc(n.what)}</p>${n.more ? `<p>${esc(n.more)}</p>` : ""}${pins(n.inputs, "Inputs")}${pins(n.outputs, "Outputs")}${n.settings.length ? `<p class="meta">Settings</p><dl class="pins">${n.settings.map(setting).join("")}</dl>` : ""}${n.limits.length ? `<p class="meta">Limits: ${n.limits.map((l) => esc(`${l.label} (${l.default} by default, hosts can raise it to ${l.max}; slow above ${l.lagAbove})`)).join("; ")}.</p>` : ""}${n.needs ? `<p class="meta">${esc(n.needs)}</p>` : ""}${n.risk ? `<p class="meta">Careful: ${esc(n.risk)}</p>` : ""}${n.cost ? `<p class="meta">Cost: ${esc(n.cost)}</p>` : ""}${n.related.length ? `<p class="meta">Related: ${n.related.filter((r) => byType[r]).map((r) => `<a href="${byType[r].category === n.category ? "" : `${slug(byType[r].category)}.html`}#${nodeId(r)}">${esc(byType[r].title)}</a>`).join(", ")}</p>` : ""}</div>`;
-  const pages = Object.fromEntries(
-    cats.map((c) => {
-      const list = data.nodes.filter((n) => n.category === c);
-      return [`${slug(c)}.html`, page({ title: c, lead: `Game Mode Studio's ${c} nodes (${list.length}): what each does, its inputs and outputs, settings, limits and related nodes.`, nav: nav(c), body: `<section class="topic" id="c-${slug(c)}">${list.map(node).join("\n")}</section>`, file: "nodes.json, nodehelp.json, limits.ts", up: "../../" })];
-    }),
-  );
-  const indexNav = `<div class="group"><b>Categories</b><ul>${cats.map((c) => `<li><a href="nodes/${slug(c)}.html">${esc(c)}</a></li>`).join("")}<li><a href="#enums">Built-in lists</a></li><li><a href="#library">Starter library</a></li></ul></div>`;
-  const indexBody = `<section class="topic" id="categories"><h2>Categories</h2>${cats.map((c) => {
+  const pages = {};
+  for (const c of cats) {
     const list = data.nodes.filter((n) => n.category === c);
-    return `<h3 id="c-${slug(c)}"><a href="nodes/${slug(c)}.html">${esc(c)}</a> <span class="ty">${list.length}</span></h3><p class="meta">${list.map((n) => `<a href="${nodeHref(n)}">${esc(n.title)}</a>`).join(", ")}</p>`;
-  }).join("")}</section>
-<section class="topic" id="enums"><h2>Built-in lists</h2><p>Lists every mode has (What Kind Of, Component Kind Of give them; Switch on Enum fills its cases from them).</p>${enums.map((e) => `<h3 id="enum-${slug(e.id)}">${esc(e.name)}</h3><p>${esc(e.values.join(", "))}</p>`).join("")}</section>
-<section class="topic" id="library"><h2>Starter library</h2><p>Ready-made pieces to add from Game Mode Studio's My library.</p>${lib.map((l) => `<div class="node" id="lib-${slug(l.name)}"><h3>${esc(l.name)}</h3><p class="meta">${esc(l.category)}</p><p>${esc(l.description)}</p>${l.inputs.length ? `<p class="meta">In: ${esc(l.inputs.map((p) => p.name).join(", "))}. Out: ${esc(l.outputs.map((p) => p.name).join(", "))}.</p>` : ""}${l.tables.length ? `<p class="meta">Brings the table${l.tables.length > 1 ? "s" : ""} ${esc(l.tables.join(", "))}.</p>` : ""}</div>`).join("")}</section>`;
-  const index = page({ title: "Game Mode Studio nodes", lead: `Every node (${data.nodes.length}) by category; each category has its own page.`, nav: indexNav, body: indexBody, file: "nodes.json, nodehelp.json, limits.ts" });
+    const grid = `<div class="grid" aria-label="${esc(c)} nodes">${list.map((n) => `<a class="mini" href="#${nodeId(n.type)}"><span class="badge k-${kindOf(n)}">${kindOf(n)}</span><b>${esc(n.title)}</b><span class="s">${esc(firstSentence(n.what))}</span></a>`).join("")}</div>`;
+    pages[`${slug(c)}.html`] = page({
+      title: c,
+      lead: `${list.length} Game Mode Studio node${list.length === 1 ? "" : "s"}. Pick one for its pins, settings and limits.`,
+      side: nodeSide(data, c, "../../"),
+      main: `${grid}\n${list.map((n) => nodeCard(data, n, byType)).join("\n")}`,
+      toc: list.map((n) => `<li><a href="#${nodeId(n.type)}">${esc(n.title)}</a></li>`).join(""),
+      file: "nodes.json, nodehelp.json, limits.ts",
+      up: "../../",
+    });
+  }
+  const catGrid = `<div class="grid">${cats.map((c) => {
+    const list = data.nodes.filter((n) => n.category === c);
+    return `<a class="mini" href="nodes/${slug(c)}.html"><span class="badge">${list.length}</span><b>${esc(c)}</b><span class="s">${esc(list.slice(0, 4).map((n) => n.title).join(", "))}${list.length > 4 ? "…" : ""}</span></a>`;
+  }).join("")}</div>`;
+  const enumsHtml = `<h2 id="enums">Built-in lists</h2><p>Lists every mode has (What Kind Of and Component Kind Of give them; Switch on Enum fills its cases from them).</p>${enums.map((e) => `<article class="card" id="enum-${slug(e.id)}"><header><h3>${esc(e.name)}</h3></header><p class="what">${esc(e.values.join(", "))}</p></article>`).join("")}`;
+  const libHtml = `<h2 id="library">Starter library</h2><p>Ready-made pieces to add from Game Mode Studio's My library.</p>${lib.map((l) => `<article class="card" id="lib-${slug(l.name)}"><header><h3>${esc(l.name)}</h3><span class="badge">${esc(l.kind || "item")}</span><span class="id">${esc(l.category)}</span></header><p class="what">${esc(l.description)}</p>${l.inputs.length ? `<details><summary>Inputs and outputs</summary><p>In: ${esc(l.inputs.map((p) => p.name).join(", "))}. Out: ${esc(l.outputs.map((p) => p.name).join(", "))}.</p></details>` : ""}${l.tables.length ? `<p class="ty">Brings the table${l.tables.length > 1 ? "s" : ""} ${esc(l.tables.join(", "))}.</p>` : ""}</article>`).join("")}`;
+  const index = page({
+    title: "Game Mode Studio nodes",
+    lead: `All ${data.nodes.length} nodes, by category. Search above, or open a category.`,
+    side: nodeSide(data, null, "../"),
+    main: `${catGrid}${enumsHtml}${libHtml}`,
+    toc: `<li><a href="#enums">Built-in lists</a></li><li><a href="#library">Starter library</a></li>`,
+    file: "nodes.json, nodehelp.json, limits.ts",
+  });
   return { index, pages };
 }
 
-function entitiesPage(ents) {
-  const groups = [...new Set(ents.map((e) => `${e.source}: ${e.group}`))];
-  const nav = groups.map((g) => `<div class="group"><b>${esc(g)}</b><ul>${ents.filter((e) => `${e.source}: ${e.group}` === g).map((e) => `<li><a href="#${entId(e.name)}">${esc(e.name)}</a></li>`).join("")}</ul></div>`).join("");
-  const body = groups
-    .map(
-      (g) => `<section class="topic" id="g-${slug(g)}"><h2>${esc(g)}</h2>${ents
-        .filter((e) => `${e.source}: ${e.group}` === g)
-        .map((e) => {
-          const keys = e.keys.filter((k) => k.type !== "flags");
-          const flags = e.keys.find((k) => k.type === "flags");
-          return `<div class="node" id="${entId(e.name)}"><h3>${esc(e.name)}${e.title && e.title !== e.name ? ` <span class="ty">${esc(e.title)}</span>` : ""} <a class="anchor" href="#${entId(e.name)}" aria-label="Link to ${esc(e.name)}">#</a></h3>
-<p>${esc(e.help)}</p>${e.blurb && e.blurb !== e.help ? `<p>${esc(e.blurb)}</p>` : ""}<p class="meta">${e.kind === "SolidClass" ? "A brush entity (tie brushes to it)." : "A point entity."}${e.source.startsWith("Loner") ? " Needs Loner-Strike's components plugin (it comes with the app)." : ""}</p>${keys.length ? `<p class="meta">Keys</p><dl class="pins">${keys.map((k) => `<dt>${esc(k.label || k.name)} <span class="ty">${esc(k.name)}</span></dt><dd>${esc(k.help)}${k.default ? esc(` Default: ${k.default}.`) : ""}${k.options.length ? esc(` Choices: ${k.options.map((o) => `${o.value} ${o.label}`).join(", ")}.`) : ""}</dd>`).join("")}</dl>` : ""}${flags?.options.length ? `<p class="meta">Flags</p><dl class="pins">${flags.options.map((o) => `<dt>${esc(o.value)}</dt><dd>${esc(o.label)}${o.on ? " (on by default)" : ""}</dd>`).join("")}</dl>` : ""}</div>`;
-        })
-        .join("\n")}</section>`,
-    )
-    .join("\n");
-  return page({ title: "Map editor entities", lead: `Every entity the map editor places (${ents.length}): what it does in the game, its keys and flags.`, nav, body, file: "cstrike.fgd, lonerstrike.fgd, components.json" });
+/** The entity pages: an index (a card per group), and per group an overview grid, then the cards. */
+function entityPages(ents) {
+  const groups = [...new Set(ents.map(entGroup))];
+  const side = (here, up) => groups.map((g) => {
+    const list = ents.filter((e) => entGroup(e) === g);
+    const open = g === here;
+    return `<details${open ? " open" : ""} class="${open ? "here" : ""}"><summary><a href="${up}reference/entities/${slug(g)}.html"${open ? ' aria-current="page"' : ""}>${esc(g)}</a><span class="n">${list.length}</span></summary>${open ? `<ul>${list.map((e) => `<li><a href="#${entId(e.name)}">${esc(e.name)}</a></li>`).join("")}</ul>` : ""}</details>`;
+  }).join("");
+  const kind = (e) => (e.source.startsWith("Loner") ? "component" : e.kind === "SolidClass" ? "brush" : "point");
+  const card = (e) => {
+    const keys = e.keys.filter((k) => k.type !== "flags");
+    const flags = e.keys.find((k) => k.type === "flags");
+    const blurb = e.blurb && !saysSame(e.help, e.blurb) ? e.blurb : "";
+    return `<article class="card" id="${entId(e.name)}"><header><h3><a href="#${entId(e.name)}">${esc(e.name)}</a></h3><span class="badge k-${kind(e)}">${kind(e)}</span>${e.title && e.title !== e.name ? `<span class="id">${esc(e.title)}</span>` : ""}<button class="copy-link" type="button" data-id="${entId(e.name)}" aria-label="Copy a link to ${esc(e.name)}">Copy link</button></header>
+<p class="what">${esc(e.help)}</p>${blurb ? `<p>${esc(blurb)}</p>` : ""}<p class="ty">${e.kind === "SolidClass" ? "A brush entity: tie brushes to it." : "A point entity."}${e.source.startsWith("Loner") ? " Needs Loner-Strike's components plugin, which comes with the app." : ""}</p>
+${keys.length ? `<details><summary>Keys <span class="n">(${keys.length})</span></summary><dl>${keys.map((k) => `<dt>${esc(k.label || k.name)} <span class="ty">${esc(k.name)}</span></dt><dd>${esc(k.help)}${k.default ? esc(` Default: ${k.default}.`) : ""}${k.options.length ? esc(` Choices: ${k.options.map((o) => `${o.value} ${o.label}`).join(", ")}.`) : ""}</dd>`).join("")}</dl></details>` : ""}${flags?.options.length ? `<details><summary>Flags <span class="n">(${flags.options.length})</span></summary><dl>${flags.options.map((o) => `<dt>${esc(o.value)}</dt><dd>${esc(o.label)}${o.on ? " (on by default)" : ""}</dd>`).join("")}</dl></details>` : ""}
+</article>`;
+  };
+  const pages = {};
+  for (const g of groups) {
+    const list = ents.filter((e) => entGroup(e) === g);
+    pages[`${slug(g)}.html`] = page({
+      title: g,
+      lead: `${list.length} entit${list.length === 1 ? "y" : "ies"} the map editor places. Pick one for its keys and flags.`,
+      side: side(g, "../../"),
+      main: `<div class="grid">${list.map((e) => `<a class="mini" href="#${entId(e.name)}"><span class="badge k-${kind(e)}">${kind(e)}</span><b>${esc(e.name)}</b><span class="s">${esc(firstSentence(e.help))}</span></a>`).join("")}</div>\n${list.map(card).join("\n")}`,
+      toc: list.map((e) => `<li><a href="#${entId(e.name)}">${esc(e.name)}</a></li>`).join(""),
+      file: "cstrike.fgd, lonerstrike.fgd, components.json",
+      up: "../../",
+    });
+  }
+  const index = page({
+    title: "Map editor entities",
+    lead: `All ${ents.length} entities the map editor places, by group. Search above, or open a group.`,
+    side: side(null, "../"),
+    main: `<div class="grid">${groups.map((g) => {
+      const list = ents.filter((e) => entGroup(e) === g);
+      return `<a class="mini" href="entities/${slug(g)}.html"><span class="badge">${list.length}</span><b>${esc(g)}</b><span class="s">${esc(list.slice(0, 4).map((e) => e.name).join(", "))}${list.length > 4 ? "…" : ""}</span></a>`;
+    }).join("")}</div>`,
+    file: "cstrike.fgd, lonerstrike.fgd, components.json",
+  });
+  return { index, pages };
 }
 
+/** The editor's tools and keys: a card per menu, panel or dialog group. */
 function editorPage(inv) {
-  const nav = `<div class="group"><b>Where</b><ul>${inv.map((s) => `<li><a href="#t-${slug(s.name)}">${esc(s.name)}</a></li>`).join("")}</ul></div>`;
-  const body = inv.map((s) => `<section class="topic" id="t-${slug(s.name)}"><h2>${esc(s.name)}</h2><dl class="pins">${s.rows.map((r) => `<dt>${esc(r.item)}</dt><dd>${esc(r.where)}</dd>`).join("")}</dl></section>`).join("\n");
-  return page({ title: "Map editor tools and keys", lead: "Everything in the map editor's menus, panels and dialogs, and where to find it, with the keys.", nav, body, file: "the editor's coverage inventory" });
+  const side = inv.map((s) => `<details><summary><a href="#t-${slug(s.name)}">${esc(s.name)}</a><span class="n">${s.rows.length}</span></summary></details>`).join("");
+  const main = inv.map((s) => `<article class="card" id="t-${slug(s.name)}"><header><h3><a href="#t-${slug(s.name)}">${esc(s.name)}</a></h3><span class="badge">${s.rows.length}</span><button class="copy-link" type="button" data-id="t-${slug(s.name)}" aria-label="Copy a link to ${esc(s.name)}">Copy link</button></header><dl>${s.rows.map((r) => `<dt>${esc(r.item)}</dt><dd>${esc(r.where)}</dd>`).join("")}</dl></article>`).join("\n");
+  return page({ title: "Map editor tools and keys", lead: "Everything in the map editor's menus, panels and dialogs, where to find it, and its keys.", side, main, toc: inv.map((s) => `<li><a href="#t-${slug(s.name)}">${esc(s.name)}</a></li>`).join(""), file: "the editor's coverage inventory", kinds: false });
 }
 
-/** The docs search's extra entries: one per node, entity and editor section. */
+/** The reference's front page: the three references and the guides. */
+function landingPage(data, ents, inv) {
+  const card = (href, title, n, about) => `<a class="mini" href="${href}"><span class="badge">${n}</span><b>${esc(title)}</b><span class="s">${esc(about)}</span></a>`;
+  const main = `<div class="grid">${card("nodes.html", "Game Mode Studio nodes", data.nodes.length, "Every node: its pins, settings, limits and what bots do with it.")}${card("entities.html", "Map editor entities", ents.length, "Every entity: what it does in the game, its keys and flags.")}${card("editor.html", "Map editor tools and keys", inv.length, "The editor's menus, panels and dialogs, and their keys.")}</div>
+<h2>Guides</h2><div class="grid">${GUIDES.map(([id, title, about]) => card(`../docs.html#${id}`, title, "soon", about)).join("")}</div>`;
+  return page({ title: "Reference", lead: "Made from the app's own catalogs, so it always matches the app. Search everything from the box above.", side: `<details open class="here"><summary><a href="./" aria-current="page">Reference</a></summary><ul><li><a href="nodes.html">Studio nodes</a></li><li><a href="entities.html">Map entities</a></li><li><a href="editor.html">Editor tools and keys</a></li></ul></details>`, main, file: "nodes.json, the FGDs, the editor's inventory" });
+}
+
+/** The search entries (the reference pages' search, and the docs search): one per node, entity
+ *  and editor section. u url from the site root, n name, t where, k keywords, x one-line summary,
+ *  cat category, c kind, b works with bots, l has limits, ty pin types. */
 function searchIndex(data, ents, inv) {
-  const cut = (s, n = 160) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
   return [
-    ...data.nodes.map((n) => ({ u: `reference/${nodeHref(n)}`, n: n.title, t: `Studio node · ${n.category}`, k: n.type, x: cut([n.what, ...n.inputs.map((p) => p.label), ...n.outputs.map((p) => p.label)].filter(Boolean).join(" ")) })),
-    ...ents.map((e) => ({ u: `reference/entities.html#${entId(e.name)}`, n: e.name, t: `Entity · ${e.group}`, k: `${e.title} ${e.keys.map((k) => k.name).join(" ")}`, x: cut(e.help) })),
-    ...inv.map((s) => ({ u: `reference/editor.html#t-${slug(s.name)}`, n: `Editor: ${s.name}`, t: "Map editor tools and keys", k: "", x: cut(s.rows.map((r) => r.item).join(", ")) })),
+    ...data.nodes.map((n) => ({ u: `reference/${nodeHref(n)}`, n: n.title, t: `Studio node · ${n.category}`, k: `${n.type} ${[...n.inputs, ...n.outputs].map((p) => p.label || "").join(" ")}`.trim(), x: firstSentence(n.what), cat: n.category, c: kindOf(n), b: hasBots(n) ? 1 : 0, l: n.limits.length ? 1 : 0, ty: [...new Set([...n.inputs, ...n.outputs].filter((p) => p.type !== "exec").map((p) => typeLabel(data.pinTypes, p.type)))] })),
+    ...ents.map((e) => ({ u: `reference/${entHref(e)}`, n: e.name, t: `Entity · ${entGroup(e)}`, k: `${e.title} ${e.keys.map((k) => k.name).join(" ")}`, x: firstSentence(e.help), cat: entGroup(e), c: e.kind === "SolidClass" ? "brush" : "point", b: /\bbots?\b/i.test(e.help) ? 1 : 0, l: 0, ty: [] })),
+    ...inv.map((s) => ({ u: `reference/editor.html#t-${slug(s.name)}`, n: `Editor: ${s.name}`, t: "Map editor tools and keys", k: s.rows.map((r) => r.where).join(" ").slice(0, 300), x: s.rows.map((r) => r.item).slice(0, 8).join(", "), cat: "Map editor", c: "", b: 0, l: 0, ty: [] })),
   ];
 }
 
@@ -340,10 +449,11 @@ function docsBlock(data, ents, inv) {
   <h1>Reference</h1>
   <p class="lead">Made from the app's own catalogs, so it always matches the app. The docs search finds every entry.</p>
   <ul>
-    <li><a href="reference/nodes.html"><b>Game Mode Studio nodes</b></a>: all ${data.nodes.length}, by category: ${cats.map((c) => `<a href="reference/nodes/${slug(c)}.html">${esc(c)}</a>`).join(", ")}.</li>
+    <li><a href="reference/nodes.html"><b>Game Mode Studio nodes</b></a>: all ${data.nodes.length}, by category (${cats.length}), each with its pins, settings and limits.</li>
     <li><a href="reference/entities.html"><b>Map editor entities</b></a>: all ${ents.length}, with their keys and flags.</li>
-    <li><a href="reference/editor.html"><b>Map editor tools and keys</b></a>: ${inv.map((s) => esc(s.name)).join(", ")}.</li>
+    <li><a href="reference/editor.html"><b>Map editor tools and keys</b></a>: the menus, panels and dialogs, and their keys.</li>
   </ul>
+  <p><a href="reference/">Open the reference</a>: it has its own search with filters.</p>
 </section>`;
   // (stubs for the hand-written guides: an agent writes them once the type system lands)
   const stubs = GUIDES.map(([id, title, about]) => `<section class="topic" id="${id}" data-group="Reference" data-stub="1">
@@ -395,13 +505,18 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const inv = editorInventory();
   const out = join(site, "reference");
   mkdirSync(out, { recursive: true });
+  writeFileSync(join(out, "base.css"), baseCss());
   const np = nodePages(data, builtinEnums(), library());
   writeFileSync(join(out, "nodes.html"), np.index);
-  mkdirSync(join(out, "nodes"), { recursive: true });
-  for (const f of readdirSync(join(out, "nodes"))) if (f.endsWith(".html") && !np.pages[f]) unlinkSync(join(out, "nodes", f));
-  for (const [f, html] of Object.entries(np.pages)) writeFileSync(join(out, "nodes", f), html);
-  writeFileSync(join(out, "entities.html"), entitiesPage(ents));
+  const ep = entityPages(ents);
+  writeFileSync(join(out, "entities.html"), ep.index);
   writeFileSync(join(out, "editor.html"), editorPage(inv));
+  writeFileSync(join(out, "index.html"), landingPage(data, ents, inv));
+  for (const [dir, pages] of [["nodes", np.pages], ["entities", ep.pages]]) {
+    mkdirSync(join(out, dir), { recursive: true });
+    for (const f of readdirSync(join(out, dir))) if (f.endsWith(".html") && !pages[f]) unlinkSync(join(out, dir, f));
+    for (const [f, html] of Object.entries(pages)) writeFileSync(join(out, dir, f), html);
+  }
   writeFileSync(join(out, "index.js"), `// Made by scripts/gen-reference.mjs: the docs search's reference entries (u url, n name, t where, k keywords, x text)\nwindow.LS_REFERENCE = ${JSON.stringify(searchIndex(data, ents, inv))};\n`);
   const docs = join(site, "docs.html");
   writeFileSync(docs, replaceBlock(read(docs), docsBlock(data, ents, inv), '<section class="topic" id="something-wrong"'));

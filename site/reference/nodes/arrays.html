@@ -3,256 +3,196 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Arrays · Loner-Strike docs</title>
-<meta name="description" content="Game Mode Studio's Arrays nodes (22): what each does, its inputs and outputs, settings, limits and related nodes.">
+<title>Arrays · Loner-Strike reference</title>
+<meta name="description" content="22 Game Mode Studio nodes. Pick one for its pins, settings and limits.">
 <link rel="icon" href="../../favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<style>
-@font-face { font-family: "Counter-Strike"; src: url("../../fonts/counter-strike.ttf") format("truetype"); font-display: swap; }
-:root {
-  --bg: #3e4637; --side: #353c2f; --panel: #4c5844; --panel-2: #5a6a50;
-  --bevel-hi: rgba(136,145,128,.55); --bevel-lo: #292c21;
-  --bone: #d8ded3; --dim: #c2c9b7; --faint: #aeb7a2;
-  --signal: #c4b550; --ink: #26240f;
-  --raised: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
-  --sunken: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi);
-  --stencil: "Counter-Strike", Impact, sans-serif;
-  --text: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
-  --top: 58px;
-}
-* { box-sizing: border-box; }
-html { scroll-padding-top: calc(var(--top) + 16px); }
-body { margin: 0; background: var(--bg); color: var(--bone); font: 500 18px/1.6 var(--text); -webkit-font-smoothing: antialiased; }
-a { color: var(--signal); }
-:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.skip:focus { position: fixed; left: 16px; top: 12px; z-index: 9; width: auto; height: auto; clip: auto; background: var(--signal); color: var(--ink); padding: 6px 12px; }
-
-/* top bar, as on the home page */
-.top { position: sticky; top: 0; z-index: 6; background: rgba(53,60,47,.96); backdrop-filter: blur(6px); box-shadow: 0 1px 0 var(--bevel-lo); }
-.top .wrap { width: min(1200px, 100% - 32px); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: var(--top); gap: 16px; }
-.brand { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
-.wordmark { font: 400 22px/1 var(--stencil); color: var(--bone); text-decoration: none; }
-.brand .here { color: var(--faint); font-weight: 600; }
-.top nav { display: flex; gap: 22px; align-items: center; }
-.top nav a { color: var(--dim); text-decoration: none; font-weight: 600; }
-.top nav a:hover { color: var(--bone); }
-.top nav a.btn { color: var(--ink); background: var(--signal); padding: 7px 14px; border-radius: 2px; font-weight: 700; font-size: 16px;
-  box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
-.top nav a.btn:hover { background: #d4c55d; }
-
-/* the topic list on the left (sticky), one topic at a time on the right */
-.docs { width: min(1200px, 100% - 32px); margin: 0 auto; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 48px; align-items: start; }
-.rail { align-self: stretch; }
-.side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); max-height: calc(100dvh - var(--top) - 40px); overflow-y: auto; overscroll-behavior: contain;
-  margin: 20px 0 40px; background: var(--side); box-shadow: var(--raised); border-radius: 3px; padding: 12px 0 14px; scrollbar-width: thin; scrollbar-color: var(--panel-2) transparent; }
-.search { margin: 0 12px 6px; }
-.search input { width: 100%; font: 500 16px/1.2 var(--text); color: var(--bone); background: #2b3125; box-shadow: var(--sunken); border: 0; border-radius: 2px; padding: 9px 10px; }
-.search input::placeholder { color: var(--faint); opacity: .85; }
-.group { margin-top: 8px; }
-.group > b { display: block; padding: 2px 16px 3px; color: var(--faint); font-size: 14px; font-weight: 700; }
-.side ul { list-style: none; margin: 0; padding: 0; }
-.side li + li { margin-top: 0; }
-.side a { display: block; padding: 3px 16px; color: var(--dim); text-decoration: none; font-weight: 600; line-height: 1.3; border-left: 3px solid transparent; }
-.side a:hover { color: var(--bone); background: rgba(255,255,255,.04); }
-.side a[aria-current="page"] { color: var(--bone); background: var(--panel); border-left-color: var(--signal); }
-.side .sub { display: none; padding: 2px 0 6px; }
-.side a[aria-current="page"] + .sub { display: block; }
-.side .sub a { padding: 2px 16px 2px 30px; font-size: 16px; font-weight: 500; color: var(--faint); }
-.side .sub a:hover, .side .sub a.on { color: var(--bone); }
-/* search results: one per heading, the topic above it, a snippet with the match marked */
-.results ul { list-style: none; margin: 0; padding: 0; }
-.results [role="option"] { display: block; padding: 6px 16px; color: var(--dim); cursor: pointer; border-left: 3px solid transparent; line-height: 1.3; }
-.results [role="option"] b { display: block; color: var(--bone); font-weight: 700; }
-.results [role="option"] small { display: block; color: var(--faint); font-weight: 600; font-size: 13px; }
-.results [role="option"] span { display: block; color: var(--dim); font-size: 15px; font-weight: 500; margin-top: 2px; }
-.results [role="option"]:hover, .results [role="option"][aria-selected="true"] { background: var(--panel); border-left-color: var(--signal); }
-.results mark, mark.hit { background: var(--signal); color: var(--ink); border-radius: 2px; padding: 0 1px; }
-.results .none { margin: 6px 16px; color: var(--faint); font-size: 16px; }
-.results .none a { display: inline; padding: 0; border: 0; color: var(--signal); }
-.flash { animation: flash 2.2s ease-out; }
-@keyframes flash { 0%, 35% { background: rgba(196,181,80,.28); box-shadow: 0 0 0 6px rgba(196,181,80,.28); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
-.wrong-link { margin: 0 12px 4px; }
-.side a.wrong-link { padding: 4px 4px; border: 0; color: var(--signal); font-weight: 700; }
-/* collapsible groups */
-.group-btn { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; background: none; border: 0; cursor: pointer; padding: 3px 16px; color: var(--faint); font: 700 14px/1.3 var(--text); text-align: left; }
-.group-btn:hover { color: var(--bone); }
-.group-btn .chev { transition: transform .15s; font-size: 12px; }
-.group-btn[aria-expanded="false"] .chev { transform: rotate(-90deg); }
-.group-btn[aria-expanded="false"] + ul { display: none; }
-/* on this page (wide screens) */
-.toc { display: none; }
-@media (min-width: 1200px) {
-  .docs { width: min(1400px, 100% - 32px); grid-template-columns: 250px minmax(0, 1fr) 210px; gap: 40px; }
-  .toc:not([hidden]) { display: block; position: sticky; top: calc(var(--top) + 20px); margin: 26px 0 40px; max-height: calc(100vh - var(--top) - 40px); overflow-y: auto; scrollbar-width: thin; }
-  .toc-title { margin: 0 0 6px; color: var(--faint); font-size: 14px; font-weight: 700; }
-  .toc ul { list-style: none; margin: 0; padding: 0; box-shadow: inset 1px 0 0 var(--bevel-lo); }
-  .toc a { display: block; padding: 3px 10px; color: var(--faint); text-decoration: none; font-size: 15px; font-weight: 600; line-height: 1.3; border-left: 2px solid transparent; }
-  .toc a.h3 { padding-left: 22px; font-weight: 500; font-size: 14px; }
-  .toc a:hover { color: var(--bone); }
-  .toc a.on { color: var(--bone); border-left-color: var(--signal); }
-}
-@media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--signal); } .group-btn .chev { transition: none; } }
-html:not(.js) .search { display: none; }
-html:not(.js) .side .sub { display: block; }
-
-.menu-btn { display: none; }
-
-article { padding: 26px 0 64px; min-width: 0; max-width: 780px; }
-.topic + .topic { margin-top: 56px; }
-.js .topic { display: none; }
-.js .topic + .topic { margin-top: 0; }
-.js .topic.on { display: block; }
-.crumb { color: var(--faint); font-size: 15px; font-weight: 600; margin: 0; }
-h1 { font: 400 38px/1.1 var(--stencil); margin: 4px 0 6px; }
-h2 { font-size: 23px; line-height: 1.3; margin: 32px 0 4px; }
-h2 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
-h2:hover .anchor, h2 .anchor:focus { opacity: .8; }
-h3 { font-size: 19px; margin: 22px 0 4px; }
-p, li, td { color: var(--dim); text-wrap: pretty; }
-ul, ol { padding-left: 22px; }
-li + li { margin-top: 4px; }
-b, strong { color: var(--bone); }
-.lead { font-size: 20px; margin: 6px 0 0; }
-code { font: 15px/1.4 ui-monospace, Menlo, Consolas, monospace; background: var(--side); padding: 1px 5px; border-radius: 2px; color: var(--bone); overflow-wrap: anywhere; }
-pre { background: #23271c; box-shadow: var(--sunken); padding: 12px 14px; border-radius: 2px; overflow-x: auto; margin: 10px 0 14px; }
-pre code { background: none; padding: 0; font-size: 14px; white-space: pre; overflow-wrap: normal; }
-.table { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 17px; }
-th, td { text-align: left; padding: 7px 14px 7px 0; border-bottom: 1px solid rgba(0,0,0,.2); vertical-align: top; }
-th { color: var(--faint); font-weight: 600; font-size: 15px; }
-td:first-child { white-space: nowrap; }
-.kbd { font: 600 14px/1 ui-monospace, Menlo, Consolas, monospace; background: var(--panel-2); box-shadow: var(--raised); padding: 3px 7px; border-radius: 2px; color: var(--bone); white-space: nowrap; }
-.note { background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; margin: 16px 0; }
-.note p { margin: 4px 0; }
-.msg { border-left: 3px solid var(--panel-2); padding: 2px 0 2px 12px; margin: 8px 0; color: var(--bone); font-style: italic; }
-article ul { list-style: none; padding-left: 22px; }
-article ul > li { position: relative; }
-article ul > li::before { content: ""; position: absolute; left: -18px; top: .66em; width: 7px; height: 7px; background: var(--signal); box-shadow: inset -1px -1px 0 #8c7f33, inset 1px 1px 0 #e3d683; }
-article ol { list-style: none; padding-left: 34px; counter-reset: step; }
-article ol > li { position: relative; counter-increment: step; }
-article ol > li::before { content: counter(step); position: absolute; left: -34px; top: .15em; width: 22px; height: 22px; display: grid; place-items: center; background: var(--signal); color: var(--ink); font-weight: 700; font-size: 14px; line-height: 1; box-shadow: inset -2px -2px 0 #8c7f33, inset 2px 2px 0 #e3d683; }
-.side .sub a { position: relative; }
-.side .sub a::before { content: ""; position: absolute; left: 17px; top: .72em; width: 5px; height: 5px; background: var(--faint); opacity: .6; }
-.side .sub a.on::before, .side .sub a:hover::before { background: var(--signal); opacity: 1; }
-.menu-label { color: var(--faint); font-size: 14px; font-weight: 600; margin-right: 8px; }
-details.prov { background: var(--panel); box-shadow: var(--raised); border-radius: 2px; margin: 8px 0; }
-details.prov summary { cursor: pointer; padding: 9px 14px; font-weight: 700; color: var(--bone); }
-details.prov p { margin: 0; padding: 0 14px 12px; }
-@media (hover: none) { h2 .anchor { display: none; } }
-@media (max-width: 520px) {
-  .table tr { display: block; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.2); }
-  .table td, .table th { display: block; border: 0; padding: 0; }
-  .table td:first-child { margin-bottom: 2px; }
-  .table thead { display: none; }
-}
-figure.shot { margin: 16px 0 20px; }
-figure.shot img { display: block; width: 100%; height: auto; border-radius: 3px; background: #23271c; box-shadow: var(--raised), 0 14px 40px rgba(0,0,0,.3); }
-figure.shot figcaption { margin-top: 8px; color: var(--faint); font-size: 15px; }
-h3 { font-weight: 700; }
-.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 48px; padding-top: 16px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
-.pager a { display: block; text-decoration: none; background: var(--panel); box-shadow: var(--raised); border-radius: 3px; padding: 10px 16px; min-width: 0; color: var(--bone); font-weight: 700; }
-.pager a small { display: block; color: var(--faint); font-weight: 500; font-size: 14px; }
-.pager a:hover { background: var(--panel-2); }
-.pager .next { margin-left: auto; text-align: right; }
-.pager a[hidden] { display: none; }
-html:not(.js) .pager { display: none; }
-
-footer { width: min(1200px, 100% - 32px); margin: 0 auto; padding: 24px 0 48px; color: var(--faint); font-size: 15px; box-shadow: inset 0 1px 0 var(--bevel-lo); }
-footer a { color: var(--dim); }
-
-@media (max-width: 900px) {
-  .top nav a:not(.btn) { display: none; }
-  .brand .here { display: none; }
-  html { scroll-padding-top: calc(var(--top) + 64px); }
-  .docs { grid-template-columns: 1fr; gap: 0; }
-  .rail { display: contents; }
-  .js .menu-btn { position: sticky; top: var(--top); z-index: 5; display: flex; align-items: center; justify-content: space-between; width: calc(100% + 32px); margin: 0 -16px; padding: 12px 16px;
-    font: 700 17px/1.2 var(--text); color: var(--bone); background: var(--panel); box-shadow: 0 1px 0 var(--bevel-lo); border: 0; cursor: pointer; text-align: left; }
-  .menu-btn .chev { transition: transform .15s; }
-  .menu-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
-  .side { position: static; max-height: none; margin: 0; border-radius: 0 0 3px 3px; }
-  .js .side { display: none; position: sticky; top: calc(var(--top) + 46px); z-index: 4; max-height: calc(100dvh - var(--top) - 60px); overflow-y: auto; }
-  .js .side.open { display: block; }
-  h1 { font-size: 32px; }
-  td:first-child { white-space: normal; }
-}
-@media (prefers-reduced-motion: reduce) { .menu-btn .chev { transition: none; } }
-</style>
-<style>
-.ref .topic { display: block; }
-.ref .pins { display: grid; grid-template-columns: minmax(0, 12em) minmax(0, 1fr); gap: 2px 14px; margin: 6px 0 10px; font-size: 16px; }
-.ref .pins dt { color: var(--bone); font-weight: 600; }
-.ref .pins dd { margin: 0; color: var(--dim); }
-.ref .ty { color: var(--faint); font-weight: 500; font-size: 14px; }
-.ref .node { padding: 14px 0; box-shadow: inset 0 -1px 0 rgba(0,0,0,.2); }
-.ref .node h3 { margin: 0 0 4px; }
-.ref h3 .anchor { color: var(--faint); text-decoration: none; margin-left: 6px; font-weight: 500; opacity: 0; }
-.ref h3:hover .anchor, .ref h3 .anchor:focus { opacity: .8; }
-.ref .meta { color: var(--faint); font-size: 15px; }
-.ref .side { position: static; max-height: none; }
-@media (min-width: 901px) { .ref .side { position: sticky; top: calc(var(--top) + 20px); max-height: calc(100vh - var(--top) - 40px); } }
-@media (max-width: 520px) { .ref .pins { grid-template-columns: 1fr; } .ref .pins dd { margin-bottom: 6px; } }
-</style>
+<link rel="stylesheet" href="../../reference/base.css">
+<link rel="stylesheet" href="../../reference/ref.css">
 </head>
-<body class="ref">
+<body data-root="../../">
 <a class="sr-only skip" href="#content">Skip to the reference</a>
 <header class="top"><div class="wrap"><div class="brand"><a class="wordmark" href="/">Loner-Strike</a><span class="here">Reference</span></div>
-<nav aria-label="Site"><a href="../../docs.html">Docs</a><a href="../../docs.html#reference">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
-<div class="docs">
-  <div class="rail"><nav class="side" aria-label="Arrays"><div class="group"><b>Categories</b><ul><li><a href="../nodes.html">All categories</a></li><li><a href="events.html">Events</a></li><li><a href="conditions.html">Conditions</a></li><li><a href="numbers.html">Numbers</a></li><li><a href="text.html">Text</a></li><li><a href="variables.html">Variables</a></li><li><a href="flow.html">Flow</a></li><li><a href="functions.html">Functions</a></li><li><a href="macros.html">Macros</a></li><li><a href="arrays.html" aria-current="page">Arrays</a></li><li><a href="maps.html">Maps</a></li><li><a href="structs.html">Structs</a></li><li><a href="enums.html">Enums</a></li><li><a href="vectors.html">Vectors</a></li><li><a href="spatial.html">Spatial</a></li><li><a href="timers.html">Timers</a></li><li><a href="round-clock.html">Round clock</a></li><li><a href="players.html">Players</a></li><li><a href="input.html">Input</a></li><li><a href="cooldowns.html">Cooldowns</a></li><li><a href="weapons.html">Weapons</a></li><li><a href="damage.html">Damage</a></li><li><a href="squads.html">Squads</a></li><li><a href="buying.html">Buying</a></li><li><a href="saved.html">Saved</a></li><li><a href="messages.html">Messages</a></li><li><a href="game.html">Game</a></li><li><a href="scoring.html">Scoring</a></li><li><a href="bots.html">Bots</a></li><li><a href="components.html">Components</a></li><li><a href="map-markers.html">Map markers</a></li><li><a href="waves.html">Waves</a></li><li><a href="upgrades.html">Upgrades</a></li><li><a href="world.html">World</a></li><li><a href="entities.html">Entities</a></li><li><a href="effects.html">Effects</a></li><li><a href="advanced.html">Advanced</a></li><li><a href="downed.html">Downed</a></li><li><a href="shop.html">Shop</a></li><li><a href="npcs.html">NPCs</a></li><li><a href="battle-royale.html">Battle Royale</a></li><li><a href="creatures.html">Creatures</a></li><li><a href="data-tables.html">Data tables</a></li><li><a href="projectiles.html">Projectiles</a></li><li><a href="hud-view.html">HUD &amp; View</a></li><li><a href="collision.html">Collision</a></li></ul></div></nav></div>
-  <article id="content" tabindex="-1">
-    <p class="crumb"><a href="../../docs.html#reference">Reference</a> › <a href="../nodes.html">Game Mode Studio nodes</a></p>
+<nav aria-label="Site"><a href="/">Home</a><a href="../../docs.html#whats-new">What's new</a><a href="../../docs.html#tools">Tools</a><a href="../../docs.html#vps">Run a server</a><a href="../../reference/" aria-current="page">Reference</a><a class="btn" href="/#get">Get it</a></nav></div></header>
+<div class="ref-searchbar" role="search"><div class="wrap">
+  <label class="sr-only" for="ref-q">Search the reference</label>
+  <input id="ref-q" class="ref-q" type="search" placeholder="Search nodes, entities and editor tools (press /)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ref-results">
+  <details class="ref-filter-box"><summary>Filters</summary><div class="ref-filters" id="ref-filters"><label>Category <select id="ref-f-cat"><option value="">Any</option></select></label>
+      <label>Kind <select id="ref-f-kind"><option value="">Any</option><option value="event">Event</option><option value="action">Action</option><option value="value">Value</option><option value="flow">Flow</option><option value="point">Point entity</option><option value="brush">Brush entity</option></select></label>
+      <label>Type <select id="ref-f-type"><option value="">Any</option></select></label>
+      <label><input type="checkbox" id="ref-f-bots"> Works with bots</label>
+      <label><input type="checkbox" id="ref-f-limits"> Has limits</label></div></details>
+  <p class="ref-count" id="ref-count" aria-live="polite"></p>
+  <div class="ref-results-box" id="ref-results-box" hidden><ul id="ref-results" role="listbox" aria-label="Results"></ul></div>
+</div></div>
+<div class="ref-layout">
+  <div class="ref-rail"><button class="ref-menu-btn" type="button" aria-expanded="false" aria-controls="ref-side">Arrays <span aria-hidden="true">▾</span></button>
+  <nav class="ref-side" id="ref-side" aria-label="Reference"><details class=""><summary><a href="../../reference/nodes/events.html">Events</a><span class="n">44</span></summary></details><details class=""><summary><a href="../../reference/nodes/conditions.html">Conditions</a><span class="n">11</span></summary></details><details class=""><summary><a href="../../reference/nodes/numbers.html">Numbers</a><span class="n">15</span></summary></details><details class=""><summary><a href="../../reference/nodes/text.html">Text</a><span class="n">18</span></summary></details><details class=""><summary><a href="../../reference/nodes/variables.html">Variables</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/flow.html">Flow</a><span class="n">18</span></summary></details><details class=""><summary><a href="../../reference/nodes/functions.html">Functions</a><span class="n">6</span></summary></details><details class=""><summary><a href="../../reference/nodes/macros.html">Macros</a><span class="n">3</span></summary></details><details open class="here"><summary><a href="../../reference/nodes/arrays.html" aria-current="page">Arrays</a><span class="n">22</span></summary><ul><li><a href="#n-flow-for-each-array">For Each</a></li><li><a href="#n-array-make">Make Array</a></li><li><a href="#n-array-players">Players Array</a></li><li><a href="#n-array-add">Add</a></li><li><a href="#n-array-insert">Insert</a></li><li><a href="#n-array-remove">Remove Item</a></li><li><a href="#n-array-remove-index">Remove Index</a></li><li><a href="#n-array-set">Set Array Item</a></li><li><a href="#n-array-clear">Clear</a></li><li><a href="#n-array-shuffle">Shuffle</a></li><li><a href="#n-array-sort">Sort</a></li><li><a href="#n-array-get">Get</a></li><li><a href="#n-array-length">Length</a></li><li><a href="#n-array-contains">Contains</a></li><li><a href="#n-array-find">Find</a></li><li><a href="#n-array-random">Random Item</a></li><li><a href="#n-array-sum">Sum</a></li><li><a href="#n-array-min">Array Min</a></li><li><a href="#n-array-max">Array Max</a></li><li><a href="#n-array-average">Average</a></li><li><a href="#n-array-reverse">Reverse</a></li><li><a href="#n-array-slice">Slice</a></li></ul></details><details class=""><summary><a href="../../reference/nodes/maps.html">Maps</a><span class="n">8</span></summary></details><details class=""><summary><a href="../../reference/nodes/structs.html">Structs</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/nodes/enums.html">Enums</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/nodes/vectors.html">Vectors</a><span class="n">23</span></summary></details><details class=""><summary><a href="../../reference/nodes/spatial.html">Spatial</a><span class="n">6</span></summary></details><details class=""><summary><a href="../../reference/nodes/timers.html">Timers</a><span class="n">11</span></summary></details><details class=""><summary><a href="../../reference/nodes/round-clock.html">Round clock</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/players.html">Players</a><span class="n">95</span></summary></details><details class=""><summary><a href="../../reference/nodes/input.html">Input</a><span class="n">2</span></summary></details><details class=""><summary><a href="../../reference/nodes/cooldowns.html">Cooldowns</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/weapons.html">Weapons</a><span class="n">3</span></summary></details><details class=""><summary><a href="../../reference/nodes/damage.html">Damage</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/squads.html">Squads</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/buying.html">Buying</a><span class="n">2</span></summary></details><details class=""><summary><a href="../../reference/nodes/saved.html">Saved</a><span class="n">8</span></summary></details><details class=""><summary><a href="../../reference/nodes/messages.html">Messages</a><span class="n">15</span></summary></details><details class=""><summary><a href="../../reference/nodes/game.html">Game</a><span class="n">22</span></summary></details><details class=""><summary><a href="../../reference/nodes/scoring.html">Scoring</a><span class="n">1</span></summary></details><details class=""><summary><a href="../../reference/nodes/bots.html">Bots</a><span class="n">20</span></summary></details><details class=""><summary><a href="../../reference/nodes/components.html">Components</a><span class="n">40</span></summary></details><details class=""><summary><a href="../../reference/nodes/map-markers.html">Map markers</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/waves.html">Waves</a><span class="n">8</span></summary></details><details class=""><summary><a href="../../reference/nodes/upgrades.html">Upgrades</a><span class="n">21</span></summary></details><details class=""><summary><a href="../../reference/nodes/world.html">World</a><span class="n">36</span></summary></details><details class=""><summary><a href="../../reference/nodes/entities.html">Entities</a><span class="n">28</span></summary></details><details class=""><summary><a href="../../reference/nodes/effects.html">Effects</a><span class="n">20</span></summary></details><details class=""><summary><a href="../../reference/nodes/advanced.html">Advanced</a><span class="n">9</span></summary></details><details class=""><summary><a href="../../reference/nodes/downed.html">Downed</a><span class="n">8</span></summary></details><details class=""><summary><a href="../../reference/nodes/shop.html">Shop</a><span class="n">4</span></summary></details><details class=""><summary><a href="../../reference/nodes/npcs.html">NPCs</a><span class="n">14</span></summary></details><details class=""><summary><a href="../../reference/nodes/battle-royale.html">Battle Royale</a><span class="n">15</span></summary></details><details class=""><summary><a href="../../reference/nodes/creatures.html">Creatures</a><span class="n">25</span></summary></details><details class=""><summary><a href="../../reference/nodes/data-tables.html">Data tables</a><span class="n">6</span></summary></details><details class=""><summary><a href="../../reference/nodes/projectiles.html">Projectiles</a><span class="n">5</span></summary></details><details class=""><summary><a href="../../reference/nodes/hud-view.html">HUD &amp; View</a><span class="n">12</span></summary></details><details class=""><summary><a href="../../reference/nodes/collision.html">Collision</a><span class="n">9</span></summary></details></nav></div>
+  <main class="ref-main" id="content" tabindex="-1">
+    <p class="crumb"><a href="../../docs.html#reference">Reference</a></p>
     <h1>Arrays</h1>
-    <p class="lead">Game Mode Studio's Arrays nodes (22): what each does, its inputs and outputs, settings, limits and related nodes.</p>
-    <p class="meta">Made from the app's own catalog (nodes.json, nodehelp.json, limits.ts), so it always matches the app.</p>
-<section class="topic" id="c-arrays"><div class="node" id="n-flow-for-each-array"><h3>For Each <a class="anchor" href="#n-flow-for-each-array" aria-label="Link to For Each">#</a></h3>
-<p>Runs Loop Body once for each item of an array (Break stops early), then Completed.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Break <span class="ty">Flow</span></dt><dd>Stops the loop.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Loop Body <span class="ty">Flow</span></dt><dd>Runs once for every step.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number.</dd><dt>Completed <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl><p class="meta">Related: <a href="#n-array-make">Make Array</a>, <a href="#n-array-players">Players Array</a>, <a href="#n-array-add">Add</a></p></div>
-<div class="node" id="n-array-make"><h3>Make Array <a class="anchor" href="#n-array-make" aria-label="Link to Make Array">#</a></h3>
-<p>An array of the items wired in (a new one each time it's worked out).</p><p class="meta">Inputs</p><dl class="pins"><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Items</dt><dd>A number from 0 to 8. Default: 2. From 0 up to 8.</dd></dl><p class="meta">Related: <a href="#n-array-players">Players Array</a>, <a href="#n-array-add">Add</a>, <a href="#n-array-insert">Insert</a></p></div>
-<div class="node" id="n-array-players"><h3>Players Array <a class="anchor" href="#n-array-players" aria-label="Link to Players Array">#</a></h3>
-<p>An array of every player who fits.</p><p class="meta">Outputs</p><dl class="pins"><dt>Players <span class="ty">array&lt;player&gt;</span></dt><dd>Players: a list of players.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Who</dt><dd>Pick one: Everyone in the game, Everyone alive, Everyone dead, Terrorists, Counter-Terrorists, Living Terrorists, Living Counter-Terrorists, Bots, People (not bots). Default: alive. Choices: Everyone in the game, Everyone alive, Everyone dead, Terrorists, Counter-Terrorists, Living Terrorists, Living Counter-Terrorists, Bots, People (not bots).</dd></dl><p class="meta">Related: <a href="#n-array-make">Make Array</a>, <a href="#n-array-add">Add</a>, <a href="#n-array-insert">Insert</a></p></div>
-<div class="node" id="n-array-add"><h3>Add <a class="anchor" href="#n-array-add" aria-label="Link to Add">#</a></h3>
-<p>Adds an item at the end (an array holds at most 10000).</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl><p class="meta">Related: <a href="#n-array-players">Players Array</a>, <a href="#n-array-insert">Insert</a>, <a href="#n-array-make">Make Array</a></p></div>
-<div class="node" id="n-array-insert"><h3>Insert <a class="anchor" href="#n-array-insert" aria-label="Link to Insert">#</a></h3>
-<p>Puts an item in at an index (the rest move up).</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Index</dt><dd>A number from 0 to 10000. A wire into the pin of the same name is used instead. Default: 0. From 0 up to 10000.</dd></dl><p class="meta">Related: <a href="#n-array-add">Add</a>, <a href="#n-array-remove">Remove Item</a>, <a href="#n-array-players">Players Array</a></p></div>
-<div class="node" id="n-array-remove"><h3>Remove Item <a class="anchor" href="#n-array-remove" aria-label="Link to Remove Item">#</a></h3>
-<p>Takes out every item equal to this one.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Removed <span class="ty">Yes/No</span></dt><dd>Removed: yes or no.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl><p class="meta">Related: <a href="#n-array-insert">Insert</a>, <a href="#n-array-remove-index">Remove Index</a>, <a href="#n-array-add">Add</a></p></div>
-<div class="node" id="n-array-remove-index"><h3>Remove Index <a class="anchor" href="#n-array-remove-index" aria-label="Link to Remove Index">#</a></h3>
-<p>Takes out the item at an index.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Index</dt><dd>A number from 0 to 10000. A wire into the pin of the same name is used instead. Default: 0. From 0 up to 10000.</dd></dl><p class="meta">Related: <a href="#n-array-remove">Remove Item</a>, <a href="#n-array-set">Set Array Item</a>, <a href="#n-array-insert">Insert</a></p></div>
-<div class="node" id="n-array-set"><h3>Set Array Item <a class="anchor" href="#n-array-set" aria-label="Link to Set Array Item">#</a></h3>
-<p>Changes the item at an index (nothing happens past the end).</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number. Leave it empty to use the setting.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Index</dt><dd>A number from 0 to 10000. A wire into the pin of the same name is used instead. Default: 0. From 0 up to 10000.</dd></dl><p class="meta">Related: <a href="#n-array-remove-index">Remove Index</a>, <a href="#n-array-clear">Clear</a>, <a href="#n-array-remove">Remove Item</a></p></div>
-<div class="node" id="n-array-clear"><h3>Clear <a class="anchor" href="#n-array-clear" aria-label="Link to Clear">#</a></h3>
-<p>Empties an array.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl><p class="meta">Related: <a href="#n-array-set">Set Array Item</a>, <a href="#n-array-shuffle">Shuffle</a>, <a href="#n-array-remove-index">Remove Index</a></p></div>
-<div class="node" id="n-array-shuffle"><h3>Shuffle <a class="anchor" href="#n-array-shuffle" aria-label="Link to Shuffle">#</a></h3>
-<p>Puts an array's items in a random order.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl><p class="meta">Related: <a href="#n-array-clear">Clear</a>, <a href="#n-array-sort">Sort</a>, <a href="#n-array-set">Set Array Item</a></p></div>
-<div class="node" id="n-array-sort"><h3>Sort <a class="anchor" href="#n-array-sort" aria-label="Link to Sort">#</a></h3>
-<p>Sorts an array (numbers by size, text A to Z, the rest by their number).</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Order</dt><dd>Pick one: Smallest first, Biggest first. Default: asc. Choices: Smallest first, Biggest first.</dd></dl><p class="meta">Related: <a href="#n-array-shuffle">Shuffle</a>, <a href="#n-array-get">Get</a>, <a href="#n-array-clear">Clear</a></p></div>
-<div class="node" id="n-array-get"><h3>Get <a class="anchor" href="#n-array-get" aria-label="Link to Get">#</a></h3>
-<p>The item at an index (nothing, 0 or empty past the end).</p><p class="meta">Inputs</p><dl class="pins"><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Index</dt><dd>A number from 0 to 10000. A wire into the pin of the same name is used instead. Default: 0. From 0 up to 10000.</dd></dl><p class="meta">Related: <a href="#n-array-sort">Sort</a>, <a href="#n-array-length">Length</a>, <a href="#n-array-shuffle">Shuffle</a></p></div>
-<div class="node" id="n-array-length"><h3>Length <a class="anchor" href="#n-array-length" aria-label="Link to Length">#</a></h3>
-<p>How many items an array has.</p><p class="meta">Inputs</p><dl class="pins"><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Length <span class="ty">Number</span></dt><dd>Length: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl><p class="meta">Related: <a href="#n-array-get">Get</a>, <a href="#n-array-contains">Contains</a>, <a href="#n-array-sort">Sort</a></p></div>
-<div class="node" id="n-array-contains"><h3>Contains <a class="anchor" href="#n-array-contains" aria-label="Link to Contains">#</a></h3>
-<p>Is the item in the array?</p><p class="meta">Inputs</p><dl class="pins"><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Contains <span class="ty">Yes/No</span></dt><dd>Contains: yes or no.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl><p class="meta">Related: <a href="#n-array-length">Length</a>, <a href="#n-array-find">Find</a>, <a href="#n-array-get">Get</a></p></div>
-<div class="node" id="n-array-find"><h3>Find <a class="anchor" href="#n-array-find" aria-label="Link to Find">#</a></h3>
-<p>The index of the first item equal to this one (-1 if none).</p><p class="meta">Inputs</p><dl class="pins"><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Index <span class="ty">Number</span></dt><dd>Index: a number.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl><p class="meta">Related: <a href="#n-array-contains">Contains</a>, <a href="#n-array-random">Random Item</a>, <a href="#n-array-length">Length</a></p></div>
-<div class="node" id="n-array-random"><h3>Random Item <a class="anchor" href="#n-array-random" aria-label="Link to Random Item">#</a></h3>
-<p>An item picked at random (a new pick each time it's worked out).</p><p class="meta">Inputs</p><dl class="pins"><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl><p class="meta">Related: <a href="#n-array-find">Find</a>, <a href="#n-array-contains">Contains</a>, <a href="#n-array-length">Length</a></p></div>
-<div class="node" id="n-array-sum"><h3>Sum <a class="anchor" href="#n-array-sum" aria-label="Link to Sum">#</a></h3>
-<p>All the numbers added up (0 for an empty array).</p><p class="meta">Inputs</p><dl class="pins"><dt>Numbers <span class="ty">array&lt;number&gt;</span></dt><dd>Numbers: a list of numbers. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Sum <span class="ty">Number</span></dt><dd>Sum: a number.</dd></dl><p class="meta">Related: <a href="#n-array-min">Array Min</a>, <a href="#n-array-max">Array Max</a>, <a href="#n-array-average">Average</a></p></div>
-<div class="node" id="n-array-min"><h3>Array Min <a class="anchor" href="#n-array-min" aria-label="Link to Array Min">#</a></h3>
-<p>The smallest number, and its index (-1 for an empty array).</p><p class="meta">Inputs</p><dl class="pins"><dt>Numbers <span class="ty">array&lt;number&gt;</span></dt><dd>Numbers: a list of numbers. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Min <span class="ty">Number</span></dt><dd>Min: a number.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number.</dd></dl><p class="meta">Related: <a href="#n-array-sum">Sum</a>, <a href="#n-array-max">Array Max</a>, <a href="#n-array-average">Average</a></p></div>
-<div class="node" id="n-array-max"><h3>Array Max <a class="anchor" href="#n-array-max" aria-label="Link to Array Max">#</a></h3>
-<p>The biggest number, and its index (-1 for an empty array).</p><p class="meta">Inputs</p><dl class="pins"><dt>Numbers <span class="ty">array&lt;number&gt;</span></dt><dd>Numbers: a list of numbers. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Max <span class="ty">Number</span></dt><dd>Max: a number.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number.</dd></dl><p class="meta">Related: <a href="#n-array-min">Array Min</a>, <a href="#n-array-average">Average</a>, <a href="#n-array-sum">Sum</a></p></div>
-<div class="node" id="n-array-average"><h3>Average <a class="anchor" href="#n-array-average" aria-label="Link to Average">#</a></h3>
-<p>The numbers' average (0 for an empty array).</p><p class="meta">Inputs</p><dl class="pins"><dt>Numbers <span class="ty">array&lt;number&gt;</span></dt><dd>Numbers: a list of numbers. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Average <span class="ty">Number</span></dt><dd>Average: a number.</dd></dl><p class="meta">Related: <a href="#n-array-max">Array Max</a>, <a href="#n-array-reverse">Reverse</a>, <a href="#n-array-min">Array Min</a></p></div>
-<div class="node" id="n-array-reverse"><h3>Reverse <a class="anchor" href="#n-array-reverse" aria-label="Link to Reverse">#</a></h3>
-<p>Turns an array round: the last item first.</p><p class="meta">Inputs</p><dl class="pins"><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl><p class="meta">Related: <a href="#n-array-average">Average</a>, <a href="#n-array-slice">Slice</a>, <a href="#n-array-max">Array Max</a></p></div>
-<div class="node" id="n-array-slice"><h3>Slice <a class="anchor" href="#n-array-slice" aria-label="Link to Slice">#</a></h3>
-<p>A new array with Count items from Start (the first is 0).</p><p class="meta">Inputs</p><dl class="pins"><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Start <span class="ty">Number</span></dt><dd>Start: a number. Leave it empty to use the setting.</dd><dt>Count <span class="ty">Number</span></dt><dd>Count: a number. Leave it empty to use the setting.</dd></dl><p class="meta">Outputs</p><dl class="pins"><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss.</dd></dl><p class="meta">Settings</p><dl class="pins"><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Start</dt><dd>A number from 0 to 10000. A wire into the pin of the same name is used instead. Default: 0. From 0 up to 10000.</dd><dt>Count</dt><dd>A number from 0 to 10000. A wire into the pin of the same name is used instead. Default: 3. From 0 up to 10000.</dd></dl><p class="meta">Related: <a href="#n-array-reverse">Reverse</a>, <a href="#n-array-average">Average</a>, <a href="#n-array-max">Array Max</a></p></div></section>
-  </article>
+    <p class="lead">22 Game Mode Studio nodes. Pick one for its pins, settings and limits.</p>
+<div class="grid" aria-label="Arrays nodes"><a class="mini" href="#n-flow-for-each-array"><span class="badge k-action">action</span><b>For Each</b><span class="s">Runs Loop Body once for each item of an array (Break stops early), then Completed.</span></a><a class="mini" href="#n-array-make"><span class="badge k-value">value</span><b>Make Array</b><span class="s">An array of the items wired in (a new one each time it's worked out).</span></a><a class="mini" href="#n-array-players"><span class="badge k-value">value</span><b>Players Array</b><span class="s">An array of every player who fits.</span></a><a class="mini" href="#n-array-add"><span class="badge k-action">action</span><b>Add</b><span class="s">Adds an item at the end (an array holds at most 10000).</span></a><a class="mini" href="#n-array-insert"><span class="badge k-action">action</span><b>Insert</b><span class="s">Puts an item in at an index (the rest move up).</span></a><a class="mini" href="#n-array-remove"><span class="badge k-action">action</span><b>Remove Item</b><span class="s">Takes out every item equal to this one.</span></a><a class="mini" href="#n-array-remove-index"><span class="badge k-action">action</span><b>Remove Index</b><span class="s">Takes out the item at an index.</span></a><a class="mini" href="#n-array-set"><span class="badge k-action">action</span><b>Set Array Item</b><span class="s">Changes the item at an index (nothing happens past the end).</span></a><a class="mini" href="#n-array-clear"><span class="badge k-action">action</span><b>Clear</b><span class="s">Empties an array.</span></a><a class="mini" href="#n-array-shuffle"><span class="badge k-action">action</span><b>Shuffle</b><span class="s">Puts an array's items in a random order.</span></a><a class="mini" href="#n-array-sort"><span class="badge k-action">action</span><b>Sort</b><span class="s">Sorts an array (numbers by size, text A to Z, the rest by their number).</span></a><a class="mini" href="#n-array-get"><span class="badge k-value">value</span><b>Get</b><span class="s">The item at an index (nothing, 0 or empty past the end).</span></a><a class="mini" href="#n-array-length"><span class="badge k-value">value</span><b>Length</b><span class="s">How many items an array has.</span></a><a class="mini" href="#n-array-contains"><span class="badge k-value">value</span><b>Contains</b><span class="s">Is the item in the array?</span></a><a class="mini" href="#n-array-find"><span class="badge k-value">value</span><b>Find</b><span class="s">The index of the first item equal to this one (-1 if none).</span></a><a class="mini" href="#n-array-random"><span class="badge k-value">value</span><b>Random Item</b><span class="s">An item picked at random (a new pick each time it's worked out).</span></a><a class="mini" href="#n-array-sum"><span class="badge k-value">value</span><b>Sum</b><span class="s">All the numbers added up (0 for an empty array).</span></a><a class="mini" href="#n-array-min"><span class="badge k-value">value</span><b>Array Min</b><span class="s">The smallest number, and its index (-1 for an empty array).</span></a><a class="mini" href="#n-array-max"><span class="badge k-value">value</span><b>Array Max</b><span class="s">The biggest number, and its index (-1 for an empty array).</span></a><a class="mini" href="#n-array-average"><span class="badge k-value">value</span><b>Average</b><span class="s">The numbers' average (0 for an empty array).</span></a><a class="mini" href="#n-array-reverse"><span class="badge k-action">action</span><b>Reverse</b><span class="s">Turns an array round: the last item first.</span></a><a class="mini" href="#n-array-slice"><span class="badge k-value">value</span><b>Slice</b><span class="s">A new array with Count items from Start (the first is 0).</span></a></div>
+<article class="card" id="n-flow-for-each-array" aria-labelledby="n-flow-for-each-array-h">
+<header><h3 id="n-flow-for-each-array-h"><a href="#n-flow-for-each-array">For Each</a></h3><span class="badge k-action">action</span><span class="id">flow.for_each_array</span><button class="copy-link" type="button" data-id="n-flow-for-each-array" aria-label="Copy a link to For Each">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">For Each</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin exec"></span>Break</li><li><span class="pin" style="--c:#cccccc"></span>Array</li></ul><ul class="out"><li>Loop Body<span class="pin exec"></span></li><li>Item<span class="pin" style="--c:#cccccc"></span></li><li>Index<span class="pin" style="--c:#9be36a"></span></li><li>Completed<span class="pin exec"></span></li></ul></div></div>
+<p class="what">Runs Loop Body once for each item of an array (Break stops early), then Completed.</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Break <span class="ty">Flow</span></dt><dd>Stops the loop.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl></details><details><summary>Outputs <span class="n">(2)</span></summary><dl><dt>Loop Body <span class="ty">Flow</span></dt><dd>Runs once for every step.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number.</dd><dt>Completed <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-make">Make Array</a><a class="chip" href="#n-array-players">Players Array</a><a class="chip" href="#n-array-add">Add</a></div>
+</article>
+<article class="card" id="n-array-make" aria-labelledby="n-array-make-h">
+<header><h3 id="n-array-make-h"><a href="#n-array-make">Make Array</a></h3><span class="badge k-value">value</span><span class="id">array.make</span><button class="copy-link" type="button" data-id="n-array-make" aria-label="Copy a link to Make Array">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Make Array</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#cccccc"></span>Item</li></ul><ul class="out"><li>Array<span class="pin" style="--c:#cccccc"></span></li></ul></div></div>
+<p class="what">An array of the items wired in (a new one each time it's worked out).</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss.</dd></dl></details><details><summary>Settings <span class="n">(2)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Items</dt><dd>A number from 0 to 8. Default: 2.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-players">Players Array</a><a class="chip" href="#n-array-add">Add</a><a class="chip" href="#n-array-insert">Insert</a></div>
+</article>
+<article class="card" id="n-array-players" aria-labelledby="n-array-players-h">
+<header><h3 id="n-array-players-h"><a href="#n-array-players">Players Array</a></h3><span class="badge k-value">value</span><span class="id">array.players</span><button class="copy-link" type="button" data-id="n-array-players" aria-label="Copy a link to Players Array">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Players Array</div><div class="gfx-pins"><ul class="in"></ul><ul class="out"><li>Players<span class="pin" style="--c:#cccccc"></span></li></ul></div></div>
+<p class="what">An array of every player who fits.</p>
+<details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Players <span class="ty">array&lt;player&gt;</span></dt><dd>Players: a list of players.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Who</dt><dd>Pick one: Everyone in the game, Everyone alive, Everyone dead, Terrorists, Counter-Terrorists, Living Terrorists, Living Counter-Terrorists, Bots, People (not bots). Default: alive.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-make">Make Array</a><a class="chip" href="#n-array-add">Add</a><a class="chip" href="#n-array-insert">Insert</a></div>
+</article>
+<article class="card" id="n-array-add" aria-labelledby="n-array-add-h">
+<header><h3 id="n-array-add-h"><a href="#n-array-add">Add</a></h3><span class="badge k-action">action</span><span class="id">array.add</span><button class="copy-link" type="button" data-id="n-array-add" aria-label="Copy a link to Add">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Add</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#cccccc"></span>Array</li><li><span class="pin" style="--c:#cccccc"></span>Item</li></ul><ul class="out"><li><span class="pin exec"></span></li><li>Index<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">Adds an item at the end (an array holds at most 10000).</p>
+<details><summary>Inputs <span class="n">(2)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-players">Players Array</a><a class="chip" href="#n-array-insert">Insert</a><a class="chip" href="#n-array-make">Make Array</a></div>
+</article>
+<article class="card" id="n-array-insert" aria-labelledby="n-array-insert-h">
+<header><h3 id="n-array-insert-h"><a href="#n-array-insert">Insert</a></h3><span class="badge k-action">action</span><span class="id">array.insert</span><button class="copy-link" type="button" data-id="n-array-insert" aria-label="Copy a link to Insert">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Insert</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#cccccc"></span>Array</li><li><span class="pin" style="--c:#cccccc"></span>Item</li><li><span class="pin" style="--c:#9be36a"></span>Index</li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Puts an item in at an index (the rest move up).</p>
+<details><summary>Inputs <span class="n">(3)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number. Leave it empty to use the setting.</dd></dl></details><details><summary>Settings <span class="n">(2)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Index</dt><dd>A number from 0 to 10000. A wire into the pin of the same name is used instead. Default: 0.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-add">Add</a><a class="chip" href="#n-array-remove">Remove Item</a><a class="chip" href="#n-array-players">Players Array</a></div>
+</article>
+<article class="card" id="n-array-remove" aria-labelledby="n-array-remove-h">
+<header><h3 id="n-array-remove-h"><a href="#n-array-remove">Remove Item</a></h3><span class="badge k-action">action</span><span class="id">array.remove</span><button class="copy-link" type="button" data-id="n-array-remove" aria-label="Copy a link to Remove Item">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Remove Item</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#cccccc"></span>Array</li><li><span class="pin" style="--c:#cccccc"></span>Item</li></ul><ul class="out"><li><span class="pin exec"></span></li><li>Removed<span class="pin" style="--c:#ff6b8a"></span></li></ul></div></div>
+<p class="what">Takes out every item equal to this one.</p>
+<details><summary>Inputs <span class="n">(2)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Then <span class="ty">Flow</span></dt><dd>Goes on when it's done.</dd><dt>Removed <span class="ty">Yes/No</span></dt><dd>Removed: yes or no.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-insert">Insert</a><a class="chip" href="#n-array-remove-index">Remove Index</a><a class="chip" href="#n-array-add">Add</a></div>
+</article>
+<article class="card" id="n-array-remove-index" aria-labelledby="n-array-remove-index-h">
+<header><h3 id="n-array-remove-index-h"><a href="#n-array-remove-index">Remove Index</a></h3><span class="badge k-action">action</span><span class="id">array.remove_index</span><button class="copy-link" type="button" data-id="n-array-remove-index" aria-label="Copy a link to Remove Index">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Remove Index</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#cccccc"></span>Array</li><li><span class="pin" style="--c:#9be36a"></span>Index</li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Takes out the item at an index.</p>
+<details><summary>Inputs <span class="n">(2)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number. Leave it empty to use the setting.</dd></dl></details><details><summary>Settings <span class="n">(2)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Index</dt><dd>A number from 0 to 10000. A wire into the pin of the same name is used instead. Default: 0.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-remove">Remove Item</a><a class="chip" href="#n-array-set">Set Array Item</a><a class="chip" href="#n-array-insert">Insert</a></div>
+</article>
+<article class="card" id="n-array-set" aria-labelledby="n-array-set-h">
+<header><h3 id="n-array-set-h"><a href="#n-array-set">Set Array Item</a></h3><span class="badge k-action">action</span><span class="id">array.set</span><button class="copy-link" type="button" data-id="n-array-set" aria-label="Copy a link to Set Array Item">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Set Array Item</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#cccccc"></span>Array</li><li><span class="pin" style="--c:#9be36a"></span>Index</li><li><span class="pin" style="--c:#cccccc"></span>Item</li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Changes the item at an index (nothing happens past the end).</p>
+<details><summary>Inputs <span class="n">(3)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number. Leave it empty to use the setting.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd></dl></details><details><summary>Settings <span class="n">(2)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Index</dt><dd>A number from 0 to 10000. A wire into the pin of the same name is used instead. Default: 0.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-remove-index">Remove Index</a><a class="chip" href="#n-array-clear">Clear</a><a class="chip" href="#n-array-remove">Remove Item</a></div>
+</article>
+<article class="card" id="n-array-clear" aria-labelledby="n-array-clear-h">
+<header><h3 id="n-array-clear-h"><a href="#n-array-clear">Clear</a></h3><span class="badge k-action">action</span><span class="id">array.clear</span><button class="copy-link" type="button" data-id="n-array-clear" aria-label="Copy a link to Clear">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Clear</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#cccccc"></span>Array</li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Empties an array.</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-set">Set Array Item</a><a class="chip" href="#n-array-shuffle">Shuffle</a><a class="chip" href="#n-array-remove-index">Remove Index</a></div>
+</article>
+<article class="card" id="n-array-shuffle" aria-labelledby="n-array-shuffle-h">
+<header><h3 id="n-array-shuffle-h"><a href="#n-array-shuffle">Shuffle</a></h3><span class="badge k-action">action</span><span class="id">array.shuffle</span><button class="copy-link" type="button" data-id="n-array-shuffle" aria-label="Copy a link to Shuffle">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Shuffle</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#cccccc"></span>Array</li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Puts an array's items in a random order.</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-clear">Clear</a><a class="chip" href="#n-array-sort">Sort</a><a class="chip" href="#n-array-set">Set Array Item</a></div>
+</article>
+<article class="card" id="n-array-sort" aria-labelledby="n-array-sort-h">
+<header><h3 id="n-array-sort-h"><a href="#n-array-sort">Sort</a></h3><span class="badge k-action">action</span><span class="id">array.sort</span><button class="copy-link" type="button" data-id="n-array-sort" aria-label="Copy a link to Sort">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Sort</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#cccccc"></span>Array</li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Sorts an array (numbers by size, text A to Z, the rest by their number).</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl></details><details><summary>Settings <span class="n">(2)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Order</dt><dd>Pick one: Smallest first, Biggest first. Default: asc.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-shuffle">Shuffle</a><a class="chip" href="#n-array-get">Get</a><a class="chip" href="#n-array-clear">Clear</a></div>
+</article>
+<article class="card" id="n-array-get" aria-labelledby="n-array-get-h">
+<header><h3 id="n-array-get-h"><a href="#n-array-get">Get</a></h3><span class="badge k-value">value</span><span class="id">array.get</span><button class="copy-link" type="button" data-id="n-array-get" aria-label="Copy a link to Get">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Get</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#cccccc"></span>Array</li><li><span class="pin" style="--c:#9be36a"></span>Index</li></ul><ul class="out"><li>Item<span class="pin" style="--c:#cccccc"></span></li></ul></div></div>
+<p class="what">The item at an index (nothing, 0 or empty past the end).</p>
+<details><summary>Inputs <span class="n">(2)</span></summary><dl><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number. Leave it empty to use the setting.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds.</dd></dl></details><details><summary>Settings <span class="n">(2)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Index</dt><dd>A number from 0 to 10000. A wire into the pin of the same name is used instead. Default: 0.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-sort">Sort</a><a class="chip" href="#n-array-length">Length</a><a class="chip" href="#n-array-shuffle">Shuffle</a></div>
+</article>
+<article class="card" id="n-array-length" aria-labelledby="n-array-length-h">
+<header><h3 id="n-array-length-h"><a href="#n-array-length">Length</a></h3><span class="badge k-value">value</span><span class="id">array.length</span><button class="copy-link" type="button" data-id="n-array-length" aria-label="Copy a link to Length">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Length</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#cccccc"></span>Array</li></ul><ul class="out"><li>Length<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">How many items an array has.</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Length <span class="ty">Number</span></dt><dd>Length: a number.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-get">Get</a><a class="chip" href="#n-array-contains">Contains</a><a class="chip" href="#n-array-sort">Sort</a></div>
+</article>
+<article class="card" id="n-array-contains" aria-labelledby="n-array-contains-h">
+<header><h3 id="n-array-contains-h"><a href="#n-array-contains">Contains</a></h3><span class="badge k-value">value</span><span class="id">array.contains</span><button class="copy-link" type="button" data-id="n-array-contains" aria-label="Copy a link to Contains">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Contains</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#cccccc"></span>Array</li><li><span class="pin" style="--c:#cccccc"></span>Item</li></ul><ul class="out"><li>Contains<span class="pin" style="--c:#ff6b8a"></span></li></ul></div></div>
+<p class="what">Is the item in the array?</p>
+<details><summary>Inputs <span class="n">(2)</span></summary><dl><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Contains <span class="ty">Yes/No</span></dt><dd>Contains: yes or no.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-length">Length</a><a class="chip" href="#n-array-find">Find</a><a class="chip" href="#n-array-get">Get</a></div>
+</article>
+<article class="card" id="n-array-find" aria-labelledby="n-array-find-h">
+<header><h3 id="n-array-find-h"><a href="#n-array-find">Find</a></h3><span class="badge k-value">value</span><span class="id">array.find</span><button class="copy-link" type="button" data-id="n-array-find" aria-label="Copy a link to Find">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Find</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#cccccc"></span>Array</li><li><span class="pin" style="--c:#cccccc"></span>Item</li></ul><ul class="out"><li>Index<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">The index of the first item equal to this one (-1 if none).</p>
+<details><summary>Inputs <span class="n">(2)</span></summary><dl><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds. Optional.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Index <span class="ty">Number</span></dt><dd>Index: a number.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-contains">Contains</a><a class="chip" href="#n-array-random">Random Item</a><a class="chip" href="#n-array-length">Length</a></div>
+</article>
+<article class="card" id="n-array-random" aria-labelledby="n-array-random-h">
+<header><h3 id="n-array-random-h"><a href="#n-array-random">Random Item</a></h3><span class="badge k-value">value</span><span class="id">array.random</span><button class="copy-link" type="button" data-id="n-array-random" aria-label="Copy a link to Random Item">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Random Item</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#cccccc"></span>Array</li></ul><ul class="out"><li>Item<span class="pin" style="--c:#cccccc"></span></li></ul></div></div>
+<p class="what">An item picked at random (a new pick each time it's worked out).</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Item <span class="ty">$T</span></dt><dd>Item: the type set in Holds.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-find">Find</a><a class="chip" href="#n-array-contains">Contains</a><a class="chip" href="#n-array-length">Length</a></div>
+</article>
+<article class="card" id="n-array-sum" aria-labelledby="n-array-sum-h">
+<header><h3 id="n-array-sum-h"><a href="#n-array-sum">Sum</a></h3><span class="badge k-value">value</span><span class="id">array.sum</span><button class="copy-link" type="button" data-id="n-array-sum" aria-label="Copy a link to Sum">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Sum</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#cccccc"></span>Numbers</li></ul><ul class="out"><li>Sum<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">All the numbers added up (0 for an empty array).</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Numbers <span class="ty">array&lt;number&gt;</span></dt><dd>Numbers: a list of numbers. Needs a wire.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Sum <span class="ty">Number</span></dt><dd>Sum: a number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-min">Array Min</a><a class="chip" href="#n-array-max">Array Max</a><a class="chip" href="#n-array-average">Average</a></div>
+</article>
+<article class="card" id="n-array-min" aria-labelledby="n-array-min-h">
+<header><h3 id="n-array-min-h"><a href="#n-array-min">Array Min</a></h3><span class="badge k-value">value</span><span class="id">array.min</span><button class="copy-link" type="button" data-id="n-array-min" aria-label="Copy a link to Array Min">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Array Min</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#cccccc"></span>Numbers</li></ul><ul class="out"><li>Min<span class="pin" style="--c:#9be36a"></span></li><li>Index<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">The smallest number, and its index (-1 for an empty array).</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Numbers <span class="ty">array&lt;number&gt;</span></dt><dd>Numbers: a list of numbers. Needs a wire.</dd></dl></details><details><summary>Outputs <span class="n">(2)</span></summary><dl><dt>Min <span class="ty">Number</span></dt><dd>Min: a number.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-sum">Sum</a><a class="chip" href="#n-array-max">Array Max</a><a class="chip" href="#n-array-average">Average</a></div>
+</article>
+<article class="card" id="n-array-max" aria-labelledby="n-array-max-h">
+<header><h3 id="n-array-max-h"><a href="#n-array-max">Array Max</a></h3><span class="badge k-value">value</span><span class="id">array.max</span><button class="copy-link" type="button" data-id="n-array-max" aria-label="Copy a link to Array Max">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Array Max</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#cccccc"></span>Numbers</li></ul><ul class="out"><li>Max<span class="pin" style="--c:#9be36a"></span></li><li>Index<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">The biggest number, and its index (-1 for an empty array).</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Numbers <span class="ty">array&lt;number&gt;</span></dt><dd>Numbers: a list of numbers. Needs a wire.</dd></dl></details><details><summary>Outputs <span class="n">(2)</span></summary><dl><dt>Max <span class="ty">Number</span></dt><dd>Max: a number.</dd><dt>Index <span class="ty">Number</span></dt><dd>Index: a number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-min">Array Min</a><a class="chip" href="#n-array-average">Average</a><a class="chip" href="#n-array-sum">Sum</a></div>
+</article>
+<article class="card" id="n-array-average" aria-labelledby="n-array-average-h">
+<header><h3 id="n-array-average-h"><a href="#n-array-average">Average</a></h3><span class="badge k-value">value</span><span class="id">array.average</span><button class="copy-link" type="button" data-id="n-array-average" aria-label="Copy a link to Average">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Average</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#cccccc"></span>Numbers</li></ul><ul class="out"><li>Average<span class="pin" style="--c:#9be36a"></span></li></ul></div></div>
+<p class="what">The numbers' average (0 for an empty array).</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Numbers <span class="ty">array&lt;number&gt;</span></dt><dd>Numbers: a list of numbers. Needs a wire.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Average <span class="ty">Number</span></dt><dd>Average: a number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-max">Array Max</a><a class="chip" href="#n-array-reverse">Reverse</a><a class="chip" href="#n-array-min">Array Min</a></div>
+</article>
+<article class="card" id="n-array-reverse" aria-labelledby="n-array-reverse-h">
+<header><h3 id="n-array-reverse-h"><a href="#n-array-reverse">Reverse</a></h3><span class="badge k-action">action</span><span class="id">array.reverse</span><button class="copy-link" type="button" data-id="n-array-reverse" aria-label="Copy a link to Reverse">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Reverse</div><div class="gfx-pins"><ul class="in"><li><span class="pin exec"></span></li><li><span class="pin" style="--c:#cccccc"></span>Array</li></ul><ul class="out"><li><span class="pin exec"></span></li></ul></div></div>
+<p class="what">Turns an array round: the last item first.</p>
+<details><summary>Inputs <span class="n">(1)</span></summary><dl><dt>Run <span class="ty">Flow</span></dt><dd>Runs this node.</dd><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd></dl></details><details><summary>Settings <span class="n">(1)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-average">Average</a><a class="chip" href="#n-array-slice">Slice</a><a class="chip" href="#n-array-max">Array Max</a></div>
+</article>
+<article class="card" id="n-array-slice" aria-labelledby="n-array-slice-h">
+<header><h3 id="n-array-slice-h"><a href="#n-array-slice">Slice</a></h3><span class="badge k-value">value</span><span class="id">array.slice</span><button class="copy-link" type="button" data-id="n-array-slice" aria-label="Copy a link to Slice">Copy link</button></header>
+<div class="gfx" aria-hidden="true"><div class="gfx-title" style="--hc:#3f4f63">Slice</div><div class="gfx-pins"><ul class="in"><li><span class="pin" style="--c:#cccccc"></span>Array</li><li><span class="pin" style="--c:#9be36a"></span>Start</li><li><span class="pin" style="--c:#9be36a"></span>Count</li></ul><ul class="out"><li>Array<span class="pin" style="--c:#cccccc"></span></li></ul></div></div>
+<p class="what">A new array with Count items from Start (the first is 0).</p>
+<details><summary>Inputs <span class="n">(3)</span></summary><dl><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss. Needs a wire.</dd><dt>Start <span class="ty">Number</span></dt><dd>Start: a number. Leave it empty to use the setting.</dd><dt>Count <span class="ty">Number</span></dt><dd>Count: a number. Leave it empty to use the setting.</dd></dl></details><details><summary>Outputs <span class="n">(1)</span></summary><dl><dt>Array <span class="ty">array&lt;$T&gt;</span></dt><dd>Array: a list of the type set in Holdss.</dd></dl></details><details><summary>Settings <span class="n">(3)</span></summary><dl><dt>Holds</dt><dd>What kind of values it holds. Default: number.</dd><dt>Start</dt><dd>A number from 0 to 10000. A wire into the pin of the same name is used instead. Default: 0.</dd><dt>Count</dt><dd>A number from 0 to 10000. A wire into the pin of the same name is used instead. Default: 3.</dd></dl></details>
+<div class="chips"><span class="lbl">Related:</span><a class="chip" href="#n-array-reverse">Reverse</a><a class="chip" href="#n-array-average">Average</a><a class="chip" href="#n-array-max">Array Max</a></div>
+</article>
+    <p class="meta ty">Made from the app's own catalog (nodes.json, nodehelp.json, limits.ts), so it matches the app.</p>
+  </main>
+  <nav class="ref-toc" aria-label="On this page"><p>On this page</p><ul><li><a href="#n-flow-for-each-array">For Each</a></li><li><a href="#n-array-make">Make Array</a></li><li><a href="#n-array-players">Players Array</a></li><li><a href="#n-array-add">Add</a></li><li><a href="#n-array-insert">Insert</a></li><li><a href="#n-array-remove">Remove Item</a></li><li><a href="#n-array-remove-index">Remove Index</a></li><li><a href="#n-array-set">Set Array Item</a></li><li><a href="#n-array-clear">Clear</a></li><li><a href="#n-array-shuffle">Shuffle</a></li><li><a href="#n-array-sort">Sort</a></li><li><a href="#n-array-get">Get</a></li><li><a href="#n-array-length">Length</a></li><li><a href="#n-array-contains">Contains</a></li><li><a href="#n-array-find">Find</a></li><li><a href="#n-array-random">Random Item</a></li><li><a href="#n-array-sum">Sum</a></li><li><a href="#n-array-min">Array Min</a></li><li><a href="#n-array-max">Array Max</a></li><li><a href="#n-array-average">Average</a></li><li><a href="#n-array-reverse">Reverse</a></li><li><a href="#n-array-slice">Slice</a></li></ul></nav>
 </div>
 <footer><a href="/">lonerstrike.com</a> · <a href="../../docs.html">Docs</a> · <a href="https://github.com/jamesontucker/Loner-Strike">GitHub</a></footer>
+<script src="../../reference/ref.js" defer></script>
 </body>
 </html>

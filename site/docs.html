@@ -64,6 +64,9 @@ a { color: var(--signal); }
 .top nav { display: flex; gap: 22px; align-items: center; }
 .top nav a { color: var(--dim); text-decoration: none; font-weight: 600; }
 .top nav a:hover { color: var(--bone); }
+.top nav a[aria-current="page"] { color: var(--bone); box-shadow: inset 0 -2px 0 var(--signal); }
+.top nav a { white-space: nowrap; }
+@media (max-width: 1100px) { .top nav { gap: 14px; } .brand .here { display: none; } }
 .top nav a.btn { color: var(--ink); background: var(--signal); padding: 7px 14px; border-radius: 2px; font-weight: 700; font-size: 16px;
   box-shadow: inset 1px 1px 0 rgba(255,255,230,.55), inset -1px -1px 0 #6e6526; }
 .top nav a.btn:hover { background: #d4c55d; }
@@ -217,6 +220,7 @@ footer a { color: var(--dim); }
       <a href="#whats-new">What's new</a>
       <a href="#tools">Tools</a>
       <a href="#vps">Run a server</a>
+      <a href="reference/" id="nav-reference">Reference</a>
       <a class="btn" href="/#get">Get it</a>
     </nav>
   </div>
@@ -2038,10 +2042,11 @@ args = ["--mcp-stdio"]</code></pre>
   <h1>Reference</h1>
   <p class="lead">Made from the app's own catalogs, so it always matches the app. The docs search finds every entry.</p>
   <ul>
-    <li><a href="reference/nodes.html"><b>Game Mode Studio nodes</b></a>: all 643, by category: <a href="reference/nodes/events.html">Events</a>, <a href="reference/nodes/conditions.html">Conditions</a>, <a href="reference/nodes/numbers.html">Numbers</a>, <a href="reference/nodes/text.html">Text</a>, <a href="reference/nodes/variables.html">Variables</a>, <a href="reference/nodes/flow.html">Flow</a>, <a href="reference/nodes/functions.html">Functions</a>, <a href="reference/nodes/macros.html">Macros</a>, <a href="reference/nodes/arrays.html">Arrays</a>, <a href="reference/nodes/maps.html">Maps</a>, <a href="reference/nodes/structs.html">Structs</a>, <a href="reference/nodes/enums.html">Enums</a>, <a href="reference/nodes/vectors.html">Vectors</a>, <a href="reference/nodes/spatial.html">Spatial</a>, <a href="reference/nodes/timers.html">Timers</a>, <a href="reference/nodes/round-clock.html">Round clock</a>, <a href="reference/nodes/players.html">Players</a>, <a href="reference/nodes/input.html">Input</a>, <a href="reference/nodes/cooldowns.html">Cooldowns</a>, <a href="reference/nodes/weapons.html">Weapons</a>, <a href="reference/nodes/damage.html">Damage</a>, <a href="reference/nodes/squads.html">Squads</a>, <a href="reference/nodes/buying.html">Buying</a>, <a href="reference/nodes/saved.html">Saved</a>, <a href="reference/nodes/messages.html">Messages</a>, <a href="reference/nodes/game.html">Game</a>, <a href="reference/nodes/scoring.html">Scoring</a>, <a href="reference/nodes/bots.html">Bots</a>, <a href="reference/nodes/components.html">Components</a>, <a href="reference/nodes/map-markers.html">Map markers</a>, <a href="reference/nodes/waves.html">Waves</a>, <a href="reference/nodes/upgrades.html">Upgrades</a>, <a href="reference/nodes/world.html">World</a>, <a href="reference/nodes/entities.html">Entities</a>, <a href="reference/nodes/effects.html">Effects</a>, <a href="reference/nodes/advanced.html">Advanced</a>, <a href="reference/nodes/downed.html">Downed</a>, <a href="reference/nodes/shop.html">Shop</a>, <a href="reference/nodes/npcs.html">NPCs</a>, <a href="reference/nodes/battle-royale.html">Battle Royale</a>, <a href="reference/nodes/creatures.html">Creatures</a>, <a href="reference/nodes/data-tables.html">Data tables</a>, <a href="reference/nodes/projectiles.html">Projectiles</a>, <a href="reference/nodes/hud-view.html">HUD &amp; View</a>, <a href="reference/nodes/collision.html">Collision</a>.</li>
+    <li><a href="reference/nodes.html"><b>Game Mode Studio nodes</b></a>: all 643, by category (45), each with its pins, settings and limits.</li>
     <li><a href="reference/entities.html"><b>Map editor entities</b></a>: all 158, with their keys and flags.</li>
-    <li><a href="reference/editor.html"><b>Map editor tools and keys</b></a>: File, Edit, Select, View, Tools, Map, Help, Dialogs, Keys (every binding), Panels.</li>
+    <li><a href="reference/editor.html"><b>Map editor tools and keys</b></a>: the menus, panels and dialogs, and their keys.</li>
   </ul>
+  <p><a href="reference/">Open the reference</a>: it has its own search with filters.</p>
 </section>
 
 <section class="topic" id="guide-types" data-group="Reference" data-stub="1">
@@ -2435,6 +2440,9 @@ args = ["--mcp-stdio"]</code></pre>
       p[0].innerHTML = "<small>" + p[2] + "</small>" + esc(title(p[1]));
     });
     document.title = title(topic) + " · Loner-Strike docs";
+    // (inside the Reference group, its top-bar link is the current one)
+    var navRef = document.getElementById("nav-reference");
+    if (navRef) { if (topic.dataset.group === "Reference") navRef.setAttribute("aria-current", "page"); else navRef.removeAttribute("aria-current"); }
     document.getElementById("menu-now").textContent = title(topic);
     if (cur && !side.classList.contains("open")) {
       var r = cur.getBoundingClientRect(), s = side.getBoundingClientRect();
