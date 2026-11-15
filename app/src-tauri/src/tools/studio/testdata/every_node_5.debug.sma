@@ -33,8 +33,8 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 10
-#define LSG_OT 1
+#define LSG_O 8
+#define LSG_OT 2
 
 stock Float:g_lsgDmg, bool:g_lsgDmgBlock
 #define LSD_N 31
@@ -2175,17 +2175,15 @@ stock lsg_vol_place(v)
 	}
 }
 
-// why the last Spawn Trigger Volume failed: the Spawn Failure enum (0 None, 2 Out of entity slots,
-// 3 Limit reached, 6 Bad input; gen/fx.rs WHY_*), and its words for the debugger
-stock g_lsgVolWhy
-stock const g_lsgVolWhyName[][] = { "", "Blocked", "Out of entity slots", "Limit reached: Trigger volumes at once (Limits)", "Missing file", "Retries used up", "Bad input: At entity is gone and there's no Position" }
+// why the last Spawn Trigger Volume failed ("" when it made one): the spawn outcome's Failure Reason
+stock g_lsgVolWhy[24]
 
 stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[3], shape, Float:sx, Float:sy, Float:sz, filter, const name[], cap, incap, need_at)
 {
-	g_lsgVolWhy = 0
+	g_lsgVolWhy[0] = 0
 	if (need_at && !(at > 0 && pev_valid(at)))
 	{
-		g_lsgVolWhy = 6
+		copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), "Bad input")
 		return 0
 	}
 	new v = -1
@@ -2195,12 +2193,12 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 	if (v < 0)
 	{
 		log_amx("[%s] Spawn Trigger Volume skipped: as many are out as Trigger volumes at once allows (%d, Limits)", LSG_MODE, cap)
-		g_lsgVolWhy = 3
+		copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), "Limit reached")
 		return 0
 	}
 	if (!lsg_ent_room("Spawn Trigger Volume"))
 	{
-		g_lsgVolWhy = 2
+		copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), "Out of entity slots")
 		return 0
 	}
 	if (!(at > 0 && pev_valid(at)))
@@ -2215,7 +2213,7 @@ stock lsg_vol_spawn(at, const Float:pos[3], const Float:ang[3], const Float:off[
 	new e = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
 	if (!e)
 	{
-		g_lsgVolWhy = 2
+		copy(g_lsgVolWhy, charsmax(g_lsgVolWhy), "Out of entity slots")
 		return 0
 	}
 	set_pev(e, pev_classname, "lsg_volume")
@@ -3964,28 +3962,6 @@ stock lsg_argstr(a, s[], len)
 // If not: the nearest free spot within reach (rings round it, in sight of it), or nothing.
 stock g_lsgXrN[LSG_N], g_lsgXrIn = -1, Float:g_lsgXrO[LSG_N][3]
 
-// (Retry: a timer with the flow's ctx, then the spot and the tries so far)
-stock lsg_xr_wait(i, const fn[], Float:every, const ctx[], const Float:o[3])
-{
-	new d[LSG_CTX + 4]
-	for (new k = 0; k < LSG_CTX; k++)
-		d[k] = ctx[k]
-	d[LSG_CTX] = _:o[0]
-	d[LSG_CTX + 1] = _:o[1]
-	d[LSG_CTX + 2] = _:o[2]
-	d[LSG_CTX + 3] = g_lsgXrN[i]
-	set_task(every, fn, LSG_TASK + 410000 + i, d, LSG_CTX + 4)
-}
-
-stock lsg_xr_back(i, const d[])
-{
-	g_lsgXrIn = i
-	g_lsgXrO[i][0] = Float:d[LSG_CTX]
-	g_lsgXrO[i][1] = Float:d[LSG_CTX + 1]
-	g_lsgXrO[i][2] = Float:d[LSG_CTX + 2]
-	g_lsgXrN[i] = d[LSG_CTX + 3]
-}
-
 // (Retry: the spot of the first try, kept)
 stock lsg_xr_put(i, ok, const Float:o[3])
 {
@@ -4358,12 +4334,13 @@ lsg_n4(ctx[])
 	g_lsgOut[4] = lsg_vol_spawn(0, lsgVp, lsgVa, lsgVo, 0, 256.0, 256.0, 128.0, 0, "zone", 32, 32, 0)
 	g_lsgO[0] = g_lsgOut[4]
 	g_lsgO[1] = g_lsgOut[4] ? 1 : 0
-	g_lsgO[2] = g_lsgVolWhy
+	copy(g_lsgOT[0], 127, g_lsgVolWhy)
 	if (!g_lsgOut[4])
-		lsd_error(4, g_lsgVolWhyName[clamp(g_lsgVolWhy, 0, 6)])
+		lsd_error(4, g_lsgVolWhy)
 	else
 		lsd_exit(4, fmt("entity %d", g_lsgOut[4]))
-	lsg_n5(ctx)
+	if (g_lsgOut[4])
+		lsg_n5(ctx)
 }
 
 // Spawn Trigger Volume (vs2)
@@ -4382,14 +4359,15 @@ lsg_n5(ctx[])
 	new Float:lsgVp[3], Float:lsgVa[3], Float:lsgVo[3]
 	lsg_vto(lsi3, lsgVo)
 	g_lsgOut[5] = lsg_vol_spawn(lsi2, lsgVp, lsgVa, lsgVo, 1, 128.0, 0.0, 0.0, 2, "near", 32, 32, 1)
-	g_lsgO[3] = g_lsgOut[5]
-	g_lsgO[4] = g_lsgOut[5] ? 1 : 0
-	g_lsgO[5] = g_lsgVolWhy
+	g_lsgO[2] = g_lsgOut[5]
+	g_lsgO[3] = g_lsgOut[5] ? 1 : 0
+	copy(g_lsgOT[1], 127, g_lsgVolWhy)
 	if (!g_lsgOut[5])
-		lsd_error(5, g_lsgVolWhyName[clamp(g_lsgVolWhy, 0, 6)])
+		lsd_error(5, g_lsgVolWhy)
 	else
 		lsd_exit(5, fmt("entity %d", g_lsgOut[5]))
-	lsg_n6(ctx)
+	if (g_lsgOut[5])
+		lsg_n6(ctx)
 }
 
 // Spawn Prop (prop)
@@ -4421,10 +4399,10 @@ lsg_n6(ctx[])
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[6] = e
-	g_lsgO[6] = e
-	g_lsgO[7] = e ? 1 : 0
-	g_lsgO[8] = e ? lsgMv : 0
-	g_lsgO[9] = e ? 0 : lsgWhy
+	g_lsgO[4] = e
+	g_lsgO[5] = e ? 1 : 0
+	g_lsgO[6] = e ? lsgMv : 0
+	g_lsgO[7] = e ? 0 : lsgWhy
 	if (e)
 	{
 		if (lsgMv)
@@ -4452,7 +4430,7 @@ lsg_n6(ctx[])
 // Set Entity Collision (solid)
 lsg_n7(ctx[])
 {
-	new lsi0 = g_lsgO[6]
+	new lsi0 = g_lsgO[4]
 	if (lsd_want(7))
 	{
 	lsd_begin()
@@ -4471,7 +4449,7 @@ lsg_n7(ctx[])
 // Set Entity Size (size)
 lsg_n8(ctx[])
 {
-	new lsi0 = g_lsgO[6]
+	new lsi0 = g_lsgO[4]
 	if (lsd_want(8))
 	{
 	lsd_begin()
@@ -4490,7 +4468,7 @@ lsg_n8(ctx[])
 // Entity Takes Damage (dmg)
 lsg_n9(ctx[])
 {
-	new lsi0 = g_lsgO[6]
+	new lsi0 = g_lsgO[4]
 	if (lsd_want(9))
 	{
 	lsd_begin()
@@ -4509,7 +4487,7 @@ lsg_n9(ctx[])
 // Set Entity Health (hp)
 lsg_n10(ctx[])
 {
-	new lsi0 = g_lsgO[6]
+	new lsi0 = g_lsgO[4]
 	new Float:lsi1 = 250.0
 	if (lsd_want(10))
 	{
@@ -4530,7 +4508,7 @@ lsg_n10(ctx[])
 // Print String (phpr)
 lsg_n11(ctx[])
 {
-	new Float:lsi0 = lsg_ent_health(g_lsgO[6])
+	new Float:lsi0 = lsg_ent_health(g_lsgO[4])
 	if (lsd_want(11))
 	{
 	lsd_begin()
@@ -4570,7 +4548,7 @@ lsg_n12(ctx[])
 // Remove Trigger Volume (rm)
 lsg_n13(ctx[])
 {
-	new lsi0 = g_lsgO[3]
+	new lsi0 = g_lsgO[2]
 	if (lsd_want(13))
 	{
 	lsd_begin()

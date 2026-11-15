@@ -33,7 +33,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 4
+#define LSG_O 8
 #define LSG_OT 1
 
 
@@ -3555,28 +3555,6 @@ stock lsg_argstr(a, s[], len)
 // If not: the nearest free spot within reach (rings round it, in sight of it), or nothing.
 stock g_lsgXrN[LSG_N], g_lsgXrIn = -1, Float:g_lsgXrO[LSG_N][3]
 
-// (Retry: a timer with the flow's ctx, then the spot and the tries so far)
-stock lsg_xr_wait(i, const fn[], Float:every, const ctx[], const Float:o[3])
-{
-	new d[LSG_CTX + 4]
-	for (new k = 0; k < LSG_CTX; k++)
-		d[k] = ctx[k]
-	d[LSG_CTX] = _:o[0]
-	d[LSG_CTX + 1] = _:o[1]
-	d[LSG_CTX + 2] = _:o[2]
-	d[LSG_CTX + 3] = g_lsgXrN[i]
-	set_task(every, fn, LSG_TASK + 410000 + i, d, LSG_CTX + 4)
-}
-
-stock lsg_xr_back(i, const d[])
-{
-	g_lsgXrIn = i
-	g_lsgXrO[i][0] = Float:d[LSG_CTX]
-	g_lsgXrO[i][1] = Float:d[LSG_CTX + 1]
-	g_lsgXrO[i][2] = Float:d[LSG_CTX + 2]
-	g_lsgXrN[i] = d[LSG_CTX + 3]
-}
-
 // (Retry: the spot of the first try, kept)
 stock lsg_xr_put(i, ok, const Float:o[3])
 {
@@ -5585,26 +5563,53 @@ lsg_n31(ctx[])
 	}
 	if (lsd_enter(31, ctx))
 		return
-	new Float:o[3]
-	if (!ls_components_running())
-		lsd_error(31, "gm_components isn't running on this server.")
-	else if (!lsg_xf_at(0, lsi1, -1, o))
-		lsd_error(31, "No entity has that name on this map.")
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 31
+	if (!lsgRe)
+		g_lsgXrN[31] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn NPC")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(0, lsi1, -1, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 2, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_npc_spawn("models/barney.mdl", o, 0.0, "Walker", "behavior=stand unkillable=1 blocked=here")))
+		lsgWhy = 6
+	new bool:lsgWait = false
+	g_lsgOut[31] = e
+	g_lsgO[0] = e
+	g_lsgO[1] = e ? 1 : 0
+	g_lsgO[2] = e ? lsgMv : 0
+	g_lsgO[3] = e ? 0 : lsgWhy
+	if (e)
+	{
+		if (lsgMv)
+		lsd_exit(31, "moved to a nearby free spot")
+		else
+		lsd_exit(31, "spawned")
+	}
+	else if (lsgWait)
+		lsd_exit(31, "blocked: trying again")
 	else
 	{
-		g_lsgOut[31] = ls_npc_spawn("models/barney.mdl", o, 0.0, "Walker", "behavior=stand unkillable=1")
-		if (g_lsgOut[31])
-			lsd_exit(31, fmt("entity %d", g_lsgOut[31]))
-		else
-			lsd_error(31, "Not made: its model isn't loaded with this map, or there's no room.")
+		switch (lsgWhy)
+		{
+			case 6: lsd_error(31, "gm_components isn't running on this server.")
+			case 2: lsd_error(31, "Not made: the server is out of entity slots.")
+			case 1: lsd_error(31, "The spot is blocked (a player, a wall or something solid there) and no free spot was found.")
+			case 5: lsd_error(31, "The spot stayed blocked: every retry was used up.")
+		}
 	}
-	lsg_n32(ctx)
+	if (!lsgRe)
+		lsg_n32(ctx)
 }
 
 // NPC Move To (mv)
 lsg_n32(ctx[])
 {
-	new lsi0 = g_lsgOut[31]
+	new lsi0 = g_lsgO[0]
 	new lsi2 = lsg_vec(128.0, 0.0, 0.0)
 	if (lsd_want(32))
 	{
@@ -5667,7 +5672,7 @@ lsg_n34(ctx[])
 // NPC Follow Path (fp)
 lsg_n35(ctx[])
 {
-	new lsi0 = g_lsgOut[31]
+	new lsi0 = g_lsgO[0]
 	new lsi1 = lsg_mka44(lsg_vec(128.0, 0.0, 0.0), lsg_vec(128.0, 128.0, 0.0))
 	if (lsd_want(35))
 	{
@@ -5725,7 +5730,7 @@ lsg_n37(ctx[])
 // NPC Follow Path (fp2)
 lsg_n38(ctx[])
 {
-	new lsi0 = g_lsgOut[31]
+	new lsi0 = g_lsgO[0]
 	if (lsd_want(38))
 	{
 	lsd_begin()
@@ -5747,7 +5752,7 @@ lsg_n38(ctx[])
 // NPC Stop (stop)
 lsg_n39(ctx[])
 {
-	new lsi0 = g_lsgOut[31]
+	new lsi0 = g_lsgO[0]
 	if (lsd_want(39))
 	{
 	lsd_begin()
@@ -5762,7 +5767,7 @@ lsg_n39(ctx[])
 // Spawn Prop (prop)
 lsg_n40(ctx[])
 {
-	new lsi0 = g_lsgOut[31]
+	new lsi0 = g_lsgO[0]
 	new Float:lsi6 = 1.0
 	if (lsd_want(40))
 	{
@@ -5788,10 +5793,10 @@ lsg_n40(ctx[])
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[40] = e
-	g_lsgO[0] = e
-	g_lsgO[1] = e ? 1 : 0
-	g_lsgO[2] = e ? lsgMv : 0
-	g_lsgO[3] = e ? 0 : lsgWhy
+	g_lsgO[4] = e
+	g_lsgO[5] = e ? 1 : 0
+	g_lsgO[6] = e ? lsgMv : 0
+	g_lsgO[7] = e ? 0 : lsgWhy
 	if (e)
 	{
 		if (lsgMv)
@@ -5819,7 +5824,7 @@ lsg_n40(ctx[])
 // Play Animation (anim)
 lsg_n41(ctx[])
 {
-	new lsi0 = g_lsgO[0]
+	new lsi0 = g_lsgO[4]
 	if (lsd_want(41))
 	{
 	lsd_begin()
@@ -5837,8 +5842,8 @@ lsg_n41(ctx[])
 // Attach To (att)
 lsg_n42(ctx[])
 {
-	new lsi0 = g_lsgO[0]
-	new lsi1 = g_lsgOut[31]
+	new lsi0 = g_lsgO[4]
+	new lsi1 = g_lsgO[0]
 	new lsi2 = lsg_vec(128.0, 0.0, 0.0)
 	if (lsd_want(42))
 	{
@@ -5859,8 +5864,8 @@ lsg_n42(ctx[])
 // Attach To (att2)
 lsg_n43(ctx[])
 {
-	new lsi0 = g_lsgO[0]
-	new lsi1 = g_lsgOut[31]
+	new lsi0 = g_lsgO[4]
+	new lsi1 = g_lsgO[0]
 	if (lsd_want(43))
 	{
 	lsd_begin()
@@ -5879,7 +5884,7 @@ lsg_n43(ctx[])
 // Detach (det)
 lsg_n44(ctx[])
 {
-	new lsi0 = g_lsgO[0]
+	new lsi0 = g_lsgO[4]
 	if (lsd_want(44))
 	{
 	lsd_begin()
@@ -5895,7 +5900,7 @@ lsg_n44(ctx[])
 // Set Entity Property (pset2)
 lsg_n45(ctx[])
 {
-	new lsi0 = g_lsgO[0]
+	new lsi0 = g_lsgO[4]
 	new Float:lsi1 = 2.0
 	if (lsd_want(45))
 	{

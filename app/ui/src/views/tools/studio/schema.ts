@@ -234,16 +234,7 @@ export function parseGraph(v: unknown): { graph: Graph } | { error: string } {
     const i = r.error.issues[0];
     return { error: `That graph file is damaged (${i.path.join(".") || "file"}: ${i.message}).` };
   }
-  return { graph: volSpawnPins(projSpawnPins(r.data)) };
-}
-
-/** Spawn Trigger Volume's outputs before the spawn outcome standard (graph.rs vol_spawn_pins, the
- *  same rule): Volume reads as Entity (`out`), Success's first id `success` as `ok`. */
-export function volSpawnPins(g: Graph): Graph {
-  const vols = new Set(g.nodes.filter((n) => n.type === "vol.spawn").map((n) => n.id));
-  const old: Record<string, string> = { volume: "out", success: "ok" };
-  if (!g.edges.some((e) => vols.has(e.from.node) && e.from.pin in old)) return g;
-  return { ...g, edges: g.edges.map((e) => (vols.has(e.from.node) && e.from.pin in old ? { ...e, from: { ...e.from, pin: old[e.from.pin] } } : e)) };
+  return { graph: projSpawnPins(r.data) };
 }
 
 /** Spawn Projectile's older pins (graph.rs proj_spawn_pins, the same rule): `rot_off` reads as

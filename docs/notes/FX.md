@@ -67,15 +67,7 @@ condition with its Failure Reason and debugger words: files loaded, `lsg_ent_roo
 (`fx::place`), `lsg_xf_free(o, size, mode, maxd, moved)` (Pawn: a hull trace at the spot, then
 rings every 16 units out to Max distance, 3 heights each, each in sight of the spot), the create
 call, `fx::apply`, the outputs, and Retry (a `public lsg_xr{i}` timer re-running the node, task
-`LSG_TASK + 410000 + i`; each wait carries its own ctx, spot and try count via `lsg_xr_wait` /
-`lsg_xr_back`, and waits for the first try's spot to clear, not the entity's spot now).
-
-Lasting client state (X's `lsg_msg_state`): none of the FX nodes set any; lights, decals, gibs,
-rings and sounds are one-off effects and stay on `lsg_msg_room`.
-
-Sim check (de_dust2, 2 bots, a prop at each spawning bot): Try a nearby spot moved it every time
-(16/16), Don't spawn if blocked failed every time with Blocked (16/16), Retry spawned once the bot
-had walked off (11 of 11 waits that cleared, 1-6 s after the spawn), no run time errors. `hull_size`: 0 small (weapon, item), 1 medium (prop, component), 2 tall
+`LSG_TASK + 410000 + i`). `hull_size`: 0 small (weapon, item), 1 medium (prop, component), 2 tall
 (creature, NPC: HULL_HUMAN), -1 not solid (no check). The node kinds must be in `fx::STORE` (for
 the extra output slots). Registry side: make_nodes.py's post-process loop adds the params,
 outputs, help (BLOCKED_HELP) and keywords; reuse BLOCKED_CHOICES.

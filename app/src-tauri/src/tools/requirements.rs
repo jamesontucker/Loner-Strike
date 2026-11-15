@@ -87,36 +87,21 @@ pub fn kind_of(p: &str) -> Option<&'static str> {
 /// Every model, sound and sprite path the graph's nodes name (in any setting, so new nodes
 /// count too), as the game reads them (sounds under sound/).
 pub fn content_of(g: &Graph) -> BTreeSet<String> {
-    // (wherever a value can hold a path: node settings, variable defaults (an array's or map's items
-    // too), Function locals, data table cells)
-    fn look(v: &Value, out: &mut BTreeSet<String>) {
-        match v {
-            Value::String(s) => {
-                for part in s.split(|c: char| c.is_whitespace() || c == '|' || c == ',' || c == ';' || c == '=') {
-                    let Some(mut p) = clean_path(part) else { continue };
-                    if kind_of(&p) == Some("sound") && !p.starts_with("sound/") {
-                        p = format!("sound/{p}");
-                    }
-                    out.insert(p);
-                }
-            }
-            Value::Array(a) => a.iter().for_each(|v| look(v, out)),
-            Value::Object(o) => o.values().for_each(|v| look(v, out)),
-            _ => {}
-        }
-    }
     let mut out = BTreeSet::new();
+    let mut look = |v: &Value| {
+        if let Some(s) = v.as_str() {
+            for part in s.split(|c: char| c.is_whitespace() || c == '|' || c == ',' || c == ';' || c == '=') {
+                let Some(mut p) = clean_path(part) else { continue };
+                if kind_of(&p) == Some("sound") && !p.starts_with("sound/") {
+                    p = format!("sound/{p}");
+                }
+                out.insert(p);
+            }
+        }
+    };
     for n in &g.nodes {
         for v in n.params.values() {
-            look(v, &mut out);
-        }
-    }
-    for v in g.variables.iter().chain(g.functions.iter().flat_map(|f| f.locals.iter())) {
-        look(&v.default, &mut out);
-    }
-    for t in &g.data_tables {
-        for row in &t.rows {
-            row.iter().for_each(|v| look(v, &mut out));
+            look(v);
         }
     }
     out
@@ -437,18 +422,6 @@ mod tests {
         assert_eq!(c, vec!["models/props/crate.mdl", "sound/ambience/wind.wav", "sprites/glow01.spr"]);
         assert_eq!(clean_path("../../x.mdl"), None);
         assert_eq!(clean_path("C:\\x.mdl"), None);
-    }
-
-    /// A custom file kept in a variable's default (an array's items too), a Function's local, a
-    /// data table's cell travels with the mode as one in a node does.
-    #[test]
-    fn content_is_found_in_variables_locals_and_tables() {
-        let gr = graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "req_v", "name": "R"}, "nodes": [], "edges": [],
-            "variables": [{"id": "v1", "name": "Hat", "type": "text", "scope": "mode", "default": "models/hats/Top.mdl"}, {"id": "v2", "name": "Beeps", "type": "array<text>", "scope": "mode", "default": ["my/beep.wav", "x"]}],
-            "functions": [{"id": "f", "name": "F", "locals": [{"id": "l", "name": "Glow", "type": "text", "scope": "local", "default": "sprites/mine.spr"}]}],
-            "dataTables": [{"id": "t", "name": "Lines", "key": "a", "columns": [{"id": "a", "name": "Voice", "type": "text"}], "rows": [["vox/hello.wav"], ["plain words"]]}]})).unwrap();
-        let c: Vec<String> = content_of(&gr).into_iter().collect();
-        assert_eq!(c, vec!["models/hats/top.mdl", "sound/my/beep.wav", "sound/vox/hello.wav", "sprites/mine.spr"]);
     }
 
     #[test]

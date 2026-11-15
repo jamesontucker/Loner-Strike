@@ -152,7 +152,7 @@ fn sprite_text(s: &str) -> String {
 
 /// Spawn Projectile's start (T1fix): an entity's place (a player's eyes) moved by a local
 /// offset along its facing (turned by a rotation offset), and that facing as the direction.
-const PROJ_FROM: &str = "\nstock bool:lsg_proj_from(e, Float:f, Float:r, Float:u, rot, copy, Float:o[3], Float:d[3])\n{\n\tif (e <= 0 || !pev_valid(e) || (e <= MaxClients && !is_user_alive(e)))\n\t\treturn false\n\tnew Float:a[3], Float:fw[3], Float:rt[3], Float:up[3]\n\tpev(e, pev_origin, o)\n\tif (e <= MaxClients)\n\t{\n\t\tnew Float:vo[3]\n\t\tpev(e, pev_view_ofs, vo)\n\t\tfor (new k = 0; k < 3; k++)\n\t\t\to[k] += vo[k]\n\t\tpev(e, pev_v_angle, a)\n\t}\n\telse\n\t\tpev(e, pev_angles, a)\n\t// Local offset: along the entity's own forward, right and up\n\tangle_vector(a, ANGLEVECTOR_FORWARD, fw)\n\tangle_vector(a, ANGLEVECTOR_RIGHT, rt)\n\tangle_vector(a, ANGLEVECTOR_UP, up)\n\tfor (new k = 0; k < 3; k++)\n\t\to[k] += fw[k] * f + rt[k] * r + up[k] * u\n\t// which way: its facing (Face the way At entity faces) or none, turned by Rotation offset\n\tif (!copy)\n\t\ta[0] = a[1] = a[2] = 0.0\n\tif (rot >= 0)\n\t\tfor (new k = 0; k < 3; k++)\n\t\t\ta[k] += lsg_vc(rot, k)\n\tangle_vector(a, ANGLEVECTOR_FORWARD, d)\n\treturn true\n}";
+const PROJ_FROM: &str = "\nstock bool:lsg_proj_from(e, Float:f, Float:r, Float:u, rot, copy, Float:o[3], Float:d[3])\n{\n\tif (e <= 0 || !pev_valid(e) || (e <= MaxClients && !is_user_alive(e)))\n\t\treturn false\n\tnew Float:a[3], Float:fw[3], Float:rt[3], Float:up[3]\n\tpev(e, pev_origin, o)\n\tif (e <= MaxClients)\n\t{\n\t\tnew Float:vo[3]\n\t\tpev(e, pev_view_ofs, vo)\n\t\tfor (new k = 0; k < 3; k++)\n\t\t\to[k] += vo[k]\n\t\tpev(e, pev_v_angle, a)\n\t}\n\telse\n\t\tpev(e, pev_angles, a)\n\t// Local offset: along the entity's own forward, right and up\n\tangle_vector(a, ANGLEVECTOR_FORWARD, fw)\n\tangle_vector(a, ANGLEVECTOR_RIGHT, rt)\n\tangle_vector(a, ANGLEVECTOR_UP, up)\n\tfor (new k = 0; k < 3; k++)\n\t\to[k] += fw[k] * f + rt[k] * r + up[k] * u\n\t// which way: its facing (Face the way At entity faces) or none, turned by Rotation offset\n\tif (!copy)\n\t\ta[0] = a[1] = a[2] = 0.0\n\tif (rot >= 0)\n\t\tfor (new k = 0; k < 3; k++)\n\t\t\ta[k] += lsg_vc(rot, k)\n\tangle_vector(a, ANGLEVECTOR_FORWARD, d)\n\treturn true\n}\n\n// Spawn Projectile's spot and way: At position and Direction / Rotation win over the entity's\nstock bool:lsg_proj_at(e, Float:f, Float:r, Float:u, rot, copy, pos, dir, ang, Float:o[3], Float:d[3])\n{\n\tnew bool:ok = lsg_proj_from(e, f, r, u, rot, copy, o, d)\n\tif (pos >= 0)\n\t{\n\t\tlsg_vto(pos, o)\n\t\tok = true\n\t}\n\tif (dir >= 0)\n\t\tlsg_vto(dir, d)\n\telse if (ang >= 0)\n\t{\n\t\tnew Float:pa[3]\n\t\tlsg_vto(ang, pa)\n\t\tangle_vector(pa, ANGLEVECTOR_FORWARD, d)\n\t}\n\treturn ok\n}";
 
 /// Live projectiles a Spawn Projectile made (T1fix): which node, and the flow's context, by the
 /// projectile's entity; a note for an entity already in the table replaces it (a reused index).
@@ -2180,23 +2180,25 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             // At entity alone (no Position): it has to be there
             let need_at = v.data_source(id, "at_ent").is_some() && v.data_source(id, "pos").is_none();
             b.line(format!("\tg_lsgOut[{i}] = lsg_vol_spawn({at}, lsgVp, lsgVa, lsgVo, {}, {size}, {filter}, {}, {}, {}, {})", if sphere { 1 } else { 0 }, pawn_str(&name), gen.limit_expr("trigger_volumes"), gen.limit_expr("volume_members"), if need_at { 1 } else { 0 }));
-            // the spawn outcome standard (docs/notes/FX.md): Entity, Success, Failure reason (the
-            // Spawn Failure enum); Spawned or Failed, then Then right away whatever happened
-            for (pin, val) in [("out", format!("g_lsgOut[{i}]")), ("ok", format!("g_lsgOut[{i}] ? 1 : 0")), ("reason", "g_lsgVolWhy".to_string())] {
-                if let Some(k) = gen.out_index(id, pin) {
-                    b.line(format!("\tg_lsgO[{k}] = {val}"));
-                }
+            // the spawn outcome (Entity, Success, Failure Reason)
+            if let Some(k) = gen.out_index(id, "volume") {
+                b.line(format!("\tg_lsgO[{k}] = g_lsgOut[{i}]"));
+            }
+            if let Some(k) = gen.out_index(id, "success") {
+                b.line(format!("\tg_lsgO[{k}] = g_lsgOut[{i}] ? 1 : 0"));
+            }
+            if let Some(t) = gen.tout_index(id, "reason") {
+                b.line(format!("\tcopy(g_lsgOT[{t}], 127, g_lsgVolWhy)"));
             }
             if debug {
-                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\tlsd_error({i}, g_lsgVolWhyName[clamp(g_lsgVolWhy, 0, 6)])\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))"));
+                b.line(format!("\tif (!g_lsgOut[{i}])\n\t\tlsd_error({i}, g_lsgVolWhy)\n\telse\n\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))"));
             }
-            match (next("spawned"), next("failed")) {
+            match (next("then"), next("failed")) {
                 (Some(t), Some(f)) => b.line(format!("\tif (g_lsgOut[{i}])\n\t\t{t}\n\telse\n\t\t{f}")),
                 (Some(t), None) => b.line(format!("\tif (g_lsgOut[{i}])\n\t\t{t}")),
                 (None, Some(f)) => b.line(format!("\tif (!g_lsgOut[{i}])\n\t\t{f}")),
                 (None, None) => {}
             }
-            then_line(&mut b, "then");
         }
         "vol.remove" => {
             let call = format!("lsg_vol_remove({})", inp("volume", "entity"));
@@ -2646,28 +2648,24 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             then_line(&mut b, "then");
         }
         "npc.spawn" | "npc.spawn_use" => {
-            // where: a point wired in, else an entity wired in, else the one with that name
-            // (the shared transform: At position, or At entity with a Local offset; else the named one)
-            let at = fx::place(gen, id, "at_ent", &at_origin(gen, id, n, def));
+            // where: a point wired in, else an entity wired in, else the one with that name (the
+            // shared transform); "If the spot is blocked" decides the spot (gen/fx.rs spawn_flow),
+            // and gm_components takes it as given (blocked=here: one check, not two)
+            let place = fx::place(gen, id, "at_ent", &at_origin(gen, id, n, def));
             let model = pawn_str(&model_text(gen.text(n, def, "model")));
-            let call = if def.kind == "npc.spawn" {
-                let keys = format!("behavior={} unkillable={}", if gen.choice(n, def, "behavior") == "wander" { "wander" } else { "stand" }, if gen.boolean(n, def, "unkillable") { 1 } else { 0 });
+            let npc = def.kind == "npc.spawn";
+            let create = if npc {
+                let keys = format!("behavior={} unkillable={} blocked=here", if gen.choice(n, def, "behavior") == "wander" { "wander" } else { "stand" }, if gen.boolean(n, def, "unkillable") { 1 } else { 0 });
                 format!("ls_npc_spawn({model}, o, {}, {}, {})", float_lit(gen.num(n, def, "yaw")), pawn_str(&safe_text(gen.text(n, def, "name"), 31)), pawn_str(&keys))
             } else {
-                let keys = format!("once={} hide={} bots={}", if gen.boolean(n, def, "once") { 1 } else { 0 }, if gen.boolean(n, def, "hide") { 1 } else { 0 }, if gen.boolean(n, def, "bots") { 1 } else { 0 });
+                let keys = format!("once={} hide={} bots={} blocked=here", if gen.boolean(n, def, "once") { 1 } else { 0 }, if gen.boolean(n, def, "hide") { 1 } else { 0 }, if gen.boolean(n, def, "bots") { 1 } else { 0 });
                 format!("ls_interactable_spawn({model}, o, {}, {})", pawn_str(&safe_text(gen.text(n, def, "prompt"), 60)), pawn_str(&keys))
             };
-            b.line("\tnew Float:o[3]");
-            if debug {
-                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!{at})\n\t\t{}\n\telse\n\t{{\n\t\tg_lsgOut[{i}] = {call}\n\t\tif (g_lsgOut[{i}])\n\t\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))\n\t\telse\n\t\t\t{}\n\t}}", err("gm_components isn't running on this server."), err("No entity has that name on this map."), err("Not made: its model isn't loaded with this map, or there's no room.")));
-            } else {
-                b.line(format!("\tif (!{comps} && {at})\n\t\tg_lsgOut[{i}] = {call}"));
-            }
+            let what = if npc { "Spawn NPC" } else { "Spawn Interactable" };
+            let pre = [("ls_components_running()".to_string(), fx::WHY_BAD, "gm_components isn't running on this server."), (format!("lsg_ent_room(\"{what}\")"), fx::WHY_SLOTS, "Not made: the server is out of entity slots.")];
             // (an NPC's Facing setting is a yaw offset on top, so saved graphs face the same way)
-            if let Some(l) = fx::apply(gen, n, def, id, &format!("g_lsgOut[{i}]"), "at_ent", true, if def.kind == "npc.spawn" { Some("yaw") } else { None }) {
-                b.line(l);
-            }
-            then_line(&mut b, "then");
+            let apply = fx::apply(gen, n, def, id, "e", "at_ent", true, if npc { Some("yaw") } else { None });
+            fx::spawn_flow(gen, id, n, def, &mut b, &pre, &place, &create, (fx::WHY_BAD, "Not made: gm_components didn't make it."), apply, &exit, &err, &next, &mut after);
         }
         // T1fix: projectiles (gm_components ls_proj_*): graph text never reaches a command
         "proj.spawn" => {
@@ -2678,13 +2676,14 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             // (a trail is a message: one more this frame only when the mode's message budget has room)
             let trail = if flag("trail") == 1 { "%d" } else { "0" };
             let keys = format!("trail={trail} spin={} bounce={} radius={} falloff={} explode={} dangerous={}", flag("spin"), gen.num(n, def, "bounce").clamp(0.0, 10.0).round(), gen.num(n, def, "radius").clamp(0.0, 2000.0).round(), flag("falloff"), flag("explode"), flag("dangerous"));
-            b.line("\tnew Float:o[3], Float:d[3], lsgK[160], bool:lsgA = true");
-            // where from and which way: At entity (or the owner's eyes) with its offsets, then
-            // what's wired overrides (Position, Direction or Rotation)
-            // (the spawn transform pins every spawn node takes, docs/notes/FX.md: Local offset along
-            // At entity's own forward, right and up, 16 forward when unwired to clear the shooter;
-            // Rotation offset turns the facing; Face the way At entity faces off: Rotation offset alone)
-            let rot = if wired("angles_offset") { inp("angles_offset", "vector") } else { "-1".into() };
+            b.line("\tnew Float:d[3], lsgK[160]");
+            // where from and which way (the spawn transform pins every spawn node takes,
+            // docs/notes/FX.md): At position, else At entity (or the owner's eyes) moved by Local
+            // offset along its own forward, right and up (16 forward when unwired, to clear the
+            // shooter); Direction, else Rotation, else its facing (Face the way At entity faces)
+            // turned by Rotation offset. Not solid: "If the spot is blocked" has nothing to check.
+            let vh = |p: &str| if wired(p) { inp(p, "vector") } else { "-1".into() };
+            let rot = vh("angles_offset");
             let base = if wired("at_ent") { inp("at_ent", "entity") } else { owner.clone() };
             let (of, or_, ou) = if wired("offset") {
                 let o = inp("offset", "vector");
@@ -2693,31 +2692,24 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 ("16.0".to_string(), "0.0".to_string(), "0.0".to_string())
             };
             let copy = if n.params.get("copy_rot").and_then(serde_json::Value::as_bool).unwrap_or(true) { 1 } else { 0 };
-            b.line(format!("\tlsgA = lsg_proj_from({base}, {of}, {or_}, {ou}, {rot}, {copy}, o, d)"));
-            if wired("pos") {
-                b.line(format!("\tlsg_vto({}, o)\n\tlsgA = true", inp("pos", "vector")));
-            }
-            if wired("dir") {
-                b.line(format!("\tlsg_vto({}, d)", inp("dir", "vector")));
-            } else if wired("angles") {
-                b.line(format!("\tnew Float:pa[3]\n\tlsg_vto({}, pa)\n\tangle_vector(pa, ANGLEVECTOR_FORWARD, d)", inp("angles", "vector")));
-            }
+            let place = format!("lsg_proj_at({base}, {of}, {or_}, {ou}, {rot}, {copy}, {}, {}, {}, o, d)", vh("pos"), vh("dir"), vh("angles"));
             let trail_arg = if flag("trail") == 1 { format!("lsg_msg_room(\"Spawn Projectile\", 1, 0, {}) ? 1 : 0, ", gen.limit_expr("messages")) } else { String::new() };
             b.line(format!("\tformatex(lsgK, charsmax(lsgK), \"{keys} damage=%.0f scale=%.2f\", {trail_arg}floatclamp({}, 0.0, 5000.0), floatclamp({}, 0.05, 4.0))", inp("damage", "number"), inp("scale", "number")));
-            // how many fly at once is the mode's Limits setting (gm_components' ls_proj_max); the engine's
-            // own ceiling, free entity slots, is checked first (the larger reserve wins: the plugin keeps 128)
-            b.line(format!("\tif (get_cvar_num(\"ls_proj_max\") != {lim})\n\t\tset_cvar_num(\"ls_proj_max\", {lim})", lim = gen.limit_expr("projectiles")));
-            let call = format!("(lsg_ent_room(\"Spawn Projectile\") ? ls_proj_spawn({owner}, {model}, o, d, floatclamp({}, 1.0, 5000.0), {}, {}, lsgK) : 0)", inp("speed", "number"), float_lit(gen.num(n, def, "gravity").clamp(0.0, 4.0)), float_lit(gen.num(n, def, "life").clamp(0.1, 60.0)));
-            // Velocity, when wired, sets the motion outright
-            // (On Hit / On Expired come later, for this projectile only: its node and the flow's
-            // context are kept by the projectile's entity, cleared when it's gone or reused)
-            let note = format!("\n\t\tif (g_lsgOut[{i}])\n\t\t\tlsg_pj_note(g_lsgOut[{i}], {}, ctx)", i + 1);
-            let vel = if wired("vel") { format!("\n\t\tif (g_lsgOut[{i}])\n\t\t{{\n\t\t\tnew Float:pv[3]\n\t\t\tlsg_vto({}, pv)\n\t\t\tls_proj_set_velocity(g_lsgOut[{i}], pv)\n\t\t}}", inp("vel", "vector")) } else { String::new() };
-            if debug {
-                b.line(format!("\tif ({comps})\n\t\t{}\n\telse if (!lsgA)\n\t\t{}\n\telse\n\t{{\n\t\tg_lsgOut[{i}] = {call}{vel}{note}\n\t\tif (g_lsgOut[{i}])\n\t\t\tlsd_exit({i}, fmt(\"entity %d\", g_lsgOut[{i}]))\n\t\telse\n\t\t\t{}\n\t}}", err("gm_components isn't running on this server."), err("Not fired: no Position, and no At entity or living owner to fire from."), err("Spawn Projectile skipped: the server is out of entity slots.")));
-            } else {
-                b.line(format!("\tg_lsgOut[{i}] = 0\n\tif (!{comps} && lsgA)\n\t{{\n\t\tg_lsgOut[{i}] = {call}{vel}{note}\n\t}}"));
-            }
+            // how many fly at once is the mode's Limits setting (gm_components' ls_proj_max)
+            let lim = gen.limit_expr("projectiles");
+            b.line(format!("\tif (get_cvar_num(\"ls_proj_max\") != {lim})\n\t\tset_cvar_num(\"ls_proj_max\", {lim})"));
+            let create = format!("ls_proj_spawn({owner}, {model}, o, d, floatclamp({}, 1.0, 5000.0), {}, {}, lsgK)", inp("speed", "number"), float_lit(gen.num(n, def, "gravity").clamp(0.0, 4.0)), float_lit(gen.num(n, def, "life").clamp(0.1, 60.0)));
+            // Velocity, when wired, sets the motion outright; On Hit / On Expired come later, for
+            // this projectile only (its node and the flow's context kept by its entity)
+            let vel = if wired("vel") { format!("\n\t\tnew Float:pv[3]\n\t\tlsg_vto({}, pv)\n\t\tls_proj_set_velocity(e, pv)", inp("vel", "vector")) } else { String::new() };
+            let apply = Some(format!("\tif (e)\n\t{{{vel}\n\t\tlsg_pj_note(e, {}, ctx)\n\t}}", i + 1));
+            let pre = [
+                ("ls_components_running()".to_string(), fx::WHY_BAD, "gm_components isn't running on this server."),
+                ("lsg_ent_room(\"Spawn Projectile\")".to_string(), fx::WHY_SLOTS, "Spawn Projectile skipped: the server is out of entity slots."),
+                (format!("ls_proj_count() < {lim}"), fx::WHY_LIMIT, "Not fired: as many projectiles fly as Projectiles at once allows (Limits)."),
+                (format!("lsg_have({model})"), fx::WHY_MISSING, "Not fired: its model or sprite isn't loaded with this map."),
+            ];
+            fx::spawn_flow(gen, id, n, def, &mut b, &pre, &place, &create, (fx::WHY_BAD, "Not fired: gm_components didn't make it."), apply, &exit, &err, &next, &mut after);
             // the callbacks (stocks after the handlers, like Say and Choose's replies)
             let mut set = String::new();
             for (pin, val) in [("hit_pos", "lsg_vfrom(pos)"), ("hit_normal", "lsg_vfrom(normal)"), ("hit_player", "(hit >= 1 && hit <= MaxClients) ? hit : 0"), ("hit_ent", "(hit > MaxClients) ? hit : 0"), ("hit_world", "hit == 0 ? 1 : 0"), ("hit_zone", "_:float(hitgroup)"), ("hit_owner", "owner")] {
@@ -2731,7 +2723,6 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let on_exp = next("on_expire").unwrap_or_else(|| "#pragma unused ctx".into());
             let cb = format!("\n// {} ({}): its hits and its end\nstock lsg_pjhit{i}(ctx[], owner, const Float:pos[3], const Float:normal[3], hit, hitgroup)\n{{\n\t#pragma unused owner\n\t#pragma unused pos\n\t#pragma unused normal\n\t#pragma unused hit\n\t#pragma unused hitgroup{set}{dbg_hit}\n\t{on_hit}\n}}\n\nstock lsg_pjexp{i}(ctx[])\n{{{dbg_exp}\n\t{on_exp}\n}}", comment_text(&def.title), id_text(id));
             menus_after.push((i, cb));
-            then_line(&mut b, "then");
         }
         "proj.remove" => {
             let p = inp("proj", "entity");
@@ -3215,20 +3206,12 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let p = if who == 0 && v.data_source(id, "player").is_some() { inp("player", "player") } else { "0".into() };
             let from = if v.data_source(id, "from").is_some() { inp("from", "entity") } else { "0".into() };
             let vec_in = |pin: &str, var: &str| if v.data_source(id, pin).is_some() { format!("\tlsg_vto({}, {var})\n", inp(pin, "vector")) } else { String::new() };
-            let look = if v.data_source(id, "look").is_some() { inp("look", "entity") } else { "0".into() };
             b.line(format!(
-                "\tnew Float:lsgA[3], Float:lsgAa[3], Float:lsgB[3], Float:lsgBa[3], Float:lsgL[3]\n{}{}{}{}{}\tlsg_view_look({look}, lsgL, {}, {}, {})",
+                "\tnew Float:lsgA[3], Float:lsgAa[3], Float:lsgB[3], Float:lsgBa[3]\n{}{}{}{}\tlsg_view_from({who}, {p}, {from}, lsgA, lsgAa, {}, lsgB, lsgBa, {}, {}, {}, {}, {})",
                 vec_in("pos", "lsgA"),
                 vec_in("angles", "lsgAa"),
                 vec_in("to", "lsgB"),
                 vec_in("to_angles", "lsgBa"),
-                vec_in("look_pos", "lsgL"),
-                if v.data_source(id, "look_pos").is_some() { 1 } else { 0 },
-                if gen.boolean(n, def, "frame") { 1 } else { 0 },
-                if gen.boolean(n, def, "talk") { 1 } else { 0 }
-            ));
-            b.line(format!(
-                "\tlsg_view_from({who}, {p}, {from}, lsgA, lsgAa, {}, lsgB, lsgBa, {}, {}, {}, {}, {})",
                 if v.data_source(id, "pos").is_some() { 1 } else { 0 },
                 if v.data_source(id, "to").is_some() { 1 } else { 0 },
                 float_lit(gen.num(n, def, "offset").clamp(-256.0, 512.0)),
@@ -7274,106 +7257,13 @@ stock lsg_coords(const Float:o[3])
 
 // View From: a camera entity each shot; players see through it (set_view) until it ends
 stock g_lsgViewCam[33], Float:g_lsgViewTill[33], bool:g_lsgViewFreeze[33], g_lsgCamFollow[2048], Float:g_lsgCamOff[2048], Float:g_lsgCamStop[2048]
-// what the next View From looks at (an entity, or a position), whether it frames a conversation
-// and ends with it; and per camera, what it keeps pointing at
-stock g_lsgVLook, Float:g_lsgVLookPos[3], bool:g_lsgVHasLook, bool:g_lsgVFrame, bool:g_lsgVTalk
-stock g_lsgCamLook[2048], Float:g_lsgCamLookPos[2048][3], bool:g_lsgCamLooks[2048], bool:g_lsgViewTalk[33], bool:g_lsgViewTalked[33]
-
-stock lsg_view_look(look, const Float:lp[3], hasLp, frame, talk)
-{
-	g_lsgVLook = look > 0 && pev_valid(look) ? look : 0
-	g_lsgVLookPos = lp
-	g_lsgVHasLook = g_lsgVLook > 0 || hasLp != 0
-	g_lsgVFrame = frame != 0
-	g_lsgVTalk = talk != 0
-}
-
-// the point a camera looks at: its entity's (a player's eyes) or its position
-stock bool:lsg_cam_target(cam, Float:t[3])
-{
-	new e = g_lsgCamLook[cam]
-	if (e > 0)
-	{
-		if (!pev_valid(e))
-			return false
-		pev(e, pev_origin, t)
-		new Float:ofs[3]
-		pev(e, pev_view_ofs, ofs)
-		t[2] += ofs[2] > 0.0 ? ofs[2] : 24.0
-		return true
-	}
-	if (!g_lsgCamLooks[cam])
-		return false
-	t = g_lsgCamLookPos[cam]
-	return true
-}
-
-// "until the conversation ends": once one has started for them (Say or Choose may come a little
-// after View From), it's over when they aren't talking any more
-stock bool:lsg_view_talk_over(p)
-{
-	if (!g_lsgViewTalk[p] || !ls_components_running())
-		return false
-	if (ls_npc_talking(p))
-	{
-		g_lsgViewTalked[p] = true
-		return false
-	}
-	return g_lsgViewTalked[p]
-}
-
-// a view entity's angles toward a point (the pitch the other way round, as trigger_camera does)
-stock lsg_cam_aim(cam)
-{
-	new Float:t[3], Float:o[3], Float:d[3], Float:ang[3]
-	if (!lsg_cam_target(cam, t))
-		return
-	pev(cam, pev_origin, o)
-	for (new k = 0; k < 3; k++)
-		d[k] = t[k] - o[k]
-	vector_to_angle(d, ang)
-	ang[0] = -ang[0]
-	if (ang[0] < -180.0)
-		ang[0] += 360.0
-	set_pev(cam, pev_angles, ang)
-	set_pev(cam, pev_v_angle, ang)
-}
-
 
 stock lsg_view_from(who, one, from, const Float:a[3], const Float:aa[3], hasA, const Float:b[3], const Float:ba[3], hasB, Float:off, Float:move, Float:secs, freeze)
 {
-	if (from <= 0 && !hasA && !(g_lsgVFrame && g_lsgVLook))
+	if (from <= 0 && !hasA)
 		return 0
 	if (from > 0 && !pev_valid(from))
 		return 0
-	new n = 0
-	for (new p = 1; p <= MaxClients; p++)
-	{
-		if (!is_user_connected(p) || is_user_bot(p))
-			continue
-		if ((who == 0 && p != one) || (who == 1 && get_user_team(p) != 1) || (who == 2 && get_user_team(p) != 2))
-			continue
-		// (each player a camera of their own)
-		new cam = lsg_view_cam(p, from, a, aa, b, ba, hasB, off, move)
-		if (!cam)
-			continue
-		lsg_view_back(p)
-		g_lsgViewCam[p] = cam
-		g_lsgViewTill[p] = secs > 0.0 ? get_gametime() + secs : 0.0
-		g_lsgViewFreeze[p] = freeze != 0
-		g_lsgViewTalk[p] = g_lsgVTalk
-		g_lsgViewTalked[p] = false
-		if (freeze)
-			set_pev(p, pev_flags, pev(p, pev_flags) | FL_FROZEN)
-		engfunc(EngFunc_SetView, p, cam)
-		n++
-	}
-	return n
-}
-
-// one viewer's camera: where it stands, how it moves, what it looks at
-stock lsg_view_cam(p, from, const Float:a[3], const Float:aa[3], const Float:b[3], const Float:ba[3], hasB, Float:off, Float:move)
-{
 	if (!lsg_ent_room("View From"))
 		return 0
 	new cam = create_entity("info_target")
@@ -7386,28 +7276,7 @@ stock lsg_view_cam(p, from, const Float:a[3], const Float:aa[3], const Float:b[3
 	set_pev(cam, pev_solid, SOLID_NOT)
 	set_pev(cam, pev_movetype, MOVETYPE_NOCLIP)
 	new Float:o[3], Float:ang[3]
-	g_lsgCamFollow[cam] = 0
-	g_lsgCamLook[cam] = g_lsgVLook
-	g_lsgCamLookPos[cam] = g_lsgVLookPos
-	g_lsgCamLooks[cam] = g_lsgVHasLook
-	if (g_lsgVFrame && g_lsgVLook)
-	{
-		// to the side of the player and the NPC, a little above their eyes, looking at the NPC
-		new Float:e[3], Float:t[3], Float:d[3], Float:ofs[3]
-		pev(p, pev_origin, e)
-		pev(p, pev_view_ofs, ofs)
-		e[2] += ofs[2]
-		pev(g_lsgVLook, pev_origin, t)
-		for (new k = 0; k < 3; k++)
-			d[k] = t[k] - e[k]
-		new Float:len = floatsqroot(d[0] * d[0] + d[1] * d[1])
-		if (len < 1.0)
-			len = 1.0
-		o[0] = (e[0] + t[0]) * 0.5 - d[1] / len * 110.0
-		o[1] = (e[1] + t[1]) * 0.5 + d[0] / len * 110.0
-		o[2] = e[2] + 12.0
-	}
-	else if (from > 0)
+	if (from > 0)
 	{
 		pev(from, pev_origin, o)
 		o[2] += off
@@ -7419,13 +7288,14 @@ stock lsg_view_cam(p, from, const Float:a[3], const Float:aa[3], const Float:b[3
 	{
 		o = a
 		ang = aa
+		g_lsgCamFollow[cam] = 0
 	}
 	engfunc(EngFunc_SetOrigin, cam, o)
 	set_pev(cam, pev_angles, ang)
 	set_pev(cam, pev_v_angle, ang)
 	g_lsgCamStop[cam] = 0.0
 	// a glide from A to B: the engine moves it (velocity, angular velocity); stopped when it's there
-	if (from <= 0 && hasB && move > 0.0 && !g_lsgVFrame)
+	if (from <= 0 && hasB && move > 0.0)
 	{
 		new Float:vel[3], Float:av[3]
 		for (new k = 0; k < 3; k++)
@@ -7437,8 +7307,25 @@ stock lsg_view_cam(p, from, const Float:a[3], const Float:aa[3], const Float:b[3
 		set_pev(cam, pev_avelocity, av)
 		g_lsgCamStop[cam] = get_gametime() + move
 	}
-	lsg_cam_aim(cam)
-	return cam
+	new n = 0
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		if ((who == 0 && p != one) || (who == 1 && get_user_team(p) != 1) || (who == 2 && get_user_team(p) != 2))
+			continue
+		lsg_view_back(p)
+		g_lsgViewCam[p] = cam
+		g_lsgViewTill[p] = secs > 0.0 ? get_gametime() + secs : 0.0
+		g_lsgViewFreeze[p] = freeze != 0
+		if (freeze)
+			set_pev(p, pev_flags, pev(p, pev_flags) | FL_FROZEN)
+		engfunc(EngFunc_SetView, p, cam)
+		n++
+	}
+	if (!n)
+		remove_entity(cam)
+	return n
 }
 
 // one player's view back: first or third person as Set Camera left it
@@ -7449,7 +7336,6 @@ stock lsg_view_back(p)
 		return
 	g_lsgViewCam[p] = 0
 	g_lsgViewTill[p] = 0.0
-	g_lsgViewTalk[p] = false
 	if (is_user_connected(p))
 	{
 		if (g_lsgViewFreeze[p])
@@ -7483,7 +7369,7 @@ stock lsg_view_tick(Float:now)
 		new cam = g_lsgViewCam[p]
 		if (!cam)
 			continue
-		if (!pev_valid(cam) || (g_lsgViewTill[p] > 0.0 && now >= g_lsgViewTill[p]) || lsg_view_talk_over(p))
+		if (!pev_valid(cam) || (g_lsgViewTill[p] > 0.0 && now >= g_lsgViewTill[p]))
 		{
 			lsg_view_back(p)
 			continue
@@ -7510,9 +7396,6 @@ stock lsg_view_tick(Float:now)
 			set_pev(cam, pev_avelocity, Float:{0.0, 0.0, 0.0})
 			g_lsgCamStop[cam] = 0.0
 		}
-		// (a camera with something to look at keeps pointing at it, over its own angles)
-		if (g_lsgCamLook[cam] || g_lsgCamLooks[cam])
-			lsg_cam_aim(cam)
 	}
 }"##;
 
@@ -8226,7 +8109,8 @@ mod tests {
         let g = super::super::graph::from_value(g).unwrap();
         assert!(!has_errors(&validate(&g)), "{:#?}", validate(&g));
         let src = generate(&g, false).source;
-        assert!(src.contains("ls_interactable_offer(g_lsgOut[") && src.contains("bots=1"), "{src}");
+        // (Spawn Interactable's Entity is kept in its output slot: the spawn outcome standard)
+        assert!(src.contains("ls_interactable_offer(") && src.contains("bots=1"), "{src}");
         assert!(!src.contains("offer %s trap"), "not the brain's price offer");
     }
 

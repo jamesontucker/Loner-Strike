@@ -32,7 +32,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 65
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 64
+#define LSG_O 72
 #define LSG_OT 1
 
 
@@ -2849,28 +2849,6 @@ stock lsg_argstr(a, s[], len)
 // If not: the nearest free spot within reach (rings round it, in sight of it), or nothing.
 stock g_lsgXrN[LSG_N], g_lsgXrIn = -1, Float:g_lsgXrO[LSG_N][3]
 
-// (Retry: a timer with the flow's ctx, then the spot and the tries so far)
-stock lsg_xr_wait(i, const fn[], Float:every, const ctx[], const Float:o[3])
-{
-	new d[LSG_CTX + 4]
-	for (new k = 0; k < LSG_CTX; k++)
-		d[k] = ctx[k]
-	d[LSG_CTX] = _:o[0]
-	d[LSG_CTX + 1] = _:o[1]
-	d[LSG_CTX + 2] = _:o[2]
-	d[LSG_CTX + 3] = g_lsgXrN[i]
-	set_task(every, fn, LSG_TASK + 410000 + i, d, LSG_CTX + 4)
-}
-
-stock lsg_xr_back(i, const d[])
-{
-	g_lsgXrIn = i
-	g_lsgXrO[i][0] = Float:d[LSG_CTX]
-	g_lsgXrO[i][1] = Float:d[LSG_CTX + 1]
-	g_lsgXrO[i][2] = Float:d[LSG_CTX + 2]
-	g_lsgXrN[i] = d[LSG_CTX + 3]
-}
-
 // (Retry: the spot of the first try, kept)
 stock lsg_xr_put(i, ok, const Float:o[3])
 {
@@ -3543,21 +3521,59 @@ lsg_n25(ctx[])
 // Spawn NPC (np)
 lsg_n26(ctx[])
 {
-	new Float:o[3]
-	if (!!ls_components_running() && lsg_xf_at(ctx[0], -1, lsg_vec(32.0, 0.0, 8.0), o))
-		g_lsgOut[26] = ls_npc_spawn("models/barney.mdl", o, 45.0, "Guide", "behavior=stand unkillable=1")
-	lsg_xf_set(g_lsgOut[26], 1, -1, lsg_vec(0.0, 45.0, 0.0), -1, 1.0)
-	lsg_n27(ctx)
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 26
+	if (!lsgRe)
+		g_lsgXrN[26] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn NPC")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(ctx[0], -1, lsg_vec(32.0, 0.0, 8.0), o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 2, 2, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_npc_spawn("models/barney.mdl", o, 45.0, "Guide", "behavior=stand unkillable=1 blocked=here")))
+		lsgWhy = 6
+	lsg_xf_set(e, 1, -1, lsg_vec(0.0, 45.0, 0.0), -1, 1.0)
+	new bool:lsgWait = false
+	g_lsgOut[26] = e
+	g_lsgO[36] = e
+	g_lsgO[37] = e ? 1 : 0
+	g_lsgO[38] = e ? lsgMv : 0
+	g_lsgO[39] = e ? 0 : lsgWhy
+	if (!lsgRe)
+		lsg_n27(ctx)
+	#pragma unused lsgWait
 }
 
 // Spawn Interactable (iu)
 lsg_n27(ctx[])
 {
-	new Float:o[3]
-	if (!!ls_components_running() && lsg_xf_at(0, lsg_vec(0.0, 0.0, 40.0), -1, o))
-		g_lsgOut[27] = ls_interactable_spawn("models/w_weaponbox.mdl", o, "Press E to use", "once=1 hide=0 bots=0")
-	lsg_xf_set(g_lsgOut[27], 0, lsg_vec(0.0, 90.0, 0.0), -1, -1, 1.0)
-	lsg_n28(ctx)
+	new Float:o[3], e = 0, lsgMv = 0, lsgWhy = 0, lsgRe = g_lsgXrIn == 27
+	if (!lsgRe)
+		g_lsgXrN[27] = 0
+	g_lsgXrIn = -1
+	if (!(ls_components_running()))
+		lsgWhy = 6
+	else if (!(lsg_ent_room("Spawn Interactable")))
+		lsgWhy = 2
+	else if (!(lsg_xf_at(0, lsg_vec(0.0, 0.0, 40.0), -1, o)))
+		lsgWhy = 6
+	else if (!lsg_xf_free(o, 0, 3, 128.0, lsgMv))
+		lsgWhy = 1
+	else if (!(e = ls_interactable_spawn("models/w_weaponbox.mdl", o, "Press E to use", "once=1 hide=0 bots=0 blocked=here")))
+		lsgWhy = 6
+	lsg_xf_set(e, 0, lsg_vec(0.0, 90.0, 0.0), -1, -1, 1.0)
+	new bool:lsgWait = false
+	g_lsgOut[27] = e
+	g_lsgO[40] = e
+	g_lsgO[41] = e ? 1 : 0
+	g_lsgO[42] = e ? lsgMv : 0
+	g_lsgO[43] = e ? 0 : lsgWhy
+	if (!lsgRe)
+		lsg_n28(ctx)
+	#pragma unused lsgWait
 }
 
 // Create Component (cc)
@@ -3580,10 +3596,10 @@ lsg_n28(ctx[])
 	lsg_xf_set(e, 0, lsg_vec(0.0, 90.0, 0.0), -1, -1, 1.0)
 	new bool:lsgWait = false
 	g_lsgOut[28] = e
-	g_lsgO[36] = e
-	g_lsgO[37] = e ? 1 : 0
-	g_lsgO[38] = e ? lsgMv : 0
-	g_lsgO[39] = e ? 0 : lsgWhy
+	g_lsgO[44] = e
+	g_lsgO[45] = e ? 1 : 0
+	g_lsgO[46] = e ? lsgMv : 0
+	g_lsgO[47] = e ? 0 : lsgWhy
 	if (!lsgRe)
 		lsg_n29(ctx)
 	#pragma unused lsgWait
@@ -3608,10 +3624,10 @@ lsg_n29(ctx[])
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[29] = e
-	g_lsgO[40] = e
-	g_lsgO[41] = e ? 1 : 0
-	g_lsgO[42] = e ? lsgMv : 0
-	g_lsgO[43] = e ? 0 : lsgWhy
+	g_lsgO[48] = e
+	g_lsgO[49] = e ? 1 : 0
+	g_lsgO[50] = e ? lsgMv : 0
+	g_lsgO[51] = e ? 0 : lsgWhy
 	if (!lsgRe)
 		lsg_n30(ctx)
 	#pragma unused lsgWait
@@ -3636,10 +3652,10 @@ lsg_n30(ctx[])
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[30] = e
-	g_lsgO[44] = e
-	g_lsgO[45] = e ? 1 : 0
-	g_lsgO[46] = e ? lsgMv : 0
-	g_lsgO[47] = e ? 0 : lsgWhy
+	g_lsgO[52] = e
+	g_lsgO[53] = e ? 1 : 0
+	g_lsgO[54] = e ? lsgMv : 0
+	g_lsgO[55] = e ? 0 : lsgWhy
 	if (!lsgRe)
 		lsg_n31(ctx)
 	#pragma unused lsgWait
@@ -3665,10 +3681,10 @@ lsg_n31(ctx[])
 	lsg_xf_set(e, 1, -1, -1, -1, 1.0)
 	new bool:lsgWait = false
 	g_lsgOut[31] = e
-	g_lsgO[48] = e
-	g_lsgO[49] = e ? 1 : 0
-	g_lsgO[50] = e ? lsgMv : 0
-	g_lsgO[51] = e ? 0 : lsgWhy
+	g_lsgO[56] = e
+	g_lsgO[57] = e ? 1 : 0
+	g_lsgO[58] = e ? lsgMv : 0
+	g_lsgO[59] = e ? 0 : lsgWhy
 	if (e)
 	{
 		lsg_n32(ctx)
@@ -3683,7 +3699,7 @@ lsg_n31(ctx[])
 // Branch (br)
 lsg_n32(ctx[])
 {
-	new ok = ((((g_lsgO[50]) ? 1 : 0)) ? 1 : 0)
+	new ok = ((((g_lsgO[58]) ? 1 : 0)) ? 1 : 0)
 	#pragma unused ok
 	#pragma unused ctx
 }
@@ -3707,10 +3723,10 @@ lsg_n33(ctx[])
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[33] = e
-	g_lsgO[52] = e
-	g_lsgO[53] = e ? 1 : 0
-	g_lsgO[54] = e ? lsgMv : 0
-	g_lsgO[55] = e ? 0 : lsgWhy
+	g_lsgO[60] = e
+	g_lsgO[61] = e ? 1 : 0
+	g_lsgO[62] = e ? lsgMv : 0
+	g_lsgO[63] = e ? 0 : lsgWhy
 	if (e)
 	{
 	}
@@ -3741,10 +3757,10 @@ lsg_n34(ctx[])
 		lsgWhy = 6
 	new bool:lsgWait = false
 	g_lsgOut[34] = e
-	g_lsgO[56] = e
-	g_lsgO[57] = e ? 1 : 0
-	g_lsgO[58] = e ? lsgMv : 0
-	g_lsgO[59] = e ? 0 : lsgWhy
+	g_lsgO[64] = e
+	g_lsgO[65] = e ? 1 : 0
+	g_lsgO[66] = e ? lsgMv : 0
+	g_lsgO[67] = e ? 0 : lsgWhy
 	if (e)
 	{
 	}
@@ -3757,7 +3773,7 @@ lsg_n34(ctx[])
 // Switch on Enum (why)
 lsg_n35(ctx[])
 {
-	switch (g_lsgO[55])
+	switch (g_lsgO[63])
 	{
 		case 0:
 		{
@@ -3806,20 +3822,20 @@ lsg_n36(ctx[])
 		lsgWhy = 4
 	new bool:lsgWait = !e && lsgWhy == 1 && (0 == 0 || ++g_lsgXrN[36] < 0)
 	if (lsgWait)
-		lsg_xr_wait(36, "lsg_xr36", 1.0, ctx, o)
+		set_task(1.0, "lsg_xr36", LSG_TASK + 410000 + 36, ctx, LSG_CTX)
 	else if (!e && lsgWhy == 1)
 		lsgWhy = 5
 	g_lsgOut[36] = e
-	g_lsgO[60] = e
-	g_lsgO[61] = e ? 1 : 0
-	g_lsgO[62] = e ? lsgMv : 0
-	g_lsgO[63] = e ? 0 : lsgWhy
+	g_lsgO[68] = e
+	g_lsgO[69] = e ? 1 : 0
+	g_lsgO[70] = e ? lsgMv : 0
+	g_lsgO[71] = e ? 0 : lsgWhy
 	#pragma unused lsgWait
 }
 
-public lsg_xr36(d[])
+public lsg_xr36(ctx[])
 {
-	lsg_xr_back(36, d)
-	lsg_n36(d)
+	g_lsgXrIn = 36
+	lsg_n36(ctx)
 }
 

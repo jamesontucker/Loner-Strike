@@ -88,35 +88,10 @@ pub fn safe_path(rel: &str) -> bool {
         && rel.bytes().all(|c| c.is_ascii_alphanumeric() || b"_-./+!()".contains(&c))
 }
 
-/// A file players may need from this server: in a download folder, a kind the game sends, and
-/// not Valve's: nothing on the stock lists of Half-Life, CS 1.6 or Condition Zero ever goes to the
-/// public mirror, whichever game the server runs (a CS 1.6 player lacking a Condition Zero file
-/// is the map's problem; we never hand out Valve's files). `_game` is kept for the callers.
-pub fn wanted(rel: &str, _game: &str) -> bool {
-    safe_path(rel) && crate::extras::downloadable(rel) && !valves(rel)
-}
-
-/// On any of Valve's lists (stock_valve, stock_cstrike, stock_czero; doctor::is_stock for both games).
-pub fn valves(rel: &str) -> bool {
-    crate::tools::doctor::is_stock(rel, "cstrike") || crate::tools::doctor::is_stock(rel, "czero")
-}
-
-/// The custom maps that name a file only Condition Zero has (its textures, sky or sounds): on a
-/// CS 1.6 server their players see missing textures for those, since the mirror never has them.
-pub fn needs_czero(maps: &BTreeMap<String, MapNeeds>, game: &str) -> Vec<String> {
-    if game.eq_ignore_ascii_case("czero") {
-        return Vec::new();
-    }
-    let cz_only = |rel: &str| crate::tools::doctor::is_stock(rel, "czero") && !crate::tools::doctor::is_stock(rel, "cstrike");
-    maps.iter()
-        .filter(|(_, n)| {
-            let (wads, sky) = worldspawn_of(&n.ent);
-            wads.iter().any(|w| cz_only(w))
-                || sky.is_some_and(|s| ["up", "dn", "lf", "rt", "ft", "bk"].iter().any(|side| cz_only(&format!("gfx/env/{s}{side}.tga"))))
-                || crate::extras::parse_res(&n.res).iter().any(|r| cz_only(r.trim_start_matches('/')))
-        })
-        .map(|(m, _)| m.clone())
-        .collect()
+/// A file players may need from this server: in a download folder, a kind the game sends, not
+/// one every player of `game` already has.
+pub fn wanted(rel: &str, game: &str) -> bool {
+    safe_path(rel) && crate::extras::downloadable(rel) && !crate::tools::doctor::is_stock(rel, game)
 }
 
 fn hex(d: &[u8]) -> String {
@@ -314,162 +289,16 @@ fn walk_local(root: &Path) -> Vec<(String, u64)> {
     out
 }
 
-/// What a custom map makes a joining player fetch besides the .bsp: from its entity lump (the
-/// first block, worldspawn: "wad" and "skyname") and its .res text.
-#[derive(Default, Debug, Clone, PartialEq)]
-pub struct MapNeeds {
-    pub ent: String,
-    pub res: String,
-}
-
-/// worldspawn's texture files (file names only) and sky name, from the entity lump's text.
-pub fn worldspawn_of(ent: &str) -> (Vec<String>, Option<String>) {
-    let first = ent.split('}').next().unwrap_or("");
-    let key = |k: &str| -> Option<String> {
-        let at = first.find(&format!("\"{k}\""))? + k.len() + 2;
-        let rest = &first[at..];
-        let start = rest.find('"')? + 1;
-        let end = rest[start..].find('"')? + start;
-        Some(rest[start..end].to_string())
-    };
-    let wads = key("wad").unwrap_or_default().split(';').filter_map(|w| w.replace('\\', "/").rsplit('/').next().map(|s| s.trim().to_string())).filter(|w| w.to_lowercase().ends_with(".wad")).collect();
-    let sky = key("skyname").map(|s| s.trim().to_string()).filter(|s| !s.is_empty() && s.bytes().all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c)));
-    (wads, sky)
-}
-
-/// The files to offer, out of the custom ones present: each custom map with its .res, .txt,
-/// overview, the .res's entries, its texture files and sky; and the custom models, sounds and
-/// sprites (game modes and plugins precache them). Loose texture files, skies and overviews of
-/// maps the server doesn't have stay off the mirror. Names match without regard to case, as the
-/// game does on Windows; the path offered is the file's own.
-pub fn select(present: &[(String, u64)], maps: &BTreeMap<String, MapNeeds>) -> Vec<(String, u64)> {
-    let by_lower: BTreeMap<String, &(String, u64)> = present.iter().map(|p| (p.0.to_lowercase(), p)).collect();
-    let mut want: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for (m, needs) in maps {
-        for rel in [format!("maps/{m}.bsp"), format!("maps/{m}.res"), format!("maps/{m}.txt"), format!("overviews/{m}.bmp"), format!("overviews/{m}.tga"), format!("overviews/{m}.txt")] {
-            want.insert(rel.to_lowercase());
-        }
-        for rel in crate::extras::parse_res(&needs.res) {
-            want.insert(rel.trim_start_matches('/').to_lowercase());
-        }
-        let (wads, sky) = worldspawn_of(&needs.ent);
-        for w in wads {
-            want.insert(w.to_lowercase());
-        }
-        if let Some(sky) = sky {
-            for side in ["up", "dn", "lf", "rt", "ft", "bk"] {
-                want.insert(format!("gfx/env/{sky}{side}.tga").to_lowercase());
-            }
-        }
-    }
-    let mut out: Vec<(String, u64)> = present
-        .iter()
-        .filter(|(rel, _)| {
-            let l = rel.to_lowercase();
-            want.contains(&l) || l.starts_with("models/") || l.starts_with("sound/") || l.starts_with("sprites/")
-        })
-        .cloned()
-        .collect();
-    out.retain(|(rel, _)| by_lower.contains_key(&rel.to_lowercase()));
-    out.sort();
-    out.dedup();
-    out
-}
-
-/// The custom maps among the present files (their names).
-fn custom_maps(present: &[(String, u64)]) -> Vec<String> {
-    present.iter().filter_map(|(rel, _)| rel.strip_prefix("maps/").and_then(|f| f.strip_suffix(".bsp")).filter(|m| !m.contains('/')).map(String::from)).collect()
-}
-
-/// Run on the server's machine like HASH_PY (`python3 -I -S -c NEEDS_PY <game folder>`), map
-/// names on stdin: each map's entity lump start and .res text, as JSON, read without following
-/// links.
-pub const NEEDS_PY: &str = r#"import os, sys, json, stat
-root = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY)
-def opennf(rel):
-    parts = rel.split('/')
-    d = os.dup(root)
-    try:
-        for p in parts[:-1]:
-            n = os.open(p, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=d)
-            os.close(d)
-            d = n
-        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=d)
-    finally:
-        os.close(d)
-    if not stat.S_ISREG(os.fstat(fd).st_mode):
-        os.close(fd)
-        raise OSError('not a file')
-    return os.fdopen(fd, 'rb')
-out = {}
-for m in sys.stdin.read().split():
-    if '/' in m or m.startswith('.'):
-        continue
-    info = {'ent': '', 'res': ''}
-    try:
-        with opennf('maps/%s.bsp' % m) as f:
-            h = f.read(12)
-            off = int.from_bytes(h[4:8], 'little', signed=True)
-            ln = int.from_bytes(h[8:12], 'little', signed=True)
-            if off >= 0 and ln > 0:
-                f.seek(off)
-                info['ent'] = f.read(min(ln, 65536)).decode('latin-1').split('}')[0]
-    except (OSError, ValueError):
-        pass
-    try:
-        with opennf('maps/%s.res' % m) as f:
-            info['res'] = f.read(65536).decode('latin-1')
-    except OSError:
-        pass
-    out[m] = info
-sys.stdout.write(json.dumps(out))
-"#;
-
-/// A map's needs from a local game folder (read through open_inside).
-fn local_needs(root: &Path, map: &str) -> MapNeeds {
-    use std::io::{Seek, SeekFrom};
-    let mut n = MapNeeds::default();
-    if let Ok(mut f) = open_inside(root, &format!("maps/{map}.bsp")) {
-        let mut h = [0u8; 12];
-        if f.read_exact(&mut h).is_ok() {
-            let off = i32::from_le_bytes(h[4..8].try_into().unwrap());
-            let len = i32::from_le_bytes(h[8..12].try_into().unwrap());
-            if off >= 0 && len > 0 && f.seek(SeekFrom::Start(off as u64)).is_ok() {
-                let mut buf = Vec::new();
-                let _ = (&mut f).take(len.min(65536) as u64).read_to_end(&mut buf);
-                let text: String = buf.iter().map(|&b| b as char).collect();
-                n.ent = text.split('}').next().unwrap_or("").to_string();
-            }
-        }
-    }
-    if let Ok(f) = open_inside(root, &format!("maps/{map}.res")) {
-        let mut buf = Vec::new();
-        let _ = f.take(65536).read_to_end(&mut buf);
-        n.res = buf.iter().map(|&b| b as char).collect();
-    }
-    n
-}
-
-/// The custom files of a server (local or on a Linux machine) that players may need, with their
-/// SHA-256.
+/// The custom files of a server (local or on a Linux machine), with their SHA-256.
 pub fn collect(g: &Game, game: &str) -> Result<Vec<File>, String> {
-    collect_all(g, game).map(|(f, _)| f)
-}
-
-/// collect, and the custom maps that need Condition Zero's own files (needs_czero).
-pub fn collect_all(g: &Game, game: &str) -> Result<(Vec<File>, Vec<String>), String> {
     let keep = |rel: &str, size: u64| size > 0 && size <= MAX_FILE && wanted(rel, game);
     let mut files = Vec::new();
-    let cz;
     match &g.remote {
         None => {
-            let present: Vec<(String, u64)> = walk_local(&g.dir).into_iter().filter(|(r, s)| keep(r, *s)).collect();
-            let maps: BTreeMap<String, MapNeeds> = custom_maps(&present).into_iter().map(|m| (m.clone(), local_needs(&g.dir, &m))).collect();
-            cz = needs_czero(&maps, game);
-            for (rel, _) in select(&present, &maps) {
-                // a link swapped in since the listing is refused here, never followed
-                if let Ok((size, sha256)) = sha_inside(&g.dir, &rel) {
-                    if size > 0 && size <= MAX_FILE {
+            for (rel, size) in walk_local(&g.dir) {
+                if keep(&rel, size) {
+                    // a link swapped in since the listing is refused here, never followed
+                    if let Ok((size, sha256)) = sha_inside(&g.dir, &rel) {
                         files.push(File { path: rel, size, sha256, etag: String::new() });
                     }
                 }
@@ -485,38 +314,20 @@ pub fn collect_all(g: &Game, game: &str) -> Result<(Vec<File>, Vec<String>), Str
             if code == 3 {
                 return Err("The server's game folder isn't on that machine.".into());
             }
-            let mut present = Vec::new();
+            let mut sizes = BTreeMap::new();
             for l in out.lines() {
                 if let Some((rel, size)) = l.split_once('\t') {
                     let rel = rel.strip_prefix("./").unwrap_or(rel);
                     let size = size.trim().parse::<u64>().unwrap_or(0);
                     if keep(rel, size) {
-                        present.push((rel.to_string(), size));
+                        sizes.insert(rel.to_string(), size);
                     }
                 }
             }
-            let names = custom_maps(&present);
-            let mut maps: BTreeMap<String, MapNeeds> = names.iter().map(|m| (m.clone(), MapNeeds::default())).collect();
-            if !names.is_empty() {
-                let mut text = String::new();
-                let code = crate::remote::exec_stream(r, &needs_cmd(&q), names.join("\n").as_bytes(), |l| text.push_str(l))?;
-                if code != 0 {
-                    return Err("Couldn't read the server's maps on that machine (it needs python3, which Loner-Strike's setup installs).".into());
-                }
-                if let Ok(v) = serde_json::from_str::<BTreeMap<String, Value>>(&text) {
-                    for (m, info) in v {
-                        if let Some(n) = maps.get_mut(&m) {
-                            n.ent = info["ent"].as_str().unwrap_or("").to_string();
-                            n.res = info["res"].as_str().unwrap_or("").to_string();
-                        }
-                    }
-                }
+            if sizes.is_empty() {
+                return Ok(files);
             }
-            cz = needs_czero(&maps, game);
-            let asked: std::collections::BTreeSet<String> = select(&present, &maps).into_iter().map(|(r, _)| r).collect();
-            if asked.is_empty() {
-                return Ok((files, cz));
-            }
+            let asked: std::collections::BTreeSet<String> = sizes.into_keys().collect();
             let input: Vec<u8> = asked.iter().flat_map(|k| k.bytes().chain([0u8])).collect();
             let mut out = String::new();
             let code = crate::remote::exec_stream(r, &hash_cmd(&q), &input, |l| {
@@ -531,12 +342,7 @@ pub fn collect_all(g: &Game, game: &str) -> Result<(Vec<File>, Vec<String>), Str
         }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok((files, cz))
-}
-
-/// NEEDS_PY's command, like hash_cmd.
-fn needs_cmd(q: &str) -> String {
-    format!("python3 -I -S -c {} {q}", crate::remote::shell_quote(NEEDS_PY))
+    Ok(files)
 }
 
 fn read_manifest(p: &Path) -> Option<Manifest> {
@@ -546,7 +352,7 @@ fn read_manifest(p: &Path) -> Option<Manifest> {
 /// Copies a server's custom files into its folder on this computer (only what changed since the
 /// last time) and writes manifest.json, ready for scripts/r2-fastdl.sh.
 pub fn prepare(id: &str, g: &Game, game: &str) -> Result<Value, String> {
-    let (files, needs_cz) = collect_all(g, game)?;
+    let files = collect(g, game)?;
     let dir = stage_dir(id);
     let out = dir.join("files");
     std::fs::create_dir_all(&out).map_err(|e| format!("Couldn't make {} ({e}).", out.display()))?;
@@ -595,7 +401,7 @@ pub fn prepare(id: &str, g: &Game, game: &str) -> Result<Value, String> {
     let text = serde_json::to_string_pretty(&m).map_err(|e| e.to_string())?;
     std::fs::write(dir.join("manifest.json"), text).map_err(|e| format!("Couldn't write the manifest ({e})."))?;
     Ok(json!({
-        "ok": true, "files": m.files.len(), "copied": copied, "removed": removed, "needs_czero": needs_cz,
+        "ok": true, "files": m.files.len(), "copied": copied, "removed": removed,
         "mb": (bytes as f64 / 1_048_576.0 * 10.0).round() / 10.0,
         "dir": dir.to_string_lossy(), "command": format!("scripts/r2-fastdl.sh {id}"),
     }))
@@ -644,7 +450,7 @@ fn check_one(http: &reqwest::blocking::Client, url: &str, f: &File) -> (Option<S
         Some(format!("is sent compressed ({}), which the game can't unpack: upload it as application/octet-stream", get("content-encoding")))
     } else if get("content-length").parse::<u64>().ok().is_some_and(|n| n != f.size) {
         Some(format!("is {} bytes there, {} here", get("content-length"), f.size))
-    } else if !f.etag.is_empty() && !get("etag").is_empty() && get("etag").trim_start_matches("W/").trim_matches('"') != f.etag.trim_matches('"') {
+    } else if !f.etag.is_empty() && get("etag").trim_start_matches("W/").trim_matches('"') != f.etag.trim_matches('"') {
         Some("is an older copy: Cloudflare may still have it cached (it refreshes within 5 minutes)".to_string())
     } else {
         None
@@ -793,15 +599,6 @@ mod tests {
         assert!(!wanted("addons/amxmodx/plugins/x.amxx", "cstrike"));
         assert!(wanted("loner.wad", "cstrike"));
         assert!(!wanted("halflife.wad", "cstrike"));
-        // Valve's files for either game never go up, whichever game the server runs
-        assert!(!wanted("czcs_italy.wad", "cstrike"), "Condition Zero's own texture file on a CS 1.6 server");
-        assert!(!wanted("czcs_italy.wad", "czero"));
-        let cz = BTreeMap::from([
-            ("cz_map".to_string(), MapNeeds { ent: "{\n\"wad\" \"\\\\x\\\\czcs_italy.wad;\\\\x\\\\mine.wad\"\n}".into(), res: String::new() }),
-            ("plain".to_string(), MapNeeds { ent: "{\n\"wad\" \"\\\\x\\\\halflife.wad\"\n}".into(), res: String::new() }),
-        ]);
-        assert_eq!(needs_czero(&cz, "cstrike"), ["cz_map"]);
-        assert!(needs_czero(&cz, "czero").is_empty());
     }
 
     /// A game folder with links pointing outside it (a secret next to it): (root, game dir).
@@ -884,107 +681,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// End to end against a fake mirror (run by hand, see docs/notes/W2.md):
-    /// LS_FASTDL_E2E=<server folder holding cstrike/> LS_FASTDL_E2E_ID=<id> LS_FASTDL_E2E_STEP=prepare|check
-    /// LS_FASTDL_MIRROR=http://127.0.0.1:<port>/fastdl cargo test fastdl_e2e -- --ignored --nocapture
-    /// prepare writes the folder for scripts/r2-fastdl.sh --from (printed); check compares the
-    /// mirror with the server and fetches what a player joining on each custom map asks for.
-    #[test]
-    #[ignore]
-    fn fastdl_e2e() {
-        // a dry run from a saved listing (find's "path<TAB>size" lines) and NEEDS_PY's answer, as
-        // collect() makes on a Linux machine: what would be offered, with sizes
-        if let (Ok(list), Ok(needs)) = (std::env::var("LS_FASTDL_LIST"), std::env::var("LS_FASTDL_NEEDS")) {
-            let present: Vec<(String, u64)> = std::fs::read_to_string(list).unwrap().lines().filter_map(|l| l.split_once('\t')).map(|(r, n)| (r.strip_prefix("./").unwrap_or(r).to_string(), n.trim().parse().unwrap_or(0))).filter(|(r, n)| *n > 0 && *n <= MAX_FILE && wanted(r, "cstrike")).collect();
-            let v: BTreeMap<String, Value> = serde_json::from_str(&std::fs::read_to_string(needs).unwrap()).unwrap();
-            let maps: BTreeMap<String, MapNeeds> = custom_maps(&present).into_iter().map(|m| { let i = &v[&m]; (m, MapNeeds { ent: i["ent"].as_str().unwrap_or("").into(), res: i["res"].as_str().unwrap_or("").into() }) }).collect();
-            let sel = select(&present, &maps);
-            for (r, n) in &sel {
-                println!("WOULD\t{n}\t{r}");
-            }
-            println!("MAPS\t{}", maps.keys().cloned().collect::<Vec<_>>().join(" "));
-            println!("NEEDS_CZERO\t{}", needs_czero(&maps, "cstrike").join(" "));
-            return;
-        }
-        let (Ok(hl), Ok(id), Ok(step)) = (std::env::var("LS_FASTDL_E2E"), std::env::var("LS_FASTDL_E2E_ID"), std::env::var("LS_FASTDL_E2E_STEP")) else { return };
-        let g = Game::on_port(Path::new(&hl), "cstrike", 27015, true);
-        if step == "prepare" {
-            let r = prepare(&id, &g, "cstrike").unwrap();
-            println!("PREPARED {r}");
-            return;
-        }
-        let r = check(&id, &g, "cstrike", &mirror_url(&id)).unwrap();
-        println!("CHECK {}", serde_json::to_string_pretty(&r).unwrap());
-        assert_eq!(r["ok"], true);
-        // a joining player's list for each custom map: the map, what its .res names, its WADs and
-        // sky (extras::map_files, the same list the game builds), each fetched as sv_downloadurl + "/" + path
-        let roots = vec![g.dir.clone()];
-        let http = crate::sys::http();
-        let mut fetched = 0;
-        for e in std::fs::read_dir(g.dir.join("maps")).unwrap().flatten() {
-            let name = e.file_name().to_string_lossy().to_string();
-            let Some(map) = name.strip_suffix(".bsp") else { continue };
-            if !wanted(&format!("maps/{name}"), "cstrike") {
-                continue;
-            }
-            for rel in crate::extras::map_files(&roots, map) {
-                if !wanted(&rel, "cstrike") {
-                    continue;
-                }
-                let url = format!("{}/{rel}", mirror_url(&id));
-                let body = http.get(&url).send().unwrap().error_for_status().unwrap_or_else(|e| panic!("{url}: {e}")).bytes().unwrap();
-                let want = std::fs::read(g.dir.join(&rel)).unwrap();
-                assert!(body.as_ref() == want.as_slice(), "{rel} differs on the mirror");
-                fetched += 1;
-                println!("resolved {rel} ({} bytes)", body.len());
-            }
-        }
-        assert!(fetched > 0, "no custom map to try");
-    }
-
-    #[test]
-    fn fastdl_offers_what_maps_and_modes_need() {
-        let present: Vec<(String, u64)> = ["maps/my_map.bsp", "maps/my_map.res", "maps/My_Map.txt", "overviews/my_map.bmp", "overviews/gone_map.bmp", "MyTex.wad", "loose.wad",
-            "gfx/env/skyaup.tga", "gfx/env/otherup.tga", "sound/loner/hi.wav", "models/loner/heli.mdl", "sprites/x.spr", "sound/ambience/res_only.wav"]
-            .iter().map(|s| (s.to_string(), 1)).collect();
-        let maps = BTreeMap::from([("my_map".to_string(), MapNeeds { ent: "{\n\"wad\" \"\\\\half-life\\\\cstrike\\\\mytex.wad;\\\\x\\\\halflife.wad\"\n\"skyname\" \"skya\"\n}".into(), res: "// res\nsound/ambience/res_only.wav\n".into() })]);
-        let got: Vec<String> = select(&present, &maps).into_iter().map(|(r, _)| r).collect();
-        assert_eq!(got, ["MyTex.wad", "gfx/env/skyaup.tga", "maps/My_Map.txt", "maps/my_map.bsp", "maps/my_map.res", "models/loner/heli.mdl", "overviews/my_map.bmp", "sound/ambience/res_only.wav", "sound/loner/hi.wav", "sprites/x.spr"]);
-        assert_eq!(custom_maps(&present), ["my_map"]);
-    }
-
-    /// NEEDS_PY (run on the server's machine) reads a map's worldspawn and .res, isolated like
-    /// HASH_PY, and never through a link.
-    #[cfg(unix)]
-    #[test]
-    fn fastdl_remote_needs_reader() {
-        use std::io::Write;
-        let (root, dir) = linked_folder("needs");
-        let ent = b"{\n\"wad\" \"\\\\x\\\\mytex.wad\"\n\"skyname\" \"skya\"\n}\n{\n}";
-        let mut bsp = vec![30u8, 0, 0, 0, 12, 0, 0, 0];
-        bsp.extend_from_slice(&(ent.len() as i32).to_le_bytes());
-        bsp.extend_from_slice(ent);
-        std::fs::write(dir.join("maps/real_map.bsp"), &bsp).unwrap();
-        std::fs::write(dir.join("maps/real_map.res"), "sound/a.wav\n").unwrap();
-        std::os::unix::fs::symlink(root.join("outside/id_rsa.wav"), dir.join("maps/linked.res")).unwrap();
-        std::fs::write(dir.join("os.py"), format!("open({:?}, 'w').write('x')\n", root.join("planted_ran").to_string_lossy())).unwrap();
-        let cmd = needs_cmd(&crate::remote::shell_quote(&dir.to_string_lossy()));
-        let mut child = std::process::Command::new("sh").arg("-c").arg(&cmd).current_dir(&dir).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).spawn().unwrap();
-        child.stdin.take().unwrap().write_all(b"real_map\nlinked\n../x\n").unwrap();
-        let out = child.wait_with_output().unwrap();
-        assert!(out.status.success() && !root.join("planted_ran").exists());
-        let v: BTreeMap<String, Value> = serde_json::from_slice(&out.stdout).unwrap();
-        assert_eq!(worldspawn_of(v["real_map"]["ent"].as_str().unwrap()), (vec!["mytex.wad".to_string()], Some("skya".to_string())));
-        assert_eq!(v["real_map"]["res"], "sound/a.wav\n");
-        assert_eq!(v["linked"]["res"], "", "a linked .res isn't read");
-        assert!(!v.contains_key("../x"));
-        // and the local reader agrees
-        let n = local_needs(&dir, "real_map");
-        assert_eq!(worldspawn_of(&n.ent).0, ["mytex.wad"]);
-        assert_eq!(local_needs(&dir, "linked").res, "");
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
     #[test]
     fn fastdl_collects_and_prepares_a_local_server() {
         let root = crate::sys::test_root().join(format!("fastdl-{}", std::process::id()));
@@ -997,18 +693,17 @@ mod tests {
         }
         let g = Game::on_port(&root, "cstrike", 27099, true);
         let got: Vec<String> = collect(&g, "cstrike").unwrap().into_iter().map(|f| f.path).collect();
-        // (my.wad: no map names it, so it stays off the mirror)
-        assert_eq!(got, ["maps/my_map.bsp", "maps/my_map.res", "sound/loner/hi.wav"]);
+        assert_eq!(got, ["maps/my_map.bsp", "maps/my_map.res", "my.wad", "sound/loner/hi.wav"]);
         let id = format!("fdtest{}", std::process::id());
         let r = prepare(&id, &g, "cstrike").unwrap();
-        assert_eq!(r["files"], 3);
-        assert_eq!(r["copied"], 3);
+        assert_eq!(r["files"], 4);
+        assert_eq!(r["copied"], 4);
         let st = stage_dir(&id);
         assert_eq!(std::fs::read_to_string(st.join("files/maps/my_map.bsp")).unwrap(), "bsp");
         // nothing changed: nothing copied again; a file gone from the server leaves the folder
-        std::fs::remove_file(dir.join("sound/loner/hi.wav")).unwrap();
+        std::fs::remove_file(dir.join("my.wad")).unwrap();
         let r = prepare(&id, &g, "cstrike").unwrap();
-        assert_eq!((r["files"].as_u64(), r["copied"].as_u64(), r["removed"].as_u64()), (Some(2), Some(0), Some(1)));
+        assert_eq!((r["files"].as_u64(), r["copied"].as_u64(), r["removed"].as_u64()), (Some(3), Some(0), Some(1)));
         let m = read_manifest(&st.join("manifest.json")).unwrap();
         assert_eq!(m.files[0].sha256, hex(&Sha256::digest(b"bsp")));
         let _ = std::fs::remove_dir_all(&root);

@@ -1435,11 +1435,8 @@ mod tests {
         nodes.push(n("cam0", "fun.camera", json!({"view": "first"})));
         nodes.push(n("vf", "fun.view_from", json!({"who": "player", "secs": 3, "move": 2, "freeze": true})));
         nodes.push(n("vf2", "fun.view_from", json!({"who": "all", "secs": 0, "offset": 80})));
-        // (looking at a position from one; framing a conversation with an NPC, until it ends)
-        nodes.push(n("vf3", "fun.view_from", json!({"who": "ct", "secs": 4})));
-        nodes.push(n("vf4", "fun.view_from", json!({"who": "player", "secs": 0, "frame": true, "talk": true})));
         nodes.push(n("vr", "fun.view_return", json!({})));
-        let chain = ["ps", "pk", "burn", "out", "trail", "b1", "b2", "b3", "swap", "pr", "bury", "up", "cam", "pr2", "cam1", "drunk", "cam0", "vf", "vf2", "vf3", "vf4", "vr"];
+        let chain = ["ps", "pk", "burn", "out", "trail", "b1", "b2", "b3", "swap", "pr", "bury", "up", "cam", "pr2", "cam1", "drunk", "cam0", "vf", "vf2", "vr"];
         let mut edges: Vec<Value> = chain.windows(2).enumerate().map(|(i, w)| json!({"id": format!("c{i}"), "from": {"node": w[0], "pin": "then"}, "to": {"node": w[1], "pin": "exec"}})).collect();
         let mut wire = |a: &str, ap: &str, b: &str, bp: &str| {
             let id = format!("d{}", edges.len());
@@ -1462,10 +1459,6 @@ mod tests {
         wire("vp", "out", "vf", "pos");
         wire("vp", "out", "vf", "to");
         wire("pk", "player", "vf2", "from");
-        wire("vp", "out", "vf3", "pos");
-        wire("vp", "out", "vf3", "look_pos");
-        wire("ps", "player", "vf4", "player");
-        wire("pk", "player", "vf4", "look");
         graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "fun_nodes", "name": "Fun nodes"}, "nodes": nodes, "edges": edges})).unwrap()
     }
 
@@ -1483,9 +1476,7 @@ mod tests {
                 "lsg_pre_model(\"sprites/fire.spr\")", "lsg_pre_model(\"sprites/steam1.spr\")", "lsg_pre_model(\"sprites/blood.spr\")", "g_lsgSprBeam = precache_model(\"sprites/laserbeam.spr\")",
                 "set_task(0.1, \"lsg_fun_tick\"", "RegisterHamPlayer(Ham_Killed, \"lsg_fun_dead\", 1)", "RegisterHamPlayer(Ham_Spawn, \"lsg_fun_spawn\", 1)", "lsg_fun_left(id)",
                 "lsg_swap(", "lsg_bury(", "lsg_unbury(", "lsg_drunk(", "lsg_burst(1, lsgAt, 2", "lsg_burst(3, lsgAt, 1",
-                "lsg_view_from(0, ", "lsg_view_from(3, 0, ", "lsg_view_return(0)",
-                "lsg_view_look(0, lsgL, 0, 0, 0)", "lsg_view_look(0, lsgL, 1, 0, 0)", "lsgL, 0, 1, 1)", "lsg_view_cam(p, from, a, aa, b, ba, hasB, off, move)",
-                "if (ls_npc_talking(p))", "return g_lsgViewTalked[p]", "lsg_cam_aim(cam)", "register_forward(FM_CmdStart, \"lsg_view_cmd\", 0)", "lsg_view_back(p)",
+                "lsg_view_from(0, ", "lsg_view_from(3, 0, ", "lsg_view_return(0)", "register_forward(FM_CmdStart, \"lsg_view_cmd\", 0)", "lsg_view_back(p)",
             ] {
                 assert!(src.contains(want), "{want}");
             }
