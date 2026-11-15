@@ -57,7 +57,7 @@ A Tools section in the app for making things:
 
 ## New in 1.0: Community and AI agents
 
-- Community browser (Tools, Share): maps, Game Mode Studio modes, prefabs, sprays and textures made with Loner-Strike, hosted on GameBanana (tagged "Software Used: LonerStrike") and moderated. Try one in a click. Only content and Studio modes can be shared; nothing that runs code is downloaded. Publishing is done from the app, which checks and packages a map with its nav, knowledge and overview, fills in the GameBanana credits and asks whether AI helped make it. Remix a creation with credit to the original; a shared map can carry its editable source. Docs: https://lonerstrike.com/docs#community
+- Community browser (Tools, Share): maps, Game Mode Studio modes, prefabs, sprays and textures made with Loner-Strike, hosted on GameBanana (with the Custom Tag "Software Used: LonerStrike", added under Tags › Custom Tag) and moderated. Try one in a click. Only content and Studio modes can be shared; nothing that runs code is downloaded. Publishing is done from the app, which checks and packages a map with its nav, knowledge and overview, fills in the GameBanana credits and asks whether AI helped make it. Remix a creation with credit to the original; a shared map can carry its editable source. Docs: https://lonerstrike.com/docs#community
 - AI agents (Settings): an MCP connector so coding agents such as Claude Code, Codex, OpenCode, Cursor, Claude Desktop and VS Code can use the tools. Off by default, local only, read-only until "Allow changes", and it asks before anything destructive. Setup: https://lonerstrike.com/docs#mcp
 
 ## Playing with friends

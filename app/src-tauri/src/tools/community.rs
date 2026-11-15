@@ -832,9 +832,12 @@ fn s(v: &Value) -> String {
 
 /// Whether GameBanana's tags (strings "Title: Value" in lists, {_sTitle, _sValue} on pages)
 /// carry the Loner-Strike tag.
+/// LonerStrike isn't one of the presets in GameBanana's "Software Used" list, so uploaders add a
+/// Custom Tag, whose title is optional: a tag with no title and the value LonerStrike counts too
+/// (Parity A, as the list service does since eae6110d).
 pub fn has_tag(tags: &Value) -> bool {
     let ours = |v: &str| v.trim().eq_ignore_ascii_case(TAG_VALUE) || v.trim().eq_ignore_ascii_case(TAG_ALSO);
-    let want = |t: &str, v: &str| t.trim().eq_ignore_ascii_case(TAG_TITLE) && v.split(',').any(ours);
+    let want = |t: &str, v: &str| (t.trim().is_empty() || t.trim().eq_ignore_ascii_case(TAG_TITLE)) && v.split(',').any(ours);
     tags.as_array().into_iter().flatten().any(|t| match t {
         Value::String(x) => match x.split_once(':') {
             Some((a, b)) => want(a, b),
@@ -2563,7 +2566,7 @@ pub fn check_page(page: &Value, model: Model, id: i64, pkg: &Package) -> Result<
         return Err("That page isn't in GameBanana's Counter-Strike 1.6 section.".into());
     }
     if !has_tag(&page["_aTags"]) {
-        return Err(format!("Add the tag \"{TAG_TITLE}: {TAG_VALUE}\" to the page (Edit > Attributes), then try again."));
+        return Err(format!("Add the tag to the page: Edit the page > Tags > Custom Tag: {TAG_TITLE} = {TAG_VALUE}. Then try again."));
     }
     let files = files_of(page);
     let Some(f) = files.iter().find(|f| f["md5"].as_str() == Some(pkg.md5.as_str())) else {
@@ -3395,6 +3398,15 @@ mod tests {
         assert!(has_tag(&json!([{"_sTitle": "Software Used", "_sValue": "Loner-Strike"}])));
         assert!(!has_tag(&json!([{"_sTitle": "Software Used", "_sValue": "Loner-Striker"}])));
         assert!(!has_tag(&json!(["cs: counter strike", "Software Used: Hammer"])), "what the search also finds");
+        // Parity A: a Custom Tag (LonerStrike isn't one of GameBanana's presets): its title is
+        // optional, so an untitled one counts; the search lists those as the bare value, or ": value"
+        assert!(has_tag(&json!([{"_sTitle": "", "_sValue": "LonerStrike"}])));
+        assert!(has_tag(&json!([{"_sTitle": " ", "_sValue": "Loner-Strike"}])));
+        assert!(has_tag(&json!(["Halloween", "LonerStrike"])));
+        assert!(has_tag(&json!([": lonerstrike"])));
+        assert!(has_tag(&json!(["Software used: LonerStrike"])), "a custom title, any case");
+        assert!(!has_tag(&json!([{"_sTitle": "", "_sValue": "Hammer"}])));
+        assert!(!has_tag(&json!([{"_sTitle": "Made with", "_sValue": "LonerStrike"}])), "another title isn't ours");
         // another game
         let mut r = record("Mod", 300, "x", json!(["Software Used: Loner-Strike"]), "Maps", "", 1);
         r["_aGame"]["_idRow"] = json!(1);

@@ -89,7 +89,7 @@ export function PrefabPanel() {
     const r = await api.exportPrefab(p.id);
     setBusy(null);
     if (r.error) return toast(r.error, true);
-    if (!r.cancelled) toast(`Saved ${r.file}. Upload it to GameBanana's Prefabs with the attribute Software Used: LonerStrike, then register it in Tools > Community.`);
+    if (!r.cancelled) toast(`Saved ${r.file}. Upload it to GameBanana's Prefabs with a Custom Tag (Tags › Custom Tag: Software Used = LonerStrike), then register it in Tools > Community.`);
   };
 
   const remove = async (p: Prefab) => {

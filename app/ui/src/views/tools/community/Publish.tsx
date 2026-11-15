@@ -823,7 +823,7 @@ function CopyRow({ label, value, long }: { label: string; value: string; long?: 
 export function fixFor(why: string): string | null {
   const w = why.toLowerCase();
   if (/counter-strike 1\.6 section|wrong game|category/.test(w)) return "Move the page to GameBanana's Counter-Strike 1.6 section (and the right category), then press Add to Community again.";
-  if (/software used|lonerstrike|\btag\b/.test(w)) return "On GameBanana: Edit, Attributes, then set Software Used to LonerStrike. Then press Add to Community again.";
+  if (/software used|lonerstrike|\btag\b/.test(w)) return "Edit the page › Tags › Custom Tag: Software Used = LonerStrike. Then press Add to Community again.";
   if (/still checking|checksum yet|try again in a few minutes|didn't answer/.test(w)) return "GameBanana hasn't finished checking the file yet. Try again in a few minutes.";
   if (/virus check/.test(w)) return "GameBanana's file check didn't pass it. Make the package again with Publish and upload the new zip.";
   if (/run code|plugin/.test(w)) return "Shared creations can't carry plugins or programs. Make the mode in Game Mode Studio, or leave those files out.";
@@ -880,7 +880,7 @@ function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () =>
       <Step n={2} title="Upload it to GameBanana" note="Sign in there first. Then:">
         <ol className="cm-checklist" aria-label="Getting it into Community">
           <li>Upload <b>{form.file}</b> unchanged in the <b>{form.game}</b> section ({form.category}), with the screenshots.</li>
-          <li>In the upload form, set the attribute <b>{form.tag.title}</b> to <b>{form.tag.value}</b> (copy it below).</li>
+          <li>In the upload form's <b>Tags</b>, add a <b>Custom Tag</b>: Title <b>{form.tag.title}</b>, Value <b>{form.tag.value}</b> (copy each below). It isn't in the Tag Library's list.</li>
           <li>Paste the <b>Authors</b> credits (copy below), and fill in the <b>AI Usage</b> section if AI helped.</li>
           <li>Wait for GameBanana's file check, then paste the page's link in step 3 and press <b>Add to Community</b>.</li>
         </ol>
@@ -888,15 +888,16 @@ function Upload({ pkg, form, onDone }: { pkg: Package; form: Form; onDone: () =>
         <div className="cm-copies">
           <CopyRow label="Name" value={form.title} />
           <CopyRow label="Description" value={form.text} long />
-          <CopyRow label={`Attribute: ${form.tag.title}`} value={form.tag.value} />
+          <CopyRow label="Custom Tag: Title" value={form.tag.title} />
+          <CopyRow label="Custom Tag: Value" value={form.tag.value} />
           {form.authors && form.authors.length > 0 && <CopyRow label="Credits for GameBanana's Authors module (one per person)" value={form.authors.join("\n")} long />}
         </div>
-        <p className="muted small-note">The attribute <code>{form.tag.title}: {form.tag.value}</code> is how Community finds it.</p>
+        <p className="muted small-note">The Custom Tag <code>{form.tag.title}: {form.tag.value}</code> is how Community finds it (the Title can be left empty).</p>
       </Step>
       <Step n={3} title="Register the page" note="Paste the page's link once GameBanana has checked the file.">
         <form className="cm-register" onSubmit={(e) => { e.preventDefault(); send(); }}>
           <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://gamebanana.com/mods/…" aria-label="GameBanana link" aria-describedby="cm-needs" />
-          <p className="muted small-note" id="cm-needs">Needs: Counter-Strike 1.6 section, Software Used: LonerStrike, and GameBanana's file check done.</p>
+          <p className="muted small-note" id="cm-needs">Needs: Counter-Strike 1.6 section, the Custom Tag Software Used: LonerStrike, and GameBanana's file check done.</p>
           <label className="check-row cm-agree">
             <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} required />
             <span>I have the right to share this, and I accept the <a href="https://lonerstrike.com/terms" target="_blank" rel="noreferrer">Terms</a>.</span>

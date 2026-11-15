@@ -21,7 +21,7 @@ test("the GameBanana step: checklist, the Needs hint, and refusals with what to 
     });
   });
   const answers = [
-    { error: 'Add the tag "Software Used: LonerStrike" to the page (Edit > Attributes), then try again.' },
+    { error: "Add the tag to the page: Edit the page > Tags > Custom Tag: Software Used = LonerStrike. Then try again." },
     { ok: true, state: "refused", error: "GameBanana is still checking the file. Try again in a few minutes.", copy: "" },
     { ok: true, state: "refused", error: "That page isn't in GameBanana's Counter-Strike 1.6 section.", copy: "" },
   ];
@@ -37,22 +37,26 @@ test("the GameBanana step: checklist, the Needs hint, and refusals with what to 
   const list = page.getByRole("list", { name: "Getting it into Community" });
   await expect(list.getByRole("listitem")).toHaveCount(4);
   await expect(list.getByRole("listitem").nth(0)).toContainText("Upload king_of_the_hill.zip unchanged in the Counter-Strike 1.6 section");
-  await expect(list.getByRole("listitem").nth(1)).toContainText("set the attribute Software Used to LonerStrike");
+  await expect(list.getByRole("listitem").nth(1)).toContainText("add a Custom Tag: Title Software Used, Value LonerStrike");
   await expect(list.getByRole("listitem").nth(2)).toContainText("AI Usage");
   await expect(list.getByRole("listitem").nth(3)).toContainText("Add to Community");
-  // the value to copy is there with its Copy button
-  await expect(page.locator(".cm-copy", { hasText: "Attribute: Software Used" }).getByRole("button", { name: "Copy" })).toBeVisible();
+  // the tag's Title and Value, each with its own Copy button
+  for (const [label, value] of [["Custom Tag: Title", "Software Used"], ["Custom Tag: Value", "LonerStrike"]]) {
+    const row = page.locator(".cm-copy", { hasText: label });
+    await expect(row.locator("input")).toHaveValue(value);
+    await expect(row.getByRole("button", { name: "Copy" })).toBeVisible();
+  }
 
   // the link box says what the page needs
   const link = page.getByRole("textbox", { name: "GameBanana link" });
-  await expect(link).toHaveAccessibleDescription("Needs: Counter-Strike 1.6 section, Software Used: LonerStrike, and GameBanana's file check done.");
+  await expect(link).toHaveAccessibleDescription("Needs: Counter-Strike 1.6 section, the Custom Tag Software Used: LonerStrike, and GameBanana's file check done.");
 
   // refusals: the reason, then what to do
   await link.fill("https://gamebanana.com/mods/123456");
   await page.getByRole("checkbox", { name: /I have the right to share this/ }).check();
   const add = page.getByRole("button", { name: "Add to Community" });
   await add.click();
-  await expect(page.getByTestId("refusal-fix")).toContainText("set Software Used to LonerStrike");
+  await expect(page.getByTestId("refusal-fix")).toContainText("Edit the page › Tags › Custom Tag: Software Used = LonerStrike");
   await add.click();
   await expect(page.getByTestId("refusal-fix")).toContainText("Try again in a few minutes.");
   await add.click();
