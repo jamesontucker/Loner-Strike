@@ -1,0 +1,103 @@
+{
+  "app": "1.0.0",
+  "capabilities": [],
+  "components": [],
+  "creatures": [],
+  "map": {
+    "players": {
+      "max": 12,
+      "min": 2
+    },
+    "size": "small"
+  },
+  "markers": [
+    {
+      "description": "Where creatures come in",
+      "draw": {
+        "colour": "#c0392b",
+        "icon": "skull",
+        "shape": "diamond"
+      },
+      "id": "spawn",
+      "keys": [
+        {
+          "default": 1,
+          "help": "First wave",
+          "max": 99.0,
+          "min": 1.0,
+          "name": "wave",
+          "type": "number"
+        },
+        {
+          "choices": [
+            [
+              "north",
+              "North"
+            ],
+            [
+              "south",
+              "South"
+            ]
+          ],
+          "default": "north",
+          "help": "",
+          "name": "side",
+          "type": "choice"
+        }
+      ],
+      "label": "Creature spawn",
+      "required": {
+        "max": 16,
+        "min": 2
+      },
+      "type": "point"
+    },
+    {
+      "description": "",
+      "draw": {
+        "colour": "#d9c27a",
+        "icon": "flag",
+        "shape": "box",
+        "size": [
+          512.0,
+          512.0,
+          128.0
+        ]
+      },
+      "id": "base",
+      "keys": [],
+      "label": "Base",
+      "required": {
+        "max": 1,
+        "min": 1
+      },
+      "type": "area"
+    },
+    {
+      "description": "",
+      "draw": {
+        "colour": "#d9c27a",
+        "icon": "flag",
+        "shape": "line"
+      },
+      "id": "patrol",
+      "keys": [],
+      "label": "Patrol",
+      "required": {
+        "max": null,
+        "min": 0
+      },
+      "type": "path"
+    }
+  ],
+  "mode": {
+    "description": "Finds the map's ls_marker entities",
+    "id": "mk_test",
+    "name": "Marker test",
+    "uid": "6f1c2d3e-4a5b-4c6d-8e7f-001122334455"
+  },
+  "notes": "Test map for markers.",
+  "schema": "loner-strike/mode-kit",
+  "source": "studio",
+  "version": 1
+}

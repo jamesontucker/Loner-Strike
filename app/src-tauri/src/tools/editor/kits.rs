@@ -148,8 +148,9 @@ pub fn parse(text: &str) -> Result<Kit, String> {
     if v["schema"] != SCHEMA {
         return Err("It isn't a mode map kit.".into());
     }
-    if v["version"].as_u64().is_none_or(|n| n > VERSION as u64 || n == 0) {
-        return Err(format!("It's for a newer version of the kit format ({}); update the app.", v["version"]));
+    // (no version: the 1.0 format; a newer one is refused whole: docs/notes/Compat.md)
+    if v["version"].as_u64().unwrap_or(1) > VERSION as u64 {
+        return Err(crate::compat::newer("map kit", v["app"].as_str()));
     }
     let k: Kit = serde_json::from_value(v).map_err(|e| format!("It doesn't follow the kit format ({e})."))?;
     if !name_ok(&k.mode.id, 24, true) || k.mode.id.len() < 2 {

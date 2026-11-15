@@ -119,10 +119,33 @@ public ls__module_filter(const library[], LibType:type)
 
 public ls__native_filter(const name[], index, trap)
 {
-	/* missing at load: fine; a call made anyway does nothing */
+	/* missing at load: fine; a call made anyway does nothing, but the host is told once per
+	   native (a mode built for a newer gm_components than the server has: docs/notes/Compat.md) */
 	if (equal(name, "mk_", 3) || equal(name, "gm_modes_", 9) || equal(name, "ls_", 3))
+	{
+		if (trap && equal(name, "ls_", 3))
+			ls__missing_native(name);
 		return PLUGIN_HANDLED;
+	}
 	return PLUGIN_CONTINUE;
+}
+
+stock ls__missing_native(const name[])
+{
+	static said[512];
+	new key[40];
+	formatex(key, charsmax(key), ",%s,", name);
+	if (contain(said, key) != -1)
+		return;
+	if (strlen(said) + strlen(key) < charsmax(said))
+		add(said, charsmax(said), key);
+	new plugin[64], ver[16];
+	get_plugin(-1, plugin, charsmax(plugin));
+	get_cvar_string("ls_components_version", ver, charsmax(ver));
+	if (!ver[0])
+		log_amx("[Loner-Strike] %s needs gm_components (%s), which isn't running on this server: that part of the mode does nothing.", plugin, name);
+	else
+		log_amx("[Loner-Strike] %s needs a newer gm_components than this server's (version %s has no %s): update the server's Loner-Strike files from the app (the server's Health tab), and that part of the mode will work.", plugin, ver, name);
 }
 
 #if !defined LS_OWN_PLUGIN_NATIVES

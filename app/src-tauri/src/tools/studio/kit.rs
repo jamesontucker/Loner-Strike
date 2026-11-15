@@ -104,6 +104,7 @@ pub fn kit_of(g: &Graph) -> Value {
     let mut kit = json!({
         "schema": KIT_SCHEMA,
         "version": KIT_VERSION,
+        "app": crate::compat::APP_VERSION,
         "mode": {"uid": g.mode.uid, "id": g.mode.id, "name": g.mode.name, "description": g.mode.description},
         "source": "studio",
         "markers": g.markers.iter().map(marker_json).collect::<Vec<_>>(),
@@ -132,8 +133,9 @@ pub fn check_kit(v: &Value) -> Result<(), String> {
     if v.get("schema").and_then(Value::as_str) != Some(KIT_SCHEMA) {
         return bad("it isn't a kit");
     }
-    if v.get("version").and_then(Value::as_u64) != Some(KIT_VERSION) {
-        return bad("it's a newer version");
+    // (no version: the 1.0 format; a newer one is refused whole: docs/notes/Compat.md)
+    if v.get("version").and_then(Value::as_u64).unwrap_or(1) > KIT_VERSION {
+        return Err(crate::compat::newer("mode map kit", v.get("app").and_then(Value::as_str)));
     }
     let mode = &v["mode"];
     let id = mode.get("id").and_then(Value::as_str).unwrap_or("");

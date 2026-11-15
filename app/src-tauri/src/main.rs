@@ -20,6 +20,7 @@ mod roles; // MCP: community roles, the host's side (claim, /link relay, support
 mod hamguard; // MCP: the fixed Ham Sandwich kept in place before Play and local starts
 mod procmatch; // MCP: a leftover process is ended only if it's still the one the app started
 mod diagnostics;
+mod compat; // W2: format versions across 1.x (docs/notes/Compat.md)
 mod extras;
 mod fastdl; // W2: fast downloads from Loner-Strike's mirror (dl.lonerstrike.com/fastdl/<server>)
 mod game;

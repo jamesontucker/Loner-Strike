@@ -590,6 +590,10 @@ pub struct Index {
     pub revoked: Vec<String>,
     /// GameBanana member names whose game modes count as verified
     pub verified_authors: Vec<String>,
+    /// the oldest app that reads this format (the list writes it when its schema goes up: the
+    /// refusal names it; docs/notes/Compat.md)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_app: Option<String>,
 }
 
 fn key(model: Model, id: i64) -> String {
@@ -648,7 +652,7 @@ pub fn parse_index(bytes: &[u8]) -> Result<Index, String> {
         return Err("The community list couldn't be read.".into());
     }
     if idx.schema > SCHEMA {
-        return Err("The community list is newer than this app. Update Loner-Strike to see it.".into());
+        return Err(crate::compat::newer("community list", idx.min_app.as_deref()).replace("to open it", "to see it"));
     }
     idx.items.truncate(MAX_ITEMS);
     let mut seen = HashSet::new();
@@ -728,7 +732,7 @@ pub fn load_index(fetch: &dyn Fn() -> Result<Vec<u8>, String>, cache: &Path) -> 
                 let _ = crate::sys::write_atomic(cache, &b);
                 return (idx, Source::Live);
             }
-            Err(e) => newer = e.contains("newer than this app"),
+            Err(e) => newer = e.contains("newer"),
         }
     }
     let kept = std::fs::read(cache).ok().and_then(|b| parse_index(&b).ok());

@@ -26,6 +26,9 @@ pub const MAX_PREFAB_MAP: usize = 8 * 1024 * 1024;
 pub struct PrefabMeta {
     #[serde(default)]
     pub format: u32,
+    /// the app version that made it (a newer format's refusal names it; docs/notes/Compat.md)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub saved_by: String,
     /// P5: the prefab's permanent id (a UUID v4): who it is in the library, in packages and
     /// in a placed group; the name is only for showing. Empty until the library gives it one.
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -225,6 +228,7 @@ pub fn describe(frag: &MapDocument, name: &str, tags: &[String], author: &str, c
     }
     PrefabMeta {
         format: PREFAB_FORMAT,
+        saved_by: crate::compat::APP_VERSION.into(),
         uid: String::new(),
         origin: None,
         exports: Vec::new(),
@@ -281,7 +285,7 @@ pub fn from_files(map: &str, json: Option<&str>, fallback_name: &str) -> Result<
         Some(j) => {
             let m: PrefabMeta = serde_json::from_str(j).map_err(|e| format!("That prefab's details couldn't be read: {e}"))?;
             if m.format > PREFAB_FORMAT {
-                return Err("This prefab was made by a newer Loner-Strike. Update the app to use it.".into());
+                return Err(crate::compat::newer("prefab", Some(&m.saved_by)));
             }
             m
         }

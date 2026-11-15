@@ -1,0 +1,11 @@
+{"schema": "loner-strike/graph", "version": 3, "mode": {"id": "avoid_test", "name": "Avoid test"},
+ "variables": [], "comments": [],
+ "nodes": [
+  {"id": "rs", "type": "event.round_started", "pos": {"x": 0, "y": 0}, "params": {}},
+  {"id": "vm", "type": "vec.make", "pos": {"x": 0, "y": 100}, "params": {"x": 0, "y": 0, "z": 0}},
+  {"id": "av", "type": "bots.avoid", "pos": {"x": 200, "y": 0}, "params": {"tag": "danger"}}
+ ],
+ "edges": [
+  {"id": "w1", "from": {"node": "rs", "pin": "then"}, "to": {"node": "av", "pin": "exec"}},
+  {"id": "w2", "from": {"node": "vm", "pin": "out"}, "to": {"node": "av", "pin": "pos"}}
+ ]}

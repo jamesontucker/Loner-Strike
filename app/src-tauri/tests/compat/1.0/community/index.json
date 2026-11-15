@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "updated": 1794000000,
+  "revoked": [],
+  "verifiedAuthors": ["jam"],
+  "items": [
+    {"kind": "map", "gb": 101, "name": "de_lonely", "author": "jam", "summary": "A quiet bomb map", "file": 5,
+     "md5": "abcdefabcdefabcdefabcdefabcdefab",
+     "map": {"name": "de_lonely", "bspSize": 1000, "modes": ["classic"], "nav": true, "lsv": true, "places": true},
+     "health": {"verdict": "good", "bots": 12, "minutes": 5}},
+    {"kind": "mode", "gb": 102, "name": "Floor is lava", "author": "jam", "file": 6,
+     "mode": {"id": "lava", "uid": "6f1c2d3e-4a5b-4c6d-8e7f-001122334455", "maps": ["de_lonely"], "plugins": []}},
+    {"kind": "creature", "gb": 103, "name": "Ghoul", "author": "gb123", "file": 7,
+     "creatures": [{"name": "gb123.ghoul", "model": false, "sounds": 0}]}
+  ]
+}

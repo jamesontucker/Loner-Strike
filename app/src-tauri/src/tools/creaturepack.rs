@@ -23,6 +23,9 @@ use super::creatures;
 
 /// The pack file in a package (map, mode, prefab or a standalone creature).
 pub const PACK_FILE: &str = "creatures/creatures.ini";
+/// The pack's format (its `; format: N (Loner-Strike x.y.z)` line; none: the 1.0 format, 1). A newer
+/// one is refused whole (docs/notes/Compat.md).
+pub const PACK_FORMAT: u32 = 1;
 const BLOCK_START: &str = "; >>> from ";
 const BLOCK_END: &str = "; <<< end ";
 const TOOL: &str = "Shared creatures";
@@ -824,6 +827,7 @@ pub fn pack_types(hl: &Path, game: &str, names: &[String], namespace: &str) -> R
         types.push(PackedType { name: to.clone(), from: n.clone(), files: own.into_iter().map(|(r, _)| r).collect() });
     }
     let mut text = String::from("; Loner-Strike shared creatures: the app adds these to creatures.ini when this is installed.\n");
+    text.push_str(&format!("; format: {PACK_FORMAT} (Loner-Strike {})\n", crate::compat::APP_VERSION));
     text.push_str(&format!("; types: {}\n", types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(" ")));
     if !files.is_empty() {
         text.push_str(&format!("; files: {}\n", files.iter().map(|(r, _)| r.as_str()).collect::<Vec<_>>().join(" ")));
@@ -915,6 +919,14 @@ pub fn parse_pack(text: &str) -> Result<Parsed, String> {
                 if !p.files.iter().any(|x| x.eq_ignore_ascii_case(w)) {
                     p.files.push(w.to_string());
                 }
+            }
+            continue;
+        }
+        if let Some(f) = t.strip_prefix("; format:") {
+            let n: u32 = f.split_whitespace().next().and_then(|n| n.parse().ok()).unwrap_or(1);
+            if n > PACK_FORMAT {
+                let by = f.split_once("(Loner-Strike ").and_then(|(_, v)| v.split(')').next());
+                return Err(crate::compat::newer("creature pack", by));
             }
             continue;
         }

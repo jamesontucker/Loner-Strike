@@ -204,12 +204,16 @@ pub fn answer(g: &Graph, saved: &Saved, h: &Here) -> Value {
 
 /// The bot-brain features a mode can use, the brain version each needs (`ls_mode_ver` for bots,
 /// `ls_creature_ver` for creatures) and how players see it.
-const FEATURES: [(&str, &str, &str, u8); 5] = [
+const FEATURES: [(&str, &str, &str, u8); 8] = [
     ("creatures", "Creatures (zombies, the wave spawner's types)", "creature", 1),
     ("creature_control_2", "Creature State, Target, Speed and Tier", "creature", 2),
     ("bot_orders", "Orders to bots (Go To, Hold, Follow, a bot's nature)", "mode", 1),
     ("bots_in_modes", "Bots that play the mode (the Bots nodes: goals, offers, phases)", "mode", 1),
     ("influence", "Personality influence on bot orders", "mode", 2),
+    // W2: offers bots walk up to and use, places bots keep away from, pickups they go for
+    ("offer_use", "Bots: Offer with Use (bots press E on it)", "mode", 3),
+    ("bots_avoid", "Bots Avoid Area", "mode", 4),
+    ("offer_pickup", "Bots: Offer with Pickup (health, weapons)", "mode", 4),
 ];
 
 /// What a mode needs beyond the game (QA4-G F6): Loner-Strike's components plugin and which map
@@ -242,6 +246,16 @@ pub fn mode_needs(g: &Graph) -> Value {
     if influence {
         used.push("influence");
     }
+    let offer = |kind: &str| nodes.iter().any(|x| x.kind == "bots.offer" && x.params.get("kind").and_then(Value::as_str) == Some(kind));
+    if offer("use") {
+        used.push("offer_use");
+    }
+    if has(&|k| k == "bots.avoid") {
+        used.push("bots_avoid");
+    }
+    if offer("pickup") {
+        used.push("offer_pickup");
+    }
     let need = |brain: &str| FEATURES.iter().filter(|f| f.2 == brain && used.contains(&f.0)).map(|f| f.3).max().unwrap_or(0);
     json!({
         "componentsPlugin": n.components,
@@ -259,7 +273,8 @@ pub fn mode_needs(g: &Graph) -> Value {
 pub fn brain_here(game_dir: &Path) -> Value {
     let b = std::fs::read(game_dir.join("dlls/mp.dll")).or_else(|_| std::fs::read(game_dir.join("dlls/cs.so"))).unwrap_or_default();
     let has = |s: &str| b.windows(s.len()).any(|w| w == s.as_bytes());
-    let mode = if has("[influence 0-100]") { 2 } else if has("ls_mode_ver") { 1 } else { 0 };
+    // (3: the "use" offer in ls_mode offer's help; 4: the pickup offer and avoid places)
+    let mode = if has("pickup: cost = weight") { 4 } else if has("|turret|use") { 3 } else if has("[influence 0-100]") { 2 } else if has("ls_mode_ver") { 1 } else { 0 };
     let creature = if has("ls_creature_ver") { if has("0.2..3") { 2 } else { 1 } } else { 0 };
     json!({"modeVer": mode, "creatureVer": creature})
 }

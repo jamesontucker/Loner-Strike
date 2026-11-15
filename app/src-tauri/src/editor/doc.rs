@@ -427,8 +427,14 @@ impl MapDocument {
         self.material(name).map(|m| (m.width.max(1) as f64, m.height.max(1) as f64)).unwrap_or((64.0, 64.0))
     }
 
+    /// The project as saved: its format `version` and `saved_by` (the app version, which a newer
+    /// format's refusal names; docs/notes/Compat.md).
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).unwrap_or_default()
+        let mut v = serde_json::to_value(self).unwrap_or_default();
+        if let Some(o) = v.as_object_mut() {
+            o.insert("saved_by".into(), serde_json::Value::String(crate::compat::APP_VERSION.into()));
+        }
+        serde_json::to_string_pretty(&v).unwrap_or_default()
     }
 
     pub fn from_json(s: &str) -> Result<MapDocument, String> {
@@ -438,9 +444,7 @@ impl MapDocument {
             return Err("This doesn't look like a Loner-Strike map project.".into());
         }
         if version > DOC_VERSION as u64 {
-            return Err(format!(
-                "This project was saved by a newer Loner-Strike (format {version}); update the app to open it."
-            ));
+            return Err(crate::compat::newer("map project", raw.get("saved_by").and_then(|v| v.as_str())));
         }
         // Older versions would be upgraded here, one step at a time.
         let mut doc: MapDocument =
