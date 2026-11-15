@@ -12815,6 +12815,11 @@
 "help":"Scale: a number. Leave it empty to use the setting."
 },
 {
+"id":"model",
+"dir":"in",
+"help":"The model. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -12857,7 +12862,7 @@
 },
 {
 "id":"model",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces. A wire into the pin of the same name is used instead."
 },
 {
 "id":"name",
@@ -13036,6 +13041,11 @@
 "help":"Scale: a number. Leave it empty to use the setting."
 },
 {
+"id":"model",
+"dir":"in",
+"help":"The model. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -13078,7 +13088,7 @@
 },
 {
 "id":"model",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces. A wire into the pin of the same name is used instead."
 },
 {
 "id":"prompt",
@@ -13277,6 +13287,11 @@
 "help":"Scale: a number. Leave it empty to use the setting."
 },
 {
+"id":"model",
+"dir":"in",
+"help":"Model or sprite: visual. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -13360,7 +13375,7 @@
 "settings":[
 {
 "id":"model",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces. A wire into the pin of the same name is used instead."
 },
 {
 "id":"copy_rot",
@@ -24170,6 +24185,11 @@
 "help":"Scale: a number. Leave it empty to use the setting."
 },
 {
+"id":"model",
+"dir":"in",
+"help":"The model. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -24208,7 +24228,7 @@
 "settings":[
 {
 "id":"model",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces. A wire into the pin of the same name is used instead."
 },
 {
 "id":"solid",
@@ -25027,6 +25047,11 @@
 "help":"The position. Needs a wire."
 },
 {
+"id":"sound",
+"dir":"in",
+"help":"The sound. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -25035,7 +25060,7 @@
 "settings":[
 {
 "id":"sound",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces. A wire into the pin of the same name is used instead."
 }
 ],
 "related":[
@@ -25122,6 +25147,11 @@
 "help":"The player. Needs a wire."
 },
 {
+"id":"sound",
+"dir":"in",
+"help":"The sound. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -25130,7 +25160,7 @@
 "settings":[
 {
 "id":"sound",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces. A wire into the pin of the same name is used instead."
 }
 ],
 "related":[
@@ -25387,6 +25417,11 @@
 "help":"Color (wins over the setting): color. Optional."
 },
 {
+"id":"sprite",
+"dir":"in",
+"help":"The sprite. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -25400,7 +25435,7 @@
 "settings":[
 {
 "id":"sprite",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces. A wire into the pin of the same name is used instead."
 },
 {
 "id":"who",
@@ -41231,11 +41266,11 @@
 },
 {
 "id":"model",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces."
 },
 {
 "id":"pmodel",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces."
 },
 {
 "id":"restore",
@@ -49704,7 +49739,7 @@
 },
 {
 "id":"sprite",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces."
 },
 {
 "id":"secs",
@@ -49808,7 +49843,7 @@
 "settings":[
 {
 "id":"sprite",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces."
 },
 {
 "id":"scale",
@@ -50565,6 +50600,11 @@
 "help":"Size: a number. Leave it empty to use the setting."
 },
 {
+"id":"custom",
+"dir":"in",
+"help":"Custom model (empty: the one above): model. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -50577,7 +50617,7 @@
 },
 {
 "id":"custom",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces. A wire into the pin of the same name is used instead."
 },
 {
 "id":"material",
@@ -50792,6 +50832,11 @@
 "help":"Pitch: a number. Leave it empty to use the setting."
 },
 {
+"id":"sound",
+"dir":"in",
+"help":"The sound. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -50804,7 +50849,7 @@
 },
 {
 "id":"sound",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces. A wire into the pin of the same name is used instead."
 },
 {
 "id":"volume",
@@ -50893,6 +50938,11 @@
 "help":"Pitch: a number. Leave it empty to use the setting."
 },
 {
+"id":"sound",
+"dir":"in",
+"help":"The sound. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -50901,7 +50951,7 @@
 "settings":[
 {
 "id":"sound",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces. A wire into the pin of the same name is used instead."
 },
 {
 "id":"volume",
@@ -50989,6 +51039,11 @@
 "help":"Pitch: a number. Leave it empty to use the setting."
 },
 {
+"id":"sound",
+"dir":"in",
+"help":"The sound. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -50997,7 +51052,7 @@
 "settings":[
 {
 "id":"sound",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces. A wire into the pin of the same name is used instead."
 },
 {
 "id":"channel",
@@ -51134,6 +51189,11 @@
 "help":"Play again every (seconds): a number. Leave it empty to use the setting."
 },
 {
+"id":"sound",
+"dir":"in",
+"help":"The sound. Leave it empty to use the setting."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -51147,7 +51207,7 @@
 "settings":[
 {
 "id":"sound",
-"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+"help":"Picked from this mode's own pieces. A wire into the pin of the same name is used instead."
 },
 {
 "id":"volume",

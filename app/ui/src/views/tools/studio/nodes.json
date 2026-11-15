@@ -6621,6 +6621,13 @@
      "type": "number",
      "label": "Scale",
      "param": "scale"
+    },
+    {
+     "id": "model",
+     "type": "model",
+     "label": "Model",
+     "optional": true,
+     "param": "model"
     }
    ],
    "outputs": [
@@ -6670,7 +6677,7 @@
     {
      "id": "model",
      "label": "Model",
-     "kind": "path",
+     "kind": "model",
      "default": "models/barney.mdl"
     },
     {
@@ -6832,6 +6839,13 @@
      "type": "number",
      "label": "Scale",
      "param": "scale"
+    },
+    {
+     "id": "model",
+     "type": "model",
+     "label": "Model",
+     "optional": true,
+     "param": "model"
     }
    ],
    "outputs": [
@@ -6881,7 +6895,7 @@
     {
      "id": "model",
      "label": "Model",
-     "kind": "path",
+     "kind": "model",
      "default": "models/w_weaponbox.mdl"
     },
     {
@@ -7055,6 +7069,13 @@
      "type": "number",
      "label": "Scale",
      "param": "scale"
+    },
+    {
+     "id": "model",
+     "type": "visual",
+     "label": "Model or sprite",
+     "optional": true,
+     "param": "model"
     }
    ],
    "outputs": [
@@ -7143,7 +7164,7 @@
     {
      "id": "model",
      "label": "Model or sprite",
-     "kind": "path",
+     "kind": "visual",
      "default": "models/w_hegrenade.mdl"
     },
     {
@@ -11694,6 +11715,13 @@
      "type": "number",
      "label": "Scale",
      "param": "scale"
+    },
+    {
+     "id": "model",
+     "type": "model",
+     "label": "Model",
+     "optional": true,
+     "param": "model"
     }
    ],
    "outputs": [
@@ -11737,7 +11765,7 @@
     {
      "id": "model",
      "label": "Model",
-     "kind": "path",
+     "kind": "model",
      "default": "models/w_c4.mdl"
     },
     {
@@ -12086,6 +12114,13 @@
      "type": "vector",
      "label": "Position",
      "required": true
+    },
+    {
+     "id": "sound",
+     "type": "sound",
+     "label": "Sound",
+     "optional": true,
+     "param": "sound"
     }
    ],
    "outputs": [
@@ -12099,7 +12134,7 @@
     {
      "id": "sound",
      "label": "Sound",
-     "kind": "path",
+     "kind": "sound",
      "default": "ambience/thunder_clap.wav"
     }
    ],
@@ -12121,6 +12156,13 @@
      "type": "player",
      "label": "Player",
      "required": true
+    },
+    {
+     "id": "sound",
+     "type": "sound",
+     "label": "Sound",
+     "optional": true,
+     "param": "sound"
     }
    ],
    "outputs": [
@@ -12134,7 +12176,7 @@
     {
      "id": "sound",
      "label": "Sound",
-     "kind": "path",
+     "kind": "sound",
      "default": "buttons/bell1.wav"
     }
    ],
@@ -12417,6 +12459,13 @@
      "type": "color",
      "label": "Color (wins over the setting)",
      "optional": true
+    },
+    {
+     "id": "sprite",
+     "type": "sprite",
+     "label": "Sprite",
+     "optional": true,
+     "param": "sprite"
     }
    ],
    "outputs": [
@@ -12435,7 +12484,7 @@
     {
      "id": "sprite",
      "label": "Sprite",
-     "kind": "path",
+     "kind": "sprite",
      "default": "sprites/arrow1.spr"
     },
     {
@@ -21153,13 +21202,13 @@
     {
      "id": "model",
      "label": "View model",
-     "kind": "path",
+     "kind": "model",
      "default": "models/v_knife.mdl"
     },
     {
      "id": "pmodel",
      "label": "Model others see (empty: unchanged)",
-     "kind": "path",
+     "kind": "model",
      "default": ""
     },
     {
@@ -26428,7 +26477,7 @@
     {
      "id": "sprite",
      "label": "Sprite",
-     "kind": "path",
+     "kind": "sprite",
      "default": "sprites/iplayervip.spr"
     },
     {
@@ -26509,7 +26558,7 @@
     {
      "id": "sprite",
      "label": "Sprite",
-     "kind": "path",
+     "kind": "sprite",
      "default": "sprites/glow01.spr"
     },
     {
@@ -27079,6 +27128,13 @@
      "type": "number",
      "label": "Size",
      "param": "size"
+    },
+    {
+     "id": "custom",
+     "type": "model",
+     "label": "Custom model (empty: the one above)",
+     "optional": true,
+     "param": "custom"
     }
    ],
    "outputs": [
@@ -27132,7 +27188,7 @@
     {
      "id": "custom",
      "label": "Custom model (empty: the one above)",
-     "kind": "path",
+     "kind": "model",
      "default": ""
     },
     {
@@ -27331,6 +27387,13 @@
      "type": "number",
      "label": "Pitch",
      "param": "pitch"
+    },
+    {
+     "id": "sound",
+     "type": "sound",
+     "label": "Sound",
+     "optional": true,
+     "param": "sound"
     }
    ],
    "outputs": [
@@ -27368,7 +27431,7 @@
     {
      "id": "sound",
      "label": "Sound",
-     "kind": "path",
+     "kind": "sound",
      "default": "buttons/bell1.wav"
     },
     {
@@ -27424,6 +27487,13 @@
      "type": "number",
      "label": "Pitch",
      "param": "pitch"
+    },
+    {
+     "id": "sound",
+     "type": "sound",
+     "label": "Sound",
+     "optional": true,
+     "param": "sound"
     }
    ],
    "outputs": [
@@ -27437,7 +27507,7 @@
     {
      "id": "sound",
      "label": "Sound",
-     "kind": "path",
+     "kind": "sound",
      "default": "ambience/thunder_clap.wav"
     },
     {
@@ -27511,6 +27581,13 @@
      "type": "number",
      "label": "Pitch",
      "param": "pitch"
+    },
+    {
+     "id": "sound",
+     "type": "sound",
+     "label": "Sound",
+     "optional": true,
+     "param": "sound"
     }
    ],
    "outputs": [
@@ -27524,7 +27601,7 @@
     {
      "id": "sound",
      "label": "Sound",
-     "kind": "path",
+     "kind": "sound",
      "default": "items/gunpickup2.wav"
     },
     {
@@ -27646,6 +27723,13 @@
      "type": "number",
      "label": "Play again every (seconds)",
      "param": "every"
+    },
+    {
+     "id": "sound",
+     "type": "sound",
+     "label": "Sound",
+     "optional": true,
+     "param": "sound"
     }
    ],
    "outputs": [
@@ -27664,7 +27748,7 @@
     {
      "id": "sound",
      "label": "Sound",
-     "kind": "path",
+     "kind": "sound",
      "default": "ambience/wind1.wav"
     },
     {

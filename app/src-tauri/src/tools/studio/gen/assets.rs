@@ -30,6 +30,46 @@ pub(crate) const WARN_MODELS: usize = 64;
 pub(crate) const WARN_SOUNDS: usize = 96;
 pub(crate) const CAP: usize = 128;
 
+/// The file settings typed in graph version 4 (path settings before): node, setting, type, and
+/// whether it has a bound pin (wire a file value in; unwired, the setting is the value and the
+/// plugin is what it was). The engine effect sprites and view models take the setting only: the
+/// engine wants their load index, written when the plugin is made.
+pub(crate) const TYPED: [(&str, &str, &str, bool); 16] = [
+    ("npc.spawn", "model", "model", true),
+    ("npc.spawn_use", "model", "model", true),
+    ("proj.spawn", "model", "visual", true),
+    ("ent.spawn_prop", "model", "model", true),
+    ("fx.sound_at", "sound", "sound", true),
+    ("fx.sound_to", "sound", "sound", true),
+    ("fx.marker", "sprite", "sprite", true),
+    ("fx.gibs", "custom", "model", true),
+    ("snd.play_2d", "sound", "sound", true),
+    ("snd.play_at", "sound", "sound", true),
+    ("snd.play_on", "sound", "sound", true),
+    ("snd.loop", "sound", "sound", true),
+    ("eng.view_model", "model", "model", false),
+    ("eng.view_model", "pmodel", "model", false),
+    ("fx.icon_over", "sprite", "sprite", false),
+    ("fx.sprite_at", "sprite", "sprite", false),
+];
+
+/// A typed file setting's value in the plugin: the wired file's path (the table's row), or
+/// `lit` (the setting's literal, as before) when nothing is wired in.
+pub(crate) fn path_or(gen: &Gen, node: &str, prm: &str, lit: String) -> String {
+    if gen.v.data_source(node, prm).is_none() {
+        return lit;
+    }
+    let ty = gen.v.in_type(node, prm).unwrap_or_else(|| "model".into());
+    format!("g_lsgAsset[lsg_asset_i({})]", gen.need(node, prm, &ty))
+}
+
+/// Is a file wired into one of these nodes' file pins?
+fn wired_in(g: &Graph, kinds: &[&str]) -> bool {
+    g.nodes.iter().filter(|n| kinds.contains(&n.kind.as_str())).any(|n| {
+        TYPED.iter().any(|(k, p, _, pin)| *pin && *k == n.kind && g.edges.iter().any(|e| e.to.node == n.id && e.to.pin == *p))
+    })
+}
+
 pub(crate) fn is_type(t: &str) -> bool {
     TYPES.contains(&t)
 }
@@ -135,7 +175,7 @@ pub(crate) fn lit(v: Option<&Value>) -> String {
 }
 
 pub(crate) fn used(g: &Graph) -> bool {
-    !table(g).is_empty() || g.nodes.iter().any(|n| n.kind == "asset.file_name")
+    !table(g).is_empty() || g.nodes.iter().any(|n| n.kind == "asset.file_name") || wired_in(g, &TYPED.map(|t| t.0))
 }
 
 /// A pure node's output.
@@ -171,7 +211,20 @@ pub(super) fn precache(g: &Graph) -> Vec<String> {
     if table(g).is_empty() {
         return vec![];
     }
-    vec!["\t// the files the mode's Model, Sprite and Sound values name\n\tfor (new i = 1; i < sizeof g_lsgAsset; i++)\n\t\tg_lsgAssetOk[i] = lsg_pre_asset(g_lsgAsset[i])".into()]
+    let mut out = vec!["\t// the files the mode's Model, Sprite and Sound values name\n\tfor (new i = 1; i < sizeof g_lsgAsset; i++)\n\t\tg_lsgAssetOk[i] = lsg_pre_asset(g_lsgAsset[i])".to_string()];
+    // (a file wired into Spawn NPC / Spawn Projectile: gm_components loads it its own way too)
+    let t = table(g);
+    if wired_in(g, &["npc.spawn"]) {
+        for m in t.iter().filter(|m| m.ends_with(".mdl")) {
+            out.push(format!("\tls_npc_precache({})", pawn_str(m)));
+        }
+    }
+    if wired_in(g, &["proj.spawn"]) {
+        for m in t.iter().filter(|m| m.ends_with(".mdl") || m.ends_with(".spr")) {
+            out.push(format!("\tif (lsg_have({m}))\n\t\tls_proj_precache({m})", m = pawn_str(m)));
+        }
+    }
+    out
 }
 
 /// Problems: the budget (files of its own a mode loads), a File Name Of fed something that
@@ -236,9 +289,12 @@ fn prob(level: &'static str, node: Option<&str>, pin: Option<&str>, message: Str
 }
 
 /// A node param of a file kind: its value check (graph.rs's param match calls this).
-pub(crate) fn check_param(kind: &str, label: &str, v: &Value) -> Option<Result<(), String>> {
+pub(crate) fn check_param(kind: &str, label: &str, v: &Value, may_be_empty: bool) -> Option<Result<(), String>> {
     let ty = param_type(kind).or(if kind == "visual" { Some("visual") } else { None })?;
     Some(match v.as_str() {
+        Some("") if may_be_empty => Ok(()),
+        // (a sound setting saved with sound/ in front: the plugin always took it off)
+        Some(s) if ty == "sound" && s.get(..6).is_some_and(|p| p.eq_ignore_ascii_case("sound/")) && s.get(6..).is_some_and(|r| valid_asset(ty, r)) => Ok(()),
         Some(s) if !s.is_empty() && valid_asset(ty, s) => Ok(()),
         _ => Err(format!("{label} must be {}, up to 64 letters, digits, _ - . or /.", asset_rule(ty))),
     })
@@ -276,6 +332,48 @@ mod tests {
         assert!(src.contains("g_v2 = 5"), "{src}");
         // File Name Of: the table's row (0 when it isn't one)
         assert!(src.contains("g_lsgAsset[lsg_asset_i("), "{src}");
+    }
+
+    /// A file wired into a typed setting is that file's path (the table's row); gm_components loads
+    /// the table's models for Spawn NPC too. Unwired, the setting's literal, as before.
+    #[test]
+    fn wired_files_go_into_typed_settings() {
+        let g = parse(EVERY).unwrap();
+        let src = generate(&g, false).source;
+        let lines: Vec<&str> = src.lines().collect();
+        let call = |f: &str| lines.iter().find(|l| l.contains(f) && !l.starts_with("stock")).copied().unwrap_or("");
+        assert!(call("lsg_snd_2d(").contains("g_lsgAsset[lsg_asset_i(1)]"), "{}", call("lsg_snd_2d("));
+        assert!(call("ls_npc_spawn(").contains("g_lsgAsset[lsg_asset_i(3)]"), "{}", call("ls_npc_spawn("));
+        assert!(call("lsg_prop_o(").contains("g_lsgAsset[lsg_asset_i(3)]"), "{}", call("lsg_prop_o("));
+        assert!(src.contains("\tls_npc_precache(\"models/w_c4.mdl\")"), "{src}");
+        // the same nodes unwired: their own setting
+        let g = with(|x| x["edges"].as_array_mut().unwrap().retain(|e| !(e["to"]["pin"] == "sound" || e["to"]["pin"] == "model")));
+        let src = generate(&g, false).source;
+        assert!(src.contains("lsg_snd_2d(") && src.contains("\"buttons/bell1.wav\""), "{src}");
+        assert!(src.contains("ls_npc_spawn(\"models/barney.mdl\""), "{src}");
+    }
+
+    /// The typed settings: the registry's kinds and bound pins match TYPED; an old sound setting
+    /// with sound/ in front still checks; a setting that may be empty can be.
+    #[test]
+    fn typed_settings_match_the_registry() {
+        let reg = crate::tools::studio::graph::registry();
+        for (k, prm, ty, pin) in TYPED {
+            let d = reg.nodes.iter().find(|d| d.kind == k).unwrap_or_else(|| panic!("{k}"));
+            let p = d.params.iter().find(|p| p.id == prm).unwrap();
+            assert_eq!(p.kind, ty, "{k} {prm}");
+            assert_eq!(d.inputs.iter().any(|i| i.id == prm && i.ty == ty && i.param.as_deref() == Some(prm)), pin, "{k} {prm} pin");
+        }
+        assert_eq!(check_param("sound", "Sound", &Value::String("sound/ambience/wind1.wav".into()), false), Some(Ok(())));
+        assert!(check_param("model", "Model", &Value::String("".into()), false).unwrap().is_err(), "a file value that must be there");
+        assert_eq!(check_param("model", "Model", &Value::String("".into()), true), Some(Ok(())));
+        assert!(check_param("model", "Model", &Value::String("sprites/a.spr".into()), false).unwrap().is_err());
+        assert_eq!(check_param("visual", "Model", &Value::String("sprites/a.spr".into()), false), Some(Ok(())));
+        // (graph text from anywhere: a multibyte character where sound/ would end is refused, never a panic)
+        for v in ["soun\u{20ac}x.wav", "sound\u{20ac}.wav", "\u{20ac}\u{20ac}.wav", "sou\u{e9}/a.wav"] {
+            assert!(check_param("sound", "Sound", &Value::String(v.into()), false).unwrap().is_err(), "{v}");
+            assert!(!valid_asset("sound", v) && !valid_asset("model", v), "{v}");
+        }
     }
 
     /// A mode with no file values gets none of it (old plugins stay the same).

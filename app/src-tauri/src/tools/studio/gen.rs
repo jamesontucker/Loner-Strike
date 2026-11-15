@@ -2720,7 +2720,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             // shared transform); "If the spot is blocked" decides the spot (gen/fx.rs spawn_flow),
             // and gm_components takes it as given (blocked=here: one check, not two)
             let place = fx::place(gen, id, "at_ent", &at_origin(gen, id, n, def));
-            let model = pawn_str(&model_text(gen.text(n, def, "model")));
+            let model = assets::path_or(gen, id, "model", pawn_str(&model_text(gen.text(n, def, "model")))); // X-fx
             let npc = def.kind == "npc.spawn";
             let create = if npc {
                 let keys = format!("behavior={} unkillable={} blocked=here", if gen.choice(n, def, "behavior") == "wander" { "wander" } else { "stand" }, if gen.boolean(n, def, "unkillable") { 1 } else { 0 });
@@ -2739,7 +2739,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
         "proj.spawn" => {
             let wired = |k: &str| v.data_source(id, k).is_some();
             let owner = if wired("owner") { inp("owner", "player") } else { "0".into() };
-            let model = pawn_str(&proj_text(gen.text(n, def, "model")));
+            let model = assets::path_or(gen, id, "model", pawn_str(&proj_text(gen.text(n, def, "model")))); // X-fx
             let flag = |k: &str| if gen.boolean(n, def, k) { 1 } else { 0 };
             // (a trail is a message: one more this frame only when the mode's message budget has room)
             let trail = if flag("trail") == 1 { "%d" } else { "0" };
@@ -3186,8 +3186,8 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
                 "creature.set_speed" => format!("lsg_cr_speed({}, {})", inp("creature", "entity"), inp("mult", "number")),
                 "creature.set_tier" => format!("lsg_cr_tier({}, floatround({}))", inp("creature", "entity"), inp("tier", "number")),
                 "creature.remove" => format!("lsg_cr_cmd({}, {})", inp("creature", "entity"), pawn_str(if gen.choice(n, def, "how") == "remove" { "remove %d" } else { "kill %d" })),
-                "fx.sound_at" => format!("lsg_sound_at({}, {})", inp("pos", "vector"), pawn_str(&sound_text(gen.text(n, def, "sound")))),
-                "fx.sound_to" => format!("lsg_sound_to({}, {})", p(), pawn_str(&sound_text(gen.text(n, def, "sound")))),
+                "fx.sound_at" => format!("lsg_sound_at({}, {})", inp("pos", "vector"), assets::path_or(gen, id, "sound", pawn_str(&sound_text(gen.text(n, def, "sound"))))), // X-fx
+                "fx.sound_to" => format!("lsg_sound_to({}, {})", p(), assets::path_or(gen, id, "sound", pawn_str(&sound_text(gen.text(n, def, "sound"))))), // X-fx
                 "fx.lights" => format!("set_lights({})", pawn_str(match gen.choice(n, def, "style") { "dark" => "e", "darkest" => "b", "bright" => "z", "flicker" => "mmnmmommommnonmmonqnmmo", _ => "#OFF" })),
                 _ => format!("lsg_fire_event({}, floatround({}), floatround({}))", pawn_str(&name_text(gen.text(n, def, "name"))), inp("a", "number"), inp("b", "number")),
             };
@@ -3407,7 +3407,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let c = |k: &str| match k { "r" => rgb.0.clone(), "g" => rgb.1.clone(), "b" => rgb.2.clone(), _ => cn(k) };
             b.line(format!(
                 "\tg_lsgOut[{i}] = lsg_marker({}, {follow}, lsgAt, {}, {}, {}, {}, {}, {}, {}, {who}, {forp}, {})",
-                pawn_str(&sprite_text(gen.text(n, def, "sprite"))),
+                assets::path_or(gen, id, "sprite", pawn_str(&sprite_text(gen.text(n, def, "sprite")))), // X-fx
                 if pos { 1 } else { 0 },
                 float_lit(gen.num(n, def, "height").clamp(0.0, 512.0)),
                 float_lit(gen.num(n, def, "scale").clamp(0.05, 5.0)),
@@ -3448,7 +3448,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             // (the shared transform and "If the spot is blocked", gen/fx.rs)
             let fallback = if v.data_source(id, "at").is_some() { format!("lsg_ent_origin({}, o)", inp("at", "entity")) } else { "false".into() };
             let place = fx::place(gen, id, "at", &fallback);
-            let model = pawn_str(&model_text(gen.text(n, def, "model")));
+            let model = assets::path_or(gen, id, "model", pawn_str(&model_text(gen.text(n, def, "model")))); // X-fx
             let create = format!("lsg_prop_o(o, {model}, {})", if gen.boolean(n, def, "solid") { 1 } else { 0 });
             let apply = fx::apply(gen, n, def, id, "e", "at", true, None);
             let pre = [(format!("lsg_have({model})"), fx::WHY_MISSING, "No prop: its model isn't loaded with the map."), ("lsg_ent_room(\"Spawn Prop\")".to_string(), fx::WHY_SLOTS, "No prop: the server is out of entity slots.")];

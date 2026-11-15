@@ -184,11 +184,38 @@
    }
   },
   {
-   "id": "call",
-   "type": "fn.call",
+   "id": "p2d",
+   "type": "snd.play_2d",
    "pos": {
     "x": 1560,
     "y": 220
+   },
+   "params": {}
+  },
+  {
+   "id": "npc",
+   "type": "npc.spawn",
+   "pos": {
+    "x": 1820,
+    "y": 220
+   },
+   "params": {}
+  },
+  {
+   "id": "prop",
+   "type": "ent.spawn_prop",
+   "pos": {
+    "x": 0,
+    "y": 440
+   },
+   "params": {}
+  },
+  {
+   "id": "call",
+   "type": "fn.call",
+   "pos": {
+    "x": 260,
+    "y": 440
    },
    "params": {
     "func": "fk"
@@ -198,8 +225,8 @@
    "id": "fk_e",
    "type": "fn.entry",
    "pos": {
-    "x": 1820,
-    "y": 220
+    "x": 520,
+    "y": 440
    },
    "params": {},
    "graph": "fk"
@@ -208,7 +235,7 @@
    "id": "fk_get",
    "type": "var.get",
    "pos": {
-    "x": 0,
+    "x": 780,
     "y": 440
    },
    "params": {
@@ -220,7 +247,7 @@
    "id": "fk_nm",
    "type": "asset.file_name",
    "pos": {
-    "x": 260,
+    "x": 1040,
     "y": 440
    },
    "params": {},
@@ -230,7 +257,7 @@
    "id": "fk_pr",
    "type": "debug.print",
    "pos": {
-    "x": 520,
+    "x": 1300,
     "y": 440
    },
    "params": {
@@ -390,12 +417,100 @@
     "pin": "then"
    },
    "to": {
-    "node": "call",
+    "node": "p2d",
     "pin": "exec"
    }
   },
   {
    "id": "w15",
+   "from": {
+    "node": "snd",
+    "pin": "out"
+   },
+   "to": {
+    "node": "p2d",
+    "pin": "sound"
+   }
+  },
+  {
+   "id": "w16",
+   "from": {
+    "node": "p2d",
+    "pin": "then"
+   },
+   "to": {
+    "node": "npc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w17",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "npc",
+    "pin": "at_ent"
+   }
+  },
+  {
+   "id": "w18",
+   "from": {
+    "node": "mdl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "npc",
+    "pin": "model"
+   }
+  },
+  {
+   "id": "w19",
+   "from": {
+    "node": "npc",
+    "pin": "then"
+   },
+   "to": {
+    "node": "prop",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w20",
+   "from": {
+    "node": "ps",
+    "pin": "player"
+   },
+   "to": {
+    "node": "prop",
+    "pin": "at"
+   }
+  },
+  {
+   "id": "w21",
+   "from": {
+    "node": "mdl",
+    "pin": "out"
+   },
+   "to": {
+    "node": "prop",
+    "pin": "model"
+   }
+  },
+  {
+   "id": "w22",
+   "from": {
+    "node": "prop",
+    "pin": "then"
+   },
+   "to": {
+    "node": "call",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "w23",
    "from": {
     "node": "ps",
     "pin": "player"
@@ -406,7 +521,7 @@
    }
   },
   {
-   "id": "w16",
+   "id": "w24",
    "from": {
     "node": "fk_e",
     "pin": "then"
@@ -417,7 +532,7 @@
    }
   },
   {
-   "id": "w17",
+   "id": "w25",
    "from": {
     "node": "fk_get",
     "pin": "out"
@@ -428,7 +543,7 @@
    }
   },
   {
-   "id": "w18",
+   "id": "w26",
    "from": {
     "node": "fk_nm",
     "pin": "out"

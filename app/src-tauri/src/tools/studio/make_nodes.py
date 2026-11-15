@@ -1327,6 +1327,19 @@ node("asset.model", "Model", "Files", "A model file (models/....mdl), loaded wit
 node("asset.sprite", "Sprite", "Files", "A sprite file (sprites/....spr), loaded with the map." + FILE_HELP, outputs=[P("out","sprite","Sprite")], params=[prm("file","Sprite","sprite","sprites/arrow1.spr")], keywords="sprite file spr asset constant pick", pure=True)
 node("asset.sound", "Sound", "Files", "A sound file (a .wav from inside sound/), loaded with the map." + FILE_HELP, outputs=[P("out","sound","Sound")], params=[prm("file","Sound","sound","items/gunpickup2.wav")], keywords="sound file wav asset constant pick audio", pure=True)
 node("asset.file_name", "File Name Of", "Files", "A Model's, Sprite's or Sound's file name as text (models/....mdl; a sound from inside sound/), to show or log it. Empty when it's none.", inputs=[P("file","any","File",required=True)], outputs=[P("out","text","Name")], keywords="file name path text model sound sprite to text", pure=True)
+# the path settings, typed (graph version 4): same ids and stored values, so saved graphs read as
+# they are; a bound pin of the same id takes a wired file (unwired, the setting is the value).
+# gen/assets.rs TYPED is the same list.
+TYPED_FILES = [("npc.spawn","model","model",True), ("npc.spawn_use","model","model",True), ("proj.spawn","model","visual",True), ("ent.spawn_prop","model","model",True),
+    ("fx.sound_at","sound","sound",True), ("fx.sound_to","sound","sound",True), ("fx.marker","sprite","sprite",True), ("fx.gibs","custom","model",True),
+    ("snd.play_2d","sound","sound",True), ("snd.play_at","sound","sound",True), ("snd.play_on","sound","sound",True), ("snd.loop","sound","sound",True),
+    ("eng.view_model","model","model",False), ("eng.view_model","pmodel","model",False), ("fx.icon_over","sprite","sprite",False), ("fx.sprite_at","sprite","sprite",False)]
+for t, pid, ty, pin in TYPED_FILES:
+    d = next(d for d in nodes if d["type"] == t)
+    prm_ = next(p for p in d["params"] if p["id"] == pid)
+    prm_["kind"] = ty
+    if pin and not any(i["id"] == pid for i in d["inputs"]):
+        d["inputs"].append(P(pid, ty, prm_["label"], optional=True, param=pid))
 # ==== end assets (X-fx) ====
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)
 print(len(nodes), "nodes")

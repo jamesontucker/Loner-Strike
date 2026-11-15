@@ -2881,7 +2881,7 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
             _ => Err(format!("{} is a name of up to 32 letters, digits, _ - or .", def.label)),
         },
         // assets (X-fx): Model, Sprite, Sound and Model-or-sprite settings
-        k @ ("model" | "sprite" | "sound" | "visual") => super::gen::assets::check_param(k, &def.label, v).unwrap_or(Ok(())),
+        k @ ("model" | "sprite" | "sound" | "visual") => super::gen::assets::check_param(k, &def.label, v, true).unwrap_or(Ok(())), // (empty: the node's own checks say what it does then, as before)
         "path" => match v.as_str() {
             Some(s) if valid_path(s) => Ok(()),
             _ => Err(format!("{} is a file path of up to 64 letters, digits, _ - . or /.", def.label)),
@@ -3077,7 +3077,7 @@ mod tests {
             for pin in n.inputs.iter().chain(&n.outputs) {
                 // (fixed arrays: of any plain item type, as type_ok allows)
                 // (assets (X-fx): the file types)
-                assert!(TYPES.contains(&pin.ty.as_str()) || crate::tools::studio::gen::assets::TYPES.contains(&pin.ty.as_str()) || pin.ty == "array<$K>" || pin.ty.strip_prefix("array<").and_then(|t| t.strip_suffix('>')).is_some_and(|t| ["player", "entity", "number", "text", "vector", "bool", "team"].contains(&t)), "{} {} {}", n.kind, pin.id, pin.ty);
+                assert!(TYPES.contains(&pin.ty.as_str()) || crate::tools::studio::gen::assets::TYPES.contains(&pin.ty.as_str()) || pin.ty == "visual" || pin.ty == "array<$K>" || pin.ty.strip_prefix("array<").and_then(|t| t.strip_suffix('>')).is_some_and(|t| ["player", "entity", "number", "text", "vector", "bool", "team"].contains(&t)), "{} {} {}", n.kind, pin.id, pin.ty);
                 if let Some(pp) = &pin.param {
                     assert!(n.param(pp).is_some(), "{} {}", n.kind, pin.id);
                 }

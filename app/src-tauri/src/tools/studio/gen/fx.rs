@@ -544,7 +544,7 @@ fn action_inner(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Ou
             let call = format!(
                 "lsg_fx_gibs({at}, {}, {}, {}, {}, clamp(floatround({}), 1, 255), {}, {}, {}, {lim})",
                 pos_or("pos"),
-                pawn_str(&model),
+                super::assets::path_or(gen, id, "custom", pawn_str(&model)),
                 mat.2,
                 pawn_str(mat.3),
                 num("count"),
@@ -561,15 +561,15 @@ fn action_inner(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Ou
         }
         "snd.play_2d" => {
             let (w, who) = who(gen, n, def, id);
-            let call = format!("lsg_snd_2d({w}, {who}, {}, {}, clamp(floatround({}), 50, 255), {lim})", pawn_str(&sound_path(gen.text(n, def, "sound"))), num("volume"), num("pitch"));
+            let call = format!("lsg_snd_2d({w}, {who}, {}, {}, clamp(floatround({}), 50, 255), {lim})", super::assets::path_or(gen, id, "sound", pawn_str(&sound_path(gen.text(n, def, "sound")))), num("volume"), num("pitch"));
             done(b, &call, "Not played: the sound isn't on the server (loaded with the map), or nobody to hear it.", "played");
         }
         "snd.play_at" => {
-            let call = format!("lsg_snd_at({}, {}, {}, {}, {}, clamp(floatround({}), 50, 255))", ent_or("at"), pos_or("pos"), pawn_str(&sound_path(gen.text(n, def, "sound"))), num("volume"), falloff(gen, n, def), num("pitch"));
+            let call = format!("lsg_snd_at({}, {}, {}, {}, {}, clamp(floatround({}), 50, 255))", ent_or("at"), pos_or("pos"), super::assets::path_or(gen, id, "sound", pawn_str(&sound_path(gen.text(n, def, "sound")))), num("volume"), falloff(gen, n, def), num("pitch"));
             done(b, &call, "Not played: no position, or the sound isn't on the server (loaded with the map).", "played");
         }
         "snd.play_on" => {
-            let call = format!("lsg_snd_on({}, {}, {}, {}, {}, clamp(floatround({}), 50, 255))", inp("ent", "entity"), channel(gen, n, def), pawn_str(&sound_path(gen.text(n, def, "sound"))), num("volume"), falloff(gen, n, def), num("pitch"));
+            let call = format!("lsg_snd_on({}, {}, {}, {}, {}, clamp(floatround({}), 50, 255))", inp("ent", "entity"), channel(gen, n, def), super::assets::path_or(gen, id, "sound", pawn_str(&sound_path(gen.text(n, def, "sound")))), num("volume"), falloff(gen, n, def), num("pitch"));
             done(b, &call, "Not played: nothing there, or the sound isn't on the server (loaded with the map).", "played");
         }
         "snd.loop" => {
@@ -579,7 +579,7 @@ fn action_inner(gen: &Gen, id: &str, n: &Node, def: &'static NodeDef, b: &mut Ou
                 "(g_lsgOut[{i}] = lsg_snd_loop({}, {}, {}, {}, {}, clamp(floatround({}), 50, 255), {}, {most}))",
                 ent_or("on"),
                 pos_or("pos"),
-                pawn_str(&sound_path(gen.text(n, def, "sound"))),
+                super::assets::path_or(gen, id, "sound", pawn_str(&sound_path(gen.text(n, def, "sound")))),
                 num("volume"),
                 falloff(gen, n, def),
                 num("pitch"),
