@@ -1614,6 +1614,54 @@ mod tests {
         assert!(settings::manifest(&g).to_string().contains("Objective markers at once"));
     }
 
+    /// The entity handles: typed outputs that still go into Entity pins, and the casts back
+    /// (Success with the narrower kind, Failed otherwise), into variables of each kind.
+    pub fn handles_mode() -> Graph {
+        let n = |id: &str, t: &str, p: Value| json!({"id": id, "type": t, "pos": {"x": 0, "y": 0}, "params": p});
+        let e = |i: usize, a: &str, ap: &str, b: &str, bp: &str| json!({"id": format!("w{i}"), "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+        let nodes = vec![
+            n("rs", "event.round_started", json!({})),
+            n("pe", "flow.pick_entity", json!({"by": "class", "name": "info_player_start"})),
+            n("cs", "creature.spawn", json!({"kind": "zombie", "health": 100})),
+            n("setc", "var.set", json!({"var": "boss"})),
+            n("rm", "ent.remove", json!({})),
+            n("asn", "cast.npc", json!({})),
+            n("setn", "var.set", json!({"var": "guide"})),
+            n("asp", "cast.projectile", json!({})),
+            n("asv", "cast.volume", json!({})),
+            n("asm", "cast.objmarker", json!({})),
+            n("ask", "cast.component", json!({})),
+            n("gc", "var.get", json!({"var": "boss"})),
+            n("pr", "debug.print", json!({"text": "boss", "chat": false})),
+        ];
+        let edges = vec![
+            e(1, "rs", "then", "pe", "exec"), e(2, "pe", "then", "cs", "exec"), e(3, "pe", "entity", "cs", "at_ent"), e(4, "cs", "then", "setc", "exec"), e(5, "cs", "out", "setc", "value"),
+            e(6, "setc", "then", "asn", "exec"), e(7, "pe", "entity", "asn", "in"), e(8, "asn", "ok", "setn", "exec"), e(9, "asn", "out", "setn", "value"),
+            e(10, "setn", "then", "asp", "exec"), e(11, "pe", "entity", "asp", "in"), e(12, "asp", "ok", "asv", "exec"), e(13, "asp", "out", "asv", "in"),
+            e(14, "asv", "ok", "asm", "exec"), e(15, "asv", "out", "asm", "in"), e(16, "asm", "ok", "ask", "exec"), e(17, "asm", "out", "ask", "in"),
+            e(18, "ask", "ok", "pr", "exec"), e(19, "gc", "out", "pr", "value"), e(20, "pr", "then", "rm", "exec"), e(21, "gc", "out", "rm", "in"),
+        ];
+        graph::from_value(json!({"schema": graph::SCHEMA, "version": graph::VERSION, "mode": {"id": "handles", "name": "Handles"}, "nodes": nodes, "edges": edges,
+            "variables": [{"id": "boss", "name": "Boss", "type": "creature", "scope": "mode"}, {"id": "guide", "name": "Guide", "type": "npc", "scope": "mode"}]})).unwrap()
+    }
+
+    #[test]
+    fn handles_go_into_entity_pins_and_cast_back() {
+        let g = handles_mode();
+        let p: Vec<_> = graph::validate(&g).into_iter().filter(|p| p.level != "info").collect();
+        assert!(p.is_empty(), "{p:#?}");
+        let src = gen::generate(&g, false).source;
+        for want in ["lsg_kind_ok(lsgE, \"ls_npc\")", "lsg_kind_ok(lsgE, \"\")", "lsg_cls_is(lsgE, \"ls_projectile\")", "lsg_cls_is(lsgE, \"lsg_volume\")", "lsg_cls_is(lsgE, \"ls_studio_marker\")", "stock bool:lsg_cls_is(e, const c[])"] {
+            assert!(src.contains(want), "{want}");
+        }
+        // an Entity straight into a Creature variable: refused (check it with As Creature first)
+        let mut bad = g.clone();
+        bad.edges.retain(|e| e.id != "w5");
+        bad.edges.push(serde_json::from_value(json!({"id": "wx", "from": {"node": "pe", "pin": "entity"}, "to": {"node": "setc", "pin": "value"}})).unwrap());
+        assert!(graph::validate(&bad).iter().any(|p| p.level == "error"));
+        assert!(graph::compatible("creature", "entity") && !graph::compatible("entity", "creature") && !graph::compatible("array<creature>", "array<entity>"));
+    }
+
     /// Transform: the app's own struct, put in only when used; the transform nodes' Transform pins
     /// (the separate pins win), a Transform variable that keeps where someone was, Make / Break
     /// Transform, Set Entity Transform.
@@ -2115,6 +2163,7 @@ mod tests {
         graphs.push(("typed_enums".into(), serde_json::to_string(&typed_enums_mode()).unwrap()));
         graphs.push(("colors".into(), serde_json::to_string(&color_mode()).unwrap()));
         graphs.push(("transforms".into(), serde_json::to_string(&transform_mode()).unwrap()));
+        graphs.push(("handles".into(), serde_json::to_string(&handles_mode()).unwrap()));
         graphs.push(("steam_nodes".into(), serde_json::to_string(&steam_mode()).unwrap()));
         graphs.push(("every_node_p5".into(), include_str!("testdata/every_node_p5.graph.json").into())); // P5
         graphs.push(("fun_nodes".into(), serde_json::to_string(&fun_mode(false)).unwrap()));

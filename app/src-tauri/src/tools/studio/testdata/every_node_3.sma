@@ -15,9 +15,9 @@
 #define LSG_MODE "every_node_3"
 #define LSG_CTX 21
 #define LSG_TXT 2
-#define LSG_N 126
+#define LSG_N 132
 #define LSG_TASK 7310000
-#pragma dynamic 84736
+#pragma dynamic 88576
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -32,7 +32,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 74
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 31
+#define LSG_O 36
 #define LSG_OT 3
 
 // The mode's variables
@@ -5570,6 +5570,13 @@ stock lsg_kind_of(e)
 	return equal(c, "ls_studio_prop") ? 6 : 7
 }
 
+stock bool:lsg_cls_is(e, const c[])
+{
+	new t[32]
+	pev(e, pev_classname, t, charsmax(t))
+	return equal(t, c) != 0
+}
+
 stock const g_lsgCompKinds[][] = { "ls_capture_point", "ls_extraction_zone", "ls_checkpoint", "ls_shop", "ls_barricade", "ls_trigger_trap", "ls_loot_container", "ls_supply_drop", "ls_supply_crate", "ls_perk_machine", "ls_upgrade_bench", "ls_mystery_box", "ls_meeting_point", "ls_moving_platform", "ls_timed_door", "ls_wave_spawner", "ls_safe_zone", "ls_zone_shrinker", "ls_damage_zone", "ls_weapon_spawner", "ls_respawn_point", "ls_player_class", "ls_pickup", "ls_npc", "ls_interactable" }
 stock lsg_comp_kind_of(e)
 {
@@ -5769,6 +5776,7 @@ public lsg_on_round_started()
 {
 	new ctx[LSG_CTX]
 	lsg_n125(ctx)
+	lsg_n126(ctx)
 }
 
 public lsg_on_player_spawned(id)
@@ -7257,5 +7265,86 @@ lsg_n124(ctx[])
 lsg_n125(ctx[])
 {
 	lsg_n124(ctx)
+}
+
+// Round Started (hc_ev)
+lsg_n126(ctx[])
+{
+	lsg_n127(ctx)
+}
+
+// As NPC (hc_npc)
+lsg_n127(ctx[])
+{
+	new lsgE = lsg_find("spot1")
+	if (lsg_kind_ok(lsgE, "ls_npc"))
+	{
+		g_lsgO[31] = lsgE
+		lsg_n128(ctx)
+	}
+	else
+	{
+		g_lsgO[31] = 0
+	}
+}
+
+// As Projectile (hc_projectile)
+lsg_n128(ctx[])
+{
+	new lsgE = lsg_find("spot1")
+	if (lsgE > MaxClients && pev_valid(lsgE) && lsg_cls_is(lsgE, "ls_projectile"))
+	{
+		g_lsgO[32] = lsgE
+		lsg_n129(ctx)
+	}
+	else
+	{
+		g_lsgO[32] = 0
+	}
+}
+
+// As Trigger Volume (hc_volume)
+lsg_n129(ctx[])
+{
+	new lsgE = lsg_find("spot1")
+	if (lsgE > MaxClients && pev_valid(lsgE) && lsg_cls_is(lsgE, "lsg_volume"))
+	{
+		g_lsgO[33] = lsgE
+		lsg_n130(ctx)
+	}
+	else
+	{
+		g_lsgO[33] = 0
+	}
+}
+
+// As Objective Marker (hc_objmarker)
+lsg_n130(ctx[])
+{
+	new lsgE = lsg_find("spot1")
+	if (lsgE > MaxClients && pev_valid(lsgE) && lsg_cls_is(lsgE, "ls_studio_marker"))
+	{
+		g_lsgO[34] = lsgE
+		lsg_n131(ctx)
+	}
+	else
+	{
+		g_lsgO[34] = 0
+	}
+}
+
+// As Component (hc_component)
+lsg_n131(ctx[])
+{
+	new lsgE = lsg_find("spot1")
+	if (lsg_kind_ok(lsgE, ""))
+	{
+		g_lsgO[35] = lsgE
+	}
+	else
+	{
+		g_lsgO[35] = 0
+	}
+	#pragma unused ctx
 }
 

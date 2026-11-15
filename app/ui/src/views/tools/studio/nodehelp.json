@@ -4700,7 +4700,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"The entity."
+"help":"Entity: component."
 },
 {
 "id":"spawned",
@@ -4807,7 +4807,7 @@
 "y":0
 },
 "params":{
-"text":"Entity:",
+"text":"Success:",
 "chat":false
 }
 }
@@ -4828,7 +4828,7 @@
 "id":"w2",
 "from":{
 "node":"it",
-"pin":"out"
+"pin":"ok"
 },
 "to":{
 "node":"show",
@@ -6432,7 +6432,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"The entity."
+"help":"Entity: creature."
 },
 {
 "id":"spawned",
@@ -6553,7 +6553,7 @@
 "y":0
 },
 "params":{
-"text":"Entity:",
+"text":"Success:",
 "chat":false
 }
 }
@@ -6574,7 +6574,7 @@
 "id":"w2",
 "from":{
 "node":"it",
-"pin":"out"
+"pin":"ok"
 },
 "to":{
 "node":"show",
@@ -12827,7 +12827,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"The entity."
+"help":"Entity: npc."
 },
 {
 "id":"spawned",
@@ -12953,7 +12953,7 @@
 "y":0
 },
 "params":{
-"text":"Entity:",
+"text":"Success:",
 "chat":false
 }
 }
@@ -12974,7 +12974,7 @@
 "id":"w2",
 "from":{
 "node":"it",
-"pin":"out"
+"pin":"ok"
 },
 "to":{
 "node":"show",
@@ -13053,7 +13053,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"The entity."
+"help":"Entity: component."
 },
 {
 "id":"spawned",
@@ -13179,7 +13179,7 @@
 "y":0
 },
 "params":{
-"text":"Entity:",
+"text":"Success:",
 "chat":false
 }
 }
@@ -13200,7 +13200,7 @@
 "id":"w2",
 "from":{
 "node":"it",
-"pin":"out"
+"pin":"ok"
 },
 "to":{
 "node":"show",
@@ -13299,7 +13299,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"The entity."
+"help":"Entity: projectile."
 },
 {
 "id":"on_hit",
@@ -13500,7 +13500,7 @@
 "y":0
 },
 "params":{
-"text":"Entity:",
+"text":"Hit Position:",
 "chat":false
 }
 }
@@ -13521,7 +13521,7 @@
 "id":"w2",
 "from":{
 "node":"it",
-"pin":"out"
+"pin":"hit_pos"
 },
 "to":{
 "node":"show",
@@ -13555,7 +13555,7 @@
 {
 "id":"proj",
 "dir":"out",
-"help":"Projectile: an entity (a thing in the map)."
+"help":"The projectile."
 },
 {
 "id":"owner",
@@ -13620,7 +13620,7 @@
 "y":0
 },
 "params":{
-"text":"Projectile:",
+"text":"Owner:",
 "chat":false
 }
 }
@@ -13630,7 +13630,7 @@
 "id":"w1",
 "from":{
 "node":"it",
-"pin":"proj"
+"pin":"owner"
 },
 "to":{
 "node":"show",
@@ -25439,7 +25439,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Marker: an entity (a thing in the map)."
+"help":"Marker: objmarker."
 }
 ],
 "settings":[
@@ -25482,7 +25482,7 @@
 "fx.sound_to"
 ],
 "example":{
-"caption":"When a round starts, Objective Marker runs and its result is printed.",
+"caption":"When a round starts, Objective Marker runs.",
 "nodes":[
 {
 "id":"ev",
@@ -25522,18 +25522,6 @@
 "by":"class",
 "name":"info_player_deathmatch"
 }
-},
-{
-"id":"show",
-"type":"debug.print",
-"pos":{
-"x":680,
-"y":0
-},
-"params":{
-"text":"Marker:",
-"chat":false
-}
 }
 ],
 "edges":[
@@ -25567,28 +25555,6 @@
 },
 "to":{
 "node":"it",
-"pin":"exec"
-}
-},
-{
-"id":"w4",
-"from":{
-"node":"it",
-"pin":"out"
-},
-"to":{
-"node":"show",
-"pin":"value"
-}
-},
-{
-"id":"w5",
-"from":{
-"node":"it",
-"pin":"then"
-},
-"to":{
-"node":"show",
 "pin":"exec"
 }
 }
@@ -27110,7 +27076,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Creature: an entity (a thing in the map)."
+"help":"The creature."
 },
 {
 "id":"type",
@@ -27165,7 +27131,7 @@
 "y":0
 },
 "params":{
-"text":"Creature:",
+"text":"Type:",
 "chat":false
 }
 }
@@ -27208,7 +27174,7 @@
 "id":"w4",
 "from":{
 "node":"it",
-"pin":"out"
+"pin":"type"
 },
 "to":{
 "node":"show",
@@ -44702,7 +44668,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"The entity."
+"help":"Entity: volume."
 },
 {
 "id":"ok",
@@ -44800,7 +44766,7 @@
 "y":0
 },
 "params":{
-"text":"Entity:",
+"text":"Success:",
 "chat":false
 }
 }
@@ -44832,7 +44798,7 @@
 "id":"w3",
 "from":{
 "node":"it",
-"pin":"out"
+"pin":"ok"
 },
 "to":{
 "node":"show",
@@ -57251,6 +57217,548 @@
 ]
 }
 },
+"cast.npc":{
+"title":"As NPC",
+"category":"NPCs",
+"what":"Casting: is this entity an NPC (ls_npc, gm_components)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"in",
+"dir":"in",
+"help":"The entity. Needs a wire."
+},
+{
+"id":"ok",
+"dir":"out",
+"help":"Runs on Success."
+},
+{
+"id":"fail",
+"dir":"out",
+"help":"Runs on Failed."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"The npc."
+}
+],
+"settings":[],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"hostage.is_following",
+"hostage.stop",
+"hostage.follow"
+],
+"example":{
+"caption":"When a round starts, As NPC runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"cast.npc",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"in"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"cast.projectile":{
+"title":"As Projectile",
+"category":"Projectiles",
+"what":"Casting: is this entity a projectile (Spawn Projectile's)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"in",
+"dir":"in",
+"help":"The entity. Needs a wire."
+},
+{
+"id":"ok",
+"dir":"out",
+"help":"Runs on Success."
+},
+{
+"id":"fail",
+"dir":"out",
+"help":"Runs on Failed."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"The projectile."
+}
+],
+"settings":[],
+"related":[
+"proj.set_velocity",
+"proj.velocity",
+"proj.remove"
+],
+"example":{
+"caption":"When a round starts, As Projectile runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"cast.projectile",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"in"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"cast.volume":{
+"title":"As Trigger Volume",
+"category":"Entities",
+"what":"Casting: is this entity a trigger volume (Spawn Trigger Volume's)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"in",
+"dir":"in",
+"help":"The entity. Needs a wire."
+},
+{
+"id":"ok",
+"dir":"out",
+"help":"Runs on Success."
+},
+{
+"id":"fail",
+"dir":"out",
+"help":"Runs on Failed."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Trigger Volume: volume."
+}
+],
+"settings":[],
+"related":[
+"ent.set_transform",
+"ent.spawn_weapon",
+"ent.spawn_entity"
+],
+"example":{
+"caption":"When a round starts, As Trigger Volume runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"cast.volume",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"in"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"cast.objmarker":{
+"title":"As Objective Marker",
+"category":"Effects",
+"what":"Casting: is this entity an objective marker? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"in",
+"dir":"in",
+"help":"The entity. Needs a wire."
+},
+{
+"id":"ok",
+"dir":"out",
+"help":"Runs on Success."
+},
+{
+"id":"fail",
+"dir":"out",
+"help":"Runs on Failed."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"Objective Marker: objmarker."
+}
+],
+"settings":[],
+"related":[
+"snd.stop",
+"snd.loop",
+"snd.play_on"
+],
+"example":{
+"caption":"When a round starts, As Objective Marker runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"cast.objmarker",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"in"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"cast.component":{
+"title":"As Component",
+"category":"Components",
+"what":"Casting: is this entity one of gm_components' components (any kind)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"in",
+"dir":"in",
+"help":"The entity. Needs a wire."
+},
+{
+"id":"ok",
+"dir":"out",
+"help":"Runs on Success."
+},
+{
+"id":"fail",
+"dir":"out",
+"help":"Runs on Failed."
+},
+{
+"id":"out",
+"dir":"out",
+"help":"The component."
+}
+],
+"settings":[],
+"needs":"Needs Loner-Strike's components plugin, which comes with the app.",
+"related":[
+"comp.drop_call",
+"comp.respawn_at",
+"comp.in_zone"
+],
+"example":{
+"caption":"When a round starts, As Component runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"cast.component",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{}
+},
+{
+"id":"ent",
+"type":"flow.pick_entity",
+"pos":{
+"x":0,
+"y":160
+},
+"params":{
+"by":"class",
+"name":"info_player_deathmatch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ent",
+"pin":"entity"
+},
+"to":{
+"node":"it",
+"pin":"in"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"ent",
+"pin":"exec"
+}
+},
+{
+"id":"w3",
+"from":{
+"node":"ent",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
 "ent.set_transform":{
 "title":"Set Entity Transform",
 "category":"Entities",
@@ -57280,8 +57788,8 @@
 "settings":[],
 "related":[
 "ent.transform",
-"ent.spawn_weapon",
-"ent.spawn_entity"
+"cast.volume",
+"ent.spawn_weapon"
 ]
 },
 "color.literal":{

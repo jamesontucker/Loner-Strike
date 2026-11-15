@@ -2034,6 +2034,60 @@
     "y": 5400
    },
    "params": {}
+  },
+  {
+   "id": "hc_ev",
+   "type": "event.round_started",
+   "pos": {
+    "x": 0,
+    "y": 8150
+   },
+   "params": {}
+  },
+  {
+   "id": "hc_npc",
+   "type": "cast.npc",
+   "pos": {
+    "x": 0,
+    "y": 8160
+   },
+   "params": {}
+  },
+  {
+   "id": "hc_projectile",
+   "type": "cast.projectile",
+   "pos": {
+    "x": 0,
+    "y": 8170
+   },
+   "params": {}
+  },
+  {
+   "id": "hc_volume",
+   "type": "cast.volume",
+   "pos": {
+    "x": 0,
+    "y": 8180
+   },
+   "params": {}
+  },
+  {
+   "id": "hc_objmarker",
+   "type": "cast.objmarker",
+   "pos": {
+    "x": 0,
+    "y": 8190
+   },
+   "params": {}
+  },
+  {
+   "id": "hc_component",
+   "type": "cast.component",
+   "pos": {
+    "x": 0,
+    "y": 8200
+   },
+   "params": {}
   }
  ],
  "edges": [
@@ -4433,6 +4487,116 @@
    "to": {
     "node": "tf_set",
     "pin": "exec"
+   }
+  },
+  {
+   "id": "hc_xnpc",
+   "from": {
+    "node": "hc_ev",
+    "pin": "then"
+   },
+   "to": {
+    "node": "hc_npc",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hc_inpc",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hc_npc",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "hc_xprojectile",
+   "from": {
+    "node": "hc_npc",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "hc_projectile",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hc_iprojectile",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hc_projectile",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "hc_xvolume",
+   "from": {
+    "node": "hc_projectile",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "hc_volume",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hc_ivolume",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hc_volume",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "hc_xobjmarker",
+   "from": {
+    "node": "hc_volume",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "hc_objmarker",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hc_iobjmarker",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hc_objmarker",
+    "pin": "in"
+   }
+  },
+  {
+   "id": "hc_xcomponent",
+   "from": {
+    "node": "hc_objmarker",
+    "pin": "ok"
+   },
+   "to": {
+    "node": "hc_component",
+    "pin": "exec"
+   }
+  },
+  {
+   "id": "hc_icomponent",
+   "from": {
+    "node": "ent",
+    "pin": "out"
+   },
+   "to": {
+    "node": "hc_component",
+    "pin": "in"
    }
   }
  ],

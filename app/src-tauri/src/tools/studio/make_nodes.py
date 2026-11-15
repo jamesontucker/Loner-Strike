@@ -1277,6 +1277,20 @@ if "Spatial" not in data["categories"]:
 for c, after in [("Input", "Players"), ("Cooldowns", "Input"), ("Weapons", "Cooldowns")]:
     if c not in data["categories"]:
         data["categories"].insert(data["categories"].index(after) + 1, c)
+# ==== types: handles (X) ====
+# the entity handles: what the spawn and cast nodes make is typed (an NPC, a Creature...) and still
+# goes into every Entity pin (upcast); inputs stay Entity (StudioCompat.md: never narrow one)
+for _t, _pin, _ty in [("creature.spawn","out","creature"), ("npc.spawn","out","npc"), ("npc.spawn_use","out","component"), ("fx.marker","out","objmarker"),
+                      ("comp.create","out","component"), ("vol.spawn","out","volume"), ("proj.spawn","out","projectile"), ("proj.on_hit","proj","projectile"), ("cast.creature","out","creature")]:
+    for o in next(d for d in nodes if d["type"] == _t)["outputs"]:
+        if o["id"] == _pin and o["type"] == "entity":
+            o["type"] = _ty
+for _k, _title, _ty, _what, _cat in [("npc","As NPC","npc","an NPC (ls_npc, gm_components)","NPCs"), ("projectile","As Projectile","projectile","a projectile (Spawn Projectile's)","Projectiles"),
+                                      ("volume","As Trigger Volume","volume","a trigger volume (Spawn Trigger Volume's)","Collision"), ("objmarker","As Objective Marker","objmarker","an objective marker","Effects"),
+                                      ("component","As Component","component","one of gm_components' components (any kind)","Components")]:
+    node("cast." + _k, _title, _cat if _cat in data["categories"] else "Entities", f"Casting: is this entity {_what}? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind.",
+         inputs=[X, P("in","entity","Entity",required=True)], outputs=[E("ok","Success"), E("fail","Failed"), P("out",_ty,_title[3:])], keywords=f"casting cast as {_k} entity convert", **({"needs": "components"} if _k in ("npc", "component") else {}))
+
 # ==== types: transform (X) ====
 # Transform: the app's own struct (graph.rs transform_struct): Position, Rotation, Scale, Velocity.
 # Make and Break Transform are Make and Break Struct with it picked; the transform nodes gain a

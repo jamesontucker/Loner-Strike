@@ -25,7 +25,7 @@ import { collapse, insertSnippet, tabView, type Snippet } from "./graphOps";
 import { addComment, addNode, canConnect, connect, copy, insertReroute, inType, moveItems, outType, paste, remove, toggleBreakpoint } from "./graphOps";
 import { compatible, nodeDef, typeColor, type PinType } from "./registry";
 import { pinsOf } from "./pins";
-import { insertAsPlayer, wantsAsPlayer } from "./castOps";
+import { castFor, insertAsPlayer } from "./castOps";
 import { insertItem, type LibItem } from "./library";
 import { dropPlan, knownMake, type Make } from "./dropOps";
 import { READABLE, startView, align, distribute, linked, loadBookmarks, promotable, promoteToVariable, QUICK_ADD, saveBookmarks, type AlignHow, type Box } from "./tidyOps";
@@ -415,9 +415,10 @@ export function Canvas({ toast, onApi, snippets }: { toast: (text: string, error
         const src = state.fromHandle.type === "source";
         const from = src ? { node: state.fromHandle.nodeId, pin: state.fromHandle.id } : { node: th.nodeId, pin: th.id };
         const to = src ? { node: th.nodeId, pin: th.id } : { node: state.fromHandle.nodeId, pin: state.fromHandle.id };
-        if (g0 && wantsAsPlayer(g0, from, to)) {
+        const cast = g0 ? castFor(g0, from, to) : undefined;
+        if (g0 && cast) {
           const c = canConnect(g0, from, to);
-          toast(`${c.ok ? "" : c.error} An Entity becomes a Player with As Player (casting).`, true, { label: "Insert As Player", run: () => edit((g) => insertAsPlayer(g, from, to)) });
+          toast(`${c.ok ? "" : c.error} Check what it is with ${cast[1]} first (casting).`, true, { label: `Insert ${cast[1]}`, run: () => edit((g) => insertAsPlayer(g, from, to, cast[0])) });
         }
         return;
       }

@@ -448,7 +448,7 @@ fn kind_of(ty: &str) -> char {
 /// Outputs kept in ctx (they go down the flow: loops, picks, a Function's inputs).
 const CTX_KINDS: [&str; 14] = ["table.for_each", "creature.for_each", "timeline.play", "marker.for_each", "flow.for_each_player", "flow.for_each_entity", "flow.pick_player", "flow.pick_entity", "func.define", "fn.entry", "flow.for_loop", "flow.for_loop_break", "flow.for_each_array", "event.custom"];
 /// Outputs kept in g_lsgO / g_lsgOT (what an action made).
-const STORE_KINDS: [&str; 16] = ["vol.spawn", "save.top", "array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call", "up.perk_buy", "npc.choose", "fun.swap", "cast.player", "cast.creature"];
+const STORE_KINDS: [&str; 21] = ["cast.npc", "cast.projectile", "cast.volume", "cast.objmarker", "cast.component", "vol.spawn", "save.top", "array.add", "array.remove", "flow.do_n", "flow.flipflop", "fn.call", "comp.loot_roll", "game.run_command", "game.amx_command", "amx.call", "up.perk_buy", "npc.choose", "fun.swap", "cast.player", "cast.creature"];
 /// Nodes with more than one flow input: one Pawn function each.
 const MULTI_IN: [&str; 8] = ["timeline.play", "flow.do_once", "flow.do_n", "flow.gate", "flow.for_loop_break", "flow.for_each_array", "flow.for_each_player", "flow.for_each_entity"];
 /// The vector and struct rings: values that aren't in variables live here for a while.
@@ -1607,6 +1607,10 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if pure_used(&gen, "ent.kind_of") {
         o.line("// Kind Of: the built-in Entity Kind enum's value (Player, Bot, Creature, NPC, Interactable,\n// Component, Prop, Map entity, None)\nstock lsg_kind_of(e)\n{\n\tif (e <= 0 || !pev_valid(e))\n\t\treturn 8\n\tif (e <= MaxClients)\n\t\treturn is_user_connected(e) ? (is_user_bot(e) ? 1 : 0) : 8\n\tif (lsg_is_creature(e))\n\t\treturn 2\n\tif (lsg_kind_ok(e, \"ls_npc\"))\n\t\treturn 3\n\tif (lsg_kind_ok(e, \"ls_interactable\"))\n\t\treturn 4\n\tif (lsg_kind_ok(e, \"\"))\n\t\treturn 5\n\tnew c[24]\n\tpev(e, pev_classname, c, charsmax(c))\n\treturn equal(c, \"ls_studio_prop\") ? 6 : 7\n}\n");
     }
+    // (As Projectile, As Trigger Volume, As Objective Marker: by the classname the Studio gives them)
+    if ["cast.projectile", "cast.volume", "cast.objmarker"].iter().any(|k| has(k)) {
+        o.line("stock bool:lsg_cls_is(e, const c[])\n{\n\tnew t[32]\n\tpev(e, pev_classname, t, charsmax(t))\n\treturn equal(t, c) != 0\n}\n");
+    }
     // Component Kind Of: gm_components' kind, as the Component Kind enum's value (its order)
     if pure_used(&gen, "ent.comp_kind") {
         let names: Vec<String> = COMP_KINDS.iter().map(|k| pawn_str(k)).collect();
@@ -2130,7 +2134,7 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             let label = pawn_str(&safe_text(&ip.label, 30));
             let f = match val.ty.as_str() {
                 "player" => "lsd_in_player",
-                "entity" => "lsd_in_entity",
+                "entity" | "npc" | "creature" | "projectile" | "volume" | "objmarker" | "component" | "soundloop" => "lsd_in_entity",
                 "team" => "lsd_in_team",
                 "number" => "lsd_in_number",
                 "bool" => "lsd_in_bool",
@@ -3253,16 +3257,25 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             }
             then_line(&mut b, "then");
         }
-        "cast.player" | "cast.creature" => {
+        "cast.player" | "cast.creature" | "cast.npc" | "cast.projectile" | "cast.volume" | "cast.objmarker" | "cast.component" => {
             let e = inp("in", "entity");
             let k = gen.out_index(id, "out");
             let player = def.kind == "cast.player";
-            let test = if player { "lsgE >= 1 && lsgE <= MaxClients && is_user_connected(lsgE)" } else { "lsg_is_creature(lsgE)" };
+            let cls = |c: &str| format!("lsgE > MaxClients && pev_valid(lsgE) && lsg_cls_is(lsgE, \"{c}\")");
+            let test = match def.kind.as_str() {
+                "cast.player" => "lsgE >= 1 && lsgE <= MaxClients && is_user_connected(lsgE)".to_string(),
+                "cast.npc" => "lsg_kind_ok(lsgE, \"ls_npc\")".into(),
+                "cast.component" => "lsg_kind_ok(lsgE, \"\")".into(),
+                "cast.projectile" => cls("ls_projectile"),
+                "cast.volume" => cls("lsg_volume"),
+                "cast.objmarker" => cls("ls_studio_marker"),
+                _ => "lsg_is_creature(lsgE)".into(),
+            };
             let mut yes = vec![];
             if let Some(k) = k {
                 yes.push(format!("\t\tg_lsgO[{k}] = lsgE"));
             }
-            if !player {
+            if def.kind == "cast.creature" {
                 if let Some(t) = gen.tout_index(id, "type") {
                     yes.push(format!("\t\tcopy(g_lsgOT[{t}], 127, lsg_cr_type(lsgE))"));
                 }
@@ -4097,7 +4110,8 @@ fn text_args(gen: &Gen, text: &str, value: Option<Val>) -> String {
             "player" => format!("\"%s %s\", {text}, lsg_name({})", val.expr),
             "bool" => format!("\"%s %s\", {text}, g_lsgYesNo[({}) ? 1 : 0]", val.expr),
             "team" => format!("\"%s %s\", {text}, g_lsgTeamName[clamp({}, 0, 3)]", val.expr),
-            "entity" | "any" => format!("\"%s %d\", {text}, {}", val.expr),
+            // (the handles as Entity was: a 1.0 graph's text stays the same)
+            "entity" | "any" | "npc" | "creature" | "projectile" | "volume" | "objmarker" | "component" | "soundloop" => format!("\"%s %d\", {text}, {}", val.expr),
             _ => format!("\"%s %s\", {text}, {}", to_text(gen, &val)),
         },
     }

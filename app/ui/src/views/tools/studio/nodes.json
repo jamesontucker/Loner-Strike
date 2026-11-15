@@ -2486,7 +2486,7 @@
     },
     {
      "id": "out",
-     "type": "entity",
+     "type": "component",
      "label": "Entity"
     },
     {
@@ -3316,7 +3316,7 @@
     },
     {
      "id": "out",
-     "type": "entity",
+     "type": "creature",
      "label": "Entity"
     },
     {
@@ -6638,7 +6638,7 @@
     },
     {
      "id": "out",
-     "type": "entity",
+     "type": "npc",
      "label": "Entity"
     },
     {
@@ -6856,7 +6856,7 @@
     },
     {
      "id": "out",
-     "type": "entity",
+     "type": "component",
      "label": "Entity"
     },
     {
@@ -7086,7 +7086,7 @@
     },
     {
      "id": "out",
-     "type": "entity",
+     "type": "projectile",
      "label": "Entity"
     },
     {
@@ -7329,7 +7329,7 @@
     },
     {
      "id": "proj",
-     "type": "entity",
+     "type": "projectile",
      "label": "Projectile"
     },
     {
@@ -12487,7 +12487,7 @@
     },
     {
      "id": "out",
-     "type": "entity",
+     "type": "objmarker",
      "label": "Marker"
     }
    ],
@@ -13495,7 +13495,7 @@
     },
     {
      "id": "out",
-     "type": "entity",
+     "type": "creature",
      "label": "Creature"
     },
     {
@@ -23160,7 +23160,7 @@
     },
     {
      "id": "out",
-     "type": "entity",
+     "type": "volume",
      "label": "Entity"
     },
     {
@@ -31083,6 +31083,198 @@
    ],
    "keywords": "language locale lang translate",
    "pure": true
+  },
+  {
+   "type": "cast.npc",
+   "title": "As NPC",
+   "category": "NPCs",
+   "help": "Casting: is this entity an NPC (ls_npc, gm_components)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "ok",
+     "type": "exec",
+     "label": "Success"
+    },
+    {
+     "id": "fail",
+     "type": "exec",
+     "label": "Failed"
+    },
+    {
+     "id": "out",
+     "type": "npc",
+     "label": "NPC"
+    }
+   ],
+   "params": [],
+   "keywords": "casting cast as npc entity convert",
+   "needs": "components"
+  },
+  {
+   "type": "cast.projectile",
+   "title": "As Projectile",
+   "category": "Projectiles",
+   "help": "Casting: is this entity a projectile (Spawn Projectile's)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "ok",
+     "type": "exec",
+     "label": "Success"
+    },
+    {
+     "id": "fail",
+     "type": "exec",
+     "label": "Failed"
+    },
+    {
+     "id": "out",
+     "type": "projectile",
+     "label": "Projectile"
+    }
+   ],
+   "params": [],
+   "keywords": "casting cast as projectile entity convert"
+  },
+  {
+   "type": "cast.volume",
+   "title": "As Trigger Volume",
+   "category": "Entities",
+   "help": "Casting: is this entity a trigger volume (Spawn Trigger Volume's)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "ok",
+     "type": "exec",
+     "label": "Success"
+    },
+    {
+     "id": "fail",
+     "type": "exec",
+     "label": "Failed"
+    },
+    {
+     "id": "out",
+     "type": "volume",
+     "label": "Trigger Volume"
+    }
+   ],
+   "params": [],
+   "keywords": "casting cast as volume entity convert"
+  },
+  {
+   "type": "cast.objmarker",
+   "title": "As Objective Marker",
+   "category": "Effects",
+   "help": "Casting: is this entity an objective marker? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "ok",
+     "type": "exec",
+     "label": "Success"
+    },
+    {
+     "id": "fail",
+     "type": "exec",
+     "label": "Failed"
+    },
+    {
+     "id": "out",
+     "type": "objmarker",
+     "label": "Objective Marker"
+    }
+   ],
+   "params": [],
+   "keywords": "casting cast as objmarker entity convert"
+  },
+  {
+   "type": "cast.component",
+   "title": "As Component",
+   "category": "Components",
+   "help": "Casting: is this entity one of gm_components' components (any kind)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "in",
+     "type": "entity",
+     "label": "Entity",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "ok",
+     "type": "exec",
+     "label": "Success"
+    },
+    {
+     "id": "fail",
+     "type": "exec",
+     "label": "Failed"
+    },
+    {
+     "id": "out",
+     "type": "component",
+     "label": "Component"
+    }
+   ],
+   "params": [],
+   "keywords": "casting cast as component entity convert",
+   "needs": "components"
   },
   {
    "type": "ent.set_transform",

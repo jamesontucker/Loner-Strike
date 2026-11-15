@@ -16,9 +16,9 @@
 #define LSG_MODE "every_node_3"
 #define LSG_CTX 21
 #define LSG_TXT 2
-#define LSG_N 126
+#define LSG_N 132
 #define LSG_TASK 7310000
-#pragma dynamic 84736
+#pragma dynamic 88576
 stock g_lsgTxt[LSG_TXT][64]
 stock g_lsgOut[LSG_N]
 stock g_lsgLeft[LSG_N]
@@ -33,7 +33,7 @@ stock const g_lsgTeamName[][] = { "no team", "Terrorists", "Counter-Terrorists",
 #define LSG_AC 74
 #define LSG_AMAX 10000
 #define LSG_TMPA 32
-#define LSG_O 31
+#define LSG_O 36
 #define LSG_OT 3
 
 // The mode's variables
@@ -409,9 +409,9 @@ stock lsg_proj_vel(e)
 		ls_proj_velocity(e, v)
 	return lsg_vfrom(v)
 }
-#define LSD_N 126
-new const g_lsdIds[LSD_N][] = { "ps", "tick", "ph", "phx", "ch", "chp", "n0", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8", "n9", "n10", "n12", "n25", "n26", "n27", "n28", "n30", "n32", "n34", "n36", "n38", "n40", "n42", "n44", "n46", "n48", "n50", "n52", "n54", "n56", "n58", "n60", "n62", "n82", "n83", "n84", "n85", "n86", "n87", "n88", "n89", "n90", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n102", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n114", "n115", "n116", "n117", "n118", "n119", "n120", "n121", "n122", "n123", "n124", "n125", "n126", "n127", "n129", "n130", "n131", "n132", "n133", "n139", "n141", "n142", "n143", "n144", "n145", "n146", "n147", "n148", "n149", "n152", "n153", "n154", "n155", "n156", "n162", "n163", "n164", "n165", "n168", "n169", "n170", "n171", "n172", "n173", "n176", "n180", "n186", "n187", "n188", "n189", "n190", "n191", "n192", "n193", "n194", "n195", "tf_set", "tf_ev" }
-new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
+#define LSD_N 132
+new const g_lsdIds[LSD_N][] = { "ps", "tick", "ph", "phx", "ch", "chp", "n0", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8", "n9", "n10", "n12", "n25", "n26", "n27", "n28", "n30", "n32", "n34", "n36", "n38", "n40", "n42", "n44", "n46", "n48", "n50", "n52", "n54", "n56", "n58", "n60", "n62", "n82", "n83", "n84", "n85", "n86", "n87", "n88", "n89", "n90", "n91", "n92", "n93", "n94", "n95", "n96", "n97", "n98", "n99", "n100", "n101", "n102", "n106", "n107", "n108", "n109", "n110", "n111", "n112", "n113", "n114", "n115", "n116", "n117", "n118", "n119", "n120", "n121", "n122", "n123", "n124", "n125", "n126", "n127", "n129", "n130", "n131", "n132", "n133", "n139", "n141", "n142", "n143", "n144", "n145", "n146", "n147", "n148", "n149", "n152", "n153", "n154", "n155", "n156", "n162", "n163", "n164", "n165", "n168", "n169", "n170", "n171", "n172", "n173", "n176", "n180", "n186", "n187", "n188", "n189", "n190", "n191", "n192", "n193", "n194", "n195", "tf_set", "tf_ev", "hc_ev", "hc_npc", "hc_projectile", "hc_volume", "hc_objmarker", "hc_component" }
+new bool:g_lsdBp[LSD_N] = { false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false }
 // The Game Mode Studio's debug runtime (tools/studio/gen.rs puts it into Playtest builds only).
 // Every helper is a stock, so the ones a graph doesn't use cost nothing and warn nothing.
 new const g_lsdBool[][] = { "false", "true" }
@@ -6287,6 +6287,13 @@ stock lsg_kind_of(e)
 	return equal(c, "ls_studio_prop") ? 6 : 7
 }
 
+stock bool:lsg_cls_is(e, const c[])
+{
+	new t[32]
+	pev(e, pev_classname, t, charsmax(t))
+	return equal(t, c) != 0
+}
+
 stock const g_lsgCompKinds[][] = { "ls_capture_point", "ls_extraction_zone", "ls_checkpoint", "ls_shop", "ls_barricade", "ls_trigger_trap", "ls_loot_container", "ls_supply_drop", "ls_supply_crate", "ls_perk_machine", "ls_upgrade_bench", "ls_mystery_box", "ls_meeting_point", "ls_moving_platform", "ls_timed_door", "ls_wave_spawner", "ls_safe_zone", "ls_zone_shrinker", "ls_damage_zone", "ls_weapon_spawner", "ls_respawn_point", "ls_player_class", "ls_pickup", "ls_npc", "ls_interactable" }
 stock lsg_comp_kind_of(e)
 {
@@ -6492,6 +6499,7 @@ public lsg_on_round_started()
 {
 	new ctx[LSG_CTX]
 	lsg_n125(ctx)
+	lsg_n126(ctx)
 }
 
 public lsg_on_player_spawned(id)
@@ -9267,6 +9275,143 @@ lsg_n125(ctx[])
 	lsg_n124(ctx)
 }
 
+// Round Started (hc_ev)
+lsg_n126(ctx[])
+{
+	if (lsd_want(126))
+	{
+	lsd_begin()
+	}
+	if (lsd_enter(126, ctx))
+		return
+	lsd_exit(126, "ran")
+	lsg_n127(ctx)
+}
+
+// As NPC (hc_npc)
+lsg_n127(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	if (lsd_want(127))
+	{
+	lsd_begin()
+	lsd_in_entity("Entity", lsi0)
+	}
+	if (lsd_enter(127, ctx))
+		return
+	new lsgE = lsi0
+	if (lsg_kind_ok(lsgE, "ls_npc"))
+	{
+		g_lsgO[31] = lsgE
+		lsd_exit(127, "success")
+		lsg_n128(ctx)
+	}
+	else
+	{
+		g_lsgO[31] = 0
+		lsd_exit(127, "failed")
+	}
+}
+
+// As Projectile (hc_projectile)
+lsg_n128(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	if (lsd_want(128))
+	{
+	lsd_begin()
+	lsd_in_entity("Entity", lsi0)
+	}
+	if (lsd_enter(128, ctx))
+		return
+	new lsgE = lsi0
+	if (lsgE > MaxClients && pev_valid(lsgE) && lsg_cls_is(lsgE, "ls_projectile"))
+	{
+		g_lsgO[32] = lsgE
+		lsd_exit(128, "success")
+		lsg_n129(ctx)
+	}
+	else
+	{
+		g_lsgO[32] = 0
+		lsd_exit(128, "failed")
+	}
+}
+
+// As Trigger Volume (hc_volume)
+lsg_n129(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	if (lsd_want(129))
+	{
+	lsd_begin()
+	lsd_in_entity("Entity", lsi0)
+	}
+	if (lsd_enter(129, ctx))
+		return
+	new lsgE = lsi0
+	if (lsgE > MaxClients && pev_valid(lsgE) && lsg_cls_is(lsgE, "lsg_volume"))
+	{
+		g_lsgO[33] = lsgE
+		lsd_exit(129, "success")
+		lsg_n130(ctx)
+	}
+	else
+	{
+		g_lsgO[33] = 0
+		lsd_exit(129, "failed")
+	}
+}
+
+// As Objective Marker (hc_objmarker)
+lsg_n130(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	if (lsd_want(130))
+	{
+	lsd_begin()
+	lsd_in_entity("Entity", lsi0)
+	}
+	if (lsd_enter(130, ctx))
+		return
+	new lsgE = lsi0
+	if (lsgE > MaxClients && pev_valid(lsgE) && lsg_cls_is(lsgE, "ls_studio_marker"))
+	{
+		g_lsgO[34] = lsgE
+		lsd_exit(130, "success")
+		lsg_n131(ctx)
+	}
+	else
+	{
+		g_lsgO[34] = 0
+		lsd_exit(130, "failed")
+	}
+}
+
+// As Component (hc_component)
+lsg_n131(ctx[])
+{
+	new lsi0 = lsg_find("spot1")
+	if (lsd_want(131))
+	{
+	lsd_begin()
+	lsd_in_entity("Entity", lsi0)
+	}
+	if (lsd_enter(131, ctx))
+		return
+	new lsgE = lsi0
+	if (lsg_kind_ok(lsgE, ""))
+	{
+		g_lsgO[35] = lsgE
+		lsd_exit(131, "success")
+	}
+	else
+	{
+		g_lsgO[35] = 0
+		lsd_exit(131, "failed")
+	}
+}
+
 lsd_call(n, const data[])
 {
 	new ctx[LSG_CTX]
@@ -9400,5 +9545,11 @@ lsd_call(n, const data[])
 		case 123: lsg_n123(ctx)
 		case 124: lsg_n124(ctx)
 		case 125: lsg_n125(ctx)
+		case 126: lsg_n126(ctx)
+		case 127: lsg_n127(ctx)
+		case 128: lsg_n128(ctx)
+		case 129: lsg_n129(ctx)
+		case 130: lsg_n130(ctx)
+		case 131: lsg_n131(ctx)
 	}
 }

@@ -734,3 +734,11 @@ test("decal kinds: the start values the schema takes are Place Decal's kinds", (
   const kinds = (nodeDef("fx.decal")!.params.find((p) => p.id === "decal")!.choices as [string, string][]).map(([k]) => k);
   assert.deepEqual(DECAL_KINDS, kinds);
 });
+
+test("casts: an Entity dropped on a narrower pin offers that kind's cast (As Creature, As NPC...)", async () => {
+  const { castFor, CASTS } = await import("../src/views/tools/studio/castOps");
+  assert.equal(Object.keys(CASTS).length, 7);
+  const graph = { ...emptyGraph("c", "C"), variables: [{ id: "boss", name: "Boss", type: "creature", scope: "mode", default: null }],
+    nodes: [{ id: "pe", type: "flow.pick_entity", pos: { x: 0, y: 0 }, params: { by: "class", name: "x" } }, { id: "set", type: "var.set", pos: { x: 0, y: 0 }, params: { var: "boss" } }] } as unknown as Parameters<typeof castFor>[0];
+  assert.deepEqual(castFor(graph, { node: "pe", pin: "entity" }, { node: "set", pin: "value" }), ["cast.creature", "As Creature"]);
+});
