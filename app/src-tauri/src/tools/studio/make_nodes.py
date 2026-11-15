@@ -1277,6 +1277,13 @@ if "Spatial" not in data["categories"]:
 for c, after in [("Input", "Players"), ("Cooldowns", "Input"), ("Weapons", "Cooldowns")]:
     if c not in data["categories"]:
         data["categories"].insert(data["categories"].index(after) + 1, c)
+# ==== categories (X) ====
+# every node's category is in the list once (the palette and MCP's studio_nodes read it)
+for _c in [d["category"] for d in nodes]:
+    if _c not in data["categories"]:
+        data["categories"].append(_c)
+data["categories"] = [c for i, c in enumerate(data["categories"]) if c not in data["categories"][:i]]
+
 # ==== types: whole numbers (X) ====
 # one Number type; pins and settings the game takes as whole numbers (counts, ammo, money, slots,
 # rounds...) get a # mark, and Problems says when a constant there has a fraction (it's rounded)

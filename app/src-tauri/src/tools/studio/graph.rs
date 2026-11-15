@@ -3114,6 +3114,17 @@ mod tests {
     const DYNAMIC: [&str; 4] = ["macro.use", "macro.exit", "macro.entry", "event.call"];
     // (Timeline: its tracks add outputs, event tracks flow ones)
 
+    /// Every node's category is listed once (the palette's groups, MCP's studio_nodes).
+    #[test]
+    fn every_category_is_listed_once() {
+        let v: Value = serde_json::from_str(NODES_JSON).unwrap();
+        let cats: Vec<&str> = v["categories"].as_array().unwrap().iter().filter_map(Value::as_str).collect();
+        for n in &registry().nodes {
+            assert!(cats.contains(&n.category.as_str()), "{} ({})", n.category, n.kind);
+        }
+        assert_eq!(cats.len(), cats.iter().collect::<HashSet<_>>().len(), "{cats:?}");
+    }
+
     #[test]
     fn registry_is_complete() {
         let r = registry();

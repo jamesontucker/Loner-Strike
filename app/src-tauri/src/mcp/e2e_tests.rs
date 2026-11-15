@@ -293,6 +293,75 @@ async fn an_agent_builds_checks_compiles_a_map_and_makes_a_mode() {
     assert!(ag.calls.lock().unwrap().iter().any(|c| c.starts_with("studio compile agent_e2e")));
 }
 
+/// The final Studio check over MCP: an agent sees the new categories and types, reads each new
+/// node's help and pins, and builds a mode with Spawn Projectile + Projectile Hit, View From, Player
+/// Pressed Button + Cooldown, a Trigger Volume's overlap and the typed values (Color, a Creature
+/// cast, a Hit Zone into Switch on Enum) through studio_edit; it checks clean and compiles.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_agent_builds_a_mode_with_the_new_nodes_and_types() {
+    let ag = Agent::new();
+    let reg = ag.call("studio_nodes", json!({"search": ""})).await;
+    for c in ["Colors", "Files", "Projectiles", "Collision", "HUD & View"] {
+        assert!(reg["categories"].as_array().unwrap().iter().any(|x| x == c), "category {c}");
+    }
+    for t in ["color", "model", "sprite", "sound", "creature", "npc", "projectile", "volume", "objmarker", "component", "soundloop"] {
+        assert!(reg["pinTypes"][t]["label"].is_string(), "pin type {t}");
+    }
+    for k in ["proj.spawn", "proj.on_hit", "fun.view_from", "in.pressed", "cd.start", "vol.spawn", "vol.on_begin", "color.make", "color.literal", "cast.npc", "cast.creature", "ent.set_transform"] {
+        let h = ag.call("studio_node_help", json!({"type": k})).await;
+        assert!(h["help"]["what"].is_string(), "{k}: {h}");
+    }
+    ag.call("studio_draft_open", json!({"id": "agent_types", "from": "new", "name": "Agent types"})).await;
+    let r = ag.call("studio_edit", json!({"id": "agent_types", "ops": [
+        {"op": "add_node", "type": "in.pressed", "x": 0, "y": 0},
+        {"op": "add_node", "type": "cd.start", "x": 300, "y": 0},
+        {"op": "add_node", "type": "proj.spawn", "x": 600, "y": 0},
+        {"op": "add_node", "type": "proj.on_hit", "x": 0, "y": 300},
+        {"op": "add_node", "type": "flow.switch_enum", "x": 300, "y": 300},
+        {"op": "add_node", "type": "fun.view_from", "x": 600, "y": 300},
+        {"op": "add_node", "type": "event.round_started", "x": 0, "y": 600},
+        {"op": "add_node", "type": "vol.spawn", "x": 300, "y": 600},
+        {"op": "add_node", "type": "vol.on_begin", "x": 0, "y": 900},
+        {"op": "add_node", "type": "player.set_glow", "x": 300, "y": 900},
+        {"op": "add_node", "type": "color.literal", "x": 0, "y": 1100},
+        {"op": "add_node", "type": "cast.player", "x": 150, "y": 900},
+        {"op": "add_node", "type": "flow.pick_entity", "x": 150, "y": 600, "params": {"by": "class", "name": "info_player_start"}},
+    ]})).await;
+    let id = |i: usize| r["results"][i]["result"].as_str().unwrap().to_string();
+    let (press, cd, shoot, hit, sw, view, rs, vol, enter, glow, col, asp, pe) = (id(0), id(1), id(2), id(3), id(4), id(5), id(6), id(7), id(8), id(9), id(10), id(11), id(12));
+    let r = ag.call("studio_edit", json!({"id": "agent_types", "ops": [
+        {"op": "connect", "from": format!("{press}.then"), "to": format!("{cd}.exec")},
+        {"op": "connect", "from": format!("{press}.player"), "to": format!("{cd}.player")},
+        {"op": "connect", "from": format!("{cd}.then"), "to": format!("{shoot}.exec")},
+        {"op": "connect", "from": format!("{press}.player"), "to": format!("{shoot}.owner")},
+        {"op": "connect", "from": format!("{press}.player"), "to": format!("{shoot}.at_ent")},
+        {"op": "connect", "from": format!("{hit}.then"), "to": format!("{sw}.exec")},
+        {"op": "set_value", "node": sw, "param": "enum", "value": "ls_hitzone"},
+        {"op": "connect", "from": format!("{hit}.zone"), "to": format!("{sw}.in")},
+        {"op": "connect", "from": format!("{sw}.v1"), "to": format!("{view}.exec")},
+        {"op": "connect", "from": format!("{hit}.owner"), "to": format!("{view}.player")},
+        {"op": "connect", "from": format!("{hit}.proj"), "to": format!("{view}.from")},
+        {"op": "connect", "from": format!("{rs}.then"), "to": format!("{pe}.exec")},
+        {"op": "connect", "from": format!("{pe}.then"), "to": format!("{vol}.exec")},
+        {"op": "connect", "from": format!("{pe}.entity"), "to": format!("{vol}.at_ent")},
+        {"op": "connect", "from": format!("{enter}.then"), "to": format!("{asp}.exec")},
+        {"op": "connect", "from": format!("{enter}.who"), "to": format!("{asp}.in")},
+        {"op": "connect", "from": format!("{asp}.ok"), "to": format!("{glow}.exec")},
+        {"op": "connect", "from": format!("{asp}.out"), "to": format!("{glow}.player")},
+        {"op": "connect", "from": format!("{col}.out"), "to": format!("{glow}.color")},
+    ]})).await;
+    let bad: Vec<&Value> = r["results"].as_array().unwrap().iter().filter(|x| x["ok"] == false).collect();
+    assert!(bad.is_empty(), "{bad:#?}");
+    let errors: Vec<&Value> = r["problems"].as_array().unwrap().iter().filter(|p| p["level"] == "error").collect();
+    assert!(errors.is_empty(), "{errors:#?}");
+    let code = ag.call("studio_code", json!({"id": "agent_types", "draft": true})).await;
+    // (the plugin comes in pages; it starts with its header and has no problems)
+    assert!(code["text"].as_str().unwrap_or_default().contains("Agent types - made with"), "{code}");
+    assert_eq!(code["problems"], json!([]));
+    let built = ag.call("studio_compile", json!({"id": "agent_types", "draft": true})).await;
+    assert_eq!(built["ok"], true, "{built}");
+}
+
 /// P5: leak tracing as an agent: the line of a leaking compile, its hole and the brushes there.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_agent_finds_the_leak() {

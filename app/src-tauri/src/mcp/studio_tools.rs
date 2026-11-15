@@ -74,7 +74,7 @@ pub fn specs() -> Vec<Spec> {
             schema: || obj(json!({"id": id_prop(), "ops": {"type": "array", "items": {"type": "object"}, "description": "Edits in order, all or nothing (one undo step). Each is {op, ...}:\n\
 add_node {type, x?, y?, params?, graph?} (graph: a Function/Macro id) -> node id;\n\
 remove {ids} (nodes, wires, comments);\n\
-connect {from: {node, pin}, to: {node, pin}} (an output to an input; a flow output or a data input keeps one wire) -> wire id;\n\
+connect {from: {node, pin}, to: {node, pin}} (an output to an input; a flow output or a data input keeps one wire; a Player or an entity handle such as Creature or NPC goes into Entity pins, the other way needs an As Creature / As NPC... cast) -> wire id;\n\
 disconnect {wire} or {from, to};\n\
 set_value {node, pin or param, value} (an unwired input's value, or a node setting);\n\
 breakpoint {node, on};\n\

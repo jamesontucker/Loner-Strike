@@ -219,6 +219,23 @@ between pins whose types don't fit), as one undo step; `studio_draft` reads it b
 wires. Nothing is written until `studio_draft_save`, which asks before it replaces a graph file. The Studio page
 doesn't show an agent's draft until it's saved.
 
+**Studio types (graph version 4).** `studio_nodes` lists every pin type with its label and color (`pinTypes`) and
+every category, the new ones included: Colors and Files.
+
+- **Values and handles.** Beyond Number, Yes/No, Text, Vector, Player, Entity, Team and Timer, pins and variables
+  can be Color, Model, Sprite, Sound, Decal, Transform, and the built-in Weapon, Hit Zone and Damage Kind enums. They
+  can also be an entity handle: NPC, Creature, Projectile, Trigger Volume, Objective Marker, Component, Sound Loop.
+- **What connects.** A handle (and a Player) goes into any Entity pin as it is. The other way needs a cast: As
+  Player, As Creature, As NPC, As Projectile, As Trigger Volume, As Objective Marker, As Component. Each has Success
+  and Failed outputs.
+- **Text conversions.** A Weapon goes into a text pin as its name. Text never becomes a file: pick files with the
+  Model, Sprite and Sound nodes or a file variable.
+- **Whole numbers.** There is one Number type. Pins marked `whole` round a constant with a fraction, and the checks
+  say so.
+- **Orphans.** A wire to a pin a node no longer has, or a value of a setting it no longer has, is kept and named by
+  an error until it's re-wired or removed (docs/notes/StudioCompat.md).
+- **Help.** `studio_node_help` gives each node's help, pins and settings, the new nodes included.
+
 Bot people, the crosshair and config builder, the community browser, the project panel, GetMore / GameBanana, add-ons, sounds, voice, smarter chat, admins, lists, extras, scrims, the
 server browser, backups, map copy and nav learning are all reachable through `app_call`. Use
 `app_routes` with a search word to find the route.

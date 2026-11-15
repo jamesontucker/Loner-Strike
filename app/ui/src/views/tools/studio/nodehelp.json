@@ -57436,7 +57436,7 @@
 },
 "cast.volume":{
 "title":"As Trigger Volume",
-"category":"Entities",
+"category":"Collision",
 "what":"Casting: is this entity a trigger volume (Spawn Trigger Volume's)? Success with it as that kind, else Failed. The one-click fix where an Entity wire goes into a pin of that kind.",
 "pins":[
 {
@@ -57467,9 +57467,9 @@
 ],
 "settings":[],
 "related":[
-"ent.set_transform",
-"ent.spawn_weapon",
-"ent.spawn_entity"
+"vol.is_overlapping",
+"vol.remove",
+"vol.spawn"
 ],
 "example":{
 "caption":"When a round starts, As Trigger Volume runs.",
@@ -57788,8 +57788,8 @@
 "settings":[],
 "related":[
 "ent.transform",
-"cast.volume",
-"ent.spawn_weapon"
+"ent.spawn_weapon",
+"ent.spawn_entity"
 ]
 },
 "color.literal":{
