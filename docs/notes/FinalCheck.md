@@ -313,7 +313,7 @@ The connect step found no free input in view, so it was skipped; it isn't a fail
 | fc_cover_fx | ok | 37/41 ran |
 | fc_cover_5 | ok | 25/36 ran |
 | fc_cover_p5 | ok | 4/26 ran: the input nodes skip bots by default, and the save and cooldown nodes hang off them. Covered by the earlier P5 sim with bots allowed |
-| fc_cover_4 | not measured | the switch fell on a dead server (the crash below); left for a rerun |
+| fc_cover_4 | ok (rerun at c7c2bd0d, own sim, port 27540) | 36/39 nodes ran, 0 run-time errors, 25 kills; the 2 kinds not recorded (Attachment / Bone Position) are pure. Node notes: View Model with nothing in hand; Sprite At, Tracer and Beam Between skipped some runs at the per-frame effects budget (as they should) |
 | fc_cover_3 | FAIL, then fixed | crashed the sim twice: `Host_Error: PF_setmodel_I: no precache: models/rpgrocket.mdl` (fixed in 7a88f7ae). Live on Alone Together it ran with no crash, but its Change Map node reloads de_dust2 every ~11 s, so a person can't stay in. That's the test graph's doing |
 
 - Of this round's 163 kinds, 63 ran in a game. 70 of the rest are pure nodes, which the debugger
