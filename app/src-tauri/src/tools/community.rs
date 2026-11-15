@@ -2883,9 +2883,13 @@ pub fn remix(st: &Shared, model: Model, id: i64) -> Result<Value, String> {
         let map = it.map.as_ref().map(|m| m.name.clone()).unwrap_or_else(|| "map".into());
         let credit = crate::editor::doc::RemixCredit { model: "Mod".into(), gb: id, uid: it.uid.clone(), name: it.name.clone(), author: it.author.clone(), updated: it.updated };
         let path = super::mapsource::save_remix(&super::editor::remix_dir(), &map, doc, wad, credit)?;
-        // Parity A: its own models, sprites and sounds beside the remix
+        // Parity A: its own models, sprites and sounds in the remix's own folder, beside its .lsmap
         let game = if it.games.iter().any(|g| g == "czero") && !it.games.iter().any(|g| g == "cstrike") { "czero" } else { "cstrike" };
-        super::mapsource::copy_package_assets(&src, &super::editor::remix_dir(), game);
+        let own = path.parent().ok_or("The remix folder couldn't be found.")?;
+        let (_, clashed) = super::mapsource::copy_package_assets(&src, own, game);
+        if !clashed.is_empty() {
+            return Err(format!("The package has the same file more than once ({}). Ask its maker to package it again.", clashed.join(", ")));
+        }
         Ok(path)
     })();
     let _ = std::fs::remove_dir_all(&tmp);
@@ -3661,9 +3665,11 @@ mod tests {
             f.read_to_end(&mut b).unwrap();
             put(unz.join(&name), &b);
         }
-        let remix = root.join("remixes");
-        let moved = super::super::mapsource::copy_package_assets(&unz, &remix, "cstrike");
+        let remix_path = super::super::mapsource::save_remix(&root.join("remixes"), "de_imp", crate::editor::doc::MapDocument::default(), None, Default::default()).unwrap();
+        let remix = remix_path.parent().unwrap().to_path_buf();
+        let (moved, clashed) = super::super::mapsource::copy_package_assets(&unz, &remix, "cstrike");
         assert_eq!(moved, ["models/qa_box.mdl", "sound/qa_hum.wav"]);
+        assert!(clashed.is_empty());
         assert_eq!(std::fs::read(remix.join("sound/qa_hum.wav")).unwrap(), wav);
         // and the remixer's project finds them beside it
         let places = Places { hl: Some(m.hl.clone()), game: "cstrike".into(), beside: vec![remix.clone()] };

@@ -246,47 +246,46 @@ fn safe_file_name(n: &str) -> bool {
     !n.is_empty() && n.len() <= 64 && n.chars().all(|c| c.is_ascii_alphanumeric() || "_-.".contains(c)) && !n.starts_with('.')
 }
 
-/// Saves a remix: the project as `<dir>/<name>_remix.lsmap` (or `_remix2`... never over a file
-/// that's there) with the credit and a fresh id, its WAD beside it. The project's path.
+/// Saves a remix in its own folder: `<dir>/<name>_remix/<name>_remix.lsmap` (or `_remix2`...,
+/// never a folder that's there) with the credit and a fresh id, its WAD beside it. Each remix's
+/// files stay apart from every other's (Parity A, security review: a shared folder let one remix
+/// pick up another's models). The project's path.
 pub fn save_remix(dir: &Path, name: &str, mut doc: MapDocument, wad: Option<(String, Vec<u8>)>, credit: RemixCredit) -> Result<PathBuf, String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("Couldn't make the remix folder ({e})."))?;
     let base: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-').take(24).collect();
     let base = if base.is_empty() { "map".to_string() } else { base };
     let mut stem = format!("{base}_remix");
     let mut n = 2;
-    while dir.join(format!("{stem}.lsmap")).exists() {
+    while dir.join(&stem).exists() || dir.join(format!("{stem}.lsmap")).exists() {
         stem = format!("{base}_remix{n}");
         n += 1;
         if n > 999 {
             return Err("There are too many remixes of this map already.".into());
         }
     }
+    let own = dir.join(&stem);
+    std::fs::create_dir(&own).map_err(|e| format!("Couldn't make the remix folder ({e})."))?;
     if let Some((wad_name, bytes)) = wad {
-        // (its own folder's WAD: a second remix keeps the first one's if they're the same)
-        let target = dir.join(&wad_name);
-        if !target.exists() || std::fs::read(&target).ok().as_deref() != Some(&bytes[..]) {
-            let target = if target.exists() { dir.join(format!("{stem}_{wad_name}")) } else { target };
-            if target != dir.join(&wad_name) {
-                // the project names the WAD by file name: point it at the copy kept for this remix
-                let new = target.file_name().unwrap().to_string_lossy().to_string();
-                doc.world.wads = doc.world.wads.iter().map(|w| if w.eq_ignore_ascii_case(&wad_name) { new.clone() } else { w.clone() }).collect();
-            }
-            std::fs::write(&target, &bytes).map_err(|e| format!("Couldn't save the remix's textures ({e})."))?;
+        if !safe_file_name(&wad_name) {
+            return Err("The map's texture file has a name that can't be used.".into());
         }
+        std::fs::write(own.join(&wad_name), &bytes).map_err(|e| format!("Couldn't save the remix's textures ({e})."))?;
     }
     doc.editor.uid = Some(crate::editor::doc::new_uid());
     doc.editor.remix_of = Some(credit);
-    let path = dir.join(format!("{stem}.lsmap"));
+    let path = own.join(format!("{stem}.lsmap"));
     std::fs::write(&path, doc.to_json()).map_err(|e| format!("Couldn't save the remix ({e})."))?;
     Ok(path)
 }
 
 /// Parity A: a shared map package's own models, sprites and sounds (models/, sprites/, sound/: the
-/// map's files, never the game's own) copied into the remix's project folder, so the remix
-/// opens with them beside it (shown under Mine, sent with Playtest and Publish). A file already
-/// there is kept. The paths copied.
-pub fn copy_package_assets(src: &Path, dest: &Path, game: &str) -> Vec<String> {
+/// map's files, never the game's own) copied into the remix's own folder (beside its .lsmap), so
+/// the remix opens with them (shown under Mine, sent with Playtest and Publish). A file already in
+/// that folder is never kept silently or replaced: it's left out and named in the second list.
+/// The paths copied, and the ones refused.
+pub fn copy_package_assets(src: &Path, dest: &Path, game: &str) -> (Vec<String>, Vec<String>) {
     let mut out = Vec::new();
+    let mut clashed = Vec::new();
     for p in crate::archive::walk(src) {
         let Ok(rel) = p.strip_prefix(src) else { continue };
         let rel = rel.to_string_lossy().replace('\\', "/");
@@ -295,7 +294,7 @@ pub fn copy_package_assets(src: &Path, dest: &Path, game: &str) -> Vec<String> {
             continue;
         }
         let Some(rel) = super::editor::assets::clean_rel(&rel) else { continue };
-        if super::doctor::is_stock(&rel, game) || dest.join(&rel).exists() {
+        if super::doctor::is_stock(&rel, game) {
             continue;
         }
         let ext = rel.rsplit_once('.').map(|x| x.1.to_ascii_lowercase()).unwrap_or_default();
@@ -303,12 +302,17 @@ pub fn copy_package_assets(src: &Path, dest: &Path, game: &str) -> Vec<String> {
             continue;
         }
         let to = dest.join(&rel);
+        if crate::mapcopy::Finder::default().find(dest, &rel).is_some() || to.exists() {
+            clashed.push(rel);
+            continue;
+        }
         if to.parent().map(std::fs::create_dir_all).is_some_and(|r| r.is_ok()) && std::fs::copy(&p, &to).is_ok() {
             out.push(rel);
         }
     }
     out.sort();
-    out
+    clashed.sort();
+    (out, clashed)
 }
 
 /// Tests here and in community.rs: a Half-Life folder with CS 1.6's cstrike.wad (holding "stockwall") and the mapper's own
@@ -420,16 +424,47 @@ mod tests {
         let dir = root.join("remixes");
         let a = save_remix(&dir, "aim_qa", doc.clone(), wad.clone(), credit.clone()).unwrap();
         let b = save_remix(&dir, "aim_qa", doc.clone(), wad, credit.clone()).unwrap();
-        assert_eq!(a.file_name().unwrap(), "aim_qa_remix.lsmap");
-        assert_eq!(b.file_name().unwrap(), "aim_qa_remix2.lsmap", "never over the first");
+        assert_eq!(a, dir.join("aim_qa_remix/aim_qa_remix.lsmap"), "its own folder");
+        assert_eq!(b, dir.join("aim_qa_remix2/aim_qa_remix2.lsmap"), "never the first one's");
         let (back, _) = super::super::editor::load_file(&a).unwrap();
         assert_eq!(back.editor.remix_of.as_ref(), Some(&credit));
         assert!(back.editor.uid.as_deref().is_some_and(crate::editor::doc::valid_uid));
         assert_eq!(back.brushes.len(), doc.brushes.len(), "the same map");
-        assert!(dir.join("aim_qa_custom.wad").is_file());
+        assert!(dir.join("aim_qa_remix/aim_qa_custom.wad").is_file() && dir.join("aim_qa_remix2/aim_qa_custom.wad").is_file());
         // the remix's own source carries the credit on
         let again = build(&a, &hl, false, "aim_qa_remix").unwrap();
         assert_eq!(again.remix_of.as_ref().map(|c| c.gb), Some(777));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Parity A (security review): two remixes whose packages both carry models/x.mdl, with
+    /// different bytes, each get their own, right file, in their own folder.
+    #[test]
+    fn each_remix_keeps_its_own_files() {
+        let root = std::env::temp_dir().join(format!("ls-remix-own-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let dir = root.join("remixes");
+        let mut paths = Vec::new();
+        for (i, bytes) in [b"IDST from map one".as_slice(), b"IDST from map two".as_slice()].into_iter().enumerate() {
+            let pkg = root.join(format!("pkg{i}"));
+            std::fs::create_dir_all(pkg.join("models")).unwrap();
+            std::fs::write(pkg.join("models/x.mdl"), bytes).unwrap();
+            let path = save_remix(&dir, "same_map", MapDocument::default(), None, RemixCredit::default()).unwrap();
+            let own = path.parent().unwrap().to_path_buf();
+            let (copied, clashed) = copy_package_assets(&pkg, &own, "cstrike");
+            assert_eq!((copied, clashed), (vec!["models/x.mdl".to_string()], Vec::<String>::new()));
+            paths.push((own, bytes.to_vec()));
+        }
+        assert_ne!(paths[0].0, paths[1].0, "two folders");
+        for (own, bytes) in &paths {
+            assert_eq!(&std::fs::read(own.join("models/x.mdl")).unwrap(), bytes);
+        }
+        assert!(!dir.join("models").exists(), "nothing in the shared folder");
+        // a file already in the remix's own folder: refused and named, never kept silently
+        let pkg = root.join("pkg0");
+        let (copied, clashed) = copy_package_assets(&pkg, &paths[0].0, "cstrike");
+        assert!(copied.is_empty());
+        assert_eq!(clashed, ["models/x.mdl"]);
         let _ = std::fs::remove_dir_all(&root);
     }
 
