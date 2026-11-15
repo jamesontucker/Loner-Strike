@@ -26351,7 +26351,7 @@
 "fun.view_from":{
 "title":"View From",
 "category":"Players",
-"what":"A cinematic view: the chosen players (the wired one, a team or everyone) see from a position and angles, or from an entity (following it, Offset above it), for some seconds (0: until Return View). Move to: it glides there over Move time. Death, leaving and a new round give the view back by themselves. Freeze: they can't move or shoot meanwhile. A map's own trigger_camera still works.",
+"what":"A cinematic view: the chosen players (the wired one, a team or everyone; each gets a camera of their own) see from a position and angles, or from an entity (following it, Offset above it), for some seconds (0: until Return View). Look at: an entity or position it keeps pointing at (its angles worked out, over Angles). Move to: it glides there over Move time. Frame a conversation: with the wired player and an NPC in Look at, the camera stands to the side of both, looking at the NPC (for Say and Choose); Until the conversation ends gives the view back when it does. Death, leaving and a new round give the view back by themselves. Freeze: they can't move or shoot meanwhile. A map's own trigger_camera still works.",
 "pins":[
 {
 "id":"exec",
@@ -26389,6 +26389,16 @@
 "help":"Move to angles: a position or direction (X, Y, Z). Optional."
 },
 {
+"id":"look",
+"dir":"in",
+"help":"Look at: an entity (a thing in the map). Optional."
+},
+{
+"id":"look_pos",
+"dir":"in",
+"help":"Look at position: a position or direction (X, Y, Z). Optional."
+},
+{
 "id":"then",
 "dir":"out",
 "help":"Goes on when it's done."
@@ -26413,6 +26423,14 @@
 },
 {
 "id":"freeze",
+"help":"On or off."
+},
+{
+"id":"frame",
+"help":"On or off."
+},
+{
+"id":"talk",
 "help":"On or off."
 }
 ],
@@ -26445,7 +26463,9 @@
 "secs":5,
 "offset":64,
 "move":3,
-"freeze":true
+"freeze":true,
+"frame":false,
+"talk":false
 }
 }
 ],

@@ -2926,13 +2926,106 @@ stock lsg_coords(const Float:o[3])
 
 // View From: a camera entity each shot; players see through it (set_view) until it ends
 stock g_lsgViewCam[33], Float:g_lsgViewTill[33], bool:g_lsgViewFreeze[33], g_lsgCamFollow[2048], Float:g_lsgCamOff[2048], Float:g_lsgCamStop[2048]
+// what the next View From looks at (an entity, or a position), whether it frames a conversation
+// and ends with it; and per camera, what it keeps pointing at
+stock g_lsgVLook, Float:g_lsgVLookPos[3], bool:g_lsgVHasLook, bool:g_lsgVFrame, bool:g_lsgVTalk
+stock g_lsgCamLook[2048], Float:g_lsgCamLookPos[2048][3], bool:g_lsgCamLooks[2048], bool:g_lsgViewTalk[33], bool:g_lsgViewTalked[33]
+
+stock lsg_view_look(look, const Float:lp[3], hasLp, frame, talk)
+{
+	g_lsgVLook = look > 0 && pev_valid(look) ? look : 0
+	g_lsgVLookPos = lp
+	g_lsgVHasLook = g_lsgVLook > 0 || hasLp != 0
+	g_lsgVFrame = frame != 0
+	g_lsgVTalk = talk != 0
+}
+
+// the point a camera looks at: its entity's (a player's eyes) or its position
+stock bool:lsg_cam_target(cam, Float:t[3])
+{
+	new e = g_lsgCamLook[cam]
+	if (e > 0)
+	{
+		if (!pev_valid(e))
+			return false
+		pev(e, pev_origin, t)
+		new Float:ofs[3]
+		pev(e, pev_view_ofs, ofs)
+		t[2] += ofs[2] > 0.0 ? ofs[2] : 24.0
+		return true
+	}
+	if (!g_lsgCamLooks[cam])
+		return false
+	t = g_lsgCamLookPos[cam]
+	return true
+}
+
+// "until the conversation ends": once one has started for them (Say or Choose may come a little
+// after View From), it's over when they aren't talking any more
+stock bool:lsg_view_talk_over(p)
+{
+	if (!g_lsgViewTalk[p] || !ls_components_running())
+		return false
+	if (ls_npc_talking(p))
+	{
+		g_lsgViewTalked[p] = true
+		return false
+	}
+	return g_lsgViewTalked[p]
+}
+
+// a view entity's angles toward a point (the pitch the other way round, as trigger_camera does)
+stock lsg_cam_aim(cam)
+{
+	new Float:t[3], Float:o[3], Float:d[3], Float:ang[3]
+	if (!lsg_cam_target(cam, t))
+		return
+	pev(cam, pev_origin, o)
+	for (new k = 0; k < 3; k++)
+		d[k] = t[k] - o[k]
+	vector_to_angle(d, ang)
+	ang[0] = -ang[0]
+	if (ang[0] < -180.0)
+		ang[0] += 360.0
+	set_pev(cam, pev_angles, ang)
+	set_pev(cam, pev_v_angle, ang)
+}
+
 
 stock lsg_view_from(who, one, from, const Float:a[3], const Float:aa[3], hasA, const Float:b[3], const Float:ba[3], hasB, Float:off, Float:move, Float:secs, freeze)
 {
-	if (from <= 0 && !hasA)
+	if (from <= 0 && !hasA && !(g_lsgVFrame && g_lsgVLook))
 		return 0
 	if (from > 0 && !pev_valid(from))
 		return 0
+	new n = 0
+	for (new p = 1; p <= MaxClients; p++)
+	{
+		if (!is_user_connected(p) || is_user_bot(p))
+			continue
+		if ((who == 0 && p != one) || (who == 1 && get_user_team(p) != 1) || (who == 2 && get_user_team(p) != 2))
+			continue
+		// (each player a camera of their own)
+		new cam = lsg_view_cam(p, from, a, aa, b, ba, hasB, off, move)
+		if (!cam)
+			continue
+		lsg_view_back(p)
+		g_lsgViewCam[p] = cam
+		g_lsgViewTill[p] = secs > 0.0 ? get_gametime() + secs : 0.0
+		g_lsgViewFreeze[p] = freeze != 0
+		g_lsgViewTalk[p] = g_lsgVTalk
+		g_lsgViewTalked[p] = false
+		if (freeze)
+			set_pev(p, pev_flags, pev(p, pev_flags) | FL_FROZEN)
+		engfunc(EngFunc_SetView, p, cam)
+		n++
+	}
+	return n
+}
+
+// one viewer's camera: where it stands, how it moves, what it looks at
+stock lsg_view_cam(p, from, const Float:a[3], const Float:aa[3], const Float:b[3], const Float:ba[3], hasB, Float:off, Float:move)
+{
 	if (!lsg_ent_room("View From"))
 		return 0
 	new cam = create_entity("info_target")
@@ -2945,7 +3038,28 @@ stock lsg_view_from(who, one, from, const Float:a[3], const Float:aa[3], hasA, c
 	set_pev(cam, pev_solid, SOLID_NOT)
 	set_pev(cam, pev_movetype, MOVETYPE_NOCLIP)
 	new Float:o[3], Float:ang[3]
-	if (from > 0)
+	g_lsgCamFollow[cam] = 0
+	g_lsgCamLook[cam] = g_lsgVLook
+	g_lsgCamLookPos[cam] = g_lsgVLookPos
+	g_lsgCamLooks[cam] = g_lsgVHasLook
+	if (g_lsgVFrame && g_lsgVLook)
+	{
+		// to the side of the player and the NPC, a little above their eyes, looking at the NPC
+		new Float:e[3], Float:t[3], Float:d[3], Float:ofs[3]
+		pev(p, pev_origin, e)
+		pev(p, pev_view_ofs, ofs)
+		e[2] += ofs[2]
+		pev(g_lsgVLook, pev_origin, t)
+		for (new k = 0; k < 3; k++)
+			d[k] = t[k] - e[k]
+		new Float:len = floatsqroot(d[0] * d[0] + d[1] * d[1])
+		if (len < 1.0)
+			len = 1.0
+		o[0] = (e[0] + t[0]) * 0.5 - d[1] / len * 110.0
+		o[1] = (e[1] + t[1]) * 0.5 + d[0] / len * 110.0
+		o[2] = e[2] + 12.0
+	}
+	else if (from > 0)
 	{
 		pev(from, pev_origin, o)
 		o[2] += off
@@ -2957,14 +3071,13 @@ stock lsg_view_from(who, one, from, const Float:a[3], const Float:aa[3], hasA, c
 	{
 		o = a
 		ang = aa
-		g_lsgCamFollow[cam] = 0
 	}
 	engfunc(EngFunc_SetOrigin, cam, o)
 	set_pev(cam, pev_angles, ang)
 	set_pev(cam, pev_v_angle, ang)
 	g_lsgCamStop[cam] = 0.0
 	// a glide from A to B: the engine moves it (velocity, angular velocity); stopped when it's there
-	if (from <= 0 && hasB && move > 0.0)
+	if (from <= 0 && hasB && move > 0.0 && !g_lsgVFrame)
 	{
 		new Float:vel[3], Float:av[3]
 		for (new k = 0; k < 3; k++)
@@ -2976,25 +3089,8 @@ stock lsg_view_from(who, one, from, const Float:a[3], const Float:aa[3], hasA, c
 		set_pev(cam, pev_avelocity, av)
 		g_lsgCamStop[cam] = get_gametime() + move
 	}
-	new n = 0
-	for (new p = 1; p <= MaxClients; p++)
-	{
-		if (!is_user_connected(p) || is_user_bot(p))
-			continue
-		if ((who == 0 && p != one) || (who == 1 && get_user_team(p) != 1) || (who == 2 && get_user_team(p) != 2))
-			continue
-		lsg_view_back(p)
-		g_lsgViewCam[p] = cam
-		g_lsgViewTill[p] = secs > 0.0 ? get_gametime() + secs : 0.0
-		g_lsgViewFreeze[p] = freeze != 0
-		if (freeze)
-			set_pev(p, pev_flags, pev(p, pev_flags) | FL_FROZEN)
-		engfunc(EngFunc_SetView, p, cam)
-		n++
-	}
-	if (!n)
-		remove_entity(cam)
-	return n
+	lsg_cam_aim(cam)
+	return cam
 }
 
 // one player's view back: first or third person as Set Camera left it
@@ -3005,6 +3101,7 @@ stock lsg_view_back(p)
 		return
 	g_lsgViewCam[p] = 0
 	g_lsgViewTill[p] = 0.0
+	g_lsgViewTalk[p] = false
 	if (is_user_connected(p))
 	{
 		if (g_lsgViewFreeze[p])
@@ -3038,7 +3135,7 @@ stock lsg_view_tick(Float:now)
 		new cam = g_lsgViewCam[p]
 		if (!cam)
 			continue
-		if (!pev_valid(cam) || (g_lsgViewTill[p] > 0.0 && now >= g_lsgViewTill[p]))
+		if (!pev_valid(cam) || (g_lsgViewTill[p] > 0.0 && now >= g_lsgViewTill[p]) || lsg_view_talk_over(p))
 		{
 			lsg_view_back(p)
 			continue
@@ -3065,6 +3162,9 @@ stock lsg_view_tick(Float:now)
 			set_pev(cam, pev_avelocity, Float:{0.0, 0.0, 0.0})
 			g_lsgCamStop[cam] = 0.0
 		}
+		// (a camera with something to look at keeps pointing at it, over its own angles)
+		if (g_lsgCamLook[cam] || g_lsgCamLooks[cam])
+			lsg_cam_aim(cam)
 	}
 }
 // one server command, only an allowed one (graph::cmd_rules: the app checks the same). The
@@ -8008,7 +8108,8 @@ lsg_n82(ctx[])
 	}
 	if (lsd_enter(82, ctx))
 		return
-	new Float:lsgA[3], Float:lsgAa[3], Float:lsgB[3], Float:lsgBa[3]
+	new Float:lsgA[3], Float:lsgAa[3], Float:lsgB[3], Float:lsgBa[3], Float:lsgL[3]
+	lsg_view_look(0, lsgL, 0, 0, 0)
 	lsg_view_from(0, 0, 0, lsgA, lsgAa, 0, lsgB, lsgBa, 0, 64.0, 3.0, 5.0, 1)
 	lsd_exit(82, "viewing")
 	lsg_n83(ctx)

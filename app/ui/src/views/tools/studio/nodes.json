@@ -12720,7 +12720,7 @@
    "type": "fun.view_from",
    "title": "View From",
    "category": "Players",
-   "help": "A cinematic view: the chosen players (the wired one, a team or everyone) see from a position and angles, or from an entity (following it, Offset above it), for some seconds (0: until Return View). Move to: it glides there over Move time. Death, leaving and a new round give the view back by themselves. Freeze: they can't move or shoot meanwhile. A map's own trigger_camera still works.",
+   "help": "A cinematic view: the chosen players (the wired one, a team or everyone; each gets a camera of their own) see from a position and angles, or from an entity (following it, Offset above it), for some seconds (0: until Return View). Look at: an entity or position it keeps pointing at (its angles worked out, over Angles). Move to: it glides there over Move time. Frame a conversation: with the wired player and an NPC in Look at, the camera stands to the side of both, looking at the NPC (for Say and Choose); Until the conversation ends gives the view back when it does. Death, leaving and a new round give the view back by themselves. Freeze: they can't move or shoot meanwhile. A map's own trigger_camera still works.",
    "inputs": [
     {
      "id": "exec",
@@ -12761,6 +12761,18 @@
      "id": "to_angles",
      "type": "vector",
      "label": "Move to angles",
+     "optional": true
+    },
+    {
+     "id": "look",
+     "type": "entity",
+     "label": "Look at",
+     "optional": true
+    },
+    {
+     "id": "look_pos",
+     "type": "vector",
+     "label": "Look at position",
      "optional": true
     }
    ],
@@ -12825,6 +12837,18 @@
      "label": "Freeze player while viewing",
      "kind": "bool",
      "default": true
+    },
+    {
+     "id": "frame",
+     "label": "Frame a conversation",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "talk",
+     "label": "Until the conversation ends",
+     "kind": "bool",
+     "default": false
     }
    ],
    "keywords": "camera cinematic cutscene view intro shot"
