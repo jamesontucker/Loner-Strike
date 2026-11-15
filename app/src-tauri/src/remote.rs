@@ -1266,7 +1266,8 @@ sudo tee /usr/local/bin/lsregister >/dev/null <<'LSREG'
 #!/usr/bin/env python3
 # lsregister <address> <game folder>: after a start (the unit's ExecStartPost), puts the server
 # back on the Loner-Strike server list, when its friends.cfg says ls_list 1. Returns at once and
-# asks in the background while the map loads (the list checks the server itself).
+# asks in the background while the map loads (the list checks the server itself). It names itself:
+# Cloudflare in front of the list turns away Python's default User-Agent (HTTP 403).
 import json, os, sys, time, urllib.request
 addr, game = sys.argv[1], sys.argv[2]
 try:
@@ -1280,7 +1281,7 @@ os.setsid()
 time.sleep(45)
 for _ in range(10):
     try:
-        req = urllib.request.Request("https://list.lonerstrike.com/register", data=json.dumps(dict(address=addr)).encode(), headers=dict([("Content-Type", "application/json")]))
+        req = urllib.request.Request("https://list.lonerstrike.com/register", data=json.dumps(dict(address=addr)).encode(), headers=dict([("Content-Type", "application/json"), ("User-Agent", "LonerStrike-lsregister/1")]))
         with urllib.request.urlopen(req, timeout=20) as r:
             if json.load(r).get("ok"):
                 print("lsregister: %s is on the Loner-Strike server list" % addr, flush=True)
@@ -1697,7 +1698,7 @@ mod tests {
         let svc = service_sh("x", "cstrike", &["-game".into(), "cstrike".into(), "-port".into(), "27016".into()], "play.example.com:27016");
         // W2: back on the server list after every start (lsregister, when friends.cfg says so)
         assert!(svc.contains("ExecStartPost=-/usr/local/bin/lsregister 'play.example.com:27016' $SRV/cstrike\nExecStart="), "{svc}");
-        assert!(svc.contains("sudo tee /usr/local/bin/lsregister") && svc.contains("[\"ls_list\", \"1\"]") && svc.contains("os.fork()"));
+        assert!(svc.contains("sudo tee /usr/local/bin/lsregister") && svc.contains("[\"ls_list\", \"1\"]") && svc.contains("os.fork()") && svc.contains("(\"User-Agent\", \"LonerStrike-lsregister/1\")"), "named, or Cloudflare refuses it");
         assert!(!service_sh("x", "cstrike", &["-game".into(), "cstrike".into()], "").contains("ExecStartPost=-/usr/local/bin/lsregister"), "no address: no line");
         assert!(svc.contains("ExecStart=/usr/local/bin/lswatchdog 27016 lonerstrike-x") && svc.contains("print(f\"{unit} hasn't"));
         assert!(svc.contains("ExecStart=$SRV/hlds_linux '-game' 'cstrike' '-port' '27016'") && svc.contains("lsctl") && svc.contains("b\"\\xff\\xff\\xff\\xff\""));
