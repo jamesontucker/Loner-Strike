@@ -2562,7 +2562,8 @@ stock lsg_w1_num(Float:v, decimals, thousands)
 {
 	new t[48], raw[40], fmt[8]
 	formatex(fmt, charsmax(fmt), "%%.%df", clamp(decimals, 0, 4))
-	formatex(raw, charsmax(raw), fmt, floatabs(v))
+	// (AMX Mod X's %f cuts the digits off: half a unit of the last decimal first, so it rounds)
+	formatex(raw, charsmax(raw), fmt, floatabs(v) + 0.5 / floatpower(10.0, float(clamp(decimals, 0, 4))))
 	if (!thousands)
 	{
 		formatex(t, charsmax(t), "%s%s", v < 0.0 ? "-" : "", raw)
