@@ -8,7 +8,7 @@ import { copyText, getJsonAt, postJsonAt, useActions } from "../api";
 import { BusyButton, useToast } from "../ui";
 
 type Info = { can_upload?: boolean; url?: string; prepared?: { files: number; made: number } | null; error?: string };
-type Prepared = { ok?: boolean; files?: number; copied?: number; removed?: number; mb?: number; dir?: string; command?: string; error?: string };
+type Prepared = { ok?: boolean; files?: number; copied?: number; removed?: number; mb?: number; dir?: string; command?: string; needs_czero?: string[]; error?: string };
 type Problem = { path: string; why: string };
 type Checked = { ok?: boolean; url?: string; files?: number; checked?: number; extra?: number; uploaded?: boolean; problems?: Problem[]; cloudflare?: Record<string, number>; error?: string };
 
@@ -66,6 +66,12 @@ export function FastdlMirror({ id, current, save }: { id: string; current: strin
             {prep.files ? `${prep.files} files (${prep.mb} MB) ready, ${prep.copied} copied just now${prep.removed ? `, ${prep.removed} gone from the server` : ""}.` : "There's no custom content: everything here comes with the game."}{" "}
             Upload them in Terminal, from the Loner-Strike repo:
           </p>
+          {!!prep.needs_czero?.length && (
+            <p className="small-note">
+              Needs Condition Zero files: {prep.needs_czero.length} {prep.needs_czero.length === 1 ? "map" : "maps"} ({prep.needs_czero.slice(0, 8).join(", ")}
+              {prep.needs_czero.length > 8 ? ", …" : ""}). The mirror never has Valve's own files, so CS 1.6 players see missing textures on those.
+            </p>
+          )}
           {prep.command && (
             <div className="copy-row">
               <div>

@@ -88,10 +88,35 @@ pub fn safe_path(rel: &str) -> bool {
         && rel.bytes().all(|c| c.is_ascii_alphanumeric() || b"_-./+!()".contains(&c))
 }
 
-/// A file players may need from this server: in a download folder, a kind the game sends, not
-/// one every player of `game` already has.
-pub fn wanted(rel: &str, game: &str) -> bool {
-    safe_path(rel) && crate::extras::downloadable(rel) && !crate::tools::doctor::is_stock(rel, game)
+/// A file players may need from this server: in a download folder, a kind the game sends, and
+/// not Valve's: nothing on the stock lists of Half-Life, CS 1.6 or Condition Zero ever goes to the
+/// public mirror, whichever game the server runs (a CS 1.6 player lacking a Condition Zero file
+/// is the map's problem; we never hand out Valve's files). `_game` is kept for the callers.
+pub fn wanted(rel: &str, _game: &str) -> bool {
+    safe_path(rel) && crate::extras::downloadable(rel) && !valves(rel)
+}
+
+/// On any of Valve's lists (stock_valve, stock_cstrike, stock_czero; doctor::is_stock for both games).
+pub fn valves(rel: &str) -> bool {
+    crate::tools::doctor::is_stock(rel, "cstrike") || crate::tools::doctor::is_stock(rel, "czero")
+}
+
+/// The custom maps that name a file only Condition Zero has (its textures, sky or sounds): on a
+/// CS 1.6 server their players see missing textures for those, since the mirror never has them.
+pub fn needs_czero(maps: &BTreeMap<String, MapNeeds>, game: &str) -> Vec<String> {
+    if game.eq_ignore_ascii_case("czero") {
+        return Vec::new();
+    }
+    let cz_only = |rel: &str| crate::tools::doctor::is_stock(rel, "czero") && !crate::tools::doctor::is_stock(rel, "cstrike");
+    maps.iter()
+        .filter(|(_, n)| {
+            let (wads, sky) = worldspawn_of(&n.ent);
+            wads.iter().any(|w| cz_only(w))
+                || sky.is_some_and(|s| ["up", "dn", "lf", "rt", "ft", "bk"].iter().any(|side| cz_only(&format!("gfx/env/{s}{side}.tga"))))
+                || crate::extras::parse_res(&n.res).iter().any(|r| cz_only(r.trim_start_matches('/')))
+        })
+        .map(|(m, _)| m.clone())
+        .collect()
 }
 
 fn hex(d: &[u8]) -> String {
@@ -428,12 +453,19 @@ fn local_needs(root: &Path, map: &str) -> MapNeeds {
 /// The custom files of a server (local or on a Linux machine) that players may need, with their
 /// SHA-256.
 pub fn collect(g: &Game, game: &str) -> Result<Vec<File>, String> {
+    collect_all(g, game).map(|(f, _)| f)
+}
+
+/// collect, and the custom maps that need Condition Zero's own files (needs_czero).
+pub fn collect_all(g: &Game, game: &str) -> Result<(Vec<File>, Vec<String>), String> {
     let keep = |rel: &str, size: u64| size > 0 && size <= MAX_FILE && wanted(rel, game);
     let mut files = Vec::new();
+    let cz;
     match &g.remote {
         None => {
             let present: Vec<(String, u64)> = walk_local(&g.dir).into_iter().filter(|(r, s)| keep(r, *s)).collect();
             let maps: BTreeMap<String, MapNeeds> = custom_maps(&present).into_iter().map(|m| (m.clone(), local_needs(&g.dir, &m))).collect();
+            cz = needs_czero(&maps, game);
             for (rel, _) in select(&present, &maps) {
                 // a link swapped in since the listing is refused here, never followed
                 if let Ok((size, sha256)) = sha_inside(&g.dir, &rel) {
@@ -480,9 +512,10 @@ pub fn collect(g: &Game, game: &str) -> Result<Vec<File>, String> {
                     }
                 }
             }
+            cz = needs_czero(&maps, game);
             let asked: std::collections::BTreeSet<String> = select(&present, &maps).into_iter().map(|(r, _)| r).collect();
             if asked.is_empty() {
-                return Ok(files);
+                return Ok((files, cz));
             }
             let input: Vec<u8> = asked.iter().flat_map(|k| k.bytes().chain([0u8])).collect();
             let mut out = String::new();
@@ -498,7 +531,7 @@ pub fn collect(g: &Game, game: &str) -> Result<Vec<File>, String> {
         }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(files)
+    Ok((files, cz))
 }
 
 /// NEEDS_PY's command, like hash_cmd.
@@ -513,7 +546,7 @@ fn read_manifest(p: &Path) -> Option<Manifest> {
 /// Copies a server's custom files into its folder on this computer (only what changed since the
 /// last time) and writes manifest.json, ready for scripts/r2-fastdl.sh.
 pub fn prepare(id: &str, g: &Game, game: &str) -> Result<Value, String> {
-    let files = collect(g, game)?;
+    let (files, needs_cz) = collect_all(g, game)?;
     let dir = stage_dir(id);
     let out = dir.join("files");
     std::fs::create_dir_all(&out).map_err(|e| format!("Couldn't make {} ({e}).", out.display()))?;
@@ -562,7 +595,7 @@ pub fn prepare(id: &str, g: &Game, game: &str) -> Result<Value, String> {
     let text = serde_json::to_string_pretty(&m).map_err(|e| e.to_string())?;
     std::fs::write(dir.join("manifest.json"), text).map_err(|e| format!("Couldn't write the manifest ({e})."))?;
     Ok(json!({
-        "ok": true, "files": m.files.len(), "copied": copied, "removed": removed,
+        "ok": true, "files": m.files.len(), "copied": copied, "removed": removed, "needs_czero": needs_cz,
         "mb": (bytes as f64 / 1_048_576.0 * 10.0).round() / 10.0,
         "dir": dir.to_string_lossy(), "command": format!("scripts/r2-fastdl.sh {id}"),
     }))
@@ -760,6 +793,15 @@ mod tests {
         assert!(!wanted("addons/amxmodx/plugins/x.amxx", "cstrike"));
         assert!(wanted("loner.wad", "cstrike"));
         assert!(!wanted("halflife.wad", "cstrike"));
+        // Valve's files for either game never go up, whichever game the server runs
+        assert!(!wanted("czcs_italy.wad", "cstrike"), "Condition Zero's own texture file on a CS 1.6 server");
+        assert!(!wanted("czcs_italy.wad", "czero"));
+        let cz = BTreeMap::from([
+            ("cz_map".to_string(), MapNeeds { ent: "{\n\"wad\" \"\\\\x\\\\czcs_italy.wad;\\\\x\\\\mine.wad\"\n}".into(), res: String::new() }),
+            ("plain".to_string(), MapNeeds { ent: "{\n\"wad\" \"\\\\x\\\\halflife.wad\"\n}".into(), res: String::new() }),
+        ]);
+        assert_eq!(needs_czero(&cz, "cstrike"), ["cz_map"]);
+        assert!(needs_czero(&cz, "czero").is_empty());
     }
 
     /// A game folder with links pointing outside it (a secret next to it): (root, game dir).
@@ -861,6 +903,7 @@ mod tests {
                 println!("WOULD\t{n}\t{r}");
             }
             println!("MAPS\t{}", maps.keys().cloned().collect::<Vec<_>>().join(" "));
+            println!("NEEDS_CZERO\t{}", needs_czero(&maps, "cstrike").join(" "));
             return;
         }
         let (Ok(hl), Ok(id), Ok(step)) = (std::env::var("LS_FASTDL_E2E"), std::env::var("LS_FASTDL_E2E_ID"), std::env::var("LS_FASTDL_E2E_STEP")) else { return };
