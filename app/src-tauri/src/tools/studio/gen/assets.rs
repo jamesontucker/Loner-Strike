@@ -496,6 +496,26 @@ mod tests {
         assert!(validate(&bad).iter().any(|x| x.level == "error"));
     }
 
+    /// Loop Sound's Handle is a Sound Loop: it goes into a Sound Loop variable and, as an entity,
+    /// into Stop Sound and any Entity pin (an old graph's wires stay good).
+    #[test]
+    fn loop_handles_are_sound_loops() {
+        let mut v: Value = serde_json::from_str(include_str!("../testdata/every_node_fx.graph.json")).unwrap();
+        v["variables"].as_array_mut().unwrap().push(serde_json::json!({"id": "lv", "name": "Rain", "type": "soundloop", "scope": "mode"}));
+        v["variables"].as_array_mut().unwrap().push(serde_json::json!({"id": "ev", "name": "Old", "type": "entity", "scope": "mode"}));
+        let nodes = v["nodes"].as_array_mut().unwrap();
+        nodes.push(serde_json::json!({"id": "keep", "type": "var.set", "pos": {"x": 0, "y": 0}, "params": {"var": "lv"}}));
+        nodes.push(serde_json::json!({"id": "keep2", "type": "var.set", "pos": {"x": 0, "y": 0}, "params": {"var": "ev"}}));
+        let e = v["edges"].as_array_mut().unwrap();
+        e.push(serde_json::json!({"id": "k1", "from": {"node": "lp", "pin": "out"}, "to": {"node": "keep", "pin": "value"}}));
+        e.push(serde_json::json!({"id": "k2", "from": {"node": "lp", "pin": "out"}, "to": {"node": "keep2", "pin": "value"}}));
+        let g = parse(&v.to_string()).unwrap();
+        let view = crate::tools::studio::graph::View::new(&g);
+        assert_eq!(view.out_type("lp", "out").as_deref(), Some("soundloop"));
+        let p = validate(&g);
+        assert!(!p.iter().any(|x| x.level == "error" && ["keep", "keep2", "st"].contains(&x.node.as_deref().unwrap_or(""))), "{p:#?}");
+    }
+
     /// A mode with no file values gets none of it (old plugins stay the same).
     #[test]
     fn no_file_values_no_table() {

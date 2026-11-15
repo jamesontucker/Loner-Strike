@@ -27781,7 +27781,7 @@
     },
     {
      "id": "out",
-     "type": "entity",
+     "type": "soundloop",
      "label": "Handle"
     }
    ],

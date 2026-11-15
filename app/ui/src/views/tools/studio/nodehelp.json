@@ -51221,7 +51221,7 @@
 {
 "id":"out",
 "dir":"out",
-"help":"Handle: an entity (a thing in the map)."
+"help":"Handle: soundloop."
 }
 ],
 "settings":[
@@ -51252,7 +51252,7 @@
 "snd.play_at"
 ],
 "example":{
-"caption":"When a round starts, Loop Sound runs and its result is printed.",
+"caption":"When a round starts, Loop Sound runs.",
 "nodes":[
 {
 "id":"ev",
@@ -51277,18 +51277,6 @@
 "falloff":"normal",
 "every":0
 }
-},
-{
-"id":"show",
-"type":"debug.print",
-"pos":{
-"x":680,
-"y":0
-},
-"params":{
-"text":"Handle:",
-"chat":false
-}
 }
 ],
 "edges":[
@@ -51300,28 +51288,6 @@
 },
 "to":{
 "node":"it",
-"pin":"exec"
-}
-},
-{
-"id":"w2",
-"from":{
-"node":"it",
-"pin":"out"
-},
-"to":{
-"node":"show",
-"pin":"value"
-}
-},
-{
-"id":"w3",
-"from":{
-"node":"it",
-"pin":"then"
-},
-"to":{
-"node":"show",
 "pin":"exec"
 }
 }

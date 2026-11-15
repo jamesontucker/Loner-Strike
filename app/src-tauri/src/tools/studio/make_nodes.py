@@ -1364,6 +1364,12 @@ _dch = next(p for p in _fxd["params"] if p["id"] == "decal")
 node("asset.decal", "Decal", "Files", "A kind of decal from the game's decals.wad (bullet hole, scorch, blood...): keep it in a variable or an array, and wire it into Place Decal, which picks one of that kind.", outputs=[P("out","decal","Decal")], params=[prm("decal","Decal","choice",_dch["default"],choices=_dch["choices"])], keywords="decal spray mark scorch blood bullet hole kind constant", pure=True)
 if not any(i["id"] == "decal" for i in _fxd["inputs"]):
     _fxd["inputs"].append(P("decal","decal","Decal",optional=True,param="decal"))
+# Sound Loop values: Loop Sound's Handle is a playing loop (an entity underneath, so it still goes
+# into Entity pins: graph.rs upcast); keep it to stop that loop and no other
+_lp = next(d for d in nodes if d["type"] == "snd.loop")
+for o in _lp["outputs"]:
+    if o["id"] == "out":
+        o["type"] = "soundloop"
 # ==== end assets (X-fx) ====
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)
 print(len(nodes), "nodes")
