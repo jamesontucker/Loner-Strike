@@ -166,17 +166,25 @@ pub fn build(project: &Path, hl: &Path, czero: bool, name: &str) -> Result<Sourc
     if !lumps.is_empty() {
         files.push((format!("source/{wad_name}"), wadwrite::write_lumps(&lumps)));
     }
-    files.push(("source/README-source.txt".into(), readme(name, !lumps.is_empty(), &wad_name).into_bytes()));
-    Ok(Source { files, textures, missing, remix_of })
+    let mut s = Source { files, textures, missing, remix_of };
+    // (the README says which textures came along and which weren't found)
+    let text = readme(name, &s.textures, &s.missing, &wad_name);
+    s.files.push(("source/README-source.txt".into(), text.into_bytes()));
+    Ok(s)
 }
 
-fn readme(name: &str, has_wad: bool, wad_name: &str) -> String {
+fn readme(name: &str, textures: &[String], missing: &[String], wad_name: &str) -> String {
     let mut t = String::new();
     t.push_str(&format!("The editable source of {name}.\r\n\r\n"));
     t.push_str(&format!("{name}.lsmap  the Loner-Strike map editor's project: in Loner-Strike, Community > the map's page > Remix this map\r\n"));
     t.push_str(&format!("{name}.map    the same map as a Valve 220 .map, for Hammer, J.A.C.K. and TrenchBroom\r\n"));
-    if has_wad {
-        t.push_str(&format!("{wad_name}  the map's own textures (the game's own ones come with the game)\r\n"));
+    if !textures.is_empty() {
+        t.push_str(&format!("{wad_name}  the map's own textures ({}; the game's own ones come with the game)\r\n", textures.len()));
+    }
+    // (textures the map uses that weren't in any texture file on the maker's computer: a remix
+    // shows them as a checkerboard until someone finds them)
+    if !missing.is_empty() {
+        t.push_str(&format!("\r\nNot included (not in any texture file the maker had): {}\r\n", missing.join(", ")));
     }
     t.push_str("\r\nRemix it, and credit the original when you share yours (Loner-Strike's Publish does that for you).\r\n");
     t
@@ -361,6 +369,9 @@ mod tests {
         assert_eq!(names, ["source/aim_qa.lsmap", "source/aim_qa.map", "source/aim_qa_custom.wad", "source/README-source.txt"]);
         assert_eq!(s.textures, ["brick"], "only the map's own, used texture: not CS 1.6's, not an unused one");
         assert_eq!(s.missing, ["lost"]);
+        // (the README says so, for a remixer: what's in the WAD and what wasn't found)
+        let readme = String::from_utf8(s.files.iter().find(|(n, _)| n.ends_with("README-source.txt")).unwrap().1.clone()).unwrap();
+        assert!(readme.contains("(1; the game's own ones come with the game)") && readme.contains("Not included (not in any texture file the maker had): lost"), "{readme}");
         let wad_bytes = &s.files[2].1;
         let lumps = wadwrite::read_lumps(wad_bytes).unwrap();
         assert_eq!(lumps.iter().map(|l| l.name.to_ascii_lowercase()).collect::<Vec<_>>(), ["brick"]);

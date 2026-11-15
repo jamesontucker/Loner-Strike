@@ -246,13 +246,6 @@ fn files(g: &Graph) -> (BTreeSet<String>, BTreeSet<String>) {
 
 // ---- the transform every spawn node takes ------------------------------------------------
 
-/// Whether a spawn node's place comes from the shared transform pins (a position, or an
-/// entity wired into its At pin with an offset). `at_pin` is the node's entity pin.
-pub(super) fn place_wired(gen: &Gen, id: &str, at_pin: &str) -> bool {
-    let w = |p: &str| gen.v.data_source(id, p).is_some();
-    w("pos") || (w(at_pin) && w("offset"))
-}
-
 /// Code that finds where a spawn node makes its thing, into `o` (a Float:o[3] already
 /// declared): the entity wired into `at_pin` (with Local offset), else At position, else
 /// `fallback` (the node's own way, like the entity with a name). It is an expression that's

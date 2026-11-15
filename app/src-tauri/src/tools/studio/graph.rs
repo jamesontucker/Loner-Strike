@@ -1102,8 +1102,6 @@ pub const BASE_TYPES: [&str; 20] = [
     // (graph version 4) files the mode loads, a color, the entity handles, a playing loop
     "model", "sprite", "sound", "decal", "color", "npc", "creature", "projectile", "volume", "objmarker", "component", "soundloop",
 ];
-/// The entity handles: an entity known to be that kind (each goes into Entity pins as it is).
-pub const HANDLES: [&str; 6] = ["npc", "creature", "projectile", "volume", "objmarker", "component"];
 
 /// What a value of this type goes into as it is, one step (a Player is an Entity, a Creature is an
 /// Entity, a Model or a Sprite is a "visual", a Weapon is its name).

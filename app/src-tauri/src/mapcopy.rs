@@ -190,9 +190,6 @@ pub struct LocalMap {
     pub bsp: PathBuf,
     /// "cstrike" or "czero": the game whose folders the .bsp is in
     pub game: String,
-    /// the folder it's really in: the game's own, or its _downloads folder (maps the game
-    /// downloaded from a server)
-    pub folder: String,
     /// only in czero/maps (going to a CS 1.6 server)
     pub cz_only: bool,
 }
@@ -217,7 +214,7 @@ pub fn find_local(f: &Finder, hl: &Path, map: &str, target_game: &str) -> Option
             let name = p.file_stem()?.to_string_lossy().to_string();
             let g = folder.trim_end_matches("_downloads");
             let cz_only = target_game == "cstrike" && g == "czero";
-            return Some(LocalMap { name, bsp: p, game: g.into(), folder: folder.into(), cz_only });
+            return Some(LocalMap { name, bsp: p, game: g.into(), cz_only });
         }
     }
     None
@@ -1043,20 +1040,20 @@ mod tests {
         put(&hl, "cstrike_downloads/maps/kz_zen.bsp", &bsp(ENTS));
         put(&hl, "cstrike_downloads/sprites/myglow.spr", b"IDSP");
         let m = find_local(&f, &hl, "kz_zen", "cstrike").unwrap();
-        assert_eq!((m.game.as_str(), m.folder.as_str(), m.cz_only), ("cstrike", "cstrike_downloads", false));
+        assert_eq!((m.game.as_str(), m.bsp.parent().and_then(|x| x.parent()).and_then(|d| d.file_name()).unwrap().to_string_lossy().as_ref(), m.cz_only), ("cstrike", "cstrike_downloads", false));
         let (files, _) = needed_files(&f, &hl, &m);
         assert!(files.iter().any(|(r, p)| r == "sprites/myglow.spr" && p.starts_with(hl.join("cstrike_downloads"))), "{files:?}");
         // a Condition Zero game plays it too
-        assert_eq!(find_local(&f, &hl, "kz_zen", "czero").unwrap().folder, "cstrike_downloads");
+        assert_eq!(find_local(&f, &hl, "kz_zen", "czero").unwrap().bsp.parent().and_then(|m| m.parent()).and_then(|d| d.file_name()).unwrap().to_string_lossy(), "cstrike_downloads");
         // the game's own folder wins over what it downloaded
         put(&hl, "cstrike/maps/kz_zen.bsp", &bsp(ENTS));
-        assert_eq!(find_local(&f, &hl, "kz_zen", "cstrike").unwrap().folder, "cstrike");
+        assert_eq!(find_local(&f, &hl, "kz_zen", "cstrike").unwrap().bsp.parent().and_then(|m| m.parent()).and_then(|d| d.file_name()).unwrap().to_string_lossy(), "cstrike");
         // Condition Zero: its own downloads before 1.6's folders; for 1.6 it's Condition Zero only
         put(&hl, "czero_downloads/maps/cz_dl.bsp", &bsp(ENTS));
         put(&hl, "cstrike_downloads/maps/cz_dl.bsp", &bsp(ENTS));
         let cz = find_local(&f, &hl, "cz_dl", "czero").unwrap();
-        assert_eq!((cz.game.as_str(), cz.folder.as_str()), ("czero", "czero_downloads"));
-        assert_eq!(find_local(&f, &hl, "cz_dl", "cstrike").unwrap().folder, "cstrike_downloads");
+        assert_eq!((cz.game.as_str(), cz.bsp.parent().and_then(|x| x.parent()).and_then(|d| d.file_name()).unwrap().to_string_lossy().as_ref()), ("czero", "czero_downloads"));
+        assert_eq!(find_local(&f, &hl, "cz_dl", "cstrike").unwrap().bsp.parent().and_then(|m| m.parent()).and_then(|d| d.file_name()).unwrap().to_string_lossy(), "cstrike_downloads");
         put(&hl, "czero_downloads/maps/cz_only.bsp", &bsp(ENTS));
         let only = find_local(&f, &hl, "cz_only", "cstrike").unwrap();
         assert!(only.cz_only && only.game == "czero");
