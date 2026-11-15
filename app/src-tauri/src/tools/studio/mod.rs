@@ -1698,7 +1698,8 @@ mod tests {
         let mk = include_str!("testdata/markers.graph.json");
         let every2 = include_str!("testdata/every_node_2.graph.json");
         let every3 = include_str!("testdata/every_node_3.graph.json");
-        let mut graphs: Vec<(String, String)> = [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br), ("markers", mk), ("every_node_2", every2), ("every_node_3", every3)].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+        let every4 = include_str!("testdata/every_node_4.graph.json");
+        let mut graphs: Vec<(String, String)> = [("rifle_reward", TEMPLATE), ("all_nodes", all), ("malicious", evil), ("every_node", every), ("last_stand", ls), ("royale", br), ("markers", mk), ("every_node_2", every2), ("every_node_3", every3), ("every_node_4", every4)].iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
         for (id, v) in builtin_snippets() {
             graphs.push((format!("sn_{id}"), serde_json::to_string(&snippet_as_graph(&id, &v)).unwrap()));
         }

@@ -93,7 +93,8 @@
   "NPCs",
   "Battle Royale",
   "Creatures",
-  "Data tables"
+  "Data tables",
+  "HUD & View"
  ],
  "nodes": [
   {
@@ -19035,6 +19036,768 @@
    ],
    "params": [],
    "reroute": true
+  },
+  {
+   "type": "eng.hide_hud",
+   "title": "Hide HUD Parts",
+   "category": "HUD & View",
+   "help": "Hides parts of a player's HUD (or everyone's): the crosshair, money, the round timer, the radar with health and armor (one switch in the game), the weapon and ammo panel, the flashlight icon. Nothing ticked shows it all again. It stays through the game redrawing the HUD; Back to normal on death/respawn ends it there.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player (empty: everyone)",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "crosshair",
+     "label": "Crosshair",
+     "kind": "bool",
+     "default": true
+    },
+    {
+     "id": "money",
+     "label": "Money",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "timer",
+     "label": "Round timer",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "radar",
+     "label": "Radar, health and armor",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "weapons",
+     "label": "Weapon and ammo panel",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "flashlight",
+     "label": "Flashlight icon",
+     "kind": "bool",
+     "default": false
+    },
+    {
+     "id": "reset",
+     "label": "Back to normal on death/respawn",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "hud crosshair money timer radar hide interface hideweapon"
+  },
+  {
+   "type": "eng.fov",
+   "title": "Set Field of View",
+   "category": "HUD & View",
+   "help": "How wide a player sees (or everyone): 90 is normal, less zooms in, more is a fish-eye. A sniper scope still zooms and comes back to this. Back to normal on death/respawn puts 90 back there.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player (empty: everyone)",
+     "optional": true
+    },
+    {
+     "id": "fov",
+     "type": "number",
+     "label": "Degrees",
+     "param": "fov"
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "fov",
+     "label": "Degrees",
+     "kind": "number",
+     "default": 90,
+     "min": 10,
+     "max": 170
+    },
+    {
+     "id": "reset",
+     "label": "Back to normal on death/respawn",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "fov zoom field of view setfov"
+  },
+  {
+   "type": "eng.view_model",
+   "title": "Set Weapon View Model",
+   "category": "HUD & View",
+   "help": "The model a player sees in their own hands (models/v_...mdl) for the weapon in hand or a chosen weapon, kept whenever they take it out again; also, if set, the model others see them hold (models/p_...mdl). Back to normal model puts the game's own back. Your own models are loaded with the map and go with the mode when you publish it.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "weapon",
+     "label": "Weapon",
+     "kind": "choice",
+     "default": "current",
+     "choices": [
+      [
+       "current",
+       "The one in hand"
+      ],
+      [
+       "knife",
+       "Knife"
+      ],
+      [
+       "ak47",
+       "AK-47"
+      ],
+      [
+       "m4a1",
+       "M4A1"
+      ],
+      [
+       "awp",
+       "AWP"
+      ],
+      [
+       "scout",
+       "Scout"
+      ],
+      [
+       "famas",
+       "FAMAS"
+      ],
+      [
+       "galil",
+       "Galil"
+      ],
+      [
+       "aug",
+       "AUG"
+      ],
+      [
+       "sg552",
+       "SG 552"
+      ],
+      [
+       "mp5navy",
+       "MP5"
+      ],
+      [
+       "p90",
+       "P90"
+      ],
+      [
+       "ump45",
+       "UMP 45"
+      ],
+      [
+       "mac10",
+       "MAC-10"
+      ],
+      [
+       "tmp",
+       "TMP"
+      ],
+      [
+       "m3",
+       "M3 shotgun"
+      ],
+      [
+       "xm1014",
+       "XM1014 shotgun"
+      ],
+      [
+       "m249",
+       "M249"
+      ],
+      [
+       "deagle",
+       "Desert Eagle"
+      ],
+      [
+       "usp",
+       "USP"
+      ],
+      [
+       "glock18",
+       "Glock"
+      ],
+      [
+       "p228",
+       "P228"
+      ],
+      [
+       "fiveseven",
+       "Five-SeveN"
+      ],
+      [
+       "elite",
+       "Dual Elites"
+      ],
+      [
+       "hegrenade",
+       "HE grenade"
+      ],
+      [
+       "flashbang",
+       "Flashbang"
+      ],
+      [
+       "smokegrenade",
+       "Smoke grenade"
+      ]
+     ]
+    },
+    {
+     "id": "model",
+     "label": "View model",
+     "kind": "path",
+     "default": "models/v_knife.mdl"
+    },
+    {
+     "id": "pmodel",
+     "label": "Model others see (empty: unchanged)",
+     "kind": "path",
+     "default": ""
+    },
+    {
+     "id": "restore",
+     "label": "Back to normal model",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "viewmodel weapon model skin v_ p_ hands"
+  },
+  {
+   "type": "eng.flashlight",
+   "title": "Flashlight",
+   "category": "HUD & View",
+   "help": "Turns a player's flashlight on or off, lets them use it or not (F), and sets its battery (0 to 100; -1 leaves it).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "do",
+     "label": "Do",
+     "kind": "choice",
+     "default": "on",
+     "choices": [
+      [
+       "on",
+       "Turn it on"
+      ],
+      [
+       "off",
+       "Turn it off"
+      ],
+      [
+       "allow",
+       "Let them use it"
+      ],
+      [
+       "deny",
+       "Don't let them use it"
+      ]
+     ]
+    },
+    {
+     "id": "battery",
+     "label": "Battery",
+     "kind": "number",
+     "default": -1,
+     "min": -1,
+     "max": 100
+    }
+   ],
+   "keywords": "flashlight torch light battery impulse 100"
+  },
+  {
+   "type": "eng.nightvision",
+   "title": "Night Vision",
+   "category": "HUD & View",
+   "help": "Gives a player night vision goggles or takes them, or turns them on or off (giving them first if needed). The same in Counter-Strike and Condition Zero.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "do",
+     "label": "Do",
+     "kind": "choice",
+     "default": "give",
+     "choices": [
+      [
+       "give",
+       "Give goggles"
+      ],
+      [
+       "take",
+       "Take goggles"
+      ],
+      [
+       "on",
+       "Turn on"
+      ],
+      [
+       "off",
+       "Turn off"
+      ]
+     ]
+    }
+   ],
+   "keywords": "nightvision nvg goggles"
+  },
+  {
+   "type": "eng.footsteps",
+   "title": "Silent Footsteps",
+   "category": "HUD & View",
+   "help": "A player's footsteps make no sound (on) or sound again (off). It lasts until turned off or they leave.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "on",
+     "label": "Silent",
+     "kind": "bool",
+     "default": true
+    }
+   ],
+   "keywords": "footsteps silent quiet steps sound"
+  },
+  {
+   "type": "eng.score_tag",
+   "title": "Scoreboard Tag",
+   "category": "HUD & View",
+   "help": "Shows VIP, Bomb or Dead next to a player's name on everyone's scoreboard (or none: the game's own again). Only the tag: they aren't really the VIP, carrying the bomb or dead. Clear on death/respawn ends it there.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "tag",
+     "label": "Tag",
+     "kind": "choice",
+     "default": "vip",
+     "choices": [
+      [
+       "none",
+       "None (the game's own)"
+      ],
+      [
+       "vip",
+       "VIP"
+      ],
+      [
+       "bomb",
+       "Bomb"
+      ],
+      [
+       "dead",
+       "Dead"
+      ]
+     ]
+    },
+    {
+     "id": "reset",
+     "label": "Clear on death/respawn",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "scoreboard tag vip bomb dead scoreattrib"
+  },
+  {
+   "type": "eng.score_color",
+   "title": "Scoreboard Team Color",
+   "category": "HUD & View",
+   "help": "Shows a player as a Terrorist, Counter-Terrorist or spectator in everyone's game (name color, scoreboard section) without moving them: their real team, spawns and rules stay. Real team undoes it. Side effects: the radar and name tags follow what's shown, and the player's own buy menu and team HUD do too.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player",
+     "required": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "team",
+     "label": "Show as",
+     "kind": "choice",
+     "default": "t",
+     "choices": [
+      [
+       "t",
+       "Terrorist"
+      ],
+      [
+       "ct",
+       "Counter-Terrorist"
+      ],
+      [
+       "spec",
+       "Spectator"
+      ],
+      [
+       "real",
+       "Real team"
+      ]
+     ]
+    }
+   ],
+   "keywords": "scoreboard team color teaminfo disguise"
+  },
+  {
+   "type": "eng.spectate",
+   "title": "Force Spectate",
+   "category": "HUD & View",
+   "help": "Makes a dead player or a spectator watch Target through their eyes, and keeps them on Target until Release (or Target leaves). A living player is refused.",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Watcher",
+     "required": true
+    },
+    {
+     "id": "target",
+     "type": "player",
+     "label": "Target",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "do",
+     "label": "Do",
+     "kind": "choice",
+     "default": "watch",
+     "choices": [
+      [
+       "watch",
+       "Watch Target"
+      ],
+      [
+       "release",
+       "Release"
+      ]
+     ]
+    }
+   ],
+   "keywords": "spectate observer watch camera follow"
+  },
+  {
+   "type": "eng.soundtrack",
+   "title": "Play Soundtrack",
+   "category": "HUD & View",
+   "help": "Plays a Half-Life soundtrack track for everyone or one player (the game's own music files, as a map's trigger_cdaudio does), looping if asked; or stops it. Players hear it only if their game has the soundtrack (Steam's Half-Life files do).",
+   "inputs": [
+    {
+     "id": "exec",
+     "type": "exec",
+     "label": ""
+    },
+    {
+     "id": "player",
+     "type": "player",
+     "label": "Player (empty: everyone)",
+     "optional": true
+    }
+   ],
+   "outputs": [
+    {
+     "id": "then",
+     "type": "exec",
+     "label": ""
+    }
+   ],
+   "params": [
+    {
+     "id": "do",
+     "label": "Do",
+     "kind": "choice",
+     "default": "play",
+     "choices": [
+      [
+       "play",
+       "Play"
+      ],
+      [
+       "stop",
+       "Stop"
+      ]
+     ]
+    },
+    {
+     "id": "track",
+     "label": "Track",
+     "kind": "choice",
+     "default": "2",
+     "choices": [
+      [
+       "2",
+       "2: Adrenaline Horror"
+      ],
+      [
+       "3",
+       "3: Vague Voices"
+      ],
+      [
+       "4",
+       "4: Klaxon Beat"
+      ],
+      [
+       "5",
+       "5: Space Ocean"
+      ],
+      [
+       "6",
+       "6: Cavern Ambiance"
+      ],
+      [
+       "7",
+       "7: Apprehensive Short"
+      ],
+      [
+       "8",
+       "8: Bass String Short"
+      ],
+      [
+       "9",
+       "9: Hurricane Strings"
+      ],
+      [
+       "10",
+       "10: Diabolical Adrenaline Guitar"
+      ],
+      [
+       "11",
+       "11: Valve Theme (long)"
+      ],
+      [
+       "12",
+       "12: Nepal Monastery"
+      ],
+      [
+       "13",
+       "13: Alien Shock"
+      ],
+      [
+       "14",
+       "14: Sirens in the Distance"
+      ],
+      [
+       "15",
+       "15: Nuclear Mission Jam"
+      ],
+      [
+       "16",
+       "16: Scared Confusion Short"
+      ],
+      [
+       "17",
+       "17: Drums and Riffs"
+      ],
+      [
+       "18",
+       "18: Hard Technology Rock"
+      ],
+      [
+       "19",
+       "19: Steam in the Pipes"
+      ],
+      [
+       "20",
+       "20: Electric Guitar Ambience"
+      ],
+      [
+       "21",
+       "21: Dimensionless Deepness"
+      ],
+      [
+       "22",
+       "22: Military Precision"
+      ],
+      [
+       "23",
+       "23: Jungle Drums"
+      ],
+      [
+       "24",
+       "24: Traveling Through Limbo"
+      ],
+      [
+       "25",
+       "25: Credits / Closing Theme"
+      ],
+      [
+       "26",
+       "26: Threatening Short"
+      ],
+      [
+       "27",
+       "27: Dark Piano Short"
+      ],
+      [
+       "28",
+       "28: Sharp Fear Short"
+      ]
+     ]
+    },
+    {
+     "id": "loop",
+     "label": "Loop",
+     "kind": "bool",
+     "default": false
+    }
+   ],
+   "keywords": "music soundtrack cd audio track mp3 cdaudio"
   }
  ]
 }

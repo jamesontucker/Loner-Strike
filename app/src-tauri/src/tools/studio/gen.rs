@@ -27,6 +27,9 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
 
+// HUD & View: the engine nodes (Y), their own file
+pub(crate) mod engine;
+
 /// How many event cell values a flow can carry (victim, attacker...).
 const CTX: usize = 8;
 /// How many event text values (a creature's type) a flow can carry.
@@ -1363,6 +1366,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         o.line(SAVED);
         o.blank();
     }
+    engine::blocks(g, &mut o);
     if uses_clock {
         o.line(CLOCK);
         o.blank();
@@ -1472,7 +1476,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         .filter_map(|k| k.split_whitespace().find_map(|w| w.strip_prefix("keeper=")))
         .filter_map(|k| match k { "barney" => Some("models/barney.mdl"), "gman" => Some("models/gman.mdl"), _ => None })
         .collect::<BTreeSet<_>>().into_iter().collect();
-    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() || !npc_models.is_empty() || uses_fire || uses_smoke || uses_blood {
+    if !need.creatures.is_empty() || uses_markers || map_events || !keepers.is_empty() || uses_exp || uses_beam || !props.is_empty() || !sounds.is_empty() || !npc_models.is_empty() || engine::needs_precache(g) || uses_fire || uses_smoke || uses_blood {
         let mut pre = String::from("public plugin_precache()\n{");
         for m in &npc_models {
             pre.push_str(&format!("\n\t// an NPC the mode makes: its model is loaded with the map\n\tls_npc_precache({})", pawn_str(m)));
@@ -1499,6 +1503,10 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
         }
         for snd in &sounds {
             pre.push_str(&format!("\n\tlsg_pre_sound({})", pawn_str(snd)));
+        }
+        // (the view models a Set Weapon View Model names)
+        for l in engine::precache(g) {
+            pre.push_str(&format!("\n{l}"));
         }
         for m in &keepers {
             pre.push_str(&format!("\n\t// the shopkeeper of a shop the mode makes\n\tlsg_pre_model({})", pawn_str(m)));
@@ -1606,6 +1614,7 @@ pub fn generate(checked: &Graph, debug: bool) -> Generated {
     if uses_down {
         o.line("\tset_task(0.25, \"lsg_revive_tick\", LSG_TASK - 1, _, _, \"b\")");
     }
+    engine::init(g, &mut o);
     if uses_clock {
         o.line("\tset_task(1.0, \"lsg_clock_tick\", LSG_TASK - 2, _, _, \"b\")");
     }
@@ -3382,6 +3391,10 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             if debug {
                 b.line(format!("\tlsd_exit({i}, fmt(\"%d keys\", lsg_mlen({m})))"));
             }
+            then_line(&mut b, "then");
+        }
+        k if engine::is_action(k) => {
+            engine::action(gen, id, n, def, &mut b, &inp, &exit, &err);
             then_line(&mut b, "then");
         }
         _ => {}
@@ -6953,6 +6966,8 @@ mod tests {
     /// the nodes every_node has no room for (a graph holds 400): the mode-building pieces
     pub const EVERY_NODE_2: &str = include_str!("testdata/every_node_2.graph.json");
     pub const EVERY_NODE_3: &str = include_str!("testdata/every_node_3.graph.json");
+    /// the HUD & View engine nodes (Y): their own graph, so others' every_node_3 edits don't meet them
+    pub const EVERY_NODE_4: &str = include_str!("testdata/every_node_4.graph.json");
     pub const MALICIOUS: &str = include_str!("testdata/malicious.graph.json");
 
     fn snapshot(name: &str, got: &str) {
@@ -7370,11 +7385,14 @@ mod tests {
         let g3 = parse(EVERY_NODE_3).unwrap();
         let p3 = super::super::graph::validate_core(&g3);
         assert!(p3.is_empty(), "every_node_3: {:#?}", p3);
-        let used: BTreeSet<&str> = g.nodes.iter().chain(g2.nodes.iter()).chain(g3.nodes.iter()).map(|n| n.kind.as_str()).collect();
+        let g4 = parse(EVERY_NODE_4).unwrap();
+        let p4 = super::super::graph::validate_core(&g4);
+        assert!(p4.is_empty(), "every_node_4: {:#?}", p4);
+        let used: BTreeSet<&str> = g.nodes.iter().chain(g2.nodes.iter()).chain(g3.nodes.iter()).chain(g4.nodes.iter()).map(|n| n.kind.as_str()).collect();
         for d in &registry().nodes {
-            assert!(used.contains(d.kind.as_str()), "every_node(_2/_3).graph.json lacks {}", d.kind);
+            assert!(used.contains(d.kind.as_str()), "every_node(_2/_3/_4).graph.json lacks {}", d.kind);
         }
-        for (name, gg) in [("every_node_2", &g2), ("every_node_3", &g3)] {
+        for (name, gg) in [("every_node_2", &g2), ("every_node_3", &g3), ("every_node_4", &g4)] {
             let r = generate(gg, false);
             for n in gg.nodes.iter().filter(|n| { let d = registry().get(&n.kind).unwrap(); !d.pure && !d.reroute }) {
                 assert!(r.spans.iter().any(|s| s.node == n.id), "{name}: {} isn't in the plugin", n.id);

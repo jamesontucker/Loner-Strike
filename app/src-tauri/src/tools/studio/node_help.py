@@ -241,6 +241,20 @@ def setting_help(p, pinned):
         s += " A wire into the pin of the same name is used instead."
     return s
 
+# HUD & View (engine nodes, Y)
+NOTES.update({
+    "eng.hide_hud": {"more": "Uses the game's own HUD switches (HideWeapon), so it costs nothing while it's on. The radar, health and armor are one switch in Counter-Strike. A spectator's own HUD isn't touched.", "related": ["eng.fov", "msg.hud"]},
+    "eng.fov": {"more": "Scopes still work: a sniper zooms in and goes back to this field of view. Very wide or very narrow views can make people feel sick; keep it between 60 and 120 for long play.", "related": ["eng.hide_hud"]},
+    "eng.view_model": {"more": "The model must be a file under models/ (the game's own, like models/v_knife.mdl, or your own). A file that isn't there is left out and the weapon keeps its own model. Only the look changes: damage, speed and sounds are the weapon's.", "risk": "Each model the mode uses is loaded with the map (the game has a limit of 512 models)."},
+    "eng.flashlight": {"more": "Don't let them use it also turns it off; Let them use it undoes that. The battery is what the HUD shows; it drains and recharges as usual."},
+    "eng.nightvision": {"related": ["eng.flashlight"]},
+    "eng.footsteps": {"more": "Only the footstep sounds: jumping and landing still make noise, and bots still hear players who shoot."},
+    "eng.score_tag": {"more": "The game sends the tags again when someone dies, spawns or picks up the bomb; this one is put back on each time until it's set to None."},
+    "eng.score_color": {"more": "Only how the player is shown changes. The game still treats them as their real team for damage, spawns, buying and winning. Everyone's radar and name tags follow the shown team, and the player's own client does too (their buy menu shows that team's guns, which they can't buy).", "risk": "Players can be confused about who's on which team; say so in the mode's description."},
+    "eng.spectate": {"more": "The watcher sees through Target's eyes and can't switch away while it lasts. When Target dies they keep watching the body until Release or a new Target."},
+    "eng.soundtrack": {"more": "The tracks are the Half-Life soundtrack's, numbered as the game numbers them (2 is the first). It's the player's own music volume (MP3 volume in the options).", "related": ["fx.sound_to"]},
+})
+
 EXEC_OUT = {"then": "Goes on when it's done.", "true": "Runs when the answer is yes.", "false": "Runs when the answer is no.", "each": "Runs once for every item.", "body": "Runs once for every step.", "none": "Runs when nothing was found.", "tick": "Runs every time the timer fires.", "done": "Runs when it's over.", "default": "Runs when no case matches.", "valid": "Runs when it's there.", "invalid": "Runs when it isn't."}
 
 def pin_help(d, p, out, notes):

@@ -38952,6 +38952,884 @@
 "flow.switch_text",
 "flow.switch_num"
 ]
+},
+"eng.hide_hud":{
+"title":"Hide HUD Parts",
+"category":"HUD & View",
+"what":"Hides parts of a player's HUD (or everyone's): the crosshair, money, the round timer, the radar with health and armor (one switch in the game), the weapon and ammo panel, the flashlight icon. Nothing ticked shows it all again. It stays through the game redrawing the HUD; Back to normal on death/respawn ends it there.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"Player (empty: everyone): a player. Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"crosshair",
+"help":"On or off."
+},
+{
+"id":"money",
+"help":"On or off."
+},
+{
+"id":"timer",
+"help":"On or off."
+},
+{
+"id":"radar",
+"help":"On or off."
+},
+{
+"id":"weapons",
+"help":"On or off."
+},
+{
+"id":"flashlight",
+"help":"On or off."
+},
+{
+"id":"reset",
+"help":"On or off."
+}
+],
+"more":"Uses the game's own HUD switches (HideWeapon), so it costs nothing while it's on. The radar, health and armor are one switch in Counter-Strike. A spectator's own HUD isn't touched.",
+"related":[
+"eng.fov",
+"msg.hud",
+"eng.view_model"
+],
+"example":{
+"caption":"When a round starts, Hide HUD Parts runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"eng.hide_hud",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"crosshair":true,
+"money":false,
+"timer":false,
+"radar":false,
+"weapons":false,
+"flashlight":false,
+"reset":true
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"eng.fov":{
+"title":"Set Field of View",
+"category":"HUD & View",
+"what":"How wide a player sees (or everyone): 90 is normal, less zooms in, more is a fish-eye. A sniper scope still zooms and comes back to this. Back to normal on death/respawn puts 90 back there.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"Player (empty: everyone): a player. Optional."
+},
+{
+"id":"fov",
+"dir":"in",
+"help":"Degrees: a number. Leave it empty to use the setting."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"fov",
+"help":"A number from 10 to 170. A wire into the pin of the same name is used instead."
+},
+{
+"id":"reset",
+"help":"On or off."
+}
+],
+"more":"Scopes still work: a sniper zooms in and goes back to this field of view. Very wide or very narrow views can make people feel sick; keep it between 60 and 120 for long play.",
+"related":[
+"eng.hide_hud",
+"eng.view_model",
+"eng.flashlight"
+],
+"example":{
+"caption":"When a round starts, Set Field of View runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"eng.fov",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"fov":90,
+"reset":true
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"eng.view_model":{
+"title":"Set Weapon View Model",
+"category":"HUD & View",
+"what":"The model a player sees in their own hands (models/v_...mdl) for the weapon in hand or a chosen weapon, kept whenever they take it out again; also, if set, the model others see them hold (models/p_...mdl). Back to normal model puts the game's own back. Your own models are loaded with the map and go with the mode when you publish it.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"weapon",
+"help":"Pick one: The one in hand, Knife, AK-47, M4A1, AWP, Scout, FAMAS, Galil, AUG, SG 552, MP5, P90…."
+},
+{
+"id":"model",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"pmodel",
+"help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
+},
+{
+"id":"restore",
+"help":"On or off."
+}
+],
+"more":"The model must be a file under models/ (the game's own, like models/v_knife.mdl, or your own). A file that isn't there is left out and the weapon keeps its own model. Only the look changes: damage, speed and sounds are the weapon's.",
+"related":[
+"eng.fov",
+"eng.flashlight",
+"eng.hide_hud"
+],
+"risk":"Each model the mode uses is loaded with the map (the game has a limit of 512 models).",
+"example":{
+"caption":"When a player spawns, Set Weapon View Model runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"eng.view_model",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"weapon":"current",
+"model":"models/v_knife.mdl",
+"pmodel":"",
+"restore":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"player"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"eng.flashlight":{
+"title":"Flashlight",
+"category":"HUD & View",
+"what":"Turns a player's flashlight on or off, lets them use it or not (F), and sets its battery (0 to 100; -1 leaves it).",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"do",
+"help":"Pick one: Turn it on, Turn it off, Let them use it, Don't let them use it."
+},
+{
+"id":"battery",
+"help":"A number from -1 to 100."
+}
+],
+"more":"Don't let them use it also turns it off; Let them use it undoes that. The battery is what the HUD shows; it drains and recharges as usual.",
+"related":[
+"eng.view_model",
+"eng.nightvision",
+"eng.fov"
+],
+"example":{
+"caption":"When a player spawns, Flashlight runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"eng.flashlight",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"do":"on",
+"battery":-1
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"player"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"eng.nightvision":{
+"title":"Night Vision",
+"category":"HUD & View",
+"what":"Gives a player night vision goggles or takes them, or turns them on or off (giving them first if needed). The same in Counter-Strike and Condition Zero.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"do",
+"help":"Pick one: Give goggles, Take goggles, Turn on, Turn off."
+}
+],
+"related":[
+"eng.flashlight",
+"eng.footsteps",
+"eng.view_model"
+],
+"example":{
+"caption":"When a player spawns, Night Vision runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"eng.nightvision",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"do":"give"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"player"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"eng.footsteps":{
+"title":"Silent Footsteps",
+"category":"HUD & View",
+"what":"A player's footsteps make no sound (on) or sound again (off). It lasts until turned off or they leave.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"on",
+"help":"On or off."
+}
+],
+"more":"Only the footstep sounds: jumping and landing still make noise, and bots still hear players who shoot.",
+"related":[
+"eng.nightvision",
+"eng.score_tag",
+"eng.flashlight"
+],
+"example":{
+"caption":"When a player spawns, Silent Footsteps runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"eng.footsteps",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"on":true
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"player"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"eng.score_tag":{
+"title":"Scoreboard Tag",
+"category":"HUD & View",
+"what":"Shows VIP, Bomb or Dead next to a player's name on everyone's scoreboard (or none: the game's own again). Only the tag: they aren't really the VIP, carrying the bomb or dead. Clear on death/respawn ends it there.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"tag",
+"help":"Pick one: None (the game's own), VIP, Bomb, Dead."
+},
+{
+"id":"reset",
+"help":"On or off."
+}
+],
+"more":"The game sends the tags again when someone dies, spawns or picks up the bomb; this one is put back on each time until it's set to None.",
+"related":[
+"eng.footsteps",
+"eng.score_color",
+"eng.nightvision"
+],
+"example":{
+"caption":"When a player spawns, Scoreboard Tag runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"eng.score_tag",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"tag":"vip",
+"reset":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"player"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"eng.score_color":{
+"title":"Scoreboard Team Color",
+"category":"HUD & View",
+"what":"Shows a player as a Terrorist, Counter-Terrorist or spectator in everyone's game (name color, scoreboard section) without moving them: their real team, spawns and rules stay. Real team undoes it. Side effects: the radar and name tags follow what's shown, and the player's own buy menu and team HUD do too.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"The player. Needs a wire."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"team",
+"help":"Pick one: Terrorist, Counter-Terrorist, Spectator, Real team."
+}
+],
+"more":"Only how the player is shown changes. The game still treats them as their real team for damage, spawns, buying and winning. Everyone's radar and name tags follow the shown team, and the player's own client does too (their buy menu shows that team's guns, which they can't buy).",
+"related":[
+"eng.score_tag",
+"eng.spectate",
+"eng.footsteps"
+],
+"risk":"Players can be confused about who's on which team; say so in the mode's description.",
+"example":{
+"caption":"When a player spawns, Scoreboard Team Color runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"eng.score_color",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"team":"t"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"player"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"eng.spectate":{
+"title":"Force Spectate",
+"category":"HUD & View",
+"what":"Makes a dead player or a spectator watch Target through their eyes, and keeps them on Target until Release (or Target leaves). A living player is refused.",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"Watcher: a player. Needs a wire."
+},
+{
+"id":"target",
+"dir":"in",
+"help":"Target: a player. Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"do",
+"help":"Pick one: Watch Target, Release."
+}
+],
+"more":"The watcher sees through Target's eyes and can't switch away while it lasts. When Target dies they keep watching the body until Release or a new Target.",
+"related":[
+"eng.score_color",
+"eng.soundtrack",
+"eng.score_tag"
+],
+"example":{
+"caption":"When a player spawns, Force Spectate runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.player_spawned",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"eng.spectate",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"do":"watch"
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"player"
+},
+"to":{
+"node":"it",
+"pin":"player"
+}
+},
+{
+"id":"w2",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
+},
+"eng.soundtrack":{
+"title":"Play Soundtrack",
+"category":"HUD & View",
+"what":"Plays a Half-Life soundtrack track for everyone or one player (the game's own music files, as a map's trigger_cdaudio does), looping if asked; or stops it. Players hear it only if their game has the soundtrack (Steam's Half-Life files do).",
+"pins":[
+{
+"id":"exec",
+"dir":"in",
+"help":"Runs this node."
+},
+{
+"id":"player",
+"dir":"in",
+"help":"Player (empty: everyone): a player. Optional."
+},
+{
+"id":"then",
+"dir":"out",
+"help":"Goes on when it's done."
+}
+],
+"settings":[
+{
+"id":"do",
+"help":"Pick one: Play, Stop."
+},
+{
+"id":"track",
+"help":"Pick one: 2: Adrenaline Horror, 3: Vague Voices, 4: Klaxon Beat, 5: Space Ocean, 6: Cavern Ambiance, 7: Apprehensive Short, 8: Bass String Short, 9: Hurricane Strings, 10: Diabolical Adrenaline Guitar, 11: Valve Theme (long), 12: Nepal Monastery, 13: Alien Shock…."
+},
+{
+"id":"loop",
+"help":"On or off."
+}
+],
+"more":"The tracks are the Half-Life soundtrack's, numbered as the game numbers them (2 is the first). It's the player's own music volume (MP3 volume in the options).",
+"related":[
+"fx.sound_to",
+"eng.spectate",
+"eng.score_color"
+],
+"example":{
+"caption":"When a round starts, Play Soundtrack runs.",
+"nodes":[
+{
+"id":"ev",
+"type":"event.round_started",
+"pos":{
+"x":0,
+"y":0
+},
+"params":{}
+},
+{
+"id":"it",
+"type":"eng.soundtrack",
+"pos":{
+"x":340,
+"y":0
+},
+"params":{
+"do":"play",
+"track":"2",
+"loop":false
+}
+}
+],
+"edges":[
+{
+"id":"w1",
+"from":{
+"node":"ev",
+"pin":"then"
+},
+"to":{
+"node":"it",
+"pin":"exec"
+}
+}
+]
+}
 }
 }
 }

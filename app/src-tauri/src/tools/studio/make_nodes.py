@@ -679,6 +679,33 @@ for d in nodes:
         d["help"] += INFLUENCE_HELP
         d["keywords"] = (d.get("keywords", "") + " personality obey skill").strip()
 
+# ---- HUD & View: engine nodes (Y). Kept together, after the others: X edits the rest of this file.
+PLO = P("player","player","Player (empty: everyone)",optional=True)
+PLR = P("player","player","Player",required=True)
+CD_TRACKS = [["2","2: Adrenaline Horror"],["3","3: Vague Voices"],["4","4: Klaxon Beat"],["5","5: Space Ocean"],["6","6: Cavern Ambiance"],["7","7: Apprehensive Short"],["8","8: Bass String Short"],["9","9: Hurricane Strings"],["10","10: Diabolical Adrenaline Guitar"],["11","11: Valve Theme (long)"],["12","12: Nepal Monastery"],["13","13: Alien Shock"],["14","14: Sirens in the Distance"],["15","15: Nuclear Mission Jam"],["16","16: Scared Confusion Short"],["17","17: Drums and Riffs"],["18","18: Hard Technology Rock"],["19","19: Steam in the Pipes"],["20","20: Electric Guitar Ambience"],["21","21: Dimensionless Deepness"],["22","22: Military Precision"],["23","23: Jungle Drums"],["24","24: Traveling Through Limbo"],["25","25: Credits / Closing Theme"],["26","26: Threatening Short"],["27","27: Dark Piano Short"],["28","28: Sharp Fear Short"]]
+node("eng.hide_hud", "Hide HUD Parts", "HUD & View", "Hides parts of a player's HUD (or everyone's): the crosshair, money, the round timer, the radar with health and armor (one switch in the game), the weapon and ammo panel, the flashlight icon. Nothing ticked shows it all again. It stays through the game redrawing the HUD; Back to normal on death/respawn ends it there.",
+     inputs=[X, PLO], outputs=[E()], params=[prm("crosshair","Crosshair","bool",True), prm("money","Money","bool",False), prm("timer","Round timer","bool",False), prm("radar","Radar, health and armor","bool",False), prm("weapons","Weapon and ammo panel","bool",False), prm("flashlight","Flashlight icon","bool",False), prm("reset","Back to normal on death/respawn","bool",True)],
+     keywords="hud crosshair money timer radar hide interface hideweapon")
+node("eng.fov", "Set Field of View", "HUD & View", "How wide a player sees (or everyone): 90 is normal, less zooms in, more is a fish-eye. A sniper scope still zooms and comes back to this. Back to normal on death/respawn puts 90 back there.",
+     inputs=[X, PLO, P("fov","number","Degrees",param="fov")], outputs=[E()], params=[prm("fov","Degrees","number",90,min=10,max=170), prm("reset","Back to normal on death/respawn","bool",True)], keywords="fov zoom field of view setfov")
+node("eng.view_model", "Set Weapon View Model", "HUD & View", "The model a player sees in their own hands (models/v_...mdl) for the weapon in hand or a chosen weapon, kept whenever they take it out again; also, if set, the model others see them hold (models/p_...mdl). Back to normal model puts the game's own back. Your own models are loaded with the map and go with the mode when you publish it.",
+     inputs=[X, PLR], outputs=[E()], params=[prm("weapon","Weapon","choice","current",choices=[["current","The one in hand"],["knife","Knife"]]+WEAPONS), prm("model","View model","path","models/v_knife.mdl"), prm("pmodel","Model others see (empty: unchanged)","path",""), prm("restore","Back to normal model","bool",False)],
+     keywords="viewmodel weapon model skin v_ p_ hands")
+node("eng.flashlight", "Flashlight", "HUD & View", "Turns a player's flashlight on or off, lets them use it or not (F), and sets its battery (0 to 100; -1 leaves it).",
+     inputs=[X, PLR], outputs=[E()], params=[prm("do","Do","choice","on",choices=[["on","Turn it on"],["off","Turn it off"],["allow","Let them use it"],["deny","Don't let them use it"]]), prm("battery","Battery","number",-1,min=-1,max=100)], keywords="flashlight torch light battery impulse 100")
+node("eng.nightvision", "Night Vision", "HUD & View", "Gives a player night vision goggles or takes them, or turns them on or off (giving them first if needed). The same in Counter-Strike and Condition Zero.",
+     inputs=[X, PLR], outputs=[E()], params=[prm("do","Do","choice","give",choices=[["give","Give goggles"],["take","Take goggles"],["on","Turn on"],["off","Turn off"]])], keywords="nightvision nvg goggles")
+node("eng.footsteps", "Silent Footsteps", "HUD & View", "A player's footsteps make no sound (on) or sound again (off). It lasts until turned off or they leave.",
+     inputs=[X, PLR], outputs=[E()], params=[prm("on","Silent","bool",True)], keywords="footsteps silent quiet steps sound")
+node("eng.score_tag", "Scoreboard Tag", "HUD & View", "Shows VIP, Bomb or Dead next to a player's name on everyone's scoreboard (or none: the game's own again). Only the tag: they aren't really the VIP, carrying the bomb or dead. Clear on death/respawn ends it there.",
+     inputs=[X, PLR], outputs=[E()], params=[prm("tag","Tag","choice","vip",choices=[["none","None (the game's own)"],["vip","VIP"],["bomb","Bomb"],["dead","Dead"]]), prm("reset","Clear on death/respawn","bool",False)], keywords="scoreboard tag vip bomb dead scoreattrib")
+node("eng.score_color", "Scoreboard Team Color", "HUD & View", "Shows a player as a Terrorist, Counter-Terrorist or spectator in everyone's game (name color, scoreboard section) without moving them: their real team, spawns and rules stay. Real team undoes it. Side effects: the radar and name tags follow what's shown, and the player's own buy menu and team HUD do too.",
+     inputs=[X, PLR], outputs=[E()], params=[prm("team","Show as","choice","t",choices=[["t","Terrorist"],["ct","Counter-Terrorist"],["spec","Spectator"],["real","Real team"]])], keywords="scoreboard team color teaminfo disguise")
+node("eng.spectate", "Force Spectate", "HUD & View", "Makes a dead player or a spectator watch Target through their eyes, and keeps them on Target until Release (or Target leaves). A living player is refused.",
+     inputs=[X, P("player","player","Watcher",required=True), P("target","player","Target",optional=True)], outputs=[E()], params=[prm("do","Do","choice","watch",choices=[["watch","Watch Target"],["release","Release"]])], keywords="spectate observer watch camera follow")
+node("eng.soundtrack", "Play Soundtrack", "HUD & View", "Plays a Half-Life soundtrack track for everyone or one player (the game's own music files, as a map's trigger_cdaudio does), looping if asked; or stops it. Players hear it only if their game has the soundtrack (Steam's Half-Life files do).",
+     inputs=[X, PLO], outputs=[E()], params=[prm("do","Do","choice","play",choices=[["play","Play"],["stop","Stop"]]), prm("track","Track","choice","2",choices=CD_TRACKS), prm("loop","Loop","bool",False)], keywords="music soundtrack cd audio track mp3 cdaudio")
+
 data = {
   "version": 4,
   "pinTypes": {
@@ -696,7 +723,7 @@ data = {
     "any": {"label": "Anything", "color": "#9a9a9a"},
     "var": {"label": "Variable", "color": "#cccccc"}
   },
-  "categories": ["Events", "Conditions", "Numbers", "Text", "Variables", "Flow", "Functions", "Macros", "Arrays", "Maps", "Structs", "Enums", "Vectors", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Map markers", "Waves", "Upgrades", "Game", "World", "Entities", "Effects", "Advanced", "Downed", "Shop", "NPCs", "Battle Royale", "Creatures", "Data tables"],
+  "categories": ["Events", "Conditions", "Numbers", "Text", "Variables", "Flow", "Functions", "Macros", "Arrays", "Maps", "Structs", "Enums", "Vectors", "Timers", "Round clock", "Players", "Damage", "Squads", "Buying", "Saved", "Messages", "Game", "Scoring", "Bots", "Components", "Map markers", "Waves", "Upgrades", "Game", "World", "Entities", "Effects", "Advanced", "Downed", "Shop", "NPCs", "Battle Royale", "Creatures", "Data tables", "HUD & View"],
   "nodes": nodes,
 }
 json.dump(data, open(sys.argv[1], "w"), indent=1, ensure_ascii=False)
