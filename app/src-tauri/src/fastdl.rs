@@ -187,12 +187,14 @@ fn sha_inside(root: &Path, rel: &str) -> Result<(u64, String), String> {
     Ok((n_all, hex(&h.finalize())))
 }
 
-/// Run on the server's machine (in its game folder) with the wanted paths on stdin, NUL
-/// separated: each is opened folder by folder with O_NOFOLLOW (no link anywhere on the way, so
+/// Run on the server's machine as `python3 -I -S -c HASH_PY <game folder>` (isolated: never
+/// imports anything from the game folder or the current one, which can hold downloaded files,
+/// and ignores PYTHON* settings; no cd into the folder) with the wanted paths on stdin, NUL
+/// separated, relative to the folder: each is opened folder by folder with O_NOFOLLOW (no link anywhere on the way, so
 /// nothing outside the folder), must be a plain file, and is hashed from that open file.
 /// Prints "size<TAB>sha256<TAB>path", or "refused<TAB>path".
 pub const HASH_PY: &str = r#"import os, sys, stat, hashlib
-root = os.open('.', os.O_RDONLY | os.O_DIRECTORY)
+root = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY)
 for rel in sys.stdin.buffer.read().split(b'\0'):
     if not rel:
         continue
@@ -230,6 +232,11 @@ for rel in sys.stdin.buffer.read().split(b'\0'):
             os.close(fd)
         sys.stdout.write('refused\t%s\n' % rel.decode('ascii', 'replace'))
 "#;
+
+/// The command that hashes on the server's machine: `q` is the game folder, shell-quoted.
+fn hash_cmd(q: &str) -> String {
+    format!("python3 -I -S -c {} {q}", crate::remote::shell_quote(HASH_PY))
+}
 
 /// HASH_PY's answer for the paths asked about (anything else it printed is ignored).
 fn parse_hashes(out: &str, asked: &std::collections::BTreeSet<String>) -> (Vec<File>, usize) {
@@ -323,7 +330,7 @@ pub fn collect(g: &Game, game: &str) -> Result<Vec<File>, String> {
             let asked: std::collections::BTreeSet<String> = sizes.into_keys().collect();
             let input: Vec<u8> = asked.iter().flat_map(|k| k.bytes().chain([0u8])).collect();
             let mut out = String::new();
-            let code = crate::remote::exec_stream(r, &format!("cd {q} && python3 -c {}", crate::remote::shell_quote(HASH_PY)), &input, |l| {
+            let code = crate::remote::exec_stream(r, &hash_cmd(&q), &input, |l| {
                 out.push_str(l);
                 out.push('\n');
             })?;
@@ -650,10 +657,18 @@ mod tests {
         let asked: std::collections::BTreeSet<String> =
             ["maps/real_map.bsp", "sound/linked.wav", "sound/linkdir/k.mdl", "models/k.mdl", "linked.wad", "maps/../../outside/id_rsa.wav"].iter().map(|s| s.to_string()).collect();
         let input: Vec<u8> = asked.iter().flat_map(|k| k.bytes().chain([0u8])).collect();
-        let mut child = std::process::Command::new("python3").arg("-c").arg(HASH_PY).current_dir(&dir).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).spawn().expect("python3");
+        // the very command the machine runs, started from inside the game folder (the worst case),
+        // with modules planted there that would give it away if imported
+        for m in ["hashlib", "os", "stat", "sys", "sitecustomize"] {
+            std::fs::write(dir.join(format!("{m}.py")), format!("open({:?}, 'w').write('imported')\nraise SystemExit(7)\n", root.join("planted_ran").to_string_lossy())).unwrap();
+        }
+        let cmd = hash_cmd(&crate::remote::shell_quote(&dir.to_string_lossy()));
+        assert!(cmd.starts_with("python3 -I -S -c ") && !cmd.contains("cd "), "{cmd}");
+        let mut child = std::process::Command::new("sh").arg("-c").arg(&cmd).current_dir(&dir).env("PYTHONPATH", &dir).env("PYTHONSTARTUP", dir.join("os.py")).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).spawn().expect("sh");
         child.stdin.take().unwrap().write_all(&input).unwrap();
         let out = child.wait_with_output().unwrap();
-        assert!(out.status.success());
+        assert!(out.status.success(), "{out:?}");
+        assert!(!root.join("planted_ran").exists(), "a module planted in the game folder was imported");
         let text = String::from_utf8(out.stdout).unwrap();
         assert!(!text.contains(&hex(&Sha256::digest(b"SECRET"))), "a secret was hashed: {text}");
         let (files, refused) = parse_hashes(&text, &asked);
