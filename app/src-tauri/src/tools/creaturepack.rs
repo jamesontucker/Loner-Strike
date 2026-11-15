@@ -1610,15 +1610,63 @@ fn value_words(v: &str) -> Vec<&str> {
     v.split([';', ' ', '|', '=', '"', ',']).filter(|w| !w.is_empty()).collect()
 }
 
-/// The models and sounds a Studio graph's NPC nodes name (game paths).
+/// The values of a graph that can name a file (X-fx, Studio types): node settings, variables' and
+/// Function locals' start values (Model, Sprite and Sound variables) and data table cells (Model,
+/// Sprite and Sound columns), as JSON pointers' parents and keys.
+fn file_value_sites(v: &Value) -> Vec<&Value> {
+    let mut out: Vec<&Value> = Vec::new();
+    for n in v["nodes"].as_array().into_iter().flatten().filter(|n| npc_node(n)) {
+        out.extend(n["params"].as_object().into_iter().flatten().map(|(_, pv)| pv));
+    }
+    for x in v["variables"].as_array().into_iter().flatten() {
+        out.push(&x["default"]);
+    }
+    for f in v["functions"].as_array().into_iter().flatten() {
+        out.extend(f["locals"].as_array().into_iter().flatten().map(|x| &x["default"]));
+    }
+    for t in v["dataTables"].as_array().into_iter().flatten() {
+        out.extend(t["rows"].as_array().into_iter().flatten().flat_map(|r| r.as_array().into_iter().flatten()));
+    }
+    out
+}
+
+/// The same places, to change in place.
+fn file_value_sites_mut(v: &mut Value, mut f: impl FnMut(&mut Value)) {
+    for n in v["nodes"].as_array_mut().into_iter().flatten() {
+        if !npc_node(n) {
+            continue;
+        }
+        if let Some(o) = n["params"].as_object_mut() {
+            o.values_mut().for_each(&mut f);
+        }
+    }
+    for x in v["variables"].as_array_mut().into_iter().flatten() {
+        if let Some(d) = x.get_mut("default") {
+            f(d);
+        }
+    }
+    for fun in v["functions"].as_array_mut().into_iter().flatten() {
+        for x in fun["locals"].as_array_mut().into_iter().flatten() {
+            if let Some(d) = x.get_mut("default") {
+                f(d);
+            }
+        }
+    }
+    for t in v["dataTables"].as_array_mut().into_iter().flatten() {
+        for r in t["rows"].as_array_mut().into_iter().flatten() {
+            r.as_array_mut().into_iter().flatten().for_each(&mut f);
+        }
+    }
+}
+
+/// The models, sprites and sounds a Studio graph names (game paths): in any node setting, and
+/// in file variables' and locals' start values and data table cells (X-fx).
 pub fn npc_files_in_graph_json(v: &Value) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
-    for n in v["nodes"].as_array().into_iter().flatten().filter(|n| npc_node(n)) {
-        for (_, pv) in n["params"].as_object().into_iter().flatten() {
-            for w in pv.as_str().map(value_words).unwrap_or_default() {
-                if let Some((rel, _)) = npc_file(w) {
-                    out.insert(rel);
-                }
+    for pv in file_value_sites(v) {
+        for w in pv.as_str().map(value_words).unwrap_or_default() {
+            if let Some((rel, _)) = npc_file(w) {
+                out.insert(rel);
             }
         }
     }
@@ -1714,18 +1762,12 @@ impl Pack {
         if self.npc_renames.is_empty() {
             return;
         }
-        for n in v["nodes"].as_array_mut().into_iter().flatten() {
-            if !npc_node(n) {
-                continue;
+        // (every place a file can be named: settings, start values, table cells; X-fx)
+        file_value_sites_mut(v, |pv| {
+            if let Some(sv) = pv.as_str() {
+                *pv = Value::String(rename_paths(sv, &self.npc_renames));
             }
-            if let Some(o) = n["params"].as_object_mut() {
-                for (_, pv) in o.iter_mut() {
-                    if let Some(sv) = pv.as_str() {
-                        *pv = Value::String(rename_paths(sv, &self.npc_renames));
-                    }
-                }
-            }
-        }
+        });
     }
 }
 
@@ -2460,6 +2502,35 @@ mod tests {
         assert_eq!(gv["nodes"][0]["params"]["model"], "models/gb7/qa/joe.mdl");
         // (a file that isn't in the game stays as it was)
         assert_eq!(gv["nodes"][2]["params"]["model"], "models/qa/not_npc.mdl");
+        let _ = std::fs::remove_dir_all(&hl);
+    }
+
+    /// Custom files held only by a file variable, a Function's local or a data table cell are
+    /// packed and renamed too (X-fx, Studio types), not only those in node settings.
+    #[test]
+    fn files_in_start_values_and_table_cells_travel_with_the_mode() {
+        let g = serde_json::json!({
+            "nodes": [{"id": "a", "type": "asset.sound", "params": {"file": "qa/node.wav"}}],
+            "variables": [{"id": "v1", "name": "Taunt", "type": "sound", "scope": "mode", "default": "qa/var.wav"}, {"id": "v2", "name": "N", "type": "number", "scope": "mode", "default": 3}],
+            "functions": [{"id": "f", "name": "F", "inputs": [], "outputs": [], "locals": [{"id": "l", "name": "Box", "type": "model", "scope": "mode", "default": "models/qa/local.mdl"}]}],
+            "dataTables": [{"id": "t", "name": "Loot", "key": "k", "columns": [{"id": "k", "name": "K", "type": "text"}, {"id": "m", "name": "M", "type": "model"}], "rows": [["a", "models/qa/cell.mdl"], ["b", "sprites/qa/cell.spr"]]}]
+        });
+        let found: Vec<String> = npc_files_in_graph_json(&g).into_iter().collect();
+        assert_eq!(found, vec!["models/qa/cell.mdl", "models/qa/local.mdl", "sound/qa/node.wav", "sound/qa/var.wav", "sprites/qa/cell.spr"]);
+        let (hl, gd) = game("");
+        for f in &found {
+            std::fs::create_dir_all(gd.join(f).parent().unwrap()).unwrap();
+            std::fs::write(gd.join(f), b"x").unwrap();
+        }
+        let mut gv = g.clone();
+        Pack::default().with_npc(&hl, "cstrike", &npc_files_in_graph_json(&g), "gb9").unwrap().rewrite_graph(&mut gv);
+        assert_eq!(gv["variables"][0]["default"], "gb9/qa/var.wav");
+        assert_eq!(gv["variables"][1]["default"], 3, "a number stays");
+        assert_eq!(gv["functions"][0]["locals"][0]["default"], "models/gb9/qa/local.mdl");
+        assert_eq!(gv["dataTables"][0]["rows"][0][1], "models/gb9/qa/cell.mdl");
+        assert_eq!(gv["dataTables"][0]["rows"][1][1], "sprites/gb9/qa/cell.spr");
+        assert_eq!(gv["dataTables"][0]["rows"][0][0], "a", "a text cell stays");
+        assert_eq!(gv["nodes"][0]["params"]["file"], "gb9/qa/node.wav");
         let _ = std::fs::remove_dir_all(&hl);
     }
 
