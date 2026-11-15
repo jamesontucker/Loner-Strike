@@ -406,6 +406,186 @@
 ]
 @PointClass size(-8 -8 -8, 8 8 8) color(160 200 255) = env_rain : "Rain on the whole map (players see it outdoors)." []
 @PointClass size(-8 -8 -8, 8 8 8) color(255 255 255) = env_snow : "Snow on the whole map (players see it outdoors)." []
+// ---- beams, gibs and other engine effects (all in our game DLL) ---------------------------
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(120 160 255) = env_beam : "A beam (electric arc, rope of light) between two named entities, or from here to a random spot within its radius."
+[
+	LightningStart(target_destination) : "Starts at" : : "The entity the beam starts at (blank: this one)."
+	LightningEnd(target_destination) : "Ends at" : : "The entity the beam ends at (blank: a random spot within the radius)."
+	texture(sprite) : "Beam sprite" : "sprites/laserbeam.spr" : "Needed: without a sprite the beam removes itself."
+	renderamt(integer) : "Brightness" : 100 : "0 to 255."
+	rendercolor(color255) : "Color" : "255 255 255"
+	Radius(integer) : "Radius" : 256 : "How far a random end can be (no Ends at)."
+	life(float) : "Seconds each strike lasts" : 1 : "0: always on."
+	BoltWidth(integer) : "Width" : 20 : "1 to 255."
+	NoiseAmplitude(integer) : "Jaggedness" : 0 : "0 straight, 255 wild."
+	TextureScroll(integer) : "Scroll speed" : 35
+	framestart(integer) : "First frame" : 0
+	StrikeTime(string) : "Seconds between strikes" : "1" : "A negative number picks a random time up to that."
+	damage(float) : "Damage a second" : 0 : "To anything the beam touches."
+	spawnflags(flags) =
+	[
+		1 : "Starts on" : 0
+		2 : "Can be switched" : 0
+		4 : "Random end" : 0
+		8 : "Ring between the two ends" : 0
+		16 : "Sparks at the start" : 0
+		32 : "Sparks at the end" : 0
+		64 : "Scorch marks where it hits" : 0
+		128 : "Fades in from the start" : 0
+		256 : "Fades out to the end" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 60 60) = env_laser : "A straight laser from here to a named entity, with an optional sprite where it hits."
+[
+	LaserTarget(target_destination) : "Points at" : : "The entity the laser goes to (a random one of them if several share the name)."
+	texture(sprite) : "Beam sprite" : "sprites/laserbeam.spr" : "Needed: without a sprite the laser removes itself."
+	EndSprite(sprite) : "Sprite where it hits" : ""
+	renderamt(integer) : "Brightness" : 100 : "0 to 255."
+	rendercolor(color255) : "Color" : "255 0 0"
+	width(integer) : "Width" : 20 : "1 to 255."
+	NoiseAmplitude(integer) : "Jaggedness" : 0 : "0 straight, 255 wild."
+	TextureScroll(integer) : "Scroll speed" : 35
+	framestart(integer) : "First frame" : 0
+	damage(float) : "Damage a second" : 0 : "To anything the laser touches."
+	spawnflags(flags) =
+	[
+		1 : "Starts on" : 0
+		16 : "Sparks at the start" : 0
+		32 : "Sparks at the end" : 0
+		64 : "Scorch marks where it hits" : 0
+	]
+]
+@PointClass base(Targetname, Angles) size(-8 -8 -8, 8 8 8) color(200 120 60) = gibshooter : "Throws gibs (body pieces) the way it faces when set off."
+[
+	m_iGibs(integer) : "How many" : 3
+	delay(float) : "Seconds between gibs" : "0" : "0: a tenth of a second."
+	m_flVelocity(integer) : "Speed" : 200
+	m_flVariance(float) : "Spread" : "0.15" : "0 straight, 1 anywhere in front."
+	m_flGibLife(float) : "Seconds a gib stays" : 4 : "0: 25 seconds."
+	spawnflags(flags) =
+	[
+		1 : "Can be set off again" : 0
+	]
+]
+@PointClass base(Targetname, Angles, RenderFields) size(-8 -8 -8, 8 8 8) color(200 120 60) = env_shooter : "Throws pieces of any model (or sprite) the way it faces when set off: rubble, glass, cans, shells."
+[
+	shootmodel(studio) : "Model or sprite thrown" : "models/woodgibs.mdl" : "A model's body parts are picked at random."
+	shootsounds(choices) : "Material sound" : -1 : "The sound the pieces make when they land." =
+	[
+		-1 : "None"
+		0 : "Glass"
+		1 : "Wood"
+		2 : "Metal"
+		3 : "Flesh"
+		4 : "Concrete"
+	]
+	m_iGibs(integer) : "How many" : 3
+	delay(float) : "Seconds between pieces" : "0" : "0: a tenth of a second."
+	m_flVelocity(integer) : "Speed" : 200
+	m_flVariance(float) : "Spread" : "0.15" : "0 straight, 1 anywhere in front."
+	m_flGibLife(float) : "Seconds a piece stays" : 4 : "0: 25 seconds."
+	scale(float) : "Size" : 1 : "For a sprite."
+	skin(integer) : "Skin" : 0
+	spawnflags(flags) =
+	[
+		1 : "Can be set off again" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 0 0) = env_blood : "Sprays blood the way it faces when set off."
+[
+	angles(string) : "Spray direction (pitch yaw roll)" : "0 0 0"
+	color(choices) : "Blood color" : 0 =
+	[
+		0 : "Red (people)"
+		1 : "Yellow (creatures)"
+	]
+	amount(integer) : "Amount" : 100
+	spawnflags(flags) =
+	[
+		1 : "Random direction" : 0
+		2 : "A stream, not drops" : 0
+		4 : "At the player who set it off" : 0
+		8 : "Leaves a blood decal" : 0
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 128 0) iconsprite("sprites/flare6.spr") = env_funnel : "A funnel of glowing particles pulled in to this spot (or pushed out) when set off; goes once."
+[
+	spawnflags(flags) =
+	[
+		1 : "Pushed out instead of pulled in" : 0
+	]
+]
+@PointClass base(Targetname, Angle) size(-8 -8 -8, 8 8 8) color(0 160 255) = env_beverage : "A drinks machine's chute: drops a soda can each time it's set off (a can gives a little health)."
+[
+	health(integer) : "Cans" : 10 : "How many it can give."
+	skin(choices) : "Can" : 0 =
+	[
+		0 : "Coca-Cola"
+		1 : "Sprite"
+		2 : "Diet Coke"
+		3 : "Orange"
+		4 : "Surge"
+		5 : "Moxie"
+		6 : "Random"
+	]
+]
+@PointClass base(Targetname, Target) size(-8 -8 -8, 8 8 8) color(255 255 128) = env_message : "Shows a message from the map's titles.txt when set off, with an optional sound."
+[
+	message(string) : "Message name" : : "A name from titles.txt."
+	messagesound(sound) : "Sound" : ""
+	messagevolume(string) : "Volume" : "10" : "0 to 10."
+	messageattenuation(choices) : "Heard" : 0 =
+	[
+		0 : "Small radius"
+		1 : "Medium radius"
+		2 : "Large radius"
+		3 : "Everywhere"
+	]
+	spawnflags(flags) =
+	[
+		1 : "Only once" : 0
+		2 : "Everyone (not just who set it off)" : 0
+	]
+]
+@SolidClass base(Targetname) = trigger_cdaudio : "Plays a CD track (game music) when a player walks in; goes once."
+[
+	health(choices) : "Track" : 0 : "The game's music tracks (Half-Life's soundtrack in the game folder)." =
+	[
+		-1 : "Stop"
+		1 : "Track 1"
+		2 : "Track 2"
+		3 : "Track 3"
+		4 : "Track 4"
+		5 : "Track 5"
+		6 : "Track 6"
+		7 : "Track 7"
+		8 : "Track 8"
+		9 : "Track 9"
+		10 : "Track 10"
+		11 : "Track 11"
+		12 : "Track 12"
+		13 : "Track 13"
+		14 : "Track 14"
+		15 : "Track 15"
+		16 : "Track 16"
+		17 : "Track 17"
+		18 : "Track 18"
+		19 : "Track 19"
+		20 : "Track 20"
+		21 : "Track 21"
+		22 : "Track 22"
+		23 : "Track 23"
+		24 : "Track 24"
+		25 : "Track 25"
+		26 : "Track 26"
+		27 : "Track 27"
+	]
+]
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(128 255 128) iconsprite("sprites/speaker.spr") = target_cdaudio : "Plays a CD track (game music) when a player comes within its radius, or when set off; goes once."
+[
+	health(integer) : "Track" : 1 : "-1 stops the music."
+	radius(integer) : "Radius" : 128
+]
 @SolidClass base(Targetname) = env_bubbles : "Bubbles rising from inside the brush."
 [
 	density(integer) : "How many" : 2

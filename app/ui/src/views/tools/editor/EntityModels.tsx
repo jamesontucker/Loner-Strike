@@ -41,6 +41,15 @@ export function modelOf(e: DocEntity, creatures: Creature[] = []): string | null
       const type = keyOf(e.keys, "type")?.trim() || "zombie";
       return creatures.find((c) => c.name === type)?.model?.trim() || CREATURE_MODELS[type] || null;
     }
+    // engine effects: what they throw or drop
+    case "env_shooter": {
+      const sm = keyOf(e.keys, "shootmodel")?.trim().replace(/\\/g, "/");
+      return sm && /\.mdl$/i.test(sm) && !sm.includes("..") ? sm.replace(/^\/+/, "") : null;
+    }
+    case "gibshooter":
+      return "models/hgibs.mdl";
+    case "env_beverage":
+      return "models/can.mdl";
     case "hostage_entity":
     case "monster_scientist":
       return "models/scientist.mdl";

@@ -155,8 +155,9 @@ export function EntityBatch({ ents, look, yaw, picked = false }: { ents: DocEnti
         c.set(lk.colour);
         arrowCols.push(c.r, c.g, c.b, c.r, c.g, c.b);
       }
-      if (showModels && /^env_(sprite|glow)$/.test(e.classname)) {
-        const rgb = (keyOf(e.keys, "rendercolor") ?? "255 255 255").split(/\s+/).map(Number);
+      if (showModels && /^env_(sprite|glow|funnel)$/.test(e.classname)) {
+        // (env_funnel: its particles are an orange flare, sprites/flare6.spr)
+        const rgb = (keyOf(e.keys, "rendercolor") ?? (e.classname === "env_funnel" ? "255 150 40" : "255 255 255")).split(/\s+/).map(Number);
         const ok = rgb.length >= 3 && rgb.slice(0, 3).every(Number.isFinite) && rgb.some((x) => x > 0);
         const scale = Math.max(0.1, Math.min(8, Number(keyOf(e.keys, "scale") ?? 1) || 1));
         glowPos.push(o[0], o[1], o[2]);

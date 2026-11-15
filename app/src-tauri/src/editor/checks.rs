@@ -388,6 +388,10 @@ fn basic(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<Iss
     // P5: every link that names nothing (target, killtarget, master, pathtarget, a
     // multi_manager's names…), from the one I/O graph the I/O panel and MCP editor_io use
     for l in super::io::graph(doc).broken() {
+        // (a beam's or laser's ends get their own warning in effects())
+        if BEAM_END_KEYS.contains(&l.key.as_str()) {
+            continue;
+        }
         let cls = doc.entities.get(&l.from).map(|e| e.classname()).unwrap_or("");
         let how = match l.kind {
             super::io::Kind::Master => format!("{cls}'s master is \"{}\", which nothing is named: it may never work.", l.name),
@@ -396,6 +400,7 @@ fn basic(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<Iss
         };
         out.push(Issue { entity: Some(l.from.0), ..issue(Level::Info, "dangling-target", how) });
     }
+    effects(doc, &mut out);
     if entstring > limits::MAX_ENTSTRING {
         out.push(issue(Level::Warning, "entstring", format!("About {} KB of entity text; older tools stop at 128 KB.", entstring / 1024)));
     }
@@ -461,6 +466,51 @@ fn basic(doc: &MapDocument, known_textures: Option<&HashSet<String>>) -> Vec<Iss
     out
 }
 
+// ---- beams, gibs and the other engine effects ----------------------------------------------
+
+/** The keys that name a beam's or laser's ends. */
+const BEAM_END_KEYS: [&str; 3] = ["LightningStart", "LightningEnd", "LaserTarget"];
+
+/// What stops an effect entity working in the game: a beam or laser with no sprite removes
+/// itself, an end that names nothing, a shooter with nothing to throw, effects that only work
+/// when set off but have no name (missing sprite and model files are the assets check's).
+fn effects(doc: &MapDocument, out: &mut Vec<Issue>) {
+    let named: HashSet<&str> = doc.entities.values().filter_map(|e| e.get("targetname")).map(str::trim).filter(|n| !n.is_empty()).collect();
+    let val = |e: &crate::editor::doc::Entity, k: &str| e.get(k).map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
+    for (id, e) in &doc.entities {
+        let eid = Some(id.0);
+        let cls = e.classname();
+        let mut warn = |level: Level, code: &'static str, msg: String| out.push(Issue { entity: eid, ..issue(level, code, msg) });
+        match cls {
+            "env_beam" | "env_laser" => {
+                if val(e, "texture").is_none() {
+                    warn(Level::Error, "beam-no-sprite", format!("{cls} has no beam sprite: in the game it removes itself. Pick one (sprites/laserbeam.spr is the usual)."));
+                }
+                if cls == "env_laser" && val(e, "LaserTarget").is_none() {
+                    warn(Level::Warning, "beam-no-end", "env_laser points at nothing: name an entity in Points at (an info_target is usual).".into());
+                }
+                for k in BEAM_END_KEYS {
+                    if let Some(n) = val(e, k) {
+                        if !named.contains(n.as_str()) {
+                            warn(Level::Warning, "beam-end-missing", format!("{cls}'s {} \"{n}\" names nothing, so the beam has no end there.", if k == "LightningStart" { "start" } else { "end" }));
+                        }
+                    }
+                }
+            }
+            "env_shooter" if val(e, "shootmodel").or_else(|| val(e, "model")).is_none() => {
+                warn(Level::Error, "shooter-no-model", "env_shooter has nothing to throw: pick a model or sprite.".into());
+            }
+            "env_message" if val(e, "message").is_none() => {
+                warn(Level::Warning, "message-empty", "env_message has no message name (from titles.txt), so it shows nothing.".into());
+            }
+            _ => {}
+        }
+        if matches!(cls, "gibshooter" | "env_shooter" | "env_blood" | "env_funnel" | "env_beverage" | "env_message") && val(e, "targetname").is_none() {
+            out.push(Issue { entity: eid, ..issue(Level::Info, "effect-unnamed", format!("{cls} only works when set off, and it has no name for anything to set it off.")) });
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -470,6 +520,24 @@ mod tests {
 
     fn codes(v: &[Issue]) -> Vec<&'static str> {
         v.iter().map(|i| i.code).collect()
+    }
+
+    #[test]
+    fn effect_entities_say_what_stops_them() {
+        let mut d = MapDocument::new();
+        let ent = |kv: &[(&str, &str)]| Entity { keys: kv.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(), group: None };
+        let beam = d.insert_entity(ent(&[("classname", "env_beam"), ("origin", "0 0 0"), ("LightningStart", "a"), ("LightningEnd", "nowhere")]));
+        let laser = d.insert_entity(ent(&[("classname", "env_laser"), ("origin", "0 0 0"), ("texture", "sprites/laserbeam.spr")]));
+        let shooter = d.insert_entity(ent(&[("classname", "env_shooter"), ("origin", "0 0 0")]));
+        d.insert_entity(ent(&[("classname", "info_target"), ("origin", "0 0 64"), ("targetname", "a")]));
+        let ok = d.insert_entity(ent(&[("classname", "env_beam"), ("origin", "0 0 0"), ("texture", "sprites/laserbeam.spr"), ("LightningStart", "a"), ("targetname", "b1")]));
+        let v = run(&d, None);
+        let of = |id: EntityId| v.iter().filter(|i| i.entity == Some(id.0)).map(|i| i.code).collect::<Vec<_>>();
+        assert!(of(beam).contains(&"beam-no-sprite") && of(beam).contains(&"beam-end-missing"));
+        assert!(!v.iter().any(|i| i.code == "dangling-target" && i.entity == Some(beam.0)), "said once, as the beam's warning");
+        assert_eq!(of(laser), vec!["beam-no-end"]);
+        assert!(of(shooter).contains(&"shooter-no-model") && of(shooter).contains(&"effect-unnamed"));
+        assert!(of(ok).is_empty(), "{:?}", of(ok));
     }
 
     #[test]

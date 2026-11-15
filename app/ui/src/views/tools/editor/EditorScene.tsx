@@ -37,6 +37,7 @@ import { KitOverlay } from "./KitOverlay"; // P5: mode kit areas and paths
 import { FlatHandles, startFlatMove } from "./FlatHandles"; // Parity A: 2D handles and moves
 import { FlatGrid } from "./FlatGrid"; // Parity A
 import { EntityBatch, LinkBatch } from "./EntityBatch"; // Parity A: entities in a few draws
+import { EffectPreviews } from "./EffectPreviews"; // beams, lasers and shooters drawn as in the game
 import { QuietWhileDragging, wrapRootInvalidate } from "./paneRedraw"; // Parity A: redraw only the panes that changed
 import { startExtrude, startSplit } from "./extrude"; // Parity A: Shift-drag extrude, Ctrl-drag split
 import { DropTarget } from "./DropTarget"; // P5: a dragged texture's face
@@ -956,6 +957,7 @@ function ToolLayer({ bounds }: { bounds: [Vec3, Vec3] }) {
       <BrushesWithMats />
       <Entities />
       <Links />
+      <EffectPreviews />
       <mesh rotation={planeRot} userData={{ kind: "plane" }} renderOrder={-1}>
         <planeGeometry args={[span, span]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
