@@ -328,7 +328,7 @@ body.ed-popped { margin: 0; padding: 8px; background: var(--bg, #22271e); overfl
 .ed-dock-bottom-area.folded { height: auto; }
 .ed-dock-fold { margin-right: 2px; }
 /* (one row at common widths: the layout picker drops its words first, then Find's) */
-.ed-bar-name .map-title { font-size: 15px; line-height: 1.1; }
+.ed-bar-name .map-title { font-size: 15px; line-height: 1.1; margin: 0; }
 /* the map's name, its Beta tag, then a labeled Find button; the rest sits on the right */
 .ed-bar-name { flex: 0 1 auto; min-width: 40px; overflow: hidden; display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; }
 .ed-bar-name .map-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

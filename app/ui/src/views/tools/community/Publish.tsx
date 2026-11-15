@@ -306,7 +306,7 @@ function mapChecks(map: string, r: Readiness): Check[] {
 function SourceStep({ projects, project, setProject, on, setOn }: { projects: SourceProject[]; project: string; setProject: (p: string) => void; on: boolean; setOn: (v: boolean) => void }) {
   const picked = projects.find((p) => p.path === project);
   return (
-    <div className="stack-tight" data-testid="cm-source">
+    <div className="stack-tight cm-source" data-testid="cm-source">
       <label className="cm-wide-check">
         <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} /> Include the editable source (others can remix it)
       </label>
