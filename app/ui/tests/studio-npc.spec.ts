@@ -53,7 +53,7 @@ test("the NPC nodes come from the palette, and Say and Choose shows its replies"
     const spot = await page.evaluate((b) => {
       // (every point of a node-sized box around the spot must be canvas: the palette opens only
       // on the canvas itself)
-      const free = (x: number, y: number) => [[0, 0], [-60, -30], [60, -30], [-60, 30], [60, 30]].every(([dx, dy]) => document.elementFromPoint(b.x + x + dx, b.y + y + dy)?.classList.contains("react-flow__pane"));
+      const free = (x: number, y: number) => [[0, 0], [-80, -40], [80, -40], [-80, 40], [80, 40], [0, -40], [0, 40]].every(([dx, dy]) => document.elementFromPoint(b.x + x + dx, b.y + y + dy)?.classList.contains("react-flow__pane"));
       for (let y = 50; y < b.height - 40; y += 50)
         for (let x = b.width - 140; x > 80; x -= 60) if (free(x, y)) return { x, y };
       return null;
@@ -63,9 +63,13 @@ test("the NPC nodes come from the palette, and Say and Choose shows its replies"
     const pal = page.getByRole("dialog", { name: "Add a node" });
     await pal.getByRole("textbox").fill(search);
     await expect(pal.locator(".st-palette-item").first()).toContainText(title);
+    const before = await page.locator(".react-flow__node").count();
     await page.keyboard.press("Enter");
     await expect(pal).toHaveCount(0);
     await expect(page.locator(`.react-flow__node[data-id]`, { hasText: title }).first()).toBeAttached();
+    // (drawn before the next spot is looked for: it must not land on this one)
+    await expect(page.locator(".react-flow__node")).toHaveCount(before + 1);
+    await page.waitForTimeout(150);
   }
   // Say and Choose: one output per reply, Timed out, Walked away and Picked
   const choose = page.locator(".react-flow__node", { hasText: "Say and Choose" }).first();

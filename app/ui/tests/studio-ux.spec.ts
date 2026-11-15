@@ -27,6 +27,22 @@ async function seed(page: Page, blank = false) {
   expect((await r.json()).ok, "seed saved").toBeTruthy();
 }
 
+// a spot of empty canvas (no node, wire or comment under a node-sized box around it), from the
+// bottom right: a right-click there opens Add a node, not a node's or a wire's menu
+async function emptySpot(page: Page): Promise<{ x: number; y: number }> {
+  // (after the canvas has settled: opening a graph frames it with a short animation)
+  await page.waitForTimeout(600);
+  const pb = (await page.locator(".react-flow__pane").boundingBox())!;
+  const spot = await page.evaluate((b) => {
+    const free = (x: number, y: number) => [[0, 0], [-70, -35], [70, -35], [-70, 35], [70, 35]].every(([dx, dy]) => document.elementFromPoint(b.x + x + dx, b.y + y + dy)?.classList.contains("react-flow__pane"));
+    for (let y = b.height - 50; y > 45; y -= 30)
+      for (let x = b.width - 90; x > 80; x -= 40) if (free(x, y)) return { x, y };
+    return null;
+  }, pb);
+  expect(spot, "an empty spot of canvas").not.toBeNull();
+  return spot!;
+}
+
 test.beforeEach(async ({ page }) => {
   // both side panels shown: a small window starts with Details folded (by design, UX review H4)
   await page.addInitScript(() => localStorage.setItem("ls.studio.panels", JSON.stringify({ left: true, right: true, minimap: false })));
@@ -77,7 +93,7 @@ test("H5: search ranks title matches first and Enter places the best one", async
     return g.nodes.filter((n: { type: string }) => n.type === "event.player_killed").length;
   };
   const before = await killedSaved();
-  await page.locator(".react-flow__pane").click({ button: "right", position: { x: 40, y: 40 } });
+  await page.locator(".react-flow__pane").click({ button: "right", position: await emptySpot(page) });
   const pal = page.getByRole("dialog", { name: "Add a node" });
   await pal.getByRole("textbox").fill("killed");
   const first = pal.locator(".st-palette-item").first();
@@ -89,7 +105,7 @@ test("H5: search ranks title matches first and Enter places the best one", async
   expect(await killedSaved()).toBe(before + 1);
   // a title that starts with the words beats one that only has them in its help
   const pb = (await page.locator(".react-flow__pane").boundingBox())!;
-  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 40, y: pb.height - 40 } });
+  await page.locator(".react-flow__pane").click({ button: "right", position: await emptySpot(page) });
   await pal.getByRole("textbox").fill("give w");
   await expect(pal.locator(".st-palette-item").first()).toContainText("Give Weapon");
   await page.keyboard.press("Escape");
@@ -116,7 +132,7 @@ test("M5, M7, L9: new things are picked and named at once; a Custom Event puts i
   await expect(page.getByRole("heading", { name: "This mode" })).toBeVisible({ timeout: 20_000 });
   // a node from the search is picked: Details shows it
   const pb = (await page.locator(".react-flow__pane").boundingBox())!;
-  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 60, y: pb.height - 60 } });
+  await page.locator(".react-flow__pane").click({ button: "right", position: await emptySpot(page) });
   const pal = page.getByRole("dialog", { name: "Add a node" });
   await pal.getByRole("textbox").fill("give money");
   await page.keyboard.press("Enter");
@@ -230,8 +246,8 @@ test("H6: a pin's value is typed on the node, the same as in Details", async ({ 
   await seed(page);
   await page.goto(`/tools-dev.html?open=studio:${ID}`);
   await expect(page.getByRole("heading", { name: "This mode" })).toBeVisible({ timeout: 20_000 });
-  const pb = (await page.locator(".react-flow__pane").boundingBox())!;
-  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 260, y: pb.height - 200 } });
+  // (an empty spot: the templates' layout moves with the node sizes, so no fixed position)
+  await page.locator(".react-flow__pane").click({ button: "right", position: await emptySpot(page) });
   const pal = page.getByRole("dialog", { name: "Add a node" });
   await pal.getByRole("textbox").fill("give money");
   await page.keyboard.press("Enter");
@@ -253,7 +269,7 @@ test("H6: a pin's value is typed on the node, the same as in Details", async ({ 
   await amount.press("Escape");
   await expect(amount).toHaveValue("300");
   // a yes/no and a choice on a Give Weapon: right there too
-  await page.locator(".react-flow__pane").click({ button: "right", position: { x: pb.width - 260, y: 60 } });
+  await page.locator(".react-flow__pane").click({ button: "right", position: await emptySpot(page) });
   await pal.getByRole("textbox").fill("give weapon");
   await page.keyboard.press("Enter");
   const gw = page.locator(".react-flow__node.selected");
