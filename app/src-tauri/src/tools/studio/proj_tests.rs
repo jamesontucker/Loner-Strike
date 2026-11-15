@@ -20,7 +20,7 @@ fn proj_graph() -> graph::Graph {
             "nodes": [
                 {"id": "k", "type": "event.player_spawned"},
                 // a rocket from the player's eyes, 16 forward, with its own hit flow
-                {"id": "rocket", "type": "proj.spawn", "params": {"model": "models/rpgrocket.mdl", "speed": 1200, "damage": 100, "radius": 200, "explode": true, "trail": true, "off_f": 16}},
+                {"id": "rocket", "type": "proj.spawn", "params": {"model": "models/rpgrocket.mdl", "speed": 1200, "damage": 100, "radius": 200, "explode": true, "trail": true}},
                 {"id": "boom", "type": "msg.broadcast", "params": {"text": "rocket hit"}},
                 {"id": "gone", "type": "msg.broadcast", "params": {"text": "rocket expired"}},
                 // a bouncing sprite from a point along a direction, a different hit flow, and a hostile path
@@ -84,6 +84,46 @@ fn projectiles_generate_with_their_own_callbacks() {
         assert!(src.contains("ls_proj_remove(") && src.contains("lsg_proj_vel("));
         assert!(!src.contains("server_cmd(") || !src.contains("ls_proj_test"));
     }
+}
+
+/// A graph saved before the spawn transform standard (docs/notes/FX.md): Rotation offset was
+/// `rot_off`, Forward/Right/Up offset the settings off_f/off_r/off_u. It loads with the standard
+/// pins (angles_offset, a Local offset from a Make Vector) and fires from the same spot.
+#[test]
+fn old_spawn_projectile_graphs_load_with_the_standard_pins() {
+    let e = |id: &str, a: &str, ap: &str, b: &str, bp: &str| json!({"id": id, "from": {"node": a, "pin": ap}, "to": {"node": b, "pin": bp}});
+    let old = json!({
+        "schema": graph::SCHEMA, "version": graph::VERSION,
+        "mode": {"id": "proj_old", "uid": "0c8d2e4a-6b1f-4c3d-9e5a-7f2b1d3c4e50", "name": "Old projectiles", "description": "Saved before"},
+        "variables": [], "comments": [],
+        "nodes": [
+            {"id": "k", "type": "event.player_spawned"},
+            {"id": "turn", "type": "vec.make", "params": {"x": 0, "y": 15, "z": 0}},
+            // moved 32 forward, 8 right, 4 up, turned by a wire into the old Rotation offset
+            {"id": "a", "type": "proj.spawn", "params": {"model": "models/rpgrocket.mdl", "off_f": 32, "off_r": 8, "off_u": 4}},
+            // the old defaults (16, 0, 0): no wire needed
+            {"id": "b", "type": "proj.spawn", "params": {"model": "models/rpgrocket.mdl", "off_f": 16, "off_r": 0, "off_u": 0}}
+        ],
+        "edges": [e("w1", "k", "then", "a", "exec"), e("w2", "k", "player", "a", "owner"), e("w3", "turn", "out", "a", "rot_off"), e("w4", "a", "then", "b", "exec"), e("w5", "k", "player", "b", "owner")]
+    });
+    let g = graph::parse(&old.to_string()).unwrap();
+    assert!(g.edges.iter().any(|x| x.from.node == "turn" && x.to.node == "a" && x.to.pin == "angles_offset"));
+    assert!(!g.edges.iter().any(|x| x.to.pin == "rot_off"));
+    assert!(g.nodes.iter().filter(|n| n.kind == "proj.spawn").all(|n| !n.params.contains_key("off_f") && !n.params.contains_key("off_r") && !n.params.contains_key("off_u")));
+    let v = g.nodes.iter().find(|n| n.id == "a_offset").expect("a Make Vector for the old offsets");
+    assert_eq!((v.params["x"].as_f64(), v.params["y"].as_f64(), v.params["z"].as_f64()), (Some(32.0), Some(8.0), Some(4.0)));
+    assert!(g.edges.iter().any(|x| x.from.node == "a_offset" && x.to.node == "a" && x.to.pin == "offset"));
+    assert!(!g.nodes.iter().any(|n| n.id == "b_offset"), "the default needs no wire");
+    let problems = graph::validate(&g);
+    assert!(problems.iter().all(|p| p.level != "error"), "{problems:?}");
+    // the same spot: the offset from the vector, the default 16 forward, the facing kept
+    let src = gen::generate(&g, false).source;
+    assert!(src.contains("lsg_proj_from(") && src.contains(", 16.0, 0.0, 0.0, -1, 1, o, d)"), "{src}");
+    assert!(src.matches("lsg_vc(").count() >= 3, "{src}");
+    // loading again changes nothing
+    let again = graph::parse(&serde_json::to_string(&g).unwrap()).unwrap();
+    assert_eq!(again.nodes.len(), g.nodes.len());
+    assert_eq!(again.edges.len(), g.edges.len());
 }
 
 #[test]

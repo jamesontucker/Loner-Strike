@@ -234,7 +234,34 @@ export function parseGraph(v: unknown): { graph: Graph } | { error: string } {
     const i = r.error.issues[0];
     return { error: `That graph file is damaged (${i.path.join(".") || "file"}: ${i.message}).` };
   }
-  return { graph: r.data };
+  return { graph: projSpawnPins(r.data) };
+}
+
+/** Spawn Projectile's older pins (graph.rs proj_spawn_pins, the same rule): `rot_off` reads as
+ *  `angles_offset`, and the off_f/off_r/off_u settings as a Local offset wired from a Make Vector
+ *  beside the node (none for the old default 16, 0, 0: an unwired Local offset is that). */
+export function projSpawnPins(g: Graph): Graph {
+  const olds = g.nodes.filter((n) => n.type === "proj.spawn" && (g.edges.some((e) => e.to.node === n.id && e.to.pin === "rot_off") || ["off_f", "off_r", "off_u"].some((k) => k in n.params)));
+  if (!olds.length) return g;
+  let nodes = g.nodes;
+  let edges = g.edges.map((e) => (e.to.pin === "rot_off" && olds.some((n) => n.id === e.to.node) ? { ...e, to: { ...e.to, pin: "angles_offset" } } : e));
+  for (const n of olds) {
+    const num = (k: string, d: number) => Math.max(-512, Math.min(512, typeof n.params[k] === "number" ? (n.params[k] as number) : d));
+    const [f, r, u] = [num("off_f", 16), num("off_r", 0), num("off_u", 0)];
+    const params = { ...n.params };
+    delete params.off_f;
+    delete params.off_r;
+    delete params.off_u;
+    nodes = nodes.map((x) => (x.id === n.id ? { ...x, params } : x));
+    if ((f === 16 && r === 0 && u === 0) || edges.some((e) => e.to.node === n.id && e.to.pin === "offset")) continue;
+    let vid = `${n.id}_offset`;
+    while (nodes.some((x) => x.id === vid)) vid += "_";
+    let eid = `${vid}_w`;
+    while (edges.some((x) => x.id === eid)) eid += "_";
+    nodes = [...nodes, { ...n, id: vid, type: "vec.make", pos: { x: n.pos.x - 260, y: n.pos.y + 160 }, params: { x: f, y: r, z: u } } as GNode];
+    edges = [...edges, { id: eid, from: { node: vid, pin: "out" }, to: { node: n.id, pin: "offset" } } as GEdge];
+  }
+  return { ...g, nodes, edges };
 }
 
 /** A new mode's uid (UUID v4). */

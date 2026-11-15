@@ -860,6 +860,7 @@ pub fn from_value(v: Value) -> Result<Graph, String> {
     }
     let mut g: Graph = serde_json::from_value(v).map_err(|e| format!("That graph file is damaged ({e})."))?;
     g.version = VERSION;
+    proj_spawn_pins(&mut g);
     // (the app's own enums: there in every graph, after the mode's; a mode's own of the same id wins)
     for (id, name, values) in BUILTIN_ENUMS {
         if !g.enums.iter().any(|e| e.id == id) {
@@ -2781,6 +2782,48 @@ pub fn check_param(def: &ParamDef, v: &Value) -> Result<(), String> {
 /// A param's value, or its default.
 pub fn param<'a>(n: &'a Node, def: &'a NodeDef, id: &str) -> Option<&'a Value> {
     n.params.get(id).or_else(|| def.param(id).map(|p| &p.default))
+}
+
+/// Spawn Projectile's older pins and settings (before the spawn transform standard,
+/// docs/notes/FX.md): Rotation offset was `rot_off`, and Forward/Right/Up offset were the
+/// settings off_f/off_r/off_u (16, 0, 0 by default). They read as `angles_offset` and a Local
+/// offset wired from a Make Vector next to the node, so a saved graph fires from the same spot;
+/// the default 16 forward needs no wire (an unwired Local offset is that).
+pub fn proj_spawn_pins(g: &mut Graph) {
+    let ids: Vec<String> = g.nodes.iter().filter(|n| n.kind == "proj.spawn").map(|n| n.id.clone()).collect();
+    for id in ids {
+        for e in g.edges.iter_mut().filter(|e| e.to.node == id && e.to.pin == "rot_off") {
+            e.to.pin = "angles_offset".into();
+        }
+        let Some(n) = g.nodes.iter_mut().find(|n| n.id == id) else { continue };
+        let old = ["off_f", "off_r", "off_u"].map(|k| n.params.remove(k));
+        if old.iter().all(Option::is_none) {
+            continue;
+        }
+        let num = |v: &Option<Value>, d: f64| v.as_ref().and_then(Value::as_f64).unwrap_or(d).clamp(-512.0, 512.0);
+        let (f, r, u) = (num(&old[0], 16.0), num(&old[1], 0.0), num(&old[2], 0.0));
+        let wired = g.edges.iter().any(|e| e.to.node == id && e.to.pin == "offset");
+        if wired || ((f - 16.0).abs() < 1e-9 && r.abs() < 1e-9 && u.abs() < 1e-9) {
+            continue;
+        }
+        let (pos, graph) = (n.pos, n.graph.clone());
+        let mut vid = format!("{id}_offset");
+        while g.nodes.iter().any(|x| x.id == vid) {
+            vid.push('_');
+        }
+        let mut vn = serde_json::json!({"id": vid, "type": "vec.make", "pos": {"x": pos.x - 260.0, "y": pos.y + 160.0}, "params": {"x": f, "y": r, "z": u}});
+        if let Some(gr) = graph {
+            vn["graph"] = Value::String(gr);
+        }
+        if let Ok(node) = serde_json::from_value::<Node>(vn) {
+            g.nodes.push(node);
+            let mut eid = format!("{vid}_w");
+            while g.edges.iter().any(|x| x.id == eid) {
+                eid.push('_');
+            }
+            g.edges.push(Edge { id: eid, from: PinRef { node: vid, pin: "out".into() }, to: PinRef { node: id, pin: "offset".into() } });
+        }
+    }
 }
 
 #[cfg(test)]

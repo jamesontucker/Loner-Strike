@@ -152,7 +152,7 @@ fn sprite_text(s: &str) -> String {
 
 /// Spawn Projectile's start (T1fix): an entity's place (a player's eyes) moved by a local
 /// offset along its facing (turned by a rotation offset), and that facing as the direction.
-const PROJ_FROM: &str = "\nstock bool:lsg_proj_from(e, Float:f, Float:r, Float:u, rot, Float:o[3], Float:d[3])\n{\n\tif (e <= 0 || !pev_valid(e) || (e <= MaxClients && !is_user_alive(e)))\n\t\treturn false\n\tnew Float:a[3], Float:fw[3], Float:rt[3], Float:up[3]\n\tpev(e, pev_origin, o)\n\tif (e <= MaxClients)\n\t{\n\t\tnew Float:vo[3]\n\t\tpev(e, pev_view_ofs, vo)\n\t\tfor (new k = 0; k < 3; k++)\n\t\t\to[k] += vo[k]\n\t\tpev(e, pev_v_angle, a)\n\t}\n\telse\n\t\tpev(e, pev_angles, a)\n\tif (rot >= 0)\n\t\tfor (new k = 0; k < 3; k++)\n\t\t\ta[k] += lsg_vc(rot, k)\n\tangle_vector(a, ANGLEVECTOR_FORWARD, fw)\n\tangle_vector(a, ANGLEVECTOR_RIGHT, rt)\n\tangle_vector(a, ANGLEVECTOR_UP, up)\n\tfor (new k = 0; k < 3; k++)\n\t{\n\t\to[k] += fw[k] * f + rt[k] * r + up[k] * u\n\t\td[k] = fw[k]\n\t}\n\treturn true\n}";
+const PROJ_FROM: &str = "\nstock bool:lsg_proj_from(e, Float:f, Float:r, Float:u, rot, copy, Float:o[3], Float:d[3])\n{\n\tif (e <= 0 || !pev_valid(e) || (e <= MaxClients && !is_user_alive(e)))\n\t\treturn false\n\tnew Float:a[3], Float:fw[3], Float:rt[3], Float:up[3]\n\tpev(e, pev_origin, o)\n\tif (e <= MaxClients)\n\t{\n\t\tnew Float:vo[3]\n\t\tpev(e, pev_view_ofs, vo)\n\t\tfor (new k = 0; k < 3; k++)\n\t\t\to[k] += vo[k]\n\t\tpev(e, pev_v_angle, a)\n\t}\n\telse\n\t\tpev(e, pev_angles, a)\n\t// Local offset: along the entity's own forward, right and up\n\tangle_vector(a, ANGLEVECTOR_FORWARD, fw)\n\tangle_vector(a, ANGLEVECTOR_RIGHT, rt)\n\tangle_vector(a, ANGLEVECTOR_UP, up)\n\tfor (new k = 0; k < 3; k++)\n\t\to[k] += fw[k] * f + rt[k] * r + up[k] * u\n\t// which way: its facing (Face the way At entity faces) or none, turned by Rotation offset\n\tif (!copy)\n\t\ta[0] = a[1] = a[2] = 0.0\n\tif (rot >= 0)\n\t\tfor (new k = 0; k < 3; k++)\n\t\t\ta[k] += lsg_vc(rot, k)\n\tangle_vector(a, ANGLEVECTOR_FORWARD, d)\n\treturn true\n}";
 
 /// Live projectiles a Spawn Projectile made (T1fix): which node, and the flow's context, by the
 /// projectile's entity; a note for an entity already in the table replaces it (a reused index).
@@ -2665,9 +2665,19 @@ fn node_code(gen: &Gen, id: &str, o: &mut Out) {
             b.line("\tnew Float:o[3], Float:d[3], lsgK[160], bool:lsgA = true");
             // where from and which way: At entity (or the owner's eyes) with its offsets, then
             // what's wired overrides (Position, Direction or Rotation)
-            let rot = if wired("rot_off") { inp("rot_off", "vector") } else { "-1".into() };
+            // (the spawn transform pins every spawn node takes, docs/notes/FX.md: Local offset along
+            // At entity's own forward, right and up, 16 forward when unwired to clear the shooter;
+            // Rotation offset turns the facing; Face the way At entity faces off: Rotation offset alone)
+            let rot = if wired("angles_offset") { inp("angles_offset", "vector") } else { "-1".into() };
             let base = if wired("at_ent") { inp("at_ent", "entity") } else { owner.clone() };
-            b.line(format!("\tlsgA = lsg_proj_from({base}, {}, {}, {}, {rot}, o, d)", float_lit(gen.num(n, def, "off_f").clamp(-512.0, 512.0)), float_lit(gen.num(n, def, "off_r").clamp(-512.0, 512.0)), float_lit(gen.num(n, def, "off_u").clamp(-512.0, 512.0))));
+            let (of, or_, ou) = if wired("offset") {
+                let o = inp("offset", "vector");
+                (format!("lsg_vc({o}, 0)"), format!("lsg_vc({o}, 1)"), format!("lsg_vc({o}, 2)"))
+            } else {
+                ("16.0".to_string(), "0.0".to_string(), "0.0".to_string())
+            };
+            let copy = if n.params.get("copy_rot").and_then(serde_json::Value::as_bool).unwrap_or(true) { 1 } else { 0 };
+            b.line(format!("\tlsgA = lsg_proj_from({base}, {of}, {or_}, {ou}, {rot}, {copy}, o, d)"));
             if wired("pos") {
                 b.line(format!("\tlsg_vto({}, o)\n\tlsgA = true", inp("pos", "vector")));
             }

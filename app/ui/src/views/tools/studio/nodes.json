@@ -6510,7 +6510,7 @@
    "type": "proj.spawn",
    "title": "Spawn Projectile",
    "category": "Projectiles",
-   "help": "Fires a model or sprite (loaded with the map). Where from: Position, else At entity (a player's eyes) moved by the offsets along its facing, else the owner's eyes. Which way: Direction, else Rotation, else the way At entity (or the owner) faces, turned by Rotation offset; Velocity, when wired, sets the motion outright. Gravity 0 flies straight; 1 falls like a grenade. Bounces: off walls before it stops. Damage: to what it hits, or everything within Radius (less further out with Falloff). Kills count for the owner. On Hit runs later for this projectile only, with what it hit (each bounce too); On Expired when its time runs out. 64 fly at most; a new round clears them.",
+   "help": "Fires a model or sprite (loaded with the map). Where from: At position, else At entity (a player's eyes) moved by Local offset along its own forward, right and up (16 forward when nothing is wired there), else the owner's eyes. Which way: Direction, else Rotation, else the way At entity (or the owner) faces when Face the way At entity faces is on, turned by Rotation offset; Velocity, when wired, sets the motion outright. Gravity 0 flies straight; 1 falls like a grenade. Bounces: off walls before it stops. Damage: to what it hits, or everything within Radius (less further out with Falloff). Kills count for the owner. On Hit runs later for this projectile only, with what it hit (each bounce too); On Expired when its time runs out. 64 fly at most; a new round clears them.",
    "inputs": [
     {
      "id": "exec",
@@ -6524,15 +6524,33 @@
      "optional": true
     },
     {
+     "id": "at_ent",
+     "type": "entity",
+     "label": "At entity",
+     "optional": true
+    },
+    {
      "id": "pos",
      "type": "vector",
-     "label": "Position",
+     "label": "At position",
+     "optional": true
+    },
+    {
+     "id": "offset",
+     "type": "vector",
+     "label": "Local offset (forward, right, up)",
      "optional": true
     },
     {
      "id": "angles",
      "type": "vector",
-     "label": "Rotation",
+     "label": "Rotation (pitch, yaw, roll)",
+     "optional": true
+    },
+    {
+     "id": "angles_offset",
+     "type": "vector",
+     "label": "Rotation offset",
      "optional": true
     },
     {
@@ -6545,18 +6563,6 @@
      "id": "dir",
      "type": "vector",
      "label": "Direction",
-     "optional": true
-    },
-    {
-     "id": "at_ent",
-     "type": "entity",
-     "label": "At entity",
-     "optional": true
-    },
-    {
-     "id": "rot_off",
-     "type": "vector",
-     "label": "Rotation offset",
      "optional": true
     },
     {
@@ -6643,28 +6649,10 @@
      "default": "models/w_hegrenade.mdl"
     },
     {
-     "id": "off_f",
-     "label": "Forward offset",
-     "kind": "number",
-     "default": 16,
-     "min": -512,
-     "max": 512
-    },
-    {
-     "id": "off_r",
-     "label": "Right offset",
-     "kind": "number",
-     "default": 0,
-     "min": -512,
-     "max": 512
-    },
-    {
-     "id": "off_u",
-     "label": "Up offset",
-     "kind": "number",
-     "default": 0,
-     "min": -512,
-     "max": 512
+     "id": "copy_rot",
+     "label": "Face the way At entity faces",
+     "kind": "bool",
+     "default": true
     },
     {
      "id": "speed",

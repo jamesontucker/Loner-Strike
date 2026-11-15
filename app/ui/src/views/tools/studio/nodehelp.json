@@ -12949,7 +12949,7 @@
 "proj.spawn":{
 "title":"Spawn Projectile",
 "category":"Projectiles",
-"what":"Fires a model or sprite (loaded with the map). Where from: Position, else At entity (a player's eyes) moved by the offsets along its facing, else the owner's eyes. Which way: Direction, else Rotation, else the way At entity (or the owner) faces, turned by Rotation offset; Velocity, when wired, sets the motion outright. Gravity 0 flies straight; 1 falls like a grenade. Bounces: off walls before it stops. Damage: to what it hits, or everything within Radius (less further out with Falloff). Kills count for the owner. On Hit runs later for this projectile only, with what it hit (each bounce too); On Expired when its time runs out. 64 fly at most; a new round clears them.",
+"what":"Fires a model or sprite (loaded with the map). Where from: At position, else At entity (a player's eyes) moved by Local offset along its own forward, right and up (16 forward when nothing is wired there), else the owner's eyes. Which way: Direction, else Rotation, else the way At entity (or the owner) faces when Face the way At entity faces is on, turned by Rotation offset; Velocity, when wired, sets the motion outright. Gravity 0 flies straight; 1 falls like a grenade. Bounces: off walls before it stops. Damage: to what it hits, or everything within Radius (less further out with Falloff). Kills count for the owner. On Hit runs later for this projectile only, with what it hit (each bounce too); On Expired when its time runs out. 64 fly at most; a new round clears them.",
 "pins":[
 {
 "id":"exec",
@@ -12962,14 +12962,29 @@
 "help":"Owner: a player. Optional."
 },
 {
+"id":"at_ent",
+"dir":"in",
+"help":"At entity: an entity (a thing in the map). Optional."
+},
+{
 "id":"pos",
 "dir":"in",
-"help":"The position. Optional."
+"help":"At position: a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"offset",
+"dir":"in",
+"help":"Local offset (forward, right, up): a position or direction (X, Y, Z). Optional."
 },
 {
 "id":"angles",
 "dir":"in",
-"help":"Rotation: a position or direction (X, Y, Z). Optional."
+"help":"Rotation (pitch, yaw, roll): a position or direction (X, Y, Z). Optional."
+},
+{
+"id":"angles_offset",
+"dir":"in",
+"help":"Rotation offset: a position or direction (X, Y, Z). Optional."
 },
 {
 "id":"vel",
@@ -12980,16 +12995,6 @@
 "id":"dir",
 "dir":"in",
 "help":"Direction: a position or direction (X, Y, Z). Optional."
-},
-{
-"id":"at_ent",
-"dir":"in",
-"help":"At entity: an entity (a thing in the map). Optional."
-},
-{
-"id":"rot_off",
-"dir":"in",
-"help":"Rotation offset: a position or direction (X, Y, Z). Optional."
 },
 {
 "id":"speed",
@@ -13068,16 +13073,8 @@
 "help":"A file in the game folder, like models/w_c4.mdl or ambience/thunder_clap.wav."
 },
 {
-"id":"off_f",
-"help":"A number from -512 to 512."
-},
-{
-"id":"off_r",
-"help":"A number from -512 to 512."
-},
-{
-"id":"off_u",
-"help":"A number from -512 to 512."
+"id":"copy_rot",
+"help":"On or off."
 },
 {
 "id":"speed",
@@ -13155,9 +13152,7 @@
 },
 "params":{
 "model":"models/w_hegrenade.mdl",
-"off_f":16,
-"off_r":0,
-"off_u":0,
+"copy_rot":true,
 "speed":1000,
 "scale":1,
 "gravity":0,

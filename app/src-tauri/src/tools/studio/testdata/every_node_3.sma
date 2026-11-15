@@ -284,7 +284,7 @@ public ls_on_npc_choice(id, npc, choice)
 	return PLUGIN_CONTINUE
 }
 
-stock bool:lsg_proj_from(e, Float:f, Float:r, Float:u, rot, Float:o[3], Float:d[3])
+stock bool:lsg_proj_from(e, Float:f, Float:r, Float:u, rot, copy, Float:o[3], Float:d[3])
 {
 	if (e <= 0 || !pev_valid(e) || (e <= MaxClients && !is_user_alive(e)))
 		return false
@@ -300,17 +300,19 @@ stock bool:lsg_proj_from(e, Float:f, Float:r, Float:u, rot, Float:o[3], Float:d[
 	}
 	else
 		pev(e, pev_angles, a)
-	if (rot >= 0)
-		for (new k = 0; k < 3; k++)
-			a[k] += lsg_vc(rot, k)
+	// Local offset: along the entity's own forward, right and up
 	angle_vector(a, ANGLEVECTOR_FORWARD, fw)
 	angle_vector(a, ANGLEVECTOR_RIGHT, rt)
 	angle_vector(a, ANGLEVECTOR_UP, up)
 	for (new k = 0; k < 3; k++)
-	{
 		o[k] += fw[k] * f + rt[k] * r + up[k] * u
-		d[k] = fw[k]
-	}
+	// which way: its facing (Face the way At entity faces) or none, turned by Rotation offset
+	if (!copy)
+		a[0] = a[1] = a[2] = 0.0
+	if (rot >= 0)
+		for (new k = 0; k < 3; k++)
+			a[k] += lsg_vc(rot, k)
+	angle_vector(a, ANGLEVECTOR_FORWARD, d)
 	return true
 }
 
@@ -4903,7 +4905,7 @@ lsg_n13(ctx[])
 lsg_n14(ctx[])
 {
 	new Float:o[3], Float:d[3], lsgK[160], bool:lsgA = true
-	lsgA = lsg_proj_from(0, 16.0, 0.0, 0.0, -1, o, d)
+	lsgA = lsg_proj_from(0, 16.0, 0.0, 0.0, -1, 1, o, d)
 	formatex(lsgK, charsmax(lsgK), "trail=0 spin=0 bounce=0 radius=0 falloff=1 explode=0 dangerous=0 damage=%.0f scale=%.2f", floatclamp(0.0, 0.0, 5000.0), floatclamp(1.0, 0.05, 4.0))
 	if (get_cvar_num("ls_proj_max") != 64)
 		set_cvar_num("ls_proj_max", 64)
